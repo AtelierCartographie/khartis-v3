@@ -21,6 +21,10 @@
     justify-content: center;
     background-color: var(--cds-ui-background);
     z-index: var(--z-overlay);
+    padding-top: var(--safe-area-top);
+    padding-bottom: var(--safe-area-bottom);
+    padding-left: var(--safe-area-left);
+    padding-right: var(--safe-area-right);
   }
 
   .loading-inner {

@@ -3,7 +3,7 @@ import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { type AnalysisResult } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { SvelteMap } from 'svelte/reactivity';
-import { datasetsStore } from '../../../store/datasets.store.svelte';
+import { datasetsStore } from '../../../stores/datasets.store.svelte';
 import {
   isTextLikeColumnType,
   projectHtmlLikeText

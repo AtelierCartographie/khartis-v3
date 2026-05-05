@@ -25,13 +25,13 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('$lib/features/commons/store/basemap-style.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/basemap-style.store.svelte', () => ({
   basemapStyleStore: {
     referenceBasemapId: null
   }
 }));
 
-vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   datasetsStore: {
     selectedDataset: null,
     enabledDatasets: [],

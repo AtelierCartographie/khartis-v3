@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
   visualizationStore: {
     version: 0,
     visualizations: []

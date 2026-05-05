@@ -1,4 +1,4 @@
-import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
+import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import type { Layer } from '@deck.gl/core';
 
 export function getVisualizationRenderOrder(

@@ -5,14 +5,14 @@ import {
 import {
   visualizationStore,
   type VisualizationConfig
-} from '$lib/features/commons/store/visualization.store.svelte';
+} from '$lib/features/commons/stores/visualization.store.svelte';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
 import {
   clampFontSize,
   DEFAULT_FONT_FAMILY,
   normalizeFontFamily
-} from '$lib/features/step-toolbar/constants/fonts.constants';
+} from '$lib/features/step-toolbar/fonts.constants';
 import { getVisualizationLegendSubtitle } from '$lib/features/commons/utils/legend-subtitle.utils';
 import {
   getFormatLayoutSizingContext,

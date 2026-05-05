@@ -1,13 +1,13 @@
 import { m } from '$lib/paraglide/messages.js';
-import type { VisualizationConfig } from '../store/visualization.store.svelte';
-import { datasetsStore } from '../store/datasets.store.svelte';
+import type { VisualizationConfig } from '../stores/visualization.store.svelte';
+import { datasetsStore } from '../stores/datasets.store.svelte';
 import { deepClone } from './clone.utils';
 import {
   FACET_SLOT,
   SCALE_MODE,
   type FacetSlotPath,
   type ScaleMode
-} from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+} from '$lib/features/step-toolbar/tools/facets';
 import {
   findPaletteById,
   generatePaletteColors,

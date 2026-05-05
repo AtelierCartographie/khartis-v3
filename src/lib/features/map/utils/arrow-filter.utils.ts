@@ -5,7 +5,7 @@ import type {
   VizDataFilter,
   VizFilterOperator,
   PrimitiveFilter
-} from '$lib/features/commons/store/visualization.store.svelte';
+} from '$lib/features/commons/stores/visualization.store.svelte';
 import type { DataTableFilter } from '$lib/features/duckdb/types';
 import { FilterOperatorEnum } from '$lib/features/duckdb/types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';

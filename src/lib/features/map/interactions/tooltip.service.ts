@@ -4,8 +4,8 @@ import {
   INTERNAL_COLUMN,
   JOINED_BASEMAP_COLUMNS
 } from '$lib/features/commons/constants/data.constants';
-import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
-import { globalState } from '$lib/features/commons/store/global.svelte';
+import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
+import { globalState } from '$lib/features/commons/stores/global.svelte';
 import { ToolbarStep } from '$lib/features/commons/types/global';
 import type { PickingInfo } from '@deck.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';

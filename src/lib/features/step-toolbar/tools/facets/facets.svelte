@@ -13,13 +13,13 @@
     visualizationStore,
     PrimitiveFilterType,
     type VisualizationConfig
-  } from '$lib/features/commons/store/visualization.store.svelte';
+  } from '$lib/features/commons/stores/visualization.store.svelte';
   import { FACET_SLOT, type FacetSlotPath } from './facets.store.svelte';
-  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {
     globalActions,
     globalState
-  } from '$lib/features/commons/store/global.svelte';
+  } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
   import {
@@ -28,7 +28,7 @@
     ColorMode,
     StrokeMode,
     ThicknessMode
-  } from '$lib/features/main-toolbar/constants';
+  } from '$lib/features/commons/constants/visualization.constants';
   import SliderWithInput from '$lib/features/commons/components/viz-controls/slider-with-input.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
 

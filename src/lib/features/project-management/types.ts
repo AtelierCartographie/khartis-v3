@@ -1,4 +1,4 @@
-import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+import type { UploadedFile } from '$lib/features/commons/stores/create-project.types';
 
 export interface ProjectManifest {
   version: string;

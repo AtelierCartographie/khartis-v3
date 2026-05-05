@@ -6,13 +6,13 @@ import {
   TABULAR_DELIMITERS
 } from '$lib/features/commons/constants/file-types.constants';
 import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
-import { ParseError } from '../errors/pipeline.errors';
+import { ParseError } from '../pipeline.errors';
 import {
   type FileValidation,
   type UploadedFile,
   DataSourceType,
   FileType
-} from '../store/create-project.types';
+} from '../stores/create-project.types';
 import { LogCategory, logger } from './logger';
 import { sanitizeDisplayName } from './string.utils';
 
@@ -31,7 +31,7 @@ export type ColumnStatSummary = {
   mean?: number;
 };
 
-export { DataSourceType, FileType } from '../store/create-project.types';
+export { DataSourceType, FileType } from '../stores/create-project.types';
 export { formatFileSize } from './format.utils';
 
 export function detectFileType(file: File): FileType {

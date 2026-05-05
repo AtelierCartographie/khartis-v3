@@ -10,14 +10,14 @@
   import {
     globalActions,
     globalState
-  } from '$lib/features/commons/store/global.svelte';
-  import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
+  } from '$lib/features/commons/stores/global.svelte';
+  import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
   import {
     clampFontSize,
     resolveFontFamilyStack
-  } from '$lib/features/step-toolbar/constants/fonts.constants';
+  } from '$lib/features/step-toolbar/fonts.constants';
   import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import {
     getDragBounds,
@@ -26,8 +26,8 @@
   import {
     geoIndicationsActions,
     geoIndicationsState
-  } from '$lib/features/step-toolbar/tools/geo-indications/geo-indications.store.svelte';
-  import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+  } from '$lib/features/step-toolbar/tools/geo-indications';
+  import { getFormatState } from '$lib/features/step-toolbar/tools/format';
   import {
     clampScaleDistance,
     formatScaleDistance,
@@ -36,7 +36,7 @@
     INSET_MAP_SIZE_LIMITS,
     SCALE_MAX_WIDTH_PX,
     toDistanceMeters
-  } from '$lib/features/step-toolbar/tools/geo-indications/utils';
+  } from '$lib/features/step-toolbar/tools/geo-indications';
   import { onDestroy, onMount, tick, untrack } from 'svelte';
   import * as d3geo from 'd3-geo';
   import type { GeoPermissibleObjects, GeoProjection } from 'd3-geo';
@@ -55,7 +55,7 @@
   } from '../utils/focus-viewport.utils';
   import { setStylingToolPopoverDragging } from '../utils/tool-popover-drag-visibility.utils';
   import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
-  import { getLegendState } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
+  import { getLegendState } from '$lib/features/step-toolbar/tools/legend';
   import * as m from '$lib/paraglide/messages';
   import { GEOJSON_TYPE } from '$lib/features/commons/constants';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';

@@ -13,7 +13,7 @@ vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
     datasetsVersion: 0
   }
 }));
-vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
   ClassificationMethod: {
     EQUAL_INTERVAL: 'equal_interval',
     QUANTILES: 'quantiles',

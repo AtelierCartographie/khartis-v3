@@ -12,7 +12,7 @@ import * as m from '$lib/paraglide/messages';
 import {
   DENSITY_LEVEL,
   type DensityLevelOption
-} from '$lib/features/main-toolbar/constants';
+} from '$lib/features/commons/constants/visualization.constants';
 import { Duck } from '../duck';
 import { registerTableMutationCallback } from '../cache/cache-manager';
 import {

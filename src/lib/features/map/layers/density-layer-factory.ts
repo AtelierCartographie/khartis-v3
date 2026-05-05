@@ -8,7 +8,7 @@ import {
 } from '../utils/geoarrow-stream-bridge';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { DENSITY_DEFAULTS } from '$lib/features/main-toolbar/constants';
+import { DENSITY_DEFAULTS } from '$lib/features/commons/constants/visualization.constants';
 import type { DeckDataRow, LayerContext } from '../types';
 import { normalizeOpacity } from './layer-factory';
 

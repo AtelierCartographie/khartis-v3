@@ -22,7 +22,7 @@
     PatternParams
   } from './palette.constants';
   import { PALETTE_TYPE, normalizePaletteId } from './palette.constants';
-  import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
+  import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 
   interface Props {
     label?: string;

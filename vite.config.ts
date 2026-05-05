@@ -1,9 +1,35 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { svelteTesting } from '@testing-library/svelte/vite';
-import { createLogger, defineConfig, loadEnv } from 'vite';
+import { createLogger, defineConfig, loadEnv, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { visualizer } from 'rollup-plugin-visualizer';
+
+const verifyServiceWorkerPrecache = (): Plugin => ({
+  name: 'verify-sw-precache',
+  apply: 'build',
+  closeBundle: {
+    sequential: true,
+    order: 'post',
+    handler() {
+      const candidates = [
+        resolve(process.cwd(), '.svelte-kit/output/client/sw.js'),
+        resolve(process.cwd(), 'build/sw.js')
+      ];
+      const swPath = candidates.find((path) => existsSync(path));
+      if (!swPath) return;
+      const content = readFileSync(swPath, 'utf8');
+      const hasIndexInPrecache = /url:["'][^"']*index\.html["']/.test(content);
+      if (!hasIndexInPrecache) {
+        throw new Error(
+          `[verify-sw-precache] ${swPath} does not precache index.html — refusing to ship a broken Service Worker. Check VitePWA workbox.globPatterns and additionalManifestEntries.`
+        );
+      }
+    }
+  }
+});
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -93,6 +119,7 @@ export default defineConfig(({ mode }) => {
         outdir: './src/lib/paraglide',
         emitTsDeclarations: true
       }),
+      verifyServiceWorkerPrecache(),
       VitePWA({
         includeAssets: [
           'favicon.ico',
@@ -107,16 +134,19 @@ export default defineConfig(({ mode }) => {
         workbox: {
           sourcemap: false,
           inlineWorkboxRuntime: true,
-          globPatterns:
-            process.env.NODE_ENV === 'production'
-              ? [
-                  '**/*.{js,css,html,ico,png,svg,woff2,woff,ttf,eot,otf}',
-                  'duckdb-extensions/**/*.wasm',
-                  'basemaps/all-basemaps-metadata.json',
-                  'basemaps/all-basemaps-attributes.parquet'
-                ]
-              : [],
+          globPatterns: [
+            '**/*.{js,css,html,ico,png,svg,woff2,woff,ttf,eot,otf}',
+            'duckdb-extensions/**/*.wasm',
+            'basemaps/all-basemaps-metadata.json',
+            'basemaps/all-basemaps-attributes.parquet'
+          ],
           globIgnores: ['**/node_modules/**/*'],
+          additionalManifestEntries: [
+            {
+              url: basePath ? `${basePath}/index.html` : '/index.html',
+              revision: `${Date.now()}`
+            }
+          ],
           navigateFallback: basePath ? `${basePath}/index.html` : '/index.html',
           navigateFallbackDenylist: [/^\/api\//, /\.[^/]+$/],
           maximumFileSizeToCacheInBytes: 50 * 1024 * 1024,

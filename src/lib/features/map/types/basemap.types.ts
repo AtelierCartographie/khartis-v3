@@ -2,7 +2,7 @@ import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import type {
   JoinEntity,
   JoinStats
-} from '$lib/features/main-toolbar/data-tab/components/join-accordion.types';
+} from '$lib/features/data-tab/components/join-accordion.types';
 
 export type { JoinEntity };
 export type JoinQuality = JoinStats;

@@ -1,4 +1,4 @@
-import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
+import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { isTextLikeColumnType } from '$lib/features/commons/utils/html-like-text.utils';
 import {

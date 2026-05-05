@@ -1,4 +1,4 @@
-import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
+import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
 import * as m from '$lib/paraglide/messages';

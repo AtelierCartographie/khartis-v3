@@ -41,8 +41,8 @@
 <style>
   .notification-container {
     position: fixed;
-    bottom: 16px;
-    right: 16px;
+    bottom: calc(16px + var(--safe-area-bottom));
+    right: calc(16px + var(--safe-area-right));
     z-index: var(--z-notification);
     display: flex;
     flex-direction: column-reverse;

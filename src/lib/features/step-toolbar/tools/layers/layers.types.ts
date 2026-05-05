@@ -1,5 +1,5 @@
 import type { Component } from 'svelte';
-import type { PrimitiveFilter } from '$lib/features/commons/store/visualization.store.svelte';
+import type { PrimitiveFilter } from '$lib/features/commons/stores/visualization.store.svelte';
 import type { BasemapRenderGroup } from '$lib/features/map/stores/basemap-layers.store.svelte';
 
 export type LayerType = 'visualization' | 'geographic';

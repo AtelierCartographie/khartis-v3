@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
   PrimitiveFilterType: {
     POINT: 'point',
     LINE: 'line',
@@ -85,13 +85,13 @@ import {
   ScaleType,
   VisualizationType,
   type VisualizationConfig
-} from '$lib/features/commons/store/visualization.store.svelte';
+} from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   FillMode,
   ShapeType,
   StrokeMode,
   SymbolMode
-} from '$lib/features/main-toolbar/constants';
+} from '$lib/features/commons/constants/visualization.constants';
 import {
   getPointSizeLegendScale,
   type PointSizeLegendScale

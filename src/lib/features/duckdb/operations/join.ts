@@ -1,7 +1,7 @@
 import {
   DataValidationError,
   DuckDBError
-} from '$lib/features/commons/errors/pipeline.errors';
+} from '$lib/features/commons/pipeline.errors';
 import {
   escapeIdentifier,
   escapeSqlString

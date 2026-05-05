@@ -1,6 +1,10 @@
 :root {
   --cds-main-toolbar-width: 50vw;
-  --cds-header-height: 47px;
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  --cds-header-height: calc(47px + var(--safe-area-top));
   --kh-text-size-control-width: 80px;
   --khartis-floating-panel-background: rgba(255, 255, 255, 0.78);
   --khartis-data-table-header-background: var(--cds-ui-03);
@@ -338,4 +342,23 @@ label {
 .bx--slider-container .bx--slider-text-input {
   width: var(--slider-input-width);
   flex-shrink: 0;
+}
+
+/* Fullscreen Carbon modals on mobile — reproduces Carbon vanilla behavior
+   but aligned with Khartis mobile breakpoint (1024px) instead of Carbon md (672px) */
+@media (max-width: 1023px) {
+  .bx--modal-container {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: 100%;
+    margin: 0;
+    border-radius: 0;
+    padding-top: var(--safe-area-top);
+    padding-bottom: var(--safe-area-bottom);
+    padding-left: var(--safe-area-left);
+    padding-right: var(--safe-area-right);
+  }
 }

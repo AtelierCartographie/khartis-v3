@@ -38,7 +38,24 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('$lib/features/commons/store/create-project.store.svelte', () => ({
+vi.mock('@duckdb/duckdb-wasm', () => ({
+  default: {},
+  createWorker: vi.fn(),
+  selectBundle: vi.fn()
+}));
+
+vi.mock('$lib/features/duckdb', () => ({
+  Duck: {},
+  duckDBOrchestrator: {
+    initialize: vi.fn(),
+    executeQuery: vi.fn(),
+    getConnection: vi.fn()
+  },
+  validateGPSColumns: vi.fn(),
+  GEO_CONSTANTS: { WGS84_CRS: 'EPSG:4326' }
+}));
+
+vi.mock('$lib/features/commons/stores/create-project.store.svelte', () => ({
   createProjectState: mocks.createProjectState,
   createProjectActions: {
     processFiles: mocks.processFilesMock,
@@ -66,13 +83,13 @@ vi.mock('$lib/features/commons/store/create-project.store.svelte', () => ({
   }
 }));
 
-vi.mock('$lib/features/commons/store/project.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/project.store.svelte', () => ({
   projectStore: {
     createProject: mocks.createProjectMock
   }
 }));
 
-vi.mock('$lib/features/commons/store/projects.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/projects.store.svelte', () => ({
   projectsStore: {
     projects: [],
     refresh: mocks.refreshProjectsMock

@@ -6,7 +6,7 @@
   import type { LngLatBoundsLike } from 'maplibre-gl';
   import { onMount, untrack } from 'svelte';
   import { fade } from 'svelte/transition';
-  import { basemapStyleStore } from '../../commons/store/basemap-style.store.svelte';
+  import { basemapStyleStore } from '../../commons/stores/basemap-style.store.svelte';
   import {
     BasemapStyle,
     getBasemapViewportPreset,
@@ -17,10 +17,10 @@
   import {
     mapInstanceStore,
     type ViewportFitReason
-  } from '../../commons/store/map-instance.store.svelte';
-  import { datasetsStore } from '../../commons/store/datasets.store.svelte';
-  import { projectStore } from '../../commons/store/project.store.svelte';
-  import { visualizationStore } from '../../commons/store/visualization.store.svelte';
+  } from '../../commons/stores/map-instance.store.svelte';
+  import { datasetsStore } from '../../commons/stores/datasets.store.svelte';
+  import { projectStore } from '../../commons/stores/project.store.svelte';
+  import { visualizationStore } from '../../commons/stores/visualization.store.svelte';
   import { ViewMode } from '../constants/map.constants';
   import {
     useMapBasemap,
@@ -40,14 +40,14 @@
   } from '../services/basemap.service.svelte';
   import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs';
   import { basemapLayersStore } from '../stores/basemap-layers.store.svelte';
-  import { fontAssetsStore } from '$lib/features/commons/store/font-assets.store.svelte';
+  import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
   import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
   import { projectionStore } from '../stores/projection.store.svelte';
   import { mapProjectionStore } from '../stores/map-projection.store.svelte';
   import { mapLoadingStore } from '../stores/map-loading.store.svelte';
-  import { globalState } from '$lib/features/commons/store/global.svelte';
-  import { zoomModeStore } from '$lib/features/commons/store/zoom-mode.store.svelte';
+  import { globalState } from '$lib/features/commons/stores/global.svelte';
+  import { zoomModeStore } from '$lib/features/commons/stores/zoom-mode.store.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
   import type {
@@ -59,18 +59,18 @@
     DEFAULT_PAGE_COLOR,
     getFormatLayoutSizingContext,
     getFormatState
-  } from '../../step-toolbar/tools/format/format.store.svelte';
-  import { getSimplificationState } from '../../step-toolbar/tools/simplification/simplification.store.svelte';
-  import { getProjectionState } from '../../step-toolbar/tools/projections/projection.store.svelte';
-  import { buildProjectionRenderKey } from '../../step-toolbar/tools/projections/projection-render-key';
+  } from '$lib/features/step-toolbar/tools/format';
+  import { getSimplificationState } from '$lib/features/step-toolbar/tools/simplification';
+  import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
+  import { buildProjectionRenderKey } from '$lib/features/step-toolbar/tools/projections';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { getFiltersMap } from '$lib/features/duckdb/orchestrator/state.svelte';
-  import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
+  import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations';
   import {
     getColorBlindnessState,
     isColorBlindnessActive
-  } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
-  import { getColorBlindnessMatrix } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.filter';
+  } from '$lib/features/step-toolbar/tools/color-blindness';
+  import { getColorBlindnessMatrix } from '$lib/features/step-toolbar/tools/color-blindness';
   import {
     resolveOrthographicDatasetBounds,
     resolveOrthographicProjectionFitBbox,

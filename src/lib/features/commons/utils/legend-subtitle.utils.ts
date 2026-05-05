@@ -1,11 +1,11 @@
-import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
+import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   ColorMode,
   FillMode,
   ProportionalType,
   SymbolMode,
   ThicknessMode
-} from '$lib/features/main-toolbar/constants';
+} from '$lib/features/commons/constants/visualization.constants';
 
 export function joinLegendSubtitleParts(
   parts: Array<string | null | undefined>

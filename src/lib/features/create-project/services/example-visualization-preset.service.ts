@@ -10,25 +10,25 @@ import type {
 import type {
   ExampleProject,
   ExampleVisualizationPreset
-} from '$lib/features/commons/store/create-project.types';
+} from '$lib/features/commons/stores/create-project.types';
 import {
   ClassificationMethod,
   type ClassificationConfig,
   type VisualizationConfig,
   visualizationStore
-} from '$lib/features/commons/store/visualization.store.svelte';
+} from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   FillMode,
   ShapeType,
   SymbolMode,
   ThicknessMode
-} from '$lib/features/main-toolbar/constants';
+} from '$lib/features/commons/constants/visualization.constants';
 import {
   applySuggestionToVisualization,
   buildSuggestionOrigin,
   mapSuggestionToType
-} from '$lib/features/main-toolbar/visualization-tab/utils/suggestion.service';
-import { getSuggestionSignature } from '$lib/features/main-toolbar/visualization-tab/utils/suggestion-selection';
+} from '$lib/features/visualization/utils/suggestion.service';
+import { getSuggestionSignature } from '$lib/features/visualization/utils/suggestion-selection';
 
 type ExampleSuggestionId =
   | 'choropleth'

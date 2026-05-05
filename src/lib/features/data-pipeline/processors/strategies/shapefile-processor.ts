@@ -1,9 +1,9 @@
 import { MIME } from '$lib/features/commons/constants';
-import { ParseError } from '$lib/features/commons/errors/pipeline.errors';
+import { ParseError } from '$lib/features/commons/pipeline.errors';
 import {
   FileType,
   type UploadedFile
-} from '$lib/features/commons/store/create-project.types';
+} from '$lib/features/commons/stores/create-project.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import * as m from '$lib/paraglide/messages';
 import type {

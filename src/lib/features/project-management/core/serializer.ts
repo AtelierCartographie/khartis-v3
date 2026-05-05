@@ -1,6 +1,6 @@
-import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
-import { dataTabState } from '$lib/features/commons/store/data-tab.store.svelte';
-import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import type { UploadedFile } from '$lib/features/commons/stores/create-project.types';
+import { dataTabState } from '$lib/features/commons/stores/data-tab.store.svelte';
+import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { deepCloneForStorage } from '$lib/features/commons/utils/clone-for-storage.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { resolvePersistedJoinState } from '$lib/features/commons/utils/persisted-join-state.utils';

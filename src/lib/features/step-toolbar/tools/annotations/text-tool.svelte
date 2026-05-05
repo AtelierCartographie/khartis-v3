@@ -14,7 +14,7 @@
     MIN_FONT_SIZE,
     clampFontSize,
     normalizeFontFamily
-  } from '$lib/features/step-toolbar/constants/fonts.constants';
+  } from '$lib/features/step-toolbar/fonts.constants';
   import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
   import * as m from '$lib/paraglide/messages';
   import {

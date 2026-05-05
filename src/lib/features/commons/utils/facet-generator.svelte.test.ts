@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   getUniqueValues: vi.fn()
 }));
 
-vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   datasetsStore: {
     getColumnStatistics: mocks.getColumnStatistics,
     getUniqueValues: mocks.getUniqueValues
@@ -25,7 +25,7 @@ import {
 import {
   FACET_SLOT,
   SCALE_MODE
-} from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+} from '$lib/features/step-toolbar/tools/facets';
 
 function makeBaseViz(overrides = {}) {
   return {

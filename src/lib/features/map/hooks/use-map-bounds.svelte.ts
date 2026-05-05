@@ -5,7 +5,7 @@ import { debounce } from '$lib/features/commons/utils/debounce.utils';
 import {
   mapInstanceStore,
   type ViewportFitReason
-} from '$lib/features/commons/store/map-instance.store.svelte';
+} from '$lib/features/commons/stores/map-instance.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   calculateBoundsFromGeoArrow,

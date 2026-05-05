@@ -1,4 +1,4 @@
-import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
+import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import type { FacetsLayout } from './facets.store.svelte';
 
 export const FACET_TITLE_HEIGHT = 28;

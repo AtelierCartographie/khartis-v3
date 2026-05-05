@@ -1,6 +1,6 @@
 import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import { tableFromIPC } from '@uwdata/flechette';
-import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
+import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import * as m from '$lib/paraglide/messages';
 import { DUCK_CONST } from '../constants';
 import type {

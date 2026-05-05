@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { globalState } from '$lib/features/commons/stores/global.svelte';
   import type { ProjectionViewMode } from '$lib/features/commons/types/global';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { Popover } from 'carbon-components-svelte';
@@ -103,7 +103,16 @@
       return;
     }
 
-    if (!toolbar || !toolbar.contains(target)) {
+    const mobileToolsBar = document.querySelector('.mobile-tools-bar');
+    const mobileBottomNav = document.querySelector('.mobile-bottom-nav');
+
+    const insideStepToolbar = !!toolbar && toolbar.contains(target);
+    const insideMobileToolsBar =
+      !!mobileToolsBar && mobileToolsBar.contains(target);
+    const insideMobileBottomNav =
+      !!mobileBottomNav && mobileBottomNav.contains(target);
+
+    if (!insideStepToolbar && !insideMobileToolsBar && !insideMobileBottomNav) {
       closeSelectedToolPanel();
     }
   }
@@ -182,7 +191,9 @@
     excludeSelectors: [
       `#${DOM_IDS.STEP_TOOLBAR}`,
       `#${DOM_IDS.COLOR_PICKER}`,
-      `#${DOM_IDS.COLOR_PICKER_DROPDOWN}`
+      `#${DOM_IDS.COLOR_PICKER_DROPDOWN}`,
+      '.mobile-tools-bar',
+      '.mobile-bottom-nav'
     ]
   }}
   onoutsideclick={handleOutsideClick}
@@ -229,6 +240,36 @@
     overflow: visible;
     background: var(--khartis-control-surface-background);
     padding: 0;
+  }
+
+  @media (max-width: 1023px) {
+    :global(#khartis-tool-popover .bx--popover) {
+      position: fixed !important;
+      inset: auto 0 0 0 !important;
+      top: auto !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: calc(
+        60px + env(safe-area-inset-bottom, 0px) + var(--cds-spacing-03) + 48px +
+          var(--cds-spacing-03)
+      ) !important;
+      transform: none !important;
+      width: 100vw !important;
+      max-width: 100vw !important;
+      margin: 0 !important;
+    }
+
+    :global(#khartis-tool-popover .bx--popover-contents) {
+      width: 100vw !important;
+      max-width: 100vw !important;
+      max-height: 70vh;
+      border-radius: 8px 8px 0 0;
+      box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .popover-scroll {
+      max-height: 70vh;
+    }
   }
 
   .popover-scroll {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
   ClassificationMethod: {
     EQUAL_INTERVAL: 'equal_interval',
     QUANTILES: 'quantiles',
@@ -20,7 +20,7 @@ import {
   resolveHeadTailClassCountMax,
   resolveNestedMeansClassCount,
   resolveRequestedClassCount
-} from '$lib/features/main-toolbar/visualization-tab/components/discretization/discretization.utils';
+} from '$lib/features/visualization/components/discretization/discretization.utils';
 
 // ─── normalizeClassificationMethod ────────────────────────────────────────
 

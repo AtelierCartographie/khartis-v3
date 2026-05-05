@@ -1,4 +1,4 @@
-import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+import type { UploadedFile } from '$lib/features/commons/stores/create-project.types';
 import type { GeoColumnResult } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { GeoColumnInfo } from '$lib/features/data-pipeline';

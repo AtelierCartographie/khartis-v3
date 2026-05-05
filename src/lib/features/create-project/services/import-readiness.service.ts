@@ -1,5 +1,5 @@
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
-import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+import type { UploadedFile } from '$lib/features/commons/stores/create-project.types';
 
 export type ImportFileLike = Pick<UploadedFile, 'status' | 'validation'>;
 

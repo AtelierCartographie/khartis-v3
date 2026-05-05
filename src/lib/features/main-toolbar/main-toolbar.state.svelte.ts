@@ -1,5 +1,5 @@
-import { globalActions } from '$lib/features/commons/store/global.svelte';
-import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+import { globalActions } from '$lib/features/commons/stores/global.svelte';
+import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { ToolbarStep } from '$lib/features/commons/types/global';
 
 export interface MainToolbarState {

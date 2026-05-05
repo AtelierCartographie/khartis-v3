@@ -103,6 +103,13 @@
     width: 100%;
   }
 
+  @media (max-width: 480px) {
+    .margins-grid {
+      grid-template-columns: 1fr;
+      gap: var(--cds-spacing-04);
+    }
+  }
+
   .margin-input {
     display: flex;
     flex-direction: column;

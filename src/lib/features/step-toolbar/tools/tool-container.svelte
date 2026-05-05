@@ -1,6 +1,6 @@
 <script lang="ts">
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
-  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { globalState } from '$lib/features/commons/stores/global.svelte';
   import {
     StylingTools,
     VisualizationTools

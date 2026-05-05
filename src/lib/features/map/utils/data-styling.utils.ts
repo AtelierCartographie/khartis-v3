@@ -1,4 +1,4 @@
-import type { VisualizationConfig } from '../../commons/store/visualization.store.svelte';
+import type { VisualizationConfig } from '../../commons/stores/visualization.store.svelte';
 import {
   getLinePrimitive,
   getPrimitiveCategoryColumn,
@@ -13,8 +13,12 @@ import {
   getPolygonPrimitive,
   ScaleType,
   VisualizationType
-} from '../../commons/store/visualization.store.svelte';
-import { ColorMode, FillMode, SymbolMode } from '../../main-toolbar/constants';
+} from '../../commons/stores/visualization.store.svelte';
+import {
+  ColorMode,
+  FillMode,
+  SymbolMode
+} from '$lib/features/commons/constants/visualization.constants';
 import { hexToRgb } from '../../commons/utils/color-utils';
 
 export function getColorForValue(

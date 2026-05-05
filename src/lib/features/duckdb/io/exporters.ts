@@ -1,4 +1,4 @@
-import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
+import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';

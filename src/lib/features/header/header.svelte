@@ -1,6 +1,6 @@
 <script lang="ts">
   import Button from '$lib/features/commons/components/carbon/button.svelte';
-  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { m } from '$lib/paraglide/messages.js';
   import {
     Header as CbsHeader,
@@ -49,6 +49,13 @@
   #khartis-header :global(.bx--header) {
     background-color: var(--cds-ui-background) !important;
     border-color: var(--cds-ui-03) !important;
+    height: calc(3rem + var(--safe-area-top));
+    padding-top: var(--safe-area-top);
+  }
+
+  #khartis-header :global(.bx--header__menu-trigger) {
+    min-width: 48px;
+    min-height: 48px;
   }
 
   #khartis-header :global(.bx--header__menu-trigger > svg) {
@@ -77,6 +84,7 @@
   @media (max-width: 1023px) {
     #khartis-header :global(.header-help-button.bx--btn) {
       min-width: 3rem;
+      min-height: 3rem;
       padding-inline: 0.75rem;
       font-size: 0;
     }

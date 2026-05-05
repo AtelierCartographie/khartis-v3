@@ -1,7 +1,7 @@
 import {
   clampFontSize,
   resolveFontFamilyStack
-} from '$lib/features/step-toolbar/constants/fonts.constants';
+} from '$lib/features/step-toolbar/fonts.constants';
 import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
 
 export type ScaleFn = (value: number) => number;

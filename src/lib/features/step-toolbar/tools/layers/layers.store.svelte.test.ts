@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
+import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import type { BasemapLayerConfig } from '$lib/features/map/stores/basemap-layers.store.svelte';
 
 const { mockVisualizationStore, mockFacetsStore } = vi.hoisted(() => ({
@@ -22,7 +22,7 @@ const { mockVisualizationStore, mockFacetsStore } = vi.hoisted(() => ({
   }
 }));
 
-vi.mock('$lib/features/commons/store/visualization.store.svelte', () => {
+vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => {
   const PrimitiveFilterType = {
     POINT: 'point',
     LINE: 'line',
@@ -145,12 +145,12 @@ import {
   PrimitiveFilterType,
   ScaleType,
   VisualizationType
-} from '$lib/features/commons/store/visualization.store.svelte';
+} from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   BasemapDottedPattern,
   MissingDataShape,
   ShapeType
-} from '$lib/features/main-toolbar/constants';
+} from '$lib/features/commons/constants/visualization.constants';
 import {
   getBasemapLayerColor,
   getVisualizationColor,

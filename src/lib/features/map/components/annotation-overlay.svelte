@@ -8,7 +8,7 @@
   import {
     globalState,
     globalActions
-  } from '$lib/features/commons/store/global.svelte';
+  } from '$lib/features/commons/stores/global.svelte';
   import { StylingTools } from '$lib/features/commons/types/global';
   import {
     AnnotationKind,
@@ -18,13 +18,13 @@
   import {
     clampFontSize,
     resolveFontFamilyStack
-  } from '$lib/features/step-toolbar/constants/fonts.constants';
+  } from '$lib/features/step-toolbar/fonts.constants';
   import { onDestroy, tick } from 'svelte';
   import {
     annotationsActions,
     getAnnotationsState
-  } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
-  import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+  } from '$lib/features/step-toolbar/tools/annotations';
+  import { getFormatState } from '$lib/features/step-toolbar/tools/format';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import {
     getElementCenteringDelta,
@@ -40,8 +40,8 @@
     AnnotationPlacementPreview,
     AnnotationStyle,
     PageElementRole
-  } from '$lib/features/step-toolbar/tools/annotations/annotations.types';
-  import { resolveAnnotationCoordinateSpace } from '$lib/features/step-toolbar/tools/annotations/annotations.types';
+  } from '$lib/features/step-toolbar/tools/annotations';
+  import { resolveAnnotationCoordinateSpace } from '$lib/features/step-toolbar/tools/annotations';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
 
   let {

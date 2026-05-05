@@ -1,9 +1,9 @@
 import * as m from '$lib/paraglide/messages';
-import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import {
   visualizationStore,
   type VisualizationConfig
-} from '$lib/features/commons/store/visualization.store.svelte';
+} from '$lib/features/commons/stores/visualization.store.svelte';
 import { RefineOperation } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { LogCategory, logger } from '../../../utils/logger';

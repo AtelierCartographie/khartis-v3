@@ -7,7 +7,7 @@
     RadioButtonGroup,
     TextInput
   } from 'carbon-components-svelte';
-  import { projectsStore } from '../store/projects.store.svelte';
+  import { projectsStore } from '../stores/projects.store.svelte';
 
   interface Props {
     open: boolean;

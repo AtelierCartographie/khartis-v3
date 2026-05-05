@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import SimpleCheckbox from '$lib/features/commons/components/simple-checkbox.svelte';
   import type { ProcessedDataset } from '$lib/features/data-pipeline';
   import { Duck, RefineOperation } from '$lib/features/duckdb';

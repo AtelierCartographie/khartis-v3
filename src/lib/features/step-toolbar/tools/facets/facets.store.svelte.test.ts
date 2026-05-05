@@ -27,7 +27,7 @@ vi.mock('$lib/features/commons/utils/facet-generator', () => ({
   buildFacetVisualizationUpdates: mocks.buildFacetVisualizationUpdatesMock
 }));
 
-vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   datasetsStore: {
     get datasets() {
       return mocks.datasets;
@@ -37,7 +37,7 @@ vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
 
 const updateVisualizationMock = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
   visualizationStore: {
     get visualizations() {
       return mocks.visualizations;

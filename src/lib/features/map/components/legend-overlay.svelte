@@ -1,7 +1,7 @@
 <script module lang="ts">
   import { motif } from '@ateliercartographie/motif.js';
   import { PATTERN_TYPE_MAP } from '../layers/pattern-texture';
-  import type { PatternParams } from '$lib/features/commons/store/visualization.store.svelte';
+  import type { PatternParams } from '$lib/features/commons/stores/visualization.store.svelte';
 
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- module-level cache, no reactivity needed
   const patternTileCache = new Map<string, string>();
@@ -41,11 +41,11 @@
 </script>
 
 <script lang="ts">
-  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {
     globalActions,
     globalState
-  } from '$lib/features/commons/store/global.svelte';
+  } from '$lib/features/commons/stores/global.svelte';
   import {
     StylingTools,
     ToolbarStep
@@ -66,13 +66,13 @@
     visualizationStore,
     type ClassificationConfig,
     type VisualizationConfig
-  } from '$lib/features/commons/store/visualization.store.svelte';
+  } from '$lib/features/commons/stores/visualization.store.svelte';
   import { hexToRgb, hslToHex } from '$lib/features/commons/utils/color-utils';
   import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
   import {
     clampFontSize,
     resolveFontFamilyStack
-  } from '$lib/features/step-toolbar/constants/fonts.constants';
+  } from '$lib/features/step-toolbar/fonts.constants';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
   import {
     getDragBounds,
@@ -86,11 +86,11 @@
   import {
     getLegendState,
     legendActions
-  } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
+  } from '$lib/features/step-toolbar/tools/legend';
   import {
     getFormatLayoutSizingContext,
     getFormatState
-  } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+  } from '$lib/features/step-toolbar/tools/format';
   import {
     CATEGORY_SHAPE_CYCLE,
     CategoryShapeMode,
@@ -101,7 +101,7 @@
     SizeMode,
     SLIDER_LIMITS,
     SymbolMode
-  } from '$lib/features/main-toolbar/constants';
+  } from '$lib/features/commons/constants/visualization.constants';
   import * as m from '$lib/paraglide/messages';
   import { tick, untrack } from 'svelte';
   import { SvelteMap } from 'svelte/reactivity';
@@ -140,7 +140,7 @@
     type LineWidthLegendScale,
     type PointSizeLegendScale
   } from '../utils/legend.utils';
-  import type { LegendItem } from '$lib/features/step-toolbar/tools/legend/legend.types';
+  import type { LegendItem } from '$lib/features/step-toolbar/tools/legend';
 
   let { hidden = false }: { hidden?: boolean } = $props();
 

@@ -5,7 +5,7 @@
   } from '$lib/features/commons/constants/ui.constants';
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
-  import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
+  import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import * as m from '$lib/paraglide/messages.js';
   import {
@@ -25,7 +25,7 @@
     FONT_SIZE_OPTIONS,
     MIN_FONT_SIZE,
     normalizeFontFamily
-  } from '$lib/features/step-toolbar/constants/fonts.constants';
+  } from '$lib/features/step-toolbar/fonts.constants';
   import {
     geoIndicationsActions,
     geoIndicationsState
@@ -36,7 +36,7 @@
     getScaleDistanceStep,
     getNumericEventValue,
     type ColorPickerValidateEvent
-  } from './utils';
+  } from './geo-indications.utils';
 
   const store = geoIndicationsActions;
   const geoState = $derived(geoIndicationsState);

@@ -3,8 +3,8 @@ import {
   getWarningFileSizeForType,
   STORAGE_LIMITS,
   type ValidationResult
-} from '../configs/validation.config';
-import { FileType } from '../store/create-project.types';
+} from '../validation.config';
+import { FileType } from '../stores/create-project.types';
 import { getFileExtension } from './file.utils';
 import { LogCategory, logger } from './logger';
 import {

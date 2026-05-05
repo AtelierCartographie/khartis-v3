@@ -5,7 +5,7 @@ import {
   collectYearValuesFromRows,
   isLikelyYearColumn,
   parseYearValue
-} from '$lib/features/main-toolbar/visualization-tab/components/year-filter.utils';
+} from '$lib/features/visualization/components/year-filter.utils';
 
 // ─── parseYearValue ────────────────────────────────────────────────────────
 

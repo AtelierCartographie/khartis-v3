@@ -1,7 +1,7 @@
 import {
   globalActions,
   globalState
-} from '$lib/features/commons/store/global.svelte';
+} from '$lib/features/commons/stores/global.svelte';
 import { StylingTools, ToolbarStep } from '$lib/features/commons/types/global';
 
 export function activateStylingToolFromMap(tool: StylingTools): void {

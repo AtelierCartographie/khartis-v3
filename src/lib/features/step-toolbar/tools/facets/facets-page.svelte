@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import type { FeatureCollection } from 'geojson';
-  import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
+  import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
   import type { SplitRenderingTable } from '$lib/features/map/types';
   import AnnotationOverlay from '$lib/features/map/components/annotation-overlay.svelte';
   import GeoIndicationsOverlay from '$lib/features/map/components/geo-indications-overlay.svelte';
@@ -12,7 +12,7 @@
     getFormatState
   } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
-  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import FacetsGrid from './facets-grid.svelte';
   import type { FacetsLayout } from './facets.store.svelte';

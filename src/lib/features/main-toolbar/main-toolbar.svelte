@@ -4,8 +4,8 @@
   import {
     globalActions,
     globalState
-  } from '$lib/features/commons/store/global.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  } from '$lib/features/commons/stores/global.svelte';
+  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import {
     ToolbarState,
     ToolbarStep
@@ -23,13 +23,13 @@
   import clsx from 'clsx';
   import { tick } from 'svelte';
   import ToolbarTabs from './components/toolbar-tabs.svelte';
-  import { dataTabStore } from './data-tab/data-tab.store.svelte';
-  import DataTab from './data-tab/data-tab.svelte';
+  import { dataTabStore } from '$lib/features/data-tab/data-tab.store.svelte';
+  import DataTab from '$lib/features/data-tab/data-tab.svelte';
   import {
     mainToolbarActions,
     mainToolbarState
   } from './main-toolbar.state.svelte';
-  import VizualisationTab from './visualization-tab/visualization-tab.svelte';
+  import VizualisationTab from '$lib/features/visualization/visualization.svelte';
 
   let toolbarContent = $state<HTMLElement | null>(null);
 

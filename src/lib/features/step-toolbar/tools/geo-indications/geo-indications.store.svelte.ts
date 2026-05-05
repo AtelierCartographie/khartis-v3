@@ -8,15 +8,15 @@ import {
   DEFAULT_FONT_FAMILY,
   isAvailableFont,
   isAvailableFontSize
-} from '$lib/features/step-toolbar/constants/fonts.constants';
+} from '$lib/features/step-toolbar/fonts.constants';
 import { hexToHsl } from '$lib/features/commons/utils/color-utils';
 import {
   PRINT_STANDARD_TOKENS,
   resolveLayoutSizingTokens
 } from '$lib/features/commons/utils/layout-sizing.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
-import { globalActions } from '$lib/features/commons/store/global.svelte';
-import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
+import { globalActions } from '$lib/features/commons/stores/global.svelte';
+import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import {
   getFormatLayoutSizingContext,
   getFormatState
@@ -26,7 +26,7 @@ import {
   convertDistanceValue,
   INSET_MAP_SIZE_LIMITS,
   normalizeScaleDistanceValue
-} from './utils';
+} from './geo-indications.utils';
 import type {
   ColorState,
   DragPosition,

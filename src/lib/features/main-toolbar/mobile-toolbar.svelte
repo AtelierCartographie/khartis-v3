@@ -3,9 +3,9 @@
   import {
     globalActions,
     globalState
-  } from '$lib/features/commons/store/global.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+  } from '$lib/features/commons/stores/global.svelte';
+  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
   import {
     StylingTools,
     ToolbarStep,
@@ -17,36 +17,43 @@
     ChevronDown,
     ColorPalette,
     DataBase,
-    Document,
     Earth,
     EdgeNode,
+    Edit,
     Grid as GridIcon,
     Layers,
-    ListBoxes,
-    Pen,
+    Legend,
+    Location,
     RulerAlt,
     Search,
+    TextFont,
     View
   } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import ToolPopover from '../step-toolbar/tool-popover.svelte';
-  import { annotationsActions } from '../step-toolbar/tools/annotations/annotations.store.svelte';
+  import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations';
   import {
     getLegendState,
     legendActions
-  } from '../step-toolbar/tools/legend/legend.store.svelte';
+  } from '$lib/features/step-toolbar/tools/legend';
   import {
     closeSelectedToolPanel,
     selectTool
   } from '../step-toolbar/tools-list/tool-list.utils.svelte';
   import ToolContainer from '../step-toolbar/tools/tool-container.svelte';
-  import { VizSubTab } from './constants';
-  import DataTab from './data-tab/data-tab.svelte';
-  import ChooseVisualization from './visualization-tab/choose-visualization.svelte';
-  import ConfigureVisualization from './visualization-tab/configure-visualization.svelte';
-  import CustomizeBasemap from './visualization-tab/customize-basemap.svelte';
+  import { VizSubTab } from './main-toolbar.constants';
+  import DataTab from '$lib/features/data-tab/data-tab.svelte';
+  import ChooseVisualization from '$lib/features/visualization/choose-visualization.svelte';
+  import ConfigureVisualization from '$lib/features/visualization/configure-visualization.svelte';
+  import CustomizeBasemap from '$lib/features/visualization/customize-basemap.svelte';
 
   let activeVizSubTab = $state<VizSubTab>(VizSubTab.CHOOSE);
+
+  const vizSubTabs = [
+    { id: VizSubTab.CHOOSE, label: m.mobile_viz_tab_choose() },
+    { id: VizSubTab.CONFIGURE, label: m.mobile_viz_tab_configure() },
+    { id: VizSubTab.CUSTOMIZE, label: m.mobile_viz_tab_customize() }
+  ] as const;
 
   const stepLabels = {
     [ToolbarStep.Data]: m.step_data(),
@@ -65,7 +72,11 @@
       globalActions.closeMobileToolbar();
     } else {
       globalActions.setNavigationState(step);
-      globalActions.openMobileToolbar();
+      if (step === ToolbarStep.Styling) {
+        globalActions.closeMobileToolbar();
+      } else {
+        globalActions.openMobileToolbar();
+      }
     }
     closeSelectedToolPanel();
   };
@@ -79,6 +90,7 @@
   };
 
   const handleToolSelect = (tool: VisualizationTools) => {
+    globalActions.closeMobileToolbar();
     selectTool(tool);
   };
 
@@ -99,6 +111,7 @@
       });
     }
 
+    globalActions.closeMobileToolbar();
     selectTool(tool);
   };
 
@@ -113,7 +126,8 @@
 {#if globalState.isMobileView}
   <div
     class={clsx('mobile-toolbar-overlay', {
-      open: globalState.isMobileToolbarOpen
+      open: globalState.isMobileToolbarOpen,
+      'with-tools-bar': showToolsBar
     })}
     role="dialog"
     aria-modal="true"
@@ -164,135 +178,182 @@
           {/if}
         </div>
       {:else if globalState.selectedStep === ToolbarStep.Styling}
-        <div class="styling-tools-grid">
-          <p class="styling-intro">{m.styling_tools_intro()}</p>
-          <div class="tools-grid">
-            <button
-              class="tool-btn"
-              onclick={() => handleStylingToolSelect(StylingTools.Format)}
-            >
-              <Document size={32} />
-              <span>{m.tool_format()}</span>
-            </button>
-            <div class="tool-button-wrapper">
-              <button
-                class="tool-btn"
-                onclick={() => handleStylingToolSelect(StylingTools.Legend)}
-              >
-                <ListBoxes size={32} />
-                <span>{m.tool_legend()}</span>
-              </button>
-              {#if showLegendBadge}
-                <span class="notification-badge"></span>
-              {/if}
-            </div>
-            <button
-              class="tool-btn"
-              onclick={() =>
-                handleStylingToolSelect(StylingTools.GeoIndications)}
-            >
-              <Earth size={32} />
-              <span>{m.tool_geo_indications()}</span>
-            </button>
-            <button
-              class="tool-btn"
-              onclick={() => handleStylingToolSelect(StylingTools.Annotations)}
-            >
-              <Pen size={32} />
-              <span>{m.tool_annotations()}</span>
-            </button>
-            <button
-              class="tool-btn"
-              onclick={() =>
-                handleStylingToolSelect(StylingTools.ColorBlindness)}
-            >
-              <View size={32} />
-              <span>{m.tool_color_blindness()}</span>
-            </button>
-          </div>
+        <div class="styling-empty-state">
+          <p class="styling-hint">{m.styling_tools_hint()}</p>
         </div>
       {/if}
     </article>
 
     {#if globalState.selectedStep === ToolbarStep.Visualizations}
       <div class="viz-sub-tabs">
-        <button
-          class={clsx('sub-tab', {
-            selected: activeVizSubTab === VizSubTab.CHOOSE
-          })}
-          onclick={() => (activeVizSubTab = VizSubTab.CHOOSE)}
-        >
-          {m.mobile_viz_tab_choose()}
-        </button>
-        <button
-          class={clsx('sub-tab', {
-            selected: activeVizSubTab === VizSubTab.CONFIGURE
-          })}
-          onclick={() => (activeVizSubTab = VizSubTab.CONFIGURE)}
-        >
-          {m.mobile_viz_tab_customize()}
-        </button>
+        {#each vizSubTabs as tab (tab.id)}
+          <button
+            type="button"
+            class={clsx('sub-tab', {
+              selected: activeVizSubTab === tab.id
+            })}
+            onclick={() => (activeVizSubTab = tab.id)}
+            aria-pressed={activeVizSubTab === tab.id}
+          >
+            {tab.label}
+          </button>
+        {/each}
       </div>
     {/if}
   </div>
 
   {#if showToolsBar && hasProject}
     <nav class="mobile-tools-bar app-shadow" aria-label={m.mobile_tools_aria()}>
-      <IconButton
-        kind="ghost"
-        size="small"
-        icon={Search}
-        iconDescription={m.tool_search()}
-        isSelected={globalState.selectedTool === VisualizationTools.Search}
-        on:click={() => handleToolSelect(VisualizationTools.Search)}
-      />
-      <IconButton
-        kind="ghost"
-        size="small"
-        icon={Layers}
-        iconDescription={m.tool_layers()}
-        isSelected={globalState.selectedTool === VisualizationTools.Layers}
-        on:click={() => handleToolSelect(VisualizationTools.Layers)}
-      />
-      <IconButton
-        kind="ghost"
-        size="small"
-        icon={Earth}
-        iconDescription={m.tool_projection()}
-        isSelected={globalState.selectedTool === VisualizationTools.Projection}
-        on:click={() => handleToolSelect(VisualizationTools.Projection)}
-      />
-      <IconButton
-        kind="ghost"
-        size="small"
-        icon={EdgeNode}
-        iconDescription={m.tool_simplification()}
-        isSelected={globalState.selectedTool ===
-          VisualizationTools.Simplification}
-        on:click={() => handleToolSelect(VisualizationTools.Simplification)}
-      />
-      <IconButton
-        kind="ghost"
-        size="small"
-        icon={GridIcon}
-        iconDescription={m.tool_facets()}
-        isSelected={globalState.selectedTool === VisualizationTools.Facets}
-        on:click={() => handleToolSelect(VisualizationTools.Facets)}
-      />
-
-      <ToolPopover
-        light
-        open={!!globalState.selectedTool}
-        align="top"
-        viewMode={globalState.projectionViewMode ?? 'list'}
-        listWidth={320}
-        gridWidth="100vw"
-      >
-        {#snippet content()}
-          <ToolContainer />
-        {/snippet}
-      </ToolPopover>
+      {#if globalState.selectedStep === ToolbarStep.Visualizations}
+        <button
+          type="button"
+          class="mobile-tool-btn"
+          class:active={globalState.selectedTool === VisualizationTools.Search}
+          aria-pressed={globalState.selectedTool === VisualizationTools.Search}
+          onclick={() => handleToolSelect(VisualizationTools.Search)}
+        >
+          {#if globalState.selectedTool === VisualizationTools.Search}
+            <span class="tool-active-indicator"></span>
+          {/if}
+          <Search size={20} />
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-btn"
+          class:active={globalState.selectedTool === VisualizationTools.Layers}
+          aria-pressed={globalState.selectedTool === VisualizationTools.Layers}
+          onclick={() => handleToolSelect(VisualizationTools.Layers)}
+        >
+          {#if globalState.selectedTool === VisualizationTools.Layers}
+            <span class="tool-active-indicator"></span>
+          {/if}
+          <Layers size={20} />
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-btn"
+          class:active={globalState.selectedTool ===
+            VisualizationTools.Projection}
+          aria-pressed={globalState.selectedTool ===
+            VisualizationTools.Projection}
+          onclick={() => handleToolSelect(VisualizationTools.Projection)}
+        >
+          {#if globalState.selectedTool === VisualizationTools.Projection}
+            <span class="tool-active-indicator"></span>
+          {/if}
+          <Earth size={20} />
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-btn"
+          class:active={globalState.selectedTool ===
+            VisualizationTools.Simplification}
+          aria-pressed={globalState.selectedTool ===
+            VisualizationTools.Simplification}
+          onclick={() => handleToolSelect(VisualizationTools.Simplification)}
+        >
+          {#if globalState.selectedTool === VisualizationTools.Simplification}
+            <span class="tool-active-indicator"></span>
+          {/if}
+          <EdgeNode size={20} />
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-btn"
+          class:active={globalState.selectedTool === VisualizationTools.Facets}
+          aria-pressed={globalState.selectedTool === VisualizationTools.Facets}
+          onclick={() => handleToolSelect(VisualizationTools.Facets)}
+        >
+          {#if globalState.selectedTool === VisualizationTools.Facets}
+            <span class="tool-active-indicator"></span>
+          {/if}
+          <GridIcon size={20} />
+        </button>
+      {:else if globalState.selectedStep === ToolbarStep.Styling}
+        <button
+          type="button"
+          class="mobile-tool-btn"
+          class:active={globalState.selectedTool === StylingTools.Format}
+          aria-pressed={globalState.selectedTool === StylingTools.Format}
+          onclick={() => handleStylingToolSelect(StylingTools.Format)}
+        >
+          {#if globalState.selectedTool === StylingTools.Format}
+            <span class="tool-active-indicator"></span>
+          {/if}
+          <TextFont size={20} />
+        </button>
+        <div class="mobile-tool-wrapper">
+          <button
+            type="button"
+            class="mobile-tool-btn"
+            class:active={globalState.selectedTool === StylingTools.Legend}
+            aria-pressed={globalState.selectedTool === StylingTools.Legend}
+            onclick={() => handleStylingToolSelect(StylingTools.Legend)}
+          >
+            {#if globalState.selectedTool === StylingTools.Legend}
+              <span class="tool-active-indicator"></span>
+            {/if}
+            <Legend size={20} />
+          </button>
+          {#if showLegendBadge}
+            <span class="notification-badge"></span>
+          {/if}
+        </div>
+        <button
+          type="button"
+          class="mobile-tool-btn"
+          class:active={globalState.selectedTool ===
+            StylingTools.GeoIndications}
+          aria-pressed={globalState.selectedTool ===
+            StylingTools.GeoIndications}
+          onclick={() => handleStylingToolSelect(StylingTools.GeoIndications)}
+        >
+          {#if globalState.selectedTool === StylingTools.GeoIndications}
+            <span class="tool-active-indicator"></span>
+          {/if}
+          <Location size={20} />
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-btn"
+          class:active={globalState.selectedTool === StylingTools.Annotations}
+          aria-pressed={globalState.selectedTool === StylingTools.Annotations}
+          onclick={() => handleStylingToolSelect(StylingTools.Annotations)}
+        >
+          {#if globalState.selectedTool === StylingTools.Annotations}
+            <span class="tool-active-indicator"></span>
+          {/if}
+          <Edit size={20} />
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-btn"
+          class:active={globalState.selectedTool ===
+            StylingTools.ColorBlindness}
+          aria-pressed={globalState.selectedTool ===
+            StylingTools.ColorBlindness}
+          onclick={() => handleStylingToolSelect(StylingTools.ColorBlindness)}
+        >
+          {#if globalState.selectedTool === StylingTools.ColorBlindness}
+            <span class="tool-active-indicator"></span>
+          {/if}
+          <View size={20} />
+        </button>
+      {/if}
     </nav>
+
+    <ToolPopover
+      light
+      open={!!globalState.selectedTool}
+      align="top"
+      viewMode={globalState.projectionViewMode ?? 'list'}
+      listWidth={320}
+      gridWidth="100vw"
+    >
+      {#snippet content()}
+        <ToolContainer />
+      {/snippet}
+    </ToolPopover>
   {/if}
 
   <nav
@@ -339,11 +400,18 @@
     bottom: calc(60px + env(safe-area-inset-bottom, 0px));
     background: var(--cds-ui-01);
     z-index: var(--z-mobile-toolbar);
-    transform: translateY(100%);
+    transform: translateY(calc(100% + 80px));
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     flex-direction: column;
     overflow: hidden;
+  }
+
+  .mobile-toolbar-overlay.with-tools-bar {
+    bottom: calc(
+      60px + env(safe-area-inset-bottom, 0px) + var(--cds-spacing-10) +
+        var(--cds-spacing-03)
+    );
   }
 
   .mobile-toolbar-overlay.open {
@@ -386,6 +454,7 @@
     flex: 1;
     overflow-y: auto;
     padding: 0;
+    padding-bottom: calc(var(--cds-spacing-10) + var(--cds-spacing-03));
     -webkit-overflow-scrolling: touch;
   }
 
@@ -426,67 +495,72 @@
     border-bottom-color: var(--cds-interactive-01);
   }
 
-  .styling-tools-grid {
+  .styling-empty-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
     padding: var(--cds-spacing-05);
   }
 
-  .styling-intro {
+  .styling-hint {
     color: var(--cds-text-02);
     font-size: 0.875rem;
-    margin-bottom: var(--cds-spacing-05);
     text-align: center;
   }
 
-  .tools-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--cds-spacing-04);
-  }
-
-  .tool-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-    padding: var(--cds-spacing-04);
-    background: var(--cds-ui-01);
-    border: 1px solid var(--cds-ui-03);
-    border-radius: 8px;
-    color: var(--cds-text-01);
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .tool-btn:hover {
-    background: var(--cds-hover-ui);
-  }
-
-  .tool-btn:active {
-    background: var(--cds-active-ui);
-  }
-
-  .tool-btn :global(svg) {
-    fill: var(--cds-text-01);
-  }
-
-  .tool-btn span {
-    font-size: 0.75rem;
-    font-weight: 500;
-    text-align: center;
-  }
-
-  .tool-button-wrapper {
+  .mobile-tool-wrapper {
     position: relative;
   }
 
-  .tool-button-wrapper .tool-btn {
-    width: 100%;
+  .mobile-tool-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--cds-text-01);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+  }
+
+  .mobile-tool-btn:hover {
+    background: var(--cds-hover-ui);
+  }
+
+  .mobile-tool-btn:active {
+    background: var(--cds-active-ui);
+  }
+
+  .mobile-tool-btn.active {
+    background: var(--cds-layer-selected);
+  }
+
+  .mobile-tool-btn :global(svg) {
+    fill: var(--cds-text-01);
+  }
+
+  .tool-active-indicator {
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6px;
+    height: 6px;
+    background-color: var(--cds-support-error, #da1e28);
+    border-radius: 50%;
+    pointer-events: none;
   }
 
   .notification-badge {
     position: absolute;
-    top: 8px;
-    right: 8px;
+    top: 2px;
+    right: 2px;
     width: 8px;
     height: 8px;
     background-color: var(--cds-support-error, #da1e28);
@@ -503,11 +577,11 @@
     transform: translateX(-50%);
     display: flex;
     align-items: center;
-    gap: var(--cds-spacing-02);
+    gap: var(--cds-spacing-01);
     padding: var(--cds-spacing-02) var(--cds-spacing-03);
-    background: var(--cds-ui-01);
-    border-radius: 8px;
-    z-index: var(--z-mobile-overlay);
+    background: var(--cds-background);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    z-index: calc(var(--z-mobile-toolbar) + 1);
   }
 
   .mobile-bottom-nav {
@@ -545,11 +619,12 @@
   }
 
   .nav-tab.selected {
-    color: var(--cds-interactive-01);
+    color: var(--cds-text-primary);
+    background: var(--cds-layer-selected);
   }
 
   .nav-tab.selected :global(svg) {
-    fill: var(--cds-interactive-01);
+    fill: var(--cds-text-primary);
   }
 
   .nav-tab :global(svg) {

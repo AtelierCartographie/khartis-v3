@@ -3,7 +3,7 @@
   import {
     globalActions,
     globalState
-  } from '$lib/features/commons/store/global.svelte';
+  } from '$lib/features/commons/stores/global.svelte';
   import { m } from '$lib/paraglide/messages.js';
   import { ChevronLeft } from 'carbon-icons-svelte';
 </script>

@@ -13,7 +13,7 @@ import {
   BasemapRemarquables,
   BasemapRepresentation,
   BASEMAP_LAYER_CONFIG
-} from '$lib/features/main-toolbar/constants';
+} from '$lib/features/commons/constants/visualization.constants';
 import {
   BASEMAP_LAYER_ID,
   basemapLayersStore

@@ -16,10 +16,10 @@ import {
   getPreferredBasemapSimplificationLevel,
   resolveBasemapVariantFile
 } from '$lib/features/map/services/basemap.service.svelte';
-import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
-import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import {
   simplifyGeometryTable,
   calculateToleranceFromRate

@@ -1,9 +1,9 @@
-import { ParseError } from '$lib/features/commons/errors/pipeline.errors';
+import { ParseError } from '$lib/features/commons/pipeline.errors';
 import { MIME } from '$lib/features/commons/constants';
 import {
   FileType,
   type UploadedFile
-} from '$lib/features/commons/store/create-project.types';
+} from '$lib/features/commons/stores/create-project.types';
 import type { GeoJSONFeatureCollection } from '$lib/types/data';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import * as m from '$lib/paraglide/messages';

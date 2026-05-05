@@ -15,28 +15,24 @@ import { toJsonValue } from '$lib/features/commons/utils/json.utils';
 import type { SerializedProjectData } from '$lib/types/serialization.types';
 import { persistenceRegistry } from '$lib/features/project-management';
 import { createCompanionFilesFromAssetRefs } from '$lib/features/project-management/core/asset-store';
-import { layersActions } from '../../step-toolbar/tools/layers/layers.store.svelte';
-import { legendActions } from '../../step-toolbar/tools/legend/legend.store.svelte';
-import { projectionActions } from '../../step-toolbar/tools/projections/projection.store.svelte';
-import {
-  formatError,
-  isFatalError,
-  ParseError
-} from '../errors/pipeline.errors';
-import type { UploadedFile } from '../store/create-project.types';
+import { layersActions } from '$lib/features/step-toolbar/tools/layers';
+import { legendActions } from '$lib/features/step-toolbar/tools/legend';
+import { projectionActions } from '$lib/features/step-toolbar/tools/projections';
+import { formatError, isFatalError, ParseError } from '../pipeline.errors';
+import type { UploadedFile } from '../stores/create-project.types';
 import {
   FileType,
   COLUMN_TRANSFORMATION_TYPES
-} from '../store/create-project.types';
-import { dataTabActions } from '../store/data-tab.store.svelte';
-import { datasetsStore } from '../store/datasets.store.svelte';
-import { globalActions, globalState } from '../store/global.svelte';
-import { projectStore } from '../store/project.store.svelte';
+} from '../stores/create-project.types';
+import { dataTabActions } from '../stores/data-tab.store.svelte';
+import { datasetsStore } from '../stores/datasets.store.svelte';
+import { globalActions, globalState } from '../stores/global.svelte';
+import { projectStore } from '../stores/project.store.svelte';
 import {
   ClassificationMethod,
   visualizationStore,
   type VisualizationConfig
-} from '../store/visualization.store.svelte';
+} from '../stores/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
 import {
   notificationManager,
@@ -54,11 +50,11 @@ import {
   computeDivergingSplit,
   generateColorsForBreaks
 } from './classification.service';
-import { FillMode } from '../../main-toolbar/constants';
+import { FillMode } from '$lib/features/commons/constants/visualization.constants';
 import {
   getColorBlindnessState,
   isColorBlindnessActive
-} from '../../step-toolbar/tools/color-blindness/color-blindness.store.svelte';
+} from '$lib/features/step-toolbar/tools/color-blindness';
 import {
   findPaletteById,
   generatePaletteColors,
@@ -69,7 +65,7 @@ import {
   resolveBreakpointLowerClassCount,
   resolveComputedClassCount,
   resolveRequestedClassCount
-} from '../../main-toolbar/visualization-tab/components/discretization/discretization.utils';
+} from '$lib/features/visualization/components/discretization/discretization.utils';
 import * as m from '$lib/paraglide/messages';
 
 function createDataOrchestratorService() {

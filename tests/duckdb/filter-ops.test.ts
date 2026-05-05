@@ -5,7 +5,7 @@ import {
   formatFilterValue
 } from '$lib/features/duckdb/orchestrator/filter-ops';
 import { FilterOperatorEnum } from '$lib/features/duckdb/types';
-import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
+import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 
 function filter(
   operator: FilterOperatorEnum,

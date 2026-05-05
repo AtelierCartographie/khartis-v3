@@ -1,7 +1,7 @@
 <script lang="ts">
   import Tooltip from '$lib/features/commons/components/carbon/tooltip.svelte';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import {
     formatDate,
     formatFileSize
@@ -20,7 +20,7 @@
   } from 'carbon-components-svelte';
   import { Calendar, Link } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
-  import { useProjectNavigation } from './hooks';
+  import { useProjectNavigation } from './use-project-navigation';
   import { CreateProjectValidationService } from './services/validation.service';
 
   interface Props {
