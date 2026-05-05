@@ -1,10 +1,10 @@
 import type { ProjectionLike } from 'geoarrow-deck-stream';
-import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
-import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
+import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import type { DuckDBDataset } from '$lib/features/duckdb/types';
-import { getProjectionState } from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
+import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
 import type { BBox } from '../types';
 import {
   basemapService,

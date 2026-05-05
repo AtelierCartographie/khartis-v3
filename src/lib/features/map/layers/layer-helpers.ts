@@ -6,8 +6,8 @@ import {
   getProportionalSymbolSizeForValue,
   getSizeForValue
 } from '../utils/data-styling.utils';
-import { BasemapDottedPattern } from '$lib/features/main-toolbar/constants';
-import { ScaleType } from '$lib/features/commons/store/visualization.store.svelte';
+import { BasemapDottedPattern } from '$lib/features/commons/constants/visualization.constants';
+import { ScaleType } from '$lib/features/commons/stores/visualization.store.svelte';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 
 export const HIGHLIGHT_FILL_COLOR: RGBColor = [180, 180, 180];
@@ -38,6 +38,19 @@ export function withOpacity(color: number[], opacity = 1): Color {
   const normalized = Math.min(Math.max(opacity, 0), 1);
   const alpha = Math.round(normalized * 255);
   return [color[0] ?? 0, color[1] ?? 0, color[2] ?? 0, alpha];
+}
+
+export function sortBySizeDescending<T>(
+  items: readonly T[],
+  sizeFn: (item: T) => number
+): T[] {
+  return items
+    .map((item, index) => ({ item, size: sizeFn(item), index }))
+    .sort((a, b) => {
+      if (b.size !== a.size) return b.size - a.size;
+      return a.index - b.index;
+    })
+    .map(({ item }) => item);
 }
 
 export function createCategoricalColorAccessor(

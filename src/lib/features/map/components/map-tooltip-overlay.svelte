@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
-  import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
+  import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
   import { mapTooltipStore } from '../stores/map-tooltip.store.svelte';
   import { DECK_CANVAS_ID } from '../constants';
   import { resolveTooltipViewportPosition } from '../utils/tooltip-position';

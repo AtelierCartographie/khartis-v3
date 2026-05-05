@@ -4,7 +4,7 @@
     FormatMode,
     PageModel
   } from '$lib/features/commons/constants/ui.constants';
-  import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+  import { getFormatState } from '$lib/features/step-toolbar/tools/format';
   import { m } from '$lib/paraglide/messages.js';
   import {
     Modal,
@@ -18,7 +18,7 @@
     Download,
     Image
   } from 'carbon-icons-svelte';
-  import { useExportModal } from './hooks';
+  import { useExportModal } from './use-export-modal.svelte';
   import {
     ExportTab,
     MAP_FORMAT,
@@ -26,13 +26,13 @@
     EXPORT_RESOLUTION,
     formatExportDimensions,
     getExportDimensionsForPage
-  } from './types';
+  } from './header.types';
   import type {
     MapExportFormat,
     DataExportFormat,
     ExportTabType,
     ExportResolution
-  } from './types';
+  } from './header.types';
 
   const modal = useExportModal();
   const currentFormat = $derived(getFormatState());
@@ -413,10 +413,12 @@
     background: var(--cds-background, #ffffff);
   }
 
-  :global(.download-modal .bx--modal-container) {
-    width: min(38rem, calc(100vw - 2rem));
-    max-height: calc(100vh - 3rem);
-    border-radius: 0;
+  @media (min-width: 1024px) {
+    :global(.download-modal .bx--modal-container) {
+      width: min(38rem, calc(100vw - 2rem));
+      max-height: calc(100vh - 3rem);
+      border-radius: 0;
+    }
   }
 
   :global(.download-modal .bx--modal-header) {
@@ -439,6 +441,7 @@
   @media (max-width: 1023px) {
     #khartis-download-button :global(.bx--btn) {
       min-width: 3rem;
+      min-height: 3rem;
       padding-inline: 0.75rem;
       font-size: 0;
     }
@@ -605,10 +608,6 @@
   }
 
   @media (max-width: 671px) {
-    :global(.download-modal .bx--modal-container) {
-      width: calc(100vw - 1rem);
-    }
-
     :global(.download-modal .bx--modal-content) {
       padding-inline: var(--cds-spacing-05);
       padding-block-end: var(--cds-spacing-05);

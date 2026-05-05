@@ -1,6 +1,6 @@
 <script lang="ts">
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { sanitizeProjectName } from '$lib/features/commons/utils/sanitize.utils';
   import { m } from '$lib/paraglide/messages.js';
   import { TextInput } from 'carbon-components-svelte';
@@ -56,6 +56,7 @@
   id="khartis-project-title"
   class="project-title"
   data-testid="project-title"
+  title={inputValue || m.project_placeholder()}
 >
   <TextInput
     light

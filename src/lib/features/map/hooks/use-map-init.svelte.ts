@@ -3,11 +3,11 @@ import type { DeckProps, View } from '@deck.gl/core';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { CanvasContext } from '@luma.gl/core';
 import maplibregl from 'maplibre-gl';
-import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { EnvironmentUtils } from '$lib/features/commons/utils/environment.utils';
 
 export type DeckInstance = Deck<View | View[] | null>;
-import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
+import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   BasemapStyle,
@@ -60,7 +60,7 @@ export interface UseMapInitProps {
   onMapLoaded: () => void;
   onZoom: () => void;
   onMoveEnd: () => void;
-  getActiveVisualizations?: () => import('$lib/features/commons/store/visualization.store.svelte').VisualizationConfig[];
+  getActiveVisualizations?: () => import('$lib/features/commons/stores/visualization.store.svelte').VisualizationConfig[];
   onOrthographicViewStateChanged?: (
     target: [number, number, number],
     zoom: number

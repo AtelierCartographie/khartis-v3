@@ -17,7 +17,7 @@ import {
 import {
   DataValidationError,
   DuckDBError
-} from '$lib/features/commons/errors/pipeline.errors';
+} from '$lib/features/commons/pipeline.errors';
 import type { DuckDBContext } from '$lib/features/duckdb/types';
 
 function ctx(): DuckDBContext {

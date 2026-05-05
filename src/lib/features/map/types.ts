@@ -98,7 +98,7 @@ export interface YearFilterInfo {
 
 export interface LayerContext {
   viz:
-    | import('$lib/features/commons/store/visualization.store.svelte').VisualizationConfig
+    | import('$lib/features/commons/stores/visualization.store.svelte').VisualizationConfig
     | null;
   datasetId: string | undefined;
   fillColor: RGBColor;
@@ -136,7 +136,7 @@ export interface LayerContext {
   /** Cartographic projection applied before Deck.gl renders the geometry */
   customProjection?: ProjectionLike;
   /** Primitive sublayer render order (from viz store) */
-  primitiveOrder?: import('$lib/features/commons/store/visualization.store.svelte').PrimitiveFilter[];
+  primitiveOrder?: import('$lib/features/commons/stores/visualization.store.svelte').PrimitiveFilter[];
   densityTable?: ArrowTable;
   densityGeometryInfo?: GeometryInfo;
   /** Split rendering: dataset attributes Arrow paired with the basemap geometry. */

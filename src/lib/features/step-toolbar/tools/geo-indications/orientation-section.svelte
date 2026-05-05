@@ -15,7 +15,7 @@
     geoIndicationsActions,
     geoIndicationsState
   } from './geo-indications.store.svelte';
-  import type { ColorPickerValidateEvent } from './utils';
+  import type { ColorPickerValidateEvent } from './geo-indications.utils';
 
   const store = geoIndicationsActions;
   const geoState = $derived(geoIndicationsState);

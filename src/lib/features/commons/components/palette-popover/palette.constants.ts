@@ -12,7 +12,7 @@ import type {
   CategoricalColorOptions
 } from '@ateliercartographie/ok-palette';
 import { motif } from '@ateliercartographie/motif.js';
-import type { PatternParams } from '$lib/features/commons/store/visualization.store.svelte';
+import type { PatternParams } from '$lib/features/commons/stores/visualization.store.svelte';
 import { webglToHex } from '$lib/features/commons/utils/color-utils';
 import { PATTERN_TYPE_MAP } from '$lib/features/map/layers/pattern-texture';
 import {

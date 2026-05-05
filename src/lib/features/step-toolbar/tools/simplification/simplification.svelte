@@ -18,14 +18,14 @@
   import { Undo, Earth, LicenseGlobal } from 'carbon-icons-svelte';
   import type { SimplificationResult } from './simplification.types';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
-  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
   import {
     basemapService,
     getAvailableBasemapSimplificationLevels,
     getPreferredBasemapSimplificationLevel
   } from '$lib/features/map/services/basemap.service.svelte';
-  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {
     simplificationActions,
     getSimplificationState
@@ -419,6 +419,7 @@
     :global(.bx--radio-button-group:not(.bx--radio-button-group--vertical)) {
     gap: var(--cds-spacing-05);
     width: 100%;
+    flex-wrap: wrap;
   }
 
   #khartis-simplification-tool
@@ -426,8 +427,9 @@
       .bx--radio-button-group:not(.bx--radio-button-group--vertical)
         .bx--radio-button-wrapper
     ) {
-    flex: 1 0 0;
+    flex: 1 0 auto;
     margin-right: 0;
+    min-width: fit-content;
   }
 
   .simplification-loader {

@@ -125,7 +125,7 @@ vi.mock('$lib/features/duckdb', () => ({
   }
 }));
 
-vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   datasetsStore: {
     get datasets() {
       return mocks.datasets;
@@ -143,7 +143,7 @@ vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
   }
 }));
 
-vi.mock('$lib/features/commons/store/project.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/project.store.svelte', () => ({
   projectStore: {
     currentProject: undefined
   }
@@ -162,13 +162,13 @@ vi.mock('$lib/features/step-toolbar/tools/legend/legend.store.svelte', () => ({
   }
 }));
 
-import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   applySuggestionToVisualization,
   isVisualizationMatchingSuggestion,
   resolveBlankVisualizationType,
   resolveDatasetGeometryType
-} from '$lib/features/main-toolbar/visualization-tab/utils/suggestion.service';
+} from '$lib/features/visualization/utils/suggestion.service';
 import {
   shouldApplyCategorical,
   shouldApplyChoropleth,

@@ -17,7 +17,7 @@ vi.mock('$lib/features/duckdb', () => ({
   GEO_CONSTANTS: { WGS84_CRS: 'EPSG:4326' }
 }));
 
-vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   datasetsStore: { getAllDatasets: () => [], selectedDataset: null }
 }));
 
@@ -39,7 +39,7 @@ import {
   SPARSE_POLYGON_THRESHOLD,
   SPARSE_SYMBOL_FLOOR_PX,
   DENSE_SYMBOL_FLOOR_PX
-} from '$lib/features/commons/store/visualization.store.svelte';
+} from '$lib/features/commons/stores/visualization.store.svelte';
 
 describe('resolveProportionalSymbolMaxSize — density-aware floor', () => {
   it('caps at 24 px for very small datasets', () => {

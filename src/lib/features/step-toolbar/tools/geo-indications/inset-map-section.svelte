@@ -19,7 +19,7 @@
   import {
     INSET_MAP_SIZE_LIMITS,
     type ColorPickerValidateEvent
-  } from './utils';
+  } from './geo-indications.utils';
 
   const store = geoIndicationsActions;
   const geoState = $derived(geoIndicationsState);

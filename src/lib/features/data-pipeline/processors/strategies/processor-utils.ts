@@ -1,5 +1,5 @@
-import { ParseError } from '$lib/features/commons/errors/pipeline.errors';
-import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+import { ParseError } from '$lib/features/commons/pipeline.errors';
+import type { UploadedFile } from '$lib/features/commons/stores/create-project.types';
 import * as m from '$lib/paraglide/messages';
 
 export function isTabularData(

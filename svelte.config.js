@@ -3,7 +3,8 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { optimizeCss, optimizeImports } from 'carbon-preprocess-svelte';
 import { loadEnv } from 'vite';
 
-const mode = process.env.NODE_ENV || 'development';
+const isBuild = process.argv.includes('build');
+const mode = process.env.NODE_ENV ?? (isBuild ? 'production' : 'development');
 const env = loadEnv(mode, process.cwd(), '');
 
 const config = {

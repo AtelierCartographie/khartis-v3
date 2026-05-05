@@ -16,7 +16,7 @@ vi.mock('$lib/features/duckdb', () => ({
   }
 }));
 
-vi.mock('$lib/features/commons/store/map-instance.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/map-instance.store.svelte', () => ({
   mapInstanceStore: {
     centerOnDataPoint: mocks.centerOnDataPoint
   }

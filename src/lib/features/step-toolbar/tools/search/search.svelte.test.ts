@@ -32,7 +32,7 @@ const mocks = vi.hoisted(() => ({
   }
 }));
 
-vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   datasetsStore: {
     get selectedDataset() {
       return {
@@ -53,7 +53,7 @@ vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
   }
 }));
 
-vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
   visualizationStore: {
     get selectedVisualization() {
       return undefined;

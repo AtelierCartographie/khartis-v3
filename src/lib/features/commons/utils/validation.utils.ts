@@ -3,7 +3,7 @@ import {
   STORAGE_LIMITS,
   getMaxFileSizeForType,
   getWarningFileSizeForType
-} from '../configs/validation.config';
+} from '../validation.config';
 import { estimateProjectStorageSize } from './size-estimation.utils';
 import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 import { detectFileType } from './file-import.utils';

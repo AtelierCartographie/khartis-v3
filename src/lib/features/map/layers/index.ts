@@ -8,6 +8,7 @@ export {
   createProportionalSizeAccessor,
   createProportionalSymbolSizeAccessor,
   HIGHLIGHT_FILL_COLOR,
+  sortBySizeDescending,
   withGeoJsonRowHighlight,
   withGeoJsonRowHighlightAccessor,
   withOpacity,

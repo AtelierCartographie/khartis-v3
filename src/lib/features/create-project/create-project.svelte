@@ -2,8 +2,8 @@
   import {
     createProjectActions,
     createProjectState
-  } from '$lib/features/commons/store/create-project.store.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  } from '$lib/features/commons/stores/create-project.store.svelte';
+  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { m } from '$lib/paraglide/messages';
   import {
     ComposedModal,
@@ -212,17 +212,27 @@
     }
   }
 
-  #khartis-create-project :global(.bx--modal-container) {
-    width: 90vw;
-    max-width: 700px;
-    height: 85vh;
-    background: var(--cds-background);
+  @media (min-width: 1024px) {
+    #khartis-create-project :global(.bx--modal-container) {
+      width: 90vw;
+      max-width: 700px;
+      height: 85vh;
+      background: var(--cds-background);
+    }
+
+    #khartis-create-project :global(.fixed-modal-body) {
+      height: calc(85vh - 120px);
+      overflow: hidden;
+      padding: var(--cds-spacing-05);
+    }
   }
 
-  #khartis-create-project :global(.fixed-modal-body) {
-    height: calc(85vh - 120px);
-    overflow: hidden;
-    padding: var(--cds-spacing-05);
+  @media (max-width: 1023px) {
+    #khartis-create-project :global(.fixed-modal-body) {
+      height: calc(100dvh - 120px);
+      overflow-y: auto;
+      padding: var(--cds-spacing-04);
+    }
   }
 
   #khartis-create-project :global(.no-close-button .bx--modal-close) {
@@ -285,28 +295,7 @@
     line-height: var(--cds-body-short-01-line-height, 1.28572);
   }
 
-  @media (max-width: 1024px) {
-    #khartis-create-project :global(.bx--modal-container) {
-      width: 95vw;
-      height: 90vh;
-    }
-
-    #khartis-create-project :global(.fixed-modal-body) {
-      height: calc(90vh - 120px);
-    }
-  }
-
   @media (max-width: 768px) {
-    #khartis-create-project :global(.bx--modal-container) {
-      width: 98vw;
-      height: 95vh;
-    }
-
-    #khartis-create-project :global(.fixed-modal-body) {
-      height: calc(95vh - 120px);
-      padding: var(--cds-spacing-04);
-    }
-
     .project-type-selector {
       flex-direction: column;
       gap: var(--cds-spacing-03);
