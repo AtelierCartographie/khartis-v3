@@ -1,12 +1,8 @@
 import { globalActions } from '$lib/features/commons/stores/global.svelte';
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { ToolbarStep } from '$lib/features/commons/types/global';
-
-export interface MainToolbarState {
-  canNavigateToVisualization: boolean;
-  hasValidData: boolean;
-  currentProjectName: string;
-}
+import type { MainToolbarState } from './main-toolbar.store.svelte.types';
+export type { MainToolbarState } from './main-toolbar.store.svelte.types';
 
 const DEFAULT_STATE: MainToolbarState = {
   canNavigateToVisualization: false,

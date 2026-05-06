@@ -3,7 +3,7 @@ import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-
 import * as m from '$lib/paraglide/messages';
 import type { ExampleProject } from './stores/create-project.types';
 
-export interface ExampleCategoryConfig {
+interface ExampleCategoryConfig {
   id: ExampleCategory;
   label: string;
   icon?: string;

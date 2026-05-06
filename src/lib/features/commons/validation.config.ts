@@ -7,7 +7,7 @@ export {
   validationFailure
 } from '$lib/features/data-pipeline/types';
 
-export interface StorageLimits {
+interface StorageLimits {
   maxFileSize: number;
   warningFileSize: number;
   maxProjectSize: number;
