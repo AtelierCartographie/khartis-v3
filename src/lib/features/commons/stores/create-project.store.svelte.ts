@@ -12,7 +12,10 @@ import {
   type ProcessingCallbacks
 } from '../../create-project/services/file-processor.service';
 import { CreateProjectValidationService } from '../../create-project/services/validation.service';
-import { getMaxFileSizeForType, STORAGE_LIMITS } from '../validation.config';
+import {
+  getMaxFileSizeForType,
+  STORAGE_LIMITS
+} from '../constants/validation.config';
 import {
   createUploadedFile,
   extractDataFromPaste,
@@ -32,8 +35,8 @@ import type {
   ExampleProject,
   ProjectTab,
   UploadedFile
-} from './create-project.types';
-import { DataSourceType } from './create-project.types';
+} from '../types/create-project.types';
+import { DataSourceType } from '../types/create-project.types';
 import { datasetsStore } from './datasets.store.svelte';
 import { projectStore } from './project.store.svelte';
 import { visualizationStore } from './visualization.store.svelte';

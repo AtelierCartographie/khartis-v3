@@ -61,6 +61,11 @@ import {
   StrokeMode
 } from '$lib/features/commons/constants/visualization.constants';
 import { MultiShapeLayer } from './multi-shape-layer';
+import {
+  DEFAULT_TEXT_LINE_HEIGHT,
+  EXPLICIT_TEXT_CHARACTER_SET,
+  resolveTextFontSettings
+} from './text-character-set';
 import type {
   DeckDataRow,
   GeometryInfo,
@@ -154,20 +159,6 @@ const HIGHLIGHT_DIMMING_FACTOR = 0.3;
 export const DEFAULT_TEXT_SIZE = PRINT_STANDARD_TOKENS.annotations.noteFontSize;
 export const DEFAULT_HALO_WIDTH = 2;
 export const DEFAULT_TEXT_FONT = resolveFontFamilyStack(DEFAULT_FONT_FAMILY);
-/**
- * SDF atlas tuning for Deck.gl TextLayer. The bare `{ sdf: true }` default
- * leaves Deck.gl on its built-ins (fontSize 64, buffer 4, radius 12), which
- * looks acceptable on Retina (devicePixelRatio >= 2) but produces fuzzy edges
- * on low-DPI external monitors (1x at 2560x1440). A larger atlas (fontSize 96)
- * gives the SDF generator more source pixels per glyph, while wider buffer +
- * radius support the configured halo widths without clipping.
- */
-export const DEFAULT_TEXT_FONT_SETTINGS = {
-  sdf: true,
-  fontSize: 96,
-  buffer: 8,
-  radius: 16
-} as const;
 const SELECTED_POLYGON_STROKE_COLOR: [number, number, number, number] = [
   15, 98, 254, 255
 ];
@@ -3096,8 +3087,14 @@ function createTextOverlayLayers(
           secondaryLabelsConfig.bold ? '700' : '400',
           secondaryLabelsConfig.italic
         ),
-        characterSet: 'auto',
-        fontSettings: DEFAULT_TEXT_FONT_SETTINGS,
+        characterSet: EXPLICIT_TEXT_CHARACTER_SET,
+        fontSettings: resolveTextFontSettings(
+          secondaryLabelsConfig.halo &&
+            (secondaryLabelsConfig.haloWidth ?? DEFAULT_HALO_WIDTH) > 0
+            ? 'halo-on'
+            : 'halo-off'
+        ),
+        lineHeight: DEFAULT_TEXT_LINE_HEIGHT,
         outlineColor: withOpacity(
           resolveStyleColor(secondaryLabelsConfig.haloColor, [255, 255, 255]),
           1
@@ -3264,8 +3261,13 @@ function createTextOverlayLayers(
             textConfig.bold ? '700' : '400',
             textConfig.italic
           ),
-          characterSet: 'auto',
-          fontSettings: DEFAULT_TEXT_FONT_SETTINGS,
+          characterSet: EXPLICIT_TEXT_CHARACTER_SET,
+          fontSettings: resolveTextFontSettings(
+            textConfig.halo && (textConfig.haloWidth ?? DEFAULT_HALO_WIDTH) > 0
+              ? 'halo-on'
+              : 'halo-off'
+          ),
+          lineHeight: DEFAULT_TEXT_LINE_HEIGHT,
           outlineColor: withOpacity(
             resolveStyleColor(textConfig.haloColor, [255, 255, 255]),
             1

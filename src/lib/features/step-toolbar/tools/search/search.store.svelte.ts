@@ -13,13 +13,13 @@ import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { projectHtmlLikeText } from '$lib/features/commons/utils/html-like-text.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import { Duck } from '$lib/features/duckdb';
-import { buildStripHtmlTextSqlExpression } from '$lib/features/duckdb/html-like-text.utils';
+import { buildStripHtmlTextSqlExpression } from '$lib/features/duckdb/utils/html-like-text.utils';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { mapHighlightStore } from '$lib/features/map/stores/map-highlight.store.svelte';
 import { mapTooltipStore } from '$lib/features/map/stores/map-tooltip.store.svelte';
 import type { TooltipEntry } from '$lib/features/map/types';
 import { centerMapOnTableRow } from '$lib/features/map/services/center-on-table-row.service';
-import type { SearchState } from './search.types';
+import type { SearchState } from '../../types/search.types';
 
 const MIN_SEARCH_LENGTH = 2;
 const ALL_SOURCES_ID = 'all';

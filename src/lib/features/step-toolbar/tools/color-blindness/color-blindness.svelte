@@ -6,7 +6,7 @@
     getColorBlindnessState,
     isColorBlindnessActive
   } from './color-blindness.store.svelte';
-  import type { ColorBlindnessState } from './color-blindness.types';
+  import type { ColorBlindnessState } from '../../types/color-blindness.types';
   import ColorBlindnessNotification from './color-blindness-notification.svelte';
 
   const colorBlindnessState = $derived(getColorBlindnessState());

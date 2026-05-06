@@ -1,7 +1,7 @@
 <script lang="ts">
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
   import type { TableMutation } from '$lib/features/commons/components/advanced-data-table/types';
-  import { FileType } from '$lib/features/commons/stores/create-project.types';
+  import { FileType } from '$lib/features/commons/types/create-project.types';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
@@ -12,7 +12,7 @@
   import type {
     EnrichDataState,
     GeolocationState
-  } from '$lib/features/commons/stores/data-tab.types';
+  } from '$lib/features/commons/types/data-tab.types';
   import {
     showError,
     showSuccess,

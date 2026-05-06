@@ -1,16 +1,16 @@
 import type {
   ProcessingCallbacks,
   FileProcessorService
-} from './file-processor.service.types';
+} from '../types/file-processing.service.types';
 export type {
   ProcessingCallbacks,
   FileProcessorService
-} from './file-processor.service.types';
+} from '../types/file-processing.service.types';
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import { FILE_EXTENSIONS, MIME } from '$lib/features/commons/constants';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
-import type { UploadedFile } from '$lib/features/commons/stores/create-project.types';
-import { FileType } from '$lib/features/commons/stores/create-project.types';
+import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
+import { FileType } from '$lib/features/commons/types/create-project.types';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { DeepDataValidator } from '$lib/features/commons/utils/deep-validator.utils';
 import { getFileExtension } from '$lib/features/commons/utils/file.utils';
@@ -137,7 +137,7 @@ import {
   convertRowsToTabular,
   createDataMatrix,
   type ColumnInfo
-} from '../file-processor.utils';
+} from '../utils/file-processor.utils';
 
 interface FileProcessor {
   process: (uploadedFile: UploadedFile, file: File) => Promise<void>;

@@ -2,7 +2,7 @@ import { PROJECT_CONST } from '../constants';
 import * as m from '$lib/paraglide/messages';
 import {
   clampFontSize,
-  DEFAULT_FONT_FAMILY,
+  CARTOGRAPHIC_FONT_FAMILY,
   normalizeFontFamily
 } from '$lib/features/step-toolbar/fonts.constants';
 
@@ -231,7 +231,7 @@ function backfillPrimitiveConfigs(
       fontFamily:
         normalizeFontFamily(
           typeof style.textFontFamily === 'string' ? style.textFontFamily : null
-        ) ?? DEFAULT_FONT_FAMILY,
+        ) ?? CARTOGRAPHIC_FONT_FAMILY,
       color: style.textColor,
       opacity: style.textOpacity ?? 0,
       size: clampFontSize(style.textSize as number | undefined, 12),
@@ -260,7 +260,7 @@ function backfillPrimitiveConfigs(
             typeof style.labelFontFamily === 'string'
               ? style.labelFontFamily
               : null
-          ) ?? DEFAULT_FONT_FAMILY,
+          ) ?? CARTOGRAPHIC_FONT_FAMILY,
         color: style.labelColor,
         opacity: style.labelOpacity ?? 0,
         size: clampFontSize(style.labelSize as number | undefined, 12),

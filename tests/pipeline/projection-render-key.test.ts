@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildProjectionRenderKey } from '$lib/features/step-toolbar/tools/projections/projection-render-key';
-import type { ProjectionState } from '$lib/features/step-toolbar/tools/projections/projections.types';
+import type { ProjectionState } from '$lib/features/step-toolbar/types/projections.types';
 import { ViewMode } from '$lib/features/commons/constants/ui.constants';
 
 const DEFAULT_STATE: ProjectionState = {

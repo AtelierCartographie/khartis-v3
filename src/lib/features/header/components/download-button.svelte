@@ -18,7 +18,7 @@
     Download,
     Image
   } from 'carbon-icons-svelte';
-  import { useExportModal } from '../use-export-modal.svelte';
+  import { useExportModal } from '../hooks/use-export-modal.svelte';
   import {
     ExportTab,
     MAP_FORMAT,

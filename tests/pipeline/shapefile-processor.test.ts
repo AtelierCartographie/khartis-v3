@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   FileType,
   type UploadedFile
-} from '$lib/features/commons/stores/create-project.types';
+} from '$lib/features/commons/types/create-project.types';
 
 const { getFileForDuckDBMock } = vi.hoisted(() => ({
   getFileForDuckDBMock: vi.fn()

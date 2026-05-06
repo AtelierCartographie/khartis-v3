@@ -5,7 +5,7 @@ import {
   ScaleForm
 } from '$lib/features/commons/constants/ui.constants';
 import {
-  DEFAULT_FONT_FAMILY,
+  CARTOGRAPHIC_FONT_FAMILY,
   isAvailableFont,
   isAvailableFontSize
 } from '$lib/features/step-toolbar/fonts.constants';
@@ -31,7 +31,7 @@ import type {
   ColorState,
   DragPosition,
   GeoIndicationsState
-} from './geo-indications.types';
+} from '../../types/geo-indications.types';
 
 const DEFAULT_INSET_WINDOW_COLOR = hexToHsl('#ffffff');
 const DEFAULT_INSET_CONTINENT_COLOR = hexToHsl('#d9d9d9');
@@ -45,7 +45,7 @@ const DEFAULT_STATE: GeoIndicationsState = {
     distance: 0,
     units: DistanceUnit.KILOMETERS,
     color: { hue: 0, saturation: 0, lightness: 0 },
-    fontFamily: DEFAULT_FONT_FAMILY,
+    fontFamily: CARTOGRAPHIC_FONT_FAMILY,
     fontSize: PRINT_STANDARD_TOKENS.geoIndications.scaleFontSize,
     expanded: true,
     dragPosition: null

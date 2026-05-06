@@ -13,7 +13,7 @@
   import FillSection from '../shared/fill-section.svelte';
   import { FILL_MODES_STANDARD } from '../shared/fill-mode-presets';
   import DiscretizationModal from '../discretization/discretization-modal.svelte';
-  import type { SymbolModeProps } from './symbol-types.types';
+  import type { SymbolModeProps } from '../../types/symbol.types';
   import { resolveDiscretizationLabel } from '../discretization/discretization.utils';
   import { FACET_SLOT } from '../../adapters/facets-adapter';
   import {

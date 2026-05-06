@@ -10,7 +10,7 @@ import type {
 import type {
   ExampleProject,
   ExampleVisualizationPreset
-} from '$lib/features/commons/stores/create-project.types';
+} from '$lib/features/commons/types/create-project.types';
 import {
   ClassificationMethod,
   type ClassificationConfig,
