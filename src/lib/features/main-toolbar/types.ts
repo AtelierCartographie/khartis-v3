@@ -1,5 +1,4 @@
-// Types extracted from main-toolbar.store.svelte.ts
-
+// Types for main-toolbar feature
 export interface MainToolbarState {
   canNavigateToVisualization: boolean;
   hasValidData: boolean;

@@ -25,7 +25,7 @@
     StrokeSection
   } from '../shared';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
-  import type { SymbolModeProps } from './symbol-types.types';
+  import type { SymbolModeProps } from '../../types/symbol.types';
   import FillSection from '../shared/fill-section.svelte';
   import { FILL_MODES_STANDARD } from '../shared/fill-mode-presets';
   import DiscretizationModal from '../discretization/discretization-modal.svelte';

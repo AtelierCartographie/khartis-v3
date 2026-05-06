@@ -36,7 +36,7 @@
     StrokeSection
   } from '../shared';
   import { resolveCategoryPreviewCount } from '../shared/categorical-preview.utils';
-  import type { SymbolModeProps } from './symbol-types.types';
+  import type { SymbolModeProps } from '../../types/symbol.types';
   import DiscretizationModal from '../discretization/discretization-modal.svelte';
   import { resolveDiscretizationLabel } from '../discretization/discretization.utils';
   import { FACET_SLOT } from '../../adapters/facets-adapter';
