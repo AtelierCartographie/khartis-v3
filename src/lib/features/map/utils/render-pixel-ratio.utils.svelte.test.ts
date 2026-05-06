@@ -1,16 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import {
   MAX_MAP_RENDER_PIXEL_RATIO,
+  MIN_DEVICE_PIXEL_RATIO_TARGET,
   resolveMapRenderPixelRatio
 } from './render-pixel-ratio.utils';
 
 describe('resolveMapRenderPixelRatio', () => {
-  it('keeps standard displays at native CSS resolution', () => {
-    expect(resolveMapRenderPixelRatio(1, 1, 800, 4096)).toBe(1);
+  it('supersamples low-DPI displays up to the minimum device pixel ratio target', () => {
+    expect(resolveMapRenderPixelRatio(1, 1, 800, 4096)).toBe(
+      MIN_DEVICE_PIXEL_RATIO_TARGET
+    );
+  });
+
+  it('supersamples mid-density displays (Windows 1.5x scaling) up to the target', () => {
+    expect(resolveMapRenderPixelRatio(1.5, 1, 800, 4096)).toBe(
+      MIN_DEVICE_PIXEL_RATIO_TARGET
+    );
   });
 
   it('uses the device pixel ratio for high-density displays', () => {
     expect(resolveMapRenderPixelRatio(2, 1, 800, 4096)).toBe(2);
+  });
+
+  it('honors device pixel ratios above the supersampling target', () => {
+    expect(resolveMapRenderPixelRatio(3, 1, 800, 4096)).toBe(3);
   });
 
   it('compensates page zoom when the viewport is scaled up', () => {
@@ -22,5 +35,9 @@ describe('resolveMapRenderPixelRatio', () => {
     expect(resolveMapRenderPixelRatio(4, 2, 800, 8192)).toBe(
       MAX_MAP_RENDER_PIXEL_RATIO
     );
+  });
+
+  it('clamps the supersampled minimum when the GPU buffer is too small for the viewport', () => {
+    expect(resolveMapRenderPixelRatio(1, 1, 4096, 4096)).toBe(1);
   });
 });

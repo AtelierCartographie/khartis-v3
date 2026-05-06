@@ -30,7 +30,11 @@ import {
   resolveOrthographicZoomBounds
 } from '../utils/map-zoom.utils';
 import { shouldUseMapLibreInterleaved } from '../utils/render-engine.utils';
-import { getBrowserMaxRenderBufferSizePx } from '../utils/render-pixel-ratio.utils';
+import {
+  getBrowserMaxRenderBufferSizePx,
+  MIN_DEVICE_PIXEL_RATIO_TARGET,
+  resolveMapRenderPixelRatio
+} from '../utils/render-pixel-ratio.utils';
 import type {
   DeckOrthographicViewStateMap,
   OrthographicMainViewState
@@ -101,9 +105,21 @@ function isDeckDebugEnabled(): boolean {
 }
 
 function getInitialRenderPixelRatio(): number {
-  return typeof window !== 'undefined'
-    ? window.devicePixelRatio || DEFAULT_RENDER_PIXEL_RATIO
-    : DEFAULT_RENDER_PIXEL_RATIO;
+  if (typeof window === 'undefined') {
+    return DEFAULT_RENDER_PIXEL_RATIO;
+  }
+  const reportedDevicePixelRatio =
+    window.devicePixelRatio || DEFAULT_RENDER_PIXEL_RATIO;
+  const maxViewportDimension = Math.max(
+    window.innerWidth || 0,
+    window.innerHeight || 0
+  );
+  return resolveMapRenderPixelRatio(
+    Math.max(reportedDevicePixelRatio, MIN_DEVICE_PIXEL_RATIO_TARGET),
+    1,
+    maxViewportDimension,
+    getBrowserMaxRenderBufferSizePx()
+  );
 }
 
 let hasPatchedLumaCanvasContext = false;
