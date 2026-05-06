@@ -1,7 +1,7 @@
 import {
   getMaxFileSizeForType,
   getWarningFileSizeForType
-} from '$lib/features/commons/validation.config';
+} from '$lib/features/commons/constants/validation.config';
 import { detectFileType } from '$lib/features/commons/utils/file-import.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import * as m from '$lib/paraglide/messages';

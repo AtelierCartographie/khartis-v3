@@ -1,5 +1,5 @@
-import type { CsvMatrix, ColumnInfo } from './types/file-processing.types';
-export type { CsvMatrix, ColumnInfo } from './types/file-processing.types';
+import type { CsvMatrix, ColumnInfo } from '../types/file-processing.types';
+export type { CsvMatrix, ColumnInfo } from '../types/file-processing.types';
 import type { ColumnStatSummary } from '$lib/features/commons/utils/file-import.utils';
 import type { JsonValue } from '$lib/types/data';
 

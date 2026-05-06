@@ -28,7 +28,7 @@
   import {
     mainToolbarActions,
     mainToolbarState
-  } from './main-toolbar.store.svelte';
+  } from './stores/main-toolbar.store.svelte';
   import VizualisationTab from '$lib/features/visualization-tab/visualization.svelte';
 
   let toolbarContent = $state<HTMLElement | null>(null);

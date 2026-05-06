@@ -38,7 +38,7 @@
   import DuplicateProjectModal from '../commons/components/duplicate-project-modal.svelte';
   import Separator from '../commons/components/separator.svelte';
   import Switch from '../commons/components/switch.svelte';
-  import { useSideNav } from './use-side-nav.svelte';
+  import { useSideNav } from './hooks/use-side-nav.svelte';
 
   const DEFAULT_APP_VERSION = '1.6.0-staging.1';
   const sideNav = useSideNav();

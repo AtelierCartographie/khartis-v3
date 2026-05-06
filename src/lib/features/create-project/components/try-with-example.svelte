@@ -10,7 +10,7 @@
     EXAMPLE_PROJECTS,
     getExamplesByCategory,
     loadExampleData
-  } from '$lib/features/commons/examples.data';
+  } from '$lib/features/commons/constants/examples.data';
   import {
     createProjectActions,
     createProjectState
@@ -32,7 +32,7 @@
   import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
   import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages';
-  import { useProjectNavigation } from '../use-project-navigation.svelte';
+  import { useProjectNavigation } from '../hooks/use-project-navigation.svelte';
   import { InlineNotification, Tag } from 'carbon-components-svelte';
 
   interface Props {

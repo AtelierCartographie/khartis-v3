@@ -137,7 +137,7 @@ import {
   convertRowsToTabular,
   createDataMatrix,
   type ColumnInfo
-} from '../file-processor.utils';
+} from '../utils/file-processor.utils';
 
 interface FileProcessor {
   process: (uploadedFile: UploadedFile, file: File) => Promise<void>;

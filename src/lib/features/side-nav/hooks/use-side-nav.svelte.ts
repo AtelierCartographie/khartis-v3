@@ -1,5 +1,5 @@
-import type { UseSideNavReturn } from './types';
-export type { UseSideNavReturn } from './types';
+import type { UseSideNavReturn } from '../types';
+export type { UseSideNavReturn } from '../types';
 import { createProjectActions } from '$lib/features/commons/stores/create-project.store.svelte';
 import { EVENT } from '$lib/features/commons/constants/dom.constants';
 import { globalState } from '$lib/features/commons/stores/global.svelte';

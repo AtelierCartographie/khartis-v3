@@ -12,7 +12,10 @@ import {
   type ProcessingCallbacks
 } from '../../create-project/services/file-processor.service';
 import { CreateProjectValidationService } from '../../create-project/services/validation.service';
-import { getMaxFileSizeForType, STORAGE_LIMITS } from '../validation.config';
+import {
+  getMaxFileSizeForType,
+  STORAGE_LIMITS
+} from '../constants/validation.config';
 import {
   createUploadedFile,
   extractDataFromPaste,

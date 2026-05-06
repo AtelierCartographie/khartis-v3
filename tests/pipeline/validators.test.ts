@@ -4,7 +4,7 @@ import { FileType } from '$lib/features/commons/types/create-project.types';
 import {
   getMaxFileSizeForType,
   getWarningFileSizeForType
-} from '$lib/features/commons/validation.config';
+} from '$lib/features/commons/constants/validation.config';
 import { validateFile } from '$lib/features/data-pipeline/core/validators';
 
 function fakeFile(name: string, size: number): File {

@@ -1,7 +1,7 @@
 import { ExampleCategory } from '$lib/features/commons/constants/ui.constants';
 import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
 import * as m from '$lib/paraglide/messages';
-import type { ExampleProject } from './types/create-project.types';
+import type { ExampleProject } from '../types/create-project.types';
 
 interface ExampleCategoryConfig {
   id: ExampleCategory;

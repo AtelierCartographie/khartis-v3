@@ -1,5 +1,5 @@
-import type { UseExportModalReturn } from './types';
-export type { UseExportModalReturn } from './types';
+import type { UseExportModalReturn } from '../types';
+export type { UseExportModalReturn } from '../types';
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
@@ -15,14 +15,14 @@ import {
   DATA_FORMAT,
   EXPORT_RESOLUTION,
   getExportDimensionsForPage
-} from './types';
+} from '../types';
 import {
   exportProject,
   exportMapAsSvg,
   exportMapAsJpg,
   exportData,
   ExportError
-} from './export.service';
+} from '../services/export.service';
 
 const DEFAULT_FILE_NAME = m.export_default_filename();
 
