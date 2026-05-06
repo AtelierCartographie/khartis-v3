@@ -26,7 +26,11 @@ import {
 import { facetsStore } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
 import * as m from '$lib/paraglide/messages';
 import { BASEMAP_SUBLAYER_COLOR, VIZ_SUBLAYER_COLOR } from './layers.constants';
-import type { Layer, LayerReorderScope, LayersState } from './layers.types';
+import type {
+  Layer,
+  LayerReorderScope,
+  LayersState
+} from '../../types/layers.types';
 
 const DEFAULT_STATE: LayersState = {
   layers: []

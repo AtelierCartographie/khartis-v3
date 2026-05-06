@@ -4,7 +4,7 @@ import {
   STORAGE_LIMITS,
   type ValidationResult
 } from '../validation.config';
-import { FileType } from '../stores/create-project.types';
+import { FileType } from '../types/create-project.types';
 import { getFileExtension } from './file.utils';
 import { LogCategory, logger } from './logger';
 import {

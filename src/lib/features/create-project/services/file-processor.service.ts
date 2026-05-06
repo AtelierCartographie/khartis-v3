@@ -9,8 +9,8 @@ export type {
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import { FILE_EXTENSIONS, MIME } from '$lib/features/commons/constants';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
-import type { UploadedFile } from '$lib/features/commons/stores/create-project.types';
-import { FileType } from '$lib/features/commons/stores/create-project.types';
+import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
+import { FileType } from '$lib/features/commons/types/create-project.types';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { DeepDataValidator } from '$lib/features/commons/utils/deep-validator.utils';
 import { getFileExtension } from '$lib/features/commons/utils/file.utils';

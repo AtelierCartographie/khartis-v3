@@ -28,8 +28,8 @@
   import { persistTabularSourceSnapshot } from '$lib/features/data-tab/services/tabular-source-snapshot.service';
   import { dataTabStore } from '$lib/features/data-tab/stores/data-tab.store.svelte';
   import { applyExampleVisualizationPresets } from '../services/example-visualization-preset.service';
-  import type { ExampleProject } from '$lib/features/commons/stores/create-project.types';
-  import type { UploadedFile } from '$lib/features/commons/stores/create-project.types';
+  import type { ExampleProject } from '$lib/features/commons/types/create-project.types';
+  import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
   import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages';
   import { useProjectNavigation } from '../use-project-navigation.svelte';

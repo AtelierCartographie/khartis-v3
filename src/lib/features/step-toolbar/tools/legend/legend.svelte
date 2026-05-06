@@ -21,7 +21,7 @@
   } from '$lib/features/step-toolbar/fonts.constants';
   import { CSS_CLASSES, DOM_IDS, LEGEND_DEFAULTS } from './legend.constants';
   import { getLegendState, legendActions } from './legend.store.svelte';
-  import type { LegendItem } from './legend.types';
+  import type { LegendItem } from '../../types/legend.types';
 
   type ColorPickerValidateEvent = {
     hex: string;

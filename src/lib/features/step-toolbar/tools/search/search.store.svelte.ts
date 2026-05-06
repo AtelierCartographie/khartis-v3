@@ -19,7 +19,7 @@ import { mapHighlightStore } from '$lib/features/map/stores/map-highlight.store.
 import { mapTooltipStore } from '$lib/features/map/stores/map-tooltip.store.svelte';
 import type { TooltipEntry } from '$lib/features/map/types';
 import { centerMapOnTableRow } from '$lib/features/map/services/center-on-table-row.service';
-import type { SearchState } from './search.types';
+import type { SearchState } from '../../types/search.types';
 
 const MIN_SEARCH_LENGTH = 2;
 const ALL_SOURCES_ID = 'all';

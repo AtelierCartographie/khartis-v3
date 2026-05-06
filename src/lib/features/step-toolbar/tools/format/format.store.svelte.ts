@@ -7,7 +7,7 @@ import {
 import type { LayoutSizingContext } from '$lib/features/commons/utils/layout-sizing.utils';
 export { PAGE_GRID_SIZE_PX } from '$lib/features/commons/utils/page-grid.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
-import type { FormatState } from './format.types';
+import type { FormatState } from '../../types/format.types';
 
 const HUE_MAX = 359;
 const PERCENTAGE_MAX = 100;

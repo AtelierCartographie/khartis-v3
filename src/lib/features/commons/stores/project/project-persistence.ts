@@ -23,7 +23,7 @@ import { showError } from '../../utils/notification.utils.svelte';
 import { resolvePersistedJoinState } from '../../utils/persisted-join-state.utils';
 import { generateProjectFilename } from '../../utils/string.utils';
 import { ProjectValidator } from '../../utils/validation.utils';
-import type { UploadedFile } from '../create-project.types';
+import type { UploadedFile } from '../../types/create-project.types';
 import type { ProjectStateContainer } from './project-state.svelte';
 import { addToHistory, resetHistory } from './project-history';
 

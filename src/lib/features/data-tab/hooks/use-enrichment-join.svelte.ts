@@ -12,7 +12,7 @@ import type {
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { SvelteMap } from 'svelte/reactivity';
-import type { UploadedFile } from '$lib/features/commons/stores/create-project.types';
+import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import type { JsonValue } from '$lib/types/data';
 import type { JoinStats } from '../components/index';
 import { refreshDatasetMetadata } from '../services/dataset-metadata.service';

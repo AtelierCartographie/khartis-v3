@@ -24,7 +24,7 @@ import type {
   LegendItem,
   LegendState,
   LegendStyle
-} from './legend.types';
+} from '../../types/legend.types';
 
 type LegendTextMode = NonNullable<LegendItem['titleMode']>;
 

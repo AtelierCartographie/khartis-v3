@@ -1,4 +1,4 @@
-import type { UploadedFile } from '$lib/features/commons/stores/create-project.types';
+import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 
 export interface ProcessingCallbacks {
   onProgress: (fileId: string, progress: number) => void;

@@ -31,7 +31,7 @@ import type {
   ColorState,
   DragPosition,
   GeoIndicationsState
-} from './geo-indications.types';
+} from '../../types/geo-indications.types';
 
 const DEFAULT_INSET_WINDOW_COLOR = hexToHsl('#ffffff');
 const DEFAULT_INSET_CONTINENT_COLOR = hexToHsl('#d9d9d9');

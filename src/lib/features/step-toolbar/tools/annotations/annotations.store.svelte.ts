@@ -38,8 +38,8 @@ import type {
   AnnotationsState,
   AnnotationStyle,
   PageElementRole
-} from './annotations.types';
-import { resolveAnnotationCoordinateSpace } from './annotations.types';
+} from '../../types/annotations.types';
+import { resolveAnnotationCoordinateSpace } from '../../types/annotations.types';
 
 const ANNOTATION_ID_PREFIX = 'annotation-';
 const DEFAULT_NOTE_FONT_SIZE = 8;

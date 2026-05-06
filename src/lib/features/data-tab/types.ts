@@ -1,4 +1,4 @@
-import type { VariableBadgeType } from '$lib/features/commons/components/variable-badge.types';
+import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
 
 export interface GeocodeColumnItem {
   id: number;

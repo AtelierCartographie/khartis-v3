@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as m from '$lib/paraglide/messages';
-import { FileType } from '$lib/features/commons/stores/create-project.types';
+import { FileType } from '$lib/features/commons/types/create-project.types';
 import {
   getMaxFileSizeForType,
   getWarningFileSizeForType

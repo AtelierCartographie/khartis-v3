@@ -32,8 +32,8 @@ import type {
   ExampleProject,
   ProjectTab,
   UploadedFile
-} from './create-project.types';
-import { DataSourceType } from './create-project.types';
+} from '../types/create-project.types';
+import { DataSourceType } from '../types/create-project.types';
 import { datasetsStore } from './datasets.store.svelte';
 import { projectStore } from './project.store.svelte';
 import { visualizationStore } from './visualization.store.svelte';

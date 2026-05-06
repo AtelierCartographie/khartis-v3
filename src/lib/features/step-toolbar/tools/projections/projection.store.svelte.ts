@@ -13,7 +13,7 @@ import { basemapService } from '$lib/features/map/services/basemap.service.svelt
 import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
 import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
 import { projectionStore as mapRenderProjectionStore } from '$lib/features/map/stores/projection.store.svelte';
-import type { ProjectionState } from './projections.types';
+import type { ProjectionState } from '../../types/projections.types';
 import {
   suggestProjectionsForBbox,
   buildProjectionFromSuggestion,

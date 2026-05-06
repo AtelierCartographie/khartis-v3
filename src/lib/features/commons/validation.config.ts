@@ -1,4 +1,4 @@
-import { FileType } from './stores/create-project.types';
+import { FileType } from './types/create-project.types';
 
 export type { ValidationResult } from '$lib/features/data-pipeline/types';
 
