@@ -5,4 +5,4 @@ export {
   DEFAULT_PAGE_COLOR,
   getFormatLayoutSizingContext
 } from './format.store.svelte';
-export type { FormatState } from './format.types';
+export type { FormatState } from '../../types/format.types';

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { RefineOperation, type AnalysisResult } from '$lib/features/duckdb';
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
-  import type { VariableBadgeType } from '$lib/features/commons/components/variable-badge.types';
+  import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
   import * as m from '$lib/paraglide/messages';
   import CaretDown from 'carbon-icons-svelte/lib/CaretDown.svelte';
   import CaretUp from 'carbon-icons-svelte/lib/CaretUp.svelte';

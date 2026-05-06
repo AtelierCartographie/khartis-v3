@@ -1,7 +1,7 @@
 import {
   FileType,
   type UploadedFile
-} from '$lib/features/commons/stores/create-project.types';
+} from '$lib/features/commons/types/create-project.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import type {

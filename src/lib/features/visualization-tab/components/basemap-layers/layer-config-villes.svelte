@@ -5,7 +5,7 @@
   import { SliderWithInput } from '../shared';
   import {
     AVAILABLE_FONTS,
-    DEFAULT_FONT_FAMILY,
+    CARTOGRAPHIC_FONT_FAMILY,
     FONT_SIZE_OPTIONS,
     clampFontSize,
     normalizeFontFamily
@@ -72,7 +72,7 @@
     color = '#525252',
     size = 8,
     opacity = 100,
-    labelFontFamily = DEFAULT_FONT_FAMILY,
+    labelFontFamily = CARTOGRAPHIC_FONT_FAMILY,
     labelSize = DEFAULT_LABEL_SIZE,
     labelColor = '#161616',
     onchange
@@ -174,7 +174,8 @@
       <Dropdown
         size="sm"
         titleText={m.basemap_config_label_font()}
-        selectedId={normalizeFontFamily(labelFontFamily) ?? DEFAULT_FONT_FAMILY}
+        selectedId={normalizeFontFamily(labelFontFamily) ??
+          CARTOGRAPHIC_FONT_FAMILY}
         items={getFontOptions()}
         on:select={handleLabelFontFamilyChange}
       />

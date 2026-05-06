@@ -46,7 +46,7 @@ describe('TextStylePopover', () => {
   });
 
   it('should render the compact font and size controls from the design', () => {
-    expect(sectionSource).toContain('DEFAULT_FONT_FAMILY,');
+    expect(sectionSource).toContain('CARTOGRAPHIC_FONT_FAMILY,');
     expect(sectionSource).toContain('resolveFontSizeOptions');
     expect(sectionSource).toContain('const fontSizes = $derived(');
     expect(sectionSource).toContain('function openSelectPicker(');

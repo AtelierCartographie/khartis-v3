@@ -1,4 +1,4 @@
-import type { UploadedFile } from '$lib/features/commons/stores/create-project.types';
+import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { sanitizePreparedGeoJSON } from '$lib/features/commons/utils/persisted-geojson.utils';

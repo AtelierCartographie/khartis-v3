@@ -14,7 +14,7 @@ import type {
   DataTabState,
   IgnoredEntity,
   SerializedDataTabState
-} from './data-tab.types';
+} from '../types/data-tab.types';
 
 const DEFAULT_STATE: DataTabState = {
   dataControl: {

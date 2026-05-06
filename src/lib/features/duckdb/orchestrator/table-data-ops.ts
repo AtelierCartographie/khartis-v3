@@ -5,7 +5,7 @@ import {
 } from '$lib/features/commons/utils/sanitize.utils';
 import { GEOMETRY_COLUMN_TYPE } from '$lib/features/commons/constants';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
-import { buildOrderClause } from '../html-like-text.utils';
+import { buildOrderClause } from '../utils/html-like-text.utils';
 import type { AnalysisResult, ArrowTableLike, FilterStats } from '../types';
 import { buildFilterWhereClause } from './filter-ops';
 import { getFiltersMap } from './state.svelte';

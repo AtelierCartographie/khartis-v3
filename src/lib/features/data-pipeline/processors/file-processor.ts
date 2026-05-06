@@ -1,5 +1,5 @@
 import { MIME } from '$lib/features/commons/constants';
-import type { UploadedFile } from '$lib/features/commons/stores/create-project.types';
+import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import {
   createUploadedFile,
   DataSourceType,

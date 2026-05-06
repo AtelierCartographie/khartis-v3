@@ -38,14 +38,18 @@ import {
   DEFAULT_STROKE_WIDTH
 } from '../constants/colors.constants';
 import { DEFAULT_CATEGORICAL_COLORS as FIGMA_DEFAULT_CATEGORICAL_COLORS } from '../constants/qualitative-palette.constants';
-import { COLUMN_TYPE_GEOMETRY } from '../constants/data.constants';
+import {
+  COLUMN_TYPE_GEOMETRY,
+  GEO_COLUMN_TYPE
+} from '../constants/data.constants';
+import { GEOJSON_TYPE } from '../constants/geojson.constants';
 import {
   findPreferredNumericColumn,
   findPreferredTextColumn
 } from '../utils/visualization-columns.utils';
 import {
   clampFontSize,
-  DEFAULT_FONT_FAMILY,
+  CARTOGRAPHIC_FONT_FAMILY,
   normalizeFontFamily
 } from '$lib/features/step-toolbar/fonts.constants';
 import * as m from '$lib/paraglide/messages';
@@ -586,7 +590,7 @@ function buildSecondaryLabelsConfig(
     fontFamily:
       normalizeFontFamily(
         existing?.fontFamily ?? visualization.style.labelFontFamily
-      ) ?? DEFAULT_FONT_FAMILY,
+      ) ?? CARTOGRAPHIC_FONT_FAMILY,
     color: existing?.color ?? visualization.style.labelColor,
     opacity: existing?.opacity ?? visualization.style.labelOpacity ?? 0,
     size: clampFontSize(
@@ -861,7 +865,7 @@ function buildTextPrimitiveConfig(
     fontFamily:
       normalizeFontFamily(
         existing?.fontFamily ?? visualization.style.textFontFamily
-      ) ?? DEFAULT_FONT_FAMILY,
+      ) ?? CARTOGRAPHIC_FONT_FAMILY,
     color: existing?.color ?? visualization.style.textColor,
     opacity: normalizedOpacity,
     size: clampFontSize(
@@ -1241,6 +1245,18 @@ type VisualizationMappingKey = (typeof VISUALIZATION_MAPPING_KEYS)[number];
 
 type GeometryFamily = 'point' | 'line' | 'polygon' | 'unknown';
 
+const GEOMETRY_FAMILY_KEYWORDS: Record<
+  Exclude<GeometryFamily, 'unknown'>,
+  readonly string[]
+> = {
+  polygon: ['polygon', 'multisurface'],
+  line: ['line', 'curve'],
+  point: ['point']
+};
+
+const GEOMETRY_COLLECTION_KEYWORD =
+  GEOJSON_TYPE.GEOMETRY_COLLECTION.toLowerCase();
+
 function incrementVersion(
   state: VisualizationState,
   priority: SavePriorityType = SavePriority.DEBOUNCED
@@ -1255,13 +1271,13 @@ function getDefaultStyle(
   const textOverlayDefaults: VisualizationConfig['style'] = {
     labelColor: DEFAULT_COLORS.text,
     labelOpacity: DEFAULT_LABEL_OPACITY,
-    labelFontFamily: DEFAULT_FONT_FAMILY,
+    labelFontFamily: CARTOGRAPHIC_FONT_FAMILY,
     labelBold: false,
     labelItalic: false,
     labelCollisionDetection: true,
     textColor: DEFAULT_COLORS.text,
     textOpacity: DEFAULT_TEXT_OPACITY,
-    textFontFamily: DEFAULT_FONT_FAMILY,
+    textFontFamily: CARTOGRAPHIC_FONT_FAMILY,
     textCollisionDetection: true
   };
 
@@ -1495,21 +1511,50 @@ function resolveGeometryFamilyFromDataset(
     typeof dataset.geometry === 'string'
       ? dataset.geometry
       : dataset.geometry?.type;
-  const normalizedGeometryType = geometryType?.toLowerCase() ?? '';
+  const normalized = geometryType?.toLowerCase() ?? '';
 
-  if (normalizedGeometryType.includes('polygon')) {
+  if (normalized === GEOMETRY_COLLECTION_KEYWORD) {
+    return 'unknown';
+  }
+
+  for (const [family, keywords] of Object.entries(GEOMETRY_FAMILY_KEYWORDS)) {
+    if (keywords.some((keyword) => normalized.includes(keyword))) {
+      return family as Exclude<GeometryFamily, 'unknown'>;
+    }
+  }
+
+  if (
+    'joinedBasemap' in dataset &&
+    typeof dataset.joinedBasemap === 'string' &&
+    dataset.joinedBasemap.length > 0
+  ) {
     return 'polygon';
   }
 
-  if (normalizedGeometryType.includes('line')) {
-    return 'line';
-  }
-
-  if (normalizedGeometryType.includes('point')) {
+  if (datasetHasGpsPointColumns(dataset)) {
     return 'point';
   }
 
   return 'unknown';
+}
+
+function datasetHasGpsPointColumns(
+  dataset: ProcessedDataset | DatasetResult
+): boolean {
+  const columns = dataset.geoDetection?.geoColumns ?? [];
+  if (columns.length === 0) {
+    return false;
+  }
+
+  const detectedTypes = new Set(columns.map((column) => column.type));
+  if (detectedTypes.has(GEO_COLUMN_TYPE.COORDINATES)) {
+    return true;
+  }
+
+  return (
+    detectedTypes.has(GEO_COLUMN_TYPE.LATITUDE) &&
+    detectedTypes.has(GEO_COLUMN_TYPE.LONGITUDE)
+  );
 }
 
 export function resolveAllowedPrimitiveFilters(

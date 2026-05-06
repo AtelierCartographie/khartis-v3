@@ -19,7 +19,7 @@
   import { Button, Loading, TextInput } from 'carbon-components-svelte';
   import { Add } from 'carbon-icons-svelte';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
-  import { useProjectNavigation } from '../use-project-navigation.svelte';
+  import { useProjectNavigation } from '../hooks/use-project-navigation.svelte';
   import { CreateProjectValidationService } from '../services/validation.service';
 
   interface Props {

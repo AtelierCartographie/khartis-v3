@@ -1,8 +1,8 @@
-import { DEFAULT_FONT_FAMILY } from '$lib/features/step-toolbar/fonts.constants';
+import { CARTOGRAPHIC_FONT_FAMILY } from '$lib/features/step-toolbar/fonts.constants';
 import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
 
 export const LEGEND_DEFAULTS = {
-  FONT_FAMILY: DEFAULT_FONT_FAMILY,
+  FONT_FAMILY: CARTOGRAPHIC_FONT_FAMILY,
   FONT_SIZE: PRINT_STANDARD_TOKENS.legend.fontSize,
   OPACITY: 100 as number
 };

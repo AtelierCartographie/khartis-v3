@@ -7,7 +7,7 @@ import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte'
 import type {
   SimplificationResult,
   SimplificationState
-} from './simplification.types';
+} from '../../types/simplification.types';
 import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
 import {
   basemapService,

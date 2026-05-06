@@ -2,8 +2,8 @@ import type {
   AssetRef,
   ColumnTransformation,
   UploadedFile
-} from '$lib/features/commons/stores/create-project.types';
-import type { SerializedDataTabState } from '$lib/features/commons/stores/data-tab.types';
+} from '$lib/features/commons/types/create-project.types';
+import type { SerializedDataTabState } from '$lib/features/commons/types/data-tab.types';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import type { ZoomMode } from '$lib/features/commons/stores/zoom-mode.store.svelte';
 import type {
@@ -19,15 +19,15 @@ import type { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 import type { BasemapLayerConfig } from '$lib/features/map/stores/basemap-layers.store.svelte';
 import type { MapProjectionType } from '$lib/features/map/stores/map-projection.store.svelte';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-import type { AnnotationsState } from '$lib/features/step-toolbar/tools/annotations/annotations.types';
-import type { ColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.types';
+import type { AnnotationsState } from '$lib/features/step-toolbar/types/annotations.types';
+import type { ColorBlindnessState } from '$lib/features/step-toolbar/types/color-blindness.types';
 import type { FacetsState } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
-import type { FormatState } from '$lib/features/step-toolbar/tools/format/format.types';
-import type { GeoIndicationsState } from '$lib/features/step-toolbar/tools/geo-indications/geo-indications.types';
-import type { LegendState } from '$lib/features/step-toolbar/tools/legend/legend.types';
-import type { ProjectionState } from '$lib/features/step-toolbar/tools/projections/projections.types';
-import type { SearchState } from '$lib/features/step-toolbar/tools/search/search.types';
-import type { SimplificationState } from '$lib/features/step-toolbar/tools/simplification/simplification.types';
+import type { FormatState } from '$lib/features/step-toolbar/types/format.types';
+import type { GeoIndicationsState } from '$lib/features/step-toolbar/types/geo-indications.types';
+import type { LegendState } from '$lib/features/step-toolbar/types/legend.types';
+import type { ProjectionState } from '$lib/features/step-toolbar/types/projections.types';
+import type { SearchState } from '$lib/features/step-toolbar/types/search.types';
+import type { SimplificationState } from '$lib/features/step-toolbar/types/simplification.types';
 import type { DataTableFilterInput } from '$lib/features/duckdb';
 import type { DataToolsState } from '$lib/features/data-tab/stores/data-tools.store.svelte';
 import type { DataTabWorkflowState } from '$lib/features/data-tab/stores/data-tab.store.svelte';

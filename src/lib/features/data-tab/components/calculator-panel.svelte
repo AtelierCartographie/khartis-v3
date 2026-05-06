@@ -12,7 +12,7 @@
   import { dataToolsStore } from '../stores/data-tools.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
-  import { COLUMN_TRANSFORMATION_TYPES } from '$lib/features/commons/stores/create-project.types';
+  import { COLUMN_TRANSFORMATION_TYPES } from '$lib/features/commons/types/create-project.types';
 
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';

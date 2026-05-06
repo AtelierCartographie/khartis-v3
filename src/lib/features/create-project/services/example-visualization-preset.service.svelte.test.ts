@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ColumnType, type DatasetResult } from '$lib/features/data-pipeline';
-import type { ExampleVisualizationPreset } from '$lib/features/commons/stores/create-project.types';
+import type { ExampleVisualizationPreset } from '$lib/features/commons/types/create-project.types';
 import { ExampleCategory } from '$lib/features/commons/constants/ui.constants';
 
 vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({

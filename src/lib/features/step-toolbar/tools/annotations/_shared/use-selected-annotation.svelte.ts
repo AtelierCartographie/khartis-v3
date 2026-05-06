@@ -1,5 +1,5 @@
 import type { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
-import type { Annotation } from '../annotations.types';
+import type { Annotation } from '../../../types/annotations.types';
 import { getAnnotationsState } from '../annotations.store.svelte';
 
 export function useSelectedAnnotationByType(kind: AnnotationKind) {

@@ -8,7 +8,7 @@ import {
 } from '$lib/features/project-management/core/persistence-registry';
 import type { SerializedDatasetsViewState } from '$lib/types/serialization.types';
 import { LogCategory, logger } from '../utils/logger';
-import type { UploadedFile } from './create-project.types';
+import type { UploadedFile } from '../types/create-project.types';
 import { deserializeDatasetsViewState } from '../utils/datasets-view-state.utils';
 import {
   datasetsState,

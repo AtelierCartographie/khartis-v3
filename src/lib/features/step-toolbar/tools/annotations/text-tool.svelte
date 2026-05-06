@@ -9,7 +9,7 @@
   import { hslToHex, hexToHsl } from '$lib/features/commons/utils/color-utils';
   import {
     AVAILABLE_FONTS,
-    DEFAULT_FONT_FAMILY,
+    CARTOGRAPHIC_FONT_FAMILY,
     FONT_SIZE_OPTIONS,
     MIN_FONT_SIZE,
     clampFontSize,
@@ -99,7 +99,7 @@
   }
 
   const effectiveFont = $derived(
-    normalizeFontFamily(effectiveStyle.font) ?? DEFAULT_FONT_FAMILY
+    normalizeFontFamily(effectiveStyle.font) ?? CARTOGRAPHIC_FONT_FAMILY
   );
   const effectiveFontSize = $derived(
     effectiveStyle.fontSize ?? PRINT_STANDARD_TOKENS.annotations.noteFontSize
@@ -126,7 +126,7 @@
   });
   const bgOpacity = $derived(effectiveStyle.backgroundOpacity ?? 100);
 
-  let localFont = $state<string>(DEFAULT_FONT_FAMILY);
+  let localFont = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
   let localFontSize = $state<number>(MIN_FONT_SIZE);
 
   $effect(() => {

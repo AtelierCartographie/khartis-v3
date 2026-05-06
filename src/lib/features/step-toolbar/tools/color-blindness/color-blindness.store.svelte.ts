@@ -1,6 +1,6 @@
 import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
-import type { ColorBlindnessState } from './color-blindness.types';
+import type { ColorBlindnessState } from '../../types/color-blindness.types';
 
 const DEFAULT_STATE: ColorBlindnessState = {
   simulationType: ColorBlindnessType.NONE,

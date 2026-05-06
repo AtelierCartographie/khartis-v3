@@ -9,7 +9,7 @@ import { persistenceRegistry } from '$lib/features/project-management';
 import type {
   ColumnTransformation,
   UploadedFile
-} from './create-project.types';
+} from '../types/create-project.types';
 import {
   createProjectState,
   type ProjectStateContainer,

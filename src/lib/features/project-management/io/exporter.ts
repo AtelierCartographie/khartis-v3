@@ -2,7 +2,7 @@ import { zipSync } from 'fflate';
 import type {
   AssetRef,
   UploadedFile
-} from '$lib/features/commons/stores/create-project.types';
+} from '$lib/features/commons/types/create-project.types';
 import { PROJECT_CONST } from '../constants';
 import {
   ensureUploadedFileAssets,

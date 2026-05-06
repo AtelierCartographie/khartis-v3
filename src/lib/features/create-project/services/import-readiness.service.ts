@@ -1,5 +1,5 @@
-import type { ImportFileLike } from './import-readiness.service.types';
-export type { ImportFileLike } from './import-readiness.service.types';
+import type { ImportFileLike } from '../types/import.types';
+export type { ImportFileLike } from '../types/import.types';
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 
 const PENDING_IMPORT_STATUSES = new Set<FileStatus>([

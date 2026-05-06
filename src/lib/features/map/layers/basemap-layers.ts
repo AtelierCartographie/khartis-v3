@@ -66,6 +66,11 @@ import type { StylePreset, StylePresets } from '../types/basemap.types';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { withOpacity, dottedPatternToDashArray } from './layer-helpers';
 import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
+import {
+  DEFAULT_TEXT_FONT_SETTINGS_RASTER,
+  DEFAULT_TEXT_LINE_HEIGHT,
+  EXPLICIT_TEXT_CHARACTER_SET
+} from './text-character-set';
 
 // Shared extension instance — avoids re-allocation per layer per frame
 const DASH_EXTENSION = new PathStyleExtension({
@@ -1587,6 +1592,9 @@ function createVillesLabelLayer(
     getTextAlignmentBaseline: 'top',
     getTextPixelOffset: [0, Math.max(config.size, 1) + 4],
     textFontFamily: resolveFontFamilyStack(labelFontFamily),
+    textCharacterSet: EXPLICIT_TEXT_CHARACTER_SET,
+    textFontSettings: DEFAULT_TEXT_FONT_SETTINGS_RASTER,
+    textLineHeight: DEFAULT_TEXT_LINE_HEIGHT,
     textSizeUnits: 'pixels',
     ...getBaseLayerProps(ctx),
     updateTriggers: {

@@ -1,11 +1,32 @@
+import { TextLayer } from '@deck.gl/layers';
 import {
   FONT_FACE_LOAD_REQUESTS,
   DEFAULT_FONT_FAMILY
 } from '$lib/features/step-toolbar/fonts.constants';
+import { EXPLICIT_TEXT_CHARACTER_SET } from '$lib/features/map/layers/text-character-set';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+
+const TEXT_ATLAS_CACHE_LIMIT = 16;
+const PRELOAD_TEXT_HINT = EXPLICIT_TEXT_CHARACTER_SET.join('');
 
 function canUseDocumentFonts(): boolean {
   return typeof document !== 'undefined' && 'fonts' in document;
+}
+
+function resetTextAtlasCache(): void {
+  try {
+    (
+      TextLayer as unknown as { fontAtlasCacheLimit: number }
+    ).fontAtlasCacheLimit = TEXT_ATLAS_CACHE_LIMIT;
+  } catch (error) {
+    logger.warn(
+      'Failed to reset Deck.gl text atlas cache after font preload',
+      LogCategory.UI,
+      {
+        error: error instanceof Error ? error.message : String(error)
+      }
+    );
+  }
 }
 
 function createFontAssetsStore() {
@@ -32,7 +53,7 @@ function createFontAssetsStore() {
       try {
         await Promise.all(
           FONT_FACE_LOAD_REQUESTS.map((descriptor) =>
-            document.fonts.load(descriptor)
+            document.fonts.load(descriptor, PRELOAD_TEXT_HINT)
           )
         );
         await document.fonts.ready;
@@ -46,6 +67,7 @@ function createFontAssetsStore() {
           }
         );
       } finally {
+        resetTextAtlasCache();
         ready = true;
         version += 1;
         loadingPromise = null;

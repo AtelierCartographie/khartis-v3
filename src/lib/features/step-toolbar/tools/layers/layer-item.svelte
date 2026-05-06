@@ -11,7 +11,7 @@
     ViewFilled,
     ViewOff
   } from 'carbon-icons-svelte';
-  import type { Layer } from './layers.types.js';
+  import type { Layer } from '../../types/layers.types';
 
   interface Props {
     layer: Layer;

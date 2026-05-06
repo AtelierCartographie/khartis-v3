@@ -1,6 +1,6 @@
 <script lang="ts">
   import { GEOID_SCORE_THRESHOLD } from '$lib/features/commons/components/advanced-data-table/column-type-styles';
-  import type { VariableBadgeType } from '$lib/features/commons/components/variable-badge.types';
+  import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
   import { GeoreferenceType } from '$lib/features/commons/constants/ui.constants';
   import {
     GEO_COLUMN_TYPE,

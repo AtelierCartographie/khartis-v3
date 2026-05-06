@@ -6,7 +6,7 @@
   import {
     VARIABLE_BADGE_STYLES,
     type VariableBadgeType
-  } from './variable-badge.types';
+  } from '../types/variable-badge.types';
 
   interface Props {
     label: string;

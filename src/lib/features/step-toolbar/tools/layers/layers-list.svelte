@@ -2,7 +2,7 @@
   import { dragHandleZone } from 'svelte-dnd-action';
   import { untrack } from 'svelte';
   import LayerItem from './layer-item.svelte';
-  import type { Layer, LayerReorderScope } from './layers.types.js';
+  import type { Layer, LayerReorderScope } from '../../types/layers.types';
 
   interface Props {
     parentLayers: Layer[];

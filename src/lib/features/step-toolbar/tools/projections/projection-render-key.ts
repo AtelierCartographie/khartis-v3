@@ -1,4 +1,4 @@
-import type { ProjectionState } from './projections.types';
+import type { ProjectionState } from '../../types/projections.types';
 
 /**
  * Stable key for layer refreshes driven by the Projection tool.

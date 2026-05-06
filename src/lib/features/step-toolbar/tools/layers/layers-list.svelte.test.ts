@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import * as m from '$lib/paraglide/messages';
 import LayersList from './layers-list.svelte';
-import type { Layer } from './layers.types';
+import type { Layer } from '../../types/layers.types';
 
 vi.mock('svelte-dnd-action', () => ({
   dragHandle: () => ({ destroy() {} }),

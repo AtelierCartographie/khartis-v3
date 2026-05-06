@@ -16,7 +16,7 @@
     Slider
   } from 'carbon-components-svelte';
   import { Undo, Earth, LicenseGlobal } from 'carbon-icons-svelte';
-  import type { SimplificationResult } from './simplification.types';
+  import type { SimplificationResult } from '../../types/simplification.types';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';

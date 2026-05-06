@@ -10,8 +10,8 @@ import {
   dataPipeline,
   isZipDatasetResult
 } from '$lib/features/data-pipeline';
-import type { UploadedFile } from '../create-project.types';
-import { FileType } from '../create-project.types';
+import type { UploadedFile } from '../../types/create-project.types';
+import { FileType } from '../../types/create-project.types';
 import type { DatasetsState, DatasetsInternals } from './datasets-state.svelte';
 import { startProcessing, endProcessing } from './datasets-state.svelte';
 import { LogCategory, logger } from '../../utils/logger';

@@ -2,7 +2,7 @@
   import {
     AVAILABLE_FONTS,
     clampFontSize,
-    DEFAULT_FONT_FAMILY,
+    CARTOGRAPHIC_FONT_FAMILY,
     MIN_FONT_SIZE,
     normalizeFontFamily,
     resolveFontSizeOptions
@@ -130,7 +130,7 @@
           bind:this={fontSelectRef}
           aria-label={m.annotations_font()}
           value={normalizeFontFamily(section?.fontFamily) ??
-            DEFAULT_FONT_FAMILY}
+            CARTOGRAPHIC_FONT_FAMILY}
           disabled={!enabled}
           onchange={handleFontFamilySelect}
         >

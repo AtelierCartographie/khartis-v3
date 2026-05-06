@@ -3,7 +3,7 @@ import type { Table } from 'apache-arrow/Arrow';
 import type {
   FileType,
   UploadedFile
-} from '$lib/features/commons/stores/create-project.types';
+} from '$lib/features/commons/types/create-project.types';
 
 export interface DuckDBClient {
   query(sql: string, options?: { format?: string }): Promise<unknown>;

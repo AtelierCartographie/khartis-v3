@@ -20,7 +20,7 @@
   } from 'carbon-components-svelte';
   import { Calendar, Link } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
-  import { useProjectNavigation } from '../use-project-navigation.svelte';
+  import { useProjectNavigation } from '../hooks/use-project-navigation.svelte';
   import { CreateProjectValidationService } from '../services/validation.service';
 
   interface Props {

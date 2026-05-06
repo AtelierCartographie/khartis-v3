@@ -1,4 +1,4 @@
-import { STORAGE_LIMITS } from '$lib/features/commons/validation.config';
+import { STORAGE_LIMITS } from '$lib/features/commons/constants/validation.config';
 import { extractUrlsFromInput } from '$lib/features/commons/utils/file-import.utils';
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';

@@ -12,7 +12,7 @@ import {
   type UploadedFile,
   DataSourceType,
   FileType
-} from '../stores/create-project.types';
+} from '../types/create-project.types';
 import { LogCategory, logger } from './logger';
 import { sanitizeDisplayName } from './string.utils';
 
@@ -31,7 +31,7 @@ export type ColumnStatSummary = {
   mean?: number;
 };
 
-export { DataSourceType, FileType } from '../stores/create-project.types';
+export { DataSourceType, FileType } from '../types/create-project.types';
 export { formatFileSize } from './format.utils';
 
 export function detectFileType(file: File): FileType {

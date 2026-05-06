@@ -1,6 +1,6 @@
 import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
-import type { UploadedFile } from '$lib/features/commons/stores/create-project.types';
+import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';

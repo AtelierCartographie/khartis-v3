@@ -7,10 +7,7 @@
   import { ComboBox } from 'carbon-components-svelte';
   import ChartTSne from 'carbon-icons-svelte/lib/ChartTSne.svelte';
   import { List } from 'carbon-icons-svelte';
-  import type {
-    GeocodeColumnItem,
-    GeocodeFieldProps
-  } from '../geocode-settings.types';
+  import type { GeocodeColumnItem, GeocodeFieldProps } from '../types';
 
   interface Props {
     referenceMode: GeoreferenceType;

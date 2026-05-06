@@ -3,7 +3,7 @@
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
-  import type { VariableBadgeType } from '$lib/features/commons/components/variable-badge.types';
+  import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
   import type { VizSuggestion } from '$lib/features/commons/services/viz-suggester.service';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {

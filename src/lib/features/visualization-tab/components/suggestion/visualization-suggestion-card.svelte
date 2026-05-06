@@ -1,7 +1,7 @@
 <script lang="ts">
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
-  import type { VariableBadgeType } from '$lib/features/commons/components/variable-badge.types';
+  import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
   import type { VizSuggestion } from '$lib/features/commons/services/viz-suggester.service';
   import TilePreview from '$lib/features/commons/components/tile-preview.svelte';
   import * as m from '$lib/paraglide/messages';

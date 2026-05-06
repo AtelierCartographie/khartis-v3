@@ -8,6 +8,7 @@ export const AVAILABLE_FONTS = [
 
 export type AvailableFont = (typeof AVAILABLE_FONTS)[number];
 export const DEFAULT_FONT_FAMILY: AvailableFont = 'Cabin';
+export const CARTOGRAPHIC_FONT_FAMILY: AvailableFont = 'Open Sans';
 export const FONT_SIZES = [8, 10, 12, 14, 16, 18, 20, 24] as const;
 export type FontSize = (typeof FONT_SIZES)[number];
 export const FONT_SIZE_OPTIONS = FONT_SIZES.map((size) => String(size));
@@ -37,6 +38,8 @@ const FONT_LOAD_VARIANTS = [
   { style: 'normal', weight: 700 },
   { style: 'italic', weight: 700 }
 ] as const;
+
+const FONT_LOAD_SIZES_PX = [16, 96] as const;
 
 function stripFontQuotes(value: string): string {
   return value.trim().replace(/^['"]|['"]$/g, '');
@@ -115,8 +118,10 @@ export function resolveFontSizeOptions(
 }
 
 export const FONT_FACE_LOAD_REQUESTS = AVAILABLE_FONTS.flatMap((fontFamily) =>
-  FONT_LOAD_VARIANTS.map(
-    ({ style, weight }) =>
-      `${style} ${weight} 16px ${resolveFontFaceFamily(fontFamily)}`
+  FONT_LOAD_VARIANTS.flatMap(({ style, weight }) =>
+    FONT_LOAD_SIZES_PX.map(
+      (size) =>
+        `${style} ${weight} ${size}px ${resolveFontFaceFamily(fontFamily)}`
+    )
   )
 );
