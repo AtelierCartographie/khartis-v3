@@ -1,3 +1,5 @@
+import type { UseExportModalReturn } from './use-export-modal.types';
+export type { UseExportModalReturn } from './use-export-modal.types';
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
@@ -23,25 +25,6 @@ import {
 } from './export.service';
 
 const DEFAULT_FILE_NAME = m.export_default_filename();
-
-export interface UseExportModalReturn {
-  readonly isOpen: boolean;
-  readonly isExporting: boolean;
-  readonly selectedTab: ExportTabType;
-  readonly fileName: string;
-  readonly mapFormat: MapExportFormat;
-  readonly dataFormat: DataExportFormat;
-  readonly resolution: ExportResolution;
-
-  open: () => void;
-  close: () => void;
-  setTab: (tab: ExportTabType) => void;
-  setFileName: (name: string) => void;
-  setMapFormat: (format: MapExportFormat) => void;
-  setDataFormat: (format: DataExportFormat) => void;
-  setResolution: (resolution: ExportResolution) => void;
-  executeExport: () => Promise<void>;
-}
 
 export function useExportModal(): UseExportModalReturn {
   let isOpen = $state(false);

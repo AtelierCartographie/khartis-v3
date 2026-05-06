@@ -1,3 +1,11 @@
+import type {
+  ProcessingCallbacks,
+  FileProcessorService
+} from './file-processor.service.types';
+export type {
+  ProcessingCallbacks,
+  FileProcessorService
+} from './file-processor.service.types';
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import { FILE_EXTENSIONS, MIME } from '$lib/features/commons/constants';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
@@ -130,17 +138,6 @@ import {
   createDataMatrix,
   type ColumnInfo
 } from '../file-processor.utils';
-
-export interface ProcessingCallbacks {
-  onProgress: (fileId: string, progress: number) => void;
-  onStatusChange: (
-    fileId: string,
-    status: UploadedFile['status'],
-    errorMessage?: string
-  ) => void;
-  onDataUpdate: (fileId: string, data: Partial<UploadedFile>) => void;
-  onAdditionalFile?: (file: UploadedFile) => void;
-}
 
 interface FileProcessor {
   process: (uploadedFile: UploadedFile, file: File) => Promise<void>;
@@ -660,10 +657,6 @@ function getProcessor(
   }
 
   return createGenericProcessor(callbacks);
-}
-
-export interface FileProcessorService {
-  processFile: (uploadedFile: UploadedFile, file: File) => Promise<void>;
 }
 
 export function createFileProcessorService(

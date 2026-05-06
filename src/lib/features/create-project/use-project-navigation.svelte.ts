@@ -1,15 +1,15 @@
+import type {
+  UseProjectNavigationProps,
+  UseProjectNavigationReturn
+} from './use-project-navigation.types';
+export type {
+  UseProjectNavigationProps,
+  UseProjectNavigationReturn
+} from './use-project-navigation.types';
 import { goto } from '$app/navigation';
 import { base } from '$app/paths';
 import { createProjectActions } from '$lib/features/commons/stores/create-project.store.svelte';
 import { globalState } from '$lib/features/commons/stores/global.svelte';
-
-export interface UseProjectNavigationProps {
-  getOnClose: () => (() => void) | undefined;
-}
-
-export interface UseProjectNavigationReturn {
-  navigateAfterAction: () => Promise<void>;
-}
 
 export function useProjectNavigation(
   props: UseProjectNavigationProps

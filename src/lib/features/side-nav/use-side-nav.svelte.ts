@@ -1,3 +1,5 @@
+import type { UseSideNavReturn } from './use-side-nav.types';
+export type { UseSideNavReturn } from './use-side-nav.types';
 import { createProjectActions } from '$lib/features/commons/stores/create-project.store.svelte';
 import { EVENT } from '$lib/features/commons/constants/dom.constants';
 import { globalState } from '$lib/features/commons/stores/global.svelte';
@@ -8,22 +10,6 @@ import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations
 
 const SIDENAV_CONTAINER_ID = 'khartis-side-nav';
 const HAMBURGER_SELECTOR = '.bx--header__menu-trigger';
-
-export interface UseSideNavReturn {
-  readonly currentLocale: Locale;
-  readonly isDuplicating: boolean;
-  handleNewProject: () => void;
-  handleOpenProject: () => void;
-  handleSaveProject: () => Promise<void>;
-  handleDuplicateConfirm: (
-    projectId: string,
-    newName: string,
-    closeModal: () => void
-  ) => Promise<void>;
-  handleDeleteConfirm: (closeModal: () => void) => Promise<void>;
-  handleLanguageChange: (event: Event) => void;
-  closeSideNav: () => void;
-}
 
 export function useSideNav(): UseSideNavReturn {
   let currentLocale = $state<Locale>(getLocale());

@@ -1,21 +1,7 @@
+import type { CsvMatrix, ColumnInfo } from './file-processor.utils.types';
+export type { CsvMatrix, ColumnInfo } from './file-processor.utils.types';
 import type { ColumnStatSummary } from '$lib/features/commons/utils/file-import.utils';
 import type { JsonValue } from '$lib/types/data';
-
-type CsvPrimitive = string | number | boolean | null | Date;
-export type CsvMatrix = CsvPrimitive[][];
-
-export interface ColumnInfo {
-  name: string;
-  type: string;
-  stats: {
-    count?: number;
-    nulls?: number;
-    uniques?: number;
-    min?: unknown;
-    max?: unknown;
-    mean?: number;
-  };
-}
 
 export function convertRowsToTabular(
   rows: Array<Record<string, unknown>>
