@@ -21,7 +21,7 @@ import {
 } from '$lib/features/commons/utils/layout-sizing.utils';
 import {
   clampFontSize,
-  DEFAULT_FONT_FAMILY,
+  CARTOGRAPHIC_FONT_FAMILY,
   normalizeFontFamily
 } from '$lib/features/step-toolbar/fonts.constants';
 import {
@@ -60,7 +60,7 @@ const DEFAULT_STATE: AnnotationsState = {
   drawingModeType: DrawingType.LINE,
   drawingInProgress: [],
   defaultStyle: {
-    font: DEFAULT_FONT_FAMILY,
+    font: CARTOGRAPHIC_FONT_FAMILY,
     fontSize: DEFAULT_NOTE_FONT_SIZE,
     bold: false,
     italic: false,
@@ -151,7 +151,7 @@ function normalizeAnnotationStyleUpdates(
   }
   if (styleUpdates.font !== undefined) {
     normalizedUpdates.font =
-      normalizeFontFamily(styleUpdates.font) ?? DEFAULT_FONT_FAMILY;
+      normalizeFontFamily(styleUpdates.font) ?? CARTOGRAPHIC_FONT_FAMILY;
   }
   if (styleUpdates.fontSize !== undefined) {
     normalizedUpdates.fontSize = clampFontSize(

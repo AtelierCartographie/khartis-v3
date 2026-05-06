@@ -91,10 +91,10 @@ describe('TextsConfig — Figma layout', () => {
 
   it('should wire the restored halo and collision controls into the popover', () => {
     expect(source).toContain(
-      'let fontFamily = $state<string>(DEFAULT_FONT_FAMILY);'
+      'let fontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);'
     );
     expect(source).toContain(
-      'let secondaryFontFamily = $state<string>(DEFAULT_FONT_FAMILY);'
+      'let secondaryFontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);'
     );
     expect(source).toContain('let halo = $state<boolean>(false);');
     expect(source).toContain('let secondaryHalo = $state<boolean>(false);');

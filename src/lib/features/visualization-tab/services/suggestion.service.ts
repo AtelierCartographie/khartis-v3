@@ -52,7 +52,7 @@ import {
 } from '$lib/features/commons/utils/visualization-columns.utils';
 import {
   clampFontSize,
-  DEFAULT_FONT_FAMILY,
+  CARTOGRAPHIC_FONT_FAMILY,
   normalizeFontFamily
 } from '$lib/features/step-toolbar/fonts.constants';
 import { getVisualizationLegendSubtitle } from '$lib/features/commons/utils/legend-subtitle.utils';
@@ -289,7 +289,7 @@ function buildTextPrimitiveConfig(
     labelColumn: text?.secondaryLabels.labelColumn,
     fontFamily:
       normalizeFontFamily(text?.secondaryLabels.fontFamily) ??
-      DEFAULT_FONT_FAMILY,
+      CARTOGRAPHIC_FONT_FAMILY,
     color: text?.secondaryLabels.color ?? DEFAULT_COLORS.text,
     opacity: text?.secondaryLabels.opacity ?? 1,
     size: clampFontSize(
@@ -311,7 +311,8 @@ function buildTextPrimitiveConfig(
     enabled: true,
     colorMode: text?.colorMode ?? ColorMode.UNIQUE,
     sizeMode: text?.sizeMode ?? SizeMode.FIXED,
-    fontFamily: normalizeFontFamily(text?.fontFamily) ?? DEFAULT_FONT_FAMILY,
+    fontFamily:
+      normalizeFontFamily(text?.fontFamily) ?? CARTOGRAPHIC_FONT_FAMILY,
     color: text?.color ?? DEFAULT_COLORS.text,
     opacity:
       text?.opacity !== undefined && text.opacity > 0
@@ -1026,11 +1027,11 @@ export function resolveBlankVisualizationPreset(
   const style = {
     ...preset.style,
     lineColor: DEFAULT_COLORS.gray,
-    textFontFamily: DEFAULT_FONT_FAMILY,
+    textFontFamily: CARTOGRAPHIC_FONT_FAMILY,
     textHalo: false,
     textCollisionDetection: false,
     textDxpMasking: false,
-    labelFontFamily: DEFAULT_FONT_FAMILY,
+    labelFontFamily: CARTOGRAPHIC_FONT_FAMILY,
     labelBold: false,
     labelItalic: false,
     labelHalo: false,
@@ -1328,7 +1329,7 @@ function mergeTextPrimitiveConfig(
     secondaryLabels: {
       ...(base?.secondaryLabels ?? {
         enabled: false,
-        fontFamily: DEFAULT_FONT_FAMILY,
+        fontFamily: CARTOGRAPHIC_FONT_FAMILY,
         opacity: 1,
         size: VISUALIZATION_DEFAULTS.labelSize,
         bold: false,

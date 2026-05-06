@@ -15,7 +15,7 @@
   import {
     AVAILABLE_FONTS,
     clampFontSize,
-    DEFAULT_FONT_FAMILY,
+    CARTOGRAPHIC_FONT_FAMILY,
     FONT_SIZE_OPTIONS,
     normalizeFontFamily
   } from '$lib/features/step-toolbar/fonts.constants';
@@ -36,14 +36,15 @@
   const items = $derived(legendState.items);
   const isContentTab = $derived(legendState.activeTab === LegendTab.CONTENT);
 
-  let localFontFamily = $state<string>(DEFAULT_FONT_FAMILY);
+  let localFontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
   let localFontSize = $state<number>(LEGEND_DEFAULTS.FONT_SIZE);
   let localOpacity = $state<number>(LEGEND_DEFAULTS.OPACITY);
   let expandedItemIds = $state<string[]>([]);
 
   $effect(() => {
     localFontFamily =
-      normalizeFontFamily(legendState.style.fontFamily) ?? DEFAULT_FONT_FAMILY;
+      normalizeFontFamily(legendState.style.fontFamily) ??
+      CARTOGRAPHIC_FONT_FAMILY;
     localFontSize = clampFontSize(
       legendState.style.fontSize,
       LEGEND_DEFAULTS.FONT_SIZE

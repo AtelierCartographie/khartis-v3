@@ -10,7 +10,7 @@ import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte'
 import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
 import {
   clampFontSize,
-  DEFAULT_FONT_FAMILY,
+  CARTOGRAPHIC_FONT_FAMILY,
   normalizeFontFamily
 } from '$lib/features/step-toolbar/fonts.constants';
 import { getVisualizationLegendSubtitle } from '$lib/features/commons/utils/legend-subtitle.utils';
@@ -220,7 +220,7 @@ const { actions, getState } = createToolStore<LegendState, LegendActions>(
       const normalizedUpdates = { ...updates };
       if (updates.fontFamily !== undefined) {
         normalizedUpdates.fontFamily =
-          normalizeFontFamily(updates.fontFamily) ?? DEFAULT_FONT_FAMILY;
+          normalizeFontFamily(updates.fontFamily) ?? CARTOGRAPHIC_FONT_FAMILY;
       }
       if (updates.fontSize !== undefined) {
         normalizedUpdates.fontSize = clampFontSize(
