@@ -60,13 +60,13 @@
   import { GEOJSON_TYPE } from '$lib/features/commons/constants';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { readGeoParquetViaDuckDB } from '../utils/read-geojson-arrow';
+  import { readGeoParquetViaDuckDB } from '../services/read-geojson-arrow.service';
   import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
   import {
     getDefaultInsetStyle,
     getDefaultOrientationStyle,
     getDefaultScaleStyle
-  } from '../utils/geo-indications-default-placement';
+  } from '../utils/geo-indications-default-placement.utils';
 
   let {
     interactive = true,

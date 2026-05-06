@@ -8,7 +8,7 @@
   import { globalActions } from '$lib/features/commons/stores/global.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import CreateNewProject from '$lib/features/create-project/create-new-project.svelte';
+  import CreateNewProject from '$lib/features/create-project/components/create-new-project.svelte';
   import {
     canSubmitImport,
     getValidImportFiles,
@@ -16,8 +16,8 @@
   } from '$lib/features/create-project/services/import-readiness.service';
   import * as m from '$lib/paraglide/messages';
   import { InlineNotification, Modal } from 'carbon-components-svelte';
-  import { dataTabStore } from '$lib/features/data-tab/data-tab.store.svelte';
-  import { dataToolsStore } from '$lib/features/data-tab/data-tools.store.svelte';
+  import { dataTabStore } from '$lib/features/data-tab/stores/data-tab.store.svelte';
+  import { dataToolsStore } from '$lib/features/data-tab/stores/data-tools.store.svelte';
 
   interface Props {
     open: boolean;

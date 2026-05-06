@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canFinalizeJoin } from '$lib/features/data-tab/services/join-validation';
+import { canFinalizeJoin } from '$lib/features/data-tab/utils/join-validation.utils';
 
 describe('canFinalizeJoin', () => {
   it('returns true when at least one entity is joined', () => {

@@ -73,7 +73,7 @@ vi.mock('$lib/features/duckdb/operations/simplification', () => ({
   calculateToleranceFromRate: mocks.calculateToleranceFromRate
 }));
 
-vi.mock('$lib/features/map/utils/basemap-import.utils', () => ({
+vi.mock('$lib/features/map/services/basemap-import.service', () => ({
   getBasemapRawTableName: (name: string) => `${name}__raw`,
   refreshImportedBasemapHelperTables: mocks.refreshImportedBasemapHelperTables
 }));

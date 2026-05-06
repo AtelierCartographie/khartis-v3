@@ -22,13 +22,13 @@ import {
 import type { D3Usage } from 'proj-suggest';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-import { normalizeBoundsForProjectionSuggestion } from '$lib/features/map/utils/dataset-crs';
+import { normalizeBoundsForProjectionSuggestion } from '$lib/features/map/utils/dataset-crs.utils';
 import {
   resolveProjectionAvailabilityContext,
   resolveProjectionSuggestionBoundsFromBasemap,
   supportsCustomProjectionCode,
   supportsProjectionSuggestions
-} from '$lib/features/map/utils/projection-availability';
+} from '$lib/features/map/utils/projection-availability.utils';
 import { usesMercatorMapProjection } from '$lib/features/map/utils/user-projection.utils';
 
 const DEFAULT_PROJECTION = 'mercator';

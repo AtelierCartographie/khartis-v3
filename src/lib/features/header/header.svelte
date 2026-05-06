@@ -7,9 +7,9 @@
     HeaderUtilities
   } from 'carbon-components-svelte';
   import { Help } from 'carbon-icons-svelte';
-  import DownloadButton from './download-button.svelte';
-  import Logo from './logo.svelte';
-  import ProjectTitle from './project-title.svelte';
+  import DownloadButton from './components/download-button.svelte';
+  import Logo from './components/logo.svelte';
+  import ProjectTitle from './components/project-title.svelte';
 </script>
 
 <div id="khartis-header">

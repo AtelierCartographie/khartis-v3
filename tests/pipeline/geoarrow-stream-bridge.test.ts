@@ -6,7 +6,7 @@ import type { FeatureCollection, Point, Polygon } from 'geojson';
 import {
   computeProjectedBboxForProjection,
   projectGeoJSON
-} from '$lib/features/map/utils/geoarrow-stream-bridge';
+} from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
 
 describe('computeProjectedBboxForProjection', () => {
   it('supports projections that are sampled through stream()', () => {

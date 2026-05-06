@@ -1,7 +1,7 @@
 import type { BinaryPolygonData } from 'geoarrow-deck-stream';
 import { describe, expect, it } from 'vitest';
 import PolygonTesselator from '../../node_modules/@deck.gl/layers/dist/solid-polygon-layer/polygon-tesselator.js';
-import { createCompatibleSolidPolygonLayerProps } from '$lib/features/map/utils/solid-polygon-layer-props';
+import { createCompatibleSolidPolygonLayerProps } from '$lib/features/map/utils/solid-polygon-layer-props.utils';
 
 describe('createCompatibleSolidPolygonLayerProps', () => {
   it('normalizes hole masks to Uint16Array for Deck.gl', () => {

@@ -49,25 +49,25 @@
     getFormatState
   } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
   import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
-  import { getMainlandBboxForBasemap } from '$lib/features/map/utils/geoarrow-stream-bridge';
+  import { getMainlandBboxForBasemap } from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
   import { fitBasemapRenderProjection } from '$lib/features/map/utils/fit-basemap-render-projection.utils';
-  import { buildProjectionForBasemap } from '$lib/features/map/utils/geoarrow-stream-bridge';
-  import { computeProjectedBboxForProjection } from '$lib/features/map/utils/geoarrow-stream-bridge';
-  import { resolveOrthographicBasemapReferenceBboxes } from '$lib/features/map/utils/orthographic-basemap-reference';
-  import { resolveProjectionForRender } from '$lib/features/map/utils/projection-priority';
+  import { buildProjectionForBasemap } from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
+  import { computeProjectedBboxForProjection } from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
+  import { resolveOrthographicBasemapReferenceBboxes } from '$lib/features/map/utils/orthographic-basemap-reference.utils';
+  import { resolveProjectionForRender } from '$lib/features/map/utils/projection-priority.utils';
   import { resolveUserProjectionOverride } from '$lib/features/map/utils/user-projection.utils';
-  import { shouldUseIdentityProjectionForDatasetCrs } from '$lib/features/map/utils/dataset-crs';
+  import { shouldUseIdentityProjectionForDatasetCrs } from '$lib/features/map/utils/dataset-crs.utils';
   import {
     getBrowserMaxRenderBufferSizePx,
     resolveMapRenderPixelRatio
-  } from '$lib/features/map/utils/render-pixel-ratio';
+  } from '$lib/features/map/utils/render-pixel-ratio.utils';
   import {
     resolveOrthographicDatasetBounds,
     resolveOrthographicProjectionFitBbox,
     resolveOrthographicReferenceBbox,
     resolveOrthographicReferenceTable,
     shouldUseBasemapReferenceInOrthographicView
-  } from '$lib/features/map/utils/orthographic-reference';
+  } from '$lib/features/map/utils/orthographic-reference.utils';
   import {
     buildSplitDatasetRowMapping,
     getSplitMatchedGeometryRowIndices

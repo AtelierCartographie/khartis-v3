@@ -13,7 +13,7 @@ import {
 import { normalizeDatasets } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 import { m } from '$lib/paraglide/messages.js';
-import { DATA_FORMAT, type DataExportFormat } from './header.types';
+import { DATA_FORMAT, type DataExportFormat } from './types';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';

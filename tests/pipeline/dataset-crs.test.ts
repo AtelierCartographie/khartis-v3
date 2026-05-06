@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isWgs84LikeCrs,
   normalizeBoundsForProjectionSuggestion
-} from '$lib/features/map/utils/dataset-crs';
+} from '$lib/features/map/utils/dataset-crs.utils';
 
 describe('normalizeBoundsForProjectionSuggestion', () => {
   it('recognizes CRS84 GeoJSON metadata as WGS84-like', () => {

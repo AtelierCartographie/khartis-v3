@@ -5,7 +5,7 @@ import { createScatterplotLayerProps } from 'geoarrow-deck-stream';
 import {
   parsePointData,
   parsePointDataWithProjection
-} from '../utils/geoarrow-stream-bridge';
+} from '../utils/geoarrow-stream-bridge.utils';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { DENSITY_DEFAULTS } from '$lib/features/commons/constants/visualization.constants';

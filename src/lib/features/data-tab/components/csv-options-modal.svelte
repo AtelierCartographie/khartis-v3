@@ -5,7 +5,7 @@
     fromThousandsSeparatorSelectValue,
     toThousandsSeparatorSelectValue,
     type ThousandsSeparatorSelectValue
-  } from '$lib/features/data-tab/services/csv-options.utils';
+  } from '$lib/features/data-tab/utils/csv-options.utils';
   import * as m from '$lib/paraglide/messages';
   import {
     InlineLoading,

@@ -17,7 +17,7 @@
     getAvailableProjectionIds,
     resolveProjectionAvailabilityContext,
     supportsCustomProjectionCode
-  } from '$lib/features/map/utils/projection-availability';
+  } from '$lib/features/map/utils/projection-availability.utils';
   import { m } from '$lib/paraglide/messages';
   import {
     Button,

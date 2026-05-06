@@ -6,7 +6,7 @@ import { persistenceRegistry } from '$lib/features/project-management/core/persi
 import {
   buildFacetVisualizationUpdates,
   generateFacetVisualizations
-} from '$lib/features/commons/utils/facet-generator';
+} from '$lib/features/commons/services/facet-generator.service';
 
 export const SCALE_MODE = {
   SHARED: 'shared',

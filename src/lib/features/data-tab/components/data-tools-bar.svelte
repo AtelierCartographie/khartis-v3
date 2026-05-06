@@ -13,7 +13,10 @@
   } from 'carbon-icons-svelte';
   import Button from '$lib/features/commons/components/button-native.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { dataToolsStore, DataToolType } from '../data-tools.store.svelte';
+  import {
+    dataToolsStore,
+    DataToolType
+  } from '../stores/data-tools.store.svelte';
 
   interface Props {
     onDelete?: () => void;

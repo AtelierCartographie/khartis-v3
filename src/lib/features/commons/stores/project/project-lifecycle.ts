@@ -22,8 +22,8 @@ import { cleanFileForStorage } from './project-files';
 import { addToHistory, resetHistory } from './project-history';
 import { saveCurrentProject } from './project-persistence';
 import { globalActions } from '../global.svelte';
-import { dataTabStore } from '$lib/features/data-tab/data-tab.store.svelte';
-import { dataToolsStore } from '$lib/features/data-tab/data-tools.store.svelte';
+import { dataTabStore } from '$lib/features/data-tab/stores/data-tab.store.svelte';
+import { dataToolsStore } from '$lib/features/data-tab/stores/data-tools.store.svelte';
 import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
 
 export function resetAllStores(): void {
