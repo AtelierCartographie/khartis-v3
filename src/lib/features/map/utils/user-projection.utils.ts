@@ -9,8 +9,8 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { ProjectionState } from '$lib/features/step-toolbar/tools/projections';
 import type { BBox, CanvasSize } from '../types';
 import type { ProjectionPresets } from '../types/basemap.types';
-import { buildCompositeProjectionFromPresetId } from './geoarrow-stream-bridge';
-import { proj4d3 } from './proj4d3';
+import { buildCompositeProjectionFromPresetId } from './geoarrow-stream-bridge.utils';
+import { proj4d3 } from './proj4d3.utils';
 
 export const COMPOSITE_PROJECTION_PREFIX = 'composite:';
 

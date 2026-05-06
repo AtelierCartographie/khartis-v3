@@ -43,9 +43,9 @@
   import ToolContainer from '../step-toolbar/tools/tool-container.svelte';
   import { VizSubTab } from './main-toolbar.constants';
   import DataTab from '$lib/features/data-tab/data-tab.svelte';
-  import ChooseVisualization from '$lib/features/visualization/choose-visualization.svelte';
-  import ConfigureVisualization from '$lib/features/visualization/configure-visualization.svelte';
-  import CustomizeBasemap from '$lib/features/visualization/customize-basemap.svelte';
+  import ChooseVisualization from '$lib/features/visualization-tab/components/choose-visualization.svelte';
+  import ConfigureVisualization from '$lib/features/visualization-tab/components/configure-visualization.svelte';
+  import CustomizeBasemap from '$lib/features/visualization-tab/components/customize-basemap.svelte';
 
   let activeVizSubTab = $state<VizSubTab>(VizSubTab.CHOOSE);
 

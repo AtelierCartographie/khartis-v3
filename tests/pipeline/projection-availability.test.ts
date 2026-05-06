@@ -9,7 +9,7 @@ import {
   resolveDisplayedProjectionId,
   resolveProjectionAvailabilityContext,
   resolveProjectionSuggestionBoundsFromBasemap
-} from '$lib/features/map/utils/projection-availability';
+} from '$lib/features/map/utils/projection-availability.utils';
 import {
   MAP_RENDER_ENGINE,
   resolveMapRenderEngine,

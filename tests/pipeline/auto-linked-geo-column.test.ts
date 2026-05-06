@@ -49,7 +49,7 @@ vi.mock('$lib/features/map/stores/osm-basemap.store.svelte', () => ({
   osmBasemapStore: { isActive: false, activeOSMBasemap: null, clear: vi.fn() }
 }));
 
-import { pickAutoLinkedGeoColumn } from '$lib/features/data-tab/enrich-data/hooks/use-enrichment-basemap.svelte';
+import { pickAutoLinkedGeoColumn } from '$lib/features/data-tab/hooks/use-enrichment-basemap.svelte';
 
 function makeDataset(overrides: Partial<DatasetResult> = {}): DatasetResult {
   return {

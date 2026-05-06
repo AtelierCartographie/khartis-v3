@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasConfidentTopSuggestion } from '$lib/features/commons/services/suggestion-confidence';
+import { hasConfidentTopSuggestion } from '$lib/features/commons/utils/suggestion-confidence.utils';
 
 describe('hasConfidentTopSuggestion', () => {
   it('returns false when the list is empty', () => {

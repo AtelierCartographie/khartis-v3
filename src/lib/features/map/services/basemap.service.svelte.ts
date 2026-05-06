@@ -14,7 +14,7 @@ import type {
   ProjectionPresets,
   StylePresets
 } from '../types/basemap.types';
-import { readGeoParquetDirect } from '../utils/read-geojson-arrow';
+import { readGeoParquetDirect } from './read-geojson-arrow.service';
 import { SimplificationLevel } from '../../commons/types/enums';
 import {
   addGeoArrowMetadataFromDuckDB,

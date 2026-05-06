@@ -23,13 +23,13 @@
   import clsx from 'clsx';
   import { tick } from 'svelte';
   import ToolbarTabs from './components/toolbar-tabs.svelte';
-  import { dataTabStore } from '$lib/features/data-tab/data-tab.store.svelte';
+  import { dataTabStore } from '$lib/features/data-tab/stores/data-tab.store.svelte';
   import DataTab from '$lib/features/data-tab/data-tab.svelte';
   import {
     mainToolbarActions,
     mainToolbarState
-  } from './main-toolbar.state.svelte';
-  import VizualisationTab from '$lib/features/visualization/visualization.svelte';
+  } from './main-toolbar.store.svelte';
+  import VizualisationTab from '$lib/features/visualization-tab/visualization.svelte';
 
   let toolbarContent = $state<HTMLElement | null>(null);
 

@@ -76,7 +76,7 @@ describe('extractGeometryInfo bbox aggregation', () => {
   });
 
   it('basemap-import bbox query reproduces extractGeometryInfo result (regression guard)', async () => {
-    // Reproduces the exact SQL pattern used in basemap-import.utils.ts:queryBasemapBounds.
+    // Reproduces the exact SQL pattern used in basemap-import.service.ts:queryBasemapBounds.
     // Before the fix this used scalar ST_Extent and returned only the first feature's bbox.
     const row = await fetchSingleRow<{
       minX: number;

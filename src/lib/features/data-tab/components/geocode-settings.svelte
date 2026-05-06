@@ -10,7 +10,7 @@
   import type {
     GeocodeColumnItem,
     GeocodeFieldProps
-  } from './geocode-settings.types';
+  } from '../geocode-settings.types';
 
   interface Props {
     referenceMode: GeoreferenceType;
