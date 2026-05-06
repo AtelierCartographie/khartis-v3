@@ -1,11 +1,11 @@
 import type {
   UseProjectNavigationProps,
   UseProjectNavigationReturn
-} from './use-project-navigation.types';
+} from './types/navigation.types';
 export type {
   UseProjectNavigationProps,
   UseProjectNavigationReturn
-} from './use-project-navigation.types';
+} from './types/navigation.types';
 import { goto } from '$app/navigation';
 import { base } from '$app/paths';
 import { createProjectActions } from '$lib/features/commons/stores/create-project.store.svelte';

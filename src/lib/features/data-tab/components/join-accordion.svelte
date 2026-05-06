@@ -17,7 +17,7 @@
   } from 'carbon-icons-svelte';
   import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
   import { canFinalizeJoin } from '../utils/join-validation.utils';
-  import type { JoinStats } from '../join-accordion.types';
+  import type { JoinStats } from '../types';
 
   interface Props {
     stats: JoinStats;

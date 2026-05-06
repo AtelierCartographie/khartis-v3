@@ -1,11 +1,11 @@
 import type {
   ProcessingCallbacks,
   FileProcessorService
-} from './file-processor.service.types';
+} from '../types/file-processing.service.types';
 export type {
   ProcessingCallbacks,
   FileProcessorService
-} from './file-processor.service.types';
+} from '../types/file-processing.service.types';
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import { FILE_EXTENSIONS, MIME } from '$lib/features/commons/constants';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';

@@ -1,5 +1,5 @@
-import type { UseExportModalReturn } from './use-export-modal.types';
-export type { UseExportModalReturn } from './use-export-modal.types';
+import type { UseExportModalReturn } from './types';
+export type { UseExportModalReturn } from './types';
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
