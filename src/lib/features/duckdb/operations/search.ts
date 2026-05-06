@@ -7,7 +7,7 @@ import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants'
 import { registerTableMutationCallback } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
-import { buildStripHtmlTextSqlExpression } from '../html-like-text.utils';
+import { buildStripHtmlTextSqlExpression } from '../utils/html-like-text.utils';
 import type { CellSearchResult, DuckDBContext, SearchStats } from '../types';
 
 const MAX_ROWS_FOR_SEARCH = 10000;

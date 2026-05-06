@@ -21,8 +21,8 @@
     VISUALIZATION_DEFAULTS
   } from '$lib/features/commons/constants/visualization.constants';
   import {
+    CARTOGRAPHIC_FONT_FAMILY,
     clampFontSize,
-    DEFAULT_FONT_FAMILY,
     MAX_FONT_SIZE,
     MIN_FONT_SIZE,
     normalizeFontFamily
@@ -144,7 +144,7 @@
 
   let textColor = $state<string>(DEFAULT_COLORS.text);
   let textOpacity = $state<number>(VISUALIZATION_DEFAULTS.textOpacity);
-  let fontFamily = $state<string>(DEFAULT_FONT_FAMILY);
+  let fontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
   let bold = $state<boolean>(false);
   let italic = $state<boolean>(false);
   let size = $state<number>(VISUALIZATION_DEFAULTS.textSize);
@@ -158,7 +158,7 @@
 
   let secondaryColor = $state<string>(DEFAULT_COLORS.text);
   let secondaryOpacity = $state<number>(VISUALIZATION_DEFAULTS.labelOpacity);
-  let secondaryFontFamily = $state<string>(DEFAULT_FONT_FAMILY);
+  let secondaryFontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
   let secondarySize = $state<number>(VISUALIZATION_DEFAULTS.labelSize);
   let secondaryBold = $state<boolean>(false);
   let secondaryItalic = $state<boolean>(false);
@@ -253,7 +253,7 @@
         coerceString(visualization.style.textColor) ?? DEFAULT_COLORS.text;
       fontFamily =
         normalizeFontFamily(visualization.style.textFontFamily) ??
-        DEFAULT_FONT_FAMILY;
+        CARTOGRAPHIC_FONT_FAMILY;
       bold = visualization.style.textBold ?? false;
       italic = visualization.style.textItalic ?? false;
       size = clampFontSize(
@@ -273,7 +273,7 @@
         coerceString(visualization.style.labelColor) ?? DEFAULT_COLORS.text;
       secondaryFontFamily =
         normalizeFontFamily(visualization.style.labelFontFamily) ??
-        DEFAULT_FONT_FAMILY;
+        CARTOGRAPHIC_FONT_FAMILY;
       secondaryOpacity = parseOpacityToSlider(
         visualization.style.labelOpacity,
         VISUALIZATION_DEFAULTS.labelOpacity

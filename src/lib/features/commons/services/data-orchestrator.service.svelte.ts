@@ -19,11 +19,11 @@ import { layersActions } from '$lib/features/step-toolbar/tools/layers';
 import { legendActions } from '$lib/features/step-toolbar/tools/legend';
 import { projectionActions } from '$lib/features/step-toolbar/tools/projections';
 import { formatError, isFatalError, ParseError } from '../pipeline.errors';
-import type { UploadedFile } from '../stores/create-project.types';
+import type { UploadedFile } from '../types/create-project.types';
 import {
   FileType,
   COLUMN_TRANSFORMATION_TYPES
-} from '../stores/create-project.types';
+} from '../types/create-project.types';
 import { dataTabActions } from '../stores/data-tab.store.svelte';
 import { datasetsStore } from '../stores/datasets.store.svelte';
 import { globalActions, globalState } from '../stores/global.svelte';

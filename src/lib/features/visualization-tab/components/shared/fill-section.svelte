@@ -24,7 +24,7 @@
     FillMode,
     SLIDER_LIMITS
   } from '$lib/features/commons/constants/visualization.constants';
-  import type { FacetSlotPath } from '../../utils/facets-contract.types';
+  import type { FacetSlotPath } from '../../types/facets-contract.types';
   import DiscretizationRow from './discretization-row.svelte';
   import MissingDataSection from './missing-data-section.svelte';
   import FacetsVariablePicker from './facets-variable-picker.svelte';

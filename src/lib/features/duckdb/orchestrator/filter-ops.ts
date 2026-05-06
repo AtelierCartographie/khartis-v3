@@ -6,7 +6,7 @@ import {
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
-import { buildStripHtmlTextSqlExpression } from '../html-like-text.utils';
+import { buildStripHtmlTextSqlExpression } from '../utils/html-like-text.utils';
 import type {
   DataTableFilter,
   DataTableFilterInput,

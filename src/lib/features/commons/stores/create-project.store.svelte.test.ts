@@ -6,7 +6,7 @@ import {
 import {
   DataSourceType,
   FileType
-} from '$lib/features/commons/stores/create-project.types';
+} from '$lib/features/commons/types/create-project.types';
 
 const mocks = vi.hoisted(() => ({
   clearDuckMock: vi.fn(),

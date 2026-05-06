@@ -26,9 +26,11 @@ import {
   getEnabledPrimitiveFilters,
   getSymbolPrimitive,
   getTextPrimitive,
+  resolveAllowedPrimitiveFilters,
   visualizationStore,
   type VisualizationConfig
 } from './visualization.store.svelte';
+import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
 import {
   ColorMode,
   CategoryShapeMode,
@@ -1069,5 +1071,203 @@ describe('visualizationStore LinePrimitiveConfig round-trip persistence', () => 
         ?.thicknessClassification?.breaks
     ).toEqual([8, 16, 24]);
     expect(viz.line?.missingData?.color).toBe('#bdbdbd');
+  });
+});
+
+describe('resolveAllowedPrimitiveFilters geometry resolution', () => {
+  function makeDataset(overrides: Partial<DatasetResult> = {}): DatasetResult {
+    return {
+      id: 'ds-geo-resolve',
+      name: 'geo-resolve',
+      sourceFileId: 'src-geo-resolve',
+      tableName: 'geo_resolve',
+      columns: [],
+      rowCount: 0,
+      metadata: {
+        processedAt: new Date('2026-05-07T00:00:00.000Z'),
+        fileType: 'geojson',
+        parserUsed: 'test'
+      },
+      format: FileFormatEnum.GEOJSON,
+      ...overrides
+    };
+  }
+
+  function makeGeometry(type: string): DatasetResult['geometry'] {
+    return {
+      type,
+      columnName: 'geom',
+      bounds: [0, 0, 1, 1],
+      centroid: [0.5, 0.5],
+      featureCount: 1
+    };
+  }
+
+  it('returns POINT and POLYGON when geometry is Polygon', () => {
+    const result = resolveAllowedPrimitiveFilters(
+      VisualizationType.CHOROPLETH,
+      makeDataset({ geometry: makeGeometry('Polygon') })
+    );
+    expect(result).toEqual([
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.POLYGON
+    ]);
+  });
+
+  it('returns POINT and POLYGON for MultiPolygon', () => {
+    const result = resolveAllowedPrimitiveFilters(
+      VisualizationType.CHOROPLETH,
+      makeDataset({ geometry: makeGeometry('MultiPolygon') })
+    );
+    expect(result).toEqual([
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.POLYGON
+    ]);
+  });
+
+  it('returns LINE for LineString', () => {
+    const result = resolveAllowedPrimitiveFilters(
+      VisualizationType.CATEGORICAL,
+      makeDataset({ geometry: makeGeometry('LineString') })
+    );
+    expect(result).toEqual([PrimitiveFilterType.LINE]);
+  });
+
+  it('returns LINE for MultiLineString', () => {
+    const result = resolveAllowedPrimitiveFilters(
+      VisualizationType.CATEGORICAL,
+      makeDataset({ geometry: makeGeometry('MultiLineString') })
+    );
+    expect(result).toEqual([PrimitiveFilterType.LINE]);
+  });
+
+  it('returns POINT for Point', () => {
+    const result = resolveAllowedPrimitiveFilters(
+      VisualizationType.PROPORTIONAL,
+      makeDataset({ geometry: makeGeometry('Point') })
+    );
+    expect(result).toEqual([PrimitiveFilterType.POINT]);
+  });
+
+  it('returns POINT for MultiPoint', () => {
+    const result = resolveAllowedPrimitiveFilters(
+      VisualizationType.PROPORTIONAL,
+      makeDataset({ geometry: makeGeometry('MultiPoint') })
+    );
+    expect(result).toEqual([PrimitiveFilterType.POINT]);
+  });
+
+  it('returns POINT for a CSV with detected latitude and longitude columns', () => {
+    const result = resolveAllowedPrimitiveFilters(
+      VisualizationType.PROPORTIONAL,
+      makeDataset({
+        format: FileFormatEnum.CSV,
+        geoDetection: {
+          hasGeoColumns: true,
+          geoColumns: [
+            {
+              index: 0,
+              columnName: 'lat',
+              type: GEO_COLUMN_TYPE.LATITUDE,
+              confidence: 1
+            },
+            {
+              index: 1,
+              columnName: 'lon',
+              type: GEO_COLUMN_TYPE.LONGITUDE,
+              confidence: 1
+            }
+          ],
+          warnings: []
+        }
+      })
+    );
+    expect(result).toEqual([PrimitiveFilterType.POINT]);
+  });
+
+  it('returns POINT for a CSV with a single coordinates column', () => {
+    const result = resolveAllowedPrimitiveFilters(
+      VisualizationType.PROPORTIONAL,
+      makeDataset({
+        format: FileFormatEnum.CSV,
+        geoDetection: {
+          hasGeoColumns: true,
+          geoColumns: [
+            {
+              index: 0,
+              columnName: 'gps',
+              type: GEO_COLUMN_TYPE.COORDINATES,
+              confidence: 1
+            }
+          ],
+          warnings: []
+        }
+      })
+    );
+    expect(result).toEqual([PrimitiveFilterType.POINT]);
+  });
+
+  it('does not infer POINT when only latitude is detected without longitude', () => {
+    const result = resolveAllowedPrimitiveFilters(
+      VisualizationType.PROPORTIONAL,
+      makeDataset({
+        format: FileFormatEnum.CSV,
+        geoDetection: {
+          hasGeoColumns: true,
+          geoColumns: [
+            {
+              index: 0,
+              columnName: 'lat',
+              type: GEO_COLUMN_TYPE.LATITUDE,
+              confidence: 1
+            }
+          ],
+          warnings: []
+        }
+      })
+    );
+    expect(result).toEqual([
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.LINE,
+      PrimitiveFilterType.POLYGON
+    ]);
+  });
+
+  it('returns POINT and POLYGON when the dataset is joined to a basemap', () => {
+    const result = resolveAllowedPrimitiveFilters(
+      VisualizationType.CHOROPLETH,
+      makeDataset({
+        format: FileFormatEnum.CSV,
+        joinedBasemap: 'world-countries-50m'
+      })
+    );
+    expect(result).toEqual([
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.POLYGON
+    ]);
+  });
+
+  it('falls back to all primitives for an unjoined CSV without GPS detection', () => {
+    const result = resolveAllowedPrimitiveFilters(
+      VisualizationType.PROPORTIONAL,
+      makeDataset({ format: FileFormatEnum.CSV })
+    );
+    expect(result).toEqual([
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.LINE,
+      PrimitiveFilterType.POLYGON
+    ]);
+  });
+
+  it('treats GeometryCollection as unknown rather than activating one primitive', () => {
+    const result = resolveAllowedPrimitiveFilters(
+      VisualizationType.CHOROPLETH,
+      makeDataset({ geometry: makeGeometry('GeometryCollection') })
+    );
+    expect(result).toEqual([
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.LINE,
+      PrimitiveFilterType.POLYGON
+    ]);
   });
 });

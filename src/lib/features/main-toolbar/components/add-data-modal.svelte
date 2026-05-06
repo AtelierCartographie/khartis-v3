@@ -3,7 +3,7 @@
     createProjectActions,
     createProjectState
   } from '$lib/features/commons/stores/create-project.store.svelte';
-  import { DataSourceType } from '$lib/features/commons/stores/create-project.types';
+  import { DataSourceType } from '$lib/features/commons/types/create-project.types';
   import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
   import { globalActions } from '$lib/features/commons/stores/global.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';

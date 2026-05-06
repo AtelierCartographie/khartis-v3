@@ -22,6 +22,39 @@ type TextBackgroundUpdater = (
   background: TextPrimitiveConfig['background']
 ) => Partial<TextPrimitiveConfig['background']>;
 
+const TEXT_STYLE_MIRROR_KEYS = [
+  'textColor',
+  'textOpacity',
+  'textSize',
+  'textFontFamily',
+  'textBold',
+  'textItalic',
+  'textAlign',
+  'textHalo',
+  'textHaloColor',
+  'textHaloWidth',
+  'textCollisionDetection',
+  'textDxpMasking'
+] as const satisfies ReadonlyArray<keyof VisualizationConfig['style']>;
+
+const SECONDARY_LABEL_STYLE_MIRROR: ReadonlyArray<{
+  from: keyof TextSecondaryLabelsConfig;
+  to: keyof VisualizationConfig['style'];
+}> = [
+  { from: 'color', to: 'labelColor' },
+  { from: 'opacity', to: 'labelOpacity' },
+  { from: 'size', to: 'labelSize' },
+  { from: 'fontFamily', to: 'labelFontFamily' },
+  { from: 'bold', to: 'labelBold' },
+  { from: 'italic', to: 'labelItalic' },
+  { from: 'align', to: 'labelAlign' },
+  { from: 'halo', to: 'labelHalo' },
+  { from: 'haloColor', to: 'labelHaloColor' },
+  { from: 'haloWidth', to: 'labelHaloWidth' },
+  { from: 'collisionDetection', to: 'labelCollisionDetection' },
+  { from: 'dxpMasking', to: 'labelDxpMasking' }
+];
+
 export interface TextHandlersDeps {
   getSelectedVisualization: () => VisualizationConfig | undefined;
   updateSelectedVisualization: (
@@ -109,7 +142,11 @@ export function createTextHandlers(deps: TextHandlersDeps) {
       ],
       text
     );
-    handleTextChange({ ...renamedNoFallback, ...renamedWithFallback });
+    const styleMirror = pickOwnedKeys(updates, TEXT_STYLE_MIRROR_KEYS);
+    deps.updateSelectedVisualization({
+      text: { ...text, ...renamedNoFallback, ...renamedWithFallback },
+      ...(Object.keys(styleMirror).length > 0 ? { style: styleMirror } : {})
+    });
   }
 
   function handleTextModesChange(updates: Partial<VisualizationModes>): void {
@@ -183,8 +220,19 @@ export function createTextHandlers(deps: TextHandlersDeps) {
   ): void {
     const text = getTextPrimitive(deps.getSelectedVisualization());
     if (!text) return;
-    handleTextChange({
-      secondaryLabels: { ...text.secondaryLabels, ...updates }
+    const styleMirror: Partial<VisualizationConfig['style']> = {};
+    for (const { from, to } of SECONDARY_LABEL_STYLE_MIRROR) {
+      if (!Object.prototype.hasOwnProperty.call(updates, from)) continue;
+      const value = updates[from];
+      if (value === undefined) continue;
+      (styleMirror as Record<string, unknown>)[to] = value;
+    }
+    deps.updateSelectedVisualization({
+      text: {
+        ...text,
+        secondaryLabels: { ...text.secondaryLabels, ...updates }
+      },
+      ...(Object.keys(styleMirror).length > 0 ? { style: styleMirror } : {})
     });
   }
 

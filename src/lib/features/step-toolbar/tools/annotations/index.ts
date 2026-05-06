@@ -10,5 +10,5 @@ export type {
   Annotation,
   AnnotationStyle,
   AnnotationPlacementPreview
-} from './annotations.types';
-export { resolveAnnotationCoordinateSpace } from './annotations.types';
+} from '../../types/annotations.types';
+export { resolveAnnotationCoordinateSpace } from '../../types/annotations.types';

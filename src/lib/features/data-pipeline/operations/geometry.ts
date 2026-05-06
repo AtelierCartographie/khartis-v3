@@ -165,7 +165,9 @@ export async function extractGeometryInfo(
 }
 
 function normalizeGeometryType(type?: string | null): GeometryInfo['type'] {
-  if (!type) return GEOJSON_TYPE.POLYGON;
+  if (!type) return GEOJSON_TYPE.GEOMETRY_COLLECTION;
   const normalized = type.replace(/^ST_/i, '').toUpperCase();
-  return GEOMETRY_TYPE_TO_GEOJSON[normalized] ?? GEOJSON_TYPE.POLYGON;
+  return (
+    GEOMETRY_TYPE_TO_GEOJSON[normalized] ?? GEOJSON_TYPE.GEOMETRY_COLLECTION
+  );
 }

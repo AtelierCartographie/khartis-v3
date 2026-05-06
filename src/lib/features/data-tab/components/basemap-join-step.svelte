@@ -50,7 +50,7 @@
   import OSMBasemapSelector from './osm-basemap-selector.svelte';
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
   import { dataTabStore } from '../stores/data-tab.store.svelte';
-  import type { UploadedFile } from '$lib/features/commons/stores/create-project.types';
+  import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
   import { resolveSuggestedBasemapAutoSelectionTarget } from '../utils/basemap-auto-selection.utils';
   import {
     getDatasetIdentity,

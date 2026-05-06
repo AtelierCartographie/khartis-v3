@@ -20,7 +20,7 @@
   } from 'carbon-components-svelte';
   import {
     AVAILABLE_FONTS,
-    DEFAULT_FONT_FAMILY,
+    CARTOGRAPHIC_FONT_FAMILY,
     clampFontSize,
     FONT_SIZE_OPTIONS,
     MIN_FONT_SIZE,
@@ -40,13 +40,14 @@
 
   const store = geoIndicationsActions;
   const geoState = $derived(geoIndicationsState);
-  let localScaleFontFamily = $state<string>(DEFAULT_FONT_FAMILY);
+  let localScaleFontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
   let localScaleFontSize = $state<number>(MIN_FONT_SIZE);
   let mapViewRevision = $state(0);
 
   $effect(() => {
     localScaleFontFamily =
-      normalizeFontFamily(geoState.scale.fontFamily) ?? DEFAULT_FONT_FAMILY;
+      normalizeFontFamily(geoState.scale.fontFamily) ??
+      CARTOGRAPHIC_FONT_FAMILY;
     localScaleFontSize = clampFontSize(geoState.scale.fontSize, MIN_FONT_SIZE);
   });
 

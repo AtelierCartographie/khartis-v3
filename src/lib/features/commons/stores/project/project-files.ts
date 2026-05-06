@@ -1,7 +1,7 @@
 import * as m from '$lib/paraglide/messages';
 import { dataOrchestratorService } from '../../services/data-orchestrator.service.svelte';
 import { LogCategory, logger } from '../../utils/logger';
-import type { UploadedFile } from '../create-project.types';
+import type { UploadedFile } from '../../types/create-project.types';
 import type { ProjectStateContainer } from './project-state.svelte';
 import { markDirtyAndSave } from './project-persistence';
 

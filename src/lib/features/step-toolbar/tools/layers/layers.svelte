@@ -3,7 +3,7 @@
   import { Modal, TextInput } from 'carbon-components-svelte';
   import LayersList from './layers-list.svelte';
   import { layersActions, layersState } from './layers.store.svelte';
-  import type { Layer, LayerReorderScope } from './layers.types.js';
+  import type { Layer, LayerReorderScope } from '../../types/layers.types';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
   import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
