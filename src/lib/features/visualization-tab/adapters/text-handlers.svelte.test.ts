@@ -111,6 +111,48 @@ describe('createTextHandlers', () => {
     expect(arg.text.size).toBe(14);
   });
 
+  it('handleTextStyleChange dual-writes the legacy style mirror so the picker UI does not revert', () => {
+    const bag = makeBag();
+    bag.handlers.handleTextStyleChange({
+      textFontFamily: 'Inter',
+      textColor: '#fff',
+      textSize: 14,
+      textBold: true
+    } as never);
+    const arg = bag.updateSelectedVisualization.mock.calls[0][0];
+    expect(arg.text.fontFamily).toBe('Inter');
+    expect(arg.text.color).toBe('#fff');
+    expect(arg.style).toEqual({
+      textFontFamily: 'Inter',
+      textColor: '#fff',
+      textSize: 14,
+      textBold: true
+    });
+  });
+
+  it('handleTextStyleChange omits the style mirror when no mirrored key is provided', () => {
+    const bag = makeBag();
+    bag.handlers.handleTextStyleChange({} as never);
+    const arg = bag.updateSelectedVisualization.mock.calls[0][0];
+    expect(arg.style).toBeUndefined();
+  });
+
+  it('handleTextSecondaryLabelsChange dual-writes label* keys onto style', () => {
+    const bag = makeBag();
+    bag.handlers.handleTextSecondaryLabelsChange({
+      fontFamily: 'Inter',
+      color: '#000',
+      size: 11
+    } as never);
+    const arg = bag.updateSelectedVisualization.mock.calls[0][0];
+    expect(arg.text.secondaryLabels.fontFamily).toBe('Inter');
+    expect(arg.style).toEqual({
+      labelFontFamily: 'Inter',
+      labelColor: '#000',
+      labelSize: 11
+    });
+  });
+
   it('handleTextModesChange renames color/size to colorMode/sizeMode', () => {
     const bag = makeBag();
     bag.handlers.handleTextModesChange({
