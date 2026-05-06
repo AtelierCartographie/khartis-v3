@@ -11,7 +11,7 @@
   } from 'carbon-components-svelte';
   import { ChevronLeft, ChevronRight } from 'carbon-icons-svelte';
   import { onMount, untrack } from 'svelte';
-  import { dataToolsStore } from '../data-tools.store.svelte';
+  import { dataToolsStore } from '../stores/data-tools.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { type SearchStats } from '$lib/features/duckdb';

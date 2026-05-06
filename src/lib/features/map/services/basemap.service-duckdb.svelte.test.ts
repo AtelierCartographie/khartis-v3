@@ -28,7 +28,7 @@ vi.mock('$lib/features/duckdb', () => ({
   }
 }));
 
-vi.mock('../utils/read-geojson-arrow', () => ({
+vi.mock('./read-geojson-arrow.service', () => ({
   readGeoParquetDirect: vi.fn()
 }));
 

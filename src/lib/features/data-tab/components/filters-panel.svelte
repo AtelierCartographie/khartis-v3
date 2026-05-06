@@ -19,7 +19,7 @@
     type FilterStats
   } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { dataToolsStore } from '../data-tools.store.svelte';
+  import { dataToolsStore } from '../stores/data-tools.store.svelte';
   import * as m from '$lib/paraglide/messages';
 
   interface Props {

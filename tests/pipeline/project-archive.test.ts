@@ -19,17 +19,23 @@ const serialize = vi.fn(async (project) => ({
   }
 }));
 
-vi.mock('$lib/features/project-management/core/asset-store', () => ({
-  ensureUploadedFileAssets,
-  readAssetBytes,
-  persistAssetBytes
-}));
+vi.mock(
+  '$lib/features/project-management/services/asset-store.service',
+  () => ({
+    ensureUploadedFileAssets,
+    readAssetBytes,
+    persistAssetBytes
+  })
+);
 
-vi.mock('$lib/features/project-management/core/persistence', () => ({
-  saveProject
-}));
+vi.mock(
+  '$lib/features/project-management/services/persistence.service',
+  () => ({
+    saveProject
+  })
+);
 
-vi.mock('$lib/features/project-management/core/serializer', () => ({
+vi.mock('$lib/features/project-management/services/serializer.service', () => ({
   deserialize,
   serialize
 }));

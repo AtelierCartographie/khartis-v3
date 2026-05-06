@@ -18,7 +18,7 @@ import type {
   JoinQuality
 } from '$lib/features/map/types/basemap.types';
 import type { Table } from 'apache-arrow/Arrow';
-import { addGeoArrowMetadata } from '$lib/features/map/utils/read-geojson-arrow';
+import { addGeoArrowMetadata } from '$lib/features/map/services/read-geojson-arrow.service';
 import type { DuckDBDataset, FinalizeJoinResult } from '../types';
 import { detectGPSColumns } from './gps-ops';
 

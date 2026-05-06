@@ -1,7 +1,6 @@
+import type { ImportFileLike } from './import-readiness.service.types';
+export type { ImportFileLike } from './import-readiness.service.types';
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
-import type { UploadedFile } from '$lib/features/commons/stores/create-project.types';
-
-export type ImportFileLike = Pick<UploadedFile, 'status' | 'validation'>;
 
 const PENDING_IMPORT_STATUSES = new Set<FileStatus>([
   FileStatus.UPLOADING,

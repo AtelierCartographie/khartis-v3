@@ -12,7 +12,7 @@
   import { fade } from 'svelte/transition';
   import { datasetsStore } from '../commons/stores/datasets.store.svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
-  import { isWgs84LikeCrs } from './utils/dataset-crs';
+  import { isWgs84LikeCrs } from './utils/dataset-crs.utils';
   import { globalActions, globalState } from '../commons/stores/global.svelte';
   import { ToolbarStep } from '../commons/types/global';
   import { LogCategory, logger } from '../commons/utils/logger';
@@ -27,7 +27,7 @@
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
   import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
   import FacetsPage from '$lib/features/step-toolbar/tools/facets/facets-page.svelte';
-  import { loadDatasetsSequentially } from './utils/load-datasets-sequentially';
+  import { loadDatasetsSequentially } from './utils/load-datasets-sequentially.utils';
   import { resolveWorkspaceFitScale } from '../commons/utils/workspace-viewport.utils';
   import {
     getPolygonPrimitive,

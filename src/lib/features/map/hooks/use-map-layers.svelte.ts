@@ -26,7 +26,7 @@ import {
   type MetadataLayerEntry
 } from '../layers';
 import { extractGeometryInfo } from '../io';
-import { buildProjectionForBasemap } from '../utils/geoarrow-stream-bridge';
+import { buildProjectionForBasemap } from '../utils/geoarrow-stream-bridge.utils';
 import { DeckLayerId, GeometryType } from '../constants';
 import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
 import type { PrimitiveFilter } from '$lib/features/commons/stores/visualization.store.svelte';
@@ -53,13 +53,13 @@ import type { DataTableFilter } from '$lib/features/duckdb/types';
 import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
 import type { BasemapMetadata } from '../types/basemap.types';
-import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs';
+import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs.utils';
 import { fitBasemapRenderProjection } from '../utils/fit-basemap-render-projection.utils';
-import { shouldShowOrthographicBasemapLayers } from '../utils/orthographic-basemap-visibility';
-import { resolveProjectionForRender } from '../utils/projection-priority';
+import { shouldShowOrthographicBasemapLayers } from '../utils/orthographic-basemap-visibility.utils';
+import { resolveProjectionForRender } from '../utils/projection-priority.utils';
 import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
 import { getRepresentativePointArrowTable } from '$lib/features/duckdb/orchestrator/arrow-ops';
-import { resolveRepresentativePointTableName } from './representative-point-table.utils';
+import { resolveRepresentativePointTableName } from '../utils/representative-point-table.utils';
 
 const GEOMETRY_TO_PRIMITIVE: Partial<Record<GeometryType, PrimitiveFilter>> = {
   [GeometryType.POINT]: PrimitiveFilterType.POINT,

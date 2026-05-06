@@ -16,11 +16,11 @@
     FetchUpload,
     Information
   } from 'carbon-icons-svelte';
-  import CreateNewProject from './create-new-project.svelte';
-  import OpenProject from './open-project.svelte';
-  import ProjectName from './project-name.svelte';
-  import ProjectTab from './project-tab.svelte';
-  import TryWithExample from './try-with-example.svelte';
+  import CreateNewProject from './components/create-new-project.svelte';
+  import OpenProject from './components/open-project.svelte';
+  import ProjectName from './components/project-name.svelte';
+  import ProjectTab from './components/project-tab.svelte';
+  import TryWithExample from './components/try-with-example.svelte';
   import { KEY } from '../commons/constants/dom.constants';
 
   function linkDialogToTitle(node: HTMLElement) {

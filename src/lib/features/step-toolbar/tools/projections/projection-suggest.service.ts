@@ -7,7 +7,7 @@ import {
   type ResolvedProjection
 } from 'proj-suggest';
 import type { GeoProjection } from 'd3-geo';
-import { proj4d3 } from '$lib/features/map/utils/proj4d3';
+import { proj4d3 } from '$lib/features/map/utils/proj4d3.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { buildD3ProjectionFromConfig } from '$lib/features/commons/utils/d3-projection-config.utils';
 

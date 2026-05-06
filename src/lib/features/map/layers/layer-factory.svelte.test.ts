@@ -97,10 +97,10 @@ vi.mock('../io', async () => {
   };
 });
 
-vi.mock('../utils/geoarrow-stream-bridge', async () => {
+vi.mock('../utils/geoarrow-stream-bridge.utils', async () => {
   const actual = await vi.importActual<
-    typeof import('../utils/geoarrow-stream-bridge')
-  >('../utils/geoarrow-stream-bridge');
+    typeof import('../utils/geoarrow-stream-bridge.utils')
+  >('../utils/geoarrow-stream-bridge.utils');
 
   return {
     ...actual,
@@ -126,7 +126,7 @@ vi.mock('../utils/geoarrow-stream-bridge', async () => {
   };
 });
 
-vi.mock('../utils/solid-polygon-layer-props', () => ({
+vi.mock('../utils/solid-polygon-layer-props.utils', () => ({
   createCompatibleSolidPolygonLayerProps:
     createCompatibleSolidPolygonLayerPropsMock
 }));

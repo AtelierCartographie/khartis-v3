@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveTextLabelPlacement } from '$lib/features/map/utils/text-label-placement';
+import { resolveTextLabelPlacement } from '$lib/features/map/utils/text-label-placement.utils';
 
 describe('resolveTextLabelPlacement', () => {
   it('keeps the primary text centered on the centroid when no symbol is rendered', () => {

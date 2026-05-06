@@ -11,7 +11,7 @@ import { createArrowTableWithMetadata } from '$lib/features/duckdb/orchestrator/
 import {
   createCompanionFilesFromAssetRefs,
   createFileFromAssetRef
-} from '$lib/features/project-management/core/asset-store';
+} from '$lib/features/project-management/services/asset-store.service';
 import * as m from '$lib/paraglide/messages';
 import { isGeospatialFile } from '../constants';
 import { detectFileFormat, generateTableName } from '../core/format-detector';

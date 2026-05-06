@@ -4,7 +4,7 @@
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
   import { mapTooltipStore } from '../stores/map-tooltip.store.svelte';
   import { DECK_CANVAS_ID } from '../constants';
-  import { resolveTooltipViewportPosition } from '../utils/tooltip-position';
+  import { resolveTooltipViewportPosition } from '../utils/tooltip-position.utils';
   import * as m from '$lib/paraglide/messages';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import { Tag } from 'carbon-components-svelte';

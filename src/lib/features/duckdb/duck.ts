@@ -8,7 +8,7 @@ import {
 import { executeQuery, executeQueryStreaming } from './core/query';
 import { exportToCsv } from './io/exporters';
 import { registerFiles } from './io/file-registry';
-import { readGeofile, readLink, readTabular } from './io/readers';
+import { readGeofile, readLink, readTabular } from './io';
 import { analyse, describeColumns } from './operations/analysis';
 
 import { applyJoinAssociation, joinById } from './operations/join';

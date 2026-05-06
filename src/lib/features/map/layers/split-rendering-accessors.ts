@@ -5,7 +5,10 @@ import {
   JOINED_BASEMAP_COLUMN
 } from '$lib/features/commons/constants/data.constants';
 import type { LayerContext } from '../types';
-import { rowAccessor, splitRowAccessor } from '../utils/geoarrow-stream-bridge';
+import {
+  rowAccessor,
+  splitRowAccessor
+} from '../utils/geoarrow-stream-bridge.utils';
 
 export type GeoJsonFeatureLike = {
   properties?: Record<string, unknown>;

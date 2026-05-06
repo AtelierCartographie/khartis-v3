@@ -7,7 +7,7 @@ import {
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import * as m from '$lib/paraglide/messages';
 import type { Table as ArrowTable } from 'apache-arrow';
-import { convertGeoPackageToGeoJsonFile } from '$lib/features/map/utils/geopackage-browser-fallback';
+import { convertGeoPackageToGeoJsonFile } from '$lib/features/map/utils/geopackage-browser-fallback.utils';
 import {
   DUCK_CONST,
   EXTENSIONS,

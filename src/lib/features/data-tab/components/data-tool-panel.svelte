@@ -10,7 +10,7 @@
   import * as m from '$lib/paraglide/messages';
   import { Close } from 'carbon-icons-svelte';
   import { onMount, type Snippet } from 'svelte';
-  import { dataToolsStore } from '../data-tools.store.svelte';
+  import { dataToolsStore } from '../stores/data-tools.store.svelte';
 
   interface Props {
     title: string;

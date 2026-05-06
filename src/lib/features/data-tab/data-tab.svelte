@@ -1,9 +1,9 @@
 <script lang="ts">
-  import BasemapJoinStep from './basemap-join-step.svelte';
-  import DataControlStep from './data-control-step.svelte';
-  import { dataTabStore } from './data-tab.store.svelte';
-  import EnrichDataStep from './enrich-data-step.svelte';
-  import GeolocationStep from './geolocation-step.svelte';
+  import BasemapJoinStep from './components/basemap-join-step.svelte';
+  import DataControlStep from './components/data-control-step.svelte';
+  import { dataTabStore } from './stores/data-tab.store.svelte';
+  import EnrichDataStep from './components/enrich-data-step.svelte';
+  import GeolocationStep from './components/geolocation-step.svelte';
   import ToolbarTabLayout from '$lib/features/main-toolbar/components/toolbar-tab-layout.svelte';
 
   const isGeographicMode = $derived(dataTabStore.isGeographicMode);

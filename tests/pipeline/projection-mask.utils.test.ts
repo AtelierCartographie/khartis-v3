@@ -1,7 +1,7 @@
 import * as d3geo from 'd3-geo';
 import { describe, expect, it } from 'vitest';
 import { buildProjectionMaskPath } from '../../src/lib/features/map/utils/projection-mask.utils';
-import { proj4d3 } from '../../src/lib/features/map/utils/proj4d3';
+import { proj4d3 } from '../../src/lib/features/map/utils/proj4d3.utils';
 
 describe('buildProjectionMaskPath', () => {
   it('builds the projected sphere path for d3 projections', () => {

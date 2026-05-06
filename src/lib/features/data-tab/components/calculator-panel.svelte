@@ -9,7 +9,7 @@
     InlineNotification
   } from 'carbon-components-svelte';
   import { ArrowRight, Launch } from 'carbon-icons-svelte';
-  import { dataToolsStore } from '../data-tools.store.svelte';
+  import { dataToolsStore } from '../stores/data-tools.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { COLUMN_TRANSFORMATION_TYPES } from '$lib/features/commons/stores/create-project.types';
@@ -21,7 +21,7 @@
     COLUMN_TYPE_GEOMETRY
   } from '$lib/features/commons/constants/data.constants';
   import * as m from '$lib/paraglide/messages';
-  import { refreshDatasetMetadata } from '../services/dataset-metadata';
+  import { refreshDatasetMetadata } from '../services/dataset-metadata.service';
   import AutocompleteTextarea, {
     type Suggestion
   } from '$lib/features/commons/components/autocomplete-textarea.svelte';

@@ -62,7 +62,7 @@ vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
   }
 }));
 
-vi.mock('$lib/features/map/utils/center-on-table-row.utils', () => ({
+vi.mock('$lib/features/map/services/center-on-table-row.service', () => ({
   centerMapOnTableRow: mocks.centerMapOnTableRow
 }));
 

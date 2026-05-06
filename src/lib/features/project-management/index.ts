@@ -19,9 +19,9 @@ export {
 
 export { migrateIfNeeded, type SchemaMigration } from './core/schema-migration';
 
-export { projectRepository } from './core/persistence';
+export { projectRepository } from './services/persistence.service';
 
-export { projectStorage } from './core/storage';
+export { projectStorage } from './services/storage.service';
 
 export { duplicateProject } from './operations/duplicate';
 

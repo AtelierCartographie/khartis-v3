@@ -9,7 +9,7 @@ import {
 import type { SerializedDatasetsViewState } from '$lib/types/serialization.types';
 import { LogCategory, logger } from '../utils/logger';
 import type { UploadedFile } from './create-project.types';
-import { deserializeDatasetsViewState } from './datasets-view-state';
+import { deserializeDatasetsViewState } from '../utils/datasets-view-state.utils';
 import {
   datasetsState,
   datasetsInternals,

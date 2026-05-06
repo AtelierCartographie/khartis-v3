@@ -39,7 +39,7 @@ vi.mock('$lib/features/duckdb/io/reader-utils', () => ({
   addRowId: addRowIdMock
 }));
 
-vi.mock('$lib/features/map/utils/geopackage-browser-fallback', () => ({
+vi.mock('$lib/features/map/utils/geopackage-browser-fallback.utils', () => ({
   convertGeoPackageToGeoJsonFile: convertGeoPackageToGeoJsonFileMock
 }));
 

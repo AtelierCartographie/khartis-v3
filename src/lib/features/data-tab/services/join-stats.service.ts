@@ -6,7 +6,7 @@ import {
 import { Duck } from '$lib/features/duckdb';
 import { buildFilterWhereClause } from '$lib/features/duckdb/orchestrator/filter-ops';
 import { getFilters } from '$lib/features/duckdb/orchestrator/state.svelte';
-import type { JoinEntity, JoinStats } from '../components';
+import type { JoinEntity, JoinStats } from '../components/index';
 
 export interface ComputeJoinStatsOptions {
   sourceTableName: string;

@@ -39,7 +39,7 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('../data-tools.store.svelte', () => ({
+vi.mock('../stores/data-tools.store.svelte', () => ({
   dataToolsStore: {
     get calculatorName() {
       return mocks.dataToolsState.calculatorName;
@@ -116,7 +116,7 @@ vi.mock('$lib/features/commons/stores/project.store.svelte', () => ({
   }
 }));
 
-vi.mock('../services/dataset-metadata', () => ({
+vi.mock('../services/dataset-metadata.service', () => ({
   refreshDatasetMetadata: (...args: unknown[]) =>
     mocks.refreshDatasetMetadataMock(...args)
 }));

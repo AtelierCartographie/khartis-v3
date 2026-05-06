@@ -29,8 +29,8 @@
   import clsx from 'clsx';
   import { SvelteMap } from 'svelte/reactivity';
   import AddDataModal from './add-data-modal.svelte';
-  import { dataTabStore } from '$lib/features/data-tab/data-tab.store.svelte';
-  import { dataToolsStore } from '$lib/features/data-tab/data-tools.store.svelte';
+  import { dataTabStore } from '$lib/features/data-tab/stores/data-tab.store.svelte';
+  import { dataToolsStore } from '$lib/features/data-tab/stores/data-tools.store.svelte';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import { UI_CONSTANTS } from '$lib/features/commons/constants/visualization.constants';
   import {

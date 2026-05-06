@@ -38,7 +38,7 @@
     basemapService,
     getPreferredBasemapFile
   } from '../services/basemap.service.svelte';
-  import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs';
+  import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs.utils';
   import { basemapLayersStore } from '../stores/basemap-layers.store.svelte';
   import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
   import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
@@ -77,7 +77,7 @@
     resolveOrthographicReferenceBbox,
     resolveOrthographicReferenceTable,
     shouldUseBasemapReferenceInOrthographicView
-  } from '../utils/orthographic-reference';
+  } from '../utils/orthographic-reference.utils';
   import {
     buildSplitDatasetRowMapping,
     getSplitMatchedGeometryRowIndices
@@ -86,18 +86,18 @@
     buildProjectionForBasemap,
     computeProjectedBboxForProjection,
     getMainlandBboxForBasemap
-  } from '../utils/geoarrow-stream-bridge';
+  } from '../utils/geoarrow-stream-bridge.utils';
   import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
-  import { resolveOrthographicBasemapReferenceBboxes } from '../utils/orthographic-basemap-reference';
+  import { resolveOrthographicBasemapReferenceBboxes } from '../utils/orthographic-basemap-reference.utils';
   import { fitBasemapRenderProjection } from '../utils/fit-basemap-render-projection.utils';
   import { buildProjectionMaskPath } from '../utils/projection-mask.utils';
-  import { resolveProjectionForRender } from '../utils/projection-priority';
+  import { resolveProjectionForRender } from '../utils/projection-priority.utils';
   import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
   import { selectRowsByIndices } from '../utils/arrow-filter.utils';
   import {
     getBrowserMaxRenderBufferSizePx,
     resolveMapRenderPixelRatio
-  } from '../utils/render-pixel-ratio';
+  } from '../utils/render-pixel-ratio.utils';
   import { resolveOrthographicZoomBounds } from '../utils/map-zoom.utils';
   import { shouldUseMapLibreInterleaved } from '../utils/render-engine.utils';
   import {

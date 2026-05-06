@@ -7,7 +7,7 @@ import {
   SavePriority,
   type SavePriorityType
 } from '$lib/features/project-management';
-import { deserializeUploadedFile } from '$lib/features/project-management/core/serializer';
+import { deserializeUploadedFile } from '$lib/features/project-management/services/serializer.service';
 import type {
   SerializedProjectData,
   SerializedUploadedFile

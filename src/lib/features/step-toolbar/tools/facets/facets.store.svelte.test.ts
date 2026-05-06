@@ -22,7 +22,7 @@ vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
   }
 }));
 
-vi.mock('$lib/features/commons/utils/facet-generator', () => ({
+vi.mock('$lib/features/commons/services/facet-generator.service', () => ({
   generateFacetVisualizations: mocks.generateFacetVisualizationsMock,
   buildFacetVisualizationUpdates: mocks.buildFacetVisualizationUpdatesMock
 }));
