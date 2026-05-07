@@ -64,7 +64,7 @@ export function get_model_matrix(
 export function get_model_matrix_from_bbox(
   bbox: [number, number, number, number],
   canvasSize: CanvasSize,
-  /** Negate Y scale for d3-geo projected coordinates (Y-down convention) */
+
   flipY = false,
   fitPaddingPx = 0
 ): Matrix4 {

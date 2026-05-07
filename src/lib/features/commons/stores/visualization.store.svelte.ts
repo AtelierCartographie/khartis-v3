@@ -601,7 +601,7 @@ function buildSecondaryLabelsConfig(
     ),
     bold: existing?.bold ?? visualization.style.labelBold ?? false,
     italic: existing?.italic ?? visualization.style.labelItalic ?? false,
-    align: existing?.align ?? visualization.style.labelAlign ?? 'left',
+    align: existing?.align ?? visualization.style.labelAlign ?? 'center',
     halo: existing?.halo ?? visualization.style.labelHalo ?? false,
     haloColor:
       existing?.haloColor ??
@@ -876,7 +876,7 @@ function buildTextPrimitiveConfig(
     ),
     bold: existing?.bold ?? visualization.style.textBold ?? false,
     italic: existing?.italic ?? visualization.style.textItalic ?? false,
-    align: existing?.align ?? visualization.style.textAlign ?? 'left',
+    align: existing?.align ?? visualization.style.textAlign ?? 'center',
     halo: existing?.halo ?? visualization.style.textHalo ?? false,
     haloColor:
       existing?.haloColor ??
@@ -1426,25 +1426,6 @@ function getDefaultModes(type: VisualizationType): VisualizationModes {
   }
 }
 
-/**
- * Density-aware default size envelope for proportional/bivariate symbols on
- * polygon datasets.
- *
- * Trade-off: for sparse layouts (e.g. 96 French départements) we want big
- * symbols so the hierarchy is readable; for dense layouts (e.g. 35k French
- * communes) we want small symbols to avoid overlap. The base formula
- * `140 / sqrt(rowCount)` does that, but it ignores the spatial extent — for a
- * 332-feature pan-European dataset (NUTS 2) it returns maxSize=8 px, which is
- * below the cartographic legibility floor (Bertin ~5 px diameter) and crushes
- * the lower-end symbols to 2-3 px (per CDC [CTX-03] non-specialist users must
- * still see the hierarchy).
- *
- * Two-tier floor:
- *  - <500 features (regional/admin scale)  → minimum 10 px  (legibility wins)
- *  - ≥500 features (commune/IRIS scale)    → minimum 6 px   (avoid overlap)
- *
- * Cap stays at VISUALIZATION_DEFAULTS.symbolMaxSize (24 px).
- */
 export const SPARSE_POLYGON_THRESHOLD = 500;
 export const SPARSE_SYMBOL_FLOOR_PX = 10;
 export const DENSE_SYMBOL_FLOOR_PX = 6;

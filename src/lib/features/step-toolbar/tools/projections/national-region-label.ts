@@ -1,14 +1,6 @@
 import * as m from '$lib/paraglide/messages';
 import type { ProjectionSuggestion } from './projection-suggest.service';
 
-/**
- * Maps the country/region id carried by a `ProjectionSuggestion`
- * (e.g. `national-eu`, `national-france`) to a human-readable label
- * used next to the "Nationale" / "National" badge in the UI.
- *
- * Falls back to the bare tag (`"Nationale"`) when the region is unknown,
- * so the UI stays readable for countries not yet translated.
- */
 export function getNationalRegionLabel(
   suggestion: ProjectionSuggestion
 ): string | null {
@@ -63,11 +55,6 @@ export function getNationalRegionLabel(
   }
 }
 
-/**
- * Returns the badge text shown on national projection cards,
- * e.g. "Nationale · Europe" for `national-eu`, or plain "Nationale"
- * when the region is unknown.
- */
 export function getNationalProjectionBadge(
   suggestion: ProjectionSuggestion,
   baseLabel: string

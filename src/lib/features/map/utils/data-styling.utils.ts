@@ -30,8 +30,6 @@ export function getColorForValue(
     return [128, 128, 128];
   }
 
-  // Most classification flows store only the internal thresholds while the
-  // color scale still has one extra class on each side.
   if (colors.length === breaks.length + 1) {
     if (breaks.length === 0) {
       return hexToRgb(colors[0] ?? '#808080');
@@ -57,7 +55,6 @@ export function getColorForValue(
     return hexToRgb(colors[colors.length - 1] ?? '#808080');
   }
 
-  // Some legacy paths already store lower bounds for each class.
   if (breaks.length === colors.length) {
     for (let i = breaks.length - 1; i >= 0; i--) {
       const lowerBreak = breaks[i];

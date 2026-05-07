@@ -443,7 +443,6 @@ const { actions, getState } = createToolStore<
           }
         }
 
-        // Basemap undo
         if (!lastApplied.basemapId) {
           s.lastApplied = undefined;
           return false;

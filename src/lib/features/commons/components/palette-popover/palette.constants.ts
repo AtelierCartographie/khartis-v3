@@ -103,7 +103,6 @@ export interface QualitativeColorGroups {
   froid: string[];
 }
 
-/** Colorblind-safe subset indices (per theme row) derived from Figma Daltonisme filter */
 const COLORBLIND_SAFE_INDICES: Record<
   QualitativePreset,
   {
@@ -134,7 +133,6 @@ const COLORBLIND_SAFE_INDICES: Record<
   }
 };
 
-/** Monochrome palettes — single seed color, ok-palette generates the light→dark ramp */
 export const monochromePalettes: Palette[] = [
   {
     id: 'mono-pink',
@@ -168,7 +166,6 @@ export const monochromePalettes: Palette[] = [
   }
 ];
 
-/** Bicolor palettes — two seed colors, ok-palette interpolates between them */
 export const bicolorPalettes: Palette[] = [
   {
     id: 'blues',
@@ -202,7 +199,6 @@ export const bicolorPalettes: Palette[] = [
   }
 ];
 
-/** Sepia palettes — warm desaturated tones (hue 30°–90° oklch) */
 export const sepiaPalettes: Palette[] = [
   {
     id: 'sepia-sand',
@@ -236,7 +232,6 @@ export const sepiaPalettes: Palette[] = [
   }
 ];
 
-/** Standard sequential palettes — used by dropdown and getPalettesForType */
 export const sequentialPalettes: Palette[] = bicolorPalettes;
 
 export const divergingPalettes: Palette[] = [
@@ -391,13 +386,6 @@ export function getPatternPalettes(): Palette[] {
   ];
 }
 
-/**
- * Generates palette colors using ok-palette's perceptual Oklch generators.
- * Dispatches to the appropriate generator based on palette type.
- *
- * @param contrast Controls lightness range — 'high' improves accessibility (colorblind)
- * @param categoricalOptions Override categorical generation (presets, temperature)
- */
 export function generatePaletteColors(
   palette: Palette,
   count: number,
@@ -486,9 +474,6 @@ export function generatePaletteColors(
   }
 }
 
-/**
- * Generates sequential colors from one color (monochrome ramp) via ok-palette.
- */
 export function generateSequentialFromColor(
   color: string,
   count: number,
@@ -501,9 +486,6 @@ export function generateSequentialFromColor(
   );
 }
 
-/**
- * Generates sequential colors from two colors (bi-tone ramp) via ok-palette.
- */
 export function generateSequentialFromColors(
   colorStart: string,
   colorEnd: string,
@@ -522,10 +504,6 @@ export function generateSequentialFromColors(
   );
 }
 
-/**
- * Builds a CSS background for pattern preview using motif.js.
- * Returns a `url(data:...)` from the motif tile canvas.
- */
 export function buildPatternBackground(
   palette: Palette,
   params?: PatternParams
@@ -556,10 +534,6 @@ export function buildPatternBackground(
   return `url(${tile.toDataURL()})`;
 }
 
-/**
- * Generates 7 intensity shades of a single color via ok-palette sequential ramp.
- * Produces a dark-to-light gradient centered on the seed color (CDC [VIZ-02c]).
- */
 export function generateIntensityShades(seedColor: string): string[] {
   const ramp = sequential({
     colorStart: seedColor,
@@ -640,14 +614,6 @@ export function normalizePaletteId(id: string | undefined): string | undefined {
   return LEGACY_PALETTE_ID_ALIASES[id] ?? id;
 }
 
-/**
- * Resolves the palette kind that a classification should expose to the user.
- * Single source of truth for the "has the user set a divergent breakpoint?"
- * gate that flips the palette dropdown, color generator and SVG legend from
- * sequential to diverging swatches. Keeps Figma `930:114478` and `930:115082`
- * variants in sync across fill-section, stroke-section, lines-config and the
- * classification.service break computation.
- */
 export function resolvePaletteTypeForBreakpoint(
   classification: { breakpointValue?: number | null } | null | undefined
 ): PaletteType {
@@ -817,12 +783,10 @@ export function getQualitativeColorGroups(
   };
 }
 
-/** Alias for generateIntensityShades — 7 shades of a single color for the Intensité row */
 export function generateIntensityShadesForColor(seedHex: string): string[] {
   return generateIntensityShades(seedHex);
 }
 
-/** Generate N categorical colors aligned with a seed color's hue within a preset's ranges */
 export function generateCategoricalColorsFromSeed(
   seedHex: string,
   count: number,

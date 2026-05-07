@@ -1,7 +1,3 @@
-// deck.gl — Modified FillStyleExtension with getFillPatternRotation accessor.
-// Original: https://github.com/visgl/deck.gl — SPDX-License-Identifier: MIT
-// Adapted for Khartis by @AtelierCartographie (issue #68).
-
 import { LayerExtension } from '@deck.gl/core';
 import { project, fp64LowPart } from '@deck.gl/core';
 

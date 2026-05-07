@@ -1,9 +1,9 @@
 export const AVAILABLE_FONTS = [
+  'Open Sans',
   'Cabin',
   'IBM Plex Sans',
   'Inter',
-  'Lato',
-  'Open Sans'
+  'Lato'
 ] as const;
 
 export type AvailableFont = (typeof AVAILABLE_FONTS)[number];

@@ -9,7 +9,6 @@
     onchange?: (color: string) => void;
   }
 
-  // size prop kept for API compatibility, no visual distinction in ColorPicker
   let {
     label = '',
     value,

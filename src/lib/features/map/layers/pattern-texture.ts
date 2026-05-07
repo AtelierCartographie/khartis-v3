@@ -1,11 +1,3 @@
-/**
- * Pattern texture atlas powered by motif.js + ok-palette.
- * Generates sprite sheets for Deck.gl FillStyleExtension / RotatableFillStyleExtension.
- *
- * Static atlas: 5 predefined patterns (backward compat).
- * Dynamic atlas: generated from ok-palette's categoricalPatterns() / sequentialPatterns().
- */
-
 import { motifAtlas } from '@ateliercartographie/motif.js';
 import type {
   PatternOptions,
@@ -34,7 +26,6 @@ const PATTERN_NAMES = [
 
 export type PatternName = (typeof PATTERN_NAMES)[number];
 
-/** Shared pattern type + angle mapping — used by legend, SVG export, and palette preview */
 export const PATTERN_TYPE_MAP: Record<
   PatternName,
   Pick<PatternOptions, 'type' | 'angle'>
@@ -51,9 +42,6 @@ export const PATTERN_TYPE_MAP: Record<
   plus: { type: 'plus' }
 };
 
-/** Full motif.js options for atlas generation.
- *  background must be 'transparent' so Deck.gl fillPatternMask works
- *  (mask uses alpha channel — opaque white background = no visible effect). */
 const PATTERN_CONFIGS: Record<PatternName, PatternOptions> = {
   diagonal: {
     type: 'line',
@@ -124,10 +112,6 @@ const PATTERN_CONFIGS: Record<PatternName, PatternOptions> = {
 let cachedResult: AtlasResult | null = null;
 const customAtlasCache = new Map<string, AtlasResult>();
 
-/**
- * Builds the static pattern texture atlas and mapping via motif.js.
- * Results are cached — subsequent calls return the same references.
- */
 export function getPatternAtlas(): {
   atlas: HTMLCanvasElement;
   mapping: Record<
@@ -197,9 +181,6 @@ export function getPatternAtlasForPattern(
   return { atlas: result.canvas, mapping: result.mapping };
 }
 
-/**
- * Checks whether a given pattern ID is a valid known pattern.
- */
 export function isValidPatternId(
   patternId: string | undefined
 ): patternId is PatternName {
@@ -207,9 +188,6 @@ export function isValidPatternId(
   return (PATTERN_NAMES as readonly string[]).includes(patternId);
 }
 
-/**
- * Converts ok-palette PatternParams to motif.js PatternOptions.
- */
 function toMotifOptions(params: OkPatternParams): PatternOptions {
   return {
     type: params.type as PatternOptions['type'],
@@ -222,14 +200,6 @@ function toMotifOptions(params: OkPatternParams): PatternOptions {
   };
 }
 
-/**
- * Generates a dynamic pattern atlas from ok-palette's pattern generators + motif.js.
- * Each class gets its own distinct pattern in the sprite sheet.
- *
- * @param count Number of patterns to generate (one per class)
- * @param mode 'categorical' for varied shapes/angles, 'sequential' for monotonic size increase
- * @returns Atlas canvas + mapping with keys 'class-0', 'class-1', etc.
- */
 export function generatePatternAtlas(
   count: number,
   mode: 'categorical' | 'sequential' = 'categorical'

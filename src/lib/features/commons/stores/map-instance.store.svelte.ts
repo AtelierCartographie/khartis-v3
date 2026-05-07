@@ -120,7 +120,7 @@ function isPlausibleSerializedTarget(
 
 interface PendingViewState {
   zoom: number;
-  /** Target stored in data (geographic) coordinates, not world coordinates. */
+
   target: [number, number, number];
 }
 
@@ -565,15 +565,6 @@ function createMapInstanceStore() {
     resetZoomLocal();
   }
 
-  /**
-   * Reset the Deck.gl orthographic camera to origin — or restore the
-   * project-saved view state if one exists.
-   *
-   * `pendingRestore` is kept alive across ALL calls to this function
-   * (data load, world basemap load, reference basemap load, …) so the
-   * last one wins.  It is only cleared when the user explicitly changes
-   * the zoom via the toolbar.
-   */
   function fitToOrthographicBounds(
     reason: ViewportFitReason | null = null
   ): void {
@@ -707,10 +698,7 @@ function createMapInstanceStore() {
     state.viewportFitReason = null;
     synchronizedViewportController = null;
     orthographicViewStateAdapter = null;
-    // Note: pendingRestore is intentionally NOT cleared here.
-    // reset() is called during map teardown (view switch, destroy)
-    // but pendingRestore must survive until fitToOrthographicBounds()
-    // consumes it on the next initialization.
+
     lastSerializedViewState = null;
   }
 

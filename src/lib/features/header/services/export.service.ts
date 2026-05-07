@@ -318,7 +318,6 @@ async function fetchJoinedDatasetWithGeometry(
     format: 'array'
   })) as Record<string, unknown>[];
 
-  // DuckDB Arrow rows have non-enumerable properties — must copy by explicit column name
   const allColumnNames = [
     ...dataset.columns.map((c) => c.name),
     INTERNAL_COLUMN.GEOM

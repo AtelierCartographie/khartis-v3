@@ -176,14 +176,6 @@ function getSmoothedDrawingPoints(
   return dedupeDrawingPoints(smoothedPoints);
 }
 
-/**
- * Converts a list of drawing points to an SVG path string.
- * When smoothness > 0, rounds the polyline with iterative corner cutting.
- *
- * @param points - Array of 2D points
- * @param smoothness - 0 (straight lines) to 100 (maximum smoothing)
- * @param closed - Whether to close the path (for zone drawings)
- */
 export function smoothDrawingPath(
   points: DrawingPoint[],
   smoothness: number,
@@ -204,11 +196,6 @@ export function smoothDrawingPath(
   return path;
 }
 
-/**
- * Computes the bounding box for an SVG drawing given its points and stroke width.
- * When smoothing is enabled, the returned bounds follow the rounded polyline so
- * the exported SVG does not clip the rendered stroke.
- */
 export function computeDrawingBounds(
   points: DrawingPoint[],
   strokeWidth: number = 2,

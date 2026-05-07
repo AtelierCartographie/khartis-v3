@@ -17,7 +17,7 @@ interface ResolveOrthographicReferenceTableOptions {
   duckDataset: OrthographicDuckDatasetRef;
   datasetTable: ArrowTable;
   basemapTable?: ArrowTable | null;
-  /** When set, a reference basemap is explicitly selected (overlay) */
+
   referenceBasemapId?: string | null;
 }
 
@@ -52,9 +52,8 @@ export function shouldUseBasemapReferenceInOrthographicView(
   duckDataset: OrthographicDuckDatasetRef,
   referenceBasemapId?: string | null
 ): boolean {
-  // Tabular data joined to basemap → use basemap bounds
   if (Boolean(duckDataset?.joinedBasemap) && !dataset?.geometry) return true;
-  // Reference basemap explicitly selected (overlay) → use basemap bounds so boundaries are visible with polygon data
+
   if (referenceBasemapId) return true;
   return false;
 }
