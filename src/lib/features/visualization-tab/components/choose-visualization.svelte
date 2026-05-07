@@ -83,7 +83,6 @@
   const datasetColumns = $derived(selectedDataset?.columns ?? []);
 
   const suggestions = $derived.by((): VizSuggestion[] => {
-    // Track orchestrator version so suggestions re-evaluate after join completes
     void duckDBOrchestrator.datasetsVersion;
     return computeVisualizationSuggestions(selectedDataset);
   });

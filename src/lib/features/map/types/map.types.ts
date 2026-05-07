@@ -47,15 +47,6 @@ export interface FacetSyncViewState {
   zoom: number;
 }
 
-/**
- * Split rendering payload — pairs the basemap geometry Arrow (ref-stable across
- * datasets joined to the same basemap, fed to Deck via parseSolidPolygons) with
- * the dataset attributes Arrow that supplies values for the lookup accessors.
- *
- * `featureIdColumn` indicates the column in the geometry Arrow that resolves to
- * the dataset's `basemap_id` (`__feature_id__` for custom basemaps, `id` for
- * catalog ones). See issue #87.
- */
 export interface SplitRenderingTable {
   geometry: ArrowTable;
   dataset: ArrowTable;
@@ -111,29 +102,29 @@ export interface LayerContext {
   textStatistics?: { min: number; max: number };
   textCategoryColorMap?: Map<string, RGBColor> | null;
   highlightedRowIds?: Set<number>;
-  /** Scalar version counter for highlight changes (avoids Set ref in updateTriggers) */
+
   highlightVersion?: number;
-  /** Shared screen transform for Deck.gl OrthographicView layers */
+
   modelMatrix?: Matrix4 | null;
   projectionSuffix?: string;
   beforeId?: string;
-  /** Pre-computed geometry info — avoids redundant extractGeometryInfo() calls */
+
   geometryInfo?: GeometryInfo;
-  /** DuckDB-derived point geometry used for symbols/text on non-point features */
+
   representativePointTable?: ArrowTable;
-  /** Geometry info for the representative point table */
+
   representativePointGeometryInfo?: GeometryInfo;
-  /** GPU-side year filter via DataFilterExtension — avoids data prop changes on year switch */
+
   yearFilter?: YearFilterInfo;
-  /** Cartographic projection applied before Deck.gl renders the geometry */
+
   customProjection?: ProjectionLike;
-  /** Primitive sublayer render order (from viz store) */
+
   primitiveOrder?: import('$lib/features/commons/stores/visualization.store.svelte').PrimitiveFilter[];
   densityTable?: ArrowTable;
   densityGeometryInfo?: GeometryInfo;
-  /** Split rendering: dataset attributes Arrow paired with the basemap geometry. */
+
   splitDatasetTable?: ArrowTable;
-  /** Split rendering: column in the geometry Arrow holding the stable feature id. */
+
   splitFeatureIdColumn?: string;
 }
 

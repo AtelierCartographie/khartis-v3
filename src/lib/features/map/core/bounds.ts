@@ -52,7 +52,6 @@ function safeReadGeometryValue(
   }
 }
 
-// Avoids repeated O(n) geometry scans per Arrow table; auto-GC via WeakMap.
 const boundsCache = new WeakMap<ArrowTable, LngLatBoundsLike | null>();
 
 function isValidBbox(
@@ -368,7 +367,6 @@ export function calculateBoundsFromGeoArrow(
         if (bbox.length === 4) {
           const [minLng, minLat, maxLng, maxLat] = bbox;
 
-          // Check if bbox is world bounds (DuckDB default) - if so, skip and calculate from data
           const isWorldBounds =
             minLng === -180 &&
             minLat === -90 &&

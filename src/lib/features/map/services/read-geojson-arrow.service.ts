@@ -29,7 +29,6 @@ const GEO_METADATA_VERSION = '1.0.0';
 const DEFAULT_CRS_NAME = GEO_CONSTANTS.WGS84_CRS;
 const WORLD_BOUNDS: [number, number, number, number] = [-180, -90, 180, 90];
 
-// Lazy-loaded parquet-wasm module (initialized once on first use)
 let parquetWasmReady: Promise<typeof import('parquet-wasm')> | null = null;
 
 async function getParquetWasm(): Promise<typeof import('parquet-wasm')> {
@@ -86,8 +85,6 @@ function detectNativeGeoArrowFromType(geomField: Field): string | null {
       case 'polygons':
         return ArrowExtension.GEOARROW_MULTIPOLYGON;
       case 'vertices':
-        // List<FixedSizeList<[x,y]>> is shared by MultiPoint and LineString.
-        // Keep the historical MultiPoint fallback for this ambiguous shape.
         if (childField.type.typeId === Type.FixedSizeList) {
           return ArrowExtension.GEOARROW_MULTIPOINT;
         }
@@ -323,7 +320,6 @@ async function readParquetGeoInfo(
     )) as Array<{ value: string }>;
 
     if (result.length > 0 && result[0].value) {
-      // parquet_kv_metadata returns BLOB type — convert to string if needed
       const rawValue =
         (result[0].value as unknown) instanceof Uint8Array
           ? new TextDecoder().decode(result[0].value as unknown as Uint8Array)
@@ -337,11 +333,10 @@ async function readParquetGeoInfo(
       const isProjectedCRS = crs?.type === 'ProjectedCRS';
       let sourceCrs: string | undefined;
       if (isProjectedCRS) {
-        // Try direct id (e.g., EPSG:2154 on the ProjectedCRS itself)
         if (crs?.id?.authority && crs?.id?.code) {
           sourceCrs = `${crs.id.authority}:${crs.id.code}`;
         }
-        // Fallback: detect from CRS name (e.g., "RGF93 v1 / Lambert-93")
+
         if (!sourceCrs && crs?.name) {
           if (/Lambert[\s-]*93/i.test(crs.name)) sourceCrs = 'EPSG:2154';
           else if (/Lambert[\s-]*II/i.test(crs.name)) sourceCrs = 'EPSG:27572';
@@ -364,12 +359,6 @@ async function readParquetGeoInfo(
   };
 }
 
-/**
- * Read a GeoParquet file via DuckDB and return an Arrow table with GeoArrow metadata.
- *
- * With DuckDB WASM >= 1.33.1-dev44.0 and CRS warmup, read_parquet() can export
- * GeoParquet geometry through Arrow IPC without disabling automatic conversion.
- */
 export async function readGeoParquetViaDuckDB(
   arrayBuffer: ArrayBuffer,
   tableName: string,
@@ -441,7 +430,6 @@ export async function readGeoParquetViaDuckDB(
       });
     }
 
-    // Client-side proj4 fallback for unsupported CRS
     if (isProjectionSupported(geoInfo.sourceCrs)) {
       logger.info(
         `Falling back to client-side proj4 reprojection for ${geoInfo.sourceCrs}`,
@@ -486,19 +474,6 @@ export async function readGeoParquetViaDuckDB(
   return table;
 }
 
-/**
- * Read a GeoParquet file directly via parquet-wasm, preserving native GeoArrow geometry.
- *
- * Built-in basemap parquet files encode geometry as native GeoArrow (geoarrow.point,
- * geoarrow.polygon, etc.). Reading them through DuckDB causes 3 unnecessary conversions:
- *   geoarrow native → DuckDB blob → geoarrow.wkb → geoarrow native (geoarrow-deck-stream)
- *
- * parquet-wasm decodes parquet directly to Arrow IPC, preserving the native encoding:
- *   geoarrow native → Arrow table (geometry still native) → geoarrow-deck-stream
- *
- * Use for built-in basemaps (WGS84, no reprojection). Custom basemaps and projected
- * CRS still go through readGeoParquetViaDuckDB for ST_Transform support.
- */
 export async function readGeoParquetDirect(
   arrayBuffer: ArrayBuffer,
   bbox?: [number, number, number, number]
@@ -523,7 +498,6 @@ export async function readGeoParquetDirect(
     }
   }
 
-  // Rename geometry column to standard name if needed (geoarrow-deck-stream expects 'geometry')
   if (
     primaryColumn !== INTERNAL_COLUMN.GEOMETRY &&
     primaryColumn !== INTERNAL_COLUMN.WKB_GEOMETRY &&
@@ -564,17 +538,11 @@ export async function readGeoParquetDirect(
     table = new Table(newBatches);
   }
 
-  // Ensure GeoArrow metadata is complete (adds field-level ARROW:extension:name if missing)
   table = addGeoArrowMetadata(table, encoding, bbox);
 
   return table;
 }
 
-/**
- * Simplified client-side reprojection fallback.
- * With DuckDB >= 1.33, geometry is geoarrow.wkb. We use ST_AsGeoJSON to extract
- * coordinates, reproject with proj4, and rebuild as GeoJSON strings.
- */
 async function reprojectParquetWithProj4(
   escapedFileId: string,
   geomCol: string,
@@ -652,9 +620,6 @@ async function reprojectParquetWithProj4(
   return table;
 }
 
-/**
- * Recursively reproject GeoJSON coordinates in-place using proj4.
- */
 function reprojectGeoJSONCoords(coords: unknown, sourceCrs: string): void {
   if (!Array.isArray(coords)) return;
 

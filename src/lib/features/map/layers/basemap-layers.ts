@@ -58,7 +58,7 @@ import {
   BasemapCitySymbol
 } from '$lib/features/commons/constants/visualization.constants';
 import {
-  DEFAULT_FONT_FAMILY,
+  CARTOGRAPHIC_FONT_FAMILY,
   resolveFontFamilyStack
 } from '$lib/features/step-toolbar/fonts.constants';
 import type { BBox, DeckDataRow, GeometryInfo, RGBColor } from '../types';
@@ -72,7 +72,6 @@ import {
   EXPLICIT_TEXT_CHARACTER_SET
 } from './text-character-set';
 
-// Shared extension instance — avoids re-allocation per layer per frame
 const DASH_EXTENSION = new PathStyleExtension({
   dash: true,
   highPrecisionDash: true
@@ -80,10 +79,6 @@ const DASH_EXTENSION = new PathStyleExtension({
 const SOLID_DASH_ARRAY: [number, number] = [1, 0];
 const PROJECTED_OCEAN_EXTENT = 1_000_000;
 
-/**
- * WeakMap cache for basemap GeoJSON conversions — avoids O(n) arrowTableToGeoJSON()
- * on every basemap config change (color, opacity, stroke). Same pattern as layer-factory.ts.
- */
 const basemapGeoJsonCache = new WeakMap<
   ArrowTable,
   Map<string, FeatureCollection | null>
@@ -235,12 +230,6 @@ function shouldPreferProjectedGeoJsonFallback(
   _geometryInfo: GeometryInfo,
   _projection: ProjectionLike | undefined
 ): boolean {
-  // Always use the Arrow native path for native GeoArrow data, even when
-  // a projection is active. geoarrow-deck-stream supports composite and
-  // cartographic projections natively via d3-geo streaming.
-  //
-  // WKB and GeoJSON-encoded data still fall back to GeoJsonLayer because
-  // they are not native GeoArrow and the condition below gates on that.
   return false;
 }
 
@@ -324,9 +313,6 @@ export function createTerreLayers(
   const fillOpacity = config.fillOpacity / 100;
   const strokeOpacity = config.strokeOpacity / 100;
 
-  // Each country border is drawn TWICE (by adjacent polygon strokes).
-  // WebGL anti-aliases sub-pixel lines to ~1px minimum visible width.
-  // Combined effect: ~2px borders. Cap to 0.5px max to keep borders subtle.
   const effectiveStrokeThickness = Math.min(config.strokeThickness, 0.5);
   const effectiveStrokeOpacity = Math.min(strokeOpacity, 0.4);
   const shouldRenderStroke =
@@ -383,7 +369,6 @@ export function createTerreLayers(
       );
     }
 
-    // Fill layer
     layers.push(
       new SolidPolygonLayer({
         id: layerId,
@@ -396,7 +381,6 @@ export function createTerreLayers(
       })
     );
 
-    // Stroke layer
     if (shouldRenderStroke && outlineData) {
       layers.push(
         new PathLayer({
@@ -518,7 +502,6 @@ export function createMersLayer(
     ]
   };
 
-  // Projected basemap layers are already in cartesian D3 output space, not lon/lat.
   const oceanData = ctx.projection
     ? {
         type: GEOJSON_TYPE.FEATURE_COLLECTION,
@@ -1518,7 +1501,6 @@ export function createVillesLayer(
     });
   }
 
-  // Cache polygon conversion by (filter, symbol, size)
   const polygonKey = `${filterKey}:${config.symbol}:${config.size}`;
   const shouldUseProjectedSymbols = Boolean(ctx.projection);
   if (
@@ -1575,7 +1557,7 @@ function createVillesLabelLayer(
   ) as FeatureCollection<Point>;
   const labelColor = toRgbColor(config.labelColor ?? '#161616');
   const labelSize = config.labelSize ?? 12;
-  const labelFontFamily = config.labelFontFamily ?? DEFAULT_FONT_FAMILY;
+  const labelFontFamily = config.labelFontFamily ?? CARTOGRAPHIC_FONT_FAMILY;
   const layerId = buildLayerId(
     DeckLayerId.BASEMAP_VILLES_LABELS,
     ctx.projectionSuffix
@@ -1970,9 +1952,8 @@ export interface BasemapAdditionalData {
 }
 
 export interface BasemapLayerGroups {
-  /** Layers rendered below data: land fill, seas, lakes, relief */
   background: Layer<DeckDataRow>[];
-  /** Layers rendered above data: borders, rivers, graticules, cities */
+
   foreground: Layer<DeckDataRow>[];
 }
 

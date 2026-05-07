@@ -1644,7 +1644,6 @@ describe('basemap projection fallbacks', () => {
       return null;
     });
 
-    // First call with frontieres ON - Terre stroke should be suppressed
     const layersOn = createBasemapLayers(worldBaseTable, ctx, {
       metadataLayers: [
         {
@@ -1666,7 +1665,6 @@ describe('basemap projection fallbacks', () => {
 
     expect(terreLayerOn?.props.stroked).toBe(false);
 
-    // Toggle frontieres OFF - Terre stroke should be restored
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.FRONTIERES, false);
 
     const layersOff = createBasemapLayers(worldBaseTable, ctx, {

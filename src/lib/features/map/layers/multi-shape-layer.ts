@@ -1,11 +1,3 @@
-/**
- * Extension of deck.gl ScatterplotLayer that renders multiple geometric shapes
- * via Signed Distance Functions (SDF) in the fragment shader. See issue #92.
- *
- * SDF math adapted from Inigo Quilez's 2D primitive reference collection
- * (https://iquilezles.org/articles/distfunctions2d/), MIT-style licensing preserved.
- */
-
 import { ScatterplotLayer } from '@deck.gl/layers';
 
 export enum ShapeTypeOrdinal {
@@ -270,10 +262,6 @@ interface MultiShapeLayerState {
   };
 }
 
-/**
- * Extends deck.gl's ScatterplotLayer with an `instanceShapes` attribute and an
- * SDF fragment shader that dispatches on shape type.
- */
 export class MultiShapeLayer<DataT = unknown> extends ScatterplotLayer<
   DataT,
   MultiShapeLayerProps<DataT>

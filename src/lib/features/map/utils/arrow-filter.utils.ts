@@ -10,29 +10,12 @@ import type { DataTableFilter } from '$lib/features/duckdb/types';
 import { FilterOperatorEnum } from '$lib/features/duckdb/types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
-/**
- * Multi-entry year filter cache.
- * WeakMap<sourceTable, Map<cacheKey, filteredTable>> allows caching multiple
- * year filter results per source table. When the user cycles between years
- * (e.g., 2020→2021→2020), the second visit to 2020 is a cache hit and returns
- * the same table reference — which in turn preserves downstream WeakMap caches
- * (GeoArrow binary parsing, GeoJSON conversion) and avoids costly re-parsing.
- */
 const yearFilterCache = new WeakMap<ArrowTable, Map<string, ArrowTable>>();
 
-/**
- * Multi-entry data filter cache (same pattern as yearFilterCache).
- * Prevents creating a new ArrowTable on every render when filters haven't changed,
- * preserving the downstream WeakMap cache chain (GeoArrow binary, GeoJSON, bounds).
- */
 const dataFilterCache = new WeakMap<ArrowTable, Map<string, ArrowTable>>();
 
-/**
- * Multi-entry table filter cache (same pattern as yearFilterCache).
- */
 const tableFilterCache = new WeakMap<ArrowTable, Map<string, ArrowTable>>();
 
-/** Build a stable, order-independent cache key from a list of filter descriptors. */
 function buildFilterCacheKey(
   filters: Array<{
     column: string;
@@ -52,10 +35,6 @@ function buildFilterCacheKey(
     .join('|');
 }
 
-/**
- * Build a new Arrow table containing only the rows at the given indices.
- * Uses table.slice() to preserve the original schema (including GeoArrow metadata).
- */
 export function selectRowsByIndices(
   table: ArrowTable,
   indices: number[]
@@ -64,7 +43,6 @@ export function selectRowsByIndices(
     return table.slice(0, 0) as ArrowTable;
   }
 
-  // Group consecutive indices into ranges for efficient slicing
   const ranges: [number, number][] = [];
   let rangeStart = indices[0];
   let rangeEnd = indices[0] + 1;
@@ -80,7 +58,6 @@ export function selectRowsByIndices(
   }
   ranges.push([rangeStart, rangeEnd]);
 
-  // Slice for each range and collect batches
   const allBatches: InstanceType<typeof Table>['batches'] = [];
   for (const [start, end] of ranges) {
     const sliced = table.slice(start, end);
@@ -105,8 +82,6 @@ export function filterArrowTableByYear(
     if (cached) return cached;
   }
 
-  // Helper to cache pass-through results (including error states) so
-  // repeated calls with the same invalid filter skip re-validation.
   function cacheYearResult(result: ArrowTable): void {
     const existing = yearFilterCache.get(table);
     if (existing) {
@@ -152,7 +127,7 @@ export function filterArrowTableByYear(
 
   for (let i = 0; i < table.numRows; i++) {
     const cellValue = columnVector.get(i);
-    // Fast path: number > bigint > string fallback
+
     const numValue =
       typeof cellValue === 'number'
         ? cellValue
@@ -337,9 +312,6 @@ export function filterArrowTableByDataFilters(
 ): ArrowTable {
   if (!filters?.length) return table;
 
-  // Apply only filters matching the given primitiveType (or global filters with no type),
-  // and skip filters that are not yet fully configured (e.g. empty value after creation)
-  // so the map does not blank out while the user is still typing.
   const applicableFilters = (
     primitiveType
       ? filters.filter(

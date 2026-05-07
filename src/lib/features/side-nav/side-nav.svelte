@@ -38,6 +38,8 @@
   import DuplicateProjectModal from '../commons/components/duplicate-project-modal.svelte';
   import Separator from '../commons/components/separator.svelte';
   import Switch from '../commons/components/switch.svelte';
+  import OfflineButton from './components/offline-button.svelte';
+  import OfflinePanel from './components/offline-panel.svelte';
   import { useSideNav } from './hooks/use-side-nav.svelte';
 
   const DEFAULT_APP_VERSION = '1.6.0-staging.1';
@@ -451,6 +453,8 @@
                 {m.sidenav_install_app()}
               {/if}
             </Button>
+
+            <OfflineButton />
           </Column>
         </Row>
       </Grid>
@@ -605,6 +609,8 @@
   onClose={closeDeleteModal}
   onConfirm={() => sideNav.handleDeleteConfirm(closeDeleteModal)}
 />
+
+<OfflinePanel />
 
 <div id="khartis-install-dialog">
   <ComposedModal
@@ -779,7 +785,7 @@
   }
 
   #khartis-install-dialog :global(.install-help-modal) {
-    width: min(92vw, 42rem);
+    width: min(92vw, 28rem);
   }
 
   #khartis-install-dialog :global(.install-help-body) {

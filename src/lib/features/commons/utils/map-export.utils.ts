@@ -49,9 +49,6 @@ function getExportPixelRatio(
   );
 }
 
-/**
- * Shared html-to-image filter — excludes debug-only DOM nodes from exports.
- */
 function exportFilter(domNode: HTMLElement): boolean {
   if (domNode.classList?.contains('page-grid')) return false;
   if (domNode.classList?.contains('view-mode-loader')) return false;
@@ -62,15 +59,6 @@ function usesInterleavedDeckOverlay(): boolean {
   return mapInstanceStore.deckOverlay !== null;
 }
 
-/**
- * Pre-renders the MapLibre WebGL canvas at the requested pixel ratio, waits
- * for the first 'render' frame, then returns a cleanup function that restores
- * the original ratio.
- *
- * In Deck.gl interleaved mode, MapLibre pixel-ratio resizes make the shared
- * canvas capture Deck.gl layers with the wrong projection. Keep that canvas at
- * screen pixel ratio and let html-to-image scale the aligned frame.
- */
 async function prerenderWebgl(pixelRatio: number): Promise<() => void> {
   const map = mapInstanceStore.map;
   if (!map || usesInterleavedDeckOverlay()) return () => {};
@@ -85,7 +73,7 @@ async function prerenderWebgl(pixelRatio: number): Promise<() => void> {
       () => reject(new Error(m.error_map_render_timeout())),
       10000
     );
-    // Register BEFORE setPixelRatio — JS is single-threaded, no rAF can fire between
+
     map.once('render', () => {
       clearTimeout(timeout);
       resolve();
@@ -95,7 +83,6 @@ async function prerenderWebgl(pixelRatio: number): Promise<() => void> {
   });
 
   return () => {
-    // Restore in next frame — html-to-image has already read canvas.toDataURL() synchronously
     requestAnimationFrame(() => {
       map.setPixelRatio(currentRatio);
       map.triggerRepaint();
@@ -103,14 +90,6 @@ async function prerenderWebgl(pixelRatio: number): Promise<() => void> {
   };
 }
 
-/**
- * Temporarily mutates .page-container for export:
- *   - Hides the alignment grid
- *   - Strips the color-blindness CSS filter (CDC §2.C.2.e: not exported; the
- *     filter also refs an SVG sibling outside the container so html-to-image
- *     wouldn't resolve it anyway)
- * Returns a cleanup function that undoes both mutations.
- */
 function mutateDomForExport(pageContainer: HTMLElement): () => void {
   pageContainer.classList.add('is-exporting-map');
 
@@ -742,9 +721,6 @@ export async function exportMapToJpg(
     return Promise.reject(new Error(m.export_map_not_loaded()));
   }
 
-  // Scale the page to fit within the target dimensions (letterbox if aspect ratios differ).
-  // Math.min ensures both dimensions stay within target; for identical aspect ratios (e.g.
-  // 16:9 page + 16:9 QHD target) both values are equal and the output is pixel-perfect.
   const pagePixelRatio = getExportPixelRatio(pageContainer, opts);
 
   const restoreRatio = await prerenderWebgl(pagePixelRatio);
@@ -753,8 +729,6 @@ export async function exportMapToJpg(
 
   const pageCanvas = await (async (): Promise<HTMLCanvasElement | null> => {
     try {
-      // Step 1 — capture as canvas. toCanvas skips the PNG Blob encode/decode
-      // round-trip that toBlob + createImageBitmap would incur.
       return await htmlToImageCanvas(pageContainer, {
         pixelRatio: pagePixelRatio,
         style: { boxShadow: 'none' },
@@ -770,9 +744,6 @@ export async function exportMapToJpg(
     return Promise.reject(new Error(m.error_capture_page_failed()));
   }
 
-  // Step 2 — composite into an exact opts.width × opts.height canvas.
-  // If page aspect ratio === target (e.g. 16:9 page + QHD), pageCanvas fills exactly.
-  // Otherwise white letterbox bands appear on the shorter axis.
   const offscreen = new OffscreenCanvas(opts.width, opts.height);
   const ctx = offscreen.getContext('2d');
   if (!ctx) {

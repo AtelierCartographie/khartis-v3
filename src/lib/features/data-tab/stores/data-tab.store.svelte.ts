@@ -204,7 +204,7 @@ export const dataTabStore = {
   getDisplayedStepNumber(step: DataTabStep): number | null {
     return getDisplayedStepNumber(step);
   },
-  /** The step index where the basemap-join step lives (last step for tabular workflows) */
+
   get basemapStepIndex(): number {
     if (isGeographicMode()) return -1;
     return getStepCount() - 1;

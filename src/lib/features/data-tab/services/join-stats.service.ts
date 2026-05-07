@@ -35,8 +35,6 @@ export async function computeDatasetJoinStats(
   const { sourceTableName, sourceColumn, targetTableName, targetColumn } =
     options;
 
-  // join_macros are loaded once at DuckDB init (duck.ts) — no need to reload
-
   const escapedSourceCol = escapeIdentifier(sourceColumn);
   const escapedTargetCol = escapeIdentifier(targetColumn);
   const escapedSourceTable = escapeIdentifier(sourceTableName);
@@ -105,8 +103,6 @@ export async function computeDatasetJoinStats(
       .map((v) => `'${escapeSqlString(v)}'`)
       .join(', ');
 
-    // Build a temporary join table with the `normalized` column expected by get_similarity,
-    // then use a LATERAL join to call get_similarity for each unmatched source value.
     const tempJoinTable = '__join_stats_target__';
     await Duck.query(
       `CREATE OR REPLACE TEMP TABLE "${escapeIdentifier(tempJoinTable)}" AS

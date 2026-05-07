@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as m from '$lib/paraglide/messages';
 
-// ok-palette's resolvePalette relies on OffscreenCanvas which jsdom does not expose.
-// Stub it with a deterministic dummy so tests can exercise count/branching logic
-// without needing a working canvas 2D context.
 vi.mock('@ateliercartographie/ok-palette', async () => {
   const divergentSequential = vi.fn(
     ({
@@ -37,9 +34,6 @@ vi.mock('@ateliercartographie/ok-palette', async () => {
   };
 });
 
-// motif.js relies on canvas via tile().toDataURL(); stub to return a fixed data URL
-// keyed on a hash of its inputs so buildPatternBackground assertions still vary
-// between different pattern/angle combinations.
 vi.mock('@ateliercartographie/motif.js', () => ({
   motif: (config: { type: string; angle?: number }) => ({
     tile: () => ({
@@ -268,9 +262,6 @@ describe('palette.constants — generatePaletteColors', () => {
   });
 
   it('should accept a contrast parameter and still return N hex colors', () => {
-    // resolvePalette is mocked in this file, so we only assert the contract
-    // (count + hex format) rather than inter-contrast distinctness which depends
-    // on the real ok-palette color math.
     const p = monochromePalettes[0];
     const normal = generatePaletteColors(p, 5);
     const high = generatePaletteColors(p, 5, 'high');
@@ -507,8 +498,6 @@ describe('palette.constants — generateCategoricalColorsFromSeed', () => {
   });
 
   it('should return N hex colors regardless of preset', () => {
-    // resolvePalette is mocked, so inter-preset distinctness is not verifiable
-    // here; the real behavior is covered by ok-palette's own tests.
     const vif = generateCategoricalColorsFromSeed('#f287ac', 4, 'vif');
     const pastel = generateCategoricalColorsFromSeed('#f287ac', 4, 'pastel');
     expect(vif).toHaveLength(4);
