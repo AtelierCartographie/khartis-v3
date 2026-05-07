@@ -34,7 +34,7 @@ interface KhartisProject {
 ### Visualisation
 
 ```typescript
-// src/lib/features/commons/store/visualization.store.svelte.ts
+// src/lib/features/commons/stores/visualization.store.svelte.ts
 enum VisualizationType {
   CHOROPLETH = 'choropleth',
   PROPORTIONAL = 'proportional',
@@ -56,7 +56,7 @@ enum ClassificationMethod {
 ### Fichier
 
 ```typescript
-// src/lib/features/commons/store/create-project.types.ts
+// src/lib/features/commons/types/create-project.types.ts
 enum FileType {
   CSV = 'csv',
   TSV = 'tsv',
@@ -153,7 +153,7 @@ Ne jamais modifier `DatasetResult` sans mettre à jour les tests dans `tests/pip
 
 ## Hiérarchie d'erreurs
 
-Toutes les erreurs du pipeline héritent de `PipelineError`. Fichier : `src/lib/features/commons/errors/pipeline.errors.ts`.
+Toutes les erreurs du pipeline héritent de `PipelineError`. Fichier : `src/lib/features/commons/pipeline.errors.ts`.
 
 | Classe                | Code                    | Fatal | Contexte                     |
 | --------------------- | ----------------------- | ----- | ---------------------------- |
@@ -167,7 +167,7 @@ Toutes les erreurs du pipeline héritent de `PipelineError`. Fichier : `src/lib/
 Guards : `isPipelineError(err)`, `isFatalError(err)`, `formatError(err)`.
 
 ```typescript
-import { isFatalError } from '$lib/features/commons/errors/pipeline.errors';
+import { isFatalError } from '$lib/features/commons/pipeline.errors';
 import {
   showError,
   showWarning

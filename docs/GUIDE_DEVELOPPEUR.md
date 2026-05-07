@@ -2,7 +2,7 @@
 
 > Onboarding, conventions, patterns et tâches courantes pour contribuer à Khartis v3.
 
-**Voir aussi** : [ARCHITECTURE.md](ARCHITECTURE.md) · [PIPELINE_DONNEES.md](PIPELINE_DONNEES.md) · [DUCKDB.md](DUCKDB.md) · [MAP.md](MAP.md) · [GESTION_ETAT.md](GESTION_ETAT.md) · [REFERENCE.md](REFERENCE.md)
+**Voir aussi** : [ARCHITECTURE.md](ARCHITECTURE.md) · [ARCHITECTURE_FEATURES.md](ARCHITECTURE_FEATURES.md) · [PIPELINE_DONNEES.md](PIPELINE_DONNEES.md) · [DUCKDB.md](DUCKDB.md) · [MAP.md](MAP.md) · [GESTION_ETAT.md](GESTION_ETAT.md) · [REFERENCE.md](REFERENCE.md)
 
 ---
 
@@ -32,17 +32,19 @@ src/
 │   ├── +layout.svelte       # Point d'entrée SvelteKit : init DuckDB, ARIA
 │   └── +page.svelte         # Chargement lazy de la carte principale
 └── lib/
-    ├── features/            # 10 features autonomes
-    │   ├── commons/         # Stores globaux, services, composants, erreurs
-    │   ├── create-project/  # Modale d'entrée (import, exemples, ouverture)
-    │   ├── data-pipeline/   # Import fichiers, détection format, validation
-    │   ├── duckdb/          # Moteur DuckDB WASM (Duck, orchestrateur, macros)
-    │   ├── header/          # Barre de navigation (export, sauvegarde)
-    │   ├── main-toolbar/    # Sidebar gauche (3 étapes)
-    │   ├── map/             # Carte Deck.gl + MapLibre
-    │   ├── project-management/ # Persistance .kh, IndexedDB, migrations
-    │   ├── side-nav/        # Menu latéral (langue, projets récents)
-    │   └── step-toolbar/    # Panneau droit (10 outils)
+    ├── features/            # 12 features autonomes
+    │   ├── commons/             # Stores globaux, services, composants, erreurs
+    │   ├── create-project/      # Modale d'entrée (import, exemples, ouverture)
+    │   ├── data-pipeline/       # Import fichiers, détection format, validation
+    │   ├── data-tab/            # Onglet « Données » (import, jointure, enrichissement)
+    │   ├── duckdb/              # Moteur DuckDB WASM (Duck, orchestrateur, macros)
+    │   ├── header/              # Barre de navigation (export, sauvegarde)
+    │   ├── main-toolbar/        # Coquille panneau gauche (orchestre data-tab et visualization-tab)
+    │   ├── map/                 # Carte Deck.gl + MapLibre
+    │   ├── project-management/  # Persistance .kh, IndexedDB, migrations
+    │   ├── side-nav/            # Menu latéral (langue, projets récents)
+    │   ├── step-toolbar/        # Panneau droit (10 outils)
+    │   └── visualization-tab/   # Onglet « Visualisations » (suggestions, primitives, fond)
     ├── paraglide/           # Généré automatiquement — ne pas éditer
     └── types/               # Types partagés cross-features
 
@@ -59,13 +61,24 @@ tests/
 
 ```
 features/mon-outil/
-├── mon-outil.svelte              # Composant d'entrée
-├── mon-outil.store.svelte.ts     # État + actions
-├── mon-outil.types.ts            # Types publics de la feature
+├── index.ts                      # API publique de la feature (exports)
+├── mon-outil.svelte              # Composant d'entrée (optionnel)
 ├── components/                   # Sous-composants internes
+├── stores/                       # Stores réactifs (.store.svelte.ts)
 ├── hooks/                        # Hooks Svelte (use-xxx.svelte.ts)
-└── services/                     # Logique métier (aucune dépendance UI)
+├── services/                     # Logique métier (aucune dépendance UI)
+├── types/                        # Types publics de la feature (.types.ts)
+├── utils/                        # Utilitaires purs
+└── constants/                    # Constantes et configurations
 ```
+
+Chaque feature expose son API publique via `index.ts`. Les imports inter-features
+doivent passer par ce barrel ; les imports profonds dans les internes d'une
+autre feature sont interdits (vérifié par `architecture-boundaries.test.ts`).
+
+> Pour le **rationale** derrière le découpage de chaque feature et les
+> guidelines pour en créer une nouvelle, voir
+> [ARCHITECTURE_FEATURES.md](ARCHITECTURE_FEATURES.md).
 
 ---
 
@@ -259,11 +272,11 @@ pnpm build          # Génère build/ (HTML + JS + assets + fonds de carte)
 
 ## Ajouter un processeur de pipeline
 
-1. Ajouter le `FileType` dans `commons/store/create-project.types.ts`.
+1. Ajouter le `FileType` dans `commons/types/create-project.types.ts`.
 2. Déclarer l'extension dans `data-pipeline/constants.ts`.
-3. Mettre à jour `detectFileFormat()` dans `core/format-detector.ts`.
-4. Créer le processeur dans `processors/strategies/<nom>-processor.ts` (implémente `FileProcessor`).
-5. Exporter depuis `processors/strategies/index.ts`.
-6. Enregistrer dans `processors/register-processors.ts`.
-7. Si le processeur doit être actif (pas en fallback), ajouter le `FileType` à `RAW_FILE_PROCESSOR_TYPES`.
+3. Mettre à jour `detectFileFormat()` dans `data-pipeline/core/format-detector.ts`.
+4. Créer le processeur dans `data-pipeline/processors/strategies/<nom>-processor.ts` (implémente `FileProcessor`).
+5. Exporter depuis `data-pipeline/processors/strategies/index.ts`.
+6. Enregistrer dans `data-pipeline/processors/register-processors.ts`.
+7. Si le processeur doit être actif (pas en fallback), ajouter le `FileType` à `RAW_FILE_PROCESSOR_TYPES` dans `data-pipeline/processors/file-processor.ts`.
 8. Écrire les tests co-localisés.

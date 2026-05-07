@@ -2,7 +2,7 @@
 
 > Vue d'ensemble du système Khartis v3 : principes, couches techniques et flux de données.
 
-**Voir aussi** : [GUIDE_DEVELOPPEUR.md](GUIDE_DEVELOPPEUR.md) · [PIPELINE_DONNEES.md](PIPELINE_DONNEES.md) · [DUCKDB.md](DUCKDB.md) · [MAP.md](MAP.md) · [GESTION_ETAT.md](GESTION_ETAT.md)
+**Voir aussi** : [ARCHITECTURE_FEATURES.md](ARCHITECTURE_FEATURES.md) · [GUIDE_DEVELOPPEUR.md](GUIDE_DEVELOPPEUR.md) · [PIPELINE_DONNEES.md](PIPELINE_DONNEES.md) · [DUCKDB.md](DUCKDB.md) · [MAP.md](MAP.md) · [GESTION_ETAT.md](GESTION_ETAT.md)
 
 ---
 
@@ -62,25 +62,31 @@ src/
 │   ├── +layout.svelte       # Init DuckDB, ARIA Carbon, zoom/pan global
 │   └── +page.svelte         # Chargement lazy de la carte
 └── lib/
-    ├── features/            # 10 features indépendantes (voir ci-dessous)
+    ├── features/            # 12 features indépendantes (voir ci-dessous)
     ├── paraglide/           # Messages i18n générés (FR/EN) — ne pas éditer
     └── types/               # Types TypeScript partagés cross-features
 ```
 
-### Les 10 features
+### Les 12 features
 
 | Feature               | Rôle                                                                          |
 | --------------------- | ----------------------------------------------------------------------------- |
 | `commons/`            | Stores globaux, services partagés, composants Carbon, erreurs, utilitaires    |
 | `create-project/`     | Modale de création : import fichier, exemples, ouverture projet               |
 | `data-pipeline/`      | Import fichiers : détection format, validation, processeurs, DuckDB           |
+| `data-tab/`           | Onglet « Données » du panneau gauche : import, jointure, enrichissement       |
 | `duckdb/`             | Moteur DuckDB WASM : singleton `Duck`, orchestrateur, macros SQL              |
 | `header/`             | Barre de navigation supérieure (export, sauvegarde projet)                    |
-| `main-toolbar/`       | Sidebar gauche : onglets Données, Visualisations, Habillage                   |
+| `main-toolbar/`       | Coquille du panneau gauche : orchestre `data-tab/` et `visualization-tab/`    |
 | `map/`                | Carte Deck.gl + MapLibre : hooks, layer factories, projections, tooltip       |
 | `project-management/` | Format `.kh`, sérialisation, asset store IndexedDB, import/export             |
 | `side-nav/`           | Menu latéral (langue, liste des projets récents)                              |
 | `step-toolbar/`       | Panneau droit : 10 outils (search, layers, projections, legend, annotations…) |
+| `visualization-tab/`  | Onglet « Visualisations » : suggestions, primitives, fond de carte            |
+
+Chaque feature expose son API publique via `index.ts`. Les imports inter-features doivent passer par ce barrel ; les imports profonds dans les internes d'une autre feature sont interdits (vérifié par `architecture-boundaries.test.ts`).
+
+> Pour comprendre **pourquoi** chaque feature est organisée comme elle l'est et savoir comment structurer une nouvelle feature, voir [ARCHITECTURE_FEATURES.md](ARCHITECTURE_FEATURES.md).
 
 ---
 
@@ -91,7 +97,7 @@ src/
 | Traitement de fichiers           | `dataPipeline.processFile()`                          | `src/lib/features/data-pipeline/index.ts`                     |
 | Requêtes SQL (bas niveau)        | `Duck.query()`                                        | `src/lib/features/duckdb/duck.ts`                             |
 | Opérations données (haut niveau) | `duckDBOrchestrator`                                  | `src/lib/features/duckdb/orchestrator/`                       |
-| Stores globaux                   | `projectStore`, `datasetsStore`, `visualizationStore` | `src/lib/features/commons/store/`                             |
+| Stores globaux                   | `projectStore`, `datasetsStore`, `visualizationStore` | `src/lib/features/commons/stores/`                            |
 | Rendu carte                      | `useMapLayers`, `useMapInit`, `useMapBasemap`         | `src/lib/features/map/hooks/`                                 |
 | Classification                   | `calculateBreaks()`, `generateColorsForBreaks()`      | `src/lib/features/commons/services/classification.service.ts` |
 | Suggestion de visualisation      | `vizSuggester.suggestVisualizations()`                | `src/lib/features/commons/services/viz-suggester.service.ts`  |
@@ -130,7 +136,7 @@ Khartis applique une stratégie d'erreur cohérente à travers tout le pipeline 
 - **Ne jamais bloquer l'interface** pour les tâches longues : toutes les opérations DuckDB sont asynchrones, le feedback de progression est envoyé par callback.
 - **Messages utilisateur** : toutes les erreurs remontées à l'UI passent par le système de notifications (`showError` / `showWarning`), localisées via Paraglide.
 
-La hiérarchie d'erreurs (`PipelineError` → `DataValidationError` | `ParseError` | `DuckDBError` | `NonFatalError`) est définie dans `src/lib/features/commons/errors/pipeline.errors.ts`.
+La hiérarchie d'erreurs (`PipelineError` → `DataValidationError` | `ParseError` | `DuckDBError` | `NonFatalError`) est définie dans `src/lib/features/commons/pipeline.errors.ts`.
 
 ---
 

@@ -209,7 +209,7 @@ Workers are available for:
 
 ### Error Classes
 
-Use the hierarchical error system defined in `src/lib/features/commons/errors/pipeline.errors.ts`:
+Use the hierarchical error system defined in `src/lib/features/commons/pipeline.errors.ts`:
 
 - `PipelineError` (base class — `code`, `details`)
   - `DataValidationError` — invalid data (adds `field`)
@@ -224,7 +224,7 @@ Use the hierarchical error system defined in `src/lib/features/commons/errors/pi
 import {
   DataValidationError,
   isPipelineError
-} from '$lib/features/commons/errors/pipeline.errors';
+} from '$lib/features/commons/pipeline.errors';
 
 try {
   await operation();
