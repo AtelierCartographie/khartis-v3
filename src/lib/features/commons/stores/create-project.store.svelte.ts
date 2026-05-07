@@ -643,6 +643,10 @@ export const createProjectActions = {
   },
 
   async downloadRemoteFile(url: string, index: number): Promise<File> {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      throw new Error(m.error_offline_url_import());
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(
       () => controller.abort(),

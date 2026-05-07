@@ -204,6 +204,106 @@ export async function cancelOfflineBasemap(
   }
 }
 
+export async function getCachedBasemapIds(): Promise<string[]> {
+  if (typeof caches === 'undefined') return [];
+
+  try {
+    const cache = await caches.open('basemaps-data');
+    const requests = await cache.keys();
+    const ids = new Set<string>();
+    for (const req of requests) {
+      try {
+        const url = new URL(req.url);
+        const match = url.pathname.match(
+          /\/basemaps\/geometry\/([^/]+)\.parquet$/
+        );
+        if (match) ids.add(match[1]);
+      } catch {
+        /* ignore unparseable urls */
+      }
+    }
+    return Array.from(ids);
+  } catch (error) {
+    logger.warn(
+      'Failed to enumerate cached basemap ids',
+      LogCategory.SYSTEM,
+      error
+    );
+    return [];
+  }
+}
+
+export async function clearOfflineCacheViaSw(
+  scope: 'all' | 'basemaps' | 'tiles'
+): Promise<void> {
+  if (
+    typeof navigator === 'undefined' ||
+    !('serviceWorker' in navigator) ||
+    !navigator.serviceWorker.controller
+  ) {
+    return;
+  }
+
+  navigator.serviceWorker.controller.postMessage({
+    type: 'CLEAR_OFFLINE_CACHE',
+    scope
+  });
+}
+
+export interface FactoryResetOptions {
+  reload?: boolean;
+}
+
+export async function factoryResetPwa(
+  options: FactoryResetOptions = {}
+): Promise<void> {
+  const { reload = true } = options;
+
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    if (navigator.serviceWorker.controller) {
+      try {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'FACTORY_RESET'
+        });
+      } catch (error) {
+        logger.warn(
+          'Failed to message SW for factory reset',
+          LogCategory.SYSTEM,
+          error
+        );
+      }
+    }
+
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((reg) => reg.unregister()));
+    } catch (error) {
+      logger.warn(
+        'Failed to unregister service workers',
+        LogCategory.SYSTEM,
+        error
+      );
+    }
+  }
+
+  if (typeof caches !== 'undefined') {
+    try {
+      const names = await caches.keys();
+      await Promise.all(names.map((n) => caches.delete(n)));
+    } catch (error) {
+      logger.warn(
+        'Failed to delete caches client-side during factory reset',
+        LogCategory.SYSTEM,
+        error
+      );
+    }
+  }
+
+  if (reload && typeof window !== 'undefined') {
+    window.location.reload();
+  }
+}
+
 export async function ensurePeriodicBasemapRevalidation(): Promise<void> {
   if (!isPeriodicSyncSupported()) {
     return;
