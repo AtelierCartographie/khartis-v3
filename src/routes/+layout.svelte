@@ -96,6 +96,10 @@
   }
 
   onMount(() => {
+    requestAnimationFrame(() => {
+      document.getElementById('app-splash')?.remove();
+    });
+
     void fontAssetsStore.ensureLoaded();
 
     const hasCookie = document.cookie.includes(cookieName);
