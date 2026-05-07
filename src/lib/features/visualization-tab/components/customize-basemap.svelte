@@ -30,7 +30,6 @@
   import { resolveTiledStyleFromToggle } from '../services/tiled-basemap-selection.service';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 
-  // Single $derived: one array iteration instead of 9 separate .find() calls
   const layerConfigs = $derived(
     new Map(basemapLayersStore.layers.map((l) => [l.id, l] as const))
   );
@@ -171,9 +170,6 @@
   }
 
   function handleTiledBasemapToggle(checked: boolean) {
-    // When activating from blank white, always default to Monde (world).
-    // Last-selected style history is only meaningful once the user has
-    // explicitly interacted with the zone/style selector.
     const isFirstActivation =
       checked && basemapStyleStore.selectedStyle === BasemapStyle.BLANK_WHITE;
     const preferredStyle = isFirstActivation
@@ -207,8 +203,6 @@
 
     basemapStyleStore.setStyle(nextStyle);
 
-    // Always fit the viewport to the newly-activated basemap so the user
-    // sees the correct geographic context (world for Monde, France for France).
     if (checked) {
       basemapStyleStore.requestViewportReset(nextStyle);
     }

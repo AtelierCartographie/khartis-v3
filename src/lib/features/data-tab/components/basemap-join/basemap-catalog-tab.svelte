@@ -141,7 +141,7 @@
           ? e.detail.selectedItem.basemap.title_fr
           : e.detail.selectedItem.basemap.title_en;
       searchQuery = title;
-      // Selecting from the ComboBox must trigger the same flow as clicking a card.
+
       onSelectBasemap(e.detail.selectedItem.basemap);
     } else {
       searchQuery = '';

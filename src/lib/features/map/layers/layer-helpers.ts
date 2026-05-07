@@ -12,11 +12,6 @@ import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants'
 
 export const HIGHLIGHT_FILL_COLOR: RGBColor = [180, 180, 180];
 
-/**
- * Resolves missingData render props from a VisualizationConfig. Returns the
- * RGB color to use for features with missing values, and whether they should
- * be rendered (alpha 255) or hidden (alpha 0).
- */
 export function resolveMissingDataRenderProps(
   viz: { missingData?: { show?: boolean; color?: string } } | undefined | null,
   fallbackColor: RGBColor = HIGHLIGHT_FILL_COLOR
@@ -24,7 +19,7 @@ export function resolveMissingDataRenderProps(
   const show = viz?.missingData?.show ?? true;
   const rawColor = viz?.missingData?.color;
   if (!rawColor) return { color: fallbackColor, show };
-  // Inline hex→rgb to keep this module dependency-free.
+
   const clean = rawColor.replace('#', '');
   const bigint = parseInt(clean, 16);
   if (Number.isNaN(bigint)) return { color: fallbackColor, show };

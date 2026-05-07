@@ -149,7 +149,7 @@
   let italic = $state<boolean>(false);
   let size = $state<number>(VISUALIZATION_DEFAULTS.textSize);
   let sizeMode = $state<SizeMode>(SizeMode.FIXED);
-  let alignment = $state<'left' | 'center' | 'right'>('left');
+  let alignment = $state<'left' | 'center' | 'right'>('center');
   let halo = $state<boolean>(false);
   let haloColor = $state<string>(DEFAULT_COLORS.halo);
   let haloWidth = $state<number>(VISUALIZATION_DEFAULTS.haloWidth);
@@ -162,7 +162,7 @@
   let secondarySize = $state<number>(VISUALIZATION_DEFAULTS.labelSize);
   let secondaryBold = $state<boolean>(false);
   let secondaryItalic = $state<boolean>(false);
-  let secondaryAlignment = $state<'left' | 'center' | 'right'>('left');
+  let secondaryAlignment = $state<'left' | 'center' | 'right'>('center');
   let secondaryHalo = $state<boolean>(false);
   let secondaryHaloColor = $state<string>(DEFAULT_COLORS.halo);
   let secondaryHaloWidth = $state<number>(VISUALIZATION_DEFAULTS.haloWidth);
@@ -261,7 +261,7 @@
         VISUALIZATION_DEFAULTS.textSize
       );
       sizeMode = visualization.modes?.size ?? SizeMode.FIXED;
-      alignment = visualization.style.textAlign ?? 'left';
+      alignment = visualization.style.textAlign ?? 'center';
       halo = visualization.style.textHalo ?? false;
       haloColor = visualization.style.textHaloColor ?? DEFAULT_COLORS.halo;
       haloWidth =
@@ -284,7 +284,7 @@
       );
       secondaryBold = visualization.style.labelBold ?? false;
       secondaryItalic = visualization.style.labelItalic ?? false;
-      secondaryAlignment = visualization.style.labelAlign ?? 'left';
+      secondaryAlignment = visualization.style.labelAlign ?? 'center';
       secondaryHalo = visualization.style.labelHalo ?? false;
       secondaryHaloColor =
         visualization.style.labelHaloColor ?? DEFAULT_COLORS.halo;

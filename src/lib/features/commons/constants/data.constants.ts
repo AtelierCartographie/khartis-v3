@@ -19,7 +19,6 @@ export const JOINED_BASEMAP_COLUMNS = Object.values(
   JOINED_BASEMAP_COLUMN
 ) as readonly string[];
 
-// Ordered by frequency — auto-detection stops at first match.
 export const GEO_COLUMN_NAMES = [
   INTERNAL_COLUMN.GEOM,
   INTERNAL_COLUMN.GEOMETRY,
@@ -44,7 +43,6 @@ export const EXCLUDED_COLUMNS = [
 
 export const COLUMN_TYPE_GEOMETRY = 'geometry' as const;
 
-// Values persisted in dataset analysis results — must stay stable across schema versions.
 export const GEO_COLUMN_TYPE = {
   LATITUDE: 'latitude',
   LONGITUDE: 'longitude',

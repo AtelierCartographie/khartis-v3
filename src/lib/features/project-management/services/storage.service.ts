@@ -17,7 +17,6 @@ export async function saveToStorage<T>(key: string, data: T): Promise<void> {
     const storeName = PROJECT_CONST.DB.METADATA_STORE_NAME;
 
     if (!db.objectStoreNames.contains(storeName)) {
-      // DB hasn't been upgraded yet — this shouldn't happen, but guard anyway
       logger.warn(
         'Metadata store not found, skipping save',
         LogCategory.PERSISTENCE,

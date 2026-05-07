@@ -432,11 +432,10 @@ export const createProjectActions = {
         }
       };
       this.addUploadedFile(incompleteFile);
-      // No flash message - warning shown in form
+
       return;
     }
 
-    // At this point all required files are present (we returned early if any missing)
     const shpFile = files.find((f) => f.name.toLowerCase().endsWith('.shp'))!;
 
     const relatedFilesData: Record<string, ArrayBuffer> = {};

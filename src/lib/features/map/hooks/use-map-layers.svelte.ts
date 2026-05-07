@@ -342,9 +342,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       projectionPresets: basemapService.projectionPresets
     });
 
-    // Downstream GeoArrow/projection caches key by ProjectionLike reference.
-    // Recreating the same override projection on every layer refresh defeats
-    // those caches and forces needless reprojection work.
     cachedProjectionOverrideKey = overrideKey;
     cachedProjectionOverrideRef = projectionOverride;
 
@@ -575,10 +572,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   ): ProjectionLike | undefined {
     const datasetGeometryCrs = getDatasetGeometryCrs(datasetId);
 
-    // Orthographic mode fits the camera against projectionStore.referenceBbox.
-    // WGS84 datasets still need the same render projection as the basemap when
-    // that reference bbox is already projected, otherwise the geometry collapses
-    // into a tiny patch against a world-scale frame.
     if (
       !isOrthographicMode &&
       shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs)
@@ -699,7 +692,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       return;
     }
 
-    // In MapLibre mode, avoid pushing layers while style is being swapped/reloaded.
     if (deckOverlay && map && !map.isStyleLoaded()) {
       return;
     }
@@ -711,28 +703,17 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const visualizationsToRender =
         getVisualizationRenderOrder(activeVisualizations);
 
-      // Only apply modelMatrix in the Deck.gl OrthographicView engine.
-      // In MapLibre mode (deckOverlay), the map handles projection including globe
       const isOrthographicMode = !deckOverlay && Boolean(deckInstance);
       const matrixToApply = isOrthographicMode
         ? (getModelMatrix?.() ?? projectionStore.modelMatrix)
         : null;
 
-      // In MapLibre mode, use projection suffix to force layer re-creation
-      // when projection changes.
-      // This is a workaround for deck.gl issue #9466 where layers don't sync with globe projection
       const projectionSuffix = deckOverlay
         ? mapProjectionStore.projection
         : undefined;
       const projectionFitBbox = getProjectionFitBbox?.() ?? null;
       const fitPaddingPx = projectionStore.fitPaddingPx;
 
-      // Only applies in the Deck.gl OrthographicView engine. In MapLibre mode,
-      // the map handles projection natively and data must stay in WGS84 lat/lng.
-      //
-      // Memoized: buildProjectionForBasemap() creates a new object each call,
-      // defeating downstream WeakMap caches. We keep the same reference until
-      // the basemap metadata actually changes.
       const currentMetadata = basemapService.currentMetadata;
       const basemapProjection = getProjectionFromMetadata(
         currentMetadata,
@@ -745,15 +726,13 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         isOrthographicMode,
         projectionFitBbox
       );
-      // Catalog basemap metadata remains the default. An explicit user choice
-      // in the Projection tool must still override it immediately.
+
       const activeBasemapProjection = resolveProjectionForRender(
         basemapProjection,
         projectionOverride,
         projectionState.overrideSource
       );
 
-      // In MapLibre interleaved mode, find the first symbol layer to render data layers below text
       const beforeId =
         map && deckOverlay ? findFirstSymbolLayerId(map) : undefined;
 
@@ -786,8 +765,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         }
       }
 
-      // Only show basemap layers in the Deck.gl OrthographicView engine.
-      // In MapLibre mode, the tiled basemap provides the background (OSM, Carte Facile, etc.)
       const hasDatasetContent = datasetContentIds.size > 0;
       const shouldShowBasemapLayers = shouldShowOrthographicBasemapLayers({
         isOrthographicMode,
@@ -818,10 +795,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const shouldKeepOrthographicBasemapLayers =
         shouldShowBasemapLayers || shouldShowGeneratedBasemapLayers;
 
-      // Basemap layers are split into background (terre, mers, lacs, relief)
-      // and foreground (frontières, rivières, graticules, villes).
-      // Foreground layers render ABOVE data so basemap borders remain visible
-      // even when polygon data covers the basemap fill.
       let basemapBackgroundLayers: Layer<DeckDataRow>[] = [];
       let basemapForegroundLayers: Layer<DeckDataRow>[] = [];
 
@@ -1174,7 +1147,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           !hasExpectedVisibleLayers ||
           previousLayersToPreserve.length !== lastAppliedLayers.length
         ) {
-          // Keep the restore cache aligned with intentionally removed layers.
           lastAppliedLayers = previousLayersToPreserve;
         }
       }

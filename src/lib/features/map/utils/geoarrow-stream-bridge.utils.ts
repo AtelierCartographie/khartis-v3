@@ -1,11 +1,3 @@
-/**
- * Bridge between geoarrow-deck-stream and Deck.gl layers.
- *
- * Provides both identity (lon/lat passthrough) and projection-aware parsing.
- * Identity parsing is used for custom basemaps and MapLibre mode.
- * Projection-aware parsing applies composite/simple/identity projections
- * from basemap metadata for built-in basemaps in orthographic mode.
- */
 import {
   type Table as ArrowTable,
   Schema,
@@ -29,7 +21,7 @@ import type {
   ProjectionLike
 } from 'geoarrow-deck-stream';
 import { type GeoProjection, type GeoStream } from 'd3-geo';
-// d3-geo-projection has no bundled type declarations — import via namespace cast
+
 import * as _d3GeoProjection from 'd3-geo-projection';
 
 const { geoNaturalEarth2 } = _d3GeoProjection as unknown as {
@@ -45,7 +37,6 @@ import { proj4d3 } from './proj4d3.utils';
 
 type BBoxTuple = [number, number, number, number];
 
-// Proj4 projection names not supported by proj4.js — mapped to d3-geo equivalents
 const D3_GEO_PROJECTION_MAP: Record<string, () => GeoProjection> = {
   natearth2: geoNaturalEarth2
 };
@@ -59,7 +50,6 @@ function resolveSimpleProjection(proj4String: string): GeoProjection {
   return proj4d3(proj4String);
 }
 
-// geoarrow-deck-stream requires a "geometry" column; DuckDB ST_Read names it "geom"/"wkb_geometry".
 const EXPECTED_GEOM_COL = 'geometry';
 const normalizedTableCache = new WeakMap<ArrowTable, ArrowTable>();
 const projectedBboxCache = new WeakMap<
@@ -209,7 +199,6 @@ function normalizeGeomColumnName(table: ArrowTable): ArrowTable {
 
   if (!primaryColumn || primaryColumn === EXPECTED_GEOM_COL) return table;
 
-  // Rename the geometry column + update "geo" metadata to match
   const updatedFields = table.schema.fields.map((f) =>
     f.name === primaryColumn
       ? new Field(EXPECTED_GEOM_COL, f.type, f.nullable, f.metadata)
@@ -227,8 +216,7 @@ function normalizeGeomColumnName(table: ArrowTable): ArrowTable {
   metadataMap.set('geo', JSON.stringify(parsedGeo));
 
   const newSchema = new Schema(updatedFields, metadataMap);
-  // Rebuild each RecordBatch with the new schema so that the Table and
-  // inner batch schemas stay equivalent (Apache Arrow enforces this).
+
   const newBatches = table.batches.map(
     (batch) => new RecordBatch(newSchema, batch.data)
   );
@@ -269,10 +257,6 @@ function withGeographicBoundsRouting(
     const entries = projection.getSubProjections();
     const streams = entries.map((entry) => entry.projection.stream(sink));
 
-    // Ring-level buffers — one per sub-projection. When non-null we are
-    // inside a ring (between lineStart and lineEnd) and collect points
-    // so that empty rings can be suppressed per stream.  d3-geo crashes
-    // if lineEnd (ringEnd) is called on a ring that received no points.
     let ringBuffers: [number, number][][] | null = null;
 
     cachedStream = {
@@ -352,8 +336,6 @@ const pathCache = new WeakMap<ArrowTable, BinaryPathData>();
 const solidPolygonCache = new WeakMap<ArrowTable, BinaryPolygonData>();
 const pointCache = new WeakMap<ArrowTable, BinaryPointData>();
 
-// Projection-aware caches (2-key: table → projection → result).
-// The ProjectionLike key is stable per basemap thanks to memoization in use-map-layers.
 const projSolidPolygonCache = new WeakMap<
   ArrowTable,
   Map<ProjectionLike, BinaryPolygonData>
@@ -406,13 +388,6 @@ export function parseSolidPolygons(table: ArrowTable): BinaryPolygonData {
   return result;
 }
 
-/**
- * Fast WKB Point decoder for Arrow tables (e.g. dot-density output).
- *
- * WKB Points have a fixed 21-byte layout (1 endian + 4 type + 8 X + 8 Y),
- * so this path can write directly into pre-allocated binary buffers and avoid
- * native GeoArrow conversion when the geometry is plain Point WKB.
- */
 function decodeWkbPointsAllBatches(
   table: ArrowTable,
   projection?: ProjectionLike
@@ -439,13 +414,12 @@ function decodeWkbPointsAllBatches(
     for (let i = 0; i < batchLen; i++) {
       const start = offsets[i];
       const end = offsets[i + 1];
-      // WKB Point = 21 bytes. Guard against malformed / non-Point WKB by
-      // bailing out and letting the caller fall back to the library.
+
       if (end - start !== 21) return null;
       const base = values.byteOffset + start;
       const view = new DataView(values.buffer, base, 21);
       const le = view.getUint8(0) === 1;
-      // bytes 1-4 = type; 1 = Point (we only handle the Point case here)
+
       const type = view.getUint32(1, le);
       if (type !== 1) return null;
       const x = view.getFloat64(5, le);
@@ -471,8 +445,7 @@ function parsePointsAllBatches(
   options: ParserOptions
 ): BinaryPointData {
   const normalized = normalizeGeomColumnName(table);
-  // Fast path: identity projection + WKB Points (density output) can skip the
-  // library entirely and decode straight to binary buffers in one pass.
+
   const isIdentityProjection =
     !options.projection || options.projection === IDENTITY_OPTIONS.projection;
   if (normalized.batches.length > 0) {
@@ -504,11 +477,6 @@ export function parsePointData(table: ArrowTable): BinaryPointData {
   return result;
 }
 
-/**
- * Build a d3-compatible projection from basemap metadata.
- * Returns geoIdentity for custom/identity basemaps, a composite projection
- * for DOM-TOM layouts, or a simple proj4-based projection.
- */
 export function buildProjectionForBasemap(
   metadata: BasemapMetadata,
   width: number,
@@ -600,11 +568,6 @@ export function buildCompositeProjectionFromPresetId(
   }
 }
 
-/**
- * For composite basemaps (DOM-TOM), the full bbox spans ~120° of longitude.
- * Without composite projection (identity fallback), we use the mainland
- * bounds from the first preset entry for viewport fitting.
- */
 export function getMainlandBboxForBasemap(
   metadata: BasemapMetadata,
   projectionPresets: ProjectionPresets | null
@@ -623,21 +586,12 @@ export function getMainlandBboxForBasemap(
   return [b[0][0], b[0][1], b[1][0], b[1][1]];
 }
 
-/**
- * Compute the bounding box of a basemap's output coordinates in projected space.
- * When a non-identity projection is active, the layers output coordinates in the
- * projection's pixel space (e.g. [0,960]×[0,500] for Natural Earth 2). The model
- * matrix must be computed in that same space, not in WGS84 lon/lat.
- *
- * Samples the WGS84 bbox boundary through the projection to find the projected extent.
- * Returns null for identity projections (use original WGS84 bbox unchanged).
- */
 export function computeProjectedBboxForBasemap(
   metadata: BasemapMetadata,
   projectionPresets: ProjectionPresets | null,
   width = 960,
   height = 600,
-  /** Override the WGS84 bbox to project (e.g., mainland-only bounds for composites) */
+
   overrideBbox?: BBoxTuple
 ): BBoxTuple | null {
   const projTo = metadata.proj_to;
@@ -683,11 +637,6 @@ export function computeProjectedBboxForProjection(
   return sampleProjectedBbox(projection, bbox);
 }
 
-/**
- * Parse geometry with a specific projection.
- * Cached by (table, projection) — the projection reference is stable per basemap
- * (memoized in use-map-layers.svelte.ts), so the Map key is a reference equality check.
- */
 export function parseSolidPolygonsWithProjection(
   table: ArrowTable,
   projection: ProjectionLike,
@@ -757,10 +706,6 @@ export function parsePointDataWithProjection(
   return result;
 }
 
-/**
- * Per-point color attribute for ScatterplotLayer.
- * Each point maps 1:1 to a featureId (original Arrow row index).
- */
 export function pointColorAttr(
   data: BinaryPointData,
   colorLookup: (featureId: number) => [number, number, number, number]
@@ -784,9 +729,6 @@ export function pointColorAttr(
   return { value: colors, size: 4, normalized: true };
 }
 
-/**
- * Per-point radius attribute for ScatterplotLayer.
- */
 export function pointRadiusAttr(
   data: BinaryPointData,
   radiusLookup: (featureId: number) => number
@@ -806,12 +748,6 @@ export function pointRadiusAttr(
   return { value: radii, size: 1 };
 }
 
-/**
- * Per-vertex color attribute for PathLayer binary data.
- *
- * Deck.gl's PathLayer expects binary attributes such as getColor/getWidth
- * to follow the same vertex layout as getPath, not one value per path.
- */
 export function pathColorAttr(
   data: BinaryPathData,
   colorLookup: (featureId: number) => [number, number, number, number]
@@ -841,9 +777,6 @@ export function pathColorAttr(
   return { value: colors, size: 4, normalized: true };
 }
 
-/**
- * Per-vertex width attribute for PathLayer binary data.
- */
 export function pathWidthAttr(
   data: BinaryPathData,
   widthLookup: (featureId: number) => number
@@ -879,15 +812,6 @@ export function rowAccessor<T>(
   };
 }
 
-/**
- * Split rendering accessor (issue #87) — given the basemap geometry Arrow
- * (data source for Deck.gl) and the dataset attribute Arrow joined on
- * `basemap_id`, returns an accessor that resolves a vertex's `featureId`
- * (geometry-row index) → stable feature id (`__feature_id__` / `id`) → dataset
- * row, then forwards to the supplied accessor. The dataset row map is built
- * once per call and indexed by stringified `basemap_id` to absorb int vs
- * varchar key drift.
- */
 export function splitRowAccessor<T>(
   geometry: ArrowTable,
   dataset: ArrowTable,
@@ -922,10 +846,6 @@ export function splitRowAccessor<T>(
   };
 }
 
-/**
- * Optimized accessor for single-column lookups.
- * Avoids creating a full row proxy — reads directly from the column vector.
- */
 export function columnAccessor<T>(
   table: ArrowTable,
   columnName: string,
@@ -936,11 +856,6 @@ export function columnAccessor<T>(
   return (featureId: number): T => transform(vector.get(featureId));
 }
 
-/**
- * Build a Float32 binary attribute for DataFilterExtension's getFilterValue.
- * Works with any binary data type (points, paths, polygons) that has featureIds.
- * Each feature gets a single numeric value read from the specified Arrow column.
- */
 export function filterValueAttr(
   data: { readonly length: number; readonly featureIds: Uint32Array },
   table: ArrowTable,
@@ -971,11 +886,7 @@ export function filterValueAttr(
   return { value: values, size: 1 };
 }
 
-/**
- * Extract positions from binary point data.
- */
 export function pointPositions(data: BinaryPointData): Float64Array {
-  // Points positions are already flat [x0,y0,x1,y1,...] — return as Float64
   const result = new Float64Array(data.length * 2);
   for (let i = 0; i < data.length * 2; i++) {
     result[i] = data.positions[i];

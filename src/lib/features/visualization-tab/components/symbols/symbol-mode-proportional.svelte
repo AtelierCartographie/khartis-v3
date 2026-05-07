@@ -498,12 +498,6 @@
     onSymbolPrimitiveChange?.({ positionMode: next });
   }
 
-  /**
-   * Commits a candidate (breakValueA, breakValueB) tuple to state, swapping
-   * the pair when both are finite numbers in the wrong order so downstream
-   * rendering always receives a normalised range. Keeps E-08 invariant in
-   * one place instead of mirroring swap logic across two handlers.
-   */
   function commitBreakValues(nextA: number | null, nextB: number | null): void {
     const shouldSwap =
       nextA !== null &&

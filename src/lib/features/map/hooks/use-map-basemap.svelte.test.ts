@@ -46,8 +46,7 @@ describe('useMapBasemap loading state', () => {
     expect(source).toContain(
       "logger.warn('Failed to sync MapLibre projection'"
     );
-    // syncProjection is intentionally NOT guarded by !map.isStyleLoaded()
-    // so it can override a style's default projection in onStyleLoaded.
+
     expect(source).not.toContain(
       'if (!map || !getIsMapLoaded() || !map.isStyleLoaded())'
     );

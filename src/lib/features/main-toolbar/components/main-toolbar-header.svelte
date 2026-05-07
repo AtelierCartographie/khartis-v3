@@ -1,8 +1,7 @@
 <script lang="ts">
   import type { Component } from 'svelte';
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  type AnyIconComponent = Component<any>;
+  type AnyIconComponent = Component;
 
   interface Props {
     title: string;

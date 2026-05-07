@@ -58,7 +58,6 @@ export async function openDatabase(): Promise<IDBDatabase> {
         store.createIndex('name', 'manifest.name', { unique: false });
       }
 
-      // v2: add metadata object store (replaces localforage)
       if (!db.objectStoreNames.contains(PROJECT_CONST.DB.METADATA_STORE_NAME)) {
         db.createObjectStore(PROJECT_CONST.DB.METADATA_STORE_NAME, {
           keyPath: 'key'
@@ -71,7 +70,6 @@ export async function openDatabase(): Promise<IDBDatabase> {
 
   db = database;
 
-  // One-shot migration: copy localforage keys to the new IDB metadata store
   if (!localforageMigrated) {
     localforageMigrated = true;
     localforageMigrationPromise = migrateFromLocalforage(database)
@@ -134,7 +132,6 @@ async function saveMetadataStoreValue(
 }
 
 async function migrateFromLocalforage(database: IDBDatabase): Promise<void> {
-  // Dynamic import to avoid bundling localforage if it's already been removed
   let lf: {
     getItem: (k: string) => Promise<string | null>;
     removeItem: (k: string) => Promise<void>;
@@ -143,7 +140,7 @@ async function migrateFromLocalforage(database: IDBDatabase): Promise<void> {
     const mod = await import('localforage');
     lf = mod.default;
   } catch {
-    return; // localforage already removed from deps — nothing to migrate
+    return;
   }
 
   const keys = [ProjectStorageKey.CURRENT, ProjectStorageKey.METADATA];

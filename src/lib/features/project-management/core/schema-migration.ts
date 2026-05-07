@@ -237,7 +237,7 @@ function backfillPrimitiveConfigs(
       size: clampFontSize(style.textSize as number | undefined, 12),
       bold: style.textBold ?? false,
       italic: style.textItalic ?? false,
-      align: style.textAlign ?? 'left',
+      align: style.textAlign ?? 'center',
       halo: style.textHalo ?? false,
       haloColor: style.textHaloColor,
       haloWidth: style.textHaloWidth ?? 2,
@@ -266,7 +266,7 @@ function backfillPrimitiveConfigs(
         size: clampFontSize(style.labelSize as number | undefined, 12),
         bold: style.labelBold ?? false,
         italic: style.labelItalic ?? false,
-        align: style.labelAlign ?? 'left',
+        align: style.labelAlign ?? 'center',
         halo: style.labelHalo ?? false,
         haloColor: style.labelHaloColor,
         haloWidth: style.labelHaloWidth ?? 2,
@@ -436,7 +436,6 @@ function normalizePersistenceSchema(
 }
 
 const migrations: SchemaMigration[] = [
-  // remapLegacyPointShape is idempotent — safe to apply at both 3.0.0 and 3.1.0.
   { from: '3.0.0', to: '3.1.0', migrate: remapLegacyPointShape },
   { from: '3.1.0', to: '3.2.0', migrate: remapLegacyPointShape },
   { from: '3.2.0', to: '3.3.0', migrate: backfillSymbolFillColor },

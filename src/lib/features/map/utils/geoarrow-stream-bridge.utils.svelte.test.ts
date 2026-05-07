@@ -227,7 +227,6 @@ describe('geoarrow stream bridge path attributes', () => {
       throw new Error('Expected test composite projection');
     }
 
-    // A ring entirely inside Madeira bounds — mainland inset receives no points
     const ring: [number, number][] = [
       [-16.905127652705204, 32.838495269525914],
       [-16.818310560055068, 32.76911289942041],
@@ -251,7 +250,6 @@ describe('geoarrow stream bridge path attributes', () => {
           ringPoints = [];
         },
         lineEnd(): void {
-          // d3-geo's ringEnd accesses ring[0]; an empty ring would crash.
           if (ringPoints.length === 0) {
             throw new Error('Empty ring — d3-geo would crash here');
           }

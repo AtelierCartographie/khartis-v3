@@ -98,8 +98,7 @@ describe('basemapService.ensureAttributesLoaded', () => {
     expect(createAttributesQuery).toContain(
       "SELECT * FROM parquet_scan('duck-file-id')"
     );
-    // Per issue #102 (TomBor, 2026-05-04) the runtime id-repair was removed:
-    // the shipped parquet from PR #101 already carries the correct entity id.
+
     expect(createAttributesQuery).not.toContain('__row_idx__');
     expect(createAttributesQuery).not.toContain('file_row_number');
     expect(createAttributesQuery).not.toContain('__group_id__');

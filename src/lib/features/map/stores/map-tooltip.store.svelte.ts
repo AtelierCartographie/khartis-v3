@@ -1,18 +1,17 @@
 import type { TooltipEntry } from '../types';
 
 export interface MapTooltipState {
-  /** Whether a tooltip should be visible */
   visible: boolean;
-  /** Screen coordinates relative to the active Deck.gl viewport/canvas */
+
   x: number;
   y: number;
-  /** Data entries to display */
+
   entries: TooltipEntry[];
-  /** Whether the tooltip is pinned (clicked) vs following hover */
+
   pinned: boolean;
-  /** Layer ID that the tooltip is associated with (for highlight) */
+
   layerId: string | null;
-  /** Row index in the picked layer */
+
   rowIndex: number;
 }
 

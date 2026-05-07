@@ -76,7 +76,7 @@ import type {
 } from '../types';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import {
-  DEFAULT_FONT_FAMILY,
+  CARTOGRAPHIC_FONT_FAMILY,
   resolveFontFamilyStack
 } from '$lib/features/step-toolbar/fonts.constants';
 import {
@@ -158,7 +158,9 @@ const HIGHLIGHT_DIMMING_FACTOR = 0.3;
 
 export const DEFAULT_TEXT_SIZE = PRINT_STANDARD_TOKENS.annotations.noteFontSize;
 export const DEFAULT_HALO_WIDTH = 2;
-export const DEFAULT_TEXT_FONT = resolveFontFamilyStack(DEFAULT_FONT_FAMILY);
+export const DEFAULT_TEXT_FONT = resolveFontFamilyStack(
+  CARTOGRAPHIC_FONT_FAMILY
+);
 const SELECTED_POLYGON_STROKE_COLOR: [number, number, number, number] = [
   15, 98, 254, 255
 ];
@@ -315,7 +317,7 @@ function resolveGeoJsonLayerColor(
 type BinaryLayerInteractionData = {
   khartisSourceTable?: ArrowTable;
   khartisSplitDatasetTable?: ArrowTable;
-  /** geometry-row index → dataset-row index (Int32Array, -1 = no match). */
+
   khartisSplitDatasetRowByGeomRow?: Int32Array;
   featureIds?: Uint32Array;
 };
@@ -1929,20 +1931,11 @@ function resolvePointParser(customProjection?: ProjectionLike) {
     : parsePointData;
 }
 
-// WeakMap cache for arrowTableToGeoJSON — keyed by (table, geoColumn).
-// Avoids redundant full-table walks when the same table is converted
-// multiple times during a single layer-creation pass (labels, fallback, etc.).
 const geoJsonConversionCache = new WeakMap<
   ArrowTable,
   Map<string, FeatureCollection | null>
 >();
 
-/**
- * WeakMap cache for createTextLayerDataFromBinary — avoids recomputing
- * centroids + label extraction when only styling/highlight changes occur.
- * Two-level keying: table → (ProjectionLike | null) → "geoType:col:col2" → result.
- * The projection reference is stable per basemap (memoized in use-map-layers.svelte.ts).
- */
 const textLabelCache = new WeakMap<
   ArrowTable,
   Map<ProjectionLike | null, Map<string, TextLayerDatum[]>>
@@ -1969,14 +1962,8 @@ export function getCachedGeoJSON(
   return result;
 }
 
-/** Cached DataFilterExtension singleton — reused across all layers with year filtering */
 const DATA_FILTER_EXTENSION = new DataFilterExtension({ filterSize: 1 });
 
-/**
- * Build DataFilterExtension props for a binary layer when yearFilter is active.
- * Injects getFilterValue binary attribute into data.attributes and returns
- * layer props (extensions, filterRange, updateTriggers).
- */
 function buildYearFilterProps(
   binaryData: { readonly length: number; readonly featureIds: Uint32Array },
   dataObj: { attributes: Record<string, unknown> },
@@ -1984,9 +1971,7 @@ function buildYearFilterProps(
   yearFilter: YearFilterInfo
 ): Record<string, unknown> {
   const filterAttr = filterValueAttr(binaryData, table, yearFilter.column);
-  // deck.gl only recalculates binary attributes reliably when the data prop
-  // changes shallowly; mutating data.attributes in place can leave the filter
-  // extension with stale GPU state when a year filter is toggled on/off.
+
   const nextData = {
     ...dataObj,
     attributes: {
@@ -2023,7 +2008,6 @@ function filterGeoJsonByYear<T extends Geometry>(
   };
 }
 
-/** Cached RotatableFillStyleExtension instance (reused across renders) */
 let fillStyleExtensionInstance: RotatableFillStyleExtension | null = null;
 
 function getFillStyleExtension(): RotatableFillStyleExtension {
@@ -2035,10 +2019,6 @@ function getFillStyleExtension(): RotatableFillStyleExtension {
   return fillStyleExtensionInstance;
 }
 
-/**
- * Builds fill pattern props for polygon layers when a valid patternId is configured.
- * Returns null if no pattern should be applied.
- */
 function buildPatternProps(ctx: LayerContext): {
   extensions: RotatableFillStyleExtension[];
   fillPatternAtlas: HTMLCanvasElement;
@@ -2462,10 +2442,6 @@ export function createTextLayerData(
   return output;
 }
 
-/**
- * Create TextLayerDatum[] from binary point geometry data + Arrow column values.
- * Used both for raw POINT tables and DuckDB-derived representative point tables.
- */
 export function createTextLayerDataFromBinary(
   table: ArrowTable,
   geoInfo: GeometryInfo,
@@ -2477,9 +2453,7 @@ export function createTextLayerDataFromBinary(
 ): TextLayerDatum[] {
   const canUseCache =
     attributeTable === table && attributeRowByGeometryRow === undefined;
-  // Check text label cache — centroids + label text are stable for the same
-  // table + columns + projection. Uses projection reference as key (stable
-  // per basemap thanks to memoization in use-map-layers.svelte.ts).
+
   const projKey = customProjection ?? null;
   const labelCacheKey = `${geoInfo.type}:${primaryColumn}:${secondaryColumn ?? ''}`;
   if (canUseCache) {
@@ -2514,7 +2488,7 @@ export function createTextLayerDataFromBinary(
 
   for (let i = 0; i < numFeatures; i++) {
     const fid = featureIds[i];
-    // Deduplicate: multi-geometry features share the same featureId
+
     if (seen.has(fid)) continue;
     seen.add(fid);
 
@@ -2547,7 +2521,6 @@ export function createTextLayerDataFromBinary(
   }
 
   if (canUseCache) {
-    // Store in cache (table → projection → labelKey → result)
     let tMap = textLabelCache.get(table);
     if (!tMap) {
       tMap = new Map();
@@ -2667,7 +2640,6 @@ function createTextOverlayLayers(
     return [];
   }
 
-  // Fallback: GeoJSON conversion (for WKB/GeoJSON-encoded data, or if binary failed)
   if (!textLayerData) {
     let geojsonData: FeatureCollection | null;
     try {
@@ -3536,9 +3508,6 @@ export function createPointLayers(
     pointStrokeWidth > 0;
   const pointFillOpacity = pointConfig?.opacity ?? rawFillOpacity;
 
-  // Density mode renders POINT geometries driven by the POLYGON primitive,
-  // even when the Symboles toggle is OFF — short-circuit the point-primitive
-  // early-exit in that case (issue #93).
   const densityActive =
     viz &&
     getPolygonPrimitive(viz)?.fillMode === FillMode.DENSITY &&
@@ -3619,9 +3588,6 @@ export function createPointLayers(
       !isNativeGeoArrow &&
       (isWkbEncoded || isGeoJsonEncoded));
 
-  // GeoJSON fallback only for actual GeoJSON strings or legacy ogc.wkb without
-  // geoarrow-deck-stream support. geoarrow.wkb goes through the binary path
-  // (isNativeGeoArrow = true) since geoarrow-deck-stream handles WKB natively.
   if (shouldUseGeoJsonPointLayer) {
     let geojsonData;
     try {
@@ -4112,7 +4078,6 @@ export function createPointLayers(
         }
       : baseFillAccessor;
 
-  // Binary attributes — must be in data.attributes for ScatterplotLayer binary data
   const fillColorBinAttr = fillColorAccessor
     ? pointColorAttr(pointData, ctxRowAccessor(ctx, jsTable, fillColorAccessor))
     : null;
@@ -4648,7 +4613,6 @@ export function createLineLayers(
             )
         : baseLineColorAccessor;
 
-    // Binary color attribute — must be in data.attributes for PathLayer binary data
     const colorBinaryAttr = lineColorFn
       ? pathColorAttr(lineData, ctxRowAccessor(ctx, jsTable, lineColorFn))
       : null;
@@ -5142,7 +5106,6 @@ export function createPolygonLayers(
               )
           : baseFillAccessor;
 
-      // Binary fill color attribute — must be in data.attributes for SolidPolygonLayer binary data
       const fillColorBinaryAttr = fillColorFn
         ? createPolygonFillColorAttribute(
             polyData,
@@ -5441,8 +5404,7 @@ export function createPolygonLayers(
   let geojsonData;
   try {
     const rawGeoJSON = getCachedGeoJSON(jsTable, geoColumn);
-    // When a basemap projection is active, pre-project GeoJSON coordinates
-    // so data aligns with the projected basemap coordinate space.
+
     geojsonData =
       rawGeoJSON && ctx.customProjection
         ? projectGeoJSON(rawGeoJSON, ctx.customProjection)
@@ -5951,7 +5913,6 @@ export function createDeckLayers(
     return [];
   }
 
-  // Opt 5: reuse pre-computed geometryInfo from context when available
   const geometryInfo = ctx.geometryInfo ?? extractGeometryInfo(jsTable);
 
   if (!geometryInfo) {
@@ -5982,8 +5943,7 @@ export function createDeckLayers(
   const isLineGeometry =
     resolvedGeometryType === GeometryType.LINESTRING ||
     resolvedGeometryType === GeometryType.MULTILINESTRING;
-  // Density mode generates POINT geometries but is driven by the POLYGON
-  // primitive (issue #93). Gate visibility on POLYGON filter in that case.
+
   const isDensityMode =
     ctx.viz && getPolygonPrimitive(ctx.viz)?.fillMode === FillMode.DENSITY;
   const effectivePrimitive = isDensityMode
@@ -6024,8 +5984,6 @@ export function createDeckLayers(
       );
   }
 
-  // Use visible: false instead of skipping creation — preserves GPU buffers
-  // for instant re-display when the user re-enables the primitive filter.
   if (isPrimitiveFilteredOut) {
     thematicLayers = thematicLayers.map(
       (layer) => layer.clone({ visible: false }) as Layer<DeckDataRow>

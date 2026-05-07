@@ -42,9 +42,6 @@
   const contextualSurfaceId =
     createExclusiveContextualSurfaceId('color-picker');
 
-  // Portal the dropdown to document.body so position:fixed is relative to the
-  // true viewport — Carbon Popover uses transform:translateX which would
-  // otherwise make position:fixed position relative to the popover, not the screen.
   function portal(node: HTMLElement): { destroy: () => void } {
     document.body.appendChild(node);
     return {
@@ -186,7 +183,7 @@
         initialColor = getValidatedColor();
       }
       updateDropdownPosition();
-      // Re-measure after browser layout so offsetHeight is accurate (needed for open-upward)
+
       const rafId = requestAnimationFrame(updateDropdownPosition);
       window.addEventListener(EVENT.SCROLL, updateDropdownPosition, true);
       window.addEventListener(EVENT.RESIZE, updateDropdownPosition);

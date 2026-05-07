@@ -973,8 +973,6 @@
     for (const [original, corrected] of Object.entries(addition)) {
       const previous = merged[original];
       if (previous && previous !== corrected) {
-        // The previous correction has already mutated the column to `previous`,
-        // so the row currently keyed by `previous` is the one being remapped.
         merged[previous] = corrected;
         delete merged[original];
       } else if (corrected === original) {
@@ -1630,7 +1628,7 @@
     if (dataTabStore.hasCompletedStep[basemapStepIndex]) return;
     const id = datasetIdForOrchestrator;
     if (!id) return;
-    // Use getDatasetBySourceFile since datasetIdForOrchestrator returns sourceFileId
+
     const duckDataset = duckDBOrchestrator.getDatasetBySourceFile(id);
     if (duckDataset?.gpsMode && duckDataset.joinedBasemap) {
       dataTabStore.markStepComplete(basemapStepIndex);

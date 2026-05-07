@@ -199,8 +199,6 @@
     `background-color: ${pageBackgroundColor}; padding: ${renderedPageMargins.top}px ${renderedPageMargins.right}px ${renderedPageMargins.bottom}px ${renderedPageMargins.left}px;`
   );
   const mapCanvasStyle = $derived.by(() => {
-    // Keep a neutral canvas background. Sea color must come only from map
-    // layers, otherwise out-of-projection areas look like editable ocean.
     return `background-color: ${pageBackgroundColor};`;
   });
   const projectionMaskPath = $derived.by(() => {
@@ -297,9 +295,9 @@
 
   let referenceBasemapRequestId = 0;
   let isApplyingMapLibreSync = false;
-  /** True while a reference basemap is being loaded — blocks triggerOnReady */
+
   let isLoadingReferenceBasemap = false;
-  /** True if triggerOnReady was called while reference basemap was loading */
+
   let pendingOnReady = false;
   const isBlankCanvas = $derived(
     !hasData &&
@@ -307,9 +305,6 @@
       !basemapStyleStore.referenceBasemapId &&
       !osmBasemapStore.isActive
   );
-
-  // Bounds computation is cached at module level in bounds.ts via WeakMap<ArrowTable, ...>.
-  // No need for component-local cache.
 
   function queueStyleIdleRetry(_source?: string): void {
     const map = mapInit.map;
@@ -374,8 +369,6 @@
   function triggerOnReady() {
     if (hasCalledOnReady) return;
 
-    // Don't reveal the map while the reference basemap is still loading
-    // — the user would see the world basemap flash before the correct one
     if (isLoadingReferenceBasemap) {
       pendingOnReady = true;
       return;
@@ -1266,9 +1259,7 @@
       mapBasemap.syncOSMRasterLayer();
       mapBasemap.syncLabelsVisibility();
       mapBasemap.syncGroupVisibility();
-      // The loaded style may specify a default projection (e.g. monde styles use globe).
-      // transformStyle strips it so the store remains the single source of truth.
-      // Re-apply the stored projection to stay in sync.
+
       mapBasemap.syncProjection();
       applyPendingMapLibreViewportPreset();
       waitingForStyleIdle = false;
@@ -1427,7 +1418,6 @@
         } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
           scheduleLayerUpdate('effect:canvasResize');
           if (mapInstanceStore.hasPendingOrthographicRestore) {
-            // Apply the saved view after the logical projection state is ready.
             mapInstanceStore.fitToOrthographicBounds();
           }
         }
@@ -1698,8 +1688,6 @@
     }
   });
 
-  // Detect when project becomes empty (all datasets removed) using datasetsStore
-  // as the source of truth — displayTables can be empty for tabular CSVs not yet joined
   $effect(() => {
     const currentCount = datasetsStore.datasets.length;
     const sourceFileCount = untrack(
@@ -1724,8 +1712,6 @@
         return;
       }
 
-      // Guard: don't reset if the project still has source files.
-      // Datasets can be temporarily empty during reprocessing or lifecycle transitions.
       if (sourceFileCount > 0) {
         return;
       }
@@ -1797,7 +1783,7 @@
     if (worldBaseTable && canUpdate) {
       untrack(() => {
         scheduleLayerUpdate('effect:worldBaseTable');
-        // When no user data, basemap loading completes the init — trigger ready immediately
+
         if (!hasData) {
           triggerOnReady();
 
@@ -1905,8 +1891,6 @@
     untrack(() => {
       mapBasemap.syncProjection();
 
-      // Avoid fitting to the old viewport while a basemap style is loading;
-      // the correct viewport preset will be applied via onStyleLoaded.
       if (
         mapInit.isMapLoaded &&
         mapInit.viewMode === ViewMode.MAPLIBRE &&
@@ -2137,10 +2121,6 @@
 
     updateCanvasSize();
 
-    // If a reference basemap is configured (project restore), mark it early
-    // so triggerOnReady() stays blocked until the reference basemap is loaded.
-    // Without this, onReady fires after the first data table arrives but
-    // before the reference basemap is ready → user sees world → reference flash.
     if (basemapStyleStore.referenceBasemapId) {
       isLoadingReferenceBasemap = true;
     }

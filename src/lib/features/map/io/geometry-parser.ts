@@ -452,8 +452,6 @@ export function arrowTableToGeoJSON(
       return null;
     }
 
-    // Pre-fetch column vectors once — avoids repeated getChild() lookups
-    // inside the O(n×m) loop (n rows × m columns).
     const propertyColumns: Array<{
       name: string;
       vector: NonNullable<ReturnType<ArrowTable['getChild']>>;
@@ -555,8 +553,6 @@ export function extractGeometryInfo(table: ArrowTable): GeometryInfo | null {
     const resolvedGeometryType =
       extensionGeometryType ?? normalizedGeometryType;
 
-    // geoarrow.wkb (DuckDB >= 1.33) is included: geoarrow-deck-stream
-    // transparently decodes WKB in all parse functions.
     const isNativeGeoArrow = Boolean(
       arrowExtension &&
       (arrowExtension.startsWith('geoarrow.') ||
