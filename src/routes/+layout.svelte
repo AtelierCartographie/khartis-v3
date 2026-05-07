@@ -3,7 +3,7 @@
   import KeyboardShortcuts from '$lib/features/commons/components/keyboard-shortcuts.svelte';
   import NotificationContainer from '$lib/features/commons/components/notification-container.svelte';
   import ConsentBanner from '$lib/features/commons/components/consent-banner.svelte';
-  import PwaUpdatePrompt from '$lib/features/commons/components/pwa-update-prompt.svelte';
+  import PwaServiceWorker from '$lib/features/commons/components/pwa-service-worker.svelte';
   import {
     globalActions,
     globalState,
@@ -645,7 +645,7 @@
 
     <MapTooltipOverlay />
     <NotificationContainer />
-    <PwaUpdatePrompt />
+    <PwaServiceWorker />
     <ConsentBanner />
   </main>
 {/if}
