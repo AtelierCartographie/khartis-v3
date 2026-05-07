@@ -47,4 +47,20 @@ describe.skipIf(!hasBuild)('PWA precache budget', () => {
     const matchesString = /["'][^"']*\/index\.html["']/.test(swContent);
     expect(matchesUrl || matchesString).toBe(true);
   });
+
+  it('registers the geopf-vector-tiles runtime cache', () => {
+    expect(swContent).toContain('geopf-vector-tiles');
+  });
+
+  it('registers the openmaptiles runtime cache', () => {
+    expect(swContent).toContain('openmaptiles');
+  });
+
+  it('registers the presets runtime cache', () => {
+    expect(swContent).toMatch(/presets/);
+  });
+
+  it('handles CLEAR_OFFLINE_CACHE messages from clients', () => {
+    expect(swContent).toContain('CLEAR_OFFLINE_CACHE');
+  });
 });

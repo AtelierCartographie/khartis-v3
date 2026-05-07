@@ -11,6 +11,11 @@ import {
 } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { CacheFirst, StaleWhileRevalidate } from 'workbox-strategies';
+import type {
+  ClientToSwMessage,
+  OfflineCacheScope,
+  SwToClientMessage
+} from '$lib/types/sw-messages';
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ revision: string | null; url: string }>;
@@ -19,6 +24,22 @@ declare const self: ServiceWorkerGlobalScope & {
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 const NINETY_DAYS_SECONDS = 60 * 60 * 24 * 90;
 const THIRTY_DAYS_SECONDS = 60 * 60 * 24 * 30;
+
+const BASEMAPS_DATA_CACHE = 'basemaps-data';
+const PRESETS_CACHE = 'presets';
+const GEOPF_TILES_CACHE = 'geopf-vector-tiles';
+const OPENMAPTILES_CACHE = 'openmaptiles';
+
+const OFFLINE_CACHE_NAMES_BY_SCOPE: Record<OfflineCacheScope, string[]> = {
+  basemaps: [BASEMAPS_DATA_CACHE, PRESETS_CACHE],
+  tiles: [GEOPF_TILES_CACHE, OPENMAPTILES_CACHE],
+  all: [
+    BASEMAPS_DATA_CACHE,
+    PRESETS_CACHE,
+    GEOPF_TILES_CACHE,
+    OPENMAPTILES_CACHE
+  ]
+};
 
 self.skipWaiting();
 clientsClaim();
@@ -117,8 +138,57 @@ registerRoute(
   })
 );
 
+registerRoute(
+  ({ url }) =>
+    url.pathname.includes('/basemaps/projection-presets.json') ||
+    url.pathname.includes('/basemaps/style-presets.json'),
+  new CacheFirst({
+    cacheName: PRESETS_CACHE,
+    plugins: [
+      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new ExpirationPlugin({
+        maxEntries: 4,
+        maxAgeSeconds: ONE_YEAR_SECONDS,
+        purgeOnQuotaError: true
+      })
+    ]
+  })
+);
+
+registerRoute(
+  ({ url }) =>
+    url.origin === 'https://data.geopf.fr' &&
+    /\/tms\/.+\.pbf$/.test(url.pathname),
+  new StaleWhileRevalidate({
+    cacheName: GEOPF_TILES_CACHE,
+    plugins: [
+      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new ExpirationPlugin({
+        maxEntries: 200,
+        maxAgeSeconds: THIRTY_DAYS_SECONDS,
+        purgeOnQuotaError: true
+      })
+    ]
+  })
+);
+
+registerRoute(
+  ({ url }) => url.origin === 'https://openmaptiles.geo.data.gouv.fr',
+  new StaleWhileRevalidate({
+    cacheName: OPENMAPTILES_CACHE,
+    plugins: [
+      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new ExpirationPlugin({
+        maxEntries: 100,
+        maxAgeSeconds: THIRTY_DAYS_SECONDS,
+        purgeOnQuotaError: true
+      })
+    ]
+  })
+);
+
 const basemapDataStrategy = new CacheFirst({
-  cacheName: 'basemaps-data',
+  cacheName: BASEMAPS_DATA_CACHE,
   plugins: [
     new CacheableResponsePlugin({ statuses: [0, 200] }),
     new ExpirationPlugin({
@@ -130,7 +200,7 @@ const basemapDataStrategy = new CacheFirst({
 });
 
 const basemapDataSlowStrategy = new StaleWhileRevalidate({
-  cacheName: 'basemaps-data',
+  cacheName: BASEMAPS_DATA_CACHE,
   plugins: [
     new CacheableResponsePlugin({ statuses: [0, 200] }),
     new ExpirationPlugin({
@@ -182,11 +252,89 @@ function resolveNavigationFallbackUrl(): string {
 }
 
 self.addEventListener('message', (event) => {
-  if (!event.data || typeof event.data !== 'object') return;
-  if (event.data.type === 'SKIP_WAITING') {
+  const message = event.data as ClientToSwMessage | undefined;
+  if (!message || typeof message !== 'object') return;
+
+  if (message.type === 'SKIP_WAITING') {
     void self.skipWaiting();
+    return;
+  }
+
+  if (message.type === 'CLEAR_OFFLINE_CACHE') {
+    event.waitUntil(handleClearOfflineCache(message.scope));
+    return;
+  }
+
+  if (message.type === 'FACTORY_RESET') {
+    event.waitUntil(handleFactoryReset());
   }
 });
+
+async function handleFactoryReset(): Promise<void> {
+  const cleared: string[] = [];
+  try {
+    const allCaches = await caches.keys();
+    await Promise.all(
+      allCaches.map(async (name) => {
+        try {
+          const deleted = await caches.delete(name);
+          if (deleted) cleared.push(name);
+        } catch (error) {
+          console.warn(
+            '[sw] failed to clear cache during factory reset',
+            name,
+            error
+          );
+        }
+      })
+    );
+  } catch (error) {
+    console.warn('[sw] factory reset cache enumeration failed', error);
+  }
+
+  await broadcastToClients({
+    type: 'PWA_RESET_DONE',
+    clearedCaches: cleared
+  });
+}
+
+async function handleClearOfflineCache(
+  scope: OfflineCacheScope
+): Promise<void> {
+  const targetCaches = OFFLINE_CACHE_NAMES_BY_SCOPE[scope] ?? [];
+  const cleared: string[] = [];
+
+  await Promise.all(
+    targetCaches.map(async (name) => {
+      try {
+        const deleted = await caches.delete(name);
+        if (deleted) cleared.push(name);
+      } catch (error) {
+        console.warn('[sw] failed to clear cache', name, error);
+      }
+    })
+  );
+
+  await broadcastToClients({
+    type: 'CACHE_CLEARED',
+    scope,
+    cleared
+  });
+}
+
+async function broadcastToClients(message: SwToClientMessage): Promise<void> {
+  try {
+    const clients = await self.clients.matchAll({
+      includeUncontrolled: true,
+      type: 'window'
+    });
+    for (const client of clients) {
+      client.postMessage(message);
+    }
+  } catch (error) {
+    console.warn('[sw] broadcast failed', error);
+  }
+}
 
 const BASEMAP_FETCH_PREFIX = 'khartis-basemap-';
 const PERIODIC_SYNC_TAG_BASEMAPS = 'khartis-basemaps-revalidate';
@@ -214,24 +362,39 @@ self.addEventListener('backgroundfetchsuccess', ((
     return;
   }
 
+  const basemapId = registration.id.slice(BASEMAP_FETCH_PREFIX.length);
+
   event.waitUntil(
     (async () => {
+      let totalBytes = 0;
       try {
         const records = await registration.matchAll();
-        const cache = await caches.open('basemaps-data');
+        const cache = await caches.open(BASEMAPS_DATA_CACHE);
         await Promise.all(
           records.map(async (record) => {
             const response = await record.responseReady;
             if (response && response.ok) {
               await cache.put(record.request, response.clone());
+              const size = Number(response.headers.get('content-length') ?? 0);
+              if (Number.isFinite(size) && size > 0) totalBytes += size;
             }
           })
         );
         await event.updateUI?.({
           title: 'Carte téléchargée pour usage hors ligne'
         });
+        await broadcastToClients({
+          type: 'BG_FETCH_DONE',
+          basemapId,
+          bytes: totalBytes
+        });
       } catch (error) {
         console.warn('[sw] backgroundfetchsuccess persist failed', error);
+        await broadcastToClients({
+          type: 'BG_FETCH_FAIL',
+          basemapId,
+          reason: error instanceof Error ? error.message : 'persist failed'
+        });
       }
     })()
   );
@@ -243,10 +406,16 @@ self.addEventListener('backgroundfetchfail', ((event: BackgroundFetchEvent) => {
     return;
   }
 
+  const basemapId = registration.id.slice(BASEMAP_FETCH_PREFIX.length);
+
   event.waitUntil(
     (async () => {
       await event.updateUI?.({
         title: 'Téléchargement de la carte interrompu'
+      });
+      await broadcastToClients({
+        type: 'BG_FETCH_FAIL',
+        basemapId
       });
     })()
   );
@@ -277,7 +446,7 @@ self.addEventListener('periodicsync', ((event: PeriodicSyncEvent) => {
 
 async function revalidateBasemapsCache(): Promise<void> {
   try {
-    const cache = await caches.open('basemaps-data');
+    const cache = await caches.open(BASEMAPS_DATA_CACHE);
     const requests = await cache.keys();
     await Promise.all(
       requests.map(async (request) => {
