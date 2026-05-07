@@ -214,7 +214,7 @@ La jointure associe les données tabulaires (colonne identifiant) aux géométri
 
 ## Données manquantes
 
-**Fichier** : `commons/store/visualization.store.svelte.ts` — `MissingDataConfig`
+**Fichier** : `commons/stores/visualization.store.svelte.ts` — `MissingDataConfig`
 
 Les entités sans valeur dans la colonne de mapping sont rendues avec une représentation distincte configurable :
 
