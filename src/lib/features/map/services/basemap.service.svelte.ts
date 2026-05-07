@@ -1103,7 +1103,6 @@ function createBasemapService() {
       throw new Error('DuckDB not initialized');
     }
 
-    // Custom basemaps imported by the user are already materialized as DuckDB tables.
     if (isCustomBasemap) {
       const escapedBasemapId = escapeSqlString(resolvedBasemapId);
       const existingTable = (await Duck.query(
@@ -1334,7 +1333,6 @@ function createBasemapService() {
     );
   }
 
-  // Callers depend on a stable Arrow ref — same reference hits parseSolidPolygons WeakMap cache, avoiding earcut re-runs per join.
   async function getBasemapGeometryArrow(
     basemapId: string
   ): Promise<ArrowTable | null> {

@@ -432,11 +432,10 @@ export const createProjectActions = {
         }
       };
       this.addUploadedFile(incompleteFile);
-      // No flash message - warning shown in form
+
       return;
     }
 
-    // At this point all required files are present (we returned early if any missing)
     const shpFile = files.find((f) => f.name.toLowerCase().endsWith('.shp'))!;
 
     const relatedFilesData: Record<string, ArrayBuffer> = {};
@@ -644,6 +643,10 @@ export const createProjectActions = {
   },
 
   async downloadRemoteFile(url: string, index: number): Promise<File> {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      throw new Error(m.error_offline_url_import());
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(
       () => controller.abort(),

@@ -111,21 +111,6 @@ function buildD3SuggestionProjection(
   };
 }
 
-/**
- * Returns ranked projection suggestions for a given dataset bbox, per
- * CDC [VIZ-TOOLS-c] ("Algorithme basé sur emprise géographique").
- *
- * Delegates to `proj-suggest`, the official Atelier de cartographie library
- * (Thomas Ansart) — a reimplementation of Snyder (1987) / Šavrič et al. (2016)
- * cartographic decision tree. We do not re-rank here: `result.national` is
- * already sorted by share of the bbox covered by the country/zone, and
- * `result.generic` is sorted by suitability for the bbox extent.
- *
- * Returns null when the bbox is invalid (e.g. zero width, off-globe). Otherwise
- * returns two parallel lists; the auto-selection layer prefers `national`
- * because the CDC reserves that category for officially endorsed CRSes per zone
- * (Lambert-93 for France, ETRS89-LAEA for Europe, etc.).
- */
 export function suggestProjectionsForBbox(
   bbox: [number, number, number, number]
 ): {
@@ -171,7 +156,6 @@ export function buildProjectionFromSuggestion(
     }
   }
 
-  // Prefer proj4 string when available (more precise for national projections)
   if (suggestion.proj4String) {
     try {
       const projection = proj4d3(suggestion.proj4String);

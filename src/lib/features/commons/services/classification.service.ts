@@ -552,16 +552,6 @@ export interface DivergingSplit {
   hasCenterClass: boolean;
 }
 
-/**
- * Splits N classes around a breakpoint value for a diverging palette.
- * - `lowerCount`: classes whose upper bound <= breakpoint (cold/red side).
- * - `upperCount`: classes whose lower bound >= breakpoint (warm/blue side).
- * - `hasCenterClass`: true when the breakpoint falls strictly inside a class
- *   (that class becomes the neutral centre).
- *
- * `breaks` are the internal thresholds (N-1 values) between the N classes.
- * When breakpoint is null, falls back to symmetric split `[half, half]`.
- */
 export function computeDivergingSplit(
   numClasses: number,
   breaks: readonly number[],

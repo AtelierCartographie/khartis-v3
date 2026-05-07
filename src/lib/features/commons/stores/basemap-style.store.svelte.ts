@@ -23,7 +23,6 @@ function getInitialGroupVisibility(
   return getDefaultVisibility(config) as Record<string, boolean>;
 }
 
-/** Maps legacy style IDs from pre-v2 projects to their closest new equivalent. */
 const LEGACY_STYLE_MIGRATION: Record<string, BasemapStyle> = {
   'carte-facile-desaturated': BasemapStyle.FRANCE_NIVEAUX_DE_GRIS,
   'carte-facile-simple': BasemapStyle.FRANCE_COULEURS,

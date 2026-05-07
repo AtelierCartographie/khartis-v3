@@ -13,7 +13,7 @@ interface ProjectionState {
   fitPaddingPx: number;
   renderScale: number;
   modelMatrix: Matrix4 | null;
-  /** True when referenceBbox is in d3-geo projected coordinates (Y-down) */
+
   isProjectedCoordinates: boolean;
 }
 
@@ -76,7 +76,7 @@ function createProjectionStore() {
   function setReferenceBbox(
     bbox: BBox,
     geoMetadata?: string,
-    /** True when bbox is in d3-geo projected coordinates (Y-down) */
+
     isProjected = false
   ): void {
     state.referenceBbox = bbox;

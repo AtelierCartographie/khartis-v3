@@ -1,10 +1,11 @@
 <script lang="ts">
   import TilePreview from '$lib/features/commons/components/tile-preview.svelte';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
+  import { connectivityStore } from '$lib/features/commons/stores/connectivity.store.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
   import { getLocale } from '$lib/paraglide/runtime';
-  import { RadioButton } from 'carbon-components-svelte';
+  import { RadioButton, Tag } from 'carbon-components-svelte';
   import { Calendar } from 'carbon-icons-svelte';
   import clsx from 'clsx';
 
@@ -71,6 +72,9 @@
   );
 
   const aspectRatio = '16:9';
+
+  const offlineEntry = $derived(connectivityStore.basemaps.get(basemap.file));
+  const isOfflineCached = $derived(offlineEntry?.status === 'cached');
 </script>
 
 <div
@@ -121,6 +125,16 @@
         </span>
       </div>
     {/if}
+
+    {#if isOfflineCached}
+      <div class="offline-tag-row">
+        <Tag type="blue" size="sm">{m.basemap_offline_available()}</Tag>
+      </div>
+    {:else if !connectivityStore.isOnline}
+      <div class="offline-tag-row">
+        <Tag type="warm-gray" size="sm">{m.basemap_offline_required()}</Tag>
+      </div>
+    {/if}
   </div>
 
   {#if showMatchScore && matchPercentage !== undefined}
@@ -143,6 +157,11 @@
 </div>
 
 <style>
+  .offline-tag-row {
+    display: flex;
+    margin-top: var(--cds-spacing-02);
+  }
+
   .basemap-card {
     --basemap-card-background: var(--cds-layer-01, #f4f4f4);
     --basemap-card-border-color: var(--cds-border-subtle-01, #c6c6c6);

@@ -1,5 +1,3 @@
-// CDC [DATA-09b/VIZ-02a] requires auto-selection; epsilon prevents arbitrary pre-selection when multiple suggestions tie.
-
 const DEFAULT_CONFIDENCE_EPSILON = 1e-3;
 
 export interface ConfidenceOptions {

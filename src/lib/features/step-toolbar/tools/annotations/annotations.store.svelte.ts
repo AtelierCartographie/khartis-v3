@@ -65,7 +65,7 @@ const DEFAULT_STATE: AnnotationsState = {
     bold: false,
     italic: false,
     underlined: false,
-    textAlign: TextAlign.Left,
+    textAlign: TextAlign.Center,
     opacity: 100,
     color: '#000000',
     smoothness: DEFAULT_DRAWING_SMOOTHNESS

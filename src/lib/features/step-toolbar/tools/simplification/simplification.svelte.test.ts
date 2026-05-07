@@ -139,8 +139,6 @@ describe('simplification tool — OSM reference basemap', () => {
   });
 
   it('should also block simplification when only a MapLibre tiled style is selected (no OSM join yet)', () => {
-    // basemapStyleStore.requiresMapLibre is true as soon as a non-blank style
-    // is picked in the visualization tab, even before a tiled dataset is joined.
     mocks.requiresMapLibre = true;
 
     render(SimplificationTool);

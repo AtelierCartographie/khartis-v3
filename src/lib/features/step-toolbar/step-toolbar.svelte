@@ -59,8 +59,6 @@
 
   $effect(() => {
     if (globalState.selectedStep === ToolbarStep.Styling) {
-      // untrack: initPageElements reads+writes s.items; tracking it would cause
-      // a write-triggers-read loop. Only selectedStep should drive this effect.
       untrack(() =>
         annotationsActions.initPageElements({
           withPlaceholders: true,

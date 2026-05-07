@@ -70,8 +70,7 @@
   const enabledDatasets = $derived(datasetsStore.enabledDatasets);
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   const activeOSMBasemap = $derived(osmBasemapStore.activeOSMBasemap);
-  // Anti-flicker: only reveal map status loaders after 300 ms of real work,
-  // so cached / fast (<300 ms) renders don't flash a spinner on screen.
+
   let showDensityLoader = $state(false);
   let showReferenceBasemapLoader = $state(false);
   $effect(() => {
@@ -133,7 +132,6 @@
   const facetsLayout = $derived(facetsStore.layout);
   const facetVisualizations = $derived(facetsStore.facetVisualizations);
 
-  /** Incremented each time the main data-load $effect fires so stale async loads are discarded. */
   let loadGeneration = 0;
   const WORKSPACE_FIT_PADDING_PX = 30;
   const STYLING_STEP_COVERAGE_RATIO = 0.85;
@@ -285,8 +283,7 @@
     const hadGeoJSON = displayGeoJSONs.has(datasetId);
 
     displaySplitData.set(datasetId, split);
-    // The geometry Arrow remains the canonical "table" so existing readers
-    // (thematic-map, picking, etc.) continue to read the same shape.
+
     displayTables.set(datasetId, split.geometry);
     displayGeoJSONs.delete(datasetId);
 
@@ -476,9 +473,6 @@
     });
 
     try {
-      // Issue #87 split rendering: keep the basemap geometry Arrow ref-stable
-      // (re-uses parseSolidPolygons WeakMap cache) and pair it with the dataset
-      // attributes Arrow for lookup-based accessors.
       const [geometryArrow, datasetArrow] = await Promise.all([
         basemapService.getBasemapGeometryArrow(joinedBasemap),
         duckDBOrchestrator.getArrowTableDirect(tableName)
@@ -508,9 +502,6 @@
         return;
       }
 
-      // Fallback: legacy joined-arrow path (export still uses
-      // `getJoinedArrowTable`; here we keep it as a defensive net when the
-      // split inputs are unavailable).
       const joinedTable = await duckDBOrchestrator.getJoinedArrowTable(
         tableName,
         joinedBasemap
@@ -768,14 +759,6 @@
     }
   }
 
-  /**
-   * Pending animation-frame handle for the reload debounce. Multiple
-   * visualization mutations fired in the same tick (e.g. a mode switch that
-   * also resets palette + column mappings) used to schedule one full dataset
-   * reload per bump, generating a 4-8× "Preparing dataset" log burst and a
-   * visible FPS drop on the map. Coalescing into a single rAF collapses
-   * those bursts into a single reload per animation frame.
-   */
   let pendingReloadHandle: number | null = null;
 
   $effect(() => {
@@ -894,7 +877,6 @@
         clearTimeout(toolbarTransitionTimeoutId);
       }
 
-      // Safety timeout in case transitionend never fires
       toolbarTransitionTimeoutId = setTimeout(
         finishToolbarTransition,
         TOOLBAR_TRANSITION_SAFETY_MS
@@ -938,7 +920,6 @@
     );
     isInitializing = false;
 
-    // Force a layer update now that data + viz state are both available.
     bumpDisplayDataVersion();
 
     if (remainingDatasets.length > 0) {

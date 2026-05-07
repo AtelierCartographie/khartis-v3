@@ -23,8 +23,7 @@
   } from '$lib/features/data-tab/services/persisted-basemap.service';
 
   let configureSection: HTMLElement | undefined = $state();
-  /** Datasets for which we already auto-created (or found existing) visualizations.
-   *  Prevents re-creation after the user explicitly deletes the last viz. */
+
   const initializedDatasetIds = new SvelteSet<string>();
 
   function handleCreateVisualization() {
@@ -48,7 +47,6 @@
       return;
     }
 
-    // Don't re-create if this dataset already had a viz (user deleted it)
     if (initializedDatasetIds.has(dataset.id)) return;
     initializedDatasetIds.add(dataset.id);
 

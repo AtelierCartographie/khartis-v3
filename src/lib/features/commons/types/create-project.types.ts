@@ -77,10 +77,10 @@ export interface UploadedFile {
   type: string;
   fileType: FileType;
   content?: string | ArrayBuffer;
-  originalFile?: File; // Keep reference to original File object to avoid re-parsing
-  relatedFileObjects?: File[]; // For shapefiles: store all companion File objects (.shx, .dbf, .prj, etc.)
+  originalFile?: File;
+  relatedFileObjects?: File[];
   parsedData?: ParsedData;
-  // Cached GeoJSON from preprocessing — avoids re-stringifying in DuckDB.
+
   preparedGeoJSON?: string;
   status: FileStatus;
   errorMessage?: string;
@@ -111,7 +111,7 @@ export interface UploadedFile {
   missingShapefileComponents?: string[];
   isVirtualCopy?: boolean;
   originalSourceFileId?: string;
-  /** Stable dataset ID — persisted so visualization.datasetId references survive page reloads */
+
   datasetId?: string;
 }
 

@@ -443,8 +443,6 @@ export function useEnrichmentJoin(
         snapshot.duckColumns
       );
 
-      // Update the existing orchestrator dataset entry with the new enriched table name
-      // (avoids creating a duplicate entry with the same sourceFileId)
       try {
         await duckDBOrchestrator.updateDatasetTableName(
           selectedDataset.sourceFileId || selectedDataset.id,

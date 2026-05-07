@@ -20,6 +20,7 @@ export interface GlobalState {
   isCreateProjectModalOpen: boolean;
   isDuplicateModalOpen: boolean;
   isDeleteModalOpen: boolean;
+  isOfflinePanelOpen: boolean;
   selectedStep: ToolbarStep;
   selectedTool?: StylingTools | VisualizationTools;
   toolbarState: ToolbarState;

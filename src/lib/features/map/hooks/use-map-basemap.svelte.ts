@@ -153,8 +153,6 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     }
 
     if (styleKey === lastAppliedStyleKey) {
-      // Style hasn't changed, but projection may be out of sync
-      // (e.g. after a zone switch changed mapProjectionStore without reloading the style)
       syncProjection();
       return;
     }
@@ -198,12 +196,8 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       }
     };
 
-    // MapLibre passes the event object to the handler; wrap it so
-    // `wasTimeout` stays a boolean and `onStyleLoaded` is not skipped.
     styleLoadHandler = () => completeStyleLoad(false);
 
-    // Safety timeout: if style.load never fires (e.g. network error),
-    // unlock the loading flag after 10s to avoid permanent deadlock.
     styleSafetyTimeout = setTimeout(() => {
       if (isStyleLoading) {
         logger.warn(
@@ -215,8 +209,6 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       }
     }, REFERENCE_BASEMAP_LOAD_TIMEOUT_MS);
 
-    // `style.load` fires once when the full style graph is ready.
-    // Using `styledata` can flip the loading flag too early.
     map.once('style.load', styleLoadHandler);
 
     const stripStyleProjection: TransformStyleFunction = (previous, next) => {

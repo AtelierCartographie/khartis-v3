@@ -415,8 +415,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       viewState,
       interactionState
     }: OrthographicViewStateChangeParams): OrthographicMainViewState => {
-      // Deck.gl passes the individual view's state as a flat object
-      // ({ target, zoom, … }), NOT nested under the view ID.
       const vs: OrthographicMainViewState =
         (viewState as unknown as DeckOrthographicViewStateMap).main ??
         (viewState as unknown as OrthographicMainViewState);
@@ -470,7 +468,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
           >['onViewStateChange'],
           _onMetrics: isDeckDebugEnabled() ? handleDeckMetrics : null,
           onLoad: () => {
-            // Ignore late callbacks from a stale deck instance during view switches.
             if (deckInstance !== orthographicDeck) {
               return;
             }
@@ -591,8 +588,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
 
     let errorFallbackApplied = false;
     map.on('error', (e) => {
-      // Tile-loading errors (404, network) are common when switching styles
-      // and are not actionable — suppress them once the map is loaded.
       if (isMapLoaded) return;
 
       logger.error(
@@ -659,8 +654,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
   }
 
   function destroy(): void {
-    // Clear reactive refs first so concurrent effects cannot read stale
-    // Deck/Map instances during teardown.
     const mapToRemove = map;
     const overlayToClean = deckOverlay;
     const deckToFinalize = deckInstance;
@@ -678,7 +671,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     }
     mapEventSubscriptions = [];
 
-    // Release GPU buffers before removing overlay/map
     if (overlayToClean) {
       try {
         overlayToClean.setProps({ layers: [] });

@@ -248,8 +248,6 @@
   );
   const isSelectionMode = $derived(isSelectable && isEditMode);
 
-  // Defensive guard: during rapid dataset/table switches, transient invalid
-  // column entries can appear and break keyed reconciliation in Svelte.
   const safeVisibleColumns = $derived.by(() =>
     columnOps.visibleColumns.filter(
       (column): column is { name: string; type: string } =>

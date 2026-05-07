@@ -546,9 +546,7 @@ function detectMagnitudeSwap(
   const latStats = numericStats(latValues);
   const lonStats = numericStats(lonValues);
   if (latStats.count < 2 || lonStats.count < 2) return false;
-  // Both axes are in their declared legal ranges but their magnitudes look
-  // reversed for European-style bounded datasets: latitude cluster small,
-  // longitude cluster large. This flags the CSV-11 Seveso IDF swap.
+
   const latLooksLikeEuropeanLongitude =
     latStats.maxAbs < 15 && latStats.minAbs < 15;
   const lonLooksLikeEuropeanLatitude =
@@ -651,7 +649,6 @@ export function collectGPSRangeWarnings(
     }
   }
 
-  // Silence unused headers warning until callers need per-column headings
   void headers;
   return warnings;
 }
@@ -740,10 +737,8 @@ export const GeoColumnDetector = {
     const results: GeoColumnResult[] = [];
     const warnings: string[] = [];
 
-    // Process columns in chunks to avoid blocking
     const COLUMN_CHUNK_SIZE = 10;
     for (let i = 0; i < headers.length; i += COLUMN_CHUNK_SIZE) {
-      // Yield to event loop between chunks
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       const endIndex = Math.min(i + COLUMN_CHUNK_SIZE, headers.length);
@@ -787,8 +782,6 @@ export const GeoColumnDetector = {
     });
     warnings.push(...rangeWarnings);
 
-    // Fallback: even if the detector rejected a lat/lon column because of out-of-range
-    // values, look at header names and emit range warnings so the user is told what's wrong.
     if (!latColumn || !lonColumn) {
       const fallbackWarnings = collectFallbackGPSWarnings({
         headers,

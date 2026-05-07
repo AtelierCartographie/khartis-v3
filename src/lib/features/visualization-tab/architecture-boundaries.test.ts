@@ -101,7 +101,6 @@ describe('visualization architecture boundaries', () => {
 
       const source = readFileSync(filePath, 'utf8');
 
-      // Only flag TS/non-component deep imports; .svelte component imports are allowed directly
       const deepToolImport =
         /from ['"].*\$lib\/features\/step-toolbar\/tools\/[\w-]+\/(?!index)(?:[^'"]+(?<!\.svelte))['"]/g;
       const matches = [...source.matchAll(deepToolImport)];

@@ -29,6 +29,7 @@ function createGlobalStore() {
     isCreateProjectModalOpen: false,
     isDuplicateModalOpen: false,
     isDeleteModalOpen: false,
+    isOfflinePanelOpen: false,
     selectedStep: initialStep,
     selectedTool: undefined,
     toolbarState: resolveInitialToolbarState(initialStep),
@@ -393,6 +394,12 @@ function createGlobalStore() {
     },
     set isDeleteModalOpen(value: boolean) {
       state.isDeleteModalOpen = value;
+    },
+    get isOfflinePanelOpen() {
+      return state.isOfflinePanelOpen;
+    },
+    set isOfflinePanelOpen(value: boolean) {
+      state.isOfflinePanelOpen = value;
     },
     get selectedStep() {
       return state.selectedStep;

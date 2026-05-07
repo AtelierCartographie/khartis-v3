@@ -356,9 +356,6 @@ function createDataOrchestratorService() {
             }
           );
 
-          // For geo files (GeoJSON, SHP, etc.), prepareFileForDuckDB returns null
-          // when tableName/geoDuckTableReady are already set — bypass those guards
-          // by passing a stripped dataset so re-processing is forced.
           const strippedDataset: DatasetResult = {
             ...dataset,
             tableName: undefined as unknown as string,
@@ -457,8 +454,6 @@ function createDataOrchestratorService() {
         return;
       }
 
-      // Persist dataset ID on the file so viz.datasetId references survive restores.
-      // On next restore the processor will reuse this stable ID.
       file.datasetId = dataset.id;
 
       await processFileInDuckDB(file, dataset);
@@ -506,10 +501,6 @@ function createDataOrchestratorService() {
         visualizationStore.removeVisualization(viz.id);
       });
 
-      // Remove dataset from store BEFORE dropping DuckDB table.
-      // dropTable() bumps datasetsVersion which triggers UI effects —
-      // if the dataset still exists, AdvancedDataTable will try to query
-      // the already-dropped table and crash.
       datasetsStore.removeDataset(dataset.id);
       layersActions.syncWithVisualizations();
 
@@ -830,12 +821,6 @@ function createDataOrchestratorService() {
     }
   }
 
-  /**
-   * Migrate orphaned viz.datasetId values from pre-stable-ID projects.
-   * Old projects stored random UUIDs as dataset IDs — after the stable-ID fix
-   * (dataset.id = file.id) those references no longer match.
-   * Match orphaned vizs to unmatched datasets by positional order.
-   */
   function migrateOrphanedVizDatasetIds(): void {
     const datasets = datasetsStore.datasets;
     if (datasets.length === 0) return;
@@ -1044,13 +1029,8 @@ function createDataOrchestratorService() {
     const breaks = viz.classification.breaks;
     const colors = viz.classification.colors;
 
-    // No breaks at all
     if (!breaks || breaks.length < 2) return true;
 
-    // Breaks/colors mismatch: for N colors we support either:
-    // - N-1 internal thresholds (current classification flow)
-    // - N lower bounds (legacy serialized projects)
-    // Anything else likely means corrupted serialized state — recompute.
     if (colors && colors.length > 0) {
       const isInternalThresholdShape = breaks.length === colors.length - 1;
       const isLegacyLowerBoundShape = breaks.length === colors.length;
@@ -1072,8 +1052,6 @@ function createDataOrchestratorService() {
     return false;
   }
 
-  /** Set to true once onProjectChanged() completes. If initialize() runs after,
-   *  it skips the migration + breaks work that onProjectChanged already did. */
   let projectAlreadyRestored = false;
   let projectRestoreInProgress = $state(false);
   let activeGeoColumnRestoreToken = 0;
@@ -1235,8 +1213,6 @@ function createDataOrchestratorService() {
   async function initialize(): Promise<void> {
     await projectStore.waitForInit();
 
-    // onProjectChanged() may have already been called during projectStore init
-    // (via loadLastProject → loadProject). If so, skip duplicate restoration.
     if (projectAlreadyRestored) {
       return;
     }

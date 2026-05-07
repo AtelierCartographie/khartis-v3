@@ -49,7 +49,6 @@ const DEFAULT_STATE: ProjectionState = {
   suggestions: undefined
 };
 
-/** Counter to discard stale async suggestion results. */
 let suggestionRequestId = 0;
 
 type ProjectionActions = {
@@ -304,7 +303,6 @@ const { actions, getState } = createToolStore<
 
           if (!result) return;
 
-          // Ignore stale results from superseded calls.
           if (requestId !== suggestionRequestId) {
             logger.info(
               'Stale projection suggestions discarded',
@@ -377,8 +375,6 @@ const { actions, getState } = createToolStore<
         return;
       }
 
-      // Suggestions that fell back to d3 must preserve the suggester's native
-      // rotation/parallels instead of collapsing to a generic internal preset.
       if (builtProjection?.source === 'd3' && suggestion.d3Config) {
         s.selected = DEFAULT_PROJECTION;
         s.customCode = undefined;

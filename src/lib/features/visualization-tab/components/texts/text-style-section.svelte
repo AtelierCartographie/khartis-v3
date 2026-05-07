@@ -57,7 +57,7 @@
   let quickHaloColorInput = $state<HTMLInputElement>();
 
   const enabled = $derived(Boolean(section));
-  const align = $derived<TextAlignment>(section?.align ?? 'left');
+  const align = $derived<TextAlignment>(section?.align ?? 'center');
   const AlignmentIcon = $derived(resolveAlignmentIcon(align));
   const fontSizes = $derived(
     resolveFontSizeOptions(section?.size ?? fallbackSize)
