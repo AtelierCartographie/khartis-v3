@@ -41,6 +41,65 @@
   </head>
 
   <body data-sveltekit-preload-data="hover">
+    <style>
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        background: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+      }
+      #app-splash[hidden] {
+        display: none !important;
+      }
+      #app-splash .app-splash__inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 32px;
+      }
+      #app-splash .app-splash__logo {
+        transform: scale(1.2);
+      }
+      #app-splash .app-splash__spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid #e0e0e0;
+        border-top-color: #0f62fe;
+        border-radius: 50%;
+        animation: app-splash-spin 1s linear infinite;
+      }
+      @keyframes app-splash-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+    <div id="app-splash" role="status" aria-label="Chargement de Khartis">
+      <div class="app-splash__inner">
+        <svg
+          class="app-splash__logo"
+          width="46"
+          height="32"
+          viewBox="0 0 46 32"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
+          <path
+            d="M0 0.658325H5.67384V31.8091H0V0.658325ZM23.9754 0.658325H17.6L6.79385 15.3168L17.6 31.8091H23.9754L13.1692 15.3168L23.9754 0.658325Z"
+            fill="#121619"
+          />
+          <path
+            d="M35.8646 8.84294C34.2154 8.86755 32.6154 9.38447 31.2616 10.3322V0.621399H25.7723V31.846H31.2492V15.2799C32.2708 14.0368 33.8092 13.3352 35.4092 13.3599C36.7016 13.2491 37.9692 13.8029 38.7569 14.8491C39.5569 16.2399 39.9139 17.8399 39.8031 19.4522V31.846H45.2923V19.4891C45.2923 12.3999 42.1416 8.85524 35.8523 8.85524L35.8646 8.84294Z"
+            fill="#121619"
+          />
+        </svg>
+        <div class="app-splash__spinner" aria-hidden="true"></div>
+      </div>
+    </div>
     <div style="display: contents">%sveltekit.body%</div>
   </body>
 </html>

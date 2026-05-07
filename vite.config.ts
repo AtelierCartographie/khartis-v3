@@ -21,10 +21,12 @@ const verifyServiceWorkerPrecache = (): Plugin => ({
       const swPath = candidates.find((path) => existsSync(path));
       if (!swPath) return;
       const content = readFileSync(swPath, 'utf8');
-      const hasIndexInPrecache = /url:["'][^"']*index\.html["']/.test(content);
+      const hasIndexInPrecache =
+        /url:["'][^"']*index\.html["']/.test(content) ||
+        /["'][^"']*\/index\.html["']/.test(content);
       if (!hasIndexInPrecache) {
         throw new Error(
-          `[verify-sw-precache] ${swPath} does not precache index.html — refusing to ship a broken Service Worker. Check VitePWA workbox.globPatterns and additionalManifestEntries.`
+          `[verify-sw-precache] ${swPath} does not precache index.html — refusing to ship a broken Service Worker. Check VitePWA injectManifest.globPatterns and additionalManifestEntries.`
         );
       }
     }
@@ -80,7 +82,12 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       target: 'esnext',
-      chunkSizeWarningLimit: 3000
+      chunkSizeWarningLimit: 3000,
+      rolldownOptions: {
+        checks: {
+          pluginTimings: false
+        }
+      }
     },
     optimizeDeps: {
       include: [
@@ -121,6 +128,9 @@ export default defineConfig(({ mode }) => {
       }),
       verifyServiceWorkerPrecache(),
       VitePWA({
+        strategies: 'injectManifest',
+        srcDir: 'src',
+        filename: 'sw.ts',
         includeAssets: [
           'favicon.ico',
           'apple-touch-icon-180x180.png',
@@ -132,16 +142,10 @@ export default defineConfig(({ mode }) => {
           enabled: false,
           type: 'module'
         },
-        workbox: {
-          sourcemap: false,
-          inlineWorkboxRuntime: true,
-          clientsClaim: true,
-          skipWaiting: true,
+        injectManifest: {
           globPatterns: [
             '**/*.{js,css,html,ico,png,svg,woff2,woff,ttf,eot,otf}',
-            'duckdb-extensions/**/*.wasm',
-            'basemaps/all-basemaps-metadata.json',
-            'basemaps/all-basemaps-attributes.parquet'
+            'basemaps/all-basemaps-metadata.json'
           ],
           globIgnores: ['**/node_modules/**/*'],
           additionalManifestEntries: [
@@ -150,99 +154,7 @@ export default defineConfig(({ mode }) => {
               revision: `${Date.now()}`
             }
           ],
-          navigateFallback: basePath ? `${basePath}/index.html` : '/index.html',
-          navigateFallbackDenylist: [/^\/api\//, /\.[^/]+$/],
-          maximumFileSizeToCacheInBytes: 50 * 1024 * 1024,
-          cleanupOutdatedCaches: true,
-          runtimeCaching: [
-            {
-              urlPattern: /.*duckdb.*\.wasm$/,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'duckdb-wasm-core',
-                expiration: {
-                  maxEntries: 5,
-                  maxAgeSeconds: 60 * 60 * 24 * 365
-                },
-                cacheableResponse: {
-                  statuses: [0, 200]
-                },
-                matchOptions: {
-                  ignoreSearch: true
-                }
-              }
-            },
-            {
-              urlPattern: /^https:\/\/extensions\.duckdb\.org\/.*/,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'duckdb-extensions-cdn',
-                expiration: {
-                  maxEntries: 10,
-                  maxAgeSeconds: 60 * 60 * 24 * 365
-                },
-                cacheableResponse: {
-                  statuses: [0, 200]
-                }
-              }
-            },
-            {
-              urlPattern: /\/duckdb-extensions\/.*\.wasm$/,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'duckdb-extensions-local',
-                expiration: {
-                  maxEntries: 10,
-                  maxAgeSeconds: 60 * 60 * 24 * 365
-                },
-                cacheableResponse: {
-                  statuses: [0, 200]
-                }
-              }
-            },
-            {
-              urlPattern: /\/basemaps\/.*\.(parquet|geojson|json)$/,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'basemaps-data',
-                expiration: {
-                  maxEntries: 100,
-                  maxAgeSeconds: 60 * 60 * 24 * 365
-                },
-                cacheableResponse: {
-                  statuses: [0, 200]
-                }
-              }
-            },
-            {
-              urlPattern: /.*\.worker\.js$/,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'workers',
-                expiration: {
-                  maxEntries: 20,
-                  maxAgeSeconds: 60 * 60 * 24 * 90
-                },
-                cacheableResponse: {
-                  statuses: [0, 200]
-                }
-              }
-            },
-            {
-              urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'images',
-                expiration: {
-                  maxEntries: 100,
-                  maxAgeSeconds: 60 * 60 * 24 * 30
-                },
-                cacheableResponse: {
-                  statuses: [0, 200]
-                }
-              }
-            }
-          ]
+          maximumFileSizeToCacheInBytes: 50 * 1024 * 1024
         },
         manifest: {
           id: basePath ? `${basePath}/` : '/',
