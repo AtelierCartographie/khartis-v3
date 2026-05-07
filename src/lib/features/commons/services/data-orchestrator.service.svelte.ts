@@ -756,7 +756,7 @@ function createDataOrchestratorService() {
               file.relatedFilesData
             )) {
               try {
-                const restoredFile = new File([buffer], name);
+                const restoredFile = new File([buffer as ArrayBuffer], name);
                 companionFiles.push(restoredFile);
               } catch (err) {
                 logger.warn(
