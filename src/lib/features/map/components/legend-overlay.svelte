@@ -1,10 +1,10 @@
 <script module lang="ts">
   import { motif } from '@ateliercartographie/motif.js';
   import { PATTERN_TYPE_MAP } from '../layers/pattern-texture';
+  import { SvelteMap } from 'svelte/reactivity';
   import type { PatternParams } from '$lib/features/commons/stores/visualization.store.svelte';
 
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- module-level cache, no reactivity needed
-  const patternTileCache = new Map<string, string>();
+  const patternTileCache: Record<string, string> = {};
 
   function getPatternTileUrl(
     patternId: string,
@@ -20,7 +20,7 @@
       size: patternParams?.size,
       scale: patternParams?.scale
     });
-    if (patternTileCache.has(cacheKey)) return patternTileCache.get(cacheKey)!;
+    if (cacheKey in patternTileCache) return patternTileCache[cacheKey];
     const config = PATTERN_TYPE_MAP[patternId as keyof typeof PATTERN_TYPE_MAP];
     if (!config) return null;
     const scale = Math.max(4, patternParams?.scale ?? 8);
@@ -35,7 +35,7 @@
       patchSize: true
     }).tile();
     const url = tile.toDataURL();
-    patternTileCache.set(cacheKey, url);
+    patternTileCache[cacheKey] = url;
     return url;
   }
 </script>
@@ -103,9 +103,7 @@
     SymbolMode
   } from '$lib/features/commons/constants/visualization.constants';
   import * as m from '$lib/paraglide/messages';
-  import { tick, untrack } from 'svelte';
-  import { SvelteMap } from 'svelte/reactivity';
-  import { onDestroy } from 'svelte';
+  import { tick, untrack, onDestroy } from 'svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import {
     LegendSvg,

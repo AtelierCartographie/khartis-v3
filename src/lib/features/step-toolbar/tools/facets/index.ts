@@ -10,4 +10,3 @@ export type {
   ScaleMode,
   FacetsState
 } from './facets.store.svelte';
-export { getFacetsBaseVisualizationId, disableFacets } from './facets-access';

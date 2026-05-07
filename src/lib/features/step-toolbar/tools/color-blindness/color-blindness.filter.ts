@@ -1,12 +1,5 @@
 import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
 
-/**
- * SVG feColorMatrix values for color blindness simulation.
- * Based on Machado, Oliveira & Fernandes 2009 physiological model.
- *
- * Format (20 values for 4×5 matrix):
- * "R→R R→G R→B 0 0  G→R G→G G→B 0 0  B→R B→G B→B 0 0  0 0 0 1 0"
- */
 const MATRICES: Partial<Record<ColorBlindnessType, string>> = {
   [ColorBlindnessType.PROTANOPIA]:
     '0.152286 1.052599 -0.204887 0 0 0.114503 0.786281 0.099216 0 0 -0.003882 -0.048116 1.051998 0 0 0 0 0 1 0',
@@ -26,10 +19,6 @@ const MATRICES: Partial<Record<ColorBlindnessType, string>> = {
     '0.618 0.320 0.062 0 0 0.163 0.775 0.062 0 0 0.163 0.320 0.516 0 0 0 0 0 1 0'
 };
 
-/**
- * Returns the SVG feColorMatrix values string for the given type,
- * or null when no simulation is needed (NONE).
- */
 export function getColorBlindnessMatrix(
   type: ColorBlindnessType
 ): string | null {

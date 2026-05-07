@@ -661,14 +661,6 @@ async function preparePointBasemapTables(
   await ensureFeatureIdColumn(duck, tableName);
 }
 
-/**
- * Injects the stable `__feature_id__` column on a custom basemap table.
- *
- * The id is assigned via `ROW_NUMBER()` so that each feature owns an identifier
- * decoupled from the user-chosen join column. Downstream pipelines (join, render,
- * tooltip) use it to locate a feature without depending on the attribute used for
- * the join match. See issue #87.
- */
 async function ensureFeatureIdColumn(
   duck: typeof Duck,
   tableName: string

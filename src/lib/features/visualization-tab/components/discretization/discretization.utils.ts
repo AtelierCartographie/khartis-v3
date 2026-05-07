@@ -35,11 +35,6 @@ export function normalizeClassificationMethod(
   }
 }
 
-/**
- * Snaps a requested class count to the nearest valid nested-means level.
- * Nested means is recursive (each pass doubles the cuts) so only powers of 2
- * are meaningful. Inputs <2 collapse to 2; ties favour the lower power of 2.
- */
 export function resolveNestedMeansClassCount(
   requestedClassCount: number
 ): number {
