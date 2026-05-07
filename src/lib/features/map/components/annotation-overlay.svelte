@@ -845,7 +845,6 @@
     const shapeW = item.style?.shapeWidth ?? defaultSize.width;
     const shapeH = item.style?.shapeHeight ?? defaultSize.height;
 
-    // Center of shape in screen coords (accounting for zoom transform)
     const renderedPosition = getRenderedPosition(item);
     const localPosition =
       scope === 'page'

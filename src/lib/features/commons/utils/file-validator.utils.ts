@@ -132,8 +132,6 @@ export const FileValidator = {
 
       switch (result.fileType) {
         case FileType.CSV:
-
-        // fallthrough
         case FileType.TSV:
           await FileValidator.validateCSVContent(file, buffer, result);
           break;
@@ -222,8 +220,15 @@ export const FileValidator = {
     const suspiciousPatterns = [
       /\.\./,
       /[<>:"|?*\\]/,
-      // eslint-disable-next-line no-control-regex
-      /[\x00-\x1f\x7f]/,
+
+      new RegExp(
+        '[' +
+          String.fromCharCode(0) +
+          '-' +
+          String.fromCharCode(31) +
+          String.fromCharCode(127) +
+          ']'
+      ),
       /^\./
     ];
 
@@ -343,8 +348,6 @@ export const FileValidator = {
   validateByType(file: File, result: DetailedValidationResult): void {
     switch (result.fileType) {
       case FileType.CSV:
-
-      // fallthrough
       case FileType.TSV:
         if (file.size > 10 * 1024 * 1024) {
           result.warnings.push(m.validation_csv_large_slow());

@@ -46,7 +46,7 @@ function isValidBasemapMetadata(value: unknown): value is BasemapMetadata {
   }
 
   const candidate = value as Record<string, unknown>;
-  // Accept both new format (title_fr, proj_source) and old .kh files (title, projection)
+
   const hasTitle =
     typeof candidate.title_fr === 'string' ||
     typeof candidate.title === 'string';

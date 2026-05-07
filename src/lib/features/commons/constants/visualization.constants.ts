@@ -94,10 +94,6 @@ export const CATEGORY_SHAPE_CYCLE: readonly ShapeType[] = [
   ShapeType.RECTANGLE
 ];
 
-/**
- * Numeric ordinal used by the GLSL shader `instanceShapes` attribute.
- * Kept aligned with the MultiShapeLayer SDF dispatcher.
- */
 export const SHAPE_ORDINAL: Record<ShapeType, number> = {
   [ShapeType.CIRCLE]: 0,
   [ShapeType.SQUARE]: 1,
@@ -110,9 +106,6 @@ export const SHAPE_ORDINAL: Record<ShapeType, number> = {
   [ShapeType.RECTANGLE]: 8
 };
 
-/**
- * Shapes that scale on height only (1D), not area (2D).
- */
 export const LINEAR_SHAPES: readonly ShapeType[] = [
   ShapeType.BAR,
   ShapeType.SPIKE
@@ -123,9 +116,6 @@ export function isLinearShape(shape: ShapeType): boolean {
   return LINEAR_SHAPES.includes(shape);
 }
 
-/**
- * Availability matrix per symbol mode — see issue #92.
- */
 export function availableShapesForSymbolMode(mode: SymbolMode): ShapeType[] {
   switch (mode) {
     case SymbolMode.UNIQUE:

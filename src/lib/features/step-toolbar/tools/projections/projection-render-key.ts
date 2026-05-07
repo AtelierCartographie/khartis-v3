@@ -1,9 +1,5 @@
 import type { ProjectionState } from '../../types/projections.types';
 
-/**
- * Stable key for layer refreshes driven by the Projection tool.
- * It intentionally ignores suggestion payloads and UI-only state.
- */
 export function buildProjectionRenderKey(state: ProjectionState): string {
   const center = state.center
     ? `${state.center[0]},${state.center[1]}`

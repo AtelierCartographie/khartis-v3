@@ -2,17 +2,7 @@ const DEFAULT_RENDER_PIXEL_RATIO = 1;
 
 export const MAX_MAP_RENDER_PIXEL_RATIO = 4;
 export const DEFAULT_MAX_RENDER_BUFFER_SIZE_PX = 4096;
-/**
- * Floor applied to the system-reported devicePixelRatio when computing the
- * map render pixel ratio. Low-DPI displays (typical 1x external monitors at
- * 2560x1440) report devicePixelRatio = 1 and would otherwise render the
- * Deck.gl/MapLibre canvas at native CSS resolution, which produces noticeably
- * blurry SDF text and rasterized icons compared to Retina (2x) displays.
- * Rendering at >= 2x triggers GPU supersampling so the final on-screen
- * downscale yields crisp text and shapes on every display class. The GPU
- * buffer clamping below still applies, so very large viewports degrade
- * gracefully back toward 1x rather than overflowing the GL render buffer.
- */
+
 export const MIN_DEVICE_PIXEL_RATIO_TARGET = 2;
 
 let cachedBrowserMaxRenderBufferSizePx: number | null = null;

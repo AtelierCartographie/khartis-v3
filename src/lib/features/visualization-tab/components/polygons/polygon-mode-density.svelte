@@ -117,8 +117,6 @@
       return;
     }
 
-    // Include ratio presence in the cache key — when ratio is reset (e.g.
-    // after a column change), we must re-compute even for the same column.
     const hasRatio = Boolean(visualization?.density?.ratio);
     const signature = `${datasetId}::${column}::${hasRatio ? 'r' : 'no-r'}`;
     if (signature === lastRequestedColumn) return;

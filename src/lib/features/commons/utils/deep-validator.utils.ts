@@ -69,7 +69,6 @@ export const DeepDataValidator = {
     const rowCount = data.length;
     const columnCount = headers.length;
 
-    // Yield before heavy analysis
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const columns = await DeepDataValidator.analyzeColumns(headers, data);
