@@ -4,6 +4,12 @@ import type { ExampleVisualizationPreset } from '$lib/features/commons/types/cre
 import { ExampleCategory } from '$lib/features/commons/constants/ui.constants';
 
 vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
+  VisualizationType: {
+    CHOROPLETH: 'choropleth',
+    PROPORTIONAL: 'proportional',
+    CATEGORICAL: 'categorical',
+    BIVARIATE: 'bivariate'
+  },
   ClassificationMethod: {
     KMEANS: 'kmeans',
     QUANTILES: 'quantiles',
@@ -14,12 +20,33 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
     LINE: 'line',
     POLYGON: 'polygon'
   },
+  getVisualizationOriginMode: vi.fn(
+    (visualization) => visualization?.origin?.mode ?? 'legacy'
+  ),
   visualizationStore: {
     getVisualizationsByDataset: vi.fn(() => []),
     createVisualization: vi.fn(),
     visualizations: [],
     updateVisualization: vi.fn()
   }
+}));
+
+vi.mock('@duckdb/duckdb-wasm', () => ({
+  default: {},
+  createWorker: vi.fn(),
+  selectBundle: vi.fn()
+}));
+
+vi.mock('$lib/features/duckdb', () => ({
+  DuckDBSimplifiedType: {
+    VARCHAR: 'VARCHAR',
+    INTEGER: 'INTEGER',
+    DOUBLE: 'DOUBLE',
+    BOOLEAN: 'BOOLEAN',
+    TIMESTAMP: 'TIMESTAMP',
+    DATE: 'DATE'
+  },
+  GEO_CONSTANTS: { WGS84_CRS: 'EPSG:4326', WEB_MERCATOR_CRS: 'EPSG:3857' }
 }));
 
 vi.mock('$lib/features/commons/constants/visualization.constants', () => ({

@@ -371,7 +371,7 @@
         <ProjectCard
           title={example.title}
           subtitle={example.subtitle}
-          variant={selectedExample === example.id ? 'blue' : 'gray'}
+          variant="gray"
           selected={selectedExample === example.id}
           disabled={isLoading && selectedExample !== example.id}
           onclick={() => handleExampleClick(example.id)}
