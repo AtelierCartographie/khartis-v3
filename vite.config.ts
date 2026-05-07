@@ -126,7 +126,8 @@ export default defineConfig(({ mode }) => {
           'apple-touch-icon-180x180.png',
           'maskable-icon-512x512.png'
         ],
-        registerType: 'prompt',
+        registerType: 'autoUpdate',
+        injectRegister: false,
         devOptions: {
           enabled: false,
           type: 'module'
@@ -134,6 +135,8 @@ export default defineConfig(({ mode }) => {
         workbox: {
           sourcemap: false,
           inlineWorkboxRuntime: true,
+          clientsClaim: true,
+          skipWaiting: true,
           globPatterns: [
             '**/*.{js,css,html,ico,png,svg,woff2,woff,ttf,eot,otf}',
             'duckdb-extensions/**/*.wasm',
