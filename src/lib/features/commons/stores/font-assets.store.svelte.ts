@@ -9,6 +9,15 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 const TEXT_ATLAS_CACHE_LIMIT = 16;
 const PRELOAD_TEXT_HINT = EXPLICIT_TEXT_CHARACTER_SET.join('');
 
+const NOTO_SANS_FALLBACK_REQUESTS = [
+  'normal 400 16px "Noto Sans Arabic"',
+  'normal 700 16px "Noto Sans Arabic"',
+  'normal 400 16px "Noto Sans SC"',
+  'normal 700 16px "Noto Sans SC"',
+  'normal 400 16px "Noto Sans JP"',
+  'normal 700 16px "Noto Sans JP"'
+];
+
 function canUseDocumentFonts(): boolean {
   return typeof document !== 'undefined' && 'fonts' in document;
 }
@@ -52,8 +61,8 @@ function createFontAssetsStore() {
     loadingPromise = (async () => {
       try {
         await Promise.all(
-          FONT_FACE_LOAD_REQUESTS.map((descriptor) =>
-            document.fonts.load(descriptor, PRELOAD_TEXT_HINT)
+          [...FONT_FACE_LOAD_REQUESTS, ...NOTO_SANS_FALLBACK_REQUESTS].map(
+            (descriptor) => document.fonts.load(descriptor, PRELOAD_TEXT_HINT)
           )
         );
         await document.fonts.ready;

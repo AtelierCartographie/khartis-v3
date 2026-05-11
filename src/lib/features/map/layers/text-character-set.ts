@@ -138,6 +138,8 @@ export const EXPLICIT_TEXT_CHARACTER_SET: string[] = Object.freeze(
   buildBaseCharacterSet()
 ) as string[];
 
+export const DECK_TEXT_CHARACTER_SET = 'auto' as const;
+
 export function extendTextCharacterSet(
   extra: readonly string[] | string | Set<string> | undefined
 ): string[] {

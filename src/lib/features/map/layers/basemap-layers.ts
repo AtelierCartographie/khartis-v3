@@ -69,7 +69,7 @@ import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-l
 import {
   DEFAULT_TEXT_FONT_SETTINGS_RASTER,
   DEFAULT_TEXT_LINE_HEIGHT,
-  EXPLICIT_TEXT_CHARACTER_SET
+  DECK_TEXT_CHARACTER_SET
 } from './text-character-set';
 
 const DASH_EXTENSION = new PathStyleExtension({
@@ -1574,7 +1574,7 @@ function createVillesLabelLayer(
     getTextAlignmentBaseline: 'top',
     getTextPixelOffset: [0, Math.max(config.size, 1) + 4],
     textFontFamily: resolveFontFamilyStack(labelFontFamily),
-    textCharacterSet: EXPLICIT_TEXT_CHARACTER_SET,
+    textCharacterSet: DECK_TEXT_CHARACTER_SET,
     textFontSettings: DEFAULT_TEXT_FONT_SETTINGS_RASTER,
     textLineHeight: DEFAULT_TEXT_LINE_HEIGHT,
     textSizeUnits: 'pixels',
