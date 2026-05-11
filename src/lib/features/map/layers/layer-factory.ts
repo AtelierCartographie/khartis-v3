@@ -63,7 +63,7 @@ import {
 import { MultiShapeLayer } from './multi-shape-layer';
 import {
   DEFAULT_TEXT_LINE_HEIGHT,
-  EXPLICIT_TEXT_CHARACTER_SET,
+  DECK_TEXT_CHARACTER_SET,
   resolveTextFontSettings
 } from './text-character-set';
 import type {
@@ -3059,7 +3059,7 @@ function createTextOverlayLayers(
           secondaryLabelsConfig.bold ? '700' : '400',
           secondaryLabelsConfig.italic
         ),
-        characterSet: EXPLICIT_TEXT_CHARACTER_SET,
+        characterSet: DECK_TEXT_CHARACTER_SET,
         fontSettings: resolveTextFontSettings(
           secondaryLabelsConfig.halo &&
             (secondaryLabelsConfig.haloWidth ?? DEFAULT_HALO_WIDTH) > 0
@@ -3233,7 +3233,7 @@ function createTextOverlayLayers(
             textConfig.bold ? '700' : '400',
             textConfig.italic
           ),
-          characterSet: EXPLICIT_TEXT_CHARACTER_SET,
+          characterSet: DECK_TEXT_CHARACTER_SET,
           fontSettings: resolveTextFontSettings(
             textConfig.halo && (textConfig.haloWidth ?? DEFAULT_HALO_WIDTH) > 0
               ? 'halo-on'
