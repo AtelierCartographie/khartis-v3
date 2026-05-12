@@ -1347,6 +1347,7 @@
   "annotations_alignment_label": "Alignement",
   "annotations_import_image": "Importer une image",
   "annotations_import_image_description": "Après l'import, déplacez l'aperçu sur la page puis cliquez pour placer l’image.",
+  "annotations_image_unsupported_format": "Format d'image non pris en charge. Utilisez un fichier JPG ou PNG.",
   "annotations_fill_color": "Couleur de remplissage",
   "annotations_delete_image": "Supprimer l'image",
   "annotations_panel_mode_create": "Créer",

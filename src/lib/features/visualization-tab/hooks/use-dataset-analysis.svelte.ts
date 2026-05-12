@@ -1,5 +1,4 @@
 import {
-  ALL_PRIMITIVE_FILTERS,
   PrimitiveFilterType,
   resolveAllowedPrimitiveFilters,
   type PrimitiveFilter,
@@ -10,6 +9,7 @@ import {
   GEO_COLUMN_TYPE
 } from '$lib/features/commons/constants/data.constants';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+import { filterVisualizableDataColumns } from '$lib/features/commons/utils/visualization-columns.utils';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { isLikelyYearColumn } from '../utils/year-filter.utils';
 
@@ -53,9 +53,11 @@ export function useDatasetAnalysis(
   const dataFieldItems = $derived.by(() => {
     const dataset = getSelectedDataset() ?? datasetsStore.selectedDataset;
     if (!dataset?.columns) return [];
-    return dataset.columns
-      .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
-      .map((col, id) => ({ id, text: col.name, type: col.type }));
+    return filterVisualizableDataColumns(dataset.columns).map((col, id) => ({
+      id,
+      text: col.name,
+      type: col.type
+    }));
   });
 
   const hasGeometry = $derived.by(() => {
@@ -98,7 +100,7 @@ export function useDatasetAnalysis(
   const availablePrimitiveFilters = $derived.by(() => {
     const dataset = getSelectedDataset();
     const viz = deps.getSelectedVisualization();
-    if (!viz || !dataset) return ALL_PRIMITIVE_FILTERS;
+    if (!viz || !dataset) return [];
     return resolveAllowedPrimitiveFilters(viz.type, dataset);
   });
 
