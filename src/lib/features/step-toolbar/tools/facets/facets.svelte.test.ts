@@ -25,4 +25,9 @@ describe('facets tool scale mode UI', () => {
       'return viz.text?.background?.strokeCategoryColumn;'
     );
   });
+
+  it('shows the numeric variable icon only for numeric dataset columns', () => {
+    expect(source).toContain('isAutoFacetNumericColumn');
+    expect(source).not.toContain('col.type !== COLUMN_TYPE_GEOMETRY');
+  });
 });

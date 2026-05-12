@@ -15,6 +15,7 @@
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
+  import { isAutoFacetDataColumn } from '$lib/features/commons/utils/visualization-columns.utils';
 
   interface DataField {
     id: number;
@@ -63,20 +64,32 @@
   const selectedField = $derived(
     singleSelectItems.find((f) => f.id === selectedFieldId) ?? null
   );
+  const collectionDataFields = $derived(
+    dataFields.filter(isAutoFacetDataColumn)
+  );
+  const selectedCollectionFieldIds = $derived(
+    selectedFieldIds.filter((id) =>
+      collectionDataFields.some((field) => field.id === id)
+    )
+  );
 
   const triggerLabel = $derived.by(() => {
     if (!isCollectionEnabled) return null;
-    const count = selectedFieldIds.length;
+    const count = selectedCollectionFieldIds.length;
     if (count === 0) return null;
     if (count === 1) {
-      return dataFields.find((f) => f.id === selectedFieldIds[0]) ?? null;
+      return (
+        collectionDataFields.find(
+          (f) => f.id === selectedCollectionFieldIds[0]
+        ) ?? null
+      );
     }
     return null;
   });
 
   const collectionCount = $derived(
-    isCollectionEnabled && selectedFieldIds.length > 1
-      ? selectedFieldIds.length
+    isCollectionEnabled && selectedCollectionFieldIds.length > 1
+      ? selectedCollectionFieldIds.length
       : 0
   );
   const contextualSurfaceId = createExclusiveContextualSurfaceId(
@@ -84,7 +97,7 @@
   );
 
   const displayItems = $derived(
-    (isCollectionEnabled ? dataFields : singleSelectItems).filter(
+    (isCollectionEnabled ? collectionDataFields : singleSelectItems).filter(
       (f) => f.id !== NONE_FIELD_ID
     )
   );
@@ -98,15 +111,16 @@
   }
 
   function isSelected(fieldId: number): boolean {
-    if (isCollectionEnabled) return selectedFieldIds.includes(fieldId);
+    if (isCollectionEnabled)
+      return selectedCollectionFieldIds.includes(fieldId);
     return selectedFieldId === fieldId;
   }
 
   function handleItemClick(fieldId: number) {
     if (isCollectionEnabled) {
-      const next = selectedFieldIds.includes(fieldId)
-        ? selectedFieldIds.filter((id) => id !== fieldId)
-        : [...selectedFieldIds, fieldId];
+      const next = selectedCollectionFieldIds.includes(fieldId)
+        ? selectedCollectionFieldIds.filter((id) => id !== fieldId)
+        : [...selectedCollectionFieldIds, fieldId];
       onCollectionChange?.(next);
     } else {
       onSelect(fieldId);

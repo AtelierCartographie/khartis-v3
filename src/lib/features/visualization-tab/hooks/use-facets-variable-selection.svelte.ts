@@ -1,8 +1,10 @@
+import { isAutoFacetDataColumn } from '$lib/features/commons/utils/visualization-columns.utils';
 import { facetsStore, type FacetSlotPath } from '../adapters/facets-adapter';
 
 interface DataFieldOption {
   id: number;
   text: string;
+  type?: string;
 }
 
 interface FacetsVariableSelectionOptions {
@@ -85,9 +87,13 @@ export function useFacetsVariableSelection({
     const seed = baseVariableName ? [baseVariableName] : [];
     const candidates = seed.slice();
 
-    for (const { text } of getDataFields()) {
+    for (const field of getDataFields()) {
       if (candidates.length >= 2) {
         break;
+      }
+      const text = field.text;
+      if (!isAutoFacetDataColumn(field)) {
+        continue;
       }
       if (text && !candidates.includes(text)) {
         candidates.push(text);
