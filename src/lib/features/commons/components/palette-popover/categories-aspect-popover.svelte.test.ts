@@ -173,6 +173,30 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
     expect(source).toContain('disabled={!draftCommonAspect.stroke}');
   });
 
+  it('keeps only the common stroke-width toggle and uses number inputs for per-category symbol sizes', () => {
+    expect(source).not.toContain('m.aspect_common_stroke_size()');
+    expect(source).toContain('m.aspect_common_stroke_unique()');
+    expect(source).toContain('m.per_category_size()');
+    expect(source).toContain('<CompactNumberInput');
+    expect(source).toContain('handleCategorySize(category.id, value)');
+  });
+
+  it('shows per-category stroke color and width when common stroke controls are disabled', () => {
+    expect(source).toContain('const showPerCategoryStrokeColor = $derived(');
+    expect(source).toContain(
+      '!draftCommonAspect.stroke || !draftCommonAspect.autoColor'
+    );
+    expect(source).toContain('const showPerCategoryStrokeWidth = $derived(');
+    expect(source).toContain(
+      '!draftCommonAspect.stroke || !(draftCommonAspect.strokeUnique ?? true)'
+    );
+    expect(source).toContain('{#if showPerCategoryStrokeColor}');
+    expect(source).toContain('m.per_category_stroke_color()');
+    expect(source).toContain('{#if showPerCategoryStrokeWidth}');
+    expect(source).toContain('m.per_category_stroke_width()');
+    expect(source).toContain('handleCategoryStrokeWidth(category.id, value)');
+  });
+
   it('should suppress the per-category accordion for the ranked symbols variant', () => {
     expect(source).toContain(
       'const showPerCategoryAspect = $derived(!isSymbolsDifferentRank)'
@@ -199,16 +223,20 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
     expect(source).toContain('.category-item--disabled');
   });
 
-  it('should keep nested color surfaces from closing the whole categories popover', () => {
-    expect(source).toContain('function isNestedColorSurface');
+  it('should keep nested popover surfaces from closing the whole categories popover', () => {
+    expect(source).toContain('function isNestedPopoverSurface');
     expect(source).toContain("target.id === 'khartis-color-picker-dropdown'");
     expect(source).toContain(
       "target.classList.contains('single-color-dropdown')"
     );
     expect(source).toContain("target.classList.contains('palette-popover')");
+    expect(source).toContain("target.classList.contains('bx--list-box__menu')");
     expect(source).toContain(
-      'if (isNestedColorSurface(e.composedPath())) return'
+      "target.classList.contains('bx--list-box__menu-item')"
     );
+    expect(source).toContain('const path = e.composedPath()');
+    expect(source).toContain('!path.includes(popoverRef)');
+    expect(source).toContain('if (isNestedPopoverSurface(path)) return');
   });
 });
 

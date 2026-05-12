@@ -8,13 +8,13 @@ const source = readFileSync(
 );
 
 describe('SymbolModeCategories (en categorie.png alignment)', () => {
-  it('exposes the CategoryShapeMode radio group with three options', () => {
+  it('exposes the CategoryShapeMode radio group without the ordered option', () => {
     expect(source).toContain('id="cat-shape-unique"');
     expect(source).toContain('id="cat-shape-different"');
-    expect(source).toContain('id="cat-shape-ordered"');
+    expect(source).not.toContain('id="cat-shape-ordered"');
     expect(source).toContain('CategoryShapeMode.UNIQUE');
     expect(source).toContain('CategoryShapeMode.DIFFERENT');
-    expect(source).toContain('CategoryShapeMode.ORDERED');
+    expect(source).toContain('coerceCategoryShapeMode');
   });
 
   it('only shows the single-shape Dropdown when categoryShapeMode is UNIQUE', () => {
@@ -63,11 +63,16 @@ describe('SymbolModeCategories (en categorie.png alignment)', () => {
   it('enables the Categories Aspect popover via categoriesMode + categoryLabels', () => {
     expect(source).toContain('categoriesMode={true}');
     expect(source).toContain('const resolvedCategoryLabels = $derived(');
-    expect(source).toContain('categoryLabels={resolvedCategoryLabels}');
+    expect(source).toContain(
+      'classification={visualization?.symbol?.classification ??'
+    );
+    expect(source).toContain('visualization?.symbolClassification}');
+    expect(source).toContain('?.categoryValues ?? resolvedCategoryLabels');
     expect(source).toContain(
       'disabledCategoryLabels={visualization?.symbol?.classification'
     );
     expect(source).toContain('categoriesCommonAspect={categoriesCommonAspect}');
+    expect(source).toContain('showCategoriesCommonAspect={true}');
   });
 
   it('hydrates missing category labels from the dataset when the classification mirror is empty', () => {
@@ -87,21 +92,33 @@ describe('SymbolModeCategories (en categorie.png alignment)', () => {
       'categoriesVariant = $derived<CategoriesAspectVariant>'
     );
     expect(source).toContain("'symbols-different'");
-    expect(source).toContain("'symbols-different-rank'");
     expect(source).toContain("'symbols-unique'");
     expect(source).toContain('categoriesVariant={categoriesVariant}');
   });
 
   it('maps category common aspect updates back to the point symbol primitive', () => {
     expect(source).toContain('function handleCategoriesCommonAspectChange');
-    expect(source).toContain('resolveOrderedCategorySizeBounds');
-    expect(source).toContain('symbolUpdates.minSize = minSize');
-    expect(source).toContain('symbolUpdates.maxSize = maxSize');
+    expect(source).not.toContain('resolveOrderedCategorySizeBounds');
+    expect(source).not.toContain('symbolUpdates.minSize = minSize');
+    expect(source).not.toContain('symbolUpdates.maxSize = maxSize');
+    expect(source).toContain('const useCategoryStrokeColors =');
+    expect(source).toContain('const useCategoryStrokeWidths =');
+    expect(source).toContain(
+      'symbolUpdates.strokeMode = useCategoryStrokeColors'
+    );
     expect(source).toContain('disabledLabels: nextCategories');
+    expect(source).toContain('categoryValues: nextCategories.map(');
+    expect(source).toContain('category.value ?? category.label');
+    expect(source).toContain('categoryStrokeWidths: useCategoryStrokeWidths');
     expect(source).toContain('onSymbolPrimitiveChange?.(symbolUpdates)');
     expect(source).toContain(
       'onCategoriesCommonAspectChange={handleCategoriesCommonAspectChange}'
     );
+    expect(source).toContain('resolveCommonAspectPatternType');
+    expect(source).toContain(
+      'pattern: Boolean(symbolClassification?.patternId)'
+    );
+    expect(source).toContain('symbolClassification?.patternId');
   });
 
   it('uses a dedicated categories-aspect trigger that stops propagation before opening the popover', () => {
@@ -181,7 +198,6 @@ describe('SymbolModeCategories — anti-leak classification routing', () => {
       'categoriesVariant = $derived<CategoriesAspectVariant>'
     );
     expect(source).toContain("'symbols-different'");
-    expect(source).toContain("'symbols-different-rank'");
     expect(source).toContain("'symbols-unique'");
     expect(source).toContain('categoriesVariant={categoriesVariant}');
   });

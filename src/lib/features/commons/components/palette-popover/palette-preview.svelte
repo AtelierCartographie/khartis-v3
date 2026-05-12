@@ -133,22 +133,33 @@
   });
 
   const categoryDraftCount = $derived(
-    Math.max(colors.length, categoryLabels.length)
+    Math.max(
+      colors.length,
+      categoryLabels.length,
+      classification?.labels?.length ?? 0,
+      classification?.categoryValues?.length ?? 0
+    )
   );
   const categoryDrafts = $derived<CategoryDraft[]>(
     Array.from({ length: categoryDraftCount }, (_, i) => {
-      const label =
-        categoryLabels[i] ?? m.palette_category_default_label({ index: i + 1 });
+      const value =
+        classification?.categoryValues?.[i] ??
+        categoryLabels[i] ??
+        m.palette_category_default_label({ index: i + 1 });
+      const label = classification?.labels?.[i] ?? categoryLabels[i] ?? value;
       const color =
         colors[i % Math.max(colors.length, 1)] ??
         DEFAULT_COMMON_ASPECT.color ??
         '#f287ac';
+      const disabledLabels =
+        classification?.disabledLabels ?? disabledCategoryLabels;
 
       return {
         id: String(i),
+        value,
         label,
         color,
-        enabled: !disabledCategoryLabels.includes(label),
+        enabled: !disabledLabels.includes(value),
         customSize: classification?.categorySizes?.[i],
         strokeColor: classification?.categoryStrokeColors?.[i],
         customStrokeWidth: classification?.categoryStrokeWidths?.[i]
@@ -216,7 +227,10 @@
   function resolveValidatedCategoryPatternId(
     commonAspect: CategoriesCommonAspect
   ): PatternId | undefined {
-    if (categoriesVariant !== 'polygons' || !commonAspect.pattern) {
+    const supportsPattern =
+      categoriesVariant === 'polygons' ||
+      categoriesVariant.startsWith('symbols');
+    if (!supportsPattern || !commonAspect.pattern) {
       return undefined;
     }
 
@@ -279,9 +293,12 @@
     onClassificationChange?.({
       colors: resolvedColors,
       labels: normalizedCategories.map((category) => category.label),
+      categoryValues: normalizedCategories.map(
+        (category) => category.value ?? category.label
+      ),
       disabledLabels: normalizedCategories
         .filter((category) => !category.enabled)
-        .map((category) => category.label),
+        .map((category) => category.value ?? category.label),
       categoryShapes,
       categorySizes: normalizedCategories.some(
         (category) => category.customSize !== undefined
