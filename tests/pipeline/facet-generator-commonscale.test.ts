@@ -45,7 +45,7 @@ describe('facet × commonScale — architecture invariant', () => {
 
   it('layer-factory shares the A+B max when commonScale is true', () => {
     expect(layerFactorySource).toContain(
-      'Math.max(primaryStats.max, secondaryStats.max)'
+      'Math.max(primaryDomainMax, secondaryDomainMax)'
     );
     expect(layerFactorySource).toContain('commonScale ? sharedMax');
   });

@@ -3,6 +3,7 @@ import type { DeckDataRow, RGBColor } from '../types';
 import {
   getClassedSizeForValue,
   getColorForValue,
+  getAbsoluteDomainMax,
   getProportionalSymbolSizeForValue,
   getSizeForValue
 } from '../utils/data-styling.utils';
@@ -99,15 +100,18 @@ export function createProportionalSymbolSizeAccessor(
   sizeColumn: string,
   maxValue: number,
   maxSize: number,
-  sizeScale: ScaleType
+  sizeScale: ScaleType,
+  minValue = 0
 ) {
+  const domainMax = getAbsoluteDomainMax(minValue, maxValue);
+
   return (object: DeckDataRow): number => {
     const rawValue = object[sizeColumn];
     const numericValue =
       typeof rawValue === 'number' ? rawValue : Number(rawValue);
     return getProportionalSymbolSizeForValue(
       numericValue,
-      maxValue,
+      domainMax,
       maxSize,
       sizeScale
     );
@@ -287,15 +291,18 @@ export function createGeoJsonProportionalSymbolSizeAccessor(
   sizeColumn: string,
   maxValue: number,
   maxSize: number,
-  sizeScale: ScaleType
+  sizeScale: ScaleType,
+  minValue = 0
 ) {
+  const domainMax = getAbsoluteDomainMax(minValue, maxValue);
+
   return (feature: { properties?: Record<string, unknown> | null }) => {
     const value = feature.properties?.[sizeColumn];
     const numericValue =
       typeof value === 'number' ? value : parseFloat(String(value));
     return getProportionalSymbolSizeForValue(
       numericValue,
-      maxValue,
+      domainMax,
       maxSize,
       sizeScale
     );

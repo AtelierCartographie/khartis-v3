@@ -836,6 +836,81 @@ describe('createPolygonLayers', () => {
     expect(radii![0]).toBeGreaterThan(radii![1]);
   });
 
+  it('passes common category patterns to split representative point symbols', () => {
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [createPolygonFeature('keep', 2024)]
+    } satisfies FeatureCollection<Polygon>);
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 2,
+      featureIds: new Uint32Array([0, 1]),
+      positions: new Float64Array([0, 0, 1, 1])
+    });
+    createScatterplotLayerPropsMock.mockImplementation((pointData) => ({
+      data: {
+        length: pointData.length,
+        featureIds: pointData.featureIds,
+        attributes: {}
+      }
+    }));
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.CATEGORIES,
+      categoryColumn: 'kind',
+      shape: ShapeType.CIRCLE,
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 2,
+        labels: ['Urban', 'Rural'],
+        categoryValues: ['urban', 'rural'],
+        colors: ['#3366cc', '#dc3912'],
+        patternId: 'dots'
+      }
+    };
+    const geometryTable = createTableWithRows(
+      [
+        { id: 'DEU', geometry: null },
+        { id: 'FRA', geometry: null }
+      ],
+      ['id', 'geometry']
+    );
+    const representativeTable = createTableWithRows(
+      [
+        { id: 'DEU', geometry: null },
+        { id: 'FRA', geometry: null }
+      ],
+      ['id', 'geometry']
+    );
+    const datasetTable = createTableWithRows(
+      [
+        { basemap_id: 'DEU', kind: 'urban' },
+        { basemap_id: 'FRA', kind: 'rural' }
+      ],
+      ['basemap_id', 'kind']
+    );
+
+    const layers = createPolygonLayers(geometryTable, createGeometryInfo(), {
+      ...createContext(visualization),
+      representativePointTable: representativeTable,
+      representativePointGeometryInfo: {
+        ...createPointGeometryInfo(),
+        type: 'POINT' as GeometryInfo['type']
+      },
+      splitDatasetTable: datasetTable,
+      splitFeatureIdColumn: 'id'
+    });
+
+    const pointLayer = layers.find((layer) =>
+      String(layer.props.id).includes('point-layer')
+    ) as MultiShapeLayer | undefined;
+
+    expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
+    expect(pointLayer?.props.patternEnabled).toBe(true);
+    expect(pointLayer?.props.patternType).toBe(1);
+  });
+
   it('renders the GeoJSON fallback pattern below the polygon stroke', () => {
     arrowTableToGeoJSONMock.mockReturnValue({
       type: 'FeatureCollection',
@@ -1261,7 +1336,8 @@ describe('createPointLayers', () => {
       classification: {
         method: ClassificationMethod.MANUAL,
         classes: 1,
-        labels: ['Pause'],
+        labels: ['Pause label'],
+        categoryValues: ['Pause'],
         colors: ['#3366cc'],
         disabledLabels: ['Pause']
       }
@@ -1283,6 +1359,26 @@ describe('createPointLayers', () => {
       return;
     }
 
+    const fillTriggers = pointLayer.props.updateTriggers
+      ?.getFillColor as unknown[];
+    const radiusTriggers = pointLayer.props.updateTriggers
+      ?.getRadius as unknown[];
+    const lineTriggers = pointLayer.props.updateTriggers
+      ?.getLineColor as unknown[];
+
+    expect(fillTriggers).toContain(
+      visualization.symbol.classification?.categoryValues
+    );
+    expect(fillTriggers).toContain(
+      visualization.symbol.classification?.disabledLabels
+    );
+    expect(radiusTriggers).toContain(
+      visualization.symbol.classification?.disabledLabels
+    );
+    expect(lineTriggers).toContain(
+      visualization.symbol.classification?.disabledLabels
+    );
+
     const fillColorAttribute = layerData.attributes.getFillColor;
     if (!fillColorAttribute) {
       expect(fillColorAttribute).toBeDefined();
@@ -1290,6 +1386,47 @@ describe('createPointLayers', () => {
     }
 
     expect(Array.from(fillColorAttribute.value)).toEqual([0, 0, 0, 0]);
+  });
+
+  it('uses MultiShapeLayer for categorical point patterns even with circle symbols', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 1,
+      featureIds: new Uint32Array([0])
+    });
+    createScatterplotLayerPropsMock.mockReturnValue({
+      data: {
+        attributes: {},
+        featureIds: new Uint32Array([0])
+      }
+    });
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.CATEGORIES,
+      categoryColumn: 'category',
+      shape: ShapeType.CIRCLE,
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 1,
+        labels: ['North'],
+        categoryValues: ['north'],
+        colors: ['#3366cc'],
+        patternId: 'cross'
+      }
+    };
+
+    const layers = createPointLayers(
+      createTableWithRows([{ category: 'north' }], ['category']),
+      createPointGeometryInfo(),
+      createContext(visualization)
+    );
+
+    const pointLayer = layers[0] as MultiShapeLayer;
+
+    expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
+    expect(pointLayer.props.patternEnabled).toBe(true);
+    expect(pointLayer.props.patternType).toBe(3);
   });
 
   it('uses zero-based square-root radii and sorts proportional point buffers by descending radius', () => {
