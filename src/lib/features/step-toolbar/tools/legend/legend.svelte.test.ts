@@ -79,9 +79,7 @@ describe('legend tool', () => {
     await fireEvent.input(screen.getByRole('spinbutton'), {
       target: { value: '42' }
     });
-    await fireEvent.click(
-      screen.getByRole('switch', { name: /arrière.plan/i })
-    );
+    await fireEvent.click(screen.getByRole('switch', { name: /fond/i }));
 
     expect(getLegendState().style.fontFamily).toBe('Inter');
     expect(getLegendState().style.fontSize).toBe(24);
