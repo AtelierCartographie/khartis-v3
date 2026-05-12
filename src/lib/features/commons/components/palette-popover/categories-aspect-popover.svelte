@@ -130,7 +130,7 @@
       case ToolbarState.Compact:
         return '434px';
       default:
-        return 'clamp(400px, 50vw, 800px)';
+        return '50vw';
     }
   });
 
@@ -298,15 +298,13 @@
     toggleCategoryExpand(id);
   }
 
-  function isNestedSurface(path: EventTarget[]) {
+  function isNestedColorSurface(path: EventTarget[]) {
     return path.some((target) => {
       if (!(target instanceof Element)) return false;
       return (
         target.id === 'khartis-color-picker-dropdown' ||
         target.classList.contains('single-color-dropdown') ||
-        target.classList.contains('palette-popover') ||
-        target.classList.contains('bx--list-box__menu') ||
-        target.classList.contains('bx--list-box__menu-item')
+        target.classList.contains('palette-popover')
       );
     });
   }
@@ -404,7 +402,7 @@
       const target = e.target as Node;
       if (popoverRef && !popoverRef.contains(target)) {
         if (triggerElement && triggerElement.contains(target)) return;
-        if (isNestedSurface(e.composedPath())) return;
+        if (isNestedColorSurface(e.composedPath())) return;
         handleClose();
       }
     }
@@ -677,7 +675,8 @@
                       width="100%"
                       height="32px"
                       showSteppers={false}
-                      disabled={!draftCommonAspect.stroke}
+                      disabled={!draftCommonAspect.stroke ||
+                        draftCommonAspect.strokeSize <= 0}
                       onchange={(value) =>
                         handleCommonAspectChange('strokeSize', value)}
                     />
@@ -884,14 +883,13 @@
                             <span class="field-label"
                               >{m.per_category_size()}</span
                             >
-                            <CompactNumberInput
-                              value={category.customSize ??
-                                draftCommonAspect.size}
+                            <SliderWithInput
                               min={1}
                               max={100}
-                              width="100%"
-                              height="32px"
-                              showSteppers={false}
+                              value={category.customSize ??
+                                draftCommonAspect.size}
+                              showMinMax
+                              inputWidth="96px"
                               onchange={(value) =>
                                 handleCategorySize(category.id, value)}
                             />

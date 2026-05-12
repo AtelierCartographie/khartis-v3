@@ -36,16 +36,4 @@ describe('filterFieldsByKind', () => {
       items[2]
     ]);
   });
-
-  it('excludes none option when includeNoneOption is false', () => {
-    expect(filterFieldsByKind(items, 'numeric', undefined, false)).toEqual([
-      items[1]
-    ]);
-    expect(filterFieldsByKind(items, 'textual', undefined, false)).toEqual([
-      items[2],
-      items[3],
-      items[4],
-      items[5]
-    ]);
-  });
 });

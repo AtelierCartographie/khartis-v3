@@ -31,8 +31,7 @@ function matchesFieldSelectionKind(
 export function filterFieldsByKind(
   items: FieldSelectionItem[],
   kind: FieldSelectionKind,
-  selectedFieldId?: number,
-  includeNoneOption: boolean = true
+  selectedFieldId?: number
 ): FieldSelectionItem[] {
   const filtered = items.filter(
     (item) =>
@@ -40,8 +39,8 @@ export function filterFieldsByKind(
   );
   const noneOption = items.find((item) => item.id === NONE_FIELD_ID);
 
-  if (!includeNoneOption || !noneOption) {
-    return filtered.filter((item) => item.id !== NONE_FIELD_ID);
+  if (!noneOption) {
+    return filtered;
   }
 
   return [noneOption, ...filtered.filter((item) => item.id !== NONE_FIELD_ID)];
