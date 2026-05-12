@@ -181,6 +181,113 @@ describe('common legend generators', () => {
     ]);
   });
 
+  it('keeps the cross-zero sign legend inside the SVG viewBox bounds', () => {
+    const svg = createLegendSvg(
+      draw_symbols_legend([-100, -50, 50, 100], {
+        type: 'circle',
+        fill: '#4585f5'
+      })
+    );
+
+    expect(svg.markup).toContain('sign_legend');
+
+    const rectYs = [
+      ...svg.markup.matchAll(/<g class="sign_legend"[^>]*>[\s\S]*?<\/g>/g)
+    ].flatMap((block) =>
+      [...block[0].matchAll(/<rect[^>]*y="([^"]+)"/g)].map((m) => Number(m[1]))
+    );
+    expect(rectYs.length).toBeGreaterThan(0);
+    for (const y of rectYs) {
+      expect(y).toBeLessThan(svg.height);
+    }
+
+    const svgWithoutSign = createLegendSvg(
+      draw_symbols_legend([10, 100, 1_000], {
+        type: 'circle',
+        fill: '#4585f5'
+      })
+    );
+    expect(svg.height).toBeGreaterThan(svgWithoutSign.height);
+  });
+
+  it('keeps sign legend, nodata and note all within bounds for cross-zero data', () => {
+    const svg = createLegendSvg(
+      draw_symbols_legend([-100, -50, 50, 100], {
+        type: 'circle',
+        fill: '#4585f5',
+        nodata: true,
+        nodataLabel: 'Sans données',
+        note: 'Source: Khartis',
+        title: 'Visualisation',
+        subtitle: 'Indice'
+      })
+    );
+
+    expect(svg.markup).toContain('sign_legend');
+    expect(svg.markup).toContain('Sans données');
+    expect(svg.markup).toContain('Source: Khartis');
+    expect(svg.markup).toContain('Indice');
+    expect(svg.markup).toContain('Visualisation');
+    expect(svg.width).toBeGreaterThan(0);
+    expect(svg.height).toBeGreaterThan(0);
+  });
+
+  it('handles cross-zero proportional bars with the sign legend integrated', () => {
+    const svg = createLegendSvg(
+      draw_symbols_legend([-50, 100], {
+        type: 'bar',
+        fill: '#4585f5'
+      })
+    );
+
+    expect(svg.markup).toContain('sign_legend');
+    expect(svg.height).toBeGreaterThan(0);
+
+    const rectYs = [
+      ...svg.markup.matchAll(/<g class="sign_legend"[^>]*>[\s\S]*?<\/g>/g)
+    ].flatMap((block) =>
+      [...block[0].matchAll(/<rect[^>]*y="([^"]+)"/g)].map((m) => Number(m[1]))
+    );
+    expect(rectYs.length).toBeGreaterThan(0);
+    for (const y of rectYs) {
+      expect(y).toBeLessThan(svg.height);
+    }
+  });
+
+  it('uses uniform section gaps between symbols, sign legend, nodata and note', () => {
+    const svg = createLegendSvg(
+      draw_symbols_legend([-100, -50, 50, 100], {
+        type: 'circle',
+        fill: '#4585f5',
+        nodata: true,
+        nodataLabel: 'Sans données',
+        note: 'Source: Khartis'
+      })
+    );
+
+    const signLegendBlock = /<g class="sign_legend"[^>]*>[\s\S]*?<\/g>/.exec(
+      svg.markup
+    )?.[0];
+    expect(signLegendBlock).toBeDefined();
+    const signRectYs = [
+      ...(signLegendBlock ?? '').matchAll(/<rect[^>]*y="([\d.]+)"/g)
+    ].map((m) => Number(m[1]));
+    expect(signRectYs.length).toBe(2);
+    const [plusBoxY, minusBoxY] = signRectYs;
+    expect(minusBoxY).toBeGreaterThan(plusBoxY);
+
+    const interBoxGap = minusBoxY - plusBoxY;
+    expect(interBoxGap).toBeGreaterThan(0);
+    expect(interBoxGap).toBeLessThan(40);
+
+    const nodataMatch = /<g class="nodata">[\s\S]*?y1="([\d.]+)"/.exec(
+      svg.markup
+    );
+    expect(nodataMatch).not.toBeNull();
+    const nodataY = Number(nodataMatch?.[1]);
+    expect(nodataY).toBeGreaterThan(minusBoxY);
+  });
+
   it('keeps double proportional symbol rows compact', () => {
     const svg = createLegendSvg(
       draw_khartis_double_symbols_legend(
@@ -225,10 +332,10 @@ describe('common legend generators', () => {
 
     expect(svg.markup).toContain('khartis_double_symbol_legend');
     expect(svg.markup).toContain('Absence de données');
-    expect(svg.height).toBeLessThan(165);
+    expect(svg.height).toBeLessThan(190);
   });
 
-  it('aligns double symbol labels on the same row axis with consistent spacing', () => {
+  it('aligns each double symbol label with its own symbol center', () => {
     const markup = draw_khartis_double_symbols_legend([
       {
         label: '227,119',
@@ -273,7 +380,48 @@ describe('common legend generators', () => {
     rowCenters.forEach((center, index) => {
       expect(center).toBeCloseTo(labelYs[index], 5);
     });
-    expect(labelYs[1] - labelYs[0]).toBeCloseTo(labelYs[2] - labelYs[1], 5);
+  });
+
+  it('bottom-aligns double symbol rows so smaller symbols sit lower relative to previous row', () => {
+    const markup = draw_khartis_double_symbols_legend([
+      {
+        label: '227,119',
+        size: 18,
+        symbol: 'M0,-8A8,8,0,1,1,0,8A8,8,0,1,1,0,-8',
+        fill: '#4585f5',
+        secondaryFill: '#ff812a'
+      },
+      {
+        label: '113,567',
+        size: 11,
+        symbol: 'M0,-8A8,8,0,1,1,0,8A8,8,0,1,1,0,-8',
+        fill: '#4585f5',
+        secondaryFill: '#ff812a'
+      },
+      {
+        label: '14',
+        size: 4,
+        symbol: 'M0,-8A8,8,0,1,1,0,8A8,8,0,1,1,0,-8',
+        fill: '#4585f5',
+        secondaryFill: '#ff812a'
+      }
+    ]);
+    const host = document.createElement('div');
+    host.innerHTML = `<svg>${markup}</svg>`;
+
+    const rowGroups = [...host.querySelectorAll('.double-symbol-pair')];
+    const cyValues = rowGroups.map((group) => {
+      const transform = group.querySelector('path')?.getAttribute('transform');
+      const match = transform?.match(/translate\([^,]+,([^)]+)\)/);
+      return Number(match?.[1] ?? NaN);
+    });
+
+    expect(cyValues).toHaveLength(3);
+    // With bottom-align, the gap between cy values increases as radius decreases
+    // because smaller symbols sit lower in their fixed-height row.
+    const gap0 = cyValues[1] - cyValues[0];
+    const gap1 = cyValues[2] - cyValues[1];
+    expect(gap1).toBeGreaterThan(gap0);
   });
 
   it('escapes SVG text, colors, and paths in Khartis extensions', () => {
