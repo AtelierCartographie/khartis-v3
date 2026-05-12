@@ -3,7 +3,7 @@
   import {
     MisuseOutline,
     SquareOutline,
-    Category,
+    Table,
     Tag
   } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
@@ -218,7 +218,7 @@
   const strokeModeItems = [
     { icon: MisuseOutline, label: m.stroke_mode_none(), iconSize: 16 },
     { icon: SquareOutline, label: m.stroke_mode_unique(), iconSize: 16 },
-    { icon: Category, label: m.stroke_mode_classes(), iconSize: 16 },
+    { icon: Table, label: m.stroke_mode_classes(), iconSize: 16 },
     { icon: Tag, label: m.stroke_mode_categories(), iconSize: 16 }
   ];
 

@@ -24,6 +24,7 @@ import {
   PrimitiveFilterType,
   VisualizationType,
   getEnabledPrimitiveFilters,
+  getPrimitiveClassification,
   getSymbolPrimitive,
   getTextPrimitive,
   resolveAllowedPrimitiveFilters,
@@ -802,6 +803,57 @@ describe('visualizationStore SymbolPrimitiveConfig round-trip persistence', () =
     const viz = visualizationStore.selectedVisualization;
     const symbol = getSymbolPrimitive(viz);
     expect(symbol?.classification?.labels).toEqual(['A', 'B', 'C', 'D']);
+  });
+
+  it('merges source category metadata from the legacy symbolClassification mirror', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+    const input = buildRichSymbolVisualization();
+    const sourceAwareClassification = {
+      ...input.symbolClassification!,
+      labels: ['Public label', 'private'],
+      categoryValues: ['public', 'private'],
+      disabledLabels: ['private']
+    };
+    const mirrorAware: VisualizationConfig = {
+      ...input,
+      symbolClassification: sourceAwareClassification,
+      symbol: input.symbol
+        ? {
+            ...input.symbol,
+            classification: {
+              ...input.symbol.classification!,
+              labels: ['public', 'private']
+            }
+          }
+        : undefined
+    };
+
+    visualizationStore.restoreFromSerialized({
+      visualizations: [mirrorAware],
+      selectedVisualizationId: mirrorAware.id,
+      activeVisualizationIds: [mirrorAware.id]
+    });
+
+    const viz = visualizationStore.selectedVisualization;
+    const symbol = getSymbolPrimitive(viz);
+    const runtimeClassification = getPrimitiveClassification(
+      viz,
+      PrimitiveFilterType.POINT
+    );
+    expect(symbol?.classification?.labels).toEqual(['Public label', 'private']);
+    expect(symbol?.classification?.categoryValues).toEqual([
+      'public',
+      'private'
+    ]);
+    expect(symbol?.classification?.disabledLabels).toEqual(['private']);
+    expect(runtimeClassification?.categoryValues).toEqual([
+      'public',
+      'private'
+    ]);
+    expect(runtimeClassification?.disabledLabels).toEqual(['private']);
+    expect(symbol?.classification?.categoryShapes).toEqual(
+      input.symbol?.classification?.categoryShapes
+    );
   });
 
   it('keeps symbol stroke discretization fields through the persistence registry round-trip used by project saves', () => {
