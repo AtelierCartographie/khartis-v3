@@ -1,6 +1,12 @@
 import { GeoJsonLayer, PathLayer, ScatterplotLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { Feature, FeatureCollection, Point, Polygon } from 'geojson';
+import type {
+  Feature,
+  FeatureCollection,
+  LineString,
+  Point,
+  Polygon
+} from 'geojson';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -276,6 +282,23 @@ function createPointFeature(
     geometry: {
       type: 'Point',
       coordinates: [0, 0]
+    }
+  };
+}
+
+function createLineFeature(
+  id: string,
+  routeName: string
+): Feature<LineString, { id: string; route_name: string }> {
+  return {
+    type: 'Feature',
+    properties: { id, route_name: routeName },
+    geometry: {
+      type: 'LineString',
+      coordinates: [
+        [0, 0],
+        [1, 1]
+      ]
     }
   };
 }
@@ -565,6 +588,23 @@ describe('binary scatter styling refresh', () => {
     );
     expect(source).toContain(
       'resolveDeckTextFontFamily(textConfig.fontFamily)'
+    );
+  });
+
+  it('wires disabled category labels into text and text-background categorical rendering', () => {
+    expect(source).toContain('textClassification?.disabledLabels ?? []');
+    expect(source).toContain(
+      'textBackgroundConfig.classification?.disabledLabels ?? []'
+    );
+    expect(source).toContain(
+      'textBackgroundConfig.strokeClassification?.disabledLabels ?? []'
+    );
+    expect(source).toContain('textClassification?.disabledLabels,');
+    expect(source).toContain(
+      'textBackgroundConfig.classification?.disabledLabels,'
+    );
+    expect(source).toContain(
+      'textBackgroundConfig.strokeClassification?.disabledLabels'
     );
   });
 });
@@ -1035,6 +1075,50 @@ describe('createPolygonLayers', () => {
     expect(fillLayer?.props.updateTriggers?.getFillColor).toEqual(
       expect.arrayContaining(['#ff00ff', true])
     );
+  });
+
+  it('keeps disabled GeoJSON polygon categories transparent', () => {
+    const disabledFeature: Feature<Polygon, { segment: string }> = {
+      type: 'Feature',
+      properties: { segment: 'Pause' },
+      geometry: createPolygonFeature('disabled', 2024).geometry
+    };
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [disabledFeature]
+    } satisfies FeatureCollection<Polygon>);
+
+    const visualization = createVisualization(FillMode.CATEGORIES);
+    visualization.type = VisualizationType.CATEGORICAL;
+    visualization.mapping = { categoryColumn: 'segment' };
+    visualization.polygon = {
+      ...visualization.polygon!,
+      fillMode: FillMode.CATEGORIES,
+      categoryColumn: 'segment',
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 2,
+        labels: ['Active', 'Pause'],
+        categoryValues: ['Active', 'Pause'],
+        colors: ['#3366cc', '#dc3912'],
+        disabledLabels: ['Pause']
+      }
+    };
+
+    const layers = createPolygonLayers(
+      createTableWithRows([{ segment: 'Pause' }], ['segment']),
+      createGeometryInfo(),
+      createContext(visualization)
+    );
+
+    const polygonLayer = layers.find(
+      (layer) => layer instanceof GeoJsonLayer
+    ) as GeoJsonLayer | undefined;
+    const getFillColor = polygonLayer?.props.getFillColor as
+      | ((feature: typeof disabledFeature) => [number, number, number, number])
+      | undefined;
+
+    expect(getFillColor?.(disabledFeature)).toEqual([0, 0, 0, 0]);
   });
 
   it('maps split polygon choropleth fills through geometry ids and dataset basemap ids', () => {
@@ -1718,6 +1802,130 @@ describe('createLineLayers', () => {
 
     expect(pathColorAttrMock).toHaveBeenCalled();
     expect(layers.some((layer) => layer instanceof PathLayer)).toBe(true);
+  });
+
+  it('keeps disabled native categorical line labels transparent', () => {
+    pathColorAttrMock.mockImplementationOnce(
+      (
+        pathData: { featureIds?: Uint32Array },
+        getColor: (featureId: number) => [number, number, number, number]
+      ) => ({
+        value: new Uint8ClampedArray(getColor(pathData.featureIds?.[0] ?? 0)),
+        size: 4
+      })
+    );
+
+    const visualization: VisualizationConfig = {
+      id: 'viz-line-disabled-native',
+      name: 'Line disabled category test',
+      type: VisualizationType.CATEGORICAL,
+      datasetId: 'dataset-1',
+      enabled: true,
+      primitiveFilters: [PrimitiveFilterType.LINE],
+      line: {
+        enabled: true,
+        colorMode: ColorMode.CATEGORIES,
+        thicknessMode: ThicknessMode.UNIQUE,
+        color: '#3366cc',
+        width: 3,
+        maxWidth: 6,
+        opacity: 0.5,
+        dashed: false,
+        categoryColumn: 'route_name',
+        classification: {
+          method: ClassificationMethod.MANUAL,
+          classes: 2,
+          colors: ['#ff0000', '#00ff00'],
+          labels: ['Active', 'Pause'],
+          categoryValues: ['Active', 'Pause'],
+          disabledLabels: ['Pause']
+        }
+      },
+      style: {
+        fillOpacity: 1,
+        strokeOpacity: 1,
+        strokeWidth: 1
+      },
+      mapping: {}
+    };
+
+    const layers = createLineLayers(
+      createTableWithRows([{ route_name: 'Pause' }], ['route_name']),
+      createLineGeometryInfo(),
+      {
+        ...createContext(visualization),
+        customProjection: undefined
+      }
+    );
+    const lineLayer = layers[0] as PathLayer;
+    const layerData = lineLayer.props.data as {
+      attributes?: { getColor?: { value: Uint8ClampedArray } };
+    };
+
+    expect(layerData.attributes?.getColor?.value).toEqual(
+      new Uint8ClampedArray([0, 0, 0, 0])
+    );
+  });
+
+  it('keeps disabled GeoJSON categorical line labels transparent', () => {
+    const disabledFeature = createLineFeature('disabled', 'Pause');
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [disabledFeature]
+    } satisfies FeatureCollection<LineString>);
+
+    const visualization: VisualizationConfig = {
+      id: 'viz-line-disabled-geojson',
+      name: 'Line disabled GeoJSON category test',
+      type: VisualizationType.CATEGORICAL,
+      datasetId: 'dataset-1',
+      enabled: true,
+      primitiveFilters: [PrimitiveFilterType.LINE],
+      line: {
+        enabled: true,
+        colorMode: ColorMode.CATEGORIES,
+        thicknessMode: ThicknessMode.UNIQUE,
+        color: '#3366cc',
+        width: 3,
+        maxWidth: 6,
+        opacity: 0.5,
+        dashed: false,
+        categoryColumn: 'route_name',
+        classification: {
+          method: ClassificationMethod.MANUAL,
+          classes: 2,
+          colors: ['#ff0000', '#00ff00'],
+          labels: ['Active', 'Pause'],
+          categoryValues: ['Active', 'Pause'],
+          disabledLabels: ['Pause']
+        }
+      },
+      style: {
+        fillOpacity: 1,
+        strokeOpacity: 1,
+        strokeWidth: 1
+      },
+      mapping: {}
+    };
+
+    const layers = createLineLayers(
+      createTableWithRows([{ route_name: 'Pause' }], ['route_name']),
+      {
+        ...createLineGeometryInfo(),
+        encoding: 'geojson',
+        isNativeGeoArrow: false,
+        isGeoJsonEncoded: true
+      },
+      createContext(visualization)
+    );
+    const lineLayer = layers.find((layer) => layer instanceof GeoJsonLayer) as
+      | GeoJsonLayer
+      | undefined;
+    const getLineColor = lineLayer?.props.getLineColor as
+      | ((feature: typeof disabledFeature) => [number, number, number, number])
+      | undefined;
+
+    expect(getLineColor?.(disabledFeature)).toEqual([0, 0, 0, 0]);
   });
 
   it('uses a dedicated thickness classification for classed line widths', () => {
