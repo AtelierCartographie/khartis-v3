@@ -54,6 +54,7 @@
   import {
     getLinePrimitive,
     getLineThicknessClassification,
+    getPolygonPrimitive,
     getPrimitiveClassification,
     getPrimitiveCategoryColumn,
     getPrimitiveValueColumn,
@@ -100,7 +101,9 @@
     ShapeType,
     SizeMode,
     SLIDER_LIMITS,
-    SymbolMode
+    StrokeMode,
+    SymbolMode,
+    VISUALIZATION_DEFAULTS
   } from '$lib/features/commons/constants/visualization.constants';
   import * as m from '$lib/paraglide/messages';
   import { tick, untrack, onDestroy } from 'svelte';
@@ -135,6 +138,7 @@
     resolveLegendColorSwatchPrimitive,
     resolveMissingDataLegendPrimitive,
     resolveMissingDataPointShape,
+    type LegendSwatchPrimitive,
     type LineWidthLegendScale,
     type PointSizeLegendScale
   } from '../utils/legend.utils';
@@ -368,6 +372,24 @@
     const maxSize = Math.max(...sizes);
 
     return normalizeLegendValue(size, minSize, maxSize, 4, 18);
+  }
+
+  function getUniquePointLegendDisplaySize(size: number | undefined): number {
+    const clampedSize = Math.max(
+      SLIDER_LIMITS.symbolSize.min,
+      Math.min(
+        SLIDER_LIMITS.symbolSize.max,
+        size ?? VISUALIZATION_DEFAULTS.symbolSize
+      )
+    );
+
+    return normalizeLegendValue(
+      clampedSize,
+      SLIDER_LIMITS.symbolSize.min,
+      SLIDER_LIMITS.symbolSize.max,
+      6,
+      24
+    );
   }
 
   function getLineLegendDisplayWidth(
@@ -614,12 +636,14 @@
       getCategoricalLegendDraft(viz),
       getTextColorLegendDraft(viz),
       getTextSizeLegendDraft(viz),
+      getUniquePointSymbolLegendDraft(viz),
       getPointSizeLegendDraft(viz),
       getLineWidthLegendDraft(viz)
     ].filter((draft): draft is LegendSegmentDraft => draft !== null);
 
     if (
-      viz?.missingData?.show &&
+      viz &&
+      isLegendMissingDataShown(viz, resolveMissingDataLegendPrimitive(viz)) &&
       !drafts.some((draft) => draft.consumesMissingData)
     ) {
       const missingDataDraft = getMissingDataLegendDraft(viz);
@@ -700,7 +724,7 @@
       key: 'classed-color',
       className:
         type === 'pattern' ? 'legend-svg--patterns' : 'legend-svg--categorical',
-      consumesMissingData: Boolean(viz.missingData?.show),
+      consumesMissingData: isLegendMissingDataShown(viz, primitive),
       create: (options, context) =>
         toLegendSvg(
           draw_khartis_swatch_legend(items, {
@@ -708,7 +732,8 @@
             type,
             ...getMissingDataFooterOptions(
               viz,
-              context.includeMissingDataFooter
+              context.includeMissingDataFooter,
+              primitive
             )
           })
         )
@@ -911,13 +936,13 @@
     return {
       key: 'quantitative-color',
       className: 'legend-svg--quantitative',
-      consumesMissingData: Boolean(viz.missingData?.show),
+      consumesMissingData: isLegendMissingDataShown(viz, 'area'),
       create: (options, context) =>
         toLegendSvg(
           draw_quanti_color_legend(thresholds, classification.colors ?? [], {
             ...options,
             nodata: context.includeMissingDataFooter
-              ? Boolean(viz.missingData?.show)
+              ? isLegendMissingDataShown(viz, 'area')
               : false,
             nodataLabel: context.includeMissingDataFooter
               ? m.missing_data_text()
@@ -950,7 +975,7 @@
       return {
         key: 'categorical-patterns',
         className: 'legend-svg--patterns',
-        consumesMissingData: Boolean(viz.missingData?.show),
+        consumesMissingData: isLegendMissingDataShown(viz, primitive),
         create: (options, context) =>
           toLegendSvg(
             draw_khartis_swatch_legend(items, {
@@ -958,7 +983,8 @@
               type: 'pattern',
               ...getMissingDataFooterOptions(
                 viz,
-                context.includeMissingDataFooter
+                context.includeMissingDataFooter,
+                primitive
               )
             })
           )
@@ -974,7 +1000,7 @@
     return {
       key: 'categorical-color',
       className: 'legend-svg--categorical',
-      consumesMissingData: Boolean(viz.missingData?.show),
+      consumesMissingData: isLegendMissingDataShown(viz, primitive),
       create: (options, context) =>
         toLegendSvg(
           draw_categorical_legend(categories, {
@@ -1010,7 +1036,7 @@
         return {
           key: 'point-size',
           className: 'legend-svg--symbols',
-          consumesMissingData: Boolean(viz.missingData?.show),
+          consumesMissingData: isLegendMissingDataShown(viz, 'point'),
           create: (options, context) =>
             toLegendSvg(
               draw_symbols_legend(values, {
@@ -1020,7 +1046,7 @@
                 fill: scale.fillColor,
                 stroke: scale.strokeColor,
                 nodata: context.includeMissingDataFooter
-                  ? Boolean(viz.missingData?.show)
+                  ? isLegendMissingDataShown(viz, 'point')
                   : false,
                 nodataLabel: context.includeMissingDataFooter
                   ? m.missing_data_text()
@@ -1040,14 +1066,15 @@
       return {
         key: 'double-point-size',
         className: 'legend-svg--double-symbols',
-        consumesMissingData: Boolean(viz.missingData?.show),
+        consumesMissingData: isLegendMissingDataShown(viz, 'point'),
         create: (options, context) =>
           toLegendSvg(
             draw_khartis_double_symbols_legend(steps, {
               ...options,
               ...getMissingDataFooterOptions(
                 viz,
-                context.includeMissingDataFooter
+                context.includeMissingDataFooter,
+                'point'
               )
             })
           )
@@ -1062,7 +1089,7 @@
     return {
       key: 'point-size-classes',
       className: 'legend-svg--symbols',
-      consumesMissingData: Boolean(viz.missingData?.show),
+      consumesMissingData: isLegendMissingDataShown(viz, 'point'),
       create: (options, context) =>
         toLegendSvg(
           draw_khartis_swatch_legend(items, {
@@ -1070,7 +1097,68 @@
             type: 'symbol',
             ...getMissingDataFooterOptions(
               viz,
-              context.includeMissingDataFooter
+              context.includeMissingDataFooter,
+              'point'
+            )
+          })
+        )
+    };
+  }
+
+  function getUniquePointSymbolLegendDraft(
+    viz: VisualizationConfig | undefined
+  ): LegendSegmentDraft | null {
+    const symbol = getSymbolPrimitive(viz);
+
+    if (!viz || !symbol?.enabled || symbol.mode !== SymbolMode.UNIQUE) {
+      return null;
+    }
+
+    if (
+      symbol.fillMode === FillMode.CLASSES ||
+      symbol.fillMode === FillMode.CATEGORIES
+    ) {
+      return null;
+    }
+
+    const fill =
+      symbol.fillMode === FillMode.NONE
+        ? 'none'
+        : resolveLegendColor(symbol.fillColor, DEFAULT_COLORS.fill);
+    const stroke =
+      symbol.strokeMode === StrokeMode.NONE
+        ? 'none'
+        : resolveLegendColor(symbol.strokeColor, DEFAULT_COLORS.stroke);
+
+    const item: KhartisLegendSwatchItem = {
+      label: m.symbols_title(),
+      fill,
+      stroke,
+      strokeWidth:
+        symbol.strokeMode === StrokeMode.NONE
+          ? 0
+          : Math.max(
+              0.5,
+              symbol.strokeWidth ?? VISUALIZATION_DEFAULTS.strokeWidth
+            ),
+      opacity: normalizeLegendOpacity(symbol.opacity, 1),
+      symbol: getShapePath(symbol.shape ?? ShapeType.CIRCLE),
+      size: getUniquePointLegendDisplaySize(symbol.size)
+    };
+
+    return {
+      key: 'unique-point-symbol',
+      className: 'legend-svg--symbols',
+      consumesMissingData: isLegendMissingDataShown(viz, 'point'),
+      create: (options, context) =>
+        toLegendSvg(
+          draw_khartis_swatch_legend([item], {
+            ...options,
+            type: 'symbol',
+            ...getMissingDataFooterOptions(
+              viz,
+              context.includeMissingDataFooter,
+              'point'
             )
           })
         )
@@ -1104,14 +1192,15 @@
     return {
       key: 'line-width',
       className: 'legend-svg--line-width',
-      consumesMissingData: Boolean(viz.missingData?.show),
+      consumesMissingData: isLegendMissingDataShown(viz, 'line'),
       create: (options, context) =>
         toLegendSvg(
           draw_khartis_line_width_legend(steps, {
             ...options,
             ...getMissingDataFooterOptions(
               viz,
-              context.includeMissingDataFooter
+              context.includeMissingDataFooter,
+              'line'
             )
           })
         )
@@ -1130,7 +1219,7 @@
     return {
       key: 'density',
       className: 'legend-svg--density',
-      consumesMissingData: Boolean(viz.missingData?.show),
+      consumesMissingData: isLegendMissingDataShown(viz, 'area'),
       create: (options, context) =>
         toLegendSvg(
           draw_khartis_density_legend({
@@ -1140,7 +1229,8 @@
             fill: scale.fillColor,
             ...getMissingDataFooterOptions(
               viz,
-              context.includeMissingDataFooter
+              context.includeMissingDataFooter,
+              'area'
             )
           })
         )
@@ -1150,12 +1240,12 @@
   function getMissingDataLegendDraft(
     viz: VisualizationConfig
   ): LegendSegmentDraft | null {
-    const missingData = viz.missingData;
+    const primitive = resolveMissingDataLegendPrimitive(viz);
+    const missingData = getLegendMissingDataConfig(viz, primitive);
     if (!missingData?.show) {
       return null;
     }
 
-    const primitive = resolveMissingDataLegendPrimitive(viz);
     const item = getMissingDataLegendItem(viz, primitive);
 
     return {
@@ -1313,16 +1403,16 @@
 
   function getMissingDataFooterOptions(
     viz: VisualizationConfig,
-    includeFooter = true
+    includeFooter = true,
+    primitive: LegendSwatchPrimitive = resolveMissingDataLegendPrimitive(viz)
   ): {
     footerItems?: KhartisLegendSwatchItem[];
     footerType?: KhartisLegendSwatchType;
   } {
-    if (!includeFooter || !viz.missingData?.show) {
+    if (!includeFooter || !isLegendMissingDataShown(viz, primitive)) {
       return {};
     }
 
-    const primitive = resolveMissingDataLegendPrimitive(viz);
     return {
       footerItems: [getMissingDataLegendItem(viz, primitive)],
       footerType: getSwatchType(primitive, primitive === 'area')
@@ -1365,17 +1455,20 @@
 
   function getCategoricalMissingDataFooterOptions(
     viz: VisualizationConfig,
-    primitive: ReturnType<typeof resolveLegendColorSwatchPrimitive>,
+    primitive: LegendSwatchPrimitive,
     includeFooter = true
   ): {
     footerItems?: CategoryItem[];
     footerType?: CategoricalFooterShapeType;
   } {
-    if (!includeFooter || !viz.missingData?.show) {
+    const missingDataPrimitive = resolveMissingDataLegendPrimitive(viz);
+    if (
+      !includeFooter ||
+      !isLegendMissingDataShown(viz, missingDataPrimitive)
+    ) {
       return {};
     }
 
-    const missingDataPrimitive = resolveMissingDataLegendPrimitive(viz);
     const item = getMissingDataLegendItem(viz, missingDataPrimitive);
     const footerType = getSwatchType(
       primitive,
@@ -1395,9 +1488,9 @@
 
   function getMissingDataLegendItem(
     viz: VisualizationConfig,
-    primitive: ReturnType<typeof resolveMissingDataLegendPrimitive>
+    primitive: LegendSwatchPrimitive
   ): KhartisLegendSwatchItem {
-    const missingData = viz.missingData;
+    const missingData = getLegendMissingDataConfig(viz, primitive);
     const color = missingData?.color ?? '#d9d9d9';
 
     if (primitive === 'point') {
@@ -1462,8 +1555,34 @@
     };
   }
 
+  function getLegendMissingDataConfig(
+    viz: VisualizationConfig | undefined,
+    primitive: LegendSwatchPrimitive
+  ): VisualizationConfig['missingData'] {
+    if (!viz) {
+      return undefined;
+    }
+
+    switch (primitive) {
+      case 'point':
+        return getSymbolPrimitive(viz)?.missingData ?? viz.missingData;
+      case 'line':
+        return getLinePrimitive(viz)?.missingData ?? viz.missingData;
+      case 'area':
+      default:
+        return getPolygonPrimitive(viz)?.missingData ?? viz.missingData;
+    }
+  }
+
+  function isLegendMissingDataShown(
+    viz: VisualizationConfig | undefined,
+    primitive: LegendSwatchPrimitive
+  ): boolean {
+    return Boolean(getLegendMissingDataConfig(viz, primitive)?.show);
+  }
+
   function getSwatchType(
-    primitive: ReturnType<typeof resolveLegendColorSwatchPrimitive>,
+    primitive: LegendSwatchPrimitive,
     hasPattern: boolean
   ): KhartisLegendSwatchType {
     if (hasPattern) {
@@ -1488,6 +1607,17 @@
     const resolved = value ?? fallback;
     const normalized = resolved > 1 ? resolved / 100 : resolved;
     return Math.max(0, Math.min(1, normalized));
+  }
+
+  function resolveLegendColor(
+    color: string | string[] | undefined,
+    fallback: string
+  ): string {
+    if (Array.isArray(color)) {
+      return typeof color[0] === 'string' ? color[0] : fallback;
+    }
+
+    return typeof color === 'string' ? color : fallback;
   }
 
   function getClassificationClassCount(

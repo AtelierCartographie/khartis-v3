@@ -425,7 +425,30 @@ describe('legend overlay visibility', () => {
     expect(
       container.querySelector('.legend-svg--missing-data')
     ).not.toBeInTheDocument();
-    expect(screen.getByText('Données manquantes')).toBeInTheDocument();
+    expect(screen.getByText('Absence de données')).toBeInTheDocument();
+  });
+
+  it('renders unique point symbols with the selected shape and configured size', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildUniquePointViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    const symbolLegend = container.querySelector('.legend-svg--symbols');
+    const triangle = Array.from(
+      symbolLegend?.querySelectorAll('path') ?? []
+    ).find((path) => path.getAttribute('d') === 'M0,-8L8,7H-8Z');
+
+    expect(symbolLegend).toBeInTheDocument();
+    expect(
+      container.querySelector('.legend-svg--missing-data')
+    ).not.toBeInTheDocument();
+    expect(triangle).toBeInTheDocument();
+    expect(triangle?.getAttribute('transform')).toContain('scale(1.5)');
+    expect(screen.getByText('Symboles')).toBeInTheDocument();
+    expect(screen.getByText('Absence de données')).toBeInTheDocument();
   });
 
   it('renders point classed fill legends with the active fill value column and class count', () => {
@@ -579,6 +602,31 @@ describe('legend overlay visibility', () => {
     expect(screen.queryAllByText('1,200')).toHaveLength(0);
   });
 
+  it('uses symbol missing data visibility for point size legends', () => {
+    const viz = buildPointSizeClassesViz();
+    viz.missingData = {
+      show: true,
+      shape: MissingDataShape.CIRCLE,
+      size: 6,
+      color: '#d9d9d9'
+    };
+    if (viz.symbol?.missingData) {
+      viz.symbol.missingData = {
+        ...viz.symbol.missingData,
+        show: false
+      };
+    }
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [viz];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    expect(container.querySelector('.legend-svg--symbols')).toBeInTheDocument();
+    expect(screen.queryByText('Absence de données')).not.toBeInTheDocument();
+  });
+
   it('renders text categorical legends through the common SVG system', () => {
     mockVisualizationStore.version = 1;
     mockVisualizationStore.visualizations = [buildTextCategoriesViz()];
@@ -616,7 +664,7 @@ describe('legend overlay visibility', () => {
 
     render(LegendOverlay);
 
-    expect(screen.getAllByText('Données manquantes')).toHaveLength(1);
+    expect(screen.getAllByText('Absence de données')).toHaveLength(1);
   });
 
   it('renders proportional text size legends through the original symbol legend generator', () => {
@@ -631,7 +679,7 @@ describe('legend overlay visibility', () => {
       container.querySelector('.legend-svg--text-size')
     ).toBeInTheDocument();
     expect(container.querySelector('.symbol_legend')).toBeInTheDocument();
-    expect(screen.getByText('Données manquantes')).toBeInTheDocument();
+    expect(screen.getByText('Absence de données')).toBeInTheDocument();
   });
 
   it('renders bivariate text legends as compact color and size blocks', () => {
@@ -1002,6 +1050,52 @@ function buildPointClassedFillViz(): VisualizationConfig {
     mapping: {
       categoryColumn: 'category',
       colorColumn: 'category',
+      geometryColumn: 'geom'
+    }
+  } as VisualizationConfig;
+}
+
+function buildUniquePointViz(): VisualizationConfig {
+  return {
+    id: 'viz-point-unique',
+    name: 'Symbols',
+    type: 'categorical',
+    datasetId: 'dataset-1',
+    enabled: true,
+    primitiveFilters: ['point'],
+    primitiveOrder: ['point'],
+    symbol: {
+      enabled: true,
+      mode: SymbolMode.UNIQUE,
+      shape: ShapeType.TRIANGLE,
+      size: 100,
+      minSize: 6,
+      maxSize: 100,
+      sizeScale: 'linear',
+      opacity: 1,
+      fillMode: FillMode.UNIQUE,
+      fillColor: '#4585f5',
+      strokeMode: StrokeMode.UNIQUE,
+      strokeColor: '#ffffff',
+      strokeWidth: 1,
+      strokeOpacity: 1,
+      proportionalType: ProportionalType.SINGLE,
+      categoryShape: CategoryShapeMode.UNIQUE,
+      missingData: {
+        show: true,
+        shape: MissingDataShape.CIRCLE,
+        size: 6,
+        color: '#d9d9d9'
+      }
+    },
+    style: {
+      fillColor: '#4585f5',
+      fillOpacity: 100,
+      strokeColor: '#ffffff',
+      strokeWidth: 1,
+      strokeOpacity: 100
+    },
+    mapping: {
       geometryColumn: 'geom'
     }
   } as VisualizationConfig;

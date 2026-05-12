@@ -76,7 +76,7 @@ type RowShapeFactory<T> = (
   size: number,
   index: number,
   rowHeight: number
-) => { markup: string; defs?: string };
+) => { markup: string; defs?: string; labelY?: number };
 
 interface RowLegendOptions<T> extends CommonLegendTextOptions {
   className: string;
@@ -175,12 +175,13 @@ export function draw_khartis_double_symbols_legend(
     ),
     footerItems: options.footerItems,
     footerType: options.footerType,
-    drawShape: (step, x, rowTop, size, _index, rowHeight) => {
+    drawShape: (step, x, rowTop, _size, _index, rowHeight) => {
       const radius = getDoubleSymbolRadius(step.size);
       const mode = step.positionMode ?? 'overlay';
       const pairWidth = getDoubleSymbolPairWidth(step);
       const left = x + (shapeWidth - pairWidth) / 2;
-      const cy = rowTop + rowHeight / 2;
+      const baselinePadding = 1;
+      const cy = rowTop + rowHeight - radius - baselinePadding;
       const firstX = left + radius;
       const secondX =
         mode === 'juxtaposition' ? left + radius * 2 + 8 : left + radius * 2;
@@ -210,7 +211,8 @@ export function draw_khartis_double_symbols_legend(
       );
 
       return {
-        markup: `<g class="double-symbol-pair" data-position-mode="${escapeSvgAttribute(mode)}">${first}${second}</g>`
+        markup: `<g class="double-symbol-pair" data-position-mode="${escapeSvgAttribute(mode)}">${first}${second}</g>`,
+        labelY: cy
       };
     }
   });
@@ -243,8 +245,8 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): string {
   const noteSize = options.note ? Math.round(fontSize * 0.92) : 0;
   const lineHeight = fontSize * 1.2;
   const font = createLegendFont({ fontSize, lineHeight, fontFamily });
-  const margin = Math.max(7, Math.round(fontSize * 0.4));
-  const gap = Math.max(6, Math.round(fontSize * 0.45));
+  const margin = Math.max(10, Math.round(fontSize * 0.6));
+  const gap = Math.max(8, Math.round(fontSize * 0.6));
   const shapeSize = Math.round(fontSize * 1.25);
   const footerType = options.footerType ?? 'box';
   const footerItems = options.footerItems ?? [];
@@ -291,7 +293,6 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): string {
     const x = margin;
     const rowTop = startY + index * rowStep;
     const labelX = x + shapeWidth + gap;
-    const labelY = rowTop + rowBodyHeight / 2;
     const shape = options.drawShape(
       item,
       x,
@@ -300,6 +301,7 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): string {
       index,
       rowBodyHeight
     );
+    const labelY = shape.labelY ?? rowTop + rowBodyHeight / 2;
     const label = render_label(
       labelLines[index] ?? [],
       labelX,
@@ -322,8 +324,9 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): string {
   );
   const footerBodyHeight = Math.max(shapeSize, lineHeight * maxFooterLineCount);
   const footerRowStep = footerBodyHeight + gap;
+  const section_gap = Math.max(10, Math.round(fontSize * 0.6));
   const footerStartY =
-    footerItems.length > 0 ? mainBottom + Math.max(3, gap) : mainBottom;
+    footerItems.length > 0 ? mainBottom + section_gap : mainBottom;
   const footerRows = footerItems.map((item, index) => {
     const x = margin;
     const rowTop = footerStartY + index * footerRowStep;
@@ -355,11 +358,10 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): string {
       ? footerStartY + footerItems.length * footerRowStep - gap
       : mainBottom;
   const bottom = footerItems.length > 0 ? footerBottom : mainBottom;
-  const noteGap = options.note ? Math.max(4, gap) : 0;
   const note = render_note(
     options.note,
     margin,
-    bottom + noteGap,
+    bottom + (options.note ? section_gap : 0),
     maxTextWidth,
     noteSize,
     fontFamily
@@ -427,7 +429,7 @@ function draw_line(
   width: number
 ): string {
   const dash = item.dashed ? ' stroke-dasharray="5,3"' : '';
-  return `<line x1="${x}" y1="${y}" x2="${x + width}" y2="${y}" stroke="${escapeSvgAttribute(item.stroke ?? item.fill ?? 'currentColor')}" stroke-width="${Math.max(1, item.strokeWidth ?? 2)}" opacity="${normalizeOpacity(item.opacity)}"${dash} stroke-linecap="round" />`;
+  return `<line x1="${x}" y1="${y}" x2="${x + width}" y2="${y}" stroke="${escapeSvgAttribute(item.stroke ?? item.fill ?? 'currentColor')}" stroke-width="${Math.max(0.5, item.strokeWidth ?? 2)}" opacity="${normalizeOpacity(item.opacity)}"${dash} stroke-linecap="round" />`;
 }
 
 function draw_symbol(

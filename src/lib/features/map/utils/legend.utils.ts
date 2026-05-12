@@ -29,6 +29,7 @@ import {
   ThicknessMode
 } from '$lib/features/commons/constants/visualization.constants';
 import {
+  getAbsoluteDomainMax,
   getProportionalSymbolSizeForValue,
   getSizeForValue
 } from './data-styling.utils';
@@ -523,6 +524,7 @@ export function getPointSizeLegendScale(
       return null;
     }
 
+    const proportionalDomainMax = getAbsoluteDomainMax(minValue, maxValue);
     const isDouble =
       symbol.proportionalType === ProportionalType.DOUBLE &&
       !!symbol.valueColumn;
@@ -540,7 +542,7 @@ export function getPointSizeLegendScale(
     return {
       kind: 'proportional',
       steps: buildProportionalSymbolLegendSteps(
-        maxValue,
+        proportionalDomainMax,
         proportionalMaxSize,
         resolveProportionalSymbolScale(symbol.shape ?? ShapeType.CIRCLE)
       ),
