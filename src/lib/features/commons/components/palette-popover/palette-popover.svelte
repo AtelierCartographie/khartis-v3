@@ -37,7 +37,6 @@
     numClasses?: number;
     divergingSplit?: import('./palette.constants').DivergingPaletteSplit;
     exclusive?: boolean;
-    disablePattern?: boolean;
     onclose?: () => void;
     onvalidate?: (
       palette: Palette | undefined,
@@ -58,7 +57,6 @@
     numClasses = 5,
     divergingSplit,
     exclusive = true,
-    disablePattern = false,
     onclose,
     onvalidate
   }: Props = $props();
@@ -107,7 +105,7 @@
       case ToolbarState.Compact:
         return '434px';
       default:
-        return 'clamp(400px, 50vw, 800px)';
+        return '50vw';
     }
   });
 
@@ -302,7 +300,6 @@
           numClasses={numClasses}
           colorBlindFilter={draftColorBlindFilter}
           bind:inverted={draftInverted}
-          disablePattern={disablePattern}
           onColorsChange={handleCustomColorsChange}
           onPatternSelect={handlePatternSelect}
           onContrastChange={handleContrastChange}

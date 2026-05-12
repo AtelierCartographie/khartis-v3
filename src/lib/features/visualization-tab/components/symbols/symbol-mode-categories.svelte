@@ -100,13 +100,6 @@
   let symbolOpacity = $state<number>(100);
   let shapeType = $state<ShapeType>(ShapeType.CIRCLE);
   let categoryShapeMode = $state<CategoryShapeMode>(CategoryShapeMode.UNIQUE);
-
-  // Fallback: ordered mode is not yet supported, force to unique
-  $effect(() => {
-    if (categoryShapeMode === CategoryShapeMode.ORDERED) {
-      categoryShapeMode = CategoryShapeMode.UNIQUE;
-    }
-  });
   let showMissingData = $state<boolean>(true);
   let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
   let missingDataSize = $state<number>(2);
@@ -129,8 +122,7 @@
     filterFieldsByKind(
       selectableDataFields,
       'textual',
-      categoryFieldSelection.selectedFieldId,
-      false
+      categoryFieldSelection.selectedFieldId
     )
   );
   const categoryLabels = useCategoryLabels({
@@ -443,7 +435,11 @@
       value={CategoryShapeMode.DIFFERENT}
       labelText={m.category_shape_mode_different()}
     />
-    <!-- Ordered shape mode hidden pending asset delivery from Atelier -->
+    <RadioButton
+      id="cat-shape-ordered"
+      value={CategoryShapeMode.ORDERED}
+      labelText={m.category_shape_mode_ordered()}
+    />
   </RadioButtonGroup>
 </div>
 
