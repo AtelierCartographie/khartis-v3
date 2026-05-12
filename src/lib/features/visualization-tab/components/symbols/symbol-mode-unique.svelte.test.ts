@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { SLIDER_LIMITS } from '$lib/features/commons/constants/visualization.constants';
 
 const source = readFileSync(
   resolve(import.meta.dirname, 'symbol-mode-unique.svelte'),
@@ -21,6 +22,7 @@ describe('SymbolModeUnique (aucun.png alignment)', () => {
   it('binds the size slider to symbolSize limits', () => {
     expect(source).toContain('min={SLIDER_LIMITS.symbolSize.min}');
     expect(source).toContain('max={SLIDER_LIMITS.symbolSize.max}');
+    expect(SLIDER_LIMITS.symbolSize.max).toBe(100);
   });
 
   it('delegates the background fill rendering to the shared FillSection', () => {

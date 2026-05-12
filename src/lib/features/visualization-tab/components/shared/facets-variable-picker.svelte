@@ -5,10 +5,11 @@
     Checkbox,
     CheckboxCheckedFilled,
     ChevronDown,
-    Checkmark,
-    Table
+    Checkmark
   } from 'carbon-icons-svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
+  import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
+  import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import {
     createExclusiveContextualSurfaceId,
@@ -51,7 +52,13 @@
     onToggleCollection
   }: Props = $props();
 
-  const isNumeric = (field: DataField) => field.type === 'number';
+  function resolveVariableBadgeType(field: DataField): VariableBadgeType {
+    if (field.type === 'number' || field.type === 'numeric') return 'numeric';
+    if (field.type === 'boolean') return 'boolean';
+    if (field.type === 'date') return 'date';
+    if (field.type === 'geometry') return 'geo';
+    return 'string';
+  }
 
   const selectedField = $derived(
     singleSelectItems.find((f) => f.id === selectedFieldId) ?? null
@@ -77,9 +84,9 @@
   );
 
   const displayItems = $derived(
-    isCollectionEnabled
-      ? dataFields.filter((f) => f.id !== NONE_FIELD_ID)
-      : singleSelectItems
+    (isCollectionEnabled ? dataFields : singleSelectItems).filter(
+      (f) => f.id !== NONE_FIELD_ID
+    )
   );
 
   function handleTriggerClick() {
@@ -143,23 +150,17 @@
           >{m.facets_variables_count({ count: collectionCount })}</span
         >
       {:else if isCollectionEnabled && triggerLabel}
-        <span
-          class="variable-tag"
-          class:numeric={isNumeric(triggerLabel)}
-          class:string={!isNumeric(triggerLabel)}
-        >
-          <span class="tag-text">{triggerLabel.text}</span>
-          <Table size={16} />
-        </span>
+        <VariableBadge
+          label={triggerLabel.text}
+          type={resolveVariableBadgeType(triggerLabel)}
+          interactive={false}
+        />
       {:else if selectedField && selectedFieldId !== NONE_FIELD_ID}
-        <span
-          class="variable-tag"
-          class:numeric={isNumeric(selectedField)}
-          class:string={!isNumeric(selectedField)}
-        >
-          <span class="tag-text">{selectedField.text}</span>
-          <Table size={16} />
-        </span>
+        <VariableBadge
+          label={selectedField.text}
+          type={resolveVariableBadgeType(selectedField)}
+          interactive={false}
+        />
       {:else}
         <span class="placeholder">{m.none()}</span>
       {/if}
@@ -190,18 +191,11 @@
                 {/if}
               </span>
             {/if}
-            {#if field.id === NONE_FIELD_ID}
-              <span class="item-plain">{field.text}</span>
-            {:else}
-              <span
-                class="variable-tag"
-                class:numeric={isNumeric(field)}
-                class:string={!isNumeric(field)}
-              >
-                <span class="tag-text">{field.text}</span>
-                <Table size={16} />
-              </span>
-            {/if}
+            <VariableBadge
+              label={field.text}
+              type={resolveVariableBadgeType(field)}
+              interactive={false}
+            />
             {#if !isCollectionEnabled && isSelected(field.id)}
               <span class="checkmark"><Checkmark size={16} /></span>
             {/if}
@@ -275,41 +269,6 @@
     }
   }
 
-  .variable-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    height: 18px;
-    padding: 0 var(--cds-spacing-02) 0 var(--cds-spacing-03);
-    border-radius: 1000px;
-    font-size: 0.75rem;
-    max-width: 100%;
-    overflow: hidden;
-    flex-shrink: 1;
-
-    &.numeric {
-      background: #e8daff;
-      border: 1px solid #be95ff;
-      color: #6929c4;
-    }
-
-    &.string {
-      background: var(--tag-magenta-tag-background, #ffd6e8);
-      border: 1px solid var(--tag-magenta-tag-border-operational, #ff7eb6);
-      color: var(--tag-magenta-tag-color, #9f1853);
-    }
-  }
-
-  .tag-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    flex: 1;
-    min-width: 0;
-    line-height: var(--cds-spacing-05);
-    padding-bottom: 2px;
-  }
-
   .placeholder {
     font-size: 0.875rem;
     color: var(--cds-text-placeholder, #a8a8a8);
@@ -357,16 +316,15 @@
       background: var(--cds-layer-selected-01, #e0e0e0);
     }
 
-    .variable-tag {
+    :global(.variable-badge) {
       flex: 1;
       min-width: 0;
     }
   }
 
-  .item-plain {
+  .trigger-value :global(.variable-badge) {
     flex: 1;
-    font-size: 0.875rem;
-    color: var(--cds-text-primary, #161616);
+    min-width: 0;
   }
 
   .checkbox-icon {

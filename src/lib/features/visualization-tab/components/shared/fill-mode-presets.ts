@@ -1,8 +1,8 @@
 import {
-  Category,
   ChartScatter,
   MisuseOutline,
   SquareFill,
+  Table,
   Tag
 } from 'carbon-icons-svelte';
 import * as m from '$lib/paraglide/messages';
@@ -48,7 +48,7 @@ const FILL_MODE_ITEMS: Record<FillMode, FillModeItem> = {
     iconSize: DEFAULT_ICON_SIZE
   },
   [FillMode.CLASSES]: {
-    icon: Category,
+    icon: Table,
     label: m.fill_mode_classes(),
     iconSize: DEFAULT_ICON_SIZE
   },
