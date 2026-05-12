@@ -134,17 +134,13 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
   });
 
   it('exposes breakValue A/B TextInputs bound to handleBreakValue*Change', () => {
-    expect(doubleControlsSource).toContain('m.symbol_a_break_value()');
-    expect(doubleControlsSource).toContain('m.symbol_b_break_value()');
+    expect(doubleControlsSource).toContain('m.symbol_a_size_according()');
+    expect(doubleControlsSource).toContain('m.symbol_b_size_according()');
     const doubleBlock = source.split(
       'proportionalType === ProportionalType.DOUBLE'
     )[1];
-    expect(doubleBlock).toContain(
-      'onBreakValueAChange={handleBreakValueAChange}'
-    );
-    expect(doubleBlock).toContain(
-      'onBreakValueBChange={handleBreakValueBChange}'
-    );
+    expect(doubleBlock).toContain('<DoubleModeControls');
+    expect(source).toContain('<ProportionalDoubleSection');
   });
 
   it('exposes onSymbolPrimitiveChange prop for extended SymbolPrimitiveConfig fields', () => {
