@@ -701,34 +701,63 @@ export function usePrimitivePanelController({
     updates: MappingUpdates,
     options?: VisualizationWriteOptions
   ): void {
-    updateTextBackgroundFromVisualization(
-      () => ({
+    updateTextBackgroundFromVisualization((background) => {
+      const previousCategoryColumn = background.categoryColumn;
+      const categoryColumnChanged =
+        hasOwnKey(updates, 'categoryColumn') &&
+        updates.categoryColumn !== previousCategoryColumn;
+      const nextClassification =
+        categoryColumnChanged && background.classification
+          ? {
+              ...background.classification,
+              labels: [],
+              disabledLabels: undefined
+            }
+          : background.classification;
+
+      return {
         ...(hasOwnKey(updates, 'valueColumn')
           ? { valueColumn: updates.valueColumn }
           : {}),
         ...(hasOwnKey(updates, 'categoryColumn')
           ? { categoryColumn: updates.categoryColumn }
-          : {})
-      }),
-      options
-    );
+          : {}),
+        ...(nextClassification ? { classification: nextClassification } : {})
+      };
+    }, options);
   }
 
   function applyTextBackgroundStrokeMappingUpdate(
     updates: MappingUpdates,
     options?: VisualizationWriteOptions
   ): void {
-    updateTextBackgroundFromVisualization(
-      () => ({
+    updateTextBackgroundFromVisualization((background) => {
+      const previousStrokeCategoryColumn =
+        background.strokeCategoryColumn ?? background.categoryColumn;
+      const strokeCategoryColumnChanged =
+        hasOwnKey(updates, 'categoryColumn') &&
+        updates.categoryColumn !== previousStrokeCategoryColumn;
+      const nextStrokeClassification =
+        strokeCategoryColumnChanged && background.strokeClassification
+          ? {
+              ...background.strokeClassification,
+              labels: [],
+              disabledLabels: undefined
+            }
+          : background.strokeClassification;
+
+      return {
         ...(hasOwnKey(updates, 'valueColumn')
           ? { strokeValueColumn: updates.valueColumn }
           : {}),
         ...(hasOwnKey(updates, 'categoryColumn')
           ? { strokeCategoryColumn: updates.categoryColumn }
+          : {}),
+        ...(nextStrokeClassification
+          ? { strokeClassification: nextStrokeClassification }
           : {})
-      }),
-      options
-    );
+      };
+    }, options);
   }
 
   function invertTextBackgroundPalette(): void {
@@ -1460,8 +1489,33 @@ export function usePrimitivePanelController({
           return;
         }
 
+        const previousCategoryColumn =
+          polygon.categoryColumn ?? visualization.mapping.categoryColumn;
+        const categoryColumnChanged =
+          hasOwnKey(updates, 'categoryColumn') &&
+          updates.categoryColumn !== previousCategoryColumn;
+        const nextPolygonClassification =
+          categoryColumnChanged && polygon.classification
+            ? {
+                ...polygon.classification,
+                labels: [],
+                disabledLabels: undefined
+              }
+            : polygon.classification;
+        const nextRootPolygonClassification =
+          categoryColumnChanged && visualization.classification
+            ? {
+                ...visualization.classification,
+                labels: [],
+                disabledLabels: undefined
+              }
+            : undefined;
+
         updateVisualization(
           {
+            ...(nextRootPolygonClassification
+              ? { classification: nextRootPolygonClassification }
+              : {}),
             polygon: {
               ...polygon,
               ...(hasOwnKey(updates, 'valueColumn')
@@ -1469,6 +1523,9 @@ export function usePrimitivePanelController({
                 : {}),
               ...(hasOwnKey(updates, 'categoryColumn')
                 ? { categoryColumn: updates.categoryColumn }
+                : {}),
+              ...(nextPolygonClassification
+                ? { classification: nextPolygonClassification }
                 : {})
             },
             mapping: { ...visualization.mapping, ...updates }
@@ -1638,6 +1695,19 @@ export function usePrimitivePanelController({
           return;
         }
 
+        const previousCategoryColumn =
+          text.categoryColumn ?? visualization.mapping.categoryColumn;
+        const categoryColumnChanged =
+          hasOwnKey(updates, 'categoryColumn') &&
+          updates.categoryColumn !== previousCategoryColumn;
+        const nextTextClassification =
+          categoryColumnChanged && text.classification
+            ? {
+                ...text.classification,
+                labels: [],
+                disabledLabels: undefined
+              }
+            : text.classification;
         const secondaryLabelColumnProvided = hasOwnKey(
           updates,
           'secondaryLabelColumn'
@@ -1658,6 +1728,9 @@ export function usePrimitivePanelController({
                 : {}),
               ...(hasOwnKey(updates, 'categoryColumn')
                 ? { categoryColumn: updates.categoryColumn }
+                : {}),
+              ...(nextTextClassification
+                ? { classification: nextTextClassification }
                 : {}),
               ...(hasOwnKey(updates, 'labelColumn') &&
               updates.labelColumn === undefined
@@ -1712,6 +1785,22 @@ export function usePrimitivePanelController({
           return;
         }
 
+        const previousStrokeCategoryColumn =
+          polygon.strokeCategoryColumn ??
+          polygon.categoryColumn ??
+          visualization.mapping.categoryColumn;
+        const strokeCategoryColumnChanged =
+          hasOwnKey(updates, 'categoryColumn') &&
+          updates.categoryColumn !== previousStrokeCategoryColumn;
+        const nextStrokeClassification =
+          strokeCategoryColumnChanged && polygon.strokeClassification
+            ? {
+                ...polygon.strokeClassification,
+                labels: [],
+                disabledLabels: undefined
+              }
+            : polygon.strokeClassification;
+
         updateVisualization(
           {
             polygon: {
@@ -1721,6 +1810,9 @@ export function usePrimitivePanelController({
                 : {}),
               ...(hasOwnKey(updates, 'categoryColumn')
                 ? { strokeCategoryColumn: updates.categoryColumn }
+                : {}),
+              ...(nextStrokeClassification
+                ? { strokeClassification: nextStrokeClassification }
                 : {})
             }
           },

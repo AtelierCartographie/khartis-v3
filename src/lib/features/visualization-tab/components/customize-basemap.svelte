@@ -450,7 +450,8 @@
             : undefined}
           showToggle={true}
           toggleVariant="suggestions"
-          toggleChecked={getConfig('villes')?.visible ?? true}
+          toggleChecked={supportsCities &&
+            (getConfig('villes')?.visible ?? true)}
           toggleDisabled={!supportsCities}
           disabled={!supportsCities}
           disabledReason={!supportsCities

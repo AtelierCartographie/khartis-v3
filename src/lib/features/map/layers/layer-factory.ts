@@ -115,6 +115,7 @@ import {
   withGeoJsonRowHighlight,
   withGeoJsonRowHighlightAccessor,
   withOpacity,
+  withOpacityPreservingAlpha,
   withRowHighlight,
   withRowHighlightAccessor
 } from './layer-helpers';
@@ -2790,14 +2791,19 @@ function createTextOverlayLayers(
   const createCategoricalTextColorAccessor = (
     vector: ReturnType<ArrowTable['getChild']>,
     fallback: RGBColor,
-    opacity: number
+    opacity: number,
+    disabledLabels: string[] = []
   ) => {
     if (!vector || !effectiveCategoryColorMap?.size) {
       return withOpacity(fallback, opacity);
     }
 
+    const disabled = new Set(disabledLabels.map(String));
     return (datum: TextLayerDatum): Color => {
       const category = toTextValue(vector.get(datum.rowIndex));
+      if (category && disabled.has(category)) {
+        return [0, 0, 0, 0];
+      }
       const rgb = category
         ? (effectiveCategoryColorMap.get(category) ?? fallback)
         : fallback;
@@ -2942,7 +2948,8 @@ function createTextOverlayLayers(
             backgroundCategoryVector,
             backgroundCategoryColorMap,
             backgroundFillFallback,
-            textBackgroundConfig.fillOpacity
+            textBackgroundConfig.fillOpacity,
+            textBackgroundConfig.classification?.disabledLabels ?? []
           )
         : withOpacity(backgroundFillFallback, textBackgroundConfig.fillOpacity)
     : null;
@@ -2973,7 +2980,8 @@ function createTextOverlayLayers(
             backgroundStrokeCategoryVector,
             backgroundStrokeCategoryColorMap,
             backgroundStrokeFallback,
-            textBackgroundConfig.strokeOpacity
+            textBackgroundConfig.strokeOpacity,
+            textBackgroundConfig.strokeClassification?.disabledLabels ?? []
           )
         : null
     : null;
@@ -3206,6 +3214,7 @@ function createTextOverlayLayers(
             textBackgroundConfig.classification?.breaks,
             textBackgroundConfig.classification?.colors,
             textBackgroundConfig.classification?.labels,
+            textBackgroundConfig.classification?.disabledLabels,
             secondaryLabelsConfig.dxpMasking,
             secondaryLabelsConfig.haloColor
           ],
@@ -3221,7 +3230,8 @@ function createTextOverlayLayers(
             textBackgroundConfig.categoryColumn,
             textBackgroundConfig.strokeClassification?.colors,
             textBackgroundConfig.strokeClassification?.breaks,
-            textBackgroundConfig.strokeClassification?.labels
+            textBackgroundConfig.strokeClassification?.labels,
+            textBackgroundConfig.strokeClassification?.disabledLabels
           ]
         }
       };
@@ -3259,7 +3269,8 @@ function createTextOverlayLayers(
             ? createCategoricalTextColorAccessor(
                 categoryVector,
                 textColor,
-                textOpacity
+                textOpacity,
+                textClassification?.disabledLabels ?? []
               )
             : withOpacity(textColor, textOpacity);
       const textColorAccessor = (datum: TextLayerDatum): Color => {
@@ -3329,6 +3340,7 @@ function createTextOverlayLayers(
               textClassification?.breaks,
               textClassification?.colors,
               textClassification?.labels,
+              textClassification?.disabledLabels,
               textConfig.color,
               textOpacity,
               textConfig.missingData?.color
@@ -3391,6 +3403,7 @@ function createTextOverlayLayers(
               textBackgroundConfig.classification?.breaks,
               textBackgroundConfig.classification?.colors,
               textBackgroundConfig.classification?.labels,
+              textBackgroundConfig.classification?.disabledLabels,
               textConfig.dxpMasking,
               textConfig.haloColor
             ],
@@ -3406,7 +3419,8 @@ function createTextOverlayLayers(
               textBackgroundConfig.categoryColumn,
               textBackgroundConfig.strokeClassification?.colors,
               textBackgroundConfig.strokeClassification?.breaks,
-              textBackgroundConfig.strokeClassification?.labels
+              textBackgroundConfig.strokeClassification?.labels,
+              textBackgroundConfig.strokeClassification?.disabledLabels
             ]
           }
         }) as ThematicLayer
@@ -3439,14 +3453,19 @@ function createCategoricalAccessorFromMap(
   vector: ReturnType<ArrowTable['getChild']>,
   colorMap: Map<string, RGBColor> | null,
   fallback: RGBColor,
-  opacity: number
+  opacity: number,
+  disabledLabels: string[] = []
 ): ((datum: TextLayerDatum) => Color) | Color {
   if (!vector || !colorMap || colorMap.size === 0) {
     return withOpacity(fallback, opacity);
   }
 
+  const disabled = new Set(disabledLabels.map(String));
   return (datum: TextLayerDatum): Color => {
     const category = toTextValue(vector.get(datum.rowIndex));
+    if (category && disabled.has(category)) {
+      return [0, 0, 0, 0];
+    }
     const rgb = category ? (colorMap.get(category) ?? fallback) : fallback;
     return withOpacity(rgb, opacity);
   };
@@ -3745,7 +3764,7 @@ export function createPointLayers(
       pointStrokeBreaks &&
       pointStrokeColors?.length
         ? (feature: { properties?: Record<string, unknown> }) =>
-            withOpacity(
+            withOpacityPreservingAlpha(
               createGeoJsonChoroplethColorAccessor(
                 pointStrokeValueColumn,
                 pointStrokeBreaks,
@@ -3760,7 +3779,7 @@ export function createPointLayers(
             pointStrokeCategoryColumn &&
             pointStrokeColors?.length
           ? (feature: { properties?: Record<string, unknown> }) =>
-              withOpacity(
+              withOpacityPreservingAlpha(
                 createGeoJsonCategoricalColorAccessor(
                   pointStrokeCategoryColumn,
                   pointStrokeGeoJsonColorMap,
@@ -4667,12 +4686,10 @@ export function createLineLayers(
 
     const baseLineColorAccessor = baseColorFn
       ? (row: DeckDataRow) =>
-          withOpacity(baseColorFn(row), normalizedLineOpacity) as [
-            number,
-            number,
-            number,
-            number
-          ]
+          withOpacityPreservingAlpha(
+            baseColorFn(row),
+            normalizedLineOpacity
+          ) as [number, number, number, number]
       : null;
 
     const lineColorFn =
@@ -4854,7 +4871,7 @@ export function createLineLayers(
   const baseGeoJsonLineColor =
     useChoropleth && viz
       ? (feature: { properties?: Record<string, unknown> }) =>
-          withOpacity(
+          withOpacityPreservingAlpha(
             createGeoJsonChoroplethColorAccessor(
               lineValueColumn!,
               lineColorClassification!.breaks!,
@@ -4865,11 +4882,14 @@ export function createLineLayers(
           ) as [number, number, number, number]
       : useCategoricalColor && viz
         ? (feature: { properties?: Record<string, unknown> }) =>
-            withOpacity(
+            withOpacityPreservingAlpha(
               createGeoJsonCategoricalColorAccessor(
                 lineCategoryColumn!,
                 effectiveCategoryColorMap,
-                resolvedLineColor
+                resolvedLineColor,
+                resolvedLineColor,
+                true,
+                lineColorClassification?.disabledLabels ?? []
               )(feature),
               normalizedLineOpacity
             ) as [number, number, number, number]
@@ -5563,7 +5583,8 @@ export function createPolygonLayers(
             effectiveCategoryColorMap,
             polygonFillColor,
             polygonMissingColor,
-            showMissingPolygons
+            showMissingPolygons,
+            polygonClassification?.disabledLabels ?? []
           )
         : null);
 
@@ -5632,18 +5653,16 @@ export function createPolygonLayers(
 
   const baseGeoJsonStrokeColor = splitGeoJsonStrokeColor
     ? (feature: { properties?: Record<string, unknown> }) =>
-        withOpacity(splitGeoJsonStrokeColor(feature), polygonStrokeOpacity) as [
-          number,
-          number,
-          number,
-          number
-        ]
+        withOpacityPreservingAlpha(
+          splitGeoJsonStrokeColor(feature),
+          polygonStrokeOpacity
+        ) as [number, number, number, number]
     : polygonStrokeMode === StrokeMode.CLASSES &&
         polygonStrokeValueColumn &&
         polygonStrokeBreaks &&
         polygonStrokeColors?.length
       ? (feature: { properties?: Record<string, unknown> }) =>
-          withOpacity(
+          withOpacityPreservingAlpha(
             createGeoJsonChoroplethColorAccessor(
               polygonStrokeValueColumn,
               polygonStrokeBreaks,
@@ -5658,13 +5677,14 @@ export function createPolygonLayers(
           polygonStrokeCategoryColumn &&
           polygonStrokeColors?.length
         ? (feature: { properties?: Record<string, unknown> }) =>
-            withOpacity(
+            withOpacityPreservingAlpha(
               createGeoJsonCategoricalColorAccessor(
                 polygonStrokeCategoryColumn,
                 polygonStrokeGeoJsonColorMap,
                 polygonStrokeColor,
                 polygonMissingColor,
-                showMissingPolygons
+                showMissingPolygons,
+                polygonConfig?.strokeClassification?.disabledLabels ?? []
               )(feature),
               polygonStrokeOpacity
             ) as [number, number, number, number]

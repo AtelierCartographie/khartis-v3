@@ -117,6 +117,9 @@ describe('CustomizeBasemap', () => {
     expect(source).toContain(
       'availableMetadataLayerTypes.has(BasemapLayerType.POINT)'
     );
+    expect(source).toMatch(
+      /toggleChecked=\{supportsCities &&\s+\(getConfig\('villes'\)\?\.visible \?\? true\)\}/
+    );
   });
 
   it('keeps lakes and rivers unavailable while the catalog has no hydrography layers', () => {

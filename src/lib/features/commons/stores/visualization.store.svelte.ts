@@ -1600,13 +1600,13 @@ export function resolveAllowedPrimitiveFilters(
       return [PrimitiveFilterType.POINT, PrimitiveFilterType.POLYGON];
 
     case 'line':
-      return [PrimitiveFilterType.LINE];
+      return [PrimitiveFilterType.POINT, PrimitiveFilterType.LINE];
 
     case 'point':
       return [PrimitiveFilterType.POINT];
 
     default:
-      return [...ALL_PRIMITIVE_FILTERS];
+      return [];
   }
 }
 
@@ -1632,7 +1632,7 @@ function resolveDefaultPrimitiveFilters(
       return [PrimitiveFilterType.POINT];
 
     default:
-      return [...ALL_PRIMITIVE_FILTERS];
+      return [];
   }
 }
 
