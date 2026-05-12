@@ -7,7 +7,6 @@
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
-  import { globalState } from '$lib/features/commons/stores/global.svelte';
 
   import {
     type Palette,
@@ -80,14 +79,13 @@
 
   function updatePosition() {
     if (!triggerElement) return;
-    const scale = globalState.zoom.pageZoomLevel / 100;
     const rect = triggerElement.getBoundingClientRect();
-    const top = rect.top / scale;
-    const bottom = rect.bottom / scale;
-    const left = rect.left / scale;
-    const width = rect.width / scale;
+    const top = rect.top;
+    const bottom = rect.bottom;
+    const left = rect.left;
+    const width = rect.width;
     const estimatedDropdownHeight = 300;
-    const spaceBelow = window.innerHeight / scale - bottom;
+    const spaceBelow = window.innerHeight - bottom;
     const shouldFlip = spaceBelow < estimatedDropdownHeight && top > spaceBelow;
 
     dropdownPos = {
@@ -124,16 +122,14 @@
       updatePosition();
       requestAnimationFrame(() => {
         if (dropdownRef) {
-          const scale = globalState.zoom.pageZoomLevel / 100;
-          const actualHeight =
-            dropdownRef.getBoundingClientRect().height / scale;
+          const actualHeight = dropdownRef.getBoundingClientRect().height;
           if (!triggerElement) return;
           const rect = triggerElement.getBoundingClientRect();
-          const top = rect.top / scale;
-          const bottom = rect.bottom / scale;
-          const left = rect.left / scale;
-          const width = rect.width / scale;
-          const spaceBelow = window.innerHeight / scale - bottom;
+          const top = rect.top;
+          const bottom = rect.bottom;
+          const left = rect.left;
+          const width = rect.width;
+          const spaceBelow = window.innerHeight - bottom;
           const shouldFlip = spaceBelow < actualHeight && top > spaceBelow;
           dropdownPos = {
             top: shouldFlip ? top - actualHeight : bottom,

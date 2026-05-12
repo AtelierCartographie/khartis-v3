@@ -95,8 +95,7 @@
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
   let commonScale = $state<boolean>(true);
   let positionMode = $state<SymbolDoublePosition>(SymbolDoublePosition.OVERLAY);
-  let breakValueA = $state<number | null>(null);
-  let breakValueB = $state<number | null>(null);
+
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
   const primaryFieldSelection = useFieldSelection(() => dataFields);
@@ -107,14 +106,16 @@
     filterFieldsByKind(
       selectableDataFields,
       'numeric',
-      primaryFieldSelection.selectedFieldId
+      primaryFieldSelection.selectedFieldId,
+      false
     )
   );
   const selectableSecondaryNumericDataFields = $derived(
     filterFieldsByKind(
       selectableDataFields,
       'numeric',
-      secondaryValueFieldSelection.selectedFieldId
+      secondaryValueFieldSelection.selectedFieldId,
+      false
     )
   );
   const facetsSelection = useFacetsVariableSelection({
@@ -205,14 +206,6 @@
       commonScale = visualization.symbol.commonScale ?? true;
       positionMode =
         visualization.symbol.positionMode ?? SymbolDoublePosition.OVERLAY;
-      breakValueA =
-        visualization.symbol.breakValueA === undefined
-          ? null
-          : visualization.symbol.breakValueA;
-      breakValueB =
-        visualization.symbol.breakValueB === undefined
-          ? null
-          : visualization.symbol.breakValueB;
     }
 
     queueMicrotask(() => {
@@ -261,9 +254,7 @@
       fillColorB = DEFAULT_COLORS.secondary;
       onSymbolPrimitiveChange?.({
         commonScale: true,
-        positionMode: SymbolDoublePosition.OVERLAY,
-        breakValueA: null,
-        breakValueB: null
+        positionMode: SymbolDoublePosition.OVERLAY
       });
       onStyleChange?.({ fillColorB: DEFAULT_COLORS.secondary });
     }
@@ -293,9 +284,11 @@
     onStyleChange?.({ fillColorB: value });
   }
 
-  const shapeTypes = $derived(getSymbolShapeTypes(symbolMode));
+  const shapeTypes = $derived(
+    getSymbolShapeTypes(symbolMode, proportionalType)
+  );
   const shapeDropdownItems = $derived(
-    buildSymbolShapeDropdownItems(symbolMode)
+    buildSymbolShapeDropdownItems(symbolMode, proportionalType)
   );
   const showBarWidthControl = $derived(isLinearShape(shapeType));
 
@@ -498,39 +491,8 @@
     onSymbolPrimitiveChange?.({ positionMode: next });
   }
 
-  function commitBreakValues(nextA: number | null, nextB: number | null): void {
-    const shouldSwap =
-      nextA !== null &&
-      nextB !== null &&
-      Number.isFinite(nextA) &&
-      Number.isFinite(nextB) &&
-      nextA > nextB;
-    const finalA = shouldSwap ? nextB : nextA;
-    const finalB = shouldSwap ? nextA : nextB;
-    breakValueA = finalA;
-    breakValueB = finalB;
-    onSymbolPrimitiveChange?.({
-      breakValueA: finalA,
-      breakValueB: finalB
-    });
-  }
-
-  function handleBreakValueAChange(value: number | null) {
-    if (isSyncingFromVisualization) return;
-    commitBreakValues(value, breakValueB);
-  }
-
-  function handleBreakValueBChange(value: number | null) {
-    if (isSyncingFromVisualization) return;
-    commitBreakValues(breakValueA, value);
-  }
-
   const positionModeItems = [
     { id: SymbolDoublePosition.OVERLAY, text: m.symbol_position_overlay() },
-    {
-      id: SymbolDoublePosition.JUXTAPOSITION,
-      text: m.symbol_position_juxtaposition()
-    },
     { id: SymbolDoublePosition.DIVISION, text: m.symbol_position_division() }
   ];
 </script>
@@ -568,8 +530,6 @@
       bind:symbolMaxSize={symbolMaxSize}
       shapeType={shapeType}
       positionMode={positionMode}
-      breakValueA={breakValueA}
-      breakValueB={breakValueB}
       sizeColumnName={sizeColumnName}
       bind:sizePickerOpen={sizePickerOpen}
       bind:fieldBPickerOpen={fieldBPickerOpen}
@@ -587,8 +547,6 @@
       onSymbolMaxSizeChange={handleSymbolMaxSizeChange}
       onShapeDropdownSelect={handleShapeDropdownSelect}
       onPositionModeChange={handlePositionModeChange}
-      onBreakValueAChange={handleBreakValueAChange}
-      onBreakValueBChange={handleBreakValueBChange}
     />
   {:else}
     <ProportionalScaleSection
@@ -646,19 +604,6 @@
   />
 {/if}
 
-<MissingDataSection
-  bind:show={showMissingData}
-  color={missingDataColor}
-  shape={missingDataShape}
-  size={missingDataSize}
-  showShapeSelector={true}
-  showSizeSlider={true}
-  onshowchange={handleMissingDataShowChange}
-  onshapechange={handleMissingDataShapeChange}
-  onsizechange={handleMissingDataSizeChange}
-  oncolorchange={handleMissingDataColorChange}
-/>
-
 {#if symbolMode === SymbolMode.PROPORTIONAL && proportionalType === ProportionalType.DOUBLE}
   <ProportionalDoubleSection
     fillColor={fillColor}
@@ -667,6 +612,18 @@
     onColorAChange={handleFillColorChange}
     onColorBChange={handleFillColorBChange}
     onOpacityChange={handleFillOpacityChange}
+  />
+  <MissingDataSection
+    bind:show={showMissingData}
+    color={missingDataColor}
+    shape={missingDataShape}
+    size={missingDataSize}
+    showShapeSelector={true}
+    showSizeSlider={true}
+    onshowchange={handleMissingDataShowChange}
+    onshapechange={handleMissingDataShapeChange}
+    onsizechange={handleMissingDataSizeChange}
+    oncolorchange={handleMissingDataColorChange}
   />
 {:else}
   <FillSection
@@ -713,6 +670,18 @@
       />
     {/snippet}
   </FillSection>
+  <MissingDataSection
+    bind:show={showMissingData}
+    color={missingDataColor}
+    shape={missingDataShape}
+    size={missingDataSize}
+    showShapeSelector={true}
+    showSizeSlider={true}
+    onshowchange={handleMissingDataShowChange}
+    onshapechange={handleMissingDataShapeChange}
+    onsizechange={handleMissingDataSizeChange}
+    oncolorchange={handleMissingDataColorChange}
+  />
 {/if}
 
 <StrokeSection
