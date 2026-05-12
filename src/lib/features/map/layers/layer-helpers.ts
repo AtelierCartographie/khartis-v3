@@ -36,6 +36,16 @@ export function withOpacity(color: number[], opacity = 1): Color {
   return [color[0] ?? 0, color[1] ?? 0, color[2] ?? 0, alpha];
 }
 
+export function withOpacityPreservingAlpha(
+  color: number[],
+  opacity = 1
+): Color {
+  const normalized = Math.min(Math.max(opacity, 0), 1);
+  const sourceAlpha = color[3] ?? 255;
+  const alpha = Math.round(normalized * sourceAlpha);
+  return [color[0] ?? 0, color[1] ?? 0, color[2] ?? 0, alpha];
+}
+
 export function sortBySizeDescending<T>(
   items: readonly T[],
   sizeFn: (item: T) => number
@@ -410,9 +420,10 @@ export function withRowHighlightAccessor(
     Math.min(Math.max(opacity * dimmingFactor, 0), 1) * 255
   );
   return (row: DeckDataRow): [number, number, number, number] => {
-    const [r, g, b] = accessor(row);
+    const [r, g, b, sourceAlpha = 255] = accessor(row);
     const rowId = row[INTERNAL_COLUMN.ID] as number;
-    const alpha = highlightedRowIds.has(rowId) ? fullAlpha : dimAlpha;
+    const targetAlpha = highlightedRowIds.has(rowId) ? fullAlpha : dimAlpha;
+    const alpha = Math.round(targetAlpha * (sourceAlpha / 255));
     return [r, g, b, alpha];
   };
 }
@@ -458,9 +469,10 @@ export function withGeoJsonRowHighlightAccessor(
   return (feature: {
     properties?: Record<string, unknown>;
   }): [number, number, number, number] => {
-    const [r, g, b] = accessor(feature);
+    const [r, g, b, sourceAlpha = 255] = accessor(feature);
     const rowId = feature.properties?.[INTERNAL_COLUMN.ID] as number;
-    const alpha = highlightedRowIds.has(rowId) ? fullAlpha : dimAlpha;
+    const targetAlpha = highlightedRowIds.has(rowId) ? fullAlpha : dimAlpha;
+    const alpha = Math.round(targetAlpha * (sourceAlpha / 255));
     return [r, g, b, alpha];
   };
 }
