@@ -17,6 +17,7 @@ export enum PatternType {
 
 export interface CategoryDraft {
   id: string;
+  value?: string;
   label: string;
   color: string;
   enabled: boolean;

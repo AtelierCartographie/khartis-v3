@@ -124,17 +124,20 @@ describe('PalettePreview — categoriesMode routing (Fill Categories)', () => {
       'const categoryDrafts = $derived<CategoryDraft[]>('
     );
     expect(source).toContain('const categoryDraftCount = $derived(');
-    expect(source).toContain('Math.max(colors.length, categoryLabels.length)');
+    expect(source).toContain('Math.max(');
+    expect(source).toContain('colors.length,');
+    expect(source).toContain('categoryLabels.length,');
+    expect(source).toContain('classification?.categoryValues?.length ?? 0');
     expect(source).toContain(
       'Array.from({ length: categoryDraftCount }, (_, i) => {'
     );
+    expect(source).toContain('classification?.categoryValues?.[i]');
     expect(source).toContain(
-      'categoryLabels[i] ?? m.palette_category_default_label'
+      'classification?.labels?.[i] ?? categoryLabels[i] ?? value'
     );
     expect(source).toContain('colors[i % Math.max(colors.length, 1)]');
-    expect(source).toContain(
-      'enabled: !disabledCategoryLabels.includes(label)'
-    );
+    expect(source).toContain('value,');
+    expect(source).toContain('enabled: !disabledLabels.includes(value)');
   });
 
   it('should normalize validated category drafts before updating ClassificationConfig', () => {
@@ -144,7 +147,11 @@ describe('PalettePreview — categoriesMode routing (Fill Categories)', () => {
     expect(source).toContain(
       'labels: normalizedCategories.map((category) => category.label)'
     );
+    expect(source).toContain('categoryValues: normalizedCategories.map(');
     expect(source).toContain('disabledLabels: normalizedCategories');
+    expect(source).toContain(
+      '.map((category) => category.value ?? category.label)'
+    );
     expect(source).toContain("categoriesVariant === 'symbols-different'");
     expect(source).toContain("categoriesVariant === 'symbols-different-rank'");
   });
@@ -168,9 +175,10 @@ describe('PalettePreview — categoriesMode routing (Fill Categories)', () => {
     expect(source).toContain('Boolean(onCategoriesCommonAspectChange)');
   });
 
-  it('should persist the polygon common pattern as a classification pattern id', () => {
+  it('should persist polygon and symbol common patterns as a classification pattern id', () => {
     expect(source).toContain('function resolveValidatedCategoryPatternId');
-    expect(source).toContain("categoriesVariant !== 'polygons'");
+    expect(source).toContain("categoriesVariant === 'polygons'");
+    expect(source).toContain("categoriesVariant.startsWith('symbols')");
     expect(source).toContain('function coerceCategoryPatternId');
     expect(source).toContain(
       'const existingPatternId = coerceCategoryPatternId'
