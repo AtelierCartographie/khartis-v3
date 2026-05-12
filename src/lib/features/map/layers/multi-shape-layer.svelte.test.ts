@@ -47,7 +47,7 @@ describe('MultiShapeLayer — class contract', () => {
     expect(typeof MultiShapeLayer.defaultProps).toBe('object');
   });
 
-  it('declares getShape, barWidth, offsetX, offsetY, halfMask, shapeScale and dash defaults', () => {
+  it('declares getShape, barWidth, offsetX, offsetY, halfMask, shapeScale, dash and pattern defaults', () => {
     const props = MultiShapeLayer.defaultProps as Record<string, unknown>;
     expect(props.getShape).toMatchObject({ type: 'accessor', value: 0 });
     expect(props.barWidth).toMatchObject({ type: 'number', value: 6 });
@@ -58,6 +58,11 @@ describe('MultiShapeLayer — class contract', () => {
     expect(props.dashed).toMatchObject({ type: 'boolean', value: false });
     expect(props.dashLength).toMatchObject({ type: 'number', value: 3 });
     expect(props.gapLength).toMatchObject({ type: 'number', value: 2 });
+    expect(props.patternEnabled).toMatchObject({
+      type: 'boolean',
+      value: false
+    });
+    expect(props.patternType).toMatchObject({ type: 'number', value: 1 });
   });
 });
 
@@ -82,14 +87,27 @@ describe('MultiShapeLayer — source invariants (keep SDF shader consistent)', (
     expect(source).toContain('float dashed;');
     expect(source).toContain('float dashLength;');
     expect(source).toContain('float gapLength;');
+    expect(source).toContain('float patternEnabled;');
+    expect(source).toContain('float patternType;');
     expect(source).toContain('vec2 scaledUv = uv / max(multiShape.shapeScale');
     expect(source).toContain('lineMask *= getDashMask(scaledUv);');
+    expect(source).toContain('vec4 applyFillPattern(vec4 fillColor, vec2 uv)');
   });
 
   it('orients spike symbols upward in shader space', () => {
     expect(source).toContain(
       'vec2 pos = vec2(uv.x, -uv.y) * outerRadiusPixels;'
     );
+  });
+
+  it('keeps triangle symbols oriented like the UI and legend', () => {
+    const triangleBlock = source.match(
+      /case 6: \/\/ TRIANGLE[\s\S]*?case 7: \/\/ STAR/
+    )?.[0];
+
+    expect(triangleBlock).toBeDefined();
+    expect(triangleBlock).toContain('return sdEquilateralTriangle(pos, r)');
+    expect(triangleBlock).not.toContain('vec2(pos.x, -pos.y)');
   });
 
   it('calls super.draw after setting shaderInputs to avoid GPU state leaks', () => {

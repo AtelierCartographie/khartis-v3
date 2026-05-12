@@ -134,14 +134,30 @@ describe('useMapLayers source', () => {
     expect(source).not.toContain(
       'function getManualProjectionSplitReferenceTable'
     );
+    expect(source).toContain('function getMatchedSplitTable(');
     expect(source).toContain('getSplitMatchedGeometryRowIndices(');
+    expect(source).toContain('selectRowsByIndices(table, matchedRows)');
+    expect(source).toContain('getMatchedSplitTable(split.geometry, split)');
     expect(source).toContain(
-      'selectRowsByIndices(split.geometry, matchedRows)'
+      'getMatchedSplitTable(rawRepresentativePointBaseTable, split)'
     );
     expect(source).not.toContain('manualProjectionBasemapTable');
     expect(source).toContain('getRequestedMetadataLayerTypes(worldBaseTable)');
     expect(source).toContain(
       'createBasemapLayers(\n            shouldShowBasemapLayers ? worldBaseTable : null,'
+    );
+  });
+
+  it('filters split representative point tables through the joined dataset rows', () => {
+    expect(source).toContain('function filterSplitGeometryTableByDatasetRows(');
+    expect(source).toContain(
+      'const dataFilteredDataset = filterArrowTableByDataFilters(\n      split.dataset,'
+    );
+    expect(source).toContain(
+      'filterSplitGeometryTableByDatasetRows(\n                    representativePointBaseTable,\n                    split,\n                    viz.dataFilters,\n                    PrimitiveFilterType.POINT'
+    );
+    expect(source).toContain(
+      'getSplitMatchedGeometryRowIndices(\n      matchedGeometryTable,\n      filteredDataset,'
     );
   });
 

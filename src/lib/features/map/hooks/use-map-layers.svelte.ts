@@ -245,6 +245,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   >();
   const representativePointLoadFailures = new WeakSet<ArrowTable>();
   const representativePointNotifyOnReady = new WeakSet<ArrowTable>();
+  const matchedSplitTableCache = new WeakMap<
+    ArrowTable,
+    WeakMap<ArrowTable, Map<string, ArrowTable>>
+  >();
   let cachedProjectionOverrideKey: string | null = null;
   let cachedProjectionOverrideRef: ProjectionLike | undefined;
 
@@ -603,36 +607,84 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     return resolvedMetadata;
   }
 
-  function shouldRenderOnlyJoinedSplitGeometry(
-    split: SplitRenderingTable | undefined,
-    projectionState: ReturnType<typeof getProjectionState>
-  ): boolean {
-    return Boolean(
-      split &&
-      projectionState.overrideActive &&
-      projectionState.overrideSource === 'manual'
+  function getMatchedSplitTable(
+    table: ArrowTable,
+    split: SplitRenderingTable
+  ): ArrowTable {
+    let datasetCache = matchedSplitTableCache.get(table);
+    if (!datasetCache) {
+      datasetCache = new WeakMap();
+      matchedSplitTableCache.set(table, datasetCache);
+    }
+
+    let columnCache = datasetCache.get(split.dataset);
+    if (!columnCache) {
+      columnCache = new Map();
+      datasetCache.set(split.dataset, columnCache);
+    }
+
+    const cached = columnCache.get(split.featureIdColumn);
+    if (cached) {
+      return cached;
+    }
+
+    const matchedRows = getSplitMatchedGeometryRowIndices(
+      table,
+      split.dataset,
+      split.featureIdColumn
     );
+    const matchedTable =
+      matchedRows.length === table.numRows
+        ? table
+        : selectRowsByIndices(table, matchedRows);
+    columnCache.set(split.featureIdColumn, matchedTable);
+    return matchedTable;
   }
 
   function getRenderableSplitGeometryTable(
-    split: SplitRenderingTable | undefined,
-    projectionState: ReturnType<typeof getProjectionState>
+    split: SplitRenderingTable | undefined
   ): ArrowTable | undefined {
     if (!split) {
       return undefined;
     }
 
-    if (!shouldRenderOnlyJoinedSplitGeometry(split, projectionState)) {
-      return split.geometry;
+    return getMatchedSplitTable(split.geometry, split);
+  }
+
+  function filterSplitGeometryTableByDatasetRows(
+    geometryTable: ArrowTable,
+    split: SplitRenderingTable,
+    dataFilters: VisualizationConfig['dataFilters'],
+    primitiveType: PrimitiveFilter | undefined,
+    tableFilters: DataTableFilter[] | undefined,
+    yearFilter: VisualizationConfig['yearFilter']
+  ): ArrowTable {
+    const matchedGeometryTable = getMatchedSplitTable(geometryTable, split);
+    const dataFilteredDataset = filterArrowTableByDataFilters(
+      split.dataset,
+      dataFilters,
+      primitiveType
+    );
+    const tableFilteredDataset = filterArrowTableByTableFilters(
+      dataFilteredDataset,
+      tableFilters
+    );
+    const filteredDataset = yearFilter
+      ? filterArrowTableByYear(tableFilteredDataset, yearFilter)
+      : tableFilteredDataset;
+
+    if (filteredDataset === split.dataset) {
+      return matchedGeometryTable;
     }
 
-    const matchedRows = getSplitMatchedGeometryRowIndices(
-      split.geometry,
-      split.dataset,
+    const matchingRows = getSplitMatchedGeometryRowIndices(
+      matchedGeometryTable,
+      filteredDataset,
       split.featureIdColumn
     );
-
-    return selectRowsByIndices(split.geometry, matchedRows);
+    return matchingRows.length === matchedGeometryTable.numRows
+      ? matchedGeometryTable
+      : selectRowsByIndices(matchedGeometryTable, matchingRows);
   }
 
   function getRequestedMetadataLayerTypes(
@@ -888,8 +940,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           const datasetId = viz.datasetId;
           const split = splitData?.get(datasetId);
           const table =
-            getRenderableSplitGeometryTable(split, projectionState) ??
-            tables.get(datasetId);
+            getRenderableSplitGeometryTable(split) ?? tables.get(datasetId);
           const densityTable = densityTables?.get(datasetId);
           const geojson = geoJSONs.get(datasetId);
 
@@ -965,7 +1016,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             const joinedBasemapId = split
               ? getDatasetJoinedBasemap(datasetId)
               : null;
-            const representativePointBaseTable = geoInfo
+            const rawRepresentativePointBaseTable = geoInfo
               ? getRepresentativePointTable(
                   datasetId,
                   table,
@@ -973,24 +1024,40 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
                   joinedBasemapId
                 )
               : null;
+            const representativePointBaseTable =
+              rawRepresentativePointBaseTable && split
+                ? getMatchedSplitTable(rawRepresentativePointBaseTable, split)
+                : rawRepresentativePointBaseTable;
 
             if (representativePointBaseTable) {
-              const representativeVizFiltered = filterArrowTableByDataFilters(
-                representativePointBaseTable,
-                viz.dataFilters,
-                PrimitiveFilterType.POINT
-              );
-              const representativeTableFiltered =
-                filterArrowTableByTableFilters(
-                  representativeVizFiltered,
-                  tableFilters
-                );
-              const filteredRepresentativePointTable = viz.yearFilter
-                ? filterArrowTableByYear(
-                    representativeTableFiltered,
+              const filteredRepresentativePointTable = split
+                ? filterSplitGeometryTableByDatasetRows(
+                    representativePointBaseTable,
+                    split,
+                    viz.dataFilters,
+                    PrimitiveFilterType.POINT,
+                    tableFilters,
                     viz.yearFilter
                   )
-                : representativeTableFiltered;
+                : (() => {
+                    const representativeVizFiltered =
+                      filterArrowTableByDataFilters(
+                        representativePointBaseTable,
+                        viz.dataFilters,
+                        PrimitiveFilterType.POINT
+                      );
+                    const representativeTableFiltered =
+                      filterArrowTableByTableFilters(
+                        representativeVizFiltered,
+                        tableFilters
+                      );
+                    return viz.yearFilter
+                      ? filterArrowTableByYear(
+                          representativeTableFiltered,
+                          viz.yearFilter
+                        )
+                      : representativeTableFiltered;
+                  })();
               ctx.representativePointTable = filteredRepresentativePointTable;
               ctx.representativePointGeometryInfo =
                 getCachedRepresentativeGeometryInfo(
