@@ -24,6 +24,7 @@
   } from '$lib/features/commons/constants/visualization.constants';
   import {
     DEFAULT_COMMON_ASPECT,
+    PatternType,
     type CategoriesAspectVariant,
     type CategoriesCommonAspect,
     type CategoryDraft
@@ -141,6 +142,15 @@
     buildSymbolShapeDropdownItems(SymbolMode.CATEGORIES)
   );
 
+  function coerceCategoryShapeMode(
+    mode: CategoryShapeMode | undefined
+  ): CategoryShapeMode {
+    if (!mode || mode === CategoryShapeMode.ORDERED) {
+      return CategoryShapeMode.UNIQUE;
+    }
+    return mode;
+  }
+
   function syncFetchedCategoryLabels(nextLabels: string[]) {
     const persistedLabels = symbolClassification?.labels ?? [];
     if (
@@ -173,17 +183,33 @@
       onClassificationChange?.({ categoryShapes: undefined });
     } else if (next === CategoryShapeMode.DIFFERENT) {
       onClassificationChange?.({ categoryShapes: undefined });
-    } else if (next === CategoryShapeMode.ORDERED) {
-      onClassificationChange?.({ categoryShapes: undefined });
+    }
+  }
+
+  function resolveCommonAspectPatternType(
+    patternId: string | undefined
+  ): PatternType {
+    switch (patternId) {
+      case undefined:
+        return DEFAULT_COMMON_ASPECT.patternType ?? PatternType.DOTS;
+      case 'dots':
+        return PatternType.DOTS;
+      case 'cross':
+        return PatternType.CROSSHATCH;
+      case 'horizontal':
+      case 'vertical':
+        return PatternType.LINES;
+      case 'diagonal':
+      case 'diagonal-reverse':
+      default:
+        return PatternType.DASHES;
     }
   }
 
   const categoriesVariant = $derived<CategoriesAspectVariant>(
     categoryShapeMode === CategoryShapeMode.DIFFERENT
       ? 'symbols-different'
-      : categoryShapeMode === CategoryShapeMode.ORDERED
-        ? 'symbols-different-rank'
-        : 'symbols-unique'
+      : 'symbols-unique'
   );
 
   const categoriesCommonAspect = $derived<CategoriesCommonAspect>({
@@ -203,6 +229,10 @@
     strokeSize: Math.max(
       1,
       visualization?.symbol?.strokeWidth ?? DEFAULT_COMMON_ASPECT.strokeSize
+    ),
+    pattern: Boolean(symbolClassification?.patternId),
+    patternType: resolveCommonAspectPatternType(
+      symbolClassification?.patternId
     ),
     shape: visualization?.symbol?.shape ?? DEFAULT_COMMON_ASPECT.shape,
     color: currentPalette[0] ?? DEFAULT_COMMON_ASPECT.color
@@ -225,8 +255,15 @@
       shapeType = availableShapes.includes(persistedShape)
         ? persistedShape
         : ShapeType.CIRCLE;
-      categoryShapeMode =
-        symbolConfig.categoryShape ?? untrack(() => categoryShapeMode);
+      const nextCategoryShapeMode = coerceCategoryShapeMode(
+        symbolConfig.categoryShape ?? untrack(() => categoryShapeMode)
+      );
+      categoryShapeMode = nextCategoryShapeMode;
+      if (symbolConfig.categoryShape === CategoryShapeMode.ORDERED) {
+        queueMicrotask(() =>
+          onModesChange?.({ categoryShape: nextCategoryShapeMode })
+        );
+      }
     } else if (visualization?.symbols) {
       symbolOpacity = parseOpacityToSlider(
         visualization.symbols.opacity,
@@ -237,12 +274,28 @@
         ? persistedShape
         : ShapeType.CIRCLE;
       if (visualization?.modes?.categoryShape) {
-        categoryShapeMode = visualization.modes.categoryShape;
+        const nextCategoryShapeMode = coerceCategoryShapeMode(
+          visualization.modes.categoryShape
+        );
+        categoryShapeMode = nextCategoryShapeMode;
+        if (visualization.modes.categoryShape === CategoryShapeMode.ORDERED) {
+          queueMicrotask(() =>
+            onModesChange?.({ categoryShape: nextCategoryShapeMode })
+          );
+        }
       }
     } else {
       symbolOpacity = 100;
       if (visualization?.modes?.categoryShape) {
-        categoryShapeMode = visualization.modes.categoryShape;
+        const nextCategoryShapeMode = coerceCategoryShapeMode(
+          visualization.modes.categoryShape
+        );
+        categoryShapeMode = nextCategoryShapeMode;
+        if (visualization.modes.categoryShape === CategoryShapeMode.ORDERED) {
+          queueMicrotask(() =>
+            onModesChange?.({ categoryShape: nextCategoryShapeMode })
+          );
+        }
       }
     }
     if (visualization?.missingData) {
@@ -294,17 +347,6 @@
     )
   );
 
-  function resolveOrderedCategorySizeBounds(baseSize: number): {
-    minSize: number;
-    maxSize: number;
-  } {
-    const clampedBaseSize = Math.min(Math.max(baseSize, 1), 20);
-    const minSize = Math.max(1, Math.round(clampedBaseSize * 0.75));
-    const maxSize = Math.max(minSize + 1, Math.round(clampedBaseSize * 1.75));
-
-    return { minSize, maxSize };
-  }
-
   function handleCategoriesCommonAspectChange(
     commonAspect: CategoriesCommonAspect,
     nextCategories: CategoryDraft[]
@@ -312,26 +354,23 @@
     const symbolUpdates: Partial<
       NonNullable<Parameters<NonNullable<typeof onSymbolPrimitiveChange>>[0]>
     > = {};
+    const useCategoryStrokeColors =
+      !commonAspect.stroke || !commonAspect.autoColor;
+    const useCategoryStrokeWidths =
+      !commonAspect.stroke || commonAspect.strokeUnique === false;
+    const useStroke =
+      commonAspect.stroke || useCategoryStrokeColors || useCategoryStrokeWidths;
 
     if (commonAspect.sizeUnique) {
       symbolUpdates.size = commonAspect.size;
-      if (categoryShapeMode === CategoryShapeMode.ORDERED) {
-        const { minSize, maxSize } = resolveOrderedCategorySizeBounds(
-          commonAspect.size
-        );
-        symbolUpdates.minSize = minSize;
-        symbolUpdates.maxSize = maxSize;
-      }
     }
 
-    if (categoryShapeMode === CategoryShapeMode.ORDERED && commonAspect.shape) {
-      symbolUpdates.shape = commonAspect.shape;
-    }
-
-    if (commonAspect.stroke) {
-      symbolUpdates.strokeMode = commonAspect.autoColor
-        ? StrokeMode.UNIQUE
-        : StrokeMode.CATEGORIES;
+    if (useStroke) {
+      symbolUpdates.strokeMode = useCategoryStrokeColors
+        ? StrokeMode.CATEGORIES
+        : commonAspect.autoColor
+          ? StrokeMode.UNIQUE
+          : StrokeMode.CATEGORIES;
       if (commonAspect.autoColor) {
         symbolUpdates.strokeColor = AUTO_CATEGORY_STROKE_COLOR;
         symbolUpdates.strokeOpacity = AUTO_CATEGORY_STROKE_OPACITY;
@@ -346,22 +385,26 @@
       onSymbolPrimitiveChange?.(symbolUpdates);
     }
 
-    if (commonAspect.stroke && !commonAspect.autoColor) {
+    if (useCategoryStrokeColors || useCategoryStrokeWidths) {
       onStrokeClassificationChange?.({
-        colors: nextCategories.map(
-          (category) => category.strokeColor ?? AUTO_CATEGORY_STROKE_COLOR
-        ),
+        colors: useCategoryStrokeColors
+          ? nextCategories.map(
+              (category) => category.strokeColor ?? AUTO_CATEGORY_STROKE_COLOR
+            )
+          : nextCategories.map(() => AUTO_CATEGORY_STROKE_COLOR),
         labels: nextCategories.map((category) => category.label),
+        categoryValues: nextCategories.map(
+          (category) => category.value ?? category.label
+        ),
         disabledLabels: nextCategories
           .filter((category) => !category.enabled)
-          .map((category) => category.label),
-        categoryStrokeWidths:
-          commonAspect.strokeUnique === false
-            ? nextCategories.map(
-                (category) =>
-                  category.customStrokeWidth ?? commonAspect.strokeSize
-              )
-            : undefined,
+          .map((category) => category.value ?? category.label),
+        categoryStrokeWidths: useCategoryStrokeWidths
+          ? nextCategories.map(
+              (category) =>
+                category.customStrokeWidth ?? commonAspect.strokeSize
+            )
+          : undefined,
         paletteId: undefined,
         inverted: false,
         patternId: undefined,
@@ -435,11 +478,6 @@
       value={CategoryShapeMode.DIFFERENT}
       labelText={m.category_shape_mode_different()}
     />
-    <RadioButton
-      id="cat-shape-ordered"
-      value={CategoryShapeMode.ORDERED}
-      labelText={m.category_shape_mode_ordered()}
-    />
   </RadioButtonGroup>
 </div>
 
@@ -487,12 +525,17 @@
   paletteType={PALETTE_TYPE.QUALITATIVE}
   categoriesMode={true}
   categoriesVariant={categoriesVariant}
-  categoryLabels={resolvedCategoryLabels}
+  classification={visualization?.symbol?.classification ??
+    visualization?.symbolClassification}
+  categoryLabels={(
+    visualization?.symbol?.classification ?? visualization?.symbolClassification
+  )?.categoryValues ?? resolvedCategoryLabels}
   disabledCategoryLabels={visualization?.symbol?.classification
     ?.disabledLabels ??
     visualization?.symbolClassification?.disabledLabels ??
     []}
   categoriesCommonAspect={categoriesCommonAspect}
+  showCategoriesCommonAspect={true}
   bind:categoriesPopoverOpen={categoriesAspectOpen}
   onClassificationChange={onClassificationChange}
   onCategoriesCommonAspectChange={handleCategoriesCommonAspectChange}
