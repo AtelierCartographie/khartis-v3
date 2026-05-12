@@ -10,8 +10,10 @@ const source = readFileSync(
 describe('FacetsVariablePicker collection filtering', () => {
   it('keeps collection choices constrained to the compatible single-select list', () => {
     expect(source).toContain('singleSelectItems = dataFields');
+    expect(source).toContain('isAutoFacetDataColumn');
+    expect(source).toContain('collectionDataFields');
     expect(source).toContain(
-      '(isCollectionEnabled ? dataFields : singleSelectItems).filter'
+      '(isCollectionEnabled ? collectionDataFields : singleSelectItems).filter'
     );
     expect(source).toContain('displayItems');
   });
