@@ -173,7 +173,7 @@ function getCategoryColorMapForViz(
   }
 
   const categories =
-    classification.labels
+    (classification.categoryValues ?? classification.labels)
       ?.map((label) => {
         if (label === null || label === undefined) {
           return null;

@@ -2,12 +2,7 @@
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import * as m from '$lib/paraglide/messages';
-  import {
-    Category,
-    ChartBubble,
-    CircleFilled,
-    Tag
-  } from 'carbon-icons-svelte';
+  import { ChartBubble, CircleFilled, Table, Tag } from 'carbon-icons-svelte';
   import {
     FillMode,
     SymbolMode
@@ -131,7 +126,7 @@
   const symbolModeItems = [
     { icon: CircleFilled, label: m.symbol_mode_unique(), iconSize: 16 },
     { icon: ChartBubble, label: m.symbol_mode_proportional(), iconSize: 16 },
-    { icon: Category, label: m.symbol_mode_classes(), iconSize: 16 },
+    { icon: Table, label: m.symbol_mode_classes(), iconSize: 16 },
     { icon: Tag, label: m.symbol_mode_categories(), iconSize: 16 }
   ];
 

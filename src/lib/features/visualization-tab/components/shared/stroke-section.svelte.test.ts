@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { SLIDER_LIMITS } from '$lib/features/commons/constants/visualization.constants';
 
 const source = readFileSync(
   resolve(import.meta.dirname, 'stroke-section.svelte'),
@@ -39,6 +40,11 @@ describe('StrokeSection — palette wiring', () => {
 });
 
 describe('StrokeSection — anti-leak fill↔stroke', () => {
+  it('allows contour thickness up to 20', () => {
+    expect(SLIDER_LIMITS.strokeWidth.max).toBe(20);
+    expect(source).toContain('max={SLIDER_LIMITS.strokeWidth.max}');
+  });
+
   it('restores a visible stroke width when an active stroke mode inherits width 0', () => {
     expect(source).toContain('function ensureVisibleStrokeWidth()');
     expect(source).toContain(

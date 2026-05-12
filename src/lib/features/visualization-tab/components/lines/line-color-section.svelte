@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { Category, Subtract, Tag } from 'carbon-icons-svelte';
+  import { Subtract, Table, Tag } from 'carbon-icons-svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { DiscretizationRow, PalettePreview, SectionHeading } from '../shared';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
@@ -83,7 +83,7 @@
 
   const colorModeItems = [
     { icon: Subtract, label: m.color_mode_unique(), iconSize: 16 },
-    { icon: Category, label: m.color_mode_classes(), iconSize: 16 },
+    { icon: Table, label: m.color_mode_classes(), iconSize: 16 },
     { icon: Tag, label: m.color_mode_categories(), iconSize: 16 }
   ];
 
