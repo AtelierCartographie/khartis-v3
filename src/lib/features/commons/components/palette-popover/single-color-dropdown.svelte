@@ -7,7 +7,7 @@
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
-  import { globalState } from '$lib/features/commons/stores/global.svelte';
+
   import { VIF_MIXTE_COLORS } from './palette.constants';
 
   interface Props {
@@ -49,14 +49,13 @@
 
   function updatePosition() {
     if (!triggerElement) return;
-    const scale = globalState.zoom.pageZoomLevel / 100;
     const rect = triggerElement.getBoundingClientRect();
-    const top = rect.top / scale;
-    const bottom = rect.bottom / scale;
-    const left = rect.left / scale;
-    const width = rect.width / scale;
+    const top = rect.top;
+    const bottom = rect.bottom;
+    const left = rect.left;
+    const width = rect.width;
     const estimatedDropdownHeight = 260;
-    const spaceBelow = window.innerHeight / scale - bottom;
+    const spaceBelow = window.innerHeight - bottom;
     const shouldFlip = spaceBelow < estimatedDropdownHeight && top > spaceBelow;
     dropdownPos = {
       top: shouldFlip ? top - estimatedDropdownHeight : bottom,
