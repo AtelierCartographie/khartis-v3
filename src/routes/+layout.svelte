@@ -14,6 +14,7 @@
   import '$lib/features/commons/utils/uuid.utils';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import { projectRuntime } from '$lib/features/commons/stores/project/project-runtime.svelte';
   import { initializeStores } from '$lib/features/commons/stores/stores-init';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { EVENT } from '$lib/features/commons/constants/dom.constants';
@@ -599,51 +600,54 @@
       <StepToolbar />
     {/if}
 
-    <article
-      class="main-content"
-      class:workspace-panning={workspaceDragState !== null}
-      class:workspace-overflow-draggable={isWorkspacePanDraggable}
-      class:workspace-has-overflow={hasWorkspaceOverflow}
-      class:workspace-space-armed={isSpacePanArmed && !isPageMode}
-      onpointerdown={handleMainContentPointerDown}
-    >
-      <div
-        bind:this={workspaceViewportElement}
-        class="workspace-viewport"
-        class:has-overflow={hasWorkspaceOverflow}
+    {#key projectRuntime.runtimeKey}
+      <article
+        class="main-content"
+        class:workspace-panning={workspaceDragState !== null}
+        class:workspace-overflow-draggable={isWorkspacePanDraggable}
+        class:workspace-has-overflow={hasWorkspaceOverflow}
+        class:workspace-space-armed={isSpacePanArmed && !isPageMode}
+        onpointerdown={handleMainContentPointerDown}
       >
-        <div class="workspace-camera" style={workspaceCameraStyle}>
-          <div class="page-scale-layer">
-            <div class="page-content-wrapper">
-              {@render children()}
+        <div
+          bind:this={workspaceViewportElement}
+          class="workspace-viewport"
+          class:has-overflow={hasWorkspaceOverflow}
+        >
+          <div class="workspace-camera" style={workspaceCameraStyle}>
+            <div class="page-scale-layer">
+              <div class="page-content-wrapper">
+                {@render children()}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <ZoomToolbar />
+        <ZoomToolbar />
 
-      <MobileOpenPanelButton />
+        <MobileOpenPanelButton />
 
-      <GlobalLoadingIndicator />
+        <GlobalLoadingIndicator />
 
-      {#if showMobileColorBlindnessNotification}
-        <div class="colorblind-notification">
-          <ColorBlindnessNotification
-            ondeactivate={handleDeactivateColorBlindness}
-            onclose={() => (mobileColorBlindnessNotificationDismissed = true)}
-          />
-        </div>
+        {#if showMobileColorBlindnessNotification}
+          <div class="colorblind-notification">
+            <ColorBlindnessNotification
+              ondeactivate={handleDeactivateColorBlindness}
+              onclose={() => (mobileColorBlindnessNotificationDismissed = true)}
+            />
+          </div>
+        {/if}
+      </article>
+
+      {#if globalState.isMobileView}
+        <MobileToolbar />
+      {:else}
+        <MainToolbar />
       {/if}
-    </article>
 
-    {#if globalState.isMobileView}
-      <MobileToolbar />
-    {:else}
-      <MainToolbar />
-    {/if}
+      <MapTooltipOverlay />
+    {/key}
 
-    <MapTooltipOverlay />
     <NotificationContainer />
     <PwaServiceWorker />
     <ConsentBanner />
