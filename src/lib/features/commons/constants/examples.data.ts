@@ -59,6 +59,7 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     thumbnail: resolveExampleAssetPath('/examples/european-cities-thumb.png'),
     dataUrl: resolveExampleAssetPath('/examples/data/european-cities.csv'),
     baseMapId: undefined,
+    referenceBasemapId: 'europe-nuts1-2024-medium',
     visualizations: [
       {
         type: 'proportional',

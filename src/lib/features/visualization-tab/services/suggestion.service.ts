@@ -60,6 +60,7 @@ import { getVisualizationLegendSubtitle } from '$lib/features/commons/utils/lege
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { deepClone } from '$lib/features/commons/utils/clone.utils';
+import { SavePriority } from '$lib/features/project-management/core/persistence-registry';
 
 interface DatasetGeometrySource {
   id?: string;
@@ -1572,13 +1573,17 @@ export function applySuggestionToVisualization(
     suggestion
   );
 
-  visualizationStore.updateVisualization(vizId, {
-    ...preset,
-    ...suggestionUpdate,
-    origin: options.origin,
-    primitiveOrder: undefined,
-    dataFilters: undefined
-  });
+  visualizationStore.updateVisualization(
+    vizId,
+    {
+      ...preset,
+      ...suggestionUpdate,
+      origin: options.origin,
+      primitiveOrder: undefined,
+      dataFilters: undefined
+    },
+    SavePriority.IMMEDIATE
+  );
 
   const updatedVisualization = visualizationStore.visualizations.find(
     (item) => item.id === vizId
