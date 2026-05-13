@@ -3,7 +3,8 @@ export const AVAILABLE_FONTS = [
   'Cabin',
   'IBM Plex Sans',
   'Inter',
-  'Lato'
+  'Lato',
+  'Noto Sans'
 ] as const;
 
 export type AvailableFont = (typeof AVAILABLE_FONTS)[number];
@@ -21,7 +22,9 @@ const FONT_FAMILY_STACKS: Record<AvailableFont, string> = {
   'IBM Plex Sans': '"IBM Plex Sans", sans-serif',
   Inter: '"Inter", sans-serif',
   Lato: '"Lato", sans-serif',
-  'Open Sans': '"Open Sans", sans-serif'
+  'Open Sans': '"Open Sans", sans-serif',
+  'Noto Sans':
+    '"Noto Sans", "Noto Sans Arabic", "Noto Sans SC", "Noto Sans JP", sans-serif'
 };
 
 const FONT_FAMILY_NAMES: Record<AvailableFont, string> = {
@@ -29,7 +32,8 @@ const FONT_FAMILY_NAMES: Record<AvailableFont, string> = {
   'IBM Plex Sans': '"IBM Plex Sans"',
   Inter: '"Inter"',
   Lato: '"Lato"',
-  'Open Sans': '"Open Sans"'
+  'Open Sans': '"Open Sans"',
+  'Noto Sans': '"Noto Sans"'
 };
 
 const FONT_LOAD_VARIANTS = [

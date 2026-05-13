@@ -267,6 +267,7 @@
     colors={currentPalette}
     selectedPaletteId={visualization?.classification?.paletteId}
     inverted={visualization?.classification?.inverted ?? false}
+    showInvertButton={false}
     paletteType={resolvePaletteTypeForBreakpoint(visualization?.classification)}
     classification={visualization?.classification}
     oninvert={onInvertPalette}

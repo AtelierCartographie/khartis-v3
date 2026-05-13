@@ -66,7 +66,13 @@ export function draw_categorical_legend(
     lineHeight: line_height,
     fontFamily: resolvedFontFamily
   });
-  const margin = { top: 12, right: 12, bottom: 12, left: 12 };
+  const marginValue = Math.max(10, Math.round(fontSize * 0.6));
+  const margin = {
+    top: marginValue,
+    right: marginValue,
+    bottom: marginValue,
+    left: marginValue
+  };
   const box_dim = Math.round(fontSize * 1.25);
   const box = { h: box_dim, w: type === 'line' ? box_dim * 1.5 : box_dim };
   const footerBox = {
@@ -74,7 +80,7 @@ export function draw_categorical_legend(
     w: footerType === 'line' ? box_dim * 1.5 : box_dim
   };
   const gap = Math.max(8, Math.round(fontSize * 0.6));
-  const gutter = 24;
+  const gutter = Math.max(16, Math.round(fontSize * 1.2));
   let label_width = Math.round(fontSize * 15);
   const items_nb = raw_categories.length;
   const column_nb = items_nb <= 4 ? 1 : items_nb <= 8 ? 2 : 3;
@@ -218,9 +224,10 @@ export function draw_categorical_legend(
         (Math.max(...categories.map((item) => item.y_index)) + 1) * row_step -
         gap
       : y_start;
+  const section_gap = Math.max(10, Math.round(fontSize * 0.6));
   const footer_start =
     footerItems.length > 0
-      ? categories_bottom + Math.max(3, gap)
+      ? categories_bottom + section_gap
       : categories_bottom;
   const footerBoxes = footerItems.map((item, index) =>
     create_shape(
@@ -264,9 +271,10 @@ export function draw_categorical_legend(
       : categories_bottom;
   const content_bottom =
     footerItems.length > 0 ? footer_bottom : categories_bottom;
-  const note_gap = 8;
   const note_section_height =
-    note_lines.length > 0 ? note_gap + note_lines.length * (noteSize * 1.2) : 0;
+    note_lines.length > 0
+      ? section_gap + note_lines.length * (noteSize * 1.2)
+      : 0;
   const width = body_width;
   const height = content_bottom + note_section_height + margin.bottom;
 
@@ -360,7 +368,7 @@ export function draw_categorical_legend(
 
     let note_markup = '';
     if (note_lines.length > 0) {
-      const note_y = content_bottom + note_gap;
+      const note_y = content_bottom + section_gap;
       const line_h = noteSize * 1.2;
       note_markup += `<g class="note" text-anchor="start" dominant-baseline="hanging" font-size="${noteSize}">`;
       note_lines.forEach((line, i) => {

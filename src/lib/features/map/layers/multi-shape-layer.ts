@@ -33,6 +33,8 @@ const multiShapeModule = {
       float dashed;
       float dashLength;
       float gapLength;
+      float patternEnabled;
+      float patternType;
     } multiShape;
   `,
   uniformTypes: {
@@ -43,7 +45,9 @@ const multiShapeModule = {
     shapeScale: 'f32',
     dashed: 'f32',
     dashLength: 'f32',
-    gapLength: 'f32'
+    gapLength: 'f32',
+    patternEnabled: 'f32',
+    patternType: 'f32'
   }
 };
 
@@ -154,8 +158,7 @@ float getDistance(vec2 uv, float radiusPixels, int shapeType, float radius) {
             {
                 vec2 pos = uv * outerRadiusPixels;
                 float r = 0.7 * outerRadiusPixels;
-                vec2 p = vec2(pos.x, -pos.y);
-                return sdEquilateralTriangle(p, r) + outerRadiusPixels;
+                return sdEquilateralTriangle(pos, r) + outerRadiusPixels;
             }
         case 7: // STAR
             {
@@ -188,6 +191,51 @@ float getDashMask(vec2 uv) {
     return 1.0 - step(duty, phase);
 }
 
+float stripeMask(float coord, float spacing, float width) {
+    float phase = abs(fract(coord / spacing) - 0.5);
+    return 1.0 - step(width, phase);
+}
+
+float getFillPatternMask(vec2 uv) {
+    if (multiShape.patternEnabled < 0.5) {
+        return 0.0;
+    }
+
+    vec2 p = uv * outerRadiusPixels;
+    float spacing = 5.0;
+    float patternType = floor(multiShape.patternType + 0.5);
+
+    if (patternType < 1.5) {
+        vec2 cell = fract(p / spacing) - 0.5;
+        return 1.0 - step(0.22, length(cell));
+    }
+
+    if (patternType < 2.5) {
+        return stripeMask(p.x + p.y, spacing, 0.12);
+    }
+
+    if (patternType < 3.5) {
+        return clamp(
+            stripeMask(p.x + p.y, spacing, 0.10) +
+            stripeMask(p.x - p.y, spacing, 0.10),
+            0.0,
+            1.0
+        );
+    }
+
+    return stripeMask(p.y, spacing, 0.10) * stripeMask(p.x, spacing * 1.6, 0.28);
+}
+
+vec4 applyFillPattern(vec4 fillColor, vec2 uv) {
+    float mask = getFillPatternMask(uv);
+    if (mask <= 0.0 || fillColor.a <= 0.0) {
+        return fillColor;
+    }
+
+    vec3 patternRgb = mix(fillColor.rgb, vec3(0.0), 0.38);
+    return vec4(mix(fillColor.rgb, patternRgb, mask), fillColor.a);
+}
+
 void main(void) {
     geometry.uv = unitPosition;
     vec2 uv = unitPosition - vec2(multiShape.offsetX, multiShape.offsetY);
@@ -209,9 +257,10 @@ void main(void) {
             ? smoothedge(innerUnitRadius * outerRadiusPixels, distToCenter)
             : step(innerUnitRadius * outerRadiusPixels, distToCenter);
         lineMask *= getDashMask(scaledUv);
+        vec4 fillColor = applyFillPattern(vFillColor, scaledUv);
 
         if (scatterplot.filled > 0.5) {
-            fragColor = mix(vFillColor, vLineColor, lineMask);
+            fragColor = mix(fillColor, vLineColor, lineMask);
         } else {
             if (lineMask == 0.0) discard;
             fragColor = vec4(vLineColor.rgb, vLineColor.a * lineMask);
@@ -219,7 +268,7 @@ void main(void) {
     } else if (scatterplot.filled < 0.5) {
         discard;
     } else {
-        fragColor = vFillColor;
+        fragColor = applyFillPattern(vFillColor, scaledUv);
     }
 
     fragColor.a *= inShape;
@@ -239,6 +288,8 @@ export type MultiShapeLayerProps<DataT = unknown> = {
   dashed?: boolean;
   dashLength?: number;
   gapLength?: number;
+  patternEnabled?: boolean;
+  patternType?: number;
 };
 
 const defaultProps = {
@@ -251,7 +302,9 @@ const defaultProps = {
   shapeScale: { type: 'number', value: 1 },
   dashed: { type: 'boolean', value: false },
   dashLength: { type: 'number', value: 3 },
-  gapLength: { type: 'number', value: 2 }
+  gapLength: { type: 'number', value: 2 },
+  patternEnabled: { type: 'boolean', value: false },
+  patternType: { type: 'number', value: 1 }
 };
 
 interface MultiShapeLayerState {
@@ -319,7 +372,9 @@ vRadius = instanceRadius;
       shapeScale,
       dashed,
       dashLength,
-      gapLength
+      gapLength,
+      patternEnabled,
+      patternType
     } = this.props;
     const state = this.state as unknown as MultiShapeLayerState;
     const shaderInputs = state.model?.shaderInputs;
@@ -333,7 +388,9 @@ vRadius = instanceRadius;
           shapeScale: shapeScale ?? 1,
           dashed: dashed ? 1 : 0,
           dashLength: dashLength ?? 3,
-          gapLength: gapLength ?? 2
+          gapLength: gapLength ?? 2,
+          patternEnabled: patternEnabled ? 1 : 0,
+          patternType: patternType ?? 1
         }
       });
     }

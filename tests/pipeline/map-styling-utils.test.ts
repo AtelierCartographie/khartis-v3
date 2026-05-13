@@ -177,6 +177,7 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
 }));
 
 import {
+  getAbsoluteDomainMax,
   getColorForValue,
   getSizeForValue,
   getProportionalSymbolSizeForValue,
@@ -303,16 +304,30 @@ describe('getProportionalSymbolSizeForValue', () => {
     ).toBe(10);
   });
 
-  it('returns zero for absent, negative, or unusable proportional values', () => {
+  it('uses absolute values for negative proportional symbols', () => {
+    expect(
+      getProportionalSymbolSizeForValue(-25, 100, 40, ScaleType.SQRT)
+    ).toBeCloseTo(20);
+    expect(
+      getProportionalSymbolSizeForValue(-50, -100, 40, ScaleType.LINEAR)
+    ).toBe(20);
+  });
+
+  it('returns zero for absent or unusable proportional values', () => {
     expect(
       getProportionalSymbolSizeForValue(Number.NaN, 100, 40, ScaleType.SQRT)
-    ).toBe(0);
-    expect(
-      getProportionalSymbolSizeForValue(-10, 100, 40, ScaleType.SQRT)
     ).toBe(0);
     expect(getProportionalSymbolSizeForValue(10, 0, 40, ScaleType.SQRT)).toBe(
       0
     );
+  });
+});
+
+describe('getAbsoluteDomainMax', () => {
+  it('uses the largest magnitude from min/max statistics', () => {
+    expect(getAbsoluteDomainMax(-500, 100)).toBe(500);
+    expect(getAbsoluteDomainMax(-500, -1)).toBe(500);
+    expect(getAbsoluteDomainMax(0, 100)).toBe(100);
   });
 });
 

@@ -14,6 +14,10 @@
     annotationsActions,
     getAnnotationsState
   } from './annotations.store.svelte';
+  import {
+    isSupportedAnnotationImageFile,
+    SUPPORTED_ANNOTATION_IMAGE_EXTENSIONS
+  } from './image-file-validation';
 
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
@@ -30,6 +34,7 @@
   );
 
   let hiddenUploader: HTMLDivElement | null = null;
+  let imageImportError = $state<string | null>(null);
 
   function triggerFileDialog() {
     if (hiddenUploader && hiddenUploader?.focus) {
@@ -44,6 +49,12 @@
     const files: readonly File[] = e.detail || [];
     if (files.length > 0) {
       const file = files[0];
+      if (!isSupportedAnnotationImageFile(file)) {
+        imageImportError = m.annotations_image_unsupported_format();
+        return;
+      }
+
+      imageImportError = null;
       const reader = new FileReader();
       reader.onload = (ev) => {
         const dataUrl = ev.target?.result as string;
@@ -82,11 +93,14 @@
           labelTitle=""
           buttonLabel=""
           status="edit"
-          accept={['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp']}
+          accept={Array.from(SUPPORTED_ANNOTATION_IMAGE_EXTENSIONS)}
           multiple={false}
           on:change={handleFileUpload}
         />
       </div>
+      {#if imageImportError}
+        <p class="helper helper--error" role="alert">{imageImportError}</p>
+      {/if}
     </Column>
   </Row>
 
@@ -164,6 +178,10 @@
     color: var(--cds-text-secondary);
     font-size: 0.75rem;
     line-height: 1rem;
+  }
+
+  .helper--error {
+    color: var(--cds-text-error);
   }
 
   .visually-hidden {

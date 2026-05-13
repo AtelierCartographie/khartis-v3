@@ -10,9 +10,21 @@ const source = readFileSync(
 describe('FacetsVariablePicker collection filtering', () => {
   it('keeps collection choices constrained to the compatible single-select list', () => {
     expect(source).toContain('singleSelectItems = dataFields');
+    expect(source).toContain('isAutoFacetDataColumn');
+    expect(source).toContain('collectionDataFields');
     expect(source).toContain(
-      'dataFields.filter((f) => f.id !== NONE_FIELD_ID)'
+      '(isCollectionEnabled ? collectionDataFields : singleSelectItems).filter'
     );
     expect(source).toContain('displayItems');
+  });
+
+  it('renders data-step VariableBadge markers and excludes Aucun from dropdown choices', () => {
+    expect(source).toContain(
+      "import VariableBadge from '$lib/features/commons/components/variable-badge.svelte'"
+    );
+    expect(source).toContain('resolveVariableBadgeType');
+    expect(source).toContain('(f) => f.id !== NONE_FIELD_ID');
+    expect(source).not.toContain('field.id === NONE_FIELD_ID');
+    expect(source).not.toContain('<Table');
   });
 });

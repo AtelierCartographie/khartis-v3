@@ -80,14 +80,13 @@
 
   function updatePosition() {
     if (!triggerElement) return;
-    const scale = globalState.zoom.pageZoomLevel / 100;
     const rect = triggerElement.getBoundingClientRect();
-    const top = rect.top / scale;
-    const bottom = rect.bottom / scale;
-    const left = rect.left / scale;
-    const width = rect.width / scale;
+    const top = rect.top;
+    const bottom = rect.bottom;
+    const left = rect.left;
+    const width = rect.width;
     const estimatedDropdownHeight = 300;
-    const spaceBelow = window.innerHeight / scale - bottom;
+    const spaceBelow = window.innerHeight - bottom;
     const shouldFlip = spaceBelow < estimatedDropdownHeight && top > spaceBelow;
 
     dropdownPos = {

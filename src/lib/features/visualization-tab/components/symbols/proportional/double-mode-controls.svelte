@@ -4,7 +4,6 @@
   import Switch from '$lib/features/commons/components/switch.svelte';
   import { InfoPopover, SliderWithInput } from '../../shared';
   import FacetsVariablePicker from '../../shared/facets-variable-picker.svelte';
-  import BreakValueInput from './break-value-input.svelte';
   import {
     SLIDER_LIMITS,
     type ShapeType
@@ -36,8 +35,6 @@
     symbolMaxSize: number;
     shapeType: ShapeType;
     positionMode: string;
-    breakValueA: number | null;
-    breakValueB: number | null;
     sizeColumnName: string;
     sizePickerOpen: boolean;
     fieldBPickerOpen: boolean;
@@ -59,8 +56,6 @@
     onSymbolMaxSizeChange: (value: number) => void;
     onShapeDropdownSelect: (id: string | number) => void;
     onPositionModeChange: (id: string | number) => void;
-    onBreakValueAChange: (value: number | null) => void;
-    onBreakValueBChange: (value: number | null) => void;
   }
 
   let {
@@ -68,8 +63,6 @@
     symbolMaxSize = $bindable(),
     shapeType,
     positionMode,
-    breakValueA,
-    breakValueB,
     sizeColumnName,
     sizePickerOpen = $bindable(),
     fieldBPickerOpen = $bindable(),
@@ -86,9 +79,7 @@
     onFieldBSelect,
     onSymbolMaxSizeChange,
     onShapeDropdownSelect,
-    onPositionModeChange,
-    onBreakValueAChange,
-    onBreakValueBChange
+    onPositionModeChange
   }: Props = $props();
 </script>
 
@@ -183,19 +174,6 @@
     type="default"
   />
 </div>
-
-<BreakValueInput
-  label={m.symbol_a_break_value()}
-  infoText={m.break_value_info()}
-  value={breakValueA}
-  onchange={onBreakValueAChange}
-/>
-
-<BreakValueInput
-  label={m.symbol_b_break_value()}
-  value={breakValueB}
-  onchange={onBreakValueBChange}
-/>
 
 <style lang="scss">
   .field-group {

@@ -128,6 +128,23 @@ describe('createProportionalSymbolSizeAccessor', () => {
     expect(accessor({ pop: 25 } as never)).toBeCloseTo(25);
   });
 
+  it('uses the absolute value for negative proportional symbol values', () => {
+    expect(accessor({ pop: -25 } as never)).toBeCloseTo(25);
+  });
+
+  it('uses min/max magnitudes when the column statistics cross zero', () => {
+    const crossingAccessor = createProportionalSymbolSizeAccessor(
+      'delta',
+      100,
+      50,
+      ScaleType.SQRT,
+      -400
+    );
+
+    expect(crossingAccessor({ delta: -100 } as never)).toBeCloseTo(25);
+    expect(crossingAccessor({ delta: 100 } as never)).toBeCloseTo(25);
+  });
+
   it('returns zero for null or non-finite values', () => {
     expect(accessor({ pop: null } as never)).toBe(0);
     expect(accessor({ pop: 'abc' } as never)).toBe(0);
@@ -145,6 +162,7 @@ describe('createGeoJsonProportionalSymbolSizeAccessor', () => {
   it('keeps GeoJSON symbol fallback on the same zero-based proportional contract', () => {
     expect(accessor({ properties: { pop: 0 } })).toBe(0);
     expect(accessor({ properties: { pop: 50 } })).toBe(25);
+    expect(accessor({ properties: { pop: -50 } })).toBe(25);
     expect(accessor({ properties: { pop: null } })).toBe(0);
   });
 });
