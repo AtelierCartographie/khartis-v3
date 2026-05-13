@@ -1,7 +1,7 @@
 import { m } from '$lib/paraglide/messages.js';
 import Textbox from '@borgar/textbox';
 import { extent, ticks as d3_ticks } from 'd3-array';
-import { draw_categorical_legend } from './categorical';
+
 import {
   createLegendCanvasRect,
   createLegendFont,
@@ -75,7 +75,6 @@ export function draw_symbols_legend(
   const cross_zero = min < 0 && max > 0;
   const all_negative = min < 0 && max <= 0;
   const label_sign = all_negative ? -1 : 1;
-  let box_sign_legend: string | null = null;
 
   if (cross_zero || all_negative) {
     values_array = values_array.map(Math.abs);
@@ -83,20 +82,6 @@ export function draw_symbols_legend(
   }
 
   const sorted_data = values_array.slice().sort((a, b) => a - b);
-
-  if (cross_zero) {
-    box_sign_legend = draw_categorical_legend(
-      [
-        { label: '+', fill: plus_color },
-        { label: '-', fill: less_color }
-      ],
-      {
-        type: 'box',
-        fontSize,
-        fontFamily: resolvedFontFamily
-      }
-    );
-  }
 
   const scale =
     type !== 'bar' && type !== 'spike'
@@ -108,11 +93,26 @@ export function draw_symbols_legend(
   const x_max = type !== 'bar' && type !== 'spike' ? values[0] : bar_width;
   const y_max = values[0];
   const is_min_alone = values[values.length - 1] <= 1.5;
-  const margin = 10;
+  const margin = Math.max(10, Math.round(fontSize * 0.6));
   const header_gap = 3;
   const label_gap = 10;
   const label_safety_padding = Math.max(6, Math.round(fontSize * 0.6));
   const font = createLegendFont({ fontSize, fontFamily: resolvedFontFamily });
+  const sign_box_dim = Math.round(fontSize * 1.25);
+  const sign_row_inner_gap = Math.max(4, Math.round(fontSize * 0.3));
+  const sign_label_max_width = cross_zero
+    ? Math.max(
+        Textbox.measureText('+', font),
+        Textbox.measureText('−', font),
+        Textbox.measureText('-', font)
+      ) + label_safety_padding
+    : 0;
+  const sign_legend_body_width = cross_zero
+    ? margin + sign_box_dim + label_gap + sign_label_max_width + margin
+    : 0;
+  const sign_legend_section_height = cross_zero
+    ? sign_box_dim * 2 + sign_row_inner_gap
+    : 0;
   const max_symbol_width =
     type !== 'bar' && type !== 'spike'
       ? margin + x_max * 2 + 20
@@ -132,7 +132,11 @@ export function draw_symbols_legend(
   const nodata_body_width = nodata
     ? nodata_label_x + nodata_label_width + margin
     : 0;
-  const width = Math.max(main_body_width, nodata_body_width);
+  const width = Math.max(
+    main_body_width,
+    nodata_body_width,
+    sign_legend_body_width
+  );
   const label_anchor_x = width - margin;
   const max_text_width = width - margin * 2;
   const title_font = createLegendFont({
@@ -169,13 +173,20 @@ export function draw_symbols_legend(
     margin + actual_header_height + title_margin_bottom + y_max * 2;
   const bottom_min_alone = bottom_symbols + 10;
   const symbols_bottom = is_min_alone ? bottom_min_alone : bottom_symbols;
-  const nodata_gap = 10;
-  const nodata_section_height = nodata ? nodata_gap + fontSize : 0;
-  const note_gap = 8;
+  const section_gap = Math.max(10, Math.round(fontSize * 0.6));
+  const sign_legend_y = cross_zero
+    ? symbols_bottom + section_gap
+    : symbols_bottom;
+  const sign_legend_bottom = cross_zero
+    ? sign_legend_y + sign_legend_section_height
+    : symbols_bottom;
+  const nodata_section_height = nodata ? section_gap + fontSize : 0;
   const note_section_height =
-    note_lines.length > 0 ? note_gap + note_lines.length * (noteSize * 1.2) : 0;
+    note_lines.length > 0
+      ? section_gap + note_lines.length * (noteSize * 1.2)
+      : 0;
   const height =
-    symbols_bottom + margin + nodata_section_height + note_section_height;
+    sign_legend_bottom + nodata_section_height + note_section_height + margin;
   const { symbols, links, labels } = create_symbols();
 
   return create_svg_markup(symbols, links, labels);
@@ -247,24 +258,39 @@ export function draw_symbols_legend(
 
     let nodata_markup = '';
     if (nodata) {
-      const nodata_y = symbols_bottom + margin + nodata_gap;
-      const dash_y = nodata_y - fontSize / 2;
+      const dash_y = sign_legend_bottom + section_gap + fontSize / 2;
       nodata_markup = `<g class="nodata">
         <line x1="${nodata_dash_x - nodata_dash_width / 2}" y1="${dash_y}" x2="${nodata_dash_x + nodata_dash_width / 2}" y2="${dash_y}" stroke="black" stroke-width="1"/>
         <path d="M${nodata_dash_x + nodata_dash_width / 2},${dash_y}L${nodata_label_x - label_gap},${dash_y}" fill="none" stroke="currentColor" stroke-width="0.75" stroke-dasharray="3,2"/>
-        <text x="${nodata_label_x}" y="${dash_y}" text-anchor="start" font-size="${fontSize}" font-variant="tabular-nums">${escapeSvgText(nodata_label)}</text>
+        <text x="${nodata_label_x}" y="${dash_y}" text-anchor="start" font-size="${fontSize}" font-variant="tabular-nums" dominant-baseline="middle">${escapeSvgText(nodata_label)}</text>
       </g>`;
     }
 
     let note_markup = '';
     if (note_lines.length > 0) {
-      const note_y = symbols_bottom + margin + nodata_section_height + note_gap;
+      const note_y = sign_legend_bottom + nodata_section_height + section_gap;
       const line_h = noteSize * 1.2;
       note_markup += `<g class="note" text-anchor="start" dominant-baseline="hanging" font-size="${noteSize}">`;
       note_lines.forEach((line, i) => {
         note_markup += `<text x="${margin}" y="${note_y + i * line_h}">${escapeSvgText(line)}</text>`;
       });
       note_markup += `</g>`;
+    }
+
+    let sign_legend_markup = '';
+    if (cross_zero) {
+      const sign_box_x = margin;
+      const sign_label_x = sign_box_x + sign_box_dim + label_gap;
+      const plus_y = sign_legend_y;
+      const less_y = sign_legend_y + sign_box_dim + sign_row_inner_gap;
+      const safePlus = escapeSvgAttribute(plus_color);
+      const safeLess = escapeSvgAttribute(less_color);
+      sign_legend_markup = `<g class="sign_legend" font-size="${fontSize}">
+        <rect x="${sign_box_x}" y="${plus_y}" width="${sign_box_dim}" height="${sign_box_dim}" fill="${safePlus}" />
+        <text x="${sign_label_x}" y="${plus_y + sign_box_dim / 2}" text-anchor="start" dominant-baseline="middle">+</text>
+        <rect x="${sign_box_x}" y="${less_y}" width="${sign_box_dim}" height="${sign_box_dim}" fill="${safeLess}" />
+        <text x="${sign_label_x}" y="${less_y + sign_box_dim / 2}" text-anchor="start" dominant-baseline="middle">−</text>
+      </g>`;
     }
 
     return `<g class="symbol_legend" font-family="${safeFontFamily}">
@@ -279,11 +305,9 @@ export function draw_symbols_legend(
         ${labels.join('')}
       </g>
       ${header_markup}
+      ${sign_legend_markup}
       ${nodata_markup}
       ${note_markup}
-      <g class="sign_legend" transform="translate(${0},${height})">
-        ${cross_zero ? box_sign_legend : ''}
-      </g>
     </g>`;
   }
 }

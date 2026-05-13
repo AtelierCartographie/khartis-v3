@@ -21,4 +21,8 @@ describe('useFacetsVariableSelection', () => {
     );
     expect(source).toContain('[baseVariableName, ...variableNames]');
   });
+
+  it('does not seed collection facets with technical identifiers', () => {
+    expect(source).toContain('isAutoFacetDataColumn(field)');
+  });
 });

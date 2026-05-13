@@ -35,6 +35,14 @@ describe('FillSection — interface', () => {
     expect(classesBlock).toContain('visualization?.classification');
   });
 
+  it('hides the standalone palette inversion button in CLASSES mode', () => {
+    const classesBlock = source.match(
+      /fillMode === FillMode\.CLASSES[\s\S]*?FillMode\.CATEGORIES/
+    )?.[0];
+    expect(classesBlock).toBeDefined();
+    expect(classesBlock).toContain('showInvertButton={false}');
+  });
+
   it('renders PalettePreview with QUALITATIVE paletteType + categoriesMode for FillMode.CATEGORIES', () => {
     expect(source).toContain('paletteType={PALETTE_TYPE.QUALITATIVE}');
     expect(source).toContain('categoriesMode={true}');

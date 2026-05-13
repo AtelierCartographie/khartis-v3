@@ -282,10 +282,10 @@ function backfillPrimitiveConfigs(
 }
 
 const LEGACY_SLIDER_BOUNDS = {
-  symbolSize: { min: 1, max: 50 },
-  symbolMaxSize: { min: 2, max: 60 },
-  symbolMinSize: { min: 1, max: 50 },
-  strokeWidth: { min: 0, max: 12 },
+  symbolSize: { min: 1, max: 100 },
+  symbolMaxSize: { min: 2, max: 100 },
+  symbolMinSize: { min: 1, max: 100 },
+  strokeWidth: { min: 0, max: 20 },
   lineWidth: { min: 0.5, max: 12 },
   lineMaxWidth: { min: 1, max: 20 },
   haloWidth: { min: 0, max: 6 }

@@ -7,6 +7,10 @@ import {
   buildFacetVisualizationUpdates,
   generateFacetVisualizations
 } from '$lib/features/commons/services/facet-generator.service';
+import {
+  isAutoFacetDataColumn,
+  isAutoFacetNumericColumn
+} from '$lib/features/commons/utils/visualization-columns.utils';
 
 export const SCALE_MODE = {
   SHARED: 'shared',
@@ -37,6 +41,18 @@ export const FACET_SLOT = {
 
 export type FacetSlotPath = (typeof FACET_SLOT)[keyof typeof FACET_SLOT];
 
+const NUMERIC_FACET_SLOTS = new Set<FacetSlotPath>([
+  FACET_SLOT.SYMBOL_VALUE,
+  FACET_SLOT.SYMBOL_SIZE,
+  FACET_SLOT.SYMBOL_FILL_VALUE,
+  FACET_SLOT.POLYGON_VALUE,
+  FACET_SLOT.LINE_VALUE,
+  FACET_SLOT.LINE_SIZE,
+  FACET_SLOT.TEXT_VALUE,
+  FACET_SLOT.TEXT_BACKGROUND_VALUE,
+  FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE
+]);
+
 function isFacetSlotPath(value: unknown): value is FacetSlotPath {
   return (Object.values(FACET_SLOT) as string[]).includes(value as string);
 }
@@ -54,7 +70,7 @@ function resolveFacetMappingKey(
 }
 
 function slotRequiresNumericVariable(slotPath: FacetSlotPath): boolean {
-  return slotPath.endsWith('.valueColumn') || slotPath.endsWith('.sizeColumn');
+  return NUMERIC_FACET_SLOTS.has(slotPath);
 }
 
 function getCompatibleDatasetVariables(
@@ -69,9 +85,10 @@ function getCompatibleDatasetVariables(
   }
 
   return dataset.columns
-    .filter(
-      (column) =>
-        !slotRequiresNumericVariable(slotPath) || column.type === 'number'
+    .filter((column) =>
+      slotRequiresNumericVariable(slotPath)
+        ? isAutoFacetNumericColumn(column)
+        : isAutoFacetDataColumn(column)
     )
     .map((column) => column.name);
 }
@@ -84,10 +101,6 @@ function filterCompatibleFacetVariables(
   const sanitized = variables.filter(
     (value): value is string => typeof value === 'string' && value.length > 0
   );
-  if (!slotRequiresNumericVariable(slotPath)) {
-    return sanitized;
-  }
-
   const dataset = datasetsStore.datasets.find(
     (candidate) => candidate.id === visualization.datasetId
   );
@@ -95,13 +108,17 @@ function filterCompatibleFacetVariables(
     return sanitized;
   }
 
-  const numericColumns = new Set(
+  const compatibleColumns = new Set(
     dataset.columns
-      .filter((column) => column.type === 'number')
+      .filter((column) =>
+        slotRequiresNumericVariable(slotPath)
+          ? isAutoFacetNumericColumn(column)
+          : isAutoFacetDataColumn(column)
+      )
       .map((column) => column.name)
   );
 
-  return sanitized.filter((variable) => numericColumns.has(variable));
+  return sanitized.filter((variable) => compatibleColumns.has(variable));
 }
 
 function normalizeFacetVariablesForEnable(

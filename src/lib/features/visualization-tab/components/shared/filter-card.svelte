@@ -43,6 +43,25 @@
     onUpdateFilter
   }: Props = $props();
 
+  type CarbonTextInputEvent = Event & {
+    detail?: string | number | null | { value?: string | number | null };
+  };
+
+  function readTextInputValue(event: CarbonTextInputEvent): string {
+    const detail = event.detail;
+    if (typeof detail === 'string') return detail;
+    if (typeof detail === 'number') return String(detail);
+    if (
+      detail &&
+      typeof detail === 'object' &&
+      'value' in detail &&
+      (typeof detail.value === 'string' || typeof detail.value === 'number')
+    ) {
+      return String(detail.value);
+    }
+    return event.target instanceof HTMLInputElement ? event.target.value : '';
+  }
+
   function getColumnType(columnName: string): ColumnType | null {
     const field = dataFields.find((f) => f.text === columnName);
     return normalizeFieldType(field?.type);
@@ -147,7 +166,7 @@
         value={filter.value ?? ''}
         on:input={(e) =>
           onUpdateFilter?.(filter.id, {
-            value: (e.target as HTMLInputElement).value
+            value: readTextInputValue(e)
           })}
       />
     </div>
@@ -159,7 +178,7 @@
         value={filter.secondaryValue ?? ''}
         on:input={(e) =>
           onUpdateFilter?.(filter.id, {
-            secondaryValue: (e.target as HTMLInputElement).value
+            secondaryValue: readTextInputValue(e)
           })}
       />
     </div>
@@ -201,7 +220,7 @@
           value={filter.value ?? ''}
           on:input={(e) =>
             onUpdateFilter?.(filter.id, {
-              value: (e.target as HTMLInputElement).value
+              value: readTextInputValue(e)
             })}
         />
       {/if}

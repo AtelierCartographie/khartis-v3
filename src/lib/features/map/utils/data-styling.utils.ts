@@ -121,18 +121,21 @@ export function getProportionalSymbolSizeForValue(
   maxSize: number,
   scale: ScaleType = ScaleType.SQRT
 ): number {
+  const magnitude = Math.abs(value);
+  const domainMax = Math.abs(max);
+
   if (
-    !Number.isFinite(value) ||
-    !Number.isFinite(max) ||
+    !Number.isFinite(magnitude) ||
+    !Number.isFinite(domainMax) ||
     !Number.isFinite(maxSize) ||
-    value <= 0 ||
-    max <= 0 ||
+    magnitude <= 0 ||
+    domainMax <= 0 ||
     maxSize <= 0
   ) {
     return 0;
   }
 
-  const normalized = Math.min(1, Math.max(0, value / max));
+  const normalized = Math.min(1, Math.max(0, magnitude / domainMax));
 
   switch (scale) {
     case ScaleType.LINEAR:
@@ -145,6 +148,11 @@ export function getProportionalSymbolSizeForValue(
     default:
       return Math.sqrt(normalized) * maxSize;
   }
+}
+
+export function getAbsoluteDomainMax(min: number, max: number): number {
+  const values = [min, max].filter(Number.isFinite).map(Math.abs);
+  return values.length > 0 ? Math.max(...values) : Number.NaN;
 }
 
 export function getClassedSizeForValue(

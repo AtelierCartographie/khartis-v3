@@ -11,13 +11,13 @@ function buildV360Project(
       {
         id: 'viz-1',
         symbol: {
-          size: 80,
-          maxSize: 90,
-          minSize: 60,
-          strokeWidth: 18
+          size: 120,
+          maxSize: 130,
+          minSize: 110,
+          strokeWidth: 28
         },
         polygon: {
-          strokeWidth: 16
+          strokeWidth: 24
         },
         line: {
           width: 18,
@@ -30,7 +30,7 @@ function buildV360Project(
           }
         },
         style: {
-          strokeWidth: 14,
+          strokeWidth: 26,
           lineWidth: 14,
           lineMaxWidth: 35,
           textHaloWidth: 9,
@@ -57,16 +57,16 @@ describe('schema-migration 3.6.0 → 3.7.0', () => {
     const secondaryLabels = text.secondaryLabels as Record<string, number>;
     const style = viz.style as Record<string, number>;
 
-    expect(symbol.size).toBe(50);
-    expect(symbol.maxSize).toBe(60);
-    expect(symbol.minSize).toBe(50);
-    expect(symbol.strokeWidth).toBe(12);
-    expect(polygon.strokeWidth).toBe(12);
+    expect(symbol.size).toBe(100);
+    expect(symbol.maxSize).toBe(100);
+    expect(symbol.minSize).toBe(100);
+    expect(symbol.strokeWidth).toBe(20);
+    expect(polygon.strokeWidth).toBe(20);
     expect(line.width).toBe(12);
     expect(line.maxWidth).toBe(20);
     expect(text.haloWidth).toBe(6);
     expect(secondaryLabels.haloWidth).toBe(6);
-    expect(style.strokeWidth).toBe(12);
+    expect(style.strokeWidth).toBe(20);
     expect(style.lineWidth).toBe(12);
     expect(style.lineMaxWidth).toBe(20);
     expect(style.textHaloWidth).toBe(6);
