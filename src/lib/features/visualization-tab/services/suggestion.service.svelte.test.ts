@@ -273,6 +273,7 @@ describe('suggestion.service', () => {
       score: 46
     };
 
+    mocks.notifyChangeMock.mockClear();
     applySuggestionToVisualization(visualization.id, suggestion);
 
     const updatedVisualization = visualizationStore.visualizations.find(
@@ -287,6 +288,10 @@ describe('suggestion.service', () => {
         suggestion
       )
     ).toBe(true);
+    expect(mocks.notifyChangeMock).toHaveBeenCalledWith(
+      'visualization',
+      'immediate'
+    );
   });
 
   it('overwrites stale symbol fill state when applying a qualitative point suggestion', () => {
