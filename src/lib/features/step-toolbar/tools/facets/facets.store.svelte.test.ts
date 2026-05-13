@@ -187,6 +187,7 @@ describe('facetsStore', () => {
           id: 'dataset-1',
           columns: [
             { name: 'label', type: 'text' },
+            { name: 'OGC_FID', type: 'number' },
             { name: 'a', type: 'number' },
             { name: 'b', type: 'number' }
           ]
@@ -209,6 +210,127 @@ describe('facetsStore', () => {
         ['a', 'b'],
         SCALE_MODE.INDEPENDENT,
         FACET_SLOT.POLYGON_VALUE
+      );
+    });
+
+    it('does not auto-complete numeric facet slots with technical identifiers', async () => {
+      mocks.visualizations = [
+        {
+          id: 'base-viz',
+          name: 'Base visualization',
+          datasetId: 'dataset-1'
+        }
+      ];
+      mocks.datasets = [
+        {
+          id: 'dataset-1',
+          columns: [
+            { name: 'OGC_FID', type: 'number' },
+            { name: 'capacity_total', type: 'number' },
+            { name: 'population_total', type: 'number' }
+          ]
+        }
+      ];
+      mocks.generateFacetVisualizationsMock.mockResolvedValue([
+        { id: 'facet-capacity' },
+        { id: 'facet-population' }
+      ]);
+
+      await facetsStore.updateVariables(
+        'base-viz',
+        ['capacity_total'],
+        FACET_SLOT.SYMBOL_FILL_VALUE
+      );
+
+      expect(facetsStore.enabled).toBe(true);
+      expect(facetsStore.variables).toEqual([
+        'capacity_total',
+        'population_total'
+      ]);
+      expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
+        mocks.visualizations[0],
+        ['capacity_total', 'population_total'],
+        SCALE_MODE.INDEPENDENT,
+        FACET_SLOT.SYMBOL_FILL_VALUE
+      );
+    });
+
+    it('filters internal geometry columns from categorical facet slots', async () => {
+      mocks.visualizations = [
+        {
+          id: 'base-viz',
+          name: 'Base visualization',
+          datasetId: 'dataset-1'
+        }
+      ];
+      mocks.datasets = [
+        {
+          id: 'dataset-1',
+          columns: [
+            { name: 'OGC_FID', type: 'number' },
+            { name: 'geom', type: 'string' },
+            { name: '__feature_id__', type: 'string' },
+            { name: 'category', type: 'text' },
+            { name: 'segment', type: 'text' }
+          ]
+        }
+      ];
+      mocks.generateFacetVisualizationsMock.mockResolvedValue([
+        { id: 'facet-category' },
+        { id: 'facet-segment' }
+      ]);
+
+      await facetsStore.updateVariables(
+        'base-viz',
+        ['OGC_FID', 'geom', '__feature_id__', 'category', 'segment'],
+        FACET_SLOT.SYMBOL_FILL_CATEGORY
+      );
+
+      expect(facetsStore.variables).toEqual(['category', 'segment']);
+      expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
+        mocks.visualizations[0],
+        ['category', 'segment'],
+        SCALE_MODE.INDEPENDENT,
+        FACET_SLOT.SYMBOL_FILL_CATEGORY
+      );
+    });
+
+    it('filters incompatible text fields from camelCase numeric facet slots', async () => {
+      mocks.visualizations = [
+        {
+          id: 'base-viz',
+          name: 'Base visualization',
+          datasetId: 'dataset-1'
+        }
+      ];
+      mocks.datasets = [
+        {
+          id: 'dataset-1',
+          columns: [
+            { name: 'label', type: 'text' },
+            { name: 'OGC_FID', type: 'number' },
+            { name: 'a', type: 'number' },
+            { name: 'b', type: 'number' }
+          ]
+        }
+      ];
+      mocks.generateFacetVisualizationsMock.mockResolvedValue([
+        { id: 'facet-a' },
+        { id: 'facet-b' }
+      ]);
+
+      await facetsStore.updateVariables(
+        'base-viz',
+        ['label', 'a', 'b'],
+        FACET_SLOT.SYMBOL_FILL_VALUE
+      );
+
+      expect(facetsStore.variables).toEqual(['a', 'b']);
+      expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
+        mocks.visualizations[0],
+        ['a', 'b'],
+        SCALE_MODE.INDEPENDENT,
+        FACET_SLOT.SYMBOL_FILL_VALUE
       );
     });
 
@@ -412,6 +534,92 @@ describe('facetsStore', () => {
         0,
         FACET_SLOT.SYMBOL_SIZE,
         'label'
+      );
+
+      expect(result).toBe(false);
+      expect(updateVisualizationMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects incompatible text fields for camelCase numeric facet slots', () => {
+      mocks.visualizations = [
+        {
+          id: 'base-viz',
+          name: 'Base',
+          datasetId: 'dataset-1'
+        },
+        {
+          id: 'facet-a',
+          name: 'a',
+          mapping: { valueColumn: 'a' },
+          text: {
+            background: {
+              strokeValueColumn: 'a'
+            }
+          }
+        }
+      ];
+      mocks.datasets = [
+        {
+          id: 'dataset-1',
+          columns: [{ name: 'label', type: 'text' }]
+        }
+      ];
+
+      facetsStore.restoreFromSerialized({
+        enabled: true,
+        baseVisualizationId: 'base-viz',
+        primarySlotPath: FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE,
+        variables: ['a'],
+        layout: { columns: 1, gap: 16 },
+        scaleMode: SCALE_MODE.INDEPENDENT,
+        generatedVisualizationIds: ['facet-a']
+      });
+
+      const result = facetsStore.setVariableForSlot(
+        0,
+        FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE,
+        'label'
+      );
+
+      expect(result).toBe(false);
+      expect(updateVisualizationMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects technical identifiers for numeric facet slots', () => {
+      mocks.visualizations = [
+        {
+          id: 'base-viz',
+          name: 'Base',
+          datasetId: 'dataset-1'
+        },
+        {
+          id: 'facet-a',
+          name: 'a',
+          mapping: { valueColumn: 'a' },
+          polygon: { valueColumn: 'a' }
+        }
+      ];
+      mocks.datasets = [
+        {
+          id: 'dataset-1',
+          columns: [{ name: 'OGC_FID', type: 'number' }]
+        }
+      ];
+
+      facetsStore.restoreFromSerialized({
+        enabled: true,
+        baseVisualizationId: 'base-viz',
+        primarySlotPath: FACET_SLOT.POLYGON_VALUE,
+        variables: ['a'],
+        layout: { columns: 1, gap: 16 },
+        scaleMode: SCALE_MODE.INDEPENDENT,
+        generatedVisualizationIds: ['facet-a']
+      });
+
+      const result = facetsStore.setVariableForSlot(
+        0,
+        FACET_SLOT.POLYGON_VALUE,
+        'OGC_FID'
       );
 
       expect(result).toBe(false);

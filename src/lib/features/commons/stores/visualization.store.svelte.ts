@@ -112,6 +112,7 @@ export interface ClassificationConfig {
   paletteId?: string;
   inverted?: boolean;
   labels?: string[];
+  categoryValues?: string[];
   disabledLabels?: string[];
   breakpointValue?: number | null;
   breakpointLowerClassCount?: number;
@@ -661,6 +662,49 @@ function buildPolygonPrimitiveConfig(
   };
 }
 
+function hasOwnClassificationKey<K extends keyof ClassificationConfig>(
+  classification: ClassificationConfig | undefined,
+  key: K
+): classification is ClassificationConfig & Pick<ClassificationConfig, K> {
+  return (
+    classification !== undefined &&
+    Object.prototype.hasOwnProperty.call(classification, key)
+  );
+}
+
+function resolveSymbolClassification(
+  existing: ClassificationConfig | undefined,
+  mirror: ClassificationConfig | undefined,
+  fallback: ClassificationConfig | undefined
+): ClassificationConfig | undefined {
+  const base = existing ?? mirror ?? fallback;
+  if (!base || !mirror || mirror === base) {
+    return base;
+  }
+
+  return {
+    ...base,
+    ...(hasOwnClassificationKey(mirror, 'colors')
+      ? { colors: mirror.colors }
+      : {}),
+    ...(hasOwnClassificationKey(mirror, 'labels')
+      ? { labels: mirror.labels }
+      : {}),
+    ...(hasOwnClassificationKey(mirror, 'categoryValues')
+      ? { categoryValues: mirror.categoryValues }
+      : {}),
+    ...(hasOwnClassificationKey(mirror, 'disabledLabels')
+      ? { disabledLabels: mirror.disabledLabels }
+      : {}),
+    ...(hasOwnClassificationKey(mirror, 'paletteId')
+      ? { paletteId: mirror.paletteId }
+      : {}),
+    ...(hasOwnClassificationKey(mirror, 'inverted')
+      ? { inverted: mirror.inverted }
+      : {})
+  };
+}
+
 function buildSymbolPrimitiveConfig(
   visualization: VisualizationConfig
 ): SymbolPrimitiveConfig {
@@ -751,10 +795,11 @@ function buildSymbolPrimitiveConfig(
       existing?.fillClassification ?? legacyFillClassification,
     strokeValueColumn: existing?.strokeValueColumn,
     strokeCategoryColumn: existing?.strokeCategoryColumn,
-    classification:
-      existing?.classification ??
-      visualization.symbolClassification ??
-      visualization.classification,
+    classification: resolveSymbolClassification(
+      existing?.classification,
+      visualization.symbolClassification,
+      visualization.classification
+    ),
     strokeClassification: existing?.strokeClassification,
     missingData: existing?.missingData ?? visualization.missingData,
     modeStates: existing?.modeStates
@@ -1086,13 +1131,21 @@ export function getPrimitiveClassification(
     visualization as VisualizationConfig,
     primitive
   );
+  if (primitive === PrimitiveFilterType.POINT) {
+    return resolveSymbolClassification(
+      resolvedPrimitive && 'classification' in resolvedPrimitive
+        ? resolvedPrimitive.classification
+        : undefined,
+      visualization.symbolClassification,
+      visualization.classification
+    );
+  }
+
   if (resolvedPrimitive && 'classification' in resolvedPrimitive) {
     return resolvedPrimitive.classification;
   }
 
   switch (primitive) {
-    case PrimitiveFilterType.POINT:
-      return visualization.symbolClassification ?? visualization.classification;
     case PrimitiveFilterType.LINE:
       return visualization.lineClassification ?? visualization.classification;
     case PrimitiveFilterType.TEXT:
@@ -1547,13 +1600,13 @@ export function resolveAllowedPrimitiveFilters(
       return [PrimitiveFilterType.POINT, PrimitiveFilterType.POLYGON];
 
     case 'line':
-      return [PrimitiveFilterType.LINE];
+      return [PrimitiveFilterType.POINT, PrimitiveFilterType.LINE];
 
     case 'point':
       return [PrimitiveFilterType.POINT];
 
     default:
-      return [...ALL_PRIMITIVE_FILTERS];
+      return [];
   }
 }
 
@@ -1579,7 +1632,7 @@ function resolveDefaultPrimitiveFilters(
       return [PrimitiveFilterType.POINT];
 
     default:
-      return [...ALL_PRIMITIVE_FILTERS];
+      return [];
   }
 }
 

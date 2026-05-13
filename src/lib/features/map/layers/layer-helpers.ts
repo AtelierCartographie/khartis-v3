@@ -3,6 +3,7 @@ import type { DeckDataRow, RGBColor } from '../types';
 import {
   getClassedSizeForValue,
   getColorForValue,
+  getAbsoluteDomainMax,
   getProportionalSymbolSizeForValue,
   getSizeForValue
 } from '../utils/data-styling.utils';
@@ -32,6 +33,16 @@ export function resolveMissingDataRenderProps(
 export function withOpacity(color: number[], opacity = 1): Color {
   const normalized = Math.min(Math.max(opacity, 0), 1);
   const alpha = Math.round(normalized * 255);
+  return [color[0] ?? 0, color[1] ?? 0, color[2] ?? 0, alpha];
+}
+
+export function withOpacityPreservingAlpha(
+  color: number[],
+  opacity = 1
+): Color {
+  const normalized = Math.min(Math.max(opacity, 0), 1);
+  const sourceAlpha = color[3] ?? 255;
+  const alpha = Math.round(normalized * sourceAlpha);
   return [color[0] ?? 0, color[1] ?? 0, color[2] ?? 0, alpha];
 }
 
@@ -99,15 +110,18 @@ export function createProportionalSymbolSizeAccessor(
   sizeColumn: string,
   maxValue: number,
   maxSize: number,
-  sizeScale: ScaleType
+  sizeScale: ScaleType,
+  minValue = 0
 ) {
+  const domainMax = getAbsoluteDomainMax(minValue, maxValue);
+
   return (object: DeckDataRow): number => {
     const rawValue = object[sizeColumn];
     const numericValue =
       typeof rawValue === 'number' ? rawValue : Number(rawValue);
     return getProportionalSymbolSizeForValue(
       numericValue,
-      maxValue,
+      domainMax,
       maxSize,
       sizeScale
     );
@@ -287,15 +301,18 @@ export function createGeoJsonProportionalSymbolSizeAccessor(
   sizeColumn: string,
   maxValue: number,
   maxSize: number,
-  sizeScale: ScaleType
+  sizeScale: ScaleType,
+  minValue = 0
 ) {
+  const domainMax = getAbsoluteDomainMax(minValue, maxValue);
+
   return (feature: { properties?: Record<string, unknown> | null }) => {
     const value = feature.properties?.[sizeColumn];
     const numericValue =
       typeof value === 'number' ? value : parseFloat(String(value));
     return getProportionalSymbolSizeForValue(
       numericValue,
-      maxValue,
+      domainMax,
       maxSize,
       sizeScale
     );
@@ -403,9 +420,10 @@ export function withRowHighlightAccessor(
     Math.min(Math.max(opacity * dimmingFactor, 0), 1) * 255
   );
   return (row: DeckDataRow): [number, number, number, number] => {
-    const [r, g, b] = accessor(row);
+    const [r, g, b, sourceAlpha = 255] = accessor(row);
     const rowId = row[INTERNAL_COLUMN.ID] as number;
-    const alpha = highlightedRowIds.has(rowId) ? fullAlpha : dimAlpha;
+    const targetAlpha = highlightedRowIds.has(rowId) ? fullAlpha : dimAlpha;
+    const alpha = Math.round(targetAlpha * (sourceAlpha / 255));
     return [r, g, b, alpha];
   };
 }
@@ -451,9 +469,10 @@ export function withGeoJsonRowHighlightAccessor(
   return (feature: {
     properties?: Record<string, unknown>;
   }): [number, number, number, number] => {
-    const [r, g, b] = accessor(feature);
+    const [r, g, b, sourceAlpha = 255] = accessor(feature);
     const rowId = feature.properties?.[INTERNAL_COLUMN.ID] as number;
-    const alpha = highlightedRowIds.has(rowId) ? fullAlpha : dimAlpha;
+    const targetAlpha = highlightedRowIds.has(rowId) ? fullAlpha : dimAlpha;
+    const alpha = Math.round(targetAlpha * (sourceAlpha / 255));
     return [r, g, b, alpha];
   };
 }

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { SLIDER_LIMITS } from '$lib/features/commons/constants/visualization.constants';
 
 const source = readFileSync(
   resolve(import.meta.dirname, 'symbol-mode-proportional.svelte'),
@@ -38,6 +39,7 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
 
   it('shows the max-size slider for proportional single and classes modes', () => {
     expect(scaleSource).toContain('label={m.max_size()}');
+    expect(SLIDER_LIMITS.symbolMaxSize.max).toBe(100);
     expect(source).toContain('{#if symbolMode === SymbolMode.CLASSES}');
     const classesBlock = source.split(
       '{#if symbolMode === SymbolMode.CLASSES}'
@@ -116,10 +118,13 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
     expect(doubleControlsSource).toContain('m.symbol_b_size_according()');
   });
 
-  it('exposes max size slider, shape and position dropdown in DOUBLE', () => {
+  it('exposes max size slider, shape and position dropdown in DOUBLE without Juxtaposition', () => {
     expect(doubleControlsSource).toContain('label={m.max_size()}');
     expect(doubleControlsSource).toContain('m.symbol_position_mode()');
     expect(doubleControlsSource).toContain('items={positionModeItems}');
+    expect(source).toContain('SymbolDoublePosition.OVERLAY');
+    expect(source).toContain('SymbolDoublePosition.DIVISION');
+    expect(source).not.toContain('m.symbol_position_juxtaposition()');
   });
 
   it('exposes bar/spike width control for linear symbol shapes', () => {
@@ -133,53 +138,34 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
     expect(source).toContain('onSymbolsChange?.({ barWidth: value })');
   });
 
-  it('exposes breakValue A/B TextInputs bound to handleBreakValue*Change', () => {
-    expect(doubleControlsSource).toContain('m.symbol_a_break_value()');
-    expect(doubleControlsSource).toContain('m.symbol_b_break_value()');
+  it('removes breakValue A/B controls from DOUBLE', () => {
+    expect(doubleControlsSource).toContain('m.symbol_a_size_according()');
+    expect(doubleControlsSource).toContain('m.symbol_b_size_according()');
     const doubleBlock = source.split(
       'proportionalType === ProportionalType.DOUBLE'
     )[1];
-    expect(doubleBlock).toContain(
-      'onBreakValueAChange={handleBreakValueAChange}'
-    );
-    expect(doubleBlock).toContain(
-      'onBreakValueBChange={handleBreakValueBChange}'
-    );
+    expect(doubleBlock).toContain('<DoubleModeControls');
+    expect(source).toContain('<ProportionalDoubleSection');
+    expect(doubleControlsSource).not.toContain('BreakValueInput');
+    expect(doubleControlsSource).not.toContain('symbol_a_break_value');
+    expect(doubleControlsSource).not.toContain('symbol_b_break_value');
+    expect(source).not.toContain('handleBreakValue');
   });
 
   it('exposes onSymbolPrimitiveChange prop for extended SymbolPrimitiveConfig fields', () => {
     expect(source).toContain('onSymbolPrimitiveChange');
     expect(source).toContain('onSymbolPrimitiveChange?.({ commonScale');
     expect(source).toContain('onSymbolPrimitiveChange?.({ positionMode');
-    expect(source).toMatch(
-      /onSymbolPrimitiveChange\?\.\(\{\s*breakValueA:[\s\S]{0,60}breakValueB:/
+  });
+
+  it('places missing-data controls after the double color section', () => {
+    const doubleBranch = source.split(
+      '{#if symbolMode === SymbolMode.PROPORTIONAL && proportionalType === ProportionalType.DOUBLE}'
+    )[1];
+    expect(doubleBranch).toBeDefined();
+    expect(doubleBranch.indexOf('<ProportionalDoubleSection')).toBeLessThan(
+      doubleBranch.indexOf('<MissingDataSection')
     );
-  });
-
-  it('E-08: centralises swap logic in a single commitBreakValues helper (no mirrored handlers)', () => {
-    expect(source).toMatch(/function commitBreakValues\([\s\S]*?\n {2}\}/);
-    const helper = source.match(
-      /function commitBreakValues\([\s\S]*?\n {2}\}/
-    )?.[0];
-    expect(helper).toBeDefined();
-    expect(helper).toContain('Number.isFinite(nextA)');
-    expect(helper).toContain('Number.isFinite(nextB)');
-    expect(helper).toContain('nextA > nextB');
-    expect(helper).toContain('breakValueA: finalA');
-    expect(helper).toContain('breakValueB: finalB');
-  });
-
-  it('E-08: break-value handlers forward to commitBreakValues with the current pair', () => {
-    const handlerA = source.match(
-      /function handleBreakValueAChange\([\s\S]*?\n {2}\}/
-    )?.[0];
-    const handlerB = source.match(
-      /function handleBreakValueBChange\([\s\S]*?\n {2}\}/
-    )?.[0];
-    expect(handlerA).toContain('commitBreakValues(value, breakValueB)');
-    expect(handlerB).toContain('commitBreakValues(breakValueA, value)');
-    expect(handlerA).toContain('isSyncingFromVisualization');
-    expect(handlerB).toContain('isSyncingFromVisualization');
   });
 });
 

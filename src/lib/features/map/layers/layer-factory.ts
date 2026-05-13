@@ -22,7 +22,10 @@ import {
   GeometryType
 } from '../constants';
 import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
-import type { PrimitiveFilter } from '$lib/features/commons/stores/visualization.store.svelte';
+import type {
+  ClassificationConfig,
+  PrimitiveFilter
+} from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   getEnabledPrimitiveFilters,
   getLinePrimitive,
@@ -63,7 +66,7 @@ import {
 import { MultiShapeLayer } from './multi-shape-layer';
 import {
   DEFAULT_TEXT_LINE_HEIGHT,
-  EXPLICIT_TEXT_CHARACTER_SET,
+  DECK_TEXT_CHARACTER_SET,
   resolveTextFontSettings
 } from './text-character-set';
 import type {
@@ -81,6 +84,7 @@ import {
 } from '$lib/features/step-toolbar/fonts.constants';
 import {
   getCategoricalColorMap,
+  getAbsoluteDomainMax,
   hasCompleteCategoricalColorMap,
   getClassedSizeForValue,
   getColorForValue,
@@ -111,6 +115,7 @@ import {
   withGeoJsonRowHighlight,
   withGeoJsonRowHighlightAccessor,
   withOpacity,
+  withOpacityPreservingAlpha,
   withRowHighlight,
   withRowHighlightAccessor
 } from './layer-helpers';
@@ -157,6 +162,14 @@ export { resolveSplitMappingFeatureIdColumn } from './split-rendering-accessors'
 const HIGHLIGHT_DIMMING_FACTOR = 0.3;
 
 export const DEFAULT_TEXT_SIZE = PRINT_STANDARD_TOKENS.annotations.noteFontSize;
+
+const SYMBOL_PATTERN_TYPE = {
+  DOTS: 1,
+  LINES: 2,
+  CROSSHATCH: 3,
+  DASHES: 4
+} as const;
+
 export const DEFAULT_HALO_WIDTH = 2;
 export const DEFAULT_TEXT_FONT = resolveFontFamilyStack(
   CARTOGRAPHIC_FONT_FAMILY
@@ -630,6 +643,10 @@ function createDoubleProportionalPointLayers(
   const pointClassification =
     getPrimitiveClassification(viz, PrimitiveFilterType.POINT) ??
     viz.classification;
+  const symbolPatternType =
+    pointConfig.mode === SymbolMode.CATEGORIES
+      ? resolveSymbolPatternType(pointClassification)
+      : null;
   const pointFillClassification =
     getSymbolFillClassification(viz) ?? viz.classification;
   const useFillChoropleth = Boolean(
@@ -663,11 +680,19 @@ function createDoubleProportionalPointLayers(
     disabledFillLabels.has(String(row[pointFillCategoryColumn]));
   const primaryStats = pointStatistics;
   const secondaryStats = pointSecondaryStatistics;
+  const primaryDomainMax = getAbsoluteDomainMax(
+    primaryStats.min,
+    primaryStats.max
+  );
+  const secondaryDomainMax = getAbsoluteDomainMax(
+    secondaryStats.min,
+    secondaryStats.max
+  );
   const sharedMax = commonScale
-    ? Math.max(primaryStats.max, secondaryStats.max)
-    : primaryStats.max;
-  const primaryScaleMax = commonScale ? sharedMax : primaryStats.max;
-  const secondaryScaleMax = commonScale ? sharedMax : secondaryStats.max;
+    ? Math.max(primaryDomainMax, secondaryDomainMax)
+    : primaryDomainMax;
+  const primaryScaleMax = commonScale ? sharedMax : primaryDomainMax;
+  const secondaryScaleMax = commonScale ? sharedMax : secondaryDomainMax;
   const primaryRadiusAccessor = createProportionalSymbolSizeAccessor(
     pointSizeColumn,
     primaryScaleMax,
@@ -982,6 +1007,8 @@ function createDoubleProportionalPointLayers(
       dashLength: pointStrokeDashArray[0],
       gapLength: pointStrokeDashArray[1],
       barWidth: pointBarWidth,
+      patternEnabled: symbolPatternType !== null,
+      patternType: symbolPatternType ?? SYMBOL_PATTERN_TYPE.DOTS,
       opacity: 1,
       radiusScale: layoutProps.radiusScale,
       radiusUnits: 'pixels',
@@ -1176,6 +1203,10 @@ function createRepresentativePointSymbolLayers(
   const pointClassification =
     getPrimitiveClassification(viz, PrimitiveFilterType.POINT) ??
     viz.classification;
+  const symbolPatternType =
+    pointConfig.mode === SymbolMode.CATEGORIES
+      ? resolveSymbolPatternType(pointClassification)
+      : null;
   const pointFillClassification =
     getSymbolFillClassification(viz) ?? viz.classification;
   const pointColorCategoryColumn =
@@ -1197,7 +1228,8 @@ function createRepresentativePointSymbolLayers(
     PrimitiveFilterType.POINT
   );
   const useChoropleth = shouldApplyChoropleth(viz, PrimitiveFilterType.POINT);
-  const { max: maxValue } = pointStatistics;
+  const { min: minValue, max: maxValue } = pointStatistics;
+  const proportionalDomainMax = getAbsoluteDomainMax(minValue, maxValue);
   const pointFillOpacity = pointConfig.opacity ?? rawFillOpacity;
   const pointMissingColumn = resolvePointMissingColumn(
     viz,
@@ -1265,7 +1297,7 @@ function createRepresentativePointSymbolLayers(
     : useProportionalSymbols
       ? createProportionalSymbolSizeAccessor(
           pointSizeColumn!,
-          maxValue,
+          proportionalDomainMax,
           proportionalMaxPointRadius,
           proportionalSymbolScale
         )
@@ -1595,6 +1627,8 @@ function createRepresentativePointSymbolLayers(
       dashLength: pointStrokeDashArray[0],
       gapLength: pointStrokeDashArray[1],
       barWidth: pointBarWidth,
+      patternEnabled: symbolPatternType !== null,
+      patternType: symbolPatternType ?? SYMBOL_PATTERN_TYPE.DOTS,
       opacity: 1,
       radiusScale: 1,
       radiusUnits: 'pixels',
@@ -1661,7 +1695,8 @@ function createRepresentativePointSymbolLayers(
           categoryShapeMode,
           useCategoryShape,
           pointCategoryColumn,
-          pointClassification?.labels
+          pointClassification?.labels,
+          symbolPatternType
         ],
         ...(ctx.yearFilter && {
           getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
@@ -2065,6 +2100,29 @@ function buildPatternProps(ctx: LayerContext): {
   };
 }
 
+function resolveSymbolPatternType(
+  classification: ClassificationConfig | undefined
+): number | null {
+  switch (classification?.patternId) {
+    case 'dots':
+      return SYMBOL_PATTERN_TYPE.DOTS;
+    case 'cross':
+      return SYMBOL_PATTERN_TYPE.CROSSHATCH;
+    case 'horizontal':
+    case 'vertical':
+      return SYMBOL_PATTERN_TYPE.LINES;
+    case 'diagonal':
+    case 'diagonal-reverse':
+    case 'plus':
+    case 'square':
+    case 'diamond':
+    case 'triangle':
+      return SYMBOL_PATTERN_TYPE.DASHES;
+    default:
+      return null;
+  }
+}
+
 function createPolygonPatternOverlayLayer(
   layerId: string,
   polygonPatternId: string | undefined,
@@ -2175,7 +2233,7 @@ export function resolveEffectiveCategoryColorMap(
 
   const classificationColors = classification.colors ?? [];
   const storedLabels =
-    classification.labels
+    (classification.categoryValues ?? classification.labels)
       ?.map((label) => toTextValue(label))
       .filter((label): label is string => label !== null) ?? [];
   if (storedLabels.length > 0) {
@@ -2733,14 +2791,19 @@ function createTextOverlayLayers(
   const createCategoricalTextColorAccessor = (
     vector: ReturnType<ArrowTable['getChild']>,
     fallback: RGBColor,
-    opacity: number
+    opacity: number,
+    disabledLabels: string[] = []
   ) => {
     if (!vector || !effectiveCategoryColorMap?.size) {
       return withOpacity(fallback, opacity);
     }
 
+    const disabled = new Set(disabledLabels.map(String));
     return (datum: TextLayerDatum): Color => {
       const category = toTextValue(vector.get(datum.rowIndex));
+      if (category && disabled.has(category)) {
+        return [0, 0, 0, 0];
+      }
       const rgb = category
         ? (effectiveCategoryColorMap.get(category) ?? fallback)
         : fallback;
@@ -2769,7 +2832,7 @@ function createTextOverlayLayers(
 
       return getProportionalSymbolSizeForValue(
         numericValue,
-        textStatistics.max,
+        getAbsoluteDomainMax(textStatistics.min, textStatistics.max),
         maxSize,
         ScaleType.SQRT
       );
@@ -2885,7 +2948,8 @@ function createTextOverlayLayers(
             backgroundCategoryVector,
             backgroundCategoryColorMap,
             backgroundFillFallback,
-            textBackgroundConfig.fillOpacity
+            textBackgroundConfig.fillOpacity,
+            textBackgroundConfig.classification?.disabledLabels ?? []
           )
         : withOpacity(backgroundFillFallback, textBackgroundConfig.fillOpacity)
     : null;
@@ -2916,7 +2980,8 @@ function createTextOverlayLayers(
             backgroundStrokeCategoryVector,
             backgroundStrokeCategoryColorMap,
             backgroundStrokeFallback,
-            textBackgroundConfig.strokeOpacity
+            textBackgroundConfig.strokeOpacity,
+            textBackgroundConfig.strokeClassification?.disabledLabels ?? []
           )
         : null
     : null;
@@ -2998,7 +3063,7 @@ function createTextOverlayLayers(
 
       return getProportionalSymbolSizeForValue(
         numericValue,
-        pointStatistics.max,
+        getAbsoluteDomainMax(pointStatistics.min, pointStatistics.max),
         proportionalMaxPointRadius,
         proportionalSymbolScale
       );
@@ -3059,7 +3124,7 @@ function createTextOverlayLayers(
           secondaryLabelsConfig.bold ? '700' : '400',
           secondaryLabelsConfig.italic
         ),
-        characterSet: EXPLICIT_TEXT_CHARACTER_SET,
+        characterSet: DECK_TEXT_CHARACTER_SET,
         fontSettings: resolveTextFontSettings(
           secondaryLabelsConfig.halo &&
             (secondaryLabelsConfig.haloWidth ?? DEFAULT_HALO_WIDTH) > 0
@@ -3149,6 +3214,7 @@ function createTextOverlayLayers(
             textBackgroundConfig.classification?.breaks,
             textBackgroundConfig.classification?.colors,
             textBackgroundConfig.classification?.labels,
+            textBackgroundConfig.classification?.disabledLabels,
             secondaryLabelsConfig.dxpMasking,
             secondaryLabelsConfig.haloColor
           ],
@@ -3164,7 +3230,8 @@ function createTextOverlayLayers(
             textBackgroundConfig.categoryColumn,
             textBackgroundConfig.strokeClassification?.colors,
             textBackgroundConfig.strokeClassification?.breaks,
-            textBackgroundConfig.strokeClassification?.labels
+            textBackgroundConfig.strokeClassification?.labels,
+            textBackgroundConfig.strokeClassification?.disabledLabels
           ]
         }
       };
@@ -3202,7 +3269,8 @@ function createTextOverlayLayers(
             ? createCategoricalTextColorAccessor(
                 categoryVector,
                 textColor,
-                textOpacity
+                textOpacity,
+                textClassification?.disabledLabels ?? []
               )
             : withOpacity(textColor, textOpacity);
       const textColorAccessor = (datum: TextLayerDatum): Color => {
@@ -3233,7 +3301,7 @@ function createTextOverlayLayers(
             textConfig.bold ? '700' : '400',
             textConfig.italic
           ),
-          characterSet: EXPLICIT_TEXT_CHARACTER_SET,
+          characterSet: DECK_TEXT_CHARACTER_SET,
           fontSettings: resolveTextFontSettings(
             textConfig.halo && (textConfig.haloWidth ?? DEFAULT_HALO_WIDTH) > 0
               ? 'halo-on'
@@ -3272,6 +3340,7 @@ function createTextOverlayLayers(
               textClassification?.breaks,
               textClassification?.colors,
               textClassification?.labels,
+              textClassification?.disabledLabels,
               textConfig.color,
               textOpacity,
               textConfig.missingData?.color
@@ -3334,6 +3403,7 @@ function createTextOverlayLayers(
               textBackgroundConfig.classification?.breaks,
               textBackgroundConfig.classification?.colors,
               textBackgroundConfig.classification?.labels,
+              textBackgroundConfig.classification?.disabledLabels,
               textConfig.dxpMasking,
               textConfig.haloColor
             ],
@@ -3349,7 +3419,8 @@ function createTextOverlayLayers(
               textBackgroundConfig.categoryColumn,
               textBackgroundConfig.strokeClassification?.colors,
               textBackgroundConfig.strokeClassification?.breaks,
-              textBackgroundConfig.strokeClassification?.labels
+              textBackgroundConfig.strokeClassification?.labels,
+              textBackgroundConfig.strokeClassification?.disabledLabels
             ]
           }
         }) as ThematicLayer
@@ -3382,14 +3453,19 @@ function createCategoricalAccessorFromMap(
   vector: ReturnType<ArrowTable['getChild']>,
   colorMap: Map<string, RGBColor> | null,
   fallback: RGBColor,
-  opacity: number
+  opacity: number,
+  disabledLabels: string[] = []
 ): ((datum: TextLayerDatum) => Color) | Color {
   if (!vector || !colorMap || colorMap.size === 0) {
     return withOpacity(fallback, opacity);
   }
 
+  const disabled = new Set(disabledLabels.map(String));
   return (datum: TextLayerDatum): Color => {
     const category = toTextValue(vector.get(datum.rowIndex));
+    if (category && disabled.has(category)) {
+      return [0, 0, 0, 0];
+    }
     const rgb = category ? (colorMap.get(category) ?? fallback) : fallback;
     return withOpacity(rgb, opacity);
   };
@@ -3521,6 +3597,10 @@ export function createPointLayers(
     ? (getPrimitiveClassification(viz, PrimitiveFilterType.POINT) ??
       viz.classification)
     : undefined;
+  const symbolPatternType =
+    pointConfig?.mode === SymbolMode.CATEGORIES
+      ? resolveSymbolPatternType(pointClassification)
+      : null;
   const useProportionalSymbols = viz && shouldApplyProportionalSymbols(viz);
   const useClassedSymbols =
     pointConfig?.mode === SymbolMode.CLASSES &&
@@ -3533,7 +3613,8 @@ export function createPointLayers(
   const useChoropleth =
     viz && shouldApplyChoropleth(viz, PrimitiveFilterType.POINT);
   const hideSymbolFill = shouldHideSymbolFill(viz);
-  const { max: maxValue } = pointStatistics;
+  const { min: minValue, max: maxValue } = pointStatistics;
+  const proportionalDomainMax = getAbsoluteDomainMax(minValue, maxValue);
   const pointMissingColumn = resolvePointMissingColumn(
     viz,
     Boolean(useProportionalSymbols),
@@ -3683,7 +3764,7 @@ export function createPointLayers(
       pointStrokeBreaks &&
       pointStrokeColors?.length
         ? (feature: { properties?: Record<string, unknown> }) =>
-            withOpacity(
+            withOpacityPreservingAlpha(
               createGeoJsonChoroplethColorAccessor(
                 pointStrokeValueColumn,
                 pointStrokeBreaks,
@@ -3698,7 +3779,7 @@ export function createPointLayers(
             pointStrokeCategoryColumn &&
             pointStrokeColors?.length
           ? (feature: { properties?: Record<string, unknown> }) =>
-              withOpacity(
+              withOpacityPreservingAlpha(
                 createGeoJsonCategoricalColorAccessor(
                   pointStrokeCategoryColumn,
                   pointStrokeGeoJsonColorMap,
@@ -3743,7 +3824,7 @@ export function createPointLayers(
         : useProportionalSymbols && viz
           ? createGeoJsonProportionalSymbolSizeAccessor(
               pointSizeColumn!,
-              maxValue,
+              proportionalDomainMax,
               proportionalMaxPointRadius,
               proportionalSymbolScale
             )
@@ -3852,6 +3933,8 @@ export function createPointLayers(
               pointCategoryColumn,
               pointCategoryColorMap,
               pointClassification?.labels,
+              pointClassification?.categoryValues,
+              pointClassification?.disabledLabels,
               fillColor,
               pointStrokeColor,
               pointStrokeValueColumn,
@@ -3885,7 +3968,8 @@ export function createPointLayers(
               proportionalSymbolScale,
               pointMissingColumn,
               pointConfig?.missingData?.show,
-              pointConfig?.missingData?.size
+              pointConfig?.missingData?.size,
+              pointClassification?.disabledLabels
             ]
           }
         }) as ThematicLayer
@@ -3959,6 +4043,9 @@ export function createPointLayers(
             useCategoricalColor,
             pointCategoryColumn,
             pointCategoryColorMap,
+            pointClassification?.labels,
+            pointClassification?.categoryValues,
+            pointClassification?.disabledLabels,
             fillColor,
             pointMissingColumn,
             pointConfig?.missingData?.show,
@@ -3976,7 +4063,8 @@ export function createPointLayers(
             proportionalSymbolScale,
             pointMissingColumn,
             pointConfig?.missingData?.show,
-            pointConfig?.missingData?.size
+            pointConfig?.missingData?.size,
+            pointClassification?.disabledLabels
           ],
           getLineColor: [
             pointStrokeColor,
@@ -3988,6 +4076,7 @@ export function createPointLayers(
             pointConfig?.strokeClassification?.colors,
             pointConfig?.strokeClassification?.labels,
             pointConfig?.strokeClassification?.disabledLabels,
+            pointClassification?.disabledLabels,
             pointMissingColumn,
             pointConfig?.missingData?.show,
             hlVersion
@@ -4165,7 +4254,7 @@ export function createPointLayers(
       : useProportionalSymbols && viz
         ? createProportionalSymbolSizeAccessor(
             pointSizeColumn!,
-            maxValue,
+            proportionalDomainMax,
             proportionalMaxPointRadius,
             proportionalSymbolScale
           )
@@ -4364,6 +4453,7 @@ export function createPointLayers(
     pointShape !== ShapeType.CIRCLE ||
     missingPointShape !== ShapeType.CIRCLE ||
     useCategoryShape ||
+    symbolPatternType !== null ||
     (pointStrokeDashed && showPointStroke);
   const baseLayerProps = {
     id: layerId,
@@ -4399,6 +4489,8 @@ export function createPointLayers(
         pointCategoryColumn,
         pointCategoryColorMap,
         pointClassification?.labels,
+        pointClassification?.categoryValues,
+        pointClassification?.disabledLabels,
         fillColor,
         pointMissingColumn,
         pointConfig?.missingData?.show,
@@ -4418,7 +4510,8 @@ export function createPointLayers(
         proportionalSymbolScale,
         pointMissingColumn,
         pointConfig?.missingData?.show,
-        pointConfig?.missingData?.size
+        pointConfig?.missingData?.size,
+        pointClassification?.disabledLabels
       ],
       getLineColor: [
         pointStrokeColor,
@@ -4433,6 +4526,7 @@ export function createPointLayers(
         pointConfig?.strokeClassification?.breaks,
         pointConfig?.strokeClassification?.labels,
         pointConfig?.strokeClassification?.disabledLabels,
+        pointClassification?.disabledLabels,
         hlVersion
       ],
       getShape: [
@@ -4442,7 +4536,9 @@ export function createPointLayers(
         categoryShapeMode,
         pointCategoryColumn,
         pointClassification?.labels,
-        pointClassification?.categoryShapes
+        pointClassification?.categoryValues,
+        pointClassification?.categoryShapes,
+        symbolPatternType
       ]
       // Note: getFilterValue is a binary attribute (baked once via filterValueAttr),
       // not a per-frame accessor. Year changes are handled by filterRange prop alone.
@@ -4456,7 +4552,9 @@ export function createPointLayers(
         dashed: showPointStroke && pointStrokeDashed,
         dashLength: pointStrokeDashArray[0],
         gapLength: pointStrokeDashArray[1],
-        barWidth: pointBarWidth
+        barWidth: pointBarWidth,
+        patternEnabled: symbolPatternType !== null,
+        patternType: symbolPatternType ?? SYMBOL_PATTERN_TYPE.DOTS
       })
     ];
   }
@@ -4588,12 +4686,10 @@ export function createLineLayers(
 
     const baseLineColorAccessor = baseColorFn
       ? (row: DeckDataRow) =>
-          withOpacity(baseColorFn(row), normalizedLineOpacity) as [
-            number,
-            number,
-            number,
-            number
-          ]
+          withOpacityPreservingAlpha(
+            baseColorFn(row),
+            normalizedLineOpacity
+          ) as [number, number, number, number]
       : null;
 
     const lineColorFn =
@@ -4775,7 +4871,7 @@ export function createLineLayers(
   const baseGeoJsonLineColor =
     useChoropleth && viz
       ? (feature: { properties?: Record<string, unknown> }) =>
-          withOpacity(
+          withOpacityPreservingAlpha(
             createGeoJsonChoroplethColorAccessor(
               lineValueColumn!,
               lineColorClassification!.breaks!,
@@ -4786,11 +4882,14 @@ export function createLineLayers(
           ) as [number, number, number, number]
       : useCategoricalColor && viz
         ? (feature: { properties?: Record<string, unknown> }) =>
-            withOpacity(
+            withOpacityPreservingAlpha(
               createGeoJsonCategoricalColorAccessor(
                 lineCategoryColumn!,
                 effectiveCategoryColorMap,
-                resolvedLineColor
+                resolvedLineColor,
+                resolvedLineColor,
+                true,
+                lineColorClassification?.disabledLabels ?? []
               )(feature),
               normalizedLineOpacity
             ) as [number, number, number, number]
@@ -5484,7 +5583,8 @@ export function createPolygonLayers(
             effectiveCategoryColorMap,
             polygonFillColor,
             polygonMissingColor,
-            showMissingPolygons
+            showMissingPolygons,
+            polygonClassification?.disabledLabels ?? []
           )
         : null);
 
@@ -5553,18 +5653,16 @@ export function createPolygonLayers(
 
   const baseGeoJsonStrokeColor = splitGeoJsonStrokeColor
     ? (feature: { properties?: Record<string, unknown> }) =>
-        withOpacity(splitGeoJsonStrokeColor(feature), polygonStrokeOpacity) as [
-          number,
-          number,
-          number,
-          number
-        ]
+        withOpacityPreservingAlpha(
+          splitGeoJsonStrokeColor(feature),
+          polygonStrokeOpacity
+        ) as [number, number, number, number]
     : polygonStrokeMode === StrokeMode.CLASSES &&
         polygonStrokeValueColumn &&
         polygonStrokeBreaks &&
         polygonStrokeColors?.length
       ? (feature: { properties?: Record<string, unknown> }) =>
-          withOpacity(
+          withOpacityPreservingAlpha(
             createGeoJsonChoroplethColorAccessor(
               polygonStrokeValueColumn,
               polygonStrokeBreaks,
@@ -5579,13 +5677,14 @@ export function createPolygonLayers(
           polygonStrokeCategoryColumn &&
           polygonStrokeColors?.length
         ? (feature: { properties?: Record<string, unknown> }) =>
-            withOpacity(
+            withOpacityPreservingAlpha(
               createGeoJsonCategoricalColorAccessor(
                 polygonStrokeCategoryColumn,
                 polygonStrokeGeoJsonColorMap,
                 polygonStrokeColor,
                 polygonMissingColor,
-                showMissingPolygons
+                showMissingPolygons,
+                polygonConfig?.strokeClassification?.disabledLabels ?? []
               )(feature),
               polygonStrokeOpacity
             ) as [number, number, number, number]

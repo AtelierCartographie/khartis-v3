@@ -24,6 +24,7 @@ import {
   PrimitiveFilterType,
   VisualizationType,
   getEnabledPrimitiveFilters,
+  getPrimitiveClassification,
   getSymbolPrimitive,
   getTextPrimitive,
   resolveAllowedPrimitiveFilters,
@@ -804,6 +805,57 @@ describe('visualizationStore SymbolPrimitiveConfig round-trip persistence', () =
     expect(symbol?.classification?.labels).toEqual(['A', 'B', 'C', 'D']);
   });
 
+  it('merges source category metadata from the legacy symbolClassification mirror', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+    const input = buildRichSymbolVisualization();
+    const sourceAwareClassification = {
+      ...input.symbolClassification!,
+      labels: ['Public label', 'private'],
+      categoryValues: ['public', 'private'],
+      disabledLabels: ['private']
+    };
+    const mirrorAware: VisualizationConfig = {
+      ...input,
+      symbolClassification: sourceAwareClassification,
+      symbol: input.symbol
+        ? {
+            ...input.symbol,
+            classification: {
+              ...input.symbol.classification!,
+              labels: ['public', 'private']
+            }
+          }
+        : undefined
+    };
+
+    visualizationStore.restoreFromSerialized({
+      visualizations: [mirrorAware],
+      selectedVisualizationId: mirrorAware.id,
+      activeVisualizationIds: [mirrorAware.id]
+    });
+
+    const viz = visualizationStore.selectedVisualization;
+    const symbol = getSymbolPrimitive(viz);
+    const runtimeClassification = getPrimitiveClassification(
+      viz,
+      PrimitiveFilterType.POINT
+    );
+    expect(symbol?.classification?.labels).toEqual(['Public label', 'private']);
+    expect(symbol?.classification?.categoryValues).toEqual([
+      'public',
+      'private'
+    ]);
+    expect(symbol?.classification?.disabledLabels).toEqual(['private']);
+    expect(runtimeClassification?.categoryValues).toEqual([
+      'public',
+      'private'
+    ]);
+    expect(runtimeClassification?.disabledLabels).toEqual(['private']);
+    expect(symbol?.classification?.categoryShapes).toEqual(
+      input.symbol?.classification?.categoryShapes
+    );
+  });
+
   it('keeps symbol stroke discretization fields through the persistence registry round-trip used by project saves', () => {
     datasetsStore.addProcessedDataset(buildDataset());
     const input = buildRichSymbolVisualization();
@@ -1125,20 +1177,26 @@ describe('resolveAllowedPrimitiveFilters geometry resolution', () => {
     ]);
   });
 
-  it('returns LINE for LineString', () => {
+  it('returns POINT and LINE for LineString', () => {
     const result = resolveAllowedPrimitiveFilters(
       VisualizationType.CATEGORICAL,
       makeDataset({ geometry: makeGeometry('LineString') })
     );
-    expect(result).toEqual([PrimitiveFilterType.LINE]);
+    expect(result).toEqual([
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.LINE
+    ]);
   });
 
-  it('returns LINE for MultiLineString', () => {
+  it('returns POINT and LINE for MultiLineString', () => {
     const result = resolveAllowedPrimitiveFilters(
       VisualizationType.CATEGORICAL,
       makeDataset({ geometry: makeGeometry('MultiLineString') })
     );
-    expect(result).toEqual([PrimitiveFilterType.LINE]);
+    expect(result).toEqual([
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.LINE
+    ]);
   });
 
   it('returns POINT for Point', () => {
@@ -1226,11 +1284,7 @@ describe('resolveAllowedPrimitiveFilters geometry resolution', () => {
         }
       })
     );
-    expect(result).toEqual([
-      PrimitiveFilterType.POINT,
-      PrimitiveFilterType.LINE,
-      PrimitiveFilterType.POLYGON
-    ]);
+    expect(result).toEqual([]);
   });
 
   it('returns POINT and POLYGON when the dataset is joined to a basemap', () => {
@@ -1247,27 +1301,19 @@ describe('resolveAllowedPrimitiveFilters geometry resolution', () => {
     ]);
   });
 
-  it('falls back to all primitives for an unjoined CSV without GPS detection', () => {
+  it('disables primitives for an unjoined CSV without GPS detection', () => {
     const result = resolveAllowedPrimitiveFilters(
       VisualizationType.PROPORTIONAL,
       makeDataset({ format: FileFormatEnum.CSV })
     );
-    expect(result).toEqual([
-      PrimitiveFilterType.POINT,
-      PrimitiveFilterType.LINE,
-      PrimitiveFilterType.POLYGON
-    ]);
+    expect(result).toEqual([]);
   });
 
-  it('treats GeometryCollection as unknown rather than activating one primitive', () => {
+  it('treats GeometryCollection as unknown rather than enabling incompatible primitives', () => {
     const result = resolveAllowedPrimitiveFilters(
       VisualizationType.CHOROPLETH,
       makeDataset({ geometry: makeGeometry('GeometryCollection') })
     );
-    expect(result).toEqual([
-      PrimitiveFilterType.POINT,
-      PrimitiveFilterType.LINE,
-      PrimitiveFilterType.POLYGON
-    ]);
+    expect(result).toEqual([]);
   });
 });

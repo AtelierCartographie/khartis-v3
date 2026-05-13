@@ -59,6 +59,18 @@ importers:
       '@fontsource/lato':
         specifier: ^5.2.7
         version: 5.2.7
+      '@fontsource/noto-sans':
+        specifier: ^5.2.10
+        version: 5.2.10
+      '@fontsource/noto-sans-arabic':
+        specifier: ^5.2.10
+        version: 5.2.10
+      '@fontsource/noto-sans-jp':
+        specifier: ^5.2.9
+        version: 5.2.9
+      '@fontsource/noto-sans-sc':
+        specifier: ^5.2.9
+        version: 5.2.9
       '@fontsource/open-sans':
         specifier: ^5.2.7
         version: 5.2.7
@@ -1254,6 +1266,18 @@ packages:
 
   '@fontsource/lato@5.2.7':
     resolution: {integrity: sha512-k5mum1ADbDW5cTw1Ett1eQVWeoZ6gq0ct6SFBibEhB4LRxhniChJZTBgd6ph5yBxLkN1fcnsnmicBNA4S/3nbw==}
+
+  '@fontsource/noto-sans-arabic@5.2.10':
+    resolution: {integrity: sha512-Hgj3NwQJ0NquIADW3hFboFjsts4UvEOJQ8tOX0bhQZgpNKHsMawjv/1SZnq0QvRbP6efHTZM/A1k7tdy9S6sbA==}
+
+  '@fontsource/noto-sans-jp@5.2.9':
+    resolution: {integrity: sha512-6yVGiofnrnbiJjU8ch4JGSs2HqyozxMvsVyVmFwOnDH3u//qQKLqmKM4n0lqN0637uaJNzUW9nIJqbbMgHVQzw==}
+
+  '@fontsource/noto-sans-sc@5.2.9':
+    resolution: {integrity: sha512-bTUIWGBgJDpwi5qAr+x0/lcgv80IHTB9vl6s2f6EymZEa7qYV99yNRBZuKFT+SYDKVunZrjCEhWtpxqmbXWl5Q==}
+
+  '@fontsource/noto-sans@5.2.10':
+    resolution: {integrity: sha512-J58RVfS/C0Z2VBF+PoU260Tx8cdRGYuS+e3yQe4hYaIYDl0sEVn5CzlLo5zVRvQD0HaIUTV8AZMfqR7rtdEpqQ==}
 
   '@fontsource/open-sans@5.2.7':
     resolution: {integrity: sha512-8yfgDYjE5O0vmTPdrcjV35y4yMnctsokmi9gN49Gcsr0sjzkMkR97AnKDe6OqZh2SFkYlR28fxOvi21bYEgMSw==}
@@ -6976,6 +7000,14 @@ snapshots:
   '@fontsource/inter@5.2.8': {}
 
   '@fontsource/lato@5.2.7': {}
+
+  '@fontsource/noto-sans-arabic@5.2.10': {}
+
+  '@fontsource/noto-sans-jp@5.2.9': {}
+
+  '@fontsource/noto-sans-sc@5.2.9': {}
+
+  '@fontsource/noto-sans@5.2.10': {}
 
   '@fontsource/open-sans@5.2.7': {}
 

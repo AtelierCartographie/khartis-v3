@@ -1,4 +1,9 @@
 import { isLikelyCoordinateColumn } from './geo-detector.utils';
+import {
+  COLUMN_TYPE_GEOMETRY,
+  EXCLUDED_COLUMNS,
+  INTERNAL_COLUMN
+} from '../constants/data.constants';
 
 type ColumnLike = {
   name?: string | null;
@@ -33,6 +38,48 @@ export function isIdLikeColumnName(name: string): boolean {
 
 export function isHiddenTechnicalColumnName(name: string): boolean {
   return /^__/.test(name.trim());
+}
+
+function normalizeColumnName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+const VISUALIZATION_EXCLUDED_COLUMN_NAMES = new Set<string>([
+  ...EXCLUDED_COLUMNS,
+  INTERNAL_COLUMN.WKB_GEOMETRY,
+  INTERNAL_COLUMN.THE_GEOM
+]);
+
+export function isVisualizableDataColumn(column: ColumnLike): boolean {
+  const name = resolveColumnName(column);
+  if (!name) return false;
+
+  if (column.type === COLUMN_TYPE_GEOMETRY) {
+    return false;
+  }
+
+  if (isHiddenTechnicalColumnName(name)) {
+    return false;
+  }
+
+  return !VISUALIZATION_EXCLUDED_COLUMN_NAMES.has(normalizeColumnName(name));
+}
+
+export function filterVisualizableDataColumns<T extends ColumnLike>(
+  columns: T[]
+): T[] {
+  return columns.filter(isVisualizableDataColumn);
+}
+
+export function isAutoFacetDataColumn(column: ColumnLike): boolean {
+  const name = resolveColumnName(column);
+  return Boolean(
+    name && isVisualizableDataColumn(column) && !isIdLikeColumnName(name)
+  );
+}
+
+export function isAutoFacetNumericColumn(column: ColumnLike): boolean {
+  return isAutoFacetDataColumn(column) && isNumericColumn(column);
 }
 
 function resolveYearColumnName(name: string): number | undefined {

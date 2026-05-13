@@ -1,6 +1,12 @@
 import { GeoJsonLayer, PathLayer, ScatterplotLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { Feature, FeatureCollection, Point, Polygon } from 'geojson';
+import type {
+  Feature,
+  FeatureCollection,
+  LineString,
+  Point,
+  Polygon
+} from 'geojson';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -276,6 +282,23 @@ function createPointFeature(
     geometry: {
       type: 'Point',
       coordinates: [0, 0]
+    }
+  };
+}
+
+function createLineFeature(
+  id: string,
+  routeName: string
+): Feature<LineString, { id: string; route_name: string }> {
+  return {
+    type: 'Feature',
+    properties: { id, route_name: routeName },
+    geometry: {
+      type: 'LineString',
+      coordinates: [
+        [0, 0],
+        [1, 1]
+      ]
     }
   };
 }
@@ -567,6 +590,23 @@ describe('binary scatter styling refresh', () => {
       'resolveDeckTextFontFamily(textConfig.fontFamily)'
     );
   });
+
+  it('wires disabled category labels into text and text-background categorical rendering', () => {
+    expect(source).toContain('textClassification?.disabledLabels ?? []');
+    expect(source).toContain(
+      'textBackgroundConfig.classification?.disabledLabels ?? []'
+    );
+    expect(source).toContain(
+      'textBackgroundConfig.strokeClassification?.disabledLabels ?? []'
+    );
+    expect(source).toContain('textClassification?.disabledLabels,');
+    expect(source).toContain(
+      'textBackgroundConfig.classification?.disabledLabels,'
+    );
+    expect(source).toContain(
+      'textBackgroundConfig.strokeClassification?.disabledLabels'
+    );
+  });
 });
 
 describe('createPolygonLayers', () => {
@@ -836,6 +876,81 @@ describe('createPolygonLayers', () => {
     expect(radii![0]).toBeGreaterThan(radii![1]);
   });
 
+  it('passes common category patterns to split representative point symbols', () => {
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [createPolygonFeature('keep', 2024)]
+    } satisfies FeatureCollection<Polygon>);
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 2,
+      featureIds: new Uint32Array([0, 1]),
+      positions: new Float64Array([0, 0, 1, 1])
+    });
+    createScatterplotLayerPropsMock.mockImplementation((pointData) => ({
+      data: {
+        length: pointData.length,
+        featureIds: pointData.featureIds,
+        attributes: {}
+      }
+    }));
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.CATEGORIES,
+      categoryColumn: 'kind',
+      shape: ShapeType.CIRCLE,
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 2,
+        labels: ['Urban', 'Rural'],
+        categoryValues: ['urban', 'rural'],
+        colors: ['#3366cc', '#dc3912'],
+        patternId: 'dots'
+      }
+    };
+    const geometryTable = createTableWithRows(
+      [
+        { id: 'DEU', geometry: null },
+        { id: 'FRA', geometry: null }
+      ],
+      ['id', 'geometry']
+    );
+    const representativeTable = createTableWithRows(
+      [
+        { id: 'DEU', geometry: null },
+        { id: 'FRA', geometry: null }
+      ],
+      ['id', 'geometry']
+    );
+    const datasetTable = createTableWithRows(
+      [
+        { basemap_id: 'DEU', kind: 'urban' },
+        { basemap_id: 'FRA', kind: 'rural' }
+      ],
+      ['basemap_id', 'kind']
+    );
+
+    const layers = createPolygonLayers(geometryTable, createGeometryInfo(), {
+      ...createContext(visualization),
+      representativePointTable: representativeTable,
+      representativePointGeometryInfo: {
+        ...createPointGeometryInfo(),
+        type: 'POINT' as GeometryInfo['type']
+      },
+      splitDatasetTable: datasetTable,
+      splitFeatureIdColumn: 'id'
+    });
+
+    const pointLayer = layers.find((layer) =>
+      String(layer.props.id).includes('point-layer')
+    ) as MultiShapeLayer | undefined;
+
+    expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
+    expect(pointLayer?.props.patternEnabled).toBe(true);
+    expect(pointLayer?.props.patternType).toBe(1);
+  });
+
   it('renders the GeoJSON fallback pattern below the polygon stroke', () => {
     arrowTableToGeoJSONMock.mockReturnValue({
       type: 'FeatureCollection',
@@ -960,6 +1075,50 @@ describe('createPolygonLayers', () => {
     expect(fillLayer?.props.updateTriggers?.getFillColor).toEqual(
       expect.arrayContaining(['#ff00ff', true])
     );
+  });
+
+  it('keeps disabled GeoJSON polygon categories transparent', () => {
+    const disabledFeature: Feature<Polygon, { segment: string }> = {
+      type: 'Feature',
+      properties: { segment: 'Pause' },
+      geometry: createPolygonFeature('disabled', 2024).geometry
+    };
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [disabledFeature]
+    } satisfies FeatureCollection<Polygon>);
+
+    const visualization = createVisualization(FillMode.CATEGORIES);
+    visualization.type = VisualizationType.CATEGORICAL;
+    visualization.mapping = { categoryColumn: 'segment' };
+    visualization.polygon = {
+      ...visualization.polygon!,
+      fillMode: FillMode.CATEGORIES,
+      categoryColumn: 'segment',
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 2,
+        labels: ['Active', 'Pause'],
+        categoryValues: ['Active', 'Pause'],
+        colors: ['#3366cc', '#dc3912'],
+        disabledLabels: ['Pause']
+      }
+    };
+
+    const layers = createPolygonLayers(
+      createTableWithRows([{ segment: 'Pause' }], ['segment']),
+      createGeometryInfo(),
+      createContext(visualization)
+    );
+
+    const polygonLayer = layers.find(
+      (layer) => layer instanceof GeoJsonLayer
+    ) as GeoJsonLayer | undefined;
+    const getFillColor = polygonLayer?.props.getFillColor as
+      | ((feature: typeof disabledFeature) => [number, number, number, number])
+      | undefined;
+
+    expect(getFillColor?.(disabledFeature)).toEqual([0, 0, 0, 0]);
   });
 
   it('maps split polygon choropleth fills through geometry ids and dataset basemap ids', () => {
@@ -1261,7 +1420,8 @@ describe('createPointLayers', () => {
       classification: {
         method: ClassificationMethod.MANUAL,
         classes: 1,
-        labels: ['Pause'],
+        labels: ['Pause label'],
+        categoryValues: ['Pause'],
         colors: ['#3366cc'],
         disabledLabels: ['Pause']
       }
@@ -1283,6 +1443,26 @@ describe('createPointLayers', () => {
       return;
     }
 
+    const fillTriggers = pointLayer.props.updateTriggers
+      ?.getFillColor as unknown[];
+    const radiusTriggers = pointLayer.props.updateTriggers
+      ?.getRadius as unknown[];
+    const lineTriggers = pointLayer.props.updateTriggers
+      ?.getLineColor as unknown[];
+
+    expect(fillTriggers).toContain(
+      visualization.symbol.classification?.categoryValues
+    );
+    expect(fillTriggers).toContain(
+      visualization.symbol.classification?.disabledLabels
+    );
+    expect(radiusTriggers).toContain(
+      visualization.symbol.classification?.disabledLabels
+    );
+    expect(lineTriggers).toContain(
+      visualization.symbol.classification?.disabledLabels
+    );
+
     const fillColorAttribute = layerData.attributes.getFillColor;
     if (!fillColorAttribute) {
       expect(fillColorAttribute).toBeDefined();
@@ -1290,6 +1470,47 @@ describe('createPointLayers', () => {
     }
 
     expect(Array.from(fillColorAttribute.value)).toEqual([0, 0, 0, 0]);
+  });
+
+  it('uses MultiShapeLayer for categorical point patterns even with circle symbols', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 1,
+      featureIds: new Uint32Array([0])
+    });
+    createScatterplotLayerPropsMock.mockReturnValue({
+      data: {
+        attributes: {},
+        featureIds: new Uint32Array([0])
+      }
+    });
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.CATEGORIES,
+      categoryColumn: 'category',
+      shape: ShapeType.CIRCLE,
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 1,
+        labels: ['North'],
+        categoryValues: ['north'],
+        colors: ['#3366cc'],
+        patternId: 'cross'
+      }
+    };
+
+    const layers = createPointLayers(
+      createTableWithRows([{ category: 'north' }], ['category']),
+      createPointGeometryInfo(),
+      createContext(visualization)
+    );
+
+    const pointLayer = layers[0] as MultiShapeLayer;
+
+    expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
+    expect(pointLayer.props.patternEnabled).toBe(true);
+    expect(pointLayer.props.patternType).toBe(3);
   });
 
   it('uses zero-based square-root radii and sorts proportional point buffers by descending radius', () => {
@@ -1581,6 +1802,130 @@ describe('createLineLayers', () => {
 
     expect(pathColorAttrMock).toHaveBeenCalled();
     expect(layers.some((layer) => layer instanceof PathLayer)).toBe(true);
+  });
+
+  it('keeps disabled native categorical line labels transparent', () => {
+    pathColorAttrMock.mockImplementationOnce(
+      (
+        pathData: { featureIds?: Uint32Array },
+        getColor: (featureId: number) => [number, number, number, number]
+      ) => ({
+        value: new Uint8ClampedArray(getColor(pathData.featureIds?.[0] ?? 0)),
+        size: 4
+      })
+    );
+
+    const visualization: VisualizationConfig = {
+      id: 'viz-line-disabled-native',
+      name: 'Line disabled category test',
+      type: VisualizationType.CATEGORICAL,
+      datasetId: 'dataset-1',
+      enabled: true,
+      primitiveFilters: [PrimitiveFilterType.LINE],
+      line: {
+        enabled: true,
+        colorMode: ColorMode.CATEGORIES,
+        thicknessMode: ThicknessMode.UNIQUE,
+        color: '#3366cc',
+        width: 3,
+        maxWidth: 6,
+        opacity: 0.5,
+        dashed: false,
+        categoryColumn: 'route_name',
+        classification: {
+          method: ClassificationMethod.MANUAL,
+          classes: 2,
+          colors: ['#ff0000', '#00ff00'],
+          labels: ['Active', 'Pause'],
+          categoryValues: ['Active', 'Pause'],
+          disabledLabels: ['Pause']
+        }
+      },
+      style: {
+        fillOpacity: 1,
+        strokeOpacity: 1,
+        strokeWidth: 1
+      },
+      mapping: {}
+    };
+
+    const layers = createLineLayers(
+      createTableWithRows([{ route_name: 'Pause' }], ['route_name']),
+      createLineGeometryInfo(),
+      {
+        ...createContext(visualization),
+        customProjection: undefined
+      }
+    );
+    const lineLayer = layers[0] as PathLayer;
+    const layerData = lineLayer.props.data as {
+      attributes?: { getColor?: { value: Uint8ClampedArray } };
+    };
+
+    expect(layerData.attributes?.getColor?.value).toEqual(
+      new Uint8ClampedArray([0, 0, 0, 0])
+    );
+  });
+
+  it('keeps disabled GeoJSON categorical line labels transparent', () => {
+    const disabledFeature = createLineFeature('disabled', 'Pause');
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [disabledFeature]
+    } satisfies FeatureCollection<LineString>);
+
+    const visualization: VisualizationConfig = {
+      id: 'viz-line-disabled-geojson',
+      name: 'Line disabled GeoJSON category test',
+      type: VisualizationType.CATEGORICAL,
+      datasetId: 'dataset-1',
+      enabled: true,
+      primitiveFilters: [PrimitiveFilterType.LINE],
+      line: {
+        enabled: true,
+        colorMode: ColorMode.CATEGORIES,
+        thicknessMode: ThicknessMode.UNIQUE,
+        color: '#3366cc',
+        width: 3,
+        maxWidth: 6,
+        opacity: 0.5,
+        dashed: false,
+        categoryColumn: 'route_name',
+        classification: {
+          method: ClassificationMethod.MANUAL,
+          classes: 2,
+          colors: ['#ff0000', '#00ff00'],
+          labels: ['Active', 'Pause'],
+          categoryValues: ['Active', 'Pause'],
+          disabledLabels: ['Pause']
+        }
+      },
+      style: {
+        fillOpacity: 1,
+        strokeOpacity: 1,
+        strokeWidth: 1
+      },
+      mapping: {}
+    };
+
+    const layers = createLineLayers(
+      createTableWithRows([{ route_name: 'Pause' }], ['route_name']),
+      {
+        ...createLineGeometryInfo(),
+        encoding: 'geojson',
+        isNativeGeoArrow: false,
+        isGeoJsonEncoded: true
+      },
+      createContext(visualization)
+    );
+    const lineLayer = layers.find((layer) => layer instanceof GeoJsonLayer) as
+      | GeoJsonLayer
+      | undefined;
+    const getLineColor = lineLayer?.props.getLineColor as
+      | ((feature: typeof disabledFeature) => [number, number, number, number])
+      | undefined;
+
+    expect(getLineColor?.(disabledFeature)).toEqual([0, 0, 0, 0]);
   });
 
   it('uses a dedicated thickness classification for classed line widths', () => {

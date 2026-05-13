@@ -21,7 +21,6 @@
     globalState
   } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
-  import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
   import {
     FillMode,
     SymbolMode,
@@ -29,6 +28,7 @@
     StrokeMode,
     ThicknessMode
   } from '$lib/features/commons/constants/visualization.constants';
+  import { isAutoFacetNumericColumn } from '$lib/features/commons/utils/visualization-columns.utils';
   import SliderWithInput from '$lib/features/commons/components/viz-controls/slider-with-input.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
 
@@ -245,7 +245,7 @@
     const dataset = datasetsStore.datasets.find((d) => d.id === baseDatasetId);
     if (!dataset?.columns) return [];
     return dataset.columns
-      .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
+      .filter(isAutoFacetNumericColumn)
       .map((col) => col.name);
   });
 

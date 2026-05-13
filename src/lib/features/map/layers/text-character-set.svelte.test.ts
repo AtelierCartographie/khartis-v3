@@ -202,22 +202,20 @@ describe('extendTextCharacterSet', () => {
 });
 
 describe('text-character-set — adoption', () => {
-  it('layer-factory.ts wires the explicit set into both TextLayers', () => {
+  it('layer-factory.ts wires the auto character set into both TextLayers', () => {
     const source = readFileSync(
       resolve(import.meta.dirname, 'layer-factory.ts'),
       'utf-8'
     );
     expect(source).toMatch(
-      /import\s*\{[^}]*EXPLICIT_TEXT_CHARACTER_SET[^}]*\}\s*from\s*'\.\/text-character-set'/
+      /import\s*\{[^}]*DECK_TEXT_CHARACTER_SET[^}]*\}\s*from\s*'\.\/text-character-set'/
     );
     expect(source).toMatch(
       /import\s*\{[^}]*resolveTextFontSettings[^}]*\}\s*from\s*'\.\/text-character-set'/
     );
-    const explicitMatches = source.match(
-      /characterSet: EXPLICIT_TEXT_CHARACTER_SET/g
-    );
-    expect(explicitMatches?.length).toBe(2);
-    expect(source).not.toMatch(/characterSet:\s*'auto'/);
+    const autoMatches = source.match(/characterSet: DECK_TEXT_CHARACTER_SET/g);
+    expect(autoMatches?.length).toBe(2);
+    expect(source).not.toMatch(/characterSet:\s*EXPLICIT_TEXT_CHARACTER_SET/);
   });
 
   it('layer-factory.ts picks SDF fontSettings when halo is on, raster otherwise', () => {
@@ -233,12 +231,12 @@ describe('text-character-set — adoption', () => {
     expect(resolveCalls?.length).toBe(2);
   });
 
-  it('basemap-layers.ts wires the raster preset into the city labels GeoJsonLayer (no halo)', () => {
+  it('basemap-layers.ts wires the auto character set into the city labels GeoJsonLayer (no halo)', () => {
     const source = readFileSync(
       resolve(import.meta.dirname, 'basemap-layers.ts'),
       'utf-8'
     );
-    expect(source).toContain('textCharacterSet: EXPLICIT_TEXT_CHARACTER_SET');
+    expect(source).toContain('textCharacterSet: DECK_TEXT_CHARACTER_SET');
     expect(source).toContain(
       'textFontSettings: DEFAULT_TEXT_FONT_SETTINGS_RASTER'
     );

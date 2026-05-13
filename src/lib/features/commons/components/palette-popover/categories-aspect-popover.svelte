@@ -101,6 +101,14 @@
           ? 'texts'
           : 'symbols'
   );
+  const showPerCategoryStrokeColor = $derived(
+    primitiveKind === 'symbols' &&
+      (!draftCommonAspect.stroke || !draftCommonAspect.autoColor)
+  );
+  const showPerCategoryStrokeWidth = $derived(
+    primitiveKind === 'symbols' &&
+      (!draftCommonAspect.stroke || !(draftCommonAspect.strokeUnique ?? true))
+  );
 
   const shapeChoices = $derived<Array<{ id: ShapeType; label: string }>>([
     { id: ShapeType.CIRCLE, label: m.shape_circle() },
@@ -210,15 +218,6 @@
     draftCommonAspect = { ...draftCommonAspect, [key]: value };
   }
 
-  function handleCommonAspectToggle<K extends keyof CategoriesCommonAspect>(
-    key: K,
-    enabled: boolean,
-    enabledValue: CategoriesCommonAspect[K],
-    disabledValue: CategoriesCommonAspect[K]
-  ) {
-    handleCommonAspectChange(key, enabled ? enabledValue : disabledValue);
-  }
-
   function applySuggestionPalette(seedHex: string) {
     const nextColors = generateCategoricalColorsFromSeed(
       seedHex,
@@ -298,13 +297,15 @@
     toggleCategoryExpand(id);
   }
 
-  function isNestedColorSurface(path: EventTarget[]) {
+  function isNestedPopoverSurface(path: EventTarget[]) {
     return path.some((target) => {
       if (!(target instanceof Element)) return false;
       return (
         target.id === 'khartis-color-picker-dropdown' ||
         target.classList.contains('single-color-dropdown') ||
-        target.classList.contains('palette-popover')
+        target.classList.contains('palette-popover') ||
+        target.classList.contains('bx--list-box__menu') ||
+        target.classList.contains('bx--list-box__menu-item')
       );
     });
   }
@@ -399,10 +400,10 @@
     if (!open) return;
 
     function handleClick(e: MouseEvent) {
-      const target = e.target as Node;
-      if (popoverRef && !popoverRef.contains(target)) {
-        if (triggerElement && triggerElement.contains(target)) return;
-        if (isNestedColorSurface(e.composedPath())) return;
+      const path = e.composedPath();
+      if (popoverRef && !path.includes(popoverRef)) {
+        if (triggerElement && path.includes(triggerElement)) return;
+        if (isNestedPopoverSurface(path)) return;
         handleClose();
       }
     }
@@ -616,53 +617,23 @@
                 <div class="common-paired-row common-paired-row--with-input">
                   <div class="common-field common-field--toggle">
                     <span class="field-label"
-                      >{m.aspect_common_stroke_size()}</span
+                      >{m.aspect_common_stroke_unique()}</span
                     >
                     <div class="common-toggle-value">
                       <div class="toggle-control">
                         <Switch
-                          toggled={draftCommonAspect.strokeSize > 0}
+                          toggled={draftCommonAspect.strokeUnique ?? true}
                           hideLabel
-                          labelText={m.aspect_common_stroke_size()}
+                          labelText={m.aspect_common_stroke_unique()}
                           disabled={!draftCommonAspect.stroke}
                           onchange={(value) =>
-                            handleCommonAspectToggle(
-                              'strokeSize',
-                              value,
-                              draftCommonAspect.strokeSize > 0
-                                ? draftCommonAspect.strokeSize
-                                : 1,
-                              0
-                            )}
+                            handleCommonAspectChange('strokeUnique', value)}
                         />
                         <span class="toggle-state">
-                          {draftCommonAspect.strokeSize > 0 ? m.yes() : m.no()}
+                          {(draftCommonAspect.strokeUnique ?? true)
+                            ? m.yes()
+                            : m.no()}
                         </span>
-                      </div>
-                    </div>
-
-                    <div class="common-paired-row">
-                      <div class="common-field common-field--toggle">
-                        <span class="field-label"
-                          >{m.aspect_common_stroke_unique()}</span
-                        >
-                        <div class="common-toggle-value">
-                          <div class="toggle-control">
-                            <Switch
-                              toggled={draftCommonAspect.strokeUnique ?? true}
-                              hideLabel
-                              labelText={m.aspect_common_stroke_unique()}
-                              disabled={!draftCommonAspect.stroke}
-                              onchange={(value) =>
-                                handleCommonAspectChange('strokeUnique', value)}
-                            />
-                            <span class="toggle-state">
-                              {(draftCommonAspect.strokeUnique ?? true)
-                                ? m.yes()
-                                : m.no()}
-                            </span>
-                          </div>
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -676,7 +647,7 @@
                       height="32px"
                       showSteppers={false}
                       disabled={!draftCommonAspect.stroke ||
-                        draftCommonAspect.strokeSize <= 0}
+                        !(draftCommonAspect.strokeUnique ?? true)}
                       onchange={(value) =>
                         handleCommonAspectChange('strokeSize', value)}
                     />
@@ -883,20 +854,21 @@
                             <span class="field-label"
                               >{m.per_category_size()}</span
                             >
-                            <SliderWithInput
-                              min={1}
-                              max={100}
+                            <CompactNumberInput
                               value={category.customSize ??
                                 draftCommonAspect.size}
-                              showMinMax
-                              inputWidth="96px"
+                              min={1}
+                              max={100}
+                              width="100%"
+                              height="32px"
+                              showSteppers={false}
                               onchange={(value) =>
                                 handleCategorySize(category.id, value)}
                             />
                           </div>
                         {/if}
 
-                        {#if primitiveKind === 'symbols' && draftCommonAspect.stroke && !draftCommonAspect.autoColor}
+                        {#if showPerCategoryStrokeColor}
                           <div class="field-stack">
                             <span class="field-label"
                               >{m.per_category_stroke_color()}</span
@@ -907,25 +879,25 @@
                                 handleCategoryStrokeColor(category.id, hex)}
                             />
                           </div>
+                        {/if}
 
-                          {#if !(draftCommonAspect.strokeUnique ?? true)}
-                            <div class="field-stack">
-                              <span class="field-label"
-                                >{m.per_category_stroke_width()}</span
-                              >
-                              <CompactNumberInput
-                                value={category.customStrokeWidth ??
-                                  draftCommonAspect.strokeSize}
-                                min={1}
-                                max={20}
-                                width="100%"
-                                height="32px"
-                                showSteppers={false}
-                                onchange={(value) =>
-                                  handleCategoryStrokeWidth(category.id, value)}
-                              />
-                            </div>
-                          {/if}
+                        {#if showPerCategoryStrokeWidth}
+                          <div class="field-stack">
+                            <span class="field-label"
+                              >{m.per_category_stroke_width()}</span
+                            >
+                            <CompactNumberInput
+                              value={category.customStrokeWidth ??
+                                draftCommonAspect.strokeSize}
+                              min={1}
+                              max={20}
+                              width="100%"
+                              height="32px"
+                              showSteppers={false}
+                              onchange={(value) =>
+                                handleCategoryStrokeWidth(category.id, value)}
+                            />
+                          </div>
                         {/if}
                       </div>
                     {/if}

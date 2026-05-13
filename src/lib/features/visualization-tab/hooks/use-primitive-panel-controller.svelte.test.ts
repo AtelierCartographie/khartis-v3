@@ -25,4 +25,16 @@ describe('usePrimitivePanelController', () => {
     );
     expect(source).toContain('sizeColumn: nextSizeColumn');
   });
+
+  it('resets categorical label state when polygon, text, and text-background category mappings change', () => {
+    expect(source).toContain('const nextPolygonClassification =');
+    expect(source).toContain('const nextRootPolygonClassification =');
+    expect(source).toContain('const nextTextClassification =');
+    expect(source).toContain('const nextClassification =');
+    expect(source).toContain('const nextStrokeClassification =');
+    expect(source.match(/labels: \[\]/g)?.length).toBeGreaterThanOrEqual(5);
+    expect(
+      source.match(/disabledLabels: undefined/g)?.length
+    ).toBeGreaterThanOrEqual(5);
+  });
 });

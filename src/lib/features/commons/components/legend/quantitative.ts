@@ -50,10 +50,10 @@ export function draw_quanti_color_legend(
   const overlap_test = (i: number, positions: number[]) =>
     labels_length[i] / 2 + labels_length[i + 1] / 2 + label_gap <
     positions[i + 1] - positions[i];
-  const original_margin = 10;
-  const margin_top = original_margin;
-  const margin_left = original_margin + labels_length[0] / 2;
-  const margin_right = original_margin + labels_length[nb_boxes] / 2;
+  const margin = Math.max(10, Math.round(fontSize * 0.6));
+  const margin_top = margin;
+  const margin_left = margin + labels_length[0] / 2;
+  const margin_right = margin + labels_length[nb_boxes] / 2;
   let box_width = 40;
   const max_box_width = 200;
   let boxes_width: number;
@@ -75,7 +75,7 @@ export function draw_quanti_color_legend(
   );
 
   const scale_body_width = margin_left + boxes_width + margin_right;
-  const nodata_gap = 10;
+  const section_gap = Math.max(10, Math.round(fontSize * 0.6));
   const nodata_box_h = box_height;
   const nodata_box_w = Math.round(fontSize * 2);
   const nodata_label = options.nodataLabel ?? m.legend_no_data_label();
@@ -85,10 +85,10 @@ export function draw_quanti_color_legend(
       label_gap +
       Textbox.measureText(nodata_label, font) +
       label_safety_padding +
-      original_margin
+      margin
     : 0;
   const body_width = Math.max(scale_body_width, nodata_body_width);
-  const max_text_width = body_width - margin_left - original_margin;
+  const max_text_width = body_width - margin_left - margin;
   const title_font = createLegendFont({
     fontSize: titleSize,
     fontFamily: resolvedFontFamily,
@@ -117,10 +117,11 @@ export function draw_quanti_color_legend(
   const actual_box_top = margin_top + actual_header_height + 5;
   const actual_tick_end = actual_box_top + box_height + 5;
   const actual_labels_bottom = actual_tick_end + 5 + fontSize;
-  const nodata_section_height = nodata ? nodata_gap + nodata_box_h + 5 : 0;
-  const note_gap = 8;
+  const nodata_section_height = nodata ? section_gap + nodata_box_h + 5 : 0;
   const actual_note_height =
-    note_lines.length > 0 ? note_gap + note_lines.length * (noteSize * 1.2) : 0;
+    note_lines.length > 0
+      ? section_gap + note_lines.length * (noteSize * 1.2)
+      : 0;
   const width = body_width;
   const height =
     actual_labels_bottom +
@@ -169,7 +170,7 @@ export function draw_quanti_color_legend(
 
     let nodata_markup = '';
     if (nodata) {
-      const nodata_y = actual_labels_bottom + nodata_gap;
+      const nodata_y = actual_labels_bottom + section_gap;
       const nodata_label_x = margin_left + nodata_box_w + label_gap;
       nodata_markup = `<g class="nodata">
         <rect x="${margin_left}" y="${nodata_y}" width="${nodata_box_w}" height="${nodata_box_h}" fill="#d9d9d9" stroke="none"/>
@@ -179,7 +180,7 @@ export function draw_quanti_color_legend(
 
     let note_markup = '';
     if (note_lines.length > 0) {
-      const note_y = actual_labels_bottom + nodata_section_height + note_gap;
+      const note_y = actual_labels_bottom + nodata_section_height + section_gap;
       const line_h = noteSize * 1.2;
       note_markup += `<g class="note" text-anchor="start" dominant-baseline="hanging" font-size="${noteSize}">`;
       note_lines.forEach((line, i) => {
