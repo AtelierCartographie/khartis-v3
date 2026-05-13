@@ -98,9 +98,26 @@ describe('CustomizeBasemap', () => {
 
   it('derives overlay support from the selected reference basemap metadata', () => {
     expect(source).toContain('getPreferredBasemapFile');
-    expect(source).toContain('getReferenceBasemapMetadata');
+    expect(source).toContain('getActiveReferenceBasemapMetadata');
+    expect(source).toContain('resolveActiveBasemapMetadata');
     expect(source).toContain('basemapStyleStore.referenceBasemapId');
-    expect(source).toContain('basemapService.availableBasemaps.find');
+    expect(source).toContain(
+      'availableBasemaps: basemapService.availableBasemaps'
+    );
+  });
+
+  it('does not use cached catalog metadata when no reference basemap is active', () => {
+    const helperStart = source.indexOf(
+      'function getActiveReferenceBasemapMetadata'
+    );
+    const helperEnd = source.indexOf('const currentMetadata', helperStart);
+    const helperSource = source.slice(helperStart, helperEnd);
+
+    expect(helperSource).toContain('if (!referenceBasemapId)');
+    expect(helperSource).toContain('return null;');
+    expect(helperSource).not.toContain(
+      'return basemapService.currentMetadata;'
+    );
   });
 
   it('enables city controls from catalog centroid or point metadata', () => {
