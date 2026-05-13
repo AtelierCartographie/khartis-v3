@@ -101,15 +101,15 @@ describe('useMapLayers source', () => {
     );
   });
 
-  it('keeps generated ocean off imported data until a manual projection needs it', () => {
+  it('keeps generated ocean off imported data until customized or a manual projection needs it', () => {
     expect(source).toContain('GENERATED_ORTHOGRAPHIC_BASEMAP_LAYER_IDS');
     expect(source).toContain('GENERATED_ORTHOGRAPHIC_OCEAN_LAYER_IDS');
     expect(source).toContain('function hasVisibleGeneratedBasemapLayer(');
     expect(source).toContain('const hasManualProjectionOverride =');
     expect(source).toContain('const shouldShowGeneratedOceanLayer =');
-    expect(source).toContain(
-      '(!hasDatasetContent || hasManualProjectionOverride)'
-    );
+    expect(source).toContain('shouldShowGeneratedOrthographicOceanLayer({');
+    expect(source).toContain('function hasCustomizedGeneratedOceanStyle()');
+    expect(source).toContain('hasCustomizedOceanStyle:');
     expect(source).toContain('function isGeneratedOceanLayer(');
     expect(source).toContain('basemapGroups.background.filter');
   });

@@ -29,6 +29,7 @@
   import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
   import { resolveTiledStyleFromToggle } from '../services/tiled-basemap-selection.service';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
+  import { resolveActiveBasemapMetadata } from '$lib/features/map/utils/basemap-metadata-resolution.utils';
 
   const layerConfigs = $derived(
     new Map(basemapLayersStore.layers.map((l) => [l.id, l] as const))
@@ -49,9 +50,11 @@
     })
   );
 
-  function getReferenceBasemapMetadata(referenceBasemapId: string | null) {
+  function getActiveReferenceBasemapMetadata(
+    referenceBasemapId: string | null
+  ) {
     if (!referenceBasemapId) {
-      return basemapService.currentMetadata;
+      return null;
     }
 
     const resolvedBasemapId = getPreferredBasemapFile(
@@ -59,15 +62,16 @@
       referenceBasemapId
     );
 
-    return (
-      basemapService.availableBasemaps.find(
-        (basemap) => basemap.file === resolvedBasemapId
-      ) ?? basemapService.currentMetadata
-    );
+    return resolveActiveBasemapMetadata({
+      referenceBasemapId,
+      resolvedBasemapId,
+      availableBasemaps: basemapService.availableBasemaps,
+      currentMetadata: basemapService.currentMetadata
+    });
   }
 
   const currentMetadata = $derived.by(() =>
-    getReferenceBasemapMetadata(basemapStyleStore.referenceBasemapId)
+    getActiveReferenceBasemapMetadata(basemapStyleStore.referenceBasemapId)
   );
   const customBaseLayerType = $derived.by(
     () =>

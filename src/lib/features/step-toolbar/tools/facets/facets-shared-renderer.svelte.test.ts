@@ -45,4 +45,24 @@ describe('facets shared renderer structure', () => {
     expect(helperSource).toContain('Boolean(datasetBbox)');
     expect(helperSource).not.toContain('!basemapStyleStore.referenceBasemapId');
   });
+
+  it('does not inherit cached catalog projection metadata for standalone facet geofiles', () => {
+    const helperStart = source.indexOf(
+      'function getProjectionMetadataForDataset'
+    );
+    const helperEnd = source.indexOf(
+      'function getProjectionViewportSize',
+      helperStart
+    );
+    const helperSource = source.slice(helperStart, helperEnd);
+
+    expect(helperSource).toContain('if (!datasetId)');
+    expect(helperSource).toContain('const referenceBasemapId =');
+    expect(helperSource).toContain('if (!referenceBasemapId)');
+    expect(helperSource).toContain('return null;');
+    expect(helperSource).toContain('resolveActiveBasemapMetadata');
+    expect(helperSource).not.toContain(
+      'if (!duckDataset?.joinedBasemap) {\n      return basemapService.currentMetadata;'
+    );
+  });
 });
