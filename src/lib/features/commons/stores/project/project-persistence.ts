@@ -26,6 +26,10 @@ import { ProjectValidator } from '../../utils/validation.utils';
 import type { UploadedFile } from '../../types/create-project.types';
 import type { ProjectStateContainer } from './project-state.svelte';
 import { addToHistory, resetHistory } from './project-history';
+import {
+  beginProjectRuntime,
+  resetProjectRuntimeState
+} from './project-runtime.svelte';
 
 function syncGeoInfoToSourceFiles(container: ProjectStateContainer): void {
   const files = container._state.currentProject?.data?.sourceFiles;
@@ -221,6 +225,8 @@ export async function importProject(
     const project = await projectFiles.importProject(file);
 
     container._state.currentProject = project;
+    beginProjectRuntime(project.id);
+    resetProjectRuntimeState();
     container._state.isDirty = false;
     container._state.lastSaved = new Date();
     resetHistory(container);
