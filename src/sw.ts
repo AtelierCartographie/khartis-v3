@@ -29,6 +29,7 @@ const BASEMAPS_DATA_CACHE = 'basemaps-data';
 const PRESETS_CACHE = 'presets';
 const GEOPF_TILES_CACHE = 'geopf-vector-tiles';
 const OPENMAPTILES_CACHE = 'openmaptiles';
+const FONTS_CACHE = 'fonts';
 
 const OFFLINE_CACHE_NAMES_BY_SCOPE: Record<OfflineCacheScope, string[]> = {
   basemaps: [BASEMAPS_DATA_CACHE, PRESETS_CACHE],
@@ -132,6 +133,21 @@ registerRoute(
       new ExpirationPlugin({
         maxEntries: 100,
         maxAgeSeconds: THIRTY_DAYS_SECONDS,
+        purgeOnQuotaError: true
+      })
+    ]
+  })
+);
+
+registerRoute(
+  ({ request }) => request.destination === 'font',
+  new CacheFirst({
+    cacheName: FONTS_CACHE,
+    plugins: [
+      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new ExpirationPlugin({
+        maxEntries: 80,
+        maxAgeSeconds: ONE_YEAR_SECONDS,
         purgeOnQuotaError: true
       })
     ]
