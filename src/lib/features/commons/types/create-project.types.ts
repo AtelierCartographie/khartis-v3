@@ -124,6 +124,7 @@ export interface ExampleProject {
   thumbnail?: string;
   dataUrl?: string;
   baseMapId?: string;
+  referenceBasemapId?: string;
   visualizations?: ExampleVisualizationPreset[];
   tags?: string[];
 }
