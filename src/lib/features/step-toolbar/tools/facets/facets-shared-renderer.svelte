@@ -51,6 +51,7 @@
   import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
   import { getMainlandBboxForBasemap } from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
   import { fitBasemapRenderProjection } from '$lib/features/map/utils/fit-basemap-render-projection.utils';
+  import { resolveActiveBasemapMetadata } from '$lib/features/map/utils/basemap-metadata-resolution.utils';
   import { buildProjectionForBasemap } from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
   import { computeProjectedBboxForProjection } from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
   import { resolveOrthographicBasemapReferenceBboxes } from '$lib/features/map/utils/orthographic-basemap-reference.utils';
@@ -353,25 +354,29 @@
   }
 
   function getProjectionMetadataForDataset(datasetId: string | undefined) {
-    if (basemapStyleStore.referenceBasemapId) {
+    if (!datasetId) {
       return basemapService.currentMetadata;
     }
 
     const duckDataset = getRenderedDuckDBDataset(datasetId);
-    if (!duckDataset?.joinedBasemap) {
-      return basemapService.currentMetadata;
+    const referenceBasemapId =
+      basemapStyleStore.referenceBasemapId ?? duckDataset?.joinedBasemap;
+
+    if (!referenceBasemapId) {
+      return null;
     }
 
     const resolvedBasemapId = getPreferredBasemapFile(
       basemapService.availableBasemaps,
-      duckDataset.joinedBasemap
+      referenceBasemapId
     );
 
-    return (
-      basemapService.availableBasemaps.find(
-        (basemap) => basemap.file === resolvedBasemapId
-      ) ?? basemapService.currentMetadata
-    );
+    return resolveActiveBasemapMetadata({
+      referenceBasemapId,
+      resolvedBasemapId,
+      availableBasemaps: basemapService.availableBasemaps,
+      currentMetadata: basemapService.currentMetadata
+    });
   }
 
   function getProjectionViewportSize(): { width: number; height: number } {

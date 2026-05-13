@@ -90,6 +90,7 @@
   import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
   import { resolveOrthographicBasemapReferenceBboxes } from '../utils/orthographic-basemap-reference.utils';
   import { fitBasemapRenderProjection } from '../utils/fit-basemap-render-projection.utils';
+  import { resolveActiveBasemapMetadata } from '../utils/basemap-metadata-resolution.utils';
   import { buildProjectionMaskPath } from '../utils/projection-mask.utils';
   import { resolveProjectionForRender } from '../utils/projection-priority.utils';
   import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
@@ -645,7 +646,17 @@
     }
 
     if (basemapStyleStore.referenceBasemapId) {
-      return basemapService.currentMetadata;
+      const resolvedBasemapId = getPreferredBasemapFile(
+        basemapService.availableBasemaps,
+        basemapStyleStore.referenceBasemapId
+      );
+
+      return resolveActiveBasemapMetadata({
+        referenceBasemapId: basemapStyleStore.referenceBasemapId,
+        resolvedBasemapId,
+        availableBasemaps: basemapService.availableBasemaps,
+        currentMetadata: basemapService.currentMetadata
+      });
     }
 
     const duckDataset = getRenderedDuckDBDataset(datasetId);
@@ -658,11 +669,12 @@
       duckDataset.joinedBasemap
     );
 
-    return (
-      basemapService.availableBasemaps.find(
-        (basemap) => basemap.file === resolvedBasemapId
-      ) ?? basemapService.currentMetadata
-    );
+    return resolveActiveBasemapMetadata({
+      referenceBasemapId: duckDataset.joinedBasemap,
+      resolvedBasemapId,
+      availableBasemaps: basemapService.availableBasemaps,
+      currentMetadata: basemapService.currentMetadata
+    });
   }
 
   function getProjectionFitBbox(): BBox | null {
