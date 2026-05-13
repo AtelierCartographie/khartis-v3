@@ -12,9 +12,17 @@ export {
   duplicateProject,
   listProjects,
   clearProject,
-  loadLastProject,
-  resetAllStores
+  loadLastProject
 } from './project-lifecycle';
+
+export {
+  beginProjectRuntime,
+  captureProjectRuntime,
+  isCurrentProjectRuntime,
+  projectRuntime,
+  resetProjectRuntimeState,
+  type ProjectRuntimeSnapshot
+} from './project-runtime.svelte';
 
 export {
   getSourceFileIndex,

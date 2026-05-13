@@ -7,8 +7,7 @@ import {
   PROJECT_CONST,
   duplicateProject as duplicateProjectEntity,
   projectRepository,
-  projectStorage,
-  persistenceRegistry
+  projectStorage
 } from '$lib/features/project-management';
 import { m } from '$lib/paraglide/messages';
 import { dataOrchestratorService } from '../../services/data-orchestrator.service.svelte';
@@ -21,18 +20,10 @@ import type { ProjectStateContainer } from './project-state.svelte';
 import { cleanFileForStorage } from './project-files';
 import { addToHistory, resetHistory } from './project-history';
 import { saveCurrentProject } from './project-persistence';
-import { globalActions } from '../global.svelte';
-import { dataTabStore } from '$lib/features/data-tab/stores/data-tab.store.svelte';
-import { dataToolsStore } from '$lib/features/data-tab/stores/data-tools.store.svelte';
-import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
-
-export function resetAllStores(): void {
-  persistenceRegistry.resetAll();
-  projectionStore.reset();
-  globalActions.resetNavigationState();
-  dataTabStore.reset();
-  dataToolsStore.reset();
-}
+import {
+  beginProjectRuntime,
+  resetProjectRuntimeState
+} from './project-runtime.svelte';
 
 export async function createProject(
   container: ProjectStateContainer,
@@ -51,8 +42,6 @@ export async function createProject(
   const sanitizedName = sanitizeProjectName(name);
   const cleanedFiles = files.map(cleanFileForStorage);
 
-  resetAllStores();
-
   const project: KhartisProject = {
     id: crypto.randomUUID(),
     manifest: {
@@ -68,6 +57,8 @@ export async function createProject(
   };
 
   container._state.currentProject = project;
+  beginProjectRuntime(project.id);
+  resetProjectRuntimeState();
   container._state.isDirty = false;
   container._state.lastSaved = new Date();
 
@@ -90,6 +81,8 @@ export async function loadProject(
 
   if (project) {
     container._state.currentProject = project;
+    beginProjectRuntime(project.id);
+    resetProjectRuntimeState();
     container._state.isDirty = false;
     container._state.lastSaved = new Date();
     resetHistory(container);
@@ -110,7 +103,8 @@ export async function deleteProject(
 
     if (container._state.currentProject?.id === id) {
       container._state.currentProject = undefined;
-      resetAllStores();
+      beginProjectRuntime(null);
+      resetProjectRuntimeState();
       await projectStorage.remove(ProjectStorageKey.CURRENT);
       await dataOrchestratorService.onProjectChanged();
     }
@@ -196,13 +190,15 @@ export async function clearProject(
   container: ProjectStateContainer
 ): Promise<void> {
   container._state.currentProject = undefined;
+  beginProjectRuntime(null);
   container._state.isDirty = false;
   container._state.lastSaved = undefined;
   resetHistory(container);
 
-  resetAllStores();
+  resetProjectRuntimeState();
 
   await projectStorage.remove(ProjectStorageKey.CURRENT);
+  await dataOrchestratorService.onProjectChanged();
 }
 
 export async function loadLastProject(
