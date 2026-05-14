@@ -1,12 +1,14 @@
 export {
-  SCALE_MODE,
   MAX_FACETS_COLUMNS,
   MAX_FACETS,
-  FACET_SLOT,
   facetsStore
 } from './facets.store.svelte';
+export {
+  FACET_SLOT,
+  SCALE_MODE
+} from '$lib/features/commons/constants/facets.constants';
 export type {
   FacetSlotPath,
-  ScaleMode,
-  FacetsState
-} from './facets.store.svelte';
+  ScaleMode
+} from '$lib/features/commons/constants/facets.constants';
+export type { FacetsState } from './facets.store.svelte';

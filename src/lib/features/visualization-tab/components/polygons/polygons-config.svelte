@@ -389,8 +389,8 @@
         strokeCategoryColumn={visualization?.polygon?.strokeCategoryColumn}
         showMissingData={showMissingData}
         missingDataColor={missingDataColor}
-        facetsValueSlotPath={FACET_SLOT.POLYGON_VALUE}
-        facetsCategorySlotPath={FACET_SLOT.POLYGON_CATEGORY}
+        facetsValueSlotPath={FACET_SLOT.POLYGON_STROKE_VALUE}
+        facetsCategorySlotPath={FACET_SLOT.POLYGON_STROKE_CATEGORY}
         onMissingDataShowChange={handleMissingDataShowChange}
         onMissingDataColorChange={handleMissingDataColorChange}
       />

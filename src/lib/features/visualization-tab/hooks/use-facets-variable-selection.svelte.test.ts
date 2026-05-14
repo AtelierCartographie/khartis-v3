@@ -23,6 +23,8 @@ describe('useFacetsVariableSelection', () => {
   });
 
   it('does not seed collection facets with technical identifiers', () => {
-    expect(source).toContain('isAutoFacetDataColumn(field)');
+    expect(source).toContain('isFieldCompatibleWithSlot(field, slotPath)');
+    expect(source).toContain('facetSlotRequiresNumericVariable(slotPath)');
+    expect(source).toContain('isAutoFacetNumericColumn(field)');
   });
 });

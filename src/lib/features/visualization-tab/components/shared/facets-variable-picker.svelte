@@ -65,7 +65,7 @@
     singleSelectItems.find((f) => f.id === selectedFieldId) ?? null
   );
   const collectionDataFields = $derived(
-    dataFields.filter(isAutoFacetDataColumn)
+    singleSelectItems.filter(isAutoFacetDataColumn)
   );
   const selectedCollectionFieldIds = $derived(
     selectedFieldIds.filter((id) =>

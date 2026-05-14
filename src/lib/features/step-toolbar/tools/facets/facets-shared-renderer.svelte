@@ -82,7 +82,8 @@
   import type { BBox, SplitRenderingTable } from '$lib/features/map/types';
   import type { ProjectionLike } from 'geoarrow-deck-stream';
   import { buildFacetRenderDescriptors } from './facets-shared-renderer.utils';
-  import type { FacetsLayout } from './facets.store.svelte';
+  import { facetsStore, type FacetsLayout } from './facets.store.svelte';
+  import { resolveSharedFacetScaleStats } from './facets-shared-scale';
 
   interface Props {
     visualizations: VisualizationConfig[];
@@ -111,8 +112,6 @@
   }: Props = $props();
 
   const IS_DEV = import.meta.env.DEV;
-  const FACET_RENDER_PIXEL_RATIO_MAX = 1;
-
   let rendererContainer = $state<HTMLDivElement | undefined>(undefined);
   let deckInstance = $state<DeckInstance | null>(null);
   let isRendererLoaded = $state(false);
@@ -165,14 +164,21 @@
   );
   const maxRenderBufferSizePx = $derived(getBrowserMaxRenderBufferSizePx());
   const renderPixelRatio = $derived.by(() => {
-    const resolvedPixelRatio = resolveMapRenderPixelRatio(
+    return resolveMapRenderPixelRatio(
       typeof window !== 'undefined' ? window.devicePixelRatio : 1,
       globalState.zoom.pageZoomScale,
       Math.max(containerWidth, containerHeight),
       maxRenderBufferSizePx
     );
-
-    return Math.min(resolvedPixelRatio, FACET_RENDER_PIXEL_RATIO_MAX);
+  });
+  const sharedScaleStats = $derived.by(() => {
+    return resolveSharedFacetScaleStats({
+      visualizations,
+      scaleMode: facetsStore.scaleMode,
+      primarySlotPath: facetsStore.primarySlotPath,
+      getColumnStatistics: (datasetId, columnName) =>
+        datasetsStore.getColumnStatistics(datasetId, columnName)
+    });
   });
 
   const mapState = useMapState();
@@ -693,7 +699,10 @@
     getIsMapLoaded: () => isRendererLoaded,
     getWorldBaseTable: () => worldBaseTable,
     getActiveVisualizations: () => visualizations,
-    buildLayerContextForViz: (viz) => mapState.buildLayerContextForViz(viz),
+    buildLayerContextForViz: (viz) => {
+      const context = mapState.buildLayerContextForViz(viz);
+      return sharedScaleStats ? { ...context, ...sharedScaleStats } : context;
+    },
     getProjectionMetadataForDataset: (datasetId) =>
       getProjectionMetadataForDataset(datasetId),
     getProjectionFitBbox: () => getProjectionFitBbox(),
@@ -967,6 +976,7 @@
     void basemapStyleStore.selectedStyle;
     void mapProjectionStore.projection;
     void osmBasemapStore.activeOSMBasemap;
+    void sharedScaleStats;
     const projectionState = getProjectionState();
     void projectionState.overrideActive;
     void projectionState.overrideSource;

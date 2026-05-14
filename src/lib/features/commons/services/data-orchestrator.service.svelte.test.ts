@@ -25,6 +25,26 @@ describe('dataOrchestratorService restore pipeline', () => {
     );
   });
 
+  it('restores facets after datasets and visualizations are available', () => {
+    expect(source).toContain('const facetsSettings = (');
+    expect(source).toContain(
+      'persistenceRegistry.deserializeAll({ facets: facetsSettings });'
+    );
+    expect(source).toContain(
+      'await facetsStore.restoreGeneratedVisualizations();'
+    );
+    expect(source.indexOf('await processProjectFiles')).toBeLessThan(
+      source.indexOf(
+        'persistenceRegistry.deserializeAll({ facets: facetsSettings });'
+      )
+    );
+    expect(
+      source.indexOf('visualizationStore.restoreFromSerialized(vizSettings)')
+    ).toBeLessThan(
+      source.indexOf('await facetsStore.restoreGeneratedVisualizations();')
+    );
+  });
+
   it('does not rely on setTimeout-based geo-column restoration anymore', () => {
     expect(source).not.toContain('setTimeout(');
     expect(source).not.toContain('pendingGeoColumnRestoreTimeout');
