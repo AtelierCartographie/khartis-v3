@@ -41,6 +41,7 @@
   import type { SplitRenderingTable } from './types';
   import { INTERNAL_COLUMN } from '../commons/constants/data.constants';
   import { shouldUseMapLibreInterleaved } from './utils/render-engine.utils';
+  import { resolveMapDisplayDatasets } from './utils/map-display-datasets.utils';
 
   let thematicMapRef = $state<HTMLDivElement>(undefined!);
 
@@ -68,6 +69,14 @@
   let displayDataVersion = $state(0);
 
   const enabledDatasets = $derived(datasetsStore.enabledDatasets);
+  const mapDisplayDatasets = $derived.by(() =>
+    resolveMapDisplayDatasets({
+      allDatasets: datasetsStore.datasets,
+      enabledDatasets,
+      activeVisualizations: visualizationStore.activeVisualizations,
+      selectedStep: globalState.selectedStep
+    })
+  );
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   const activeOSMBasemap = $derived(osmBasemapStore.activeOSMBasemap);
 
@@ -229,7 +238,7 @@
     error: unknown,
     tableName?: string
   ): boolean {
-    if (isStaleLoad(generation) || !datasetsStore.isDatasetEnabled(datasetId)) {
+    if (isStaleLoad(generation) || !isDatasetExpectedForDisplay(datasetId)) {
       return true;
     }
 
@@ -238,6 +247,10 @@
     }
 
     return !duckDBOrchestrator.getDatasetByTable(tableName);
+  }
+
+  function isDatasetExpectedForDisplay(datasetId: string): boolean {
+    return mapDisplayDatasets.some((dataset) => dataset.id === datasetId);
   }
 
   function bumpDisplayDataVersion(): void {
@@ -479,7 +492,7 @@
       ]);
 
       if (isStaleLoad(generation)) return;
-      if (!datasetsStore.isDatasetEnabled(datasetId)) return;
+      if (!isDatasetExpectedForDisplay(datasetId)) return;
 
       if (geometryArrow && datasetArrow) {
         const featureIdColumn = detectFeatureIdColumn(geometryArrow);
@@ -509,7 +522,7 @@
 
       if (isStaleLoad(generation)) return;
 
-      if (!datasetsStore.isDatasetEnabled(datasetId)) {
+      if (!isDatasetExpectedForDisplay(datasetId)) {
         return;
       }
 
@@ -604,7 +617,7 @@
       }
 
       if (isStaleLoad(generation)) return;
-      if (!datasetsStore.isDatasetEnabled(dataset.id)) return;
+      if (!isDatasetExpectedForDisplay(dataset.id)) return;
 
       if (densityTable) {
         setDisplayDensityTable(dataset.id, densityTable);
@@ -625,7 +638,7 @@
             tableName
           )) ||
         isStaleLoad(generation) ||
-        !datasetsStore.isDatasetEnabled(dataset.id)
+        !isDatasetExpectedForDisplay(dataset.id)
       ) {
         return;
       }
@@ -657,7 +670,7 @@
 
       if (generation !== undefined && isStaleLoad(generation)) return;
 
-      if (!datasetsStore.isDatasetEnabled(datasetId)) {
+      if (!isDatasetExpectedForDisplay(datasetId)) {
         return;
       }
 
@@ -683,7 +696,7 @@
             error,
             datasetTableName
           )) ||
-        (!datasetsStore.isDatasetEnabled(datasetId) &&
+        (!isDatasetExpectedForDisplay(datasetId) &&
           isMissingDuckTableError(error)) ||
         (datasetTableName &&
           isMissingDuckTableError(error) &&
@@ -712,7 +725,7 @@
 
       if (isStaleLoad(generation)) return;
 
-      if (!datasetsStore.isDatasetEnabled(datasetId)) {
+      if (!isDatasetExpectedForDisplay(datasetId)) {
         return;
       }
 
@@ -765,7 +778,7 @@
     void duckDBDatasetsVersion;
     void densityReloadSignature;
     void basemapService.simplificationVersion;
-    const currentEnabledDatasets = enabledDatasets;
+    const currentMapDisplayDatasets = mapDisplayDatasets;
 
     if (isInitializing) {
       return;
@@ -781,15 +794,15 @@
         hasError = false;
         errorMessage = null;
 
-        const currentEnabledIds = new Set(
-          currentEnabledDatasets.map((d) => d.id)
+        const currentMapDisplayIds = new Set(
+          currentMapDisplayDatasets.map((d) => d.id)
         );
 
         const tableIdsToRemove = [...displayTables.keys()].filter(
-          (id) => !currentEnabledIds.has(id)
+          (id) => !currentMapDisplayIds.has(id)
         );
         const geojsonIdsToRemove = [...displayGeoJSONs.keys()].filter(
-          (id) => !currentEnabledIds.has(id)
+          (id) => !currentMapDisplayIds.has(id)
         );
 
         const datasetIdsToRemove = new Set([
@@ -801,7 +814,7 @@
         }
 
         const thisGeneration = ++loadGeneration;
-        void loadDatasetsSequentially(currentEnabledDatasets, (dataset) =>
+        void loadDatasetsSequentially(currentMapDisplayDatasets, (dataset) =>
           loadDatasetForDisplay(dataset, thisGeneration)
         ).catch((error) => {
           logger.error(
@@ -829,7 +842,7 @@
 
     const thisGeneration = ++loadGeneration;
 
-    for (const dataset of enabledDatasets) {
+    for (const dataset of mapDisplayDatasets) {
       const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
         dataset.sourceFileId
       );
@@ -899,11 +912,11 @@
   async function initializeMap() {
     const start = performance.now();
     logger.info('Initializing main map view', LogCategory.MAP, {
-      enabledCount: enabledDatasets.length
+      displayDatasetCount: mapDisplayDatasets.length
     });
 
     const initGeneration = ++loadGeneration;
-    const [firstDataset, ...remainingDatasets] = enabledDatasets;
+    const [firstDataset, ...remainingDatasets] = mapDisplayDatasets;
 
     if (firstDataset) {
       await loadDatasetForDisplay(firstDataset, initGeneration);

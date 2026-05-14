@@ -1208,7 +1208,8 @@ export interface VisualizationStore {
   ) => void;
   updateVisualization: (
     id: string,
-    updates: Partial<VisualizationConfig>
+    updates: Partial<VisualizationConfig>,
+    priority?: SavePriorityType
   ) => void;
   renameVisualization: (id: string, name: string) => void;
   applyVisualizationPreset: (id: string, type: VisualizationType) => void;
@@ -2422,9 +2423,10 @@ function createVisualizationStore(): VisualizationStore {
 
   function updateVisualization(
     id: string,
-    updates: Partial<VisualizationConfig>
+    updates: Partial<VisualizationConfig>,
+    priority?: SavePriorityType
   ): void {
-    applyVisualizationUpdate(id, () => updates);
+    applyVisualizationUpdate(id, () => updates, priority);
   }
 
   function renameVisualization(id: string, name: string): void {
