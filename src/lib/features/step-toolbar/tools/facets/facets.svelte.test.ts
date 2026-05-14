@@ -17,13 +17,15 @@ describe('facets tool scale mode UI', () => {
     expect(source).toContain('facetsStore.toggleScaleMode()');
   });
 
-  it('uses dedicated text background stroke slots instead of fill slots', () => {
+  it('uses dedicated stroke slots instead of fill or size slots', () => {
+    expect(source).toContain('FACET_SLOT.SYMBOL_STROKE_VALUE');
+    expect(source).toContain('FACET_SLOT.SYMBOL_STROKE_CATEGORY');
+    expect(source).toContain('FACET_SLOT.POLYGON_STROKE_VALUE');
+    expect(source).toContain('FACET_SLOT.POLYGON_STROKE_CATEGORY');
+    expect(source).toContain('FACET_SLOT.LINE_THICKNESS_VALUE');
     expect(source).toContain('FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE');
     expect(source).toContain('FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY');
-    expect(source).toContain('return viz.text?.background?.strokeValueColumn;');
-    expect(source).toContain(
-      'return viz.text?.background?.strokeCategoryColumn;'
-    );
+    expect(source).toContain('getFacetSlotVariable(viz, slotPath)');
   });
 
   it('shows the numeric variable icon only for numeric dataset columns', () => {
