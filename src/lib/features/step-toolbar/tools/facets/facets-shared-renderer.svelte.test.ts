@@ -18,6 +18,16 @@ describe('facets shared renderer structure', () => {
     );
   });
 
+  it('uses shared scale statistics and uncapped render pixel ratio for sharp facets', () => {
+    expect(source).toContain('resolveSharedFacetScaleStats');
+    expect(source).toContain(
+      'return sharedScaleStats ? { ...context, ...sharedScaleStats } : context;'
+    );
+    expect(source).toContain('resolveMapRenderPixelRatio(');
+    expect(source).not.toContain('FACET_RENDER_PIXEL_RATIO_MAX');
+    expect(source).not.toContain('Math.min(resolvedPixelRatio');
+  });
+
   it('does not subscribe the redraw effect to projectionStore state that it mutates itself', () => {
     expect(source).not.toContain('void projectionStore.modelMatrix;');
     expect(source).not.toContain('void projectionStore.referenceBbox;');

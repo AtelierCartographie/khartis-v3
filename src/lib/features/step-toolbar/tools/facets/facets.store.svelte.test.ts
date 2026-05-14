@@ -499,6 +499,58 @@ describe('facetsStore', () => {
       });
     });
 
+    it('updates symbol stroke slots without touching symbol size slots', () => {
+      mocks.visualizations = [
+        {
+          id: 'base-viz',
+          name: 'Base',
+          datasetId: 'dataset-1'
+        },
+        {
+          id: 'facet-a',
+          name: 'a',
+          mapping: { valueColumn: 'a', sizeColumn: 'size' },
+          symbol: {
+            sizeColumn: 'size',
+            strokeValueColumn: 'a'
+          }
+        }
+      ];
+      mocks.datasets = [
+        {
+          id: 'dataset-1',
+          columns: [
+            { name: 'new-stroke', type: 'number' },
+            { name: 'size', type: 'number' }
+          ]
+        }
+      ];
+      facetsStore.restoreFromSerialized({
+        enabled: true,
+        baseVisualizationId: 'base-viz',
+        primarySlotPath: FACET_SLOT.SYMBOL_STROKE_VALUE,
+        variables: ['a', 'new-stroke'],
+        layout: { columns: 2, gap: 16 },
+        scaleMode: SCALE_MODE.INDEPENDENT,
+        generatedVisualizationIds: ['facet-a']
+      });
+
+      const result = facetsStore.setVariableForSlot(
+        0,
+        FACET_SLOT.SYMBOL_STROKE_VALUE,
+        'new-stroke'
+      );
+
+      expect(result).toBe(true);
+      expect(updateVisualizationMock).toHaveBeenCalledWith('facet-a', {
+        mapping: { valueColumn: 'new-stroke', sizeColumn: 'size' },
+        symbol: {
+          sizeColumn: 'size',
+          strokeValueColumn: 'new-stroke'
+        }
+      });
+    });
+
     it('rejects incompatible text fields for numeric facet slots', () => {
       mocks.visualizations = [
         {
@@ -803,6 +855,56 @@ describe('facetsStore', () => {
       });
 
       expect(facetsStore.layout.gap).toBe(16);
+    });
+
+    it('regenerates missing facet visualizations after project restore', async () => {
+      mocks.visualizations = [
+        {
+          id: 'base-viz',
+          name: 'Base visualization',
+          datasetId: 'dataset-1'
+        }
+      ];
+      mocks.datasets = [
+        {
+          id: 'dataset-1',
+          columns: [
+            { name: 'a', type: 'number' },
+            { name: 'b', type: 'number' }
+          ]
+        }
+      ];
+      mocks.generateFacetVisualizationsMock.mockResolvedValue([
+        { id: 'restored-a' },
+        { id: 'restored-b' }
+      ]);
+      facetsStore.restoreFromSerialized({
+        enabled: true,
+        baseVisualizationId: 'base-viz',
+        primarySlotPath: FACET_SLOT.SYMBOL_SIZE,
+        variables: ['a', 'b'],
+        layout: { columns: 2, gap: 16 },
+        scaleMode: SCALE_MODE.SHARED,
+        generatedVisualizationIds: ['old-a', 'old-b']
+      });
+
+      await facetsStore.restoreGeneratedVisualizations();
+
+      expect(mocks.removeBulkVisualizationsMock).not.toHaveBeenCalled();
+      expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
+        mocks.visualizations[0],
+        ['a', 'b'],
+        SCALE_MODE.SHARED,
+        FACET_SLOT.SYMBOL_SIZE
+      );
+      expect(mocks.createBulkVisualizationsMock).toHaveBeenCalledWith([
+        { id: 'restored-a' },
+        { id: 'restored-b' }
+      ]);
+      expect(facetsStore.generatedVisualizationIds).toEqual([
+        'restored-a',
+        'restored-b'
+      ]);
     });
   });
 

@@ -29,6 +29,7 @@
     ThicknessMode
   } from '$lib/features/commons/constants/visualization.constants';
   import { isAutoFacetNumericColumn } from '$lib/features/commons/utils/visualization-columns.utils';
+  import { getFacetSlotVariable } from '$lib/features/commons/utils/facet-visualization-updates';
   import SliderWithInput from '$lib/features/commons/components/viz-controls/slider-with-input.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
 
@@ -110,9 +111,13 @@
 
     const strokeMode = viz.modes?.stroke;
     if (strokeMode === StrokeMode.CLASSES) {
-      pushSlot(slots, FACET_SLOT.SYMBOL_VALUE, m.facets_slot_stroke());
+      pushSlot(slots, FACET_SLOT.SYMBOL_STROKE_VALUE, m.facets_slot_stroke());
     } else if (strokeMode === StrokeMode.CATEGORIES) {
-      pushSlot(slots, FACET_SLOT.SYMBOL_CATEGORY, m.facets_slot_stroke());
+      pushSlot(
+        slots,
+        FACET_SLOT.SYMBOL_STROKE_CATEGORY,
+        m.facets_slot_stroke()
+      );
     }
 
     return slots;
@@ -126,9 +131,13 @@
       pushSlot(slots, FACET_SLOT.POLYGON_CATEGORY, m.facets_slot_fill());
     }
     if (viz.modes?.stroke === StrokeMode.CLASSES) {
-      pushSlot(slots, FACET_SLOT.POLYGON_VALUE, m.facets_slot_stroke());
+      pushSlot(slots, FACET_SLOT.POLYGON_STROKE_VALUE, m.facets_slot_stroke());
     } else if (viz.modes?.stroke === StrokeMode.CATEGORIES) {
-      pushSlot(slots, FACET_SLOT.POLYGON_CATEGORY, m.facets_slot_stroke());
+      pushSlot(
+        slots,
+        FACET_SLOT.POLYGON_STROKE_CATEGORY,
+        m.facets_slot_stroke()
+      );
     }
     return slots;
   }
@@ -138,7 +147,11 @@
     if (viz.modes?.thickness === ThicknessMode.PROPORTIONAL) {
       pushSlot(slots, FACET_SLOT.LINE_SIZE, m.facets_slot_size_shape());
     } else if (viz.modes?.thickness === ThicknessMode.CLASSES) {
-      pushSlot(slots, FACET_SLOT.LINE_VALUE, m.facets_slot_size_shape());
+      pushSlot(
+        slots,
+        FACET_SLOT.LINE_THICKNESS_VALUE,
+        m.facets_slot_size_shape()
+      );
     }
 
     if (viz.modes?.color === ColorMode.CLASSES) {
@@ -255,40 +268,7 @@
   ): string | undefined {
     const viz = facetVisualizations[mapIndex];
     if (!viz) return undefined;
-    switch (slotPath) {
-      case FACET_SLOT.SYMBOL_VALUE:
-        return viz.symbol?.valueColumn;
-      case FACET_SLOT.SYMBOL_CATEGORY:
-        return viz.symbol?.categoryColumn;
-      case FACET_SLOT.SYMBOL_SIZE:
-        return viz.symbol?.sizeColumn;
-      case FACET_SLOT.SYMBOL_FILL_VALUE:
-        return viz.symbol?.fillValueColumn;
-      case FACET_SLOT.SYMBOL_FILL_CATEGORY:
-        return viz.symbol?.fillCategoryColumn;
-      case FACET_SLOT.POLYGON_VALUE:
-        return viz.polygon?.valueColumn;
-      case FACET_SLOT.POLYGON_CATEGORY:
-        return viz.polygon?.categoryColumn;
-      case FACET_SLOT.LINE_VALUE:
-        return viz.line?.valueColumn;
-      case FACET_SLOT.LINE_CATEGORY:
-        return viz.line?.categoryColumn;
-      case FACET_SLOT.LINE_SIZE:
-        return viz.line?.sizeColumn;
-      case FACET_SLOT.TEXT_VALUE:
-        return viz.text?.valueColumn;
-      case FACET_SLOT.TEXT_CATEGORY:
-        return viz.text?.categoryColumn;
-      case FACET_SLOT.TEXT_BACKGROUND_VALUE:
-        return viz.text?.background?.valueColumn;
-      case FACET_SLOT.TEXT_BACKGROUND_CATEGORY:
-        return viz.text?.background?.categoryColumn;
-      case FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE:
-        return viz.text?.background?.strokeValueColumn;
-      case FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY:
-        return viz.text?.background?.strokeCategoryColumn;
-    }
+    return getFacetSlotVariable(viz, slotPath);
   }
 
   function handleSlotVariableChange(

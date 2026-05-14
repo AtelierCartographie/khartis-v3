@@ -151,20 +151,24 @@
       singleSelectItems={selectableDataFields}
       selectedFieldId={valueFieldSelection.selectedFieldId}
       selectedFieldIds={facetsSelection.getSelectedFieldIds(
-        FACET_SLOT.LINE_VALUE
+        FACET_SLOT.LINE_THICKNESS_VALUE
       )}
       isCollectionEnabled={facetsSelection.isActiveForSlot(
-        FACET_SLOT.LINE_VALUE
+        FACET_SLOT.LINE_THICKNESS_VALUE
       )}
       onSelect={valueFieldSelection.handleSelect}
       onCollectionChange={(ids) =>
         facetsSelection.updateVariables(
           valueColumnName,
-          FACET_SLOT.LINE_VALUE,
+          FACET_SLOT.LINE_THICKNESS_VALUE,
           ids
         )}
       onToggleCollection={(en) =>
-        facetsSelection.toggle(valueColumnName, FACET_SLOT.LINE_VALUE, en)}
+        facetsSelection.toggle(
+          valueColumnName,
+          FACET_SLOT.LINE_THICKNESS_VALUE,
+          en
+        )}
     />
   </div>
   <DiscretizationRow

@@ -15,6 +15,7 @@ import { toJsonValue } from '$lib/features/commons/utils/json.utils';
 import type { SerializedProjectData } from '$lib/types/serialization.types';
 import { persistenceRegistry } from '$lib/features/project-management';
 import { createCompanionFilesFromAssetRefs } from '$lib/features/project-management/services/asset-store.service';
+import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
 import { layersActions } from '$lib/features/step-toolbar/tools/layers';
 import { legendActions } from '$lib/features/step-toolbar/tools/legend';
 import { projectionActions } from '$lib/features/step-toolbar/tools/projections';
@@ -1196,6 +1197,9 @@ function createDataOrchestratorService() {
     const vizSettings = (
       currentProject?.data as SerializedProjectData | undefined
     )?.visualizationSettings;
+    const facetsSettings = (
+      currentProject?.data as SerializedProjectData | undefined
+    )?.uiSettings?.facets;
     const projectionSettings = (
       currentProject?.data as SerializedProjectData | undefined
     )?.layoutSettings?.projection;
@@ -1237,6 +1241,11 @@ function createDataOrchestratorService() {
 
         migrateOrphanedVizDatasetIds();
         await recomputeMissingBreaks();
+
+        if (facetsSettings) {
+          persistenceRegistry.deserializeAll({ facets: facetsSettings });
+          await facetsStore.restoreGeneratedVisualizations();
+        }
 
         if (!isCurrentProjectRuntime(restoreRun)) {
           return;

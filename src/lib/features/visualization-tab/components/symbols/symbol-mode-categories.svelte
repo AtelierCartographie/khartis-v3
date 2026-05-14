@@ -580,8 +580,8 @@
   strokeCategoryColumn={visualization?.symbol?.strokeCategoryColumn}
   showMissingData={showMissingData}
   missingDataColor={missingDataColor}
-  facetsValueSlotPath={FACET_SLOT.SYMBOL_VALUE}
-  facetsCategorySlotPath={FACET_SLOT.SYMBOL_CATEGORY}
+  facetsValueSlotPath={FACET_SLOT.SYMBOL_STROKE_VALUE}
+  facetsCategorySlotPath={FACET_SLOT.SYMBOL_STROKE_CATEGORY}
   onMissingDataShowChange={handleMissingDataShowChange}
   onMissingDataColorChange={handleMissingDataColorChange}
 />
