@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { exportProcessedDatasets } from './file-export.utils';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { downloadFile, exportProcessedDatasets } from './file-export.utils';
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
 
 function createGeometryDataset(
@@ -47,7 +47,88 @@ function createGeometryDataset(
   };
 }
 
+function stubBlobUrlApi(): {
+  createObjectURL: ReturnType<typeof vi.fn>;
+  revokeObjectURL: ReturnType<typeof vi.fn>;
+  restore: () => void;
+} {
+  const createDescriptor = Object.getOwnPropertyDescriptor(
+    URL,
+    'createObjectURL'
+  );
+  const revokeDescriptor = Object.getOwnPropertyDescriptor(
+    URL,
+    'revokeObjectURL'
+  );
+  const createObjectURL = vi.fn(() => 'blob:khartis-export');
+  const revokeObjectURL = vi.fn();
+
+  Object.defineProperty(URL, 'createObjectURL', {
+    configurable: true,
+    value: createObjectURL
+  });
+  Object.defineProperty(URL, 'revokeObjectURL', {
+    configurable: true,
+    value: revokeObjectURL
+  });
+
+  return {
+    createObjectURL,
+    revokeObjectURL,
+    restore: () => {
+      if (createDescriptor) {
+        Object.defineProperty(URL, 'createObjectURL', createDescriptor);
+      } else {
+        Reflect.deleteProperty(URL, 'createObjectURL');
+      }
+
+      if (revokeDescriptor) {
+        Object.defineProperty(URL, 'revokeObjectURL', revokeDescriptor);
+      } else {
+        Reflect.deleteProperty(URL, 'revokeObjectURL');
+      }
+    }
+  };
+}
+
 describe('file export utils', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('keeps generated blob URLs alive until the browser has handled the download', () => {
+    vi.useFakeTimers();
+    const { createObjectURL, revokeObjectURL, restore } = stubBlobUrlApi();
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => {});
+
+    try {
+      downloadFile(new Blob(['map']), 'map.jpg');
+
+      const anchor = document.querySelector(
+        'a[download="map.jpg"]'
+      ) as HTMLAnchorElement | null;
+      expect(createObjectURL).toHaveBeenCalledOnce();
+      expect(click).toHaveBeenCalledOnce();
+      expect(anchor?.getAttribute('href')).toBe('blob:khartis-export');
+      expect(anchor?.style.display).toBe('none');
+      expect(revokeObjectURL).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(29999);
+      expect(document.querySelector('a[download="map.jpg"]')).not.toBeNull();
+      expect(revokeObjectURL).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(1);
+      expect(document.querySelector('a[download="map.jpg"]')).toBeNull();
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:khartis-export');
+    } finally {
+      restore();
+    }
+  });
+
   it('excludes recognized geometry columns from plain csv exports', async () => {
     const dataset = createGeometryDataset({
       type: 'Polygon',

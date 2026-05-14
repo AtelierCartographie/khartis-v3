@@ -13,6 +13,7 @@ import {
 
 const CSV_BOM = '\uFEFF';
 const CSV_MIME_TYPE_UTF8 = `${MIME.CSV};charset=utf-8`;
+const DOWNLOAD_URL_REVOKE_DELAY_MS = 30000;
 
 export const generateExportFilename = generateFilename;
 
@@ -492,8 +493,13 @@ export function downloadFile(blob: Blob, filename: string): void {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  a.rel = 'noopener';
+  a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+
+  window.setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, DOWNLOAD_URL_REVOKE_DELAY_MS);
 }
