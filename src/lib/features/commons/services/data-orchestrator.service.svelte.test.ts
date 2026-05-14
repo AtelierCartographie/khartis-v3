@@ -25,6 +25,26 @@ describe('dataOrchestratorService restore pipeline', () => {
     );
   });
 
+  it('restores facets after datasets and visualizations are available', () => {
+    expect(source).toContain('const facetsSettings = (');
+    expect(source).toContain(
+      'persistenceRegistry.deserializeAll({ facets: facetsSettings });'
+    );
+    expect(source).toContain(
+      'await facetsStore.restoreGeneratedVisualizations();'
+    );
+    expect(source.indexOf('await processProjectFiles')).toBeLessThan(
+      source.indexOf(
+        'persistenceRegistry.deserializeAll({ facets: facetsSettings });'
+      )
+    );
+    expect(
+      source.indexOf('visualizationStore.restoreFromSerialized(vizSettings)')
+    ).toBeLessThan(
+      source.indexOf('await facetsStore.restoreGeneratedVisualizations();')
+    );
+  });
+
   it('does not rely on setTimeout-based geo-column restoration anymore', () => {
     expect(source).not.toContain('setTimeout(');
     expect(source).not.toContain('pendingGeoColumnRestoreTimeout');
@@ -42,5 +62,25 @@ describe('dataOrchestratorService restore pipeline', () => {
         'await persistenceRegistry.withPersistenceSuspended(async () => {'
       )
     ).toBeLessThan(source.indexOf('persistenceRegistry.markClean();'));
+  });
+
+  it('clears project runtime state before restoring project files', () => {
+    expect(source.indexOf('await duckDBOrchestrator.clear();')).toBeLessThan(
+      source.indexOf('await processProjectFiles(')
+    );
+    expect(source).toContain('visualizationStore.clear();');
+    expect(source).toContain('datasetsStore.clear();');
+    expect(source).toContain('layersActions.reset();');
+    expect(source).toContain('processedFileIds.clear();');
+    expect(source).toContain('processingFiles.clear();');
+  });
+
+  it('ignores stale project restores after the runtime changes', () => {
+    expect(source).toContain('const restoreRun = captureProjectRuntime();');
+    expect(source).toContain('isCurrentProjectRuntime(restoreRun)');
+    expect(source.indexOf('await processProjectFiles(')).toBeLessThan(
+      source.indexOf('visualizationStore.restoreFromSerialized(vizSettings)')
+    );
+    expect(source).toContain('restoreRun');
   });
 });

@@ -51,6 +51,7 @@
   import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
   import { getMainlandBboxForBasemap } from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
   import { fitBasemapRenderProjection } from '$lib/features/map/utils/fit-basemap-render-projection.utils';
+  import { resolveActiveBasemapMetadata } from '$lib/features/map/utils/basemap-metadata-resolution.utils';
   import { buildProjectionForBasemap } from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
   import { computeProjectedBboxForProjection } from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
   import { resolveOrthographicBasemapReferenceBboxes } from '$lib/features/map/utils/orthographic-basemap-reference.utils';
@@ -81,7 +82,8 @@
   import type { BBox, SplitRenderingTable } from '$lib/features/map/types';
   import type { ProjectionLike } from 'geoarrow-deck-stream';
   import { buildFacetRenderDescriptors } from './facets-shared-renderer.utils';
-  import type { FacetsLayout } from './facets.store.svelte';
+  import { facetsStore, type FacetsLayout } from './facets.store.svelte';
+  import { resolveSharedFacetScaleStats } from './facets-shared-scale';
 
   interface Props {
     visualizations: VisualizationConfig[];
@@ -110,8 +112,6 @@
   }: Props = $props();
 
   const IS_DEV = import.meta.env.DEV;
-  const FACET_RENDER_PIXEL_RATIO_MAX = 1;
-
   let rendererContainer = $state<HTMLDivElement | undefined>(undefined);
   let deckInstance = $state<DeckInstance | null>(null);
   let isRendererLoaded = $state(false);
@@ -164,14 +164,21 @@
   );
   const maxRenderBufferSizePx = $derived(getBrowserMaxRenderBufferSizePx());
   const renderPixelRatio = $derived.by(() => {
-    const resolvedPixelRatio = resolveMapRenderPixelRatio(
+    return resolveMapRenderPixelRatio(
       typeof window !== 'undefined' ? window.devicePixelRatio : 1,
       globalState.zoom.pageZoomScale,
       Math.max(containerWidth, containerHeight),
       maxRenderBufferSizePx
     );
-
-    return Math.min(resolvedPixelRatio, FACET_RENDER_PIXEL_RATIO_MAX);
+  });
+  const sharedScaleStats = $derived.by(() => {
+    return resolveSharedFacetScaleStats({
+      visualizations,
+      scaleMode: facetsStore.scaleMode,
+      primarySlotPath: facetsStore.primarySlotPath,
+      getColumnStatistics: (datasetId, columnName) =>
+        datasetsStore.getColumnStatistics(datasetId, columnName)
+    });
   });
 
   const mapState = useMapState();
@@ -353,25 +360,29 @@
   }
 
   function getProjectionMetadataForDataset(datasetId: string | undefined) {
-    if (basemapStyleStore.referenceBasemapId) {
+    if (!datasetId) {
       return basemapService.currentMetadata;
     }
 
     const duckDataset = getRenderedDuckDBDataset(datasetId);
-    if (!duckDataset?.joinedBasemap) {
-      return basemapService.currentMetadata;
+    const referenceBasemapId =
+      basemapStyleStore.referenceBasemapId ?? duckDataset?.joinedBasemap;
+
+    if (!referenceBasemapId) {
+      return null;
     }
 
     const resolvedBasemapId = getPreferredBasemapFile(
       basemapService.availableBasemaps,
-      duckDataset.joinedBasemap
+      referenceBasemapId
     );
 
-    return (
-      basemapService.availableBasemaps.find(
-        (basemap) => basemap.file === resolvedBasemapId
-      ) ?? basemapService.currentMetadata
-    );
+    return resolveActiveBasemapMetadata({
+      referenceBasemapId,
+      resolvedBasemapId,
+      availableBasemaps: basemapService.availableBasemaps,
+      currentMetadata: basemapService.currentMetadata
+    });
   }
 
   function getProjectionViewportSize(): { width: number; height: number } {
@@ -688,7 +699,10 @@
     getIsMapLoaded: () => isRendererLoaded,
     getWorldBaseTable: () => worldBaseTable,
     getActiveVisualizations: () => visualizations,
-    buildLayerContextForViz: (viz) => mapState.buildLayerContextForViz(viz),
+    buildLayerContextForViz: (viz) => {
+      const context = mapState.buildLayerContextForViz(viz);
+      return sharedScaleStats ? { ...context, ...sharedScaleStats } : context;
+    },
     getProjectionMetadataForDataset: (datasetId) =>
       getProjectionMetadataForDataset(datasetId),
     getProjectionFitBbox: () => getProjectionFitBbox(),
@@ -962,6 +976,7 @@
     void basemapStyleStore.selectedStyle;
     void mapProjectionStore.projection;
     void osmBasemapStore.activeOSMBasemap;
+    void sharedScaleStats;
     const projectionState = getProjectionState();
     void projectionState.overrideActive;
     void projectionState.overrideSource;

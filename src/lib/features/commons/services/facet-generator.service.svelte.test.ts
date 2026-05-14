@@ -25,7 +25,7 @@ import {
 import {
   FACET_SLOT,
   SCALE_MODE
-} from '$lib/features/step-toolbar/tools/facets';
+} from '$lib/features/commons/constants/facets.constants';
 
 function makeBaseViz(overrides = {}) {
   return {
@@ -167,6 +167,80 @@ describe('generateFacetVisualizations', () => {
     );
   });
 
+  it('should target symbol stroke facets without overwriting symbol fill facets', async () => {
+    const fillClassification = {
+      method: 'equal_interval',
+      numClasses: 4,
+      classes: 4,
+      colors: ['#100', '#200', '#300', '#400']
+    };
+    const strokeClassification = {
+      method: 'equal_interval',
+      numClasses: 4,
+      classes: 4,
+      colors: ['#010', '#020', '#030', '#040']
+    };
+    const base = makeBaseViz({
+      symbol: {
+        fillValueColumn: 'fill-value',
+        fillClassification,
+        strokeValueColumn: 'stroke-value',
+        strokeClassification
+      }
+    });
+
+    const result = await generateFacetVisualizations(
+      base as never,
+      ['stroke-next'],
+      SCALE_MODE.SHARED,
+      FACET_SLOT.SYMBOL_STROKE_VALUE
+    );
+
+    expect(result[0].symbol?.fillValueColumn).toBe('fill-value');
+    expect(result[0].symbol?.strokeValueColumn).toBe('stroke-next');
+    expect(result[0].symbol?.fillClassification).toEqual(fillClassification);
+    expect(result[0].symbol?.strokeClassification).toEqual(
+      strokeClassification
+    );
+  });
+
+  it('should target polygon stroke facets without overwriting polygon fill facets', async () => {
+    const fillClassification = {
+      method: 'equal_interval',
+      numClasses: 4,
+      classes: 4,
+      colors: ['#100', '#200', '#300', '#400']
+    };
+    const strokeClassification = {
+      method: 'equal_interval',
+      numClasses: 4,
+      classes: 4,
+      colors: ['#010', '#020', '#030', '#040']
+    };
+    const base = makeBaseViz({
+      polygon: {
+        valueColumn: 'fill-value',
+        classification: fillClassification,
+        strokeValueColumn: 'stroke-value',
+        strokeClassification
+      }
+    });
+
+    const result = await generateFacetVisualizations(
+      base as never,
+      ['stroke-next'],
+      SCALE_MODE.SHARED,
+      FACET_SLOT.POLYGON_STROKE_VALUE
+    );
+
+    expect(result[0].polygon?.valueColumn).toBe('fill-value');
+    expect(result[0].polygon?.strokeValueColumn).toBe('stroke-next');
+    expect(result[0].polygon?.classification).toEqual(fillClassification);
+    expect(result[0].polygon?.strokeClassification).toEqual(
+      strokeClassification
+    );
+  });
+
   it('should seed labels for targeted categorical facets', async () => {
     mocks.getColumnStatistics.mockReturnValue(null);
     mocks.getUniqueValues.mockReturnValue(['A', 'B', 'C']);
@@ -226,6 +300,35 @@ describe('generateFacetVisualizations', () => {
     );
 
     expect(result[0].classification?.breaks).toEqual([10, 20, 30, 40, 50]);
+  });
+
+  it('should recalculate line thickness breaks in independent mode', async () => {
+    mocks.getColumnStatistics.mockReturnValue({ min: 10, max: 50 });
+
+    const base = makeBaseViz({
+      line: {
+        valueColumn: 'traffic',
+        thicknessClassification: {
+          method: 'equal_interval',
+          numClasses: 4,
+          classes: 4,
+          breaks: [0, 25, 50, 75, 100],
+          colors: ['#aaa', '#bbb', '#ccc', '#ddd']
+        }
+      }
+    });
+
+    const result = await generateFacetVisualizations(
+      base as never,
+      ['length'],
+      SCALE_MODE.INDEPENDENT,
+      FACET_SLOT.LINE_THICKNESS_VALUE
+    );
+
+    expect(result[0].line?.valueColumn).toBe('length');
+    expect(result[0].line?.thicknessClassification?.breaks).toEqual([
+      10, 20, 30, 40, 50
+    ]);
   });
 
   it('builds an in-place visualization update for scale mode changes without changing ids', () => {

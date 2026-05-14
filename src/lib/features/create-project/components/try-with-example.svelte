@@ -21,7 +21,6 @@
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { Duck } from '$lib/features/duckdb';
   import { detectGPSColumns } from '$lib/features/duckdb/orchestrator/gps-ops';
   import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
   import { PERSISTED_BASEMAP_TYPE } from '$lib/features/data-tab/services/persisted-basemap.service';
@@ -30,6 +29,8 @@
   import { applyExampleVisualizationPresets } from '../services/example-visualization-preset.service';
   import type { ExampleProject } from '$lib/features/commons/types/create-project.types';
   import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
+  import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
+  import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
   import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages';
   import { useProjectNavigation } from '../hooks/use-project-navigation.svelte';
@@ -96,6 +97,23 @@
     return sorted[0]?.columnName ?? suggested;
   }
 
+  function applyReferenceBasemapToProject(basemap: BasemapMetadata): void {
+    dataTabActions.setBasemapJoinState({
+      selectedBasemap: basemap.file,
+      basemapSource: BasemapSource.CATALOG
+    });
+    basemapStyleStore.setReferenceBasemap(basemap.file);
+    projectStore.updateProjectData({
+      basemap: {
+        id: basemap.file,
+        type: basemap.isCustom
+          ? PERSISTED_BASEMAP_TYPE.CUSTOM
+          : PERSISTED_BASEMAP_TYPE.CATALOG,
+        data: basemap.isCustom ? { ...basemap } : undefined
+      }
+    });
+  }
+
   async function applyExamplePreset(
     example: ExampleProject,
     file: UploadedFile
@@ -127,27 +145,15 @@
 
     const geoColumn = resolveExampleGeoColumn(file) ?? '';
 
-    dataTabActions.setBasemapJoinState({
-      selectedBasemap: basemap.file,
-      basemapSource: BasemapSource.CATALOG
-    });
-    basemapStyleStore.setReferenceBasemap(basemap.file);
-    projectStore.updateProjectData({
-      basemap: {
-        id: basemap.file,
-        type: basemap.isCustom
-          ? PERSISTED_BASEMAP_TYPE.CUSTOM
-          : PERSISTED_BASEMAP_TYPE.CATALOG,
-        data: basemap.isCustom ? { ...basemap } : undefined
-      }
-    });
-
     try {
       await duckDBOrchestrator.finalizeJoin(dataset.id, basemap, geoColumn);
+      datasetsStore.updateDatasetJoinBasemap(dataset.id, basemap.file);
+      applyReferenceBasemapToProject(basemap);
 
-      const duckColumns = await Duck.analyse(dataset.tableName, {
-        force: true
-      });
+      const duckColumns = await duckDBOrchestrator.getFullAnalysis(
+        dataset.tableName,
+        true
+      );
       await persistTabularSourceSnapshot({
         sourceFileId: file.id,
         tableName: dataset.tableName,
@@ -176,6 +182,32 @@
         }
       );
     }
+  }
+
+  async function applyExampleReferenceBasemap(
+    example: ExampleProject
+  ): Promise<void> {
+    if (!example.referenceBasemapId) {
+      return;
+    }
+
+    await basemapCatalogService.loadCatalog();
+    const basemap = basemapCatalogService.getBasemapById(
+      example.referenceBasemapId
+    );
+    if (!basemap) {
+      logger.warn(
+        'Example referenceBasemapId not found in catalog',
+        LogCategory.PROJECT,
+        {
+          exampleId: example.id,
+          referenceBasemapId: example.referenceBasemapId
+        }
+      );
+      return;
+    }
+
+    applyReferenceBasemapToProject(basemap);
   }
 
   async function applyExampleGPSPreset(file: UploadedFile): Promise<void> {
@@ -214,9 +246,10 @@
       gpsColumns
     });
 
-    const duckColumns = await Duck.analyse(dataset.tableName, {
-      force: true
-    });
+    const duckColumns = await duckDBOrchestrator.getFullAnalysis(
+      dataset.tableName,
+      true
+    );
     await persistTabularSourceSnapshot({
       sourceFileId: file.id,
       tableName: dataset.tableName,
@@ -253,10 +286,18 @@
   }
 
   function selectCategory(category: ExampleCategory) {
+    if (isLoading) {
+      return;
+    }
+
     selectedCategory = category;
   }
 
   async function handleExampleClick(exampleId: string) {
+    if (isLoading) {
+      return;
+    }
+
     if (selectedExample === exampleId) {
       selectedExample = null;
       return;
@@ -310,8 +351,10 @@
       await applyExamplePreset(example, processedExampleFile);
       if (!example.baseMapId) {
         await applyExampleGPSPreset(processedExampleFile);
+        await applyExampleReferenceBasemap(example);
       }
       applyExampleVisualizations(example, processedExampleFile);
+      await persistenceRegistry.flush();
 
       await navigateAfterAction();
     } catch (err) {
@@ -373,7 +416,7 @@
           subtitle={example.subtitle}
           variant="gray"
           selected={selectedExample === example.id}
-          disabled={isLoading && selectedExample !== example.id}
+          disabled={isLoading}
           onclick={() => handleExampleClick(example.id)}
         >
           {#snippet footer()}

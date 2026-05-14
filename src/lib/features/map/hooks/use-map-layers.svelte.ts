@@ -55,7 +55,10 @@ import type { ProjectionLike } from 'geoarrow-deck-stream';
 import type { BasemapMetadata } from '../types/basemap.types';
 import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs.utils';
 import { fitBasemapRenderProjection } from '../utils/fit-basemap-render-projection.utils';
-import { shouldShowOrthographicBasemapLayers } from '../utils/orthographic-basemap-visibility.utils';
+import {
+  shouldShowGeneratedOrthographicOceanLayer,
+  shouldShowOrthographicBasemapLayers
+} from '../utils/orthographic-basemap-visibility.utils';
 import { resolveProjectionForRender } from '../utils/projection-priority.utils';
 import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
 import { getRepresentativePointArrowTable } from '$lib/features/duckdb/orchestrator/arrow-ops';
@@ -102,6 +105,9 @@ const GENERATED_ORTHOGRAPHIC_CONTEXT_LAYER_IDS = new Set<string>([
   BASEMAP_LAYER_ID.EQUATEUR,
   BASEMAP_LAYER_ID.MERIDIENS
 ]);
+
+const DEFAULT_GENERATED_OCEAN_COLOR = '#e0e0e0';
+const DEFAULT_GENERATED_OCEAN_OPACITY = 100;
 
 export interface UseMapLayersProps {
   getDeckOverlay: () => MapboxOverlay | null;
@@ -730,6 +736,18 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     return String(layer.id).startsWith(DeckLayerId.BASEMAP_MERS);
   }
 
+  function hasCustomizedGeneratedOceanStyle(): boolean {
+    const oceanLayer = basemapLayersStore.getLayer(BASEMAP_LAYER_ID.MERS);
+    if (!oceanLayer) {
+      return false;
+    }
+
+    return (
+      oceanLayer.color !== DEFAULT_GENERATED_OCEAN_COLOR ||
+      oceanLayer.opacity !== DEFAULT_GENERATED_OCEAN_OPACITY
+    );
+  }
+
   function updateLayers(
     tables: Map<string, ArrowTable>,
     geoJSONs: Map<string, FeatureCollection>,
@@ -832,11 +850,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const canShowGeneratedBasemapLayers =
         !shouldShowBasemapLayers && isOrthographicMode && !isOSMActive;
       const shouldShowGeneratedOceanLayer =
-        canShowGeneratedBasemapLayers &&
-        hasVisibleGeneratedBasemapLayer(
-          GENERATED_ORTHOGRAPHIC_OCEAN_LAYER_IDS
-        ) &&
-        (!hasDatasetContent || hasManualProjectionOverride);
+        shouldShowGeneratedOrthographicOceanLayer({
+          canShowGeneratedBasemapLayers,
+          hasVisibleGeneratedOceanLayer: hasVisibleGeneratedBasemapLayer(
+            GENERATED_ORTHOGRAPHIC_OCEAN_LAYER_IDS
+          ),
+          hasDatasetContent,
+          hasManualProjectionOverride,
+          hasCustomizedOceanStyle: hasCustomizedGeneratedOceanStyle()
+        });
       const shouldShowGeneratedContextLayers =
         canShowGeneratedBasemapLayers &&
         hasVisibleGeneratedBasemapLayer(
