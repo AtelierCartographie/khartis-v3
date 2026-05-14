@@ -15,7 +15,10 @@ import {
   type FacetSlotPath,
   type ScaleMode
 } from '$lib/features/commons/constants/facets.constants';
-import { buildFacetVariablePatch } from '$lib/features/commons/utils/facet-visualization-updates';
+import {
+  buildFacetVariablePatch,
+  getFacetSlotVariable
+} from '$lib/features/commons/utils/facet-visualization-updates';
 import {
   isAutoFacetDataColumn,
   isAutoFacetNumericColumn
@@ -428,6 +431,68 @@ function createFacetsStore() {
     }
   }
 
+  function syncGeneratedVisualizationsFromBase(baseVizId?: string): void {
+    if (
+      isRegenerating ||
+      !state.enabled ||
+      !state.baseVisualizationId ||
+      !state.primarySlotPath
+    ) {
+      return;
+    }
+
+    if (baseVizId && baseVizId !== state.baseVisualizationId) {
+      return;
+    }
+
+    const primarySlotPath = state.primarySlotPath;
+    const baseViz = visualizationStore.visualizations.find(
+      (v) => v.id === state.baseVisualizationId
+    );
+    if (!baseViz) {
+      disable();
+      return;
+    }
+
+    const generatedVisualizations = state.generatedVisualizationIds
+      .map((id) =>
+        visualizationStore.visualizations.find(
+          (visualization) => visualization.id === id
+        )
+      )
+      .filter((visualization): visualization is VisualizationConfig =>
+        Boolean(visualization)
+      );
+
+    if (
+      generatedVisualizations.length !== state.generatedVisualizationIds.length
+    ) {
+      return;
+    }
+
+    generatedVisualizations.forEach((visualization, index) => {
+      const variable =
+        getFacetSlotVariable(visualization, primarySlotPath) ??
+        state.variables[index];
+      if (!variable) {
+        return;
+      }
+
+      visualizationStore.updateVisualization(
+        visualization.id,
+        buildFacetVisualizationUpdates({
+          baseViz,
+          visualization: baseViz,
+          variable,
+          scaleMode: state.scaleMode,
+          primarySlotPath
+        })
+      );
+    });
+
+    notifyPersistence();
+  }
+
   function disable(): void {
     if (!state.enabled) {
       return;
@@ -728,6 +793,7 @@ function createFacetsStore() {
     setColumns,
     setGap,
     toggleScaleMode,
+    syncGeneratedVisualizationsFromBase,
     restoreFromSerialized,
     restoreGeneratedVisualizations
   };
