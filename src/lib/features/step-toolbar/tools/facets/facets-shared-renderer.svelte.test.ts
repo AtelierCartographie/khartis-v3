@@ -18,6 +18,16 @@ describe('facets shared renderer structure', () => {
     );
   });
 
+  it('uses shared scale statistics and uncapped render pixel ratio for sharp facets', () => {
+    expect(source).toContain('resolveSharedFacetScaleStats');
+    expect(source).toContain(
+      'return sharedScaleStats ? { ...context, ...sharedScaleStats } : context;'
+    );
+    expect(source).toContain('resolveMapRenderPixelRatio(');
+    expect(source).not.toContain('FACET_RENDER_PIXEL_RATIO_MAX');
+    expect(source).not.toContain('Math.min(resolvedPixelRatio');
+  });
+
   it('does not subscribe the redraw effect to projectionStore state that it mutates itself', () => {
     expect(source).not.toContain('void projectionStore.modelMatrix;');
     expect(source).not.toContain('void projectionStore.referenceBbox;');
@@ -44,5 +54,25 @@ describe('facets shared renderer structure', () => {
     );
     expect(helperSource).toContain('Boolean(datasetBbox)');
     expect(helperSource).not.toContain('!basemapStyleStore.referenceBasemapId');
+  });
+
+  it('does not inherit cached catalog projection metadata for standalone facet geofiles', () => {
+    const helperStart = source.indexOf(
+      'function getProjectionMetadataForDataset'
+    );
+    const helperEnd = source.indexOf(
+      'function getProjectionViewportSize',
+      helperStart
+    );
+    const helperSource = source.slice(helperStart, helperEnd);
+
+    expect(helperSource).toContain('if (!datasetId)');
+    expect(helperSource).toContain('const referenceBasemapId =');
+    expect(helperSource).toContain('if (!referenceBasemapId)');
+    expect(helperSource).toContain('return null;');
+    expect(helperSource).toContain('resolveActiveBasemapMetadata');
+    expect(helperSource).not.toContain(
+      'if (!duckDataset?.joinedBasemap) {\n      return basemapService.currentMetadata;'
+    );
   });
 });

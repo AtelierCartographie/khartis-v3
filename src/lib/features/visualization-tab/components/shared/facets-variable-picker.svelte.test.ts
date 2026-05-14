@@ -12,6 +12,7 @@ describe('FacetsVariablePicker collection filtering', () => {
     expect(source).toContain('singleSelectItems = dataFields');
     expect(source).toContain('isAutoFacetDataColumn');
     expect(source).toContain('collectionDataFields');
+    expect(source).toContain('singleSelectItems.filter(isAutoFacetDataColumn)');
     expect(source).toContain(
       '(isCollectionEnabled ? collectionDataFields : singleSelectItems).filter'
     );

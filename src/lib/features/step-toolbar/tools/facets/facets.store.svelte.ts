@@ -8,70 +8,24 @@ import {
   generateFacetVisualizations
 } from '$lib/features/commons/services/facet-generator.service';
 import {
+  FACET_SLOT,
+  SCALE_MODE,
+  facetSlotRequiresNumericVariable,
+  isFacetSlotPath,
+  type FacetSlotPath,
+  type ScaleMode
+} from '$lib/features/commons/constants/facets.constants';
+import { buildFacetVariablePatch } from '$lib/features/commons/utils/facet-visualization-updates';
+import {
   isAutoFacetDataColumn,
   isAutoFacetNumericColumn
 } from '$lib/features/commons/utils/visualization-columns.utils';
 
-export const SCALE_MODE = {
-  SHARED: 'shared',
-  INDEPENDENT: 'independent'
-} as const;
+export { FACET_SLOT, SCALE_MODE };
+export type { FacetSlotPath, ScaleMode };
 
 export const MAX_FACETS_COLUMNS = 4;
 export const MAX_FACETS = 16;
-
-export const FACET_SLOT = {
-  SYMBOL_VALUE: 'symbol.valueColumn',
-  SYMBOL_CATEGORY: 'symbol.categoryColumn',
-  SYMBOL_SIZE: 'symbol.sizeColumn',
-  SYMBOL_FILL_VALUE: 'symbol.fillValueColumn',
-  SYMBOL_FILL_CATEGORY: 'symbol.fillCategoryColumn',
-  POLYGON_VALUE: 'polygon.valueColumn',
-  POLYGON_CATEGORY: 'polygon.categoryColumn',
-  LINE_VALUE: 'line.valueColumn',
-  LINE_CATEGORY: 'line.categoryColumn',
-  LINE_SIZE: 'line.sizeColumn',
-  TEXT_VALUE: 'text.valueColumn',
-  TEXT_CATEGORY: 'text.categoryColumn',
-  TEXT_BACKGROUND_VALUE: 'text.background.valueColumn',
-  TEXT_BACKGROUND_CATEGORY: 'text.background.categoryColumn',
-  TEXT_BACKGROUND_STROKE_VALUE: 'text.background.strokeValueColumn',
-  TEXT_BACKGROUND_STROKE_CATEGORY: 'text.background.strokeCategoryColumn'
-} as const;
-
-export type FacetSlotPath = (typeof FACET_SLOT)[keyof typeof FACET_SLOT];
-
-const NUMERIC_FACET_SLOTS = new Set<FacetSlotPath>([
-  FACET_SLOT.SYMBOL_VALUE,
-  FACET_SLOT.SYMBOL_SIZE,
-  FACET_SLOT.SYMBOL_FILL_VALUE,
-  FACET_SLOT.POLYGON_VALUE,
-  FACET_SLOT.LINE_VALUE,
-  FACET_SLOT.LINE_SIZE,
-  FACET_SLOT.TEXT_VALUE,
-  FACET_SLOT.TEXT_BACKGROUND_VALUE,
-  FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE
-]);
-
-function isFacetSlotPath(value: unknown): value is FacetSlotPath {
-  return (Object.values(FACET_SLOT) as string[]).includes(value as string);
-}
-
-function resolveFacetMappingKey(
-  slotPath: FacetSlotPath
-): keyof NonNullable<VisualizationConfig['mapping']> {
-  if (slotPath.endsWith('.categoryColumn')) {
-    return 'categoryColumn';
-  }
-  if (slotPath.endsWith('.sizeColumn')) {
-    return 'sizeColumn';
-  }
-  return 'valueColumn';
-}
-
-function slotRequiresNumericVariable(slotPath: FacetSlotPath): boolean {
-  return NUMERIC_FACET_SLOTS.has(slotPath);
-}
 
 function getCompatibleDatasetVariables(
   visualization: VisualizationConfig,
@@ -86,7 +40,7 @@ function getCompatibleDatasetVariables(
 
   return dataset.columns
     .filter((column) =>
-      slotRequiresNumericVariable(slotPath)
+      facetSlotRequiresNumericVariable(slotPath)
         ? isAutoFacetNumericColumn(column)
         : isAutoFacetDataColumn(column)
     )
@@ -111,7 +65,7 @@ function filterCompatibleFacetVariables(
   const compatibleColumns = new Set(
     dataset.columns
       .filter((column) =>
-        slotRequiresNumericVariable(slotPath)
+        facetSlotRequiresNumericVariable(slotPath)
           ? isAutoFacetNumericColumn(column)
           : isAutoFacetDataColumn(column)
       )
@@ -131,7 +85,7 @@ function normalizeFacetVariablesForEnable(
     variables,
     slotPath
   );
-  if (compatible.length >= 2 || !slotRequiresNumericVariable(slotPath)) {
+  if (compatible.length >= 2 || !facetSlotRequiresNumericVariable(slotPath)) {
     return compatible;
   }
 
@@ -167,233 +121,7 @@ function applyFacetVariableToVisualization(
   slotPath: FacetSlotPath,
   variableName: string
 ): Partial<VisualizationConfig> {
-  const mappingKey = resolveFacetMappingKey(slotPath);
-  const nextMapping = {
-    ...visualization.mapping,
-    [mappingKey]: variableName
-  };
-
-  switch (slotPath) {
-    case FACET_SLOT.SYMBOL_VALUE:
-      return {
-        mapping: nextMapping,
-        ...(visualization.symbol
-          ? {
-              symbol: {
-                ...visualization.symbol,
-                valueColumn: variableName
-              }
-            }
-          : {})
-      };
-
-    case FACET_SLOT.SYMBOL_CATEGORY:
-      return {
-        mapping: nextMapping,
-        ...(visualization.symbol
-          ? {
-              symbol: {
-                ...visualization.symbol,
-                categoryColumn: variableName
-              }
-            }
-          : {})
-      };
-
-    case FACET_SLOT.SYMBOL_SIZE:
-      return {
-        mapping: nextMapping,
-        ...(visualization.symbol
-          ? {
-              symbol: {
-                ...visualization.symbol,
-                sizeColumn: variableName
-              }
-            }
-          : {})
-      };
-
-    case FACET_SLOT.SYMBOL_FILL_VALUE:
-      return {
-        mapping: nextMapping,
-        ...(visualization.symbol
-          ? {
-              symbol: {
-                ...visualization.symbol,
-                fillValueColumn: variableName
-              }
-            }
-          : {})
-      };
-
-    case FACET_SLOT.SYMBOL_FILL_CATEGORY:
-      return {
-        mapping: nextMapping,
-        ...(visualization.symbol
-          ? {
-              symbol: {
-                ...visualization.symbol,
-                fillCategoryColumn: variableName
-              }
-            }
-          : {})
-      };
-
-    case FACET_SLOT.POLYGON_VALUE:
-      return {
-        mapping: nextMapping,
-        ...(visualization.polygon
-          ? {
-              polygon: {
-                ...visualization.polygon,
-                valueColumn: variableName
-              }
-            }
-          : {})
-      };
-
-    case FACET_SLOT.POLYGON_CATEGORY:
-      return {
-        mapping: nextMapping,
-        ...(visualization.polygon
-          ? {
-              polygon: {
-                ...visualization.polygon,
-                categoryColumn: variableName
-              }
-            }
-          : {})
-      };
-
-    case FACET_SLOT.LINE_VALUE:
-      return {
-        mapping: nextMapping,
-        ...(visualization.line
-          ? {
-              line: {
-                ...visualization.line,
-                valueColumn: variableName
-              }
-            }
-          : {})
-      };
-
-    case FACET_SLOT.LINE_CATEGORY:
-      return {
-        mapping: nextMapping,
-        ...(visualization.line
-          ? {
-              line: {
-                ...visualization.line,
-                categoryColumn: variableName
-              }
-            }
-          : {})
-      };
-
-    case FACET_SLOT.LINE_SIZE:
-      return {
-        mapping: nextMapping,
-        ...(visualization.line
-          ? {
-              line: {
-                ...visualization.line,
-                sizeColumn: variableName
-              }
-            }
-          : {})
-      };
-
-    case FACET_SLOT.TEXT_VALUE:
-      return {
-        mapping: nextMapping,
-        ...(visualization.text
-          ? {
-              text: {
-                ...visualization.text,
-                valueColumn: variableName
-              }
-            }
-          : {})
-      };
-
-    case FACET_SLOT.TEXT_CATEGORY:
-      return {
-        mapping: nextMapping,
-        ...(visualization.text
-          ? {
-              text: {
-                ...visualization.text,
-                categoryColumn: variableName
-              }
-            }
-          : {})
-      };
-
-    case FACET_SLOT.TEXT_BACKGROUND_VALUE:
-      return {
-        mapping: nextMapping,
-        ...(visualization.text?.background
-          ? {
-              text: {
-                ...visualization.text,
-                background: {
-                  ...visualization.text.background,
-                  valueColumn: variableName
-                }
-              }
-            }
-          : {})
-      };
-
-    case FACET_SLOT.TEXT_BACKGROUND_CATEGORY:
-      return {
-        mapping: nextMapping,
-        ...(visualization.text?.background
-          ? {
-              text: {
-                ...visualization.text,
-                background: {
-                  ...visualization.text.background,
-                  categoryColumn: variableName
-                }
-              }
-            }
-          : {})
-      };
-
-    case FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE:
-      return {
-        mapping: nextMapping,
-        ...(visualization.text?.background
-          ? {
-              text: {
-                ...visualization.text,
-                background: {
-                  ...visualization.text.background,
-                  strokeValueColumn: variableName
-                }
-              }
-            }
-          : {})
-      };
-
-    case FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY:
-      return {
-        mapping: nextMapping,
-        ...(visualization.text?.background
-          ? {
-              text: {
-                ...visualization.text,
-                background: {
-                  ...visualization.text.background,
-                  strokeCategoryColumn: variableName
-                }
-              }
-            }
-          : {})
-      };
-  }
+  return buildFacetVariablePatch(visualization, slotPath, variableName);
 }
 
 export function computeBestColumns(
@@ -406,8 +134,6 @@ export function computeBestColumns(
   if (mapCount === 4) return 2;
   return Math.min(maxCols, Math.ceil(Math.sqrt(mapCount)));
 }
-
-export type ScaleMode = (typeof SCALE_MODE)[keyof typeof SCALE_MODE];
 
 export interface FacetsLayout {
   columns: number;
@@ -625,6 +351,80 @@ function createFacetsStore() {
       notifyPersistence();
     } catch (error) {
       logger.error('Failed to enable facets', LogCategory.STORE, error);
+    }
+  }
+
+  async function restoreGeneratedVisualizations(): Promise<void> {
+    if (
+      !state.enabled ||
+      !state.baseVisualizationId ||
+      !state.primarySlotPath ||
+      state.variables.length < 2
+    ) {
+      return;
+    }
+
+    const baseViz = visualizationStore.visualizations.find(
+      (v) => v.id === state.baseVisualizationId
+    );
+    if (!baseViz) {
+      disable();
+      return;
+    }
+
+    const existingVisualizationIds = new Set(
+      visualizationStore.visualizations.map((visualization) => visualization.id)
+    );
+    const hasAllGeneratedVisualizations =
+      state.generatedVisualizationIds.length === state.variables.length &&
+      state.generatedVisualizationIds.every((id) =>
+        existingVisualizationIds.has(id)
+      );
+
+    if (hasAllGeneratedVisualizations) {
+      return;
+    }
+
+    const compatible = normalizeFacetVariablesForEnable(
+      baseViz,
+      state.variables,
+      state.primarySlotPath
+    ).slice(0, MAX_FACETS);
+
+    if (compatible.length < 2) {
+      disable();
+      return;
+    }
+
+    const staleGeneratedIds = state.generatedVisualizationIds.filter((id) =>
+      existingVisualizationIds.has(id)
+    );
+
+    isRegenerating = true;
+    try {
+      const facetConfigs = await generateFacetVisualizations(
+        baseViz,
+        compatible,
+        state.scaleMode,
+        state.primarySlotPath
+      );
+
+      if (staleGeneratedIds.length > 0) {
+        visualizationStore.removeBulkVisualizations(staleGeneratedIds);
+      }
+      visualizationStore.createBulkVisualizations(facetConfigs);
+
+      state.variables = [...compatible];
+      state.generatedVisualizationIds = facetConfigs.map((config) => config.id);
+      notifyPersistence();
+    } catch (error) {
+      logger.error(
+        'Failed to restore generated facet visualizations',
+        LogCategory.STORE,
+        error
+      );
+    } finally {
+      isRegenerating = false;
     }
   }
 
@@ -928,7 +728,8 @@ function createFacetsStore() {
     setColumns,
     setGap,
     toggleScaleMode,
-    restoreFromSerialized
+    restoreFromSerialized,
+    restoreGeneratedVisualizations
   };
 }
 

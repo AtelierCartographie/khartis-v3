@@ -1,4 +1,8 @@
-import { isAutoFacetDataColumn } from '$lib/features/commons/utils/visualization-columns.utils';
+import {
+  isAutoFacetDataColumn,
+  isAutoFacetNumericColumn
+} from '$lib/features/commons/utils/visualization-columns.utils';
+import { facetSlotRequiresNumericVariable } from '$lib/features/commons/constants/facets.constants';
 import { facetsStore, type FacetSlotPath } from '../adapters/facets-adapter';
 
 interface DataFieldOption {
@@ -50,6 +54,15 @@ export function useFacetsVariableSelection({
       .filter((name): name is string => Boolean(name));
   }
 
+  function isFieldCompatibleWithSlot(
+    field: DataFieldOption,
+    slotPath: FacetSlotPath
+  ): boolean {
+    return facetSlotRequiresNumericVariable(slotPath)
+      ? isAutoFacetNumericColumn(field)
+      : isAutoFacetDataColumn(field);
+  }
+
   async function updateVariables(
     baseVariableName: string,
     slotPath: FacetSlotPath | undefined,
@@ -92,7 +105,7 @@ export function useFacetsVariableSelection({
         break;
       }
       const text = field.text;
-      if (!isAutoFacetDataColumn(field)) {
+      if (!isFieldCompatibleWithSlot(field, slotPath)) {
         continue;
       }
       if (text && !candidates.includes(text)) {

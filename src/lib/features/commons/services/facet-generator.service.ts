@@ -5,9 +5,12 @@ import { deepClone } from '../utils/clone.utils';
 import {
   FACET_SLOT,
   SCALE_MODE,
+  facetSlotRecomputesIndependentBreaks,
+  isFacetCategorySlot,
   type FacetSlotPath,
   type ScaleMode
-} from '$lib/features/step-toolbar/tools/facets';
+} from '$lib/features/commons/constants/facets.constants';
+import { applyFacetVariablePatch } from '$lib/features/commons/utils/facet-visualization-updates';
 import {
   findPaletteById,
   generatePaletteColors,
@@ -36,18 +39,6 @@ function buildEqualIntervalBreaks(
   return breaks;
 }
 
-function resolveFacetMappingKey(
-  slotPath: FacetSlotPath
-): keyof NonNullable<VisualizationConfig['mapping']> {
-  if (slotPath.endsWith('.categoryColumn')) {
-    return 'categoryColumn';
-  }
-  if (slotPath.endsWith('.sizeColumn')) {
-    return 'sizeColumn';
-  }
-  return 'valueColumn';
-}
-
 function resolveFacetClassification(
   visualization: VisualizationConfig,
   slotPath: FacetSlotPath
@@ -60,8 +51,21 @@ function resolveFacetClassification(
         visualization.symbol?.classification ?? visualization.classification
       );
 
+    case FACET_SLOT.SYMBOL_FILL_VALUE:
+    case FACET_SLOT.SYMBOL_FILL_CATEGORY:
+      return visualization.symbol?.fillClassification;
+
+    case FACET_SLOT.SYMBOL_STROKE_VALUE:
+    case FACET_SLOT.SYMBOL_STROKE_CATEGORY:
+      return visualization.symbol?.strokeClassification;
+
     case FACET_SLOT.LINE_VALUE:
     case FACET_SLOT.LINE_CATEGORY:
+      return visualization.line?.classification ?? visualization.classification;
+
+    case FACET_SLOT.LINE_THICKNESS_VALUE:
+      return visualization.line?.thicknessClassification;
+
     case FACET_SLOT.LINE_SIZE:
       return visualization.line?.classification ?? visualization.classification;
 
@@ -76,6 +80,10 @@ function resolveFacetClassification(
     case FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE:
     case FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY:
       return visualization.text?.background?.strokeClassification;
+
+    case FACET_SLOT.POLYGON_STROKE_VALUE:
+    case FACET_SLOT.POLYGON_STROKE_CATEGORY:
+      return visualization.polygon?.strokeClassification;
 
     case FACET_SLOT.POLYGON_VALUE:
     case FACET_SLOT.POLYGON_CATEGORY:
@@ -135,151 +143,7 @@ function applyFacetVariableToVisualization(
   slotPath: FacetSlotPath,
   variable: string
 ): void {
-  const mappingKey = resolveFacetMappingKey(slotPath);
-  visualization.mapping = {
-    ...visualization.mapping,
-    [mappingKey]: variable
-  };
-
-  switch (slotPath) {
-    case FACET_SLOT.SYMBOL_VALUE:
-      if (visualization.symbol) {
-        visualization.symbol = {
-          ...visualization.symbol,
-          valueColumn: variable
-        };
-      }
-      return;
-
-    case FACET_SLOT.SYMBOL_CATEGORY:
-      if (visualization.symbol) {
-        visualization.symbol = {
-          ...visualization.symbol,
-          categoryColumn: variable
-        };
-      }
-      return;
-
-    case FACET_SLOT.SYMBOL_SIZE:
-      if (visualization.symbol) {
-        visualization.symbol = {
-          ...visualization.symbol,
-          sizeColumn: variable
-        };
-      }
-      return;
-
-    case FACET_SLOT.POLYGON_VALUE:
-      if (visualization.polygon) {
-        visualization.polygon = {
-          ...visualization.polygon,
-          valueColumn: variable
-        };
-      }
-      return;
-
-    case FACET_SLOT.POLYGON_CATEGORY:
-      if (visualization.polygon) {
-        visualization.polygon = {
-          ...visualization.polygon,
-          categoryColumn: variable
-        };
-      }
-      return;
-
-    case FACET_SLOT.LINE_VALUE:
-      if (visualization.line) {
-        visualization.line = {
-          ...visualization.line,
-          valueColumn: variable
-        };
-      }
-      return;
-
-    case FACET_SLOT.LINE_CATEGORY:
-      if (visualization.line) {
-        visualization.line = {
-          ...visualization.line,
-          categoryColumn: variable
-        };
-      }
-      return;
-
-    case FACET_SLOT.LINE_SIZE:
-      if (visualization.line) {
-        visualization.line = {
-          ...visualization.line,
-          sizeColumn: variable
-        };
-      }
-      return;
-
-    case FACET_SLOT.TEXT_VALUE:
-      if (visualization.text) {
-        visualization.text = {
-          ...visualization.text,
-          valueColumn: variable
-        };
-      }
-      return;
-
-    case FACET_SLOT.TEXT_CATEGORY:
-      if (visualization.text) {
-        visualization.text = {
-          ...visualization.text,
-          categoryColumn: variable
-        };
-      }
-      return;
-
-    case FACET_SLOT.TEXT_BACKGROUND_VALUE:
-      if (visualization.text?.background) {
-        visualization.text = {
-          ...visualization.text,
-          background: {
-            ...visualization.text.background,
-            valueColumn: variable
-          }
-        };
-      }
-      return;
-
-    case FACET_SLOT.TEXT_BACKGROUND_CATEGORY:
-      if (visualization.text?.background) {
-        visualization.text = {
-          ...visualization.text,
-          background: {
-            ...visualization.text.background,
-            categoryColumn: variable
-          }
-        };
-      }
-      return;
-
-    case FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE:
-      if (visualization.text?.background) {
-        visualization.text = {
-          ...visualization.text,
-          background: {
-            ...visualization.text.background,
-            strokeValueColumn: variable
-          }
-        };
-      }
-      return;
-
-    case FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY:
-      if (visualization.text?.background) {
-        visualization.text = {
-          ...visualization.text,
-          background: {
-            ...visualization.text.background,
-            strokeCategoryColumn: variable
-          }
-        };
-      }
-      return;
-  }
+  applyFacetVariablePatch(visualization, slotPath, variable);
 }
 
 function applyFacetClassificationToVisualization(
@@ -301,9 +165,28 @@ function applyFacetClassificationToVisualization(
       }
       return;
 
+    case FACET_SLOT.SYMBOL_FILL_VALUE:
+    case FACET_SLOT.SYMBOL_FILL_CATEGORY:
+      if (visualization.symbol) {
+        visualization.symbol = {
+          ...visualization.symbol,
+          fillClassification: classification
+        };
+      }
+      return;
+
+    case FACET_SLOT.SYMBOL_STROKE_VALUE:
+    case FACET_SLOT.SYMBOL_STROKE_CATEGORY:
+      if (visualization.symbol) {
+        visualization.symbol = {
+          ...visualization.symbol,
+          strokeClassification: classification
+        };
+      }
+      return;
+
     case FACET_SLOT.LINE_VALUE:
     case FACET_SLOT.LINE_CATEGORY:
-    case FACET_SLOT.LINE_SIZE:
       visualization.classification = classification;
       visualization.lineClassification = classification;
       if (visualization.line) {
@@ -312,6 +195,18 @@ function applyFacetClassificationToVisualization(
           classification
         };
       }
+      return;
+
+    case FACET_SLOT.LINE_THICKNESS_VALUE:
+      if (visualization.line) {
+        visualization.line = {
+          ...visualization.line,
+          thicknessClassification: classification
+        };
+      }
+      return;
+
+    case FACET_SLOT.LINE_SIZE:
       return;
 
     case FACET_SLOT.TEXT_VALUE:
@@ -352,6 +247,16 @@ function applyFacetClassificationToVisualization(
       }
       return;
 
+    case FACET_SLOT.POLYGON_STROKE_VALUE:
+    case FACET_SLOT.POLYGON_STROKE_CATEGORY:
+      if (visualization.polygon) {
+        visualization.polygon = {
+          ...visualization.polygon,
+          strokeClassification: classification
+        };
+      }
+      return;
+
     case FACET_SLOT.POLYGON_VALUE:
     case FACET_SLOT.POLYGON_CATEGORY:
     default:
@@ -376,7 +281,7 @@ function buildFacetClassification(
     return baseClassification;
   }
 
-  if (slotPath.endsWith('.categoryColumn')) {
+  if (isFacetCategorySlot(slotPath)) {
     return buildCategoricalFacetClassification(
       baseViz,
       variable,
@@ -384,7 +289,7 @@ function buildFacetClassification(
     );
   }
 
-  if (!slotPath.endsWith('.valueColumn')) {
+  if (!facetSlotRecomputesIndependentBreaks(slotPath)) {
     return { ...baseClassification };
   }
 

@@ -22,4 +22,17 @@ describe('+layout color-blindness notification', () => {
     );
     expect(source).toContain('!globalState.selectedTool');
   });
+
+  it('remounts project-bound workspace content when the project runtime changes', () => {
+    expect(source).toContain(
+      "import { projectRuntime } from '$lib/features/commons/stores/project/project-runtime.svelte';"
+    );
+    expect(source).toContain('{#key projectRuntime.runtimeKey}');
+    expect(source.indexOf('{#key projectRuntime.runtimeKey}')).toBeLessThan(
+      source.indexOf('<MainToolbar />')
+    );
+    expect(source.indexOf('{#key projectRuntime.runtimeKey}')).toBeLessThan(
+      source.indexOf('<MapTooltipOverlay />')
+    );
+  });
 });

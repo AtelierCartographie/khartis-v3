@@ -15,6 +15,7 @@ import { toJsonValue } from '$lib/features/commons/utils/json.utils';
 import type { SerializedProjectData } from '$lib/types/serialization.types';
 import { persistenceRegistry } from '$lib/features/project-management';
 import { createCompanionFilesFromAssetRefs } from '$lib/features/project-management/services/asset-store.service';
+import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
 import { layersActions } from '$lib/features/step-toolbar/tools/layers';
 import { legendActions } from '$lib/features/step-toolbar/tools/legend';
 import { projectionActions } from '$lib/features/step-toolbar/tools/projections';
@@ -28,6 +29,11 @@ import { dataTabActions } from '../stores/data-tab.store.svelte';
 import { datasetsStore } from '../stores/datasets.store.svelte';
 import { globalActions, globalState } from '../stores/global.svelte';
 import { projectStore } from '../stores/project.store.svelte';
+import {
+  captureProjectRuntime,
+  isCurrentProjectRuntime,
+  type ProjectRuntimeSnapshot
+} from '../stores/project/project-runtime.svelte';
 import {
   ClassificationMethod,
   visualizationStore,
@@ -686,7 +692,10 @@ function createDataOrchestratorService() {
     }
   }
 
-  async function processProjectFiles(files: UploadedFile[]): Promise<void> {
+  async function processProjectFiles(
+    files: UploadedFile[],
+    restoreRun?: ProjectRuntimeSnapshot
+  ): Promise<void> {
     const unprocessedFiles = files.filter(
       (file) => !processedFileIds.has(file.id) && !processingFiles.has(file.id)
     );
@@ -723,6 +732,10 @@ function createDataOrchestratorService() {
 
     try {
       await processWithLimit(unprocessedFiles, 1, async (file) => {
+        if (restoreRun && !isCurrentProjectRuntime(restoreRun)) {
+          return;
+        }
+
         if (
           file.fileType === FileType.SHAPEFILE &&
           (!file.relatedFileObjects || file.relatedFileObjects.length === 0)
@@ -765,6 +778,10 @@ function createDataOrchestratorService() {
           }
         }
 
+        if (restoreRun && !isCurrentProjectRuntime(restoreRun)) {
+          return;
+        }
+
         if (!file.originalFile && file.content) {
           try {
             file.originalFile = await createFileFromUpload(file);
@@ -777,12 +794,21 @@ function createDataOrchestratorService() {
           }
         }
 
+        if (restoreRun && !isCurrentProjectRuntime(restoreRun)) {
+          return;
+        }
+
         const autoEnable = file.id === selectedSourceFileId;
 
         try {
           await onFileAdded(file, autoEnable, {
             suggestProjection: shouldSuggestProjection
           });
+
+          if (restoreRun && !isCurrentProjectRuntime(restoreRun)) {
+            await onFileRemoved(file.id);
+            return;
+          }
 
           if (
             file.columnTransformations &&
@@ -791,8 +817,17 @@ function createDataOrchestratorService() {
             await applyColumnTransformations(file);
           }
 
+          if (restoreRun && !isCurrentProjectRuntime(restoreRun)) {
+            await onFileRemoved(file.id);
+            return;
+          }
+
           if (file.deletedRowIds && file.deletedRowIds.length > 0) {
             await applyRowDeletions(file);
+          }
+
+          if (restoreRun && !isCurrentProjectRuntime(restoreRun)) {
+            await onFileRemoved(file.id);
           }
         } catch (fileError) {
           logger.error(
@@ -1156,11 +1191,15 @@ function createDataOrchestratorService() {
   }
 
   async function restoreCurrentProjectState(): Promise<void> {
+    const restoreRun = captureProjectRuntime();
     const restoreToken = activeGeoColumnRestoreToken;
     const currentProject = projectStore.currentProject;
     const vizSettings = (
       currentProject?.data as SerializedProjectData | undefined
     )?.visualizationSettings;
+    const facetsSettings = (
+      currentProject?.data as SerializedProjectData | undefined
+    )?.uiSettings?.facets;
     const projectionSettings = (
       currentProject?.data as SerializedProjectData | undefined
     )?.layoutSettings?.projection;
@@ -1173,11 +1212,27 @@ function createDataOrchestratorService() {
         datasetsStore.clear();
         layersActions.reset();
         processedFileIds.clear();
+        processingFiles.clear();
 
         await duckDBOrchestrator.clear();
 
+        if (!isCurrentProjectRuntime(restoreRun)) {
+          return;
+        }
+
+        if (!currentProject) {
+          return;
+        }
+
         if (currentProject?.data?.sourceFiles) {
-          await processProjectFiles(currentProject.data.sourceFiles);
+          await processProjectFiles(
+            currentProject.data.sourceFiles,
+            restoreRun
+          );
+        }
+
+        if (!isCurrentProjectRuntime(restoreRun)) {
+          return;
         }
 
         if (vizSettings) {
@@ -1186,6 +1241,15 @@ function createDataOrchestratorService() {
 
         migrateOrphanedVizDatasetIds();
         await recomputeMissingBreaks();
+
+        if (facetsSettings) {
+          persistenceRegistry.deserializeAll({ facets: facetsSettings });
+          await facetsStore.restoreGeneratedVisualizations();
+        }
+
+        if (!isCurrentProjectRuntime(restoreRun)) {
+          return;
+        }
 
         if (projectionSettings) {
           projectionActions.setState(projectionSettings);
@@ -1199,14 +1263,22 @@ function createDataOrchestratorService() {
           await restorePersistedDataTabState(currentProject, restoreToken);
         }
 
+        if (!isCurrentProjectRuntime(restoreRun)) {
+          return;
+        }
+
         layersActions.syncWithVisualizations();
         legendActions.syncWithVisualizations();
       });
 
-      persistenceRegistry.markClean();
-      projectAlreadyRestored = true;
+      if (isCurrentProjectRuntime(restoreRun)) {
+        persistenceRegistry.markClean();
+        projectAlreadyRestored = true;
+      }
     } finally {
-      projectRestoreInProgress = false;
+      if (isCurrentProjectRuntime(restoreRun)) {
+        projectRestoreInProgress = false;
+      }
     }
   }
 
