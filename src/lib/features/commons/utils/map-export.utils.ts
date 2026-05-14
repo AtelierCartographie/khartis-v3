@@ -2,6 +2,8 @@ import * as m from '$lib/paraglide/messages';
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
 import { toCanvas as htmlToImageCanvas } from 'html-to-image';
+import type { Deck, View } from '@deck.gl/core';
+import type { Map as MapLibreMap } from 'maplibre-gl';
 
 interface ExportOptions {
   width: number;
@@ -13,6 +15,13 @@ interface RelativeRect {
   y: number;
   width: number;
   height: number;
+}
+
+type DeckInstance = Deck<View | View[] | null>;
+type RestoreExportRender = () => Promise<void>;
+interface FrozenCanvas {
+  image: HTMLImageElement;
+  restore: RestoreExportRender;
 }
 
 const SVG_EXPORT_STYLE_PROPERTIES = [
@@ -38,6 +47,9 @@ const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   width: 1920,
   height: 1080
 };
+const EXPORT_RENDER_TIMEOUT_MS = 10000;
+const PIXEL_RATIO_EPSILON = 0.001;
+const FROZEN_CANVAS_ATTRIBUTE = 'data-khartis-export-frozen-canvas';
 
 function getExportPixelRatio(
   pageContainer: HTMLElement,
@@ -55,38 +67,109 @@ function exportFilter(domNode: HTMLElement): boolean {
   return true;
 }
 
-function usesInterleavedDeckOverlay(): boolean {
-  return mapInstanceStore.deckOverlay !== null;
+function getFallbackDevicePixelRatio(): number {
+  if (typeof window === 'undefined') {
+    return 1;
+  }
+
+  return window.devicePixelRatio || 1;
 }
 
-async function prerenderWebgl(pixelRatio: number): Promise<() => void> {
-  const map = mapInstanceStore.map;
-  if (!map || usesInterleavedDeckOverlay()) return () => {};
+function resolveDeckPixelRatio(
+  value: DeckInstance['props']['useDevicePixels']
+): number {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return value;
+  }
 
-  const currentRatio = map.getPixelRatio();
-  const scale = Math.max(pixelRatio, currentRatio);
+  if (value === false) {
+    return 1;
+  }
 
-  if (scale <= currentRatio) return () => {};
+  return getFallbackDevicePixelRatio();
+}
 
+async function waitForMapRender(map: MapLibreMap): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(
       () => reject(new Error(m.error_map_render_timeout())),
-      10000
+      EXPORT_RENDER_TIMEOUT_MS
     );
 
     map.once('render', () => {
       clearTimeout(timeout);
       resolve();
     });
-    map.setPixelRatio(scale);
     map.triggerRepaint();
   });
+}
 
-  return () => {
-    requestAnimationFrame(() => {
-      map.setPixelRatio(currentRatio);
-      map.triggerRepaint();
-    });
+async function prerenderMapLibre(
+  map: MapLibreMap,
+  pixelRatio: number
+): Promise<RestoreExportRender> {
+  const currentRatio = map.getPixelRatio();
+  const scale = Math.max(pixelRatio, currentRatio);
+
+  if (scale <= currentRatio + PIXEL_RATIO_EPSILON) return async () => {};
+
+  map.setPixelRatio(scale);
+  await waitForMapRender(map);
+
+  return async () => {
+    map.setPixelRatio(currentRatio);
+    await waitForMapRender(map);
+  };
+}
+
+async function redrawDeckForExport(
+  deck: DeckInstance,
+  reason: string
+): Promise<void> {
+  deck.redraw(reason);
+  await waitForNextFrame();
+  deck.redraw(`${reason}Frame`);
+  await waitForNextFrame();
+}
+
+async function prerenderDeck(
+  deck: DeckInstance,
+  pixelRatio: number
+): Promise<RestoreExportRender> {
+  const currentUseDevicePixels = deck.props.useDevicePixels;
+  const currentRatio = resolveDeckPixelRatio(currentUseDevicePixels);
+  const scale = Math.max(pixelRatio, currentRatio);
+
+  if (scale <= currentRatio + PIXEL_RATIO_EPSILON) return async () => {};
+
+  deck.setProps({ useDevicePixels: scale });
+  await redrawDeckForExport(deck, 'exportPixelRatio');
+
+  return async () => {
+    deck.setProps({ useDevicePixels: currentUseDevicePixels });
+    await redrawDeckForExport(deck, 'restoreExportPixelRatio');
+  };
+}
+
+async function prerenderWebgl(
+  pixelRatio: number
+): Promise<RestoreExportRender> {
+  const restorers: RestoreExportRender[] = [];
+  const map = mapInstanceStore.map;
+  const deck = mapInstanceStore.deckInstance;
+
+  if (map) {
+    restorers.push(await prerenderMapLibre(map, pixelRatio));
+  }
+
+  if (deck) {
+    restorers.push(await prerenderDeck(deck, pixelRatio));
+  }
+
+  return async () => {
+    for (const restore of restorers.reverse()) {
+      await restore();
+    }
   };
 }
 
@@ -125,6 +208,102 @@ function waitForNextFrame(): Promise<void> {
 
     setTimeout(resolve, 0);
   });
+}
+
+async function waitForImageDecode(image: HTMLImageElement): Promise<void> {
+  if (typeof image.decode === 'function') {
+    await image.decode().catch(() => undefined);
+    return;
+  }
+
+  if (image.complete) return;
+
+  await new Promise<void>((resolve) => {
+    image.addEventListener('load', () => resolve(), { once: true });
+    image.addEventListener('error', () => resolve(), { once: true });
+  });
+}
+
+function createFrozenCanvas(canvas: HTMLCanvasElement): FrozenCanvas | null {
+  const parent = canvas.parentElement;
+  if (!parent) return null;
+
+  const canvasRect = canvas.getBoundingClientRect();
+  if (canvasRect.width <= 0 || canvasRect.height <= 0) return null;
+
+  let dataUrl: string;
+  try {
+    dataUrl = canvas.toDataURL('image/png');
+  } catch {
+    return null;
+  }
+
+  if (!dataUrl || dataUrl === 'data:,') return null;
+
+  const parentRect = parent.getBoundingClientRect();
+  const parentPosition = parent.style.position;
+  const parentComputedPosition = getComputedStyle(parent).position;
+  const canvasVisibility = canvas.style.visibility;
+  const canvasStyles = getComputedStyle(canvas);
+  const image = document.createElement('img');
+
+  image.src = dataUrl;
+  image.alt = '';
+  image.setAttribute(FROZEN_CANVAS_ATTRIBUTE, 'true');
+  image.style.position = 'absolute';
+  image.style.left = `${canvasRect.left - parentRect.left}px`;
+  image.style.top = `${canvasRect.top - parentRect.top}px`;
+  image.style.width = `${canvasRect.width}px`;
+  image.style.height = `${canvasRect.height}px`;
+  image.style.pointerEvents = 'none';
+  image.style.objectFit = 'fill';
+  image.style.transform = canvasStyles.transform;
+  image.style.transformOrigin = canvasStyles.transformOrigin;
+  image.style.zIndex =
+    canvasStyles.zIndex === 'auto' ? '0' : canvasStyles.zIndex;
+
+  if (parentComputedPosition === 'static') {
+    parent.style.position = 'relative';
+  }
+
+  canvas.style.visibility = 'hidden';
+  parent.appendChild(image);
+
+  return {
+    image,
+    restore: async () => {
+      canvas.style.visibility = canvasVisibility;
+      parent.style.position = parentPosition;
+      image.remove();
+    }
+  };
+}
+
+async function freezeCanvasesForExport(
+  pageContainer: HTMLElement
+): Promise<RestoreExportRender> {
+  const canvases = Array.from(
+    new Set(
+      pageContainer.querySelectorAll<HTMLCanvasElement>(
+        '.map-canvas canvas, .shared-facets-canvas canvas, canvas'
+      )
+    )
+  );
+  const frozenCanvases = canvases
+    .map((canvas) => createFrozenCanvas(canvas))
+    .filter((frozenCanvas): frozenCanvas is FrozenCanvas =>
+      Boolean(frozenCanvas)
+    );
+
+  await Promise.all(
+    frozenCanvases.map((frozenCanvas) => waitForImageDecode(frozenCanvas.image))
+  );
+
+  return async () => {
+    for (const frozenCanvas of frozenCanvases.reverse()) {
+      await frozenCanvas.restore();
+    }
+  };
 }
 
 function escapeXml(value: string): string {
@@ -704,7 +883,7 @@ export async function exportMapToSvg(
     return new Blob([markup], { type: 'image/svg+xml;charset=utf-8' });
   } finally {
     restoreDom();
-    restoreRatio();
+    await restoreRatio();
   }
 }
 
@@ -725,18 +904,24 @@ export async function exportMapToJpg(
 
   const restoreRatio = await prerenderWebgl(pagePixelRatio);
   const restoreDom = mutateDomForExport(pageContainer);
-  await waitForNextFrame();
+  let restoreFrozenCanvases: RestoreExportRender = async () => {};
 
   const pageCanvas = await (async (): Promise<HTMLCanvasElement | null> => {
     try {
+      await waitForNextFrame();
+      restoreFrozenCanvases = await freezeCanvasesForExport(pageContainer);
+      await waitForNextFrame();
+
       return await htmlToImageCanvas(pageContainer, {
         pixelRatio: pagePixelRatio,
+        backgroundColor: '#ffffff',
         style: { boxShadow: 'none' },
         filter: exportFilter
       });
     } finally {
+      await restoreFrozenCanvases();
       restoreDom();
-      restoreRatio();
+      await restoreRatio();
     }
   })();
 
