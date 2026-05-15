@@ -88,6 +88,33 @@ function stubImageDecode(): () => void {
   };
 }
 
+function createDeckExportFixture(
+  layers: unknown[],
+  project: (position: number[]) => number[] = ([x, y]) => [x, y]
+) {
+  return {
+    props: { useDevicePixels: 1 },
+    setProps: vi.fn(),
+    redraw: vi.fn(),
+    getViewports: vi.fn(() => [{ project }]),
+    layerManager: {
+      getLayers: vi.fn(() => layers)
+    }
+  };
+}
+
+function createDeckLayer(
+  layerName: string,
+  id: string,
+  props: Record<string, unknown>
+): unknown {
+  return {
+    id,
+    constructor: { layerName },
+    props: { id, ...props }
+  };
+}
+
 describe('map export DOM mutations', () => {
   beforeEach(() => {
     htmlToImage.toCanvas.mockReset();
@@ -123,10 +150,267 @@ describe('map export DOM mutations', () => {
     expect(source).toContain('id="khartis-layer-geo-indications"');
     expect(source).toContain('id="khartis-layer-annotations"');
     expect(source).not.toContain('toSvg as htmlToImageSvg');
+    expect(source).not.toContain('foreignObject');
   });
 
   it('waits for embedded fonts before exporting the page', () => {
     expect(source).toContain('await fontAssetsStore.ensureLoaded();');
+  });
+
+  it('exports layout text as native SVG text instead of a foreignObject fallback', async () => {
+    document.body.innerHTML = `
+      <div class="page-container" style="background: white;">
+        <div class="annotation-overlay">
+          <div class="annotation-item" data-annotation-role="title">
+            <div
+              class="annotation-text"
+              style="color: rgb(1, 2, 3); font-family: Arial; font-size: 14px; font-weight: 700; line-height: 18px; text-align: center;"
+            >Native title</div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const item = document.querySelector('.annotation-item');
+    const text = document.querySelector('.annotation-text');
+    if (!page || !item || !text) {
+      throw new Error('Missing text export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(item, { left: 40, top: 50, width: 200, height: 30 });
+    bindElementBox(text, { left: 40, top: 50, width: 200, height: 30 });
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    expect(markup).toContain('id="khartis-layer-annotations"');
+    expect(markup).toContain('id="khartis-annotation-title-1"');
+    expect(markup).toContain('<text');
+    expect(markup).toContain('Native title');
+    expect(markup).toContain('text-anchor="middle"');
+    expect(markup).not.toContain('<foreignObject');
+  });
+
+  it('exports MapLibre interleaved Deck point layers as editable SVG primitives', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="map-canvas">
+          <canvas></canvas>
+        </div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const canvas = document.querySelector('canvas');
+    if (!page || !canvas) {
+      throw new Error('Missing export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(canvas, { left: 10, top: 20, width: 200, height: 120 });
+    const toDataUrl = vi
+      .spyOn(canvas, 'toDataURL')
+      .mockReturnValue('data:image/png;base64,AAAA');
+
+    const layer = createDeckLayer('ScatterplotLayer', 'editable-symbols', {
+      data: {
+        length: 2,
+        attributes: {
+          getPosition: {
+            value: new Float32Array([3, 4, 8, 10]),
+            size: 2
+          },
+          getFillColor: {
+            value: new Uint8Array([255, 0, 0, 255, 0, 0, 255, 128]),
+            size: 4
+          },
+          getRadius: {
+            value: new Float32Array([6, 4]),
+            size: 1
+          }
+        }
+      },
+      filled: true,
+      stroked: false
+    });
+    const deck = createDeckExportFixture([layer], ([x, y]) => [x * 2, y * 2]);
+    const map = {
+      __deck: deck,
+      getCanvas: vi.fn(() => canvas),
+      getPixelRatio: vi.fn(() => 1),
+      setPixelRatio: vi.fn(),
+      getMaxZoom: vi.fn(() => 22),
+      setMaxZoom: vi.fn(),
+      setMinZoom: vi.fn(),
+      getZoom: vi.fn(() => 1),
+      setZoom: vi.fn()
+    };
+    mapInstanceStore.setMapInstance(map as never);
+    mapInstanceStore.setMapLoaded(true);
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    expect(markup).toContain('data-khartis-layer-id="editable-symbols"');
+    expect(markup).toContain('data-khartis-layer-type="ScatterplotLayer"');
+    expect(markup).toContain('<circle');
+    expect(markup).toContain('cx="16"');
+    expect(markup).toContain('cy="28"');
+    expect(markup).toContain('fill="rgb(255, 0, 0)"');
+    expect(markup).toContain('fill-opacity="1"');
+    expect(markup).toContain('fill-opacity="0.502"');
+    expect(markup).not.toContain('data-khartis-export-mode="raster-fallback"');
+    expect(toDataUrl).not.toHaveBeenCalled();
+  });
+
+  it('keeps MapLibre basemaps as a background image while exporting Deck visualizations as vectors', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="map-canvas">
+          <canvas></canvas>
+        </div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const canvas = document.querySelector('canvas');
+    if (!page || !canvas) {
+      throw new Error('Missing export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(canvas, { left: 0, top: 0, width: 400, height: 300 });
+    const toDataUrl = vi
+      .spyOn(canvas, 'toDataURL')
+      .mockReturnValue('data:image/png;base64,BASEMAP');
+
+    const layer = createDeckLayer('ScatterplotLayer', 'osm-symbols', {
+      data: {
+        length: 1,
+        attributes: {
+          getPosition: {
+            value: new Float32Array([12, 24]),
+            size: 2
+          },
+          getFillColor: {
+            value: new Uint8Array([255, 0, 0, 255]),
+            size: 4
+          },
+          getRadius: {
+            value: new Float32Array([5]),
+            size: 1
+          }
+        }
+      },
+      filled: true,
+      stroked: false
+    });
+    const deck = createDeckExportFixture([layer]);
+    const map = {
+      __deck: deck,
+      getCanvas: vi.fn(() => canvas),
+      getPixelRatio: vi.fn(() => 1),
+      setPixelRatio: vi.fn(),
+      triggerRepaint: vi.fn(),
+      once: vi.fn((_event: string, callback: () => void) => callback()),
+      getMaxZoom: vi.fn(() => 22),
+      setMaxZoom: vi.fn(),
+      setMinZoom: vi.fn(),
+      getZoom: vi.fn(() => 1),
+      setZoom: vi.fn()
+    };
+    mapInstanceStore.setMapInstance(map as never);
+    mapInstanceStore.setMapLoaded(true);
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    expect(deck.setProps).toHaveBeenNthCalledWith(1, { layers: [] });
+    expect(deck.setProps).toHaveBeenNthCalledWith(2, { layers: [layer] });
+    expect(toDataUrl).toHaveBeenCalledWith('image/png');
+    expect(markup).toContain('data-khartis-export-mode="maplibre-background"');
+    expect(markup).toContain('href="data:image/png;base64,BASEMAP"');
+    expect(markup).toContain('data-khartis-layer-id="osm-symbols"');
+    expect(markup).toContain('<circle');
+    expect(markup).not.toContain('data-khartis-export-mode="raster-fallback"');
+  });
+
+  it('exports Deck line and polygon layers as SVG paths', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="map-canvas">
+          <canvas></canvas>
+        </div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const canvas = document.querySelector('canvas');
+    if (!page || !canvas) {
+      throw new Error('Missing export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(canvas, { left: 0, top: 0, width: 400, height: 300 });
+    vi.spyOn(canvas, 'toDataURL').mockReturnValue('data:image/png;base64,AAAA');
+
+    const lineLayer = createDeckLayer('PathLayer', 'editable-lines', {
+      data: {
+        length: 1,
+        startIndices: new Uint32Array([0, 3]),
+        attributes: {
+          getPath: {
+            value: new Float32Array([0, 0, 10, 0, 10, 10]),
+            size: 2
+          },
+          getColor: {
+            value: new Uint8Array([0, 0, 0, 255]),
+            size: 4
+          },
+          getWidth: {
+            value: new Float32Array([2]),
+            size: 1
+          }
+        }
+      }
+    });
+    const polygonLayer = createDeckLayer(
+      'SolidPolygonLayer',
+      'editable-areas',
+      {
+        data: {
+          length: 1,
+          startIndices: new Uint32Array([0, 4]),
+          attributes: {
+            getPolygon: {
+              value: new Float32Array([20, 20, 60, 20, 60, 50, 20, 50]),
+              size: 2
+            },
+            getFillColor: {
+              value: new Uint8Array([10, 20, 30, 255]),
+              size: 4
+            }
+          }
+        }
+      }
+    );
+    const deck = createDeckExportFixture([polygonLayer, lineLayer]);
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    expect(markup).toContain('data-khartis-layer-id="editable-areas"');
+    expect(markup).toContain('data-khartis-layer-id="editable-lines"');
+    expect(markup).toContain('fill-rule="evenodd"');
+    expect(markup).toContain('fill="rgb(10, 20, 30)"');
+    expect(markup).toContain('stroke-width="2"');
+    expect(markup).toContain('M 20 20 L 60 20 L 60 50 L 20 50 Z');
+    expect(markup).toContain('M 0 0 L 10 0 L 10 10');
+    expect(markup).not.toContain('data-khartis-export-mode="raster-fallback"');
   });
 
   it.each([
