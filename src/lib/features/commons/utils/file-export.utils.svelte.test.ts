@@ -4,8 +4,18 @@ import type { ProcessedDataset } from '$lib/features/data-pipeline';
 
 function createGeometryDataset(
   geometryValue: Record<string, unknown> | string,
-  options: { includeGeometryMeta?: boolean } = {}
+  options: { includeGeometryMeta?: boolean; includeGeoDetection?: boolean } = {}
 ): ProcessedDataset {
+  const geoColumns = options.includeGeoDetection
+    ? [
+        {
+          index: 4,
+          columnName: 'geom',
+          type: 'coordinates' as const,
+          confidence: 1
+        }
+      ]
+    : [];
   return {
     id: 'dataset-1',
     name: 'Tiny geo',
@@ -31,8 +41,9 @@ function createGeometryDataset(
     ],
     analysis: {
       columns: [],
-      geoColumns: [],
+      geoColumns,
       hasGeoData: true,
+      suggestedGeoColumn: options.includeGeoDetection ? 'geom' : undefined,
       rowCount: 1,
       warnings: []
     },
@@ -151,6 +162,19 @@ describe('file export utils', () => {
     expect(text).not.toContain('geometry_wkt');
   });
 
+  it('fails csv exports with a clear error when no tabular column remains', async () => {
+    const dataset = createGeometryDataset({
+      type: 'Point',
+      coordinates: [2.3522, 48.8566]
+    });
+    dataset.columns = dataset.columns.filter(
+      (column) => column.name === 'geom'
+    );
+    dataset.data = dataset.data.map((row) => ({ geom: row.geom }));
+
+    await expect(exportProcessedDatasets([dataset], 'csv')).rejects.toThrow();
+  });
+
   it('builds valid geojson exports from recognized geometry columns', async () => {
     const dataset = createGeometryDataset(
       JSON.stringify({
@@ -165,7 +189,7 @@ describe('file export utils', () => {
           ]
         ]
       }),
-      { includeGeometryMeta: false }
+      { includeGeometryMeta: false, includeGeoDetection: true }
     );
 
     const blob = await exportProcessedDatasets([dataset], 'geojson');
@@ -183,5 +207,83 @@ describe('file export utils', () => {
     expect(geojson.features[0].geometry.type).toBe('Polygon');
     expect(geojson.features[0].properties).not.toHaveProperty('geom');
     expect(geojson.features[0].properties.name).toBe('Alpha');
+  });
+
+  it('does not overwrite an existing _source_dataset property in geojson exports', async () => {
+    const dataset = createGeometryDataset({
+      type: 'Point',
+      coordinates: [2.3522, 48.8566]
+    });
+    dataset.data[0]._source_dataset = 'user value';
+    dataset.columns.push({
+      name: '_source_dataset',
+      type: 'string',
+      nullable: false,
+      unique: true
+    });
+
+    const blob = await exportProcessedDatasets([dataset], 'geojson');
+    const geojson = JSON.parse(await blob.text()) as {
+      features: Array<{ properties: Record<string, unknown> }>;
+    };
+
+    expect(geojson.features[0].properties._source_dataset).toBe('user value');
+    expect(geojson.features[0].properties._source_dataset_2).toBe('Tiny geo');
+  });
+
+  it('keeps text columns named location when GPS columns provide geometry', async () => {
+    const dataset: ProcessedDataset = {
+      id: 'dataset-gps',
+      name: 'GPS places',
+      format: 'csv',
+      data: [
+        {
+          location: 'Central office',
+          lat: 48.8566,
+          lon: 2.3522
+        }
+      ],
+      rowCount: 1,
+      columns: [
+        { name: 'location', type: 'string', nullable: false, unique: true },
+        { name: 'lat', type: 'number', nullable: false, unique: true },
+        { name: 'lon', type: 'number', nullable: false, unique: true }
+      ],
+      analysis: {
+        columns: [],
+        geoColumns: [
+          {
+            index: 1,
+            columnName: 'lat',
+            type: 'latitude',
+            confidence: 1
+          },
+          {
+            index: 2,
+            columnName: 'lon',
+            type: 'longitude',
+            confidence: 1
+          }
+        ],
+        hasGeoData: true,
+        suggestedGeoColumn: 'lat',
+        rowCount: 1,
+        warnings: []
+      },
+      geometry: undefined,
+      duckdbTableName: undefined,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      fileSize: 123,
+      metadata: {
+        processedAt: new Date('2026-01-01T00:00:00Z'),
+        transformations: []
+      }
+    };
+
+    const blob = await exportProcessedDatasets([dataset], 'csv');
+    const text = await blob.text();
+
+    expect(text).toContain('location,lat,lon');
+    expect(text).toContain('Central office,48.8566,2.3522');
   });
 });

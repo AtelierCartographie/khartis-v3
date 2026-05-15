@@ -58,12 +58,21 @@ describe('export service geometry extraction', () => {
     expect(source).toContain('ST_AsGeoJSON(${geometryExpression})');
   });
 
-  it('uses browser SQLite GeoPackage export without reprojection', () => {
+  it('uses browser SQLite GeoPackage export with one layer per source', () => {
     expect(source).toContain('function exportDatasetsToGeoPackage');
-    expect(source).toContain('exportGeoPackage(features,');
+    expect(source).toContain('exportGeoPackageLayers(layers)');
     expect(source).toContain('ST_AsWKB(${geometryExpression})');
     expect(source).toContain('buildDirectGeoPackageExportSource');
     expect(source).toContain('buildGeometryValueExpression(');
+    expect(source).toContain('sourceCrs ? WGS84_CRS : null');
     expect(source).not.toContain("DRIVER 'GPKG'");
+  });
+
+  it('uses strict geometry-column resolution so GPS exports are not shadowed by text location columns', () => {
+    expect(source).toContain('isDatasetGeometryColumn(dataset, column)');
+    expect(source).not.toContain('dataset.analysis.hasGeoData) &&');
+    expect(source).toContain(
+      'if (!geomColumn && dataset.duckdbTableName && gpsColumns)'
+    );
   });
 });

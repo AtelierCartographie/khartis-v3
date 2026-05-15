@@ -7,7 +7,8 @@ import {
   generateExportFilename
 } from '$lib/features/commons/utils/file-export.utils';
 import {
-  exportGeoPackage,
+  exportGeoPackageLayers,
+  type GeoPackageLayerExportOptions,
   type GeoPackageFeatureRow
 } from '$lib/features/commons/utils/geopackage-export.utils';
 import {
@@ -30,7 +31,6 @@ import type {
 import {
   COLUMN_TYPE_GEOMETRY,
   CANONICAL_ID_COLUMN,
-  GEO_COLUMN_NAMES,
   INTERNAL_COLUMN,
   JOINED_BASEMAP_COLUMN
 } from '$lib/features/commons/constants/data.constants';
@@ -38,6 +38,7 @@ import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
+import { isDatasetGeometryColumn } from '$lib/features/commons/utils/geometry-column.utils';
 
 export interface ExportError extends Error {
   title: string;
@@ -54,10 +55,11 @@ interface JoinedGeometryExportSource {
 }
 
 interface GeoPackageExportSource {
+  layerName: string;
   sourceCrs: string | null;
   propertyColumns: string[];
   tempViewName?: string;
-  buildSelect: (allPropertyColumns: string[]) => string;
+  buildSelect: () => string;
 }
 
 const WGS84_CRS = 'EPSG:4326';
@@ -182,18 +184,11 @@ function getDataFormatConfig(format: Exclude<DataExportFormat, 'geopackage'>): {
   }
 }
 
-function isGeometryColumnName(name: string): boolean {
-  return (GEO_COLUMN_NAMES as readonly string[]).includes(name.toLowerCase());
-}
-
 function resolveDatasetGeometryColumn(
   dataset: ProcessedDataset
 ): ProcessedDataset['columns'][0] | undefined {
-  return dataset.columns.find(
-    (column) =>
-      column.type === COLUMN_TYPE_GEOMETRY ||
-      ((Boolean(dataset.geometry) || dataset.analysis.hasGeoData) &&
-        isGeometryColumnName(column.name))
+  return dataset.columns.find((column) =>
+    isDatasetGeometryColumn(dataset, column)
   );
 }
 
@@ -401,10 +396,6 @@ function buildAlignedPropertySelect(
         : `NULL AS "${escapedName}"`;
     })
     .join(', ');
-}
-
-function buildSourceDatasetSelect(datasetName: string): string {
-  return `'${escapeSqlString(datasetName)}' AS "_source_dataset"`;
 }
 
 function normalizeWkbValue(value: unknown): Uint8Array | null {
@@ -666,17 +657,17 @@ async function buildJoinedGeoPackageExportSource(
 
   const propertyColumns = dataset.columns.map((column) => column.name);
   return {
+    layerName: dataset.name,
     sourceCrs: WGS84_CRS,
     propertyColumns,
     tempViewName: viewName,
-    buildSelect: (allPropertyColumns) => {
+    buildSelect: () => {
       const propertySelect = buildAlignedPropertySelect(
-        allPropertyColumns,
+        propertyColumns,
         propertyColumns
       );
       const selectColumns = [
         propertySelect,
-        buildSourceDatasetSelect(dataset.name),
         `ST_AsWKB("geom"::GEOMETRY) AS "${GEOPACKAGE_WKB_COLUMN}"`
       ].filter(Boolean);
       return `SELECT ${selectColumns.join(', ')} FROM "${viewName}" WHERE "geom" IS NOT NULL`;
@@ -696,9 +687,11 @@ async function buildDirectGeoPackageExportSource(
     dataset.duckdbTableName,
     geomColumn.name
   );
+  const sourceCrs = resolveDatasetGeometryCrs(dataset);
   const geometryExpression = buildGeometryValueExpression(
     geomColumn.name,
-    geometryDuckDBType
+    geometryDuckDBType,
+    { sourceCrs, targetCrs: WGS84_CRS }
   );
   const propertyColumns = dataset.columns
     .filter((column) => column.name !== geomColumn.name)
@@ -706,16 +699,16 @@ async function buildDirectGeoPackageExportSource(
   const escapedTable = escapeIdentifier(dataset.duckdbTableName);
 
   return {
-    sourceCrs: resolveDatasetGeometryCrs(dataset),
+    layerName: dataset.name,
+    sourceCrs: sourceCrs ? WGS84_CRS : null,
     propertyColumns,
-    buildSelect: (allPropertyColumns) => {
+    buildSelect: () => {
       const propertySelect = buildAlignedPropertySelect(
-        allPropertyColumns,
+        propertyColumns,
         propertyColumns
       );
       const selectColumns = [
         propertySelect,
-        buildSourceDatasetSelect(dataset.name),
         `ST_AsWKB(${geometryExpression}) AS "${GEOPACKAGE_WKB_COLUMN}"`
       ].filter(Boolean);
       return `SELECT ${selectColumns.join(', ')} FROM "${escapedTable}" WHERE ${geometryExpression} IS NOT NULL`;
@@ -736,16 +729,16 @@ function buildGpsGeoPackageExportSource(
   const escapedTable = escapeIdentifier(dataset.duckdbTableName);
 
   return {
+    layerName: dataset.name,
     sourceCrs: WGS84_CRS,
     propertyColumns,
-    buildSelect: (allPropertyColumns) => {
+    buildSelect: () => {
       const propertySelect = buildAlignedPropertySelect(
-        allPropertyColumns,
+        propertyColumns,
         propertyColumns
       );
       const selectColumns = [
         propertySelect,
-        buildSourceDatasetSelect(dataset.name),
         `ST_AsWKB(${geometryExpression}) AS "${GEOPACKAGE_WKB_COLUMN}"`
       ].filter(Boolean);
       return `SELECT ${selectColumns.join(', ')} FROM "${escapedTable}" WHERE ${geometryExpression} IS NOT NULL`;
@@ -775,18 +768,6 @@ async function buildGeoPackageExportSource(
   return null;
 }
 
-function resolveSharedSourceCrs(
-  sources: GeoPackageExportSource[]
-): string | null {
-  const sourceCrsValues = new Set(
-    sources
-      .map((source) => normalizeCrsName(source.sourceCrs))
-      .filter((crs): crs is string => Boolean(crs))
-  );
-
-  return sourceCrsValues.size === 1 ? [...sourceCrsValues][0] : null;
-}
-
 async function exportDatasetsToGeoPackage(
   datasets: ProcessedDataset[]
 ): Promise<Blob> {
@@ -805,41 +786,40 @@ async function exportDatasetsToGeoPackage(
     throw new Error(m.error_no_geometric_data_export());
   }
 
-  const allPropertyColumns = Array.from(
-    new Set(sources.flatMap((source) => source.propertyColumns))
-  );
-  const sourceCrs = resolveSharedSourceCrs(sources);
-
   try {
-    const unionSelect = sources
-      .map((source) => source.buildSelect(allPropertyColumns))
-      .join(' UNION ALL ');
-    const rows = (await Duck.query(unionSelect, { format: 'array' })) as Record<
-      string,
-      unknown
-    >[];
-    const features: GeoPackageFeatureRow[] = rows.flatMap((row) => {
-      const wkb = normalizeWkbValue(row[GEOPACKAGE_WKB_COLUMN]);
-      if (!wkb) {
-        return [];
+    const layers: GeoPackageLayerExportOptions[] = [];
+    for (const source of sources) {
+      const rows = (await Duck.query(source.buildSelect(), {
+        format: 'array'
+      })) as Record<string, unknown>[];
+      const features: GeoPackageFeatureRow[] = rows.flatMap((row) => {
+        const wkb = normalizeWkbValue(row[GEOPACKAGE_WKB_COLUMN]);
+        if (!wkb) {
+          return [];
+        }
+
+        const properties: Record<string, unknown> = {};
+        for (const columnName of source.propertyColumns) {
+          properties[columnName] = row[columnName];
+        }
+
+        return [{ properties, wkb }];
+      });
+
+      if (features.length > 0) {
+        layers.push({
+          layerName: source.layerName,
+          sourceCrs: source.sourceCrs,
+          features
+        });
       }
+    }
 
-      const properties: Record<string, unknown> = {};
-      for (const columnName of [...allPropertyColumns, '_source_dataset']) {
-        properties[columnName] = row[columnName];
-      }
-
-      return [{ properties, wkb }];
-    });
-
-    if (features.length === 0) {
+    if (layers.length === 0) {
       throw new Error(m.error_no_geometric_data_export());
     }
 
-    return exportGeoPackage(features, {
-      layerName: 'khartis_export',
-      sourceCrs
-    });
+    return exportGeoPackageLayers(layers);
   } finally {
     await Promise.all(
       sources

@@ -3,6 +3,7 @@ import { MIME } from '../constants';
 import { escapeIdentifier } from './sanitize.utils';
 
 type SqliteModule = Awaited<ReturnType<typeof sqlite3InitModule>>;
+type SqliteDatabase = InstanceType<SqliteModule['oo1']['DB']>;
 
 export interface GeoPackageFeatureRow {
   properties: Record<string, unknown>;
@@ -14,10 +15,28 @@ export interface GeoPackageExportOptions {
   sourceCrs: string | null;
 }
 
+export interface GeoPackageLayerExportOptions extends GeoPackageExportOptions {
+  features: GeoPackageFeatureRow[];
+}
+
+interface GeoPackagePropertyColumnMapping {
+  sourceName: string;
+  columnName: string;
+}
+
 const GEOPACKAGE_GEOMETRY_COLUMN = 'geom';
 const GEOPACKAGE_ID_COLUMN = 'fid';
+const GEOPACKAGE_LAYER_NAME_MAX_LENGTH = 48;
 const SQLITE_APPLICATION_ID_GEOPACKAGE = 1196444487;
 const SQLITE_USER_VERSION_GEOPACKAGE_1_2 = 10200;
+const GEOPACKAGE_RESERVED_COLUMN_NAMES = new Set([
+  GEOPACKAGE_ID_COLUMN,
+  GEOPACKAGE_GEOMETRY_COLUMN
+]);
+const EPSG_WKT_DEFINITIONS: Record<number, string> = {
+  3857: 'PROJCS["WGS 84 / Pseudo-Mercator",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]],PROJECTION["Mercator_1SP"],PARAMETER["central_meridian",0],PARAMETER["scale_factor",1],PARAMETER["false_easting",0],PARAMETER["false_northing",0],UNIT["metre",1]]',
+  2154: 'PROJCS["RGF93 / Lambert-93",GEOGCS["RGF93",DATUM["Reseau_Geodesique_Francais_1993",SPHEROID["GRS 1980",6378137,298.257222101]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]],PROJECTION["Lambert_Conformal_Conic_2SP"],PARAMETER["standard_parallel_1",49],PARAMETER["standard_parallel_2",44],PARAMETER["latitude_of_origin",46.5],PARAMETER["central_meridian",3],PARAMETER["false_easting",700000],PARAMETER["false_northing",6600000],UNIT["metre",1]]'
+};
 const DEFAULT_SRS_ROWS = [
   {
     srsName: 'Undefined Cartesian SRS',
@@ -63,8 +82,72 @@ function quoteIdentifier(identifier: string): string {
 }
 
 function normalizeLayerName(layerName: string): string {
-  const normalized = layerName.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 48);
+  const normalized = layerName
+    .replace(/[^a-zA-Z0-9_]/g, '_')
+    .slice(0, GEOPACKAGE_LAYER_NAME_MAX_LENGTH);
   return normalized || 'khartis_export';
+}
+
+function normalizeIdentifierKey(identifier: string): string {
+  return identifier.toLowerCase();
+}
+
+function createUniqueIdentifier(
+  preferredName: string,
+  usedNames: Set<string>,
+  options: {
+    fallbackName: string;
+    collisionSuffix?: string;
+    maxLength?: number;
+  }
+): string {
+  const maxLength = options.maxLength ?? Number.POSITIVE_INFINITY;
+  const baseName = (preferredName.trim() || options.fallbackName).slice(
+    0,
+    maxLength
+  );
+  const buildCandidate = (suffix = '') =>
+    `${baseName.slice(0, Math.max(1, maxLength - suffix.length))}${suffix}`;
+  let candidate = buildCandidate();
+
+  if (usedNames.has(normalizeIdentifierKey(candidate))) {
+    const suffix = options.collisionSuffix ?? '_2';
+    candidate = buildCandidate(suffix);
+    let counter = 2;
+    while (usedNames.has(normalizeIdentifierKey(candidate))) {
+      candidate = buildCandidate(`${suffix}_${counter}`);
+      counter += 1;
+    }
+  }
+
+  usedNames.add(normalizeIdentifierKey(candidate));
+  return candidate;
+}
+
+function createUniqueLayerName(
+  layerName: string,
+  usedLayerNames: Set<string>
+): string {
+  return createUniqueIdentifier(normalizeLayerName(layerName), usedLayerNames, {
+    fallbackName: 'khartis_export',
+    maxLength: GEOPACKAGE_LAYER_NAME_MAX_LENGTH
+  });
+}
+
+function createPropertyColumnMappings(
+  propertyColumns: string[]
+): GeoPackagePropertyColumnMapping[] {
+  const usedColumnNames = new Set(
+    [...GEOPACKAGE_RESERVED_COLUMN_NAMES].map(normalizeIdentifierKey)
+  );
+
+  return propertyColumns.map((sourceName) => ({
+    sourceName,
+    columnName: createUniqueIdentifier(sourceName, usedColumnNames, {
+      fallbackName: 'property',
+      collisionSuffix: '_property'
+    })
+  }));
 }
 
 function resolveSrs(sourceCrs: string | null): {
@@ -84,7 +167,9 @@ function resolveSrs(sourceCrs: string | null): {
       organization: 'EPSG',
       organizationCoordsysId: srsId,
       definition:
-        srsId === 4326 ? DEFAULT_SRS_ROWS[2].definition : `EPSG:${srsId}`,
+        srsId === 4326
+          ? DEFAULT_SRS_ROWS[2].definition
+          : (EPSG_WKT_DEFINITIONS[srsId] ?? `EPSG:${srsId}`),
       description: `EPSG:${srsId}`
     };
   }
@@ -191,17 +276,15 @@ function inferSqliteColumnType(values: unknown[]): string {
   return 'TEXT';
 }
 
-function createGeoPackageSchema(
-  db: InstanceType<SqliteModule['oo1']['DB']>,
-  options: {
-    layerName: string;
-    propertyColumns: string[];
-    geometryType: string;
-    srs: ReturnType<typeof resolveSrs>;
-    features: GeoPackageFeatureRow[];
-  }
-): void {
-  const { layerName, propertyColumns, geometryType, srs, features } = options;
+function resolveLayerGeometryType(features: GeoPackageFeatureRow[]): string {
+  const geometryTypes = new Set(
+    features.map((feature) => readWkbGeometryType(feature.wkb))
+  );
+
+  return geometryTypes.size === 1 ? [...geometryTypes][0] : 'GEOMETRY';
+}
+
+function createGeoPackageMetadata(db: SqliteDatabase): void {
   db.exec(`
     PRAGMA application_id = ${SQLITE_APPLICATION_ID_GEOPACKAGE};
     PRAGMA user_version = ${SQLITE_USER_VERSION_GEOPACKAGE_1_2};
@@ -242,14 +325,19 @@ function createGeoPackageSchema(
       CONSTRAINT fk_gc_srs FOREIGN KEY (srs_id) REFERENCES gpkg_spatial_ref_sys(srs_id)
     );
   `);
+}
 
+function insertSpatialReferenceSystems(
+  db: SqliteDatabase,
+  srsRows: Array<ReturnType<typeof resolveSrs>>
+): void {
   const insertSrs = db.prepare(`
     INSERT OR IGNORE INTO gpkg_spatial_ref_sys (
       srs_name, srs_id, organization, organization_coordsys_id, definition, description
     ) VALUES (?, ?, ?, ?, ?, ?)
   `);
   try {
-    for (const row of [...DEFAULT_SRS_ROWS, srs]) {
+    for (const row of [...DEFAULT_SRS_ROWS, ...srsRows]) {
       insertSrs
         .bind([
           row.srsName,
@@ -264,7 +352,20 @@ function createGeoPackageSchema(
   } finally {
     insertSrs.finalize();
   }
+}
 
+function createGeoPackageFeatureTable(
+  db: SqliteDatabase,
+  options: {
+    layerName: string;
+    propertyColumnMappings: GeoPackagePropertyColumnMapping[];
+    geometryType: string;
+    srs: ReturnType<typeof resolveSrs>;
+    features: GeoPackageFeatureRow[];
+  }
+): void {
+  const { layerName, propertyColumnMappings, geometryType, srs, features } =
+    options;
   db.prepare(
     `INSERT INTO gpkg_contents (table_name, data_type, identifier, description, srs_id)
      VALUES (?, 'features', ?, '', ?)`
@@ -279,9 +380,11 @@ function createGeoPackageSchema(
     .bind([layerName, GEOPACKAGE_GEOMETRY_COLUMN, geometryType, srs.srsId])
     .stepFinalize();
 
-  const propertyDefinitions = propertyColumns.map((columnName) => {
-    const values = features.map((feature) => feature.properties[columnName]);
-    return `${quoteIdentifier(columnName)} ${inferSqliteColumnType(values)}`;
+  const propertyDefinitions = propertyColumnMappings.map((mapping) => {
+    const values = features.map(
+      (feature) => feature.properties[mapping.sourceName]
+    );
+    return `${quoteIdentifier(mapping.columnName)} ${inferSqliteColumnType(values)}`;
   });
   const columnDefinitions = [
     `${quoteIdentifier(GEOPACKAGE_ID_COLUMN)} INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL`,
@@ -295,17 +398,19 @@ function createGeoPackageSchema(
 }
 
 function insertFeatures(
-  db: InstanceType<SqliteModule['oo1']['DB']>,
+  db: SqliteDatabase,
   options: {
     layerName: string;
-    propertyColumns: string[];
+    propertyColumnMappings: GeoPackagePropertyColumnMapping[];
     srsId: number;
     features: GeoPackageFeatureRow[];
   }
 ): void {
-  const { layerName, propertyColumns, srsId, features } = options;
+  const { layerName, propertyColumnMappings, srsId, features } = options;
   const insertColumns = [
-    ...propertyColumns.map(quoteIdentifier),
+    ...propertyColumnMappings.map((mapping) =>
+      quoteIdentifier(mapping.columnName)
+    ),
     quoteIdentifier(GEOPACKAGE_GEOMETRY_COLUMN)
   ];
   const placeholders = insertColumns.map(() => '?').join(', ');
@@ -317,8 +422,8 @@ function insertFeatures(
   try {
     for (const feature of features) {
       const values = [
-        ...propertyColumns.map((column) =>
-          normalizePropertyValue(feature.properties[column])
+        ...propertyColumnMappings.map((mapping) =>
+          normalizePropertyValue(feature.properties[mapping.sourceName])
         ),
         createGeoPackageGeometryBlob(feature.wkb, srsId)
       ];
@@ -337,29 +442,52 @@ export async function exportGeoPackage(
     throw new Error('No feature rows to export');
   }
 
+  return exportGeoPackageLayers([{ ...options, features }]);
+}
+
+export async function exportGeoPackageLayers(
+  layers: GeoPackageLayerExportOptions[]
+): Promise<Blob> {
+  const exportableLayers = layers.filter((layer) => layer.features.length > 0);
+  if (exportableLayers.length === 0) {
+    throw new Error('No feature rows to export');
+  }
+
   const sqlite3 = await getSqliteModule();
   const db = new sqlite3.oo1.DB(':memory:', 'cw');
-  const layerName = normalizeLayerName(options.layerName);
-  const propertyColumns = Array.from(
-    new Set(features.flatMap((feature) => Object.keys(feature.properties)))
-  );
-  const srs = resolveSrs(options.sourceCrs);
-  const geometryType = readWkbGeometryType(features[0].wkb);
+  const usedLayerNames = new Set<string>();
+  const preparedLayers = exportableLayers.map((layer) => {
+    const layerName = createUniqueLayerName(layer.layerName, usedLayerNames);
+    const propertyColumns = Array.from(
+      new Set(
+        layer.features.flatMap((feature) => Object.keys(feature.properties))
+      )
+    );
+    return {
+      layerName,
+      propertyColumnMappings: createPropertyColumnMappings(propertyColumns),
+      srs: resolveSrs(layer.sourceCrs),
+      geometryType: resolveLayerGeometryType(layer.features),
+      features: layer.features
+    };
+  });
 
   try {
-    createGeoPackageSchema(db, {
-      layerName,
-      propertyColumns,
-      geometryType,
-      srs,
-      features
-    });
-    insertFeatures(db, {
-      layerName,
-      propertyColumns,
-      srsId: srs.srsId,
-      features
-    });
+    createGeoPackageMetadata(db);
+    insertSpatialReferenceSystems(
+      db,
+      preparedLayers.map((layer) => layer.srs)
+    );
+
+    for (const layer of preparedLayers) {
+      createGeoPackageFeatureTable(db, layer);
+      insertFeatures(db, {
+        layerName: layer.layerName,
+        propertyColumnMappings: layer.propertyColumnMappings,
+        srsId: layer.srs.srsId,
+        features: layer.features
+      });
+    }
 
     const dbPointer = db.pointer;
     if (dbPointer === undefined) {

@@ -6,14 +6,12 @@ import { LogCategory, logger } from './logger';
 import { escapeIdentifier, escapeSqlString } from './sanitize.utils';
 import { generateFilename } from './string.utils';
 import { MIME, GEOJSON_TYPE } from '../constants';
-import {
-  COLUMN_TYPE_GEOMETRY,
-  GEO_COLUMN_NAMES
-} from '../constants/data.constants';
+import { isDatasetGeometryColumn } from './geometry-column.utils';
 
 const CSV_BOM = '\uFEFF';
 const CSV_MIME_TYPE_UTF8 = `${MIME.CSV};charset=utf-8`;
 const DOWNLOAD_URL_REVOKE_DELAY_MS = 30000;
+const SOURCE_DATASET_COLUMN = '_source_dataset';
 
 export const generateExportFilename = generateFilename;
 
@@ -85,9 +83,13 @@ export async function exportDatasetToCsv(
     }
 
     const viewName = `export_view_${Date.now()}`;
-    const nonGeomColumns = dataset.columns
-      .filter((col) => !isDatasetGeometryColumn(dataset, col))
-      .map((col) => `"${escapeIdentifier(col.name)}"`)
+    const nonGeomColumnNames = getExportableColumnNames(dataset);
+    if (nonGeomColumnNames.length === 0) {
+      throw new Error(m.error_no_valid_data_export());
+    }
+
+    const nonGeomColumns = nonGeomColumnNames
+      .map((columnName) => `"${escapeIdentifier(columnName)}"`)
       .join(', ');
 
     try {
@@ -114,6 +116,9 @@ export async function exportDatasetToCsv(
   const headers = dataset.columns
     .filter((col) => !isDatasetGeometryColumn(dataset, col))
     .map((col) => col.name);
+  if (headers.length === 0) {
+    throw new Error(m.error_no_valid_data_export());
+  }
 
   const data = dataset.data.map((row) => {
     const cleanRow: Record<string, unknown> = {};
@@ -132,9 +137,25 @@ function getExportableColumnNames(dataset: ProcessedDataset): string[] {
     .map((col) => col.name);
 }
 
+function resolveSourceDatasetColumnName(columnNames: string[]): string {
+  const usedNames = new Set(columnNames.map((name) => name.toLowerCase()));
+  if (!usedNames.has(SOURCE_DATASET_COLUMN)) {
+    return SOURCE_DATASET_COLUMN;
+  }
+
+  let index = 2;
+  let candidate = `${SOURCE_DATASET_COLUMN}_${index}`;
+  while (usedNames.has(candidate.toLowerCase())) {
+    index += 1;
+    candidate = `${SOURCE_DATASET_COLUMN}_${index}`;
+  }
+  return candidate;
+}
+
 function buildAlignedUnionSelect(
   dataset: ProcessedDataset,
-  allHeaders: string[]
+  allHeaders: string[],
+  sourceDatasetColumn: string
 ): string {
   const exportableColumns = new Set(getExportableColumnNames(dataset));
   const selectColumns = allHeaders.map((columnName) => {
@@ -145,7 +166,12 @@ function buildAlignedUnionSelect(
   });
   const escapedName = escapeSqlString(dataset.name);
 
-  return `SELECT ${selectColumns.join(', ')}, '${escapedName}' as _source_dataset FROM "${escapeIdentifier(dataset.duckdbTableName!)}"`;
+  const selectList = [
+    ...selectColumns,
+    `'${escapedName}' as "${escapeIdentifier(sourceDatasetColumn)}"`
+  ];
+
+  return `SELECT ${selectList.join(', ')} FROM "${escapeIdentifier(dataset.duckdbTableName!)}"`;
 }
 
 export function exportToGeoJson(data: unknown): Blob {
@@ -216,8 +242,13 @@ export async function exportProcessedDatasets(
         const allHeaders = Array.from(
           new Set(datasets.flatMap(getExportableColumnNames))
         );
+        const sourceDatasetColumn = resolveSourceDatasetColumnName(allHeaders);
         const unionParts = datasets.map((dataset) => {
-          return buildAlignedUnionSelect(dataset, allHeaders);
+          return buildAlignedUnionSelect(
+            dataset,
+            allHeaders,
+            sourceDatasetColumn
+          );
         });
 
         const unionQuery = `
@@ -246,14 +277,6 @@ export async function exportProcessedDatasets(
     }
 
     const allData: Record<string, unknown>[] = [];
-    for (const dataset of datasets) {
-      const dataWithSource = dataset.data.map((row) => ({
-        ...row,
-        _source_dataset: dataset.name
-      }));
-      allData.push(...dataWithSource);
-    }
-
     const allHeaders = Array.from(
       new Set(
         datasets.flatMap((d) =>
@@ -263,13 +286,27 @@ export async function exportProcessedDatasets(
         )
       )
     );
-    allHeaders.push('_source_dataset');
+    const sourceDatasetColumn = resolveSourceDatasetColumnName(allHeaders);
+    for (const dataset of datasets) {
+      const dataWithSource = dataset.data.map((row) => ({
+        ...row,
+        [sourceDatasetColumn]: dataset.name
+      }));
+      allData.push(...dataWithSource);
+    }
+
+    allHeaders.push(sourceDatasetColumn);
 
     return exportToCsv(allData, allHeaders);
   }
 
   if (format === 'geojson') {
     const allFeatures: unknown[] = [];
+    const allPropertyColumns = Array.from(
+      new Set(datasets.flatMap(getExportableColumnNames))
+    );
+    const sourceDatasetColumn =
+      resolveSourceDatasetColumnName(allPropertyColumns);
 
     for (const dataset of datasets) {
       if (!dataset.geometry && !dataset.analysis.hasGeoData) {
@@ -286,7 +323,7 @@ export async function exportProcessedDatasets(
           .forEach((col) => {
             properties[col.name] = row[col.name];
           });
-        properties._source_dataset = dataset.name;
+        properties[sourceDatasetColumn] = dataset.name;
 
         allFeatures.push({
           type: 'Feature' as const,
@@ -326,21 +363,6 @@ export async function exportProcessedDatasets(
   };
 
   return exportToJson(exportData);
-}
-
-function isKnownGeometryColumnName(name: string): boolean {
-  return (GEO_COLUMN_NAMES as readonly string[]).includes(name.toLowerCase());
-}
-
-function isDatasetGeometryColumn(
-  dataset: ProcessedDataset,
-  column: ProcessedDataset['columns'][0]
-): boolean {
-  return (
-    column.type === COLUMN_TYPE_GEOMETRY ||
-    ((Boolean(dataset.geometry) || dataset.analysis.hasGeoData) &&
-      isKnownGeometryColumnName(column.name))
-  );
 }
 
 function isGeoJsonGeometryValue(value: unknown): boolean {
