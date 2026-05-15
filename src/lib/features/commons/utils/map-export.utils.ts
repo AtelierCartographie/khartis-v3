@@ -1848,22 +1848,6 @@ async function captureMapLibreBackgroundForSvg(
   }
 }
 
-function buildProjectionMaskLayer(pageContainer: HTMLElement): string {
-  const projectionMask = pageContainer.querySelector(
-    '.projection-mask-overlay'
-  ) as SVGSVGElement | null;
-
-  if (!projectionMask) return '';
-
-  const maskRect = getRelativeRect(projectionMask, pageContainer);
-  return serializeSvgNode(projectionMask, {
-    x: maskRect.x,
-    y: maskRect.y,
-    width: maskRect.width,
-    height: maskRect.height
-  });
-}
-
 function parseCssPixels(value: string): number {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -2453,8 +2437,7 @@ function buildVisualizationLayer(
           structuredOptions.mapLibreBackgroundDataUrl
         )
       : '',
-    deckLayer || buildCanvasVisualizationFallback(pageContainer, mapCanvas),
-    buildProjectionMaskLayer(pageContainer)
+    deckLayer || buildCanvasVisualizationFallback(pageContainer, mapCanvas)
   ].filter(Boolean);
 
   if (parts.length === 0) {

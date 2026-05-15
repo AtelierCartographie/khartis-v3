@@ -113,6 +113,17 @@ describe('useMapLayers source', () => {
     );
   });
 
+  it('applies manual projection clipping through Deck layers instead of a DOM overlay', () => {
+    expect(source).toContain('createProjectionSphereMaskLayer');
+    expect(source).toContain('applyProjectionSphereMask');
+    expect(source).toContain(
+      'isOrthographicMode && hasManualProjectionOverride'
+    );
+    expect(source).toContain('getProjectionForSphereMask?.()');
+    expect(source).toContain('activeBasemapProjection');
+    expect(source).toContain('projectionOverride');
+  });
+
   it('keeps generated ocean off imported data until customized or a manual projection needs it', () => {
     expect(source).toContain('GENERATED_ORTHOGRAPHIC_BASEMAP_LAYER_IDS');
     expect(source).toContain('GENERATED_ORTHOGRAPHIC_OCEAN_LAYER_IDS');

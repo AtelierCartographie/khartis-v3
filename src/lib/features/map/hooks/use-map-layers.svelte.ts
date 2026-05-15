@@ -61,6 +61,10 @@ import {
   shouldShowOrthographicBasemapLayers
 } from '../utils/orthographic-basemap-visibility.utils';
 import { resolveProjectionForRender } from '../utils/projection-priority.utils';
+import {
+  applyProjectionSphereMask,
+  createProjectionSphereMaskLayer
+} from '../utils/projection-sphere-mask.utils';
 import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
 import { getRepresentativePointArrowTable } from '$lib/features/duckdb/orchestrator/arrow-ops';
 import { resolveRepresentativePointTableName } from '../utils/representative-point-table.utils';
@@ -122,6 +126,7 @@ export interface UseMapLayersProps {
     datasetId: string
   ) => BasemapMetadata | null;
   getProjectionFitBbox?: () => BBox | null;
+  getProjectionForSphereMask?: () => ProjectionLike | undefined;
   getModelMatrix?: () => Matrix4 | null | undefined;
   getShouldRenderDatasetFallbacks?: () => boolean;
   getTableFilters?: (datasetId: string) => DataTableFilter[] | undefined;
@@ -149,6 +154,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     buildLayerContextForViz,
     getProjectionMetadataForDataset,
     getProjectionFitBbox,
+    getProjectionForSphereMask,
     getModelMatrix,
     getShouldRenderDatasetFallbacks,
     getTableFilters,
@@ -1235,8 +1241,22 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         thematicLayers: layers,
         basemapForegroundLayers
       });
+      const projectionSphereMaskLayer =
+        isOrthographicMode && hasManualProjectionOverride
+          ? createProjectionSphereMaskLayer({
+              projection:
+                getProjectionForSphereMask?.() ??
+                activeBasemapProjection ??
+                projectionOverride,
+              modelMatrix: matrixToApply
+            })
+          : null;
+      const maskedOrderedLayers = applyProjectionSphereMask(
+        orderedLayers,
+        projectionSphereMaskLayer
+      );
       layers.length = 0;
-      layers.push(...orderedLayers);
+      layers.push(...maskedOrderedLayers);
 
       const hasExpectedActiveViz = activeVisualizations.length > 0;
       const hasExpectedDatasetFallbacks =
