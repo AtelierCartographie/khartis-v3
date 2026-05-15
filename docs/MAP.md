@@ -212,6 +212,8 @@ Pour les GeoArrow natifs, les couches linéaires sont rendues en `PathLayer` bin
 
 L'overlay SVG (`annotation-overlay.svelte`) est superposé à la carte via un `position: absolute` sur le conteneur viewer. Il gère 4 types d'annotations : `TEXT`, `SHAPE` (flèche, cercle, rectangle, triangle), `DRAWING` (Bézier freehand), `IMAGE`. Les annotations sont ancrées à la page (coordonnées pixel), non géolocalisées. Elles sont stockées dans `annotations.store.svelte.ts` et incluses dans l'export SVG.
 
+Dans `exportMapToSvg()`, les annotations `TEXT` sont reconstruites en `<text>` SVG natif à partir des rectangles DOM calculés pour préserver les placements sans `foreignObject`. Les annotations `SHAPE` et `DRAWING` conservent leur SVG source sérialisé, tandis que les annotations `IMAGE` restent des balises `<image>`.
+
 ---
 
 ## Collections / Facettes

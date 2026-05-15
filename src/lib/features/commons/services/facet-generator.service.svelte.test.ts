@@ -362,6 +362,41 @@ describe('generateFacetVisualizations', () => {
     expect(update.classification?.breaks).toEqual([10, 20, 30, 40, 50]);
   });
 
+  it('can sync non-faceted primitive changes from the base visualization', () => {
+    const base = makeBaseViz({
+      symbol: {
+        enabled: true,
+        sizeColumn: 'population_total'
+      },
+      line: {
+        enabled: true,
+        valueColumn: 'traffic'
+      },
+      text: {
+        enabled: true,
+        labelColumn: 'place_name',
+        opacity: 1
+      }
+    });
+
+    const update = buildFacetVisualizationUpdates({
+      baseViz: base as never,
+      visualization: base as never,
+      variable: 'gdp',
+      scaleMode: SCALE_MODE.SHARED,
+      primarySlotPath: FACET_SLOT.POLYGON_VALUE
+    });
+
+    expect(update.polygon?.valueColumn).toBe('gdp');
+    expect(update.symbol?.enabled).toBe(true);
+    expect(update.symbol?.sizeColumn).toBe('population_total');
+    expect(update.line?.enabled).toBe(true);
+    expect(update.line?.valueColumn).toBe('traffic');
+    expect(update.text?.enabled).toBe(true);
+    expect(update.text?.labelColumn).toBe('place_name');
+    expect(update.text?.opacity).toBe(1);
+  });
+
   it('should fall back to base breaks when stats are missing in independent mode', async () => {
     mocks.getColumnStatistics.mockReturnValue(null);
 

@@ -163,12 +163,12 @@
       label: m.download_data_csv()
     },
     {
-      id: DATA_FORMAT.CSV_GEO,
-      label: m.download_data_csv_geo()
-    },
-    {
       id: DATA_FORMAT.GEOJSON,
       label: m.download_data_geojson()
+    },
+    {
+      id: DATA_FORMAT.GEOPACKAGE,
+      label: m.download_data_geopackage()
     }
   ]);
 
@@ -179,8 +179,8 @@
   function isDataExportFormat(value: unknown): value is DataExportFormat {
     return (
       value === DATA_FORMAT.CSV ||
-      value === DATA_FORMAT.CSV_GEO ||
-      value === DATA_FORMAT.GEOJSON
+      value === DATA_FORMAT.GEOJSON ||
+      value === DATA_FORMAT.GEOPACKAGE
     );
   }
 

@@ -88,7 +88,8 @@ export function draw_symbols_legend(
       ? sqrtScale([0, max], [0, size])
       : linearScale([0, max], [0, size]);
   const minGap = fontSize * 0.8;
-  const ticks = get_ticks(sorted_data, { scale, minGap, min, max });
+  let ticks = get_ticks(sorted_data, { scale, minGap, min, max });
+  ticks = removeOverlappingSymbolTicks(ticks, scale, type, fontSize);
   const values = ticks.reverse().map(scale);
   const x_max = type !== 'bar' && type !== 'spike' ? values[0] : bar_width;
   const y_max = values[0];
@@ -310,6 +311,35 @@ export function draw_symbols_legend(
       ${note_markup}
     </g>`;
   }
+}
+
+function removeOverlappingSymbolTicks(
+  ticks: number[],
+  scale: ScaleFn,
+  type: SymbolType,
+  fontSize: number
+): number[] {
+  if (ticks.length <= 1) return ticks;
+
+  const multiplier = type !== 'bar' && type !== 'spike' ? 2 : 1;
+  const minLabelGap = fontSize * 1.2;
+  const result: number[] = [];
+
+  for (let i = ticks.length - 1; i >= 0; i--) {
+    if (result.length === 0) {
+      result.push(ticks[i]);
+      continue;
+    }
+
+    const lastKept = result[result.length - 1];
+    const distance = multiplier * Math.abs(scale(lastKept) - scale(ticks[i]));
+
+    if (distance >= minLabelGap) {
+      result.push(ticks[i]);
+    }
+  }
+
+  return result.reverse();
 }
 
 function get_ticks(sorted_data: number[], options: GetTicksOptions): number[] {

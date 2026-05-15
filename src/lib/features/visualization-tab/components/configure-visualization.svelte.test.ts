@@ -93,6 +93,16 @@ describe('ConfigureVisualization', () => {
     expect(source).toContain('updateTextBackground,');
   });
 
+  it('syncs generated facet copies after base visualization edits from the panel', () => {
+    expect(source).toContain(
+      "import { facetsStore } from '../adapters/facets-adapter';"
+    );
+    expect(source).toContain(
+      'facetsStore.syncGeneratedVisualizationsFromBase(visualizationId);'
+    );
+    expect(source).toContain('syncFacetsFromSelectedVisualization();');
+  });
+
   it('preserves suggestion origin when polygon classification defaults sync automatically', () => {
     expect(source).toContain(
       'visualizationStore.updateClassification(selectedViz.id, updates, options);'
