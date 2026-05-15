@@ -1,6 +1,7 @@
 import { COORDINATE_SYSTEM } from '@deck.gl/core';
 import { GeoJsonLayer, PathLayer, SolidPolygonLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import { geoEquirectangular } from 'd3-geo';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
 import type { FeatureCollection, LineString, Point, Polygon } from 'geojson';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,7 +19,7 @@ import {
   BASEMAP_LAYER_ID,
   basemapLayersStore
 } from '../stores/basemap-layers.store.svelte';
-import type { GeometryInfo } from '../types';
+import type { BBox, GeometryInfo } from '../types';
 
 const {
   arrowTableToGeoJSONMock,
@@ -110,6 +111,78 @@ function createCompositeProjectionContext() {
         polygonEnd: () => void;
       }) => sink,
       getSubProjections: () => []
+    } as unknown as ProjectionLike
+  };
+}
+
+function createClippedTestProjection(
+  bounds: BBox,
+  screenExtent: [[number, number], [number, number]]
+): ProjectionLike {
+  const [[x0, y0], [x1, y1]] = screenExtent;
+  const [west, south, east, north] = bounds;
+  const width = x1 - x0;
+  const height = y1 - y0;
+  return {
+    stream: (sink: {
+      point: (x: number, y: number) => void;
+      lineStart: () => void;
+      lineEnd: () => void;
+      polygonStart: () => void;
+      polygonEnd: () => void;
+    }) => ({
+      point: (longitude: number, latitude: number) => {
+        const x = x0 + ((longitude - west) / (east - west)) * width;
+        const y = y1 - ((latitude - south) / (north - south)) * height;
+        if (x >= x0 && x <= x1 && y >= y0 && y <= y1) {
+          sink.point(x, y);
+        }
+      },
+      lineStart: () => sink.lineStart(),
+      lineEnd: () => sink.lineEnd(),
+      polygonStart: () => sink.polygonStart(),
+      polygonEnd: () => sink.polygonEnd()
+    })
+  } as ProjectionLike;
+}
+
+function createCompositeGraticuleProjectionContext() {
+  const bounds: BBox = [-10, 35, 30, 70];
+  const screenExtent: [[number, number], [number, number]] = [
+    [0, 0],
+    [400, 300]
+  ];
+  const acoresBounds: BBox = [-32, 35, -24, 42];
+  const acoresScreenExtent: [[number, number], [number, number]] = [
+    [420, 220],
+    [500, 300]
+  ];
+  return {
+    projection: {
+      stream: (sink: {
+        point: (x: number, y: number) => void;
+        lineStart: () => void;
+        lineEnd: () => void;
+        polygonStart: () => void;
+        polygonEnd: () => void;
+      }) => sink,
+      getSubProjections: () => [
+        {
+          id: 'mainland',
+          projection: createClippedTestProjection(bounds, screenExtent),
+          bounds,
+          screenExtent
+        },
+        {
+          id: 'acores',
+          projection: createClippedTestProjection(
+            acoresBounds,
+            acoresScreenExtent
+          ),
+          bounds: acoresBounds,
+          screenExtent: acoresScreenExtent
+        }
+      ]
     } as unknown as ProjectionLike
   };
 }
@@ -431,7 +504,7 @@ describe('basemap projection fallbacks', () => {
     expect(Reflect.get(layer?.props ?? {}, 'getDashArray')).toEqual([1, 0]);
   });
 
-  it('clips generated equator lines to the active basemap bbox', () => {
+  it('keeps generated equator lines on the complete domain with a regional bbox', () => {
     const layer = createEquateurLayer(
       {
         id: 'equateur',
@@ -449,11 +522,11 @@ describe('basemap projection fallbacks', () => {
     const coordinates = data.features[0]?.geometry.coordinates ?? [];
 
     expect(data.features).toHaveLength(1);
-    expect(coordinates[0]).toEqual([2, 0]);
-    expect(coordinates[coordinates.length - 1]).toEqual([10, 0]);
+    expect(coordinates[0]).toEqual([-180, 0]);
+    expect(coordinates[coordinates.length - 1]).toEqual([180, 0]);
   });
 
-  it('omits generated equator lines when the active bbox excludes latitude zero', () => {
+  it('keeps generated equator lines even when the active bbox excludes latitude zero', () => {
     const layer = createEquateurLayer(
       {
         id: 'equateur',
@@ -468,8 +541,11 @@ describe('basemap projection fallbacks', () => {
     ) as GeoJsonLayer | null;
 
     const data = layer?.props.data as FeatureCollection<LineString>;
+    const coordinates = data.features[0]?.geometry.coordinates ?? [];
 
-    expect(data.features).toHaveLength(0);
+    expect(data.features).toHaveLength(1);
+    expect(coordinates[0]).toEqual([-180, 0]);
+    expect(coordinates[coordinates.length - 1]).toEqual([180, 0]);
   });
 
   it('projects generated meridians and parallels with regular spacing', () => {
@@ -499,6 +575,239 @@ describe('basemap projection fallbacks', () => {
     expect(layer?.props.updateTriggers.data[0]).toContain(
       BasemapGraticuleMode.REGULAR
     );
+  });
+
+  it('projects generated graticule data through composite sub-projections', () => {
+    const ctx = createCompositeGraticuleProjectionContext();
+
+    const layer = createMeridiensLayer(
+      {
+        id: 'meridiens',
+        visible: true,
+        mode: BasemapGraticuleMode.REGULAR,
+        spacingDegrees: 10,
+        color: '#666666',
+        dotted: true,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 1,
+        opacity: 100
+      },
+      { ...ctx, bbox: [-10, 35, 30, 70] }
+    ) as GeoJsonLayer | null;
+
+    const data = layer?.props.data as FeatureCollection<
+      LineString,
+      { name: string; subProjectionId?: string }
+    >;
+    const names = data.features.map((feature) => feature.properties.name);
+    const meridian = data.features.find(
+      (feature) => feature.properties.name === 'meridian-0'
+    );
+    const meridianCoordinates = meridian?.geometry.coordinates ?? [];
+    const subProjectionIds = new Set(
+      data.features.map((feature) => feature.properties.subProjectionId)
+    );
+
+    expect(projectGeoJSONMock).not.toHaveBeenCalled();
+    expect(layer).toBeInstanceOf(GeoJsonLayer);
+    expect(data.features.length).toBeGreaterThan(0);
+    expect(names).toContain('meridian-0');
+    expect(names).toContain('parallel-40');
+    expect(names).not.toContain('parallel--66.5634');
+    expect(names.filter((name) => name === 'parallel-40')).toHaveLength(1);
+    expect(subProjectionIds).toEqual(new Set(['mainland']));
+    expect(meridian?.properties.subProjectionId).toBe('mainland');
+    expect(meridianCoordinates.length).toBeGreaterThan(0);
+  });
+
+  it('does not reuse composite graticule projections across routing bboxes', () => {
+    const westBounds: BBox = [-10, -10, 10, 10];
+    const eastBounds: BBox = [20, -10, 40, 10];
+    const projection = {
+      stream: (sink: {
+        point: (x: number, y: number) => void;
+        lineStart: () => void;
+        lineEnd: () => void;
+        polygonStart: () => void;
+        polygonEnd: () => void;
+      }) => sink,
+      getSubProjections: () => [
+        {
+          id: 'west',
+          projection: createClippedTestProjection(westBounds, [
+            [0, 0],
+            [100, 100]
+          ]),
+          bounds: westBounds,
+          screenExtent: [
+            [0, 0],
+            [100, 100]
+          ]
+        },
+        {
+          id: 'east',
+          projection: createClippedTestProjection(eastBounds, [
+            [200, 0],
+            [300, 100]
+          ]),
+          bounds: eastBounds,
+          screenExtent: [
+            [200, 0],
+            [300, 100]
+          ]
+        }
+      ]
+    } as unknown as ProjectionLike;
+    const config = {
+      id: 'equateur' as const,
+      visible: true,
+      color: '#666666',
+      dotted: false,
+      dottedPattern: BasemapDottedPattern.DOTS,
+      thickness: 1,
+      opacity: 100
+    };
+
+    const westLayer = createEquateurLayer(config, {
+      projection,
+      bbox: westBounds
+    }) as GeoJsonLayer | null;
+    const eastLayer = createEquateurLayer(config, {
+      projection,
+      bbox: eastBounds
+    }) as GeoJsonLayer | null;
+
+    const westData = westLayer?.props.data as FeatureCollection<
+      LineString,
+      { subProjectionId?: string }
+    >;
+    const eastData = eastLayer?.props.data as FeatureCollection<
+      LineString,
+      { subProjectionId?: string }
+    >;
+
+    expect(
+      new Set(
+        westData.features.map((feature) => feature.properties.subProjectionId)
+      )
+    ).toEqual(new Set(['west']));
+    expect(
+      new Set(
+        eastData.features.map((feature) => feature.properties.subProjectionId)
+      )
+    ).toEqual(new Set(['east']));
+  });
+
+  it('streams composite graticule lines through projection clipping to reach frame edges', () => {
+    const screenExtent: [[number, number], [number, number]] = [
+      [25, 25],
+      [75, 75]
+    ];
+    const projection = geoEquirectangular()
+      .scale(100)
+      .translate([50, 50])
+      .clipExtent(screenExtent);
+
+    const layer = createEquateurLayer(
+      {
+        id: 'equateur',
+        visible: true,
+        color: '#666666',
+        dotted: false,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 1,
+        opacity: 100
+      },
+      {
+        bbox: [-20, -10, 20, 10],
+        projection: {
+          stream: (sink: {
+            point: (x: number, y: number) => void;
+            lineStart: () => void;
+            lineEnd: () => void;
+            polygonStart: () => void;
+            polygonEnd: () => void;
+          }) => sink,
+          getSubProjections: () => [
+            {
+              id: 'main',
+              projection,
+              bounds: [-20, -10, 20, 10] as BBox,
+              screenExtent
+            }
+          ]
+        } as unknown as ProjectionLike
+      }
+    ) as GeoJsonLayer | null;
+
+    const data = layer?.props.data as FeatureCollection<LineString>;
+    const coordinates = data.features[0]?.geometry.coordinates ?? [];
+    const first = coordinates[0];
+    const last = coordinates[coordinates.length - 1];
+
+    expect(first[0]).toBeCloseTo(25, 6);
+    expect(first[1]).toBeCloseTo(50, 6);
+    expect(last[0]).toBeCloseTo(75, 6);
+    expect(last[1]).toBeCloseTo(50, 6);
+  });
+
+  it('expands composite graticule clipping to the visible canvas extent', () => {
+    const subFrameExtent: [[number, number], [number, number]] = [
+      [25, 25],
+      [75, 75]
+    ];
+    const canvasExtent: [[number, number], [number, number]] = [
+      [0, 0],
+      [100, 100]
+    ];
+    const projection = geoEquirectangular()
+      .scale(100)
+      .translate([50, 50])
+      .clipExtent(subFrameExtent);
+
+    const layer = createEquateurLayer(
+      {
+        id: 'equateur',
+        visible: true,
+        color: '#666666',
+        dotted: false,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 1,
+        opacity: 100
+      },
+      {
+        bbox: [-20, -10, 20, 10],
+        graticuleClipExtent: canvasExtent,
+        projection: {
+          stream: (sink: {
+            point: (x: number, y: number) => void;
+            lineStart: () => void;
+            lineEnd: () => void;
+            polygonStart: () => void;
+            polygonEnd: () => void;
+          }) => sink,
+          getSubProjections: () => [
+            {
+              id: 'main',
+              projection,
+              bounds: [-20, -10, 20, 10] as BBox,
+              screenExtent: subFrameExtent
+            }
+          ]
+        } as unknown as ProjectionLike
+      }
+    ) as GeoJsonLayer | null;
+
+    const data = layer?.props.data as FeatureCollection<LineString>;
+    const coordinates = data.features[0]?.geometry.coordinates ?? [];
+    const first = coordinates[0];
+    const last = coordinates[coordinates.length - 1];
+
+    expect(first[0]).toBeCloseTo(0, 6);
+    expect(first[1]).toBeCloseTo(50, 6);
+    expect(last[0]).toBeCloseTo(100, 6);
+    expect(last[1]).toBeCloseTo(50, 6);
+    expect(projection.clipExtent()).toEqual(subFrameExtent);
   });
 
   it('keeps generated meridians and parallels visible when dotted styling is disabled', () => {
@@ -543,15 +852,35 @@ describe('basemap projection fallbacks', () => {
       { name: string }
     >;
     const names = data.features.map((feature) => feature.properties.name);
+    const meridian = data.features.find(
+      (feature) => feature.properties.name === 'meridian-0'
+    );
+    const parallel = data.features.find(
+      (feature) => feature.properties.name === 'parallel--5'
+    );
+    const meridianCoordinates = meridian?.geometry.coordinates ?? [];
+    const parallelCoordinates = parallel?.geometry.coordinates ?? [];
 
     expect(names).toContain('meridian-0');
+    expect(names).toContain('meridian--180');
     expect(names).toContain('meridian-5');
     expect(names).toContain('meridian-10');
+    expect(names).toContain('meridian-180');
+    expect(names).toContain('parallel--90');
     expect(names).toContain('parallel--5');
     expect(names).toContain('parallel-5');
+    expect(names).toContain('parallel-90');
     expect(names).not.toContain('parallel-0');
+    expect(meridianCoordinates[0]).toEqual([0, -90]);
+    expect(meridianCoordinates[meridianCoordinates.length - 1]).toEqual([
+      0, 90
+    ]);
+    expect(parallelCoordinates[0]).toEqual([-180, -5]);
+    expect(parallelCoordinates[parallelCoordinates.length - 1]).toEqual([
+      180, -5
+    ]);
     expect(layer?.props.updateTriggers.data[0]).toContain(
-      'regular:5:0,-5,10,5:exclude-equator'
+      'regular:5:-180,-90,180,90:exclude-equator'
     );
   });
 
@@ -791,7 +1120,7 @@ describe('basemap projection fallbacks', () => {
     expect(data1).not.toBe(data3);
   });
 
-  it('clips graticule to the active bbox', () => {
+  it('uses the complete graticule domain even with a regional bbox', () => {
     const layerWorld = createMeridiensLayer(
       {
         id: 'meridiens',
@@ -827,9 +1156,41 @@ describe('basemap projection fallbacks', () => {
 
     const dataEurope = layerEurope?.props.data as FeatureCollection<LineString>;
     const europeFeatureCount = dataEurope.features.length;
+    const names = dataEurope.features.map(
+      (feature) => feature.properties?.name
+    );
+    const europeMeridian = dataEurope.features.find(
+      (feature) => feature.properties?.name === 'meridian-0'
+    );
+    const europeParallel = dataEurope.features.find(
+      (feature) => feature.properties?.name === 'parallel-60'
+    );
+    const meridianCoordinates = europeMeridian?.geometry.coordinates ?? [];
+    const parallelCoordinates = europeParallel?.geometry.coordinates ?? [];
 
-    expect(europeFeatureCount).toBeLessThan(worldFeatureCount);
-    expect(europeFeatureCount).toBeGreaterThan(0);
+    expect(europeFeatureCount).toBe(worldFeatureCount);
+    expect(dataEurope).toBe(dataWorld);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'meridian--180',
+        'meridian--30',
+        'meridian-0',
+        'meridian-60',
+        'meridian-180',
+        'parallel--90',
+        'parallel-0',
+        'parallel-60',
+        'parallel-90'
+      ])
+    );
+    expect(meridianCoordinates[0]).toEqual([0, -90]);
+    expect(meridianCoordinates[meridianCoordinates.length - 1]).toEqual([
+      0, 90
+    ]);
+    expect(parallelCoordinates[0]).toEqual([-180, 60]);
+    expect(parallelCoordinates[parallelCoordinates.length - 1]).toEqual([
+      180, 60
+    ]);
   });
 
   it('enforces lineWidthMinPixels of 0.5 for meridiens', () => {

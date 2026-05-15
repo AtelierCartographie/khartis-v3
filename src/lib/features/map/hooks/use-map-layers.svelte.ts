@@ -44,6 +44,7 @@ import {
   filterArrowTableByTableFilters,
   selectRowsByIndices
 } from '../utils/arrow-filter.utils';
+import { get_bbox_center, get_max_scale } from '../core/projscreen';
 import { getSplitMatchedGeometryRowIndices } from '../layers/split-rendering-accessors';
 import {
   getMapLayerRenderOrder,
@@ -263,6 +264,39 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       width: Math.max(1, projectionStore.canvasSize.width),
       height: Math.max(1, projectionStore.canvasSize.height)
     };
+  }
+
+  function getVisibleProjectedCanvasExtent():
+    | [[number, number], [number, number]]
+    | null {
+    const referenceBbox = projectionStore.referenceBbox;
+    if (!referenceBbox) {
+      const viewportSize = getProjectionViewportSize();
+      return [
+        [0, 0],
+        [viewportSize.width, viewportSize.height]
+      ];
+    }
+
+    const viewportSize = getProjectionViewportSize();
+    const scale =
+      get_max_scale(viewportSize, referenceBbox, projectionStore.fitPaddingPx) *
+      projectionStore.renderScale;
+    if (!Number.isFinite(scale) || scale <= 0) {
+      return [
+        [0, 0],
+        [viewportSize.width, viewportSize.height]
+      ];
+    }
+
+    const [centerX, centerY] = get_bbox_center(referenceBbox);
+    const halfWidth = viewportSize.width / scale / 2;
+    const halfHeight = viewportSize.height / scale / 2;
+
+    return [
+      [centerX - halfWidth, centerY - halfHeight],
+      [centerX + halfWidth, centerY + halfHeight]
+    ];
   }
 
   function getProjectionFromMetadata(
@@ -783,6 +817,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         : undefined;
       const projectionFitBbox = getProjectionFitBbox?.() ?? null;
       const fitPaddingPx = projectionStore.fitPaddingPx;
+      const graticuleClipExtent: [[number, number], [number, number]] | null =
+        isOrthographicMode ? getVisibleProjectedCanvasExtent() : null;
 
       const currentMetadata = basemapService.currentMetadata;
       const basemapProjection = getProjectionFromMetadata(
@@ -881,8 +917,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               ? activeBasemapProjection
               : projectionOverride,
             bbox: shouldShowBasemapLayers
-              ? (currentMetadata?.bbox ?? projectionFitBbox)
-              : projectionFitBbox
+              ? (projectionFitBbox ?? currentMetadata?.bbox ?? null)
+              : projectionFitBbox,
+            graticuleClipExtent
           };
 
           const metadataLayers: MetadataLayerEntry[] = [];
