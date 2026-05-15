@@ -145,12 +145,60 @@ describe('map export DOM mutations', () => {
   it('builds SVG exports as structured layers instead of a single html snapshot', () => {
     expect(source).toContain('function buildStructuredSvgMarkup');
     expect(source).toContain('id="khartis-layer-page"');
+    expect(source).toContain('id="khartis-page-background"');
+    expect(source).toContain('SVG_MAP_FRAME_CLIP_ID');
     expect(source).toContain('id="khartis-layer-visualizations"');
     expect(source).toContain('id="khartis-layer-legend"');
     expect(source).toContain('id="khartis-layer-geo-indications"');
     expect(source).toContain('id="khartis-layer-annotations"');
     expect(source).not.toContain('toSvg as htmlToImageSvg');
     expect(source).not.toContain('foreignObject');
+  });
+
+  it('exports the full page bounds, page color, and map frame background around SVG map content', async () => {
+    document.body.innerHTML = `
+      <div class="page-container" style="background-color: rgb(250, 250, 250); padding: 30px 40px 50px 20px;">
+        <div class="map-stage">
+          <div class="map-canvas" style="background-color: rgb(200, 210, 220);">
+            <canvas></canvas>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const mapStage = document.querySelector('.map-stage');
+    const mapCanvas = document.querySelector('.map-canvas');
+    const canvas = document.querySelector('canvas');
+    if (!page || !mapStage || !mapCanvas || !canvas) {
+      throw new Error('Missing page geometry export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 320, height: 230 });
+    bindElementBox(mapStage, { left: 20, top: 30, width: 300, height: 200 });
+    bindElementBox(mapCanvas, { left: 20, top: 30, width: 300, height: 200 });
+    bindElementBox(canvas, { left: 20, top: 30, width: 300, height: 200 });
+    vi.spyOn(canvas, 'toDataURL').mockReturnValue('data:image/png;base64,AAAA');
+
+    const blob = await exportMapToSvg({ width: 720, height: 560 });
+    const markup = await blob.text();
+
+    expect(markup).toContain('width="720"');
+    expect(markup).toContain('height="560"');
+    expect(markup).toContain('viewBox="0 0 360 280"');
+    expect(markup).toContain('<clipPath id="khartis-map-frame-clip">');
+    expect(markup).toContain('id="khartis-page-background"');
+    expect(markup).toContain('width="360"');
+    expect(markup).toContain('height="280"');
+    expect(markup).toContain('fill="rgb(250, 250, 250)"');
+    expect(markup).toContain('id="khartis-map-frame-background"');
+    expect(markup).toContain('x="20"');
+    expect(markup).toContain('y="30"');
+    expect(markup).toContain('width="300"');
+    expect(markup).toContain('height="200"');
+    expect(markup).toContain('fill="rgb(200, 210, 220)"');
+    expect(markup).toContain('clip-path="url(#khartis-map-frame-clip)"');
+    expect(markup).toContain('data-khartis-export-mode="raster-fallback"');
   });
 
   it('waits for embedded fonts before exporting the page', () => {
@@ -568,6 +616,201 @@ describe('map export DOM mutations', () => {
   it('exports the shared facets WebGL canvas when a map collection is active', () => {
     expect(source).toContain('function resolveMapCanvas');
     expect(source).toContain('.shared-facets-canvas canvas');
+  });
+
+  it('uses the facets page root for SVG and JPEG exports', async () => {
+    const restoreImageDecode = stubImageDecode();
+    document.body.innerHTML = `
+      <div class="facets-page" style="background-color: rgb(245, 245, 245); padding: 10px 20px 30px 40px;">
+        <div class="facets-map-stage">
+          <div class="shared-facets-canvas" style="position: relative; background-color: rgb(210, 220, 230);">
+            <canvas width="720" height="560"></canvas>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const page = document.querySelector('.facets-page');
+    const mapStage = document.querySelector('.facets-map-stage');
+    const sharedCanvas = document.querySelector('.shared-facets-canvas');
+    const canvas = document.querySelector('canvas');
+    if (!page || !mapStage || !sharedCanvas || !canvas) {
+      throw new Error('Missing facets export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 420, height: 320 });
+    bindElementBox(mapStage, { left: 40, top: 10, width: 360, height: 280 });
+    bindElementBox(sharedCanvas, {
+      left: 40,
+      top: 10,
+      width: 360,
+      height: 280
+    });
+    bindElementBox(canvas, { left: 40, top: 10, width: 360, height: 280 });
+    vi.spyOn(canvas, 'toDataURL').mockReturnValue(
+      'data:image/png;base64,FACETS'
+    );
+    htmlToImage.toCanvas.mockImplementation(async (node) => {
+      expect(node).toBe(page);
+      return createExportCanvas(800, 600);
+    });
+
+    try {
+      const blob = await exportMapToSvg({ width: 800, height: 600 });
+      const markup = await blob.text();
+
+      expect(markup).toContain('viewBox="0 0 420 320"');
+      expect(markup).toContain('id="khartis-map-frame-background"');
+      expect(markup).toContain('fill="rgb(210, 220, 230)"');
+      expect(markup).toContain('clip-path="url(#khartis-map-frame-clip)"');
+      expect(markup).toContain('data-khartis-export-mode="raster-fallback"');
+
+      await exportMapToJpg({ width: 800, height: 600 });
+    } finally {
+      restoreImageDecode();
+    }
+
+    expect(htmlToImage.toCanvas).toHaveBeenCalledWith(
+      page,
+      expect.objectContaining({
+        pixelRatio: 600 / 320,
+        backgroundColor: '#ffffff'
+      })
+    );
+  });
+
+  it('serializes facet Deck viewports without collapsing maps into the first facet', async () => {
+    document.body.innerHTML = `
+      <div class="facets-page">
+        <div class="facets-map-stage">
+          <div class="shared-facets-canvas">
+            <canvas></canvas>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const page = document.querySelector('.facets-page');
+    const mapStage = document.querySelector('.facets-map-stage');
+    const sharedCanvas = document.querySelector('.shared-facets-canvas');
+    const canvas = document.querySelector('canvas');
+    if (!page || !mapStage || !sharedCanvas || !canvas) {
+      throw new Error('Missing facet viewport export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 220 });
+    bindElementBox(mapStage, { left: 0, top: 0, width: 400, height: 200 });
+    bindElementBox(sharedCanvas, { left: 0, top: 0, width: 400, height: 200 });
+    bindElementBox(canvas, { left: 0, top: 0, width: 400, height: 200 });
+    const toDataUrl = vi
+      .spyOn(canvas, 'toDataURL')
+      .mockReturnValue('data:image/png;base64,FACETS');
+
+    const firstLayer = createDeckLayer(
+      'ScatterplotLayer',
+      'facet-viz-a-symbols',
+      {
+        data: {
+          length: 1,
+          attributes: {
+            getPosition: {
+              value: new Float32Array([0, 0]),
+              size: 2
+            },
+            getFillColor: {
+              value: new Uint8Array([255, 0, 0, 255]),
+              size: 4
+            },
+            getRadius: {
+              value: new Float32Array([5]),
+              size: 1
+            }
+          }
+        },
+        filled: true,
+        stroked: false
+      }
+    );
+    const secondLayer = createDeckLayer(
+      'ScatterplotLayer',
+      'facet-viz-b-symbols',
+      {
+        data: {
+          length: 1,
+          attributes: {
+            getPosition: {
+              value: new Float32Array([0, 0]),
+              size: 2
+            },
+            getFillColor: {
+              value: new Uint8Array([0, 0, 255, 255]),
+              size: 4
+            },
+            getRadius: {
+              value: new Float32Array([5]),
+              size: 1
+            }
+          }
+        },
+        filled: true,
+        stroked: false
+      }
+    );
+    const viewports = [
+      {
+        id: 'facet-view-a',
+        x: 0,
+        y: 0,
+        width: 200,
+        height: 200,
+        project: vi.fn(() => [50, 80])
+      },
+      {
+        id: 'facet-view-b',
+        x: 200,
+        y: 0,
+        width: 200,
+        height: 200,
+        project: vi.fn(() => [50, 80])
+      }
+    ];
+    const deck = {
+      props: {
+        useDevicePixels: 1,
+        layerFilter: vi.fn(({ layer, viewport }) => {
+          const layerId = String(layer.id);
+          if (layerId.includes('viz-a')) return viewport.id === 'facet-view-a';
+          if (layerId.includes('viz-b')) return viewport.id === 'facet-view-b';
+          return true;
+        })
+      },
+      setProps: vi.fn(),
+      redraw: vi.fn(),
+      getViewports: vi.fn(() => viewports),
+      layerManager: {
+        getLayers: vi.fn(() => [firstLayer, secondLayer])
+      }
+    };
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+
+    const blob = await exportMapToSvg({ width: 800, height: 440 });
+    const markup = await blob.text();
+
+    expect(markup).toContain('data-khartis-viewport-id="facet-view-a"');
+    expect(markup).toContain('data-khartis-viewport-id="facet-view-b"');
+    expect(markup).toContain(
+      'clip-path="url(#khartis-deck-viewport-facet-view-a-clip)"'
+    );
+    expect(markup).toContain(
+      'clip-path="url(#khartis-deck-viewport-facet-view-b-clip)"'
+    );
+    expect(markup).toContain('data-khartis-layer-id="facet-viz-a-symbols"');
+    expect(markup).toContain('data-khartis-layer-id="facet-viz-b-symbols"');
+    expect(markup).toContain('cx="50"');
+    expect(markup).toContain('cx="250"');
+    expect(markup).not.toContain('data-khartis-export-mode="raster-fallback"');
+    expect(toDataUrl).not.toHaveBeenCalled();
   });
 
   it('serializes geo indications with their visible text and background colors', async () => {

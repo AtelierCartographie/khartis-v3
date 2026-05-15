@@ -45,6 +45,10 @@ interface JoinedGeometryExportSource {
   tableName?: string;
 }
 
+const EXPORT_PAGE_SELECTOR = '.page-container, .facets-page';
+const EXPORT_MAP_CANVAS_SELECTOR =
+  '.map-canvas canvas, .shared-facets-canvas canvas, canvas';
+
 export const ExportError: ExportErrorConstructor = function ExportError(
   this: ExportError,
   title: string,
@@ -134,8 +138,8 @@ function hasRenderableMapOutput(): boolean {
     return false;
   }
 
-  const pageContainer = document.querySelector('.page-container');
-  const canvas = pageContainer?.querySelector('canvas');
+  const pageContainer = document.querySelector(EXPORT_PAGE_SELECTOR);
+  const canvas = pageContainer?.querySelector(EXPORT_MAP_CANVAS_SELECTOR);
 
   return (
     canvas instanceof HTMLCanvasElement && canvas.width > 0 && canvas.height > 0

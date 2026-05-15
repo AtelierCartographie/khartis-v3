@@ -19,7 +19,10 @@ describe('export service geometry extraction', () => {
     expect(source).toContain(
       'if (!mapInstanceStore.isMapLoaded && !hasRenderableMapOutput())'
     );
-    expect(source).toContain("document.querySelector('.page-container')");
+    expect(source).toContain("'.page-container, .facets-page'");
+    expect(source).toContain(
+      "'.map-canvas canvas, .shared-facets-canvas canvas, canvas'"
+    );
     expect(source).toContain('canvas.width > 0 && canvas.height > 0');
   });
 

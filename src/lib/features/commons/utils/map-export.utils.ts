@@ -17,6 +17,12 @@ interface RelativeRect {
   height: number;
 }
 
+interface PageExportGeometry {
+  width: number;
+  height: number;
+  mapFrame: RelativeRect | null;
+}
+
 type DeckInstance = Deck<View | View[] | null>;
 type RestoreExportRender = () => Promise<void>;
 interface FrozenCanvas {
@@ -25,6 +31,11 @@ interface FrozenCanvas {
 }
 
 interface SvgViewportLike {
+  id?: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
   project(position: number[]): number[] | { x: number; y: number };
 }
 
@@ -117,6 +128,12 @@ const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
 const EXPORT_RENDER_TIMEOUT_MS = 10000;
 const PIXEL_RATIO_EPSILON = 0.001;
 const FROZEN_CANVAS_ATTRIBUTE = 'data-khartis-export-frozen-canvas';
+const SVG_MAP_FRAME_CLIP_ID = 'khartis-map-frame-clip';
+const EXPORT_PAGE_SELECTOR = '.page-container, .facets-page';
+const EXPORT_MAP_STAGE_SELECTOR = '.map-stage, .facets-map-stage';
+const EXPORT_MAP_SURFACE_SELECTOR = '.map-canvas, .shared-facets-canvas';
+const EXPORT_MAP_CANVAS_SELECTOR =
+  '.map-canvas canvas, .shared-facets-canvas canvas, canvas';
 
 function getExportPixelRatio(
   pageContainer: HTMLElement,
@@ -126,6 +143,14 @@ function getExportPixelRatio(
     options.width / pageContainer.offsetWidth,
     options.height / pageContainer.offsetHeight
   );
+}
+
+function getExportPixelRatioForSize(
+  width: number,
+  height: number,
+  options: ExportOptions
+): number {
+  return Math.min(options.width / width, options.height / height);
 }
 
 function exportFilter(domNode: HTMLElement): boolean {
@@ -252,7 +277,7 @@ function mutateDomForExport(pageContainer: HTMLElement): () => void {
   });
 
   const mapStage = pageContainer.querySelector(
-    '.map-stage'
+    EXPORT_MAP_STAGE_SELECTOR
   ) as HTMLElement | null;
   const savedFilter = mapStage?.style.filter ?? '';
   if (mapStage) mapStage.style.filter = 'none';
@@ -352,7 +377,7 @@ async function freezeCanvasesForExport(
   const canvases = Array.from(
     new Set(
       pageContainer.querySelectorAll<HTMLCanvasElement>(
-        '.map-canvas canvas, .shared-facets-canvas canvas, canvas'
+        EXPORT_MAP_CANVAS_SELECTOR
       )
     )
   );
@@ -404,6 +429,33 @@ function getRelativeRect(
     width: elementRect.width,
     height: elementRect.height
   };
+}
+
+function resolvePageExportGeometry(
+  pageContainer: HTMLElement
+): PageExportGeometry {
+  const pageRect = pageContainer.getBoundingClientRect();
+  const computed = getComputedStyle(pageContainer);
+  const mapStage = pageContainer.querySelector(
+    EXPORT_MAP_STAGE_SELECTOR
+  ) as HTMLElement | null;
+  const mapFrame = mapStage ? getRelativeRect(mapStage, pageContainer) : null;
+  const paddingRight = parseCssPixels(computed.paddingRight);
+  const paddingBottom = parseCssPixels(computed.paddingBottom);
+  const width = Math.max(
+    1,
+    pageContainer.offsetWidth,
+    pageRect.width,
+    mapFrame ? mapFrame.x + mapFrame.width + paddingRight : 0
+  );
+  const height = Math.max(
+    1,
+    pageContainer.offsetHeight,
+    pageRect.height,
+    mapFrame ? mapFrame.y + mapFrame.height + paddingBottom : 0
+  );
+
+  return { width, height, mapFrame };
 }
 
 function roundSvgValue(value: number): string {
@@ -520,7 +572,7 @@ function resolveDeckLayers(deck: SvgDeckLike): SvgDeckLayerLike[] {
   return (managedLayers ?? propLayers ?? []).filter(isDeckLayerLike);
 }
 
-function resolveDeckViewport(deck: SvgDeckLike): SvgViewportLike | null {
+function resolveDeckViewports(deck: SvgDeckLike): SvgViewportLike[] {
   const viewports =
     typeof deck.getViewports === 'function'
       ? deck.getViewports()
@@ -528,9 +580,50 @@ function resolveDeckViewport(deck: SvgDeckLike): SvgViewportLike | null {
         ? deck.viewManager.getViewports()
         : [];
 
-  return (
-    viewports.find((viewport) => typeof viewport.project === 'function') ?? null
+  return viewports.filter(
+    (viewport): viewport is SvgViewportLike =>
+      Boolean(viewport) && typeof viewport.project === 'function'
   );
+}
+
+function getViewportNumber(
+  viewport: SvgViewportLike,
+  key: 'x' | 'y' | 'width' | 'height',
+  fallback: number
+): number {
+  const value = viewport[key];
+
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function getViewportId(viewport: SvgViewportLike, index: number): string {
+  return typeof viewport.id === 'string' && viewport.id.trim()
+    ? viewport.id
+    : `viewport-${index + 1}`;
+}
+
+function shouldRenderLayerInViewport(
+  deck: SvgDeckLike,
+  layer: SvgDeckLayerLike,
+  viewport: SvgViewportLike
+): boolean {
+  const layerFilter = deck.props?.layerFilter;
+  if (typeof layerFilter !== 'function') {
+    return true;
+  }
+
+  try {
+    return (
+      layerFilter({
+        layer,
+        viewport,
+        isPicking: false,
+        renderPass: 'screen'
+      }) !== false
+    );
+  } catch {
+    return true;
+  }
 }
 
 function getBinaryData(
@@ -775,16 +868,18 @@ function projectPosition(
 function buildLayerGroup(
   layer: SvgDeckLayerLike,
   index: number,
-  content: string
+  content: string,
+  idSuffix: string = ''
 ): string {
   if (!content.trim()) return '';
 
   const layerId = getLayerId(layer, index);
   const layerType = getLayerTypeName(layer);
+  const safeSuffix = idSuffix ? `-${sanitizeSvgId(idSuffix)}` : '';
 
   return `
     <g
-      id="khartis-deck-layer-${escapeXml(sanitizeSvgId(layerId))}"
+      id="khartis-deck-layer-${escapeXml(sanitizeSvgId(layerId))}${escapeXml(safeSuffix)}"
       data-khartis-layer-id="${escapeXml(layerId)}"
       data-khartis-layer-type="${escapeXml(layerType)}"
     >
@@ -1569,19 +1664,77 @@ function buildDeckVisualizationLayer(
   mapCanvas: HTMLCanvasElement
 ): string {
   const deck = resolveActiveDeckForSvg();
-  const viewport = deck ? resolveDeckViewport(deck) : null;
-  if (!deck || !viewport) return '';
+  const viewports = deck ? resolveDeckViewports(deck) : [];
+  if (!deck || viewports.length === 0) return '';
 
-  const context: SvgProjectionContext = {
-    canvasRect: getRelativeRect(mapCanvas, pageContainer),
-    viewport
-  };
+  const canvasRect = getRelativeRect(mapCanvas, pageContainer);
   const layers = resolveDeckLayers(deck);
 
-  return layers
-    .map((layer, index) =>
-      buildLayerGroup(layer, index, serializeDeckLayer(layer, context))
-    )
+  if (viewports.length === 1) {
+    const context: SvgProjectionContext = {
+      canvasRect,
+      viewport: viewports[0]
+    };
+
+    return layers
+      .map((layer, index) =>
+        buildLayerGroup(layer, index, serializeDeckLayer(layer, context))
+      )
+      .filter(Boolean)
+      .join('');
+  }
+
+  return viewports
+    .map((viewport, viewportIndex) => {
+      const viewportId = getViewportId(viewport, viewportIndex);
+      const viewportRect: RelativeRect = {
+        x: canvasRect.x + getViewportNumber(viewport, 'x', 0),
+        y: canvasRect.y + getViewportNumber(viewport, 'y', 0),
+        width: getViewportNumber(viewport, 'width', canvasRect.width),
+        height: getViewportNumber(viewport, 'height', canvasRect.height)
+      };
+      const context: SvgProjectionContext = {
+        canvasRect: viewportRect,
+        viewport
+      };
+      const content = layers
+        .map((layer, layerIndex) =>
+          shouldRenderLayerInViewport(deck, layer, viewport)
+            ? buildLayerGroup(
+                layer,
+                layerIndex,
+                serializeDeckLayer(layer, context),
+                viewportId
+              )
+            : ''
+        )
+        .filter(Boolean)
+        .join('');
+
+      if (!content) {
+        return '';
+      }
+
+      const clipId = `khartis-deck-viewport-${sanitizeSvgId(viewportId)}-clip`;
+
+      return `
+        <clipPath id="${escapeXml(clipId)}">
+          <rect
+            x="${roundSvgValue(viewportRect.x)}"
+            y="${roundSvgValue(viewportRect.y)}"
+            width="${roundSvgValue(viewportRect.width)}"
+            height="${roundSvgValue(viewportRect.height)}"
+          />
+        </clipPath>
+        <g
+          id="khartis-deck-viewport-${escapeXml(sanitizeSvgId(viewportId))}"
+          data-khartis-viewport-id="${escapeXml(viewportId)}"
+          clip-path="url(#${escapeXml(clipId)})"
+        >
+          ${content}
+        </g>
+      `;
+    })
     .filter(Boolean)
     .join('');
 }
@@ -2282,7 +2435,8 @@ function buildAnnotationLayer(pageContainer: HTMLElement): string {
 
 function buildVisualizationLayer(
   pageContainer: HTMLElement,
-  structuredOptions: StructuredSvgOptions = {}
+  structuredOptions: StructuredSvgOptions = {},
+  geometry: PageExportGeometry = resolvePageExportGeometry(pageContainer)
 ): string {
   const mapCanvas = resolveMapCanvas(pageContainer);
 
@@ -2308,7 +2462,10 @@ function buildVisualizationLayer(
   }
 
   return `
-    <g id="khartis-layer-visualizations">
+    <g
+      id="khartis-layer-visualizations"
+      ${geometry.mapFrame ? `clip-path="url(#${SVG_MAP_FRAME_CLIP_ID})"` : ''}
+    >
       ${parts.join('')}
     </g>
   `;
@@ -2320,22 +2477,103 @@ function resolveMapCanvas(
   return (
     mapInstanceStore.getMapCanvas() ??
     (pageContainer.querySelector(
-      '.map-canvas canvas, .shared-facets-canvas canvas, canvas'
+      EXPORT_MAP_CANVAS_SELECTOR
     ) as HTMLCanvasElement | null)
   );
+}
+
+function resolveElementBackgroundColor(
+  element: HTMLElement,
+  fallback: string
+): string {
+  const backgroundColor = getComputedStyle(element).backgroundColor;
+
+  return isTransparentColor(backgroundColor) ? fallback : backgroundColor;
+}
+
+function buildPageLayer(
+  pageContainer: HTMLElement,
+  geometry: PageExportGeometry
+): string {
+  const pageBackgroundColor = resolveElementBackgroundColor(
+    pageContainer,
+    '#ffffff'
+  );
+  const parts = [
+    `
+      <rect
+        id="khartis-page-background"
+        x="0"
+        y="0"
+        width="${roundSvgValue(geometry.width)}"
+        height="${roundSvgValue(geometry.height)}"
+        fill="${escapeXml(pageBackgroundColor)}"
+      />
+    `
+  ];
+
+  const mapStage = pageContainer.querySelector(
+    EXPORT_MAP_STAGE_SELECTOR
+  ) as HTMLElement | null;
+  const mapSurface =
+    (mapStage?.querySelector(
+      EXPORT_MAP_SURFACE_SELECTOR
+    ) as HTMLElement | null) ?? mapStage;
+  const mapBackgroundColor = mapSurface
+    ? resolveElementBackgroundColor(mapSurface, '')
+    : '';
+
+  if (
+    geometry.mapFrame &&
+    mapBackgroundColor &&
+    mapBackgroundColor !== pageBackgroundColor
+  ) {
+    parts.push(`
+      <rect
+        id="khartis-map-frame-background"
+        x="${roundSvgValue(geometry.mapFrame.x)}"
+        y="${roundSvgValue(geometry.mapFrame.y)}"
+        width="${roundSvgValue(geometry.mapFrame.width)}"
+        height="${roundSvgValue(geometry.mapFrame.height)}"
+        fill="${escapeXml(mapBackgroundColor)}"
+      />
+    `);
+  }
+
+  return `
+    <g id="khartis-layer-page">
+      ${parts.join('')}
+    </g>
+  `;
+}
+
+function buildSvgDefinitions(geometry: PageExportGeometry): string {
+  if (!geometry.mapFrame) {
+    return '';
+  }
+
+  return `
+    <defs>
+      <clipPath id="${SVG_MAP_FRAME_CLIP_ID}">
+        <rect
+          x="${roundSvgValue(geometry.mapFrame.x)}"
+          y="${roundSvgValue(geometry.mapFrame.y)}"
+          width="${roundSvgValue(geometry.mapFrame.width)}"
+          height="${roundSvgValue(geometry.mapFrame.height)}"
+        />
+      </clipPath>
+    </defs>
+  `;
 }
 
 function buildStructuredSvgMarkup(
   pageContainer: HTMLElement,
   options: ExportOptions,
-  structuredOptions: StructuredSvgOptions = {}
+  structuredOptions: StructuredSvgOptions = {},
+  geometry: PageExportGeometry = resolvePageExportGeometry(pageContainer)
 ): string {
-  const width = Math.max(1, pageContainer.offsetWidth);
-  const height = Math.max(1, pageContainer.offsetHeight);
-  const backgroundColor =
-    getComputedStyle(pageContainer).backgroundColor || '#ffffff';
   const layers = [
-    buildVisualizationLayer(pageContainer, structuredOptions),
+    buildVisualizationLayer(pageContainer, structuredOptions, geometry),
     buildLegendLayer(pageContainer),
     buildGeoIndicationsLayer(pageContainer),
     buildAnnotationLayer(pageContainer)
@@ -2346,18 +2584,11 @@ function buildStructuredSvgMarkup(
       xmlns="http://www.w3.org/2000/svg"
       width="${roundSvgValue(options.width)}"
       height="${roundSvgValue(options.height)}"
-      viewBox="0 0 ${roundSvgValue(width)} ${roundSvgValue(height)}"
+      viewBox="0 0 ${roundSvgValue(geometry.width)} ${roundSvgValue(geometry.height)}"
       preserveAspectRatio="xMidYMid meet"
     >
-      <g id="khartis-layer-page">
-        <rect
-          x="0"
-          y="0"
-          width="${roundSvgValue(width)}"
-          height="${roundSvgValue(height)}"
-          fill="${escapeXml(backgroundColor)}"
-        />
-      </g>
+      ${buildSvgDefinitions(geometry)}
+      ${buildPageLayer(pageContainer, geometry)}
       ${layers.join('')}
     </svg>
   `.trim();
@@ -2370,13 +2601,18 @@ export async function exportMapToSvg(
   await fontAssetsStore.ensureLoaded();
 
   const pageContainer = document.querySelector(
-    '.page-container'
+    EXPORT_PAGE_SELECTOR
   ) as HTMLElement | null;
   if (!pageContainer) {
     return Promise.reject(new Error(m.export_map_not_loaded()));
   }
 
-  const pixelRatio = getExportPixelRatio(pageContainer, opts);
+  const pageGeometry = resolvePageExportGeometry(pageContainer);
+  const pixelRatio = getExportPixelRatioForSize(
+    pageGeometry.width,
+    pageGeometry.height,
+    opts
+  );
 
   const restoreRatio = await prerenderWebgl(pixelRatio);
   const restoreDom = mutateDomForExport(pageContainer);
@@ -2388,10 +2624,11 @@ export async function exportMapToSvg(
     const markup = buildStructuredSvgMarkup(
       pageContainer,
       {
-        width: Math.max(1, Math.round(pageContainer.offsetWidth * pixelRatio)),
-        height: Math.max(1, Math.round(pageContainer.offsetHeight * pixelRatio))
+        width: Math.max(1, Math.round(pageGeometry.width * pixelRatio)),
+        height: Math.max(1, Math.round(pageGeometry.height * pixelRatio))
       },
-      { mapLibreBackgroundDataUrl }
+      { mapLibreBackgroundDataUrl },
+      pageGeometry
     );
 
     return new Blob([markup], { type: 'image/svg+xml;charset=utf-8' });
@@ -2408,7 +2645,7 @@ export async function exportMapToJpg(
   await fontAssetsStore.ensureLoaded();
 
   const pageContainer = document.querySelector(
-    '.page-container'
+    EXPORT_PAGE_SELECTOR
   ) as HTMLElement | null;
   if (!pageContainer) {
     return Promise.reject(new Error(m.export_map_not_loaded()));
