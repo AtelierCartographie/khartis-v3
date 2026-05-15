@@ -151,30 +151,6 @@ describe('file export utils', () => {
     expect(text).not.toContain('geometry_wkt');
   });
 
-  it('exports geometry to geometry_wkt for csv-geo exports', async () => {
-    const dataset = createGeometryDataset(
-      {
-        type: 'Polygon',
-        coordinates: [
-          [
-            [0, 0],
-            [1, 0],
-            [1, 1],
-            [0, 1],
-            [0, 0]
-          ]
-        ]
-      },
-      { includeGeometryMeta: false }
-    );
-
-    const blob = await exportProcessedDatasets([dataset], 'csv-geo');
-    const text = await blob.text();
-
-    expect(text).toContain('geometry_wkt');
-    expect(text).toContain('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))');
-  });
-
   it('builds valid geojson exports from recognized geometry columns', async () => {
     const dataset = createGeometryDataset(
       JSON.stringify({

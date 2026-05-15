@@ -11,6 +11,8 @@ describe('export service geometry extraction', () => {
   it('exports WKB geometry through DuckDB spatial conversion instead of casting raw blobs', () => {
     expect(source).toContain('function buildGeometryExportSelect');
     expect(source).toContain('ST_GeomFromWKB');
+    expect(source).toContain('ST_Transform(${expression},');
+    expect(source).toContain("'EPSG:4326'");
     expect(source).not.toContain('ST_AsGeoJSON("${escapedName}"::GEOMETRY)');
   });
 
@@ -31,7 +33,8 @@ describe('export service geometry extraction', () => {
       'const joinedGeometrySource = resolveJoinedGeometryExportSource(dataset)'
     );
     const inlineGeometryFallbackIndex = source.indexOf(
-      '!dataset.duckdbTableName'
+      '!dataset.duckdbTableName',
+      joinedGeometryLookupIndex
     );
 
     expect(source).toContain('function resolveJoinedGeometryExportSource');
@@ -39,5 +42,28 @@ describe('export service geometry extraction', () => {
     expect(joinedGeometryLookupIndex).toBeGreaterThan(-1);
     expect(inlineGeometryFallbackIndex).toBeGreaterThan(-1);
     expect(joinedGeometryLookupIndex).toBeLessThan(inlineGeometryFallbackIndex);
+  });
+
+  it('exports joined datasets from the full basemap side', () => {
+    expect(source).toContain('function createJoinedGeometryExportView');
+    expect(source).toContain('FROM "${escapedGeometry}" g');
+    expect(source).toContain('LEFT JOIN "${escapedDataset}" d');
+    expect(source).not.toContain('INNER JOIN "${escapedGeometry}"');
+  });
+
+  it('builds GeoJSON geometry from GPS columns when no geometry column exists', () => {
+    expect(source).toContain('function fetchGpsDatasetWithGeometry');
+    expect(source).toContain('resolveGPSCoordinateColumns');
+    expect(source).toContain('ST_Point(${lonValue}, ${latValue})::GEOMETRY');
+    expect(source).toContain('ST_AsGeoJSON(${geometryExpression})');
+  });
+
+  it('uses browser SQLite GeoPackage export without reprojection', () => {
+    expect(source).toContain('function exportDatasetsToGeoPackage');
+    expect(source).toContain('exportGeoPackage(features,');
+    expect(source).toContain('ST_AsWKB(${geometryExpression})');
+    expect(source).toContain('buildDirectGeoPackageExportSource');
+    expect(source).toContain('buildGeometryValueExpression(');
+    expect(source).not.toContain("DRIVER 'GPKG'");
   });
 });
