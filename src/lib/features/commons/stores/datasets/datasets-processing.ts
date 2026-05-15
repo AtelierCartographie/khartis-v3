@@ -291,6 +291,8 @@ export function createDatasetFromPreprocessedFile(
     data,
     fileSize: file.size,
     geoDetection: file.deepAnalysis?.geoDetection,
+    joinedBasemap: file.joinedBasemap,
+    geoColumn: file.geoColumn,
     analysis: {
       columns,
       geoColumns: geometryInfo
@@ -346,6 +348,21 @@ export function createVisualizationsForGeoDatasets(
       }
     }
   }
+}
+
+function restoreDatasetJoinStateFromFile(
+  dataset: DatasetResult,
+  file: UploadedFile
+): DatasetResult {
+  if (dataset.sourceFileId !== file.id && dataset.id !== file.datasetId) {
+    return dataset;
+  }
+
+  return {
+    ...dataset,
+    joinedBasemap: dataset.joinedBasemap ?? file.joinedBasemap,
+    geoColumn: dataset.geoColumn ?? file.geoColumn
+  };
 }
 
 function notifySkippedFiles(
@@ -510,9 +527,9 @@ export async function addFile(
       return await dataPipeline.processUploadedFile(file, file.originalFile);
     });
 
-    const datasets: DatasetResult[] = isZipDatasetResult(result)
-      ? result.datasets
-      : [result];
+    const datasets: DatasetResult[] = (
+      isZipDatasetResult(result) ? result.datasets : [result]
+    ).map((dataset) => restoreDatasetJoinStateFromFile(dataset, file));
 
     for (const dataset of datasets) {
       const existingDataset = state.datasets.find(
