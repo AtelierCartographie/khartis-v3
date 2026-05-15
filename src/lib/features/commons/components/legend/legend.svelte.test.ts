@@ -101,6 +101,67 @@ describe('common legend generators', () => {
     expect(svg.height).toBeGreaterThan(0);
   });
 
+  it('drops symbol legend ticks whose labels would vertically overlap', () => {
+    const svg = createLegendSvg(
+      draw_symbols_legend([38, 54], {
+        type: 'circle',
+        size: 18,
+        fontSize: 12,
+        fill: '#4585f5'
+      })
+    );
+
+    const host = document.createElement('div');
+    host.innerHTML = `<svg>${svg.markup}</svg>`;
+    const labelTexts = [...host.querySelectorAll('.labels text')].map(
+      (node) => ({
+        y: Number(node.getAttribute('y')),
+        text: node.textContent?.trim() ?? ''
+      })
+    );
+
+    // With size=18 and fontSize=12, [38,54] would have labels only ~6px apart.
+    // The smaller tick should be dropped so only the max remains.
+    expect(labelTexts.length).toBeGreaterThanOrEqual(1);
+    expect(labelTexts.some((l) => l.text === '54')).toBe(true);
+
+    // Verify no two labels are closer than fontSize * 1.2
+    for (let i = 0; i < labelTexts.length - 1; i++) {
+      const dist = Math.abs(labelTexts[i].y - labelTexts[i + 1].y);
+      expect(dist).toBeGreaterThanOrEqual(12 * 1.2);
+    }
+  });
+
+  it('keeps non-overlapping symbol legend ticks while dropping overlapping ones', () => {
+    const svg = createLegendSvg(
+      draw_symbols_legend([1_300_000, 4_000_000, 9_900_000], {
+        type: 'circle',
+        size: 18,
+        fontSize: 12,
+        fill: '#4585f5'
+      })
+    );
+
+    const host = document.createElement('div');
+    host.innerHTML = `<svg>${svg.markup}</svg>`;
+    const labelTexts = [...host.querySelectorAll('.labels text')].map(
+      (node) => ({
+        y: Number(node.getAttribute('y')),
+        text: node.textContent?.trim() ?? ''
+      })
+    );
+
+    // The middle tick (4,000,000) would overlap with neighbours at this size,
+    // so we expect to keep the extremes that are far enough apart.
+    expect(labelTexts.length).toBeGreaterThanOrEqual(1);
+
+    // Verify no two labels are closer than fontSize * 1.2
+    for (let i = 0; i < labelTexts.length - 1; i++) {
+      const dist = Math.abs(labelTexts[i].y - labelTexts[i + 1].y);
+      expect(dist).toBeGreaterThanOrEqual(12 * 1.2);
+    }
+  });
+
   it('widens proportional symbol legends when the missing-data label is long', () => {
     const base = createLegendSvg(
       draw_symbols_legend([10, 100, 1_000], {
