@@ -254,6 +254,45 @@ describe('datasetsStore persisted view state', () => {
     expect(datasetsStore.datasets[0]?.tableName).toBe('table_dataset-asset');
   });
 
+  it('preserves persisted join state while replaying asset-backed files', async () => {
+    mocks.processUploadedFileMock.mockResolvedValueOnce(
+      makeDataset('dataset-asset-joined', 'source-asset-joined')
+    );
+
+    await datasetsStore.addFile(
+      makeUploadedFile('source-asset-joined', 'data.csv', {
+        content: undefined,
+        type: 'text/csv',
+        fileType: FileType.CSV,
+        duckdbTableName: 'joined_data_csv_123',
+        parsedData: [{ country: 'France' }],
+        statistics: {
+          country: {
+            type: 'text',
+            count: 1
+          }
+        },
+        assetRef: {
+          assetId: 'asset-joined',
+          originalName: 'data.csv',
+          mimeType: 'text/csv',
+          size: 16,
+          kind: 'primary'
+        },
+        joinedBasemap: 'monde-countries-2024-medium',
+        geoColumn: 'country'
+      }),
+      true
+    );
+
+    expect(datasetsStore.datasets[0]).toMatchObject({
+      id: 'dataset-asset-joined',
+      sourceFileId: 'source-asset-joined',
+      joinedBasemap: 'monde-countries-2024-medium',
+      geoColumn: 'country'
+    });
+  });
+
   it('reuses an in-memory preprocessed DuckDB table during project creation', async () => {
     await datasetsStore.addFile(
       makeUploadedFile('source-preprocessed', 'data.csv', {
@@ -277,6 +316,35 @@ describe('datasetsStore persisted view state', () => {
       sourceFileId: 'source-preprocessed',
       tableName: 'data_csv_123',
       rowCount: 1
+    });
+  });
+
+  it('preserves persisted join state when reusing a preprocessed DuckDB table', async () => {
+    await datasetsStore.addFile(
+      makeUploadedFile('source-preprocessed-joined', 'data.csv', {
+        type: 'text/csv',
+        fileType: FileType.CSV,
+        duckdbTableName: 'joined_data_csv_123',
+        parsedData: [{ country: 'France' }],
+        statistics: {
+          country: {
+            type: 'text',
+            count: 1
+          }
+        },
+        joinedBasemap: 'monde-countries-2024-medium',
+        geoColumn: 'country'
+      }),
+      true
+    );
+
+    expect(mocks.processUploadedFileMock).not.toHaveBeenCalled();
+    expect(datasetsStore.datasets[0]).toMatchObject({
+      id: 'source-preprocessed-joined',
+      sourceFileId: 'source-preprocessed-joined',
+      tableName: 'joined_data_csv_123',
+      joinedBasemap: 'monde-countries-2024-medium',
+      geoColumn: 'country'
     });
   });
 

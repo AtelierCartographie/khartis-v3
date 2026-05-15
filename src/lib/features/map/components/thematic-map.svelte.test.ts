@@ -7,14 +7,11 @@ const source = readFileSync(
   'utf8'
 );
 
-describe('ThematicMap projection mask overlay', () => {
-  it('only enables the projection mask for manual overrides and uses an even-odd path fill', () => {
-    expect(source).toContain('class="projection-mask-overlay"');
-    expect(source).toContain(
-      "getProjectionState().overrideSource !== 'manual'"
-    );
-    expect(source).toContain('fill-rule="evenodd"');
-    expect(source).toContain('clip-rule="evenodd"');
+describe('ThematicMap source', () => {
+  it('does not render a fixed SVG projection mask over the Deck canvas', () => {
+    expect(source).not.toContain('projection-mask-overlay');
+    expect(source).not.toContain('buildProjectionMaskPath');
+    expect(source).not.toContain('fill-rule="evenodd"');
   });
 
   it('renders the alignment grid at page level and keeps it aligned with the shared snap size', () => {
@@ -48,6 +45,8 @@ describe('ThematicMap projection mask overlay', () => {
   it('uses logical page dimensions for viewport refits and rendered dimensions for canvas sharpness', () => {
     expect(source).toContain('logicalMapCanvasWidth');
     expect(source).toContain('logicalMapCanvasHeight');
+    expect(source).toContain('getProjectionForSphereMask: () =>');
+    expect(source).toContain('getOrthographicRenderProjection(');
     expect(source).toContain('getModelMatrix: () => renderModelMatrix');
     expect(source).toContain('.scale([pageDisplayScale, pageDisplayScale, 1])');
     expect(source).toContain('.multiplyRight(modelMatrix)');

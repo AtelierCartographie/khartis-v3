@@ -88,6 +88,30 @@ const projectedBasemapGeoJsonCache = new WeakMap<
   WeakMap<object, FeatureCollection>
 >();
 
+type GraticuleAxis = 'meridian' | 'parallel';
+type GraticuleLineProperties = {
+  name: string;
+  axis: GraticuleAxis;
+  value: number;
+  subProjectionId?: string;
+};
+type GraticuleClipExtent = [[number, number], [number, number]];
+
+type CompositeGraticuleSubProjection = {
+  id: string;
+  projection: ProjectionLike;
+  bounds: BBox;
+  screenExtent?: [[number, number], [number, number]];
+};
+
+type CompositeGraticuleProjection = ProjectionLike & {
+  getSubProjections: () => CompositeGraticuleSubProjection[];
+};
+type ProjectionWithClipExtent = ProjectionLike & {
+  clipExtent(): GraticuleClipExtent | null;
+  clipExtent(extent: GraticuleClipExtent | null): ProjectionWithClipExtent;
+};
+
 function getCachedBasemapGeoJSON(
   table: ArrowTable,
   geoColumn: string
@@ -105,10 +129,13 @@ function getCachedBasemapGeoJSON(
   return result;
 }
 
-function projectFeatureCollectionIfNeeded<T extends GeoJSON.Geometry>(
-  geojson: FeatureCollection<T>,
+function projectFeatureCollectionIfNeeded<
+  T extends GeoJSON.Geometry,
+  P extends GeoJSON.GeoJsonProperties = GeoJSON.GeoJsonProperties
+>(
+  geojson: FeatureCollection<T, P>,
   ctx: Pick<BasemapLayerContext, 'projection'>
-): FeatureCollection<T> {
+): FeatureCollection<T, P> {
   if (!ctx.projection) {
     return geojson;
   }
@@ -116,7 +143,7 @@ function projectFeatureCollectionIfNeeded<T extends GeoJSON.Geometry>(
   const projectionKey = ctx.projection as ProjectionLike & object;
   let projectionCache = projectedBasemapGeoJsonCache.get(geojson);
   const cached = projectionCache?.get(projectionKey) as
-    | FeatureCollection<T>
+    | FeatureCollection<T, P>
     | undefined;
   if (cached) {
     return cached;
@@ -125,11 +152,182 @@ function projectFeatureCollectionIfNeeded<T extends GeoJSON.Geometry>(
   const projected = _projectGeoJSON(
     geojson,
     ctx.projection
-  ) as FeatureCollection<T> | null;
+  ) as FeatureCollection<T, P> | null;
   const result = projected ?? {
     ...geojson,
     features: []
   };
+
+  if (!projectionCache) {
+    projectionCache = new WeakMap<object, FeatureCollection>();
+    projectedBasemapGeoJsonCache.set(geojson, projectionCache);
+  }
+  projectionCache.set(projectionKey, result);
+
+  return result;
+}
+
+function hasCompositeGraticuleSubProjections(
+  projection: ProjectionLike
+): projection is CompositeGraticuleProjection {
+  return (
+    typeof (projection as { getSubProjections?: unknown }).getSubProjections ===
+    'function'
+  );
+}
+
+function hasClipExtent(
+  projection: ProjectionLike
+): projection is ProjectionWithClipExtent {
+  return (
+    typeof (projection as { clipExtent?: unknown }).clipExtent === 'function'
+  );
+}
+
+function projectGraticuleLineToSegments(
+  coordinates: GeoJSON.Position[],
+  projection: ProjectionLike,
+  clipExtent?: GraticuleClipExtent | null
+): GeoJSON.Position[][] {
+  const segments: GeoJSON.Position[][] = [];
+  let currentSegment: GeoJSON.Position[] = [];
+  const previousClipExtent =
+    clipExtent && hasClipExtent(projection) ? projection.clipExtent() : null;
+
+  if (clipExtent && hasClipExtent(projection)) {
+    projection.clipExtent(clipExtent);
+  }
+
+  const stream = projection.stream({
+    point(x: number, y: number): void {
+      if (Number.isFinite(x) && Number.isFinite(y)) {
+        currentSegment.push([x, y]);
+      }
+    },
+    lineStart(): void {
+      currentSegment = [];
+    },
+    lineEnd(): void {
+      if (currentSegment.length >= 2) {
+        segments.push(currentSegment);
+      }
+      currentSegment = [];
+    },
+    polygonStart(): void {},
+    polygonEnd(): void {}
+  });
+
+  try {
+    stream.lineStart();
+    for (const coordinate of coordinates) {
+      const [longitude, latitude] = coordinate;
+      if (Number.isFinite(longitude) && Number.isFinite(latitude)) {
+        stream.point(longitude, latitude);
+      }
+    }
+    stream.lineEnd();
+  } finally {
+    if (clipExtent && hasClipExtent(projection)) {
+      projection.clipExtent(previousClipExtent);
+    }
+  }
+
+  return segments;
+}
+
+function bboxIntersects(first: BBox, second: BBox): boolean {
+  return (
+    rangesOverlap(first[0], first[2], second[0], second[2]) &&
+    rangesOverlap(first[1], first[3], second[1], second[3])
+  );
+}
+
+function projectGraticuleWithSubProjections(
+  geojson: FeatureCollection<LineString, GraticuleLineProperties>,
+  entries: CompositeGraticuleSubProjection[],
+  routingBbox: BBox,
+  clipExtent?: GraticuleClipExtent | null
+): FeatureCollection<LineString | MultiLineString, GraticuleLineProperties> {
+  const features: Feature<
+    LineString | MultiLineString,
+    GraticuleLineProperties
+  >[] = [];
+
+  for (const feature of geojson.features) {
+    for (const entry of entries) {
+      if (!bboxIntersects(entry.bounds, routingBbox)) {
+        continue;
+      }
+
+      const segments = projectGraticuleLineToSegments(
+        feature.geometry.coordinates,
+        entry.projection,
+        clipExtent
+      );
+      if (segments.length === 0) {
+        continue;
+      }
+
+      features.push({
+        ...feature,
+        properties: {
+          ...feature.properties,
+          subProjectionId: entry.id
+        },
+        geometry:
+          segments.length === 1
+            ? {
+                type: GEOJSON_TYPE.LINE_STRING,
+                coordinates: segments[0]
+              }
+            : {
+                type: GEOJSON_TYPE.MULTI_LINE_STRING,
+                coordinates: segments
+              }
+      });
+    }
+  }
+
+  return {
+    ...geojson,
+    features
+  };
+}
+
+function projectGraticuleFeatureCollectionIfNeeded(
+  geojson: FeatureCollection<LineString, GraticuleLineProperties>,
+  ctx: Pick<BasemapLayerContext, 'projection' | 'graticuleClipExtent'>,
+  routingBbox: BBox
+): FeatureCollection<LineString | MultiLineString, GraticuleLineProperties> {
+  if (!ctx.projection) {
+    return geojson;
+  }
+
+  if (hasCompositeGraticuleSubProjections(ctx.projection)) {
+    const entries = ctx.projection.getSubProjections();
+    return entries.length > 0
+      ? projectGraticuleWithSubProjections(
+          geojson,
+          entries,
+          routingBbox,
+          ctx.graticuleClipExtent
+        )
+      : projectFeatureCollectionIfNeeded(geojson, ctx);
+  }
+
+  const projectionKey = ctx.projection as ProjectionLike & object;
+  let projectionCache = projectedBasemapGeoJsonCache.get(geojson);
+  const cached = projectionCache?.get(projectionKey) as
+    | FeatureCollection<LineString | MultiLineString, GraticuleLineProperties>
+    | undefined;
+  if (cached) {
+    return cached;
+  }
+
+  const result: FeatureCollection<
+    LineString | MultiLineString,
+    GraticuleLineProperties
+  > = projectFeatureCollectionIfNeeded(geojson, ctx);
 
   if (!projectionCache) {
     projectionCache = new WeakMap<object, FeatureCollection>();
@@ -154,10 +352,14 @@ function getPreparedBasemapGeoJSON<T extends GeoJSON.Geometry>(
 
 let cachedGraticuleKey: string | null = null;
 let cachedGraticuleData: FeatureCollection<
-  LineString | MultiLineString
+  LineString,
+  GraticuleLineProperties
 > | null = null;
 let cachedEquatorKey: string | null = null;
-let cachedEquatorData: FeatureCollection<LineString> | null = null;
+let cachedEquatorData: FeatureCollection<
+  LineString,
+  GraticuleLineProperties
+> | null = null;
 
 let cachedCitiesKey: string | null = null;
 let cachedCitiesSource: FeatureCollection<Point> | null = null;
@@ -171,6 +373,7 @@ interface BasemapLayerContext {
   projection?: ProjectionLike;
   bbox?: BBox | null;
   excludeEquator?: boolean;
+  graticuleClipExtent?: GraticuleClipExtent | null;
 }
 
 interface BaseLayerProps {
@@ -724,11 +927,17 @@ const LINE_SAMPLE_STEP_DEGREES = 1;
 const EQUATOR_EPSILON = 0.000001;
 
 function roundCoordinate(value: number): number {
-  return Math.round(value * COORDINATE_PRECISION) / COORDINATE_PRECISION;
+  const rounded =
+    Math.round(value * COORDINATE_PRECISION) / COORDINATE_PRECISION;
+  return Object.is(rounded, -0) ? 0 : rounded;
 }
 
 function clampCoordinate(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function bboxToKey(bbox: BBox): string {
+  return bbox.map((value) => roundCoordinate(value)).join(',');
 }
 
 function normalizeLineBbox(bbox: BBox | null | undefined): BBox {
@@ -757,16 +966,24 @@ function normalizeLineBbox(bbox: BBox | null | undefined): BBox {
   ];
 }
 
-function bboxToKey(bbox: BBox): string {
-  return bbox.map((value) => roundCoordinate(value)).join(',');
-}
-
 function isEquatorLatitude(latitude: number): boolean {
   return Math.abs(latitude) <= EQUATOR_EPSILON;
 }
 
 function isWithin(value: number, min: number, max: number): boolean {
   return value >= min - EQUATOR_EPSILON && value <= max + EQUATOR_EPSILON;
+}
+
+function rangesOverlap(
+  firstMin: number,
+  firstMax: number,
+  secondMin: number,
+  secondMax: number
+): boolean {
+  return (
+    firstMin <= secondMax + EQUATOR_EPSILON &&
+    secondMin <= firstMax + EQUATOR_EPSILON
+  );
 }
 
 function createSampledRange(min: number, max: number): number[] {
@@ -818,11 +1035,13 @@ function normalizeGraticuleSpacing(value: unknown): number {
 
 function createLineFeature(
   name: string,
+  axis: GraticuleAxis,
+  value: number,
   coordinates: [number, number][]
-): Feature<LineString> {
+): Feature<LineString, GraticuleLineProperties> {
   return {
     type: GEOJSON_TYPE.FEATURE,
-    properties: { name },
+    properties: { name, axis, value: roundCoordinate(value) },
     geometry: {
       type: GEOJSON_TYPE.LINE_STRING,
       coordinates
@@ -831,44 +1050,45 @@ function createLineFeature(
 }
 
 function createParallelFeature(
-  latitude: number,
-  bbox: BBox
-): Feature<LineString> {
-  const [west, , east] = bbox;
-  const coordinates = createSampledRange(west, east).map(
+  latitude: number
+): Feature<LineString, GraticuleLineProperties> {
+  const coordinates = createSampledRange(WORLD_BBOX[0], WORLD_BBOX[2]).map(
     (longitude) => [longitude, roundCoordinate(latitude)] as [number, number]
   );
   return createLineFeature(
     `parallel-${roundCoordinate(latitude)}`,
+    'parallel',
+    latitude,
     coordinates
   );
 }
 
 function createMeridianFeature(
-  longitude: number,
-  bbox: BBox
-): Feature<LineString> {
-  const [, south, , north] = bbox;
-  const coordinates = createSampledRange(south, north).map(
+  longitude: number
+): Feature<LineString, GraticuleLineProperties> {
+  const coordinates = createSampledRange(WORLD_BBOX[1], WORLD_BBOX[3]).map(
     (latitude) => [roundCoordinate(longitude), latitude] as [number, number]
   );
   return createLineFeature(
     `meridian-${roundCoordinate(longitude)}`,
+    'meridian',
+    longitude,
     coordinates
   );
 }
 
-function createEquatorGeoJSON(bbox: BBox): FeatureCollection<LineString> {
-  const key = bboxToKey(bbox);
+function createEquatorGeoJSON(): FeatureCollection<
+  LineString,
+  GraticuleLineProperties
+> {
+  const key = 'equator:complete-domain';
   if (cachedEquatorKey === key && cachedEquatorData) {
     return cachedEquatorData;
   }
 
   cachedEquatorData = {
     type: GEOJSON_TYPE.FEATURE_COLLECTION,
-    features: isWithin(0, bbox[1], bbox[3])
-      ? [createParallelFeature(0, bbox)]
-      : []
+    features: [createParallelFeature(0)]
   };
   cachedEquatorKey = key;
   return cachedEquatorData;
@@ -878,19 +1098,19 @@ function createRegularGraticuleGeoJSON(
   bbox: BBox,
   spacingDegrees: number,
   excludeEquator: boolean
-): FeatureCollection<LineString> {
+): FeatureCollection<LineString, GraticuleLineProperties> {
   const [west, south, east, north] = bbox;
-  const features: Feature<LineString>[] = [];
+  const features: Feature<LineString, GraticuleLineProperties>[] = [];
 
   for (const longitude of createDegreeSeries(west, east, spacingDegrees)) {
-    features.push(createMeridianFeature(longitude, bbox));
+    features.push(createMeridianFeature(longitude));
   }
 
   for (const latitude of createDegreeSeries(south, north, spacingDegrees)) {
     if (excludeEquator && isEquatorLatitude(latitude)) {
       continue;
     }
-    features.push(createParallelFeature(latitude, bbox));
+    features.push(createParallelFeature(latitude));
   }
 
   return {
@@ -902,8 +1122,8 @@ function createRegularGraticuleGeoJSON(
 function createRemarkableGraticuleGeoJSON(
   bbox: BBox,
   excludeEquator: boolean
-): FeatureCollection<LineString> {
-  const features: Feature<LineString>[] = [];
+): FeatureCollection<LineString, GraticuleLineProperties> {
+  const features: Feature<LineString, GraticuleLineProperties>[] = [];
   const [west, south, east, north] = bbox;
   const remarkableParallels = [
     -POLAR_CIRCLE_LATITUDE,
@@ -914,7 +1134,7 @@ function createRemarkableGraticuleGeoJSON(
   ];
 
   if (isWithin(0, west, east)) {
-    features.push(createMeridianFeature(0, bbox));
+    features.push(createMeridianFeature(0));
   }
 
   for (const latitude of remarkableParallels) {
@@ -924,7 +1144,7 @@ function createRemarkableGraticuleGeoJSON(
     if (excludeEquator && isEquatorLatitude(latitude)) {
       continue;
     }
-    features.push(createParallelFeature(latitude, bbox));
+    features.push(createParallelFeature(latitude));
   }
 
   return {
@@ -947,8 +1167,8 @@ export function createEquateurLayer(
     ctx.projectionSuffix
   );
   const bbox = normalizeLineBbox(ctx.bbox);
-  const equatorKey = bboxToKey(bbox);
-  const equatorGeoJSON = createEquatorGeoJSON(bbox);
+  const equatorKey = 'equator:complete-domain';
+  const equatorGeoJSON = createEquatorGeoJSON();
 
   const dashArray = config.dotted
     ? dottedPatternToDashArray(config.dottedPattern)
@@ -956,7 +1176,7 @@ export function createEquateurLayer(
 
   return new GeoJsonLayer({
     id: layerId,
-    data: projectFeatureCollectionIfNeeded(equatorGeoJSON, ctx),
+    data: projectGraticuleFeatureCollectionIfNeeded(equatorGeoJSON, ctx, bbox),
     stroked: true,
     filled: false,
     getLineColor: withOpacity(strokeColor, opacity),
@@ -988,22 +1208,27 @@ export function createMeridiensLayer(
     DeckLayerId.BASEMAP_MERIDIENS,
     ctx.projectionSuffix
   );
-  const bbox = normalizeLineBbox(ctx.bbox);
+  const routingBbox = normalizeLineBbox(ctx.bbox);
   const spacingDegrees = normalizeGraticuleSpacing(config.spacingDegrees);
+  const selectionBbox = WORLD_BBOX;
   const mode = config.mode ?? BasemapGraticuleMode.REMARKABLE;
   const excludeEquator = Boolean(ctx.excludeEquator);
 
   const graticuleKey = [
     mode,
     spacingDegrees,
-    bboxToKey(bbox),
+    bboxToKey(selectionBbox),
     excludeEquator ? 'exclude-equator' : 'include-equator'
   ].join(':');
   if (cachedGraticuleKey !== graticuleKey || !cachedGraticuleData) {
     cachedGraticuleData =
       mode === BasemapGraticuleMode.REGULAR
-        ? createRegularGraticuleGeoJSON(bbox, spacingDegrees, excludeEquator)
-        : createRemarkableGraticuleGeoJSON(bbox, excludeEquator);
+        ? createRegularGraticuleGeoJSON(
+            selectionBbox,
+            spacingDegrees,
+            excludeEquator
+          )
+        : createRemarkableGraticuleGeoJSON(selectionBbox, excludeEquator);
     cachedGraticuleKey = graticuleKey;
   }
 
@@ -1015,7 +1240,11 @@ export function createMeridiensLayer(
 
   return new GeoJsonLayer({
     id: layerId,
-    data: projectFeatureCollectionIfNeeded(featuresCollection, ctx),
+    data: projectGraticuleFeatureCollectionIfNeeded(
+      featuresCollection,
+      ctx,
+      routingBbox
+    ),
     stroked: true,
     filled: false,
     getLineColor: withOpacity(strokeColor, opacity),

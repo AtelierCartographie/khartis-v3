@@ -125,6 +125,98 @@ describe('facetsStore', () => {
     ]);
   });
 
+  it('syncs generated facets from the latest base visualization without changing ids', () => {
+    const baseViz = {
+      id: 'base-viz',
+      name: 'Base visualization',
+      datasetId: 'dataset-1',
+      text: {
+        enabled: true,
+        valueColumn: 'base-value'
+      }
+    };
+    mocks.visualizations = [
+      baseViz,
+      {
+        id: 'facet-a',
+        name: 'a',
+        text: { valueColumn: 'a' }
+      },
+      {
+        id: 'facet-b',
+        name: 'b',
+        text: { valueColumn: 'custom-b' }
+      }
+    ];
+
+    facetsStore.restoreFromSerialized({
+      enabled: true,
+      baseVisualizationId: 'base-viz',
+      primarySlotPath: FACET_SLOT.TEXT_VALUE,
+      variables: ['a', 'b'],
+      layout: { columns: 2, gap: 16 },
+      scaleMode: SCALE_MODE.INDEPENDENT,
+      generatedVisualizationIds: ['facet-a', 'facet-b']
+    });
+
+    facetsStore.syncGeneratedVisualizationsFromBase('base-viz');
+
+    expect(mocks.buildFacetVisualizationUpdatesMock).toHaveBeenNthCalledWith(
+      1,
+      {
+        baseViz,
+        visualization: baseViz,
+        variable: 'a',
+        scaleMode: SCALE_MODE.INDEPENDENT,
+        primarySlotPath: FACET_SLOT.TEXT_VALUE
+      }
+    );
+    expect(mocks.buildFacetVisualizationUpdatesMock).toHaveBeenNthCalledWith(
+      2,
+      {
+        baseViz,
+        visualization: baseViz,
+        variable: 'custom-b',
+        scaleMode: SCALE_MODE.INDEPENDENT,
+        primarySlotPath: FACET_SLOT.TEXT_VALUE
+      }
+    );
+    expect(updateVisualizationMock).toHaveBeenNthCalledWith(1, 'facet-a', {
+      name: 'a',
+      facet: { baseVisualizationId: 'base-viz' }
+    });
+    expect(updateVisualizationMock).toHaveBeenNthCalledWith(2, 'facet-b', {
+      name: 'custom-b',
+      facet: { baseVisualizationId: 'base-viz' }
+    });
+  });
+
+  it('does not sync generated facets when a non-base visualization changes', () => {
+    mocks.visualizations = [
+      {
+        id: 'base-viz',
+        name: 'Base visualization',
+        datasetId: 'dataset-1'
+      },
+      { id: 'facet-a', name: 'a' }
+    ];
+
+    facetsStore.restoreFromSerialized({
+      enabled: true,
+      baseVisualizationId: 'base-viz',
+      primarySlotPath: FACET_SLOT.POLYGON_VALUE,
+      variables: ['a'],
+      layout: { columns: 1, gap: 16 },
+      scaleMode: SCALE_MODE.INDEPENDENT,
+      generatedVisualizationIds: ['facet-a']
+    });
+
+    facetsStore.syncGeneratedVisualizationsFromBase('facet-a');
+
+    expect(mocks.buildFacetVisualizationUpdatesMock).not.toHaveBeenCalled();
+    expect(updateVisualizationMock).not.toHaveBeenCalled();
+  });
+
   describe('updateVariables', () => {
     it('should disable the collection when fewer than 2 variables are provided', async () => {
       facetsStore.restoreFromSerialized({

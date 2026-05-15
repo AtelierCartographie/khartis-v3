@@ -91,7 +91,6 @@
   import { resolveOrthographicBasemapReferenceBboxes } from '../utils/orthographic-basemap-reference.utils';
   import { fitBasemapRenderProjection } from '../utils/fit-basemap-render-projection.utils';
   import { resolveActiveBasemapMetadata } from '../utils/basemap-metadata-resolution.utils';
-  import { buildProjectionMaskPath } from '../utils/projection-mask.utils';
   import { resolveProjectionForRender } from '../utils/projection-priority.utils';
   import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
   import { selectRowsByIndices } from '../utils/arrow-filter.utils';
@@ -184,8 +183,6 @@
   const mapCanvasHeight = $derived(
     Math.max(1, Math.round(logicalMapCanvasHeight * pageDisplayScale))
   );
-  const projectionMaskWidth = $derived(Math.max(1, logicalMapCanvasWidth));
-  const projectionMaskHeight = $derived(Math.max(1, logicalMapCanvasHeight));
   const renderModelMatrix = $derived.by(() => {
     const modelMatrix = projectionStore.modelMatrix;
     if (!modelMatrix) {
@@ -201,24 +198,6 @@
   );
   const mapCanvasStyle = $derived.by(() => {
     return `background-color: ${pageBackgroundColor};`;
-  });
-  const projectionMaskPath = $derived.by(() => {
-    if (mapInit.viewMode !== ViewMode.ORTHOGRAPHIC) {
-      return null;
-    }
-
-    if (getProjectionState().overrideSource !== 'manual') {
-      return null;
-    }
-
-    const basemapMeta = getProjectionMetadataForDataset(firstDatasetId);
-    const renderProjection = getOrthographicRenderProjection(basemapMeta);
-
-    return buildProjectionMaskPath({
-      projection: renderProjection,
-      width: projectionMaskWidth,
-      height: projectionMaskHeight
-    });
   });
   const maxRenderBufferSizePx = $derived(getBrowserMaxRenderBufferSizePx());
   const renderPixelRatio = $derived.by(() => {
@@ -265,7 +244,6 @@
 
   let mapContainer = $state<HTMLDivElement | undefined>(undefined);
   let hasCalledOnReady = $state(false);
-  let projectionMaskId = $state<string | null>(null);
   let initStartTime = $state<number>(Date.now());
   let maxWaitTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let worldBaseTable = $state.raw<ArrowTable | null>(null);
@@ -728,6 +706,10 @@
     getProjectionMetadataForDataset: (datasetId) =>
       getProjectionMetadataForDataset(datasetId),
     getProjectionFitBbox: () => getProjectionFitBbox(),
+    getProjectionForSphereMask: () =>
+      getOrthographicRenderProjection(
+        getProjectionMetadataForDataset(firstDatasetId)
+      ),
     getModelMatrix: () => renderModelMatrix,
     getShouldRenderDatasetFallbacks: () =>
       globalState.selectedStep === ToolbarStep.Data,
@@ -2118,11 +2100,6 @@
 
     const container = mapContainer;
 
-    projectionMaskId =
-      typeof crypto?.randomUUID === 'function'
-        ? `projection-mask-${crypto.randomUUID()}`
-        : `projection-mask-${Math.random().toString(36).slice(2)}`;
-
     const initialViewMode = shouldUseMapLibreInterleaved({
       requiresMapLibre: basemapStyleStore.requiresMapLibre,
       hasOSMBasemap: osmBasemapStore.isActive
@@ -2206,41 +2183,6 @@
       style={mapCanvasStyle}
     ></div>
 
-    {#if projectionMaskPath && projectionMaskId}
-      <svg
-        aria-hidden="true"
-        class="projection-mask-overlay"
-        viewBox={`0 0 ${projectionMaskWidth} ${projectionMaskHeight}`}
-        preserveAspectRatio="none"
-      >
-        <defs>
-          <mask
-            id={projectionMaskId}
-            maskUnits="userSpaceOnUse"
-            maskContentUnits="userSpaceOnUse"
-          >
-            <rect
-              width={projectionMaskWidth}
-              height={projectionMaskHeight}
-              fill="white"
-            ></rect>
-            <path
-              d={projectionMaskPath}
-              fill="black"
-              fill-rule="evenodd"
-              clip-rule="evenodd"
-            ></path>
-          </mask>
-        </defs>
-        <rect
-          width={projectionMaskWidth}
-          height={projectionMaskHeight}
-          fill={pageBackgroundColor}
-          mask={`url(#${projectionMaskId})`}
-        ></rect>
-      </svg>
-    {/if}
-
     {#if isSwitchingViewMode}
       <div class="view-mode-loader" transition:fade={{ duration: 200 }}>
         <SkeletonPlaceholder style="width: 100%; height: 100%;" />
@@ -2266,41 +2208,6 @@
         class:is-empty={isBlankCanvas}
         style={mapCanvasStyle}
       ></div>
-
-      {#if projectionMaskPath && projectionMaskId}
-        <svg
-          aria-hidden="true"
-          class="projection-mask-overlay"
-          viewBox={`0 0 ${projectionMaskWidth} ${projectionMaskHeight}`}
-          preserveAspectRatio="none"
-        >
-          <defs>
-            <mask
-              id={projectionMaskId}
-              maskUnits="userSpaceOnUse"
-              maskContentUnits="userSpaceOnUse"
-            >
-              <rect
-                width={projectionMaskWidth}
-                height={projectionMaskHeight}
-                fill="white"
-              ></rect>
-              <path
-                d={projectionMaskPath}
-                fill="black"
-                fill-rule="evenodd"
-                clip-rule="evenodd"
-              ></path>
-            </mask>
-          </defs>
-          <rect
-            width={projectionMaskWidth}
-            height={projectionMaskHeight}
-            fill={pageBackgroundColor}
-            mask={`url(#${projectionMaskId})`}
-          ></rect>
-        </svg>
-      {/if}
 
       {#if isSwitchingViewMode}
         <div class="view-mode-loader" transition:fade={{ duration: 200 }}>
@@ -2362,15 +2269,6 @@
 
   .map-canvas :global(canvas) {
     display: block;
-  }
-
-  .projection-mask-overlay {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    z-index: var(--z-map-layer);
-    pointer-events: none;
   }
 
   .view-mode-loader {
