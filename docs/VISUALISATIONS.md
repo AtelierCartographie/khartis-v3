@@ -260,12 +260,14 @@ Personnalisation réduite : couleur de fond, contour (couleur, épaisseur, point
 | Format        | Contenu                                                        | Service                                                  |
 | ------------- | -------------------------------------------------------------- | -------------------------------------------------------- |
 | JPG bitmap    | Full HD / 2K / 4K, ratio de page conservé                      | `exportMapToJpg()` (`header/services/export.service.ts`) |
-| SVG vectoriel | Calques organisés par viz, annotations incluses                | `exportMapToSvg()`                                       |
+| SVG vectoriel | Calques organisés par viz, annotations et habillage inclus     | `exportMapToSvg()`                                       |
 | CSV           | Données tabulaires (colonne géo exclue)                        | `exportData(format='csv')`                               |
 | GeoJSON       | Données + géométries jointes                                   | `exportData(format='geojson')`                           |
 | `.kh` projet  | Archive autoportante (voir [GESTION_ETAT.md](GESTION_ETAT.md)) | `projectStore.exportProject()`                           |
 
-L'export SVG inclut l'overlay annotations, les légendes, et les indications géographiques. Tous les textes SVG passent par `escapeSvgText()` avant injection `{@html}`.
+L'export SVG produit un document structuré par groupes (`khartis-layer-page`, `khartis-layer-visualizations`, `khartis-layer-legend`, `khartis-layer-geo-indications`, `khartis-layer-annotations`). Les couches Deck.gl connues sont sérialisées en primitives SVG éditables (`path`, `circle`, `text`) quand leurs attributs sont disponibles. Les textes d'habillage et d'annotation sont exportés en `<text>` SVG natif à partir du layout DOM calculé, sans `foreignObject`.
+
+Les fonds MapLibre/OSM restent capturés en `<image>` PNG dans le SVG, car le rendu tuilé WebGL ne peut pas être reconstruit fidèlement en primitives SVG locales. Pendant cette capture, les couches Deck.gl sont temporairement masquées puis restaurées afin d'éviter de dupliquer les visualisations raster et vectorielles. Les annotations image restent aussi des `<image>`.
 
 ---
 
