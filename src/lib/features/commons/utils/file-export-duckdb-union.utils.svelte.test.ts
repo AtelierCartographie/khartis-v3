@@ -80,10 +80,10 @@ describe('DuckDB-backed CSV union exports', () => {
     const createViewQuery = String(mocks.query.mock.calls[0][0]);
 
     expect(createViewQuery).toContain(
-      `SELECT "name", "value", NULL AS "other", 'Dataset A' as _source_dataset FROM "table_a"`
+      `SELECT "name", "value", NULL AS "other", 'Dataset A' as "_source_dataset" FROM "table_a"`
     );
     expect(createViewQuery).toContain(
-      `SELECT "name", NULL AS "value", "other", 'Dataset B' as _source_dataset FROM "table_b"`
+      `SELECT "name", NULL AS "value", "other", 'Dataset B' as "_source_dataset" FROM "table_b"`
     );
     expect(createViewQuery).toContain(' UNION ALL ');
   });

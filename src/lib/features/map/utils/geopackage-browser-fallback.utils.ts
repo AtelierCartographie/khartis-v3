@@ -88,16 +88,32 @@ function resolveSourceCrs(
   organizationCoordsysId: number | bigint | string | null,
   srsId: number | bigint | string | null
 ): string | null {
+  const normalizedOrganization = organization?.toUpperCase() ?? null;
+  const numericOrganizationCoordsysId =
+    organizationCoordsysId === null || organizationCoordsysId === undefined
+      ? null
+      : Number(organizationCoordsysId);
+  const numericSrsId =
+    srsId === null || srsId === undefined ? null : Number(srsId);
+
   if (
-    organization &&
-    organizationCoordsysId !== null &&
-    organizationCoordsysId !== undefined
+    normalizedOrganization === 'NONE' ||
+    numericOrganizationCoordsysId === -1 ||
+    numericSrsId === -1
   ) {
-    return `${organization.toUpperCase()}:${organizationCoordsysId}`;
+    return null;
   }
 
-  if (srsId !== null && srsId !== undefined) {
-    return `EPSG:${srsId}`;
+  if (
+    normalizedOrganization &&
+    numericOrganizationCoordsysId !== null &&
+    Number.isFinite(numericOrganizationCoordsysId)
+  ) {
+    return `${normalizedOrganization}:${numericOrganizationCoordsysId}`;
+  }
+
+  if (numericSrsId !== null && Number.isFinite(numericSrsId)) {
+    return `EPSG:${numericSrsId}`;
   }
 
   return null;

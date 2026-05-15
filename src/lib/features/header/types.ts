@@ -1,5 +1,5 @@
 export type MapExportFormat = 'svg' | 'jpg';
-export type DataExportFormat = 'csv' | 'geojson' | 'csv-geo';
+export type DataExportFormat = 'csv' | 'geojson' | 'geopackage';
 export type ExportResolution = '1080p' | '2k' | '4k';
 
 export interface ExportDimensions {
@@ -23,7 +23,7 @@ export const MAP_FORMAT = {
 export const DATA_FORMAT = {
   CSV: 'csv',
   GEOJSON: 'geojson',
-  CSV_GEO: 'csv-geo'
+  GEOPACKAGE: 'geopackage'
 } as const;
 
 export const EXPORT_RESOLUTION = {

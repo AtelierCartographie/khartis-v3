@@ -245,10 +245,12 @@ export function extractDataFromPaste(pastedText: string): {
   fileType: FileType;
   content: string;
 } | null {
-  const trimmed = pastedText.trim();
-  if (!trimmed) return null;
+  if (!pastedText.trim()) return null;
 
-  const firstLine = trimmed.split('\n')[0];
+  const content = pastedText
+    .replace(/^(?:\r?\n)+/, '')
+    .replace(/(?:\r?\n)+$/, '');
+  const firstLine = content.split(/\r?\n/)[0];
   const hasDelimiter = TABULAR_DELIMITERS.some((d) => firstLine.includes(d));
 
   if (!hasDelimiter) return null;
@@ -256,7 +258,7 @@ export function extractDataFromPaste(pastedText: string): {
   const tabCount = (firstLine.match(/\t/g) || []).length;
   const fileType = tabCount > 0 ? FileType.TSV : FileType.CSV;
 
-  return { fileType, content: trimmed };
+  return { fileType, content };
 }
 
 export function isValidUrl(url: string): boolean {

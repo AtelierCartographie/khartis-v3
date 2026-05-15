@@ -55,10 +55,22 @@ describe('useMapLayers source', () => {
     expect(body).not.toContain('BasemapLayerType.GEOGRAPHIC_LINES');
   });
 
-  it('passes the active basemap bbox to generated basemap layers', () => {
+  it('prefers the projection fit bbox for generated basemap layers', () => {
     expect(source).toContain('bbox: shouldShowBasemapLayers');
-    expect(source).toContain('? (currentMetadata?.bbox ?? projectionFitBbox)');
+    expect(source).toContain(
+      '? (projectionFitBbox ?? currentMetadata?.bbox ?? null)'
+    );
     expect(source).toContain(': projectionFitBbox');
+  });
+
+  it('passes the orthographic canvas extent to generated graticule layers', () => {
+    expect(source).toContain('function getVisibleProjectedCanvasExtent');
+    expect(source).toContain('projectionStore.referenceBbox');
+    expect(source).toContain('get_max_scale(');
+    expect(source).toContain('const graticuleClipExtent');
+    expect(source).toContain(
+      'isOrthographicMode ? getVisibleProjectedCanvasExtent() : null'
+    );
   });
 
   it('only applies modelMatrix in the Deck.gl OrthographicView engine', () => {
@@ -99,6 +111,17 @@ describe('useMapLayers source', () => {
     expect(source).toContain(
       'const projectionOverride = getProjectionOverride('
     );
+  });
+
+  it('applies manual projection clipping through Deck layers instead of a DOM overlay', () => {
+    expect(source).toContain('createProjectionSphereMaskLayer');
+    expect(source).toContain('applyProjectionSphereMask');
+    expect(source).toContain(
+      'isOrthographicMode && hasManualProjectionOverride'
+    );
+    expect(source).toContain('getProjectionForSphereMask?.()');
+    expect(source).toContain('activeBasemapProjection');
+    expect(source).toContain('projectionOverride');
   });
 
   it('keeps generated ocean off imported data until customized or a manual projection needs it', () => {

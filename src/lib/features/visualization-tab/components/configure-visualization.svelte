@@ -53,6 +53,7 @@
   } from '../hooks/use-classification-color-sync.svelte';
   import { usePrimitiveAdapters } from '../adapters/use-primitive-adapters.svelte';
   import { useVisualizationOrchestration } from '../hooks/use-visualization-orchestration.svelte';
+  import { facetsStore } from '../adapters/facets-adapter';
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
   const classificationBreaks = useClassificationBreaksController({
@@ -84,6 +85,7 @@
 
     if (primitive === PrimitiveFilterType.POLYGON) {
       visualizationStore.updateClassification(selectedViz.id, updates, options);
+      syncFacetsFromSelectedVisualization();
       return;
     }
 
@@ -93,6 +95,7 @@
       updates,
       options
     );
+    syncFacetsFromSelectedVisualization();
   }
 
   const primitivePanelController = usePrimitivePanelController({
@@ -109,6 +112,7 @@
         updates,
         options
       );
+      syncFacetsFromSelectedVisualization();
     },
     updatePrimitiveStrokeClassification:
       updatePrimitiveStrokeClassificationState,
@@ -225,6 +229,19 @@
     if (nextVisualization && afterUpdate) {
       afterUpdate(nextVisualization);
     }
+    syncFacetsFromVisualizationId(visualizationId);
+  }
+
+  function syncFacetsFromVisualizationId(visualizationId: string): void {
+    facetsStore.syncGeneratedVisualizationsFromBase(visualizationId);
+  }
+
+  function syncFacetsFromSelectedVisualization(): void {
+    if (!selectedViz?.id) {
+      return;
+    }
+
+    syncFacetsFromVisualizationId(selectedViz.id);
   }
 
   function updatePrimitiveStrokeClassificationState(
@@ -240,6 +257,7 @@
       primitive,
       updates
     );
+    syncFacetsFromSelectedVisualization();
   }
 
   const {

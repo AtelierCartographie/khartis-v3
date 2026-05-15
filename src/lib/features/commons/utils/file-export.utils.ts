@@ -6,13 +6,12 @@ import { LogCategory, logger } from './logger';
 import { escapeIdentifier, escapeSqlString } from './sanitize.utils';
 import { generateFilename } from './string.utils';
 import { MIME, GEOJSON_TYPE } from '../constants';
-import {
-  COLUMN_TYPE_GEOMETRY,
-  GEO_COLUMN_NAMES
-} from '../constants/data.constants';
+import { isDatasetGeometryColumn } from './geometry-column.utils';
 
 const CSV_BOM = '\uFEFF';
 const CSV_MIME_TYPE_UTF8 = `${MIME.CSV};charset=utf-8`;
+const DOWNLOAD_URL_REVOKE_DELAY_MS = 30000;
+const SOURCE_DATASET_COLUMN = '_source_dataset';
 
 export const generateExportFilename = generateFilename;
 
@@ -84,9 +83,13 @@ export async function exportDatasetToCsv(
     }
 
     const viewName = `export_view_${Date.now()}`;
-    const nonGeomColumns = dataset.columns
-      .filter((col) => !isDatasetGeometryColumn(dataset, col))
-      .map((col) => `"${escapeIdentifier(col.name)}"`)
+    const nonGeomColumnNames = getExportableColumnNames(dataset);
+    if (nonGeomColumnNames.length === 0) {
+      throw new Error(m.error_no_valid_data_export());
+    }
+
+    const nonGeomColumns = nonGeomColumnNames
+      .map((columnName) => `"${escapeIdentifier(columnName)}"`)
       .join(', ');
 
     try {
@@ -113,6 +116,9 @@ export async function exportDatasetToCsv(
   const headers = dataset.columns
     .filter((col) => !isDatasetGeometryColumn(dataset, col))
     .map((col) => col.name);
+  if (headers.length === 0) {
+    throw new Error(m.error_no_valid_data_export());
+  }
 
   const data = dataset.data.map((row) => {
     const cleanRow: Record<string, unknown> = {};
@@ -131,9 +137,25 @@ function getExportableColumnNames(dataset: ProcessedDataset): string[] {
     .map((col) => col.name);
 }
 
+function resolveSourceDatasetColumnName(columnNames: string[]): string {
+  const usedNames = new Set(columnNames.map((name) => name.toLowerCase()));
+  if (!usedNames.has(SOURCE_DATASET_COLUMN)) {
+    return SOURCE_DATASET_COLUMN;
+  }
+
+  let index = 2;
+  let candidate = `${SOURCE_DATASET_COLUMN}_${index}`;
+  while (usedNames.has(candidate.toLowerCase())) {
+    index += 1;
+    candidate = `${SOURCE_DATASET_COLUMN}_${index}`;
+  }
+  return candidate;
+}
+
 function buildAlignedUnionSelect(
   dataset: ProcessedDataset,
-  allHeaders: string[]
+  allHeaders: string[],
+  sourceDatasetColumn: string
 ): string {
   const exportableColumns = new Set(getExportableColumnNames(dataset));
   const selectColumns = allHeaders.map((columnName) => {
@@ -144,7 +166,12 @@ function buildAlignedUnionSelect(
   });
   const escapedName = escapeSqlString(dataset.name);
 
-  return `SELECT ${selectColumns.join(', ')}, '${escapedName}' as _source_dataset FROM "${escapeIdentifier(dataset.duckdbTableName!)}"`;
+  const selectList = [
+    ...selectColumns,
+    `'${escapedName}' as "${escapeIdentifier(sourceDatasetColumn)}"`
+  ];
+
+  return `SELECT ${selectList.join(', ')} FROM "${escapeIdentifier(dataset.duckdbTableName!)}"`;
 }
 
 export function exportToGeoJson(data: unknown): Blob {
@@ -188,133 +215,12 @@ export function exportToJson(data: unknown): Blob {
   return new Blob([jsonString], { type: MIME.JSON });
 }
 
-async function exportDatasetsToCsvWithGeometry(
-  datasets: ProcessedDataset[]
-): Promise<Blob> {
-  const allData: Record<string, unknown>[] = [];
-
-  for (const dataset of datasets) {
-    for (const row of dataset.data) {
-      const exportRow: Record<string, unknown> = {};
-
-      for (const col of dataset.columns) {
-        if (isDatasetGeometryColumn(dataset, col)) {
-          const geometry = row[col.name];
-          const wkt = geometryToWkt(geometry);
-          if (wkt) {
-            exportRow['geometry_wkt'] = wkt;
-          }
-        } else {
-          exportRow[col.name] = row[col.name];
-        }
-      }
-
-      if (datasets.length > 1) {
-        exportRow['_source_dataset'] = dataset.name;
-      }
-
-      allData.push(exportRow);
-    }
-  }
-
-  const allHeaders = Array.from(
-    new Set(allData.flatMap((row) => Object.keys(row)))
-  );
-
-  return exportToCsv(allData, allHeaders);
-}
-
-function geometryToWkt(geometry: unknown): string {
-  if (!geometry) {
-    return '';
-  }
-
-  if (typeof geometry === 'string') {
-    const trimmed = geometry.trim();
-    if (!trimmed) {
-      return '';
-    }
-
-    try {
-      return geometryToWkt(JSON.parse(trimmed));
-    } catch {
-      return isWktGeometry(trimmed) ? trimmed : '';
-    }
-  }
-
-  if (typeof geometry !== 'object') {
-    return '';
-  }
-
-  const geom = geometry as { type?: string; coordinates?: unknown };
-  const type = geom.type;
-  const coords = geom.coordinates;
-
-  if (!type || !coords) {
-    return '';
-  }
-
-  switch (type) {
-    case GEOJSON_TYPE.POINT:
-      return `POINT(${formatCoords(coords)})`;
-    case GEOJSON_TYPE.MULTI_POINT:
-      return `MULTIPOINT(${formatMultiCoords(coords as unknown[][])})`;
-    case GEOJSON_TYPE.LINE_STRING:
-      return `LINESTRING(${formatLineCoords(coords as unknown[])})`;
-    case GEOJSON_TYPE.MULTI_LINE_STRING:
-      return `MULTILINESTRING(${formatMultiLineCoords(coords as unknown[][])})`;
-    case GEOJSON_TYPE.POLYGON:
-      return `POLYGON(${formatPolygonCoords(coords as unknown[][])})`;
-    case GEOJSON_TYPE.MULTI_POLYGON:
-      return `MULTIPOLYGON(${formatMultiPolygonCoords(coords as unknown[][][])})`;
-    default:
-      return JSON.stringify(geometry);
-  }
-}
-
-function isWktGeometry(value: string): boolean {
-  return /^(POINT|MULTIPOINT|LINESTRING|MULTILINESTRING|POLYGON|MULTIPOLYGON|GEOMETRYCOLLECTION)\s*\(/i.test(
-    value
-  );
-}
-
-function formatCoords(coords: unknown): string {
-  if (Array.isArray(coords) && coords.length >= 2) {
-    return `${coords[0]} ${coords[1]}`;
-  }
-  return '';
-}
-
-function formatMultiCoords(coords: unknown[][]): string {
-  return coords.map((c) => `(${formatCoords(c)})`).join(', ');
-}
-
-function formatLineCoords(coords: unknown[]): string {
-  return coords.map((c) => formatCoords(c)).join(', ');
-}
-
-function formatMultiLineCoords(coords: unknown[][]): string {
-  return coords.map((line) => `(${formatLineCoords(line)})`).join(', ');
-}
-
-function formatPolygonCoords(coords: unknown[][]): string {
-  return coords.map((ring) => `(${formatLineCoords(ring)})`).join(', ');
-}
-
-function formatMultiPolygonCoords(coords: unknown[][][]): string {
-  return coords.map((poly) => `(${formatPolygonCoords(poly)})`).join(', ');
-}
-
 export async function exportProcessedDatasets(
   datasets: ProcessedDataset[],
-  format: 'csv' | 'geojson' | 'json' | 'csv-geo' = 'json'
+  format: 'csv' | 'geojson' | 'json' = 'json'
 ): Promise<Blob> {
   if (datasets.length === 0) {
     throw new Error(m.error_no_datasets_to_export());
-  }
-
-  if (format === 'csv-geo') {
-    return exportDatasetsToCsvWithGeometry(datasets);
   }
 
   if (format === 'csv') {
@@ -336,8 +242,13 @@ export async function exportProcessedDatasets(
         const allHeaders = Array.from(
           new Set(datasets.flatMap(getExportableColumnNames))
         );
+        const sourceDatasetColumn = resolveSourceDatasetColumnName(allHeaders);
         const unionParts = datasets.map((dataset) => {
-          return buildAlignedUnionSelect(dataset, allHeaders);
+          return buildAlignedUnionSelect(
+            dataset,
+            allHeaders,
+            sourceDatasetColumn
+          );
         });
 
         const unionQuery = `
@@ -366,14 +277,6 @@ export async function exportProcessedDatasets(
     }
 
     const allData: Record<string, unknown>[] = [];
-    for (const dataset of datasets) {
-      const dataWithSource = dataset.data.map((row) => ({
-        ...row,
-        _source_dataset: dataset.name
-      }));
-      allData.push(...dataWithSource);
-    }
-
     const allHeaders = Array.from(
       new Set(
         datasets.flatMap((d) =>
@@ -383,13 +286,27 @@ export async function exportProcessedDatasets(
         )
       )
     );
-    allHeaders.push('_source_dataset');
+    const sourceDatasetColumn = resolveSourceDatasetColumnName(allHeaders);
+    for (const dataset of datasets) {
+      const dataWithSource = dataset.data.map((row) => ({
+        ...row,
+        [sourceDatasetColumn]: dataset.name
+      }));
+      allData.push(...dataWithSource);
+    }
+
+    allHeaders.push(sourceDatasetColumn);
 
     return exportToCsv(allData, allHeaders);
   }
 
   if (format === 'geojson') {
     const allFeatures: unknown[] = [];
+    const allPropertyColumns = Array.from(
+      new Set(datasets.flatMap(getExportableColumnNames))
+    );
+    const sourceDatasetColumn =
+      resolveSourceDatasetColumnName(allPropertyColumns);
 
     for (const dataset of datasets) {
       if (!dataset.geometry && !dataset.analysis.hasGeoData) {
@@ -406,7 +323,7 @@ export async function exportProcessedDatasets(
           .forEach((col) => {
             properties[col.name] = row[col.name];
           });
-        properties._source_dataset = dataset.name;
+        properties[sourceDatasetColumn] = dataset.name;
 
         allFeatures.push({
           type: 'Feature' as const,
@@ -448,21 +365,6 @@ export async function exportProcessedDatasets(
   return exportToJson(exportData);
 }
 
-function isKnownGeometryColumnName(name: string): boolean {
-  return (GEO_COLUMN_NAMES as readonly string[]).includes(name.toLowerCase());
-}
-
-function isDatasetGeometryColumn(
-  dataset: ProcessedDataset,
-  column: ProcessedDataset['columns'][0]
-): boolean {
-  return (
-    column.type === COLUMN_TYPE_GEOMETRY ||
-    ((Boolean(dataset.geometry) || dataset.analysis.hasGeoData) &&
-      isKnownGeometryColumnName(column.name))
-  );
-}
-
 function isGeoJsonGeometryValue(value: unknown): boolean {
   if (!value || typeof value !== 'object') {
     return false;
@@ -492,8 +394,13 @@ export function downloadFile(blob: Blob, filename: string): void {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  a.rel = 'noopener';
+  a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+
+  window.setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, DOWNLOAD_URL_REVOKE_DELAY_MS);
 }
