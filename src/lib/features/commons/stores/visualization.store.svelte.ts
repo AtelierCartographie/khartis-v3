@@ -132,6 +132,8 @@ export interface MissingDataConfig {
   color: string;
   opacity?: number;
   pattern?: boolean;
+  dashed?: boolean;
+  dashedPattern?: BasemapDottedPattern;
   label?: string;
 }
 
@@ -262,6 +264,7 @@ export interface LinePrimitiveConfig {
   maxWidth: number;
   opacity: number;
   dashed: boolean;
+  dashedPattern?: BasemapDottedPattern;
   valueColumn?: string;
   categoryColumn?: string;
   sizeColumn?: string;
@@ -445,6 +448,7 @@ export interface VisualizationConfig {
     lineColor?: string | string[];
     lineOpacity?: number;
     lineDashed?: boolean;
+    lineDashedPattern?: BasemapDottedPattern;
     textColor?: string | string[];
     textOpacity?: number;
     textFontFamily?: string;
@@ -847,6 +851,10 @@ function buildLinePrimitiveConfig(
       VISUALIZATION_DEFAULTS.lineMaxWidth,
     opacity: existing?.opacity ?? visualization.style.lineOpacity ?? 1,
     dashed: existing?.dashed ?? visualization.style.lineDashed ?? false,
+    dashedPattern:
+      existing?.dashedPattern ??
+      visualization.style.lineDashedPattern ??
+      BasemapDottedPattern.DOTS,
     valueColumn: existing?.valueColumn ?? visualization.mapping.valueColumn,
     categoryColumn:
       existing?.categoryColumn ?? visualization.mapping.categoryColumn,
@@ -2082,7 +2090,9 @@ function getDefaultMissingData(): MissingDataConfig {
     shape: MissingDataShape.CIRCLE,
     size: 2,
     color: DEFAULT_MISSING_DATA_COLOR,
-    pattern: false
+    pattern: false,
+    dashed: false,
+    dashedPattern: BasemapDottedPattern.DOTS
   };
 }
 

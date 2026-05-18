@@ -131,7 +131,8 @@ export const buildLinePanelVisualization = createPanelBuilder({
       lineOpacity: line.opacity,
       lineWidth: line.width,
       lineMaxWidth: line.maxWidth,
-      lineDashed: line.dashed
+      lineDashed: line.dashed,
+      lineDashedPattern: line.dashedPattern
     },
     mapping: {
       ...visualization.mapping,

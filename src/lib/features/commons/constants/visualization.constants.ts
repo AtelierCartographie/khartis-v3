@@ -188,8 +188,8 @@ export const VISUALIZATION_DEFAULTS = {
 export const SLIDER_LIMITS = {
   opacity: { min: 0, max: 100, step: 1 },
   strokeWidth: { min: 0, max: 20, step: 0.5 },
-  lineWidth: { min: 0.5, max: 5, step: 0.5 },
-  lineMaxWidth: { min: 1, max: 8, step: 0.5 },
+  lineWidth: { min: 0.5, max: 10, step: 0.5 },
+  lineMaxWidth: { min: 1, max: 10, step: 0.5 },
   lineOpacity: { min: 0, max: 100, step: 1 },
   symbolSize: { min: 1, max: 100, step: 1 },
   symbolMaxSize: { min: 2, max: 100, step: 1 },
