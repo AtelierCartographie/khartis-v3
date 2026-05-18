@@ -4,6 +4,7 @@ import {
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
+  BasemapDottedPattern,
   FillMode,
   StrokeMode,
   SymbolMode
@@ -85,6 +86,7 @@ function createVisualization(): VisualizationConfig {
       width: 2,
       maxWidth: 9,
       dashed: true,
+      dashedPattern: BasemapDottedPattern.DASHES,
       valueColumn: 'flow',
       categoryColumn: 'type',
       sizeColumn: 'size_flow',
@@ -194,6 +196,9 @@ describe('primitive-panel-visualization', () => {
     expect(visualization?.modes?.color).toBe('categories');
     expect(visualization?.modes?.thickness).toBe('classes');
     expect(visualization?.style?.lineColor).toBe('#00ff00');
+    expect(visualization?.style?.lineDashedPattern).toBe(
+      BasemapDottedPattern.DASHES
+    );
     expect(visualization?.mapping?.categoryColumn).toBe('type');
     expect(visualization?.lineThicknessClassification).toEqual(
       createVisualization().line?.thicknessClassification
