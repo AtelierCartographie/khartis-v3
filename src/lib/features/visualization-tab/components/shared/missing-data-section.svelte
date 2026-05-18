@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     Column,
+    Dropdown,
     Grid,
     Row,
     Select,
@@ -9,6 +10,7 @@
   import * as m from '$lib/paraglide/messages';
   import {
     DEFAULT_COLORS,
+    BasemapDottedPattern,
     MissingDataShape,
     SLIDER_LIMITS
   } from '$lib/features/commons/constants/visualization.constants';
@@ -24,12 +26,18 @@
     color?: string;
     shape?: MissingDataShape;
     size?: number;
+    sizeLabel?: string;
     showShapeSelector?: boolean;
     showSizeSlider?: boolean;
+    showDashedToggle?: boolean;
+    dashed?: boolean;
+    dashedPattern?: BasemapDottedPattern;
     onshowchange?: (show: boolean) => void;
     oncolorchange?: (color: string) => void;
     onshapechange?: (shape: MissingDataShape) => void;
     onsizechange?: (size: number) => void;
+    ondashedchange?: (dashed: boolean) => void;
+    ondashedpatternchange?: (pattern: BasemapDottedPattern) => void;
   }
 
   let {
@@ -37,13 +45,29 @@
     color = DEFAULT_COLORS.missingData,
     shape = MissingDataShape.CIRCLE,
     size = 2,
+    sizeLabel = m.size_label(),
     showShapeSelector = true,
     showSizeSlider = true,
+    showDashedToggle = false,
+    dashed = false,
+    dashedPattern = BasemapDottedPattern.DOTS,
     onshowchange,
     oncolorchange,
     onshapechange,
-    onsizechange
+    onsizechange,
+    ondashedchange,
+    ondashedpatternchange
   }: Props = $props();
+
+  const dashedPatternItems = $derived([
+    { id: BasemapDottedPattern.DOTS, text: m.dashed_pattern_dots() },
+    { id: BasemapDottedPattern.DASHES, text: m.dashed_pattern_dashes() },
+    { id: BasemapDottedPattern.DASH_DOT, text: m.dashed_pattern_dash_dot() },
+    {
+      id: BasemapDottedPattern.LONG_DASH,
+      text: m.dashed_pattern_long_dash()
+    }
+  ]);
 
   function handleShowToggle(value: boolean) {
     show = value;
@@ -54,6 +78,20 @@
     const target = e.target as HTMLSelectElement;
     const next = coerceMissingDataShape(target.value);
     if (next) onshapechange?.(next);
+  }
+
+  function handleDashedToggle(value: boolean) {
+    dashed = value;
+    ondashedchange?.(value);
+  }
+
+  function handleDashedPatternSelect(value: string | number) {
+    const next =
+      Object.values(BasemapDottedPattern).find(
+        (pattern) => pattern === value
+      ) ?? BasemapDottedPattern.DOTS;
+    dashedPattern = next;
+    ondashedpatternchange?.(next);
   }
 </script>
 
@@ -108,7 +146,7 @@
           <Column>
             <div class="size-slider">
               <SliderWithInput
-                label={m.size_label()}
+                label={sizeLabel}
                 bind:value={size}
                 min={SLIDER_LIMITS.missingDataSize.min}
                 max={SLIDER_LIMITS.missingDataSize.max}
@@ -118,6 +156,34 @@
             </div>
           </Column>
         </Row>
+      {/if}
+
+      {#if showDashedToggle}
+        <Row>
+          <Column>
+            <div class="dashed-toggle">
+              <ToggleWithLabel
+                label={m.dashed()}
+                toggled={dashed}
+                ontoggle={handleDashedToggle}
+              />
+            </div>
+          </Column>
+        </Row>
+        {#if dashed}
+          <Row>
+            <Column>
+              <Dropdown
+                titleText={m.stroke_dashed_pattern()}
+                items={dashedPatternItems}
+                selectedId={dashedPattern}
+                on:select={(e) =>
+                  handleDashedPatternSelect(e.detail.selectedId)}
+                type="default"
+              />
+            </Column>
+          </Row>
+        {/if}
       {/if}
     </Grid>
   {/if}
@@ -131,6 +197,10 @@
   }
 
   .size-slider {
+    margin-top: var(--cds-spacing-03);
+  }
+
+  .dashed-toggle {
     margin-top: var(--cds-spacing-03);
   }
 </style>
