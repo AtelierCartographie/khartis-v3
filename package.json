@@ -111,7 +111,6 @@
     "@deck.gl/mapbox": "^9.3.2",
     "@duckdb/duckdb-wasm": "1.33.1-dev45.0",
     "@fontsource/cabin": "^5.2.8",
-    "@fontsource/ibm-plex-mono": "^5.2.7",
     "@fontsource/ibm-plex-sans": "^5.2.8",
     "@fontsource/inter": "^5.2.8",
     "@fontsource/lato": "^5.2.7",
