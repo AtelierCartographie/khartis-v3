@@ -30,6 +30,7 @@
     View
   } from 'carbon-icons-svelte';
   import clsx from 'clsx';
+  import type { Component } from 'svelte';
   import ToolPopover from '../step-toolbar/tool-popover.svelte';
   import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations';
   import {
@@ -43,9 +44,33 @@
   import ToolContainer from '../step-toolbar/tools/tool-container.svelte';
   import { VizSubTab } from './main-toolbar.constants';
   import DataTab from '$lib/features/data-tab/data-tab.svelte';
-  import ChooseVisualization from '$lib/features/visualization-tab/components/choose-visualization.svelte';
-  import ConfigureVisualization from '$lib/features/visualization-tab/components/configure-visualization.svelte';
-  import CustomizeBasemap from '$lib/features/visualization-tab/components/customize-basemap.svelte';
+
+  let ChooseVisualization = $state<Component | null>(null);
+  let ConfigureVisualization = $state<Component | null>(null);
+  let CustomizeBasemap = $state<Component | null>(null);
+  let vizComponentsLoadPromise: Promise<void> | null = null;
+
+  function ensureVizComponentsLoaded(): Promise<void> {
+    if (ChooseVisualization && ConfigureVisualization && CustomizeBasemap) {
+      return Promise.resolve();
+    }
+    vizComponentsLoadPromise ??= Promise.all([
+      import('$lib/features/visualization-tab/components/choose-visualization.svelte'),
+      import('$lib/features/visualization-tab/components/configure-visualization.svelte'),
+      import('$lib/features/visualization-tab/components/customize-basemap.svelte')
+    ]).then(([choose, configure, customize]) => {
+      ChooseVisualization = choose.default;
+      ConfigureVisualization = configure.default;
+      CustomizeBasemap = customize.default;
+    });
+    return vizComponentsLoadPromise;
+  }
+
+  $effect(() => {
+    if (globalState.selectedStep === ToolbarStep.Visualizations) {
+      void ensureVizComponentsLoaded();
+    }
+  });
 
   let activeVizSubTab = $state<VizSubTab>(VizSubTab.CHOOSE);
 
@@ -170,9 +195,9 @@
         <DataTab />
       {:else if globalState.selectedStep === ToolbarStep.Visualizations}
         <div class="viz-content">
-          {#if activeVizSubTab === VizSubTab.CHOOSE}
+          {#if activeVizSubTab === VizSubTab.CHOOSE && ChooseVisualization}
             <ChooseVisualization />
-          {:else}
+          {:else if ConfigureVisualization && CustomizeBasemap}
             <ConfigureVisualization />
             <CustomizeBasemap />
           {/if}
