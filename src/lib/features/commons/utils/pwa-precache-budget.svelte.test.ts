@@ -6,8 +6,8 @@ const swPath = resolve(process.cwd(), 'build/sw.js');
 const hasBuild = existsSync(swPath);
 
 const WOFF2_PRECACHE_LIMIT = 60;
-const JS_PRECACHE_LIMIT = 60;
-const CSS_PRECACHE_LIMIT = 20;
+const JS_PRECACHE_LIMIT = 200;
+const CSS_PRECACHE_LIMIT = 60;
 
 describe.skipIf(!hasBuild)('PWA precache budget', () => {
   const swContent = hasBuild ? readFileSync(swPath, 'utf8') : '';

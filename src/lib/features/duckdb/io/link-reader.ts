@@ -7,6 +7,7 @@ import {
 import * as m from '$lib/paraglide/messages';
 import * as duckdb from '@duckdb/duckdb-wasm';
 import { DUCK_CONST } from '../constants';
+import { ensureHTTPFSLoaded } from '../core/engine';
 import { executeQuery } from '../core/query';
 import { runInTransaction } from '../core/transaction';
 import type { DuckDBContext, ReadLinkOptions } from '../types';
@@ -33,6 +34,8 @@ export async function readLink(
   if (!tablename) {
     tablename = generateUniqueTableName(filename, ctx.loaded_files);
   }
+
+  await ensureHTTPFSLoaded();
 
   await ctx.db.registerFileURL(
     filename,
