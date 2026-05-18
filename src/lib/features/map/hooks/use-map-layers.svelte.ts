@@ -63,7 +63,8 @@ import {
 import { resolveProjectionForRender } from '../utils/projection-priority.utils';
 import {
   applyProjectionSphereMask,
-  createProjectionSphereMaskLayer
+  createProjectionSphereMaskLayer,
+  createProjectionSphereOutlineLayer
 } from '../utils/projection-sphere-mask.utils';
 import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
 import { getRepresentativePointArrowTable } from '$lib/features/duckdb/orchestrator/arrow-ops';
@@ -1245,19 +1246,28 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         thematicLayers: layers,
         basemapForegroundLayers
       });
-      const projectionSphereMaskLayer =
+      const sphereProjectionInput =
         isOrthographicMode && hasManualProjectionOverride
-          ? createProjectionSphereMaskLayer({
-              projection:
-                getProjectionForSphereMask?.() ??
-                activeBasemapProjection ??
-                projectionOverride,
-              modelMatrix: matrixToApply
-            })
-          : null;
+          ? (getProjectionForSphereMask?.() ??
+            activeBasemapProjection ??
+            projectionOverride)
+          : undefined;
+      const projectionSphereMaskLayer = sphereProjectionInput
+        ? createProjectionSphereMaskLayer({
+            projection: sphereProjectionInput,
+            modelMatrix: matrixToApply
+          })
+        : null;
+      const projectionSphereOutlineLayer = sphereProjectionInput
+        ? createProjectionSphereOutlineLayer({
+            projection: sphereProjectionInput,
+            modelMatrix: matrixToApply
+          })
+        : null;
       const maskedOrderedLayers = applyProjectionSphereMask(
         orderedLayers,
-        projectionSphereMaskLayer
+        projectionSphereMaskLayer,
+        projectionSphereOutlineLayer
       );
       layers.length = 0;
       layers.push(...maskedOrderedLayers);
