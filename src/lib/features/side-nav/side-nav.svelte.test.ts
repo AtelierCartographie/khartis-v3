@@ -17,9 +17,12 @@ describe('side nav', () => {
   });
 
   it('renders the version label from an environment variable', () => {
-    expect(source).toContain(
-      'const appVersion = import.meta.env.VITE_APP_VERSION || DEFAULT_APP_VERSION;'
-    );
+    expect(source).toContain('import.meta.env.VITE_APP_VERSION');
+    expect(source).toContain('DEFAULT_APP_VERSION');
     expect(source).toContain('m.sidenav_version({ version: appVersion })');
+  });
+
+  it('strips a leading v from the env-injected version to avoid double "vv"', () => {
+    expect(source).toMatch(/\.replace\(\s*\/\^v\/i\s*,\s*['"]['"]\s*\)/);
   });
 });
