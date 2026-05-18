@@ -198,6 +198,24 @@ function resolveThematicStrokeDashArray(
   }
 }
 
+function isMissingLineNumericValue(value: unknown): boolean {
+  if (value === null || value === undefined || value === '') {
+    return true;
+  }
+  const numericValue = typeof value === 'number' ? value : Number(value);
+  return !Number.isFinite(numericValue);
+}
+
+function isMissingLineCategoryValue(
+  value: unknown,
+  colorMap: Map<string, RGBColor> | null
+): boolean {
+  if (value === null || value === undefined || value === '') {
+    return true;
+  }
+  return !colorMap?.has(String(value));
+}
+
 export const DEFAULT_TEXT_MASK_PADDING: [number, number] = [3, 1];
 export const TEXT_COLLISION_SAFE_PADDING: [number, number] = [4, 4];
 export const TEXT_COLLISION_PRIORITY = 1;
@@ -4597,7 +4615,9 @@ export function createLineLayers(
       : rawLineFillOpacity;
   const resolvedLineWidth = lineConfig?.width ?? strokeWidth;
   const lineDashed = lineConfig?.dashed ?? false;
-  const lineDashArray = lineDashed ? DEFAULT_DASH_ARRAY : [0, 0];
+  const lineDashArray = lineDashed
+    ? resolveThematicStrokeDashArray(lineConfig?.dashedPattern)
+    : ([0, 0] as [number, number]);
 
   const hasLineHighlights =
     lineHighlightedRowIds && lineHighlightedRowIds.size > 0;
@@ -4632,9 +4652,34 @@ export function createLineLayers(
   const { min: minValue, max: maxValue } = lineStatistics;
   const resolvedSizeScale = viz?.symbols?.sizeScale ?? ScaleType.LINEAR;
   const maxLineWidth = lineConfig?.maxWidth ?? resolvedLineWidth;
+  const lineMissingData = lineConfig?.missingData;
+  const lineHasMissingDataStyle =
+    !!lineMissingData &&
+    (useChoropleth || useCategoricalColor || usesVariableLineWidth);
+  const { color: lineMissingColor, show: showLineMissingData } =
+    resolveMissingDataRenderProps(
+      lineConfig,
+      hexToRgb(DEFAULT_COLORS.missingData)
+    );
+  const lineMissingColorTuple = withOpacity(
+    lineMissingColor,
+    showLineMissingData ? normalizedLineOpacity : 0
+  ) as [number, number, number, number];
+  const lineMissingWidth = showLineMissingData
+    ? (lineMissingData?.size ?? resolvedLineWidth)
+    : 0;
+  const lineMissingDashArray =
+    showLineMissingData && lineMissingData?.dashed
+      ? resolveThematicStrokeDashArray(lineMissingData.dashedPattern)
+      : lineDashArray;
+  const usesMissingLineDash =
+    lineHasMissingDataStyle &&
+    showLineMissingData &&
+    (lineMissingData?.dashed ?? false);
+  const lineUsesDashExtension = lineDashed || usesMissingLineDash;
 
   const lineLayerBaseId = createThematicLayerId(DeckLayerId.LINE_LAYER, ctx);
-  const layerId = lineDashed
+  const layerId = lineUsesDashExtension
     ? `${lineLayerBaseId}-dashed`
     : `${lineLayerBaseId}-solid`;
   const primitiveFilters = getEnabledPrimitiveFilters(viz);
@@ -4652,7 +4697,7 @@ export function createLineLayers(
     (arrowExtension === ArrowExtension.GEOARROW_LINESTRING ||
       arrowExtension === ArrowExtension.GEOARROW_MULTILINESTRING);
 
-  if ((isNativeGeoArrowLine || isNativeGeoArrow) && !lineDashed) {
+  if ((isNativeGeoArrowLine || isNativeGeoArrow) && !lineUsesDashExtension) {
     const lineData = resolvePathParser(ctx.customProjection)(jsTable);
     const effectiveCategoryColorMap = resolveEffectiveCategoryColorMap(
       jsTable,
@@ -4661,13 +4706,47 @@ export function createLineLayers(
       lineCategoryColumn,
       PrimitiveFilterType.LINE
     );
+    const isMissingLineRow = (row: DeckDataRow): boolean => {
+      if (!lineHasMissingDataStyle) return false;
+      if (
+        useCategoricalColor &&
+        lineCategoryColumn &&
+        isMissingLineCategoryValue(
+          row[lineCategoryColumn],
+          effectiveCategoryColorMap
+        )
+      ) {
+        return true;
+      }
+      if (
+        useChoropleth &&
+        lineValueColumn &&
+        isMissingLineNumericValue(row[lineValueColumn])
+      ) {
+        return true;
+      }
+      if (
+        useClassedWidth &&
+        lineValueColumn &&
+        isMissingLineNumericValue(row[lineValueColumn])
+      ) {
+        return true;
+      }
+      return (
+        useProportionalWidth &&
+        !!lineSizeColumn &&
+        isMissingLineNumericValue(row[lineSizeColumn])
+      );
+    };
 
     const choroplethAccessor =
       useChoropleth && viz
         ? createChoroplethColorAccessor(
             lineValueColumn!,
             lineColorClassification!.breaks!,
-            lineColorClassification!.colors!
+            lineColorClassification!.colors!,
+            lineMissingColor,
+            showLineMissingData
           )
         : null;
 
@@ -4676,8 +4755,8 @@ export function createLineLayers(
         ? createCategoricalColorAccessor(
             lineCategoryColumn!,
             effectiveCategoryColorMap,
-            HIGHLIGHT_FILL_COLOR,
-            true,
+            lineMissingColor,
+            showLineMissingData,
             lineColorClassification?.disabledLabels ?? []
           )
         : null;
@@ -4690,7 +4769,17 @@ export function createLineLayers(
             baseColorFn(row),
             normalizedLineOpacity
           ) as [number, number, number, number]
-      : null;
+      : lineHasMissingDataStyle
+        ? (row: DeckDataRow) =>
+            isMissingLineRow(row)
+              ? lineMissingColorTuple
+              : (withOpacity(resolvedLineColor, normalizedLineOpacity) as [
+                  number,
+                  number,
+                  number,
+                  number
+                ])
+        : null;
 
     const lineColorFn =
       hasLineHighlights && lineHighlightedRowIds
@@ -4713,7 +4802,7 @@ export function createLineLayers(
       ? pathColorAttr(lineData, ctxRowAccessor(ctx, jsTable, lineColorFn))
       : null;
 
-    const widthFn =
+    const variableWidthFn =
       useClassedWidth && viz
         ? createClassedSizeAccessor(
             lineValueColumn!,
@@ -4733,6 +4822,13 @@ export function createLineLayers(
               resolvedSizeScale
             )
           : null;
+    const widthFn =
+      variableWidthFn || lineHasMissingDataStyle
+        ? (row: DeckDataRow) =>
+            isMissingLineRow(row)
+              ? lineMissingWidth
+              : (variableWidthFn?.(row) ?? resolvedLineWidth)
+        : null;
 
     const widthBinaryAttr = widthFn
       ? pathWidthAttr(lineData, ctxRowAccessor(ctx, jsTable, widthFn))
@@ -4783,13 +4879,17 @@ export function createLineLayers(
           lineColorClassification?.colors,
           lineCategoryColorMap,
           lineColorClassification?.labels,
+          lineColorClassification?.disabledLabels,
           resolvedLineColor,
           normalizedLineOpacity,
+          lineMissingColor,
+          showLineMissingData,
           hlVersion
         ],
         getDashArray: [lineDashed],
         getWidth: [
           usesVariableLineWidth,
+          lineHasMissingDataStyle,
           lineSizeColumn,
           lineValueColumn,
           minValue,
@@ -4797,7 +4897,8 @@ export function createLineLayers(
           lineThicknessClassification?.breaks,
           maxLineWidth,
           resolvedSizeScale,
-          resolvedLineWidth
+          resolvedLineWidth,
+          lineMissingWidth
         ]
       }
     });
@@ -4867,6 +4968,41 @@ export function createLineLayers(
     lineCategoryColumn,
     PrimitiveFilterType.LINE
   );
+  const isMissingLineFeature = (feature: {
+    properties?: Record<string, unknown> | null;
+  }): boolean => {
+    if (!lineHasMissingDataStyle) return false;
+    const properties = feature.properties;
+    if (
+      useCategoricalColor &&
+      lineCategoryColumn &&
+      isMissingLineCategoryValue(
+        properties?.[lineCategoryColumn],
+        effectiveCategoryColorMap
+      )
+    ) {
+      return true;
+    }
+    if (
+      useChoropleth &&
+      lineValueColumn &&
+      isMissingLineNumericValue(properties?.[lineValueColumn])
+    ) {
+      return true;
+    }
+    if (
+      useClassedWidth &&
+      lineValueColumn &&
+      isMissingLineNumericValue(properties?.[lineValueColumn])
+    ) {
+      return true;
+    }
+    return (
+      useProportionalWidth &&
+      !!lineSizeColumn &&
+      isMissingLineNumericValue(properties?.[lineSizeColumn])
+    );
+  };
 
   const baseGeoJsonLineColor =
     useChoropleth && viz
@@ -4876,7 +5012,9 @@ export function createLineLayers(
               lineValueColumn!,
               lineColorClassification!.breaks!,
               lineColorClassification!.colors!,
-              resolvedLineColor
+              resolvedLineColor,
+              lineMissingColor,
+              showLineMissingData
             )(feature),
             normalizedLineOpacity
           ) as [number, number, number, number]
@@ -4887,13 +5025,23 @@ export function createLineLayers(
                 lineCategoryColumn!,
                 effectiveCategoryColorMap,
                 resolvedLineColor,
-                resolvedLineColor,
-                true,
+                lineMissingColor,
+                showLineMissingData,
                 lineColorClassification?.disabledLabels ?? []
               )(feature),
               normalizedLineOpacity
             ) as [number, number, number, number]
-        : null;
+        : lineHasMissingDataStyle
+          ? (feature: { properties?: Record<string, unknown> | null }) =>
+              isMissingLineFeature(feature)
+                ? lineMissingColorTuple
+                : (withOpacity(resolvedLineColor, normalizedLineOpacity) as [
+                    number,
+                    number,
+                    number,
+                    number
+                  ])
+          : null;
 
   const geoJsonLineColor =
     hasLineHighlights && lineHighlightedRowIds
@@ -4913,7 +5061,7 @@ export function createLineLayers(
       : (baseGeoJsonLineColor ??
         withOpacity(resolvedLineColor, normalizedLineOpacity));
 
-  const geoJsonLineWidth =
+  const geoJsonVariableLineWidth =
     useClassedWidth && viz
       ? createGeoJsonClassedSizeAccessor(
           lineValueColumn!,
@@ -4935,6 +5083,19 @@ export function createLineLayers(
             resolvedLineWidth
           )
         : resolvedLineWidth;
+  const geoJsonLineWidth =
+    typeof geoJsonVariableLineWidth === 'function' || lineHasMissingDataStyle
+      ? (feature: { properties?: Record<string, unknown> | null }) =>
+          isMissingLineFeature(feature)
+            ? lineMissingWidth
+            : typeof geoJsonVariableLineWidth === 'function'
+              ? geoJsonVariableLineWidth(feature)
+              : geoJsonVariableLineWidth
+      : geoJsonVariableLineWidth;
+  const geoJsonDashArray = lineUsesDashExtension
+    ? (feature: { properties?: Record<string, unknown> | null }) =>
+        isMissingLineFeature(feature) ? lineMissingDashArray : lineDashArray
+    : lineDashArray;
   const filteredLineGeojsonData = filterGeoJsonByYear(
     lineGeojsonData,
     ctx.yearFilter
@@ -4946,8 +5107,8 @@ export function createLineLayers(
     stroked: true,
     filled: false,
     getLineColor: geoJsonLineColor,
-    extensions: lineDashed ? [DASH_EXTENSION] : [],
-    getDashArray: lineDashArray,
+    extensions: lineUsesDashExtension ? [DASH_EXTENSION] : [],
+    getDashArray: geoJsonDashArray,
     dashJustified: true,
     lineWidthUnits: 'pixels',
     getLineWidth: geoJsonLineWidth,
@@ -4966,13 +5127,21 @@ export function createLineLayers(
         lineColorClassification?.colors,
         lineCategoryColorMap,
         lineColorClassification?.labels,
+        lineColorClassification?.disabledLabels,
         resolvedLineColor,
         normalizedLineOpacity,
         hlVersion
       ],
-      getDashArray: [lineDashed],
+      getDashArray: [
+        lineDashed,
+        lineConfig?.dashedPattern,
+        lineMissingData?.dashed,
+        lineMissingData?.dashedPattern,
+        showLineMissingData
+      ],
       getLineWidth: [
         usesVariableLineWidth,
+        lineHasMissingDataStyle,
         lineSizeColumn,
         lineValueColumn,
         minValue,
@@ -4980,7 +5149,8 @@ export function createLineLayers(
         lineThicknessClassification?.breaks,
         maxLineWidth,
         resolvedSizeScale,
-        resolvedLineWidth
+        resolvedLineWidth,
+        lineMissingWidth
       ]
     }
   });

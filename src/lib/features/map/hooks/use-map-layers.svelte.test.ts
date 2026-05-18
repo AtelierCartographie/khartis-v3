@@ -184,6 +184,17 @@ describe('useMapLayers source', () => {
     );
   });
 
+  it('does not preserve stale thematic layers when visualization filters return no rows', () => {
+    expect(source).toContain('let hasEmptyFilteredVisualization = false;');
+    expect(source).toContain(
+      'if (filteredTable !== table && filteredTable.numRows === 0) {'
+    );
+    expect(source).toContain('hasEmptyFilteredVisualization = true;');
+    expect(source).toContain(
+      'const shouldPreservePreviousLayers =\n        !hasEmptyFilteredVisualization &&'
+    );
+  });
+
   it('preserves explicit null projection metadata for standalone geofiles', () => {
     expect(source).toContain('function getDatasetProjectionMetadata(');
     expect(source).toContain('metadata === undefined ? currentMetadata');
