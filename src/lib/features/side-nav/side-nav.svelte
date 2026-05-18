@@ -44,7 +44,9 @@
 
   const DEFAULT_APP_VERSION = '1.6.0-staging.1';
   const sideNav = useSideNav();
-  const appVersion = import.meta.env.VITE_APP_VERSION || DEFAULT_APP_VERSION;
+  const appVersion = (
+    import.meta.env.VITE_APP_VERSION || DEFAULT_APP_VERSION
+  ).replace(/^v/i, '');
   let shortcutLabels = $state(getSideNavShortcutLabels(false));
   let deferredInstallPrompt = $state<BeforeInstallPromptEvent | null>(null);
   let isInstallDialogOpen = $state(false);
