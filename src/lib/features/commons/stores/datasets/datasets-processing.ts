@@ -22,6 +22,8 @@ import {
   isGeoJSONFeatureCollection,
   type GeoJSONFeatureCollection
 } from '$lib/types/data';
+import { fontAssetsStore } from '../font-assets.store.svelte';
+import { detectFontsInDataset } from '../../services/font-detection.service';
 
 export interface VisualizationConfig {
   id: string;
@@ -452,6 +454,18 @@ export async function processFiles(
       state.enabledDatasetIds.add(dataset.id);
     }
 
+    for (const dataset of newDatasets) {
+      detectFontsInDataset(dataset)
+        .then((fonts) => {
+          if (fonts.size > 0) {
+            void fontAssetsStore.loadFallbackFonts(fonts);
+          }
+        })
+        .catch(() => {
+          // ignore font detection errors — non-critical
+        });
+    }
+
     if (newDatasets.length > 0 && !state.selectedDatasetId) {
       state.selectedDatasetId = newDatasets[0].id;
     }
@@ -572,6 +586,18 @@ export async function addFile(
         pendingResolvers.forEach((resolve) => resolve(dataset.id));
         internals.pendingDatasetResolvers.delete(dataset.sourceFileId);
       }
+    }
+
+    for (const dataset of datasets) {
+      detectFontsInDataset(dataset)
+        .then((fonts) => {
+          if (fonts.size > 0) {
+            void fontAssetsStore.loadFallbackFonts(fonts);
+          }
+        })
+        .catch(() => {
+          // ignore font detection errors — non-critical
+        });
     }
 
     return addedDataset;
