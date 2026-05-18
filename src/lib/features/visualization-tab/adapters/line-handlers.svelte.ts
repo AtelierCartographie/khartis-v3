@@ -82,7 +82,8 @@ export function createLineHandlers(deps: LineHandlersDeps) {
         { from: 'lineOpacity', to: 'opacity' },
         { from: 'lineWidth', to: 'width' },
         { from: 'lineMaxWidth', to: 'maxWidth' },
-        { from: 'lineDashed', to: 'dashed' }
+        { from: 'lineDashed', to: 'dashed' },
+        { from: 'lineDashedPattern', to: 'dashedPattern' }
       ],
       line
     );

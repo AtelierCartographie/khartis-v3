@@ -16,17 +16,30 @@ const colorSectionSource = readFileSync(
 );
 
 describe('LinesConfig — palette wiring', () => {
-  it('keeps the Figma section structure for thickness, color and global controls', () => {
+  it('keeps the section structure for thickness, color and scoped controls', () => {
     expect(thicknessSectionSource).toContain(
       '<SectionHeading title={m.thickness()} />'
     );
     expect(colorSectionSource).toContain(
       '<SectionHeading title={m.color()} />'
     );
-    expect(source).toContain('<ToggleWithLabel');
-    expect(source).toContain('<MissingDataSection');
+    expect(thicknessSectionSource).toContain('<ToggleWithLabel');
+    expect(thicknessSectionSource).toContain('<MissingDataSection');
+    expect(colorSectionSource).toContain('<ToggleWithLabel');
+    expect(colorSectionSource).toContain('<MissingDataSection');
     expect(source).toContain('<LineThicknessSection');
     expect(source).toContain('<LineColorSection');
+  });
+
+  it('uses only Carbon icons in line mode selectors', () => {
+    expect(thicknessSectionSource).toContain(
+      "import { Minimize, Subtract, Table } from 'carbon-icons-svelte'"
+    );
+    expect(colorSectionSource).toContain(
+      "import { Subtract, Table, Tag } from 'carbon-icons-svelte'"
+    );
+    expect(thicknessSectionSource).not.toContain('<svg');
+    expect(colorSectionSource).not.toContain('<svg');
   });
 
   it('renders the proportional and classes thickness branches with shared controls', () => {
@@ -43,6 +56,18 @@ describe('LinesConfig — palette wiring', () => {
     expect(classesBlock).toBeDefined();
     expect(classesBlock).toContain('<DiscretizationRow');
     expect(classesBlock).toContain('label={m.max_thickness()}');
+  });
+
+  it('filters line variable pickers by quantitative or qualitative type', () => {
+    expect(thicknessSectionSource).toContain(
+      "filterFieldsByKind(\n      selectableDataFields,\n      'numeric'"
+    );
+    expect(colorSectionSource).toContain(
+      "filterFieldsByKind(\n      selectableDataFields,\n      'numeric'"
+    );
+    expect(colorSectionSource).toContain(
+      "filterFieldsByKind(\n      selectableDataFields,\n      'textual'"
+    );
   });
 
   it('should import PALETTE_TYPE from palette-popover/palette.constants', () => {
@@ -96,6 +121,16 @@ describe('LinesConfig — palette wiring', () => {
       ?.split('{:else if')[0];
     expect(uniqueBlock).toContain('<SingleColorPreview');
     expect(uniqueBlock).not.toContain('<ColorSelector');
+    expect(uniqueBlock).not.toContain('<MissingDataSection');
+  });
+
+  it('configures line missing data without the generic representation selector', () => {
+    expect(colorSectionSource).toContain('showShapeSelector={false}');
+    expect(colorSectionSource).toContain('sizeLabel={m.thickness()}');
+    expect(colorSectionSource).toContain('showDashedToggle={true}');
+    expect(thicknessSectionSource).toContain('showShapeSelector={false}');
+    expect(thicknessSectionSource).toContain('showSizeSlider={false}');
+    expect(thicknessSectionSource).toContain('showDashedToggle={true}');
   });
 
   it('should enable Categories Aspect popover via categoriesMode + categoryLabels on CATEGORIES', () => {
