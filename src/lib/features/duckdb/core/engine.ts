@@ -183,8 +183,20 @@ async function loadHTTPFSExtension(): Promise<void> {
   }
 }
 
+export async function ensureHTTPFSLoaded(): Promise<void> {
+  if (extensionsLoaded.httpfs) return;
+  if (extensionLoadPromises.httpfs) {
+    await extensionLoadPromises.httpfs;
+    return;
+  }
+  extensionLoadPromises.httpfs = loadHTTPFSExtension().finally(() => {
+    extensionLoadPromises.httpfs = null;
+  });
+  await extensionLoadPromises.httpfs;
+}
+
 async function preloadExtensions(): Promise<void> {
-  await Promise.all([loadSpatialExtension(), loadHTTPFSExtension()]);
+  await loadSpatialExtension();
 }
 
 export async function initEngine(): Promise<void> {

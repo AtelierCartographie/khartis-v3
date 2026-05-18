@@ -25,7 +25,6 @@
   import { setLocale, locales, cookieName } from '$lib/paraglide/runtime.js';
   import Header from '$lib/features/header/header.svelte';
   import MainToolbar from '$lib/features/main-toolbar/main-toolbar.svelte';
-  import MobileToolbar from '$lib/features/main-toolbar/mobile-toolbar.svelte';
   import MobileOpenPanelButton from '$lib/features/map/components/mobile-open-panel-button.svelte';
   import MapTooltipOverlay from '$lib/features/map/components/map-tooltip-overlay.svelte';
   import ZoomToolbar from '$lib/features/map/components/zoom-toolbar.svelte';
@@ -74,7 +73,26 @@
   let previousStep = $state<ToolbarStep | null>(null);
   let stylingElementsInitializedForProject = $state<string | null>(null);
   let CreateProject = $state<CreateProjectComponent | null>(null);
+  let MobileToolbar = $state<Component | null>(null);
+  let mobileToolbarLoadPromise: Promise<void> | null = null;
   const ENABLE_BEFOREUNLOAD_CONFIRMATION = false;
+
+  function ensureMobileToolbarLoaded(): Promise<void> {
+    if (MobileToolbar) return Promise.resolve();
+    mobileToolbarLoadPromise ??=
+      import('$lib/features/main-toolbar/mobile-toolbar.svelte').then(
+        (module) => {
+          MobileToolbar = module.default;
+        }
+      );
+    return mobileToolbarLoadPromise;
+  }
+
+  $effect(() => {
+    if (globalState.isMobileView) {
+      void ensureMobileToolbarLoaded();
+    }
+  });
 
   const handleResize = () => {
     globalActions.setMobileView(window.innerWidth < MOBILE_BREAKPOINT);
@@ -639,9 +657,9 @@
         {/if}
       </article>
 
-      {#if globalState.isMobileView}
+      {#if globalState.isMobileView && MobileToolbar}
         <MobileToolbar />
-      {:else}
+      {:else if !globalState.isMobileView}
         <MainToolbar />
       {/if}
 

@@ -7,32 +7,29 @@
   } from '$lib/features/commons/types/global';
   import { m } from '$lib/paraglide/messages';
   import { Close } from 'carbon-icons-svelte';
-  import type { Snippet } from 'svelte';
+  import type { Component } from 'svelte';
   import { closeSelectedToolPanel } from '../tools-list/tool-list.utils.svelte';
   import { getAnnotationsState } from './annotations/annotations.store.svelte';
   import { shouldBlockToolClose } from './tool-close-guard';
-  import Annotations from './annotations/annotations.svelte';
-  import ColorBlindness from './color-blindness/color-blindness.svelte';
-  import Facets from './facets/facets.svelte';
-  import Format from './format/format.svelte';
-  import GeoIndications from './geo-indications/geo-indications.svelte';
-  import Layers from './layers/layers.svelte';
-  import Legend from './legend/legend.svelte';
-  import Projection from './projections/projection.svelte';
-  import Search from './search/search.svelte';
-  import Simplification from './simplification/simplification.svelte';
 
-  const toolComponents = {
-    [StylingTools.Annotations]: Annotations,
-    [StylingTools.Format]: Format,
-    [StylingTools.Legend]: Legend,
-    [StylingTools.GeoIndications]: GeoIndications,
-    [StylingTools.ColorBlindness]: ColorBlindness,
-    [VisualizationTools.Search]: Search,
-    [VisualizationTools.Layers]: Layers,
-    [VisualizationTools.Projection]: Projection,
-    [VisualizationTools.Simplification]: Simplification,
-    [VisualizationTools.Facets]: Facets
+  type ToolId = StylingTools | VisualizationTools;
+
+  const toolLoaders: Record<ToolId, () => Promise<{ default: Component }>> = {
+    [StylingTools.Annotations]: () =>
+      import('./annotations/annotations.svelte'),
+    [StylingTools.Format]: () => import('./format/format.svelte'),
+    [StylingTools.Legend]: () => import('./legend/legend.svelte'),
+    [StylingTools.GeoIndications]: () =>
+      import('./geo-indications/geo-indications.svelte'),
+    [StylingTools.ColorBlindness]: () =>
+      import('./color-blindness/color-blindness.svelte'),
+    [VisualizationTools.Search]: () => import('./search/search.svelte'),
+    [VisualizationTools.Layers]: () => import('./layers/layers.svelte'),
+    [VisualizationTools.Projection]: () =>
+      import('./projections/projection.svelte'),
+    [VisualizationTools.Simplification]: () =>
+      import('./simplification/simplification.svelte'),
+    [VisualizationTools.Facets]: () => import('./facets/facets.svelte')
   };
 
   const titles = {
@@ -48,11 +45,25 @@
     [VisualizationTools.Facets]: m.tool_facets()
   };
 
-  let selectedComponent = $derived<Snippet | undefined>(
+  const loadedTools = $state<Partial<Record<ToolId, Component>>>({});
+
+  function ensureToolLoaded(tool: ToolId): void {
+    if (loadedTools[tool]) return;
+    void toolLoaders[tool]().then((module) => {
+      loadedTools[tool] = module.default;
+    });
+  }
+
+  $effect(() => {
+    const tool = globalState.selectedTool;
+    if (tool) {
+      ensureToolLoaded(tool as ToolId);
+    }
+  });
+
+  let SelectedComponent = $derived<Component | undefined>(
     globalState.selectedTool
-      ? toolComponents[
-          globalState.selectedTool as StylingTools & VisualizationTools
-        ]
+      ? loadedTools[globalState.selectedTool as ToolId]
       : undefined
   );
 
@@ -88,7 +99,9 @@
   </header>
 
   <div class="tool-body">
-    {@render selectedComponent?.()}
+    {#if SelectedComponent}
+      <SelectedComponent />
+    {/if}
   </div>
 </aside>
 
