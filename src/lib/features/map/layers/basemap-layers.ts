@@ -2237,19 +2237,6 @@ export function createBasemapLayers(
 
         case BASEMAP_LAYER_ID.TERRE: {
           const terreConfig = config as TerreLayerConfig;
-          const metadataLandLayers =
-            landEntries.length > 0
-              ? createMetadataLandLayers(landEntries, stylePresets, ctx, {
-                  fillColorOverride: withOpacity(
-                    toRgbColor(terreConfig.fillColor),
-                    terreConfig.fillOpacity / 100
-                  ) as [number, number, number, number]
-                })
-              : [];
-
-          if (metadataLandLayers.length > 0) {
-            targetGroups.push(metadataLandLayers);
-          }
 
           if (worldBaseTable) {
             const terreLayers = createTerreLayers(
@@ -2262,6 +2249,21 @@ export function createBasemapLayers(
             );
             if (terreLayers.length > 0) {
               targetGroups.push(terreLayers);
+            }
+          } else if (landEntries.length > 0) {
+            const metadataLandLayers = createMetadataLandLayers(
+              landEntries,
+              stylePresets,
+              ctx,
+              {
+                fillColorOverride: withOpacity(
+                  toRgbColor(terreConfig.fillColor),
+                  terreConfig.fillOpacity / 100
+                ) as [number, number, number, number]
+              }
+            );
+            if (metadataLandLayers.length > 0) {
+              targetGroups.push(metadataLandLayers);
             }
           }
           break;
