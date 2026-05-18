@@ -7,6 +7,18 @@ import { createLogger, defineConfig, loadEnv, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { visualizer } from 'rollup-plugin-visualizer';
 
+const crossOriginIsolationAssets = (): Plugin => ({
+  name: 'cross-origin-isolation-assets',
+  configurePreviewServer(server) {
+    server.middlewares.use((_req, res, next) => {
+      res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+      res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      next();
+    });
+  }
+});
+
 const verifyServiceWorkerPrecache = (): Plugin => ({
   name: 'verify-sw-precache',
   apply: 'build',
@@ -83,6 +95,7 @@ export default defineConfig(({ mode }) => {
     build: {
       target: 'esnext',
       chunkSizeWarningLimit: 3000,
+      sourcemap: true,
       rolldownOptions: {
         checks: {
           pluginTimings: false
@@ -126,6 +139,7 @@ export default defineConfig(({ mode }) => {
         outdir: './src/lib/paraglide',
         emitTsDeclarations: true
       }),
+      crossOriginIsolationAssets(),
       verifyServiceWorkerPrecache(),
       VitePWA({
         strategies: 'injectManifest',
