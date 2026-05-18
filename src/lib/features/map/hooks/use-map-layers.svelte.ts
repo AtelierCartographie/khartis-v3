@@ -849,6 +849,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         map && deckOverlay ? findFirstSymbolLayerId(map) : undefined;
 
       const layers: Layer<DeckDataRow>[] = [];
+      let hasEmptyFilteredVisualization = false;
 
       const datasetContentIds = new Set<string>();
       for (const datasetId of tables.keys()) datasetContentIds.add(datasetId);
@@ -1078,6 +1079,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             const filteredTable = viz.yearFilter
               ? filterArrowTableByYear(tableFiltered, viz.yearFilter)
               : tableFiltered;
+            if (filteredTable !== table && filteredTable.numRows === 0) {
+              hasEmptyFilteredVisualization = true;
+            }
             const joinedBasemapId = split
               ? getDatasetJoinedBasemap(datasetId)
               : null;
@@ -1272,6 +1276,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         shouldKeepOrthographicBasemapLayers
       );
       const shouldPreservePreviousLayers =
+        !hasEmptyFilteredVisualization &&
         layers.length === 0 &&
         previousLayersToPreserve.length > 0 &&
         hasExpectedVisibleLayers;

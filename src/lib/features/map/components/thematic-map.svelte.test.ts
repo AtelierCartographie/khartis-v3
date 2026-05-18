@@ -118,4 +118,12 @@ describe('ThematicMap source', () => {
     expect(helperSource).toContain('Boolean(datasetBbox)');
     expect(helperSource).not.toContain('!basemapStyleStore.referenceBasemapId');
   });
+
+  it('invalidates Deck layers when visualization data filters change', () => {
+    expect(source).toContain('const visualizationDataFiltersVersion');
+    expect(source).toContain('void visualizationStore.version;');
+    expect(source).toContain('filter.primitiveType ??');
+    expect(source).toContain('filter.secondaryValue ??');
+    expect(source).toContain('visualizationDataFiltersVersion,');
+  });
 });
