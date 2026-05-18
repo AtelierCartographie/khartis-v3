@@ -2,9 +2,7 @@
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import {
     InfoPopover,
-    MissingDataSection,
     SliderWithInput,
-    ToggleWithLabel,
     VizFilterButton,
     VizFilterPanel
   } from '../shared';
@@ -27,9 +25,9 @@
     DEFAULT_QUALITATIVE_PREVIEW
   } from '$lib/features/commons/components/palette-popover/palette.constants';
   import {
+    BasemapDottedPattern,
     ColorMode,
     DEFAULT_COLORS,
-    MissingDataShape,
     ThicknessMode,
     SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS
@@ -43,11 +41,7 @@
   } from '../../hooks/use-field-selection.svelte';
   import { useCategoryLabels } from '../../hooks/use-category-labels.svelte';
   import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
-  import {
-    coerceMissingDataShape,
-    coerceString,
-    parseOpacityToSlider
-  } from '../../utils/coerce.utils';
+  import { coerceString, parseOpacityToSlider } from '../../utils/coerce.utils';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -173,9 +167,14 @@
     return primitiveFilters.includes(PrimitiveFilterType.LINE);
   });
   let dashed = $state<boolean>(false);
+  let dashedPattern = $state<BasemapDottedPattern>(BasemapDottedPattern.DOTS);
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
-  let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
+  let missingDataSize = $state<number>(2);
+  let missingDataDashed = $state<boolean>(false);
+  let missingDataDashedPattern = $state<BasemapDottedPattern>(
+    BasemapDottedPattern.DOTS
+  );
   const categoryColumnName = $derived(
     categoryFieldSelection.selectedFieldName ?? ''
   );
@@ -196,19 +195,36 @@
       color =
         coerceString(visualization.style.lineColor) ?? DEFAULT_COLORS.line;
       dashed = visualization.style.lineDashed ?? false;
+      dashedPattern =
+        visualization.line?.dashedPattern ??
+        visualization.style.lineDashedPattern ??
+        BasemapDottedPattern.DOTS;
     }
     if (visualization?.modes) {
       thicknessMode = visualization.modes.thickness ?? ThicknessMode.UNIQUE;
       colorMode = visualization.modes.color ?? ColorMode.UNIQUE;
     }
-    if (visualization?.missingData) {
-      showMissingData = visualization.missingData.show ?? true;
-      missingDataColor =
-        visualization.missingData.color ?? DEFAULT_COLORS.missingData;
-      missingDataShape =
-        visualization.missingData.shape ?? MissingDataShape.CIRCLE;
+    const missingData =
+      visualization?.line?.missingData ?? visualization?.missingData;
+    if (missingData) {
+      showMissingData = missingData.show ?? true;
+      missingDataColor = missingData.color ?? DEFAULT_COLORS.missingData;
+      missingDataSize = missingData.size ?? 2;
+      missingDataDashed = missingData.dashed ?? false;
+      missingDataDashedPattern =
+        missingData.dashedPattern ?? BasemapDottedPattern.DOTS;
     }
   });
+
+  function coerceDashedPattern(
+    value: BasemapDottedPattern | string | number | undefined
+  ): BasemapDottedPattern {
+    return (
+      Object.values(BasemapDottedPattern).find(
+        (pattern) => pattern === value
+      ) ?? BasemapDottedPattern.DOTS
+    );
+  }
 
   function handleThicknessModeChange(index: number) {
     const modes = [
@@ -252,7 +268,16 @@
 
   function handleDashedChange(value: boolean) {
     dashed = value;
-    onStyleChange?.({ lineDashed: value });
+    onStyleChange?.({
+      lineDashed: value,
+      ...(value ? { lineDashedPattern: dashedPattern } : {})
+    });
+  }
+
+  function handleDashedPatternChange(value: BasemapDottedPattern) {
+    const next = coerceDashedPattern(value);
+    dashedPattern = next;
+    onStyleChange?.({ lineDashedPattern: next });
   }
 
   function handleToggleChange(checked: boolean) {
@@ -269,11 +294,23 @@
     onMissingDataChange?.({ color: value });
   }
 
-  function handleMissingDataShapeChange(shape: string) {
-    const coerced = coerceMissingDataShape(shape);
-    if (!coerced) return;
-    missingDataShape = coerced;
-    onMissingDataChange?.({ shape: coerced });
+  function handleMissingDataSizeChange(value: number) {
+    missingDataSize = value;
+    onMissingDataChange?.({ size: value });
+  }
+
+  function handleMissingDataDashedChange(value: boolean) {
+    missingDataDashed = value;
+    onMissingDataChange?.({
+      dashed: value,
+      ...(value ? { dashedPattern: missingDataDashedPattern } : {})
+    });
+  }
+
+  function handleMissingDataDashedPatternChange(value: BasemapDottedPattern) {
+    const next = coerceDashedPattern(value);
+    missingDataDashedPattern = next;
+    onMissingDataChange?.({ dashedPattern: next });
   }
 
   function handleOpenColorDiscretization() {
@@ -345,6 +382,12 @@
       thicknessMode={thicknessMode}
       thickness={thickness}
       maxThickness={maxThickness}
+      dashed={dashed}
+      dashedPattern={dashedPattern}
+      showMissingData={showMissingData}
+      missingDataColor={missingDataColor}
+      missingDataDashed={missingDataDashed}
+      missingDataDashedPattern={missingDataDashedPattern}
       thicknessDiscretizationLabel={thicknessDiscretizationLabel}
       valueColumnName={valueColumnName}
       sizeColumnName={sizeColumnName}
@@ -357,12 +400,25 @@
       onThicknessModeChange={handleThicknessModeChange}
       onThicknessChange={handleThicknessChange}
       onMaxThicknessChange={handleMaxThicknessChange}
+      onDashedChange={handleDashedChange}
+      onDashedPatternChange={handleDashedPatternChange}
+      onMissingDataShowChange={handleMissingDataToggle}
+      onMissingDataColorChange={handleMissingDataColorChange}
+      onMissingDataDashedChange={handleMissingDataDashedChange}
+      onMissingDataDashedPatternChange={handleMissingDataDashedPatternChange}
       onOpenThicknessDiscretization={handleOpenThicknessDiscretization}
     />
 
     <LineColorSection
       colorMode={colorMode}
       color={color}
+      dashed={dashed}
+      dashedPattern={dashedPattern}
+      showMissingData={showMissingData}
+      missingDataColor={missingDataColor}
+      missingDataSize={missingDataSize}
+      missingDataDashed={missingDataDashed}
+      missingDataDashedPattern={missingDataDashedPattern}
       valueColumnName={valueColumnName}
       categoryColumnName={categoryColumnName}
       colorDiscretizationLabel={colorDiscretizationLabel}
@@ -381,6 +437,13 @@
       facetsSelection={facetsSelection}
       onColorModeChange={handleColorModeChange}
       onColorChange={handleColorChange}
+      onDashedChange={handleDashedChange}
+      onDashedPatternChange={handleDashedPatternChange}
+      onMissingDataShowChange={handleMissingDataToggle}
+      onMissingDataColorChange={handleMissingDataColorChange}
+      onMissingDataSizeChange={handleMissingDataSizeChange}
+      onMissingDataDashedChange={handleMissingDataDashedChange}
+      onMissingDataDashedPatternChange={handleMissingDataDashedPatternChange}
       onOpenColorDiscretization={handleOpenColorDiscretization}
       onClassificationChange={handleColorClassificationChange}
       onInvertPalette={onInvertPalette}
@@ -395,22 +458,6 @@
       showMinMax
       inputWidth="128px"
       onchange={handleOpacityChange}
-    />
-
-    <ToggleWithLabel
-      label={m.dashed()}
-      toggled={dashed}
-      ontoggle={handleDashedChange}
-    />
-
-    <MissingDataSection
-      show={showMissingData}
-      onshowchange={handleMissingDataToggle}
-      color={missingDataColor}
-      oncolorchange={handleMissingDataColorChange}
-      shape={missingDataShape}
-      onshapechange={handleMissingDataShapeChange}
-      showShapeSelector={true}
     />
   </div>
 </ExpandableSection>

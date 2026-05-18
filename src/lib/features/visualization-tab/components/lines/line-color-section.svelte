@@ -1,20 +1,31 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
+  import { Dropdown } from 'carbon-components-svelte';
   import { Subtract, Table, Tag } from 'carbon-icons-svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
-  import { DiscretizationRow, PalettePreview, SectionHeading } from '../shared';
+  import {
+    DiscretizationRow,
+    MissingDataSection,
+    PalettePreview,
+    SectionHeading,
+    ToggleWithLabel
+  } from '../shared';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import {
     PALETTE_TYPE,
     resolvePaletteTypeForBreakpoint
   } from '$lib/features/commons/components/palette-popover/palette.constants';
   import FacetsVariablePicker from '../shared/facets-variable-picker.svelte';
-  import { ColorMode } from '$lib/features/commons/constants/visualization.constants';
+  import {
+    BasemapDottedPattern,
+    ColorMode
+  } from '$lib/features/commons/constants/visualization.constants';
   import {
     FACET_SLOT,
     type FacetSlotPath
   } from '../../adapters/facets-adapter';
   import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
+  import { filterFieldsByKind } from '../../hooks/use-field-selection.svelte';
 
   interface FieldSelection {
     selectedFieldId: number;
@@ -32,6 +43,13 @@
   interface Props {
     colorMode: ColorMode;
     color: string;
+    dashed: boolean;
+    dashedPattern: BasemapDottedPattern;
+    showMissingData: boolean;
+    missingDataColor: string;
+    missingDataSize: number;
+    missingDataDashed: boolean;
+    missingDataDashedPattern: BasemapDottedPattern;
     valueColumnName: string;
     categoryColumnName: string;
     colorDiscretizationLabel: string;
@@ -50,6 +68,13 @@
     facetsSelection: FacetsSelection;
     onColorModeChange: (index: number) => void;
     onColorChange: (value: string) => void;
+    onDashedChange: (value: boolean) => void;
+    onDashedPatternChange: (value: BasemapDottedPattern) => void;
+    onMissingDataShowChange: (value: boolean) => void;
+    onMissingDataColorChange: (value: string) => void;
+    onMissingDataSizeChange: (value: number) => void;
+    onMissingDataDashedChange: (value: boolean) => void;
+    onMissingDataDashedPatternChange: (value: BasemapDottedPattern) => void;
     onOpenColorDiscretization: () => void;
     onClassificationChange: (updates: Partial<ClassificationConfig>) => void;
     onInvertPalette?: () => void;
@@ -58,6 +83,13 @@
   let {
     colorMode,
     color,
+    dashed,
+    dashedPattern,
+    showMissingData,
+    missingDataColor,
+    missingDataSize,
+    missingDataDashed,
+    missingDataDashedPattern,
     valueColumnName,
     categoryColumnName,
     colorDiscretizationLabel,
@@ -76,6 +108,13 @@
     facetsSelection,
     onColorModeChange,
     onColorChange,
+    onDashedChange,
+    onDashedPatternChange,
+    onMissingDataShowChange,
+    onMissingDataColorChange,
+    onMissingDataSizeChange,
+    onMissingDataDashedChange,
+    onMissingDataDashedPatternChange,
     onOpenColorDiscretization,
     onClassificationChange,
     onInvertPalette
@@ -94,6 +133,38 @@
   ];
 
   const colorModeIndex = $derived(COLOR_MODE_ORDER.indexOf(colorMode));
+
+  const selectableValueDataFields = $derived(
+    filterFieldsByKind(
+      selectableDataFields,
+      'numeric',
+      valueFieldSelection.selectedFieldId
+    )
+  );
+  const selectableCategoryDataFields = $derived(
+    filterFieldsByKind(
+      selectableDataFields,
+      'textual',
+      categoryFieldSelection.selectedFieldId
+    )
+  );
+  const dashedPatternItems = $derived([
+    { id: BasemapDottedPattern.DOTS, text: m.dashed_pattern_dots() },
+    { id: BasemapDottedPattern.DASHES, text: m.dashed_pattern_dashes() },
+    { id: BasemapDottedPattern.DASH_DOT, text: m.dashed_pattern_dash_dot() },
+    {
+      id: BasemapDottedPattern.LONG_DASH,
+      text: m.dashed_pattern_long_dash()
+    }
+  ]);
+
+  function handleDashedPatternSelect(value: string | number) {
+    const next =
+      Object.values(BasemapDottedPattern).find(
+        (pattern) => pattern === value
+      ) ?? BasemapDottedPattern.DOTS;
+    onDashedPatternChange(next);
+  }
 </script>
 
 <SectionHeading title={m.color()} />
@@ -120,7 +191,7 @@
       bind:open={colorPickerOpen}
       titleText={m.color_according()}
       dataFields={dataFields}
-      singleSelectItems={selectableDataFields}
+      singleSelectItems={selectableValueDataFields}
       selectedFieldId={valueFieldSelection.selectedFieldId}
       selectedFieldIds={facetsSelection.getSelectedFieldIds(
         FACET_SLOT.LINE_VALUE
@@ -154,13 +225,28 @@
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />
+  <MissingDataSection
+    show={showMissingData}
+    onshowchange={onMissingDataShowChange}
+    color={missingDataColor}
+    oncolorchange={onMissingDataColorChange}
+    size={missingDataSize}
+    sizeLabel={m.thickness()}
+    onsizechange={onMissingDataSizeChange}
+    showShapeSelector={false}
+    showDashedToggle={true}
+    dashed={missingDataDashed}
+    dashedPattern={missingDataDashedPattern}
+    ondashedchange={onMissingDataDashedChange}
+    ondashedpatternchange={onMissingDataDashedPatternChange}
+  />
 {:else if colorMode === ColorMode.CATEGORIES}
   <div class="field-group">
     <FacetsVariablePicker
       bind:open={categoryPickerOpen}
       titleText={m.color_according()}
       dataFields={dataFields}
-      singleSelectItems={selectableDataFields}
+      singleSelectItems={selectableCategoryDataFields}
       selectedFieldId={categoryFieldSelection.selectedFieldId}
       selectedFieldIds={facetsSelection.getSelectedFieldIds(
         FACET_SLOT.LINE_CATEGORY
@@ -203,6 +289,36 @@
     bind:categoriesPopoverOpen={categoriesPopoverOpen}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
+  />
+  <MissingDataSection
+    show={showMissingData}
+    onshowchange={onMissingDataShowChange}
+    color={missingDataColor}
+    oncolorchange={onMissingDataColorChange}
+    size={missingDataSize}
+    sizeLabel={m.thickness()}
+    onsizechange={onMissingDataSizeChange}
+    showShapeSelector={false}
+    showDashedToggle={true}
+    dashed={missingDataDashed}
+    dashedPattern={missingDataDashedPattern}
+    ondashedchange={onMissingDataDashedChange}
+    ondashedpatternchange={onMissingDataDashedPatternChange}
+  />
+{/if}
+
+<ToggleWithLabel
+  label={m.dashed()}
+  toggled={dashed}
+  ontoggle={onDashedChange}
+/>
+{#if dashed}
+  <Dropdown
+    titleText={m.stroke_dashed_pattern()}
+    items={dashedPatternItems}
+    selectedId={dashedPattern}
+    on:select={(e) => handleDashedPatternSelect(e.detail.selectedId)}
+    type="default"
   />
 {/if}
 

@@ -47,6 +47,7 @@ function makeBag(): DepsBag {
     width: 2,
     maxWidth: 8,
     dashed: false,
+    dashedPattern: 'dots',
     valueColumn: 'col',
     colorMode: 'unique',
     thicknessMode: 'unique',
@@ -85,6 +86,17 @@ describe('createLineHandlers', () => {
     const arg = bag.updateSelectedVisualization.mock.calls[0][0];
     expect(arg.line.color).toBe('#fff');
     expect(arg.line.opacity).toBe(0.3);
+  });
+
+  it('handleLineStyleChange renames line dashed pattern into line state', () => {
+    const bag = makeBag();
+    bag.handlers.handleLineStyleChange({
+      lineDashed: true,
+      lineDashedPattern: 'dashes'
+    } as never);
+    const arg = bag.updateSelectedVisualization.mock.calls[0][0];
+    expect(arg.line.dashed).toBe(true);
+    expect(arg.line.dashedPattern).toBe('dashes');
   });
 
   it('handleLineStyleChange falls back to existing opacity when undefined provided', () => {
