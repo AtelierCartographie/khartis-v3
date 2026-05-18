@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { svelteTesting } from '@testing-library/svelte/vite';
-import { createLogger, defineConfig, loadEnv, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { visualizer } from 'rollup-plugin-visualizer';
 
@@ -16,6 +16,32 @@ const crossOriginIsolationAssets = (): Plugin => ({
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
       next();
     });
+  }
+});
+
+const dropWoffFallback = (): Plugin => ({
+  name: 'drop-woff-fallback',
+  apply: 'build',
+  generateBundle(_options, bundle) {
+    const woffFallbackPattern =
+      /,\s*url\([^)]*\.woff\)\s*format\(['"]woff['"]\)/g;
+    for (const [fileName, asset] of Object.entries(bundle)) {
+      if (asset.type !== 'asset') continue;
+      if (fileName.endsWith('.woff')) {
+        delete bundle[fileName];
+        continue;
+      }
+      if (fileName.endsWith('.css')) {
+        const original =
+          typeof asset.source === 'string'
+            ? asset.source
+            : new TextDecoder().decode(asset.source as Uint8Array);
+        const next = original.replace(woffFallbackPattern, '');
+        if (next !== original) {
+          asset.source = next;
+        }
+      }
+    }
   }
 });
 
@@ -48,29 +74,8 @@ const verifyServiceWorkerPrecache = (): Plugin => ({
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const basePath = env.BASE_PATH || '';
-  const baseLogger = createLogger();
-  const ignoredWarningPatterns = [
-    /Unknown output options: codeSplitting/,
-    /"spawn" is not exported by "__vite-browser-external"/,
-    /Sourcemap for ".*" points to a source file outside its package/
-  ];
 
   return {
-    customLogger: {
-      ...baseLogger,
-      warn(message, options) {
-        if (ignoredWarningPatterns.some((pattern) => pattern.test(message))) {
-          return;
-        }
-        baseLogger.warn(message, options);
-      },
-      warnOnce(message, options) {
-        if (ignoredWarningPatterns.some((pattern) => pattern.test(message))) {
-          return;
-        }
-        baseLogger.warnOnce(message, options);
-      }
-    },
     css: {
       preprocessorOptions: {
         scss: {
@@ -95,7 +100,7 @@ export default defineConfig(({ mode }) => {
     build: {
       target: 'esnext',
       chunkSizeWarningLimit: 3000,
-      sourcemap: true,
+      sourcemap: mode !== 'production',
       rolldownOptions: {
         checks: {
           pluginTimings: false
@@ -120,19 +125,6 @@ export default defineConfig(({ mode }) => {
           brotliSize: true,
           template: 'treemap'
         }),
-      {
-        name: 'font-display-swap',
-        generateBundle(_, bundle) {
-          for (const chunk of Object.values(bundle)) {
-            if (chunk.type === 'asset' && chunk.fileName.endsWith('.css')) {
-              chunk.source = (chunk.source as string).replaceAll(
-                'font-display:auto',
-                'font-display:swap'
-              );
-            }
-          }
-        }
-      },
       sveltekit(),
       paraglideVitePlugin({
         project: './project.inlang',
@@ -140,6 +132,7 @@ export default defineConfig(({ mode }) => {
         emitTsDeclarations: true
       }),
       crossOriginIsolationAssets(),
+      dropWoffFallback(),
       verifyServiceWorkerPrecache(),
       VitePWA({
         strategies: 'injectManifest',
@@ -164,6 +157,7 @@ export default defineConfig(({ mode }) => {
             'basemaps/style-presets.json'
           ],
           globIgnores: ['**/node_modules/**/*'],
+          // index.html is excluded from globPatterns matching, so we precache it explicitly with a per-build revision; verifyServiceWorkerPrecache asserts this entry survives.
           additionalManifestEntries: [
             {
               url: basePath ? `${basePath}/index.html` : '/index.html',
