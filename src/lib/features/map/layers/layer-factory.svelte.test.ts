@@ -18,6 +18,7 @@ import {
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
+  BasemapDottedPattern,
   CategoryShapeMode,
   FillMode,
   ColorMode,
@@ -443,6 +444,8 @@ function getLayerIds(layers: ReturnType<typeof createPolygonLayers>): string[] {
 type ScatterBinaryTestData = {
   attributes: Record<string, { value: Uint8Array } | undefined>;
 };
+
+type TestLineFeature = Feature<LineString, Record<string, unknown>>;
 
 function hasScatterBinaryTestData(
   data: unknown
@@ -1926,6 +1929,141 @@ describe('createLineLayers', () => {
       | undefined;
 
     expect(getLineColor?.(disabledFeature)).toEqual([0, 0, 0, 0]);
+  });
+
+  it('wires disabled line categories into Deck color update triggers', () => {
+    expect(source).toContain('lineColorClassification?.disabledLabels');
+  });
+
+  it('uses the selected dash pattern for dashed GeoJSON line layers', () => {
+    const feature = createLineFeature('dashed', 'A');
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [feature]
+    } satisfies FeatureCollection<LineString>);
+
+    const visualization: VisualizationConfig = {
+      id: 'viz-line-dashed-pattern',
+      name: 'Line dashed pattern test',
+      type: VisualizationType.CATEGORICAL,
+      datasetId: 'dataset-1',
+      enabled: true,
+      primitiveFilters: [PrimitiveFilterType.LINE],
+      line: {
+        enabled: true,
+        colorMode: ColorMode.UNIQUE,
+        thicknessMode: ThicknessMode.UNIQUE,
+        color: '#3366cc',
+        width: 3,
+        maxWidth: 6,
+        opacity: 1,
+        dashed: true,
+        dashedPattern: BasemapDottedPattern.DASHES
+      },
+      style: {
+        fillOpacity: 1,
+        strokeOpacity: 1,
+        strokeWidth: 1
+      },
+      mapping: {}
+    };
+
+    const layers = createLineLayers(
+      createTableWithRows([{ route_name: 'A' }], ['route_name']),
+      {
+        ...createLineGeometryInfo(),
+        encoding: 'geojson',
+        isNativeGeoArrow: false,
+        isGeoJsonEncoded: true
+      },
+      createContext(visualization)
+    );
+    const lineLayer = layers.find((layer) => layer instanceof GeoJsonLayer) as
+      | GeoJsonLayer
+      | undefined;
+    const lineLayerProps = lineLayer?.props as
+      | { getDashArray?: (item: TestLineFeature) => [number, number] }
+      | undefined;
+
+    expect(lineLayerProps?.getDashArray?.(feature)).toEqual([6, 4]);
+  });
+
+  it('applies missing-data color, width and dash style to GeoJSON lines', () => {
+    const feature: Feature<
+      LineString,
+      { id: string; route_name: string; flow: null }
+    > = {
+      ...createLineFeature('missing', 'A'),
+      properties: { id: 'missing', route_name: 'A', flow: null }
+    };
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [feature]
+    } satisfies FeatureCollection<LineString>);
+
+    const visualization: VisualizationConfig = {
+      id: 'viz-line-missing-geojson',
+      name: 'Line missing data GeoJSON test',
+      type: VisualizationType.PROPORTIONAL,
+      datasetId: 'dataset-1',
+      enabled: true,
+      primitiveFilters: [PrimitiveFilterType.LINE],
+      line: {
+        enabled: true,
+        colorMode: ColorMode.UNIQUE,
+        thicknessMode: ThicknessMode.PROPORTIONAL,
+        color: '#3366cc',
+        width: 3,
+        maxWidth: 10,
+        opacity: 1,
+        dashed: false,
+        sizeColumn: 'flow',
+        missingData: {
+          show: true,
+          shape: MissingDataShape.CIRCLE,
+          size: 7,
+          color: '#123456',
+          dashed: true,
+          dashedPattern: BasemapDottedPattern.LONG_DASH
+        }
+      },
+      style: {
+        fillOpacity: 1,
+        strokeOpacity: 1,
+        strokeWidth: 1
+      },
+      mapping: {}
+    };
+
+    const layers = createLineLayers(
+      createTableWithRows(
+        [{ route_name: 'A', flow: null }],
+        ['route_name', 'flow']
+      ),
+      {
+        ...createLineGeometryInfo(),
+        encoding: 'geojson',
+        isNativeGeoArrow: false,
+        isGeoJsonEncoded: true
+      },
+      createContext(visualization)
+    );
+    const lineLayer = layers.find((layer) => layer instanceof GeoJsonLayer) as
+      | GeoJsonLayer
+      | undefined;
+    const lineLayerProps = lineLayer?.props as
+      | {
+          getLineColor?: (
+            item: TestLineFeature
+          ) => [number, number, number, number];
+          getLineWidth?: (item: TestLineFeature) => number;
+          getDashArray?: (item: TestLineFeature) => [number, number];
+        }
+      | undefined;
+
+    expect(lineLayerProps?.getLineColor?.(feature)).toEqual([18, 52, 86, 255]);
+    expect(lineLayerProps?.getLineWidth?.(feature)).toBe(7);
+    expect(lineLayerProps?.getDashArray?.(feature)).toEqual([12, 4]);
   });
 
   it('uses a dedicated thickness classification for classed line widths', () => {

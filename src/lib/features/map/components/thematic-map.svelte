@@ -231,11 +231,13 @@
       ? getColorBlindnessMatrix(colorBlindnessState.simulationType)
       : null
   );
-  const visibleVisualizations = $derived.by(() =>
-    globalState.selectedStep === ToolbarStep.Data
+  const visibleVisualizations = $derived.by(() => {
+    void visualizationStore.version;
+
+    return globalState.selectedStep === ToolbarStep.Data
       ? []
-      : mapState.activeVisualizations
-  );
+      : visualizationStore.activeVisualizations;
+  });
 
   const MIN_SKELETON_DURATION_MS = 500;
   const MAX_WAIT_FOR_DATA_MS = 5000;
@@ -495,7 +497,10 @@
       }
       isApplyingMapLibreSync = false;
     },
-    getActiveVisualizations: () => visibleVisualizations,
+    getActiveVisualizations: () =>
+      globalState.selectedStep === ToolbarStep.Data
+        ? []
+        : visualizationStore.activeVisualizations,
     onOrthographicViewStateChanged: (target, zoom) => {
       mapInstanceStore.markViewportManual();
       onMoveSync?.({ type: 'orthographic', target, zoom });
@@ -1901,6 +1906,30 @@
       .map(([k, v]) => `${k}:${v.length}:${v.map((f) => f.id).join(',')}`)
       .join('|')
   );
+  const visualizationDataFiltersVersion = $derived.by(() => {
+    void visualizationStore.version;
+
+    return visibleVisualizations
+      .map((visualization) => {
+        const filters = visualization.dataFilters ?? [];
+        const filterKey = filters
+          .map((filter) =>
+            [
+              filter.id,
+              filter.primitiveType ?? '',
+              filter.column,
+              filter.operator,
+              filter.value ?? '',
+              filter.secondaryValue ?? '',
+              filter.limit ?? ''
+            ].join(':')
+          )
+          .join(',');
+
+        return `${visualization.id}:${filterKey}`;
+      })
+      .join('|');
+  });
   const projectionRenderTrigger = $derived.by(() => {
     const projectionState = getProjectionState();
 
@@ -1915,6 +1944,7 @@
     dataVersion,
     dataSize: `${tables.size}-${geoJSONs.size}`,
     filtersVersion,
+    visualizationDataFiltersVersion,
     projectionVersion: projectionRenderTrigger,
     selectedStep: globalState.selectedStep
   });
