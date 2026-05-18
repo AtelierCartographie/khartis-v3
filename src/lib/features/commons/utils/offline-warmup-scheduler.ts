@@ -14,7 +14,10 @@ import type { ConnectivityStore } from '$lib/features/commons/stores/connectivit
 
 const PHASE_A_RESOURCES = [
   '/basemaps/projection-presets.json',
-  '/basemaps/style-presets.json',
+  '/basemaps/style-presets.json'
+];
+
+const PHASE_B_PREFETCH_RESOURCES = [
   '/basemaps/all-basemaps-attributes.parquet'
 ];
 
@@ -219,6 +222,25 @@ async function runConcurrent(
 
 async function runPhaseB(ctx: WarmupContext): Promise<void> {
   ctx.store.setWarmupPhase('B');
+
+  const prefetchUrls = PHASE_B_PREFETCH_RESOURCES.map((p) =>
+    resolveStaticAssetUrl(p)
+  );
+  await Promise.allSettled(
+    prefetchUrls.map(async (url) => {
+      try {
+        await fetch(url, { signal: ctx.signal });
+      } catch (error) {
+        if (ctx.signal.aborted) return;
+        logger.debug('Phase B prefetch failed', LogCategory.SYSTEM, {
+          url,
+          error
+        });
+      }
+    })
+  );
+
+  if (ctx.signal.aborted) return;
 
   const entries = await buildEssentialDownloadEntries();
   if (entries.length === 0 || ctx.signal.aborted) {
