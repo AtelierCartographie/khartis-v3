@@ -571,10 +571,10 @@
     const isCached = basemapService.getCachedBasemap(basemap.file) !== null;
     if (isCached) {
       basemapStyleStore.setReferenceBasemap(basemap.file);
-    } else {
-      basemapStyleStore.setReferenceBasemap(null);
     }
-    projectStore.updateProjectData({ basemap: undefined });
+    // When not cached: keep previousReferenceBasemapId rendering during the
+    // async join so the map does not flash empty. applyCatalogReferenceBasemap
+    // will swap to the new basemap once the join is finalized.
 
     if (hasGPSMode && resolvedDatasetId) {
       try {
