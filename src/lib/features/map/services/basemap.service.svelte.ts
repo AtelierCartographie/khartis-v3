@@ -1202,6 +1202,20 @@ function createBasemapService() {
     }
   }
 
+  function getCachedBasemap(basemapId: string): LoadedBasemap | null {
+    const resolvedBasemapId = getPreferredBasemapFile(
+      availableBasemaps,
+      basemapId
+    );
+    return basemapCache.get(resolvedBasemapId) ?? null;
+  }
+
+  function getCachedGeometryTable(basemapId: string): ArrowTable | null {
+    const cached = getCachedBasemap(basemapId);
+    if (!cached) return null;
+    return getResolvedGeometryTable(cached) ?? cached.geometryTable ?? null;
+  }
+
   async function loadBasemap(basemapId: string): Promise<LoadedBasemap | null> {
     const resolvedBasemapId = getPreferredBasemapFile(
       availableBasemaps,
@@ -1681,6 +1695,8 @@ function createBasemapService() {
     initialize,
     loadGeometryIntoDuckDB,
     getBasemapGeometryArrow,
+    getCachedBasemap,
+    getCachedGeometryTable,
     loadBasemap,
     loadDefaultBasemap,
     registerCustomBasemapMetadata,

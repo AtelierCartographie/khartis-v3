@@ -1,9 +1,11 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
+  import { getLocale } from '$lib/paraglide/runtime';
   import { PaintBrush } from 'carbon-icons-svelte';
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
 
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
+  import SimpleCheckbox from '$lib/features/commons/components/simple-checkbox.svelte';
   import { InfoPopover } from './shared';
   import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
   import LayerConfigTerre from './basemap-layers/layer-config-terre.svelte';
@@ -30,6 +32,48 @@
   import { resolveTiledStyleFromToggle } from '../services/tiled-basemap-selection.service';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
   import { resolveActiveBasemapMetadata } from '$lib/features/map/utils/basemap-metadata-resolution.utils';
+  import type { BasemapLayer } from '$lib/features/map/types/basemap.types';
+  import { basemapAuxLayersStore } from '$lib/features/map/stores/basemap-aux-layers.store.svelte';
+
+  const locale = $derived(getLocale());
+
+  function pickLocalizedTitle(
+    layer: BasemapLayer | undefined,
+    fallback: string
+  ): string {
+    if (!layer) return fallback;
+    const value = locale === 'fr' ? layer.title_fr : layer.title_en;
+    return value && value.trim().length > 0
+      ? value
+      : (layer.title_fr ?? fallback);
+  }
+
+  function getAuxLayerKey(layer: BasemapLayer, basemapFile: string): string {
+    return layer.file ?? `${basemapFile}:${layer.type}`;
+  }
+
+  function isAuxLayerVisible(
+    layer: BasemapLayer,
+    basemapFile: string
+  ): boolean {
+    return basemapAuxLayersStore.isVisible(
+      basemapFile,
+      getAuxLayerKey(layer, basemapFile),
+      true
+    );
+  }
+
+  function handleAuxLayerToggle(
+    layer: BasemapLayer,
+    basemapFile: string,
+    visible: boolean
+  ): void {
+    basemapAuxLayersStore.setVisible(
+      basemapFile,
+      getAuxLayerKey(layer, basemapFile),
+      visible
+    );
+  }
 
   const layerConfigs = $derived(
     new Map(basemapLayersStore.layers.map((l) => [l.id, l] as const))
@@ -94,11 +138,54 @@
         )
       )
   );
-  const supportsCatalogGeometry = $derived(Boolean(currentMetadata));
+  const metadataLayerByType = $derived.by(() => {
+    const layersByType: Partial<Record<BasemapLayerType, BasemapLayer>> = {};
+    for (const layer of currentMetadata?.layers ?? []) {
+      if (!layersByType[layer.type]) {
+        layersByType[layer.type] = layer;
+      }
+    }
+    return layersByType;
+  });
+  const sectionTitles = $derived({
+    terre: pickLocalizedTitle(
+      metadataLayerByType[BasemapLayerType.LAND],
+      m.basemap_layer_terre()
+    ),
+    frontieres: pickLocalizedTitle(
+      metadataLayerByType[BasemapLayerType.LIMIT],
+      m.basemap_layer_frontieres()
+    ),
+    meridiens: pickLocalizedTitle(
+      metadataLayerByType[BasemapLayerType.GRATICULE],
+      m.basemap_layer_meridiens()
+    ),
+    equateur: pickLocalizedTitle(
+      metadataLayerByType[BasemapLayerType.GEOGRAPHIC_LINES],
+      m.basemap_layer_equateur()
+    ),
+    villes: pickLocalizedTitle(
+      metadataLayerByType[BasemapLayerType.CENTROID] ??
+        metadataLayerByType[BasemapLayerType.POINT],
+      m.basemap_layer_villes()
+    )
+  });
+  const supportsTerre = $derived(
+    Boolean(currentMetadata) &&
+      availableMetadataLayerTypes.has(BasemapLayerType.LAND)
+  );
   const supportsLakesRivers = $derived(
     !isCustomBasemap &&
       (availableMetadataLayerTypes.has(BasemapLayerType.POLYGON) ||
         availableMetadataLayerTypes.has(BasemapLayerType.LINE))
+  );
+  const supportsRelief = $derived(
+    Boolean(currentMetadata) &&
+      availableMetadataLayerTypes.has(BasemapLayerType.POLYGON)
+  );
+  const supportsFrontieres = $derived(
+    Boolean(currentMetadata) &&
+      availableMetadataLayerTypes.has(BasemapLayerType.LIMIT)
   );
   const supportsCities = $derived(
     !isCustomBasemap &&
@@ -275,34 +362,27 @@
           />
         </ExpandableSection>
       {:else}
-        <ExpandableSection
-          title={m.basemap_layer_terre()}
-          description={!supportsCatalogGeometry
-            ? m.basemap_layer_unavailable()
-            : undefined}
-          showToggle={true}
-          toggleVariant="suggestions"
-          toggleChecked={supportsCatalogGeometry &&
-            (getConfig('terre')?.visible ?? true)}
-          toggleDisabled={!supportsCatalogGeometry}
-          disabled={!supportsCatalogGeometry}
-          disabledReason={!supportsCatalogGeometry
-            ? m.basemap_layer_unavailable_reason()
-            : undefined}
-          onToggleChange={(checked) => handleLayerToggle('terre', checked)}
-        >
-          <LayerConfigTerre
-            fillColor={getConfig('terre')?.fillColor}
-            fillShadow={getConfig('terre')?.fillShadow}
-            fillOpacity={getConfig('terre')?.fillOpacity}
-            strokeColor={getConfig('terre')?.strokeColor}
-            strokeDotted={getConfig('terre')?.strokeDotted}
-            strokeDottedPattern={getConfig('terre')?.strokeDottedPattern}
-            strokeThickness={getConfig('terre')?.strokeThickness}
-            strokeOpacity={getConfig('terre')?.strokeOpacity}
-            onchange={(updates) => handleLayerChange('terre', updates)}
-          />
-        </ExpandableSection>
+        {#if supportsTerre}
+          <ExpandableSection
+            title={sectionTitles.terre}
+            showToggle={true}
+            toggleVariant="suggestions"
+            toggleChecked={getConfig('terre')?.visible ?? true}
+            onToggleChange={(checked) => handleLayerToggle('terre', checked)}
+          >
+            <LayerConfigTerre
+              fillColor={getConfig('terre')?.fillColor}
+              fillShadow={getConfig('terre')?.fillShadow}
+              fillOpacity={getConfig('terre')?.fillOpacity}
+              strokeColor={getConfig('terre')?.strokeColor}
+              strokeDotted={getConfig('terre')?.strokeDotted}
+              strokeDottedPattern={getConfig('terre')?.strokeDottedPattern}
+              strokeThickness={getConfig('terre')?.strokeThickness}
+              strokeOpacity={getConfig('terre')?.strokeOpacity}
+              onchange={(updates) => handleLayerChange('terre', updates)}
+            />
+          </ExpandableSection>
+        {/if}
 
         <ExpandableSection
           title={m.basemap_layer_mers()}
@@ -321,59 +401,46 @@
           />
         </ExpandableSection>
 
-        <ExpandableSection
-          title={m.basemap_layer_lacs_rivieres()}
-          description={!supportsLakesRivers
-            ? m.basemap_layer_unavailable()
-            : undefined}
-          showToggle={true}
-          toggleVariant="suggestions"
-          toggleChecked={getConfig('lacs')?.visible ?? false}
-          toggleDisabled={!supportsLakesRivers}
-          disabled={!supportsLakesRivers}
-          disabledReason={!supportsLakesRivers
-            ? m.basemap_layer_unavailable_reason()
-            : undefined}
-          onToggleChange={handleLacsRivieresToggle}
-        >
-          <LayerConfigSimple
-            showColor={true}
-            showDotted={false}
-            showThickness={true}
-            thicknessLabel={m.basemap_config_thickness_rivers()}
-            color={getConfig('lacs')?.color}
-            thickness={getConfig('rivieres')?.thickness}
-            opacity={getConfig('lacs')?.opacity}
-            onchange={handleLacsRivieresChange}
-          />
-        </ExpandableSection>
+        {#if supportsLakesRivers}
+          <ExpandableSection
+            title={m.basemap_layer_lacs_rivieres()}
+            showToggle={true}
+            toggleVariant="suggestions"
+            toggleChecked={getConfig('lacs')?.visible ?? false}
+            onToggleChange={handleLacsRivieresToggle}
+          >
+            <LayerConfigSimple
+              showColor={true}
+              showDotted={false}
+              showThickness={true}
+              thicknessLabel={m.basemap_config_thickness_rivers()}
+              color={getConfig('lacs')?.color}
+              thickness={getConfig('rivieres')?.thickness}
+              opacity={getConfig('lacs')?.opacity}
+              onchange={handleLacsRivieresChange}
+            />
+          </ExpandableSection>
+        {/if}
+
+        {#if supportsRelief}
+          <ExpandableSection
+            title={m.basemap_layer_relief()}
+            showToggle={true}
+            toggleVariant="suggestions"
+            toggleChecked={getConfig('relief')?.visible ?? true}
+            onToggleChange={(checked) => handleLayerToggle('relief', checked)}
+          >
+            <LayerConfigRelief
+              representation={getConfig('relief')?.representation}
+              color={getConfig('relief')?.color}
+              opacity={getConfig('relief')?.opacity}
+              onchange={(updates) => handleLayerChange('relief', updates)}
+            />
+          </ExpandableSection>
+        {/if}
 
         <ExpandableSection
-          title={m.basemap_layer_relief()}
-          description={!supportsCatalogGeometry
-            ? m.basemap_layer_unavailable()
-            : undefined}
-          showToggle={true}
-          toggleVariant="suggestions"
-          toggleChecked={supportsCatalogGeometry &&
-            (getConfig('relief')?.visible ?? true)}
-          toggleDisabled={!supportsCatalogGeometry}
-          disabled={!supportsCatalogGeometry}
-          disabledReason={!supportsCatalogGeometry
-            ? m.basemap_layer_unavailable_reason()
-            : undefined}
-          onToggleChange={(checked) => handleLayerToggle('relief', checked)}
-        >
-          <LayerConfigRelief
-            representation={getConfig('relief')?.representation}
-            color={getConfig('relief')?.color}
-            opacity={getConfig('relief')?.opacity}
-            onchange={(updates) => handleLayerChange('relief', updates)}
-          />
-        </ExpandableSection>
-
-        <ExpandableSection
-          title={m.basemap_layer_equateur()}
+          title={sectionTitles.equateur}
           showToggle={true}
           toggleVariant="suggestions"
           toggleChecked={getConfig('equateur')?.visible ?? true}
@@ -393,7 +460,7 @@
         </ExpandableSection>
 
         <ExpandableSection
-          title={m.basemap_layer_meridiens()}
+          title={sectionTitles.meridiens}
           showToggle={true}
           toggleVariant="suggestions"
           toggleChecked={getConfig('meridiens')?.visible ?? true}
@@ -411,71 +478,90 @@
           />
         </ExpandableSection>
 
-        <ExpandableSection
-          title={m.basemap_layer_frontieres()}
-          description={!supportsCatalogGeometry
-            ? m.basemap_layer_unavailable()
-            : undefined}
-          showToggle={true}
-          toggleVariant="suggestions"
-          toggleChecked={supportsCatalogGeometry &&
-            (getConfig('frontieres')?.visible ?? true)}
-          toggleDisabled={!supportsCatalogGeometry}
-          disabled={!supportsCatalogGeometry}
-          disabledReason={!supportsCatalogGeometry
-            ? m.basemap_layer_unavailable_reason()
-            : undefined}
-          onToggleChange={(checked) => handleLayerToggle('frontieres', checked)}
-        >
-          <LayerConfigSimple
-            showColor={true}
-            showDotted={true}
-            disableDotted={!supportsCatalogGeometry ||
-              !supportsFrontieresDotted}
-            dottedDisabledReason={!supportsCatalogGeometry
-              ? m.basemap_layer_unavailable_reason()
-              : !supportsFrontieresDotted
+        {#if supportsFrontieres}
+          <ExpandableSection
+            title={sectionTitles.frontieres}
+            showToggle={true}
+            toggleVariant="suggestions"
+            toggleChecked={getConfig('frontieres')?.visible ?? true}
+            onToggleChange={(checked) =>
+              handleLayerToggle('frontieres', checked)}
+          >
+            <LayerConfigSimple
+              showColor={true}
+              showDotted={true}
+              disableDotted={!supportsFrontieresDotted}
+              dottedDisabledReason={!supportsFrontieresDotted
                 ? m.basemap_dotted_unavailable_reason()
                 : undefined}
-            showThickness={true}
-            color={getConfig('frontieres')?.color}
-            dotted={getConfig('frontieres')?.dotted}
-            dottedPattern={getConfig('frontieres')?.dottedPattern}
-            thickness={getConfig('frontieres')?.thickness}
-            opacity={getConfig('frontieres')?.opacity}
-            onchange={(updates) => handleLayerChange('frontieres', updates)}
-          />
-        </ExpandableSection>
+              showThickness={true}
+              color={getConfig('frontieres')?.color}
+              dotted={getConfig('frontieres')?.dotted}
+              dottedPattern={getConfig('frontieres')?.dottedPattern}
+              thickness={getConfig('frontieres')?.thickness}
+              opacity={getConfig('frontieres')?.opacity}
+              onchange={(updates) => handleLayerChange('frontieres', updates)}
+            />
+          </ExpandableSection>
+        {/if}
 
-        <ExpandableSection
-          title={m.basemap_layer_villes()}
-          description={!supportsCities
-            ? m.basemap_layer_unavailable()
-            : undefined}
-          showToggle={true}
-          toggleVariant="suggestions"
-          toggleChecked={supportsCities &&
-            (getConfig('villes')?.visible ?? true)}
-          toggleDisabled={!supportsCities}
-          disabled={!supportsCities}
-          disabledReason={!supportsCities
-            ? m.basemap_layer_unavailable_reason()
-            : undefined}
-          onToggleChange={(checked) => handleLayerToggle('villes', checked)}
-        >
-          <LayerConfigVilles
-            count={getConfig('villes')?.count}
-            symbol={getConfig('villes')?.symbol}
-            color={getConfig('villes')?.color}
-            size={getConfig('villes')?.size}
-            opacity={getConfig('villes')?.opacity}
-            labelFontFamily={getConfig('villes')?.labelFontFamily}
-            labelSize={getConfig('villes')?.labelSize}
-            labelColor={getConfig('villes')?.labelColor}
-            onchange={(updates) => handleLayerChange('villes', updates)}
-          />
-        </ExpandableSection>
+        {#if supportsCities}
+          <ExpandableSection
+            title={sectionTitles.villes}
+            showToggle={true}
+            toggleVariant="suggestions"
+            toggleChecked={getConfig('villes')?.visible ?? true}
+            onToggleChange={(checked) => handleLayerToggle('villes', checked)}
+          >
+            <LayerConfigVilles
+              count={getConfig('villes')?.count}
+              symbol={getConfig('villes')?.symbol}
+              color={getConfig('villes')?.color}
+              size={getConfig('villes')?.size}
+              opacity={getConfig('villes')?.opacity}
+              labelFontFamily={getConfig('villes')?.labelFontFamily}
+              labelSize={getConfig('villes')?.labelSize}
+              labelColor={getConfig('villes')?.labelColor}
+              onchange={(updates) => handleLayerChange('villes', updates)}
+            />
+          </ExpandableSection>
+        {/if}
       {/if}
+    {/if}
+
+    {#if !isTiledBasemapEnabled && currentMetadata && (currentMetadata.layers?.length ?? 0) > 0}
+      <ExpandableSection
+        title={m.basemap_layer_section_aux()}
+        defaultOpen={true}
+      >
+        <ul class="aux-layers-list">
+          {#each currentMetadata.layers as auxLayer (getAuxLayerKey(auxLayer, currentMetadata.file))}
+            <li class="aux-layers-item">
+              <span class="aux-layers-title">
+                {pickLocalizedTitle(auxLayer, auxLayer.type)}
+              </span>
+              <div class="aux-layers-toggle">
+                <SimpleCheckbox
+                  checked={isAuxLayerVisible(auxLayer, currentMetadata.file)}
+                  labelText={pickLocalizedTitle(auxLayer, auxLayer.type)}
+                  hideLabel
+                  onchange={(checked) =>
+                    handleAuxLayerToggle(
+                      auxLayer,
+                      currentMetadata.file,
+                      checked
+                    )}
+                />
+                <span class="aux-layers-toggle-text">
+                  {isAuxLayerVisible(auxLayer, currentMetadata.file)
+                    ? m.basemap_layer_visible()
+                    : m.basemap_layer_hidden()}
+                </span>
+              </div>
+            </li>
+          {/each}
+        </ul>
+      </ExpandableSection>
     {/if}
 
     <ExpandableSection
@@ -521,6 +607,42 @@
     display: flex;
     flex-direction: column;
     border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
+  }
+
+  .aux-layers-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+  }
+
+  .aux-layers-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--cds-spacing-03);
+    padding: var(--cds-spacing-02) 0;
+  }
+
+  .aux-layers-title {
+    flex: 1 1 auto;
+    color: var(--cds-text-01, #161616);
+    font-size: 0.875rem;
+    line-height: 1.125rem;
+  }
+
+  .aux-layers-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
+    cursor: pointer;
+  }
+
+  .aux-layers-toggle-text {
+    color: var(--cds-text-helper, #6f6f6f);
+    font-size: 0.75rem;
   }
 
   .reference-basemap-tool {

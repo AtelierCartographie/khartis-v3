@@ -566,7 +566,14 @@
       selectedBasemap: basemap.file,
       basemapSource: BasemapSource.CATALOG
     });
-    basemapStyleStore.setReferenceBasemap(null);
+
+    const previousReferenceBasemapId = basemapStyleStore.referenceBasemapId;
+    const isCached = basemapService.getCachedBasemap(basemap.file) !== null;
+    if (isCached) {
+      basemapStyleStore.setReferenceBasemap(basemap.file);
+    } else {
+      basemapStyleStore.setReferenceBasemap(null);
+    }
     projectStore.updateProjectData({ basemap: undefined });
 
     if (hasGPSMode && resolvedDatasetId) {
@@ -590,6 +597,9 @@
           return;
         }
 
+        if (isCached) {
+          basemapStyleStore.setReferenceBasemap(previousReferenceBasemapId);
+        }
         logger.error(
           'Failed to finalize GPS mode for catalog basemap',
           LogCategory.MAP,
@@ -604,6 +614,8 @@
       );
       if (didFinalizeJoin && !abortSignal.aborted) {
         applyCatalogReferenceBasemap(basemap);
+      } else if (isCached && !abortSignal.aborted) {
+        basemapStyleStore.setReferenceBasemap(previousReferenceBasemapId);
       }
     }
   }

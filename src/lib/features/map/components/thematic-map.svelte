@@ -40,6 +40,7 @@
   } from '../services/basemap.service.svelte';
   import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs.utils';
   import { basemapLayersStore } from '../stores/basemap-layers.store.svelte';
+  import { basemapAuxLayersStore } from '../stores/basemap-aux-layers.store.svelte';
   import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
   import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
@@ -1939,6 +1940,7 @@
   const layerUpdateTrigger = $derived({
     vizVersion: visualizationStore.version,
     basemapVersion: basemapLayersStore.version,
+    basemapAuxVersion: basemapAuxLayersStore.version,
     fontVersion: fontAssetsStore.version,
     highlightVersion: mapHighlightStore.version,
     dataVersion,
@@ -1996,6 +1998,12 @@
         logger.info('Loading reference basemap', LogCategory.MAP, {
           basemapId: refId
         });
+        const cachedGeometryTable =
+          basemapService.getCachedGeometryTable(refId);
+        if (cachedGeometryTable) {
+          worldBaseTable = cachedGeometryTable;
+          scheduleLayerUpdate('effect:referenceBasemapCachedHit');
+        }
         try {
           const loaded = await basemapService.loadBasemap(refId);
           if (requestId !== referenceBasemapRequestId) {

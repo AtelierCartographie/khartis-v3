@@ -53,8 +53,13 @@ export interface SerializedBasemapAttribute {
   basemap_count: number;
 }
 
+export interface SerializedBasemapAuxLayers {
+  visibility: Record<string, boolean>;
+}
+
 export interface SerializedBasemapSettings {
   layers: BasemapLayerConfig[];
+  auxLayers?: SerializedBasemapAuxLayers;
   style: BasemapStyle;
   mapProjection: MapProjectionType;
   lastSelectedTiledStyle?: BasemapStyle | null;

@@ -79,21 +79,16 @@ describe('CustomizeBasemap', () => {
   });
 
   it('stops advertising catalog-only metadata layers on imported basemaps', () => {
-    expect(source).toContain('const supportsCatalogGeometry = $derived(');
+    expect(source).toContain('const supportsTerre = $derived(');
+    expect(source).toContain('const supportsFrontieres = $derived(');
     expect(source).toContain('const supportsLakesRivers = $derived(');
     expect(source).toContain('const supportsCities = $derived(');
     expect(source).toContain('!isCustomBasemap &&');
   });
 
-  it('disables catalog geometry layers when no basemap geometry is active', () => {
-    expect(source).toContain('toggleDisabled={!supportsCatalogGeometry}');
-    expect(source).toContain('disabled={!supportsCatalogGeometry}');
-    expect(source).toMatch(
-      /supportsCatalogGeometry &&\s+\(getConfig\('terre'\)\?\.visible \?\? true\)/
-    );
-    expect(source).toMatch(
-      /supportsCatalogGeometry &&\s+\(getConfig\('frontieres'\)\?\.visible \?\? true\)/
-    );
+  it('hides catalog geometry layers when no basemap geometry is active', () => {
+    expect(source).toContain('{#if supportsTerre}');
+    expect(source).toContain('{#if supportsFrontieres}');
   });
 
   it('derives overlay support from the selected reference basemap metadata', () => {
@@ -134,12 +129,10 @@ describe('CustomizeBasemap', () => {
     expect(source).toContain(
       'availableMetadataLayerTypes.has(BasemapLayerType.POINT)'
     );
-    expect(source).toMatch(
-      /toggleChecked=\{supportsCities &&\s+\(getConfig\('villes'\)\?\.visible \?\? true\)\}/
-    );
+    expect(source).toContain('{#if supportsCities}');
   });
 
-  it('keeps lakes and rivers unavailable while the catalog has no hydrography layers', () => {
+  it('hides the lakes and rivers section when the catalog has no hydrography layers', () => {
     const layerTypes = new Set(
       catalogMetadata.flatMap((basemap) =>
         (basemap.layers ?? []).map((layer) => layer.type)
@@ -148,9 +141,13 @@ describe('CustomizeBasemap', () => {
 
     expect(layerTypes.has('polygon')).toBe(false);
     expect(layerTypes.has('line')).toBe(false);
-    expect(source).toContain('toggleDisabled={!supportsLakesRivers}');
-    expect(source).toContain('disabled={!supportsLakesRivers}');
-    expect(source).toContain('disabledReason={!supportsLakesRivers');
+    expect(source).toContain('{#if supportsLakesRivers}');
+    expect(source).toContain(
+      'availableMetadataLayerTypes.has(BasemapLayerType.POLYGON)'
+    );
+    expect(source).toContain(
+      'availableMetadataLayerTypes.has(BasemapLayerType.LINE)'
+    );
   });
 
   it('connects meridiens controls to mode and spacing instead of the legacy selector', () => {

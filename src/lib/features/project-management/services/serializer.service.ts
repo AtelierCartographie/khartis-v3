@@ -156,6 +156,7 @@ function mapRegistryToSerializedFormat(
   return {
     basemapSettings: {
       layers: stores.basemapLayers,
+      auxLayers: stores.basemapAuxLayers,
       style: (stores.basemapStyle as { style?: unknown })?.style,
       lastSelectedTiledStyle: (
         stores.basemapStyle as { lastSelectedTiledStyle?: BasemapStyle | null }
@@ -191,6 +192,9 @@ function mapSerializedFormatToRegistry(
 
   if (data.basemapSettings) {
     stores.basemapLayers = data.basemapSettings.layers;
+    if (data.basemapSettings.auxLayers !== undefined) {
+      stores.basemapAuxLayers = data.basemapSettings.auxLayers;
+    }
     stores.basemapStyle = {
       style: data.basemapSettings.style,
       lastSelectedTiledStyle: data.basemapSettings.lastSelectedTiledStyle,
