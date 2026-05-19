@@ -64,7 +64,7 @@ describe('export service geometry extraction', () => {
     expect(source).toContain('ST_AsWKB(${geometryExpression})');
     expect(source).toContain('buildDirectGeoPackageExportSource');
     expect(source).toContain('buildGeometryValueExpression(');
-    expect(source).toContain('sourceCrs ? WGS84_CRS : null');
+    expect(source).toContain('const targetCrs = sourceCrs ?? WGS84_CRS;');
     expect(source).not.toContain("DRIVER 'GPKG'");
   });
 

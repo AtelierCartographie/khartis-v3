@@ -62,7 +62,7 @@ import {
   resolveFontFamilyStack
 } from '$lib/features/step-toolbar/fonts.constants';
 import type { BBox, DeckDataRow, GeometryInfo, RGBColor } from '../types';
-import type { StylePreset, StylePresets } from '../types/basemap.types';
+import type { StylePresets } from '../types/basemap.types';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { withOpacity, dottedPatternToDashArray } from './layer-helpers';
 import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
@@ -1952,85 +1952,6 @@ export interface MetadataLayerEntry {
   file: string;
 }
 
-function resolveStylePreset(
-  styleKey: string | null,
-  stylePresets: StylePresets | null
-): StylePreset | null {
-  if (!styleKey || !stylePresets) return null;
-  return stylePresets[styleKey] ?? null;
-}
-
-function createMetadataLandLayers(
-  entries: MetadataLayerEntry[],
-  stylePresets: StylePresets | null,
-  ctx: BasemapLayerContext,
-  options?: {
-    fillColorOverride?: [number, number, number, number];
-  }
-): Layer<DeckDataRow>[] {
-  const layers: Layer<DeckDataRow>[] = [];
-  const baseProps = getBaseLayerProps(ctx);
-
-  for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i];
-    const geometryInfo = extractGeometryInfo(entry.table);
-    if (!geometryInfo) continue;
-
-    const preset = resolveStylePreset(entry.style, stylePresets);
-    const fillColor: [number, number, number, number] =
-      options?.fillColorOverride ??
-      (preset && 'fillColor' in preset
-        ? preset.fillColor
-        : [220, 220, 220, 255]);
-
-    const layerId = buildLayerId(
-      DeckLayerId.BASEMAP_META_LAND,
-      `${ctx.projectionSuffix}-${i}`
-    );
-    const preferProjectedGeoJsonFallback = shouldPreferProjectedGeoJsonFallback(
-      geometryInfo,
-      ctx.projection
-    );
-
-    if (
-      !preferProjectedGeoJsonFallback &&
-      (isGeoArrowPolygonEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
-    ) {
-      const polyData = ctx.projection
-        ? parseSolidPolygonsWithProjection(entry.table, ctx.projection)
-        : parseSolidPolygons(entry.table);
-      layers.push(
-        new SolidPolygonLayer({
-          id: layerId,
-          ...createCompatibleSolidPolygonLayerProps(polyData),
-          getFillColor: fillColor,
-          ...baseProps
-        })
-      );
-    } else if (canRenderViaGeoJsonFallback(geometryInfo)) {
-      const geojson = getPreparedBasemapGeoJSON(
-        entry.table,
-        geometryInfo.geoColumn,
-        ctx
-      );
-      if (geojson) {
-        layers.push(
-          new GeoJsonLayer({
-            id: layerId,
-            data: geojson,
-            filled: true,
-            stroked: false,
-            getFillColor: fillColor,
-            ...baseProps
-          })
-        );
-      }
-    }
-  }
-
-  return layers;
-}
-
 function createMetadataLimitLayers(
   entries: MetadataLayerEntry[],
   ctx: BasemapLayerContext,
@@ -2198,12 +2119,10 @@ export function createBasemapLayers(
   const availableMetadataLayerTypes = new Set(
     additionalData?.availableMetadataLayerTypes ?? []
   );
-  const stylePresets = additionalData?.stylePresets ?? null;
 
   const metaByType = (type: BasemapLayerType) =>
     metaLayers.filter((l) => l.type === type);
 
-  const landEntries = metaByType(BasemapLayerType.LAND);
   const limitEntries = metaByType(BasemapLayerType.LIMIT);
   const polygonEntries = metaByType(BasemapLayerType.POLYGON);
   const lineEntries = metaByType(BasemapLayerType.LINE);
@@ -2237,19 +2156,6 @@ export function createBasemapLayers(
 
         case BASEMAP_LAYER_ID.TERRE: {
           const terreConfig = config as TerreLayerConfig;
-          const metadataLandLayers =
-            landEntries.length > 0
-              ? createMetadataLandLayers(landEntries, stylePresets, ctx, {
-                  fillColorOverride: withOpacity(
-                    toRgbColor(terreConfig.fillColor),
-                    terreConfig.fillOpacity / 100
-                  ) as [number, number, number, number]
-                })
-              : [];
-
-          if (metadataLandLayers.length > 0) {
-            targetGroups.push(metadataLandLayers);
-          }
 
           if (worldBaseTable) {
             const terreLayers = createTerreLayers(

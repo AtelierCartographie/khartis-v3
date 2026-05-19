@@ -8,7 +8,7 @@ import {
 } from './projection-sphere-mask.utils';
 
 describe('projection sphere mask utils', () => {
-  it('creates a Deck mask layer from the projected d3 sphere', () => {
+  it('creates a Deck polygon layer from the projected d3 sphere', () => {
     const projection = d3geo.geoNaturalEarth1().fitExtent(
       [
         [20, 20],
@@ -23,11 +23,20 @@ describe('projection sphere mask utils', () => {
     });
 
     expect(layer?.id).toBe(PROJECTION_SPHERE_MASK_LAYER_ID);
-    expect(layer?.props.operation).toBe('mask');
     expect(layer?.props.pickable).toBe(false);
+    expect(layer?.props.coordinateSystem).toBeDefined();
   });
 
-  it('prepends the mask layer and applies MaskExtension props to rendered layers', () => {
+  it('returns null when projection has no stream method', () => {
+    const layer = createProjectionSphereMaskLayer({
+      projection: undefined,
+      modelMatrix: null
+    });
+
+    expect(layer).toBeNull();
+  });
+
+  it('prepends the sphere layer when applied to layers', () => {
     const projection = d3geo.geoNaturalEarth1().fitExtent(
       [
         [20, 20],
@@ -35,7 +44,7 @@ describe('projection sphere mask utils', () => {
       ],
       { type: 'Sphere' }
     );
-    const maskLayer = createProjectionSphereMaskLayer({
+    const sphereLayer = createProjectionSphereMaskLayer({
       projection,
       modelMatrix: null
     });
@@ -45,12 +54,23 @@ describe('projection sphere mask utils', () => {
       getPosition: (item: { position: [number, number] }) => item.position
     });
 
-    const maskedLayers = applyProjectionSphereMask([pointLayer], maskLayer);
+    const orderedLayers = applyProjectionSphereMask([pointLayer], sphereLayer);
 
-    expect(maskedLayers).toHaveLength(2);
-    expect(maskedLayers[0]).toBe(maskLayer);
-    expect(maskedLayers[1].id).toBe('points');
-    expect(maskedLayers[1].props.maskId).toBe(PROJECTION_SPHERE_MASK_LAYER_ID);
-    expect(maskedLayers[1].props.extensions).toHaveLength(1);
+    expect(orderedLayers).toHaveLength(2);
+    expect(orderedLayers[0]).toBe(sphereLayer);
+    expect(orderedLayers[1].id).toBe('points');
+  });
+
+  it('returns layers unchanged when no sphere layer is provided', () => {
+    const pointLayer = new ScatterplotLayer({
+      id: 'points',
+      data: [{ position: [0, 0] }],
+      getPosition: (item: { position: [number, number] }) => item.position
+    });
+
+    const orderedLayers = applyProjectionSphereMask([pointLayer], null);
+
+    expect(orderedLayers).toHaveLength(1);
+    expect(orderedLayers[0]).toBe(pointLayer);
   });
 });
