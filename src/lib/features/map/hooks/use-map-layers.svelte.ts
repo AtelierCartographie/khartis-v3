@@ -63,8 +63,10 @@ import {
 import { resolveProjectionForRender } from '../utils/projection-priority.utils';
 import {
   applyProjectionSphereMask,
-  createProjectionSphereMaskLayer
+  createProjectionSphereMaskLayer,
+  createProjectionSphereOutlineLayer
 } from '../utils/projection-sphere-mask.utils';
+import { basemapAuxLayersStore } from '../stores/basemap-aux-layers.store.svelte';
 import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
 import { getRepresentativePointArrowTable } from '$lib/features/duckdb/orchestrator/arrow-ops';
 import { resolveRepresentativePointTableName } from '../utils/representative-point-table.utils';
@@ -951,6 +953,17 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             }
 
             for (const layer of currentMetadata.layers) {
+              const layerKey =
+                layer.file ?? `${currentMetadata.file}:${layer.type}`;
+              if (
+                !basemapAuxLayersStore.isVisible(
+                  currentMetadata.file,
+                  layerKey,
+                  true
+                )
+              ) {
+                continue;
+              }
               const table = layer.file
                 ? basemapService.currentLayers.get(layer.file)
                 : currentMetadata.isCustom
@@ -1245,19 +1258,28 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         thematicLayers: layers,
         basemapForegroundLayers
       });
-      const projectionSphereMaskLayer =
+      const sphereProjectionInput =
         isOrthographicMode && hasManualProjectionOverride
-          ? createProjectionSphereMaskLayer({
-              projection:
-                getProjectionForSphereMask?.() ??
-                activeBasemapProjection ??
-                projectionOverride,
-              modelMatrix: matrixToApply
-            })
-          : null;
+          ? (getProjectionForSphereMask?.() ??
+            activeBasemapProjection ??
+            projectionOverride)
+          : undefined;
+      const projectionSphereMaskLayer = sphereProjectionInput
+        ? createProjectionSphereMaskLayer({
+            projection: sphereProjectionInput,
+            modelMatrix: matrixToApply
+          })
+        : null;
+      const projectionSphereOutlineLayer = sphereProjectionInput
+        ? createProjectionSphereOutlineLayer({
+            projection: sphereProjectionInput,
+            modelMatrix: matrixToApply
+          })
+        : null;
       const maskedOrderedLayers = applyProjectionSphereMask(
         orderedLayers,
-        projectionSphereMaskLayer
+        projectionSphereMaskLayer,
+        projectionSphereOutlineLayer
       );
       layers.length = 0;
       layers.push(...maskedOrderedLayers);
