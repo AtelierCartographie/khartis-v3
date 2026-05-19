@@ -11,7 +11,7 @@ const crossOriginIsolationAssets = (): Plugin => ({
   name: 'cross-origin-isolation-assets',
   configurePreviewServer(server) {
     server.middlewares.use((_req, res, next) => {
-      res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+      res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
       res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
       next();
@@ -94,7 +94,7 @@ export default defineConfig(({ mode }) => {
     server: {
       headers: {
         'Cross-Origin-Opener-Policy': 'same-origin',
-        'Cross-Origin-Embedder-Policy': 'require-corp'
+        'Cross-Origin-Embedder-Policy': 'credentialless'
       }
     },
     build: {
@@ -150,21 +150,21 @@ export default defineConfig(({ mode }) => {
           type: 'module'
         },
         injectManifest: {
-          globPatterns: [
-            '**/*.{js,css,html,ico,png,svg}',
-            'basemaps/all-basemaps-metadata.json',
-            'basemaps/projection-presets.json',
-            'basemaps/style-presets.json'
+          globPatterns: ['**/*.{js,css,html}', 'manifest.webmanifest'],
+          globIgnores: [
+            '**/node_modules/**/*',
+            'basemaps/**',
+            'tests-datasets/**',
+            'screenshots/**',
+            'duckdb-extensions/**'
           ],
-          globIgnores: ['**/node_modules/**/*'],
-          // index.html is excluded from globPatterns matching, so we precache it explicitly with a per-build revision; verifyServiceWorkerPrecache asserts this entry survives.
           additionalManifestEntries: [
             {
               url: basePath ? `${basePath}/index.html` : '/index.html',
               revision: `${Date.now()}`
             }
           ],
-          maximumFileSizeToCacheInBytes: 50 * 1024 * 1024
+          maximumFileSizeToCacheInBytes: 10 * 1024 * 1024
         },
         manifest: {
           id: basePath ? `${basePath}/` : '/',

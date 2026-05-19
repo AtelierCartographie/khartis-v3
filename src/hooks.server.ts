@@ -6,11 +6,11 @@ import * as m from '$lib/paraglide/messages';
 function withCrossOriginIsolationHeaders(response: Response): Response {
   const headers = new Headers(response.headers);
   headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-  headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
+  headers.set('Cross-Origin-Embedder-Policy', 'credentialless');
 
   try {
     response.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-    response.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
+    response.headers.set('Cross-Origin-Embedder-Policy', 'credentialless');
     return response;
   } catch {
     return new Response(response.body, {

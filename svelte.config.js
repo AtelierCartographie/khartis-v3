@@ -20,6 +20,10 @@ const config = {
     }),
     paths: {
       base: env.BASE_PATH || ''
+    },
+    version: {
+      name: env.VITE_APP_VERSION || String(Date.now()),
+      pollInterval: 5 * 60 * 1000
     }
   }
 };
