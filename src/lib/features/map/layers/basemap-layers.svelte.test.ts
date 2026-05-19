@@ -1669,10 +1669,8 @@ describe('basemap projection fallbacks', () => {
     expect(labelLayer?.props.data).toBe(projectedCities);
   });
 
-  it('projects metadata land fallbacks inside createBasemapLayers', () => {
+  it('does not render meta-land when worldBaseTable is null', () => {
     const metadataTable = { id: 'land' } as unknown as ArrowTable;
-    const sourceGeoJSON = createPolygonGeoJSON('raw-meta-land');
-    const projectedGeoJSON = createPolygonGeoJSON('projected-meta-land');
     const ctx = createProjectionContext();
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
@@ -1681,10 +1679,6 @@ describe('basemap projection fallbacks', () => {
     extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
       table === metadataTable ? createPolygonGeometryInfo() : null
     );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
-      table === metadataTable ? sourceGeoJSON : null
-    );
-    projectGeoJSONMock.mockReturnValue(projectedGeoJSON);
 
     const layers = createBasemapLayers(null, ctx, {
       metadataLayers: [
@@ -1699,21 +1693,21 @@ describe('basemap projection fallbacks', () => {
       stylePresets: null
     });
 
-    const metaLandLayer = layers.background.find(
-      (layer) =>
-        layer instanceof GeoJsonLayer &&
-        String(layer.props.id).includes('basemap-meta-land')
-    ) as GeoJsonLayer | undefined;
+    const metaLandLayer = layers.background.find((layer) =>
+      String(layer.props.id).includes('basemap-meta-land')
+    );
+    const terreLayer = layers.background.find((layer) =>
+      String(layer.props.id).includes('basemap-terre')
+    );
 
-    expect(metaLandLayer?.props.data).toBe(projectedGeoJSON);
+    expect(metaLandLayer).toBeUndefined();
+    expect(terreLayer).toBeUndefined();
   });
 
-  it('adds metadata land beneath terre when both a basemap table and land metadata exist', () => {
+  it('renders terre only (no meta-land) when both worldBaseTable and LAND metadata exist', () => {
     const worldBaseTable = { id: 'world-base' } as unknown as ArrowTable;
     const metadataTable = { id: 'land-backdrop' } as unknown as ArrowTable;
     const worldGeoJSON = createPolygonGeoJSON('raw-world-land');
-    const metadataGeoJSON = createPolygonGeoJSON('raw-meta-backdrop');
-    const projectedGeoJSON = createPolygonGeoJSON('projected-meta-backdrop');
     const ctx = createProjectionContext();
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
@@ -1724,21 +1718,9 @@ describe('basemap projection fallbacks', () => {
         ? createPolygonGeometryInfo()
         : null
     );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) => {
-      if (table === metadataTable) {
-        return metadataGeoJSON;
-      }
-      if (table === worldBaseTable) {
-        return worldGeoJSON;
-      }
-      return null;
-    });
-    projectGeoJSONMock.mockImplementation((geojson) => {
-      if (geojson === metadataGeoJSON) {
-        return projectedGeoJSON;
-      }
-      return geojson;
-    });
+    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
+      table === worldBaseTable ? worldGeoJSON : null
+    );
 
     const layers = createBasemapLayers(worldBaseTable, ctx, {
       metadataLayers: [
@@ -1750,67 +1732,18 @@ describe('basemap projection fallbacks', () => {
         } satisfies MetadataLayerEntry
       ],
       availableMetadataLayerTypes: [BasemapLayerType.LAND],
-      stylePresets: {
-        land: {
-          fillColor: [220, 220, 220, 255],
-          layer_type: 'solid-polygon',
-          stroked: false,
-          description_fr: 'land',
-          description_en: 'land'
-        }
-      }
+      stylePresets: null
     });
 
-    const metaLandLayer = layers.background.find(
-      (layer) =>
-        layer instanceof GeoJsonLayer &&
-        String(layer.props.id).includes('basemap-meta-land')
-    ) as GeoJsonLayer | undefined;
+    const metaLandLayer = layers.background.find((layer) =>
+      String(layer.props.id).includes('basemap-meta-land')
+    );
     const terreLayer = layers.background.find((layer) =>
       String(layer.props.id).includes('basemap-terre')
     );
 
-    expect(metaLandLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(metaLandLayer?.props.data).toBe(projectedGeoJSON);
-    expect(metaLandLayer?.props.getFillColor).toEqual([255, 255, 255, 255]);
+    expect(metaLandLayer).toBeUndefined();
     expect(terreLayer).toBeDefined();
-  });
-
-  it('uses Arrow native path for metadata land with composite projections', () => {
-    const metadataTable = { id: 'native-land' } as unknown as ArrowTable;
-    const ctx = createCompositeProjectionContext();
-
-    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
-    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.FRONTIERES, false);
-
-    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === metadataTable ? createNativePolygonGeometryInfo() : null
-    );
-
-    const layers = createBasemapLayers(null, ctx, {
-      metadataLayers: [
-        {
-          table: metadataTable,
-          style: null,
-          type: BasemapLayerType.LAND,
-          file: 'native-land.parquet'
-        } satisfies MetadataLayerEntry
-      ],
-      availableMetadataLayerTypes: [BasemapLayerType.LAND],
-      stylePresets: null
-    });
-
-    const metaLandLayer = layers.background.find(
-      (layer) =>
-        layer instanceof SolidPolygonLayer &&
-        String(layer.props.id).includes('basemap-meta-land')
-    );
-
-    expect(parseSolidPolygonsWithProjectionMock).toHaveBeenCalledWith(
-      metadataTable,
-      ctx.projection
-    );
-    expect(metaLandLayer).toBeInstanceOf(SolidPolygonLayer);
   });
 
   it('projects metadata limit fallbacks inside createBasemapLayers', () => {

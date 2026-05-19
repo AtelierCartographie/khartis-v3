@@ -1998,6 +1998,12 @@
         logger.info('Loading reference basemap', LogCategory.MAP, {
           basemapId: refId
         });
+        const cachedGeometryTable =
+          basemapService.getCachedGeometryTable(refId);
+        if (cachedGeometryTable) {
+          worldBaseTable = cachedGeometryTable;
+          scheduleLayerUpdate('effect:referenceBasemapCachedHit');
+        }
         try {
           const loaded = await basemapService.loadBasemap(refId);
           if (requestId !== referenceBasemapRequestId) {
