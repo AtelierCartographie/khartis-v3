@@ -2,35 +2,73 @@
   import { dev } from '$app/environment';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { connectivityStore } from '$lib/features/commons/stores/connectivity.store.svelte';
+  import { factoryResetPwa } from '$lib/features/commons/utils/pwa-offline';
   import { startProgressiveWarmup } from '$lib/features/commons/utils/offline-warmup-scheduler';
   import { isSwToClientMessage } from '$lib/types/sw-messages';
   import { onDestroy, onMount } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
 
-  const SW_UPDATE_POLL_INTERVAL_MS = 60 * 60 * 1000;
   const BYTES_PER_MIB = 1024 * 1024;
+  const AUTO_RELOAD_GUARD_KEY = 'khartis:auto-reloaded-at';
+  const AUTO_RELOAD_GUARD_WINDOW_MS = 10 * 1000;
 
-  let registrationUpdateInterval: ReturnType<typeof setInterval> | null = null;
   let warmupAbortController: AbortController | null = null;
   let swMessageHandler: ((event: MessageEvent) => void) | null = null;
+  let preloadErrorHandler: ((event: Event) => void) | null = null;
 
   useRegisterSW({
     immediate: true,
-    onRegistered(registration) {
-      if (!registration) return;
-
-      if (registrationUpdateInterval) {
-        clearInterval(registrationUpdateInterval);
-      }
-
-      registrationUpdateInterval = setInterval(() => {
-        registration.update();
-      }, SW_UPDATE_POLL_INTERVAL_MS);
-    },
     onRegisterError(error) {
       logger.error('SW registration error', LogCategory.SYSTEM, error);
     }
   });
+
+  function recordAutoReload(): boolean {
+    try {
+      const last = Number(sessionStorage.getItem(AUTO_RELOAD_GUARD_KEY) ?? '0');
+      if (
+        Number.isFinite(last) &&
+        Date.now() - last < AUTO_RELOAD_GUARD_WINDOW_MS
+      ) {
+        return false;
+      }
+      sessionStorage.setItem(AUTO_RELOAD_GUARD_KEY, String(Date.now()));
+      return true;
+    } catch {
+      return true;
+    }
+  }
+
+  async function recoverFromStaleAssets(): Promise<void> {
+    logger.warn(
+      'Stale dynamic import detected, recovering',
+      LogCategory.SYSTEM
+    );
+    if (recordAutoReload()) {
+      window.location.reload();
+      return;
+    }
+    logger.error(
+      'Auto-reload loop detected, performing factory reset',
+      LogCategory.SYSTEM
+    );
+    await factoryResetPwa({ reload: true });
+  }
+
+  function attachStaleAssetRecovery(): void {
+    preloadErrorHandler = (event: Event) => {
+      event.preventDefault();
+      void recoverFromStaleAssets();
+    };
+    window.addEventListener('vite:preloadError', preloadErrorHandler);
+  }
+
+  function detachStaleAssetRecovery(): void {
+    if (preloadErrorHandler) {
+      window.removeEventListener('vite:preloadError', preloadErrorHandler);
+      preloadErrorHandler = null;
+    }
+  }
 
   async function requestPersistentStorage(): Promise<void> {
     if (
@@ -129,15 +167,12 @@
   }
 
   onDestroy(() => {
-    if (registrationUpdateInterval) {
-      clearInterval(registrationUpdateInterval);
-      registrationUpdateInterval = null;
-    }
     if (warmupAbortController) {
       warmupAbortController.abort();
       warmupAbortController = null;
     }
     detachSwMessageListener();
+    detachStaleAssetRecovery();
   });
 
   onMount(() => {
@@ -149,6 +184,7 @@
     void requestPersistentStorage();
     void logStorageUsage();
     attachSwMessageListener();
+    attachStaleAssetRecovery();
     void bootstrapOfflineWarmup();
   });
 

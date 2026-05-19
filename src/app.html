@@ -2,6 +2,46 @@
 
 <html lang="%paraglide.lang%">
   <head>
+    <script>
+      (function () {
+        try {
+          var params = new URLSearchParams(window.location.search);
+          if (!params.has('reset')) return;
+          document.documentElement.style.background = '#ffffff';
+          var clearSw =
+            'serviceWorker' in navigator
+              ? navigator.serviceWorker
+                  .getRegistrations()
+                  .then(function (regs) {
+                    return Promise.all(
+                      regs.map(function (r) {
+                        return r.unregister();
+                      })
+                    );
+                  })
+                  .catch(function () {})
+              : Promise.resolve();
+          var clearCaches =
+            'caches' in window
+              ? caches
+                  .keys()
+                  .then(function (keys) {
+                    return Promise.all(
+                      keys.map(function (k) {
+                        return caches.delete(k);
+                      })
+                    );
+                  })
+                  .catch(function () {})
+              : Promise.resolve();
+          Promise.all([clearSw, clearCaches]).then(function () {
+            var url = new URL(window.location.href);
+            url.searchParams.delete('reset');
+            window.location.replace(url.pathname + url.search + url.hash);
+          });
+        } catch (e) {}
+      })();
+    </script>
     <meta charset="utf-8" />
     <meta
       name="viewport"
