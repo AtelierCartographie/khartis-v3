@@ -6,11 +6,19 @@ import { clientsClaim } from 'workbox-core';
 import { ExpirationPlugin } from 'workbox-expiration';
 import {
   cleanupOutdatedCaches,
-  createHandlerBoundToURL,
+  matchPrecache,
   precacheAndRoute
 } from 'workbox-precaching';
-import { NavigationRoute, registerRoute } from 'workbox-routing';
-import { CacheFirst, StaleWhileRevalidate } from 'workbox-strategies';
+import {
+  NavigationRoute,
+  registerRoute,
+  setCatchHandler
+} from 'workbox-routing';
+import {
+  CacheFirst,
+  NetworkFirst,
+  StaleWhileRevalidate
+} from 'workbox-strategies';
 import type {
   ClientToSwMessage,
   OfflineCacheScope,
@@ -48,13 +56,51 @@ clientsClaim();
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
-const navigationHandler = createHandlerBoundToURL(
-  resolveNavigationFallbackUrl()
+const APP_SHELL_CACHE = 'app-shell';
+
+registerRoute(
+  ({ url }) =>
+    url.pathname.endsWith('/_app/version.json') ||
+    url.pathname.endsWith('/sw.js'),
+  async ({ request }) => {
+    try {
+      return await fetch(request.url, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: { 'cache-control': 'no-cache', pragma: 'no-cache' }
+      });
+    } catch {
+      return Response.error();
+    }
+  }
 );
-const navigationRoute = new NavigationRoute(navigationHandler, {
-  denylist: [/^\/api\//, /\.[^/]+$/]
+
+const navigationHandler = new NetworkFirst({
+  cacheName: APP_SHELL_CACHE,
+  networkTimeoutSeconds: 3,
+  plugins: [
+    new CacheableResponsePlugin({ statuses: [0, 200] }),
+    new ExpirationPlugin({
+      maxEntries: 4,
+      maxAgeSeconds: THIRTY_DAYS_SECONDS,
+      purgeOnQuotaError: true
+    })
+  ]
 });
-registerRoute(navigationRoute);
+
+registerRoute(
+  new NavigationRoute(navigationHandler, {
+    denylist: [/^\/api\//, /\.[^/]+$/]
+  })
+);
+
+setCatchHandler(async ({ request }) => {
+  if (request.destination === 'document') {
+    const fallback = await matchPrecache(resolveNavigationFallbackUrl());
+    if (fallback) return fallback;
+  }
+  return Response.error();
+});
 
 registerRoute(
   ({ url }) => /.*duckdb.*\.wasm$/.test(url.pathname),
