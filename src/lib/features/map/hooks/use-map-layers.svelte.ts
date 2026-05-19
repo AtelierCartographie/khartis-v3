@@ -1203,7 +1203,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           fallbackDatasetIds.delete(renderedDatasetId);
         }
 
+        const hasReferenceBasemap = Boolean(
+          basemapStyleStore.referenceBasemapId
+        );
+
         for (const datasetId of fallbackDatasetIds) {
+          const datasetJoinedBasemap = getDatasetJoinedBasemap(datasetId);
+          if (datasetJoinedBasemap && !hasReferenceBasemap) {
+            continue;
+          }
           const table = tables.get(datasetId);
           const geojson = geoJSONs.get(datasetId);
           const fallbackCtx = buildDatasetFallbackContext(datasetId);
