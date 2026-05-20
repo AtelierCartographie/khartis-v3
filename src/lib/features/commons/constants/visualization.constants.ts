@@ -164,7 +164,8 @@ export enum ColorMode {
 
 export enum SizeMode {
   FIXED = 'fixed',
-  PROPORTIONAL = 'proportional'
+  PROPORTIONAL = 'proportional',
+  CLASSES = 'classes'
 }
 
 export const VISUALIZATION_DEFAULTS = {
@@ -194,7 +195,7 @@ export const SLIDER_LIMITS = {
   symbolSize: { min: 1, max: 100, step: 1 },
   symbolMaxSize: { min: 2, max: 100, step: 1 },
   symbolBarWidth: { min: 1, max: 30, step: 1 },
-  textSize: { min: 6, max: 24, step: 1 },
+  textSize: { min: 6, max: 64, step: 1 },
   textOpacity: { min: 0, max: 100, step: 1 },
   labelOpacity: { min: 0, max: 100, step: 1 },
   haloWidth: { min: 0, max: 6, step: 0.5 },

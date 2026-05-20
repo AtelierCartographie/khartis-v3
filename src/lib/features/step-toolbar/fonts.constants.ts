@@ -10,7 +10,7 @@ export const AVAILABLE_FONTS = [
 export type AvailableFont = (typeof AVAILABLE_FONTS)[number];
 export const DEFAULT_FONT_FAMILY: AvailableFont = 'Cabin';
 export const CARTOGRAPHIC_FONT_FAMILY: AvailableFont = 'Open Sans';
-export const FONT_SIZES = [8, 10, 12, 14, 16, 18, 20, 24] as const;
+export const FONT_SIZES = [8, 10, 12, 14, 16, 18, 20, 24, 32, 48, 64] as const;
 export type FontSize = (typeof FONT_SIZES)[number];
 export const FONT_SIZE_OPTIONS = FONT_SIZES.map((size) => String(size));
 

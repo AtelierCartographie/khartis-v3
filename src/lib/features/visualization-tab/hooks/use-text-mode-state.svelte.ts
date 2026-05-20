@@ -62,7 +62,7 @@ function getDefaultTextColorModeState(
 function getDefaultTextSizeModeState(
   mode: SizeMode
 ): Partial<TextPrimitiveConfig> {
-  if (mode === SizeMode.PROPORTIONAL) {
+  if (mode === SizeMode.PROPORTIONAL || mode === SizeMode.CLASSES) {
     return { valueColumn: undefined, classification: undefined };
   }
   return {};
