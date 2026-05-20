@@ -9,6 +9,7 @@ import {
 } from './visualization.store.svelte';
 import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
 import '$lib/features/map/stores/basemap-aux-layers.store.svelte';
+import '$lib/features/map/services/basemap-projection-sync.svelte';
 
 let initialized = false;
 
