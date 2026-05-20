@@ -192,7 +192,8 @@ describe('geo-indications tool', () => {
       await screen.findByText(m.geo_scale_valid_at_map_center())
     ).toBeInTheDocument();
   });
-  it('exposes longitude and latitude controls for the inset map centering', async () => {
+
+  it('removes planisphere, manual centering and basemap color inheritance from the inset map controls', async () => {
     render(GeoIndications);
 
     const insetSwitch = screen.getByRole('switch', { name: m.geo_inset_map() });
@@ -201,13 +202,47 @@ describe('geo-indications tool', () => {
 
     expect(
       await screen.findByRole('spinbutton', {
-        name: m.geo_inset_map_center_longitude()
+        name: m.geo_inset_map_size()
       })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('spinbutton', {
+      screen.getByText(m.geo_inset_map_window_color())
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(m.geo_inset_map_planisphere())
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('spinbutton', {
+        name: m.geo_inset_map_center_longitude()
+      })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('spinbutton', {
         name: m.geo_inset_map_center_latitude()
       })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(m.geo_inset_map_use_basemap_colors())
+    ).not.toBeInTheDocument();
+  });
+
+  it('locks the inset map when the current extent covers at least half the world', () => {
+    mapInstanceStore.setMapInstance(
+      createScaleMap(100, {
+        north: 90,
+        south: -90,
+        east: 180,
+        west: -180
+      }) as never
+    );
+
+    render(GeoIndications);
+
+    expect(
+      screen.getByRole('switch', { name: m.geo_inset_map() })
+    ).toBeDisabled();
+    expect(
+      screen.getByText(m.geo_inset_map_unavailable_scale())
     ).toBeInTheDocument();
   });
 
