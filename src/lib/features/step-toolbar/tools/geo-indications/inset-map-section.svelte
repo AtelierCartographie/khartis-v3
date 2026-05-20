@@ -2,26 +2,17 @@
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
-  import Switch from '$lib/features/commons/components/switch.svelte';
+  import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
-  import { InsetMapType } from '$lib/features/commons/constants/ui.constants';
   import * as m from '$lib/paraglide/messages.js';
   import { Column, Grid, Row } from 'carbon-components-svelte';
-  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
-
-  const insetMapTypeOptions = [
-    { value: InsetMapType.GLOBE, labelText: m.geo_inset_map_globe() },
-    {
-      value: InsetMapType.PLANISPHERE,
-      labelText: m.geo_inset_map_planisphere()
-    }
-  ];
   import {
     geoIndicationsActions,
     geoIndicationsState
   } from './geo-indications.store.svelte';
   import {
     INSET_MAP_SIZE_LIMITS,
+    isInsetMapAvailableForBounds,
     type ColorPickerValidateEvent
   } from './geo-indications.utils';
 
@@ -49,29 +40,34 @@
       geoState.insetMap.seaColor.lightness
     )
   );
+  const insetMapAvailable = $derived.by(() => {
+    void mapInstanceStore.zoomLevel;
+    void mapInstanceStore.deckViewState;
+    return isInsetMapAvailableForBounds(mapInstanceStore.getMapBounds());
+  });
 </script>
 
 <ExpandableSection
   title={m.geo_inset_map()}
   defaultOpen={false}
   showToggle={true}
-  toggleChecked={geoState.insetMap.enabled}
-  onToggleChange={() => store.toggleInsetMap()}
+  toggleChecked={geoState.insetMap.enabled && insetMapAvailable}
+  toggleDisabled={!insetMapAvailable}
+  disabled={!insetMapAvailable}
+  disabledReason={!insetMapAvailable
+    ? m.geo_inset_map_unavailable_scale()
+    : undefined}
+  description={!insetMapAvailable
+    ? m.geo_inset_map_unavailable_scale()
+    : undefined}
+  onToggleChange={() => {
+    if (insetMapAvailable) {
+      store.toggleInsetMap();
+    }
+  }}
 >
   <div class="section-content">
     <Grid noGutter>
-      <Row>
-        <Column>
-          <SimpleRadioGroup
-            name="inset-map-type"
-            legendText={m.geo_inset_map_type()}
-            items={insetMapTypeOptions}
-            selected={geoState.insetMap.type}
-            onchange={(value) => store.setInsetMapType(value)}
-          />
-        </Column>
-      </Row>
-
       <Row>
         <Column>
           <SliderWithInput
@@ -119,51 +115,6 @@
 
       <Row>
         <Column>
-          <SliderWithInput
-            label={m.geo_inset_map_center_longitude()}
-            min={-180}
-            max={180}
-            step={1}
-            value={geoState.insetMap.centerLongitude}
-            showMinMax
-            minLabel="-180°"
-            maxLabel="180°"
-            onchange={store.setInsetMapCenterLongitude}
-          />
-        </Column>
-      </Row>
-
-      <Row>
-        <Column>
-          <SliderWithInput
-            label={m.geo_inset_map_center_latitude()}
-            min={-90}
-            max={90}
-            step={1}
-            value={geoState.insetMap.centerLatitude}
-            showMinMax
-            minLabel="-90°"
-            maxLabel="90°"
-            onchange={store.setInsetMapCenterLatitude}
-          />
-        </Column>
-      </Row>
-
-      <Row>
-        <Column>
-          <Switch
-            labelText={m.geo_inset_map_use_basemap_colors()}
-            toggled={geoState.insetMap.useBasemapColors}
-            labelA={m.no()}
-            labelB={m.yes()}
-            showStateLabel
-            onchange={store.setInsetMapUseBasemapColors}
-          />
-        </Column>
-      </Row>
-
-      <Row>
-        <Column>
           <div class="colors-row">
             <div class="color-col">
               <ColorPicker
@@ -172,7 +123,6 @@
                 hue={geoState.insetMap.continentColor.hue}
                 saturation={geoState.insetMap.continentColor.saturation}
                 lightness={geoState.insetMap.continentColor.lightness}
-                disabled={geoState.insetMap.useBasemapColors}
                 onValidate={({
                   hue,
                   saturation,
@@ -193,7 +143,6 @@
                 hue={geoState.insetMap.seaColor.hue}
                 saturation={geoState.insetMap.seaColor.saturation}
                 lightness={geoState.insetMap.seaColor.lightness}
-                disabled={geoState.insetMap.useBasemapColors}
                 onValidate={({
                   hue,
                   saturation,

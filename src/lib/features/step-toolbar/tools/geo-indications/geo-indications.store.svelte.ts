@@ -64,7 +64,7 @@ const DEFAULT_STATE: GeoIndicationsState = {
     windowColor: DEFAULT_INSET_WINDOW_COLOR,
     continentColor: DEFAULT_INSET_CONTINENT_COLOR,
     seaColor: DEFAULT_INSET_SEA_COLOR,
-    useBasemapColors: true,
+    useBasemapColors: false,
     zoom: 50,
     centerLongitude: 0,
     centerLatitude: 0,
@@ -130,6 +130,7 @@ function normalizeState(
   const nextScale = partial.scale;
   const nextOrientation = partial.orientation;
   const nextInsetMap = partial.insetMap;
+  const nextInsetMapType = InsetMapType.GLOBE;
   const nextScaleUnits =
     nextScale?.units === DistanceUnit.KILOMETERS ||
     nextScale?.units === DistanceUnit.MILES
@@ -199,25 +200,11 @@ function normalizeState(
         typeof nextInsetMap?.enabled === 'boolean'
           ? nextInsetMap.enabled
           : current.insetMap.enabled,
-      type:
-        nextInsetMap?.type === InsetMapType.GLOBE ||
-        nextInsetMap?.type === InsetMapType.PLANISPHERE
-          ? nextInsetMap.type
-          : current.insetMap.type,
+      type: nextInsetMapType,
       size: clampNumber(
         nextInsetMap?.size,
-        INSET_MAP_SIZE_LIMITS[
-          nextInsetMap?.type === InsetMapType.GLOBE ||
-          nextInsetMap?.type === InsetMapType.PLANISPHERE
-            ? nextInsetMap.type
-            : current.insetMap.type
-        ].min,
-        INSET_MAP_SIZE_LIMITS[
-          nextInsetMap?.type === InsetMapType.GLOBE ||
-          nextInsetMap?.type === InsetMapType.PLANISPHERE
-            ? nextInsetMap.type
-            : current.insetMap.type
-        ].max,
+        INSET_MAP_SIZE_LIMITS[nextInsetMapType].min,
+        INSET_MAP_SIZE_LIMITS[nextInsetMapType].max,
         current.insetMap.size
       ),
       windowColor: normalizeColorState(
@@ -232,10 +219,7 @@ function normalizeState(
         nextInsetMap?.seaColor,
         current.insetMap.seaColor
       ),
-      useBasemapColors:
-        typeof nextInsetMap?.useBasemapColors === 'boolean'
-          ? nextInsetMap.useBasemapColors
-          : current.insetMap.useBasemapColors,
+      useBasemapColors: false,
       zoom: clampNumber(nextInsetMap?.zoom, 0, 100, current.insetMap.zoom),
       centerLongitude: clampNumber(
         nextInsetMap?.centerLongitude,
@@ -429,12 +413,12 @@ const { state, actions } = createToolStore<
     setOrientationColorFromHex: (hex: string) => {
       s.orientation.color = hexToHsl(hex);
     },
-    setInsetMapType: (type: InsetMapType) => {
-      s.insetMap.type = type;
+    setInsetMapType: (_type: InsetMapType) => {
+      s.insetMap.type = InsetMapType.GLOBE;
       s.insetMap.size = clampNumber(
         s.insetMap.size,
-        INSET_MAP_SIZE_LIMITS[type].min,
-        INSET_MAP_SIZE_LIMITS[type].max,
+        INSET_MAP_SIZE_LIMITS[InsetMapType.GLOBE].min,
+        INSET_MAP_SIZE_LIMITS[InsetMapType.GLOBE].max,
         s.insetMap.size
       );
     },
@@ -464,8 +448,8 @@ const { state, actions } = createToolStore<
     setInsetMapSeaColorFromHex: (hex: string) => {
       s.insetMap.seaColor = hexToHsl(hex);
     },
-    setInsetMapUseBasemapColors: (use: boolean) => {
-      s.insetMap.useBasemapColors = use;
+    setInsetMapUseBasemapColors: (_use: boolean) => {
+      s.insetMap.useBasemapColors = false;
     },
     setInsetMapZoom: (zoom: number) => {
       s.insetMap.zoom = clampNumber(zoom, 0, 100, s.insetMap.zoom);

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DistanceUnit,
   FormatMode,
+  InsetMapType,
   PageModel
 } from '$lib/features/commons/constants/ui.constants';
 import {
@@ -54,10 +55,16 @@ describe('geo indications store responsive defaults', () => {
     formatActions.reset();
     geoIndicationsActions.reset();
     mapInstanceStore.reset();
+    injectProjectionContext(() => ({
+      referenceBbox: null,
+      canvasSize: { width: 800, height: 600 },
+      fitPaddingPx: 0,
+      isProjectedCoordinates: false
+    }));
   });
 
-  it('starts the inset map from coherent basemap colors', () => {
-    expect(geoIndicationsState.insetMap.useBasemapColors).toBe(true);
+  it('starts the inset map from explicit inset colors', () => {
+    expect(geoIndicationsState.insetMap.useBasemapColors).toBe(false);
     expect(geoIndicationsState.insetMap.windowColor).toEqual(
       hexToHsl('#ffffff')
     );
@@ -65,6 +72,25 @@ describe('geo indications store responsive defaults', () => {
       hexToHsl('#d9d9d9')
     );
     expect(geoIndicationsState.insetMap.seaColor).toEqual(hexToHsl('#d0e2ff'));
+  });
+
+  it('normalizes restored inset maps to globe mode without basemap color inheritance', () => {
+    geoIndicationsActions.setState({
+      insetMap: {
+        ...geoIndicationsState.insetMap,
+        type: InsetMapType.PLANISPHERE,
+        useBasemapColors: true
+      }
+    });
+
+    expect(geoIndicationsState.insetMap.type).toBe(InsetMapType.GLOBE);
+    expect(geoIndicationsState.insetMap.useBasemapColors).toBe(false);
+
+    geoIndicationsActions.setInsetMapType(InsetMapType.PLANISPHERE);
+    geoIndicationsActions.setInsetMapUseBasemapColors(true);
+
+    expect(geoIndicationsState.insetMap.type).toBe(InsetMapType.GLOBE);
+    expect(geoIndicationsState.insetMap.useBasemapColors).toBe(false);
   });
 
   it('promotes default sizes to the A3 profile on first enable', () => {
