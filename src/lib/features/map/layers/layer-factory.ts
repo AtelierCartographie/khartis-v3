@@ -24,6 +24,7 @@ import {
 import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
 import type {
   ClassificationConfig,
+  PatternParams,
   PrimitiveFilter
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
@@ -121,7 +122,8 @@ import {
 import {
   getPatternAtlasForPattern,
   isValidPatternId,
-  PATTERN_TYPE_MAP
+  PATTERN_TYPE_MAP,
+  type PatternName
 } from './pattern-texture';
 import {
   createPathLayerProps,
@@ -1983,7 +1985,7 @@ function getFillStyleExtension(): RotatableFillStyleExtension {
   return fillStyleExtensionInstance;
 }
 
-function buildPatternProps(ctx: LayerContext): {
+type PolygonPatternProps = {
   extensions: RotatableFillStyleExtension[];
   fillPatternAtlas: HTMLCanvasElement;
   fillPatternMapping: Record<
@@ -1994,7 +1996,45 @@ function buildPatternProps(ctx: LayerContext): {
   getFillPattern: () => string;
   getFillPatternScale: number;
   getFillPatternRotation: number;
-} | null {
+  khartisPatternId: string;
+  khartisPatternSize: number;
+  khartisPatternScale: number;
+  khartisPatternAngle: number;
+};
+
+function createPatternProps(
+  patternId: PatternName,
+  patternParams?: PatternParams
+): PolygonPatternProps | null {
+  const { atlas, mapping } = getPatternAtlasForPattern(
+    patternId,
+    patternParams
+  );
+  if (Object.keys(mapping).length === 0) {
+    return null;
+  }
+  const patternScaleValue = Math.max(1, patternParams?.scale ?? 8);
+  const patternSizeValue = Math.max(1, patternParams?.size ?? 4);
+  const patternScale = patternScaleValue * 25;
+  const patternRotation =
+    patternParams?.angle ?? PATTERN_TYPE_MAP[patternId]?.angle ?? 0;
+
+  return {
+    extensions: [getFillStyleExtension()],
+    fillPatternAtlas: atlas,
+    fillPatternMapping: mapping,
+    fillPatternMask: true,
+    getFillPattern: () => patternId,
+    getFillPatternScale: patternScale,
+    getFillPatternRotation: patternRotation,
+    khartisPatternId: patternId,
+    khartisPatternSize: patternSizeValue,
+    khartisPatternScale: patternScaleValue,
+    khartisPatternAngle: patternRotation
+  };
+}
+
+function buildPatternProps(ctx: LayerContext): PolygonPatternProps | null {
   const patternId = ctx.viz
     ? getPrimitiveClassification(ctx.viz, PrimitiveFilterType.POLYGON)
         ?.patternId
@@ -2007,26 +2047,7 @@ function buildPatternProps(ctx: LayerContext): {
     return null;
   }
 
-  const { atlas, mapping } = getPatternAtlasForPattern(
-    patternId,
-    patternParams
-  );
-  if (Object.keys(mapping).length === 0) {
-    return null;
-  }
-  const patternScale = Math.max(1, patternParams?.scale ?? 8) * 25;
-  const patternRotation =
-    patternParams?.angle ?? PATTERN_TYPE_MAP[patternId]?.angle ?? 0;
-
-  return {
-    extensions: [getFillStyleExtension()],
-    fillPatternAtlas: atlas,
-    fillPatternMapping: mapping,
-    fillPatternMask: true,
-    getFillPattern: () => patternId,
-    getFillPatternScale: patternScale,
-    getFillPatternRotation: patternRotation
-  };
+  return createPatternProps(patternId, patternParams);
 }
 
 function resolveSymbolPatternType(
@@ -2056,7 +2077,7 @@ function createPolygonPatternOverlayLayer(
   layerId: string,
   polygonPatternId: string | undefined,
   patternGeojson: FeatureCollection,
-  patternProps: NonNullable<ReturnType<typeof buildPatternProps>>,
+  patternProps: PolygonPatternProps,
   ctx: Pick<LayerContext, 'modelMatrix' | 'beforeId'>
 ): GeoJsonLayer {
   const { modelMatrix, beforeId } = ctx;
@@ -2075,6 +2096,12 @@ function createPolygonPatternOverlayLayer(
     getFillPattern: patternProps.getFillPattern,
     getFillPatternScale: patternProps.getFillPatternScale,
     getFillPatternRotation: patternProps.getFillPatternRotation,
+    ...({
+      khartisPatternId: patternProps.khartisPatternId,
+      khartisPatternSize: patternProps.khartisPatternSize,
+      khartisPatternScale: patternProps.khartisPatternScale,
+      khartisPatternAngle: patternProps.khartisPatternAngle
+    } as Record<string, unknown>),
     ...(modelMatrix && { modelMatrix }),
     ...(beforeId && { beforeId }),
     updateTriggers: {
