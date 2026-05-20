@@ -101,7 +101,8 @@ pnpm build && pnpm preview
 
 ## Privacy, security, and data
 
-- **Client-side only**: imported data never leaves the browser; optional analytics only loads after user consent
+- **Client-side only**: imported data never leaves the browser; optional analytics and error monitoring load only after user consent
+- Optional PostHog can be configured through public environment variables for consent-first product analytics and client error monitoring; session replay is disabled by default
 - All processing and persistence run in-browser via DuckDB WASM and IndexedDB (metadata + binary asset store)
 - Dependency scanning via Dependabot
 - To report a security vulnerability, see [SECURITY.md](SECURITY.md)

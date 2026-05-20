@@ -38,6 +38,7 @@
   import DuplicateProjectModal from '../commons/components/duplicate-project-modal.svelte';
   import Separator from '../commons/components/separator.svelte';
   import Switch from '../commons/components/switch.svelte';
+  import ClearCacheButton from './components/clear-cache-button.svelte';
   import OfflineButton from './components/offline-button.svelte';
   import OfflinePanel from './components/offline-panel.svelte';
   import { useSideNav } from './hooks/use-side-nav.svelte';
@@ -457,6 +458,8 @@
             </Button>
 
             <OfflineButton />
+
+            <ClearCacheButton />
           </Column>
         </Row>
       </Grid>
