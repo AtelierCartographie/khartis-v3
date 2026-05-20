@@ -217,4 +217,40 @@ describe('useMapLayers source', () => {
       'representativePointTableCache.set(sourceTable, loadedCentroidTable)'
     );
   });
+
+  it('inserts interleaved Deck.gl layers below Carte Facile labels, not auxiliary symbols', () => {
+    const body = source.match(
+      /function findFirstSymbolLayerId[\s\S]*?return firstSymbolLayerId;\n\s*\}/
+    )?.[0];
+
+    expect(body).toContain('CARTE_FACILE_LAYER_GROUP_METADATA_KEY');
+    expect(body).toContain('CARTE_FACILE_LABEL_GROUP_ID');
+    expect(body).toContain('firstSymbolLayerId ??= layer.id');
+    expect(body).toContain('metadata?.[CARTE_FACILE_LAYER_GROUP_METADATA_KEY]');
+    expect(body).toContain('return firstSymbolLayerId');
+  });
+
+  it('remounts MapLibre interleaved Deck layers when their beforeId changes', () => {
+    expect(source).toContain('function getLayerBeforeIdKey(');
+    expect(source).toContain('let lastAppliedMapLibreBeforeIdKey =');
+    expect(source).toContain(
+      'if (nextBeforeIdKey !== lastAppliedMapLibreBeforeIdKey)'
+    );
+    expect(source).toContain('deckOverlay.setProps({ layers: [] });');
+    expect(source).toContain(
+      'lastAppliedMapLibreBeforeIdKey = nextBeforeIdKey'
+    );
+  });
+
+  it('can reinsert the last applied interleaved layers after a MapLibre style swap', () => {
+    expect(source).toContain('function applyBeforeIdToLayers(');
+    expect(source).toContain('return layer.clone({ beforeId })');
+    expect(source).toContain('function syncInterleavedLayerOrder()');
+    expect(source).toContain('const beforeId = findFirstSymbolLayerId(map)');
+    expect(source).toContain(
+      'const orderedLayers = applyBeforeIdToLayers(lastAppliedLayers, beforeId)'
+    );
+    expect(source).toContain('lastAppliedLayers = orderedLayers');
+    expect(source).toContain('syncInterleavedLayerOrder');
+  });
 });

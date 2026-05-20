@@ -31,6 +31,16 @@ describe('useMapBasemap loading state', () => {
     expect(source).toContain('map.setStyle(style, {');
     expect(source).toContain('diff: false,');
     expect(source).toContain('transformStyle: stripStyleProjection');
+    expect(source).toContain('onStyleChangeRequested?.();');
+  });
+
+  it('finishes tiled style swaps from either style.load or idle so Deck layers can be rebuilt', () => {
+    expect(source).toContain(
+      'let styleIdleHandler: (() => void) | null = null;'
+    );
+    expect(source).toContain("map.once('style.load', styleLoadHandler);");
+    expect(source).toContain("map.once('idle', styleIdleHandler);");
+    expect(source).toContain("map.off('idle', styleIdleHandler);");
   });
 
   it('strips the projection property from loaded styles to keep store authority', () => {

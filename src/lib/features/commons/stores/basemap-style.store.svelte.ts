@@ -54,6 +54,7 @@ function createBasemapStyleStore() {
 
   let groupVisibilityVersion = $state(0);
   let viewportRequestVersion = $state(0);
+  let styleVersion = $state(0);
 
   function setReferenceBasemap(id: string | null): void {
     state.referenceBasemapId = id;
@@ -69,6 +70,7 @@ function createBasemapStyleStore() {
         style === state.lastSelectedTiledStyle);
 
     state.selectedStyle = style;
+    styleVersion++;
 
     if (style !== BasemapStyle.BLANK_WHITE) {
       state.lastSelectedTiledStyle = style;
@@ -111,6 +113,7 @@ function createBasemapStyleStore() {
     state.requestedViewportStyle = null;
     groupVisibilityVersion++;
     viewportRequestVersion = 0;
+    styleVersion++;
   }
 
   function restoreFromSerialized(
@@ -153,6 +156,7 @@ function createBasemapStyleStore() {
           : {}
         : getInitialGroupVisibility(style));
     groupVisibilityVersion++;
+    styleVersion++;
     if (referenceBasemapId !== undefined) {
       state.referenceBasemapId = referenceBasemapId;
     }
@@ -192,6 +196,9 @@ function createBasemapStyleStore() {
     },
     get groupVisibilityVersion(): number {
       return groupVisibilityVersion;
+    },
+    get styleVersion(): number {
+      return styleVersion;
     },
     get requestedViewportStyle(): BasemapStyle | null {
       return state.requestedViewportStyle;

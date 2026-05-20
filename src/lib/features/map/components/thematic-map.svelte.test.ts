@@ -126,4 +126,28 @@ describe('ThematicMap source', () => {
     expect(source).toContain('filter.secondaryValue ??');
     expect(source).toContain('visualizationDataFiltersVersion,');
   });
+
+  it('rebuilds Deck layers after a MapLibre style swap so beforeId matches the new style', () => {
+    expect(source).toContain(
+      'const hadPendingLayerUpdate = pendingLayerUpdate'
+    );
+    expect(source).toContain(
+      'basemapStyleVersion: basemapStyleStore.styleVersion'
+    );
+    expect(source).toContain('scheduleLayerUpdate(');
+    expect(source).toContain(
+      "hadPendingLayerUpdate ? 'onStyleLoaded-pending' : 'onStyleLoaded'"
+    );
+    expect(source).toContain('onStyleChangeRequested: () => {');
+    expect(source).toContain(
+      "scheduleLayerUpdateAfterStyleIdle(map, 'onStyleChangeRequested')"
+    );
+    expect(source).toContain('function scheduleLayerUpdateAfterStyleIdle(');
+    expect(source).toContain('scheduleLayerUpdate(`${source}:frame`)');
+    expect(source).toContain("map.once('idle', () => {");
+    expect(source).toContain('mapLayers.syncInterleavedLayerOrder();');
+    expect(source).toContain(
+      "scheduleLayerUpdateAfterStyleIdle(map, 'effect:selectedStyle-idle')"
+    );
+  });
 });
