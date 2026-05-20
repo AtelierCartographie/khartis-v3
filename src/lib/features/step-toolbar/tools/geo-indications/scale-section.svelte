@@ -12,12 +12,16 @@
     Column,
     Grid,
     NumberInput,
-    RadioButton,
-    RadioButtonGroup,
     Row,
     Select,
     SelectItem
   } from 'carbon-components-svelte';
+  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
+
+  const scaleUnitsOptions = [
+    { value: DistanceUnit.KILOMETERS, labelText: m.geo_kilometers() },
+    { value: DistanceUnit.MILES, labelText: m.geo_miles() }
+  ];
   import {
     AVAILABLE_FONTS,
     CARTOGRAPHIC_FONT_FAMILY,
@@ -168,22 +172,13 @@
 
       <Row>
         <Column>
-          <RadioButtonGroup
+          <SimpleRadioGroup
+            name="scale-units"
             legendText={m.geo_units()}
+            items={scaleUnitsOptions}
             selected={geoState.scale.units}
-            on:change={(e) => {
-              const next = (e as CustomEvent).detail;
-              if (next === geoState.scale.units) return;
-              store.setScaleUnits(next);
-            }}
-          >
-            <RadioButton
-              id="kilometers"
-              value="kilometers"
-              labelText={m.geo_kilometers()}
-            />
-            <RadioButton id="miles" value="miles" labelText={m.geo_miles()} />
-          </RadioButtonGroup>
+            onchange={(value) => store.setScaleUnits(value)}
+          />
         </Column>
       </Row>
 

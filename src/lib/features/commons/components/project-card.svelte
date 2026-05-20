@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { RadioButton } from 'carbon-components-svelte';
+  import SimpleRadio from './simple-radio.svelte';
   import { Earth } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import type { Snippet } from 'svelte';
@@ -36,10 +36,6 @@
       event.preventDefault();
       handleCardClick();
     }
-  }
-
-  function handleRadioClick(event: Event) {
-    event.preventDefault();
   }
 
   const isBlueVariant = $derived(variant === 'blue');
@@ -131,10 +127,11 @@
       <h6 class="flex-1 pr-2 title-text">{title}</h6>
 
       <div class="ml-2 radio-button-wrapper">
-        <RadioButton
+        <SimpleRadio
           checked={selected}
           disabled={disabled}
-          onclick={handleRadioClick}
+          labelText={title}
+          hideLabel
         />
       </div>
     </div>

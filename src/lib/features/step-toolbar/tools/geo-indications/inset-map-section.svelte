@@ -4,14 +4,18 @@
   import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
+  import { InsetMapType } from '$lib/features/commons/constants/ui.constants';
   import * as m from '$lib/paraglide/messages.js';
-  import {
-    Column,
-    Grid,
-    RadioButton,
-    RadioButtonGroup,
-    Row
-  } from 'carbon-components-svelte';
+  import { Column, Grid, Row } from 'carbon-components-svelte';
+  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
+
+  const insetMapTypeOptions = [
+    { value: InsetMapType.GLOBE, labelText: m.geo_inset_map_globe() },
+    {
+      value: InsetMapType.PLANISPHERE,
+      labelText: m.geo_inset_map_planisphere()
+    }
+  ];
   import {
     geoIndicationsActions,
     geoIndicationsState
@@ -58,26 +62,13 @@
     <Grid noGutter>
       <Row>
         <Column>
-          <RadioButtonGroup
+          <SimpleRadioGroup
+            name="inset-map-type"
             legendText={m.geo_inset_map_type()}
+            items={insetMapTypeOptions}
             selected={geoState.insetMap.type}
-            on:change={(e) => {
-              const next = (e as CustomEvent).detail;
-              if (next === geoState.insetMap.type) return;
-              store.setInsetMapType(next);
-            }}
-          >
-            <RadioButton
-              id="globe-type"
-              value="globe"
-              labelText={m.geo_inset_map_globe()}
-            />
-            <RadioButton
-              id="planisphere-type"
-              value="planisphere"
-              labelText={m.geo_inset_map_planisphere()}
-            />
-          </RadioButtonGroup>
+            onchange={(value) => store.setInsetMapType(value)}
+          />
         </Column>
       </Row>
 

@@ -5,7 +5,8 @@
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
   import { getLocale } from '$lib/paraglide/runtime';
-  import { RadioButton, Tag } from 'carbon-components-svelte';
+  import SimpleRadio from '$lib/features/commons/components/simple-radio.svelte';
+  import { Tag } from 'carbon-components-svelte';
   import { Calendar } from 'carbon-icons-svelte';
   import clsx from 'clsx';
 
@@ -50,12 +51,6 @@
     }
   }
 
-  function handleRadioClick(event: Event) {
-    event.preventDefault();
-    event.stopPropagation();
-    handleCardClick();
-  }
-
   const isSuggestion = $derived(variant === 'blue');
 
   const cardClasses = $derived(
@@ -90,12 +85,13 @@
   aria-disabled={disabled}
 >
   <div class="preview-section">
-    <div class="preview-radio kh-card-radio" onclickcapture={handleRadioClick}>
-      <RadioButton
+    <div class="preview-radio kh-card-radio">
+      <SimpleRadio
         checked={selected}
         disabled={disabled}
         labelText={title}
         hideLabel
+        variant={isSuggestion ? 'suggestions' : 'default'}
       />
     </div>
 

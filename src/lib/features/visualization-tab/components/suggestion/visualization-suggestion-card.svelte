@@ -5,7 +5,7 @@
   import type { VizSuggestion } from '$lib/features/commons/services/viz-suggester.service';
   import TilePreview from '$lib/features/commons/components/tile-preview.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { RadioButton } from 'carbon-components-svelte';
+  import SimpleRadio from '$lib/features/commons/components/simple-radio.svelte';
   import clsx from 'clsx';
 
   interface Props {
@@ -62,10 +62,6 @@
       handleActivate();
     }
   }
-
-  function handleRadioClick(event: Event) {
-    event.preventDefault();
-  }
 </script>
 
 <div
@@ -91,12 +87,12 @@
       <p class="title">{suggestion.label}</p>
 
       <div class="radio-wrapper kh-card-radio">
-        <RadioButton
+        <SimpleRadio
           checked={selected}
           disabled={disabled}
           labelText={suggestion.label}
           hideLabel
-          onclick={handleRadioClick}
+          variant="suggestions"
         />
       </div>
     </div>

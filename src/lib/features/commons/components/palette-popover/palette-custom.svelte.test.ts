@@ -25,12 +25,13 @@ describe('PaletteCustom (Palette personnalisée section)', () => {
 
   it('should expose a Contrast radio group with Faible/Normal/Élevé values', () => {
     expect(source).toContain('{m.contrast_label()}');
-    expect(source).toContain('{m.contrast_low()}');
-    expect(source).toContain('{m.contrast_normal()}');
-    expect(source).toContain('{m.contrast_high()}');
-    expect(source).toContain('value="low"');
-    expect(source).toContain('value="normal"');
-    expect(source).toContain('value="high"');
+    expect(source).toContain('m.contrast_low()');
+    expect(source).toContain('m.contrast_normal()');
+    expect(source).toContain('m.contrast_high()');
+    expect(source).toContain("value: 'low'");
+    expect(source).toContain("value: 'normal'");
+    expect(source).toContain("value: 'high'");
+    expect(source).toContain('<SimpleRadioGroup');
   });
 
   it('should render an Inverser la palette ToggleWithLabel in the non-qualitative branch', () => {

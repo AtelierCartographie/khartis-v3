@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { RadioButton, RadioButtonGroup } from 'carbon-components-svelte';
+  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import DoubleModeControls from './proportional/double-mode-controls.svelte';
   import ProportionalScaleSection from './proportional/proportional-scale-section.svelte';
   import ProportionalDoubleSection from './proportional/proportional-double-section.svelte';
@@ -518,25 +518,18 @@
       {m.proportional_symbols_label()}
       <InfoPopover text={m.proportional_type_info()} />
     </span>
-    <RadioButtonGroup
+    <SimpleRadioGroup
+      name="prop-type"
+      items={[
+        {
+          value: ProportionalType.SINGLE,
+          labelText: m.proportional_type_single()
+        },
+        { value: ProportionalType.DOUBLE, labelText: m.double() }
+      ]}
       selected={proportionalType}
-      on:change={(e) => {
-        const next = (e as CustomEvent).detail as ProportionalType;
-        if (next === proportionalType) return;
-        handleProportionalTypeChange(next);
-      }}
-    >
-      <RadioButton
-        id="prop-single"
-        value={ProportionalType.SINGLE}
-        labelText={m.proportional_type_single()}
-      />
-      <RadioButton
-        id="prop-double"
-        value={ProportionalType.DOUBLE}
-        labelText={m.double()}
-      />
-    </RadioButtonGroup>
+      onchange={(value) => handleProportionalTypeChange(value)}
+    />
   </div>
 
   {#if proportionalType === ProportionalType.DOUBLE}
@@ -749,10 +742,6 @@
     font-size: 0.75rem;
     color: var(--cds-text-02);
     font-weight: 400;
-  }
-
-  :global(.field-group .bx--radio-button-group) {
-    flex-direction: row;
   }
 
   :global(.field-group .bx--dropdown) {
