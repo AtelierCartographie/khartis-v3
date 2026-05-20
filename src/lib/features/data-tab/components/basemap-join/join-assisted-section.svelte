@@ -1,6 +1,5 @@
 <script lang="ts">
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
-  import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     Button,
@@ -35,6 +34,7 @@
   interface ComboBoxItem {
     id: string;
     text: string;
+    searchText: string;
   }
 
   interface JoinedEntityRow {
@@ -65,6 +65,7 @@
     onRequestBasemapValues?: () => void;
     onFinalizeJoin: () => void;
     onManualCorrection?: (dataValue: string, basemapValue: string) => void;
+    onMappingChange?: (index: number, basemapValue: string) => void;
     onIgnoreEntity?: (
       dataValue: string,
       source: IgnoreSource,
@@ -91,6 +92,7 @@
     onRequestBasemapValues,
     onFinalizeJoin,
     onManualCorrection,
+    onMappingChange,
     onIgnoreEntity,
     onRestoreEntity,
     onValidateEntity
@@ -110,13 +112,34 @@
     return set;
   });
 
+  const basemapValueSet = $derived.by(() => {
+    const set = new SvelteSet<string>();
+    for (const value of basemapValues) set.add(value);
+    return set;
+  });
+
   const availableBasemapValues = $derived(
     basemapValues.filter((value) => !joinedBasemapValueSet.has(value))
   );
 
   const basemapComboBoxItems = $derived<ComboBoxItem[]>(
-    availableBasemapValues.map((value) => ({ id: value, text: value }))
+    availableBasemapValues.map((value) => buildBasemapComboBoxItem(value))
   );
+
+  function buildBasemapComboBoxItem(value: string): ComboBoxItem {
+    const aliases = basemapAliasesByValue?.[value] ?? [];
+    const searchText = [value, ...aliases.map((alias) => alias.value)]
+      .filter(Boolean)
+      .join('\n')
+      .toLowerCase();
+    return { id: value, text: value, searchText };
+  }
+
+  function shouldFilterBasemapItem(item: ComboBoxItem, value: string): boolean {
+    const query = value.trim().toLowerCase();
+    if (!query) return true;
+    return item.searchText.includes(query);
+  }
 
   function buildJoinedRowOptions(currentBasemapValue: string): ComboBoxItem[] {
     const ownVariants = new SvelteSet<string>();
@@ -131,7 +154,16 @@
       .filter(
         (value) => ownVariants.has(value) || !joinedBasemapValueSet.has(value)
       )
-      .map((value) => ({ id: value, text: value }));
+      .map((value) => buildBasemapComboBoxItem(value));
+  }
+
+  function resolveDisplayedBasemapValue(value: string): string {
+    if (basemapValueSet.has(value)) return value;
+    const aliases = basemapAliasesByValue?.[value];
+    const displayedAlias = aliases?.find((alias) =>
+      basemapValueSet.has(alias.value)
+    );
+    return displayedAlias?.value ?? value;
   }
 
   const duplicateCount = $derived(duplicates.length);
@@ -248,11 +280,12 @@
   function buildToVerifyOptions(suggestions: string[]): string[] {
     const merged: string[] = [];
     for (const suggestion of suggestions) {
+      const displayedSuggestion = resolveDisplayedBasemapValue(suggestion);
       if (
-        !joinedBasemapValueSet.has(suggestion) &&
-        !merged.includes(suggestion)
+        !joinedBasemapValueSet.has(displayedSuggestion) &&
+        !merged.includes(displayedSuggestion)
       ) {
-        merged.push(suggestion);
+        merged.push(displayedSuggestion);
       }
     }
     for (const value of availableBasemapValues) {
@@ -571,6 +604,7 @@
                             })}
                             hideLabel
                             size="sm"
+                            shouldFilterItem={shouldFilterBasemapItem}
                             on:select={(e) => {
                               const item = e.detail.selectedItem as
                                 | ComboBoxItem
@@ -705,7 +739,7 @@
                             const target = e.target as HTMLSelectElement;
                             const selectedValue =
                               target?.value || row.selectedMapping;
-                            dataTabActions.updateJoinMapping(i, selectedValue);
+                            onMappingChange?.(i, selectedValue);
                           }}
                           size="sm"
                         >
@@ -819,6 +853,7 @@
                             })}
                             hideLabel
                             size="sm"
+                            shouldFilterItem={shouldFilterBasemapItem}
                             on:select={(e) =>
                               handleUnrecognizedSelect(
                                 entity,

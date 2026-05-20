@@ -33,7 +33,7 @@ describe('JoinAssistedSection — selected-basemap tooltip (S1.1c.iii)', () => {
   it('uses a Set for joined basemap membership checks on large basemaps', () => {
     expect(source).toContain('const joinedBasemapValueSet = $derived.by(');
     expect(source).toContain('!joinedBasemapValueSet.has(value)');
-    expect(source).toContain('!joinedBasemapValueSet.has(suggestion)');
+    expect(source).toContain('!joinedBasemapValueSet.has(displayedSuggestion)');
     expect(source).not.toContain('joinedBasemapValues.includes');
   });
 
@@ -52,6 +52,34 @@ describe('JoinAssistedSection — selected-basemap tooltip (S1.1c.iii)', () => {
       '{@const joinedRowOptions = buildJoinedRowOptions('
     );
     expect(source).not.toContain('items={allBasemapComboBoxItems}');
+  });
+
+  it('filters correction ComboBoxes by displayed value and aliases', () => {
+    expect(source).toContain(
+      'function buildBasemapComboBoxItem(value: string)'
+    );
+    expect(source).toContain('...aliases.map((alias) => alias.value)');
+    expect(source).toContain('function shouldFilterBasemapItem(');
+    expect(source).toContain('shouldFilterItem={shouldFilterBasemapItem}');
+  });
+
+  it('resolves to-verify suggestions to the displayed basemap value before deduping', () => {
+    expect(source).toContain('const basemapValueSet = $derived.by(');
+    expect(source).toContain(
+      'function resolveDisplayedBasemapValue(value: string)'
+    );
+    expect(source).toContain(
+      'const displayedSuggestion = resolveDisplayedBasemapValue(suggestion);'
+    );
+    expect(source).not.toContain('aliasValueSet');
+  });
+
+  it('delegates to-verify mapping changes through a prop for catalogue and enrichment flows', () => {
+    expect(source).toContain(
+      'onMappingChange?: (index: number, basemapValue: string) => void;'
+    );
+    expect(source).toContain('onMappingChange?.(i, selectedValue);');
+    expect(source).not.toContain('dataTabActions.updateJoinMapping');
   });
 
   it('builds the verify-row tooltip from the selected mapping', () => {

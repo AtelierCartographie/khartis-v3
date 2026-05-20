@@ -275,6 +275,7 @@
             enrichSuggestedColumn={enrichSuggestedColumn}
             hasOnlyCoordinates={hasOnlyCoordinatesValue}
             joinStats={joinHook.joinStats}
+            targetOptions={joinHook.targetOptions}
             isComputingJoin={joinHook.isComputingJoin}
             isFinalizingJoin={joinHook.isFinalizingJoin}
             onRemoveFile={handleRemoveFile}
@@ -282,6 +283,10 @@
             onGeoFileColumnChange={handleGeoFileColumnChange}
             onMappingChange={joinHook.handleMappingChange}
             onFinalizeJoin={joinHook.handleFinalizeEnrichment}
+            onManualCorrection={joinHook.handleManualCorrection}
+            onIgnoreEntity={joinHook.ignoreEntity}
+            onValidateEntity={joinHook.validateEntity}
+            onRestoreEntity={joinHook.restoreEntity}
           />
         {/if}
 
