@@ -68,6 +68,8 @@ export interface BasemapMetadata {
   description_en?: string;
   source: string;
   date: string;
+  display_id_fr?: string;
+  display_id_en?: string;
   bbox: [number, number, number, number];
   proj_source: string;
   proj_to: ProjectionConfig;

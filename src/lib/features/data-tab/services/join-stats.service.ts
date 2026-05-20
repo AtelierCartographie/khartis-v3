@@ -90,7 +90,8 @@ export async function computeDatasetJoinStats(
     } else if (row.exact_match) {
       entities.push({
         dataValue: row.source_val,
-        geoValue: row.source_val,
+        geoValue: row.exact_match,
+        basemapValue: row.exact_match,
         status: JoinStatus.JOINED
       });
     } else {
@@ -160,6 +161,19 @@ export async function computeDatasetJoinStats(
     }
   }
 
+  const duplicateValues = entities
+    .filter((e) => e.status === JoinStatus.DUPLICATE)
+    .map((e) => e.dataValue);
+  const duplicateLines =
+    duplicateValues.length > 0
+      ? await getDuplicateLines(
+          sourceTableName,
+          sourceColumn,
+          duplicateValues,
+          sourceFilterClause
+        )
+      : [];
+
   const stats: JoinStats = {
     joinedCount: entities.filter((e) => e.status === JoinStatus.JOINED).length,
     toVerifyCount: entities.filter((e) => e.status === JoinStatus.TO_VERIFY)
@@ -171,8 +185,40 @@ export async function computeDatasetJoinStats(
     ).length,
     entities,
     totalEntities: entities.length,
-    duplicateLines: []
+    duplicateLines
   };
 
   return stats;
+}
+
+async function getDuplicateLines(
+  sourceTableName: string,
+  sourceColumn: string,
+  duplicateValues: string[],
+  sourceFilterClause: string | null
+): Promise<Array<{ dataValue: string; lines: number[] }>> {
+  const escapedSourceTable = escapeIdentifier(sourceTableName);
+  const escapedSourceCol = escapeIdentifier(sourceColumn);
+  const duplicateValuesLiteral = duplicateValues
+    .map((value) => `'${escapeSqlString(value)}'`)
+    .join(', ');
+
+  const hasRowId = (await Duck.query(
+    `SELECT column_name FROM information_schema.columns
+     WHERE table_name = '${escapeSqlString(sourceTableName)}'
+       AND column_name = '__id'`,
+    { format: 'array' }
+  )) as Array<{ column_name: string }>;
+  const idCol = hasRowId.length > 0 ? '"__id"' : 'rowid';
+
+  return (await Duck.query(
+    `SELECT
+       CAST("${escapedSourceCol}" AS VARCHAR) AS dataValue,
+       array_agg(${idCol} ORDER BY ${idCol}) AS lines
+     FROM "${escapedSourceTable}"
+     WHERE CAST("${escapedSourceCol}" AS VARCHAR) IN (${duplicateValuesLiteral})${sourceFilterClause ? ` AND ${sourceFilterClause}` : ''}
+     GROUP BY CAST("${escapedSourceCol}" AS VARCHAR)
+     HAVING COUNT(*) > 1`,
+    { format: 'array' }
+  )) as Array<{ dataValue: string; lines: number[] }>;
 }

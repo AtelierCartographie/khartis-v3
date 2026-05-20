@@ -114,6 +114,7 @@ describe('useEnrichmentJoin', () => {
       duplicateCount: 0,
       unrecognizedCount: 0,
       totalEntities: 3,
+      duplicateLines: [],
       entities: [
         {
           dataValue: 'A',
@@ -240,4 +241,112 @@ describe('useEnrichmentJoin', () => {
     expect(mocks.computeDatasetJoinStatsMock).not.toHaveBeenCalled();
     expect(hook.joinStats).toBeNull();
   });
+
+  it('uses selected uncertain mappings and exposes target options for the updated assisted join UI', async () => {
+    mocks.computeDatasetJoinStatsMock.mockResolvedValueOnce({
+      joinedCount: 0,
+      toVerifyCount: 1,
+      duplicateCount: 0,
+      unrecognizedCount: 0,
+      totalEntities: 1,
+      duplicateLines: [],
+      entities: [
+        {
+          dataValue: 'Frnce',
+          status: JoinStatus.TO_VERIFY,
+          matches: ['France']
+        }
+      ]
+    });
+    mocks.queryMock.mockImplementation(async (sql: string) => {
+      if (sql.includes('SELECT DISTINCT CAST("id" AS VARCHAR) as val')) {
+        return [{ val: 'France' }, { val: 'Belgique' }];
+      }
+      return [];
+    });
+
+    const hook = useEnrichmentJoin({
+      getEnrichmentDataset: () =>
+        ({
+          tableName: 'enrichment_table',
+          columns: [{ name: 'id' }, { name: 'population_2024' }]
+        }) as never,
+      getEnrichLinkedVariableId: () => 1,
+      getGeoFileColumnId: () => 2,
+      getEnrichDataFieldItems: () => [{ id: 1, columnName: 'id' }],
+      getGeoFileColumns: () => [{ id: 2, columnName: 'id' }],
+      onJoinFinalized: vi.fn()
+    });
+
+    await hook.computeEnrichmentJoinStats();
+
+    expect(hook.targetOptions).toEqual(['France', 'Belgique']);
+
+    hook.validateEntity('Frnce', 'France');
+    await hook.handleFinalizeEnrichment();
+
+    const createTableSql = getCreateTableSql();
+    expect(createTableSql).toContain(
+      `WHEN CAST(e."id" AS VARCHAR) = 'Frnce' THEN 'France'`
+    );
+    expect(createTableSql).toContain('WITH enrichment_source AS');
+  });
+
+  it('excludes ignored entities from the enrichment join query', async () => {
+    mocks.computeDatasetJoinStatsMock.mockResolvedValueOnce({
+      joinedCount: 1,
+      toVerifyCount: 0,
+      duplicateCount: 0,
+      unrecognizedCount: 1,
+      totalEntities: 2,
+      duplicateLines: [],
+      entities: [
+        {
+          dataValue: 'France',
+          geoValue: 'France',
+          basemapValue: 'France',
+          status: JoinStatus.JOINED
+        },
+        {
+          dataValue: 'XXX',
+          status: JoinStatus.UNRECOGNIZED
+        }
+      ]
+    });
+    mocks.queryMock.mockImplementation(async (sql: string) => {
+      if (sql.includes('SELECT DISTINCT CAST("id" AS VARCHAR) as val')) {
+        return [{ val: 'France' }, { val: 'Belgique' }];
+      }
+      return [];
+    });
+
+    const hook = useEnrichmentJoin({
+      getEnrichmentDataset: () =>
+        ({
+          tableName: 'enrichment_table',
+          columns: [{ name: 'id' }, { name: 'population_2024' }]
+        }) as never,
+      getEnrichLinkedVariableId: () => 1,
+      getGeoFileColumnId: () => 2,
+      getEnrichDataFieldItems: () => [{ id: 1, columnName: 'id' }],
+      getGeoFileColumns: () => [{ id: 2, columnName: 'id' }],
+      onJoinFinalized: vi.fn()
+    });
+
+    await hook.computeEnrichmentJoinStats();
+    hook.ignoreEntity('XXX');
+    await hook.handleFinalizeEnrichment();
+
+    expect(getCreateTableSql()).toContain(
+      `WHERE CAST(e."id" AS VARCHAR) NOT IN ('XXX')`
+    );
+  });
 });
+
+function getCreateTableSql(): string {
+  const createTableCall = mocks.queryMock.mock.calls.find(([sql]) =>
+    String(sql).includes('CREATE TABLE "geo_table_enriched_1777777777777" AS')
+  );
+  expect(createTableCall).toBeDefined();
+  return String(createTableCall?.[0]);
+}
