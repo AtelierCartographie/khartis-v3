@@ -6,22 +6,28 @@ const source = readFileSync(
   resolve(import.meta.dirname, 'customize-basemap.svelte'),
   'utf8'
 );
+const auxSectionSource = readFileSync(
+  resolve(
+    import.meta.dirname,
+    'basemap-layers/aux-layer-config-section.svelte'
+  ),
+  'utf8'
+);
 const catalogMetadata = JSON.parse(
   readFileSync(
     resolve(process.cwd(), 'static/basemaps/all-basemaps-metadata.json'),
     'utf8'
   )
-) as Array<{ layers?: Array<{ type?: string }> }>;
+) as Array<{ file: string; layers?: Array<{ type?: string }> }>;
 
 describe('CustomizeBasemap', () => {
   it('keeps the reference basemap tool inside the tiled expandable so it can be disabled again', () => {
-    expect(source).toContain('{#if !isTiledBasemapEnabled}');
+    expect(source).toContain('!isTiledBasemapEnabled');
     expect(source).toContain('title={m.basemap_tiled_label()}');
     expect(source).toContain('toggleChecked={isTiledBasemapEnabled}');
     expect(source).toContain('onToggleChange={handleTiledBasemapToggle}');
     expect(source).toContain('class="reference-basemap-tool"');
     expect(source).toContain('{m.basemap_tiled_helper()}');
-    expect(source).not.toContain('{#if isTiledBasemapEnabled}');
   });
 
   it('defaults to Monde on first activation from blank white', () => {
@@ -44,30 +50,36 @@ describe('CustomizeBasemap', () => {
     );
   });
 
-  it('switches imported basemaps to a reduced fill and stroke panel', () => {
-    const customBranch = source.match(/{#if isCustomBasemap}([\s\S]*?){:else}/);
-    expect(customBranch).not.toBeNull();
-
-    const branch = customBranch![1];
-
-    expect(branch).toContain('title={m.basemap_config_fill()}');
-    expect(branch).toContain('title={m.basemap_config_stroke()}');
-    expect(branch).toContain('showStrokeSection={false}');
-    expect(branch).not.toContain('title={m.basemap_layer_mers()}');
-    expect(branch).not.toContain('title={m.basemap_layer_lacs_rivieres()}');
-    expect(branch).not.toContain('title={m.basemap_layer_relief()}');
-    expect(branch).not.toContain('title={m.basemap_layer_equateur()}');
-    expect(branch).not.toContain('title={m.basemap_layer_meridiens()}');
-    expect(branch).not.toContain('title={m.basemap_layer_villes()}');
+  it('iterates over currentMetadata.layers to render one entry per declared layer (issue #156 contract)', () => {
+    expect(source).toContain('layerEntries');
+    expect(source).toContain('metadata.layers');
+    expect(source).toContain('{#each layerEntries as entry');
+    expect(source).toContain('<AuxLayerConfigSection');
   });
 
-  it('keeps mers on LayerConfigSimple so simple basemap colors inherit the shared control', () => {
-    expect(source).toContain('title={m.basemap_layer_mers()}');
-    expect(source).toContain('<LayerConfigSimple');
+  it('drops the duplicated "Couches du fond de carte" parallel section that doubled the catalog list', () => {
+    expect(source).not.toContain('basemap_layer_section_aux');
   });
 
-  it('disables catalog-only overlays when the active basemap is imported', () => {
-    expect(source).toContain('const hiddenCustomLayerIds = $derived.by(() =>');
+  it('tracks the instance index per type so multiple layers of the same type (Europe NUTS 1 + NUTS 2 limits) render as distinct sections', () => {
+    expect(source).toContain('typeCounters');
+    expect(source).toContain('instanceIndex');
+  });
+
+  it('maps every catalog layer type to a legacy id so the rendering pipeline stays wired', () => {
+    expect(source).toContain('mapLayerTypeToLegacyId');
+    expect(source).toContain('BasemapLayerType.LAND');
+    expect(source).toContain('BasemapLayerType.LIMIT');
+    expect(source).toContain('BasemapLayerType.CENTROID');
+    expect(source).toContain('BasemapLayerType.POINT');
+    expect(source).toContain('BasemapLayerType.GRATICULE');
+    expect(source).toContain('BasemapLayerType.GEOGRAPHIC_LINES');
+    expect(source).toContain('BasemapLayerType.POLYGON');
+    expect(source).toContain('BasemapLayerType.LINE');
+  });
+
+  it('hides catalog-only legacy layer ids on imported basemaps so old controls stop leaking', () => {
+    expect(source).toContain('hiddenCustomLayerIds');
     expect(source).toContain("'mers'");
     expect(source).toContain("'lacs'");
     expect(source).toContain("'rivieres'");
@@ -75,33 +87,15 @@ describe('CustomizeBasemap', () => {
     expect(source).toContain("'equateur'");
     expect(source).toContain("'meridiens'");
     expect(source).toContain("'villes'");
-    expect(source).toContain('if (getConfig(layerId)?.visible ?? false)');
   });
 
-  it('stops advertising catalog-only metadata layers on imported basemaps', () => {
-    expect(source).toContain('const supportsTerre = $derived(');
-    expect(source).toContain('const supportsFrontieres = $derived(');
-    expect(source).toContain('const supportsLakesRivers = $derived(');
-    expect(source).toContain('const supportsCities = $derived(');
-    expect(source).toContain('!isCustomBasemap &&');
-  });
-
-  it('hides catalog geometry layers when no basemap geometry is active', () => {
-    expect(source).toContain('{#if supportsTerre}');
-    expect(source).toContain('{#if supportsFrontieres}');
-  });
-
-  it('derives overlay support from the selected reference basemap metadata', () => {
-    expect(source).toContain('getPreferredBasemapFile');
+  it('derives current metadata exclusively from the user-selected reference basemap (not from cached service state)', () => {
     expect(source).toContain('getActiveReferenceBasemapMetadata');
-    expect(source).toContain('resolveActiveBasemapMetadata');
     expect(source).toContain('basemapStyleStore.referenceBasemapId');
-    expect(source).toContain(
-      'availableBasemaps: basemapService.availableBasemaps'
-    );
+    expect(source).toContain('resolveActiveBasemapMetadata');
   });
 
-  it('does not use cached catalog metadata when no reference basemap is active', () => {
+  it('returns null metadata when no reference basemap is selected, never falling back to stale cache', () => {
     const helperStart = source.indexOf(
       'function getActiveReferenceBasemapMetadata'
     );
@@ -115,73 +109,46 @@ describe('CustomizeBasemap', () => {
     );
   });
 
-  it('enables city controls from catalog centroid or point metadata', () => {
-    const layerTypes = new Set(
-      catalogMetadata.flatMap((basemap) =>
-        (basemap.layers ?? []).map((layer) => layer.type)
-      )
-    );
-
-    expect(layerTypes.has('centroid')).toBe(true);
-    expect(source).toContain(
-      'availableMetadataLayerTypes.has(BasemapLayerType.CENTROID)'
-    );
-    expect(source).toContain(
-      'availableMetadataLayerTypes.has(BasemapLayerType.POINT)'
-    );
-    expect(source).toContain('{#if supportsCities}');
+  it('renders the Meridiens config component from the catalog graticule layer mapping', () => {
+    expect(catalogLayerTypes()).toContain('graticule');
+    expect(auxSectionSource).toContain('<LayerConfigMeridiens');
+    expect(auxSectionSource).toContain("legacyId === 'meridiens'");
   });
 
-  it('hides the lakes and rivers section when the catalog has no hydrography layers', () => {
-    const layerTypes = new Set(
-      catalogMetadata.flatMap((basemap) =>
-        (basemap.layers ?? []).map((layer) => layer.type)
-      )
-    );
-
-    expect(layerTypes.has('polygon')).toBe(false);
-    expect(layerTypes.has('line')).toBe(false);
-    expect(source).toContain('{#if supportsLakesRivers}');
-    expect(source).toContain(
-      'availableMetadataLayerTypes.has(BasemapLayerType.POLYGON)'
-    );
-    expect(source).toContain(
-      'availableMetadataLayerTypes.has(BasemapLayerType.LINE)'
-    );
+  it('renders city controls from catalog centroid or point metadata layers', () => {
+    expect(catalogLayerTypes()).toContain('centroid');
+    expect(auxSectionSource).toContain('<LayerConfigVilles');
+    expect(auxSectionSource).toContain("legacyId === 'villes'");
   });
 
-  it('connects meridiens controls to mode and spacing instead of the legacy selector', () => {
-    expect(source).toContain('<LayerConfigMeridiens');
-    expect(source).toContain("mode={getConfig('meridiens')?.mode}");
-    expect(source).toContain(
-      "spacingDegrees={getConfig('meridiens')?.spacingDegrees}"
+  it('keeps lakes and rivers visibility/styles synchronized when toggled from the Mers/Polygones layer slot', () => {
+    expect(auxSectionSource).toContain('handleLacsRivieresChange');
+    expect(auxSectionSource).toContain(
+      "basemapLayersStore.updateLayer('lacs', shared)"
     );
-    expect(source).not.toContain("remarquables={getConfig('meridiens')");
-  });
-
-  it('keeps equator and graticule styling independent from catalog metadata availability', () => {
-    expect(source).not.toContain('supportsEquatorDotted');
-    expect(source).not.toContain('supportsMeridiansDotted');
-    expect(source).not.toContain('disableDotted={!supportsEquatorDotted}');
-    expect(source).not.toContain('disableDotted={!supportsMeridiansDotted}');
-  });
-
-  it('keeps the lakes and rivers toggle synchronized while styling rivers thickness only', () => {
-    expect(source).toContain(
-      "basemapLayersStore.setLayerVisibility('lacs', checked)"
-    );
-    expect(source).toContain(
-      "basemapLayersStore.setLayerVisibility('rivieres', checked)"
-    );
-    expect(source).toContain("basemapLayersStore.updateLayer('lacs', shared)");
-    expect(source).toContain(
+    expect(auxSectionSource).toContain(
       "basemapLayersStore.updateLayer('rivieres', shared)"
     );
-    expect(source).toContain("basemapLayersStore.updateLayer('rivieres', {");
-    expect(source).not.toContain("basemapLayersStore.updateLayer('lacs', {");
+    expect(auxSectionSource).toContain(
+      "basemapLayersStore.updateLayer('rivieres', {"
+    );
   });
 
-  it('uses the shared basemap thickness limits instead of hardcoded wide bounds', () => {
-    expect(source).not.toContain('thicknessMax={20}');
+  it('renders the same style controls for secondary instances of the same type so users always see the expected color/thickness/opacity inputs', () => {
+    // Secondary instances (e.g. second NUTS limit, second land "Territoire") must
+    // not fall back to a plain helper text — they must show the same controls
+    // as the primary instance with a shared style override.
+    expect(auxSectionSource).not.toContain('basemap_aux_secondary_helper()');
+    expect(auxSectionSource).not.toContain(
+      'basemap_aux_secondary_limit_helper()'
+    );
   });
 });
+
+function catalogLayerTypes(): Set<string> {
+  return new Set(
+    catalogMetadata.flatMap((basemap) =>
+      (basemap.layers ?? []).map((layer) => layer.type ?? '')
+    )
+  );
+}

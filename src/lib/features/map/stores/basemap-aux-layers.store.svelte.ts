@@ -6,8 +6,11 @@ import {
 const STORE_KEY = 'basemapAuxLayers';
 const SINGLETON_KEY = '__khartisBasemapAuxLayersStore';
 
+export type AuxLayerStyleOverride = Record<string, unknown>;
+
 interface SerializedAuxLayers {
   visibility: Record<string, boolean>;
+  styles?: Record<string, AuxLayerStyleOverride>;
 }
 
 interface GlobalRegistry {
@@ -16,12 +19,14 @@ interface GlobalRegistry {
 
 interface BasemapAuxLayersState {
   visibility: Map<string, boolean>;
+  styles: Map<string, AuxLayerStyleOverride>;
   version: number;
 }
 
 function createBasemapAuxLayersStore() {
   const state = $state<BasemapAuxLayersState>({
     visibility: new Map(),
+    styles: new Map(),
     version: 0
   });
 
@@ -52,29 +57,69 @@ function createBasemapAuxLayersStore() {
     persistenceRegistry.notifyChange(STORE_KEY, SavePriority.IMMEDIATE);
   }
 
+  function getStyle(
+    basemapFile: string,
+    layerFile: string
+  ): AuxLayerStyleOverride | undefined {
+    const key = buildKey(basemapFile, layerFile);
+    return state.styles.get(key);
+  }
+
+  function updateStyle(
+    basemapFile: string,
+    layerFile: string,
+    updates: AuxLayerStyleOverride
+  ): void {
+    const key = buildKey(basemapFile, layerFile);
+    const previous = state.styles.get(key) ?? {};
+    state.styles.set(key, { ...previous, ...updates });
+    state.styles = new Map(state.styles);
+    state.version += 1;
+    persistenceRegistry.notifyChange(STORE_KEY, SavePriority.DEBOUNCED);
+  }
+
+  function clearStyle(basemapFile: string, layerFile: string): void {
+    const key = buildKey(basemapFile, layerFile);
+    if (!state.styles.has(key)) return;
+    state.styles.delete(key);
+    state.styles = new Map(state.styles);
+    state.version += 1;
+    persistenceRegistry.notifyChange(STORE_KEY, SavePriority.DEBOUNCED);
+  }
+
   function reset(): void {
     state.visibility = new Map();
+    state.styles = new Map();
     state.version += 1;
   }
 
   function serialize(): SerializedAuxLayers {
     return {
-      visibility: Object.fromEntries(state.visibility)
+      visibility: Object.fromEntries(state.visibility),
+      styles: Object.fromEntries(state.styles)
     };
   }
 
   function deserialize(data: SerializedAuxLayers | undefined): void {
-    if (!data?.visibility) {
+    if (!data) {
       reset();
       return;
     }
-    state.visibility = new Map(Object.entries(data.visibility));
+    state.visibility = data.visibility
+      ? new Map(Object.entries(data.visibility))
+      : new Map();
+    state.styles = data.styles
+      ? new Map(Object.entries(data.styles))
+      : new Map();
     state.version += 1;
   }
 
   return {
     isVisible,
     setVisible,
+    getStyle,
+    updateStyle,
+    clearStyle,
     reset,
     serialize,
     deserialize,

@@ -107,6 +107,13 @@ export interface VillesLayerConfig extends BasemapLayerBase {
   labelColor?: string;
 }
 
+export interface SphereLayerConfig extends BasemapLayerBase {
+  id: 'sphere';
+  color: string;
+  thickness: number;
+  opacity: number;
+}
+
 export type BasemapLayerConfig =
   | TerreLayerConfig
   | MersLayerConfig
@@ -116,7 +123,8 @@ export type BasemapLayerConfig =
   | EquateurLayerConfig
   | MeridiensLayerConfig
   | FrontieresLayerConfig
-  | VillesLayerConfig;
+  | VillesLayerConfig
+  | SphereLayerConfig;
 
 const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
@@ -200,6 +208,13 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     dotted: false,
     dottedPattern: BasemapDottedPattern.DOTS,
     thickness: 0.5,
+    opacity: 100
+  },
+  {
+    id: 'sphere',
+    visible: true,
+    color: '#5a5a5a',
+    thickness: 1,
     opacity: 100
   }
 ];
