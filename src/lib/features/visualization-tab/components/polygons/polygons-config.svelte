@@ -142,6 +142,7 @@
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
+  let missingDataPattern = $state<boolean>(false);
   const enabled = $derived.by(() => {
     const primitiveFilters =
       visualization?.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
@@ -166,6 +167,7 @@
       showMissingData = visualization.missingData.show ?? true;
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
+      missingDataPattern = visualization.missingData.pattern ?? false;
     }
   });
 
@@ -245,6 +247,11 @@
   function handleMissingDataColorChange(value: string) {
     missingDataColor = value;
     onMissingDataChange?.({ color: value });
+  }
+
+  function handleMissingDataPatternChange(value: boolean) {
+    missingDataPattern = value;
+    onMissingDataChange?.({ pattern: value });
   }
 
   function handleOpenDiscretization() {
@@ -344,6 +351,7 @@
       categoriesVariant="polygons"
       showMissingData={showMissingData}
       missingDataColor={missingDataColor}
+      missingDataPattern={missingDataPattern}
       sectionTitle={m.fill()}
       selectableDataFields={selectableDataFields}
       getFacetsSelectedFieldIds={facetsSelection.getSelectedFieldIds}
@@ -360,6 +368,7 @@
       onClassificationChange={handleClassificationChange}
       onMissingDataShowChange={handleMissingDataShowChange}
       onMissingDataColorChange={handleMissingDataColorChange}
+      onMissingDataPatternChange={handleMissingDataPatternChange}
       onInvertPalette={onInvertPalette}
     >
       {#snippet densitySnippet()}
