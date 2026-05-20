@@ -180,6 +180,60 @@ describe('mapInstanceStore map zoom bounds', () => {
     expect(mapInstanceStore.zoomLevel).toBe(200);
   });
 
+  it('derives visible bounds from the orthographic Deck view state', () => {
+    const { deck } = createDeckMock();
+
+    mocks.projectionStoreMock.referenceBbox = [-200, -100, 200, 100];
+    mocks.projectionStoreMock.canvasSize = { width: 800, height: 600 };
+    mocks.getBboxCenterMock.mockReturnValue([0, 0]);
+    mocks.getMaxScaleMock.mockReturnValue(2);
+
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+    mapInstanceStore.updateDeckViewState({
+      target: [20, -10, 0],
+      zoom: 1
+    });
+
+    expect(mapInstanceStore.getMapBounds()).toEqual({
+      north: 70,
+      south: -80,
+      east: 110,
+      west: -90
+    });
+  });
+
+  it('derives orthographic Deck bounds even when a MapLibre instance is present', () => {
+    const mapMock = createMapMock();
+    const { deck } = createDeckMock();
+
+    mocks.projectionStoreMock.referenceBbox = [-200, -100, 200, 100];
+    mocks.projectionStoreMock.canvasSize = { width: 800, height: 600 };
+    mocks.getBboxCenterMock.mockReturnValue([0, 0]);
+    mocks.getMaxScaleMock.mockReturnValue(2);
+
+    mapInstanceStore.setMapInstance(mapMock.map);
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+    mapInstanceStore.updateDeckViewState({
+      target: [20, -10, 0],
+      zoom: 1
+    });
+
+    expect(mapInstanceStore.getMapBounds()).toEqual({
+      north: 0,
+      south: 0,
+      east: 0,
+      west: 0
+    });
+    expect(mapInstanceStore.getDeckMapBounds()).toEqual({
+      north: 70,
+      south: -80,
+      east: 110,
+      west: -90
+    });
+  });
+
   it('keeps orthographic auto-fit at neutral zoom after MapLibre base zoom changes', () => {
     const { deck, setPropsMock } = createDeckMock();
     const zoomBounds = resolveOrthographicZoomBounds();
