@@ -4,6 +4,13 @@ import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.
 import { toCanvas as htmlToImageCanvas } from 'html-to-image';
 import type { Deck, View } from '@deck.gl/core';
 import type { Map as MapLibreMap } from 'maplibre-gl';
+import { motif } from '@ateliercartographie/motif.js';
+import type { PatternOptions } from '@ateliercartographie/motif.js';
+import {
+  isValidPatternId,
+  PATTERN_TYPE_MAP,
+  type PatternName
+} from '$lib/features/map/layers/pattern-texture';
 
 interface ExportOptions {
   width: number;
@@ -134,6 +141,13 @@ const EXPORT_MAP_STAGE_SELECTOR = '.map-stage, .facets-map-stage';
 const EXPORT_MAP_SURFACE_SELECTOR = '.map-canvas, .shared-facets-canvas';
 const EXPORT_MAP_CANVAS_SELECTOR =
   '.map-canvas canvas, .shared-facets-canvas canvas, canvas';
+
+interface SvgPatternDefinition {
+  defsHtml: string;
+  patternUrl: string;
+}
+
+const svgPatternDefsCache = new Map<string, SvgPatternDefinition>();
 
 function getExportPixelRatio(
   pageContainer: HTMLElement,
@@ -722,6 +736,114 @@ function resolveAccessorNumber(
   fallback: number
 ): number {
   return toFiniteNumber(resolveAccessorValue(accessor, datum, index), fallback);
+}
+
+function stripDefsWrapper(defsHtml: string): string {
+  return defsHtml.replace(/^\s*<defs[^>]*>/i, '').replace(/<\/defs>\s*$/i, '');
+}
+
+function buildSvgPatternCacheKey(
+  patternId: PatternName,
+  params: { angle?: number; size: number; scale: number }
+): string {
+  return JSON.stringify({
+    patternId,
+    angle: params.angle,
+    size: params.size,
+    scale: params.scale
+  });
+}
+
+function generateSvgPatternDefinition(
+  patternId: PatternName,
+  params: { angle?: number; size: number; scale: number }
+): SvgPatternDefinition | null {
+  const config = PATTERN_TYPE_MAP[patternId];
+  if (!config) return null;
+
+  const tile = motif({
+    type: config.type as PatternOptions['type'],
+    angle: params.angle ?? config.angle,
+    fill: '#000000',
+    background: 'transparent',
+    size: Math.round((params.size / params.scale) * 100),
+    scale: params.scale / 10,
+    patchSize: true
+  });
+
+  return {
+    defsHtml: stripDefsWrapper(tile.defs.outerHTML),
+    patternUrl: tile.url
+  };
+}
+
+function resolveSvgPatternReference(
+  props: Record<string, unknown>,
+  datum: unknown,
+  index: number
+): SvgPatternDefinition | null {
+  const rawPatternId =
+    props.khartisPatternId ??
+    resolveAccessorValue(props.getFillPattern, datum, index);
+  const patternId = String(rawPatternId ?? '');
+  if (!isValidPatternId(patternId)) {
+    return null;
+  }
+
+  const fallbackAngle = PATTERN_TYPE_MAP[patternId]?.angle;
+  const size = Math.max(1, toFiniteNumber(props.khartisPatternSize, 4));
+  const scale = Math.max(
+    1,
+    toFiniteNumber(
+      props.khartisPatternScale,
+      resolveAccessorNumber(props.getFillPatternScale, datum, index, 200) / 25
+    )
+  );
+  const angle = toFiniteNumber(
+    props.khartisPatternAngle,
+    resolveAccessorNumber(
+      props.getFillPatternRotation,
+      datum,
+      index,
+      fallbackAngle ?? 0
+    )
+  );
+  const cacheKey = buildSvgPatternCacheKey(patternId, {
+    angle,
+    size,
+    scale
+  });
+  const cached = svgPatternDefsCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const generated = generateSvgPatternDefinition(patternId, {
+    angle,
+    size,
+    scale
+  });
+  if (!generated) {
+    return null;
+  }
+
+  svgPatternDefsCache.set(cacheKey, generated);
+  return generated;
+}
+
+function fillAttributes(
+  color: SvgColor,
+  pattern?: SvgPatternDefinition | null
+): string {
+  if (color.opacity <= 0) {
+    return 'fill="none"';
+  }
+
+  if (!pattern) {
+    return colorAttributes('fill', color);
+  }
+
+  return `fill="${escapeXml(pattern.patternUrl)}" fill-opacity="${roundSvgValue(color.opacity)}"`;
 }
 
 function resolveAccessorTuple(
@@ -1320,6 +1442,7 @@ function serializeGeoJsonGeometry(
     ),
     layerOpacity
   );
+  const pattern = resolveSvgPatternReference(props, feature, featureIndex);
   const lineColor = applyLayerOpacity(
     normalizeSvgColor(
       resolveAccessorValue(props.getLineColor, feature, featureIndex),
@@ -1358,7 +1481,7 @@ function serializeGeoJsonGeometry(
     );
     if (!projected) return '';
 
-    return `<circle cx="${roundSvgValue(projected[0])}" cy="${roundSvgValue(projected[1])}" r="${roundSvgValue(radius)}" ${colorAttributes('fill', fillColor)} ${colorAttributes('stroke', lineColor)} stroke-width="${roundSvgValue(lineWidth)}" />`;
+    return `<circle cx="${roundSvgValue(projected[0])}" cy="${roundSvgValue(projected[1])}" r="${roundSvgValue(radius)}" ${fillAttributes(fillColor, pattern)} ${colorAttributes('stroke', lineColor)} stroke-width="${roundSvgValue(lineWidth)}" />`;
   }
 
   if (geometry.type === 'MultiPoint' && Array.isArray(geometry.coordinates)) {
@@ -1416,7 +1539,7 @@ function serializeGeoJsonGeometry(
         ? `${colorAttributes('stroke', lineColor)} stroke-width="${roundSvgValue(lineWidth)}"`
         : 'stroke="none"';
 
-    return `<path d="${path}" ${colorAttributes('fill', fillColor)} ${stroke} fill-rule="evenodd" />`;
+    return `<path d="${path}" ${fillAttributes(fillColor, pattern)} ${stroke} fill-rule="evenodd" />`;
   }
 
   if (geometry.type === 'MultiPolygon' && Array.isArray(geometry.coordinates)) {
@@ -2531,12 +2654,10 @@ function buildPageLayer(
 }
 
 function buildSvgDefinitions(geometry: PageExportGeometry): string {
-  if (!geometry.mapFrame) {
-    return '';
-  }
+  const definitions: string[] = [];
 
-  return `
-    <defs>
+  if (geometry.mapFrame) {
+    definitions.push(`
       <clipPath id="${SVG_MAP_FRAME_CLIP_ID}">
         <rect
           x="${roundSvgValue(geometry.mapFrame.x)}"
@@ -2545,6 +2666,20 @@ function buildSvgDefinitions(geometry: PageExportGeometry): string {
           height="${roundSvgValue(geometry.mapFrame.height)}"
         />
       </clipPath>
+    `);
+  }
+
+  definitions.push(
+    ...Array.from(svgPatternDefsCache.values()).map((entry) => entry.defsHtml)
+  );
+
+  if (definitions.length === 0) {
+    return '';
+  }
+
+  return `
+    <defs>
+      ${definitions.join('\n')}
     </defs>
   `;
 }
@@ -2555,6 +2690,7 @@ function buildStructuredSvgMarkup(
   structuredOptions: StructuredSvgOptions = {},
   geometry: PageExportGeometry = resolvePageExportGeometry(pageContainer)
 ): string {
+  svgPatternDefsCache.clear();
   const layers = [
     buildVisualizationLayer(pageContainer, structuredOptions, geometry),
     buildLegendLayer(pageContainer),

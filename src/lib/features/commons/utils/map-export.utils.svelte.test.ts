@@ -12,6 +12,15 @@ vi.mock('html-to-image', () => ({
   toCanvas: htmlToImage.toCanvas
 }));
 
+vi.mock('@ateliercartographie/motif.js', () => ({
+  motif: (config: { type: string; angle?: number }) => ({
+    defs: {
+      outerHTML: `<defs><pattern id="mock-pattern-${config.type}-${config.angle ?? 0}"></pattern></defs>`
+    },
+    url: `url(#mock-pattern-${config.type}-${config.angle ?? 0})`
+  })
+}));
+
 const source = readFileSync(
   resolve(import.meta.dirname, 'map-export.utils.ts'),
   'utf8'
@@ -458,6 +467,69 @@ describe('map export DOM mutations', () => {
     expect(markup).toContain('stroke-width="2"');
     expect(markup).toContain('M 20 20 L 60 20 L 60 50 L 20 50 Z');
     expect(markup).toContain('M 0 0 L 10 0 L 10 10');
+    expect(markup).not.toContain('data-khartis-export-mode="raster-fallback"');
+  });
+
+  it('exports Deck pattern fill layers as native SVG patterns', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="map-canvas">
+          <canvas></canvas>
+        </div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const canvas = document.querySelector('canvas');
+    if (!page || !canvas) {
+      throw new Error('Missing pattern export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(canvas, { left: 0, top: 0, width: 400, height: 300 });
+    vi.spyOn(canvas, 'toDataURL').mockReturnValue('data:image/png;base64,AAAA');
+
+    const patternLayer = createDeckLayer('GeoJsonLayer', 'areas-pattern', {
+      data: {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: {},
+            geometry: {
+              type: 'Polygon',
+              coordinates: [
+                [
+                  [20, 20],
+                  [60, 20],
+                  [60, 50],
+                  [20, 50],
+                  [20, 20]
+                ]
+              ]
+            }
+          }
+        ]
+      },
+      getFillColor: [0, 0, 0, 153],
+      getLineColor: [0, 0, 0, 0],
+      getLineWidth: 0,
+      khartisPatternId: 'diagonal-reverse',
+      khartisPatternSize: 9,
+      khartisPatternScale: 16,
+      khartisPatternAngle: 315
+    });
+    const deck = createDeckExportFixture([patternLayer]);
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    expect(markup).toContain('id="mock-pattern-line-315"');
+    expect(markup).toContain('fill="url(#mock-pattern-line-315)"');
+    expect(markup).toContain('fill-opacity="0.6"');
+    expect(markup).not.toContain('fill="rgb(0, 0, 0)"');
     expect(markup).not.toContain('data-khartis-export-mode="raster-fallback"');
   });
 
