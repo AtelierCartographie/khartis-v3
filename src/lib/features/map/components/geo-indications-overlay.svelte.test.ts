@@ -6,7 +6,9 @@ import {
 } from '$lib/features/commons/stores/global.svelte';
 import { StylingTools } from '$lib/features/commons/types/global';
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
+import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { formatActions } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+import { BasemapStyle } from '../constants/basemap-styles';
 import {
   geoIndicationsActions,
   geoIndicationsState
@@ -147,6 +149,32 @@ function setupEmptyGeoViewport(): {
   return { viewport };
 }
 
+function createBoundsMap(bounds: {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+}) {
+  return {
+    getZoom: () => 2,
+    getCenter: () => ({
+      lng: (bounds.east + bounds.west) / 2,
+      lat: (bounds.north + bounds.south) / 2
+    }),
+    getCanvas: () => null,
+    getBounds: () => ({
+      getNorth: () => bounds.north,
+      getSouth: () => bounds.south,
+      getEast: () => bounds.east,
+      getWest: () => bounds.west
+    }),
+    setMinZoom: () => undefined,
+    setMaxZoom: () => undefined,
+    on: () => undefined,
+    off: () => undefined
+  };
+}
+
 describe('geo indications overlay dragging', () => {
   beforeEach(() => {
     cleanup();
@@ -161,6 +189,7 @@ describe('geo indications overlay dragging', () => {
       left: 0
     });
     geoIndicationsActions.reset();
+    basemapStyleStore.reset();
     mapInstanceStore.reset();
     globalActions.resetNavigationState();
     globalState.selectedTool = StylingTools.GeoIndications;
@@ -170,6 +199,7 @@ describe('geo indications overlay dragging', () => {
     cleanup();
     formatActions.reset();
     geoIndicationsActions.reset();
+    basemapStyleStore.reset();
     mapInstanceStore.reset();
     globalActions.resetNavigationState();
   });
@@ -298,6 +328,105 @@ describe('geo indications overlay dragging', () => {
         y: 36
       });
     });
+  });
+
+  it('renders the inset map as an auto-centered globe with graticules and an extent polygon', async () => {
+    mapInstanceStore.setMapInstance(
+      createBoundsMap({
+        north: 60,
+        south: 0,
+        east: 30,
+        west: -30
+      }) as never
+    );
+    geoIndicationsActions.toggleInsetMap();
+
+    const { container } = render(GeoIndicationsOverlay);
+
+    await waitFor(() => {
+      expect(container.querySelector('.inset-map-globe')).toBeInstanceOf(
+        HTMLDivElement
+      );
+      expect(container.querySelector('.inset-outline')?.tagName).toBe('path');
+      expect(container.querySelector('.inset-graticule-path')?.tagName).toBe(
+        'path'
+      );
+      expect(container.querySelector('.inset-extent-path')?.tagName).toBe(
+        'path'
+      );
+    });
+
+    expect(container.querySelector('.inset-map-planisphere')).toBeNull();
+    expect(container.querySelector('.inset-extent-point')).toBeNull();
+  });
+
+  it('renders the inset extent as a point when the projected bbox is too small', async () => {
+    mapInstanceStore.setMapInstance(
+      createBoundsMap({
+        north: 48.857,
+        south: 48.856,
+        east: 2.353,
+        west: 2.352
+      }) as never
+    );
+    geoIndicationsActions.toggleInsetMap();
+
+    const { container } = render(GeoIndicationsOverlay);
+
+    await waitFor(() => {
+      expect(container.querySelector('.inset-extent-point')?.tagName).toBe(
+        'circle'
+      );
+    });
+
+    expect(container.querySelector('.inset-extent-path')).toBeNull();
+  });
+
+  it('keeps a point marker when the visible bounds cannot form a valid geographic rectangle', async () => {
+    mapInstanceStore.setMapInstance(
+      createBoundsMap({
+        north: 245,
+        south: 240,
+        east: 725000,
+        west: 724900
+      }) as never
+    );
+    geoIndicationsActions.toggleInsetMap();
+
+    const { container } = render(GeoIndicationsOverlay);
+
+    await waitFor(() => {
+      expect(container.querySelector('.inset-extent-point')?.tagName).toBe(
+        'circle'
+      );
+    });
+
+    expect(container.querySelector('.inset-extent-path')).toBeNull();
+  });
+
+  it('hides the inset map when the visible extent is at world scale', () => {
+    mapInstanceStore.setMapInstance(
+      createBoundsMap({
+        north: 90,
+        south: -90,
+        east: 180,
+        west: -180
+      }) as never
+    );
+    geoIndicationsActions.toggleInsetMap();
+
+    const { container } = render(GeoIndicationsOverlay);
+
+    expect(container.querySelector('.inset-map-panel')).toBeNull();
+  });
+
+  it('hides the scale bar while a tiled basemap is active', () => {
+    basemapStyleStore.setStyle(BasemapStyle.FRANCE_COULEURS);
+    geoIndicationsActions.toggleScale();
+
+    const { container } = render(GeoIndicationsOverlay);
+
+    expect(container.querySelector('.scale-bar')).toBeNull();
   });
 
   it('recenters the page when a centered geo indication loses focus', async () => {

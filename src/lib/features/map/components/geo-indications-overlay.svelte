@@ -1,7 +1,6 @@
 <script lang="ts">
   import {
     DistanceUnit,
-    InsetMapType,
     LegendPosition,
     OrientationIndicatorStyle,
     ScaleForm
@@ -38,6 +37,7 @@
     getScaleMetersPerPixel,
     getSuggestedScaleDistance,
     INSET_MAP_SIZE_LIMITS,
+    isInsetMapAvailableForBounds,
     SCALE_MAX_WIDTH_PX,
     toDistanceMeters
   } from '$lib/features/step-toolbar/tools/geo-indications';
@@ -51,7 +51,6 @@
     MultiPolygon,
     Polygon
   } from 'geojson';
-  import { basemapLayersStore } from '../stores/basemap-layers.store.svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import {
     getElementCenteringDelta,
@@ -86,14 +85,15 @@
   );
   const INSET_MAP_DATA_PATH =
     '/basemaps/geometry/monde-countries-2024-low.parquet';
-  const INSET_PLANISPHERE_RATIO = 0.62;
   const INSET_MAP_PADDING = 4;
   const INSET_MAP_WORLD_SPAN_EPSILON = 359.5;
   const INSET_ZOOM_BASE = 0.6;
   const INSET_ZOOM_FACTOR = 1.2;
+  const INSET_EXTENT_POINT_RADIUS = 4;
+  const INSET_EXTENT_MIN_SIZE = 8;
+  const INSET_POINT_BOUNDS_EPSILON = 0.000001;
   const INSET_WINDOW_STROKE_MIN = 1.2;
   const INSET_WINDOW_STROKE_MAX = 3;
-  const INSET_WORLD_WINDOW_INSET = 1.5;
   const INSET_LAND_STROKE_MIN = 0.35;
   const INSET_LAND_STROKE_MAX = 0.8;
   const ORIENTATION_MIN_SIZE_PX = 14;
@@ -115,16 +115,19 @@
     longitudeSpan: number;
   };
   type InsetDimensions = { width: number; height: number };
+  type InsetViewportPoint = { x: number; y: number; radius: number };
   type InsetRenderState = {
     spherePath: string;
+    graticulePath: string;
     landPaths: string[];
     viewportPath: string | null;
-    worldViewport: boolean;
+    viewportPoint: InsetViewportPoint | null;
     landStrokeWidth: number;
     windowStrokeWidth: number;
   };
 
   const WORLD_SPHERE: GeoPermissibleObjects = { type: 'Sphere' };
+  const INSET_GRATICULE = d3geo.geoGraticule().step([20, 20])();
   const EMPTY_GEOJSON_PROPERTIES: GeoJsonProperties = {};
   const insetClipId = `inset-geo-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -269,14 +272,25 @@
       return null;
     }
 
-    const north = clamp(toFiniteNumber(bounds.north, 90), -90, 90);
-    const south = clamp(toFiniteNumber(bounds.south, -90), -90, 90);
-    if (north <= south) {
-      return null;
-    }
-
+    const rawNorth = toFiniteNumber(bounds.north, 90);
+    const rawSouth = toFiniteNumber(bounds.south, -90);
+    const north = clamp(rawNorth, -90, 90);
+    const south = clamp(rawSouth, -90, 90);
     const rawEast = toFiniteNumber(bounds.east, 180);
     const rawWest = toFiniteNumber(bounds.west, -180);
+
+    if (north <= south) {
+      const centerLatitude = clamp((rawNorth + rawSouth) / 2, -90, 90);
+      const centerLongitude = normalizeLongitude((rawEast + rawWest) / 2);
+      return {
+        north: clamp(centerLatitude + INSET_POINT_BOUNDS_EPSILON, -90, 90),
+        south: clamp(centerLatitude - INSET_POINT_BOUNDS_EPSILON, -90, 90),
+        east: normalizeLongitude(centerLongitude + INSET_POINT_BOUNDS_EPSILON),
+        west: normalizeLongitude(centerLongitude - INSET_POINT_BOUNDS_EPSILON),
+        longitudeSpan: INSET_POINT_BOUNDS_EPSILON * 2
+      };
+    }
+
     const longitudeSpan = Math.abs(rawEast - rawWest);
     if (!Number.isFinite(longitudeSpan)) {
       return null;
@@ -350,21 +364,50 @@
     };
   }
 
+  function getBoundsCenter(bounds: MapBounds): [number, number] {
+    const halfLongitudeSpan = bounds.longitudeSpan / 2;
+    const longitude =
+      bounds.east >= bounds.west
+        ? (bounds.west + bounds.east) / 2
+        : normalizeLongitude(bounds.west + halfLongitudeSpan);
+
+    return [normalizeLongitude(longitude), (bounds.north + bounds.south) / 2];
+  }
+
+  function getProjectedPoint(
+    projection: GeoProjection,
+    bounds: MapBounds
+  ): InsetViewportPoint | null {
+    const projected = projection(getBoundsCenter(bounds));
+    if (!projected) {
+      return null;
+    }
+
+    const [x, y] = projected;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return null;
+    }
+
+    return {
+      x,
+      y,
+      radius: INSET_EXTENT_POINT_RADIUS
+    };
+  }
+
   function getInsetZoomScale(): number {
     const zoom = toFiniteNumber(geoIndicationsState.insetMap.zoom, 50);
     const normalized = clamp(zoom / 100, 0, 1);
     return INSET_ZOOM_BASE + normalized * INSET_ZOOM_FACTOR;
   }
 
-  function createInsetProjection(dimensions: InsetDimensions): GeoProjection {
-    const rotationLng = toFiniteNumber(
-      geoIndicationsState.insetMap.centerLongitude,
-      0
-    );
-    const rotationLat = toFiniteNumber(
-      geoIndicationsState.insetMap.centerLatitude,
-      0
-    );
+  function createInsetProjection(
+    dimensions: InsetDimensions,
+    bounds: MapBounds | null
+  ): GeoProjection {
+    const [rotationLng, rotationLat] = bounds
+      ? getBoundsCenter(bounds)
+      : [0, 0];
     const extent: [[number, number], [number, number]] = [
       [INSET_MAP_PADDING, INSET_MAP_PADDING],
       [
@@ -373,13 +416,10 @@
       ]
     ];
 
-    const projection =
-      geoIndicationsState.insetMap.type === InsetMapType.GLOBE
-        ? d3geo
-            .geoOrthographic()
-            .rotate([-rotationLng, -rotationLat])
-            .clipAngle(90)
-        : d3geo.geoNaturalEarth1().rotate([-rotationLng, -rotationLat, 0]);
+    const projection = d3geo
+      .geoOrthographic()
+      .rotate([-rotationLng, -rotationLat])
+      .clipAngle(90);
 
     projection.fitExtent(extent, WORLD_SPHERE);
     projection.scale(projection.scale() * getInsetZoomScale());
@@ -512,47 +552,16 @@
       geoIndicationsState.insetMap.size,
       160
     );
-
-    if (geoIndicationsState.insetMap.type === InsetMapType.GLOBE) {
-      const size = clamp(
-        requestedSize,
-        INSET_MAP_SIZE_LIMITS[InsetMapType.GLOBE].min,
-        INSET_MAP_SIZE_LIMITS[InsetMapType.GLOBE].max
-      );
-      return { width: Math.round(size), height: Math.round(size) };
-    }
-
-    const width = clamp(
+    const size = clamp(
       requestedSize,
-      INSET_MAP_SIZE_LIMITS[InsetMapType.PLANISPHERE].min,
-      INSET_MAP_SIZE_LIMITS[InsetMapType.PLANISPHERE].max
-    );
-    const height = Math.max(
-      INSET_MAP_SIZE_LIMITS[InsetMapType.PLANISPHERE].min,
-      width * INSET_PLANISPHERE_RATIO
+      INSET_MAP_SIZE_LIMITS[geoIndicationsState.insetMap.type].min,
+      INSET_MAP_SIZE_LIMITS[geoIndicationsState.insetMap.type].max
     );
 
-    return {
-      width: Math.round(width),
-      height: Math.round(height)
-    };
-  });
-
-  const basemapContinentColor = $derived.by(() => {
-    const terreLayer = basemapLayersStore.getLayer('terre');
-    return terreLayer ? terreLayer.fillColor : '#d9d9d9';
-  });
-
-  const basemapSeaColor = $derived.by(() => {
-    const seaLayer = basemapLayersStore.getLayer('mers');
-    return seaLayer ? seaLayer.color : '#d0e2ff';
+    return { width: Math.round(size), height: Math.round(size) };
   });
 
   const insetContinentColor = $derived.by(() => {
-    if (geoIndicationsState.insetMap.useBasemapColors) {
-      return basemapContinentColor;
-    }
-
     return hslToHex(
       geoIndicationsState.insetMap.continentColor.hue,
       geoIndicationsState.insetMap.continentColor.saturation,
@@ -561,10 +570,6 @@
   });
 
   const insetSeaColor = $derived.by(() => {
-    if (geoIndicationsState.insetMap.useBasemapColors) {
-      return basemapSeaColor;
-    }
-
     return hslToHex(
       geoIndicationsState.insetMap.seaColor.hue,
       geoIndicationsState.insetMap.seaColor.saturation,
@@ -580,8 +585,6 @@
     )
   );
 
-  const insetPanelBackgroundColor = $derived(insetWindowColor);
-  const insetPanelBorderColor = $derived(insetWindowColor);
   const hasVisibleLegend = $derived(
     legendState.visible && legendState.items.some((item) => item.visible)
   );
@@ -610,11 +613,7 @@
   });
 
   const insetPanelStyle = $derived.by(() => {
-    const styles = [
-      getDefaultInsetStyle(placementContext),
-      `background-color: ${insetPanelBackgroundColor}`,
-      `border: 1px solid ${insetPanelBorderColor}`
-    ];
+    const styles = [getDefaultInsetStyle(placementContext)];
 
     if (geoIndicationsState.insetMap.dragPosition) {
       styles.push(
@@ -634,27 +633,45 @@
 
   const insetRenderState = $derived.by(() => {
     const _revision = mapViewRevision;
+    const _deckViewState = mapInstanceStore.deckViewState;
+    const _zoomLevel = mapInstanceStore.zoomLevel;
     void _revision;
+    void _deckViewState;
+    void _zoomLevel;
 
     const dimensions = insetDimensions;
-    const projection = createInsetProjection(dimensions);
+    const mapBounds = getCurrentMapBounds();
+    const projection = createInsetProjection(dimensions, mapBounds);
     const path = d3geo.geoPath(projection);
     const spherePath = path(WORLD_SPHERE) ?? '';
+    const graticulePath = path(INSET_GRATICULE) ?? '';
     const landPaths = (worldFeatures?.features ?? [])
       .map((feature) => path(feature))
       .filter((candidate): candidate is string => Boolean(candidate));
 
-    const mapBounds = getCurrentMapBounds();
-    const worldViewport =
-      !mapBounds || mapBounds.longitudeSpan >= INSET_MAP_WORLD_SPAN_EPSILON;
-    const viewportFeature =
-      mapBounds && !worldViewport ? buildViewportFeature(mapBounds) : null;
-    const viewportPath = worldViewport
-      ? geoIndicationsState.insetMap.type === InsetMapType.GLOBE
-        ? spherePath
-        : null
-      : viewportFeature
+    const viewportFeature = mapBounds ? buildViewportFeature(mapBounds) : null;
+    const viewportProjectedBounds = viewportFeature
+      ? path.bounds(viewportFeature)
+      : null;
+    const viewportWidth = viewportProjectedBounds
+      ? viewportProjectedBounds[1][0] - viewportProjectedBounds[0][0]
+      : 0;
+    const viewportHeight = viewportProjectedBounds
+      ? viewportProjectedBounds[1][1] - viewportProjectedBounds[0][1]
+      : 0;
+    const shouldRenderViewportPoint =
+      !!mapBounds &&
+      (!Number.isFinite(viewportWidth) ||
+        !Number.isFinite(viewportHeight) ||
+        viewportWidth < INSET_EXTENT_MIN_SIZE ||
+        viewportHeight < INSET_EXTENT_MIN_SIZE);
+    const viewportPath =
+      viewportFeature && !shouldRenderViewportPoint
         ? path(viewportFeature)
+        : null;
+    const viewportPoint =
+      shouldRenderViewportPoint && mapBounds
+        ? getProjectedPoint(projection, mapBounds)
         : null;
     const landStrokeWidth = clamp(
       Math.min(dimensions.width, dimensions.height) * 0.0035,
@@ -669,12 +686,24 @@
 
     return {
       spherePath,
+      graticulePath,
       landPaths,
       viewportPath,
-      worldViewport,
+      viewportPoint,
       landStrokeWidth,
       windowStrokeWidth
     } satisfies InsetRenderState;
+  });
+
+  const insetMapAvailable = $derived.by(() => {
+    const _revision = mapViewRevision;
+    const _deckViewState = mapInstanceStore.deckViewState;
+    const _zoomLevel = mapInstanceStore.zoomLevel;
+    void _revision;
+    void _deckViewState;
+    void _zoomLevel;
+
+    return isInsetMapAvailableForBounds(getCurrentMapBounds());
   });
 
   type DragTarget = 'scale' | 'orientation' | 'inset';
@@ -1269,7 +1298,7 @@
     </div>
   {/if}
 
-  {#if geoIndicationsState.visible && geoIndicationsState.insetMap.enabled}
+  {#if geoIndicationsState.visible && geoIndicationsState.insetMap.enabled && insetMapAvailable}
     <div
       bind:this={insetMapElement}
       class="inset-map-panel"
@@ -1287,10 +1316,7 @@
       onpointerdown={handleInsetMapPointerDown}
     >
       <div
-        class="inset-map {geoIndicationsState.insetMap.type ===
-        InsetMapType.GLOBE
-          ? 'inset-map-globe'
-          : 'inset-map-planisphere'}"
+        class="inset-map inset-map-globe"
         style="width: {insetDimensions.width}px; height: {insetDimensions.height}px;"
       >
         <svg
@@ -1299,42 +1325,13 @@
           height={insetDimensions.height}
           viewBox="0 0 {insetDimensions.width} {insetDimensions.height}"
         >
-          {#if geoIndicationsState.insetMap.type === InsetMapType.GLOBE}
-            <defs>
-              <clipPath id={insetClipId}>
-                <path d={insetRenderState.spherePath}></path>
-              </clipPath>
-            </defs>
-            <path d={insetRenderState.spherePath} fill={insetSeaColor}></path>
-            <g clip-path={`url(#${insetClipId})`}>
-              {#each insetRenderState.landPaths as landPath, index (index)}
-                <path
-                  class="inset-land-path"
-                  d={landPath}
-                  fill={insetContinentColor}
-                  stroke={insetContinentColor}
-                  stroke-width={insetRenderState.landStrokeWidth}
-                ></path>
-              {/each}
-            </g>
-            <path class="inset-outline" d={insetRenderState.spherePath}></path>
-            {#if insetRenderState.viewportPath}
-              <path
-                class="inset-window-path"
-                d={insetRenderState.viewportPath}
-                fill="none"
-                stroke={insetWindowColor}
-                stroke-width={insetRenderState.windowStrokeWidth}
-              ></path>
-            {/if}
-          {:else}
-            <rect
-              x="0"
-              y="0"
-              width={insetDimensions.width}
-              height={insetDimensions.height}
-              fill={insetSeaColor}
-            ></rect>
+          <defs>
+            <clipPath id={insetClipId}>
+              <path d={insetRenderState.spherePath}></path>
+            </clipPath>
+          </defs>
+          <path d={insetRenderState.spherePath} fill={insetSeaColor}></path>
+          <g clip-path={`url(#${insetClipId})`}>
             {#each insetRenderState.landPaths as landPath, index (index)}
               <path
                 class="inset-land-path"
@@ -1344,43 +1341,33 @@
                 stroke-width={insetRenderState.landStrokeWidth}
               ></path>
             {/each}
-            <rect
-              class="inset-outline"
-              x="0.5"
-              y="0.5"
-              width={insetDimensions.width - 1}
-              height={insetDimensions.height - 1}
-              rx="6"
-              ry="6"
-            ></rect>
-            {#if insetRenderState.viewportPath}
+            {#if insetRenderState.graticulePath}
               <path
-                class="inset-window-path"
-                d={insetRenderState.viewportPath}
+                class="inset-graticule-path"
+                d={insetRenderState.graticulePath}
                 fill="none"
-                stroke={insetWindowColor}
-                stroke-width={insetRenderState.windowStrokeWidth}
               ></path>
-            {:else if insetRenderState.worldViewport}
-              <rect
-                class="inset-window-path"
-                x={INSET_WORLD_WINDOW_INSET}
-                y={INSET_WORLD_WINDOW_INSET}
-                width={Math.max(
-                  1,
-                  insetDimensions.width - INSET_WORLD_WINDOW_INSET * 2
-                )}
-                height={Math.max(
-                  1,
-                  insetDimensions.height - INSET_WORLD_WINDOW_INSET * 2
-                )}
-                rx="5"
-                ry="5"
-                fill="none"
-                stroke={insetWindowColor}
-                stroke-width={insetRenderState.windowStrokeWidth}
-              ></rect>
             {/if}
+          </g>
+          <path class="inset-outline" d={insetRenderState.spherePath}></path>
+          {#if insetRenderState.viewportPath}
+            <path
+              class="inset-extent-path"
+              d={insetRenderState.viewportPath}
+              fill="none"
+              stroke={insetWindowColor}
+              stroke-width={insetRenderState.windowStrokeWidth}
+            ></path>
+          {:else if insetRenderState.viewportPoint}
+            <circle
+              class="inset-extent-point"
+              cx={insetRenderState.viewportPoint.x}
+              cy={insetRenderState.viewportPoint.y}
+              r={insetRenderState.viewportPoint.radius}
+              fill={insetWindowColor}
+              stroke={insetWindowColor}
+              stroke-width={insetRenderState.windowStrokeWidth}
+            ></circle>
           {/if}
         </svg>
       </div>
@@ -1481,10 +1468,6 @@
     border-radius: 50%;
   }
 
-  .inset-map-planisphere {
-    border-radius: 6px;
-  }
-
   .inset-map-svg {
     display: block;
     width: 100%;
@@ -1496,7 +1479,14 @@
     vector-effect: non-scaling-stroke;
   }
 
-  .inset-window-path {
+  .inset-graticule-path {
+    stroke: rgba(0, 0, 0, 0.3);
+    stroke-width: 0.5;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .inset-extent-path,
+  .inset-extent-point {
     stroke-linecap: round;
     stroke-linejoin: round;
     vector-effect: non-scaling-stroke;
@@ -1504,7 +1494,8 @@
 
   .inset-outline {
     fill: none;
-    stroke: rgba(22, 22, 22, 0.24);
+    stroke: rgba(0, 0, 0, 0.3);
     stroke-width: 1;
+    vector-effect: non-scaling-stroke;
   }
 </style>
