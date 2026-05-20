@@ -35,14 +35,19 @@ import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-eng
 const DEFAULT_STATE: SimplificationState = {
   source: SimplificationSource.Basemap,
   level: SimplificationLevel.Medium,
-  rate: 50,
+  rate: 0,
   isProcessing: false
 };
 
 const DATASET_SIMPLIFICATION_SUFFIX = '__simplified';
 
+let pendingApplyOptions: { datasetId?: string } | null = null;
+
 type SimplificationActions = {
-  setSource: (source: SimplificationSource) => void;
+  setSource: (
+    source: SimplificationSource,
+    options?: { datasetId?: string }
+  ) => void;
   setLevel: (level: SimplificationLevel) => void;
   setRate: (rate: number) => void;
   applySimplification: (options?: {
@@ -304,8 +309,71 @@ const { actions, getState } = createToolStore<
       }
     };
 
+    const runApply = async (options?: {
+      datasetId?: string;
+    }): Promise<SimplificationResult | null> => {
+      if (s.isProcessing) {
+        pendingApplyOptions = options ?? {};
+        return null;
+      }
+      s.isProcessing = true;
+      try {
+        const result = await performSimplification(options);
+        if (result?.simplified) {
+          const activeDataset =
+            s.source === SimplificationSource.Geo
+              ? options?.datasetId
+                ? datasetsStore.datasets.find((d) => d.id === options.datasetId)
+                : datasetsStore.selectedDataset
+              : undefined;
+          const activeBasemapId = basemapService.currentBasemap?.metadata.file;
+          s.lastApplied = {
+            source: s.source,
+            level:
+              s.source === SimplificationSource.Basemap ? s.level : undefined,
+            rate: s.source === SimplificationSource.Geo ? s.rate : undefined,
+            basemapId:
+              s.source === SimplificationSource.Basemap
+                ? activeBasemapId
+                : undefined,
+            datasetId:
+              s.source === SimplificationSource.Geo
+                ? result?.datasetId
+                : undefined,
+            datasetSourceFileId:
+              s.source === SimplificationSource.Geo
+                ? (result?.datasetSourceFileId ?? activeDataset?.sourceFileId)
+                : undefined,
+            datasetBaseTableName:
+              s.source === SimplificationSource.Geo
+                ? result?.datasetBaseTableName
+                : undefined,
+            datasetSimplifiedTableName:
+              s.source === SimplificationSource.Geo
+                ? result?.datasetSimplifiedTableName
+                : undefined,
+            previousBasemapLevel: result?.previousBasemapLevel,
+            previousBasemapTableName: result?.previousBasemapTableName,
+            primaryLayerType: result?.primaryLayerType,
+            timestamp: Date.now()
+          };
+        }
+        return result;
+      } finally {
+        s.isProcessing = false;
+        const queued = pendingApplyOptions;
+        pendingApplyOptions = null;
+        if (queued) {
+          void runApply(queued);
+        }
+      }
+    };
+
     return {
-      setSource: (source: SimplificationSource) => {
+      setSource: (
+        source: SimplificationSource,
+        options?: { datasetId?: string }
+      ) => {
         s.source = source;
         if (source === SimplificationSource.Basemap && s.lastApplied) {
           const metadata = basemapService.currentBasemap?.metadata;
@@ -317,6 +385,8 @@ const { actions, getState } = createToolStore<
               s.lastApplied.level
             );
           s.level = restoredLevel ?? SimplificationLevel.Medium;
+        } else if (source === SimplificationSource.Geo) {
+          s.rate = getGeoDatasetAppliedRate(options?.datasetId);
         }
       },
       setLevel: (level: SimplificationLevel) => {
@@ -335,62 +405,7 @@ const { actions, getState } = createToolStore<
       setRate: (rate: number) => {
         s.rate = Math.max(0, Math.min(100, rate));
       },
-      applySimplification: async (options?: {
-        datasetId?: string;
-      }): Promise<SimplificationResult | null> => {
-        if (s.isProcessing) {
-          return null;
-        }
-        s.isProcessing = true;
-        try {
-          const result = await performSimplification(options);
-          if (result?.simplified) {
-            const activeDataset =
-              s.source === SimplificationSource.Geo
-                ? options?.datasetId
-                  ? datasetsStore.datasets.find(
-                      (d) => d.id === options.datasetId
-                    )
-                  : datasetsStore.selectedDataset
-                : undefined;
-            const activeBasemapId =
-              basemapService.currentBasemap?.metadata.file;
-            s.lastApplied = {
-              source: s.source,
-              level:
-                s.source === SimplificationSource.Basemap ? s.level : undefined,
-              rate: s.source === SimplificationSource.Geo ? s.rate : undefined,
-              basemapId:
-                s.source === SimplificationSource.Basemap
-                  ? activeBasemapId
-                  : undefined,
-              datasetId:
-                s.source === SimplificationSource.Geo
-                  ? result?.datasetId
-                  : undefined,
-              datasetSourceFileId:
-                s.source === SimplificationSource.Geo
-                  ? (result?.datasetSourceFileId ?? activeDataset?.sourceFileId)
-                  : undefined,
-              datasetBaseTableName:
-                s.source === SimplificationSource.Geo
-                  ? result?.datasetBaseTableName
-                  : undefined,
-              datasetSimplifiedTableName:
-                s.source === SimplificationSource.Geo
-                  ? result?.datasetSimplifiedTableName
-                  : undefined,
-              previousBasemapLevel: result?.previousBasemapLevel,
-              previousBasemapTableName: result?.previousBasemapTableName,
-              primaryLayerType: result?.primaryLayerType,
-              timestamp: Date.now()
-            };
-          }
-          return result;
-        } finally {
-          s.isProcessing = false;
-        }
-      },
+      applySimplification: runApply,
       undoLastSimplification: async (): Promise<boolean> => {
         const lastApplied = s.lastApplied;
         if (!lastApplied) {
@@ -432,6 +447,7 @@ const { actions, getState } = createToolStore<
               simplificationApplied: undefined
             });
             s.lastApplied = undefined;
+            s.rate = 0;
             return true;
           } catch (error) {
             logger.error(
@@ -517,6 +533,7 @@ const { actions, getState } = createToolStore<
           }
 
           s.lastApplied = undefined;
+          s.rate = 0;
           return true;
         } catch (error) {
           logger.error(
@@ -556,6 +573,14 @@ function getGeoDatasetBaseTableName(dataset: {
 
 function getGeoDatasetSimplifiedTableName(baseTableName: string): string {
   return `${trimDatasetSimplificationSuffix(baseTableName)}${DATASET_SIMPLIFICATION_SUFFIX}`;
+}
+
+function getGeoDatasetAppliedRate(datasetId?: string): number {
+  const dataset = datasetId
+    ? datasetsStore.datasets.find((d) => d.id === datasetId)
+    : datasetsStore.selectedDataset;
+
+  return dataset?.simplificationApplied?.rate ?? 0;
 }
 
 function trimDatasetSimplificationSuffix(tableName: string): string {
