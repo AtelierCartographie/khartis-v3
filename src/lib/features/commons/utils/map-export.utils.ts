@@ -257,14 +257,19 @@ async function prerenderDeck(
   };
 }
 
+function usesInterleavedDeckOverlay(): boolean {
+  return mapInstanceStore.deckOverlay !== null;
+}
+
 async function prerenderWebgl(
   pixelRatio: number
 ): Promise<RestoreExportRender> {
   const restorers: RestoreExportRender[] = [];
   const map = mapInstanceStore.map;
   const deck = mapInstanceStore.deckInstance;
+  const interleaved = usesInterleavedDeckOverlay();
 
-  if (map) {
+  if (map && !interleaved) {
     restorers.push(await prerenderMapLibre(map, pixelRatio));
   }
 

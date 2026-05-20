@@ -1,4 +1,10 @@
 import { TextLayer } from '@deck.gl/layers';
+import '@fontsource/noto-sans-arabic/arabic-400.css';
+import '@fontsource/noto-sans-arabic/arabic-700.css';
+import '@fontsource/noto-sans-sc/chinese-simplified-400.css';
+import '@fontsource/noto-sans-sc/chinese-simplified-700.css';
+import '@fontsource/noto-sans-jp/japanese-400.css';
+import '@fontsource/noto-sans-jp/japanese-700.css';
 import {
   FONT_FACE_LOAD_REQUESTS,
   DEFAULT_FONT_FAMILY
@@ -17,24 +23,6 @@ const NOTO_SANS_FALLBACK_REQUESTS: Record<RequiredFallbackFont, string[]> = {
   ],
   sc: ['normal 400 16px "Noto Sans SC"', 'normal 700 16px "Noto Sans SC"'],
   jp: ['normal 400 16px "Noto Sans JP"', 'normal 700 16px "Noto Sans JP"']
-};
-
-const FONT_LOADERS: Record<
-  RequiredFallbackFont,
-  Record<number, () => Promise<unknown>>
-> = {
-  arabic: {
-    400: () => import('@fontsource/noto-sans-arabic/arabic-400.css'),
-    700: () => import('@fontsource/noto-sans-arabic/arabic-700.css')
-  },
-  sc: {
-    400: () => import('@fontsource/noto-sans-sc/chinese-simplified-400.css'),
-    700: () => import('@fontsource/noto-sans-sc/chinese-simplified-700.css')
-  },
-  jp: {
-    400: () => import('@fontsource/noto-sans-jp/japanese-400.css'),
-    700: () => import('@fontsource/noto-sans-jp/japanese-700.css')
-  }
 };
 
 function canUseDocumentFonts(): boolean {
@@ -131,11 +119,6 @@ function createFontAssetsStore() {
     const promises = toLoad.map(async (font) => {
       const promise = (async () => {
         try {
-          const loaders = FONT_LOADERS[font];
-          if (!loaders) return;
-
-          await Promise.all([loaders[400](), loaders[700]()]);
-
           const descriptors = NOTO_SANS_FALLBACK_REQUESTS[font];
           if (descriptors) {
             await Promise.all(

@@ -5,9 +5,9 @@ import {
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { m } from '$lib/paraglide/messages.js';
 import { PROJECT_CONST } from '../constants';
+import { getProjectDatabase } from './database-access.service';
 
 async function getDb(): Promise<IDBDatabase> {
-  const { getProjectDatabase } = await import('./database-access.service');
   return getProjectDatabase();
 }
 

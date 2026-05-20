@@ -3,6 +3,10 @@ import type {
   DatasetResult
 } from '$lib/features/data-pipeline';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import {
+  disableFacets,
+  getFacetsBaseVisualizationId
+} from '$lib/features/step-toolbar/tools/facets/facets-access';
 import type { DatasetsState, DatasetsInternals } from './datasets-state.svelte';
 import type { VisualizationStoreOperations } from './datasets-processing';
 import { LogCategory, logger } from '../../utils/logger';
@@ -51,8 +55,6 @@ export async function deleteDataset(
 
   if (vizOps) {
     const vizs = vizOps.getVisualizationsByDataset(datasetId);
-    const { disableFacets, getFacetsBaseVisualizationId } =
-      await import('$lib/features/step-toolbar/tools/facets/facets-access');
     const facetsBaseVizId = getFacetsBaseVisualizationId();
     const facetsBaseBeingDeleted =
       facetsBaseVizId !== null &&
