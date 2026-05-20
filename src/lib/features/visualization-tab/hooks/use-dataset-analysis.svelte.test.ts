@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const {
   datasetsStoreMock,
   duckDBOrchestratorMock,
-  isLikelyYearColumnMock,
   resolveAllowedPrimitiveFiltersMock
 } = vi.hoisted(() => ({
   datasetsStoreMock: {
@@ -13,7 +12,6 @@ const {
   duckDBOrchestratorMock: {
     getDatasetBySourceFile: vi.fn().mockReturnValue(null)
   },
-  isLikelyYearColumnMock: vi.fn().mockReturnValue(false),
   resolveAllowedPrimitiveFiltersMock: vi.fn(() => ['point', 'polygon'])
 }));
 
@@ -50,10 +48,6 @@ vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
   duckDBOrchestrator: duckDBOrchestratorMock
 }));
 
-vi.mock('../utils/year-filter.utils', () => ({
-  isLikelyYearColumn: isLikelyYearColumnMock
-}));
-
 import { useDatasetAnalysis } from './use-dataset-analysis.svelte';
 
 describe('useDatasetAnalysis', () => {
@@ -62,7 +56,6 @@ describe('useDatasetAnalysis', () => {
     datasetsStoreMock.datasets = [];
     datasetsStoreMock.selectedDataset = null;
     duckDBOrchestratorMock.getDatasetBySourceFile.mockReturnValue(null);
-    isLikelyYearColumnMock.mockReturnValue(false);
     resolveAllowedPrimitiveFiltersMock.mockReturnValue(['point', 'polygon']);
   });
 
@@ -156,20 +149,6 @@ describe('useDatasetAnalysis', () => {
       getSelectedVisualization: () => ({ datasetId: 'ds-1' }) as never
     });
     expect(analysis.hasGeometry).toBe(false);
-  });
-
-  it('hasYearDimension true when isLikelyYearColumn matches a column', () => {
-    isLikelyYearColumnMock.mockReturnValue(true);
-    const dataset = {
-      id: 'ds-1',
-      columns: [{ name: 'year', type: 'number' }],
-      data: []
-    };
-    datasetsStoreMock.datasets = [dataset];
-    const analysis = useDatasetAnalysis({
-      getSelectedVisualization: () => ({ datasetId: 'ds-1' }) as never
-    });
-    expect(analysis.hasYearDimension).toBe(true);
   });
 
   it('exposes symbols and lines, but not polygons, for line-compatible datasets', () => {

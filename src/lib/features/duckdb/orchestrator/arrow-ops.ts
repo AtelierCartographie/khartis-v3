@@ -72,24 +72,8 @@ export interface DuckDBClientForArrow {
   ): Promise<{ name: string[]; type: string[] }>;
 }
 
-export interface YearFilterClause {
-  column: string;
-  value: number | string;
-}
-
 interface GeoArrowMetadataOverrides {
   geometryType?: string;
-}
-
-export function buildYearFilterWhereClause(
-  filter: YearFilterClause | undefined
-): string | null {
-  if (!filter) return null;
-  const value =
-    typeof filter.value === 'number'
-      ? filter.value
-      : `'${String(filter.value).replace(/'/g, "''")}'`;
-  return `"${filter.column}" = ${value}`;
 }
 
 /**
@@ -728,33 +712,8 @@ export async function getArrowTableDirect(
   tableName: string,
   Duck: DuckDBClientForArrow,
   getCachedTable: () => Table | undefined,
-  setCache: (table: Table) => void,
-  whereClause?: string | null
+  setCache: (table: Table) => void
 ): Promise<Table> {
-  if (whereClause) {
-    const { table: baseTable, geomColumn } = await fetchArrowTableWithGeometry(
-      tableName,
-      Duck,
-      whereClause
-    );
-    const tableWithMetadata = await addGeoArrowMetadataFromDuckDB(
-      baseTable,
-      tableName,
-      Duck,
-      undefined,
-      geomColumn
-    );
-    logger.info(
-      'Created filtered Arrow table with metadata',
-      LogCategory.DUCKDB,
-      {
-        tableName,
-        whereClause
-      }
-    );
-    return tableWithMetadata;
-  }
-
   const cached = getCachedTable();
   if (cached) {
     return cached;

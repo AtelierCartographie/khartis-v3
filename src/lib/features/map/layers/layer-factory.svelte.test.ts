@@ -372,10 +372,7 @@ function createSymbolVisualization(): VisualizationConfig {
   };
 }
 
-function createContext(
-  viz: VisualizationConfig,
-  yearFilter?: LayerContext['yearFilter']
-): LayerContext {
+function createContext(viz: VisualizationConfig): LayerContext {
   return {
     viz,
     datasetId: 'dataset-1',
@@ -387,7 +384,6 @@ function createContext(
     strokeOpacity: 1,
     statistics: { min: 0, max: 1 },
     categoryColorMap: null,
-    yearFilter,
     customProjection: {
       stream: (sink) => sink
     } as LayerContext['customProjection']
@@ -613,7 +609,7 @@ describe('binary scatter styling refresh', () => {
 });
 
 describe('createPolygonLayers', () => {
-  it('projects and year-filters the pattern overlay in the GeoJSON fallback path', () => {
+  it('projects the pattern overlay in the GeoJSON fallback path', () => {
     const sourceGeoJson: FeatureCollection<Polygon> = {
       type: 'FeatureCollection',
       features: [
@@ -635,10 +631,7 @@ describe('createPolygonLayers', () => {
     const layers = createPolygonLayers(
       createTableWithFields([]),
       createGeometryInfo(),
-      createContext(createVisualization(FillMode.UNIQUE), {
-        column: 'year',
-        value: 2024
-      })
+      createContext(createVisualization(FillMode.UNIQUE))
     );
 
     const fillLayer = layers.find(
@@ -658,12 +651,12 @@ describe('createPolygonLayers', () => {
       (fillLayer?.props.data as FeatureCollection<Polygon>).features.map(
         (feature) => feature.properties?.id
       )
-    ).toEqual(['keep-projected']);
+    ).toEqual(['keep-projected', 'drop-projected']);
     expect(
       (patternLayer?.props.data as FeatureCollection<Polygon>).features.map(
         (feature) => feature.properties?.id
       )
-    ).toEqual(['keep-projected']);
+    ).toEqual(['keep-projected', 'drop-projected']);
   });
 
   it('uses the projected GeoJSON fallback for native polygons when a projection is active', () => {
