@@ -165,11 +165,11 @@ describe('simplification store — synchronous actions', () => {
     resetStore();
   });
 
-  it('should initialize with Basemap source, Medium level, rate 50 and not processing', () => {
+  it('should initialize with Basemap source, Medium level, rate 0 and not processing', () => {
     const s = getSimplificationState();
     expect(s.source).toBe(SimplificationSource.Basemap);
     expect(s.level).toBe(SimplificationLevel.Medium);
-    expect(s.rate).toBe(50);
+    expect(s.rate).toBe(0);
     expect(s.isProcessing).toBe(false);
     expect(s.lastApplied).toBeUndefined();
   });
@@ -177,6 +177,45 @@ describe('simplification store — synchronous actions', () => {
   it('should switch source to Geo when setSource is called', () => {
     simplificationActions.setSource(SimplificationSource.Geo);
     expect(getSimplificationState().source).toBe(SimplificationSource.Geo);
+  });
+
+  it('should reset the Geo simplification rate to 0 when the selected dataset has not been simplified', () => {
+    simplificationActions.setRate(50);
+    mocks.datasets = [
+      {
+        id: 'ds-1',
+        tableName: 'regions',
+        geometry: { bounds: [0, 0, 1, 1] }
+      }
+    ];
+
+    simplificationActions.setSource(SimplificationSource.Geo, {
+      datasetId: 'ds-1'
+    });
+
+    expect(getSimplificationState().source).toBe(SimplificationSource.Geo);
+    expect(getSimplificationState().rate).toBe(0);
+  });
+
+  it('should restore the Geo simplification rate from the targeted dataset when it exists', () => {
+    simplificationActions.setRate(12);
+    mocks.datasets = [
+      {
+        id: 'ds-1',
+        tableName: 'regions',
+        geometry: { bounds: [0, 0, 1, 1] },
+        simplificationApplied: {
+          rate: 37
+        }
+      }
+    ];
+
+    simplificationActions.setSource(SimplificationSource.Geo, {
+      datasetId: 'ds-1'
+    });
+
+    expect(getSimplificationState().source).toBe(SimplificationSource.Geo);
+    expect(getSimplificationState().rate).toBe(37);
   });
 
   it('should clamp rate to 0 when a negative value is provided', () => {
@@ -443,6 +482,7 @@ describe('simplification store — applySimplification dispatch', () => {
     });
 
     simplificationActions.setSource(SimplificationSource.Geo);
+    simplificationActions.setRate(50);
     const result = await simplificationActions.applySimplification({
       datasetId: 'ds-1'
     });

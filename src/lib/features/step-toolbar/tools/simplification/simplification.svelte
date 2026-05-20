@@ -11,10 +11,9 @@
     Dropdown,
     InlineLoading,
     InlineNotification,
-    RadioButton,
-    RadioButtonGroup,
     Slider
   } from 'carbon-components-svelte';
+  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import { Undo, Earth, LicenseGlobal } from 'carbon-icons-svelte';
   import type { SimplificationResult } from '../../types/simplification.types';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
@@ -149,7 +148,30 @@
 
     const newSource =
       index === 0 ? SimplificationSource.Basemap : SimplificationSource.Geo;
-    store.setSource(newSource);
+    store.setSource(newSource, { datasetId: resolvedGeoDatasetId });
+    lastResult = null;
+  }
+
+  function getDatasetAppliedRate(datasetId: string | undefined): number {
+    const dataset = datasetId
+      ? geoDatasets.find((d) => d.id === datasetId)
+      : undefined;
+
+    return dataset?.simplificationApplied?.rate ?? 0;
+  }
+
+  function readSliderInputValue(event: Event, fallback: number): number {
+    const detail = (event as CustomEvent<unknown>).detail;
+    if (typeof detail === 'number' && Number.isFinite(detail)) {
+      return detail;
+    }
+
+    const targetValue =
+      event.target instanceof HTMLInputElement
+        ? Number(event.target.value)
+        : NaN;
+
+    return Number.isFinite(targetValue) ? targetValue : fallback;
   }
 
   function clearApplyTimeout(): void {
@@ -262,7 +284,7 @@
             step={1}
             value={simplState.rate}
             on:input={(e) => {
-              store.setRate((e as CustomEvent).detail ?? 50);
+              store.setRate(readSliderInputValue(e, simplState.rate));
               scheduleSimplificationApply('rate-change', 250);
             }}
             labelText=""
@@ -275,25 +297,21 @@
     {:else if !usesMapLibreInterleaved && hasBasemapVariants}
       <div>
         <div class="form-label">{m.simplification_level_label()}</div>
-        <RadioButtonGroup
-          orientation="horizontal"
+        <SimpleRadioGroup
+          name="simplification-level"
+          disabled={isBasemapSourceBlocked}
+          items={availableBasemapLevels.map((level) => ({
+            value: level,
+            labelText: getLevelLabel(level)
+          }))}
           selected={resolvedBasemapLevel}
-          on:change={(e) => {
+          onchange={(value) => {
             if (isBasemapSourceBlocked) return;
-            const nextLevel = (e as CustomEvent).detail as SimplificationLevel;
-            if (nextLevel === resolvedBasemapLevel) return;
-            store.setLevel(nextLevel);
+            if (value === resolvedBasemapLevel) return;
+            store.setLevel(value);
             scheduleSimplificationApply('level-change');
           }}
-        >
-          {#each availableBasemapLevels as level (level)}
-            <RadioButton
-              value={level}
-              labelText={getLevelLabel(level)}
-              disabled={isBasemapSourceBlocked}
-            />
-          {/each}
-        </RadioButtonGroup>
+        />
       </div>
     {/if}
   {/if}
@@ -314,6 +332,8 @@
         items={geoDropdownItems}
         on:select={(e) => {
           selectedGeoDatasetId = (e as CustomEvent).detail.selectedId as string;
+          store.setRate(getDatasetAppliedRate(selectedGeoDatasetId));
+          lastResult = null;
         }}
       />
     {/if}
@@ -327,7 +347,7 @@
           step={1}
           value={simplState.rate}
           on:input={(e) => {
-            store.setRate((e as CustomEvent).detail ?? 50);
+            store.setRate(readSliderInputValue(e, simplState.rate));
             scheduleSimplificationApply('rate-change', 250);
           }}
           labelText=""
