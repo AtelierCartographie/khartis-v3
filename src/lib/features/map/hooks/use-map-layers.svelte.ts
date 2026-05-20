@@ -932,7 +932,21 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           };
 
           const metadataLayers: MetadataLayerEntry[] = [];
-          if (shouldShowBasemapLayers && currentMetadata) {
+          // Metadata layers (limits, lakes, graticules, etc.) follow the
+          // user's explicit basemap selection signal. When `referenceBasemapId`
+          // is set we keep rendering the currently cached metadata so an
+          // in-flight basemap switch does not flash. When the user explicitly
+          // toggles the basemap off (`referenceBasemapId` becomes null), we
+          // suppress them so antimeridian wraparounds and stale catalog state
+          // do not bleed through.
+          const hasExplicitBasemapSelection = Boolean(
+            basemapStyleStore.referenceBasemapId
+          );
+          if (
+            shouldShowBasemapLayers &&
+            currentMetadata &&
+            hasExplicitBasemapSelection
+          ) {
             const requestedLayerTypes =
               getRequestedMetadataLayerTypes(worldBaseTable);
             if (requestedLayerTypes.length > 0) {
@@ -952,6 +966,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
                 });
             }
 
+            void basemapAuxLayersStore.version;
             for (const layer of currentMetadata.layers) {
               const layerKey =
                 layer.file ?? `${currentMetadata.file}:${layer.type}`;
@@ -1203,13 +1218,36 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           fallbackDatasetIds.delete(renderedDatasetId);
         }
 
-        const hasReferenceBasemap = Boolean(
-          basemapStyleStore.referenceBasemapId
-        );
+        const activeReferenceBasemapId = basemapStyleStore.referenceBasemapId;
+        const hasReferenceBasemap = Boolean(activeReferenceBasemapId);
 
         for (const datasetId of fallbackDatasetIds) {
           const datasetJoinedBasemap = getDatasetJoinedBasemap(datasetId);
+          const datasetEntry = datasetsStore.datasets.find(
+            (d) => d.id === datasetId
+          );
+          const datasetHasOwnGeometry = Boolean(datasetEntry?.geometry);
+          // Skip rendering when the dataset cannot produce geometry that is
+          // safe to project under the active basemap:
+          //   1. Joined to a basemap but user has explicitly toggled it off
+          //      (e.g. a country dataset waiting for a basemap reselection).
+          //   2. Joined to a basemap that does not match the active reference
+          //      basemap (e.g. Monde-joined dataset rendered through the
+          //      EUROPE_DOM_TOM composite leaves wedges for clipped countries).
+          //   3. No active join and the dataset has no own geometry — there is
+          //      nothing meaningful to draw and the stale table from a prior
+          //      join would otherwise leak through.
           if (datasetJoinedBasemap && !hasReferenceBasemap) {
+            continue;
+          }
+          if (
+            datasetJoinedBasemap &&
+            activeReferenceBasemapId &&
+            datasetJoinedBasemap !== activeReferenceBasemapId
+          ) {
+            continue;
+          }
+          if (!datasetJoinedBasemap && !datasetHasOwnGeometry) {
             continue;
           }
           const table = tables.get(datasetId);
@@ -1278,12 +1316,17 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             modelMatrix: matrixToApply
           })
         : null;
-      const projectionSphereOutlineLayer = sphereProjectionInput
-        ? createProjectionSphereOutlineLayer({
-            projection: sphereProjectionInput,
-            modelMatrix: matrixToApply
-          })
-        : null;
+      const sphereConfig = basemapLayersStore.layers.find(
+        (l) => l.id === 'sphere'
+      );
+      const sphereVisible = sphereConfig?.visible ?? true;
+      const projectionSphereOutlineLayer =
+        sphereProjectionInput && sphereVisible
+          ? createProjectionSphereOutlineLayer({
+              projection: sphereProjectionInput,
+              modelMatrix: matrixToApply
+            })
+          : null;
       const maskedOrderedLayers = applyProjectionSphereMask(
         orderedLayers,
         projectionSphereMaskLayer,

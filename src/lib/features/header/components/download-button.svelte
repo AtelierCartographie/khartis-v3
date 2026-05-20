@@ -6,12 +6,8 @@
   } from '$lib/features/commons/constants/ui.constants';
   import { getFormatState } from '$lib/features/step-toolbar/tools/format';
   import { m } from '$lib/paraglide/messages.js';
-  import {
-    Modal,
-    RadioButton,
-    RadioButtonGroup,
-    TextInput
-  } from 'carbon-components-svelte';
+  import { Modal, TextInput } from 'carbon-components-svelte';
+  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import {
     DataStructured,
     DocumentExport,
@@ -192,34 +188,28 @@
     );
   }
 
-  function handleMapFormatChange(event: CustomEvent<unknown>): void {
-    if (!isMapExportFormat(event.detail) || event.detail === modal.mapFormat) {
+  function handleMapFormatChange(next: unknown): void {
+    if (!isMapExportFormat(next) || next === modal.mapFormat) {
       return;
     }
 
-    modal.setMapFormat(event.detail);
+    modal.setMapFormat(next);
   }
 
-  function handleDataFormatChange(event: CustomEvent<unknown>): void {
-    if (
-      !isDataExportFormat(event.detail) ||
-      event.detail === modal.dataFormat
-    ) {
+  function handleDataFormatChange(next: unknown): void {
+    if (!isDataExportFormat(next) || next === modal.dataFormat) {
       return;
     }
 
-    modal.setDataFormat(event.detail);
+    modal.setDataFormat(next);
   }
 
-  function handleResolutionChange(event: CustomEvent<unknown>): void {
-    if (
-      !isExportResolution(event.detail) ||
-      event.detail === modal.resolution
-    ) {
+  function handleResolutionChange(next: unknown): void {
+    if (!isExportResolution(next) || next === modal.resolution) {
       return;
     }
 
-    modal.setResolution(event.detail);
+    modal.setResolution(next);
   }
 </script>
 
@@ -276,17 +266,15 @@
             <p class="panel-description">{m.download_map_description()}</p>
           </div>
 
-          <RadioButtonGroup
-            legendText={m.download_tab_map()}
-            hideLegend
+          <SimpleRadioGroup
             name="map-export-format"
+            items={mapFormatOptions.map((o) => ({
+              value: o.id,
+              labelText: o.label
+            }))}
             selected={modal.mapFormat}
-            on:change={handleMapFormatChange}
-          >
-            {#each mapFormatOptions as option (option.id)}
-              <RadioButton value={option.id} labelText={option.label} />
-            {/each}
-          </RadioButtonGroup>
+            onchange={(value) => handleMapFormatChange(value)}
+          />
 
           <p class="option-note">
             {mapFormatOptions.find((option) => option.id === modal.mapFormat)
@@ -317,16 +305,16 @@
 
           {#if modal.mapFormat !== MAP_FORMAT.SVG}
             <div class="option-section">
-              <RadioButtonGroup
-                legendText={m.download_map_resolution()}
+              <SimpleRadioGroup
                 name="map-export-resolution"
+                legendText={m.download_map_resolution()}
+                items={resolutionOptions.map((o) => ({
+                  value: o.id,
+                  labelText: o.label
+                }))}
                 selected={modal.resolution}
-                on:change={handleResolutionChange}
-              >
-                {#each resolutionOptions as option (option.id)}
-                  <RadioButton value={option.id} labelText={option.label} />
-                {/each}
-              </RadioButtonGroup>
+                onchange={(value) => handleResolutionChange(value)}
+              />
             </div>
           {/if}
         {:else}
@@ -334,18 +322,16 @@
             <p class="panel-description">{m.download_data_description()}</p>
           </div>
 
-          <RadioButtonGroup
-            legendText={m.download_tab_data()}
-            hideLegend
+          <SimpleRadioGroup
             name="data-export-format"
-            selected={modal.dataFormat}
             orientation="vertical"
-            on:change={handleDataFormatChange}
-          >
-            {#each dataFormatOptions as option (option.id)}
-              <RadioButton value={option.id} labelText={option.label} />
-            {/each}
-          </RadioButtonGroup>
+            items={dataFormatOptions.map((o) => ({
+              value: o.id,
+              labelText: o.label
+            }))}
+            selected={modal.dataFormat}
+            onchange={(value) => handleDataFormatChange(value)}
+          />
         {/if}
       </section>
 

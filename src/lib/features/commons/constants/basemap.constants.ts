@@ -7,7 +7,8 @@ export const BASEMAP_LAYER_ID = {
   EQUATEUR: 'equateur',
   MERIDIENS: 'meridiens',
   FRONTIERES: 'frontieres',
-  VILLES: 'villes'
+  VILLES: 'villes',
+  SPHERE: 'sphere'
 } as const;
 
 export type BasemapLayerId =

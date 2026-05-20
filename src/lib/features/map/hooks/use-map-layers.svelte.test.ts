@@ -9,7 +9,9 @@ const source = readFileSync(
 
 describe('useMapLayers source', () => {
   it('keeps file-backed custom basemap metadata layers available to the renderer', () => {
-    expect(source).toContain('if (shouldShowBasemapLayers && currentMetadata)');
+    expect(source).toContain('shouldShowBasemapLayers &&');
+    expect(source).toContain('currentMetadata &&');
+    expect(source).toContain('hasExplicitBasemapSelection');
     expect(source).not.toContain(
       'if (currentMetadata && !currentMetadata.isCustom && worldBaseTable) {'
     );
@@ -147,7 +149,9 @@ describe('useMapLayers source', () => {
   });
 
   it('does not attach catalog basemap tables to generated-only layers', () => {
-    expect(source).toContain('if (shouldShowBasemapLayers && currentMetadata)');
+    expect(source).toContain('shouldShowBasemapLayers &&');
+    expect(source).toContain('currentMetadata &&');
+    expect(source).toContain('hasExplicitBasemapSelection');
     expect(source).toContain('shouldShowBasemapLayers ? worldBaseTable : null');
     expect(source).toContain('projection: shouldShowBasemapLayers');
     expect(source).toContain('stylePresets: shouldShowBasemapLayers');
