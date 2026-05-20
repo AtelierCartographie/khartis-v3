@@ -57,4 +57,10 @@ describe('projection store', () => {
       'mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);'
     );
   });
+
+  it('selects the catalogue composite projection id from basemap metadata presets', () => {
+    expect(source).toContain('getCompositeProjectionSelectionId');
+    expect(source).toContain("projectionMetadata.type === 'composite'");
+    expect(source).toContain('setSelectedInternal(projectionId, true,');
+  });
 });

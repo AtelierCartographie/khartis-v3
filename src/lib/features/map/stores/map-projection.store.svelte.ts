@@ -19,7 +19,8 @@ type SetProjectionOptions = {
 function createMapProjectionStore() {
   const state = $state({
     projection: DEFAULT_MAP_PROJECTION as MapProjectionType,
-    explicitGlobe: false
+    explicitGlobe: false,
+    flipY: false
   });
 
   function setProjection(
@@ -44,6 +45,7 @@ function createMapProjectionStore() {
   function reset(): void {
     state.projection = DEFAULT_MAP_PROJECTION;
     state.explicitGlobe = false;
+    state.flipY = false;
   }
 
   function restoreFromSerialized(projection: MapProjectionType): void {
@@ -56,6 +58,7 @@ function createMapProjectionStore() {
     }
     state.projection = projection;
     state.explicitGlobe = projection === PROJECTION_GLOBE;
+    state.flipY = false;
   }
 
   return {
@@ -67,6 +70,9 @@ function createMapProjectionStore() {
     },
     get isGlobeExplicitlyEnabled(): boolean {
       return state.explicitGlobe;
+    },
+    get flipY(): boolean {
+      return state.flipY;
     },
     setProjection,
     toggle,

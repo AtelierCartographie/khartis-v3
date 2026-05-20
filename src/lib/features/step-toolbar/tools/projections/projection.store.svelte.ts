@@ -29,7 +29,10 @@ import {
   supportsCustomProjectionCode,
   supportsProjectionSuggestions
 } from '$lib/features/map/utils/projection-availability.utils';
-import { usesMercatorMapProjection } from '$lib/features/map/utils/user-projection.utils';
+import {
+  getCompositeProjectionSelectionId,
+  usesMercatorMapProjection
+} from '$lib/features/map/utils/user-projection.utils';
 
 const DEFAULT_PROJECTION = 'mercator';
 
@@ -61,6 +64,7 @@ type ProjectionActions = {
   setSimplifiedPreview: (value: boolean) => void;
   suggestProjectionForCurrentData: () => void;
   applySuggestion: (suggestion: ProjectionSuggestion) => void;
+  applyBasemapPreferredProjection: () => void;
   getCurrentProjectionInfo: () => ProjectionInfo | undefined;
 };
 
@@ -169,6 +173,13 @@ async function resolveSuggestionBounds(): Promise<
     if (gpsBounds) {
       return toBoundsFromGpsBounds(gpsBounds);
     }
+
+    const geomExtent = await duckDBOrchestrator.getGeometryExtent(
+      duckDataset.id
+    );
+    if (geomExtent) {
+      return geomExtent;
+    }
   }
 
   return resolveProjectionSuggestionBoundsFromBasemap({
@@ -233,8 +244,28 @@ const { actions, getState } = createToolStore<
       setSelectedInternal(projectionId, true);
     };
 
+    const applyBasemapPreferredProjection = (): void => {
+      if (s.overrideSource === 'manual') {
+        return;
+      }
+      const projectionMetadata = basemapService.currentMetadata?.proj_to;
+      const presetId = projectionMetadata?.preset;
+      if (!presetId) {
+        return;
+      }
+      const projectionId =
+        projectionMetadata.type === 'composite'
+          ? getCompositeProjectionSelectionId(presetId)
+          : presetId;
+      if (s.selected === projectionId) {
+        return;
+      }
+      setSelectedInternal(projectionId, true, 'auto');
+    };
+
     return {
       setSelected,
+      applyBasemapPreferredProjection,
       toggleSelected: (projectionId: string) => {
         if (s.overrideActive && !s.customCode && s.selected === projectionId) {
           clearSelectedInternal(true);

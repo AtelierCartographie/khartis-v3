@@ -668,6 +668,52 @@ export const duckDBOrchestrator = {
     return gpsOps.getGPSBounds(dataset, Duck);
   },
 
+  async getGeometryExtent(
+    datasetId: string
+  ): Promise<[number, number, number, number] | null> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    const dataset = state.findDatasetByIdOrSourceFile(datasetId);
+    if (!dataset || !dataset.tableName) return null;
+
+    try {
+      const rows = (await Duck.query(
+        `SELECT
+           MIN(ST_XMin(geom)) AS minx,
+           MIN(ST_YMin(geom)) AS miny,
+           MAX(ST_XMax(geom)) AS maxx,
+           MAX(ST_YMax(geom)) AS maxy
+         FROM "${dataset.tableName}"
+         WHERE geom IS NOT NULL`,
+        { format: 'array' }
+      )) as Array<{
+        minx: number | null;
+        miny: number | null;
+        maxx: number | null;
+        maxy: number | null;
+      }>;
+      const row = rows[0];
+      if (
+        !row ||
+        row.minx == null ||
+        row.miny == null ||
+        row.maxx == null ||
+        row.maxy == null
+      ) {
+        return null;
+      }
+      return [
+        Number(row.minx),
+        Number(row.miny),
+        Number(row.maxx),
+        Number(row.maxy)
+      ];
+    } catch {
+      return null;
+    }
+  },
+
   async getTableData(
     tableName: string,
     options?: tableDataOps.GetTableDataOptions
