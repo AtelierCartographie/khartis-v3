@@ -947,6 +947,106 @@ describe('createPolygonLayers', () => {
     expect(pointLayer?.props.patternType).toBe(1);
   });
 
+  it('hides disabled split representative symbol categories across fill, stroke and radius attributes', () => {
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [createPolygonFeature('keep', 2024)]
+    } satisfies FeatureCollection<Polygon>);
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 2,
+      featureIds: new Uint32Array([0, 1]),
+      positions: new Float64Array([0, 0, 1, 1])
+    });
+    createScatterplotLayerPropsMock.mockImplementation((pointData) => ({
+      data: {
+        length: pointData.length,
+        featureIds: pointData.featureIds,
+        attributes: {}
+      }
+    }));
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.CATEGORIES,
+      categoryColumn: 'kind',
+      strokeMode: StrokeMode.UNIQUE,
+      strokeWidth: 3,
+      shape: ShapeType.CIRCLE,
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 2,
+        labels: ['Urban', 'Rural'],
+        categoryValues: ['urban', 'rural'],
+        colors: ['#3366cc', '#dc3912'],
+        disabledLabels: ['rural']
+      }
+    };
+    const geometryTable = createTableWithRows(
+      [
+        { id: 'DEU', geometry: null },
+        { id: 'FRA', geometry: null }
+      ],
+      ['id', 'geometry']
+    );
+    const representativeTable = createTableWithRows(
+      [
+        { id: 'DEU', geometry: null },
+        { id: 'FRA', geometry: null }
+      ],
+      ['id', 'geometry']
+    );
+    const datasetTable = createTableWithRows(
+      [
+        { basemap_id: 'DEU', kind: 'urban' },
+        { basemap_id: 'FRA', kind: 'rural' }
+      ],
+      ['basemap_id', 'kind']
+    );
+
+    const layers = createPolygonLayers(geometryTable, createGeometryInfo(), {
+      ...createContext(visualization),
+      representativePointTable: representativeTable,
+      representativePointGeometryInfo: {
+        ...createPointGeometryInfo(),
+        type: 'POINT' as GeometryInfo['type']
+      },
+      splitDatasetTable: datasetTable,
+      splitFeatureIdColumn: 'id'
+    });
+
+    const pointLayer = layers.find((layer) =>
+      String(layer.props.id).includes('point-layer')
+    ) as MultiShapeLayer | undefined;
+    const layerData = pointLayer?.props.data as
+      | {
+          attributes?: {
+            getFillColor?: { value?: Uint8ClampedArray };
+            getLineColor?: { value?: Uint8ClampedArray };
+            getRadius?: { value?: Float32Array };
+          };
+        }
+      | undefined;
+
+    expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
+    expect(
+      Array.from(layerData?.attributes?.getFillColor?.value ?? [])
+    ).toEqual([51, 102, 204, 255, 0, 0, 0, 0]);
+    expect(
+      Array.from(layerData?.attributes?.getLineColor?.value ?? [])
+    ).toEqual([31, 31, 31, 255, 0, 0, 0, 0]);
+    expect(Array.from(layerData?.attributes?.getRadius?.value ?? [])).toEqual([
+      5, 0
+    ]);
+
+    expect(pointLayer?.props.updateTriggers?.getLineColor).toContain(
+      visualization.symbol.classification?.disabledLabels
+    );
+    expect(pointLayer?.props.updateTriggers?.getRadius).toContain(
+      visualization.symbol.classification?.disabledLabels
+    );
+  });
+
   it('renders the GeoJSON fallback pattern below the polygon stroke', () => {
     arrowTableToGeoJSONMock.mockReturnValue({
       type: 'FeatureCollection',
