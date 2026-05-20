@@ -605,7 +605,7 @@ describe('map export DOM mutations', () => {
     expect(deck.setProps).not.toHaveBeenCalled();
   });
 
-  it('temporarily supersamples MapLibre interleaved exports instead of keeping the live canvas ratio', async () => {
+  it('skips the MapLibre pixel-ratio rescale in interleaved Deck.gl mode to preserve symbol projection', async () => {
     document.body.innerHTML = `<div class="page-container"></div>`;
     const page = document.querySelector('.page-container');
     if (!page) {
@@ -632,12 +632,11 @@ describe('map export DOM mutations', () => {
 
     await exportMapToJpg({ width: 3840, height: 2160 });
 
-    expect(map.setPixelRatio).toHaveBeenNthCalledWith(1, 4);
+    expect(map.setPixelRatio).not.toHaveBeenCalled();
     expect(htmlToImage.toCanvas).toHaveBeenCalledWith(
       page,
       expect.objectContaining({ pixelRatio: 4 })
     );
-    expect(map.setPixelRatio).toHaveBeenNthCalledWith(2, 1.5);
   });
 
   it('freezes WebGL canvases as images while html-to-image captures JPEG exports', async () => {
