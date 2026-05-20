@@ -114,6 +114,8 @@ const GENERATED_ORTHOGRAPHIC_CONTEXT_LAYER_IDS = new Set<string>([
 
 const DEFAULT_GENERATED_OCEAN_COLOR = '#e0e0e0';
 const DEFAULT_GENERATED_OCEAN_OPACITY = 100;
+const CARTE_FACILE_LAYER_GROUP_METADATA_KEY = 'cartefacile:group';
+const CARTE_FACILE_LABEL_GROUP_ID = 'labels';
 
 export interface UseMapLayersProps {
   getDeckOverlay: () => MapboxOverlay | null;
@@ -142,6 +144,7 @@ export interface UseMapLayersReturn {
     splitData?: Map<string, SplitRenderingTable>,
     densityTables?: Map<string, ArrowTable>
   ) => void;
+  syncInterleavedLayerOrder: () => boolean;
 }
 
 export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
@@ -192,12 +195,51 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     const style = map.getStyle();
     if (!style?.layers) return undefined;
 
+    let firstSymbolLayerId: string | undefined;
+
     for (const layer of style.layers) {
-      if (layer.type === 'symbol') {
+      if (layer.type !== 'symbol') {
+        continue;
+      }
+
+      firstSymbolLayerId ??= layer.id;
+
+      const metadata = layer.metadata as Record<string, unknown> | undefined;
+      if (
+        metadata?.[CARTE_FACILE_LAYER_GROUP_METADATA_KEY] ===
+        CARTE_FACILE_LABEL_GROUP_ID
+      ) {
         return layer.id;
       }
     }
-    return undefined;
+    return firstSymbolLayerId;
+  }
+
+  function getLayerBeforeIdKey(layers: Layer<DeckDataRow>[]): string {
+    const beforeIds = new Set<string>();
+    for (const layer of layers) {
+      const beforeId = (layer.props as { beforeId?: unknown }).beforeId;
+      if (typeof beforeId === 'string') {
+        beforeIds.add(beforeId);
+      }
+    }
+    return [...beforeIds].join('|');
+  }
+
+  let lastAppliedMapLibreBeforeIdKey = '';
+
+  function applyBeforeIdToLayers(
+    layers: Layer<DeckDataRow>[],
+    beforeId: string | undefined
+  ): Layer<DeckDataRow>[] {
+    return layers.map((layer) => {
+      const currentBeforeId = (layer.props as { beforeId?: unknown }).beforeId;
+      if (currentBeforeId === beforeId) {
+        return layer;
+      }
+
+      return layer.clone({ beforeId }) as Layer<DeckDataRow>;
+    });
   }
 
   function setLayers(layers: Layer<DeckDataRow>[]): boolean {
@@ -206,10 +248,16 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
     try {
       if (deckOverlay) {
+        const nextBeforeIdKey = getLayerBeforeIdKey(layers);
+        if (nextBeforeIdKey !== lastAppliedMapLibreBeforeIdKey) {
+          deckOverlay.setProps({ layers: [] });
+        }
         deckOverlay.setProps({ layers });
+        lastAppliedMapLibreBeforeIdKey = nextBeforeIdKey;
         return true;
       }
       if (deckInstance) {
+        lastAppliedMapLibreBeforeIdKey = '';
         deckInstance.setProps({ layers });
         return true;
       }
@@ -225,6 +273,29 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   }
 
   let lastAppliedLayers: Layer<DeckDataRow>[] = [];
+
+  function syncInterleavedLayerOrder(): boolean {
+    const deckOverlay = getDeckOverlay();
+    const map = getMap();
+
+    if (!deckOverlay || !map || lastAppliedLayers.length === 0) {
+      return false;
+    }
+
+    const beforeId = findFirstSymbolLayerId(map);
+    if (!beforeId) {
+      return false;
+    }
+
+    const orderedLayers = applyBeforeIdToLayers(lastAppliedLayers, beforeId);
+    const applied = setLayers(orderedLayers);
+
+    if (applied) {
+      lastAppliedLayers = orderedLayers;
+    }
+
+    return applied;
+  }
 
   function isOrthographicBasemapLayer(layer: Layer<DeckDataRow>): boolean {
     const layerId = String(layer.id);
@@ -1380,6 +1451,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   }
 
   return {
-    updateLayers
+    updateLayers,
+    syncInterleavedLayerOrder
   };
 }

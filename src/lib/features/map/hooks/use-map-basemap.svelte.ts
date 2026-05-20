@@ -18,6 +18,7 @@ export interface UseMapBasemapProps {
   getMap: () => MapLibreMap | null;
   getIsMapLoaded: () => boolean;
   onProjectionChanged?: () => void;
+  onStyleChangeRequested?: () => void;
   onStyleLoaded?: () => void;
 }
 
@@ -32,7 +33,13 @@ export interface UseMapBasemapReturn {
 }
 
 export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
-  const { getMap, getIsMapLoaded, onProjectionChanged, onStyleLoaded } = props;
+  const {
+    getMap,
+    getIsMapLoaded,
+    onProjectionChanged,
+    onStyleChangeRequested,
+    onStyleLoaded
+  } = props;
   const REFERENCE_BASEMAP_LOAD_TIMEOUT_MS = 10_000;
 
   function getStyleKey(style: string | StyleSpecification): string {
@@ -50,6 +57,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
   let lastAppliedOSMRasterKey: string | null = null;
   let isStyleLoading = $state(false);
   let styleLoadHandler: (() => void) | null = null;
+  let styleIdleHandler: (() => void) | null = null;
   let styleSafetyTimeout: ReturnType<typeof setTimeout> | null = null;
   let finishStyleLoading: (() => void) | null = null;
   let rasterLoadMap: MapLibreMap | null = null;
@@ -167,6 +175,9 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     if (styleLoadHandler) {
       map.off('style.load', styleLoadHandler);
     }
+    if (styleIdleHandler) {
+      map.off('idle', styleIdleHandler);
+    }
 
     const completeStyleLoad = (wasTimeout = false) => {
       if (styleSafetyTimeout) {
@@ -181,6 +192,10 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       if (styleLoadHandler) {
         map.off('style.load', styleLoadHandler);
         styleLoadHandler = null;
+      }
+      if (styleIdleHandler) {
+        map.off('idle', styleIdleHandler);
+        styleIdleHandler = null;
       }
 
       const latestStyleKey = getStyleKey(basemapStyleStore.selectedStyleUrl);
@@ -197,6 +212,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     };
 
     styleLoadHandler = () => completeStyleLoad(false);
+    styleIdleHandler = () => completeStyleLoad(false);
 
     styleSafetyTimeout = setTimeout(() => {
       if (isStyleLoading) {
@@ -210,6 +226,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     }, REFERENCE_BASEMAP_LOAD_TIMEOUT_MS);
 
     map.once('style.load', styleLoadHandler);
+    map.once('idle', styleIdleHandler);
 
     const stripStyleProjection: TransformStyleFunction = (previous, next) => {
       if ('projection' in next) {
@@ -224,6 +241,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
         diff: false,
         transformStyle: stripStyleProjection
       });
+      onStyleChangeRequested?.();
     } catch (error) {
       logger.error(
         'setStyle() threw, unlocking style loading',
@@ -377,6 +395,10 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     if (map && styleLoadHandler) {
       map.off('style.load', styleLoadHandler);
       styleLoadHandler = null;
+    }
+    if (map && styleIdleHandler) {
+      map.off('idle', styleIdleHandler);
+      styleIdleHandler = null;
     }
     if (styleSafetyTimeout) {
       clearTimeout(styleSafetyTimeout);
