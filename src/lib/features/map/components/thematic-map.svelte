@@ -3,7 +3,7 @@
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import { SkeletonPlaceholder } from 'carbon-components-svelte';
   import { Matrix4 } from '@math.gl/core';
-  import type { LngLatBoundsLike } from 'maplibre-gl';
+  import type { LngLatBoundsLike, Map as MapLibreMap } from 'maplibre-gl';
   import { onMount, untrack } from 'svelte';
   import { fade } from 'svelte/transition';
   import { basemapStyleStore } from '../../commons/stores/basemap-style.store.svelte';
@@ -346,6 +346,27 @@
         mapLoadingStore.setUpdatingLayers(false);
       });
     }, LAYER_UPDATE_DEBOUNCE_MS);
+  }
+
+  function scheduleLayerUpdateAfterStyleIdle(
+    map: MapLibreMap,
+    source: string
+  ): void {
+    pendingLayerUpdate = true;
+    requestAnimationFrame(() => {
+      if (mapInit.map !== map) {
+        return;
+      }
+      scheduleLayerUpdate(`${source}:frame`);
+    });
+    map.once('idle', () => {
+      if (mapInit.map !== map) {
+        return;
+      }
+      mapLayers.syncInterleavedLayerOrder();
+      pendingLayerUpdate = false;
+      scheduleLayerUpdate(source);
+    });
   }
 
   function triggerOnReady() {
@@ -1255,6 +1276,12 @@
         scheduleLayerUpdate('onProjectionChanged');
       }
     },
+    onStyleChangeRequested: () => {
+      const map = mapInit.map;
+      if (mapInit.viewMode === ViewMode.MAPLIBRE && map) {
+        scheduleLayerUpdateAfterStyleIdle(map, 'onStyleChangeRequested');
+      }
+    },
     onStyleLoaded: () => {
       mapBasemap.syncOSMRasterLayer();
       mapBasemap.syncLabelsVisibility();
@@ -1263,10 +1290,12 @@
       mapBasemap.syncProjection();
       applyPendingMapLibreViewportPreset();
       waitingForStyleIdle = false;
-      if (pendingLayerUpdate) {
-        pendingLayerUpdate = false;
-        scheduleLayerUpdate('onStyleLoaded-pending');
-      }
+      mapLayers.syncInterleavedLayerOrder();
+      const hadPendingLayerUpdate = pendingLayerUpdate;
+      pendingLayerUpdate = false;
+      scheduleLayerUpdate(
+        hadPendingLayerUpdate ? 'onStyleLoaded-pending' : 'onStyleLoaded'
+      );
     }
   });
 
@@ -1830,9 +1859,23 @@
 
   $effect(() => {
     const selectedStyle = basemapStyleStore.selectedStyle;
+    const isMapLoaded = mapInit.isMapLoaded;
+    const viewMode = mapInit.viewMode;
+    const map = mapInit.map;
     const nextZone = getBasemapZone(selectedStyle);
     const previousZone = lastSelectedBasemapZone;
     lastSelectedBasemapZone = nextZone;
+
+    if (
+      selectedStyle !== BasemapStyle.BLANK_WHITE &&
+      isMapLoaded &&
+      viewMode === ViewMode.MAPLIBRE &&
+      map
+    ) {
+      untrack(() =>
+        scheduleLayerUpdateAfterStyleIdle(map, 'effect:selectedStyle-idle')
+      );
+    }
 
     if (
       selectedStyle === BasemapStyle.BLANK_WHITE ||
@@ -1941,6 +1984,7 @@
     vizVersion: visualizationStore.version,
     basemapVersion: basemapLayersStore.version,
     basemapAuxVersion: basemapAuxLayersStore.version,
+    basemapStyleVersion: basemapStyleStore.styleVersion,
     fontVersion: fontAssetsStore.version,
     highlightVersion: mapHighlightStore.version,
     dataVersion,
