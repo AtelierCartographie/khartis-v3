@@ -26,15 +26,15 @@ function createBasemapMetadata(): BasemapMetadata {
     simplification_level: 'medium',
     layers: [
       {
-        title_fr: 'Centroids des pays',
+        title_fr: 'Centroïdes des pays',
         title_en: 'Country centroids',
         type: BasemapLayerType.CENTROID,
         file: 'monde-countries-centroids-2024-medium',
         style: null
       },
       {
-        title_fr: 'Limites des pays',
-        title_en: 'Country boundaries',
+        title_fr: 'Frontières des pays',
+        title_en: 'Country borders',
         type: BasemapLayerType.LIMIT,
         file: 'monde-countries-limites-2024-medium',
         style: 'limit-level-0'

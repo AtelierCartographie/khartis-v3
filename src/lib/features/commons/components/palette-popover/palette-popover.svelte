@@ -15,6 +15,7 @@
   import PaletteComparison from './palette-comparison.svelte';
   import {
     PALETTE_TYPE,
+    type DivergingPaletteSplit,
     type PaletteType,
     type Palette,
     type PatternParams,
@@ -35,7 +36,7 @@
     paletteType?: PaletteType;
     colorBlindFilter?: boolean;
     numClasses?: number;
-    divergingSplit?: import('./palette.constants').DivergingPaletteSplit;
+    divergingSplit?: DivergingPaletteSplit;
     exclusive?: boolean;
     onclose?: () => void;
     onvalidate?: (

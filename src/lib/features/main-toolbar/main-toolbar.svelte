@@ -22,34 +22,14 @@
   } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { tick } from 'svelte';
-  import type { Component } from 'svelte';
   import ToolbarTabs from './components/toolbar-tabs.svelte';
   import { dataTabStore } from '$lib/features/data-tab/stores/data-tab.store.svelte';
   import DataTab from '$lib/features/data-tab/data-tab.svelte';
+  import VizualisationTab from '$lib/features/visualization-tab/visualization.svelte';
   import {
     mainToolbarActions,
     mainToolbarState
   } from './stores/main-toolbar.store.svelte';
-
-  let VizualisationTab = $state<Component | null>(null);
-  let vizTabLoadPromise: Promise<void> | null = null;
-
-  function ensureVizualisationTabLoaded(): Promise<void> {
-    if (VizualisationTab) return Promise.resolve();
-    vizTabLoadPromise ??=
-      import('$lib/features/visualization-tab/visualization.svelte').then(
-        (module) => {
-          VizualisationTab = module.default;
-        }
-      );
-    return vizTabLoadPromise;
-  }
-
-  $effect(() => {
-    if (globalState.selectedStep === ToolbarStep.Visualizations) {
-      void ensureVizualisationTabLoaded();
-    }
-  });
 
   let toolbarContent = $state<HTMLElement | null>(null);
 
@@ -180,7 +160,7 @@
   >
     {#if globalState.selectedStep === ToolbarStep.Data}
       <DataTab />
-    {:else if globalState.selectedStep === ToolbarStep.Visualizations && VizualisationTab}
+    {:else if globalState.selectedStep === ToolbarStep.Visualizations}
       <VizualisationTab />
     {/if}
   </article>

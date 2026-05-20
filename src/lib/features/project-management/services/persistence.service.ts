@@ -1,3 +1,4 @@
+import localforage from 'localforage';
 import { estimateProjectStorageSize } from '$lib/features/commons/utils/size-estimation.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { m } from '$lib/paraglide/messages.js';
@@ -132,23 +133,12 @@ async function saveMetadataStoreValue(
 }
 
 async function migrateFromLocalforage(database: IDBDatabase): Promise<void> {
-  let lf: {
-    getItem: (k: string) => Promise<string | null>;
-    removeItem: (k: string) => Promise<void>;
-  };
-  try {
-    const mod = await import('localforage');
-    lf = mod.default;
-  } catch {
-    return;
-  }
-
   const keys = [ProjectStorageKey.CURRENT, ProjectStorageKey.METADATA];
   let migrated = 0;
   let skipped = 0;
 
   for (const key of keys) {
-    const value = await lf.getItem(key);
+    const value = await localforage.getItem<string>(key);
     if (value === null) continue;
 
     const existingValue = await loadMetadataStoreValue(database, key);
@@ -159,7 +149,7 @@ async function migrateFromLocalforage(database: IDBDatabase): Promise<void> {
       skipped++;
     }
 
-    await lf.removeItem(key);
+    await localforage.removeItem(key);
   }
 
   if (migrated > 0 || skipped > 0) {

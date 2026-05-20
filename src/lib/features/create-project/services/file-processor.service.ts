@@ -11,7 +11,13 @@ import { FILE_EXTENSIONS, MIME } from '$lib/features/commons/constants';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import { FileType } from '$lib/features/commons/types/create-project.types';
-import type { DatasetResult } from '$lib/features/data-pipeline';
+import {
+  dataPipeline,
+  isZipDatasetResult,
+  type DatasetResult
+} from '$lib/features/data-pipeline';
+
+type ProcessFileResult = Awaited<ReturnType<typeof dataPipeline.processFile>>;
 import { DeepDataValidator } from '$lib/features/commons/utils/deep-validator.utils';
 import { getFileExtension } from '$lib/features/commons/utils/file.utils';
 import {
@@ -253,8 +259,6 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       callbacks.onProgress(uploadedFile.id, progress);
     });
 
-    const { dataPipeline } = await import('$lib/features/data-pipeline');
-
     const dataset = (await dataPipeline.processFile(file)) as DatasetResult;
     const { tableName, columns, rowCount } = dataset;
     const headers = columns.map((col) => col.name);
@@ -391,8 +395,6 @@ function createGeoPackageProcessor(
       callbacks.onProgress(uploadedFile.id, progress);
     });
 
-    const { dataPipeline } = await import('$lib/features/data-pipeline');
-
     const dataset = (await dataPipeline.processFile(file)) as DatasetResult;
     const { tableName } = dataset;
 
@@ -417,11 +419,7 @@ function createGeoPackageProcessor(
 function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
   async function processSingleDataset(
     uploadedFile: UploadedFile,
-    dataset: Awaited<
-      ReturnType<
-        typeof import('$lib/features/data-pipeline').dataPipeline.processFile
-      >
-    > & {
+    dataset: ProcessFileResult & {
       tableName: string;
       columns: Array<{
         name: string;
@@ -491,11 +489,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
 
   async function processMultipleDatasets(
     uploadedFile: UploadedFile,
-    zipResult: Awaited<
-      ReturnType<
-        typeof import('$lib/features/data-pipeline').dataPipeline.processFile
-      >
-    >,
+    zipResult: ProcessFileResult,
     duck: typeof Duck
   ): Promise<void> {
     const result = zipResult as {
@@ -601,9 +595,6 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     callbacks.onProgress(uploadedFile.id, 10);
 
     const fileContent = await file.arrayBuffer();
-
-    const { dataPipeline, isZipDatasetResult } =
-      await import('$lib/features/data-pipeline');
 
     const result = await dataPipeline.processFile(file);
 

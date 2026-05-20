@@ -88,11 +88,11 @@ export interface VisualizationModes {
   symbol?: SymbolMode;
   fill?: FillMode;
   stroke?: StrokeMode;
-  thickness?: import('$lib/features/commons/constants/visualization.constants').ThicknessMode;
-  color?: import('$lib/features/commons/constants/visualization.constants').ColorMode;
-  size?: import('$lib/features/commons/constants/visualization.constants').SizeMode;
+  thickness?: ThicknessMode;
+  color?: ColorMode;
+  size?: SizeMode;
   proportionalType?: ProportionalType;
-  categoryShape?: import('$lib/features/commons/constants/visualization.constants').CategoryShapeMode;
+  categoryShape?: CategoryShapeMode;
   strokeShowMissing?: boolean;
 }
 
