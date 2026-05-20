@@ -188,6 +188,15 @@ describe('useMapLayers source', () => {
     );
   });
 
+  it('filters split polygon geometry through joined dataset rows before rendering', () => {
+    expect(source).toContain(
+      'const filteredTable = split\n              ? filterSplitGeometryTableByDatasetRows(\n                  table,\n                  split,\n                  viz.dataFilters,\n                  tablePrimitiveType,\n                  tableFilters\n                )'
+    );
+    expect(source).not.toContain(
+      'const vizFiltered = filterArrowTableByDataFilters(\n              table,\n              viz.dataFilters,\n              tablePrimitiveType\n            );'
+    );
+  });
+
   it('does not preserve stale thematic layers when visualization filters return no rows', () => {
     expect(source).toContain('let hasEmptyFilteredVisualization = false;');
     expect(source).toContain(
