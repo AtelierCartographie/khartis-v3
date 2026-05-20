@@ -1,9 +1,6 @@
 <script lang="ts">
-  import {
-    Dropdown,
-    RadioButtonGroup,
-    RadioButton
-  } from 'carbon-components-svelte';
+  import { Dropdown } from 'carbon-components-svelte';
+  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     DENSITY_DEFAULTS,
@@ -257,17 +254,16 @@
     <span class="field-label">
       {m.density_level_hint()}
     </span>
-    <RadioButtonGroup
+    <SimpleRadioGroup
+      name="density-level"
+      orientation="vertical"
+      items={dedupedLevelOptions.map((option) => ({
+        value: option.level,
+        labelText: `${levelLabelFor(option.level)} (${m.density_ratio_label({ ratio: String(option.ratio) })})`
+      }))}
       selected={selectedLevel}
-      on:change={(event) => handleLevelChange(event.detail as DensityLevelName)}
-    >
-      {#each dedupedLevelOptions as option (option.level)}
-        <RadioButton
-          labelText={`${levelLabelFor(option.level)} (${m.density_ratio_label({ ratio: String(option.ratio) })})`}
-          value={option.level}
-        />
-      {/each}
-    </RadioButtonGroup>
+      onchange={(value) => handleLevelChange(value)}
+    />
   </div>
 {:else if loadingLevels}
   <div class="field-group">
@@ -326,11 +322,5 @@
 
   .density-levels {
     gap: var(--cds-spacing-04);
-  }
-
-  :global(.polygons-config .density-levels .bx--radio-button-group) {
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-    align-items: flex-start;
   }
 </style>

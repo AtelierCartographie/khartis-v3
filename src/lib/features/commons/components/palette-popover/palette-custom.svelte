@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { RadioButtonGroup, RadioButton } from 'carbon-components-svelte';
+  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import ContentSwitcher from './content-switcher.svelte';
   import SingleColorPreview from './single-color-preview.svelte';
   import {
@@ -378,20 +378,16 @@
     {#if activeTab !== 2}
       <div class="contrast-section">
         <span class="field-label">{m.contrast_label()}</span>
-        <RadioButtonGroup
+        <SimpleRadioGroup
+          name="palette-contrast"
+          items={[
+            { value: 'low', labelText: m.contrast_low() },
+            { value: 'normal', labelText: m.contrast_normal() },
+            { value: 'high', labelText: m.contrast_high() }
+          ]}
           selected={contrastMode}
-          legendText=""
-          orientation="horizontal"
-          on:change={(e) => {
-            const next = String(e.detail);
-            if (next === contrastMode) return;
-            handleContrastChange(next);
-          }}
-        >
-          <RadioButton labelText={m.contrast_low()} value="low" />
-          <RadioButton labelText={m.contrast_normal()} value="normal" />
-          <RadioButton labelText={m.contrast_high()} value="high" />
-        </RadioButtonGroup>
+          onchange={(value) => handleContrastChange(value)}
+        />
       </div>
     {/if}
 
@@ -570,22 +566,5 @@
       auto,
       8px 8px,
       auto;
-  }
-
-  .contrast-section :global(.bx--radio-button-group) {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-
-  .contrast-section :global(.bx--radio-button-wrapper) {
-    margin: 0;
-  }
-
-  .contrast-section :global(.bx--radio-button__label) {
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 14px;
-    line-height: 18px;
-    letter-spacing: 0.16px;
   }
 </style>

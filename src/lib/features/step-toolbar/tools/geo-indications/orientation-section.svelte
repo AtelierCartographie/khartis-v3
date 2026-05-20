@@ -3,14 +3,21 @@
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
+  import { OrientationIndicatorStyle } from '$lib/features/commons/constants/ui.constants';
   import * as m from '$lib/paraglide/messages.js';
-  import {
-    Column,
-    Grid,
-    RadioButton,
-    RadioButtonGroup,
-    Row
-  } from 'carbon-components-svelte';
+  import { Column, Grid, Row } from 'carbon-components-svelte';
+  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
+
+  const orientationStyleOptions = [
+    {
+      value: OrientationIndicatorStyle.ARROW,
+      labelText: m.geo_orientation_arrow()
+    },
+    {
+      value: OrientationIndicatorStyle.COMPASS,
+      labelText: m.geo_orientation_compass()
+    }
+  ];
   import {
     geoIndicationsActions,
     geoIndicationsState
@@ -40,26 +47,13 @@
     <Grid noGutter>
       <Row>
         <Column>
-          <RadioButtonGroup
+          <SimpleRadioGroup
+            name="orientation-style"
             legendText={m.geo_orientation_style()}
+            items={orientationStyleOptions}
             selected={geoState.orientation.style}
-            on:change={(e) => {
-              const next = (e as CustomEvent).detail;
-              if (next === geoState.orientation.style) return;
-              store.setOrientationStyle(next);
-            }}
-          >
-            <RadioButton
-              id="arrow-style"
-              value="arrow"
-              labelText={m.geo_orientation_arrow()}
-            />
-            <RadioButton
-              id="compass-style"
-              value="compass"
-              labelText={m.geo_orientation_compass()}
-            />
-          </RadioButtonGroup>
+            onchange={(value) => store.setOrientationStyle(value)}
+          />
         </Column>
       </Row>
 

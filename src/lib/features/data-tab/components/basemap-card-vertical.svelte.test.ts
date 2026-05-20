@@ -29,15 +29,10 @@ describe('BasemapCardVertical', () => {
     expect(source).not.toContain('use:stackCardHeader');
   });
 
-  it('routes radio clicks through the same selection callback as card clicks', () => {
-    const body = source.match(
-      /function handleRadioClick\(event: Event\)[\s\S]*?\n\s*\}/
-    )?.[0];
-
-    expect(source).toContain('onclickcapture={handleRadioClick}');
-    expect(body).toContain('event.preventDefault();');
-    expect(body).toContain('event.stopPropagation();');
-    expect(body).toContain('handleCardClick();');
+  it('uses SimpleRadio so the card click handler is the single source of selection', () => {
+    expect(source).toContain('<SimpleRadio');
+    expect(source).toContain('checked={selected}');
+    expect(source).not.toContain('import { RadioButton');
   });
 
   it('keeps the preview radio accessible without showing duplicate card text', () => {

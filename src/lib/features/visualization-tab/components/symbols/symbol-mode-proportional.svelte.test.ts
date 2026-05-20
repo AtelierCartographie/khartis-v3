@@ -63,8 +63,10 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
   });
 
   it('keeps the Uniques/Doubles radio group in PROPORTIONAL', () => {
-    expect(source).toContain('id="prop-single"');
-    expect(source).toContain('id="prop-double"');
+    expect(source).toContain('<SimpleRadioGroup');
+    expect(source).toContain('name="prop-type"');
+    expect(source).toContain('value: ProportionalType.SINGLE');
+    expect(source).toContain('value: ProportionalType.DOUBLE');
   });
 
   it('uses MissingDataSection with shape selector and size slider enabled', () => {
@@ -142,7 +144,7 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
     expect(doubleControlsSource).toContain('m.symbol_a_size_according()');
     expect(doubleControlsSource).toContain('m.symbol_b_size_according()');
     const doubleBlock = source.split(
-      'proportionalType === ProportionalType.DOUBLE'
+      '{#if proportionalType === ProportionalType.DOUBLE}'
     )[1];
     expect(doubleBlock).toContain('<DoubleModeControls');
     expect(source).toContain('<ProportionalDoubleSection');

@@ -9,11 +9,11 @@ const source = readFileSync(
 
 describe('SymbolModeCategories (en categorie.png alignment)', () => {
   it('exposes the CategoryShapeMode radio group without the ordered option', () => {
-    expect(source).toContain('id="cat-shape-unique"');
-    expect(source).toContain('id="cat-shape-different"');
-    expect(source).not.toContain('id="cat-shape-ordered"');
-    expect(source).toContain('CategoryShapeMode.UNIQUE');
-    expect(source).toContain('CategoryShapeMode.DIFFERENT');
+    expect(source).toContain('<SimpleRadioGroup');
+    expect(source).toContain('name="cat-shape-mode"');
+    expect(source).toContain('value: CategoryShapeMode.UNIQUE');
+    expect(source).toContain('value: CategoryShapeMode.DIFFERENT');
+    expect(source).not.toContain('CategoryShapeMode.ORDERED, labelText');
     expect(source).toContain('coerceCategoryShapeMode');
   });
 

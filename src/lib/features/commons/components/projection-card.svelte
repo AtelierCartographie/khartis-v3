@@ -2,7 +2,7 @@
   import TilePreview from '$lib/features/commons/components/tile-preview.svelte';
   import { InfoPopover } from '$lib/features/commons/components/viz-controls';
   import * as m from '$lib/paraglide/messages';
-  import { RadioButton } from 'carbon-components-svelte';
+  import SimpleRadio from './simple-radio.svelte';
   import { CheckmarkFilled } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { KEY } from '../constants/dom.constants';
@@ -68,10 +68,6 @@
     }
   }
 
-  function handleRadioClick(event: Event) {
-    event.preventDefault();
-  }
-
   const isVertical = $derived(layout === 'vertical');
   const useSuggestionTheme = $derived(variant !== 'gray');
   const hasSubtitle = $derived(Boolean(subtitle?.trim()));
@@ -116,12 +112,11 @@
       </div>
 
       <div class="title-radio kh-card-radio">
-        <RadioButton
+        <SimpleRadio
           checked={selected}
           disabled={disabled}
           labelText={title}
           hideLabel
-          onclick={handleRadioClick}
         />
       </div>
     </div>

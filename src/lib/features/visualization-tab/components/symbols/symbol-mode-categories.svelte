@@ -1,11 +1,8 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
-  import {
-    Dropdown,
-    RadioButton,
-    RadioButtonGroup
-  } from 'carbon-components-svelte';
+  import { Dropdown } from 'carbon-components-svelte';
+  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import { Settings } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import {
@@ -459,26 +456,21 @@
     {m.category_shape_mode_label()}
     <InfoPopover text={m.category_shape_mode_info()} />
   </span>
-  <RadioButtonGroup
+  <SimpleRadioGroup
     name="cat-shape-mode"
+    items={[
+      {
+        value: CategoryShapeMode.UNIQUE,
+        labelText: m.category_shape_mode_unique()
+      },
+      {
+        value: CategoryShapeMode.DIFFERENT,
+        labelText: m.category_shape_mode_different()
+      }
+    ]}
     selected={categoryShapeMode}
-    on:change={(e) => {
-      const next = (e as CustomEvent).detail as CategoryShapeMode;
-      if (next === categoryShapeMode) return;
-      handleCategoryShapeModeChange(next);
-    }}
-  >
-    <RadioButton
-      id="cat-shape-unique"
-      value={CategoryShapeMode.UNIQUE}
-      labelText={m.category_shape_mode_unique()}
-    />
-    <RadioButton
-      id="cat-shape-different"
-      value={CategoryShapeMode.DIFFERENT}
-      labelText={m.category_shape_mode_different()}
-    />
-  </RadioButtonGroup>
+    onchange={(value) => handleCategoryShapeModeChange(value)}
+  />
 </div>
 
 {#if categoryShapeMode === CategoryShapeMode.UNIQUE}
@@ -609,10 +601,6 @@
     font-size: 0.75rem;
     color: var(--cds-text-02);
     font-weight: 400;
-  }
-
-  :global(.field-group .bx--radio-button-group) {
-    flex-direction: row;
   }
 
   .categories-aspect-row {

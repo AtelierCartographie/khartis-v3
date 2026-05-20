@@ -1,12 +1,7 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages.js';
-  import {
-    InlineLoading,
-    Modal,
-    RadioButton,
-    RadioButtonGroup,
-    TextInput
-  } from 'carbon-components-svelte';
+  import { InlineLoading, Modal, TextInput } from 'carbon-components-svelte';
+  import SimpleRadioGroup from './simple-radio-group.svelte';
   import { projectsStore } from '../stores/projects.store.svelte';
 
   interface Props {
@@ -98,14 +93,18 @@
       <div class="project-selection">
         <h5>{m.duplicate_project_modal_select_project()}</h5>
 
-        <RadioButtonGroup
-          bind:selected={selectedProjectId}
-          on:change={(e) => handleProjectSelection(String(e.detail))}
-        >
-          {#each projectsStore.projects as project (project.id)}
-            <RadioButton value={project.id} labelText={project.name} />
-          {/each}
-        </RadioButtonGroup>
+        <div class="project-radio-group">
+          <SimpleRadioGroup
+            name="duplicate-project-source"
+            orientation="vertical"
+            items={projectsStore.projects.map((project) => ({
+              value: project.id,
+              labelText: project.name
+            }))}
+            selected={selectedProjectId}
+            onchange={(value) => handleProjectSelection(value)}
+          />
+        </div>
       </div>
 
       <div class="name-input-section">
@@ -156,7 +155,7 @@
     margin-top: var(--cds-spacing-03);
   }
 
-  :global(.duplicate-modal-content .bx--radio-button-group) {
+  .project-radio-group {
     max-height: 200px;
     overflow-y: auto;
   }
