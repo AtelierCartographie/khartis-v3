@@ -21,4 +21,13 @@ describe('ToolbarTabs dataset rename persistence', () => {
       'await projectStore.renameFile(editingTabId, newFullName);'
     );
   });
+
+  it('selects the duplicated dataset virtual tab after duplication', () => {
+    expect(source).toContain(
+      'const newDatasetId = await datasetsStore.duplicateDataset'
+    );
+    expect(source).toContain(
+      'globalActions.selectDataButton(newDataset.sourceFileId);'
+    );
+  });
 });
