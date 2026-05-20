@@ -10,15 +10,13 @@
     hexToHsl
   } from '$lib/features/commons/utils/color-utils';
   import * as m from '$lib/paraglide/messages';
-  import {
-    Button,
-    Column,
-    Grid,
-    RadioButton,
-    RadioButtonGroup,
-    Row,
-    Slider
-  } from 'carbon-components-svelte';
+  import { Button, Column, Grid, Row, Slider } from 'carbon-components-svelte';
+  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
+
+  const drawingTypeOptions = [
+    { value: DrawingType.LINE, labelText: m.annotations_drawing_line() },
+    { value: DrawingType.ZONE, labelText: m.annotations_drawing_area() }
+  ];
   import { Add, TrashCan } from 'carbon-icons-svelte';
   import {
     annotationsActions,
@@ -117,8 +115,7 @@
     annotationsActions.beginDrawing(drawingType);
   }
 
-  function handleDrawingTypeChange(event: CustomEvent<string | number>) {
-    const type = String(event.detail) as DrawingType;
+  function handleDrawingTypeChange(type: DrawingType) {
     if (type === drawingType) return;
     if (selectedDrawing) {
       annotationsActions.selectAnnotation(null);
@@ -160,20 +157,13 @@
 <Grid noGutter fullWidth>
   <Row>
     <Column>
-      <RadioButtonGroup
+      <SimpleRadioGroup
+        name="drawing-type"
         legendText={m.annotations_type()}
+        items={drawingTypeOptions}
         selected={drawingType}
-        on:change={handleDrawingTypeChange}
-      >
-        <RadioButton
-          labelText={m.annotations_drawing_line()}
-          value={DrawingType.LINE}
-        />
-        <RadioButton
-          labelText={m.annotations_drawing_area()}
-          value={DrawingType.ZONE}
-        />
-      </RadioButtonGroup>
+        onchange={(value) => handleDrawingTypeChange(value)}
+      />
     </Column>
   </Row>
 
