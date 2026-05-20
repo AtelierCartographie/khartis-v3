@@ -1,7 +1,12 @@
+import type { Layer } from '@deck.gl/core';
 import type { Matrix4 } from '@math.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
+import type {
+  PrimitiveFilter,
+  VisualizationConfig
+} from '$lib/features/commons/stores/visualization.store.svelte';
 
 export type {
   PickingInfo,
@@ -11,7 +16,7 @@ export type {
 
 export type DeckDataRow = Record<string, unknown>;
 
-export type ThematicLayer = import('@deck.gl/core').Layer<DeckDataRow>;
+export type ThematicLayer = Layer<DeckDataRow>;
 
 export interface GeometryInfo {
   type: string;
@@ -75,9 +80,7 @@ export interface DeckMapProps {
 }
 
 export interface LayerContext {
-  viz:
-    | import('$lib/features/commons/stores/visualization.store.svelte').VisualizationConfig
-    | null;
+  viz: VisualizationConfig | null;
   datasetId: string | undefined;
   fillColor: RGBColor;
   symbolFillColor: RGBColor;
@@ -112,7 +115,7 @@ export interface LayerContext {
 
   customProjection?: ProjectionLike;
 
-  primitiveOrder?: import('$lib/features/commons/stores/visualization.store.svelte').PrimitiveFilter[];
+  primitiveOrder?: PrimitiveFilter[];
   densityTable?: ArrowTable;
   densityGeometryInfo?: GeometryInfo;
 

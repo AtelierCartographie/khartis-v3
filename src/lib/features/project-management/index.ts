@@ -25,23 +25,11 @@ export { projectStorage } from './services/storage.service';
 
 export { duplicateProject } from './operations/duplicate';
 
+import { exportProject, createArchive } from './io/exporter';
+import { importProject } from './io/importer';
+
 export const projectFiles = {
-  exportProject: async (
-    project: Parameters<typeof import('./io/exporter').exportProject>[0]
-  ) => {
-    const { exportProject } = await import('./io/exporter');
-    return exportProject(project);
-  },
-  createArchive: async (
-    project: Parameters<typeof import('./io/exporter').createArchive>[0]
-  ) => {
-    const { createArchive } = await import('./io/exporter');
-    return createArchive(project);
-  },
-  importProject: async (
-    file: Parameters<typeof import('./io/importer').importProject>[0]
-  ) => {
-    const { importProject } = await import('./io/importer');
-    return importProject(file);
-  }
+  exportProject,
+  createArchive,
+  importProject
 };

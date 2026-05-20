@@ -6,6 +6,7 @@ import { combineUint8Arrays } from '$lib/features/commons/utils/array.utils';
 import { m } from '$lib/paraglide/messages.js';
 
 import { PROJECT_CONST } from '../constants';
+import { getProjectDatabase } from './database-access.service';
 
 interface StoredAssetMetadata {
   assetId: string;
@@ -39,7 +40,6 @@ function createProjectAssetRefId(projectId: string, assetId: string): string {
 }
 
 async function getDb(): Promise<IDBDatabase> {
-  const { getProjectDatabase } = await import('./database-access.service');
   return getProjectDatabase();
 }
 

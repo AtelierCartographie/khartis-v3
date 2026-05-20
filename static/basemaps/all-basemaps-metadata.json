@@ -17,7 +17,7 @@
     "simplification_level": "low",
     "layers": [
       {
-        "title_fr": "Centroids des NUTS 1",
+        "title_fr": "Centroïdes des NUTS 1",
         "title_en": "NUTS 1 centroids",
         "type": "centroid",
         "file": "europe-nuts1-centroids-2021-low",
@@ -71,7 +71,7 @@
     "simplification_level": "low",
     "layers": [
       {
-        "title_fr": "Centroids des NUTS 1",
+        "title_fr": "Centroïdes des NUTS 1",
         "title_en": "NUTS 1 centroids",
         "type": "centroid",
         "file": "europe-nuts1-centroids-2024-low",
@@ -125,7 +125,7 @@
     "simplification_level": "low",
     "layers": [
       {
-        "title_fr": "Centroids des NUTS 2",
+        "title_fr": "Centroïdes des NUTS 2",
         "title_en": "NUTS 2 centroids",
         "type": "centroid",
         "file": "europe-nuts2-centroids-2021-low",
@@ -186,7 +186,7 @@
     "simplification_level": "low",
     "layers": [
       {
-        "title_fr": "Centroids des NUTS 2",
+        "title_fr": "Centroïdes des NUTS 2",
         "title_en": "NUTS 2 centroids",
         "type": "centroid",
         "file": "europe-nuts2-centroids-2024-low",
@@ -247,7 +247,7 @@
     "simplification_level": "low",
     "layers": [
       {
-        "title_fr": "Centroids des NUTS 3",
+        "title_fr": "Centroïdes des NUTS 3",
         "title_en": "NUTS 3 centroids",
         "type": "centroid",
         "file": "europe-nuts3-centroids-2021-low",
@@ -315,7 +315,7 @@
     "simplification_level": "low",
     "layers": [
       {
-        "title_fr": "Centroids des NUTS 3",
+        "title_fr": "Centroïdes des NUTS 3",
         "title_en": "NUTS 3 centroids",
         "type": "centroid",
         "file": "europe-nuts3-centroids-2024-low",
@@ -383,7 +383,7 @@
     "simplification_level": "medium",
     "layers": [
       {
-        "title_fr": "Centroids des NUTS 1",
+        "title_fr": "Centroïdes des NUTS 1",
         "title_en": "NUTS 1 centroids",
         "type": "centroid",
         "file": "europe-nuts1-centroids-2021-medium",
@@ -437,7 +437,7 @@
     "simplification_level": "medium",
     "layers": [
       {
-        "title_fr": "Centroids des NUTS 1",
+        "title_fr": "Centroïdes des NUTS 1",
         "title_en": "NUTS 1 centroids",
         "type": "centroid",
         "file": "europe-nuts1-centroids-2024-medium",
@@ -491,7 +491,7 @@
     "simplification_level": "medium",
     "layers": [
       {
-        "title_fr": "Centroids des NUTS 2",
+        "title_fr": "Centroïdes des NUTS 2",
         "title_en": "NUTS 2 centroids",
         "type": "centroid",
         "file": "europe-nuts2-centroids-2021-medium",
@@ -552,7 +552,7 @@
     "simplification_level": "medium",
     "layers": [
       {
-        "title_fr": "Centroids des NUTS 2",
+        "title_fr": "Centroïdes des NUTS 2",
         "title_en": "NUTS 2 centroids",
         "type": "centroid",
         "file": "europe-nuts2-centroids-2024-medium",
@@ -613,7 +613,7 @@
     "simplification_level": "medium",
     "layers": [
       {
-        "title_fr": "Centroids des NUTS 3",
+        "title_fr": "Centroïdes des NUTS 3",
         "title_en": "NUTS 3 centroids",
         "type": "centroid",
         "file": "europe-nuts3-centroids-2021-medium",
@@ -681,7 +681,7 @@
     "simplification_level": "medium",
     "layers": [
       {
-        "title_fr": "Centroids des NUTS 3",
+        "title_fr": "Centroïdes des NUTS 3",
         "title_en": "NUTS 3 centroids",
         "type": "centroid",
         "file": "europe-nuts3-centroids-2024-medium",
@@ -749,7 +749,7 @@
     "simplification_level": "high",
     "layers": [
       {
-        "title_fr": "Centroids des NUTS 1",
+        "title_fr": "Centroïdes des NUTS 1",
         "title_en": "NUTS 1 centroids",
         "type": "centroid",
         "file": "europe-nuts1-centroids-2021-high",
@@ -803,7 +803,7 @@
     "simplification_level": "high",
     "layers": [
       {
-        "title_fr": "Centroids des NUTS 1",
+        "title_fr": "Centroïdes des NUTS 1",
         "title_en": "NUTS 1 centroids",
         "type": "centroid",
         "file": "europe-nuts1-centroids-2024-high",
@@ -857,7 +857,7 @@
     "simplification_level": "high",
     "layers": [
       {
-        "title_fr": "Centroids des NUTS 2",
+        "title_fr": "Centroïdes des NUTS 2",
         "title_en": "NUTS 2 centroids",
         "type": "centroid",
         "file": "europe-nuts2-centroids-2021-high",
@@ -918,7 +918,7 @@
     "simplification_level": "high",
     "layers": [
       {
-        "title_fr": "Centroids des NUTS 2",
+        "title_fr": "Centroïdes des NUTS 2",
         "title_en": "NUTS 2 centroids",
         "type": "centroid",
         "file": "europe-nuts2-centroids-2024-high",
@@ -979,7 +979,7 @@
     "simplification_level": "high",
     "layers": [
       {
-        "title_fr": "Centroids des NUTS 3",
+        "title_fr": "Centroïdes des NUTS 3",
         "title_en": "NUTS 3 centroids",
         "type": "centroid",
         "file": "europe-nuts3-centroids-2021-high",
@@ -1047,7 +1047,7 @@
     "simplification_level": "high",
     "layers": [
       {
-        "title_fr": "Centroids des NUTS 3",
+        "title_fr": "Centroïdes des NUTS 3",
         "title_en": "NUTS 3 centroids",
         "type": "centroid",
         "file": "europe-nuts3-centroids-2024-high",
@@ -1115,7 +1115,7 @@
     "simplification_level": "medium",
     "layers": [
       {
-        "title_fr": "Centroids des cantons",
+        "title_fr": "Centroïdes des cantons",
         "title_en": "Canton centroids",
         "type": "centroid",
         "file": "france-canton-centroids-2025-medium",
@@ -1176,8 +1176,8 @@
     "simplification_level": "medium",
     "layers": [
       {
-        "title_fr": "Chefs-lieux des communes",
-        "title_en": "Heads of municipalities",
+        "title_fr": "Centroïdes des communes",
+        "title_en": "Commune centroids",
         "type": "centroid",
         "file": "france-commune-centroids-2025-medium",
         "style": null
@@ -1237,7 +1237,7 @@
     "simplification_level": "medium",
     "layers": [
       {
-        "title_fr": "Centroids des départements",
+        "title_fr": "Centroïdes des départements",
         "title_en": "Department centroids",
         "type": "centroid",
         "file": "france-departement-centroids-2025-medium",
@@ -1291,7 +1291,7 @@
     "simplification_level": "medium",
     "layers": [
       {
-        "title_fr": "Centroids des régions",
+        "title_fr": "Centroïdes des régions",
         "title_en": "Region centroids",
         "type": "centroid",
         "file": "france-region-centroids-2025-medium",
@@ -1338,7 +1338,7 @@
     "simplification_level": "high",
     "layers": [
       {
-        "title_fr": "Centroids des cantons",
+        "title_fr": "Centroïdes des cantons",
         "title_en": "Canton centroids",
         "type": "centroid",
         "file": "france-canton-centroids-2025-high",
@@ -1399,8 +1399,8 @@
     "simplification_level": "high",
     "layers": [
       {
-        "title_fr": "Chefs-lieux des communes",
-        "title_en": "Heads of municipalities",
+        "title_fr": "Centroïdes des communes",
+        "title_en": "Commune centroids",
         "type": "centroid",
         "file": "france-commune-centroids-2025-high",
         "style": null
@@ -1460,7 +1460,7 @@
     "simplification_level": "high",
     "layers": [
       {
-        "title_fr": "Centroids des départements",
+        "title_fr": "Centroïdes des départements",
         "title_en": "Department centroids",
         "type": "centroid",
         "file": "france-departement-centroids-2025-high",
@@ -1514,7 +1514,7 @@
     "simplification_level": "high",
     "layers": [
       {
-        "title_fr": "Centroids des régions",
+        "title_fr": "Centroïdes des régions",
         "title_en": "Region centroids",
         "type": "centroid",
         "file": "france-region-centroids-2025-high",
@@ -1557,15 +1557,15 @@
     "simplification_level": "low",
     "layers": [
       {
-        "title_fr": "Centroids des pays",
+        "title_fr": "Centroïdes des pays",
         "title_en": "Country centroids",
         "type": "centroid",
         "file": "monde-countries-centroids-2024-low",
         "style": null
       },
       {
-        "title_fr": "Limites des pays",
-        "title_en": "Country boundaries",
+        "title_fr": "Frontières des pays",
+        "title_en": "Country borders",
         "type": "limit",
         "file": "monde-countries-limites-2024-low",
         "style": "limit-level-0"
@@ -1607,15 +1607,15 @@
     "simplification_level": "medium",
     "layers": [
       {
-        "title_fr": "Centroids des pays",
+        "title_fr": "Centroïdes des pays",
         "title_en": "Country centroids",
         "type": "centroid",
         "file": "monde-countries-centroids-2024-medium",
         "style": null
       },
       {
-        "title_fr": "Limites des pays",
-        "title_en": "Country boundaries",
+        "title_fr": "Frontières des pays",
+        "title_en": "Country borders",
         "type": "limit",
         "file": "monde-countries-limites-2024-medium",
         "style": "limit-level-0"
@@ -1657,15 +1657,15 @@
     "simplification_level": "high",
     "layers": [
       {
-        "title_fr": "Centroids des pays",
+        "title_fr": "Centroïdes des pays",
         "title_en": "Country centroids",
         "type": "centroid",
         "file": "monde-countries-centroids-2024-high",
         "style": null
       },
       {
-        "title_fr": "Limites des pays",
-        "title_en": "Country boundaries",
+        "title_fr": "Frontières des pays",
+        "title_en": "Country borders",
         "type": "limit",
         "file": "monde-countries-limites-2024-high",
         "style": "limit-level-0"
