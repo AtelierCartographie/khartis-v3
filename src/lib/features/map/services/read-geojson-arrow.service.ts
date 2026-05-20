@@ -18,6 +18,7 @@ import {
   tableFromIPC,
   type Table as ArrowTable
 } from 'apache-arrow/Arrow';
+import * as parquetWasm from 'parquet-wasm';
 import {
   ArrowExtension,
   GeoArrowMetadataKey,
@@ -29,14 +30,13 @@ const GEO_METADATA_VERSION = '1.0.0';
 const DEFAULT_CRS_NAME = GEO_CONSTANTS.WGS84_CRS;
 const WORLD_BOUNDS: [number, number, number, number] = [-180, -90, 180, 90];
 
-let parquetWasmReady: Promise<typeof import('parquet-wasm')> | null = null;
+let parquetWasmReady: Promise<typeof parquetWasm> | null = null;
 
-async function getParquetWasm(): Promise<typeof import('parquet-wasm')> {
+async function getParquetWasm(): Promise<typeof parquetWasm> {
   if (!parquetWasmReady) {
     parquetWasmReady = (async () => {
-      const mod = await import('parquet-wasm');
-      await mod.default();
-      return mod;
+      await parquetWasm.default();
+      return parquetWasm;
     })();
   }
   return parquetWasmReady;
