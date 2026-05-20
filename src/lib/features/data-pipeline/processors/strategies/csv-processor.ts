@@ -5,6 +5,10 @@ import {
   type UploadedFile
 } from '$lib/features/commons/types/create-project.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import {
+  convertTabularDataToArrow,
+  insertArrowTableIntoDuckDB
+} from '$lib/features/duckdb/io/arrow-converter';
 import * as m from '$lib/paraglide/messages';
 import type {
   FileProcessor,
@@ -18,9 +22,6 @@ async function processWithArrow(
   file: UploadedFile,
   start: number
 ): Promise<ProcessorDataset | null> {
-  const { convertTabularDataToArrow, insertArrowTableIntoDuckDB } =
-    await import('$lib/features/duckdb/io/arrow-converter');
-
   try {
     const arrowTable = convertTabularDataToArrow(
       file.parsedData as Record<string, unknown>[],

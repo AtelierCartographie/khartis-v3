@@ -1,4 +1,4 @@
-import type sqlite3InitModule from '@sqlite.org/sqlite-wasm';
+import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import proj4 from 'proj4';
 import { reprojectPoint } from '$lib/features/duckdb/io/reprojection';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -226,12 +226,7 @@ export function extractWkbFromGeoPackageGeometry(
 }
 
 async function getSqliteModule(): Promise<SqliteModule> {
-  if (!sqliteModulePromise) {
-    sqliteModulePromise = import('@sqlite.org/sqlite-wasm').then(
-      ({ default: initSqlite }) => initSqlite()
-    );
-  }
-
+  sqliteModulePromise ??= sqlite3InitModule();
   return sqliteModulePromise;
 }
 

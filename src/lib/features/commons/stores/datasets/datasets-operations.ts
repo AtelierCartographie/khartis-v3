@@ -8,6 +8,10 @@ import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
+import {
+  disableFacets,
+  getFacetsBaseVisualizationId
+} from '$lib/features/step-toolbar/tools/facets/facets-access';
 import { toJsonValue } from '$lib/features/commons/utils/json.utils';
 import type { UploadedFile } from '../../types/create-project.types';
 import { DataSourceType, FileType } from '../../types/create-project.types';
@@ -218,8 +222,6 @@ export async function resetDataset(
     if (visualizationStoreOps) {
       const visualizations =
         visualizationStoreOps.getVisualizationsByDataset(datasetId);
-      const { disableFacets, getFacetsBaseVisualizationId } =
-        await import('$lib/features/step-toolbar/tools/facets/facets-access');
       const facetsBaseVizId = getFacetsBaseVisualizationId();
       const facetsBaseBeingReset =
         facetsBaseVizId !== null &&

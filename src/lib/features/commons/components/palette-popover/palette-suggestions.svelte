@@ -4,6 +4,7 @@
   import QualitativeColorGrid from './qualitative-color-grid.svelte';
   import {
     PALETTE_TYPE,
+    type DivergingPaletteSplit,
     type PaletteType,
     type Palette,
     type SuggestionPreset,
@@ -24,7 +25,7 @@
     selectedPaletteId: string;
     selectedColor?: string;
     numClasses: number;
-    divergingSplit?: import('./palette.constants').DivergingPaletteSplit;
+    divergingSplit?: DivergingPaletteSplit;
     qualitativeMode?: 'single' | 'categories';
     onTypeChange?: (type: PaletteType) => void;
     onColorBlindChange?: (enabled: boolean) => void;
