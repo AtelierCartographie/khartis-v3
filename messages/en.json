@@ -360,6 +360,8 @@
   "geo_style": "Style",
   "geo_distance": "Distance",
   "geo_scale_max_distance_current_view": "Maximum at current zoom: {distance} {unit}",
+  "geo_scale_unavailable_tiled_basemap": "Tiled basemaps already include a scale.",
+  "geo_scale_valid_at_map_center": "The scale is valid at the center of the map.",
   "geo_units": "Units",
   "geo_kilometers": "Kilometers",
   "geo_miles": "Miles",

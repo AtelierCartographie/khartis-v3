@@ -360,6 +360,8 @@
   "geo_style": "Style",
   "geo_distance": "Distance",
   "geo_scale_max_distance_current_view": "Maximum au zoom actuel : {distance} {unit}",
+  "geo_scale_unavailable_tiled_basemap": "Les fonds tuilés intègrent déjà une échelle.",
+  "geo_scale_valid_at_map_center": "L’échelle est valable au centre de la carte.",
   "geo_units": "Unités",
   "geo_kilometers": "Kilomètres",
   "geo_miles": "Miles",

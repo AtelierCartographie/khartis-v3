@@ -1,7 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DistanceUnit } from '$lib/features/commons/constants/ui.constants';
+import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
+import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 import * as m from '$lib/paraglide/messages';
 
 const mocks = vi.hoisted(() => ({
@@ -21,10 +23,19 @@ import {
 } from './geo-indications.store.svelte';
 import { MAX_SCALE_DISTANCE_BY_UNIT } from './geo-indications.utils';
 
-function createScaleMap(widthPerLongitudeDegree: number) {
+function createScaleMap(
+  widthPerLongitudeDegree: number,
+  bounds = { north: 20, south: -20, east: 30, west: -30 }
+) {
   return {
     getCenter: () => ({ lng: 0, lat: 0 }),
     getZoom: () => 2,
+    getBounds: () => ({
+      getNorth: () => bounds.north,
+      getSouth: () => bounds.south,
+      getEast: () => bounds.east,
+      getWest: () => bounds.west
+    }),
     project: ([lng]: [number, number]) => ({
       x: lng * widthPerLongitudeDegree,
       y: 0
@@ -40,6 +51,7 @@ describe('geo-indications tool', () => {
   beforeEach(() => {
     mocks.resetPagePan.mockClear();
     geoIndicationsActions.reset();
+    basemapStyleStore.reset();
     mapInstanceStore.reset();
   });
 
@@ -154,6 +166,32 @@ describe('geo-indications tool', () => {
     expect(geoIndicationsState.scale.distance).toBe(100);
   });
 
+  it('disables the scale section while a tiled basemap is active', async () => {
+    basemapStyleStore.setStyle(BasemapStyle.FRANCE_COULEURS);
+
+    render(GeoIndications);
+
+    const scaleSwitch = screen.getByRole('switch', { name: m.geo_scale() });
+
+    expect(scaleSwitch).toBeDisabled();
+    expect(
+      screen.getByText(m.geo_scale_unavailable_tiled_basemap())
+    ).toBeInTheDocument();
+
+    await fireEvent.click(scaleSwitch);
+
+    expect(geoIndicationsState.scale.enabled).toBe(false);
+  });
+
+  it('states that the scale is valid at the map center', async () => {
+    render(GeoIndications);
+
+    await fireEvent.click(screen.getByRole('switch', { name: m.geo_scale() }));
+
+    expect(
+      await screen.findByText(m.geo_scale_valid_at_map_center())
+    ).toBeInTheDocument();
+  });
   it('exposes longitude and latitude controls for the inset map centering', async () => {
     render(GeoIndications);
 

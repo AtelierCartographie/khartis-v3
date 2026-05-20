@@ -12,6 +12,8 @@
     globalState
   } from '$lib/features/commons/stores/global.svelte';
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
+  import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
   import {
@@ -32,6 +34,8 @@
     clampScaleDistance,
     formatScaleDistance,
     getScaleDistanceLimit,
+    getCurrentScaleDistanceContext,
+    getScaleMetersPerPixel,
     getSuggestedScaleDistance,
     INSET_MAP_SIZE_LIMITS,
     SCALE_MAX_WIDTH_PX,
@@ -73,7 +77,6 @@
     hidden = false
   }: { interactive?: boolean; hidden?: boolean } = $props();
 
-  const EARTH_RADIUS_METERS = 6378137;
   const MM_TO_PAGE_PX = 72 / 25.4;
   const SCALE_PADDING = 6;
   const SCALE_SEGMENT_COUNT = 4;
@@ -233,31 +236,6 @@
     return fallback;
   }
 
-  function computeScaleWidthFromMap(distanceMeters: number): number | null {
-    const map = mapInstanceStore.map;
-    if (!map || distanceMeters <= 0) {
-      return null;
-    }
-
-    const center = map.getCenter();
-    const safeLatitude = clamp(center.lat, -85, 85);
-    const latitudeRadians = (safeLatitude * Math.PI) / 180;
-    const cosLatitude = Math.cos(latitudeRadians);
-    if (Math.abs(cosLatitude) < 1e-6) {
-      return null;
-    }
-
-    const deltaLongitude =
-      (distanceMeters / (EARTH_RADIUS_METERS * cosLatitude)) * (180 / Math.PI);
-    const projectedStart = map.project(center);
-    const projectedEnd = map.project([
-      center.lng + deltaLongitude,
-      safeLatitude
-    ]);
-    const width = Math.abs(projectedEnd.x - projectedStart.x);
-
-    return Number.isFinite(width) ? width : null;
-  }
   function toWorldFeatureCollection(
     payload: unknown
   ): WorldFeatureCollection | null {
@@ -409,15 +387,9 @@
     return projection;
   }
 
-  function getScaleDistanceContext() {
-    const center = mapInstanceStore.getMapCenter();
-
-    return {
-      map: mapInstanceStore.map,
-      zoom: mapInstanceStore.currentZoom,
-      centerLatitude: center?.lat ?? null
-    };
-  }
+  const isScaleAvailable = $derived(
+    !basemapStyleStore.requiresMapLibre && !osmBasemapStore.isActive
+  );
 
   const scaleDistanceLimit = $derived.by(() => {
     const _revision = mapViewRevision;
@@ -427,7 +399,7 @@
 
     return getScaleDistanceLimit(
       geoIndicationsState.scale.units,
-      getScaleDistanceContext()
+      getCurrentScaleDistanceContext()
     );
   });
 
@@ -443,13 +415,13 @@
         distance,
         geoIndicationsState.scale.units,
         distance,
-        getScaleDistanceContext()
+        getCurrentScaleDistanceContext()
       );
     }
 
     return getSuggestedScaleDistance(
       geoIndicationsState.scale.units,
-      getScaleDistanceContext()
+      getCurrentScaleDistanceContext()
     );
   });
 
@@ -457,7 +429,7 @@
     const _revision = mapViewRevision;
     void _revision;
 
-    if (!geoIndicationsState.scale.enabled) {
+    if (!geoIndicationsState.scale.enabled || !isScaleAvailable) {
       return;
     }
 
@@ -469,7 +441,7 @@
       geoIndicationsActions.setScaleDistance(
         getSuggestedScaleDistance(
           geoIndicationsState.scale.units,
-          getScaleDistanceContext()
+          getCurrentScaleDistanceContext()
         )
       );
       return;
@@ -479,7 +451,7 @@
       currentDistance,
       geoIndicationsState.scale.units,
       currentDistance,
-      getScaleDistanceContext()
+      getCurrentScaleDistanceContext()
     );
     if (clampedDistance === currentDistance) {
       return;
@@ -498,9 +470,12 @@
       effectiveScaleDistance,
       geoIndicationsState.scale.units
     );
-    const projectedWidth = computeScaleWidthFromMap(distanceMeters);
-    if (projectedWidth !== null) {
-      return clamp(projectedWidth, 8, SCALE_MAX_WIDTH_PX);
+    const metersPerPixel = getScaleMetersPerPixel(
+      getCurrentScaleDistanceContext(),
+      false
+    );
+    if (metersPerPixel !== null && metersPerPixel > 0) {
+      return clamp(distanceMeters / metersPerPixel, 8, SCALE_MAX_WIDTH_PX);
     }
 
     return clamp(
@@ -1144,7 +1119,7 @@
   class:non-interactive={!interactive}
   bind:this={overlayElement}
 >
-  {#if geoIndicationsState.visible && geoIndicationsState.scale.enabled}
+  {#if geoIndicationsState.visible && geoIndicationsState.scale.enabled && isScaleAvailable}
     <div
       bind:this={scaleElement}
       class="scale-bar"
