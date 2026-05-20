@@ -220,7 +220,6 @@ function isMissingLineCategoryValue(
 export const DEFAULT_TEXT_MASK_PADDING: [number, number] = [3, 1];
 export const TEXT_COLLISION_SAFE_PADDING: [number, number] = [4, 4];
 export const TEXT_COLLISION_PRIORITY = 1;
-const TEXT_BACKGROUND_PADDING: [number, number] = [6, 4];
 
 export const TRANSPARENT_BACKGROUND_COLOR: Color = [0, 0, 0, 0];
 const POINT_SYMBOL_ICON_VIEWBOX_SIZE = 64;
@@ -2374,8 +2373,8 @@ export function resolveVariableTextSizeBounds(baseSize: number): {
 } {
   const { min, max } = SLIDER_LIMITS.textSize;
   const clampedBaseSize = Math.min(Math.max(baseSize, min), max);
-  const minSize = Math.max(min, Math.round(clampedBaseSize * 0.75));
-  const maxSize = Math.min(max, Math.round(clampedBaseSize * 1.75));
+  const minSize = min;
+  const maxSize = clampedBaseSize;
 
   return {
     minSize: Math.min(minSize, maxSize),
@@ -2750,17 +2749,20 @@ function createTextOverlayLayers(
   const labelBaseSize = secondaryLabelsConfig.size ?? DEFAULT_TEXT_SIZE;
   const textBaseSize = textConfig.size ?? DEFAULT_TEXT_SIZE;
   const variableTextSizeColumn =
-    sizeMode === SizeMode.PROPORTIONAL ? textValueColumn : undefined;
+    sizeMode === SizeMode.PROPORTIONAL || sizeMode === SizeMode.CLASSES
+      ? textValueColumn
+      : undefined;
   const variableTextSizeVector = variableTextSizeColumn
     ? textAttributeTable.getChild(variableTextSizeColumn)
     : null;
   const canApplyVariableTextSize =
-    sizeMode === SizeMode.PROPORTIONAL &&
+    (sizeMode === SizeMode.PROPORTIONAL || sizeMode === SizeMode.CLASSES) &&
     !!variableTextSizeColumn &&
     !!variableTextSizeVector;
-  const { maxSize: maxLabelSize } =
+  const { minSize: minLabelSize, maxSize: maxLabelSize } =
     resolveVariableTextSizeBounds(labelBaseSize);
-  const { maxSize: maxTextSize } = resolveVariableTextSizeBounds(textBaseSize);
+  const { minSize: minTextSize, maxSize: maxTextSize } =
+    resolveVariableTextSizeBounds(textBaseSize);
   const thematicValueVector = textValueColumn
     ? textAttributeTable.getChild(textValueColumn)
     : null;
@@ -2774,6 +2776,8 @@ function createTextOverlayLayers(
     textCategoryColumn,
     PrimitiveFilterType.TEXT
   );
+  const textSizeClassCountHint =
+    textClassification?.numClasses ?? textClassification?.colors?.length;
 
   const createChoroplethTextColorAccessor = (
     vector: ReturnType<ArrowTable['getChild']>,
@@ -2827,6 +2831,7 @@ function createTextOverlayLayers(
       return defaultSize;
     }
 
+    const minSize = defaultSize === labelBaseSize ? minLabelSize : minTextSize;
     const maxSize = defaultSize === labelBaseSize ? maxLabelSize : maxTextSize;
 
     return (datum: TextLayerDatum): number => {
@@ -2839,6 +2844,16 @@ function createTextOverlayLayers(
 
       if (!Number.isFinite(numericValue)) {
         return defaultSize;
+      }
+
+      if (sizeMode === SizeMode.CLASSES && textClassification?.breaks?.length) {
+        return getClassedSizeForValue(
+          numericValue,
+          textClassification.breaks,
+          minSize,
+          maxSize,
+          textSizeClassCountHint
+        );
       }
 
       return getProportionalSymbolSizeForValue(
@@ -2916,120 +2931,14 @@ function createTextOverlayLayers(
     ? textAttributeTable.getChild(secondaryLabelColumn)
     : null;
 
-  const textBackgroundConfig = textConfig.background;
-  const backgroundEnabled = textBackgroundConfig.fillMode !== FillMode.NONE;
-  const backgroundDecorationEnabled =
-    backgroundEnabled || textBackgroundConfig.strokeMode !== StrokeMode.NONE;
-  const backgroundValueVector = textBackgroundConfig.valueColumn
-    ? textAttributeTable.getChild(textBackgroundConfig.valueColumn)
-    : null;
-  const backgroundCategoryVector = textBackgroundConfig.categoryColumn
-    ? textAttributeTable.getChild(textBackgroundConfig.categoryColumn)
-    : null;
-  const backgroundStrokeValueVector = textBackgroundConfig.strokeValueColumn
-    ? textAttributeTable.getChild(textBackgroundConfig.strokeValueColumn)
-    : backgroundValueVector;
-  const backgroundStrokeCategoryVector =
-    textBackgroundConfig.strokeCategoryColumn
-      ? textAttributeTable.getChild(textBackgroundConfig.strokeCategoryColumn)
-      : backgroundCategoryVector;
-  const backgroundCategoryColorMap = buildCategoryColorMapFromLabels(
-    textBackgroundConfig.classification?.labels,
-    textBackgroundConfig.classification?.colors
-  );
-  const backgroundFillFallback = resolveStyleColor(
-    textBackgroundConfig.fillColor,
-    [255, 255, 255]
-  );
-  const backgroundStrokeFallback = resolveStyleColor(
-    textBackgroundConfig.strokeColor,
-    [0, 0, 0]
-  );
-  const backgroundBaseFillAccessor = backgroundEnabled
-    ? textBackgroundConfig.fillMode === FillMode.CLASSES
-      ? createChoroplethTextColorAccessor(
-          backgroundValueVector,
-          textBackgroundConfig.classification?.breaks,
-          textBackgroundConfig.classification?.colors,
-          backgroundFillFallback,
-          textBackgroundConfig.fillOpacity
-        )
-      : textBackgroundConfig.fillMode === FillMode.CATEGORIES
-        ? createCategoricalAccessorFromMap(
-            backgroundCategoryVector,
-            backgroundCategoryColorMap,
-            backgroundFillFallback,
-            textBackgroundConfig.fillOpacity,
-            textBackgroundConfig.classification?.disabledLabels ?? []
-          )
-        : withOpacity(backgroundFillFallback, textBackgroundConfig.fillOpacity)
-    : null;
-  const backgroundStrokeActive =
-    textBackgroundConfig.strokeMode !== StrokeMode.NONE &&
-    textBackgroundConfig.strokeWidth > 0 &&
-    textBackgroundConfig.strokeOpacity > 0;
-  const backgroundBorderWidth = backgroundStrokeActive
-    ? textBackgroundConfig.strokeWidth
-    : 0;
-  const backgroundStrokeCategoryColorMap = buildCategoryColorMapFromLabels(
-    textBackgroundConfig.strokeClassification?.labels ??
-      textBackgroundConfig.classification?.labels,
-    textBackgroundConfig.strokeClassification?.colors
-  );
-  const backgroundBaseStrokeAccessor = backgroundStrokeActive
-    ? textBackgroundConfig.strokeMode === StrokeMode.CLASSES
-      ? createChoroplethTextColorAccessor(
-          backgroundStrokeValueVector,
-          textBackgroundConfig.strokeClassification?.breaks ??
-            textBackgroundConfig.classification?.breaks,
-          textBackgroundConfig.strokeClassification?.colors,
-          backgroundStrokeFallback,
-          textBackgroundConfig.strokeOpacity
-        )
-      : textBackgroundConfig.strokeMode === StrokeMode.CATEGORIES
-        ? createCategoricalAccessorFromMap(
-            backgroundStrokeCategoryVector,
-            backgroundStrokeCategoryColorMap,
-            backgroundStrokeFallback,
-            textBackgroundConfig.strokeOpacity,
-            textBackgroundConfig.strokeClassification?.disabledLabels ?? []
-          )
-        : null
-    : null;
-  const resolveBackgroundStrokeColor = (datum: TextLayerDatum): Color => {
-    if (datum.isMissingData) {
-      return TRANSPARENT_BACKGROUND_COLOR;
-    }
-    return typeof backgroundBaseStrokeAccessor === 'function'
-      ? backgroundBaseStrokeAccessor(datum)
-      : (backgroundBaseStrokeAccessor ?? TRANSPARENT_BACKGROUND_COLOR);
-  };
-  const backgroundBorderColor = backgroundStrokeActive
-    ? backgroundBaseStrokeAccessor
-      ? resolveBackgroundStrokeColor
-      : withOpacity(
-          backgroundStrokeFallback,
-          textBackgroundConfig.strokeOpacity
-        )
+  const backgroundBorderWidth = 0;
+  const backgroundBorderColor = TRANSPARENT_BACKGROUND_COLOR;
+  const sharedBackgroundPadding = textConfig.dxpMasking
+    ? DEFAULT_TEXT_MASK_PADDING
+    : TEXT_COLLISION_SAFE_PADDING;
+  const backgroundColorAccessor = textConfig.dxpMasking
+    ? withOpacity(resolveStyleColor(textConfig.haloColor, [255, 255, 255]), 1)
     : TRANSPARENT_BACKGROUND_COLOR;
-  const sharedBackgroundPadding = backgroundDecorationEnabled
-    ? TEXT_BACKGROUND_PADDING
-    : textConfig.dxpMasking
-      ? DEFAULT_TEXT_MASK_PADDING
-      : TEXT_COLLISION_SAFE_PADDING;
-  const resolveBackgroundColor = (datum: TextLayerDatum): Color => {
-    if (datum.isMissingData) {
-      return TRANSPARENT_BACKGROUND_COLOR;
-    }
-    return typeof backgroundBaseFillAccessor === 'function'
-      ? backgroundBaseFillAccessor(datum)
-      : (backgroundBaseFillAccessor ?? TRANSPARENT_BACKGROUND_COLOR);
-  };
-  const backgroundColorAccessor = backgroundEnabled
-    ? resolveBackgroundColor
-    : textConfig.dxpMasking
-      ? withOpacity(resolveStyleColor(textConfig.haloColor, [255, 255, 255]), 1)
-      : TRANSPARENT_BACKGROUND_COLOR;
   const paddingY = resolveVerticalPadding(sharedBackgroundPadding);
   const resolvePointRadiusForDatum = (datum: TextLayerDatum): number => {
     if (!hasPointSymbols) {
@@ -3105,6 +3014,14 @@ function createTextOverlayLayers(
       secondarySize: resolveAccessorValue(labelSizeAccessor, datum),
       paddingY
     });
+  const resolvePrimaryTextAnchor = (datum: TextLayerDatum) =>
+    resolvePointRadiusForDatum(datum) > 0
+      ? 'start'
+      : resolveTextAnchor(textConfig.align);
+  const resolveSecondaryTextAnchor = (datum: TextLayerDatum) =>
+    resolvePointRadiusForDatum(datum) > 0
+      ? 'start'
+      : resolveTextAnchor(secondaryLabelsConfig.align);
 
   if (shouldRenderLabelLayer && secondaryLabelLayerData) {
     const labelData = sortBySizeDescending(
@@ -3121,11 +3038,12 @@ function createTextOverlayLayers(
         getColor: withOpacity(labelColor, labelOpacity),
         getSize: labelSizeAccessor,
         sizeUnits: 'pixels',
-        getTextAnchor: resolveTextAnchor(secondaryLabelsConfig.align),
+        getTextAnchor: resolveSecondaryTextAnchor,
         getAlignmentBaseline: (d) =>
           resolveSecondaryPlacement(d).secondaryAlignmentBaseline,
         getPixelOffset: (d) =>
           resolveSecondaryPlacement(d).secondaryPixelOffset,
+        maxWidth: 10,
         fontFamily: resolveDeckTextFontFamily(secondaryLabelsConfig.fontFamily),
         fontWeight: resolveDeckTextFontWeight(
           secondaryLabelsConfig.bold ? '700' : '400',
@@ -3165,9 +3083,24 @@ function createTextOverlayLayers(
             secondaryLabelsConfig.size,
             sizeMode,
             variableTextSizeColumn,
-            textStatistics.max
+            textStatistics.max,
+            textClassification?.breaks,
+            textClassification?.numClasses
           ],
-          getTextAnchor: [secondaryLabelsConfig.align],
+          getTextAnchor: [
+            secondaryLabelsConfig.align,
+            pointConfig?.enabled,
+            pointConfig?.mode,
+            pointConfig?.size,
+            pointConfig?.minSize,
+            pointConfig?.maxSize,
+            pointConfig?.sizeColumn,
+            pointConfig?.valueColumn,
+            proportionalSymbolScale,
+            pointMissingColumn,
+            pointStatistics.min,
+            pointStatistics.max
+          ],
           getPixelOffset: [
             pointConfig?.enabled,
             pointConfig?.mode,
@@ -3212,34 +3145,9 @@ function createTextOverlayLayers(
             secondaryLabelsConfig.halo,
             secondaryLabelsConfig.haloWidth
           ],
-          getBackgroundColor: [
-            textBackgroundConfig.fillMode,
-            textBackgroundConfig.fillColor,
-            textBackgroundConfig.fillOpacity,
-            textBackgroundConfig.valueColumn,
-            textBackgroundConfig.categoryColumn,
-            textBackgroundConfig.classification?.breaks,
-            textBackgroundConfig.classification?.colors,
-            textBackgroundConfig.classification?.labels,
-            textBackgroundConfig.classification?.disabledLabels,
-            secondaryLabelsConfig.dxpMasking,
-            secondaryLabelsConfig.haloColor
-          ],
-          getBorderWidth: [
-            textBackgroundConfig.strokeMode,
-            textBackgroundConfig.strokeWidth
-          ],
-          getBorderColor: [
-            textBackgroundConfig.strokeMode,
-            textBackgroundConfig.strokeColor,
-            textBackgroundConfig.strokeOpacity,
-            textBackgroundConfig.valueColumn,
-            textBackgroundConfig.categoryColumn,
-            textBackgroundConfig.strokeClassification?.colors,
-            textBackgroundConfig.strokeClassification?.breaks,
-            textBackgroundConfig.strokeClassification?.labels,
-            textBackgroundConfig.strokeClassification?.disabledLabels
-          ]
+          getBackgroundColor: [textConfig.dxpMasking, textConfig.haloColor],
+          getBorderWidth: [],
+          getBorderColor: []
         }
       };
 
@@ -3295,10 +3203,11 @@ function createTextOverlayLayers(
           getColor: textColorAccessor,
           getSize: textSizeAccessor,
           sizeUnits: 'pixels',
-          getTextAnchor: resolveTextAnchor(textConfig.align),
+          getTextAnchor: resolvePrimaryTextAnchor,
           getAlignmentBaseline: (d) =>
             resolvePrimaryPlacement(d).primaryAlignmentBaseline,
           getPixelOffset: (d) => resolvePrimaryPlacement(d).primaryPixelOffset,
+          maxWidth: 10,
           fontFamily: resolveDeckTextFontFamily(textConfig.fontFamily),
           fontWeight: resolveDeckTextFontWeight(
             textConfig.bold ? '700' : '400',
@@ -3352,9 +3261,24 @@ function createTextOverlayLayers(
               textConfig.size,
               sizeMode,
               variableTextSizeColumn,
-              textStatistics.max
+              textStatistics.max,
+              textClassification?.breaks,
+              textClassification?.numClasses
             ],
-            getTextAnchor: [textConfig.align],
+            getTextAnchor: [
+              textConfig.align,
+              pointConfig?.enabled,
+              pointConfig?.mode,
+              pointConfig?.size,
+              pointConfig?.minSize,
+              pointConfig?.maxSize,
+              pointConfig?.sizeColumn,
+              pointConfig?.valueColumn,
+              proportionalSymbolScale,
+              pointMissingColumn,
+              pointStatistics.min,
+              pointStatistics.max
+            ],
             getPixelOffset: [
               pointConfig?.enabled,
               pointConfig?.mode,
@@ -3397,34 +3321,9 @@ function createTextOverlayLayers(
             ],
             outlineColor: [textConfig.haloColor],
             outlineWidth: [textConfig.halo, textConfig.haloWidth],
-            getBackgroundColor: [
-              textBackgroundConfig.fillMode,
-              textBackgroundConfig.fillColor,
-              textBackgroundConfig.fillOpacity,
-              textBackgroundConfig.valueColumn,
-              textBackgroundConfig.categoryColumn,
-              textBackgroundConfig.classification?.breaks,
-              textBackgroundConfig.classification?.colors,
-              textBackgroundConfig.classification?.labels,
-              textBackgroundConfig.classification?.disabledLabels,
-              textConfig.dxpMasking,
-              textConfig.haloColor
-            ],
-            getBorderWidth: [
-              textBackgroundConfig.strokeMode,
-              textBackgroundConfig.strokeWidth
-            ],
-            getBorderColor: [
-              textBackgroundConfig.strokeMode,
-              textBackgroundConfig.strokeColor,
-              textBackgroundConfig.strokeOpacity,
-              textBackgroundConfig.valueColumn,
-              textBackgroundConfig.categoryColumn,
-              textBackgroundConfig.strokeClassification?.colors,
-              textBackgroundConfig.strokeClassification?.breaks,
-              textBackgroundConfig.strokeClassification?.labels,
-              textBackgroundConfig.strokeClassification?.disabledLabels
-            ]
+            getBackgroundColor: [textConfig.dxpMasking, textConfig.haloColor],
+            getBorderWidth: [],
+            getBorderColor: []
           }
         }) as ThematicLayer
       );
@@ -3450,28 +3349,6 @@ function buildCategoryColorMapFromLabels(
     }
   });
   return map;
-}
-
-function createCategoricalAccessorFromMap(
-  vector: ReturnType<ArrowTable['getChild']>,
-  colorMap: Map<string, RGBColor> | null,
-  fallback: RGBColor,
-  opacity: number,
-  disabledLabels: string[] = []
-): ((datum: TextLayerDatum) => Color) | Color {
-  if (!vector || !colorMap || colorMap.size === 0) {
-    return withOpacity(fallback, opacity);
-  }
-
-  const disabled = new Set(disabledLabels.map(String));
-  return (datum: TextLayerDatum): Color => {
-    const category = toTextValue(vector.get(datum.rowIndex));
-    if (category && disabled.has(category)) {
-      return [0, 0, 0, 0];
-    }
-    const rgb = category ? (colorMap.get(category) ?? fallback) : fallback;
-    return withOpacity(rgb, opacity);
-  };
 }
 
 function createDotDensityLayers(

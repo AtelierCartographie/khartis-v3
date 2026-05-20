@@ -15,57 +15,41 @@ const labelSectionSource = readFileSync(
   'utf8'
 );
 
-function getComponentBlock(name: string): string {
-  return (
-    backgroundSectionSource.split(`<${name}`)[1]?.split('/>')[0] ??
-    source.split(`<${name}`)[1]?.split('/>')[0] ??
-    ''
-  );
-}
-
-describe('TextsConfig — FillSection wiring (background)', () => {
-  it('delegates the background fill rendering to the shared FillSection', () => {
+describe('TextsConfig — text fill and contour wiring', () => {
+  it('uses text color controls for Fond instead of background-box fill modes', () => {
     expect(backgroundSectionSource).toContain(
-      "import FillSection from '../shared/fill-section.svelte'"
-    );
-    expect(backgroundSectionSource).toContain('<FillSection');
-  });
-
-  it('uses the standard 4-mode preset for the text background (no DENSITY)', () => {
-    expect(backgroundSectionSource).toContain(
-      'availableModes={FILL_MODES_STANDARD}'
+      "import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte'"
     );
     expect(backgroundSectionSource).toContain(
-      "import { FILL_MODES_STANDARD } from '../shared/fill-mode-presets'"
+      '<SectionHeading title={m.background()} />'
+    );
+    expect(backgroundSectionSource).toContain('<SingleColorPreview');
+    expect(backgroundSectionSource).toContain('color={color}');
+    expect(backgroundSectionSource).toContain('onchange={onColorChange}');
+    expect(source).toContain('color={textColor}');
+    expect(source).toContain('onColorChange={handleTextColorChange}');
+    expect(backgroundSectionSource).not.toContain('<FillSection');
+    expect(backgroundSectionSource).toContain(
+      '<SliderWithInput\n  label={m.opacity()}'
     );
   });
 
-  it('sets categoriesVariant to texts without a redundant primitive tag', () => {
-    const fillBlock = backgroundSectionSource
-      .split('<FillSection')[1]
-      ?.split('/>')[0];
-    expect(fillBlock).toBeDefined();
-    expect(fillBlock).not.toContain('primitive=');
-    expect(fillBlock).toContain('categoriesVariant="texts"');
-  });
-
-  it('wires onBackgroundClassificationChange to the FillSection fill role', () => {
-    const fillBlock = getComponentBlock('FillSection');
-    expect(fillBlock).toContain('onClassificationChange={');
-    expect(fillBlock).toContain(
-      'facetsValueSlotPath={FACET_SLOT.TEXT_BACKGROUND_VALUE}'
-    );
-    expect(fillBlock).toContain(
-      'facetsCategorySlotPath={FACET_SLOT.TEXT_BACKGROUND_CATEGORY}'
-    );
-    expect(fillBlock).not.toContain('TEXT_BACKGROUND_STROKE');
-  });
-
-  it('keeps the StrokeSection branch for the background halo', () => {
-    expect(backgroundSectionSource).toContain('<StrokeSection');
+  it('uses the Contour section for Deck text halo controls', () => {
     expect(backgroundSectionSource).toContain(
-      'onStrokeClassificationChange={onBackgroundStrokeClassificationChange}'
+      '<SectionHeading title={m.stroke()} />'
     );
+    expect(backgroundSectionSource).toContain(
+      '<ToggleWithLabel label={m.stroke()} toggled={halo} ontoggle={onHaloToggle} />'
+    );
+    expect(backgroundSectionSource).toContain('color={haloColor}');
+    expect(backgroundSectionSource).toContain('onchange={onHaloColorChange}');
+    expect(backgroundSectionSource).toContain(
+      '<SliderWithInput\n    label={m.thickness()}'
+    );
+    expect(source).toContain('onHaloToggle={handleHaloToggle}');
+    expect(source).toContain('onHaloColorChange={handleHaloColorChange}');
+    expect(source).toContain('onHaloWidthChange={handleHaloWidthChange}');
+    expect(backgroundSectionSource).not.toContain('<StrokeSection');
   });
 });
 
@@ -169,7 +153,9 @@ describe('TextsConfig — Figma layout', () => {
     expect(sizeSectionSource).toContain(
       "import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte'"
     );
-    expect(sizeSectionSource).toContain('import { TextScale, TextAllCaps }');
+    expect(sizeSectionSource).toContain(
+      'import { Table, TextScale, TextAllCaps }'
+    );
     expect(source).toContain('const TEXT_SIZE_SLIDER_MIN = MIN_FONT_SIZE;');
     expect(source).toContain('const TEXT_SIZE_SLIDER_MAX = MAX_FONT_SIZE;');
     expect(sizeSectionSource).toContain(
@@ -179,6 +165,12 @@ describe('TextsConfig — Figma layout', () => {
     expect(sizeSectionSource).toContain('inputWidth="64px"');
     expect(source).toContain('onModesChange?.({ size: nextMode });');
     expect(sizeSectionSource).toContain('FACET_SLOT.TEXT_VALUE');
+    expect(sizeSectionSource).toContain('SizeMode.CLASSES');
+    expect(sizeSectionSource).toContain('m.size_mode_classes()');
+    expect(sizeSectionSource).toContain(
+      "filterFieldsByKind(\n      selectableDataFields,\n      'numeric'"
+    );
+    expect(sizeSectionSource).toContain('label={sizeSliderLabel}');
   });
 
   it('should use the shared palette preview for missing-data color', () => {
@@ -194,41 +186,17 @@ describe('TextsConfig — Figma layout', () => {
   });
 });
 
-describe('TextsConfig — background discretization routing', () => {
-  it('opens background fill and background stroke discretization through separate targets', () => {
-    expect(source).toContain("discretizationTarget = 'background-fill'");
-    expect(source).toContain("discretizationTarget = 'background-stroke'");
-  });
-
-  it('wires the background stroke section to its dedicated stroke classification state', () => {
-    const strokeBlock = getComponentBlock('StrokeSection');
-    expect(strokeBlock).toContain(
-      'strokeClassification={backgroundVisualization?.text?.background'
-    );
-    expect(strokeBlock).toContain('?.strokeClassification}');
-    expect(strokeBlock).toContain(
-      'strokeValueColumn={backgroundVisualization?.text?.background'
-    );
-    expect(strokeBlock).toContain(
-      'strokeCategoryColumn={backgroundVisualization?.text?.background'
-    );
-    expect(strokeBlock).toContain(
-      'facetsValueSlotPath={FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE}'
-    );
-    expect(strokeBlock).toContain(
-      'facetsCategorySlotPath={FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY}'
-    );
-    expect(strokeBlock).not.toContain('FACET_SLOT.TEXT_BACKGROUND_VALUE}');
-    expect(strokeBlock).not.toContain('FACET_SLOT.TEXT_BACKGROUND_CATEGORY}');
-  });
-
-  it('passes the correct shared-modal role for background fill vs stroke', () => {
+describe('TextsConfig — text-size discretization routing', () => {
+  it('opens text size classes through the shared size discretization modal', () => {
+    expect(source).toContain('function openTextSizeDiscretization()');
     expect(source).toContain(
-      "role={discretizationTarget === 'background-stroke' ? 'stroke' : 'fill'}"
+      'onOpenDiscretization={openTextSizeDiscretization}'
     );
+    expect(source).toContain('role="size"');
     expect(source).toContain(
       'classification={activeDiscretizationClassification}'
     );
     expect(source).toContain('valueColumn={activeDiscretizationValueColumn}');
+    expect(source).toContain('onClassificationChange?.(classification);');
   });
 });

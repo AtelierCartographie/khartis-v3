@@ -206,6 +206,22 @@ describe('createTextHandlers', () => {
     expect(updates.text.sizeModeStates?.fixed).toMatchObject({ size: 12 });
   });
 
+  it('handleTextModesChange supports classed text-size state', () => {
+    const bag = makeBag();
+    bag.handlers.handleTextModesChange({ size: 'classes' } as never);
+    const [updates, afterUpdate] =
+      bag.updateSelectedVisualization.mock.calls[0];
+    expect(updates.text.sizeMode).toBe('classes');
+    expect(updates.text.valueColumn).toBeUndefined();
+    expect(updates.text.classification).toBeUndefined();
+
+    afterUpdate({ id: 'next' });
+    expect(bag.ensurePrimitiveClassificationDefaults).toHaveBeenCalledWith(
+      'text',
+      { id: 'next' }
+    );
+  });
+
   it('handleTextModesChange does not update modeStates when mode is unchanged', () => {
     const bag = makeBag();
     bag.handlers.handleTextModesChange({ color: 'unique' } as never);
