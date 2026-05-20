@@ -51,8 +51,12 @@
   import { Theme } from 'carbon-components-svelte';
   import GlobalLoadingIndicator from '$lib/features/commons/components/global-loading-indicator.svelte';
   import { onMount, untrack } from 'svelte';
-  import type { Component } from 'svelte';
   import ColorBlindnessNotification from '$lib/features/step-toolbar/tools/color-blindness/color-blindness-notification.svelte';
+  import CreateProject from '$lib/features/create-project/create-project.svelte';
+  import MobileToolbar from '$lib/features/main-toolbar/mobile-toolbar.svelte';
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+  import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+  import { dataOrchestratorService } from '$lib/features/commons/services/data-orchestrator.service.svelte';
 
   import '$lib/features/commons/assets/styles/dimension.css';
   import '$lib/features/commons/assets/styles/flex.css';
@@ -63,36 +67,11 @@
   import '$lib/features/commons/assets/styles/spacing.css';
   import '$lib/features/commons/assets/styles/theming.css';
 
-  type CreateProjectComponent = Component<{
-    open: boolean;
-    onClose: () => void;
-  }>;
-
   let { children } = $props();
   let isLoading = $state(true);
   let previousStep = $state<ToolbarStep | null>(null);
   let stylingElementsInitializedForProject = $state<string | null>(null);
-  let CreateProject = $state<CreateProjectComponent | null>(null);
-  let MobileToolbar = $state<Component | null>(null);
-  let mobileToolbarLoadPromise: Promise<void> | null = null;
   const ENABLE_BEFOREUNLOAD_CONFIRMATION = false;
-
-  function ensureMobileToolbarLoaded(): Promise<void> {
-    if (MobileToolbar) return Promise.resolve();
-    mobileToolbarLoadPromise ??=
-      import('$lib/features/main-toolbar/mobile-toolbar.svelte').then(
-        (module) => {
-          MobileToolbar = module.default;
-        }
-      );
-    return mobileToolbarLoadPromise;
-  }
-
-  $effect(() => {
-    if (globalState.isMobileView) {
-      void ensureMobileToolbarLoaded();
-    }
-  });
 
   const handleResize = () => {
     globalActions.setMobileView(window.innerWidth < MOBILE_BREAKPOINT);
@@ -106,13 +85,6 @@
       );
     }
   });
-
-  async function loadCreateProject(): Promise<void> {
-    if (CreateProject) return;
-    const module =
-      await import('$lib/features/create-project/create-project.svelte');
-    CreateProject = module.default;
-  }
 
   onMount(() => {
     void fontAssetsStore.ensureLoaded();
@@ -175,16 +147,8 @@
     window.addEventListener(WORKSPACE_FIT_EVENT, handleWorkspaceFitEvent);
 
     const initializeDataServices = async () => {
-      const [{ duckDBOrchestrator }, { basemapService }] = await Promise.all([
-        import('$lib/features/duckdb/orchestrator/orchestrator.svelte'),
-        import('$lib/features/map/services/basemap.service.svelte')
-      ]);
-
       await duckDBOrchestrator.initialize();
       await basemapService.initialize();
-
-      const { dataOrchestratorService } =
-        await import('$lib/features/commons/services/data-orchestrator.service.svelte');
       await dataOrchestratorService.initialize();
     };
 
@@ -202,7 +166,6 @@
 
         if (!projectStore.currentProject) {
           globalState.isCreateProjectModalOpen = true;
-          void loadCreateProject();
         }
 
         startDataServices().catch((error) => {
@@ -212,7 +175,6 @@
             error
           );
           globalState.isCreateProjectModalOpen = true;
-          void loadCreateProject();
         });
 
         logger.debug(
@@ -227,7 +189,6 @@
         );
         isLoading = false;
         globalState.isCreateProjectModalOpen = true;
-        void loadCreateProject();
       }
     };
 
@@ -271,12 +232,6 @@
       pageMutationObserver = null;
       stepToolbarResizeObserver = null;
     };
-  });
-
-  $effect(() => {
-    if (!isLoading && globalState.isCreateProjectModalOpen) {
-      void loadCreateProject();
-    }
   });
 
   function observeStepToolbar(): void {
@@ -610,7 +565,7 @@
   <KeyboardShortcuts />
 
   <main class:mobile-view={globalState.isMobileView}>
-    {#if CreateProject && globalState.isCreateProjectModalOpen}
+    {#if globalState.isCreateProjectModalOpen}
       <CreateProject open onClose={handleCloseModal} />
     {/if}
 
@@ -657,9 +612,9 @@
         {/if}
       </article>
 
-      {#if globalState.isMobileView && MobileToolbar}
+      {#if globalState.isMobileView}
         <MobileToolbar />
-      {:else if !globalState.isMobileView}
+      {:else}
         <MainToolbar />
       {/if}
 

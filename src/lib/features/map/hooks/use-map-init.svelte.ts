@@ -8,6 +8,7 @@ import { EnvironmentUtils } from '$lib/features/commons/utils/environment.utils'
 
 export type DeckInstance = Deck<View | View[] | null>;
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
+import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   BasemapStyle,
@@ -64,7 +65,7 @@ export interface UseMapInitProps {
   onMapLoaded: () => void;
   onZoom: () => void;
   onMoveEnd: () => void;
-  getActiveVisualizations?: () => import('$lib/features/commons/stores/visualization.store.svelte').VisualizationConfig[];
+  getActiveVisualizations?: () => VisualizationConfig[];
   onOrthographicViewStateChanged?: (
     target: [number, number, number],
     zoom: number

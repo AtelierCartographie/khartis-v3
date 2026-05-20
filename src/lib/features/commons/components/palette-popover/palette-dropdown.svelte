@@ -10,6 +10,7 @@
   import { globalState } from '$lib/features/commons/stores/global.svelte';
 
   import {
+    type DivergingPaletteSplit,
     type Palette,
     type PaletteType,
     getPalettesForType,
@@ -26,7 +27,7 @@
     colorBlindFilter: boolean;
     numClasses: number;
     previewCount?: number;
-    divergingSplit?: import('./palette.constants').DivergingPaletteSplit;
+    divergingSplit?: DivergingPaletteSplit;
     exclusive?: boolean;
     onclose?: () => void;
     onselect?: (palette: Palette, colors: string[]) => void;

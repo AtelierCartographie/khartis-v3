@@ -1,4 +1,4 @@
-import type sqlite3InitModule from '@sqlite.org/sqlite-wasm';
+import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import { MIME } from '../constants';
 import { escapeIdentifier } from './sanitize.utils';
 
@@ -68,12 +68,7 @@ const DEFAULT_SRS_ROWS = [
 let sqliteModulePromise: Promise<SqliteModule> | null = null;
 
 async function getSqliteModule(): Promise<SqliteModule> {
-  if (!sqliteModulePromise) {
-    sqliteModulePromise = import('@sqlite.org/sqlite-wasm').then(
-      ({ default: initSqlite }) => initSqlite()
-    );
-  }
-
+  sqliteModulePromise ??= sqlite3InitModule();
   return sqliteModulePromise;
 }
 
