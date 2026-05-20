@@ -35,18 +35,18 @@ export function resolveTextLabelPlacement(params: {
     };
   }
 
-  const secondaryBottomOffset = -(pointRadius + TEXT_SYMBOL_GAP_PX);
+  const horizontalOffset = pointRadius + TEXT_SYMBOL_GAP_PX;
+  const primaryHeight = primarySize + paddingY * 2;
   const secondaryHeight = secondarySize + paddingY * 2;
+  const primaryVerticalOffset = hasSecondaryLabel
+    ? -((secondaryHeight + TEXT_STACK_GAP_PX) / 2)
+    : 0;
+  const secondaryVerticalOffset = (primaryHeight + TEXT_STACK_GAP_PX) / 2;
 
   return {
-    primaryAlignmentBaseline: 'bottom',
-    secondaryAlignmentBaseline: 'bottom',
-    primaryPixelOffset: [
-      0,
-      hasSecondaryLabel
-        ? secondaryBottomOffset - secondaryHeight - TEXT_STACK_GAP_PX
-        : secondaryBottomOffset
-    ],
-    secondaryPixelOffset: [0, secondaryBottomOffset]
+    primaryAlignmentBaseline: 'center',
+    secondaryAlignmentBaseline: 'center',
+    primaryPixelOffset: [horizontalOffset, primaryVerticalOffset],
+    secondaryPixelOffset: [horizontalOffset, secondaryVerticalOffset]
   };
 }

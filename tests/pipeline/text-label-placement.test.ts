@@ -20,7 +20,7 @@ describe('resolveTextLabelPlacement', () => {
     });
   });
 
-  it('positions the text stack above the symbol when a symbol is rendered', () => {
+  it('positions the text stack to the right of the symbol when a symbol is rendered', () => {
     expect(
       resolveTextLabelPlacement({
         hasPointSymbol: true,
@@ -31,14 +31,14 @@ describe('resolveTextLabelPlacement', () => {
         paddingY: 2
       })
     ).toEqual({
-      primaryAlignmentBaseline: 'bottom',
-      secondaryAlignmentBaseline: 'bottom',
-      primaryPixelOffset: [0, -32],
-      secondaryPixelOffset: [0, -14]
+      primaryAlignmentBaseline: 'center',
+      secondaryAlignmentBaseline: 'center',
+      primaryPixelOffset: [14, -9],
+      secondaryPixelOffset: [14, 15]
     });
   });
 
-  it('keeps a single primary label just above the symbol when there is no secondary label', () => {
+  it('keeps a single primary label centered to the right of the symbol when there is no secondary label', () => {
     expect(
       resolveTextLabelPlacement({
         hasPointSymbol: true,
@@ -49,10 +49,10 @@ describe('resolveTextLabelPlacement', () => {
         paddingY: 2
       })
     ).toEqual({
-      primaryAlignmentBaseline: 'bottom',
-      secondaryAlignmentBaseline: 'bottom',
-      primaryPixelOffset: [0, -14],
-      secondaryPixelOffset: [0, -14]
+      primaryAlignmentBaseline: 'center',
+      secondaryAlignmentBaseline: 'center',
+      primaryPixelOffset: [14, 0],
+      secondaryPixelOffset: [14, 15]
     });
   });
 });

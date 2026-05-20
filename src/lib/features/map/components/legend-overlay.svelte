@@ -855,7 +855,8 @@
     if (
       !viz ||
       !text?.enabled ||
-      text.sizeMode !== SizeMode.PROPORTIONAL ||
+      (text.sizeMode !== SizeMode.PROPORTIONAL &&
+        text.sizeMode !== SizeMode.CLASSES) ||
       !text.valueColumn
     ) {
       return null;

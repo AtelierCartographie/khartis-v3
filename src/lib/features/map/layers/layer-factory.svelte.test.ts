@@ -1,4 +1,9 @@
-import { GeoJsonLayer, PathLayer, ScatterplotLayer } from '@deck.gl/layers';
+import {
+  GeoJsonLayer,
+  PathLayer,
+  ScatterplotLayer,
+  TextLayer
+} from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type {
   Feature,
@@ -25,6 +30,7 @@ import {
   MissingDataShape,
   ProportionalType,
   ShapeType,
+  SizeMode,
   StrokeMode,
   SymbolDoublePosition,
   SymbolMode,
@@ -47,6 +53,7 @@ const {
   parseSolidPolygonsWithProjectionMock,
   pathColorAttrMock,
   pathWidthAttrMock,
+  pointPositionsMock,
   projectGeoJSONMock
 } = vi.hoisted(() => {
   class WorkerStub {
@@ -78,6 +85,7 @@ const {
     parseSolidPolygonsWithProjectionMock: vi.fn(),
     pathColorAttrMock: vi.fn(),
     pathWidthAttrMock: vi.fn(),
+    pointPositionsMock: vi.fn(),
     projectGeoJSONMock: vi.fn()
   };
 });
@@ -119,6 +127,7 @@ vi.mock('../utils/geoarrow-stream-bridge.utils', async () => {
     parseSolidPolygonsWithProjection: parseSolidPolygonsWithProjectionMock,
     pathColorAttr: pathColorAttrMock,
     pathWidthAttr: pathWidthAttrMock,
+    pointPositions: pointPositionsMock,
     projectGeoJSON: projectGeoJSONMock,
     rowAccessor: vi.fn(
       (
@@ -156,7 +165,14 @@ vi.mock('./pattern-texture', async () => {
   };
 });
 
+vi.mock('$lib/features/commons/stores/font-assets.store.svelte', () => ({
+  fontAssetsStore: {
+    ready: true
+  }
+}));
+
 import {
+  createDeckLayers,
   createLineLayers,
   createPointLayers,
   createPolygonLayers,
@@ -390,6 +406,65 @@ function createContext(viz: VisualizationConfig): LayerContext {
   };
 }
 
+function createTextVisualization(): VisualizationConfig {
+  const visualization = createSymbolVisualization();
+
+  return {
+    ...visualization,
+    primitiveFilters: [PrimitiveFilterType.POINT, PrimitiveFilterType.TEXT],
+    text: {
+      enabled: true,
+      labelColumn: 'name',
+      colorMode: ColorMode.UNIQUE,
+      sizeMode: SizeMode.FIXED,
+      fontFamily: 'Open Sans',
+      color: '#111111',
+      opacity: 1,
+      size: 24,
+      bold: false,
+      italic: false,
+      align: 'center',
+      halo: false,
+      haloColor: '#ffffff',
+      haloWidth: 2,
+      collisionDetection: true,
+      dxpMasking: false,
+      missingData: {
+        show: true,
+        shape: MissingDataShape.CIRCLE,
+        size: 6,
+        color: '#c6c6c6',
+        label: 'N/A'
+      },
+      secondaryLabels: {
+        enabled: false,
+        fontFamily: 'Open Sans',
+        color: '#111111',
+        opacity: 1,
+        size: 12,
+        bold: false,
+        italic: false,
+        align: 'center',
+        halo: false,
+        haloColor: '#ffffff',
+        haloWidth: 2,
+        collisionDetection: true,
+        dxpMasking: false
+      },
+      background: {
+        fillMode: FillMode.NONE,
+        fillColor: '#ffffff',
+        fillOpacity: 1,
+        strokeMode: StrokeMode.NONE,
+        strokeColor: '#000000',
+        strokeWidth: 0,
+        strokeOpacity: 1,
+        strokeDashed: false
+      }
+    }
+  };
+}
+
 function createGeometryInfo(): GeometryInfo {
   return {
     type: 'Polygon',
@@ -512,6 +587,10 @@ beforeEach(() => {
   });
   parsePointDataMock.mockReturnValue({});
   parsePointDataWithProjectionMock.mockReturnValue({});
+  pointPositionsMock.mockImplementation(
+    (pointData: { positions?: Float32Array | Float64Array }) =>
+      pointData.positions ?? new Float32Array()
+  );
 });
 
 describe('resolveSplitMappingFeatureIdColumn', () => {
@@ -590,21 +669,168 @@ describe('binary scatter styling refresh', () => {
     );
   });
 
-  it('wires disabled category labels into text and text-background categorical rendering', () => {
+  it('wires disabled category labels into text categorical rendering', () => {
     expect(source).toContain('textClassification?.disabledLabels ?? []');
-    expect(source).toContain(
-      'textBackgroundConfig.classification?.disabledLabels ?? []'
-    );
-    expect(source).toContain(
-      'textBackgroundConfig.strokeClassification?.disabledLabels ?? []'
-    );
     expect(source).toContain('textClassification?.disabledLabels,');
-    expect(source).toContain(
-      'textBackgroundConfig.classification?.disabledLabels,'
+  });
+});
+
+describe('createTextOverlayLayers', () => {
+  it('wraps text labels and places labels to the right when symbols are rendered', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 2,
+      featureIds: new Uint32Array([0, 1]),
+      positions: new Float32Array([0, 0, 10, 10])
+    });
+
+    const visualization = createTextVisualization();
+    const layers = createDeckLayers(
+      createTableWithRows(
+        [
+          { name: 'Short label', metric: 10 },
+          { name: 'A very long label that should wrap', metric: 90 }
+        ],
+        ['name', 'metric']
+      ),
+      {
+        ...createContext(visualization),
+        geometryInfo: {
+          ...createPointGeometryInfo(),
+          type: 'POINT' as GeometryInfo['type']
+        }
+      }
     );
-    expect(source).toContain(
-      'textBackgroundConfig.strokeClassification?.disabledLabels'
+
+    const textLayer = layers.find((layer) => layer instanceof TextLayer) as
+      | TextLayer
+      | undefined;
+    const textProps = textLayer?.props as
+      | {
+          data: unknown[];
+          maxWidth?: number;
+          getTextAnchor?: (datum: unknown) => string;
+          getPixelOffset?: (datum: unknown) => [number, number];
+        }
+      | undefined;
+    const datum = textProps?.data[0];
+    expect(textProps?.maxWidth).toBe(10);
+    expect(textProps?.getTextAnchor?.(datum)).toBe('start');
+    expect(textProps?.getPixelOffset?.(datum)).toEqual([9, 0]);
+  });
+
+  it('supports classed text sizes using the selected maximum size', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 2,
+      featureIds: new Uint32Array([0, 1]),
+      positions: new Float32Array([0, 0, 10, 10])
+    });
+
+    const visualization = createTextVisualization();
+    visualization.text = {
+      ...visualization.text!,
+      sizeMode: SizeMode.CLASSES,
+      valueColumn: 'metric',
+      size: 64,
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 3,
+        numClasses: 3,
+        breaks: [0, 50, 100]
+      }
+    };
+
+    const layers = createDeckLayers(
+      createTableWithRows(
+        [
+          { name: 'Low', metric: 10 },
+          { name: 'High', metric: 90 }
+        ],
+        ['name', 'metric']
+      ),
+      {
+        ...createContext(visualization),
+        geometryInfo: {
+          ...createPointGeometryInfo(),
+          type: 'POINT' as GeometryInfo['type']
+        }
+      }
     );
+
+    const textLayer = layers.find((layer) => layer instanceof TextLayer) as
+      | TextLayer
+      | undefined;
+    const getSize = (textLayer?.props as { getSize?: unknown } | undefined)
+      ?.getSize as ((datum: { rowIndex: number }) => number) | undefined;
+
+    expect(getSize?.({ rowIndex: 0 })).toBeLessThan(
+      getSize?.({ rowIndex: 1 }) ?? 0
+    );
+    expect(getSize?.({ rowIndex: 1 })).toBeLessThanOrEqual(64);
+    expect(textLayer?.props.updateTriggers?.getSize).toContain(
+      visualization.text.classification?.breaks
+    );
+  });
+
+  it('keeps centroid labels centered and ignores legacy text background boxes', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 1,
+      featureIds: new Uint32Array([0]),
+      positions: new Float32Array([0, 0])
+    });
+
+    const visualization = createTextVisualization();
+    visualization.primitiveFilters = [PrimitiveFilterType.TEXT];
+    visualization.symbol = { ...visualization.symbol!, enabled: false };
+    visualization.text = {
+      ...visualization.text!,
+      background: {
+        ...visualization.text!.background,
+        fillMode: FillMode.UNIQUE,
+        fillColor: '#ff0000',
+        fillOpacity: 1,
+        strokeMode: StrokeMode.UNIQUE,
+        strokeColor: '#00ff00',
+        strokeWidth: 4,
+        strokeOpacity: 1
+      }
+    };
+
+    const layers = createDeckLayers(
+      createTableWithRows([{ name: 'Centroid' }], ['name']),
+      {
+        ...createContext(visualization),
+        geometryInfo: {
+          ...createPointGeometryInfo(),
+          type: 'POINT' as GeometryInfo['type']
+        }
+      }
+    );
+
+    const textLayer = layers.find((layer) => layer instanceof TextLayer) as
+      | TextLayer
+      | undefined;
+    const textProps = textLayer?.props as
+      | {
+          data: unknown[];
+          getTextAnchor?: (datum: unknown) => string;
+          getPixelOffset?: (datum: unknown) => [number, number];
+          getBackgroundColor?:
+            | ((datum: unknown) => [number, number, number, number])
+            | [number, number, number, number];
+          getBorderWidth?: number;
+        }
+      | undefined;
+    const datum = textProps?.data[0];
+    const backgroundColor = textProps?.getBackgroundColor;
+    const resolvedBackgroundColor =
+      typeof backgroundColor === 'function'
+        ? backgroundColor(datum)
+        : backgroundColor;
+
+    expect(textProps?.getTextAnchor?.(datum)).toBe('middle');
+    expect(textProps?.getPixelOffset?.(datum)).toEqual([0, 0]);
+    expect(resolvedBackgroundColor).toEqual([0, 0, 0, 0]);
+    expect(textProps?.getBorderWidth).toBe(0);
   });
 });
 
@@ -2361,15 +2587,8 @@ describe('createLineLayers', () => {
     expect(pathColorAttrMock).toHaveBeenCalled();
   });
 
-  it('allows text background contour to render when fill is disabled', () => {
-    expect(source).toContain(
-      'const backgroundDecorationEnabled =\n    backgroundEnabled || textBackgroundConfig.strokeMode !== StrokeMode.NONE;'
-    );
-    expect(source).toContain(
-      'const backgroundStrokeActive =\n    textBackgroundConfig.strokeMode !== StrokeMode.NONE'
-    );
-    expect(source).toContain(
-      'const sharedBackgroundPadding = backgroundDecorationEnabled'
-    );
+  it('does not route text contour through legacy background boxes', () => {
+    expect(source).not.toContain('textBackgroundConfig');
+    expect(source).toContain('outlineWidth: textConfig.halo');
   });
 });
