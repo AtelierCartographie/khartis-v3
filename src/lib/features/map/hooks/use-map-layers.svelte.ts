@@ -39,7 +39,6 @@ import type {
 import type { DeckInstance } from './use-map-init.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import {
-  filterArrowTableByYear,
   filterArrowTableByDataFilters,
   filterArrowTableByTableFilters,
   selectRowsByIndices
@@ -704,8 +703,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     split: SplitRenderingTable,
     dataFilters: VisualizationConfig['dataFilters'],
     primitiveType: PrimitiveFilter | undefined,
-    tableFilters: DataTableFilter[] | undefined,
-    yearFilter: VisualizationConfig['yearFilter']
+    tableFilters: DataTableFilter[] | undefined
   ): ArrowTable {
     const matchedGeometryTable = getMatchedSplitTable(geometryTable, split);
     const dataFilteredDataset = filterArrowTableByDataFilters(
@@ -717,9 +715,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       dataFilteredDataset,
       tableFilters
     );
-    const filteredDataset = yearFilter
-      ? filterArrowTableByYear(tableFilteredDataset, yearFilter)
-      : tableFilteredDataset;
+    const filteredDataset = tableFilteredDataset;
 
     if (filteredDataset === split.dataset) {
       return matchedGeometryTable;
@@ -1104,9 +1100,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               vizFiltered,
               tableFilters
             );
-            const filteredTable = viz.yearFilter
-              ? filterArrowTableByYear(tableFiltered, viz.yearFilter)
-              : tableFiltered;
+            const filteredTable = tableFiltered;
             if (filteredTable !== table && filteredTable.numRows === 0) {
               hasEmptyFilteredVisualization = true;
             }
@@ -1133,8 +1127,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
                     split,
                     viz.dataFilters,
                     PrimitiveFilterType.POINT,
-                    tableFilters,
-                    viz.yearFilter
+                    tableFilters
                   )
                 : (() => {
                     const representativeVizFiltered =
@@ -1148,12 +1141,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
                         representativeVizFiltered,
                         tableFilters
                       );
-                    return viz.yearFilter
-                      ? filterArrowTableByYear(
-                          representativeTableFiltered,
-                          viz.yearFilter
-                        )
-                      : representativeTableFiltered;
+                    return representativeTableFiltered;
                   })();
               ctx.representativePointTable = filteredRepresentativePointTable;
               ctx.representativePointGeometryInfo =

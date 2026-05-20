@@ -19,7 +19,6 @@
   import PolygonsConfig from './polygons/polygons-config.svelte';
   import SymbolsConfig from './symbols/symbols-config.svelte';
   import TextsConfig from './texts/texts-config.svelte';
-  import YearFilter from './year-filter.svelte';
   import {
     buildLinePanelVisualization,
     buildPolygonPanelVisualization,
@@ -67,7 +66,6 @@
   });
   const dataFieldItems = $derived(datasetAnalysis.dataFieldItems);
   const hasGeometry = $derived(datasetAnalysis.hasGeometry);
-  const hasYearDimension = $derived(datasetAnalysis.hasYearDimension);
   const showsSymbolsConfig = $derived(datasetAnalysis.showsSymbolsConfig);
   const showsPolygonsConfig = $derived(datasetAnalysis.showsPolygonsConfig);
   const showsLinesConfig = $derived(datasetAnalysis.showsLinesConfig);
@@ -609,10 +607,6 @@
   </div>
 
   <div class="config-accordion">
-    {#if selectedViz && hasYearDimension}
-      <YearFilter visualization={selectedViz} />
-    {/if}
-
     <SymbolsConfig
       dataFields={dataFieldItems}
       visualization={symbolVisualization}

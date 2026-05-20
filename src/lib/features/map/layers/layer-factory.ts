@@ -6,7 +6,7 @@ import {
   PathLayer,
   ScatterplotLayer
 } from '@deck.gl/layers';
-import { DataFilterExtension, PathStyleExtension } from '@deck.gl/extensions';
+import { PathStyleExtension } from '@deck.gl/extensions';
 import RotatableFillStyleExtension from './rotatable-fill-style-extension';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
@@ -74,8 +74,7 @@ import type {
   GeometryInfo,
   LayerContext,
   RGBColor,
-  ThematicLayer,
-  YearFilterInfo
+  ThematicLayer
 } from '../types';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import {
@@ -142,7 +141,6 @@ import {
   pointColorAttr,
   pointRadiusAttr,
   rowAccessor,
-  filterValueAttr,
   pointPositions,
   projectGeoJSON
 } from '../utils/geoarrow-stream-bridge.utils';
@@ -996,19 +994,6 @@ function createDoubleProportionalPointLayers(
       missingShapeOrdinal
     );
     sortScatterBinaryDataByRadius(scatterBinaryData);
-    const yearFilterBinaryData = {
-      length: scatterBinaryData.length ?? pointData.length,
-      featureIds: scatterBinaryData.featureIds ?? pointData.featureIds
-    };
-
-    const yearFilterProps = ctx.yearFilter
-      ? buildYearFilterProps(
-          yearFilterBinaryData,
-          scatterBinaryData,
-          jsTable,
-          ctx.yearFilter
-        )
-      : null;
 
     return new MultiShapeLayer({
       id: `${layerId}-${suffix}`,
@@ -1037,7 +1022,6 @@ function createDoubleProportionalPointLayers(
       ...resolveHoverHighlightProps(pickable),
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
-      ...yearFilterProps,
       updateTriggers: {
         getFillColor: [
           triggerColumn,
@@ -1084,10 +1068,7 @@ function createDoubleProportionalPointLayers(
           commonScale,
           positionMode
         ],
-        getShape: [shapeOrdinal, missingShapeOrdinal, triggerColumn],
-        ...(ctx.yearFilter && {
-          getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
-        })
+        getShape: [shapeOrdinal, missingShapeOrdinal, triggerColumn]
       }
     }) as ThematicLayer;
   };
@@ -1622,19 +1603,6 @@ function createRepresentativePointSymbolLayers(
     sortScatterBinaryDataByRadius(scatterBinaryData);
   }
 
-  const yearFilterBinaryData = {
-    length: scatterBinaryData.length ?? pointData.length,
-    featureIds: scatterBinaryData.featureIds ?? pointData.featureIds
-  };
-  const yearFilterProps = ctx.yearFilter
-    ? buildYearFilterProps(
-        yearFilterBinaryData,
-        scatterBinaryData,
-        jsTable,
-        ctx.yearFilter
-      )
-    : null;
-
   return [
     new MultiShapeLayer({
       id: `${pointLayerId}-centroids`,
@@ -1657,7 +1625,6 @@ function createRepresentativePointSymbolLayers(
       ...resolveHoverHighlightProps(),
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
-      ...yearFilterProps,
       updateTriggers: {
         getFillColor: [
           useChoropleth,
@@ -1715,10 +1682,7 @@ function createRepresentativePointSymbolLayers(
           pointCategoryColumn,
           pointClassification?.labels,
           symbolPatternType
-        ],
-        ...(ctx.yearFilter && {
-          getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
-        })
+        ]
       }
     })
   ];
@@ -1838,10 +1802,7 @@ function createHighlightedPolygonOverlay(
   geoColumn: string,
   highlightedRowIds: Set<number> | undefined,
   highlightVersion: number,
-  ctx: Pick<
-    LayerContext,
-    'customProjection' | 'yearFilter' | 'modelMatrix' | 'beforeId'
-  >
+  ctx: Pick<LayerContext, 'customProjection' | 'modelMatrix' | 'beforeId'>
 ): Layer<DeckDataRow> | null {
   if (!highlightedRowIds || highlightedRowIds.size === 0) {
     return null;
@@ -1868,18 +1829,14 @@ function createHighlightedPolygonOverlay(
     const projectedGeoJson = ctx.customProjection
       ? projectGeoJSON(highlightedGeoJson, ctx.customProjection)
       : highlightedGeoJson;
-    const filteredGeoJson = filterGeoJsonByYear(
-      projectedGeoJson,
-      ctx.yearFilter
-    );
 
-    if (filteredGeoJson.features.length === 0) {
+    if (projectedGeoJson.features.length === 0) {
       return null;
     }
 
     return new GeoJsonLayer({
       id: `${layerId}-selection-overlay`,
-      data: filteredGeoJson,
+      data: projectedGeoJson,
       filled: false,
       stroked: true,
       lineWidthUnits: 'pixels',
@@ -2013,52 +1970,6 @@ export function getCachedGeoJSON(
   const result = arrowTableToGeoJSON(table, geoColumn);
   columnMap.set(geoColumn, result);
   return result;
-}
-
-const DATA_FILTER_EXTENSION = new DataFilterExtension({ filterSize: 1 });
-
-function buildYearFilterProps(
-  binaryData: { readonly length: number; readonly featureIds: Uint32Array },
-  dataObj: { attributes: Record<string, unknown> },
-  table: ArrowTable,
-  yearFilter: YearFilterInfo
-): Record<string, unknown> {
-  const filterAttr = filterValueAttr(binaryData, table, yearFilter.column);
-
-  const nextData = {
-    ...dataObj,
-    attributes: {
-      ...dataObj.attributes,
-      getFilterValue: filterAttr
-    }
-  };
-  return {
-    data: nextData,
-    extensions: [DATA_FILTER_EXTENSION],
-    filterRange: [yearFilter.value, yearFilter.value] as [number, number]
-  };
-}
-
-function filterGeoJsonByYear<T extends Geometry>(
-  geojson: FeatureCollection<T>,
-  yearFilter: YearFilterInfo | undefined
-): FeatureCollection<T> {
-  if (!yearFilter) {
-    return geojson;
-  }
-
-  const expectedYear = parseYearTextValue(yearFilter.value);
-  if (expectedYear === null) {
-    return geojson;
-  }
-
-  return {
-    ...geojson,
-    features: geojson.features.filter((feature) => {
-      const rawValue = feature.properties?.[yearFilter.column];
-      return parseYearTextValue(rawValue) === expectedYear;
-    })
-  };
 }
 
 let fillStyleExtensionInstance: RotatableFillStyleExtension | null = null;
@@ -2365,29 +2276,6 @@ export function toTextValue(value: unknown): string | null {
   return text.length > 0 ? text : null;
 }
 
-function parseYearTextValue(value: unknown): number | null {
-  if (typeof value === 'bigint') {
-    const numericValue = Number(value);
-    return Number.isFinite(numericValue) ? numericValue : null;
-  }
-
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : null;
-  }
-
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return null;
-    }
-
-    const numericValue = Number.parseFloat(trimmed);
-    return Number.isFinite(numericValue) ? numericValue : null;
-  }
-
-  return null;
-}
-
 export function resolveMissingTextLabel(label: string | undefined): string {
   const normalizedLabel = label?.trim();
   return normalizedLabel && normalizedLabel.length > 0 ? normalizedLabel : '•';
@@ -2404,27 +2292,6 @@ export function resolveTextDatumText(
   return datum.secondaryText
     ? `${datum.primaryText}\n${datum.secondaryText}`
     : datum.primaryText;
-}
-
-export function filterTextLayerDataByYear(
-  textData: TextLayerDatum[],
-  table: ArrowTable,
-  yearFilter: YearFilterInfo | undefined
-): TextLayerDatum[] {
-  if (!yearFilter) {
-    return textData;
-  }
-
-  const yearVector = table.getChild(yearFilter.column);
-  const expectedYear = parseYearTextValue(yearFilter.value);
-  if (!yearVector || expectedYear === null) {
-    return textData;
-  }
-
-  return textData.filter((datum) => {
-    const currentYear = parseYearTextValue(yearVector.get(datum.rowIndex));
-    return currentYear === expectedYear;
-  });
 }
 
 function collectCoordinates(
@@ -3114,13 +2981,9 @@ function createTextOverlayLayers(
     });
 
   if (shouldRenderLabelLayer && secondaryLabelLayerData) {
-    const labelDataFiltered = filterTextLayerDataByYear(
+    const labelData = sortBySizeDescending(
       secondaryLabelLayerData.filter((datum) => !datum.isMissingData),
-      textAttributeTable,
-      ctx.yearFilter
-    );
-    const labelData = sortBySizeDescending(labelDataFiltered, (datum) =>
-      resolveAccessorValue(labelSizeAccessor, datum)
+      (datum) => resolveAccessorValue(labelSizeAccessor, datum)
     );
     if (labelData.length > 0) {
       const labelLayerId = createThematicLayerId(DeckLayerId.LABEL_LAYER, ctx);
@@ -3261,16 +3124,12 @@ function createTextOverlayLayers(
   }
 
   if (shouldRenderTextLayer) {
-    const textDataFiltered = filterTextLayerDataByYear(
+    const textData = sortBySizeDescending(
       textLayerData.filter(
         (datum) =>
           !datum.isMissingData || (textConfig.missingData?.show ?? true)
       ),
-      textAttributeTable,
-      ctx.yearFilter
-    );
-    const textData = sortBySizeDescending(textDataFiltered, (datum) =>
-      resolveAccessorValue(textSizeAccessor, datum)
+      (datum) => resolveAccessorValue(textSizeAccessor, datum)
     );
     if (textData.length > 0) {
       const textLayerId = createThematicLayerId(DeckLayerId.TEXT_LAYER, ctx);
@@ -3720,11 +3579,6 @@ export function createPointLayers(
       );
       return [];
     }
-    const filteredGeoJsonData = filterGeoJsonByYear(
-      geojsonData,
-      ctx.yearFilter
-    );
-
     const effectiveCategoryColorMap = resolveEffectiveCategoryColorMap(
       jsTable,
       viz,
@@ -3872,12 +3726,12 @@ export function createPointLayers(
         : geoJsonRadius;
     const sortedGeoJsonData = useProportionalSymbols
       ? {
-          ...filteredGeoJsonData,
-          features: [...filteredGeoJsonData.features].sort(
+          ...geojsonData,
+          features: [...geojsonData.features].sort(
             (a, b) => getGeoJsonPointRadius(b) - getGeoJsonPointRadius(a)
           )
         }
-      : filteredGeoJsonData;
+      : geojsonData;
 
     if (
       pointShape !== ShapeType.CIRCLE ||
@@ -4454,19 +4308,6 @@ export function createPointLayers(
     sortScatterBinaryDataByRadius(scatterBinaryData);
   }
 
-  const yearFilterBinaryData = {
-    length: scatterBinaryData.length ?? pointData.length,
-    featureIds: scatterBinaryData.featureIds ?? pointData.featureIds
-  };
-  const yearFilterProps = ctx.yearFilter
-    ? buildYearFilterProps(
-        yearFilterBinaryData,
-        scatterBinaryData,
-        jsTable,
-        ctx.yearFilter
-      )
-    : null;
-
   const useMultiShapeLayer =
     pointShape !== ShapeType.CIRCLE ||
     missingPointShape !== ShapeType.CIRCLE ||
@@ -4496,7 +4337,6 @@ export function createPointLayers(
     ...resolveHoverHighlightProps(),
     ...(modelMatrix && { modelMatrix }),
     ...(beforeId && { beforeId }),
-    ...yearFilterProps,
     updateTriggers: {
       getFillColor: [
         useChoropleth,
@@ -4558,8 +4398,6 @@ export function createPointLayers(
         pointClassification?.categoryShapes,
         symbolPatternType
       ]
-      // Note: getFilterValue is a binary attribute (baked once via filterValueAttr),
-      // not a per-frame accessor. Year changes are handled by filterRange prop alone.
     }
   };
 
@@ -4848,10 +4686,6 @@ export function createLineLayers(
       pathBinaryData.attributes.getWidth = widthBinaryAttr;
     }
 
-    const lineYearFilterProps = ctx.yearFilter
-      ? buildYearFilterProps(lineData, pathBinaryData, jsTable, ctx.yearFilter)
-      : null;
-
     const lineLayer = new PathLayer({
       id: layerId,
       ...(pathProps as unknown as Record<string, unknown>),
@@ -4868,7 +4702,6 @@ export function createLineLayers(
       ...resolveHoverHighlightProps(),
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
-      ...lineYearFilterProps,
       updateTriggers: {
         getColor: [
           useChoropleth,
@@ -5096,14 +4929,10 @@ export function createLineLayers(
     ? (feature: { properties?: Record<string, unknown> | null }) =>
         isMissingLineFeature(feature) ? lineMissingDashArray : lineDashArray
     : lineDashArray;
-  const filteredLineGeojsonData = filterGeoJsonByYear(
-    lineGeojsonData,
-    ctx.yearFilter
-  );
 
   const lineLayer = new GeoJsonLayer({
     id: layerId,
-    data: filteredLineGeojsonData,
+    data: lineGeojsonData,
     stroked: true,
     filled: false,
     getLineColor: geoJsonLineColor,
@@ -5473,15 +5302,6 @@ export function createPolygonLayers(
         solidBinaryData.attributes.getFillColor = fillColorBinaryAttr;
       }
 
-      const polyYearFilterProps = ctx.yearFilter
-        ? buildYearFilterProps(
-            polyData,
-            solidBinaryData,
-            jsTable,
-            ctx.yearFilter
-          )
-        : {};
-
       const fillLayer = new SolidPolygonLayer({
         id: layerId,
         ...(solidProps as unknown as Record<string, unknown>),
@@ -5502,7 +5322,6 @@ export function createPolygonLayers(
         },
         ...(modelMatrix && { modelMatrix }),
         ...(beforeId && { beforeId }),
-        ...polyYearFilterProps,
         updateTriggers: {
           getFillColor: [
             useChoropleth,
@@ -5529,15 +5348,6 @@ export function createPolygonLayers(
         strokeBinaryData.attributes.getColor = strokeColorBinaryAttr;
       }
 
-      const strokeYearFilterProps = ctx.yearFilter
-        ? buildYearFilterProps(
-            outlineData,
-            strokeBinaryData,
-            jsTable,
-            ctx.yearFilter
-          )
-        : {};
-
       let strokeLayer: Layer<DeckDataRow>;
       if (strokeDashed) {
         strokeLayer = new PathLayer({
@@ -5555,7 +5365,6 @@ export function createPolygonLayers(
           pickable: false,
           ...(modelMatrix && { modelMatrix }),
           ...(beforeId && { beforeId }),
-          ...strokeYearFilterProps,
           updateTriggers: {
             getColor: [polygonStrokeColor, polygonStrokeOpacity, hlVersion],
             getDashArray: [strokeDashed],
@@ -5575,7 +5384,6 @@ export function createPolygonLayers(
           pickable: false,
           ...(modelMatrix && { modelMatrix }),
           ...(beforeId && { beforeId }),
-          ...strokeYearFilterProps,
           updateTriggers: {
             getColor: [polygonStrokeColor, polygonStrokeOpacity, hlVersion],
             getWidth: [polygonStrokeWidth]
@@ -5592,12 +5400,6 @@ export function createPolygonLayers(
             rawPatternGeojson && ctx.customProjection
               ? projectGeoJSON(rawPatternGeojson, ctx.customProjection)
               : rawPatternGeojson;
-          if (patternGeojson) {
-            patternGeojson = filterGeoJsonByYear(
-              patternGeojson,
-              ctx.yearFilter
-            );
-          }
         } catch {
           patternGeojson = null;
         }
@@ -5887,19 +5689,13 @@ export function createPolygonLayers(
       : (baseGeoJsonStrokeColor ??
         withOpacity(polygonStrokeColor, polygonStrokeOpacity))
     : ([0, 0, 0, 0] as [number, number, number, number]);
-  const filteredPolygonGeojsonData = filterGeoJsonByYear(
-    geojsonData,
-    ctx.yearFilter
-  );
 
   const patternLayer =
-    patternProps &&
-    showGeoJsonFill &&
-    filteredPolygonGeojsonData.features.length > 0
+    patternProps && showGeoJsonFill && geojsonData.features.length > 0
       ? createPolygonPatternOverlayLayer(
           layerId,
           polygonClassification?.patternId,
-          filteredPolygonGeojsonData,
+          geojsonData,
           patternProps,
           ctx
         )
@@ -5912,7 +5708,7 @@ export function createPolygonLayers(
     geoJsonLayers = [
       new GeoJsonLayer({
         id: projectedGeoJsonLayerId,
-        data: filteredPolygonGeojsonData,
+        data: geojsonData,
         getFillColor: geoJsonFillColor,
         filled: showGeoJsonFill,
         stroked: false,
@@ -5948,7 +5744,7 @@ export function createPolygonLayers(
         ? [
             new GeoJsonLayer({
               id: `${layerId}-stroke`,
-              data: filteredPolygonGeojsonData,
+              data: geojsonData,
               getLineColor: geoJsonStrokeColor,
               filled: false,
               stroked: true,
@@ -5990,7 +5786,7 @@ export function createPolygonLayers(
     geoJsonLayers = [
       new GeoJsonLayer({
         id: projectedGeoJsonLayerId,
-        data: filteredPolygonGeojsonData,
+        data: geojsonData,
         getFillColor: geoJsonFillColor,
         getLineColor: geoJsonStrokeColor,
         filled: showGeoJsonFill,
@@ -6100,7 +5896,6 @@ export function createGeoJsonLayers(
     ? projectGeoJSON(geojson, ctx.customProjection)
     : geojson;
   const data = ensureGeoJsonFeatureIds(projectedData);
-  const filteredData = filterGeoJsonByYear(data, ctx.yearFilter);
   const baseFillColor: [number, number, number, number] = [
     fillColor[0],
     fillColor[1],
@@ -6129,7 +5924,7 @@ export function createGeoJsonLayers(
   const layers: Layer<DeckDataRow>[] = [
     new GeoJsonLayer({
       id: layerId,
-      data: filteredData,
+      data: data,
       filled: true,
       stroked: true,
       getFillColor: geoJsonFillColor,
@@ -6155,7 +5950,7 @@ export function createGeoJsonLayers(
 
   const selectionOverlay = createHighlightedGeoJsonOverlay(
     layerId,
-    filteredData,
+    data,
     highlightedRowIds,
     hlVersion,
     ctx
