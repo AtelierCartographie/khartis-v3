@@ -74,11 +74,6 @@ export interface DeckMapProps {
   isFacetCell?: boolean;
 }
 
-export interface YearFilterInfo {
-  column: string;
-  value: number;
-}
-
 export interface LayerContext {
   viz:
     | import('$lib/features/commons/stores/visualization.store.svelte').VisualizationConfig
@@ -114,8 +109,6 @@ export interface LayerContext {
   representativePointTable?: ArrowTable;
 
   representativePointGeometryInfo?: GeometryInfo;
-
-  yearFilter?: YearFilterInfo;
 
   customProjection?: ProjectionLike;
 

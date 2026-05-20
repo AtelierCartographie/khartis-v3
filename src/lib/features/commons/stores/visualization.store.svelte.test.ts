@@ -398,7 +398,6 @@ describe('visualizationStore suggestion origin tracking', () => {
             symbols: visualization.symbols,
             missingData: visualization.missingData,
             density: visualization.density,
-            yearFilter: visualization.yearFilter,
             dataFilters: visualization.dataFilters
           }
         }
@@ -427,7 +426,6 @@ describe('visualizationStore suggestion origin tracking', () => {
           symbols: visualization.symbols,
           missingData: visualization.missingData,
           density: visualization.density,
-          yearFilter: visualization.yearFilter,
           dataFilters: visualization.dataFilters
         }
       }

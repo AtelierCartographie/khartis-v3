@@ -1168,7 +1168,6 @@ function createVisualizationRestoreSnapshot(
     symbols: deepClone(visualization.symbols),
     missingData: deepClone(visualization.missingData),
     density: deepClone(visualization.density),
-    yearFilter: deepClone(visualization.yearFilter),
     dataFilters: deepClone(visualization.dataFilters)
   };
 }

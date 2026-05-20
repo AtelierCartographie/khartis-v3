@@ -1,7 +1,6 @@
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import { Table } from 'apache-arrow/Arrow';
 import type {
-  YearFilter,
   VizDataFilter,
   VizFilterOperator,
   PrimitiveFilter
@@ -9,8 +8,6 @@ import type {
 import type { DataTableFilter } from '$lib/features/duckdb/types';
 import { FilterOperatorEnum } from '$lib/features/duckdb/types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-
-const yearFilterCache = new WeakMap<ArrowTable, Map<string, ArrowTable>>();
 
 const dataFilterCache = new WeakMap<ArrowTable, Map<string, ArrowTable>>();
 
@@ -65,95 +62,6 @@ export function selectRowsByIndices(
   }
 
   return new Table(table.schema, allBatches) as ArrowTable;
-}
-
-export function filterArrowTableByYear(
-  table: ArrowTable,
-  yearFilter: YearFilter | undefined
-): ArrowTable {
-  if (!yearFilter) return table;
-
-  const { column, value } = yearFilter;
-
-  const cacheKey = `${column}:${value}`;
-  const tableCache = yearFilterCache.get(table);
-  if (tableCache) {
-    const cached = tableCache.get(cacheKey);
-    if (cached) return cached;
-  }
-
-  function cacheYearResult(result: ArrowTable): void {
-    const existing = yearFilterCache.get(table);
-    if (existing) {
-      existing.set(cacheKey, result);
-    } else {
-      yearFilterCache.set(table, new Map([[cacheKey, result]]));
-    }
-  }
-
-  const columnIndex = table.schema.fields.findIndex(
-    (field) => field.name === column
-  );
-
-  if (columnIndex === -1) {
-    logger.warn('Year filter column not found in table', LogCategory.MAP, {
-      column,
-      availableColumns: table.schema.fields.map((f) => f.name)
-    });
-    cacheYearResult(table);
-    return table;
-  }
-
-  const columnVector = table.getChildAt(columnIndex);
-  if (!columnVector) {
-    logger.warn('Year filter column vector not accessible', LogCategory.MAP, {
-      column
-    });
-    cacheYearResult(table);
-    return table;
-  }
-
-  const matchingIndices: number[] = [];
-  const targetValue =
-    typeof value === 'number' ? value : parseInt(String(value), 10);
-
-  if (isNaN(targetValue)) {
-    logger.warn('Year filter value is not a valid number', LogCategory.MAP, {
-      value
-    });
-    cacheYearResult(table);
-    return table;
-  }
-
-  for (let i = 0; i < table.numRows; i++) {
-    const cellValue = columnVector.get(i);
-
-    const numValue =
-      typeof cellValue === 'number'
-        ? cellValue
-        : typeof cellValue === 'bigint'
-          ? Number(cellValue)
-          : parseInt(String(cellValue), 10);
-    if (!isNaN(numValue) && numValue === targetValue) {
-      matchingIndices.push(i);
-    }
-  }
-
-  if (matchingIndices.length === 0) {
-    logger.warn('Year filter returned no matching rows', LogCategory.MAP, {
-      column,
-      value: targetValue
-    });
-  }
-
-  if (matchingIndices.length === table.numRows) {
-    cacheYearResult(table);
-    return table;
-  }
-
-  const result = selectRowsByIndices(table, matchingIndices);
-  cacheYearResult(result);
-  return result;
 }
 
 type FilterOperator = VizFilterOperator | string;

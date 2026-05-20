@@ -196,19 +196,8 @@ describe('ConfigureVisualization', () => {
     expect(textHandlersSource).toContain('handleTextChange({');
   });
 
-  it('mounts the year filter only when the selected dataset exposes a real year dimension', () => {
-    expect(source).toContain("import YearFilter from './year-filter.svelte';");
-    expect(datasetAnalysisSource).toContain(
-      "import { isLikelyYearColumn } from '../utils/year-filter.utils';"
-    );
-    expect(datasetAnalysisSource).toContain(
-      'const hasYearDimension = $derived.by(() =>'
-    );
-    expect(datasetAnalysisSource).toContain(
-      'return dataset.columns.some((column) => isLikelyYearColumn(column, rows));'
-    );
-    expect(source).toContain('{#if selectedViz && hasYearDimension}');
-    expect(source).toContain('<YearFilter visualization={selectedViz} />');
+  it('does not mount the removed year filter panel', () => {
+    expect(datasetAnalysisSource).not.toContain('hasYearDimension');
   });
 
   it('delegates symbol mode snapshot/restore to the dedicated helper', () => {

@@ -365,7 +365,6 @@ export interface VisualizationRestoreSnapshot {
   symbols?: VisualizationConfig['symbols'];
   missingData?: MissingDataConfig;
   density?: DensityConfig;
-  yearFilter?: YearFilter;
   dataFilters?: VizDataFilter[];
 }
 
@@ -388,11 +387,6 @@ export const ALL_PRIMITIVE_FILTERS: PrimitiveFilter[] = [
   PrimitiveFilterType.LINE,
   PrimitiveFilterType.POLYGON
 ];
-
-export interface YearFilter {
-  column: string;
-  value: number | string;
-}
 
 export type VizFilterOperator =
   | 'gte'
@@ -499,7 +493,6 @@ export interface VisualizationConfig {
   };
   missingData?: MissingDataConfig;
   density?: DensityConfig;
-  yearFilter?: YearFilter;
   dataFilters?: VizDataFilter[];
 }
 
@@ -1246,7 +1239,6 @@ export interface VisualizationStore {
     datasetId: string,
     columnName: string
   ) => void;
-  setYearFilter: (id: string, filter: YearFilter | null) => void;
   addDataFilter: (id: string, filter: Omit<VizDataFilter, 'id'>) => void;
   removeDataFilter: (id: string, filterId: string) => void;
   updateDataFilter: (
@@ -1846,7 +1838,6 @@ const ORIGIN_TRACKED_UPDATE_KEYS = [
   'textClassification',
   'symbols',
   'missingData',
-  'yearFilter',
   'dataFilters'
 ] as const;
 
@@ -2782,7 +2773,6 @@ function createVisualizationStore(): VisualizationStore {
         text.valueColumn === columnName ||
         text.categoryColumn === columnName ||
         text.secondaryLabels.labelColumn === columnName ||
-        visualization.yearFilter?.column === columnName ||
         (visualization.dataFilters ?? []).some(
           (filter) => filter.column === columnName
         )
@@ -2848,14 +2838,6 @@ function createVisualizationStore(): VisualizationStore {
         labelColumn: renameColumn(nextText.secondaryLabels.labelColumn)
       };
 
-      const nextYearFilter =
-        visualization.yearFilter?.column === previousName
-          ? { ...visualization.yearFilter, column: nextName }
-          : visualization.yearFilter;
-      if (nextYearFilter !== visualization.yearFilter) {
-        mutated = true;
-      }
-
       const previousDataFilters = visualization.dataFilters ?? [];
       const nextDataFilters = previousDataFilters.map((filter) =>
         filter.column === previousName
@@ -2882,7 +2864,6 @@ function createVisualizationStore(): VisualizationStore {
         line: nextLine,
         text: nextText,
         mapping: nextMapping,
-        yearFilter: nextYearFilter,
         dataFilters: nextDataFilters
       });
     });
@@ -3006,14 +2987,6 @@ function createVisualizationStore(): VisualizationStore {
         nextText.classification = undefined;
       }
 
-      const nextYearFilter =
-        visualization.yearFilter?.column === columnName
-          ? undefined
-          : visualization.yearFilter;
-      if (nextYearFilter !== visualization.yearFilter) {
-        mutated = true;
-      }
-
       const previousDataFilters = visualization.dataFilters ?? [];
       const nextDataFilters = previousDataFilters.filter(
         (filter) => filter.column !== columnName
@@ -3043,7 +3016,6 @@ function createVisualizationStore(): VisualizationStore {
         classification: shouldClearClassification
           ? undefined
           : visualization.classification,
-        yearFilter: nextYearFilter,
         dataFilters: nextDataFilters
       });
     });
@@ -3051,10 +3023,6 @@ function createVisualizationStore(): VisualizationStore {
     if (hasChanges) {
       incrementVersion(state);
     }
-  }
-
-  function setYearFilter(id: string, filter: YearFilter | null): void {
-    applyVisualizationUpdate(id, () => ({ yearFilter: filter ?? undefined }));
   }
 
   function addDataFilter(id: string, filter: Omit<VizDataFilter, 'id'>): void {
@@ -3181,7 +3149,6 @@ function createVisualizationStore(): VisualizationStore {
     getVisualizationsUsingColumn,
     renameDatasetColumnReferences,
     removeDatasetColumnReferences,
-    setYearFilter,
     addDataFilter,
     removeDataFilter,
     updateDataFilter,

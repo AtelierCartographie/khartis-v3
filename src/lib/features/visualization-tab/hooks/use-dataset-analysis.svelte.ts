@@ -11,7 +11,6 @@ import {
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { filterVisualizableDataColumns } from '$lib/features/commons/utils/visualization-columns.utils';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-import { isLikelyYearColumn } from '../utils/year-filter.utils';
 
 export interface DataFieldItem {
   id: number;
@@ -29,7 +28,6 @@ export interface DatasetAnalysis {
   > | null;
   readonly dataFieldItems: DataFieldItem[];
   readonly hasGeometry: boolean;
-  readonly hasYearDimension: boolean;
   readonly availablePrimitiveFilters: PrimitiveFilter[];
   readonly showsSymbolsConfig: boolean;
   readonly showsPolygonsConfig: boolean;
@@ -90,13 +88,6 @@ export function useDatasetAnalysis(
     return hasLatitude && hasLongitude;
   });
 
-  const hasYearDimension = $derived.by(() => {
-    const dataset = getSelectedDataset() ?? datasetsStore.selectedDataset;
-    if (!dataset?.columns) return false;
-    const rows = dataset.originalData?.data ?? dataset.data ?? [];
-    return dataset.columns.some((column) => isLikelyYearColumn(column, rows));
-  });
-
   const availablePrimitiveFilters = $derived.by(() => {
     const dataset = getSelectedDataset();
     const viz = deps.getSelectedVisualization();
@@ -130,9 +121,6 @@ export function useDatasetAnalysis(
     },
     get hasGeometry() {
       return hasGeometry;
-    },
-    get hasYearDimension() {
-      return hasYearDimension;
     },
     get availablePrimitiveFilters() {
       return availablePrimitiveFilters;
