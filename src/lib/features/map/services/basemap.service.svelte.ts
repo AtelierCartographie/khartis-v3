@@ -1224,6 +1224,11 @@ function createBasemapService() {
 
     if (basemapCache.has(resolvedBasemapId)) {
       currentBasemap = basemapCache.get(resolvedBasemapId)!;
+      const baseLevel = getBasemapSimplificationLevel(currentBasemap.metadata);
+      if (currentBasemap.activeSimplificationLevel !== baseLevel) {
+        currentBasemap.activeSimplificationLevel = baseLevel;
+        simplificationVersion += 1;
+      }
       updateProjectionFromTable(
         getResolvedGeometryTable(currentBasemap) ?? currentBasemap.geometryTable
       );

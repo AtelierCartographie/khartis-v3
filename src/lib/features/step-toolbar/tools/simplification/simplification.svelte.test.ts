@@ -276,6 +276,27 @@ describe('simplification tool — imported basemap', () => {
 describe('simplification tool — geo datasets', () => {
   beforeEach(resetMocks);
 
+  it('should reset the Geo source rate against the targeted dataset when switching tabs', async () => {
+    mocks.geoDatasets = [
+      {
+        id: 'ds-1',
+        name: 'regions.geojson',
+        geometry: { bounds: [0, 0, 1, 1] }
+      }
+    ];
+    mocks.selectedDataset = mocks.geoDatasets[0];
+
+    const { container } = render(SimplificationTool);
+    const sourceTabs = container.querySelectorAll('.toggle-tab');
+
+    await fireEvent.click(sourceTabs[1]);
+
+    expect(mocks.simplActions.setSource).toHaveBeenCalledWith(
+      SimplificationSource.Geo,
+      { datasetId: 'ds-1' }
+    );
+  });
+
   it('should show the rate slider and warning, without a dropdown when only one geo dataset exists', () => {
     mocks.simplState.source = SimplificationSource.Geo as SimplSourceValue;
     mocks.geoDatasets = [
