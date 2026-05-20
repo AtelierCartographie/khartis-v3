@@ -53,6 +53,21 @@ describe('PolygonsConfig — FillSection wiring', () => {
     );
   });
 
+  it('routes polygon missing-data motif state through FillSection', () => {
+    const fillBlock = source
+      .split('<FillSection')[1]
+      ?.split('</FillSection>')[0];
+    expect(source).toContain('let missingDataPattern = $state<boolean>(false)');
+    expect(source).toContain(
+      'missingDataPattern = visualization.missingData.pattern ?? false'
+    );
+    expect(source).toContain('function handleMissingDataPatternChange');
+    expect(fillBlock).toContain('missingDataPattern={missingDataPattern}');
+    expect(fillBlock).toContain(
+      'onMissingDataPatternChange={handleMissingDataPatternChange}'
+    );
+  });
+
   it('keeps StrokeSection branch unchanged and gated on non-DENSITY fill mode', () => {
     expect(source).toContain('{#if effectiveFillMode !== FillMode.DENSITY}');
     expect(source).toContain('<StrokeSection');

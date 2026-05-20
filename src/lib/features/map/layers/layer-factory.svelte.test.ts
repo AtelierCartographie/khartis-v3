@@ -1443,6 +1443,134 @@ describe('createPolygonLayers', () => {
     });
   });
 
+  it('renders a missing-data pattern overlay only for missing polygon class values', () => {
+    const geojson = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          ...createPolygonFeature('missing', 2024),
+          properties: { id: 'missing', metric: null }
+        },
+        {
+          ...createPolygonFeature('known', 2024),
+          properties: { id: 'known', metric: 12 }
+        }
+      ]
+    } satisfies FeatureCollection<Polygon>;
+    arrowTableToGeoJSONMock.mockReturnValue(geojson);
+
+    const visualization = createVisualization(FillMode.CLASSES);
+    visualization.mapping = { valueColumn: 'metric' };
+    visualization.missingData = {
+      show: true,
+      shape: MissingDataShape.CIRCLE,
+      size: 2,
+      color: '#c6c6c6',
+      pattern: true
+    };
+    visualization.polygon = {
+      ...visualization.polygon!,
+      valueColumn: 'metric',
+      missingData: visualization.missingData,
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 2,
+        numClasses: 2,
+        breaks: [10],
+        colors: ['#2166ac', '#b2182b']
+      }
+    };
+
+    const layers = createPolygonLayers(
+      createTableWithRows(
+        [
+          { id: 'missing', metric: null },
+          { id: 'known', metric: 12 }
+        ],
+        ['id', 'metric']
+      ),
+      createGeometryInfo(),
+      createContext(visualization)
+    );
+
+    const missingPatternLayer = layers.find((layer) =>
+      String(layer.props.id).includes('missing-data-pattern')
+    ) as GeoJsonLayer | undefined;
+    const patternData = missingPatternLayer?.props.data as
+      | FeatureCollection<Polygon>
+      | undefined;
+
+    expect(missingPatternLayer).toBeInstanceOf(GeoJsonLayer);
+    expect(
+      patternData?.features.map((feature) => feature.properties?.id)
+    ).toEqual(['missing']);
+  });
+
+  it('renders a missing-data pattern overlay for unmapped polygon categories', () => {
+    const geojson = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          ...createPolygonFeature('known', 2024),
+          properties: { id: 'known', segment: 'known' }
+        },
+        {
+          ...createPolygonFeature('unknown', 2024),
+          properties: { id: 'unknown', segment: 'unknown' }
+        }
+      ]
+    } satisfies FeatureCollection<Polygon>;
+    arrowTableToGeoJSONMock.mockReturnValue(geojson);
+
+    const visualization = createVisualization(FillMode.CATEGORIES);
+    visualization.type = VisualizationType.CATEGORICAL;
+    visualization.mapping = { categoryColumn: 'segment' };
+    visualization.missingData = {
+      show: true,
+      shape: MissingDataShape.CIRCLE,
+      size: 2,
+      color: '#c6c6c6',
+      pattern: true
+    };
+    visualization.polygon = {
+      ...visualization.polygon!,
+      fillMode: FillMode.CATEGORIES,
+      categoryColumn: 'segment',
+      missingData: visualization.missingData,
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 1,
+        labels: ['known'],
+        categoryValues: ['known'],
+        colors: ['#2166ac']
+      }
+    };
+
+    const layers = createPolygonLayers(
+      createTableWithRows(
+        [
+          { id: 'known', segment: 'known' },
+          { id: 'unknown', segment: 'unknown' }
+        ],
+        ['id', 'segment']
+      ),
+      createGeometryInfo(),
+      createContext(visualization)
+    );
+
+    const missingPatternLayer = layers.find((layer) =>
+      String(layer.props.id).includes('missing-data-pattern')
+    ) as GeoJsonLayer | undefined;
+    const patternData = missingPatternLayer?.props.data as
+      | FeatureCollection<Polygon>
+      | undefined;
+
+    expect(missingPatternLayer).toBeInstanceOf(GeoJsonLayer);
+    expect(
+      patternData?.features.map((feature) => feature.properties?.id)
+    ).toEqual(['unknown']);
+  });
+
   it('renders density from the dedicated density table without falling back to polygon fill', () => {
     const visualization = createVisualization(FillMode.DENSITY);
     visualization.density = {

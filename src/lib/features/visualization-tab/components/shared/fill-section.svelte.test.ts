@@ -81,6 +81,20 @@ describe('FillSection — interface', () => {
     );
   });
 
+  it('exposes the missing-data pattern toggle only for polygon fills', () => {
+    expect(source).toContain('missingDataPattern?: boolean;');
+    expect(source).toContain(
+      'onMissingDataPatternChange?: (pattern: boolean) => void;'
+    );
+    expect(source).toContain(
+      "showPatternToggle={categoriesVariant === 'polygons'}"
+    );
+    expect(source).toContain('pattern={missingDataPattern}');
+    expect(source).toContain(
+      'onpatternchange={onMissingDataPatternChange ?? (() => {})}'
+    );
+  });
+
   it('does not require a consumer primitive tag', () => {
     expect(source).not.toContain('primitive: FillPrimitiveKind');
     expect(source).not.toContain('FillPrimitiveKind');

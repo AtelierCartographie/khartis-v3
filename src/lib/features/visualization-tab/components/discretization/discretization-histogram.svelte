@@ -48,7 +48,7 @@
     {#each breaks as breakItem, index (index)}
       {@const widthPercent = (breakItem.count / maxHistogramCount) * 100}
       {@const histogramColor = resolveHistogramColor(breakItem, index)}
-      <div class="histogram-row">
+      <div class="histogram-threshold-row">
         <div class="histogram-label">
           {#if index === 0}{m.discretization_min_abbrev()}{/if}
         </div>
@@ -73,6 +73,17 @@
           <CaretRight size={16} />
         </div>
         {#if sizePreview}
+          <div class="break-preview-spacer"></div>
+        {/if}
+        <div class="histogram-bar-wrapper histogram-bar-wrapper--empty"></div>
+      </div>
+      <div class="histogram-interval-row">
+        <div class="histogram-label"></div>
+        <div
+          class="histogram-input-wrapper histogram-input-wrapper--spacer"
+        ></div>
+        <div class="histogram-caret histogram-caret--spacer"></div>
+        {#if sizePreview}
           <div
             class="break-preview"
             data-shape={sizePreview.shape}
@@ -88,7 +99,7 @@
         </div>
       </div>
     {/each}
-    <div class="histogram-row">
+    <div class="histogram-threshold-row">
       <div class="histogram-label">{m.discretization_max_abbrev()}</div>
       <div class="histogram-input-wrapper">
         <TextInput
@@ -103,6 +114,9 @@
       <div class="histogram-caret">
         <CaretRight size={16} />
       </div>
+      {#if sizePreview}
+        <div class="break-preview-spacer"></div>
+      {/if}
       <div class="histogram-bar-wrapper"></div>
     </div>
   </div>
@@ -138,11 +152,19 @@
     flex-direction: column;
   }
 
-  .histogram-row {
+  .histogram-threshold-row,
+  .histogram-interval-row {
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-02);
-    min-height: 32px;
+  }
+
+  .histogram-threshold-row {
+    min-height: 28px;
+  }
+
+  .histogram-interval-row {
+    min-height: 20px;
   }
 
   .histogram-label {
@@ -157,6 +179,10 @@
   .histogram-input-wrapper {
     flex: 1;
     min-width: 64px;
+  }
+
+  .histogram-input-wrapper--spacer {
+    align-self: stretch;
   }
 
   .histogram-input-wrapper :global(.bx--form-item) {
@@ -185,6 +211,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  .histogram-caret--spacer {
+    visibility: hidden;
   }
 
   .break-preview {
@@ -218,12 +248,22 @@
     height: var(--preview-size);
   }
 
+  .break-preview-spacer {
+    width: 28px;
+    height: 1px;
+    flex-shrink: 0;
+  }
+
   .histogram-bar-wrapper {
     width: 128px;
-    height: 24px;
+    height: 18px;
     flex-shrink: 0;
     display: flex;
     align-items: center;
+  }
+
+  .histogram-bar-wrapper--empty {
+    height: 1px;
   }
 
   .histogram-bar {

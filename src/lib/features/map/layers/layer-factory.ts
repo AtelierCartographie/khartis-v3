@@ -179,6 +179,7 @@ const SELECTED_POLYGON_STROKE_COLOR: [number, number, number, number] = [
 ];
 const SELECTED_POLYGON_STROKE_WIDTH = 3;
 const DASH_EXTENSION = new PathStyleExtension({ dash: true });
+const DEFAULT_MISSING_DATA_PATTERN_ID: PatternName = 'diagonal';
 const DEFAULT_DASH_ARRAY: [number, number] = [3, 2];
 
 function resolveThematicStrokeDashArray(
@@ -2064,6 +2065,17 @@ function buildPatternProps(ctx: LayerContext): PolygonPatternProps | null {
   return createPatternProps(patternId, patternParams);
 }
 
+function buildMissingDataPatternProps(
+  polygonConfig: ReturnType<typeof getPolygonPrimitive> | undefined,
+  showMissingPolygons: boolean
+): PolygonPatternProps | null {
+  if (!showMissingPolygons || !polygonConfig?.missingData?.pattern) {
+    return null;
+  }
+
+  return createPatternProps(DEFAULT_MISSING_DATA_PATTERN_ID);
+}
+
 function resolveSymbolPatternType(
   classification: ClassificationConfig | undefined
 ): number | null {
@@ -2092,12 +2104,13 @@ function createPolygonPatternOverlayLayer(
   polygonPatternId: string | undefined,
   patternGeojson: FeatureCollection,
   patternProps: PolygonPatternProps,
-  ctx: Pick<LayerContext, 'modelMatrix' | 'beforeId'>
+  ctx: Pick<LayerContext, 'modelMatrix' | 'beforeId'>,
+  idSuffix = `pattern-${polygonPatternId ?? 'none'}`
 ): GeoJsonLayer {
   const { modelMatrix, beforeId } = ctx;
 
   return new GeoJsonLayer({
-    id: `${layerId}-pattern-${polygonPatternId ?? 'none'}`,
+    id: `${layerId}-${idSuffix}`,
     data: patternGeojson,
     getFillColor: [0, 0, 0, 255],
     stroked: false,
@@ -2125,6 +2138,78 @@ function createPolygonPatternOverlayLayer(
     },
     dataComparator: (newData, oldData) => newData === oldData
   });
+}
+
+function isMissingPolygonFillDatum(
+  row: Record<string, unknown>,
+  fillMode: FillMode,
+  valueColumn: string | undefined,
+  categoryColumn: string | undefined,
+  categoryColorMap: Map<string, RGBColor> | null
+): boolean {
+  if (fillMode === FillMode.CLASSES) {
+    if (!valueColumn) {
+      return false;
+    }
+    const rawValue = row[valueColumn];
+    if (isMissingThematicValue(rawValue)) {
+      return true;
+    }
+    const numericValue =
+      typeof rawValue === 'number' ? rawValue : Number(rawValue);
+    return !Number.isFinite(numericValue);
+  }
+
+  if (fillMode === FillMode.CATEGORIES) {
+    if (!categoryColumn) {
+      return false;
+    }
+    const rawValue = row[categoryColumn];
+    if (isMissingThematicValue(rawValue)) {
+      return true;
+    }
+    return !categoryColorMap?.has(String(rawValue));
+  }
+
+  return false;
+}
+
+function filterMissingPolygonPatternFeatures(
+  geojson: FeatureCollection,
+  ctx: LayerContext,
+  geometryTable: ArrowTable,
+  fillMode: FillMode,
+  valueColumn: string | undefined,
+  categoryColumn: string | undefined,
+  categoryColorMap: Map<string, RGBColor> | null
+): FeatureCollection {
+  const rowPredicate = (row: Record<string, unknown>) =>
+    isMissingPolygonFillDatum(
+      row,
+      fillMode,
+      valueColumn,
+      categoryColumn,
+      categoryColorMap
+    );
+  const splitFeaturePredicate = createSplitGeoJsonFeatureAccessor(
+    ctx,
+    geometryTable,
+    rowPredicate
+  );
+  const isMissingFeature = splitFeaturePredicate
+    ? (feature: { properties?: Record<string, unknown> }) =>
+        splitFeaturePredicate(feature)
+    : (feature: { properties?: Record<string, unknown> }) =>
+        rowPredicate(feature.properties ?? {});
+
+  return {
+    ...geojson,
+    features: geojson.features.filter((feature) =>
+      isMissingFeature({
+        properties: feature.properties ?? undefined
+      })
+    )
+  };
 }
 
 export type { LayerContext };
@@ -5124,6 +5209,10 @@ export function createPolygonLayers(
       polygonConfig,
       hexToRgb(DEFAULT_COLORS.missingData)
     );
+  const missingDataPatternProps = buildMissingDataPatternProps(
+    polygonConfig,
+    showMissingPolygons
+  );
   const densityRequested =
     polygonFillMode === FillMode.DENSITY && Boolean(viz?.density);
   const densityTable = ctx.densityTable;
@@ -5455,6 +5544,44 @@ export function createPolygonLayers(
           );
         }
       }
+      let missingDataPatternLayer: Layer<DeckDataRow> | null = null;
+      if (missingDataPatternProps) {
+        let missingPatternGeojson: FeatureCollection | null = null;
+        try {
+          const rawPatternGeojson = getCachedGeoJSON(jsTable, geoColumn);
+          const projectedPatternGeojson =
+            rawPatternGeojson && ctx.customProjection
+              ? projectGeoJSON(rawPatternGeojson, ctx.customProjection)
+              : rawPatternGeojson;
+          missingPatternGeojson = projectedPatternGeojson
+            ? filterMissingPolygonPatternFeatures(
+                projectedPatternGeojson,
+                ctx,
+                jsTable,
+                polygonFillMode,
+                polygonValueColumn,
+                polygonCategoryColumn,
+                effectiveCategoryColorMap
+              )
+            : null;
+        } catch {
+          missingPatternGeojson = null;
+        }
+
+        if (
+          missingPatternGeojson &&
+          missingPatternGeojson.features.length > 0
+        ) {
+          missingDataPatternLayer = createPolygonPatternOverlayLayer(
+            layerId,
+            DEFAULT_MISSING_DATA_PATTERN_ID,
+            missingPatternGeojson,
+            missingDataPatternProps,
+            ctx,
+            'missing-data-pattern'
+          );
+        }
+      }
 
       const pointLayers = createRepresentativePointSymbolLayers(jsTable, ctx);
       const showFill =
@@ -5472,6 +5599,14 @@ export function createPolygonLayers(
           : []),
         ...(showFill && patternLayer
           ? [{ primitive: PrimitiveFilterType.POLYGON, layer: patternLayer }]
+          : []),
+        ...(showFill && missingDataPatternLayer
+          ? [
+              {
+                primitive: PrimitiveFilterType.POLYGON,
+                layer: missingDataPatternLayer
+              }
+            ]
           : []),
         ...(showStroke
           ? [{ primitive: PrimitiveFilterType.LINE, layer: strokeLayer }]
@@ -5741,11 +5876,40 @@ export function createPolygonLayers(
           ctx
         )
       : null;
+  const missingDataPatternGeojson =
+    missingDataPatternProps &&
+    showGeoJsonFill &&
+    geojsonData.features.length > 0
+      ? filterMissingPolygonPatternFeatures(
+          geojsonData,
+          ctx,
+          jsTable,
+          polygonFillMode,
+          polygonValueColumn,
+          polygonCategoryColumn,
+          effectiveCategoryColorMap
+        )
+      : null;
+  const missingDataPatternLayer =
+    missingDataPatternProps &&
+    missingDataPatternGeojson &&
+    missingDataPatternGeojson.features.length > 0
+      ? createPolygonPatternOverlayLayer(
+          layerId,
+          DEFAULT_MISSING_DATA_PATTERN_ID,
+          missingDataPatternGeojson,
+          missingDataPatternProps,
+          ctx,
+          'missing-data-pattern'
+        )
+      : null;
 
-  const shouldSplitGeoJsonLayers = Boolean(patternLayer && showGeoJsonStroke);
+  const shouldSplitGeoJsonLayers = Boolean(
+    (patternLayer || missingDataPatternLayer) && showGeoJsonStroke
+  );
 
   let geoJsonLayers: Layer<DeckDataRow>[] = [];
-  if (shouldSplitGeoJsonLayers && patternLayer) {
+  if (shouldSplitGeoJsonLayers) {
     geoJsonLayers = [
       new GeoJsonLayer({
         id: projectedGeoJsonLayerId,
@@ -5780,7 +5944,8 @@ export function createPolygonLayers(
         },
         dataComparator: (newData, oldData) => newData === oldData
       }),
-      patternLayer,
+      ...(patternLayer ? [patternLayer] : []),
+      ...(missingDataPatternLayer ? [missingDataPatternLayer] : []),
       ...(showGeoJsonStroke
         ? [
             new GeoJsonLayer({
@@ -5879,7 +6044,8 @@ export function createPolygonLayers(
         },
         dataComparator: (newData, oldData) => newData === oldData
       }),
-      ...(patternLayer ? [patternLayer] : [])
+      ...(patternLayer ? [patternLayer] : []),
+      ...(missingDataPatternLayer ? [missingDataPatternLayer] : [])
     ];
   }
 
@@ -5965,7 +6131,7 @@ export function createGeoJsonLayers(
   const layers: Layer<DeckDataRow>[] = [
     new GeoJsonLayer({
       id: layerId,
-      data: data,
+      data,
       filled: true,
       stroked: true,
       getFillColor: geoJsonFillColor,

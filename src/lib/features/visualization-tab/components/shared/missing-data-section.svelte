@@ -30,14 +30,17 @@
     showShapeSelector?: boolean;
     showSizeSlider?: boolean;
     showDashedToggle?: boolean;
+    showPatternToggle?: boolean;
     dashed?: boolean;
     dashedPattern?: BasemapDottedPattern;
+    pattern?: boolean;
     onshowchange?: (show: boolean) => void;
     oncolorchange?: (color: string) => void;
     onshapechange?: (shape: MissingDataShape) => void;
     onsizechange?: (size: number) => void;
     ondashedchange?: (dashed: boolean) => void;
     ondashedpatternchange?: (pattern: BasemapDottedPattern) => void;
+    onpatternchange?: (pattern: boolean) => void;
   }
 
   let {
@@ -49,14 +52,17 @@
     showShapeSelector = true,
     showSizeSlider = true,
     showDashedToggle = false,
+    showPatternToggle = false,
     dashed = false,
     dashedPattern = BasemapDottedPattern.DOTS,
+    pattern = false,
     onshowchange,
     oncolorchange,
     onshapechange,
     onsizechange,
     ondashedchange,
-    ondashedpatternchange
+    ondashedpatternchange,
+    onpatternchange
   }: Props = $props();
 
   const dashedPatternItems = $derived([
@@ -92,6 +98,11 @@
       ) ?? BasemapDottedPattern.DOTS;
     dashedPattern = next;
     ondashedpatternchange?.(next);
+  }
+
+  function handlePatternToggle(value: boolean) {
+    pattern = value;
+    onpatternchange?.(value);
   }
 </script>
 
@@ -158,6 +169,20 @@
         </Row>
       {/if}
 
+      {#if showPatternToggle}
+        <Row>
+          <Column>
+            <div class="pattern-toggle">
+              <ToggleWithLabel
+                label={m.pattern()}
+                toggled={pattern}
+                ontoggle={handlePatternToggle}
+              />
+            </div>
+          </Column>
+        </Row>
+      {/if}
+
       {#if showDashedToggle}
         <Row>
           <Column>
@@ -200,7 +225,8 @@
     margin-top: var(--cds-spacing-03);
   }
 
-  .dashed-toggle {
+  .dashed-toggle,
+  .pattern-toggle {
     margin-top: var(--cds-spacing-03);
   }
 </style>

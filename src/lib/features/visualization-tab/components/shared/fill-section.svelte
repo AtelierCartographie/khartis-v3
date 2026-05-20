@@ -54,6 +54,7 @@
     categoriesVariant: CategoriesAspectVariant;
     showMissingData?: boolean;
     missingDataColor?: string;
+    missingDataPattern?: boolean;
     showOpacitySlider?: boolean;
     showOpacityBounds?: boolean;
     showMissingDataSection?: boolean;
@@ -84,6 +85,7 @@
     onClassificationChange: (updates: Partial<ClassificationConfig>) => void;
     onMissingDataShowChange?: (show: boolean) => void;
     onMissingDataColorChange?: (color: string) => void;
+    onMissingDataPatternChange?: (pattern: boolean) => void;
     onInvertPalette?: () => void;
   }
 
@@ -103,6 +105,7 @@
     categoriesVariant,
     showMissingData = true,
     missingDataColor = DEFAULT_COLORS.missingData,
+    missingDataPattern = false,
     showOpacitySlider = true,
     showOpacityBounds = false,
     showMissingDataSection = true,
@@ -125,6 +128,7 @@
     onClassificationChange,
     onMissingDataShowChange,
     onMissingDataColorChange,
+    onMissingDataPatternChange,
     onInvertPalette
   }: Props = $props();
 
@@ -338,8 +342,11 @@
     color={missingDataColor}
     showShapeSelector={false}
     showSizeSlider={false}
+    showPatternToggle={categoriesVariant === 'polygons'}
+    pattern={missingDataPattern}
     onshowchange={onMissingDataShowChange ?? (() => {})}
     oncolorchange={onMissingDataColorChange ?? (() => {})}
+    onpatternchange={onMissingDataPatternChange ?? (() => {})}
   />
 {/if}
 

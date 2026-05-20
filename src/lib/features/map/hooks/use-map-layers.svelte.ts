@@ -1160,18 +1160,23 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             const tablePrimitiveType = geoInfo?.type
               ? GEOMETRY_TO_PRIMITIVE[geoInfo.type as GeometryType]
               : undefined;
-
-            const vizFiltered = filterArrowTableByDataFilters(
-              table,
-              viz.dataFilters,
-              tablePrimitiveType
-            );
             const tableFilters = getTableFilters?.(datasetId);
-            const tableFiltered = filterArrowTableByTableFilters(
-              vizFiltered,
-              tableFilters
-            );
-            const filteredTable = tableFiltered;
+            const filteredTable = split
+              ? filterSplitGeometryTableByDatasetRows(
+                  table,
+                  split,
+                  viz.dataFilters,
+                  tablePrimitiveType,
+                  tableFilters
+                )
+              : filterArrowTableByTableFilters(
+                  filterArrowTableByDataFilters(
+                    table,
+                    viz.dataFilters,
+                    tablePrimitiveType
+                  ),
+                  tableFilters
+                );
             if (filteredTable !== table && filteredTable.numRows === 0) {
               hasEmptyFilteredVisualization = true;
             }
