@@ -35,6 +35,7 @@ export interface JoinStats {
   toVerifyCount: number;
   duplicateCount: number;
   unrecognizedCount: number;
+  ignoredCount?: number;
   entities: JoinEntity[];
   totalEntities: number;
   duplicateLines: Array<{ dataValue: string; lines: number[] }>;

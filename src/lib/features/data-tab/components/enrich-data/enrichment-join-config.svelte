@@ -1,21 +1,22 @@
 <script lang="ts">
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
-  import { GeoreferenceType } from '$lib/features/commons/constants/ui.constants';
+  import {
+    GeoreferenceType,
+    JoinStatus
+  } from '$lib/features/commons/constants/ui.constants';
   import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
   import type { DatasetResult } from '$lib/features/data-pipeline';
   import * as m from '$lib/paraglide/messages';
   import { Button, InlineNotification } from 'carbon-components-svelte';
-  import { Close, MagicWand } from 'carbon-icons-svelte';
-  import {
-    GeocodeSettings,
-    JoinAccordion,
-    SectionHeaderWithIcon,
-    type JoinStats
-  } from '../index';
+  import { Close } from 'carbon-icons-svelte';
+  import { GeocodeSettings, type JoinStats } from '../index';
+  import JoinAssistedSection from '../basemap-join/join-assisted-section.svelte';
   import type {
     EnrichDataFieldItem,
     GeoFileColumnItem
   } from '../../utils/enrichment.utils';
+
+  type IgnoreSource = 'joined' | 'to_verify' | 'unrecognized';
 
   interface Props {
     enrichmentDataset: DatasetResult;
@@ -27,6 +28,7 @@
     enrichSuggestedColumn: EnrichDataFieldItem | undefined;
     hasOnlyCoordinates: boolean;
     joinStats: JoinStats | null;
+    targetOptions?: string[];
     isComputingJoin: boolean;
     isFinalizingJoin: boolean;
     onRemoveFile: () => void;
@@ -40,6 +42,14 @@
     ) => void;
     onMappingChange: (index: number, value: string) => void;
     onFinalizeJoin: () => void;
+    onManualCorrection?: (dataValue: string, targetValue: string) => void;
+    onIgnoreEntity?: (
+      dataValue: string,
+      source: IgnoreSource,
+      targetValue?: string
+    ) => void;
+    onValidateEntity?: (dataValue: string, targetValue: string) => void;
+    onRestoreEntity?: (dataValue: string) => void;
   }
 
   let {
@@ -52,13 +62,18 @@
     enrichSuggestedColumn,
     hasOnlyCoordinates,
     joinStats,
+    targetOptions = [],
     isComputingJoin,
     isFinalizingJoin,
     onRemoveFile,
     onEnrichLinkedVariableChange,
     onGeoFileColumnChange,
     onMappingChange,
-    onFinalizeJoin
+    onFinalizeJoin,
+    onManualCorrection,
+    onIgnoreEntity,
+    onValidateEntity,
+    onRestoreEntity
   }: Props = $props();
 
   function handleEnrichColumnSelect(id: number, columnName: string): void {
@@ -82,6 +97,58 @@
 
   const geoFileSelectedColumnName = $derived(
     geoFileColumns.find((c) => c.id === geoFileColumnId)?.columnName
+  );
+
+  const linkedVariableName = $derived(
+    enrichDataFieldItems.find((i) => i.id === enrichLinkedVariableId)
+      ?.columnName
+  );
+
+  const joinedEntitiesList = $derived(
+    (joinStats?.entities ?? [])
+      .filter((entity) => entity.status === JoinStatus.JOINED)
+      .map((entity) => {
+        const targetValue =
+          entity.basemapValue ??
+          entity.geoValue ??
+          entity.selectedMapping ??
+          entity.matches?.[0] ??
+          entity.dataValue;
+        return {
+          dataValue: entity.dataValue,
+          basemapValue: targetValue,
+          otherIdentifiers:
+            entity.matches?.filter((match) => match !== targetValue) ?? []
+        };
+      })
+  );
+
+  const toVerifyRows = $derived(
+    (joinStats?.entities ?? [])
+      .filter((entity) => entity.status === JoinStatus.TO_VERIFY)
+      .map((entity) => ({
+        dataValue: entity.dataValue,
+        selectedMapping: entity.selectedMapping ?? entity.matches?.[0] ?? '',
+        basemapOptions: entity.basemapOptions ?? entity.matches ?? []
+      }))
+  );
+
+  const duplicateEntities = $derived(
+    (joinStats?.entities ?? [])
+      .filter((entity) => entity.status === JoinStatus.DUPLICATE)
+      .map((entity) => entity.dataValue)
+  );
+
+  const unrecognizedEntities = $derived(
+    (joinStats?.entities ?? [])
+      .filter((entity) => entity.status === JoinStatus.UNRECOGNIZED)
+      .map((entity) => entity.dataValue)
+  );
+
+  const ignoredEntities = $derived(
+    (joinStats?.entities ?? [])
+      .filter((entity) => entity.status === JoinStatus.IGNORED)
+      .map((entity) => ({ dataValue: entity.dataValue, lines: [] }))
   );
 </script>
 
@@ -179,24 +246,30 @@
       <h4 class="section-title">{m.enrich_verify_section_title()}</h4>
 
       {#if joinStats || isComputingJoin}
-        <SectionHeaderWithIcon
-          title={m.section_join_assisted()}
-          icon={MagicWand}
-        />
-
         {#if isComputingJoin}
           <div class="computing-join">
             <span>{m.enrich_computing_join()}</span>
           </div>
         {:else if joinStats}
-          <JoinAccordion
-            stats={joinStats}
-            showCorrectionTable={true}
-            linkedVariableName={enrichDataFieldItems.find(
-              (i) => i.id === enrichLinkedVariableId
-            )?.columnName}
+          <JoinAssistedSection
+            joinRows={toVerifyRows}
+            duplicates={duplicateEntities}
+            unknowns={unrecognizedEntities}
+            joinedCount={joinStats.joinedCount}
+            toVerifyCount={joinStats.toVerifyCount}
+            linkedVariableName={linkedVariableName}
+            basemapValues={targetOptions}
+            loading={isFinalizingJoin}
+            joinFinalized={false}
+            joinedEntitiesList={joinedEntitiesList}
+            duplicateLines={joinStats.duplicateLines}
+            ignoredEntities={ignoredEntities}
             onMappingChange={onMappingChange}
             onFinalizeJoin={onFinalizeJoin}
+            onManualCorrection={onManualCorrection}
+            onIgnoreEntity={onIgnoreEntity}
+            onValidateEntity={onValidateEntity}
+            onRestoreEntity={onRestoreEntity}
           />
 
           {#if isFinalizingJoin}

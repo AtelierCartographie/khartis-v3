@@ -612,10 +612,28 @@
         basemap,
         abortSignal
       );
-      if (didFinalizeJoin && !abortSignal.aborted) {
-        applyCatalogReferenceBasemap(basemap);
-      } else if (isCached && !abortSignal.aborted) {
-        basemapStyleStore.setReferenceBasemap(previousReferenceBasemapId);
+      if (abortSignal.aborted) return;
+      // Always apply the basemap the user explicitly picked, even if the join
+      // produced zero matches. Without this, clicking a basemap that does not
+      // match the data (e.g. country-coded dataset on a canton basemap) would
+      // silently keep the previous basemap, making the catalog feel broken.
+      // The join stats panel surfaces the mismatch separately.
+      applyCatalogReferenceBasemap(basemap);
+      if (!didFinalizeJoin) {
+        dataTabStore.resetStepCompletion(stepIndex);
+        if (resolvedDatasetId) {
+          const duckDataset =
+            duckDBOrchestrator.getDatasetBySourceFile(resolvedDatasetId) ??
+            duckDBOrchestrator.getDataset(resolvedDatasetId);
+          if (duckDataset) {
+            duckDBOrchestrator.updateDatasetJoinInfo(duckDataset.id, {
+              joinedBasemap: undefined,
+              geoColumn: undefined,
+              gpsMode: false,
+              gpsColumns: undefined
+            });
+          }
+        }
       }
     }
   }
@@ -1750,6 +1768,7 @@
     onRequestBasemapValues={requestBasemapAttributeValues}
     onFinalizeJoin={handleFinalizeJoin}
     onManualCorrection={handleManualCorrection}
+    onMappingChange={dataTabActions.updateJoinMapping}
     onIgnoreEntity={handleIgnoreEntity}
     onRestoreEntity={handleRestoreEntity}
     onValidateEntity={handleValidateEntity}

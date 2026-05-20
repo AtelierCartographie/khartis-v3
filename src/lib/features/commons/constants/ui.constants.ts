@@ -88,14 +88,16 @@ export enum BasemapLayerType {
   POINT = 'point',
   LAND = 'land',
   GRATICULE = 'graticule',
-  GEOGRAPHIC_LINES = 'geographic-lines'
+  GEOGRAPHIC_LINES = 'geographic-lines',
+  SPHERE = 'sphere'
 }
 
 export enum JoinStatus {
   JOINED = 'joined',
   TO_VERIFY = 'to_verify',
   DUPLICATE = 'duplicate',
-  UNRECOGNIZED = 'unrecognized'
+  UNRECOGNIZED = 'unrecognized',
+  IGNORED = 'ignored'
 }
 
 export enum OrientationIndicatorStyle {

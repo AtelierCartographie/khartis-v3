@@ -17,6 +17,7 @@ import type {
   BasemapMetadata,
   JoinQuality
 } from '$lib/features/map/types/basemap.types';
+import { getLocale } from '$lib/paraglide/runtime';
 import type { Table } from 'apache-arrow/Arrow';
 import { addGeoArrowMetadata } from '$lib/features/map/services/read-geojson-arrow.service';
 import type { DuckDBDataset, FinalizeJoinResult } from '../types';
@@ -751,8 +752,33 @@ export async function getBasemapAttributeValues(
   await ensureBasemapHasAttributes(basemapId, Duck);
 
   const escapedBasemapId = escapeSqlString(basemapId);
+  const displayVariant = getBasemapDisplayVariant(basemap);
+  const displayOrder = displayVariant
+    ? `CASE WHEN variant = '${escapeSqlString(displayVariant)}' THEN 0 ELSE 1 END,`
+    : '';
   const rows = (await Duck.query(
-    `SELECT DISTINCT raw FROM basemap_attributes WHERE basemap = '${escapedBasemapId}' AND raw IS NOT NULL ORDER BY raw`,
+    `WITH source AS (
+       SELECT
+         raw,
+         COALESCE(id, raw) AS entity_id,
+         variant,
+         ROW_NUMBER() OVER () AS source_order
+       FROM basemap_attributes
+       WHERE basemap = '${escapedBasemapId}' AND raw IS NOT NULL
+     ),
+     ranked AS (
+       SELECT
+         raw,
+         ROW_NUMBER() OVER (
+           PARTITION BY entity_id
+           ORDER BY ${displayOrder} source_order
+         ) AS rank
+       FROM source
+     )
+     SELECT raw
+     FROM ranked
+     WHERE rank = 1
+     ORDER BY raw`,
     { format: 'array' }
   )) as Array<{ raw: string }>;
 
@@ -764,19 +790,18 @@ export interface BasemapAlias {
   variant: string | null;
 }
 
+function getBasemapDisplayVariant(basemap: BasemapMetadata): string | null {
+  const locale = getLocale();
+  if (locale === 'fr') {
+    return basemap.display_id_fr ?? basemap.display_id_en ?? null;
+  }
+  return basemap.display_id_en ?? basemap.display_id_fr ?? null;
+}
+
 /**
- * Returns alias rows grouped by basemap entity.
- *
- * The `basemap_attributes` parquet does NOT carry a shared entity id;
- * instead, rows for the same feature are emitted consecutively, with
- * the pivot variant (e.g. `iso3_code`) appearing once per entity.
- * We reconstruct entity groups by counting pivot occurrences with a
- * cumulative window and gathering every other row that shares the
- * same group index.
- *
- * For monde-countries-2024-medium this surfaces, for `raw='BRA'`,
- * the alternative labels {Brazil, Brésil, Brasilien, BR} with their
- * source variant (name_engl, name_fren, name_germ, cntr_id).
+ * Returns alias rows grouped by the entity id supplied by basemap_attributes.
+ * The same map is keyed by every variant so a manual value can always resolve
+ * every other identifier of the entity.
  */
 export async function getBasemapAttributeAliasesByValue(
   basemap: BasemapMetadata,
@@ -787,52 +812,35 @@ export async function getBasemapAttributeAliasesByValue(
 
   const escapedBasemapId = escapeSqlString(basemapId);
 
-  const firstVariantRows = (await Duck.query(
-    `SELECT variant
-     FROM basemap_attributes
-     WHERE basemap = '${escapedBasemapId}'
-     LIMIT 1`,
-    { format: 'array' }
-  )) as Array<{ variant: string | null }>;
-  const pivotVariant = firstVariantRows[0]?.variant;
-  if (!pivotVariant) return {};
-
-  const escapedPivot = escapeSqlString(pivotVariant);
-
   const rows = (await Duck.query(
-    `WITH numbered AS (
-       SELECT raw, variant, ROW_NUMBER() OVER () AS rn
-       FROM basemap_attributes
-       WHERE basemap = '${escapedBasemapId}'
-     ),
-     grouped AS (
+    `WITH source AS (
        SELECT
          raw,
          variant,
-         rn,
-         SUM(CASE WHEN variant = '${escapedPivot}' THEN 1 ELSE 0 END)
-           OVER (ORDER BY rn ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
-           AS group_id
-       FROM numbered
+         COALESCE(id, raw) AS entity_id,
+         ROW_NUMBER() OVER () AS rn
+       FROM basemap_attributes
+       WHERE basemap = '${escapedBasemapId}'
      )
-     SELECT raw, variant, group_id, rn
-     FROM grouped
-     ORDER BY group_id, rn`,
+     SELECT raw, variant, entity_id, rn
+     FROM source
+     WHERE raw IS NOT NULL
+     ORDER BY entity_id, rn`,
     { format: 'array' }
   )) as Array<{
     raw: string;
     variant: string | null;
-    group_id: number;
+    entity_id: string;
     rn: number;
   }>;
 
-  const groups = new Map<number, BasemapAlias[]>();
+  const groups = new Map<string, BasemapAlias[]>();
   for (const row of rows) {
-    if (!row.raw || row.group_id == null) continue;
-    let bucket = groups.get(row.group_id);
+    if (!row.raw || !row.entity_id) continue;
+    let bucket = groups.get(row.entity_id);
     if (!bucket) {
       bucket = [];
-      groups.set(row.group_id, bucket);
+      groups.set(row.entity_id, bucket);
     }
     bucket.push({ value: row.raw, variant: row.variant ?? null });
   }
@@ -841,7 +849,7 @@ export async function getBasemapAttributeAliasesByValue(
   for (const row of rows) {
     if (!row.raw) continue;
     if (row.raw in result) continue;
-    const bucket = groups.get(row.group_id);
+    const bucket = groups.get(row.entity_id);
     if (!bucket) continue;
     const aliases = bucket.filter((entry) => entry.value !== row.raw);
     if (aliases.length > 0) result[row.raw] = aliases;

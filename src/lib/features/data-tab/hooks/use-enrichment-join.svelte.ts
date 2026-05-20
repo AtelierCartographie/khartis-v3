@@ -2,7 +2,10 @@ import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
 import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import { sanitizePreparedGeoJSON } from '$lib/features/commons/utils/persisted-geojson.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type {
@@ -33,10 +36,15 @@ export interface UseEnrichmentJoinReturn {
   readonly joinStats: JoinStats | null;
   readonly isComputingJoin: boolean;
   readonly isFinalizingJoin: boolean;
+  readonly targetOptions: string[];
   readonly joinMappings: SvelteMap<number, string>;
   computeEnrichmentJoinStats: () => Promise<void>;
   handleMappingChange: (index: number, value: string) => void;
   handleFinalizeEnrichment: () => Promise<void>;
+  handleManualCorrection: (dataValue: string, targetValue: string) => void;
+  validateEntity: (dataValue: string, targetValue: string) => void;
+  ignoreEntity: (dataValue: string) => void;
+  restoreEntity: (dataValue: string) => void;
   resetJoinState: () => void;
 }
 
@@ -56,7 +64,84 @@ export function useEnrichmentJoin(
   let joinStats = $state<JoinStats | null>(null);
   let isComputingJoin = $state(false);
   let isFinalizingJoin = $state(false);
+  let targetOptions = $state<string[]>([]);
   let joinMappings = new SvelteMap<number, string>();
+  let ignoredDataValues = $state(new Set<string>());
+  let manualCorrections = new SvelteMap<string, string>();
+
+  function applyIgnoredEntities(stats: JoinStats): JoinStats {
+    if (ignoredDataValues.size === 0) {
+      return { ...stats, ignoredCount: 0 };
+    }
+    let unrecognizedDelta = 0;
+    let toVerifyDelta = 0;
+    const updatedEntities = stats.entities.map((entity) => {
+      if (!ignoredDataValues.has(entity.dataValue)) return entity;
+      if (entity.status === JoinStatus.UNRECOGNIZED) unrecognizedDelta++;
+      if (entity.status === JoinStatus.TO_VERIFY) toVerifyDelta++;
+      return { ...entity, status: JoinStatus.IGNORED };
+    });
+    return {
+      ...stats,
+      entities: updatedEntities,
+      unrecognizedCount: Math.max(
+        0,
+        stats.unrecognizedCount - unrecognizedDelta
+      ),
+      toVerifyCount: Math.max(0, stats.toVerifyCount - toVerifyDelta),
+      ignoredCount: ignoredDataValues.size
+    };
+  }
+
+  function collectEffectiveCorrections(): Record<string, string> {
+    const corrections: Record<string, string> = {};
+
+    if (joinStats) {
+      for (const entity of joinStats.entities) {
+        if (
+          entity.status === JoinStatus.TO_VERIFY &&
+          entity.selectedMapping &&
+          entity.selectedMapping !== entity.dataValue
+        ) {
+          corrections[entity.dataValue] = entity.selectedMapping;
+        }
+      }
+    }
+
+    for (const [dataValue, targetValue] of manualCorrections.entries()) {
+      if (targetValue && targetValue !== dataValue) {
+        corrections[dataValue] = targetValue;
+      }
+    }
+
+    return corrections;
+  }
+
+  function resolveCorrectedJoinExpression(columnExpression: string): string {
+    const corrections = collectEffectiveCorrections();
+    const entries = Object.entries(corrections);
+    if (entries.length === 0) return columnExpression;
+
+    const cases = entries
+      .map(
+        ([original, corrected]) =>
+          `WHEN ${columnExpression} = '${escapeSqlString(original)}' THEN '${escapeSqlString(corrected)}'`
+      )
+      .join('\n               ');
+
+    return `CASE
+               ${cases}
+               ELSE ${columnExpression}
+             END`;
+  }
+
+  function buildIgnoredWhereClause(columnExpression: string): string {
+    if (ignoredDataValues.size === 0) return '';
+    const ignoredValues = [...ignoredDataValues]
+      .map((value) => `'${escapeSqlString(value)}'`)
+      .join(', ');
+    return `WHERE ${columnExpression} NOT IN (${ignoredValues})`;
+  }
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
 
@@ -236,6 +321,7 @@ export function useEnrichmentJoin(
   async function computeEnrichmentJoinStats(): Promise<void> {
     if (isJoinBlocked()) {
       joinStats = null;
+      targetOptions = [];
       return;
     }
 
@@ -251,6 +337,7 @@ export function useEnrichmentJoin(
 
     if (!enrichCol || !geoCol) {
       joinStats = null;
+      targetOptions = [];
       return;
     }
 
@@ -278,6 +365,7 @@ export function useEnrichmentJoin(
       )) as Array<{ val: string }>;
 
       const allTargetOptions = targetValues.map((v) => v.val).filter(Boolean);
+      targetOptions = allTargetOptions;
 
       stats.entities = stats.entities.map((entity) => {
         if (entity.status === JoinStatus.TO_VERIFY) {
@@ -292,7 +380,7 @@ export function useEnrichmentJoin(
         return entity;
       });
 
-      joinStats = stats;
+      joinStats = applyIgnoredEntities(stats);
     } catch (error) {
       logger.error(
         'Failed to compute enrichment join stats',
@@ -300,8 +388,50 @@ export function useEnrichmentJoin(
         error
       );
       joinStats = null;
+      targetOptions = [];
     } finally {
       isComputingJoin = false;
+    }
+  }
+
+  function ignoreEntity(dataValue: string): void {
+    if (!dataValue || ignoredDataValues.has(dataValue)) return;
+    ignoredDataValues = new Set([...ignoredDataValues, dataValue]);
+    manualCorrections.delete(dataValue);
+    if (joinStats) {
+      joinStats = applyIgnoredEntities({
+        ...joinStats,
+        entities: joinStats.entities.map((entity) =>
+          entity.status === JoinStatus.IGNORED && entity.dataValue !== dataValue
+            ? entity
+            : entity.dataValue === dataValue
+              ? entity
+              : entity
+        ),
+        unrecognizedCount: joinStats.unrecognizedCount,
+        toVerifyCount: joinStats.toVerifyCount,
+        ignoredCount: 0
+      });
+    }
+  }
+
+  function restoreEntity(dataValue: string): void {
+    if (!ignoredDataValues.has(dataValue)) return;
+    const next = new Set(ignoredDataValues);
+    next.delete(dataValue);
+    ignoredDataValues = next;
+    if (joinStats) {
+      const restoredEntities = joinStats.entities.map((entity) =>
+        entity.dataValue === dataValue
+          ? { ...entity, status: JoinStatus.UNRECOGNIZED }
+          : entity
+      );
+      joinStats = applyIgnoredEntities({
+        ...joinStats,
+        entities: restoredEntities,
+        unrecognizedCount: joinStats.unrecognizedCount + 1,
+        ignoredCount: 0
+      });
     }
   }
 
@@ -326,6 +456,46 @@ export function useEnrichmentJoin(
         entities: updatedEntities
       };
     }
+  }
+
+  function handleManualCorrection(
+    dataValue: string,
+    targetValue: string
+  ): void {
+    if (!dataValue || !targetValue) return;
+    manualCorrections.set(dataValue, targetValue);
+
+    if (!joinStats) return;
+
+    const updatedEntities = joinStats.entities.map((entity) =>
+      entity.dataValue === dataValue
+        ? {
+            ...entity,
+            status: JoinStatus.JOINED,
+            geoValue: targetValue,
+            basemapValue: targetValue,
+            selectedMapping: targetValue
+          }
+        : entity
+    );
+
+    joinStats = applyIgnoredEntities({
+      ...joinStats,
+      entities: updatedEntities,
+      joinedCount: updatedEntities.filter(
+        (entity) => entity.status === JoinStatus.JOINED
+      ).length,
+      toVerifyCount: updatedEntities.filter(
+        (entity) => entity.status === JoinStatus.TO_VERIFY
+      ).length,
+      unrecognizedCount: updatedEntities.filter(
+        (entity) => entity.status === JoinStatus.UNRECOGNIZED
+      ).length
+    });
+  }
+
+  function validateEntity(dataValue: string, targetValue: string): void {
+    handleManualCorrection(dataValue, targetValue);
   }
 
   async function handleFinalizeEnrichment(): Promise<void> {
@@ -396,9 +566,16 @@ export function useEnrichmentJoin(
       const enrichColsDedupSelect = enrichmentColumns
         .map(
           (col) =>
-            `any_value(e."${escapeIdentifier(col)}") AS "${escapeIdentifier(col)}"`
+            `any_value(source."${escapeIdentifier(col)}") AS "${escapeIdentifier(col)}"`
         )
         .join(',\n            ');
+      const enrichmentJoinValueExpression = `CAST(e."${escapedEnrichmentColumn}" AS VARCHAR)`;
+      const correctedJoinValueExpression = resolveCorrectedJoinExpression(
+        enrichmentJoinValueExpression
+      );
+      const ignoredWhereClause = buildIgnoredWhereClause(
+        enrichmentJoinValueExpression
+      );
 
       const enrichedTableName = `${geoTableName}_enriched_${Date.now()}`;
       const escapedEnrichedTableName = escapeIdentifier(enrichedTableName);
@@ -416,11 +593,23 @@ export function useEnrichmentJoin(
 
       await Duck.query(
         `CREATE TABLE "${escapedEnrichedTableName}" AS
-         WITH enrichment_unique AS (
+         WITH enrichment_source AS (
            SELECT
-             normalize_text_join(CAST(e."${escapedEnrichmentColumn}" AS VARCHAR)) AS join_key,
-             ${enrichColsDedupSelect}
+             ${correctedJoinValueExpression} AS __khartis_join_value,
+             ${enrichmentColumns
+               .map(
+                 (col) =>
+                   `e."${escapeIdentifier(col)}" AS "${escapeIdentifier(col)}"`
+               )
+               .join(',\n             ')}
            FROM "${escapedEnrichmentTableName}" e
+           ${ignoredWhereClause}
+         ),
+         enrichment_unique AS (
+           SELECT
+             normalize_text_join(__khartis_join_value) AS join_key,
+             ${enrichColsDedupSelect}
+           FROM enrichment_source source
            GROUP BY 1
          )
          SELECT g.*, ${enrichColsSelect}
@@ -494,7 +683,10 @@ export function useEnrichmentJoin(
 
   function resetJoinState(): void {
     joinStats = null;
+    targetOptions = [];
     joinMappings = new SvelteMap<number, string>();
+    ignoredDataValues = new Set();
+    manualCorrections = new SvelteMap<string, string>();
   }
 
   return {
@@ -507,12 +699,19 @@ export function useEnrichmentJoin(
     get isFinalizingJoin() {
       return isFinalizingJoin;
     },
+    get targetOptions() {
+      return targetOptions;
+    },
     get joinMappings() {
       return joinMappings;
     },
     computeEnrichmentJoinStats,
     handleMappingChange,
     handleFinalizeEnrichment,
+    handleManualCorrection,
+    validateEntity,
+    ignoreEntity,
+    restoreEntity,
     resetJoinState
   };
 }

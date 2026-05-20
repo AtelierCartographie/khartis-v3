@@ -25,6 +25,8 @@
     showCorrectionTable?: boolean;
     onMappingChange?: (index: number, value: string) => void;
     onFinalizeJoin?: () => void;
+    onIgnoreEntity?: (dataValue: string) => void;
+    onRestoreEntity?: (dataValue: string) => void;
   }
 
   const {
@@ -32,13 +34,16 @@
     linkedVariableName,
     showCorrectionTable = false,
     onMappingChange,
-    onFinalizeJoin
+    onFinalizeJoin,
+    onIgnoreEntity,
+    onRestoreEntity
   }: Props = $props();
 
   let joinedExpanded = $state(false);
   let toVerifyExpanded = $state(true);
   let duplicatesExpanded = $state(false);
   let unrecognizedExpanded = $state(false);
+  let ignoredExpanded = $state(false);
 
   const joinedEntities = $derived(
     stats.entities.filter((e) => e.status === JoinStatus.JOINED)
@@ -52,6 +57,10 @@
   const unrecognizedEntities = $derived(
     stats.entities.filter((e) => e.status === JoinStatus.UNRECOGNIZED)
   );
+  const ignoredEntities = $derived(
+    stats.entities.filter((e) => e.status === JoinStatus.IGNORED)
+  );
+  const ignoredCount = $derived(stats.ignoredCount ?? ignoredEntities.length);
 
   const hasErrors = $derived(
     stats.toVerifyCount > 0 ||
@@ -241,12 +250,66 @@
         <div class="category-body">
           <ul class="entity-list">
             {#each unrecognizedEntities as entity (entity.dataValue)}
-              <li class="entity-item">{entity.dataValue}</li>
+              <li class="entity-item entity-item--with-action">
+                <span>{entity.dataValue}</span>
+                {#if onIgnoreEntity}
+                  <Button
+                    kind="ghost"
+                    size="small"
+                    on:click={() => onIgnoreEntity?.(entity.dataValue)}
+                  >
+                    {m.join_ignore_action()}
+                  </Button>
+                {/if}
+              </li>
             {/each}
           </ul>
         </div>
       {/if}
     </div>
+
+    {#if ignoredCount > 0}
+      <div class="category-row">
+        <button
+          class="category-row-header"
+          onclick={() => (ignoredExpanded = !ignoredExpanded)}
+          aria-expanded={ignoredExpanded}
+        >
+          <span class="category-icon icon-warning-alt">
+            <WarningAltFilled size={20} />
+          </span>
+          <div class="category-count count-warning-alt">{ignoredCount}</div>
+          <span class="category-label label-warning-alt">
+            {m.join_entities_ignored({ count: ignoredCount })}
+          </span>
+          <span class="category-chevron">
+            {#if ignoredExpanded}<ChevronUp size={20} />{:else}<ChevronDown
+                size={20}
+              />{/if}
+          </span>
+        </button>
+        {#if ignoredExpanded}
+          <div class="category-body">
+            <ul class="entity-list">
+              {#each ignoredEntities as entity (entity.dataValue)}
+                <li class="entity-item entity-item--with-action">
+                  <span>{entity.dataValue}</span>
+                  {#if onRestoreEntity}
+                    <Button
+                      kind="ghost"
+                      size="small"
+                      on:click={() => onRestoreEntity?.(entity.dataValue)}
+                    >
+                      {m.join_restore_action()}
+                    </Button>
+                  {/if}
+                </li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
+      </div>
+    {/if}
   </div>
 
   <div class="join-status-zone">
@@ -432,6 +495,11 @@
     padding: 10px 16px;
     background-color: var(--cds-layer-hover-01, #f4f4f4);
     border-bottom: 1px solid var(--cds-border-subtle-00, #e0e0e0);
+  }
+
+  .entity-item--with-action {
+    align-items: center;
+    justify-content: space-between;
   }
 
   .entity-item:last-child {
