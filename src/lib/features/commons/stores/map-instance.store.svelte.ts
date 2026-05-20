@@ -55,6 +55,13 @@ export interface ProjectionContext {
   isProjectedCoordinates: boolean;
 }
 
+export interface VisibleMapBounds {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+}
+
 let projectionContextGetter: () => ProjectionContext = () => ({
   referenceBbox: null,
   canvasSize: { width: 0, height: 0 },
@@ -260,15 +267,54 @@ function createMapInstanceStore() {
     return state.map?.getCanvas() ?? null;
   }
 
-  function getMapBounds() {
-    if (!state.map) return null;
-    const bounds = state.map.getBounds();
+  function getDeckMapBounds() {
+    if (!state.deckInstance || !state.isMapLoaded) return null;
+    const ctx = projectionContextGetter();
+    if (!ctx.referenceBbox) return null;
+    if (ctx.canvasSize.width <= 0 || ctx.canvasSize.height <= 0) return null;
+
+    const zoomScale = Math.pow(2, state.deckViewState.zoom);
+    if (!Number.isFinite(zoomScale) || zoomScale <= 0) return null;
+
+    const target = normalizeTarget(state.deckViewState.target);
+    const halfWidth = ctx.canvasSize.width / zoomScale / 2;
+    const halfHeight = ctx.canvasSize.height / zoomScale / 2;
+    const corners = [
+      worldToData([target[0] - halfWidth, target[1] - halfHeight, 0]),
+      worldToData([target[0] + halfWidth, target[1] - halfHeight, 0]),
+      worldToData([target[0] + halfWidth, target[1] + halfHeight, 0]),
+      worldToData([target[0] - halfWidth, target[1] + halfHeight, 0])
+    ];
+    const xs = corners.map((corner) => corner[0]);
+    const ys = corners.map((corner) => corner[1]);
+
+    if (
+      xs.some((value) => !Number.isFinite(value)) ||
+      ys.some((value) => !Number.isFinite(value))
+    ) {
+      return null;
+    }
+
     return {
-      north: bounds.getNorth(),
-      south: bounds.getSouth(),
-      east: bounds.getEast(),
-      west: bounds.getWest()
-    };
+      north: Math.max(...ys),
+      south: Math.min(...ys),
+      east: Math.max(...xs),
+      west: Math.min(...xs)
+    } satisfies VisibleMapBounds;
+  }
+
+  function getMapBounds() {
+    if (state.map) {
+      const bounds = state.map.getBounds();
+      return {
+        north: bounds.getNorth(),
+        south: bounds.getSouth(),
+        east: bounds.getEast(),
+        west: bounds.getWest()
+      } satisfies VisibleMapBounds;
+    }
+
+    return getDeckMapBounds();
   }
 
   function getMapZoom(): number {
@@ -757,6 +803,7 @@ function createMapInstanceStore() {
     setDeckInstance,
     setMapLoaded,
     getMapCanvas,
+    getDeckMapBounds,
     getMapBounds,
     getMapZoom,
     getMapCenter,

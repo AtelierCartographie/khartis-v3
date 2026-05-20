@@ -4,7 +4,10 @@ import {
   FormatMode,
   PageModel
 } from '$lib/features/commons/constants/ui.constants';
-import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
+import {
+  injectProjectionContext,
+  mapInstanceStore
+} from '$lib/features/commons/stores/map-instance.store.svelte';
 import { hexToHsl } from '$lib/features/commons/utils/color-utils';
 import { formatActions } from '../format/format.store.svelte';
 
@@ -31,6 +34,12 @@ function createScaleMap(widthPerLongitudeDegree: number) {
     project: ([lng]: [number, number]) => ({
       x: lng * widthPerLongitudeDegree,
       y: 0
+    }),
+    getBounds: () => ({
+      getNorth: () => 0,
+      getSouth: () => 0,
+      getEast: () => 0,
+      getWest: () => 0
     }),
     setMinZoom: () => undefined,
     setMaxZoom: () => undefined,
@@ -139,6 +148,22 @@ describe('geo indications store responsive defaults', () => {
 
     expect(geoIndicationsState.scale.units).toBe(DistanceUnit.MILES);
     expect(geoIndicationsState.scale.distance).toBe(50);
+  });
+
+  it('uses Deck bounds before a stale MapLibre instance outside tiled basemaps', () => {
+    mapInstanceStore.setMapInstance(createScaleMap(1_000_000) as never);
+    mapInstanceStore.setDeckInstance({ setProps: vi.fn() } as never);
+    mapInstanceStore.setMapLoaded(true);
+    injectProjectionContext(() => ({
+      referenceBbox: [-180, -90, 180, 90],
+      canvasSize: { width: 800, height: 600 },
+      fitPaddingPx: 0,
+      isProjectedCoordinates: false
+    }));
+
+    geoIndicationsActions.setScaleDistance(5000);
+
+    expect(geoIndicationsState.scale.distance).toBe(5000);
   });
 
   it('clamps scale distance to the meaningful max for the active unit', () => {

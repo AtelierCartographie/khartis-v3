@@ -5,7 +5,9 @@
   } from '$lib/features/commons/constants/ui.constants';
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
+  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import * as m from '$lib/paraglide/messages.js';
   import {
@@ -41,6 +43,7 @@
     getNumericEventValue,
     type ColorPickerValidateEvent
   } from './geo-indications.utils';
+  import { getCurrentScaleDistanceContext } from './scale-distance-context.svelte';
 
   const store = geoIndicationsActions;
   const geoState = $derived(geoIndicationsState);
@@ -94,13 +97,17 @@
     void _revision;
     void _zoomLevel;
 
-    const center = mapInstanceStore.getMapCenter();
-    return getScaleDistanceLimit(geoState.scale.units, {
-      map: mapInstanceStore.map,
-      zoom: mapInstanceStore.currentZoom,
-      centerLatitude: center?.lat ?? null
-    });
+    return getScaleDistanceLimit(
+      geoState.scale.units,
+      getCurrentScaleDistanceContext()
+    );
   });
+  const isScaleDisabled = $derived(
+    basemapStyleStore.requiresMapLibre || osmBasemapStore.isActive
+  );
+  const scaleDisabledReason = $derived(
+    isScaleDisabled ? m.geo_scale_unavailable_tiled_basemap() : undefined
+  );
   const scaleDistanceStep = $derived(
     getScaleDistanceStep(
       geoState.scale.distance > 0 ? geoState.scale.distance : scaleDistanceLimit
@@ -128,12 +135,22 @@
 
 <ExpandableSection
   title={m.geo_scale()}
+  description={scaleDisabledReason}
   defaultOpen={geoState.scale.expanded}
   showToggle={true}
-  toggleChecked={geoState.scale.enabled}
-  onToggleChange={() => store.toggleScale()}
+  toggleChecked={geoState.scale.enabled && !isScaleDisabled}
+  toggleDisabled={isScaleDisabled}
+  disabled={isScaleDisabled}
+  disabledReason={scaleDisabledReason}
+  onToggleChange={() => {
+    if (!isScaleDisabled) {
+      store.toggleScale();
+    }
+  }}
 >
   <div class="section-content">
+    <p class="scale-center-note">{m.geo_scale_valid_at_map_center()}</p>
+
     <Grid noGutter>
       <Row>
         <Column>
@@ -256,6 +273,13 @@
 <style>
   .section-content :global(.bx--row + .bx--row) {
     margin-top: var(--cds-spacing-05);
+  }
+
+  .scale-center-note {
+    margin: 0 0 var(--cds-spacing-05);
+    color: var(--cds-text-secondary);
+    font-size: var(--cds-body-compact-01-font-size, 0.875rem);
+    line-height: var(--cds-body-compact-01-line-height, 1.28572);
   }
 
   .text-style-row {

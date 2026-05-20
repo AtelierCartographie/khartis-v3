@@ -1,4 +1,5 @@
 import { Matrix4 } from '@math.gl/core';
+import type { ProjectionLike } from 'geoarrow-deck-stream';
 import {
   get_bbox_from_geoparquet,
   get_model_matrix,
@@ -13,6 +14,7 @@ interface ProjectionState {
   fitPaddingPx: number;
   renderScale: number;
   modelMatrix: Matrix4 | null;
+  renderProjection: ProjectionLike | null;
 
   isProjectedCoordinates: boolean;
 }
@@ -28,6 +30,7 @@ function createProjectionStore() {
     fitPaddingPx: DEFAULT_FIT_PADDING_PX,
     renderScale: 1,
     modelMatrix: null,
+    renderProjection: null,
     isProjectedCoordinates: false
   });
 
@@ -116,10 +119,15 @@ function createProjectionStore() {
     state.renderScale = nextRenderScale;
   }
 
+  function setRenderProjection(projection: ProjectionLike | null): void {
+    state.renderProjection = projection;
+  }
+
   function clear(): void {
     state.referenceBbox = null;
     state.referenceGeoMetadata = null;
     state.modelMatrix = null;
+    state.renderProjection = null;
     state.fitPaddingPx = DEFAULT_FIT_PADDING_PX;
     state.renderScale = 1;
     state.isProjectedCoordinates = false;
@@ -130,6 +138,7 @@ function createProjectionStore() {
     state.referenceGeoMetadata = null;
     state.canvasSize = DEFAULT_CANVAS_SIZE;
     state.modelMatrix = null;
+    state.renderProjection = null;
     state.fitPaddingPx = DEFAULT_FIT_PADDING_PX;
     state.renderScale = 1;
     state.isProjectedCoordinates = false;
@@ -144,6 +153,9 @@ function createProjectionStore() {
     },
     get modelMatrix(): Matrix4 | null {
       return state.modelMatrix;
+    },
+    get renderProjection(): ProjectionLike | null {
+      return state.renderProjection;
     },
     get canvasSize(): CanvasSize {
       return state.canvasSize;
@@ -162,6 +174,7 @@ function createProjectionStore() {
     updateCanvasSize,
     setFitPadding,
     setRenderScale,
+    setRenderProjection,
     clear,
     reset
   };

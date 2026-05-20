@@ -888,7 +888,8 @@
 
   function getOrthographicRenderProjection(
     basemapMeta: ReturnType<typeof getProjectionMetadataForDataset>,
-    allowManualOverride = true
+    allowManualOverride = true,
+    updateRenderProjectionStore = true
   ): ProjectionLike | undefined {
     const projectionState = getProjectionState();
     const viewportSize = getProjectionViewportSize();
@@ -913,12 +914,16 @@
         : undefined;
     const overrideProjection = getProjectionOverrideForRender();
 
-    return resolveProjectionForRender(
+    const renderProjection = resolveProjectionForRender(
       defaultProjection,
       overrideProjection,
       projectionState.overrideSource,
       allowManualOverride
     );
+    if (updateRenderProjectionStore) {
+      projectionStore.setRenderProjection(renderProjection ?? null);
+    }
+    return renderProjection;
   }
 
   function projectBboxForRenderProjection(
@@ -928,7 +933,8 @@
   ): BBox | null {
     const renderProjection = getOrthographicRenderProjection(
       basemapMeta,
-      allowManualOverride
+      allowManualOverride,
+      false
     );
     if (!renderProjection || !bbox) {
       return null;

@@ -16,7 +16,6 @@ import {
 } from '$lib/features/commons/utils/layout-sizing.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import { globalActions } from '$lib/features/commons/stores/global.svelte';
-import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import {
   getFormatLayoutSizingContext,
   getFormatState
@@ -27,6 +26,7 @@ import {
   INSET_MAP_SIZE_LIMITS,
   normalizeScaleDistanceValue
 } from './geo-indications.utils';
+import { getCurrentScaleDistanceContext } from './scale-distance-context.svelte';
 import type {
   ColorState,
   DragPosition,
@@ -254,16 +254,6 @@ function normalizeState(
         current.insetMap.dragPosition
       )
     }
-  };
-}
-
-function getCurrentScaleDistanceContext() {
-  const center = mapInstanceStore.getMapCenter();
-
-  return {
-    map: mapInstanceStore.map,
-    zoom: mapInstanceStore.currentZoom,
-    centerLatitude: center?.lat ?? null
   };
 }
 

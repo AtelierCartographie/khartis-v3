@@ -3,6 +3,7 @@ import {
   InsetMapType
 } from '$lib/features/commons/constants/ui.constants';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
+import { geoDistance } from 'd3-geo';
 
 export type ColorPickerValidateEvent = {
   hex: string;
@@ -30,19 +31,36 @@ const METERS_PER_MILE = 1609.344;
 const EARTH_CIRCUMFERENCE_KILOMETERS = 40075.017;
 const EARTH_RADIUS_METERS = 6378137;
 const SCALE_FALLBACK_ZOOM = 2;
+const NICE_SCALE_STEPS = [1, 2, 4, 5, 10] as const;
 
 export const SCALE_TARGET_WIDTH_PX = 80;
 export const SCALE_MAX_WIDTH_PX = 120;
+export const INSET_MAP_MAX_AREA_FRACTION = 0.5;
 
 export type ScaleDistanceMapLike = {
   getCenter: () => { lng: number; lat: number };
   project: (lngLat: [number, number]) => { x: number; y: number };
 };
 
+type ScaleDistanceProjectionLike = {
+  invert: (point: [number, number]) => [number, number] | null | undefined;
+};
+
 export type ScaleDistanceContext = {
   map?: ScaleDistanceMapLike | null;
   zoom?: number | null;
   centerLatitude?: number | null;
+  bounds?: InsetMapBounds | null;
+  canvasSize?: { width: number; height: number } | null;
+  isProjectedCoordinates?: boolean;
+  projection?: unknown;
+};
+
+export type InsetMapBounds = {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
 };
 
 export const MAX_SCALE_DISTANCE_BY_UNIT: Record<DistanceUnit, number> = {
@@ -62,6 +80,31 @@ function toFiniteNumber(value: unknown, fallback: number): number {
   return fallback;
 }
 
+export function getInsetMapBoundsAreaFraction(
+  bounds: InsetMapBounds | null | undefined
+): number | null {
+  if (!bounds) {
+    return null;
+  }
+
+  const north = clamp(toFiniteNumber(bounds.north, 90), -90, 90);
+  const south = clamp(toFiniteNumber(bounds.south, -90), -90, 90);
+  const rawLongitudeSpan = Math.abs(
+    toFiniteNumber(bounds.east, 180) - toFiniteNumber(bounds.west, -180)
+  );
+  const longitudeSpan = clamp(rawLongitudeSpan, 0, 360);
+  const latitudeSpan = clamp(north - south, 0, 180);
+
+  return (longitudeSpan * latitudeSpan) / (360 * 180);
+}
+
+export function isInsetMapAvailableForBounds(
+  bounds: InsetMapBounds | null | undefined
+): boolean {
+  const areaFraction = getInsetMapBoundsAreaFraction(bounds);
+  return areaFraction === null || areaFraction < INSET_MAP_MAX_AREA_FRACTION;
+}
+
 function getScaleDistanceFractionDigits(distance: number): number {
   if (distance < 1) {
     return 2;
@@ -74,7 +117,7 @@ function getScaleDistanceFractionDigits(distance: number): number {
   return 0;
 }
 
-function toNiceDistance(value: number): number {
+function toNiceDistanceAtLeast(value: number): number {
   if (!Number.isFinite(value) || value <= 0) {
     return 1;
   }
@@ -83,7 +126,7 @@ function toNiceDistance(value: number): number {
   const magnitude = Math.pow(10, exponent);
   const normalized = value / magnitude;
   const step =
-    normalized < 1.5 ? 1 : normalized < 3 ? 2 : normalized < 7 ? 5 : 10;
+    NICE_SCALE_STEPS.find((candidate) => candidate >= normalized) ?? 10;
 
   return step * magnitude;
 }
@@ -96,9 +139,48 @@ function toNiceDistanceAtMost(value: number): number {
   const exponent = Math.floor(Math.log10(value));
   const magnitude = Math.pow(10, exponent);
   const normalized = value / magnitude;
-  const step = normalized >= 5 ? 5 : normalized >= 2 ? 2 : 1;
+  const step =
+    [...NICE_SCALE_STEPS]
+      .reverse()
+      .find((candidate) => candidate <= normalized) ?? 1;
 
   return step * magnitude;
+}
+
+function isValidLongitudeLatitudePair(
+  candidate: unknown
+): candidate is [number, number] {
+  return (
+    Array.isArray(candidate) &&
+    candidate.length >= 2 &&
+    typeof candidate[0] === 'number' &&
+    Number.isFinite(candidate[0]) &&
+    typeof candidate[1] === 'number' &&
+    Number.isFinite(candidate[1])
+  );
+}
+
+function hasProjectionInvert(
+  candidate: unknown
+): candidate is ScaleDistanceProjectionLike {
+  return (
+    !!candidate &&
+    typeof candidate === 'object' &&
+    'invert' in candidate &&
+    typeof (candidate as { invert?: unknown }).invert === 'function'
+  );
+}
+
+function getDistanceMeters(
+  start: [number, number],
+  end: [number, number]
+): number | null {
+  const radians = geoDistance(start, end);
+  if (!Number.isFinite(radians) || radians <= 0) {
+    return null;
+  }
+
+  return radians * EARTH_RADIUS_METERS;
 }
 
 function getProjectedMetersPerPixelAtCenter(
@@ -142,13 +224,113 @@ function getFallbackMetersPerPixel(
   );
 }
 
-function resolveMetersPerPixel(
+function getOrthographicCoordinateDeltaPerPixel(
+  bounds: InsetMapBounds | null | undefined,
+  canvasSize: { width: number; height: number } | null | undefined
+): number | null {
+  if (!bounds || !canvasSize || canvasSize.width <= 0) {
+    return null;
+  }
+
+  const coordinateSpan = Math.abs(
+    toFiniteNumber(bounds.east, 0) - toFiniteNumber(bounds.west, 0)
+  );
+  if (!Number.isFinite(coordinateSpan) || coordinateSpan <= 0) {
+    return null;
+  }
+
+  return coordinateSpan / canvasSize.width;
+}
+
+function getProjectionMetersPerPixelAtCenter(
+  projection: unknown,
+  bounds: InsetMapBounds | null | undefined,
+  canvasSize: { width: number; height: number } | null | undefined
+): number | null {
+  const coordinateDelta = getOrthographicCoordinateDeltaPerPixel(
+    bounds,
+    canvasSize
+  );
+  if (!hasProjectionInvert(projection) || coordinateDelta === null || !bounds) {
+    return null;
+  }
+
+  const centerX =
+    (toFiniteNumber(bounds.east, 0) + toFiniteNumber(bounds.west, 0)) / 2;
+  const centerY =
+    (toFiniteNumber(bounds.north, 0) + toFiniteNumber(bounds.south, 0)) / 2;
+  const start = projection.invert([centerX, centerY]);
+  const end = projection.invert([centerX + coordinateDelta, centerY]);
+
+  if (
+    !isValidLongitudeLatitudePair(start) ||
+    !isValidLongitudeLatitudePair(end)
+  ) {
+    return null;
+  }
+
+  return getDistanceMeters(start, end);
+}
+
+function getGeographicBoundsMetersPerPixelAtCenter(
+  bounds: InsetMapBounds | null | undefined,
+  canvasSize: { width: number; height: number } | null | undefined
+): number | null {
+  const longitudeDelta = getOrthographicCoordinateDeltaPerPixel(
+    bounds,
+    canvasSize
+  );
+  if (longitudeDelta === null || !bounds) {
+    return null;
+  }
+
+  const centerLongitude =
+    (toFiniteNumber(bounds.east, 0) + toFiniteNumber(bounds.west, 0)) / 2;
+  const centerLatitude = clamp(
+    (toFiniteNumber(bounds.north, 0) + toFiniteNumber(bounds.south, 0)) / 2,
+    -85,
+    85
+  );
+
+  return getDistanceMeters(
+    [centerLongitude, centerLatitude],
+    [centerLongitude + longitudeDelta, centerLatitude]
+  );
+}
+
+export function getScaleMetersPerPixel(
   context: ScaleDistanceContext,
   allowFallback: boolean
 ): number | null {
+  const projectionBased = getProjectionMetersPerPixelAtCenter(
+    context.projection,
+    context.bounds,
+    context.canvasSize
+  );
+  if (projectionBased !== null) {
+    return projectionBased;
+  }
+
   const projected = getProjectedMetersPerPixelAtCenter(context.map);
   if (projected !== null) {
     return projected;
+  }
+
+  const orthographicCoordinateDelta = getOrthographicCoordinateDeltaPerPixel(
+    context.bounds,
+    context.canvasSize
+  );
+  if (context.isProjectedCoordinates && orthographicCoordinateDelta !== null) {
+    return orthographicCoordinateDelta;
+  }
+
+  const geographicBoundsMetersPerPixel =
+    getGeographicBoundsMetersPerPixelAtCenter(
+      context.bounds,
+      context.canvasSize
+    );
+  if (geographicBoundsMetersPerPixel !== null) {
+    return geographicBoundsMetersPerPixel;
   }
 
   if (!allowFallback) {
@@ -194,7 +376,7 @@ export function getSuggestedScaleDistance(
   unit: DistanceUnit,
   context: ScaleDistanceContext = {}
 ): number {
-  const metersPerPixel = resolveMetersPerPixel(context, true);
+  const metersPerPixel = getScaleMetersPerPixel(context, true);
   if (metersPerPixel === null) {
     return 1;
   }
@@ -204,7 +386,7 @@ export function getSuggestedScaleDistance(
     unit
   );
   return normalizeScaleDistanceValue(
-    Math.max(0.1, toNiceDistance(rawDistance))
+    Math.max(0.1, toNiceDistanceAtLeast(rawDistance))
   );
 }
 
@@ -213,7 +395,7 @@ export function getScaleDistanceLimit(
   context: ScaleDistanceContext = {}
 ): number {
   const hardLimit = MAX_SCALE_DISTANCE_BY_UNIT[unit];
-  const metersPerPixel = resolveMetersPerPixel(context, false);
+  const metersPerPixel = getScaleMetersPerPixel(context, false);
   if (metersPerPixel === null) {
     return hardLimit;
   }

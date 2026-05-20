@@ -57,6 +57,10 @@ describe('ThematicMap source', () => {
       'projectionStore.setFitPadding(logicalMapViewportFitPaddingPx)'
     );
     expect(source).toContain(
+      'projectionStore.setRenderProjection(renderProjection ?? null);'
+    );
+    expect(source).toContain('updateRenderProjectionStore = true');
+    expect(source).toContain(
       'const viewportSnapshot = `${logicalMapCanvasWidth}x${logicalMapCanvasHeight}-${logicalMapViewportFitPaddingPx}`;'
     );
     expect(source).toContain("scheduleLayerUpdate('effect:canvasResize')");
