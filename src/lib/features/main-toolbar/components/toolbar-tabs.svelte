@@ -303,6 +303,9 @@
         const newDataset = datasetsStore.datasets.find(
           (d) => d.id === newDatasetId
         );
+        if (newDataset?.sourceFileId) {
+          globalActions.selectDataButton(newDataset.sourceFileId);
+        }
         showSuccess(
           m.success_dataset_duplicated_title(),
           m.success_dataset_duplicated_message({
