@@ -262,6 +262,7 @@ describe('[S01 Phase 2] semio-detector on real CSV fixtures', () => {
   it('CSV-07 tiny-geo-enrich: id → geoid, category → QL', async () => {
     const classes = await classifyCsv('tiny-geo-3features-enrich.csv', 'csv07');
     expect(classes.get('id')).toBe('geoid');
+    expect(classes.get('population_2024')).toBe('QTA');
     expect(classes.get('category')).toBe('QL');
   });
 

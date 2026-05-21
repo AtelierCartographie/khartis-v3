@@ -41,7 +41,7 @@ describe('useMapLayers source', () => {
     expect(body).toContain('requestedTypes.add(BasemapLayerType.LINE)');
   });
 
-  it('requests foreground metadata for borders and cities only', () => {
+  it('requests foreground metadata for borders, cities and remarkable graticules', () => {
     const body = source.match(
       /function getRequestedMetadataLayerTypes[\s\S]*?return \[\.\.\.requestedTypes\];\n\s*\}/
     )?.[0];
@@ -51,10 +51,12 @@ describe('useMapLayers source', () => {
     expect(body).toContain("case 'villes':");
     expect(body).toContain('requestedTypes.add(BasemapLayerType.CENTROID)');
     expect(body).toContain('requestedTypes.add(BasemapLayerType.POINT)');
-    expect(body).not.toContain("case 'meridiens':");
+    expect(body).toContain("case 'meridiens':");
+    expect(body).toContain(
+      'requestedTypes.add(BasemapLayerType.GEOGRAPHIC_LINES)'
+    );
     expect(body).not.toContain('BasemapLayerType.GRATICULE');
     expect(body).not.toContain("case 'equateur':");
-    expect(body).not.toContain('BasemapLayerType.GEOGRAPHIC_LINES');
   });
 
   it('prefers the projection fit bbox for generated basemap layers', () => {
@@ -69,6 +71,9 @@ describe('useMapLayers source', () => {
     expect(source).toContain('function getVisibleProjectedCanvasExtent');
     expect(source).toContain('projectionStore.referenceBbox');
     expect(source).toContain('get_max_scale(');
+    expect(source).not.toContain(
+      'get_max_scale(viewportSize, referenceBbox, projectionStore.fitPaddingPx) *\n      projectionStore.renderScale'
+    );
     expect(source).toContain('const graticuleClipExtent');
     expect(source).toContain(
       'isOrthographicMode ? getVisibleProjectedCanvasExtent() : null'
@@ -213,6 +218,14 @@ describe('useMapLayers source', () => {
     expect(source).toContain('metadata === undefined ? currentMetadata');
     expect(source).toContain('!basemapStyleStore.referenceBasemapId');
     expect(source).toContain('!getDatasetJoinedBasemap(datasetId)');
+  });
+
+  it('allows GPS Arrow tables to render as data-step fallbacks without a joined basemap', () => {
+    expect(source).toContain('const hasLoadedRenderableGeometry = Boolean(');
+    expect(source).toContain("table?.schema.metadata?.get('geo')");
+    expect(source).toContain(
+      '!datasetJoinedBasemap &&\n            !datasetHasOwnGeometry &&\n            !hasLoadedRenderableGeometry'
+    );
   });
 
   it('preloads joined-basemap centroid tables before symbol visualizations request them', () => {

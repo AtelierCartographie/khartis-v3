@@ -32,4 +32,14 @@ describe('SingleColorPreview (Fill Unique trigger)', () => {
     expect(source).toContain('const hex = newColors[0]');
     expect(source).toContain('onchange?.(hex)');
   });
+
+  it('should propagate validated motif settings for unique polygon fills', () => {
+    expect(source).toContain('patternId?: string;');
+    expect(source).toContain('onpatternchange?:');
+    expect(source).toContain('const nextPatternId = palette?.patternId');
+    expect(source).toContain('onpatternchange?.(');
+    expect(source).toContain(
+      "selectedPaletteId={patternId ? `pattern-${patternId}` : '__custom__'}"
+    );
+  });
 });

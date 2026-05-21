@@ -104,6 +104,21 @@ describe('detectSemioType — NUMERIC columns', () => {
     expect(result.semioType).toBe('QTA');
   });
 
+  it('does not classify bounded numeric thematic values as longitude without a coordinate keyword', () => {
+    const result = detectSemioType(
+      analysis('population_2024', NUMERIC, {
+        uniques: 3,
+        min: 80,
+        max: 160,
+        share_integers: 1.0,
+        share_floats: 0,
+        share_rank_interval: 0,
+        extent_magnitude: 1
+      }) as never
+    );
+    expect(result.semioType).toBe('QTA');
+  });
+
   it('detects QTR for ratio-keyword float column', () => {
     const result = detectSemioType(
       analysis('taux_pauvrete', NUMERIC, {
