@@ -119,6 +119,10 @@ function createPostHogService() {
     return readConfig() !== null;
   }
 
+  function getCaptureConfig(): PostHogServiceConfig | null {
+    return readConfig();
+  }
+
   async function init(): Promise<PostHog | null> {
     if (!browser) return null;
     if (posthog) return posthog;
@@ -234,6 +238,7 @@ function createPostHogService() {
     init,
     captureEvent,
     captureException,
+    getCaptureConfig,
     isConfigured
   };
 }
