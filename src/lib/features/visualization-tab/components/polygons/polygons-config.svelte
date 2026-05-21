@@ -172,9 +172,12 @@
   });
 
   const FILL_MODE_ORDER = FILL_MODES_WITH_DENSITY;
+  const POLYGON_STROKE_WIDTH_MAX = 10;
+  const POLYGON_CLASSES_FILL_OPACITY = VISUALIZATION_DEFAULTS.fillOpacity / 100;
 
   function handleFillModeChange(index: number) {
     const nextFillMode = FILL_MODE_ORDER[index] || FillMode.NONE;
+    const previousFillMode = fillMode;
     fillMode = nextFillMode;
 
     if (nextFillMode === FillMode.NONE) {
@@ -198,6 +201,12 @@
       }
       if (currentOpacity <= 0) {
         updates.fillOpacity = VISUALIZATION_DEFAULTS.fillOpacity / 100;
+      }
+      if (
+        nextFillMode === FillMode.CLASSES &&
+        previousFillMode !== FillMode.CLASSES
+      ) {
+        updates.fillOpacity = POLYGON_CLASSES_FILL_OPACITY;
       }
       if (Object.keys(updates).length > 0) {
         onStyleChange?.(updates);
@@ -396,6 +405,7 @@
         strokeClassification={visualization?.polygon?.strokeClassification}
         strokeValueColumn={visualization?.polygon?.strokeValueColumn}
         strokeCategoryColumn={visualization?.polygon?.strokeCategoryColumn}
+        maxStrokeWidth={POLYGON_STROKE_WIDTH_MAX}
         showMissingData={showMissingData}
         missingDataColor={missingDataColor}
         facetsValueSlotPath={FACET_SLOT.POLYGON_STROKE_VALUE}

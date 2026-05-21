@@ -51,6 +51,7 @@
 <div id="khartis-toggle-tabs" class="toggle-tabs {className}">
   {#each items as item, index (index)}
     <button
+      type="button"
       class="toggle-tab {activeIndex === index
         ? activeClass
         : ''} {activeIndex === index ? fullWidthClass : ''} {index === 0 &&

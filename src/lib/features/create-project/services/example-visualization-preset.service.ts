@@ -26,7 +26,8 @@ import {
 import {
   applySuggestionToVisualization,
   buildSuggestionOrigin,
-  mapSuggestionToType
+  mapSuggestionToType,
+  rememberAppliedSuggestionState
 } from '$lib/features/visualization-tab/services/suggestion.service';
 import { getSuggestionSignature } from '$lib/features/visualization-tab/utils/suggestion-selection.utils';
 
@@ -416,5 +417,6 @@ export function applyExampleVisualizationPresets(
       })
     });
     applyDeclaredOverrides(targetVisualization.id, preset);
+    rememberAppliedSuggestionState(targetVisualization.id, suggestionKey);
   });
 }

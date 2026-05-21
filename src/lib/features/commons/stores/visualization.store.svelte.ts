@@ -376,10 +376,16 @@ export interface VisualizationRestoreState {
   visualization: VisualizationRestoreSnapshot;
 }
 
+export interface VisualizationAppliedSuggestionState {
+  suggestionKey: string;
+  visualization: VisualizationRestoreSnapshot;
+}
+
 export interface VisualizationOrigin {
   mode: VisualizationOriginMode;
   suggestionKey?: string;
   restoreState?: VisualizationRestoreState;
+  appliedSuggestionState?: VisualizationAppliedSuggestionState;
 }
 
 export const ALL_PRIMITIVE_FILTERS: PrimitiveFilter[] = [
@@ -2032,7 +2038,37 @@ function resolveNextVisualizationOrigin(
       : {}),
     ...(visualization.origin?.restoreState
       ? { restoreState: deepClone(visualization.origin.restoreState) }
+      : {}),
+    ...(visualization.origin?.appliedSuggestionState
+      ? {
+          appliedSuggestionState: deepClone(
+            visualization.origin.appliedSuggestionState
+          )
+        }
       : {})
+  };
+}
+
+function resolveDuplicatedVisualizationOrigin(
+  origin: VisualizationConfig['origin']
+): VisualizationConfig['origin'] {
+  if (!origin) {
+    return undefined;
+  }
+
+  if (
+    origin.mode === 'auto-suggestion' ||
+    origin.mode === 'manual-suggestion'
+  ) {
+    return {
+      mode: 'custom',
+      ...(origin.suggestionKey ? { suggestionKey: origin.suggestionKey } : {})
+    };
+  }
+
+  return {
+    mode: origin.mode,
+    ...(origin.suggestionKey ? { suggestionKey: origin.suggestionKey } : {})
   };
 }
 
@@ -2480,6 +2516,7 @@ function createVisualizationStore(): VisualizationStore {
       ...deepClone(original),
       id: crypto.randomUUID(),
       name: duplicatedName,
+      origin: resolveDuplicatedVisualizationOrigin(original.origin),
       ...(targetDatasetId ? { datasetId: targetDatasetId } : {})
     });
 

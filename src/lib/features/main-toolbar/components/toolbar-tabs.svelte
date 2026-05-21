@@ -7,6 +7,7 @@
     globalState
   } from '$lib/features/commons/stores/global.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import { dataOrchestratorService } from '$lib/features/commons/services/data-orchestrator.service.svelte';
   import { ButtonKind } from '$lib/features/commons/types/enums';
   import {
     ToolbarState,
@@ -27,6 +28,7 @@
     TrashCan
   } from 'carbon-icons-svelte';
   import clsx from 'clsx';
+  import { tick } from 'svelte';
   import { SvelteMap } from 'svelte/reactivity';
   import AddDataModal from './add-data-modal.svelte';
   import { dataTabStore } from '$lib/features/data-tab/stores/data-tab.store.svelte';
@@ -305,6 +307,8 @@
         );
         if (newDataset?.sourceFileId) {
           globalActions.selectDataButton(newDataset.sourceFileId);
+          await tick();
+          await dataOrchestratorService.restoreSelectedDataTabState();
         }
         showSuccess(
           m.success_dataset_duplicated_title(),
@@ -505,6 +509,7 @@
                 <input
                   type="text"
                   class="tab-name-input"
+                  aria-label={m.dataset_name_label()}
                   bind:value={editedName}
                   bind:this={nameInputRef}
                   onkeydown={handleTabKeyPress}
@@ -523,6 +528,7 @@
               {/if}
             </div>
             <button
+              type="button"
               class="tab-menu-button"
               onclick={(e: MouseEvent) => toggleTabMenu(dataButton.id, e)}
               aria-label={m.file_options()}
@@ -558,6 +564,7 @@
                       />
                     {:else}
                       <button
+                        type="button"
                         class="tab-menu-item tab-menu-item-dataset"
                         class:tab-menu-item-selected={dataset.isSelected}
                         onclick={(e: Event) =>
@@ -594,6 +601,7 @@
                 <div class="tab-menu-divider"></div>
               {/if}
               <button
+                type="button"
                 class="tab-menu-item"
                 onclick={(e: Event) =>
                   handleRenameFromMenu(dataButton.id, dataButton.label, e)}
@@ -603,6 +611,7 @@
                 {m.tab_rename_action()}
               </button>
               <button
+                type="button"
                 class="tab-menu-item"
                 onclick={(e: Event) => handleDuplicateTab(dataButton.id, e)}
                 role="menuitem"
@@ -612,6 +621,7 @@
               </button>
               <div class="tab-menu-divider"></div>
               <button
+                type="button"
                 class="tab-menu-item tab-menu-item-danger"
                 onclick={(e: Event) =>
                   handleDeleteFromMenu(dataButton.id, dataButton.label, e)}

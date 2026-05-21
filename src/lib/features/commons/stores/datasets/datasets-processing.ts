@@ -53,6 +53,10 @@ function isNonEmptyRow(
   return !!row && Object.keys(row).length > 0;
 }
 
+function toOptionalNumber(value: unknown): number | undefined {
+  return value != null && value !== '' ? Number(value) : undefined;
+}
+
 function extractCoordsFromGeometry(
   geometry: Record<string, unknown> | null | undefined
 ): Array<[number, number]> {
@@ -230,6 +234,12 @@ export function createDatasetFromPreprocessedFile(
       min?: unknown;
       max?: unknown;
       mean?: number;
+      median?: number;
+      stdDev?: number;
+      share_integers?: number;
+      share_floats?: number;
+      share_rank_interval?: number;
+      extent_magnitude?: number;
     }
   >;
 
@@ -241,12 +251,18 @@ export function createDatasetFromPreprocessedFile(
       stats: {
         name,
         type: (stats.type as ColumnType) || ColumnType.TEXT,
-        count: stats.count ?? 0,
-        nulls: stats.nullCount ?? 0,
-        uniques: stats.unique ?? 0,
+        count: toOptionalNumber(stats.count) ?? 0,
+        nulls: toOptionalNumber(stats.nullCount) ?? 0,
+        uniques: toOptionalNumber(stats.unique) ?? 0,
         min: stats.min,
         max: stats.max,
-        mean: stats.mean
+        mean: toOptionalNumber(stats.mean),
+        median: toOptionalNumber(stats.median),
+        stdDev: toOptionalNumber(stats.stdDev),
+        share_integers: toOptionalNumber(stats.share_integers),
+        share_floats: toOptionalNumber(stats.share_floats),
+        share_rank_interval: toOptionalNumber(stats.share_rank_interval),
+        extent_magnitude: toOptionalNumber(stats.extent_magnitude)
       }
     })
   );

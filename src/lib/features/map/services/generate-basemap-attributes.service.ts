@@ -6,6 +6,7 @@ import {
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
+import { getCustomBasemapJoinCandidateColumns } from './custom-basemap-columns.service';
 
 export async function generateCustomBasemapAttributes(
   tableName: string,
@@ -34,27 +35,7 @@ export async function generateCustomBasemapAttributes(
 
     const columns = await duck.analyse(tableName);
 
-    const candidateColumns = columns.filter((col) => {
-      if (col.name === INTERNAL_COLUMN.FEATURE_ID) return false;
-      const name = col.name.toLowerCase();
-      return (
-        /^(name|nom|libelle|label)$/i.test(name) ||
-        /^(id|code|iso|insee|nuts)$/i.test(name) ||
-        /_name$/i.test(name) ||
-        /_code$/i.test(name)
-      );
-    });
-
-    if (candidateColumns.length === 0) {
-      const textColumn = columns.find(
-        (col) =>
-          col.type_simple === 'string' &&
-          col.name !== INTERNAL_COLUMN.FEATURE_ID
-      );
-      if (textColumn) {
-        candidateColumns.push(textColumn);
-      }
-    }
+    const candidateColumns = getCustomBasemapJoinCandidateColumns(columns);
 
     const countQuery = (await duck.query(
       `SELECT COUNT(*) as total FROM "${safeTableName}"`,

@@ -357,9 +357,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     }
 
     const viewportSize = getProjectionViewportSize();
-    const scale =
-      get_max_scale(viewportSize, referenceBbox, projectionStore.fitPaddingPx) *
-      projectionStore.renderScale;
+    const scale = get_max_scale(
+      viewportSize,
+      referenceBbox,
+      projectionStore.fitPaddingPx
+    );
     if (!Number.isFinite(scale) || scale <= 0) {
       return [
         [0, 0],
@@ -827,6 +829,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           requestedTypes.add(BasemapLayerType.CENTROID);
           requestedTypes.add(BasemapLayerType.POINT);
           break;
+        case 'meridiens':
+          requestedTypes.add(BasemapLayerType.GEOGRAPHIC_LINES);
+          break;
       }
     }
 
@@ -1291,6 +1296,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             (d) => d.id === datasetId
           );
           const datasetHasOwnGeometry = Boolean(datasetEntry?.geometry);
+          const table = tables.get(datasetId);
+          const geojson = geoJSONs.get(datasetId);
+          const hasLoadedRenderableGeometry = Boolean(
+            geojson || table?.schema.metadata?.get('geo')
+          );
           // Skip rendering when the dataset cannot produce geometry that is
           // safe to project under the active basemap:
           //   1. Joined to a basemap but user has explicitly toggled it off
@@ -1311,11 +1321,13 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           ) {
             continue;
           }
-          if (!datasetJoinedBasemap && !datasetHasOwnGeometry) {
+          if (
+            !datasetJoinedBasemap &&
+            !datasetHasOwnGeometry &&
+            !hasLoadedRenderableGeometry
+          ) {
             continue;
           }
-          const table = tables.get(datasetId);
-          const geojson = geoJSONs.get(datasetId);
           const fallbackCtx = buildDatasetFallbackContext(datasetId);
           const datasetProjectionMetadata = getDatasetProjectionMetadata(
             datasetId,

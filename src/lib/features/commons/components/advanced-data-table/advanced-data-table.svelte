@@ -784,6 +784,7 @@
                   <div class="row-index-header-content">
                     <div class="histogram-toggle-area">
                       <button
+                        type="button"
                         class="histogram-toggle"
                         onclick={toggleHistograms}
                         title={m.data_toggle_summary_plots()}

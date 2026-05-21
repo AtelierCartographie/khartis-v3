@@ -22,6 +22,7 @@ import {
 } from '../../duckdb/orchestrator/arrow-ops';
 import { INTERNAL_COLUMN } from '../../commons/constants/data.constants';
 import { GEOMETRY_WKT_TYPES } from '../../commons/constants/geometry.constants';
+import { getCustomBasemapGeometryProjectColumns } from './custom-basemap-columns.service';
 
 const BASEMAP_METADATA_PATH = '/basemaps/all-basemaps-metadata.json';
 const BASEMAP_ATTRIBUTES_PATH = '/basemaps/all-basemaps-attributes.parquet';
@@ -975,6 +976,17 @@ function createBasemapService() {
     );
   }
 
+  async function resolveCustomBasemapGeometryProjectColumns(
+    tableName: string
+  ): Promise<string[]> {
+    if (!Duck) {
+      throw new Error('DuckDB not initialized');
+    }
+
+    const columns = await Duck.analyse(tableName);
+    return getCustomBasemapGeometryProjectColumns(columns);
+  }
+
   function getLoadableMetadataLayers(
     metadata: BasemapMetadata,
     layerTypes?: readonly BasemapLayerType[]
@@ -995,10 +1007,13 @@ function createBasemapService() {
     const customLayerType = shouldReadFromDuck
       ? metadata.layers.find((layer) => layer.file === layerFile)?.type
       : null;
+    const projectColumns = shouldReadFromDuck
+      ? await resolveCustomBasemapGeometryProjectColumns(layerFile)
+      : null;
     return shouldReadFromDuck
       ? loadGeometryFromDuckTable(
           layerFile,
-          [INTERNAL_COLUMN.FEATURE_ID],
+          projectColumns,
           getCustomBasemapLayerGeometryTypeOverride(customLayerType)
         )
       : loadGeometryFromParquet(layerFile);
@@ -1073,9 +1088,9 @@ function createBasemapService() {
       throw new Error(`Custom basemap table not found: ${customTableName}`);
     }
 
-    return loadGeometryFromDuckTable(customTableName, [
-      INTERNAL_COLUMN.FEATURE_ID
-    ]);
+    const projectColumns =
+      await resolveCustomBasemapGeometryProjectColumns(customTableName);
+    return loadGeometryFromDuckTable(customTableName, projectColumns);
   }
 
   async function loadGeometryIntoDuckDB(basemapId: string): Promise<string> {

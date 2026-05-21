@@ -140,8 +140,12 @@
     const next = modes[index] || SymbolMode.UNIQUE;
     if (next === symbolMode) return;
     symbolMode = next;
+    const currentFillMode =
+      getSymbolPrimitive(visualization)?.fillMode ?? visualization?.modes?.fill;
     const nextFillMode =
-      symbolMode === SymbolMode.CATEGORIES ? undefined : FillMode.UNIQUE;
+      symbolMode === SymbolMode.CATEGORIES || currentFillMode !== undefined
+        ? undefined
+        : FillMode.UNIQUE;
     onModesChange?.({
       symbol: symbolMode,
       ...(nextFillMode !== undefined && { fill: nextFillMode })

@@ -287,7 +287,8 @@
               store.setRate(readSliderInputValue(e, simplState.rate));
               scheduleSimplificationApply('rate-change', 250);
             }}
-            labelText=""
+            labelText={m.simplification_rate_label()}
+            hideLabel
             minLabel="0"
             maxLabel="100"
             fullWidth
@@ -350,7 +351,8 @@
             store.setRate(readSliderInputValue(e, simplState.rate));
             scheduleSimplificationApply('rate-change', 250);
           }}
-          labelText=""
+          labelText={m.simplification_rate_label()}
+          hideLabel
           minLabel="0"
           maxLabel="100"
           fullWidth

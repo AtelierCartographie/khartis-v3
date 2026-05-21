@@ -36,6 +36,7 @@ const NICE_SCALE_STEPS = [1, 2, 4, 5, 10] as const;
 export const SCALE_TARGET_WIDTH_PX = 80;
 export const SCALE_MAX_WIDTH_PX = 120;
 export const INSET_MAP_MAX_AREA_FRACTION = 0.5;
+const INSET_PROJECTED_BOUNDS_EDGE_SEGMENTS = 16;
 
 export type ScaleDistanceMapLike = {
   getCenter: () => { lng: number; lat: number };
@@ -61,6 +62,11 @@ export type InsetMapBounds = {
   south: number;
   east: number;
   west: number;
+};
+
+export type InsetMapBoundsProjectionContext = {
+  isProjectedCoordinates?: boolean;
+  projection?: unknown;
 };
 
 export const MAX_SCALE_DISTANCE_BY_UNIT: Record<DistanceUnit, number> = {
@@ -103,6 +109,109 @@ export function isInsetMapAvailableForBounds(
 ): boolean {
   const areaFraction = getInsetMapBoundsAreaFraction(bounds);
   return areaFraction === null || areaFraction < INSET_MAP_MAX_AREA_FRACTION;
+}
+
+function normalizeLongitude(longitude: number): number {
+  const normalized = ((((longitude + 180) % 360) + 360) % 360) - 180;
+  return normalized === -180 && longitude > 0 ? 180 : normalized;
+}
+
+function sampleProjectedBoundsEdge(bounds: InsetMapBounds): [number, number][] {
+  const points: [number, number][] = [];
+  for (let step = 0; step <= INSET_PROJECTED_BOUNDS_EDGE_SEGMENTS; step++) {
+    const ratio = step / INSET_PROJECTED_BOUNDS_EDGE_SEGMENTS;
+    const x = bounds.west + (bounds.east - bounds.west) * ratio;
+    const y = bounds.north + (bounds.south - bounds.north) * ratio;
+
+    points.push([x, bounds.north]);
+    points.push([bounds.east, y]);
+    points.push([
+      bounds.east - (bounds.east - bounds.west) * ratio,
+      bounds.south
+    ]);
+    points.push([
+      bounds.west,
+      bounds.south - (bounds.south - bounds.north) * ratio
+    ]);
+  }
+  return points;
+}
+
+function getMinimalLongitudeBounds(
+  longitudes: number[]
+): Pick<InsetMapBounds, 'east' | 'west'> & { longitudeSpan: number } {
+  const sortedLongitudes = [...longitudes].sort((a, b) => a - b);
+  let largestGap = -Infinity;
+  let intervalStartIndex = 0;
+
+  for (let index = 0; index < sortedLongitudes.length; index++) {
+    const current = sortedLongitudes[index];
+    const next =
+      index === sortedLongitudes.length - 1
+        ? sortedLongitudes[0] + 360
+        : sortedLongitudes[index + 1];
+    const gap = next - current;
+
+    if (gap > largestGap) {
+      largestGap = gap;
+      intervalStartIndex = (index + 1) % sortedLongitudes.length;
+    }
+  }
+
+  const west = sortedLongitudes[intervalStartIndex];
+  const east =
+    sortedLongitudes[
+      (intervalStartIndex - 1 + sortedLongitudes.length) %
+        sortedLongitudes.length
+    ];
+
+  return {
+    east,
+    west,
+    longitudeSpan: Math.max(0, 360 - largestGap)
+  };
+}
+
+export function getInsetMapGeographicBounds(
+  bounds: InsetMapBounds | null | undefined,
+  context: InsetMapBoundsProjectionContext = {}
+): InsetMapBounds | null {
+  if (!bounds) {
+    return null;
+  }
+
+  const projection = context.projection;
+  if (!context.isProjectedCoordinates || !hasProjectionInvert(projection)) {
+    return bounds;
+  }
+
+  const geographicPoints = sampleProjectedBoundsEdge(bounds)
+    .map((point) => projection.invert(point))
+    .filter(isValidLongitudeLatitudePair);
+
+  if (geographicPoints.length === 0) {
+    return null;
+  }
+
+  const longitudeBounds = getMinimalLongitudeBounds(
+    geographicPoints.map(([longitude]) => normalizeLongitude(longitude))
+  );
+  const latitudes = geographicPoints.map(([, latitude]) =>
+    clamp(latitude, -90, 90)
+  );
+  const south = Math.min(...latitudes);
+  const north = Math.max(...latitudes);
+
+  if (north < south) {
+    return null;
+  }
+
+  return {
+    north,
+    south,
+    east: longitudeBounds.east,
+    west: longitudeBounds.west
+  };
 }
 
 function getScaleDistanceFractionDigits(distance: number): number {

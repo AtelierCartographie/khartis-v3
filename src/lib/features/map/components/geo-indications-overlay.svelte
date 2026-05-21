@@ -13,6 +13,7 @@
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
+  import { projectionStore } from '../stores/projection.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
   import {
@@ -36,6 +37,7 @@
     getCurrentScaleDistanceContext,
     getScaleMetersPerPixel,
     getSuggestedScaleDistance,
+    getInsetMapGeographicBounds,
     INSET_MAP_SIZE_LIMITS,
     isInsetMapAvailableForBounds,
     SCALE_MAX_WIDTH_PX,
@@ -89,6 +91,7 @@
   const INSET_MAP_WORLD_SPAN_EPSILON = 359.5;
   const INSET_ZOOM_BASE = 0.6;
   const INSET_ZOOM_FACTOR = 1.2;
+  const INSET_ZOOM_DEFAULT = 50;
   const INSET_EXTENT_POINT_RADIUS = 4;
   const INSET_EXTENT_MIN_SIZE = 8;
   const INSET_POINT_BOUNDS_EPSILON = 0.000001;
@@ -129,7 +132,8 @@
   const WORLD_SPHERE: GeoPermissibleObjects = { type: 'Sphere' };
   const INSET_GRATICULE = d3geo.geoGraticule().step([20, 20])();
   const EMPTY_GEOJSON_PROPERTIES: GeoJsonProperties = {};
-  const insetClipId = `inset-geo-${Math.random().toString(36).slice(2, 10)}`;
+  const componentId = $props.id();
+  const insetClipId = `inset-geo-${componentId}`;
 
   let worldFeatures = $state<WorldFeatureCollection | null>(null);
   let mapViewRevision = $state(0);
@@ -267,7 +271,11 @@
   }
 
   function getCurrentMapBounds(): MapBounds | null {
-    const bounds = mapInstanceStore.getMapBounds();
+    const mapBounds = mapInstanceStore.getMapBounds();
+    const bounds = getInsetMapGeographicBounds(mapBounds, {
+      isProjectedCoordinates: projectionStore.isProjectedCoordinates,
+      projection: projectionStore.renderProjection
+    });
     if (!bounds) {
       return null;
     }
@@ -396,7 +404,7 @@
   }
 
   function getInsetZoomScale(): number {
-    const zoom = toFiniteNumber(geoIndicationsState.insetMap.zoom, 50);
+    const zoom = INSET_ZOOM_DEFAULT;
     const normalized = clamp(zoom / 100, 0, 1);
     return INSET_ZOOM_BASE + normalized * INSET_ZOOM_FACTOR;
   }

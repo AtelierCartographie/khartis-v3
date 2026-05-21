@@ -256,6 +256,7 @@
                 id="cp-hue-num"
                 class="number"
                 type="number"
+                aria-label={m.color_hue()}
                 min={0}
                 max={359}
                 step={1}
@@ -286,6 +287,7 @@
                 id="cp-sat-num"
                 class="number"
                 type="number"
+                aria-label={m.color_saturation()}
                 min={0}
                 max={100}
                 step={1}
@@ -316,6 +318,7 @@
                 id="cp-light-num"
                 class="number"
                 type="number"
+                aria-label={m.color_brightness()}
                 min={0}
                 max={100}
                 step={1}
