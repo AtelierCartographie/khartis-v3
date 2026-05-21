@@ -68,10 +68,6 @@ const { actions, getState } = createToolStore<
     async function simplifyCustomBasemap(): Promise<SimplificationResult> {
       const currentBasemap = basemapService.currentBasemap;
       if (!currentBasemap) {
-        logger.error(
-          'No basemap loaded for simplification',
-          LogCategory.DUCKDB
-        );
         throw new Error('No basemap loaded');
       }
 
@@ -124,10 +120,6 @@ const { actions, getState } = createToolStore<
     async function simplifyBasemapVariant(): Promise<SimplificationResult> {
       const currentBasemap = basemapService.currentBasemap;
       if (!currentBasemap) {
-        logger.error(
-          'No basemap loaded for simplification',
-          LogCategory.DUCKDB
-        );
         throw new Error('No basemap loaded');
       }
 
@@ -200,30 +192,14 @@ const { actions, getState } = createToolStore<
         : datasetsStore.selectedDataset;
 
       if (!dataset) {
-        logger.error(
-          'No dataset found for simplification',
-          LogCategory.DUCKDB,
-          {
-            datasetId
-          }
-        );
         throw new Error('No dataset found');
       }
 
       if (dataset.joinedBasemap) {
-        logger.error(
-          'Cannot simplify a dataset joined to a catalog basemap',
-          LogCategory.DUCKDB,
-          { datasetId: dataset.id, joinedBasemap: dataset.joinedBasemap }
-        );
         throw new Error('Cannot simplify a catalog basemap dataset');
       }
 
       if (!dataset.geometry?.bounds) {
-        logger.error(
-          'Dataset has no geometry bounds for simplification',
-          LogCategory.DUCKDB
-        );
         throw new Error('Dataset has no geometry bounds');
       }
 
@@ -426,11 +402,6 @@ const { actions, getState } = createToolStore<
             : datasetsStore.selectedDataset;
 
           if (!dataset) {
-            logger.warn(
-              'Cannot undo dataset simplification: dataset not found',
-              LogCategory.DUCKDB,
-              lastApplied
-            );
             return false;
           }
 
@@ -473,11 +444,6 @@ const { actions, getState } = createToolStore<
             !currentBasemap ||
             currentBasemap.metadata.file !== lastApplied.basemapId
           ) {
-            logger.warn(
-              'Cannot undo basemap simplification: basemap changed or not loaded',
-              LogCategory.DUCKDB,
-              lastApplied
-            );
             s.lastApplied = undefined;
             return false;
           }

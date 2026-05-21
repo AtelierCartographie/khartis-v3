@@ -1,10 +1,10 @@
 import { MIME } from '$lib/features/commons/constants';
 import { ParseError } from '$lib/features/commons/pipeline.errors';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   FileType,
   type UploadedFile
 } from '$lib/features/commons/types/create-project.types';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   convertTabularDataToArrow,
   insertArrowTableIntoDuckDB
@@ -19,8 +19,7 @@ import { convertToCSV, isTabularData } from './processor-utils';
 
 async function processWithArrow(
   ctx: ProcessContext,
-  file: UploadedFile,
-  start: number
+  file: UploadedFile
 ): Promise<ProcessorDataset | null> {
   try {
     const arrowTable = convertTabularDataToArrow(
@@ -34,12 +33,6 @@ async function processWithArrow(
       ctx.callbacks.getRowCount(ctx.tableName)
     ]);
 
-    logger.success('CSV processed via Arrow', LogCategory.DUCKDB, {
-      tableName: ctx.tableName,
-      rowCount,
-      durationMs: (performance.now() - start).toFixed(2)
-    });
-
     return {
       id: file.datasetId ?? file.id,
       tableName: ctx.tableName,
@@ -51,9 +44,9 @@ async function processWithArrow(
       geoDetection: file.deepAnalysis?.geoDetection
     };
   } catch (error) {
-    logger.warn(
-      'Arrow ingestion failed, falling back',
-      LogCategory.DUCKDB,
+    logger.error(
+      'Failed to rebuild CSV processor dataset from context',
+      LogCategory.DATA,
       error
     );
     return null;
@@ -62,8 +55,7 @@ async function processWithArrow(
 
 async function processWithLegacy(
   ctx: ProcessContext,
-  file: UploadedFile,
-  start: number
+  file: UploadedFile
 ): Promise<ProcessorDataset> {
   const csvData = convertToCSV(file.parsedData as Record<string, unknown>[]);
   const duckFile = new File([csvData], file.name, { type: MIME.CSV });
@@ -77,12 +69,6 @@ async function processWithLegacy(
     ctx.Duck.analyse(actualTableName),
     ctx.callbacks.getRowCount(actualTableName)
   ]);
-
-  logger.success('CSV processed via legacy', LogCategory.DUCKDB, {
-    tableName: actualTableName,
-    rowCount,
-    durationMs: (performance.now() - start).toFixed(2)
-  });
 
   return {
     id: file.datasetId ?? file.id,
@@ -114,7 +100,6 @@ export const csvProcessor: FileProcessor = {
     ctx: ProcessContext,
     file: UploadedFile
   ): Promise<ProcessorDataset> {
-    const start = performance.now();
     if (!file.parsedData || !isTabularData(file.parsedData)) {
       throw new ParseError(m.error_csv_invalid_data(), FileType.CSV, {
         fileId: file.id,
@@ -122,9 +107,6 @@ export const csvProcessor: FileProcessor = {
       });
     }
 
-    return (
-      (await processWithArrow(ctx, file, start)) ??
-      processWithLegacy(ctx, file, start)
-    );
+    return (await processWithArrow(ctx, file)) ?? processWithLegacy(ctx, file);
   }
 };

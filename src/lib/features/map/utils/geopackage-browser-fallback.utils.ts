@@ -135,14 +135,7 @@ function ensureProjectionDefinition(
   try {
     proj4.defs(normalized, definition);
   } catch (error) {
-    logger.warn(
-      'Failed to register GeoPackage projection definition',
-      LogCategory.MAP,
-      {
-        sourceCrs,
-        error: error instanceof Error ? error.message : String(error)
-      }
-    );
+    logger.error('Failed to register proj4 definition', LogCategory.MAP, error);
   }
 }
 
@@ -376,18 +369,6 @@ export async function convertGeoPackageToGeoJsonFile(
       type: 'FeatureCollection',
       features
     };
-
-    logger.info(
-      'GeoPackage converted to GeoJSON for browser fallback',
-      LogCategory.MAP,
-      {
-        fileName: file.name,
-        selectedLayer: selectedLayer.layerName,
-        geometryType: selectedLayer.geometryType,
-        featureCount: features.length,
-        sourceCrs: selectedLayer.sourceCrs
-      }
-    );
 
     return new File(
       [JSON.stringify(featureCollection)],

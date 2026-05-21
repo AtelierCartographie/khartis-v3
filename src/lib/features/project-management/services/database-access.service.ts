@@ -139,8 +139,6 @@ export async function saveMetadataStoreValue(
 
 async function migrateFromLocalforage(database: IDBDatabase): Promise<void> {
   const keys = [ProjectStorageKey.CURRENT, ProjectStorageKey.METADATA];
-  let migrated = 0;
-  let skipped = 0;
 
   for (const key of keys) {
     const value = await localforage.getItem<string>(key);
@@ -149,18 +147,8 @@ async function migrateFromLocalforage(database: IDBDatabase): Promise<void> {
     const existingValue = await loadMetadataStoreValue(database, key);
     if (existingValue === null) {
       await saveMetadataStoreValue(database, key, value);
-      migrated++;
-    } else {
-      skipped++;
     }
 
     await localforage.removeItem(key);
-  }
-
-  if (migrated > 0 || skipped > 0) {
-    logger.info(
-      `Migrated ${migrated} keys from localforage to IDB metadata store${skipped > 0 ? ` (${skipped} already present in IDB)` : ''}`,
-      LogCategory.PERSISTENCE
-    );
   }
 }

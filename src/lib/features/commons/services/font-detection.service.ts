@@ -5,7 +5,6 @@ import {
   detectRequiredFonts,
   type RequiredFallbackFont
 } from '../utils/detect-required-fonts';
-import { LogCategory, logger } from '../utils/logger';
 
 const SAMPLE_SIZE = 100;
 
@@ -61,15 +60,8 @@ export async function detectFontsInDataset(
           }
         }
       }
-    } catch (error) {
-      logger.warn(
-        'Failed to sample dataset for font detection',
-        LogCategory.DATA,
-        {
-          tableName: dataset.tableName,
-          error: error instanceof Error ? error.message : String(error)
-        }
-      );
+    } catch {
+      return detectRequiredFonts(text);
     }
   }
 

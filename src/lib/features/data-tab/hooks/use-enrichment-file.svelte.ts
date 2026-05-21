@@ -2,8 +2,6 @@ import {
   dataTabActions,
   dataTabState
 } from '$lib/features/commons/stores/data-tab.store.svelte';
-import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
-import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type {
   DatasetResult,
@@ -18,6 +16,8 @@ import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import type { DuckDBDataset } from '$lib/features/duckdb/types';
 import * as m from '$lib/paraglide/messages';
+import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 
 export interface UseEnrichmentFileReturn {
   readonly enrichmentFile: File | null;
@@ -164,10 +164,10 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
     try {
       await Duck.dropTable(dataset.tableName);
     } catch (error) {
-      logger.warn(
-        'Failed to cleanup enrichment temporary table',
+      logger.error(
+        'Failed to cleanup enrichment table',
         LogCategory.DATA,
-        { tableName: dataset.tableName, error }
+        error
       );
     }
   }

@@ -1,13 +1,12 @@
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   ArrowExtension,
   COMPATIBLE_GEOMETRY_TYPES,
   GeoArrowMetadataKey,
   GEO_EXTENSION_TO_TYPE,
-  GEO_TYPE_TO_EXTENSION,
   GeometryType,
   WKBGeometryTypeCode
 } from '../constants';
@@ -46,15 +45,9 @@ function warnGeometryReadFailureOnce(
   }
 
   geometryReadWarnings.set(geoColumn, warningCount + 1);
-  logger.warn(
-    'Failed to read geometry row from Arrow vector',
-    LogCategory.MAP,
-    {
-      geoColumn,
-      rowIndex,
-      error: error instanceof Error ? error.message : String(error)
-    }
-  );
+  logger.error('Failed to read geometry value', LogCategory.MAP, error, {
+    extra: { geoColumn, rowIndex }
+  });
 }
 
 function safeReadVectorValue(
@@ -490,8 +483,8 @@ export function arrowTableToGeoJSON(
 
     return { type: GEOJSON_TYPE.FEATURE_COLLECTION, features };
   } catch (error) {
-    logger.warn(
-      'Failed to convert Arrow table to GeoJSON',
+    logger.error(
+      'Failed to convert Arrow geometry to GeoJSON',
       LogCategory.MAP,
       error
     );
@@ -529,26 +522,12 @@ export function extractGeometryInfo(table: ArrowTable): GeometryInfo | null {
       arrowExtensionRaw ? arrowExtensionRaw.toLowerCase() : null
     );
 
-    const expectedExtension =
-      GEO_TYPE_TO_EXTENSION[normalizedGeometryType] ?? null;
     const extensionGeometryType = arrowExtension
       ? GEO_EXTENSION_TO_TYPE[arrowExtension]
       : null;
     const isWkbExtension =
       arrowExtension === ArrowExtension.OGC_WKB ||
       arrowExtension === ArrowExtension.GEOARROW_WKB;
-
-    const hasMatchingGeoExtension =
-      arrowExtension && expectedExtension
-        ? isWkbExtension ||
-          arrowExtension === expectedExtension ||
-          (extensionGeometryType
-            ? areGeometryTypesCompatible(
-                normalizedGeometryType,
-                extensionGeometryType
-              )
-            : false)
-        : false;
 
     const resolvedGeometryType =
       extensionGeometryType ?? normalizedGeometryType;
@@ -567,14 +546,6 @@ export function extractGeometryInfo(table: ArrowTable): GeometryInfo | null {
     const isWkbEncoded = isWkbExtension;
     const isGeoJsonEncoded = arrowExtension === ArrowExtension.GEOJSON;
 
-    if (!hasMatchingGeoExtension) {
-      logger.warn('Geometry extension mismatch detected', LogCategory.MAP, {
-        geometryType: resolvedGeometryType,
-        arrowExtension,
-        expectedExtension
-      });
-    }
-
     return {
       type: resolvedGeometryType,
       encoding: arrowExtension,
@@ -584,7 +555,11 @@ export function extractGeometryInfo(table: ArrowTable): GeometryInfo | null {
       isGeoJsonEncoded
     };
   } catch (error) {
-    logger.warn('Failed to extract geometry info', LogCategory.MAP, error);
+    logger.error(
+      'Failed to extract GeoArrow geometry metadata',
+      LogCategory.MAP,
+      error
+    );
     return null;
   }
 }

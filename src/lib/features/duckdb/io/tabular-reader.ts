@@ -2,7 +2,6 @@ import {
   DataValidationError,
   DuckDBError
 } from '$lib/features/commons/pipeline.errors';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
 import { DUCK_CONST } from '../constants';
@@ -34,7 +33,6 @@ export async function readTabular(
   input: string | File,
   options: ReadTabularOptions = {}
 ): Promise<string> {
-  const start = performance.now();
   let { tablename } = options;
   const decimal_separator =
     options.decimal_separator ?? DUCK_CONST.DEFAULT.DECIMAL_SEPARATOR;
@@ -151,11 +149,6 @@ export async function readTabular(
               const parsedRowCount = Number(rowCountResult?.[0]?.cnt ?? 0);
 
               if (parsedRowCount === 0) {
-                logger.warn(
-                  'CSV import yielded 0 rows, retrying with ignore_errors + all_varchar',
-                  LogCategory.DUCKDB,
-                  { tablename: finalTablename, filename }
-                );
                 await runCsvImport({ ignoreErrors: true, allVarchar: true });
               }
             }
@@ -186,11 +179,6 @@ export async function readTabular(
         throw error;
       }
 
-      logger.warn(
-        'CSV import failed, retrying with ignore_errors + all_varchar in a new transaction',
-        LogCategory.DUCKDB,
-        { tablename: finalTablename, filename, error }
-      );
       await runImportInTransaction(true);
     }
 
@@ -199,15 +187,7 @@ export async function readTabular(
     }
 
     ctx.loaded_files.set(tablename, filename);
-    logger.success('Tabular data ingested', LogCategory.DUCKDB, {
-      tablename,
-      filename,
-      durationMs: (performance.now() - start).toFixed(2)
-    });
     return tablename;
-  } catch (error) {
-    logger.error('Failed to read tabular data', LogCategory.DUCKDB, error);
-    throw error;
   } finally {
     if (cleanupFileId) {
       await dropRegisteredFile(ctx.db, ctx.registered_files, cleanupFileId);

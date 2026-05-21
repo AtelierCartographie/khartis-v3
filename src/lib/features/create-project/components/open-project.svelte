@@ -1,11 +1,6 @@
 <script lang="ts">
   import Tooltip from '$lib/features/commons/components/carbon/tooltip.svelte';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
-  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
-  import {
-    formatDate,
-    formatFileSize
-  } from '$lib/features/commons/utils/format.utils';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import type { SavedProjectMetadata } from '$lib/features/project-management';
   import { m } from '$lib/paraglide/messages';
@@ -22,6 +17,11 @@
   import { onMount } from 'svelte';
   import { useProjectNavigation } from '../hooks/use-project-navigation.svelte';
   import { CreateProjectValidationService } from '../services/validation.service';
+  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import {
+    formatDate,
+    formatFileSize
+  } from '$lib/features/commons/utils/format.utils';
 
   interface Props {
     onClose?: () => void;
@@ -98,9 +98,6 @@
     });
 
     if (!khFile) {
-      logger.warn('No valid Khartis file found', LogCategory.PROJECT, {
-        fileNames: files.map((f) => f.name)
-      });
       error = m.validation_invalid_khartis_file();
       return;
     }

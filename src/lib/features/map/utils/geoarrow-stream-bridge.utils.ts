@@ -27,13 +27,13 @@ import * as _d3GeoProjection from 'd3-geo-projection';
 const { geoNaturalEarth2 } = _d3GeoProjection as unknown as {
   geoNaturalEarth2: () => GeoProjection;
 };
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type {
   BasemapMetadata,
   ProjectionPresetEntry,
   ProjectionPresets
 } from '../types/basemap.types';
 import { proj4d3 } from './proj4d3.utils';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 type BBoxTuple = [number, number, number, number];
 
@@ -352,16 +352,7 @@ const projPointCache = new WeakMap<
 export function parsePaths(table: ArrowTable): BinaryPathData {
   let result = pathCache.get(table);
   if (!result) {
-    try {
-      result = parseGeometry(normalizeGeomColumnName(table), IDENTITY_OPTIONS);
-    } catch (error) {
-      logger.error(
-        'Failed to parse paths from Arrow table',
-        LogCategory.MAP,
-        error
-      );
-      throw error;
-    }
+    result = parseGeometry(normalizeGeomColumnName(table), IDENTITY_OPTIONS);
     pathCache.set(table, result);
   }
   return result;
@@ -370,19 +361,10 @@ export function parsePaths(table: ArrowTable): BinaryPathData {
 export function parseSolidPolygons(table: ArrowTable): BinaryPolygonData {
   let result = solidPolygonCache.get(table);
   if (!result) {
-    try {
-      result = parsePolygonsToSolid(
-        normalizeGeomColumnName(table),
-        IDENTITY_OPTIONS
-      );
-    } catch (error) {
-      logger.error(
-        'Failed to parse solid polygons from Arrow table',
-        LogCategory.MAP,
-        error
-      );
-      throw error;
-    }
+    result = parsePolygonsToSolid(
+      normalizeGeomColumnName(table),
+      IDENTITY_OPTIONS
+    );
     solidPolygonCache.set(table, result);
   }
   return result;
@@ -462,16 +444,7 @@ function parsePointsAllBatches(
 export function parsePointData(table: ArrowTable): BinaryPointData {
   let result = pointCache.get(table);
   if (!result) {
-    try {
-      result = parsePointsAllBatches(table, IDENTITY_OPTIONS);
-    } catch (error) {
-      logger.error(
-        'Failed to parse points from Arrow table',
-        LogCategory.MAP,
-        error
-      );
-      throw error;
-    }
+    result = parsePointsAllBatches(table, IDENTITY_OPTIONS);
     pointCache.set(table, result);
   }
   return result;
@@ -493,10 +466,10 @@ export function buildProjectionForBasemap(
     try {
       return resolveSimpleProjection(projTo.proj4);
     } catch (error) {
-      logger.warn(
-        'Failed to build simple projection, falling back to identity',
+      logger.error(
+        'Failed to resolve simple basemap projection',
         LogCategory.MAP,
-        { proj4: projTo.proj4, error }
+        error
       );
       return geoIdentity();
     }
@@ -514,11 +487,6 @@ export function buildProjectionForBasemap(
     }
   }
 
-  logger.warn(
-    `Unknown projection config, falling back to identity`,
-    LogCategory.MAP,
-    { projTo }
-  );
   return geoIdentity();
 }
 
@@ -559,10 +527,10 @@ export function buildCompositeProjectionFromPresetId(
       ? withGeographicBoundsRouting(projection)
       : projection;
   } catch (error) {
-    logger.warn(
-      'Failed to build composite projection, falling back to identity',
+    logger.error(
+      'Failed to build composite basemap projection',
       LogCategory.MAP,
-      { preset: presetId, error }
+      error
     );
     return null;
   }

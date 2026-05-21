@@ -1,5 +1,3 @@
-import { LogCategory, logger } from './logger';
-
 const DEFAULT_NOTIFICATION_TIMEOUT_MS = 5_000;
 const ERROR_NOTIFICATION_TIMEOUT_MS = 10_000;
 
@@ -66,10 +64,6 @@ function createNotificationManager() {
   }
 
   function error(options: NotificationOptions): string {
-    logger.error(
-      `${options.title}: ${options.subtitle || ''}`,
-      LogCategory.NOTIFICATION
-    );
     return addNotification(NotificationType.ERROR, {
       ...options,
       timeout: options.timeout ?? ERROR_NOTIFICATION_TIMEOUT_MS
@@ -116,15 +110,8 @@ export function showSuccess(title: string, subtitle?: string): void {
 export function showError(
   title: string,
   subtitle?: string,
-  logDetails?: unknown
+  _logDetails?: unknown
 ): void {
-  if (logDetails) {
-    logger.error(
-      `${title}: ${subtitle || ''}`,
-      LogCategory.ERROR_HANDLER,
-      logDetails
-    );
-  }
   notificationManager.error({ title, subtitle });
 }
 

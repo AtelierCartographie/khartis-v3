@@ -20,6 +20,7 @@ import { layersActions } from '$lib/features/step-toolbar/tools/layers';
 import { legendActions } from '$lib/features/step-toolbar/tools/legend';
 import { projectionActions } from '$lib/features/step-toolbar/tools/projections';
 import { formatError, isFatalError, ParseError } from '../pipeline.errors';
+import { buildFileErrorContext } from './posthog.service';
 import type { UploadedFile } from '../types/create-project.types';
 import {
   FileType,
@@ -205,17 +206,6 @@ function createDataOrchestratorService() {
         throw new Error(m.error_duckdb_not_initialized());
       }
 
-      logger.info(
-        'Recreating DuckDB table from parsed data',
-        LogCategory.DUCKDB,
-        {
-          fileId: file.id,
-          fileName: file.name,
-          tableName,
-          rowCount: (file.parsedData as unknown[]).length
-        }
-      );
-
       const jsonData = JSON.stringify(file.parsedData);
       const jsonBlob = new Blob([jsonData], { type: 'application/json' });
       const jsonFile = new File([jsonBlob], `${tableName}.json`, {
@@ -290,12 +280,8 @@ function createDataOrchestratorService() {
         basemap,
         restoredJoinState.geoColumn
       );
-    } catch (joinError) {
-      logger.warn('Failed to restore join on project load', LogCategory.DATA, {
-        datasetId: duckDatasetId,
-        joinedBasemap: restoredJoinState.joinedBasemap,
-        error: joinError
-      });
+    } catch {
+      return;
     }
   }
 
@@ -331,7 +317,11 @@ function createDataOrchestratorService() {
           geometryDatasetsVersion++;
         }
       } catch (error) {
-        logger.error(m.error_process_geo_file(), LogCategory.DUCKDB, error);
+        logger.error(m.error_process_geo_file(), LogCategory.DUCKDB, error, {
+          feature: 'data',
+          flow: 'process_geo_file',
+          extra: buildFileErrorContext(file)
+        });
         throw error;
       }
       return;
@@ -353,16 +343,6 @@ function createDataOrchestratorService() {
         }
 
         if (registered === null) {
-          logger.info(
-            'DuckDB table missing, re-processing file from scratch',
-            LogCategory.DUCKDB,
-            {
-              fileId: file.id,
-              fileName: file.name,
-              oldTableName: dataset.tableName
-            }
-          );
-
           const strippedDataset: DatasetResult = {
             ...dataset,
             tableName: undefined as unknown as string,
@@ -475,7 +455,11 @@ function createDataOrchestratorService() {
 
       layersActions.syncWithVisualizations();
     } catch (error) {
-      logger.error('File import failed', LogCategory.DATA, formatError(error));
+      logger.error('File import failed', LogCategory.DATA, formatError(error), {
+        feature: 'data',
+        flow: 'import_file',
+        extra: buildFileErrorContext(file, { isFatal: isFatalError(error) })
+      });
 
       if (isFatalError(error)) {
         await importRollbackService.rollback(snapshot);
@@ -657,12 +641,8 @@ function createDataOrchestratorService() {
             }
             break;
         }
-      } catch (err) {
-        logger.warn(
-          `Failed to apply transformation ${transformation.type} on column ${transformation.column}`,
-          LogCategory.DATA,
-          { error: err }
-        );
+      } catch {
+        continue;
       }
     }
 
@@ -683,14 +663,8 @@ function createDataOrchestratorService() {
         ? await Duck.get_row_count(dataset.tableName)
         : 0;
       datasetsStore.updateDatasetRowCount(dataset.id, newRowCount);
-    } catch (err) {
-      logger.warn(
-        `Failed to apply row deletions for ${file.name}`,
-        LogCategory.DATA,
-        {
-          error: err
-        }
-      );
+    } catch {
+      return;
     }
   }
 
@@ -747,12 +721,8 @@ function createDataOrchestratorService() {
               file.relatedFileObjects = await createCompanionFilesFromAssetRefs(
                 file.companionAssetRefs
               );
-            } catch (err) {
-              logger.warn(
-                `Failed to restore companion assets for ${file.name}`,
-                LogCategory.DATA,
-                { error: err }
-              );
+            } catch {
+              file.relatedFileObjects = [];
             }
           }
 
@@ -764,14 +734,8 @@ function createDataOrchestratorService() {
               try {
                 const restoredFile = new File([buffer as ArrayBuffer], name);
                 companionFiles.push(restoredFile);
-              } catch (err) {
-                logger.warn(
-                  `Failed to restore companion file ${name}`,
-                  LogCategory.DATA,
-                  {
-                    error: err
-                  }
-                );
+              } catch {
+                continue;
               }
             }
             if (companionFiles.length > 0) {
@@ -787,12 +751,8 @@ function createDataOrchestratorService() {
         if (!file.originalFile && file.content) {
           try {
             file.originalFile = await createFileFromUpload(file);
-          } catch (err) {
-            logger.warn(
-              `Failed to restore original file object for ${file.name}`,
-              LogCategory.DATA,
-              { error: err }
-            );
+          } catch {
+            return;
           }
         }
 
@@ -885,14 +845,6 @@ function createDataOrchestratorService() {
     const unmatchedDatasets = datasets.filter((d) => !matchedIds.has(d.id));
 
     if (uniqueOldIds.length !== unmatchedDatasets.length) {
-      logger.warn(
-        'Cannot auto-migrate orphaned viz dataset IDs — count mismatch',
-        LogCategory.DATA,
-        {
-          orphanedGroups: uniqueOldIds.length,
-          unmatchedDatasets: unmatchedDatasets.length
-        }
-      );
       return;
     }
 
@@ -907,12 +859,6 @@ function createDataOrchestratorService() {
         visualizationStore.updateVisualization(viz.id, { datasetId: newId });
       }
     }
-
-    logger.info(
-      `Migrated ${orphanedVizs.length} orphaned viz(s) to stable dataset IDs`,
-      LogCategory.DATA,
-      { mappings: Object.fromEntries(oldToNew) }
-    );
   }
 
   async function recomputeMissingBreaks(): Promise<void> {
@@ -1043,12 +989,8 @@ function createDataOrchestratorService() {
               }
             : {})
         });
-      } catch (error) {
-        logger.warn(
-          `Failed to recompute breaks for viz ${viz.id}`,
-          LogCategory.DATA,
-          { error }
-        );
+      } catch {
+        return;
       }
     }
   }
@@ -1072,16 +1014,6 @@ function createDataOrchestratorService() {
       const isInternalThresholdShape = breaks.length === colors.length - 1;
       const isLegacyLowerBoundShape = breaks.length === colors.length;
       if (!isInternalThresholdShape && !isLegacyLowerBoundShape) {
-        logger.warn(
-          'Breaks/colors mismatch detected, will recompute',
-          LogCategory.DATA,
-          {
-            vizId: viz.id,
-            breaksLength: breaks.length,
-            colorsLength: colors.length,
-            expectedBreaks: [colors.length - 1, colors.length]
-          }
-        );
         return true;
       }
     }
@@ -1138,18 +1070,29 @@ function createDataOrchestratorService() {
 
     cancelPendingGeoColumnRestore();
     const restoreToken = activeGeoColumnRestoreToken;
-    await restorePersistedDataTabState(currentProject, restoreToken, {
-      allowFallbackToAnyJoinedFile: false
-    });
+    const restoreRun = captureProjectRuntime();
+    await restorePersistedDataTabState(
+      currentProject,
+      restoreToken,
+      restoreRun,
+      {
+        allowFallbackToAnyJoinedFile: false
+      }
+    );
   }
 
   async function restoreTabularJoinCompletion(
     sourceFileId: string,
     joinedBasemap: string,
-    geoColumn: string
+    geoColumn: string,
+    restoreRun: ProjectRuntimeSnapshot
   ): Promise<void> {
     try {
       await basemapCatalogService.loadCatalog();
+      if (!isCurrentProjectRuntime(restoreRun)) {
+        return;
+      }
+
       const basemap = basemapCatalogService.getBasemapById(joinedBasemap);
       const stepIndex = dataTabStore.basemapStepIndex;
 
@@ -1162,6 +1105,10 @@ function createDataOrchestratorService() {
         basemap,
         geoColumn
       );
+      if (!isCurrentProjectRuntime(restoreRun)) {
+        return;
+      }
+
       dataTabActions.setJoinStats(stats);
 
       if (stats.joinedCount === 0) {
@@ -1170,20 +1117,20 @@ function createDataOrchestratorService() {
       }
 
       await duckDBOrchestrator.finalizeJoin(sourceFileId, basemap, geoColumn);
+      if (!isCurrentProjectRuntime(restoreRun)) {
+        return;
+      }
+
       dataTabStore.markStepComplete(stepIndex);
-    } catch (error) {
-      logger.warn('Failed to restore selected join state', LogCategory.DATA, {
-        sourceFileId,
-        joinedBasemap,
-        geoColumn,
-        error
-      });
+    } catch {
+      return;
     }
   }
 
   async function restorePersistedDataTabState(
     currentProject: NonNullable<typeof projectStore.currentProject>,
     restoreToken: number,
+    restoreRun: ProjectRuntimeSnapshot,
     options: { allowFallbackToAnyJoinedFile?: boolean } = {}
   ): Promise<void> {
     const restoredFile = resolveRestoredJoinFile(currentProject, options);
@@ -1196,7 +1143,8 @@ function createDataOrchestratorService() {
 
     if (
       restoreToken !== activeGeoColumnRestoreToken ||
-      projectStore.currentProject?.id !== currentProject.id
+      projectStore.currentProject?.id !== currentProject.id ||
+      !isCurrentProjectRuntime(restoreRun)
     ) {
       return;
     }
@@ -1217,6 +1165,9 @@ function createDataOrchestratorService() {
     });
 
     if (restoredPrimaryJoinState.joinedBasemap) {
+      if (!isCurrentProjectRuntime(restoreRun)) {
+        return;
+      }
       dataTabActions.selectBasemap(restoredPrimaryJoinState.joinedBasemap);
     }
 
@@ -1224,6 +1175,9 @@ function createDataOrchestratorService() {
       restoredPrimaryJoinState.gpsMode &&
       restoredPrimaryJoinState.gpsColumns
     ) {
+      if (!isCurrentProjectRuntime(restoreRun)) {
+        return;
+      }
       dataTabActions.setGeolocationState({
         linkedVariable: null,
         linkedVariableName: '',
@@ -1247,6 +1201,9 @@ function createDataOrchestratorService() {
       .findIndex((c) => c.name === restoredPrimaryJoinState.geoColumn);
 
     if (colIndex >= 0) {
+      if (!isCurrentProjectRuntime(restoreRun)) {
+        return;
+      }
       dataTabActions.setGeolocationState({
         linkedVariable: colIndex,
         linkedVariableName: restoredPrimaryJoinState.geoColumn,
@@ -1256,7 +1213,8 @@ function createDataOrchestratorService() {
         await restoreTabularJoinCompletion(
           restoredFile.id,
           restoredPrimaryJoinState.joinedBasemap,
-          restoredPrimaryJoinState.geoColumn
+          restoredPrimaryJoinState.geoColumn,
+          restoreRun
         );
       }
     }
@@ -1344,7 +1302,11 @@ function createDataOrchestratorService() {
         duckDBOrchestrator.applyPersistedTableFilters();
 
         if (currentProject) {
-          await restorePersistedDataTabState(currentProject, restoreToken);
+          await restorePersistedDataTabState(
+            currentProject,
+            restoreToken,
+            restoreRun
+          );
         }
 
         if (!isCurrentProjectRuntime(restoreRun)) {

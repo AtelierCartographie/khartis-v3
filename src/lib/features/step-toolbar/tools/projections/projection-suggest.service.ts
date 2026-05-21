@@ -8,8 +8,8 @@ import {
 } from 'proj-suggest';
 import type { GeoProjection } from 'd3-geo';
 import { proj4d3 } from '$lib/features/map/utils/proj4d3.utils';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { buildD3ProjectionFromConfig } from '$lib/features/commons/utils/d3-projection-config.utils';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 export interface ProjectionSuggestion {
   id: string;
@@ -97,11 +97,6 @@ function buildD3SuggestionProjection(
 
   const projection = buildD3ProjectionFromConfig(suggestion.d3Config);
   if (!projection) {
-    logger.warn('Unknown d3 projection factory', LogCategory.MAP, {
-      id: suggestion.id,
-      bbox: suggestion.bbox,
-      d3Projection: suggestion.d3Config.projection
-    });
     return null;
   }
 
@@ -120,10 +115,6 @@ export function suggestProjectionsForBbox(
   const bboxInput: BBox = bbox;
   const validation = validate_bbox(bboxInput);
   if (!validation.valid) {
-    logger.warn('Invalid bbox for projection suggestion', LogCategory.MAP, {
-      bbox,
-      errors: validation.errors
-    });
     return null;
   }
 
@@ -143,9 +134,6 @@ export function buildProjectionFromSuggestion(
   suggestion: ProjectionSuggestion
 ): BuiltProjectionSuggestion | null {
   if (!isSupportedProjectionSuggestion(suggestion)) {
-    logger.warn('Unsupported projection suggestion skipped', LogCategory.MAP, {
-      id: suggestion.id
-    });
     return null;
   }
 
@@ -165,27 +153,11 @@ export function buildProjectionFromSuggestion(
           source: 'proj4'
         };
       }
-      logger.warn(
-        'Proj4 suggestion produced invalid coordinates, falling back to d3',
-        LogCategory.MAP,
-        {
-          id: suggestion.id,
-          epsg: suggestion.epsg,
-          bbox: suggestion.bbox,
-          d3Projection: suggestion.d3Config?.projection
-        }
-      );
     } catch (err) {
-      logger.warn(
-        'Failed to build projection from proj4 string, falling back to d3',
+      logger.error(
+        'Failed to build proj4 projection suggestion',
         LogCategory.MAP,
-        {
-          id: suggestion.id,
-          epsg: suggestion.epsg,
-          bbox: suggestion.bbox,
-          d3Projection: suggestion.d3Config?.projection,
-          error: err
-        }
+        err
       );
     }
   }

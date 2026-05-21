@@ -53,14 +53,10 @@ function scheduleArrowMetadataPrefetch(
   }
 
   void prefetchPromise.catch((error) => {
-    logger.debug(
-      'Arrow metadata prefetch failed after dataset registration',
+    logger.error(
+      'Failed to prefetch Arrow metadata',
       LogCategory.DUCKDB,
-      {
-        datasetId: dataset.id,
-        tableName: dataset.tableName,
-        error
-      }
+      error
     );
   });
 }
@@ -77,8 +73,6 @@ export async function registerExistingTable(
     preferredDatasetId?: string;
   }
 ): Promise<DuckDBDataset | null> {
-  const start = performance.now();
-
   try {
     const escapedTableNameForCheck = escapeSqlString(tableName);
     const tableCheck = (await Duck.query(
@@ -87,11 +81,6 @@ export async function registerExistingTable(
     )) as Array<{ table_name: string }>;
 
     if (!tableCheck || tableCheck.length === 0) {
-      logger.warn(
-        'Table does not exist in DuckDB, needs re-processing',
-        LogCategory.DUCKDB,
-        { tableName, sourceFileId }
-      );
       return null;
     }
 
@@ -136,11 +125,6 @@ export async function registerExistingTable(
     bumpDatasetsVersion();
     setCurrentTableName(tableName);
 
-    logger.info('DuckDB table registered', LogCategory.DUCKDB, {
-      tableName,
-      datasetId: dataset.id,
-      durationMs: (performance.now() - start).toFixed(2)
-    });
     return dataset;
   } catch (error) {
     logger.error(
@@ -169,11 +153,6 @@ export async function processFile(
     const tableName = generateTableName(file.name);
 
     if (!hasProcessor(file)) {
-      logger.warn(
-        'Unsupported file type for DuckDB ingestion',
-        LogCategory.DUCKDB,
-        { fileId: file.id, fileType: file.fileType }
-      );
       return null;
     }
 
@@ -216,14 +195,6 @@ export async function processFile(
 
     restoreJoinState(result, file);
 
-    const totalDuration = performance.now() - startTime;
-    logger.success('File processed via DuckDB', LogCategory.DUCKDB, {
-      fileId: file.id,
-      datasetId: result.id,
-      fileType: file.fileType,
-      durationMs: totalDuration.toFixed(2)
-    });
-
     return result;
   } catch (error) {
     const errorDuration = performance.now() - startTime;
@@ -253,7 +224,6 @@ export async function dropTable(
   tableName: string,
   Duck: DuckDBClientForDataset
 ): Promise<void> {
-  const start = performance.now();
   const state = getState();
 
   try {
@@ -280,11 +250,6 @@ export async function dropTable(
 
     // Clear cached metadata for the dropped table (prevents reference leaks)
     Duck.cleanupTableResources?.(tableName);
-
-    logger.info('Dropped DuckDB table', LogCategory.DUCKDB, {
-      tableName,
-      durationMs: (performance.now() - start).toFixed(2)
-    });
   } catch (error) {
     logger.error(
       '[duckDBOrchestrator:dropTable] ERROR',
@@ -375,11 +340,6 @@ export async function updateDatasetTableName(
 ): Promise<DuckDBDataset | null> {
   const existing = findDatasetByIdOrSourceFile(sourceFileId);
   if (!existing) {
-    logger.warn(
-      'Cannot update table name: dataset not found in orchestrator',
-      LogCategory.DUCKDB,
-      { sourceFileId, newTableName }
-    );
     return null;
   }
 
@@ -399,17 +359,6 @@ export async function updateDatasetTableName(
 
     bumpDatasetsVersion();
     setCurrentTableName(newTableName);
-
-    logger.info(
-      'Updated dataset table name in orchestrator',
-      LogCategory.DUCKDB,
-      {
-        datasetId: existing.id,
-        oldTableName: existing.tableName,
-        newTableName,
-        rowCount
-      }
-    );
 
     return findDatasetByIdOrSourceFile(sourceFileId) ?? null;
   } catch (error) {

@@ -15,7 +15,7 @@ describe('useMapBasemap loading state', () => {
     expect(source).toContain('mapLoadingStore.beginReferenceBasemapLoading();');
     expect(source).toContain('mapLoadingStore.endReferenceBasemapLoading();');
     expect(source).toContain("map.once('idle', rasterIdleHandler);");
-    expect(source).toContain('beginRasterLoad(map, nextRasterKey);');
+    expect(source).toContain('beginRasterLoad(map);');
   });
 
   it('replays the latest requested style after an in-flight style load', () => {
@@ -53,9 +53,6 @@ describe('useMapBasemap loading state', () => {
   it('guards sync helpers when MapLibre style is not loaded', () => {
     expect(source).toContain('!map.isStyleLoaded()');
     expect(source).toContain('isStyleLoading ||');
-    expect(source).toContain(
-      "logger.warn('Failed to sync MapLibre projection'"
-    );
 
     expect(source).not.toContain(
       'if (!map || !getIsMapLoaded() || !map.isStyleLoaded())'

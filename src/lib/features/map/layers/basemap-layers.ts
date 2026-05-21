@@ -18,6 +18,7 @@ import {
   pathWidthAttr,
   projectGeoJSON as _projectGeoJSON
 } from '../utils/geoarrow-stream-bridge.utils';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
 import type {
   FeatureCollection,
@@ -30,7 +31,6 @@ import type {
   MultiPolygon
 } from 'geojson';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   ArrowExtension,
   createLayerId,
@@ -571,10 +571,6 @@ export function createTerreLayers(
 
   const geometryInfo = extractGeometryInfo(worldBaseTable);
   if (!geometryInfo) {
-    logger.warn(
-      'World base table missing geo metadata for terre layer',
-      LogCategory.MAP
-    );
     return [];
   }
 
@@ -730,10 +726,6 @@ export function createTerreLayers(
 
       return layers;
     }
-    logger.warn(
-      'Failed to convert world base table to GeoJSON for terre layer',
-      LogCategory.MAP
-    );
   }
 
   return [];
@@ -992,10 +984,6 @@ export function createFrontieresLayer(
         }
       });
     }
-    logger.warn(
-      'Failed to convert frontieres table to GeoJSON for frontieres layer',
-      LogCategory.MAP
-    );
   }
 
   return null;
@@ -1423,10 +1411,6 @@ export function createReliefLayers(
 
   const geometryInfo = extractGeometryInfo(worldBaseTable);
   if (!geometryInfo) {
-    logger.warn(
-      'World base table missing geo metadata for relief layer',
-      LogCategory.MAP
-    );
     return [];
   }
 
@@ -1536,10 +1520,6 @@ export function createReliefLayers(
         })
       ];
     }
-    logger.warn(
-      'Failed to convert world base table to GeoJSON for relief layer',
-      LogCategory.MAP
-    );
   }
 
   return [];
@@ -2407,12 +2387,9 @@ export function createBasemapLayers(
       }
     } catch (error) {
       logger.error(
-        'Failed to create basemap layer; keeping other layers intact',
+        'Failed to create catalog basemap layer group',
         LogCategory.MAP,
-        {
-          layerId: config.id,
-          error
-        }
+        error
       );
     }
   }

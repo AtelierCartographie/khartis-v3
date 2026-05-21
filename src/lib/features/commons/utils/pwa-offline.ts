@@ -1,4 +1,4 @@
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { LogCategory, logger } from './logger';
 
 interface BackgroundFetchIcon {
   src: string;
@@ -72,8 +72,8 @@ async function getRegistration(): Promise<ExtendedRegistration | null> {
     const ready = await swContainer.ready;
     return ready as ExtendedRegistration;
   } catch (error) {
-    logger.warn(
-      'Service worker registration unavailable',
+    logger.error(
+      'Failed to resolve service worker registration',
       LogCategory.SYSTEM,
       error
     );
@@ -158,7 +158,6 @@ export async function prepareBasemapForOffline(
     );
     return { status: 'started', registration: bgFetch };
   } catch (error) {
-    logger.warn('Background fetch start failed', LogCategory.SYSTEM, error);
     return { status: 'failed', reason: error };
   }
 }
@@ -175,8 +174,8 @@ export async function getOfflineBasemapIds(): Promise<string[]> {
       .filter((id) => id.startsWith('khartis-basemap-'))
       .map((id) => id.replace('khartis-basemap-', ''));
   } catch (error) {
-    logger.warn(
-      'Failed to retrieve background fetch ids',
+    logger.error(
+      'Failed to list offline basemap background fetches',
       LogCategory.SYSTEM,
       error
     );
@@ -199,7 +198,11 @@ export async function cancelOfflineBasemap(
     if (!bgFetch) return false;
     return await bgFetch.abort();
   } catch (error) {
-    logger.warn('Background fetch abort failed', LogCategory.SYSTEM, error);
+    logger.error(
+      'Failed to cancel offline basemap download',
+      LogCategory.SYSTEM,
+      error
+    );
     return false;
   }
 }
@@ -219,17 +222,31 @@ export async function getCachedBasemapIds(): Promise<string[]> {
         );
         if (match) ids.add(match[1]);
       } catch {
-        /* ignore unparseable urls */
+        continue;
       }
     }
     return Array.from(ids);
   } catch (error) {
-    logger.warn(
-      'Failed to enumerate cached basemap ids',
+    logger.error(
+      'Failed to list cached basemap ids',
       LogCategory.SYSTEM,
       error
     );
     return [];
+  }
+}
+
+function postFactoryResetMessage(controller: ServiceWorker): void {
+  try {
+    controller.postMessage({
+      type: 'FACTORY_RESET'
+    });
+  } catch (error) {
+    logger.error(
+      'Failed to notify service worker before factory reset',
+      LogCategory.SYSTEM,
+      error
+    );
   }
 }
 
@@ -261,25 +278,15 @@ export async function factoryResetPwa(
 
   if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
     if (navigator.serviceWorker.controller) {
-      try {
-        navigator.serviceWorker.controller.postMessage({
-          type: 'FACTORY_RESET'
-        });
-      } catch (error) {
-        logger.warn(
-          'Failed to message SW for factory reset',
-          LogCategory.SYSTEM,
-          error
-        );
-      }
+      postFactoryResetMessage(navigator.serviceWorker.controller);
     }
 
     try {
       const registrations = await navigator.serviceWorker.getRegistrations();
       await Promise.all(registrations.map((reg) => reg.unregister()));
     } catch (error) {
-      logger.warn(
-        'Failed to unregister service workers',
+      logger.error(
+        'Failed to unregister service workers during factory reset',
         LogCategory.SYSTEM,
         error
       );
@@ -291,8 +298,8 @@ export async function factoryResetPwa(
       const names = await caches.keys();
       await Promise.all(names.map((n) => caches.delete(n)));
     } catch (error) {
-      logger.warn(
-        'Failed to delete caches client-side during factory reset',
+      logger.error(
+        'Failed to clear caches during factory reset',
         LogCategory.SYSTEM,
         error
       );
@@ -331,8 +338,8 @@ export async function ensurePeriodicBasemapRevalidation(): Promise<void> {
       minInterval: PERIODIC_SYNC_INTERVAL_MS
     });
   } catch (error) {
-    logger.debug(
-      'Periodic sync registration skipped',
+    logger.error(
+      'Failed to register periodic basemap revalidation',
       LogCategory.SYSTEM,
       error
     );

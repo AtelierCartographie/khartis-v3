@@ -1,5 +1,5 @@
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { PIPELINE_CONST } from '../constants';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 export interface DecimalDetectionResult {
   separator: '.' | ',';
@@ -163,7 +163,7 @@ export async function detectDecimalSeparator(
           : undefined
     };
   } catch (error) {
-    logger.warn('Failed to detect decimal separator', LogCategory.DATA, error);
+    logger.error('Failed to detect decimal format', LogCategory.DATA, error);
     return { separator: '.', confidence: 0, sampleSize: 0, delimiter: ',' };
   }
 }

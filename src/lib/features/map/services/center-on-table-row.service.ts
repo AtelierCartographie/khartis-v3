@@ -1,13 +1,14 @@
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+
+import { Duck } from '$lib/features/duckdb';
+import { basemapService } from '../services/basemap.service.svelte';
+import { resolveCenterCoordinates } from './orthographic-center.service';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
-
-import { Duck } from '$lib/features/duckdb';
-import { basemapService } from '../services/basemap.service.svelte';
-import { resolveCenterCoordinates } from './orthographic-center.service';
 
 interface CenterOnTableRowOptions {
   tableName: string;
@@ -419,6 +420,10 @@ export async function centerMapOnTableRow({
     );
     await applyCenter(basemapCenter, sourceFileId);
   } catch (error) {
-    console.error(error);
+    logger.error('Failed to center map on table row', LogCategory.MAP, error, {
+      feature: 'map',
+      flow: 'center_on_table_row',
+      extra: { tableName, rowId, sourceFileId, joinedBasemap }
+    });
   }
 }

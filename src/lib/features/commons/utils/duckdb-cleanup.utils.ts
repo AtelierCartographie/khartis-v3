@@ -5,8 +5,8 @@ export async function cleanupDuckDBResources(tableName: string): Promise<void> {
   try {
     Duck?.cleanupTableResources(tableName);
   } catch (error) {
-    logger.warn(
-      'Failed to cleanup DuckDB resources',
+    logger.error(
+      'Failed to cleanup DuckDB table resources',
       LogCategory.DUCKDB,
       error
     );

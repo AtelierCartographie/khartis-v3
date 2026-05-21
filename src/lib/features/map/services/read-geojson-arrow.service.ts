@@ -350,7 +350,7 @@ async function readParquetGeoInfo(
       return { encoding, sourceCrs, isProjectedCRS, primaryColumn: primaryCol };
     }
   } catch (error) {
-    logger.warn('Failed to read GeoParquet metadata', LogCategory.MAP, error);
+    logger.error('Failed to read GeoParquet metadata', LogCategory.MAP, error);
   }
   return {
     encoding: undefined,
@@ -391,11 +391,6 @@ export async function readGeoParquetViaDuckDB(
     const geomCol = geoInfo.primaryColumn;
     const escapedGeomCol = escapeIdentifier(geomCol);
     const escapedSourceCrs = escapeSqlString(geoInfo.sourceCrs);
-    logger.info(
-      `Reprojecting parquet geometry from ${geoInfo.sourceCrs} to EPSG:4326`,
-      LogCategory.MAP,
-      { sourceCrs: geoInfo.sourceCrs, geomCol }
-    );
 
     try {
       const result = await Duck.query(
@@ -408,10 +403,10 @@ export async function readGeoParquetViaDuckDB(
       table = addGeoArrowMetadata(table, geoInfo.encoding, bbox);
       return table;
     } catch (err1) {
-      logger.warn(
-        'ST_Transform via read_parquet failed, trying ST_Read',
+      logger.error(
+        'Failed to transform projected GeoParquet with read_parquet',
         LogCategory.MAP,
-        { error: err1 }
+        err1
       );
     }
 
@@ -426,16 +421,14 @@ export async function readGeoParquetViaDuckDB(
       table = addGeoArrowMetadata(table, geoInfo.encoding, bbox);
       return table;
     } catch (err2) {
-      logger.warn('ST_Transform via ST_Read also failed', LogCategory.MAP, {
-        error: err2
-      });
+      logger.error(
+        'Failed to transform projected GeoParquet with ST_Read',
+        LogCategory.MAP,
+        err2
+      );
     }
 
     if (isProjectionSupported(geoInfo.sourceCrs)) {
-      logger.info(
-        `Falling back to client-side proj4 reprojection for ${geoInfo.sourceCrs}`,
-        LogCategory.MAP
-      );
       try {
         const reprojectedTable = await reprojectParquetWithProj4(
           escapedFileId,
@@ -444,16 +437,12 @@ export async function readGeoParquetViaDuckDB(
           sanitizedName,
           bbox
         );
-        logger.info(
-          `Client-side proj4 reprojection succeeded (${reprojectedTable.numRows} features)`,
-          LogCategory.MAP
-        );
         return reprojectedTable;
       } catch (err3) {
-        logger.warn(
-          'Client-side proj4 reprojection failed, using raw coordinates',
+        logger.error(
+          'Failed to reproject GeoParquet with proj4 fallback',
           LogCategory.MAP,
-          { error: err3 }
+          err3
         );
       }
     }

@@ -8,7 +8,6 @@
   import { onDestroy, onMount } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
 
-  const BYTES_PER_MIB = 1024 * 1024;
   const AUTO_RELOAD_GUARD_KEY = 'khartis:auto-reloaded-at';
   const AUTO_RELOAD_GUARD_WINDOW_MS = 10 * 1000;
 
@@ -34,16 +33,17 @@
       }
       sessionStorage.setItem(AUTO_RELOAD_GUARD_KEY, String(Date.now()));
       return true;
-    } catch {
+    } catch (error) {
+      logger.error(
+        'Failed to update auto-reload session guard',
+        LogCategory.SYSTEM,
+        error
+      );
       return true;
     }
   }
 
   async function recoverFromStaleAssets(): Promise<void> {
-    logger.warn(
-      'Stale dynamic import detected, recovering',
-      LogCategory.SYSTEM
-    );
     if (recordAutoReload()) {
       window.location.reload();
       return;
@@ -89,37 +89,14 @@
         return;
       }
 
-      const granted = await navigator.storage.persist();
-      logger.debug('Persistent storage request', LogCategory.SYSTEM, {
-        granted
-      });
+      await navigator.storage.persist();
     } catch (error) {
-      logger.warn(
-        'Persistent storage request failed',
+      logger.error(
+        'Failed to request persistent browser storage',
         LogCategory.SYSTEM,
         error
       );
-    }
-  }
-
-  async function logStorageUsage(): Promise<void> {
-    if (
-      typeof navigator === 'undefined' ||
-      !('storage' in navigator) ||
-      typeof navigator.storage.estimate !== 'function'
-    ) {
       return;
-    }
-
-    try {
-      const { usage = 0, quota = 0 } = await navigator.storage.estimate();
-      logger.info('PWA storage estimate', LogCategory.SYSTEM, {
-        usageMiB: (usage / BYTES_PER_MIB).toFixed(1),
-        quotaMiB: (quota / BYTES_PER_MIB).toFixed(1),
-        usageRatio: quota > 0 ? (usage / quota).toFixed(3) : '0'
-      });
-    } catch (error) {
-      logger.warn('Storage estimate failed', LogCategory.SYSTEM, error);
     }
   }
 
@@ -148,16 +125,10 @@
   }
 
   async function bootstrapOfflineWarmup(): Promise<void> {
-    try {
-      await connectivityStore.refreshStorageEstimate();
-      await connectivityStore.refreshCachedBasemaps();
-    } catch (error) {
-      logger.debug(
-        'Initial offline state refresh failed',
-        LogCategory.SYSTEM,
-        error
-      );
-    }
+    await Promise.allSettled([
+      connectivityStore.refreshStorageEstimate(),
+      connectivityStore.refreshCachedBasemaps()
+    ]);
 
     warmupAbortController = new AbortController();
     startProgressiveWarmup({
@@ -182,7 +153,6 @@
     }
 
     void requestPersistentStorage();
-    void logStorageUsage();
     attachSwMessageListener();
     attachStaleAssetRecovery();
     void bootstrapOfflineWarmup();

@@ -10,11 +10,6 @@ vi.mock('./use-category-labels.svelte', () => ({
     haveCategoryLabelsChangedMock(...args)
 }));
 
-vi.mock('$lib/features/commons/utils/logger', () => ({
-  logger: { warn: vi.fn() },
-  LogCategory: { VISUALIZATION: 'visualization' }
-}));
-
 import {
   CATEGORY_LABEL_FETCH_ERROR,
   createCategoryLabelsFetcher
@@ -89,8 +84,8 @@ describe('use-category-labels-fetcher', () => {
     expect(applyLabels).not.toHaveBeenCalled();
   });
 
-  it('logs warn when resolveCategoryLabels rejects', async () => {
-    const { logger } = await import('$lib/features/commons/utils/logger');
+  it('skips applying labels when resolveCategoryLabels rejects', async () => {
+    const applyLabels = vi.fn();
     resolveCategoryLabelsMock.mockRejectedValue(new Error('boom'));
     const fetcher = createCategoryLabelsFetcher(() => []);
 
@@ -98,11 +93,11 @@ describe('use-category-labels-fetcher', () => {
       dataset: { id: 'ds-1' },
       column: 'cat',
       getCurrentLabels: () => [],
-      applyLabels: vi.fn(),
+      applyLabels,
       errorMessage: CATEGORY_LABEL_FETCH_ERROR.FILL
     });
 
-    expect(logger.warn).toHaveBeenCalled();
+    expect(applyLabels).not.toHaveBeenCalled();
   });
 
   it('does not apply labels when controller is aborted before fetch resolves', async () => {

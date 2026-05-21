@@ -1,21 +1,8 @@
-import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
-import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
-import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import {
   exportProcessedDatasets,
   downloadFile,
   generateExportFilename
 } from '$lib/features/commons/utils/file-export.utils';
-import {
-  exportGeoPackageLayers,
-  type GeoPackageLayerExportOptions,
-  type GeoPackageFeatureRow
-} from '$lib/features/commons/utils/geopackage-export.utils';
-import {
-  exportMapToSvg,
-  exportMapToJpg
-} from '$lib/features/commons/utils/map-export.utils';
-import { normalizeDatasets } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 import { m } from '$lib/paraglide/messages.js';
 import { DATA_FORMAT, type DataExportFormat } from '../types';
@@ -39,6 +26,19 @@ import {
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
 import { isDatasetGeometryColumn } from '$lib/features/commons/utils/geometry-column.utils';
+import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
+import {
+  exportGeoPackageLayers,
+  type GeoPackageLayerExportOptions,
+  type GeoPackageFeatureRow
+} from '$lib/features/commons/utils/geopackage-export.utils';
+import {
+  exportMapToSvg,
+  exportMapToJpg
+} from '$lib/features/commons/utils/map-export.utils';
+import { normalizeDatasets } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 
 export interface ExportError extends Error {
   title: string;
@@ -580,13 +580,7 @@ async function fetchJoinedDatasetWithGeometry(
     format: 'array'
   })) as Record<string, unknown>[];
 
-  await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`).catch((error) =>
-    logger.warn(
-      'Failed to drop temporary joined export view',
-      LogCategory.DUCKDB,
-      error
-    )
-  );
+  await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`).catch(() => {});
 
   const allColumnNames = [
     ...dataset.columns.map((c) => c.name),
@@ -879,13 +873,7 @@ async function exportDatasetsToGeoPackage(
       sources
         .flatMap((source) => (source.tempViewName ? [source.tempViewName] : []))
         .map((viewName) =>
-          Duck.query(`DROP VIEW IF EXISTS "${viewName}"`).catch((error) =>
-            logger.warn(
-              'Failed to drop temporary joined GeoPackage export view',
-              LogCategory.DUCKDB,
-              error
-            )
-          )
+          Duck.query(`DROP VIEW IF EXISTS "${viewName}"`).catch(() => {})
         )
     );
   }
@@ -916,7 +904,8 @@ async function fetchDatasetsWithGeometry(
             datasetId: dataset.id,
             joinedBasemap: joinedGeometrySource.joinedBasemap,
             error: error instanceof Error ? error.message : String(error)
-          }
+          },
+          { feature: 'export', flow: 'fetch_joined_geometry' }
         );
         results.push(dataset);
       }
@@ -934,7 +923,8 @@ async function fetchDatasetsWithGeometry(
             datasetId: dataset.id,
             tableName: dataset.duckdbTableName,
             error: error instanceof Error ? error.message : String(error)
-          }
+          },
+          { feature: 'export', flow: 'fetch_gps_geometry' }
         );
         results.push(dataset);
       }
@@ -1014,7 +1004,8 @@ async function fetchDatasetsWithGeometry(
           datasetId: dataset.id,
           tableName: dataset.duckdbTableName,
           error: error instanceof Error ? error.message : String(error)
-        }
+        },
+        { feature: 'export', flow: 'fetch_geometry_duckdb' }
       );
       results.push(dataset);
     }

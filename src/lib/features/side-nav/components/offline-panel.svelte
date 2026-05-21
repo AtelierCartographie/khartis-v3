@@ -4,6 +4,7 @@
     type OfflineBasemapEntry
   } from '$lib/features/commons/stores/connectivity.store.svelte';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import {
     buildEssentialDownloadEntries,
     buildExtendedDownloadEntries,
@@ -21,7 +22,6 @@
     setOfflineDownloadsDisabled,
     startExtendedWarmup
   } from '$lib/features/commons/utils/offline-warmup-scheduler';
-  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages.js';
   import {
     Accordion,
@@ -63,8 +63,8 @@
     try {
       essentials = await buildEssentialDownloadEntries();
       extended = await buildExtendedDownloadEntries();
-    } catch (error) {
-      logger.warn('Failed to load offline entries', LogCategory.SYSTEM, error);
+    } catch {
+      // Offline catalog failures leave the panel empty; user actions stay disabled.
     }
   }
 
@@ -161,7 +161,11 @@
       connectivityStore.setBasemapStatus(basemapId, 'evicted', 0);
       void connectivityStore.refreshStorageEstimate();
     } catch (error) {
-      logger.warn('Failed to delete basemap cache', LogCategory.SYSTEM, error);
+      logger.error(
+        'Failed to delete offline basemap cache entry',
+        LogCategory.SYSTEM,
+        error
+      );
     }
   }
 

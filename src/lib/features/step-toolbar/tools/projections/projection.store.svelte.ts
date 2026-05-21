@@ -1,3 +1,20 @@
+import {
+  suggestProjectionsForBbox,
+  buildProjectionFromSuggestion,
+  type ProjectionSuggestion
+} from './projection-suggest.service';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import { normalizeBoundsForProjectionSuggestion } from '$lib/features/map/utils/dataset-crs.utils';
+import {
+  resolveProjectionAvailabilityContext,
+  resolveProjectionSuggestionBoundsFromBasemap,
+  supportsCustomProjectionCode,
+  supportsProjectionSuggestions
+} from '$lib/features/map/utils/projection-availability.utils';
+import {
+  getCompositeProjectionSelectionId,
+  usesMercatorMapProjection
+} from '$lib/features/map/utils/user-projection.utils';
 import { ViewMode } from '$lib/features/commons/constants/ui.constants';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
@@ -14,25 +31,7 @@ import { mapProjectionStore } from '$lib/features/map/stores/map-projection.stor
 import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
 import { projectionStore as mapRenderProjectionStore } from '$lib/features/map/stores/projection.store.svelte';
 import type { ProjectionState } from '../../types/projections.types';
-import {
-  suggestProjectionsForBbox,
-  buildProjectionFromSuggestion,
-  type ProjectionSuggestion
-} from './projection-suggest.service';
 import type { D3Usage } from 'proj-suggest';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-import { normalizeBoundsForProjectionSuggestion } from '$lib/features/map/utils/dataset-crs.utils';
-import {
-  resolveProjectionAvailabilityContext,
-  resolveProjectionSuggestionBoundsFromBasemap,
-  supportsCustomProjectionCode,
-  supportsProjectionSuggestions
-} from '$lib/features/map/utils/projection-availability.utils';
-import {
-  getCompositeProjectionSelectionId,
-  usesMercatorMapProjection
-} from '$lib/features/map/utils/user-projection.utils';
 
 const DEFAULT_PROJECTION = 'mercator';
 
@@ -335,21 +334,10 @@ const { actions, getState } = createToolStore<
           if (!result) return;
 
           if (requestId !== suggestionRequestId) {
-            logger.info(
-              'Stale projection suggestions discarded',
-              LogCategory.MAP,
-              { requestId, current: suggestionRequestId }
-            );
             return;
           }
 
           s.suggestions = result;
-
-          logger.info('Projection suggestions computed', LogCategory.MAP, {
-            national: result.national.length,
-            generic: result.generic.length,
-            bbox: bounds
-          });
 
           if (s.overrideSource === 'auto') {
             clearSelectedInternal(true);
@@ -394,15 +382,6 @@ const { actions, getState } = createToolStore<
         s.overrideActive = true;
         s.overrideSource = overrideSource;
         mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);
-        logger.info(
-          'Applied projection suggestion via proj4',
-          LogCategory.MAP,
-          {
-            id: suggestion.id,
-            epsg: suggestion.epsg,
-            bbox: suggestion.bbox
-          }
-        );
         return;
       }
 
@@ -414,22 +393,8 @@ const { actions, getState } = createToolStore<
         s.overrideActive = true;
         s.overrideSource = overrideSource;
         mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);
-        logger.info(
-          'Applied projection suggestion via d3 mapping',
-          LogCategory.MAP,
-          {
-            id: suggestion.id,
-            epsg: suggestion.epsg,
-            bbox: suggestion.bbox,
-            d3Projection: suggestion.d3Config.projection
-          }
-        );
         return;
       }
-
-      logger.warn('Could not apply projection suggestion', LogCategory.MAP, {
-        id: suggestion.id
-      });
     }
   },
   {

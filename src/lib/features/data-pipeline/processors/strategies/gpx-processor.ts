@@ -1,11 +1,10 @@
-import { ParseError } from '$lib/features/commons/pipeline.errors';
 import { MIME } from '$lib/features/commons/constants';
+import { ParseError } from '$lib/features/commons/pipeline.errors';
 import {
   FileType,
   type UploadedFile
 } from '$lib/features/commons/types/create-project.types';
 import type { GeoJSONFeatureCollection } from '$lib/types/data';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import * as m from '$lib/paraglide/messages';
 import type {
   FileProcessor,
@@ -167,7 +166,6 @@ export const gpxProcessor: FileProcessor = {
     ctx: ProcessContext,
     file: UploadedFile
   ): Promise<ProcessorDataset> {
-    const start = performance.now();
     const rawContent = await readGpxContent(file);
     const geojson = parseGpxToGeoJson(rawContent);
     const geojsonFile = new File(
@@ -202,13 +200,6 @@ export const gpxProcessor: FileProcessor = {
       },
       geoDetection: file.deepAnalysis?.geoDetection
     };
-
-    logger.success('GPX processed', LogCategory.DUCKDB, {
-      datasetId: dataset.id,
-      tableName: dataset.tableName,
-      rowCount: dataset.rowCount,
-      durationMs: (performance.now() - start).toFixed(2)
-    });
 
     return dataset;
   }

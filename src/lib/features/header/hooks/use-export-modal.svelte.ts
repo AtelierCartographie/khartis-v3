@@ -1,8 +1,6 @@
 import type { UseExportModalReturn } from '../types';
 export type { UseExportModalReturn } from '../types';
-import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
-import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { getFormatState } from '$lib/features/step-toolbar/tools/format';
 import { m } from '$lib/paraglide/messages.js';
 import {
@@ -23,6 +21,8 @@ import {
   exportData,
   ExportError
 } from '../services/export.service';
+import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
 
 const DEFAULT_FILE_NAME = m.export_default_filename();
 

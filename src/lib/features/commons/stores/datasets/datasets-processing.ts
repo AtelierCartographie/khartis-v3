@@ -347,10 +347,6 @@ export function createVisualizationsForGeoDatasets(
   ops?: VisualizationStoreOperations | null
 ): void {
   if (!ops) {
-    logger.warn(
-      'Visualization store not injected, skipping auto-visualization creation',
-      LogCategory.STORE
-    );
     return;
   }
 
@@ -401,9 +397,6 @@ function notifySkippedFiles(
         files: allSkippedFiles.join(', ')
       })
     );
-    logger.warn('Some files from ZIP were skipped', LogCategory.STORE, {
-      skippedFiles: allSkippedFiles
-    });
   }
 }
 
@@ -416,11 +409,6 @@ export async function processFiles(
   state.error = undefined;
 
   try {
-    logger.info(
-      `Processing ${files.length} files with semaphore (max 2 concurrent)`,
-      LogCategory.STORE
-    );
-
     const results = await Promise.all(
       files.map(async (file) => {
         return internals.processingSemaphore.run(async () => {
@@ -439,10 +427,6 @@ export async function processFiles(
             file.parsedData &&
             file.statistics
           ) {
-            logger.warn(
-              `File ${file.name} has parsed data but no DuckDB table - creating from parsed data`,
-              LogCategory.STORE
-            );
             return createDatasetFromPreprocessedFile(file);
           }
 
@@ -487,11 +471,6 @@ export async function processFiles(
     }
 
     notifySkippedFiles(results);
-
-    logger.success(
-      `All ${files.length} files processed successfully`,
-      LogCategory.STORE
-    );
   } catch (error) {
     logger.error('Files processing failed', LogCategory.STORE, {
       error: error instanceof Error ? error.message : 'Unknown error'
@@ -543,10 +522,6 @@ export async function addFile(
       }
 
       if (!hasRestorableBinarySource && file.parsedData && file.statistics) {
-        logger.warn(
-          `File ${file.name} has parsed data but no DuckDB table - creating from parsed data`,
-          LogCategory.STORE
-        );
         return createDatasetFromPreprocessedFile(file);
       }
 

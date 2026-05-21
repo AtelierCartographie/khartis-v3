@@ -1,5 +1,3 @@
-import { MIME } from '$lib/features/commons/constants';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
 import { isGeospatialFile } from '../constants';
@@ -10,6 +8,7 @@ import { applyTabularGeoDetection } from './tabular-geo-detection';
 import type { DatasetResult, ZipDatasetResult } from '../types';
 import { processZipFile } from './zip-processor';
 import { isZipArchiveName } from '../utils/zip-handler';
+import { MIME } from '$lib/features/commons/constants';
 
 export async function processRemoteFile(
   url: string,
@@ -60,56 +59,28 @@ export async function processRemoteFile(
 export async function processRemoteZipFile(
   url: string
 ): Promise<DatasetResult | ZipDatasetResult> {
-  const start = performance.now();
-
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(
-        m.pipeline_error_fetch_failed({
-          status: String(response.status),
-          statusText: response.statusText
-        })
-      );
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    const filename = url.split('/').pop() || m.remote_zip_default_name();
-    const file = new File([arrayBuffer], filename, { type: MIME.ZIP });
-    const result = await processZipFile(file);
-
-    if ('datasets' in result) {
-      for (const dataset of result.datasets) {
-        dataset.sourceFileId = url;
-      }
-      logger.success(
-        'Remote MIME.ZIP archive processed (multi)',
-        LogCategory.DATA,
-        {
-          url,
-          datasetCount: result.datasets.length,
-          durationMs: (performance.now() - start).toFixed(2)
-        }
-      );
-      return result;
-    }
-
-    result.sourceFileId = url;
-    logger.success('Remote MIME.ZIP archive processed', LogCategory.DATA, {
-      url,
-      datasetId: result.id,
-      durationMs: (performance.now() - start).toFixed(2)
-    });
-    return result;
-  } catch (error) {
-    logger.error(
-      'Failed to process remote MIME.ZIP archive',
-      LogCategory.DATA,
-      {
-        url,
-        error
-      }
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(
+      m.pipeline_error_fetch_failed({
+        status: String(response.status),
+        statusText: response.statusText
+      })
     );
-    throw error;
   }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const filename = url.split('/').pop() || m.remote_zip_default_name();
+  const file = new File([arrayBuffer], filename, { type: MIME.ZIP });
+  const result = await processZipFile(file);
+
+  if ('datasets' in result) {
+    for (const dataset of result.datasets) {
+      dataset.sourceFileId = url;
+    }
+    return result;
+  }
+
+  result.sourceFileId = url;
+  return result;
 }

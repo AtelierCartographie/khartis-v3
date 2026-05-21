@@ -1,16 +1,21 @@
 <script lang="ts">
   import {
+    BasemapSource,
     ExampleCategory,
     FileStatus,
     GeoreferenceType
   } from '$lib/features/commons/constants/ui.constants';
-  import ProjectCard from '$lib/features/commons/components/project-card.svelte';
   import {
     EXAMPLE_CATEGORIES,
     EXAMPLE_PROJECTS,
     getExamplesByCategory,
     loadExampleData
   } from '$lib/features/commons/constants/examples.data';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { m } from '$lib/paraglide/messages';
+  import { useProjectNavigation } from '../hooks/use-project-navigation.svelte';
+  import { InlineNotification, Tag } from 'carbon-components-svelte';
+  import ProjectCard from '$lib/features/commons/components/project-card.svelte';
   import {
     createProjectActions,
     createProjectState
@@ -22,7 +27,6 @@
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { detectGPSColumns } from '$lib/features/duckdb/orchestrator/gps-ops';
-  import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
   import { PERSISTED_BASEMAP_TYPE } from '$lib/features/data-tab/services/persisted-basemap.service';
   import { persistTabularSourceSnapshot } from '$lib/features/data-tab/services/tabular-source-snapshot.service';
   import { dataTabStore } from '$lib/features/data-tab/stores/data-tab.store.svelte';
@@ -31,10 +35,6 @@
   import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
-  import { logger, LogCategory } from '$lib/features/commons/utils/logger';
-  import { m } from '$lib/paraglide/messages';
-  import { useProjectNavigation } from '../hooks/use-project-navigation.svelte';
-  import { InlineNotification, Tag } from 'carbon-components-svelte';
 
   interface Props {
     onClose?: () => void;
@@ -125,21 +125,11 @@
     await basemapCatalogService.loadCatalog();
     const basemap = basemapCatalogService.getBasemapById(example.baseMapId);
     if (!basemap) {
-      logger.warn(
-        'Example baseMapId not found in catalog',
-        LogCategory.PROJECT,
-        { exampleId: example.id, baseMapId: example.baseMapId }
-      );
       return;
     }
 
     const dataset = datasetsStore.getDatasetBySourceFile(file.id);
     if (!dataset) {
-      logger.warn(
-        'Example dataset not found after project creation',
-        LogCategory.PROJECT,
-        { exampleId: example.id, fileId: file.id }
-      );
       return;
     }
 
@@ -170,17 +160,8 @@
       for (let i = 0; i <= basemapStepIndex; i++) {
         dataTabStore.markStepComplete(i);
       }
-    } catch (joinError) {
-      logger.warn(
-        'Failed to auto-join example dataset to basemap',
-        LogCategory.PROJECT,
-        {
-          exampleId: example.id,
-          baseMapId: basemap.file,
-          geoColumn,
-          error: joinError
-        }
-      );
+    } catch {
+      return;
     }
   }
 
@@ -196,14 +177,6 @@
       example.referenceBasemapId
     );
     if (!basemap) {
-      logger.warn(
-        'Example referenceBasemapId not found in catalog',
-        LogCategory.PROJECT,
-        {
-          exampleId: example.id,
-          referenceBasemapId: example.referenceBasemapId
-        }
-      );
       return;
     }
 
@@ -274,11 +247,6 @@
   ): void {
     const dataset = datasetsStore.getDatasetBySourceFile(file.id);
     if (!dataset) {
-      logger.warn(
-        'Example dataset not found while applying visualization presets',
-        LogCategory.PROJECT,
-        { exampleId: example.id, fileId: file.id }
-      );
       return;
     }
 

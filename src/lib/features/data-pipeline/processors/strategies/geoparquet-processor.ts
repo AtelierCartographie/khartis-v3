@@ -2,7 +2,6 @@ import {
   FileType,
   type UploadedFile
 } from '$lib/features/commons/types/create-project.types';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import type {
   FileProcessor,
@@ -30,7 +29,6 @@ export const geoparquetProcessor: FileProcessor = {
     ctx: ProcessContext,
     file: UploadedFile
   ): Promise<ProcessorDataset> {
-    const start = performance.now();
     // DuckDB >= 1.33 handles geoarrow.wkb natively — no need for geoparquet-wasm.
     const buffer = await getArrayBuffer(file);
     const sanitizedName = ctx.tableName.replace(/[^a-zA-Z0-9_]/g, '_');
@@ -75,13 +73,6 @@ export const geoparquetProcessor: FileProcessor = {
       },
       geoDetection: file.deepAnalysis?.geoDetection
     };
-
-    logger.success('GeoParquet processed', LogCategory.DUCKDB, {
-      datasetId: dataset.id,
-      tableName: dataset.tableName,
-      rowCount: dataset.rowCount,
-      durationMs: (performance.now() - start).toFixed(2)
-    });
 
     return dataset;
   }

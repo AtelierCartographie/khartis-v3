@@ -6,7 +6,6 @@ import {
 } from '../constants/validation.config';
 import { FileType } from '../types/create-project.types';
 import { getFileExtension } from './file.utils';
-import { LogCategory, logger } from './logger';
 import {
   FILE_EXTENSIONS,
   GEOJSON_TYPE,
@@ -148,8 +147,7 @@ export const FileValidator = {
           await FileValidator.validateGeoPackageContent(file, buffer, result);
           break;
       }
-    } catch (error) {
-      logger.error('Async validation failed', LogCategory.FILE, error);
+    } catch {
       result.errors.push(m.validation_content_check_failed());
     }
 
@@ -487,12 +485,7 @@ export const FileValidator = {
           result.errors.push(m.validation_geojson_no_features_prop());
         }
       }
-    } catch (error) {
-      logger.error(
-        m.error_geojson_content_validation(),
-        LogCategory.FILE,
-        error
-      );
+    } catch {
       if (file.size < 1024 * 1024) {
         result.errors.push(m.validation_json_invalid());
       } else {
@@ -621,8 +614,7 @@ export const FileValidator = {
       if (parsed.protocol === 'http:') {
         result.warnings.push(m.validation_url_insecure_http());
       }
-    } catch (error) {
-      logger.error('URL validation failed', LogCategory.FILE, error);
+    } catch {
       result.errors.push(m.validation_invalid_url());
     }
 

@@ -826,6 +826,8 @@ function createBasemapService() {
   const basemapCache = new Map<string, LoadedBasemap>();
   const geometryTablesInDuckDB = new Set<string>();
   const loadingBasemaps = new Map<string, Promise<LoadedBasemap | null>>();
+  let basemapCacheGeneration = 0;
+  let basemapActivationRequestId = 0;
 
   async function loadMetadata(): Promise<void> {
     try {
@@ -839,7 +841,10 @@ function createBasemapService() {
 
       availableBasemaps = await response.json();
     } catch (error) {
-      logger.error('Failed to load basemap metadata', LogCategory.MAP, error);
+      logger.error('Failed to load basemap metadata', LogCategory.MAP, error, {
+        feature: 'basemap',
+        flow: 'load_basemap_metadata'
+      });
       throw error;
     }
   }
@@ -884,7 +889,12 @@ function createBasemapService() {
 
       attributesLoaded = true;
     } catch (error) {
-      logger.error('Failed to load basemap attributes', LogCategory.MAP, error);
+      logger.error(
+        'Failed to load basemap attributes',
+        LogCategory.MAP,
+        error,
+        { feature: 'basemap', flow: 'load_basemap_attributes' }
+      );
       throw error;
     }
   }
@@ -895,12 +905,11 @@ function createBasemapService() {
         resolveStaticAssetUrl(PROJECTION_PRESETS_PATH)
       );
       if (!response.ok) {
-        logger.warn('Failed to fetch projection presets', LogCategory.MAP);
         return;
       }
       projectionPresetsData = await response.json();
     } catch (error) {
-      logger.warn('Failed to load projection presets', LogCategory.MAP, error);
+      logger.error('Failed to load projection presets', LogCategory.MAP, error);
     }
   }
 
@@ -908,12 +917,11 @@ function createBasemapService() {
     try {
       const response = await fetch(resolveStaticAssetUrl(STYLE_PRESETS_PATH));
       if (!response.ok) {
-        logger.warn('Failed to fetch style presets', LogCategory.MAP);
         return;
       }
       stylePresetsData = await response.json();
     } catch (error) {
-      logger.warn('Failed to load style presets', LogCategory.MAP, error);
+      logger.error('Failed to load style presets', LogCategory.MAP, error);
     }
   }
 
@@ -1030,6 +1038,22 @@ function createBasemapService() {
     }
   }
 
+  function activateLoadedBasemap(loadedBasemap: LoadedBasemap): LoadedBasemap {
+    currentBasemap = loadedBasemap;
+    const geometryTable =
+      getResolvedGeometryTable(loadedBasemap) ?? loadedBasemap.geometryTable;
+    if (geometryTable) {
+      updateProjectionFromTable(geometryTable);
+    }
+    return loadedBasemap;
+  }
+
+  function invalidateBasemapLoads(): void {
+    basemapCacheGeneration += 1;
+    basemapActivationRequestId += 1;
+    loadingBasemaps.clear();
+  }
+
   async function loadBasemapInternal(
     basemapId: string
   ): Promise<LoadedBasemap | null> {
@@ -1046,7 +1070,6 @@ function createBasemapService() {
     );
 
     if (!metadata) {
-      logger.warn(`Basemap not found: ${basemapId}`, LogCategory.MAP);
       return null;
     }
 
@@ -1056,21 +1079,17 @@ function createBasemapService() {
         ? await loadCustomBasemapGeometry(metadata)
         : await loadGeometryFromParquet(metadata.file, metadata.bbox);
 
-      currentBasemap = createLoadedBasemapVariant(
-        metadata,
-        geometryTable,
-        new Map()
-      );
-
-      basemapCache.set(resolvedBasemapId, currentBasemap);
-      updateProjectionFromTable(geometryTable);
-
-      return currentBasemap;
+      return createLoadedBasemapVariant(metadata, geometryTable, new Map());
     } catch (error) {
       logger.error(
         `Failed to load basemap: ${basemapId}`,
         LogCategory.MAP,
-        error
+        error,
+        {
+          feature: 'basemap',
+          flow: 'load_basemap',
+          extra: { basemapId }
+        }
       );
       return null;
     } finally {
@@ -1155,14 +1174,10 @@ function createBasemapService() {
           tempTableName
         );
       } catch (error) {
-        logger.warn(
-          'Catalog GeoParquet ST_Read failed, using DuckDB read_parquet materialization',
+        logger.error(
+          'Failed to materialize catalog parquet with ST_Read, using read_parquet fallback',
           LogCategory.MAP,
-          {
-            basemapId: normalizedBasemapId,
-            resolvedBasemapId,
-            error
-          }
+          error
         );
         await Duck.query(`DROP TABLE IF EXISTS "${escapedTempTableName}"`);
         await materializeCatalogParquetWithReadParquet(
@@ -1225,29 +1240,20 @@ function createBasemapService() {
     return basemapCache.get(resolvedBasemapId) ?? null;
   }
 
-  function getCachedGeometryTable(basemapId: string): ArrowTable | null {
-    const cached = getCachedBasemap(basemapId);
-    if (!cached) return null;
-    return getResolvedGeometryTable(cached) ?? cached.geometryTable ?? null;
-  }
+  async function loadBasemapData(
+    basemapId: string
+  ): Promise<LoadedBasemap | null> {
+    if (!isInitialized) {
+      await initialize();
+    }
 
-  async function loadBasemap(basemapId: string): Promise<LoadedBasemap | null> {
     const resolvedBasemapId = getPreferredBasemapFile(
       availableBasemaps,
       basemapId
     );
-
-    if (basemapCache.has(resolvedBasemapId)) {
-      currentBasemap = basemapCache.get(resolvedBasemapId)!;
-      const baseLevel = getBasemapSimplificationLevel(currentBasemap.metadata);
-      if (currentBasemap.activeSimplificationLevel !== baseLevel) {
-        currentBasemap.activeSimplificationLevel = baseLevel;
-        simplificationVersion += 1;
-      }
-      updateProjectionFromTable(
-        getResolvedGeometryTable(currentBasemap) ?? currentBasemap.geometryTable
-      );
-      return currentBasemap;
+    const cached = basemapCache.get(resolvedBasemapId);
+    if (cached) {
+      return cached;
     }
 
     const existing = loadingBasemaps.get(resolvedBasemapId);
@@ -1255,14 +1261,47 @@ function createBasemapService() {
       return existing;
     }
 
-    const promise = loadBasemapInternal(resolvedBasemapId);
+    const generation = basemapCacheGeneration;
+    const promise = loadBasemapInternal(resolvedBasemapId).then((loaded) => {
+      if (loaded && generation === basemapCacheGeneration) {
+        basemapCache.set(resolvedBasemapId, loaded);
+      }
+      return loaded;
+    });
     loadingBasemaps.set(resolvedBasemapId, promise);
 
     try {
       return await promise;
     } finally {
-      loadingBasemaps.delete(resolvedBasemapId);
+      if (loadingBasemaps.get(resolvedBasemapId) === promise) {
+        loadingBasemaps.delete(resolvedBasemapId);
+      }
     }
+  }
+
+  function getCachedGeometryTable(basemapId: string): ArrowTable | null {
+    const cached = getCachedBasemap(basemapId);
+    if (!cached) return null;
+    return getResolvedGeometryTable(cached) ?? cached.geometryTable ?? null;
+  }
+
+  async function loadBasemap(basemapId: string): Promise<LoadedBasemap | null> {
+    const requestId = ++basemapActivationRequestId;
+    const loadedBasemap = await loadBasemapData(basemapId);
+    if (!loadedBasemap) {
+      return null;
+    }
+
+    if (requestId === basemapActivationRequestId) {
+      const baseLevel = getBasemapSimplificationLevel(loadedBasemap.metadata);
+      if (loadedBasemap.activeSimplificationLevel !== baseLevel) {
+        loadedBasemap.activeSimplificationLevel = baseLevel;
+        simplificationVersion += 1;
+      }
+      activateLoadedBasemap(loadedBasemap);
+    }
+
+    return loadedBasemap;
   }
 
   async function loadDefaultBasemap(): Promise<LoadedBasemap | null> {
@@ -1295,13 +1334,8 @@ function createBasemapService() {
       new Map()
     );
     basemapCache.set(metadata.file, loaded);
-    currentBasemap = loaded;
-
-    logger.info('Custom basemap registered', LogCategory.MAP, {
-      basemapId: metadata.file,
-      rows: geometryTable.numRows,
-      metadataLayerCount: metadata.layers.length
-    });
+    basemapActivationRequestId += 1;
+    activateLoadedBasemap(loaded);
   }
 
   async function refreshCustomBasemap(
@@ -1332,8 +1366,7 @@ function createBasemapService() {
     loadedBasemap.simplifiedVariants?.clear();
 
     if (currentBasemap?.metadata.file === basemapId) {
-      currentBasemap = loadedBasemap;
-      updateProjectionFromTable(geometryTable);
+      activateLoadedBasemap(loadedBasemap);
     }
 
     return geometryTable;
@@ -1382,12 +1415,10 @@ function createBasemapService() {
       const variant = getResolvedBasemapVariant(cached);
       const geometryTable = variant?.geometryTable ?? cached.geometryTable;
       if (geometryTable) {
-        currentBasemap = cached;
-        updateProjectionFromTable(geometryTable);
         return geometryTable;
       }
     }
-    const loaded = await loadBasemapInternal(basemapId);
+    const loaded = await loadBasemapData(basemapId);
     if (!loaded) return null;
     const variant = getResolvedBasemapVariant(loaded);
     return variant?.geometryTable ?? loaded.geometryTable ?? null;
@@ -1431,11 +1462,6 @@ function createBasemapService() {
     );
 
     if (!variantMetadata) {
-      logger.warn('Basemap variant metadata not available', LogCategory.MAP, {
-        basemapId,
-        variantFile,
-        level
-      });
       return null;
     }
 
@@ -1497,12 +1523,12 @@ function createBasemapService() {
             return table;
           })
           .catch((error) => {
-            variant.failedLayerFiles.add(layerFile);
-            logger.warn('Failed to load basemap layer', LogCategory.MAP, {
-              basemapId: variant.metadata.file,
-              layerFile,
+            logger.error(
+              'Failed to load basemap layer table',
+              LogCategory.MAP,
               error
-            });
+            );
+            variant.failedLayerFiles.add(layerFile);
             return null;
           })
           .finally(() => {
@@ -1541,7 +1567,7 @@ function createBasemapService() {
     basemapId: string,
     layerTypes?: readonly BasemapLayerType[]
   ): Promise<boolean> {
-    const loadedBasemap = await loadBasemap(basemapId);
+    const loadedBasemap = await loadBasemapData(basemapId);
     if (!loadedBasemap) {
       return false;
     }
@@ -1669,11 +1695,13 @@ function createBasemapService() {
   }
 
   function reset(): void {
+    invalidateBasemapLoads();
     currentBasemap = null;
     geometryTablesInDuckDB.clear();
   }
 
   function clearCache(): void {
+    invalidateBasemapLoads();
     basemapCache.clear();
     geometryTablesInDuckDB.clear();
   }

@@ -1,5 +1,5 @@
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import * as m from '$lib/paraglide/messages';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { DatasetResult, ZipDatasetResult } from '../types';
 import {
   createFileFromExtracted,
@@ -14,29 +14,18 @@ import { processFileInternal } from './file-processor';
 export async function processZipFile(
   file: File
 ): Promise<DatasetResult | ZipDatasetResult> {
-  const start = performance.now();
+  const extraction = await extractZip(file);
 
-  try {
-    const extraction = await extractZip(file);
-
-    if (extraction.isShapefileArchive && extraction.shapefileBaseName) {
-      return processShapefileArchive(file, extraction, start);
-    }
-
-    return processGenericZip(file, extraction, start);
-  } catch (error) {
-    logger.error('Failed to process ZIP archive', LogCategory.DATA, {
-      fileName: file.name,
-      error
-    });
-    throw error;
+  if (extraction.isShapefileArchive && extraction.shapefileBaseName) {
+    return processShapefileArchive(file, extraction);
   }
+
+  return processGenericZip(file, extraction);
 }
 
 async function processShapefileArchive(
   file: File,
-  extraction: Awaited<ReturnType<typeof extractZip>>,
-  start: number
+  extraction: Awaited<ReturnType<typeof extractZip>>
 ): Promise<DatasetResult | ZipDatasetResult> {
   const shapefileFiles = getShapefileFilesFromArchive(
     extraction.files,
@@ -63,12 +52,6 @@ async function processShapefileArchive(
   dataset.sourceFileId = file.name;
   dataset.name = extraction.shapefileBaseName!;
 
-  logger.success('Shapefile from ZIP processed', LogCategory.DATA, {
-    datasetId: dataset.id,
-    baseName: extraction.shapefileBaseName,
-    durationMs: (performance.now() - start).toFixed(2)
-  });
-
   const otherFiles = getNonShapefileFilesFromArchive(
     extraction.files,
     extraction.shapefileBaseName!
@@ -78,14 +61,13 @@ async function processShapefileArchive(
     return dataset;
   }
 
-  return processAdditionalFiles(file, dataset, otherFiles, start);
+  return processAdditionalFiles(file, dataset, otherFiles);
 }
 
 async function processAdditionalFiles(
   file: File,
   shapefileDataset: DatasetResult,
-  otherFiles: Awaited<ReturnType<typeof extractZip>>['files'],
-  _start: number
+  otherFiles: Awaited<ReturnType<typeof extractZip>>['files']
 ): Promise<DatasetResult | ZipDatasetResult> {
   const additionalDatasets: DatasetResult[] = [];
   const skippedOtherFiles: string[] = [];
@@ -102,13 +84,10 @@ async function processAdditionalFiles(
 
       additionalDatasets.push(additionalDataset);
     } catch (error) {
-      logger.warn(
-        'Failed to process additional file from ZIP',
+      logger.error(
+        'Failed to process additional file from shapefile archive',
         LogCategory.DATA,
-        {
-          fileName: extractedFileInfo.name,
-          error
-        }
+        error
       );
       skippedOtherFiles.push(extractedFileInfo.name);
     }
@@ -130,8 +109,7 @@ async function processAdditionalFiles(
 
 async function processGenericZip(
   file: File,
-  extraction: Awaited<ReturnType<typeof extractZip>>,
-  start: number
+  extraction: Awaited<ReturnType<typeof extractZip>>
 ): Promise<DatasetResult | ZipDatasetResult> {
   const supportedFiles = getSupportedFilesFromArchive(extraction.files);
 
@@ -140,16 +118,15 @@ async function processGenericZip(
   }
 
   if (supportedFiles.length === 1) {
-    return processSingleFileFromZip(file, supportedFiles[0], start);
+    return processSingleFileFromZip(file, supportedFiles[0]);
   }
 
-  return processMultipleFilesFromZip(file, supportedFiles, start);
+  return processMultipleFilesFromZip(file, supportedFiles);
 }
 
 async function processSingleFileFromZip(
   zipFile: File,
-  extractedFileInfo: ExtractedFile,
-  start: number
+  extractedFileInfo: ExtractedFile
 ): Promise<DatasetResult> {
   const extractedFile = createFileFromExtracted(extractedFileInfo);
 
@@ -160,19 +137,12 @@ async function processSingleFileFromZip(
   dataset.sourceFileId = zipFile.name;
   dataset.name = extractedFileInfo.name;
 
-  logger.success('File from ZIP processed', LogCategory.DATA, {
-    datasetId: dataset.id,
-    extractedFile: extractedFileInfo.name,
-    durationMs: (performance.now() - start).toFixed(2)
-  });
-
   return dataset;
 }
 
 async function processMultipleFilesFromZip(
   zipFile: File,
-  supportedFiles: ExtractedFile[],
-  start: number
+  supportedFiles: ExtractedFile[]
 ): Promise<ZipDatasetResult> {
   const datasets: DatasetResult[] = [];
   const skippedFiles: string[] = [];
@@ -188,13 +158,10 @@ async function processMultipleFilesFromZip(
       dataset.name = extractedFileInfo.name;
       datasets.push(dataset);
     } catch (error) {
-      logger.warn(
-        'Failed to process file from ZIP, skipping',
+      logger.error(
+        'Failed to process file from ZIP archive',
         LogCategory.DATA,
-        {
-          fileName: extractedFileInfo.name,
-          error
-        }
+        error
       );
       skippedFiles.push(extractedFileInfo.name);
     }
@@ -211,13 +178,6 @@ async function processMultipleFilesFromZip(
     processedFiles: datasets.length,
     skippedFiles
   };
-
-  logger.success('ZIP archive processed', LogCategory.DATA, {
-    sourceZip: zipFile.name,
-    processedCount: datasets.length,
-    skippedCount: skippedFiles.length,
-    durationMs: (performance.now() - start).toFixed(2)
-  });
 
   return result;
 }
