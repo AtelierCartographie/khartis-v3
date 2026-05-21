@@ -43,4 +43,12 @@ describe('BasemapJoinStep reference basemap selection', () => {
       'dataTabState.basemapJoin.basemapSource === BasemapSource.OSM &&\n        Boolean(basemapSelected)'
     );
   });
+
+  it('hydrates dataset join metadata when finalizing a basemap join', () => {
+    expect(source).toContain('function syncSelectedDatasetJoinedBasemap');
+    expect(source).toContain(
+      'datasetsStore.updateDatasetJoinBasemap(datasetId, joinedBasemap)'
+    );
+    expect(source).toContain('syncSelectedDatasetJoinedBasemap(basemap.file)');
+  });
 });

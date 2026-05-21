@@ -643,6 +643,29 @@ describe('simplification store — undo', () => {
     expect(getSimplificationState().lastApplied).toBeUndefined();
   });
 
+  it('should escape custom basemap table names as SQL identifiers during undoLastSimplification', async () => {
+    mocks.currentBasemap = {
+      metadata: {
+        file: 'custom"map',
+        bbox: [0, 0, 5, 5],
+        layers: [{ type: 'polygon' }],
+        isCustom: true
+      }
+    };
+    mocks.duckQuery.mockResolvedValue([{ table_name: 'custom"map__raw' }]);
+
+    simplificationActions.setSource(SimplificationSource.Basemap);
+    await simplificationActions.applySimplification();
+
+    mocks.duckQuery.mockClear();
+    const undone = await simplificationActions.undoLastSimplification();
+
+    expect(undone).toBe(true);
+    expect(mocks.duckQuery).toHaveBeenCalledWith(
+      'CREATE OR REPLACE TABLE "custom""map" AS SELECT * FROM "custom""map__raw"'
+    );
+  });
+
   it('should restore the previous catalog basemap variant after undoLastSimplification', async () => {
     mocks.currentBasemap = {
       metadata: {

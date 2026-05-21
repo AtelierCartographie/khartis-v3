@@ -72,6 +72,22 @@ describe('resolveSuggestionCardAction', () => {
     ).toBe('clear');
   });
 
+  it('re-applies instead of clearing when the target visualization is inactive', () => {
+    const suggestion = createSuggestion();
+
+    expect(
+      resolveSuggestionCardAction(
+        {
+          displayedSuggestionKey: getSuggestionSignature(suggestion),
+          originSuggestionKey: getSuggestionSignature(suggestion),
+          hasRestoreState: true,
+          isTargetActive: false
+        },
+        suggestion
+      )
+    ).toBe('apply');
+  });
+
   it('re-applies the same origin suggestion when no restore state is available', () => {
     const suggestion = createSuggestion();
 

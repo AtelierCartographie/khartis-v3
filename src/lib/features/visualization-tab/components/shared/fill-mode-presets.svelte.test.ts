@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ChartTSne, StopFilledAlt } from 'carbon-icons-svelte';
 
 import { FillMode } from '$lib/features/commons/constants/visualization.constants';
 import {
@@ -42,6 +43,16 @@ describe('fill-mode-presets', () => {
       expect(item.label.length).toBeGreaterThan(0);
       expect(item.iconSize).toBe(16);
     });
+  });
+
+  it('uses the Figma-requested Carbon icons for unique fill and density fill', () => {
+    const items = buildFillModeItems(FILL_MODES_WITH_DENSITY);
+    expect(items[FILL_MODES_WITH_DENSITY.indexOf(FillMode.UNIQUE)]?.icon).toBe(
+      StopFilledAlt
+    );
+    expect(items[FILL_MODES_WITH_DENSITY.indexOf(FillMode.DENSITY)]?.icon).toBe(
+      ChartTSne
+    );
   });
 
   it('buildFillModeItems preserves the order of the input modes', () => {

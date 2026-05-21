@@ -251,6 +251,22 @@ describe('DiscretizationModal', () => {
     expect(select?.value).toBe('equal-interval');
   });
 
+  it('keeps rendering when an unknown panel method value reaches the description', () => {
+    const unknownMethod = 'quantiles' as never;
+    const { container } = render(DiscretizationPanel, {
+      method: unknownMethod,
+      breaks: [
+        { min: 0, max: 10, count: 1, color: '#111111' },
+        { min: 10, max: 20, count: 1, color: '#222222' }
+      ]
+    });
+
+    expect(container.querySelector('#classification-method')).not.toBeNull();
+    expect(container.textContent).toContain(
+      'Crée des seuils naturels avec la méthode K-means SQL.'
+    );
+  });
+
   it('should update both adjacent bounds when editing a shared break value in manual mode', async () => {
     const onbreakschange = vi.fn();
     const { container } = render(DiscretizationPanel, {

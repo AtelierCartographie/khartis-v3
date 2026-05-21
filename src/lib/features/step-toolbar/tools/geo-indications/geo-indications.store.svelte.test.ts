@@ -9,7 +9,7 @@ import {
   injectProjectionContext,
   mapInstanceStore
 } from '$lib/features/commons/stores/map-instance.store.svelte';
-import { hexToHsl } from '$lib/features/commons/utils/color-utils';
+import { hexToHsl, hslToHex } from '$lib/features/commons/utils/color-utils';
 import { formatActions } from '../format/format.store.svelte';
 
 const mocks = vi.hoisted(() => ({
@@ -65,9 +65,13 @@ describe('geo indications store responsive defaults', () => {
 
   it('starts the inset map from explicit inset colors', () => {
     expect(geoIndicationsState.insetMap.useBasemapColors).toBe(false);
-    expect(geoIndicationsState.insetMap.windowColor).toEqual(
-      hexToHsl('#ffffff')
-    );
+    expect(
+      hslToHex(
+        geoIndicationsState.insetMap.windowColor.hue,
+        geoIndicationsState.insetMap.windowColor.saturation,
+        geoIndicationsState.insetMap.windowColor.lightness
+      )
+    ).toBe('#DD5642');
     expect(geoIndicationsState.insetMap.continentColor).toEqual(
       hexToHsl('#d9d9d9')
     );

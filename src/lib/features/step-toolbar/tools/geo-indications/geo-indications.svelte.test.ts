@@ -4,6 +4,7 @@ import { DistanceUnit } from '$lib/features/commons/constants/ui.constants';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
+import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
 import * as m from '$lib/paraglide/messages';
 
 const mocks = vi.hoisted(() => ({
@@ -53,6 +54,7 @@ describe('geo-indications tool', () => {
     geoIndicationsActions.reset();
     basemapStyleStore.reset();
     mapInstanceStore.reset();
+    projectionStore.reset();
   });
 
   it('renders section toggles', () => {
@@ -244,6 +246,34 @@ describe('geo-indications tool', () => {
     expect(
       screen.getByText(m.geo_inset_map_unavailable_scale())
     ).toBeInTheDocument();
+  });
+
+  it('checks projected inset availability from geographic bounds', () => {
+    mapInstanceStore.setMapInstance(
+      createScaleMap(100, {
+        north: 60000,
+        south: 0,
+        east: 30000,
+        west: -30000
+      }) as never
+    );
+    projectionStore.setReferenceBbox(
+      [-30000, 0, 30000, 60000],
+      undefined,
+      true
+    );
+    projectionStore.setRenderProjection({
+      invert: ([x, y]: [number, number]) => [x / 1000, y / 1000]
+    } as never);
+
+    render(GeoIndications);
+
+    expect(
+      screen.getByRole('switch', { name: m.geo_inset_map() })
+    ).not.toBeDisabled();
+    expect(
+      screen.queryByText(m.geo_inset_map_unavailable_scale())
+    ).not.toBeInTheDocument();
   });
 
   it('updates the inset map size from the numeric input', async () => {

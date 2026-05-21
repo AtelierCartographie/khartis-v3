@@ -2,25 +2,57 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import type { BasemapLayerConfig } from '$lib/features/map/stores/basemap-layers.store.svelte';
 
-const { mockVisualizationStore, mockFacetsStore } = vi.hoisted(() => ({
-  mockVisualizationStore: {
-    activeVisualizations: [] as VisualizationConfig[],
-    visualizations: [] as VisualizationConfig[],
-    togglePrimitiveFilter: vi.fn(),
-    toggleVisualization: vi.fn(),
-    removeVisualization: vi.fn(),
-    setVisualizationOrder: vi.fn(),
-    setPrimitiveFilterOrder: vi.fn(),
-    duplicateVisualization: vi.fn(),
-    updateVisualization: vi.fn(),
-    renameVisualization: vi.fn()
-  },
-  mockFacetsStore: {
-    enabled: false,
-    baseVisualizationId: null as string | null,
-    generatedVisualizationIds: [] as string[]
-  }
-}));
+const {
+  mockVisualizationStore,
+  mockFacetsStore,
+  mockBasemapLayersStore,
+  mockBasemapAuxLayersStore,
+  mockBasemapStyleStore,
+  mockBasemapService
+} = vi.hoisted(() => {
+  const basemapLayersStore = {
+    layers: [] as Array<Record<string, unknown>>,
+    version: 0,
+    getLayer: vi.fn((id: string) =>
+      basemapLayersStore.layers.find((layer) => layer.id === id)
+    ),
+    setLayerVisibility: vi.fn(),
+    setLayerRenderGroupOrder: vi.fn()
+  };
+
+  return {
+    mockVisualizationStore: {
+      activeVisualizations: [] as VisualizationConfig[],
+      visualizations: [] as VisualizationConfig[],
+      togglePrimitiveFilter: vi.fn(),
+      toggleVisualization: vi.fn(),
+      removeVisualization: vi.fn(),
+      setVisualizationOrder: vi.fn(),
+      setPrimitiveFilterOrder: vi.fn(),
+      duplicateVisualization: vi.fn(),
+      updateVisualization: vi.fn(),
+      renameVisualization: vi.fn()
+    },
+    mockFacetsStore: {
+      enabled: false,
+      baseVisualizationId: null as string | null,
+      generatedVisualizationIds: [] as string[]
+    },
+    mockBasemapLayersStore: basemapLayersStore,
+    mockBasemapAuxLayersStore: {
+      version: 0,
+      isVisible: vi.fn(() => true),
+      setVisible: vi.fn()
+    },
+    mockBasemapStyleStore: {
+      referenceBasemapId: null as string | null
+    },
+    mockBasemapService: {
+      availableBasemaps: [] as Array<Record<string, unknown>>,
+      currentMetadata: null as Record<string, unknown> | null
+    }
+  };
+});
 
 vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => {
   const PrimitiveFilterType = {
@@ -129,15 +161,45 @@ vi.mock('$lib/features/step-toolbar/tools/facets/facets.store.svelte', () => ({
 
 vi.mock('$lib/features/map/stores/basemap-layers.store.svelte', () => ({
   BASEMAP_LAYER_ID: {
-    TERRE: 'terre'
+    TERRE: 'terre',
+    MERS: 'mers',
+    LACS: 'lacs',
+    RIVIERES: 'rivieres',
+    RELIEF: 'relief',
+    EQUATEUR: 'equateur',
+    MERIDIENS: 'meridiens',
+    FRONTIERES: 'frontieres',
+    VILLES: 'villes',
+    SPHERE: 'sphere'
   },
-  basemapLayersStore: {
-    layers: [],
-    version: 0,
-    setLayerVisibility: vi.fn(),
-    setLayerRenderGroupOrder: vi.fn()
-  },
-  getBasemapRenderGroup: vi.fn(() => 'background')
+  basemapLayersStore: mockBasemapLayersStore,
+  getBasemapRenderGroup: vi.fn((id: string) =>
+    id === 'frontieres' || id === 'rivieres' || id === 'villes'
+      ? 'foreground'
+      : 'background'
+  )
+}));
+
+vi.mock('$lib/features/map/stores/basemap-aux-layers.store.svelte', () => ({
+  basemapAuxLayersStore: mockBasemapAuxLayersStore
+}));
+
+vi.mock('$lib/features/commons/stores/basemap-style.store.svelte', () => ({
+  basemapStyleStore: mockBasemapStyleStore
+}));
+
+vi.mock('$lib/features/map/services/basemap.service.svelte', () => ({
+  basemapService: mockBasemapService,
+  getPreferredBasemapFile: vi.fn(
+    (_basemaps, referenceBasemapId: string) => referenceBasemapId
+  )
+}));
+
+vi.mock('$lib/features/map/utils/basemap-metadata-resolution.utils', () => ({
+  resolveActiveBasemapMetadata: vi.fn(
+    ({ referenceBasemapId, currentMetadata }) =>
+      referenceBasemapId ? currentMetadata : null
+  )
 }));
 
 import {
@@ -151,6 +213,7 @@ import {
   MissingDataShape,
   ShapeType
 } from '$lib/features/commons/constants/visualization.constants';
+import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import {
   getBasemapLayerColor,
   getVisualizationColor,
@@ -204,11 +267,56 @@ function createVisualization(
   };
 }
 
+function resetBasemapLayerMocks(): void {
+  mockBasemapStyleStore.referenceBasemapId = null;
+  mockBasemapService.availableBasemaps = [];
+  mockBasemapService.currentMetadata = null;
+  mockBasemapAuxLayersStore.version = 0;
+  mockBasemapAuxLayersStore.isVisible.mockReturnValue(true);
+  mockBasemapLayersStore.layers = [
+    {
+      id: 'mers',
+      visible: true,
+      color: '#d0e2ff',
+      opacity: 100
+    },
+    {
+      id: 'sphere',
+      visible: true,
+      color: '#8d8d8d',
+      thickness: 1,
+      opacity: 100
+    },
+    {
+      id: 'frontieres',
+      visible: true,
+      color: '#525252',
+      dotted: false,
+      dottedPattern: BasemapDottedPattern.DOTS,
+      thickness: 1,
+      opacity: 100
+    },
+    {
+      id: 'meridiens',
+      visible: true,
+      color: '#e0e0e0',
+      dotted: true,
+      dottedPattern: BasemapDottedPattern.DOTS,
+      thickness: 1,
+      opacity: 100
+    }
+  ];
+}
+
 describe('layers color helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockVisualizationStore.activeVisualizations = [];
     mockVisualizationStore.visualizations = [];
+    mockFacetsStore.enabled = false;
+    mockFacetsStore.baseVisualizationId = null;
+    mockFacetsStore.generatedVisualizationIds = [];
+    resetBasemapLayerMocks();
   });
 
   it('uses the classification palette before a white outline for choropleths', () => {
@@ -434,6 +542,114 @@ describe('layers color helpers', () => {
     expect(mockVisualizationStore.togglePrimitiveFilter).toHaveBeenCalledWith(
       'viz-1',
       PrimitiveFilterType.POINT
+    );
+  });
+
+  it('builds Calques sublayers from active basemap metadata instead of static legacy layers', () => {
+    const visualization = createVisualization();
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+    mockBasemapStyleStore.referenceBasemapId = 'world';
+    mockBasemapService.currentMetadata = {
+      file: 'world',
+      layers: [
+        {
+          title_fr: 'Frontières des pays',
+          title_en: 'Country borders',
+          type: BasemapLayerType.LIMIT,
+          file: 'world-limit-countries.parquet'
+        },
+        {
+          title_fr: 'Frontières administratives',
+          title_en: 'Administrative borders',
+          type: BasemapLayerType.LIMIT,
+          file: 'world-limit-admin.parquet'
+        },
+        {
+          title_fr: 'Graticules (10°)',
+          title_en: 'Graticules (10°)',
+          type: BasemapLayerType.GRATICULE,
+          file: 'world-graticule.parquet'
+        },
+        {
+          title_fr: 'Lignes remarquables',
+          title_en: 'Remarkable lines',
+          type: BasemapLayerType.GEOGRAPHIC_LINES,
+          file: 'world-geographic-lines.parquet'
+        }
+      ]
+    };
+
+    layersActions.syncWithVisualizations();
+
+    expect(layersState.layers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'viz-1::basemap::synthetic:mers',
+          basemapLayerId: 'mers'
+        }),
+        expect.objectContaining({
+          id: 'viz-1::basemap::synthetic:sphere',
+          basemapLayerId: 'sphere'
+        }),
+        expect.objectContaining({
+          id: 'viz-1::basemap::world-limit-countries.parquet',
+          basemapLayerId: 'frontieres',
+          basemapFile: 'world',
+          basemapLayerKey: 'world-limit-countries.parquet',
+          name: 'Frontières des pays'
+        }),
+        expect.objectContaining({
+          id: 'viz-1::basemap::world-limit-admin.parquet',
+          basemapLayerId: 'frontieres',
+          basemapFile: 'world',
+          basemapLayerKey: 'world-limit-admin.parquet',
+          name: 'Frontières administratives'
+        }),
+        expect.objectContaining({
+          id: 'viz-1::basemap::world-graticule.parquet',
+          basemapLayerId: 'meridiens',
+          name: 'Graticules (10°)'
+        })
+      ])
+    );
+    expect(
+      layersState.layers.some(
+        (layer) => layer.basemapLayerKey === 'world-geographic-lines.parquet'
+      )
+    ).toBe(false);
+  });
+
+  it('toggles metadata LIMIT entries through entry-scoped aux visibility without disabling all Frontieres', () => {
+    const visualization = createVisualization();
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+    mockBasemapStyleStore.referenceBasemapId = 'world';
+    mockBasemapService.currentMetadata = {
+      file: 'world',
+      layers: [
+        {
+          title_fr: 'Frontières des pays',
+          title_en: 'Country borders',
+          type: BasemapLayerType.LIMIT,
+          file: 'world-limit-countries.parquet'
+        }
+      ]
+    };
+
+    layersActions.syncWithVisualizations();
+    layersActions.toggleLayerVisibility(
+      'viz-1::basemap::world-limit-countries.parquet'
+    );
+
+    expect(mockBasemapAuxLayersStore.setVisible).toHaveBeenCalledWith(
+      'world',
+      'world-limit-countries.parquet',
+      false
+    );
+    expect(mockBasemapLayersStore.setLayerVisibility).not.toHaveBeenCalledWith(
+      'frontieres',
+      false
     );
   });
 

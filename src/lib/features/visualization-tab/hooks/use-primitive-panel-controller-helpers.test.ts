@@ -495,6 +495,36 @@ describe('use-primitive-panel-controller', () => {
     ]);
   });
 
+  it('initializes polygon fill classes with the polygon-specific four-class default', () => {
+    const harness = createHarness({
+      visualization: {
+        ...createVisualization(),
+        polygon: {
+          ...createVisualization().polygon,
+          fillMode: FillMode.CLASSES,
+          classification: undefined
+        }
+      } as VisualizationConfig
+    });
+
+    harness.controller.ensurePrimitiveClassificationDefaults(
+      PrimitiveFilterType.POLYGON,
+      harness.visualization
+    );
+
+    expect(harness.primitiveClassificationUpdates).toEqual([
+      {
+        primitive: PrimitiveFilterType.POLYGON,
+        updates: {
+          method: ClassificationMethod.KMEANS,
+          classes: 4,
+          numClasses: 4
+        },
+        options: undefined
+      }
+    ]);
+  });
+
   it('does not treat the color classification as an existing thickness classification', () => {
     const harness = createHarness({
       visualization: {
