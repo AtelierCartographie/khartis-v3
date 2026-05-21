@@ -1,3 +1,9 @@
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import type { ProjectionState } from '$lib/features/step-toolbar/tools/projections';
+import type { BBox, CanvasSize } from '../types';
+import type { ProjectionPresets } from '../types/basemap.types';
+import { buildCompositeProjectionFromPresetId } from './geoarrow-stream-bridge.utils';
+import { proj4d3 } from './proj4d3.utils';
 import { type GeoProjection } from 'd3-geo';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
 import {
@@ -5,12 +11,6 @@ import {
   getProjectionById
 } from '$lib/features/commons/utils/projection.utils';
 import { buildD3ProjectionFromConfig } from '$lib/features/commons/utils/d3-projection-config.utils';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import type { ProjectionState } from '$lib/features/step-toolbar/tools/projections';
-import type { BBox, CanvasSize } from '../types';
-import type { ProjectionPresets } from '../types/basemap.types';
-import { buildCompositeProjectionFromPresetId } from './geoarrow-stream-bridge.utils';
-import { proj4d3 } from './proj4d3.utils';
 
 export const COMPOSITE_PROJECTION_PREFIX = 'composite:';
 
@@ -213,15 +213,6 @@ export function resolveUserProjectionOverride({
           projectionPresets
         )
       ) {
-        logger.warn(
-          'Composite projection is incompatible with current bbox',
-          LogCategory.MAP,
-          {
-            selected: state.selected,
-            presetId,
-            fitBbox
-          }
-        );
         return undefined;
       }
 

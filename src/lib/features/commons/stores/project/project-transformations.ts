@@ -1,4 +1,3 @@
-import { LogCategory, logger } from '../../utils/logger';
 import type { UploadedFile } from '../../types/create-project.types';
 import type { ColumnTransformation } from '../../types/create-project.types';
 import type { ProjectStateContainer } from './project-state.svelte';
@@ -104,9 +103,6 @@ export async function addDeletedRows(
 ): Promise<void> {
   const fileIndex = getSourceFileIndex(container, fileId);
   if (fileIndex === -1) {
-    logger.warn('File not found for adding deleted rows', LogCategory.PROJECT, {
-      fileId
-    });
     return;
   }
 

@@ -276,8 +276,8 @@ async function showTooltipForResult(
       }));
 
     mapTooltipStore.pinAt(160, 200, entries, null, rowId - 1);
-  } catch (error) {
-    logger.error('Error pinning search tooltip', LogCategory.UI, error);
+  } catch {
+    // Tooltip failure must not block result navigation.
   }
 }
 

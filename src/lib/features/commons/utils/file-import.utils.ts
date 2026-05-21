@@ -229,7 +229,18 @@ export function validateGeospatialFile(
     logger.error(
       'Failed to validate GeoJSON structure',
       LogCategory.FILE,
-      error
+      error,
+      {
+        feature: 'data',
+        flow: 'validate_geospatial_file',
+        extra: {
+          contentType: typeof content,
+          contentLength:
+            typeof content === 'string'
+              ? content.length
+              : (content as ArrayBuffer).byteLength
+        }
+      }
     );
     errors.push(m.validation_json_bad_structure());
   }

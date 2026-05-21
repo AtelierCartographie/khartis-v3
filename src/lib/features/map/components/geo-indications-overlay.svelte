@@ -15,6 +15,7 @@
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
   import { projectionStore } from '../stores/projection.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
   import {
     clampFontSize,
@@ -63,7 +64,6 @@
   import { getLegendState } from '$lib/features/step-toolbar/tools/legend';
   import * as m from '$lib/paraglide/messages';
   import { GEOJSON_TYPE } from '$lib/features/commons/constants';
-  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { readGeoParquetViaDuckDB } from '../services/read-geojson-arrow.service';
   import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
@@ -158,10 +158,6 @@
         );
         const geoInfo = extractGeometryInfo(arrowTable);
         if (!geoInfo) {
-          logger.warn(
-            'Inset map: no geometry info found in parquet',
-            LogCategory.MAP
-          );
           return;
         }
         const geojson = arrowTableToGeoJSON(arrowTable, geoInfo.geoColumn);
@@ -169,12 +165,12 @@
           worldFeatures = toWorldFeatureCollection(geojson);
         }
       } catch (error) {
-        logger.warn(
-          'Failed to load inset map world features',
-          LogCategory.MAP,
-          error
-        );
         if (!cancelled) {
+          logger.error(
+            'Failed to load inset world basemap',
+            LogCategory.MAP,
+            error
+          );
           worldFeatures = null;
         }
       }

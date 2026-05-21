@@ -2,12 +2,11 @@ import {
   IGNORED_FILE_PREFIXES,
   SHAPEFILE_EXTENSIONS
 } from '$lib/features/commons/constants/ui.constants';
+import * as m from '$lib/paraglide/messages';
+import { unzip, type Unzipped, type FlateError } from 'fflate';
 import { MIME } from '$lib/features/commons/constants';
 import { PIPELINE_CONST } from '../constants';
 import { getFileExtensionWithDot } from '$lib/features/commons/utils/file.utils';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import * as m from '$lib/paraglide/messages';
-import { unzip, type Unzipped, type FlateError } from 'fflate';
 
 export interface ExtractedFile {
   name: string;
@@ -44,8 +43,6 @@ function getFileName(path: string): string {
 }
 
 export async function extractZip(file: File): Promise<ZipExtractionResult> {
-  const start = performance.now();
-
   try {
     const buffer = await file.arrayBuffer();
     const unzipped = await new Promise<Unzipped>((resolve, reject) => {
@@ -77,22 +74,11 @@ export async function extractZip(file: File): Promise<ZipExtractionResult> {
 
     const shapefileInfo = detectShapefileInArchive(files);
 
-    logger.success('ZIP archive extracted', LogCategory.DATA, {
-      fileName: file.name,
-      extractedFiles: files.length,
-      isShapefileArchive: shapefileInfo.isShapefileArchive,
-      durationMs: (performance.now() - start).toFixed(2)
-    });
-
     return {
       files,
       ...shapefileInfo
     };
   } catch (error) {
-    logger.error('Failed to extract ZIP archive', LogCategory.DATA, {
-      fileName: file.name,
-      error
-    });
     throw new Error(
       m.pipeline_error_zip_extract_failed({
         error: error instanceof Error ? error.message : String(error)

@@ -125,13 +125,6 @@ function createGlobalStore() {
           ensureDatasetSelectionForSourceFile(selectedDataButtonState.id);
         }
       } else if (selectedDataButtonState.id) {
-        logger.info(
-          '[global-store] clearing selected data button because project has no source files',
-          LogCategory.UI,
-          {
-            previousSelectedDataButtonId: selectedDataButtonState.id
-          }
-        );
         selectedDataButtonState.id = undefined;
       }
     } finally {

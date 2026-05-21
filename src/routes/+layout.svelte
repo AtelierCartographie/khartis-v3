@@ -20,7 +20,6 @@
   import { EVENT } from '$lib/features/commons/constants/dom.constants';
   import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 
-  initializeStores();
   import '$lib/features/commons/stores/locale.store.svelte';
   import { setLocale, locales, cookieName } from '$lib/paraglide/runtime.js';
   import Header from '$lib/features/header/header.svelte';
@@ -47,6 +46,10 @@
     resolveWorkspaceViewportBounds,
     type WorkspaceViewportBounds
   } from '$lib/features/commons/utils/workspace-viewport.utils';
+  import {
+    getMainToolbarActualWidthPx,
+    getMainToolbarMaxWidthPx
+  } from '$lib/features/main-toolbar/main-toolbar.constants';
   import StepToolbar from '$lib/features/step-toolbar/step-toolbar.svelte';
   import { Theme } from 'carbon-components-svelte';
   import GlobalLoadingIndicator from '$lib/features/commons/components/global-loading-indicator.svelte';
@@ -67,14 +70,20 @@
   import '$lib/features/commons/assets/styles/spacing.css';
   import '$lib/features/commons/assets/styles/theming.css';
 
+  initializeStores();
+
   let { children } = $props();
   let isLoading = $state(true);
   let previousStep = $state<ToolbarStep | null>(null);
   let stylingElementsInitializedForProject = $state<string | null>(null);
+  let windowWidth = $state(
+    typeof window !== 'undefined' ? window.innerWidth : 0
+  );
   const ENABLE_BEFOREUNLOAD_CONFIRMATION = false;
 
   const handleResize = () => {
     globalActions.setMobileView(window.innerWidth < MOBILE_BREAKPOINT);
+    windowWidth = window.innerWidth;
   };
 
   $effect(() => {
@@ -176,11 +185,6 @@
           );
           globalState.isCreateProjectModalOpen = true;
         });
-
-        logger.debug(
-          'UI ready — data services loading in background',
-          LogCategory.SYSTEM
-        );
       } catch (error) {
         logger.error(
           'Project store initialization failed',
@@ -322,7 +326,20 @@
   let observedPageElement: HTMLElement | null = null;
 
   const pagePan = $derived(globalState.zoom.pagePanOffset);
-  const workspaceCenteringOffsetX = $derived(stepToolbarWidth / 2);
+  const mainToolbarMaxWidth = $derived(
+    getMainToolbarMaxWidthPx(windowWidth, globalState.isMobileView)
+  );
+  const mainToolbarActualWidth = $derived(
+    getMainToolbarActualWidthPx(
+      globalState.toolbarState,
+      globalState.selectedStep,
+      windowWidth,
+      globalState.isMobileView
+    )
+  );
+  const workspaceCenteringOffsetX = $derived(
+    (stepToolbarWidth + mainToolbarActualWidth - mainToolbarMaxWidth) / 2
+  );
   const workspaceCameraStyle = $derived(
     `transform: translate(${pagePan.x + workspaceCenteringOffsetX}px, ${pagePan.y}px);`
   );

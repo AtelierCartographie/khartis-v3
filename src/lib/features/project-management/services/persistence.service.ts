@@ -1,8 +1,3 @@
-import { estimateProjectStorageSize } from '$lib/features/commons/utils/size-estimation.utils';
-import {
-  safeJsonParse,
-  safeJsonStringify
-} from '$lib/features/commons/utils/clone.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { m } from '$lib/paraglide/messages.js';
 import type { SerializedProject } from '$lib/types/serialization.types';
@@ -21,6 +16,11 @@ import {
   saveMetadataStoreValue
 } from './database-access.service';
 import { migrateIfNeeded } from '../core/schema-migration';
+import { estimateProjectStorageSize } from '$lib/features/commons/utils/size-estimation.utils';
+import {
+  safeJsonParse,
+  safeJsonStringify
+} from '$lib/features/commons/utils/clone.utils';
 
 export { openProjectDatabase as openDatabase };
 
@@ -101,10 +101,12 @@ export async function loadProject(id: string): Promise<KhartisProject | null> {
     const project = await deserialize(serializedProject);
     return project;
   } catch (error) {
-    logger.error('Failed to deserialize project', LogCategory.PERSISTENCE, {
-      id,
-      error
-    });
+    logger.error(
+      'Failed to deserialize project',
+      LogCategory.PERSISTENCE,
+      { id, error },
+      { feature: 'project', flow: 'deserialize_project' }
+    );
     return null;
   }
 }

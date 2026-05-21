@@ -114,4 +114,13 @@ describe('dataOrchestratorService restore pipeline', () => {
     expect(source).toContain('await duckDBOrchestrator.finalizeJoin(');
     expect(source).toContain('dataTabStore.markStepComplete(stepIndex);');
   });
+
+  it('guards restored tabular joins with the active project runtime snapshot', () => {
+    expect(source).toContain('restoreRun: ProjectRuntimeSnapshot');
+    expect(source).toContain('restoreTabularJoinCompletion(');
+    expect(source).toContain('!isCurrentProjectRuntime(restoreRun)');
+    expect(source).toContain(
+      'await restorePersistedDataTabState(\n            currentProject,\n            restoreToken,\n            restoreRun'
+    );
+  });
 });

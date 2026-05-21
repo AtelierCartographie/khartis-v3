@@ -1,7 +1,3 @@
-import { MIME } from '$lib/features/commons/constants';
-import { DataValidationError } from '$lib/features/commons/pipeline.errors';
-import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck, initDuckDB } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
 import { validateFile } from './core/validators';
@@ -21,6 +17,9 @@ import type {
   ZipDatasetResult
 } from './types';
 import { isZipFile } from './utils/zip-handler';
+import { MIME } from '$lib/features/commons/constants';
+import { DataValidationError } from '$lib/features/commons/pipeline.errors';
+import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 
 export { createFileFromUpload };
 
@@ -49,19 +48,8 @@ const Pipeline = {
 
   async initialize(): Promise<void> {
     if (initialized) return;
-    const start = performance.now();
-    try {
-      await initDuckDB();
-      initialized = true;
-      logger.success('Data pipeline ready', LogCategory.DATA, {
-        durationMs: (performance.now() - start).toFixed(2)
-      });
-    } catch (error) {
-      logger.error('Data pipeline initialization failed', LogCategory.DATA, {
-        error
-      });
-      throw error;
-    }
+    await initDuckDB();
+    initialized = true;
   },
 
   async processFile(file: File): Promise<DatasetResult | ZipDatasetResult> {
@@ -83,55 +71,43 @@ const Pipeline = {
     originalFile?: File
   ): Promise<DatasetResult | ZipDatasetResult> {
     await this.initialize();
-    const start = performance.now();
-    try {
-      let result: DatasetResult | ZipDatasetResult;
+    let result: DatasetResult | ZipDatasetResult;
 
-      if (originalFile && isZipFile(originalFile)) {
-        result = await processZipFile(originalFile);
-      } else if (originalFile) {
-        const companionFiles = uploadedFile.relatedFileObjects?.filter(
-          (f: File) => f.name.toLowerCase() !== originalFile.name.toLowerCase()
-        );
-        result = await processFileInternal(originalFile, {
+    if (originalFile && isZipFile(originalFile)) {
+      result = await processZipFile(originalFile);
+    } else if (originalFile) {
+      const companionFiles = uploadedFile.relatedFileObjects?.filter(
+        (f: File) => f.name.toLowerCase() !== originalFile.name.toLowerCase()
+      );
+      result = await processFileInternal(originalFile, {
+        companionFiles
+      });
+    } else {
+      const fallback = await createFileFromUpload(uploadedFile);
+      if (isZipFile(fallback)) {
+        result = await processZipFile(fallback);
+      } else {
+        const companionFiles =
+          await createCompanionFilesFromUpload(uploadedFile);
+        result = await processFileInternal(fallback, {
           companionFiles
         });
-      } else {
-        const fallback = await createFileFromUpload(uploadedFile);
-        if (isZipFile(fallback)) {
-          result = await processZipFile(fallback);
-        } else {
-          const companionFiles =
-            await createCompanionFilesFromUpload(uploadedFile);
-          result = await processFileInternal(fallback, {
-            companionFiles
-          });
-        }
       }
-
-      if ('datasets' in result) {
-        for (const dataset of result.datasets) {
-          dataset.sourceFileId = uploadedFile.id;
-          applyGeoDetection(dataset, uploadedFile.deepAnalysis?.geoDetection);
-        }
-      } else {
-        result.id = uploadedFile.datasetId ?? uploadedFile.id;
-        result.sourceFileId = uploadedFile.id;
-        result.name = uploadedFile.name;
-        applyGeoDetection(result, uploadedFile.deepAnalysis?.geoDetection);
-      }
-
-      logger.success('Uploaded file processed', LogCategory.DATA, {
-        durationMs: (performance.now() - start).toFixed(2)
-      });
-      return result;
-    } catch (error) {
-      logger.error('Failed to process uploaded file', LogCategory.DATA, {
-        fileId: uploadedFile.id,
-        error
-      });
-      throw error;
     }
+
+    if ('datasets' in result) {
+      for (const dataset of result.datasets) {
+        dataset.sourceFileId = uploadedFile.id;
+        applyGeoDetection(dataset, uploadedFile.deepAnalysis?.geoDetection);
+      }
+    } else {
+      result.id = uploadedFile.datasetId ?? uploadedFile.id;
+      result.sourceFileId = uploadedFile.id;
+      result.name = uploadedFile.name;
+      applyGeoDetection(result, uploadedFile.deepAnalysis?.geoDetection);
+    }
+
+    return result;
   },
 
   async processRemoteFile(
