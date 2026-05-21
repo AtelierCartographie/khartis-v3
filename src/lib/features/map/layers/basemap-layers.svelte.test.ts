@@ -438,6 +438,35 @@ describe('basemap projection fallbacks', () => {
     );
   });
 
+  it('uses the projected canvas extent for mers when it is available', () => {
+    const layer = createMersLayer(
+      {
+        id: 'mers',
+        visible: true,
+        color: '#006dff',
+        opacity: 100
+      },
+      {
+        projection: geoEquirectangular() as ProjectionLike,
+        graticuleClipExtent: [
+          [-180, -90],
+          [180, 90]
+        ]
+      }
+    ) as GeoJsonLayer | null;
+
+    const data = layer?.props.data as FeatureCollection<Polygon> | undefined;
+
+    expect(layer).toBeInstanceOf(GeoJsonLayer);
+    expect(data?.features[0]?.geometry.coordinates[0]).toEqual([
+      [-180, -90],
+      [180, -90],
+      [180, 90],
+      [-180, 90],
+      [-180, -90]
+    ]);
+  });
+
   it('falls back to composite screen extents when projected sphere parsing is empty', () => {
     const mainlandBounds: BBox = [-10, 35, 40, 72];
     const emptyProjection = {

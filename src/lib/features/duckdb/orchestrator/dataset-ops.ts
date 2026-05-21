@@ -314,36 +314,57 @@ export function updateDatasetJoinInfo(
       DuckDBDataset,
       'joinedBasemap' | 'geoColumn' | 'gpsMode' | 'gpsColumns'
     >
-  >
-): void {
+  >,
+  options: { bumpVersion?: boolean } = {}
+): boolean {
+  let changed = false;
   updateDatasets((datasets) => {
     const ds = datasets.get(datasetId);
     if (ds) {
-      if ('joinedBasemap' in joinInfo) {
-        ds.joinedBasemap = joinInfo.joinedBasemap;
-      }
-      if ('geoColumn' in joinInfo) {
-        ds.geoColumn = joinInfo.geoColumn;
-      }
-      if ('gpsMode' in joinInfo) {
-        ds.gpsMode = joinInfo.gpsMode;
-      }
-      if ('gpsColumns' in joinInfo) {
-        ds.gpsColumns = joinInfo.gpsColumns;
+      const nextJoinedBasemap =
+        'joinedBasemap' in joinInfo ? joinInfo.joinedBasemap : ds.joinedBasemap;
+      const nextGpsMode = 'gpsMode' in joinInfo ? joinInfo.gpsMode : ds.gpsMode;
+      const nextGeoColumn =
+        nextGpsMode === true
+          ? undefined
+          : 'geoColumn' in joinInfo
+            ? joinInfo.geoColumn
+            : ds.geoColumn;
+      const nextGpsColumns =
+        nextGpsMode === false
+          ? undefined
+          : 'gpsColumns' in joinInfo
+            ? joinInfo.gpsColumns
+            : ds.gpsColumns;
+
+      changed =
+        ds.joinedBasemap !== nextJoinedBasemap ||
+        ds.geoColumn !== nextGeoColumn ||
+        ds.gpsMode !== nextGpsMode ||
+        !areGpsColumnsEqual(ds.gpsColumns, nextGpsColumns);
+
+      if (!changed) {
+        return;
       }
 
-      if (joinInfo.gpsMode === false) {
-        ds.gpsColumns = undefined;
-      }
-
-      if (joinInfo.gpsMode === true) {
-        ds.geoColumn = undefined;
-      }
-
+      ds.joinedBasemap = nextJoinedBasemap;
+      ds.geoColumn = nextGeoColumn;
+      ds.gpsMode = nextGpsMode;
+      ds.gpsColumns = nextGpsColumns;
       ds.arrowTableWithMetadata = undefined;
     }
   });
-  bumpDatasetsVersion();
+  if (changed && options.bumpVersion !== false) {
+    bumpDatasetsVersion();
+  }
+  return changed;
+}
+
+function areGpsColumnsEqual(
+  left: DuckDBDataset['gpsColumns'],
+  right: DuckDBDataset['gpsColumns']
+): boolean {
+  return left?.lat === right?.lat && left?.lon === right?.lon;
 }
 
 export async function updateDatasetTableName(

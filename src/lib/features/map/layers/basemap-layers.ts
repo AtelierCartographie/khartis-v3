@@ -751,23 +751,6 @@ export function createMersLayer(
   const layerId = buildLayerId(DeckLayerId.BASEMAP_MERS, ctx.projectionSuffix);
 
   if (ctx.projection) {
-    const sphereData = parseSphere(ctx.projection, {
-      output: 'polygon'
-    }) as BinaryPolygonData;
-
-    if (hasSpherePolygon(sphereData)) {
-      return new SolidPolygonLayer({
-        id: layerId,
-        ...createCompatibleSolidPolygonLayerProps(sphereData),
-        coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-        getFillColor: withOpacity(fillColor, opacity),
-        ...getBaseLayerProps(ctx),
-        updateTriggers: {
-          getFillColor: [config.color, config.opacity]
-        }
-      });
-    }
-
     const projectedCompositeOceanData = createProjectedCompositeOceanData(
       ctx.projection,
       ctx.bbox,
@@ -780,6 +763,23 @@ export function createMersLayer(
         data: projectedCompositeOceanData,
         filled: true,
         stroked: false,
+        coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+        getFillColor: withOpacity(fillColor, opacity),
+        ...getBaseLayerProps(ctx),
+        updateTriggers: {
+          getFillColor: [config.color, config.opacity]
+        }
+      });
+    }
+
+    const sphereData = parseSphere(ctx.projection, {
+      output: 'polygon'
+    }) as BinaryPolygonData;
+
+    if (hasSpherePolygon(sphereData)) {
+      return new SolidPolygonLayer({
+        id: layerId,
+        ...createCompatibleSolidPolygonLayerProps(sphereData),
         coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
         getFillColor: withOpacity(fillColor, opacity),
         ...getBaseLayerProps(ctx),

@@ -5,11 +5,13 @@ import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.type
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
+import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { detectSemioType } from '$lib/features/commons/utils/semio-detector.utils';
 import {
   extractGeoArrowMetadata,
   type ProcessedDataset
 } from '$lib/features/data-pipeline';
+import { isGeometryColumnType } from '$lib/features/data-pipeline/operations/geometry';
 import {
   SavePriority,
   persistenceRegistry
@@ -480,7 +482,9 @@ export const duckDBOrchestrator = {
         options
       );
 
-      datasetOps.updateDatasetJoinInfo(dataset.id, result);
+      datasetOps.updateDatasetJoinInfo(dataset.id, result, {
+        bumpVersion: false
+      });
       invalidateDatasetCache(dataset.tableName);
       state.bumpDatasetsVersion();
     } catch (error) {
@@ -678,14 +682,24 @@ export const duckDBOrchestrator = {
     if (!dataset || !dataset.tableName) return null;
 
     try {
+      const tableInfo = await Duck.describe_table(dataset.tableName);
+      const geometryColumn = tableInfo.name.find((_, index) =>
+        isGeometryColumnType(tableInfo.type[index])
+      );
+      if (!geometryColumn) {
+        return null;
+      }
+
+      const escapedTable = escapeIdentifier(dataset.tableName);
+      const escapedGeometryColumn = escapeIdentifier(geometryColumn);
       const rows = (await Duck.query(
         `SELECT
-           MIN(ST_XMin(geom)) AS minx,
-           MIN(ST_YMin(geom)) AS miny,
-           MAX(ST_XMax(geom)) AS maxx,
-           MAX(ST_YMax(geom)) AS maxy
-         FROM "${dataset.tableName}"
-         WHERE geom IS NOT NULL`,
+           MIN(ST_XMin("${escapedGeometryColumn}")) AS minx,
+           MIN(ST_YMin("${escapedGeometryColumn}")) AS miny,
+           MAX(ST_XMax("${escapedGeometryColumn}")) AS maxx,
+           MAX(ST_YMax("${escapedGeometryColumn}")) AS maxy
+         FROM "${escapedTable}"
+         WHERE "${escapedGeometryColumn}" IS NOT NULL`,
         { format: 'array' }
       )) as Array<{
         minx: number | null;

@@ -68,6 +68,8 @@
     new SvelteMap<string, SplitRenderingTable>()
   );
   let displayDataVersion = $state(0);
+  const joinedBasemapDisplayKeys = new SvelteMap<string, string>();
+  const joinedBasemapDisplayLoads = new SvelteMap<string, Promise<void>>();
 
   const enabledDatasets = $derived(datasetsStore.enabledDatasets);
   const mapDisplayDatasets = $derived.by(() =>
@@ -449,6 +451,7 @@
     const removedDensityTable = displayDensityTables.delete(datasetId);
     const removedGeoJSON = displayGeoJSONs.delete(datasetId);
     const removedSplit = displaySplitData.delete(datasetId);
+    joinedBasemapDisplayKeys.delete(datasetId);
 
     if (removedTable || removedDensityTable || removedGeoJSON || removedSplit) {
       if (removedTable) {
@@ -465,6 +468,20 @@
       }
       bumpDisplayDataVersion();
     }
+  }
+
+  function getJoinedBasemapDisplayKey(
+    datasetId: string,
+    joinedBasemap: string,
+    tableName: string
+  ): string {
+    return [
+      datasetId,
+      joinedBasemap,
+      tableName,
+      duckDBOrchestrator.datasetsVersion,
+      basemapService.simplificationVersion
+    ].join('::');
   }
 
   function findActiveDensityViz(datasetId: string): VisualizationConfig | null {
@@ -493,7 +510,53 @@
   ): Promise<void> {
     const start = performance.now();
     const datasetId = dataset.id;
+    const displayKey = getJoinedBasemapDisplayKey(
+      datasetId,
+      joinedBasemap,
+      tableName
+    );
 
+    if (joinedBasemapDisplayKeys.get(datasetId) === displayKey) {
+      return;
+    }
+
+    const loadKey = `${displayKey}::${generation}`;
+    const existingLoad = joinedBasemapDisplayLoads.get(loadKey);
+    if (existingLoad) {
+      await existingLoad;
+      return;
+    }
+
+    const loadPromise = (async () => {
+      await loadJoinedBasemapForDisplay(
+        dataset,
+        joinedBasemap,
+        tableName,
+        generation,
+        displayKey,
+        start
+      );
+    })();
+
+    joinedBasemapDisplayLoads.set(loadKey, loadPromise);
+    try {
+      await loadPromise;
+    } finally {
+      if (joinedBasemapDisplayLoads.get(loadKey) === loadPromise) {
+        joinedBasemapDisplayLoads.delete(loadKey);
+      }
+    }
+  }
+
+  async function loadJoinedBasemapForDisplay(
+    dataset: DatasetResult,
+    joinedBasemap: string,
+    tableName: string,
+    generation: number,
+    displayKey: string,
+    start: number
+  ): Promise<void> {
+    const datasetId = dataset.id;
     logger.info('Loading joined basemap for tabular dataset', LogCategory.MAP, {
       datasetId,
       joinedBasemap,
@@ -519,6 +582,7 @@
           dataset: datasetArrow,
           featureIdColumn
         });
+        joinedBasemapDisplayKeys.set(datasetId, displayKey);
         logger.success(
           'Split joined basemap ready for rendering',
           LogCategory.MAP,
@@ -546,6 +610,7 @@
 
       if (joinedTable) {
         setDisplayArrowTable(datasetId, joinedTable);
+        joinedBasemapDisplayKeys.set(datasetId, displayKey);
         logger.success('Joined basemap ready for rendering', LogCategory.MAP, {
           datasetId,
           rows: joinedTable.numRows,
@@ -555,10 +620,12 @@
         logger.warn('No joined data returned for dataset', LogCategory.MAP, {
           datasetId
         });
+        joinedBasemapDisplayKeys.delete(datasetId);
         removeDatasetFromDisplay(datasetId);
       }
     } catch (error) {
       logger.error('Failed to load joined basemap', LogCategory.MAP, error);
+      joinedBasemapDisplayKeys.delete(datasetId);
       removeDatasetFromDisplay(dataset.id);
     }
   }
