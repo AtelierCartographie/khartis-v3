@@ -361,6 +361,7 @@
     aria-label={m.navigation_primary_aria()}
   >
     <button
+      type="button"
       class={clsx('nav-tab', { selected: isStepSelected(ToolbarStep.Data) })}
       onclick={() => selectStep(ToolbarStep.Data)}
       aria-pressed={isStepSelected(ToolbarStep.Data)}
@@ -370,6 +371,7 @@
     </button>
 
     <button
+      type="button"
       class={clsx('nav-tab', {
         selected: isStepSelected(ToolbarStep.Visualizations)
       })}
@@ -381,6 +383,7 @@
     </button>
 
     <button
+      type="button"
       class={clsx('nav-tab', { selected: isStepSelected(ToolbarStep.Styling) })}
       onclick={() => selectStep(ToolbarStep.Styling)}
       aria-pressed={isStepSelected(ToolbarStep.Styling)}

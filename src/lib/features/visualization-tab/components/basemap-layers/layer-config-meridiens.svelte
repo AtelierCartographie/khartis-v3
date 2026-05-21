@@ -18,6 +18,7 @@
     color?: string;
     dotted?: boolean;
     dottedPattern?: BasemapDottedPattern;
+    allowRemarkable?: boolean;
     disableDotted?: boolean;
     dottedDisabledReason?: string;
     thickness?: number;
@@ -31,12 +32,17 @@
     color = '#e0e0e0',
     dotted = true,
     dottedPattern = BasemapDottedPattern.DOTS,
+    allowRemarkable = true,
     disableDotted = false,
     dottedDisabledReason,
     thickness = 1,
     opacity = 100,
     onchange
   }: Props = $props();
+
+  const effectiveMode = $derived(
+    allowRemarkable ? mode : BasemapGraticuleMode.REGULAR
+  );
 
   function handleModeChange(nextMode: BasemapGraticuleMode) {
     if (nextMode !== mode) {
@@ -70,25 +76,31 @@
 </script>
 
 <div class="layer-config-content">
-  <ToggleTabs
-    activeIndex={mode === BasemapGraticuleMode.REGULAR ? 1 : 0}
-    items={[
-      {
-        icon: Star,
-        label: m.basemap_config_graticule_remarkable(),
-        iconSize: 16
-      },
-      { icon: Wikis, label: m.basemap_config_graticule_regular(), iconSize: 16 }
-    ]}
-    onchange={(index) =>
-      handleModeChange(
-        index === 1
-          ? BasemapGraticuleMode.REGULAR
-          : BasemapGraticuleMode.REMARKABLE
-      )}
-  />
+  {#if allowRemarkable}
+    <ToggleTabs
+      activeIndex={mode === BasemapGraticuleMode.REGULAR ? 1 : 0}
+      items={[
+        {
+          icon: Star,
+          label: m.basemap_config_graticule_remarkable(),
+          iconSize: 16
+        },
+        {
+          icon: Wikis,
+          label: m.basemap_config_graticule_regular(),
+          iconSize: 16
+        }
+      ]}
+      onchange={(index) =>
+        handleModeChange(
+          index === 1
+            ? BasemapGraticuleMode.REGULAR
+            : BasemapGraticuleMode.REMARKABLE
+        )}
+    />
+  {/if}
 
-  {#if mode === BasemapGraticuleMode.REGULAR}
+  {#if effectiveMode === BasemapGraticuleMode.REGULAR}
     <div class="control-group">
       <label class="field-label" for="graticule-spacing-input">
         {m.basemap_config_spacing_degrees()}

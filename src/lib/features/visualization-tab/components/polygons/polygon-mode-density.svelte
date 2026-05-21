@@ -259,7 +259,7 @@
       orientation="vertical"
       items={dedupedLevelOptions.map((option) => ({
         value: option.level,
-        labelText: `${levelLabelFor(option.level)} (${m.density_ratio_label({ ratio: String(option.ratio) })})`
+        labelText: `${levelLabelFor(option.level)} : ${m.density_ratio_label({ ratio: String(option.ratio) })}`
       }))}
       selected={selectedLevel}
       onchange={(value) => handleLevelChange(value)}

@@ -42,6 +42,7 @@
   import { INTERNAL_COLUMN } from '../commons/constants/data.constants';
   import { shouldUseMapLibreInterleaved } from './utils/render-engine.utils';
   import { resolveMapDisplayDatasets } from './utils/map-display-datasets.utils';
+  import { resolveBestSplitFeatureIdColumn } from './layers/split-rendering-accessors';
 
   let thematicMapRef = $state<HTMLDivElement>(undefined!);
 
@@ -315,7 +316,21 @@
     }
   }
 
-  function detectFeatureIdColumn(geometry: ArrowTable): string {
+  function detectFeatureIdColumn(
+    geometry: ArrowTable,
+    dataset?: ArrowTable
+  ): string {
+    if (dataset) {
+      const matchedColumn = resolveBestSplitFeatureIdColumn(
+        geometry,
+        dataset,
+        INTERNAL_COLUMN.FEATURE_ID
+      );
+      if (matchedColumn) {
+        return matchedColumn;
+      }
+    }
+
     const fields = geometry.schema.fields ?? [];
     if (fields.some((f) => f.name === INTERNAL_COLUMN.FEATURE_ID)) {
       return INTERNAL_COLUMN.FEATURE_ID;
@@ -495,7 +510,10 @@
       if (!isDatasetExpectedForDisplay(datasetId)) return;
 
       if (geometryArrow && datasetArrow) {
-        const featureIdColumn = detectFeatureIdColumn(geometryArrow);
+        const featureIdColumn = detectFeatureIdColumn(
+          geometryArrow,
+          datasetArrow
+        );
         setDisplaySplitTable(datasetId, {
           geometry: geometryArrow,
           dataset: datasetArrow,

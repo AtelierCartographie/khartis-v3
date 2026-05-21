@@ -23,13 +23,20 @@ function buildFilterCacheKey(
     primitiveType?: string;
   }>
 ): string {
-  return filters
-    .map(
-      (f) =>
-        `${f.column}:${f.operator}:${f.value ?? ''}:${f.secondaryValue ?? ''}:${f.limit ?? ''}:${f.primitiveType ?? ''}`
-    )
-    .sort()
-    .join('|');
+  const normalized = filters
+    .map((filter) => ({
+      column: filter.column,
+      operator: filter.operator,
+      value: filter.value ?? null,
+      secondaryValue: filter.secondaryValue ?? null,
+      limit: filter.limit ?? null,
+      primitiveType: filter.primitiveType ?? null
+    }))
+    .sort((left, right) =>
+      JSON.stringify(left).localeCompare(JSON.stringify(right))
+    );
+
+  return JSON.stringify(normalized);
 }
 
 export function selectRowsByIndices(

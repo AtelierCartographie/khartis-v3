@@ -80,7 +80,8 @@
         selectedId={field.selectedId}
         on:select={(e) => handleComboSelect(field, e.detail)}
         placeholder={field.placeholder ?? ''}
-        labelText=""
+        labelText={field.label}
+        hideLabel
         size="sm"
       />
       {#if field.selectedColumnName}

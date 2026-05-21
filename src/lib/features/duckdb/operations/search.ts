@@ -42,9 +42,10 @@ registerTableMutationCallback((table: string) => {
 function getCacheKey(
   table: string,
   query: string,
-  column: string | null
+  column: string | null,
+  threshold: number
 ): string {
-  return `${table}:${query}:${column || 'all'}`;
+  return `${table}:${query}:${column || 'all'}:${threshold}`;
 }
 
 function getFromCache(key: string): SearchStats | null {
@@ -159,7 +160,7 @@ export async function searchInTable(
   }
 
   const trimmedQuery = searchQuery.trim();
-  const cacheKey = getCacheKey(table, trimmedQuery, column);
+  const cacheKey = getCacheKey(table, trimmedQuery, column, threshold);
   const cached = getFromCache(cacheKey);
   if (cached) {
     return cached;

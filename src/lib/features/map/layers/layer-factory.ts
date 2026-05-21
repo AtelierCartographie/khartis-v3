@@ -152,8 +152,11 @@ import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants'
 import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
 import {
   buildSplitDatasetRowMapping,
+  createSplitAwareNullableRowAccessor,
   createSplitAwareRowAccessor as ctxRowAccessor,
   createSplitGeoJsonFeatureAccessor,
+  createSplitGeoJsonNullableFeatureAccessor,
+  hasSplitRenderingContext,
   resolveSplitMappingFeatureIdColumn
 } from './split-rendering-accessors';
 
@@ -2205,6 +2208,62 @@ function filterMissingPolygonPatternFeatures(
     ...geojson,
     features: geojson.features.filter((feature) =>
       isMissingFeature({
+        properties: feature.properties ?? undefined
+      })
+    )
+  };
+}
+
+function createSplitUniqueBinaryColorAccessor(
+  ctx: LayerContext,
+  sourceTable: ArrowTable,
+  geometryTable: ArrowTable,
+  color: RGBColor
+): ((featureId: number) => [number, number, number, number]) | null {
+  if (!hasSplitRenderingContext(ctx)) {
+    return null;
+  }
+
+  return createSplitAwareNullableRowAccessor(
+    ctx,
+    sourceTable,
+    (row) => (row ? [color[0], color[1], color[2], 255] : [0, 0, 0, 0]),
+    geometryTable
+  );
+}
+
+function createSplitUniqueGeoJsonColorAccessor(
+  ctx: LayerContext,
+  geometryTable: ArrowTable,
+  color: RGBColor
+):
+  | ((feature: {
+      properties?: Record<string, unknown>;
+    }) => [number, number, number, number])
+  | null {
+  return createSplitGeoJsonNullableFeatureAccessor(ctx, geometryTable, (row) =>
+    row ? [color[0], color[1], color[2], 255] : [0, 0, 0, 0]
+  );
+}
+
+function filterSplitMatchedPolygonFeatures(
+  geojson: FeatureCollection,
+  ctx: LayerContext,
+  geometryTable: ArrowTable
+): FeatureCollection {
+  const splitFeaturePredicate = createSplitGeoJsonNullableFeatureAccessor(
+    ctx,
+    geometryTable,
+    (row) => row !== null
+  );
+  if (!splitFeaturePredicate) {
+    return geojson;
+  }
+
+  return {
+    ...geojson,
+    features: geojson.features.filter((feature) =>
+      splitFeaturePredicate({
         properties: feature.properties ?? undefined
       })
     )
@@ -5191,6 +5250,15 @@ export function createPolygonLayers(
               polygonClassification?.disabledLabels ?? []
             )
           : null;
+      const splitUniqueFillAccessor =
+        polygonFillMode === FillMode.UNIQUE
+          ? createSplitUniqueBinaryColorAccessor(
+              ctx,
+              jsTable,
+              jsTable,
+              polygonFillColor
+            )
+          : null;
 
       const baseFillAccessor = choroplethAccessor ?? categoricalAccessor;
 
@@ -5211,12 +5279,14 @@ export function createPolygonLayers(
               )
           : baseFillAccessor;
 
-      const fillColorBinaryAttr = fillColorFn
-        ? createPolygonFillColorAttribute(
-            polyData,
-            ctxRowAccessor(ctx, jsTable, fillColorFn)
-          )
-        : null;
+      const fillColorBinaryAttr = splitUniqueFillAccessor
+        ? createPolygonFillColorAttribute(polyData, splitUniqueFillAccessor)
+        : fillColorFn
+          ? createPolygonFillColorAttribute(
+              polyData,
+              ctxRowAccessor(ctx, jsTable, fillColorFn)
+            )
+          : null;
 
       const polygonStrokeClassification = polygonConfig?.strokeClassification;
       const strokeColorsArray =
@@ -5269,6 +5339,15 @@ export function createPolygonLayers(
               );
             })()
           : null;
+      const splitUniqueStrokeAccessor =
+        polygonStrokeMode === StrokeMode.UNIQUE
+          ? createSplitUniqueBinaryColorAccessor(
+              ctx,
+              jsTable,
+              jsTable,
+              polygonStrokeColor
+            )
+          : null;
       const baseStrokeAccessor =
         strokeChoroplethAccessor ?? strokeCategoricalAccessor;
 
@@ -5289,12 +5368,14 @@ export function createPolygonLayers(
               )
           : baseStrokeAccessor;
 
-      const strokeColorBinaryAttr = strokeColorFn
-        ? pathColorAttr(
-            outlineData,
-            ctxRowAccessor(ctx, jsTable, strokeColorFn)
-          )
-        : null;
+      const strokeColorBinaryAttr = splitUniqueStrokeAccessor
+        ? pathColorAttr(outlineData, splitUniqueStrokeAccessor)
+        : strokeColorFn
+          ? pathColorAttr(
+              outlineData,
+              ctxRowAccessor(ctx, jsTable, strokeColorFn)
+            )
+          : null;
 
       const layers: Layer<DeckDataRow>[] = [];
 
@@ -5407,6 +5488,9 @@ export function createPolygonLayers(
             rawPatternGeojson && ctx.customProjection
               ? projectGeoJSON(rawPatternGeojson, ctx.customProjection)
               : rawPatternGeojson;
+          patternGeojson = patternGeojson
+            ? filterSplitMatchedPolygonFeatures(patternGeojson, ctx, jsTable)
+            : null;
         } catch {
           patternGeojson = null;
         }
@@ -5589,7 +5673,13 @@ export function createPolygonLayers(
               polygonClassification?.disabledLabels ?? []
             )
           )
-        : null;
+        : polygonFillMode === FillMode.UNIQUE
+          ? createSplitUniqueGeoJsonColorAccessor(
+              ctx,
+              jsTable,
+              polygonFillColor
+            )
+          : null;
 
   const baseGeoJsonFillColor =
     splitGeoJsonFillColor ??
@@ -5674,7 +5764,13 @@ export function createPolygonLayers(
               polygonConfig?.strokeClassification?.disabledLabels ?? []
             )
           )
-        : null;
+        : polygonStrokeMode === StrokeMode.UNIQUE
+          ? createSplitUniqueGeoJsonColorAccessor(
+              ctx,
+              jsTable,
+              polygonStrokeColor
+            )
+          : null;
 
   const baseGeoJsonStrokeColor = splitGeoJsonStrokeColor
     ? (feature: { properties?: Record<string, unknown> }) =>
@@ -5743,12 +5839,19 @@ export function createPolygonLayers(
         withOpacity(polygonStrokeColor, polygonStrokeOpacity))
     : ([0, 0, 0, 0] as [number, number, number, number]);
 
-  const patternLayer =
+  const patternGeojsonData =
     patternProps && showGeoJsonFill && geojsonData.features.length > 0
+      ? filterSplitMatchedPolygonFeatures(geojsonData, ctx, jsTable)
+      : null;
+  const patternLayer =
+    patternProps &&
+    showGeoJsonFill &&
+    patternGeojsonData &&
+    patternGeojsonData.features.length > 0
       ? createPolygonPatternOverlayLayer(
           layerId,
           polygonClassification?.patternId,
-          geojsonData,
+          patternGeojsonData,
           patternProps,
           ctx
         )

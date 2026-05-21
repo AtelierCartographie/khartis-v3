@@ -408,7 +408,7 @@ export const FileValidator = {
     let maxCount = 0;
 
     for (const sep of separators) {
-      const count = (lines[0].match(new RegExp(sep, 'g')) || []).length;
+      const count = lines[0].split(sep).length - 1;
       if (count > maxCount) {
         maxCount = count;
         detectedSeparator = sep;

@@ -73,6 +73,7 @@
     showMissingDataSection?: boolean;
     showSliderBounds?: boolean;
     sliderInputWidth?: string;
+    maxStrokeWidth?: number;
     facetsValueSlotPath?: FacetSlotPath;
     facetsCategorySlotPath?: FacetSlotPath;
     onMissingDataShowChange?: (show: boolean) => void;
@@ -101,6 +102,7 @@
     showMissingDataSection = true,
     showSliderBounds = true,
     sliderInputWidth = '128px',
+    maxStrokeWidth = SLIDER_LIMITS.strokeWidth.max,
     facetsValueSlotPath,
     facetsCategorySlotPath,
     onMissingDataShowChange,
@@ -142,6 +144,12 @@
     missingDataColor ??
       visualization?.missingData?.color ??
       DEFAULT_COLORS.missingData
+  );
+  const strokeWidthMax = $derived(
+    Math.max(
+      MIN_VISIBLE_STROKE_WIDTH,
+      Math.min(maxStrokeWidth, SLIDER_LIMITS.strokeWidth.max)
+    )
   );
   let strokeShowMissing = $derived(resolvedShowMissingData);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
@@ -267,8 +275,9 @@
   }
 
   function handleStrokeWidthChange(value: number) {
-    strokeWidth = value;
-    onStyleChange?.({ strokeWidth: value });
+    const next = clampVisibleStrokeWidth(value);
+    strokeWidth = next;
+    onStyleChange?.({ strokeWidth: next });
   }
 
   function handleStrokeOpacityChange(value: number) {
@@ -300,12 +309,21 @@
   }
 
   function ensureVisibleStrokeWidth() {
-    if (strokeMode === StrokeMode.NONE || strokeWidth > 0) {
+    if (strokeMode === StrokeMode.NONE) {
       return;
     }
 
-    strokeWidth = VISUALIZATION_DEFAULTS.strokeWidth;
-    onStyleChange?.({ strokeWidth: VISUALIZATION_DEFAULTS.strokeWidth });
+    const next = clampVisibleStrokeWidth(strokeWidth);
+    if (strokeWidth === next) {
+      return;
+    }
+
+    strokeWidth = next;
+    onStyleChange?.({ strokeWidth: next });
+  }
+
+  function clampVisibleStrokeWidth(value: number) {
+    return Math.min(Math.max(value, MIN_VISIBLE_STROKE_WIDTH), strokeWidthMax);
   }
 
   $effect(() => {
@@ -366,7 +384,7 @@
       label={m.thickness()}
       bind:value={strokeWidth}
       min={MIN_VISIBLE_STROKE_WIDTH}
-      max={SLIDER_LIMITS.strokeWidth.max}
+      max={strokeWidthMax}
       step={SLIDER_LIMITS.strokeWidth.step}
       showMinMax={showSliderBounds}
       inputWidth={sliderInputWidth}
@@ -416,7 +434,7 @@
       label={m.thickness()}
       bind:value={strokeWidth}
       min={MIN_VISIBLE_STROKE_WIDTH}
-      max={SLIDER_LIMITS.strokeWidth.max}
+      max={strokeWidthMax}
       step={SLIDER_LIMITS.strokeWidth.step}
       showMinMax={showSliderBounds}
       inputWidth={sliderInputWidth}
@@ -476,7 +494,7 @@
       label={m.thickness()}
       bind:value={strokeWidth}
       min={MIN_VISIBLE_STROKE_WIDTH}
-      max={SLIDER_LIMITS.strokeWidth.max}
+      max={strokeWidthMax}
       step={SLIDER_LIMITS.strokeWidth.step}
       showMinMax={showSliderBounds}
       inputWidth={sliderInputWidth}

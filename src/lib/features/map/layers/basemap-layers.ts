@@ -4,7 +4,11 @@ import { GeoJsonLayer } from '@deck.gl/layers';
 import { PathStyleExtension } from '@deck.gl/extensions';
 import { SolidPolygonLayer, PathLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import { createPathLayerProps } from 'geoarrow-deck-stream';
+import {
+  createPathLayerProps,
+  parseSphere,
+  type BinaryPolygonData
+} from 'geoarrow-deck-stream';
 import {
   parsePaths,
   parseSolidPolygons,
@@ -77,8 +81,6 @@ const DASH_EXTENSION = new PathStyleExtension({
   highPrecisionDash: true
 });
 const SOLID_DASH_ARRAY: [number, number] = [1, 0];
-const PROJECTED_OCEAN_EXTENT = 1_000_000;
-
 const basemapGeoJsonCache = new WeakMap<
   ArrowTable,
   Map<string, FeatureCollection | null>
@@ -165,6 +167,71 @@ function projectFeatureCollectionIfNeeded<
   projectionCache.set(projectionKey, result);
 
   return result;
+}
+
+function hasSpherePolygon(sphereData: BinaryPolygonData): boolean {
+  return sphereData.length > 0 && sphereData.positions.length > 0;
+}
+
+function createScreenExtentPolygon(
+  screenExtent: [[number, number], [number, number]]
+): Feature<Polygon> | null {
+  const [[x0, y0], [x1, y1]] = screenExtent;
+  if (![x0, y0, x1, y1].every(Number.isFinite) || x0 === x1 || y0 === y1) {
+    return null;
+  }
+
+  return {
+    type: GEOJSON_TYPE.FEATURE,
+    properties: {},
+    geometry: {
+      type: GEOJSON_TYPE.POLYGON,
+      coordinates: [
+        [
+          [x0, y0],
+          [x1, y0],
+          [x1, y1],
+          [x0, y1],
+          [x0, y0]
+        ]
+      ]
+    }
+  };
+}
+
+function createProjectedCompositeOceanData(
+  projection: ProjectionLike,
+  bbox?: BBox | null,
+  visibleProjectedExtent?: GraticuleClipExtent | null
+): FeatureCollection<Polygon> | null {
+  if (visibleProjectedExtent) {
+    const canvasFeature = createScreenExtentPolygon(visibleProjectedExtent);
+    if (canvasFeature) {
+      return {
+        type: GEOJSON_TYPE.FEATURE_COLLECTION,
+        features: [canvasFeature]
+      };
+    }
+  }
+
+  if (!hasCompositeGraticuleSubProjections(projection)) {
+    return null;
+  }
+
+  const features = projection
+    .getSubProjections()
+    .filter((entry) => !bbox || bboxIntersects(entry.bounds, bbox))
+    .map((entry) =>
+      entry.screenExtent ? createScreenExtentPolygon(entry.screenExtent) : null
+    )
+    .filter((feature): feature is Feature<Polygon> => feature !== null);
+
+  return features.length > 0
+    ? {
+        type: GEOJSON_TYPE.FEATURE_COLLECTION,
+        features
+      }
+    : null;
 }
 
 function hasCompositeGraticuleSubProjections(
@@ -683,6 +750,48 @@ export function createMersLayer(
 
   const layerId = buildLayerId(DeckLayerId.BASEMAP_MERS, ctx.projectionSuffix);
 
+  if (ctx.projection) {
+    const sphereData = parseSphere(ctx.projection, {
+      output: 'polygon'
+    }) as BinaryPolygonData;
+
+    if (hasSpherePolygon(sphereData)) {
+      return new SolidPolygonLayer({
+        id: layerId,
+        ...createCompatibleSolidPolygonLayerProps(sphereData),
+        coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+        getFillColor: withOpacity(fillColor, opacity),
+        ...getBaseLayerProps(ctx),
+        updateTriggers: {
+          getFillColor: [config.color, config.opacity]
+        }
+      });
+    }
+
+    const projectedCompositeOceanData = createProjectedCompositeOceanData(
+      ctx.projection,
+      ctx.bbox,
+      ctx.graticuleClipExtent
+    );
+
+    if (projectedCompositeOceanData) {
+      return new GeoJsonLayer({
+        id: layerId,
+        data: projectedCompositeOceanData,
+        filled: true,
+        stroked: false,
+        coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+        getFillColor: withOpacity(fillColor, opacity),
+        ...getBaseLayerProps(ctx),
+        updateTriggers: {
+          getFillColor: [config.color, config.opacity]
+        }
+      });
+    }
+
+    return null;
+  }
+
   const oceanGeoJSON: FeatureCollection = {
     type: GEOJSON_TYPE.FEATURE_COLLECTION,
     features: [
@@ -705,39 +814,12 @@ export function createMersLayer(
     ]
   };
 
-  const oceanData = ctx.projection
-    ? {
-        type: GEOJSON_TYPE.FEATURE_COLLECTION,
-        features: [
-          {
-            type: GEOJSON_TYPE.FEATURE,
-            properties: {},
-            geometry: {
-              type: GEOJSON_TYPE.POLYGON,
-              coordinates: [
-                [
-                  [-PROJECTED_OCEAN_EXTENT, -PROJECTED_OCEAN_EXTENT],
-                  [PROJECTED_OCEAN_EXTENT, -PROJECTED_OCEAN_EXTENT],
-                  [PROJECTED_OCEAN_EXTENT, PROJECTED_OCEAN_EXTENT],
-                  [-PROJECTED_OCEAN_EXTENT, PROJECTED_OCEAN_EXTENT],
-                  [-PROJECTED_OCEAN_EXTENT, -PROJECTED_OCEAN_EXTENT]
-                ]
-              ]
-            }
-          }
-        ]
-      }
-    : oceanGeoJSON;
-
   return new GeoJsonLayer({
     id: layerId,
-    data: oceanData,
+    data: oceanGeoJSON,
     filled: true,
     stroked: false,
     getFillColor: withOpacity(fillColor, opacity),
-    ...(ctx.projection
-      ? { coordinateSystem: COORDINATE_SYSTEM.CARTESIAN }
-      : {}),
     ...getBaseLayerProps(ctx),
     updateTriggers: {
       getFillColor: [config.color, config.opacity]
@@ -1957,7 +2039,26 @@ function createMetadataLimitLayers(
   ctx: BasemapLayerContext,
   config: FrontieresLayerConfig
 ): Layer<DeckDataRow>[] {
-  if (!config.visible) return [];
+  return createMetadataLineLayers(
+    entries,
+    ctx,
+    config,
+    DeckLayerId.BASEMAP_META_LIMIT
+  );
+}
+
+type StyledMetadataLineConfig = Pick<
+  FrontieresLayerConfig,
+  'color' | 'dotted' | 'dottedPattern' | 'thickness' | 'opacity'
+>;
+
+function createMetadataLineLayers(
+  entries: MetadataLayerEntry[],
+  ctx: BasemapLayerContext,
+  config: StyledMetadataLineConfig,
+  idPrefix: DeckLayerId
+): Layer<DeckDataRow>[] {
+  if (entries.length === 0) return [];
 
   const layers: Layer<DeckDataRow>[] = [];
   const baseProps = getBaseLayerProps(ctx);
@@ -1980,8 +2081,8 @@ function createMetadataLimitLayers(
     if (!hasArrowRows(entry.table)) continue;
 
     const layerId = buildLayerId(
-      DeckLayerId.BASEMAP_META_LIMIT,
-      `${ctx.projectionSuffix}-${i}`
+      idPrefix,
+      `${ctx.projectionSuffix || DEFAULT_PROJECTION_SUFFIX}-${i}`
     );
     const preferProjectedGeoJsonFallback = shouldPreferProjectedGeoJsonFallback(
       geometryInfo,
@@ -2126,6 +2227,7 @@ export function createBasemapLayers(
   const limitEntries = metaByType(BasemapLayerType.LIMIT);
   const polygonEntries = metaByType(BasemapLayerType.POLYGON);
   const lineEntries = metaByType(BasemapLayerType.LINE);
+  const geographicLineEntries = metaByType(BasemapLayerType.GEOGRAPHIC_LINES);
   const pointEntries = metaByType(BasemapLayerType.POINT);
   const centroidEntries = metaByType(BasemapLayerType.CENTROID);
   const hasMetadataLimits =
@@ -2139,7 +2241,9 @@ export function createBasemapLayers(
   );
 
   for (const config of basemapLayersStore.layers) {
-    if (!config.visible) continue;
+    const hasEntryScopedVisibility =
+      config.id === BASEMAP_LAYER_ID.FRONTIERES && hasMetadataLimits;
+    if (!config.visible && !hasEntryScopedVisibility) continue;
 
     try {
       const targetGroups =
@@ -2250,11 +2354,34 @@ export function createBasemapLayers(
         }
 
         case BASEMAP_LAYER_ID.MERIDIENS: {
-          const layer = createMeridiensLayer(config as MeridiensLayerConfig, {
-            ...ctx,
-            excludeEquator: isEquateurVisible
-          });
-          if (layer) targetGroups.push([layer]);
+          const meridiensConfig = config as MeridiensLayerConfig;
+          if (
+            meridiensConfig.mode === BasemapGraticuleMode.REMARKABLE &&
+            geographicLineEntries.length > 0
+          ) {
+            const lineLayers = createMetadataLineLayers(
+              geographicLineEntries,
+              ctx,
+              meridiensConfig,
+              DeckLayerId.BASEMAP_META_GEO_LINES
+            );
+            if (lineLayers.length > 0) {
+              targetGroups.push(lineLayers);
+            }
+          } else {
+            const effectiveMeridiensConfig =
+              meridiensConfig.mode === BasemapGraticuleMode.REMARKABLE
+                ? {
+                    ...meridiensConfig,
+                    mode: BasemapGraticuleMode.REGULAR
+                  }
+                : meridiensConfig;
+            const layer = createMeridiensLayer(effectiveMeridiensConfig, {
+              ...ctx,
+              excludeEquator: isEquateurVisible
+            });
+            if (layer) targetGroups.push([layer]);
+          }
           break;
         }
 

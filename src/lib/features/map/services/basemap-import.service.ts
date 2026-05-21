@@ -15,6 +15,7 @@ import {
   fetchArrowTableWithGeometry
 } from '$lib/features/duckdb/orchestrator/arrow-ops';
 import { generateCustomBasemapAttributes } from './generate-basemap-attributes.service';
+import { getCustomBasemapGeometryProjectColumns } from './custom-basemap-columns.service';
 import * as m from '$lib/paraglide/messages';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import {
@@ -51,6 +52,14 @@ interface GeoParquetMeta {
 const RAW_TABLE_SUFFIX = '__raw';
 const INNERLINES_TABLE_SUFFIX = '__innerlines';
 const CENTROIDS_TABLE_SUFFIX = '__centroids';
+
+async function resolveCustomBasemapProjectColumns(
+  duck: typeof Duck,
+  tableName: string
+): Promise<string[]> {
+  const columns = await duck.analyse(tableName);
+  return getCustomBasemapGeometryProjectColumns(columns);
+}
 
 export function getBasemapRawTableName(tableName: string): string {
   return `${tableName}${RAW_TABLE_SUFFIX}`;
@@ -388,12 +397,16 @@ async function createArrowTableFromDuckTable(
   duck: typeof Duck,
   tableName: string
 ): Promise<ArrowTable> {
+  const projectColumns = await resolveCustomBasemapProjectColumns(
+    duck,
+    tableName
+  );
   const { table: rawTable, geomColumn } = await fetchArrowTableWithGeometry(
     tableName,
     duck,
     null,
     null,
-    [INTERNAL_COLUMN.FEATURE_ID]
+    projectColumns
   );
   return addGeoArrowMetadataFromDuckDB(
     rawTable,

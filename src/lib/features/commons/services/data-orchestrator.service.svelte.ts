@@ -29,6 +29,7 @@ import { dataTabActions } from '../stores/data-tab.store.svelte';
 import { datasetsStore } from '../stores/datasets.store.svelte';
 import { globalActions, globalState } from '../stores/global.svelte';
 import { projectStore } from '../stores/project.store.svelte';
+import { dataTabStore } from '$lib/features/data-tab/stores/data-tab.store.svelte';
 import {
   captureProjectRuntime,
   isCurrentProjectRuntime,
@@ -522,6 +523,7 @@ function createDataOrchestratorService() {
 
     processedFileIds.delete(fileId);
     cleanupOrphanedDatasets();
+    await restoreSelectedDataTabState();
   }
 
   async function processWithLimit<T>(
@@ -1100,7 +1102,8 @@ function createDataOrchestratorService() {
   }
 
   function resolveRestoredJoinFile(
-    currentProject: typeof projectStore.currentProject
+    currentProject: typeof projectStore.currentProject,
+    options: { allowFallbackToAnyJoinedFile?: boolean } = {}
   ): UploadedFile | undefined {
     if (!currentProject?.data?.sourceFiles) {
       return undefined;
@@ -1110,19 +1113,80 @@ function createDataOrchestratorService() {
       datasetsStore.selectedDataset?.sourceFileId ??
       globalState.selectedDataButtonId;
 
-    return (
-      currentProject.data.sourceFiles.find(
-        (file) =>
-          file.id === selectedSourceFileId && hasPersistedJoinState(file)
-      ) ?? currentProject.data.sourceFiles.find(hasPersistedJoinState)
+    const selectedFile = currentProject.data.sourceFiles.find(
+      (file) => file.id === selectedSourceFileId && hasPersistedJoinState(file)
     );
+
+    if (selectedFile || options.allowFallbackToAnyJoinedFile === false) {
+      return selectedFile;
+    }
+
+    return currentProject.data.sourceFiles.find(hasPersistedJoinState);
+  }
+
+  async function restoreSelectedDataTabState(): Promise<void> {
+    if (projectRestoreInProgress) {
+      return;
+    }
+
+    globalActions.ensureTabSelected();
+
+    const currentProject = projectStore.currentProject;
+    if (!currentProject) {
+      return;
+    }
+
+    cancelPendingGeoColumnRestore();
+    const restoreToken = activeGeoColumnRestoreToken;
+    await restorePersistedDataTabState(currentProject, restoreToken, {
+      allowFallbackToAnyJoinedFile: false
+    });
+  }
+
+  async function restoreTabularJoinCompletion(
+    sourceFileId: string,
+    joinedBasemap: string,
+    geoColumn: string
+  ): Promise<void> {
+    try {
+      await basemapCatalogService.loadCatalog();
+      const basemap = basemapCatalogService.getBasemapById(joinedBasemap);
+      const stepIndex = dataTabStore.basemapStepIndex;
+
+      if (!basemap || stepIndex < 0) {
+        return;
+      }
+
+      const stats = await duckDBOrchestrator.computeJoinStats(
+        sourceFileId,
+        basemap,
+        geoColumn
+      );
+      dataTabActions.setJoinStats(stats);
+
+      if (stats.joinedCount === 0) {
+        dataTabStore.resetStepCompletion(stepIndex);
+        return;
+      }
+
+      await duckDBOrchestrator.finalizeJoin(sourceFileId, basemap, geoColumn);
+      dataTabStore.markStepComplete(stepIndex);
+    } catch (error) {
+      logger.warn('Failed to restore selected join state', LogCategory.DATA, {
+        sourceFileId,
+        joinedBasemap,
+        geoColumn,
+        error
+      });
+    }
   }
 
   async function restorePersistedDataTabState(
     currentProject: NonNullable<typeof projectStore.currentProject>,
-    restoreToken: number
+    restoreToken: number,
+    options: { allowFallbackToAnyJoinedFile?: boolean } = {}
   ): Promise<void> {
-    const restoredFile = resolveRestoredJoinFile(currentProject);
+    const restoredFile = resolveRestoredJoinFile(currentProject, options);
     if (!restoredFile) {
       return;
     }
@@ -1167,6 +1231,7 @@ function createDataOrchestratorService() {
         longitudeColumn: restoredPrimaryJoinState.gpsColumns.lon,
         autoDetected: false
       });
+      dataTabStore.markStepComplete(dataTabStore.basemapStepIndex);
       return;
     }
 
@@ -1187,6 +1252,13 @@ function createDataOrchestratorService() {
         linkedVariableName: restoredPrimaryJoinState.geoColumn,
         autoDetected: false
       });
+      if (restoredPrimaryJoinState.joinedBasemap) {
+        await restoreTabularJoinCompletion(
+          restoredFile.id,
+          restoredPrimaryJoinState.joinedBasemap,
+          restoredPrimaryJoinState.geoColumn
+        );
+      }
     }
   }
 
@@ -1200,6 +1272,9 @@ function createDataOrchestratorService() {
     const facetsSettings = (
       currentProject?.data as SerializedProjectData | undefined
     )?.uiSettings?.facets;
+    const layoutSettings = (
+      currentProject?.data as SerializedProjectData | undefined
+    )?.layoutSettings;
     const projectionSettings = (
       currentProject?.data as SerializedProjectData | undefined
     )?.layoutSettings?.projection;
@@ -1237,6 +1312,15 @@ function createDataOrchestratorService() {
 
         if (vizSettings) {
           visualizationStore.restoreFromSerialized(vizSettings);
+        }
+
+        if (layoutSettings) {
+          persistenceRegistry.deserializeAll({
+            format: layoutSettings.format,
+            annotations: layoutSettings.annotations,
+            legend: layoutSettings.legend,
+            geoIndications: layoutSettings.geoIndications
+          });
         }
 
         migrateOrphanedVizDatasetIds();
@@ -1307,7 +1391,8 @@ function createDataOrchestratorService() {
     initialize,
     onFileAdded,
     onFileRemoved,
-    onProjectChanged
+    onProjectChanged,
+    restoreSelectedDataTabState
   };
 }
 

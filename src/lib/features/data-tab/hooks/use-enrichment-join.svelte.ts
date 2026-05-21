@@ -150,6 +150,10 @@ export function useEnrichmentJoin(
     return selectedDataset.tableName || null;
   }
 
+  function toOptionalNumber(value: unknown): number | undefined {
+    return value != null && value !== '' ? Number(value) : undefined;
+  }
+
   function buildStatisticsSnapshot(
     columns: DuckAnalyticsColumn[]
   ): UploadedFile['statistics'] {
@@ -158,12 +162,18 @@ export function useEnrichmentJoin(
         column.name,
         {
           type: column.type_simple || 'text',
-          count: column.count ?? 0,
-          nullCount: column.nulls ?? 0,
-          unique: column.uniques ?? 0,
-          min: column.min,
-          max: column.max,
-          mean: typeof column.mean === 'number' ? column.mean : undefined
+          count: toOptionalNumber(column.count) ?? 0,
+          nullCount: toOptionalNumber(column.nulls) ?? 0,
+          unique: toOptionalNumber(column.uniques) ?? 0,
+          min: typeof column.min === 'bigint' ? Number(column.min) : column.min,
+          max: typeof column.max === 'bigint' ? Number(column.max) : column.max,
+          mean: toOptionalNumber(column.mean),
+          median: toOptionalNumber(column.median),
+          stdDev: toOptionalNumber(column.stddev),
+          share_integers: toOptionalNumber(column.share_integers),
+          share_floats: toOptionalNumber(column.share_floats),
+          share_rank_interval: toOptionalNumber(column.share_rank_interval),
+          extent_magnitude: toOptionalNumber(column.extent_magnitude)
         }
       ])
     );

@@ -12,11 +12,23 @@
   interface Props {
     label?: string;
     color: string;
+    patternId?: string;
     exclusive?: boolean;
     onchange?: (hex: string) => void;
+    onpatternchange?: (
+      patternId: string | undefined,
+      patternParams: PatternParams | undefined
+    ) => void;
   }
 
-  let { label, color, exclusive = false, onchange }: Props = $props();
+  let {
+    label,
+    color,
+    patternId,
+    exclusive = false,
+    onchange,
+    onpatternchange
+  }: Props = $props();
 
   let dropdownOpen = $state(false);
   let popoverOpen = $state(false);
@@ -41,13 +53,15 @@
   }
 
   function handlePopoverValidate(
-    _palette: Palette | undefined,
+    palette: Palette | undefined,
     newColors: string[],
     _nextInverted: boolean,
-    _patternParams?: PatternParams
+    patternParams?: PatternParams
   ) {
     const hex = newColors[0];
     if (hex) onchange?.(hex);
+    const nextPatternId = palette?.patternId;
+    onpatternchange?.(nextPatternId, nextPatternId ? patternParams : undefined);
     popoverOpen = false;
   }
 
@@ -89,7 +103,7 @@
   triggerElement={triggerRef}
   currentColors={[color]}
   currentInverted={false}
-  selectedPaletteId="__custom__"
+  selectedPaletteId={patternId ? `pattern-${patternId}` : '__custom__'}
   paletteType={PALETTE_TYPE.QUALITATIVE}
   colorBlindFilter={false}
   numClasses={1}

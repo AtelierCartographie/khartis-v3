@@ -239,7 +239,18 @@
       exclusive
       label={m.color()}
       color={fillColor}
+      patternId={categoriesVariant === 'polygons'
+        ? visualization?.classification?.patternId
+        : undefined}
       onchange={onFillColorChange}
+      onpatternchange={(patternId, patternParams) => {
+        if (categoriesVariant === 'polygons') {
+          onClassificationChange({
+            patternId,
+            patternParams: patternId ? patternParams : undefined
+          });
+        }
+      }}
     />
   {/if}
 {:else if fillMode === FillMode.DENSITY && densitySnippet}

@@ -9,6 +9,7 @@ import {
   rowAccessor,
   splitRowAccessor
 } from '../utils/geoarrow-stream-bridge.utils';
+import { isCustomBasemapJoinCandidateColumn } from '../services/custom-basemap-columns.service';
 
 export type GeoJsonFeatureLike = {
   properties?: Record<string, unknown>;
@@ -78,6 +79,34 @@ export function createSplitAwareRowAccessor<T>(
   );
 }
 
+export function createSplitAwareNullableRowAccessor<T>(
+  ctx: LayerContext,
+  sourceTable: ArrowTable,
+  accessor: (row: Record<string, unknown> | null) => T,
+  geometryTable = sourceTable
+): (featureId: number) => T {
+  if (!hasSplitRenderingContext(ctx)) {
+    return rowAccessor(sourceTable, accessor);
+  }
+
+  const featureIdColumn = resolveSplitMappingFeatureIdColumn(
+    geometryTable,
+    ctx.splitFeatureIdColumn
+  );
+
+  if (!featureIdColumn) {
+    return rowAccessor(sourceTable, accessor);
+  }
+
+  return splitRowAccessor(
+    geometryTable,
+    ctx.splitDatasetTable,
+    featureIdColumn,
+    JOINED_BASEMAP_COLUMN.ID,
+    accessor
+  );
+}
+
 export function createSplitGeoJsonFeatureAccessor<T>(
   ctx: LayerContext,
   geometryTable: ArrowTable,
@@ -113,6 +142,41 @@ export function createSplitGeoJsonFeatureAccessor<T>(
   };
 }
 
+export function createSplitGeoJsonNullableFeatureAccessor<T>(
+  ctx: LayerContext,
+  geometryTable: ArrowTable,
+  accessor: (row: Record<string, unknown> | null) => T
+): ((feature: GeoJsonFeatureLike) => T) | null {
+  if (!hasSplitRenderingContext(ctx)) {
+    return null;
+  }
+
+  const featureIdColumn = resolveSplitMappingFeatureIdColumn(
+    geometryTable,
+    ctx.splitFeatureIdColumn
+  );
+  if (!featureIdColumn) {
+    return null;
+  }
+
+  const datasetByFeatureId = buildSplitDatasetRowLookup(
+    ctx.splitDatasetTable,
+    JOINED_BASEMAP_COLUMN.ID
+  );
+  if (!datasetByFeatureId) {
+    return null;
+  }
+
+  return (feature: GeoJsonFeatureLike): T => {
+    const rawFeatureId = feature.properties?.[featureIdColumn];
+    const row =
+      rawFeatureId !== null && rawFeatureId !== undefined
+        ? (datasetByFeatureId.get(String(rawFeatureId)) ?? null)
+        : null;
+    return accessor(row);
+  };
+}
+
 export function buildSplitDatasetRowMapping(
   geometry: ArrowTable,
   dataset: ArrowTable,
@@ -143,6 +207,71 @@ export function buildSplitDatasetRowMapping(
     }
   }
   return out;
+}
+
+function countSplitDatasetRowMatches(
+  geometry: ArrowTable,
+  dataset: ArrowTable,
+  featureIdColumn: string,
+  basemapIdColumn: string = JOINED_BASEMAP_COLUMN.ID
+): number {
+  const rowMapping = buildSplitDatasetRowMapping(
+    geometry,
+    dataset,
+    featureIdColumn,
+    basemapIdColumn
+  );
+
+  let count = 0;
+  for (let rowIndex = 0; rowIndex < rowMapping.length; rowIndex += 1) {
+    if (rowMapping[rowIndex] !== -1) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+export function resolveBestSplitFeatureIdColumn(
+  geometry: ArrowTable,
+  dataset: ArrowTable,
+  preferredFeatureIdColumn?: string,
+  basemapIdColumn: string = JOINED_BASEMAP_COLUMN.ID
+): string | undefined {
+  const fields = geometry.schema.fields ?? [];
+  const candidates = [
+    preferredFeatureIdColumn,
+    JOINED_BASEMAP_COLUMN.ID,
+    CANONICAL_ID_COLUMN,
+    INTERNAL_COLUMN.FEATURE_ID,
+    ...fields
+      .map((field) => field.name)
+      .filter((name) => isCustomBasemapJoinCandidateColumn(name))
+  ].filter(
+    (name, index, names): name is string =>
+      Boolean(name && fields.some((field) => field.name === name)) &&
+      names.indexOf(name) === index
+  );
+
+  let bestColumn: string | undefined;
+  let bestMatchCount = 0;
+
+  for (const candidate of candidates) {
+    const matchCount = countSplitDatasetRowMatches(
+      geometry,
+      dataset,
+      candidate,
+      basemapIdColumn
+    );
+    if (matchCount > bestMatchCount) {
+      bestColumn = candidate;
+      bestMatchCount = matchCount;
+    }
+  }
+
+  return (
+    bestColumn ??
+    resolveSplitMappingFeatureIdColumn(geometry, preferredFeatureIdColumn)
+  );
 }
 
 export function getSplitMatchedGeometryRowIndices(

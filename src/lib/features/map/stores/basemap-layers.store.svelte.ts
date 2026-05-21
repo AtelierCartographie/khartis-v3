@@ -250,7 +250,7 @@ function normalizeLayerThickness<T extends BasemapLayerConfig>(layer: T): T {
     case 'terre':
       return {
         ...layer,
-        strokeThickness: clampBasemapThickness(layer.strokeThickness, 0.5)
+        strokeThickness: clampBasemapThickness(layer.strokeThickness, 0.5, 0)
       };
     case 'rivieres':
     case 'equateur':
