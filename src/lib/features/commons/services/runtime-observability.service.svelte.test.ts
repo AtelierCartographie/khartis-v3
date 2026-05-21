@@ -17,6 +17,11 @@ describe('runtime observability', () => {
     expect(source).toContain("window.addEventListener('error'");
     expect(source).toContain("window.addEventListener('unhandledrejection'");
     expect(source).toContain('khartis_main_thread_stall');
+    expect(source).toContain('khartis_worker_watchdog_stall');
+    expect(source).toContain('new Worker(workerUrl');
+    expect(source).toContain('Khartis main thread heartbeat missed');
+    expect(source).toContain('Worker watchdog persisted main thread stall');
+    expect(source).toContain('WORKER_STALL_DB_NAME');
     expect(source).toContain(
       'recentInteractions: recentInteractions.slice(-5)'
     );
