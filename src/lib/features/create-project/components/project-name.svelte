@@ -3,8 +3,6 @@
     createProjectActions,
     createProjectState
   } from '$lib/features/commons/stores/create-project.store.svelte';
-  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
-  import { projectsStore } from '$lib/features/commons/stores/projects.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { sanitizeProjectName } from '$lib/features/commons/utils/sanitize.utils';
@@ -21,6 +19,8 @@
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import { useProjectNavigation } from '../hooks/use-project-navigation.svelte';
   import { CreateProjectValidationService } from '../services/validation.service';
+  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import { projectsStore } from '$lib/features/commons/stores/projects.store.svelte';
 
   interface Props {
     onClose?: () => void;

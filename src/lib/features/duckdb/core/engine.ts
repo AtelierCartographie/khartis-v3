@@ -64,14 +64,6 @@ function calculateOptimalMemory(): string {
     const deviceMemory =
       (navigator as Navigator & { deviceMemory?: number }).deviceMemory || 4;
     const optimalMemory = Math.min(Math.floor(deviceMemory * 0.5 * 1024), 3072);
-    logger.debug(
-      'Dynamic memory allocation based on device',
-      LogCategory.DUCKDB,
-      {
-        deviceMemory: `${deviceMemory}GB`,
-        allocatedMemory: `${optimalMemory}MB`
-      }
-    );
     return `${optimalMemory}MB`;
   }
   return '2048MB';
@@ -96,7 +88,6 @@ async function configureRuntimeSettings(): Promise<void> {
 
 async function configureLocalExtensionRepository(): Promise<void> {
   if (!connection) return;
-  const startTime = performance.now();
   const repositoryUrl = resolveStaticAssetUrl('/duckdb-extensions');
 
   try {
@@ -108,16 +99,11 @@ async function configureLocalExtensionRepository(): Promise<void> {
       }
     );
     localExtensionRepositoryConfigured = true;
-    logger.debug('Local extension repository configured', LogCategory.DUCKDB, {
-      bundleVariant,
-      repositoryUrl,
-      durationMs: (performance.now() - startTime).toFixed(2)
-    });
   } catch (error) {
-    logger.warn(
-      'Failed to set local extension repository, using CDN fallback',
+    logger.error(
+      'Failed to configure local DuckDB extension repository',
       LogCategory.DUCKDB,
-      { error }
+      error
     );
   }
 }
@@ -206,11 +192,9 @@ export async function initEngine(): Promise<void> {
     return;
   }
   const startTime = performance.now();
-  logger.info('DuckDB initialization started', LogCategory.DUCKDB);
 
   initPromise = (async () => {
     try {
-      const bundleStart = performance.now();
       const manualBundles: DuckDBBundles = {
         mvp: { mainModule: duckdb_wasm, mainWorker: mvp_worker },
         eh: { mainModule: duckdb_wasm_eh, mainWorker: eh_worker }
@@ -230,15 +214,6 @@ export async function initEngine(): Promise<void> {
       // paths used by spatial readers can initialize, but the core stays on
       // the extension-compatible eh/mvp bundles.
       threadsSupported = false;
-      logger.debug('DuckDB bundle selected', LogCategory.DUCKDB, {
-        bundleVariant,
-        threadsSupported,
-        crossOriginIsolated:
-          typeof crossOriginIsolated !== 'undefined'
-            ? crossOriginIsolated
-            : false,
-        durationMs: (performance.now() - bundleStart).toFixed(2)
-      });
 
       const worker = new Worker(bundle.mainWorker!);
 
@@ -259,10 +234,6 @@ export async function initEngine(): Promise<void> {
       await configureLocalExtensionRepository();
       await warmSpatialCoordinateSystems();
       await preloadExtensions();
-
-      logger.success('DuckDB initialization complete', LogCategory.DUCKDB, {
-        totalDurationMs: (performance.now() - startTime).toFixed(2)
-      });
     } catch (error) {
       db = null;
       connection = null;

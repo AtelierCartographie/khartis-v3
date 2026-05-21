@@ -69,6 +69,33 @@ async function ensureInitialized(): Promise<void> {
   await initialize();
 }
 
+const joinQueues = new Map<string, Promise<void>>();
+const joinRequestCounters = new Map<string, number>();
+let joinQueueGeneration = 0;
+
+function nextJoinRequestId(datasetId: string): number {
+  const nextRequestId = (joinRequestCounters.get(datasetId) ?? 0) + 1;
+  joinRequestCounters.set(datasetId, nextRequestId);
+  return nextRequestId;
+}
+
+function isCurrentJoinRequest(
+  datasetId: string,
+  requestId: number,
+  generation: number
+): boolean {
+  return (
+    generation === joinQueueGeneration &&
+    joinRequestCounters.get(datasetId) === requestId
+  );
+}
+
+function resetJoinRequestState(): void {
+  joinQueueGeneration += 1;
+  joinRequestCounters.clear();
+  joinQueues.clear();
+}
+
 async function initialize(): Promise<void> {
   if (state.isInitialized()) return;
 
@@ -78,22 +105,16 @@ async function initialize(): Promise<void> {
     return;
   }
 
-  const start = performance.now();
-  logger.info(
-    'Starting DuckDB orchestrator initialization',
-    LogCategory.DUCKDB
-  );
-
   const initPromise = (async () => {
     try {
       await initDuckDB();
       state.setInitialized(true);
-      logger.success('DuckDB orchestrator initialized', LogCategory.DUCKDB, {
-        durationMs: (performance.now() - start).toFixed(2)
-      });
     } catch (error) {
       state.setInitPromise(null);
-      logger.error('Failed to initialize DuckDB', LogCategory.DUCKDB, error);
+      logger.error('Failed to initialize DuckDB', LogCategory.DUCKDB, error, {
+        feature: 'duckdb',
+        flow: 'orchestrator_initialize'
+      });
       showError(m.error_duckdb_init_title(), m.error_duckdb_init_message());
       throw error;
     }
@@ -138,8 +159,8 @@ async function prefetchArrowMetadata(dataset: DuckDBDataset): Promise<void> {
       dataset.arrowTableWithMetadata = arrowTableWithMetadata;
       dataset.geoArrowMetadata = geoArrowMetadata || undefined;
     } catch (error) {
-      logger.debug(
-        'Failed to prefetch Arrow metadata',
+      logger.error(
+        'Failed to prefetch Arrow table metadata',
         LogCategory.DUCKDB,
         error
       );
@@ -470,34 +491,81 @@ export const duckDBOrchestrator = {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
-    const dataset = state.findDatasetByIdOrSourceFile(datasetId);
-    if (!dataset) throw new Error(m.error_dataset_not_found());
+    const requestedDataset = state.findDatasetByIdOrSourceFile(datasetId);
+    if (!requestedDataset) throw new Error(m.error_dataset_not_found());
+
+    const targetDatasetId = requestedDataset.id;
+    const targetTableName = requestedDataset.tableName;
+    const requestId = nextJoinRequestId(targetDatasetId);
+    const generation = joinQueueGeneration;
+    const previous = joinQueues.get(targetDatasetId) ?? Promise.resolve();
+    const runPromise = previous
+      .catch(() => undefined)
+      .then(async () => {
+        if (!isCurrentJoinRequest(targetDatasetId, requestId, generation)) {
+          return;
+        }
+
+        const dataset = state.getDatasetById(targetDatasetId);
+        if (!dataset || dataset.tableName !== targetTableName) {
+          return;
+        }
+
+        try {
+          const result = await joinOps.finalizeJoin(
+            dataset,
+            basemap,
+            geoColumn,
+            Duck,
+            options
+          );
+
+          if (!isCurrentJoinRequest(targetDatasetId, requestId, generation)) {
+            return;
+          }
+
+          const currentDataset = state.getDatasetById(targetDatasetId);
+          if (!currentDataset || currentDataset.tableName !== targetTableName) {
+            return;
+          }
+
+          datasetOps.updateDatasetJoinInfo(currentDataset.id, result, {
+            bumpVersion: false
+          });
+          invalidateDatasetCache(currentDataset.tableName);
+          state.bumpDatasetsVersion();
+        } catch (error) {
+          if (!isCurrentJoinRequest(targetDatasetId, requestId, generation)) {
+            return;
+          }
+
+          if (
+            shouldIgnoreFinalizeJoinError(datasetId, targetTableName, error)
+          ) {
+            return;
+          }
+
+          logger.error(
+            'Failed to finalize join',
+            LogCategory.DATA,
+            {
+              datasetId,
+              basemap: basemap.file,
+              error
+            },
+            { feature: 'data', flow: 'finalize_basemap_join' }
+          );
+          throw error;
+        }
+      });
+    joinQueues.set(targetDatasetId, runPromise);
 
     try {
-      const result = await joinOps.finalizeJoin(
-        dataset,
-        basemap,
-        geoColumn,
-        Duck,
-        options
-      );
-
-      datasetOps.updateDatasetJoinInfo(dataset.id, result, {
-        bumpVersion: false
-      });
-      invalidateDatasetCache(dataset.tableName);
-      state.bumpDatasetsVersion();
-    } catch (error) {
-      if (shouldIgnoreFinalizeJoinError(datasetId, dataset.tableName, error)) {
-        return;
+      await runPromise;
+    } finally {
+      if (joinQueues.get(targetDatasetId) === runPromise) {
+        joinQueues.delete(targetDatasetId);
       }
-
-      logger.error('Failed to finalize join', LogCategory.DATA, {
-        datasetId,
-        basemap: basemap.file,
-        error
-      });
-      throw error;
     }
   },
 
@@ -1101,17 +1169,13 @@ export const duckDBOrchestrator = {
   },
 
   async clear(): Promise<void> {
-    const start = performance.now();
+    resetJoinRequestState();
     const datasets = state.getAllDatasets();
     for (const dataset of datasets) {
       await duckDBOrchestrator.dropTable(dataset.tableName);
     }
 
     state.clearState();
-
-    logger.info('Cleared DuckDB orchestrator state', LogCategory.DUCKDB, {
-      durationMs: (performance.now() - start).toFixed(2)
-    });
   },
 
   async convertToProcessedDataset(

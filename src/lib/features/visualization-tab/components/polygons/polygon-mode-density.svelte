@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Dropdown } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import * as m from '$lib/paraglide/messages';
   import {
     DENSITY_DEFAULTS,
@@ -13,7 +14,6 @@
   } from '$lib/features/commons/constants/visualization.constants';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
-  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { InfoPopover, SliderWithInput } from '../shared';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
@@ -173,10 +173,10 @@
           });
         }
       } catch (error) {
-        logger.warn(
+        logger.error(
           'Failed to compute density levels',
           LogCategory.VISUALIZATION,
-          { error, column }
+          error
         );
         levelOptions = [];
       } finally {

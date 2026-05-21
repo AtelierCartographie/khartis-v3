@@ -17,11 +17,6 @@ export async function saveToStorage<T>(key: string, data: T): Promise<void> {
     const storeName = PROJECT_CONST.DB.METADATA_STORE_NAME;
 
     if (!db.objectStoreNames.contains(storeName)) {
-      logger.warn(
-        'Metadata store not found, skipping save',
-        LogCategory.PERSISTENCE,
-        { key }
-      );
       return;
     }
 
@@ -70,10 +65,10 @@ export async function loadFromStorage<T>(key: string): Promise<T | null> {
         reject(request.error || new Error('Failed to load metadata'));
     });
   } catch (error) {
-    logger.warn(
-      'Failed to load project storage entry',
+    logger.error(
+      'Failed to load project metadata from storage',
       LogCategory.PERSISTENCE,
-      { key, error }
+      error
     );
     return null;
   }
@@ -97,10 +92,10 @@ async function removeFromStorage(key: string): Promise<void> {
         reject(tx.error || new Error('Failed to remove metadata'));
     });
   } catch (error) {
-    logger.warn(
-      'Failed to remove project storage entry',
+    logger.error(
+      'Failed to remove project metadata from storage',
       LogCategory.PERSISTENCE,
-      { key, error }
+      error
     );
   }
 }

@@ -1,3 +1,4 @@
+import type { RequiredFallbackFont } from '../utils/detect-required-fonts';
 import { TextLayer } from '@deck.gl/layers';
 import '@fontsource/noto-sans-arabic/arabic-400.css';
 import '@fontsource/noto-sans-arabic/arabic-700.css';
@@ -5,13 +6,9 @@ import '@fontsource/noto-sans-sc/chinese-simplified-400.css';
 import '@fontsource/noto-sans-sc/chinese-simplified-700.css';
 import '@fontsource/noto-sans-jp/japanese-400.css';
 import '@fontsource/noto-sans-jp/japanese-700.css';
-import {
-  FONT_FACE_LOAD_REQUESTS,
-  DEFAULT_FONT_FAMILY
-} from '$lib/features/step-toolbar/fonts.constants';
+import { FONT_FACE_LOAD_REQUESTS } from '$lib/features/step-toolbar/fonts.constants';
 import { EXPLICIT_TEXT_CHARACTER_SET } from '$lib/features/map/layers/text-character-set';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import type { RequiredFallbackFont } from '../utils/detect-required-fonts';
+import { LogCategory, logger } from '../utils/logger';
 
 const TEXT_ATLAS_CACHE_LIMIT = 16;
 const PRELOAD_TEXT_HINT = EXPLICIT_TEXT_CHARACTER_SET.join('');
@@ -35,12 +32,10 @@ function resetTextAtlasCache(): void {
       TextLayer as unknown as { fontAtlasCacheLimit: number }
     ).fontAtlasCacheLimit = TEXT_ATLAS_CACHE_LIMIT;
   } catch (error) {
-    logger.warn(
-      'Failed to reset Deck.gl text atlas cache after font preload',
-      LogCategory.UI,
-      {
-        error: error instanceof Error ? error.message : String(error)
-      }
+    logger.error(
+      'Failed to reset Deck text atlas cache',
+      LogCategory.MAP,
+      error
     );
   }
 }
@@ -76,14 +71,7 @@ function createFontAssetsStore() {
         );
         await document.fonts.ready;
       } catch (error) {
-        logger.warn(
-          'Failed to fully preload embedded fonts; continuing with available faces',
-          LogCategory.UI,
-          {
-            defaultFontFamily: DEFAULT_FONT_FAMILY,
-            error: error instanceof Error ? error.message : String(error)
-          }
-        );
+        logger.error('Failed to load base font assets', LogCategory.MAP, error);
       } finally {
         resetTextAtlasCache();
         ready = true;
@@ -131,12 +119,10 @@ function createFontAssetsStore() {
 
           loadedFallbacks.add(font);
         } catch (error) {
-          logger.warn(
-            `Failed to load fallback font ${font}; continuing with system fallback`,
-            LogCategory.UI,
-            {
-              error: error instanceof Error ? error.message : String(error)
-            }
+          logger.error(
+            'Failed to load fallback font assets',
+            LogCategory.MAP,
+            error
           );
         } finally {
           resetTextAtlasCache();

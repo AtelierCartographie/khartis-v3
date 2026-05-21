@@ -1,5 +1,5 @@
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import * as m from '$lib/paraglide/messages';
 import { DUCK_CONST } from '../constants';
 import type { DuckDBClientForArrow } from '../orchestrator/arrow-ops';
@@ -115,19 +115,11 @@ export async function simplifyGeometryTable(
       FROM simplify_and_clean('${escapedInput}', '${geometryColumn}', ${tolerance})
     `);
   } catch (error) {
-    logger.warn(
-      'Topology-preserving simplification failed, falling back to feature simplification',
+    logger.error(
+      'Failed to simplify geometry with simplify_and_clean macro, using SQL fallback',
       LogCategory.DUCKDB,
-      {
-        sourceTable,
-        inputTableName,
-        targetTable: resolvedTargetTable,
-        geometryColumn,
-        tolerance,
-        error
-      }
+      error
     );
-
     await Duck.query(`
       ${createStatement} "${escapedTarget}" AS
       ${buildFallbackSimplificationSelect(
@@ -154,8 +146,8 @@ export async function simplifyGeometryTable(
       FROM extract_innerlines('${escapedTarget}')
     `);
   } catch (error) {
-    logger.warn(
-      'Failed to recompute innerlines after simplification',
+    logger.error(
+      'Failed to rebuild simplified geometry innerlines',
       LogCategory.DUCKDB,
       error
     );
@@ -169,14 +161,6 @@ export async function simplifyGeometryTable(
       : 0;
 
   const duration = performance.now() - start;
-
-  logger.debug('Geometry simplification completed', LogCategory.DUCKDB, {
-    targetTable: resolvedTargetTable,
-    originalVertices,
-    simplifiedVertices,
-    reductionPercentage: `${reductionPercentage}%`,
-    durationMs: duration.toFixed(2)
-  });
 
   return {
     originalVertices,

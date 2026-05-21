@@ -202,6 +202,23 @@ describe('workspace viewport utils', () => {
       ).toBeCloseTo(((1000 - 98 - 60) * 0.85) / 842, 6);
     });
 
+    it('should reserve inline-end space alongside inline-start before fitting', () => {
+      expect(
+        resolveWorkspaceFitScale({
+          viewportWidth: 1600,
+          viewportHeight: 1000,
+          pageWidth: 842,
+          pageHeight: 595,
+          reservedInlineStartPx: 98,
+          reservedInlineEndPx: 434,
+          maxViewportCoverageRatio: 1
+        })
+      ).toBeCloseTo(
+        Math.min((1600 - 98 - 434 - 60) / 842, (1000 - 60) / 595),
+        6
+      );
+    });
+
     it('should allow callers to opt into full available workspace coverage', () => {
       expect(
         resolveWorkspaceFitScale({

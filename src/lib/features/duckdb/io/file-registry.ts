@@ -1,6 +1,6 @@
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { AsyncDuckDB } from '@duckdb/duckdb-wasm';
 import * as duckdb from '@duckdb/duckdb-wasm';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { DUCK_CONST } from '../constants';
 import type { FileWithId, RegisterFilesOptions } from '../types';
 
@@ -169,15 +169,6 @@ async function patchDuplicateDbfFieldNames(file: File): Promise<File> {
     return file;
   }
 
-  logger.warn(
-    'Patched duplicate DBF field names before DuckDB registration',
-    LogCategory.DUCKDB,
-    {
-      fileName: file.name,
-      renamedCount
-    }
-  );
-
   return new File([bytes], file.name, {
     type: file.type,
     lastModified: file.lastModified
@@ -246,10 +237,11 @@ export async function dropRegisteredFile(
   try {
     await db.dropFile(fileId);
   } catch (error) {
-    logger.warn('Failed to drop registered DuckDB file', LogCategory.DUCKDB, {
-      fileId,
+    logger.error(
+      'Failed to drop registered DuckDB file',
+      LogCategory.DUCKDB,
       error
-    });
+    );
   } finally {
     registered_files.delete(fileId);
   }

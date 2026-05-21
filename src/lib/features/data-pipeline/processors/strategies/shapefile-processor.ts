@@ -4,7 +4,6 @@ import {
   FileType,
   type UploadedFile
 } from '$lib/features/commons/types/create-project.types';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import * as m from '$lib/paraglide/messages';
 import type {
   FileProcessor,
@@ -27,7 +26,6 @@ export const shapefileProcessor: FileProcessor = {
     ctx: ProcessContext,
     file: UploadedFile
   ): Promise<ProcessorDataset> {
-    const start = performance.now();
     const shpFile = getFileForDuckDB(file, MIME.SHAPEFILE_SHP);
 
     const companionFiles =
@@ -80,13 +78,6 @@ export const shapefileProcessor: FileProcessor = {
       },
       geoDetection: file.deepAnalysis?.geoDetection
     };
-
-    logger.success('Shapefile processed', LogCategory.DUCKDB, {
-      datasetId: dataset.id,
-      tableName: dataset.tableName,
-      rowCount: dataset.rowCount,
-      durationMs: (performance.now() - start).toFixed(2)
-    });
 
     return dataset;
   }

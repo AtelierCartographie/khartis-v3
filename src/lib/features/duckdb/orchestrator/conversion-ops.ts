@@ -1,5 +1,5 @@
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { ArrowTableLike, DuckDBDataset } from '../types';
 import * as datasetState from './dataset-state';
 
@@ -31,7 +31,11 @@ export async function convertToProcessedDataset(
       }
     }
   } catch (error) {
-    logger.warn('Error loading data', LogCategory.DUCKDB, error);
+    logger.error(
+      'Failed to convert DuckDB table data to processed dataset rows',
+      LogCategory.DUCKDB,
+      error
+    );
     data = [];
   }
 

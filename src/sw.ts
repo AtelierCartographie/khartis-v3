@@ -341,17 +341,13 @@ async function handleFactoryReset(): Promise<void> {
         try {
           const deleted = await caches.delete(name);
           if (deleted) cleared.push(name);
-        } catch (error) {
-          console.warn(
-            '[sw] failed to clear cache during factory reset',
-            name,
-            error
-          );
+        } catch {
+          // Cache cleanup should not block reset completion.
         }
       })
     );
-  } catch (error) {
-    console.warn('[sw] factory reset cache enumeration failed', error);
+  } catch {
+    // Reset can still notify clients even when cache enumeration fails.
   }
 
   await broadcastToClients({
@@ -371,8 +367,8 @@ async function handleClearOfflineCache(
       try {
         const deleted = await caches.delete(name);
         if (deleted) cleared.push(name);
-      } catch (error) {
-        console.warn('[sw] failed to clear cache', name, error);
+      } catch {
+        // Best-effort offline cleanup.
       }
     })
   );
@@ -393,8 +389,8 @@ async function broadcastToClients(message: SwToClientMessage): Promise<void> {
     for (const client of clients) {
       client.postMessage(message);
     }
-  } catch (error) {
-    console.warn('[sw] broadcast failed', error);
+  } catch {
+    // Client notification is best-effort from the service worker.
   }
 }
 
@@ -451,7 +447,6 @@ self.addEventListener('backgroundfetchsuccess', ((
           bytes: totalBytes
         });
       } catch (error) {
-        console.warn('[sw] backgroundfetchsuccess persist failed', error);
         await broadcastToClients({
           type: 'BG_FETCH_FAIL',
           basemapId,
@@ -522,7 +517,7 @@ async function revalidateBasemapsCache(): Promise<void> {
         }
       })
     );
-  } catch (error) {
-    console.warn('[sw] periodic sync revalidation failed', error);
+  } catch {
+    // Periodic sync failures are retried by the browser.
   }
 }

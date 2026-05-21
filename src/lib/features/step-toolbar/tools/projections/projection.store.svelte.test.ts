@@ -30,7 +30,7 @@ describe('projection store', () => {
     expect(source).toContain(
       's.suggestionD3Config = cloneD3UsageConfig(suggestion.d3Config);'
     );
-    expect(source).toContain('d3Projection: suggestion.d3Config.projection');
+    expect(source).toContain('projection: config.projection');
   });
 
   it('computes projection suggestions without auto-selecting the first one', () => {

@@ -51,4 +51,32 @@ describe('BasemapJoinStep reference basemap selection', () => {
     );
     expect(source).toContain('syncSelectedDatasetJoinedBasemap(basemap.file)');
   });
+
+  it('does not re-finalize a restored catalog join that is already active in DuckDB', () => {
+    expect(source).toContain('function isCatalogJoinFinalizedForBasemap');
+    expect(source).toContain('duckDataset.joinedBasemap === basemapId');
+    expect(source).toContain('duckDataset.geoColumn === geoColumn');
+    expect(source).toContain('hasCurrentJoinStats()');
+    expect(source).toContain('requestBasemapAttributeValues();');
+    expect(source).toContain(
+      'const stats = await duckDBOrchestrator.computeJoinStats('
+    );
+  });
+
+  it('ties the join loader to the latest async request', () => {
+    expect(source).toContain('function beginJoinLoading');
+    expect(source).toContain('function endJoinLoading');
+    expect(source).toContain('function cancelJoinLoading');
+    expect(source).toContain('function abortCurrentJoin');
+    expect(source).toContain('endJoinLoading(loadingRequestId);');
+  });
+
+  it('keys basemap attribute values by the requested basemap', () => {
+    expect(source).toContain('basemapAttributeValuesRequestId');
+    expect(source).toContain('basemapAttributeValuesBasemapId');
+    expect(source).toContain('basemapAttributeValuesLoadingKey');
+    expect(source).toContain(
+      'isCurrentBasemapAttributeValuesRequest(requestId, basemapId)'
+    );
+  });
 });

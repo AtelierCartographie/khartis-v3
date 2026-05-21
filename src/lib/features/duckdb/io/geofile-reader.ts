@@ -8,12 +8,7 @@ import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants'
 import * as m from '$lib/paraglide/messages';
 import type { Table as ArrowTable } from 'apache-arrow';
 import { convertGeoPackageToGeoJsonFile } from '$lib/features/map/utils/geopackage-browser-fallback.utils';
-import {
-  DUCK_CONST,
-  EXTENSIONS,
-  GEO_CONSTANTS,
-  SQL_FUNCTIONS
-} from '../constants';
+import { DUCK_CONST, EXTENSIONS, SQL_FUNCTIONS } from '../constants';
 import { executeQuery } from '../core/query';
 import type {
   DuckDBContext,
@@ -83,11 +78,6 @@ async function runGeofileReadWithThreadFallback(
     if (!retryWithSerializedExecution) {
       throw error;
     }
-    logger.warn(
-      'Geofile read hit thread pool exhaustion — retrying with serialized execution',
-      LogCategory.DUCKDB,
-      { filename: finalTablename }
-    );
     // Reduce DuckDB threads to 1 to avoid pthread_create exhaustion for large
     // multi-layer GPKG files, then retry the read. Restore threads afterwards.
     await executeQuery(ctx.connection, 'PRAGMA threads=1', {
@@ -158,8 +148,8 @@ async function ensureSpatialExtension(ctx: DuckDBContext): Promise<void> {
     });
     ctx.extensionsLoaded.spatial = true;
   } catch (loadError) {
-    logger.debug(
-      'LOAD spatial failed, trying INSTALL + LOAD',
+    logger.error(
+      'Failed to load spatial extension, trying install fallback',
       LogCategory.DUCKDB,
       loadError
     );
@@ -311,138 +301,87 @@ async function detectGeofileMetadata(
   }
 }
 
-function needsReprojection(crs: string | null): boolean {
-  if (!crs) return false;
-  const normalizedCRS = crs.toUpperCase();
-  return (
-    normalizedCRS !== GEO_CONSTANTS.WGS84_CRS && normalizedCRS !== 'WGS 84'
-  );
-}
-
 export async function readGeofile(
   ctx: DuckDBContext,
   geofile: File,
   options: ReadGeofileOptions = {}
 ): Promise<DuckDBMetadata | string> {
-  const start = performance.now();
   let { tablename } = options;
   const meta = options.meta ?? false;
   const shapefile = options.shapefile ?? false;
   const requestedLayer = options.layer;
   let usedGeoPackageBrowserFallback = false;
 
-  try {
-    await registerFiles(ctx.db, ctx.registered_files, [geofile], { shapefile });
-    const geofileWithId = geofile as FileWithId;
+  await registerFiles(ctx.db, ctx.registered_files, [geofile], { shapefile });
+  const geofileWithId = geofile as FileWithId;
 
-    if (meta) {
-      const escapedFileIdMeta = escapeSqlString(geofileWithId.id);
-      const result = await executeQuery(
-        ctx.connection,
-        `FROM ${SQL_FUNCTIONS.ST_READ_META}('${escapedFileIdMeta}')
+  if (meta) {
+    const escapedFileIdMeta = escapeSqlString(geofileWithId.id);
+    const result = await executeQuery(
+      ctx.connection,
+      `FROM ${SQL_FUNCTIONS.ST_READ_META}('${escapedFileIdMeta}')
 				SELECT
 					file_name AS name,
 					driver_short_name AS format,
 					layers[1].feature_count AS nb_entities,
 					layers[1].geometry_fields[1].type AS geometry,
 					layers[1].geometry_fields[1].crs.name AS crs`,
-        { format: DUCK_CONST.QUERY_FORMAT.ARROW_TABLE }
-      );
-      return result as DuckDBMetadata;
-    }
-
-    if (!tablename) {
-      tablename = generateUniqueTableName(geofile.name, ctx.loaded_files);
-    }
-
-    const geoMeta = await detectGeofileMetadata(
-      ctx,
-      geofileWithId.id,
-      requestedLayer
+      { format: DUCK_CONST.QUERY_FORMAT.ARROW_TABLE }
     );
-
-    const geomCol = geoMeta.geometryColumn;
-    const preservesSourceProjection = needsReprojection(geoMeta.crs);
-
-    const finalTablename = tablename;
-    const escapedFinalTable = escapeIdentifier(finalTablename);
-    const escapedGeoFileId = escapeSqlString(geofileWithId.id);
-    const selectedLayerClause = geoMeta.selectedLayer
-      ? `, layer = '${escapeSqlString(geoMeta.selectedLayer)}'`
-      : '';
-
-    if (geoMeta.autoSelectedLayer && geoMeta.selectedLayer) {
-      logger.info(
-        'Auto-selected spatial layer from multi-layer geofile',
-        LogCategory.DUCKDB,
-        {
-          filename: geofile.name,
-          layerCount: geoMeta.layerCount,
-          selectedLayer: geoMeta.selectedLayer
-        }
-      );
-    }
-
-    try {
-      await runGeofileReadWithThreadFallback(
-        ctx,
-        escapedFinalTable,
-        escapedGeoFileId,
-        selectedLayerClause,
-        finalTablename!,
-        ctx.threadsSupported
-      );
-    } catch (error) {
-      if (!isGeoPackageFile(geofile.name) || !isThreadPoolError(error)) {
-        throw error;
-      }
-
-      logger.warn(
-        'DuckDB GeoPackage ingest failed, trying browser fallback',
-        LogCategory.DUCKDB,
-        {
-          filename: geofile.name,
-          selectedLayer: geoMeta.selectedLayer,
-          error: error instanceof Error ? error.message : String(error)
-        }
-      );
-
-      const fallbackGeoJsonFile = await convertGeoPackageToGeoJsonFile(
-        geofile,
-        {
-          preferredLayer: geoMeta.selectedLayer ?? undefined
-        }
-      );
-
-      usedGeoPackageBrowserFallback = true;
-      await readGeofile(ctx, fallbackGeoJsonFile, {
-        ...options,
-        tablename: finalTablename,
-        layer: undefined
-      });
-    }
-
-    if (!tablename) {
-      throw new DuckDBError(m.error_unable_determine_table());
-    }
-
-    if (!usedGeoPackageBrowserFallback) {
-      await addRowId(ctx.connection, finalTablename);
-    }
-
-    ctx.loaded_files.set(tablename, geofile.name);
-    logger.success('Geofile ingested', LogCategory.DUCKDB, {
-      tablename,
-      filename: geofile.name,
-      geometryColumn: geomCol,
-      preservesSourceProjection,
-      sourceCRS: geoMeta.crs,
-      browserFallback: usedGeoPackageBrowserFallback,
-      durationMs: (performance.now() - start).toFixed(2)
-    });
-    return tablename;
-  } catch (error) {
-    logger.error('Failed to read geofile', LogCategory.DUCKDB, error);
-    throw error;
+    return result as DuckDBMetadata;
   }
+
+  if (!tablename) {
+    tablename = generateUniqueTableName(geofile.name, ctx.loaded_files);
+  }
+
+  const geoMeta = await detectGeofileMetadata(
+    ctx,
+    geofileWithId.id,
+    requestedLayer
+  );
+
+  const finalTablename = tablename;
+  const escapedFinalTable = escapeIdentifier(finalTablename);
+  const escapedGeoFileId = escapeSqlString(geofileWithId.id);
+  const selectedLayerClause = geoMeta.selectedLayer
+    ? `, layer = '${escapeSqlString(geoMeta.selectedLayer)}'`
+    : '';
+
+  try {
+    await runGeofileReadWithThreadFallback(
+      ctx,
+      escapedFinalTable,
+      escapedGeoFileId,
+      selectedLayerClause,
+      finalTablename!,
+      ctx.threadsSupported
+    );
+  } catch (error) {
+    if (!isGeoPackageFile(geofile.name) || !isThreadPoolError(error)) {
+      throw error;
+    }
+
+    const fallbackGeoJsonFile = await convertGeoPackageToGeoJsonFile(geofile, {
+      preferredLayer: geoMeta.selectedLayer ?? undefined
+    });
+
+    usedGeoPackageBrowserFallback = true;
+    await readGeofile(ctx, fallbackGeoJsonFile, {
+      ...options,
+      tablename: finalTablename,
+      layer: undefined
+    });
+  }
+
+  if (!tablename) {
+    throw new DuckDBError(m.error_unable_determine_table());
+  }
+
+  if (!usedGeoPackageBrowserFallback) {
+    await addRowId(ctx.connection, finalTablename);
+  }
+
+  ctx.loaded_files.set(tablename, geofile.name);
+  return tablename;
 }

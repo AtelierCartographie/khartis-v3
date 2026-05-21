@@ -10,8 +10,8 @@ import { PathStyleExtension } from '@deck.gl/extensions';
 import RotatableFillStyleExtension from './rotatable-fill-style-extension';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
 import * as m from '$lib/paraglide/messages';
@@ -1876,13 +1876,10 @@ function createHighlightedPolygonOverlay(
       dataComparator: (newData, oldData) => newData === oldData
     });
   } catch (error) {
-    logger.warn(
-      'Failed to build highlighted polygon overlay',
+    logger.error(
+      'Failed to create highlighted Arrow path overlay',
       LogCategory.MAP,
-      {
-        geoColumn,
-        error: error instanceof Error ? error.message : String(error)
-      }
+      error
     );
     return null;
   }
@@ -2772,13 +2769,10 @@ function createTextOverlayLayers(
     try {
       geojsonData = getCachedGeoJSON(jsTable, geometryInfo.geoColumn);
     } catch (error) {
-      logger.warn(
-        'Failed to convert geometry for text overlays, skipping labels/texts',
+      logger.error(
+        'Failed to read GeoJSON for text layer',
         LogCategory.MAP,
-        {
-          datasetId: ctx.datasetId,
-          error: error instanceof Error ? error.message : String(error)
-        }
+        error
       );
       return [];
     }
@@ -3439,7 +3433,7 @@ function createDotDensityLayers(
         : parsePointData(jsTable);
     } catch (error) {
       logger.error(
-        'Failed to parse density points from Arrow table',
+        'Failed to parse point symbol layer data',
         LogCategory.MAP,
         error
       );
@@ -3618,23 +3612,13 @@ export function createPointLayers(
           : rawGeoJSON;
     } catch (error) {
       logger.error(
-        'Error converting point geometry to GeoJSON',
+        'Failed to read GeoJSON for proportional polygon layer',
         LogCategory.MAP,
-        {
-          encoding: arrowExtension,
-          error: error instanceof Error ? error.message : String(error)
-        }
+        error
       );
       return [];
     }
     if (!geojsonData) {
-      logger.warn(
-        'Failed to convert point geometry to GeoJSON',
-        LogCategory.MAP,
-        {
-          encoding: arrowExtension
-        }
-      );
       showWarning(
         m.error_geometry_conversion_title(),
         m.error_geometry_conversion_message()
@@ -4525,9 +4509,7 @@ export function createLineLayers(
   const {
     geoColumn,
     encoding: arrowExtension,
-    isNativeGeoArrow,
-    isWkbEncoded,
-    isGeoJsonEncoded
+    isNativeGeoArrow
   } = geometryInfo;
   const lineColorClassification = viz
     ? (getPrimitiveClassification(viz, PrimitiveFilterType.LINE) ??
@@ -4821,14 +4803,6 @@ export function createLineLayers(
       .map((entry) => entry.layer);
   }
 
-  if (!isWkbEncoded && !isGeoJsonEncoded) {
-    logger.warn(
-      'Unknown line encoding, attempting GeoJSON fallback',
-      LogCategory.MAP,
-      { arrowExtension }
-    );
-  }
-
   let lineGeojsonData;
   try {
     const rawGeoJSON = getCachedGeoJSON(jsTable, geoColumn);
@@ -4837,18 +4811,14 @@ export function createLineLayers(
         ? projectGeoJSON(rawGeoJSON, ctx.customProjection)
         : rawGeoJSON;
   } catch (error) {
-    logger.error('Error converting line geometry to GeoJSON', LogCategory.MAP, {
-      encoding: arrowExtension,
-      geoColumn,
-      error: error instanceof Error ? error.message : String(error)
-    });
+    logger.error(
+      'Failed to read GeoJSON for line layer',
+      LogCategory.MAP,
+      error
+    );
     return [];
   }
   if (!lineGeojsonData) {
-    logger.warn('Failed to convert line geometry to GeoJSON', LogCategory.MAP, {
-      encoding: arrowExtension,
-      geoColumn
-    });
     showWarning(
       m.error_geometry_conversion_title(),
       m.error_geometry_conversion_message()
@@ -5597,14 +5567,10 @@ export function createPolygonLayers(
 
       return layers;
     } catch (error) {
-      logger.warn(
-        'Binary polygon parsing failed, falling back to GeoJSON',
+      logger.error(
+        'Failed to create polygon selection overlay layer',
         LogCategory.MAP,
-        {
-          encoding: arrowExtension,
-          geoColumn,
-          error: error instanceof Error ? error.message : String(error)
-        }
+        error
       );
     }
   }
@@ -5619,20 +5585,13 @@ export function createPolygonLayers(
         : rawGeoJSON;
   } catch (error) {
     logger.error(
-      'Error converting polygon geometry to GeoJSON',
+      'Failed to read GeoJSON for polygon layer',
       LogCategory.MAP,
-      {
-        encoding: arrowExtension,
-        geoColumn,
-        error: error instanceof Error ? error.message : String(error)
-      }
+      error
     );
     return [];
   }
   if (!geojsonData) {
-    logger.warn('Failed to convert geometry to GeoJSON', LogCategory.MAP, {
-      encoding: arrowExtension
-    });
     showWarning(
       m.error_geometry_conversion_title(),
       m.error_geometry_conversion_message()
@@ -6154,13 +6113,6 @@ export function createDeckLayers(
   ctx: LayerContext
 ): Layer<DeckDataRow>[] {
   if (jsTable.numRows === 0) {
-    logger.debug(
-      'Skipping thematic layer creation for empty Arrow table',
-      LogCategory.MAP,
-      {
-        datasetId: ctx.datasetId
-      }
-    );
     return [];
   }
 
@@ -6169,9 +6121,10 @@ export function createDeckLayers(
   if (!geometryInfo) {
     const hasUserDataset = Boolean(ctx.datasetId);
     if (hasUserDataset) {
-      logger.error('No GeoArrow metadata in Arrow table', LogCategory.MAP, {
-        datasetId: ctx.datasetId
-      });
+      logger.error(
+        'Missing geometry metadata for user dataset layer',
+        LogCategory.MAP
+      );
     }
     return [];
   }
@@ -6225,14 +6178,6 @@ export function createDeckLayers(
       break;
 
     default:
-      logger.error(
-        'Unsupported geometry type for Deck layer',
-        LogCategory.MAP,
-        {
-          geometryType: resolvedGeometryType,
-          datasetId: ctx.datasetId
-        }
-      );
   }
 
   if (isPrimitiveFilteredOut) {

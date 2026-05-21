@@ -1,13 +1,3 @@
-import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
-import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
-import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
-import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
-import {
-  dataTabActions,
-  dataTabState
-} from '$lib/features/commons/stores/data-tab.store.svelte';
-import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
-import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { DatasetResult } from '$lib/features/data-pipeline/types';
 import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
@@ -41,6 +31,16 @@ import {
 } from '../services/persisted-basemap.service';
 import { resolveDatasetIdForOrchestrator } from '../utils/dataset-resolution.utils';
 import { resolveNextBasemapSelectionId } from '../utils/basemap-selection.utils';
+import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
+import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
+import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
+import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
+import {
+  dataTabActions,
+  dataTabState
+} from '$lib/features/commons/stores/data-tab.store.svelte';
+import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 
 export interface BasemapSuggestionItem {
   basemap: BasemapMetadata;
@@ -519,9 +519,9 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
             );
           } catch (error) {
             if (!cancelled && !isMissingDuckTableError(error)) {
-              logger.warn(
-                'Enrichment basemap suggestions fell back to heuristics',
-                LogCategory.MAP,
+              logger.error(
+                'Failed to compute basemap join suggestions',
+                LogCategory.DATA,
                 error
               );
             }

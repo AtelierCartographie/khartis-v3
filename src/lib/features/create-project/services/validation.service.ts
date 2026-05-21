@@ -1,7 +1,6 @@
 import { STORAGE_LIMITS } from '$lib/features/commons/constants/validation.config';
 import { extractUrlsFromInput } from '$lib/features/commons/utils/file-import.utils';
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { ValidationResult } from '$lib/features/data-pipeline/types';
 import * as m from '$lib/paraglide/messages';
 
@@ -13,30 +12,6 @@ interface MultiFileValidationResult {
 
 function validateFiles(files: File[]): MultiFileValidationResult {
   const result = FileValidator.validateMultiple(files);
-
-  if (result.globalErrors.length > 0) {
-    logger.error(
-      'Global file validation failed',
-      LogCategory.FILE,
-      result.globalErrors
-    );
-  }
-
-  for (const [filename, fileResult] of result.results) {
-    if (!fileResult.isValid) {
-      logger.error('File validation failed', LogCategory.FILE, {
-        filename,
-        errors: fileResult.errors
-      });
-    }
-
-    if (fileResult.warnings.length > 0) {
-      logger.warn('File validation warnings', LogCategory.FILE, {
-        filename,
-        warnings: fileResult.warnings
-      });
-    }
-  }
 
   return result;
 }
@@ -69,20 +44,6 @@ function validateURL(urlInput: string): ValidationResult {
       });
     }
   });
-
-  if (errors.length > 0) {
-    logger.error('URL validation failed', LogCategory.FILE, {
-      urls,
-      errors
-    });
-  }
-
-  if (warnings.length > 0) {
-    logger.warn('URL validation warnings', LogCategory.FILE, {
-      urls,
-      warnings
-    });
-  }
 
   return {
     isValid: errors.length === 0,
