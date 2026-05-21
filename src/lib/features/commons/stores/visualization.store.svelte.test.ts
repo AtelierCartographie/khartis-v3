@@ -219,6 +219,65 @@ describe('visualizationStore legacy label normalization', () => {
   });
 });
 
+describe('visualizationStore duplication', () => {
+  afterEach(() => {
+    visualizationStore.clear();
+    datasetsStore.clear();
+    persistenceRegistry.markClean();
+  });
+
+  it('duplicates suggestion-backed visualizations as independent custom copies', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+
+    const original = visualizationStore.createVisualization(
+      VisualizationType.CATEGORICAL,
+      'dataset-1',
+      'Suggested visualization'
+    );
+    visualizationStore.updateVisualization(original.id, {
+      origin: {
+        mode: 'auto-suggestion',
+        suggestionKey: 'symbols_differents::name',
+        restoreState: {
+          origin: { mode: 'legacy' },
+          visualization: {
+            type: original.type,
+            modes: original.modes,
+            primitiveFilters: original.primitiveFilters,
+            style: original.style,
+            mapping: original.mapping
+          }
+        }
+      }
+    });
+
+    const duplicated = visualizationStore.duplicateVisualization(original.id);
+
+    expect(duplicated).not.toBeNull();
+    if (!duplicated) {
+      return;
+    }
+
+    expect(duplicated.id).not.toBe(original.id);
+    expect(duplicated.origin).toEqual({
+      mode: 'custom',
+      suggestionKey: 'symbols_differents::name'
+    });
+    expect(duplicated.origin?.restoreState).toBeUndefined();
+    expect(visualizationStore.selectedVisualization?.id).toBe(duplicated.id);
+    expect(
+      visualizationStore.activeVisualizations.map(
+        (visualization) => visualization.id
+      )
+    ).toContain(duplicated.id);
+
+    const storedOriginal = visualizationStore.visualizations.find(
+      (visualization) => visualization.id === original.id
+    );
+    expect(storedOriginal?.origin?.restoreState).toBeDefined();
+  });
+});
+
 describe('visualizationStore default mapping selection', () => {
   afterEach(() => {
     visualizationStore.clear();

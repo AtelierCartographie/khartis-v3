@@ -45,6 +45,20 @@ describe('dataOrchestratorService restore pipeline', () => {
     );
   });
 
+  it('restores layout stores after the runtime reset and before legend sync', () => {
+    expect(source).toContain('const layoutSettings = (');
+    expect(source).toContain('format: layoutSettings.format');
+    expect(source).toContain('annotations: layoutSettings.annotations');
+    expect(source).toContain('legend: layoutSettings.legend');
+    expect(source).toContain('geoIndications: layoutSettings.geoIndications');
+    expect(
+      source.indexOf('visualizationStore.restoreFromSerialized(vizSettings)')
+    ).toBeLessThan(source.indexOf('format: layoutSettings.format'));
+    expect(source.indexOf('legend: layoutSettings.legend')).toBeLessThan(
+      source.indexOf('legendActions.syncWithVisualizations();')
+    );
+  });
+
   it('does not rely on setTimeout-based geo-column restoration anymore', () => {
     expect(source).not.toContain('setTimeout(');
     expect(source).not.toContain('pendingGeoColumnRestoreTimeout');
@@ -82,5 +96,22 @@ describe('dataOrchestratorService restore pipeline', () => {
       source.indexOf('visualizationStore.restoreFromSerialized(vizSettings)')
     );
     expect(source).toContain('restoreRun');
+  });
+
+  it('restores the selected source join state after a live file removal', () => {
+    expect(source).toContain('restoreSelectedDataTabState');
+    expect(source.indexOf('cleanupOrphanedDatasets();')).toBeLessThan(
+      source.indexOf('await restoreSelectedDataTabState();')
+    );
+    expect(source).toContain('globalActions.ensureTabSelected();');
+    expect(source).toContain('allowFallbackToAnyJoinedFile: false');
+  });
+
+  it('recomputes and finalizes the restored tabular join before marking it complete', () => {
+    expect(source).toContain('restoreTabularJoinCompletion');
+    expect(source).toContain('duckDBOrchestrator.computeJoinStats(');
+    expect(source).toContain('dataTabActions.setJoinStats(stats);');
+    expect(source).toContain('await duckDBOrchestrator.finalizeJoin(');
+    expect(source).toContain('dataTabStore.markStepComplete(stepIndex);');
   });
 });

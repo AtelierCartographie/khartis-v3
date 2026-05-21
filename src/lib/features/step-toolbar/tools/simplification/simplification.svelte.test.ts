@@ -269,7 +269,11 @@ describe('simplification tool — imported basemap', () => {
     expect(
       screen.getByText(m.simplification_warning_subtitle())
     ).toBeInTheDocument();
-    expect(screen.getByText(m.simplification_rate_label())).toBeInTheDocument();
+    expect(
+      screen.getByRole('slider', {
+        name: m.simplification_rate_label()
+      })
+    ).toBeInTheDocument();
   });
 });
 
@@ -313,7 +317,11 @@ describe('simplification tool — geo datasets', () => {
     expect(
       screen.getByText(m.simplification_warning_title())
     ).toBeInTheDocument();
-    expect(screen.getByText(m.simplification_rate_label())).toBeInTheDocument();
+    expect(
+      screen.getByRole('slider', {
+        name: m.simplification_rate_label()
+      })
+    ).toBeInTheDocument();
     expect(
       screen.queryByText(m.simplification_geo_dataset_label())
     ).not.toBeInTheDocument();
