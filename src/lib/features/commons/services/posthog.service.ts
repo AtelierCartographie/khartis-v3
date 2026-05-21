@@ -211,8 +211,28 @@ function createPostHogService() {
     instance.captureException(exception, properties);
   }
 
+  function captureEvent(
+    eventName: string,
+    properties: Record<string, unknown> = {}
+  ): void {
+    if (!browser) return;
+    const config = readConfig();
+    if (!config) return;
+
+    const instance = posthog;
+    if (!instance) {
+      void init().then((ready) => {
+        ready?.capture(eventName, properties);
+      });
+      return;
+    }
+
+    instance.capture(eventName, properties);
+  }
+
   return {
     init,
+    captureEvent,
     captureException,
     isConfigured
   };

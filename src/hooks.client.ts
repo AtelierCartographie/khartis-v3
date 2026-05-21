@@ -1,6 +1,11 @@
-import type { HandleClientError } from '@sveltejs/kit';
+import type { ClientInit, HandleClientError } from '@sveltejs/kit';
+import { installRuntimeObservability } from '$lib/features/commons/services/runtime-observability.service';
 import { LogCategory } from '$lib/features/commons/utils/logger';
 import { posthogService } from '$lib/features/commons/services/posthog.service';
+
+export const init: ClientInit = () => {
+  installRuntimeObservability();
+};
 
 export const handleError: HandleClientError = ({ error, status, event }) => {
   if (status === 404) return;

@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
     PUBLIC_POSTHOG_HOST: 'https://eu.i.posthog.com'
   },
   posthogInit: vi.fn(),
+  posthogCapture: vi.fn(),
   posthogCaptureException: vi.fn(),
   posthogRegister: vi.fn()
 }));
@@ -23,6 +24,7 @@ vi.mock('posthog-js', () => ({
         | undefined;
       args1?.loaded?.({ register: mocks.posthogRegister });
     },
+    capture: (...args: unknown[]) => mocks.posthogCapture(...args),
     captureException: (...args: unknown[]) =>
       mocks.posthogCaptureException(...args)
   }
@@ -135,6 +137,23 @@ describe('posthogService', () => {
         feature: 'data',
         flow: 'import_file',
         extra: { fileName: 'test.csv' }
+      })
+    );
+  });
+
+  it('captures custom diagnostic events with properties', async () => {
+    const { posthogService } = await loadPostHogService();
+
+    posthogService.captureEvent('khartis_main_thread_stall', {
+      blockedMs: 4210,
+      path: '/cartographie/khartisnewpprd/'
+    });
+
+    expect(mocks.posthogCapture).toHaveBeenCalledWith(
+      'khartis_main_thread_stall',
+      expect.objectContaining({
+        blockedMs: 4210,
+        path: '/cartographie/khartisnewpprd/'
       })
     );
   });
