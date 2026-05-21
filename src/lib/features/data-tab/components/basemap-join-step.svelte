@@ -396,6 +396,31 @@
     };
   }
 
+  function isGPSJoinFinalizedForBasemap(
+    basemapId: string,
+    resolvedDatasetId = datasetIdForOrchestrator
+  ): boolean {
+    const duckDataset = getCurrentDuckDataset(resolvedDatasetId);
+
+    return Boolean(
+      duckDataset?.gpsMode &&
+      duckDataset.joinedBasemap === basemapId &&
+      duckDataset.gpsColumns?.lat &&
+      duckDataset.gpsColumns?.lon
+    );
+  }
+
+  async function finalizeGPSJoinIfNeeded(
+    basemap: BasemapMetadata,
+    resolvedDatasetId: string
+  ): Promise<void> {
+    if (isGPSJoinFinalizedForBasemap(basemap.file, resolvedDatasetId)) {
+      return;
+    }
+
+    await duckDBOrchestrator.finalizeJoin(resolvedDatasetId, basemap, '');
+  }
+
   async function persistJoinSnapshot(
     joinState: PersistedJoinSnapshot = {},
     sourceSnapshot = resolveSourceSnapshot()
@@ -492,6 +517,7 @@
         );
         if (abortSignal.aborted) return false;
 
+        syncSelectedDatasetJoinedBasemap(basemap.file);
         dataTabStore.markStepComplete(stepIndex);
         return true;
       } catch (finalizeError) {
@@ -552,6 +578,17 @@
 
     hasDismissedSuggestedBasemap = false;
 
+    if (
+      hasGPSMode &&
+      resolvedDatasetId &&
+      nextBasemapId === basemapSelected &&
+      isGPSJoinFinalizedForBasemap(basemap.file, resolvedDatasetId) &&
+      basemapStyleStore.referenceBasemapId === basemap.file
+    ) {
+      dataTabStore.markStepComplete(stepIndex);
+      return;
+    }
+
     if (currentJoinAbortController) {
       currentJoinAbortController.abort();
     }
@@ -578,7 +615,7 @@
 
     if (hasGPSMode && resolvedDatasetId) {
       try {
-        await duckDBOrchestrator.finalizeJoin(resolvedDatasetId, basemap, '');
+        await finalizeGPSJoinIfNeeded(basemap, resolvedDatasetId);
         if (abortSignal.aborted) return;
 
         await persistJoinSnapshot(
@@ -587,6 +624,7 @@
         );
         if (abortSignal.aborted) return;
 
+        syncSelectedDatasetJoinedBasemap(basemap.file);
         dataTabStore.markStepComplete(stepIndex);
         applyCatalogReferenceBasemap(basemap);
       } catch (error) {
@@ -739,11 +777,7 @@
       });
 
       if (hasGPSMode && resolvedDatasetId) {
-        await duckDBOrchestrator.finalizeJoin(
-          resolvedDatasetId,
-          customBasemap,
-          ''
-        );
+        await finalizeGPSJoinIfNeeded(customBasemap, resolvedDatasetId);
         if (abortSignal.aborted) return;
 
         await persistJoinSnapshot(
@@ -752,6 +786,7 @@
         );
         if (abortSignal.aborted) return;
 
+        syncSelectedDatasetJoinedBasemap(customBasemap.file);
         dataTabStore.markStepComplete(stepIndex);
         logger.success(
           'Custom basemap imported with GPS mode — join skipped',
@@ -844,7 +879,7 @@
     }
 
     try {
-      await duckDBOrchestrator.finalizeJoin(resolvedDatasetId, osmBasemap, '');
+      await finalizeGPSJoinIfNeeded(osmBasemap, resolvedDatasetId);
       if (abortSignal.aborted) return;
 
       await persistJoinSnapshot(
@@ -853,6 +888,7 @@
       );
       if (abortSignal.aborted) return;
 
+      syncSelectedDatasetJoinedBasemap(osmBasemap.file);
       dataTabStore.markStepComplete(stepIndex);
       logger.success('OSM basemap activated with GPS mode', LogCategory.MAP);
     } catch (error) {
@@ -971,6 +1007,7 @@
         );
         if (abortSignal.aborted) return;
 
+        syncSelectedDatasetJoinedBasemap(basemap.file);
         dataTabStore.markStepComplete(stepIndex);
         logger.success(
           'Corrections applied and join finalized',
@@ -1101,6 +1138,7 @@
           );
           if (abortSignal.aborted) return;
 
+          syncSelectedDatasetJoinedBasemap(basemap.file);
           dataTabStore.markStepComplete(stepIndex);
           logger.success(
             'Manual correction applied and join finalized',
@@ -1142,6 +1180,12 @@
       return;
     }
     await handleFinalizeJoin();
+  }
+
+  function syncSelectedDatasetJoinedBasemap(joinedBasemap: string): void {
+    const datasetId = selectedDataset?.id;
+    if (!datasetId) return;
+    datasetsStore.updateDatasetJoinBasemap(datasetId, joinedBasemap);
   }
 
   async function handleFinalizeJoin() {
@@ -1190,6 +1234,7 @@
         },
         sourceSnapshot
       );
+      syncSelectedDatasetJoinedBasemap(basemap.file);
 
       dataTabStore.markStepComplete(stepIndex);
 
@@ -1429,11 +1474,7 @@
 
             joinLoading = true;
             try {
-              await duckDBOrchestrator.finalizeJoin(
-                resolvedDatasetId,
-                basemap,
-                ''
-              );
+              await finalizeGPSJoinIfNeeded(basemap, resolvedDatasetId);
               if (controller.signal.aborted) return;
 
               await persistJoinSnapshot(
@@ -1442,6 +1483,7 @@
               );
               if (controller.signal.aborted) return;
 
+              syncSelectedDatasetJoinedBasemap(basemap.file);
               dataTabActions.clearJoinStats();
               dataTabStore.markStepComplete(stepIndex);
               previousJoinContext = `${resolvedDatasetId}::${basemap.file}`;
@@ -1507,6 +1549,7 @@
               linkedVariableName
             );
             if (controller.signal.aborted) return;
+            syncSelectedDatasetJoinedBasemap(basemap.file);
             dataTabStore.markStepComplete(stepIndex);
             logger.success(
               'Join restored and finalized after project reload',

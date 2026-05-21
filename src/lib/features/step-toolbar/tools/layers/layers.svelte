@@ -7,6 +7,8 @@
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
   import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
+  import { basemapAuxLayersStore } from '$lib/features/map/stores/basemap-aux-layers.store.svelte';
+  import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
   import {
@@ -22,6 +24,9 @@
   $effect(() => {
     void visualizationStore.version;
     void basemapLayersStore.version;
+    void basemapAuxLayersStore.version;
+    void basemapStyleStore.referenceBasemapId;
+    void basemapService.simplificationVersion;
     store.syncWithVisualizations();
   });
 

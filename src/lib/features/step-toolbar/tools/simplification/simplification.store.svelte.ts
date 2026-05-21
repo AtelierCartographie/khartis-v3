@@ -28,7 +28,10 @@ import {
   getBasemapRawTableName,
   refreshImportedBasemapHelperTables
 } from '$lib/features/map/services/basemap-import.service';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
 
@@ -488,7 +491,7 @@ const { actions, getState } = createToolStore<
               getBasemapRawTableName(tableName);
 
             await Duck.query(
-              `CREATE OR REPLACE TABLE "${escapeSqlString(tableName)}" AS SELECT * FROM "${escapeSqlString(rawTableName)}"`
+              `CREATE OR REPLACE TABLE "${escapeIdentifier(tableName)}" AS SELECT * FROM "${escapeIdentifier(rawTableName)}"`
             );
 
             if (lastApplied.primaryLayerType) {

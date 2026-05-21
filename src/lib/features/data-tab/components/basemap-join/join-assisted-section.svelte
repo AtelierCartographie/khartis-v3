@@ -538,6 +538,7 @@
     <div class="category-rows">
       <div class="category-row category-row-joined">
         <button
+          type="button"
           class="category-row-header"
           onclick={toggleJoined}
           aria-expanded={joinedExpanded}
@@ -676,6 +677,7 @@
 
       <div class="category-row category-row-verify">
         <button
+          type="button"
           class="category-row-header"
           onclick={() => (toVerifyExpanded = !toVerifyExpanded)}
           aria-expanded={toVerifyExpanded}
@@ -795,6 +797,7 @@
 
       <div class="category-row category-row-unrecognized">
         <button
+          type="button"
           class="category-row-header"
           onclick={toggleUnrecognized}
           aria-expanded={unrecognizedExpanded}
@@ -925,6 +928,7 @@
 
       <div class="category-row category-row-duplicates">
         <button
+          type="button"
           class="category-row-header"
           onclick={() => (duplicatesExpanded = !duplicatesExpanded)}
           aria-expanded={duplicatesExpanded}
@@ -981,6 +985,7 @@
 
       <div class="category-row category-row-ignored">
         <button
+          type="button"
           class="category-row-header"
           onclick={() => (ignoredExpanded = !ignoredExpanded)}
           aria-expanded={ignoredExpanded}
