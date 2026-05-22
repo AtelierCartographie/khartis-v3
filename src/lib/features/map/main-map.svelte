@@ -42,6 +42,7 @@
   import { INTERNAL_COLUMN } from '../commons/constants/data.constants';
   import { shouldUseMapLibreInterleaved } from './utils/render-engine.utils';
   import { resolveMapDisplayDatasets } from './utils/map-display-datasets.utils';
+  import { resolveBestSplitFeatureIdColumn } from './layers/split-rendering-accessors';
 
   let thematicMapRef = $state<HTMLDivElement>(undefined!);
 
@@ -67,6 +68,8 @@
     new SvelteMap<string, SplitRenderingTable>()
   );
   let displayDataVersion = $state(0);
+  const joinedBasemapDisplayKeys = new SvelteMap<string, string>();
+  const joinedBasemapDisplayLoads = new SvelteMap<string, Promise<void>>();
 
   const enabledDatasets = $derived(datasetsStore.enabledDatasets);
   const mapDisplayDatasets = $derived.by(() =>
@@ -143,19 +146,12 @@
 
   let loadGeneration = 0;
   const WORKSPACE_FIT_PADDING_PX = 30;
-  const STYLING_STEP_COVERAGE_RATIO = 0.85;
-  const DEFAULT_STEP_COVERAGE_RATIO = 1;
   let responsiveMapResizeObserver: ResizeObserver | null = null;
+  let observedWorkspace: HTMLElement | null = null;
+  let observedStepToolbar: HTMLElement | null = null;
   let workspaceWidth = $state(0);
   let workspaceHeight = $state(0);
   let stepToolbarWidth = $state(0);
-
-  const fitCoverageRatio = $derived(
-    globalState.selectedStep === ToolbarStep.Styling &&
-      !globalState.isMobileView
-      ? STYLING_STEP_COVERAGE_RATIO
-      : DEFAULT_STEP_COVERAGE_RATIO
-  );
 
   const fitScale = $derived(
     resolveWorkspaceFitScale({
@@ -165,7 +161,7 @@
       pageHeight: formatState.height,
       paddingPx: WORKSPACE_FIT_PADDING_PX,
       reservedInlineStartPx: globalState.isMobileView ? 0 : stepToolbarWidth,
-      maxViewportCoverageRatio: fitCoverageRatio
+      maxViewportCoverageRatio: 1
     })
   );
   const renderedPageScale = $derived(
@@ -178,45 +174,55 @@
     Math.max(1, Math.round(formatState.height * renderedPageScale))
   );
 
-  function updateResponsiveMapBounds(): void {
-    const workspace = document.querySelector('.workspace-viewport');
-    const stepToolbar = document.getElementById('khartis-step-toolbar');
+  function applyWorkspaceResize(entry: ResizeObserverEntry): void {
+    const rect = entry.contentRect;
+    workspaceWidth = rect.width;
+    workspaceHeight = rect.height;
+  }
 
-    workspaceWidth =
-      workspace instanceof HTMLElement ? workspace.clientWidth : 0;
-    workspaceHeight =
-      workspace instanceof HTMLElement ? workspace.clientHeight : 0;
-    stepToolbarWidth =
-      stepToolbar instanceof HTMLElement
-        ? Math.round(stepToolbar.getBoundingClientRect().width)
-        : 0;
+  function applyStepToolbarResize(entry: ResizeObserverEntry): void {
+    stepToolbarWidth = Math.round(entry.contentRect.width);
   }
 
   function startResponsiveMapObservers(): void {
-    const workspace = document.querySelector('.workspace-viewport');
-    const stepToolbar = document.getElementById('khartis-step-toolbar');
+    observedWorkspace = document.querySelector('.workspace-viewport');
+    observedStepToolbar = document.getElementById('khartis-step-toolbar');
 
     if (typeof ResizeObserver !== 'undefined') {
-      responsiveMapResizeObserver = new ResizeObserver(() => {
-        updateResponsiveMapBounds();
+      responsiveMapResizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.target === observedWorkspace) {
+            applyWorkspaceResize(entry);
+          } else if (entry.target === observedStepToolbar) {
+            applyStepToolbarResize(entry);
+          }
+        }
       });
 
-      if (workspace instanceof HTMLElement) {
-        responsiveMapResizeObserver.observe(workspace);
+      if (observedWorkspace) {
+        responsiveMapResizeObserver.observe(observedWorkspace);
       }
-      if (stepToolbar instanceof HTMLElement) {
-        responsiveMapResizeObserver.observe(stepToolbar);
+      if (observedStepToolbar) {
+        responsiveMapResizeObserver.observe(observedStepToolbar);
       }
     }
 
-    window.addEventListener(EVENT.RESIZE, updateResponsiveMapBounds);
-    updateResponsiveMapBounds();
+    if (observedWorkspace) {
+      workspaceWidth = observedWorkspace.clientWidth;
+      workspaceHeight = observedWorkspace.clientHeight;
+    }
+    if (observedStepToolbar) {
+      stepToolbarWidth = Math.round(
+        observedStepToolbar.getBoundingClientRect().width
+      );
+    }
   }
 
   function stopResponsiveMapObservers(): void {
     responsiveMapResizeObserver?.disconnect();
     responsiveMapResizeObserver = null;
-    window.removeEventListener(EVENT.RESIZE, updateResponsiveMapBounds);
+    observedWorkspace = null;
+    observedStepToolbar = null;
   }
 
   function isStaleLoad(generation: number): boolean {
@@ -315,7 +321,21 @@
     }
   }
 
-  function detectFeatureIdColumn(geometry: ArrowTable): string {
+  function detectFeatureIdColumn(
+    geometry: ArrowTable,
+    dataset?: ArrowTable
+  ): string {
+    if (dataset) {
+      const matchedColumn = resolveBestSplitFeatureIdColumn(
+        geometry,
+        dataset,
+        INTERNAL_COLUMN.FEATURE_ID
+      );
+      if (matchedColumn) {
+        return matchedColumn;
+      }
+    }
+
     const fields = geometry.schema.fields ?? [];
     if (fields.some((f) => f.name === INTERNAL_COLUMN.FEATURE_ID)) {
       return INTERNAL_COLUMN.FEATURE_ID;
@@ -357,14 +377,7 @@
     dataset: DatasetResult,
     generation: number
   ): Promise<ArrowTable | FeatureCollection | null> {
-    const start = performance.now();
     let tableName: string | undefined;
-    logger.info('Preparing dataset for map rendering', LogCategory.MAP, {
-      datasetId: dataset.id,
-      fileName: dataset.name,
-      hasGeometry: Boolean(dataset.geometry),
-      sourceFileId: dataset.sourceFileId
-    });
     try {
       if (dataset.geometry && dataset.sourceFileId) {
         const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
@@ -390,25 +403,11 @@
               : await duckDBOrchestrator.getArrowTableDirect(tableName);
 
           if (arrowTable) {
-            logger.success('Arrow table ready for Deck.gl', LogCategory.MAP, {
-              tableName,
-              rows: arrowTable.numRows,
-              cached: Boolean(duckDBDataset?.arrowTableWithMetadata),
-              reprojectedForTiledBasemap: shouldReprojectForTiledBasemap,
-              durationMs: (performance.now() - start).toFixed(2)
-            });
             return arrowTable;
           }
         }
       }
 
-      logger.warn(
-        'Dataset missing geometry metadata, showing empty map',
-        LogCategory.MAP,
-        {
-          datasetId: dataset.id
-        }
-      );
       return null;
     } catch (error) {
       if (
@@ -434,6 +433,7 @@
     const removedDensityTable = displayDensityTables.delete(datasetId);
     const removedGeoJSON = displayGeoJSONs.delete(datasetId);
     const removedSplit = displaySplitData.delete(datasetId);
+    joinedBasemapDisplayKeys.delete(datasetId);
 
     if (removedTable || removedDensityTable || removedGeoJSON || removedSplit) {
       if (removedTable) {
@@ -452,6 +452,20 @@
     }
   }
 
+  function getJoinedBasemapDisplayKey(
+    datasetId: string,
+    joinedBasemap: string,
+    tableName: string
+  ): string {
+    return [
+      datasetId,
+      joinedBasemap,
+      tableName,
+      duckDBOrchestrator.datasetsVersion,
+      basemapService.simplificationVersion
+    ].join('::');
+  }
+
   function findActiveDensityViz(datasetId: string): VisualizationConfig | null {
     const matches: VisualizationConfig[] = [];
     for (const viz of visualizationStore.activeVisualizations) {
@@ -459,13 +473,6 @@
       if (getPolygonPrimitive(viz)?.fillMode !== FillMode.DENSITY) continue;
       if (!viz.density?.valueColumn || !viz.density?.ratio) continue;
       matches.push(viz);
-    }
-    if (matches.length > 1) {
-      logger.warn(
-        'Multiple density visualizations on the same dataset — rendering only the first one',
-        LogCategory.MAP,
-        { datasetId, count: matches.length }
-      );
     }
     return matches[0] ?? null;
   }
@@ -476,14 +483,52 @@
     tableName: string,
     generation: number
   ): Promise<void> {
-    const start = performance.now();
     const datasetId = dataset.id;
-
-    logger.info('Loading joined basemap for tabular dataset', LogCategory.MAP, {
+    const displayKey = getJoinedBasemapDisplayKey(
       datasetId,
       joinedBasemap,
       tableName
-    });
+    );
+
+    if (joinedBasemapDisplayKeys.get(datasetId) === displayKey) {
+      return;
+    }
+
+    const loadKey = `${displayKey}::${generation}`;
+    const existingLoad = joinedBasemapDisplayLoads.get(loadKey);
+    if (existingLoad) {
+      await existingLoad;
+      return;
+    }
+
+    const loadPromise = (async () => {
+      await loadJoinedBasemapForDisplay(
+        dataset,
+        joinedBasemap,
+        tableName,
+        generation,
+        displayKey
+      );
+    })();
+
+    joinedBasemapDisplayLoads.set(loadKey, loadPromise);
+    try {
+      await loadPromise;
+    } finally {
+      if (joinedBasemapDisplayLoads.get(loadKey) === loadPromise) {
+        joinedBasemapDisplayLoads.delete(loadKey);
+      }
+    }
+  }
+
+  async function loadJoinedBasemapForDisplay(
+    dataset: DatasetResult,
+    joinedBasemap: string,
+    tableName: string,
+    generation: number,
+    displayKey: string
+  ): Promise<void> {
+    const datasetId = dataset.id;
 
     try {
       const [geometryArrow, datasetArrow] = await Promise.all([
@@ -495,23 +540,16 @@
       if (!isDatasetExpectedForDisplay(datasetId)) return;
 
       if (geometryArrow && datasetArrow) {
-        const featureIdColumn = detectFeatureIdColumn(geometryArrow);
+        const featureIdColumn = detectFeatureIdColumn(
+          geometryArrow,
+          datasetArrow
+        );
         setDisplaySplitTable(datasetId, {
           geometry: geometryArrow,
           dataset: datasetArrow,
           featureIdColumn
         });
-        logger.success(
-          'Split joined basemap ready for rendering',
-          LogCategory.MAP,
-          {
-            datasetId,
-            geomRows: geometryArrow.numRows,
-            datasetRows: datasetArrow.numRows,
-            featureIdColumn,
-            durationMs: (performance.now() - start).toFixed(2)
-          }
-        );
+        joinedBasemapDisplayKeys.set(datasetId, displayKey);
         return;
       }
 
@@ -528,19 +566,14 @@
 
       if (joinedTable) {
         setDisplayArrowTable(datasetId, joinedTable);
-        logger.success('Joined basemap ready for rendering', LogCategory.MAP, {
-          datasetId,
-          rows: joinedTable.numRows,
-          durationMs: (performance.now() - start).toFixed(2)
-        });
+        joinedBasemapDisplayKeys.set(datasetId, displayKey);
       } else {
-        logger.warn('No joined data returned for dataset', LogCategory.MAP, {
-          datasetId
-        });
+        joinedBasemapDisplayKeys.delete(datasetId);
         removeDatasetFromDisplay(datasetId);
       }
     } catch (error) {
       logger.error('Failed to load joined basemap', LogCategory.MAP, error);
+      joinedBasemapDisplayKeys.delete(datasetId);
       removeDatasetFromDisplay(dataset.id);
     }
   }
@@ -621,10 +654,6 @@
 
       if (densityTable) {
         setDisplayDensityTable(dataset.id, densityTable);
-        logger.success('Density points ready for Deck.gl', LogCategory.MAP, {
-          datasetId: dataset.id,
-          rows: densityTable.numRows
-        });
       } else {
         removeDensityTable(dataset.id);
       }
@@ -655,14 +684,8 @@
     duckDBDatasetId: string,
     generation?: number
   ): Promise<void> {
-    const start = performance.now();
     const datasetTableName =
       duckDBOrchestrator.getDatasetById(duckDBDatasetId)?.tableName;
-
-    logger.info('Loading GPS data for OSM basemap', LogCategory.MAP, {
-      datasetId,
-      duckDBDatasetId
-    });
 
     try {
       const { table } =
@@ -676,15 +699,7 @@
 
       if (table) {
         setDisplayArrowTable(datasetId, table);
-        logger.success('GPS data ready for rendering on OSM', LogCategory.MAP, {
-          datasetId,
-          rows: table.numRows,
-          durationMs: (performance.now() - start).toFixed(2)
-        });
       } else {
-        logger.warn('No GPS data returned for dataset', LogCategory.MAP, {
-          datasetId
-        });
         removeDatasetFromDisplay(datasetId);
       }
     } catch (error) {
@@ -732,20 +747,8 @@
       if (result) {
         if ('numRows' in result) {
           setDisplayArrowTable(datasetId, result);
-          logger.info(
-            'Dataset added to display as Arrow table',
-            LogCategory.MAP,
-            {
-              datasetId,
-              rows: result.numRows
-            }
-          );
         } else if ('features' in result) {
           setDisplayGeoJSON(datasetId, result);
-          logger.info('Dataset added to display as GeoJSON', LogCategory.MAP, {
-            datasetId,
-            features: result.features.length
-          });
         }
       }
 
@@ -848,14 +851,6 @@
       );
 
       if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
-        logger.info(
-          'OSM basemap activated, loading GPS data',
-          LogCategory.MAP,
-          {
-            datasetId: dataset.id,
-            osmBasemap: osmBasemap.file
-          }
-        );
         loadGPSData(dataset.id, duckDBDataset.id, thisGeneration);
       }
     }
@@ -910,11 +905,6 @@
   });
 
   async function initializeMap() {
-    const start = performance.now();
-    logger.info('Initializing main map view', LogCategory.MAP, {
-      displayDatasetCount: mapDisplayDatasets.length
-    });
-
     const initGeneration = ++loadGeneration;
     const [firstDataset, ...remainingDatasets] = mapDisplayDatasets;
 
@@ -922,15 +912,6 @@
       await loadDatasetForDisplay(firstDataset, initGeneration);
     }
 
-    logger.success(
-      'First dataset ready, unblocking map render',
-      LogCategory.MAP,
-      {
-        durationMs: (performance.now() - start).toFixed(2),
-        tablesLoaded: displayTables.size,
-        geoJSONsLoaded: displayGeoJSONs.size
-      }
-    );
     isInitializing = false;
 
     bumpDisplayDataVersion();
@@ -939,13 +920,7 @@
       void loadDatasetsSequentially(remainingDatasets, (dataset) =>
         loadDatasetForDisplay(dataset, initGeneration)
       )
-        .then(() => {
-          logger.success('All datasets loaded', LogCategory.MAP, {
-            durationMs: (performance.now() - start).toFixed(2),
-            tablesLoaded: displayTables.size,
-            geoJSONsLoaded: displayGeoJSONs.size
-          });
-        })
+        .then(() => {})
         .catch((error) => {
           logger.error(
             'Failed to load remaining datasets',
@@ -977,7 +952,6 @@
   let skeletonTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   function handleMapReady() {
-    logger.success('Map fully rendered', LogCategory.MAP);
     const elapsed = Date.now() - skeletonShownAt;
     const remaining = Math.max(0, MIN_SKELETON_DISPLAY_MS - elapsed);
     if (remaining === 0) {

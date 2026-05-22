@@ -1,6 +1,5 @@
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import type { GeoColumnResult } from '$lib/features/commons/utils/geo-detector.utils';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { GeoColumnInfo } from '$lib/features/data-pipeline';
 import type { AnalysisResult, DuckDBDataset } from '../types';
 import { detectGPSColumns } from './gps-ops';
@@ -12,13 +11,6 @@ export function restoreJoinStateFromFile(
   if (!file.joinedBasemap && !file.gpsMode) {
     return null;
   }
-
-  logger.info('Restoring join state from persisted data', LogCategory.DUCKDB, {
-    datasetId: dataset.id,
-    joinedBasemap: file.joinedBasemap,
-    gpsMode: file.gpsMode,
-    gpsColumns: file.gpsColumns
-  });
 
   const updates: Partial<DuckDBDataset> = {};
 
@@ -37,10 +29,6 @@ export function restoreJoinStateFromFile(
       );
       if (detected) {
         updates.gpsColumns = detected;
-        logger.info('Re-detected GPS columns', LogCategory.DUCKDB, {
-          lat: detected.lat,
-          lon: detected.lon
-        });
       }
     } else {
       updates.gpsColumns = file.gpsColumns;

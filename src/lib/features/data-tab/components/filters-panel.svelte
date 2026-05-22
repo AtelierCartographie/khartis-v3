@@ -6,10 +6,6 @@
     Tag,
     InlineNotification
   } from 'carbon-components-svelte';
-  import Button from '$lib/features/commons/components/button-native.svelte';
-  import TrashCan from 'carbon-icons-svelte/lib/TrashCan.svelte';
-  import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
-  import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
   import { ColumnType } from '$lib/features/data-pipeline';
@@ -21,6 +17,10 @@
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { dataToolsStore } from '../stores/data-tools.store.svelte';
   import * as m from '$lib/paraglide/messages';
+  import Button from '$lib/features/commons/components/button-native.svelte';
+  import TrashCan from 'carbon-icons-svelte/lib/TrashCan.svelte';
+  import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
+  import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 
   interface Props {
     tableName?: string;

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const METADATA_KEY = 'khartis_projects_metadata';
+const CURRENT_KEY = 'khartis_current_project';
 
 const mocks = vi.hoisted(() => ({
   localforageGetItem: vi.fn<(key: string) => Promise<string | null>>(),
@@ -279,5 +280,28 @@ describe('project persistence localforage migration', () => {
     expect(metadata).toHaveLength(1);
     expect(metadata[0]?.id).toBe('fresh-project');
     expect(mocks.localforageRemoveItem).toHaveBeenCalledWith(METADATA_KEY);
+  });
+
+  it('keeps project storage reads working without a persistence-storage import cycle', async () => {
+    const database = new FakeDatabase();
+    database.seedStore('metadata', 'key', [
+      {
+        key: CURRENT_KEY,
+        value: JSON.stringify('current-project')
+      }
+    ]);
+    installFakeIndexedDb(database);
+
+    await import('./persistence.service');
+    const { projectStorage } = await import('./storage.service');
+
+    await expect(projectStorage.load<string>(CURRENT_KEY)).resolves.toBe(
+      'current-project'
+    );
+    expect(mocks.loggerWarn).not.toHaveBeenCalledWith(
+      'Failed to load project storage entry',
+      expect.anything(),
+      expect.objectContaining({ key: CURRENT_KEY })
+    );
   });
 });

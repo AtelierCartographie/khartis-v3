@@ -1,7 +1,7 @@
 import {
-  ChartScatter,
+  ChartTSne,
   MisuseOutline,
-  SquareFill,
+  StopFilledAlt,
   Table,
   Tag
 } from 'carbon-icons-svelte';
@@ -38,12 +38,12 @@ const FILL_MODE_ITEMS: Record<FillMode, FillModeItem> = {
     iconSize: DEFAULT_ICON_SIZE
   },
   [FillMode.UNIQUE]: {
-    icon: SquareFill,
+    icon: StopFilledAlt,
     label: m.fill_mode_unique(),
     iconSize: DEFAULT_ICON_SIZE
   },
   [FillMode.DENSITY]: {
-    icon: ChartScatter,
+    icon: ChartTSne,
     label: m.symbol_mode_density(),
     iconSize: DEFAULT_ICON_SIZE
   },

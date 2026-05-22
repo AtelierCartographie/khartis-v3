@@ -3,10 +3,10 @@
     createProjectActions,
     createProjectState
   } from '$lib/features/commons/stores/create-project.store.svelte';
-  import { DataSourceType } from '$lib/features/commons/types/create-project.types';
   import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
   import { globalActions } from '$lib/features/commons/stores/global.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import { DataSourceType } from '$lib/features/commons/types/create-project.types';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import CreateNewProject from '$lib/features/create-project/components/create-new-project.svelte';
   import {
@@ -82,8 +82,6 @@
       } finally {
         isImporting = false;
       }
-    } else {
-      logger.error('No current project', LogCategory.PROJECT);
     }
   };
 

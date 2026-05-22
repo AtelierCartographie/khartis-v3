@@ -52,4 +52,13 @@ describe('try-with-example project initialization', () => {
     );
     expect(source).toContain('await applyExampleReferenceBasemap(example);');
   });
+
+  it('synchronises the in-memory geolocation linked variable with the catalog join geoColumn', () => {
+    expect(source).toContain('syncGeolocationStateForCatalogJoin(');
+    expect(source).toContain('geoReference: GeoreferenceType.ENTITIES');
+    expect(source).toContain('linkedVariableName: geoColumn');
+    expect(
+      source.indexOf('await duckDBOrchestrator.finalizeJoin(')
+    ).toBeLessThan(source.indexOf('syncGeolocationStateForCatalogJoin('));
+  });
 });

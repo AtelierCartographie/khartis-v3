@@ -222,6 +222,13 @@ describe('getColorForValue — n+1 colors for n internal breaks', () => {
   it('returns fallback gray when colors array is empty', () => {
     expect(getColorForValue(5, [10], [])).toEqual([128, 128, 128]);
   });
+
+  it('returns fallback gray when classification arrays are missing', () => {
+    expect(getColorForValue(5, undefined, ['#ff0000'])).toEqual([
+      128, 128, 128
+    ]);
+    expect(getColorForValue(5, [10], undefined)).toEqual([128, 128, 128]);
+  });
 });
 
 describe('getColorForValue — n colors for n breaks (legacy lower-bounds path)', () => {

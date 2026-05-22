@@ -788,10 +788,6 @@
     patchLumaCanvasContextResizeGuard();
 
     if (!supportsWebGL2()) {
-      logger.warn(
-        'WebGL2 unavailable: shared facet renderer disabled',
-        LogCategory.MAP
-      );
       mapInstanceStore.setDeckInstance(null);
       mapInstanceStore.setMapLoaded(true);
       triggerOnReady();
@@ -884,8 +880,8 @@
         sharedDeck.setProps({ layers: [] });
         sharedDeck.finalize();
       } catch (error) {
-        logger.warn(
-          'Shared facet deck finalize raised an error during teardown',
+        logger.error(
+          'Failed to finalize facet Deck instance',
           LogCategory.MAP,
           error
         );
@@ -953,10 +949,12 @@
             worldBaseTable = resolvedBasemap.geometryTable;
           }
         } finally {
-          isLoadingReferenceBasemap = false;
-          if (pendingOnReady) {
-            pendingOnReady = false;
-            triggerOnReady();
+          if (requestId === referenceBasemapRequestId) {
+            isLoadingReferenceBasemap = false;
+            if (pendingOnReady) {
+              pendingOnReady = false;
+              triggerOnReady();
+            }
           }
         }
         return;

@@ -89,6 +89,20 @@ describe('PolygonsConfig — FillSection wiring', () => {
     );
   });
 
+  it('limits polygon contour thickness to 10 through the shared StrokeSection', () => {
+    const strokeBlock = source.split('<StrokeSection')[1]?.split('/>')[0];
+    expect(source).toContain('const POLYGON_STROKE_WIDTH_MAX = 10;');
+    expect(strokeBlock).toContain('maxStrokeWidth={POLYGON_STROKE_WIDTH_MAX}');
+  });
+
+  it('resets polygon classed fill opacity to 100% when entering En classes', () => {
+    expect(source).toContain('const POLYGON_CLASSES_FILL_OPACITY');
+    expect(source).toContain('previousFillMode !== FillMode.CLASSES');
+    expect(source).toContain(
+      'updates.fillOpacity = POLYGON_CLASSES_FILL_OPACITY'
+    );
+  });
+
   it('exposes FillMode.DENSITY through PolygonModeDensity in the density snippet', () => {
     expect(source).toContain('FillMode.DENSITY');
     expect(source).toContain('<PolygonModeDensity');

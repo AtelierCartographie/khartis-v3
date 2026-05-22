@@ -9,7 +9,6 @@ import {
 } from '$lib/features/step-toolbar/tools/facets/facets-access';
 import type { DatasetsState, DatasetsInternals } from './datasets-state.svelte';
 import type { VisualizationStoreOperations } from './datasets-processing';
-import { LogCategory, logger } from '../../utils/logger';
 import { sanitizeTextInput } from '../../utils/sanitize.utils';
 import { projectStore } from '../project.store.svelte';
 import { dataTabActions } from '../data-tab.store.svelte';
@@ -96,9 +95,6 @@ export function updateDataset(
   const datasetIndex = state.datasets.findIndex((d) => d.id === datasetId);
 
   if (datasetIndex === -1) {
-    logger.warn('Dataset not found for update', LogCategory.STORE, {
-      datasetId
-    });
     return;
   }
 
@@ -118,14 +114,6 @@ export function updateDatasetJoinBasemap(
   const datasetIndex = state.datasets.findIndex((d) => d.id === datasetId);
 
   if (datasetIndex === -1) {
-    logger.warn(
-      'Dataset not found for join basemap update',
-      LogCategory.STORE,
-      {
-        datasetId,
-        joinedBasemap
-      }
-    );
     return;
   }
 
@@ -141,9 +129,6 @@ export function updateDatasetRowCount(
   rowCount: number
 ): void {
   if (!findById(state.datasets, datasetId)) {
-    logger.warn('Dataset not found for row count update', LogCategory.STORE, {
-      datasetId
-    });
     return;
   }
   state.datasets = updateById(state.datasets, datasetId, { rowCount });
@@ -166,9 +151,6 @@ export function updateDatasetCsvOptions(
 ): void {
   const dataset = findById(state.datasets, datasetId);
   if (!dataset) {
-    logger.warn('Dataset not found for CSV options update', LogCategory.STORE, {
-      datasetId
-    });
     return;
   }
   state.datasets = updateById(state.datasets, datasetId, {

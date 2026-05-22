@@ -21,6 +21,7 @@ import {
   type VisualizationPreset,
   type VisualizationConfig,
   type VisualizationOrigin,
+  type VisualizationAppliedSuggestionState,
   type VisualizationRestoreSnapshot,
   type VisualizationRestoreState,
   resolveVisualizationPreset,
@@ -61,6 +62,7 @@ import { projectStore } from '$lib/features/commons/stores/project.store.svelte'
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { deepClone } from '$lib/features/commons/utils/clone.utils';
 import { SavePriority } from '$lib/features/project-management/core/persistence-registry';
+import { getSuggestionSignature } from '../utils/suggestion-selection.utils';
 
 interface DatasetGeometrySource {
   id?: string;
@@ -102,6 +104,22 @@ interface SuggestionBehavior {
   symbol?: Partial<SymbolPrimitiveConfig>;
   line?: Partial<LinePrimitiveConfig>;
   text?: Partial<TextPrimitiveConfig>;
+}
+
+function hasGpsCoordinateDetection(
+  dataset?: DatasetGeometrySource | null
+): boolean {
+  if (!dataset?.geoDetection?.geoColumns) {
+    return false;
+  }
+
+  const hasLat = dataset.geoDetection.geoColumns.some(
+    (c) => c.type === GEO_COLUMN_TYPE.LATITUDE
+  );
+  const hasLon = dataset.geoDetection.geoColumns.some(
+    (c) => c.type === GEO_COLUMN_TYPE.LONGITUDE
+  );
+  return hasLat && hasLon;
 }
 
 const SUGGESTION_VISUALIZATION_TYPES = {
@@ -268,7 +286,7 @@ function buildSupportPolygonConfig(
     fillMode: FillMode.UNIQUE,
     fillColor: DEFAULT_COLORS.gray,
     fillOpacity: polygon?.fillOpacity ?? 1,
-    strokeMode: StrokeMode.UNIQUE,
+    strokeMode: StrokeMode.NONE,
     strokeColor: DEFAULT_COLORS.gray,
     strokeWidth: polygon?.strokeWidth ?? 1,
     strokeOpacity: 1,
@@ -364,48 +382,38 @@ export function resolveDatasetGeometryType(
   if (dataset.gpsMode) {
     return 'Point';
   }
-  if (dataset.joinedBasemap) {
-    return 'Polygon';
+  if (hasGpsCoordinateDetection(dataset)) {
+    return 'Point';
   }
 
-  if (dataset.geoDetection?.geoColumns) {
-    const hasLat = dataset.geoDetection.geoColumns.some(
-      (c) => c.type === GEO_COLUMN_TYPE.LATITUDE
-    );
-    const hasLon = dataset.geoDetection.geoColumns.some(
-      (c) => c.type === GEO_COLUMN_TYPE.LONGITUDE
-    );
-    if (hasLat && hasLon) {
-      return 'Point';
-    }
-  }
-
-  if (!dataset.sourceFileId) {
-    return null;
-  }
-
-  const duckDataset = duckDBOrchestrator.getDatasetBySourceFile(
-    dataset.sourceFileId
-  );
+  const duckDataset = dataset.sourceFileId
+    ? duckDBOrchestrator.getDatasetBySourceFile(dataset.sourceFileId)
+    : null;
   if (duckDataset) {
     if (duckDataset.gpsMode) {
       return 'Point';
     }
+  }
+
+  const sourceFile = dataset.sourceFileId
+    ? projectStore.currentProject?.data?.sourceFiles?.find(
+        (f) => f.id === dataset.sourceFileId
+      )
+    : undefined;
+  if (sourceFile?.gpsMode) {
+    return 'Point';
+  }
+
+  if (dataset.joinedBasemap) {
+    return 'Polygon';
+  }
+  if (duckDataset) {
     if (duckDataset.joinedBasemap) {
       return 'Polygon';
     }
   }
-
-  const sourceFile = projectStore.currentProject?.data?.sourceFiles?.find(
-    (f) => f.id === dataset.sourceFileId
-  );
-  if (sourceFile) {
-    if (sourceFile.gpsMode) {
-      return 'Point';
-    }
-    if (sourceFile.joinedBasemap) {
-      return 'Polygon';
-    }
+  if (sourceFile?.joinedBasemap) {
+    return 'Polygon';
   }
 
   const datasetId = (dataset as { id?: string }).id;
@@ -669,7 +677,8 @@ export function resolveSuggestionBehavior(
         }),
         modes: {
           ...preset.modes,
-          fill: FillMode.CLASSES
+          fill: FillMode.CLASSES,
+          stroke: StrokeMode.NONE
         },
         style: {},
         classification: choroplethPreset.classification,
@@ -678,6 +687,7 @@ export function resolveSuggestionBehavior(
         polygon: {
           enabled: true,
           fillMode: FillMode.CLASSES,
+          strokeMode: StrokeMode.NONE,
           valueColumn: primaryNumericColumn,
           classification: choroplethPreset.classification,
           missingData: preset.missingData
@@ -711,7 +721,8 @@ export function resolveSuggestionBehavior(
         }),
         modes: {
           ...preset.modes,
-          fill: FillMode.CATEGORIES
+          fill: FillMode.CATEGORIES,
+          stroke: StrokeMode.NONE
         },
         style: {},
         classification: categoricalPreset.classification,
@@ -720,6 +731,7 @@ export function resolveSuggestionBehavior(
         polygon: {
           enabled: true,
           fillMode: FillMode.CATEGORIES,
+          strokeMode: StrokeMode.NONE,
           categoryColumn: primaryTextColumn,
           classification: categoricalPreset.classification,
           missingData: preset.missingData
@@ -750,7 +762,8 @@ export function resolveSuggestionBehavior(
       mapping: baseMapping,
       modes: {
         ...preset.modes,
-        fill: FillMode.UNIQUE
+        fill: FillMode.UNIQUE,
+        stroke: StrokeMode.NONE
       },
       style: { fillColor: DEFAULT_COLORS.fill },
       classification: undefined,
@@ -759,6 +772,7 @@ export function resolveSuggestionBehavior(
       polygon: {
         enabled: true,
         fillMode: FillMode.UNIQUE,
+        strokeMode: StrokeMode.NONE,
         fillColor: DEFAULT_COLORS.fill,
         classification: undefined,
         missingData: preset.missingData
@@ -1186,6 +1200,16 @@ function createVisualizationRestoreState(
   };
 }
 
+function createVisualizationAppliedSuggestionState(
+  visualization: VisualizationConfig,
+  suggestionKey: string
+): VisualizationAppliedSuggestionState {
+  return {
+    suggestionKey,
+    visualization: createVisualizationRestoreSnapshot(visualization)
+  };
+}
+
 export function buildSuggestionOrigin(
   visualization: VisualizationConfig,
   origin: VisualizationOrigin
@@ -1197,12 +1221,53 @@ export function buildSuggestionOrigin(
     visualization.origin?.restoreState
       ? deepClone(visualization.origin.restoreState)
       : undefined;
+  const existingAppliedSuggestionState =
+    origin.suggestionKey &&
+    visualization.origin?.appliedSuggestionState?.suggestionKey ===
+      origin.suggestionKey
+      ? deepClone(visualization.origin.appliedSuggestionState)
+      : undefined;
 
   return {
     ...origin,
+    ...(existingAppliedSuggestionState
+      ? { appliedSuggestionState: existingAppliedSuggestionState }
+      : {}),
     restoreState:
       existingRestoreState ?? createVisualizationRestoreState(visualization)
   };
+}
+
+export function rememberAppliedSuggestionState(
+  vizId: string,
+  suggestionKey: string
+): void {
+  const visualization = visualizationStore.visualizations.find(
+    (item) => item.id === vizId
+  );
+  if (!visualization) {
+    return;
+  }
+
+  visualizationStore.updateVisualization(
+    vizId,
+    {
+      origin: {
+        mode: getVisualizationOriginMode(visualization),
+        ...(visualization.origin?.suggestionKey
+          ? { suggestionKey: visualization.origin.suggestionKey }
+          : { suggestionKey }),
+        ...(visualization.origin?.restoreState
+          ? { restoreState: deepClone(visualization.origin.restoreState) }
+          : {}),
+        appliedSuggestionState: createVisualizationAppliedSuggestionState(
+          visualization,
+          suggestionKey
+        )
+      }
+    },
+    SavePriority.IMMEDIATE
+  );
 }
 
 export function restoreVisualizationFromSuggestion(vizId: string): boolean {
@@ -1210,6 +1275,7 @@ export function restoreVisualizationFromSuggestion(vizId: string): boolean {
     (item) => item.id === vizId
   );
   const restoreState = visualization?.origin?.restoreState;
+  const appliedSuggestionState = visualization?.origin?.appliedSuggestionState;
 
   if (!visualization || !restoreState) {
     return false;
@@ -1238,6 +1304,16 @@ export function restoreVisualizationFromSuggestion(vizId: string): boolean {
     nextOrigin = undefined;
   } else {
     nextOrigin = deepClone(restoreState.origin);
+  }
+
+  if (appliedSuggestionState) {
+    nextOrigin = {
+      ...(nextOrigin ??
+        (dataset && isVisualizationBlank(restoredVisualization, dataset)
+          ? { mode: 'manual-blank' as const }
+          : { mode: 'custom' as const })),
+      appliedSuggestionState: deepClone(appliedSuggestionState)
+    };
   }
 
   visualizationStore.updateVisualization(vizId, {
@@ -1515,6 +1591,18 @@ export function isVisualizationMatchingSuggestion(
   );
 }
 
+function ensureVisualizationActive(vizId: string): void {
+  if (
+    visualizationStore.activeVisualizations.some(
+      (visualization) => visualization.id === vizId
+    )
+  ) {
+    return;
+  }
+
+  visualizationStore.toggleVisualization(vizId);
+}
+
 export function applySuggestionToVisualization(
   vizId: string,
   suggestion: VizSuggestion,
@@ -1571,16 +1659,29 @@ export function applySuggestionToVisualization(
     dataset,
     suggestion
   );
+  const rememberedAppliedState = options.origin?.appliedSuggestionState;
+  const suggestionKey = getSuggestionSignature(suggestion);
+  const rememberedSuggestionUpdate =
+    rememberedAppliedState?.suggestionKey === suggestionKey
+      ? deepClone(rememberedAppliedState.visualization)
+      : null;
+
+  ensureVisualizationActive(vizId);
 
   visualizationStore.updateVisualization(
     vizId,
-    {
-      ...preset,
-      ...suggestionUpdate,
-      origin: options.origin,
-      primitiveOrder: undefined,
-      dataFilters: undefined
-    },
+    rememberedSuggestionUpdate
+      ? {
+          ...rememberedSuggestionUpdate,
+          origin: options.origin
+        }
+      : {
+          ...preset,
+          ...suggestionUpdate,
+          origin: options.origin,
+          primitiveOrder: undefined,
+          dataFilters: undefined
+        },
     SavePriority.IMMEDIATE
   );
 

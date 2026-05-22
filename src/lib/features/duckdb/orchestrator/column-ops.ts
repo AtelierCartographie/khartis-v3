@@ -1,5 +1,4 @@
 import { DuckDBError } from '$lib/features/commons/pipeline.errors';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   escapeIdentifier,
   escapeSqlString
@@ -139,16 +138,8 @@ export async function dropRows(
 ): Promise<void> {
   if (!rowIds.length) return;
 
-  const start = performance.now();
-
   await Duck.drop_rows(tableName, rowIds);
   await maybeAnalyse(tableName, Duck, options);
-
-  logger.info('Dropped rows from DuckDB table', LogCategory.DUCKDB, {
-    tableName,
-    rowCount: rowIds.length,
-    durationMs: (performance.now() - start).toFixed(2)
-  });
 }
 
 export async function refineColumn(
@@ -158,8 +149,6 @@ export async function refineColumn(
   Duck: DuckDBClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<void> {
-  const start = performance.now();
-
   const escapedTable = escapeIdentifier(tableName);
   const escapedCol = escapeIdentifier(columnName);
 
@@ -186,13 +175,6 @@ export async function refineColumn(
   await Duck.query(operations[operation]);
 
   await maybeAnalyse(tableName, Duck, options);
-
-  logger.info('Refined DuckDB column', LogCategory.DUCKDB, {
-    tableName,
-    columnName,
-    operation,
-    durationMs: (performance.now() - start).toFixed(2)
-  });
 }
 
 export async function replaceInColumn(
@@ -203,8 +185,6 @@ export async function replaceInColumn(
   Duck: DuckDBClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<number> {
-  const start = performance.now();
-
   const escapedTable = escapeIdentifier(tableName);
   const escapedCol = escapeIdentifier(columnName);
   const escapedSearchValue = escapeSqlString(searchValue);
@@ -226,17 +206,6 @@ export async function replaceInColumn(
   const count = Number(countRow?.count) || 0;
 
   if (count > 0) {
-    logger.info(
-      'Replacing exact matches in DuckDB column',
-      LogCategory.DUCKDB,
-      {
-        tableName,
-        columnName,
-        count,
-        searchValue,
-        replaceValue
-      }
-    );
     await Duck.query(
       `UPDATE "${escapedTable}" SET "${escapedCol}" = '${escapedReplaceValue}' WHERE ${exactMatchCondition}`
     );
@@ -244,16 +213,6 @@ export async function replaceInColumn(
     if (!options?.skipAnalysis) {
       await Duck.analyse(tableName, { force: true });
     }
-    logger.success(
-      'Column values replaced (exact matches)',
-      LogCategory.DUCKDB,
-      {
-        tableName,
-        columnName,
-        count,
-        durationMs: (performance.now() - start).toFixed(2)
-      }
-    );
   }
 
   return count;
@@ -369,8 +328,6 @@ export async function addCalculatedColumn(
   Duck: DuckDBClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<AnalysisResult[]> {
-  const start = performance.now();
-
   const trimmedName = columnName.trim();
   if (!trimmedName) {
     throw new DuckDBError(m.error_invalid_column_name_calc());
@@ -397,12 +354,6 @@ export async function addCalculatedColumn(
   const updatedColumns = options?.skipAnalysis
     ? columns
     : await Duck.analyse(tableName, { force: true });
-
-  logger.success('Calculated column added to DuckDB', LogCategory.DUCKDB, {
-    tableName,
-    columnName: trimmedName,
-    durationMs: (performance.now() - start).toFixed(2)
-  });
 
   return updatedColumns;
 }

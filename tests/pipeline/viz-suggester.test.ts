@@ -50,6 +50,22 @@ const qtaCol = col({
   }
 });
 
+const boundedPopulationCol = col({
+  name: 'population_2024',
+  type: 'number',
+  stats: {
+    totalCount: 3,
+    uniqueCount: 3,
+    nullCount: 0,
+    min: 80,
+    max: 160,
+    share_integers: 1.0,
+    share_floats: 0,
+    share_rank_interval: 0,
+    extent_magnitude: 1
+  }
+});
+
 const geoidCol = col({
   name: 'iso',
   type: 'string',
@@ -150,6 +166,19 @@ describe('suggestVisualizations — Polygon thematic', () => {
     const results = vizSuggester.suggestVisualizations([qlCol], 'Polygon');
     const withColumn = results.filter((s) => s.columns?.includes('land_use'));
     expect(withColumn.length).toBeGreaterThan(0);
+  });
+
+  it('keeps bounded absolute numeric columns eligible on Polygon datasets', () => {
+    const results = vizSuggester.suggestVisualizations(
+      [boundedPopulationCol],
+      'Polygon',
+      { maxSuggestions: 10 }
+    );
+    const withColumn = results.filter((s) =>
+      s.columns?.includes('population_2024')
+    );
+    expect(withColumn.length).toBeGreaterThan(0);
+    expect(withColumn.map((s) => s.id)).toContain('symbols_proportional');
   });
 
   it('GEOID column does not appear in suggestion columns', () => {

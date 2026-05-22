@@ -20,7 +20,6 @@
   import { EVENT } from '$lib/features/commons/constants/dom.constants';
   import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 
-  initializeStores();
   import '$lib/features/commons/stores/locale.store.svelte';
   import { setLocale, locales, cookieName } from '$lib/paraglide/runtime.js';
   import Header from '$lib/features/header/header.svelte';
@@ -66,6 +65,8 @@
   import '$lib/features/commons/assets/styles/figma-tokens.css';
   import '$lib/features/commons/assets/styles/spacing.css';
   import '$lib/features/commons/assets/styles/theming.css';
+
+  initializeStores();
 
   let { children } = $props();
   let isLoading = $state(true);
@@ -176,11 +177,6 @@
           );
           globalState.isCreateProjectModalOpen = true;
         });
-
-        logger.debug(
-          'UI ready — data services loading in background',
-          LogCategory.SYSTEM
-        );
       } catch (error) {
         logger.error(
           'Project store initialization failed',

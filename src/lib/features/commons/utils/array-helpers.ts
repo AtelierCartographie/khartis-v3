@@ -1,5 +1,3 @@
-import { LogCategory, logger } from './logger';
-
 export function findById<T extends { id: string }>(
   array: T[],
   id: string | undefined
@@ -14,9 +12,7 @@ export function updateById<T extends { id: string }>(
   updates: Partial<T>
 ): T[] {
   const found = array.some((item) => item.id === id);
-  if (!found) {
-    logger.warn(`updateById: ID "${id}" not found in array`, LogCategory.DATA);
-  }
+  if (!found) return array;
   return array.map((item) => (item.id === id ? { ...item, ...updates } : item));
 }
 

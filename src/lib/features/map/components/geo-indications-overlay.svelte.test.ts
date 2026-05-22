@@ -7,6 +7,7 @@ import {
 import { StylingTools } from '$lib/features/commons/types/global';
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
+import { projectionStore } from '../stores/projection.store.svelte';
 import { formatActions } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import { BasemapStyle } from '../constants/basemap-styles';
 import {
@@ -190,6 +191,7 @@ describe('geo indications overlay dragging', () => {
     });
     geoIndicationsActions.reset();
     basemapStyleStore.reset();
+    projectionStore.reset();
     mapInstanceStore.reset();
     globalActions.resetNavigationState();
     globalState.selectedTool = StylingTools.GeoIndications;
@@ -200,6 +202,7 @@ describe('geo indications overlay dragging', () => {
     formatActions.reset();
     geoIndicationsActions.reset();
     basemapStyleStore.reset();
+    projectionStore.reset();
     mapInstanceStore.reset();
     globalActions.resetNavigationState();
   });
@@ -358,6 +361,40 @@ describe('geo indications overlay dragging', () => {
 
     expect(container.querySelector('.inset-map-planisphere')).toBeNull();
     expect(container.querySelector('.inset-extent-point')).toBeNull();
+  });
+
+  it('converts projected map bounds before rendering the inset extent', async () => {
+    const invert = vi.fn(([x, y]: [number, number]) => [x / 1000, y / 1000]);
+    mapInstanceStore.setMapInstance(
+      createBoundsMap({
+        north: 60000,
+        south: 0,
+        east: 30000,
+        west: -30000
+      }) as never
+    );
+    projectionStore.setReferenceBbox(
+      [-30000, 0, 30000, 60000],
+      undefined,
+      true
+    );
+    projectionStore.setRenderProjection({
+      invert
+    } as never);
+    geoIndicationsActions.toggleInsetMap();
+
+    const { container } = render(GeoIndicationsOverlay);
+
+    await waitFor(() => {
+      expect(container.querySelector('.inset-extent-path')?.tagName).toBe(
+        'path'
+      );
+    });
+
+    expect(invert.mock.calls.length).toBeGreaterThan(4);
+    expect(container.querySelector('.inset-map-panel')).toBeInstanceOf(
+      HTMLDivElement
+    );
   });
 
   it('renders the inset extent as a point when the projected bbox is too small', async () => {

@@ -33,6 +33,7 @@ function createProjectionStore() {
     renderProjection: null,
     isProjectedCoordinates: false
   });
+  let needsCanvasFit = true;
 
   function recalculateModelMatrix(): void {
     const {
@@ -72,6 +73,7 @@ function createProjectionStore() {
       state.referenceBbox = bbox;
       state.referenceGeoMetadata = geoMetadata;
       state.isProjectedCoordinates = false;
+      needsCanvasFit = true;
       recalculateModelMatrix();
     }
   }
@@ -85,17 +87,28 @@ function createProjectionStore() {
     state.referenceBbox = bbox;
     state.referenceGeoMetadata = geoMetadata ?? null;
     state.isProjectedCoordinates = isProjected;
+    needsCanvasFit = true;
     recalculateModelMatrix();
   }
 
   function updateCanvasSize(size: CanvasSize): void {
     if (
-      size.width !== state.canvasSize.width ||
-      size.height !== state.canvasSize.height
+      size.width === state.canvasSize.width &&
+      size.height === state.canvasSize.height
     ) {
-      state.canvasSize = size;
-      recalculateModelMatrix();
+      return;
     }
+
+    state.canvasSize = size;
+    if (needsCanvasFit) {
+      recalculateModelMatrix();
+      needsCanvasFit = false;
+    }
+  }
+
+  function refitToCanvas(): void {
+    needsCanvasFit = true;
+    recalculateModelMatrix();
   }
 
   function setFitPadding(fitPaddingPx: number): void {
@@ -109,6 +122,7 @@ function createProjectionStore() {
     }
 
     state.fitPaddingPx = nextFitPaddingPx;
+    needsCanvasFit = true;
     recalculateModelMatrix();
   }
 
@@ -131,6 +145,7 @@ function createProjectionStore() {
     state.fitPaddingPx = DEFAULT_FIT_PADDING_PX;
     state.renderScale = 1;
     state.isProjectedCoordinates = false;
+    needsCanvasFit = true;
   }
 
   function reset(): void {
@@ -142,6 +157,7 @@ function createProjectionStore() {
     state.fitPaddingPx = DEFAULT_FIT_PADDING_PX;
     state.renderScale = 1;
     state.isProjectedCoordinates = false;
+    needsCanvasFit = true;
   }
 
   return {
@@ -172,6 +188,7 @@ function createProjectionStore() {
     setReferenceBboxFromMetadata,
     setReferenceBbox,
     updateCanvasSize,
+    refitToCanvas,
     setFitPadding,
     setRenderScale,
     setRenderProjection,

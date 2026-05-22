@@ -154,4 +154,19 @@ describe('ThematicMap source', () => {
       "scheduleLayerUpdateAfterStyleIdle(map, 'effect:selectedStyle-idle')"
     );
   });
+
+  it('does not let stale reference basemap requests release loading state', () => {
+    const effectStart = source.indexOf(
+      'const requestId = ++referenceBasemapRequestId;'
+    );
+    const finallyStart = source.indexOf('} finally {', effectStart);
+    const finallyBody = source.slice(finallyStart, finallyStart + 240);
+
+    expect(finallyBody).toContain(
+      'if (requestId === referenceBasemapRequestId)'
+    );
+    expect(finallyBody.indexOf('if (requestId')).toBeLessThan(
+      finallyBody.indexOf('isLoadingReferenceBasemap = false;')
+    );
+  });
 });

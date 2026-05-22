@@ -1,7 +1,4 @@
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
-import { dataTabState } from '$lib/features/commons/stores/data-tab.store.svelte';
-import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
-import { deepCloneForStorage } from '$lib/features/commons/utils/clone-for-storage.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { resolvePersistedJoinState } from '$lib/features/commons/utils/persisted-join-state.utils';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
@@ -23,6 +20,9 @@ import {
   deserializeUploadedFile
 } from '../core/file-serializer';
 import { persistenceRegistry } from '../core/persistence-registry';
+import { dataTabState } from '$lib/features/commons/stores/data-tab.store.svelte';
+import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+import { deepCloneForStorage } from '$lib/features/commons/utils/clone-for-storage.utils';
 
 export type { FileSerializationOptions } from '../core/file-serializer';
 export { serializeUploadedFile, deserializeUploadedFile };
@@ -70,12 +70,16 @@ function isValidBasemapMetadata(value: unknown): value is BasemapMetadata {
 async function ensureDuckDbReady(operation: string): Promise<boolean> {
   try {
     await duckDBOrchestrator.waitForInitialization();
-  } catch {
+  } catch (error) {
+    logger.error(
+      `Failed to initialize DuckDB before ${operation}`,
+      LogCategory.PERSISTENCE,
+      error
+    );
     return false;
   }
 
   if (!Duck) {
-    logger.warn(`DuckDB unavailable while ${operation}`, LogCategory.PROJECT);
     return false;
   }
 

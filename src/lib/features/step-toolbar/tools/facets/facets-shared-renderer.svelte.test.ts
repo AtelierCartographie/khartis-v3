@@ -75,4 +75,19 @@ describe('facets shared renderer structure', () => {
       'if (!duckDataset?.joinedBasemap) {\n      return basemapService.currentMetadata;'
     );
   });
+
+  it('does not let stale reference basemap requests release facet loading state', () => {
+    const effectStart = source.indexOf(
+      'const requestId = ++referenceBasemapRequestId;'
+    );
+    const finallyStart = source.indexOf('} finally {', effectStart);
+    const finallyBody = source.slice(finallyStart, finallyStart + 200);
+
+    expect(finallyBody).toContain(
+      'if (requestId === referenceBasemapRequestId)'
+    );
+    expect(finallyBody.indexOf('if (requestId')).toBeLessThan(
+      finallyBody.indexOf('isLoadingReferenceBasemap = false;')
+    );
+  });
 });

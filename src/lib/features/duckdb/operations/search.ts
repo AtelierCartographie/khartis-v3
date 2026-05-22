@@ -42,9 +42,10 @@ registerTableMutationCallback((table: string) => {
 function getCacheKey(
   table: string,
   query: string,
-  column: string | null
+  column: string | null,
+  threshold: number
 ): string {
-  return `${table}:${query}:${column || 'all'}`;
+  return `${table}:${query}:${column || 'all'}:${threshold}`;
 }
 
 function getFromCache(key: string): SearchStats | null {
@@ -159,7 +160,7 @@ export async function searchInTable(
   }
 
   const trimmedQuery = searchQuery.trim();
-  const cacheKey = getCacheKey(table, trimmedQuery, column);
+  const cacheKey = getCacheKey(table, trimmedQuery, column, threshold);
   const cached = getFromCache(cacheKey);
   if (cached) {
     return cached;
@@ -223,11 +224,6 @@ export async function searchInTable(
         1,
         Math.min(100, Math.floor((MAX_ROWS_FOR_SEARCH / rowCount) * 100))
       );
-      logger.warn(
-        'Large table detected, using sampling for search',
-        LogCategory.DUCKDB,
-        { table, rowCount, colCount, estimatedCells, samplePercent }
-      );
 
       // Select only __id + text columns for search sample — excludes geometry
       // WKB binaries (can be several MB per row) that are never used for text search.
@@ -278,15 +274,6 @@ export async function searchInTable(
       !isSampled
     ) {
       if (searchId !== currentSearchId) return emptyResult;
-
-      logger.debug(
-        'Running fuzzy search (few exact results)',
-        LogCategory.DUCKDB,
-        {
-          exactResultCount: exactResults.length,
-          threshold: MIN_RESULTS_FOR_FUZZY
-        }
-      );
 
       const fuzzySQL = buildFuzzySearchSQL(
         searchTable,

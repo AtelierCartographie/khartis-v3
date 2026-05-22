@@ -1,4 +1,3 @@
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   escapeIdentifier,
   escapeSqlString
@@ -153,17 +152,6 @@ export async function normalizeFormattedNumericColumns(
     );
 
     convertedColumns.push(columnName);
-  }
-
-  if (convertedColumns.length > 0) {
-    logger.info(
-      'Converted formatted numeric text columns after tabular import',
-      LogCategory.DATA,
-      {
-        tableName,
-        convertedColumns
-      }
-    );
   }
 
   return convertedColumns;

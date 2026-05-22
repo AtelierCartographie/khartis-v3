@@ -2030,11 +2030,6 @@
 
     untrack(async () => {
       if (!mapInit.isMapLoaded) {
-        logger.debug(
-          'Map not loaded yet, deferring reference basemap load until ready',
-          LogCategory.MAP,
-          { refId }
-        );
         return;
       }
 
@@ -2045,9 +2040,6 @@
       if (refId) {
         isLoadingReferenceBasemap = true;
         let shouldReleaseSuggestedPreview = false;
-        logger.info('Loading reference basemap', LogCategory.MAP, {
-          basemapId: refId
-        });
         const cachedGeometryTable =
           basemapService.getCachedGeometryTable(refId);
         if (cachedGeometryTable) {
@@ -2127,16 +2119,18 @@
             );
           }
         } finally {
-          isLoadingReferenceBasemap = false;
-          if (
-            mapLoadingStore.isHoldingPreviewForSuggestedBasemap &&
-            !shouldReleaseSuggestedPreview
-          ) {
-            mapLoadingStore.setHoldingPreviewForSuggestedBasemap(false);
-          }
-          if (pendingOnReady) {
-            pendingOnReady = false;
-            triggerOnReady();
+          if (requestId === referenceBasemapRequestId) {
+            isLoadingReferenceBasemap = false;
+            if (
+              mapLoadingStore.isHoldingPreviewForSuggestedBasemap &&
+              !shouldReleaseSuggestedPreview
+            ) {
+              mapLoadingStore.setHoldingPreviewForSuggestedBasemap(false);
+            }
+            if (pendingOnReady) {
+              pendingOnReady = false;
+              triggerOnReady();
+            }
           }
         }
       } else if (!hasData) {

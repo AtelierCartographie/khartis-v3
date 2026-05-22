@@ -1,5 +1,3 @@
-import { MIME } from '$lib/features/commons/constants';
-import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import {
   createUploadedFile,
   DataSourceType,
@@ -34,6 +32,8 @@ import {
   detectDecimalSeparator,
   readFileHead
 } from '../utils/decimal-detector';
+import { MIME } from '$lib/features/commons/constants';
+import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 
 export interface ProcessFileOptions {
   originalName?: string;
@@ -123,8 +123,6 @@ export async function processFileInternal(
   const isShapefile = fileInfo.name.toLowerCase().endsWith('.shp');
   const format = detectFileFormat(fileInfo.name);
 
-  const start = performance.now();
-
   if (
     isShapefile &&
     (!options.companionFiles || options.companionFiles.length === 0)
@@ -188,12 +186,6 @@ export async function processFileInternal(
   }
 
   await applyTabularGeoDetection(dataset);
-
-  logger.success('DuckDB dataset built', LogCategory.DATA, {
-    tableName,
-    rowCount: dataset.rowCount,
-    durationMs: (performance.now() - start).toFixed(2)
-  });
 
   return dataset;
 }

@@ -104,12 +104,6 @@ class PersistenceRegistryImpl {
   }
 
   register<T>(entry: PersistenceEntry<T>): void {
-    if (this.entries.has(entry.key)) {
-      logger.warn(
-        `Persistence registry: duplicate key "${entry.key}", overwriting`,
-        LogCategory.PERSISTENCE
-      );
-    }
     this.entries.set(entry.key, entry as PersistenceEntry);
   }
 
@@ -162,8 +156,8 @@ class PersistenceRegistryImpl {
       try {
         entry.deserialize(data[key]);
       } catch (error) {
-        logger.warn(
-          `Failed to restore store "${key}", skipping`,
+        logger.error(
+          `Failed to deserialize store "${key}"`,
           LogCategory.PERSISTENCE,
           error
         );
@@ -172,12 +166,12 @@ class PersistenceRegistryImpl {
   }
 
   resetAll(): void {
-    for (const [, entry] of this.entries) {
+    for (const [key, entry] of this.entries) {
       try {
         entry.reset();
       } catch (error) {
-        logger.warn(
-          `Failed to reset store "${entry.key}"`,
+        logger.error(
+          `Failed to reset store "${key}"`,
           LogCategory.PERSISTENCE,
           error
         );

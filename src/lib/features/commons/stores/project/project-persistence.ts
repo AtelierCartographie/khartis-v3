@@ -157,17 +157,6 @@ export async function saveCurrentProject(
       throw new Error(projectValidation.errors.join(', '));
     }
 
-    if (projectValidation.warnings.length > 0) {
-      projectValidation.warnings.forEach((warning) => {
-        logger.warn(
-          `[ProjectStore:saveCurrentProject] ${warning}`,
-          LogCategory.PROJECT,
-          {
-            projectId: container._state.currentProject?.id
-          }
-        );
-      });
-    }
     container._state.currentProject.manifest.updatedAt = new Date();
 
     await projectRepository.save(container._state.currentProject);

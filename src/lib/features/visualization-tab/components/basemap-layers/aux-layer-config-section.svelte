@@ -21,13 +21,15 @@
     basemapFile: string;
     sharedLegacyId?: BasemapLayerId;
     instanceIndex?: number;
+    allowRemarkable?: boolean;
   }
 
   let {
     layer,
     basemapFile,
     sharedLegacyId,
-    instanceIndex = 0
+    instanceIndex = 0,
+    allowRemarkable = true
   }: Props = $props();
 
   const locale = $derived(getLocale());
@@ -73,14 +75,8 @@
   });
 
   function syncGraticuleCompanions(checked: boolean): void {
-    const meridiensConfig = getConfig('meridiens');
-    const isRemarkable =
-      meridiensConfig?.mode === BasemapGraticuleMode.REMARKABLE;
-    basemapLayersStore.setLayerVisibility('equateur', checked && isRemarkable);
-    basemapLayersStore.setLayerVisibility(
-      'meridiens',
-      checked && !isRemarkable
-    );
+    basemapLayersStore.setLayerVisibility('meridiens', checked);
+    basemapLayersStore.setLayerVisibility('equateur', false);
   }
 
   function handleToggle(checked: boolean): void {
@@ -96,7 +92,14 @@
     id: T,
     updates: Partial<Extract<BasemapLayerConfig, { id: T }>>
   ): void {
-    basemapLayersStore.updateLayer(id, updates);
+    const normalizedUpdates =
+      id === 'meridiens' &&
+      !allowRemarkable &&
+      (updates as Record<string, unknown>).mode ===
+        BasemapGraticuleMode.REMARKABLE
+        ? { ...updates, mode: BasemapGraticuleMode.REGULAR }
+        : updates;
+    basemapLayersStore.updateLayer(id, normalizedUpdates);
     if (id === 'meridiens') {
       const sharedKeys = [
         'color',
@@ -107,14 +110,16 @@
       ] as const;
       const equateurUpdates: Record<string, unknown> = {};
       for (const key of sharedKeys) {
-        if (key in updates) {
-          equateurUpdates[key] = (updates as Record<string, unknown>)[key];
+        if (key in normalizedUpdates) {
+          equateurUpdates[key] = (normalizedUpdates as Record<string, unknown>)[
+            key
+          ];
         }
       }
       if (Object.keys(equateurUpdates).length > 0) {
         basemapLayersStore.updateLayer('equateur', equateurUpdates);
       }
-      if ('mode' in updates) {
+      if ('mode' in normalizedUpdates) {
         const isVisible = basemapAuxLayersStore.isVisible(
           basemapFile,
           renderKey,
@@ -179,6 +184,7 @@
       color={getConfig('meridiens')?.color}
       dotted={getConfig('meridiens')?.dotted}
       dottedPattern={getConfig('meridiens')?.dottedPattern}
+      allowRemarkable={allowRemarkable}
       thickness={getConfig('meridiens')?.thickness}
       opacity={getConfig('meridiens')?.opacity}
       onchange={(updates) => handleLayerChange('meridiens', updates)}

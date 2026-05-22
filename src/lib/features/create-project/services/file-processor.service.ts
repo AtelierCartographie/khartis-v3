@@ -6,11 +6,6 @@ export type {
   ProcessingCallbacks,
   FileProcessorService
 } from '../types/file-processing.service.types';
-import { FileStatus } from '$lib/features/commons/constants/ui.constants';
-import { FILE_EXTENSIONS, MIME } from '$lib/features/commons/constants';
-import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
-import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
-import { FileType } from '$lib/features/commons/types/create-project.types';
 import {
   dataPipeline,
   isZipDatasetResult,
@@ -18,13 +13,7 @@ import {
 } from '$lib/features/data-pipeline';
 
 type ProcessFileResult = Awaited<ReturnType<typeof dataPipeline.processFile>>;
-import { DeepDataValidator } from '$lib/features/commons/utils/deep-validator.utils';
-import { getFileExtension } from '$lib/features/commons/utils/file.utils';
-import {
-  readFileContent,
-  validateGeospatialFile
-} from '$lib/features/commons/utils/file-import.utils';
-import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
+
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import { DataValidator } from '$lib/features/commons/utils/validation.utils';
@@ -144,6 +133,18 @@ import {
   createDataMatrix,
   type ColumnInfo
 } from '../utils/file-processor.utils';
+import { FileStatus } from '$lib/features/commons/constants/ui.constants';
+import { FILE_EXTENSIONS, MIME } from '$lib/features/commons/constants';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
+import { FileType } from '$lib/features/commons/types/create-project.types';
+import { DeepDataValidator } from '$lib/features/commons/utils/deep-validator.utils';
+import { getFileExtension } from '$lib/features/commons/utils/file.utils';
+import {
+  readFileContent,
+  validateGeospatialFile
+} from '$lib/features/commons/utils/file-import.utils';
+import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 
 interface FileProcessor {
   process: (uploadedFile: UploadedFile, file: File) => Promise<void>;
@@ -165,19 +166,6 @@ async function validateAsync(
         validation: asyncValidation
       });
       return false;
-    }
-
-    if (asyncValidation.warnings.length > 0) {
-      asyncValidation.warnings.forEach((warning) => {
-        logger.warn(
-          `[FileProcessor:validateAsync] ${warning}`,
-          LogCategory.FILE,
-          {
-            fileId: uploadedFile.id,
-            fileName: file.name
-          }
-        );
-      });
     }
   }
 
@@ -210,12 +198,8 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
           m.warning_duplicate_rows_message({ count: String(duplicateCount) })
         );
       }
-    } catch (error) {
-      logger.warn(
-        '[CsvProcessor:computeDuplicatesAsync] Failed to compute duplicates',
-        LogCategory.FILE,
-        { fileId, error }
-      );
+    } catch {
+      return;
     }
   }
 
@@ -301,16 +285,6 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
     if (rowCount <= DUPLICATE_SCAN_ROW_LIMIT) {
       void computeDuplicatesAsync(uploadedFile.id, tableName, Duck);
-    } else {
-      logger.info(
-        'Skipping duplicate scan for large CSV import',
-        LogCategory.FILE,
-        {
-          fileId: uploadedFile.id,
-          fileName: file.name,
-          rowCount
-        }
-      );
     }
   }
 
@@ -339,19 +313,6 @@ function createGeoJsonProcessor(callbacks: ProcessingCallbacks): FileProcessor {
           geoValidation.errors.join(', ')
         );
         return;
-      }
-
-      if (geoValidation.warnings.length > 0) {
-        geoValidation.warnings.forEach((warning) => {
-          logger.warn(
-            `[GeoJSON validation warning] ${warning}`,
-            LogCategory.FILE,
-            {
-              fileId: uploadedFile.id,
-              fileName: file.name
-            }
-          );
-        });
       }
 
       callbacks.onDataUpdate(uploadedFile.id, {

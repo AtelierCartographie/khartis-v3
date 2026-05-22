@@ -199,21 +199,12 @@ Ne jamais utiliser `console.log` dans le code de production. Utiliser le logger 
 ```typescript
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 
-logger.debug('message', LogCategory.DATA);
-logger.info('message', LogCategory.STORE);
-logger.warn('message', LogCategory.DUCKDB, { details: '...' });
 logger.error('message', LogCategory.SYSTEM, error);
-logger.success('done', LogCategory.PROJECT);
-
-// Mesure d'une opération asynchrone
-const result = await logger.time('parseFile', LogCategory.FILE, async () => {
-  return await Duck.read_tabular(file);
-});
 ```
 
 Catégories disponibles :
 
-`DATA` · `STORE` · `DUCKDB` · `MAP` · `UI` · `PERSISTENCE` · `PROJECT` · `VISUALIZATION` · `FILE` · `NOTIFICATION` · `EXPORT` · `ERROR_HANDLER` · `SYSTEM`
+`DATA` · `STORE` · `DUCKDB` · `MAP` · `UI` · `PERSISTENCE` · `PROJECT` · `VISUALIZATION` · `FILE` · `EXPORT` · `SYSTEM`
 
 ---
 

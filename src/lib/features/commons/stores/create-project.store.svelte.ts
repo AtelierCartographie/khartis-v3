@@ -185,11 +185,6 @@ export const createProjectActions = {
         completeFile.originalFile = shpFile;
       }
     }
-
-    logger.info('Shapefile companion files merged', LogCategory.FILE, {
-      shapefile: completeFile.name,
-      addedFiles: filesToAdd.map((file) => file.name)
-    });
   },
 
   async processFiles(
@@ -576,9 +571,6 @@ export const createProjectActions = {
 
   setNewProjectError(error?: string): void {
     createProjectState.newProject.error = error;
-    if (error) {
-      logger.error('New project error', LogCategory.PROJECT, error);
-    }
   },
 
   setNewProjectWarning(warning?: string): void {
@@ -813,9 +805,6 @@ export const createProjectActions = {
 
   setTryExampleError(error?: string): void {
     createProjectState.tryExample.error = error;
-    if (error) {
-      logger.error('Try example error', LogCategory.PROJECT, error);
-    }
   },
 
   resetNewProject(): void {

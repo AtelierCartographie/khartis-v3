@@ -3,7 +3,6 @@ import type {
   StyleSpecification,
   TransformStyleFunction
 } from 'maplibre-gl';
-import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { OSMSourceId } from '../constants';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
@@ -13,6 +12,7 @@ import {
   createOSMRasterSource,
   createOSMRasterLayer
 } from '../services/osm-tile.service';
+import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 
 export interface UseMapBasemapProps {
   getMap: () => MapLibreMap | null;
@@ -100,7 +100,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     finishRasterLoading = null;
   }
 
-  function beginRasterLoad(map: MapLibreMap, rasterKey: string): void {
+  function beginRasterLoad(map: MapLibreMap): void {
     completeRasterLoad(map);
 
     rasterLoadMap = map;
@@ -108,11 +108,6 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     rasterIdleHandler = () => completeRasterLoad(map);
     map.once('idle', rasterIdleHandler);
     rasterSafetyTimeout = setTimeout(() => {
-      logger.warn(
-        'OSM raster load timed out after 10s, unlocking',
-        LogCategory.MAP,
-        { rasterKey }
-      );
       completeRasterLoad(map);
     }, REFERENCE_BASEMAP_LOAD_TIMEOUT_MS);
   }
@@ -216,11 +211,6 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
     styleSafetyTimeout = setTimeout(() => {
       if (isStyleLoading) {
-        logger.warn(
-          'Basemap style.load timed out after 10s, unlocking',
-          LogCategory.MAP,
-          { styleKey }
-        );
         completeStyleLoad(true);
       }
     }, REFERENCE_BASEMAP_LOAD_TIMEOUT_MS);
@@ -299,9 +289,13 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
         if (!map.getLayer(osmLayerId)) {
           map.addLayer(rasterLayer);
         }
-        beginRasterLoad(map, nextRasterKey);
+        beginRasterLoad(map);
       } catch (error) {
-        logger.warn('Failed to add OSM raster layer', LogCategory.MAP, error);
+        logger.error(
+          'Failed to apply OSM raster layer',
+          LogCategory.MAP,
+          error
+        );
         completeRasterLoad(map);
       }
 
@@ -338,8 +332,12 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
           map.setLayoutProperty(layer.id, 'visibility', visibility);
         }
       }
-    } catch {
-      logger.warn('Failed to sync labels visibility', LogCategory.MAP);
+    } catch (error) {
+      logger.error(
+        'Failed to sync MapLibre label visibility',
+        LogCategory.MAP,
+        error
+      );
     }
   }
 
@@ -366,8 +364,12 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
           );
         }
       }
-    } catch {
-      logger.warn('Failed to sync group visibility', LogCategory.MAP);
+    } catch (error) {
+      logger.error(
+        'Failed to sync MapLibre group visibility',
+        LogCategory.MAP,
+        error
+      );
     }
   }
 
@@ -381,7 +383,11 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     try {
       map.setProjection({ type: projection });
     } catch (error) {
-      logger.warn('Failed to sync MapLibre projection', LogCategory.MAP, error);
+      logger.error(
+        'Failed to sync MapLibre projection',
+        LogCategory.MAP,
+        error
+      );
       return;
     }
 

@@ -39,9 +39,9 @@ export async function exportToCsv(
     try {
       await ctx.db.dropFile(filename);
     } catch (error) {
-      logger.debug(
-        'Failed to remove temporary CSV file',
-        LogCategory.DUCKDB,
+      logger.error(
+        'Failed to cleanup DuckDB export file',
+        LogCategory.EXPORT,
         error
       );
     }

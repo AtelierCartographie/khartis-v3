@@ -92,6 +92,10 @@ function scoreGeoId(indicators: GeoIdIndicators): SemioScore {
 
 function scoreGeoLat(indicators: GeoLatIndicators): SemioScore {
   let score = 0;
+  if (!indicators.latWords) {
+    return { semioType: SEMIO_TYPES.GEOLAT, score };
+  }
+
   if (indicators.latWords) score += 4;
   if (Math.abs(indicators.min) < 90 && Math.abs(indicators.max) < 90)
     score += 2;
@@ -100,6 +104,10 @@ function scoreGeoLat(indicators: GeoLatIndicators): SemioScore {
 
 function scoreGeoLon(indicators: GeoLonIndicators): SemioScore {
   let score = 0;
+  if (!indicators.lonWords) {
+    return { semioType: SEMIO_TYPES.GEOLON, score };
+  }
+
   if (indicators.lonWords) score += 4;
   if (Math.abs(indicators.min) < 180 && Math.abs(indicators.max) < 180)
     score += 2;
@@ -166,7 +174,9 @@ function detectKeywordsFromName(columnName: string): {
       nameParts.some((p) => idKeywords.includes(p)) ||
       idKeywords.some((keyword) => lowerName === keyword),
     latWords: nameParts.some((p) => ['lat', 'latitude'].includes(p)),
-    lonWords: nameParts.some((p) => ['lon', 'lng', 'longitude'].includes(p)),
+    lonWords: nameParts.some((p) =>
+      ['lon', 'long', 'lng', 'longitude'].includes(p)
+    ),
     ratioWords: nameParts.some((p) =>
       ['ratio', 'rate', 'percent', 'pct', '%', 'pour', 'taux'].includes(p)
     ),

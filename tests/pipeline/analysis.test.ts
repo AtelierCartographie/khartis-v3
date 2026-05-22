@@ -59,6 +59,14 @@ describe('enrichColumns', () => {
     expect(stats.stdDev).toBe(1.2);
   });
 
+  it('preserves optional numeric stats when they are zero', () => {
+    const result = enrichColumns([col({ mean: 0, median: 0, stddev: 0 })]);
+    const stats = result[0].stats;
+    expect(stats.mean).toBe(0);
+    expect(stats.median).toBe(0);
+    expect(stats.stdDev).toBe(0);
+  });
+
   it('initialises values array to empty', () => {
     const result = enrichColumns([col()]);
     expect(result[0].values).toEqual([]);
@@ -99,5 +107,8 @@ describe('buildStatisticsSnapshot', () => {
     expect(
       (withEmptyMean.value as Record<string, unknown>).mean
     ).toBeUndefined();
+
+    const withZeroMean = buildStatisticsSnapshot([col({ mean: 0 })]);
+    expect((withZeroMean.value as Record<string, unknown>).mean).toBe(0);
   });
 });

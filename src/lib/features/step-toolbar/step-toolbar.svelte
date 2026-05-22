@@ -122,6 +122,7 @@
       aria-label={m.toolbar_step_selection_aria()}
     >
       <button
+        type="button"
         data-testid={TEST_IDS.STEP_DATA}
         class={clsx(CSS_CLASSES.NAV_ITEM, {
           [CSS_CLASSES.SELECTED]: isStepSelected(ToolbarStep.Data)
@@ -135,6 +136,7 @@
       </button>
 
       <button
+        type="button"
         data-testid={TEST_IDS.STEP_VISUALIZATIONS}
         class={clsx(CSS_CLASSES.NAV_ITEM, {
           [CSS_CLASSES.SELECTED]: isStepSelected(ToolbarStep.Visualizations)
@@ -148,6 +150,7 @@
       </button>
 
       <button
+        type="button"
         data-testid={TEST_IDS.STEP_STYLING}
         class={clsx(CSS_CLASSES.NAV_ITEM, {
           [CSS_CLASSES.SELECTED]: isStepSelected(ToolbarStep.Styling)

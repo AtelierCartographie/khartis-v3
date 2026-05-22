@@ -19,7 +19,8 @@ const config = {
       strict: true
     }),
     paths: {
-      base: env.BASE_PATH || ''
+      base: env.BASE_PATH || '',
+      relative: false
     },
     version: {
       name: env.VITE_APP_VERSION || String(Date.now()),

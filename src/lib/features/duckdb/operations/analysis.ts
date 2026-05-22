@@ -1,8 +1,8 @@
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { getTableMetadata } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
@@ -96,8 +96,8 @@ export async function analyse(
       );
       analysisTable = sampleViewName;
     } catch (error) {
-      logger.warn(
-        'Failed to create sample view, falling back to full table',
+      logger.error(
+        'Failed to create DuckDB analysis sample table',
         LogCategory.DUCKDB,
         error
       );

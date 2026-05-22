@@ -22,6 +22,9 @@ export interface Layer {
   primitive?: PrimitiveFilter;
   basemapLayerId?: string;
   basemapRenderGroup?: BasemapRenderGroup;
+  basemapFile?: string;
+  basemapLayerKey?: string;
+  basemapLayerPrimary?: boolean;
 }
 
 export interface LayersState {

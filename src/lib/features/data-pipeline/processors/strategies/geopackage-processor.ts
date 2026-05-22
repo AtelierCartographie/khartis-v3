@@ -3,7 +3,6 @@ import {
   FileType,
   type UploadedFile
 } from '$lib/features/commons/types/create-project.types';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type {
   FileProcessor,
   ProcessContext,
@@ -25,7 +24,6 @@ export const geopackageProcessor: FileProcessor = {
     ctx: ProcessContext,
     file: UploadedFile
   ): Promise<ProcessorDataset> {
-    const start = performance.now();
     const gpkgFile = getFileForDuckDB(file, MIME.GEOPACKAGE);
 
     await ctx.Duck.register_files([gpkgFile]);
@@ -54,13 +52,6 @@ export const geopackageProcessor: FileProcessor = {
       },
       geoDetection: file.deepAnalysis?.geoDetection
     };
-
-    logger.success('GeoPackage processed', LogCategory.DUCKDB, {
-      datasetId: dataset.id,
-      tableName: dataset.tableName,
-      rowCount: dataset.rowCount,
-      durationMs: (performance.now() - start).toFixed(2)
-    });
 
     return dataset;
   }

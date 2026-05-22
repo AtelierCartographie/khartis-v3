@@ -1,4 +1,3 @@
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Table, tableToIPC, vectorFromArray, type Vector } from 'apache-arrow';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import * as m from '$lib/paraglide/messages';
@@ -41,21 +40,12 @@ export async function insertArrowTableIntoDuckDB(
     throw new Error(m.error_duckdb_connection_null());
   }
 
-  try {
-    const ipcStream = tableToIPC(table);
-    const ipcBuffer =
-      ipcStream instanceof Uint8Array ? ipcStream : new Uint8Array(ipcStream);
+  const ipcStream = tableToIPC(table);
+  const ipcBuffer =
+    ipcStream instanceof Uint8Array ? ipcStream : new Uint8Array(ipcStream);
 
-    await ctx.connection.insertArrowFromIPCStream(ipcBuffer, {
-      name: tableName,
-      schema: 'main'
-    });
-  } catch (error) {
-    logger.error(
-      'Failed to insert Arrow table into DuckDB',
-      LogCategory.DUCKDB,
-      error
-    );
-    throw error;
-  }
+  await ctx.connection.insertArrowFromIPCStream(ipcBuffer, {
+    name: tableName,
+    schema: 'main'
+  });
 }

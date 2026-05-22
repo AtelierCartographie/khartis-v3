@@ -1,12 +1,12 @@
 <script lang="ts">
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import * as m from '$lib/paraglide/messages';
   import { Modal } from 'carbon-components-svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {
     showSuccess,
     showError
   } from '$lib/features/commons/utils/notification.utils.svelte';
-  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import * as m from '$lib/paraglide/messages';
 
   let {
     open = $bindable(false),

@@ -40,11 +40,10 @@
     onchange
   }: Props = $props();
 
-  const fallbackInputId = `slider-input-${Math.random().toString(36).slice(2, 10)}`;
-  const fallbackSliderId = `slider-${Math.random().toString(36).slice(2, 10)}`;
+  const componentId = $props.id();
 
-  const inputId = $derived(id ?? fallbackInputId);
-  const sliderId = $derived(`${id ?? fallbackSliderId}-control`);
+  const inputId = $derived(id ?? `${componentId}-slider-input`);
+  const sliderId = $derived(`${id ?? `${componentId}-slider`}-control`);
   const accessibleLabel = $derived(label || m.slider_default_aria_label());
 
   let pendingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -143,6 +142,7 @@
       valueMinWidth="3.5rem"
       disabled={disabled}
       showSteppers={showSteppers}
+      ariaLabel={accessibleLabel}
       onchange={handleInputChange}
     />
   </div>

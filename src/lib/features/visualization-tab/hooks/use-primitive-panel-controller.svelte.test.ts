@@ -37,4 +37,12 @@ describe('usePrimitivePanelController', () => {
       source.match(/disabledLabels: undefined/g)?.length
     ).toBeGreaterThanOrEqual(5);
   });
+
+  it('uses a four-class default only for polygon fill classifications', () => {
+    expect(source).toContain('const DEFAULT_CLASS_COUNT = 5;');
+    expect(source).toContain('const DEFAULT_POLYGON_FILL_CLASS_COUNT = 4;');
+    expect(source).toContain('primitive === PrimitiveFilterType.POLYGON');
+    expect(source).toContain('classes: defaultClassCount');
+    expect(source).toContain('numClasses: defaultClassCount');
+  });
 });

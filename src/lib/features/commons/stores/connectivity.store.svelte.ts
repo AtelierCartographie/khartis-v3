@@ -1,4 +1,3 @@
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type {
   OfflineCacheScope,
   SwToClientMessage
@@ -119,8 +118,8 @@ function createConnectivityStore() {
         quota,
         ratio: quota > 0 ? usage / quota : 0
       };
-    } catch (error) {
-      logger.warn('Storage estimate refresh failed', LogCategory.SYSTEM, error);
+    } catch {
+      state.storage = null;
     }
   }
 
@@ -157,8 +156,8 @@ function createConnectivityStore() {
           basemaps.set(id, { ...entry, status: 'evicted', progress: 0 });
         }
       }
-    } catch (error) {
-      logger.warn('Refresh cached basemaps failed', LogCategory.SYSTEM, error);
+    } catch {
+      return;
     }
   }
 
@@ -224,10 +223,6 @@ function createConnectivityStore() {
       !('serviceWorker' in navigator) ||
       !navigator.serviceWorker.controller
     ) {
-      logger.warn(
-        'Cannot clear offline cache: no service worker controller',
-        LogCategory.SYSTEM
-      );
       return;
     }
 

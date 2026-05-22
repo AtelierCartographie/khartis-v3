@@ -283,6 +283,7 @@
         {/if}
         <div class="tooltip-shell-actions">
           <button
+            type="button"
             class="tooltip-close"
             aria-label={m.close()}
             onclick={handleClose}

@@ -168,21 +168,6 @@ export async function duplicateProject(
 export async function listProjects(): Promise<SavedProjectMetadata[]> {
   const projects = await projectRepository.listMetadata();
 
-  const storageCheck = ProjectValidator.validateStorageCapacity(
-    projects.length
-  );
-  if (storageCheck.warnings.length > 0) {
-    storageCheck.warnings.forEach((warning) => {
-      logger.warn(
-        `[ProjectStore:listProjects] ${warning}`,
-        LogCategory.PROJECT,
-        {
-          projectCount: projects.length
-        }
-      );
-    });
-  }
-
   return projects;
 }
 

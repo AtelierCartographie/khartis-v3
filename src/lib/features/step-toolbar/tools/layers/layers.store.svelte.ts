@@ -23,14 +23,27 @@ import {
   type BasemapLayerConfig,
   type BasemapLayerId
 } from '$lib/features/map/stores/basemap-layers.store.svelte';
+import { basemapAuxLayersStore } from '$lib/features/map/stores/basemap-aux-layers.store.svelte';
+import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
+import {
+  basemapService,
+  getPreferredBasemapFile
+} from '$lib/features/map/services/basemap.service.svelte';
+import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
+import { resolveActiveBasemapMetadata } from '$lib/features/map/utils/basemap-metadata-resolution.utils';
 import { facetsStore } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
 import * as m from '$lib/paraglide/messages';
+import { getLocale } from '$lib/paraglide/runtime';
 import { BASEMAP_SUBLAYER_COLOR, VIZ_SUBLAYER_COLOR } from './layers.constants';
 import type {
   Layer,
   LayerReorderScope,
   LayersState
 } from '../../types/layers.types';
+import type {
+  BasemapLayer,
+  BasemapMetadata
+} from '$lib/features/map/types/basemap.types';
 
 const DEFAULT_STATE: LayersState = {
   layers: []
@@ -222,9 +235,9 @@ function buildVisualizationSubLayerId(
 
 function buildBasemapSubLayerId(
   visualizationId: string,
-  basemapLayerId: BasemapLayerId
+  basemapLayerKey: string
 ): string {
-  return `${visualizationId}${BASEMAP_SUBLAYER_SEPARATOR}${basemapLayerId}`;
+  return `${visualizationId}${BASEMAP_SUBLAYER_SEPARATOR}${basemapLayerKey}`;
 }
 
 function getVisualizationPrimitiveName(primitive: PrimitiveFilter): string {
@@ -300,6 +313,8 @@ function getBasemapLayerName(layerId: BasemapLayerId): string {
       return m.basemap_layer_frontieres();
     case BASEMAP_LAYER_ID.VILLES:
       return m.basemap_layer_villes();
+    case BASEMAP_LAYER_ID.SPHERE:
+      return m.basemap_layer_sphere();
     default:
       return layerId;
   }
@@ -339,8 +354,188 @@ function getBasemapLayerOpacity(layer: BasemapLayerConfig): number {
   return 100;
 }
 
+function getActiveReferenceBasemapMetadata(): BasemapMetadata | null {
+  const referenceBasemapId = basemapStyleStore.referenceBasemapId;
+  if (!referenceBasemapId) {
+    return null;
+  }
+
+  const resolvedBasemapId = getPreferredBasemapFile(
+    basemapService.availableBasemaps,
+    referenceBasemapId
+  );
+
+  return resolveActiveBasemapMetadata({
+    referenceBasemapId,
+    resolvedBasemapId,
+    availableBasemaps: basemapService.availableBasemaps,
+    currentMetadata: basemapService.currentMetadata
+  });
+}
+
+function pickMetadataLayerName(layer: BasemapLayer): string {
+  const title = getLocale() === 'fr' ? layer.title_fr : layer.title_en;
+  return title?.trim() || layer.title_fr?.trim() || layer.type;
+}
+
+function isBasemapLayersToolRenderableType(type: BasemapLayerType): boolean {
+  return (
+    type !== BasemapLayerType.CENTROID &&
+    type !== BasemapLayerType.GEOGRAPHIC_LINES
+  );
+}
+
+function getCustomBaseLayerType(
+  metadata: BasemapMetadata
+): BasemapLayerType | undefined {
+  return metadata.layers.find(
+    (layer) =>
+      layer.type === BasemapLayerType.POLYGON ||
+      layer.type === BasemapLayerType.LINE ||
+      layer.type === BasemapLayerType.POINT
+  )?.type;
+}
+
+function mapMetadataLayerTypeToBasemapLayerId(
+  type: BasemapLayerType,
+  isCustom: boolean,
+  isCustomLine: boolean
+): BasemapLayerId | null {
+  switch (type) {
+    case BasemapLayerType.LAND:
+      return isCustomLine ? null : BASEMAP_LAYER_ID.TERRE;
+    case BasemapLayerType.LIMIT:
+      return BASEMAP_LAYER_ID.FRONTIERES;
+    case BasemapLayerType.CENTROID:
+    case BasemapLayerType.POINT:
+      return isCustom ? null : BASEMAP_LAYER_ID.VILLES;
+    case BasemapLayerType.GRATICULE:
+      return BASEMAP_LAYER_ID.MERIDIENS;
+    case BasemapLayerType.GEOGRAPHIC_LINES:
+      return BASEMAP_LAYER_ID.MERIDIENS;
+    case BasemapLayerType.POLYGON:
+      return isCustom ? BASEMAP_LAYER_ID.TERRE : BASEMAP_LAYER_ID.MERS;
+    case BasemapLayerType.LINE:
+      return isCustom ? BASEMAP_LAYER_ID.FRONTIERES : BASEMAP_LAYER_ID.RIVIERES;
+    case BasemapLayerType.SPHERE:
+      return BASEMAP_LAYER_ID.SPHERE;
+    default:
+      return null;
+  }
+}
+
+function isEntryScopedMetadataLayer(type: BasemapLayerType): boolean {
+  return type === BasemapLayerType.LIMIT;
+}
+
+function buildSyntheticBasemapLayerEntries(
+  visualizationId: string,
+  startOrder: number
+): Layer[] {
+  const syntheticIds: BasemapLayerId[] = [
+    BASEMAP_LAYER_ID.MERS,
+    BASEMAP_LAYER_ID.SPHERE
+  ];
+
+  return syntheticIds.flatMap((layerId, index): Layer[] => {
+    const config = basemapLayersStore.getLayer(layerId);
+    if (!config) return [];
+    return [
+      {
+        id: buildBasemapSubLayerId(visualizationId, `synthetic:${layerId}`),
+        parentId: visualizationId,
+        isSubLayer: true,
+        type: 'geographic',
+        basemapLayerId: layerId,
+        basemapRenderGroup: getBasemapRenderGroup(layerId),
+        name: getBasemapLayerName(layerId),
+        visible: config.visible,
+        color: getBasemapLayerColor(config),
+        opacity: getBasemapLayerOpacity(config),
+        order: startOrder + index
+      }
+    ];
+  });
+}
+
+function buildDynamicBasemapSubLayers(
+  visualizationId: string,
+  startOrder: number
+): Layer[] {
+  const metadata = getActiveReferenceBasemapMetadata();
+  if (!metadata) {
+    return basemapLayersStore.layers.map(
+      (bmLayer, bmIndex): Layer => ({
+        id: buildBasemapSubLayerId(visualizationId, bmLayer.id),
+        parentId: visualizationId,
+        isSubLayer: true,
+        type: 'geographic',
+        basemapLayerId: bmLayer.id,
+        basemapRenderGroup: getBasemapRenderGroup(bmLayer.id),
+        name: getBasemapLayerName(bmLayer.id),
+        visible: bmLayer.visible,
+        color: getBasemapLayerColor(bmLayer),
+        opacity: getBasemapLayerOpacity(bmLayer),
+        order: startOrder + bmIndex
+      })
+    );
+  }
+
+  const isCustom = Boolean(metadata.isCustom);
+  const isCustomLine =
+    isCustom && getCustomBaseLayerType(metadata) === BasemapLayerType.LINE;
+  const typeCounters = new Map<BasemapLayerType, number>();
+  const layers: Layer[] = buildSyntheticBasemapLayerEntries(
+    visualizationId,
+    startOrder
+  );
+
+  for (const layer of metadata.layers) {
+    if (!isBasemapLayersToolRenderableType(layer.type)) continue;
+    const instanceIndex = typeCounters.get(layer.type) ?? 0;
+    typeCounters.set(layer.type, instanceIndex + 1);
+    const layerKey =
+      layer.file ?? `${metadata.file}:${layer.type}:${instanceIndex}`;
+    const basemapLayerId = mapMetadataLayerTypeToBasemapLayerId(
+      layer.type,
+      isCustom,
+      isCustomLine
+    );
+    const config = basemapLayerId
+      ? basemapLayersStore.getLayer(basemapLayerId)
+      : undefined;
+    const entryVisible = basemapAuxLayersStore.isVisible(
+      metadata.file,
+      layerKey,
+      true
+    );
+    const usesEntryVisibility = isEntryScopedMetadataLayer(layer.type);
+
+    layers.push({
+      id: buildBasemapSubLayerId(visualizationId, layerKey),
+      parentId: visualizationId,
+      isSubLayer: true,
+      type: 'geographic',
+      basemapLayerId: basemapLayerId ?? undefined,
+      basemapFile: metadata.file,
+      basemapLayerKey: layerKey,
+      basemapLayerPrimary: instanceIndex === 0,
+      basemapRenderGroup: basemapLayerId
+        ? getBasemapRenderGroup(basemapLayerId)
+        : 'foreground',
+      name: pickMetadataLayerName(layer),
+      visible:
+        entryVisible && (usesEntryVisibility || (config?.visible ?? true)),
+      color: config ? getBasemapLayerColor(config) : BASEMAP_SUBLAYER_COLOR,
+      opacity: config ? getBasemapLayerOpacity(config) : 100,
+      order: startOrder + layers.length
+    });
+  }
+
+  return layers;
+}
+
 function buildLayers(): Layer[] {
-  const basemapLayers = basemapLayersStore.layers;
   const activeVisualizationIds = new Set(
     visualizationStore.activeVisualizations.map((v) => v.id)
   );
@@ -396,20 +591,9 @@ function buildLayers(): Layer[] {
       })
     );
 
-    const basemapSubLayers = basemapLayers.map(
-      (bmLayer, bmIndex): Layer => ({
-        id: buildBasemapSubLayerId(viz.id, bmLayer.id),
-        parentId: viz.id,
-        isSubLayer: true,
-        type: 'geographic',
-        basemapLayerId: bmLayer.id,
-        basemapRenderGroup: getBasemapRenderGroup(bmLayer.id),
-        name: getBasemapLayerName(bmLayer.id),
-        visible: bmLayer.visible,
-        color: getBasemapLayerColor(bmLayer),
-        opacity: getBasemapLayerOpacity(bmLayer),
-        order: vizSubLayers.length + bmIndex
-      })
+    const basemapSubLayers = buildDynamicBasemapSubLayers(
+      viz.id,
+      vizSubLayers.length
     );
 
     return [parentLayer, ...vizSubLayers, ...basemapSubLayers];
@@ -458,8 +642,26 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
         if (!layer) return;
 
         if (layer.type === 'geographic') {
-          const bmId = (layer.basemapLayerId ?? layer.id) as BasemapLayerId;
-          basemapLayersStore.setLayerVisibility(bmId, !layer.visible);
+          if (layer.basemapFile && layer.basemapLayerKey) {
+            basemapAuxLayersStore.setVisible(
+              layer.basemapFile,
+              layer.basemapLayerKey,
+              !layer.visible
+            );
+          }
+
+          if (layer.basemapLayerId) {
+            const shouldUpdateLegacyVisibility =
+              !layer.basemapFile ||
+              (layer.basemapLayerPrimary &&
+                layer.basemapLayerId !== BASEMAP_LAYER_ID.FRONTIERES);
+            if (shouldUpdateLegacyVisibility) {
+              basemapLayersStore.setLayerVisibility(
+                layer.basemapLayerId as BasemapLayerId,
+                !layer.visible
+              );
+            }
+          }
         } else if (layer.type === 'visualization') {
           if (layer.isSubLayer) {
             if (layer.parentId && layer.primitive) {

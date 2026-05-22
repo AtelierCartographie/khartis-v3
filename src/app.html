@@ -19,7 +19,12 @@
                       })
                     );
                   })
-                  .catch(function () {})
+                  .catch(function (error) {
+                    console.error(
+                      'Khartis reset service worker cleanup failed',
+                      error
+                    );
+                  })
               : Promise.resolve();
           var clearCaches =
             'caches' in window
@@ -39,7 +44,9 @@
             url.searchParams.delete('reset');
             window.location.replace(url.pathname + url.search + url.hash);
           });
-        } catch (e) {}
+        } catch (error) {
+          console.error('Khartis reset bootstrap failed', error);
+        }
       })();
     </script>
     <meta charset="utf-8" />

@@ -62,6 +62,15 @@ describe('FillSection — interface', () => {
     expect(source).toContain('categoriesCommonAspect={categoriesCommonAspect}');
   });
 
+  it('routes unique polygon fill motifs into the polygon classification', () => {
+    expect(source).toContain('patternId={categoriesVariant ===');
+    expect(source).toContain('onpatternchange={(patternId, patternParams)');
+    expect(source).toContain('onClassificationChange({');
+    expect(source).toContain(
+      'patternParams: patternId ? patternParams : undefined'
+    );
+  });
+
   it('hides the opacity slider for FillMode.NONE and FillMode.DENSITY', () => {
     expect(source).toContain(
       'fillMode !== FillMode.NONE && fillMode !== FillMode.DENSITY'

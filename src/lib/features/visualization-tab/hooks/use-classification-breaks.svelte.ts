@@ -513,15 +513,6 @@ export function useClassificationBreaksController({
 
     const datasetSourceFileId = resolveDatasetSourceFileId(options.datasetId);
     if (!datasetSourceFileId) {
-      logger.warn(
-        '[use-classification-breaks] skipped breaks computation (missing sourceFileId)',
-        LogCategory.UI,
-        {
-          datasetId: options.datasetId,
-          scopeKey: options.scopeKey,
-          trigger: options.trigger
-        }
-      );
       clearRetry(options.scopeKey);
       return;
     }

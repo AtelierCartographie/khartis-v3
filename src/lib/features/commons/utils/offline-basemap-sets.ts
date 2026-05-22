@@ -1,5 +1,5 @@
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
+import { LogCategory, logger } from './logger';
 
 const BASEMAP_METADATA_PATH = '/basemaps/all-basemaps-metadata.json';
 const GEOMETRY_BASE_PATH = '/basemaps/geometry';
@@ -62,7 +62,7 @@ export async function loadBasemapMetadata(
     cachedMetadata = data;
     return data;
   } catch (error) {
-    logger.warn('Failed to load basemap metadata', LogCategory.SYSTEM, error);
+    logger.error('Failed to fetch basemap metadata', LogCategory.SYSTEM, error);
     return [];
   }
 }
@@ -103,11 +103,6 @@ export async function buildEssentialDownloadEntries(
   for (const id of ESSENTIAL_BASEMAP_IDS) {
     const found = byId.get(id);
     if (!found) {
-      logger.warn(
-        'Essential basemap missing from metadata',
-        LogCategory.SYSTEM,
-        { id }
-      );
       continue;
     }
     entries.push(buildEntryFromMetadata(found));

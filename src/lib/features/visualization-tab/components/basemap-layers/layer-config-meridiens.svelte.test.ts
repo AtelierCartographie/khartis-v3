@@ -48,4 +48,12 @@ describe('LayerConfigMeridiens', () => {
     expect(source).toContain('onchange?.({ spacingDegrees: value })');
     expect(source).not.toContain('<Dropdown');
   });
+
+  it('hides remarkable mode and falls back to regular spacing when metadata does not support remarkable lines', () => {
+    expect(source).toContain('allowRemarkable?: boolean');
+    expect(source).toContain('{#if allowRemarkable}');
+    expect(source).toContain(
+      'allowRemarkable ? mode : BasemapGraticuleMode.REGULAR'
+    );
+  });
 });

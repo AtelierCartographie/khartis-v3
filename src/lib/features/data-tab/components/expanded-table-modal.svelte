@@ -166,6 +166,7 @@
             <input
               type="text"
               class="title-input"
+              aria-label={m.dataset_name_label()}
               style="width: {inputWidth}px"
               bind:value={editedName}
               bind:this={inputRef}

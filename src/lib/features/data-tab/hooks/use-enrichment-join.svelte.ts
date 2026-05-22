@@ -1,12 +1,3 @@
-import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
-import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
-import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
-import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
-import { sanitizePreparedGeoJSON } from '$lib/features/commons/utils/persisted-geojson.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type {
   DatasetResult,
@@ -21,6 +12,15 @@ import type { JoinStats } from '../components/index';
 import { refreshDatasetMetadata } from '../services/dataset-metadata.service';
 import { computeDatasetJoinStats } from '../services/join-stats.service';
 import { canFinalizeJoin } from '../utils/join-validation.utils';
+import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
+import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
+import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
+import { sanitizePreparedGeoJSON } from '$lib/features/commons/utils/persisted-geojson.utils';
 
 export interface UseEnrichmentJoinProps {
   getEnrichmentDataset: () => DatasetResult | null;
@@ -150,6 +150,10 @@ export function useEnrichmentJoin(
     return selectedDataset.tableName || null;
   }
 
+  function toOptionalNumber(value: unknown): number | undefined {
+    return value != null && value !== '' ? Number(value) : undefined;
+  }
+
   function buildStatisticsSnapshot(
     columns: DuckAnalyticsColumn[]
   ): UploadedFile['statistics'] {
@@ -158,12 +162,18 @@ export function useEnrichmentJoin(
         column.name,
         {
           type: column.type_simple || 'text',
-          count: column.count ?? 0,
-          nullCount: column.nulls ?? 0,
-          unique: column.uniques ?? 0,
-          min: column.min,
-          max: column.max,
-          mean: typeof column.mean === 'number' ? column.mean : undefined
+          count: toOptionalNumber(column.count) ?? 0,
+          nullCount: toOptionalNumber(column.nulls) ?? 0,
+          unique: toOptionalNumber(column.uniques) ?? 0,
+          min: typeof column.min === 'bigint' ? Number(column.min) : column.min,
+          max: typeof column.max === 'bigint' ? Number(column.max) : column.max,
+          mean: toOptionalNumber(column.mean),
+          median: toOptionalNumber(column.median),
+          stdDev: toOptionalNumber(column.stddev),
+          share_integers: toOptionalNumber(column.share_integers),
+          share_floats: toOptionalNumber(column.share_floats),
+          share_rank_interval: toOptionalNumber(column.share_rank_interval),
+          extent_magnitude: toOptionalNumber(column.extent_magnitude)
         }
       ])
     );
@@ -516,15 +526,6 @@ export function useEnrichmentJoin(
     if (!enrichCol || !geoCol) return;
 
     if (!canFinalizeJoin(joinStats)) {
-      logger.warn(
-        'Cannot finalize enrichment join with unresolved entities',
-        LogCategory.DATA,
-        {
-          toVerify: joinStats.toVerifyCount,
-          duplicates: joinStats.duplicateCount,
-          joinedCount: joinStats.joinedCount
-        }
-      );
       return;
     }
 
@@ -541,16 +542,9 @@ export function useEnrichmentJoin(
         .map((col) => col.name);
 
       if (enrichmentColumns.length === 0) {
-        logger.warn('No columns to enrich with', LogCategory.DATA);
         isFinalizingJoin = false;
         return;
       }
-
-      logger.info('Finalizing enrichment join', LogCategory.DATA, {
-        geoTable: geoTableName,
-        enrichTable: enrichmentDataset.tableName,
-        enrichColumnsCount: enrichmentColumns.length
-      });
 
       const oldTableName = geoTableName;
       const escapedGeoTableName = escapeIdentifier(geoTableName);
@@ -579,17 +573,6 @@ export function useEnrichmentJoin(
 
       const enrichedTableName = `${geoTableName}_enriched_${Date.now()}`;
       const escapedEnrichedTableName = escapeIdentifier(enrichedTableName);
-
-      if (joinStats.duplicateCount > 0) {
-        logger.warn(
-          'Finalizing enrichment with duplicate source keys, keeping one value per normalized key',
-          LogCategory.DATA,
-          {
-            duplicateCount: joinStats.duplicateCount,
-            enrichColumn: enrichCol.columnName
-          }
-        );
-      }
 
       await Duck.query(
         `CREATE TABLE "${escapedEnrichedTableName}" AS
@@ -638,29 +621,21 @@ export function useEnrichmentJoin(
           enrichedTableName
         );
       } catch (updateError) {
-        logger.warn(
-          'Failed to update enriched table in orchestrator',
+        logger.error(
+          'Failed to update enriched dataset table name',
           LogCategory.DATA,
-          { enrichedTableName, error: updateError }
+          updateError
         );
       }
-
-      logger.success('Enrichment finalized', LogCategory.DATA, {
-        newTable: enrichedTableName,
-        addedColumns: enrichmentColumns
-      });
 
       if (oldTableName !== enrichedTableName) {
         try {
           await Duck.dropTable(oldTableName);
         } catch (dropError) {
-          logger.warn(
-            'Failed to drop old table after enrichment',
+          logger.error(
+            'Failed to drop previous enrichment table',
             LogCategory.DATA,
-            {
-              oldTableName,
-              error: dropError
-            }
+            dropError
           );
         }
       }

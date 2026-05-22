@@ -36,4 +36,13 @@ describe('PolygonModeDensity', () => {
     expect(source).toContain('computeDensityLevelsFromGpsJoin');
     expect(source).toContain('duckDataset?.gpsMode && duckDataset.gpsColumns');
   });
+
+  it('formats density equivalence labels without parenthesized ratios', () => {
+    expect(source).toContain(
+      'labelText: `${levelLabelFor(option.level)} : ${m.density_ratio_label({ ratio: String(option.ratio) })}`'
+    );
+    expect(source).not.toContain(
+      'labelText: `${levelLabelFor(option.level)} (${m.density_ratio_label'
+    );
+  });
 });

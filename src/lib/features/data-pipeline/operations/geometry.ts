@@ -1,5 +1,5 @@
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck, GEO_CONSTANTS } from '$lib/features/duckdb';
 import type { GeometryInfo } from '../types';
 import { computeCentroid } from '../types';
@@ -156,10 +156,11 @@ export async function extractGeometryInfo(
       featureCount: undefined
     };
   } catch (error) {
-    logger.warn('Failed to extract geometry info', LogCategory.DATA, {
-      tableName,
+    logger.error(
+      'Failed to inspect DuckDB geometry column',
+      LogCategory.DUCKDB,
       error
-    });
+    );
     return undefined;
   }
 }

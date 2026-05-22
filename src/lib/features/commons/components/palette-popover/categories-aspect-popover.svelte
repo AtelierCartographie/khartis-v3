@@ -563,6 +563,7 @@
                       height="32px"
                       showSteppers={false}
                       disabled={!draftCommonAspect.sizeUnique}
+                      ariaLabel={m.aspect_common_size_unique()}
                       onchange={(value) =>
                         handleCommonAspectChange('size', value)}
                     />
@@ -648,6 +649,7 @@
                       showSteppers={false}
                       disabled={!draftCommonAspect.stroke ||
                         !(draftCommonAspect.strokeUnique ?? true)}
+                      ariaLabel={m.aspect_common_stroke_unique()}
                       onchange={(value) =>
                         handleCommonAspectChange('strokeSize', value)}
                     />
@@ -777,6 +779,7 @@
                     <input
                       type="text"
                       class="category-label-input"
+                      aria-label={m.palette_categories_list_label()}
                       value={category.label}
                       onfocus={() => selectCategory(category.id)}
                       oninput={(e: Event) =>
@@ -862,6 +865,7 @@
                               width="100%"
                               height="32px"
                               showSteppers={false}
+                              ariaLabel={m.per_category_size()}
                               onchange={(value) =>
                                 handleCategorySize(category.id, value)}
                             />
@@ -894,6 +898,7 @@
                               width="100%"
                               height="32px"
                               showSteppers={false}
+                              ariaLabel={m.per_category_stroke_width()}
                               onchange={(value) =>
                                 handleCategoryStrokeWidth(category.id, value)}
                             />
