@@ -184,6 +184,23 @@
     stepToolbarWidth = Math.round(entry.contentRect.width);
   }
 
+  function readObservedDimensions(): void {
+    if (observedWorkspace) {
+      const rect = observedWorkspace.getBoundingClientRect();
+      workspaceWidth = rect.width;
+      workspaceHeight = rect.height;
+    }
+    if (observedStepToolbar) {
+      stepToolbarWidth = Math.round(
+        observedStepToolbar.getBoundingClientRect().width
+      );
+    }
+  }
+
+  function handleWindowResize(): void {
+    readObservedDimensions();
+  }
+
   function startResponsiveMapObservers(): void {
     observedWorkspace = document.querySelector('.workspace-viewport');
     observedStepToolbar = document.getElementById('khartis-step-toolbar');
@@ -207,14 +224,10 @@
       }
     }
 
-    if (observedWorkspace) {
-      workspaceWidth = observedWorkspace.clientWidth;
-      workspaceHeight = observedWorkspace.clientHeight;
-    }
-    if (observedStepToolbar) {
-      stepToolbarWidth = Math.round(
-        observedStepToolbar.getBoundingClientRect().width
-      );
+    readObservedDimensions();
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener(EVENT.RESIZE, handleWindowResize);
     }
   }
 
@@ -223,6 +236,9 @@
     responsiveMapResizeObserver = null;
     observedWorkspace = null;
     observedStepToolbar = null;
+    if (typeof window !== 'undefined') {
+      window.removeEventListener(EVENT.RESIZE, handleWindowResize);
+    }
   }
 
   function isStaleLoad(generation: number): boolean {
@@ -490,8 +506,18 @@
       tableName
     );
 
-    if (joinedBasemapDisplayKeys.get(datasetId) === displayKey) {
+    const hasDisplayPayload =
+      displayTables.has(datasetId) ||
+      displayGeoJSONs.has(datasetId) ||
+      displaySplitData.has(datasetId);
+    if (
+      joinedBasemapDisplayKeys.get(datasetId) === displayKey &&
+      hasDisplayPayload
+    ) {
       return;
+    }
+    if (!hasDisplayPayload) {
+      joinedBasemapDisplayKeys.delete(datasetId);
     }
 
     const loadKey = `${displayKey}::${generation}`;
@@ -854,6 +880,44 @@
         loadGPSData(dataset.id, duckDBDataset.id, thisGeneration);
       }
     }
+  });
+
+  $effect(() => {
+    void visualizationStore.version;
+    void duckDBDatasetsVersion;
+    void displayDataVersion;
+    if (isInitializing) return;
+
+    const activeVizDatasetIds = new Set(
+      visualizationStore.activeVisualizations.map((viz) => viz.datasetId)
+    );
+    const expectedDatasets = mapDisplayDatasets.filter((dataset) =>
+      activeVizDatasetIds.has(dataset.id)
+    );
+
+    const missing = expectedDatasets.filter(
+      (dataset) =>
+        !displayTables.has(dataset.id) &&
+        !displayGeoJSONs.has(dataset.id) &&
+        !displaySplitData.has(dataset.id)
+    );
+    if (missing.length === 0) return;
+
+    const reconcileGeneration = ++loadGeneration;
+    untrack(() => {
+      for (const dataset of missing) {
+        joinedBasemapDisplayKeys.delete(dataset.id);
+      }
+      void loadDatasetsSequentially(missing, (dataset) =>
+        loadDatasetForDisplay(dataset, reconcileGeneration)
+      ).catch((error) => {
+        logger.error(
+          'Failed to reconcile missing visualization datasets',
+          LogCategory.MAP,
+          error
+        );
+      });
+    });
   });
 
   function cleanupTransitionListener(): void {
