@@ -424,6 +424,31 @@
       return;
     }
 
+    if (linkedVar === null && !linkedName) {
+      const sourceFileId = selectedDataset?.sourceFileId;
+      const duckDataset = sourceFileId
+        ? duckDBOrchestrator.getDatasetBySourceFile(sourceFileId)
+        : undefined;
+      if (
+        duckDataset &&
+        !duckDataset.gpsMode &&
+        duckDataset.geoColumn &&
+        duckDataset.joinedBasemap
+      ) {
+        const existingJoinColumn = dataFieldItems().find(
+          (item) => item.columnName === duckDataset.geoColumn
+        );
+        if (existingJoinColumn) {
+          previousAutoSelectedColumn = existingJoinColumn.columnName;
+          dataTabActions.setGeolocationState({
+            linkedVariable: existingJoinColumn.id,
+            linkedVariableName: existingJoinColumn.columnName
+          });
+          return;
+        }
+      }
+    }
+
     if (linkedVar === null && !linkedName && suggested) {
       if (
         !columnAnalysisLoaded ||

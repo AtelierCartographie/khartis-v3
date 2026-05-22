@@ -79,4 +79,21 @@ describe('BasemapJoinStep reference basemap selection', () => {
       'isCurrentBasemapAttributeValuesRequest(requestId, basemapId)'
     );
   });
+
+  it('skips computeAndAutoFinalizeJoin when the join is already finalized in DuckDB', () => {
+    const effectStart = source.indexOf(
+      'void computeAndAutoFinalizeJoin(basemap, abortSignal, linkedVariableName);'
+    );
+    expect(effectStart).toBeGreaterThan(-1);
+    const guardWindow = source.slice(
+      Math.max(0, effectStart - 600),
+      effectStart
+    );
+    expect(guardWindow).toContain('isCatalogJoinFinalizedForBasemap(');
+    expect(guardWindow).toContain('selectedBasemapId');
+    expect(guardWindow).toContain('linkedVariableName');
+    expect(guardWindow).toContain(
+      'dataTabStore.markStepComplete(basemapStepIndex)'
+    );
+  });
 });

@@ -139,7 +139,6 @@ export interface ResolveFitZoomParams {
 
 export interface ResolveWorkspaceFitScaleParams extends ResolveFitZoomParams {
   reservedInlineStartPx?: number;
-  reservedInlineEndPx?: number;
   maxViewportCoverageRatio?: number;
 }
 
@@ -187,7 +186,6 @@ export function resolveWorkspaceFitScale({
   pageHeight,
   paddingPx = FIT_PADDING_PX,
   reservedInlineStartPx = 0,
-  reservedInlineEndPx = 0,
   maxViewportCoverageRatio = 0.85
 }: ResolveWorkspaceFitScaleParams): number {
   if (
@@ -201,7 +199,7 @@ export function resolveWorkspaceFitScale({
 
   const availableWidth = Math.max(
     1,
-    viewportWidth - reservedInlineStartPx - reservedInlineEndPx - paddingPx * 2
+    viewportWidth - reservedInlineStartPx - paddingPx * 2
   );
   const availableHeight = Math.max(1, viewportHeight - paddingPx * 2);
   const coverageRatio = clamp(maxViewportCoverageRatio, 0.1, 1);
