@@ -3,8 +3,10 @@
 
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 import { clientsClaim } from 'workbox-core';
+import type { WorkboxPlugin } from 'workbox-core/types';
 import { ExpirationPlugin } from 'workbox-expiration';
 import {
+  addPlugins,
   cleanupOutdatedCaches,
   matchPrecache,
   precacheAndRoute
@@ -53,10 +55,59 @@ const OFFLINE_CACHE_NAMES_BY_SCOPE: Record<OfflineCacheScope, string[]> = {
 self.skipWaiting();
 clientsClaim();
 
+const RETRY_STATUS_CODES = new Set([403, 408, 425, 429, 500, 502, 503, 504]);
+const MAX_TRANSIENT_RETRIES = 2;
+const BASE_RETRY_DELAY_MS = 500;
+const RETRY_JITTER_MS = 500;
+
+const retryTransientErrorsPlugin: WorkboxPlugin = {
+  fetchDidSucceed: async ({ request, response }) => {
+    if (!RETRY_STATUS_CODES.has(response.status)) {
+      return response;
+    }
+    let latest = response;
+    for (let attempt = 0; attempt < MAX_TRANSIENT_RETRIES; attempt += 1) {
+      const delayMs =
+        BASE_RETRY_DELAY_MS * Math.pow(2, attempt) +
+        Math.random() * RETRY_JITTER_MS;
+      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+      try {
+        const retried = await fetch(request.clone());
+        if (retried.ok) {
+          return retried;
+        }
+        if (!RETRY_STATUS_CODES.has(retried.status)) {
+          return retried;
+        }
+        latest = retried;
+      } catch {
+        break;
+      }
+    }
+    return latest;
+  }
+};
+
+addPlugins([retryTransientErrorsPlugin]);
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
 const APP_SHELL_CACHE = 'app-shell';
+const HASHED_RUNTIME_CACHES_TO_RESET = ['fonts', 'images'];
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    (async () => {
+      try {
+        await Promise.allSettled(
+          HASHED_RUNTIME_CACHES_TO_RESET.map((name) => caches.delete(name))
+        );
+      } catch {
+        // Cache reset is best-effort; failure must not block activation.
+      }
+    })()
+  );
+});
 
 registerRoute(
   ({ url }) =>
@@ -79,6 +130,7 @@ const navigationHandler = new NetworkFirst({
   cacheName: APP_SHELL_CACHE,
   networkTimeoutSeconds: 3,
   plugins: [
+    retryTransientErrorsPlugin,
     new CacheableResponsePlugin({ statuses: [0, 200] }),
     new ExpirationPlugin({
       maxEntries: 4,
@@ -108,6 +160,7 @@ registerRoute(
     cacheName: 'duckdb-wasm-core',
     matchOptions: { ignoreSearch: true },
     plugins: [
+      retryTransientErrorsPlugin,
       new CacheableResponsePlugin({ statuses: [0, 200] }),
       new ExpirationPlugin({
         maxEntries: 5,
@@ -123,6 +176,7 @@ registerRoute(
   new CacheFirst({
     cacheName: 'duckdb-extensions-cdn',
     plugins: [
+      retryTransientErrorsPlugin,
       new CacheableResponsePlugin({ statuses: [0, 200] }),
       new ExpirationPlugin({
         maxEntries: 10,
@@ -140,6 +194,7 @@ registerRoute(
   new CacheFirst({
     cacheName: 'duckdb-extensions-local',
     plugins: [
+      retryTransientErrorsPlugin,
       new CacheableResponsePlugin({ statuses: [0, 200] }),
       new ExpirationPlugin({
         maxEntries: 12,
@@ -160,6 +215,7 @@ registerRoute(
   new CacheFirst({
     cacheName: 'workers',
     plugins: [
+      retryTransientErrorsPlugin,
       new CacheableResponsePlugin({ statuses: [0, 200] }),
       new ExpirationPlugin({
         maxEntries: 20,
@@ -175,6 +231,7 @@ registerRoute(
   new CacheFirst({
     cacheName: 'images',
     plugins: [
+      retryTransientErrorsPlugin,
       new CacheableResponsePlugin({ statuses: [0, 200] }),
       new ExpirationPlugin({
         maxEntries: 100,
@@ -190,6 +247,7 @@ registerRoute(
   new CacheFirst({
     cacheName: FONTS_CACHE,
     plugins: [
+      retryTransientErrorsPlugin,
       new CacheableResponsePlugin({ statuses: [0, 200] }),
       new ExpirationPlugin({
         maxEntries: 80,
@@ -207,6 +265,7 @@ registerRoute(
   new CacheFirst({
     cacheName: PRESETS_CACHE,
     plugins: [
+      retryTransientErrorsPlugin,
       new CacheableResponsePlugin({ statuses: [0, 200] }),
       new ExpirationPlugin({
         maxEntries: 4,
@@ -224,6 +283,7 @@ registerRoute(
   new StaleWhileRevalidate({
     cacheName: GEOPF_TILES_CACHE,
     plugins: [
+      retryTransientErrorsPlugin,
       new CacheableResponsePlugin({ statuses: [0, 200] }),
       new ExpirationPlugin({
         maxEntries: 200,
@@ -239,6 +299,7 @@ registerRoute(
   new StaleWhileRevalidate({
     cacheName: OPENMAPTILES_CACHE,
     plugins: [
+      retryTransientErrorsPlugin,
       new CacheableResponsePlugin({ statuses: [0, 200] }),
       new ExpirationPlugin({
         maxEntries: 100,
@@ -252,6 +313,7 @@ registerRoute(
 const basemapDataStrategy = new CacheFirst({
   cacheName: BASEMAPS_DATA_CACHE,
   plugins: [
+    retryTransientErrorsPlugin,
     new CacheableResponsePlugin({ statuses: [0, 200] }),
     new ExpirationPlugin({
       maxEntries: 100,
@@ -264,6 +326,7 @@ const basemapDataStrategy = new CacheFirst({
 const basemapDataSlowStrategy = new StaleWhileRevalidate({
   cacheName: BASEMAPS_DATA_CACHE,
   plugins: [
+    retryTransientErrorsPlugin,
     new CacheableResponsePlugin({ statuses: [0, 200] }),
     new ExpirationPlugin({
       maxEntries: 100,
