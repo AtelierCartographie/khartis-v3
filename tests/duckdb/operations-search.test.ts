@@ -77,4 +77,43 @@ describe('searchInTable', () => {
       'length(trim(strip_html_text("Description"::VARCHAR))) > 0'
     );
   });
+
+  it('keeps fuzzy-search cache entries separate by threshold', async () => {
+    executeQueryMock
+      .mockResolvedValueOnce([
+        { normalized_term: 'brnschweig', row_count: 1, col_count: 1 }
+      ])
+      .mockResolvedValueOnce([{ column_name: 'Name' }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          __id: 1,
+          column_name: 'Name',
+          column_value: 'Braunschweig',
+          score: 0.91
+        }
+      ])
+      .mockResolvedValueOnce([
+        { normalized_term: 'brnschweig', row_count: 1, col_count: 1 }
+      ])
+      .mockResolvedValueOnce([{ column_name: 'Name' }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          __id: 1,
+          column_name: 'Name',
+          column_value: 'Braunschweig',
+          score: 0.91
+        }
+      ]);
+
+    await searchInTable(ctx(), 'threshold_table', 'Brnschweig', {
+      threshold: 0.9
+    });
+    await searchInTable(ctx(), 'threshold_table', 'Brnschweig', {
+      threshold: 0.5
+    });
+
+    expect(executeQueryMock).toHaveBeenCalledTimes(8);
+  });
 });

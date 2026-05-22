@@ -382,11 +382,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
   }
 
   function initializeOrthographic(container: HTMLDivElement): void {
-    logger.info(
-      'Initializing Deck.gl standalone render engine',
-      LogCategory.MAP
-    );
-
     containerRef = container;
     isMapLoaded = false;
     removeOrthographicFallbackCanvas();
@@ -404,10 +399,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       isMapLoaded = true;
       mapInstanceStore.setDeckInstance(null);
       mapInstanceStore.setMapLoaded(true);
-      logger.warn(
-        'WebGL2 unavailable: using static Deck.gl fallback canvas',
-        LogCategory.MAP
-      );
       onMapLoaded();
       return;
     }
@@ -475,10 +466,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
 
             isMapLoaded = true;
             mapInstanceStore.setMapLoaded(true);
-            logger.success(
-              'Deck.gl OrthographicView render engine ready',
-              LogCategory.MAP
-            );
             onMapLoaded();
           },
           onError: (error, layer) => {
@@ -512,8 +499,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     config: MapInitConfig = DEFAULT_CONFIG
   ): void {
     const style = basemapStyleStore.selectedStyleUrl;
-
-    logger.info('Initializing MapLibre + Deck.gl overlay', LogCategory.MAP);
 
     containerRef = container;
     currentViewMode = ViewMode.MAPLIBRE;
@@ -574,7 +559,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       mapInstanceStore.setMapInstance(map);
       mapInstanceStore.setDeckOverlay(deckOverlay);
       mapInstanceStore.setMapLoaded(true);
-      logger.success('MapLibre + Deck.gl ready', LogCategory.MAP);
       if (isDeckDebugEnabled()) {
         (window as unknown as Record<string, unknown>).__maplibreMap = map;
         (window as unknown as Record<string, unknown>).__deck = deckOverlay;
@@ -686,8 +670,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       try {
         deckToFinalize.finalize();
       } catch (error) {
-        logger.warn(
-          'Deck finalize raised an error during teardown',
+        logger.error(
+          'Failed to finalize Deck instance',
           LogCategory.MAP,
           error
         );
@@ -698,7 +682,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     if (isDeckDebugEnabled()) {
       deckDebugStore.clear();
     }
-    logger.info('Map destroyed', LogCategory.MAP);
   }
 
   return {

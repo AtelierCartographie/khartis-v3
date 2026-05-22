@@ -67,7 +67,8 @@ vi.mock('$lib/features/commons/constants/visualization.constants', () => ({
 vi.mock('$lib/features/visualization-tab/services/suggestion.service', () => ({
   applySuggestionToVisualization: vi.fn(),
   buildSuggestionOrigin: vi.fn((_visualization, origin) => origin),
-  mapSuggestionToType: vi.fn(() => 'choropleth')
+  mapSuggestionToType: vi.fn(() => 'choropleth'),
+  rememberAppliedSuggestionState: vi.fn()
 }));
 
 vi.mock(
@@ -86,7 +87,8 @@ import { visualizationStore } from '$lib/features/commons/stores/visualization.s
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   applySuggestionToVisualization,
-  buildSuggestionOrigin
+  buildSuggestionOrigin,
+  rememberAppliedSuggestionState
 } from '$lib/features/visualization-tab/services/suggestion.service';
 
 function buildDataset(columns: Array<{ name: string; type: ColumnType }>) {
@@ -227,6 +229,10 @@ describe('example visualization presets', () => {
       expect.objectContaining({
         origin: expect.objectContaining({ mode: 'custom' })
       })
+    );
+    expect(rememberAppliedSuggestionState).toHaveBeenCalledWith(
+      'viz-1',
+      'choropleth'
     );
   });
 });

@@ -357,9 +357,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     }
 
     const viewportSize = getProjectionViewportSize();
-    const scale =
-      get_max_scale(viewportSize, referenceBbox, projectionStore.fitPaddingPx) *
-      projectionStore.renderScale;
+    const scale = get_max_scale(
+      viewportSize,
+      referenceBbox,
+      projectionStore.fitPaddingPx
+    );
     if (!Number.isFinite(scale) || scale <= 0) {
       return [
         [0, 0],
@@ -608,18 +610,13 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         }
       })
       .catch((error) => {
+        logger.error(
+          'Failed to build representative point table',
+          LogCategory.MAP,
+          error
+        );
         representativePointLoadFailures.add(sourceTable);
         representativePointNotifyOnReady.delete(sourceTable);
-        logger.warn(
-          'Deferred representative point table loading failed',
-          LogCategory.MAP,
-          {
-            datasetId,
-            joinedBasemapId,
-            geometryType: geometryInfo.type,
-            error
-          }
-        );
       })
       .finally(() => {
         representativePointLoadPromises.delete(sourceTable);
@@ -827,6 +824,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           requestedTypes.add(BasemapLayerType.CENTROID);
           requestedTypes.add(BasemapLayerType.POINT);
           break;
+        case 'meridiens':
+          requestedTypes.add(BasemapLayerType.GEOGRAPHIC_LINES);
+          break;
       }
     }
 
@@ -1025,10 +1025,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
                   }
                 })
                 .catch((error) => {
-                  logger.warn(
-                    'Deferred basemap layer loading failed',
+                  logger.error(
+                    'Failed to ensure basemap auxiliary layers are loaded',
                     LogCategory.MAP,
-                    { basemapId: currentMetadata.file, error }
+                    error
                   );
                 });
             }
@@ -1148,11 +1148,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           } else if (table) {
             const geoMetadata = table.schema.metadata?.get('geo');
             if (!geoMetadata) {
-              logger.warn(
-                'Arrow table missing GeoArrow metadata, skipping',
-                LogCategory.MAP,
-                { datasetId }
-              );
               continue;
             }
             const geoInfo = extractGeometryInfo(table);
@@ -1291,6 +1286,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             (d) => d.id === datasetId
           );
           const datasetHasOwnGeometry = Boolean(datasetEntry?.geometry);
+          const table = tables.get(datasetId);
+          const geojson = geoJSONs.get(datasetId);
+          const hasLoadedRenderableGeometry = Boolean(
+            geojson || table?.schema.metadata?.get('geo')
+          );
           // Skip rendering when the dataset cannot produce geometry that is
           // safe to project under the active basemap:
           //   1. Joined to a basemap but user has explicitly toggled it off
@@ -1311,11 +1311,13 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           ) {
             continue;
           }
-          if (!datasetJoinedBasemap && !datasetHasOwnGeometry) {
+          if (
+            !datasetJoinedBasemap &&
+            !datasetHasOwnGeometry &&
+            !hasLoadedRenderableGeometry
+          ) {
             continue;
           }
-          const table = tables.get(datasetId);
-          const geojson = geoJSONs.get(datasetId);
           const fallbackCtx = buildDatasetFallbackContext(datasetId);
           const datasetProjectionMetadata = getDatasetProjectionMetadata(
             datasetId,
@@ -1350,11 +1352,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           } else if (table) {
             const geoMetadata = table.schema.metadata?.get('geo');
             if (!geoMetadata) {
-              logger.warn(
-                'Arrow table missing GeoArrow metadata, skipping fallback preview',
-                LogCategory.MAP,
-                { datasetId }
-              );
               continue;
             }
             const fallbackArrowLayers = createDeckLayers(table, fallbackCtx);
@@ -1438,10 +1435,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           lastAppliedLayers = previousLayersToPreserve;
         }
       }
-      logger.success('Deck.gl layers applied', LogCategory.MAP, {
-        layerCount: layers.length,
-        isOSMActive
-      });
     } catch (error) {
       logger.error(
         'Unexpected failure while updating map layers',

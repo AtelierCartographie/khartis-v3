@@ -112,6 +112,13 @@
     file: undefined,
     style: null
   };
+  const oceanSyntheticLayer: BasemapLayer = {
+    title_fr: 'Mers/Océans',
+    title_en: 'Seas/Oceans',
+    type: BasemapLayerType.POLYGON,
+    file: '__generated-ocean-sphere__',
+    style: null
+  };
 
   interface LayerEntry {
     layer: BasemapLayer;
@@ -134,11 +141,17 @@
     const typeCounters = new SvelteMap<BasemapLayerType, number>();
     const entries: LayerEntry[] = [
       {
+        layer: oceanSyntheticLayer,
+        sharedLegacyId: 'mers',
+        instanceIndex: 0
+      },
+      {
         layer: sphereSyntheticLayer,
         sharedLegacyId: 'sphere',
         instanceIndex: 0
       }
     ];
+    typeCounters.set(BasemapLayerType.POLYGON, 1);
     typeCounters.set(BasemapLayerType.SPHERE, 1);
     for (const layer of metadata.layers) {
       if (!isSection3RenderableType(layer.type)) continue;
@@ -170,7 +183,6 @@
       return [];
     }
     const hidden: BasemapLayerId[] = [
-      'mers',
       'lacs',
       'rivieres',
       'relief',
@@ -192,6 +204,9 @@
     !isCustomBasemap &&
       (availableMetadataLayerTypes.has(BasemapLayerType.CENTROID) ||
         availableMetadataLayerTypes.has(BasemapLayerType.POINT))
+  );
+  const supportsRemarkableGraticule = $derived(
+    availableMetadataLayerTypes.has(BasemapLayerType.GEOGRAPHIC_LINES)
   );
 
   function getLayerVisibility(layerId: BasemapLayerId): boolean {
@@ -278,6 +293,7 @@
           basemapFile={currentMetadata.file}
           sharedLegacyId={entry.sharedLegacyId ?? undefined}
           instanceIndex={entry.instanceIndex}
+          allowRemarkable={supportsRemarkableGraticule}
         />
       {/each}
     {/if}

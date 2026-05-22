@@ -23,6 +23,7 @@ interface ResolveSuggestionCardActionOptions {
   displayedSuggestionKey?: string;
   originSuggestionKey?: string;
   hasRestoreState?: boolean;
+  isTargetActive?: boolean;
 }
 
 export function getSuggestionSignature(
@@ -46,6 +47,13 @@ export function resolveSuggestionCardAction(
     typeof currentSuggestion === 'string'
       ? currentSuggestion
       : currentSuggestion?.displayedSuggestionKey;
+
+  if (
+    typeof currentSuggestion !== 'string' &&
+    currentSuggestion?.isTargetActive === false
+  ) {
+    return 'apply';
+  }
 
   if (displayedSuggestionKey === nextSuggestionKey) {
     return 'clear';

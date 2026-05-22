@@ -75,6 +75,7 @@
   <div class="category-rows">
     <div class="category-row">
       <button
+        type="button"
         class="category-row-header"
         onclick={() => (joinedExpanded = !joinedExpanded)}
         aria-expanded={joinedExpanded}
@@ -109,6 +110,7 @@
 
     <div class="category-row">
       <button
+        type="button"
         class="category-row-header"
         onclick={() => (toVerifyExpanded = !toVerifyExpanded)}
         aria-expanded={toVerifyExpanded}
@@ -153,7 +155,8 @@
                     <div class="table-cell cell-select">
                       <Select
                         id={`join-${i}`}
-                        labelText=""
+                        labelText={m.join_basemap_column()}
+                        hideLabel
                         selected={entity.selectedMapping}
                         on:change={(e) => {
                           const target = e.target as HTMLSelectElement;
@@ -196,6 +199,7 @@
     {#if stats.duplicateCount > 0}
       <div class="category-row">
         <button
+          type="button"
           class="category-row-header"
           onclick={() => (duplicatesExpanded = !duplicatesExpanded)}
           aria-expanded={duplicatesExpanded}
@@ -229,6 +233,7 @@
 
     <div class="category-row">
       <button
+        type="button"
         class="category-row-header"
         onclick={() => (unrecognizedExpanded = !unrecognizedExpanded)}
         aria-expanded={unrecognizedExpanded}
@@ -271,6 +276,7 @@
     {#if ignoredCount > 0}
       <div class="category-row">
         <button
+          type="button"
           class="category-row-header"
           onclick={() => (ignoredExpanded = !ignoredExpanded)}
           aria-expanded={ignoredExpanded}

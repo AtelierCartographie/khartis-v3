@@ -146,16 +146,6 @@ async function resolveGeometryTypeForTable(
     geometryType = GEOMETRY_WKT_TYPES.MULTI_POINT;
   }
 
-  logger.info(
-    'Mixed geometry types detected, normalized to Multi* variant',
-    LogCategory.DUCKDB,
-    {
-      tableName,
-      detectedTypes: types.join(', '),
-      normalizedType: geometryType
-    }
-  );
-
   return geometryType;
 }
 
@@ -268,7 +258,7 @@ async function reprojectArrowTableWithProj4(
 async function executeArrowIpcQuery(
   Duck: DuckDBClientForArrow,
   query: string,
-  tableName: string
+  _tableName: string
 ): Promise<Table> {
   // Use streaming when available — reduces peak WASM memory for large tables.
   // Fallback to regular query() if streaming returns 0 rows (race condition
@@ -284,17 +274,6 @@ async function executeArrowIpcQuery(
       if (!firstBatchEmpty) {
         return streamTable;
       }
-      logger.debug(
-        'queryStreaming first batch is empty (schema header), retrying with regular query',
-        LogCategory.DUCKDB,
-        { tableName }
-      );
-    } else {
-      logger.debug(
-        'queryStreaming returned 0 rows, retrying with regular query',
-        LogCategory.DUCKDB,
-        { tableName, ipcBufferBytes: ipcBuffer.byteLength }
-      );
     }
   }
 
@@ -493,15 +472,6 @@ export async function fetchArrowRepresentativePointTable(
       throw error;
     }
     maximumInscribedCircleSupported = false;
-    logger.warn(
-      'Representative point query failed, falling back to ST_PointOnSurface for the rest of this session',
-      LogCategory.DUCKDB,
-      {
-        tableName,
-        geometryType,
-        error: error instanceof Error ? error.message : String(error)
-      }
-    );
     return {
       table: await executeArrowIpcQuery(
         Duck,
@@ -548,11 +518,6 @@ export async function addGeoArrowMetadataFromDuckDB(
       }
 
       if (!geomColumn) {
-        logger.warn(
-          'No geometry column found in DuckDB table',
-          LogCategory.DUCKDB,
-          { tableName }
-        );
         return table;
       }
 
@@ -602,11 +567,6 @@ export async function addGeoArrowMetadataFromDuckDB(
 
     const schema = table.schema;
     if (!schema) {
-      logger.warn(
-        'Arrow table missing schema, cannot add GeoArrow metadata',
-        LogCategory.DUCKDB,
-        { tableName }
-      );
       return table;
     }
 
@@ -676,15 +636,6 @@ export async function createArrowTableWithMetadata(
     geomColumn
   );
   const geoArrowMetadata = extractMetadata(arrowTableWithMetadata);
-  if (!geoArrowMetadata) {
-    logger.warn(
-      'GeoArrow metadata missing after conversion',
-      LogCategory.DUCKDB,
-      {
-        tableName
-      }
-    );
-  }
   return { arrowTableWithMetadata, geoArrowMetadata };
 }
 
@@ -732,9 +683,6 @@ export async function getArrowTableDirect(
   );
 
   setCache(tableWithMetadata);
-  logger.info('Cached Arrow table with metadata', LogCategory.DUCKDB, {
-    tableName
-  });
 
   return tableWithMetadata;
 }
@@ -780,17 +728,6 @@ export async function getArrowTableReprojected(
     ) {
       throw error;
     }
-
-    logger.warn(
-      'DuckDB ST_Transform failed, trying client-side proj4 fallback for Arrow reprojection',
-      LogCategory.DUCKDB,
-      {
-        tableName,
-        sourceCrs,
-        targetCrs: normalizedTargetCrs,
-        error: error instanceof Error ? error.message : String(error)
-      }
-    );
 
     const geometryType = await resolveGeometryTypeForTable(
       tableName,

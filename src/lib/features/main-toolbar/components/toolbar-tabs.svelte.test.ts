@@ -29,5 +29,9 @@ describe('ToolbarTabs dataset rename persistence', () => {
     expect(source).toContain(
       'globalActions.selectDataButton(newDataset.sourceFileId);'
     );
+    expect(source).toContain('await tick();');
+    expect(source).toContain(
+      'await dataOrchestratorService.restoreSelectedDataTabState();'
+    );
   });
 });

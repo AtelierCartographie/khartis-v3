@@ -1,8 +1,8 @@
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { GEO_COLUMN_NAMES } from '$lib/features/commons/constants/data.constants';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
 import type { LngLatBoundsLike } from 'maplibre-gl';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { GeoArrowMetadataKey } from '../constants';
 import { parseGeoJsonGeometry } from '../io/geometry-parser';
 import { GEOJSON_TYPE } from '$lib/features/commons/constants';
@@ -28,14 +28,11 @@ function warnBoundsReadFailureOnce(
   }
 
   boundsReadWarnings.set(geoColumn, warningCount + 1);
-  logger.warn(
-    'Failed to read geometry row during bounds calculation',
+  logger.error(
+    'Failed to read geometry while calculating bounds',
     LogCategory.MAP,
-    {
-      geoColumn,
-      rowIndex,
-      error: error instanceof Error ? error.message : String(error)
-    }
+    error,
+    { extra: { geoColumn, rowIndex } }
   );
 }
 
@@ -330,11 +327,7 @@ export function calculateBoundsFromGeoArrowRows(
 
     return null;
   } catch (error) {
-    logger.warn(
-      'Failed to calculate filtered bounds from GeoArrow',
-      LogCategory.MAP,
-      error
-    );
+    logger.error('Failed to calculate GeoJSON bounds', LogCategory.MAP, error);
     return null;
   }
 }
@@ -411,19 +404,10 @@ export function calculateBoundsFromGeoArrow(
       }
     }
 
-    logger.warn(
-      'No geometry column found for bounds calculation',
-      LogCategory.MAP,
-      { fields: jsTable.schema.fields.map((f) => f.name) }
-    );
     boundsCache.set(jsTable, null);
     return null;
   } catch (error) {
-    logger.warn(
-      'Failed to calculate bounds from GeoArrow',
-      LogCategory.MAP,
-      error
-    );
+    logger.error('Failed to calculate GeoArrow bounds', LogCategory.MAP, error);
     boundsCache.set(jsTable, null);
     return null;
   }
@@ -473,11 +457,7 @@ export function calculateBoundsFromGeoJSON(
       [maxLng, maxLat]
     ];
   } catch (error) {
-    logger.warn(
-      'Failed to calculate bounds from GeoJSON',
-      LogCategory.MAP,
-      error
-    );
+    logger.error('Failed to calculate feature bounds', LogCategory.MAP, error);
     return null;
   }
 }

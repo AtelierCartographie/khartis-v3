@@ -65,6 +65,7 @@ import {
 import {
   DEFAULT_COLORS,
   FillMode,
+  StrokeMode,
   SymbolDoublePosition,
   SymbolMode,
   ThicknessMode
@@ -74,9 +75,11 @@ import {
   applySuggestionToVisualization,
   buildSuggestionOrigin,
   mapSuggestionToType,
+  resolveBlankVisualizationType,
   SUGGESTION_BEHAVIOR_IDS,
   isVisualizationBlank,
   isVisualizationMatchingSuggestion,
+  rememberAppliedSuggestionState,
   resolveDatasetGeometryType,
   restoreVisualizationFromSuggestion
 } from './suggestion.service';
@@ -286,6 +289,35 @@ describe('suggestion.service', () => {
         updatedVisualization!,
         dataset,
         suggestion
+      )
+    ).toBe(true);
+    expect(mocks.notifyChangeMock).toHaveBeenCalledWith(
+      'visualization',
+      'immediate'
+    );
+  });
+
+  it('reactivates an inactive visualization when applying a suggestion', () => {
+    const dataset = createPointDataset();
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.PROPORTIONAL,
+      dataset.id
+    );
+    const suggestion = createSuggestionById('symbols_proportional', 'point');
+
+    visualizationStore.toggleVisualization(visualization.id);
+    expect(
+      visualizationStore.activeVisualizations.some(
+        (item) => item.id === visualization.id
+      )
+    ).toBe(false);
+
+    mocks.notifyChangeMock.mockClear();
+    applySuggestionToVisualization(visualization.id, suggestion);
+
+    expect(
+      visualizationStore.activeVisualizations.some(
+        (item) => item.id === visualization.id
       )
     ).toBe(true);
     expect(mocks.notifyChangeMock).toHaveBeenCalledWith(
@@ -656,6 +688,8 @@ describe('suggestion.service', () => {
       PrimitiveFilterType.POLYGON
     ]);
     expect(updatedVisualization?.mapping.valueColumn).toBe('population_total');
+    expect(updatedVisualization?.modes?.stroke).toBe(StrokeMode.NONE);
+    expect(updatedVisualization?.polygon?.strokeMode).toBe(StrokeMode.NONE);
     expect(updatedVisualization?.style.textOpacity).toBe(0);
     expect(updatedVisualization?.style.labelOpacity).toBe(0);
   });
@@ -760,6 +794,68 @@ describe('suggestion.service', () => {
     expect(restoredVisualization?.style.fillOpacity).toBe(0.42);
     expect(restoredVisualization?.style.strokeWidth).toBe(2);
     expect(restoredVisualization?.classification).toBeUndefined();
+  });
+
+  it('re-applies remembered example overrides after suggestion deselection', () => {
+    const dataset = createPointDataset();
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.PROPORTIONAL,
+      dataset.id
+    );
+    const suggestion = createSuggestionById('symbols_proportional', 'point');
+    const suggestionKey =
+      'symbols_proportional::1::population_total::point::QTA';
+
+    applySuggestionToVisualization(visualization.id, suggestion, {
+      origin: buildSuggestionOrigin(visualization, {
+        mode: 'custom',
+        suggestionKey
+      })
+    });
+
+    const suggestedVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    )!;
+    visualizationStore.updateVisualization(visualization.id, {
+      origin: suggestedVisualization.origin,
+      style: {
+        ...suggestedVisualization.style,
+        symbolFillColor: '#E6142D'
+      },
+      symbol: suggestedVisualization.symbol
+        ? {
+            ...suggestedVisualization.symbol,
+            fillColor: '#E6142D',
+            minSize: 5,
+            maxSize: 50
+          }
+        : undefined
+    });
+    rememberAppliedSuggestionState(visualization.id, suggestionKey);
+
+    expect(restoreVisualizationFromSuggestion(visualization.id)).toBe(true);
+
+    const restoredVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    )!;
+    expect(restoredVisualization.origin?.suggestionKey).toBeUndefined();
+    expect(restoredVisualization.origin?.appliedSuggestionState).toBeDefined();
+
+    applySuggestionToVisualization(visualization.id, suggestion, {
+      origin: buildSuggestionOrigin(restoredVisualization, {
+        mode: 'manual-suggestion',
+        suggestionKey
+      })
+    });
+
+    const reappliedVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    );
+
+    expect(reappliedVisualization?.style.symbolFillColor).toBe('#E6142D');
+    expect(reappliedVisualization?.symbol?.fillColor).toBe('#E6142D');
+    expect(reappliedVisualization?.symbol?.minSize).toBe(5);
+    expect(reappliedVisualization?.symbol?.maxSize).toBe(50);
   });
 
   it('restores the manual visualization even after the suggestion has drifted to custom', () => {
@@ -1169,5 +1265,38 @@ describe('resolveDatasetGeometryType / MultiPoint + centroid routing', () => {
       columns: []
     } as unknown as SuggestionTestDataset;
     expect(resolveDatasetGeometryType(ds)).toBeNull();
+  });
+
+  it('prioritizes GPS coordinates over an assisted joined basemap', () => {
+    const ds = {
+      id: 'dataset-gps-joined',
+      name: 'GPS CSV with assisted basemap',
+      sourceFileId: 'source-gps-joined',
+      tableName: 'gps_joined_dataset',
+      rowCount: 96,
+      joinedBasemap: 'france-region-2025-medium',
+      metadata: {
+        processedAt: new Date(),
+        fileType: 'csv',
+        parserUsed: 'test'
+      },
+      geoDetection: {
+        geoColumns: [
+          { type: 'latitude', columnName: 'lat' },
+          { type: 'longitude', columnName: 'long' },
+          { type: 'city', columnName: 'commune' }
+        ]
+      },
+      columns: [
+        { name: 'lat', type: 'number', stats: {}, values: [] },
+        { name: 'long', type: 'number', stats: {}, values: [] },
+        { name: 'directive_ippc', type: 'text', stats: {}, values: [] }
+      ]
+    } as unknown as SuggestionTestDataset;
+
+    expect(resolveDatasetGeometryType(ds)).toBe('Point');
+    expect(resolveBlankVisualizationType(ds)).toBe(
+      VisualizationType.PROPORTIONAL
+    );
   });
 });

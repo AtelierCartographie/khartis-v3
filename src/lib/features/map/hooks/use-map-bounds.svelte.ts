@@ -1,17 +1,16 @@
 import type { LngLatBoundsLike, Map as MapLibreMap } from 'maplibre-gl';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
-import { debounce } from '$lib/features/commons/utils/debounce.utils';
-import {
-  mapInstanceStore,
-  type ViewportFitReason
-} from '$lib/features/commons/stores/map-instance.store.svelte';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   calculateBoundsFromGeoArrow,
   calculateBoundsFromGeoJSON
 } from '../core';
 import { MAP_TIMING } from '../constants/timing.constants';
+import { debounce } from '$lib/features/commons/utils/debounce.utils';
+import {
+  mapInstanceStore,
+  type ViewportFitReason
+} from '$lib/features/commons/stores/map-instance.store.svelte';
 
 export interface UseMapBoundsProps {
   getMap: () => MapLibreMap | null;
@@ -128,10 +127,6 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
 
     const bounds = calculateBoundsFromGeoArrow(jsTable);
     if (bounds) {
-      logger.info('Fitting map to Arrow dataset bounds', LogCategory.MAP, {
-        datasetId: currentDatasetId,
-        bounds
-      });
       executeFitBounds(bounds, {
         reason: options.reason ?? 'dataset',
         animate: options.animate
@@ -140,15 +135,6 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
         lastFitDatasetId = currentDatasetId;
       }
     } else {
-      logger.warn(
-        'Could not calculate bounds from Arrow table',
-        LogCategory.MAP,
-        {
-          datasetId: currentDatasetId,
-          numRows: jsTable.numRows,
-          fields: jsTable.schema.fields.map((f) => f.name)
-        }
-      );
       onFitComplete?.();
     }
   }
@@ -164,9 +150,6 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
 
     const bounds = calculateBoundsFromGeoJSON(geojson);
     if (bounds) {
-      logger.info('Fitting map to GeoJSON bounds', LogCategory.MAP, {
-        featureCount: geojson.features.length
-      });
       handleBoundsUpdate(bounds, {
         reason: options.reason ?? 'dataset',
         animate: options.animate

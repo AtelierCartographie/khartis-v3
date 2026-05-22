@@ -1,6 +1,13 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import * as m from '$lib/paraglide/messages';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const source = readFileSync(
+  resolve(import.meta.dirname, 'layers.svelte'),
+  'utf8'
+);
 
 vi.mock('svelte-dnd-action', () => ({
   dragHandle: () => ({ destroy() {} }),
@@ -35,6 +42,7 @@ vi.mock('./layers.store.svelte', () => ({
 
 vi.mock('$lib/features/commons/stores/basemap-style.store.svelte', () => ({
   basemapStyleStore: {
+    referenceBasemapId: null,
     requiresMapLibre: false
   }
 }));
@@ -46,6 +54,18 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
 vi.mock('$lib/features/map/stores/basemap-layers.store.svelte', () => ({
   basemapLayersStore: {
     version: 0
+  }
+}));
+
+vi.mock('$lib/features/map/stores/basemap-aux-layers.store.svelte', () => ({
+  basemapAuxLayersStore: {
+    version: 0
+  }
+}));
+
+vi.mock('$lib/features/map/services/basemap.service.svelte', () => ({
+  basemapService: {
+    simplificationVersion: 0
   }
 }));
 
@@ -119,6 +139,12 @@ describe('layers', () => {
     ];
 
     vi.clearAllMocks();
+  });
+
+  it('resyncs when basemap metadata or auxiliary layer visibility changes', () => {
+    expect(source).toContain('void basemapAuxLayersStore.version');
+    expect(source).toContain('void basemapStyleStore.referenceBasemapId');
+    expect(source).toContain('void basemapService.simplificationVersion');
   });
 
   it('collapses parent groups from the main layer cards', async () => {

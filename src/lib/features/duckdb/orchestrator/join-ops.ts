@@ -136,8 +136,6 @@ async function ensureSimilarityCached(
   }
 
   const buildPromise = (async () => {
-    const start = performance.now();
-
     await ensureBasemapAttributesLoaded(Duck);
 
     const escapedGeoCol = escapeIdentifier(geoColumn);
@@ -272,16 +270,6 @@ async function ensureSimilarityCached(
       filterClause: normalizedFilter,
       cacheTableName
     };
-
-    logger.info(
-      'Similarity cache built against all basemaps',
-      LogCategory.DATA,
-      {
-        cacheTableName,
-        datasetTable: dataset.tableName,
-        durationMs: (performance.now() - start).toFixed(2)
-      }
-    );
 
     return cacheTableName;
   })();
@@ -624,12 +612,6 @@ async function generateAttributesForBasemap(
       ${unionQueries.join('\nUNION ALL\n')}
     `);
 
-    logger.info('Generated basemap attributes on-the-fly', LogCategory.DATA, {
-      basemapId,
-      columnsUsed: candidateColumns.map((c) => c.column_name),
-      totalCount
-    });
-
     return true;
   } catch (error) {
     logger.error(
@@ -714,12 +696,6 @@ async function ensureBasemapHasAttributes(
   )) as Array<{ cnt: number }>;
 
   if (!attributeCount?.[0]?.cnt || attributeCount[0].cnt === 0) {
-    logger.info(
-      'No pre-built attributes found, generating from geometry',
-      LogCategory.DATA,
-      { basemapId }
-    );
-
     const generated = await generateAttributesForBasemap(basemapId, Duck);
     if (!generated) {
       throw new Error(m.error_no_attributes_basemap({ basemapId }));
@@ -972,13 +948,6 @@ export async function finalizeJoin(
   Duck: DuckDBClientForJoin,
   _options?: FinalizeJoinOptions
 ): Promise<FinalizeJoinResult> {
-  const start = performance.now();
-  logger.info('Finalizing join for dataset', LogCategory.DATA, {
-    datasetId: dataset.id,
-    basemap: basemap.file,
-    geoColumn
-  });
-
   if (isOSMBasemap(basemap)) {
     return finalizeGPSJoin(dataset, basemap);
   }
@@ -1013,33 +982,6 @@ export async function finalizeJoin(
     Duck
   );
 
-  const joinedCountResult = (await Duck.query(
-    `SELECT COUNT(*) as cnt FROM "${dataset.tableName}" WHERE "${JOINED_BASEMAP_COLUMN.ID}" IS NOT NULL`,
-    { format: 'array' }
-  )) as Array<{ cnt: number }>;
-
-  const joinedCount = Number(joinedCountResult?.[0]?.cnt ?? 0);
-  if (joinedCount === 0) {
-    logger.warn('Join produced 0 matches', LogCategory.DATA, {
-      datasetId: dataset.id,
-      basemap: basemap.file,
-      geoColumn
-    });
-  } else {
-    logger.info('Join validation passed', LogCategory.DATA, {
-      joinedCount,
-      totalRows: dataset.rowCount,
-      matchPercentage: ((joinedCount / dataset.rowCount) * 100).toFixed(1)
-    });
-  }
-
-  logger.success('Join finalized successfully', LogCategory.DATA, {
-    datasetId: dataset.id,
-    basemap: basemap.file,
-    joinedCount,
-    durationMs: (performance.now() - start).toFixed(2)
-  });
-
   return {
     joinedBasemap: basemap.file,
     geoColumn,
@@ -1052,27 +994,10 @@ function finalizeGPSJoin(
   dataset: DuckDBDataset,
   basemap: BasemapMetadata
 ): FinalizeJoinResult {
-  const start = performance.now();
-  logger.info(
-    'Finalizing GPS join (no textual join needed)',
-    LogCategory.DATA,
-    {
-      datasetId: dataset.id,
-      basemap: basemap.file
-    }
-  );
-
   const gpsColumns = detectGPSColumns(dataset.columns, dataset.geoDetection);
   if (!gpsColumns) {
     throw new Error(m.error_gps_columns_not_found());
   }
-
-  logger.success('GPS join finalized', LogCategory.DATA, {
-    datasetId: dataset.id,
-    basemap: basemap.file,
-    gpsColumns,
-    durationMs: (performance.now() - start).toFixed(2)
-  });
 
   return {
     joinedBasemap: basemap.file,
@@ -1088,12 +1013,6 @@ export async function getJoinedArrowTable(
   loadGeometryIntoDuckDB: (basemapId: string) => Promise<string>,
   getArrowTableDirect: (tableName: string) => Promise<Table>
 ): Promise<Table> {
-  const start = performance.now();
-  logger.info('Creating joined Arrow table for rendering', LogCategory.MAP, {
-    datasetTableName,
-    basemapId
-  });
-
   const geometryTable = await loadGeometryIntoDuckDB(basemapId);
 
   const sanitizedDataset = datasetTableName.replace(/[^a-zA-Z0-9_]/g, '_');
@@ -1179,19 +1098,7 @@ export async function getJoinedArrowTable(
   // Arrow field hierarchy and adds the required 'geo' schema metadata.
   arrowTable = addGeoArrowMetadata(arrowTable);
 
-  logger.success('Joined Arrow table created', LogCategory.MAP, {
-    joinedView,
-    rows: arrowTable.numRows,
-    hasGeoMetadata: Boolean(arrowTable.schema.metadata?.get('geo')),
-    durationMs: (performance.now() - start).toFixed(2)
-  });
-
   return arrowTable;
-}
-
-interface ArrowTableLike {
-  get(index: number): Record<string, unknown>;
-  numRows: number;
 }
 
 export async function joinDataWithBasemap(
@@ -1201,15 +1108,6 @@ export async function joinDataWithBasemap(
   basemapColumnName: string,
   Duck: DuckDBClientForJoin
 ): Promise<string> {
-  const start = performance.now();
-
-  logger.info('Joining data with basemap in DuckDB', LogCategory.DUCKDB, {
-    dataTableName,
-    basemapTableName,
-    dataColumnName,
-    basemapColumnName
-  });
-
   const joinedTableName = `joined_${Date.now().toString(36)}`;
   const escapedDataTable = escapeIdentifier(dataTableName);
   const escapedDataCol = escapeIdentifier(dataColumnName);
@@ -1225,19 +1123,6 @@ export async function joinDataWithBasemap(
     INNER JOIN "${escapedDataTable}" d
     ON LOWER(TRIM(b."${escapedBasemapCol}")) = LOWER(TRIM(d."${escapedDataCol}"))
   `);
-
-  const countResult = (await Duck.query(`
-    SELECT COUNT(*) as count FROM "${joinedTableName}"
-  `)) as ArrowTableLike;
-
-  const countRow = countResult.get(0) as Record<string, unknown>;
-  const joinedCount = Number(countRow?.count) || 0;
-
-  logger.success('DuckDB basemap join completed', LogCategory.DUCKDB, {
-    joinedTableName,
-    joinedCount,
-    durationMs: (performance.now() - start).toFixed(2)
-  });
 
   return joinedTableName;
 }

@@ -3,6 +3,7 @@
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
+  import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import * as m from '$lib/paraglide/messages.js';
   import { Column, Grid, Row } from 'carbon-components-svelte';
@@ -11,6 +12,7 @@
     geoIndicationsState
   } from './geo-indications.store.svelte';
   import {
+    getInsetMapGeographicBounds,
     INSET_MAP_SIZE_LIMITS,
     isInsetMapAvailableForBounds,
     type ColorPickerValidateEvent
@@ -43,7 +45,18 @@
   const insetMapAvailable = $derived.by(() => {
     void mapInstanceStore.zoomLevel;
     void mapInstanceStore.deckViewState;
-    return isInsetMapAvailableForBounds(mapInstanceStore.getMapBounds());
+    void projectionStore.isProjectedCoordinates;
+    void projectionStore.renderProjection;
+
+    const bounds = getInsetMapGeographicBounds(
+      mapInstanceStore.getMapBounds(),
+      {
+        isProjectedCoordinates: projectionStore.isProjectedCoordinates,
+        projection: projectionStore.renderProjection
+      }
+    );
+
+    return isInsetMapAvailableForBounds(bounds);
   });
 </script>
 
@@ -96,19 +109,6 @@
             }: ColorPickerValidateEvent) => {
               store.setInsetMapWindowColor({ hue, saturation, lightness });
             }}
-          />
-        </Column>
-      </Row>
-
-      <Row>
-        <Column>
-          <SliderWithInput
-            label={m.geo_inset_map_zoom()}
-            min={0}
-            max={100}
-            step={1}
-            value={geoState.insetMap.zoom}
-            onchange={store.setInsetMapZoom}
           />
         </Column>
       </Row>

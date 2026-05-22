@@ -6,6 +6,8 @@ export function clickOutside(
 ) {
   let enabled = params?.enabled ?? true;
   let excludeSelectors = params?.excludeSelectors ?? [];
+  let listenerAttached = false;
+  let listenerTimer: ReturnType<typeof setTimeout> | null = null;
 
   function handleClick(event: MouseEvent) {
     if (!enabled) return;
@@ -29,13 +31,25 @@ export function clickOutside(
   }
 
   function startListening() {
-    setTimeout(() => {
+    if (listenerAttached || listenerTimer) return;
+
+    listenerTimer = setTimeout(() => {
+      listenerTimer = null;
+      if (!enabled) return;
       document.addEventListener(EVENT.CLICK, handleClick, true);
+      listenerAttached = true;
     }, 0);
   }
 
   function stopListening() {
+    if (listenerTimer) {
+      clearTimeout(listenerTimer);
+      listenerTimer = null;
+    }
+
+    if (!listenerAttached) return;
     document.removeEventListener(EVENT.CLICK, handleClick, true);
+    listenerAttached = false;
   }
 
   if (enabled) {

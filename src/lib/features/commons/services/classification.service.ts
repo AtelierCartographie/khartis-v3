@@ -2,7 +2,6 @@ import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { ClassificationMethod } from '$lib/features/commons/stores/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
-import * as m from '$lib/paraglide/messages';
 import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
 import { webglToHex } from '../utils/color-utils';
 import {
@@ -107,9 +106,6 @@ function getQueryContext(
 ): QueryContext | null {
   const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(datasetId);
   if (!duckDBDataset?.tableName) {
-    logger.warn('No DuckDB table found for dataset', LogCategory.DATA, {
-      datasetId
-    });
     return null;
   }
 
@@ -216,14 +212,8 @@ async function roundBreaks(
         return sanitized;
       }
     }
-  } catch (roundError) {
-    logger.warn(
-      'round_thresholds failed, using unrounded breaks',
-      LogCategory.DATA,
-      {
-        roundError
-      }
-    );
+  } catch {
+    return breaks;
   }
 
   return breaks;
@@ -339,10 +329,6 @@ export async function calculateBreaks(
   try {
     const stats = await queryColumnStats(prepared.context);
     if (!stats) {
-      logger.warn('No valid data for classification', LogCategory.DATA, {
-        tableName: prepared.context.tableName,
-        columnName
-      });
       return null;
     }
 
@@ -364,10 +350,6 @@ export async function calculateBreaks(
     }
 
     if (stats.min === stats.max) {
-      logger.warn(m.error_insufficient_data_range(), LogCategory.DATA, {
-        min: stats.min,
-        max: stats.max
-      });
       return {
         breaks: [stats.min],
         counts: [0],
@@ -381,10 +363,6 @@ export async function calculateBreaks(
     const macroName = mapMethodToMacro(method);
 
     if (!macroName) {
-      logger.warn(m.error_no_classification_macro(), LogCategory.DATA, {
-        method,
-        numClasses
-      });
       return null;
     }
 
@@ -399,19 +377,15 @@ export async function calculateBreaks(
         breaks = sanitizeBreaks(extracted, stats.min, stats.max);
       }
     } catch (macroError) {
-      logger.warn('DuckDB macro failed to calculate breaks', LogCategory.DATA, {
-        macroName,
-        numClasses,
-        error: macroError
-      });
+      logger.error(
+        'Failed to compute classification breaks',
+        LogCategory.DUCKDB,
+        macroError
+      );
       return null;
     }
 
     if (breaks.length === 0) {
-      logger.warn('No breaks calculated by DuckDB macro', LogCategory.DATA, {
-        method,
-        numClasses
-      });
       return null;
     }
 
@@ -442,14 +416,23 @@ export async function calculateBreaks(
 
     return result;
   } catch (error) {
-    logger.error('Failed to calculate breaks', LogCategory.DATA, {
-      datasetId,
-      tableName: prepared.context.tableName,
-      columnName,
-      method,
-      numClasses,
-      error
-    });
+    logger.error(
+      'Failed to calculate breaks',
+      LogCategory.DATA,
+      {
+        datasetId,
+        tableName: prepared.context.tableName,
+        columnName,
+        method,
+        numClasses,
+        error
+      },
+      {
+        feature: 'visualization',
+        flow: 'classification_calculate_breaks',
+        extra: { method, numClasses }
+      }
+    );
     return null;
   } finally {
     await prepared.cleanup();
@@ -536,12 +519,17 @@ export async function calculateBreakCounts(
       max: stats.max
     };
   } catch (error) {
-    logger.error('Failed to calculate manual break counts', LogCategory.DATA, {
-      datasetId: options.datasetId,
-      tableName: context.tableName,
-      columnName: options.columnName,
-      error
-    });
+    logger.error(
+      'Failed to calculate manual break counts',
+      LogCategory.DATA,
+      {
+        datasetId: options.datasetId,
+        tableName: context.tableName,
+        columnName: options.columnName,
+        error
+      },
+      { feature: 'visualization', flow: 'classification_manual_counts' }
+    );
     return null;
   }
 }

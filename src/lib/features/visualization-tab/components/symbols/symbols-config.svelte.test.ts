@@ -62,6 +62,15 @@ describe('SymbolsConfig container', () => {
     expect(source).toContain('onFillInvertPalette={onFillInvertPalette}');
   });
 
+  it('does not reset an existing fill mode when only the symbol mode changes', () => {
+    expect(source).toContain('const currentFillMode =');
+    expect(source).toContain(
+      'getSymbolPrimitive(visualization)?.fillMode ?? visualization?.modes?.fill'
+    );
+    expect(source).toContain('currentFillMode !== undefined');
+    expect(source).toContain(': FillMode.UNIQUE');
+  });
+
   it('shows breakpoint controls only for the symbol fill discretization modal', () => {
     expect(source).toContain(
       "showBreakpointControls={discretizationTarget === 'fill'}"

@@ -255,6 +255,14 @@
     motifEnabled = value;
     if (!value) {
       selectedPatternId = null;
+      onColorsChange?.([singleColor]);
+      return;
+    }
+
+    const palette = selectedPalette ?? patternPalettes[0];
+    if (palette) {
+      selectedPatternId = palette.id;
+      emitPatternSelect(palette, currentPatternParams);
     }
   }
 </script>
@@ -279,6 +287,74 @@
       toggled={motifEnabled}
       ontoggle={handleMotifToggle}
     />
+
+    {#if motifEnabled}
+      <div class="pattern-list">
+        {#each patternPalettes as palette (palette.id)}
+          <button
+            type="button"
+            class="pattern-item"
+            class:selected={selectedPatternId === palette.id}
+            onclick={() => handlePatternClick(palette)}
+            aria-label={getPaletteDisplayName(palette)}
+            aria-pressed={selectedPatternId === palette.id}
+          >
+            <div
+              class="pattern-preview"
+              style="background: {buildPatternBackground(palette)}"
+            ></div>
+            <span class="pattern-name">{getPaletteDisplayName(palette)}</span>
+          </button>
+        {/each}
+      </div>
+
+      {#if selectedPalette}
+        <div class="pattern-params">
+          {#if isLinePattern}
+            <div class="param-row">
+              <span class="param-label">{m.pattern_angle()}</span>
+              <div class="angle-buttons">
+                {#each ANGLE_OPTIONS as opt (opt.angle)}
+                  <button
+                    type="button"
+                    class="angle-btn"
+                    class:active={currentAngle === opt.angle}
+                    onclick={() => handleAngleSelect(opt)}
+                    aria-pressed={currentAngle === opt.angle}
+                  >
+                    {opt.label}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          <SliderWithInput
+            label={m.pattern_size()}
+            min={1}
+            max={10}
+            value={patternSize}
+            onchange={handleSizeChange}
+          />
+
+          <SliderWithInput
+            label={m.pattern_scale()}
+            min={4}
+            max={24}
+            value={patternScale}
+            onchange={handleScaleChange}
+          />
+
+          <div class="live-preview">
+            <span class="param-label">{m.pattern_preview()}</span>
+            <div
+              class="live-preview-swatch"
+              style="background: {livePreviewBg}"
+            ></div>
+          </div>
+        </div>
+      {/if}
+    {/if}
   {:else}
     <ContentSwitcher
       items={tabLabels}

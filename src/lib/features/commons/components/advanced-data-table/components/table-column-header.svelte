@@ -350,6 +350,7 @@
 
       {#if columnWarnings.length > 0}
         <button
+          type="button"
           class="warning-badge"
           bind:this={warningBadgeRef}
           onclick={toggleWarningTooltip}
@@ -385,6 +386,7 @@
       {#if isEditMode}
         <div class="col-actions" class:menu-open={menuOpen}>
           <button
+            type="button"
             class="menu-trigger"
             bind:this={menuButton}
             onclick={toggleMenu}
@@ -403,6 +405,7 @@
               >
                 {#if onChangeType}
                   <button
+                    type="button"
                     class="menu-item submenu-trigger"
                     bind:this={typeSubmenuTriggerRef}
                     onmouseenter={() =>
@@ -415,6 +418,7 @@
                 {/if}
 
                 <button
+                  type="button"
                   class="menu-item submenu-trigger"
                   bind:this={refineSubmenuTriggerRef}
                   onmouseenter={() =>
@@ -429,6 +433,7 @@
 
                 {#if onRename}
                   <button
+                    type="button"
                     class="menu-item"
                     onclick={() =>
                       handleMenuAction(() => onRename(column.name))}
@@ -439,6 +444,7 @@
 
                 {#if onHide}
                   <button
+                    type="button"
                     class="menu-item"
                     onclick={() => handleMenuAction(() => onHide(column.name))}
                   >
@@ -450,6 +456,7 @@
 
                 {#if onDelete}
                   <button
+                    type="button"
                     class="menu-item menu-item-danger"
                     onclick={() =>
                       handleMenuAction(() => onDelete(column.name))}
@@ -471,6 +478,7 @@
               >
                 {#each typeOptions as option (option.value)}
                   <button
+                    type="button"
                     class="menu-item"
                     onclick={() =>
                       handleMenuAction(() =>
@@ -494,6 +502,7 @@
               >
                 {#each refineOptions as option (option.value)}
                   <button
+                    type="button"
                     class="menu-item"
                     onclick={() =>
                       handleMenuAction(() =>
@@ -511,6 +520,7 @@
     </div>
     <div class="sort-row">
       <button
+        type="button"
         class="sort-btn"
         class:active={sortColumn === column.name && sortOrder === 'ASC'}
         onclick={() => onSort(column.name, 'ASC')}
@@ -519,6 +529,7 @@
         <CaretUp size={16} />
       </button>
       <button
+        type="button"
         class="sort-btn"
         class:active={sortColumn === column.name && sortOrder === 'DESC'}
         onclick={() => onSort(column.name, 'DESC')}

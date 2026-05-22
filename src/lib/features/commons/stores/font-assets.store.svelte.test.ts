@@ -17,10 +17,10 @@ vi.mock('@deck.gl/layers', () => {
   };
 });
 
-const loggerWarnMock = vi.fn();
+const loggerErrorMock = vi.fn();
 vi.mock('$lib/features/commons/utils/logger', () => ({
-  logger: { warn: loggerWarnMock },
-  LogCategory: { UI: 'ui' }
+  logger: { error: loggerErrorMock },
+  LogCategory: { MAP: 'map' }
 }));
 
 interface MutableFontFaceSet {
@@ -41,7 +41,7 @@ function installFontFaceSet(
 describe('fontAssetsStore.ensureLoaded', () => {
   beforeEach(() => {
     fontAtlasCacheLimitSpy.mockReset();
-    loggerWarnMock.mockReset();
+    loggerErrorMock.mockReset();
     vi.resetModules();
   });
 
@@ -87,7 +87,7 @@ describe('fontAssetsStore.ensureLoaded', () => {
     await fontAssetsStore.ensureLoaded();
 
     expect(fontAtlasCacheLimitSpy).toHaveBeenCalledWith(16);
-    expect(loggerWarnMock).toHaveBeenCalled();
+    expect(loggerErrorMock).toHaveBeenCalled();
   });
 
   it('does not reset twice when ensureLoaded is awaited concurrently', async () => {

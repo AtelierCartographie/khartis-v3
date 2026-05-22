@@ -1,4 +1,3 @@
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
 import {
   buildEssentialDownloadEntries,
@@ -11,6 +10,7 @@ import {
   prepareBasemapForOffline
 } from '$lib/features/commons/utils/pwa-offline';
 import type { ConnectivityStore } from '$lib/features/commons/stores/connectivity.store.svelte';
+import { LogCategory, logger } from './logger';
 
 const PHASE_A_RESOURCES = [
   '/basemaps/projection-presets.json',
@@ -133,10 +133,11 @@ async function runPhaseA(ctx: WarmupContext): Promise<void> {
         await fetch(url, { signal: ctx.signal });
       } catch (error) {
         if (ctx.signal.aborted) return;
-        logger.debug('Phase A warmup fetch failed', LogCategory.SYSTEM, {
-          url,
+        logger.error(
+          'Failed to warm offline resource',
+          LogCategory.SYSTEM,
           error
-        });
+        );
       }
     })
   );
@@ -187,11 +188,11 @@ async function fallbackFetch(
       }
     } catch (error) {
       if (ctx.signal.aborted) return;
-      logger.debug('Fallback fetch failed', LogCategory.SYSTEM, {
-        basemapId: entry.basemapId,
-        url,
+      logger.error(
+        'Failed to download offline basemap fallback resource',
+        LogCategory.SYSTEM,
         error
-      });
+      );
       ctx.store.setBasemapStatus(entry.basemapId, 'failed', 0);
       return;
     }
@@ -232,10 +233,11 @@ async function runPhaseB(ctx: WarmupContext): Promise<void> {
         await fetch(url, { signal: ctx.signal });
       } catch (error) {
         if (ctx.signal.aborted) return;
-        logger.debug('Phase B prefetch failed', LogCategory.SYSTEM, {
-          url,
+        logger.error(
+          'Failed to prefetch offline basemap resource',
+          LogCategory.SYSTEM,
           error
-        });
+        );
       }
     })
   );
@@ -295,7 +297,6 @@ export function startProgressiveWarmup(ctx: WarmupContext): void {
         await runPhaseB(ctx);
       } catch (error) {
         if ((error as Error).name === 'AbortError') return;
-        logger.warn('Progressive warmup failed', LogCategory.SYSTEM, error);
       } finally {
         warmupRunning = false;
       }
@@ -309,7 +310,6 @@ export async function startExtendedWarmup(ctx: WarmupContext): Promise<void> {
     await runPhaseC(ctx);
   } catch (error) {
     if ((error as Error).name === 'AbortError') return;
-    logger.warn('Extended warmup failed', LogCategory.SYSTEM, error);
   }
 }
 

@@ -1523,6 +1523,72 @@ describe('createPolygonLayers', () => {
     );
   });
 
+  it('keeps unmatched split polygons transparent for unique binary fills', () => {
+    createPolygonFillColorAttributeMock.mockImplementation(
+      (
+        polyData: { featureIds?: Uint32Array },
+        getFillColor: (featureId: number) => [number, number, number, number]
+      ) => {
+        const featureIds = Array.from(polyData.featureIds ?? new Uint32Array());
+        return {
+          value: new Uint8ClampedArray(
+            featureIds.flatMap((featureId) =>
+              Array.from(getFillColor(featureId))
+            )
+          ),
+          size: 4
+        };
+      }
+    );
+    parseSolidPolygonsMock.mockReturnValue({
+      featureIds: new Uint32Array([0, 1])
+    });
+
+    const visualization = createVisualization(FillMode.UNIQUE);
+    visualization.polygon = {
+      ...visualization.polygon!,
+      fillColor: '#ff0000',
+      classification: undefined
+    };
+    const geometryTable = createTableWithRows(
+      [
+        { id: 'DEU', geometry: null },
+        { id: 'ESP', geometry: null }
+      ],
+      ['id', 'geometry']
+    );
+    const datasetTable = createTableWithRows(
+      [{ basemap_id: 'DEU', value: 10 }],
+      ['basemap_id', 'value']
+    );
+
+    const layers = createPolygonLayers(
+      geometryTable,
+      {
+        ...createGeometryInfo(),
+        encoding: 'geoarrow.polygon',
+        isNativeGeoArrow: true,
+        isGeoJsonEncoded: false
+      },
+      {
+        ...createContext(visualization),
+        customProjection: undefined,
+        splitDatasetTable: datasetTable,
+        splitFeatureIdColumn: 'id'
+      }
+    );
+    const fillLayer = layers[0];
+    const fillColorAttribute = (
+      fillLayer?.props.data as {
+        attributes: { getFillColor?: { value: Uint8ClampedArray } };
+      }
+    ).attributes.getFillColor;
+
+    expect(fillColorAttribute?.value).toEqual(
+      new Uint8ClampedArray([255, 0, 0, 255, 0, 0, 0, 0])
+    );
+  });
+
   it('maps split projected GeoJSON choropleth fills through geometry ids and dataset basemap ids', () => {
     const visualization = createVisualization(FillMode.CLASSES);
     visualization.mapping = { valueColumn: 'growth_rate' };
@@ -1583,6 +1649,59 @@ describe('createPolygonLayers', () => {
     expect(getFillColor?.(createPolygonFeature('FRA', 2024))).toEqual([
       178, 24, 43, 255
     ]);
+  });
+
+  it('keeps unmatched split polygons transparent for unique GeoJSON fills and pattern overlays', () => {
+    const visualization = createVisualization(FillMode.UNIQUE);
+    visualization.polygon = {
+      ...visualization.polygon!,
+      fillColor: '#ff0000'
+    };
+    const geometryTable = createTableWithRows(
+      [
+        { id: 'DEU', geometry: null },
+        { id: 'ESP', geometry: null }
+      ],
+      ['id', 'geometry']
+    );
+    const datasetTable = createTableWithRows(
+      [{ basemap_id: 'DEU', value: 10 }],
+      ['basemap_id', 'value']
+    );
+    const geojson = {
+      type: 'FeatureCollection',
+      features: [
+        createPolygonFeature('DEU', 2024),
+        createPolygonFeature('ESP', 2024)
+      ]
+    } satisfies FeatureCollection<Polygon>;
+    arrowTableToGeoJSONMock.mockReturnValue(geojson);
+
+    const layers = createPolygonLayers(geometryTable, createGeometryInfo(), {
+      ...createContext(visualization),
+      splitDatasetTable: datasetTable,
+      splitFeatureIdColumn: 'id'
+    });
+    const fillLayer = layers.find(
+      (layer) =>
+        layer instanceof GeoJsonLayer &&
+        !String(layer.props.id).includes('-pattern-')
+    ) as GeoJsonLayer | undefined;
+    const getFillColor = fillLayer?.props.getFillColor as
+      | ((feature: Feature<Polygon, { id: string; year: number }>) => number[])
+      | undefined;
+    const patternLayer = getPatternLayer(layers);
+    const patternData = patternLayer?.props.data as FeatureCollection<Polygon>;
+
+    expect(getFillColor?.(createPolygonFeature('DEU', 2024))).toEqual([
+      255, 0, 0, 255
+    ]);
+    expect(getFillColor?.(createPolygonFeature('ESP', 2024))).toEqual([
+      0, 0, 0, 0
+    ]);
+    expect(
+      patternData.features.map((feature) => feature.properties?.id)
+    ).toEqual(['DEU']);
   });
 
   it('renders the binary polygon pattern below the stroke layer', () => {
