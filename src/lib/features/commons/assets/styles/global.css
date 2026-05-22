@@ -212,6 +212,11 @@ html[theme='g100'] .app-shadow {
 
 html,
 body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
   color: var(--cds-text-01);
 }
 
