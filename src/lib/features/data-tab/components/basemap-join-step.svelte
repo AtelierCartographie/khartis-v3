@@ -1767,6 +1767,18 @@
     );
     if (!basemap) return;
 
+    if (
+      !filtersChanged &&
+      isCatalogJoinFinalizedForBasemap(
+        selectedBasemapId,
+        linkedVariableName,
+        resolvedDatasetId
+      )
+    ) {
+      dataTabStore.markStepComplete(basemapStepIndex);
+      return;
+    }
+
     abortCurrentJoin();
     currentJoinAbortController = new AbortController();
     const abortSignal = currentJoinAbortController.signal;
