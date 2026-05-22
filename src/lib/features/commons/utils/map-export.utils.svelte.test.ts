@@ -470,6 +470,158 @@ describe('map export DOM mutations', () => {
     expect(markup).not.toContain('data-khartis-export-mode="raster-fallback"');
   });
 
+  it('exports Deck text layers as native SVG text elements', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="map-canvas">
+          <canvas></canvas>
+        </div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const canvas = document.querySelector('canvas');
+    if (!page || !canvas) {
+      throw new Error('Missing export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(canvas, { left: 0, top: 0, width: 400, height: 300 });
+    vi.spyOn(canvas, 'toDataURL').mockReturnValue('data:image/png;base64,AAAA');
+
+    const textLayer = createDeckLayer('TextLayer', 'editable-texts', {
+      data: [
+        { position: [10, 20], text: 'Paris' },
+        { position: [30, 40], text: 'Lyon' }
+      ],
+      getPosition: (d: { position: number[] }) => d.position,
+      getText: (d: { text: string }) => d.text,
+      getColor: () => [0, 0, 0, 255],
+      getSize: () => 14,
+      sizeUnits: 'pixels',
+      fontFamily: 'Arial',
+      fontWeight: '400',
+      background: false,
+      billboard: true,
+      pickable: false,
+      visible: true,
+      opacity: 1
+    });
+    const deck = createDeckExportFixture([textLayer], ([x, y]) => [
+      x * 2,
+      y * 2
+    ]);
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    expect(markup).toContain('data-khartis-layer-id="editable-texts"');
+    expect(markup).toContain('data-khartis-layer-type="TextLayer"');
+    expect(markup).toContain('<text');
+    expect(markup).toContain('>Paris</text>');
+    expect(markup).toContain('>Lyon</text>');
+    expect(markup).toContain('font-family="Arial"');
+    expect(markup).toContain('font-size="14"');
+    expect(markup).toContain('x="20"');
+    expect(markup).toContain('y="40"');
+    expect(markup).toContain('x="60"');
+    expect(markup).toContain('y="80"');
+  });
+
+  it('renders BAR and SPIKE shapes with the configured barWidth', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="map-canvas"><canvas></canvas></div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const canvas = document.querySelector('canvas');
+    if (!page || !canvas) {
+      throw new Error('Missing fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(canvas, { left: 0, top: 0, width: 400, height: 300 });
+    vi.spyOn(canvas, 'toDataURL').mockReturnValue('data:image/png;base64,AAAA');
+
+    const layer = createDeckLayer('MultiShapeLayer', 'shapes', {
+      data: {
+        length: 2,
+        attributes: {
+          getPosition: {
+            value: new Float32Array([10, 10, 30, 30]),
+            size: 2
+          },
+          getFillColor: {
+            value: new Uint8Array([255, 0, 0, 255, 0, 0, 255, 255]),
+            size: 4
+          },
+          getRadius: {
+            value: new Float32Array([10, 10]),
+            size: 1
+          },
+          getShape: {
+            value: new Float32Array([2, 3]),
+            size: 1
+          }
+        }
+      },
+      barWidth: 8,
+      filled: true,
+      stroked: false
+    });
+    const deck = createDeckExportFixture([layer]);
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    expect(markup).toContain('<rect x="6"');
+    expect(markup).toContain('width="8"');
+    expect(markup).toContain('height="20"');
+    expect(markup).toMatch(/<path d="M 24 40 L 30 20 L 36 40 Z"/);
+  });
+
+  it('emits an SVG drop-shadow filter for the legend box-shadow', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="map-canvas"><canvas></canvas></div>
+        <div
+          class="legend-container"
+          style="background-color: rgb(255, 255, 255); box-shadow: rgba(0, 0, 0, 0.15) 0px 2px 8px 0px;"
+        ></div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const legend = document.querySelector('.legend-container');
+    const canvas = document.querySelector('canvas');
+    if (!page || !legend || !canvas) {
+      throw new Error('Missing legend fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(canvas, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(legend, { left: 20, top: 30, width: 120, height: 60 });
+    vi.spyOn(canvas, 'toDataURL').mockReturnValue('data:image/png;base64,AAAA');
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    expect(markup).toMatch(/id="khartis-drop-shadow-\d+"/);
+    expect(markup).toContain('<feDropShadow');
+    expect(markup).toContain('dx="0"');
+    expect(markup).toContain('dy="2"');
+    expect(markup).toContain('stdDeviation="4"');
+    expect(markup).toContain('flood-color="rgb(0, 0, 0)"');
+    expect(markup).toContain('flood-opacity="0.15"');
+    expect(markup).toMatch(/filter="url\(#khartis-drop-shadow-\d+\)"/);
+  });
+
   it('exports Deck pattern fill layers as native SVG patterns', async () => {
     document.body.innerHTML = `
       <div class="page-container">
