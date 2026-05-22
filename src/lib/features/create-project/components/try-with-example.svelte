@@ -27,6 +27,7 @@
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+  import { dataOrchestratorService } from '$lib/features/commons/services/data-orchestrator.service.svelte';
   import { detectGPSColumns } from '$lib/features/duckdb/orchestrator/gps-ops';
   import { PERSISTED_BASEMAP_TYPE } from '$lib/features/data-tab/services/persisted-basemap.service';
   import { persistTabularSourceSnapshot } from '$lib/features/data-tab/services/tabular-source-snapshot.service';
@@ -351,6 +352,7 @@
       }
       applyExampleVisualizations(example, processedExampleFile);
       await persistenceRegistry.flush();
+      await dataOrchestratorService.onProjectChanged();
 
       await navigateAfterAction();
     } catch (err) {
