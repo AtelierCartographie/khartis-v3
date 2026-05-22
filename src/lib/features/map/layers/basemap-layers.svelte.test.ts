@@ -438,7 +438,7 @@ describe('basemap projection fallbacks', () => {
     );
   });
 
-  it('uses the projected canvas extent for mers when it is available', () => {
+  it('prefers the sphere polygon over the projected canvas extent', () => {
     const layer = createMersLayer(
       {
         id: 'mers',
@@ -453,18 +453,11 @@ describe('basemap projection fallbacks', () => {
           [180, 90]
         ]
       }
-    ) as GeoJsonLayer | null;
+    ) as SolidPolygonLayer | null;
 
-    const data = layer?.props.data as FeatureCollection<Polygon> | undefined;
-
-    expect(layer).toBeInstanceOf(GeoJsonLayer);
-    expect(data?.features[0]?.geometry.coordinates[0]).toEqual([
-      [-180, -90],
-      [180, -90],
-      [180, 90],
-      [-180, 90],
-      [-180, -90]
-    ]);
+    expect(layer).toBeInstanceOf(SolidPolygonLayer);
+    expect(layer?.props.coordinateSystem).toBe(COORDINATE_SYSTEM.CARTESIAN);
+    expect(layer?.props.getFillColor).toEqual([0, 109, 255, 255]);
   });
 
   it('falls back to composite screen extents when projected sphere parsing is empty', () => {
