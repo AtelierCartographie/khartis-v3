@@ -5,6 +5,7 @@
     FileStatus,
     GeoreferenceType
   } from '$lib/features/commons/constants/ui.constants';
+  import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
   import {
     EXAMPLE_CATEGORIES,
     EXAMPLE_PROJECTS,
@@ -139,6 +140,7 @@
       await duckDBOrchestrator.finalizeJoin(dataset.id, basemap, geoColumn);
       datasetsStore.updateDatasetJoinBasemap(dataset.id, basemap.file);
       applyReferenceBasemapToProject(basemap);
+      syncGeolocationStateForCatalogJoin(dataset, geoColumn);
 
       const duckColumns = await duckDBOrchestrator.getFullAnalysis(
         dataset.tableName,
@@ -163,6 +165,32 @@
     } catch {
       return;
     }
+  }
+
+  function syncGeolocationStateForCatalogJoin(
+    dataset: { columns?: Array<{ name: string }> } | null | undefined,
+    geoColumn: string
+  ): void {
+    if (!geoColumn) {
+      return;
+    }
+    const linkedVariable =
+      dataset?.columns
+        ?.filter(
+          (col) =>
+            col.name !== INTERNAL_COLUMN.GEOMETRY &&
+            col.name !== INTERNAL_COLUMN.ID
+        )
+        .findIndex((col) => col.name === geoColumn) ?? -1;
+
+    dataTabActions.setGeolocationState({
+      geoReference: GeoreferenceType.ENTITIES,
+      linkedVariable: linkedVariable >= 0 ? linkedVariable : null,
+      linkedVariableName: geoColumn,
+      latitudeColumn: undefined,
+      longitudeColumn: undefined,
+      autoDetected: false
+    });
   }
 
   async function applyExampleReferenceBasemap(

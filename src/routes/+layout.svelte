@@ -46,10 +46,6 @@
     resolveWorkspaceViewportBounds,
     type WorkspaceViewportBounds
   } from '$lib/features/commons/utils/workspace-viewport.utils';
-  import {
-    getMainToolbarActualWidthPx,
-    getMainToolbarMaxWidthPx
-  } from '$lib/features/main-toolbar/main-toolbar.constants';
   import StepToolbar from '$lib/features/step-toolbar/step-toolbar.svelte';
   import { Theme } from 'carbon-components-svelte';
   import GlobalLoadingIndicator from '$lib/features/commons/components/global-loading-indicator.svelte';
@@ -76,14 +72,10 @@
   let isLoading = $state(true);
   let previousStep = $state<ToolbarStep | null>(null);
   let stylingElementsInitializedForProject = $state<string | null>(null);
-  let windowWidth = $state(
-    typeof window !== 'undefined' ? window.innerWidth : 0
-  );
   const ENABLE_BEFOREUNLOAD_CONFIRMATION = false;
 
   const handleResize = () => {
     globalActions.setMobileView(window.innerWidth < MOBILE_BREAKPOINT);
-    windowWidth = window.innerWidth;
   };
 
   $effect(() => {
@@ -326,20 +318,7 @@
   let observedPageElement: HTMLElement | null = null;
 
   const pagePan = $derived(globalState.zoom.pagePanOffset);
-  const mainToolbarMaxWidth = $derived(
-    getMainToolbarMaxWidthPx(windowWidth, globalState.isMobileView)
-  );
-  const mainToolbarActualWidth = $derived(
-    getMainToolbarActualWidthPx(
-      globalState.toolbarState,
-      globalState.selectedStep,
-      windowWidth,
-      globalState.isMobileView
-    )
-  );
-  const workspaceCenteringOffsetX = $derived(
-    (stepToolbarWidth + mainToolbarActualWidth - mainToolbarMaxWidth) / 2
-  );
+  const workspaceCenteringOffsetX = $derived(stepToolbarWidth / 2);
   const workspaceCameraStyle = $derived(
     `transform: translate(${pagePan.x + workspaceCenteringOffsetX}px, ${pagePan.y}px);`
   );

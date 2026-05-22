@@ -15,10 +15,6 @@
   import { isWgs84LikeCrs } from './utils/dataset-crs.utils';
   import { globalActions, globalState } from '../commons/stores/global.svelte';
   import { ToolbarStep } from '../commons/types/global';
-  import {
-    getMainToolbarActualWidthPx,
-    getMainToolbarMaxWidthPx
-  } from '$lib/features/main-toolbar/main-toolbar.constants';
   import { LogCategory, logger } from '../commons/utils/logger';
   import { FormatMode } from '../commons/constants/ui.constants';
   import {
@@ -156,24 +152,6 @@
   let workspaceWidth = $state(0);
   let workspaceHeight = $state(0);
   let stepToolbarWidth = $state(0);
-  let windowWidth = $state(
-    typeof window !== 'undefined' ? window.innerWidth : 0
-  );
-
-  const mainToolbarMaxWidth = $derived(
-    getMainToolbarMaxWidthPx(windowWidth, globalState.isMobileView)
-  );
-  const mainToolbarActualWidth = $derived(
-    getMainToolbarActualWidthPx(
-      globalState.toolbarState,
-      globalState.selectedStep,
-      windowWidth,
-      globalState.isMobileView
-    )
-  );
-  const mainToolbarReservedPx = $derived(
-    Math.max(0, mainToolbarMaxWidth - mainToolbarActualWidth)
-  );
 
   const fitScale = $derived(
     resolveWorkspaceFitScale({
@@ -183,7 +161,6 @@
       pageHeight: formatState.height,
       paddingPx: WORKSPACE_FIT_PADDING_PX,
       reservedInlineStartPx: globalState.isMobileView ? 0 : stepToolbarWidth,
-      reservedInlineEndPx: mainToolbarReservedPx,
       maxViewportCoverageRatio: 1
     })
   );
@@ -205,10 +182,6 @@
 
   function applyStepToolbarResize(entry: ResizeObserverEntry): void {
     stepToolbarWidth = Math.round(entry.contentRect.width);
-  }
-
-  function handleWindowResize(): void {
-    windowWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
   }
 
   function startResponsiveMapObservers(): void {
@@ -234,8 +207,6 @@
       }
     }
 
-    window.addEventListener(EVENT.RESIZE, handleWindowResize);
-
     if (observedWorkspace) {
       workspaceWidth = observedWorkspace.clientWidth;
       workspaceHeight = observedWorkspace.clientHeight;
@@ -245,7 +216,6 @@
         observedStepToolbar.getBoundingClientRect().width
       );
     }
-    handleWindowResize();
   }
 
   function stopResponsiveMapObservers(): void {
@@ -253,7 +223,6 @@
     responsiveMapResizeObserver = null;
     observedWorkspace = null;
     observedStepToolbar = null;
-    window.removeEventListener(EVENT.RESIZE, handleWindowResize);
   }
 
   function isStaleLoad(generation: number): boolean {
