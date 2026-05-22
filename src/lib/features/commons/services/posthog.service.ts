@@ -159,9 +159,9 @@ function createPostHogService() {
               '.shared-facets-canvas'
             ].join(', '),
             recordCrossOriginIframes: false,
-            collectFonts: true,
-            recordHeaders: true,
-            recordBody: true
+            collectFonts: false,
+            recordHeaders: false,
+            recordBody: false
           },
 
           person_profiles: 'always',
@@ -245,9 +245,36 @@ function createPostHogService() {
 
 export const posthogService = createPostHogService();
 
-if (typeof window !== 'undefined') {
-  void posthogService.init();
+const POSTHOG_INIT_DELAY_MS = 2000;
+
+function scheduleInitialPostHogInit(): void {
+  if (typeof window === 'undefined') return;
+
+  const start = (): void => {
+    void posthogService.init();
+  };
+
+  const requestIdle =
+    'requestIdleCallback' in window
+      ? window.requestIdleCallback.bind(window)
+      : null;
+
+  const schedule = (): void => {
+    if (requestIdle) {
+      requestIdle(start, { timeout: POSTHOG_INIT_DELAY_MS });
+    } else {
+      window.setTimeout(start, POSTHOG_INIT_DELAY_MS);
+    }
+  };
+
+  if (document.readyState === 'complete') {
+    schedule();
+  } else {
+    window.addEventListener('load', schedule, { once: true });
+  }
 }
+
+scheduleInitialPostHogInit();
 
 function extractErrorFromData(data: unknown): Error | null {
   if (data instanceof Error) return data;
