@@ -17,6 +17,7 @@
   } from '$lib/features/map/services/basemap.service.svelte';
   import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
   import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
+  import { SYNTHETIC_AUX_LAYER_KEY } from '$lib/features/commons/constants/basemap.constants';
   import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
@@ -106,17 +107,17 @@
   }
 
   const sphereSyntheticLayer: BasemapLayer = {
-    title_fr: 'Sphère de projection',
-    title_en: 'Projection sphere',
+    title_fr: m.basemap_layer_sphere(),
+    title_en: m.basemap_layer_sphere(),
     type: BasemapLayerType.SPHERE,
-    file: undefined,
+    file: SYNTHETIC_AUX_LAYER_KEY.SPHERE,
     style: null
   };
   const oceanSyntheticLayer: BasemapLayer = {
-    title_fr: 'Mers/Océans',
-    title_en: 'Seas/Oceans',
+    title_fr: m.basemap_layer_mers(),
+    title_en: m.basemap_layer_mers(),
     type: BasemapLayerType.POLYGON,
-    file: '__generated-ocean-sphere__',
+    file: SYNTHETIC_AUX_LAYER_KEY.MERS,
     style: null
   };
 

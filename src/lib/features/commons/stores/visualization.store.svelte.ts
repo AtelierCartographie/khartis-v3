@@ -389,6 +389,7 @@ export interface VisualizationOrigin {
 }
 
 export const ALL_PRIMITIVE_FILTERS: PrimitiveFilter[] = [
+  PrimitiveFilterType.TEXT,
   PrimitiveFilterType.POINT,
   PrimitiveFilterType.LINE,
   PrimitiveFilterType.POLYGON
@@ -1604,13 +1605,21 @@ export function resolveAllowedPrimitiveFilters(
 ): PrimitiveFilter[] {
   switch (resolveGeometryFamilyFromDataset(dataset)) {
     case 'polygon':
-      return [PrimitiveFilterType.POINT, PrimitiveFilterType.POLYGON];
+      return [
+        PrimitiveFilterType.POINT,
+        PrimitiveFilterType.POLYGON,
+        PrimitiveFilterType.TEXT
+      ];
 
     case 'line':
-      return [PrimitiveFilterType.POINT, PrimitiveFilterType.LINE];
+      return [
+        PrimitiveFilterType.POINT,
+        PrimitiveFilterType.LINE,
+        PrimitiveFilterType.TEXT
+      ];
 
     case 'point':
-      return [PrimitiveFilterType.POINT];
+      return [PrimitiveFilterType.POINT, PrimitiveFilterType.TEXT];
 
     default:
       return [];
@@ -2217,13 +2226,69 @@ function createVisualizationStore(): VisualizationStore {
     applyVisualizationUpdate(id, (visualization) => {
       const currentFilters =
         visualization.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
-      const nextFilters = currentFilters.includes(primitive)
-        ? currentFilters.filter((item) => item !== primitive)
-        : [...currentFilters, primitive];
+      const willBeEnabled = !currentFilters.includes(primitive);
+      const nextFilters = willBeEnabled
+        ? [...currentFilters, primitive]
+        : currentFilters.filter((item) => item !== primitive);
 
-      return {
+      const update: Partial<VisualizationConfig> = {
         primitiveFilters: nextFilters
       };
+
+      switch (primitive) {
+        case PrimitiveFilterType.POINT: {
+          const symbol = buildSymbolPrimitiveConfig(visualization);
+          update.symbol = {
+            ...symbol,
+            enabled: willBeEnabled,
+            opacity:
+              willBeEnabled && (symbol.opacity ?? 0) <= 0
+                ? VISUALIZATION_DEFAULTS.symbolOpacity / 100
+                : symbol.opacity
+          };
+          break;
+        }
+        case PrimitiveFilterType.LINE: {
+          const line = buildLinePrimitiveConfig(visualization);
+          update.line = {
+            ...line,
+            enabled: willBeEnabled,
+            opacity:
+              willBeEnabled && (line.opacity ?? 0) <= 0
+                ? VISUALIZATION_DEFAULTS.lineOpacity / 100
+                : line.opacity
+          };
+          break;
+        }
+        case PrimitiveFilterType.POLYGON: {
+          const polygon = buildPolygonPrimitiveConfig(visualization);
+          update.polygon = {
+            ...polygon,
+            enabled: willBeEnabled,
+            fillOpacity:
+              willBeEnabled &&
+              polygon.fillMode !== FillMode.NONE &&
+              (polygon.fillOpacity ?? 0) <= 0
+                ? VISUALIZATION_DEFAULTS.fillOpacity / 100
+                : polygon.fillOpacity
+          };
+          break;
+        }
+        case PrimitiveFilterType.TEXT: {
+          const text = buildTextPrimitiveConfig(visualization);
+          update.text = {
+            ...text,
+            enabled: willBeEnabled,
+            opacity:
+              willBeEnabled && (text.opacity ?? 0) <= 0
+                ? VISUALIZATION_DEFAULTS.textOpacity / 100
+                : text.opacity
+          };
+          break;
+        }
+      }
+
+      return update;
     });
   }
 

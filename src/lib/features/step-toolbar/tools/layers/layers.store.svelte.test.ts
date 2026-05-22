@@ -58,7 +58,8 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => {
   const PrimitiveFilterType = {
     POINT: 'point',
     LINE: 'line',
-    POLYGON: 'polygon'
+    POLYGON: 'polygon',
+    TEXT: 'text'
   } as const;
   const ScaleType = {
     SQRT: 'sqrt'
@@ -82,7 +83,8 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => {
     (visualization.primitiveFilters as string[] | undefined) ?? [
       PrimitiveFilterType.POINT,
       PrimitiveFilterType.LINE,
-      PrimitiveFilterType.POLYGON
+      PrimitiveFilterType.POLYGON,
+      PrimitiveFilterType.TEXT
     ];
 
   const getPolygonPrimitive = (visualization: VisualizationConfig) => ({
@@ -115,14 +117,16 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => {
     opacity: visualization.style.lineOpacity ?? 1
   });
 
-  const getTextPrimitive = () => ({
-    enabled: false,
-    color: undefined,
-    opacity: 0,
-    fontFamily: 'Cabin',
+  const getTextPrimitive = (visualization: VisualizationConfig) => ({
+    enabled: getEnabledPrimitiveFilters(visualization).includes(
+      PrimitiveFilterType.TEXT
+    ),
+    color: visualization.style.textColor,
+    opacity: visualization.style.textOpacity ?? 1,
+    fontFamily: visualization.style.textFontFamily ?? 'Cabin',
     secondaryLabels: {
-      color: undefined,
-      fontFamily: 'Cabin',
+      color: visualization.style.labelColor,
+      fontFamily: visualization.style.labelFontFamily ?? 'Cabin',
       bold: false,
       italic: false
     }
@@ -138,7 +142,8 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => {
     ALL_PRIMITIVE_FILTERS: [
       PrimitiveFilterType.POINT,
       PrimitiveFilterType.LINE,
-      PrimitiveFilterType.POLYGON
+      PrimitiveFilterType.POLYGON,
+      PrimitiveFilterType.TEXT
     ],
     PrimitiveFilterType,
     ScaleType,
@@ -239,7 +244,8 @@ function createVisualization(
     primitiveOrder: [
       PrimitiveFilterType.POINT,
       PrimitiveFilterType.LINE,
-      PrimitiveFilterType.POLYGON
+      PrimitiveFilterType.POLYGON,
+      PrimitiveFilterType.TEXT
     ],
     style: {
       fillOpacity: 0.8,
@@ -411,6 +417,96 @@ describe('layers color helpers', () => {
           visible: true
         })
       ])
+    );
+  });
+
+  it('exposes a Textes sublayer for every visualization so it can be toggled later', () => {
+    const visualization = createVisualization({
+      primitiveFilters: [
+        PrimitiveFilterType.POINT,
+        PrimitiveFilterType.LINE,
+        PrimitiveFilterType.POLYGON
+      ]
+    });
+
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+
+    const textSubLayer = layersState.layers.find(
+      (layer) => layer.id === 'viz-1::text'
+    );
+    expect(textSubLayer).toEqual(
+      expect.objectContaining({
+        id: 'viz-1::text',
+        parentId: 'viz-1',
+        isSubLayer: true,
+        primitive: PrimitiveFilterType.TEXT,
+        visible: false
+      })
+    );
+  });
+
+  it('marks the Textes sublayer as visible when the visualization enables text', () => {
+    const visualization = createVisualization({
+      primitiveFilters: [PrimitiveFilterType.POLYGON, PrimitiveFilterType.TEXT]
+    });
+
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+
+    const textSubLayer = layersState.layers.find(
+      (layer) => layer.id === 'viz-1::text'
+    );
+    expect(textSubLayer).toEqual(
+      expect.objectContaining({
+        visible: true
+      })
+    );
+  });
+
+  it('toggles the Textes sublayer through togglePrimitiveFilter', () => {
+    const visualization = createVisualization();
+
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+    layersActions.toggleLayerVisibility('viz-1::text');
+
+    expect(mockVisualizationStore.togglePrimitiveFilter).toHaveBeenCalledWith(
+      'viz-1',
+      PrimitiveFilterType.TEXT
+    );
+  });
+
+  it('reorders Textes among other primitive sublayers via setPrimitiveFilterOrder', () => {
+    const visualization = createVisualization({
+      primitiveOrder: [
+        PrimitiveFilterType.POINT,
+        PrimitiveFilterType.LINE,
+        PrimitiveFilterType.POLYGON,
+        PrimitiveFilterType.TEXT
+      ]
+    });
+
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+    layersActions.reorderSubLayers('viz-1', 3, 0);
+
+    expect(mockVisualizationStore.setPrimitiveFilterOrder).toHaveBeenCalledWith(
+      'viz-1',
+      [
+        PrimitiveFilterType.TEXT,
+        PrimitiveFilterType.POINT,
+        PrimitiveFilterType.LINE,
+        PrimitiveFilterType.POLYGON
+      ]
     );
   });
 
