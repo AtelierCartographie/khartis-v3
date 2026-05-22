@@ -832,6 +832,78 @@ describe('createTextOverlayLayers', () => {
     expect(resolvedBackgroundColor).toEqual([0, 0, 0, 0]);
     expect(textProps?.getBorderWidth).toBe(0);
   });
+
+  it('places text labels above point layers when primitiveOrder lists TEXT first', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 1,
+      featureIds: new Uint32Array([0]),
+      positions: new Float32Array([0, 0])
+    });
+
+    const visualization = createTextVisualization();
+    visualization.primitiveFilters = [
+      PrimitiveFilterType.TEXT,
+      PrimitiveFilterType.POINT
+    ];
+    visualization.primitiveOrder = [
+      PrimitiveFilterType.TEXT,
+      PrimitiveFilterType.POINT
+    ];
+
+    const layers = createDeckLayers(
+      createTableWithRows([{ name: 'A' }], ['name']),
+      {
+        ...createContext(visualization),
+        primitiveOrder: visualization.primitiveOrder,
+        geometryInfo: {
+          ...createPointGeometryInfo(),
+          type: 'POINT' as GeometryInfo['type']
+        }
+      }
+    );
+
+    const ids = layers.map((layer) => String(layer.id));
+    const pointIndex = ids.findIndex((id) => id.startsWith('point-layer'));
+    const textIndex = ids.findIndex((id) => id.startsWith('text-layer'));
+    expect(pointIndex).toBeGreaterThanOrEqual(0);
+    expect(textIndex).toBeGreaterThan(pointIndex);
+  });
+
+  it('places text labels below point layers when primitiveOrder lists POINT first', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 1,
+      featureIds: new Uint32Array([0]),
+      positions: new Float32Array([0, 0])
+    });
+
+    const visualization = createTextVisualization();
+    visualization.primitiveFilters = [
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.TEXT
+    ];
+    visualization.primitiveOrder = [
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.TEXT
+    ];
+
+    const layers = createDeckLayers(
+      createTableWithRows([{ name: 'A' }], ['name']),
+      {
+        ...createContext(visualization),
+        primitiveOrder: visualization.primitiveOrder,
+        geometryInfo: {
+          ...createPointGeometryInfo(),
+          type: 'POINT' as GeometryInfo['type']
+        }
+      }
+    );
+
+    const ids = layers.map((layer) => String(layer.id));
+    const pointIndex = ids.findIndex((id) => id.startsWith('point-layer'));
+    const textIndex = ids.findIndex((id) => id.startsWith('text-layer'));
+    expect(textIndex).toBeGreaterThanOrEqual(0);
+    expect(pointIndex).toBeGreaterThan(textIndex);
+  });
 });
 
 describe('createPolygonLayers', () => {

@@ -24,6 +24,7 @@ import {
   type BasemapLayerId
 } from '$lib/features/map/stores/basemap-layers.store.svelte';
 import { basemapAuxLayersStore } from '$lib/features/map/stores/basemap-aux-layers.store.svelte';
+import { SYNTHETIC_AUX_LAYER_KEY } from '$lib/features/commons/constants/basemap.constants';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import {
   basemapService,
@@ -52,6 +53,7 @@ const DEFAULT_STATE: LayersState = {
 const VISUALIZATION_SUBLAYER_SEPARATOR = '::';
 const BASEMAP_SUBLAYER_SEPARATOR = '::basemap::';
 const VISUALIZATION_SUBLAYER_ORDER: PrimitiveFilter[] = [
+  PrimitiveFilterType.TEXT,
   PrimitiveFilterType.POINT,
   PrimitiveFilterType.LINE,
   PrimitiveFilterType.POLYGON
@@ -196,6 +198,18 @@ export function getVisualizationPrimitiveColor(
         getVisualizationColor(viz)
       );
     }
+    case PrimitiveFilterType.TEXT: {
+      const text = getTextPrimitive(viz);
+      const classificationColor = getClassificationColor(
+        getPrimitiveClassification(viz, PrimitiveFilterType.TEXT)
+      );
+      return (
+        getStyleColor(text?.color) ??
+        getStyleColor(text?.secondaryLabels?.color) ??
+        classificationColor ??
+        getVisualizationColor(viz)
+      );
+    }
     case PrimitiveFilterType.POINT:
     default: {
       const symbol = getSymbolPrimitive(viz);
@@ -248,6 +262,8 @@ function getVisualizationPrimitiveName(primitive: PrimitiveFilter): string {
       return m.lines_title();
     case PrimitiveFilterType.POLYGON:
       return m.polygons_title();
+    case PrimitiveFilterType.TEXT:
+      return m.texts_title();
     default:
       return primitive;
   }
@@ -264,6 +280,8 @@ function getVisualizationPrimitiveOpacity(
       return Math.round((getLinePrimitive(viz)?.opacity ?? 1) * 100);
     case PrimitiveFilterType.POLYGON:
       return Math.round((getPolygonPrimitive(viz)?.fillOpacity ?? 1) * 100);
+    case PrimitiveFilterType.TEXT:
+      return Math.round((getTextPrimitive(viz)?.opacity ?? 1) * 100);
     default:
       return 100;
   }
@@ -430,26 +448,33 @@ function isEntryScopedMetadataLayer(type: BasemapLayerType): boolean {
 
 function buildSyntheticBasemapLayerEntries(
   visualizationId: string,
-  startOrder: number
+  startOrder: number,
+  basemapFile: string | null
 ): Layer[] {
-  const syntheticIds: BasemapLayerId[] = [
-    BASEMAP_LAYER_ID.MERS,
-    BASEMAP_LAYER_ID.SPHERE
+  const synthetics: { layerId: BasemapLayerId; key: string }[] = [
+    { layerId: BASEMAP_LAYER_ID.MERS, key: SYNTHETIC_AUX_LAYER_KEY.MERS },
+    { layerId: BASEMAP_LAYER_ID.SPHERE, key: SYNTHETIC_AUX_LAYER_KEY.SPHERE }
   ];
 
-  return syntheticIds.flatMap((layerId, index): Layer[] => {
+  return synthetics.flatMap(({ layerId, key }, index): Layer[] => {
     const config = basemapLayersStore.getLayer(layerId);
     if (!config) return [];
+    const auxVisible = basemapFile
+      ? basemapAuxLayersStore.isVisible(basemapFile, key, true)
+      : true;
     return [
       {
-        id: buildBasemapSubLayerId(visualizationId, `synthetic:${layerId}`),
+        id: buildBasemapSubLayerId(visualizationId, key),
         parentId: visualizationId,
         isSubLayer: true,
         type: 'geographic',
         basemapLayerId: layerId,
+        basemapFile: basemapFile ?? undefined,
+        basemapLayerKey: basemapFile ? key : undefined,
+        basemapLayerPrimary: true,
         basemapRenderGroup: getBasemapRenderGroup(layerId),
         name: getBasemapLayerName(layerId),
-        visible: config.visible,
+        visible: config.visible && auxVisible,
         color: getBasemapLayerColor(config),
         opacity: getBasemapLayerOpacity(config),
         order: startOrder + index
@@ -463,39 +488,26 @@ function buildDynamicBasemapSubLayers(
   startOrder: number
 ): Layer[] {
   const metadata = getActiveReferenceBasemapMetadata();
+  const layers: Layer[] = buildSyntheticBasemapLayerEntries(
+    visualizationId,
+    startOrder,
+    metadata?.file ?? null
+  );
+
   if (!metadata) {
-    return basemapLayersStore.layers.map(
-      (bmLayer, bmIndex): Layer => ({
-        id: buildBasemapSubLayerId(visualizationId, bmLayer.id),
-        parentId: visualizationId,
-        isSubLayer: true,
-        type: 'geographic',
-        basemapLayerId: bmLayer.id,
-        basemapRenderGroup: getBasemapRenderGroup(bmLayer.id),
-        name: getBasemapLayerName(bmLayer.id),
-        visible: bmLayer.visible,
-        color: getBasemapLayerColor(bmLayer),
-        opacity: getBasemapLayerOpacity(bmLayer),
-        order: startOrder + bmIndex
-      })
-    );
+    return layers;
   }
 
   const isCustom = Boolean(metadata.isCustom);
   const isCustomLine =
     isCustom && getCustomBaseLayerType(metadata) === BasemapLayerType.LINE;
   const typeCounters = new Map<BasemapLayerType, number>();
-  const layers: Layer[] = buildSyntheticBasemapLayerEntries(
-    visualizationId,
-    startOrder
-  );
 
   for (const layer of metadata.layers) {
     if (!isBasemapLayersToolRenderableType(layer.type)) continue;
     const instanceIndex = typeCounters.get(layer.type) ?? 0;
     typeCounters.set(layer.type, instanceIndex + 1);
-    const layerKey =
-      layer.file ?? `${metadata.file}:${layer.type}:${instanceIndex}`;
+    const layerKey = layer.file ?? `${metadata.file}:${layer.type}`;
     const basemapLayerId = mapMetadataLayerTypeToBasemapLayerId(
       layer.type,
       isCustom,
