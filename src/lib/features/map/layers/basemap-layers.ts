@@ -170,7 +170,36 @@ function projectFeatureCollectionIfNeeded<
 }
 
 function hasSpherePolygon(sphereData: BinaryPolygonData): boolean {
-  return sphereData.length > 0 && sphereData.positions.length > 0;
+  if (!sphereData || sphereData.length === 0) return false;
+  if (!sphereData.positions || sphereData.positions.length === 0) return false;
+  const positionsValue = (sphereData.positions as { value?: ArrayBufferView })
+    .value;
+  if (positionsValue && positionsValue.byteLength === 0) return false;
+  return true;
+}
+
+const spherePolygonCache = new WeakMap<ProjectionLike, BinaryPolygonData>();
+
+function getSpherePolygon(
+  projection: ProjectionLike
+): BinaryPolygonData | null {
+  const cached = spherePolygonCache.get(projection);
+  if (cached) return hasSpherePolygon(cached) ? cached : null;
+  try {
+    const sphereData = parseSphere(projection, {
+      output: 'polygon'
+    }) as BinaryPolygonData;
+    if (!hasSpherePolygon(sphereData)) return null;
+    spherePolygonCache.set(projection, sphereData);
+    return sphereData;
+  } catch (error) {
+    logger.error(
+      'Failed to parse sphere polygon for mers layer',
+      LogCategory.MAP,
+      error
+    );
+    return null;
+  }
 }
 
 function createScreenExtentPolygon(
@@ -740,9 +769,36 @@ export function createMersLayer(
   const fillColor = toRgbColor(config.color);
   const opacity = config.opacity / 100;
 
-  const layerId = buildLayerId(DeckLayerId.BASEMAP_MERS, ctx.projectionSuffix);
+  const baseLayerId = buildLayerId(
+    DeckLayerId.BASEMAP_MERS,
+    ctx.projectionSuffix
+  );
 
   if (ctx.projection) {
+    const sphereData = getSpherePolygon(ctx.projection);
+
+    if (sphereData) {
+      try {
+        const polygonProps = createCompatibleSolidPolygonLayerProps(sphereData);
+        return new SolidPolygonLayer({
+          id: `${baseLayerId}-sphere`,
+          ...polygonProps,
+          coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+          getFillColor: withOpacity(fillColor, opacity),
+          ...getBaseLayerProps(ctx),
+          updateTriggers: {
+            getFillColor: [config.color, config.opacity]
+          }
+        });
+      } catch (error) {
+        logger.error(
+          'Failed to build sphere polygon mers layer, falling back to composite/rectangle',
+          LogCategory.MAP,
+          error
+        );
+      }
+    }
+
     const projectedCompositeOceanData = createProjectedCompositeOceanData(
       ctx.projection,
       ctx.bbox,
@@ -751,27 +807,10 @@ export function createMersLayer(
 
     if (projectedCompositeOceanData) {
       return new GeoJsonLayer({
-        id: layerId,
+        id: `${baseLayerId}-composite`,
         data: projectedCompositeOceanData,
         filled: true,
         stroked: false,
-        coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-        getFillColor: withOpacity(fillColor, opacity),
-        ...getBaseLayerProps(ctx),
-        updateTriggers: {
-          getFillColor: [config.color, config.opacity]
-        }
-      });
-    }
-
-    const sphereData = parseSphere(ctx.projection, {
-      output: 'polygon'
-    }) as BinaryPolygonData;
-
-    if (hasSpherePolygon(sphereData)) {
-      return new SolidPolygonLayer({
-        id: layerId,
-        ...createCompatibleSolidPolygonLayerProps(sphereData),
         coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
         getFillColor: withOpacity(fillColor, opacity),
         ...getBaseLayerProps(ctx),
@@ -807,7 +846,7 @@ export function createMersLayer(
   };
 
   return new GeoJsonLayer({
-    id: layerId,
+    id: `${baseLayerId}-rect`,
     data: oceanGeoJSON,
     filled: true,
     stroked: false,

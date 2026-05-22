@@ -19,6 +19,7 @@ import {
   BASEMAP_LAYER_ID,
   basemapLayersStore
 } from '../stores/basemap-layers.store.svelte';
+import { SYNTHETIC_AUX_LAYER_KEY } from '$lib/features/commons/constants/basemap.constants';
 import {
   createBasemapLayers,
   createDeckLayers,
@@ -66,6 +67,7 @@ import {
   createProjectionSphereOutlineLayer
 } from '../utils/projection-sphere-mask.utils';
 import { basemapAuxLayersStore } from '../stores/basemap-aux-layers.store.svelte';
+import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
 import { getRepresentativePointArrowTable } from '$lib/features/duckdb/orchestrator/arrow-ops';
 import { resolveRepresentativePointTableName } from '../utils/representative-point-table.utils';
@@ -1371,21 +1373,65 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             activeBasemapProjection ??
             projectionOverride)
           : undefined;
-      const projectionSphereMaskLayer = sphereProjectionInput
-        ? createProjectionSphereMaskLayer({
-            projection: sphereProjectionInput,
-            modelMatrix: matrixToApply
-          })
-        : null;
+      const mersConfig = basemapLayersStore.layers.find((l) => l.id === 'mers');
+      const mersAuxVisible =
+        currentMetadata && mersConfig
+          ? basemapAuxLayersStore.isVisible(
+              currentMetadata.file,
+              SYNTHETIC_AUX_LAYER_KEY.MERS,
+              true
+            )
+          : true;
+      const mersEffectiveVisible =
+        (mersConfig?.visible ?? false) && mersAuxVisible;
+      const mersFillColor: [number, number, number, number] | undefined =
+        mersConfig && mersEffectiveVisible
+          ? (() => {
+              const [r, g, b] = hexToRgb(mersConfig.color);
+              const alpha = Math.round(
+                ((mersConfig.opacity ?? 100) / 100) * 255
+              );
+              return [r, g, b, alpha];
+            })()
+          : undefined;
+      const projectionSphereMaskLayer =
+        sphereProjectionInput && mersFillColor
+          ? createProjectionSphereMaskLayer({
+              projection: sphereProjectionInput,
+              modelMatrix: matrixToApply,
+              fillColor: mersFillColor
+            })
+          : null;
       const sphereConfig = basemapLayersStore.layers.find(
         (l) => l.id === 'sphere'
       );
-      const sphereVisible = sphereConfig?.visible ?? true;
+      const sphereAuxVisible =
+        currentMetadata && sphereConfig
+          ? basemapAuxLayersStore.isVisible(
+              currentMetadata.file,
+              SYNTHETIC_AUX_LAYER_KEY.SPHERE,
+              true
+            )
+          : true;
+      const sphereVisible = (sphereConfig?.visible ?? true) && sphereAuxVisible;
+      const sphereOutlineOptions = sphereConfig
+        ? (() => {
+            const [r, g, b] = hexToRgb(sphereConfig.color);
+            const alpha = Math.round(
+              ((sphereConfig.opacity ?? 100) / 100) * 255
+            );
+            return {
+              color: [r, g, b, alpha] as [number, number, number, number],
+              width: sphereConfig.thickness
+            };
+          })()
+        : undefined;
       const projectionSphereOutlineLayer =
         sphereProjectionInput && sphereVisible
           ? createProjectionSphereOutlineLayer({
               projection: sphereProjectionInput,
-              modelMatrix: matrixToApply
+              modelMatrix: matrixToApply,
+              ...(sphereOutlineOptions ?? {})
             })
           : null;
       const maskedOrderedLayers = applyProjectionSphereMask(
