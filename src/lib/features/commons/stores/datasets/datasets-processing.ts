@@ -53,6 +53,10 @@ function isNonEmptyRow(
   return !!row && Object.keys(row).length > 0;
 }
 
+function toOptionalNumber(value: unknown): number | undefined {
+  return value != null && value !== '' ? Number(value) : undefined;
+}
+
 function extractCoordsFromGeometry(
   geometry: Record<string, unknown> | null | undefined
 ): Array<[number, number]> {
@@ -230,6 +234,12 @@ export function createDatasetFromPreprocessedFile(
       min?: unknown;
       max?: unknown;
       mean?: number;
+      median?: number;
+      stdDev?: number;
+      share_integers?: number;
+      share_floats?: number;
+      share_rank_interval?: number;
+      extent_magnitude?: number;
     }
   >;
 
@@ -241,12 +251,18 @@ export function createDatasetFromPreprocessedFile(
       stats: {
         name,
         type: (stats.type as ColumnType) || ColumnType.TEXT,
-        count: stats.count ?? 0,
-        nulls: stats.nullCount ?? 0,
-        uniques: stats.unique ?? 0,
+        count: toOptionalNumber(stats.count) ?? 0,
+        nulls: toOptionalNumber(stats.nullCount) ?? 0,
+        uniques: toOptionalNumber(stats.unique) ?? 0,
         min: stats.min,
         max: stats.max,
-        mean: stats.mean
+        mean: toOptionalNumber(stats.mean),
+        median: toOptionalNumber(stats.median),
+        stdDev: toOptionalNumber(stats.stdDev),
+        share_integers: toOptionalNumber(stats.share_integers),
+        share_floats: toOptionalNumber(stats.share_floats),
+        share_rank_interval: toOptionalNumber(stats.share_rank_interval),
+        extent_magnitude: toOptionalNumber(stats.extent_magnitude)
       }
     })
   );
@@ -331,10 +347,6 @@ export function createVisualizationsForGeoDatasets(
   ops?: VisualizationStoreOperations | null
 ): void {
   if (!ops) {
-    logger.warn(
-      'Visualization store not injected, skipping auto-visualization creation',
-      LogCategory.STORE
-    );
     return;
   }
 
@@ -385,9 +397,6 @@ function notifySkippedFiles(
         files: allSkippedFiles.join(', ')
       })
     );
-    logger.warn('Some files from ZIP were skipped', LogCategory.STORE, {
-      skippedFiles: allSkippedFiles
-    });
   }
 }
 
@@ -400,11 +409,6 @@ export async function processFiles(
   state.error = undefined;
 
   try {
-    logger.info(
-      `Processing ${files.length} files with semaphore (max 2 concurrent)`,
-      LogCategory.STORE
-    );
-
     const results = await Promise.all(
       files.map(async (file) => {
         return internals.processingSemaphore.run(async () => {
@@ -423,10 +427,6 @@ export async function processFiles(
             file.parsedData &&
             file.statistics
           ) {
-            logger.warn(
-              `File ${file.name} has parsed data but no DuckDB table - creating from parsed data`,
-              LogCategory.STORE
-            );
             return createDatasetFromPreprocessedFile(file);
           }
 
@@ -471,11 +471,6 @@ export async function processFiles(
     }
 
     notifySkippedFiles(results);
-
-    logger.success(
-      `All ${files.length} files processed successfully`,
-      LogCategory.STORE
-    );
   } catch (error) {
     logger.error('Files processing failed', LogCategory.STORE, {
       error: error instanceof Error ? error.message : 'Unknown error'
@@ -527,10 +522,6 @@ export async function addFile(
       }
 
       if (!hasRestorableBinarySource && file.parsedData && file.statistics) {
-        logger.warn(
-          `File ${file.name} has parsed data but no DuckDB table - creating from parsed data`,
-          LogCategory.STORE
-        );
         return createDatasetFromPreprocessedFile(file);
       }
 

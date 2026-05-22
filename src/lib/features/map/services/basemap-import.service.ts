@@ -1,9 +1,3 @@
-import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type {
   BasemapLayer,
@@ -15,6 +9,7 @@ import {
   fetchArrowTableWithGeometry
 } from '$lib/features/duckdb/orchestrator/arrow-ops';
 import { generateCustomBasemapAttributes } from './generate-basemap-attributes.service';
+import { getCustomBasemapGeometryProjectColumns } from './custom-basemap-columns.service';
 import * as m from '$lib/paraglide/messages';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import {
@@ -23,6 +18,12 @@ import {
   getShapefileFilesFromArchive
 } from '$lib/features/data-pipeline/utils/zip-handler';
 import { convertGeoPackageToGeoJsonFile } from '../utils/geopackage-browser-fallback.utils';
+import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 export interface BasemapImportResult {
   basemap: BasemapMetadata;
@@ -51,6 +52,14 @@ interface GeoParquetMeta {
 const RAW_TABLE_SUFFIX = '__raw';
 const INNERLINES_TABLE_SUFFIX = '__innerlines';
 const CENTROIDS_TABLE_SUFFIX = '__centroids';
+
+async function resolveCustomBasemapProjectColumns(
+  duck: typeof Duck,
+  tableName: string
+): Promise<string[]> {
+  const columns = await duck.analyse(tableName);
+  return getCustomBasemapGeometryProjectColumns(columns);
+}
 
 export function getBasemapRawTableName(tableName: string): string {
   return `${tableName}${RAW_TABLE_SUFFIX}`;
@@ -101,15 +110,11 @@ export async function processBasemapImport(
     try {
       return await processGeofileBasemapImport(duck, file, tableName);
     } catch (error) {
-      logger.warn(
-        'DuckDB GeoPackage basemap import failed, trying browser fallback',
+      logger.error(
+        'Failed to import GeoPackage directly, trying browser fallback',
         LogCategory.MAP,
-        {
-          fileName: file.name,
-          error: error instanceof Error ? error.message : String(error)
-        }
+        error
       );
-
       await duck.query(
         `DROP TABLE IF EXISTS "${escapeIdentifier(tableName)}"`,
         {
@@ -303,7 +308,11 @@ async function readGeoParquetMetadata(
       return JSON.parse(result[0].value) as GeoParquetMeta;
     }
   } catch (error) {
-    logger.warn('Failed to read GeoParquet metadata', LogCategory.MAP, error);
+    logger.error(
+      'Failed to read imported basemap GeoParquet metadata',
+      LogCategory.MAP,
+      error
+    );
   }
   return null;
 }
@@ -388,12 +397,16 @@ async function createArrowTableFromDuckTable(
   duck: typeof Duck,
   tableName: string
 ): Promise<ArrowTable> {
+  const projectColumns = await resolveCustomBasemapProjectColumns(
+    duck,
+    tableName
+  );
   const { table: rawTable, geomColumn } = await fetchArrowTableWithGeometry(
     tableName,
     duck,
     null,
     null,
-    [INTERNAL_COLUMN.FEATURE_ID]
+    projectColumns
   );
   return addGeoArrowMetadataFromDuckDB(
     rawTable,
@@ -505,13 +518,10 @@ async function rebuildPolygonDerivedTables(
         AND CAST(ST_GeometryType(geom) AS VARCHAR) IN ('LINESTRING', 'MULTILINESTRING')
     `);
   } catch (error) {
-    logger.warn(
-      'Failed to extract innerlines for custom basemap, using empty layer',
+    logger.error(
+      'Failed to extract imported basemap innerlines',
       LogCategory.MAP,
-      {
-        tableName,
-        error: error instanceof Error ? error.message : String(error)
-      }
+      error
     );
     await createEmptyInnerlinesTable(duck, innerlinesTableName);
   }
@@ -580,16 +590,11 @@ async function preparePolygonBasemapTables(
       FROM simplify_and_clean('${escapeSqlString(rawTableName)}', '${escapeSqlString(geometryColumn)}', 0.0)
     `);
   } catch (error) {
-    logger.warn(
-      'Basemap polygon cleanup failed, falling back to direct geometry copy',
+    logger.error(
+      'Failed to normalize imported basemap polygon geometry with macro, using SQL fallback',
       LogCategory.MAP,
-      {
-        tableName,
-        geometryColumn,
-        error: error instanceof Error ? error.message : String(error)
-      }
+      error
     );
-
     await duck.query(`
       CREATE OR REPLACE TABLE "${escapedTable}" AS
       ${buildNormalizedGeometrySelect(
@@ -623,16 +628,11 @@ async function prepareLineBasemapTables(
       FROM simplify_and_clean_linestring('${escapeSqlString(rawTableName)}', '${escapeSqlString(geometryColumn)}', 0.0)
     `);
   } catch (error) {
-    logger.warn(
-      'Basemap line cleanup failed, falling back to direct geometry copy',
+    logger.error(
+      'Failed to normalize imported basemap line geometry with macro, using SQL fallback',
       LogCategory.MAP,
-      {
-        tableName,
-        geometryColumn,
-        error: error instanceof Error ? error.message : String(error)
-      }
+      error
     );
-
     await duck.query(`
       CREATE OR REPLACE TABLE "${escapedTable}" AS
       ${buildNormalizedGeometrySelect(

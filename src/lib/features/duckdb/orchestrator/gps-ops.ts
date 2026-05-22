@@ -41,8 +41,6 @@ export async function validateGPSColumns(
   lonCol: string,
   Duck: DuckDBClientForGPS
 ): Promise<GPSValidationResult> {
-  const start = performance.now();
-
   try {
     const escapedLat = escapeIdentifier(latCol);
     const escapedLon = escapeIdentifier(lonCol);
@@ -148,17 +146,6 @@ export async function validateGPSColumns(
 
     const isValid = latInRange && lonInRange;
 
-    logger.debug('GPS columns validated', LogCategory.DATA, {
-      tableName,
-      latCol,
-      lonCol,
-      isValid,
-      possibleInversion,
-      latStats,
-      lonStats,
-      durationMs: (performance.now() - start).toFixed(2)
-    });
-
     return {
       isValid,
       possibleInversion,
@@ -203,8 +190,6 @@ export async function getGPSArrowTable(
   latColumn: string;
   lonColumn: string;
 }> {
-  const start = performance.now();
-
   if (!dataset.gpsMode || !dataset.gpsColumns) {
     throw new Error(m.gps_error_not_in_gps_mode({ id: dataset.id }));
   }
@@ -214,23 +199,10 @@ export async function getGPSArrowTable(
   const existingRequest = inFlightGPSArrowLoads.get(requestKey);
 
   if (existingRequest) {
-    logger.debug('Reusing in-flight GPS Arrow table build', LogCategory.MAP, {
-      datasetId: dataset.id,
-      tableName: dataset.tableName,
-      latColumn: lat,
-      lonColumn: lon
-    });
     return existingRequest;
   }
 
   const request = (async () => {
-    logger.info('Creating GPS Arrow table for rendering', LogCategory.MAP, {
-      datasetId: dataset.id,
-      tableName: dataset.tableName,
-      latColumn: lat,
-      lonColumn: lon
-    });
-
     const gpsTable = `gps_${dataset.tableName.replace(/[^a-zA-Z0-9_]/g, '_')}_${dataset.id.replace(/[^a-zA-Z0-9_]/g, '_')}_${Math.round(performance.now()).toString(36)}`;
     const escapedLon = escapeIdentifier(lon);
     const escapedLat = escapeIdentifier(lat);
@@ -257,14 +229,6 @@ export async function getGPSArrowTable(
     try {
       const arrowTable = await getArrowTableDirect(gpsTable);
 
-      logger.success('GPS Arrow table created', LogCategory.MAP, {
-        gpsTable,
-        rows: arrowTable.numRows,
-        latColumn: lat,
-        lonColumn: lon,
-        durationMs: (performance.now() - start).toFixed(2)
-      });
-
       return {
         table: arrowTable,
         latColumn: lat,
@@ -290,8 +254,6 @@ export async function getGPSBounds(
   dataset: DuckDBDataset,
   Duck: DuckDBClientForGPS
 ): Promise<GPSBounds | null> {
-  const start = performance.now();
-
   // In tabular-gps mode (no join), gpsColumns may not be set yet —
   // fall back to the dataset geo detection and then to column-name heuristics.
   const gpsColumns =
@@ -329,22 +291,12 @@ export async function getGPSBounds(
     }>;
 
     if (result.length === 0) {
-      logger.warn('GPS bounds query returned no results', LogCategory.MAP, {
-        datasetId: dataset.id,
-        tableName: dataset.tableName
-      });
       return null;
     }
 
     const bounds = result[0];
 
     if (bounds.valid_count === 0) {
-      logger.warn('No valid GPS coordinates found', LogCategory.MAP, {
-        datasetId: dataset.id,
-        tableName: dataset.tableName,
-        latColumn: lat,
-        lonColumn: lon
-      });
       return null;
     }
 
@@ -354,11 +306,6 @@ export async function getGPSBounds(
       bounds.max_lon === null ||
       bounds.max_lat === null
     ) {
-      logger.warn('GPS bounds contain null values', LogCategory.MAP, {
-        datasetId: dataset.id,
-        bounds,
-        validCount: bounds.valid_count
-      });
       return null;
     }
 
@@ -368,13 +315,6 @@ export async function getGPSBounds(
       maxLon: bounds.max_lon,
       maxLat: bounds.max_lat
     };
-
-    logger.success('GPS bounds computed', LogCategory.MAP, {
-      datasetId: dataset.id,
-      bounds: computedBounds,
-      validCoordinates: bounds.valid_count,
-      durationMs: (performance.now() - start).toFixed(2)
-    });
 
     return computedBounds;
   } catch (error) {

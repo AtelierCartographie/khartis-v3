@@ -13,6 +13,7 @@
     disabled?: boolean;
     id?: string;
     showSteppers?: boolean;
+    ariaLabel?: string;
     ariaDecrement?: string;
     ariaIncrement?: string;
     onchange?: (value: number) => void;
@@ -29,6 +30,7 @@
     disabled = false,
     id,
     showSteppers = true,
+    ariaLabel,
     ariaDecrement = m.compact_number_decrement(),
     ariaIncrement = m.compact_number_increment(),
     onchange
@@ -104,6 +106,7 @@
     min={min}
     max={max}
     step={step}
+    aria-label={ariaLabel ?? undefined}
     value={value}
     disabled={disabled}
     oninput={handleInput}

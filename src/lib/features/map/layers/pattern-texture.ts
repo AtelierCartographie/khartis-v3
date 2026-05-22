@@ -1,7 +1,7 @@
 import { motifAtlas } from '@ateliercartographie/motif.js';
 import type {
-  PatternOptions,
-  AtlasResult
+  AtlasResult,
+  PatternOptions
 } from '@ateliercartographie/motif.js';
 import {
   categoricalPatterns,
@@ -9,7 +9,6 @@ import {
 } from '@ateliercartographie/ok-palette';
 import type { PatternParams as OkPatternParams } from '@ateliercartographie/ok-palette';
 import type { PatternParams } from '$lib/features/commons/stores/visualization.store.svelte';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 const PATTERN_NAMES = [
   'diagonal',
@@ -221,16 +220,6 @@ export function generatePatternAtlas(
   });
 
   const result = motifAtlas(configs);
-
-  logger.info(
-    `Dynamic pattern atlas generated (${mode}, ${count} classes)`,
-    LogCategory.MAP,
-    {
-      mode,
-      count,
-      patterns: Object.keys(result.mapping).length
-    }
-  );
 
   return { atlas: result.canvas, mapping: result.mapping };
 }

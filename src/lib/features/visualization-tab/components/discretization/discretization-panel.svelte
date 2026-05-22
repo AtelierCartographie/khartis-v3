@@ -93,17 +93,45 @@
     return breaks.map((b) => b.color);
   });
 
-  function getMethodDescription(m_: ClassificationMethod): string {
-    const descriptions: Record<ClassificationMethod, () => string> = {
-      kmeans: m.discretization_desc_kmeans,
-      quantile: m.discretization_desc_quantile,
-      'equal-interval': m.discretization_desc_equal_interval,
-      manual: m.discretization_desc_manual,
-      q6: m.discretization_desc_q6,
-      'nested-means': m.discretization_desc_nested_means,
-      'head-tail': m.discretization_desc_head_tail
-    };
-    return descriptions[m_]();
+  const METHOD_DESCRIPTIONS: Record<ClassificationMethod, () => string> = {
+    kmeans: m.discretization_desc_kmeans,
+    quantile: m.discretization_desc_quantile,
+    'equal-interval': m.discretization_desc_equal_interval,
+    manual: m.discretization_desc_manual,
+    q6: m.discretization_desc_q6,
+    'nested-means': m.discretization_desc_nested_means,
+    'head-tail': m.discretization_desc_head_tail
+  };
+
+  function isClassificationMethod(
+    value: string
+  ): value is ClassificationMethod {
+    switch (value) {
+      case 'kmeans':
+      case 'quantile':
+      case 'equal-interval':
+      case 'manual':
+      case 'q6':
+      case 'nested-means':
+      case 'head-tail':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  function normalizePanelMethod(
+    value: string | null | undefined
+  ): ClassificationMethod {
+    return typeof value === 'string' && isClassificationMethod(value)
+      ? value
+      : 'kmeans';
+  }
+
+  function getMethodDescription(
+    methodValue: string | null | undefined
+  ): string {
+    return METHOD_DESCRIPTIONS[normalizePanelMethod(methodValue)]();
   }
 
   const maxHistogramCount = $derived.by(() => {
@@ -176,7 +204,7 @@
   function handleMethodChange(e: Event) {
     validationErrors = [];
     const target = e.currentTarget as HTMLSelectElement;
-    const newMethod = target.value as ClassificationMethod;
+    const newMethod = normalizePanelMethod(target.value);
     method = newMethod;
     if (newMethod === 'q6') {
       numClasses = 6;
@@ -341,7 +369,7 @@
       {#if isNestedMeans}
         <Select
           id="nested-means-classes"
-          labelText=""
+          labelText={m.discretization_num_classes()}
           hideLabel
           selected={String(numClasses)}
           on:change={handleNestedMeansChange}
@@ -356,6 +384,7 @@
           min={2}
           max={classCountMax}
           disabled={isClassCountLocked}
+          ariaLabel={m.discretization_num_classes()}
           onchange={handleClassesChange}
           width="100%"
         />

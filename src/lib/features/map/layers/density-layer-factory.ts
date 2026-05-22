@@ -41,7 +41,7 @@ export function createDotDensityLayers(
         : parsePointData(jsTable);
     } catch (error) {
       logger.error(
-        'Failed to parse density points from Arrow table',
+        'Failed to parse density point layer data',
         LogCategory.MAP,
         error
       );

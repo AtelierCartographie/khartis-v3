@@ -48,6 +48,14 @@ describe('MainMap density mode loading', () => {
     expect(source).toContain('setDisplaySplitTable');
   });
 
+  it('deduplicates joined basemap display loads by data and basemap version', () => {
+    expect(source).toContain('joinedBasemapDisplayKeys');
+    expect(source).toContain('joinedBasemapDisplayLoads');
+    expect(source).toContain('duckDBOrchestrator.datasetsVersion');
+    expect(source).toContain('basemapService.simplificationVersion');
+    expect(source).toContain('joinedBasemapDisplayKeys.get(datasetId)');
+  });
+
   it('does not apply a second color-blindness filter wrapper around ThematicMap', () => {
     expect(source).not.toContain('applyColorBlindnessFilter');
     expect(source).not.toContain('color-blindness-filters');

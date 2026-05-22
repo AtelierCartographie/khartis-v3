@@ -25,4 +25,9 @@ describe('LayerConfigTerre', () => {
   it('uses the shared subpixel thickness step for strokes', () => {
     expect(source).toContain('step={BASEMAP_LAYER_CONFIG.thickness.step}');
   });
+
+  it('allows the territory stroke thickness to be set to zero', () => {
+    expect(source).toContain('label={m.basemap_config_thickness()}');
+    expect(source).toContain('min={0}');
+  });
 });

@@ -3,7 +3,6 @@ import {
   getWarningFileSizeForType
 } from '$lib/features/commons/constants/validation.config';
 import { detectFileType } from '$lib/features/commons/utils/file-import.utils';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import * as m from '$lib/paraglide/messages';
 import { PIPELINE_CONST } from '../constants';
 import type { ValidationResult } from '../types';
@@ -20,26 +19,14 @@ export async function validateFile(file: File): Promise<ValidationResult> {
       ext as (typeof PIPELINE_CONST.EXTENSIONS.ALL)[number]
     )
   ) {
-    logger.warn('Unsupported file extension', LogCategory.DATA, {
-      fileName: file.name,
-      extension: ext
-    });
     return validationFailure([m.pipeline_error_unsupported_extension({ ext })]);
   }
 
   if (file.size === 0) {
-    logger.warn('Uploaded file is empty', LogCategory.DATA, {
-      fileName: file.name
-    });
     return validationFailure([m.pipeline_error_file_empty()]);
   }
 
   if (file.size > maxFileSize) {
-    logger.warn('Uploaded file exceeds size limit', LogCategory.DATA, {
-      fileName: file.name,
-      fileSize: file.size,
-      maxSize: maxFileSize
-    });
     return validationFailure([
       m.pipeline_error_file_size_limit({
         limit: String(maxFileSize / (1024 * 1024))

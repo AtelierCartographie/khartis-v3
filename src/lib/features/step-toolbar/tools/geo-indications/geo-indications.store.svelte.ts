@@ -33,7 +33,11 @@ import type {
   GeoIndicationsState
 } from '../../types/geo-indications.types';
 
-const DEFAULT_INSET_WINDOW_COLOR = hexToHsl('#ffffff');
+const DEFAULT_INSET_WINDOW_COLOR: ColorState = {
+  hue: 7.741935483870967,
+  saturation: 69.50672645739911,
+  lightness: 56.27450980392157
+};
 const DEFAULT_INSET_CONTINENT_COLOR = hexToHsl('#d9d9d9');
 const DEFAULT_INSET_SEA_COLOR = hexToHsl('#d0e2ff');
 
@@ -220,7 +224,7 @@ function normalizeState(
         current.insetMap.seaColor
       ),
       useBasemapColors: false,
-      zoom: clampNumber(nextInsetMap?.zoom, 0, 100, current.insetMap.zoom),
+      zoom: DEFAULT_STATE.insetMap.zoom,
       centerLongitude: clampNumber(
         nextInsetMap?.centerLongitude,
         -180,

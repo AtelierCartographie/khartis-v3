@@ -124,7 +124,10 @@
       {
         displayedSuggestionKey: appliedSuggestionKey,
         originSuggestionKey: targetViz.origin?.suggestionKey,
-        hasRestoreState: Boolean(targetViz.origin?.restoreState)
+        hasRestoreState: Boolean(targetViz.origin?.restoreState),
+        isTargetActive: visualizationStore.activeVisualizations.some(
+          (visualization) => visualization.id === targetViz.id
+        )
       },
       suggestion
     );
@@ -483,7 +486,8 @@
           if (item) selectedDatasetId = item.datasetId;
         }}
         placeholder={m.choose_data_field_placeholder()}
-        labelText=""
+        labelText={m.data_visualized_label()}
+        hideLabel
         size="xl"
       />
     </div>
@@ -505,6 +509,7 @@
                 <input
                   class="viz-rename-input"
                   type="text"
+                  aria-label={m.viz_list_rename()}
                   bind:value={renameValue}
                   onkeydown={(e: KeyboardEvent) =>
                     handleRenameKeydown(e, viz.id)}

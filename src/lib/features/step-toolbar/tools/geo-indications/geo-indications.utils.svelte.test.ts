@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DistanceUnit } from '$lib/features/commons/constants/ui.constants';
 import {
+  getInsetMapGeographicBounds,
   getScaleDistanceLimit,
   getScaleMetersPerPixel,
   getSuggestedScaleDistance
@@ -70,5 +71,29 @@ describe('geo indications scale utilities', () => {
     );
 
     expect(metersPerPixel).toBeCloseTo(400, 0);
+  });
+
+  it('converts projected inset bounds before area checks use them', () => {
+    const bounds = getInsetMapGeographicBounds(
+      {
+        north: 60000,
+        south: 0,
+        east: 30000,
+        west: -30000
+      },
+      {
+        isProjectedCoordinates: true,
+        projection: {
+          invert: ([x, y]: [number, number]) => [x / 1000, y / 1000]
+        }
+      }
+    );
+
+    expect(bounds).toEqual({
+      north: 60,
+      south: 0,
+      east: 30,
+      west: -30
+    });
   });
 });

@@ -8,9 +8,12 @@ import {
 import type { LayerContext } from '../types';
 import {
   buildSplitDatasetRowMapping,
+  createSplitAwareNullableRowAccessor,
   createSplitAwareRowAccessor,
   createSplitGeoJsonFeatureAccessor,
+  createSplitGeoJsonNullableFeatureAccessor,
   getSplitMatchedGeometryRowIndices,
+  resolveBestSplitFeatureIdColumn,
   resolveSplitMappingFeatureIdColumn
 } from './split-rendering-accessors';
 
@@ -88,6 +91,25 @@ describe('split rendering accessors', () => {
     expect([accessor(0), accessor(1), accessor(2)]).toEqual([10, 20, -1]);
   });
 
+  it('preserves null for unmatched binary split rows when requested', () => {
+    const geometry = createTableWithRows(
+      [{ [CANONICAL_ID_COLUMN]: 'DEU' }, { [CANONICAL_ID_COLUMN]: 'ESP' }],
+      [CANONICAL_ID_COLUMN]
+    );
+    const dataset = createTableWithRows(
+      [{ [JOINED_BASEMAP_COLUMN.ID]: 'DEU', value: 10 }],
+      [JOINED_BASEMAP_COLUMN.ID, 'value']
+    );
+    const accessor = createSplitAwareNullableRowAccessor(
+      createSplitContext(dataset),
+      geometry,
+      (row) => (row ? Number(row.value) : null),
+      geometry
+    );
+
+    expect([accessor(0), accessor(1)]).toEqual([10, null]);
+  });
+
   it('maps projected GeoJSON features through geometry ids to joined dataset rows', () => {
     const geometry = createTableWithRows(
       [{ [CANONICAL_ID_COLUMN]: 'DEU' }, { [CANONICAL_ID_COLUMN]: 'FRA' }],
@@ -114,6 +136,29 @@ describe('split rendering accessors', () => {
     );
     expect(accessor?.({ properties: { [CANONICAL_ID_COLUMN]: 'ESP' } })).toBe(
       'missing'
+    );
+  });
+
+  it('preserves null for unmatched projected GeoJSON split features when requested', () => {
+    const geometry = createTableWithRows(
+      [{ [CANONICAL_ID_COLUMN]: 'DEU' }, { [CANONICAL_ID_COLUMN]: 'ESP' }],
+      [CANONICAL_ID_COLUMN]
+    );
+    const dataset = createTableWithRows(
+      [{ [JOINED_BASEMAP_COLUMN.ID]: 'DEU', label: 'Germany' }],
+      [JOINED_BASEMAP_COLUMN.ID, 'label']
+    );
+    const accessor = createSplitGeoJsonNullableFeatureAccessor(
+      createSplitContext(dataset),
+      geometry,
+      (row) => row?.label ?? null
+    );
+
+    expect(accessor?.({ properties: { [CANONICAL_ID_COLUMN]: 'DEU' } })).toBe(
+      'Germany'
+    );
+    expect(accessor?.({ properties: { [CANONICAL_ID_COLUMN]: 'ESP' } })).toBe(
+      null
     );
   });
 
@@ -162,5 +207,59 @@ describe('split rendering accessors', () => {
     expect(
       getSplitMatchedGeometryRowIndices(geometry, dataset, CANONICAL_ID_COLUMN)
     ).toEqual([1, 3]);
+  });
+
+  it('prefers the geometry id column that matches joined basemap ids', () => {
+    const geometry = createTableWithRows(
+      [
+        { [INTERNAL_COLUMN.FEATURE_ID]: 1, [CANONICAL_ID_COLUMN]: 'A' },
+        { [INTERNAL_COLUMN.FEATURE_ID]: 2, [CANONICAL_ID_COLUMN]: 'B' },
+        { [INTERNAL_COLUMN.FEATURE_ID]: 3, [CANONICAL_ID_COLUMN]: 'C' }
+      ],
+      [INTERNAL_COLUMN.FEATURE_ID, CANONICAL_ID_COLUMN]
+    );
+    const dataset = createTableWithRows(
+      [
+        { [JOINED_BASEMAP_COLUMN.ID]: 'A', value: 120 },
+        { [JOINED_BASEMAP_COLUMN.ID]: 'B', value: 80 },
+        { [JOINED_BASEMAP_COLUMN.ID]: 'C', value: 160 }
+      ],
+      [JOINED_BASEMAP_COLUMN.ID, 'value']
+    );
+
+    expect(
+      resolveBestSplitFeatureIdColumn(
+        geometry,
+        dataset,
+        INTERNAL_COLUMN.FEATURE_ID
+      )
+    ).toBe(CANONICAL_ID_COLUMN);
+  });
+
+  it('tests custom basemap join candidate columns before falling back to feature ids', () => {
+    const geometry = createTableWithRows(
+      [
+        { [INTERNAL_COLUMN.FEATURE_ID]: 1, admin_code: 'A' },
+        { [INTERNAL_COLUMN.FEATURE_ID]: 2, admin_code: 'B' },
+        { [INTERNAL_COLUMN.FEATURE_ID]: 3, admin_code: 'C' }
+      ],
+      [INTERNAL_COLUMN.FEATURE_ID, 'admin_code']
+    );
+    const dataset = createTableWithRows(
+      [
+        { [JOINED_BASEMAP_COLUMN.ID]: 'A', value: 120 },
+        { [JOINED_BASEMAP_COLUMN.ID]: 'B', value: 80 },
+        { [JOINED_BASEMAP_COLUMN.ID]: 'C', value: 160 }
+      ],
+      [JOINED_BASEMAP_COLUMN.ID, 'value']
+    );
+
+    expect(
+      resolveBestSplitFeatureIdColumn(
+        geometry,
+        dataset,
+        INTERNAL_COLUMN.FEATURE_ID
+      )
+    ).toBe('admin_code');
   });
 });

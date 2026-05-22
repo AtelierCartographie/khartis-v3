@@ -105,7 +105,7 @@ export async function getTableData(
 
     return (await Duck.query(query)) as ArrowTableLike;
   } catch (error) {
-    logger.warn('Error getting table data', LogCategory.DUCKDB, error);
+    logger.error('Failed to fetch table data', LogCategory.DUCKDB, error);
     return { numRows: 0, get: () => ({}), toArray: () => [] };
   }
 }
@@ -137,7 +137,11 @@ export async function getRowCount(
   try {
     return await countRows(tableName, Duck, true);
   } catch (error) {
-    logger.warn('Error getting row count', LogCategory.DUCKDB, error);
+    logger.error(
+      'Failed to count DuckDB table rows',
+      LogCategory.DUCKDB,
+      error
+    );
     return 0;
   }
 }
@@ -160,9 +164,6 @@ export async function getRowPosition(
     const normalizedRowId = normalizeRowId(rowId);
 
     if (normalizedRowId === null) {
-      logger.debug('Invalid rowId for getRowPosition', LogCategory.DUCKDB, {
-        rowId
-      });
       return -1;
     }
 

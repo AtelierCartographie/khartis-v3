@@ -116,9 +116,6 @@ export async function resetDataset(
 ): Promise<boolean> {
   const dataset = state.datasets.find((d) => d.id === datasetId);
   if (!dataset) {
-    logger.warn('Dataset not found for reset', LogCategory.STORE, {
-      datasetId
-    });
     return false;
   }
 
@@ -127,25 +124,14 @@ export async function resetDataset(
   );
 
   if (!sourceFile) {
-    logger.warn('Source file not found for reset', LogCategory.STORE, {
-      datasetId,
-      sourceFileId: dataset.sourceFileId
-    });
     return false;
   }
 
   if (sourceFile.isVirtualCopy) {
-    logger.warn('Cannot reset a duplicated dataset', LogCategory.STORE, {
-      datasetId
-    });
     return false;
   }
 
   if (!sourceFile.content && !sourceFile.originalFile && !sourceFile.assetRef) {
-    logger.warn('Source file has no content for reset', LogCategory.STORE, {
-      datasetId,
-      fileName: sourceFile.name
-    });
     return false;
   }
 
@@ -260,9 +246,6 @@ export async function duplicateDataset(
 ): Promise<string | null> {
   const dataset = state.datasets.find((d) => d.id === datasetId);
   if (!dataset) {
-    logger.warn('Dataset not found for duplication', LogCategory.STORE, {
-      datasetId
-    });
     return null;
   }
 
@@ -393,14 +376,6 @@ export async function duplicateDataset(
     for (const viz of originalVizs) {
       visualizationStore.duplicateVisualization(viz.id, newId);
     }
-
-    logger.success('Dataset duplicated successfully', LogCategory.STORE, {
-      originalId: datasetId,
-      newId,
-      newTableName,
-      virtualFileId,
-      vizCount: originalVizs.length
-    });
 
     return newId;
   } catch (error) {

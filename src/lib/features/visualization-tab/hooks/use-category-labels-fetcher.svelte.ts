@@ -1,5 +1,4 @@
 import { untrack } from 'svelte';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   haveCategoryLabelsChanged,
   resolveCategoryLabels,
@@ -62,11 +61,10 @@ export async function fetchClassificationLabels(
     }
 
     options.applyLabels(labels);
-  } catch (error) {
+  } catch {
     if (options.signal?.aborted) {
       return;
     }
-    logger.warn(options.errorMessage, LogCategory.VISUALIZATION, error);
   }
 }
 

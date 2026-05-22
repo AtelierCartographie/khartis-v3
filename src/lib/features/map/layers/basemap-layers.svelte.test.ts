@@ -408,7 +408,7 @@ describe('basemap projection fallbacks', () => {
     ).toBeNull();
   });
 
-  it('renders projected mers in cartesian coordinates so projected ocean color stays visible', () => {
+  it('renders projected mers from the projection sphere polygon', () => {
     const layer = createMersLayer(
       {
         id: 'mers',
@@ -416,13 +416,202 @@ describe('basemap projection fallbacks', () => {
         color: '#006dff',
         opacity: 100
       },
-      createProjectionContext()
+      { projection: geoEquirectangular() as ProjectionLike }
+    ) as SolidPolygonLayer | null;
+
+    expect(layer).toBeInstanceOf(SolidPolygonLayer);
+    expect(layer?.props.coordinateSystem).toBe(COORDINATE_SYSTEM.CARTESIAN);
+    expect(layer?.props.getFillColor).toEqual([0, 109, 255, 255]);
+    const polygonData = layer?.props.data as
+      | {
+          length: number;
+          attributes: {
+            getPolygon: {
+              value: Float32Array;
+            };
+          };
+        }
+      | undefined;
+    expect(polygonData?.length).toBeGreaterThan(0);
+    expect(polygonData?.attributes.getPolygon.value).toBeInstanceOf(
+      Float32Array
+    );
+  });
+
+  it('uses the projected canvas extent for mers when it is available', () => {
+    const layer = createMersLayer(
+      {
+        id: 'mers',
+        visible: true,
+        color: '#006dff',
+        opacity: 100
+      },
+      {
+        projection: geoEquirectangular() as ProjectionLike,
+        graticuleClipExtent: [
+          [-180, -90],
+          [180, 90]
+        ]
+      }
     ) as GeoJsonLayer | null;
+
+    const data = layer?.props.data as FeatureCollection<Polygon> | undefined;
+
+    expect(layer).toBeInstanceOf(GeoJsonLayer);
+    expect(data?.features[0]?.geometry.coordinates[0]).toEqual([
+      [-180, -90],
+      [180, -90],
+      [180, 90],
+      [-180, 90],
+      [-180, -90]
+    ]);
+  });
+
+  it('falls back to composite screen extents when projected sphere parsing is empty', () => {
+    const mainlandBounds: BBox = [-10, 35, 40, 72];
+    const emptyProjection = {
+      stream: () => ({
+        point: () => {},
+        lineStart: () => {},
+        lineEnd: () => {},
+        polygonStart: () => {},
+        polygonEnd: () => {}
+      }),
+      getSubProjections: () => [
+        {
+          id: 'mainland',
+          projection: createClippedTestProjection(mainlandBounds, [
+            [0, 0],
+            [960, 600]
+          ]),
+          bounds: mainlandBounds,
+          screenExtent: [
+            [0, 0],
+            [960, 600]
+          ]
+        },
+        {
+          id: 'overseas',
+          projection: createClippedTestProjection(
+            [50, -20, 56, -12],
+            [
+              [0, 500],
+              [96, 600]
+            ]
+          ),
+          bounds: [50, -20, 56, -12] as BBox,
+          screenExtent: [
+            [0, 500],
+            [96, 600]
+          ]
+        }
+      ]
+    } as unknown as ProjectionLike;
+
+    const layer = createMersLayer(
+      {
+        id: 'mers',
+        visible: true,
+        color: '#e0e0e0',
+        opacity: 100
+      },
+      { projection: emptyProjection, bbox: mainlandBounds }
+    ) as GeoJsonLayer | null;
+
+    const data = layer?.props.data as FeatureCollection<Polygon> | undefined;
+    const coordinates = data?.features[0]?.geometry.coordinates[0] ?? [];
 
     expect(layer).toBeInstanceOf(GeoJsonLayer);
     expect(layer?.props.coordinateSystem).toBe(COORDINATE_SYSTEM.CARTESIAN);
-    expect(layer?.props.getFillColor).toEqual([0, 109, 255, 255]);
-    expect(JSON.stringify(layer?.props.data)).toContain('1000000');
+    expect(data?.features).toHaveLength(1);
+    expect(coordinates).toEqual([
+      [0, 0],
+      [960, 0],
+      [960, 600],
+      [0, 600],
+      [0, 0]
+    ]);
+  });
+
+  it('uses the visible projected extent before composite sub-extents for projected mers fallback', () => {
+    const mainlandBounds: BBox = [-10, 35, 40, 72];
+    const emptyProjection = {
+      stream: () => ({
+        point: () => {},
+        lineStart: () => {},
+        lineEnd: () => {},
+        polygonStart: () => {},
+        polygonEnd: () => {}
+      }),
+      getSubProjections: () => [
+        {
+          id: 'mainland',
+          projection: createClippedTestProjection(mainlandBounds, [
+            [0, 0],
+            [960, 600]
+          ]),
+          bounds: mainlandBounds,
+          screenExtent: [
+            [0, 0],
+            [960, 600]
+          ]
+        }
+      ]
+    } as unknown as ProjectionLike;
+
+    const layer = createMersLayer(
+      {
+        id: 'mers',
+        visible: true,
+        color: '#e0e0e0',
+        opacity: 100
+      },
+      {
+        projection: emptyProjection,
+        bbox: mainlandBounds,
+        graticuleClipExtent: [
+          [-120, -80],
+          [1200, 760]
+        ]
+      }
+    ) as GeoJsonLayer | null;
+
+    const data = layer?.props.data as FeatureCollection<Polygon> | undefined;
+    const coordinates = data?.features[0]?.geometry.coordinates[0] ?? [];
+
+    expect(layer).toBeInstanceOf(GeoJsonLayer);
+    expect(data?.features).toHaveLength(1);
+    expect(coordinates).toEqual([
+      [-120, -80],
+      [1200, -80],
+      [1200, 760],
+      [-120, 760],
+      [-120, -80]
+    ]);
+  });
+
+  it('does not fall back to a raw lon/lat ocean rectangle when projected sphere parsing is empty', () => {
+    const emptyProjection = {
+      stream: () => ({
+        point: () => {},
+        lineStart: () => {},
+        lineEnd: () => {},
+        polygonStart: () => {},
+        polygonEnd: () => {}
+      })
+    } as unknown as ProjectionLike;
+
+    const layer = createMersLayer(
+      {
+        id: 'mers',
+        visible: true,
+        color: '#e0e0e0',
+        opacity: 100
+      },
+      { projection: emptyProjection }
+    );
+
+    expect(layer).toBeNull();
   });
 
   it('projects terre GeoJSON fallback layers with the active projection', () => {
@@ -914,7 +1103,7 @@ describe('basemap projection fallbacks', () => {
     expect(names).not.toContain('parallel-0');
   });
 
-  it('uses generated equator and graticule layers even when metadata entries exist', () => {
+  it('uses geographic-lines metadata for remarkable graticules when available', () => {
     const graticuleTable = {
       id: 'metadata-graticule'
     } as unknown as ArrowTable;
@@ -924,6 +1113,10 @@ describe('basemap projection fallbacks', () => {
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.EQUATEUR, true);
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERIDIENS, true);
+    extractGeometryInfoMock.mockImplementation((table) =>
+      table === geographicLinesTable ? createLineGeometryInfo() : null
+    );
+    arrowTableToGeoJSONMock.mockReturnValue(createLineGeoJSON('geo-lines'));
 
     const layers = createBasemapLayers(
       null,
@@ -955,9 +1148,9 @@ describe('basemap projection fallbacks', () => {
     );
 
     expect(foregroundIds).toContain('basemap-equateur-basemap-default');
-    expect(foregroundIds).toContain('basemap-meridiens-basemap-default');
+    expect(foregroundIds).toContain('basemap-meta-geo-lines-basemap-default-0');
+    expect(foregroundIds).not.toContain('basemap-meridiens-basemap-default');
     expect(foregroundIds).not.toContain('basemap-meta-graticule');
-    expect(foregroundIds).not.toContain('basemap-meta-geo-lines');
   });
 
   it('normalizes legacy meridiens remarquables while restoring serialized layers', () => {

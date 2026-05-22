@@ -115,6 +115,17 @@ function mergeClassificationConfig(
   };
 }
 
+const DEFAULT_CLASS_COUNT = 5;
+const DEFAULT_POLYGON_FILL_CLASS_COUNT = 4;
+
+function getDefaultPrimitiveClassCount(
+  primitive: ClassifiablePrimitive
+): number {
+  return primitive === PrimitiveFilterType.POLYGON
+    ? DEFAULT_POLYGON_FILL_CLASS_COUNT
+    : DEFAULT_CLASS_COUNT;
+}
+
 export function usePrimitivePanelController({
   getDataFields,
   getVisualization,
@@ -808,10 +819,11 @@ export function usePrimitivePanelController({
         ? { paletteId: undefined, colors: [] }
         : {};
       if (!classification?.method || !classification?.numClasses) {
+        const defaultClassCount = getDefaultPrimitiveClassCount(primitive);
         updatePrimitiveClassification(primitive, {
           method: ClassificationMethod.KMEANS,
-          classes: 5,
-          numClasses: 5,
+          classes: defaultClassCount,
+          numClasses: defaultClassCount,
           ...resetPaletteFields
         });
       } else if (hasIncompatiblePalette) {

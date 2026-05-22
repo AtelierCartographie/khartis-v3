@@ -122,7 +122,7 @@
 
         <SliderWithInput
           label={m.basemap_config_thickness()}
-          min={BASEMAP_LAYER_CONFIG.thickness.min}
+          min={0}
           max={BASEMAP_LAYER_CONFIG.thickness.max}
           step={BASEMAP_LAYER_CONFIG.thickness.step}
           value={strokeThickness}

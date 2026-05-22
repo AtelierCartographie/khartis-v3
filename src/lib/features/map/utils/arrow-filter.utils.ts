@@ -7,7 +7,6 @@ import type {
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import type { DataTableFilter } from '$lib/features/duckdb/types';
 import { FilterOperatorEnum } from '$lib/features/duckdb/types';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 const dataFilterCache = new WeakMap<ArrowTable, Map<string, ArrowTable>>();
 
@@ -23,13 +22,20 @@ function buildFilterCacheKey(
     primitiveType?: string;
   }>
 ): string {
-  return filters
-    .map(
-      (f) =>
-        `${f.column}:${f.operator}:${f.value ?? ''}:${f.secondaryValue ?? ''}:${f.limit ?? ''}:${f.primitiveType ?? ''}`
-    )
-    .sort()
-    .join('|');
+  const normalized = filters
+    .map((filter) => ({
+      column: filter.column,
+      operator: filter.operator,
+      value: filter.value ?? null,
+      secondaryValue: filter.secondaryValue ?? null,
+      limit: filter.limit ?? null,
+      primitiveType: filter.primitiveType ?? null
+    }))
+    .sort((left, right) =>
+      JSON.stringify(left).localeCompare(JSON.stringify(right))
+    );
+
+  return JSON.stringify(normalized);
 }
 
 export function selectRowsByIndices(
@@ -247,9 +253,6 @@ export function filterArrowTableByDataFilters(
       (f) => f.name === filter.column
     );
     if (colIndex === -1) {
-      logger.warn('Data filter column not found in table', LogCategory.MAP, {
-        column: filter.column
-      });
       continue;
     }
     const vector = table.getChildAt(colIndex);
@@ -329,14 +332,6 @@ export function filterArrowTableByDataFilters(
   if (matchingIndices.length === table.numRows) {
     cacheDataResult(table);
     return table;
-  }
-
-  if (matchingIndices.length === 0) {
-    logger.warn('Data filters returned no matching rows', LogCategory.MAP, {
-      filters: validFilters.map((f) =>
-        `${f.column} ${f.operator} ${f.limit ?? f.value ?? ''} ${f.secondaryValue ?? ''}`.trim()
-      )
-    });
   }
 
   const result = selectRowsByIndices(table, matchingIndices);

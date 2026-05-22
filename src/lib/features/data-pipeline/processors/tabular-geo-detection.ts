@@ -1,9 +1,9 @@
-import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
-import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { DatasetResult } from '../types';
+import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
+import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
 
 const GEO_DETECTION_SAMPLE_LIMIT = 200;
 const GEO_NAME_HINT =
@@ -102,10 +102,10 @@ export async function applyTabularGeoDetection(
       ];
     }
   } catch (error) {
-    logger.warn(
-      'Failed to compute geo detection for dataset',
+    logger.error(
+      'Failed to detect geographic columns from tabular dataset',
       LogCategory.DATA,
-      { tableName: dataset.tableName, error }
+      error
     );
   }
 

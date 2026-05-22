@@ -1,7 +1,7 @@
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { GeoArrowMetadata } from '../types';
 import { isGeoArrowMetadata } from '../types';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 export function extractGeoArrowMetadata(
   table: ArrowTable
@@ -24,7 +24,7 @@ export function extractGeoArrowMetadata(
 
     return parsed;
   } catch (error) {
-    logger.warn('Failed to parse GeoArrow metadata', LogCategory.DATA, error);
+    logger.error('Failed to parse GeoArrow metadata', LogCategory.DATA, error);
     return null;
   }
 }

@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { convertGeoPackageToGeoJsonFile } from '$lib/features/map/utils/geopackage-browser-fallback.utils';
 import { logger } from '$lib/features/commons/utils/logger';
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import {
   exportGeoPackage,
   exportGeoPackageLayers
 } from './geopackage-export.utils';
+import { convertGeoPackageToGeoJsonFile } from '$lib/features/map/utils/geopackage-browser-fallback.utils';
 
 function createPointWkb(x: number, y: number): Uint8Array {
   const wkb = new Uint8Array(21);

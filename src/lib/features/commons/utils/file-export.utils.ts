@@ -2,7 +2,6 @@ import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { Duck, initDuckDB } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
 import { bigIntReplacer } from './clone.utils';
-import { LogCategory, logger } from './logger';
 import { escapeIdentifier, escapeSqlString } from './sanitize.utils';
 import { generateFilename } from './string.utils';
 import { MIME, GEOJSON_TYPE } from '../constants';
@@ -105,9 +104,7 @@ export async function exportDatasetToCsv(
       return blob;
     } catch (error) {
       if (Duck) {
-        await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`).catch((e) =>
-          logger.warn('Failed to drop temporary view', LogCategory.DUCKDB, e)
-        );
+        await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`).catch(() => {});
       }
       throw error;
     }
@@ -264,12 +261,7 @@ export async function exportProcessedDatasets(
       } catch (error) {
         if (Duck) {
           await Duck.query(`DROP VIEW IF EXISTS "${unionViewName}"`).catch(
-            (e) =>
-              logger.warn(
-                'Failed to drop temporary view',
-                LogCategory.DUCKDB,
-                e
-              )
+            () => {}
           );
         }
         throw error;

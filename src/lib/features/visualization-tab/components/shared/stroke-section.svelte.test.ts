@@ -42,20 +42,27 @@ describe('StrokeSection — palette wiring', () => {
 describe('StrokeSection — anti-leak fill↔stroke', () => {
   it('allows contour thickness up to 20', () => {
     expect(SLIDER_LIMITS.strokeWidth.max).toBe(20);
-    expect(source).toContain('max={SLIDER_LIMITS.strokeWidth.max}');
+    expect(source).toContain('maxStrokeWidth = SLIDER_LIMITS.strokeWidth.max');
+    expect(source).toContain('max={strokeWidthMax}');
+  });
+
+  it('clamps a primitive-specific contour thickness without changing the shared default', () => {
+    expect(source).toContain('maxStrokeWidth?: number;');
+    expect(source).toContain(
+      'Math.min(maxStrokeWidth, SLIDER_LIMITS.strokeWidth.max)'
+    );
+    expect(source).toContain('function clampVisibleStrokeWidth(value: number)');
+    expect(source).toContain('const next = clampVisibleStrokeWidth(value);');
   });
 
   it('restores a visible stroke width when an active stroke mode inherits width 0', () => {
     expect(source).toContain('function ensureVisibleStrokeWidth()');
+    expect(source).toContain('if (strokeMode === StrokeMode.NONE)');
     expect(source).toContain(
-      'if (strokeMode === StrokeMode.NONE || strokeWidth > 0)'
+      'const next = clampVisibleStrokeWidth(strokeWidth);'
     );
-    expect(source).toContain(
-      'strokeWidth = VISUALIZATION_DEFAULTS.strokeWidth;'
-    );
-    expect(source).toContain(
-      'onStyleChange?.({ strokeWidth: VISUALIZATION_DEFAULTS.strokeWidth });'
-    );
+    expect(source).toContain('strokeWidth = next;');
+    expect(source).toContain('onStyleChange?.({ strokeWidth: next });');
   });
 
   it('should require onStrokeClassificationChange (non-optional) in Props', () => {

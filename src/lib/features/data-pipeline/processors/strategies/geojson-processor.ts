@@ -3,7 +3,6 @@ import {
   FileType,
   type UploadedFile
 } from '$lib/features/commons/types/create-project.types';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type {
   FileProcessor,
   ProcessContext,
@@ -17,8 +16,7 @@ function createGeoFile(file: UploadedFile): File {
 
 async function processWithSTRead(
   ctx: ProcessContext,
-  file: UploadedFile,
-  startTime: number
+  file: UploadedFile
 ): Promise<ProcessorDataset> {
   const geoFile = createGeoFile(file);
   await ctx.Duck.register_files([geoFile]);
@@ -32,12 +30,6 @@ async function processWithSTRead(
     ctx.Duck.analyse(actualTableName),
     ctx.callbacks.getRowCount(actualTableName)
   ]);
-
-  logger.success('GeoJSON processed via ST_Read', LogCategory.DUCKDB, {
-    tableName: actualTableName,
-    rowCount,
-    durationMs: (performance.now() - startTime).toFixed(2)
-  });
 
   return {
     id: file.datasetId ?? file.id,
@@ -53,8 +45,7 @@ async function processWithSTRead(
 
 async function processWithLegacy(
   ctx: ProcessContext,
-  file: UploadedFile,
-  start: number
+  file: UploadedFile
 ): Promise<ProcessorDataset> {
   const duckFile = createGeoFile(file);
   await ctx.Duck.register_files([duckFile]);
@@ -64,12 +55,6 @@ async function processWithLegacy(
     ctx.Duck.analyse(ctx.tableName),
     ctx.callbacks.getRowCount(ctx.tableName)
   ]);
-
-  logger.success('GeoJSON processed via legacy', LogCategory.DUCKDB, {
-    tableName: ctx.tableName,
-    rowCount,
-    durationMs: (performance.now() - start).toFixed(2)
-  });
 
   return {
     id: file.datasetId ?? file.id,
@@ -99,17 +84,12 @@ export const geojsonProcessor: FileProcessor = {
     ctx: ProcessContext,
     file: UploadedFile
   ): Promise<ProcessorDataset> {
-    const startTime = performance.now();
-
     try {
-      return await processWithSTRead(ctx, file, startTime);
-    } catch (error) {
-      logger.warn('ST_Read pipeline failed', LogCategory.DUCKDB, {
-        fileId: file.id,
-        error
-      });
+      return await processWithSTRead(ctx, file);
+    } catch {
+      // Fallback path handles GeoJSON variants that ST_Read cannot ingest.
     }
 
-    return processWithLegacy(ctx, file, startTime);
+    return processWithLegacy(ctx, file);
   }
 };

@@ -1,11 +1,11 @@
-import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
-import { DuckDBError } from '$lib/features/commons/pipeline.errors';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
+import { getCustomBasemapJoinCandidateColumns } from './custom-basemap-columns.service';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 
 export async function generateCustomBasemapAttributes(
   tableName: string,
@@ -16,8 +16,7 @@ export async function generateCustomBasemapAttributes(
     throw new DuckDBError('DuckDB not initialized');
   }
 
-  try {
-    await duck.query(`
+  await duck.query(`
       CREATE TABLE IF NOT EXISTS custom_basemap_attributes (
         raw VARCHAR,
         id VARCHAR,
@@ -28,58 +27,38 @@ export async function generateCustomBasemapAttributes(
       )
     `);
 
-    const safeTableName = escapeIdentifier(tableName);
-    const safeBasemapId = escapeSqlString(basemapId);
-    const safeFeatureId = escapeIdentifier(INTERNAL_COLUMN.FEATURE_ID);
+  const safeTableName = escapeIdentifier(tableName);
+  const safeBasemapId = escapeSqlString(basemapId);
+  const safeFeatureId = escapeIdentifier(INTERNAL_COLUMN.FEATURE_ID);
 
-    const columns = await duck.analyse(tableName);
+  const columns = await duck.analyse(tableName);
 
-    const candidateColumns = columns.filter((col) => {
-      if (col.name === INTERNAL_COLUMN.FEATURE_ID) return false;
-      const name = col.name.toLowerCase();
-      return (
-        /^(name|nom|libelle|label)$/i.test(name) ||
-        /^(id|code|iso|insee|nuts)$/i.test(name) ||
-        /_name$/i.test(name) ||
-        /_code$/i.test(name)
-      );
-    });
+  const candidateColumns = getCustomBasemapJoinCandidateColumns(columns);
 
-    if (candidateColumns.length === 0) {
-      const textColumn = columns.find(
-        (col) =>
-          col.type_simple === 'string' &&
-          col.name !== INTERNAL_COLUMN.FEATURE_ID
-      );
-      if (textColumn) {
-        candidateColumns.push(textColumn);
-      }
+  const countQuery = (await duck.query(
+    `SELECT COUNT(*) as total FROM "${safeTableName}"`,
+    { format: 'array', useProxy: false }
+  )) as Array<{ total: number }>;
+  const totalCount = Number(countQuery?.[0]?.total ?? 0);
+
+  const validColumns = candidateColumns.filter((col) => {
+    const nullCount = Number(col.nulls ?? 0);
+    const recordCount = Number(col.count ?? 0);
+    if (recordCount > 0 && nullCount > recordCount * 0.5) {
+      return false;
     }
+    return true;
+  });
 
-    const countQuery = (await duck.query(
-      `SELECT COUNT(*) as total FROM "${safeTableName}"`,
-      { format: 'array', useProxy: false }
-    )) as Array<{ total: number }>;
-    const totalCount = Number(countQuery?.[0]?.total ?? 0);
+  if (validColumns.length === 0) {
+    return;
+  }
 
-    const validColumns = candidateColumns.filter((col) => {
-      const nullCount = Number(col.nulls ?? 0);
-      const recordCount = Number(col.count ?? 0);
-      if (recordCount > 0 && nullCount > recordCount * 0.5) {
-        return false;
-      }
-      return true;
-    });
+  const unionQueries = validColumns.map((col) => {
+    const safeColName = escapeIdentifier(col.name);
+    const safeVariantName = escapeSqlString(col.name);
 
-    if (validColumns.length === 0) {
-      return;
-    }
-
-    const unionQueries = validColumns.map((col) => {
-      const safeColName = escapeIdentifier(col.name);
-      const safeVariantName = escapeSqlString(col.name);
-
-      return `
+    return `
         SELECT DISTINCT
           "${safeColName}" as raw,
           CAST("${safeFeatureId}" AS VARCHAR) as id,
@@ -98,18 +77,10 @@ export async function generateCustomBasemapAttributes(
         FROM "${safeTableName}"
         WHERE "${safeColName}" IS NOT NULL
       `;
-    });
+  });
 
-    await duck.query(`
+  await duck.query(`
       INSERT INTO custom_basemap_attributes
       ${unionQueries.join('\nUNION ALL\n')}
     `);
-  } catch (error) {
-    logger.warn(
-      `Failed to generate attributes for basemap ${basemapId}`,
-      LogCategory.MAP,
-      error
-    );
-    throw error;
-  }
 }

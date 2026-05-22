@@ -23,10 +23,10 @@ import { hexToRgb } from '../../commons/utils/color-utils';
 
 export function getColorForValue(
   value: number,
-  breaks: number[],
-  colors: string[]
+  breaks: readonly number[] | undefined,
+  colors: readonly string[] | undefined
 ): [number, number, number] {
-  if (colors.length === 0) {
+  if (!breaks?.length || !colors?.length) {
     return [128, 128, 128];
   }
 

@@ -2,7 +2,10 @@ import type { UploadedFile } from '$lib/features/commons/types/create-project.ty
 import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import { generateTableName } from '$lib/features/data-pipeline';
 import {
   getProcessor,
@@ -50,14 +53,10 @@ function scheduleArrowMetadataPrefetch(
   }
 
   void prefetchPromise.catch((error) => {
-    logger.debug(
-      'Arrow metadata prefetch failed after dataset registration',
+    logger.error(
+      'Failed to prefetch Arrow metadata',
       LogCategory.DUCKDB,
-      {
-        datasetId: dataset.id,
-        tableName: dataset.tableName,
-        error
-      }
+      error
     );
   });
 }
@@ -74,8 +73,6 @@ export async function registerExistingTable(
     preferredDatasetId?: string;
   }
 ): Promise<DuckDBDataset | null> {
-  const start = performance.now();
-
   try {
     const escapedTableNameForCheck = escapeSqlString(tableName);
     const tableCheck = (await Duck.query(
@@ -84,11 +81,6 @@ export async function registerExistingTable(
     )) as Array<{ table_name: string }>;
 
     if (!tableCheck || tableCheck.length === 0) {
-      logger.warn(
-        'Table does not exist in DuckDB, needs re-processing',
-        LogCategory.DUCKDB,
-        { tableName, sourceFileId }
-      );
       return null;
     }
 
@@ -133,11 +125,6 @@ export async function registerExistingTable(
     bumpDatasetsVersion();
     setCurrentTableName(tableName);
 
-    logger.info('DuckDB table registered', LogCategory.DUCKDB, {
-      tableName,
-      datasetId: dataset.id,
-      durationMs: (performance.now() - start).toFixed(2)
-    });
     return dataset;
   } catch (error) {
     logger.error(
@@ -166,11 +153,6 @@ export async function processFile(
     const tableName = generateTableName(file.name);
 
     if (!hasProcessor(file)) {
-      logger.warn(
-        'Unsupported file type for DuckDB ingestion',
-        LogCategory.DUCKDB,
-        { fileId: file.id, fileType: file.fileType }
-      );
       return null;
     }
 
@@ -213,14 +195,6 @@ export async function processFile(
 
     restoreJoinState(result, file);
 
-    const totalDuration = performance.now() - startTime;
-    logger.success('File processed via DuckDB', LogCategory.DUCKDB, {
-      fileId: file.id,
-      datasetId: result.id,
-      fileType: file.fileType,
-      durationMs: totalDuration.toFixed(2)
-    });
-
     return result;
   } catch (error) {
     const errorDuration = performance.now() - startTime;
@@ -250,11 +224,10 @@ export async function dropTable(
   tableName: string,
   Duck: DuckDBClientForDataset
 ): Promise<void> {
-  const start = performance.now();
   const state = getState();
 
   try {
-    await Duck.query(`DROP TABLE IF EXISTS "${tableName}"`);
+    await Duck.query(`DROP TABLE IF EXISTS "${escapeIdentifier(tableName)}"`);
 
     let idToDelete: string | undefined;
     for (const [id, dataset] of state.datasets.entries()) {
@@ -277,11 +250,6 @@ export async function dropTable(
 
     // Clear cached metadata for the dropped table (prevents reference leaks)
     Duck.cleanupTableResources?.(tableName);
-
-    logger.info('Dropped DuckDB table', LogCategory.DUCKDB, {
-      tableName,
-      durationMs: (performance.now() - start).toFixed(2)
-    });
   } catch (error) {
     logger.error(
       '[duckDBOrchestrator:dropTable] ERROR',
@@ -311,36 +279,57 @@ export function updateDatasetJoinInfo(
       DuckDBDataset,
       'joinedBasemap' | 'geoColumn' | 'gpsMode' | 'gpsColumns'
     >
-  >
-): void {
+  >,
+  options: { bumpVersion?: boolean } = {}
+): boolean {
+  let changed = false;
   updateDatasets((datasets) => {
     const ds = datasets.get(datasetId);
     if (ds) {
-      if ('joinedBasemap' in joinInfo) {
-        ds.joinedBasemap = joinInfo.joinedBasemap;
-      }
-      if ('geoColumn' in joinInfo) {
-        ds.geoColumn = joinInfo.geoColumn;
-      }
-      if ('gpsMode' in joinInfo) {
-        ds.gpsMode = joinInfo.gpsMode;
-      }
-      if ('gpsColumns' in joinInfo) {
-        ds.gpsColumns = joinInfo.gpsColumns;
+      const nextJoinedBasemap =
+        'joinedBasemap' in joinInfo ? joinInfo.joinedBasemap : ds.joinedBasemap;
+      const nextGpsMode = 'gpsMode' in joinInfo ? joinInfo.gpsMode : ds.gpsMode;
+      const nextGeoColumn =
+        nextGpsMode === true
+          ? undefined
+          : 'geoColumn' in joinInfo
+            ? joinInfo.geoColumn
+            : ds.geoColumn;
+      const nextGpsColumns =
+        nextGpsMode === false
+          ? undefined
+          : 'gpsColumns' in joinInfo
+            ? joinInfo.gpsColumns
+            : ds.gpsColumns;
+
+      changed =
+        ds.joinedBasemap !== nextJoinedBasemap ||
+        ds.geoColumn !== nextGeoColumn ||
+        ds.gpsMode !== nextGpsMode ||
+        !areGpsColumnsEqual(ds.gpsColumns, nextGpsColumns);
+
+      if (!changed) {
+        return;
       }
 
-      if (joinInfo.gpsMode === false) {
-        ds.gpsColumns = undefined;
-      }
-
-      if (joinInfo.gpsMode === true) {
-        ds.geoColumn = undefined;
-      }
-
+      ds.joinedBasemap = nextJoinedBasemap;
+      ds.geoColumn = nextGeoColumn;
+      ds.gpsMode = nextGpsMode;
+      ds.gpsColumns = nextGpsColumns;
       ds.arrowTableWithMetadata = undefined;
     }
   });
-  bumpDatasetsVersion();
+  if (changed && options.bumpVersion !== false) {
+    bumpDatasetsVersion();
+  }
+  return changed;
+}
+
+function areGpsColumnsEqual(
+  left: DuckDBDataset['gpsColumns'],
+  right: DuckDBDataset['gpsColumns']
+): boolean {
+  return left?.lat === right?.lat && left?.lon === right?.lon;
 }
 
 export async function updateDatasetTableName(
@@ -351,11 +340,6 @@ export async function updateDatasetTableName(
 ): Promise<DuckDBDataset | null> {
   const existing = findDatasetByIdOrSourceFile(sourceFileId);
   if (!existing) {
-    logger.warn(
-      'Cannot update table name: dataset not found in orchestrator',
-      LogCategory.DUCKDB,
-      { sourceFileId, newTableName }
-    );
     return null;
   }
 
@@ -375,17 +359,6 @@ export async function updateDatasetTableName(
 
     bumpDatasetsVersion();
     setCurrentTableName(newTableName);
-
-    logger.info(
-      'Updated dataset table name in orchestrator',
-      LogCategory.DUCKDB,
-      {
-        datasetId: existing.id,
-        oldTableName: existing.tableName,
-        newTableName,
-        rowCount
-      }
-    );
 
     return findDatasetByIdOrSourceFile(sourceFileId) ?? null;
   } catch (error) {
