@@ -86,7 +86,7 @@ describe('BasemapJoinStep reference basemap selection', () => {
     );
     expect(effectStart).toBeGreaterThan(-1);
     const guardWindow = source.slice(
-      Math.max(0, effectStart - 600),
+      Math.max(0, effectStart - 2400),
       effectStart
     );
     expect(guardWindow).toContain('isCatalogJoinFinalizedForBasemap(');
@@ -95,5 +95,16 @@ describe('BasemapJoinStep reference basemap selection', () => {
     expect(guardWindow).toContain(
       'dataTabStore.markStepComplete(basemapStepIndex)'
     );
+  });
+
+  it('skips stale async finalize requests without logging them as map errors', () => {
+    expect(source).toContain(
+      'dataTabState.geolocation.linkedVariableName !== linkedVariableName'
+    );
+    expect(source).toContain(
+      'currentDuckDataset?.joinedBasemap === basemap.file'
+    );
+    expect(source).not.toContain('BLOCKED stale finalizeJoin');
+    expect(source).not.toContain('BLOCKED redundant finalizeJoin');
   });
 });

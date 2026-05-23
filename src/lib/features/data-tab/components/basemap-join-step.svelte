@@ -1,5 +1,6 @@
 <script lang="ts">
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 
@@ -602,6 +603,20 @@
 
       if (stats.joinedCount === 0) {
         dataTabStore.resetStepCompletion(stepIndex);
+        return false;
+      }
+
+      if (dataTabState.geolocation.linkedVariableName !== linkedVariableName) {
+        return false;
+      }
+
+      const currentDuckDataset =
+        duckDBOrchestrator.getDataset(resolvedDatasetId);
+      if (
+        currentDuckDataset?.joinedBasemap === basemap.file &&
+        currentDuckDataset.geoColumn &&
+        currentDuckDataset.geoColumn !== linkedVariableName
+      ) {
         return false;
       }
 
@@ -1775,6 +1790,33 @@
         resolvedDatasetId
       )
     ) {
+      dataTabStore.markStepComplete(basemapStepIndex);
+      return;
+    }
+
+    const existingDuckDataset = getCurrentDuckDataset(resolvedDatasetId);
+    if (
+      !filtersChanged &&
+      existingDuckDataset &&
+      !existingDuckDataset.gpsMode &&
+      existingDuckDataset.joinedBasemap === selectedBasemapId &&
+      existingDuckDataset.geoColumn &&
+      existingDuckDataset.geoColumn !== linkedVariableName
+    ) {
+      const canonicalGeoColumn = existingDuckDataset.geoColumn;
+      const linkedVariable =
+        selectedDataset?.columns
+          ?.filter(
+            (col) =>
+              col.name !== INTERNAL_COLUMN.GEOMETRY &&
+              col.name !== INTERNAL_COLUMN.ID
+          )
+          .findIndex((col) => col.name === canonicalGeoColumn) ?? -1;
+      dataTabActions.setGeolocationState({
+        linkedVariable: linkedVariable >= 0 ? linkedVariable : null,
+        linkedVariableName: canonicalGeoColumn
+      });
+      previousLinkedVariableName = canonicalGeoColumn;
       dataTabStore.markStepComplete(basemapStepIndex);
       return;
     }
