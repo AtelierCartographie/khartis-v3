@@ -340,16 +340,13 @@
   function detectFeatureIdColumn(
     geometry: ArrowTable,
     dataset?: ArrowTable
-  ): string {
+  ): string | undefined {
     if (dataset) {
-      const matchedColumn = resolveBestSplitFeatureIdColumn(
+      return resolveBestSplitFeatureIdColumn(
         geometry,
         dataset,
         INTERNAL_COLUMN.FEATURE_ID
       );
-      if (matchedColumn) {
-        return matchedColumn;
-      }
     }
 
     const fields = geometry.schema.fields ?? [];
@@ -570,13 +567,15 @@
           geometryArrow,
           datasetArrow
         );
-        setDisplaySplitTable(datasetId, {
-          geometry: geometryArrow,
-          dataset: datasetArrow,
-          featureIdColumn
-        });
-        joinedBasemapDisplayKeys.set(datasetId, displayKey);
-        return;
+        if (featureIdColumn) {
+          setDisplaySplitTable(datasetId, {
+            geometry: geometryArrow,
+            dataset: datasetArrow,
+            featureIdColumn
+          });
+          joinedBasemapDisplayKeys.set(datasetId, displayKey);
+          return;
+        }
       }
 
       const joinedTable = await duckDBOrchestrator.getJoinedArrowTable(
@@ -783,17 +782,15 @@
       const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
         dataset.sourceFileId
       );
+      const joinedBasemap =
+        duckDBDataset?.joinedBasemap ?? dataset.joinedBasemap;
+      const tableName = duckDBDataset?.tableName ?? dataset.tableName;
 
       if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
         await loadGPSData(datasetId, duckDBDataset.id, generation);
         await loadDensityTableForDisplay(dataset, generation);
-      } else if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
-        await loadJoinedBasemap(
-          dataset,
-          duckDBDataset.joinedBasemap,
-          duckDBDataset.tableName,
-          generation
-        );
+      } else if (joinedBasemap && tableName) {
+        await loadJoinedBasemap(dataset, joinedBasemap, tableName, generation);
         await loadDensityTableForDisplay(dataset, generation);
       } else {
         removeDensityTable(datasetId);

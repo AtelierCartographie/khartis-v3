@@ -262,4 +262,54 @@ describe('split rendering accessors', () => {
       )
     ).toBe('admin_code');
   });
+
+  it('does not resolve a split feature id column without joined basemap ids', () => {
+    const geometry = createTableWithRows(
+      [
+        { [INTERNAL_COLUMN.FEATURE_ID]: 1, [CANONICAL_ID_COLUMN]: 'A' },
+        { [INTERNAL_COLUMN.FEATURE_ID]: 2, [CANONICAL_ID_COLUMN]: 'B' }
+      ],
+      [INTERNAL_COLUMN.FEATURE_ID, CANONICAL_ID_COLUMN]
+    );
+    const dataset = createTableWithRows(
+      [
+        { [CANONICAL_ID_COLUMN]: 'A', value: 120 },
+        { [CANONICAL_ID_COLUMN]: 'B', value: 80 }
+      ],
+      [CANONICAL_ID_COLUMN, 'value']
+    );
+
+    expect(
+      resolveBestSplitFeatureIdColumn(
+        geometry,
+        dataset,
+        INTERNAL_COLUMN.FEATURE_ID
+      )
+    ).toBeUndefined();
+  });
+
+  it('does not resolve a split feature id column when no geometry ids match joined basemap ids', () => {
+    const geometry = createTableWithRows(
+      [
+        { [INTERNAL_COLUMN.FEATURE_ID]: 1, [CANONICAL_ID_COLUMN]: 'A' },
+        { [INTERNAL_COLUMN.FEATURE_ID]: 2, [CANONICAL_ID_COLUMN]: 'B' }
+      ],
+      [INTERNAL_COLUMN.FEATURE_ID, CANONICAL_ID_COLUMN]
+    );
+    const dataset = createTableWithRows(
+      [
+        { [JOINED_BASEMAP_COLUMN.ID]: 'X', value: 120 },
+        { [JOINED_BASEMAP_COLUMN.ID]: 'Y', value: 80 }
+      ],
+      [JOINED_BASEMAP_COLUMN.ID, 'value']
+    );
+
+    expect(
+      resolveBestSplitFeatureIdColumn(
+        geometry,
+        dataset,
+        INTERNAL_COLUMN.FEATURE_ID
+      )
+    ).toBeUndefined();
+  });
 });
