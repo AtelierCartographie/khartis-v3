@@ -26,6 +26,10 @@
     void basemapLayersStore.version;
     void basemapAuxLayersStore.version;
     void basemapStyleStore.referenceBasemapId;
+    void basemapStyleStore.groupVisibilityVersion;
+    void basemapStyleStore.styleVersion;
+    void basemapStyleStore.lastSelectedTiledStyle;
+    void osmBasemapStore.isActive;
     void basemapService.simplificationVersion;
     store.syncWithVisualizations();
   });
@@ -45,7 +49,6 @@
 
     for (const layer of layers) {
       if (!layer.isSubLayer || !layer.parentId) continue;
-      if (layer.type === 'geographic' && hasActiveTiledBasemap) continue;
 
       if (!children[layer.parentId]) {
         children[layer.parentId] = [];

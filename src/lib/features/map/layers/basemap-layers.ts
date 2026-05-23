@@ -2260,9 +2260,7 @@ export function createBasemapLayers(
   );
 
   for (const config of basemapLayersStore.layers) {
-    const hasEntryScopedVisibility =
-      config.id === BASEMAP_LAYER_ID.FRONTIERES && hasMetadataLimits;
-    if (!config.visible && !hasEntryScopedVisibility) continue;
+    if (!config.visible) continue;
 
     try {
       const targetGroups =

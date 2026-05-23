@@ -1036,9 +1036,26 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             }
 
             void basemapAuxLayersStore.version;
-            for (const layer of currentMetadata.layers) {
-              const layerKey =
-                layer.file ?? `${currentMetadata.file}:${layer.type}`;
+            const metadataLayerEntries = currentMetadata.layers.map(
+              (layer) => ({
+                layer,
+                layerKey: layer.file ?? `${currentMetadata.file}:${layer.type}`
+              })
+            );
+            const metadataLayerByKey = new Map(
+              metadataLayerEntries.map((entry) => [entry.layerKey, entry])
+            );
+            const metadataLayerKeys = basemapAuxLayersStore
+              .getOrderedLayerKeys(
+                currentMetadata.file,
+                metadataLayerEntries.map((entry) => entry.layerKey)
+              )
+              .reverse();
+
+            for (const layerKey of metadataLayerKeys) {
+              const entry = metadataLayerByKey.get(layerKey);
+              if (!entry) continue;
+              const { layer } = entry;
               if (
                 !basemapAuxLayersStore.isVisible(
                   currentMetadata.file,
