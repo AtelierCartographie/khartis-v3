@@ -237,6 +237,10 @@ export function resolveBestSplitFeatureIdColumn(
   preferredFeatureIdColumn?: string,
   basemapIdColumn: string = JOINED_BASEMAP_COLUMN.ID
 ): string | undefined {
+  if (!dataset.getChild(basemapIdColumn)) {
+    return undefined;
+  }
+
   const fields = geometry.schema.fields ?? [];
   const candidates = [
     preferredFeatureIdColumn,
@@ -268,10 +272,7 @@ export function resolveBestSplitFeatureIdColumn(
     }
   }
 
-  return (
-    bestColumn ??
-    resolveSplitMappingFeatureIdColumn(geometry, preferredFeatureIdColumn)
-  );
+  return bestColumn;
 }
 
 export function getSplitMatchedGeometryRowIndices(
