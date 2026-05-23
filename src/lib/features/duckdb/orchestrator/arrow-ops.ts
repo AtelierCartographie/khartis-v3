@@ -258,14 +258,19 @@ async function reprojectArrowTableWithProj4(
 async function executeArrowIpcQuery(
   Duck: DuckDBClientForArrow,
   query: string,
-  _tableName: string
+  _tableName: string,
+  options?: { skipStreaming?: boolean }
 ): Promise<Table> {
-  // Use streaming when available — reduces peak WASM memory for large tables.
-  // Fallback to regular query() if streaming returns 0 rows (race condition
-  // in DuckDB WASM's useUnsafe API under concurrent query load).
+  // Streaming uses DuckDB-WASM's useUnsafe binding, which holds connection
+  // state separate from the main async connection. After a schema-mutating
+  // DDL such as CREATE OR REPLACE TABLE, the streaming binding can return
+  // stale rows where newly added columns surface as NULL even though the
+  // table on the main connection is fully populated. Callers that read
+  // dataset tables prone to mutation (joins, edits) must opt out of
+  // streaming to avoid this race.
   let ipcBuffer: Uint8Array;
 
-  if (Duck.queryStreaming) {
+  if (Duck.queryStreaming && !options?.skipStreaming) {
     ipcBuffer = await Duck.queryStreaming(query);
     const streamTable = tableFromIPC(ipcBuffer);
     if (streamTable.numRows > 0) {
@@ -327,7 +332,8 @@ export async function fetchArrowTableWithGeometry(
   Duck: DuckDBClientForArrow,
   whereClause?: string | null,
   targetCrs?: string | null,
-  projectColumns?: readonly string[] | null
+  projectColumns?: readonly string[] | null,
+  options?: { skipStreaming?: boolean }
 ): Promise<{ table: Table; geomColumn: GeomColumnInfo | undefined }> {
   const tableInfo = await Duck.describe_table(tableName);
   const columns = tableInfo.name.map((name: string, index: number) => ({
@@ -379,7 +385,9 @@ export async function fetchArrowTableWithGeometry(
     query += ` WHERE ${whereClause}`;
   }
 
-  const baseTable = await executeArrowIpcQuery(Duck, query, tableName);
+  const baseTable = await executeArrowIpcQuery(Duck, query, tableName, {
+    skipStreaming: options?.skipStreaming
+  });
   return {
     table: baseTable,
     geomColumn:
@@ -672,7 +680,11 @@ export async function getArrowTableDirect(
 
   const { table: baseTable, geomColumn } = await fetchArrowTableWithGeometry(
     tableName,
-    Duck
+    Duck,
+    undefined,
+    undefined,
+    undefined,
+    { skipStreaming: true }
   );
   const tableWithMetadata = await addGeoArrowMetadataFromDuckDB(
     baseTable,
