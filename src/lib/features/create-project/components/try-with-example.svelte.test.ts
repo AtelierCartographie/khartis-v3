@@ -44,6 +44,17 @@ describe('try-with-example project initialization', () => {
     ).toBeLessThan(source.indexOf('await persistenceRegistry.flush();'));
   });
 
+  it('does not restore the project runtime after applying example presets', () => {
+    const loadTail = source.slice(
+      source.indexOf(
+        'applyExampleVisualizations(example, processedExampleFile);'
+      )
+    );
+
+    expect(loadTail).toContain('await persistenceRegistry.flush();');
+    expect(loadTail).not.toContain('dataOrchestratorService.onProjectChanged');
+  });
+
   it('supports explicit reference basemaps for GPS-only examples', () => {
     expect(typesSource).toContain('referenceBasemapId?: string;');
     expect(examplesSource).toContain("id: 'european-cities'");
