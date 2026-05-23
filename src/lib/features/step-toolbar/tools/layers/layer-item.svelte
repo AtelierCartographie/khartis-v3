@@ -24,6 +24,7 @@
     onRenameLayer?: (layerId: string) => void;
     onDuplicateLayer?: (layerId: string) => void;
     onDeleteLayer?: (layerId: string) => void;
+    showDragHandle?: boolean;
     isExpanded?: boolean;
     showExpandToggle?: boolean;
     onToggleExpanded?: () => void;
@@ -40,6 +41,7 @@
     onRenameLayer,
     onDuplicateLayer,
     onDeleteLayer,
+    showDragHandle = true,
     isExpanded = true,
     showExpandToggle = false,
     onToggleExpanded
@@ -49,13 +51,15 @@
 {#if layer.isSubLayer}
   <div class="sublayer-card" role="listitem">
     <div class="color-bar" style:background-color={layer.color}></div>
-    <div
-      class="drag-handle"
-      use:dragHandle
-      aria-label={`${m.layers_reorder()} ${layer.name}`}
-    >
-      <Draggable size={16} />
-    </div>
+    {#if showDragHandle}
+      <div
+        class="drag-handle"
+        use:dragHandle
+        aria-label={`${m.layers_reorder()} ${layer.name}`}
+      >
+        <Draggable size={16} />
+      </div>
+    {/if}
     <div class="sublayer-content">
       {#if layer.icon}
         <span class="sublayer-icon" style:color={layer.color}>
@@ -83,13 +87,15 @@
   </div>
 {:else}
   <div class="layer-card" role="listitem">
-    <div
-      class="drag-handle"
-      use:dragHandle
-      aria-label={`${m.layers_reorder()} ${layer.name}`}
-    >
-      <Draggable size={16} />
-    </div>
+    {#if showDragHandle}
+      <div
+        class="drag-handle"
+        use:dragHandle
+        aria-label={`${m.layers_reorder()} ${layer.name}`}
+      >
+        <Draggable size={16} />
+      </div>
+    {/if}
     <span class="layer-title">{layer.name}</span>
     <div class="layer-actions">
       <IconButton
