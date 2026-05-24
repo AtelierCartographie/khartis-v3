@@ -1,5 +1,6 @@
 import * as m from '$lib/paraglide/messages';
 import {
+  ProportionalType,
   ShapeType,
   SymbolMode,
   availableShapesForSymbolMode
@@ -17,14 +18,18 @@ const shapeLabelByType: Record<ShapeType, () => string> = {
   [ShapeType.RECTANGLE]: m.shape_rectangle
 };
 
-export function getSymbolShapeTypes(symbolMode: SymbolMode): ShapeType[] {
-  return availableShapesForSymbolMode(symbolMode);
+export function getSymbolShapeTypes(
+  symbolMode: SymbolMode,
+  proportionalType: ProportionalType = ProportionalType.SINGLE
+): ShapeType[] {
+  return availableShapesForSymbolMode(symbolMode, proportionalType);
 }
 
 export function buildSymbolShapeDropdownItems(
-  symbolMode: SymbolMode
+  symbolMode: SymbolMode,
+  proportionalType: ProportionalType = ProportionalType.SINGLE
 ): Array<{ id: ShapeType; text: string }> {
-  return getSymbolShapeTypes(symbolMode).map((type) => ({
+  return getSymbolShapeTypes(symbolMode, proportionalType).map((type) => ({
     id: type,
     text: shapeLabelByType[type]()
   }));
