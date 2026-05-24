@@ -1,11 +1,18 @@
 import proj4 from 'proj4';
 import { geoProjection, type GeoProjection } from 'd3-geo';
+import {
+  normalizeProj4CrsCode,
+  registerKnownProj4Definitions,
+  WGS84_CRS
+} from '$lib/features/commons/utils/proj4-crs.utils';
 
 const RADIANS_TO_DEGREES = 180 / Math.PI;
 const DEGREES_TO_RADIANS = Math.PI / 180;
 
 export function proj4d3(definition: string): GeoProjection {
-  const converter = proj4('EPSG:4326', definition);
+  registerKnownProj4Definitions();
+
+  const converter = proj4(WGS84_CRS, normalizeProj4CrsCode(definition));
 
   const projection = geoProjection((lon: number, lat: number) => {
     const [x, y] = converter.forward([
