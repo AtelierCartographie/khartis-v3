@@ -1777,7 +1777,12 @@ function normalizeVisualizationConfig(
   );
 
   const symbolMode = visualization.modes?.symbol ?? SymbolMode.UNIQUE;
-  const allowedShapes = availableShapesForSymbolMode(symbolMode);
+  const proportionalType =
+    visualization.modes?.proportionalType ?? ProportionalType.SINGLE;
+  const allowedShapes = availableShapesForSymbolMode(
+    symbolMode,
+    proportionalType
+  );
   const currentShape = visualization.symbols?.type;
   const normalizedShape =
     currentShape && allowedShapes.includes(currentShape)

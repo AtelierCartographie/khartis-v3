@@ -116,7 +116,10 @@ export function isLinearShape(shape: ShapeType): boolean {
   return LINEAR_SHAPES.includes(shape);
 }
 
-export function availableShapesForSymbolMode(mode: SymbolMode): ShapeType[] {
+export function availableShapesForSymbolMode(
+  mode: SymbolMode,
+  proportionalType: ProportionalType = ProportionalType.SINGLE
+): ShapeType[] {
   switch (mode) {
     case SymbolMode.UNIQUE:
     case SymbolMode.CATEGORIES:
@@ -130,13 +133,17 @@ export function availableShapesForSymbolMode(mode: SymbolMode): ShapeType[] {
         ShapeType.RECTANGLE
       ];
     case SymbolMode.PROPORTIONAL:
-    case SymbolMode.CLASSES:
-      return [
+    case SymbolMode.CLASSES: {
+      const shapes = [
         ShapeType.CIRCLE,
         ShapeType.SQUARE,
         ShapeType.BAR,
         ShapeType.SPIKE
       ];
+      return proportionalType === ProportionalType.DOUBLE
+        ? shapes.filter((shape) => !isLinearShape(shape))
+        : shapes;
+    }
     default:
       return [ShapeType.CIRCLE];
   }

@@ -271,9 +271,16 @@
         breakValueB: null
       });
       onStyleChange?.({ fillColorB: DEFAULT_COLORS.secondary });
-    } else if (positionMode === SymbolDoublePosition.JUXTAPOSITION) {
-      positionMode = SymbolDoublePosition.OVERLAY;
-      onSymbolPrimitiveChange?.({ positionMode: SymbolDoublePosition.OVERLAY });
+    } else {
+      if (isLinearShape(shapeType)) {
+        handleShapeTypeChange(ShapeType.CIRCLE);
+      }
+      if (positionMode === SymbolDoublePosition.JUXTAPOSITION) {
+        positionMode = SymbolDoublePosition.OVERLAY;
+        onSymbolPrimitiveChange?.({
+          positionMode: SymbolDoublePosition.OVERLAY
+        });
+      }
     }
   }
 
@@ -301,9 +308,11 @@
     onStyleChange?.({ fillColorB: value });
   }
 
-  const shapeTypes = $derived(getSymbolShapeTypes(symbolMode));
+  const shapeTypes = $derived(
+    getSymbolShapeTypes(symbolMode, proportionalType)
+  );
   const shapeDropdownItems = $derived(
-    buildSymbolShapeDropdownItems(symbolMode)
+    buildSymbolShapeDropdownItems(symbolMode, proportionalType)
   );
   const showBarWidthControl = $derived(isLinearShape(shapeType));
 
