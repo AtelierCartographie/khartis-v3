@@ -19,8 +19,6 @@
 
   const projectionState = $derived(getProjectionState());
 
-  let showInfo = $state<boolean>(true);
-
   const projectionContext = $derived(
     resolveProjectionAvailabilityContext({
       requiresMapLibre: basemapStyleStore.requiresMapLibre,
@@ -53,7 +51,6 @@
       : m.projection_settings_unavailable_render_engine()
   );
   const simplifiedPreview = $derived(projectionState.simplifiedPreview ?? true);
-
   const isDirty = $derived(
     projectionState.longitude !== 0 ||
       projectionState.latitude !== 0 ||
@@ -156,13 +153,13 @@
         />
       </div>
 
-      {#if simplifiedPreview && showInfo}
+      {#if canApplyProjectionSettings && simplifiedPreview}
         <InlineNotification
           kind="info"
           title={m.projection_settings_info_title()}
           subtitle={m.projection_settings_info_subtitle()}
           lowContrast
-          on:close={() => (showInfo = false)}
+          hideCloseButton
         />
       {/if}
     </div>

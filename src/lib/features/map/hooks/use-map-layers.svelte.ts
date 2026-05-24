@@ -881,8 +881,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const isOSMActive = Boolean(osmBasemapStore.activeOSMBasemap);
       const worldBaseTable = getWorldBaseTable();
       const activeVisualizations = getActiveVisualizations();
-      const visualizationsToRender =
-        getVisualizationRenderOrder(activeVisualizations);
 
       const isOrthographicMode = !deckOverlay && Boolean(deckInstance);
       const matrixToApply = isOrthographicMode
@@ -898,13 +896,26 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         isOrthographicMode ? getVisibleProjectedCanvasExtent() : null;
 
       const currentMetadata = basemapService.currentMetadata;
+      const projectionState = getProjectionState();
+      const hasManualProjectionOverride =
+        projectionState.overrideActive === true &&
+        projectionState.overrideSource === 'manual';
+      const shouldUseSimplifiedProjectionPreview =
+        isOrthographicMode &&
+        hasManualProjectionOverride &&
+        (projectionState.simplifiedPreview ?? true);
+      const visualizationsToRender = shouldUseSimplifiedProjectionPreview
+        ? []
+        : getVisualizationRenderOrder(activeVisualizations);
+      const shouldRenderDatasetFallbacks =
+        (getShouldRenderDatasetFallbacks?.() ?? false) &&
+        !shouldUseSimplifiedProjectionPreview;
       const basemapProjection = getProjectionFromMetadata(
         currentMetadata,
         isOrthographicMode,
         projectionFitBbox,
         fitPaddingPx
       );
-      const projectionState = getProjectionState();
       const projectionOverride = getProjectionOverride(
         isOrthographicMode,
         projectionFitBbox
@@ -958,9 +969,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           Boolean(basemapStyleStore.referenceBasemapId) ||
           hasJoinedBasemapReference
       });
-      const hasManualProjectionOverride =
-        projectionState.overrideActive === true &&
-        projectionState.overrideSource === 'manual';
       const canShowGeneratedBasemapLayers =
         !shouldShowBasemapLayers && isOrthographicMode && !isOSMActive;
       const shouldShowGeneratedOceanLayer =
@@ -1262,9 +1270,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         }
       }
 
-      const shouldRenderDatasetFallbacks =
-        getShouldRenderDatasetFallbacks?.() ?? false;
-
       if (shouldRenderDatasetFallbacks) {
         for (const [datasetId, table] of tables) {
           const joinedBasemapId = getDatasetJoinedBasemap(datasetId);
@@ -1459,7 +1464,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       layers.length = 0;
       layers.push(...maskedOrderedLayers);
 
-      const hasExpectedActiveViz = activeVisualizations.length > 0;
+      const hasExpectedActiveViz =
+        !shouldUseSimplifiedProjectionPreview &&
+        activeVisualizations.length > 0;
       const hasExpectedDatasetFallbacks =
         shouldRenderDatasetFallbacks && (tables.size > 0 || geoJSONs.size > 0);
       const hasVisibleBasemapConfig =
