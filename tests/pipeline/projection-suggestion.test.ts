@@ -165,6 +165,25 @@ describe('[S06] buildProjectionFromSuggestion — proj4 fallback contract', () =
     expect(result?.projection.rotate()[1]).toBeCloseTo(-24.9);
   });
 
+  it('builds Winkel Tripel d3 suggestions directly', () => {
+    const suggestion: ProjectionSuggestion = {
+      id: 'winkel3',
+      name: 'Winkel Tripel',
+      type: 'generic',
+      proj4String: null,
+      bbox: [-180, -90, 180, 90],
+      d3Config: {
+        projection: 'geoWinkel3'
+      }
+    };
+
+    const result = buildProjectionFromSuggestion(suggestion);
+
+    expect(result).not.toBeNull();
+    expect(result?.source).toBe('d3');
+    expect(result?.projection([0, 0])?.every(Number.isFinite)).toBe(true);
+  });
+
   it('reports d3 when proj4 fails but d3 fallback succeeds', () => {
     const suggestion: ProjectionSuggestion = {
       id: 'transverse_cylindrical_equal_area',

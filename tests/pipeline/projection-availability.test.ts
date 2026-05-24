@@ -16,7 +16,6 @@ import {
   shouldUseMapLibreInterleaved
 } from '$lib/features/map/utils/render-engine.utils';
 import { getCompositeProjectionSelectionId } from '$lib/features/map/utils/user-projection.utils';
-import { PROJECTIONS } from '$lib/features/step-toolbar/tools/projections/projections.data';
 import type { ProjectionPresets } from '$lib/features/map/types/basemap.types';
 import { PROJECTIONS as FULL_PROJECTION_CATALOG } from '$lib/features/commons/utils/projection.utils';
 
@@ -354,9 +353,24 @@ describe('projection suggestion bounds fallback', () => {
 });
 
 describe('projection primary catalogue', () => {
-  it('matches the curated CDC projection list exactly', () => {
-    expect(PROJECTIONS.map((projection) => projection.projectionId)).toEqual([
-      ...CDC_PRIMARY_PROJECTION_IDS
+  it('contains every curated CDC projection in the active catalogue', () => {
+    expect(
+      CDC_PRIMARY_PROJECTION_IDS.every((projectionId) =>
+        builtInProjectionIds.includes(projectionId)
+      )
+    ).toBe(true);
+  });
+
+  it('keeps the CDC-recommended projections marked as recommended', () => {
+    const recommendedIds = FULL_PROJECTION_CATALOG.filter(
+      (projection) => projection.recommended
+    ).map((projection) => projection.id);
+
+    expect(recommendedIds).toEqual([
+      'mercator',
+      'natural-earth',
+      'robinson',
+      'winkel-tripel'
     ]);
   });
 });
