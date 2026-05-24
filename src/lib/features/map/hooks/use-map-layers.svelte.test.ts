@@ -213,6 +213,22 @@ describe('useMapLayers source', () => {
     );
   });
 
+  it('applies simplified projection preview by masking visualization and fallback layers', () => {
+    expect(source).toContain('const shouldUseSimplifiedProjectionPreview =');
+    expect(source).toContain(
+      'hasManualProjectionOverride &&\n        (projectionState.simplifiedPreview ?? true)'
+    );
+    expect(source).toContain(
+      'const visualizationsToRender = shouldUseSimplifiedProjectionPreview\n        ? []'
+    );
+    expect(source).toContain(
+      '(getShouldRenderDatasetFallbacks?.() ?? false) &&\n        !shouldUseSimplifiedProjectionPreview'
+    );
+    expect(source).toContain(
+      'const hasExpectedActiveViz =\n        !shouldUseSimplifiedProjectionPreview &&\n        activeVisualizations.length > 0;'
+    );
+  });
+
   it('preserves explicit null projection metadata for standalone geofiles', () => {
     expect(source).toContain('function getDatasetProjectionMetadata(');
     expect(source).toContain('metadata === undefined ? currentMetadata');
