@@ -86,7 +86,16 @@ describe('buildProjectionRenderKey', () => {
     expect(key1).not.toBe(key2);
   });
 
-  it('ignores suggestions payload and UI-only state', () => {
+  it('changes when simplified preview toggles because layer visibility changes', () => {
+    const key1 = buildProjectionRenderKey(DEFAULT_STATE);
+    const key2 = buildProjectionRenderKey({
+      ...DEFAULT_STATE,
+      simplifiedPreview: false
+    });
+    expect(key1).not.toBe(key2);
+  });
+
+  it('ignores suggestions payload and view-only state', () => {
     const key1 = buildProjectionRenderKey(DEFAULT_STATE);
     const key2 = buildProjectionRenderKey({
       ...DEFAULT_STATE,
@@ -95,8 +104,7 @@ describe('buildProjectionRenderKey', () => {
         generic: []
       },
       activeSuggestionId: 'test',
-      viewMode: ViewMode.GRID,
-      simplifiedPreview: false
+      viewMode: ViewMode.GRID
     });
     expect(key1).toBe(key2);
   });
