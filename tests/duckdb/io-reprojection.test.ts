@@ -14,6 +14,12 @@ describe('EPSG_DEFINITIONS', () => {
     expect('EPSG:3035' in EPSG_DEFINITIONS).toBe(true);
   });
 
+  it('includes explicit national EPSG codes from the projection CDC', () => {
+    expect('EPSG:27700' in EPSG_DEFINITIONS).toBe(true);
+    expect('EPSG:2157' in EPSG_DEFINITIONS).toBe(true);
+    expect('EPSG:2056' in EPSG_DEFINITIONS).toBe(true);
+  });
+
   it('includes EPSG:4326 (WGS84)', () => {
     const hasWgs84 = Object.keys(EPSG_DEFINITIONS).some((k) =>
       k.toUpperCase().includes('4326')
@@ -33,6 +39,12 @@ describe('isProjectionSupported', () => {
 
   it('returns true for EPSG:3035 (ETRS89-LAEA Europe)', () => {
     expect(isProjectionSupported('EPSG:3035')).toBe(true);
+  });
+
+  it('returns true for explicit national EPSG codes from the projection CDC', () => {
+    expect(isProjectionSupported('EPSG:27700')).toBe(true);
+    expect(isProjectionSupported('EPSG:2157')).toBe(true);
+    expect(isProjectionSupported('EPSG:2056')).toBe(true);
   });
 
   it('is case-insensitive', () => {

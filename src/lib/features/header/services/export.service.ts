@@ -34,6 +34,7 @@ import {
   type GeoPackageLayerExportOptions,
   type GeoPackageFeatureRow
 } from '$lib/features/commons/utils/geopackage-export.utils';
+import { normalizeProj4CrsCode } from '$lib/features/commons/utils/proj4-crs.utils';
 import {
   exportMapToSvg,
   exportMapToJpg
@@ -260,7 +261,7 @@ function normalizeCrsName(crs: string | null | undefined): string | null {
     return WGS84_CRS;
   }
 
-  return trimmed;
+  return normalizeProj4CrsCode(trimmed);
 }
 
 function isWgs84LikeCrs(crs: string | null | undefined): boolean {
