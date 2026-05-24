@@ -45,7 +45,7 @@
   "projection_code_intro": "Appliquer une projection grâce à un code de système de coordonnées de référence (SCR).",
   "projection_code_label": "Code SCR",
   "projection_code_placeholder": "Copier-coller le code",
-  "projection_code_helper": "Le code SCR de la projection doit être au format Well-Known Text (WKT).",
+  "projection_code_helper": "Le code SCR de la projection peut être au format WKT, PROJ.4 ou EPSG.",
   "projection_code_reset": "Réinitialiser",
   "projection_code_submit": "Valider",
   "card_subtitle_surfaces": "Surfaces",

@@ -30,4 +30,10 @@ describe('Projection tool shell', () => {
       source.indexOf('projectionActions.setCustomCode(parsed.normalizedCode);')
     );
   });
+
+  it('keeps the catalogue section visible outside custom-code render contexts', () => {
+    expect(source).toContain('<ProjectionOther');
+    expect(source).not.toContain('showOtherProjectionSection');
+    expect(source).not.toContain('supportsCustomProjectionCode');
+  });
 });
