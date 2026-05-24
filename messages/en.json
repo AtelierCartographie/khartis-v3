@@ -45,7 +45,7 @@
   "projection_code_intro": "Apply a projection using a Coordinate Reference System (CRS) code.",
   "projection_code_label": "CRS Code",
   "projection_code_placeholder": "Paste the code",
-  "projection_code_helper": "The projection's CRS code must be in Well-Known Text (WKT) format.",
+  "projection_code_helper": "The projection CRS code can use WKT, PROJ.4, or EPSG format.",
   "projection_code_reset": "Reset",
   "projection_code_submit": "Validate",
   "card_subtitle_surfaces": "Surfaces",

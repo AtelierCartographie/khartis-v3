@@ -110,9 +110,10 @@
   }>();
 
   let requestedTabIndex = $state(0);
-  let crsCode = $state('');
+  let crsCodeDraft = $state<string | null>(null);
 
   const projectionState = $derived(getProjectionState());
+  const crsCode = $derived(crsCodeDraft ?? projectionState.customCode ?? '');
   const suggestionProjectionIds = $derived.by(() => {
     const suggestions = projectionState.suggestions;
     if (!suggestions) {
@@ -277,13 +278,26 @@
 
   function onReset() {
     if (isEmpty()) return;
-    crsCode = '';
+    crsCodeDraft = '';
     dispatch('reset');
   }
 
   function onApply() {
     if (isEmpty()) return;
     dispatch('apply', { code: crsCode.trim() });
+  }
+
+  function handleCrsCodeInput(event: CustomEvent<string> | Event): void {
+    const detail = (event as CustomEvent<string>).detail;
+    if (typeof detail === 'string') {
+      crsCodeDraft = detail;
+      return;
+    }
+
+    crsCodeDraft =
+      event.target instanceof HTMLTextAreaElement
+        ? event.target.value
+        : crsCode;
   }
 
   function setFilter(id: ProjectionFilterId): void {
@@ -551,12 +565,13 @@
         <p class="intro">{codeIntro}</p>
         <div class="code-form">
           <TextArea
-            bind:value={crsCode}
+            value={crsCode}
             labelText={codeLabel}
             placeholder={codePlaceholder}
             helperText={codeHelper}
             rows={8}
             light={true}
+            on:input={handleCrsCodeInput}
           />
           <div class="actions">
             <Button
