@@ -3,9 +3,6 @@
   "private": true,
   "version": "1.6.0-staging.29",
   "type": "module",
-  "engines": {
-    "node": ">=22.0.0 <25.0.0"
-  },
   "contributors": [
     {
       "name": "Thomas Ansart",
