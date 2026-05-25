@@ -216,7 +216,7 @@ describe('useMapLayers source', () => {
   it('applies simplified projection preview by masking visualization and fallback layers', () => {
     expect(source).toContain('const shouldUseSimplifiedProjectionPreview =');
     expect(source).toContain(
-      'hasManualProjectionOverride &&\n        (projectionState.simplifiedPreview ?? true)'
+      'computeSimplifiedProjectionPreview(isOrthographicMode, projectionState)'
     );
     expect(source).toContain(
       'const visualizationsToRender = shouldUseSimplifiedProjectionPreview\n        ? []'
