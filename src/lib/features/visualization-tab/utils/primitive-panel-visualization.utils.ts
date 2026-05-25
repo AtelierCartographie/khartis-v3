@@ -63,8 +63,10 @@ export const buildSymbolPanelVisualization = createPanelBuilder({
       strokeColor: extractStrokeColor(symbol.strokeColor),
       strokeWidth: symbol.strokeWidth,
       strokeOpacity: symbol.strokeOpacity,
-      strokeDashed: symbol.strokeDashed,
-      strokeDashedPattern: symbol.strokeDashedPattern
+      strokeDashed:
+        symbol.strokeDashed ?? visualization.style.strokeDashed ?? false,
+      strokeDashedPattern:
+        symbol.strokeDashedPattern ?? visualization.style.strokeDashedPattern
     },
     mapping: {
       ...visualization.mapping,

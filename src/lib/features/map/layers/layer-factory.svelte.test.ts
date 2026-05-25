@@ -175,6 +175,7 @@ import {
   createDeckLayers,
   createLineLayers,
   createPointLayers,
+  createPointSymbolIcon,
   createPolygonLayers,
   resolveEffectiveCategoryColorMap,
   resolveSplitMappingFeatureIdColumn
@@ -1383,6 +1384,46 @@ describe('createPolygonLayers', () => {
     expect(strokeLayerIndex).toBeGreaterThan(patternLayerIndex);
   });
 
+  it('applies the selected dash pattern to dashed polygon strokes', () => {
+    const buildStroke = (pattern: BasemapDottedPattern) => {
+      arrowTableToGeoJSONMock.mockReturnValue({
+        type: 'FeatureCollection',
+        features: [createPolygonFeature('keep', 2024)]
+      } satisfies FeatureCollection<Polygon>);
+
+      const visualization = createVisualization(FillMode.UNIQUE);
+      visualization.polygon = {
+        ...visualization.polygon!,
+        strokeMode: StrokeMode.UNIQUE,
+        strokeColor: '#000000',
+        strokeWidth: 3,
+        strokeOpacity: 1,
+        strokeDashed: true,
+        strokeDashedPattern: pattern
+      };
+
+      const layers = createPolygonLayers(
+        createTableWithFields([]),
+        createGeometryInfo(),
+        createContext(visualization)
+      );
+      const strokeLayer = layers.find((layer) => layer.id.includes('-stroke'));
+      const props = strokeLayer?.props as
+        | { getDashArray?: [number, number]; capRounded?: boolean }
+        | undefined;
+      return { dash: props?.getDashArray, capRounded: props?.capRounded };
+    };
+
+    const dots = buildStroke(BasemapDottedPattern.DOTS);
+    const dashes = buildStroke(BasemapDottedPattern.DASHES);
+    const dashDot = buildStroke(BasemapDottedPattern.DASH_DOT);
+
+    expect(dots.dash?.[0]).toBe(0);
+    expect(dots.capRounded).toBe(true);
+    expect(dashDot.dash).not.toEqual(dashes.dash);
+    expect(dashes.capRounded).toBe(false);
+  });
+
   it('fully disables GeoJSON polygon stroke props when contour mode is none', () => {
     arrowTableToGeoJSONMock.mockReturnValue({
       type: 'FeatureCollection',
@@ -2026,6 +2067,90 @@ describe('createPolygonLayers', () => {
   });
 });
 
+describe('createPointSymbolIcon (non-circle symbol sharpness)', () => {
+  it('rasterizes the icon at 256px over a 64-unit viewBox so large Carré/Barre/Pic stay sharp', () => {
+    const icon = createPointSymbolIcon(
+      ShapeType.SQUARE,
+      [255, 0, 0, 255],
+      [0, 0, 0, 255],
+      1
+    );
+
+    expect(icon.width).toBe(256);
+    expect(icon.height).toBe(256);
+    expect(icon.anchorX).toBe(128);
+    expect(icon.anchorY).toBe(128);
+
+    const svg = decodeURIComponent(
+      icon.url.replace(/^data:image\/svg\+xml;charset=utf-8,/, '')
+    );
+    expect(svg).toContain('width="256"');
+    expect(svg).toContain('height="256"');
+    expect(svg).toContain('viewBox="0 0 64 64"');
+  });
+
+  it('renders true dots, dashes and dash-dot distinctly on the icon stroke', () => {
+    const svgOf = (icon: { url: string }): string =>
+      decodeURIComponent(
+        icon.url.replace(/^data:image\/svg\+xml;charset=utf-8,/, '')
+      );
+    const dashOf = (icon: { url: string }): string | null =>
+      svgOf(icon).match(/stroke-dasharray="([^"]+)"/)?.[1] ?? null;
+    const capOf = (icon: { url: string }): string | null =>
+      svgOf(icon).match(/stroke-linecap="([^"]+)"/)?.[1] ?? null;
+
+    const solid = createPointSymbolIcon(
+      ShapeType.CIRCLE,
+      [255, 0, 0, 255],
+      [0, 0, 0, 255],
+      2,
+      false
+    );
+    const dots = createPointSymbolIcon(
+      ShapeType.CIRCLE,
+      [255, 0, 0, 255],
+      [0, 0, 0, 255],
+      2,
+      true,
+      [0, 2.5],
+      true
+    );
+    const dashes = createPointSymbolIcon(
+      ShapeType.CIRCLE,
+      [255, 0, 0, 255],
+      [0, 0, 0, 255],
+      2,
+      true,
+      [3, 2.5],
+      false
+    );
+    const dashDot = createPointSymbolIcon(
+      ShapeType.CIRCLE,
+      [255, 0, 0, 255],
+      [0, 0, 0, 255],
+      2,
+      true,
+      [3, 2.5, 0, 2.5],
+      true
+    );
+
+    expect(dashOf(solid)).toBeNull();
+    // dots are round caps; plain dashes are squared (butt) caps
+    expect(capOf(dots)).toBe('round');
+    expect(capOf(dashes)).toBe('butt');
+    // a real round dot is a 0-length segment + round caps (not a tiny dash)
+    expect(dashOf(dots)?.split(/\s+/)[0]).toBe('0.01');
+    // dash-dot is a real 4-segment pattern (dash, gap, dot, gap) with a 0-length dot
+    expect(dashOf(dashes)?.split(/\s+/)).toHaveLength(2);
+    expect(dashOf(dashDot)?.split(/\s+/)).toHaveLength(4);
+    expect(dashOf(dashDot)?.split(/\s+/)[2]).toBe('0.01');
+    // every style produces a visually distinct dash pattern
+    expect(new Set([dashOf(dots), dashOf(dashes), dashOf(dashDot)]).size).toBe(
+      3
+    );
+  });
+});
+
 describe('createPointLayers', () => {
   it('fully disables point circle stroke props when contour mode is none', () => {
     arrowTableToGeoJSONMock.mockReturnValue({
@@ -2624,6 +2749,74 @@ describe('createLineLayers', () => {
       | undefined;
 
     expect(lineLayerProps?.getDashArray?.(feature)).toEqual([6, 4]);
+  });
+
+  it('renders dotted lines as round dots and dash-dot distinctly from dashes', () => {
+    const buildLineLayer = (pattern: BasemapDottedPattern) => {
+      const feature = createLineFeature('dashed', 'A');
+      arrowTableToGeoJSONMock.mockReturnValue({
+        type: 'FeatureCollection',
+        features: [feature]
+      } satisfies FeatureCollection<LineString>);
+
+      const visualization: VisualizationConfig = {
+        id: `viz-line-${pattern}`,
+        name: 'Line dash pattern',
+        type: VisualizationType.CATEGORICAL,
+        datasetId: 'dataset-1',
+        enabled: true,
+        primitiveFilters: [PrimitiveFilterType.LINE],
+        line: {
+          enabled: true,
+          colorMode: ColorMode.UNIQUE,
+          thicknessMode: ThicknessMode.UNIQUE,
+          color: '#3366cc',
+          width: 3,
+          maxWidth: 6,
+          opacity: 1,
+          dashed: true,
+          dashedPattern: pattern
+        },
+        style: { fillOpacity: 1, strokeOpacity: 1, strokeWidth: 1 },
+        mapping: {}
+      };
+
+      const layers = createLineLayers(
+        createTableWithRows([{ route_name: 'A' }], ['route_name']),
+        {
+          ...createLineGeometryInfo(),
+          encoding: 'geojson',
+          isNativeGeoArrow: false,
+          isGeoJsonEncoded: true
+        },
+        createContext(visualization)
+      );
+      const lineLayer = layers.find(
+        (layer) => layer instanceof GeoJsonLayer
+      ) as GeoJsonLayer | undefined;
+      const props = lineLayer?.props as
+        | {
+            getDashArray?: (item: TestLineFeature) => [number, number];
+            capRounded?: boolean;
+          }
+        | undefined;
+      return {
+        dash: props?.getDashArray?.(feature),
+        capRounded: props?.capRounded
+      };
+    };
+
+    const dots = buildLineLayer(BasemapDottedPattern.DOTS);
+    const dashes = buildLineLayer(BasemapDottedPattern.DASHES);
+    const dashDot = buildLineLayer(BasemapDottedPattern.DASH_DOT);
+
+    expect(dots.dash?.[0]).toBe(0);
+    expect(dots.capRounded).toBe(true);
+
+    expect(dashDot.dash).not.toEqual(dashes.dash);
+    expect(dashDot.capRounded).toBe(true);
+
+    expect(dashes.capRounded).toBe(false);
   });
 
   it('applies missing-data color, width and dash style to GeoJSON lines', () => {

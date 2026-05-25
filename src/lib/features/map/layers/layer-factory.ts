@@ -190,15 +190,65 @@ function resolveThematicStrokeDashArray(
 ): [number, number] {
   switch (pattern) {
     case BasemapDottedPattern.DOTS:
-      return [2, 2];
+      return [0, 2.5];
     case BasemapDottedPattern.DASHES:
       return [6, 4];
     case BasemapDottedPattern.DASH_DOT:
-      return [6, 4];
+      return [2, 2];
     case BasemapDottedPattern.LONG_DASH:
       return [12, 4];
     default:
       return DEFAULT_DASH_ARRAY;
+  }
+}
+
+function resolveThematicStrokeCapRounded(
+  pattern: BasemapDottedPattern | undefined
+): boolean {
+  return (
+    pattern === BasemapDottedPattern.DOTS ||
+    pattern === BasemapDottedPattern.DASH_DOT
+  );
+}
+
+interface SymbolDashSpec {
+  // Shader (MultiShapeLayer) representation, in stroke-width multiples.
+  // `dot` > 0 renders a real round dot (diameter ~= stroke width) after the gap.
+  shader: { dash: number; gap: number; dot: number; dotGap: number };
+  // SVG icon representation, in stroke-width multiples. A 0-length segment with
+  // round caps renders as a real round dot.
+  svg: { dashArray: number[]; rounded: boolean };
+}
+
+function resolveSymbolDashSpec(
+  pattern: BasemapDottedPattern | undefined
+): SymbolDashSpec {
+  switch (pattern) {
+    case BasemapDottedPattern.DOTS:
+      return {
+        shader: { dash: 0, gap: 0, dot: 1, dotGap: 2.5 },
+        svg: { dashArray: [0, 2.5], rounded: true }
+      };
+    case BasemapDottedPattern.DASHES:
+      return {
+        shader: { dash: 3, gap: 2.5, dot: 0, dotGap: 0 },
+        svg: { dashArray: [3, 2.5], rounded: false }
+      };
+    case BasemapDottedPattern.DASH_DOT:
+      return {
+        shader: { dash: 3, gap: 2.5, dot: 1, dotGap: 2.5 },
+        svg: { dashArray: [3, 2.5, 0, 2.5], rounded: true }
+      };
+    case BasemapDottedPattern.LONG_DASH:
+      return {
+        shader: { dash: 6, gap: 3, dot: 0, dotGap: 0 },
+        svg: { dashArray: [6, 3], rounded: false }
+      };
+    default:
+      return {
+        shader: { dash: 3, gap: 2, dot: 0, dotGap: 0 },
+        svg: { dashArray: [3, 2], rounded: false }
+      };
   }
 }
 
@@ -226,6 +276,7 @@ export const TEXT_COLLISION_PRIORITY = 1;
 
 export const TRANSPARENT_BACKGROUND_COLOR: Color = [0, 0, 0, 0];
 const POINT_SYMBOL_ICON_VIEWBOX_SIZE = 64;
+const POINT_SYMBOL_ICON_RESOLUTION = 256;
 const DEFAULT_LABEL_COLOR = hexToRgb(DEFAULT_COLORS.text);
 
 export const DEFAULT_TEXT_COLOR = hexToRgb(DEFAULT_COLORS.text);
@@ -253,13 +304,21 @@ function createPointSymbolSvg(
   fillColor: Color,
   strokeColor: Color,
   strokeWidth: number,
-  dashed = false
+  dashed = false,
+  dashPattern: number[] = DEFAULT_DASH_ARRAY,
+  roundedDash = true
 ): string {
   const fill = colorToCss(fillColor);
   const stroke = colorToCss(strokeColor);
   const scaledStrokeWidth = Math.max(2, strokeWidth * 4);
+  // A 0-length segment with round caps renders as a real round dot.
+  const dashArrayValue = dashPattern
+    .map((value) =>
+      (value <= 0 ? 0.01 : Math.max(1, scaledStrokeWidth * value)).toFixed(2)
+    )
+    .join(' ');
   const strokeDashAttributes = dashed
-    ? ` stroke-dasharray="${Math.max(2, scaledStrokeWidth * DEFAULT_DASH_ARRAY[0])} ${Math.max(2, scaledStrokeWidth * DEFAULT_DASH_ARRAY[1])}" stroke-linecap="round"`
+    ? ` stroke-dasharray="${dashArrayValue}" stroke-linecap="${roundedDash ? 'round' : 'butt'}"`
     : '';
 
   const markup = ((): string => {
@@ -286,15 +345,17 @@ function createPointSymbolSvg(
     }
   })();
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${POINT_SYMBOL_ICON_VIEWBOX_SIZE}" height="${POINT_SYMBOL_ICON_VIEWBOX_SIZE}" viewBox="0 0 ${POINT_SYMBOL_ICON_VIEWBOX_SIZE} ${POINT_SYMBOL_ICON_VIEWBOX_SIZE}">${markup}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${POINT_SYMBOL_ICON_RESOLUTION}" height="${POINT_SYMBOL_ICON_RESOLUTION}" viewBox="0 0 ${POINT_SYMBOL_ICON_VIEWBOX_SIZE} ${POINT_SYMBOL_ICON_VIEWBOX_SIZE}">${markup}</svg>`;
 }
 
-function createPointSymbolIcon(
+export function createPointSymbolIcon(
   shape: ShapeType,
   fillColor: Color,
   strokeColor: Color,
   strokeWidth: number,
-  dashed = false
+  dashed = false,
+  dashPattern: number[] = DEFAULT_DASH_ARRAY,
+  roundedDash = true
 ): {
   url: string;
   width: number;
@@ -308,7 +369,9 @@ function createPointSymbolIcon(
     fillColor,
     strokeColor,
     strokeWidth,
-    dashed
+    dashed,
+    dashPattern,
+    roundedDash
   });
   let url = pointSymbolIconCache.get(key);
   if (!url) {
@@ -317,7 +380,9 @@ function createPointSymbolIcon(
       fillColor,
       strokeColor,
       strokeWidth,
-      dashed
+      dashed,
+      dashPattern,
+      roundedDash
     );
     url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     pointSymbolIconCache.set(key, url);
@@ -325,10 +390,10 @@ function createPointSymbolIcon(
 
   return {
     url,
-    width: POINT_SYMBOL_ICON_VIEWBOX_SIZE,
-    height: POINT_SYMBOL_ICON_VIEWBOX_SIZE,
-    anchorX: POINT_SYMBOL_ICON_VIEWBOX_SIZE / 2,
-    anchorY: POINT_SYMBOL_ICON_VIEWBOX_SIZE / 2,
+    width: POINT_SYMBOL_ICON_RESOLUTION,
+    height: POINT_SYMBOL_ICON_RESOLUTION,
+    anchorX: POINT_SYMBOL_ICON_RESOLUTION / 2,
+    anchorY: POINT_SYMBOL_ICON_RESOLUTION / 2,
     id: key
   };
 }
@@ -630,7 +695,7 @@ function createDoubleProportionalPointLayers(
   const pointStrokeWidth = pointConfig.strokeWidth ?? strokeWidth;
   const pointStrokeOpacity = pointConfig.strokeOpacity ?? rawStrokeOpacity;
   const pointStrokeDashed = pointConfig.strokeDashed ?? false;
-  const pointStrokeDashArray = resolveThematicStrokeDashArray(
+  const pointStrokeDashSpec = resolveSymbolDashSpec(
     pointConfig.strokeDashedPattern
   );
   const showPointStroke =
@@ -1012,8 +1077,10 @@ function createDoubleProportionalPointLayers(
       stroked: showPointStroke,
       filled: !hideSymbolFill,
       dashed: showPointStroke && pointStrokeDashed,
-      dashLength: pointStrokeDashArray[0],
-      gapLength: pointStrokeDashArray[1],
+      dashLength: pointStrokeDashSpec.shader.dash,
+      gapLength: pointStrokeDashSpec.shader.gap,
+      dotLength: pointStrokeDashSpec.shader.dot,
+      dotGap: pointStrokeDashSpec.shader.dotGap,
       barWidth: pointBarWidth,
       patternEnabled: symbolPatternType !== null,
       patternType: symbolPatternType ?? SYMBOL_PATTERN_TYPE.DOTS,
@@ -1180,7 +1247,7 @@ function createRepresentativePointSymbolLayers(
   const pointStrokeWidth = pointConfig.strokeWidth ?? strokeWidth;
   const pointStrokeOpacity = pointConfig.strokeOpacity ?? rawStrokeOpacity;
   const pointStrokeDashed = pointConfig.strokeDashed ?? false;
-  const pointStrokeDashArray = resolveThematicStrokeDashArray(
+  const pointStrokeDashSpec = resolveSymbolDashSpec(
     pointConfig.strokeDashedPattern
   );
   const showPointStroke =
@@ -1621,8 +1688,10 @@ function createRepresentativePointSymbolLayers(
       stroked: showPointStroke,
       filled: !hideSymbolFill,
       dashed: showPointStroke && pointStrokeDashed,
-      dashLength: pointStrokeDashArray[0],
-      gapLength: pointStrokeDashArray[1],
+      dashLength: pointStrokeDashSpec.shader.dash,
+      gapLength: pointStrokeDashSpec.shader.gap,
+      dotLength: pointStrokeDashSpec.shader.dot,
+      dotGap: pointStrokeDashSpec.shader.dotGap,
       barWidth: pointBarWidth,
       patternEnabled: symbolPatternType !== null,
       patternType: symbolPatternType ?? SYMBOL_PATTERN_TYPE.DOTS,
@@ -3508,7 +3577,7 @@ export function createPointLayers(
   const pointStrokeWidth = pointConfig?.strokeWidth ?? strokeWidth;
   const pointStrokeOpacity = pointConfig?.strokeOpacity ?? rawStrokeOpacity;
   const pointStrokeDashed = pointConfig?.strokeDashed ?? false;
-  const pointStrokeDashArray = resolveThematicStrokeDashArray(
+  const pointStrokeDashSpec = resolveSymbolDashSpec(
     pointConfig?.strokeDashedPattern
   );
   const showPointStroke =
@@ -3816,7 +3885,9 @@ export function createPointLayers(
                       pointStrokeOpacity
                     ),
               showPointStroke ? pointStrokeWidth / 3 : 0,
-              showPointStroke && pointStrokeDashed
+              showPointStroke && pointStrokeDashed,
+              pointStrokeDashSpec.svg.dashArray,
+              pointStrokeDashSpec.svg.rounded
             ),
           getIconSize: (feature) => {
             if (isDisabledGeoJsonPoint(feature)) {
@@ -3866,6 +3937,7 @@ export function createPointLayers(
               pointStrokeOpacity,
               pointStrokeWidth,
               pointStrokeDashed,
+              pointConfig?.strokeDashedPattern,
               pointMissingColumn,
               pointConfig?.missingData?.show,
               pointConfig?.missingData?.color,
@@ -4452,8 +4524,10 @@ export function createPointLayers(
       new MultiShapeLayer({
         ...baseLayerProps,
         dashed: showPointStroke && pointStrokeDashed,
-        dashLength: pointStrokeDashArray[0],
-        gapLength: pointStrokeDashArray[1],
+        dashLength: pointStrokeDashSpec.shader.dash,
+        gapLength: pointStrokeDashSpec.shader.gap,
+        dotLength: pointStrokeDashSpec.shader.dot,
+        dotGap: pointStrokeDashSpec.shader.dotGap,
         barWidth: pointBarWidth,
         patternEnabled: symbolPatternType !== null,
         patternType: symbolPatternType ?? SYMBOL_PATTERN_TYPE.DOTS
@@ -4502,6 +4576,8 @@ export function createLineLayers(
   const lineDashArray = lineDashed
     ? resolveThematicStrokeDashArray(lineConfig?.dashedPattern)
     : ([0, 0] as [number, number]);
+  const lineCapRounded =
+    lineDashed && resolveThematicStrokeCapRounded(lineConfig?.dashedPattern);
 
   const hasLineHighlights =
     lineHighlightedRowIds && lineHighlightedRowIds.size > 0;
@@ -4739,6 +4815,7 @@ export function createLineLayers(
       extensions: lineDashed ? [DASH_EXTENSION] : [],
       getDashArray: lineDashArray,
       dashJustified: true,
+      capRounded: lineCapRounded,
       widthUnits: 'pixels',
       ...(!widthBinaryAttr && { getWidth: resolvedLineWidth }),
       widthMinPixels: 1,
@@ -4763,7 +4840,7 @@ export function createLineLayers(
           showLineMissingData,
           hlVersion
         ],
-        getDashArray: [lineDashed],
+        getDashArray: [lineDashed, lineConfig?.dashedPattern],
         getWidth: [
           usesVariableLineWidth,
           lineHasMissingDataStyle,
@@ -4971,6 +5048,7 @@ export function createLineLayers(
     extensions: lineUsesDashExtension ? [DASH_EXTENSION] : [],
     getDashArray: geoJsonDashArray,
     dashJustified: true,
+    capRounded: lineCapRounded,
     lineWidthUnits: 'pixels',
     getLineWidth: geoJsonLineWidth,
     lineWidthMinPixels: 1,
@@ -5106,7 +5184,12 @@ export function createPolygonLayers(
   const useCategoricalColor =
     viz && shouldApplyCategorical(viz, PrimitiveFilterType.POLYGON);
   const strokeDashed = polygonConfig?.strokeDashed ?? false;
-  const strokeDashArray = strokeDashed ? DEFAULT_DASH_ARRAY : [0, 0];
+  const strokeDashArray = strokeDashed
+    ? resolveThematicStrokeDashArray(polygonConfig?.strokeDashedPattern)
+    : ([0, 0] as [number, number]);
+  const strokeCapRounded =
+    strokeDashed &&
+    resolveThematicStrokeCapRounded(polygonConfig?.strokeDashedPattern);
   const layerId = createThematicLayerId(DeckLayerId.POLYGON_LAYER, ctx);
   const projectedGeoJsonLayerId = `${layerId}-projected-geojson`;
   const patternProps = buildPatternProps(ctx);
@@ -5415,8 +5498,9 @@ export function createPolygonLayers(
             getColor: withOpacity(polygonStrokeColor, polygonStrokeOpacity)
           }),
           extensions: [DASH_EXTENSION],
-          getDashArray: DEFAULT_DASH_ARRAY,
+          getDashArray: strokeDashArray,
           dashJustified: true,
+          capRounded: strokeCapRounded,
           widthUnits: 'pixels',
           getWidth: polygonStrokeWidth / 4,
           widthMinPixels: 0.5,
@@ -5425,7 +5509,7 @@ export function createPolygonLayers(
           ...(beforeId && { beforeId }),
           updateTriggers: {
             getColor: [polygonStrokeColor, polygonStrokeOpacity, hlVersion],
-            getDashArray: [strokeDashed],
+            getDashArray: [strokeDashed, polygonConfig?.strokeDashedPattern],
             getWidth: [polygonStrokeWidth]
           }
         });
@@ -5896,6 +5980,7 @@ export function createPolygonLayers(
               extensions: strokeDashed ? [DASH_EXTENSION] : [],
               getDashArray: strokeDashArray,
               dashJustified: true,
+              capRounded: strokeCapRounded,
               lineWidthUnits: 'pixels',
               lineWidthScale: polygonStrokeWidth / 4,
               lineWidthMinPixels: 0.5,
@@ -5920,7 +6005,7 @@ export function createPolygonLayers(
                   showGeoJsonStroke,
                   hlVersion
                 ],
-                getDashArray: [strokeDashed]
+                getDashArray: [strokeDashed, polygonConfig?.strokeDashedPattern]
               },
               dataComparator: (newData, oldData) => newData === oldData
             })
@@ -5939,6 +6024,7 @@ export function createPolygonLayers(
         extensions: showGeoJsonStroke && strokeDashed ? [DASH_EXTENSION] : [],
         getDashArray: showGeoJsonStroke ? strokeDashArray : [0, 0],
         dashJustified: true,
+        capRounded: showGeoJsonStroke && strokeCapRounded,
         opacity: hasPolyHighlights ? 1 : polygonFillOpacity,
         lineWidthUnits: 'pixels',
         lineWidthScale: showGeoJsonStroke ? polygonStrokeWidth / 4 : 0,
@@ -5979,7 +6065,11 @@ export function createPolygonLayers(
             showGeoJsonStroke,
             hlVersion
           ],
-          getDashArray: [showGeoJsonStroke, strokeDashed]
+          getDashArray: [
+            showGeoJsonStroke,
+            strokeDashed,
+            polygonConfig?.strokeDashedPattern
+          ]
         },
         dataComparator: (newData, oldData) => newData === oldData
       }),
