@@ -194,6 +194,8 @@
     border-bottom: 1px solid var(--cds-border-subtle, #e0e0e0);
     text-align: right;
     color: var(--cds-text-secondary, #525252);
+    padding-left: var(--cds-spacing-02);
+    padding-right: var(--cds-spacing-02);
   }
 
   .histogram-input-wrapper :global(.bx--text-input:disabled) {
@@ -255,7 +257,7 @@
   }
 
   .histogram-bar-wrapper {
-    width: 128px;
+    width: 92px;
     height: 18px;
     flex-shrink: 0;
     display: flex;
