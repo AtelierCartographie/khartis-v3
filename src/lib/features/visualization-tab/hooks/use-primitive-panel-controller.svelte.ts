@@ -1511,7 +1511,9 @@ export function usePrimitivePanelController({
             ? {
                 ...polygon.classification,
                 labels: [],
-                disabledLabels: undefined
+                disabledLabels: undefined,
+                categoryValues: undefined,
+                colors: undefined
               }
             : polygon.classification;
         const nextRootPolygonClassification =
@@ -1519,7 +1521,9 @@ export function usePrimitivePanelController({
             ? {
                 ...visualization.classification,
                 labels: [],
-                disabledLabels: undefined
+                disabledLabels: undefined,
+                categoryValues: undefined,
+                colors: undefined
               }
             : undefined;
 
@@ -1577,6 +1581,8 @@ export function usePrimitivePanelController({
               }),
               labels: [],
               disabledLabels: undefined,
+              categoryValues: undefined,
+              colors: undefined,
               categoryShapes: undefined
             }
           : symbol.classification;
@@ -1596,6 +1602,8 @@ export function usePrimitivePanelController({
                 ...rootPointClassificationBase,
                 labels: [],
                 disabledLabels: undefined,
+                categoryValues: undefined,
+                colors: undefined,
                 categoryShapes: undefined
               }
             : undefined;
@@ -1653,7 +1661,9 @@ export function usePrimitivePanelController({
             ? {
                 ...line.classification,
                 labels: [],
-                disabledLabels: undefined
+                disabledLabels: undefined,
+                categoryValues: undefined,
+                colors: undefined
               }
             : line.classification;
         const rootLineClassificationBase =
@@ -1663,7 +1673,9 @@ export function usePrimitivePanelController({
             ? {
                 ...rootLineClassificationBase,
                 labels: [],
-                disabledLabels: undefined
+                disabledLabels: undefined,
+                categoryValues: undefined,
+                colors: undefined
               }
             : undefined;
 
@@ -1717,7 +1729,9 @@ export function usePrimitivePanelController({
             ? {
                 ...text.classification,
                 labels: [],
-                disabledLabels: undefined
+                disabledLabels: undefined,
+                categoryValues: undefined,
+                colors: undefined
               }
             : text.classification;
         const secondaryLabelColumnProvided = hasOwnKey(
