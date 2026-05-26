@@ -68,6 +68,43 @@ describe('getMapLayerRenderOrder', () => {
     ]);
   });
 
+  it('renders below-thematic foreground basemap above thematic polygons but below thematic markers', () => {
+    const polygonFill = makeLayer('polygon-layer-viz1');
+    const pointLayer = makeLayer('point-layer-viz1');
+    const result = getMapLayerRenderOrder({
+      basemapBackgroundLayers: [makeLayer('basemap-terre')],
+      basemapForegroundBelowThematicLayers: [makeLayer('basemap-frontieres')],
+      thematicLayers: [polygonFill, pointLayer],
+      basemapForegroundLayers: [makeLayer('basemap-villes-labels')]
+    });
+
+    expect(result.map((layer) => layer.id)).toEqual([
+      'basemap-terre',
+      'polygon-layer-viz1',
+      'basemap-frontieres',
+      'point-layer-viz1',
+      'basemap-villes-labels'
+    ]);
+  });
+
+  it('renders below-thematic foreground basemap under all markers when the thematic block has no polygons', () => {
+    const pointLayer = makeLayer('point-layer-viz1');
+    const textLayer = makeLayer('text-layer-viz1');
+    const result = getMapLayerRenderOrder({
+      basemapBackgroundLayers: [makeLayer('basemap-terre')],
+      basemapForegroundBelowThematicLayers: [makeLayer('basemap-frontieres')],
+      thematicLayers: [pointLayer, textLayer],
+      basemapForegroundLayers: []
+    });
+
+    expect(result.map((layer) => layer.id)).toEqual([
+      'basemap-terre',
+      'basemap-frontieres',
+      'point-layer-viz1',
+      'text-layer-viz1'
+    ]);
+  });
+
   it('keeps basemap foreground helpers (e.g. basemap-villes-labels) in the foreground segment', () => {
     const villesLabels = makeLayer('basemap-villes-labels');
     const textLayer = makeLayer('text-layer-vizA');

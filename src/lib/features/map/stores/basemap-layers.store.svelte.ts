@@ -22,6 +22,7 @@ export type { BasemapLayerId, BasemapRenderGroup };
 interface BasemapLayerBase {
   id: BasemapLayerId;
   visible: boolean;
+  renderBelowThematic?: boolean;
 }
 
 export interface TerreLayerConfig extends BasemapLayerBase {
@@ -137,6 +138,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
     id: 'rivieres',
     visible: false,
+    renderBelowThematic: true,
     color: '#a6c8ff',
     dotted: false,
     dottedPattern: BasemapDottedPattern.DOTS,
@@ -171,6 +173,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
     id: 'villes',
     visible: false,
+    renderBelowThematic: true,
     category: BasemapCityCategory.CAPITALS,
     count: 50,
     symbol: BasemapCitySymbol.POINT,
@@ -184,6 +187,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
     id: 'equateur',
     visible: false,
+    renderBelowThematic: true,
     color: '#8d8d8d',
     dotted: false,
     dottedPattern: BasemapDottedPattern.DOTS,
@@ -193,6 +197,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
     id: 'meridiens',
     visible: false,
+    renderBelowThematic: true,
     mode: BasemapGraticuleMode.REMARKABLE,
     spacingDegrees: 10,
     color: '#8d8d8d',
@@ -204,6 +209,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
     id: 'frontieres',
     visible: true,
+    renderBelowThematic: true,
     color: '#8d8d8d',
     dotted: false,
     dottedPattern: BasemapDottedPattern.DOTS,
@@ -213,6 +219,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
     id: 'sphere',
     visible: true,
+    renderBelowThematic: true,
     color: '#5a5a5a',
     thickness: 1,
     opacity: 100
@@ -520,6 +527,23 @@ function createBasemapLayersStore() {
     incrementVersion();
   }
 
+  function setLayerThematicPlacement(
+    id: BasemapLayerId,
+    belowThematic: boolean
+  ): void {
+    if (getBasemapRenderGroup(id) !== 'foreground') {
+      return;
+    }
+
+    const layer = state.layers.find((currentLayer) => currentLayer.id === id);
+    if (!layer || layer.renderBelowThematic === belowThematic) {
+      return;
+    }
+
+    layer.renderBelowThematic = belowThematic;
+    incrementVersion();
+  }
+
   function resetToDefaults(): void {
     state.layers = cloneDefaults();
     incrementVersion();
@@ -559,6 +583,7 @@ function createBasemapLayersStore() {
     updateLayer,
     setLayerOrder,
     setLayerRenderGroupOrder,
+    setLayerThematicPlacement,
     resetToDefaults,
     resetLayer,
     restoreFromSerialized

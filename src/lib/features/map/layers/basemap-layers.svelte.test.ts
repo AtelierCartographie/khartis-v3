@@ -1971,6 +1971,53 @@ describe('basemap projection fallbacks', () => {
     expect(metaLimitLayer?.props.data).toBe(projectedGeoJSON);
   });
 
+  it('places frontieres below the thematic block by default and above it when its placement is flipped', () => {
+    const metadataTable = { id: 'limit-placement' } as unknown as ArrowTable;
+    const sourceGeoJSON = createLineGeoJSON('raw-meta-limit-placement');
+    const ctx = createProjectionContext();
+
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.TERRE, false);
+
+    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
+      table === metadataTable ? createLineGeometryInfo() : null
+    );
+    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
+      table === metadataTable ? sourceGeoJSON : null
+    );
+    projectGeoJSONMock.mockReturnValue(sourceGeoJSON);
+
+    const buildLayers = () =>
+      createBasemapLayers(null, ctx, {
+        metadataLayers: [
+          {
+            table: metadataTable,
+            style: null,
+            type: BasemapLayerType.LIMIT,
+            file: 'limits-placement.geojson'
+          } satisfies MetadataLayerEntry
+        ],
+        availableMetadataLayerTypes: [BasemapLayerType.LIMIT],
+        stylePresets: null
+      });
+
+    const isLimitLayer = (layer: { props: { id: unknown } }): boolean =>
+      String(layer.props.id).includes('basemap-meta-limit');
+
+    const belowDefault = buildLayers();
+    expect(belowDefault.foregroundBelowThematic.some(isLimitLayer)).toBe(true);
+    expect(belowDefault.foreground.some(isLimitLayer)).toBe(true);
+
+    basemapLayersStore.setLayerThematicPlacement(
+      BASEMAP_LAYER_ID.FRONTIERES,
+      false
+    );
+
+    const aboveFlipped = buildLayers();
+    expect(aboveFlipped.foregroundBelowThematic.some(isLimitLayer)).toBe(false);
+    expect(aboveFlipped.foreground.some(isLimitLayer)).toBe(true);
+  });
+
   it('uses Arrow native path for metadata limits under composite projections', () => {
     const metadataTable = {
       id: 'native-meta-limit-composite'

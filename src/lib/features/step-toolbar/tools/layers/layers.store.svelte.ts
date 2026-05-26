@@ -750,6 +750,7 @@ function buildVectorBasemapSubLayers(
           'geographic-',
           ''
         ) as Layer['basemapRenderGroup'],
+        basemapRenderBelowThematic: config?.renderBelowThematic ?? false,
         name: layerId ? getBasemapLayerName(layerId) : firstEntry.name,
         visible,
         color: config ? getBasemapLayerColor(config) : firstEntry.color,
@@ -896,9 +897,35 @@ function buildLayers(): Layer[] {
           ? buildTiledBasemapSubLayers(viz.id, vizSubLayers.length)
           : buildVectorBasemapSubLayers(viz.id, vizSubLayers.length);
 
+      const foregroundAboveSubLayers = basemapSubLayers.filter(
+        (layer) =>
+          layer.basemapRenderGroup === 'foreground' &&
+          !layer.basemapRenderBelowThematic
+      );
+      const foregroundBelowSubLayers = basemapSubLayers.filter(
+        (layer) =>
+          layer.basemapRenderGroup === 'foreground' &&
+          layer.basemapRenderBelowThematic
+      );
+      const backgroundSubLayers = basemapSubLayers.filter(
+        (layer) => layer.basemapRenderGroup === 'background'
+      );
+
+      const lastMarkerPrimitiveIndex = vizSubLayers.reduce(
+        (last, layer, index) =>
+          layer.primitive !== PrimitiveFilterType.POLYGON ? index : last,
+        -1
+      );
+      const thematicWithForegroundBelow = [
+        ...vizSubLayers.slice(0, lastMarkerPrimitiveIndex + 1),
+        ...foregroundBelowSubLayers,
+        ...vizSubLayers.slice(lastMarkerPrimitiveIndex + 1)
+      ];
+
       const subLayers = applySubLayerDisplayOrder(viz.id, [
-        ...vizSubLayers,
-        ...basemapSubLayers
+        ...foregroundAboveSubLayers,
+        ...thematicWithForegroundBelow,
+        ...backgroundSubLayers
       ]);
 
       return [parentLayer, ...subLayers];
@@ -1053,6 +1080,27 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
         if (background.length > 0) {
           basemapLayersStore.setLayerRenderGroupOrder('background', background);
         }
+
+        const lastMarkerPrimitiveIndex = reordered.reduce(
+          (last, layer, index) =>
+            layer.type === 'visualization' &&
+            layer.primitive &&
+            layer.primitive !== PrimitiveFilterType.POLYGON
+              ? index
+              : last,
+          -1
+        );
+        reordered.forEach((layer, index) => {
+          if (
+            layer.basemapRenderGroup === 'foreground' &&
+            typeof layer.basemapLayerId === 'string'
+          ) {
+            basemapLayersStore.setLayerThematicPlacement(
+              layer.basemapLayerId as BasemapLayerId,
+              lastMarkerPrimitiveIndex < 0 || index > lastMarkerPrimitiveIndex
+            );
+          }
+        });
 
         const basemapEntryLayers = reordered.filter(
           (layer) => layer.type === 'geographic' && layer.basemapFile

@@ -2225,6 +2225,8 @@ export interface BasemapLayerGroups {
   background: Layer<DeckDataRow>[];
 
   foreground: Layer<DeckDataRow>[];
+
+  foregroundBelowThematic: Layer<DeckDataRow>[];
 }
 
 export function createBasemapLayers(
@@ -2233,7 +2235,8 @@ export function createBasemapLayers(
   additionalData?: BasemapAdditionalData
 ): BasemapLayerGroups {
   const backgroundGroups: Layer<DeckDataRow>[][] = [];
-  const foregroundGroups: Layer<DeckDataRow>[][] = [];
+  const foregroundBelowGroups: Layer<DeckDataRow>[][] = [];
+  const foregroundAboveGroups: Layer<DeckDataRow>[][] = [];
 
   const metaLayers = additionalData?.metadataLayers ?? [];
   const availableMetadataLayerTypes = new Set(
@@ -2266,7 +2269,9 @@ export function createBasemapLayers(
       const targetGroups =
         getBasemapRenderGroup(config.id) === 'background'
           ? backgroundGroups
-          : foregroundGroups;
+          : config.renderBelowThematic
+            ? foregroundBelowGroups
+            : foregroundAboveGroups;
 
       switch (config.id) {
         case BASEMAP_LAYER_ID.MERS: {
@@ -2431,8 +2436,12 @@ export function createBasemapLayers(
     }
   }
 
+  const foregroundBelowThematic = [...foregroundBelowGroups].reverse().flat();
+  const foregroundAboveThematic = [...foregroundAboveGroups].reverse().flat();
+
   return {
     background: [...backgroundGroups].reverse().flat(),
-    foreground: [...foregroundGroups].reverse().flat()
+    foreground: [...foregroundBelowThematic, ...foregroundAboveThematic],
+    foregroundBelowThematic
   };
 }
