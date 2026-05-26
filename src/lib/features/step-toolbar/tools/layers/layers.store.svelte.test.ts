@@ -17,7 +17,8 @@ const {
       basemapLayersStore.layers.find((layer) => layer.id === id)
     ),
     setLayerVisibility: vi.fn(),
-    setLayerRenderGroupOrder: vi.fn()
+    setLayerRenderGroupOrder: vi.fn(),
+    setLayerThematicPlacement: vi.fn()
   };
 
   return {
@@ -318,6 +319,7 @@ function resetBasemapLayerMocks(): void {
     {
       id: 'equateur',
       visible: true,
+      renderBelowThematic: true,
       color: '#8d8d8d',
       dotted: false,
       thickness: 1,
@@ -326,6 +328,7 @@ function resetBasemapLayerMocks(): void {
     {
       id: 'sphere',
       visible: true,
+      renderBelowThematic: true,
       color: '#8d8d8d',
       thickness: 1,
       opacity: 100
@@ -333,6 +336,7 @@ function resetBasemapLayerMocks(): void {
     {
       id: 'frontieres',
       visible: true,
+      renderBelowThematic: true,
       color: '#525252',
       dotted: false,
       dottedPattern: BasemapDottedPattern.DOTS,
@@ -342,6 +346,7 @@ function resetBasemapLayerMocks(): void {
     {
       id: 'meridiens',
       visible: true,
+      renderBelowThematic: true,
       color: '#e0e0e0',
       dotted: true,
       dottedPattern: BasemapDottedPattern.DOTS,
@@ -887,6 +892,61 @@ describe('layers color helpers', () => {
       'frontieres',
       false
     );
+  });
+
+  it('moves a foreground basemap layer above the thematic block when dragged above the primitives', () => {
+    const visualization = createVisualization({ id: 'viz-place-above' });
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+    mockBasemapStyleStore.referenceBasemapId = 'world';
+    mockBasemapService.currentMetadata = { file: 'world', layers: [] };
+
+    layersActions.syncWithVisualizations();
+    const subLayers = layersState.layers
+      .filter(
+        (layer) => layer.isSubLayer && layer.parentId === 'viz-place-above'
+      )
+      .sort((a, b) => a.order - b.order);
+    const equateurIndex = subLayers.findIndex(
+      (layer) => layer.id === 'viz-place-above::basemap::equateur'
+    );
+
+    layersActions.reorderSubLayers('viz-place-above', equateurIndex, 0);
+
+    expect(
+      mockBasemapLayersStore.setLayerThematicPlacement
+    ).toHaveBeenCalledWith('equateur', false);
+  });
+
+  it('keeps a foreground basemap layer below the thematic block when it stays under the primitives', () => {
+    const visualization = createVisualization({ id: 'viz-place-below' });
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+    mockBasemapStyleStore.referenceBasemapId = 'world';
+    mockBasemapService.currentMetadata = { file: 'world', layers: [] };
+
+    layersActions.syncWithVisualizations();
+    const subLayers = layersState.layers
+      .filter(
+        (layer) => layer.isSubLayer && layer.parentId === 'viz-place-below'
+      )
+      .sort((a, b) => a.order - b.order);
+    const equateurIndex = subLayers.findIndex(
+      (layer) => layer.id === 'viz-place-below::basemap::equateur'
+    );
+    const sphereIndex = subLayers.findIndex(
+      (layer) => layer.id === 'viz-place-below::basemap::sphere'
+    );
+
+    layersActions.reorderSubLayers(
+      'viz-place-below',
+      sphereIndex,
+      equateurIndex
+    );
+
+    expect(
+      mockBasemapLayersStore.setLayerThematicPlacement
+    ).toHaveBeenCalledWith('sphere', true);
   });
 
   it('reorders basemap sublayers inside their render groups', () => {
