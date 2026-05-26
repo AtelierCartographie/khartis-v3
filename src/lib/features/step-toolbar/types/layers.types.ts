@@ -23,6 +23,7 @@ export interface Layer {
   primitive?: PrimitiveFilter;
   basemapLayerId?: string;
   basemapRenderGroup?: BasemapRenderGroup;
+  basemapRenderBelowThematic?: boolean;
   basemapFile?: string;
   basemapLayerKey?: string;
   basemapLayerKeys?: string[];

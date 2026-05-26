@@ -994,6 +994,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
       let basemapBackgroundLayers: Layer<DeckDataRow>[] = [];
       let basemapForegroundLayers: Layer<DeckDataRow>[] = [];
+      let basemapForegroundBelowThematicLayers: Layer<DeckDataRow>[] = [];
 
       if (shouldKeepOrthographicBasemapLayers) {
         try {
@@ -1113,7 +1114,14 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               : basemapGroups.background.filter(
                   (layer) => !isGeneratedOceanLayer(layer)
                 );
-          basemapForegroundLayers = basemapGroups.foreground;
+          const foregroundBelowSet = new Set(
+            basemapGroups.foregroundBelowThematic
+          );
+          basemapForegroundBelowThematicLayers =
+            basemapGroups.foregroundBelowThematic;
+          basemapForegroundLayers = basemapGroups.foreground.filter(
+            (layer) => !foregroundBelowSet.has(layer)
+          );
         } catch (error) {
           logger.error(
             'Basemap layer creation failed; rendering thematic layers only',
@@ -1387,6 +1395,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
       const orderedLayers = getMapLayerRenderOrder({
         basemapBackgroundLayers,
+        basemapForegroundBelowThematicLayers,
         thematicLayers: layers,
         basemapForegroundLayers
       });
