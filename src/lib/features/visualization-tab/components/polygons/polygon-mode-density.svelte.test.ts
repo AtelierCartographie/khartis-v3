@@ -37,6 +37,22 @@ describe('PolygonModeDensity', () => {
     expect(source).toContain('duckDataset?.gpsMode && duckDataset.gpsColumns');
   });
 
+  it('selects the density variable through FacetsVariablePicker, not a plain Carbon Dropdown', () => {
+    expect(source).toContain('<FacetsVariablePicker');
+    expect(source).toContain(
+      "import FacetsVariablePicker from '../shared/facets-variable-picker.svelte'"
+    );
+    expect(source).not.toContain('import { Dropdown }');
+    expect(source).not.toContain('<Dropdown');
+  });
+
+  it('restricts the density variable list to numeric fields', () => {
+    expect(source).toContain(
+      "filterFieldsByKind(selectableDataFields, 'numeric', selectedColumnId)"
+    );
+    expect(source).toContain('singleSelectItems={selectableNumericFields}');
+  });
+
   it('formats density equivalence labels without parenthesized ratios', () => {
     expect(source).toContain(
       'labelText: `${levelLabelFor(option.level)} : ${m.density_ratio_label({ ratio: String(option.ratio) })}`'
