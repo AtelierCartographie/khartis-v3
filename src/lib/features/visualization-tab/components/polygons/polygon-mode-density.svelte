@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { Dropdown } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
+  import FacetsVariablePicker from '../shared/facets-variable-picker.svelte';
+  import { filterFieldsByKind } from '../../hooks/use-field-selection.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import * as m from '$lib/paraglide/messages';
   import {
@@ -43,6 +44,10 @@
   let lastRequestedColumn = $state<string | null>(null);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
+  const selectableNumericFields = $derived(
+    filterFieldsByKind(selectableDataFields, 'numeric', selectedColumnId)
+  );
+  let columnPickerOpen = $state(false);
 
   const MAX_POINTS_BUDGET = 100_000;
 
@@ -239,13 +244,14 @@
     {m.density_data_column()}
     <InfoPopover text={m.density_level_hint()} />
   </span>
-  <Dropdown
-    titleText={m.density_data_column()}
-    hideLabel
-    items={selectableDataFields}
-    selectedId={selectedColumnId}
-    on:select={(e) => handleColumnSelect(e.detail.selectedId)}
-    type="default"
+  <FacetsVariablePicker
+    bind:open={columnPickerOpen}
+    dataFields={selectableDataFields}
+    singleSelectItems={selectableNumericFields}
+    selectedFieldId={selectedColumnId}
+    isCollectionEnabled={false}
+    showCollectionFooter={false}
+    onSelect={handleColumnSelect}
   />
 </div>
 
