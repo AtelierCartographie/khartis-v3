@@ -211,6 +211,8 @@ export const SLIDER_LIMITS = {
 
 export const MIN_VISIBLE_STROKE_WIDTH = 1;
 
+export const DEFAULT_DISCRETIZATION_CLASS_COUNT = 4;
+
 export const DOT_DENSITY = {
   size: { min: 0.5, max: 4, step: 0.25 }
 } as const;

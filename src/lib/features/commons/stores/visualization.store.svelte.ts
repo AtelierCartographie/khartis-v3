@@ -24,6 +24,7 @@ import {
   SymbolMode,
   ThicknessMode,
   VISUALIZATION_DEFAULTS,
+  DEFAULT_DISCRETIZATION_CLASS_COUNT,
   availableShapesForSymbolMode
 } from '$lib/features/commons/constants/visualization.constants';
 import { deepClone } from '../utils/clone.utils';
@@ -1273,15 +1274,8 @@ const DEFAULT_LABEL_OPACITY = 0;
 const DEFAULT_TEXT_OPACITY = 0;
 
 const DEFAULT_MISSING_DATA_COLOR = '#c6c6c6';
-const DEFAULT_QUANTILES_CLASS_COUNT = 5;
 
-const DEFAULT_CHOROPLETH_COLORS = [
-  '#eff3ff',
-  '#bdd7e7',
-  '#6baed6',
-  '#3182bd',
-  '#08519c'
-];
+const DEFAULT_CHOROPLETH_COLORS = ['#eff3ff', '#bdd7e7', '#6baed6', '#08519c'];
 
 export const DEFAULT_CATEGORICAL_COLORS = [...FIGMA_DEFAULT_CATEGORICAL_COLORS];
 
@@ -1436,7 +1430,7 @@ function getDefaultClassification(
   ) {
     return {
       method: ClassificationMethod.KMEANS,
-      classes: DEFAULT_QUANTILES_CLASS_COUNT,
+      classes: DEFAULT_DISCRETIZATION_CLASS_COUNT,
       colors: [...DEFAULT_CHOROPLETH_COLORS]
     };
   }
@@ -2394,7 +2388,7 @@ function createVisualizationStore(): VisualizationStore {
     applyVisualizationUpdate(id, (visualization) => {
       const existing = visualization.classification ?? {
         method: ClassificationMethod.KMEANS,
-        classes: DEFAULT_QUANTILES_CLASS_COUNT
+        classes: DEFAULT_DISCRETIZATION_CLASS_COUNT
       };
 
       return {
@@ -2431,7 +2425,7 @@ function createVisualizationStore(): VisualizationStore {
     applyVisualizationUpdate(id, (visualization) => {
       const fallback = visualization.classification ?? {
         method: ClassificationMethod.KMEANS,
-        classes: DEFAULT_QUANTILES_CLASS_COUNT
+        classes: DEFAULT_DISCRETIZATION_CLASS_COUNT
       };
       const existing =
         (visualization[targetKey] as ClassificationConfig | undefined) ??
@@ -2471,7 +2465,7 @@ function createVisualizationStore(): VisualizationStore {
         visualization.lineClassification ??
         visualization.classification ?? {
           method: ClassificationMethod.KMEANS,
-          classes: DEFAULT_QUANTILES_CLASS_COUNT
+          classes: DEFAULT_DISCRETIZATION_CLASS_COUNT
         };
 
       return {
@@ -2509,7 +2503,7 @@ function createVisualizationStore(): VisualizationStore {
         ).strokeClassification ??
         ({
           method: ClassificationMethod.KMEANS,
-          classes: DEFAULT_QUANTILES_CLASS_COUNT
+          classes: DEFAULT_DISCRETIZATION_CLASS_COUNT
         } as ClassificationConfig);
 
       const merged = {
