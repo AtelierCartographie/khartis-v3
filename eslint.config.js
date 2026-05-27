@@ -15,7 +15,7 @@ const ignoredPaths = [
   'dist',
   'dev-dist',
   '.svelte-kit',
-  'src/paraglide'
+  'src/lib/paraglide'
 ];
 
 export default ts.config(

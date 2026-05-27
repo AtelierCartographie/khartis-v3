@@ -1,0 +1,65 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "prettier.requireConfig": true,
+  "[svelte]": { "editor.defaultFormatter": "svelte.svelte-vscode" },
+  "[javascript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[json]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[jsonc]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[markdown]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[css]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "[scss]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+  "eslint.validate": ["javascript", "typescript", "svelte"],
+  "svelte.enable-ts-plugin": true,
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "files.eol": "\n",
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/build": true,
+    "**/.svelte-kit": true,
+    "**/pnpm-lock.yaml": true,
+    "src/lib/paraglide": true
+  },
+  "files.watcherExclude": {
+    "**/.svelte-kit/**": true,
+    "**/build/**": true,
+    "**/node_modules/**": true
+  },
+  "files.exclude": {
+    "**/.DS_Store": true
+  },
+  "cSpell.words": [
+    "Khartis",
+    "choropleth",
+    "GeoArrow",
+    "geoarrow",
+    "DuckDB",
+    "duckdb",
+    "Deck",
+    "deckgl",
+    "MapLibre",
+    "maplibre",
+    "GeoParquet",
+    "Paraglide",
+    "Carbon",
+    "SvelteKit",
+    "proj",
+    "PROJ",
+    "WGS",
+    "EPSG",
+    "graticule",
+    "Mercator",
+    "Robinson",
+    "Winkel",
+    "Mollweide",
+    "discretization",
+    "quantiles",
+    "OKLab",
+    "OKLCH"
+  ]
+}

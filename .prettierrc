@@ -14,7 +14,6 @@
       "files": "*.svelte",
       "options": {
         "parser": "svelte",
-        "svelteStrictMode": false,
         "svelteAllowShorthand": false,
         "svelteIndentScriptAndStyle": true
       }
