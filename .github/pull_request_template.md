@@ -1,38 +1,38 @@
-## Objet de la PR
+## Purpose
 
-Décrivez brièvement le changement et sa motivation.
+Briefly describe the change and its motivation.
 
-## Type de changement
+## Type of change
 
-- [ ] feat (nouvelle fonctionnalité)
-- [ ] fix (correction de bug)
+- [ ] feat (new feature)
+- [ ] fix (bug fix)
 - [ ] docs (documentation)
 - [ ] refactor
 - [ ] perf
 - [ ] test
 - [ ] chore/build/ci
 
-## Détails
+## Details
 
-- Problème lié (issue/URL):
-- Portée (pages/feature impactées):
-- Choix techniques notables:
+- Related issue (issue/URL):
+- Scope (pages/features affected):
+- Notable technical choices:
 
-## Screenshots (si UI)
+## Screenshots (if UI)
 
-| Avant | Après |
-| :---: | :---: |
+| Before | After |
+| :----: | :---: |
 
 ## Checklist
 
-- [ ] Lint/format: `pnpm lint` et `pnpm format`
-- [ ] Tests serveur DuckDB: `pnpm test`
+- [ ] Lint/format: `pnpm lint` and `pnpm format`
+- [ ] Tests: `pnpm test:all` (or the relevant `test:*`)
 - [ ] Build: `pnpm build`
-- [ ] i18n: clés ajoutées/MAJ (pas de texte en dur)
-- [ ] Docs: README/CONTRIBUTING mis à jour si besoin
-- [ ] Accessibilité basique (focus/contraste) OK
-- [ ] Pas de secrets/credentials
+- [ ] i18n: keys added/updated (no hardcoded strings)
+- [ ] Docs: README/CONTRIBUTING updated if needed
+- [ ] Basic accessibility (focus/contrast) OK
+- [ ] No secrets/credentials
 
-## Notes de déploiement
+## Deployment notes
 
-Étapes manuelles ou migrations si nécessaire.
+Manual steps or migrations if any.

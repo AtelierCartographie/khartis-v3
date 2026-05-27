@@ -46,9 +46,9 @@ Khartis is a web application to create professional thematic maps without prior 
 
 ## Screenshots
 
-|                      Accueil                       |                        Visualisation                         |                     Habillage                      |
-| :------------------------------------------------: | :----------------------------------------------------------: | :------------------------------------------------: |
-| ![Écran d'accueil](static/screenshots/welcome.png) | ![Étape Visualisation](static/screenshots/visualization.png) | ![Étape Habillage](static/screenshots/styling.png) |
+|                      Welcome                      |                        Visualization                        |                     Styling                     |
+| :-----------------------------------------------: | :---------------------------------------------------------: | :---------------------------------------------: |
+| ![Welcome screen](static/screenshots/welcome.png) | ![Visualization step](static/screenshots/visualization.png) | ![Styling step](static/screenshots/styling.png) |
 
 ## Tech stack
 
@@ -67,7 +67,7 @@ Khartis is a web application to create professional thematic maps without prior 
 corepack enable pnpm
 
 # Create your local environment file
-cp .env.sample .env
+cp .env.example .env
 
 # Install dependencies (also downloads DuckDB WASM extensions)
 pnpm install
@@ -79,7 +79,7 @@ pnpm dev
 pnpm build && pnpm preview
 ```
 
-`.env` must exist before running the app locally. The committed sample (`.env.sample`) only contains non-sensitive values. By default it uses the pre-production `BASE_PATH`, which is convenient for testing deployed path prefixes; set `BASE_PATH=` in `.env` if you want a root local URL.
+`.env` must exist before running the app locally. The committed sample (`.env.example`) only contains non-sensitive values. By default it uses the pre-production `BASE_PATH`, which is convenient for testing deployed path prefixes; set `BASE_PATH=` in `.env` if you want a root local URL.
 
 ## Commands
 
@@ -120,6 +120,17 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Before submitting a PR:
 - Run `vitest run --project client` for component, store, or utility changes; `pnpm test:pipeline` / `pnpm test:duckdb` for data or DuckDB changes
 - Add/update i18n keys when adding user-facing text (no hardcoded strings)
 - Keep accessibility in mind (keyboard navigation, contrast)
+
+## AI-assisted development (optional)
+
+This repo ships a shared, version-controlled [Claude Code](https://claude.com/claude-code) setup so contributors get consistent AI assistance out of the box. It is entirely optional — the project builds, runs, and is reviewed the same way without it.
+
+- **`.claude/rules/`** — path-scoped quality rules that load automatically when you edit matching files: DuckDB usage, render pipeline, color/classification, projections, state & persistence, Svelte 5 + Carbon traps, plus a cartographic domain primer and glossary.
+- **`.claude/settings.json`** — the enabled Claude Code plugins (code review, PR review, commit helpers, doc management, TypeScript LSP, DuckDB skills, Chrome DevTools). See [`.claude/README.md`](.claude/README.md) for what each plugin does and how to invoke it.
+- **GitNexus** — the codebase is indexed for code intelligence (impact analysis, dependency-aware navigation), exposed to Claude Code via the MCP server declared in [`.mcp.json`](.mcp.json). Rebuild the local index with `npx gitnexus analyze`.
+- **`scripts/check-doc-sync.sh`** — a non-blocking pre-commit reminder that warns when structural changes (feature barrels, build/lint config) are committed without touching docs. Set `DOC_SYNC_STRICT=1` to make it fail the commit.
+
+Personal or machine-local Claude settings stay out of Git (`.claude/settings.local.json` is ignored); only the shared team config is committed. Full details in [`.claude/README.md`](.claude/README.md).
 
 ## License
 

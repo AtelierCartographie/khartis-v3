@@ -1,28 +1,28 @@
 ---
 name: Feature request
-about: Proposer une amélioration ou nouvelle fonctionnalité
+about: Propose an improvement or new feature
 labels: enhancement
 ---
 
 ## Description
 
-Quel est le besoin/problème utilisateur ?
+What is the user need or problem?
 
-## Solution proposée
+## Proposed solution
 
-Décrivez la solution souhaitée et l’impact UX.
+Describe the desired solution and its UX impact.
 
-## Alternatives envisagées
+## Alternatives considered
 
 ...
 
-## Impacts techniques
+## Technical impact
 
-- Zones impactées (features/fichiers):
-- Données/DB:
+- Affected areas (features/files):
+- Data/DB:
 - i18n:
-- Accessibilité:
+- Accessibility:
 
-## Maquettes/Specs
+## Mockups/Specs
 
-Liens vers maquettes, specs, docs.
+Links to mockups, specs, docs.
