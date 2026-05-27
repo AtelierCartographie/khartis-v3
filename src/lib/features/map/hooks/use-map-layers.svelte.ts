@@ -927,6 +927,13 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         projectionOverride,
         projectionState.overrideSource
       );
+      // NOTE: the projection store is published exclusively by the
+      // reference-fit path (resolveOrthographicReferenceState), which pairs
+      // the render projection with the bbox it produced. Publishing
+      // `activeBasemapProjection` from here too would race that path and could
+      // store a differently-fit instance, leaving consumers that invert against
+      // the reference bbox — the scale bar — mismatched. So we deliberately do
+      // not touch projectionStore.setRenderProjection here.
 
       const beforeId =
         map && deckOverlay ? findFirstSymbolLayerId(map) : undefined;
@@ -1399,10 +1406,20 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         thematicLayers: layers,
         basemapForegroundLayers
       });
+      // The projected-sphere ocean mask should appear for any non-identity
+      // projection driving the render — both manual overrides and a basemap's
+      // own default projection (e.g. Equal Earth on the World map). Gating it
+      // on manual override alone left the default-projected basemap without
+      // its sphere until the user re-picked a projection.
+      const basemapProjectionType = currentMetadata?.proj_to?.type;
+      const hasDefaultBasemapProjection =
+        basemapProjectionType === 'simple' ||
+        basemapProjectionType === 'composite';
       const sphereProjectionInput =
-        isOrthographicMode && hasManualProjectionOverride
-          ? (getProjectionForSphereMask?.() ??
-            activeBasemapProjection ??
+        isOrthographicMode &&
+        (hasManualProjectionOverride || hasDefaultBasemapProjection)
+          ? (activeBasemapProjection ??
+            getProjectionForSphereMask?.() ??
             projectionOverride)
           : undefined;
       const mersConfig = basemapLayersStore.layers.find((l) => l.id === 'mers');
