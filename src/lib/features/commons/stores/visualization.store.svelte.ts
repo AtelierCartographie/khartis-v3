@@ -706,6 +706,12 @@ function resolveSymbolClassification(
       : {}),
     ...(hasOwnClassificationKey(mirror, 'inverted')
       ? { inverted: mirror.inverted }
+      : {}),
+    ...(hasOwnClassificationKey(mirror, 'patternId')
+      ? { patternId: mirror.patternId }
+      : {}),
+    ...(hasOwnClassificationKey(mirror, 'patternParams')
+      ? { patternParams: mirror.patternParams }
       : {})
   };
 }

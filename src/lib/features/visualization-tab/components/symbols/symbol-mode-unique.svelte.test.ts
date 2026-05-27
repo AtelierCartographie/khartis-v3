@@ -33,11 +33,13 @@ describe('SymbolModeUnique (aucun.png alignment)', () => {
     expect(source).not.toContain('primitive="symbol"');
   });
 
-  it('uses the standard 4-mode preset (no DENSITY for symbols unique)', () => {
-    expect(source).toContain('availableModes={FILL_MODES_STANDARD}');
+  it('uses the symbol fill preset with NONE for transparent backgrounds', () => {
+    expect(source).toContain('availableModes={FILL_MODES_FOR_SYMBOLS}');
     expect(source).toContain(
-      "import { FILL_MODES_STANDARD } from '../shared/fill-mode-presets'"
+      "import { FILL_MODES_FOR_SYMBOLS } from '../shared/fill-mode-presets'"
     );
+    expect(source).toContain('fillMode === FillMode.NONE');
+    expect(source).not.toContain('FILL_MODES_STANDARD');
   });
 
   it('passes the background section title to FillSection', () => {

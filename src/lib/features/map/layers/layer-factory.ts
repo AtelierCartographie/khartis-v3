@@ -215,9 +215,6 @@ interface SymbolDashSpec {
   // Shader (MultiShapeLayer) representation, in stroke-width multiples.
   // `dot` > 0 renders a real round dot (diameter ~= stroke width) after the gap.
   shader: { dash: number; gap: number; dot: number; dotGap: number };
-  // SVG icon representation, in stroke-width multiples. A 0-length segment with
-  // round caps renders as a real round dot.
-  svg: { dashArray: number[]; rounded: boolean };
 }
 
 function resolveSymbolDashSpec(
@@ -226,28 +223,23 @@ function resolveSymbolDashSpec(
   switch (pattern) {
     case BasemapDottedPattern.DOTS:
       return {
-        shader: { dash: 0, gap: 0, dot: 1, dotGap: 2.5 },
-        svg: { dashArray: [0, 2.5], rounded: true }
+        shader: { dash: 0, gap: 0, dot: 1, dotGap: 2.5 }
       };
     case BasemapDottedPattern.DASHES:
       return {
-        shader: { dash: 3, gap: 2.5, dot: 0, dotGap: 0 },
-        svg: { dashArray: [3, 2.5], rounded: false }
+        shader: { dash: 3, gap: 2.5, dot: 0, dotGap: 0 }
       };
     case BasemapDottedPattern.DASH_DOT:
       return {
-        shader: { dash: 3, gap: 2.5, dot: 1, dotGap: 2.5 },
-        svg: { dashArray: [3, 2.5, 0, 2.5], rounded: true }
+        shader: { dash: 3, gap: 2.5, dot: 1, dotGap: 2.5 }
       };
     case BasemapDottedPattern.LONG_DASH:
       return {
-        shader: { dash: 6, gap: 3, dot: 0, dotGap: 0 },
-        svg: { dashArray: [6, 3], rounded: false }
+        shader: { dash: 6, gap: 3, dot: 0, dotGap: 0 }
       };
     default:
       return {
-        shader: { dash: 3, gap: 2, dot: 0, dotGap: 0 },
-        svg: { dashArray: [3, 2], rounded: false }
+        shader: { dash: 3, gap: 2, dot: 0, dotGap: 0 }
       };
   }
 }
@@ -275,18 +267,9 @@ export const TEXT_COLLISION_SAFE_PADDING: [number, number] = [4, 4];
 export const TEXT_COLLISION_PRIORITY = 1;
 
 export const TRANSPARENT_BACKGROUND_COLOR: Color = [0, 0, 0, 0];
-const POINT_SYMBOL_ICON_VIEWBOX_SIZE = 64;
-const POINT_SYMBOL_ICON_RESOLUTION = 256;
 const DEFAULT_LABEL_COLOR = hexToRgb(DEFAULT_COLORS.text);
 
 export const DEFAULT_TEXT_COLOR = hexToRgb(DEFAULT_COLORS.text);
-const pointSymbolIconCache = new Map<string, string>();
-
-function colorToCss(color: Color): string {
-  const [r = 0, g = 0, b = 0, alpha = 255] = color;
-  const normalizedAlpha = Math.max(0, Math.min(1, alpha / 255));
-  return `rgba(${r}, ${g}, ${b}, ${normalizedAlpha})`;
-}
 
 export function resolveDeckTextFontWeight(
   weight: string | number,
@@ -297,120 +280,6 @@ export function resolveDeckTextFontWeight(
 
 export function resolveDeckTextFontFamily(fontFamily?: string): string {
   return resolveFontFamilyStack(fontFamily) || DEFAULT_TEXT_FONT;
-}
-
-function createPointSymbolSvg(
-  shape: ShapeType,
-  fillColor: Color,
-  strokeColor: Color,
-  strokeWidth: number,
-  dashed = false,
-  dashPattern: number[] = DEFAULT_DASH_ARRAY,
-  roundedDash = true
-): string {
-  const fill = colorToCss(fillColor);
-  const stroke = colorToCss(strokeColor);
-  const scaledStrokeWidth = Math.max(2, strokeWidth * 4);
-  // A 0-length segment with round caps renders as a real round dot.
-  const dashArrayValue = dashPattern
-    .map((value) =>
-      (value <= 0 ? 0.01 : Math.max(1, scaledStrokeWidth * value)).toFixed(2)
-    )
-    .join(' ');
-  const strokeDashAttributes = dashed
-    ? ` stroke-dasharray="${dashArrayValue}" stroke-linecap="${roundedDash ? 'round' : 'butt'}"`
-    : '';
-
-  const markup = ((): string => {
-    switch (shape) {
-      case ShapeType.SQUARE:
-        return `<rect x="10" y="10" width="44" height="44" rx="4" ry="4" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}"${strokeDashAttributes} />`;
-      case ShapeType.BAR:
-        return `<rect x="26" y="4" width="12" height="56" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
-      case ShapeType.SPIKE:
-        return `<path d="M32 4 L42 60 H22 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
-      case ShapeType.CROSS:
-        return `<path d="M22 8 H42 V22 H56 V42 H42 V56 H22 V42 H8 V22 H22 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
-      case ShapeType.DIAMOND:
-        return `<path d="M32 6 L58 32 L32 58 L6 32 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
-      case ShapeType.TRIANGLE:
-        return `<path d="M32 8 L56 56 H8 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
-      case ShapeType.STAR:
-        return `<path d="M32 6 L39.4 24.6 L58.7 24.6 L43.1 36.1 L48.4 55.1 L32 44 L15.6 55.1 L20.9 36.1 L5.3 24.6 L24.6 24.6 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
-      case ShapeType.RECTANGLE:
-        return `<rect x="4" y="24" width="56" height="16" rx="2" ry="2" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}"${strokeDashAttributes} />`;
-      case ShapeType.CIRCLE:
-      default:
-        return `<circle cx="32" cy="32" r="22" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}"${strokeDashAttributes} />`;
-    }
-  })();
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${POINT_SYMBOL_ICON_RESOLUTION}" height="${POINT_SYMBOL_ICON_RESOLUTION}" viewBox="0 0 ${POINT_SYMBOL_ICON_VIEWBOX_SIZE} ${POINT_SYMBOL_ICON_VIEWBOX_SIZE}">${markup}</svg>`;
-}
-
-export function createPointSymbolIcon(
-  shape: ShapeType,
-  fillColor: Color,
-  strokeColor: Color,
-  strokeWidth: number,
-  dashed = false,
-  dashPattern: number[] = DEFAULT_DASH_ARRAY,
-  roundedDash = true
-): {
-  url: string;
-  width: number;
-  height: number;
-  anchorX: number;
-  anchorY: number;
-  id: string;
-} {
-  const key = JSON.stringify({
-    shape,
-    fillColor,
-    strokeColor,
-    strokeWidth,
-    dashed,
-    dashPattern,
-    roundedDash
-  });
-  let url = pointSymbolIconCache.get(key);
-  if (!url) {
-    const svg = createPointSymbolSvg(
-      shape,
-      fillColor,
-      strokeColor,
-      strokeWidth,
-      dashed,
-      dashPattern,
-      roundedDash
-    );
-    url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-    pointSymbolIconCache.set(key, url);
-  }
-
-  return {
-    url,
-    width: POINT_SYMBOL_ICON_RESOLUTION,
-    height: POINT_SYMBOL_ICON_RESOLUTION,
-    anchorX: POINT_SYMBOL_ICON_RESOLUTION / 2,
-    anchorY: POINT_SYMBOL_ICON_RESOLUTION / 2,
-    id: key
-  };
-}
-
-function resolveGeoJsonLayerColor(
-  candidate:
-    | RGBColor
-    | Color
-    | ((feature: { properties?: Record<string, unknown> }) => Color),
-  feature: { properties?: Record<string, unknown> },
-  fallbackOpacity: number
-): Color {
-  if (typeof candidate === 'function') {
-    return candidate(feature);
-  }
-
-  return withOpacity(Array.from(candidate), fallbackOpacity);
 }
 
 type BinaryLayerInteractionData = {
@@ -729,12 +598,14 @@ function createDoubleProportionalPointLayers(
   const pointClassification =
     getPrimitiveClassification(viz, PrimitiveFilterType.POINT) ??
     viz.classification;
+  const pointFillClassification =
+    getSymbolFillClassification(viz) ?? viz.classification;
   const symbolPatternType =
     pointConfig.mode === SymbolMode.CATEGORIES
       ? resolveSymbolPatternType(pointClassification)
-      : null;
-  const pointFillClassification =
-    getSymbolFillClassification(viz) ?? viz.classification;
+      : pointConfig.fillMode === FillMode.CATEGORIES
+        ? resolveSymbolPatternType(pointFillClassification)
+        : null;
   const useFillChoropleth = Boolean(
     pointConfig.fillMode === FillMode.CLASSES &&
     pointFillValueColumn &&
@@ -1280,12 +1151,14 @@ function createRepresentativePointSymbolLayers(
   const pointClassification =
     getPrimitiveClassification(viz, PrimitiveFilterType.POINT) ??
     viz.classification;
+  const pointFillClassification =
+    getSymbolFillClassification(viz) ?? viz.classification;
   const symbolPatternType =
     pointConfig.mode === SymbolMode.CATEGORIES
       ? resolveSymbolPatternType(pointClassification)
-      : null;
-  const pointFillClassification =
-    getSymbolFillClassification(viz) ?? viz.classification;
+      : pointConfig.fillMode === FillMode.CATEGORIES
+        ? resolveSymbolPatternType(pointFillClassification)
+        : null;
   const pointColorCategoryColumn =
     pointConfig.mode === SymbolMode.CATEGORIES
       ? pointCategoryColumn
@@ -3599,10 +3472,18 @@ export function createPointLayers(
     ? (getPrimitiveClassification(viz, PrimitiveFilterType.POINT) ??
       viz.classification)
     : undefined;
+  const pointFillClassification = viz
+    ? getSymbolFillClassification(viz)
+    : undefined;
+  const pointFillValueColumn = viz ? getSymbolFillValueColumn(viz) : undefined;
   const symbolPatternType =
     pointConfig?.mode === SymbolMode.CATEGORIES
       ? resolveSymbolPatternType(pointClassification)
-      : null;
+      : pointConfig?.fillMode === FillMode.CATEGORIES
+        ? resolveSymbolPatternType(
+            pointFillClassification ?? pointClassification
+          )
+        : null;
   const useProportionalSymbols = viz && shouldApplyProportionalSymbols(viz);
   const useClassedSymbols =
     pointConfig?.mode === SymbolMode.CLASSES &&
@@ -3666,10 +3547,12 @@ export function createPointLayers(
   }
 
   const shouldUseGeoJsonPointLayer =
-    pointShape !== ShapeType.CIRCLE ||
-    (!isNativeGeoArrowPoint &&
-      !isNativeGeoArrow &&
-      (isWkbEncoded || isGeoJsonEncoded));
+    !isNativeGeoArrowPoint &&
+    !isNativeGeoArrow &&
+    (isWkbEncoded || isGeoJsonEncoded) &&
+    pointShape === ShapeType.CIRCLE &&
+    missingPointShape === ShapeType.CIRCLE &&
+    !(pointStrokeDashed && showPointStroke);
 
   if (shouldUseGeoJsonPointLayer) {
     let geojsonData;
@@ -3848,124 +3731,6 @@ export function createPointLayers(
         }
       : geojsonData;
 
-    if (
-      pointShape !== ShapeType.CIRCLE ||
-      (pointStrokeDashed && showPointStroke)
-    ) {
-      return [
-        new GeoJsonLayer({
-          id: layerId,
-          data: sortedGeoJsonData,
-          pointType: 'icon',
-          getIcon: (feature: { properties?: Record<string, unknown> }) =>
-            createPointSymbolIcon(
-              isMissingGeoJsonPoint(feature) ? missingPointShape : pointShape,
-              isDisabledGeoJsonPoint(feature)
-                ? [0, 0, 0, 0]
-                : isMissingGeoJsonPoint(feature)
-                  ? withOpacity(
-                      missingPointColor,
-                      hasHighlights ? 1 : pointFillOpacity
-                    )
-                  : hideSymbolFill
-                    ? [0, 0, 0, 0]
-                    : resolveGeoJsonLayerColor(
-                        geoJsonFillColor,
-                        feature,
-                        hasHighlights ? 1 : pointFillOpacity
-                      ),
-              isDisabledGeoJsonPoint(feature) ||
-                (isMissingGeoJsonPoint(feature) && !showMissingPoints)
-                ? [0, 0, 0, 0]
-                : !showPointStroke
-                  ? [0, 0, 0, 0]
-                  : resolveGeoJsonLayerColor(
-                      geoJsonLineColor,
-                      feature,
-                      pointStrokeOpacity
-                    ),
-              showPointStroke ? pointStrokeWidth / 3 : 0,
-              showPointStroke && pointStrokeDashed,
-              pointStrokeDashSpec.svg.dashArray,
-              pointStrokeDashSpec.svg.rounded
-            ),
-          getIconSize: (feature) => {
-            if (isDisabledGeoJsonPoint(feature)) {
-              return 0;
-            }
-            if (isMissingGeoJsonPoint(feature)) {
-              return showMissingPoints
-                ? Math.max(1, missingPointRadius * 2)
-                : 0;
-            }
-            const radius = getGeoJsonPointRadius(feature);
-            return useProportionalSymbols
-              ? Math.max(0, radius * 2)
-              : Math.max(1, radius * 2);
-          },
-          iconSizeUnits: 'pixels',
-          iconSizeScale: 1,
-          iconBillboard: true,
-          iconAlphaCutoff: 0,
-          pickable: true,
-          ...resolveHoverHighlightProps(),
-          ...(modelMatrix && { modelMatrix }),
-          ...(beforeId && { beforeId }),
-          updateTriggers: {
-            getIcon: [
-              pointShape,
-              useChoropleth,
-              pointValueColumn,
-              pointClassification?.breaks,
-              pointClassification?.colors,
-              useCategoricalColor,
-              pointCategoryColumn,
-              pointCategoryColorMap,
-              pointClassification?.labels,
-              pointClassification?.categoryValues,
-              pointClassification?.disabledLabels,
-              fillColor,
-              pointStrokeColor,
-              pointStrokeValueColumn,
-              pointStrokeCategoryColumn,
-              showPointStroke,
-              pointConfig?.strokeClassification?.breaks,
-              pointConfig?.strokeClassification?.colors,
-              pointConfig?.strokeClassification?.labels,
-              pointConfig?.strokeClassification?.disabledLabels,
-              pointFillOpacity,
-              pointStrokeOpacity,
-              pointStrokeWidth,
-              pointStrokeDashed,
-              pointConfig?.strokeDashedPattern,
-              pointMissingColumn,
-              pointConfig?.missingData?.show,
-              pointConfig?.missingData?.color,
-              pointConfig?.missingData?.size,
-              pointConfig?.missingData?.shape,
-              hideSymbolFill,
-              hlVersion
-            ],
-            getIconSize: [
-              usesVariablePointSize,
-              pointSizeColumn,
-              pointValueColumn,
-              maxValue,
-              pointClassification?.breaks,
-              pointConfig?.size,
-              pointConfig?.minSize,
-              pointConfig?.maxSize,
-              proportionalSymbolScale,
-              pointMissingColumn,
-              pointConfig?.missingData?.show,
-              pointConfig?.missingData?.size,
-              pointClassification?.disabledLabels
-            ]
-          }
-        }) as ThematicLayer
-      ];
-    }
-
     return [
       new GeoJsonLayer({
         id: layerId,
@@ -4096,9 +3861,9 @@ export function createPointLayers(
   const baseFillAccessor =
     useChoropleth && viz
       ? createChoroplethColorAccessor(
-          pointValueColumn!,
-          pointClassification!.breaks!,
-          pointClassification!.colors!
+          (pointFillValueColumn ?? pointValueColumn)!,
+          (pointFillClassification ?? pointClassification)!.breaks!,
+          (pointFillClassification ?? pointClassification)!.colors!
         )
       : useCategoricalColor && viz
         ? createCategoricalColorAccessor(
@@ -4106,19 +3871,32 @@ export function createPointLayers(
             effectiveCategoryColorMap,
             HIGHLIGHT_FILL_COLOR,
             true,
-            pointClassification?.disabledLabels ?? []
+            (pointConfig?.fillMode === FillMode.CATEGORIES
+              ? (pointFillClassification ?? pointClassification)
+              : pointClassification
+            )?.disabledLabels ?? []
           )
         : null;
 
+  const usesPointCategories =
+    pointConfig?.mode === SymbolMode.CATEGORIES ||
+    pointConfig?.fillMode === FillMode.CATEGORIES;
   const disabledPointCategoryLabels = new Set(
-    (pointClassification?.disabledLabels ?? []).map(String)
+    [
+      ...(pointConfig?.mode === SymbolMode.CATEGORIES
+        ? (pointClassification?.disabledLabels ?? [])
+        : []),
+      ...(pointConfig?.fillMode === FillMode.CATEGORIES
+        ? (pointFillClassification?.disabledLabels ?? [])
+        : [])
+    ].map(String)
   );
   const isDisabledPointCategoryRow = (row: DeckDataRow): boolean =>
-    pointConfig?.mode === SymbolMode.CATEGORIES &&
+    usesPointCategories &&
     pointCategoryColumn !== undefined &&
     disabledPointCategoryLabels.has(String(row[pointCategoryColumn]));
   const hasDisabledPointCategories =
-    pointConfig?.mode === SymbolMode.CATEGORIES &&
+    usesPointCategories &&
     pointCategoryColumn !== undefined &&
     disabledPointCategoryLabels.size > 0;
 
@@ -4422,6 +4200,25 @@ export function createPointLayers(
     scatterBinaryData.attributes.getRadius = { value: radiusArr, size: 1 };
   }
 
+  const needsMissingShapeAttribute =
+    !scatterBinaryData.attributes.getShape &&
+    !!pointMissingColumn &&
+    missingPointShape !== ShapeType.CIRCLE;
+  if (needsMissingShapeAttribute) {
+    const featureIds = scatterBinaryData.featureIds;
+    const length = featureIds ? featureIds.length : jsTable.numRows;
+    const shapeArr = new Float32Array(length);
+    for (let i = 0; i < length; i += 1) {
+      const rowIdx = featureIds ? featureIds[i] : i;
+      const row = jsTable.get(rowIdx) as DeckDataRow | null;
+      shapeArr[i] =
+        row && isMissingThematicValue(row[pointMissingColumn])
+          ? missingShapeOrdinal
+          : shapeOrdinal;
+    }
+    scatterBinaryData.attributes.getShape = { value: shapeArr, size: 1 };
+  }
+
   if (useProportionalSymbols) {
     sortScatterBinaryDataByRadius(scatterBinaryData);
   }
@@ -4431,9 +4228,13 @@ export function createPointLayers(
     missingPointShape !== ShapeType.CIRCLE ||
     useCategoryShape ||
     symbolPatternType !== null ||
+    usesPointCategories ||
     (pointStrokeDashed && showPointStroke);
   const baseLayerProps = {
-    id: layerId,
+    id:
+      symbolPatternType !== null
+        ? `${layerId}-pattern-${symbolPatternType}`
+        : layerId,
     ...(scatterProps as unknown as Record<string, unknown>),
     stroked: showPointStroke,
     filled: !hideSymbolFill,
@@ -4447,6 +4248,7 @@ export function createPointLayers(
     }),
     opacity: hasHighlights ? 1 : pointFillOpacity,
     ...(!radiusBinAttr && { getRadius: uniquePointRadius }),
+    ...(!scatterBinaryData.attributes.getShape && { getShape: shapeOrdinal }),
     radiusScale: 1,
     radiusUnits: 'pixels' as const,
     lineWidthUnits: 'pixels' as const,
@@ -4459,8 +4261,11 @@ export function createPointLayers(
       getFillColor: [
         useChoropleth,
         pointValueColumn,
+        pointFillValueColumn,
         pointClassification?.breaks,
         pointClassification?.colors,
+        pointFillClassification?.breaks,
+        pointFillClassification?.colors,
         useCategoricalColor,
         pointCategoryColumn,
         pointCategoryColorMap,
@@ -4514,7 +4319,9 @@ export function createPointLayers(
         pointClassification?.labels,
         pointClassification?.categoryValues,
         pointClassification?.categoryShapes,
-        symbolPatternType
+        symbolPatternType,
+        pointMissingColumn,
+        showMissingPoints
       ]
     }
   };

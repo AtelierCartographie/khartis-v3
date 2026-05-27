@@ -1128,10 +1128,9 @@ function serializePointShape(
 
   switch (Math.round(shape)) {
     case 1:
-    case 8:
       return `<rect x="${roundSvgValue(x - radius)}" y="${roundSvgValue(y - radius)}" width="${roundSvgValue(radius * 2)}" height="${roundSvgValue(radius * 2)}" ${common} />`;
     case 4:
-      return `<path d="M ${roundSvgValue(x - radius)} ${roundSvgValue(y)} L ${roundSvgValue(x + radius)} ${roundSvgValue(y)} M ${roundSvgValue(x)} ${roundSvgValue(y - radius)} L ${roundSvgValue(x)} ${roundSvgValue(y + radius)}" fill="none" ${strokeAttributes} stroke-width="${roundSvgValue(Math.max(1, strokeWidth || radius / 3))}" stroke-linecap="square" />`;
+      return `<path d="M ${roundSvgValue(x - radius * 0.25)} ${roundSvgValue(y - radius * 0.75)} L ${roundSvgValue(x + radius * 0.25)} ${roundSvgValue(y - radius * 0.75)} L ${roundSvgValue(x + radius * 0.25)} ${roundSvgValue(y - radius * 0.25)} L ${roundSvgValue(x + radius * 0.75)} ${roundSvgValue(y - radius * 0.25)} L ${roundSvgValue(x + radius * 0.75)} ${roundSvgValue(y + radius * 0.25)} L ${roundSvgValue(x + radius * 0.25)} ${roundSvgValue(y + radius * 0.25)} L ${roundSvgValue(x + radius * 0.25)} ${roundSvgValue(y + radius * 0.75)} L ${roundSvgValue(x - radius * 0.25)} ${roundSvgValue(y + radius * 0.75)} L ${roundSvgValue(x - radius * 0.25)} ${roundSvgValue(y + radius * 0.25)} L ${roundSvgValue(x - radius * 0.75)} ${roundSvgValue(y + radius * 0.25)} L ${roundSvgValue(x - radius * 0.75)} ${roundSvgValue(y - radius * 0.25)} L ${roundSvgValue(x - radius * 0.25)} ${roundSvgValue(y - radius * 0.25)} Z" ${common} />`;
     case 5:
       return `<path d="M ${roundSvgValue(x)} ${roundSvgValue(y - radius)} L ${roundSvgValue(x + radius)} ${roundSvgValue(y)} L ${roundSvgValue(x)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x - radius)} ${roundSvgValue(y)} Z" ${common} />`;
     case 6:
@@ -1146,6 +1145,8 @@ function serializePointShape(
       const barHalfWidth = barWidth / 2;
       return `<rect x="${roundSvgValue(x - barHalfWidth)}" y="${roundSvgValue(y - radius)}" width="${roundSvgValue(barHalfWidth * 2)}" height="${roundSvgValue(radius * 2)}" ${common} />`;
     }
+    case 8:
+      return `<rect x="${roundSvgValue(x - radius * 0.9)}" y="${roundSvgValue(y - radius * 0.27)}" width="${roundSvgValue(radius * 1.8)}" height="${roundSvgValue(radius * 0.54)}" ${common} />`;
     case 0:
     default:
       return `<circle cx="${roundSvgValue(x)}" cy="${roundSvgValue(y)}" r="${roundSvgValue(radius)}" ${common} />`;
