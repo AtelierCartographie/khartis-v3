@@ -913,6 +913,47 @@ describe('visualizationStore SymbolPrimitiveConfig round-trip persistence', () =
     );
   });
 
+  it('preserves the symbol pattern (motif) from the legacy symbolClassification mirror', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+    const input = buildRichSymbolVisualization();
+    const patternAware: VisualizationConfig = {
+      ...input,
+      symbolClassification: {
+        ...input.symbolClassification!,
+        patternId: 'diagonal',
+        patternParams: { angle: 45, size: 4, scale: 8 }
+      },
+      symbol: input.symbol
+        ? {
+            ...input.symbol,
+            classification: {
+              ...input.symbol.classification!,
+              patternId: undefined,
+              patternParams: undefined
+            }
+          }
+        : undefined
+    };
+
+    visualizationStore.restoreFromSerialized({
+      visualizations: [patternAware],
+      selectedVisualizationId: patternAware.id,
+      activeVisualizationIds: [patternAware.id]
+    });
+
+    const viz = visualizationStore.selectedVisualization;
+    const runtimeClassification = getPrimitiveClassification(
+      viz,
+      PrimitiveFilterType.POINT
+    );
+    expect(runtimeClassification?.patternId).toBe('diagonal');
+    expect(runtimeClassification?.patternParams).toEqual({
+      angle: 45,
+      size: 4,
+      scale: 8
+    });
+  });
+
   it('keeps symbol stroke discretization fields through the persistence registry round-trip used by project saves', () => {
     datasetsStore.addProcessedDataset(buildDataset());
     const input = buildRichSymbolVisualization();
@@ -1212,64 +1253,74 @@ describe('resolveAllowedPrimitiveFilters geometry resolution', () => {
     };
   }
 
-  it('returns POINT and POLYGON when geometry is Polygon', () => {
+  it('returns POINT, POLYGON and TEXT when geometry is Polygon', () => {
     const result = resolveAllowedPrimitiveFilters(
       VisualizationType.CHOROPLETH,
       makeDataset({ geometry: makeGeometry('Polygon') })
     );
     expect(result).toEqual([
       PrimitiveFilterType.POINT,
-      PrimitiveFilterType.POLYGON
+      PrimitiveFilterType.POLYGON,
+      PrimitiveFilterType.TEXT
     ]);
   });
 
-  it('returns POINT and POLYGON for MultiPolygon', () => {
+  it('returns POINT, POLYGON and TEXT for MultiPolygon', () => {
     const result = resolveAllowedPrimitiveFilters(
       VisualizationType.CHOROPLETH,
       makeDataset({ geometry: makeGeometry('MultiPolygon') })
     );
     expect(result).toEqual([
       PrimitiveFilterType.POINT,
-      PrimitiveFilterType.POLYGON
+      PrimitiveFilterType.POLYGON,
+      PrimitiveFilterType.TEXT
     ]);
   });
 
-  it('returns POINT and LINE for LineString', () => {
+  it('returns POINT, LINE and TEXT for LineString', () => {
     const result = resolveAllowedPrimitiveFilters(
       VisualizationType.CATEGORICAL,
       makeDataset({ geometry: makeGeometry('LineString') })
     );
     expect(result).toEqual([
       PrimitiveFilterType.POINT,
-      PrimitiveFilterType.LINE
+      PrimitiveFilterType.LINE,
+      PrimitiveFilterType.TEXT
     ]);
   });
 
-  it('returns POINT and LINE for MultiLineString', () => {
+  it('returns POINT, LINE and TEXT for MultiLineString', () => {
     const result = resolveAllowedPrimitiveFilters(
       VisualizationType.CATEGORICAL,
       makeDataset({ geometry: makeGeometry('MultiLineString') })
     );
     expect(result).toEqual([
       PrimitiveFilterType.POINT,
-      PrimitiveFilterType.LINE
+      PrimitiveFilterType.LINE,
+      PrimitiveFilterType.TEXT
     ]);
   });
 
-  it('returns POINT for Point', () => {
+  it('returns POINT and TEXT for Point', () => {
     const result = resolveAllowedPrimitiveFilters(
       VisualizationType.PROPORTIONAL,
       makeDataset({ geometry: makeGeometry('Point') })
     );
-    expect(result).toEqual([PrimitiveFilterType.POINT]);
+    expect(result).toEqual([
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.TEXT
+    ]);
   });
 
-  it('returns POINT for MultiPoint', () => {
+  it('returns POINT and TEXT for MultiPoint', () => {
     const result = resolveAllowedPrimitiveFilters(
       VisualizationType.PROPORTIONAL,
       makeDataset({ geometry: makeGeometry('MultiPoint') })
     );
-    expect(result).toEqual([PrimitiveFilterType.POINT]);
+    expect(result).toEqual([
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.TEXT
+    ]);
   });
 
   it('returns POINT for a CSV with detected latitude and longitude columns', () => {
@@ -1297,10 +1348,13 @@ describe('resolveAllowedPrimitiveFilters geometry resolution', () => {
         }
       })
     );
-    expect(result).toEqual([PrimitiveFilterType.POINT]);
+    expect(result).toEqual([
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.TEXT
+    ]);
   });
 
-  it('returns POINT for a CSV with a single coordinates column', () => {
+  it('returns POINT and TEXT for a CSV with a single coordinates column', () => {
     const result = resolveAllowedPrimitiveFilters(
       VisualizationType.PROPORTIONAL,
       makeDataset({
@@ -1319,7 +1373,10 @@ describe('resolveAllowedPrimitiveFilters geometry resolution', () => {
         }
       })
     );
-    expect(result).toEqual([PrimitiveFilterType.POINT]);
+    expect(result).toEqual([
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.TEXT
+    ]);
   });
 
   it('does not infer POINT when only latitude is detected without longitude', () => {
@@ -1344,7 +1401,7 @@ describe('resolveAllowedPrimitiveFilters geometry resolution', () => {
     expect(result).toEqual([]);
   });
 
-  it('returns POINT and POLYGON when the dataset is joined to a basemap', () => {
+  it('returns POINT, POLYGON and TEXT when the dataset is joined to a basemap', () => {
     const result = resolveAllowedPrimitiveFilters(
       VisualizationType.CHOROPLETH,
       makeDataset({
@@ -1354,7 +1411,8 @@ describe('resolveAllowedPrimitiveFilters geometry resolution', () => {
     );
     expect(result).toEqual([
       PrimitiveFilterType.POINT,
-      PrimitiveFilterType.POLYGON
+      PrimitiveFilterType.POLYGON,
+      PrimitiveFilterType.TEXT
     ]);
   });
 
@@ -1372,5 +1430,99 @@ describe('resolveAllowedPrimitiveFilters geometry resolution', () => {
       makeDataset({ geometry: makeGeometry('GeometryCollection') })
     );
     expect(result).toEqual([]);
+  });
+});
+
+describe('visualizationStore togglePrimitiveFilter primitive sync', () => {
+  afterEach(() => {
+    visualizationStore.clear();
+    datasetsStore.clear();
+    persistenceRegistry.markClean();
+  });
+
+  it('disables text.enabled when toggling TEXT off, so the layer-factory stops rendering text labels', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CATEGORICAL,
+      'dataset-1'
+    );
+    const initialText = getTextPrimitive(visualization);
+    if (!initialText) {
+      throw new Error('Expected createVisualization to initialize text config');
+    }
+    visualizationStore.updateVisualization(visualization.id, {
+      primitiveFilters: [PrimitiveFilterType.LINE, PrimitiveFilterType.TEXT],
+      text: {
+        ...initialText,
+        enabled: true,
+        labelColumn: 'name',
+        opacity: 1
+      }
+    });
+
+    visualizationStore.togglePrimitiveFilter(
+      visualization.id,
+      PrimitiveFilterType.TEXT
+    );
+
+    const updated = visualizationStore.selectedVisualization;
+    expect(getTextPrimitive(updated)?.enabled).toBe(false);
+    expect(updated?.primitiveFilters).not.toContain(PrimitiveFilterType.TEXT);
+  });
+
+  it('restores text opacity when re-enabling TEXT through the toggle', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CATEGORICAL,
+      'dataset-1'
+    );
+    const initialText = getTextPrimitive(visualization);
+    if (!initialText) {
+      throw new Error('Expected createVisualization to initialize text config');
+    }
+    visualizationStore.updateVisualization(visualization.id, {
+      text: {
+        ...initialText,
+        enabled: false,
+        labelColumn: 'name',
+        opacity: 0
+      }
+    });
+
+    visualizationStore.togglePrimitiveFilter(
+      visualization.id,
+      PrimitiveFilterType.TEXT
+    );
+
+    const updated = visualizationStore.selectedVisualization;
+    const text = getTextPrimitive(updated);
+    expect(text?.enabled).toBe(true);
+    expect(text?.opacity ?? 0).toBeGreaterThan(0);
+    expect(updated?.primitiveFilters).toContain(PrimitiveFilterType.TEXT);
+  });
+
+  it('keeps symbol.enabled in sync with primitiveFilters when toggling POINT', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.PROPORTIONAL,
+      'dataset-1'
+    );
+    const initialSymbol = getSymbolPrimitive(visualization);
+    if (!initialSymbol) {
+      throw new Error('Expected symbol primitive to exist');
+    }
+    visualizationStore.updateVisualization(visualization.id, {
+      primitiveFilters: [PrimitiveFilterType.POINT, PrimitiveFilterType.LINE],
+      symbol: { ...initialSymbol, enabled: true }
+    });
+
+    visualizationStore.togglePrimitiveFilter(
+      visualization.id,
+      PrimitiveFilterType.POINT
+    );
+
+    const updated = visualizationStore.selectedVisualization;
+    expect(getSymbolPrimitive(updated)?.enabled).toBe(false);
+    expect(updated?.primitiveFilters).not.toContain(PrimitiveFilterType.POINT);
   });
 });

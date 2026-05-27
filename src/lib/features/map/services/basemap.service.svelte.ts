@@ -1079,7 +1079,10 @@ function createBasemapService() {
         ? await loadCustomBasemapGeometry(metadata)
         : await loadGeometryFromParquet(metadata.file, metadata.bbox);
 
-      return createLoadedBasemapVariant(metadata, geometryTable, new Map());
+      const layerTables = metadata.isCustom
+        ? await loadCustomBasemapLayerTables(metadata)
+        : new Map<string, ArrowTable>();
+      return createLoadedBasemapVariant(metadata, geometryTable, layerTables);
     } catch (error) {
       logger.error(
         `Failed to load basemap: ${basemapId}`,
@@ -1328,14 +1331,38 @@ function createBasemapService() {
     geometryTable: ArrowTable
   ): Promise<void> {
     upsertCustomBasemapMetadata(metadata);
+    const layerTables = await loadCustomBasemapLayerTables(metadata);
     const loaded: LoadedBasemap = createLoadedBasemapVariant(
       metadata,
       geometryTable,
-      new Map()
+      layerTables
     );
     basemapCache.set(metadata.file, loaded);
     basemapActivationRequestId += 1;
     activateLoadedBasemap(loaded);
+  }
+
+  async function loadCustomBasemapLayerTables(
+    metadata: BasemapMetadata
+  ): Promise<Map<string, ArrowTable>> {
+    const layerTables = new Map<string, ArrowTable>();
+    for (const layer of getLoadableMetadataLayers(metadata)) {
+      const layerFile = layer.file;
+      if (!layerFile || !(await doesDuckTableExist(layerFile))) {
+        continue;
+      }
+      try {
+        const table = await loadBasemapLayerTable(metadata, layerFile);
+        layerTables.set(layerFile, table);
+      } catch (error) {
+        logger.error(
+          'Failed to preload custom basemap layer table',
+          LogCategory.MAP,
+          error
+        );
+      }
+    }
+    return layerTables;
   }
 
   async function refreshCustomBasemap(

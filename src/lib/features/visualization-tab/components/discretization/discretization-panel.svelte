@@ -1,7 +1,10 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
-  import { SLIDER_DEBOUNCE_MS } from '$lib/features/commons/constants/visualization.constants';
+  import {
+    SLIDER_DEBOUNCE_MS,
+    DEFAULT_DISCRETIZATION_CLASS_COUNT
+  } from '$lib/features/commons/constants/visualization.constants';
   import {
     DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
     NESTED_MEANS_CLASS_COUNTS,
@@ -65,7 +68,7 @@
 
   let {
     method = $bindable<ClassificationMethod>('kmeans'),
-    numClasses = $bindable(5),
+    numClasses = $bindable(DEFAULT_DISCRETIZATION_CLASS_COUNT),
     classCountMax = DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
     breaks = $bindable<ClassBreak[]>([
       { min: 0, max: 20, count: 45, color: '#f7fbff' },

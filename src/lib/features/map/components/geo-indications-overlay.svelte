@@ -463,9 +463,11 @@
       );
     }
 
-    return getSuggestedScaleDistance(
-      geoIndicationsState.scale.units,
-      getCurrentScaleDistanceContext()
+    return (
+      getSuggestedScaleDistance(
+        geoIndicationsState.scale.units,
+        getCurrentScaleDistanceContext()
+      ) ?? 1
     );
   });
 
@@ -481,13 +483,23 @@
       geoIndicationsState.scale.distance,
       0
     );
-    if (currentDistance <= 0) {
-      geoIndicationsActions.setScaleDistance(
-        getSuggestedScaleDistance(
-          geoIndicationsState.scale.units,
-          getCurrentScaleDistanceContext()
-        )
+    // Re-suggest whenever the value was auto-tuned (initial, or every time
+    // projection/zoom/center moves) until the user manually overrides it.
+    if (currentDistance <= 0 || geoIndicationsState.scale.autoTuned) {
+      const suggested = getSuggestedScaleDistance(
+        geoIndicationsState.scale.units,
+        getCurrentScaleDistanceContext()
       );
+      // Wait for a valid measurement before persisting an initial value —
+      // otherwise the transitional state right after a basemap load would
+      // bake a bogus value into the project state.
+      if (suggested === null) {
+        return;
+      }
+      if (suggested === currentDistance) {
+        return;
+      }
+      geoIndicationsActions.setSuggestedScaleDistance(suggested);
       return;
     }
 
@@ -501,7 +513,7 @@
       return;
     }
 
-    geoIndicationsActions.setScaleDistance(clampedDistance);
+    geoIndicationsActions.setSuggestedScaleDistance(clampedDistance);
   });
 
   const scaleWidth = $derived.by(() => {

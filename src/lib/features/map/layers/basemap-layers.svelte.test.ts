@@ -438,7 +438,7 @@ describe('basemap projection fallbacks', () => {
     );
   });
 
-  it('uses the projected canvas extent for mers when it is available', () => {
+  it('prefers the sphere polygon over the projected canvas extent', () => {
     const layer = createMersLayer(
       {
         id: 'mers',
@@ -453,18 +453,11 @@ describe('basemap projection fallbacks', () => {
           [180, 90]
         ]
       }
-    ) as GeoJsonLayer | null;
+    ) as SolidPolygonLayer | null;
 
-    const data = layer?.props.data as FeatureCollection<Polygon> | undefined;
-
-    expect(layer).toBeInstanceOf(GeoJsonLayer);
-    expect(data?.features[0]?.geometry.coordinates[0]).toEqual([
-      [-180, -90],
-      [180, -90],
-      [180, 90],
-      [-180, 90],
-      [-180, -90]
-    ]);
+    expect(layer).toBeInstanceOf(SolidPolygonLayer);
+    expect(layer?.props.coordinateSystem).toBe(COORDINATE_SYSTEM.CARTESIAN);
+    expect(layer?.props.getFillColor).toEqual([0, 109, 255, 255]);
   });
 
   it('falls back to composite screen extents when projected sphere parsing is empty', () => {
@@ -1976,6 +1969,53 @@ describe('basemap projection fallbacks', () => {
     ) as GeoJsonLayer | undefined;
 
     expect(metaLimitLayer?.props.data).toBe(projectedGeoJSON);
+  });
+
+  it('places frontieres below the thematic block by default and above it when its placement is flipped', () => {
+    const metadataTable = { id: 'limit-placement' } as unknown as ArrowTable;
+    const sourceGeoJSON = createLineGeoJSON('raw-meta-limit-placement');
+    const ctx = createProjectionContext();
+
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.TERRE, false);
+
+    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
+      table === metadataTable ? createLineGeometryInfo() : null
+    );
+    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
+      table === metadataTable ? sourceGeoJSON : null
+    );
+    projectGeoJSONMock.mockReturnValue(sourceGeoJSON);
+
+    const buildLayers = () =>
+      createBasemapLayers(null, ctx, {
+        metadataLayers: [
+          {
+            table: metadataTable,
+            style: null,
+            type: BasemapLayerType.LIMIT,
+            file: 'limits-placement.geojson'
+          } satisfies MetadataLayerEntry
+        ],
+        availableMetadataLayerTypes: [BasemapLayerType.LIMIT],
+        stylePresets: null
+      });
+
+    const isLimitLayer = (layer: { props: { id: unknown } }): boolean =>
+      String(layer.props.id).includes('basemap-meta-limit');
+
+    const belowDefault = buildLayers();
+    expect(belowDefault.foregroundBelowThematic.some(isLimitLayer)).toBe(true);
+    expect(belowDefault.foreground.some(isLimitLayer)).toBe(true);
+
+    basemapLayersStore.setLayerThematicPlacement(
+      BASEMAP_LAYER_ID.FRONTIERES,
+      false
+    );
+
+    const aboveFlipped = buildLayers();
+    expect(aboveFlipped.foregroundBelowThematic.some(isLimitLayer)).toBe(false);
+    expect(aboveFlipped.foreground.some(isLimitLayer)).toBe(true);
   });
 
   it('uses Arrow native path for metadata limits under composite projections', () => {

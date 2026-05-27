@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   LINEAR_SHAPES,
+  ProportionalType,
   SHAPE_ORDINAL,
   ShapeType,
   SymbolMode,
@@ -80,6 +81,30 @@ describe('symbol shape matrix (issue #92)', () => {
         ShapeType.BAR,
         ShapeType.SPIKE
       ]);
+    });
+
+    it('should keep linear shapes for PROPORTIONAL Single (default proportionalType)', () => {
+      expect(
+        availableShapesForSymbolMode(
+          SymbolMode.PROPORTIONAL,
+          ProportionalType.SINGLE
+        )
+      ).toEqual([
+        ShapeType.CIRCLE,
+        ShapeType.SQUARE,
+        ShapeType.BAR,
+        ShapeType.SPIKE
+      ]);
+    });
+
+    it('should exclude linear shapes (BAR/SPIKE) for PROPORTIONAL Double mode', () => {
+      const shapes = availableShapesForSymbolMode(
+        SymbolMode.PROPORTIONAL,
+        ProportionalType.DOUBLE
+      );
+      expect(shapes).toEqual([ShapeType.CIRCLE, ShapeType.SQUARE]);
+      expect(shapes).not.toContain(ShapeType.BAR);
+      expect(shapes).not.toContain(ShapeType.SPIKE);
     });
 
     it('should expose the same 4 shapes for CLASSES mode as for PROPORTIONAL mode', () => {

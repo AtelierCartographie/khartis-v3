@@ -27,6 +27,9 @@
     shape?: MissingDataShape;
     size?: number;
     sizeLabel?: string;
+    sizeMin?: number;
+    sizeMax?: number;
+    sizeStep?: number;
     showShapeSelector?: boolean;
     showSizeSlider?: boolean;
     showDashedToggle?: boolean;
@@ -49,6 +52,9 @@
     shape = MissingDataShape.CIRCLE,
     size = 2,
     sizeLabel = m.size_label(),
+    sizeMin = SLIDER_LIMITS.missingDataSize.min,
+    sizeMax = SLIDER_LIMITS.missingDataSize.max,
+    sizeStep = SLIDER_LIMITS.missingDataSize.step,
     showShapeSelector = true,
     showSizeSlider = true,
     showDashedToggle = false,
@@ -159,9 +165,9 @@
               <SliderWithInput
                 label={sizeLabel}
                 bind:value={size}
-                min={SLIDER_LIMITS.missingDataSize.min}
-                max={SLIDER_LIMITS.missingDataSize.max}
-                step={SLIDER_LIMITS.missingDataSize.step}
+                min={sizeMin}
+                max={sizeMax}
+                step={sizeStep}
                 onchange={onsizechange}
               />
             </div>

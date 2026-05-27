@@ -12,36 +12,33 @@ export function getThematicLayerRenderOrder(layers: readonly Layer[]): Layer[] {
   return [...layers];
 }
 
-const THEMATIC_TEXT_LAYER_ID_PREFIXES = [
-  `${DeckLayerId.TEXT_LAYER}-`,
-  `${DeckLayerId.LABEL_LAYER}-`
-] as const;
-
-function isThematicTextLayer(layer: Layer): boolean {
-  return THEMATIC_TEXT_LAYER_ID_PREFIXES.some((prefix) =>
-    layer.id.startsWith(prefix)
-  );
+function isThematicPolygonLayer(layer: Layer): boolean {
+  return String(layer.id).startsWith(DeckLayerId.POLYGON_LAYER);
 }
 
 export function getMapLayerRenderOrder({
   basemapBackgroundLayers,
+  basemapForegroundBelowThematicLayers = [],
   thematicLayers,
   basemapForegroundLayers
 }: {
   basemapBackgroundLayers: readonly Layer[];
+  basemapForegroundBelowThematicLayers?: readonly Layer[];
   thematicLayers: readonly Layer[];
   basemapForegroundLayers: readonly Layer[];
 }): Layer[] {
-  const ordered = getThematicLayerRenderOrder(thematicLayers);
-  const nonText: Layer[] = [];
-  const text: Layer[] = [];
-  for (const layer of ordered) {
-    (isThematicTextLayer(layer) ? text : nonText).push(layer);
-  }
+  const orderedThematic = getThematicLayerRenderOrder(thematicLayers);
+  const firstMarkerIndex = orderedThematic.findIndex(
+    (layer) => !isThematicPolygonLayer(layer)
+  );
+  const insertAt =
+    firstMarkerIndex < 0 ? orderedThematic.length : firstMarkerIndex;
+
   return [
     ...basemapBackgroundLayers,
-    ...nonText,
-    ...basemapForegroundLayers,
-    ...text
+    ...orderedThematic.slice(0, insertAt),
+    ...basemapForegroundBelowThematicLayers,
+    ...orderedThematic.slice(insertAt),
+    ...basemapForegroundLayers
   ];
 }

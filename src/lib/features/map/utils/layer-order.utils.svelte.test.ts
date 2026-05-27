@@ -26,13 +26,13 @@ describe('getMapLayerRenderOrder', () => {
     ]);
   });
 
-  it('renders thematic TextLayers AFTER the basemap foreground so frontier strokes never cut across label backgrounds', () => {
+  it('preserves the position of thematic TextLayers inside the thematic block so primitiveOrder controls Z-stack', () => {
     const polygonFill = makeLayer('polygon-layer-viz1');
     const textLayer = makeLayer('text-layer-viz1');
     const labelLayer = makeLayer('label-layer-viz1');
     const result = getMapLayerRenderOrder({
       basemapBackgroundLayers: [makeLayer('basemap-terre')],
-      thematicLayers: [polygonFill, labelLayer, textLayer],
+      thematicLayers: [textLayer, labelLayer, polygonFill],
       basemapForegroundLayers: [
         makeLayer('basemap-frontieres'),
         makeLayer('basemap-villes-labels')
@@ -41,15 +41,15 @@ describe('getMapLayerRenderOrder', () => {
 
     expect(result.map((layer) => layer.id)).toEqual([
       'basemap-terre',
+      'text-layer-viz1',
+      'label-layer-viz1',
       'polygon-layer-viz1',
       'basemap-frontieres',
-      'basemap-villes-labels',
-      'label-layer-viz1',
-      'text-layer-viz1'
+      'basemap-villes-labels'
     ]);
   });
 
-  it('preserves the relative order between TextLayer and LabelLayer for the same visualization', () => {
+  it('keeps every layer in the same input order when no basemap layers are provided', () => {
     const labelA = makeLayer('label-layer-vizA');
     const textA = makeLayer('text-layer-vizA');
     const labelB = makeLayer('label-layer-vizB');
@@ -68,7 +68,44 @@ describe('getMapLayerRenderOrder', () => {
     ]);
   });
 
-  it('does not classify non-thematic basemap text helpers (e.g. basemap-villes-labels) as thematic texts', () => {
+  it('renders below-thematic foreground basemap above thematic polygons but below thematic markers', () => {
+    const polygonFill = makeLayer('polygon-layer-viz1');
+    const pointLayer = makeLayer('point-layer-viz1');
+    const result = getMapLayerRenderOrder({
+      basemapBackgroundLayers: [makeLayer('basemap-terre')],
+      basemapForegroundBelowThematicLayers: [makeLayer('basemap-frontieres')],
+      thematicLayers: [polygonFill, pointLayer],
+      basemapForegroundLayers: [makeLayer('basemap-villes-labels')]
+    });
+
+    expect(result.map((layer) => layer.id)).toEqual([
+      'basemap-terre',
+      'polygon-layer-viz1',
+      'basemap-frontieres',
+      'point-layer-viz1',
+      'basemap-villes-labels'
+    ]);
+  });
+
+  it('renders below-thematic foreground basemap under all markers when the thematic block has no polygons', () => {
+    const pointLayer = makeLayer('point-layer-viz1');
+    const textLayer = makeLayer('text-layer-viz1');
+    const result = getMapLayerRenderOrder({
+      basemapBackgroundLayers: [makeLayer('basemap-terre')],
+      basemapForegroundBelowThematicLayers: [makeLayer('basemap-frontieres')],
+      thematicLayers: [pointLayer, textLayer],
+      basemapForegroundLayers: []
+    });
+
+    expect(result.map((layer) => layer.id)).toEqual([
+      'basemap-terre',
+      'basemap-frontieres',
+      'point-layer-viz1',
+      'text-layer-viz1'
+    ]);
+  });
+
+  it('keeps basemap foreground helpers (e.g. basemap-villes-labels) in the foreground segment', () => {
     const villesLabels = makeLayer('basemap-villes-labels');
     const textLayer = makeLayer('text-layer-vizA');
     const result = getMapLayerRenderOrder({
@@ -78,8 +115,8 @@ describe('getMapLayerRenderOrder', () => {
     });
 
     expect(result.map((layer) => layer.id)).toEqual([
-      'basemap-villes-labels',
-      'text-layer-vizA'
+      'text-layer-vizA',
+      'basemap-villes-labels'
     ]);
   });
 });

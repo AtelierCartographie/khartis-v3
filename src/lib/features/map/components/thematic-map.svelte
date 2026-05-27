@@ -858,7 +858,8 @@
     projectionStore.setReferenceBbox(
       referenceState.bbox,
       undefined,
-      referenceState.isProjected
+      referenceState.isProjected,
+      referenceState.renderProjection
     );
 
     return true;
@@ -888,8 +889,7 @@
 
   function getOrthographicRenderProjection(
     basemapMeta: ReturnType<typeof getProjectionMetadataForDataset>,
-    allowManualOverride = true,
-    updateRenderProjectionStore = true
+    allowManualOverride = true
   ): ProjectionLike | undefined {
     const projectionState = getProjectionState();
     const viewportSize = getProjectionViewportSize();
@@ -914,33 +914,15 @@
         : undefined;
     const overrideProjection = getProjectionOverrideForRender();
 
-    const renderProjection = resolveProjectionForRender(
+    // Pure resolver — no store side effect. The render projection reaches the
+    // store exclusively through setReferenceBbox, paired with the bbox it
+    // produced, so the two can never drift to different fits.
+    return resolveProjectionForRender(
       defaultProjection,
       overrideProjection,
       projectionState.overrideSource,
       allowManualOverride
     );
-    if (updateRenderProjectionStore) {
-      projectionStore.setRenderProjection(renderProjection ?? null);
-    }
-    return renderProjection;
-  }
-
-  function projectBboxForRenderProjection(
-    bbox: BBox | null,
-    basemapMeta: ReturnType<typeof getProjectionMetadataForDataset>,
-    allowManualOverride = true
-  ): BBox | null {
-    const renderProjection = getOrthographicRenderProjection(
-      basemapMeta,
-      allowManualOverride,
-      false
-    );
-    if (!renderProjection || !bbox) {
-      return null;
-    }
-
-    return computeProjectedBboxForProjection(renderProjection, bbox);
   }
 
   function resolveOrthographicReferenceState(
@@ -948,10 +930,27 @@
     bounds: [[number, number], [number, number]] | null,
     basemapMeta: ReturnType<typeof getProjectionMetadataForDataset>,
     shouldUseBasemapReference: boolean
-  ): { bbox: BBox | null; isProjected: boolean } {
+  ): {
+    bbox: BBox | null;
+    isProjected: boolean;
+    renderProjection: ProjectionLike | null;
+  } {
     if (!bounds) {
-      return { bbox: null, isProjected: false };
+      return { bbox: null, isProjected: false, renderProjection: null };
     }
+
+    // Resolve the render projection ONCE and reuse the same instance for every
+    // bbox projection below. Calling getOrthographicRenderProjection per bbox
+    // risks each call observing a different getProjectionFitBbox() snapshot,
+    // which would produce differently-fit instances — and then the stored
+    // projection would not match the pixel space of the reference bbox it is
+    // paired with (the root cause of the scale bar reading 0.1 km).
+    const renderProjection =
+      getOrthographicRenderProjection(basemapMeta, true) ?? null;
+    const projectBboxWith = (bbox: BBox | null): BBox | null =>
+      renderProjection && bbox
+        ? computeProjectedBboxForProjection(renderProjection, bbox)
+        : null;
 
     const shouldUseIdentityReferenceBounds =
       shouldUseIdentityProjectionForDatasetCrs(dataset?.geometry?.crs);
@@ -959,7 +958,7 @@
       basemapMeta,
       projectionPresets: basemapService.projectionPresets,
       viewportSize: getProjectionViewportSize(),
-      projectBbox: (bbox) => projectBboxForRenderProjection(bbox, basemapMeta)
+      projectBbox: projectBboxWith
     });
 
     const [[minX, minY], [maxX, maxY]] = bounds;
@@ -967,11 +966,7 @@
     const preferDatasetBbox = shouldPreferDatasetProjectionBbox(datasetBbox);
     const datasetProjectedBbox = shouldUseIdentityReferenceBounds
       ? null
-      : projectBboxForRenderProjection(
-          datasetBbox,
-          basemapMeta,
-          preferDatasetBbox
-        );
+      : projectBboxWith(datasetBbox);
 
     const referenceBbox = resolveOrthographicReferenceBbox({
       datasetBounds: datasetBbox,
@@ -982,11 +977,16 @@
       preferDatasetBbox
     });
 
+    const isProjected =
+      referenceBbox === basemapReference.projectedBbox ||
+      referenceBbox === datasetProjectedBbox;
+
     return {
       bbox: referenceBbox,
-      isProjected:
-        referenceBbox === basemapReference.projectedBbox ||
-        referenceBbox === datasetProjectedBbox
+      isProjected,
+      // Same instance used to project the bbox above — guaranteed to share its
+      // pixel space, so the scale bar's invert is consistent.
+      renderProjection: isProjected ? renderProjection : null
     };
   }
 
@@ -1035,23 +1035,44 @@
   function resolveOrthographicBasemapReferenceState(
     basemapMeta: typeof basemapService.currentMetadata,
     basemapTable: ArrowTable | null
-  ): { bbox: BBox | null; isProjected: boolean } {
+  ): {
+    bbox: BBox | null;
+    isProjected: boolean;
+    renderProjection: ProjectionLike | null;
+  } {
     if (!basemapMeta) {
-      return { bbox: null, isProjected: false };
+      return { bbox: null, isProjected: false, renderProjection: null };
     }
+
+    // One projection instance for both projecting the bbox and pairing with
+    // it in the store (see resolveOrthographicReferenceState for the why).
+    const renderProjection =
+      getOrthographicRenderProjection(basemapMeta, true) ?? null;
+    const projectBboxWith = (bbox: BBox | null): BBox | null =>
+      renderProjection && bbox
+        ? computeProjectedBboxForProjection(renderProjection, bbox)
+        : null;
 
     const basemapReference = resolveOrthographicBasemapReferenceBboxes({
       basemapMeta,
       projectionPresets: basemapService.projectionPresets,
       viewportSize: getProjectionViewportSize(),
-      projectBbox: (bbox) => projectBboxForRenderProjection(bbox, basemapMeta)
+      projectBbox: projectBboxWith
     });
     if (basemapReference.projectedBbox) {
-      return { bbox: basemapReference.projectedBbox, isProjected: true };
+      return {
+        bbox: basemapReference.projectedBbox,
+        isProjected: true,
+        renderProjection
+      };
     }
 
     if (basemapReference.fallbackBbox) {
-      return { bbox: basemapReference.fallbackBbox, isProjected: false };
+      return {
+        bbox: basemapReference.fallbackBbox,
+        isProjected: false,
+        renderProjection: null
+      };
     }
 
     const bounds = basemapTable
@@ -1062,13 +1083,15 @@
       const [[minX, minY], [maxX, maxY]] = orthographicBounds;
       return {
         bbox: [minX, minY, maxX, maxY],
-        isProjected: false
+        isProjected: false,
+        renderProjection: null
       };
     }
 
     return {
       bbox: basemapMeta.bbox ?? null,
-      isProjected: false
+      isProjected: false,
+      renderProjection: null
     };
   }
 
@@ -1119,7 +1142,8 @@
           projectionStore.setReferenceBbox(
             referenceState.bbox,
             undefined,
-            referenceState.isProjected
+            referenceState.isProjected,
+            referenceState.renderProjection
           );
         }
 
@@ -1154,7 +1178,8 @@
           projectionStore.setReferenceBbox(
             referenceState.bbox,
             undefined,
-            referenceState.isProjected
+            referenceState.isProjected,
+            referenceState.renderProjection
           );
           fitOrthographicViewport(reasonOverride ?? 'basemap');
           return;
@@ -1168,7 +1193,12 @@
           [number, number],
           [number, number]
         ];
-        projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
+        projectionStore.setReferenceBbox(
+          [minX, minY, maxX, maxY],
+          undefined,
+          false,
+          null
+        );
         fitOrthographicViewport(reasonOverride ?? 'dataset');
         return;
       }
@@ -1184,7 +1214,8 @@
         projectionStore.setReferenceBbox(
           referenceState.bbox,
           undefined,
-          referenceState.isProjected
+          referenceState.isProjected,
+          referenceState.renderProjection
         );
         fitOrthographicViewport(reasonOverride ?? 'basemap');
         return;
@@ -1697,7 +1728,8 @@
               projectionStore.setReferenceBbox(
                 referenceState.bbox,
                 undefined,
-                referenceState.isProjected
+                referenceState.isProjected,
+                referenceState.renderProjection
               );
               scheduleLayerUpdate('effect:firstGeoJSON-basemap');
               fitOrthographicViewport('basemap');
@@ -1711,7 +1743,12 @@
               [number, number],
               [number, number]
             ];
-            projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
+            projectionStore.setReferenceBbox(
+              [minX, minY, maxX, maxY],
+              undefined,
+              false,
+              null
+            );
             scheduleLayerUpdate('effect:firstGeoJSON');
             fitOrthographicViewport('dataset');
           }
@@ -2095,7 +2132,8 @@
                   projectionStore.setReferenceBbox(
                     referenceState.bbox,
                     undefined,
-                    referenceState.isProjected
+                    referenceState.isProjected,
+                    referenceState.renderProjection
                   );
                 }
                 if (mapInit.isMapLoaded) {

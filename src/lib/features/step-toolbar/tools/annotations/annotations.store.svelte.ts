@@ -128,12 +128,14 @@ const PREDEFINED_STYLES: Record<string, Partial<AnnotationStyle>> = {
   title: {
     fontSize: PRINT_STANDARD_TOKENS.annotations.titleFontSize,
     bold: true,
-    italic: false
+    italic: false,
+    textAlign: TextAlign.Left
   },
   subtitle: {
     fontSize: PRINT_STANDARD_TOKENS.annotations.subtitleFontSize,
     bold: false,
-    italic: false
+    italic: false,
+    textAlign: TextAlign.Left
   },
   caption: {
     fontSize: PRINT_STANDARD_TOKENS.annotations.captionFontSize,
@@ -660,6 +662,10 @@ function isBottomRightPageElementRole(role: PageElementRole): boolean {
   return BOTTOM_RIGHT_STACK_ORDER.includes(role);
 }
 
+function isTopLeftPageElementRole(role: PageElementRole): boolean {
+  return role === ANNOTATION_ROLE.TITLE || role === ANNOTATION_ROLE.SUBTITLE;
+}
+
 function shouldSnapAutoPageElement(role: PageElementRole): boolean {
   return isPageElementRole(role);
 }
@@ -678,6 +684,15 @@ function reconcileAutoPageElementStyle(
       nextStyle.textAlign === TextAlign.Left)
   ) {
     nextStyle.textAlign = TextAlign.Right;
+  }
+
+  if (
+    positionMode !== 'manual' &&
+    isTopLeftPageElementRole(role) &&
+    (nextStyle.textAlign === undefined ||
+      nextStyle.textAlign === TextAlign.Center)
+  ) {
+    nextStyle.textAlign = TextAlign.Left;
   }
 
   return Object.keys(nextStyle).length > 0 ? nextStyle : undefined;

@@ -73,6 +73,8 @@ function createProjectionStore() {
       state.referenceBbox = bbox;
       state.referenceGeoMetadata = geoMetadata;
       state.isProjectedCoordinates = false;
+      // Geographic reference (raw lng/lat): no d3 projection drives it.
+      state.renderProjection = null;
       needsCanvasFit = true;
       recalculateModelMatrix();
     }
@@ -82,11 +84,19 @@ function createProjectionStore() {
     bbox: BBox,
     geoMetadata?: string,
 
-    isProjected = false
+    isProjected = false,
+    renderProjection?: ProjectionLike | null
   ): void {
     state.referenceBbox = bbox;
     state.referenceGeoMetadata = geoMetadata ?? null;
     state.isProjectedCoordinates = isProjected;
+    // The render projection MUST stay paired with the bbox it produced: both
+    // live in the same pixel space, and the scale bar inverts bbox-derived
+    // samples through this projection. Setting them together here is the only
+    // way to guarantee they never drift to different fits.
+    if (renderProjection !== undefined) {
+      state.renderProjection = renderProjection;
+    }
     needsCanvasFit = true;
     recalculateModelMatrix();
   }

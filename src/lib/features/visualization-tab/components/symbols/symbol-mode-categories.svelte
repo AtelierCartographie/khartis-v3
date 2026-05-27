@@ -546,6 +546,9 @@
   color={missingDataColor}
   shape={missingDataShape}
   size={missingDataSize}
+  sizeMin={SLIDER_LIMITS.missingDataSymbolSize.min}
+  sizeMax={SLIDER_LIMITS.missingDataSymbolSize.max}
+  sizeStep={SLIDER_LIMITS.missingDataSymbolSize.step}
   onshowchange={handleMissingDataShowChange}
   onshapechange={handleMissingDataShapeChange}
   onsizechange={handleMissingDataSizeChange}
