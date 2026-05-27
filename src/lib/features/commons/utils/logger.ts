@@ -31,19 +31,6 @@ export interface LoggerErrorContext {
   extra?: Record<string, unknown>;
 }
 
-type ErrorSink = (
-  message: string,
-  category: LogCategory,
-  data?: unknown,
-  context?: LoggerErrorContext
-) => void;
-
-let externalErrorSink: ErrorSink | null = null;
-
-export function registerErrorSink(sink: ErrorSink | null): void {
-  externalErrorSink = sink;
-}
-
 interface LoggerConfig {
   enabled: boolean;
   categories: Set<LogCategory>;
@@ -171,14 +158,31 @@ function createLogger() {
     data?: unknown,
     context?: LoggerErrorContext
   ): void {
-    log(message, { category, level: LogLevel.ERROR, data });
-    if (externalErrorSink) {
-      try {
-        externalErrorSink(message, category, data, context);
-      } catch {
-        // sink must never break logging
-      }
+    if (!context) {
+      log(message, { category, level: LogLevel.ERROR, data });
+      return;
     }
+
+    const contextualData =
+      data === undefined
+        ? { context }
+        : {
+            data:
+              config.includeStack && data instanceof Error
+                ? {
+                    name: data.name,
+                    message: data.message,
+                    stack: data.stack
+                  }
+                : data,
+            context
+          };
+
+    log(message, {
+      category,
+      level: LogLevel.ERROR,
+      data: contextualData
+    });
   }
 
   function warn(message: string, category: LogCategory, data?: unknown): void {

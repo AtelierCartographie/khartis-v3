@@ -100,7 +100,7 @@ export default defineConfig(({ mode }) => {
     build: {
       target: 'esnext',
       chunkSizeWarningLimit: 3000,
-      sourcemap: mode !== 'production' || env.UPLOAD_SOURCEMAPS === 'true',
+      sourcemap: mode !== 'production',
       rolldownOptions: {
         checks: {
           pluginTimings: false
