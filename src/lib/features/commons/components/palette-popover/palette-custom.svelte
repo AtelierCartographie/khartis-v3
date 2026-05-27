@@ -27,6 +27,7 @@
     numClasses: number;
     colorBlindFilter?: boolean;
     inverted?: boolean;
+    allowPattern?: boolean;
     onColorsChange?: (colors: string[]) => void;
     onPatternSelect?: (palette: Palette, params: PatternParams) => void;
     onContrastChange?: (contrast: ContrastMode | undefined) => void;
@@ -39,6 +40,7 @@
     numClasses,
     colorBlindFilter: _colorBlindFilter = false,
     inverted = $bindable(false),
+    allowPattern = true,
     onColorsChange,
     onPatternSelect,
     onContrastChange,
@@ -58,11 +60,15 @@
 
   const isQualitative = $derived(paletteType === PALETTE_TYPE.QUALITATIVE);
 
-  const tabLabels = $derived([
-    m.palette_custom_1_color(),
-    m.palette_custom_2_colors(),
-    m.palette_custom_patterns()
-  ]);
+  const tabLabels = $derived(
+    allowPattern
+      ? [
+          m.palette_custom_1_color(),
+          m.palette_custom_2_colors(),
+          m.palette_custom_patterns()
+        ]
+      : [m.palette_custom_1_color(), m.palette_custom_2_colors()]
+  );
 
   const patternPalettes = $derived(getPatternPalettes());
 
@@ -282,13 +288,15 @@
       onchange={handleSingleColorChange}
     />
 
-    <ToggleWithLabel
-      label={m.pattern()}
-      toggled={motifEnabled}
-      ontoggle={handleMotifToggle}
-    />
+    {#if allowPattern}
+      <ToggleWithLabel
+        label={m.pattern()}
+        toggled={motifEnabled}
+        ontoggle={handleMotifToggle}
+      />
+    {/if}
 
-    {#if motifEnabled}
+    {#if allowPattern && motifEnabled}
       <div class="pattern-list">
         {#each patternPalettes as palette (palette.id)}
           <button

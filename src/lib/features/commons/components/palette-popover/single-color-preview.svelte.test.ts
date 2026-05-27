@@ -33,6 +33,11 @@ describe('SingleColorPreview (Fill Unique trigger)', () => {
     expect(source).toContain('onchange?.(hex)');
   });
 
+  it('forwards allowPattern (default true) to PalettePopover so density can disable Motif', () => {
+    expect(source).toContain('allowPattern = true');
+    expect(source).toContain('allowPattern={allowPattern}');
+  });
+
   it('should propagate validated motif settings for unique polygon fills', () => {
     expect(source).toContain('patternId?: string;');
     expect(source).toContain('onpatternchange?:');

@@ -20,6 +20,10 @@ describe('PolygonModeDensity', () => {
     expect(source).toContain('onchange={handleFillColorChange}');
   });
 
+  it('disables the Motif toggle in density via allowPattern=false', () => {
+    expect(source).toContain('allowPattern={false}');
+  });
+
   it('writes density settings through the dedicated callback instead of the store', () => {
     expect(source).toContain(
       'onDensityChange?: (updates: Partial<DensityConfig>) => void;'
