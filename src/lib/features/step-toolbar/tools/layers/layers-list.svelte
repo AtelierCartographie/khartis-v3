@@ -28,6 +28,8 @@
     onDuplicateLayer?: (layerId: string) => void;
     onDeleteLayer?: (layerId: string) => void;
     reorderScope: LayerReorderScope;
+    reorderable?: boolean;
+    childReorderable?: boolean;
   }
 
   const {
@@ -41,7 +43,9 @@
     onRenameLayer,
     onDuplicateLayer,
     onDeleteLayer,
-    reorderScope
+    reorderScope,
+    reorderable = true,
+    childReorderable = true
   }: Props = $props();
 
   const FLIP_DURATION_MS = 200;
@@ -177,6 +181,7 @@
     items: parentItems,
     flipDurationMs: FLIP_DURATION_MS,
     type: `parent-layers-${reorderScope}`,
+    dragDisabled: !reorderable,
     dropTargetStyle: {},
     transformDraggedElement: transformParentGhost,
     useCursorForDetection: true
@@ -197,6 +202,7 @@
         onRenameLayer={onRenameLayer}
         onDuplicateLayer={onDuplicateLayer}
         onDeleteLayer={onDeleteLayer}
+        showDragHandle={reorderable}
         isExpanded={!isParentCollapsed(parentLayer.id)}
         showExpandToggle={getChildren(parentLayer.id).length > 0}
         onToggleExpanded={() => toggleParent(parentLayer.id)}
@@ -212,6 +218,7 @@
               items: getChildren(parentLayer.id),
               flipDurationMs: FLIP_DURATION_MS,
               type: `sublayers-${parentLayer.id}`,
+              dragDisabled: !childReorderable,
               dropTargetStyle: {},
               useCursorForDetection: true
             }}
@@ -223,6 +230,8 @@
                 layer={childLayer}
                 onToggleVisibility={onToggleVisibility}
                 onOpenSettings={onOpenSettings}
+                showDragHandle={childReorderable &&
+                  !childLayer.tiledLayerGroupIds}
               />
             {/each}
           </div>

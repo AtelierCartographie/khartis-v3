@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-
-vi.mock('$lib/features/duckdb', () => ({
-  GEO_CONSTANTS: { WGS84_CRS: 'EPSG:4326' }
-}));
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 vi.mock('$lib/features/commons/utils/projection.utils', () => ({
   PROJECTIONS: [
@@ -11,14 +9,23 @@ vi.mock('$lib/features/commons/utils/projection.utils', () => ({
     { id: 'equirectangular' },
     { id: 'orthographic' },
     { id: 'albers' },
+    { id: 'lambert-conformal' },
     { id: 'robinson' },
     { id: 'mollweide' },
     { id: 'winkel-tripel' },
-    { id: 'stereographic' }
+    { id: 'stereographic' },
+    { id: 'azimuthal-equal-area' }
   ]
 }));
 
 import { parseProjectionCode } from '$lib/features/step-toolbar/tools/projections/projection-code.utils';
+
+const frMessages = JSON.parse(
+  readFileSync(resolve(process.cwd(), 'messages/fr.json'), 'utf8')
+) as Record<string, string>;
+const enMessages = JSON.parse(
+  readFileSync(resolve(process.cwd(), 'messages/en.json'), 'utf8')
+) as Record<string, string>;
 
 // ─── null cases ────────────────────────────────────────────────────────────
 
@@ -33,6 +40,19 @@ describe('parseProjectionCode — null cases', () => {
 
   it('returns null when no WKT or proj4 hint is detected', () => {
     expect(parseProjectionCode('hello world')).toBeNull();
+  });
+});
+
+describe('projection code helper copy', () => {
+  it('advertises every CRS format accepted by the parser', () => {
+    for (const helper of [
+      frMessages.projection_code_helper,
+      enMessages.projection_code_helper
+    ]) {
+      expect(helper).toContain('WKT');
+      expect(helper).toContain('PROJ.4');
+      expect(helper).toContain('EPSG');
+    }
   });
 });
 
@@ -125,6 +145,29 @@ describe('parseProjectionCode — projection ID inference', () => {
 
   it('infers mercator for EPSG:3857', () => {
     expect(parseProjectionCode('EPSG:3857')?.projectionId).toBe('mercator');
+  });
+
+  it('accepts Lambert-93 EPSG code and infers the closest catalogue projection', () => {
+    const result = parseProjectionCode('epsg:2154');
+
+    expect(result).toEqual({
+      normalizedCode: 'EPSG:2154',
+      format: 'proj4',
+      projectionId: 'lambert-conformal'
+    });
+  });
+
+  it('accepts ETRS89-LAEA EPSG code and infers the equal-area projection', () => {
+    const result = parseProjectionCode('EPSG:3035');
+
+    expect(result?.format).toBe('proj4');
+    expect(result?.projectionId).toBe('azimuthal-equal-area');
+  });
+
+  it('accepts explicit national EPSG codes from the projection CDC', () => {
+    expect(parseProjectionCode('EPSG:27700')?.format).toBe('proj4');
+    expect(parseProjectionCode('EPSG:2157')?.format).toBe('proj4');
+    expect(parseProjectionCode('EPSG:2056')?.format).toBe('proj4');
   });
 
   it('falls back to mercator for a valid but unrecognized projection', () => {

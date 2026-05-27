@@ -2008,36 +2008,30 @@
 
   .annotation-item:hover:not(:has(.shape-frame)) {
     outline: 1px dashed var(--cds-border-strong-02, #6f6f6f);
-    outline-offset: 2px;
+    outline-offset: 0;
   }
 
   .annotation-item:hover .shape-frame {
     outline: 1px dashed var(--cds-border-strong-02, #6f6f6f);
-    outline-offset: 2px;
+    outline-offset: 0;
   }
 
   .annotation-item:focus-visible:not(:has(.shape-frame)) {
     outline: 1px dashed var(--cds-interactive-01, #0f62fe);
-    outline-offset: 2px;
+    outline-offset: 0;
     border-radius: 0;
   }
 
   .annotation-item:focus-visible .shape-frame {
     outline: 1px dashed var(--cds-interactive-01, #0f62fe);
-    outline-offset: 2px;
+    outline-offset: 0;
   }
 
   .annotation-item.selected {
     outline: 1px dashed var(--cds-interactive-01, #0f62fe);
-    outline-offset: 2px;
+    outline-offset: 0;
     box-shadow: none;
     border-radius: 0;
-  }
-
-  .annotation-item[data-annotation-role]:hover:not(:has(.shape-frame)),
-  .annotation-item[data-annotation-role]:focus-visible:not(:has(.shape-frame)),
-  .annotation-item[data-annotation-role].selected {
-    outline-offset: 0;
   }
 
   .annotation-item.dragging {
@@ -2058,7 +2052,9 @@
 
   .annotation-item[data-annotation-role='title'],
   .annotation-item[data-annotation-role='subtitle'] {
-    width: 324px;
+    width: max-content;
+    max-width: 324px;
+    min-width: 24px;
   }
 
   .annotation-item[data-annotation-role='source'],

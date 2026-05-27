@@ -11,6 +11,7 @@ import {
   type GeoJSONFeatureCollection
 } from '$lib/types/data';
 import { cleanupDuckDBResources } from '$lib/features/commons/utils/duckdb-cleanup.utils';
+import { buildFileErrorContext } from '$lib/features/commons/utils/file-error-context.utils';
 import { toJsonValue } from '$lib/features/commons/utils/json.utils';
 import type { SerializedProjectData } from '$lib/types/serialization.types';
 import { persistenceRegistry } from '$lib/features/project-management';
@@ -20,7 +21,6 @@ import { layersActions } from '$lib/features/step-toolbar/tools/layers';
 import { legendActions } from '$lib/features/step-toolbar/tools/legend';
 import { projectionActions } from '$lib/features/step-toolbar/tools/projections';
 import { formatError, isFatalError, ParseError } from '../pipeline.errors';
-import { buildFileErrorContext } from './posthog.service';
 import type { UploadedFile } from '../types/create-project.types';
 import {
   FileType,

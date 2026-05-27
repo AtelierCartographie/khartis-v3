@@ -14,6 +14,7 @@
     color: string;
     patternId?: string;
     exclusive?: boolean;
+    allowPattern?: boolean;
     onchange?: (hex: string) => void;
     onpatternchange?: (
       patternId: string | undefined,
@@ -26,6 +27,7 @@
     color,
     patternId,
     exclusive = false,
+    allowPattern = true,
     onchange,
     onpatternchange
   }: Props = $props();
@@ -108,6 +110,7 @@
   colorBlindFilter={false}
   numClasses={1}
   exclusive={exclusive}
+  allowPattern={allowPattern}
   onclose={handlePopoverClose}
   onvalidate={handlePopoverValidate}
 />

@@ -272,12 +272,12 @@ function isValidLongitudeLatitudePair(
 function hasProjectionInvert(
   candidate: unknown
 ): candidate is ScaleDistanceProjectionLike {
-  return (
-    !!candidate &&
-    typeof candidate === 'object' &&
-    'invert' in candidate &&
-    typeof (candidate as { invert?: unknown }).invert === 'function'
-  );
+  if (!candidate) return false;
+  // d3 / proj4d3 projections are callable function objects, not plain objects,
+  // so `typeof === 'object'` would reject them. We need both branches.
+  const candidateType = typeof candidate;
+  if (candidateType !== 'object' && candidateType !== 'function') return false;
+  return typeof (candidate as { invert?: unknown }).invert === 'function';
 }
 
 function getDistanceMeters(
@@ -381,16 +381,48 @@ function getProjectionMetersPerPixelAtCenter(
   return getDistanceMeters(start, end);
 }
 
-function getGeographicBoundsMetersPerPixelAtCenter(
+// The bounds *center* can briefly land outside ±180/±90 when the viewport
+// overflows the data bbox at low zoom, so we use a generous buffer. Real
+// projected CRS centers (Lambert93 ~700 000, Web Mercator ~7 000 000, …) sit
+// orders of magnitude above this threshold.
+const PROJECTED_CENTER_MIN_MAGNITUDE = 1000;
+
+function boundsLookProjected(
+  bounds: InsetMapBounds,
+  isProjectedCoordinates: boolean
+): boolean {
+  if (isProjectedCoordinates) {
+    return true;
+  }
+  const centerX =
+    (toFiniteNumber(bounds.east, 0) + toFiniteNumber(bounds.west, 0)) / 2;
+  const centerY =
+    (toFiniteNumber(bounds.north, 0) + toFiniteNumber(bounds.south, 0)) / 2;
+  return (
+    Math.abs(centerX) > PROJECTED_CENTER_MIN_MAGNITUDE ||
+    Math.abs(centerY) > PROJECTED_CENTER_MIN_MAGNITUDE
+  );
+}
+
+function getBoundsMetersPerPixelAtCenter(
   bounds: InsetMapBounds | null | undefined,
-  canvasSize: { width: number; height: number } | null | undefined
+  canvasSize: { width: number; height: number } | null | undefined,
+  isProjectedCoordinates: boolean
 ): number | null {
-  const longitudeDelta = getOrthographicCoordinateDeltaPerPixel(
+  const coordinateDelta = getOrthographicCoordinateDeltaPerPixel(
     bounds,
     canvasSize
   );
-  if (longitudeDelta === null || !bounds) {
+  if (coordinateDelta === null || !bounds) {
     return null;
+  }
+
+  // Projected bounds with no d3 invert available: bounds are in the source CRS
+  // unit (typically meters for Lambert93, Web Mercator, …) — the screen-space
+  // delta is already a meter delta. The magnitude check catches imported files
+  // whose CRS hint did not propagate as isProjectedCoordinates.
+  if (boundsLookProjected(bounds, isProjectedCoordinates)) {
+    return coordinateDelta;
   }
 
   const centerLongitude =
@@ -403,43 +435,135 @@ function getGeographicBoundsMetersPerPixelAtCenter(
 
   return getDistanceMeters(
     [centerLongitude, centerLatitude],
-    [centerLongitude + longitudeDelta, centerLatitude]
+    [centerLongitude + coordinateDelta, centerLatitude]
   );
+}
+
+type CompositeSubProjectionLike = {
+  id: string;
+  bounds: [number, number, number, number];
+};
+
+function getCompositeSubProjections(
+  projection: unknown
+): CompositeSubProjectionLike[] | null {
+  if (!projection) return null;
+  const type = typeof projection;
+  if (type !== 'function' && type !== 'object') return null;
+  const getter = (projection as { getSubProjections?: unknown })
+    .getSubProjections;
+  if (typeof getter !== 'function') return null;
+  const entries = (getter as () => unknown).call(projection);
+  if (!Array.isArray(entries) || entries.length === 0) return null;
+  return entries as CompositeSubProjectionLike[];
+}
+
+// Composite projections (France+DOM, Europe+overseas) clip the screen into
+// separate sub-projections. Inverting the viewport center would route the
+// scale to whichever inset the center happens to sit on. We instead always
+// anchor on the mainland: forward-project two points 1° apart at the mainland
+// center to get meters-per-d3-pixel there, then scale by the (uniform)
+// d3-pixel-per-screen-pixel ratio.
+function getCompositeMainlandMetersPerPixel(
+  projection: unknown,
+  screenToDataScale: number
+): number | null {
+  const entries = getCompositeSubProjections(projection);
+  if (!entries || typeof projection !== 'function') {
+    return null;
+  }
+
+  const mainland =
+    entries.find((entry) => entry.id === 'mainland') ?? entries[0];
+  const bounds = mainland?.bounds;
+  if (!Array.isArray(bounds) || bounds.length < 4) {
+    return null;
+  }
+
+  const [west, south, east, north] = bounds;
+  const centerLongitude = (west + east) / 2;
+  const centerLatitude = (south + north) / 2;
+  const sampleOffsetDegrees = Math.max(0.01, Math.abs(east - west) / 100);
+  const start: [number, number] = [centerLongitude, centerLatitude];
+  const end: [number, number] = [
+    centerLongitude + sampleOffsetDegrees,
+    centerLatitude
+  ];
+
+  const forward = projection as (
+    coordinates: [number, number]
+  ) => [number, number] | null;
+  const projectedStart = forward(start);
+  const projectedEnd = forward(end);
+  if (
+    !isValidLongitudeLatitudePair(projectedStart) ||
+    !isValidLongitudeLatitudePair(projectedEnd)
+  ) {
+    return null;
+  }
+
+  const d3PixelDelta = Math.hypot(
+    projectedEnd[0] - projectedStart[0],
+    projectedEnd[1] - projectedStart[1]
+  );
+  if (!Number.isFinite(d3PixelDelta) || d3PixelDelta <= 0) {
+    return null;
+  }
+
+  const realMeters = getDistanceMeters(start, end);
+  if (realMeters === null) {
+    return null;
+  }
+
+  return (realMeters / d3PixelDelta) * screenToDataScale;
 }
 
 export function getScaleMetersPerPixel(
   context: ScaleDistanceContext,
   allowFallback: boolean
 ): number | null {
-  const projectionBased = getProjectionMetersPerPixelAtCenter(
+  // 1. Composite projection: anchor on the mainland regardless of where the
+  //    viewport center sits (it may land on an inset). Uses the bounds-derived
+  //    d3-pixel-per-screen-pixel ratio.
+  const coordinateDelta = getOrthographicCoordinateDeltaPerPixel(
+    context.bounds,
+    context.canvasSize
+  );
+  if (coordinateDelta !== null) {
+    const composite = getCompositeMainlandMetersPerPixel(
+      context.projection,
+      coordinateDelta
+    );
+    if (composite !== null) {
+      return composite;
+    }
+  }
+
+  // 2. Active d3 projection — invert the bounds center (and one pixel east)
+  //    back to lng/lat and measure geodesically.
+  const fromProjection = getProjectionMetersPerPixelAtCenter(
     context.projection,
     context.bounds,
     context.canvasSize
   );
-  if (projectionBased !== null) {
-    return projectionBased;
+  if (fromProjection !== null) {
+    return fromProjection;
   }
 
-  const projected = getProjectedMetersPerPixelAtCenter(context.map);
-  if (projected !== null) {
-    return projected;
+  // 3. MapLibre instance (tiled basemap with built-in projection).
+  const fromMap = getProjectedMetersPerPixelAtCenter(context.map);
+  if (fromMap !== null) {
+    return fromMap;
   }
 
-  const orthographicCoordinateDelta = getOrthographicCoordinateDeltaPerPixel(
+  // 4. Bounds-only: projected source CRS meters (Lambert93, …) or raw degrees.
+  const fromBounds = getBoundsMetersPerPixelAtCenter(
     context.bounds,
-    context.canvasSize
+    context.canvasSize,
+    context.isProjectedCoordinates ?? false
   );
-  if (context.isProjectedCoordinates && orthographicCoordinateDelta !== null) {
-    return orthographicCoordinateDelta;
-  }
-
-  const geographicBoundsMetersPerPixel =
-    getGeographicBoundsMetersPerPixelAtCenter(
-      context.bounds,
-      context.canvasSize
-    );
-  if (geographicBoundsMetersPerPixel !== null) {
-    return geographicBoundsMetersPerPixel;
+  if (fromBounds !== null) {
+    return fromBounds;
   }
 
   if (!allowFallback) {
@@ -484,10 +608,10 @@ export function getScaleDistanceStep(distance: number): number {
 export function getSuggestedScaleDistance(
   unit: DistanceUnit,
   context: ScaleDistanceContext = {}
-): number {
+): number | null {
   const metersPerPixel = getScaleMetersPerPixel(context, true);
   if (metersPerPixel === null) {
-    return 1;
+    return null;
   }
 
   const rawDistance = fromDistanceMeters(

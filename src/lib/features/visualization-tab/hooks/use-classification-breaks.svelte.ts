@@ -14,6 +14,7 @@ import {
   ClassificationMethod,
   DEFAULT_CATEGORICAL_COLORS
 } from '$lib/features/commons/stores/visualization.store.svelte';
+import { DEFAULT_DISCRETIZATION_CLASS_COUNT } from '$lib/features/commons/constants/visualization.constants';
 import {
   DEFAULT_QUALITATIVE_PRESET,
   findPaletteById,
@@ -494,7 +495,9 @@ export function useClassificationBreaksController({
     const normalizedMethod = normalizeClassificationMethod(method);
     const requestedClassCount = resolveRequestedClassCount(
       normalizedMethod,
-      classification?.numClasses ?? 5
+      classification?.numClasses ??
+        classification?.classes ??
+        DEFAULT_DISCRETIZATION_CLASS_COUNT
     );
     const breaksKey = `${options.scopeKey}:${options.datasetId}:${options.valueColumn}:${normalizedMethod}:${requestedClassCount}`;
     const hasExistingBreaks = Boolean(classification?.breaks?.length);
@@ -568,7 +571,10 @@ export function useClassificationBreaksController({
 
       if (
         computation.normalizedMethod !== method ||
-        computation.actualClassCount !== (classification?.numClasses ?? 5) ||
+        computation.actualClassCount !==
+          (classification?.numClasses ??
+            classification?.classes ??
+            DEFAULT_DISCRETIZATION_CLASS_COUNT) ||
         classification?.classes !== computation.actualClassCount
       ) {
         classificationUpdate.method = computation.normalizedMethod;

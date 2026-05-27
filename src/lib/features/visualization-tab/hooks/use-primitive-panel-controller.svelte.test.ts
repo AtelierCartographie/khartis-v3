@@ -38,6 +38,18 @@ describe('usePrimitivePanelController', () => {
     ).toBeGreaterThanOrEqual(5);
   });
 
+  it('clears stale categoryValues and colors when a category column changes so the map recomputes instead of falling back to grey', () => {
+    // Regression for the "grey symbols on category variable change" bug:
+    // resetting only labels/disabledLabels left the color map keyed to the
+    // previous column's values, rendering every symbol with the grey fallback.
+    expect(
+      source.match(/categoryValues: undefined/g)?.length
+    ).toBeGreaterThanOrEqual(5);
+    expect(source.match(/colors: undefined/g)?.length).toBeGreaterThanOrEqual(
+      5
+    );
+  });
+
   it('uses a four-class default only for polygon fill classifications', () => {
     expect(source).toContain('const DEFAULT_CLASS_COUNT = 5;');
     expect(source).toContain('const DEFAULT_POLYGON_FILL_CLASS_COUNT = 4;');

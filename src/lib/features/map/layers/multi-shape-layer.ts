@@ -33,6 +33,8 @@ const multiShapeModule = {
       float dashed;
       float dashLength;
       float gapLength;
+      float dotLength;
+      float dotGap;
       float patternEnabled;
       float patternType;
     } multiShape;
@@ -46,6 +48,8 @@ const multiShapeModule = {
     dashed: 'f32',
     dashLength: 'f32',
     gapLength: 'f32',
+    dotLength: 'f32',
+    dotGap: 'f32',
     patternEnabled: 'f32',
     patternType: 'f32'
   }
@@ -178,17 +182,30 @@ float getDistance(vec2 uv, float radiusPixels, int shapeType, float radius) {
     }
 }
 
-float getDashMask(vec2 uv) {
+float getDashMask(vec2 uv, float strokePx, float midRadiusPx, float radialOffsetPx) {
     if (multiShape.dashed < 0.5) {
         return 1.0;
     }
 
-    float cycle = max(multiShape.dashLength + multiShape.gapLength, 0.0001);
-    float approxPerimeter = max(TAU * max(outerRadiusPixels, 1.0), cycle);
-    float repetitions = max(1.0, floor(approxPerimeter / cycle));
-    float phase = fract((atan(uv.y, uv.x) + PI) / TAU * repetitions);
-    float duty = clamp(multiShape.dashLength / cycle, 0.05, 0.95);
-    return 1.0 - step(duty, phase);
+    float sw = max(strokePx, 1.0);
+    float a = multiShape.dashLength * sw;
+    float b = multiShape.gapLength * sw;
+    float c = multiShape.dotLength * sw;
+    float d = multiShape.dotGap * sw;
+    float cycle = max(a + b + c + d, 0.0001);
+    float perimeter = max(TAU * max(midRadiusPx, 1.0), cycle);
+    float reps = max(1.0, floor(perimeter / cycle));
+    float arcPos = fract((atan(uv.y, uv.x) + PI) / TAU * reps) * cycle;
+
+    // Solid dash segment [0, a).
+    float mask = 1.0 - step(a, arcPos);
+    // Real round dot centered at a + b + c/2 (radius c/2 ~= stroke half-width).
+    if (c > 0.0) {
+        float dotCenter = a + b + c * 0.5;
+        float distToDot = length(vec2(arcPos - dotCenter, radialOffsetPx));
+        mask += 1.0 - step(c * 0.5, distToDot);
+    }
+    return clamp(mask, 0.0, 1.0);
 }
 
 float stripeMask(float coord, float spacing, float width) {
@@ -201,29 +218,29 @@ float getFillPatternMask(vec2 uv) {
         return 0.0;
     }
 
-    vec2 p = uv * outerRadiusPixels;
-    float spacing = 5.0;
+    vec2 p = uv;
+    float spacing = 0.28;
     float patternType = floor(multiShape.patternType + 0.5);
 
     if (patternType < 1.5) {
         vec2 cell = fract(p / spacing) - 0.5;
-        return 1.0 - step(0.22, length(cell));
+        return 1.0 - step(0.32, length(cell));
     }
 
     if (patternType < 2.5) {
-        return stripeMask(p.x + p.y, spacing, 0.12);
+        return stripeMask(p.x + p.y, spacing, 0.25);
     }
 
     if (patternType < 3.5) {
         return clamp(
-            stripeMask(p.x + p.y, spacing, 0.10) +
-            stripeMask(p.x - p.y, spacing, 0.10),
+            stripeMask(p.x + p.y, spacing, 0.18) +
+            stripeMask(p.x - p.y, spacing, 0.18),
             0.0,
             1.0
         );
     }
 
-    return stripeMask(p.y, spacing, 0.10) * stripeMask(p.x, spacing * 1.6, 0.28);
+    return stripeMask(p.y, spacing, 0.20) * stripeMask(p.x, spacing * 1.6, 0.34);
 }
 
 vec4 applyFillPattern(vec4 fillColor, vec2 uv) {
@@ -232,7 +249,7 @@ vec4 applyFillPattern(vec4 fillColor, vec2 uv) {
         return fillColor;
     }
 
-    vec3 patternRgb = mix(fillColor.rgb, vec3(0.0), 0.38);
+    vec3 patternRgb = mix(fillColor.rgb, vec3(0.0), 0.55);
     return vec4(mix(fillColor.rgb, patternRgb, mask), fillColor.a);
 }
 
@@ -253,10 +270,13 @@ void main(void) {
     if (inShape == 0.0) discard;
 
     if (scatterplot.stroked > 0.5) {
+        float innerEdge = innerUnitRadius * outerRadiusPixels;
+        float strokePx = max(outerRadiusPixels - innerEdge, 1.0);
+        float midRadiusPx = (innerEdge + outerRadiusPixels) * 0.5;
         float lineMask = scatterplot.antialiasing
-            ? smoothedge(innerUnitRadius * outerRadiusPixels, distToCenter)
-            : step(innerUnitRadius * outerRadiusPixels, distToCenter);
-        lineMask *= getDashMask(scaledUv);
+            ? smoothedge(innerEdge, distToCenter)
+            : step(innerEdge, distToCenter);
+        lineMask *= getDashMask(scaledUv, strokePx, midRadiusPx, distToCenter - midRadiusPx);
         vec4 fillColor = applyFillPattern(vFillColor, scaledUv);
 
         if (scatterplot.filled > 0.5) {
@@ -288,6 +308,8 @@ export type MultiShapeLayerProps<DataT = unknown> = {
   dashed?: boolean;
   dashLength?: number;
   gapLength?: number;
+  dotLength?: number;
+  dotGap?: number;
   patternEnabled?: boolean;
   patternType?: number;
 };
@@ -303,6 +325,8 @@ const defaultProps = {
   dashed: { type: 'boolean', value: false },
   dashLength: { type: 'number', value: 3 },
   gapLength: { type: 'number', value: 2 },
+  dotLength: { type: 'number', value: 0 },
+  dotGap: { type: 'number', value: 0 },
   patternEnabled: { type: 'boolean', value: false },
   patternType: { type: 'number', value: 1 }
 };
@@ -373,6 +397,8 @@ vRadius = instanceRadius;
       dashed,
       dashLength,
       gapLength,
+      dotLength,
+      dotGap,
       patternEnabled,
       patternType
     } = this.props;
@@ -389,6 +415,8 @@ vRadius = instanceRadius;
           dashed: dashed ? 1 : 0,
           dashLength: dashLength ?? 3,
           gapLength: gapLength ?? 2,
+          dotLength: dotLength ?? 0,
+          dotGap: dotGap ?? 0,
           patternEnabled: patternEnabled ? 1 : 0,
           patternType: patternType ?? 1
         }

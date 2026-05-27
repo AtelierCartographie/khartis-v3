@@ -45,7 +45,7 @@
   "projection_code_intro": "Appliquer une projection grâce à un code de système de coordonnées de référence (SCR).",
   "projection_code_label": "Code SCR",
   "projection_code_placeholder": "Copier-coller le code",
-  "projection_code_helper": "Le code SCR de la projection doit être au format Well-Known Text (WKT).",
+  "projection_code_helper": "Le code SCR de la projection peut être au format WKT, PROJ.4 ou EPSG.",
   "projection_code_reset": "Réinitialiser",
   "projection_code_submit": "Valider",
   "card_subtitle_surfaces": "Surfaces",
@@ -208,7 +208,7 @@
   "size_according": "Taille selon",
   "aspect_according": "Aspect selon",
   "color_according": "Couleur selon",
-  "max_size": "Taille maximale",
+  "max_size": "Taille maximum",
   "shape": "Forme",
   "triangle": "Triangle",
   "shape_circle": "Cercle",
@@ -1778,5 +1778,10 @@
   "offline_panel_quota_exceeded": "Espace de stockage dépassé. Videz le cache pour libérer de la place.",
   "basemap_offline_available": "Disponible hors ligne",
   "basemap_offline_required": "Connexion requise pour télécharger",
-  "error_offline_url_import": "Vous êtes hors ligne. Importez un fichier local ou reconnectez-vous pour télécharger depuis une URL."
+  "error_offline_url_import": "Vous êtes hors ligne. Importez un fichier local ou reconnectez-vous pour télécharger depuis une URL.",
+  "pwa_update_available_title": "Une nouvelle mise à jour est disponible",
+  "pwa_update_available_subtitle": "Rechargez pour appliquer les dernières améliorations.",
+  "pwa_update_reload_button": "Recharger",
+  "pwa_update_close_aria": "Fermer la notification de mise à jour",
+  "pwa_update_status_icon_aria": "Information"
 }

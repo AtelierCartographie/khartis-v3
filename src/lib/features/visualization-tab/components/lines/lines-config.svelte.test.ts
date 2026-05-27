@@ -33,13 +33,20 @@ describe('LinesConfig — palette wiring', () => {
 
   it('uses only Carbon icons in line mode selectors', () => {
     expect(thicknessSectionSource).toContain(
-      "import { Minimize, Subtract, Table } from 'carbon-icons-svelte'"
+      "import { ChartBubble, Subtract, Table } from 'carbon-icons-svelte'"
     );
     expect(colorSectionSource).toContain(
       "import { Subtract, Table, Tag } from 'carbon-icons-svelte'"
     );
     expect(thicknessSectionSource).not.toContain('<svg');
     expect(colorSectionSource).not.toContain('<svg');
+  });
+
+  it('maps proportional thickness to ChartBubble, never the minimize-window icon', () => {
+    expect(thicknessSectionSource).toContain(
+      '{ icon: ChartBubble, label: m.thickness_mode_proportional()'
+    );
+    expect(thicknessSectionSource).not.toContain('Minimize');
   });
 
   it('renders the proportional and classes thickness branches with shared controls', () => {

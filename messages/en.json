@@ -45,7 +45,7 @@
   "projection_code_intro": "Apply a projection using a Coordinate Reference System (CRS) code.",
   "projection_code_label": "CRS Code",
   "projection_code_placeholder": "Paste the code",
-  "projection_code_helper": "The projection's CRS code must be in Well-Known Text (WKT) format.",
+  "projection_code_helper": "The projection CRS code can use WKT, PROJ.4, or EPSG format.",
   "projection_code_reset": "Reset",
   "projection_code_submit": "Validate",
   "card_subtitle_surfaces": "Surfaces",
@@ -1778,5 +1778,10 @@
   "offline_panel_quota_exceeded": "Storage quota exceeded. Clear the cache to free up space.",
   "basemap_offline_available": "Available offline",
   "basemap_offline_required": "Connection required to download",
-  "error_offline_url_import": "You are offline. Import a local file or reconnect to download from a URL."
+  "error_offline_url_import": "You are offline. Import a local file or reconnect to download from a URL.",
+  "pwa_update_available_title": "A new update is available",
+  "pwa_update_available_subtitle": "Reload to apply the latest improvements.",
+  "pwa_update_reload_button": "Reload",
+  "pwa_update_close_aria": "Close the update notification",
+  "pwa_update_status_icon_aria": "Information"
 }

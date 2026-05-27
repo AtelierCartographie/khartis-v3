@@ -38,6 +38,7 @@
     numClasses?: number;
     divergingSplit?: DivergingPaletteSplit;
     exclusive?: boolean;
+    allowPattern?: boolean;
     onclose?: () => void;
     onvalidate?: (
       palette: Palette | undefined,
@@ -58,6 +59,7 @@
     numClasses = 5,
     divergingSplit,
     exclusive = true,
+    allowPattern = true,
     onclose,
     onvalidate
   }: Props = $props();
@@ -300,6 +302,7 @@
           paletteType={draftType}
           numClasses={numClasses}
           colorBlindFilter={draftColorBlindFilter}
+          allowPattern={allowPattern}
           bind:inverted={draftInverted}
           onColorsChange={handleCustomColorsChange}
           onPatternSelect={handlePatternSelect}

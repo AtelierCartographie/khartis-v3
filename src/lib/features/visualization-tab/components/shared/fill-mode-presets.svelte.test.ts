@@ -3,6 +3,7 @@ import { ChartTSne, StopFilledAlt } from 'carbon-icons-svelte';
 
 import { FillMode } from '$lib/features/commons/constants/visualization.constants';
 import {
+  FILL_MODES_FOR_SYMBOLS,
   FILL_MODES_STANDARD,
   FILL_MODES_WITH_DENSITY,
   buildFillModeItems
@@ -28,6 +29,16 @@ describe('fill-mode-presets', () => {
       FillMode.CLASSES,
       FillMode.CATEGORIES
     ]);
+  });
+
+  it('FILL_MODES_FOR_SYMBOLS keeps NONE for transparent symbol fills and omits DENSITY', () => {
+    expect(FILL_MODES_FOR_SYMBOLS).toEqual([
+      FillMode.NONE,
+      FillMode.UNIQUE,
+      FillMode.CLASSES,
+      FillMode.CATEGORIES
+    ]);
+    expect(FILL_MODES_FOR_SYMBOLS).not.toContain(FillMode.DENSITY);
   });
 
   it('buildFillModeItems returns one entry per mode', () => {

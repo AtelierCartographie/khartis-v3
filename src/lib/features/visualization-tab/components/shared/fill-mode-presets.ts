@@ -29,6 +29,13 @@ export const FILL_MODES_WITH_DENSITY: readonly FillMode[] = [
   FillMode.CATEGORIES
 ];
 
+export const FILL_MODES_FOR_SYMBOLS: readonly FillMode[] = [
+  FillMode.NONE,
+  FillMode.UNIQUE,
+  FillMode.CLASSES,
+  FillMode.CATEGORIES
+];
+
 const DEFAULT_ICON_SIZE = 16;
 
 const FILL_MODE_ITEMS: Record<FillMode, FillModeItem> = {

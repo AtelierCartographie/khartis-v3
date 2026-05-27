@@ -37,6 +37,10 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
     expect(frenchMessages.proportional_type_single).toBe('Uniques');
   });
 
+  it('labels the proportional max-size field "Taille maximum" (not "maximale")', () => {
+    expect(frenchMessages.max_size).toBe('Taille maximum');
+  });
+
   it('shows the max-size slider for proportional single and classes modes', () => {
     expect(scaleSource).toContain('label={m.max_size()}');
     expect(SLIDER_LIMITS.symbolMaxSize.max).toBe(100);
@@ -74,13 +78,15 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
     expect(source).toContain('showSizeSlider={true}');
   });
 
-  it('delegates Fill UI to the shared FillSection with standard modes', () => {
+  it('delegates Fill UI to the shared FillSection with the symbol preset including NONE', () => {
     expect(source).toContain(
       "import FillSection from '../shared/fill-section.svelte'"
     );
     expect(source).toContain('<FillSection');
     expect(source).not.toContain('primitive="symbol"');
-    expect(source).toContain('availableModes={FILL_MODES_STANDARD}');
+    expect(source).toContain('availableModes={FILL_MODES_FOR_SYMBOLS}');
+    expect(source).toContain('fillMode === FillMode.NONE');
+    expect(source).not.toContain('FILL_MODES_STANDARD');
     expect(source).toContain('categoriesVariant="symbols-unique"');
   });
 
@@ -250,6 +256,16 @@ describe('SymbolModeProportional — stroke discretization isolation', () => {
     );
     expect(fillBlock).toContain(
       'onOpenDiscretization={onOpenFillDiscretization'
+    );
+  });
+
+  it('lets the missing-data symbol size reach the symbol scale, not the 12px line cap', () => {
+    expect(source).toContain(
+      'sizeMax={SLIDER_LIMITS.missingDataSymbolSize.max}'
+    );
+    expect(SLIDER_LIMITS.missingDataSymbolSize.max).toBeGreaterThanOrEqual(30);
+    expect(SLIDER_LIMITS.missingDataSymbolSize.max).toBeGreaterThan(
+      SLIDER_LIMITS.missingDataSize.max
     );
   });
 });
