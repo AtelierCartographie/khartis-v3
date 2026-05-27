@@ -3,6 +3,10 @@
   "private": true,
   "version": "1.6.0-staging.29",
   "type": "module",
+  "engines": {
+    "node": ">=22 <25",
+    "pnpm": ">=10"
+  },
   "contributors": [
     {
       "name": "Thomas Ansart",
@@ -54,12 +58,12 @@
   "devDependencies": {
     "@commitlint/cli": "^21.0.1",
     "@commitlint/config-conventional": "^21.0.1",
-    "@duckdb/node-api": "1.5.3-r.1",
+    "@duckdb/node-api": "1.5.3-r.2",
     "@eslint/compat": "^2.1.0",
     "@eslint/js": "^10.0.1",
     "@inlang/cli": "^3.1.11",
     "@sveltejs/adapter-static": "^3.0.10",
-    "@sveltejs/kit": "^2.60.1",
+    "@sveltejs/kit": "^2.61.1",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/svelte": "^5.3.1",
@@ -68,17 +72,15 @@
     "@types/geojson": "^7946.0.16",
     "@types/node": "^25.9.1",
     "@vite-pwa/assets-generator": "^1.0.2",
-    "carbon-preprocess-svelte": "^0.11.29",
-    "dotenv-cli": "^11.0.0",
+    "carbon-preprocess-svelte": "^0.11.30",
     "eslint": "^10.4.0",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-svelte": "^3.17.1",
+    "eslint-plugin-svelte": "^3.18.0",
     "globals": "^17.6.0",
     "husky": "^9.1.7",
     "jsdom": "^29.1.1",
     "knip": "^6.14.2",
     "lint-staged": "^17.0.5",
-    "playwright": "^1.60.0",
     "prettier": "^3.8.3",
     "prettier-plugin-svelte": "^4.0.1",
     "rollup-plugin-visualizer": "^7.0.1",
@@ -87,10 +89,9 @@
     "svelte": "^5.55.9",
     "svelte-check": "^4.4.8",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.4",
+    "typescript-eslint": "^8.60.0",
     "vite": "^8.0.14",
     "vitest": "^4.1.7",
-    "workbox-background-sync": "^7.4.1",
     "workbox-cacheable-response": "^7.4.1",
     "workbox-core": "^7.4.1",
     "workbox-expiration": "^7.4.1",
@@ -117,7 +118,7 @@
     "@fontsource/noto-sans-jp": "^5.2.9",
     "@fontsource/noto-sans-sc": "^5.2.9",
     "@fontsource/open-sans": "^5.2.7",
-    "@inlang/paraglide-js": "^2.18.1",
+    "@inlang/paraglide-js": "^2.18.0",
     "@luma.gl/core": "9.3.3",
     "@math.gl/core": "^4.1.0",
     "@sqlite.org/sqlite-wasm": "3.53.0-build1",
@@ -137,7 +138,7 @@
     "maplibre-gl": "^5.24.0",
     "parquet-wasm": "^0.7.1",
     "proj-suggest": "github:AtelierCartographie/proj-suggest",
-    "proj4": "^2.20.4",
+    "proj4": "^2.20.8",
     "svelte-dnd-action": "^0.9.69",
     "vite-plugin-pwa": "^1.3.0"
   },
@@ -145,7 +146,8 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "geoarrow-deck-stream",
-      "proj-suggest"
+      "proj-suggest",
+      "sharp"
     ],
     "overrides": {
       "rollup": "4.60.0",

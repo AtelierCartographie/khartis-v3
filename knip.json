@@ -3,20 +3,33 @@
   "entry": [
     "src/routes/**/*.svelte",
     "src/routes/**/+*.{js,ts}",
+    "src/sw.ts",
     "pwa-assets.config.js",
     "scripts/**/*.sh"
   ],
-  "project": ["src/**/*.{ts,js,svelte}"],
+  "project": ["src/**/*.{ts,js,svelte,css,scss}"],
   "ignore": [
-    "**/*.d.ts",
     "src/lib/features/data-pipeline/__tests__/test-file-loader.ts",
-    "src/paraglide/**/*.js",
-    "src/paraglide/runtime.js",
-    "src/paraglide/server.js",
-    "src/paraglide/registry.js"
+    "src/lib/paraglide/**/*",
+    "src/lib/features/create-project/index.ts",
+    "src/lib/features/data-tab/index.ts",
+    "src/lib/features/header/index.ts",
+    "src/lib/features/map/index.ts",
+    "src/lib/features/side-nav/index.ts",
+    "src/lib/features/step-toolbar/index.ts",
+    "src/lib/features/step-toolbar/tools/search/index.ts",
+    "src/lib/features/visualization-tab/index.ts",
+    "src/lib/features/map/layers/density-layer-factory.ts"
   ],
-  "ignoreDependencies": ["@commitlint/cli"],
-  "ignoreBinaries": ["semantic-release", "run"],
+  "ignoreDependencies": [
+    "@fontsource/cabin",
+    "@fontsource/ibm-plex-sans",
+    "@fontsource/inter",
+    "@fontsource/lato",
+    "@fontsource/noto-sans",
+    "@fontsource/open-sans",
+    "carbon-components"
+  ],
   "ignoreExportsUsedInFile": true,
   "rules": {
     "enumMembers": "off"
