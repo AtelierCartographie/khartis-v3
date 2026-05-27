@@ -3,6 +3,7 @@
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
   import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
   import * as m from '$lib/paraglide/messages';
+  import { resolveLocale } from '$lib/features/commons/utils/format.utils';
   import CaretDown from 'carbon-icons-svelte/lib/CaretDown.svelte';
   import CaretUp from 'carbon-icons-svelte/lib/CaretUp.svelte';
   import OverflowMenuVertical from 'carbon-icons-svelte/lib/OverflowMenuVertical.svelte';
@@ -43,6 +44,10 @@
     onHide,
     onDelete
   }: Props = $props();
+
+  // App locale (fr-FR / en-US) for number and date formatting, so the summary
+  // plots follow the language selected in Khartis rather than the browser's.
+  const numberLocale = $derived(resolveLocale());
 
   const typeOptions: { value: ColumnType; label: string }[] = [
     { value: 'text', label: m.column_type_text() },
@@ -258,7 +263,7 @@
     if (item.category === null) return '⌀';
     if (item.category === 'unique')
       return m.summary_plot_unique_values({
-        count: item.count.toLocaleString()
+        count: item.count.toLocaleString(numberLocale)
       });
     return item.category;
   }
@@ -266,10 +271,10 @@
   function catTooltipText(item: CategoryItem): string {
     if (item.category === 'unique')
       return m.summary_plot_unique_values({
-        count: item.count.toLocaleString()
+        count: item.count.toLocaleString(numberLocale)
       });
     const name = item.category ?? m.column_null_label();
-    return `${item.count.toLocaleString()} – ${name}`;
+    return `${item.count.toLocaleString(numberLocale)} – ${name}`;
   }
 
   let catTooltipOpen = $state(false);
@@ -613,7 +618,7 @@
                     >
                     <span
                       >{m.column_warning_nulls({
-                        count: histogramData.nulls.toLocaleString()
+                        count: histogramData.nulls.toLocaleString(numberLocale)
                       })}</span
                     >
                   </div>
@@ -622,7 +627,8 @@
                   <div class="hist-warning-line hist-warning-line-plain">
                     <span
                       >{m.column_warning_duplicates({
-                        count: histogramData.duplicates.toLocaleString()
+                        count:
+                          histogramData.duplicates.toLocaleString(numberLocale)
                       })}</span
                     >
                   </div>
@@ -633,7 +639,7 @@
                 <div class="hist-unique-bar">
                   <span class="hist-unique-text">
                     {m.summary_plot_unique_values({
-                      count: histogramData.uniques.toLocaleString()
+                      count: histogramData.uniques.toLocaleString(numberLocale)
                     })}
                   </span>
                 </div>
@@ -656,7 +662,7 @@
                 <div class="hist-unique-bar">
                   <span class="hist-unique-text">
                     {m.summary_plot_unique_values({
-                      count: histogramData.uniques.toLocaleString()
+                      count: histogramData.uniques.toLocaleString(numberLocale)
                     })}
                   </span>
                 </div>
@@ -684,7 +690,7 @@
               </div>
               <div class="hist-footer">
                 {m.summary_plot_categories({
-                  count: histogramData.uniques.toLocaleString()
+                  count: histogramData.uniques.toLocaleString(numberLocale)
                 })}
               </div>
             {/if}
@@ -696,7 +702,7 @@
                     class="hist-num-bar"
                     style="height: {(bin.count / histogramData.maxCount) *
                       100}%"
-                    title={bin.count?.toLocaleString()}
+                    title={bin.count?.toLocaleString(numberLocale)}
                   ></div>
                 {/each}
               </div>
@@ -707,7 +713,9 @@
                     style="height: {(histogramData.nullCount /
                       histogramData.maxCount) *
                       100}%"
-                    title="{histogramData.nullCount.toLocaleString()} {m.column_null_label()}"
+                    title="{histogramData.nullCount.toLocaleString(
+                      numberLocale
+                    )} {m.column_null_label()}"
                   ></div>
                 </div>
               {/if}
@@ -716,13 +724,21 @@
               <div class="hist-num-labels">
                 <span class="hist-num-label">
                   {histogramData.isDate
-                    ? ((histogramData.min as Date)?.toLocaleDateString() ?? '')
-                    : ((histogramData.min as number)?.toLocaleString() ?? '')}
+                    ? ((histogramData.min as Date)?.toLocaleDateString(
+                        numberLocale
+                      ) ?? '')
+                    : ((histogramData.min as number)?.toLocaleString(
+                        numberLocale
+                      ) ?? '')}
                 </span>
                 <span class="hist-num-label">
                   {histogramData.isDate
-                    ? ((histogramData.max as Date)?.toLocaleDateString() ?? '')
-                    : ((histogramData.max as number)?.toLocaleString() ?? '')}
+                    ? ((histogramData.max as Date)?.toLocaleDateString(
+                        numberLocale
+                      ) ?? '')
+                    : ((histogramData.max as number)?.toLocaleString(
+                        numberLocale
+                      ) ?? '')}
                 </span>
               </div>
               {#if histogramData.nullCount > 0}
