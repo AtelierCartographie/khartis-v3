@@ -56,10 +56,11 @@ describe('ThematicMap source', () => {
     expect(source).toContain(
       'projectionStore.setFitPadding(logicalMapViewportFitPaddingPx)'
     );
-    expect(source).toContain(
-      'projectionStore.setRenderProjection(renderProjection ?? null);'
-    );
-    expect(source).toContain('updateRenderProjectionStore = true');
+    // The render projection is now published atomically with the reference
+    // bbox (paired so the scale bar inverts against the matching pixel space),
+    // not as a standalone side effect of getOrthographicRenderProjection.
+    expect(source).toContain('referenceState.renderProjection');
+    expect(source).toContain('renderProjection: ProjectionLike | null');
     expect(source).toContain(
       'const viewportSnapshot = `${logicalMapCanvasWidth}x${logicalMapCanvasHeight}-${logicalMapViewportFitPaddingPx}`;'
     );

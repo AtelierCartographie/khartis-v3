@@ -123,8 +123,10 @@ describe('useMapLayers source', () => {
   it('applies manual projection clipping through Deck layers instead of a DOM overlay', () => {
     expect(source).toContain('createProjectionSphereMaskLayer');
     expect(source).toContain('applyProjectionSphereMask');
+    // Sphere mask renders for manual overrides AND a basemap's own default
+    // projection (e.g. Equal Earth on the World map).
     expect(source).toContain(
-      'isOrthographicMode && hasManualProjectionOverride'
+      'hasManualProjectionOverride || hasDefaultBasemapProjection'
     );
     expect(source).toContain('getProjectionForSphereMask?.()');
     expect(source).toContain('activeBasemapProjection');
