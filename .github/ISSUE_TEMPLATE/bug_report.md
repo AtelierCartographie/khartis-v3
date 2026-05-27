@@ -1,36 +1,36 @@
 ---
 name: Bug report
-about: Signaler un bug
+about: Report a bug
 labels: bug
 ---
 
-## Description du bug
+## Bug description
 
-Décrivez le problème et le comportement attendu.
+Describe the problem and the expected behavior.
 
-## Étapes pour reproduire
+## Steps to reproduce
 
 1.
 2.
 3.
 
-## Résultat actuel
+## Actual result
 
 ...
 
-## Résultat attendu
+## Expected result
 
 ...
 
-## Captures / logs
+## Screenshots / logs
 
-Ajoutez des captures ou logs si utile.
+Add screenshots or logs if helpful.
 
-## Contexte
+## Context
 
-- Version du navigateur / OS:
-- Version de l’app (commit/branche):
+- Browser / OS version:
+- App version (commit/branch):
 
 ## Notes
 
-Liens vers PRs/Issues liés, hypothèses techniques, etc.
+Links to related PRs/issues, technical hypotheses, etc.
