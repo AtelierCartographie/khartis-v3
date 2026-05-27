@@ -11,7 +11,7 @@
   } from '$lib/features/commons/constants/visualization.constants';
   import { InfoPopover, SliderWithInput, StrokeSection } from '../shared';
   import FillSection from '../shared/fill-section.svelte';
-  import { FILL_MODES_STANDARD } from '../shared/fill-mode-presets';
+  import { FILL_MODES_FOR_SYMBOLS } from '../shared/fill-mode-presets';
   import DiscretizationModal from '../discretization/discretization-modal.svelte';
   import type { SymbolModeProps } from '../../types/symbol.types';
   import { resolveDiscretizationLabel } from '../discretization/discretization.utils';
@@ -142,14 +142,8 @@
     )
   );
 
-  function handleFillModeChange(index: number) {
-    const modes = [
-      FillMode.NONE,
-      FillMode.UNIQUE,
-      FillMode.CLASSES,
-      FillMode.CATEGORIES
-    ];
-    fillMode = modes[index] || FillMode.NONE;
+  function handleFillModeChange(mode: FillMode) {
+    fillMode = mode;
     if (fillMode === FillMode.CATEGORIES) {
       onModesChange?.({
         fill: FillMode.CATEGORIES,
@@ -241,7 +235,7 @@
 <FillSection
   visualization={fillVisualization}
   dataFields={dataFields}
-  availableModes={FILL_MODES_STANDARD}
+  availableModes={FILL_MODES_FOR_SYMBOLS}
   fillMode={fillMode}
   fillColor={fillColor}
   fillOpacity={fillOpacity}
@@ -258,8 +252,7 @@
   selectableDataFields={selectableDataFields}
   getFacetsSelectedFieldIds={facetsSelection.getSelectedFieldIds}
   isFacetsActiveForSlot={facetsSelection.isActiveForSlot}
-  onFillModeChange={(mode) =>
-    handleFillModeChange(FILL_MODES_STANDARD.indexOf(mode))}
+  onFillModeChange={handleFillModeChange}
   onFillColorChange={handleFillColorChange}
   onFillOpacityChange={handleFillOpacityChange}
   onValueFieldSelect={classFieldSelection.handleSelect}

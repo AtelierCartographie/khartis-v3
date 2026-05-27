@@ -124,6 +124,14 @@ describe('createSymbolHandlers', () => {
     expect(bag.ensurePrimitiveStrokeClassificationDefaults).toHaveBeenCalled();
   });
 
+  it('handleSymbolModesChange maps fill none to the symbol fillMode', () => {
+    const bag = makeBag();
+    bag.handlers.handleSymbolModesChange({ fill: 'none' } as never);
+
+    const arg = bag.updateSelectedVisualization.mock.calls[0][0];
+    expect(arg.symbol.fillMode).toBe('none');
+  });
+
   it('handleSymbolsChange renames type → shape', () => {
     const bag = makeBag();
     bag.handlers.handleSymbolsChange({ type: 'square', barWidth: 9 } as never);

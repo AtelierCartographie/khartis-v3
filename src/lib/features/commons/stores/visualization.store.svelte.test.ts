@@ -913,6 +913,47 @@ describe('visualizationStore SymbolPrimitiveConfig round-trip persistence', () =
     );
   });
 
+  it('preserves the symbol pattern (motif) from the legacy symbolClassification mirror', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+    const input = buildRichSymbolVisualization();
+    const patternAware: VisualizationConfig = {
+      ...input,
+      symbolClassification: {
+        ...input.symbolClassification!,
+        patternId: 'diagonal',
+        patternParams: { angle: 45, size: 4, scale: 8 }
+      },
+      symbol: input.symbol
+        ? {
+            ...input.symbol,
+            classification: {
+              ...input.symbol.classification!,
+              patternId: undefined,
+              patternParams: undefined
+            }
+          }
+        : undefined
+    };
+
+    visualizationStore.restoreFromSerialized({
+      visualizations: [patternAware],
+      selectedVisualizationId: patternAware.id,
+      activeVisualizationIds: [patternAware.id]
+    });
+
+    const viz = visualizationStore.selectedVisualization;
+    const runtimeClassification = getPrimitiveClassification(
+      viz,
+      PrimitiveFilterType.POINT
+    );
+    expect(runtimeClassification?.patternId).toBe('diagonal');
+    expect(runtimeClassification?.patternParams).toEqual({
+      angle: 45,
+      size: 4,
+      scale: 8
+    });
+  });
+
   it('keeps symbol stroke discretization fields through the persistence registry round-trip used by project saves', () => {
     datasetsStore.addProcessedDataset(buildDataset());
     const input = buildRichSymbolVisualization();
