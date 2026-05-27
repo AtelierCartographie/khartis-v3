@@ -1,5 +1,9 @@
 import { PROJECTIONS } from '$lib/features/commons/utils/projection.utils';
-import { GEO_CONSTANTS } from '$lib/features/duckdb';
+import {
+  normalizeProj4CrsCode,
+  registerKnownProj4Definitions,
+  WGS84_CRS
+} from '$lib/features/commons/utils/proj4-crs.utils';
 import proj4 from 'proj4';
 
 const PROJ4_HINT = /(?:\+proj=|EPSG:\d+)/i;
@@ -112,6 +116,18 @@ function inferProjectionId(code: string): string {
   }
 
   if (
+    normalized.includes('epsg:2154') ||
+    normalized.includes('epsg:27572') ||
+    normalized.includes('lambert-93')
+  ) {
+    return 'lambert-conformal';
+  }
+
+  if (normalized.includes('epsg:3035')) {
+    return 'azimuthal-equal-area';
+  }
+
+  if (
     normalized.includes('mercator') ||
     normalized.includes('+proj=merc') ||
     normalized.includes('epsg:3857')
@@ -127,8 +143,10 @@ function isKnownProjectionId(projectionId: string): boolean {
 }
 
 function validateWithProj4(code: string): boolean {
+  registerKnownProj4Definitions();
+
   try {
-    proj4(code, GEO_CONSTANTS.WGS84_CRS, [0, 0]);
+    proj4(normalizeProj4CrsCode(code), WGS84_CRS, [0, 0]);
     return true;
   } catch {
     try {
@@ -142,7 +160,7 @@ function validateWithProj4(code: string): boolean {
 }
 
 export function parseProjectionCode(code: string): ParsedProjectionCode | null {
-  const normalizedCode = code.trim();
+  const normalizedCode = normalizeProj4CrsCode(code);
   if (!normalizedCode) {
     return null;
   }

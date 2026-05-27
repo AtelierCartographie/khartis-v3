@@ -1553,7 +1553,7 @@
     "date": "2024",
     "bbox": [-180.0, -90.0, 180.0, 90.0],
     "proj_source": "EPSG:4326",
-    "proj_to": { "type": "simple", "preset": null, "proj4": "+proj=natearth2" },
+    "proj_to": { "type": "simple", "preset": null, "proj4": "+proj=eqearth" },
     "simplification_level": "low",
     "layers": [
       {
@@ -1603,7 +1603,7 @@
     "date": "2024",
     "bbox": [-180.0, -90.0, 180.0, 90.0],
     "proj_source": "EPSG:4326",
-    "proj_to": { "type": "simple", "preset": null, "proj4": "+proj=natearth2" },
+    "proj_to": { "type": "simple", "preset": null, "proj4": "+proj=eqearth" },
     "simplification_level": "medium",
     "layers": [
       {
@@ -1653,7 +1653,7 @@
     "date": "2024",
     "bbox": [-180.0, -90.0, 180.0, 90.0],
     "proj_source": "EPSG:4326",
-    "proj_to": { "type": "simple", "preset": null, "proj4": "+proj=natearth2" },
+    "proj_to": { "type": "simple", "preset": null, "proj4": "+proj=eqearth" },
     "simplification_level": "high",
     "layers": [
       {

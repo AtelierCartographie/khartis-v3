@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import { Dropdown } from 'carbon-components-svelte';
-  import { Minimize, Subtract, Table } from 'carbon-icons-svelte';
+  import { ChartBubble, Subtract, Table } from 'carbon-icons-svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
     DiscretizationRow,
@@ -99,7 +99,7 @@
 
   const thicknessModeItems = [
     { icon: Subtract, label: m.thickness_mode_unique(), iconSize: 16 },
-    { icon: Minimize, label: m.thickness_mode_proportional(), iconSize: 16 },
+    { icon: ChartBubble, label: m.thickness_mode_proportional(), iconSize: 16 },
     { icon: Table, label: m.thickness_mode_classes(), iconSize: 16 }
   ];
 

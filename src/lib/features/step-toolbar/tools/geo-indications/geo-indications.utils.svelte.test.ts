@@ -73,6 +73,69 @@ describe('geo indications scale utilities', () => {
     expect(metersPerPixel).toBeCloseTo(400, 0);
   });
 
+  it('recognizes invert on a callable d3-style projection (function, not object)', () => {
+    // A real d3/proj4d3 projection is a callable function carrying an invert
+    // method — `typeof === 'function'`, not 'object'. The metres-per-pixel
+    // path must still recognize its invert.
+    const degreesPerPixel = 0.0035932611364780853;
+    const projection = ((coords: [number, number]) => coords) as ((
+      coords: [number, number]
+    ) => [number, number]) & {
+      invert: (point: [number, number]) => [number, number];
+    };
+    projection.invert = ([x]: [number, number]) => [x * degreesPerPixel, 0];
+
+    const metersPerPixel = getScaleMetersPerPixel(
+      {
+        bounds: { north: 100, south: 0, east: 100, west: 0 },
+        canvasSize: { width: 100, height: 100 },
+        isProjectedCoordinates: true,
+        projection
+      },
+      false
+    );
+
+    expect(metersPerPixel).toBeCloseTo(400, 0);
+  });
+
+  it('anchors the scale on the mainland for composite projections', () => {
+    // Composite forward: mainland (lng < 40) projects at 10 d3-px/deg, an
+    // overseas inset (lng > 40) projects at a different, irrelevant scale.
+    const composite = ((coords: [number, number]) => {
+      const [lng, lat] = coords;
+      if (lng > 40) {
+        return [1000 + lng * 2, lat * 2];
+      }
+      return [lng * 10, lat * 10];
+    }) as ((coords: [number, number]) => [number, number]) & {
+      getSubProjections: () => Array<{
+        id: string;
+        bounds: [number, number, number, number];
+      }>;
+    };
+    composite.getSubProjections = () => [
+      { id: 'mainland', bounds: [-5, 41, 10, 51] },
+      { id: 'overseas', bounds: [44, -13, 46, -11] }
+    ];
+
+    // coordinateDelta = (east - west) / canvasWidth = 1 d3-pixel per screen px.
+    const metersPerPixel = getScaleMetersPerPixel(
+      {
+        bounds: { north: 100, south: 0, east: 100, west: 0 },
+        canvasSize: { width: 100, height: 100 },
+        isProjectedCoordinates: true,
+        projection: composite
+      },
+      false
+    );
+
+    // Anchored on the mainland (center ~2.5°,46°), not the overseas inset:
+    // metres for ~0.15° of longitude at 46°N ≈ a few thousand metres.
+    expect(metersPerPixel).not.toBeNull();
+    expect(metersPerPixel as number).toBeGreaterThan(5000);
+    expect(metersPerPixel as number).toBeLessThan(12000);
+  });
+
   it('converts projected inset bounds before area checks use them', () => {
     const bounds = getInsetMapGeographicBounds(
       {

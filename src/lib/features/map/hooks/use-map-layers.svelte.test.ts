@@ -123,8 +123,10 @@ describe('useMapLayers source', () => {
   it('applies manual projection clipping through Deck layers instead of a DOM overlay', () => {
     expect(source).toContain('createProjectionSphereMaskLayer');
     expect(source).toContain('applyProjectionSphereMask');
+    // Sphere mask renders for manual overrides AND a basemap's own default
+    // projection (e.g. Equal Earth on the World map).
     expect(source).toContain(
-      'isOrthographicMode && hasManualProjectionOverride'
+      'hasManualProjectionOverride || hasDefaultBasemapProjection'
     );
     expect(source).toContain('getProjectionForSphereMask?.()');
     expect(source).toContain('activeBasemapProjection');
@@ -210,6 +212,22 @@ describe('useMapLayers source', () => {
     expect(source).toContain('hasEmptyFilteredVisualization = true;');
     expect(source).toContain(
       'const shouldPreservePreviousLayers =\n        !hasEmptyFilteredVisualization &&'
+    );
+  });
+
+  it('applies simplified projection preview by masking visualization and fallback layers', () => {
+    expect(source).toContain('const shouldUseSimplifiedProjectionPreview =');
+    expect(source).toContain(
+      'computeSimplifiedProjectionPreview(isOrthographicMode, projectionState)'
+    );
+    expect(source).toContain(
+      'const visualizationsToRender = shouldUseSimplifiedProjectionPreview\n        ? []'
+    );
+    expect(source).toContain(
+      '(getShouldRenderDatasetFallbacks?.() ?? false) &&\n        !shouldUseSimplifiedProjectionPreview'
+    );
+    expect(source).toContain(
+      'const hasExpectedActiveViz =\n        !shouldUseSimplifiedProjectionPreview &&\n        activeVisualizations.length > 0;'
     );
   });
 

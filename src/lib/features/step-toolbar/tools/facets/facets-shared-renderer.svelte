@@ -986,6 +986,7 @@
     void projectionState.latitude;
     void projectionState.rotation;
     void projectionState.center;
+    void projectionState.simplifiedPreview;
     void zoomModeStore.mode;
     void tables;
     void densityTables;

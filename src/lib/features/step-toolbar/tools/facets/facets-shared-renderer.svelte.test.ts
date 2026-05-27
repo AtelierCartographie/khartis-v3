@@ -39,6 +39,10 @@ describe('facets shared renderer structure', () => {
     expect(source).toContain('resolveProjectionForRender(');
   });
 
+  it('redraws facets when simplified projection preview changes layer visibility', () => {
+    expect(source).toContain('void projectionState.simplifiedPreview;');
+  });
+
   it('prefers rendered dataset bounds for manual projection fits even when a joined basemap is referenced', () => {
     const helperStart = source.indexOf(
       'function shouldPreferDatasetProjectionBbox'

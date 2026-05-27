@@ -1,17 +1,10 @@
-import type { ClientInit, HandleClientError } from '@sveltejs/kit';
-import { installRuntimeObservability } from '$lib/features/commons/services/runtime-observability.service';
-import { LogCategory } from '$lib/features/commons/utils/logger';
-import { posthogService } from '$lib/features/commons/services/posthog.service';
-
-export const init: ClientInit = () => {
-  installRuntimeObservability();
-};
+import type { HandleClientError } from '@sveltejs/kit';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 export const handleError: HandleClientError = ({ error, status, event }) => {
   if (status === 404) return;
 
-  posthogService.captureException(error, {
-    category: LogCategory.SYSTEM,
+  logger.error('Unhandled client error', LogCategory.SYSTEM, error, {
     flow: 'sveltekit_client_handle_error',
     extra: {
       route_id: event.route?.id ?? null,

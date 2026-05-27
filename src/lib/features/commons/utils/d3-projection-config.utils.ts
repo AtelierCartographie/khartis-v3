@@ -45,7 +45,8 @@ const D3_FACTORY_MAP: Record<string, GeoProjectionFactory | undefined> = {
   geoAirocean: getD3ProjectionFactory('geoAirocean'),
   geoImago: getD3ProjectionFactory('geoImago'),
   geoCylindricalEqualArea: getD3ProjectionFactory('geoCylindricalEqualArea'),
-  geoRobinson: getD3ProjectionFactory('geoRobinson')
+  geoRobinson: getD3ProjectionFactory('geoRobinson'),
+  geoWinkel3: getD3ProjectionFactory('geoWinkel3')
 };
 
 export function buildD3ProjectionFromConfig(

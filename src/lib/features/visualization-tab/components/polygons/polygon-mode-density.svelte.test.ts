@@ -20,6 +20,10 @@ describe('PolygonModeDensity', () => {
     expect(source).toContain('onchange={handleFillColorChange}');
   });
 
+  it('disables the Motif toggle in density via allowPattern=false', () => {
+    expect(source).toContain('allowPattern={false}');
+  });
+
   it('writes density settings through the dedicated callback instead of the store', () => {
     expect(source).toContain(
       'onDensityChange?: (updates: Partial<DensityConfig>) => void;'
@@ -35,6 +39,22 @@ describe('PolygonModeDensity', () => {
   it('computes density levels from GPS points when the dataset is joined to a basemap', () => {
     expect(source).toContain('computeDensityLevelsFromGpsJoin');
     expect(source).toContain('duckDataset?.gpsMode && duckDataset.gpsColumns');
+  });
+
+  it('selects the density variable through FacetsVariablePicker, not a plain Carbon Dropdown', () => {
+    expect(source).toContain('<FacetsVariablePicker');
+    expect(source).toContain(
+      "import FacetsVariablePicker from '../shared/facets-variable-picker.svelte'"
+    );
+    expect(source).not.toContain('import { Dropdown }');
+    expect(source).not.toContain('<Dropdown');
+  });
+
+  it('restricts the density variable list to numeric fields', () => {
+    expect(source).toContain(
+      "filterFieldsByKind(selectableDataFields, 'numeric', selectedColumnId)"
+    );
+    expect(source).toContain('singleSelectItems={selectableNumericFields}');
   });
 
   it('formats density equivalence labels without parenthesized ratios', () => {

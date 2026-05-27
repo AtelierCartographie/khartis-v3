@@ -105,6 +105,75 @@ describe('annotations store', () => {
     expect(itemsByRole.get(ANNOTATION_ROLE.CREDIT)?.style?.textAlign).toBe(
       TextAlign.Right
     );
+    expect(itemsByRole.get(ANNOTATION_ROLE.TITLE)?.style?.textAlign).toBe(
+      TextAlign.Left
+    );
+    expect(itemsByRole.get(ANNOTATION_ROLE.SUBTITLE)?.style?.textAlign).toBe(
+      TextAlign.Left
+    );
+  });
+
+  it('reconciles legacy auto-positioned title and subtitle from center to left alignment', () => {
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const title = getAnnotationsState().items.find(
+      (item) => item.role === ANNOTATION_ROLE.TITLE
+    );
+    const subtitle = getAnnotationsState().items.find(
+      (item) => item.role === ANNOTATION_ROLE.SUBTITLE
+    );
+
+    expect(title).toBeDefined();
+    expect(subtitle).toBeDefined();
+    if (!title || !subtitle) {
+      return;
+    }
+
+    annotationsActions.updateAnnotation(title.id, {
+      style: { ...title.style, textAlign: TextAlign.Center }
+    });
+    annotationsActions.updateAnnotation(subtitle.id, {
+      style: { ...subtitle.style, textAlign: TextAlign.Center }
+    });
+
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const reconciledTitle = getAnnotationsState().items.find(
+      (item) => item.id === title.id
+    );
+    const reconciledSubtitle = getAnnotationsState().items.find(
+      (item) => item.id === subtitle.id
+    );
+
+    expect(reconciledTitle?.style?.textAlign).toBe(TextAlign.Left);
+    expect(reconciledSubtitle?.style?.textAlign).toBe(TextAlign.Left);
+  });
+
+  it('preserves explicit textAlign on manually positioned title and subtitle', () => {
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const title = getAnnotationsState().items.find(
+      (item) => item.role === ANNOTATION_ROLE.TITLE
+    );
+
+    expect(title).toBeDefined();
+    if (!title) {
+      return;
+    }
+
+    annotationsActions.moveAnnotation(title.id, { x: 200, y: 200 });
+    annotationsActions.updateAnnotation(title.id, {
+      style: { ...title.style, textAlign: TextAlign.Center }
+    });
+
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const reconciledTitle = getAnnotationsState().items.find(
+      (item) => item.id === title.id
+    );
+
+    expect(reconciledTitle?.positionMode).toBe('manual');
+    expect(reconciledTitle?.style?.textAlign).toBe(TextAlign.Center);
   });
 
   it('spawns added text notes in the bottom-right map frame stack', () => {

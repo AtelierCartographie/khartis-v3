@@ -3,6 +3,7 @@
   import { Button } from 'carbon-components-svelte';
   import { ColorPalette, Checkmark } from 'carbon-icons-svelte';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import { clampDropdownToViewport } from './dropdown-position.utils';
   import {
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
@@ -90,11 +91,16 @@
     const spaceBelow = window.innerHeight - bottom;
     const shouldFlip = spaceBelow < estimatedDropdownHeight && top > spaceBelow;
 
-    dropdownPos = {
-      top: shouldFlip ? top - estimatedDropdownHeight : bottom,
-      left,
-      width
-    };
+    dropdownPos = clampDropdownToViewport(
+      {
+        top: shouldFlip ? top - estimatedDropdownHeight : bottom,
+        left,
+        width
+      },
+      estimatedDropdownHeight,
+      window.innerWidth,
+      window.innerHeight
+    );
   }
 
   function handleSelect(palette: Palette) {
@@ -135,11 +141,16 @@
           const width = rect.width / scale;
           const spaceBelow = window.innerHeight / scale - bottom;
           const shouldFlip = spaceBelow < actualHeight && top > spaceBelow;
-          dropdownPos = {
-            top: shouldFlip ? top - actualHeight : bottom,
-            left,
-            width
-          };
+          dropdownPos = clampDropdownToViewport(
+            {
+              top: shouldFlip ? top - actualHeight : bottom,
+              left,
+              width
+            },
+            actualHeight,
+            window.innerWidth / scale,
+            window.innerHeight / scale
+          );
         }
       });
     }

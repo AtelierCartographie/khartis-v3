@@ -22,6 +22,11 @@ export interface GeoIndicationsState {
     enabled: boolean;
     form: ScaleForm;
     distance: number;
+    // When true, distance is re-suggested whenever projection/zoom/center
+    // changes — releases stale auto-suggestions from previous sessions when
+    // they no longer match the current view. Flips to false the moment the
+    // user types a value in the input.
+    autoTuned: boolean;
     units: DistanceUnit;
     color: ColorState;
     fontFamily: string;

@@ -17,7 +17,8 @@ const {
       basemapLayersStore.layers.find((layer) => layer.id === id)
     ),
     setLayerVisibility: vi.fn(),
-    setLayerRenderGroupOrder: vi.fn()
+    setLayerRenderGroupOrder: vi.fn(),
+    setLayerThematicPlacement: vi.fn()
   };
 
   return {
@@ -42,10 +43,19 @@ const {
     mockBasemapAuxLayersStore: {
       version: 0,
       isVisible: vi.fn(() => true),
-      setVisible: vi.fn()
+      setVisible: vi.fn(),
+      getOrderedLayerKeys: vi.fn(
+        (_basemapFile: string, layerFiles: readonly string[]) => [...layerFiles]
+      ),
+      setOrder: vi.fn()
     },
     mockBasemapStyleStore: {
-      referenceBasemapId: null as string | null
+      referenceBasemapId: null as string | null,
+      selectedStyle: 'blank-white',
+      lastSelectedTiledStyle: undefined as string | undefined,
+      preferredTiledStyle: 'monde-couleurs',
+      groupVisibility: {} as Record<string, boolean>,
+      setGroupVisibility: vi.fn()
     },
     mockBasemapService: {
       availableBasemaps: [] as Array<Record<string, unknown>>,
@@ -58,7 +68,8 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => {
   const PrimitiveFilterType = {
     POINT: 'point',
     LINE: 'line',
-    POLYGON: 'polygon'
+    POLYGON: 'polygon',
+    TEXT: 'text'
   } as const;
   const ScaleType = {
     SQRT: 'sqrt'
@@ -82,7 +93,8 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => {
     (visualization.primitiveFilters as string[] | undefined) ?? [
       PrimitiveFilterType.POINT,
       PrimitiveFilterType.LINE,
-      PrimitiveFilterType.POLYGON
+      PrimitiveFilterType.POLYGON,
+      PrimitiveFilterType.TEXT
     ];
 
   const getPolygonPrimitive = (visualization: VisualizationConfig) => ({
@@ -115,14 +127,16 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => {
     opacity: visualization.style.lineOpacity ?? 1
   });
 
-  const getTextPrimitive = () => ({
-    enabled: false,
-    color: undefined,
-    opacity: 0,
-    fontFamily: 'Cabin',
+  const getTextPrimitive = (visualization: VisualizationConfig) => ({
+    enabled: getEnabledPrimitiveFilters(visualization).includes(
+      PrimitiveFilterType.TEXT
+    ),
+    color: visualization.style.textColor,
+    opacity: visualization.style.textOpacity ?? 1,
+    fontFamily: visualization.style.textFontFamily ?? 'Cabin',
     secondaryLabels: {
-      color: undefined,
-      fontFamily: 'Cabin',
+      color: visualization.style.labelColor,
+      fontFamily: visualization.style.labelFontFamily ?? 'Cabin',
       bold: false,
       italic: false
     }
@@ -138,7 +152,8 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => {
     ALL_PRIMITIVE_FILTERS: [
       PrimitiveFilterType.POINT,
       PrimitiveFilterType.LINE,
-      PrimitiveFilterType.POLYGON
+      PrimitiveFilterType.POLYGON,
+      PrimitiveFilterType.TEXT
     ],
     PrimitiveFilterType,
     ScaleType,
@@ -174,7 +189,12 @@ vi.mock('$lib/features/map/stores/basemap-layers.store.svelte', () => ({
   },
   basemapLayersStore: mockBasemapLayersStore,
   getBasemapRenderGroup: vi.fn((id: string) =>
-    id === 'frontieres' || id === 'rivieres' || id === 'villes'
+    id === 'frontieres' ||
+    id === 'rivieres' ||
+    id === 'villes' ||
+    id === 'equateur' ||
+    id === 'meridiens' ||
+    id === 'sphere'
       ? 'foreground'
       : 'background'
   )
@@ -239,7 +259,8 @@ function createVisualization(
     primitiveOrder: [
       PrimitiveFilterType.POINT,
       PrimitiveFilterType.LINE,
-      PrimitiveFilterType.POLYGON
+      PrimitiveFilterType.POLYGON,
+      PrimitiveFilterType.TEXT
     ],
     style: {
       fillOpacity: 0.8,
@@ -271,9 +292,24 @@ function resetBasemapLayerMocks(): void {
   mockBasemapStyleStore.referenceBasemapId = null;
   mockBasemapService.availableBasemaps = [];
   mockBasemapService.currentMetadata = null;
+  mockBasemapStyleStore.selectedStyle = 'blank-white';
+  mockBasemapStyleStore.lastSelectedTiledStyle = undefined;
+  mockBasemapStyleStore.preferredTiledStyle = 'monde-couleurs';
+  mockBasemapStyleStore.groupVisibility = {};
   mockBasemapAuxLayersStore.version = 0;
   mockBasemapAuxLayersStore.isVisible.mockReturnValue(true);
+  mockBasemapAuxLayersStore.getOrderedLayerKeys.mockImplementation(
+    (_basemapFile: string, layerFiles: readonly string[]) => [...layerFiles]
+  );
   mockBasemapLayersStore.layers = [
+    {
+      id: 'terre',
+      visible: true,
+      fillColor: '#ffffff',
+      fillOpacity: 100,
+      strokeColor: '#a8a8a8',
+      strokeOpacity: 100
+    },
     {
       id: 'mers',
       visible: true,
@@ -281,8 +317,18 @@ function resetBasemapLayerMocks(): void {
       opacity: 100
     },
     {
+      id: 'equateur',
+      visible: true,
+      renderBelowThematic: true,
+      color: '#8d8d8d',
+      dotted: false,
+      thickness: 1,
+      opacity: 100
+    },
+    {
       id: 'sphere',
       visible: true,
+      renderBelowThematic: true,
       color: '#8d8d8d',
       thickness: 1,
       opacity: 100
@@ -290,6 +336,7 @@ function resetBasemapLayerMocks(): void {
     {
       id: 'frontieres',
       visible: true,
+      renderBelowThematic: true,
       color: '#525252',
       dotted: false,
       dottedPattern: BasemapDottedPattern.DOTS,
@@ -299,6 +346,7 @@ function resetBasemapLayerMocks(): void {
     {
       id: 'meridiens',
       visible: true,
+      renderBelowThematic: true,
       color: '#e0e0e0',
       dotted: true,
       dottedPattern: BasemapDottedPattern.DOTS,
@@ -411,6 +459,142 @@ describe('layers color helpers', () => {
           visible: true
         })
       ])
+    );
+  });
+
+  it('exposes a Textes sublayer for every visualization so it can be toggled later', () => {
+    const visualization = createVisualization({
+      primitiveFilters: [
+        PrimitiveFilterType.POINT,
+        PrimitiveFilterType.LINE,
+        PrimitiveFilterType.POLYGON
+      ]
+    });
+
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+
+    const textSubLayer = layersState.layers.find(
+      (layer) => layer.id === 'viz-1::text'
+    );
+    expect(textSubLayer).toEqual(
+      expect.objectContaining({
+        id: 'viz-1::text',
+        parentId: 'viz-1',
+        isSubLayer: true,
+        primitive: PrimitiveFilterType.TEXT,
+        visible: false
+      })
+    );
+  });
+
+  it('marks the Textes sublayer as visible when the visualization enables text', () => {
+    const visualization = createVisualization({
+      primitiveFilters: [PrimitiveFilterType.POLYGON, PrimitiveFilterType.TEXT]
+    });
+
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+
+    const textSubLayer = layersState.layers.find(
+      (layer) => layer.id === 'viz-1::text'
+    );
+    expect(textSubLayer).toEqual(
+      expect.objectContaining({
+        visible: true
+      })
+    );
+  });
+
+  it('toggles the Textes sublayer through togglePrimitiveFilter', () => {
+    const visualization = createVisualization();
+
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+    layersActions.toggleLayerVisibility('viz-1::text');
+
+    expect(mockVisualizationStore.togglePrimitiveFilter).toHaveBeenCalledWith(
+      'viz-1',
+      PrimitiveFilterType.TEXT
+    );
+  });
+
+  it('reorders Textes among other primitive sublayers via setPrimitiveFilterOrder', () => {
+    const visualization = createVisualization({
+      primitiveOrder: [
+        PrimitiveFilterType.POINT,
+        PrimitiveFilterType.LINE,
+        PrimitiveFilterType.POLYGON,
+        PrimitiveFilterType.TEXT
+      ]
+    });
+
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+    layersActions.reorderSubLayers('viz-1', 3, 0);
+
+    expect(mockVisualizationStore.setPrimitiveFilterOrder).toHaveBeenCalledWith(
+      'viz-1',
+      [
+        PrimitiveFilterType.TEXT,
+        PrimitiveFilterType.POINT,
+        PrimitiveFilterType.LINE,
+        PrimitiveFilterType.POLYGON
+      ]
+    );
+  });
+
+  it('keeps Textes at the bottom after it is reordered below basemap sublayers', () => {
+    const visualization = createVisualization({
+      primitiveOrder: [
+        PrimitiveFilterType.POINT,
+        PrimitiveFilterType.LINE,
+        PrimitiveFilterType.POLYGON,
+        PrimitiveFilterType.TEXT
+      ]
+    });
+
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+    mockBasemapStyleStore.referenceBasemapId = 'world';
+    mockBasemapService.currentMetadata = {
+      file: 'world',
+      layers: []
+    };
+
+    layersActions.syncWithVisualizations();
+    const subLayers = layersState.layers
+      .filter((layer) => layer.isSubLayer && layer.parentId === 'viz-1')
+      .sort((a, b) => a.order - b.order);
+    const textIndex = subLayers.findIndex(
+      (layer) => layer.id === 'viz-1::text'
+    );
+
+    layersActions.reorderSubLayers('viz-1', textIndex, subLayers.length - 1);
+    layersActions.syncWithVisualizations();
+
+    const reorderedSubLayerIds = layersState.layers
+      .filter((layer) => layer.isSubLayer && layer.parentId === 'viz-1')
+      .sort((a, b) => a.order - b.order)
+      .map((layer) => layer.id);
+
+    expect(reorderedSubLayerIds.at(-1)).toBe('viz-1::text');
+    expect(mockVisualizationStore.setPrimitiveFilterOrder).toHaveBeenCalledWith(
+      'viz-1',
+      [
+        PrimitiveFilterType.POINT,
+        PrimitiveFilterType.LINE,
+        PrimitiveFilterType.POLYGON,
+        PrimitiveFilterType.TEXT
+      ]
     );
   });
 
@@ -545,6 +729,59 @@ describe('layers color helpers', () => {
     );
   });
 
+  it('does not expose vector basemap rows when no reference basemap is active', () => {
+    const visualization = createVisualization();
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+    mockBasemapStyleStore.referenceBasemapId = null;
+    mockBasemapService.currentMetadata = null;
+
+    layersActions.syncWithVisualizations();
+
+    expect(
+      layersState.layers.some(
+        (layer) =>
+          layer.id === 'viz-1::basemap::mers' ||
+          layer.id === 'viz-1::basemap::sphere'
+      )
+    ).toBe(false);
+  });
+
+  it('uses LAND metadata to expose Terre only as a generic basemap sublayer', () => {
+    const visualization = createVisualization();
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+    mockBasemapStyleStore.referenceBasemapId = 'world';
+    mockBasemapService.currentMetadata = {
+      file: 'world',
+      layers: [
+        {
+          title_fr: 'Territoire',
+          title_en: 'Territory',
+          type: BasemapLayerType.LAND,
+          file: 'world-land.parquet'
+        }
+      ]
+    };
+
+    layersActions.syncWithVisualizations();
+
+    expect(layersState.layers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'viz-1::basemap::terre',
+          parentId: 'viz-1',
+          isSubLayer: true,
+          basemapLayerId: 'terre',
+          name: 'Terre'
+        })
+      ])
+    );
+    expect(
+      layersState.layers.some((layer) => layer.name === 'Territoire')
+    ).toBe(false);
+  });
+
   it('builds Calques sublayers from active basemap metadata instead of static legacy layers', () => {
     const visualization = createVisualization();
     mockVisualizationStore.visualizations = [visualization];
@@ -585,31 +822,33 @@ describe('layers color helpers', () => {
     expect(layersState.layers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: 'viz-1::basemap::synthetic:mers',
+          id: 'viz-1::basemap::mers',
+          parentId: 'viz-1',
           basemapLayerId: 'mers'
         }),
         expect.objectContaining({
-          id: 'viz-1::basemap::synthetic:sphere',
+          id: 'viz-1::basemap::sphere',
+          parentId: 'viz-1',
           basemapLayerId: 'sphere'
         }),
         expect.objectContaining({
-          id: 'viz-1::basemap::world-limit-countries.parquet',
+          id: 'viz-1::basemap::frontieres',
+          parentId: 'viz-1',
+          isSubLayer: true,
           basemapLayerId: 'frontieres',
           basemapFile: 'world',
-          basemapLayerKey: 'world-limit-countries.parquet',
-          name: 'Frontières des pays'
+          basemapLayerKeys: [
+            'world-limit-countries.parquet',
+            'world-limit-admin.parquet'
+          ],
+          name: 'Frontières/Limites'
         }),
         expect.objectContaining({
-          id: 'viz-1::basemap::world-limit-admin.parquet',
-          basemapLayerId: 'frontieres',
-          basemapFile: 'world',
-          basemapLayerKey: 'world-limit-admin.parquet',
-          name: 'Frontières administratives'
-        }),
-        expect.objectContaining({
-          id: 'viz-1::basemap::world-graticule.parquet',
+          id: 'viz-1::basemap::meridiens',
+          parentId: 'viz-1',
           basemapLayerId: 'meridiens',
-          name: 'Graticules (10°)'
+          basemapLayerKey: 'world-graticule.parquet',
+          name: 'Méridiens/Parallèles'
         })
       ])
     );
@@ -620,7 +859,7 @@ describe('layers color helpers', () => {
     ).toBe(false);
   });
 
-  it('toggles metadata LIMIT entries through entry-scoped aux visibility without disabling all Frontieres', () => {
+  it('toggles the generic Frontieres row through metadata aux visibility and the basemap layer store', () => {
     const visualization = createVisualization();
     mockVisualizationStore.visualizations = [visualization];
     mockVisualizationStore.activeVisualizations = [visualization];
@@ -638,18 +877,194 @@ describe('layers color helpers', () => {
     };
 
     layersActions.syncWithVisualizations();
-    layersActions.toggleLayerVisibility(
-      'viz-1::basemap::world-limit-countries.parquet'
+    const limitLayer = layersState.layers.find(
+      (layer) => layer.id === 'viz-1::basemap::frontieres'
     );
+    expect(limitLayer?.id).toBeDefined();
+    layersActions.toggleLayerVisibility(limitLayer!.id);
 
     expect(mockBasemapAuxLayersStore.setVisible).toHaveBeenCalledWith(
       'world',
       'world-limit-countries.parquet',
       false
     );
-    expect(mockBasemapLayersStore.setLayerVisibility).not.toHaveBeenCalledWith(
+    expect(mockBasemapLayersStore.setLayerVisibility).toHaveBeenCalledWith(
       'frontieres',
       false
+    );
+  });
+
+  it('moves a foreground basemap layer above the thematic block when dragged above the primitives', () => {
+    const visualization = createVisualization({ id: 'viz-place-above' });
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+    mockBasemapStyleStore.referenceBasemapId = 'world';
+    mockBasemapService.currentMetadata = { file: 'world', layers: [] };
+
+    layersActions.syncWithVisualizations();
+    const subLayers = layersState.layers
+      .filter(
+        (layer) => layer.isSubLayer && layer.parentId === 'viz-place-above'
+      )
+      .sort((a, b) => a.order - b.order);
+    const equateurIndex = subLayers.findIndex(
+      (layer) => layer.id === 'viz-place-above::basemap::equateur'
+    );
+
+    layersActions.reorderSubLayers('viz-place-above', equateurIndex, 0);
+
+    expect(
+      mockBasemapLayersStore.setLayerThematicPlacement
+    ).toHaveBeenCalledWith('equateur', false);
+  });
+
+  it('keeps a foreground basemap layer below the thematic block when it stays under the primitives', () => {
+    const visualization = createVisualization({ id: 'viz-place-below' });
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+    mockBasemapStyleStore.referenceBasemapId = 'world';
+    mockBasemapService.currentMetadata = { file: 'world', layers: [] };
+
+    layersActions.syncWithVisualizations();
+    const subLayers = layersState.layers
+      .filter(
+        (layer) => layer.isSubLayer && layer.parentId === 'viz-place-below'
+      )
+      .sort((a, b) => a.order - b.order);
+    const equateurIndex = subLayers.findIndex(
+      (layer) => layer.id === 'viz-place-below::basemap::equateur'
+    );
+    const sphereIndex = subLayers.findIndex(
+      (layer) => layer.id === 'viz-place-below::basemap::sphere'
+    );
+
+    layersActions.reorderSubLayers(
+      'viz-place-below',
+      sphereIndex,
+      equateurIndex
+    );
+
+    expect(
+      mockBasemapLayersStore.setLayerThematicPlacement
+    ).toHaveBeenCalledWith('sphere', true);
+  });
+
+  it('reorders basemap sublayers inside their render groups', () => {
+    const visualization = createVisualization();
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+    mockBasemapStyleStore.referenceBasemapId = 'world';
+    mockBasemapService.currentMetadata = {
+      file: 'world',
+      layers: []
+    };
+
+    layersActions.syncWithVisualizations();
+    const subLayers = layersState.layers
+      .filter((layer) => layer.isSubLayer && layer.parentId === 'viz-1')
+      .sort((a, b) => a.order - b.order);
+    const equateurIndex = subLayers.findIndex(
+      (layer) => layer.id === 'viz-1::basemap::equateur'
+    );
+    const sphereIndex = subLayers.findIndex(
+      (layer) => layer.id === 'viz-1::basemap::sphere'
+    );
+    layersActions.reorderSubLayers('viz-1', sphereIndex, equateurIndex);
+
+    expect(
+      mockBasemapLayersStore.setLayerRenderGroupOrder
+    ).toHaveBeenCalledWith('foreground', ['sphere', 'equateur', 'meridiens']);
+    expect(mockVisualizationStore.setVisualizationOrder).not.toHaveBeenCalled();
+  });
+
+  it('keeps same-type metadata entries grouped behind the generic basemap row', () => {
+    const visualization = createVisualization();
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+    mockBasemapStyleStore.referenceBasemapId = 'world';
+    mockBasemapService.currentMetadata = {
+      file: 'world',
+      layers: [
+        {
+          title_fr: 'Frontières des pays',
+          title_en: 'Country borders',
+          type: BasemapLayerType.LIMIT,
+          file: 'world-limit-countries.parquet'
+        },
+        {
+          title_fr: 'Frontières administratives',
+          title_en: 'Administrative borders',
+          type: BasemapLayerType.LIMIT,
+          file: 'world-limit-admin.parquet'
+        }
+      ]
+    };
+
+    layersActions.syncWithVisualizations();
+    const frontieresLayer = layersState.layers.find(
+      (layer) => layer.id === 'viz-1::basemap::frontieres'
+    );
+
+    expect(frontieresLayer).toEqual(
+      expect.objectContaining({
+        parentId: 'viz-1',
+        basemapLayerId: 'frontieres',
+        basemapLayerKeys: [
+          'world-limit-countries.parquet',
+          'world-limit-admin.parquet'
+        ],
+        name: 'Frontières/Limites'
+      })
+    );
+    expect(
+      layersState.layers.some((layer) =>
+        layer.id.includes('world-limit-admin.parquet')
+      )
+    ).toBe(false);
+  });
+
+  it('exposes tiled basemap groups and toggles MapLibre group visibility', () => {
+    const visualization = createVisualization();
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+    mockBasemapStyleStore.selectedStyle = 'monde-couleurs';
+    mockBasemapStyleStore.groupVisibility = {
+      labels: false
+    };
+
+    layersActions.syncWithVisualizations();
+
+    expect(layersState.layers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'viz-1::basemap::tiled-basemap::streets',
+          parentId: 'viz-1',
+          isSubLayer: true,
+          type: 'geographic',
+          tiledLayerGroupIds: ['streets'],
+          visible: true
+        }),
+        expect.objectContaining({
+          id: 'viz-1::basemap::tiled-basemap::labels',
+          parentId: 'viz-1',
+          isSubLayer: true,
+          type: 'geographic',
+          tiledLayerGroupIds: ['labels'],
+          visible: false
+        })
+      ])
+    );
+    expect(
+      layersState.layers.some((layer) => layer.id === 'viz-1::basemap::mers')
+    ).toBe(false);
+
+    layersActions.toggleLayerVisibility(
+      'viz-1::basemap::tiled-basemap::labels'
+    );
+
+    expect(mockBasemapStyleStore.setGroupVisibility).toHaveBeenCalledWith(
+      'labels',
+      true
     );
   });
 
@@ -667,7 +1082,9 @@ describe('layers color helpers', () => {
     layersActions.syncWithVisualizations();
 
     const layers = layersState.layers;
-    const parentLayers = layers.filter((l) => !l.isSubLayer);
+    const parentLayers = layers.filter(
+      (l) => !l.isSubLayer && l.type === 'visualization'
+    );
 
     expect(parentLayers).toHaveLength(1);
     expect(parentLayers[0].id).toBe('viz-2');
@@ -691,7 +1108,9 @@ describe('layers color helpers', () => {
 
     layersActions.syncWithVisualizations();
 
-    const parentLayers = layersState.layers.filter((l) => !l.isSubLayer);
+    const parentLayers = layersState.layers.filter(
+      (l) => !l.isSubLayer && l.type === 'visualization'
+    );
     expect(parentLayers[0].name).toContain('1');
     expect(parentLayers[0].name).toContain('Monde');
 

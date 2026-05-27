@@ -47,6 +47,7 @@ const DEFAULT_STATE: GeoIndicationsState = {
     enabled: false,
     form: ScaleForm.LINE,
     distance: 0,
+    autoTuned: true,
     units: DistanceUnit.KILOMETERS,
     color: { hue: 0, saturation: 0, lightness: 0 },
     fontFamily: CARTOGRAPHIC_FONT_FAMILY,
@@ -158,6 +159,10 @@ function normalizeState(
         nextScaleUnits,
         current.scale.distance
       ),
+      autoTuned:
+        typeof nextScale?.autoTuned === 'boolean'
+          ? nextScale.autoTuned
+          : current.scale.autoTuned,
       units: nextScaleUnits,
       color: normalizeColorState(nextScale?.color, current.scale.color),
       fontFamily:
@@ -265,6 +270,7 @@ type GeoIndicationsActions = {
   setVisibility: (visible: boolean) => void;
   toggleScale: () => void;
   setScaleDistance: (distance: number) => void;
+  setSuggestedScaleDistance: (distance: number) => void;
   toggleOrientation: () => void;
   toggleInsetMap: () => void;
   toggleScaleExpanded: () => void;
@@ -331,6 +337,18 @@ const { state, actions } = createToolStore<
         s.scale.distance,
         getCurrentScaleDistanceContext()
       );
+      // Any user-initiated change locks the value: subsequent projection
+      // or zoom changes must not silently overwrite it.
+      s.scale.autoTuned = false;
+    },
+    setSuggestedScaleDistance: (distance: number) => {
+      s.scale.distance = clampScaleDistance(
+        distance,
+        s.scale.units,
+        s.scale.distance,
+        getCurrentScaleDistanceContext()
+      );
+      s.scale.autoTuned = true;
     },
     toggleOrientation: () => {
       const hadActiveIndication = hasActiveGeoIndication(s);

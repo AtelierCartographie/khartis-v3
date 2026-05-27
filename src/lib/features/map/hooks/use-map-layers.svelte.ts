@@ -19,6 +19,7 @@ import {
   BASEMAP_LAYER_ID,
   basemapLayersStore
 } from '../stores/basemap-layers.store.svelte';
+import { SYNTHETIC_AUX_LAYER_KEY } from '$lib/features/commons/constants/basemap.constants';
 import {
   createBasemapLayers,
   createDeckLayers,
@@ -50,7 +51,10 @@ import {
   getVisualizationRenderOrder
 } from '../utils/layer-order.utils';
 import type { DataTableFilter } from '$lib/features/duckdb/types';
-import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
+import {
+  getProjectionState,
+  computeSimplifiedProjectionPreview
+} from '$lib/features/step-toolbar/tools/projections';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
 import type { BasemapMetadata } from '../types/basemap.types';
 import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs.utils';
@@ -66,6 +70,7 @@ import {
   createProjectionSphereOutlineLayer
 } from '../utils/projection-sphere-mask.utils';
 import { basemapAuxLayersStore } from '../stores/basemap-aux-layers.store.svelte';
+import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
 import { getRepresentativePointArrowTable } from '$lib/features/duckdb/orchestrator/arrow-ops';
 import { resolveRepresentativePointTableName } from '../utils/representative-point-table.utils';
@@ -879,8 +884,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const isOSMActive = Boolean(osmBasemapStore.activeOSMBasemap);
       const worldBaseTable = getWorldBaseTable();
       const activeVisualizations = getActiveVisualizations();
-      const visualizationsToRender =
-        getVisualizationRenderOrder(activeVisualizations);
 
       const isOrthographicMode = !deckOverlay && Boolean(deckInstance);
       const matrixToApply = isOrthographicMode
@@ -896,13 +899,24 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         isOrthographicMode ? getVisibleProjectedCanvasExtent() : null;
 
       const currentMetadata = basemapService.currentMetadata;
+      const projectionState = getProjectionState();
+      const hasManualProjectionOverride =
+        projectionState.overrideActive === true &&
+        projectionState.overrideSource === 'manual';
+      const shouldUseSimplifiedProjectionPreview =
+        computeSimplifiedProjectionPreview(isOrthographicMode, projectionState);
+      const visualizationsToRender = shouldUseSimplifiedProjectionPreview
+        ? []
+        : getVisualizationRenderOrder(activeVisualizations);
+      const shouldRenderDatasetFallbacks =
+        (getShouldRenderDatasetFallbacks?.() ?? false) &&
+        !shouldUseSimplifiedProjectionPreview;
       const basemapProjection = getProjectionFromMetadata(
         currentMetadata,
         isOrthographicMode,
         projectionFitBbox,
         fitPaddingPx
       );
-      const projectionState = getProjectionState();
       const projectionOverride = getProjectionOverride(
         isOrthographicMode,
         projectionFitBbox
@@ -913,6 +927,13 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         projectionOverride,
         projectionState.overrideSource
       );
+      // NOTE: the projection store is published exclusively by the
+      // reference-fit path (resolveOrthographicReferenceState), which pairs
+      // the render projection with the bbox it produced. Publishing
+      // `activeBasemapProjection` from here too would race that path and could
+      // store a differently-fit instance, leaving consumers that invert against
+      // the reference bbox — the scale bar — mismatched. So we deliberately do
+      // not touch projectionStore.setRenderProjection here.
 
       const beforeId =
         map && deckOverlay ? findFirstSymbolLayerId(map) : undefined;
@@ -956,9 +977,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           Boolean(basemapStyleStore.referenceBasemapId) ||
           hasJoinedBasemapReference
       });
-      const hasManualProjectionOverride =
-        projectionState.overrideActive === true &&
-        projectionState.overrideSource === 'manual';
       const canShowGeneratedBasemapLayers =
         !shouldShowBasemapLayers && isOrthographicMode && !isOSMActive;
       const shouldShowGeneratedOceanLayer =
@@ -983,6 +1001,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
       let basemapBackgroundLayers: Layer<DeckDataRow>[] = [];
       let basemapForegroundLayers: Layer<DeckDataRow>[] = [];
+      let basemapForegroundBelowThematicLayers: Layer<DeckDataRow>[] = [];
 
       if (shouldKeepOrthographicBasemapLayers) {
         try {
@@ -1034,9 +1053,26 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             }
 
             void basemapAuxLayersStore.version;
-            for (const layer of currentMetadata.layers) {
-              const layerKey =
-                layer.file ?? `${currentMetadata.file}:${layer.type}`;
+            const metadataLayerEntries = currentMetadata.layers.map(
+              (layer) => ({
+                layer,
+                layerKey: layer.file ?? `${currentMetadata.file}:${layer.type}`
+              })
+            );
+            const metadataLayerByKey = new Map(
+              metadataLayerEntries.map((entry) => [entry.layerKey, entry])
+            );
+            const metadataLayerKeys = basemapAuxLayersStore
+              .getOrderedLayerKeys(
+                currentMetadata.file,
+                metadataLayerEntries.map((entry) => entry.layerKey)
+              )
+              .reverse();
+
+            for (const layerKey of metadataLayerKeys) {
+              const entry = metadataLayerByKey.get(layerKey);
+              if (!entry) continue;
+              const { layer } = entry;
               if (
                 !basemapAuxLayersStore.isVisible(
                   currentMetadata.file,
@@ -1085,7 +1121,14 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               : basemapGroups.background.filter(
                   (layer) => !isGeneratedOceanLayer(layer)
                 );
-          basemapForegroundLayers = basemapGroups.foreground;
+          const foregroundBelowSet = new Set(
+            basemapGroups.foregroundBelowThematic
+          );
+          basemapForegroundBelowThematicLayers =
+            basemapGroups.foregroundBelowThematic;
+          basemapForegroundLayers = basemapGroups.foreground.filter(
+            (layer) => !foregroundBelowSet.has(layer)
+          );
         } catch (error) {
           logger.error(
             'Basemap layer creation failed; rendering thematic layers only',
@@ -1243,9 +1286,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         }
       }
 
-      const shouldRenderDatasetFallbacks =
-        getShouldRenderDatasetFallbacks?.() ?? false;
-
       if (shouldRenderDatasetFallbacks) {
         for (const [datasetId, table] of tables) {
           const joinedBasemapId = getDatasetJoinedBasemap(datasetId);
@@ -1362,30 +1402,85 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
       const orderedLayers = getMapLayerRenderOrder({
         basemapBackgroundLayers,
+        basemapForegroundBelowThematicLayers,
         thematicLayers: layers,
         basemapForegroundLayers
       });
+      // The projected-sphere ocean mask should appear for any non-identity
+      // projection driving the render — both manual overrides and a basemap's
+      // own default projection (e.g. Equal Earth on the World map). Gating it
+      // on manual override alone left the default-projected basemap without
+      // its sphere until the user re-picked a projection.
+      const basemapProjectionType = currentMetadata?.proj_to?.type;
+      const hasDefaultBasemapProjection =
+        basemapProjectionType === 'simple' ||
+        basemapProjectionType === 'composite';
       const sphereProjectionInput =
-        isOrthographicMode && hasManualProjectionOverride
-          ? (getProjectionForSphereMask?.() ??
-            activeBasemapProjection ??
+        isOrthographicMode &&
+        (hasManualProjectionOverride || hasDefaultBasemapProjection)
+          ? (activeBasemapProjection ??
+            getProjectionForSphereMask?.() ??
             projectionOverride)
           : undefined;
-      const projectionSphereMaskLayer = sphereProjectionInput
-        ? createProjectionSphereMaskLayer({
-            projection: sphereProjectionInput,
-            modelMatrix: matrixToApply
-          })
-        : null;
+      const mersConfig = basemapLayersStore.layers.find((l) => l.id === 'mers');
+      const mersAuxVisible =
+        currentMetadata && mersConfig
+          ? basemapAuxLayersStore.isVisible(
+              currentMetadata.file,
+              SYNTHETIC_AUX_LAYER_KEY.MERS,
+              true
+            )
+          : true;
+      const mersEffectiveVisible =
+        (mersConfig?.visible ?? false) && mersAuxVisible;
+      const mersFillColor: [number, number, number, number] | undefined =
+        mersConfig && mersEffectiveVisible
+          ? (() => {
+              const [r, g, b] = hexToRgb(mersConfig.color);
+              const alpha = Math.round(
+                ((mersConfig.opacity ?? 100) / 100) * 255
+              );
+              return [r, g, b, alpha];
+            })()
+          : undefined;
+      const projectionSphereMaskLayer =
+        sphereProjectionInput && mersFillColor
+          ? createProjectionSphereMaskLayer({
+              projection: sphereProjectionInput,
+              modelMatrix: matrixToApply,
+              fillColor: mersFillColor
+            })
+          : null;
       const sphereConfig = basemapLayersStore.layers.find(
         (l) => l.id === 'sphere'
       );
-      const sphereVisible = sphereConfig?.visible ?? true;
+      const sphereAuxVisible =
+        currentMetadata && sphereConfig
+          ? basemapAuxLayersStore.isVisible(
+              currentMetadata.file,
+              SYNTHETIC_AUX_LAYER_KEY.SPHERE,
+              true
+            )
+          : true;
+      const sphereVisible = (sphereConfig?.visible ?? true) && sphereAuxVisible;
+      const sphereOutlineOptions = sphereConfig
+        ? (() => {
+            const [r, g, b] = hexToRgb(sphereConfig.color);
+            const alpha = Math.round(
+              ((sphereConfig.opacity ?? 100) / 100) * 255
+            );
+            return {
+              color: [r, g, b, alpha] as [number, number, number, number],
+              width: sphereConfig.thickness
+            };
+          })()
+        : undefined;
       const projectionSphereOutlineLayer =
         sphereProjectionInput && sphereVisible
           ? createProjectionSphereOutlineLayer({
               projection: sphereProjectionInput,
-              modelMatrix: matrixToApply
+              modelMatrix: matrixToApply,
+              ...(sphereOutlineOptions ?? {})
             })
           : null;
       const maskedOrderedLayers = applyProjectionSphereMask(
@@ -1396,7 +1491,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       layers.length = 0;
       layers.push(...maskedOrderedLayers);
 
-      const hasExpectedActiveViz = activeVisualizations.length > 0;
+      const hasExpectedActiveViz =
+        !shouldUseSimplifiedProjectionPreview &&
+        activeVisualizations.length > 0;
       const hasExpectedDatasetFallbacks =
         shouldRenderDatasetFallbacks && (tables.size > 0 || geoJSONs.size > 0);
       const hasVisibleBasemapConfig =

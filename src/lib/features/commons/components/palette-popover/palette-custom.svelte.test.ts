@@ -56,6 +56,18 @@ describe('PaletteCustom (Palette personnalisée section)', () => {
     );
   });
 
+  it('gates every Motif affordance behind the allowPattern prop (default true)', () => {
+    expect(source).toContain('allowPattern = true');
+    const qualitativeBlock = source
+      .split('{#if isQualitative}')[1]
+      ?.split('{:else}')[0];
+    expect(qualitativeBlock).toContain('{#if allowPattern}');
+    expect(source).toContain('{#if allowPattern && motifEnabled}');
+    expect(source).toMatch(
+      /allowPattern\s*\?\s*\[[\s\S]*m\.palette_custom_patterns\(\)[\s\S]*\]\s*:\s*\[\s*m\.palette_custom_1_color\(\),\s*m\.palette_custom_2_colors\(\)\s*\]/
+    );
+  });
+
   it('should expose angle options for line patterns (0°, 45°, 315°)', () => {
     expect(source).toContain("label: '0°'");
     expect(source).toContain("label: '45°'");

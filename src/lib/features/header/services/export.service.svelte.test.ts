@@ -68,6 +68,13 @@ describe('export service geometry extraction', () => {
     expect(source).not.toContain("DRIVER 'GPKG'");
   });
 
+  it('normalizes EPSG CRS casing before export reprojection expressions', () => {
+    expect(source).toContain(
+      "import { normalizeProj4CrsCode } from '$lib/features/commons/utils/proj4-crs.utils';"
+    );
+    expect(source).toContain('return normalizeProj4CrsCode(trimmed);');
+  });
+
   it('uses strict geometry-column resolution so GPS exports are not shadowed by text location columns', () => {
     expect(source).toContain('isDatasetGeometryColumn(dataset, column)');
     expect(source).not.toContain('dataset.analysis.hasGeoData) &&');

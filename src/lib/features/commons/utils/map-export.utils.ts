@@ -435,6 +435,56 @@ function isTransparentColor(value: string): boolean {
   );
 }
 
+interface ParsedBoxShadow {
+  offsetX: number;
+  offsetY: number;
+  blur: number;
+  color: string;
+  opacity: number;
+}
+
+function parseBoxShadow(value: string): ParsedBoxShadow | null {
+  if (!value || value.trim().toLowerCase() === 'none') {
+    return null;
+  }
+
+  const colorMatch = value.match(/rgba?\(([^)]+)\)|#[0-9a-fA-F]{3,8}/);
+  if (!colorMatch) return null;
+
+  const colorToken = colorMatch[0];
+  const rest = value.replace(colorToken, '').trim();
+  const numbers = rest
+    .split(/\s+/)
+    .map((token) => Number(token.replace(/px$/, '')))
+    .filter((n) => Number.isFinite(n));
+
+  if (numbers.length < 2) return null;
+
+  const [offsetX, offsetY, blur = 0] = numbers;
+  let color = colorToken;
+  let opacity = 1;
+
+  const rgbaMatch = colorToken.match(/rgba?\(([^)]+)\)/i);
+  if (rgbaMatch) {
+    const components = rgbaMatch[1]
+      .split(',')
+      .map((token) => Number(token.trim()));
+    if (components.length >= 3) {
+      const [r, g, b, a] = components;
+      color = `rgb(${r}, ${g}, ${b})`;
+      opacity = Number.isFinite(a) ? a : 1;
+    }
+  }
+
+  return {
+    offsetX,
+    offsetY,
+    blur,
+    color,
+    opacity: clamp(opacity, 0, 1)
+  };
+}
+
 function getRelativeRect(
   element: Element,
   container: HTMLElement
@@ -1071,25 +1121,32 @@ function serializePointShape(
   radius: number,
   fillAttributes: string,
   strokeAttributes: string,
-  strokeWidth: number
+  strokeWidth: number,
+  barWidth: number = 6
 ): string {
   const common = `${fillAttributes} ${strokeAttributes} stroke-width="${roundSvgValue(strokeWidth)}"`;
 
   switch (Math.round(shape)) {
     case 1:
-    case 8:
       return `<rect x="${roundSvgValue(x - radius)}" y="${roundSvgValue(y - radius)}" width="${roundSvgValue(radius * 2)}" height="${roundSvgValue(radius * 2)}" ${common} />`;
     case 4:
-      return `<path d="M ${roundSvgValue(x - radius)} ${roundSvgValue(y)} L ${roundSvgValue(x + radius)} ${roundSvgValue(y)} M ${roundSvgValue(x)} ${roundSvgValue(y - radius)} L ${roundSvgValue(x)} ${roundSvgValue(y + radius)}" fill="none" ${strokeAttributes} stroke-width="${roundSvgValue(Math.max(1, strokeWidth || radius / 3))}" stroke-linecap="square" />`;
+      return `<path d="M ${roundSvgValue(x - radius * 0.25)} ${roundSvgValue(y - radius * 0.75)} L ${roundSvgValue(x + radius * 0.25)} ${roundSvgValue(y - radius * 0.75)} L ${roundSvgValue(x + radius * 0.25)} ${roundSvgValue(y - radius * 0.25)} L ${roundSvgValue(x + radius * 0.75)} ${roundSvgValue(y - radius * 0.25)} L ${roundSvgValue(x + radius * 0.75)} ${roundSvgValue(y + radius * 0.25)} L ${roundSvgValue(x + radius * 0.25)} ${roundSvgValue(y + radius * 0.25)} L ${roundSvgValue(x + radius * 0.25)} ${roundSvgValue(y + radius * 0.75)} L ${roundSvgValue(x - radius * 0.25)} ${roundSvgValue(y + radius * 0.75)} L ${roundSvgValue(x - radius * 0.25)} ${roundSvgValue(y + radius * 0.25)} L ${roundSvgValue(x - radius * 0.75)} ${roundSvgValue(y + radius * 0.25)} L ${roundSvgValue(x - radius * 0.75)} ${roundSvgValue(y - radius * 0.25)} L ${roundSvgValue(x - radius * 0.25)} ${roundSvgValue(y - radius * 0.25)} Z" ${common} />`;
     case 5:
       return `<path d="M ${roundSvgValue(x)} ${roundSvgValue(y - radius)} L ${roundSvgValue(x + radius)} ${roundSvgValue(y)} L ${roundSvgValue(x)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x - radius)} ${roundSvgValue(y)} Z" ${common} />`;
     case 6:
-    case 3:
       return `<path d="M ${roundSvgValue(x)} ${roundSvgValue(y - radius)} L ${roundSvgValue(x + radius)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x - radius)} ${roundSvgValue(y + radius)} Z" ${common} />`;
+    case 3: {
+      const spikeHalfWidth = (barWidth * 1.5) / 2;
+      return `<path d="M ${roundSvgValue(x - spikeHalfWidth)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x)} ${roundSvgValue(y - radius)} L ${roundSvgValue(x + spikeHalfWidth)} ${roundSvgValue(y + radius)} Z" ${common} />`;
+    }
     case 7:
       return `<path d="M ${roundSvgValue(x)} ${roundSvgValue(y - radius)} L ${roundSvgValue(x + radius * 0.22)} ${roundSvgValue(y - radius * 0.22)} L ${roundSvgValue(x + radius)} ${roundSvgValue(y - radius * 0.15)} L ${roundSvgValue(x + radius * 0.36)} ${roundSvgValue(y + radius * 0.18)} L ${roundSvgValue(x + radius * 0.58)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x)} ${roundSvgValue(y + radius * 0.5)} L ${roundSvgValue(x - radius * 0.58)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x - radius * 0.36)} ${roundSvgValue(y + radius * 0.18)} L ${roundSvgValue(x - radius)} ${roundSvgValue(y - radius * 0.15)} L ${roundSvgValue(x - radius * 0.22)} ${roundSvgValue(y - radius * 0.22)} Z" ${common} />`;
-    case 2:
-      return `<rect x="${roundSvgValue(x - radius * 0.35)}" y="${roundSvgValue(y - radius)}" width="${roundSvgValue(radius * 0.7)}" height="${roundSvgValue(radius * 2)}" ${common} />`;
+    case 2: {
+      const barHalfWidth = barWidth / 2;
+      return `<rect x="${roundSvgValue(x - barHalfWidth)}" y="${roundSvgValue(y - radius)}" width="${roundSvgValue(barHalfWidth * 2)}" height="${roundSvgValue(radius * 2)}" ${common} />`;
+    }
+    case 8:
+      return `<rect x="${roundSvgValue(x - radius * 0.9)}" y="${roundSvgValue(y - radius * 0.27)}" width="${roundSvgValue(radius * 1.8)}" height="${roundSvgValue(radius * 0.54)}" ${common} />`;
     case 0:
     default:
       return `<circle cx="${roundSvgValue(x)}" cy="${roundSvgValue(y)}" r="${roundSvgValue(radius)}" ${common} />`;
@@ -1126,6 +1183,7 @@ function serializePointLayer(
   const filled = props.filled !== false;
   const stroked = props.stroked === true || Boolean(strokeAttribute);
   const lineWidthScale = getLayerNumber(props, 'lineWidthScale', 1);
+  const barWidth = getLayerNumber(props, 'barWidth', 6);
   const parts: string[] = [];
 
   for (let index = 0; index < length; index++) {
@@ -1193,7 +1251,8 @@ function serializePointLayer(
         radius,
         colorAttributes('fill', fillColor),
         colorAttributes('stroke', strokeColor),
-        strokeWidth
+        strokeWidth,
+        barWidth
       )
     );
   }
@@ -1649,7 +1708,7 @@ function serializeTextLayer(
       props.getPosition,
       datum,
       index,
-      [0, 0, 0]
+      [0, 0]
     );
     const projected = projectPosition(position, layer, context);
     if (!projected) return;
@@ -2043,6 +2102,34 @@ function serializeSvgNode(
   return new XMLSerializer().serializeToString(clone);
 }
 
+let dropShadowFilterCounter = 0;
+
+function buildDropShadowFilter(shadow: ParsedBoxShadow): {
+  id: string;
+  markup: string;
+} {
+  dropShadowFilterCounter += 1;
+  const id = `khartis-drop-shadow-${dropShadowFilterCounter}`;
+  const markup = `
+    <filter
+      id="${id}"
+      x="-20%"
+      y="-20%"
+      width="140%"
+      height="140%"
+    >
+      <feDropShadow
+        dx="${roundSvgValue(shadow.offsetX)}"
+        dy="${roundSvgValue(shadow.offsetY)}"
+        stdDeviation="${roundSvgValue(shadow.blur / 2)}"
+        flood-color="${escapeXml(shadow.color)}"
+        flood-opacity="${roundSvgValue(shadow.opacity)}"
+      />
+    </filter>
+  `;
+  return { id, markup };
+}
+
 function buildElementBackgroundRect(
   element: HTMLElement,
   width: number,
@@ -2070,8 +2157,11 @@ function buildElementBackgroundRect(
   const strokeAttributes = hasBorder
     ? `stroke="${escapeXml(styles.borderColor)}" stroke-width="${roundSvgValue(borderWidth)}"`
     : 'stroke="none"';
+  const shadow = parseBoxShadow(styles.boxShadow);
+  const filter = shadow ? buildDropShadowFilter(shadow) : null;
 
   return `
+    ${filter ? filter.markup : ''}
     <rect
       x="0"
       y="0"
@@ -2082,6 +2172,7 @@ function buildElementBackgroundRect(
       fill="${escapeXml(fill)}"
       ${strokeAttributes}
       opacity="${escapeXml(styles.opacity || '1')}"
+      ${filter ? `filter="url(#${filter.id})"` : ''}
     />
   `;
 }
@@ -2341,6 +2432,12 @@ function buildLegendLayer(pageContainer: HTMLElement): string {
 
   const styles = getComputedStyle(legendContainer);
   const parts: string[] = [];
+  const shadow = parseBoxShadow(styles.boxShadow);
+  const filter = shadow ? buildDropShadowFilter(shadow) : null;
+
+  if (filter) {
+    parts.push(filter.markup);
+  }
 
   if (!isTransparentColor(styles.backgroundColor)) {
     parts.push(`
@@ -2350,6 +2447,7 @@ function buildLegendLayer(pageContainer: HTMLElement): string {
         width="${roundSvgValue(legendRect.width)}"
         height="${roundSvgValue(legendRect.height)}"
         fill="${escapeXml(styles.backgroundColor)}"
+        ${filter ? `filter="url(#${filter.id})"` : ''}
       />
     `);
   }
@@ -2696,6 +2794,7 @@ function buildStructuredSvgMarkup(
   geometry: PageExportGeometry = resolvePageExportGeometry(pageContainer)
 ): string {
   svgPatternDefsCache.clear();
+  dropShadowFilterCounter = 0;
   const layers = [
     buildVisualizationLayer(pageContainer, structuredOptions, geometry),
     buildLegendLayer(pageContainer),

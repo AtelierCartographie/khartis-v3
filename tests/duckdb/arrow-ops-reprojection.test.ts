@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { tableFromArrays, tableToIPC } from 'apache-arrow';
 import {
   fetchArrowTableWithGeometry,
+  getArrowTableDirect,
   getArrowTableReprojected
 } from '$lib/features/duckdb/orchestrator/arrow-ops';
 
@@ -83,5 +84,41 @@ describe('getArrowTableReprojected', () => {
     expect(parsedGeometry.coordinates[1]).toBeCloseTo(48.85, 1);
     expect(table.getChild('label')?.get(0)).toBe('Paris');
     expect(table.schema.metadata?.get('geo')).toContain('"encoding":"geojson"');
+  });
+});
+
+describe('getArrowTableDirect', () => {
+  it('skips streaming reads for mutable dataset tables', async () => {
+    const table = tableFromArrays({
+      basemap_id: ['FRA'],
+      population_2023: [67935660]
+    });
+
+    const Duck = {
+      describe_table: vi.fn().mockResolvedValue({
+        name: ['basemap_id', 'population_2023'],
+        type: ['VARCHAR', 'BIGINT']
+      }),
+      queryStreaming: vi
+        .fn()
+        .mockResolvedValue(toIpcBuffer(tableFromArrays({ stale: [] }))),
+      query: vi.fn().mockResolvedValue(toIpcBuffer(table))
+    };
+    const setCache = vi.fn();
+
+    const result = await getArrowTableDirect(
+      'joined_population_dataset',
+      Duck,
+      () => undefined,
+      setCache
+    );
+
+    expect(Duck.queryStreaming).not.toHaveBeenCalled();
+    expect(Duck.query).toHaveBeenCalledWith(
+      expect.stringContaining('SELECT * FROM "joined_population_dataset"'),
+      { format: 'arrow-ipc' }
+    );
+    expect(result.getChild('basemap_id')?.get(0)).toBe('FRA');
+    expect(setCache).toHaveBeenCalledWith(result);
   });
 });

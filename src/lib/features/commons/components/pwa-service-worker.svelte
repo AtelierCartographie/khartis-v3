@@ -7,20 +7,60 @@
   import { isSwToClientMessage } from '$lib/types/sw-messages';
   import { onDestroy, onMount } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
+  import {
+    NotificationActionButton,
+    ToastNotification
+  } from 'carbon-components-svelte';
+  import * as m from '$lib/paraglide/messages';
 
   const AUTO_RELOAD_GUARD_KEY = 'khartis:auto-reloaded-at';
   const AUTO_RELOAD_GUARD_WINDOW_MS = 10 * 1000;
+  const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
   let warmupAbortController: AbortController | null = null;
   let swMessageHandler: ((event: MessageEvent) => void) | null = null;
   let preloadErrorHandler: ((event: Event) => void) | null = null;
+  let updateCheckIntervalId: ReturnType<typeof setInterval> | null = null;
 
-  useRegisterSW({
+  const { needRefresh, updateServiceWorker } = useRegisterSW({
     immediate: true,
     onRegisterError(error) {
       logger.error('SW registration error', LogCategory.SYSTEM, error);
+    },
+    onRegisteredSW(swUrl, registration) {
+      if (!registration) return;
+      updateCheckIntervalId = setInterval(async () => {
+        if (registration.installing || !navigator.onLine) return;
+        try {
+          const response = await fetch(swUrl, {
+            cache: 'no-store',
+            headers: { 'cache-control': 'no-cache' }
+          });
+          if (response.status === 200) {
+            await registration.update();
+          }
+        } catch (error) {
+          logger.error('SW update check failed', LogCategory.SYSTEM, error);
+        }
+      }, UPDATE_CHECK_INTERVAL_MS);
     }
   });
+
+  let updatePromptVisible = $derived($needRefresh);
+
+  async function applyUpdate(): Promise<void> {
+    updatePromptVisible = false;
+    try {
+      await updateServiceWorker(true);
+    } catch (error) {
+      logger.error('Failed to apply SW update', LogCategory.SYSTEM, error);
+      window.location.reload();
+    }
+  }
+
+  function dismissUpdate(): void {
+    updatePromptVisible = false;
+  }
 
   function recordAutoReload(): boolean {
     try {
@@ -142,6 +182,10 @@
       warmupAbortController.abort();
       warmupAbortController = null;
     }
+    if (updateCheckIntervalId !== null) {
+      clearInterval(updateCheckIntervalId);
+      updateCheckIntervalId = null;
+    }
     detachSwMessageListener();
     detachStaleAssetRecovery();
   });
@@ -180,3 +224,38 @@
     }
   }
 </script>
+
+{#if updatePromptVisible}
+  <div class="pwa-update-toast">
+    <ToastNotification
+      kind="info"
+      lowContrast
+      title={m.pwa_update_available_title()}
+      subtitle={m.pwa_update_available_subtitle()}
+      closeButtonDescription={m.pwa_update_close_aria()}
+      statusIconDescription={m.pwa_update_status_icon_aria()}
+      timeout={0}
+      on:close={dismissUpdate}
+    >
+      <NotificationActionButton on:click={applyUpdate}>
+        {m.pwa_update_reload_button()}
+      </NotificationActionButton>
+    </ToastNotification>
+  </div>
+{/if}
+
+<style>
+  .pwa-update-toast {
+    position: fixed;
+    bottom: calc(16px + var(--safe-area-bottom, 0px));
+    right: calc(16px + var(--safe-area-right, 0px));
+    z-index: var(--z-notification);
+    max-width: 400px;
+    pointer-events: none;
+  }
+
+  .pwa-update-toast :global(.bx--toast-notification) {
+    pointer-events: auto;
+    margin: 0;
+  }
+</style>

@@ -63,6 +63,15 @@ describe('ProjectionOther', () => {
     );
   });
 
+  it('keeps the CRS textarea synchronized with the active custom code', () => {
+    expect(source).toContain('let crsCodeDraft = $state');
+    expect(source).toContain(
+      "const crsCode = $derived(crsCodeDraft ?? projectionState.customCode ?? '');"
+    );
+    expect(source).toContain('value={crsCode}');
+    expect(source).toContain('on:input={handleCrsCodeInput}');
+  });
+
   it('shows a clear unavailable state when the active catalogue item is filtered out', () => {
     expect(source).toContain('const selectedCatalogueUnavailable = $derived(');
     expect(source).toContain('m.projection_catalog_unavailable_title()');

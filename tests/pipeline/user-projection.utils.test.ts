@@ -127,6 +127,32 @@ describe('user projection utils', () => {
     expect(projected.every(Number.isFinite)).toBe(true);
   });
 
+  it('resolves registered EPSG custom overrides to finite projected points', () => {
+    const projection = resolveUserProjectionOverride({
+      state: {
+        selected: 'lambert-conformal',
+        overrideActive: true,
+        customCode: 'EPSG:2154',
+        center: undefined,
+        longitude: 0,
+        latitude: 0,
+        rotation: 0
+      },
+      fitBbox: [-5.15, 41.33, 9.56, 51.09],
+      viewportSize: { width: 789, height: 539 },
+      padding: 40,
+      projectionPresets
+    });
+
+    const projected = projection?.([2.3522, 48.8566]);
+
+    expect(isProjectedPoint(projected)).toBe(true);
+    if (!isProjectedPoint(projected)) {
+      throw new Error('Projection did not emit a point');
+    }
+    expect(projected.every(Number.isFinite)).toBe(true);
+  });
+
   it('preserves the native Atlantis rotation when controls are neutral', () => {
     const atlantis = asGeoProjection(
       resolveUserProjectionOverride({

@@ -87,10 +87,18 @@ describe('MultiShapeLayer — source invariants (keep SDF shader consistent)', (
     expect(source).toContain('float dashed;');
     expect(source).toContain('float dashLength;');
     expect(source).toContain('float gapLength;');
+    expect(source).toContain('float dotLength;');
+    expect(source).toContain('float dotGap;');
     expect(source).toContain('float patternEnabled;');
     expect(source).toContain('float patternType;');
     expect(source).toContain('vec2 scaledUv = uv / max(multiShape.shapeScale');
-    expect(source).toContain('lineMask *= getDashMask(scaledUv);');
+    expect(source).toContain(
+      'lineMask *= getDashMask(scaledUv, strokePx, midRadiusPx'
+    );
+    // real round dots are computed from the distance to the dot centre
+    expect(source).toContain(
+      'float distToDot = length(vec2(arcPos - dotCenter'
+    );
     expect(source).toContain('vec4 applyFillPattern(vec4 fillColor, vec2 uv)');
   });
 
