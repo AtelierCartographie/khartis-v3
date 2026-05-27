@@ -5,7 +5,7 @@ const LOCALE_MAP: Record<string, string> = {
   en: 'en-US'
 };
 
-function resolveLocale(): string {
+export function resolveLocale(): string {
   return LOCALE_MAP[getLocale()] ?? 'en-US';
 }
 
