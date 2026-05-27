@@ -27,7 +27,7 @@
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import type { SymbolModeProps } from '../../types/symbol.types';
   import FillSection from '../shared/fill-section.svelte';
-  import { FILL_MODES_STANDARD } from '../shared/fill-mode-presets';
+  import { FILL_MODES_FOR_SYMBOLS } from '../shared/fill-mode-presets';
   import DiscretizationModal from '../discretization/discretization-modal.svelte';
   import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
   import { resolveDiscretizationLabel } from '../discretization/discretization.utils';
@@ -365,17 +365,11 @@
     onMissingDataChange?.({ color });
   }
 
-  function handleFillModeChange(index: number) {
+  function handleFillModeChange(mode: FillMode) {
     if (isSyncingFromVisualization) {
       return;
     }
-    const modes = [
-      FillMode.NONE,
-      FillMode.UNIQUE,
-      FillMode.CLASSES,
-      FillMode.CATEGORIES
-    ];
-    fillMode = modes[index] || FillMode.NONE;
+    fillMode = mode;
     if (fillMode === FillMode.CATEGORIES) {
       onModesChange?.({
         fill: FillMode.CATEGORIES,
@@ -627,6 +621,9 @@
     color={missingDataColor}
     shape={missingDataShape}
     size={missingDataSize}
+    sizeMin={SLIDER_LIMITS.missingDataSymbolSize.min}
+    sizeMax={SLIDER_LIMITS.missingDataSymbolSize.max}
+    sizeStep={SLIDER_LIMITS.missingDataSymbolSize.step}
     showShapeSelector={true}
     showSizeSlider={true}
     onshowchange={handleMissingDataShowChange}
@@ -650,6 +647,9 @@
     color={missingDataColor}
     shape={missingDataShape}
     size={missingDataSize}
+    sizeMin={SLIDER_LIMITS.missingDataSymbolSize.min}
+    sizeMax={SLIDER_LIMITS.missingDataSymbolSize.max}
+    sizeStep={SLIDER_LIMITS.missingDataSymbolSize.step}
     showShapeSelector={true}
     showSizeSlider={true}
     onshowchange={handleMissingDataShowChange}
@@ -661,7 +661,7 @@
   <FillSection
     visualization={fillVisualization}
     dataFields={dataFields}
-    availableModes={FILL_MODES_STANDARD}
+    availableModes={FILL_MODES_FOR_SYMBOLS}
     fillMode={fillMode}
     fillColor={fillColor}
     fillOpacity={fillOpacity}
@@ -679,8 +679,7 @@
     selectableDataFields={selectableDataFields}
     getFacetsSelectedFieldIds={facetsSelection.getSelectedFieldIds}
     isFacetsActiveForSlot={facetsSelection.isActiveForSlot}
-    onFillModeChange={(mode: FillMode) =>
-      handleFillModeChange(FILL_MODES_STANDARD.indexOf(mode))}
+    onFillModeChange={handleFillModeChange}
     onFillColorChange={handleFillColorChange}
     onFillOpacityChange={handleFillOpacityChange}
     onValueFieldSelect={handleFillClassFieldSelect}

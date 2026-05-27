@@ -218,29 +218,29 @@ float getFillPatternMask(vec2 uv) {
         return 0.0;
     }
 
-    vec2 p = uv * outerRadiusPixels;
-    float spacing = 5.0;
+    vec2 p = uv;
+    float spacing = 0.28;
     float patternType = floor(multiShape.patternType + 0.5);
 
     if (patternType < 1.5) {
         vec2 cell = fract(p / spacing) - 0.5;
-        return 1.0 - step(0.22, length(cell));
+        return 1.0 - step(0.32, length(cell));
     }
 
     if (patternType < 2.5) {
-        return stripeMask(p.x + p.y, spacing, 0.12);
+        return stripeMask(p.x + p.y, spacing, 0.25);
     }
 
     if (patternType < 3.5) {
         return clamp(
-            stripeMask(p.x + p.y, spacing, 0.10) +
-            stripeMask(p.x - p.y, spacing, 0.10),
+            stripeMask(p.x + p.y, spacing, 0.18) +
+            stripeMask(p.x - p.y, spacing, 0.18),
             0.0,
             1.0
         );
     }
 
-    return stripeMask(p.y, spacing, 0.10) * stripeMask(p.x, spacing * 1.6, 0.28);
+    return stripeMask(p.y, spacing, 0.20) * stripeMask(p.x, spacing * 1.6, 0.34);
 }
 
 vec4 applyFillPattern(vec4 fillColor, vec2 uv) {
@@ -249,7 +249,7 @@ vec4 applyFillPattern(vec4 fillColor, vec2 uv) {
         return fillColor;
     }
 
-    vec3 patternRgb = mix(fillColor.rgb, vec3(0.0), 0.38);
+    vec3 patternRgb = mix(fillColor.rgb, vec3(0.0), 0.55);
     return vec4(mix(fillColor.rgb, patternRgb, mask), fillColor.a);
 }
 

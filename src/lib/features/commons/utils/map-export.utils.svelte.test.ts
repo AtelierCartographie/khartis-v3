@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  SHAPE_ORDINAL,
+  ShapeType
+} from '$lib/features/commons/constants/visualization.constants';
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import { exportMapToJpg, exportMapToSvg } from './map-export.utils';
 
@@ -290,7 +294,8 @@ describe('map export DOM mutations', () => {
         }
       },
       filled: true,
-      stroked: false
+      stroked: false,
+      barWidth: 8
     });
     const deck = createDeckExportFixture([layer], ([x, y]) => [x * 2, y * 2]);
     const map = {
@@ -362,7 +367,8 @@ describe('map export DOM mutations', () => {
         }
       },
       filled: true,
-      stroked: false
+      stroked: false,
+      barWidth: 8
     });
     const deck = createDeckExportFixture([layer]);
     const map = {
@@ -584,6 +590,88 @@ describe('map export DOM mutations', () => {
     expect(markup).toContain('width="8"');
     expect(markup).toContain('height="20"');
     expect(markup).toMatch(/<path d="M 24 40 L 30 20 L 36 40 Z"/);
+  });
+
+  it('exports every MultiShapeLayer symbol shape as vector SVG primitives', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="map-canvas"><canvas></canvas></div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const canvas = document.querySelector('canvas');
+    if (!page || !canvas) {
+      throw new Error('Missing fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(canvas, { left: 0, top: 0, width: 400, height: 300 });
+    vi.spyOn(canvas, 'toDataURL').mockReturnValue('data:image/png;base64,AAAA');
+
+    const exportedShapes = [
+      ShapeType.CIRCLE,
+      ShapeType.SQUARE,
+      ShapeType.BAR,
+      ShapeType.SPIKE,
+      ShapeType.CROSS,
+      ShapeType.DIAMOND,
+      ShapeType.TRIANGLE,
+      ShapeType.STAR,
+      ShapeType.RECTANGLE
+    ];
+
+    const layer = createDeckLayer('MultiShapeLayer', 'editable-symbol-shapes', {
+      data: {
+        length: exportedShapes.length,
+        attributes: {
+          getPosition: {
+            value: new Float32Array(
+              exportedShapes.flatMap((_, index) => [10 + index * 25, 10])
+            ),
+            size: 2
+          },
+          getFillColor: {
+            value: new Uint8Array(
+              exportedShapes.flatMap(() => [255, 0, 0, 255])
+            ),
+            size: 4
+          },
+          getRadius: {
+            value: new Float32Array(exportedShapes.map(() => 10)),
+            size: 1
+          },
+          getShape: {
+            value: new Float32Array(
+              exportedShapes.map((shape) => SHAPE_ORDINAL[shape])
+            ),
+            size: 1
+          }
+        }
+      },
+      filled: true,
+      stroked: false,
+      barWidth: 8
+    });
+    const deck = createDeckExportFixture([layer]);
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    expect(markup).toContain('data-khartis-layer-id="editable-symbol-shapes"');
+    expect(markup).toContain('data-khartis-layer-type="MultiShapeLayer"');
+    expect(markup).toContain('<circle cx="10" cy="10" r="10"');
+    expect(markup).toContain('<rect x="25" y="0" width="20" height="20"');
+    expect(markup).toContain('<rect x="56" y="0" width="8" height="20"');
+    expect(markup).toContain('<path d="M 79 20 L 85 0 L 91 20 Z"');
+    expect(markup).toContain('<path d="M 107.5 2.5 L 112.5 2.5 L 112.5 7.5');
+    expect(markup).toContain('<path d="M 135 0 L 145 10 L 135 20 L 125 10 Z"');
+    expect(markup).toContain('<path d="M 160 0 L 170 20 L 150 20 Z"');
+    expect(markup).toContain('<path d="M 185 0 L 187.2 7.8');
+    expect(markup).toContain('<rect x="201" y="7.3" width="18" height="5.4"');
+    expect(markup).not.toContain('data:image/svg+xml');
   });
 
   it('emits an SVG drop-shadow filter for the legend box-shadow', async () => {

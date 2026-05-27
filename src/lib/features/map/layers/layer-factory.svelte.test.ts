@@ -29,6 +29,7 @@ import {
   ColorMode,
   MissingDataShape,
   ProportionalType,
+  SHAPE_ORDINAL,
   ShapeType,
   SizeMode,
   StrokeMode,
@@ -175,7 +176,6 @@ import {
   createDeckLayers,
   createLineLayers,
   createPointLayers,
-  createPointSymbolIcon,
   createPolygonLayers,
   resolveEffectiveCategoryColorMap,
   resolveSplitMappingFeatureIdColumn
@@ -2067,91 +2067,13 @@ describe('createPolygonLayers', () => {
   });
 });
 
-describe('createPointSymbolIcon (non-circle symbol sharpness)', () => {
-  it('rasterizes the icon at 256px over a 64-unit viewBox so large Carré/Barre/Pic stay sharp', () => {
-    const icon = createPointSymbolIcon(
-      ShapeType.SQUARE,
-      [255, 0, 0, 255],
-      [0, 0, 0, 255],
-      1
-    );
-
-    expect(icon.width).toBe(256);
-    expect(icon.height).toBe(256);
-    expect(icon.anchorX).toBe(128);
-    expect(icon.anchorY).toBe(128);
-
-    const svg = decodeURIComponent(
-      icon.url.replace(/^data:image\/svg\+xml;charset=utf-8,/, '')
-    );
-    expect(svg).toContain('width="256"');
-    expect(svg).toContain('height="256"');
-    expect(svg).toContain('viewBox="0 0 64 64"');
-  });
-
-  it('renders true dots, dashes and dash-dot distinctly on the icon stroke', () => {
-    const svgOf = (icon: { url: string }): string =>
-      decodeURIComponent(
-        icon.url.replace(/^data:image\/svg\+xml;charset=utf-8,/, '')
-      );
-    const dashOf = (icon: { url: string }): string | null =>
-      svgOf(icon).match(/stroke-dasharray="([^"]+)"/)?.[1] ?? null;
-    const capOf = (icon: { url: string }): string | null =>
-      svgOf(icon).match(/stroke-linecap="([^"]+)"/)?.[1] ?? null;
-
-    const solid = createPointSymbolIcon(
-      ShapeType.CIRCLE,
-      [255, 0, 0, 255],
-      [0, 0, 0, 255],
-      2,
-      false
-    );
-    const dots = createPointSymbolIcon(
-      ShapeType.CIRCLE,
-      [255, 0, 0, 255],
-      [0, 0, 0, 255],
-      2,
-      true,
-      [0, 2.5],
-      true
-    );
-    const dashes = createPointSymbolIcon(
-      ShapeType.CIRCLE,
-      [255, 0, 0, 255],
-      [0, 0, 0, 255],
-      2,
-      true,
-      [3, 2.5],
-      false
-    );
-    const dashDot = createPointSymbolIcon(
-      ShapeType.CIRCLE,
-      [255, 0, 0, 255],
-      [0, 0, 0, 255],
-      2,
-      true,
-      [3, 2.5, 0, 2.5],
-      true
-    );
-
-    expect(dashOf(solid)).toBeNull();
-    // dots are round caps; plain dashes are squared (butt) caps
-    expect(capOf(dots)).toBe('round');
-    expect(capOf(dashes)).toBe('butt');
-    // a real round dot is a 0-length segment + round caps (not a tiny dash)
-    expect(dashOf(dots)?.split(/\s+/)[0]).toBe('0.01');
-    // dash-dot is a real 4-segment pattern (dash, gap, dot, gap) with a 0-length dot
-    expect(dashOf(dashes)?.split(/\s+/)).toHaveLength(2);
-    expect(dashOf(dashDot)?.split(/\s+/)).toHaveLength(4);
-    expect(dashOf(dashDot)?.split(/\s+/)[2]).toBe('0.01');
-    // every style produces a visually distinct dash pattern
-    expect(new Set([dashOf(dots), dashOf(dashes), dashOf(dashDot)]).size).toBe(
-      3
-    );
-  });
-});
-
 describe('createPointLayers', () => {
+  it('does not generate SVG icon point layers for symbol shapes', () => {
+    expect(source).not.toContain("pointType: 'icon'");
+    expect(source).not.toContain('createPointSymbolIcon');
+    expect(source).not.toContain('data:image/svg+xml');
+  });
+
   it('fully disables point circle stroke props when contour mode is none', () => {
     arrowTableToGeoJSONMock.mockReturnValue({
       type: 'FeatureCollection',
@@ -2170,6 +2092,116 @@ describe('createPointLayers', () => {
     expect(pointLayer.props.stroked).toBe(false);
     expect(pointLayer.props.lineWidthScale).toBe(0);
     expect(pointLayer.props.getLineColor).toEqual([0, 0, 0, 0]);
+  });
+
+  it('renders every selectable unique symbol shape without SVG icon layers', () => {
+    const shapes = [
+      ShapeType.CIRCLE,
+      ShapeType.SQUARE,
+      ShapeType.CROSS,
+      ShapeType.DIAMOND,
+      ShapeType.TRIANGLE,
+      ShapeType.STAR,
+      ShapeType.RECTANGLE
+    ];
+
+    for (const shape of shapes) {
+      parsePointDataWithProjectionMock.mockReturnValue({
+        length: 1,
+        featureIds: new Uint32Array([0])
+      });
+      createScatterplotLayerPropsMock.mockReturnValue({
+        data: { attributes: {}, featureIds: new Uint32Array([0]) }
+      });
+
+      const visualization = createSymbolVisualization();
+      visualization.symbol = {
+        ...visualization.symbol!,
+        shape
+      };
+
+      const layers = createPointLayers(
+        createTableWithFields([]),
+        createPointGeometryInfo(),
+        createContext(visualization)
+      );
+
+      const pointLayer = layers[0] as ScatterplotLayer | MultiShapeLayer;
+
+      expect(
+        (pointLayer.props as Record<string, unknown>).pointType
+      ).toBeUndefined();
+      if (shape === ShapeType.CIRCLE) {
+        expect(pointLayer).toBeInstanceOf(ScatterplotLayer);
+      } else {
+        expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
+        expect((pointLayer as MultiShapeLayer).props.getShape).toBe(
+          SHAPE_ORDINAL[shape]
+        );
+      }
+    }
+  });
+
+  it('renders proportional square, bar and spike symbols through MultiShapeLayer', () => {
+    const shapes = [ShapeType.SQUARE, ShapeType.BAR, ShapeType.SPIKE];
+
+    for (const shape of shapes) {
+      parsePointDataWithProjectionMock.mockReturnValue({
+        length: 1,
+        featureIds: new Uint32Array([0])
+      });
+      createScatterplotLayerPropsMock.mockReturnValue({
+        data: { attributes: {}, featureIds: new Uint32Array([0]) }
+      });
+
+      const visualization = createSymbolVisualization();
+      visualization.symbol = {
+        ...visualization.symbol!,
+        mode: SymbolMode.PROPORTIONAL,
+        shape,
+        sizeColumn: 'population',
+        minSize: 4,
+        maxSize: 20
+      };
+
+      const layers = createPointLayers(
+        createTableWithRows([{ population: 100 }], ['population']),
+        createPointGeometryInfo(),
+        { ...createContext(visualization), statistics: { min: 0, max: 100 } }
+      );
+
+      const pointLayer = layers[0] as MultiShapeLayer;
+      expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
+      expect(pointLayer.props.getShape).toBe(SHAPE_ORDINAL[shape]);
+    }
+  });
+
+  it('turns off point symbol filling when the background fill mode is none', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 1,
+      featureIds: new Uint32Array([0])
+    });
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      fillMode: FillMode.NONE,
+      strokeMode: StrokeMode.UNIQUE,
+      strokeWidth: 2,
+      strokeOpacity: 1
+    };
+
+    const layers = createPointLayers(
+      createTableWithFields([]),
+      createPointGeometryInfo(),
+      createContext(visualization)
+    );
+
+    const pointLayer = layers[0] as ScatterplotLayer;
+
+    expect(pointLayer).toBeInstanceOf(ScatterplotLayer);
+    expect(pointLayer.props.filled).toBe(false);
+    expect(pointLayer.props.stroked).toBe(true);
   });
 
   it('builds binary point color attributes when a symbol category is disabled', () => {
@@ -2277,6 +2309,107 @@ describe('createPointLayers', () => {
     expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
     expect(pointLayer.props.patternEnabled).toBe(true);
     expect(pointLayer.props.patternType).toBe(3);
+    expect(String(pointLayer.props.id)).toContain('-pattern-');
+  });
+
+  it('keeps categorical circle symbols on a stable MultiShapeLayer with the motif off so toggling the motif never switches layer class', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 1,
+      featureIds: new Uint32Array([0])
+    });
+    createScatterplotLayerPropsMock.mockReturnValue({
+      data: {
+        attributes: {},
+        featureIds: new Uint32Array([0])
+      }
+    });
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.CATEGORIES,
+      categoryColumn: 'category',
+      shape: ShapeType.CIRCLE,
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 1,
+        labels: ['North'],
+        categoryValues: ['north'],
+        colors: ['#3366cc']
+      }
+    };
+
+    const layers = createPointLayers(
+      createTableWithRows([{ category: 'north' }], ['category']),
+      createPointGeometryInfo(),
+      createContext(visualization)
+    );
+
+    const pointLayer = layers[0] as MultiShapeLayer;
+    expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
+    expect(pointLayer.props.patternEnabled).toBe(false);
+    expect(String(pointLayer.props.id)).not.toContain('-pattern-');
+  });
+
+  it('renders every custom category shape through a getShape binary attribute', () => {
+    const categoryShapes = [
+      ShapeType.CIRCLE,
+      ShapeType.SQUARE,
+      ShapeType.CROSS,
+      ShapeType.DIAMOND,
+      ShapeType.TRIANGLE,
+      ShapeType.STAR,
+      ShapeType.RECTANGLE
+    ];
+    const labels = categoryShapes.map((shape) => `label-${shape}`);
+
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: labels.length,
+      featureIds: new Uint32Array(labels.map((_, index) => index))
+    });
+    createScatterplotLayerPropsMock.mockReturnValue({
+      data: {
+        attributes: {},
+        featureIds: new Uint32Array(labels.map((_, index) => index))
+      }
+    });
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.CATEGORIES,
+      categoryColumn: 'category',
+      categoryShape: CategoryShapeMode.DIFFERENT,
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: labels.length,
+        labels,
+        categoryValues: labels,
+        colors: labels.map(() => '#3366cc'),
+        categoryShapes
+      }
+    };
+
+    const layers = createPointLayers(
+      createTableWithRows(
+        labels.map((category) => ({ category })),
+        ['category']
+      ),
+      createPointGeometryInfo(),
+      createContext(visualization)
+    );
+
+    const pointLayer = layers[0] as MultiShapeLayer;
+    const shapeAttribute = (
+      pointLayer.props.data as {
+        attributes?: { getShape?: { value?: Float32Array } };
+      }
+    ).attributes?.getShape;
+
+    expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
+    expect(Array.from(shapeAttribute?.value ?? [])).toEqual(
+      categoryShapes.map((shape) => SHAPE_ORDINAL[shape])
+    );
   });
 
   it('uses zero-based square-root radii and sorts proportional point buffers by descending radius', () => {
@@ -2412,6 +2545,65 @@ describe('createPointLayers', () => {
     expect(source).not.toContain('pointRadiusMinPixels');
   });
 
+  it('renders GeoJSON-encoded missing-data shapes through MultiShapeLayer (REV2-SYM-6)', () => {
+    parsePointDataMock.mockReturnValue({
+      length: 3,
+      featureIds: new Uint32Array([0, 1, 2])
+    });
+    createScatterplotLayerPropsMock.mockReturnValue({
+      data: { attributes: {}, featureIds: new Uint32Array([0, 1, 2]) }
+    });
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.PROPORTIONAL,
+      shape: ShapeType.CIRCLE,
+      sizeColumn: 'population',
+      minSize: 8,
+      maxSize: 40,
+      missingData: {
+        show: true,
+        shape: MissingDataShape.SQUARE,
+        color: '#bbbbbb',
+        size: 6
+      }
+    };
+
+    const layers = createPointLayers(
+      createTableWithRows(
+        [{ population: 2100000 }, { population: 515000 }, { population: null }],
+        ['geometry', 'population']
+      ),
+      {
+        type: 'Point',
+        encoding: 'geojson',
+        geoColumn: 'geometry',
+        isNativeGeoArrow: false,
+        isWkbEncoded: false,
+        isGeoJsonEncoded: true
+      },
+      {
+        ...createContext(visualization),
+        customProjection: undefined,
+        statistics: { min: 515000, max: 2100000 }
+      }
+    );
+
+    const pointLayer = layers[0] as MultiShapeLayer;
+    const shapeAttribute = (
+      pointLayer.props.data as {
+        attributes?: { getShape?: { value?: Float32Array } };
+      }
+    ).attributes?.getShape;
+
+    expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
+    expect(Array.from(shapeAttribute?.value ?? [])).toContain(
+      SHAPE_ORDINAL[ShapeType.SQUARE]
+    );
+    expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
+  });
+
   it('sorts each double proportional symbol layer by its own descending radius while preserving feature ids', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 3,
@@ -2520,6 +2712,244 @@ describe('createPointLayers', () => {
     expect(layers[1].props.shapeScale).toBe(0.7);
     expect(layers[0].props.radiusScale).toBe(2);
     expect(layers[1].props.radiusScale).toBe(2);
+  });
+
+  it('resolves the fill-classification pattern when the symbol fill mode is categories (REV-SYM-2)', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 1,
+      featureIds: new Uint32Array([0])
+    });
+    createScatterplotLayerPropsMock.mockReturnValue({
+      data: { attributes: {}, featureIds: new Uint32Array([0]) }
+    });
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.PROPORTIONAL,
+      shape: ShapeType.CIRCLE,
+      sizeColumn: 'population',
+      fillMode: FillMode.CATEGORIES,
+      categoryColumn: 'category',
+      fillClassification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 1,
+        labels: ['North'],
+        categoryValues: ['north'],
+        colors: ['#3366cc'],
+        patternId: 'cross'
+      }
+    };
+
+    const layers = createPointLayers(
+      createTableWithRows(
+        [{ category: 'north', population: 10 }],
+        ['category', 'population']
+      ),
+      createPointGeometryInfo(),
+      { ...createContext(visualization), statistics: { min: 10, max: 10 } }
+    );
+
+    const pointLayer = layers[0] as MultiShapeLayer;
+    expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
+    expect(pointLayer.props.patternEnabled).toBe(true);
+  });
+
+  it('renders every selectable missing-data representation shape on native points (REV-SYM-6)', () => {
+    const cases = [
+      {
+        missingShape: MissingDataShape.SQUARE,
+        expectedShape: ShapeType.SQUARE
+      },
+      { missingShape: MissingDataShape.CROSS, expectedShape: ShapeType.CROSS }
+    ];
+
+    for (const { missingShape, expectedShape } of cases) {
+      parsePointDataWithProjectionMock.mockReturnValue({
+        length: 3,
+        featureIds: new Uint32Array([0, 1, 2])
+      });
+      createScatterplotLayerPropsMock.mockReturnValue({
+        data: { attributes: {}, featureIds: new Uint32Array([0, 1, 2]) }
+      });
+
+      const visualization = createSymbolVisualization();
+      visualization.symbol = {
+        ...visualization.symbol!,
+        mode: SymbolMode.PROPORTIONAL,
+        shape: ShapeType.CIRCLE,
+        sizeColumn: 'population',
+        minSize: 4,
+        maxSize: 20,
+        missingData: {
+          show: true,
+          shape: missingShape,
+          color: '#bbbbbb',
+          size: 6
+        }
+      };
+
+      const layers = createPointLayers(
+        createTableWithRows(
+          [{ population: 25 }, { population: 100 }, { population: null }],
+          ['population']
+        ),
+        createPointGeometryInfo(),
+        { ...createContext(visualization), statistics: { min: 25, max: 100 } }
+      );
+
+      const pointLayer = layers[0] as MultiShapeLayer;
+      const shapeAttribute = (
+        pointLayer.props.data as {
+          attributes?: { getShape?: { value?: Float32Array } };
+        }
+      ).attributes?.getShape;
+
+      expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
+      expect(Array.from(shapeAttribute?.value ?? [])).toContain(
+        SHAPE_ORDINAL[expectedShape]
+      );
+    }
+  });
+
+  it('hides a disabled category on the symbol FILL channel (Fond En catégories) (REV-SYM-3)', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 2,
+      featureIds: new Uint32Array([0, 1])
+    });
+    createScatterplotLayerPropsMock.mockReturnValue({
+      data: { attributes: {}, featureIds: new Uint32Array([0, 1]) }
+    });
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.UNIQUE,
+      shape: ShapeType.CIRCLE,
+      fillMode: FillMode.CATEGORIES,
+      categoryColumn: 'category',
+      fillClassification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 2,
+        labels: ['public', 'private'],
+        categoryValues: ['public', 'private'],
+        colors: ['#00ad92', '#f287ac'],
+        disabledLabels: ['private']
+      }
+    };
+
+    const layers = createPointLayers(
+      createTableWithRows(
+        [{ category: 'public' }, { category: 'private' }],
+        ['category']
+      ),
+      createPointGeometryInfo(),
+      createContext(visualization)
+    );
+
+    const fillColorAttribute = (
+      layers[0].props.data as {
+        attributes: { getFillColor?: { value: Uint8ClampedArray } };
+      }
+    ).attributes.getFillColor;
+    expect(fillColorAttribute).toBeDefined();
+
+    const values = Array.from(fillColorAttribute!.value);
+    // public (row 0) visible; private (row 1) disabled → transparent (alpha 0).
+    expect(values[3]).toBeGreaterThan(0);
+    expect(values[7]).toBe(0);
+  });
+
+  it('applies the fill-classification choropleth to circle symbols (REV-SYM-4)', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 3,
+      featureIds: new Uint32Array([0, 1, 2])
+    });
+    createScatterplotLayerPropsMock.mockImplementation((pointData) => ({
+      data: {
+        length: pointData.length,
+        featureIds: pointData.featureIds,
+        attributes: {
+          getPosition: {
+            value: new Float32Array([0, 0, 10, 10, 20, 20]),
+            size: 2
+          }
+        }
+      }
+    }));
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.UNIQUE,
+      shape: ShapeType.CIRCLE,
+      fillMode: FillMode.CLASSES,
+      fillValueColumn: 'population',
+      fillClassification: {
+        method: ClassificationMethod.KMEANS,
+        classes: 3,
+        breaks: [100, 1000],
+        colors: ['#e4e6e7', '#7fa3ca', '#1b5eaa']
+      }
+    };
+
+    const layers = createPointLayers(
+      createTableWithRows(
+        [{ population: 50 }, { population: 500 }, { population: 5000 }],
+        ['population']
+      ),
+      createPointGeometryInfo(),
+      createContext(visualization)
+    );
+
+    const fillColorAttribute = (
+      layers[0].props.data as {
+        attributes: { getFillColor?: { value: Uint8ClampedArray } };
+      }
+    ).attributes.getFillColor;
+    expect(fillColorAttribute).toBeDefined();
+
+    const values = Array.from(fillColorAttribute!.value);
+    const tuples: string[] = [];
+    for (let i = 0; i < values.length; i += 4) {
+      tuples.push(values.slice(i, i + 4).join(','));
+    }
+    // Choropleth gradient applied (distinct per-class colors), not a uniform fallback.
+    expect(new Set(tuples).size).toBeGreaterThan(1);
+  });
+
+  it('routes a dashed circle stroke through MultiShapeLayer with dash params (REV-SYM-5)', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 1,
+      featureIds: new Uint32Array([0])
+    });
+    createScatterplotLayerPropsMock.mockReturnValue({
+      data: { attributes: {}, featureIds: new Uint32Array([0]) }
+    });
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.UNIQUE,
+      shape: ShapeType.CIRCLE,
+      strokeMode: StrokeMode.UNIQUE,
+      strokeColor: '#1f1f1f',
+      strokeWidth: 4,
+      strokeOpacity: 1,
+      strokeDashed: true,
+      strokeDashedPattern: BasemapDottedPattern.DOTS
+    };
+
+    const layers = createPointLayers(
+      createTableWithFields([]),
+      createPointGeometryInfo(),
+      createContext(visualization)
+    );
+
+    const pointLayer = layers[0] as MultiShapeLayer;
+    expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
+    expect(pointLayer.props.dashed).toBe(true);
+    expect(pointLayer.props.dotLength).toBeGreaterThan(0);
   });
 });
 
