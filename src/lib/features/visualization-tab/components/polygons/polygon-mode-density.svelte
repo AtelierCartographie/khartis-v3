@@ -296,6 +296,7 @@
 
 <SingleColorPreview
   exclusive
+  allowPattern={false}
   label={m.color()}
   color={fillColor}
   onchange={handleFillColorChange}
