@@ -92,6 +92,13 @@
     );
   }
 
+  // DuckDB COUNT() values arrive as BIGINT (JS BigInt). Normalize counts to
+  // numbers at the boundary so the rest of the component never mixes BigInt
+  // with numbers in arithmetic (Math.max, divisions), which throws.
+  function toNum(value: unknown): number {
+    return typeof value === 'bigint' ? Number(value) : (value as number);
+  }
+
   type HistogramData =
     | {
         kind: 'categorical';
@@ -126,9 +133,9 @@
     if (isGeoid) {
       return {
         kind: 'geographic' as const,
-        uniques: (analysis.uniques as number) ?? 0,
-        nulls: (analysis.nulls as number) ?? 0,
-        duplicates: (analysis.duplicates as number) ?? 0
+        uniques: toNum(analysis.uniques ?? 0),
+        nulls: toNum(analysis.nulls ?? 0),
+        duplicates: toNum(analysis.duplicates ?? 0)
       };
     }
 
@@ -138,26 +145,37 @@
     const typeSimple = analysis.type_simple;
 
     if (typeSimple === 'string') {
-      const items = analysis.histogram.toArray() as CategoryItem[];
+      const items = (analysis.histogram.toArray() as CategoryItem[]).map(
+        (item) => ({
+          category: item.category,
+          count: toNum(item.count),
+          percent: item.percent
+        })
+      );
       const isAllUnique = items.length === 1 && items[0]?.category === 'unique';
       return {
         kind: 'categorical' as const,
         items,
         isAllUnique,
-        uniques: (analysis.uniques as number) ?? 0
+        uniques: toNum(analysis.uniques ?? 0)
       };
     }
 
     if (typeSimple === 'numeric' || typeSimple === 'date') {
       const allBins = analysis.histogram.toArray() as NumericBin[];
       const nullBin = allBins.find((b) => b.bin === null);
-      const bins = allBins.filter((b) => b.bin !== null);
-      const maxCount = Math.max(...bins.map((b) => b.count), 1);
+      const bins = allBins
+        .filter((b) => b.bin !== null)
+        .map((b) => ({ bin: b.bin, count: toNum(b.count) }));
+      const nullCount = toNum(nullBin?.count ?? analysis.nulls ?? 0);
+      // The null bar shares the histogram's scale: it must be part of the same
+      // domain as the value bins so its height is comparable to the purple bars.
+      const maxCount = Math.max(...bins.map((b) => b.count), nullCount, 1);
       return {
         kind: 'numeric' as const,
         bins,
         maxCount,
-        nullCount: nullBin?.count ?? (analysis.nulls as number) ?? 0,
+        nullCount,
         min: analysis.min as number | Date | undefined,
         max: analysis.max as number | Date | undefined,
         isDate: typeSimple === 'date'
@@ -227,6 +245,50 @@
   let typeTooltipOpen = $state(false);
   let pillRef = $state<HTMLButtonElement | undefined>(undefined);
   let typeTooltipPosition = $state({ top: 0, left: 0 });
+
+  // 'unique' is the sentinel category produced by the categorical SQL macro to
+  // bucket every value that occurs exactly once.
+  function catColor(category: string | null): string {
+    if (category === null) return '#ff832b';
+    if (category === 'unique') return '#005d5d';
+    return '#9f1853';
+  }
+
+  function catLabel(item: CategoryItem): string {
+    if (item.category === null) return '⌀';
+    if (item.category === 'unique')
+      return m.summary_plot_unique_values({
+        count: item.count.toLocaleString()
+      });
+    return item.category;
+  }
+
+  function catTooltipText(item: CategoryItem): string {
+    if (item.category === 'unique')
+      return m.summary_plot_unique_values({
+        count: item.count.toLocaleString()
+      });
+    const name = item.category ?? m.column_null_label();
+    return `${item.count.toLocaleString()} – ${name}`;
+  }
+
+  let catTooltipOpen = $state(false);
+  let catTooltipContent = $state('');
+  let catTooltipPosition = $state({ top: 0, left: 0 });
+
+  function showCatTooltip(event: MouseEvent, content: string) {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    catTooltipPosition = {
+      top: rect.bottom + 4,
+      left: rect.left + rect.width / 2
+    };
+    catTooltipContent = content;
+    catTooltipOpen = true;
+  }
+
+  function hideCatTooltip() {
+    catTooltipOpen = false;
+  }
 
   function toggleMenu() {
     if (menuOpen) {
@@ -567,13 +629,16 @@
                 {/if}
               </div>
             {:else}
-              <div class="hist-unique-bar">
-                <span class="hist-unique-text">
-                  {m.summary_plot_unique_values({
-                    count: histogramData.uniques.toLocaleString()
-                  })}
-                </span>
+              <div class="hist-unique-area">
+                <div class="hist-unique-bar">
+                  <span class="hist-unique-text">
+                    {m.summary_plot_unique_values({
+                      count: histogramData.uniques.toLocaleString()
+                    })}
+                  </span>
+                </div>
               </div>
+              <div class="hist-spacer"></div>
             {/if}
           {:else if columnWarnings.length > 0 && (!histogramData || (histogramData.kind === 'categorical' && histogramData.isAllUnique))}
             <div class="hist-warnings">
@@ -587,13 +652,16 @@
             </div>
           {:else if histogramData?.kind === 'categorical'}
             {#if histogramData.isAllUnique}
-              <div class="hist-unique-bar">
-                <span class="hist-unique-text">
-                  {m.summary_plot_unique_values({
-                    count: histogramData.uniques.toLocaleString()
-                  })}
-                </span>
+              <div class="hist-unique-area">
+                <div class="hist-unique-bar">
+                  <span class="hist-unique-text">
+                    {m.summary_plot_unique_values({
+                      count: histogramData.uniques.toLocaleString()
+                    })}
+                  </span>
+                </div>
               </div>
+              <div class="hist-spacer"></div>
             {:else}
               <div class="hist-cat-bars">
                 {#each histogramData.items as item, i (item.category ?? `null-${i}`)}
@@ -601,15 +669,16 @@
                     class="hist-cat-bar"
                     class:first={i === 0}
                     class:last={i === histogramData.items.length - 1}
-                    style="background-color: {item.category === null
-                      ? '#ff832b'
-                      : '#9f1853'}"
-                    title="{item.count?.toLocaleString()} – {item.category ??
-                      m.column_null_label()}"
+                    style="flex-grow: {item.count}; background-color: {catColor(
+                      item.category
+                    )};"
+                    role="img"
+                    aria-label={catTooltipText(item)}
+                    onmouseenter={(e: MouseEvent) =>
+                      showCatTooltip(e, catTooltipText(item))}
+                    onmouseleave={hideCatTooltip}
                   >
-                    <span class="hist-cat-label">
-                      {item.category ?? '⌀'}
-                    </span>
+                    <span class="hist-cat-label">{catLabel(item)}</span>
                   </div>
                 {/each}
               </div>
@@ -635,10 +704,9 @@
                 <div class="hist-null-section">
                   <div
                     class="hist-null-bar"
-                    style="height: {Math.min(
-                      (histogramData.nullCount / histogramData.maxCount) * 100,
-                      100
-                    )}%"
+                    style="height: {(histogramData.nullCount /
+                      histogramData.maxCount) *
+                      100}%"
                     title="{histogramData.nullCount.toLocaleString()} {m.column_null_label()}"
                   ></div>
                 </div>
@@ -663,13 +731,25 @@
             </div>
           {:else}
             <div class="hist-empty">
-              {m.column_unique_count({ count: analysis.uniques ?? 0 })}
+              {m.column_unique_count({ count: toNum(analysis.uniques ?? 0) })}
             </div>
           {/if}
         </div>
       </div>
     {/if}
   </div>
+  {#if catTooltipOpen}
+    <Portal>
+      <div
+        class="simple-tooltip cat-tooltip"
+        style="top: {catTooltipPosition.top}px; left: {catTooltipPosition.left}px;"
+        role="tooltip"
+      >
+        <div class="simple-tooltip-arrow"></div>
+        {catTooltipContent}
+      </div>
+    </Portal>
+  {/if}
 </th>
 
 <style>
@@ -872,6 +952,19 @@
     overflow: hidden;
   }
 
+  /* Reserve the same footer height as the histograms (their min/max labels)
+     so the unique-values box bottom lands on the shared X-axis baseline. */
+  .hist-unique-area {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+  }
+
+  .hist-spacer {
+    height: 14px;
+    flex-shrink: 0;
+  }
+
   .hist-unique-bar {
     flex: 1;
     background-color: #005d5d;
@@ -905,13 +998,13 @@
   }
 
   .hist-cat-bar {
-    flex: 1 0 0;
+    /* flex-grow is set inline to each category count so box widths are
+       proportional to the number of values in the category. */
+    flex: 1 1 0;
     display: flex;
     align-items: center;
-    justify-content: center;
     overflow: hidden;
-    min-width: 0;
-    padding: 2px 2px;
+    min-width: 1px;
   }
 
   .hist-cat-bar.first {
@@ -935,7 +1028,11 @@
     letter-spacing: 0.32px;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
+    /* Clip at the end (start of the label stays readable) — the full label is
+       always available through the hover tooltip. */
+    text-overflow: clip;
+    text-align: left;
+    padding-left: 4px;
   }
 
   .hist-footer {
@@ -1158,5 +1255,13 @@
     border-left: 5px solid transparent;
     border-right: 5px solid transparent;
     border-bottom: 5px solid var(--cds-inverse-01, #393939);
+  }
+
+  /* Category names can be long, so allow the tooltip to wrap instead of
+     overflowing the box like the (short) type tooltip. */
+  :global(.cat-tooltip) {
+    white-space: normal;
+    max-width: 240px;
+    text-align: left;
   }
 </style>
