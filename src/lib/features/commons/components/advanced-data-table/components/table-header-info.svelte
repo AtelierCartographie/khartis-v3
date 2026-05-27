@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { FilterStats } from '$lib/features/duckdb';
   import * as m from '$lib/paraglide/messages';
+  import { resolveLocale } from '$lib/features/commons/utils/format.utils';
 
   interface Props {
     filterStats: FilterStats;
@@ -8,6 +9,7 @@
 
   const { filterStats }: Props = $props();
 
+  const numberLocale = $derived(resolveLocale());
   const hasActiveFilters = $derived(filterStats.filtered < filterStats.total);
 </script>
 
@@ -16,8 +18,8 @@
     <div class="table-info">
       <span class="filter-count" title={m.filter_count_tooltip()}>
         {m.filter_count_display({
-          filtered: filterStats.filtered.toLocaleString(),
-          total: filterStats.total.toLocaleString()
+          filtered: filterStats.filtered.toLocaleString(numberLocale),
+          total: filterStats.total.toLocaleString(numberLocale)
         })}
       </span>
     </div>
