@@ -175,15 +175,14 @@ describe('PalettePreview — categoriesMode routing (Fill Categories)', () => {
     expect(source).toContain('Boolean(onCategoriesCommonAspectChange)');
   });
 
-  it('should persist polygon and symbol common patterns as a classification pattern id', () => {
+  it('derives the common pattern id from the selected pattern type so changing the type updates the motif', () => {
     expect(source).toContain('function resolveValidatedCategoryPatternId');
     expect(source).toContain("categoriesVariant === 'polygons'");
     expect(source).toContain("categoriesVariant.startsWith('symbols')");
-    expect(source).toContain('function coerceCategoryPatternId');
-    expect(source).toContain(
-      'const existingPatternId = coerceCategoryPatternId'
-    );
-    expect(source).toContain('CATEGORY_PATTERN_IDS_BY_TYPE');
+    expect(source).toContain('CATEGORY_PATTERN_IDS_BY_TYPE[');
+    expect(source).toContain('commonAspect.patternType ?? PatternType.DOTS');
+    expect(source).not.toContain('coerceCategoryPatternId');
+    expect(source).not.toContain('const existingPatternId');
     expect(source).toContain(
       'const patternId = resolveValidatedCategoryPatternId'
     );

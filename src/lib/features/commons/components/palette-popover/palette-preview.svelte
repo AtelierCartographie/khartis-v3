@@ -83,19 +83,6 @@
     [PatternType.CROSSHATCH]: 'cross',
     [PatternType.DASHES]: 'diagonal'
   };
-  const CATEGORY_PATTERN_IDS = new Set<string>([
-    'diagonal',
-    'diagonal-reverse',
-    'horizontal',
-    'vertical',
-    'dots',
-    'cross',
-    'triangle',
-    'square',
-    'diamond',
-    'plus'
-  ]);
-
   const MAX_PREVIEW_SWATCHES = 20;
   const displayColors = $derived.by(() => {
     if (colors.length <= MAX_PREVIEW_SWATCHES) return colors;
@@ -234,26 +221,11 @@
       return undefined;
     }
 
-    const existingPatternId = coerceCategoryPatternId(
-      classification?.patternId
-    );
-    if (existingPatternId) {
-      return existingPatternId;
-    }
-
     return (
       CATEGORY_PATTERN_IDS_BY_TYPE[
         commonAspect.patternType ?? PatternType.DOTS
       ] ?? 'dots'
     );
-  }
-
-  function coerceCategoryPatternId(
-    patternId: string | undefined
-  ): PatternId | undefined {
-    return patternId && CATEGORY_PATTERN_IDS.has(patternId)
-      ? (patternId as PatternId)
-      : undefined;
   }
 
   function handleCategoriesValidateWithAspect(
