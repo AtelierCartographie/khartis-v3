@@ -20,6 +20,89 @@ export interface DuckDBClient {
   drop_rows(tableName: string, rowIds: number[]): Promise<void>;
 }
 
+const ALLOWED_COLUMN_TYPES = new Set([
+  'VARCHAR',
+  'TEXT',
+  'STRING',
+  'INTEGER',
+  'INT',
+  'INT4',
+  'SIGNED',
+  'BIGINT',
+  'INT8',
+  'LONG',
+  'SMALLINT',
+  'INT2',
+  'SHORT',
+  'TINYINT',
+  'INT1',
+  'DOUBLE',
+  'FLOAT8',
+  'NUMERIC',
+  'DECIMAL',
+  'REAL',
+  'FLOAT',
+  'FLOAT4',
+  'BOOLEAN',
+  'BOOL',
+  'LOGICAL',
+  'DATE',
+  'TIMESTAMP',
+  'TIMESTAMP WITH TIME ZONE',
+  'TIME',
+  'INTERVAL',
+  'HUGEINT',
+  'UHUGEINT',
+  'UBIGINT',
+  'UINTEGER',
+  'USMALLINT',
+  'UTINYINT',
+  'BLOB',
+  'BYTEA',
+  'BINARY',
+  'VARBINARY',
+  'UUID',
+  'JSON'
+]);
+
+const NUMERIC_COLUMN_TYPES = new Set([
+  'INTEGER',
+  'INT',
+  'INT4',
+  'SIGNED',
+  'BIGINT',
+  'INT8',
+  'LONG',
+  'SMALLINT',
+  'INT2',
+  'SHORT',
+  'TINYINT',
+  'INT1',
+  'DOUBLE',
+  'FLOAT8',
+  'NUMERIC',
+  'DECIMAL',
+  'REAL',
+  'FLOAT',
+  'FLOAT4',
+  'HUGEINT',
+  'UHUGEINT',
+  'UBIGINT',
+  'UINTEGER',
+  'USMALLINT',
+  'UTINYINT'
+]);
+
+const DECIMAL_TYPE_PATTERN = /^DECIMAL\s*\(\s*\d+\s*,\s*\d+\s*\)$/i;
+
+function isSupportedColumnType(type: string): boolean {
+  return ALLOWED_COLUMN_TYPES.has(type) || DECIMAL_TYPE_PATTERN.test(type);
+}
+
+function isNumericColumnType(type: string): boolean {
+  return NUMERIC_COLUMN_TYPES.has(type) || DECIMAL_TYPE_PATTERN.test(type);
+}
+
 async function maybeAnalyse(
   tableName: string,
   Duck: DuckDBClient,
@@ -57,60 +140,17 @@ export async function changeColumnType(
   const escapedTable = escapeIdentifier(tableName);
   const escapedCol = escapeIdentifier(columnName);
 
-  const ALLOWED_TYPES = [
-    'VARCHAR',
-    'TEXT',
-    'STRING',
-    'INTEGER',
-    'INT',
-    'INT4',
-    'SIGNED',
-    'BIGINT',
-    'INT8',
-    'LONG',
-    'SMALLINT',
-    'INT2',
-    'SHORT',
-    'TINYINT',
-    'INT1',
-    'DOUBLE',
-    'FLOAT8',
-    'NUMERIC',
-    'DECIMAL',
-    'REAL',
-    'FLOAT',
-    'FLOAT4',
-    'BOOLEAN',
-    'BOOL',
-    'LOGICAL',
-    'DATE',
-    'TIMESTAMP',
-    'TIMESTAMP WITH TIME ZONE',
-    'TIME',
-    'INTERVAL',
-    'HUGEINT',
-    'UHUGEINT',
-    'UBIGINT',
-    'UINTEGER',
-    'USMALLINT',
-    'UTINYINT',
-    'BLOB',
-    'BYTEA',
-    'BINARY',
-    'VARBINARY',
-    'UUID',
-    'JSON'
-  ];
   const normalizedType = newType.trim().toUpperCase();
-  if (
-    !ALLOWED_TYPES.includes(normalizedType) &&
-    !/^DECIMAL\s*\(\s*\d+\s*,\s*\d+\s*\)$/i.test(newType.trim())
-  ) {
+  if (!isSupportedColumnType(normalizedType)) {
     throw new DuckDBError(m.error_unsupported_column_type({ newType }));
   }
 
+  const usingClause = isNumericColumnType(normalizedType)
+    ? ` USING TRY_CAST("${escapedCol}" AS ${normalizedType})`
+    : '';
+
   await Duck.query(
-    `ALTER TABLE "${escapedTable}" ALTER COLUMN "${escapedCol}" SET DATA TYPE ${normalizedType}`
+    `ALTER TABLE "${escapedTable}" ALTER COLUMN "${escapedCol}" SET DATA TYPE ${normalizedType}${usingClause}`
   );
 
   await maybeAnalyse(tableName, Duck, options);

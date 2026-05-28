@@ -9,7 +9,7 @@ export const DUCK_CONST = {
     /** Default format for tabular data */
     FORMAT_TABULAR: 'csv',
     /** Common null value representations recognized during parsing */
-    NULL_VALUES: `['', ':', '-', 'null', 'NULL', 'NA', 'N/A', 'n/a', '#N/A', 'NaN', 'nil', 'NIL', 'none', 'NONE', 'None']`,
+    NULL_VALUES: `['', ':', '-', '...', 'null', 'NULL', 'NA', 'N/A', 'n/a', '#N/A', 'NaN', 'nil', 'NIL', 'none', 'NONE', 'None']`,
     /** Default data source identifier */
     SOURCE: 'user'
   },
