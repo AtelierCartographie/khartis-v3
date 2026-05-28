@@ -159,6 +159,20 @@
     }
   }
 
+  function getInstallButtonStatus() {
+    if (isInstalledAsApp) {
+      return m.sidenav_install_app_active();
+    }
+    if (deferredInstallPrompt) {
+      return m.sidenav_install_app_ready();
+    }
+    return m.sidenav_install_app_manual();
+  }
+
+  function getInstallButtonAriaLabel() {
+    return `${m.sidenav_install_app()}: ${getInstallButtonStatus()}`;
+  }
+
   function getInstallInstructions(): InstallInstruction[] {
     return [
       {
@@ -445,16 +459,20 @@
               size="small"
               kind="ghost"
               icon={Download}
-              class="menu-bar-item"
+              class="menu-bar-item app-action-button"
               data-testid="sidenav-install-app"
               disabled={isInstalledAsApp}
+              aria-label={getInstallButtonAriaLabel()}
               on:click={handleInstallApp}
             >
-              {#if isInstalledAsApp}
-                {m.sidenav_install_app_installed()}
-              {:else}
-                {m.sidenav_install_app()}
-              {/if}
+              <span class="app-action-copy">
+                <span class="app-action-title">
+                  {isInstalledAsApp
+                    ? m.sidenav_install_app_installed()
+                    : m.sidenav_install_app()}
+                </span>
+                <span class="app-action-meta">{getInstallButtonStatus()}</span>
+              </span>
             </Button>
 
             <OfflineButton />
@@ -678,6 +696,44 @@
 
   #khartis-side-nav :global(.menu-bar-item) {
     width: 100%;
+  }
+
+  #khartis-side-nav :global(.app-action-button) {
+    min-height: 2.25rem;
+    padding-top: var(--cds-spacing-01);
+    padding-bottom: var(--cds-spacing-01);
+  }
+
+  #khartis-side-nav :global(.app-action-button .bx--btn__icon) {
+    flex: 0 0 auto;
+  }
+
+  #khartis-side-nav :global(.app-action-copy) {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+    line-height: 1.1;
+  }
+
+  #khartis-side-nav :global(.app-action-title),
+  #khartis-side-nav :global(.app-action-meta) {
+    overflow: hidden;
+    max-width: 100%;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #khartis-side-nav :global(.app-action-title) {
+    color: currentColor;
+    font-size: 0.875rem;
+  }
+
+  #khartis-side-nav :global(.app-action-meta) {
+    margin-top: 0.0625rem;
+    color: var(--cds-text-03);
+    font-size: 0.6875rem;
+    font-weight: 400;
   }
 
   #khartis-side-nav :global(.bx--side-nav) {

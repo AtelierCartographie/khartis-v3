@@ -24,8 +24,15 @@
   });
 
   const label = $derived(() => {
+    return m.sidenav_offline_button_label();
+  });
+
+  const status = $derived(() => {
     if (!connectivityStore.isOnline) {
       return m.sidenav_offline_status_offline();
+    }
+    if (connectivityStore.quotaExceeded) {
+      return m.sidenav_offline_status_storage_warning();
     }
     if (
       connectivityStore.warmupPhase === 'A' ||
@@ -33,7 +40,16 @@
     ) {
       return m.sidenav_offline_status_warming_up();
     }
-    return m.sidenav_offline_button_label();
+    if (connectivityStore.cachedBasemapCount > 0) {
+      return m.sidenav_offline_status_ready({
+        count: connectivityStore.cachedBasemapCount
+      });
+    }
+    return m.sidenav_offline_status_online();
+  });
+
+  const ariaLabel = $derived(() => {
+    return `${label()}: ${status()}`;
   });
 
   function openOfflinePanel() {
@@ -45,23 +61,13 @@
   size="small"
   kind="ghost"
   icon={icon()}
-  class="menu-bar-item"
+  class="menu-bar-item app-action-button"
   data-testid="sidenav-offline-button"
+  aria-label={ariaLabel()}
   on:click={openOfflinePanel}
 >
-  {label()}
-  {#if connectivityStore.cachedBasemapCount > 0}
-    <span class="offline-count">{connectivityStore.cachedBasemapCount}</span>
-  {/if}
+  <span class="app-action-copy">
+    <span class="app-action-title">{label()}</span>
+    <span class="app-action-meta">{status()}</span>
+  </span>
 </Button>
-
-<style>
-  .offline-count {
-    font-size: 0.65rem;
-    color: var(--cds-text-03);
-    margin-left: auto;
-    background: var(--cds-layer-accent);
-    padding: 0.05rem 0.4rem;
-    border-radius: 0.6rem;
-  }
-</style>

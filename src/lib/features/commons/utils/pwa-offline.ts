@@ -56,6 +56,7 @@ interface ConnectionLike {
 
 const PERIODIC_SYNC_TAG_BASEMAPS = 'khartis-basemaps-revalidate';
 const PERIODIC_SYNC_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
+const FACTORY_RESET_QUERY_PARAM = 'reset';
 
 async function getRegistration(): Promise<ExtendedRegistration | null> {
   if (typeof navigator === 'undefined') {
@@ -271,6 +272,63 @@ export interface FactoryResetOptions {
   reload?: boolean;
 }
 
+export interface CacheUrlsForOfflineResult {
+  status: 'cached' | 'unsupported' | 'failed';
+  bytes: number;
+  reason?: unknown;
+}
+
+export function buildPwaResetUrl(currentHref: string): string {
+  const url = new URL(currentHref);
+  url.searchParams.set(FACTORY_RESET_QUERY_PARAM, '1');
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+export async function cacheUrlsForOffline(
+  cacheName: string,
+  urls: string[],
+  signal?: AbortSignal
+): Promise<CacheUrlsForOfflineResult> {
+  if (typeof caches === 'undefined') {
+    return { status: 'unsupported', bytes: 0 };
+  }
+
+  try {
+    const cache = await caches.open(cacheName);
+    let totalBytes = 0;
+
+    for (const url of urls) {
+      if (signal?.aborted) {
+        return {
+          status: 'failed',
+          bytes: totalBytes,
+          reason: new DOMException('Aborted', 'AbortError')
+        };
+      }
+
+      const response = await fetch(url, { signal });
+      if (!response.ok) {
+        return {
+          status: 'failed',
+          bytes: totalBytes,
+          reason: response.status
+        };
+      }
+
+      const contentLength = Number(response.headers.get('content-length') ?? 0);
+      if (Number.isFinite(contentLength) && contentLength > 0) {
+        totalBytes += contentLength;
+      }
+
+      await cache.put(url, response.clone());
+    }
+
+    return { status: 'cached', bytes: totalBytes };
+  } catch (error) {
+    return { status: 'failed', bytes: 0, reason: error };
+  }
+}
+
 export async function factoryResetPwa(
   options: FactoryResetOptions = {}
 ): Promise<void> {
@@ -307,7 +365,7 @@ export async function factoryResetPwa(
   }
 
   if (reload && typeof window !== 'undefined') {
-    window.location.reload();
+    window.location.replace(buildPwaResetUrl(window.location.href));
   }
 }
 
