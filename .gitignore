@@ -152,3 +152,5 @@ playwright-report/
 
 # Claude Code — personal/local settings (shared team config lives in .claude/settings.json)
 .claude/settings.local.json
+.gitnexus
+*-agent-tests.md
