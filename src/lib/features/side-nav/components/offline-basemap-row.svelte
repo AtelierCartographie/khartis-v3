@@ -1,20 +1,15 @@
 <script lang="ts">
   import type { OfflineBasemapEntry } from '$lib/features/commons/stores/connectivity.store.svelte';
   import { m } from '$lib/paraglide/messages.js';
-  import { Button, Tag } from 'carbon-components-svelte';
-  import { Download, TrashCan } from 'carbon-icons-svelte';
+  import { Tag } from 'carbon-components-svelte';
 
   interface Props {
     basemapId: string;
     title: string;
     entry: OfflineBasemapEntry | undefined;
-    onDownload: (basemapId: string) => void;
-    onCancel: (basemapId: string) => void;
-    onDelete: (basemapId: string) => void;
   }
 
-  const { basemapId, title, entry, onDownload, onCancel, onDelete }: Props =
-    $props();
+  const { title, entry }: Props = $props();
 
   const status = $derived(entry?.status ?? 'unknown');
 
@@ -22,7 +17,7 @@
     switch (status) {
       case 'cached':
         return {
-          type: 'blue' as const,
+          type: 'green' as const,
           label: m.offline_panel_basemap_status_cached()
         };
       case 'downloading':
@@ -41,7 +36,10 @@
           label: m.offline_panel_basemap_status_evicted()
         };
       default:
-        return null;
+        return {
+          type: 'gray' as const,
+          label: m.offline_panel_basemap_status_pending()
+        };
     }
   });
 </script>
@@ -49,47 +47,10 @@
 <div class="offline-basemap-row">
   <div class="row-info">
     <span class="row-title">{title}</span>
-    <span class="row-id">{basemapId}</span>
   </div>
 
   <div class="row-actions">
-    {#if tagInfo()}
-      {@const info = tagInfo()}
-      {#if info}
-        <Tag type={info.type} size="sm">{info.label}</Tag>
-      {/if}
-    {/if}
-
-    {#if status === 'downloading'}
-      <Button
-        size="small"
-        kind="ghost"
-        on:click={() => onCancel(basemapId)}
-        data-testid="offline-row-cancel"
-      >
-        {m.offline_panel_basemap_cancel()}
-      </Button>
-    {:else if status === 'cached'}
-      <Button
-        size="small"
-        kind="danger-ghost"
-        icon={TrashCan}
-        iconDescription={m.offline_panel_basemap_delete()}
-        tooltipPosition="left"
-        on:click={() => onDelete(basemapId)}
-        data-testid="offline-row-delete"
-      />
-    {:else}
-      <Button
-        size="small"
-        kind="ghost"
-        icon={Download}
-        iconDescription={m.offline_panel_basemap_download()}
-        tooltipPosition="left"
-        on:click={() => onDownload(basemapId)}
-        data-testid="offline-row-download"
-      />
-    {/if}
+    <Tag type={tagInfo().type} size="sm">{tagInfo().label}</Tag>
   </div>
 </div>
 
@@ -113,11 +74,6 @@
   .row-title {
     font-size: 0.875rem;
     color: var(--cds-text-01);
-  }
-
-  .row-id {
-    font-size: 0.7rem;
-    color: var(--cds-text-03);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

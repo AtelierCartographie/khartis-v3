@@ -8,25 +8,14 @@
   import {
     buildEssentialDownloadEntries,
     buildExtendedDownloadEntries,
-    classifyBasemapRegion,
-    type BasemapDownloadEntry,
-    type BasemapRegion
+    type BasemapDownloadEntry
   } from '$lib/features/commons/utils/offline-basemap-sets';
   import {
     cacheUrlsForOffline,
-    cancelOfflineBasemap,
-    factoryResetPwa,
     prepareBasemapForOffline
   } from '$lib/features/commons/utils/pwa-offline';
-  import {
-    areOfflineDownloadsDisabled,
-    setOfflineDownloadsDisabled,
-    startExtendedWarmup
-  } from '$lib/features/commons/utils/offline-warmup-scheduler';
   import { m } from '$lib/paraglide/messages.js';
   import {
-    Accordion,
-    AccordionItem,
     Button,
     ComposedModal,
     InlineNotification,
@@ -35,28 +24,25 @@
     ProgressBar,
     Tag
   } from 'carbon-components-svelte';
-  import { CloudDownload, Restart } from 'carbon-icons-svelte';
+  import { CloudDownload } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
   import OfflineBasemapRow from './offline-basemap-row.svelte';
 
   const BYTES_PER_MIB = 1024 * 1024;
+  const DOWNLOAD_ALL_CONCURRENCY = 2;
 
   let essentials = $state<BasemapDownloadEntry[]>([]);
   let extended = $state<BasemapDownloadEntry[]>([]);
-  let isFactoryResetConfirmOpen = $state(false);
-  let isFactoryResetRunning = $state(false);
-  let isExtendedWarmupRunning = $state(false);
-  let downloadsDisabled = $state(false);
-  let extendedAbortController: AbortController | null = null;
+  let isDownloadAllRunning = $state(false);
+  let downloadAllAbortController: AbortController | null = null;
 
   onMount(() => {
     void loadEntries();
-    downloadsDisabled = areOfflineDownloadsDisabled();
     void connectivityStore.refreshStorageEstimate();
     void connectivityStore.refreshCachedBasemaps();
 
     return () => {
-      extendedAbortController?.abort();
+      downloadAllAbortController?.abort();
     };
   });
 
@@ -101,47 +87,29 @@
     allDownloadable.length > 0 && downloadedCount === allDownloadable.length
   );
 
-  const groupedByRegion = $derived(() => {
-    const groups: Record<BasemapRegion, BasemapDownloadEntry[]> = {
-      france: [],
-      europe: [],
-      monde: [],
-      autre: []
-    };
-    for (const entry of allDownloadable) {
-      groups[classifyBasemapRegion(entry.basemapId)].push(entry);
-    }
-    return groups;
-  });
-
   function getEntry(basemapId: string): OfflineBasemapEntry | undefined {
     return connectivityStore.basemaps.get(basemapId);
   }
 
-  function regionLabel(region: BasemapRegion): string {
-    switch (region) {
-      case 'france':
-        return m.offline_panel_catalog_france();
-      case 'europe':
-        return m.offline_panel_catalog_europe();
-      case 'monde':
-        return m.offline_panel_catalog_world();
-      default:
-        return m.offline_panel_catalog_other();
-    }
-  }
+  const activeDownloadCount = $derived(
+    allDownloadable.filter(
+      (e) =>
+        connectivityStore.basemaps.get(e.basemapId)?.status === 'downloading'
+    ).length
+  );
 
-  const isWarmupActive = $derived(
-    connectivityStore.warmupPhase === 'A' ||
-      connectivityStore.warmupPhase === 'B' ||
-      connectivityStore.warmupPhase === 'C'
+  const pendingDownloadCount = $derived(
+    allDownloadable.filter((e) => {
+      const status = connectivityStore.basemaps.get(e.basemapId)?.status;
+      return status !== 'cached' && status !== 'downloading';
+    }).length
   );
 
   function statusType(): 'blue' | 'green' | 'red' | 'purple' | 'gray' {
     if (!connectivityStore.isOnline) return 'red';
     if (allCached) return 'green';
-    if (isWarmupActive) return 'purple';
-    if (connectivityStore.warmupPhase === 'disabled') return 'gray';
+    if (isDownloadAllRunning || activeDownloadCount > 0) return 'purple';
+    if (downloadedCount > 0) return 'blue';
     return 'blue';
   }
 
@@ -149,10 +117,9 @@
     if (!connectivityStore.isOnline)
       return m.offline_panel_status_offline_title();
     if (allCached) return m.offline_panel_status_ready_title();
-    if (isWarmupActive) return m.offline_panel_status_warming_title();
-    if (connectivityStore.warmupPhase === 'disabled') {
-      return m.offline_panel_status_disabled_title();
-    }
+    if (isDownloadAllRunning || activeDownloadCount > 0)
+      return m.offline_panel_status_downloading_title();
+    if (downloadedCount > 0) return m.offline_panel_status_partial_title();
     return m.offline_panel_status_online_title();
   }
 
@@ -160,22 +127,23 @@
     if (!connectivityStore.isOnline)
       return m.offline_panel_status_offline_body();
     if (allCached) return m.offline_panel_status_ready_body();
-    if (isWarmupActive) return m.offline_panel_status_warming_body();
+    if (isDownloadAllRunning || activeDownloadCount > 0)
+      return m.offline_panel_status_downloading_body();
+    if (downloadedCount > 0) return m.offline_panel_status_partial_body();
     if (connectivityStore.isSlowConnection) {
       return m.offline_panel_status_slow_body();
-    }
-    if (connectivityStore.warmupPhase === 'disabled') {
-      return m.offline_panel_status_disabled_body();
     }
     return m.offline_panel_status_online_body();
   }
 
-  async function handleDownload(basemapId: string) {
-    const entry = allDownloadable.find((e) => e.basemapId === basemapId);
-    if (!entry) return;
-    connectivityStore.setBasemapStatus(basemapId, 'downloading', 0);
+  async function downloadEntry(
+    entry: BasemapDownloadEntry,
+    signal: AbortSignal
+  ) {
+    if (signal.aborted) return;
+    connectivityStore.setBasemapStatus(entry.basemapId, 'downloading', 0);
     const result = await prepareBasemapForOffline({
-      basemapId,
+      basemapId: entry.basemapId,
       urls: entry.urls,
       title: entry.title
     });
@@ -183,10 +151,14 @@
       return;
     }
 
-    const fallback = await cacheUrlsForOffline('basemaps-data', entry.urls);
+    const fallback = await cacheUrlsForOffline(
+      'basemaps-data',
+      entry.urls,
+      signal
+    );
     if (fallback.status === 'cached') {
       connectivityStore.setBasemapStatus(
-        basemapId,
+        entry.basemapId,
         'cached',
         1,
         fallback.bytes
@@ -196,63 +168,73 @@
     }
 
     if (result.status === 'unsupported' || result.status === 'failed') {
-      connectivityStore.setBasemapStatus(basemapId, 'failed', 0);
+      connectivityStore.setBasemapStatus(entry.basemapId, 'failed', 0);
     }
   }
 
-  async function handleCancel(basemapId: string) {
-    await cancelOfflineBasemap(basemapId);
-    connectivityStore.setBasemapStatus(basemapId, 'unknown', 0);
-  }
+  async function runDownloadQueue(
+    entries: BasemapDownloadEntry[],
+    signal: AbortSignal
+  ) {
+    let index = 0;
 
-  async function handleDelete(basemapId: string) {
-    if (typeof caches === 'undefined') return;
-    try {
-      const cache = await caches.open('basemaps-data');
-      const requests = await cache.keys();
-      const targets = requests.filter((req) =>
-        req.url.includes(`/${basemapId}.parquet`)
-      );
-      await Promise.all(targets.map((req) => cache.delete(req)));
-      connectivityStore.setBasemapStatus(basemapId, 'evicted', 0);
-      void connectivityStore.refreshStorageEstimate();
-    } catch (error) {
-      logger.error(
-        'Failed to delete offline basemap cache entry',
-        LogCategory.SYSTEM,
-        error
-      );
+    async function worker() {
+      while (index < entries.length) {
+        if (signal.aborted) return;
+        const entry = entries[index++];
+        await downloadEntry(entry, signal);
+      }
     }
+
+    const workers = Array.from(
+      {
+        length: Math.min(DOWNLOAD_ALL_CONCURRENCY, Math.max(1, entries.length))
+      },
+      () => worker()
+    );
+    await Promise.all(workers);
   }
 
   async function handleDownloadAll() {
-    if (isExtendedWarmupRunning || !connectivityStore.isOnline) return;
-    isExtendedWarmupRunning = true;
-    extendedAbortController = new AbortController();
-    try {
-      await startExtendedWarmup({
-        store: connectivityStore,
-        signal: extendedAbortController.signal
-      });
-    } finally {
-      isExtendedWarmupRunning = false;
-      extendedAbortController = null;
+    if (
+      isDownloadAllRunning ||
+      !connectivityStore.isOnline ||
+      allCached ||
+      activeDownloadCount > 0 ||
+      pendingDownloadCount === 0
+    ) {
+      return;
     }
-  }
 
-  async function confirmFactoryReset() {
-    isFactoryResetRunning = true;
+    const entriesToDownload = allDownloadable.filter((entry) => {
+      const status = connectivityStore.basemaps.get(entry.basemapId)?.status;
+      return status !== 'cached' && status !== 'downloading';
+    });
+    if (entriesToDownload.length === 0) return;
+
+    isDownloadAllRunning = true;
+    downloadAllAbortController = new AbortController();
     try {
-      await factoryResetPwa({ reload: true });
+      await runDownloadQueue(
+        entriesToDownload,
+        downloadAllAbortController.signal
+      );
+      await Promise.allSettled([
+        connectivityStore.refreshCachedBasemaps(),
+        connectivityStore.refreshStorageEstimate()
+      ]);
+    } catch (error) {
+      if ((error as Error).name !== 'AbortError') {
+        logger.error(
+          'Failed to download offline basemaps',
+          LogCategory.SYSTEM,
+          error
+        );
+      }
     } finally {
-      isFactoryResetRunning = false;
-      isFactoryResetConfirmOpen = false;
+      isDownloadAllRunning = false;
+      downloadAllAbortController = null;
     }
-  }
-
-  function toggleDownloadsDisabled() {
-    downloadsDisabled = !downloadsDisabled;
-    setOfflineDownloadsDisabled(downloadsDisabled);
   }
 </script>
 
@@ -306,132 +288,53 @@
         size="small"
         kind="primary"
         icon={CloudDownload}
-        disabled={isExtendedWarmupRunning ||
+        disabled={isDownloadAllRunning ||
           !connectivityStore.isOnline ||
           allCached ||
-          allDownloadable.length === 0}
+          activeDownloadCount > 0 ||
+          pendingDownloadCount === 0}
         on:click={handleDownloadAll}
         data-testid="offline-download-all"
       >
-        {allCached
-          ? m.offline_panel_all_cached()
-          : isExtendedWarmupRunning
-            ? m.offline_panel_downloading_all()
-            : m.offline_panel_download_all()}
+        {!connectivityStore.isOnline
+          ? m.offline_panel_download_offline()
+          : allCached
+            ? m.offline_panel_all_cached()
+            : isDownloadAllRunning || activeDownloadCount > 0
+              ? m.offline_panel_downloading_all()
+              : m.offline_panel_download_all()}
       </Button>
       <p class="primary-helper">
         {m.offline_panel_download_all_helper()}
       </p>
     </div>
 
-    <Accordion size="sm" align="start" class="catalog-accordion">
-      {#each ['monde', 'europe', 'france', 'autre'] as const as region (region)}
-        {@const items = groupedByRegion()[region]}
-        {#if items.length > 0}
-          {@const cachedHere = items.filter(
-            (e) =>
-              connectivityStore.basemaps.get(e.basemapId)?.status === 'cached'
-          ).length}
-          <AccordionItem
-            title={`${regionLabel(region)} · ${cachedHere}/${items.length}`}
-          >
-            <ul class="basemap-list">
-              {#each items as item (item.basemapId)}
-                <li>
-                  <OfflineBasemapRow
-                    basemapId={item.basemapId}
-                    title={item.title}
-                    entry={getEntry(item.basemapId)}
-                    onDownload={handleDownload}
-                    onCancel={handleCancel}
-                    onDelete={handleDelete}
-                  />
-                </li>
-              {/each}
-            </ul>
-          </AccordionItem>
-        {/if}
-      {/each}
-    </Accordion>
-
-    <div class="maintenance-section">
-      <div class="maintenance-row">
-        <div class="maintenance-copy">
-          <p class="maintenance-label">
-            {m.offline_panel_auto_downloads()}
-          </p>
-          <p class="maintenance-helper">
-            {downloadsDisabled
-              ? m.offline_panel_auto_downloads_disabled()
-              : m.offline_panel_auto_downloads_enabled()}
-          </p>
-        </div>
-        <Button size="small" kind="ghost" on:click={toggleDownloadsDisabled}>
-          {downloadsDisabled
-            ? m.offline_panel_action_enable()
-            : m.offline_panel_action_disable()}
-        </Button>
+    <section
+      class="download-list-section"
+      aria-label={m.offline_panel_list_title()}
+    >
+      <div class="download-list-header">
+        <h3>{m.offline_panel_list_title()}</h3>
+        <span>{m.offline_panel_list_helper()}</span>
       </div>
 
-      <div class="maintenance-row">
-        <div class="maintenance-copy">
-          <p class="maintenance-label">
-            {m.offline_panel_reset_all()}
-          </p>
-          <p class="maintenance-helper">
-            {m.offline_panel_reset_all_helper()}
-          </p>
-        </div>
-        <Button
-          size="small"
-          kind="danger-tertiary"
-          icon={Restart}
-          on:click={() => (isFactoryResetConfirmOpen = true)}
-          data-testid="offline-factory-reset-btn"
-        >
-          {m.offline_panel_reset_all_action()}
-        </Button>
-      </div>
-    </div>
+      {#if allDownloadable.length > 0}
+        <ul class="basemap-list">
+          {#each allDownloadable as item (item.basemapId)}
+            <li>
+              <OfflineBasemapRow
+                basemapId={item.basemapId}
+                title={item.title}
+                entry={getEntry(item.basemapId)}
+              />
+            </li>
+          {/each}
+        </ul>
+      {:else}
+        <p class="empty-list">{m.offline_panel_catalog_empty()}</p>
+      {/if}
+    </section>
   </ModalBody>
-</ComposedModal>
-
-<ComposedModal
-  open={isFactoryResetConfirmOpen}
-  size="xs"
-  on:close={() => (isFactoryResetConfirmOpen = false)}
->
-  <ModalHeader title={m.offline_panel_reset_all_confirm_title()} />
-  <ModalBody>
-    <InlineNotification
-      kind="warning"
-      lowContrast
-      hideCloseButton
-      title={m.offline_panel_reset_all_warning_title()}
-      subtitle={m.offline_panel_reset_all_warning_subtitle()}
-    />
-    <p class="reset-body-paragraph">
-      {m.offline_panel_reset_all_confirm_body()}
-    </p>
-  </ModalBody>
-  <div class="confirm-modal-footer">
-    <Button
-      kind="secondary"
-      disabled={isFactoryResetRunning}
-      on:click={() => (isFactoryResetConfirmOpen = false)}
-    >
-      {m.offline_panel_clear_confirm_cancel()}
-    </Button>
-    <Button
-      kind="danger"
-      disabled={isFactoryResetRunning}
-      on:click={confirmFactoryReset}
-    >
-      {isFactoryResetRunning
-        ? m.offline_panel_reset_all_in_progress()
-        : m.offline_panel_reset_all_action()}
-    </Button>
-  </div>
 </ComposedModal>
 
 <style>
@@ -489,60 +392,44 @@
     line-height: 1.3;
   }
 
-  :global(.catalog-accordion .bx--accordion__item) {
-    border-color: var(--cds-border-subtle);
+  .download-list-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+    min-width: 0;
+  }
+
+  .download-list-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--cds-spacing-03);
+  }
+
+  .download-list-header h3 {
+    margin: 0;
+    color: var(--cds-text-01);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .download-list-header span {
+    color: var(--cds-text-03);
+    font-size: 0.75rem;
+    text-align: right;
   }
 
   .basemap-list {
     list-style: none;
     margin: 0;
     padding: 0;
-  }
-
-  .maintenance-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-04);
+    max-height: 18rem;
+    overflow-y: auto;
     border-top: 1px solid var(--cds-border-subtle);
-    padding-top: var(--cds-spacing-04);
   }
 
-  .maintenance-row {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--cds-spacing-04);
-  }
-
-  .maintenance-copy {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .maintenance-label {
+  .empty-list {
     margin: 0;
-    font-size: 0.8125rem;
-    color: var(--cds-text-01);
-    font-weight: 500;
-  }
-
-  .maintenance-helper {
-    margin: var(--cds-spacing-01) 0 0;
-    font-size: 0.75rem;
-    color: var(--cds-text-03);
-    line-height: 1.4;
-  }
-
-  .confirm-modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--cds-spacing-03);
-    padding: var(--cds-spacing-04) var(--cds-spacing-05);
-    border-top: 1px solid var(--cds-border-subtle);
-  }
-
-  .reset-body-paragraph {
-    margin: var(--cds-spacing-04) 0 0;
     font-size: 0.875rem;
     color: var(--cds-text-02);
   }
