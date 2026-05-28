@@ -94,7 +94,7 @@ Errors derive from `PipelineError` (`commons/pipeline.errors.ts`); user-facing e
 
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **khartis-v3** (15867 symbols, 29333 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **khartis-v3** (15891 symbols, 29354 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
