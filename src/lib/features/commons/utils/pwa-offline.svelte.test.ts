@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  buildPwaResetUrl,
+  cacheUrlsForOffline,
   isBackgroundFetchSupported,
   isOnSlowConnection,
   isPeriodicSyncSupported,
@@ -27,6 +29,56 @@ describe('pwa-offline capability detection', () => {
 
   it('returns false for slow connection without Network Information API', () => {
     expect(isOnSlowConnection()).toBe(false);
+  });
+});
+
+describe('buildPwaResetUrl', () => {
+  it('adds the reset query parameter while preserving path, search and hash', () => {
+    expect(
+      buildPwaResetUrl('https://example.test/cartographie/?lang=fr#map')
+    ).toBe('/cartographie/?lang=fr&reset=1#map');
+  });
+
+  it('replaces an existing reset query parameter', () => {
+    expect(buildPwaResetUrl('https://example.test/app?reset=0')).toBe(
+      '/app?reset=1'
+    );
+  });
+});
+
+describe('cacheUrlsForOffline', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('writes successful responses into the requested cache', async () => {
+    const put = vi.fn().mockResolvedValue(undefined);
+    const open = vi.fn().mockResolvedValue({ put });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('ok', {
+        status: 200,
+        headers: { 'content-length': '2' }
+      })
+    );
+
+    vi.stubGlobal('caches', { open });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await cacheUrlsForOffline('basemaps-data', ['/a.parquet']);
+
+    expect(result).toEqual({ status: 'cached', bytes: 2 });
+    expect(open).toHaveBeenCalledWith('basemaps-data');
+    expect(fetchMock).toHaveBeenCalledWith('/a.parquet', { signal: undefined });
+    expect(put).toHaveBeenCalledOnce();
+  });
+
+  it('reports unsupported when Cache Storage is unavailable', async () => {
+    vi.stubGlobal('caches', undefined);
+
+    await expect(cacheUrlsForOffline('basemaps-data', [])).resolves.toEqual({
+      status: 'unsupported',
+      bytes: 0
+    });
   });
 });
 

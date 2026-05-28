@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 
 const mocks = vi.hoisted(() => ({
   buildEssentialDownloadEntriesMock: vi.fn(),
   buildExtendedDownloadEntriesMock: vi.fn(),
   prepareBasemapForOfflineMock: vi.fn(),
+  cacheUrlsForOfflineMock: vi.fn(),
   cancelOfflineBasemapMock: vi.fn(),
+  factoryResetPwaMock: vi.fn(),
   startExtendedWarmupMock: vi.fn(),
   setOfflineDownloadsDisabledMock: vi.fn(),
   areOfflineDownloadsDisabledMock: vi.fn().mockReturnValue(false),
@@ -79,10 +81,13 @@ vi.mock('$lib/features/commons/utils/offline-basemap-sets', () => ({
 }));
 
 vi.mock('$lib/features/commons/utils/pwa-offline', () => ({
+  cacheUrlsForOffline: (...args: unknown[]) =>
+    mocks.cacheUrlsForOfflineMock(...args),
   prepareBasemapForOffline: (...args: unknown[]) =>
     mocks.prepareBasemapForOfflineMock(...args),
   cancelOfflineBasemap: (...args: unknown[]) =>
-    mocks.cancelOfflineBasemapMock(...args)
+    mocks.cancelOfflineBasemapMock(...args),
+  factoryResetPwa: (...args: unknown[]) => mocks.factoryResetPwaMock(...args)
 }));
 
 vi.mock('$lib/features/commons/utils/offline-warmup-scheduler', () => ({
@@ -127,6 +132,11 @@ describe('OfflinePanel', () => {
         urls: []
       }
     ]);
+    mocks.prepareBasemapForOfflineMock.mockResolvedValue({ status: 'started' });
+    mocks.cacheUrlsForOfflineMock.mockResolvedValue({
+      status: 'cached',
+      bytes: 0
+    });
     mocks.basemapsMap.clear();
   });
 
@@ -139,7 +149,7 @@ describe('OfflinePanel', () => {
     render(Component);
 
     await waitFor(() => {
-      expect(screen.getByText('Mode hors ligne')).toBeTruthy();
+      expect(screen.getByText('Accès hors ligne')).toBeTruthy();
     });
   });
 
@@ -158,6 +168,35 @@ describe('OfflinePanel', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('offline-factory-reset-btn')).toBeTruthy();
+    });
+  });
+
+  it('should cache a basemap through the fallback path when background fetch is unsupported', async () => {
+    mocks.prepareBasemapForOfflineMock.mockResolvedValue({
+      status: 'unsupported'
+    });
+    const Component = (await import('./offline-panel.svelte')).default;
+    render(Component);
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByTestId('offline-row-download').length
+      ).toBeGreaterThan(0);
+    });
+
+    await fireEvent.click(screen.getAllByTestId('offline-row-download')[0]);
+
+    await waitFor(() => {
+      expect(mocks.cacheUrlsForOfflineMock).toHaveBeenCalledWith(
+        'basemaps-data',
+        []
+      );
+      expect(mocks.setBasemapStatusMock).toHaveBeenCalledWith(
+        'monde-countries-2024-low',
+        'cached',
+        1,
+        0
+      );
     });
   });
 });

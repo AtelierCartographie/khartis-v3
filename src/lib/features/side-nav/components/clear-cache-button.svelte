@@ -5,8 +5,8 @@
   import {
     Button,
     ComposedModal,
+    InlineNotification,
     ModalBody,
-    ModalFooter,
     ModalHeader
   } from 'carbon-components-svelte';
   import { Renew } from 'carbon-icons-svelte';
@@ -29,7 +29,7 @@
     try {
       await factoryResetPwa({ reload: true });
     } catch (error) {
-      logger.error('Clear cache failed', LogCategory.SYSTEM, error);
+      logger.error('PWA repair failed', LogCategory.SYSTEM, error);
       isBusy = false;
       isOpen = false;
     }
@@ -40,11 +40,15 @@
   size="small"
   kind="ghost"
   icon={Renew}
-  class="menu-bar-item"
+  class="menu-bar-item app-action-button"
   data-testid="sidenav-clear-cache-button"
   on:click={openModal}
+  aria-label={`${m.sidenav_clear_cache_button()}: ${m.sidenav_clear_cache_hint()}`}
 >
-  {m.sidenav_clear_cache_button()}
+  <span class="app-action-copy">
+    <span class="app-action-title">{m.sidenav_clear_cache_button()}</span>
+    <span class="app-action-meta">{m.sidenav_clear_cache_hint()}</span>
+  </span>
 </Button>
 
 <ComposedModal
@@ -52,16 +56,47 @@
   size="sm"
   preventCloseOnClickOutside={isBusy}
   on:close={closeModal}
-  on:submit={handleConfirm}
 >
   <ModalHeader title={m.sidenav_clear_cache_confirm_title()} />
-  <ModalBody>
+  <ModalBody class="repair-modal-body">
     <p>{m.sidenav_clear_cache_confirm_body()}</p>
+    <InlineNotification
+      kind="warning"
+      lowContrast
+      hideCloseButton
+      title={m.sidenav_clear_cache_confirm_warning()}
+    />
   </ModalBody>
-  <ModalFooter
-    primaryButtonText={m.sidenav_clear_cache_confirm_primary()}
-    secondaryButtonText={m.sidenav_clear_cache_confirm_secondary()}
-    primaryButtonDisabled={isBusy}
-    on:click:button--secondary={closeModal}
-  />
+  <div class="repair-modal-footer">
+    <Button kind="secondary" disabled={isBusy} on:click={closeModal}>
+      {m.sidenav_clear_cache_confirm_secondary()}
+    </Button>
+    <Button kind="danger" disabled={isBusy} on:click={handleConfirm}>
+      {isBusy
+        ? m.sidenav_clear_cache_in_progress()
+        : m.sidenav_clear_cache_confirm_primary()}
+    </Button>
+  </div>
 </ComposedModal>
+
+<style>
+  :global(.repair-modal-body) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-04);
+  }
+
+  :global(.repair-modal-body p) {
+    margin: 0;
+    color: var(--cds-text-02);
+    line-height: 1.5;
+  }
+
+  .repair-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--cds-spacing-03);
+    padding: var(--cds-spacing-04) var(--cds-spacing-05);
+    border-top: 1px solid var(--cds-border-subtle);
+  }
+</style>

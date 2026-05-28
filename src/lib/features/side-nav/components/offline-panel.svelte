@@ -13,6 +13,7 @@
     type BasemapRegion
   } from '$lib/features/commons/utils/offline-basemap-sets';
   import {
+    cacheUrlsForOffline,
     cancelOfflineBasemap,
     factoryResetPwa,
     prepareBasemapForOffline
@@ -130,6 +131,45 @@
     }
   }
 
+  const isWarmupActive = $derived(
+    connectivityStore.warmupPhase === 'A' ||
+      connectivityStore.warmupPhase === 'B' ||
+      connectivityStore.warmupPhase === 'C'
+  );
+
+  function statusType(): 'blue' | 'green' | 'red' | 'purple' | 'gray' {
+    if (!connectivityStore.isOnline) return 'red';
+    if (allCached) return 'green';
+    if (isWarmupActive) return 'purple';
+    if (connectivityStore.warmupPhase === 'disabled') return 'gray';
+    return 'blue';
+  }
+
+  function statusTitle(): string {
+    if (!connectivityStore.isOnline)
+      return m.offline_panel_status_offline_title();
+    if (allCached) return m.offline_panel_status_ready_title();
+    if (isWarmupActive) return m.offline_panel_status_warming_title();
+    if (connectivityStore.warmupPhase === 'disabled') {
+      return m.offline_panel_status_disabled_title();
+    }
+    return m.offline_panel_status_online_title();
+  }
+
+  function statusBody(): string {
+    if (!connectivityStore.isOnline)
+      return m.offline_panel_status_offline_body();
+    if (allCached) return m.offline_panel_status_ready_body();
+    if (isWarmupActive) return m.offline_panel_status_warming_body();
+    if (connectivityStore.isSlowConnection) {
+      return m.offline_panel_status_slow_body();
+    }
+    if (connectivityStore.warmupPhase === 'disabled') {
+      return m.offline_panel_status_disabled_body();
+    }
+    return m.offline_panel_status_online_body();
+  }
+
   async function handleDownload(basemapId: string) {
     const entry = allDownloadable.find((e) => e.basemapId === basemapId);
     if (!entry) return;
@@ -139,6 +179,22 @@
       urls: entry.urls,
       title: entry.title
     });
+    if (result.status === 'started' || result.status === 'already-running') {
+      return;
+    }
+
+    const fallback = await cacheUrlsForOffline('basemaps-data', entry.urls);
+    if (fallback.status === 'cached') {
+      connectivityStore.setBasemapStatus(
+        basemapId,
+        'cached',
+        1,
+        fallback.bytes
+      );
+      void connectivityStore.refreshStorageEstimate();
+      return;
+    }
+
     if (result.status === 'unsupported' || result.status === 'failed') {
       connectivityStore.setBasemapStatus(basemapId, 'failed', 0);
     }
@@ -180,6 +236,7 @@
       });
     } finally {
       isExtendedWarmupRunning = false;
+      extendedAbortController = null;
     }
   }
 
@@ -208,18 +265,19 @@
   <ModalHeader title={m.offline_panel_title()} />
 
   <ModalBody class="offline-panel-body" hasForm>
-    <div class="status-row">
-      <Tag type={connectivityStore.isOnline ? 'blue' : 'red'} size="sm">
-        {connectivityStore.isOnline
-          ? m.sidenav_offline_status_online()
-          : m.sidenav_offline_status_offline()}
-      </Tag>
-      <span class="status-counter">
-        {m.offline_panel_essentials_progress({
-          ready: downloadedCount,
-          total: allDownloadable.length
-        })}
-      </span>
+    <div class="offline-summary">
+      <div class="status-row">
+        <Tag type={statusType()} size="sm">
+          {statusTitle()}
+        </Tag>
+        <span class="status-counter">
+          {m.offline_panel_essentials_progress({
+            ready: downloadedCount,
+            total: allDownloadable.length
+          })}
+        </span>
+      </div>
+      <p>{statusBody()}</p>
     </div>
 
     {#if connectivityStore.storage}
@@ -250,7 +308,8 @@
         icon={CloudDownload}
         disabled={isExtendedWarmupRunning ||
           !connectivityStore.isOnline ||
-          allCached}
+          allCached ||
+          allDownloadable.length === 0}
         on:click={handleDownloadAll}
         data-testid="offline-download-all"
       >
@@ -299,9 +358,12 @@
       <div class="maintenance-row">
         <div class="maintenance-copy">
           <p class="maintenance-label">
+            {m.offline_panel_auto_downloads()}
+          </p>
+          <p class="maintenance-helper">
             {downloadsDisabled
-              ? m.offline_panel_enable_downloads()
-              : m.offline_panel_disable_downloads()}
+              ? m.offline_panel_auto_downloads_disabled()
+              : m.offline_panel_auto_downloads_enabled()}
           </p>
         </div>
         <Button size="small" kind="ghost" on:click={toggleDownloadsDisabled}>
@@ -383,6 +445,22 @@
     gap: var(--cds-spacing-05);
     max-height: 70vh;
     overflow-y: auto;
+  }
+
+  .offline-summary {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+    padding: var(--cds-spacing-04);
+    background: var(--cds-layer);
+    border: 1px solid var(--cds-border-subtle);
+  }
+
+  .offline-summary p {
+    margin: 0;
+    color: var(--cds-text-02);
+    font-size: 0.8125rem;
+    line-height: 1.4;
   }
 
   .status-row {
