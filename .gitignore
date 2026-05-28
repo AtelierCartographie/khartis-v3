@@ -154,3 +154,7 @@ playwright-report/
 .claude/settings.local.json
 .gitnexus
 *-agent-tests.md
+
+# Codex agent artifacts (screenshots, ad-hoc captures, browser plans)
+.codex/
+.codex-artifacts/
