@@ -17,20 +17,20 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
 }));
 
 describe('ClearCacheButton', () => {
-  it('shows the repair copy and runs the PWA factory reset on confirmation', async () => {
+  it('shows the update copy and runs the PWA factory reset on confirmation', async () => {
     const Component = (await import('./clear-cache-button.svelte')).default;
     render(Component);
 
     await fireEvent.click(screen.getByTestId('sidenav-clear-cache-button'));
 
-    expect(screen.getByText('Réparer et recharger Khartis ?')).toBeTruthy();
+    expect(screen.getByText('Mettre à jour Khartis ?')).toBeTruthy();
     expect(
       screen.getByText(
-        'Les fonds de carte téléchargés pour le hors ligne devront être téléchargés de nouveau.'
+        'Les fonds de carte hors ligne devront être téléchargés de nouveau.'
       )
     ).toBeTruthy();
 
-    await fireEvent.click(screen.getByText('Réparer et recharger'));
+    await fireEvent.click(screen.getByText('Mettre à jour maintenant'));
 
     await waitFor(() => {
       expect(mocks.factoryResetPwaMock).toHaveBeenCalledWith({ reload: true });

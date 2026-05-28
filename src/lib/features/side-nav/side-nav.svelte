@@ -858,6 +858,28 @@
     padding-right: var(--cds-spacing-03);
   }
 
+  #khartis-install-dialog :global(.install-help-body .bx--inline-notification) {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  #khartis-install-dialog
+    :global(.install-help-body .bx--inline-notification__details),
+  #khartis-install-dialog
+    :global(.install-help-body .bx--inline-notification__text-wrapper) {
+    min-width: 0;
+  }
+
+  #khartis-install-dialog
+    :global(.install-help-body .bx--inline-notification__title),
+  #khartis-install-dialog
+    :global(.install-help-body .bx--inline-notification__subtitle) {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
   #khartis-install-dialog :global(.install-help-accordion) {
     margin-top: var(--cds-spacing-03);
   }

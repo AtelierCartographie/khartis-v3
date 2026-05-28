@@ -6,11 +6,6 @@ const mocks = vi.hoisted(() => ({
   buildExtendedDownloadEntriesMock: vi.fn(),
   prepareBasemapForOfflineMock: vi.fn(),
   cacheUrlsForOfflineMock: vi.fn(),
-  cancelOfflineBasemapMock: vi.fn(),
-  factoryResetPwaMock: vi.fn(),
-  startExtendedWarmupMock: vi.fn(),
-  setOfflineDownloadsDisabledMock: vi.fn(),
-  areOfflineDownloadsDisabledMock: vi.fn().mockReturnValue(false),
   refreshStorageEstimateMock: vi.fn().mockResolvedValue(undefined),
   refreshCachedBasemapsMock: vi.fn().mockResolvedValue(undefined),
   setBasemapStatusMock: vi.fn(),
@@ -84,18 +79,7 @@ vi.mock('$lib/features/commons/utils/pwa-offline', () => ({
   cacheUrlsForOffline: (...args: unknown[]) =>
     mocks.cacheUrlsForOfflineMock(...args),
   prepareBasemapForOffline: (...args: unknown[]) =>
-    mocks.prepareBasemapForOfflineMock(...args),
-  cancelOfflineBasemap: (...args: unknown[]) =>
-    mocks.cancelOfflineBasemapMock(...args),
-  factoryResetPwa: (...args: unknown[]) => mocks.factoryResetPwaMock(...args)
-}));
-
-vi.mock('$lib/features/commons/utils/offline-warmup-scheduler', () => ({
-  startExtendedWarmup: (...args: unknown[]) =>
-    mocks.startExtendedWarmupMock(...args),
-  setOfflineDownloadsDisabled: (...args: unknown[]) =>
-    mocks.setOfflineDownloadsDisabledMock(...args),
-  areOfflineDownloadsDisabled: () => mocks.areOfflineDownloadsDisabledMock()
+    mocks.prepareBasemapForOfflineMock(...args)
 }));
 
 vi.mock('$lib/features/commons/utils/logger', () => ({
@@ -132,7 +116,9 @@ describe('OfflinePanel', () => {
         urls: []
       }
     ]);
-    mocks.prepareBasemapForOfflineMock.mockResolvedValue({ status: 'started' });
+    mocks.prepareBasemapForOfflineMock.mockResolvedValue({
+      status: 'unsupported'
+    });
     mocks.cacheUrlsForOfflineMock.mockResolvedValue({
       status: 'cached',
       bytes: 0
@@ -159,40 +145,58 @@ describe('OfflinePanel', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('offline-download-all')).toBeTruthy();
+      expect(screen.getByText('Tout télécharger')).toBeTruthy();
     });
   });
 
-  it('should expose a single reset-all button in maintenance section', async () => {
+  it('should not expose application update controls inside offline access', async () => {
     const Component = (await import('./offline-panel.svelte')).default;
     render(Component);
 
     await waitFor(() => {
-      expect(screen.getByTestId('offline-factory-reset-btn')).toBeTruthy();
+      expect(screen.getByTestId('offline-download-all')).toBeTruthy();
     });
+
+    expect(screen.queryByTestId('offline-factory-reset-btn')).toBeNull();
+    expect(screen.queryByText('Mettre à jour Khartis')).toBeNull();
   });
 
-  it('should cache a basemap through the fallback path when background fetch is unsupported', async () => {
-    mocks.prepareBasemapForOfflineMock.mockResolvedValue({
-      status: 'unsupported'
-    });
+  it('should not expose one-by-one download buttons in the list', async () => {
     const Component = (await import('./offline-panel.svelte')).default;
     render(Component);
 
     await waitFor(() => {
-      expect(
-        screen.getAllByTestId('offline-row-download').length
-      ).toBeGreaterThan(0);
+      expect(screen.getByText('Fonds de carte')).toBeTruthy();
     });
 
-    await fireEvent.click(screen.getAllByTestId('offline-row-download')[0]);
+    expect(screen.queryByTestId('offline-row-download')).toBeNull();
+  });
+
+  it('should download every listed basemap through the primary action', async () => {
+    const Component = (await import('./offline-panel.svelte')).default;
+    render(Component);
 
     await waitFor(() => {
+      expect(screen.getByTestId('offline-download-all')).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId('offline-download-all'));
+
+    await waitFor(() => {
+      expect(mocks.prepareBasemapForOfflineMock).toHaveBeenCalledTimes(2);
       expect(mocks.cacheUrlsForOfflineMock).toHaveBeenCalledWith(
         'basemaps-data',
-        []
+        [],
+        expect.any(AbortSignal)
       );
       expect(mocks.setBasemapStatusMock).toHaveBeenCalledWith(
         'monde-countries-2024-low',
+        'cached',
+        1,
+        0
+      );
+      expect(mocks.setBasemapStatusMock).toHaveBeenCalledWith(
+        'france-departement-2025-medium',
         'cached',
         1,
         0
