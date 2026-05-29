@@ -4,22 +4,54 @@
     {
       "type": "Feature",
       "properties": { "route": "Nord", "traffic": 1200 },
-      "geometry": { "type": "LineString", "coordinates": [[-4, 50], [2, 51], [8, 52], [14, 53]] }
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-4, 50],
+          [2, 51],
+          [8, 52],
+          [14, 53]
+        ]
+      }
     },
     {
       "type": "Feature",
       "properties": { "route": "Centre", "traffic": 800 },
-      "geometry": { "type": "LineString", "coordinates": [[-2, 46], [4, 47], [10, 47], [16, 48]] }
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-2, 46],
+          [4, 47],
+          [10, 47],
+          [16, 48]
+        ]
+      }
     },
     {
       "type": "Feature",
       "properties": { "route": "Sud", "traffic": 450 },
-      "geometry": { "type": "LineString", "coordinates": [[-1, 42], [5, 43], [11, 43], [17, 44]] }
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-1, 42],
+          [5, 43],
+          [11, 43],
+          [17, 44]
+        ]
+      }
     },
     {
       "type": "Feature",
       "properties": { "route": "Diagonale", "traffic": 1750 },
-      "geometry": { "type": "LineString", "coordinates": [[-3, 41], [3, 45], [9, 49], [15, 53]] }
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-3, 41],
+          [3, 45],
+          [9, 49],
+          [15, 53]
+        ]
+      }
     }
   ]
 }
