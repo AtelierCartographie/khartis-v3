@@ -1203,7 +1203,6 @@
   "category_shape_mode_unique": "Unique",
   "category_shape_mode_different": "Different",
   "category_shape_mode_info": "Unique: same shape for all categories. Different: one shape per category.",
-  "symbol_mode_info": "Choose how the symbols represent your data: fixed size, proportional to a value, grouped into classes or by category.",
   "proportional_type_info": "Single: one symbol per entity. Double: two half-symbols to compare two values.",
   "common_scale_label": "Common scale",
   "common_scale_info": "Enabled, symbols A and B share the same value → size scale and are therefore directly comparable.",
