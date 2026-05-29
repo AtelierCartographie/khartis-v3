@@ -4,7 +4,10 @@
   import type { FeatureCollection } from 'geojson';
   import type { LngLatBoundsLike } from 'maplibre-gl';
   import { onMount, untrack } from 'svelte';
+  import * as m from '$lib/paraglide/messages';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
+  import { ToolbarStep } from '$lib/features/commons/types/global';
+  import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
   import { zoomModeStore } from '$lib/features/commons/stores/zoom-mode.store.svelte';
   import {
@@ -81,9 +84,17 @@
   import { resolveOrthographicInteractionController } from '$lib/features/map/utils/map-interaction-mode.utils';
   import type { BBox, SplitRenderingTable } from '$lib/features/map/types';
   import type { ProjectionLike } from 'geoarrow-deck-stream';
-  import { buildFacetRenderDescriptors } from './facets-shared-renderer.utils';
-  import { facetsStore, type FacetsLayout } from './facets.store.svelte';
+  import {
+    buildFacetRenderDescriptors,
+    FACET_TITLE_HEIGHT
+  } from './facets-shared-renderer.utils';
+  import {
+    facetsStore,
+    SCALE_MODE,
+    type FacetsLayout
+  } from './facets.store.svelte';
   import { resolveSharedFacetScaleStats } from './facets-shared-scale';
+  import LegendOverlay from '$lib/features/map/components/legend-overlay.svelte';
 
   interface Props {
     visualizations: VisualizationConfig[];
@@ -135,20 +146,49 @@
       pageAspectRatio
     })
   );
-  const gridStyle = $derived.by(() => {
-    const columns = Math.max(
-      1,
-      Math.min(layout.columns, descriptors.length || 1)
-    );
-    const cellWidth = descriptors[0]?.frame.width ?? 0;
-    const cellHeight = descriptors[0]?.frame.height ?? 0;
+  const isStylingMode = $derived(
+    globalState.selectedStep === ToolbarStep.Styling
+  );
+  // Anchored per-cell legends are shown from the Visualizations step onward and
+  // only with an independent scale (a shared scale uses one global legend).
+  const showAnchoredLegends = $derived(
+    (globalState.selectedStep === ToolbarStep.Visualizations ||
+      isStylingMode) &&
+      facetsStore.scaleMode === SCALE_MODE.INDEPENDENT
+  );
 
-    return [
-      `grid-template-columns: repeat(${columns}, ${cellWidth}px)`,
-      `grid-auto-rows: ${cellHeight + 28}px`,
-      `gap: ${layout.gap}px`
-    ].join('; ');
+  function resolveFacetTitle(variable: string): string {
+    return facetsStore.getFacetTitle(variable) ?? variable;
+  }
+
+  function handleFacetTitleChange(variable: string, value: string): void {
+    facetsStore.setFacetTitle(variable, value);
+  }
+
+  // Map collections render through the orthographic Deck.gl engine only, which
+  // cannot draw tiled basemaps (OSM raster / MapLibre vector styles need the
+  // MapLibre engine). A vector reference basemap, when present, still renders
+  // and serves as the collection background. Warn once only when a tiled
+  // basemap is the SOLE background, so the empty map is explained rather than
+  // read as a silent failure.
+  let hasWarnedTiledBasemap = false;
+  $effect(() => {
+    const tiledBasemapOnly =
+      (basemapStyleStore.requiresMapLibre || osmBasemapStore.isActive) &&
+      !basemapStyleStore.referenceBasemapId;
+    untrack(() => {
+      if (tiledBasemapOnly && !hasWarnedTiledBasemap) {
+        hasWarnedTiledBasemap = true;
+        showWarning(
+          m.facets_notice_title(),
+          m.facets_tiled_basemap_unsupported()
+        );
+      } else if (!tiledBasemapOnly) {
+        hasWarnedTiledBasemap = false;
+      }
+    });
   });
+
   const facetCanvasSize = $derived.by(() => ({
     width: Math.max(1, descriptors[0]?.frame.width ?? 1),
     height: Math.max(1, descriptors[0]?.frame.height ?? 1)
@@ -449,32 +489,30 @@
     );
   }
 
-  function projectBboxForRenderProjection(
-    bbox: BBox | null,
-    basemapMeta: ReturnType<typeof getProjectionMetadataForDataset>,
-    allowManualOverride = true
-  ): BBox | null {
-    const renderProjection = getOrthographicRenderProjection(
-      basemapMeta,
-      allowManualOverride
-    );
-
-    if (!renderProjection || !bbox) {
-      return null;
-    }
-
-    return computeProjectedBboxForProjection(renderProjection, bbox);
-  }
-
   function resolveOrthographicReferenceState(
     dataset: ReturnType<typeof getRenderedDataset>,
     bounds: [[number, number], [number, number]] | null,
     basemapMeta: ReturnType<typeof getProjectionMetadataForDataset>,
     shouldUseBasemapReference: boolean
-  ): { bbox: BBox | null; isProjected: boolean } {
+  ): {
+    bbox: BBox | null;
+    isProjected: boolean;
+    renderProjection: ProjectionLike | null;
+  } {
     if (!bounds) {
-      return { bbox: null, isProjected: false };
+      return { bbox: null, isProjected: false, renderProjection: null };
     }
+
+    // Resolve the render projection ONCE and reuse the same instance to project
+    // every bbox below, then hand it to setReferenceBbox paired with the bbox it
+    // produced — otherwise the stored projection drifts from the reference bbox
+    // pixel space and facets render oversized / off-centre.
+    const renderProjection =
+      getOrthographicRenderProjection(basemapMeta, true) ?? null;
+    const projectBboxWith = (bbox: BBox | null): BBox | null =>
+      renderProjection && bbox
+        ? computeProjectedBboxForProjection(renderProjection, bbox)
+        : null;
 
     const shouldUseIdentityReferenceBounds =
       shouldUseIdentityProjectionForDatasetCrs(dataset?.geometry?.crs);
@@ -482,18 +520,14 @@
       basemapMeta,
       projectionPresets: basemapService.projectionPresets,
       viewportSize: getProjectionViewportSize(),
-      projectBbox: (bbox) => projectBboxForRenderProjection(bbox, basemapMeta)
+      projectBbox: projectBboxWith
     });
     const [[minX, minY], [maxX, maxY]] = bounds;
     const datasetBbox: BBox = [minX, minY, maxX, maxY];
     const preferDatasetBbox = shouldPreferDatasetProjectionBbox(datasetBbox);
     const datasetProjectedBbox = shouldUseIdentityReferenceBounds
       ? null
-      : projectBboxForRenderProjection(
-          datasetBbox,
-          basemapMeta,
-          preferDatasetBbox
-        );
+      : projectBboxWith(datasetBbox);
     const referenceBbox = resolveOrthographicReferenceBbox({
       datasetBounds: datasetBbox,
       datasetProjectedBbox,
@@ -503,35 +537,57 @@
       preferDatasetBbox
     });
 
+    const isProjected =
+      referenceBbox === basemapReference.projectedBbox ||
+      referenceBbox === datasetProjectedBbox;
+
     return {
       bbox: referenceBbox,
-      isProjected:
-        referenceBbox === basemapReference.projectedBbox ||
-        referenceBbox === datasetProjectedBbox
+      isProjected,
+      renderProjection: isProjected ? renderProjection : null
     };
   }
 
   function resolveOrthographicBasemapReferenceState(
     basemapMeta: ReturnType<typeof getProjectionMetadataForDataset>,
     basemapTable: ArrowTable | null
-  ): { bbox: BBox | null; isProjected: boolean } {
+  ): {
+    bbox: BBox | null;
+    isProjected: boolean;
+    renderProjection: ProjectionLike | null;
+  } {
     if (!basemapMeta) {
-      return { bbox: null, isProjected: false };
+      return { bbox: null, isProjected: false, renderProjection: null };
     }
+
+    const renderProjection =
+      getOrthographicRenderProjection(basemapMeta, true) ?? null;
+    const projectBboxWith = (bbox: BBox | null): BBox | null =>
+      renderProjection && bbox
+        ? computeProjectedBboxForProjection(renderProjection, bbox)
+        : null;
 
     const basemapReference = resolveOrthographicBasemapReferenceBboxes({
       basemapMeta,
       projectionPresets: basemapService.projectionPresets,
       viewportSize: getProjectionViewportSize(),
-      projectBbox: (bbox) => projectBboxForRenderProjection(bbox, basemapMeta)
+      projectBbox: projectBboxWith
     });
 
     if (basemapReference.projectedBbox) {
-      return { bbox: basemapReference.projectedBbox, isProjected: true };
+      return {
+        bbox: basemapReference.projectedBbox,
+        isProjected: true,
+        renderProjection
+      };
     }
 
     if (basemapReference.fallbackBbox) {
-      return { bbox: basemapReference.fallbackBbox, isProjected: false };
+      return {
+        bbox: basemapReference.fallbackBbox,
+        isProjected: false,
+        renderProjection: null
+      };
     }
 
     const bounds = basemapTable
@@ -542,13 +598,15 @@
       const [[minX, minY], [maxX, maxY]] = orthographicBounds;
       return {
         bbox: [minX, minY, maxX, maxY],
-        isProjected: false
+        isProjected: false,
+        renderProjection: null
       };
     }
 
     return {
       bbox: basemapMeta.bbox ?? null,
-      isProjected: false
+      isProjected: false,
+      renderProjection: null
     };
   }
 
@@ -627,10 +685,14 @@
         projectionStore.setReferenceBbox(
           referenceState.bbox,
           undefined,
-          referenceState.isProjected
+          referenceState.isProjected,
+          referenceState.renderProjection
         );
+        return;
       }
-      return;
+      // No dataset bounds (e.g. catalog basemap geometry isn't readable by
+      // calculateBoundsFromGeoArrow): fall through to the basemap reference
+      // below instead of leaving the projection unfit.
     }
 
     if (firstGeoJSON) {
@@ -643,7 +705,8 @@
           projectionStore.setReferenceBbox(
             referenceState.bbox,
             undefined,
-            referenceState.isProjected
+            referenceState.isProjected,
+            referenceState.renderProjection
           );
           return;
         }
@@ -668,7 +731,8 @@
         projectionStore.setReferenceBbox(
           referenceState.bbox,
           undefined,
-          referenceState.isProjected
+          referenceState.isProjected,
+          referenceState.renderProjection
         );
       }
     }
@@ -900,6 +964,10 @@
       if (isRendererLoaded) {
         updateDeckProps();
         refreshReferenceBbox();
+        // Cell size drives the render projection fit: rebuild layers so the
+        // basemap/data projection is refitted to the facet cell, not the
+        // full shared canvas (otherwise maps render oversized and off-centre).
+        mapLayers.updateLayers(tables, geoJSONs, splitData, densityTables);
         if (mapInstanceStore.isViewportAutoFitManaged) {
           mapInstanceStore.fitToOrthographicBounds(
             mapInstanceStore.viewportFitReason ?? 'dataset'
@@ -1017,15 +1085,53 @@
   <div class="shared-facets-stage">
     <div bind:this={rendererContainer} class="shared-facets-canvas"></div>
 
-    <div class="facets-grid facets-grid-overlay" style={gridStyle}>
+    <div class="facets-overlay">
       {#each descriptors as descriptor (descriptor.facetId)}
-        <div class="facet-cell" style:width="{descriptor.frame.width}px">
-          <h4 class="facet-title">{descriptor.title}</h4>
+        <div
+          class="facet-cell"
+          style:left="{descriptor.frame.x}px"
+          style:top="{descriptor.frame.y - FACET_TITLE_HEIGHT}px"
+          style:width="{descriptor.frame.width}px"
+        >
+          <h4 class="facet-title" style:height="{FACET_TITLE_HEIGHT}px">
+            {#if isStylingMode}
+              <span
+                class="facet-title-input"
+                contenteditable="plaintext-only"
+                role="textbox"
+                tabindex="0"
+                aria-label={m.facets_facet_title_label({
+                  variable: descriptor.title
+                })}
+                onblur={(
+                  event: FocusEvent & { currentTarget: HTMLSpanElement }
+                ) =>
+                  handleFacetTitleChange(
+                    descriptor.title,
+                    event.currentTarget.textContent ?? ''
+                  )}
+                onkeydown={(
+                  event: KeyboardEvent & { currentTarget: HTMLSpanElement }
+                ) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    event.currentTarget.blur();
+                  }
+                }}>{resolveFacetTitle(descriptor.title)}</span
+              >
+            {:else}
+              {resolveFacetTitle(descriptor.title)}
+            {/if}
+          </h4>
           <div
-            class="facet-map-shell"
+            class="facet-map-frame"
             style:width="{descriptor.frame.width}px"
             style:height="{descriptor.frame.height}px"
-          ></div>
+          >
+            {#if showAnchoredLegends}
+              <LegendOverlay scopeVizId={descriptor.vizId} inline />
+            {/if}
+          </div>
         </div>
       {/each}
     </div>
@@ -1036,11 +1142,7 @@
   .facets-grid-wrapper {
     width: 100%;
     height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     box-sizing: border-box;
-    padding: 16px;
   }
 
   .shared-facets-stage {
@@ -1054,26 +1156,17 @@
     inset: 0;
   }
 
-  .facets-grid {
-    display: grid;
-    justify-content: center;
-    align-content: center;
-    justify-items: center;
-    align-items: center;
-  }
-
-  .facets-grid-overlay {
-    position: relative;
-    width: 100%;
-    height: 100%;
+  .facets-overlay {
+    position: absolute;
+    inset: 0;
     pointer-events: none;
   }
 
   .facet-cell {
+    position: absolute;
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    min-height: 0;
+    box-sizing: border-box;
   }
 
   .facet-title {
@@ -1084,12 +1177,45 @@
     margin: 0;
     padding: 2px 8px;
     line-height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-sizing: border-box;
+  }
+
+  .facet-map-frame {
+    position: relative;
+    box-sizing: border-box;
+    border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
+  }
+
+  .facet-title-input {
+    display: inline-block;
+    max-width: 100%;
+    border: none;
+    background: transparent;
+    text-align: center;
+    font: inherit;
+    color: inherit;
+    padding: 1px 6px;
+    border-radius: 2px;
+    pointer-events: auto;
+    outline: none;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .facet-map-shell {
-    border-radius: 0;
+  .facet-title-input:hover {
+    background: var(--cds-field-hover-01, rgba(141, 141, 141, 0.12));
+  }
+
+  .facet-title-input:focus {
+    outline: 2px solid var(--cds-focus, #0f62fe);
+    outline-offset: -2px;
+    background: var(--cds-field-01, #f4f4f4);
   }
 </style>
