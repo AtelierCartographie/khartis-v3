@@ -76,8 +76,8 @@ const ARROWS_AND_GEOMETRIC = [
 export const DEFAULT_TEXT_FONT_SETTINGS_SDF = {
   sdf: true,
   fontSize: 64,
-  buffer: 6,
-  radius: 12
+  buffer: 24,
+  radius: 24
 } as const;
 
 export const DEFAULT_TEXT_FONT_SETTINGS_RASTER = {

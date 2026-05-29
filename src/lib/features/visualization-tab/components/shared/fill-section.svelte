@@ -7,7 +7,8 @@
     DEFAULT_SEQUENTIAL_PREVIEW,
     DEFAULT_QUALITATIVE_PREVIEW,
     PALETTE_TYPE,
-    resolvePaletteTypeForBreakpoint
+    resolvePaletteTypeForBreakpoint,
+    type PatternParams
   } from '$lib/features/commons/components/palette-popover/palette.constants';
   import * as m from '$lib/paraglide/messages';
   import type {
@@ -31,7 +32,6 @@
   import { buildFillModeItems } from './fill-mode-presets';
   import {
     DEFAULT_COMMON_ASPECT,
-    PatternType,
     type CategoriesAspectVariant,
     type CategoriesCommonAspect
   } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
@@ -55,6 +55,8 @@
     showMissingData?: boolean;
     missingDataColor?: string;
     missingDataPattern?: boolean;
+    missingDataPatternId?: string;
+    missingDataPatternParams?: PatternParams;
     showOpacitySlider?: boolean;
     showOpacityBounds?: boolean;
     showMissingDataSection?: boolean;
@@ -86,6 +88,10 @@
     onMissingDataShowChange?: (show: boolean) => void;
     onMissingDataColorChange?: (color: string) => void;
     onMissingDataPatternChange?: (pattern: boolean) => void;
+    onMissingDataPatternStyleChange?: (
+      patternId: string,
+      params: PatternParams
+    ) => void;
     onInvertPalette?: () => void;
   }
 
@@ -106,6 +112,8 @@
     showMissingData = true,
     missingDataColor = DEFAULT_COLORS.missingData,
     missingDataPattern = false,
+    missingDataPatternId = 'diagonal',
+    missingDataPatternParams = { size: 4, scale: 8 },
     showOpacitySlider = true,
     showOpacityBounds = false,
     showMissingDataSection = true,
@@ -129,6 +137,7 @@
     onMissingDataShowChange,
     onMissingDataColorChange,
     onMissingDataPatternChange,
+    onMissingDataPatternStyleChange,
     onInvertPalette
   }: Props = $props();
 
@@ -174,10 +183,14 @@
     pattern:
       categoriesVariant === 'polygons' &&
       Boolean(visualization?.classification?.patternId),
-    patternType:
-      categoriesVariant === 'polygons'
-        ? resolvePatternType(visualization?.classification?.patternId)
-        : DEFAULT_COMMON_ASPECT.patternType
+    patternId:
+      (categoriesVariant === 'polygons'
+        ? visualization?.classification?.patternId
+        : undefined) ?? DEFAULT_COMMON_ASPECT.patternId,
+    patternParams:
+      (categoriesVariant === 'polygons'
+        ? visualization?.classification?.patternParams
+        : undefined) ?? DEFAULT_COMMON_ASPECT.patternParams
   });
   const selectableValueFields = $derived(
     filterFieldsByKind(selectableDataFields, 'numeric', selectedValueFieldId)
@@ -193,26 +206,6 @@
     }
 
     onFillModeChange(nextMode);
-  }
-
-  function resolvePatternType(patternId: string | undefined): PatternType {
-    switch (patternId) {
-      case 'dots':
-        return PatternType.DOTS;
-      case 'cross':
-      case 'square':
-      case 'diamond':
-      case 'plus':
-      case 'triangle':
-        return PatternType.CROSSHATCH;
-      case 'horizontal':
-      case 'vertical':
-      case 'diagonal':
-      case 'diagonal-reverse':
-        return PatternType.LINES;
-      default:
-        return DEFAULT_COMMON_ASPECT.patternType ?? PatternType.DOTS;
-    }
   }
 
   let missingDataShow = $derived(showMissingData);
@@ -355,9 +348,12 @@
     showSizeSlider={false}
     showPatternToggle={categoriesVariant === 'polygons'}
     pattern={missingDataPattern}
+    patternId={missingDataPatternId}
+    patternParams={missingDataPatternParams}
     onshowchange={onMissingDataShowChange ?? (() => {})}
     oncolorchange={onMissingDataColorChange ?? (() => {})}
     onpatternchange={onMissingDataPatternChange ?? (() => {})}
+    onpatternstylechange={onMissingDataPatternStyleChange ?? (() => {})}
   />
 {/if}
 

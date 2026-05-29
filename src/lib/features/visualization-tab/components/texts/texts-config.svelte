@@ -1,6 +1,6 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
-  import { InfoPopover, VizFilterButton, VizFilterPanel } from '../shared';
+  import { VizFilterButton, VizFilterPanel } from '../shared';
   import TextBackgroundSection from './text-background-section.svelte';
   import TextLabelSection from './text-label-section.svelte';
   import TextMissingDataSection from './text-missing-data-section.svelte';
@@ -526,7 +526,6 @@
     onToggleChange={handleToggleChange}
   >
     {#snippet icon()}
-      <InfoPopover text={m.texts_section_info()} />
       <VizFilterButton
         active={filterSectionVisible || filters.length > 0}
         count={filters.length}

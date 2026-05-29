@@ -85,7 +85,9 @@
         </span>
         <div class="category-count count-success">{stats.joinedCount}</div>
         <span class="category-label label-success">
-          {m.join_entities_joined({ count: stats.joinedCount })}
+          {stats.joinedCount <= 1
+            ? m.join_entities_joined_one()
+            : m.join_entities_joined()}
         </span>
         <span class="category-chevron">
           {#if joinedExpanded}<ChevronUp size={20} />{:else}<ChevronDown
@@ -120,7 +122,9 @@
         </span>
         <div class="category-count count-warning">{stats.toVerifyCount}</div>
         <span class="category-label label-warning">
-          {m.join_entities_to_verify({ count: stats.toVerifyCount })}
+          {stats.toVerifyCount <= 1
+            ? m.join_entities_to_verify_one()
+            : m.join_entities_to_verify()}
         </span>
         <span class="category-chevron">
           {#if toVerifyExpanded}<ChevronUp size={20} />{:else}<ChevronDown
@@ -211,7 +215,9 @@
             {stats.duplicateCount}
           </div>
           <span class="category-label label-warning-alt">
-            {m.join_entities_duplicate({ count: stats.duplicateCount })}
+            {stats.duplicateCount <= 1
+              ? m.join_entities_duplicate_one()
+              : m.join_entities_duplicate()}
           </span>
           <span class="category-chevron">
             {#if duplicatesExpanded}<ChevronUp size={20} />{:else}<ChevronDown
@@ -243,7 +249,9 @@
         </span>
         <div class="category-count count-error">{stats.unrecognizedCount}</div>
         <span class="category-label label-error">
-          {m.join_entities_unrecognized({ count: stats.unrecognizedCount })}
+          {stats.unrecognizedCount <= 1
+            ? m.join_entities_unrecognized_one()
+            : m.join_entities_unrecognized()}
         </span>
         <span class="category-chevron">
           {#if unrecognizedExpanded}<ChevronUp size={20} />{:else}<ChevronDown
@@ -286,7 +294,9 @@
           </span>
           <div class="category-count count-warning-alt">{ignoredCount}</div>
           <span class="category-label label-warning-alt">
-            {m.join_entities_ignored({ count: ignoredCount })}
+            {ignoredCount <= 1
+              ? m.join_entities_ignored_one()
+              : m.join_entities_ignored()}
           </span>
           <span class="category-chevron">
             {#if ignoredExpanded}<ChevronUp size={20} />{:else}<ChevronDown

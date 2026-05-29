@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import { Dropdown } from 'carbon-components-svelte';
-  import { Subtract, Table, Tag } from 'carbon-icons-svelte';
+  import { LineThin, Table, Tag } from 'carbon-icons-svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
     DiscretizationRow,
@@ -121,7 +121,7 @@
   }: Props = $props();
 
   const colorModeItems = [
-    { icon: Subtract, label: m.color_mode_unique(), iconSize: 16 },
+    { icon: LineThin, label: m.color_mode_unique(), iconSize: 16 },
     { icon: Table, label: m.color_mode_classes(), iconSize: 16 },
     { icon: Tag, label: m.color_mode_categories(), iconSize: 16 }
   ];
@@ -167,6 +167,23 @@
   }
 </script>
 
+{#snippet dashedControl()}
+  <ToggleWithLabel
+    label={m.dashed()}
+    toggled={dashed}
+    ontoggle={onDashedChange}
+  />
+  {#if dashed}
+    <Dropdown
+      titleText={m.stroke_dashed_pattern()}
+      items={dashedPatternItems}
+      selectedId={dashedPattern}
+      on:select={(e) => handleDashedPatternSelect(e.detail.selectedId)}
+      type="default"
+    />
+  {/if}
+{/snippet}
+
 <SectionHeading title={m.color()} />
 
 <div class="field-group">
@@ -185,6 +202,7 @@
     color={color}
     onchange={onColorChange}
   />
+  {@render dashedControl()}
 {:else if colorMode === ColorMode.CLASSES}
   <div class="field-group">
     <FacetsVariablePicker
@@ -225,6 +243,7 @@
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />
+  {@render dashedControl()}
   <MissingDataSection
     show={showMissingData}
     onshowchange={onMissingDataShowChange}
@@ -290,6 +309,7 @@
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />
+  {@render dashedControl()}
   <MissingDataSection
     show={showMissingData}
     onshowchange={onMissingDataShowChange}
@@ -304,21 +324,6 @@
     dashedPattern={missingDataDashedPattern}
     ondashedchange={onMissingDataDashedChange}
     ondashedpatternchange={onMissingDataDashedPatternChange}
-  />
-{/if}
-
-<ToggleWithLabel
-  label={m.dashed()}
-  toggled={dashed}
-  ontoggle={onDashedChange}
-/>
-{#if dashed}
-  <Dropdown
-    titleText={m.stroke_dashed_pattern()}
-    items={dashedPatternItems}
-    selectedId={dashedPattern}
-    on:select={(e) => handleDashedPatternSelect(e.detail.selectedId)}
-    type="default"
   />
 {/if}
 

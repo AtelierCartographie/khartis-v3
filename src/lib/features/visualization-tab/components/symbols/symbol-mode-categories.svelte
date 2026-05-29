@@ -21,7 +21,6 @@
   } from '$lib/features/commons/constants/visualization.constants';
   import {
     DEFAULT_COMMON_ASPECT,
-    PatternType,
     type CategoriesAspectVariant,
     type CategoriesCommonAspect,
     type CategoryDraft
@@ -183,26 +182,6 @@
     }
   }
 
-  function resolveCommonAspectPatternType(
-    patternId: string | undefined
-  ): PatternType {
-    switch (patternId) {
-      case undefined:
-        return DEFAULT_COMMON_ASPECT.patternType ?? PatternType.DOTS;
-      case 'dots':
-        return PatternType.DOTS;
-      case 'cross':
-        return PatternType.CROSSHATCH;
-      case 'horizontal':
-      case 'vertical':
-        return PatternType.LINES;
-      case 'diagonal':
-      case 'diagonal-reverse':
-      default:
-        return PatternType.DASHES;
-    }
-  }
-
   const categoriesVariant = $derived<CategoriesAspectVariant>(
     categoryShapeMode === CategoryShapeMode.DIFFERENT
       ? 'symbols-different'
@@ -228,9 +207,11 @@
       visualization?.symbol?.strokeWidth ?? DEFAULT_COMMON_ASPECT.strokeSize
     ),
     pattern: Boolean(symbolClassification?.patternId),
-    patternType: resolveCommonAspectPatternType(
-      symbolClassification?.patternId
-    ),
+    patternId:
+      symbolClassification?.patternId ?? DEFAULT_COMMON_ASPECT.patternId,
+    patternParams:
+      symbolClassification?.patternParams ??
+      DEFAULT_COMMON_ASPECT.patternParams,
     shape: visualization?.symbol?.shape ?? DEFAULT_COMMON_ASPECT.shape,
     color: currentPalette[0] ?? DEFAULT_COMMON_ASPECT.color
   });

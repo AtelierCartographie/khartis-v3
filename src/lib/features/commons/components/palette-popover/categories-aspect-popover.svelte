@@ -22,15 +22,16 @@
   import { ToolbarState } from '$lib/features/commons/types/global';
   import PaletteSuggestions from './palette-suggestions.svelte';
   import SingleColorPreview from './single-color-preview.svelte';
+  import PatternPicker from './pattern-picker.svelte';
   import {
     PALETTE_TYPE,
     type QualitativePreset,
+    type PatternParams,
     DEFAULT_QUALITATIVE_PRESET,
     generateCategoricalColorsFromSeed
   } from './palette.constants';
   import {
     DEFAULT_COMMON_ASPECT,
-    PatternType,
     type CategoriesAspectVariant,
     type CategoriesCommonAspect,
     type CategoryDraft
@@ -118,12 +119,6 @@
     { id: ShapeType.CROSS, label: m.shape_cross() },
     { id: ShapeType.STAR, label: m.shape_star() },
     { id: ShapeType.RECTANGLE, label: m.shape_rectangle() }
-  ]);
-  const patternTypeItems = $derived([
-    { id: PatternType.DOTS, text: m.pattern_dots() },
-    { id: PatternType.LINES, text: m.pattern_lines() },
-    { id: PatternType.CROSSHATCH, text: m.pattern_crosshatch() },
-    { id: PatternType.DASHES, text: m.pattern_dashes() }
   ]);
   const sortItems = $derived([
     { id: 'manual', text: m.palette_categories_sort_manual() },
@@ -216,6 +211,14 @@
     }
 
     draftCommonAspect = { ...draftCommonAspect, [key]: value };
+  }
+
+  function handlePatternChange(patternId: string, params: PatternParams) {
+    draftCommonAspect = {
+      ...draftCommonAspect,
+      patternId,
+      patternParams: params
+    };
   }
 
   function applySuggestionPalette(seedHex: string) {
@@ -678,17 +681,10 @@
                   </div>
                 </div>
                 {#if draftCommonAspect.pattern}
-                  <Dropdown
-                    titleText={m.pattern()}
-                    items={patternTypeItems}
-                    selectedId={draftCommonAspect.patternType ??
-                      PatternType.DOTS}
-                    on:select={(e) =>
-                      handleCommonAspectChange(
-                        'patternType',
-                        e.detail.selectedId as PatternType
-                      )}
-                    type="default"
+                  <PatternPicker
+                    patternId={draftCommonAspect.patternId}
+                    patternParams={draftCommonAspect.patternParams}
+                    onChange={handlePatternChange}
                   />
                 {/if}
               </div>
@@ -709,6 +705,15 @@
                     </span>
                   </div>
                 </div>
+                {#if draftCommonAspect.pattern}
+                  <div class="common-grid-row common-grid-row--full">
+                    <PatternPicker
+                      patternId={draftCommonAspect.patternId}
+                      patternParams={draftCommonAspect.patternParams}
+                      onChange={handlePatternChange}
+                    />
+                  </div>
+                {/if}
               </div>
             {/if}
           </section>

@@ -11,14 +11,10 @@
     CategoriesCommonAspect,
     CategoryDraft
   } from './categories-aspect-popover.types';
-  import {
-    DEFAULT_COMMON_ASPECT,
-    PatternType
-  } from './categories-aspect-popover.types';
+  import { DEFAULT_COMMON_ASPECT } from './categories-aspect-popover.types';
   import type {
     Palette,
     PaletteType,
-    PatternId,
     PatternParams
   } from './palette.constants';
   import { PALETTE_TYPE, normalizePaletteId } from './palette.constants';
@@ -77,12 +73,6 @@
   let popoverOpen = $state(false);
   let triggerRef = $state<HTMLDivElement>();
 
-  const CATEGORY_PATTERN_IDS_BY_TYPE: Record<PatternType, PatternId> = {
-    [PatternType.DOTS]: 'dots',
-    [PatternType.LINES]: 'horizontal',
-    [PatternType.CROSSHATCH]: 'cross',
-    [PatternType.DASHES]: 'diagonal'
-  };
   const MAX_PREVIEW_SWATCHES = 20;
   const displayColors = $derived.by(() => {
     if (colors.length <= MAX_PREVIEW_SWATCHES) return colors;
@@ -213,7 +203,7 @@
 
   function resolveValidatedCategoryPatternId(
     commonAspect: CategoriesCommonAspect
-  ): PatternId | undefined {
+  ): string | undefined {
     const supportsPattern =
       categoriesVariant === 'polygons' ||
       categoriesVariant.startsWith('symbols');
@@ -221,11 +211,7 @@
       return undefined;
     }
 
-    return (
-      CATEGORY_PATTERN_IDS_BY_TYPE[
-        commonAspect.patternType ?? PatternType.DOTS
-      ] ?? 'dots'
-    );
+    return commonAspect.patternId ?? 'diagonal';
   }
 
   function handleCategoriesValidateWithAspect(
@@ -292,7 +278,7 @@
       paletteId,
       inverted: false,
       patternId,
-      patternParams: patternId ? classification?.patternParams : undefined
+      patternParams: patternId ? commonAspect.patternParams : undefined
     });
     onCategoriesCommonAspectChange?.(commonAspect, normalizedCategories);
     categoriesPopoverOpen = false;

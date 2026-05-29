@@ -125,6 +125,7 @@ import {
   PATTERN_TYPE_MAP,
   type PatternName
 } from './pattern-texture';
+import { mapPatternTypeToPatternId } from '$lib/features/commons/components/palette-popover/palette.constants';
 import {
   createPathLayerProps,
   createScatterplotLayerProps,
@@ -190,7 +191,7 @@ function resolveThematicStrokeDashArray(
 ): [number, number] {
   switch (pattern) {
     case BasemapDottedPattern.DOTS:
-      return [0, 2.5];
+      return [1, 3];
     case BasemapDottedPattern.DASHES:
       return [6, 4];
     case BasemapDottedPattern.DASH_DOT:
@@ -1971,7 +1972,14 @@ function createPatternProps(
   }
   const patternScaleValue = Math.max(1, patternParams?.scale ?? 8);
   const patternSizeValue = Math.max(1, patternParams?.size ?? 4);
-  const patternScale = patternScaleValue * 25;
+  // The atlas tile already bakes the user's size + scale (motif.js), exactly
+  // like the CSS preview (buildPatternBackground). The shader consumes
+  // getFillPatternScale as "tile size in screen pixels", so render the tile at
+  // its native atlas size for a 1:1 match with the popover preview. Deriving it
+  // from a slider here re-applied scale a second time and blew tiles up to
+  // 40–200 px.
+  const patternFrame = mapping[patternId];
+  const patternScale = Math.max(1, patternFrame?.width ?? 16);
   const patternRotation =
     patternParams?.angle ?? PATTERN_TYPE_MAP[patternId]?.angle ?? 0;
 
@@ -2006,6 +2014,20 @@ function buildPatternProps(ctx: LayerContext): PolygonPatternProps | null {
   return createPatternProps(patternId, patternParams);
 }
 
+function resolveMissingDataPatternId(
+  polygonConfig: ReturnType<typeof getPolygonPrimitive> | undefined
+): PatternName {
+  const patternId = polygonConfig?.missingData?.patternId;
+  if (isValidPatternId(patternId)) {
+    return patternId;
+  }
+  // Legacy fallback: older projects only stored a coarse PatternType.
+  return mapPatternTypeToPatternId(
+    polygonConfig?.missingData?.patternType,
+    DEFAULT_MISSING_DATA_PATTERN_ID
+  );
+}
+
 function buildMissingDataPatternProps(
   polygonConfig: ReturnType<typeof getPolygonPrimitive> | undefined,
   showMissingPolygons: boolean
@@ -2014,7 +2036,10 @@ function buildMissingDataPatternProps(
     return null;
   }
 
-  return createPatternProps(DEFAULT_MISSING_DATA_PATTERN_ID);
+  return createPatternProps(
+    resolveMissingDataPatternId(polygonConfig),
+    polygonConfig.missingData.patternParams
+  );
 }
 
 function resolveSymbolPatternType(
@@ -5396,7 +5421,7 @@ export function createPolygonLayers(
         ) {
           missingDataPatternLayer = createPolygonPatternOverlayLayer(
             layerId,
-            DEFAULT_MISSING_DATA_PATTERN_ID,
+            resolveMissingDataPatternId(polygonConfig),
             missingPatternGeojson,
             missingDataPatternProps,
             ctx,
@@ -5726,7 +5751,7 @@ export function createPolygonLayers(
     missingDataPatternGeojson.features.length > 0
       ? createPolygonPatternOverlayLayer(
           layerId,
-          DEFAULT_MISSING_DATA_PATTERN_ID,
+          resolveMissingDataPatternId(polygonConfig),
           missingDataPatternGeojson,
           missingDataPatternProps,
           ctx,
