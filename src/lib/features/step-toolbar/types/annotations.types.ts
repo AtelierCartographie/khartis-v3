@@ -51,6 +51,9 @@ export interface AnnotationStyle {
   shapeWidth?: number;
   shapeHeight?: number;
   rotation?: number;
+
+  points?: { x: number; y: number }[];
+  controlOffsets?: number[];
 }
 
 export interface AnnotationPlacementPreview {

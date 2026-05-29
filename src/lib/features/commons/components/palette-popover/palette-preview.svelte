@@ -21,7 +21,11 @@
     PatternId,
     PatternParams
   } from './palette.constants';
-  import { PALETTE_TYPE, normalizePaletteId } from './palette.constants';
+  import {
+    PALETTE_TYPE,
+    PATTERN_TYPE_TO_PATTERN_ID,
+    normalizePaletteId
+  } from './palette.constants';
   import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 
   interface Props {
@@ -77,12 +81,6 @@
   let popoverOpen = $state(false);
   let triggerRef = $state<HTMLDivElement>();
 
-  const CATEGORY_PATTERN_IDS_BY_TYPE: Record<PatternType, PatternId> = {
-    [PatternType.DOTS]: 'dots',
-    [PatternType.LINES]: 'horizontal',
-    [PatternType.CROSSHATCH]: 'cross',
-    [PatternType.DASHES]: 'diagonal'
-  };
   const MAX_PREVIEW_SWATCHES = 20;
   const displayColors = $derived.by(() => {
     if (colors.length <= MAX_PREVIEW_SWATCHES) return colors;
@@ -222,7 +220,7 @@
     }
 
     return (
-      CATEGORY_PATTERN_IDS_BY_TYPE[
+      PATTERN_TYPE_TO_PATTERN_ID[
         commonAspect.patternType ?? PatternType.DOTS
       ] ?? 'dots'
     );

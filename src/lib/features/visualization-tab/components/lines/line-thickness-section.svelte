@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import { Dropdown } from 'carbon-components-svelte';
-  import { ChartBubble, Subtract, Table } from 'carbon-icons-svelte';
+  import { LineThick, LineThin, Table } from 'carbon-icons-svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
     DiscretizationRow,
@@ -98,8 +98,8 @@
   }: Props = $props();
 
   const thicknessModeItems = [
-    { icon: Subtract, label: m.thickness_mode_unique(), iconSize: 16 },
-    { icon: ChartBubble, label: m.thickness_mode_proportional(), iconSize: 16 },
+    { icon: LineThin, label: m.thickness_mode_unique(), iconSize: 16 },
+    { icon: LineThick, label: m.thickness_mode_proportional(), iconSize: 16 },
     { icon: Table, label: m.thickness_mode_classes(), iconSize: 16 }
   ];
 
@@ -146,6 +146,23 @@
   }
 </script>
 
+{#snippet dashedControl()}
+  <ToggleWithLabel
+    label={m.dashed()}
+    toggled={dashed}
+    ontoggle={onDashedChange}
+  />
+  {#if dashed}
+    <Dropdown
+      titleText={m.stroke_dashed_pattern()}
+      items={dashedPatternItems}
+      selectedId={dashedPattern}
+      on:select={(e) => handleDashedPatternSelect(e.detail.selectedId)}
+      type="default"
+    />
+  {/if}
+{/snippet}
+
 <SectionHeading title={m.thickness()} />
 
 <div class="field-group">
@@ -168,6 +185,7 @@
     inputWidth="128px"
     onchange={onThicknessChange}
   />
+  {@render dashedControl()}
 {:else if thicknessMode === ThicknessMode.PROPORTIONAL}
   <div class="field-group">
     <FacetsVariablePicker
@@ -203,6 +221,7 @@
     inputWidth="128px"
     onchange={onMaxThicknessChange}
   />
+  {@render dashedControl()}
   <MissingDataSection
     show={showMissingData}
     onshowchange={onMissingDataShowChange}
@@ -260,6 +279,7 @@
     inputWidth="128px"
     onchange={onMaxThicknessChange}
   />
+  {@render dashedControl()}
   <MissingDataSection
     show={showMissingData}
     onshowchange={onMissingDataShowChange}
@@ -272,21 +292,6 @@
     dashedPattern={missingDataDashedPattern}
     ondashedchange={onMissingDataDashedChange}
     ondashedpatternchange={onMissingDataDashedPatternChange}
-  />
-{/if}
-
-<ToggleWithLabel
-  label={m.dashed()}
-  toggled={dashed}
-  ontoggle={onDashedChange}
-/>
-{#if dashed}
-  <Dropdown
-    titleText={m.stroke_dashed_pattern()}
-    items={dashedPatternItems}
-    selectedId={dashedPattern}
-    on:select={(e) => handleDashedPatternSelect(e.detail.selectedId)}
-    type="default"
   />
 {/if}
 
