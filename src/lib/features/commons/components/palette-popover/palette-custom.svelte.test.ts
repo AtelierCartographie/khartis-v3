@@ -67,13 +67,4 @@ describe('PaletteCustom (Palette personnalisée section)', () => {
       /allowPattern\s*\?\s*\[[\s\S]*m\.palette_custom_patterns\(\)[\s\S]*\]\s*:\s*\[\s*m\.palette_custom_1_color\(\),\s*m\.palette_custom_2_colors\(\)\s*\]/
     );
   });
-
-  it('should expose angle options for line patterns (0°, 45°, 315°)', () => {
-    expect(source).toContain("label: '0°'");
-    expect(source).toContain("label: '45°'");
-    expect(source).toContain("label: '315°'");
-    expect(source).toContain("patternId: 'horizontal'");
-    expect(source).toContain("patternId: 'diagonal'");
-    expect(source).toContain("patternId: 'diagonal-reverse'");
-  });
 });

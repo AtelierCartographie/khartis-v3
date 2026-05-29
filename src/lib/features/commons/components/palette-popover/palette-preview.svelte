@@ -11,21 +11,13 @@
     CategoriesCommonAspect,
     CategoryDraft
   } from './categories-aspect-popover.types';
-  import {
-    DEFAULT_COMMON_ASPECT,
-    PatternType
-  } from './categories-aspect-popover.types';
+  import { DEFAULT_COMMON_ASPECT } from './categories-aspect-popover.types';
   import type {
     Palette,
     PaletteType,
-    PatternId,
     PatternParams
   } from './palette.constants';
-  import {
-    PALETTE_TYPE,
-    PATTERN_TYPE_TO_PATTERN_ID,
-    normalizePaletteId
-  } from './palette.constants';
+  import { PALETTE_TYPE, normalizePaletteId } from './palette.constants';
   import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 
   interface Props {
@@ -211,7 +203,7 @@
 
   function resolveValidatedCategoryPatternId(
     commonAspect: CategoriesCommonAspect
-  ): PatternId | undefined {
+  ): string | undefined {
     const supportsPattern =
       categoriesVariant === 'polygons' ||
       categoriesVariant.startsWith('symbols');
@@ -219,11 +211,7 @@
       return undefined;
     }
 
-    return (
-      PATTERN_TYPE_TO_PATTERN_ID[
-        commonAspect.patternType ?? PatternType.DOTS
-      ] ?? 'dots'
-    );
+    return commonAspect.patternId ?? 'diagonal';
   }
 
   function handleCategoriesValidateWithAspect(
@@ -290,7 +278,7 @@
       paletteId,
       inverted: false,
       patternId,
-      patternParams: patternId ? classification?.patternParams : undefined
+      patternParams: patternId ? commonAspect.patternParams : undefined
     });
     onCategoriesCommonAspectChange?.(commonAspect, normalizedCategories);
     categoriesPopoverOpen = false;

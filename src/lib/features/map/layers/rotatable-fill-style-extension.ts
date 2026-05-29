@@ -64,25 +64,29 @@ const inject = {
     if (fill.patternEnabled) {
       fill_patternBounds = fillPatternFrames / vec4(fill.patternTextureSize, fill.patternTextureSize);
       fill_patternPlacement.xy = fillPatternOffsets;
-      // fillPatternScales is the desired tile size in screen pixels.
-      fill_patternPlacement.zw = vec2(fillPatternScales);
+      // fillPatternScales is the desired tile size in screen pixels. Convert it
+      // to common units at the current zoom so the motif keeps a constant
+      // on-screen size (like Mapbox / QGIS fill-pattern) while staying anchored
+      // to geography below — re-evaluated every frame as the view scale changes.
+      fill_patternPlacement.zw = project_pixel_size(vec2(fillPatternScales));
       fill_patternRotation = radians(fillPatternRotations);
     }
   `,
 
   'fs:DECKGL_FILTER_COLOR': /* glsl */ `
     if (fill.patternEnabled) {
-      // Pattern repetition size in screen pixels. fillPatternScales carries
-      // the desired tile size (px) so motifs stay visually constant across
-      // zoom levels (standard fill-pattern behaviour in Mapbox / QGIS).
-      vec2 scale = max(fill_patternPlacement.zw, vec2(1.0));
+      // Tile size in common units (screen px converted in the vertex stage).
+      vec2 scale = max(fill_patternPlacement.zw, vec2(1e-4));
 
-      vec2 pixelPos = gl_FragCoord.xy;
+      // Anchor the motif to geography so it pans and zooms WITH the map. Using
+      // gl_FragCoord here would lock the motif to screen pixels, making the map
+      // appear to slide underneath a fixed pattern.
+      vec2 worldPos = fill.uvCoordinateOrigin + fill.uvCoordinateOrigin64Low + fill_uv;
 
       float c = cos(fill_patternRotation);
       float s = sin(fill_patternRotation);
       mat2 rotationMatrix = mat2(c, s, -s, c);
-      vec2 rotatedPos = rotationMatrix * pixelPos;
+      vec2 rotatedPos = rotationMatrix * worldPos;
 
       vec2 patternUV = mod(rotatedPos, scale) / scale;
       patternUV = mod(fill_patternPlacement.xy + patternUV, 1.0);

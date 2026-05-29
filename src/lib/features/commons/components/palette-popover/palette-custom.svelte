@@ -3,9 +3,9 @@
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import ContentSwitcher from './content-switcher.svelte';
   import SingleColorPreview from './single-color-preview.svelte';
+  import PatternPicker from './pattern-picker.svelte';
   import {
     ColorSelector,
-    SliderWithInput,
     ToggleWithLabel
   } from '$lib/features/commons/components/viz-controls';
   import {
@@ -14,11 +14,9 @@
     type PaletteType,
     type PatternParams,
     type ContrastMode,
-    getPaletteDisplayName,
     getPatternPalettes,
     generateSequentialFromColor,
-    generateSequentialFromColors,
-    buildPatternBackground
+    generateSequentialFromColors
   } from './palette.constants';
 
   interface Props {
@@ -81,51 +79,14 @@
     }
   });
 
-  const LINE_PATTERN_IDS = [
-    'diagonal',
-    'diagonal-reverse',
-    'horizontal',
-    'vertical'
-  ] as const;
-  type LinePatternId = (typeof LINE_PATTERN_IDS)[number];
-  const ANGLE_OPTIONS: {
-    label: string;
-    angle: 0 | 45 | 315;
-    patternId: LinePatternId;
-  }[] = [
-    { label: '0°', angle: 0, patternId: 'horizontal' },
-    { label: '45°', angle: 45, patternId: 'diagonal' },
-    { label: '315°', angle: 315, patternId: 'diagonal-reverse' }
-  ];
-
   const selectedPalette = $derived(
     patternPalettes.find((p) => p.id === selectedPatternId) ?? null
   );
 
-  const isLinePattern = $derived(
-    selectedPalette !== null &&
-      LINE_PATTERN_IDS.includes(selectedPalette.patternId as LinePatternId)
-  );
-
-  const currentAngle = $derived.by((): 0 | 45 | 315 | undefined => {
-    if (!selectedPalette) return undefined;
-    if (selectedPalette.patternId === 'horizontal') return 0;
-    if (selectedPalette.patternId === 'diagonal') return 45;
-    if (selectedPalette.patternId === 'diagonal-reverse') return 315;
-    return undefined;
-  });
-
   const currentPatternParams = $derived<PatternParams>({
-    angle: currentAngle,
     size: patternSize,
     scale: patternScale
   });
-
-  const livePreviewBg = $derived(
-    selectedPalette
-      ? buildPatternBackground(selectedPalette, currentPatternParams)
-      : ''
-  );
 
   const resolvedContrast = $derived<ContrastMode | undefined>(
     contrastMode === 'normal' ? undefined : contrastMode
@@ -210,42 +171,12 @@
     onColorsChange?.(colors);
   }
 
-  function handlePatternClick(palette: Palette) {
-    selectedPatternId = palette.id;
-    emitPatternSelect(palette, currentPatternParams);
-  }
-
-  function handleAngleSelect(option: (typeof ANGLE_OPTIONS)[number]) {
-    const targetPalette = patternPalettes.find(
-      (p) => p.patternId === option.patternId
-    );
-    if (targetPalette) {
-      selectedPatternId = targetPalette.id;
-      emitPatternSelect(targetPalette, {
-        ...currentPatternParams,
-        angle: option.angle
-      });
-    }
-  }
-
-  function handleSizeChange(value: number) {
-    patternSize = value;
-    if (selectedPalette) {
-      emitPatternSelect(selectedPalette, {
-        ...currentPatternParams,
-        size: value
-      });
-    }
-  }
-
-  function handleScaleChange(value: number) {
-    patternScale = value;
-    if (selectedPalette) {
-      emitPatternSelect(selectedPalette, {
-        ...currentPatternParams,
-        scale: value
-      });
-    }
+  function handlePatternChange(patternId: string, params: PatternParams) {
+    selectedPatternId = `pattern-${patternId}`;
+    patternSize = params.size ?? patternSize;
+    patternScale = params.scale ?? patternScale;
+    const palette = patternPalettes.find((p) => p.patternId === patternId);
+    if (palette) emitPatternSelect(palette, params);
   }
 
   function emitPatternSelect(palette: Palette, params: PatternParams) {
@@ -297,71 +228,11 @@
     {/if}
 
     {#if allowPattern && motifEnabled}
-      <div class="pattern-list">
-        {#each patternPalettes as palette (palette.id)}
-          <button
-            type="button"
-            class="pattern-item"
-            class:selected={selectedPatternId === palette.id}
-            onclick={() => handlePatternClick(palette)}
-            aria-label={getPaletteDisplayName(palette)}
-            aria-pressed={selectedPatternId === palette.id}
-          >
-            <div
-              class="pattern-preview"
-              style="background: {buildPatternBackground(palette)}"
-            ></div>
-            <span class="pattern-name">{getPaletteDisplayName(palette)}</span>
-          </button>
-        {/each}
-      </div>
-
-      {#if selectedPalette}
-        <div class="pattern-params">
-          {#if isLinePattern}
-            <div class="param-row">
-              <span class="param-label">{m.pattern_angle()}</span>
-              <div class="angle-buttons">
-                {#each ANGLE_OPTIONS as opt (opt.angle)}
-                  <button
-                    type="button"
-                    class="angle-btn"
-                    class:active={currentAngle === opt.angle}
-                    onclick={() => handleAngleSelect(opt)}
-                    aria-pressed={currentAngle === opt.angle}
-                  >
-                    {opt.label}
-                  </button>
-                {/each}
-              </div>
-            </div>
-          {/if}
-
-          <SliderWithInput
-            label={m.pattern_size()}
-            min={1}
-            max={10}
-            value={patternSize}
-            onchange={handleSizeChange}
-          />
-
-          <SliderWithInput
-            label={m.pattern_scale()}
-            min={4}
-            max={24}
-            value={patternScale}
-            onchange={handleScaleChange}
-          />
-
-          <div class="live-preview">
-            <span class="param-label">{m.pattern_preview()}</span>
-            <div
-              class="live-preview-swatch"
-              style="background: {livePreviewBg}"
-            ></div>
-          </div>
-        </div>
-      {/if}
+      <PatternPicker
+        patternId={selectedPalette?.patternId}
+        patternParams={currentPatternParams}
+        onChange={handlePatternChange}
+      />
     {/if}
   {:else}
     <ContentSwitcher
@@ -391,71 +262,11 @@
           />
         </div>
       {:else if activeTab === 2}
-        <div class="pattern-list">
-          {#each patternPalettes as palette (palette.id)}
-            <button
-              type="button"
-              class="pattern-item"
-              class:selected={selectedPatternId === palette.id}
-              onclick={() => handlePatternClick(palette)}
-              aria-label={getPaletteDisplayName(palette)}
-              aria-pressed={selectedPatternId === palette.id}
-            >
-              <div
-                class="pattern-preview"
-                style="background: {buildPatternBackground(palette)}"
-              ></div>
-              <span class="pattern-name">{getPaletteDisplayName(palette)}</span>
-            </button>
-          {/each}
-        </div>
-
-        {#if selectedPalette}
-          <div class="pattern-params">
-            {#if isLinePattern}
-              <div class="param-row">
-                <span class="param-label">{m.pattern_angle()}</span>
-                <div class="angle-buttons">
-                  {#each ANGLE_OPTIONS as opt (opt.angle)}
-                    <button
-                      type="button"
-                      class="angle-btn"
-                      class:active={currentAngle === opt.angle}
-                      onclick={() => handleAngleSelect(opt)}
-                      aria-pressed={currentAngle === opt.angle}
-                    >
-                      {opt.label}
-                    </button>
-                  {/each}
-                </div>
-              </div>
-            {/if}
-
-            <SliderWithInput
-              label={m.pattern_size()}
-              min={1}
-              max={10}
-              value={patternSize}
-              onchange={handleSizeChange}
-            />
-
-            <SliderWithInput
-              label={m.pattern_scale()}
-              min={4}
-              max={24}
-              value={patternScale}
-              onchange={handleScaleChange}
-            />
-
-            <div class="live-preview">
-              <span class="param-label">{m.pattern_preview()}</span>
-              <div
-                class="live-preview-swatch"
-                style="background: {livePreviewBg}"
-              ></div>
-            </div>
-          </div>
-        {/if}
+        <PatternPicker
+          patternId={selectedPalette?.patternId}
+          patternParams={currentPatternParams}
+          onChange={handlePatternChange}
+        />
       {/if}
     </div>
 
@@ -540,115 +351,5 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-  }
-
-  .pattern-list {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .pattern-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 32px;
-    padding: 7px 12px;
-    background: var(--cds-field-01, #f4f4f4);
-    border: none;
-    border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
-    cursor: pointer;
-    width: 100%;
-
-    &:hover {
-      background: var(--cds-field-hover-01, #e8e8e8);
-    }
-
-    &.selected {
-      outline: 1px solid #012749;
-      outline-offset: -1px;
-    }
-  }
-
-  .pattern-preview {
-    width: 56px;
-    height: 18px;
-    border: 1px solid var(--khartis-palette-swatch-border-color);
-    flex-shrink: 0;
-    background-size:
-      auto,
-      8px 8px,
-      auto;
-  }
-
-  .pattern-name {
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 14px;
-    line-height: 18px;
-    letter-spacing: 0.16px;
-    color: var(--cds-text-primary, #161616);
-  }
-
-  .pattern-params {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    padding-top: 8px;
-  }
-
-  .param-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .param-label {
-    font-size: 12px;
-    color: var(--cds-text-secondary);
-    white-space: nowrap;
-    min-width: 48px;
-  }
-
-  .angle-buttons {
-    display: flex;
-    gap: 4px;
-    flex-wrap: wrap;
-  }
-
-  .angle-btn {
-    min-height: 24px;
-    padding: 0 8px 2px;
-    font-size: 12px;
-    background: #e5f6ff;
-    border: 1px solid #82cfff;
-    border-radius: 9px;
-    cursor: pointer;
-    color: #003a6d;
-
-    &:hover {
-      background: #cceeff;
-    }
-
-    &.active {
-      background: #0072c3;
-      color: #ffffff;
-      border-color: #0072c3;
-    }
-  }
-
-  .live-preview {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .live-preview-swatch {
-    flex: 1;
-    height: 18px;
-    border: 1px solid var(--khartis-palette-swatch-border-color);
-    background-size:
-      auto,
-      8px 8px,
-      auto;
   }
 </style>

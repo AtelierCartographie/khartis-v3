@@ -8,6 +8,8 @@
   } from 'carbon-icons-svelte';
   import { facetsStore, SCALE_MODE } from './facets.store.svelte';
   import {
+    getLinePrimitive,
+    getPolygonPrimitive,
     getSymbolPrimitive,
     getTextPrimitive,
     visualizationStore,
@@ -92,7 +94,8 @@
 
   function resolveSymbolSlots(viz: VisualizationConfig): FacetSlot[] {
     const slots: FacetSlot[] = [];
-    const symbolMode = getSymbolPrimitive(viz)?.mode ?? SymbolMode.UNIQUE;
+    const symbol = getSymbolPrimitive(viz);
+    const symbolMode = symbol?.mode ?? SymbolMode.UNIQUE;
 
     if (symbolMode === SymbolMode.PROPORTIONAL) {
       pushSlot(slots, FACET_SLOT.SYMBOL_SIZE, m.facets_slot_size_shape());
@@ -102,14 +105,14 @@
       pushSlot(slots, FACET_SLOT.SYMBOL_CATEGORY, m.facets_slot_size_shape());
     }
 
-    const fillMode = viz.modes?.fill;
+    const fillMode = symbol?.fillMode;
     if (fillMode === FillMode.CLASSES) {
       pushSlot(slots, FACET_SLOT.SYMBOL_FILL_VALUE, m.facets_slot_fill());
     } else if (fillMode === FillMode.CATEGORIES) {
       pushSlot(slots, FACET_SLOT.SYMBOL_FILL_CATEGORY, m.facets_slot_fill());
     }
 
-    const strokeMode = viz.modes?.stroke;
+    const strokeMode = symbol?.strokeMode;
     if (strokeMode === StrokeMode.CLASSES) {
       pushSlot(slots, FACET_SLOT.SYMBOL_STROKE_VALUE, m.facets_slot_stroke());
     } else if (strokeMode === StrokeMode.CATEGORIES) {
@@ -125,14 +128,15 @@
 
   function resolvePolygonSlots(viz: VisualizationConfig): FacetSlot[] {
     const slots: FacetSlot[] = [];
-    if (viz.modes?.fill === FillMode.CLASSES) {
+    const polygon = getPolygonPrimitive(viz);
+    if (polygon?.fillMode === FillMode.CLASSES) {
       pushSlot(slots, FACET_SLOT.POLYGON_VALUE, m.facets_slot_fill());
-    } else if (viz.modes?.fill === FillMode.CATEGORIES) {
+    } else if (polygon?.fillMode === FillMode.CATEGORIES) {
       pushSlot(slots, FACET_SLOT.POLYGON_CATEGORY, m.facets_slot_fill());
     }
-    if (viz.modes?.stroke === StrokeMode.CLASSES) {
+    if (polygon?.strokeMode === StrokeMode.CLASSES) {
       pushSlot(slots, FACET_SLOT.POLYGON_STROKE_VALUE, m.facets_slot_stroke());
-    } else if (viz.modes?.stroke === StrokeMode.CATEGORIES) {
+    } else if (polygon?.strokeMode === StrokeMode.CATEGORIES) {
       pushSlot(
         slots,
         FACET_SLOT.POLYGON_STROKE_CATEGORY,
@@ -144,9 +148,10 @@
 
   function resolveLineSlots(viz: VisualizationConfig): FacetSlot[] {
     const slots: FacetSlot[] = [];
-    if (viz.modes?.thickness === ThicknessMode.PROPORTIONAL) {
+    const line = getLinePrimitive(viz);
+    if (line?.thicknessMode === ThicknessMode.PROPORTIONAL) {
       pushSlot(slots, FACET_SLOT.LINE_SIZE, m.facets_slot_size_shape());
-    } else if (viz.modes?.thickness === ThicknessMode.CLASSES) {
+    } else if (line?.thicknessMode === ThicknessMode.CLASSES) {
       pushSlot(
         slots,
         FACET_SLOT.LINE_THICKNESS_VALUE,
@@ -154,9 +159,9 @@
       );
     }
 
-    if (viz.modes?.color === ColorMode.CLASSES) {
+    if (line?.colorMode === ColorMode.CLASSES) {
       pushSlot(slots, FACET_SLOT.LINE_VALUE, m.facets_slot_color());
-    } else if (viz.modes?.color === ColorMode.CATEGORIES) {
+    } else if (line?.colorMode === ColorMode.CATEGORIES) {
       pushSlot(slots, FACET_SLOT.LINE_CATEGORY, m.facets_slot_color());
     }
     return slots;

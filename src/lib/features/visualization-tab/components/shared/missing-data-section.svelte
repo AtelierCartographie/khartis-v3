@@ -20,7 +20,8 @@
     SliderWithInput,
     ToggleWithLabel
   } from '$lib/features/commons/components/viz-controls';
-  import { PatternType } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
+  import PatternPicker from '$lib/features/commons/components/palette-popover/pattern-picker.svelte';
+  import type { PatternParams } from '$lib/features/commons/components/palette-popover/palette.constants';
 
   interface Props {
     show: boolean;
@@ -38,7 +39,8 @@
     dashed?: boolean;
     dashedPattern?: BasemapDottedPattern;
     pattern?: boolean;
-    patternType?: PatternType;
+    patternId?: string;
+    patternParams?: PatternParams;
     onshowchange?: (show: boolean) => void;
     oncolorchange?: (color: string) => void;
     onshapechange?: (shape: MissingDataShape) => void;
@@ -46,7 +48,7 @@
     ondashedchange?: (dashed: boolean) => void;
     ondashedpatternchange?: (pattern: BasemapDottedPattern) => void;
     onpatternchange?: (pattern: boolean) => void;
-    onpatterntypechange?: (patternType: PatternType) => void;
+    onpatternstylechange?: (patternId: string, params: PatternParams) => void;
   }
 
   let {
@@ -65,7 +67,8 @@
     dashed = false,
     dashedPattern = BasemapDottedPattern.DOTS,
     pattern = false,
-    patternType = PatternType.DASHES,
+    patternId = 'diagonal',
+    patternParams = { size: 4, scale: 8 },
     onshowchange,
     oncolorchange,
     onshapechange,
@@ -73,7 +76,7 @@
     ondashedchange,
     ondashedpatternchange,
     onpatternchange,
-    onpatterntypechange
+    onpatternstylechange
   }: Props = $props();
 
   const dashedPatternItems = $derived([
@@ -84,13 +87,6 @@
       id: BasemapDottedPattern.LONG_DASH,
       text: m.dashed_pattern_long_dash()
     }
-  ]);
-
-  const patternTypeItems = $derived([
-    { id: PatternType.DOTS, text: m.pattern_dots() },
-    { id: PatternType.LINES, text: m.pattern_lines() },
-    { id: PatternType.CROSSHATCH, text: m.pattern_crosshatch() },
-    { id: PatternType.DASHES, text: m.pattern_dashes() }
   ]);
 
   function handleShowToggle(value: boolean) {
@@ -123,12 +119,8 @@
     onpatternchange?.(value);
   }
 
-  function handlePatternTypeSelect(value: string | number) {
-    const next =
-      Object.values(PatternType).find((type) => type === value) ??
-      PatternType.DASHES;
-    patternType = next;
-    onpatterntypechange?.(next);
+  function handlePatternStyleChange(id: string, params: PatternParams) {
+    onpatternstylechange?.(id, params);
   }
 </script>
 
@@ -210,12 +202,10 @@
         {#if pattern}
           <Row>
             <Column>
-              <Dropdown
-                titleText={m.pattern()}
-                items={patternTypeItems}
-                selectedId={patternType}
-                on:select={(e) => handlePatternTypeSelect(e.detail.selectedId)}
-                type="default"
+              <PatternPicker
+                patternId={patternId}
+                patternParams={patternParams}
+                onChange={handlePatternStyleChange}
               />
             </Column>
           </Row>

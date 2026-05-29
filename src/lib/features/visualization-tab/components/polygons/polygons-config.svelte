@@ -34,7 +34,10 @@
   import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
   import { resetVisualClassification } from '../shared/classification-reset.utils';
   import { coerceString, parseOpacityToSlider } from '../../utils/coerce.utils';
-  import { PatternType } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
+  import {
+    mapPatternTypeToPatternId,
+    type PatternParams
+  } from '$lib/features/commons/components/palette-popover/palette.constants';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -139,7 +142,8 @@
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
   let missingDataPattern = $state<boolean>(false);
-  let missingDataPatternType = $state<PatternType>(PatternType.DASHES);
+  let missingDataPatternId = $state<string>('diagonal');
+  let missingDataPatternParams = $state<PatternParams>({ size: 4, scale: 8 });
   const enabled = $derived.by(() => {
     const primitiveFilters =
       visualization?.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
@@ -165,8 +169,16 @@
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
       missingDataPattern = visualization.missingData.pattern ?? false;
-      missingDataPatternType =
-        visualization.missingData.patternType ?? PatternType.DASHES;
+      missingDataPatternId =
+        visualization.missingData.patternId ??
+        mapPatternTypeToPatternId(
+          visualization.missingData.patternType,
+          'diagonal'
+        );
+      missingDataPatternParams = visualization.missingData.patternParams ?? {
+        size: 4,
+        scale: 8
+      };
     }
   });
 
@@ -262,9 +274,13 @@
     onMissingDataChange?.({ pattern: value });
   }
 
-  function handleMissingDataPatternTypeChange(value: PatternType) {
-    missingDataPatternType = value;
-    onMissingDataChange?.({ patternType: value });
+  function handleMissingDataPatternStyleChange(
+    patternId: string,
+    params: PatternParams
+  ) {
+    missingDataPatternId = patternId;
+    missingDataPatternParams = params;
+    onMissingDataChange?.({ patternId, patternParams: params });
   }
 
   function handleOpenDiscretization() {
@@ -364,7 +380,8 @@
       showMissingData={showMissingData}
       missingDataColor={missingDataColor}
       missingDataPattern={missingDataPattern}
-      missingDataPatternType={missingDataPatternType}
+      missingDataPatternId={missingDataPatternId}
+      missingDataPatternParams={missingDataPatternParams}
       sectionTitle={m.fill()}
       selectableDataFields={selectableDataFields}
       getFacetsSelectedFieldIds={facetsSelection.getSelectedFieldIds}
@@ -382,7 +399,7 @@
       onMissingDataShowChange={handleMissingDataShowChange}
       onMissingDataColorChange={handleMissingDataColorChange}
       onMissingDataPatternChange={handleMissingDataPatternChange}
-      onMissingDataPatternTypeChange={handleMissingDataPatternTypeChange}
+      onMissingDataPatternStyleChange={handleMissingDataPatternStyleChange}
       onInvertPalette={onInvertPalette}
     >
       {#snippet densitySnippet()}
