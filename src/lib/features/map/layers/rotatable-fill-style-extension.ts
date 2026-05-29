@@ -48,8 +48,6 @@ in vec4 fill_patternBounds;
 in vec4 fill_patternPlacement;
 in vec2 fill_uv;
 in float fill_patternRotation;
-
-const float FILL_UV_SCALE = 512.0 / 40000000.0;
 `;
 
 const fs = `
@@ -66,24 +64,27 @@ const inject = {
     if (fill.patternEnabled) {
       fill_patternBounds = fillPatternFrames / vec4(fill.patternTextureSize, fill.patternTextureSize);
       fill_patternPlacement.xy = fillPatternOffsets;
-      fill_patternPlacement.zw = fillPatternScales * fillPatternFrames.zw;
+      // fillPatternScales is the desired tile size in screen pixels.
+      fill_patternPlacement.zw = vec2(fillPatternScales);
       fill_patternRotation = radians(fillPatternRotations);
     }
   `,
 
   'fs:DECKGL_FILTER_COLOR': /* glsl */ `
     if (fill.patternEnabled) {
-      vec2 scale = FILL_UV_SCALE * fill_patternPlacement.zw;
+      // Pattern repetition size in screen pixels. fillPatternScales carries
+      // the desired tile size (px) so motifs stay visually constant across
+      // zoom levels (standard fill-pattern behaviour in Mapbox / QGIS).
+      vec2 scale = max(fill_patternPlacement.zw, vec2(1.0));
 
-      vec2 worldPos = fill.uvCoordinateOrigin + fill.uvCoordinateOrigin64Low + fill_uv;
+      vec2 pixelPos = gl_FragCoord.xy;
 
       float c = cos(fill_patternRotation);
       float s = sin(fill_patternRotation);
       mat2 rotationMatrix = mat2(c, s, -s, c);
-      vec2 rotatedPos = rotationMatrix * worldPos;
+      vec2 rotatedPos = rotationMatrix * pixelPos;
 
       vec2 patternUV = mod(rotatedPos, scale) / scale;
-
       patternUV = mod(fill_patternPlacement.xy + patternUV, 1.0);
 
       vec2 texCoords = fill_patternBounds.xy + fill_patternBounds.zw * patternUV;

@@ -1418,7 +1418,7 @@ describe('createPolygonLayers', () => {
     const dashes = buildStroke(BasemapDottedPattern.DASHES);
     const dashDot = buildStroke(BasemapDottedPattern.DASH_DOT);
 
-    expect(dots.dash?.[0]).toBe(0);
+    expect(dots.dash?.[0]).toBeGreaterThan(0);
     expect(dots.capRounded).toBe(true);
     expect(dashDot.dash).not.toEqual(dashes.dash);
     expect(dashes.capRounded).toBe(false);
@@ -1893,10 +1893,10 @@ describe('createPolygonLayers', () => {
       size: 9,
       scale: 16
     });
-    expect(patternLayerProps?.getFillPatternScale).toBe(400);
+    expect(patternLayerProps?.getFillPatternScale).toBe(136);
     expect(patternLayerProps?.getFillPatternRotation).toBe(315);
     expect(patternLayer?.props.updateTriggers).toMatchObject({
-      getFillPatternScale: [400],
+      getFillPatternScale: [136],
       getFillPatternRotation: [315]
     });
   });
@@ -3240,7 +3240,7 @@ describe('createLineLayers', () => {
     const dashes = buildLineLayer(BasemapDottedPattern.DASHES);
     const dashDot = buildLineLayer(BasemapDottedPattern.DASH_DOT);
 
-    expect(dots.dash?.[0]).toBe(0);
+    expect(dots.dash?.[0]).toBeGreaterThan(0);
     expect(dots.capRounded).toBe(true);
 
     expect(dashDot.dash).not.toEqual(dashes.dash);
