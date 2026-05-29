@@ -11,7 +11,5 @@ export interface SearchState {
   isSearching: boolean;
   caseSensitive: boolean;
   wholeWord: boolean;
-  useRegex: boolean;
-  replaceValue: string;
   isSampled: boolean;
 }
