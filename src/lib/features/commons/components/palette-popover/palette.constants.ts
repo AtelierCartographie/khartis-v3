@@ -14,7 +14,10 @@ import type {
 import { motif } from '@ateliercartographie/motif.js';
 import type { PatternParams } from '$lib/features/commons/stores/visualization.store.svelte';
 import { webglToHex } from '$lib/features/commons/utils/color-utils';
-import { PATTERN_TYPE_MAP } from '$lib/features/map/layers/pattern-texture';
+import {
+  PATTERN_TYPE_MAP,
+  resolveMotifFillPercent
+} from '$lib/features/map/layers/pattern-texture';
 import { PatternType } from './categories-aspect-popover.types';
 import {
   DEFAULT_QUALITATIVE_PRESET,
@@ -542,7 +545,7 @@ export function buildPatternBackground(
     angle: motifConfig.angle,
     fill: accent,
     background: base,
-    size: Math.round((sizePx / scalePx) * 100),
+    size: resolveMotifFillPercent(sizePx, scalePx),
     scale: scalePx / 10,
     patchSize: true
   }).tile();

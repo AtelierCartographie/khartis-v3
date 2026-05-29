@@ -1893,10 +1893,14 @@ describe('createPolygonLayers', () => {
       size: 9,
       scale: 16
     });
-    expect(patternLayerProps?.getFillPatternScale).toBe(136);
+    // size/scale are baked into the atlas tile (asserted above). The shader
+    // renders the tile at its native atlas size, so getFillPatternScale is the
+    // mapping frame width (8 in the mock) — matching the popover preview rather
+    // than re-deriving a separate screen-pixel formula.
+    expect(patternLayerProps?.getFillPatternScale).toBe(8);
     expect(patternLayerProps?.getFillPatternRotation).toBe(315);
     expect(patternLayer?.props.updateTriggers).toMatchObject({
-      getFillPatternScale: [136],
+      getFillPatternScale: [8],
       getFillPatternRotation: [315]
     });
   });
