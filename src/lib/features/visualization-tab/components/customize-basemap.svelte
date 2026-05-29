@@ -299,22 +299,24 @@
       {/each}
     {/if}
 
-    <ExpandableSection
-      title={m.basemap_tiled_label()}
-      defaultOpen={isTiledBasemapEnabled}
-      showToggle={true}
-      toggleVariant="suggestions"
-      toggleChecked={isTiledBasemapEnabled}
-      onToggleChange={handleTiledBasemapToggle}
-    >
-      {#snippet icon()}
-        <InfoPopover text={m.basemap_tiled_info()} />
-      {/snippet}
-      <div class="reference-basemap-tool">
-        <p class="kh-help">{m.basemap_tiled_helper()}</p>
-        <BasemapStyleSelector />
-      </div>
-    </ExpandableSection>
+    {#if !currentMetadata || isTiledBasemapEnabled}
+      <ExpandableSection
+        title={m.basemap_tiled_label()}
+        defaultOpen={isTiledBasemapEnabled}
+        showToggle={true}
+        toggleVariant="suggestions"
+        toggleChecked={isTiledBasemapEnabled}
+        onToggleChange={handleTiledBasemapToggle}
+      >
+        {#snippet icon()}
+          <InfoPopover text={m.basemap_tiled_info()} />
+        {/snippet}
+        <div class="reference-basemap-tool">
+          <p class="kh-help">{m.basemap_tiled_helper()}</p>
+          <BasemapStyleSelector />
+        </div>
+      </ExpandableSection>
+    {/if}
   </div>
 </section>
 
