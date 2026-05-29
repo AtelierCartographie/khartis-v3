@@ -20,6 +20,7 @@
     SliderWithInput,
     ToggleWithLabel
   } from '$lib/features/commons/components/viz-controls';
+  import { PatternType } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
 
   interface Props {
     show: boolean;
@@ -37,6 +38,7 @@
     dashed?: boolean;
     dashedPattern?: BasemapDottedPattern;
     pattern?: boolean;
+    patternType?: PatternType;
     onshowchange?: (show: boolean) => void;
     oncolorchange?: (color: string) => void;
     onshapechange?: (shape: MissingDataShape) => void;
@@ -44,6 +46,7 @@
     ondashedchange?: (dashed: boolean) => void;
     ondashedpatternchange?: (pattern: BasemapDottedPattern) => void;
     onpatternchange?: (pattern: boolean) => void;
+    onpatterntypechange?: (patternType: PatternType) => void;
   }
 
   let {
@@ -62,13 +65,15 @@
     dashed = false,
     dashedPattern = BasemapDottedPattern.DOTS,
     pattern = false,
+    patternType = PatternType.DASHES,
     onshowchange,
     oncolorchange,
     onshapechange,
     onsizechange,
     ondashedchange,
     ondashedpatternchange,
-    onpatternchange
+    onpatternchange,
+    onpatterntypechange
   }: Props = $props();
 
   const dashedPatternItems = $derived([
@@ -79,6 +84,13 @@
       id: BasemapDottedPattern.LONG_DASH,
       text: m.dashed_pattern_long_dash()
     }
+  ]);
+
+  const patternTypeItems = $derived([
+    { id: PatternType.DOTS, text: m.pattern_dots() },
+    { id: PatternType.LINES, text: m.pattern_lines() },
+    { id: PatternType.CROSSHATCH, text: m.pattern_crosshatch() },
+    { id: PatternType.DASHES, text: m.pattern_dashes() }
   ]);
 
   function handleShowToggle(value: boolean) {
@@ -109,6 +121,14 @@
   function handlePatternToggle(value: boolean) {
     pattern = value;
     onpatternchange?.(value);
+  }
+
+  function handlePatternTypeSelect(value: string | number) {
+    const next =
+      Object.values(PatternType).find((type) => type === value) ??
+      PatternType.DASHES;
+    patternType = next;
+    onpatterntypechange?.(next);
   }
 </script>
 
@@ -187,6 +207,19 @@
             </div>
           </Column>
         </Row>
+        {#if pattern}
+          <Row>
+            <Column>
+              <Dropdown
+                titleText={m.pattern()}
+                items={patternTypeItems}
+                selectedId={patternType}
+                on:select={(e) => handlePatternTypeSelect(e.detail.selectedId)}
+                type="default"
+              />
+            </Column>
+          </Row>
+        {/if}
       {/if}
 
       {#if showDashedToggle}

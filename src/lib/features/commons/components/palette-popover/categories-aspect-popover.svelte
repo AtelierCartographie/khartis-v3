@@ -709,6 +709,22 @@
                     </span>
                   </div>
                 </div>
+                {#if draftCommonAspect.pattern}
+                  <div class="common-grid-row common-grid-row--full">
+                    <Dropdown
+                      titleText={m.pattern()}
+                      items={patternTypeItems}
+                      selectedId={draftCommonAspect.patternType ??
+                        PatternType.DOTS}
+                      on:select={(e) =>
+                        handleCommonAspectChange(
+                          'patternType',
+                          e.detail.selectedId as PatternType
+                        )}
+                      type="default"
+                    />
+                  </div>
+                {/if}
               </div>
             {/if}
           </section>
