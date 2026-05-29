@@ -55,6 +55,7 @@
     showMissingData?: boolean;
     missingDataColor?: string;
     missingDataPattern?: boolean;
+    missingDataPatternType?: PatternType;
     showOpacitySlider?: boolean;
     showOpacityBounds?: boolean;
     showMissingDataSection?: boolean;
@@ -86,6 +87,7 @@
     onMissingDataShowChange?: (show: boolean) => void;
     onMissingDataColorChange?: (color: string) => void;
     onMissingDataPatternChange?: (pattern: boolean) => void;
+    onMissingDataPatternTypeChange?: (patternType: PatternType) => void;
     onInvertPalette?: () => void;
   }
 
@@ -106,6 +108,7 @@
     showMissingData = true,
     missingDataColor = DEFAULT_COLORS.missingData,
     missingDataPattern = false,
+    missingDataPatternType = PatternType.DASHES,
     showOpacitySlider = true,
     showOpacityBounds = false,
     showMissingDataSection = true,
@@ -129,6 +132,7 @@
     onMissingDataShowChange,
     onMissingDataColorChange,
     onMissingDataPatternChange,
+    onMissingDataPatternTypeChange,
     onInvertPalette
   }: Props = $props();
 
@@ -355,9 +359,11 @@
     showSizeSlider={false}
     showPatternToggle={categoriesVariant === 'polygons'}
     pattern={missingDataPattern}
+    patternType={missingDataPatternType}
     onshowchange={onMissingDataShowChange ?? (() => {})}
     oncolorchange={onMissingDataColorChange ?? (() => {})}
     onpatternchange={onMissingDataPatternChange ?? (() => {})}
+    onpatterntypechange={onMissingDataPatternTypeChange ?? (() => {})}
   />
 {/if}
 

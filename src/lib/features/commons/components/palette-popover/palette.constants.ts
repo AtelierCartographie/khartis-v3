@@ -15,6 +15,7 @@ import { motif } from '@ateliercartographie/motif.js';
 import type { PatternParams } from '$lib/features/commons/stores/visualization.store.svelte';
 import { webglToHex } from '$lib/features/commons/utils/color-utils';
 import { PATTERN_TYPE_MAP } from '$lib/features/map/layers/pattern-texture';
+import { PatternType } from './categories-aspect-popover.types';
 import {
   DEFAULT_QUALITATIVE_PRESET,
   GRAYSCALE_COLORS,
@@ -77,6 +78,21 @@ export type PatternId =
   | 'square'
   | 'diamond'
   | 'plus';
+
+export const PATTERN_TYPE_TO_PATTERN_ID: Record<PatternType, PatternId> = {
+  [PatternType.DOTS]: 'dots',
+  [PatternType.LINES]: 'horizontal',
+  [PatternType.CROSSHATCH]: 'cross',
+  [PatternType.DASHES]: 'diagonal'
+};
+
+export function mapPatternTypeToPatternId(
+  patternType: PatternType | undefined,
+  fallback: PatternId = 'diagonal'
+): PatternId {
+  if (patternType === undefined) return fallback;
+  return PATTERN_TYPE_TO_PATTERN_ID[patternType] ?? fallback;
+}
 
 export interface Palette {
   id: string;
