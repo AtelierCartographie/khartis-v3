@@ -58,7 +58,7 @@ describe('FillSection — interface', () => {
     expect(source).toContain('const categoriesCommonAspect = $derived');
     expect(source).toContain("categoriesVariant === 'polygons'");
     expect(source).toContain('visualization?.classification?.patternId');
-    expect(source).toContain('function resolvePatternType');
+    expect(source).toContain('visualization?.classification?.patternParams');
     expect(source).toContain('categoriesCommonAspect={categoriesCommonAspect}');
   });
 

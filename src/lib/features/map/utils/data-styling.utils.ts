@@ -259,6 +259,12 @@ export function hasCompleteCategoricalColorMap(
   });
 }
 
+// Polygon and point fills are resolved per primitive: getPolygonPrimitive /
+// getSymbolPrimitive already fall back to the legacy global `viz.modes.fill`, so
+// reading `viz.modes` again for them would re-activate a stale global mode after
+// a primitive switched fill mode — letting classes and categories both apply and
+// the choropleth silently override the categorical fill. Lines and text keep
+// their legacy color/fill fallbacks (older projects drove them via the globals).
 function usesClassedColor(
   viz: VisualizationConfig,
   primitive: PrimitiveFilterType
@@ -276,16 +282,10 @@ function usesClassedColor(
         viz.modes?.color === ColorMode.CLASSES
       );
     case PrimitiveFilterType.POINT:
-      return (
-        getSymbolPrimitive(viz)?.fillMode === FillMode.CLASSES ||
-        viz.modes?.fill === FillMode.CLASSES
-      );
+      return getSymbolPrimitive(viz)?.fillMode === FillMode.CLASSES;
     case PrimitiveFilterType.POLYGON:
     default:
-      return (
-        getPolygonPrimitive(viz)?.fillMode === FillMode.CLASSES ||
-        viz.modes?.fill === FillMode.CLASSES
-      );
+      return getPolygonPrimitive(viz)?.fillMode === FillMode.CLASSES;
   }
 }
 
@@ -309,16 +309,12 @@ function usesCategoricalColor(
       const symbol = getSymbolPrimitive(viz);
       return (
         symbol?.mode === SymbolMode.CATEGORIES ||
-        symbol?.fillMode === FillMode.CATEGORIES ||
-        viz.modes?.fill === FillMode.CATEGORIES
+        symbol?.fillMode === FillMode.CATEGORIES
       );
     }
     case PrimitiveFilterType.POLYGON:
     default:
-      return (
-        getPolygonPrimitive(viz)?.fillMode === FillMode.CATEGORIES ||
-        viz.modes?.fill === FillMode.CATEGORIES
-      );
+      return getPolygonPrimitive(viz)?.fillMode === FillMode.CATEGORIES;
   }
 }
 
