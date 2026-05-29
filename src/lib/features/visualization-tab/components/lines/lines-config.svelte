@@ -1,11 +1,6 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
-  import {
-    InfoPopover,
-    SliderWithInput,
-    VizFilterButton,
-    VizFilterPanel
-  } from '../shared';
+  import { SliderWithInput, VizFilterButton, VizFilterPanel } from '../shared';
   import LineThicknessSection from './line-thickness-section.svelte';
   import LineColorSection from './line-color-section.svelte';
   import type {
@@ -367,7 +362,6 @@
   onToggleChange={handleToggleChange}
 >
   {#snippet icon()}
-    <InfoPopover text={m.lines_section_info()} />
     <VizFilterButton
       active={filterSectionVisible || filters.length > 0}
       count={filters.length}
