@@ -424,7 +424,7 @@
 
   function resetToDefaultExpanded(): void {
     joinedExpanded = false;
-    toVerifyExpanded = true;
+    toVerifyExpanded = toVerifyCount > 0;
     duplicatesExpanded = false;
     unrecognizedExpanded = false;
     ignoredExpanded = false;
@@ -446,7 +446,6 @@
     }
   }
 
-  let wasLoading = $state(false);
   let hasInitializedExpanded = $state(false);
   let notificationSnapshot = $state<NotificationSnapshot>({
     hasBlockingErrors: false,
@@ -459,12 +458,10 @@
   );
 
   $effect(() => {
-    if (loading && !wasLoading && !hasInitializedExpanded) {
+    if (!loading && !hasInitializedExpanded) {
       resetToDefaultExpanded();
       hasInitializedExpanded = true;
     }
-
-    wasLoading = loading;
   });
 
   $effect(() => {
@@ -548,7 +545,9 @@
           </span>
           <div class="category-count count-success">{joinedCount}</div>
           <span class="category-label label-success"
-            >{m.join_entities_joined({ count: joinedCount })}</span
+            >{joinedCount <= 1
+              ? m.join_entities_joined_one()
+              : m.join_entities_joined()}</span
           >
           <span class="category-chevron">
             {#if joinedExpanded}
@@ -687,7 +686,9 @@
           </span>
           <div class="category-count count-warning">{toVerifyCount}</div>
           <span class="category-label label-warning"
-            >{m.join_entities_to_verify({ count: toVerifyCount })}</span
+            >{toVerifyCount <= 1
+              ? m.join_entities_to_verify_one()
+              : m.join_entities_to_verify()}</span
           >
           <span class="category-chevron">
             {#if toVerifyExpanded}
@@ -807,9 +808,9 @@
           </span>
           <div class="category-count count-error">{unrecognizedCount}</div>
           <span class="category-label label-error"
-            >{m.join_entities_unrecognized({
-              count: unrecognizedCount
-            })}</span
+            >{unrecognizedCount <= 1
+              ? m.join_entities_unrecognized_one()
+              : m.join_entities_unrecognized()}</span
           >
           <span class="category-chevron">
             {#if unrecognizedExpanded}
@@ -938,7 +939,9 @@
           </span>
           <div class="category-count count-warning-alt">{duplicateCount}</div>
           <span class="category-label label-warning-alt"
-            >{m.join_entities_duplicate({ count: duplicateCount })}</span
+            >{duplicateCount <= 1
+              ? m.join_entities_duplicate_one()
+              : m.join_entities_duplicate()}</span
           >
           <span class="category-chevron">
             {#if duplicatesExpanded}
@@ -995,7 +998,9 @@
           </span>
           <div class="category-count count-ignored">{ignoredCount}</div>
           <span class="category-label label-ignored"
-            >{m.join_entities_ignored({ count: ignoredCount })}</span
+            >{ignoredCount <= 1
+              ? m.join_entities_ignored_one()
+              : m.join_entities_ignored()}</span
           >
           <span class="category-chevron">
             {#if ignoredExpanded}
@@ -1120,7 +1125,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 0 0 16px 0;
+    padding: 0 16px 16px 16px;
   }
 
   .section-header-icon {
@@ -1130,7 +1135,7 @@
   }
 
   .section-title {
-    font-size: 0.9375rem;
+    font-size: 0.875rem;
     font-weight: 600;
     line-height: 1.25rem;
     color: #003a6d;
@@ -1237,7 +1242,7 @@
   .category-label {
     flex: 1;
     font-weight: 400;
-    font-size: 1rem;
+    font-size: 0.875rem;
     line-height: 22px;
     color: #00539a;
   }
