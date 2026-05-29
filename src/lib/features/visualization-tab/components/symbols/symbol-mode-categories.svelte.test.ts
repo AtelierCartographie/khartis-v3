@@ -114,11 +114,11 @@ describe('SymbolModeCategories (en categorie.png alignment)', () => {
     expect(source).toContain(
       'onCategoriesCommonAspectChange={handleCategoriesCommonAspectChange}'
     );
-    expect(source).toContain('resolveCommonAspectPatternType');
     expect(source).toContain(
       'pattern: Boolean(symbolClassification?.patternId)'
     );
     expect(source).toContain('symbolClassification?.patternId');
+    expect(source).toContain('symbolClassification?.patternParams');
   });
 
   it('uses a dedicated categories-aspect trigger that stops propagation before opening the popover', () => {

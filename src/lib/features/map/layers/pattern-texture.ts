@@ -127,6 +127,19 @@ export function getPatternAtlas(): {
   return { atlas: cachedResult.canvas, mapping: cachedResult.mapping };
 }
 
+/**
+ * motif.js consumes `size` as a fill percentage of the tile. Our size/scale
+ * sliders map to (size / scale) * 100, which can exceed 100% when size > scale
+ * (e.g. size 10 / scale 4 → 250%). Above 100% motif.js' patchSize inversion
+ * produces a negative shape area, i.e. a degenerate / invisible tile. Clamp to
+ * an always-visible 1–99% range so every slider combination renders a motif.
+ */
+export function resolveMotifFillPercent(size: number, scale: number): number {
+  const safeSize = Math.max(1, size);
+  const safeScale = Math.max(1, scale);
+  return Math.min(99, Math.max(1, Math.round((safeSize / safeScale) * 100)));
+}
+
 function createParameterizedPatternOptions(
   patternId: PatternName,
   params: PatternParams
@@ -138,7 +151,7 @@ function createParameterizedPatternOptions(
   return {
     ...config,
     angle: params.angle ?? config.angle,
-    size: Math.round((size / scale) * 100),
+    size: resolveMotifFillPercent(size, scale),
     scale: scale / 10,
     background: 'transparent'
   };
