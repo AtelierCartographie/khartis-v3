@@ -93,6 +93,10 @@
     getFormatState
   } from '$lib/features/step-toolbar/tools/format';
   import {
+    facetsStore,
+    SCALE_MODE
+  } from '$lib/features/step-toolbar/tools/facets';
+  import {
     CATEGORY_SHAPE_CYCLE,
     CategoryShapeMode,
     ColorMode,
@@ -144,7 +148,19 @@
   } from '../utils/legend.utils';
   import type { LegendItem } from '$lib/features/step-toolbar/tools/legend';
 
-  let { hidden = false }: { hidden?: boolean } = $props();
+  // `scopeVizId` + `inline` drive the per-facet anchored legend: each facet cell
+  // renders its own LegendOverlay scoped to one visualization, laid out inline
+  // inside the cell instead of absolutely-positioned/draggable in the viewport.
+  // Both default to the legacy behaviour (single, viewport-positioned legend).
+  let {
+    hidden = false,
+    scopeVizId = null,
+    inline = false
+  }: {
+    hidden?: boolean;
+    scopeVizId?: string | null;
+    inline?: boolean;
+  } = $props();
 
   function getPatternOverlayColor(fillColor: string | undefined): string {
     if (!fillColor?.startsWith('#') || fillColor.length !== 7) {
@@ -1677,7 +1693,29 @@
 
   const legendState = $derived(getLegendState());
   const formatState = $derived(getFormatState());
-  const visibleItems = $derived(legendState.items.filter((i) => i.visible));
+  const visibleItems = $derived.by(() => {
+    const items = legendState.items.filter((i) => i.visible);
+    if (scopeVizId) {
+      return items.filter((item) => item.variableId === scopeVizId);
+    }
+    if (!facetsStore.enabled) {
+      return items;
+    }
+
+    // In a map collection the base visualization is hidden, so its legend must
+    // not appear; only the generated facets get a legend. With a shared scale
+    // every facet shares the same breaks, so a single legend stands for all.
+    const generatedIds = new Set(facetsStore.generatedVisualizationIds);
+    const facetItems = items.filter(
+      (item) => item.variableId != null && generatedIds.has(item.variableId)
+    );
+
+    if (facetsStore.scaleMode === SCALE_MODE.SHARED) {
+      return facetItems.slice(0, 1);
+    }
+
+    return facetItems;
+  });
 
   const vizByItemId = $derived.by(() => {
     void visualizationStore.version;
@@ -1710,7 +1748,8 @@
     hslToHex(textColor.hue, textColor.saturation, textColor.lightness)
   );
   const isLegendActive = $derived(
-    globalState.selectedStep === ToolbarStep.Styling &&
+    !inline &&
+      globalState.selectedStep === ToolbarStep.Styling &&
       globalState.selectedTool === StylingTools.Legend
   );
   const pageScale = $derived(Math.max(globalState.zoom.pageZoomScale, 0.1));
@@ -1736,7 +1775,7 @@
   }
 
   const positionClass = $derived.by(() => {
-    if (legendState.dragPosition) {
+    if (inline || legendState.dragPosition) {
       return '';
     }
     return getPositionClass(legendState.position);
@@ -1752,6 +1791,7 @@
       ? Math.max(3, Math.round(layoutTokens.legend.paddingBlock * 0.35))
       : 0;
     const transform =
+      !inline &&
       !legendState.dragPosition &&
       legendState.position === LegendPosition.BOTTOM_CENTER
         ? `translateX(-50%) scale(${scale})`
@@ -1767,7 +1807,7 @@
       `color: ${textHex}`,
       'border-radius: 0px',
       `transform: ${transform}`,
-      `transform-origin: ${getLegendTransformOrigin(legendState.position, Boolean(legendState.dragPosition))}`
+      `transform-origin: ${inline ? 'bottom right' : getLegendTransformOrigin(legendState.position, Boolean(legendState.dragPosition))}`
     ];
 
     if (hasBackground) {
@@ -1778,7 +1818,7 @@
       styles.push('box-shadow: none');
     }
 
-    if (legendState.dragPosition) {
+    if (!inline && legendState.dragPosition) {
       styles.push(`left: ${legendState.dragPosition.x * scale}px`);
       styles.push(`top: ${legendState.dragPosition.y * scale}px`);
     }
@@ -2044,7 +2084,12 @@
 </script>
 
 {#if legendState.visible && visibleItems.length > 0}
-  <div class="legend-overlay" class:hidden={hidden} bind:this={overlayElement}>
+  <div
+    class="legend-overlay"
+    class:hidden={hidden}
+    class:inline={inline}
+    bind:this={overlayElement}
+  >
     <div
       bind:this={legendElement}
       class="legend-container {positionClass}"
@@ -2111,6 +2156,21 @@
   :global(.is-exporting-map) .legend-overlay.hidden {
     opacity: 1;
     visibility: visible;
+  }
+
+  /* Per-facet anchored legend: fills its cell and pins the legend to the
+     bottom-right corner of the map, without viewport-absolute positioning. */
+  .legend-overlay.inline {
+    position: absolute;
+    inset: 0;
+  }
+
+  .legend-overlay.inline .legend-container {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    cursor: default;
+    pointer-events: none;
   }
 
   .legend-container {

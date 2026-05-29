@@ -48,4 +48,38 @@ describe('facets shared renderer utils', () => {
       descriptors[0].frame.y + FACET_TITLE_HEIGHT
     );
   });
+
+  it('keeps the grid within the container so the last column is never clipped', () => {
+    // A width-constrained layout used to let gridWidth reach containerWidth and
+    // overflow the right edge by the wrapper padding, clipping the last facet.
+    const containerWidth = 987;
+    const metrics = buildFacetsGridMetrics({
+      mapCount: 2,
+      layout: { columns: 2, gap: 16 },
+      containerWidth,
+      containerHeight: 700,
+      pageAspectRatio: 0.75
+    });
+
+    expect(metrics.originX + metrics.gridWidth).toBeLessThanOrEqual(
+      containerWidth
+    );
+
+    const descriptors = buildFacetRenderDescriptors({
+      visualizations: [
+        { id: 'a', name: 'A' },
+        { id: 'b', name: 'B' }
+      ] as never,
+      layout: { columns: 2, gap: 16 },
+      containerWidth,
+      containerHeight: 700,
+      pageAspectRatio: 0.75
+    });
+
+    for (const descriptor of descriptors) {
+      expect(descriptor.frame.x + descriptor.frame.width).toBeLessThanOrEqual(
+        containerWidth
+      );
+    }
+  });
 });

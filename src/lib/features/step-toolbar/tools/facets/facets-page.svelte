@@ -15,7 +15,11 @@
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import FacetsGrid from './facets-grid.svelte';
-  import type { FacetsLayout } from './facets.store.svelte';
+  import {
+    facetsStore,
+    SCALE_MODE,
+    type FacetsLayout
+  } from './facets.store.svelte';
 
   interface Props {
     visualizations: VisualizationConfig[];
@@ -95,6 +99,17 @@
   const isStylingMode = $derived(
     globalState.selectedStep === ToolbarStep.Styling
   );
+  const isVisualizationMode = $derived(
+    globalState.selectedStep === ToolbarStep.Visualizations
+  );
+  // Legends preview from the Visualizations step onward (parity with the
+  // single-map thematic view), and stay visible through Habillage/export.
+  const showLegendPreview = $derived(isVisualizationMode || isStylingMode);
+  // With an independent scale, each facet owns an anchored legend rendered in
+  // its cell, so the single global legend is hidden; a shared scale keeps one.
+  const isIndependentScale = $derived(
+    facetsStore.scaleMode === SCALE_MODE.INDEPENDENT
+  );
   const showPageGrid = $derived(fmtState.gridEnabled && isStylingMode);
 </script>
 
@@ -117,7 +132,7 @@
       onReady={onReady}
     />
 
-    <LegendOverlay hidden={!isStylingMode} />
+    <LegendOverlay hidden={!showLegendPreview || isIndependentScale} />
     <GeoIndicationsOverlay
       interactive={isStylingMode}
       hidden={!isStylingMode}
