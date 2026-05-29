@@ -220,6 +220,9 @@
       --khartis-expandable-section-background,
       var(--cds-layer-01)
     );
+    position: sticky;
+    top: 0;
+    z-index: 5;
   }
 
   .section-header.collapsed {

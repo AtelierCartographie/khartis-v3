@@ -34,6 +34,15 @@
     computeDrawingBounds,
     smoothDrawingPath
   } from '../utils/annotation-drawing.utils';
+  import {
+    buildVectorLinePath,
+    computeVectorPathBounds,
+    getArrowHeadGeometry,
+    getSegmentTensionHandle,
+    insertControlOffsetAt,
+    removeControlOffsetForPoint,
+    type VectorPoint
+  } from '../utils/annotation-vector.utils';
   import { setStylingToolPopoverDragging } from '../utils/tool-popover-drag-visibility.utils';
   import type {
     Annotation,
@@ -57,6 +66,42 @@
   const DRAG_CLICK_SUPPRESSION_MS = 120;
   const MIN_SHAPE_SIZE = 24;
   const SHAPE_VIEWBOX_PADDING = 8;
+  const DEFAULT_VECTOR_LINE_LENGTH = 120;
+
+  function isVectorShapeContent(content: unknown): boolean {
+    return content === SHAPE_TYPE.ARROW || content === SHAPE_TYPE.LINE;
+  }
+
+  function hasArrowHead(content: unknown): boolean {
+    return content === SHAPE_TYPE.ARROW;
+  }
+
+  function getVectorPoints(item: Annotation): VectorPoint[] {
+    const points = item.style?.points;
+    return Array.isArray(points) && points.length >= 2 ? points : [];
+  }
+
+  function isVectorShapeItem(item: Annotation): boolean {
+    return (
+      item.type === AnnotationKind.SHAPE &&
+      isVectorShapeContent(item.content) &&
+      getVectorPoints(item).length >= 2
+    );
+  }
+
+  function normalizeToOrigin(points: VectorPoint[]): {
+    points: VectorPoint[];
+    minX: number;
+    minY: number;
+  } {
+    const minX = Math.min(...points.map((point) => point.x));
+    const minY = Math.min(...points.map((point) => point.y));
+    return {
+      points: points.map((point) => ({ x: point.x - minX, y: point.y - minY })),
+      minX,
+      minY
+    };
+  }
 
   type AnnotationInteractionScope = 'map' | 'page';
 
@@ -96,6 +141,22 @@
     startPoint: { x: number; y: number };
     currentPoint: { x: number; y: number };
     didDrag: boolean;
+  } | null>(null);
+  let anchorDragState = $state<{
+    id: string;
+    pointIndex: number;
+    startPoints: { x: number; y: number }[];
+    startClientX: number;
+    startClientY: number;
+  } | null>(null);
+  let tensionDragState = $state<{
+    id: string;
+    segmentIndex: number;
+    startOffset: number;
+    startClientX: number;
+    startClientY: number;
+    normalX: number;
+    normalY: number;
   } | null>(null);
   let drawingPointerId = $state<number | null>(null);
   let drawingCloseToStart = $state(false);
@@ -234,10 +295,54 @@
     };
   }
 
+  function createVectorLinePlacementPreview(
+    startPoint: { x: number; y: number },
+    endPoint: { x: number; y: number }
+  ): AnnotationPlacementPreview {
+    const shapeType = String(
+      annotationsState.pendingContent ?? SHAPE_TYPE.LINE
+    );
+    const normalized = normalizeToOrigin([startPoint, endPoint]);
+    const strokeWidth =
+      (annotationsState.pendingStyle ?? annotationsState.defaultStyle)
+        .strokeWidth ?? 2;
+    const bounds = computeVectorPathBounds(
+      normalized.points,
+      undefined,
+      strokeWidth,
+      hasArrowHead(shapeType)
+    );
+    const size = { width: bounds.width, height: bounds.height };
+    const position = clampPreviewPosition(
+      { x: normalized.minX, y: normalized.minY },
+      size
+    );
+
+    return {
+      coordinateSpace: 'page',
+      type: AnnotationKind.SHAPE,
+      position,
+      size,
+      content: shapeType,
+      style: { points: normalized.points }
+    };
+  }
+
   function createCenteredPlacementPreview(
     type: AnnotationKind,
     point: { x: number; y: number }
   ): AnnotationPlacementPreview {
+    if (
+      type === AnnotationKind.SHAPE &&
+      isVectorShapeContent(annotationsState.pendingContent)
+    ) {
+      const half = DEFAULT_VECTOR_LINE_LENGTH / 2;
+      return createVectorLinePlacementPreview(
+        { x: point.x - half, y: point.y },
+        { x: point.x + half, y: point.y }
+      );
+    }
+
     const size = getDefaultPlacementSize(
       type,
       annotationsState.pendingContent,
@@ -402,6 +507,256 @@
     window.removeEventListener(EVENT.POINTERMOVE, handleRotatePointerMove);
     window.removeEventListener(EVENT.POINTERUP, handleRotatePointerUp);
     rotateState = null;
+  }
+
+  function stopAnchorDragging(): void {
+    window.removeEventListener(EVENT.POINTERMOVE, handleAnchorPointerMove);
+    window.removeEventListener(EVENT.POINTERUP, handleAnchorPointerUp);
+    anchorDragState = null;
+  }
+
+  function stopTensionDragging(): void {
+    window.removeEventListener(EVENT.POINTERMOVE, handleTensionPointerMove);
+    window.removeEventListener(EVENT.POINTERUP, handleTensionPointerUp);
+    tensionDragState = null;
+  }
+
+  function getEditablePoints(item: Annotation): VectorPoint[] {
+    if (item.type === AnnotationKind.DRAWING) {
+      return Array.isArray(item.content) ? (item.content as VectorPoint[]) : [];
+    }
+    if (isVectorShapeItem(item)) {
+      return getVectorPoints(item);
+    }
+    return [];
+  }
+
+  function applyEditablePoints(
+    item: Annotation,
+    points: VectorPoint[],
+    controlOffsets?: number[]
+  ): void {
+    if (item.type === AnnotationKind.DRAWING) {
+      annotationsActions.updateAnnotation(item.id, { content: points });
+      return;
+    }
+    annotationsActions.updateAnnotation(item.id, {
+      style: {
+        ...(item.style ?? {}),
+        points,
+        ...(controlOffsets ? { controlOffsets } : {})
+      }
+    });
+  }
+
+  function handleTensionPointerDown(
+    event: PointerEvent,
+    item: Annotation,
+    segmentIndex: number
+  ): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const points = getVectorPoints(item);
+    const start = points[segmentIndex];
+    const end = points[segmentIndex + 1];
+    if (!start || !end) return;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const length = Math.hypot(dx, dy) || 1;
+    tensionDragState = {
+      id: item.id,
+      segmentIndex,
+      startOffset: item.style?.controlOffsets?.[segmentIndex] ?? 0,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      normalX: -dy / length,
+      normalY: dx / length
+    };
+    window.addEventListener(EVENT.POINTERMOVE, handleTensionPointerMove);
+    window.addEventListener(EVENT.POINTERUP, handleTensionPointerUp);
+  }
+
+  function handleTensionPointerMove(event: PointerEvent): void {
+    if (!tensionDragState) return;
+    const item = annotationsState.items.find(
+      (i) => i.id === tensionDragState!.id
+    );
+    if (!item) return;
+    const points = getVectorPoints(item);
+    const segmentCount = points.length - 1;
+    if (
+      tensionDragState.segmentIndex < 0 ||
+      tensionDragState.segmentIndex >= segmentCount
+    ) {
+      return;
+    }
+    const scale = Math.max(pageScale, 0.0001);
+    const dx = (event.clientX - tensionDragState.startClientX) / scale;
+    const dy = (event.clientY - tensionDragState.startClientY) / scale;
+    const deltaPerpendicular =
+      dx * tensionDragState.normalX + dy * tensionDragState.normalY;
+    const nextOffset = tensionDragState.startOffset + 2 * deltaPerpendicular;
+    const offsets = Array.from(
+      { length: segmentCount },
+      (_, index) => item.style?.controlOffsets?.[index] ?? 0
+    );
+    offsets[tensionDragState.segmentIndex] = Math.round(nextOffset * 100) / 100;
+    annotationsActions.updateAnnotation(item.id, {
+      style: { ...(item.style ?? {}), controlOffsets: offsets }
+    });
+  }
+
+  function handleTensionPointerUp(): void {
+    stopTensionDragging();
+  }
+
+  function handleAnchorPointerDown(
+    event: PointerEvent,
+    item: Annotation,
+    pointIndex: number
+  ): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const points = getEditablePoints(item);
+    if (!points[pointIndex]) return;
+    anchorDragState = {
+      id: item.id,
+      pointIndex,
+      startPoints: points.map((point) => ({ x: point.x, y: point.y })),
+      startClientX: event.clientX,
+      startClientY: event.clientY
+    };
+    window.addEventListener(EVENT.POINTERMOVE, handleAnchorPointerMove);
+    window.addEventListener(EVENT.POINTERUP, handleAnchorPointerUp);
+  }
+
+  function handleAnchorPointerMove(event: PointerEvent): void {
+    if (!anchorDragState) return;
+    const item = annotationsState.items.find(
+      (i) => i.id === anchorDragState!.id
+    );
+    if (!item) return;
+    const scale = Math.max(pageScale, 0.0001);
+    const dx = (event.clientX - anchorDragState.startClientX) / scale;
+    const dy = (event.clientY - anchorDragState.startClientY) / scale;
+    const newPoints = anchorDragState.startPoints.map((point, index) =>
+      index === anchorDragState!.pointIndex
+        ? { x: point.x + dx, y: point.y + dy }
+        : { x: point.x, y: point.y }
+    );
+    applyEditablePoints(item, newPoints);
+  }
+
+  function handleAnchorPointerUp(): void {
+    stopAnchorDragging();
+  }
+
+  function handleAnchorDoubleClick(
+    event: MouseEvent,
+    item: Annotation,
+    pointIndex: number
+  ): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const points = getEditablePoints(item);
+    const isClosed = item.style?.drawingType === DrawingType.ZONE;
+    const minPoints = isClosed ? 3 : 2;
+    if (points.length <= minPoints) return;
+    const newPoints = points.filter((_, index) => index !== pointIndex);
+    if (isVectorShapeItem(item)) {
+      const newOffsets = removeControlOffsetForPoint(
+        item.style?.controlOffsets,
+        pointIndex,
+        points.length - 1
+      );
+      applyEditablePoints(item, newPoints, newOffsets);
+      return;
+    }
+    applyEditablePoints(item, newPoints);
+  }
+
+  function distanceToSegmentSq(
+    point: { x: number; y: number },
+    segStart: { x: number; y: number },
+    segEnd: { x: number; y: number }
+  ): { distSq: number; closest: { x: number; y: number }; t: number } {
+    const dx = segEnd.x - segStart.x;
+    const dy = segEnd.y - segStart.y;
+    const lengthSq = dx * dx + dy * dy;
+    if (lengthSq < 0.0001) {
+      const ddx = point.x - segStart.x;
+      const ddy = point.y - segStart.y;
+      return {
+        distSq: ddx * ddx + ddy * ddy,
+        closest: { x: segStart.x, y: segStart.y },
+        t: 0
+      };
+    }
+    const t = Math.max(
+      0,
+      Math.min(
+        1,
+        ((point.x - segStart.x) * dx + (point.y - segStart.y) * dy) / lengthSq
+      )
+    );
+    const closest = { x: segStart.x + t * dx, y: segStart.y + t * dy };
+    const ddx = point.x - closest.x;
+    const ddy = point.y - closest.y;
+    return { distSq: ddx * ddx + ddy * ddy, closest, t };
+  }
+
+  function handleDrawingPathDoubleClick(
+    event: MouseEvent,
+    item: Annotation
+  ): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const points = getEditablePoints(item);
+    if (points.length < 2) return;
+    const svgEl = event.currentTarget as SVGGraphicsElement;
+    const ownerSvg =
+      svgEl.ownerSVGElement ?? (svgEl as unknown as SVGSVGElement);
+    const screenCtm = svgEl.getScreenCTM();
+    if (!screenCtm) return;
+    const inverseCtm = screenCtm.inverse();
+    const svgPoint = ownerSvg.createSVGPoint();
+    svgPoint.x = event.clientX;
+    svgPoint.y = event.clientY;
+    const local = svgPoint.matrixTransform(inverseCtm);
+    const isClosed = item.style?.drawingType === DrawingType.ZONE;
+    const segmentCount = isClosed ? points.length : points.length - 1;
+    let bestIndex = 0;
+    let bestDistSq = Number.POSITIVE_INFINITY;
+    let bestClosest = { x: local.x, y: local.y };
+    for (let index = 0; index < segmentCount; index += 1) {
+      const start = points[index];
+      const end = points[(index + 1) % points.length];
+      const { distSq, closest } = distanceToSegmentSq(
+        { x: local.x, y: local.y },
+        start,
+        end
+      );
+      if (distSq < bestDistSq) {
+        bestDistSq = distSq;
+        bestIndex = index;
+        bestClosest = closest;
+      }
+    }
+    const newPoints = [
+      ...points.slice(0, bestIndex + 1),
+      { x: bestClosest.x, y: bestClosest.y },
+      ...points.slice(bestIndex + 1)
+    ];
+    if (isVectorShapeItem(item)) {
+      const newOffsets = insertControlOffsetAt(
+        item.style?.controlOffsets,
+        bestIndex,
+        points.length - 1
+      );
+      applyEditablePoints(item, newPoints, newOffsets);
+      return;
+    }
+    annotationsActions.updateAnnotation(item.id, { content: newPoints });
   }
 
   function handlePointerUp(): void {
@@ -955,44 +1310,12 @@
     const shapeType = String(
       annotationsState.pendingContent ?? SHAPE_TYPE.RECTANGLE
     );
-    const baseSize = getDefaultPlacementSize(
-      AnnotationKind.SHAPE,
-      shapeType,
-      annotationsState.pendingStyle ?? annotationsState.defaultStyle
-    );
 
     if (shapeType === SHAPE_TYPE.LINE || shapeType === SHAPE_TYPE.ARROW) {
       const resolvedEnd = shiftKey
         ? snapLineEndpoint(startPoint, currentPoint)
         : currentPoint;
-      const dx = resolvedEnd.x - startPoint.x;
-      const dy = resolvedEnd.y - startPoint.y;
-      const width = Math.max(MIN_SHAPE_SIZE, Math.hypot(dx, dy));
-      const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-      const position = clampPreviewPosition(
-        {
-          x: (startPoint.x + resolvedEnd.x) / 2 - width / 2,
-          y: (startPoint.y + resolvedEnd.y) / 2 - baseSize.height / 2
-        },
-        {
-          width,
-          height: baseSize.height
-        }
-      );
-
-      return {
-        coordinateSpace: 'page',
-        type: AnnotationKind.SHAPE,
-        position,
-        size: {
-          width,
-          height: baseSize.height
-        },
-        content: shapeType,
-        style: {
-          rotation: angle
-        }
-      };
+      return createVectorLinePlacementPreview(startPoint, resolvedEnd);
     }
 
     const lockAspectRatio = shouldLockShapeAspectRatio(shapeType, shiftKey);
@@ -1310,6 +1633,8 @@
     stopDragging();
     stopResizing();
     stopRotating();
+    stopAnchorDragging();
+    stopTensionDragging();
     resetPlacementPointerState();
     resetDrawingPointerState();
   });
@@ -1592,67 +1917,129 @@
               />
             {/if}
           {:else if pendingPreview.type === AnnotationKind.SHAPE}
-            {@const previewShapeType = String(
-              previewItem.content ?? SHAPE_TYPE.CIRCLE
-            )}
-            {@const previewShapeData = renderShape(
-              previewItem,
-              previewShapeType
-            )}
-            <div
-              class="shape-content"
-              style={`width: ${pendingPreview.size.width}px; height: ${pendingPreview.size.height}px; transform: rotate(${previewRotation}deg);`}
-            >
+            {#if isVectorShapeContent(previewItem.content) && (previewItem.style?.points?.length ?? 0) >= 2}
+              {@const previewVectorPoints = previewItem.style?.points ?? []}
+              {@const previewVectorOffsets = previewItem.style?.controlOffsets}
+              {@const previewIsArrow = hasArrowHead(previewItem.content)}
+              {@const previewVectorBounds = computeVectorPathBounds(
+                previewVectorPoints,
+                previewVectorOffsets,
+                previewStyle.strokeWidth,
+                previewIsArrow
+              )}
+              {@const previewVectorPath = buildVectorLinePath(
+                previewVectorPoints,
+                previewVectorOffsets
+              )}
+              {@const previewArrowHead = previewIsArrow
+                ? getArrowHeadGeometry(
+                    previewVectorPoints,
+                    previewVectorOffsets,
+                    previewStyle.strokeWidth
+                  )
+                : null}
               <svg
-                width={pendingPreview.size.width}
-                height={pendingPreview.size.height}
-                viewBox={getShapeViewBox(previewShapeType)}
-                class="annotation-shape annotation-preview-shape"
+                width={previewVectorBounds.width}
+                height={previewVectorBounds.height}
+                viewBox={previewVectorBounds.viewBox}
+                class="annotation-shape annotation-vector annotation-preview-shape"
                 style={`opacity: ${previewStyle.opacity};`}
               >
-                {#if previewShapeData.type === SHAPE_TYPE.CIRCLE}
-                  <circle
-                    cx={previewShapeData.cx}
-                    cy={previewShapeData.cy}
-                    r={previewShapeData.r}
-                    fill="none"
-                    stroke={guideStyle.stroke}
-                    stroke-width={guideStyle.strokeWidth}
-                    stroke-dasharray={guideStyle.strokeDasharray}
-                  />
-                  <circle
-                    cx={previewShapeData.cx}
-                    cy={previewShapeData.cy}
-                    r={previewShapeData.r}
-                    fill={previewStyle.fill}
+                <path
+                  d={previewVectorPath}
+                  fill="none"
+                  stroke={guideStyle.stroke}
+                  stroke-width={guideStyle.strokeWidth}
+                  stroke-dasharray={guideStyle.strokeDasharray}
+                  stroke-linejoin="round"
+                  stroke-linecap="round"
+                />
+                <path
+                  d={previewVectorPath}
+                  fill="none"
+                  stroke={previewStyle.stroke}
+                  stroke-width={previewStyle.strokeWidth}
+                  stroke-dasharray={previewStyle.strokeDasharray}
+                  stroke-linejoin="round"
+                  stroke-linecap="round"
+                />
+                {#if previewArrowHead}
+                  <path
+                    d={previewArrowHead.path}
+                    fill={previewStyle.stroke}
                     stroke={previewStyle.stroke}
                     stroke-width={previewStyle.strokeWidth}
-                    stroke-dasharray={previewStyle.strokeDasharray}
-                  />
-                {:else}
-                  <path
-                    d={previewShapeData.path}
-                    fill="none"
-                    stroke={guideStyle.stroke}
-                    stroke-width={guideStyle.strokeWidth}
-                    stroke-dasharray={guideStyle.strokeDasharray}
                     stroke-linejoin="round"
                     stroke-linecap="round"
-                  />
-                  <path
-                    d={previewShapeData.path}
-                    fill={previewShapeData.type === SHAPE_TYPE.ARROW
-                      ? previewStyle.stroke
-                      : previewStyle.fill}
-                    stroke={previewStyle.stroke}
-                    stroke-width={previewStyle.strokeWidth}
-                    stroke-dasharray={previewStyle.strokeDasharray}
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
                   />
                 {/if}
               </svg>
-            </div>
+            {:else}
+              {@const previewShapeType = String(
+                previewItem.content ?? SHAPE_TYPE.CIRCLE
+              )}
+              {@const previewShapeData = renderShape(
+                previewItem,
+                previewShapeType
+              )}
+              <div
+                class="shape-content"
+                style={`width: ${pendingPreview.size.width}px; height: ${pendingPreview.size.height}px; transform: rotate(${previewRotation}deg);`}
+              >
+                <svg
+                  width={pendingPreview.size.width}
+                  height={pendingPreview.size.height}
+                  viewBox={getShapeViewBox(previewShapeType)}
+                  preserveAspectRatio={previewShapeType === SHAPE_TYPE.ARROW
+                    ? 'xMidYMid meet'
+                    : 'none'}
+                  class="annotation-shape annotation-preview-shape"
+                  style={`opacity: ${previewStyle.opacity};`}
+                >
+                  {#if previewShapeData.type === SHAPE_TYPE.CIRCLE}
+                    <circle
+                      cx={previewShapeData.cx}
+                      cy={previewShapeData.cy}
+                      r={previewShapeData.r}
+                      fill="none"
+                      stroke={guideStyle.stroke}
+                      stroke-width={guideStyle.strokeWidth}
+                      stroke-dasharray={guideStyle.strokeDasharray}
+                    />
+                    <circle
+                      cx={previewShapeData.cx}
+                      cy={previewShapeData.cy}
+                      r={previewShapeData.r}
+                      fill={previewStyle.fill}
+                      stroke={previewStyle.stroke}
+                      stroke-width={previewStyle.strokeWidth}
+                      stroke-dasharray={previewStyle.strokeDasharray}
+                    />
+                  {:else}
+                    <path
+                      d={previewShapeData.path}
+                      fill="none"
+                      stroke={guideStyle.stroke}
+                      stroke-width={guideStyle.strokeWidth}
+                      stroke-dasharray={guideStyle.strokeDasharray}
+                      stroke-linejoin="round"
+                      stroke-linecap="round"
+                    />
+                    <path
+                      d={previewShapeData.path}
+                      fill={previewShapeData.type === SHAPE_TYPE.ARROW
+                        ? previewStyle.stroke
+                        : previewStyle.fill}
+                      stroke={previewStyle.stroke}
+                      stroke-width={previewStyle.strokeWidth}
+                      stroke-dasharray={previewStyle.strokeDasharray}
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  {/if}
+                </svg>
+              </div>
+            {/if}
           {/if}
         </div>
       {/if}
@@ -1769,119 +2156,227 @@
           {item.content || ''}
         </div>
       {:else if item.type === AnnotationKind.SHAPE}
-        {@const shapeType = String(item.content ?? SHAPE_TYPE.CIRCLE)}
-        {@const shapeData = renderShape(item, shapeType)}
-        {@const shapeStyle = getVectorStyle(item.style)}
-        {@const defaultSize = getShapeDefaultSize(shapeType)}
-        {@const shapeW = item.style?.shapeWidth ?? defaultSize.width}
-        {@const shapeH = item.style?.shapeHeight ?? defaultSize.height}
-        {@const rotation = item.style?.rotation ?? 0}
-        {@const isShapeSelected = isAnnotationEditing && selectedId === item.id}
-        <div
-          class="shape-frame"
-          class:shape-selected={isShapeSelected}
-          style="width: {shapeW}px; height: {shapeH}px;"
-        >
-          <div class="shape-content" style="transform: rotate({rotation}deg);">
-            <svg
-              width={shapeW}
-              height={shapeH}
-              viewBox={getShapeViewBox(shapeType)}
-              class="annotation-shape"
-              style="opacity: {shapeStyle.opacity};"
-            >
-              {#if shapeData.type === SHAPE_TYPE.CIRCLE}
+        {#if isVectorShapeItem(item)}
+          {@const vectorPoints = getVectorPoints(item)}
+          {@const vectorOffsets = item.style?.controlOffsets}
+          {@const vectorStyle = getVectorStyle(item.style)}
+          {@const isArrow = hasArrowHead(item.content)}
+          {@const vectorBounds = computeVectorPathBounds(
+            vectorPoints,
+            vectorOffsets,
+            vectorStyle.strokeWidth,
+            isArrow
+          )}
+          {@const vectorPath = buildVectorLinePath(vectorPoints, vectorOffsets)}
+          {@const arrowHeadGeometry = isArrow
+            ? getArrowHeadGeometry(
+                vectorPoints,
+                vectorOffsets,
+                vectorStyle.strokeWidth
+              )
+            : null}
+          {@const isVectorSelected =
+            isAnnotationEditing && selectedId === item.id}
+          <svg
+            width={vectorBounds.width}
+            height={vectorBounds.height}
+            viewBox={vectorBounds.viewBox}
+            class="annotation-shape annotation-vector"
+            class:annotation-vector--editable={isVectorSelected}
+            style="opacity: {vectorStyle.opacity};"
+          >
+            <path
+              d={vectorPath}
+              fill="none"
+              stroke={vectorStyle.stroke}
+              stroke-width={vectorStyle.strokeWidth}
+              stroke-dasharray={vectorStyle.strokeDasharray}
+              stroke-linejoin="round"
+              stroke-linecap="round"
+            />
+            {#if arrowHeadGeometry}
+              <path
+                d={arrowHeadGeometry.path}
+                fill={vectorStyle.stroke}
+                stroke={vectorStyle.stroke}
+                stroke-width={vectorStyle.strokeWidth}
+                stroke-linejoin="round"
+                stroke-linecap="round"
+              />
+            {/if}
+            {#if isVectorSelected}
+              <path
+                class="drawing-hit-path"
+                role="button"
+                aria-label={m.annotations_drawing_add_anchor()}
+                tabindex="-1"
+                d={vectorPath}
+                fill="none"
+                stroke="transparent"
+                stroke-width={Math.max(vectorStyle.strokeWidth + 10, 14)}
+                ondblclick={(event: MouseEvent) =>
+                  handleDrawingPathDoubleClick(event, item)}
+              />
+              {#each vectorPoints.slice(0, -1) as _segment, segmentIndex (segmentIndex)}
+                {@const tensionHandle = getSegmentTensionHandle(
+                  vectorPoints[segmentIndex],
+                  vectorPoints[segmentIndex + 1],
+                  vectorOffsets?.[segmentIndex] ?? 0
+                )}
                 <circle
-                  cx={shapeData.cx}
-                  cy={shapeData.cy}
-                  r={shapeData.r}
-                  fill={shapeStyle.fill}
-                  stroke={shapeStyle.stroke}
-                  stroke-width={shapeStyle.strokeWidth}
-                  stroke-dasharray={shapeStyle.strokeDasharray}
+                  class="tension-handle"
+                  role="button"
+                  aria-label={m.annotations_curve_handle()}
+                  tabindex="-1"
+                  cx={tensionHandle.x}
+                  cy={tensionHandle.y}
+                  r="4"
+                  onpointerdown={(event: PointerEvent) =>
+                    handleTensionPointerDown(event, item, segmentIndex)}
                 />
-              {:else if shapeData.type === SHAPE_TYPE.ARROW}
-                <path
-                  d={shapeData.path}
-                  fill={shapeStyle.stroke}
-                  stroke={shapeStyle.stroke}
-                  stroke-width={shapeStyle.strokeWidth}
-                  stroke-dasharray={shapeStyle.strokeDasharray}
-                  stroke-linejoin="round"
-                  stroke-linecap="round"
+              {/each}
+              {#each vectorPoints as point, pointIndex (pointIndex)}
+                <circle
+                  class="drawing-anchor"
+                  role="button"
+                  aria-label={m.annotations_drawing_edit_anchor()}
+                  tabindex="-1"
+                  cx={point.x}
+                  cy={point.y}
+                  r="5"
+                  fill="white"
+                  stroke="var(--cds-interactive-01, #0f62fe)"
+                  stroke-width="2"
+                  onpointerdown={(event: PointerEvent) =>
+                    handleAnchorPointerDown(event, item, pointIndex)}
+                  ondblclick={(event: MouseEvent) =>
+                    handleAnchorDoubleClick(event, item, pointIndex)}
                 />
-              {:else}
-                <path
-                  d={shapeData.path}
-                  fill={shapeStyle.fill}
-                  stroke={shapeStyle.stroke}
-                  stroke-width={shapeStyle.strokeWidth}
-                  stroke-dasharray={shapeStyle.strokeDasharray}
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              {/if}
-            </svg>
-          </div>
-          {#if isShapeSelected}
-            <div class="shape-handles" role="presentation">
-              <div
-                class="resize-handle resize-nw"
-                role="presentation"
-                onpointerdown={(e: PointerEvent) =>
-                  handleResizePointerDown(e, item, 'nw')}
-              ></div>
-              <div
-                class="resize-handle resize-n"
-                role="presentation"
-                onpointerdown={(e: PointerEvent) =>
-                  handleResizePointerDown(e, item, 'n')}
-              ></div>
-              <div
-                class="resize-handle resize-ne"
-                role="presentation"
-                onpointerdown={(e: PointerEvent) =>
-                  handleResizePointerDown(e, item, 'ne')}
-              ></div>
-              <div
-                class="resize-handle resize-e"
-                role="presentation"
-                onpointerdown={(e: PointerEvent) =>
-                  handleResizePointerDown(e, item, 'e')}
-              ></div>
-              <div
-                class="resize-handle resize-se"
-                role="presentation"
-                onpointerdown={(e: PointerEvent) =>
-                  handleResizePointerDown(e, item, 'se')}
-              ></div>
-              <div
-                class="resize-handle resize-s"
-                role="presentation"
-                onpointerdown={(e: PointerEvent) =>
-                  handleResizePointerDown(e, item, 's')}
-              ></div>
-              <div
-                class="resize-handle resize-sw"
-                role="presentation"
-                onpointerdown={(e: PointerEvent) =>
-                  handleResizePointerDown(e, item, 'sw')}
-              ></div>
-              <div
-                class="resize-handle resize-w"
-                role="presentation"
-                onpointerdown={(e: PointerEvent) =>
-                  handleResizePointerDown(e, item, 'w')}
-              ></div>
-              <div
-                class="rotate-handle"
-                role="presentation"
-                onpointerdown={(e: PointerEvent) =>
-                  handleRotatePointerDown(e, item)}
-              ></div>
+              {/each}
+            {/if}
+          </svg>
+        {:else}
+          {@const shapeType = String(item.content ?? SHAPE_TYPE.CIRCLE)}
+          {@const shapeData = renderShape(item, shapeType)}
+          {@const shapeStyle = getVectorStyle(item.style)}
+          {@const defaultSize = getShapeDefaultSize(shapeType)}
+          {@const shapeW = item.style?.shapeWidth ?? defaultSize.width}
+          {@const shapeH = item.style?.shapeHeight ?? defaultSize.height}
+          {@const rotation = item.style?.rotation ?? 0}
+          {@const isShapeSelected =
+            isAnnotationEditing && selectedId === item.id}
+          <div
+            class="shape-frame"
+            class:shape-selected={isShapeSelected}
+            style="width: {shapeW}px; height: {shapeH}px;"
+          >
+            <div
+              class="shape-content"
+              style="transform: rotate({rotation}deg);"
+            >
+              <svg
+                width={shapeW}
+                height={shapeH}
+                viewBox={getShapeViewBox(shapeType)}
+                preserveAspectRatio={shapeType === SHAPE_TYPE.ARROW
+                  ? 'xMidYMid meet'
+                  : 'none'}
+                class="annotation-shape"
+                style="opacity: {shapeStyle.opacity};"
+              >
+                {#if shapeData.type === SHAPE_TYPE.CIRCLE}
+                  <circle
+                    cx={shapeData.cx}
+                    cy={shapeData.cy}
+                    r={shapeData.r}
+                    fill={shapeStyle.fill}
+                    stroke={shapeStyle.stroke}
+                    stroke-width={shapeStyle.strokeWidth}
+                    stroke-dasharray={shapeStyle.strokeDasharray}
+                  />
+                {:else if shapeData.type === SHAPE_TYPE.ARROW}
+                  <path
+                    d={shapeData.path}
+                    fill={shapeStyle.stroke}
+                    stroke={shapeStyle.stroke}
+                    stroke-width={shapeStyle.strokeWidth}
+                    stroke-dasharray={shapeStyle.strokeDasharray}
+                    stroke-linejoin="round"
+                    stroke-linecap="round"
+                  />
+                {:else}
+                  <path
+                    d={shapeData.path}
+                    fill={shapeStyle.fill}
+                    stroke={shapeStyle.stroke}
+                    stroke-width={shapeStyle.strokeWidth}
+                    stroke-dasharray={shapeStyle.strokeDasharray}
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                {/if}
+              </svg>
             </div>
-          {/if}
-        </div>
+            {#if isShapeSelected}
+              <div class="shape-handles" role="presentation">
+                <div
+                  class="resize-handle resize-nw"
+                  role="presentation"
+                  onpointerdown={(e: PointerEvent) =>
+                    handleResizePointerDown(e, item, 'nw')}
+                ></div>
+                <div
+                  class="resize-handle resize-n"
+                  role="presentation"
+                  onpointerdown={(e: PointerEvent) =>
+                    handleResizePointerDown(e, item, 'n')}
+                ></div>
+                <div
+                  class="resize-handle resize-ne"
+                  role="presentation"
+                  onpointerdown={(e: PointerEvent) =>
+                    handleResizePointerDown(e, item, 'ne')}
+                ></div>
+                <div
+                  class="resize-handle resize-e"
+                  role="presentation"
+                  onpointerdown={(e: PointerEvent) =>
+                    handleResizePointerDown(e, item, 'e')}
+                ></div>
+                <div
+                  class="resize-handle resize-se"
+                  role="presentation"
+                  onpointerdown={(e: PointerEvent) =>
+                    handleResizePointerDown(e, item, 'se')}
+                ></div>
+                <div
+                  class="resize-handle resize-s"
+                  role="presentation"
+                  onpointerdown={(e: PointerEvent) =>
+                    handleResizePointerDown(e, item, 's')}
+                ></div>
+                <div
+                  class="resize-handle resize-sw"
+                  role="presentation"
+                  onpointerdown={(e: PointerEvent) =>
+                    handleResizePointerDown(e, item, 'sw')}
+                ></div>
+                <div
+                  class="resize-handle resize-w"
+                  role="presentation"
+                  onpointerdown={(e: PointerEvent) =>
+                    handleResizePointerDown(e, item, 'w')}
+                ></div>
+                <div
+                  class="rotate-handle"
+                  role="presentation"
+                  onpointerdown={(e: PointerEvent) =>
+                    handleRotatePointerDown(e, item)}
+                ></div>
+              </div>
+            {/if}
+          </div>
+        {/if}
       {:else if item.type === AnnotationKind.DRAWING}
         {@const drawingStyle = getVectorStyle(item.style)}
         {@const points = Array.isArray(item.content) ? item.content : []}
@@ -1894,11 +2389,14 @@
             smoothness,
             isClosed
           )}
+          {@const isDrawingSelected =
+            isAnnotationEditing && selectedId === item.id}
           <svg
             width={drawingBounds.width}
             height={drawingBounds.height}
             viewBox={drawingBounds.viewBox}
             class="annotation-drawing"
+            class:annotation-drawing--editable={isDrawingSelected}
             style="opacity: {drawingStyle.opacity};"
           >
             <path
@@ -1910,6 +2408,38 @@
               stroke-linejoin="round"
               stroke-linecap="round"
             />
+            {#if isDrawingSelected}
+              <path
+                class="drawing-hit-path"
+                role="button"
+                aria-label={m.annotations_drawing_add_anchor()}
+                tabindex="-1"
+                d={smoothDrawingPath(points, smoothness, isClosed)}
+                fill="transparent"
+                stroke="transparent"
+                stroke-width={Math.max(drawingStyle.strokeWidth + 10, 14)}
+                ondblclick={(event: MouseEvent) =>
+                  handleDrawingPathDoubleClick(event, item)}
+              />
+              {#each points as point, pointIndex (pointIndex)}
+                <circle
+                  class="drawing-anchor"
+                  role="button"
+                  aria-label={m.annotations_drawing_edit_anchor()}
+                  tabindex="-1"
+                  cx={point.x}
+                  cy={point.y}
+                  r="5"
+                  fill="white"
+                  stroke="var(--cds-interactive-01, #0f62fe)"
+                  stroke-width="2"
+                  onpointerdown={(event: PointerEvent) =>
+                    handleAnchorPointerDown(event, item, pointIndex)}
+                  ondblclick={(event: MouseEvent) =>
+                    handleAnchorDoubleClick(event, item, pointIndex)}
+                />
+              {/each}
+            {/if}
           </svg>
         {/if}
       {:else if item.type === AnnotationKind.IMAGE}
@@ -2078,6 +2608,58 @@
   .annotation-shape,
   .annotation-drawing {
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
+  }
+
+  .annotation-drawing--editable {
+    overflow: visible;
+  }
+
+  .annotation-drawing .drawing-anchor {
+    cursor: grab;
+    pointer-events: all;
+    touch-action: none;
+  }
+
+  .annotation-drawing .drawing-anchor:hover {
+    fill: var(--cds-interactive-01, #0f62fe);
+    stroke: var(--cds-background, #ffffff);
+  }
+
+  .annotation-drawing .drawing-hit-path {
+    cursor: copy;
+    pointer-events: stroke;
+  }
+
+  .annotation-vector {
+    overflow: visible;
+  }
+
+  .annotation-vector .drawing-anchor,
+  .annotation-vector .tension-handle {
+    cursor: grab;
+    pointer-events: all;
+    touch-action: none;
+  }
+
+  .annotation-vector .drawing-anchor:hover {
+    fill: var(--cds-interactive-01, #0f62fe);
+    stroke: var(--cds-background, #ffffff);
+  }
+
+  .annotation-vector .tension-handle {
+    fill: var(--cds-background, #ffffff);
+    stroke: var(--cds-interactive-01, #0f62fe);
+    stroke-width: 2;
+    stroke-dasharray: 2 2;
+  }
+
+  .annotation-vector .tension-handle:hover {
+    fill: var(--cds-interactive-01, #0f62fe);
+  }
+
+  .annotation-vector .drawing-hit-path {
+    cursor: copy;
+    pointer-events: stroke;
   }
 
   .annotation-image {

@@ -83,6 +83,10 @@
   let fillSaturation = $state(0);
   let fillLightness = $state(100);
 
+  const isVectorShape = $derived(
+    selectedShape === SHAPE_TYPE.LINE || selectedShape === SHAPE_TYPE.ARROW
+  );
+
   $effect(() => {
     if (selectedShapeAnnotation) {
       const content = String(selectedShapeAnnotation.content);
@@ -149,10 +153,6 @@
     annotationsActions.applyStyle({ strokeWidth: e.detail });
   }
 
-  function handleCurvatureChange(e: CustomEvent<number>) {
-    annotationsActions.applyStyle({ curvature: e.detail });
-  }
-
   function handleRotationChange(e: CustomEvent<number>) {
     annotationsActions.applyStyle({ rotation: e.detail });
   }
@@ -193,6 +193,9 @@
           {m.annotations_add_shape()}
         </Button>
         <p class="helper">{m.annotations_shape_helper()}</p>
+        {#if isVectorShape}
+          <p class="helper">{m.annotations_vector_helper()}</p>
+        {/if}
       </div>
     </Column>
   </Row>
@@ -215,18 +218,18 @@
     </Column>
   </Row>
 
-  {#if selectedShape === SHAPE_TYPE.ARROW}
+  {#if !isVectorShape}
     <Row>
       <Column>
         <div class="section">
           <Slider
-            labelText={m.annotations_curvature()}
-            value={effectiveStyle.curvature ?? 40}
+            labelText={m.annotations_rotation()}
+            value={effectiveStyle.rotation ?? 0}
             min={0}
-            max={100}
+            max={359}
             step={1}
-            stepMultiplier={5}
-            on:input={handleCurvatureChange}
+            stepMultiplier={15}
+            on:input={handleRotationChange}
             minLabel=""
             maxLabel=""
           />
@@ -234,24 +237,6 @@
       </Column>
     </Row>
   {/if}
-
-  <Row>
-    <Column>
-      <div class="section">
-        <Slider
-          labelText={m.annotations_rotation()}
-          value={effectiveStyle.rotation ?? 0}
-          min={0}
-          max={359}
-          step={1}
-          stepMultiplier={15}
-          on:input={handleRotationChange}
-          minLabel=""
-          maxLabel=""
-        />
-      </div>
-    </Column>
-  </Row>
 
   <Row>
     <Column>

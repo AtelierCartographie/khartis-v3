@@ -19,12 +19,7 @@
   } from '$lib/features/commons/constants/visualization.constants';
   import { FILL_MODES_WITH_DENSITY } from '../shared/fill-mode-presets';
   import FillSection from '../shared/fill-section.svelte';
-  import {
-    InfoPopover,
-    StrokeSection,
-    VizFilterButton,
-    VizFilterPanel
-  } from '../shared';
+  import { StrokeSection, VizFilterButton, VizFilterPanel } from '../shared';
   import type { VizDataFilter } from '$lib/features/commons/stores/visualization.store.svelte';
   import DiscretizationModal from '../discretization/discretization-modal.svelte';
   import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
@@ -39,6 +34,7 @@
   import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
   import { resetVisualClassification } from '../shared/classification-reset.utils';
   import { coerceString, parseOpacityToSlider } from '../../utils/coerce.utils';
+  import { PatternType } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -143,6 +139,7 @@
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
   let missingDataPattern = $state<boolean>(false);
+  let missingDataPatternType = $state<PatternType>(PatternType.DASHES);
   const enabled = $derived.by(() => {
     const primitiveFilters =
       visualization?.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
@@ -168,6 +165,8 @@
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
       missingDataPattern = visualization.missingData.pattern ?? false;
+      missingDataPatternType =
+        visualization.missingData.patternType ?? PatternType.DASHES;
     }
   });
 
@@ -263,6 +262,11 @@
     onMissingDataChange?.({ pattern: value });
   }
 
+  function handleMissingDataPatternTypeChange(value: PatternType) {
+    missingDataPatternType = value;
+    onMissingDataChange?.({ patternType: value });
+  }
+
   function handleOpenDiscretization() {
     discretizationTarget = 'fill';
     discretizationModalOpen = true;
@@ -333,7 +337,6 @@
   onToggleChange={handleToggleChange}
 >
   {#snippet icon()}
-    <InfoPopover text={m.polygons_section_info()} />
     <VizFilterButton
       active={filterSectionVisible || filters.length > 0}
       count={filters.length}
@@ -361,6 +364,7 @@
       showMissingData={showMissingData}
       missingDataColor={missingDataColor}
       missingDataPattern={missingDataPattern}
+      missingDataPatternType={missingDataPatternType}
       sectionTitle={m.fill()}
       selectableDataFields={selectableDataFields}
       getFacetsSelectedFieldIds={facetsSelection.getSelectedFieldIds}
@@ -378,6 +382,7 @@
       onMissingDataShowChange={handleMissingDataShowChange}
       onMissingDataColorChange={handleMissingDataColorChange}
       onMissingDataPatternChange={handleMissingDataPatternChange}
+      onMissingDataPatternTypeChange={handleMissingDataPatternTypeChange}
       onInvertPalette={onInvertPalette}
     >
       {#snippet densitySnippet()}

@@ -15,8 +15,6 @@ const mocks = vi.hoisted(() => ({
     isSearching: false,
     caseSensitive: false,
     wholeWord: false,
-    useRegex: false,
-    replaceValue: '',
     isSampled: false
   },
   searchActions: {
@@ -26,9 +24,7 @@ const mocks = vi.hoisted(() => ({
     goToPreviousResult: vi.fn(),
     toggleCaseSensitive: vi.fn(),
     toggleWholeWord: vi.fn(),
-    toggleUseRegex: vi.fn(),
-    clearSearch: vi.fn(),
-    setReplaceValue: vi.fn()
+    clearSearch: vi.fn()
   }
 }));
 
@@ -39,6 +35,9 @@ vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
         columns: [
           { name: 'city', type: 'text' },
           { name: 'region', type: 'text' },
+          { name: 'basemap_id', type: 'text' },
+          { name: 'basemap_label', type: 'text' },
+          { name: 'typo_match', type: 'text' },
           { name: '__id', type: 'integer' },
           { name: 'geometry', type: 'geometry' }
         ]
@@ -81,7 +80,7 @@ describe('visualization search tool', () => {
     mocks.searchState.currentResultIndex = 1;
   });
 
-  it('shows the current result details and the replace input', () => {
+  it('shows the current result details without exposing a replace input', () => {
     render(SearchTool);
 
     expect(
@@ -90,11 +89,21 @@ describe('visualization search tool', () => {
     expect(screen.getByText('region')).toBeInTheDocument();
     expect(screen.getByText('Sevilla')).toBeInTheDocument();
     expect(
-      screen.getByRole('textbox', { name: m.search_replace_by() })
-    ).toBeInTheDocument();
+      screen.queryByText(m.search_replace_placeholder())
+    ).not.toBeInTheDocument();
   });
 
-  it('does not expose internal id or geometry columns in the source dropdown', async () => {
+  it('does not expose the regex option', () => {
+    render(SearchTool);
+
+    expect(
+      screen.queryByLabelText(m.search_case_sensitive())
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText(m.search_whole_word())).toBeInTheDocument();
+    expect(screen.queryByText(/regex/i)).not.toBeInTheDocument();
+  });
+
+  it('does not expose internal id, geometry, or joined basemap columns in the source dropdown', async () => {
     render(SearchTool);
 
     await fireEvent.click(screen.getByRole('combobox'));
@@ -106,6 +115,15 @@ describe('visualization search tool', () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('option', { name: 'geometry' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('option', { name: 'basemap_id' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('option', { name: 'basemap_label' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('option', { name: 'typo_match' })
     ).not.toBeInTheDocument();
   });
 });

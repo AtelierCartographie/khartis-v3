@@ -125,6 +125,7 @@ import {
   PATTERN_TYPE_MAP,
   type PatternName
 } from './pattern-texture';
+import { mapPatternTypeToPatternId } from '$lib/features/commons/components/palette-popover/palette.constants';
 import {
   createPathLayerProps,
   createScatterplotLayerProps,
@@ -190,7 +191,7 @@ function resolveThematicStrokeDashArray(
 ): [number, number] {
   switch (pattern) {
     case BasemapDottedPattern.DOTS:
-      return [0, 2.5];
+      return [1, 3];
     case BasemapDottedPattern.DASHES:
       return [6, 4];
     case BasemapDottedPattern.DASH_DOT:
@@ -1971,7 +1972,11 @@ function createPatternProps(
   }
   const patternScaleValue = Math.max(1, patternParams?.scale ?? 8);
   const patternSizeValue = Math.max(1, patternParams?.size ?? 4);
-  const patternScale = patternScaleValue * 25;
+  // patternScale is consumed as "tile size in screen pixels" by the shader,
+  // so motifs stay visually constant across zoom levels. The mapping
+  // turns the user-facing scale slider (~1 to 10) into a comfortable
+  // 16–80 px tile range, which matches what the categorical preview shows.
+  const patternScale = 8 + patternScaleValue * 8;
   const patternRotation =
     patternParams?.angle ?? PATTERN_TYPE_MAP[patternId]?.angle ?? 0;
 
@@ -2006,6 +2011,15 @@ function buildPatternProps(ctx: LayerContext): PolygonPatternProps | null {
   return createPatternProps(patternId, patternParams);
 }
 
+function resolveMissingDataPatternId(
+  polygonConfig: ReturnType<typeof getPolygonPrimitive> | undefined
+): PatternName {
+  return mapPatternTypeToPatternId(
+    polygonConfig?.missingData?.patternType,
+    DEFAULT_MISSING_DATA_PATTERN_ID
+  );
+}
+
 function buildMissingDataPatternProps(
   polygonConfig: ReturnType<typeof getPolygonPrimitive> | undefined,
   showMissingPolygons: boolean
@@ -2014,7 +2028,7 @@ function buildMissingDataPatternProps(
     return null;
   }
 
-  return createPatternProps(DEFAULT_MISSING_DATA_PATTERN_ID);
+  return createPatternProps(resolveMissingDataPatternId(polygonConfig));
 }
 
 function resolveSymbolPatternType(
@@ -5396,7 +5410,7 @@ export function createPolygonLayers(
         ) {
           missingDataPatternLayer = createPolygonPatternOverlayLayer(
             layerId,
-            DEFAULT_MISSING_DATA_PATTERN_ID,
+            resolveMissingDataPatternId(polygonConfig),
             missingPatternGeojson,
             missingDataPatternProps,
             ctx,
@@ -5726,7 +5740,7 @@ export function createPolygonLayers(
     missingDataPatternGeojson.features.length > 0
       ? createPolygonPatternOverlayLayer(
           layerId,
-          DEFAULT_MISSING_DATA_PATTERN_ID,
+          resolveMissingDataPatternId(polygonConfig),
           missingDataPatternGeojson,
           missingDataPatternProps,
           ctx,
