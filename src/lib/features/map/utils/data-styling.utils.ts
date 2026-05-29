@@ -259,33 +259,25 @@ export function hasCompleteCategoricalColorMap(
   });
 }
 
+// The resolved primitive config already falls back to the legacy global
+// `viz.modes` (see buildPolygonPrimitiveConfig et al.: `existing?.x ?? modes?.x`).
+// Reading `viz.modes` again here would re-activate the stale global mode after a
+// primitive switched fill/color mode, letting classes and categories both apply
+// at once — the choropleth then silently overrides the categorical fill.
 function usesClassedColor(
   viz: VisualizationConfig,
   primitive: PrimitiveFilterType
 ): boolean {
   switch (primitive) {
     case PrimitiveFilterType.LINE:
-      return (
-        getLinePrimitive(viz)?.colorMode === ColorMode.CLASSES ||
-        viz.modes?.color === ColorMode.CLASSES ||
-        viz.modes?.fill === FillMode.CLASSES
-      );
+      return getLinePrimitive(viz)?.colorMode === ColorMode.CLASSES;
     case PrimitiveFilterType.TEXT:
-      return (
-        getTextPrimitive(viz)?.colorMode === ColorMode.CLASSES ||
-        viz.modes?.color === ColorMode.CLASSES
-      );
+      return getTextPrimitive(viz)?.colorMode === ColorMode.CLASSES;
     case PrimitiveFilterType.POINT:
-      return (
-        getSymbolPrimitive(viz)?.fillMode === FillMode.CLASSES ||
-        viz.modes?.fill === FillMode.CLASSES
-      );
+      return getSymbolPrimitive(viz)?.fillMode === FillMode.CLASSES;
     case PrimitiveFilterType.POLYGON:
     default:
-      return (
-        getPolygonPrimitive(viz)?.fillMode === FillMode.CLASSES ||
-        viz.modes?.fill === FillMode.CLASSES
-      );
+      return getPolygonPrimitive(viz)?.fillMode === FillMode.CLASSES;
   }
 }
 
@@ -295,30 +287,19 @@ function usesCategoricalColor(
 ): boolean {
   switch (primitive) {
     case PrimitiveFilterType.LINE:
-      return (
-        getLinePrimitive(viz)?.colorMode === ColorMode.CATEGORIES ||
-        viz.modes?.color === ColorMode.CATEGORIES ||
-        viz.modes?.fill === FillMode.CATEGORIES
-      );
+      return getLinePrimitive(viz)?.colorMode === ColorMode.CATEGORIES;
     case PrimitiveFilterType.TEXT:
-      return (
-        getTextPrimitive(viz)?.colorMode === ColorMode.CATEGORIES ||
-        viz.modes?.color === ColorMode.CATEGORIES
-      );
+      return getTextPrimitive(viz)?.colorMode === ColorMode.CATEGORIES;
     case PrimitiveFilterType.POINT: {
       const symbol = getSymbolPrimitive(viz);
       return (
         symbol?.mode === SymbolMode.CATEGORIES ||
-        symbol?.fillMode === FillMode.CATEGORIES ||
-        viz.modes?.fill === FillMode.CATEGORIES
+        symbol?.fillMode === FillMode.CATEGORIES
       );
     }
     case PrimitiveFilterType.POLYGON:
     default:
-      return (
-        getPolygonPrimitive(viz)?.fillMode === FillMode.CATEGORIES ||
-        viz.modes?.fill === FillMode.CATEGORIES
-      );
+      return getPolygonPrimitive(viz)?.fillMode === FillMode.CATEGORIES;
   }
 }
 
