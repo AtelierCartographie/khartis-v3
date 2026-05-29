@@ -58,6 +58,9 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Fetch semantic-release notes
+        run: git fetch origin 'refs/notes/semantic-release:refs/notes/semantic-release' || true
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 
