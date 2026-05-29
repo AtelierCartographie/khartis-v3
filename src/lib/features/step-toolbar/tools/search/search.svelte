@@ -1,17 +1,14 @@
 <script lang="ts">
-  import Button from '$lib/features/commons/components/carbon/button.svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
-  import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+  import {
+    INTERNAL_COLUMN,
+    JOINED_BASEMAP_COLUMNS
+  } from '$lib/features/commons/constants/data.constants';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
   import { m } from '$lib/paraglide/messages';
-  import {
-    Checkbox,
-    Dropdown,
-    Search,
-    TextInput
-  } from 'carbon-components-svelte';
-  import { ChevronLeft, ChevronRight, Restart } from 'carbon-icons-svelte';
+  import { Checkbox, Dropdown, Search } from 'carbon-components-svelte';
+  import { ChevronLeft, ChevronRight } from 'carbon-icons-svelte';
   import { onDestroy } from 'svelte';
   import { searchState, searchActions } from './search.store.svelte';
 
@@ -20,14 +17,6 @@
   function handleSearchInput(e: Event) {
     const target = e.target as HTMLInputElement;
     searchActions.setSearchValue(target.value);
-  }
-
-  function handleReplaceInput(e: CustomEvent<string | number | null>) {
-    const value =
-      typeof e.detail === 'string'
-        ? e.detail
-        : ((e.target as HTMLInputElement)?.value ?? '');
-    searchActions.setReplaceValue(value);
   }
 
   function navigateResults(direction: 'prev' | 'next') {
@@ -50,7 +39,10 @@
 
     const columnItems = dataset.columns
       .filter(
-        (col) => col.type !== 'geometry' && col.name !== INTERNAL_COLUMN.ID
+        (col) =>
+          col.type !== 'geometry' &&
+          col.name !== INTERNAL_COLUMN.ID &&
+          !JOINED_BASEMAP_COLUMNS.includes(col.name)
       )
       .map((col) => ({ id: col.name, text: col.name }));
 
@@ -63,9 +55,6 @@
   const showResults = $derived(searchState.searchValue.trim().length >= 2);
   const noResults = $derived(
     showResults && !hasResults && !searchState.isSearching
-  );
-  const canReplace = $derived(
-    currentResultIndex >= 0 && searchState.replaceValue.trim().length > 0
   );
 
   let resultsListEl = $state<HTMLUListElement | null>(null);
@@ -107,11 +96,6 @@
       labelText={m.search_whole_word()}
       checked={searchState.wholeWord}
       on:change={() => searchActions.toggleWholeWord()}
-    />
-    <Checkbox
-      labelText={m.search_use_regex()}
-      checked={searchState.useRegex}
-      on:change={() => searchActions.toggleUseRegex()}
     />
   </div>
 
@@ -192,29 +176,6 @@
       </ul>
     {/if}
   {/if}
-
-  <div class="replace-section">
-    <TextInput
-      size="sm"
-      labelText={m.search_replace_by()}
-      placeholder={m.search_replace_placeholder()}
-      value={searchState.replaceValue}
-      on:input={handleReplaceInput}
-    />
-    <div class="replace-action">
-      <p class="helper-text">{m.search_replace_exact_only()}</p>
-      <Button
-        kind="secondary"
-        size="sm"
-        icon={Restart}
-        iconDescription={m.search_replace_button()}
-        disabled={!canReplace}
-        on:click={() => void searchActions.replaceCurrentResult()}
-      >
-        {m.search_replace_button()}
-      </Button>
-    </div>
-  </div>
 </div>
 
 <style lang="scss">
@@ -321,21 +282,5 @@
     line-height: 1.25rem;
     color: var(--cds-text-primary, #161616);
     word-break: break-word;
-  }
-
-  .replace-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
-    padding-top: var(--cds-spacing-03);
-    border-top: 1px solid var(--cds-border-subtle-01);
-  }
-
-  .replace-action {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--cds-spacing-03);
-    flex-wrap: wrap;
   }
 </style>

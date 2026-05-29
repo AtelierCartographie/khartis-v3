@@ -5,7 +5,7 @@ import {
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   INTERNAL_COLUMN,
-  JOINED_BASEMAP_COLUMN
+  JOINED_BASEMAP_COLUMNS
 } from '$lib/features/commons/constants/data.constants';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -13,7 +13,6 @@ import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { projectHtmlLikeText } from '$lib/features/commons/utils/html-like-text.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import { Duck } from '$lib/features/duckdb';
-import { buildStripHtmlTextSqlExpression } from '$lib/features/duckdb/utils/html-like-text.utils';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { mapHighlightStore } from '$lib/features/map/stores/map-highlight.store.svelte';
 import { mapTooltipStore } from '$lib/features/map/stores/map-tooltip.store.svelte';
@@ -32,8 +31,6 @@ const DEFAULT_STATE: SearchState = {
   isSearching: false,
   caseSensitive: false,
   wholeWord: false,
-  useRegex: false,
-  replaceValue: '',
   isSampled: false
 };
 
@@ -45,11 +42,8 @@ type SearchActions = {
   goToPreviousResult: () => void;
   goToResult: (index: number) => void;
   toggleCaseSensitive: () => void;
-  toggleUseRegex: () => void;
   toggleWholeWord: () => void;
   clearSearch: () => void;
-  setReplaceValue: (value: string) => void;
-  replaceCurrentResult: () => Promise<void>;
 };
 
 function resolveSearchDataset(): DatasetResult | undefined {
@@ -83,8 +77,6 @@ type SearchContext = {
   };
 };
 
-type SearchResultItem = SearchState['results'][number];
-
 function getSearchContext(): SearchContext | null {
   const dataset = resolveSearchDataset();
   if (!dataset?.sourceFileId) {
@@ -108,34 +100,11 @@ function getSearchContext(): SearchContext | null {
   };
 }
 
-function getSearchTableName(): string | null {
-  return getSearchContext()?.tableName ?? null;
-}
-
-function escapeSqlString(value: string): string {
-  return value.replaceAll("'", "''");
-}
-
-function escapeIdentifier(identifier: string): string {
-  return identifier.replaceAll('"', '""');
-}
-
-function resolveSearchColumns(
-  dataset: DatasetResult,
-  selectedSource: string
-): string[] {
-  const columnNames = dataset.columns
-    .filter(
-      (column) =>
-        column.type !== 'geometry' && column.name !== INTERNAL_COLUMN.ID
-    )
-    .map((column) => column.name);
-
-  if (selectedSource === ALL_SOURCES_ID) {
-    return columnNames;
-  }
-
-  return columnNames.includes(selectedSource) ? [selectedSource] : [];
+function isSearchableColumn(columnName: string, columnType: string): boolean {
+  if (columnType === 'geometry') return false;
+  if (columnName === INTERNAL_COLUMN.ID) return false;
+  if (JOINED_BASEMAP_COLUMNS.includes(columnName)) return false;
+  return true;
 }
 
 function escapeRegExp(value: string): string {
@@ -144,17 +113,8 @@ function escapeRegExp(value: string): string {
 
 function buildSearchMatcher(
   query: string,
-  options: Pick<SearchState, 'caseSensitive' | 'wholeWord' | 'useRegex'>
+  options: Pick<SearchState, 'caseSensitive' | 'wholeWord'>
 ): (value: unknown) => boolean {
-  if (options.useRegex) {
-    try {
-      const regex = new RegExp(query, options.caseSensitive ? '' : 'i');
-      return (value: unknown) => regex.test(String(value ?? ''));
-    } catch {
-      return () => false;
-    }
-  }
-
   if (options.wholeWord) {
     const regex = new RegExp(
       `(?:^|\\b)${escapeRegExp(query)}(?:\\b|$)`,
@@ -174,80 +134,11 @@ function buildSearchMatcher(
       .includes(loweredQuery);
 }
 
-async function performRegexSearch(
-  searchContext: SearchContext,
-  query: string,
-  options: Pick<SearchState, 'caseSensitive' | 'selectedSource'>
-): Promise<SearchResultItem[]> {
-  try {
-    new RegExp(query, options.caseSensitive ? '' : 'i');
-  } catch {
-    return [];
-  }
-
-  const targetColumns = resolveSearchColumns(
-    searchContext.dataset,
-    options.selectedSource
-  );
-
-  if (targetColumns.length === 0) {
-    return [];
-  }
-
-  const escapedPattern = escapeSqlString(query);
-  const regexFlags = options.caseSensitive ? 'c' : 'i';
-  const escapedTableName = escapeIdentifier(searchContext.tableName);
-
-  const unionQuery = targetColumns
-    .map((columnName) => {
-      const escapedColumnName = escapeIdentifier(columnName);
-      const escapedColumnLabel = escapeSqlString(columnName);
-      const projectedColumnValue = buildStripHtmlTextSqlExpression(
-        `"${escapedColumnName}"`
-      );
-      return `
-        SELECT
-          "${INTERNAL_COLUMN.ID}" AS row_id,
-          '${escapedColumnLabel}' AS column_name,
-          ${projectedColumnValue} AS column_value,
-          1.0 AS score
-        FROM "${escapedTableName}"
-        WHERE "${escapedColumnName}" IS NOT NULL
-          AND regexp_matches(
-            ${projectedColumnValue},
-            '${escapedPattern}',
-            '${regexFlags}'
-          )
-      `;
-    })
-    .join('\nUNION ALL\n');
-
-  const rows = (await Duck.query(
-    `${unionQuery}
-     ORDER BY row_id, column_name
-     LIMIT 500`,
-    { format: 'array' }
-  )) as Array<{
-    row_id: number;
-    column_name: string;
-    column_value: string;
-    score: number;
-  }>;
-
-  return rows.map((row) => ({
-    rowId: row.row_id,
-    columnName: row.column_name,
-    value: row.column_value,
-    score: row.score
-  }));
-}
-
 const TOOLTIP_EXCLUDED_COLUMNS = new Set<string>([
   INTERNAL_COLUMN.ID,
   INTERNAL_COLUMN.GEOM,
   INTERNAL_COLUMN.GEOMETRY,
-  JOINED_BASEMAP_COLUMN.ID,
-  JOINED_BASEMAP_COLUMN.TYPO_MATCH
+  ...JOINED_BASEMAP_COLUMNS
 ]);
 
 async function showTooltipForResult(
@@ -330,7 +221,8 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
 
     const performSearch = async (): Promise<void> => {
       const query = s.searchValue.trim();
-      const tableName = getSearchTableName();
+      const searchContext = getSearchContext();
+      const tableName = searchContext?.tableName ?? null;
 
       if (!query || query.length < MIN_SEARCH_LENGTH || !tableName) {
         s.results = [];
@@ -348,39 +240,28 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
       try {
         const matcher = buildSearchMatcher(query, {
           caseSensitive: s.caseSensitive,
-          wholeWord: s.wholeWord,
-          useRegex: s.useRegex
+          wholeWord: s.wholeWord
         });
-        const searchContext = getSearchContext();
         const columnFilter =
           s.selectedSource === ALL_SOURCES_ID ? undefined : s.selectedSource;
-        const regexResults =
-          s.useRegex && searchContext
-            ? await performRegexSearch(searchContext, query, {
-                caseSensitive: s.caseSensitive,
-                selectedSource: s.selectedSource
-              })
-            : null;
 
-        const stats =
-          regexResults !== null
-            ? {
-                exactCount: regexResults.length,
-                containsCount: 0,
-                fuzzyCount: 0,
-                totalCount: regexResults.length,
-                results: regexResults
-              }
-            : await duckDBOrchestrator.searchInTable(tableName, query, {
-                threshold: 0.85,
-                column: columnFilter
-              });
+        const stats = await duckDBOrchestrator.searchInTable(tableName, query, {
+          threshold: 0.85,
+          column: columnFilter
+        });
 
         if (requestId !== latestRequestId) {
           return;
         }
 
+        const searchableColumnNames = new Set(
+          searchContext?.dataset.columns
+            .filter((column) => isSearchableColumn(column.name, column.type))
+            .map((column) => column.name) ?? []
+        );
+
         s.results = stats.results
+          .filter((result) => searchableColumnNames.has(result.columnName))
           .map((result) => {
             const projectedValue =
               typeof result.value === 'string'
@@ -488,10 +369,6 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
         s.caseSensitive = !s.caseSensitive;
         rerunSearchIfNeeded();
       },
-      toggleUseRegex: () => {
-        s.useRegex = !s.useRegex;
-        rerunSearchIfNeeded();
-      },
       toggleWholeWord: () => {
         s.wholeWord = !s.wholeWord;
         rerunSearchIfNeeded();
@@ -508,44 +385,6 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
         s.isSampled = false;
         clearMapHighlights();
         mapTooltipStore.unpin();
-      },
-      setReplaceValue: (value: string) => {
-        s.replaceValue = value;
-      },
-      replaceCurrentResult: async (): Promise<void> => {
-        const focused = s.results[s.currentResultIndex];
-        const searchContext = getSearchContext();
-        if (!focused || !searchContext || !s.replaceValue.trim()) return;
-
-        const escapedTable = escapeIdentifier(searchContext.tableName);
-        const escapedCol = escapeIdentifier(focused.columnName);
-        const escapedNewVal = escapeSqlString(s.replaceValue);
-
-        try {
-          await Duck.query(
-            `UPDATE "${escapedTable}" SET "${escapedCol}" = '${escapedNewVal}' WHERE ${INTERNAL_COLUMN.ID} = ${focused.rowId}`,
-            { format: 'array' }
-          );
-          Duck.invalidateTableCache(searchContext.tableName);
-          duckDBOrchestrator.bumpDatasetsVersion();
-
-          const prevIndex = s.currentResultIndex;
-          s.results = s.results.filter((_, i) => i !== prevIndex);
-
-          if (s.results.length > 0) {
-            navigateTo(Math.min(prevIndex, s.results.length - 1));
-          } else {
-            s.currentResultIndex = -1;
-            clearMapHighlights();
-            mapTooltipStore.unpin();
-          }
-        } catch (error) {
-          logger.error('Replace failed', LogCategory.UI, {
-            rowId: focused.rowId,
-            column: focused.columnName,
-            error
-          });
-        }
       }
     };
   },

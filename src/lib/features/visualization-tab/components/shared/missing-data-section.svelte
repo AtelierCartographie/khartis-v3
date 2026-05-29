@@ -20,6 +20,8 @@
     SliderWithInput,
     ToggleWithLabel
   } from '$lib/features/commons/components/viz-controls';
+  import PatternPicker from '$lib/features/commons/components/palette-popover/pattern-picker.svelte';
+  import type { PatternParams } from '$lib/features/commons/components/palette-popover/palette.constants';
 
   interface Props {
     show: boolean;
@@ -37,6 +39,8 @@
     dashed?: boolean;
     dashedPattern?: BasemapDottedPattern;
     pattern?: boolean;
+    patternId?: string;
+    patternParams?: PatternParams;
     onshowchange?: (show: boolean) => void;
     oncolorchange?: (color: string) => void;
     onshapechange?: (shape: MissingDataShape) => void;
@@ -44,6 +48,7 @@
     ondashedchange?: (dashed: boolean) => void;
     ondashedpatternchange?: (pattern: BasemapDottedPattern) => void;
     onpatternchange?: (pattern: boolean) => void;
+    onpatternstylechange?: (patternId: string, params: PatternParams) => void;
   }
 
   let {
@@ -62,13 +67,16 @@
     dashed = false,
     dashedPattern = BasemapDottedPattern.DOTS,
     pattern = false,
+    patternId = 'diagonal',
+    patternParams = { size: 4, scale: 8 },
     onshowchange,
     oncolorchange,
     onshapechange,
     onsizechange,
     ondashedchange,
     ondashedpatternchange,
-    onpatternchange
+    onpatternchange,
+    onpatternstylechange
   }: Props = $props();
 
   const dashedPatternItems = $derived([
@@ -109,6 +117,10 @@
   function handlePatternToggle(value: boolean) {
     pattern = value;
     onpatternchange?.(value);
+  }
+
+  function handlePatternStyleChange(id: string, params: PatternParams) {
+    onpatternstylechange?.(id, params);
   }
 </script>
 
@@ -187,6 +199,17 @@
             </div>
           </Column>
         </Row>
+        {#if pattern}
+          <Row>
+            <Column>
+              <PatternPicker
+                patternId={patternId}
+                patternParams={patternParams}
+                onChange={handlePatternStyleChange}
+              />
+            </Column>
+          </Row>
+        {/if}
       {/if}
 
       {#if showDashedToggle}

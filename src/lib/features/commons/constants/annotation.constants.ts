@@ -46,12 +46,12 @@ export const SHAPE_SPECS: Record<ShapeTypeValue, ShapeSpec> = {
   [SHAPE_TYPE.CIRCLE]: {
     width: 80,
     height: 80,
-    lockAspectRatio: true
+    lockAspectRatio: false
   },
   [SHAPE_TYPE.LINE]: {
     width: 120,
     height: 24,
-    lockAspectRatio: true
+    lockAspectRatio: false
   },
   [SHAPE_TYPE.RECTANGLE]: {
     width: 96,
@@ -61,7 +61,7 @@ export const SHAPE_SPECS: Record<ShapeTypeValue, ShapeSpec> = {
   [SHAPE_TYPE.TRIANGLE]: {
     width: 80,
     height: 80,
-    lockAspectRatio: true
+    lockAspectRatio: false
   },
   [SHAPE_TYPE.ARROW]: {
     width: 120,
@@ -71,7 +71,7 @@ export const SHAPE_SPECS: Record<ShapeTypeValue, ShapeSpec> = {
   [SHAPE_TYPE.STAR]: {
     width: 80,
     height: 80,
-    lockAspectRatio: true
+    lockAspectRatio: false
   }
 };
 

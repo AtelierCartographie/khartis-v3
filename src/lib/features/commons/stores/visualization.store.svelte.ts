@@ -39,6 +39,7 @@ import {
   DEFAULT_STROKE_WIDTH
 } from '../constants/colors.constants';
 import { DEFAULT_CATEGORICAL_COLORS as FIGMA_DEFAULT_CATEGORICAL_COLORS } from '../constants/qualitative-palette.constants';
+import { PatternType } from '../components/palette-popover/categories-aspect-popover.types';
 import {
   COLUMN_TYPE_GEOMETRY,
   GEO_COLUMN_TYPE
@@ -133,6 +134,14 @@ export interface MissingDataConfig {
   color: string;
   opacity?: number;
   pattern?: boolean;
+  patternId?: string;
+  patternParams?: PatternParams;
+  /**
+   * Legacy: older projects stored a coarse PatternType. New code writes
+   * patternId + patternParams; this is read as a fallback so older saved
+   * projects still render their missing-data pattern.
+   */
+  patternType?: PatternType;
   dashed?: boolean;
   dashedPattern?: BasemapDottedPattern;
   label?: string;

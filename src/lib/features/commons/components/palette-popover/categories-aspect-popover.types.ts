@@ -1,4 +1,5 @@
 import { ShapeType } from '$lib/features/commons/constants/visualization.constants';
+import type { PatternParams } from '$lib/features/commons/stores/visualization.store.svelte';
 
 export type CategoriesAspectVariant =
   | 'symbols-unique'
@@ -34,7 +35,8 @@ export interface CategoriesCommonAspect {
   autoColor: boolean;
   strokeSize: number;
   pattern: boolean;
-  patternType?: PatternType;
+  patternId?: string;
+  patternParams?: PatternParams;
   strokeUnique?: boolean;
   shape?: ShapeType;
   color?: string;
@@ -52,7 +54,8 @@ export const DEFAULT_COMMON_ASPECT: CategoriesCommonAspect = {
   strokeUnique: true,
   strokeSize: 1,
   pattern: false,
-  patternType: PatternType.DOTS,
+  patternId: 'diagonal',
+  patternParams: { size: 4, scale: 8 },
   shape: ShapeType.CIRCLE,
   color: '#f287ac',
   thickness: 1,

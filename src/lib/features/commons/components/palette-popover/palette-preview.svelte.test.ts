@@ -175,12 +175,11 @@ describe('PalettePreview — categoriesMode routing (Fill Categories)', () => {
     expect(source).toContain('Boolean(onCategoriesCommonAspectChange)');
   });
 
-  it('derives the common pattern id from the selected pattern type so changing the type updates the motif', () => {
+  it('derives the common pattern id and params directly from the selected motif', () => {
     expect(source).toContain('function resolveValidatedCategoryPatternId');
     expect(source).toContain("categoriesVariant === 'polygons'");
     expect(source).toContain("categoriesVariant.startsWith('symbols')");
-    expect(source).toContain('CATEGORY_PATTERN_IDS_BY_TYPE[');
-    expect(source).toContain('commonAspect.patternType ?? PatternType.DOTS');
+    expect(source).toContain("commonAspect.patternId ?? 'diagonal'");
     expect(source).not.toContain('coerceCategoryPatternId');
     expect(source).not.toContain('const existingPatternId');
     expect(source).toContain(
@@ -188,7 +187,7 @@ describe('PalettePreview — categoriesMode routing (Fill Categories)', () => {
     );
     expect(source).toContain('patternId,');
     expect(source).toContain(
-      'patternParams: patternId ? classification?.patternParams : undefined'
+      'patternParams: patternId ? commonAspect.patternParams : undefined'
     );
   });
 });

@@ -48,8 +48,6 @@ in vec4 fill_patternBounds;
 in vec4 fill_patternPlacement;
 in vec2 fill_uv;
 in float fill_patternRotation;
-
-const float FILL_UV_SCALE = 512.0 / 40000000.0;
 `;
 
 const fs = `
@@ -66,15 +64,23 @@ const inject = {
     if (fill.patternEnabled) {
       fill_patternBounds = fillPatternFrames / vec4(fill.patternTextureSize, fill.patternTextureSize);
       fill_patternPlacement.xy = fillPatternOffsets;
-      fill_patternPlacement.zw = fillPatternScales * fillPatternFrames.zw;
+      // fillPatternScales is the desired tile size in screen pixels. Convert it
+      // to common units at the current zoom so the motif keeps a constant
+      // on-screen size (like Mapbox / QGIS fill-pattern) while staying anchored
+      // to geography below — re-evaluated every frame as the view scale changes.
+      fill_patternPlacement.zw = project_pixel_size(vec2(fillPatternScales));
       fill_patternRotation = radians(fillPatternRotations);
     }
   `,
 
   'fs:DECKGL_FILTER_COLOR': /* glsl */ `
     if (fill.patternEnabled) {
-      vec2 scale = FILL_UV_SCALE * fill_patternPlacement.zw;
+      // Tile size in common units (screen px converted in the vertex stage).
+      vec2 scale = max(fill_patternPlacement.zw, vec2(1e-4));
 
+      // Anchor the motif to geography so it pans and zooms WITH the map. Using
+      // gl_FragCoord here would lock the motif to screen pixels, making the map
+      // appear to slide underneath a fixed pattern.
       vec2 worldPos = fill.uvCoordinateOrigin + fill.uvCoordinateOrigin64Low + fill_uv;
 
       float c = cos(fill_patternRotation);
@@ -83,7 +89,6 @@ const inject = {
       vec2 rotatedPos = rotationMatrix * worldPos;
 
       vec2 patternUV = mod(rotatedPos, scale) / scale;
-
       patternUV = mod(fill_patternPlacement.xy + patternUV, 1.0);
 
       vec2 texCoords = fill_patternBounds.xy + fill_patternBounds.zw * patternUV;

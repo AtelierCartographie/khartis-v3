@@ -21,12 +21,7 @@
     ClassificationConfig
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import DiscretizationModal from '../discretization/discretization-modal.svelte';
-  import {
-    SectionHeading,
-    InfoPopover,
-    VizFilterButton,
-    VizFilterPanel
-  } from '../shared';
+  import { SectionHeading, VizFilterButton, VizFilterPanel } from '../shared';
   import type { VizDataFilter } from '$lib/features/commons/stores/visualization.store.svelte';
   import {
     SymbolModeUnique,
@@ -255,7 +250,6 @@
   onToggleChange={handleToggleChange}
 >
   {#snippet icon()}
-    <InfoPopover text={m.symbols_section_info()} />
     <VizFilterButton
       active={filterSectionVisible || filters.length > 0}
       count={filters.length}
@@ -277,7 +271,6 @@
     <div class="field-group">
       <span class="field-label">
         {m.symbols_title()}
-        <InfoPopover text={m.symbol_mode_info()} />
       </span>
       <ToggleTabs
         items={symbolModeItems}
