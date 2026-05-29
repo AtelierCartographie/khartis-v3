@@ -162,7 +162,10 @@ vi.mock('$lib/features/step-toolbar/tools/legend/legend.store.svelte', () => ({
   }
 }));
 
-import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
+import {
+  PrimitiveFilterType,
+  visualizationStore
+} from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   applySuggestionToVisualization,
   isVisualizationMatchingSuggestion,
@@ -1032,11 +1035,15 @@ function assertRenderInvariant(
   }
 
   if (POINT_CATEGORICAL_SUGGESTION_IDS.has(suggestion.id)) {
-    expect(shouldApplyCategorical(updatedVisualization!)).toBe(true);
+    expect(
+      shouldApplyCategorical(updatedVisualization!, PrimitiveFilterType.POINT)
+    ).toBe(true);
   }
 
   if (POINT_CLASSED_SUGGESTION_IDS.has(suggestion.id)) {
-    expect(shouldApplyChoropleth(updatedVisualization!)).toBe(true);
+    expect(
+      shouldApplyChoropleth(updatedVisualization!, PrimitiveFilterType.POINT)
+    ).toBe(true);
   }
 
   if (POINT_PROPORTIONAL_SUGGESTION_IDS.has(suggestion.id)) {
