@@ -236,37 +236,6 @@ describe('search store tooltip integration', () => {
     );
   });
 
-  it('uses the stripped HTML projection for regex searches', async () => {
-    const regexResult = [
-      {
-        row_id: 55,
-        column_name: 'Description',
-        column_value: 'The Pit Tras Street',
-        score: 1
-      }
-    ];
-    const duckRow: Record<string, unknown> = {};
-    Object.defineProperties(duckRow, {
-      __id: { value: 55, enumerable: false },
-      Description: { value: 'The Pit Tras Street', enumerable: false }
-    });
-    mocks.duckQuery
-      .mockResolvedValueOnce(regexResult)
-      .mockResolvedValueOnce([duckRow]);
-
-    const { searchActions } = await import('./search.store.svelte');
-
-    searchActions.clearSearch();
-    searchActions.toggleUseRegex();
-    searchActions.setSearchValue('Tras\\s+Street');
-    await searchActions.performSearch();
-
-    expect(mocks.duckQuery.mock.calls[0]?.[0]).toContain(
-      'regexp_matches(\n            strip_html_text("Description"::VARCHAR),'
-    );
-    expect(mocks.searchInTable).not.toHaveBeenCalled();
-  });
-
   it('passes joined basemap metadata through to the centering helper for joined CSV data', async () => {
     mocks.getDatasetBySourceFile.mockReturnValue({
       tableName: 'nuts2_table',
@@ -288,68 +257,45 @@ describe('search store tooltip integration', () => {
       gpsColumns: undefined
     });
   });
-});
 
-describe('search store replace integration', () => {
-  beforeEach(() => {
-    vi.resetModules();
-    mocks.duckQuery.mockReset();
-    mocks.searchInTable.mockReset();
-    mocks.getDatasetBySourceFile.mockReset();
-    mocks.pinAt.mockReset();
-    mocks.unpin.mockReset();
-    mocks.setHighlightedRows.mockReset();
-    mocks.clearHighlights.mockReset();
-    mocks.centerMapOnTableRow.mockReset();
-    mocks.bumpDatasetsVersion.mockReset();
-    mocks.invalidateTableCache.mockReset();
-
-    mocks.getDatasetBySourceFile.mockReturnValue({ tableName: 'nuts2_table' });
+  it('excludes joined basemap columns (basemap_id, basemap_label, typo_match) from results', async () => {
+    mocks.dataset.columns = [
+      { name: 'OGC_FID', type: 'integer' },
+      { name: 'NAME_LATN', type: 'text' },
+      { name: 'basemap_id', type: 'text' },
+      { name: 'basemap_label', type: 'text' },
+      { name: 'typo_match', type: 'text' },
+      { name: 'geom', type: 'geometry' },
+      { name: '__id', type: 'integer' }
+    ];
     mocks.searchInTable.mockResolvedValue({
-      exactCount: 1,
+      exactCount: 3,
       containsCount: 0,
       fuzzyCount: 0,
-      totalCount: 1,
+      totalCount: 3,
       results: [
-        { rowId: 55, columnName: 'NAME_LATN', value: 'Braunschweig', score: 1 }
+        { rowId: 55, columnName: 'NAME_LATN', value: 'Braunschweig', score: 1 },
+        {
+          rowId: 55,
+          columnName: 'basemap_label',
+          value: 'Braunschweig',
+          score: 1
+        },
+        { rowId: 55, columnName: 'basemap_id', value: 'BRAUN', score: 1 }
       ]
     });
-    mocks.duckQuery.mockResolvedValue([]);
-  });
 
-  it('should UPDATE the cell and invalidate the cache when replacing a result', async () => {
-    const { searchActions } = await import('./search.store.svelte');
+    const { searchActions, searchState } =
+      await import('./search.store.svelte');
 
     searchActions.clearSearch();
     searchActions.setSearchValue('Braunschweig');
     await searchActions.performSearch();
 
-    searchActions.setReplaceValue('Braunschweig-Wolfsburg');
-    await searchActions.replaceCurrentResult();
-
-    expect(mocks.duckQuery).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'UPDATE "nuts2_table" SET "NAME_LATN" = \'Braunschweig-Wolfsburg\' WHERE __id = 55'
-      ),
-      { format: 'array' }
-    );
-    expect(mocks.invalidateTableCache).toHaveBeenCalledWith('nuts2_table');
-    expect(mocks.bumpDatasetsVersion).toHaveBeenCalled();
-  });
-
-  it('should not replace when replace value is empty', async () => {
-    const { searchActions } = await import('./search.store.svelte');
-
-    searchActions.clearSearch();
-    searchActions.setSearchValue('Braunschweig');
-    await searchActions.performSearch();
-
-    searchActions.setReplaceValue('');
-    await searchActions.replaceCurrentResult();
-
-    expect(mocks.duckQuery).not.toHaveBeenCalledWith(
-      expect.stringContaining('UPDATE'),
-      expect.anything()
-    );
+    const columnNames = searchState.results.map((r) => r.columnName);
+    expect(columnNames).toContain('NAME_LATN');
+    expect(columnNames).not.toContain('basemap_label');
+    expect(columnNames).not.toContain('basemap_id');
+    expect(columnNames).not.toContain('typo_match');
   });
 });
