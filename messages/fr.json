@@ -525,6 +525,7 @@
   "geo_orientation_compass": "Rose des vents",
   "geo_orientation_size": "Taille (mm)",
   "geo_orientation_color": "Couleur",
+  "geo_orientation_valid_at_map_center": "L’orientation est valable au centre de la carte.",
   "geo_inset_map_type": "Type",
   "geo_inset_map_globe": "Globe",
   "geo_inset_map_planisphere": "Planisphère",

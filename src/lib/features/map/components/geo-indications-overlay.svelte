@@ -36,6 +36,7 @@
     formatScaleDistance,
     getScaleDistanceLimit,
     getCurrentScaleDistanceContext,
+    getNorthBearingAtCenter,
     getScaleMetersPerPixel,
     getSuggestedScaleDistance,
     getInsetMapGeographicBounds,
@@ -561,6 +562,18 @@
     return Math.round(
       clamp(sizeInPx, ORIENTATION_MIN_SIZE_PX, ORIENTATION_MAX_SIZE_PX)
     );
+  });
+
+  // Rotation that makes the north indicator point to geographic north at the
+  // center of the current framing, recomputed on map move/zoom/resize and on
+  // projection change — same reactivity contract as the scale bar.
+  const orientationAngle = $derived.by(() => {
+    const _revision = mapViewRevision;
+    const _zoomLevel = mapInstanceStore.zoomLevel;
+    void _revision;
+    void _zoomLevel;
+
+    return getNorthBearingAtCenter(getCurrentScaleDistanceContext()) ?? 0;
   });
 
   const insetDimensions = $derived.by(() => {
@@ -1254,62 +1267,65 @@
         width={orientationSize}
         height={orientationSize}
         viewBox="0 0 40 50"
+        style="overflow: visible;"
         aria-label={m.geo_north_indicator_aria()}
       >
-        {#if geoIndicationsState.orientation.style === OrientationIndicatorStyle.ARROW}
-          <polygon
-            points="20,5 30,35 20,28 10,35"
-            fill={orientationColor}
-            stroke={orientationColor}
-            stroke-width="1"
-          />
-          <text
-            x="20"
-            y="47"
-            text-anchor="middle"
-            font-size={PRINT_STANDARD_TOKENS.geoIndications.scaleFontSize}
-            font-weight="bold"
-            fill={orientationColor}
-            font-family={orientationFontFamily}
-          >
-            {m.orientation_north()}
-          </text>
-        {:else}
-          <circle
-            cx="20"
-            cy="20"
-            r="15"
-            fill="none"
-            stroke={orientationColor}
-            stroke-width="2"
-          />
-          <polygon points="20,7 23,20 20,15 17,20" fill={orientationColor} />
-          <polygon
-            points="20,33 23,20 20,25 17,20"
-            fill="none"
-            stroke={orientationColor}
-            stroke-width="1"
-          />
-          <line
-            x1="7"
-            y1="20"
-            x2="33"
-            y2="20"
-            stroke={orientationColor}
-            stroke-width="1"
-          />
-          <text
-            x="20"
-            y="47"
-            text-anchor="middle"
-            font-size={PRINT_STANDARD_TOKENS.annotations.captionFontSize}
-            font-weight="bold"
-            fill={orientationColor}
-            font-family={orientationFontFamily}
-          >
-            {m.orientation_north()}
-          </text>
-        {/if}
+        <g transform={`rotate(${orientationAngle.toFixed(1)} 20 25)`}>
+          {#if geoIndicationsState.orientation.style === OrientationIndicatorStyle.ARROW}
+            <polygon
+              points="20,5 30,35 20,28 10,35"
+              fill={orientationColor}
+              stroke={orientationColor}
+              stroke-width="1"
+            />
+            <text
+              x="20"
+              y="47"
+              text-anchor="middle"
+              font-size={PRINT_STANDARD_TOKENS.geoIndications.scaleFontSize}
+              font-weight="bold"
+              fill={orientationColor}
+              font-family={orientationFontFamily}
+            >
+              {m.orientation_north()}
+            </text>
+          {:else}
+            <circle
+              cx="20"
+              cy="20"
+              r="15"
+              fill="none"
+              stroke={orientationColor}
+              stroke-width="2"
+            />
+            <polygon points="20,7 23,20 20,15 17,20" fill={orientationColor} />
+            <polygon
+              points="20,33 23,20 20,25 17,20"
+              fill="none"
+              stroke={orientationColor}
+              stroke-width="1"
+            />
+            <line
+              x1="7"
+              y1="20"
+              x2="33"
+              y2="20"
+              stroke={orientationColor}
+              stroke-width="1"
+            />
+            <text
+              x="20"
+              y="47"
+              text-anchor="middle"
+              font-size={PRINT_STANDARD_TOKENS.annotations.captionFontSize}
+              font-weight="bold"
+              fill={orientationColor}
+              font-family={orientationFontFamily}
+            >
+              {m.orientation_north()}
+            </text>
+          {/if}
+        </g>
       </svg>
     </div>
   {/if}
