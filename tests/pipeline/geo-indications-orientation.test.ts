@@ -60,36 +60,15 @@ describe('getNorthBearingAtCenter', () => {
     ).toBeLessThan(0.5);
   });
 
-  it('returns ~0° for a north-up MapLibre map', () => {
+  it('returns null in MapLibre mode (bearing locked, north vertical at center)', () => {
     const map = {
       getCenter: () => ({ lng: 2, lat: 48 }),
-      // North-up screen: higher latitude maps to a smaller (upward) y.
-      project: ([, lat]: [number, number]) => ({ x: 0, y: -lat * 100 })
+      project: ([lng, lat]: [number, number]) => ({ x: lng, y: -lat })
     };
 
-    const bearing = getNorthBearingAtCenter({ map });
-
-    expect(bearing).not.toBeNull();
-    expect(Math.abs(bearing as number)).toBeLessThan(0.5);
-  });
-
-  it('reflects a MapLibre map whose north is rotated clockwise', () => {
-    const tiltDegrees = 30;
-    const tiltRadians = (tiltDegrees * Math.PI) / 180;
-    const map = {
-      getCenter: () => ({ lng: 0, lat: 48 }),
-      // Moving north shifts the screen point along the clockwise-tilted up axis
-      // (sin θ, −cos θ).
-      project: ([, lat]: [number, number]) => ({
-        x: 100 * Math.sin(tiltRadians) * lat,
-        y: 100 * -Math.cos(tiltRadians) * lat
-      })
-    };
-
-    const bearing = getNorthBearingAtCenter({ map });
-
-    expect(bearing).not.toBeNull();
-    expect(bearing as number).toBeCloseTo(tiltDegrees, 1);
+    // A present map signals the MapLibre engine: north is always vertical at
+    // the view center, so the caller keeps the indicator upright (0°).
+    expect(getNorthBearingAtCenter({ map })).toBeNull();
   });
 
   it('returns null when neither a projection nor a map can resolve the center', () => {

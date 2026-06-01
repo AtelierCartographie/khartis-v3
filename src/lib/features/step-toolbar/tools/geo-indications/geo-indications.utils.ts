@@ -653,27 +653,6 @@ function getProjectionNorthBearing(
   );
 }
 
-function getMapNorthBearing(
-  map: ScaleDistanceMapLike | null | undefined
-): number | null {
-  if (!map) {
-    return null;
-  }
-
-  const center = map.getCenter();
-  const latitude = clamp(center.lat, -85, 85);
-  const sample = getNorthwardSample(latitude);
-  const origin = map.project([center.lng, latitude]);
-  const northward = map.project([center.lng, sample.latitude]);
-
-  const dx = northward.x - origin.x;
-  const dy = northward.y - origin.y;
-  return screenDeltaToBearingDegrees(
-    sample.flip ? -dx : dx,
-    sample.flip ? -dy : dy
-  );
-}
-
 // Rotation (degrees, clockwise) to apply to an upward-pointing north indicator
 // so it points to geographic north at the center of the current framing —
 // mirrors how the scale bar reads distance at the center. Returns null when it
@@ -681,9 +660,11 @@ function getMapNorthBearing(
 export function getNorthBearingAtCenter(
   context: ScaleDistanceContext
 ): number | null {
-  // MapLibre engine: the tiled map owns the projection math.
+  // MapLibre engine: the map bearing is locked at 0 and the indicator is read
+  // at the view center, so geographic north is always vertical there — no
+  // rotation needed. (Revisit if a map-bearing/rotation control is ever added.)
   if (context.map) {
-    return getMapNorthBearing(context.map);
+    return null;
   }
 
   // Deck orthographic engine: invert the bounds center back to lng/lat with the
