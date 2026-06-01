@@ -592,6 +592,7 @@
         class:active={sortColumn === column.name && sortOrder === 'ASC'}
         onclick={() => onSort(column.name, 'ASC')}
         title={m.column_sort_asc()}
+        aria-label={`${m.column_sort_asc()} : ${column.name}`}
       >
         <CaretUp size={16} />
       </button>
@@ -601,6 +602,7 @@
         class:active={sortColumn === column.name && sortOrder === 'DESC'}
         onclick={() => onSort(column.name, 'DESC')}
         title={m.column_sort_desc()}
+        aria-label={`${m.column_sort_desc()} : ${column.name}`}
       >
         <CaretDown size={16} />
       </button>
