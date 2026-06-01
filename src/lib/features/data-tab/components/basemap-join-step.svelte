@@ -568,6 +568,15 @@
     if (!selectedDataset || !resolvedDatasetId || !linkedVariableName) {
       return false;
     }
+    // Guard against a stale linked variable that no longer maps to a real
+    // column (e.g. a CSV re-import collapsed the table). Computing the join on
+    // a missing column never settles and pins the reactive effects in a loop,
+    // freezing the UI.
+    if (
+      !selectedDataset.columns?.some((col) => col.name === linkedVariableName)
+    ) {
+      return false;
+    }
     if (isOSMBasemapId(basemap.file) || hasGPSCoordinates) {
       return false;
     }
@@ -1328,7 +1337,15 @@
     const datasetSnapshot = selectedDataset;
     const requestedDatasetIdentity = getDatasetIdentity(datasetSnapshot);
     const resolvedDatasetId = datasetIdForOrchestrator;
-    const geoColumn = dataTabState.geolocation.linkedVariableName;
+    const rawGeoColumn = dataTabState.geolocation.linkedVariableName;
+    // Ignore a linked variable that no longer exists as a column (e.g. after a
+    // CSV re-import collapsed the table) so we never grade the join on a
+    // phantom column, which loops the reactive effects and freezes the UI.
+    const geoColumn =
+      rawGeoColumn &&
+      datasetSnapshot.columns?.some((col) => col.name === rawGeoColumn)
+        ? rawGeoColumn
+        : '';
     const hasGPSMode = hasGPSCoordinates;
     const selectedBasemapId = dataTabState.basemapJoin.selectedBasemap;
     const persistedBasemapId = runtimePersistedBasemap?.id;
@@ -1831,6 +1848,44 @@
     }
 
     void computeAndAutoFinalizeJoin(basemap, abortSignal, linkedVariableName);
+  });
+
+  // Row mutations (deleting rows, removing filtered rows) change which entities
+  // exist but leave the linked variable and filters untouched, so the main join
+  // effect above short-circuits and the grading buckets go stale. Re-grade when
+  // the dataset row count changes. Loop-safe: finalizing a join never changes
+  // the row count, and the baseline resets on dataset switch (handled above).
+  let gradeBaselineDatasetId: string | null | undefined = null;
+  let gradeBaselineRowCount: number | null = null;
+  $effect(() => {
+    const datasetId = datasetIdForOrchestrator;
+    const rowCount = selectedDataset?.rowCount ?? null;
+
+    if (datasetId !== gradeBaselineDatasetId) {
+      gradeBaselineDatasetId = datasetId;
+      gradeBaselineRowCount = rowCount;
+      return;
+    }
+    if (rowCount === gradeBaselineRowCount) return;
+    gradeBaselineRowCount = rowCount;
+
+    const selectedBasemapId = basemapSelected;
+    const linkedVariableName = dataTabState.geolocation.linkedVariableName;
+    if (!datasetId || !selectedBasemapId || !linkedVariableName) return;
+    if (isOSMBasemapId(selectedBasemapId) || hasGPSCoordinates) return;
+
+    const basemap = allBasemapsForLookup.find(
+      (b) => b.file === selectedBasemapId
+    );
+    if (!basemap) return;
+
+    abortCurrentJoin();
+    currentJoinAbortController = new AbortController();
+    void computeAndAutoFinalizeJoin(
+      basemap,
+      currentJoinAbortController.signal,
+      linkedVariableName
+    );
   });
 
   $effect(() => {

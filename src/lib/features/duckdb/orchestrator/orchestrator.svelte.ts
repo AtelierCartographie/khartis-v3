@@ -223,6 +223,9 @@ function invalidateDatasetCache(tableName: string): void {
     Duck.invalidateTableCache(tableName);
   }
   invalidateJoinedArrowCacheForTable(tableName);
+  // Row/value mutations change which entities exist, so the cached join
+  // similarity (used to grade joined/unrecognized buckets) is now stale.
+  joinOps.invalidateSimilarityCache(tableName);
 }
 
 async function createArrowTableWithMetadata(tableName: string): Promise<{
