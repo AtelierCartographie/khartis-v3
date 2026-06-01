@@ -895,11 +895,11 @@ export const duckDBOrchestrator = {
     columnName: string,
     newType: string,
     options?: { skipAnalysis?: boolean }
-  ): Promise<void> {
+  ): Promise<columnOps.ChangeColumnTypeResult> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
-    await columnOps.changeColumnType(
+    const result = await columnOps.changeColumnType(
       tableName,
       columnName,
       newType,
@@ -910,6 +910,7 @@ export const duckDBOrchestrator = {
       invalidateDatasetCache(tableName);
       state.bumpDatasetsVersion();
     }
+    return result;
   },
 
   async dropColumn(

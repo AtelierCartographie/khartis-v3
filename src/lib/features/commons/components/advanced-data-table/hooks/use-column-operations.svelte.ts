@@ -6,6 +6,7 @@ import {
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { RefineOperation } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import { showWarning } from '../../../utils/notification.utils.svelte';
 import { LogCategory, logger } from '../../../utils/logger';
 import type { ColumnInfo, ColumnType } from '../types';
 
@@ -106,11 +107,24 @@ export function useColumnOperations(
     }
 
     const duckType = mapColumnTypeToDuckDB(newType);
-    await duckDBOrchestrator.changeColumnType(tableName, columnName, duckType);
+    const { invalidatedCount } = await duckDBOrchestrator.changeColumnType(
+      tableName,
+      columnName,
+      duckType
+    );
     await props.onColumnsChange();
     props.onRecordTransformation?.(
       m.history_column_type_changed({ newType, columnName })
     );
+    if (invalidatedCount > 0) {
+      showWarning(
+        m.warning_column_type_invalidated_title({ columnName }),
+        m.warning_column_type_invalidated_subtitle({
+          count: invalidatedCount,
+          newType
+        })
+      );
+    }
   }
 
   function handleHide(columnName: string): void {
