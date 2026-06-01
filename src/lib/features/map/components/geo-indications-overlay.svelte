@@ -82,6 +82,12 @@
   const MM_TO_PAGE_PX = 72 / 25.4;
   const SCALE_PADDING = 6;
   const SCALE_SEGMENT_COUNT = 4;
+  const SCALE_BAR_THICKNESS = 8;
+  const SCALE_SVG_BOTTOM_PADDING = 2;
+  // Average glyph advance as a fraction of the font size — used to estimate the
+  // label width without a DOM measurement (the layout is fully derived). Biased
+  // slightly high so a large label is never clipped horizontally.
+  const SCALE_CHAR_WIDTH_RATIO = 0.62;
   const SCALE_SEGMENTS = Array.from(
     { length: SCALE_SEGMENT_COUNT },
     (_, index) => index
@@ -553,8 +559,29 @@
     Math.max(2, Math.round(scaleRenderedWidth / SCALE_SEGMENT_COUNT))
   );
   const scaleBarWidth = $derived(scaleSegmentWidth * SCALE_SEGMENT_COUNT);
-  const scaleSvgWidth = $derived(scaleBarWidth + SCALE_PADDING * 2);
-  const scaleLabelX = $derived(scaleBarWidth / 2 + SCALE_PADDING);
+  // The viewport widens to the wider of the bar and the (estimated) label so a
+  // large label overflows neither the bar line nor the SVG; the bar stays
+  // centered within it.
+  const scaleLabelWidth = $derived(
+    Math.ceil(scaleLabel.length * scaleFontSize * SCALE_CHAR_WIDTH_RATIO)
+  );
+  const scaleContentWidth = $derived(Math.max(scaleBarWidth, scaleLabelWidth));
+  const scaleSvgWidth = $derived(scaleContentWidth + SCALE_PADDING * 2);
+  const scaleBarStartX = $derived(
+    SCALE_PADDING + (scaleContentWidth - scaleBarWidth) / 2
+  );
+  const scaleLabelX = $derived(scaleSvgWidth / 2);
+
+  // Vertical layout follows the font size so a larger label is never clipped by
+  // a fixed-height viewport: label baseline near the top, bar/line below it,
+  // SVG height bounded by the bar bottom.
+  const scaleLabelBaselineY = $derived(scaleFontSize);
+  const scaleLabelGap = $derived(Math.max(4, Math.round(scaleFontSize * 0.35)));
+  const scaleBarTopY = $derived(scaleLabelBaselineY + scaleLabelGap);
+  const scaleLineY = $derived(scaleBarTopY + SCALE_BAR_THICKNESS / 2);
+  const scaleSvgHeight = $derived(
+    scaleBarTopY + SCALE_BAR_THICKNESS + SCALE_SVG_BOTTOM_PADDING
+  );
 
   const orientationSize = $derived.by(() => {
     const rawSize = toFiniteNumber(geoIndicationsState.orientation.size, 10);
@@ -1196,13 +1223,13 @@
     >
       <svg
         width={scaleSvgWidth}
-        height="26"
+        height={scaleSvgHeight}
         aria-label={m.geo_scale_bar_aria()}
       >
         {#if geoIndicationsState.scale.form === ScaleForm.BOX}
           <text
             x={scaleLabelX}
-            y="9"
+            y={scaleLabelBaselineY}
             text-anchor="middle"
             fill={scaleColor}
             font-size={scaleFontSize}
@@ -1212,10 +1239,10 @@
           </text>
           {#each SCALE_SEGMENTS as segment (segment)}
             <rect
-              x={SCALE_PADDING + segment * scaleSegmentWidth}
-              y="13"
+              x={scaleBarStartX + segment * scaleSegmentWidth}
+              y={scaleBarTopY}
               width={scaleSegmentWidth}
-              height="8"
+              height={SCALE_BAR_THICKNESS}
               fill={segment % 2 === 0 ? scaleColor : 'transparent'}
               stroke={scaleColor}
               stroke-width="1.5"
@@ -1223,16 +1250,16 @@
           {/each}
         {:else}
           <line
-            x1={SCALE_PADDING}
-            y1="20"
-            x2={scaleBarWidth + SCALE_PADDING}
-            y2="20"
+            x1={scaleBarStartX}
+            y1={scaleLineY}
+            x2={scaleBarStartX + scaleBarWidth}
+            y2={scaleLineY}
             stroke={scaleColor}
             stroke-width="2"
           />
           <text
             x={scaleLabelX}
-            y="10"
+            y={scaleLabelBaselineY}
             text-anchor="middle"
             fill={scaleColor}
             font-size={scaleFontSize}
