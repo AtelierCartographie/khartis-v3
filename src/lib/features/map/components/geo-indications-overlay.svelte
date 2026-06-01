@@ -613,16 +613,24 @@
     orientationEnabled: geoIndicationsState.orientation.enabled,
     orientationDragged: geoIndicationsState.orientation.dragPosition !== null
   }));
+  // Drag positions are stored in logical page coordinates (the pointer handler
+  // divides screen deltas by the page scale). The overlay itself is rendered at
+  // screen scale with no CSS transform, so the position must be multiplied back
+  // by the page scale here — otherwise the element tracks the cursor at 1/scale
+  // speed. (Unlike the legend, the figures are not transform-scaled: the scale
+  // bar is calibrated in screen pixels and scaling it would falsify it.)
   const scaleStyle = $derived.by(() => {
     if (geoIndicationsState.scale.dragPosition) {
-      return `left: ${geoIndicationsState.scale.dragPosition.x}px; top: ${geoIndicationsState.scale.dragPosition.y}px; bottom: auto; right: auto;`;
+      const scale = getPageScale();
+      return `left: ${geoIndicationsState.scale.dragPosition.x * scale}px; top: ${geoIndicationsState.scale.dragPosition.y * scale}px; bottom: auto; right: auto;`;
     }
 
     return getDefaultScaleStyle(placementContext);
   });
   const orientationStyle = $derived.by(() => {
     if (geoIndicationsState.orientation.dragPosition) {
-      return `left: ${geoIndicationsState.orientation.dragPosition.x}px; top: ${geoIndicationsState.orientation.dragPosition.y}px; bottom: auto; right: auto;`;
+      const scale = getPageScale();
+      return `left: ${geoIndicationsState.orientation.dragPosition.x * scale}px; top: ${geoIndicationsState.orientation.dragPosition.y * scale}px; bottom: auto; right: auto;`;
     }
 
     return getDefaultOrientationStyle(placementContext);
@@ -632,9 +640,10 @@
     const styles = [getDefaultInsetStyle(placementContext)];
 
     if (geoIndicationsState.insetMap.dragPosition) {
+      const scale = getPageScale();
       styles.push(
-        `left: ${geoIndicationsState.insetMap.dragPosition.x}px`,
-        `top: ${geoIndicationsState.insetMap.dragPosition.y}px`,
+        `left: ${geoIndicationsState.insetMap.dragPosition.x * scale}px`,
+        `top: ${geoIndicationsState.insetMap.dragPosition.y * scale}px`,
         'bottom: auto',
         'right: auto'
       );
@@ -756,9 +765,12 @@
       return null;
     }
 
+    // offsetWidth/Height are screen pixels; convert to logical page units so
+    // the drag bounds match the logical drag position.
+    const scale = getPageScale();
     return {
-      width: overlayElement.offsetWidth,
-      height: overlayElement.offsetHeight
+      width: overlayElement.offsetWidth / scale,
+      height: overlayElement.offsetHeight / scale
     };
   }
 
@@ -838,11 +850,15 @@
       return position;
     }
 
+    // The element is rendered at screen scale (no CSS transform), so its
+    // offset size is in screen pixels — convert to logical page units to match
+    // the logical position and overlay bounds.
+    const scale = getPageScale();
     return snapPointWithinBounds(
       position,
       getDragBounds(overlaySize, {
-        width: dragElement.offsetWidth,
-        height: dragElement.offsetHeight
+        width: dragElement.offsetWidth / scale,
+        height: dragElement.offsetHeight / scale
       }),
       snapEnabled
     );
