@@ -1,6 +1,6 @@
 # Review rapide — livraison 2026-06-05 (branche `w22-2026-tma-jb`)
 
-> **11 commits.** Lancer : `pnpm dev` → http://localhost:5176/cartographie/khartisnewpprd/
+> **13 commits.** Lancer : `pnpm dev` → http://localhost:5176/cartographie/khartisnewpprd/
 > **Projet de test rapide** (Monde, choroplèthe) : ajoute à l'URL
 > `?kh=http://localhost:5176/cartographie/khartisnewpprd/tests-datasets/projects/test-project.kh`
 > 📄 **Détail de ce qui a été fait / reste** : voir **`BILAN.md`**. Ce fichier-ci = **comment tester**.
@@ -46,6 +46,10 @@
 - [ ] **Suggestion « symboles » n'active que Symboles**
       Tester : projet polygone joint → suggestions → choisir « Symboles proportionnels ».
       Voir : seule **Symboles** active, **Polygones off**.
+
+- [ ] **#184 — Décocher la suggestion après une modif manuelle**
+      Tester : projet de test → choisir une suggestion (sa carte se coche) → modifier un paramètre (couleur, classification, type…) ; puis crée une 2ᵉ viz depuis une suggestion sans y toucher.
+      Voir : la carte de suggestion **se décoche** dès la modif manuelle ; la viz **non modifiée** issue d'une suggestion **reste cochée** ; au save/reload, une viz modifiée reste décochée.
 
 - [ ] **#184 — Carte de suggestion = Primitive · Type · Variable**
       Tester : projet de test → étape Visualisations, regarde les cartes de suggestion.
@@ -147,8 +151,7 @@
 
 - **#183 cœur** ⛔ vignettes catalogue/suggestions = **SVG Atelier non fournis**.
 - **#160** rectangle→point quand l'emprise est minuscule (reporté).
-- **#184** redimensionnement de la **légende** par poignée (feature, non faite).
-- **#184** « décocher la suggestion au modif manuel » (matching à fiabiliser).
+- **#184** redimensionnement de la **légende** par poignée (feature drag, non vérifiable sans navigateur).
 - **#156** innerlines à l'import géo + synchro couleur Territoire ↔ Calques.
 - **À valider par leur auteur** (travail parallèle committé) : finitions textes #154 (color picker HSL, « halo→contour ») ; facettes #177 (contour-sphère).
 
