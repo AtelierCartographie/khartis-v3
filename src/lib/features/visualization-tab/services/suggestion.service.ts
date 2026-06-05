@@ -482,9 +482,7 @@ export function resolveSuggestionBehavior(
   const secondaryTextColumn = findPreferredTextColumn(dataset.columns, {
     preferred: suggestion.columns?.[1]
   });
-  const symbolPrimitiveFilters = isPolygonDataset
-    ? [PrimitiveFilterType.POINT, PrimitiveFilterType.POLYGON]
-    : [PrimitiveFilterType.POINT];
+  const symbolPrimitiveFilters: PrimitiveFilter[] = [PrimitiveFilterType.POINT];
   const textPrimitiveFilters: PrimitiveFilter[] = isPolygonDataset
     ? [PrimitiveFilterType.POLYGON]
     : [];

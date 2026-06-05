@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FACET_SLOT } from '$lib/features/commons/constants/facets.constants';
 import {
   FACET_TITLE_HEIGHT,
   buildFacetRenderDescriptors,
@@ -33,7 +34,8 @@ describe('facets shared renderer utils', () => {
       layout: { columns: 2, gap: 16 },
       containerWidth: 900,
       containerHeight: 700,
-      pageAspectRatio: 0.75
+      pageAspectRatio: 0.75,
+      primarySlotPath: null
     });
 
     expect(descriptors).toHaveLength(3);
@@ -73,7 +75,8 @@ describe('facets shared renderer utils', () => {
       layout: { columns: 2, gap: 16 },
       containerWidth,
       containerHeight: 700,
-      pageAspectRatio: 0.75
+      pageAspectRatio: 0.75,
+      primarySlotPath: null
     });
 
     for (const descriptor of descriptors) {
@@ -81,5 +84,27 @@ describe('facets shared renderer utils', () => {
         containerWidth
       );
     }
+  });
+
+  it('derives the facet title from the slot variable, not the frozen name', () => {
+    // Regression: changing the distribution reassigns the slot variable while the
+    // visualization name stays put; the title must follow the slot variable so it
+    // stays in sync with the map actually rendered in the facet.
+    const descriptors = buildFacetRenderDescriptors({
+      visualizations: [
+        {
+          id: 'f',
+          name: 'population',
+          polygon: { valueColumn: 'superficie_km2' }
+        }
+      ] as never,
+      layout: { columns: 1, gap: 16 },
+      containerWidth: 600,
+      containerHeight: 400,
+      pageAspectRatio: 0.75,
+      primarySlotPath: FACET_SLOT.POLYGON_VALUE
+    });
+
+    expect(descriptors[0].title).toBe('superficie_km2');
   });
 });

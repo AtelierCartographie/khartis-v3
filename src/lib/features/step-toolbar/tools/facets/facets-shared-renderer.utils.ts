@@ -1,4 +1,6 @@
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
+import type { FacetSlotPath } from '$lib/features/commons/constants/facets.constants';
+import { getFacetSlotVariable } from '$lib/features/commons/utils/facet-visualization-updates';
 import type { FacetsLayout } from './facets.store.svelte';
 
 export const FACET_TITLE_HEIGHT = 28;
@@ -100,13 +102,15 @@ export function buildFacetRenderDescriptors({
   layout,
   containerWidth,
   containerHeight,
-  pageAspectRatio
+  pageAspectRatio,
+  primarySlotPath
 }: {
   visualizations: VisualizationConfig[];
   layout: FacetsLayout;
   containerWidth: number;
   containerHeight: number;
   pageAspectRatio: number;
+  primarySlotPath: FacetSlotPath | null;
 }): FacetRenderDescriptor[] {
   const metrics = buildFacetsGridMetrics({
     mapCount: visualizations.length,
@@ -130,10 +134,19 @@ export function buildFacetRenderDescriptors({
       metrics.originY + FACET_TITLE_HEIGHT
     );
 
+    // The facet title must follow the variable actually shown in the collection
+    // slot, not the visualization's frozen name: changing the distribution
+    // reassigns the slot variable while `name` stays put, so keying the title on
+    // `name` desyncs it from the rendered map.
+    const displayVariable =
+      (primarySlotPath
+        ? getFacetSlotVariable(visualization, primarySlotPath)
+        : undefined) ?? visualization.name;
+
     return {
       facetId: visualization.id,
       vizId: visualization.id,
-      title: visualization.name,
+      title: displayVariable,
       frame: {
         x,
         y,

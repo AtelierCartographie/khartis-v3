@@ -491,6 +491,32 @@ export async function calculateDivergingBreaks(
   };
 }
 
+/**
+ * Detects whether a numeric column straddles zero (negative AND positive
+ * values). When it does, zero is the natural diverging breakpoint, so the
+ * classification can be proposed as a diverging ramp pivoted at 0. Returns the
+ * pivot value (`0`) when the column crosses zero, otherwise `null`.
+ */
+export async function detectDivergingBreakpoint(options: {
+  datasetId: string;
+  columnName: string;
+}): Promise<number | null> {
+  const context = getQueryContext(options.datasetId, options.columnName);
+  if (!context) {
+    return null;
+  }
+
+  try {
+    const stats = await queryColumnStats(context);
+    if (!stats) {
+      return null;
+    }
+    return stats.min < 0 && stats.max > 0 ? 0 : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function calculateBreakCounts(
   options: BreakCountOptions
 ): Promise<BreaksResult | null> {

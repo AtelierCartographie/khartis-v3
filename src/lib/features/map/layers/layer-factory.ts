@@ -68,7 +68,8 @@ import { MultiShapeLayer } from './multi-shape-layer';
 import {
   DEFAULT_TEXT_LINE_HEIGHT,
   DECK_TEXT_CHARACTER_SET,
-  resolveTextFontSettings
+  resolveTextFontSettings,
+  resolveTextOutlineWidth
 } from './text-character-set';
 import type {
   DeckDataRow,
@@ -2953,6 +2954,12 @@ function createTextOverlayLayers(
 
   const backgroundBorderWidth = 0;
   const backgroundBorderColor = TRANSPARENT_BACKGROUND_COLOR;
+  const primaryHaloWidth = textConfig.halo
+    ? (textConfig.haloWidth ?? DEFAULT_HALO_WIDTH)
+    : 0;
+  const secondaryHaloWidth = secondaryLabelsConfig.halo
+    ? (secondaryLabelsConfig.haloWidth ?? DEFAULT_HALO_WIDTH)
+    : 0;
   const sharedBackgroundPadding = textConfig.dxpMasking
     ? DEFAULT_TEXT_MASK_PADDING
     : TEXT_COLLISION_SAFE_PADDING;
@@ -3081,9 +3088,10 @@ function createTextOverlayLayers(
           resolveStyleColor(secondaryLabelsConfig.haloColor, [255, 255, 255]),
           1
         ),
-        outlineWidth: secondaryLabelsConfig.halo
-          ? (secondaryLabelsConfig.haloWidth ?? DEFAULT_HALO_WIDTH)
-          : 0,
+        outlineWidth: resolveTextOutlineWidth(
+          secondaryHaloWidth,
+          SLIDER_LIMITS.haloWidth.max
+        ),
         background: true,
         getBackgroundColor: backgroundColorAccessor,
         getBorderWidth: backgroundBorderWidth,
@@ -3244,9 +3252,10 @@ function createTextOverlayLayers(
             resolveStyleColor(textConfig.haloColor, [255, 255, 255]),
             1
           ),
-          outlineWidth: textConfig.halo
-            ? (textConfig.haloWidth ?? DEFAULT_HALO_WIDTH)
-            : 0,
+          outlineWidth: resolveTextOutlineWidth(
+            primaryHaloWidth,
+            SLIDER_LIMITS.haloWidth.max
+          ),
           background: true,
           getBackgroundColor: backgroundColorAccessor,
           getBorderWidth: backgroundBorderWidth,

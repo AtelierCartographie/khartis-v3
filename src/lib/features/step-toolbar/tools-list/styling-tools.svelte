@@ -4,7 +4,13 @@
   import { StylingTools } from '$lib/features/commons/types/global';
   import { m } from '$lib/paraglide/messages.js';
   import { Column, Grid, Row } from 'carbon-components-svelte';
-  import { Edit, Legend, Location, TextFont, View } from 'carbon-icons-svelte';
+  import {
+    Compass,
+    Crop,
+    Legend,
+    SettingsView,
+    WatsonHealthTextAnnotationToggle
+  } from 'carbon-icons-svelte';
   import {
     getLegendState,
     legendActions
@@ -53,7 +59,7 @@
           tooltipPosition="right"
           kind="ghost"
           iconDescription={m.tool_format()}
-          icon={TextFont}
+          icon={Crop}
           size="small"
           isSelected={globalState.selectedTool === StylingTools.Format}
           onclick={() => selectTool(StylingTools.Format)}
@@ -86,7 +92,7 @@
           tooltipPosition="right"
           kind="ghost"
           iconDescription={m.tool_geo_indications()}
-          icon={Location}
+          icon={Compass}
           size="small"
           isSelected={globalState.selectedTool === StylingTools.GeoIndications}
           onclick={() => selectTool(StylingTools.GeoIndications)}
@@ -100,7 +106,7 @@
           tooltipPosition="right"
           kind="ghost"
           iconDescription={m.tool_annotations()}
-          icon={Edit}
+          icon={WatsonHealthTextAnnotationToggle}
           size="small"
           isSelected={globalState.selectedTool === StylingTools.Annotations}
           onclick={handleAnnotationsClick}
@@ -115,7 +121,7 @@
             tooltipPosition="right"
             kind="ghost"
             iconDescription={m.tool_color_blindness()}
-            icon={View}
+            icon={SettingsView}
             size="small"
             isSelected={globalState.selectedTool ===
               StylingTools.ColorBlindness}

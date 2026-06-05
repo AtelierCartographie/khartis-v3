@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { SLIDER_LIMITS } from '$lib/features/commons/constants/visualization.constants';
 import {
   DEFAULT_TEXT_FONT_SETTINGS,
   DEFAULT_TEXT_FONT_SETTINGS_RASTER,
@@ -8,7 +9,8 @@ import {
   DEFAULT_TEXT_LINE_HEIGHT,
   EXPLICIT_TEXT_CHARACTER_SET,
   extendTextCharacterSet,
-  resolveTextFontSettings
+  resolveTextFontSettings,
+  resolveTextOutlineWidth
 } from './text-character-set';
 
 const FRENCH_DEPARTMENT_GLYPHS = [
@@ -104,6 +106,21 @@ describe('text-character-set — DEFAULT_TEXT_FONT_SETTINGS_SDF', () => {
     expect(ratio).toBeGreaterThanOrEqual(0.15);
   });
 
+  it('keeps enough atlas margin for the maximum text contour width', () => {
+    expect(DEFAULT_TEXT_FONT_SETTINGS_SDF.buffer).toBeGreaterThanOrEqual(
+      SLIDER_LIMITS.haloWidth.max
+    );
+    expect(DEFAULT_TEXT_FONT_SETTINGS_SDF.radius).toBeGreaterThanOrEqual(
+      SLIDER_LIMITS.haloWidth.max
+    );
+  });
+
+  it('reserves more glyph padding than the encoded SDF distance so thick halos are not clipped', () => {
+    expect(DEFAULT_TEXT_FONT_SETTINGS_SDF.buffer).toBeGreaterThan(
+      DEFAULT_TEXT_FONT_SETTINGS_SDF.radius
+    );
+  });
+
   it('leaves cutoff and smoothing at the Deck.gl defaults to avoid hand-drawn looking glyphs', () => {
     expect(
       (DEFAULT_TEXT_FONT_SETTINGS_SDF as { cutoff?: number }).cutoff
@@ -161,6 +178,35 @@ describe('resolveTextFontSettings', () => {
     expect(resolveTextFontSettings('halo-off')).toBe(
       resolveTextFontSettings('halo-off')
     );
+  });
+});
+
+describe('resolveTextOutlineWidth', () => {
+  const max = SLIDER_LIMITS.haloWidth.max;
+
+  it('returns 0 when the contour is disabled or the thickness is invalid', () => {
+    expect(resolveTextOutlineWidth(0, max)).toBe(0);
+    expect(resolveTextOutlineWidth(-5, max)).toBe(0);
+    expect(resolveTextOutlineWidth(Number.NaN, max)).toBe(0);
+  });
+
+  it('keeps even the maximum thickness below the deck.gl SDF saturation point', () => {
+    expect(resolveTextOutlineWidth(max, max)).toBeGreaterThan(0);
+    expect(resolveTextOutlineWidth(max, max)).toBeLessThan(1);
+  });
+
+  it('clamps thickness above the UI maximum to the same bounded outline', () => {
+    expect(resolveTextOutlineWidth(max * 10, max)).toBe(
+      resolveTextOutlineWidth(max, max)
+    );
+  });
+
+  it('increases monotonically with thickness so the slider stays meaningful end to end', () => {
+    const quarter = resolveTextOutlineWidth(max * 0.25, max);
+    const half = resolveTextOutlineWidth(max * 0.5, max);
+    const full = resolveTextOutlineWidth(max, max);
+    expect(quarter).toBeLessThan(half);
+    expect(half).toBeLessThan(full);
   });
 });
 

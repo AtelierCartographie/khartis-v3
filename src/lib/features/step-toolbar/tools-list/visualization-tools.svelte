@@ -5,11 +5,11 @@
   import { m } from '$lib/paraglide/messages.js';
   import { Column, Grid, Row } from 'carbon-components-svelte';
   import {
-    Earth,
-    EdgeNode,
+    Globe,
     Grid as GridIcon,
     Layers,
-    Search
+    Search,
+    WatsonHealthScalpelSelect
   } from 'carbon-icons-svelte';
   import { selectTool } from './tool-list.utils.svelte';
   import ToolsListContainer from './tools-list-container.svelte';
@@ -90,7 +90,7 @@
             tooltipPosition="right"
             kind="ghost"
             iconDescription={m.tool_projection()}
-            icon={Earth}
+            icon={Globe}
             size="small"
             isSelected={globalState.selectedTool ===
               VisualizationTools.Projection}
@@ -109,7 +109,7 @@
           tooltipPosition="right"
           kind="ghost"
           iconDescription={m.tool_simplification()}
-          icon={EdgeNode}
+          icon={WatsonHealthScalpelSelect}
           size="small"
           isSelected={globalState.selectedTool ===
             VisualizationTools.Simplification}
