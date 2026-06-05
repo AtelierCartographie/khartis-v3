@@ -30,7 +30,7 @@ import type {
   Polygon,
   MultiPolygon
 } from 'geojson';
-import { hexToRgb } from '$lib/features/commons/utils/color-utils';
+import { hexToRgb, webglToHex } from '$lib/features/commons/utils/color-utils';
 import {
   ArrowExtension,
   createLayerId,
@@ -66,7 +66,7 @@ import {
   resolveFontFamilyStack
 } from '$lib/features/step-toolbar/fonts.constants';
 import type { BBox, DeckDataRow, GeometryInfo, RGBColor } from '../types';
-import type { StylePresets } from '../types/basemap.types';
+import type { StylePreset, StylePresets } from '../types/basemap.types';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { withOpacity, dottedPatternToDashArray } from './layer-helpers';
 import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
@@ -2053,6 +2053,62 @@ export interface MetadataLayerEntry {
   file: string;
 }
 
+function isPolygonStylePreset(
+  preset: StylePreset | undefined
+): preset is Extract<StylePreset, { layer_type: 'solid-polygon' }> {
+  return preset?.layer_type === 'solid-polygon';
+}
+
+function resolveLandFillColorHex(
+  styleName: string | null,
+  stylePresets: StylePresets | null | undefined,
+  fallbackHex: string
+): string {
+  if (!styleName || !stylePresets) {
+    return fallbackHex;
+  }
+  const preset = stylePresets[styleName];
+  if (!isPolygonStylePreset(preset)) {
+    return fallbackHex;
+  }
+  const [r, g, b] = preset.fillColor;
+  return webglToHex([r, g, b, preset.fillColor[3] ?? 255]);
+}
+
+function createLandLayers(
+  entries: MetadataLayerEntry[],
+  config: TerreLayerConfig,
+  ctx: BasemapLayerContext,
+  stylePresets: StylePresets | null | undefined,
+  options?: { suppressStroke?: boolean }
+): Layer<DeckDataRow>[] {
+  const layers: Layer<DeckDataRow>[] = [];
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    if (!hasArrowRows(entry.table)) continue;
+
+    const landConfig: TerreLayerConfig = {
+      ...config,
+      fillColor: resolveLandFillColorHex(
+        entry.style,
+        stylePresets,
+        config.fillColor
+      )
+    };
+    const landCtx: BasemapLayerContext = {
+      ...ctx,
+      projectionSuffix: `${ctx.projectionSuffix || DEFAULT_PROJECTION_SUFFIX}-land-${i}`
+    };
+
+    layers.push(
+      ...createTerreLayers(entry.table, landConfig, landCtx, options)
+    );
+  }
+
+  return layers;
+}
+
 function createMetadataLimitLayers(
   entries: MetadataLayerEntry[],
   ctx: BasemapLayerContext,
@@ -2247,6 +2303,7 @@ export function createBasemapLayers(
     metaLayers.filter((l) => l.type === type);
 
   const limitEntries = metaByType(BasemapLayerType.LIMIT);
+  const landEntries = metaByType(BasemapLayerType.LAND);
   const polygonEntries = metaByType(BasemapLayerType.POLYGON);
   const lineEntries = metaByType(BasemapLayerType.LINE);
   const geographicLineEntries = metaByType(BasemapLayerType.GEOGRAPHIC_LINES);
@@ -2282,15 +2339,27 @@ export function createBasemapLayers(
 
         case BASEMAP_LAYER_ID.TERRE: {
           const terreConfig = config as TerreLayerConfig;
+          const terreOptions = {
+            suppressStroke: hasMetadataLimits && isFrontieresVisible
+          };
 
-          if (worldBaseTable) {
+          if (landEntries.length > 0) {
+            const landLayers = createLandLayers(
+              landEntries,
+              terreConfig,
+              ctx,
+              additionalData?.stylePresets,
+              terreOptions
+            );
+            if (landLayers.length > 0) {
+              targetGroups.push(landLayers);
+            }
+          } else if (worldBaseTable) {
             const terreLayers = createTerreLayers(
               worldBaseTable,
               terreConfig,
               ctx,
-              {
-                suppressStroke: hasMetadataLimits && isFrontieresVisible
-              }
+              terreOptions
             );
             if (terreLayers.length > 0) {
               targetGroups.push(terreLayers);
