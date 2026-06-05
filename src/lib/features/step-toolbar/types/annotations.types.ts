@@ -9,12 +9,31 @@ export type PageElementRole = AnnotationRoleValue;
 export type AnnotationCoordinateSpace = 'page' | 'map';
 export type AnnotationCreationMode = 'idle' | 'placing' | 'drawing';
 
+/**
+ * WGS84 data anchor (lon/lat) tying a `coordinateSpace:'map'` annotation to the
+ * basemap so it stays glued to the geometry when the MAP is zoomed/panned.
+ *
+ * Invariant — single-anchor contract: the anchor pins ONE reference point (the
+ * annotation's top-left in map-area coordinates). For multi-point marks
+ * (vector arrows/lines, freehand drawings) the relative geometry stays in
+ * `style.points` / `content` as unzoomed map-area pixel offsets from that
+ * anchor, exactly like a proportional symbol — only the anchor reprojects, the
+ * offsets do not. A `'map'` annotation WITHOUT an anchor is legacy: it keeps the
+ * historical pixel-page behavior (positioned relative to the map frame, ignores
+ * the map viewState).
+ */
+export interface AnnotationDataAnchor {
+  lon: number;
+  lat: number;
+}
+
 export interface Annotation {
   id: string;
   type: AnnotationKind;
   content: unknown;
   position: { x: number; y: number };
   coordinateSpace?: AnnotationCoordinateSpace;
+  anchor?: AnnotationDataAnchor;
   positionMode?: 'auto' | 'manual';
   style?: AnnotationStyle;
   visible?: boolean;

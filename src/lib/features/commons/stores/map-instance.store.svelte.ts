@@ -317,6 +317,87 @@ function createMapInstanceStore() {
     return getDeckMapBounds();
   }
 
+  /**
+   * Project an orthographic data-space point (lon/lat, or projected pixel coords
+   * when a render projection is active) to the on-screen position inside the map
+   * area, expressed in LOGICAL (unscaled) pixels relative to the map-area
+   * top-left. This is the inverse-free companion of `getDeckMapBounds`: it
+   * composes the same `dataToWorld` mapping with the deck OrthographicView
+   * (flipY:false) pan/zoom, so an annotation anchored here tracks the basemap as
+   * the deck viewState changes. Returns `null` when no reference is available.
+   */
+  function projectDataToViewportPx(
+    dataX: number,
+    dataY: number
+  ): { x: number; y: number } | null {
+    if (!state.deckInstance || !state.isMapLoaded) return null;
+    const ctx = projectionContextGetter();
+    if (!ctx.referenceBbox) return null;
+    if (ctx.canvasSize.width <= 0 || ctx.canvasSize.height <= 0) return null;
+
+    const renderScale = ctx.renderScale ?? 1;
+    if (renderScale <= 0) return null;
+
+    const zoomScale = Math.pow(2, state.deckViewState.zoom);
+    if (!Number.isFinite(zoomScale) || zoomScale <= 0) return null;
+
+    const world = dataToWorld([dataX, dataY, 0]);
+    if (!Number.isFinite(world[0]) || !Number.isFinite(world[1])) return null;
+
+    const target = normalizeTarget(state.deckViewState.target);
+    // Scaled-device-px viewport center (OrthographicView places target there).
+    const centerXScaled = (ctx.canvasSize.width * renderScale) / 2;
+    const centerYScaled = (ctx.canvasSize.height * renderScale) / 2;
+    const screenXScaled = (world[0] - target[0]) * zoomScale + centerXScaled;
+    const screenYScaled = (world[1] - target[1]) * zoomScale + centerYScaled;
+
+    if (!Number.isFinite(screenXScaled) || !Number.isFinite(screenYScaled)) {
+      return null;
+    }
+
+    // Convert scaled device px back to logical (unscaled) map-area px so the
+    // overlay can apply its own pageScale exactly once.
+    return {
+      x: screenXScaled / renderScale,
+      y: screenYScaled / renderScale
+    };
+  }
+
+  /**
+   * Inverse of `projectDataToViewportPx`: map a logical (unscaled) map-area
+   * pixel position back to orthographic data-space coordinates (lon/lat or
+   * projected pixels, matching `dataToWorld`'s input space). Returns `null` when
+   * no reference is available.
+   */
+  function unprojectViewportPxToData(
+    viewportX: number,
+    viewportY: number
+  ): { x: number; y: number } | null {
+    if (!state.deckInstance || !state.isMapLoaded) return null;
+    const ctx = projectionContextGetter();
+    if (!ctx.referenceBbox) return null;
+    if (ctx.canvasSize.width <= 0 || ctx.canvasSize.height <= 0) return null;
+
+    const renderScale = ctx.renderScale ?? 1;
+    if (renderScale <= 0) return null;
+
+    const zoomScale = Math.pow(2, state.deckViewState.zoom);
+    if (!Number.isFinite(zoomScale) || zoomScale <= 0) return null;
+
+    const target = normalizeTarget(state.deckViewState.target);
+    const centerXScaled = (ctx.canvasSize.width * renderScale) / 2;
+    const centerYScaled = (ctx.canvasSize.height * renderScale) / 2;
+    const screenXScaled = viewportX * renderScale;
+    const screenYScaled = viewportY * renderScale;
+    const worldX = (screenXScaled - centerXScaled) / zoomScale + target[0];
+    const worldY = (screenYScaled - centerYScaled) / zoomScale + target[1];
+
+    const data = worldToData([worldX, worldY, 0]);
+    if (!Number.isFinite(data[0]) || !Number.isFinite(data[1])) return null;
+
+    return { x: data[0], y: data[1] };
+  }
+
   function getMapZoom(): number {
     return state.map?.getZoom() ?? 0;
   }
@@ -805,6 +886,8 @@ function createMapInstanceStore() {
     getMapCanvas,
     getDeckMapBounds,
     getMapBounds,
+    projectDataToViewportPx,
+    unprojectViewportPxToData,
     getMapZoom,
     getMapCenter,
     setBaseZoomLevel,
