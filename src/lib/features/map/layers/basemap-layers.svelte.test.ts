@@ -644,6 +644,46 @@ describe('basemap projection fallbacks', () => {
     expect(layer).toBeInstanceOf(SolidPolygonLayer);
   });
 
+  it('renders no stroke layer on the Arrow native path when strokeThickness is 0', () => {
+    const table = {} as ArrowTable;
+    const ctx = createProjectionContext();
+
+    extractGeometryInfoMock.mockReturnValue(createNativePolygonGeometryInfo());
+
+    const layers = createTerreLayers(
+      table,
+      { ...createTerreConfig(), strokeThickness: 0 },
+      ctx
+    );
+
+    expect(layers).toHaveLength(1);
+    expect(layers[0]).toBeInstanceOf(SolidPolygonLayer);
+    expect(layers.some((layer) => String(layer.id).endsWith('-stroke'))).toBe(
+      false
+    );
+  });
+
+  it('disables the stroke on the GeoJSON fallback path when strokeThickness is 0', () => {
+    const sourceGeoJSON = createPolygonGeoJSON('raw-land');
+    const table = {} as ArrowTable;
+    const ctx = createProjectionContext();
+
+    extractGeometryInfoMock.mockReturnValue(createPolygonGeometryInfo());
+    arrowTableToGeoJSONMock.mockReturnValue(sourceGeoJSON);
+    projectGeoJSONMock.mockImplementation((geojson) => geojson);
+
+    const layers = createTerreLayers(
+      table,
+      { ...createTerreConfig(), strokeThickness: 0 },
+      ctx
+    );
+    const layer = layers[0] as GeoJsonLayer | undefined;
+
+    expect(layer).toBeInstanceOf(GeoJsonLayer);
+    expect(layer?.props.stroked).toBe(false);
+    expect(layer?.props.getLineWidth).toBe(0);
+  });
+
   it('projects generated equator lines when a custom projection is active', () => {
     const projectedGeoJSON = createLineGeoJSON('projected-equator');
     const ctx = createProjectionContext();
