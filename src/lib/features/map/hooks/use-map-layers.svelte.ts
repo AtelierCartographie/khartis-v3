@@ -136,6 +136,7 @@ export interface UseMapLayersProps {
   getProjectionFitBbox?: () => BBox | null;
   getProjectionForSphereMask?: () => ProjectionLike | undefined;
   getModelMatrix?: () => Matrix4 | null | undefined;
+  getPageDisplayScale?: () => number;
   getShouldRenderDatasetFallbacks?: () => boolean;
   getTableFilters?: (datasetId: string) => DataTableFilter[] | undefined;
   onBasemapLayersLoaded?: () => void;
@@ -165,6 +166,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     getProjectionFitBbox,
     getProjectionForSphereMask,
     getModelMatrix,
+    getPageDisplayScale,
     getShouldRenderDatasetFallbacks,
     getTableFilters,
     onBasemapLayersLoaded,
@@ -885,6 +887,13 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const matrixToApply = isOrthographicMode
         ? (getModelMatrix?.() ?? projectionStore.modelMatrix)
         : null;
+      // Page zoom scales pixel-sized marks (radius, line width, label size) so
+      // they track the canvas and SVG legend. Only orthographic mode applies the
+      // render modelMatrix that scales geometry positions, so gate the mark scale
+      // to that mode too; interleaved (MapLibre) keeps it at 1 to stay in sync.
+      const pageDisplayScaleToApply = isOrthographicMode
+        ? (getPageDisplayScale?.() ?? 1)
+        : 1;
 
       const projectionSuffix = deckOverlay
         ? mapProjectionStore.projection
@@ -1168,6 +1177,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             fitPaddingPx
           );
           ctx.modelMatrix = matrixToApply;
+          ctx.pageDisplayScale = pageDisplayScaleToApply;
           ctx.projectionSuffix = projectionSuffix;
           ctx.beforeId = beforeId;
           ctx.customProjection = resolveProjectionForRender(
@@ -1369,6 +1379,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             fitPaddingPx
           );
           fallbackCtx.modelMatrix = matrixToApply;
+          fallbackCtx.pageDisplayScale = pageDisplayScaleToApply;
           fallbackCtx.projectionSuffix = projectionSuffix;
           fallbackCtx.beforeId = beforeId;
           fallbackCtx.customProjection = resolveProjectionForRender(

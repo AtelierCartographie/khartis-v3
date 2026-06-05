@@ -738,6 +738,7 @@
         getProjectionMetadataForDataset(firstDatasetId)
       ),
     getModelMatrix: () => renderModelMatrix,
+    getPageDisplayScale: () => pageDisplayScale,
     getShouldRenderDatasetFallbacks: () =>
       globalState.selectedStep === ToolbarStep.Data,
     getTableFilters: getTableFiltersForDataset,
