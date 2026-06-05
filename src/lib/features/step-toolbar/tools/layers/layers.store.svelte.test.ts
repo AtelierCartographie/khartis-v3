@@ -37,7 +37,8 @@ const {
     mockFacetsStore: {
       enabled: false,
       baseVisualizationId: null as string | null,
-      generatedVisualizationIds: [] as string[]
+      generatedVisualizationIds: [] as string[],
+      reorderVariables: vi.fn()
     },
     mockBasemapLayersStore: basemapLayersStore,
     mockBasemapAuxLayersStore: {
@@ -241,6 +242,7 @@ import {
   layersActions,
   layersState
 } from './layers.store.svelte';
+import type { Layer } from '../../types/layers.types';
 
 function createVisualization(
   overrides: Partial<VisualizationConfig> = {}
@@ -285,7 +287,21 @@ function createVisualization(
       color: '#c6c6c6'
     },
     ...overrides
-  };
+  } as unknown as VisualizationConfig;
+}
+
+function flat(): Layer[] {
+  return layersState.layers as Layer[];
+}
+
+function findById(id: string): Layer | undefined {
+  return flat().find((layer) => layer.id === id);
+}
+
+function indexOf(id: string): number {
+  const at = flat().findIndex((layer) => layer.id === id);
+  expect(at, `expected layer ${id} to exist`).toBeGreaterThanOrEqual(0);
+  return at;
 }
 
 function resetBasemapLayerMocks(): void {
@@ -433,6 +449,32 @@ describe('layers color helpers', () => {
     expect(getBasemapLayerColor(terre)).toBe('#a8a8a8');
     expect(getBasemapLayerColor(mers)).toBe('#d0e2ff');
   });
+});
+
+describe('layers store flattened model', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockVisualizationStore.activeVisualizations = [];
+    mockVisualizationStore.visualizations = [];
+    mockFacetsStore.enabled = false;
+    mockFacetsStore.baseVisualizationId = null;
+    mockFacetsStore.generatedVisualizationIds = [];
+    resetBasemapLayerMocks();
+  });
+
+  it('produces a flat list with no standalone visualization parent rows', () => {
+    const visualization = createVisualization();
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+
+    expect(flat().every((layer) => layer.kind !== undefined)).toBe(true);
+    expect(findById('viz-1')).toBeUndefined();
+    expect(
+      flat().filter((layer) => layer.kind === 'viz-primitive').length
+    ).toBeGreaterThan(0);
+  });
 
   it('keeps hidden primitive rows available so they can be shown again', () => {
     const visualization = createVisualization({
@@ -444,25 +486,36 @@ describe('layers color helpers', () => {
 
     layersActions.syncWithVisualizations();
 
-    expect(layersState.layers).toEqual(
+    expect(flat()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: 'viz-1::point',
           parentId: 'viz-1',
-          isSubLayer: true,
+          kind: 'viz-primitive',
           visible: false
         }),
         expect.objectContaining({
           id: 'viz-1::line',
           parentId: 'viz-1',
-          isSubLayer: true,
+          kind: 'viz-primitive',
           visible: true
         })
       ])
     );
   });
 
-  it('exposes a Textes sublayer for every visualization so it can be toggled later', () => {
+  it('labels each primitive row with the primitive and its visualization name', () => {
+    const visualization = createVisualization({ name: 'Population' });
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+
+    const point = findById('viz-1::point');
+    expect(point?.name).toContain('Population');
+  });
+
+  it('exposes a Textes primitive row for every visualization so it can be toggled later', () => {
     const visualization = createVisualization({
       primitiveFilters: [
         PrimitiveFilterType.POINT,
@@ -476,21 +529,18 @@ describe('layers color helpers', () => {
 
     layersActions.syncWithVisualizations();
 
-    const textSubLayer = layersState.layers.find(
-      (layer) => layer.id === 'viz-1::text'
-    );
-    expect(textSubLayer).toEqual(
+    expect(findById('viz-1::text')).toEqual(
       expect.objectContaining({
         id: 'viz-1::text',
         parentId: 'viz-1',
-        isSubLayer: true,
+        kind: 'viz-primitive',
         primitive: PrimitiveFilterType.TEXT,
         visible: false
       })
     );
   });
 
-  it('marks the Textes sublayer as visible when the visualization enables text', () => {
+  it('marks the Textes row as visible when the visualization enables text', () => {
     const visualization = createVisualization({
       primitiveFilters: [PrimitiveFilterType.POLYGON, PrimitiveFilterType.TEXT]
     });
@@ -500,19 +550,13 @@ describe('layers color helpers', () => {
 
     layersActions.syncWithVisualizations();
 
-    const textSubLayer = layersState.layers.find(
-      (layer) => layer.id === 'viz-1::text'
-    );
-    expect(textSubLayer).toEqual(
-      expect.objectContaining({
-        visible: true
-      })
+    expect(findById('viz-1::text')).toEqual(
+      expect.objectContaining({ visible: true })
     );
   });
 
-  it('toggles the Textes sublayer through togglePrimitiveFilter', () => {
+  it('toggles the Textes row through togglePrimitiveFilter', () => {
     const visualization = createVisualization();
-
     mockVisualizationStore.visualizations = [visualization];
     mockVisualizationStore.activeVisualizations = [visualization];
 
@@ -525,21 +569,16 @@ describe('layers color helpers', () => {
     );
   });
 
-  it('reorders Textes among other primitive sublayers via setPrimitiveFilterOrder', () => {
-    const visualization = createVisualization({
-      primitiveOrder: [
-        PrimitiveFilterType.POINT,
-        PrimitiveFilterType.LINE,
-        PrimitiveFilterType.POLYGON,
-        PrimitiveFilterType.TEXT
-      ]
-    });
-
+  it('reorders Textes among the other primitive rows via setPrimitiveFilterOrder', () => {
+    const visualization = createVisualization();
     mockVisualizationStore.visualizations = [visualization];
     mockVisualizationStore.activeVisualizations = [visualization];
 
     layersActions.syncWithVisualizations();
-    layersActions.reorderSubLayers('viz-1', 3, 0);
+    layersActions.reorderLayers(
+      indexOf('viz-1::text'),
+      indexOf('viz-1::point')
+    );
 
     expect(mockVisualizationStore.setPrimitiveFilterOrder).toHaveBeenCalledWith(
       'viz-1',
@@ -552,75 +591,8 @@ describe('layers color helpers', () => {
     );
   });
 
-  it('keeps Textes at the bottom after it is reordered below basemap sublayers', () => {
-    const visualization = createVisualization({
-      primitiveOrder: [
-        PrimitiveFilterType.POINT,
-        PrimitiveFilterType.LINE,
-        PrimitiveFilterType.POLYGON,
-        PrimitiveFilterType.TEXT
-      ]
-    });
-
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-    mockBasemapStyleStore.referenceBasemapId = 'world';
-    mockBasemapService.currentMetadata = {
-      file: 'world',
-      layers: []
-    };
-
-    layersActions.syncWithVisualizations();
-    const subLayers = layersState.layers
-      .filter((layer) => layer.isSubLayer && layer.parentId === 'viz-1')
-      .sort((a, b) => a.order - b.order);
-    const textIndex = subLayers.findIndex(
-      (layer) => layer.id === 'viz-1::text'
-    );
-
-    layersActions.reorderSubLayers('viz-1', textIndex, subLayers.length - 1);
-    layersActions.syncWithVisualizations();
-
-    const reorderedSubLayerIds = layersState.layers
-      .filter((layer) => layer.isSubLayer && layer.parentId === 'viz-1')
-      .sort((a, b) => a.order - b.order)
-      .map((layer) => layer.id);
-
-    expect(reorderedSubLayerIds.at(-1)).toBe('viz-1::text');
-    expect(mockVisualizationStore.setPrimitiveFilterOrder).toHaveBeenCalledWith(
-      'viz-1',
-      [
-        PrimitiveFilterType.POINT,
-        PrimitiveFilterType.LINE,
-        PrimitiveFilterType.POLYGON,
-        PrimitiveFilterType.TEXT
-      ]
-    );
-  });
-
-  it('uses the canonical visualization name for parent layers', () => {
-    const visualization = createVisualization({
-      name: 'Audit viz'
-    });
-
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-
-    layersActions.syncWithVisualizations();
-
-    expect(layersState.layers).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: 'viz-1',
-          name: 'Audit viz'
-        })
-      ])
-    );
-  });
-
-  it('renames parent visualization layers through the dedicated immediate path', () => {
+  it('renames a visualization addressed by id through the dedicated immediate path', () => {
     const visualization = createVisualization();
-
     mockVisualizationStore.visualizations = [visualization];
     mockVisualizationStore.activeVisualizations = [visualization];
 
@@ -634,9 +606,8 @@ describe('layers color helpers', () => {
     expect(mockVisualizationStore.updateVisualization).not.toHaveBeenCalled();
   });
 
-  it('removes parent visualization layers', () => {
+  it('removes a visualization addressed by id', () => {
     const visualization = createVisualization();
-
     mockVisualizationStore.visualizations = [visualization];
     mockVisualizationStore.activeVisualizations = [visualization];
 
@@ -648,9 +619,8 @@ describe('layers color helpers', () => {
     );
   });
 
-  it('does not remove sublayers directly', () => {
+  it('does not remove a visualization when the id is unknown', () => {
     const visualization = createVisualization();
-
     mockVisualizationStore.visualizations = [visualization];
     mockVisualizationStore.activeVisualizations = [visualization];
 
@@ -660,7 +630,7 @@ describe('layers color helpers', () => {
     expect(mockVisualizationStore.removeVisualization).not.toHaveBeenCalled();
   });
 
-  it('reorders visualization layers', () => {
+  it('reorders visualizations when one visualization block is dragged ahead of another', () => {
     const viz1 = createVisualization({ id: 'viz-1', name: 'Viz 1' });
     const viz2 = createVisualization({ id: 'viz-2', name: 'Viz 2' });
 
@@ -668,7 +638,10 @@ describe('layers color helpers', () => {
     mockVisualizationStore.activeVisualizations = [viz1, viz2];
 
     layersActions.syncWithVisualizations();
-    layersActions.reorderLayers('visualization', 0, 1);
+    layersActions.reorderLayers(
+      indexOf('viz-2::point'),
+      indexOf('viz-1::point')
+    );
 
     expect(mockVisualizationStore.setVisualizationOrder).toHaveBeenCalledWith([
       'viz-2',
@@ -676,7 +649,7 @@ describe('layers color helpers', () => {
     ]);
   });
 
-  it('duplicates parent visualization layers', () => {
+  it('duplicates a visualization addressed by id and returns one of its primitive rows', () => {
     const visualization = createVisualization();
     const duplicated = createVisualization({
       id: 'viz-2',
@@ -697,10 +670,10 @@ describe('layers color helpers', () => {
       'viz-1'
     );
     expect(result).not.toBeNull();
-    expect(result?.id).toBe('viz-2');
+    expect(result?.parentId).toBe('viz-2');
   });
 
-  it('toggles visualization parent visibility', () => {
+  it('toggles a whole visualization by id when no row matches', () => {
     const visualization = createVisualization();
 
     mockVisualizationStore.visualizations = [visualization];
@@ -714,7 +687,7 @@ describe('layers color helpers', () => {
     );
   });
 
-  it('toggles primitive sublayer visibility', () => {
+  it('toggles a primitive row visibility', () => {
     const visualization = createVisualization();
 
     mockVisualizationStore.visualizations = [visualization];
@@ -739,15 +712,30 @@ describe('layers color helpers', () => {
     layersActions.syncWithVisualizations();
 
     expect(
-      layersState.layers.some(
+      flat().some(
         (layer) =>
-          layer.id === 'viz-1::basemap::mers' ||
-          layer.id === 'viz-1::basemap::sphere'
+          layer.id === 'basemap::mers' || layer.id === 'basemap::sphere'
       )
     ).toBe(false);
   });
 
-  it('uses LAND metadata to expose Terre only as a generic basemap sublayer', () => {
+  it('deduplicates basemap auxiliary rows globally across multiple visualizations', () => {
+    const viz1 = createVisualization({ id: 'viz-1', name: 'A' });
+    const viz2 = createVisualization({ id: 'viz-2', name: 'B' });
+    mockVisualizationStore.visualizations = [viz1, viz2];
+    mockVisualizationStore.activeVisualizations = [viz1, viz2];
+    mockBasemapStyleStore.referenceBasemapId = 'world';
+    mockBasemapService.currentMetadata = { file: 'world', layers: [] };
+
+    layersActions.syncWithVisualizations();
+
+    const mersRows = flat().filter((layer) => layer.basemapLayerId === 'mers');
+    expect(mersRows).toHaveLength(1);
+    expect(mersRows[0].id).toBe('basemap::mers');
+    expect(mersRows[0].parentId).toBeUndefined();
+  });
+
+  it('uses LAND metadata to expose Terre only as a generic basemap row', () => {
     const visualization = createVisualization();
     mockVisualizationStore.visualizations = [visualization];
     mockVisualizationStore.activeVisualizations = [visualization];
@@ -766,23 +754,20 @@ describe('layers color helpers', () => {
 
     layersActions.syncWithVisualizations();
 
-    expect(layersState.layers).toEqual(
+    expect(flat()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: 'viz-1::basemap::terre',
-          parentId: 'viz-1',
-          isSubLayer: true,
+          id: 'basemap::terre',
+          kind: 'basemap-aux',
           basemapLayerId: 'terre',
           name: 'Terre'
         })
       ])
     );
-    expect(
-      layersState.layers.some((layer) => layer.name === 'Territoire')
-    ).toBe(false);
+    expect(flat().some((layer) => layer.name === 'Territoire')).toBe(false);
   });
 
-  it('builds Calques sublayers from active basemap metadata instead of static legacy layers', () => {
+  it('builds basemap rows from active metadata instead of static legacy layers', () => {
     const visualization = createVisualization();
     mockVisualizationStore.visualizations = [visualization];
     mockVisualizationStore.activeVisualizations = [visualization];
@@ -819,22 +804,19 @@ describe('layers color helpers', () => {
 
     layersActions.syncWithVisualizations();
 
-    expect(layersState.layers).toEqual(
+    expect(flat()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: 'viz-1::basemap::mers',
-          parentId: 'viz-1',
+          id: 'basemap::mers',
           basemapLayerId: 'mers'
         }),
         expect.objectContaining({
-          id: 'viz-1::basemap::sphere',
-          parentId: 'viz-1',
+          id: 'basemap::sphere',
           basemapLayerId: 'sphere'
         }),
         expect.objectContaining({
-          id: 'viz-1::basemap::frontieres',
-          parentId: 'viz-1',
-          isSubLayer: true,
+          id: 'basemap::frontieres',
+          kind: 'basemap-aux',
           basemapLayerId: 'frontieres',
           basemapFile: 'world',
           basemapLayerKeys: [
@@ -844,8 +826,7 @@ describe('layers color helpers', () => {
           name: 'Frontières/Limites'
         }),
         expect.objectContaining({
-          id: 'viz-1::basemap::meridiens',
-          parentId: 'viz-1',
+          id: 'basemap::meridiens',
           basemapLayerId: 'meridiens',
           basemapLayerKey: 'world-graticule.parquet',
           name: 'Méridiens/Parallèles'
@@ -853,7 +834,7 @@ describe('layers color helpers', () => {
       ])
     );
     expect(
-      layersState.layers.some(
+      flat().some(
         (layer) => layer.basemapLayerKey === 'world-geographic-lines.parquet'
       )
     ).toBe(false);
@@ -877,11 +858,7 @@ describe('layers color helpers', () => {
     };
 
     layersActions.syncWithVisualizations();
-    const limitLayer = layersState.layers.find(
-      (layer) => layer.id === 'viz-1::basemap::frontieres'
-    );
-    expect(limitLayer?.id).toBeDefined();
-    layersActions.toggleLayerVisibility(limitLayer!.id);
+    layersActions.toggleLayerVisibility('basemap::frontieres');
 
     expect(mockBasemapAuxLayersStore.setVisible).toHaveBeenCalledWith(
       'world',
@@ -902,16 +879,7 @@ describe('layers color helpers', () => {
     mockBasemapService.currentMetadata = { file: 'world', layers: [] };
 
     layersActions.syncWithVisualizations();
-    const subLayers = layersState.layers
-      .filter(
-        (layer) => layer.isSubLayer && layer.parentId === 'viz-place-above'
-      )
-      .sort((a, b) => a.order - b.order);
-    const equateurIndex = subLayers.findIndex(
-      (layer) => layer.id === 'viz-place-above::basemap::equateur'
-    );
-
-    layersActions.reorderSubLayers('viz-place-above', equateurIndex, 0);
+    layersActions.reorderLayers(indexOf('basemap::equateur'), 0);
 
     expect(
       mockBasemapLayersStore.setLayerThematicPlacement
@@ -926,22 +894,9 @@ describe('layers color helpers', () => {
     mockBasemapService.currentMetadata = { file: 'world', layers: [] };
 
     layersActions.syncWithVisualizations();
-    const subLayers = layersState.layers
-      .filter(
-        (layer) => layer.isSubLayer && layer.parentId === 'viz-place-below'
-      )
-      .sort((a, b) => a.order - b.order);
-    const equateurIndex = subLayers.findIndex(
-      (layer) => layer.id === 'viz-place-below::basemap::equateur'
-    );
-    const sphereIndex = subLayers.findIndex(
-      (layer) => layer.id === 'viz-place-below::basemap::sphere'
-    );
-
-    layersActions.reorderSubLayers(
-      'viz-place-below',
-      sphereIndex,
-      equateurIndex
+    layersActions.reorderLayers(
+      indexOf('basemap::sphere'),
+      indexOf('basemap::equateur')
     );
 
     expect(
@@ -949,27 +904,18 @@ describe('layers color helpers', () => {
     ).toHaveBeenCalledWith('sphere', true);
   });
 
-  it('reorders basemap sublayers inside their render groups', () => {
+  it('reorders basemap rows inside their render groups', () => {
     const visualization = createVisualization();
     mockVisualizationStore.visualizations = [visualization];
     mockVisualizationStore.activeVisualizations = [visualization];
     mockBasemapStyleStore.referenceBasemapId = 'world';
-    mockBasemapService.currentMetadata = {
-      file: 'world',
-      layers: []
-    };
+    mockBasemapService.currentMetadata = { file: 'world', layers: [] };
 
     layersActions.syncWithVisualizations();
-    const subLayers = layersState.layers
-      .filter((layer) => layer.isSubLayer && layer.parentId === 'viz-1')
-      .sort((a, b) => a.order - b.order);
-    const equateurIndex = subLayers.findIndex(
-      (layer) => layer.id === 'viz-1::basemap::equateur'
+    layersActions.reorderLayers(
+      indexOf('basemap::sphere'),
+      indexOf('basemap::equateur')
     );
-    const sphereIndex = subLayers.findIndex(
-      (layer) => layer.id === 'viz-1::basemap::sphere'
-    );
-    layersActions.reorderSubLayers('viz-1', sphereIndex, equateurIndex);
 
     expect(
       mockBasemapLayersStore.setLayerRenderGroupOrder
@@ -1001,13 +947,10 @@ describe('layers color helpers', () => {
     };
 
     layersActions.syncWithVisualizations();
-    const frontieresLayer = layersState.layers.find(
-      (layer) => layer.id === 'viz-1::basemap::frontieres'
-    );
+    const frontieresLayer = findById('basemap::frontieres');
 
     expect(frontieresLayer).toEqual(
       expect.objectContaining({
-        parentId: 'viz-1',
         basemapLayerId: 'frontieres',
         basemapLayerKeys: [
           'world-limit-countries.parquet',
@@ -1017,9 +960,7 @@ describe('layers color helpers', () => {
       })
     );
     expect(
-      layersState.layers.some((layer) =>
-        layer.id.includes('world-limit-admin.parquet')
-      )
+      flat().some((layer) => layer.id.includes('world-limit-admin.parquet'))
     ).toBe(false);
   });
 
@@ -1034,33 +975,27 @@ describe('layers color helpers', () => {
 
     layersActions.syncWithVisualizations();
 
-    expect(layersState.layers).toEqual(
+    expect(flat()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: 'viz-1::basemap::tiled-basemap::streets',
-          parentId: 'viz-1',
-          isSubLayer: true,
+          id: 'basemap::tiled-basemap::streets',
+          kind: 'basemap-aux',
           type: 'geographic',
           tiledLayerGroupIds: ['streets'],
           visible: true
         }),
         expect.objectContaining({
-          id: 'viz-1::basemap::tiled-basemap::labels',
-          parentId: 'viz-1',
-          isSubLayer: true,
+          id: 'basemap::tiled-basemap::labels',
+          kind: 'basemap-aux',
           type: 'geographic',
           tiledLayerGroupIds: ['labels'],
           visible: false
         })
       ])
     );
-    expect(
-      layersState.layers.some((layer) => layer.id === 'viz-1::basemap::mers')
-    ).toBe(false);
+    expect(flat().some((layer) => layer.id === 'basemap::mers')).toBe(false);
 
-    layersActions.toggleLayerVisibility(
-      'viz-1::basemap::tiled-basemap::labels'
-    );
+    layersActions.toggleLayerVisibility('basemap::tiled-basemap::labels');
 
     expect(mockBasemapStyleStore.setGroupVisibility).toHaveBeenCalledWith(
       'labels',
@@ -1081,21 +1016,21 @@ describe('layers color helpers', () => {
 
     layersActions.syncWithVisualizations();
 
-    const layers = layersState.layers;
-    const parentLayers = layers.filter(
-      (l) => !l.isSubLayer && l.type === 'visualization'
+    const facetPrimitives = flat().filter(
+      (layer) => layer.parentId === 'viz-2'
     );
+    expect(facetPrimitives.length).toBeGreaterThan(0);
+    expect(facetPrimitives[0].name).toContain('Facet');
 
-    expect(parentLayers).toHaveLength(1);
-    expect(parentLayers[0].id).toBe('viz-2');
-    expect(parentLayers[0].name).toContain('Facet');
+    // The base visualization is not shown as its own rows in facets mode.
+    expect(flat().some((layer) => layer.parentId === 'viz-1')).toBe(false);
 
     mockFacetsStore.enabled = false;
     mockFacetsStore.baseVisualizationId = null;
     mockFacetsStore.generatedVisualizationIds = [];
   });
 
-  it('shows base visualization name in facet layer title', () => {
+  it('shows the base visualization name in facet row titles', () => {
     const baseViz = createVisualization({ id: 'viz-1', name: 'Monde' });
     const facetViz = createVisualization({ id: 'viz-2', name: 'Monde' });
 
@@ -1108,11 +1043,44 @@ describe('layers color helpers', () => {
 
     layersActions.syncWithVisualizations();
 
-    const parentLayers = layersState.layers.filter(
-      (l) => !l.isSubLayer && l.type === 'visualization'
+    const facetPrimitive = flat().find((layer) => layer.parentId === 'viz-2');
+    expect(facetPrimitive?.name).toContain('1');
+    expect(facetPrimitive?.name).toContain('Monde');
+
+    mockFacetsStore.enabled = false;
+    mockFacetsStore.baseVisualizationId = null;
+    mockFacetsStore.generatedVisualizationIds = [];
+  });
+
+  it('routes facet reordering through facetsStore.reorderVariables', () => {
+    const baseViz = createVisualization({ id: 'viz-1', name: 'Base' });
+    const facetA = createVisualization({ id: 'facet-a', name: 'A' });
+    const facetB = createVisualization({ id: 'facet-b', name: 'B' });
+    const facetC = createVisualization({ id: 'facet-c', name: 'C' });
+
+    mockVisualizationStore.visualizations = [baseViz, facetA, facetB, facetC];
+    mockVisualizationStore.activeVisualizations = [
+      baseViz,
+      facetA,
+      facetB,
+      facetC
+    ];
+    mockFacetsStore.enabled = true;
+    mockFacetsStore.baseVisualizationId = 'viz-1';
+    mockFacetsStore.generatedVisualizationIds = [
+      'facet-a',
+      'facet-b',
+      'facet-c'
+    ];
+
+    layersActions.syncWithVisualizations();
+    layersActions.reorderLayers(
+      indexOf('facet-c::point'),
+      indexOf('facet-a::point')
     );
-    expect(parentLayers[0].name).toContain('1');
-    expect(parentLayers[0].name).toContain('Monde');
+
+    expect(mockFacetsStore.reorderVariables).toHaveBeenCalledWith(2, 0);
+    expect(mockVisualizationStore.setVisualizationOrder).not.toHaveBeenCalled();
 
     mockFacetsStore.enabled = false;
     mockFacetsStore.baseVisualizationId = null;

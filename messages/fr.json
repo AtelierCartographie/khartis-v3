@@ -406,6 +406,7 @@
   "layers_settings": "Paramètres",
   "layers_more_options": "Plus d'options",
   "layers_carte_title": "Carte",
+  "layers_primitive_of_visualization": "{primitive} · {visualization}",
   "legend_content": "Contenu",
   "legend_style": "Style",
   "legend_title": "Titre",
