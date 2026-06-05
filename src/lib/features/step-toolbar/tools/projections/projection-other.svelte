@@ -1,9 +1,7 @@
 <script lang="ts">
   import ButtonNative from '$lib/features/commons/components/button-native.svelte';
-  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import ProjectionCard from '$lib/features/commons/components/projection-card.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
-  import { ViewMode } from '$lib/features/commons/constants/ui.constants';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import {
     globalActions,
@@ -24,7 +22,7 @@
     InlineNotification,
     TextArea
   } from 'carbon-components-svelte';
-  import { Code, Grid, List as ListIcon } from 'carbon-icons-svelte';
+  import { Code, List as ListIcon } from 'carbon-icons-svelte';
   import { createEventDispatcher } from 'svelte';
   import {
     PROJECTIONS as PROJECTION_CATALOG,
@@ -126,7 +124,6 @@
         .filter((projectionId): projectionId is string => Boolean(projectionId))
     );
   });
-  const viewMode = $derived(globalState.projectionViewMode ?? ViewMode.LIST);
   const projectionContext = $derived(
     resolveProjectionAvailabilityContext({
       requiresMapLibre: basemapStyleStore.requiresMapLibre,
@@ -217,17 +214,6 @@
       (item) => activeFilter === 'all' || item.shapeFilterId === activeFilter
     )
   );
-  const unclassifiedGridItems = $derived(
-    items.filter((item) => !item.shapeFilterId)
-  );
-  const gridGroups = $derived(
-    projectionGroups
-      .map((group) => ({
-        ...group,
-        items: items.filter((item) => item.shapeFilterId === group.id)
-      }))
-      .filter((group) => group.items.length > 0)
-  );
   const catalogueLabel = m.projection_catalog_label();
   const viewCodeLabel = m.projection_view_code();
 
@@ -306,10 +292,6 @@
 
   function selectCatalogueProjection(item: ProjectionCatalogueItem): void {
     projectionActions.setSelected(item.projectionId);
-  }
-
-  function setViewMode(mode: ViewMode): void {
-    projectionActions.setViewMode(mode);
   }
 
   function isCatalogueItemSelected(item: ProjectionCatalogueItem): boolean {
@@ -414,10 +396,7 @@
     />
 
     {#if !isCodeView}
-      <div
-        class="projection-content"
-        class:projection-content--grid={viewMode === ViewMode.GRID}
-      >
+      <div class="projection-content">
         {#if selectedCatalogueUnavailable}
           <InlineNotification
             kind="warning"
@@ -430,123 +409,37 @@
 
         <div class="projection-header">
           <p class="projection-helper">{description}</p>
-          <div class="projection-buttons">
-            <IconButton
-              kind="ghost"
-              icon={ListIcon}
-              size="small"
-              class={viewMode === ViewMode.LIST
-                ? 'projection-view-button projection-view-button--active'
-                : 'projection-view-button'}
-              iconDescription={m.view_list()}
-              isSelected={viewMode === ViewMode.LIST}
-              aria-pressed={viewMode === ViewMode.LIST}
-              on:click={() => setViewMode(ViewMode.LIST)}
-            />
-
-            <IconButton
-              kind="ghost"
-              icon={Grid}
-              size="small"
-              class={viewMode === ViewMode.GRID
-                ? 'projection-view-button projection-view-button--active'
-                : 'projection-view-button'}
-              iconDescription={m.view_grid()}
-              isSelected={viewMode === ViewMode.GRID}
-              aria-pressed={viewMode === ViewMode.GRID}
-              on:click={() => setViewMode(ViewMode.GRID)}
-            />
-          </div>
         </div>
 
-        {#if viewMode === ViewMode.LIST}
-          <div class="projection-tags">
-            {#each availableFilterOptions as opt (opt.id)}
-              <ButtonNative
-                type="button"
-                class="projection-tag {activeFilter === opt.id
-                  ? 'projection-tag--selected'
-                  : ''}"
-                kind="ghost"
-                size="small"
-                onclick={() => setFilter(opt.id)}>{opt.label}</ButtonNative
-              >
-            {/each}
-          </div>
+        <div class="projection-tags">
+          {#each availableFilterOptions as opt (opt.id)}
+            <ButtonNative
+              type="button"
+              class="projection-tag {activeFilter === opt.id
+                ? 'projection-tag--selected'
+                : ''}"
+              kind="ghost"
+              size="small"
+              onclick={() => setFilter(opt.id)}>{opt.label}</ButtonNative
+            >
+          {/each}
+        </div>
 
-          {#if filteredItems.length > 0}
-            <div class="projection-cards">
-              {#each filteredItems as item (item.id)}
-                <ProjectionCard
-                  title={item.title}
-                  subtitle=""
-                  tag={item.tag}
-                  ratio="1:1"
-                  previewLabel={m.projection_preview_label()}
-                  selected={isCatalogueItemSelected(item)}
-                  variant="gray"
-                  equalArea={item.equalArea}
-                  description={item.description}
-                  onclick={() => selectCatalogueProjection(item)}
-                />
-              {/each}
-            </div>
-          {:else}
-            <div class="projection-empty-state">
-              <p class="projection-empty-title">
-                {m.projection_catalog_unavailable_title()}
-              </p>
-              <p class="projection-empty-subtitle">
-                {m.projection_catalog_unavailable_subtitle()}
-              </p>
-            </div>
-          {/if}
-        {:else if items.length > 0}
-          {#if unclassifiedGridItems.length > 0}
-            <div class="projection-grid-featured">
-              {#each unclassifiedGridItems as item (item.id)}
-                <ProjectionCard
-                  title={item.title}
-                  subtitle=""
-                  tag={item.tag}
-                  ratio="16:9"
-                  previewLabel={m.projection_preview_label()}
-                  selected={isCatalogueItemSelected(item)}
-                  variant="gray"
-                  equalArea={item.equalArea}
-                  description={item.description}
-                  layout="vertical"
-                  fullWidth
-                  onclick={() => selectCatalogueProjection(item)}
-                />
-              {/each}
-            </div>
-          {/if}
-
-          <div class="projection-grid">
-            {#each gridGroups as group (group.id)}
-              <section class="projection-grid-column" aria-label={group.label}>
-                <h3>{group.label}</h3>
-                <div class="projection-grid-cards">
-                  {#each group.items as item (item.id)}
-                    <ProjectionCard
-                      title={item.title}
-                      subtitle=""
-                      tag={item.tag}
-                      ratio="16:9"
-                      previewLabel={m.projection_preview_label()}
-                      selected={isCatalogueItemSelected(item)}
-                      variant="gray"
-                      equalArea={item.equalArea}
-                      description={item.description}
-                      layout="vertical"
-                      fullWidth
-                      showTag={false}
-                      onclick={() => selectCatalogueProjection(item)}
-                    />
-                  {/each}
-                </div>
-              </section>
+        {#if filteredItems.length > 0}
+          <div class="projection-cards">
+            {#each filteredItems as item (item.id)}
+              <ProjectionCard
+                title={item.title}
+                subtitle=""
+                tag={item.tag}
+                ratio="1:1"
+                previewLabel={m.projection_preview_label()}
+                selected={isCatalogueItemSelected(item)}
+                variant="gray"
+                equalArea={item.equalArea}
+                description={item.description}
+                onclick={() => selectCatalogueProjection(item)}
+              />
             {/each}
           </div>
         {:else}
@@ -653,10 +546,6 @@
     min-width: 0;
   }
 
-  .projection-content--grid {
-    gap: var(--cds-spacing-05);
-  }
-
   .projection-header {
     display: flex;
     align-items: flex-start;
@@ -672,27 +561,6 @@
     font-size: 0.75rem;
     line-height: 1rem;
     letter-spacing: 0.32px;
-  }
-
-  .projection-buttons {
-    display: flex;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 2px;
-  }
-
-  .projection-buttons :global(.projection-view-button.bx--btn) {
-    width: 32px;
-    min-width: 32px;
-    height: 32px;
-    min-height: 32px;
-    padding: 8px;
-    color: var(--cds-icon-primary, #161616);
-  }
-
-  .projection-buttons
-    :global(.projection-view-button.projection-view-button--active.bx--btn) {
-    background: var(--cds-background-active, rgba(141, 141, 141, 0.5));
   }
 
   .projection-tags {
@@ -759,62 +627,5 @@
     color: var(--cds-text-secondary, #525252);
     font-size: 0.75rem;
     line-height: 1rem;
-  }
-
-  .projection-grid-featured,
-  .projection-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 184px);
-    gap: var(--cds-spacing-05);
-    width: 100%;
-    align-items: start;
-  }
-
-  @media (max-width: 1023px) {
-    .projection-grid-featured,
-    .projection-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-
-    .projection-grid-featured :global(.projection-card),
-    .projection-grid-cards :global(.projection-card) {
-      width: 100%;
-      height: auto;
-      min-height: 140px;
-    }
-  }
-
-  @media (max-width: 480px) {
-    .projection-grid-featured,
-    .projection-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .projection-grid-column {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
-    min-width: 0;
-  }
-
-  .projection-grid-column h3 {
-    margin: 0;
-    color: var(--cds-text-primary, #161616);
-    font-size: 0.75rem;
-    font-weight: 600;
-    line-height: 1rem;
-  }
-
-  .projection-grid-cards {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
-  }
-
-  .projection-grid-featured :global(.projection-card),
-  .projection-grid-cards :global(.projection-card) {
-    width: 184px;
-    height: 176px;
   }
 </style>

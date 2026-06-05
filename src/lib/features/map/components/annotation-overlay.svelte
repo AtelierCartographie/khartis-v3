@@ -146,6 +146,7 @@
     id: string;
     pointIndex: number;
     startPoints: { x: number; y: number }[];
+    startPosition: { x: number; y: number };
     startClientX: number;
     startClientY: number;
   } | null>(null);
@@ -623,6 +624,7 @@
       id: item.id,
       pointIndex,
       startPoints: points.map((point) => ({ x: point.x, y: point.y })),
+      startPosition: { x: item.position.x, y: item.position.y },
       startClientX: event.clientX,
       startClientY: event.clientY
     };
@@ -644,6 +646,17 @@
         ? { x: point.x + dx, y: point.y + dy }
         : { x: point.x, y: point.y }
     );
+    if (isVectorShapeItem(item)) {
+      const normalized = normalizeToOrigin(newPoints);
+      annotationsActions.updateAnnotation(item.id, {
+        position: {
+          x: anchorDragState.startPosition.x + normalized.minX,
+          y: anchorDragState.startPosition.y + normalized.minY
+        },
+        style: { ...(item.style ?? {}), points: normalized.points }
+      });
+      return;
+    }
     applyEditablePoints(item, newPoints);
   }
 
@@ -870,11 +883,6 @@
       return;
     }
 
-    if (!isAnnotationEditing) {
-      activateStylingToolFromMap(StylingTools.Annotations);
-      annotationsActions.setPageElementsVisibility(true);
-    }
-
     centeredAnnotationId = itemId;
     cancelFocusedAnnotationReset();
 
@@ -886,6 +894,16 @@
     void tick().then(() => {
       centerAnnotationInViewport(currentTarget);
     });
+    annotationsActions.selectAnnotation(itemId);
+  }
+
+  function handleAnnotationDoubleClick(
+    event: MouseEvent,
+    itemId: string
+  ): void {
+    event.stopPropagation();
+    activateStylingToolFromMap(StylingTools.Annotations);
+    annotationsActions.setPageElementsVisibility(true);
     annotationsActions.selectAnnotation(itemId);
   }
 
@@ -2005,6 +2023,7 @@
                       stroke={guideStyle.stroke}
                       stroke-width={guideStyle.strokeWidth}
                       stroke-dasharray={guideStyle.strokeDasharray}
+                      vector-effect="non-scaling-stroke"
                     />
                     <circle
                       cx={previewShapeData.cx}
@@ -2014,6 +2033,7 @@
                       stroke={previewStyle.stroke}
                       stroke-width={previewStyle.strokeWidth}
                       stroke-dasharray={previewStyle.strokeDasharray}
+                      vector-effect="non-scaling-stroke"
                     />
                   {:else}
                     <path
@@ -2024,6 +2044,7 @@
                       stroke-dasharray={guideStyle.strokeDasharray}
                       stroke-linejoin="round"
                       stroke-linecap="round"
+                      vector-effect="non-scaling-stroke"
                     />
                     <path
                       d={previewShapeData.path}
@@ -2035,6 +2056,7 @@
                       stroke-dasharray={previewStyle.strokeDasharray}
                       stroke-linecap="round"
                       stroke-linejoin="round"
+                      vector-effect="non-scaling-stroke"
                     />
                   {/if}
                 </svg>
@@ -2145,6 +2167,8 @@
         ? item.content.trim()
         : m.annotationImageAlt()}
       onclick={(event: MouseEvent) => handleAnnotationClick(event, item.id)}
+      ondblclick={(event: MouseEvent) =>
+        handleAnnotationDoubleClick(event, item.id)}
       onblur={(event: FocusEvent) => handleAnnotationBlur(event, item.id)}
       onpointerdown={(event: PointerEvent) =>
         handleAnnotationPointerDown(event, item)}
@@ -2293,6 +2317,7 @@
                     stroke={shapeStyle.stroke}
                     stroke-width={shapeStyle.strokeWidth}
                     stroke-dasharray={shapeStyle.strokeDasharray}
+                    vector-effect="non-scaling-stroke"
                   />
                 {:else if shapeData.type === SHAPE_TYPE.ARROW}
                   <path
@@ -2313,6 +2338,7 @@
                     stroke-dasharray={shapeStyle.strokeDasharray}
                     stroke-linecap="round"
                     stroke-linejoin="round"
+                    vector-effect="non-scaling-stroke"
                   />
                 {/if}
               </svg>

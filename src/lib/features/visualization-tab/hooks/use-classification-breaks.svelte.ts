@@ -4,6 +4,7 @@ import {
   calculateDivergingBreaks,
   calculateBreaks,
   computeDivergingSplit,
+  detectDivergingBreakpoint,
   generateColorsForBreaks
 } from '$lib/features/commons/services/classification.service';
 import type {
@@ -104,6 +105,10 @@ export interface ClassificationBreaksComputation {
   actualClassCount: number;
   result: NonNullable<BreaksResult>;
   breakpointLowerClassCount?: number;
+  /** Breakpoint actually used; set when a diverging pivot was auto-detected. */
+  breakpointValue?: number | null;
+  autoBreakpointApplied?: boolean;
+  autoBreakpointCleared?: boolean;
   colors: string[];
 }
 
@@ -307,12 +312,45 @@ export async function computeClassificationBreaks(
       classification?.classes ??
       5
   );
-  const breakpointValue = Object.prototype.hasOwnProperty.call(
+  const breakpointExplicit = Object.prototype.hasOwnProperty.call(
     options,
     'breakpointValue'
-  )
+  );
+  let breakpointValue = breakpointExplicit
     ? options.breakpointValue
     : classification?.breakpointValue;
+
+  // Auto-manage a diverging pivot at zero from the data, never overriding an
+  // explicit user breakpoint (the discretization modal passes one explicitly,
+  // and a manual non-zero pivot is left untouched). A pivot at 0 — or its
+  // absence — is treated as auto-managed and resolved from the column each
+  // recompute: applied when the column crosses zero, cleared when it does not.
+  // This keeps the ramp diverging for zero-crossing data and sequential
+  // otherwise, symmetrically on first classification and on column changes
+  // (a freshly selected 100 % positive column falls back to sequential).
+  let autoBreakpointApplied = false;
+  let autoBreakpointCleared = false;
+  if (
+    !breakpointExplicit &&
+    storeMethod !== ClassificationMethod.MANUAL &&
+    (breakpointValue == null || breakpointValue === 0)
+  ) {
+    const autoBreakpoint = await detectDivergingBreakpoint({
+      datasetId: options.datasetSourceFileId,
+      columnName: options.valueColumn
+    });
+    const currentPivot = breakpointValue ?? null;
+    if (autoBreakpoint !== currentPivot) {
+      if (autoBreakpoint != null) {
+        breakpointValue = autoBreakpoint;
+        autoBreakpointApplied = true;
+      } else {
+        breakpointValue = undefined;
+        autoBreakpointCleared = true;
+      }
+    }
+  }
+
   const breakpointLowerClassCount = resolveBreakpointLowerClassCount(
     requestedClassCount,
     options.breakpointLowerClassCount ??
@@ -369,6 +407,9 @@ export async function computeClassificationBreaks(
     actualClassCount,
     result,
     breakpointLowerClassCount: result.breakpointLowerClassCount,
+    breakpointValue,
+    autoBreakpointApplied,
+    autoBreakpointCleared,
     colors
   };
 }
@@ -567,6 +608,17 @@ export function useClassificationBreaksController({
       if (computation.breakpointLowerClassCount != null) {
         classificationUpdate.breakpointLowerClassCount =
           computation.breakpointLowerClassCount;
+      }
+
+      if (
+        computation.autoBreakpointApplied &&
+        computation.breakpointValue != null
+      ) {
+        classificationUpdate.breakpointValue = computation.breakpointValue;
+      }
+
+      if (computation.autoBreakpointCleared) {
+        classificationUpdate.breakpointValue = null;
       }
 
       if (

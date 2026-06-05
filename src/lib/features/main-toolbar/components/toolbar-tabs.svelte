@@ -495,7 +495,10 @@
           datasetCount > 1 && selectedDataset
             ? selectedDataset.name
             : fileInfo.name}
-        <div class="tab-button-wrapper" use:registerTab={dataButton.id}>
+        <div
+          class="tab-button-wrapper with-menu"
+          use:registerTab={dataButton.id}
+        >
           <Button
             isSelected={dataButton.isSelected}
             kind={dataButton.isSelected ? ButtonKind.Primary : ButtonKind.Ghost}
@@ -731,20 +734,31 @@
     position: relative;
     display: flex;
     align-items: center;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 250px;
   }
 
   .tab-button-wrapper :global(.tab-button) {
     position: relative;
+    padding-left: var(--cds-spacing-04);
+    padding-right: var(--cds-spacing-04);
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .tab-button-wrapper.with-menu :global(.tab-button) {
     padding-right: calc(var(--cds-spacing-08) + 24px);
-    min-width: 120px;
-    max-width: 250px;
   }
 
   .tab-content {
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-03);
-    padding-right: var(--cds-spacing-05);
+    padding-right: var(--cds-spacing-02);
+    min-width: 0;
+    overflow: hidden;
   }
 
   .tab-label {
@@ -752,7 +766,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 120px;
+    max-width: 100%;
     cursor: text;
     padding: 2px 4px;
     border-radius: 2px;

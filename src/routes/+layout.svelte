@@ -17,6 +17,8 @@
   import { projectRuntime } from '$lib/features/commons/stores/project/project-runtime.svelte';
   import { initializeStores } from '$lib/features/commons/stores/stores-init';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
+  import * as m from '$lib/paraglide/messages';
   import { EVENT } from '$lib/features/commons/constants/dom.constants';
   import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 
@@ -49,7 +51,7 @@
   import StepToolbar from '$lib/features/step-toolbar/step-toolbar.svelte';
   import { Theme } from 'carbon-components-svelte';
   import GlobalLoadingIndicator from '$lib/features/commons/components/global-loading-indicator.svelte';
-  import { onMount, untrack } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import ColorBlindnessNotification from '$lib/features/step-toolbar/tools/color-blindness/color-blindness-notification.svelte';
   import CreateProject from '$lib/features/create-project/create-project.svelte';
   import MobileToolbar from '$lib/features/main-toolbar/mobile-toolbar.svelte';
@@ -86,6 +88,48 @@
       );
     }
   });
+
+  // Loads a Khartis project (.kh) from a remote URL passed as the `?kh=` query
+  // parameter (e.g. .../khartis?kh=https://host/project.kh). The file is fetched
+  // directly by the browser (privacy: no user data leaves the device) and
+  // replayed through the regular project import. A dirty current project is
+  // protected by a confirmation prompt before being replaced.
+  async function loadProjectFromKhUrl(
+    khProjectUrl: string,
+    startDataServices: () => Promise<void>
+  ): Promise<void> {
+    if (
+      projectStore.isDirty &&
+      !window.confirm(m.project_import_url_confirm_discard())
+    ) {
+      return;
+    }
+
+    try {
+      await startDataServices();
+      const response = await fetch(khProjectUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const blob = await response.blob();
+      const fileName =
+        khProjectUrl.split('/').pop()?.split('?')[0] || 'project.kh';
+      const file = new File([blob], fileName, { type: 'application/zip' });
+      await projectStore.importProject(file);
+    } catch (error) {
+      logger.error('Failed to import project from kh URL', LogCategory.SYSTEM, {
+        khProjectUrl,
+        error
+      });
+      showError(
+        m.project_import_url_error_title(),
+        m.project_import_url_error_subtitle()
+      );
+      if (!projectStore.currentProject) {
+        globalState.isCreateProjectModalOpen = true;
+      }
+    }
+  }
 
   onMount(() => {
     void fontAssetsStore.ensureLoaded();
@@ -141,7 +185,6 @@
       if (!entry) return;
       stepToolbarWidth = Math.round(entry.contentRect.width);
     });
-    observeStepToolbar();
 
     window.addEventListener(EVENT.KEYDOWN, handleGlobalKeyDown);
     window.addEventListener(EVENT.KEYUP, handleGlobalKeyUp);
@@ -164,6 +207,14 @@
       try {
         await projectStore.waitForInit();
         isLoading = false;
+
+        const khProjectUrl = new URLSearchParams(window.location.search).get(
+          'kh'
+        );
+        if (khProjectUrl) {
+          await loadProjectFromKhUrl(khProjectUrl, startDataServices);
+          return;
+        }
 
         if (!projectStore.currentProject) {
           globalState.isCreateProjectModalOpen = true;
@@ -230,16 +281,29 @@
     };
   });
 
-  function observeStepToolbar(): void {
-    if (!stepToolbarResizeObserver) return;
-    const el = document.getElementById('khartis-step-toolbar');
-    if (!el) {
-      requestAnimationFrame(observeStepToolbar);
+  // #khartis-step-toolbar renders only in desktop view, once loading is done.
+  // React to those conditions instead of polling with requestAnimationFrame,
+  // which would otherwise spin forever in mobile view (the toolbar never renders).
+  $effect(() => {
+    const shouldObserve = !isLoading && !globalState.isMobileView;
+    if (!shouldObserve || !stepToolbarResizeObserver) {
+      stepToolbarWidth = 0;
       return;
     }
-    stepToolbarResizeObserver.observe(el);
-    stepToolbarWidth = Math.round(el.getBoundingClientRect().width);
-  }
+    const observer = stepToolbarResizeObserver;
+    let cancelled = false;
+    void tick().then(() => {
+      if (cancelled) return;
+      const el = document.getElementById('khartis-step-toolbar');
+      if (!el) return;
+      observer.observe(el);
+      stepToolbarWidth = Math.round(el.getBoundingClientRect().width);
+    });
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
+  });
 
   $effect(() => {
     void globalState.zoom.pageZoomScale;

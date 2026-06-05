@@ -1,6 +1,6 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages';
-  import { Add, Document, Earth, Subtract } from 'carbon-icons-svelte';
+  import { Add, Document, Earth, Reset, Subtract } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import IconButton from '../../commons/components/carbon/icon-button.svelte';
   import ToggleTabs from '../../commons/components/toggle-tabs.svelte';
@@ -354,6 +354,16 @@
       </div>
 
       <div class="zoom-controls">
+        <IconButton
+          kind="ghost"
+          size="small"
+          class="zoom-button"
+          icon={Reset}
+          iconDescription={m.zoom_reset_title()}
+          tooltipPosition={zoomButtonTooltipPosition}
+          on:click={fitActiveMode}
+        />
+
         <IconButton
           kind="ghost"
           size="small"

@@ -2100,7 +2100,7 @@
       role="button"
       tabindex="0"
       aria-label={m.tool_legend()}
-      onclick={handleLegendFocusClick}
+      ondblclick={handleLegendFocusClick}
       onblur={handleLegendBlur}
       onkeydown={handleLegendKeyDown}
       onpointerdown={handleLegendPointerDown}

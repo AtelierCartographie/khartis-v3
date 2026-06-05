@@ -1,8 +1,6 @@
 <script lang="ts">
   import Button from '$lib/features/commons/components/carbon/button.svelte';
-  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import ProjectionCard from '$lib/features/commons/components/projection-card.svelte';
-  import { ViewMode } from '$lib/features/commons/constants/ui.constants';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import {
     globalActions,
@@ -17,7 +15,7 @@
     supportsProjectionSuggestions
   } from '$lib/features/map/utils/projection-availability.utils';
   import { m } from '$lib/paraglide/messages';
-  import { Grid, List, MagicWandFilled } from 'carbon-icons-svelte';
+  import { MagicWandFilled } from 'carbon-icons-svelte';
   import { getNationalProjectionBadge } from './national-region-label';
   import {
     getProjectionState,
@@ -134,7 +132,6 @@
   const hasMoreListSuggestions = $derived(
     filteredListSuggestions.length > visibleSuggestionLimit
   );
-  const hasSuggestionItems = $derived(suggestionItems.length > 0);
   const suggestionEmptyTitle = $derived(
     suggestionCardsEnabled
       ? m.projection_suggestions_empty_title()
@@ -145,22 +142,6 @@
       ? m.projection_suggestions_empty_subtitle()
       : m.projection_suggestions_unavailable_subtitle()
   );
-  const unclassifiedGridSuggestions = $derived(
-    suggestionItems.filter((suggestion) => !getSuggestionFilterId(suggestion))
-  );
-  const gridSuggestionGroups = $derived(
-    projectionGroups
-      .map((group) => ({
-        ...group,
-        suggestions: suggestionItems.filter(
-          (suggestion) => getSuggestionFilterId(suggestion) === group.id
-        )
-      }))
-      .filter((group) => group.suggestions.length > 0)
-  );
-
-  let viewMode = $derived(globalState.projectionViewMode ?? ViewMode.LIST);
-
   function isSuggestionSelected(suggestion: ProjectionSuggestion) {
     return (
       projectionState.overrideActive === true &&
@@ -256,133 +237,37 @@
   }
 </script>
 
-<div
-  class="projection-content"
-  class:projection-content--grid={viewMode === ViewMode.GRID}
->
+<div class="projection-content">
   <div class="projection-header">
     <p class="projection-helper">{description}</p>
-    <div class="projection-buttons">
-      <IconButton
-        kind="ghost"
-        icon={List}
-        size="small"
-        class={viewMode === ViewMode.LIST
-          ? 'projection-view-button projection-view-button--active'
-          : 'projection-view-button'}
-        iconDescription={m.view_list()}
-        isSelected={viewMode === ViewMode.LIST}
-        aria-pressed={viewMode === ViewMode.LIST}
-        on:click={() => projectionActions.setViewMode(ViewMode.LIST)}
-      />
-
-      <IconButton
-        kind="ghost"
-        icon={Grid}
-        size="small"
-        class={viewMode === ViewMode.GRID
-          ? 'projection-view-button projection-view-button--active'
-          : 'projection-view-button'}
-        iconDescription={m.view_grid()}
-        isSelected={viewMode === ViewMode.GRID}
-        aria-pressed={viewMode === ViewMode.GRID}
-        on:click={() => projectionActions.setViewMode(ViewMode.GRID)}
-      />
-    </div>
   </div>
 
-  {#if viewMode === ViewMode.LIST}
-    <div class="projection-tags">
-      {#each availableFilterOptions as opt (opt.id)}
-        <button
-          type="button"
-          class="projection-tag"
-          class:projection-tag--selected={activeFilter === opt.id}
-          onclick={() => setFilter(opt.id)}>{opt.label}</button
-        >
-      {/each}
-    </div>
-
-    {#if filteredListSuggestions.length > 0}
-      <div class="projection-cards">
-        {#each visibleListSuggestions as suggestion (suggestion.id)}
-          <ProjectionCard
-            title={getSuggestionTitle(suggestion)}
-            subtitle=""
-            tag={getSuggestionTag(suggestion)}
-            ratio="1:1"
-            previewLabel={m.projection_preview_label()}
-            selected={isSuggestionSelected(suggestion)}
-            variant="blue"
-            equalArea={suggestion.equalArea}
-            description={getSuggestionDescription(suggestion)}
-            onclick={() => applySuggestion(suggestion)}
-          />
-        {/each}
-      </div>
-    {:else}
-      <div class="projection-empty-state">
-        <p class="projection-empty-title">{suggestionEmptyTitle}</p>
-        <p class="projection-empty-subtitle">{suggestionEmptySubtitle}</p>
-      </div>
-    {/if}
-
-    {#if hasMoreListSuggestions}
-      <Button
-        kind="tertiary"
-        size="small"
-        icon={MagicWandFilled}
-        class="show-more-btn"
-        disabled={!suggestionCardsEnabled}
-        on:click={showMoreSuggestions}>{m.show_other_suggestions()}</Button
+  <div class="projection-tags">
+    {#each availableFilterOptions as opt (opt.id)}
+      <button
+        type="button"
+        class="projection-tag"
+        class:projection-tag--selected={activeFilter === opt.id}
+        onclick={() => setFilter(opt.id)}>{opt.label}</button
       >
-    {/if}
-  {:else if hasSuggestionItems}
-    {#if unclassifiedGridSuggestions.length > 0}
-      <div class="projection-grid-featured">
-        {#each unclassifiedGridSuggestions as suggestion (suggestion.id)}
-          <ProjectionCard
-            title={getSuggestionTitle(suggestion)}
-            subtitle=""
-            tag={getSuggestionTag(suggestion)}
-            ratio="16:9"
-            previewLabel={m.projection_preview_label()}
-            selected={isSuggestionSelected(suggestion)}
-            variant="blue"
-            equalArea={suggestion.equalArea}
-            description={getSuggestionDescription(suggestion)}
-            layout="vertical"
-            fullWidth
-            onclick={() => applySuggestion(suggestion)}
-          />
-        {/each}
-      </div>
-    {/if}
+    {/each}
+  </div>
 
-    <div class="projection-grid">
-      {#each gridSuggestionGroups as group (group.id)}
-        <section class="projection-grid-column" aria-label={group.label}>
-          <h3>{group.label}</h3>
-          <div class="projection-grid-cards">
-            {#each group.suggestions as suggestion (suggestion.id)}
-              <ProjectionCard
-                title={getSuggestionTitle(suggestion)}
-                subtitle=""
-                tag={getSuggestionTag(suggestion)}
-                ratio="16:9"
-                previewLabel={m.projection_preview_label()}
-                selected={isSuggestionSelected(suggestion)}
-                variant="blue"
-                equalArea={suggestion.equalArea}
-                description={getSuggestionDescription(suggestion)}
-                layout="vertical"
-                fullWidth
-                showTag={false}
-                onclick={() => applySuggestion(suggestion)}
-              />
-            {/each}
-          </div>
-        </section>
+  {#if filteredListSuggestions.length > 0}
+    <div class="projection-cards">
+      {#each visibleListSuggestions as suggestion (suggestion.id)}
+        <ProjectionCard
+          title={getSuggestionTitle(suggestion)}
+          subtitle=""
+          tag={getSuggestionTag(suggestion)}
+          ratio="1:1"
+          previewLabel={m.projection_preview_label()}
+          selected={isSuggestionSelected(suggestion)}
+          variant="blue"
+          equalArea={suggestion.equalArea}
+          description={getSuggestionDescription(suggestion)}
+          onclick={() => applySuggestion(suggestion)}
+        />
       {/each}
     </div>
   {:else}
@@ -390,6 +275,17 @@
       <p class="projection-empty-title">{suggestionEmptyTitle}</p>
       <p class="projection-empty-subtitle">{suggestionEmptySubtitle}</p>
     </div>
+  {/if}
+
+  {#if hasMoreListSuggestions}
+    <Button
+      kind="tertiary"
+      size="small"
+      icon={MagicWandFilled}
+      class="show-more-btn"
+      disabled={!suggestionCardsEnabled}
+      on:click={showMoreSuggestions}>{m.show_other_suggestions()}</Button
+    >
   {/if}
 </div>
 
@@ -400,10 +296,6 @@
     gap: var(--cds-spacing-04);
     width: 100%;
     min-width: 0;
-  }
-
-  .projection-content--grid {
-    gap: var(--cds-spacing-05);
   }
 
   .projection-header {
@@ -421,27 +313,6 @@
     font-size: 0.75rem;
     line-height: 1rem;
     letter-spacing: 0.32px;
-  }
-
-  .projection-buttons {
-    display: flex;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 2px;
-  }
-
-  .projection-buttons :global(.projection-view-button.bx--btn) {
-    width: 32px;
-    min-width: 32px;
-    height: 32px;
-    min-height: 32px;
-    padding: 8px;
-    color: var(--cds-icon-primary, #161616);
-  }
-
-  .projection-buttons
-    :global(.projection-view-button.projection-view-button--active.bx--btn) {
-    background: var(--cds-background-active, rgba(141, 141, 141, 0.5));
   }
 
   .projection-tags {
@@ -518,62 +389,5 @@
   .projection-empty-subtitle {
     font-size: 0.75rem;
     line-height: 1rem;
-  }
-
-  .projection-grid-featured,
-  .projection-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 184px);
-    gap: var(--cds-spacing-05);
-    width: 100%;
-    align-items: start;
-  }
-
-  @media (max-width: 1023px) {
-    .projection-grid-featured,
-    .projection-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-
-    .projection-grid-featured :global(.projection-card),
-    .projection-grid-cards :global(.projection-card) {
-      width: 100%;
-      height: auto;
-      min-height: 140px;
-    }
-  }
-
-  @media (max-width: 480px) {
-    .projection-grid-featured,
-    .projection-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .projection-grid-column {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
-    min-width: 0;
-  }
-
-  .projection-grid-column h3 {
-    margin: 0;
-    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
-    font-size: 0.75rem;
-    font-weight: 600;
-    line-height: 1rem;
-  }
-
-  .projection-grid-cards {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
-  }
-
-  .projection-grid-featured :global(.projection-card),
-  .projection-grid-cards :global(.projection-card) {
-    width: 184px;
-    height: 176px;
   }
 </style>

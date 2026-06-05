@@ -47,11 +47,6 @@
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import { getProjectionState } from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
   import { getSimplificationState } from '$lib/features/step-toolbar/tools/simplification/simplification.store.svelte';
-  import {
-    getFormatLayoutSizingContext,
-    getFormatState
-  } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
-  import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
   import { getMainlandBboxForBasemap } from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
   import { fitBasemapRenderProjection } from '$lib/features/map/utils/fit-basemap-render-projection.utils';
   import { resolveActiveBasemapMetadata } from '$lib/features/map/utils/basemap-metadata-resolution.utils';
@@ -132,18 +127,15 @@
   let referenceBasemapRequestId = 0;
   let worldBaseTable = $state.raw<ArrowTable | null>(null);
 
-  const fmtState = $derived(getFormatState());
-  const mapViewportFitPaddingPx = $derived(
-    resolveLayoutSizingTokens(getFormatLayoutSizingContext(fmtState))
-      .mapViewport.fitPaddingPx
-  );
+  const FACET_VIEWPORT_FIT_PADDING_PX = 16;
   const descriptors = $derived(
     buildFacetRenderDescriptors({
       visualizations,
       layout,
       containerWidth,
       containerHeight,
-      pageAspectRatio
+      pageAspectRatio,
+      primarySlotPath: facetsStore.primarySlotPath
     })
   );
   const isStylingMode = $derived(
@@ -193,6 +185,13 @@
     width: Math.max(1, descriptors[0]?.frame.width ?? 1),
     height: Math.max(1, descriptors[0]?.frame.height ?? 1)
   }));
+
+  // Facets are small multiples: a fixed, modest viewport padding lets each map
+  // fill its cell. The page-scale fit padding (40-72px) is sized for the whole
+  // page and would shrink a facet cell drastically, so it is not reused here.
+  // Keep it constant (not derived from the cell size) so it never feeds back
+  // into the fit/relayout effect below and starves the render loop.
+  const mapViewportFitPaddingPx = FACET_VIEWPORT_FIT_PADDING_PX;
   const firstTable = $derived(
     tables.size > 0 ? tables.values().next().value : null
   );

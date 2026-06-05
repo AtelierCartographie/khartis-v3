@@ -834,6 +834,48 @@ describe('createTextOverlayLayers', () => {
     expect(textProps?.getBorderWidth).toBe(0);
   });
 
+  it('keeps a thick text contour below the SDF saturation point so the halo is not clipped', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 1,
+      featureIds: new Uint32Array([0]),
+      positions: new Float32Array([0, 0])
+    });
+
+    const visualization = createTextVisualization();
+    visualization.text = {
+      ...visualization.text!,
+      halo: true,
+      haloWidth: 20
+    };
+
+    const layers = createDeckLayers(
+      createTableWithRows([{ name: 'Contour' }], ['name']),
+      {
+        ...createContext(visualization),
+        geometryInfo: {
+          ...createPointGeometryInfo(),
+          type: 'POINT' as GeometryInfo['type']
+        }
+      }
+    );
+
+    const textLayer = layers.find((layer) => layer instanceof TextLayer) as
+      | TextLayer
+      | undefined;
+    const textProps = textLayer?.props as
+      | {
+          fontSettings?: { buffer?: number; radius?: number; sdf?: boolean };
+          outlineWidth?: number;
+        }
+      | undefined;
+
+    expect(textProps?.outlineWidth).toBeGreaterThan(0);
+    expect(textProps?.outlineWidth).toBeLessThan(1);
+    expect(textProps?.fontSettings?.sdf).toBe(true);
+    expect(textProps?.fontSettings?.buffer).toBeGreaterThanOrEqual(20);
+    expect(textProps?.fontSettings?.radius).toBeGreaterThanOrEqual(20);
+  });
+
   it('places text labels above point layers when primitiveOrder lists TEXT first', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 1,
@@ -3407,6 +3449,6 @@ describe('createLineLayers', () => {
 
   it('does not route text contour through legacy background boxes', () => {
     expect(source).not.toContain('textBackgroundConfig');
-    expect(source).toContain('outlineWidth: textConfig.halo');
+    expect(source).toContain('outlineWidth: resolveTextOutlineWidth(');
   });
 });
