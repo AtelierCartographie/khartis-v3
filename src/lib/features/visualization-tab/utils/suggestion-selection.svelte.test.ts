@@ -188,13 +188,13 @@ describe('resolveDisplayedSuggestionKey', () => {
     ).toBeUndefined();
   });
 
-  it('still honours persisted key even when origin is custom (keeps explicit re-apply visible)', () => {
+  it('clears the persisted key once the viz diverges into custom (a manual edit unchecks the suggestion)', () => {
     expect(
       resolveDisplayedSuggestionKey({
         persistedSuggestionKey: 'persisted',
         matchedSuggestionKey: 'matched',
         originMode: 'custom'
       })
-    ).toBe('persisted');
+    ).toBeUndefined();
   });
 });
