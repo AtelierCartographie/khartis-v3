@@ -362,7 +362,9 @@ describe('annotation overlay drawing interactions', () => {
     const [zone] = getAnnotationsState().items;
     expect(zone.type).toBe(AnnotationKind.DRAWING);
     expect(zone.style?.drawingType).toBe(DrawingType.ZONE);
-    expect(zone.coordinateSpace).toBe('page');
+    // Drawn-on-the-map zones are created in `'map'` space so they follow the
+    // basemap (margins are 0 here, so the placement position is unchanged).
+    expect(zone.coordinateSpace).toBe('map');
   });
 
   it('finishes a zone drawing with Enter and cancels creation with Escape', async () => {

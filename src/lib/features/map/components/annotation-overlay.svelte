@@ -563,6 +563,59 @@
     writeMapAnchor(item, localPosition);
   }
 
+  // A shape created on the map by the store carries an EXPLICIT `coordinateSpace:
+  // 'map'` and no anchor yet. Legacy `'map'` items (loaded from older projects)
+  // leave `coordinateSpace` undefined, so this guard targets only fresh shapes and
+  // never disturbs legacy ones, which keep their opt-in-on-first-drag behavior.
+  function isUnanchoredFreshMapShape(item: Annotation): boolean {
+    return (
+      item.coordinateSpace === 'map' && !item.role && item.anchor === undefined
+    );
+  }
+
+  // Finalize a freshly created `'map'` shape (rectangle/circle/triangle, vector
+  // arrow/line, freehand drawing) the first time it renders. The store creates it
+  // in `'map'` space with a map-area-local `position` but cannot reach the
+  // projection helpers, so its anchor is written here, gluing it to the basemap.
+  // When the active engine/reference cannot round-trip a data anchor (composite /
+  // pre-projected CRS), the shape is downgraded back to `'page'` — re-adding the
+  // page margins it was created without — so the on-screen placement is identical
+  // and it keeps the historical page behavior. Either branch runs once: the item
+  // then has an anchor or is `'page'`, so it leaves this effect's selection.
+  function anchorOrDowngradeNewMapShape(item: Annotation): void {
+    if (canAnchorToMap()) {
+      writeMapAnchor(item, item.position);
+      return;
+    }
+
+    annotationsActions.updateAnnotation(item.id, {
+      coordinateSpace: 'page',
+      position: {
+        x: item.position.x + pageMargins.left,
+        y: item.position.y + pageMargins.top
+      }
+    });
+  }
+
+  // Drive the one-time anchoring of newly created map shapes. Kept reactive to the
+  // map viewport so a shape created before the map is ready still gets anchored
+  // once the projection becomes available; already-anchored and page items are
+  // skipped, so this never disturbs existing annotations or fights a live drag.
+  $effect(() => {
+    void mapViewRevision;
+    void mapInstanceStore.deckViewState;
+
+    if (dragState || resizeState || anchorDragState) {
+      return;
+    }
+
+    for (const item of annotationsState.items) {
+      if (isUnanchoredFreshMapShape(item)) {
+        anchorOrDowngradeNewMapShape(item);
+      }
+    }
+  });
+
   function getScaledPreviewStyle(
     position: { x: number; y: number },
     size: { width: number; height: number }
