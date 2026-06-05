@@ -62,7 +62,7 @@ const DEFAULT_STATE: LayersState = {
 };
 
 const VISUALIZATION_SUBLAYER_SEPARATOR = '::';
-const BASEMAP_SUBLAYER_SEPARATOR = '::basemap::';
+const GLOBAL_BASEMAP_LAYER_PREFIX = 'basemap';
 const TILED_BASEMAP_LAYER_SEPARATOR = 'tiled-basemap::';
 const VISUALIZATION_SUBLAYER_ORDER: PrimitiveFilter[] = [
   PrimitiveFilterType.TEXT,
@@ -102,23 +102,19 @@ const TILED_LAYER_ITEMS: Array<{
   { id: 'cadastre', groupIds: ['cadastre'], defaultVisible: false }
 ];
 
-let basemapLayerDisplayOrder: BasemapLayerId[] = [];
-const subLayerDisplayOrderByParent = new Map<string, string[]>();
-
 type LayersActions = {
   updateLayer: (id: string, updates: Partial<Layer>) => void;
   removeLayer: (id: string) => void;
   toggleLayerVisibility: (id: string) => void;
-  reorderLayers: (
-    scope: LayerReorderScope,
-    fromIndex: number,
-    toIndex: number
-  ) => void;
-  reorderSubLayers: (
-    parentId: string,
-    fromIndex: number,
-    toIndex: number
-  ) => void;
+  /**
+   * Single flat reorder action (#182): moves a row in the flattened panel list
+   * and back-projects the resulting absolute order onto the three render
+   * stores (visualization order, primitive order, basemap render-group order,
+   * above/below-thematic flag, aux-key order). The render-store semantics —
+   * `getMapLayerRenderOrder` / `getVisualizationRenderOrder` — never change, so
+   * `buildLayers` re-clamps the result to the back→thematic→front invariant.
+   */
+  reorderLayers: (fromIndex: number, toIndex: number) => void;
   duplicateLayer: (id: string) => Layer | null;
   syncWithVisualizations: () => void;
 };
@@ -293,11 +289,11 @@ function buildVisualizationSubLayerId(
   return `${visualizationId}${VISUALIZATION_SUBLAYER_SEPARATOR}${primitive}`;
 }
 
-function buildBasemapSubLayerId(
-  visualizationId: string,
-  basemapLayerKey: string
-): string {
-  return `${visualizationId}${BASEMAP_SUBLAYER_SEPARATOR}${basemapLayerKey}`;
+// Basemap auxiliary layers are deduplicated globally in the flattened panel
+// (#182): a single row drives the one shared GPU basemap stack, so its id no
+// longer carries a per-visualization prefix.
+function buildBasemapSubLayerId(basemapLayerKey: string): string {
+  return `${GLOBAL_BASEMAP_LAYER_PREFIX}${VISUALIZATION_SUBLAYER_SEPARATOR}${basemapLayerKey}`;
 }
 
 function buildTiledBasemapLayerId(layerId: string): string {
@@ -319,6 +315,18 @@ function getVisualizationPrimitiveName(primitive: PrimitiveFilter): string {
   }
 }
 
+// Flattened panel rows have no parent header, so each primitive row carries its
+// visualization name: "<primitive> · <visualization>".
+function getPrimitiveLayerName(
+  primitive: PrimitiveFilter,
+  visualizationLabel: string
+): string {
+  return m.layers_primitive_of_visualization({
+    primitive: getVisualizationPrimitiveName(primitive),
+    visualization: visualizationLabel
+  });
+}
+
 function getVisualizationPrimitiveOpacity(
   viz: VisualizationConfig,
   primitive: PrimitiveFilter
@@ -335,30 +343,6 @@ function getVisualizationPrimitiveOpacity(
     default:
       return 100;
   }
-}
-
-function getVisualizationOpacity(viz: VisualizationConfig): number {
-  const polygon = getPolygonPrimitive(viz);
-  if (polygon?.enabled && polygon.fillMode !== FillMode.NONE) {
-    return Math.round((polygon.fillOpacity ?? 1) * 100);
-  }
-
-  const symbol = getSymbolPrimitive(viz);
-  if (symbol?.enabled) {
-    return Math.round((symbol.opacity ?? 1) * 100);
-  }
-
-  const line = getLinePrimitive(viz);
-  if (line?.enabled) {
-    return Math.round((line.opacity ?? 1) * 100);
-  }
-
-  const text = getTextPrimitive(viz);
-  if (text?.enabled) {
-    return Math.round((text.opacity ?? 1) * 100);
-  }
-
-  return 100;
 }
 
 function getBasemapLayerName(layerId: BasemapLayerId): string {
@@ -427,45 +411,56 @@ function reorderIds<T>(items: T[], fromIndex: number, toIndex: number): T[] {
   return next;
 }
 
-function applySubLayerDisplayOrder(
-  parentId: string,
-  subLayers: Layer[]
-): Layer[] {
-  const savedOrder = subLayerDisplayOrderByParent.get(parentId);
-  if (!savedOrder) {
-    return subLayers.map((layer, order) => ({ ...layer, order }));
+/**
+ * Recovers the single (from → to) move that turns `current` into `next` when
+ * `next` is a one-element reordering of the same set. Used to translate a flat
+ * drag of facet rows into `facetsStore.reorderVariables(from, to)`. Returns
+ * `null` when the orders are equal, differ in membership, or differ by more
+ * than a single move (in which case the caller leaves the facet order alone).
+ */
+function deriveSingleMove(
+  current: readonly string[],
+  next: readonly string[]
+): { from: number; to: number } | null {
+  if (
+    current.length !== next.length ||
+    current.length === 0 ||
+    arraysShallowEqual(current, next)
+  ) {
+    return null;
+  }
+  if (new Set(current).size !== current.length) {
+    return null;
+  }
+  const sameMembers =
+    new Set(current).size === new Set([...current, ...next]).size;
+  if (!sameMembers) {
+    return null;
   }
 
-  const layerById = new Map(subLayers.map((layer) => [layer.id, layer]));
-  const savedIds = savedOrder.filter((id) => layerById.has(id));
-  const savedIdSet = new Set(savedIds);
-  const missingLayers = subLayers.filter((layer) => !savedIdSet.has(layer.id));
-
-  if (savedIds.length === 0) {
-    subLayerDisplayOrderByParent.delete(parentId);
-    return subLayers.map((layer, order) => ({ ...layer, order }));
-  }
-
-  const orderedLayers: Layer[] = [];
-  for (const id of savedIds) {
-    const layer = layerById.get(id);
-    if (layer) {
-      orderedLayers.push(layer);
+  for (let from = 0; from < current.length; from += 1) {
+    for (let to = 0; to < current.length; to += 1) {
+      if (from === to) continue;
+      if (arraysShallowEqual(reorderIds([...current], from, to), next)) {
+        return { from, to };
+      }
     }
   }
-  orderedLayers.push(...missingLayers);
-  const nextOrder = orderedLayers.map((layer) => layer.id);
-  subLayerDisplayOrderByParent.set(parentId, nextOrder);
-
-  return orderedLayers.map((layer, order) => ({ ...layer, order }));
+  return null;
 }
 
-function isVisualizationLayer(layer: Layer): boolean {
-  return layer.type === 'visualization';
+function arraysShallowEqual(
+  left: readonly string[],
+  right: readonly string[]
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
 }
 
-function isVisualizationParentLayer(layer: Layer): boolean {
-  return isVisualizationLayer(layer) && !layer.isSubLayer;
+function withFlatOrder(layers: Layer[]): Layer[] {
+  return layers.map((layer, order) => ({ ...layer, order }));
 }
 
 function getBasemapLayerOpacity(layer: BasemapLayerConfig): number {
@@ -684,32 +679,24 @@ function orderBasemapEntriesForDisplay(
   });
 }
 
+// Intra-group ordering of basemap auxiliary rows is read straight from the
+// store (the single source of truth, reordered by `setLayerRenderGroupOrder`),
+// falling back to the canonical order for layers the store doesn't carry. The
+// inter-group placement (foreground/background vs thematic) is owned by
+// `buildLayers`, so there is no separate module-level order to keep in sync.
 function getBasemapDisplayOrder(layerId: BasemapLayerId | undefined): number {
   if (!layerId) return Number.MAX_SAFE_INTEGER;
-  const order =
-    basemapLayerDisplayOrder.length > 0
-      ? basemapLayerDisplayOrder
-      : BASEMAP_LAYER_DISPLAY_ORDER;
-  const index = order.indexOf(layerId);
-  return index === -1 ? Number.MAX_SAFE_INTEGER : index;
-}
-
-function setBasemapLayerDisplayOrder(layerIds: BasemapLayerId[]): void {
-  const uniqueIds = layerIds.filter(
-    (layerId, index, order) => order.indexOf(layerId) === index
+  const storeIndex = basemapLayersStore.layers.findIndex(
+    (layer) => layer.id === layerId
   );
-  basemapLayerDisplayOrder = [
-    ...uniqueIds,
-    ...BASEMAP_LAYER_DISPLAY_ORDER.filter(
-      (layerId) => !uniqueIds.includes(layerId)
-    )
-  ];
+  if (storeIndex !== -1) {
+    return storeIndex;
+  }
+  const fallbackIndex = BASEMAP_LAYER_DISPLAY_ORDER.indexOf(layerId);
+  return fallbackIndex === -1 ? Number.MAX_SAFE_INTEGER : fallbackIndex;
 }
 
-function buildVectorBasemapSubLayers(
-  visualizationId: string,
-  startOrder: number
-): Layer[] {
+function buildVectorBasemapSubLayers(): Layer[] {
   const entries = buildBasemapDisplayEntries();
   const grouped = new Map<string, BasemapDisplayEntry[]>();
 
@@ -737,9 +724,9 @@ function buildVectorBasemapSubLayers(
     rows.push({
       displayOrder: getBasemapDisplayOrder(layerId),
       layer: {
-        id: buildBasemapSubLayerId(visualizationId, layerId ?? groupKey),
-        parentId: visualizationId,
+        id: buildBasemapSubLayerId(layerId ?? groupKey),
         isSubLayer: true,
+        kind: 'basemap-aux',
         type: 'geographic',
         basemapLayerId: layerId,
         basemapFile,
@@ -755,17 +742,14 @@ function buildVectorBasemapSubLayers(
         visible,
         color: config ? getBasemapLayerColor(config) : firstEntry.color,
         opacity: config ? getBasemapLayerOpacity(config) : firstEntry.opacity,
-        order: startOrder
+        order: 0
       }
     });
   }
 
   return rows
     .sort((a, b) => a.displayOrder - b.displayOrder)
-    .map(({ layer }, index) => ({
-      ...layer,
-      order: startOrder + index
-    }));
+    .map(({ layer }, index) => ({ ...layer, order: index }));
 }
 
 function resolveTiledStyleConfig(): StyleConfig | null {
@@ -799,10 +783,7 @@ function isTiledLayerVisible(
   );
 }
 
-function buildTiledBasemapSubLayers(
-  visualizationId: string,
-  startOrder: number
-): Layer[] {
+function buildTiledBasemapSubLayers(): Layer[] {
   const config = resolveTiledStyleConfig();
   if (!config) {
     return [];
@@ -816,12 +797,9 @@ function buildTiledBasemapSubLayers(
     item.groupIds.every((groupId) => visibleGroupIds.has(groupId))
   ).map(
     (item, index): Layer => ({
-      id: buildBasemapSubLayerId(
-        visualizationId,
-        buildTiledBasemapLayerId(item.id)
-      ),
-      parentId: visualizationId,
+      id: buildBasemapSubLayerId(buildTiledBasemapLayerId(item.id)),
       isSubLayer: true,
+      kind: 'basemap-aux',
       type: 'geographic',
       basemapRenderGroup: 'background',
       tiledLayerGroupIds: item.groupIds,
@@ -830,8 +808,20 @@ function buildTiledBasemapSubLayers(
       visible: isTiledLayerVisible(config, item.groupIds, item.defaultVisible),
       color: BASEMAP_SUBLAYER_COLOR,
       opacity: 100,
-      order: startOrder + index
+      order: index
     })
+  );
+}
+
+// Top→bottom of the flattened panel maps to front→back of the render. Within
+// the global thematic block the foreground-below basemap layers insert after
+// the last marker (non-polygon) primitive in panel order — which is the first
+// marker in the reversed Deck array, matching `getMapLayerRenderOrder`.
+function isMarkerPrimitiveLayer(layer: Layer): boolean {
+  return (
+    layer.kind === 'viz-primitive' &&
+    layer.primitive !== undefined &&
+    layer.primitive !== PrimitiveFilterType.POLYGON
   );
 }
 
@@ -850,89 +840,219 @@ function buildLayers(): Layer[] {
 
   let facetIndex = 0;
 
-  const visualizationLayers = displayVisualizations.flatMap(
+  // Global thematic block: every active primitive of every visualization, in
+  // visualization order (viz[0] is front = top of the panel) then primitive
+  // order within each. No separate parent row — each line is a primitive·viz.
+  const thematicLayers = displayVisualizations.flatMap(
     (viz, vizOrder): Layer[] => {
       const primitiveFilters = getEnabledPrimitiveFilters(viz);
       const isFacetViz = facetsEnabled && facetVizIds.has(viz.id);
 
-      let layerName: string;
+      let vizLabel: string;
       if (isFacetViz) {
         facetIndex += 1;
-        layerName = `${m.layers_carte_title()} ${facetIndex} (${viz.name})`;
+        vizLabel = `${m.layers_carte_title()} ${facetIndex} (${viz.name})`;
       } else {
-        layerName = viz.name || m.viz_tab_label({ number: vizOrder + 1 });
+        vizLabel = viz.name || m.viz_tab_label({ number: vizOrder + 1 });
       }
 
-      const parentLayer: Layer = {
-        id: viz.id,
-        name: layerName,
-        visible: isFacetViz || activeVisualizationIds.has(viz.id),
-        type: 'visualization',
-        color: getVisualizationColor(viz),
-        opacity: getVisualizationOpacity(viz),
-        order: vizOrder
-      };
+      const vizVisible = isFacetViz || activeVisualizationIds.has(viz.id);
 
       const vizPrimitiveOrder = (
         viz.primitiveOrder ?? VISUALIZATION_SUBLAYER_ORDER
       ).filter((primitive, index, order) => order.indexOf(primitive) === index);
 
-      const vizSubLayers = vizPrimitiveOrder.map(
+      return vizPrimitiveOrder.map(
         (primitive, i): Layer => ({
           id: buildVisualizationSubLayerId(viz.id, primitive),
           parentId: viz.id,
           isSubLayer: true,
+          kind: 'viz-primitive',
           primitive,
-          name: getVisualizationPrimitiveName(primitive),
-          visible: primitiveFilters.includes(primitive),
+          name: getPrimitiveLayerName(primitive, vizLabel),
+          visible: vizVisible && primitiveFilters.includes(primitive),
           type: 'visualization',
           color: getVisualizationPrimitiveColor(viz, primitive),
           opacity: getVisualizationPrimitiveOpacity(viz, primitive),
           order: i
         })
       );
-
-      const basemapSubLayers =
-        resolveTiledStyleConfig() !== null
-          ? buildTiledBasemapSubLayers(viz.id, vizSubLayers.length)
-          : buildVectorBasemapSubLayers(viz.id, vizSubLayers.length);
-
-      const foregroundAboveSubLayers = basemapSubLayers.filter(
-        (layer) =>
-          layer.basemapRenderGroup === 'foreground' &&
-          !layer.basemapRenderBelowThematic
-      );
-      const foregroundBelowSubLayers = basemapSubLayers.filter(
-        (layer) =>
-          layer.basemapRenderGroup === 'foreground' &&
-          layer.basemapRenderBelowThematic
-      );
-      const backgroundSubLayers = basemapSubLayers.filter(
-        (layer) => layer.basemapRenderGroup === 'background'
-      );
-
-      const lastMarkerPrimitiveIndex = vizSubLayers.reduce(
-        (last, layer, index) =>
-          layer.primitive !== PrimitiveFilterType.POLYGON ? index : last,
-        -1
-      );
-      const thematicWithForegroundBelow = [
-        ...vizSubLayers.slice(0, lastMarkerPrimitiveIndex + 1),
-        ...foregroundBelowSubLayers,
-        ...vizSubLayers.slice(lastMarkerPrimitiveIndex + 1)
-      ];
-
-      const subLayers = applySubLayerDisplayOrder(viz.id, [
-        ...foregroundAboveSubLayers,
-        ...thematicWithForegroundBelow,
-        ...backgroundSubLayers
-      ]);
-
-      return [parentLayer, ...subLayers];
     }
   );
 
-  return visualizationLayers;
+  // Global, deduplicated basemap auxiliary block (one row per shared layer).
+  const basemapLayers =
+    resolveTiledStyleConfig() !== null
+      ? buildTiledBasemapSubLayers()
+      : buildVectorBasemapSubLayers();
+
+  const foregroundAboveLayers = basemapLayers.filter(
+    (layer) =>
+      layer.basemapRenderGroup === 'foreground' &&
+      !layer.basemapRenderBelowThematic
+  );
+  const foregroundBelowLayers = basemapLayers.filter(
+    (layer) =>
+      layer.basemapRenderGroup === 'foreground' &&
+      layer.basemapRenderBelowThematic
+  );
+  const backgroundLayers = basemapLayers.filter(
+    (layer) => layer.basemapRenderGroup === 'background'
+  );
+
+  const lastMarkerIndex = thematicLayers.reduce(
+    (last, layer, index) => (isMarkerPrimitiveLayer(layer) ? index : last),
+    -1
+  );
+  const thematicWithForegroundBelow = [
+    ...thematicLayers.slice(0, lastMarkerIndex + 1),
+    ...foregroundBelowLayers,
+    ...thematicLayers.slice(lastMarkerIndex + 1)
+  ];
+
+  return withFlatOrder([
+    ...foregroundAboveLayers,
+    ...thematicWithForegroundBelow,
+    ...backgroundLayers
+  ]);
+}
+
+/**
+ * Back-projects a reordered flat panel list onto the three render stores.
+ *
+ * The flat list is the single source the user drags; this re-derives the five
+ * ordering dimensions the render path actually consumes. `buildLayers` then
+ * re-clamps to the back→thematic→front invariant on the next sync, so an
+ * impossible drop (e.g. a background layer dropped between two primitives)
+ * snaps back without ever corrupting the GPU stack.
+ */
+function backProjectFlatOrder(reordered: Layer[]): void {
+  // Each setter is only called when its own dimension actually changed, so a
+  // drag that only moves a primitive (or a basemap row) never writes the
+  // visualization order, and vice-versa — matching the pre-flatten behaviour
+  // and avoiding parasitic re-renders / saves.
+
+  // 1. Visualization order: first appearance of each parent visualization,
+  //    top→bottom (= front→back). Reversed nowhere — viz[0] stays in front.
+  const seenVizIds = new Set<string>();
+  const orderedVizIds: string[] = [];
+  for (const layer of reordered) {
+    if (
+      layer.kind === 'viz-primitive' &&
+      typeof layer.parentId === 'string' &&
+      !seenVizIds.has(layer.parentId)
+    ) {
+      seenVizIds.add(layer.parentId);
+      orderedVizIds.push(layer.parentId);
+    }
+  }
+  if (orderedVizIds.length > 0) {
+    // When facets are active the displayed visualizations are the generated
+    // facets; their order must flow through `facetsStore.reorderVariables` so
+    // the facet `variables` and `generatedVisualizationIds` stay in lockstep —
+    // never a raw `setVisualizationOrder` (which would desync the collection).
+    if (facetsStore.enabled) {
+      const facetMove = deriveSingleMove(
+        facetsStore.generatedVisualizationIds,
+        orderedVizIds
+      );
+      if (facetMove) {
+        void facetsStore.reorderVariables(facetMove.from, facetMove.to);
+      }
+    } else {
+      const currentVizOrder = visualizationStore.visualizations.map(
+        (v) => v.id
+      );
+      if (!arraysShallowEqual(currentVizOrder, orderedVizIds)) {
+        visualizationStore.setVisualizationOrder(orderedVizIds);
+      }
+    }
+  }
+
+  // 2. Primitive order within each visualization, top→bottom.
+  const primitivesByViz = new Map<string, PrimitiveFilter[]>();
+  for (const layer of reordered) {
+    if (
+      layer.kind === 'viz-primitive' &&
+      typeof layer.parentId === 'string' &&
+      layer.primitive
+    ) {
+      const list = primitivesByViz.get(layer.parentId) ?? [];
+      list.push(layer.primitive);
+      primitivesByViz.set(layer.parentId, list);
+    }
+  }
+  for (const [vizId, primitives] of primitivesByViz) {
+    if (primitives.length === 0) continue;
+    const currentOrder = (
+      visualizationStore.visualizations.find((v) => v.id === vizId)
+        ?.primitiveOrder ?? []
+    ).filter((primitive) => primitives.includes(primitive));
+    if (!arraysShallowEqual(currentOrder, primitives)) {
+      visualizationStore.setPrimitiveFilterOrder(vizId, primitives);
+    }
+  }
+
+  // 3. Basemap render-group order (deduplicated global layers). The store is
+  //    the single source of intra-group order, so this is all that is needed —
+  //    no separate module-level display order to update.
+  const basemapLayers = reordered.filter(
+    (layer) => layer.kind === 'basemap-aux' && layer.basemapLayerId
+  );
+
+  const foreground = basemapLayers
+    .filter((layer) => layer.basemapRenderGroup === 'foreground')
+    .map((layer) => layer.basemapLayerId as BasemapLayerId);
+  const background = basemapLayers
+    .filter((layer) => layer.basemapRenderGroup === 'background')
+    .map((layer) => layer.basemapLayerId as BasemapLayerId);
+  // `setLayerRenderGroupOrder` is idempotent and group-scoped, so it is safe to
+  // call unconditionally — it never touches the visualization order.
+  if (foreground.length > 0) {
+    basemapLayersStore.setLayerRenderGroupOrder('foreground', foreground);
+  }
+  if (background.length > 0) {
+    basemapLayersStore.setLayerRenderGroupOrder('background', background);
+  }
+
+  // 4. Above/below-thematic flag for foreground basemap layers: below when the
+  //    row sits under the last marker (non-polygon) primitive in panel order —
+  //    the same rule `buildLayers` and `getMapLayerRenderOrder` apply.
+  const lastMarkerIndex = reordered.reduce(
+    (last, layer, index) => (isMarkerPrimitiveLayer(layer) ? index : last),
+    -1
+  );
+  reordered.forEach((layer, index) => {
+    if (
+      layer.kind === 'basemap-aux' &&
+      layer.basemapRenderGroup === 'foreground' &&
+      typeof layer.basemapLayerId === 'string'
+    ) {
+      basemapLayersStore.setLayerThematicPlacement(
+        layer.basemapLayerId as BasemapLayerId,
+        lastMarkerIndex < 0 || index > lastMarkerIndex
+      );
+    }
+  });
+
+  // 5. Aux-key order for metadata-backed basemap layers (per basemap file).
+  const basemapEntryLayers = reordered.filter(
+    (layer) => layer.kind === 'basemap-aux' && layer.basemapFile
+  );
+  const basemapFile = basemapEntryLayers[0]?.basemapFile;
+  if (basemapFile && basemapEntryLayers.length > 0) {
+    const orderedKeys = basemapEntryLayers.flatMap(
+      (layer) =>
+        layer.basemapLayerKeys ??
+        (layer.basemapLayerKey ? [layer.basemapLayerKey] : [])
+    );
+    basemapAuxLayersStore.setOrder(
+      basemapFile,
+      orderedKeys.filter(
+        (layerKey, index, keys) => keys.indexOf(layerKey) === index
+      )
+    );
+  }
 }
 
 const { state, actions } = createToolStore<LayersState, LayersActions>(
@@ -950,33 +1070,54 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
     return {
       updateLayer: (id: string, updates: Partial<Layer>) => {
         const layer = findLayer(id);
-        if (!layer) return;
-
-        if (layer.type === 'visualization' && !layer.isSubLayer) {
+        if (!layer) {
+          // Visualization-scoped update addressed by visualization id (rename
+          // from the row context menu — there is no standalone parent row).
           const visualization = visualizationStore.visualizations.find(
             (v) => v.id === id
           );
           if (!visualization) return;
-
           if (updates.name !== undefined) {
             visualizationStore.renameVisualization(id, updates.name);
+          }
+          syncFromSources();
+          return;
+        }
+
+        if (layer.kind === 'viz-primitive' && layer.parentId) {
+          if (updates.name !== undefined) {
+            visualizationStore.renameVisualization(
+              layer.parentId,
+              updates.name
+            );
           }
         }
 
         syncFromSources();
       },
       removeLayer: (id: string) => {
-        const layer = findLayer(id);
-        if (!layer || !isVisualizationParentLayer(layer)) return;
+        // Addressed by visualization id (the row context menu targets a whole
+        // visualization, not a single primitive row).
+        const visualization = visualizationStore.visualizations.find(
+          (v) => v.id === id
+        );
+        if (!visualization) return;
 
         visualizationStore.removeVisualization(id);
         syncFromSources();
       },
       toggleLayerVisibility: (id: string) => {
         const layer = findLayer(id);
-        if (!layer) return;
+        if (!layer) {
+          // A whole visualization, toggled by id from the row context menu.
+          if (visualizationStore.visualizations.some((v) => v.id === id)) {
+            visualizationStore.toggleVisualization(id);
+            syncFromSources();
+          }
+          return;
+        }
 
-        if (layer.type === 'geographic') {
+        if (layer.kind === 'basemap-aux') {
           if (layer.tiledLayerGroupIds) {
             for (const groupId of layer.tiledLayerGroupIds) {
               basemapStyleStore.setGroupVisibility(groupId, !layer.visible);
@@ -1005,126 +1146,30 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
               !layer.visible
             );
           }
-        } else if (layer.type === 'visualization') {
-          if (layer.isSubLayer) {
-            if (layer.parentId && layer.primitive) {
-              visualizationStore.togglePrimitiveFilter(
-                layer.parentId,
-                layer.primitive
-              );
-            }
-          } else {
-            visualizationStore.toggleVisualization(id);
-          }
-        }
-
-        syncFromSources();
-      },
-      reorderLayers: (
-        _scope: LayerReorderScope,
-        fromIndex: number,
-        toIndex: number
-      ) => {
-        const vizParents = s.layers.filter(isVisualizationParentLayer);
-        const reordered = reorderIds(vizParents, fromIndex, toIndex);
-        visualizationStore.setVisualizationOrder(
-          reordered.map((layer) => layer.id)
-        );
-        syncFromSources();
-      },
-      reorderSubLayers: (
-        parentId: string,
-        fromIndex: number,
-        toIndex: number
-      ) => {
-        const subLayers = s.layers
-          .filter((layer) => layer.isSubLayer && layer.parentId === parentId)
-          .sort((a, b) => a.order - b.order);
-
-        const reordered = reorderIds(subLayers, fromIndex, toIndex);
-        subLayerDisplayOrderByParent.set(
-          parentId,
-          reordered.map((layer) => layer.id)
-        );
-
-        const vizPrimitives = reordered
-          .filter((layer) => layer.type === 'visualization' && layer.primitive)
-          .map((layer) => layer.primitive as PrimitiveFilter);
-
-        if (vizPrimitives.length > 0) {
-          visualizationStore.setPrimitiveFilterOrder(parentId, vizPrimitives);
-        }
-
-        const basemapLayers = reordered.filter(
-          (layer) => layer.type === 'geographic' && layer.basemapLayerId
-        );
-        const basemapLayerIds = basemapLayers
-          .map((layer) => layer.basemapLayerId)
-          .filter(
-            (layerId): layerId is BasemapLayerId => typeof layerId === 'string'
-          );
-        if (basemapLayerIds.length > 0) {
-          setBasemapLayerDisplayOrder(basemapLayerIds);
-        }
-
-        const foreground = basemapLayers
-          .filter((layer) => layer.basemapRenderGroup === 'foreground')
-          .map((layer) => layer.basemapLayerId as BasemapLayerId);
-        const background = basemapLayers
-          .filter((layer) => layer.basemapRenderGroup === 'background')
-          .map((layer) => layer.basemapLayerId as BasemapLayerId);
-
-        if (foreground.length > 0) {
-          basemapLayersStore.setLayerRenderGroupOrder('foreground', foreground);
-        }
-        if (background.length > 0) {
-          basemapLayersStore.setLayerRenderGroupOrder('background', background);
-        }
-
-        const lastMarkerPrimitiveIndex = reordered.reduce(
-          (last, layer, index) =>
-            layer.type === 'visualization' &&
-            layer.primitive &&
-            layer.primitive !== PrimitiveFilterType.POLYGON
-              ? index
-              : last,
-          -1
-        );
-        reordered.forEach((layer, index) => {
-          if (
-            layer.basemapRenderGroup === 'foreground' &&
-            typeof layer.basemapLayerId === 'string'
-          ) {
-            basemapLayersStore.setLayerThematicPlacement(
-              layer.basemapLayerId as BasemapLayerId,
-              lastMarkerPrimitiveIndex < 0 || index > lastMarkerPrimitiveIndex
+        } else if (layer.kind === 'viz-primitive') {
+          if (layer.parentId && layer.primitive) {
+            visualizationStore.togglePrimitiveFilter(
+              layer.parentId,
+              layer.primitive
             );
           }
-        });
-
-        const basemapEntryLayers = reordered.filter(
-          (layer) => layer.type === 'geographic' && layer.basemapFile
-        );
-        const basemapFile = basemapEntryLayers[0]?.basemapFile;
-        if (basemapFile && basemapEntryLayers.length > 0) {
-          const orderedKeys = basemapEntryLayers.flatMap(
-            (layer) =>
-              layer.basemapLayerKeys ??
-              (layer.basemapLayerKey ? [layer.basemapLayerKey] : [])
-          );
-          basemapAuxLayersStore.setOrder(
-            basemapFile,
-            orderedKeys.filter(
-              (layerKey, index, keys) => keys.indexOf(layerKey) === index
-            )
-          );
         }
 
+        syncFromSources();
+      },
+      reorderLayers: (fromIndex: number, toIndex: number) => {
+        const reordered = reorderIds([...s.layers], fromIndex, toIndex);
+        if (reordered === s.layers) {
+          return;
+        }
+        backProjectFlatOrder(reordered);
         syncFromSources();
       },
       duplicateLayer: (id: string): Layer | null => {
-        const layer = findLayer(id);
-        if (!layer || !isVisualizationParentLayer(layer)) {
+        const visualization = visualizationStore.visualizations.find(
+          (v) => v.id === id
+        );
+        if (!visualization) {
           return null;
         }
 
@@ -1135,7 +1180,9 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
           return null;
         }
 
-        return s.layers.find((entry) => entry.id === duplicated.id) ?? null;
+        return (
+          s.layers.find((entry) => entry.parentId === duplicated.id) ?? null
+        );
       },
       syncWithVisualizations: () => {
         syncFromSources();

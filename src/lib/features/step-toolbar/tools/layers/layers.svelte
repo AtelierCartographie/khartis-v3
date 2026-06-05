@@ -3,7 +3,7 @@
   import { Modal, TextInput } from 'carbon-components-svelte';
   import LayersList from './layers-list.svelte';
   import { layersActions, layersState } from './layers.store.svelte';
-  import type { Layer, LayerReorderScope } from '../../types/layers.types';
+  import type { Layer } from '../../types/layers.types';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
   import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
@@ -42,26 +42,6 @@
   );
 
   const layers = $derived(currentState.layers as Layer[]);
-  const parentLayers = $derived(layers.filter((layer) => !layer.isSubLayer));
-
-  const childLayersByParent = $derived.by(() => {
-    const children: Record<string, Layer[]> = {};
-
-    for (const layer of layers) {
-      if (!layer.isSubLayer || !layer.parentId) continue;
-
-      if (!children[layer.parentId]) {
-        children[layer.parentId] = [];
-      }
-      children[layer.parentId].push(layer);
-    }
-
-    for (const parentId of Object.keys(children)) {
-      children[parentId].sort((a, b) => a.order - b.order);
-    }
-
-    return children;
-  });
 
   let renameModalOpen = $state(false);
   let renameLayerId = $state<string | null>(null);
@@ -96,7 +76,7 @@
     globalState.selectedTool = undefined;
     globalActions.setNavigationState(ToolbarStep.Visualizations);
 
-    if (layer.type === 'geographic') {
+    if (layer.kind === 'basemap-aux') {
       setTimeout(() => {
         document
           .querySelector('#customize-basemap')
@@ -105,7 +85,7 @@
       return;
     }
 
-    const targetVisualizationId = layer.isSubLayer ? layer.parentId : layer.id;
+    const targetVisualizationId = layer.parentId ?? layer.id;
     if (!targetVisualizationId) return;
 
     visualizationStore.selectVisualization(targetVisualizationId);
@@ -117,11 +97,16 @@
     }, 100);
   }
 
-  function handleRenameLayer(layerId: string): void {
-    const layer = layers.find((item) => item.id === layerId);
-    if (!layer || layer.isSubLayer) return;
-    renameLayerId = layerId;
-    renameValue = layer.name;
+  function getVisualizationName(visualizationId: string): string {
+    return (
+      visualizationStore.visualizations.find((v) => v.id === visualizationId)
+        ?.name ?? ''
+    );
+  }
+
+  function handleRenameLayer(visualizationId: string): void {
+    renameLayerId = visualizationId;
+    renameValue = getVisualizationName(visualizationId);
     renameModalOpen = true;
   }
 
@@ -140,16 +125,12 @@
     renameValue = '';
   }
 
-  function handleDuplicateLayer(layerId: string): void {
-    const layer = layers.find((item) => item.id === layerId);
-    if (!layer || layer.isSubLayer) return;
-    store.duplicateLayer(layerId);
+  function handleDuplicateLayer(visualizationId: string): void {
+    store.duplicateLayer(visualizationId);
   }
 
-  function handleDeleteLayer(layerId: string): void {
-    const layer = layers.find((item) => item.id === layerId);
-    if (!layer || layer.isSubLayer) return;
-    deleteLayerId = layerId;
+  function handleDeleteLayer(visualizationId: string): void {
+    deleteLayerId = visualizationId;
     deleteModalOpen = true;
   }
 
@@ -166,40 +147,24 @@
     deleteLayerId = null;
   }
 
-  function handleReorderLayers(
-    scope: LayerReorderScope,
-    fromIndex: number,
-    toIndex: number
-  ): void {
-    store.reorderLayers(scope, fromIndex, toIndex);
+  function handleReorder(fromIndex: number, toIndex: number): void {
+    store.reorderLayers(fromIndex, toIndex);
   }
 
-  function handleReorderSubLayers(
-    parentId: string,
-    fromIndex: number,
-    toIndex: number
-  ): void {
-    store.reorderSubLayers(parentId, fromIndex, toIndex);
-  }
-
-  function handleMoveLayer(
-    scope: LayerReorderScope,
-    layerId: string,
-    direction: -1 | 1
-  ): void {
-    const fromIndex = parentLayers.findIndex((layer) => layer.id === layerId);
+  function handleMoveLayer(layerId: string, direction: -1 | 1): void {
+    const fromIndex = layers.findIndex((layer) => layer.id === layerId);
     const toIndex = fromIndex + direction;
 
     if (
       fromIndex === -1 ||
       toIndex < 0 ||
-      toIndex >= parentLayers.length ||
+      toIndex >= layers.length ||
       fromIndex === toIndex
     ) {
       return;
     }
 
-    store.reorderLayers(scope, fromIndex, toIndex);
+    store.reorderLayers(fromIndex, toIndex);
   }
 </script>
 
@@ -210,13 +175,10 @@
   {/if}
 
   <LayersList
-    parentLayers={parentLayers}
-    childLayersByParent={childLayersByParent}
-    reorderScope="visualization"
+    layers={layers}
     onToggleVisibility={handleToggleVisibility}
     onOpenSettings={handleOpenSettings}
-    onReorderLayers={handleReorderLayers}
-    onReorderSubLayers={handleReorderSubLayers}
+    onReorder={handleReorder}
     onMoveLayer={handleMoveLayer}
     onRenameLayer={handleRenameLayer}
     onDuplicateLayer={handleDuplicateLayer}
