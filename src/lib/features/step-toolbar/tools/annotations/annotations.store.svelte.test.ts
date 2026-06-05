@@ -269,8 +269,12 @@ describe('annotations store', () => {
     const createdShape = annotationsActions.commitPlacement();
 
     expect(createdShape).toBeTruthy();
-    expect(createdShape?.coordinateSpace).toBe('page');
-    expect(createdShape?.position).toEqual({ x: 96, y: 128 });
+    // Drawn-on-the-map shapes are created in `'map'` space (no `role`) so they
+    // follow the basemap; the page-space placement position is converted to
+    // map-area-local (page top-left minus the page margins).
+    expect(createdShape?.coordinateSpace).toBe('map');
+    expect(createdShape?.position).toEqual({ x: 96 - 32, y: 128 - 32 });
+    expect(createdShape?.anchor).toBeUndefined();
     expect(createdShape?.style?.shapeWidth).toBe(140);
     expect(createdShape?.style?.shapeHeight).toBe(70);
     expect(createdShape?.style?.rotation).toBe(15);
@@ -329,5 +333,23 @@ describe('annotations store', () => {
     const drawing = annotationsActions.finishDrawing();
 
     expect(drawing?.style?.smoothness).toBe(0);
+  });
+
+  it('creates finished drawings in map space with a margin-relative position', () => {
+    annotationsActions.beginDrawing(DrawingType.LINE);
+    // Origin on the 12px page grid so grid snapping is a no-op and the margin
+    // conversion is the only transform under test.
+    annotationsActions.updateDrawing([
+      { x: 48, y: 60 },
+      { x: 120, y: 96 }
+    ]);
+
+    const drawing = annotationsActions.finishDrawing();
+
+    // Drawn-on-the-map drawings follow the basemap: `'map'` space with the page
+    // origin (48, 60) shifted by the page margins (32) into map-area-local space.
+    expect(drawing?.coordinateSpace).toBe('map');
+    expect(drawing?.position).toEqual({ x: 48 - 32, y: 60 - 32 });
+    expect(drawing?.anchor).toBeUndefined();
   });
 });

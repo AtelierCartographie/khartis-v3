@@ -490,6 +490,48 @@ function clearCreationState(state: AnnotationsState): void {
   state.drawingInProgress = [];
 }
 
+// Convert a page-space position (origin = page top-left, margins included) to a
+// map-area-local position (origin = map frame top-left, margins excluded), the
+// space data-anchored `'map'` annotations live in. `annotation-overlay` re-adds
+// the margins in `getRenderedPosition`, so the on-screen placement is identical.
+function toMapAreaLocalPosition(
+  position: { x: number; y: number },
+  layout: PageLayout
+): { x: number; y: number } {
+  return {
+    x: position.x - layout.margins.left,
+    y: position.y - layout.margins.top
+  };
+}
+
+// Marks drawn directly on the map — shapes (rectangle/circle/triangle), vector
+// arrows/lines and freehand drawings. Text notes (page-elements, `role`) and
+// imported images stay page-anchored, so they are excluded here.
+const MAP_ANCHORABLE_SHAPE_KINDS: ReadonlySet<AnnotationKind> = new Set([
+  AnnotationKind.SHAPE,
+  AnnotationKind.DRAWING
+]);
+
+// Drawn-on-the-map shapes (no `role`) are created in `'map'` space so they stay
+// glued to the basemap. The WGS84 anchor is written by `annotation-overlay` on
+// first render (it owns the projection helpers); a `'map'` annotation without an
+// anchor renders exactly like the historical page placement, which is also the
+// composite-projection fallback.
+function anchorShapeToMap(
+  annotation: Annotation,
+  layout: PageLayout
+): Annotation {
+  if (annotation.role || !MAP_ANCHORABLE_SHAPE_KINDS.has(annotation.type)) {
+    return annotation;
+  }
+
+  return {
+    ...annotation,
+    coordinateSpace: 'map',
+    position: toMapAreaLocalPosition(annotation.position, layout)
+  };
+}
+
 function createPlacedAnnotation(
   previewGeometry: AnnotationPlacementPreview,
   style: AnnotationStyle
@@ -925,12 +967,15 @@ const { actions, getState } = createToolStore<
         return null;
       }
 
-      const newAnnotation = createPlacedAnnotation(
-        {
-          ...resolvedPreview,
-          content: resolvedPreview.content ?? s.pendingContent
-        },
-        s.pendingStyle
+      const newAnnotation = anchorShapeToMap(
+        createPlacedAnnotation(
+          {
+            ...resolvedPreview,
+            content: resolvedPreview.content ?? s.pendingContent
+          },
+          s.pendingStyle
+        ),
+        resolvePageLayout()
       );
 
       s.items = [...s.items, newAnnotation];
@@ -1042,15 +1087,18 @@ const { actions, getState } = createToolStore<
         relativePoints
       );
 
-      const newAnnotation: Annotation = {
-        id: createAnnotationId(),
-        type: AnnotationKind.DRAWING,
-        content: relativePoints,
-        position,
-        coordinateSpace: 'page',
-        positionMode: 'manual',
-        style
-      };
+      const newAnnotation = anchorShapeToMap(
+        {
+          id: createAnnotationId(),
+          type: AnnotationKind.DRAWING,
+          content: relativePoints,
+          position,
+          coordinateSpace: 'page',
+          positionMode: 'manual',
+          style
+        },
+        layout
+      );
 
       s.items = [...s.items, newAnnotation];
       s.selectedId = newAnnotation.id;
