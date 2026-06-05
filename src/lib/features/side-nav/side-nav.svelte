@@ -39,8 +39,6 @@
   import Separator from '../commons/components/separator.svelte';
   import Switch from '../commons/components/switch.svelte';
   import ClearCacheButton from './components/clear-cache-button.svelte';
-  import OfflineButton from './components/offline-button.svelte';
-  import OfflinePanel from './components/offline-panel.svelte';
   import { useSideNav } from './hooks/use-side-nav.svelte';
 
   const DEFAULT_APP_VERSION = '1.6.0-staging.1';
@@ -475,8 +473,6 @@
               </span>
             </Button>
 
-            <OfflineButton />
-
             <ClearCacheButton />
           </Column>
         </Row>
@@ -632,8 +628,6 @@
   onClose={closeDeleteModal}
   onConfirm={() => sideNav.handleDeleteConfirm(closeDeleteModal)}
 />
-
-<OfflinePanel />
 
 <div id="khartis-install-dialog">
   <ComposedModal

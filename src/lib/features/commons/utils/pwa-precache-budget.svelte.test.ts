@@ -60,7 +60,7 @@ describe.skipIf(!hasBuild)('PWA precache budget', () => {
     expect(swContent).toMatch(/presets/);
   });
 
-  it('handles CLEAR_OFFLINE_CACHE messages from clients', () => {
-    expect(swContent).toContain('CLEAR_OFFLINE_CACHE');
+  it('handles FACTORY_RESET messages from clients', () => {
+    expect(swContent).toContain('FACTORY_RESET');
   });
 });
