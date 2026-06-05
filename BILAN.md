@@ -1,6 +1,6 @@
 # Bilan livraison Khartis — 2026-06-05 (échéance 7 juin)
 
-> Branche `w22-2026-tma-jb` · **11 commits** · code commité, rien poussé. Guide de test : `REVIEW.md`.
+> Branche `w22-2026-tma-jb` · **13 commits** · code commité, rien poussé. Guide de test : `REVIEW.md`.
 > Liste = **ce qui a été fait (avec le détail)** puis **ce qui reste (avec le pourquoi)**.
 
 ---
@@ -57,6 +57,9 @@
 - **Import de projet via URL `?kh=`** `12f54dc6`
   `loadProjectFromKhUrl` dans `+layout` : lit `?kh=`, garde `isDirty` (confirmation), fetch navigateur → `File` → `importProject` ; erreur (URL/CORS/corrompu) en toast localisé (fr+en). Privacy : fetch direct navigateur.
 
+- **Décocher la suggestion au modif manuel** #184 `426a3a90`
+  `resolveDisplayedSuggestionKey` filtre désormais l'`originMode` (`custom` / `manual-blank`) **avant** la clé persistée. Une modif manuelle bascule l'origin en `custom` (en gardant `suggestionKey`), donc la carte de suggestion **se décoche** au lieu de rester collée. Le garde s'appuie sur `originMode` (fiable), **pas** sur le matching structurel imparfait → les vizs **intactes** (`auto-suggestion`) restent cochées (pas de régression, contrairement au fix précédent reverté). Test mis à jour (14/14).
+
 ## ✅ FAIT — annotations (#172, hors liste Thomas mais livré)
 
 - **bug 1 — isolation des points d'ancrage** `12f54dc6` : déplacer un point ne déplace plus les autres (renormalisation de `position` au drag ; mesuré Δ 0,0).
@@ -69,9 +72,8 @@
 
 - **#183 cœur (vignettes catalogue + suggestions)** — ⛔ **bloqué** : les **SVG statiques de l'Atelier ne sont pas fournis** (asset externe absent du repo).
 - **#160 rectangle → point** (quand l'emprise est trop petite) — ⏸ **reporté par consigne** (décision produit explicite de le laisser pour après).
-- **#184 redimensionnement de la légende par poignée** — feature **à créer** : les annotations ont déjà des poignées de resize, mais la légende n'en a pas (elle se scale seulement au zoom page).
-- **#184 « décocher la suggestion au modif manuel »** — le matching `isVisualizationMatchingSuggestion` **est imparfait** : il ne reconnaît même pas une viz **intacte** comme correspondant à sa suggestion (d'où le `persistedSuggestionKey` collant). Un fix a été tenté puis **reverté** car il décochait aussi les vizs intactes → il faut **d'abord fiabiliser le matching**.
-- **#156 innerlines + synchro Territoire ↔ Calques** — innerlines (`extract_innerlines`, #53) à l'import géo non faites ; la couleur de fond du Territoire vient du **style preset** et pas encore de la config utilisateur (recoupe l'outil Calques #182).
+- **#184 redimensionnement de la légende par poignée** — feature **à créer** : les annotations ont déjà des poignées de resize, mais la légende n'en a pas (elle se scale seulement au zoom page). _Non livrée : une feature de drag/resize ne peut pas être validée sans navigateur (risque de régression non vérifiable côté code)._
+- **#156 innerlines + synchro Territoire ↔ Calques** — innerlines (`extract_innerlines`, #53) à l'import géo non faites ; la couleur de fond du Territoire vient du **style preset** et pas encore de la config utilisateur (recoupe l'outil Calques #182). _Non livré : pipeline DuckDB + rendu, validation visuelle requise._
 - **#154 finitions textes & #177 contour-sphère facettes** — 🟡 **travail parallèle committé** (color picker HSL, « halo→contour », contour-sphère) : c'est **du code écrit par un autre travail en cours**, à **valider en QA par son auteur** (je ne l'ai pas écrit, je ne le coche pas).
 - **QA manuelle navigateur des 2 refontes** — #172 bug 3 (forme suit le zoom carte) et #182 (save/reload + drag natif + facettes) sont **couverts par les tests unitaires** mais méritent une **confirmation visuelle humaine** (non déroulée faute de temps de session).
 
@@ -82,9 +84,11 @@
 
 ---
 
-## Commits de la session (11)
+## Commits de la session (13)
 
 ```
+426a3a90  fix(visualization): uncheck suggestion once a viz diverges into custom (#184)
+8ce6c32a  docs: add delivery review guide and status report
 91b2852e  feat(layers): flatten the layer panel into one reorderable list (#182)
 dad9e426  feat(annotations): anchor drawn shapes to the basemap on creation (#172)
 9765755b  test(map): open legend on double-click in tests (#184)
