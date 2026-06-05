@@ -104,6 +104,7 @@ export interface LayerContext {
   highlightVersion?: number;
 
   modelMatrix?: Matrix4 | null;
+  pageDisplayScale?: number;
   projectionSuffix?: string;
   beforeId?: string;
 
