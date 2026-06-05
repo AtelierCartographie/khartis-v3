@@ -804,17 +804,13 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       : selectRowsByIndices(matchedGeometryTable, matchingRows);
   }
 
-  function getRequestedMetadataLayerTypes(
-    worldBaseTable: ArrowTable | null
-  ): BasemapLayerType[] {
+  function getRequestedMetadataLayerTypes(): BasemapLayerType[] {
     const requestedTypes = new Set<BasemapLayerType>();
 
     for (const layer of basemapLayersStore.visibleLayers) {
       switch (layer.id) {
         case 'terre':
-          if (!worldBaseTable) {
-            requestedTypes.add(BasemapLayerType.LAND);
-          }
+          requestedTypes.add(BasemapLayerType.LAND);
           break;
         case 'frontieres':
           requestedTypes.add(BasemapLayerType.LIMIT);
@@ -1033,8 +1029,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             currentMetadata &&
             hasExplicitBasemapSelection
           ) {
-            const requestedLayerTypes =
-              getRequestedMetadataLayerTypes(worldBaseTable);
+            const requestedLayerTypes = getRequestedMetadataLayerTypes();
             if (requestedLayerTypes.length > 0) {
               void basemapService
                 .ensureCurrentLayersLoaded(requestedLayerTypes)

@@ -46,6 +46,8 @@ describe('useMapLayers source', () => {
       /function getRequestedMetadataLayerTypes[\s\S]*?return \[\.\.\.requestedTypes\];\n\s*\}/
     )?.[0];
 
+    expect(body).toContain("case 'terre':");
+    expect(body).toContain('requestedTypes.add(BasemapLayerType.LAND)');
     expect(body).toContain("case 'frontieres':");
     expect(body).toContain('requestedTypes.add(BasemapLayerType.LIMIT)');
     expect(body).toContain("case 'villes':");
@@ -176,7 +178,7 @@ describe('useMapLayers source', () => {
       'getMatchedSplitTable(rawRepresentativePointBaseTable, split)'
     );
     expect(source).not.toContain('manualProjectionBasemapTable');
-    expect(source).toContain('getRequestedMetadataLayerTypes(worldBaseTable)');
+    expect(source).toContain('getRequestedMetadataLayerTypes()');
     expect(source).toContain(
       'createBasemapLayers(\n            shouldShowBasemapLayers ? worldBaseTable : null,'
     );
