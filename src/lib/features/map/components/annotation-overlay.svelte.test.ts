@@ -21,7 +21,27 @@ import {
 } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
 import { computeDrawingBounds } from '../utils/annotation-drawing.utils';
 import { DRAGGING_STYLING_TARGET_BODY_CLASS } from '../utils/tool-popover-drag-visibility.utils';
+import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import AnnotationOverlay from './annotation-overlay.svelte';
+
+// Drive the map-anchoring helper from the deck view-state zoom so a data-anchored
+// annotation's resolved screen position changes when the MAP zooms. Legacy/page
+// tests never set an anchor, so they keep the pixel-page path untouched.
+const anchorMocks = vi.hoisted(() => ({
+  canAnchorToMap: vi.fn<() => boolean>(() => true),
+  dataToScreenPx: vi.fn<
+    (anchor: { lon: number; lat: number }) => { x: number; y: number } | null
+  >(() => ({ x: 0, y: 0 })),
+  screenPxToData: vi.fn<
+    (x: number, y: number) => { lon: number; lat: number } | null
+  >(() => ({ lon: 0, lat: 0 }))
+}));
+
+vi.mock('../utils/map-anchor-projection.utils', () => ({
+  canAnchorToMap: anchorMocks.canAnchorToMap,
+  dataToScreenPx: anchorMocks.dataToScreenPx,
+  screenPxToData: anchorMocks.screenPxToData
+}));
 
 function extractPathPoints(
   path: string | null
@@ -610,5 +630,55 @@ describe('annotation overlay drawing interactions', () => {
       expect(getAnnotationsState().items).toHaveLength(0);
       expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 0 });
     });
+  });
+
+  it('repositions a data-anchored map annotation when the map view state changes', async () => {
+    anchorMocks.canAnchorToMap.mockReturnValue(true);
+    anchorMocks.dataToScreenPx.mockImplementation(() => {
+      const zoom = mapInstanceStore.deckViewState.zoom;
+      return { x: zoom * 100, y: zoom * 50 };
+    });
+
+    annotationsActions.beginPlacement(AnnotationKind.SHAPE, 'circle');
+    const placed = annotationsActions.commitPlacement({
+      coordinateSpace: 'page',
+      type: AnnotationKind.SHAPE,
+      position: { x: 10, y: 10 },
+      size: { width: 56, height: 56 },
+      content: 'circle'
+    });
+    if (!placed) {
+      throw new Error('Expected a placed shape annotation');
+    }
+    // Promote to a data-anchored map annotation.
+    annotationsActions.updateAnnotation(placed.id, {
+      coordinateSpace: 'map',
+      anchor: { lon: 2.35, lat: 48.86 }
+    });
+
+    mapInstanceStore.updateDeckViewState({ target: [0, 0, 0], zoom: 1 });
+
+    const { container } = render(AnnotationOverlay);
+    const item = container.querySelector('.annotation-item');
+    if (!(item instanceof HTMLElement)) {
+      throw new Error('Annotation item was not rendered');
+    }
+
+    const zoom1 = mapInstanceStore.deckViewState.zoom;
+    await waitFor(() => {
+      expect(item.getAttribute('style')).toContain(`left: ${zoom1 * 100}px`);
+    });
+
+    mapInstanceStore.updateDeckViewState({ target: [0, 0, 0], zoom: 2 });
+
+    const zoom2 = mapInstanceStore.deckViewState.zoom;
+    expect(zoom2).not.toBe(zoom1);
+    await waitFor(() => {
+      expect(item.getAttribute('style')).toContain(`left: ${zoom2 * 100}px`);
+    });
+
+    anchorMocks.dataToScreenPx.mockReset();
+    anchorMocks.dataToScreenPx.mockReturnValue({ x: 0, y: 0 });
+    mapInstanceStore.reset();
   });
 });
