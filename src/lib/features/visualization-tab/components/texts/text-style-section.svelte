@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
+  import { hexToHsl } from '$lib/features/commons/utils/color-utils';
   import {
     AVAILABLE_FONTS,
     clampFontSize,
@@ -43,6 +45,13 @@
     onHaloColorChange?: (value: string) => void;
   }
 
+  type ColorPickerPayload = {
+    hex: string;
+    hue: number;
+    saturation: number;
+    lightness: number;
+  };
+
   interface Props {
     title: string;
     section: TextStyleSectionHandlers | undefined;
@@ -53,8 +62,6 @@
 
   let fontSelectRef = $state<HTMLSelectElement>();
   let sizeSelectRef = $state<HTMLSelectElement>();
-  let quickColorInput = $state<HTMLInputElement>();
-  let quickHaloColorInput = $state<HTMLInputElement>();
 
   const enabled = $derived(Boolean(section));
   const align = $derived<TextAlignment>(section?.align ?? 'center');
@@ -62,6 +69,8 @@
   const fontSizes = $derived(
     resolveFontSizeOptions(section?.size ?? fallbackSize)
   );
+  const textColorHsl = $derived(hexToHsl(section?.color ?? '#8d8d8d'));
+  const haloColorHsl = $derived(hexToHsl(section?.haloColor ?? '#ffffff'));
 
   function handleFontFamilySelect(event: Event) {
     if (!section) return;
@@ -87,29 +96,20 @@
     select.click();
   }
 
-  function openQuickColorInput() {
-    quickColorInput?.click();
-  }
-
-  function openQuickHaloColorInput() {
+  function enableHaloColorPicker() {
     if (!section?.onHaloColorChange) return;
     section.onHaloChange?.(true);
-    quickHaloColorInput?.click();
   }
 
-  function handleQuickColorInput(event: Event) {
+  function handleQuickColorValidate({ hex }: ColorPickerPayload) {
     if (!section) return;
-    const value = (event.currentTarget as HTMLInputElement).value;
-    if (!value) return;
-    section.onColorChange(value);
+    section.onColorChange(hex);
   }
 
-  function handleQuickHaloColorInput(event: Event) {
+  function handleQuickHaloColorValidate({ hex }: ColorPickerPayload) {
     if (!section) return;
-    const value = (event.currentTarget as HTMLInputElement).value;
-    if (!value) return;
     section.onHaloChange?.(true);
-    section.onHaloColorChange?.(value);
+    section.onHaloColorChange?.(hex);
   }
 </script>
 
@@ -212,55 +212,50 @@
       <TextUnderline size={16} />
     </button>
 
-    <button
-      type="button"
-      class="quick-format-button quick-format-button--color"
+    <div
+      class="quick-format-color-picker"
+      class:quick-format-color-picker--disabled={!enabled}
       style={`--quick-format-accent: ${section?.color ?? '#8d8d8d'};`}
-      aria-label={m.color()}
-      title={m.color()}
-      disabled={!enabled}
-      onclick={openQuickColorInput}
     >
-      <TextColor size={16} />
-    </button>
-    {#if section}
-      <input
-        bind:this={quickColorInput}
-        class="quick-format-color-input"
-        type="color"
-        value={section.color}
-        tabindex="-1"
-        aria-hidden="true"
-        oninput={handleQuickColorInput}
+      <ColorPicker
+        exclusive
+        disabled={!enabled}
+        hex={section?.color ?? '#8d8d8d'}
+        hue={textColorHsl.hue}
+        saturation={textColorHsl.saturation}
+        lightness={textColorHsl.lightness}
+        triggerAriaLabel={m.color()}
+        triggerTitle={m.color()}
+        onValidate={handleQuickColorValidate}
       />
-    {/if}
+      <span class="quick-format-color-icon" aria-hidden="true">
+        <TextColor size={16} />
+      </span>
+    </div>
 
-    <button
-      type="button"
-      class="quick-format-button quick-format-button--halo"
-      class:quick-format-button--active={Boolean(section?.halo)}
+    <div
+      class="quick-format-color-picker quick-format-color-picker--halo"
+      class:quick-format-color-picker--active={Boolean(section?.halo)}
+      class:quick-format-color-picker--disabled={!section?.onHaloColorChange}
       style={`--quick-format-accent: ${section?.haloColor ?? '#ffffff'};`}
-      aria-label={m.halo_color()}
-      title={m.halo_color()}
-      disabled={!section?.onHaloColorChange}
-      onclick={openQuickHaloColorInput}
     >
+      <ColorPicker
+        exclusive
+        disabled={!section?.onHaloColorChange}
+        hex={section?.haloColor ?? '#ffffff'}
+        hue={haloColorHsl.hue}
+        saturation={haloColorHsl.saturation}
+        lightness={haloColorHsl.lightness}
+        triggerAriaLabel={m.halo_color()}
+        triggerTitle={m.halo_color()}
+        onBeforeOpen={enableHaloColorPicker}
+        onValidate={handleQuickHaloColorValidate}
+      />
       <span class="outline-text-icon" aria-hidden="true">
         <span class="outline-text-icon__glyph">{m.text_style_glyph()}</span>
         <span class="outline-text-icon__underline"></span>
       </span>
-    </button>
-    {#if section}
-      <input
-        bind:this={quickHaloColorInput}
-        class="quick-format-color-input"
-        type="color"
-        value={section.haloColor ?? '#ffffff'}
-        tabindex="-1"
-        aria-hidden="true"
-        oninput={handleQuickHaloColorInput}
-      />
-    {/if}
+    </div>
 
     <button
       type="button"
@@ -463,29 +458,81 @@
     background: var(--cds-layer-hover-01, #e8e8e8);
   }
 
-  .quick-format-button--color {
+  .quick-format-color-picker {
+    --quick-format-accent: currentColor;
+
     position: relative;
+    width: 32px;
+    height: 32px;
+    color: var(--cds-text-primary, #161616);
   }
 
-  .quick-format-button--color::after {
-    content: '';
+  .quick-format-color-picker :global(#khartis-color-picker) {
+    width: 100%;
+    height: 100%;
+  }
+
+  .quick-format-color-picker :global(.color-trigger) {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    margin-top: 0;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+    border: none;
+    background: transparent;
+    color: var(--cds-text-primary, #161616);
+  }
+
+  .quick-format-color-picker:not(.quick-format-color-picker--disabled)
+    :global(.color-trigger:hover) {
+    background: var(--cds-layer-hover-01, #e8e8e8);
+  }
+
+  .quick-format-color-picker--active :global(.color-trigger) {
+    background: var(--cds-layer-hover-01, #e8e8e8);
+  }
+
+  .quick-format-color-picker :global(.color-trigger:focus) {
+    outline: 2px solid var(--cds-focus, #0f62fe);
+    outline-offset: -2px;
+  }
+
+  .quick-format-color-picker :global(.swatch) {
     position: absolute;
     left: 10px;
     right: 10px;
     bottom: 6px;
+    width: auto;
     height: 1px;
-    background: var(--quick-format-accent);
+    margin: 0;
+    border: none;
+    background: var(--quick-format-accent) !important;
   }
 
-  .quick-format-button:disabled.quick-format-button--color::after {
-    background: var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
+  .quick-format-color-picker :global(.chevron) {
+    display: none;
   }
 
-  .quick-format-color-input {
+  .quick-format-color-picker--disabled :global(.color-trigger) {
+    cursor: not-allowed;
+  }
+
+  .quick-format-color-picker--disabled {
+    color: var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
+  }
+
+  .quick-format-color-picker--disabled :global(.swatch) {
+    background: var(--cds-text-disabled, rgba(22, 22, 22, 0.25)) !important;
+  }
+
+  .quick-format-color-icon {
     position: absolute;
-    width: 0;
-    height: 0;
-    opacity: 0;
+    inset: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     pointer-events: none;
   }
 
@@ -497,6 +544,9 @@
     align-items: center;
     justify-content: center;
     color: currentColor;
+    position: absolute;
+    inset: 8px;
+    pointer-events: none;
   }
 
   .outline-text-icon__glyph {
@@ -524,7 +574,7 @@
     background: var(--quick-format-accent);
   }
 
-  .quick-format-button:disabled .outline-text-icon__glyph {
+  .quick-format-color-picker--disabled .outline-text-icon__glyph {
     color: transparent;
     -webkit-text-stroke-color: var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
     text-shadow:
@@ -534,7 +584,7 @@
       0 -1px var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
   }
 
-  .quick-format-button:disabled .outline-text-icon__underline {
+  .quick-format-color-picker--disabled .outline-text-icon__underline {
     background: var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
   }
 

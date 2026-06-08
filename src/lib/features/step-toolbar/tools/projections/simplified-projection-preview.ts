@@ -9,13 +9,5 @@ export function computeSimplifiedProjectionPreview(
   }
   const hasManualOverride =
     state.overrideActive === true && state.overrideSource === 'manual';
-  const hasManualParameters =
-    (state.longitude ?? 0) !== 0 ||
-    (state.latitude ?? 0) !== 0 ||
-    (state.rotation ?? 0) !== 0;
-  return (
-    hasManualOverride &&
-    hasManualParameters &&
-    (state.simplifiedPreview ?? true)
-  );
+  return hasManualOverride && state.simplifiedPreview === true;
 }

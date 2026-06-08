@@ -117,7 +117,7 @@ const GENERATED_ORTHOGRAPHIC_CONTEXT_LAYER_IDS = new Set<string>([
   BASEMAP_LAYER_ID.MERIDIENS
 ]);
 
-const DEFAULT_GENERATED_OCEAN_COLOR = '#e0e0e0';
+const DEFAULT_GENERATED_OCEAN_COLOR = '#ffffff';
 const DEFAULT_GENERATED_OCEAN_OPACITY = 100;
 const CARTE_FACILE_LAYER_GROUP_METADATA_KEY = 'cartefacile:group';
 const CARTE_FACILE_LABEL_GROUP_ID = 'labels';
@@ -136,6 +136,7 @@ export interface UseMapLayersProps {
   getProjectionFitBbox?: () => BBox | null;
   getProjectionForSphereMask?: () => ProjectionLike | undefined;
   getModelMatrix?: () => Matrix4 | null | undefined;
+  getPageDisplayScale?: () => number;
   getShouldRenderDatasetFallbacks?: () => boolean;
   getTableFilters?: (datasetId: string) => DataTableFilter[] | undefined;
   onBasemapLayersLoaded?: () => void;
@@ -165,6 +166,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     getProjectionFitBbox,
     getProjectionForSphereMask,
     getModelMatrix,
+    getPageDisplayScale,
     getShouldRenderDatasetFallbacks,
     getTableFilters,
     onBasemapLayersLoaded,
@@ -804,17 +806,38 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       : selectRowsByIndices(matchedGeometryTable, matchingRows);
   }
 
-  function getRequestedMetadataLayerTypes(
-    worldBaseTable: ArrowTable | null
-  ): BasemapLayerType[] {
+  function filterRepresentativePointTableByPrimitive(
+    representativePointBaseTable: ArrowTable,
+    split: SplitRenderingTable | undefined,
+    dataFilters: VisualizationConfig['dataFilters'],
+    primitiveType: PrimitiveFilter,
+    tableFilters: DataTableFilter[] | undefined
+  ): ArrowTable {
+    return split
+      ? filterSplitGeometryTableByDatasetRows(
+          representativePointBaseTable,
+          split,
+          dataFilters,
+          primitiveType,
+          tableFilters
+        )
+      : filterArrowTableByTableFilters(
+          filterArrowTableByDataFilters(
+            representativePointBaseTable,
+            dataFilters,
+            primitiveType
+          ),
+          tableFilters
+        );
+  }
+
+  function getRequestedMetadataLayerTypes(): BasemapLayerType[] {
     const requestedTypes = new Set<BasemapLayerType>();
 
     for (const layer of basemapLayersStore.visibleLayers) {
       switch (layer.id) {
         case 'terre':
-          if (!worldBaseTable) {
-            requestedTypes.add(BasemapLayerType.LAND);
-          }
+          requestedTypes.add(BasemapLayerType.LAND);
           break;
         case 'frontieres':
           requestedTypes.add(BasemapLayerType.LIMIT);
@@ -889,6 +912,13 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const matrixToApply = isOrthographicMode
         ? (getModelMatrix?.() ?? projectionStore.modelMatrix)
         : null;
+      // Page zoom scales pixel-sized marks (radius, line width, label size) so
+      // they track the canvas and SVG legend. Only orthographic mode applies the
+      // render modelMatrix that scales geometry positions, so gate the mark scale
+      // to that mode too; interleaved (MapLibre) keeps it at 1 to stay in sync.
+      const pageDisplayScaleToApply = isOrthographicMode
+        ? (getPageDisplayScale?.() ?? 1)
+        : 1;
 
       const projectionSuffix = deckOverlay
         ? mapProjectionStore.projection
@@ -905,9 +935,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         projectionState.overrideSource === 'manual';
       const shouldUseSimplifiedProjectionPreview =
         computeSimplifiedProjectionPreview(isOrthographicMode, projectionState);
-      const visualizationsToRender = shouldUseSimplifiedProjectionPreview
-        ? []
-        : getVisualizationRenderOrder(activeVisualizations);
+      const visualizationsToRender =
+        getVisualizationRenderOrder(activeVisualizations);
       const shouldRenderDatasetFallbacks =
         (getShouldRenderDatasetFallbacks?.() ?? false) &&
         !shouldUseSimplifiedProjectionPreview;
@@ -1033,8 +1062,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             currentMetadata &&
             hasExplicitBasemapSelection
           ) {
-            const requestedLayerTypes =
-              getRequestedMetadataLayerTypes(worldBaseTable);
+            const requestedLayerTypes = getRequestedMetadataLayerTypes();
             if (requestedLayerTypes.length > 0) {
               void basemapService
                 .ensureCurrentLayersLoaded(requestedLayerTypes)
@@ -1092,7 +1120,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
                 table,
                 style: layer.style ?? null,
                 type: layer.type,
-                file: layer.file ?? currentMetadata.file
+                file: layer.file ?? currentMetadata.file,
+                styleOverride: basemapAuxLayersStore.getStyle(
+                  currentMetadata.file,
+                  layerKey
+                )
               });
             }
           }
@@ -1173,6 +1205,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             fitPaddingPx
           );
           ctx.modelMatrix = matrixToApply;
+          ctx.pageDisplayScale = pageDisplayScaleToApply;
           ctx.projectionSuffix = projectionSuffix;
           ctx.beforeId = beforeId;
           ctx.customProjection = resolveProjectionForRender(
@@ -1235,36 +1268,38 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
                 : rawRepresentativePointBaseTable;
 
             if (representativePointBaseTable) {
-              const filteredRepresentativePointTable = split
-                ? filterSplitGeometryTableByDatasetRows(
-                    representativePointBaseTable,
-                    split,
-                    viz.dataFilters,
-                    PrimitiveFilterType.POINT,
-                    tableFilters
-                  )
-                : (() => {
-                    const representativeVizFiltered =
-                      filterArrowTableByDataFilters(
-                        representativePointBaseTable,
-                        viz.dataFilters,
-                        PrimitiveFilterType.POINT
-                      );
-                    const representativeTableFiltered =
-                      filterArrowTableByTableFilters(
-                        representativeVizFiltered,
-                        tableFilters
-                      );
-                    return representativeTableFiltered;
-                  })();
+              const filteredRepresentativePointTable =
+                filterRepresentativePointTableByPrimitive(
+                  representativePointBaseTable,
+                  split,
+                  viz.dataFilters,
+                  PrimitiveFilterType.POINT,
+                  tableFilters
+                );
+              const filteredTextRepresentativePointTable =
+                filterRepresentativePointTableByPrimitive(
+                  representativePointBaseTable,
+                  split,
+                  viz.dataFilters,
+                  PrimitiveFilterType.TEXT,
+                  tableFilters
+                );
               ctx.representativePointTable = filteredRepresentativePointTable;
               ctx.representativePointGeometryInfo =
                 getCachedRepresentativeGeometryInfo(
                   filteredRepresentativePointTable
                 ) ?? undefined;
+              ctx.textRepresentativePointTable =
+                filteredTextRepresentativePointTable;
+              ctx.textRepresentativePointGeometryInfo =
+                getCachedRepresentativeGeometryInfo(
+                  filteredTextRepresentativePointTable
+                ) ?? undefined;
             } else {
               ctx.representativePointTable = undefined;
               ctx.representativePointGeometryInfo = undefined;
+              ctx.textRepresentativePointTable = undefined;
+              ctx.textRepresentativePointGeometryInfo = undefined;
             }
 
             const arrowLayers = createDeckLayers(filteredTable, ctx);
@@ -1374,6 +1409,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             fitPaddingPx
           );
           fallbackCtx.modelMatrix = matrixToApply;
+          fallbackCtx.pageDisplayScale = pageDisplayScaleToApply;
           fallbackCtx.projectionSuffix = projectionSuffix;
           fallbackCtx.beforeId = beforeId;
           fallbackCtx.customProjection = resolveProjectionForRender(
@@ -1491,9 +1527,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       layers.length = 0;
       layers.push(...maskedOrderedLayers);
 
-      const hasExpectedActiveViz =
-        !shouldUseSimplifiedProjectionPreview &&
-        activeVisualizations.length > 0;
+      const hasExpectedActiveViz = activeVisualizations.length > 0;
       const hasExpectedDatasetFallbacks =
         shouldRenderDatasetFallbacks && (tables.size > 0 || geoJSONs.size > 0);
       const hasVisibleBasemapConfig =

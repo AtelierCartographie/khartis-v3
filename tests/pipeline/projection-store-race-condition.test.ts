@@ -139,7 +139,7 @@ describe('projection store — core actions', () => {
     expect(state.longitude).toBe(0);
     expect(state.latitude).toBe(0);
     expect(state.rotation).toBe(0);
-    expect(state.simplifiedPreview).toBe(true);
+    expect(state.simplifiedPreview).toBe(false);
   });
 });
 

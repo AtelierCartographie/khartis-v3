@@ -153,9 +153,12 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     opacity: 100
   },
   {
+    // Cartographic grayscale default: keep land (figure) lighter than the sea
+    // (ground) so the coastline reads. Fallback used when no `land` style preset
+    // applies; kept in sync with style-presets.json `land`/`nuts-land`.
     id: 'terre',
     visible: true,
-    fillColor: '#ffffff',
+    fillColor: '#f2f2f2',
     fillShadow: false,
     fillOpacity: 100,
     strokeColor: '#a8a8a8',
@@ -165,9 +168,11 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     strokeOpacity: 100
   },
   {
+    // Light neutral gray sea: distinctly darker than the land so the figure-ground
+    // contrast is legible, while staying quiet enough to recede behind thematic data.
     id: 'mers',
     visible: true,
-    color: '#e0e0e0',
+    color: '#c8c8c8',
     opacity: 100
   },
   {
@@ -373,21 +378,42 @@ function normalizeSerializedLayers(
     return cloneDefaults();
   }
 
-  return DEFAULT_LAYERS.map((defaults) => {
-    const candidate = layers.find((layer) => layer?.id === defaults.id);
+  const defaultsById = new Map(
+    DEFAULT_LAYERS.map((layer) => [layer.id, layer] as const)
+  );
+  const normalizedLayers = new Map<BasemapLayerId, BasemapLayerConfig>();
 
-    if (defaults.id === 'meridiens') {
-      return normalizeLegacyMeridiensConfig(
-        defaults,
-        candidate as LegacyMeridiensLayerConfig | undefined
-      );
+  for (const candidate of layers) {
+    const defaults = defaultsById.get(candidate?.id);
+    if (!defaults || normalizedLayers.has(defaults.id)) {
+      continue;
     }
 
-    return mergeLayerWithDefaults(
-      defaults,
-      candidate as Partial<typeof defaults> | undefined
+    if (defaults.id === 'meridiens') {
+      normalizedLayers.set(
+        defaults.id,
+        normalizeLegacyMeridiensConfig(
+          defaults,
+          candidate as LegacyMeridiensLayerConfig | undefined
+        )
+      );
+      continue;
+    }
+
+    normalizedLayers.set(
+      defaults.id,
+      mergeLayerWithDefaults(
+        defaults,
+        candidate as Partial<typeof defaults> | undefined
+      )
     );
-  });
+  }
+
+  const missingLayers = DEFAULT_LAYERS.filter(
+    (defaults) => !normalizedLayers.has(defaults.id)
+  ).map((defaults) => deepClone(defaults));
+
+  return [...Array.from(normalizedLayers.values()), ...missingLayers];
 }
 
 interface BasemapLayersState {

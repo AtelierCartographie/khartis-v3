@@ -410,6 +410,7 @@
         <ProjectCard
           title={example.title}
           subtitle={example.subtitle}
+          thumbnail={example.thumbnail}
           variant="gray"
           selected={selectedExample === example.id}
           disabled={isLoading}

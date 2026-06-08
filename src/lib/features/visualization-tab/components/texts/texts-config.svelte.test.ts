@@ -18,13 +18,13 @@ const labelSectionSource = readFileSync(
 describe('TextsConfig — text fill and contour wiring', () => {
   it('uses text color controls for Fond instead of background-box fill modes', () => {
     expect(backgroundSectionSource).toContain(
-      "import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte'"
+      "import ColorSelector from '$lib/features/commons/components/viz-controls/color-selector.svelte'"
     );
     expect(backgroundSectionSource).toContain(
       '<SectionHeading title={m.background()} />'
     );
-    expect(backgroundSectionSource).toContain('<SingleColorPreview');
-    expect(backgroundSectionSource).toContain('color={color}');
+    expect(backgroundSectionSource).toContain('<ColorSelector');
+    expect(backgroundSectionSource).toContain('value={color}');
     expect(backgroundSectionSource).toContain('onchange={onColorChange}');
     expect(source).toContain('color={textColor}');
     expect(source).toContain('onColorChange={handleTextColorChange}');
@@ -41,7 +41,7 @@ describe('TextsConfig — text fill and contour wiring', () => {
     expect(backgroundSectionSource).toContain(
       '<ToggleWithLabel label={m.stroke()} toggled={halo} ontoggle={onHaloToggle} />'
     );
-    expect(backgroundSectionSource).toContain('color={haloColor}');
+    expect(backgroundSectionSource).toContain('value={haloColor}');
     expect(backgroundSectionSource).toContain('onchange={onHaloColorChange}');
     expect(backgroundSectionSource).toContain(
       '<SliderWithInput\n    label={m.thickness()}'

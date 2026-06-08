@@ -1,5 +1,5 @@
 <script lang="ts">
-  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
+  import ColorSelector from '$lib/features/commons/components/viz-controls/color-selector.svelte';
   import { SLIDER_LIMITS } from '$lib/features/commons/constants/visualization.constants';
   import * as m from '$lib/paraglide/messages';
   import { SectionHeading, SliderWithInput, ToggleWithLabel } from '../shared';
@@ -34,10 +34,10 @@
 <SectionHeading title={m.background()} />
 
 <div class="field-group">
-  <SingleColorPreview
+  <ColorSelector
     exclusive
     label={m.color()}
-    color={color}
+    value={color}
     onchange={onColorChange}
   />
 </div>
@@ -59,10 +59,10 @@
 
 {#if halo}
   <div class="field-group">
-    <SingleColorPreview
+    <ColorSelector
       exclusive
       label={m.color()}
-      color={haloColor}
+      value={haloColor}
       onchange={onHaloColorChange}
     />
   </div>

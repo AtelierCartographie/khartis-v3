@@ -32,7 +32,12 @@
     getSelectedFieldIds(slot: FacetSlotPath): number[];
     isActiveForSlot(slot: FacetSlotPath): boolean;
     updateVariables(column: string, slot: FacetSlotPath, ids: number[]): void;
-    toggle(column: string, slot: FacetSlotPath, enabled: boolean): void;
+    toggle(
+      column: string,
+      slot: FacetSlotPath,
+      enabled: boolean,
+      fieldIds?: number[]
+    ): void;
   }
 
   interface Props {
@@ -207,8 +212,8 @@
           FACET_SLOT.LINE_SIZE,
           ids
         )}
-      onToggleCollection={(en) =>
-        facetsSelection.toggle(sizeColumnName, FACET_SLOT.LINE_SIZE, en)}
+      onToggleCollection={(en, ids) =>
+        facetsSelection.toggle(sizeColumnName, FACET_SLOT.LINE_SIZE, en, ids)}
     />
   </div>
   <SliderWithInput
@@ -256,11 +261,12 @@
           FACET_SLOT.LINE_THICKNESS_VALUE,
           ids
         )}
-      onToggleCollection={(en) =>
+      onToggleCollection={(en, ids) =>
         facetsSelection.toggle(
           valueColumnName,
           FACET_SLOT.LINE_THICKNESS_VALUE,
-          en
+          en,
+          ids
         )}
     />
   </div>

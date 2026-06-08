@@ -50,6 +50,18 @@ describe('usePrimitivePanelController', () => {
     );
   });
 
+  it('clears computed class breaks and diverging pivot when a value column changes', () => {
+    expect(source).toContain('function resetClassificationComputedValues');
+    expect(source).toContain('breaks: undefined');
+    expect(source).toContain('counts: undefined');
+    expect(source).toContain('breakpointValue: null');
+    expect(source).toContain('breakpointLowerClassCount: undefined');
+    expect(source.match(/const valueColumnChanged =/g)?.length).toBe(4);
+    expect(
+      source.match(/resetClassificationComputedValues/g)?.length
+    ).toBeGreaterThanOrEqual(5);
+  });
+
   it('uses a four-class default only for polygon fill classifications', () => {
     expect(source).toContain('const DEFAULT_CLASS_COUNT = 5;');
     expect(source).toContain('const DEFAULT_POLYGON_FILL_CLASS_COUNT = 4;');

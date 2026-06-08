@@ -263,7 +263,7 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: clip;
     padding-right: var(--cds-spacing-03);
     scrollbar-width: thin;
     scrollbar-color: var(--cds-border-subtle) transparent;

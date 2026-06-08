@@ -27,8 +27,7 @@
     "@fontsource/inter",
     "@fontsource/lato",
     "@fontsource/noto-sans",
-    "@fontsource/open-sans",
-    "carbon-components"
+    "@fontsource/open-sans"
   ],
   "ignoreExportsUsedInFile": true,
   "rules": {

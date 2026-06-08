@@ -111,23 +111,23 @@ describe('resolveRequestedClassCount', () => {
 // ─── resolveComputedClassCount ────────────────────────────────────────────
 
 describe('resolveComputedClassCount', () => {
-  it('returns min(requested, actual) for head_tail with valid actualClassCount', () => {
+  it('returns min(requested, actual) when actualClassCount is valid', () => {
     expect(resolveComputedClassCount('head_tail' as never, 10, 5)).toBe(5);
     expect(resolveComputedClassCount('head_tail' as never, 3, 5)).toBe(3);
+    expect(resolveComputedClassCount('quantiles' as never, 7, 3)).toBe(3);
+    expect(resolveComputedClassCount('kmeans' as never, 4, 3)).toBe(3);
   });
 
-  it('returns requested for head_tail when actualClassCount is invalid', () => {
+  it('returns requested when actualClassCount is invalid', () => {
     expect(resolveComputedClassCount('head_tail' as never, 5, NaN)).toBe(5);
     expect(resolveComputedClassCount('head_tail' as never, 5, 1)).toBe(5);
+    expect(resolveComputedClassCount('quantiles' as never, 7, NaN)).toBe(7);
+    expect(resolveComputedClassCount('kmeans' as never, 4, 1)).toBe(4);
   });
 
-  it('returns requested for non-head_tail methods regardless of actual', () => {
-    expect(resolveComputedClassCount('quantiles' as never, 7, 3)).toBe(7);
-  });
-
-  it('returns requested for legacy standard_deviation after normalization', () => {
+  it('normalizes legacy standard_deviation before applying actual class count', () => {
     expect(resolveComputedClassCount('standard_deviation' as never, 5, 4)).toBe(
-      5
+      4
     );
   });
 });

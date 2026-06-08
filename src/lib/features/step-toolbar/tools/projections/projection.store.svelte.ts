@@ -25,7 +25,6 @@ import {
   type ProjectionInfo
 } from '$lib/features/commons/utils/projection.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
-import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
 import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
@@ -47,7 +46,7 @@ const DEFAULT_STATE: ProjectionState = {
   customCode: undefined,
   activeSuggestionId: undefined,
   suggestionD3Config: undefined,
-  simplifiedPreview: true,
+  simplifiedPreview: false,
   suggestions: undefined
 };
 
@@ -296,20 +295,10 @@ const { actions, getState } = createToolStore<
         s.longitude = longitude;
         s.latitude = latitude;
         activateManualProjectionOverride();
-
-        const map = mapInstanceStore.map;
-        if (map) {
-          map.setCenter([longitude, latitude]);
-        }
       },
       setRotation: (rotation: number) => {
         s.rotation = rotation;
         activateManualProjectionOverride();
-
-        const map = mapInstanceStore.map;
-        if (map) {
-          map.setBearing(rotation);
-        }
       },
       setSimplifiedPreview: (value: boolean) => {
         s.simplifiedPreview = value;
@@ -399,11 +388,7 @@ const { actions, getState } = createToolStore<
   },
   {
     key: 'projection',
-    serializeFilter: ({
-      suggestions: _suggestions,
-      activeSuggestionId: _activeSuggestionId,
-      ...persisted
-    }) => persisted
+    serializeFilter: ({ suggestions: _suggestions, ...persisted }) => persisted
   }
 );
 

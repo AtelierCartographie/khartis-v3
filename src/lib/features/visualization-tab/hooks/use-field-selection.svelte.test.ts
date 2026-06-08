@@ -36,4 +36,19 @@ describe('filterFieldsByKind', () => {
       items[2]
     ]);
   });
+
+  it('treats the "numeric" type as numeric, consistently with the variable badge', () => {
+    const fields: FieldSelectionItem[] = [
+      { id: NONE_FIELD_ID, text: 'None' },
+      { id: 1, text: 'pop_number', type: 'number' },
+      { id: 2, text: 'pop_numeric', type: 'numeric' },
+      { id: 3, text: 'name', type: 'text' }
+    ];
+
+    expect(filterFieldsByKind(fields, 'numeric')).toEqual([
+      fields[0],
+      fields[1],
+      fields[2]
+    ]);
+  });
 });

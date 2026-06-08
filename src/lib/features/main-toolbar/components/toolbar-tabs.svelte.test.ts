@@ -34,4 +34,16 @@ describe('ToolbarTabs dataset rename persistence', () => {
       'await dataOrchestratorService.restoreSelectedDataTabState();'
     );
   });
+
+  it('uses compact visualisation tab labels while preserving the full accessible label', () => {
+    expect(source).toContain('shortLabel: String(idx + 1)');
+    expect(source).toContain('aria-label={vizTab.label}');
+    expect(source).toContain('{vizTab.shortLabel}');
+  });
+
+  it('hides generated facet visualisations from the main tab bar', () => {
+    expect(source).toContain(
+      'visualizationStore.visualizations.filter((viz) => !viz.facet);'
+    );
+  });
 });

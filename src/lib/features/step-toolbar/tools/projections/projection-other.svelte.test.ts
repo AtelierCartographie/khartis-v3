@@ -6,6 +6,10 @@ const source = readFileSync(
   resolve(import.meta.dirname, 'projection-other.svelte'),
   'utf8'
 );
+const suggestionCatalogueSource = readFileSync(
+  resolve(import.meta.dirname, 'projection-suggestion-catalogue.utils.ts'),
+  'utf8'
+);
 
 describe('ProjectionOther', () => {
   it('renders the catalogue as neutral projection cards instead of a ComboBox', () => {
@@ -18,19 +22,16 @@ describe('ProjectionOther', () => {
     expect(source).not.toContain('selectedId={activeCatalogueSelectionId}');
   });
 
-  it('shares the suggestion list and grid presentation controls', () => {
-    expect(source).toContain(
+  it('keeps the catalogue cards in a single list without display mode controls', () => {
+    expect(source).toContain('{#each filteredItems as item (item.id)}');
+    expect(source).toContain('className="projection-view-tabs"');
+    expect(source).not.toContain(
       "import { ViewMode } from '$lib/features/commons/constants/ui.constants';"
     );
-    expect(source).toContain(
-      'class:projection-content--grid={viewMode === ViewMode.GRID}'
-    );
-    expect(source).toContain('setViewMode(ViewMode.LIST)');
-    expect(source).toContain('setViewMode(ViewMode.GRID)');
-    expect(source).toContain('grid-template-columns: repeat(3, 184px);');
-    expect(source).toContain('width: 184px;');
-    expect(source).toContain('height: 176px;');
-    expect(source).toContain('showTag={false}');
+    expect(source).not.toContain('GridIcon');
+    expect(source).not.toContain('projection-display-tabs');
+    expect(source).not.toContain('projection-content--grid');
+    expect(source).not.toContain('handleDisplayModeChange');
   });
 
   it('keeps catalogue selection derived from the active catalogue projection', () => {
@@ -43,13 +44,19 @@ describe('ProjectionOther', () => {
 
   it('filters catalogue cards already present in Khartis suggestions', () => {
     expect(source).toContain('const suggestionProjectionIds = $derived.by');
-    expect(source).toContain('function getCatalogueProjectionIdForSuggestion');
+    expect(source).toContain(
+      "import { getCatalogueProjectionIdForSuggestion } from './projection-suggestion-catalogue.utils';"
+    );
     expect(source).toContain(
       '!suggestionProjectionIds.has(projection.projectionId)'
     );
-    expect(source).toContain("['peters', 'gall-peters']");
-    expect(source).toContain("['equalearth', 'equal-earth']");
-    expect(source).toContain("['laea', 'azimuthal-equal-area']");
+    expect(suggestionCatalogueSource).toContain("['peters', 'gall-peters']");
+    expect(suggestionCatalogueSource).toContain(
+      "['equalearth', 'equal-earth']"
+    );
+    expect(suggestionCatalogueSource).toContain(
+      "['laea', 'azimuthal-equal-area']"
+    );
   });
 
   it('does not present suggestion or code projections as catalogue selections', () => {
