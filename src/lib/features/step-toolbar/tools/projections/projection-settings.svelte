@@ -1,7 +1,8 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages';
-  import { Button, InlineNotification, Slider } from 'carbon-components-svelte';
+  import { Button, InlineNotification } from 'carbon-components-svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
+  import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
@@ -50,7 +51,9 @@
       ? m.projection_settings_unavailable_projection()
       : m.projection_settings_unavailable_render_engine()
   );
-  const simplifiedPreview = $derived(projectionState.simplifiedPreview ?? true);
+  const simplifiedPreview = $derived(
+    projectionState.simplifiedPreview === true
+  );
   const isDirty = $derived(
     projectionState.longitude !== 0 ||
       projectionState.latitude !== 0 ||
@@ -58,19 +61,19 @@
   );
   const deg = (n: number) => `${n}°`;
 
-  function handleLongitudeChange(event: CustomEvent<number>): void {
+  function handleLongitudeChange(value: number): void {
     if (!canApplyProjectionSettings) return;
-    projectionActions.setCenter(event.detail, projectionState.latitude);
+    projectionActions.setCenter(value, projectionState.latitude);
   }
 
-  function handleLatitudeChange(event: CustomEvent<number>): void {
+  function handleLatitudeChange(value: number): void {
     if (!canApplyProjectionSettings) return;
-    projectionActions.setCenter(projectionState.longitude, event.detail);
+    projectionActions.setCenter(projectionState.longitude, value);
   }
 
-  function handleRotationChange(event: CustomEvent<number>): void {
+  function handleRotationChange(value: number): void {
     if (!canApplyProjectionSettings) return;
-    projectionActions.setRotation(event.detail);
+    projectionActions.setRotation(value);
   }
 
   function handleSimplifiedPreviewChange(checked: boolean): void {
@@ -96,83 +99,83 @@
           title={m.projection_settings_unavailable_title()}
           subtitle={settingsDisabledReason}
         />
-      {/if}
-
-      <Slider
-        labelText={m.projection_settings_longitude()}
-        value={projectionState.longitude}
-        min={-180}
-        max={180}
-        step={1}
-        minLabel={deg(-180)}
-        maxLabel={deg(180)}
-        hideTextInput={false}
-        disabled={!canApplyProjectionSettings}
-        fullWidth
-        on:input={handleLongitudeChange}
-      />
-
-      <Slider
-        labelText={m.projection_settings_latitude()}
-        value={projectionState.latitude}
-        min={-90}
-        max={90}
-        step={1}
-        minLabel={deg(-90)}
-        maxLabel={deg(90)}
-        hideTextInput={false}
-        disabled={!canApplyProjectionSettings}
-        fullWidth
-        on:input={handleLatitudeChange}
-      />
-
-      <Slider
-        labelText={m.projection_settings_rotation()}
-        value={projectionState.rotation}
-        min={-180}
-        max={180}
-        step={1}
-        minLabel={deg(-180)}
-        maxLabel={deg(180)}
-        hideTextInput={false}
-        disabled={!canApplyProjectionSettings}
-        fullWidth
-        on:input={handleRotationChange}
-      />
-
-      <div class="toggle-row">
-        <Switch
-          size="sm"
-          labelText={m.projection_settings_simplified_preview()}
-          labelA={m.projection_settings_no()}
-          labelB={m.projection_settings_yes()}
-          showStateLabel
-          toggled={simplifiedPreview}
-          disabled={!canApplyProjectionSettings}
-          onchange={handleSimplifiedPreviewChange}
+      {:else}
+        <SliderWithInput
+          label={m.projection_settings_longitude()}
+          value={projectionState.longitude}
+          min={-180}
+          max={180}
+          step={1}
+          showMinMax
+          minLabel={deg(-180)}
+          maxLabel={deg(180)}
+          inputWidth="3.5rem"
+          showSteppers={false}
+          debounceMs={0}
+          onchange={handleLongitudeChange}
         />
-      </div>
 
-      {#if canApplyProjectionSettings && simplifiedPreview}
-        <InlineNotification
-          kind="info"
-          title={m.projection_settings_info_title()}
-          subtitle={m.projection_settings_info_subtitle()}
-          lowContrast
-          hideCloseButton
+        <SliderWithInput
+          label={m.projection_settings_latitude()}
+          value={projectionState.latitude}
+          min={-90}
+          max={90}
+          step={1}
+          showMinMax
+          minLabel={deg(-90)}
+          maxLabel={deg(90)}
+          inputWidth="3.5rem"
+          showSteppers={false}
+          debounceMs={0}
+          onchange={handleLatitudeChange}
         />
-      {/if}
-    </div>
 
-    <div class="footer">
-      <Button
-        class="reset"
-        kind="tertiary"
-        size="small"
-        disabled={!isDirty || !canApplyProjectionSettings}
-        icon={Renew}
-        on:click={resetAll}>{m.projection_settings_reset()}</Button
-      >
+        <SliderWithInput
+          label={m.projection_settings_rotation()}
+          value={projectionState.rotation}
+          min={-180}
+          max={180}
+          step={1}
+          showMinMax
+          minLabel={deg(-180)}
+          maxLabel={deg(180)}
+          inputWidth="3.5rem"
+          showSteppers={false}
+          debounceMs={0}
+          onchange={handleRotationChange}
+        />
+
+        <Button
+          class="reset"
+          kind="tertiary"
+          size="small"
+          disabled={!isDirty || !canApplyProjectionSettings}
+          icon={Renew}
+          on:click={resetAll}>{m.projection_settings_reset()}</Button
+        >
+
+        <div class="toggle-row">
+          <Switch
+            size="sm"
+            labelText={m.projection_settings_simplified_preview()}
+            labelA={m.projection_settings_no()}
+            labelB={m.projection_settings_yes()}
+            showStateLabel
+            toggled={simplifiedPreview}
+            onchange={handleSimplifiedPreviewChange}
+          />
+        </div>
+
+        {#if simplifiedPreview}
+          <InlineNotification
+            kind="info"
+            title={m.projection_settings_info_title()}
+            subtitle={m.projection_settings_info_subtitle()}
+            lowContrast
+            hideCloseButton
+          />
+        {/if}
+      {/if}
     </div>
   </div>
 </div>
@@ -219,10 +222,6 @@
   .toggle-row {
     display: flex;
     align-items: flex-start;
-  }
-
-  .footer {
-    display: flex;
   }
 
   #khartis-projection-settings-tool :global(.reset) {

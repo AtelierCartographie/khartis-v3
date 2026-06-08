@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import ProjectionCard from '$lib/features/commons/components/projection-card.svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
@@ -22,6 +23,7 @@
     projectionActions
   } from './projection.store.svelte';
   import type { ProjectionSuggestion } from './projection-suggest.service';
+  import { getCatalogueProjectionIdForSuggestion } from './projection-suggestion-catalogue.utils';
 
   type ProjectionShapeFilterId = Exclude<ProjectionFilterId, 'all'>;
 
@@ -51,6 +53,13 @@
     supportsProjectionSuggestions(projectionContext)
   );
   const suggestions = $derived(projectionState.suggestions);
+  $effect(() => {
+    if (!suggestionCardsEnabled || suggestions !== undefined) {
+      return;
+    }
+
+    untrack(() => projectionActions.suggestProjectionForCurrentData());
+  });
   const suggestionItems = $derived.by(() => {
     if (!suggestions) {
       return [] satisfies ProjectionSuggestion[];
@@ -143,11 +152,84 @@
       : m.projection_suggestions_unavailable_subtitle()
   );
   function isSuggestionSelected(suggestion: ProjectionSuggestion) {
+    if (
+      projectionState.overrideActive !== true ||
+      projectionState.overrideSource !== 'manual'
+    ) {
+      return false;
+    }
+
+    if (projectionState.activeSuggestionId === suggestion.id) {
+      return true;
+    }
+
+    if (isStoredSuggestionConfigSelected(suggestion)) {
+      return true;
+    }
+
+    if (
+      projectionState.customCode ||
+      projectionState.suggestionD3Config ||
+      projectionState.activeSuggestionId
+    ) {
+      return false;
+    }
+
     return (
-      projectionState.overrideActive === true &&
-      projectionState.overrideSource === 'manual' &&
-      projectionState.activeSuggestionId === suggestion.id
+      getCatalogueProjectionIdForSuggestion(suggestion) ===
+      projectionState.selected
     );
+  }
+
+  function isStoredSuggestionConfigSelected(
+    suggestion: ProjectionSuggestion
+  ): boolean {
+    if (
+      projectionState.customCode &&
+      suggestion.proj4String &&
+      normalizeProjectionCode(projectionState.customCode) ===
+        normalizeProjectionCode(suggestion.proj4String)
+    ) {
+      return true;
+    }
+
+    return areD3ConfigsEqual(
+      projectionState.suggestionD3Config,
+      suggestion.d3Config
+    );
+  }
+
+  function normalizeProjectionCode(code: string): string {
+    return code.trim().replace(/\s+/g, ' ');
+  }
+
+  function areD3ConfigsEqual(
+    left: ProjectionSuggestion['d3Config'] | undefined,
+    right: ProjectionSuggestion['d3Config'] | undefined
+  ): boolean {
+    if (!left || !right || left.projection !== right.projection) {
+      return false;
+    }
+
+    return (
+      arraysEqual(left.rotate, right.rotate) &&
+      arraysEqual(left.center, right.center) &&
+      arraysEqual(left.parallels, right.parallels) &&
+      left.snippet === right.snippet
+    );
+  }
+
+  function arraysEqual(
+    left: readonly number[] | undefined,
+    right: readonly number[] | undefined
+  ): boolean {
+    if (!left || !right) {
+      return left === right;
+    }
+    if (left.length !== right.length) {
+      return false;
+    }
+    return left.every((value, index) => value === right[index]);
   }
 
   function applySuggestion(suggestion: ProjectionSuggestion) {

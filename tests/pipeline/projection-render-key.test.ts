@@ -90,7 +90,7 @@ describe('buildProjectionRenderKey', () => {
     const key1 = buildProjectionRenderKey(DEFAULT_STATE);
     const key2 = buildProjectionRenderKey({
       ...DEFAULT_STATE,
-      simplifiedPreview: false
+      simplifiedPreview: true
     });
     expect(key1).not.toBe(key2);
   });

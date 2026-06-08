@@ -19,72 +19,76 @@ const SELECTED_PROJECTION_STATE: ProjectionState = {
 };
 
 describe('computeSimplifiedProjectionPreview', () => {
-  it('does not mask layers when a projection is selected but no manual parameters are set', () => {
-    expect(
-      computeSimplifiedProjectionPreview(true, SELECTED_PROJECTION_STATE)
-    ).toBe(false);
-  });
-
-  it('does not mask layers when applying a suggestion or custom CRS without manual parameters', () => {
-    expect(
-      computeSimplifiedProjectionPreview(true, {
-        ...DEFAULT_STATE,
-        customCode: '+proj=robin +datum=WGS84',
-        overrideActive: true,
-        overrideSource: 'manual'
-      })
-    ).toBe(false);
-  });
-
-  it('masks layers while manual longitude is being adjusted', () => {
+  it('does not mask layers when the simplified preview is off', () => {
     expect(
       computeSimplifiedProjectionPreview(true, {
         ...SELECTED_PROJECTION_STATE,
-        longitude: 15
-      })
-    ).toBe(true);
-  });
-
-  it('masks layers while manual latitude or rotation is being adjusted', () => {
-    expect(
-      computeSimplifiedProjectionPreview(true, {
-        ...SELECTED_PROJECTION_STATE,
-        latitude: 48
-      })
-    ).toBe(true);
-    expect(
-      computeSimplifiedProjectionPreview(true, {
-        ...SELECTED_PROJECTION_STATE,
-        rotation: 30
-      })
-    ).toBe(true);
-  });
-
-  it('respects the simplified preview toggle when manual parameters are set', () => {
-    expect(
-      computeSimplifiedProjectionPreview(true, {
-        ...SELECTED_PROJECTION_STATE,
-        rotation: 30,
         simplifiedPreview: false
       })
     ).toBe(false);
   });
 
-  it('defaults the simplified preview to on for manual parameters', () => {
+  it('masks layers when the simplified preview is on for a manual override', () => {
+    expect(
+      computeSimplifiedProjectionPreview(true, {
+        ...SELECTED_PROJECTION_STATE,
+        simplifiedPreview: true
+      })
+    ).toBe(true);
+  });
+
+  it('masks custom CRS and suggestions when the simplified preview is on', () => {
+    expect(
+      computeSimplifiedProjectionPreview(true, {
+        ...DEFAULT_STATE,
+        customCode: '+proj=robin +datum=WGS84',
+        overrideActive: true,
+        overrideSource: 'manual',
+        simplifiedPreview: true
+      })
+    ).toBe(true);
+  });
+
+  it('keeps masking while manual longitude, latitude or rotation are adjusted', () => {
+    expect(
+      computeSimplifiedProjectionPreview(true, {
+        ...SELECTED_PROJECTION_STATE,
+        longitude: 15,
+        simplifiedPreview: true
+      })
+    ).toBe(true);
+    expect(
+      computeSimplifiedProjectionPreview(true, {
+        ...SELECTED_PROJECTION_STATE,
+        latitude: 48,
+        simplifiedPreview: true
+      })
+    ).toBe(true);
+    expect(
+      computeSimplifiedProjectionPreview(true, {
+        ...SELECTED_PROJECTION_STATE,
+        rotation: 30,
+        simplifiedPreview: true
+      })
+    ).toBe(true);
+  });
+
+  it('defaults the simplified preview to off for manual parameters', () => {
     expect(
       computeSimplifiedProjectionPreview(true, {
         ...SELECTED_PROJECTION_STATE,
         rotation: 30,
         simplifiedPreview: undefined
       })
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('never masks layers outside orthographic mode', () => {
     expect(
       computeSimplifiedProjectionPreview(false, {
         ...SELECTED_PROJECTION_STATE,
-        rotation: 30
+        rotation: 30,
+        simplifiedPreview: true
       })
     ).toBe(false);
   });
@@ -95,7 +99,8 @@ describe('computeSimplifiedProjectionPreview', () => {
         ...DEFAULT_STATE,
         rotation: 30,
         overrideActive: true,
-        overrideSource: 'auto'
+        overrideSource: 'auto',
+        simplifiedPreview: true
       })
     ).toBe(false);
   });

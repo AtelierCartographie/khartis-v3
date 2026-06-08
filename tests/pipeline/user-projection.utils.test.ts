@@ -37,6 +37,10 @@ const europeLaeaD3Config: D3Usage = {
   rotate: [-10, -52]
 };
 
+const europeMercatorD3Config: D3Usage = {
+  projection: 'geoMercator'
+};
+
 const catalogBboxes = (
   JSON.parse(
     readFileSync(
@@ -213,8 +217,32 @@ describe('user projection utils', () => {
       })
     );
 
-    expect(projection.rotate()[0]).toBeCloseTo(45);
+    expect(projection.rotate()[0]).toBeCloseTo(30);
     expect(projection.rotate()[1]).toBeCloseTo(-45);
+    expect(projection.angle()).toBeCloseTo(15);
+  });
+
+  it('applies longitude and latitude as spherical rotation offsets', () => {
+    const projection = asGeoProjection(
+      resolveUserProjectionOverride({
+        state: {
+          selected: 'orthographic',
+          overrideActive: true,
+          customCode: undefined,
+          center: [12, 8],
+          longitude: 12,
+          latitude: 8,
+          rotation: 0
+        },
+        fitBbox: [-24.6, 34.8, 45.8, 71.2],
+        viewportSize: { width: 960, height: 600 },
+        padding: 40,
+        projectionPresets
+      })
+    );
+
+    expect(projection.rotate()[0]).toBeCloseTo(-12);
+    expect(projection.rotate()[1]).toBeCloseTo(-8);
   });
 
   it('applies non-neutral user center values to finite projected coordinates', () => {
@@ -258,6 +286,51 @@ describe('user projection utils', () => {
 
     expect(centeredPoint?.every(Number.isFinite)).toBe(true);
     expect(centeredPoint).not.toEqual(basePoint);
+  });
+
+  it('keeps manual longitude visible after fitting Mercator suggestions', () => {
+    const baseProjection = asGeoProjection(
+      resolveUserProjectionOverride({
+        state: {
+          selected: 'mercator',
+          overrideActive: true,
+          customCode: undefined,
+          suggestionD3Config: europeMercatorD3Config,
+          center: undefined,
+          longitude: 0,
+          latitude: 0,
+          rotation: 0
+        },
+        fitBbox: [-24.6, 34.8, 45.8, 71.2],
+        viewportSize: { width: 960, height: 600 },
+        padding: 40,
+        projectionPresets
+      })
+    );
+    const shiftedProjection = asGeoProjection(
+      resolveUserProjectionOverride({
+        state: {
+          selected: 'mercator',
+          overrideActive: true,
+          customCode: undefined,
+          suggestionD3Config: europeMercatorD3Config,
+          center: [60, 0],
+          longitude: 60,
+          latitude: 0,
+          rotation: 0
+        },
+        fitBbox: [-24.6, 34.8, 45.8, 71.2],
+        viewportSize: { width: 960, height: 600 },
+        padding: 40,
+        projectionPresets
+      })
+    );
+
+    const basePoint = baseProjection([10, 45]);
+    const shiftedPoint = shiftedProjection([10, 45]);
+
+    expect(shiftedPoint?.every(Number.isFinite)).toBe(true);
+    expect(shiftedPoint).not.toEqual(basePoint);
   });
 
   it('preserves d3 suggestion rotation when proj4 fallback is used', () => {
@@ -304,8 +377,9 @@ describe('user projection utils', () => {
       })
     );
 
-    expect(projection.rotate()[0]).toBeCloseTo(5);
+    expect(projection.rotate()[0]).toBeCloseTo(-10);
     expect(projection.rotate()[1]).toBeCloseTo(-52);
+    expect(projection.angle()).toBeCloseTo(15);
   });
 
   it('ignores custom proj4 overrides that produce invalid coordinates', () => {
@@ -378,6 +452,39 @@ describe('user projection utils', () => {
           `${projectionInfo.id} should produce positive projected height for ${file}: ${projectedBbox?.join(',')}`
         ).toBeGreaterThan(0);
       }
+    }
+  });
+
+  it('keeps every built-in projection compatible with non-neutral user parameters', () => {
+    for (const projectionInfo of PROJECTIONS) {
+      const projection = asGeoProjection(
+        resolveUserProjectionOverride({
+          state: {
+            selected: projectionInfo.id,
+            overrideActive: true,
+            customCode: undefined,
+            center: [8, 4],
+            longitude: 8,
+            latitude: 4,
+            rotation: 12
+          },
+          fitBbox: [-24.6, 34.8, 45.8, 71.2],
+          viewportSize: { width: 960, height: 600 },
+          padding: 40,
+          projectionPresets
+        })
+      );
+
+      expect(projection, `${projectionInfo.id} should resolve`).toBeDefined();
+      expect(
+        projection.angle(),
+        `${projectionInfo.id} should apply planar rotation`
+      ).toBeCloseTo(12);
+      const projected = projection([10, 45]);
+      expect(
+        projected?.every(Number.isFinite),
+        `${projectionInfo.id} should keep projected points finite`
+      ).toBe(true);
     }
   });
 });

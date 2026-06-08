@@ -27,6 +27,10 @@ describe('projection sphere mask utils', () => {
     expect(layer?.id).toBe(PROJECTION_SPHERE_MASK_LAYER_ID);
     expect(layer?.props.pickable).toBe(false);
     expect(layer?.props.coordinateSystem).toBeDefined();
+    expect(layer?.props.parameters).toMatchObject({
+      depthCompare: 'always',
+      depthWriteEnabled: false
+    });
   });
 
   it('returns null when projection has no stream method', () => {
