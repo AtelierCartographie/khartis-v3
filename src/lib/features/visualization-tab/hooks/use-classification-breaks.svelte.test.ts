@@ -25,6 +25,7 @@ const serviceMocks = vi.hoisted(() => ({
     lowerCount: 2,
     upperCount: 2
   })),
+  detectDivergingBreakpoint: vi.fn(),
   generateColorsForBreaks: vi.fn((count: number) =>
     Array.from({ length: count }, (_, index) => `#auto-${index}`)
   )
@@ -96,6 +97,7 @@ describe('use-classification-breaks', () => {
     serviceMocks.calculateDivergingBreaks.mockReset();
     serviceMocks.calculateBreaks.mockReset();
     serviceMocks.computeDivergingSplit.mockClear();
+    serviceMocks.detectDivergingBreakpoint.mockResolvedValue(null);
     serviceMocks.generateColorsForBreaks.mockClear();
     paletteMocks.findPaletteById.mockReset();
     paletteMocks.generateCategoricalColorsFromSeed.mockClear();
@@ -311,6 +313,28 @@ describe('use-classification-breaks', () => {
       '#auto-2',
       '#auto-3'
     ]);
+  });
+
+  it('uses the effective class count when computed breaks collapse duplicate values', async () => {
+    serviceMocks.calculateBreaks.mockResolvedValue({
+      min: 10,
+      max: 83,
+      breaks: [20, 60],
+      counts: [4, 3, 3]
+    });
+
+    const computation = await computeClassificationBreaks({
+      datasetSourceFileId: 'dataset-source',
+      valueColumn: 'population',
+      classification: {
+        method: ClassificationMethod.KMEANS,
+        numClasses: 4,
+        classes: 4
+      } as ClassificationConfig
+    });
+
+    expect(computation?.actualClassCount).toBe(3);
+    expect(computation?.colors).toEqual(['#auto-0', '#auto-1', '#auto-2']);
   });
 
   it('computes left and right breakpoint classes independently', async () => {

@@ -51,18 +51,32 @@ export interface UseClassificationColorSyncDeps {
   getTextBackgroundStrokeTarget: () => ScopeTarget | null;
   updatePrimitiveClassificationState: (
     primitive: ClassifiablePrimitive,
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
   ) => void;
   updatePrimitiveStrokeClassificationState: (
     primitive: StrokeClassifiablePrimitive,
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
   ) => void;
-  applySymbolFillUpdate: (updates: Partial<ClassificationConfig>) => void;
-  applyTextBackgroundUpdate: (updates: Partial<ClassificationConfig>) => void;
+  applySymbolFillUpdate: (
+    updates: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
+  ) => void;
+  applyTextBackgroundUpdate: (
+    updates: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
+  ) => void;
   applyTextBackgroundStrokeUpdate: (
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
   ) => void;
 }
+
+// Colour syncing is DERIVED (regenerating palette colours), never a user edit:
+// preserve the origin so it doesn't re-tag a freshly-applied suggestion as
+// `custom` and uncheck its card.
+const PRESERVE_ORIGIN = { preserveOrigin: true } as const;
 
 export function buildPrimitiveColorParamsKey(
   primitiveTargets: ClassificationTarget[],
@@ -136,7 +150,11 @@ export function syncPrimitiveColors(
         target.classification,
         target.usesCategories,
         (updates) =>
-          deps.updatePrimitiveClassificationState(target.primitive, updates)
+          deps.updatePrimitiveClassificationState(
+            target.primitive,
+            updates,
+            PRESERVE_ORIGIN
+          )
       );
     }
 
@@ -145,7 +163,7 @@ export function syncPrimitiveColors(
       syncClassificationColors(
         symbolFill.classification,
         symbolFill.usesCategories,
-        deps.applySymbolFillUpdate
+        (updates) => deps.applySymbolFillUpdate(updates, PRESERVE_ORIGIN)
       );
     }
 
@@ -154,7 +172,7 @@ export function syncPrimitiveColors(
       syncClassificationColors(
         textBg.classification,
         textBg.usesCategories,
-        deps.applyTextBackgroundUpdate
+        (updates) => deps.applyTextBackgroundUpdate(updates, PRESERVE_ORIGIN)
       );
     }
   });
@@ -177,7 +195,8 @@ export function syncStrokeColors(deps: UseClassificationColorSyncDeps): void {
         (updates) =>
           deps.updatePrimitiveStrokeClassificationState(
             target.primitive,
-            updates
+            updates,
+            PRESERVE_ORIGIN
           )
       );
     }
@@ -187,7 +206,8 @@ export function syncStrokeColors(deps: UseClassificationColorSyncDeps): void {
       syncClassificationColors(
         textBgStroke.classification,
         textBgStroke.usesCategories,
-        deps.applyTextBackgroundStrokeUpdate
+        (updates) =>
+          deps.applyTextBackgroundStrokeUpdate(updates, PRESERVE_ORIGIN)
       );
     }
   });

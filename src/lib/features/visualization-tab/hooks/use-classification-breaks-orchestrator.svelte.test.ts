@@ -193,7 +193,8 @@ describe('useClassificationBreaksOrchestrator', () => {
     applyUpdate({ breaks: [1, 2] });
     expect(bag.updatePrimitiveClassificationState).toHaveBeenCalledWith(
       'polygon',
-      { breaks: [1, 2] }
+      { breaks: [1, 2] },
+      { preserveOrigin: true }
     );
   });
 });

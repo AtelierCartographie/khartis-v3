@@ -15,7 +15,7 @@ import {
   generateUniqueTableName,
   getFileType
 } from './file-registry';
-import { addRowId } from './reader-utils';
+import { addRowId, restoreNormalizedColumnNames } from './reader-utils';
 
 export async function readLink(
   ctx: DuckDBContext,
@@ -59,6 +59,7 @@ export async function readLink(
             `CREATE OR REPLACE TABLE "${escapedTable}" AS FROM read_csv('${escapedFilename}', header=true, decimal_separator="${decimal_separator}", normalize_names=true, nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES});`,
             { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
           );
+          await restoreNormalizedColumnNames(ctx.connection, finalTablename);
           break;
 
         case DUCK_CONST.TYPE.PARQUET:

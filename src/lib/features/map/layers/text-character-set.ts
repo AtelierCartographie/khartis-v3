@@ -73,11 +73,16 @@ const ARROWS_AND_GEOMETRIC = [
   '☆'
 ] as const;
 
+export const TEXT_HALO_ATLAS_RADIUS = 32;
+export const TEXT_HALO_ATLAS_BUFFER = 48;
+
+export const MAX_TEXT_OUTLINE_WIDTH = 0.17;
+
 export const DEFAULT_TEXT_FONT_SETTINGS_SDF = {
   sdf: true,
   fontSize: 64,
-  buffer: 24,
-  radius: 24
+  buffer: TEXT_HALO_ATLAS_BUFFER,
+  radius: TEXT_HALO_ATLAS_RADIUS
 } as const;
 
 export const DEFAULT_TEXT_FONT_SETTINGS_RASTER = {
@@ -98,6 +103,17 @@ export function resolveTextFontSettings(
   return mode === 'halo-on'
     ? DEFAULT_TEXT_FONT_SETTINGS_SDF
     : DEFAULT_TEXT_FONT_SETTINGS_RASTER;
+}
+
+export function resolveTextOutlineWidth(
+  haloWidth: number,
+  maxHaloWidth: number
+): number {
+  if (!Number.isFinite(haloWidth) || haloWidth <= 0 || maxHaloWidth <= 0) {
+    return 0;
+  }
+  const ratio = Math.min(haloWidth / maxHaloWidth, 1);
+  return MAX_TEXT_OUTLINE_WIDTH * Math.sqrt(ratio);
 }
 
 export const DEFAULT_TEXT_LINE_HEIGHT = 1.15;

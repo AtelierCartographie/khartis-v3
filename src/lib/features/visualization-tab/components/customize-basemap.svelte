@@ -136,6 +136,15 @@
     return true;
   }
 
+  // The projection sphere is the outline of a global d3 projection. Composite
+  // projections (e.g. EUROPE_DOM_TOM / FRANCE_DOM_TOM) and already-projected
+  // ("identity") basemaps have no single sphere, so `parseSphere` yields nothing
+  // and the toggle is a visual no-op. Only expose the control for `simple`
+  // projections where it actually renders.
+  const supportsProjectionSphere = $derived(
+    currentMetadata?.proj_to?.type === 'simple'
+  );
+
   const layerEntries = $derived.by<LayerEntry[]>(() => {
     const metadata = currentMetadata;
     if (!metadata) return [];
@@ -146,11 +155,15 @@
         sharedLegacyId: 'mers',
         instanceIndex: 0
       },
-      {
-        layer: sphereSyntheticLayer,
-        sharedLegacyId: 'sphere',
-        instanceIndex: 0
-      }
+      ...(supportsProjectionSphere
+        ? [
+            {
+              layer: sphereSyntheticLayer,
+              sharedLegacyId: 'sphere' as BasemapLayerId,
+              instanceIndex: 0
+            }
+          ]
+        : [])
     ];
     typeCounters.set(BasemapLayerType.POLYGON, 1);
     typeCounters.set(BasemapLayerType.SPHERE, 1);

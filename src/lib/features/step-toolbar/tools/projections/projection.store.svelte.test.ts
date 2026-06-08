@@ -21,7 +21,7 @@ describe('projection store', () => {
   });
 
   it('toggles the active suggestion and preserves d3 fallback config', () => {
-    expect(source).toContain('activeSuggestionId: _activeSuggestionId');
+    expect(source).not.toContain('activeSuggestionId: _activeSuggestionId');
     expect(source).toContain('const activeSuggestionId = suggestion.id;');
     expect(source).toContain(
       "overrideSource === 'manual' &&\n        s.overrideActive &&\n        s.activeSuggestionId === suggestion.id"
@@ -43,11 +43,37 @@ describe('projection store', () => {
   it('turns projection settings into manual overrides without clearing the active projection', () => {
     expect(source).toContain('const activateManualProjectionOverride = () =>');
     expect(source).toContain("s.overrideSource = 'manual';");
+    expect(source).toContain('simplifiedPreview: false');
     expect(source).toContain(
       'setCenter: (longitude: number, latitude: number) =>'
     );
     expect(source).toContain('setRotation: (rotation: number) =>');
     expect(source).toContain('activateManualProjectionOverride();');
+  });
+
+  it('persists projection choices and user settings while omitting only computed suggestions', () => {
+    const serializeFilterIndex = source.indexOf('serializeFilter: ({');
+    const serializeFilterEndIndex = source.indexOf(
+      '}) => persisted',
+      serializeFilterIndex
+    );
+    const serializeFilterSource = source.slice(
+      serializeFilterIndex,
+      serializeFilterEndIndex
+    );
+
+    expect(serializeFilterSource).toContain('suggestions: _suggestions');
+    expect(serializeFilterSource).not.toContain('selected:');
+    expect(serializeFilterSource).not.toContain('overrideActive:');
+    expect(serializeFilterSource).not.toContain('overrideSource:');
+    expect(serializeFilterSource).not.toContain('longitude:');
+    expect(serializeFilterSource).not.toContain('latitude:');
+    expect(serializeFilterSource).not.toContain('rotation:');
+    expect(serializeFilterSource).not.toContain('center:');
+    expect(serializeFilterSource).not.toContain('customCode:');
+    expect(serializeFilterSource).not.toContain('activeSuggestionId:');
+    expect(serializeFilterSource).not.toContain('suggestionD3Config:');
+    expect(serializeFilterSource).not.toContain('simplifiedPreview:');
   });
 
   it('keeps custom CRS code active after catalogue metadata has been selected', () => {

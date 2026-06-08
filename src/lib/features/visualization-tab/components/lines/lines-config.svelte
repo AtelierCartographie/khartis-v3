@@ -489,8 +489,8 @@
   .lines-config {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-05);
-    padding: var(--cds-spacing-04) var(--cds-spacing-03) var(--cds-spacing-05);
+    gap: var(--cds-spacing-04);
+    padding: var(--cds-spacing-03);
   }
 
   :global(.field-group) {

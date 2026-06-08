@@ -377,7 +377,7 @@
                 size="sm"
                 type="gray"
                 filter
-                onclose={() => removeFilter(filter.id)}
+                on:close={() => removeFilter(filter.id)}
               >
                 {filter.label}
               </Tag>

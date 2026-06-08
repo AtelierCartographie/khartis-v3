@@ -73,13 +73,18 @@ function applyUserProjectionTransform(
   projection: GeoProjection,
   state: ProjectionOverrideState
 ): void {
+  const [longitude, latitude] = state.center ?? [
+    state.longitude,
+    state.latitude
+  ];
+  const [lambda = 0, phi = 0, gamma = 0] = projection.rotate();
+
   if (hasUserCenterOverride(state)) {
-    projection.center(state.center ?? [state.longitude, state.latitude]);
+    projection.rotate([lambda - longitude, phi - latitude, gamma]);
   }
 
   if (hasUserRotationOverride(state)) {
-    const [lambda = 0, phi = 0, gamma = 0] = projection.rotate();
-    projection.rotate([lambda + state.rotation, phi, gamma]);
+    projection.angle(projection.angle() + state.rotation);
   }
 }
 
@@ -115,12 +120,28 @@ function isUsableGeoProjection(
   projection: GeoProjection,
   fitBbox: BBox
 ): boolean {
-  const projected = projection(getBboxCenter(fitBbox));
-  return (
-    Array.isArray(projected) &&
-    projected.length >= 2 &&
-    projected.every(Number.isFinite)
-  );
+  const [west, south, east, north] = fitBbox;
+  const [centerLon, centerLat] = getBboxCenter(fitBbox);
+  const samples: [number, number][] = [
+    [centerLon, centerLat],
+    [west, south],
+    [west, north],
+    [east, south],
+    [east, north],
+    [centerLon, south],
+    [centerLon, north],
+    [west, centerLat],
+    [east, centerLat]
+  ];
+
+  return samples.some((sample) => {
+    const projected = projection(sample);
+    return (
+      Array.isArray(projected) &&
+      projected.length >= 2 &&
+      projected.every(Number.isFinite)
+    );
+  });
 }
 
 export function getCompositeProjectionSelectionId(presetId: string): string {
@@ -167,7 +188,6 @@ export function resolveUserProjectionOverride({
       }
 
       const projection = proj4d3(state.customCode);
-      applyUserProjectionTransform(projection, state);
       fitProjectionToBbox(
         projection,
         fitBbox,
@@ -175,6 +195,7 @@ export function resolveUserProjectionOverride({
         viewportSize.height,
         padding
       );
+      applyUserProjectionTransform(projection, state);
       return isUsableGeoProjection(projection, fitBbox)
         ? projection
         : undefined;
@@ -190,7 +211,6 @@ export function resolveUserProjectionOverride({
         return undefined;
       }
 
-      applyUserProjectionTransform(projection, state);
       fitProjectionToBbox(
         projection,
         fitBbox,
@@ -198,6 +218,7 @@ export function resolveUserProjectionOverride({
         viewportSize.height,
         padding
       );
+      applyUserProjectionTransform(projection, state);
 
       return isUsableGeoProjection(projection, fitBbox)
         ? projection
@@ -235,7 +256,6 @@ export function resolveUserProjectionOverride({
       return undefined;
     }
 
-    applyUserProjectionTransform(projection, state);
     fitProjectionToBbox(
       projection,
       fitBbox,
@@ -243,6 +263,7 @@ export function resolveUserProjectionOverride({
       viewportSize.height,
       padding
     );
+    applyUserProjectionTransform(projection, state);
 
     return isUsableGeoProjection(projection, fitBbox) ? projection : undefined;
   } catch (error) {

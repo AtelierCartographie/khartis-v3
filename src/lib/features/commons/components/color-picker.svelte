@@ -30,7 +30,10 @@
     onCancel = () => {},
     onPreview = (_color: ColorPayload) => {},
     onValidate = (_color: ColorPayload) => {},
-    triggerLabel = ''
+    onBeforeOpen = () => {},
+    triggerLabel = '',
+    triggerAriaLabel = '',
+    triggerTitle = ''
   } = $props();
 
   let colorOpen = $state(false);
@@ -41,6 +44,12 @@
   let initialColor: ColorPayload | null = null;
   const contextualSurfaceId =
     createExclusiveContextualSurfaceId('color-picker');
+  const effectiveTriggerAriaLabel = $derived(
+    triggerAriaLabel || triggerLabel || undefined
+  );
+  const effectiveTriggerTitle = $derived(
+    triggerTitle || triggerAriaLabel || triggerLabel || undefined
+  );
 
   function portal(node: HTMLElement): { destroy: () => void } {
     document.body.appendChild(node);
@@ -166,6 +175,18 @@
     colorOpen = false;
   }
 
+  function toggleColorPicker() {
+    if (disabled) {
+      return;
+    }
+
+    if (!colorOpen) {
+      onBeforeOpen();
+    }
+
+    colorOpen = !colorOpen;
+  }
+
   $effect(() => {
     if (!colorOpen || !exclusive) {
       return;
@@ -216,9 +237,10 @@
     class="color-trigger"
     type="button"
     disabled={disabled}
-    onclick={() => !disabled && (colorOpen = !colorOpen)}
+    onclick={toggleColorPicker}
     aria-expanded={colorOpen}
-    aria-label={triggerLabel || undefined}
+    aria-label={effectiveTriggerAriaLabel}
+    title={effectiveTriggerTitle}
     bind:this={triggerEl}
   >
     <div class="swatch" style={`background:${hex}`}></div>

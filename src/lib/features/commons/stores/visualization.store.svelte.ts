@@ -2038,6 +2038,11 @@ function resolveNextVisualizationOrigin(
   visualization: VisualizationConfig,
   updates: Partial<VisualizationConfig>
 ): VisualizationConfig['origin'] {
+  // An explicit `origin` in the update wins outright. This is also the
+  // mechanism the derived/automatic post-suggestion mutations use to stay
+  // pinned: callers pass `preserveOrigin` (auto-columns, classification
+  // defaults, breaks/colour recompute), which spreads the CURRENT origin into
+  // `updates` so a freshly-applied suggestion is never mislabelled `custom`.
   if (Object.prototype.hasOwnProperty.call(updates, 'origin')) {
     return updates.origin;
   }

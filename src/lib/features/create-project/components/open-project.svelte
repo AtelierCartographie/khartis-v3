@@ -211,7 +211,7 @@
     {#if isLoading}
       {#each Array(3) as _item, idx (idx)}
         <div class="project-card-skeleton">
-          <SkeletonPlaceholder style="width: 200px; height: 150px;" />
+          <SkeletonPlaceholder style="width: 180px; height: 135px;" />
         </div>
       {/each}
     {:else if savedProjects.length === 0}
@@ -224,6 +224,7 @@
           <ProjectCard
             title={project.name}
             subtitle={project.description || formatFileSize(project.size)}
+            thumbnail={project.thumbnail}
             variant="blue"
             selected={selectedProjectId === project.id}
             onclick={() => handleProjectClick(project.id)}
@@ -318,7 +319,7 @@
   }
 
   .project-card-skeleton {
-    min-width: 200px;
+    min-width: 180px;
   }
 
   .no-projects {

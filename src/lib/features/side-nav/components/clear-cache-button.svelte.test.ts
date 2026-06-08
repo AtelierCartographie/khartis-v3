@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   factoryResetPwaMock: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/features/commons/utils/pwa-offline', () => ({
+vi.mock('$lib/features/commons/utils/pwa-reset', () => ({
   factoryResetPwa: (...args: unknown[]) => mocks.factoryResetPwaMock(...args)
 }));
 
@@ -25,9 +25,7 @@ describe('ClearCacheButton', () => {
 
     expect(screen.getByText('Mettre à jour Khartis ?')).toBeTruthy();
     expect(
-      screen.getByText(
-        'Les fonds de carte hors ligne devront être téléchargés de nouveau.'
-      )
+      screen.getByText('Vos projets sauvegardés restent conservés.')
     ).toBeTruthy();
 
     await fireEvent.click(screen.getByText('Mettre à jour maintenant'));

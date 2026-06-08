@@ -8,7 +8,10 @@ const mocks = vi.hoisted(() => ({
   removeBulkVisualizationsMock: vi.fn(),
   setVisualizationOrderMock: vi.fn(),
   generateFacetVisualizationsMock: vi.fn(),
-  buildFacetVisualizationUpdatesMock: vi.fn()
+  buildFacetVisualizationUpdatesMock: vi.fn(),
+  resolveFacetPrimitiveFilterMock: vi.fn(() => 'polygon'),
+  getEnabledPrimitiveFiltersMock: vi.fn(() => [] as string[]),
+  showInfoMock: vi.fn()
 }));
 
 vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
@@ -24,7 +27,12 @@ vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
 
 vi.mock('$lib/features/commons/services/facet-generator.service', () => ({
   generateFacetVisualizations: mocks.generateFacetVisualizationsMock,
-  buildFacetVisualizationUpdates: mocks.buildFacetVisualizationUpdatesMock
+  buildFacetVisualizationUpdates: mocks.buildFacetVisualizationUpdatesMock,
+  resolveFacetPrimitiveFilter: mocks.resolveFacetPrimitiveFilterMock
+}));
+
+vi.mock('$lib/features/commons/utils/notification.utils.svelte', () => ({
+  showInfo: mocks.showInfoMock
 }));
 
 vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
@@ -46,7 +54,8 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
     removeBulkVisualizations: mocks.removeBulkVisualizationsMock,
     setVisualizationOrder: mocks.setVisualizationOrderMock,
     updateVisualization: updateVisualizationMock
-  }
+  },
+  getEnabledPrimitiveFilters: mocks.getEnabledPrimitiveFiltersMock
 }));
 
 import {
@@ -55,10 +64,13 @@ import {
   MAX_FACETS,
   SCALE_MODE
 } from './facets.store.svelte';
+import * as m from '$lib/paraglide/messages';
 
 describe('facetsStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.resolveFacetPrimitiveFilterMock.mockReturnValue('polygon');
+    mocks.getEnabledPrimitiveFiltersMock.mockReturnValue([]);
     mocks.buildFacetVisualizationUpdatesMock.mockImplementation(
       ({
         variable,
@@ -1019,6 +1031,104 @@ describe('facetsStore', () => {
         SCALE_MODE.INDEPENDENT,
         FACET_SLOT.POLYGON_VALUE
       );
+    });
+  });
+
+  describe('collection bridage rules', () => {
+    it('replaces the previous collection and notifies when starting a new one', async () => {
+      mocks.generateFacetVisualizationsMock.mockResolvedValue([
+        { id: 'new-a' },
+        { id: 'new-b' }
+      ]);
+      facetsStore.restoreFromSerialized({
+        enabled: true,
+        baseVisualizationId: 'base-viz',
+        primarySlotPath: FACET_SLOT.POLYGON_VALUE,
+        variables: ['old-1', 'old-2'],
+        layout: { columns: 2, gap: 16 },
+        scaleMode: SCALE_MODE.INDEPENDENT,
+        generatedVisualizationIds: ['old-a', 'old-b']
+      });
+
+      await facetsStore.enable(
+        'base-viz',
+        ['a', 'b'],
+        FACET_SLOT.POLYGON_VALUE
+      );
+
+      expect(mocks.removeBulkVisualizationsMock).toHaveBeenCalledWith([
+        'old-a',
+        'old-b'
+      ]);
+      expect(facetsStore.generatedVisualizationIds).toEqual(['new-a', 'new-b']);
+      expect(mocks.showInfoMock).toHaveBeenCalledTimes(1);
+      expect(mocks.showInfoMock).toHaveBeenCalledWith(
+        m.facets_notice_title(),
+        m.facets_notice_replaced()
+      );
+    });
+
+    it('hides the other primitives of the base visualization and notifies', async () => {
+      mocks.getEnabledPrimitiveFiltersMock.mockReturnValue([
+        'polygon',
+        'point'
+      ]);
+      mocks.resolveFacetPrimitiveFilterMock.mockReturnValue('point');
+      mocks.generateFacetVisualizationsMock.mockResolvedValue([
+        { id: 'facet-a' },
+        { id: 'facet-b' }
+      ]);
+
+      await facetsStore.enable('base-viz', ['a', 'b'], FACET_SLOT.SYMBOL_SIZE);
+
+      expect(mocks.showInfoMock).toHaveBeenCalledTimes(1);
+      expect(mocks.showInfoMock).toHaveBeenCalledWith(
+        m.facets_notice_title(),
+        m.facets_notice_hidden()
+      );
+    });
+
+    it('combines the replaced and hidden notice when both happen', async () => {
+      mocks.getEnabledPrimitiveFiltersMock.mockReturnValue([
+        'polygon',
+        'point'
+      ]);
+      mocks.resolveFacetPrimitiveFilterMock.mockReturnValue('point');
+      mocks.generateFacetVisualizationsMock.mockResolvedValue([
+        { id: 'new-a' },
+        { id: 'new-b' }
+      ]);
+      facetsStore.restoreFromSerialized({
+        enabled: true,
+        baseVisualizationId: 'base-viz',
+        primarySlotPath: FACET_SLOT.POLYGON_VALUE,
+        variables: ['old-1', 'old-2'],
+        layout: { columns: 2, gap: 16 },
+        scaleMode: SCALE_MODE.INDEPENDENT,
+        generatedVisualizationIds: ['old-a', 'old-b']
+      });
+
+      await facetsStore.enable('base-viz', ['a', 'b'], FACET_SLOT.SYMBOL_SIZE);
+
+      expect(mocks.showInfoMock).toHaveBeenCalledWith(
+        m.facets_notice_title(),
+        m.facets_notice_replaced_and_hidden()
+      );
+    });
+
+    it('does not notify when starting a first collection with no other primitive', async () => {
+      mocks.generateFacetVisualizationsMock.mockResolvedValue([
+        { id: 'facet-a' },
+        { id: 'facet-b' }
+      ]);
+
+      await facetsStore.enable(
+        'base-viz',
+        ['a', 'b'],
+        FACET_SLOT.POLYGON_VALUE
+      );
+
+      expect(mocks.showInfoMock).not.toHaveBeenCalled();
     });
   });
 

@@ -26,6 +26,7 @@ import {
   FACET_SLOT,
   SCALE_MODE
 } from '$lib/features/commons/constants/facets.constants';
+import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
 
 function makeBaseViz(overrides = {}) {
   return {
@@ -395,6 +396,9 @@ describe('generateFacetVisualizations', () => {
     expect(update.text?.enabled).toBe(true);
     expect(update.text?.labelColumn).toBe('place_name');
     expect(update.text?.opacity).toBe(1);
+    // Bridage #177: the other primitives stay configured but the facet only
+    // renders the collection's primitive, so it must restrict primitiveFilters.
+    expect(update.primitiveFilters).toEqual([PrimitiveFilterType.POLYGON]);
   });
 
   it('should fall back to base breaks when stats are missing in independent mode', async () => {

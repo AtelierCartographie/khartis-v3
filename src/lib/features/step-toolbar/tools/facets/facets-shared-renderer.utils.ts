@@ -1,4 +1,6 @@
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
+import type { FacetSlotPath } from '$lib/features/commons/constants/facets.constants';
+import { getFacetSlotVariable } from '$lib/features/commons/utils/facet-visualization-updates';
 import type { FacetsLayout } from './facets.store.svelte';
 
 export const FACET_TITLE_HEIGHT = 28;
@@ -51,9 +53,18 @@ export function buildFacetsGridMetrics({
   const totalMaps = Math.max(0, mapCount);
   const columns = Math.max(1, Math.min(layout.columns, totalMaps || 1));
   const rows = totalMaps > 0 ? Math.ceil(totalMaps / columns) : 1;
-  const availableWidth = containerWidth - (columns - 1) * layout.gap;
+  // The grid is centered inside the content box (container minus the wrapper
+  // padding), so column/row sizing must start from that same content box —
+  // otherwise gridWidth can reach containerWidth, exceed contentWidth, and the
+  // last column overflows the canvas on the right (facet rendered clipped).
+  const contentWidth = Math.max(1, containerWidth - FACETS_WRAPPER_PADDING * 2);
+  const contentHeight = Math.max(
+    1,
+    containerHeight - FACETS_WRAPPER_PADDING * 2
+  );
+  const availableWidth = contentWidth - (columns - 1) * layout.gap;
   const availableHeight =
-    containerHeight - (rows - 1) * layout.gap - FACET_TITLE_HEIGHT * rows;
+    contentHeight - (rows - 1) * layout.gap - FACET_TITLE_HEIGHT * rows;
 
   const widthPerColumn = Math.max(
     FACET_MIN_CELL,
@@ -71,11 +82,6 @@ export function buildFacetsGridMetrics({
   const gridWidth = columns * cellWidth + (columns - 1) * layout.gap;
   const gridHeight =
     rows * (cellHeight + FACET_TITLE_HEIGHT) + (rows - 1) * layout.gap;
-  const contentWidth = Math.max(1, containerWidth - FACETS_WRAPPER_PADDING * 2);
-  const contentHeight = Math.max(
-    1,
-    containerHeight - FACETS_WRAPPER_PADDING * 2
-  );
 
   return {
     cellWidth,
@@ -96,13 +102,15 @@ export function buildFacetRenderDescriptors({
   layout,
   containerWidth,
   containerHeight,
-  pageAspectRatio
+  pageAspectRatio,
+  primarySlotPath
 }: {
   visualizations: VisualizationConfig[];
   layout: FacetsLayout;
   containerWidth: number;
   containerHeight: number;
   pageAspectRatio: number;
+  primarySlotPath: FacetSlotPath | null;
 }): FacetRenderDescriptor[] {
   const metrics = buildFacetsGridMetrics({
     mapCount: visualizations.length,
@@ -126,10 +134,19 @@ export function buildFacetRenderDescriptors({
       metrics.originY + FACET_TITLE_HEIGHT
     );
 
+    // The facet title must follow the variable actually shown in the collection
+    // slot, not the visualization's frozen name: changing the distribution
+    // reassigns the slot variable while `name` stays put, so keying the title on
+    // `name` desyncs it from the rendered map.
+    const displayVariable =
+      (primarySlotPath
+        ? getFacetSlotVariable(visualization, primarySlotPath)
+        : undefined) ?? visualization.name;
+
     return {
       facetId: visualization.id,
       vizId: visualization.id,
-      title: visualization.name,
+      title: displayVariable,
       frame: {
         x,
         y,

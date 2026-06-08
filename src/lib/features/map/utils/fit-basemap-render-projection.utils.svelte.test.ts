@@ -44,6 +44,9 @@ describe('fitBasemapRenderProjection', () => {
   });
 
   it('leaves composite projections unchanged', async () => {
+    // Composite presets (e.g. FRANCE_DOM_TOM) expose no `fitExtent` — each
+    // sub-projection is already fitted to its fixed layout cell — so they must
+    // not be re-fitted here, otherwise the DOM-TOM insets would be disturbed.
     const { fitBasemapRenderProjection } =
       await import('./fit-basemap-render-projection.utils');
     const projection = {

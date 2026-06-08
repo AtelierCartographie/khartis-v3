@@ -137,9 +137,13 @@ describe('use-classification-color-sync', () => {
         updatePrimitiveClassificationState: updateClass
       })
     );
-    expect(updateClass).toHaveBeenCalledWith('polygon', {
-      colors: ['#111', '#222']
-    });
+    expect(updateClass).toHaveBeenCalledWith(
+      'polygon',
+      {
+        colors: ['#111', '#222']
+      },
+      { preserveOrigin: true }
+    );
   });
 
   it('returns early when no selected visualization id', () => {
@@ -178,8 +182,12 @@ describe('use-classification-color-sync', () => {
         updatePrimitiveStrokeClassificationState: updateStroke
       })
     );
-    expect(updateStroke).toHaveBeenCalledWith('polygon', {
-      colors: ['#111', '#222']
-    });
+    expect(updateStroke).toHaveBeenCalledWith(
+      'polygon',
+      {
+        colors: ['#111', '#222']
+      },
+      { preserveOrigin: true }
+    );
   });
 });

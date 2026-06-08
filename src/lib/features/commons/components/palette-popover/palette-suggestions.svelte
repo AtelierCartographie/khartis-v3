@@ -31,6 +31,7 @@
     onColorBlindChange?: (enabled: boolean) => void;
     onSelect?: (palette: Palette) => void;
     onColorSelect?: (color: string) => void;
+    onPaletteSelect?: (colors: string[]) => void;
     onIntensitySelect?: (color: string) => void;
     onQualitativePresetChange?: (preset: QualitativePreset) => void;
   }
@@ -47,6 +48,7 @@
     onColorBlindChange,
     onSelect,
     onColorSelect,
+    onPaletteSelect,
     onIntensitySelect,
     onQualitativePresetChange
   }: Props = $props();
@@ -110,6 +112,11 @@
   function selectQualitativeColor(hex: string) {
     selectedIntensityIndex = -1;
     onColorSelect?.(hex);
+  }
+
+  function selectQualitativePalette(colors: string[]) {
+    selectedIntensityIndex = -1;
+    onPaletteSelect?.(colors);
   }
 
   function selectIntensity(index: number, color: string) {
@@ -178,18 +185,21 @@
       colors={qualitativeGroups.mixte}
       selectedColor={qualitativeSelectedColor}
       onColorSelect={selectQualitativeColor}
+      onPaletteSelect={onPaletteSelect ? selectQualitativePalette : undefined}
     />
     <QualitativeColorGrid
       label={m.palette_theme_chaud()}
       colors={qualitativeGroups.chaud}
       selectedColor={qualitativeSelectedColor}
       onColorSelect={selectQualitativeColor}
+      onPaletteSelect={onPaletteSelect ? selectQualitativePalette : undefined}
     />
     <QualitativeColorGrid
       label={m.palette_theme_froid()}
       colors={qualitativeGroups.froid}
       selectedColor={qualitativeSelectedColor}
       onColorSelect={selectQualitativeColor}
+      onPaletteSelect={onPaletteSelect ? selectQualitativePalette : undefined}
     />
 
     {#if !isCategoriesQualitative}

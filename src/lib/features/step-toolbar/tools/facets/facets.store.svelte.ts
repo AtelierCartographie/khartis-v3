@@ -1,11 +1,18 @@
-import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
+import {
+  visualizationStore,
+  getEnabledPrimitiveFilters,
+  type PrimitiveFilter,
+  type VisualizationConfig
+} from '$lib/features/commons/stores/visualization.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
-import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { showInfo } from '$lib/features/commons/utils/notification.utils.svelte';
+import * as m from '$lib/paraglide/messages';
 import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 import {
   buildFacetVisualizationUpdates,
-  generateFacetVisualizations
+  generateFacetVisualizations,
+  resolveFacetPrimitiveFilter
 } from '$lib/features/commons/services/facet-generator.service';
 import {
   FACET_SLOT,
@@ -151,6 +158,8 @@ export interface FacetsState {
   layout: FacetsLayout;
   scaleMode: ScaleMode;
   generatedVisualizationIds: string[];
+  /** Custom facet titles keyed by facet variable name (Habillage step). */
+  facetTitles: Record<string, string>;
 }
 
 const DEFAULT_STATE: FacetsState = {
@@ -163,7 +172,8 @@ const DEFAULT_STATE: FacetsState = {
     gap: 16
   },
   scaleMode: SCALE_MODE.INDEPENDENT,
-  generatedVisualizationIds: []
+  generatedVisualizationIds: [],
+  facetTitles: {}
 };
 
 function reorderItems<T>(items: T[], fromIndex: number, toIndex: number): T[] {
@@ -181,6 +191,35 @@ function arraysEqual<T>(left: T[], right: T[]): boolean {
     left.length === right.length &&
     left.every((value, index) => value === right[index])
   );
+}
+
+function getHiddenPrimitivesForSlot(
+  baseViz: VisualizationConfig,
+  primarySlotPath: FacetSlotPath
+): PrimitiveFilter[] {
+  const targetPrimitive = resolveFacetPrimitiveFilter(primarySlotPath);
+  return getEnabledPrimitiveFilters(baseViz).filter(
+    (primitive) => primitive !== targetPrimitive
+  );
+}
+
+function notifyCollectionConstraints(
+  replacedPreviousCollection: boolean,
+  hiddenPrimitives: PrimitiveFilter[]
+): void {
+  const hasHiddenPrimitives = hiddenPrimitives.length > 0;
+  if (!replacedPreviousCollection && !hasHiddenPrimitives) {
+    return;
+  }
+
+  const subtitle =
+    replacedPreviousCollection && hasHiddenPrimitives
+      ? m.facets_notice_replaced_and_hidden()
+      : replacedPreviousCollection
+        ? m.facets_notice_replaced()
+        : m.facets_notice_hidden();
+
+  showInfo(m.facets_notice_title(), subtitle);
 }
 
 function createFacetsStore() {
@@ -283,6 +322,18 @@ function createFacetsStore() {
             ? restoredLayout.gap
             : DEFAULT_STATE.layout.gap
       };
+
+      nextState.facetTitles =
+        restored.facetTitles != null && typeof restored.facetTitles === 'object'
+          ? Object.fromEntries(
+              Object.entries(
+                restored.facetTitles as Record<string, unknown>
+              ).filter(
+                (entry): entry is [string, string] =>
+                  typeof entry[1] === 'string'
+              )
+            )
+          : { ...DEFAULT_STATE.facetTitles };
     }
 
     Object.assign(state, nextState);
@@ -334,6 +385,12 @@ function createFacetsStore() {
     }
 
     const capped = compatible.slice(0, MAX_FACETS);
+    const replacedPreviousCollection =
+      state.enabled && state.generatedVisualizationIds.length > 0;
+    const hiddenPrimitives = getHiddenPrimitivesForSlot(
+      baseViz,
+      primarySlotPath
+    );
 
     try {
       const facetConfigs = await generateFacetVisualizations(
@@ -343,6 +400,11 @@ function createFacetsStore() {
         primarySlotPath
       );
 
+      if (state.generatedVisualizationIds.length > 0) {
+        visualizationStore.removeBulkVisualizations(
+          state.generatedVisualizationIds
+        );
+      }
       visualizationStore.createBulkVisualizations(facetConfigs);
 
       state.enabled = true;
@@ -352,6 +414,8 @@ function createFacetsStore() {
       state.generatedVisualizationIds = facetConfigs.map((c) => c.id);
       state.layout.columns = computeBestColumns(capped.length);
       notifyPersistence();
+
+      notifyCollectionConstraints(replacedPreviousCollection, hiddenPrimitives);
     } catch (error) {
       logger.error('Failed to enable facets', LogCategory.STORE, error);
     }
@@ -507,11 +571,41 @@ function createFacetsStore() {
     state.primarySlotPath = null;
     state.variables = [];
     state.generatedVisualizationIds = [];
+    state.facetTitles = {};
     notifyPersistence();
   }
 
   function setVariables(variables: string[]): void {
     state.variables = [...variables];
+    notifyPersistence();
+  }
+
+  function getFacetTitle(variable: string): string | undefined {
+    return state.facetTitles[variable];
+  }
+
+  function setFacetTitle(variable: string, title: string): void {
+    if (!variable) {
+      return;
+    }
+
+    const trimmed = title.trim();
+    const isDefaultTitle = trimmed.length === 0 || trimmed === variable;
+
+    if (isDefaultTitle) {
+      if (variable in state.facetTitles) {
+        const { [variable]: _removed, ...rest } = state.facetTitles;
+        state.facetTitles = rest;
+        notifyPersistence();
+      }
+      return;
+    }
+
+    if (state.facetTitles[variable] === trimmed) {
+      return;
+    }
+
+    state.facetTitles = { ...state.facetTitles, [variable]: trimmed };
     notifyPersistence();
   }
 
@@ -781,6 +875,9 @@ function createFacetsStore() {
     get generatedVisualizationIds() {
       return state.generatedVisualizationIds;
     },
+    get facetTitles() {
+      return state.facetTitles;
+    },
     get facetVisualizations(): VisualizationConfig[] {
       return getFacetVisualizations();
     },
@@ -793,6 +890,8 @@ function createFacetsStore() {
     setColumns,
     setGap,
     toggleScaleMode,
+    getFacetTitle,
+    setFacetTitle,
     syncGeneratedVisualizationsFromBase,
     restoreFromSerialized,
     restoreGeneratedVisualizations
@@ -810,7 +909,8 @@ persistenceRegistry.register({
     variables: [...facetsStore.variables],
     layout: { ...facetsStore.layout },
     scaleMode: facetsStore.scaleMode,
-    generatedVisualizationIds: [...facetsStore.generatedVisualizationIds]
+    generatedVisualizationIds: [...facetsStore.generatedVisualizationIds],
+    facetTitles: { ...facetsStore.facetTitles }
   }),
   deserialize: (data: unknown) => facetsStore.restoreFromSerialized(data),
   reset: () => facetsStore.restoreFromSerialized(undefined),

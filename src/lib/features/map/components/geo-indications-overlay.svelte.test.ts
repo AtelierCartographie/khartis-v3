@@ -207,6 +207,17 @@ describe('geo indications overlay dragging', () => {
     globalActions.resetNavigationState();
   });
 
+  it('does not preload the inset world basemap while the inset map is disabled', async () => {
+    render(GeoIndicationsOverlay);
+
+    await Promise.resolve();
+
+    expect(mockWaitForInitialization).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalledWith(
+      expect.stringContaining('monde-countries-2024-low.parquet')
+    );
+  });
+
   it('snaps and clamps scale dragging to the shared page grid when enabled', async () => {
     geoIndicationsActions.toggleScale();
 

@@ -11,25 +11,30 @@ describe('ProjectionSettings', () => {
   it('disables projection parameters when the current render context cannot apply them', () => {
     expect(source).toContain('const canApplyProjectionSettings = $derived(');
     expect(source).toContain('supportsCustomProjectionCode(projectionContext)');
-    expect(source).toContain('disabled={!canApplyProjectionSettings}');
+    expect(source).toContain('{#if !canApplyProjectionSettings}');
+    expect(source).toContain('{:else}');
     expect(source).toContain('m.projection_settings_unavailable_title()');
   });
 
-  it('uses carbon sliders and guards disabled events from mutating projection state', () => {
+  it('uses committed numeric sliders and guards disabled events from mutating projection state', () => {
     expect(source).toContain(
-      "import { Button, InlineNotification, Slider } from 'carbon-components-svelte'"
+      "import { Button, InlineNotification } from 'carbon-components-svelte'"
+    );
+    expect(source).toContain(
+      "import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte'"
     );
     expect(source).toContain(
       "import Switch from '$lib/features/commons/components/switch.svelte'"
     );
     expect(source).toContain('if (!canApplyProjectionSettings) return;');
     expect(source).toContain(
-      'projectionActions.setCenter(event.detail, projectionState.latitude)'
+      'projectionActions.setCenter(value, projectionState.latitude)'
     );
     expect(source).toContain(
-      'projectionActions.setCenter(projectionState.longitude, event.detail)'
+      'projectionActions.setCenter(projectionState.longitude, value)'
     );
-    expect(source).toContain('projectionActions.setRotation(event.detail)');
+    expect(source).toContain('projectionActions.setRotation(value)');
+    expect(source).toContain('debounceMs={0}');
   });
 
   it('keeps reset scoped to center and rotation values', () => {
@@ -39,14 +44,30 @@ describe('ProjectionSettings', () => {
     expect(source).not.toContain('projectionActions.setCustomCode(');
   });
 
+  it('places the reset action below the three parameter sliders', () => {
+    const rotationSliderIndex = source.indexOf(
+      'label={m.projection_settings_rotation()}'
+    );
+    const resetButtonIndex = source.indexOf(
+      'on:click={resetAll}>{m.projection_settings_reset()}</Button'
+    );
+    const previewToggleIndex = source.indexOf(
+      'labelText={m.projection_settings_simplified_preview()}'
+    );
+
+    expect(rotationSliderIndex).toBeGreaterThan(-1);
+    expect(resetButtonIndex).toBeGreaterThan(rotationSliderIndex);
+    expect(resetButtonIndex).toBeLessThan(previewToggleIndex);
+    expect(source).not.toContain('<div class="footer">');
+  });
+
   it('exposes the simplified preview toggle because it changes runtime rendering', () => {
     expect(source).toContain('projection_settings_simplified_preview');
     expect(source).toContain('const simplifiedPreview = $derived(');
+    expect(source).toContain('projectionState.simplifiedPreview === true');
     expect(source).toContain('projectionActions.setSimplifiedPreview(checked)');
     expect(source).toContain('onchange={handleSimplifiedPreviewChange}');
-    expect(source).toContain(
-      '{#if canApplyProjectionSettings && simplifiedPreview}'
-    );
+    expect(source).toContain('{#if simplifiedPreview}');
     expect(source).toContain('m.projection_settings_info_title()');
   });
 });

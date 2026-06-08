@@ -71,7 +71,13 @@ export type StrokeClassifiablePrimitive =
 type CorePrimitive = (typeof CORE_PRIMITIVES)[number];
 type MappingUpdates = Partial<VisualizationConfig['mapping']>;
 type ClassificationUpdateOptions = { preserveOrigin?: boolean };
-type VisualizationWriteOptions = { visualization?: VisualizationConfig };
+type VisualizationWriteOptions = {
+  visualization?: VisualizationConfig;
+  // Auto-column assignment and default seeding are DERIVED maintenance, never a
+  // user divergence: preserving the origin keeps a freshly-applied suggestion
+  // from being re-tagged `custom` (which would uncheck its suggestion card).
+  preserveOrigin?: boolean;
+};
 type TextBackgroundUpdater = (
   background: TextPrimitiveConfig['background']
 ) => Partial<TextPrimitiveConfig['background']>;
@@ -112,6 +118,23 @@ function mergeClassificationConfig(
     classes: existing?.classes ?? 5,
     ...existing,
     ...updates
+  };
+}
+
+function resetClassificationComputedValues(
+  classification: ClassificationConfig | undefined
+): ClassificationConfig | undefined {
+  if (!classification) {
+    return undefined;
+  }
+
+  return {
+    ...classification,
+    breaks: undefined,
+    counts: undefined,
+    colors: undefined,
+    breakpointValue: null,
+    breakpointLowerClassCount: undefined
   };
 }
 
@@ -820,14 +843,20 @@ export function usePrimitivePanelController({
         : {};
       if (!classification?.method || !classification?.numClasses) {
         const defaultClassCount = getDefaultPrimitiveClassCount(primitive);
-        updatePrimitiveClassification(primitive, {
-          method: ClassificationMethod.KMEANS,
-          classes: defaultClassCount,
-          numClasses: defaultClassCount,
-          ...resetPaletteFields
-        });
+        updatePrimitiveClassification(
+          primitive,
+          {
+            method: ClassificationMethod.KMEANS,
+            classes: defaultClassCount,
+            numClasses: defaultClassCount,
+            ...resetPaletteFields
+          },
+          { preserveOrigin: true }
+        );
       } else if (hasIncompatiblePalette) {
-        updatePrimitiveClassification(primitive, resetPaletteFields);
+        updatePrimitiveClassification(primitive, resetPaletteFields, {
+          preserveOrigin: true
+        });
       }
       return;
     }
@@ -963,7 +992,7 @@ export function usePrimitivePanelController({
             {
               sizeColumn: nextSizeColumn
             },
-            { visualization }
+            { visualization, preserveOrigin: true }
           );
         }
       }
@@ -988,7 +1017,7 @@ export function usePrimitivePanelController({
             {
               sizeColumn: nextSizeColumn
             },
-            { visualization }
+            { visualization, preserveOrigin: true }
           );
         }
       }
@@ -1493,6 +1522,10 @@ export function usePrimitivePanelController({
     }
 
     const previousVisualization = visualization;
+    const originPatch =
+      options?.preserveOrigin && previousVisualization.origin
+        ? { origin: previousVisualization.origin }
+        : {};
 
     switch (primitive) {
       case PrimitiveFilterType.POLYGON: {
@@ -1506,7 +1539,12 @@ export function usePrimitivePanelController({
         const categoryColumnChanged =
           hasOwnKey(updates, 'categoryColumn') &&
           updates.categoryColumn !== previousCategoryColumn;
-        const nextPolygonClassification =
+        const previousValueColumn =
+          polygon.valueColumn ?? visualization.mapping.valueColumn;
+        const valueColumnChanged =
+          hasOwnKey(updates, 'valueColumn') &&
+          updates.valueColumn !== previousValueColumn;
+        const nextPolygonClassificationBase =
           categoryColumnChanged && polygon.classification
             ? {
                 ...polygon.classification,
@@ -1516,7 +1554,10 @@ export function usePrimitivePanelController({
                 colors: undefined
               }
             : polygon.classification;
-        const nextRootPolygonClassification =
+        const nextPolygonClassification = valueColumnChanged
+          ? resetClassificationComputedValues(nextPolygonClassificationBase)
+          : nextPolygonClassificationBase;
+        const nextRootPolygonClassificationBase =
           categoryColumnChanged && visualization.classification
             ? {
                 ...visualization.classification,
@@ -1525,10 +1566,16 @@ export function usePrimitivePanelController({
                 categoryValues: undefined,
                 colors: undefined
               }
+            : visualization.classification;
+        const nextRootPolygonClassification = valueColumnChanged
+          ? resetClassificationComputedValues(nextRootPolygonClassificationBase)
+          : categoryColumnChanged
+            ? nextRootPolygonClassificationBase
             : undefined;
 
         updateVisualization(
           {
+            ...originPatch,
             ...(nextRootPolygonClassification
               ? { classification: nextRootPolygonClassification }
               : {}),
@@ -1569,11 +1616,16 @@ export function usePrimitivePanelController({
         const categoryColumnChanged =
           hasOwnKey(updates, 'categoryColumn') &&
           updates.categoryColumn !== previousCategoryColumn;
+        const previousValueColumn =
+          symbol.valueColumn ?? visualization.mapping.valueColumn;
+        const valueColumnChanged =
+          hasOwnKey(updates, 'valueColumn') &&
+          updates.valueColumn !== previousValueColumn;
         const shouldResetStrokeLabels =
           categoryColumnChanged &&
           (!symbol.strokeCategoryColumn ||
             symbol.strokeCategoryColumn === previousCategoryColumn);
-        const nextSymbolClassification = categoryColumnChanged
+        const nextSymbolClassificationBase = categoryColumnChanged
           ? {
               ...(symbol.classification ?? {
                 method: ClassificationMethod.KMEANS,
@@ -1586,6 +1638,9 @@ export function usePrimitivePanelController({
               categoryShapes: undefined
             }
           : symbol.classification;
+        const nextSymbolClassification = valueColumnChanged
+          ? resetClassificationComputedValues(nextSymbolClassificationBase)
+          : nextSymbolClassificationBase;
         const nextSymbolStrokeClassification =
           shouldResetStrokeLabels && symbol.strokeClassification
             ? {
@@ -1596,7 +1651,7 @@ export function usePrimitivePanelController({
             : symbol.strokeClassification;
         const rootPointClassificationBase =
           visualization.symbolClassification ?? symbol.classification;
-        const nextRootPointClassification =
+        const nextRootPointClassificationBase =
           categoryColumnChanged && rootPointClassificationBase
             ? {
                 ...rootPointClassificationBase,
@@ -1606,10 +1661,16 @@ export function usePrimitivePanelController({
                 colors: undefined,
                 categoryShapes: undefined
               }
+            : rootPointClassificationBase;
+        const nextRootPointClassification = valueColumnChanged
+          ? resetClassificationComputedValues(nextRootPointClassificationBase)
+          : categoryColumnChanged
+            ? nextRootPointClassificationBase
             : undefined;
 
         updateVisualization(
           {
+            ...originPatch,
             ...(nextRootPointClassification
               ? { symbolClassification: nextRootPointClassification }
               : {}),
@@ -1656,7 +1717,12 @@ export function usePrimitivePanelController({
         const categoryColumnChanged =
           hasOwnKey(updates, 'categoryColumn') &&
           updates.categoryColumn !== previousCategoryColumn;
-        const nextLineClassification =
+        const previousValueColumn =
+          line.valueColumn ?? visualization.mapping.valueColumn;
+        const valueColumnChanged =
+          hasOwnKey(updates, 'valueColumn') &&
+          updates.valueColumn !== previousValueColumn;
+        const nextLineClassificationBase =
           categoryColumnChanged && line.classification
             ? {
                 ...line.classification,
@@ -1666,9 +1732,12 @@ export function usePrimitivePanelController({
                 colors: undefined
               }
             : line.classification;
+        const nextLineClassification = valueColumnChanged
+          ? resetClassificationComputedValues(nextLineClassificationBase)
+          : nextLineClassificationBase;
         const rootLineClassificationBase =
           visualization.lineClassification ?? line.classification;
-        const nextRootLineClassification =
+        const nextRootLineClassificationBase =
           categoryColumnChanged && rootLineClassificationBase
             ? {
                 ...rootLineClassificationBase,
@@ -1677,10 +1746,16 @@ export function usePrimitivePanelController({
                 categoryValues: undefined,
                 colors: undefined
               }
+            : rootLineClassificationBase;
+        const nextRootLineClassification = valueColumnChanged
+          ? resetClassificationComputedValues(nextRootLineClassificationBase)
+          : categoryColumnChanged
+            ? nextRootLineClassificationBase
             : undefined;
 
         updateVisualization(
           {
+            ...originPatch,
             ...(nextRootLineClassification
               ? { lineClassification: nextRootLineClassification }
               : {}),
@@ -1724,7 +1799,12 @@ export function usePrimitivePanelController({
         const categoryColumnChanged =
           hasOwnKey(updates, 'categoryColumn') &&
           updates.categoryColumn !== previousCategoryColumn;
-        const nextTextClassification =
+        const previousValueColumn =
+          text.valueColumn ?? visualization.mapping.valueColumn;
+        const valueColumnChanged =
+          hasOwnKey(updates, 'valueColumn') &&
+          updates.valueColumn !== previousValueColumn;
+        const nextTextClassificationBase =
           categoryColumnChanged && text.classification
             ? {
                 ...text.classification,
@@ -1734,6 +1814,9 @@ export function usePrimitivePanelController({
                 colors: undefined
               }
             : text.classification;
+        const nextTextClassification = valueColumnChanged
+          ? resetClassificationComputedValues(nextTextClassificationBase)
+          : nextTextClassificationBase;
         const secondaryLabelColumnProvided = hasOwnKey(
           updates,
           'secondaryLabelColumn'
@@ -1744,6 +1827,7 @@ export function usePrimitivePanelController({
 
         updateVisualization(
           {
+            ...originPatch,
             text: {
               ...text,
               ...(hasOwnKey(updates, 'labelColumn')

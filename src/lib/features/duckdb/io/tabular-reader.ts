@@ -13,7 +13,7 @@ import {
   generateUniqueTableName,
   registerFiles
 } from './file-registry';
-import { addRowId } from './reader-utils';
+import { addRowId, restoreNormalizedColumnNames } from './reader-utils';
 
 /**
  * Reads tabular data from a given input and creates a table in DuckDB.
@@ -152,6 +152,8 @@ export async function readTabular(
                 await runCsvImport({ ignoreErrors: true, allVarchar: true });
               }
             }
+
+            await restoreNormalizedColumnNames(ctx.connection, finalTablename);
           }
 
           if (

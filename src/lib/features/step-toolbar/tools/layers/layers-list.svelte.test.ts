@@ -9,89 +9,72 @@ vi.mock('svelte-dnd-action', () => ({
   dragHandleZone: () => ({ destroy() {} })
 }));
 
-const parentLayer: Layer = {
-  id: 'viz-1',
-  name: 'Visualisation',
-  visible: true,
-  color: '#ff0000',
-  type: 'visualization',
-  order: 0
-};
-
-const vizSubLayer: Layer = {
+const vizPrimitive: Layer = {
   id: 'viz-1::point',
-  name: 'Symboles',
+  name: 'Symboles · Visualisation',
   visible: true,
   color: '#ff0000',
   type: 'visualization',
+  kind: 'viz-primitive',
   order: 0,
   parentId: 'viz-1',
   isSubLayer: true
 };
 
-const vizSubLayerTwo: Layer = {
+const vizPrimitiveTwo: Layer = {
   id: 'viz-1::polygon',
-  name: 'Polygones',
+  name: 'Polygones · Visualisation',
   visible: true,
   color: '#00aa00',
   type: 'visualization',
+  kind: 'viz-primitive',
   order: 1,
   parentId: 'viz-1',
   isSubLayer: true
 };
 
-const basemapSubLayer: Layer = {
-  id: 'viz-1::basemap::terre',
+const basemapLayer: Layer = {
+  id: 'basemap::terre',
   name: 'Terre',
   visible: true,
   color: '#8a3800',
   type: 'geographic',
+  kind: 'basemap-aux',
   order: 2,
-  parentId: 'viz-1',
   isSubLayer: true,
   basemapLayerId: 'terre'
 };
 
 describe('layers list', () => {
-  it('should display sublayers including basemap sublayers', () => {
+  it('renders the whole flattened list including basemap rows', () => {
     render(LayersList, {
-      parentLayers: [parentLayer],
-      childLayersByParent: {
-        'viz-1': [vizSubLayer, vizSubLayerTwo, basemapSubLayer]
-      },
+      layers: [vizPrimitive, vizPrimitiveTwo, basemapLayer],
       onToggleVisibility: vi.fn(),
       onOpenSettings: vi.fn(),
-      onReorderLayers: vi.fn(),
-      onReorderSubLayers: vi.fn(),
-      reorderScope: 'visualization'
+      onReorder: vi.fn()
     });
 
-    expect(screen.getByText('Symboles')).toBeInTheDocument();
-    expect(screen.getByText('Polygones')).toBeInTheDocument();
+    expect(screen.getByText('Symboles · Visualisation')).toBeInTheDocument();
+    expect(screen.getByText('Polygones · Visualisation')).toBeInTheDocument();
     expect(screen.getByText('Terre')).toBeInTheDocument();
   });
 
-  it('should wire visibility toggle and settings callbacks', async () => {
+  it('wires visibility toggle and settings callbacks per row', async () => {
     const onToggleVisibility = vi.fn();
     const onOpenSettings = vi.fn();
 
     render(LayersList, {
-      parentLayers: [parentLayer],
-      childLayersByParent: {
-        'viz-1': [vizSubLayer]
-      },
+      layers: [vizPrimitive],
       onToggleVisibility,
       onOpenSettings,
-      onReorderLayers: vi.fn(),
-      onReorderSubLayers: vi.fn(),
-      reorderScope: 'visualization'
+      onReorder: vi.fn()
     });
 
     const hideButtons = screen.getAllByRole('button', {
       name: m.layers_hide()
     });
     await fireEvent.click(hideButtons[0]);
-    expect(onToggleVisibility).toHaveBeenCalledWith('viz-1');
+    expect(onToggleVisibility).toHaveBeenCalledWith('viz-1::point');
 
     const settingsButtons = screen.getAllByRole('button', {
       name: m.layers_settings()
@@ -100,24 +83,36 @@ describe('layers list', () => {
     expect(onOpenSettings).toHaveBeenCalledWith('viz-1::point');
   });
 
-  it('should not display arrow up/down buttons on sublayers', () => {
+  it('exposes the row context menu only for primitive·viz rows', () => {
     render(LayersList, {
-      parentLayers: [parentLayer],
-      childLayersByParent: {
-        'viz-1': [vizSubLayer, vizSubLayerTwo]
-      },
+      layers: [vizPrimitive, basemapLayer],
       onToggleVisibility: vi.fn(),
       onOpenSettings: vi.fn(),
-      onReorderLayers: vi.fn(),
-      onReorderSubLayers: vi.fn(),
-      reorderScope: 'visualization'
+      onReorder: vi.fn()
     });
 
-    expect(
-      screen.queryByRole('button', { name: m.layers_move_up() })
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: m.layers_move_down() })
-    ).not.toBeInTheDocument();
+    // One overflow menu (the primitive row), none for the basemap row.
+    const menus = screen.getAllByRole('button', { name: 'menu' });
+    expect(menus).toHaveLength(1);
+  });
+
+  it('targets the parent visualization id from the row context menu actions', async () => {
+    const onDeleteLayer = vi.fn();
+    render(LayersList, {
+      layers: [vizPrimitive],
+      onToggleVisibility: vi.fn(),
+      onOpenSettings: vi.fn(),
+      onReorder: vi.fn(),
+      onDeleteLayer
+    });
+
+    const menus = screen.getAllByRole('button', { name: 'menu' });
+    await fireEvent.click(menus[0]);
+    const deleteItem = screen.getByRole('menuitem', {
+      name: m.layers_delete()
+    });
+    await fireEvent.click(deleteItem);
+
+    expect(onDeleteLayer).toHaveBeenCalledWith('viz-1');
   });
 });

@@ -482,9 +482,7 @@ export function resolveSuggestionBehavior(
   const secondaryTextColumn = findPreferredTextColumn(dataset.columns, {
     preferred: suggestion.columns?.[1]
   });
-  const symbolPrimitiveFilters = isPolygonDataset
-    ? [PrimitiveFilterType.POINT, PrimitiveFilterType.POLYGON]
-    : [PrimitiveFilterType.POINT];
+  const symbolPrimitiveFilters: PrimitiveFilter[] = [PrimitiveFilterType.POINT];
   const textPrimitiveFilters: PrimitiveFilter[] = isPolygonDataset
     ? [PrimitiveFilterType.POLYGON]
     : [];
@@ -914,8 +912,13 @@ export function resolveSuggestionBehavior(
   return {
     visualizationType,
     primaryPrimitives: [PrimitiveFilterType.POINT],
-    supportPrimitives: isPolygonDataset ? [PrimitiveFilterType.POLYGON] : [],
-    forcedOffPrimitives: [PrimitiveFilterType.LINE, 'text', 'label'],
+    supportPrimitives: [],
+    forcedOffPrimitives: [
+      PrimitiveFilterType.POLYGON,
+      PrimitiveFilterType.LINE,
+      'text',
+      'label'
+    ],
     primitiveFilters: symbolPrimitiveFilters,
     mapping: buildClearedMapping(preset.mapping.geometryColumn, {
       valueColumn: symbolValueColumn,
@@ -1007,9 +1010,9 @@ export function resolveSuggestionBehavior(
       fillClassification: symbolFillClassification,
       missingData: preset.missingData
     },
-    ...(isPolygonDataset
-      ? { polygon: buildSupportPolygonConfig(preset, visualization) }
-      : {}),
+    polygon: {
+      enabled: false
+    },
     line: {
       enabled: false
     },

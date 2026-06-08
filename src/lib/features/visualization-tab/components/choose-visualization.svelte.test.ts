@@ -53,4 +53,12 @@ describe('ChooseVisualization', () => {
       'visualizationStore.updateVisualization(id, { name: trimmed });'
     );
   });
+
+  it('hides generated facet visualizations from the editable list', () => {
+    expect(source).toContain('function getEditableVisualizationsByDataset');
+    expect(source).toContain(
+      '.filter((visualization) => !visualization.facet);'
+    );
+    expect(source).toContain('return getEditableVisualizationsByDataset');
+  });
 });

@@ -1,5 +1,10 @@
 import { m } from '$lib/paraglide/messages.js';
-import type { VisualizationConfig } from '../stores/visualization.store.svelte';
+import {
+  PrimitiveFilterType,
+  type PrimitiveConfigKind,
+  type PrimitiveFilter,
+  type VisualizationConfig
+} from '../stores/visualization.store.svelte';
 import { datasetsStore } from '../stores/datasets.store.svelte';
 import { deepClone } from '../utils/clone.utils';
 import {
@@ -326,6 +331,47 @@ function buildFacetClassification(
   };
 }
 
+// A facet slot path is `<primitiveKind>.<column>` (e.g. `polygon.valueColumn`),
+// so its leading segment is exactly a PrimitiveConfigKind. This map keeps that
+// link explicit and exhaustive (TS enforces every kind is mapped). It is built
+// lazily, not at module load: PrimitiveFilterType lives in the visualization
+// store, which is part of an import cycle with this module, so reading the enum
+// at evaluation time would see it still undefined.
+let facetPrimitiveBySlotKind: Record<
+  PrimitiveConfigKind,
+  PrimitiveFilter
+> | null = null;
+
+function getFacetPrimitiveBySlotKind(): Record<
+  PrimitiveConfigKind,
+  PrimitiveFilter
+> {
+  facetPrimitiveBySlotKind ??= {
+    symbol: PrimitiveFilterType.POINT,
+    polygon: PrimitiveFilterType.POLYGON,
+    line: PrimitiveFilterType.LINE,
+    text: PrimitiveFilterType.TEXT
+  };
+  return facetPrimitiveBySlotKind;
+}
+
+function isPrimitiveConfigKind(value: string): value is PrimitiveConfigKind {
+  return value in getFacetPrimitiveBySlotKind();
+}
+
+/**
+ * Maps a facet slot path to the single primitive it drives, so a collection
+ * keeps only the facetted primitive and hides the others (issue #177 bridage).
+ */
+export function resolveFacetPrimitiveFilter(
+  slotPath: FacetSlotPath
+): PrimitiveFilter {
+  const [kind] = slotPath.split('.');
+  return isPrimitiveConfigKind(kind)
+    ? getFacetPrimitiveBySlotKind()[kind]
+    : PrimitiveFilterType.POLYGON;
+}
+
 export function buildFacetVisualizationUpdates({
   baseViz,
   visualization,
@@ -363,6 +409,7 @@ export function buildFacetVisualizationUpdates({
     polygon: nextVisualization.polygon,
     line: nextVisualization.line,
     text: nextVisualization.text,
+    primitiveFilters: [resolveFacetPrimitiveFilter(primarySlotPath)],
     facet: {
       baseVisualizationId: baseViz.id
     }

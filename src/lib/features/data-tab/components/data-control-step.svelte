@@ -22,6 +22,7 @@
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
   import { Duck } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+  import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
   import * as m from '$lib/paraglide/messages';
   import {
     DataTableSkeleton,
@@ -352,7 +353,14 @@
       throw new Error(m.csv_error_file_not_available());
     }
 
+    const previousOptions = currentCsvOptions;
+
     try {
+      const previousColumns = await Duck.describe_table(currentDuckTable);
+      const previousDataColumnCount = previousColumns.name.filter(
+        (name) => name !== INTERNAL_COLUMN.ID
+      ).length;
+
       await Duck.read_tabular(file, {
         tablename: currentDuckTable,
         header: options.header,
@@ -362,6 +370,29 @@
       });
 
       Duck.invalidateTableCache(currentDuckTable);
+
+      // A wrong delimiter can collapse a multi-column CSV into a single column.
+      // Propagating that degenerate shape to the reactive store loops the join
+      // effects and freezes the UI, so roll back to the previous options and
+      // warn instead of applying it. (normalize_names rewrites the unsplit
+      // delimiter inside the column name, so detect it by column count.)
+      const reimportedColumns = await Duck.describe_table(currentDuckTable);
+      const reimportedDataColumnCount = reimportedColumns.name.filter(
+        (name) => name !== INTERNAL_COLUMN.ID
+      ).length;
+      if (reimportedDataColumnCount === 1 && previousDataColumnCount > 1) {
+        await Duck.read_tabular(file, {
+          tablename: currentDuckTable,
+          header: previousOptions.header,
+          decimal_separator: previousOptions.decimalSeparator,
+          thousands_separator: previousOptions.thousandsSeparator,
+          delimiter: previousOptions.delimiter
+        });
+        Duck.invalidateTableCache(currentDuckTable);
+        showWarning(m.csv_warning_delimiter_collapsed(), '');
+        return;
+      }
+
       await normalizeFormattedNumericColumns(currentDuckTable, Duck);
       Duck.invalidateTableCache(currentDuckTable);
 
@@ -370,6 +401,26 @@
 
       if (newRowCount === 0) {
         showWarning(m.csv_warning_empty_after_reimport(), '');
+      }
+
+      // A re-import can drop the column the geolocation/join is bound to (e.g. a
+      // delimiter change collapsing the table to a single column). The join
+      // effects only guard against an empty linked variable, so a stale name
+      // pointing at a now-missing column makes them recompute the join forever
+      // and freeze the UI. Reset the geolocation when its column disappeared.
+      const reimportedColumnNames = new Set(
+        (snapshot?.enrichedColumns ?? []).map((col) => col.name)
+      );
+      const activeLinkedVariable = dataTabState.geolocation.linkedVariableName;
+      if (
+        activeLinkedVariable &&
+        !reimportedColumnNames.has(activeLinkedVariable)
+      ) {
+        dataTabActions.setGeolocationState({
+          linkedVariable: null,
+          linkedVariableName: ''
+        });
+        dataTabActions.clearJoinStats();
       }
 
       datasetsStore.updateDatasetCsvOptions(selectedDataset.id, {

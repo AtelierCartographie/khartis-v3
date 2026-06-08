@@ -76,11 +76,7 @@ export function resolveComputedClassCount(
     requestedClassCount
   );
 
-  if (
-    normalizedMethod === CLASSIFICATION_METHOD.HEAD_TAIL &&
-    Number.isFinite(actualClassCount) &&
-    actualClassCount >= 2
-  ) {
+  if (Number.isFinite(actualClassCount) && actualClassCount >= 2) {
     return Math.min(safeRequested, Math.floor(actualClassCount));
   }
 

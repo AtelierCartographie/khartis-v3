@@ -89,9 +89,9 @@ export function resolveDisplayedSuggestionKey({
   originMode
 }: ResolveDisplayedSuggestionKeyOptions): string | undefined {
   if (selectedSuggestionKey) return selectedSuggestionKey;
-  if (persistedSuggestionKey) return persistedSuggestionKey;
   if (originMode === 'manual-blank' || originMode === 'custom') {
     return undefined;
   }
+  if (persistedSuggestionKey) return persistedSuggestionKey;
   return matchedSuggestionKey;
 }
