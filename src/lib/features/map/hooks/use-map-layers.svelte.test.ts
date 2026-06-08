@@ -187,10 +187,19 @@ describe('useMapLayers source', () => {
   it('filters split representative point tables through the joined dataset rows', () => {
     expect(source).toContain('function filterSplitGeometryTableByDatasetRows(');
     expect(source).toContain(
+      'function filterRepresentativePointTableByPrimitive('
+    );
+    expect(source).toContain(
       'const dataFilteredDataset = filterArrowTableByDataFilters(\n      split.dataset,'
     );
     expect(source).toContain(
-      'filterSplitGeometryTableByDatasetRows(\n                    representativePointBaseTable,\n                    split,\n                    viz.dataFilters,\n                    PrimitiveFilterType.POINT'
+      'filterRepresentativePointTableByPrimitive(\n                  representativePointBaseTable,\n                  split,\n                  viz.dataFilters,\n                  PrimitiveFilterType.POINT,'
+    );
+    expect(source).toContain(
+      'filterRepresentativePointTableByPrimitive(\n                  representativePointBaseTable,\n                  split,\n                  viz.dataFilters,\n                  PrimitiveFilterType.TEXT,'
+    );
+    expect(source).toContain(
+      'ctx.textRepresentativePointTable =\n                filteredTextRepresentativePointTable;'
     );
     expect(source).toContain(
       'getSplitMatchedGeometryRowIndices(\n      matchedGeometryTable,\n      filteredDataset,'
@@ -217,19 +226,19 @@ describe('useMapLayers source', () => {
     );
   });
 
-  it('applies simplified projection preview by masking visualization and fallback layers', () => {
+  it('keeps active visualizations while simplified projection preview masks fallback layers', () => {
     expect(source).toContain('const shouldUseSimplifiedProjectionPreview =');
     expect(source).toContain(
       'computeSimplifiedProjectionPreview(isOrthographicMode, projectionState)'
     );
     expect(source).toContain(
-      'const visualizationsToRender = shouldUseSimplifiedProjectionPreview\n        ? []'
+      'const visualizationsToRender =\n        getVisualizationRenderOrder(activeVisualizations);'
     );
     expect(source).toContain(
       '(getShouldRenderDatasetFallbacks?.() ?? false) &&\n        !shouldUseSimplifiedProjectionPreview'
     );
     expect(source).toContain(
-      'const hasExpectedActiveViz =\n        !shouldUseSimplifiedProjectionPreview &&\n        activeVisualizations.length > 0;'
+      'const hasExpectedActiveViz = activeVisualizations.length > 0;'
     );
   });
 

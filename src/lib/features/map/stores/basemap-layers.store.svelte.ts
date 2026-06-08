@@ -167,7 +167,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
     id: 'mers',
     visible: true,
-    color: '#e0e0e0',
+    color: '#ffffff',
     opacity: 100
   },
   {
@@ -373,21 +373,42 @@ function normalizeSerializedLayers(
     return cloneDefaults();
   }
 
-  return DEFAULT_LAYERS.map((defaults) => {
-    const candidate = layers.find((layer) => layer?.id === defaults.id);
+  const defaultsById = new Map(
+    DEFAULT_LAYERS.map((layer) => [layer.id, layer] as const)
+  );
+  const normalizedLayers = new Map<BasemapLayerId, BasemapLayerConfig>();
 
-    if (defaults.id === 'meridiens') {
-      return normalizeLegacyMeridiensConfig(
-        defaults,
-        candidate as LegacyMeridiensLayerConfig | undefined
-      );
+  for (const candidate of layers) {
+    const defaults = defaultsById.get(candidate?.id);
+    if (!defaults || normalizedLayers.has(defaults.id)) {
+      continue;
     }
 
-    return mergeLayerWithDefaults(
-      defaults,
-      candidate as Partial<typeof defaults> | undefined
+    if (defaults.id === 'meridiens') {
+      normalizedLayers.set(
+        defaults.id,
+        normalizeLegacyMeridiensConfig(
+          defaults,
+          candidate as LegacyMeridiensLayerConfig | undefined
+        )
+      );
+      continue;
+    }
+
+    normalizedLayers.set(
+      defaults.id,
+      mergeLayerWithDefaults(
+        defaults,
+        candidate as Partial<typeof defaults> | undefined
+      )
     );
-  });
+  }
+
+  const missingLayers = DEFAULT_LAYERS.filter(
+    (defaults) => !normalizedLayers.has(defaults.id)
+  ).map((defaults) => deepClone(defaults));
+
+  return [...Array.from(normalizedLayers.values()), ...missingLayers];
 }
 
 interface BasemapLayersState {

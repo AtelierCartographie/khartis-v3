@@ -509,6 +509,37 @@ export function getRepresentativePointSource(
   };
 }
 
+function getTextRepresentativePointSource(
+  ctx: LayerContext
+): { table: ArrowTable; geometryInfo: GeometryInfo } | null {
+  const representativePointTable =
+    ctx.textRepresentativePointTable ?? ctx.representativePointTable;
+  if (!representativePointTable) {
+    return null;
+  }
+
+  const geometryInfo =
+    (ctx.textRepresentativePointTable
+      ? ctx.textRepresentativePointGeometryInfo
+      : ctx.representativePointGeometryInfo) ??
+    extractGeometryInfo(representativePointTable);
+  if (!geometryInfo) {
+    return null;
+  }
+
+  if (
+    geometryInfo.type !== GeometryType.POINT &&
+    geometryInfo.type !== GeometryType.MULTIPOINT
+  ) {
+    return null;
+  }
+
+  return {
+    table: representativePointTable,
+    geometryInfo
+  };
+}
+
 function requiresRepresentativePointSource(
   geometryType: GeometryInfo['type'] | GeometryType | undefined
 ): boolean {
@@ -2696,7 +2727,7 @@ function createTextOverlayLayers(
     (geometryInfo.encoding && geometryInfo.encoding.startsWith('geoarrow.'));
   let textLayerData: TextLayerDatum[] | null = null;
   let secondaryLabelLayerData: TextLayerDatum[] | null = null;
-  const representativePointSource = getRepresentativePointSource(ctx);
+  const representativePointSource = getTextRepresentativePointSource(ctx);
   const textPointSource =
     representativePointSource ??
     (geometryInfo.type === GeometryType.POINT

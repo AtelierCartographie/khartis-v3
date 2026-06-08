@@ -391,6 +391,10 @@ describe('basemap projection fallbacks', () => {
     expect(layer).toBeInstanceOf(GeoJsonLayer);
     expect(layer?.props.id).toContain('basemap-mers');
     expect(layer?.props.getFillColor).toEqual([18, 52, 86, 64]);
+    expect(layer?.props.parameters).toMatchObject({
+      depthCompare: 'always',
+      depthWriteEnabled: false
+    });
     expect(layer?.props.updateTriggers).toEqual({
       getFillColor: ['#123456', 25]
     });
@@ -422,6 +426,10 @@ describe('basemap projection fallbacks', () => {
     expect(layer).toBeInstanceOf(SolidPolygonLayer);
     expect(layer?.props.coordinateSystem).toBe(COORDINATE_SYSTEM.CARTESIAN);
     expect(layer?.props.getFillColor).toEqual([0, 109, 255, 255]);
+    expect(layer?.props.parameters).toMatchObject({
+      depthCompare: 'always',
+      depthWriteEnabled: false
+    });
     const polygonData = layer?.props.data as
       | {
           length: number;
@@ -516,6 +524,10 @@ describe('basemap projection fallbacks', () => {
 
     expect(layer).toBeInstanceOf(GeoJsonLayer);
     expect(layer?.props.coordinateSystem).toBe(COORDINATE_SYSTEM.CARTESIAN);
+    expect(layer?.props.parameters).toMatchObject({
+      depthCompare: 'always',
+      depthWriteEnabled: false
+    });
     expect(data?.features).toHaveLength(1);
     expect(coordinates).toEqual([
       [0, 0],
@@ -1273,6 +1285,34 @@ describe('basemap projection fallbacks', () => {
     expect(layer?.spacingDegrees).toBe(15);
     expect(layer?.color).toBe('#123456');
     expect('remarquables' in (layer ?? {})).toBe(false);
+  });
+
+  it('preserves serialized basemap layer order while restoring', () => {
+    const meridiens = basemapLayersStore.getLayer(BASEMAP_LAYER_ID.MERIDIENS);
+    const equateur = basemapLayersStore.getLayer(BASEMAP_LAYER_ID.EQUATEUR);
+
+    if (!meridiens || !equateur) {
+      throw new Error('Expected default foreground basemap layers');
+    }
+
+    basemapLayersStore.restoreFromSerialized([
+      {
+        ...meridiens,
+        visible: true
+      },
+      {
+        ...equateur,
+        visible: true
+      }
+    ]);
+
+    expect(
+      basemapLayersStore.layers.map((layer) => layer.id).slice(0, 2)
+    ).toEqual([BASEMAP_LAYER_ID.MERIDIENS, BASEMAP_LAYER_ID.EQUATEUR]);
+    expect(
+      basemapLayersStore.getLayer(BASEMAP_LAYER_ID.MERIDIENS)?.visible
+    ).toBe(true);
+    expect(basemapLayersStore.layers).toHaveLength(10);
   });
 
   it('falls back to the default meridiens mode when serialized mode is invalid', () => {

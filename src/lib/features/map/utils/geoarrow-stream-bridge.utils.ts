@@ -231,6 +231,82 @@ function isWithinBounds(lon: number, lat: number, bounds: GeoBounds): boolean {
   );
 }
 
+// Sutherland-Hodgman clip of a polygon ring against an axis-aligned lon/lat
+// rectangle (bounds = [west, south, east, north]). Routing a composite ring to
+// a sub-projection by merely *dropping* out-of-bounds points reconnects the
+// surviving points straight across the gap, producing a degenerate fan/triangle
+// (the grey wedge that swallowed the sea and the UK on the NUTS basemap). Real
+// clipping inserts the boundary-intersection vertices so the ring follows the
+// rectangle edge instead of cutting across it.
+function clipRingToBounds(
+  ring: readonly [number, number][],
+  bounds: GeoBounds
+): [number, number][] {
+  if (ring.length < 3) {
+    return [];
+  }
+  const [west, south, east, north] = bounds;
+
+  type Edge = {
+    inside: (p: [number, number]) => boolean;
+    intersect: (a: [number, number], b: [number, number]) => [number, number];
+  };
+  const edges: Edge[] = [
+    {
+      inside: (p) => p[0] >= west,
+      intersect: (a, b) => {
+        const t = (west - a[0]) / (b[0] - a[0]);
+        return [west, a[1] + t * (b[1] - a[1])];
+      }
+    },
+    {
+      inside: (p) => p[0] <= east,
+      intersect: (a, b) => {
+        const t = (east - a[0]) / (b[0] - a[0]);
+        return [east, a[1] + t * (b[1] - a[1])];
+      }
+    },
+    {
+      inside: (p) => p[1] >= south,
+      intersect: (a, b) => {
+        const t = (south - a[1]) / (b[1] - a[1]);
+        return [a[0] + t * (b[0] - a[0]), south];
+      }
+    },
+    {
+      inside: (p) => p[1] <= north,
+      intersect: (a, b) => {
+        const t = (north - a[1]) / (b[1] - a[1]);
+        return [a[0] + t * (b[0] - a[0]), north];
+      }
+    }
+  ];
+
+  let output: [number, number][] = [...ring];
+  for (const edge of edges) {
+    if (output.length === 0) {
+      return [];
+    }
+    const input = output;
+    output = [];
+    for (let i = 0; i < input.length; i++) {
+      const current = input[i];
+      const previous = input[(i + input.length - 1) % input.length];
+      const currentInside = edge.inside(current);
+      const previousInside = edge.inside(previous);
+      if (currentInside) {
+        if (!previousInside) {
+          output.push(edge.intersect(previous, current));
+        }
+        output.push(current);
+      } else if (previousInside) {
+        output.push(edge.intersect(previous, current));
+      }
+    }
+  }
+  return output.filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+}
+
 function hasCompositeSubProjections(
   projection: ProjectionLike
 ): projection is CompositeProjectionLike {
@@ -257,16 +333,26 @@ function withGeographicBoundsRouting(
     const entries = projection.getSubProjections();
     const streams = entries.map((entry) => entry.projection.stream(sink));
 
-    let ringBuffers: [number, number][][] | null = null;
+    // Collect the FULL ring, then route to each sub-projection: polygon rings
+    // are Sutherland-Hodgman clipped to the sub-projection bounds (so they hug
+    // the inset edge instead of fanning across it — fixes the grey wedge), while
+    // open line strings keep the cheap in-bounds point filter.
+    let ringBuffer: [number, number][] | null = null;
+    let inPolygon = false;
+
+    const emitRing = (index: number, points: [number, number][]): void => {
+      if (points.length < 2) return;
+      streams[index].lineStart();
+      for (const [lon, lat] of points) {
+        streams[index].point(lon, lat);
+      }
+      streams[index].lineEnd();
+    };
 
     cachedStream = {
       point(lon: number, lat: number): void {
-        if (ringBuffers) {
-          for (let index = 0; index < entries.length; index++) {
-            if (isWithinBounds(lon, lat, entries[index].bounds)) {
-              ringBuffers[index].push([lon, lat]);
-            }
-          }
+        if (ringBuffer) {
+          ringBuffer.push([lon, lat]);
         } else {
           for (let index = 0; index < entries.length; index++) {
             if (isWithinBounds(lon, lat, entries[index].bounds)) {
@@ -281,28 +367,37 @@ function withGeographicBoundsRouting(
         }
       },
       lineStart(): void {
-        ringBuffers = entries.map(() => []);
+        ringBuffer = [];
       },
       lineEnd(): void {
-        if (!ringBuffers) return;
+        if (!ringBuffer) return;
+        const ring = ringBuffer;
+        ringBuffer = null;
         for (let index = 0; index < streams.length; index++) {
-          const points = ringBuffers[index];
-          if (points.length > 0) {
-            streams[index].lineStart();
-            for (const [lon, lat] of points) {
-              streams[index].point(lon, lat);
-            }
-            streams[index].lineEnd();
+          const bounds = entries[index].bounds;
+          // Only route the ring to a sub-projection it actually touches. A ring
+          // that merely *encloses* a distant inset's bounds (e.g. the mainland
+          // outline around a DOM-TOM box) has no vertex inside it; clipping such
+          // a ring would emit the bounds rectangle as a spurious filled box (the
+          // grey square that appeared next to Spain). Requiring a vertex inside
+          // keeps real coastlines while dropping the enclosing-only case.
+          if (!ring.some(([lon, lat]) => isWithinBounds(lon, lat, bounds))) {
+            continue;
           }
+          const points = inPolygon
+            ? clipRingToBounds(ring, bounds)
+            : ring.filter(([lon, lat]) => isWithinBounds(lon, lat, bounds));
+          emitRing(index, points);
         }
-        ringBuffers = null;
       },
       polygonStart(): void {
+        inPolygon = true;
         for (const stream of streams) {
           stream.polygonStart();
         }
       },
       polygonEnd(): void {
+        inPolygon = false;
         for (const stream of streams) {
           stream.polygonEnd();
         }

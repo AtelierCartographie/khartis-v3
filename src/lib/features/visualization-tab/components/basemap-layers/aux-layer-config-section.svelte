@@ -13,7 +13,13 @@
     type BasemapLayerId
   } from '$lib/features/map/stores/basemap-layers.store.svelte';
   import { basemapAuxLayersStore } from '$lib/features/map/stores/basemap-aux-layers.store.svelte';
-  import { BasemapGraticuleMode } from '$lib/features/commons/constants/visualization.constants';
+  import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+  import {
+    BasemapGraticuleMode,
+    type BasemapDottedPattern
+  } from '$lib/features/commons/constants/visualization.constants';
+  import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
+  import { webglToHex } from '$lib/features/commons/utils/color-utils';
   import type { BasemapLayer } from '$lib/features/map/types/basemap.types';
 
   interface Props {
@@ -73,6 +79,110 @@
     void basemapAuxLayersStore.version;
     return isVisible();
   });
+
+  // Some basemaps expose several sections mapped to a single legacy config:
+  // multiple `land` layers (NUTS territory + surrounding land → `terre`) or
+  // several nested `limit` levels (NUTS 3/2/1 → `frontieres`). Styling them
+  // through that shared config couples their sliders and loses each level's
+  // designed style. Land and limit sections therefore keep their own per-file
+  // style override (in the aux store); the style preset is the default and the
+  // shared config the fallback.
+  const isLandLayer = $derived(
+    legacyId === 'terre' && layer.type === BasemapLayerType.LAND
+  );
+  const isLimitLayer = $derived(
+    legacyId === 'frontieres' && layer.type === BasemapLayerType.LIMIT
+  );
+
+  const perFileStyleOverride = $derived.by<Record<string, unknown>>(() => {
+    void basemapAuxLayersStore.version;
+    return isLandLayer || isLimitLayer
+      ? (basemapAuxLayersStore.getStyle(basemapFile, renderKey) ?? {})
+      : {};
+  });
+
+  function getPresetLandFillColor(): string | undefined {
+    const presets = basemapService.stylePresets;
+    if (!layer.style || !presets) return undefined;
+    const preset = presets[layer.style];
+    if (preset?.layer_type !== 'solid-polygon') return undefined;
+    const [r, g, b, a] = preset.fillColor;
+    return webglToHex([r, g, b, a ?? 255]);
+  }
+
+  function getPresetPathStyle(): { color?: string; width?: number } {
+    const presets = basemapService.stylePresets;
+    if (!layer.style || !presets) return {};
+    const preset = presets[layer.style];
+    if (preset?.layer_type !== 'path') return {};
+    const [r, g, b, a] = preset.color;
+    return { color: webglToHex([r, g, b, a ?? 255]), width: preset.width };
+  }
+
+  function pickString(
+    value: unknown,
+    fallback: string | undefined
+  ): string | undefined {
+    return typeof value === 'string' && value.length > 0 ? value : fallback;
+  }
+  function pickNumber(
+    value: unknown,
+    fallback: number | undefined
+  ): number | undefined {
+    return typeof value === 'number' && Number.isFinite(value)
+      ? value
+      : fallback;
+  }
+  function pickBoolean(
+    value: unknown,
+    fallback: boolean | undefined
+  ): boolean | undefined {
+    return typeof value === 'boolean' ? value : fallback;
+  }
+
+  const landConfig = $derived.by(() => {
+    const base = getConfig('terre');
+    const override = perFileStyleOverride;
+    return {
+      fillColor:
+        pickString(override.fillColor, getPresetLandFillColor()) ??
+        base?.fillColor,
+      fillShadow: pickBoolean(override.fillShadow, base?.fillShadow),
+      fillOpacity: pickNumber(override.fillOpacity, base?.fillOpacity),
+      strokeColor: pickString(override.strokeColor, base?.strokeColor),
+      strokeDotted: pickBoolean(override.strokeDotted, base?.strokeDotted),
+      strokeDottedPattern:
+        (override.strokeDottedPattern as BasemapDottedPattern | undefined) ??
+        base?.strokeDottedPattern,
+      strokeThickness: pickNumber(
+        override.strokeThickness,
+        base?.strokeThickness
+      ),
+      strokeOpacity: pickNumber(override.strokeOpacity, base?.strokeOpacity)
+    };
+  });
+
+  const limitConfig = $derived.by(() => {
+    const base = getConfig('frontieres');
+    const override = perFileStyleOverride;
+    const preset = getPresetPathStyle();
+    return {
+      color: pickString(override.color, preset.color ?? base?.color),
+      dotted: pickBoolean(override.dotted, base?.dotted),
+      dottedPattern:
+        (override.dottedPattern as BasemapDottedPattern | undefined) ??
+        base?.dottedPattern,
+      thickness: pickNumber(
+        override.thickness,
+        preset.width ?? base?.thickness
+      ),
+      opacity: pickNumber(override.opacity, base?.opacity)
+    };
+  });
+
+  function handlePerFileStyleChange(updates: Record<string, unknown>): void {
+    basemapAuxLayersStore.updateStyle(basemapFile, renderKey, updates);
+  }
 
   function syncGraticuleCompanions(checked: boolean): void {
     basemapLayersStore.setLayerVisibility('meridiens', checked);
@@ -154,28 +264,36 @@
   onToggleChange={handleToggle}
 >
   {#if legacyId === 'terre'}
+    {@const terreView = isLandLayer ? landConfig : getConfig('terre')}
     <LayerConfigTerre
-      fillColor={getConfig('terre')?.fillColor}
-      fillShadow={getConfig('terre')?.fillShadow}
-      fillOpacity={getConfig('terre')?.fillOpacity}
-      strokeColor={getConfig('terre')?.strokeColor}
-      strokeDotted={getConfig('terre')?.strokeDotted}
-      strokeDottedPattern={getConfig('terre')?.strokeDottedPattern}
-      strokeThickness={getConfig('terre')?.strokeThickness}
-      strokeOpacity={getConfig('terre')?.strokeOpacity}
-      onchange={(updates) => handleLayerChange('terre', updates)}
+      fillColor={terreView?.fillColor}
+      fillShadow={terreView?.fillShadow}
+      fillOpacity={terreView?.fillOpacity}
+      strokeColor={terreView?.strokeColor}
+      strokeDotted={terreView?.strokeDotted}
+      strokeDottedPattern={terreView?.strokeDottedPattern}
+      strokeThickness={terreView?.strokeThickness}
+      strokeOpacity={terreView?.strokeOpacity}
+      onchange={(updates) =>
+        isLandLayer
+          ? handlePerFileStyleChange(updates)
+          : handleLayerChange('terre', updates)}
     />
   {:else if legacyId === 'frontieres'}
+    {@const limitView = isLimitLayer ? limitConfig : getConfig('frontieres')}
     <LayerConfigSimple
       showColor={true}
       showDotted={true}
       showThickness={true}
-      color={getConfig('frontieres')?.color}
-      dotted={getConfig('frontieres')?.dotted}
-      dottedPattern={getConfig('frontieres')?.dottedPattern}
-      thickness={getConfig('frontieres')?.thickness}
-      opacity={getConfig('frontieres')?.opacity}
-      onchange={(updates) => handleLayerChange('frontieres', updates)}
+      color={limitView?.color}
+      dotted={limitView?.dotted}
+      dottedPattern={limitView?.dottedPattern}
+      thickness={limitView?.thickness}
+      opacity={limitView?.opacity}
+      onchange={(updates) =>
+        isLimitLayer
+          ? handlePerFileStyleChange(updates)
+          : handleLayerChange('frontieres', updates)}
     />
   {:else if legacyId === 'meridiens'}
     <LayerConfigMeridiens
