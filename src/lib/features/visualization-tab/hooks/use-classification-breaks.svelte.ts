@@ -359,7 +359,13 @@ export async function computeClassificationBreaks(
   const breakpointUpperClassCount =
     requestedClassCount - breakpointLowerClassCount;
 
-  const result: BreaksResult =
+  const usedDiverging =
+    storeMethod !== ClassificationMethod.MANUAL &&
+    breakpointValue != null &&
+    Number.isFinite(breakpointValue) &&
+    breakpointUpperClassCount > 0;
+
+  let result: BreaksResult | null =
     storeMethod === ClassificationMethod.MANUAL
       ? await computeManualBreaks({
           datasetSourceFileId: options.datasetSourceFileId,
@@ -367,14 +373,12 @@ export async function computeClassificationBreaks(
           requestedClassCount,
           breakValues: options.breakValues ?? classification?.breaks ?? []
         })
-      : breakpointValue != null &&
-          Number.isFinite(breakpointValue) &&
-          breakpointUpperClassCount > 0
+      : usedDiverging
         ? await calculateDivergingBreaks({
             datasetId: options.datasetSourceFileId,
             columnName: options.valueColumn,
             method: storeMethod,
-            breakpointValue,
+            breakpointValue: breakpointValue as number,
             lowerClassCount: breakpointLowerClassCount,
             upperClassCount: breakpointUpperClassCount
           })
@@ -384,6 +388,22 @@ export async function computeClassificationBreaks(
             method: storeMethod,
             numClasses: requestedClassCount
           });
+
+  // A diverging split fails when one side of the auto-detected pivot has too
+  // few distinct values for its class count (common on zero-crossing columns
+  // like a growth rate). Rather than leave the polygons grey, fall back to a
+  // plain sequential discretization so the choropleth still renders.
+  if (!result && usedDiverging) {
+    breakpointValue = undefined;
+    autoBreakpointApplied = false;
+    autoBreakpointCleared = true;
+    result = await calculateBreaks({
+      datasetId: options.datasetSourceFileId,
+      columnName: options.valueColumn,
+      method: storeMethod,
+      numClasses: requestedClassCount
+    });
+  }
 
   if (!result) {
     return null;

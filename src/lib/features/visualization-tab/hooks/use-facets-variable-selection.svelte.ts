@@ -85,7 +85,8 @@ export function useFacetsVariableSelection({
   async function toggle(
     baseVariableName: string,
     slotPath: FacetSlotPath | undefined,
-    enabled: boolean
+    enabled: boolean,
+    seedFieldIds?: number[]
   ): Promise<void> {
     const visualizationId = getVisualizationId();
     if (!visualizationId || !slotPath) {
@@ -94,6 +95,16 @@ export function useFacetsVariableSelection({
 
     if (!enabled) {
       facetsStore.disable();
+      return;
+    }
+
+    const seedFieldNames = seedFieldIds ? getFieldNames(seedFieldIds) : [];
+    if (seedFieldNames.length >= 2) {
+      const merged =
+        baseVariableName && !seedFieldNames.includes(baseVariableName)
+          ? [baseVariableName, ...seedFieldNames]
+          : seedFieldNames;
+      await facetsStore.updateVariables(visualizationId, merged, slotPath);
       return;
     }
 

@@ -401,11 +401,12 @@
     );
   }
 
-  async function handleFacetsToggle(enabled: boolean) {
+  async function handleFacetsToggle(enabled: boolean, fieldIds?: number[]) {
     await facetsSelection.toggle(
       categoryColumnName,
       FACET_SLOT.SYMBOL_CATEGORY,
-      enabled
+      enabled,
+      fieldIds
     );
   }
 </script>
