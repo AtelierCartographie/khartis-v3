@@ -218,7 +218,7 @@ export async function importProject(
 
     container._state.currentProject = project;
     beginProjectRuntime(project.id);
-    resetProjectRuntimeState();
+    resetProjectRuntimeState({ resetPersistence: false });
     container._state.isDirty = false;
     container._state.lastSaved = new Date();
     resetHistory(container);

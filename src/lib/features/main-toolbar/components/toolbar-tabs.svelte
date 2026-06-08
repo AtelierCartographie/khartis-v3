@@ -396,10 +396,11 @@
   let fileToDelete = $state<{ id: string; name: string } | null>(null);
 
   const vizTabs = $derived.by(() => {
-    const vizs = visualizationStore.visualizations;
+    const vizs = visualizationStore.visualizations.filter((viz) => !viz.facet);
     return vizs.map((viz, idx) => ({
       id: viz.id,
       label: m.viz_tab_label({ number: idx + 1 }),
+      shortLabel: String(idx + 1),
       isSelected: visualizationStore.selectedVisualization?.id === viz.id
     }));
   });
@@ -473,10 +474,11 @@
             on:click={() => visualizationStore.selectVisualization(vizTab.id)}
             class="tab-button"
             title={vizTab.label}
+            aria-label={vizTab.label}
           >
             <div class="tab-content">
               <span class="tab-label">
-                {vizTab.label}
+                {vizTab.shortLabel}
               </span>
             </div>
           </Button>
