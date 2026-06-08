@@ -124,7 +124,6 @@
     "@sqlite.org/sqlite-wasm": "3.53.0-build1",
     "@uwdata/flechette": "^2.5.0",
     "apache-arrow": "^21.1.0",
-    "carbon-components": "10.58.15",
     "carbon-components-svelte": "^0.108.1",
     "carbon-icons-svelte": "^13.12.0",
     "clsx": "^2.1.1",
