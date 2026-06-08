@@ -124,6 +124,19 @@ describe('ThematicMap source', () => {
     expect(helperSource).not.toContain('!basemapStyleStore.referenceBasemapId');
   });
 
+  it('refreshes projection references without refitting the viewport on parameter changes', () => {
+    expect(source).toContain('options: { fitViewport?: boolean } = {}');
+    expect(source).toContain(
+      'const shouldFitViewport = options.fitViewport ?? true;'
+    );
+    expect(source).toContain(
+      "syncOrthographicViewportAfterViewModeSwitch('projection', {\n          fitViewport: false\n        })"
+    );
+    expect(source).toContain(
+      "scheduleLayerUpdate('effect:projectionRenderTrigger')"
+    );
+  });
+
   it('invalidates Deck layers when visualization data filters change', () => {
     expect(source).toContain('const visualizationDataFiltersVersion');
     expect(source).toContain('void visualizationStore.version;');

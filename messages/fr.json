@@ -968,6 +968,7 @@
   "geo_scale_bar_aria": "Barre d'échelle",
   "geo_north_indicator_aria": "Indicateur de nord",
   "zoom_reset_title": "Niveau de zoom\nRaccourcis : Ctrl/Cmd + Plus/Moins pour zoomer, Ctrl/Cmd + 0 pour réinitialiser, Alt + Z pour changer de mode",
+  "zoom_reset": "Réinitialiser le zoom",
   "zoom_value_input_label": "Niveau de zoom",
   "zoom_in": "Zoom avant",
   "zoom_out": "Zoom arrière",

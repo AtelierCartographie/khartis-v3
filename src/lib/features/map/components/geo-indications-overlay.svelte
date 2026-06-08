@@ -44,7 +44,7 @@
     SCALE_MAX_WIDTH_PX,
     toDistanceMeters
   } from '$lib/features/step-toolbar/tools/geo-indications';
-  import { onDestroy, onMount, tick, untrack } from 'svelte';
+  import { onDestroy, tick, untrack } from 'svelte';
   import * as d3geo from 'd3-geo';
   import type { GeoPermissibleObjects, GeoProjection } from 'd3-geo';
   import type {
@@ -137,51 +137,41 @@
 
   let worldFeatures = $state<WorldFeatureCollection | null>(null);
   let mapViewRevision = $state(0);
+  let worldFeaturesLoadStarted = false;
+  let worldFeaturesLoadGeneration = 0;
 
-  onMount(() => {
-    let cancelled = false;
-
-    const loadWorldFeatures = async (): Promise<void> => {
-      try {
-        await duckDBOrchestrator.waitForInitialization();
-        const response = await fetch(
-          resolveStaticAssetUrl(INSET_MAP_DATA_PATH)
-        );
-        if (!response.ok) {
-          return;
-        }
-
-        const arrayBuffer = await response.arrayBuffer();
-        const arrowTable = await readGeoParquetViaDuckDB(
-          arrayBuffer,
-          'inset_world_countries'
-        );
-        const geoInfo = extractGeometryInfo(arrowTable);
-        if (!geoInfo) {
-          return;
-        }
-        const geojson = arrowTableToGeoJSON(arrowTable, geoInfo.geoColumn);
-        if (!cancelled && geojson) {
-          worldFeatures = toWorldFeatureCollection(geojson);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          logger.error(
-            'Failed to load inset world basemap',
-            LogCategory.MAP,
-            error
-          );
-          worldFeatures = null;
-        }
+  async function loadWorldFeatures(generation: number): Promise<void> {
+    try {
+      await duckDBOrchestrator.waitForInitialization();
+      const response = await fetch(resolveStaticAssetUrl(INSET_MAP_DATA_PATH));
+      if (!response.ok) {
+        return;
       }
-    };
 
-    void loadWorldFeatures();
-
-    return () => {
-      cancelled = true;
-    };
-  });
+      const arrayBuffer = await response.arrayBuffer();
+      const arrowTable = await readGeoParquetViaDuckDB(
+        arrayBuffer,
+        'inset_world_countries'
+      );
+      const geoInfo = extractGeometryInfo(arrowTable);
+      if (!geoInfo) {
+        return;
+      }
+      const geojson = arrowTableToGeoJSON(arrowTable, geoInfo.geoColumn);
+      if (generation === worldFeaturesLoadGeneration && geojson) {
+        worldFeatures = toWorldFeatureCollection(geojson);
+      }
+    } catch (error) {
+      if (generation === worldFeaturesLoadGeneration) {
+        logger.error(
+          'Failed to load inset world basemap',
+          LogCategory.MAP,
+          error
+        );
+        worldFeatures = null;
+      }
+    }
+  }
 
   $effect(() => {
     const map = mapInstanceStore.map;
@@ -722,6 +712,24 @@
     return isInsetMapAvailableForBounds(getCurrentMapBounds());
   });
 
+  $effect(() => {
+    if (
+      !geoIndicationsState.visible ||
+      !geoIndicationsState.insetMap.enabled ||
+      !insetMapAvailable ||
+      worldFeatures ||
+      worldFeaturesLoadStarted
+    ) {
+      return;
+    }
+
+    worldFeaturesLoadStarted = true;
+    const generation = ++worldFeaturesLoadGeneration;
+    untrack(() => {
+      void loadWorldFeatures(generation);
+    });
+  });
+
   type DragTarget = 'scale' | 'orientation' | 'inset';
 
   let overlayElement = $state<HTMLDivElement | null>(null);
@@ -1153,6 +1161,7 @@
   }
 
   onDestroy(() => {
+    worldFeaturesLoadGeneration += 1;
     centeredGeoTarget = null;
     stopDragging();
   });

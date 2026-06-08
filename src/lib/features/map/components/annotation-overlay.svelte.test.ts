@@ -5,6 +5,7 @@ import {
   DEFAULT_MARGINS,
   DrawingType
 } from '$lib/features/commons/constants/ui.constants';
+import { SHAPE_TYPE } from '$lib/features/commons/constants';
 import {
   PAGE_PRESETS,
   PageModel
@@ -56,6 +57,45 @@ function extractPathPoints(
     x: Number(x),
     y: Number(y)
   }));
+}
+
+function getStylePx(style: string, property: string): number {
+  const match = style.match(
+    new RegExp(`${property}:\\s*(-?\\d+(?:\\.\\d+)?)px`)
+  );
+  if (!match) {
+    throw new Error(`Missing ${property} in style ${style}`);
+  }
+
+  return Number(match[1]);
+}
+
+function getSelectedVectorStartPoint(container: HTMLElement): {
+  x: number;
+  y: number;
+} {
+  const item = Array.from(container.querySelectorAll('.annotation-item')).find(
+    (item) => item.querySelector('svg.annotation-vector')
+  );
+  if (!(item instanceof HTMLElement)) {
+    throw new Error('Expected a vector annotation item');
+  }
+
+  const svg = item.querySelector('svg.annotation-vector');
+  const anchor = item.querySelector('.drawing-anchor');
+  if (!(svg instanceof SVGSVGElement) || !(anchor instanceof Element)) {
+    throw new Error('Expected selected vector handles');
+  }
+
+  const [originX, originY] = (svg.getAttribute('viewBox') ?? '')
+    .split(' ')
+    .map(Number);
+  const style = item.getAttribute('style') ?? '';
+
+  return {
+    x: getStylePx(style, 'left') + Number(anchor.getAttribute('cx')) - originX,
+    y: getStylePx(style, 'top') + Number(anchor.getAttribute('cy')) - originY
+  };
 }
 
 vi.hoisted(() => {
@@ -278,6 +318,47 @@ describe('annotation overlay drawing interactions', () => {
     expect(getAnnotationsState().items[0]?.style?.smoothness).toBe(0);
     expect(pathPoints).toHaveLength(points.length);
     expect(pathPoints[1]).toEqual(points[1]);
+  });
+
+  it('keeps the untouched vector anchor visually fixed when another anchor changes bounds', async () => {
+    annotationsActions.addAnnotation(AnnotationKind.SHAPE, SHAPE_TYPE.ARROW);
+    const arrow = getAnnotationsState().items.at(-1);
+    if (!arrow) {
+      throw new Error('Expected an arrow annotation');
+    }
+
+    annotationsActions.updateAnnotation(arrow.id, {
+      coordinateSpace: 'page',
+      position: { x: 80, y: 90 },
+      style: {
+        ...(arrow.style ?? {}),
+        strokeWidth: 2,
+        points: [
+          { x: 0, y: 0 },
+          { x: 120, y: 0 }
+        ]
+      }
+    });
+
+    const { container } = render(AnnotationOverlay);
+    const before = getSelectedVectorStartPoint(container as HTMLElement);
+
+    annotationsActions.updateAnnotation(arrow.id, {
+      style: {
+        ...(getAnnotationsState().items.find((item) => item.id === arrow.id)
+          ?.style ?? {}),
+        points: [
+          { x: 0, y: 0 },
+          { x: 176.56, y: 33.94 }
+        ]
+      }
+    });
+
+    await waitFor(() => {
+      const after = getSelectedVectorStartPoint(container as HTMLElement);
+      expect(after.x).toBeCloseTo(before.x, 3);
+      expect(after.y).toBeCloseTo(before.y, 3);
+    });
   });
 
   it('keeps zone drawings active when the pointer is released away from the starting point', async () => {
