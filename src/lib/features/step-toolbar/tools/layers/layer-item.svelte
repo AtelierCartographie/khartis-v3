@@ -42,6 +42,11 @@
   // Vivid accent for thematic primitive rows, sepia for shared basemap layers.
   const isVizPrimitive = $derived(layer.kind === 'viz-primitive');
   const visualizationId = $derived(layer.parentId);
+  // Bold primitive label ("Textes") with the source visualization as a subtitle for
+  // primitive rows; a single regular line for basemap rows. Falls back to `name` so
+  // rows without the split fields still render a title.
+  const title = $derived(layer.primitiveLabel ?? layer.name);
+  const accentColor = $derived(layer.accentColor ?? layer.color);
 </script>
 
 <div
@@ -50,7 +55,7 @@
   class:layer-row--basemap={!isVizPrimitive}
   role="listitem"
 >
-  <div class="color-bar" style:background-color={layer.color}></div>
+  <div class="accent-bar" style:background-color={accentColor}></div>
   {#if showDragHandle}
     <div
       class="drag-handle"
@@ -62,11 +67,18 @@
   {/if}
   <div class="layer-content">
     {#if layer.icon}
-      <span class="layer-icon" style:color={layer.color}>
+      <span class="layer-icon" style:color={accentColor}>
         <layer.icon size={16} />
       </span>
     {/if}
-    <span class="layer-name">{layer.name}</span>
+    <span class="layer-text">
+      <span class="layer-name" class:layer-name--strong={isVizPrimitive}
+        >{title}</span
+      >
+      {#if layer.subtitle}
+        <span class="layer-subtitle">{layer.subtitle}</span>
+      {/if}
+    </span>
   </div>
   <div class="layer-actions">
     <IconButton
@@ -117,32 +129,28 @@
   .layer-row {
     display: flex;
     align-items: center;
-    height: 40px;
+    min-height: 40px;
     padding: 0 8px 0 0;
     gap: 8px;
-    background-color: var(--cds-layer);
-    border: 1px solid var(--cds-border-subtle-01);
-    border-left-width: 3px;
+    background-color: var(--cds-layer-01, #f4f4f4);
+    border: 1px solid var(--cds-border-tile-01, #c6c6c6);
     cursor: grab;
     transition: background-color 0.15s ease;
   }
 
   .layer-row:hover {
-    background-color: var(--cds-layer-hover);
+    background-color: var(--cds-layer-hover, #e8e8e8);
   }
 
-  /* Vivid accent (thematic primitives) vs sepia (shared basemap layers). */
+  /* Per-visualization Vivid accent (primitives) vs the shared Sepia accent (basemap),
+     rendered as the left edge bar. Taller two-line rows for primitives. */
   .layer-row--viz {
-    border-left-color: var(--cds-border-interactive, #4589ff);
+    min-height: 48px;
   }
 
-  .layer-row--basemap {
-    border-left-color: var(--cds-border-strong-01, #8d8d8d);
-  }
-
-  .color-bar {
+  .accent-bar {
+    align-self: stretch;
     width: 4px;
-    height: 100%;
     flex-shrink: 0;
   }
 
@@ -165,14 +173,40 @@
     flex: 1;
     gap: var(--cds-spacing-03);
     min-width: 0;
+    padding: 4px 0;
+  }
+
+  .layer-text {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    flex: 1;
+    min-width: 0;
   }
 
   .layer-name {
-    flex: 1;
     font-size: 12px;
     line-height: 16px;
     letter-spacing: 0.32px;
-    color: var(--cds-text-primary);
+    color: var(--cds-text-primary, #161616);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Heading 01/02 — primitive titles read as the foreground item. */
+  .layer-name--strong {
+    font-size: 14px;
+    line-height: 20px;
+    letter-spacing: 0.16px;
+    font-weight: 600;
+  }
+
+  .layer-subtitle {
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.32px;
+    color: var(--cds-text-helper, #6f6f6f);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
