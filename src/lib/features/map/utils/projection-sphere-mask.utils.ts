@@ -21,6 +21,10 @@ const DEFAULT_SPHERE_OUTLINE_COLOR: [number, number, number, number] = [
   90, 90, 90, 200
 ];
 const DEFAULT_SPHERE_OUTLINE_WIDTH = 1;
+const SPHERE_BACKGROUND_PARAMETERS = {
+  depthCompare: 'always' as const,
+  depthWriteEnabled: false
+} as const;
 
 function isD3StreamProjection(
   projection: ProjectionLike | undefined
@@ -108,9 +112,7 @@ export function createProjectionSphereMaskLayer({
       coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
       getFillColor: fillColor,
       pickable: false,
-      parameters: {
-        depthCompare: 'always' as const
-      },
+      parameters: SPHERE_BACKGROUND_PARAMETERS,
       updateTriggers: {
         getFillColor: [fillColor[0], fillColor[1], fillColor[2], fillColor[3]]
       },

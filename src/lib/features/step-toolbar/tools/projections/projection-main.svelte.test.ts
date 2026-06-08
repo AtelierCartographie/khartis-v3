@@ -9,18 +9,25 @@ const source = readFileSync(
 
 describe('ProjectionMain', () => {
   it('lets a selected projection card clear the user projection override', () => {
-    expect(source).toContain('projectionState.overrideActive === true');
+    expect(source).toContain('projectionState.overrideActive !== true');
     expect(source).toContain('projectionState.activeSuggestionId');
     expect(source).toContain('projectionActions.applySuggestion(suggestion);');
   });
 
   it('binds suggestion card selection to the active suggestion id', () => {
     expect(source).toContain(
+      "import { getCatalogueProjectionIdForSuggestion } from './projection-suggestion-catalogue.utils';"
+    );
+    expect(source).toContain(
       'function isSuggestionSelected(suggestion: ProjectionSuggestion)'
     );
-    expect(source).toContain("projectionState.overrideSource === 'manual'");
+    expect(source).toContain("projectionState.overrideSource !== 'manual'");
     expect(source).toContain(
       'projectionState.activeSuggestionId === suggestion.id'
+    );
+    expect(source).toContain('isStoredSuggestionConfigSelected(suggestion)');
+    expect(source).toContain(
+      'getCatalogueProjectionIdForSuggestion(suggestion)'
     );
     expect(source).toContain('selected={isSuggestionSelected(suggestion)}');
   });
@@ -31,6 +38,16 @@ describe('ProjectionMain', () => {
     );
     expect(source).not.toContain(
       'suggestionCardsEnabled ? projectionState.suggestions : undefined'
+    );
+  });
+
+  it('recomputes projection suggestions when a persisted project has none loaded', () => {
+    expect(source).toContain("import { untrack } from 'svelte';");
+    expect(source).toContain(
+      'if (!suggestionCardsEnabled || suggestions !== undefined)'
+    );
+    expect(source).toContain(
+      'projectionActions.suggestProjectionForCurrentData()'
     );
   });
 
@@ -61,15 +78,17 @@ describe('ProjectionMain', () => {
     expect(source).toContain('m.projection_suggestions_unavailable_title()');
   });
 
-  it('renders expanded mode as Figma grouped suggestion columns', () => {
-    expect(source).toContain('const gridSuggestionGroups = $derived(');
+  it('renders projection suggestions as a single list without a display mode toggle', () => {
     expect(source).toContain(
-      '{#each gridSuggestionGroups as group (group.id)}'
+      '{#each visibleListSuggestions as suggestion (suggestion.id)}'
     );
-    expect(source).toContain('grid-template-columns: repeat(3, 184px);');
-    expect(source).toContain('width: 184px;');
-    expect(source).toContain('height: 176px;');
-    expect(source).toContain('showTag={false}');
+    expect(source).not.toContain(
+      "import { ViewMode } from '$lib/features/commons/constants/ui.constants';"
+    );
+    expect(source).not.toContain('GridIcon');
+    expect(source).not.toContain('projection-view-tabs');
+    expect(source).not.toContain('projection-content--grid');
+    expect(source).not.toContain('handleViewModeChange');
   });
 
   it('stretches compact suggestion cards across the available popover body', () => {
