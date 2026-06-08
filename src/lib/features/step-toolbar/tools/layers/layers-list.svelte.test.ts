@@ -1,7 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import * as m from '$lib/paraglide/messages';
-import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
 import LayersList from './layers-list.svelte';
 import type { Layer } from '../../types/layers.types';
 
@@ -19,8 +18,7 @@ const vizPrimitive: Layer = {
   kind: 'viz-primitive',
   order: 0,
   parentId: 'viz-1',
-  isSubLayer: true,
-  primitive: PrimitiveFilterType.POINT
+  isSubLayer: true
 };
 
 const vizPrimitiveTwo: Layer = {
@@ -32,8 +30,7 @@ const vizPrimitiveTwo: Layer = {
   kind: 'viz-primitive',
   order: 1,
   parentId: 'viz-1',
-  isSubLayer: true,
-  primitive: PrimitiveFilterType.POLYGON
+  isSubLayer: true
 };
 
 const basemapLayer: Layer = {

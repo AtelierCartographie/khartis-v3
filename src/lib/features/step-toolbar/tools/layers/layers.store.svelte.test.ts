@@ -243,6 +243,10 @@ import {
   layersState
 } from './layers.store.svelte';
 import type { Layer } from '../../types/layers.types';
+import {
+  SEPIA_MIXTE_COLORS,
+  VIF_MIXTE_COLORS
+} from '$lib/features/commons/constants/qualitative-palette.constants';
 
 function createVisualization(
   overrides: Partial<VisualizationConfig> = {}
@@ -702,6 +706,36 @@ describe('layers store flattened model', () => {
     );
   });
 
+  it('gives each visualization a shared Vivid accent and a viz subtitle on its primitive rows (#182)', () => {
+    const viz1 = createVisualization({ id: 'viz-1', name: 'Viz 1' });
+    const viz2 = createVisualization({ id: 'viz-2', name: 'Viz 2' });
+
+    mockVisualizationStore.visualizations = [viz1, viz2];
+    mockVisualizationStore.activeVisualizations = [viz1, viz2];
+
+    layersActions.syncWithVisualizations();
+
+    const viz1Rows = flat().filter((layer) => layer.parentId === 'viz-1');
+    const viz2Rows = flat().filter((layer) => layer.parentId === 'viz-2');
+
+    expect(viz1Rows.length).toBeGreaterThan(0);
+    expect(viz2Rows.length).toBeGreaterThan(0);
+
+    // All primitives of one visualization share that visualization's accent…
+    expect(new Set(viz1Rows.map((layer) => layer.accentColor))).toEqual(
+      new Set([VIF_MIXTE_COLORS[0]])
+    );
+    expect(new Set(viz2Rows.map((layer) => layer.accentColor))).toEqual(
+      new Set([VIF_MIXTE_COLORS[1]])
+    );
+    // …and distinct visualizations use distinct accents.
+    expect(viz1Rows[0]?.accentColor).not.toBe(viz2Rows[0]?.accentColor);
+
+    // Primitive rows carry a bold primitive label and the source viz as a subtitle.
+    expect(viz1Rows[0]?.primitiveLabel).toBeTruthy();
+    expect(viz1Rows[0]?.subtitle).toBe('Viz 1');
+  });
+
   it('does not expose vector basemap rows when no reference basemap is active', () => {
     const visualization = createVisualization();
     mockVisualizationStore.visualizations = [visualization];
@@ -838,6 +872,13 @@ describe('layers store flattened model', () => {
         (layer) => layer.basemapLayerKey === 'world-geographic-lines.parquet'
       )
     ).toBe(false);
+
+    // Every basemap row shares the single muted Sepia accent (#182).
+    const basemapRows = flat().filter((layer) => layer.kind === 'basemap-aux');
+    expect(basemapRows.length).toBeGreaterThan(0);
+    expect(
+      basemapRows.every((layer) => layer.accentColor === SEPIA_MIXTE_COLORS[0])
+    ).toBe(true);
   });
 
   it('toggles the generic Frontieres row through metadata aux visibility and the basemap layer store', () => {

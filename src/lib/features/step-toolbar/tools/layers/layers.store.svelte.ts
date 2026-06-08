@@ -46,7 +46,12 @@ import { resolveActiveBasemapMetadata } from '$lib/features/map/utils/basemap-me
 import { facetsStore } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
 import * as m from '$lib/paraglide/messages';
 import { getLocale } from '$lib/paraglide/runtime';
-import { BASEMAP_SUBLAYER_COLOR, VIZ_SUBLAYER_COLOR } from './layers.constants';
+import {
+  BASEMAP_LAYER_ACCENT_COLOR,
+  BASEMAP_SUBLAYER_COLOR,
+  getVisualizationAccentColor,
+  VIZ_SUBLAYER_COLOR
+} from './layers.constants';
 import type {
   Layer,
   LayerReorderScope,
@@ -862,6 +867,8 @@ function buildLayers(): Layer[] {
         viz.primitiveOrder ?? VISUALIZATION_SUBLAYER_ORDER
       ).filter((primitive, index, order) => order.indexOf(primitive) === index);
 
+      const vizAccentColor = getVisualizationAccentColor(vizOrder);
+
       return vizPrimitiveOrder.map(
         (primitive, i): Layer => ({
           id: buildVisualizationSubLayerId(viz.id, primitive),
@@ -870,6 +877,9 @@ function buildLayers(): Layer[] {
           kind: 'viz-primitive',
           primitive,
           name: getPrimitiveLayerName(primitive, vizLabel),
+          primitiveLabel: getVisualizationPrimitiveName(primitive),
+          subtitle: vizLabel,
+          accentColor: vizAccentColor,
           visible: vizVisible && primitiveFilters.includes(primitive),
           type: 'visualization',
           color: getVisualizationPrimitiveColor(viz, primitive),
@@ -880,11 +890,15 @@ function buildLayers(): Layer[] {
     }
   );
 
-  // Global, deduplicated basemap auxiliary block (one row per shared layer).
-  const basemapLayers =
+  // Global, deduplicated basemap auxiliary block (one row per shared layer). Every
+  // basemap row shares the single muted Sepia accent so they recede behind primitives.
+  const basemapLayers = (
     resolveTiledStyleConfig() !== null
       ? buildTiledBasemapSubLayers()
-      : buildVectorBasemapSubLayers();
+      : buildVectorBasemapSubLayers()
+  ).map(
+    (layer): Layer => ({ ...layer, accentColor: BASEMAP_LAYER_ACCENT_COLOR })
+  );
 
   const foregroundAboveLayers = basemapLayers.filter(
     (layer) =>

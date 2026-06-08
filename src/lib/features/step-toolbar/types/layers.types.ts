@@ -23,6 +23,17 @@ export interface Layer {
   icon?: Component;
   visible: boolean;
   color: string;
+  /**
+   * Accent hue for the panel row (#182, Figma 1419-89514): a per-visualization
+   * "Vivid" categorical color for primitives (all primitives of one visualization
+   * share it; distinct visualizations differ), and a single muted "Sepia" color for
+   * basemap layers so they recede behind the thematic primitives.
+   */
+  accentColor?: string;
+  /** Bold title shown for a viz-primitive row (e.g. "Textes"), without the viz label. */
+  primitiveLabel?: string;
+  /** Secondary line under a viz-primitive title — the source visualization label. */
+  subtitle?: string;
   type: LayerType;
   kind?: LayerKind;
   opacity?: number;
