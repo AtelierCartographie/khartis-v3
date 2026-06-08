@@ -525,10 +525,30 @@
     };
   }
 
+  function getVectorShapeBoundsOrigin(item: Annotation): {
+    x: number;
+    y: number;
+  } {
+    if (!isVectorShapeItem(item)) {
+      return { x: 0, y: 0 };
+    }
+
+    const vectorStyle = getVectorStyle(item.style);
+    const bounds = computeVectorPathBounds(
+      getVectorPoints(item),
+      item.style?.controlOffsets,
+      vectorStyle.strokeWidth,
+      hasArrowHead(item.content)
+    );
+
+    return { x: bounds.originX, y: bounds.originY };
+  }
+
   function getAnnotationPositionStyle(item: Annotation): string {
     const { x, y } = getRenderedPosition(item);
+    const boundsOrigin = getVectorShapeBoundsOrigin(item);
     const scale = getPageScale();
-    return `left: ${x * scale}px; top: ${y * scale}px; transform: scale(${scale});`;
+    return `left: ${(x + boundsOrigin.x) * scale}px; top: ${(y + boundsOrigin.y) * scale}px; transform: scale(${scale});`;
   }
 
   // Persist (or refresh) the WGS84 anchor of a map-scoped annotation from its

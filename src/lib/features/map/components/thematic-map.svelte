@@ -1097,12 +1097,19 @@
   }
 
   function syncOrthographicViewportAfterViewModeSwitch(
-    reasonOverride?: ViewportFitReason
+    reasonOverride?: ViewportFitReason,
+    options: { fitViewport?: boolean } = {}
   ): void {
     if (mapInit.viewMode !== ViewMode.ORTHOGRAPHIC) {
       return;
     }
 
+    const shouldFitViewport = options.fitViewport ?? true;
+    const fitViewport = (reason: ViewportFitReason): void => {
+      if (shouldFitViewport) {
+        fitOrthographicViewport(reason);
+      }
+    };
     const refBasemapId = basemapStyleStore.referenceBasemapId;
     const currentWorldBaseTable = worldBaseTable;
 
@@ -1148,21 +1155,21 @@
           );
         }
 
-        fitOrthographicViewport(
+        fitViewport(
           reasonOverride ?? (shouldUseBasemapReference ? 'basemap' : 'dataset')
         );
         return;
       }
 
       if (shouldUseBasemapReference && projectionStore.referenceBbox) {
-        fitOrthographicViewport(reasonOverride ?? 'basemap');
+        fitViewport(reasonOverride ?? 'basemap');
         return;
       }
 
       const geoMetadata = firstTable.schema.metadata?.get('geo');
       if (geoMetadata) {
         projectionStore.setReferenceBboxFromMetadata(geoMetadata);
-        fitOrthographicViewport(reasonOverride ?? 'dataset');
+        fitViewport(reasonOverride ?? 'dataset');
         return;
       }
     }
@@ -1182,7 +1189,7 @@
             referenceState.isProjected,
             referenceState.renderProjection
           );
-          fitOrthographicViewport(reasonOverride ?? 'basemap');
+          fitViewport(reasonOverride ?? 'basemap');
           return;
         }
       }
@@ -1200,7 +1207,7 @@
           false,
           null
         );
-        fitOrthographicViewport(reasonOverride ?? 'dataset');
+        fitViewport(reasonOverride ?? 'dataset');
         return;
       }
     }
@@ -1218,7 +1225,7 @@
           referenceState.isProjected,
           referenceState.renderProjection
         );
-        fitOrthographicViewport(reasonOverride ?? 'basemap');
+        fitViewport(reasonOverride ?? 'basemap');
         return;
       }
     }
@@ -2056,7 +2063,12 @@
       mapInit.viewMode === ViewMode.ORTHOGRAPHIC &&
       !isSwitchingViewMode
     ) {
-      untrack(() => syncOrthographicViewportAfterViewModeSwitch('projection'));
+      untrack(() => {
+        syncOrthographicViewportAfterViewModeSwitch('projection', {
+          fitViewport: false
+        });
+        scheduleLayerUpdate('effect:projectionRenderTrigger');
+      });
     }
   });
 
