@@ -219,7 +219,7 @@ describe('example visualization presets', () => {
     expect(buildSuggestionOrigin).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'viz-1' }),
       expect.objectContaining({
-        mode: 'custom',
+        mode: 'manual-suggestion',
         suggestionKey: 'choropleth'
       })
     );
@@ -227,7 +227,7 @@ describe('example visualization presets', () => {
       'viz-1',
       expect.objectContaining({ id: 'choropleth' }),
       expect.objectContaining({
-        origin: expect.objectContaining({ mode: 'custom' })
+        origin: expect.objectContaining({ mode: 'manual-suggestion' })
       })
     );
     expect(rememberAppliedSuggestionState).toHaveBeenCalledWith(
