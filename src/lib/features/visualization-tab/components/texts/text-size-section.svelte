@@ -24,7 +24,12 @@
     getSelectedFieldIds(slot: FacetSlotPath): number[];
     isActiveForSlot(slot: FacetSlotPath): boolean;
     updateVariables(column: string, slot: FacetSlotPath, ids: number[]): void;
-    toggle(column: string, slot: FacetSlotPath, enabled: boolean): void;
+    toggle(
+      column: string,
+      slot: FacetSlotPath,
+      enabled: boolean,
+      fieldIds?: number[]
+    ): void;
   }
 
   interface Props {
@@ -129,8 +134,13 @@
           FACET_SLOT.TEXT_VALUE,
           ids
         )}
-      onToggleCollection={(enabled) =>
-        facetsSelection.toggle(sizeColumnName, FACET_SLOT.TEXT_VALUE, enabled)}
+      onToggleCollection={(enabled, ids) =>
+        facetsSelection.toggle(
+          sizeColumnName,
+          FACET_SLOT.TEXT_VALUE,
+          enabled,
+          ids
+        )}
     />
   </div>
 {/if}

@@ -411,8 +411,13 @@
             facetsValueSlotPath,
             ids
           )}
-        onToggleCollection={(enabled) =>
-          facetsSelection.toggle(valueColumnName, facetsValueSlotPath, enabled)}
+        onToggleCollection={(enabled, ids) =>
+          facetsSelection.toggle(
+            valueColumnName,
+            facetsValueSlotPath,
+            enabled,
+            ids
+          )}
       />
     </div>
     <DiscretizationRow
@@ -461,11 +466,12 @@
             facetsCategorySlotPath,
             ids
           )}
-        onToggleCollection={(enabled) =>
+        onToggleCollection={(enabled, ids) =>
           facetsSelection.toggle(
             categoryColumnName,
             facetsCategorySlotPath,
-            enabled
+            enabled,
+            ids
           )}
       />
     </div>

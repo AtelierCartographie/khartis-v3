@@ -17,6 +17,12 @@ describe('FacetsVariablePicker collection filtering', () => {
       '(isCollectionEnabled ? collectionDataFields : singleSelectItems).filter'
     );
     expect(source).toContain('displayItems');
+    expect(source).toContain('getSeedCollectionFieldIds');
+    expect(source).toContain('collectionDataFields.some');
+    expect(source).toContain('orderedCollectionDataFields');
+    expect(source).toContain(
+      'onToggleCollection?.(checked, checked ? getSeedCollectionFieldIds() : [])'
+    );
   });
 
   it('renders data-step VariableBadge markers and excludes Aucun from dropdown choices', () => {

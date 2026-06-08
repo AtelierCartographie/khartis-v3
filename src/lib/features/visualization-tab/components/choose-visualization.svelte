@@ -82,6 +82,12 @@
 
   const datasetColumns = $derived(selectedDataset?.columns ?? []);
 
+  function getEditableVisualizationsByDataset(datasetId: string) {
+    return visualizationStore
+      .getVisualizationsByDataset(datasetId)
+      .filter((visualization) => !visualization.facet);
+  }
+
   const suggestions = $derived.by((): VizSuggestion[] => {
     void duckDBOrchestrator.datasetsVersion;
     return computeVisualizationSuggestions(selectedDataset);
@@ -112,7 +118,7 @@
       return currentSelection;
     }
 
-    return visualizationStore.getVisualizationsByDataset(dataset.id)[0];
+    return getEditableVisualizationsByDataset(dataset.id)[0];
   }
 
   function handleSelectSuggestion(suggestion: VizSuggestion) {
@@ -189,7 +195,7 @@
     void visualizationStore.version;
 
     if (!selectedDataset) return [];
-    return visualizationStore.getVisualizationsByDataset(selectedDataset.id);
+    return getEditableVisualizationsByDataset(selectedDataset.id);
   });
 
   const targetVisualization = $derived.by(() => {

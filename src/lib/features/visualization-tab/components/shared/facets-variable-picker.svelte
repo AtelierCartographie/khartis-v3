@@ -35,7 +35,7 @@
     open?: boolean;
     onSelect: (fieldId: number) => void;
     onCollectionChange?: (fieldIds: number[]) => void;
-    onToggleCollection?: (enabled: boolean) => void;
+    onToggleCollection?: (enabled: boolean, fieldIds?: number[]) => void;
   }
 
   let {
@@ -128,8 +128,38 @@
     }
   }
 
+  function getSeedCollectionFieldIds(): number[] {
+    const next = selectedCollectionFieldIds.length
+      ? [...selectedCollectionFieldIds]
+      : selectedFieldId !== NONE_FIELD_ID &&
+          collectionDataFields.some((field) => field.id === selectedFieldId)
+        ? [selectedFieldId]
+        : [];
+    const selectedIndex = collectionDataFields.findIndex(
+      (field) => field.id === selectedFieldId
+    );
+    const orderedCollectionDataFields =
+      selectedIndex >= 0
+        ? [
+            ...collectionDataFields.slice(selectedIndex + 1),
+            ...collectionDataFields.slice(0, selectedIndex)
+          ]
+        : collectionDataFields;
+
+    for (const field of orderedCollectionDataFields) {
+      if (next.length >= 2) {
+        break;
+      }
+      if (!next.includes(field.id)) {
+        next.push(field.id);
+      }
+    }
+
+    return next;
+  }
+
   function handleToggle(checked: boolean) {
-    onToggleCollection?.(checked);
+    onToggleCollection?.(checked, checked ? getSeedCollectionFieldIds() : []);
   }
 
   $effect(() => {

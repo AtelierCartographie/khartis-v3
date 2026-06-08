@@ -52,25 +52,37 @@ export interface ClassificationBreaksOrchestratorOptions {
   getTextBackgroundStrokeTarget: () => ClassificationTarget | null | undefined;
   updatePrimitiveClassificationState: (
     primitive: ClassifiablePrimitive,
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
   ) => void;
   updatePrimitiveStrokeClassificationState: (
     primitive: StrokeClassifiablePrimitive,
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
   ) => void;
   applyLineThicknessClassification: (
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
   ) => void;
   applySymbolFillClassification: (
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
   ) => void;
   applyTextBackgroundClassification: (
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
   ) => void;
   applyTextBackgroundStrokeClassification: (
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
   ) => void;
 }
+
+// Automatic breaks/colors recomputation is a DERIVED output, not a user edit:
+// applying it must not flip a freshly-applied suggestion's origin to `custom`
+// (which would uncheck its suggestion card). Preserve the origin on every
+// orchestrator-driven recompute.
+const PRESERVE_ORIGIN = { preserveOrigin: true } as const;
 
 export function useClassificationBreaksOrchestrator(
   opts: ClassificationBreaksOrchestratorOptions
@@ -105,7 +117,12 @@ export function useClassificationBreaksOrchestrator(
       buildClassificationScopeKey('fill', primitive),
       opts.getPrimitiveValueColumn(viz, primitive),
       opts.getPrimitiveClassification(viz, primitive),
-      (updates) => opts.updatePrimitiveClassificationState(primitive, updates),
+      (updates) =>
+        opts.updatePrimitiveClassificationState(
+          primitive,
+          updates,
+          PRESERVE_ORIGIN
+        ),
       trigger
     );
   }
@@ -118,7 +135,8 @@ export function useClassificationBreaksOrchestrator(
       buildClassificationScopeKey('size', PrimitiveFilterType.LINE),
       target?.valueColumn,
       target?.classification,
-      opts.applyLineThicknessClassification,
+      (updates) =>
+        opts.applyLineThicknessClassification(updates, PRESERVE_ORIGIN),
       trigger
     );
   }
@@ -133,7 +151,11 @@ export function useClassificationBreaksOrchestrator(
       opts.getPrimitiveStrokeValueColumn(viz, primitive),
       opts.getPrimitiveStrokeClassification(viz, primitive),
       (updates) =>
-        opts.updatePrimitiveStrokeClassificationState(primitive, updates),
+        opts.updatePrimitiveStrokeClassificationState(
+          primitive,
+          updates,
+          PRESERVE_ORIGIN
+        ),
       trigger
     );
   }
@@ -146,7 +168,7 @@ export function useClassificationBreaksOrchestrator(
       buildClassificationScopeKey('fill', SYMBOL_FILL_SCOPE_TARGET),
       target?.valueColumn,
       target?.classification,
-      opts.applySymbolFillClassification,
+      (updates) => opts.applySymbolFillClassification(updates, PRESERVE_ORIGIN),
       trigger
     );
   }
@@ -159,7 +181,8 @@ export function useClassificationBreaksOrchestrator(
       buildClassificationScopeKey('fill', TEXT_BACKGROUND_SCOPE_TARGET),
       target?.valueColumn,
       target?.classification,
-      opts.applyTextBackgroundClassification,
+      (updates) =>
+        opts.applyTextBackgroundClassification(updates, PRESERVE_ORIGIN),
       trigger
     );
   }
@@ -172,7 +195,8 @@ export function useClassificationBreaksOrchestrator(
       buildClassificationScopeKey('stroke', TEXT_BACKGROUND_SCOPE_TARGET),
       target?.valueColumn,
       target?.classification,
-      opts.applyTextBackgroundStrokeClassification,
+      (updates) =>
+        opts.applyTextBackgroundStrokeClassification(updates, PRESERVE_ORIGIN),
       trigger
     );
   }
