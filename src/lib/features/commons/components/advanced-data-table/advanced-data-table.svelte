@@ -956,12 +956,22 @@
     overflow-y: auto;
     overflow-x: auto;
     background-color: var(--cds-ui-01, #ffffff);
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    scrollbar-width: thin;
+    scrollbar-color: var(--cds-border-subtle) transparent;
   }
 
   .table-container::-webkit-scrollbar {
-    display: none;
+    width: 8px;
+    height: 8px;
+  }
+
+  .table-container::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .table-container::-webkit-scrollbar-thumb {
+    background-color: var(--cds-border-subtle);
+    border-radius: 4px;
   }
 
   table {
