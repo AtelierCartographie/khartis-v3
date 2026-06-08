@@ -42,10 +42,10 @@ describe.skipIf(!hasBuild)('PWA precache budget', () => {
     expect(cssCount).toBeLessThanOrEqual(CSS_PRECACHE_LIMIT);
   });
 
-  it('precaches the navigation fallback (index.html)', () => {
-    const matchesUrl = /url:["'][^"']*index\.html["']/.test(swContent);
-    const matchesString = /["'][^"']*\/index\.html["']/.test(swContent);
-    expect(matchesUrl || matchesString).toBe(true);
+  it('precaches the navigation fallback scope root', () => {
+    const matchesUrl =
+      /["']?url["']?:["']\/cartographie\/khartisnewpprd\/["']/.test(swContent);
+    expect(matchesUrl).toBe(true);
   });
 
   it('registers the geopf-vector-tiles runtime cache', () => {

@@ -45,13 +45,17 @@ const dropWoffFallback = (): Plugin => ({
   }
 });
 
-const verifyServiceWorkerPrecache = (): Plugin => ({
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const verifyServiceWorkerPrecache = (basePath: string): Plugin => ({
   name: 'verify-sw-precache',
   apply: 'build',
   closeBundle: {
     sequential: true,
     order: 'post',
     handler() {
+      const navigationFallbackUrl = basePath ? `${basePath}/` : '/';
       const candidates = [
         resolve(process.cwd(), '.svelte-kit/output/client/sw.js'),
         resolve(process.cwd(), 'build/sw.js')
@@ -59,12 +63,12 @@ const verifyServiceWorkerPrecache = (): Plugin => ({
       const swPath = candidates.find((path) => existsSync(path));
       if (!swPath) return;
       const content = readFileSync(swPath, 'utf8');
-      const hasIndexInPrecache =
-        /url:["'][^"']*index\.html["']/.test(content) ||
-        /["'][^"']*\/index\.html["']/.test(content);
-      if (!hasIndexInPrecache) {
+      const hasNavigationFallbackInPrecache = new RegExp(
+        `["']?url["']?:["']${escapeRegExp(navigationFallbackUrl)}["']`
+      ).test(content);
+      if (!hasNavigationFallbackInPrecache) {
         throw new Error(
-          `[verify-sw-precache] ${swPath} does not precache index.html — refusing to ship a broken Service Worker. Check VitePWA injectManifest.globPatterns and additionalManifestEntries.`
+          `[verify-sw-precache] ${swPath} does not precache ${navigationFallbackUrl} — refusing to ship a broken Service Worker. Check VitePWA injectManifest.globPatterns and additionalManifestEntries.`
         );
       }
     }
@@ -133,7 +137,7 @@ export default defineConfig(({ mode }) => {
       }),
       crossOriginIsolationAssets(),
       dropWoffFallback(),
-      verifyServiceWorkerPrecache(),
+      verifyServiceWorkerPrecache(basePath),
       VitePWA({
         strategies: 'injectManifest',
         srcDir: 'src',
@@ -160,7 +164,7 @@ export default defineConfig(({ mode }) => {
           ],
           additionalManifestEntries: [
             {
-              url: basePath ? `${basePath}/index.html` : '/index.html',
+              url: basePath ? `${basePath}/` : '/',
               revision: `${Date.now()}`
             }
           ],
