@@ -295,9 +295,9 @@ registerRoute(
 function resolveNavigationFallbackUrl(): string {
   const scope = self.registration?.scope ?? '/';
   try {
-    return new URL('index.html', scope).pathname;
+    return new URL('.', scope).pathname;
   } catch {
-    return '/index.html';
+    return '/';
   }
 }
 
