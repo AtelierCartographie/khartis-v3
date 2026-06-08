@@ -677,6 +677,16 @@ describe('binary scatter styling refresh', () => {
 });
 
 describe('createTextOverlayLayers', () => {
+  it('routes text labels through the text representative point source', () => {
+    expect(source).toContain('function getTextRepresentativePointSource(');
+    expect(source).toContain(
+      'ctx.textRepresentativePointTable ?? ctx.representativePointTable'
+    );
+    expect(source).toContain(
+      'const representativePointSource = getTextRepresentativePointSource(ctx);'
+    );
+  });
+
   it('wraps text labels and places labels to the right when symbols are rendered', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 2,

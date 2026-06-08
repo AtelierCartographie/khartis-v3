@@ -117,7 +117,7 @@ const GENERATED_ORTHOGRAPHIC_CONTEXT_LAYER_IDS = new Set<string>([
   BASEMAP_LAYER_ID.MERIDIENS
 ]);
 
-const DEFAULT_GENERATED_OCEAN_COLOR = '#e0e0e0';
+const DEFAULT_GENERATED_OCEAN_COLOR = '#ffffff';
 const DEFAULT_GENERATED_OCEAN_OPACITY = 100;
 const CARTE_FACILE_LAYER_GROUP_METADATA_KEY = 'cartefacile:group';
 const CARTE_FACILE_LABEL_GROUP_ID = 'labels';
@@ -806,6 +806,31 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       : selectRowsByIndices(matchedGeometryTable, matchingRows);
   }
 
+  function filterRepresentativePointTableByPrimitive(
+    representativePointBaseTable: ArrowTable,
+    split: SplitRenderingTable | undefined,
+    dataFilters: VisualizationConfig['dataFilters'],
+    primitiveType: PrimitiveFilter,
+    tableFilters: DataTableFilter[] | undefined
+  ): ArrowTable {
+    return split
+      ? filterSplitGeometryTableByDatasetRows(
+          representativePointBaseTable,
+          split,
+          dataFilters,
+          primitiveType,
+          tableFilters
+        )
+      : filterArrowTableByTableFilters(
+          filterArrowTableByDataFilters(
+            representativePointBaseTable,
+            dataFilters,
+            primitiveType
+          ),
+          tableFilters
+        );
+  }
+
   function getRequestedMetadataLayerTypes(): BasemapLayerType[] {
     const requestedTypes = new Set<BasemapLayerType>();
 
@@ -910,9 +935,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         projectionState.overrideSource === 'manual';
       const shouldUseSimplifiedProjectionPreview =
         computeSimplifiedProjectionPreview(isOrthographicMode, projectionState);
-      const visualizationsToRender = shouldUseSimplifiedProjectionPreview
-        ? []
-        : getVisualizationRenderOrder(activeVisualizations);
+      const visualizationsToRender =
+        getVisualizationRenderOrder(activeVisualizations);
       const shouldRenderDatasetFallbacks =
         (getShouldRenderDatasetFallbacks?.() ?? false) &&
         !shouldUseSimplifiedProjectionPreview;
@@ -1096,7 +1120,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
                 table,
                 style: layer.style ?? null,
                 type: layer.type,
-                file: layer.file ?? currentMetadata.file
+                file: layer.file ?? currentMetadata.file,
+                styleOverride: basemapAuxLayersStore.getStyle(
+                  currentMetadata.file,
+                  layerKey
+                )
               });
             }
           }
@@ -1240,36 +1268,38 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
                 : rawRepresentativePointBaseTable;
 
             if (representativePointBaseTable) {
-              const filteredRepresentativePointTable = split
-                ? filterSplitGeometryTableByDatasetRows(
-                    representativePointBaseTable,
-                    split,
-                    viz.dataFilters,
-                    PrimitiveFilterType.POINT,
-                    tableFilters
-                  )
-                : (() => {
-                    const representativeVizFiltered =
-                      filterArrowTableByDataFilters(
-                        representativePointBaseTable,
-                        viz.dataFilters,
-                        PrimitiveFilterType.POINT
-                      );
-                    const representativeTableFiltered =
-                      filterArrowTableByTableFilters(
-                        representativeVizFiltered,
-                        tableFilters
-                      );
-                    return representativeTableFiltered;
-                  })();
+              const filteredRepresentativePointTable =
+                filterRepresentativePointTableByPrimitive(
+                  representativePointBaseTable,
+                  split,
+                  viz.dataFilters,
+                  PrimitiveFilterType.POINT,
+                  tableFilters
+                );
+              const filteredTextRepresentativePointTable =
+                filterRepresentativePointTableByPrimitive(
+                  representativePointBaseTable,
+                  split,
+                  viz.dataFilters,
+                  PrimitiveFilterType.TEXT,
+                  tableFilters
+                );
               ctx.representativePointTable = filteredRepresentativePointTable;
               ctx.representativePointGeometryInfo =
                 getCachedRepresentativeGeometryInfo(
                   filteredRepresentativePointTable
                 ) ?? undefined;
+              ctx.textRepresentativePointTable =
+                filteredTextRepresentativePointTable;
+              ctx.textRepresentativePointGeometryInfo =
+                getCachedRepresentativeGeometryInfo(
+                  filteredTextRepresentativePointTable
+                ) ?? undefined;
             } else {
               ctx.representativePointTable = undefined;
               ctx.representativePointGeometryInfo = undefined;
+              ctx.textRepresentativePointTable = undefined;
+              ctx.textRepresentativePointGeometryInfo = undefined;
             }
 
             const arrowLayers = createDeckLayers(filteredTable, ctx);
@@ -1497,9 +1527,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       layers.length = 0;
       layers.push(...maskedOrderedLayers);
 
-      const hasExpectedActiveViz =
-        !shouldUseSimplifiedProjectionPreview &&
-        activeVisualizations.length > 0;
+      const hasExpectedActiveViz = activeVisualizations.length > 0;
       const hasExpectedDatasetFallbacks =
         shouldRenderDatasetFallbacks && (tables.size > 0 || geoJSONs.size > 0);
       const hasVisibleBasemapConfig =

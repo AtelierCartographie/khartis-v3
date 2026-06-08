@@ -114,6 +114,10 @@ export interface LayerContext {
 
   representativePointGeometryInfo?: GeometryInfo;
 
+  textRepresentativePointTable?: ArrowTable;
+
+  textRepresentativePointGeometryInfo?: GeometryInfo;
+
   customProjection?: ProjectionLike;
 
   primitiveOrder?: PrimitiveFilter[];
