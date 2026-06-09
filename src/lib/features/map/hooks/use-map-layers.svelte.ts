@@ -1137,6 +1137,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             availableMetadataLayerTypes: metadataLayers.map(
               (layer) => layer.type
             ),
+            hasLandMetadataLayers:
+              currentMetadata?.layers.some(
+                (layer) => layer.type === BasemapLayerType.LAND
+              ) ?? false,
             metadataLayers,
             stylePresets: shouldShowBasemapLayers
               ? basemapService.stylePresets

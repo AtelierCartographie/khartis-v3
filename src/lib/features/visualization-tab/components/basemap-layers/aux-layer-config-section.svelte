@@ -66,7 +66,7 @@
   }
 
   function isVisible(): boolean {
-    if (isPrimaryInstance && legacyId) {
+    if (isPrimaryInstance && legacyId && !isPerKeyLayer) {
       return (
         (getConfig(legacyId)?.visible ?? true) &&
         basemapAuxLayersStore.isVisible(basemapFile, renderKey, true)
@@ -93,10 +93,11 @@
   const isLimitLayer = $derived(
     legacyId === 'frontieres' && layer.type === BasemapLayerType.LIMIT
   );
+  const isPerKeyLayer = $derived(isLandLayer || isLimitLayer);
 
   const perFileStyleOverride = $derived.by<Record<string, unknown>>(() => {
     void basemapAuxLayersStore.version;
-    return isLandLayer || isLimitLayer
+    return isPerKeyLayer
       ? (basemapAuxLayersStore.getStyle(basemapFile, renderKey) ?? {})
       : {};
   });
@@ -192,7 +193,7 @@
   function handleToggle(checked: boolean): void {
     if (isPrimaryInstance && legacyId === 'meridiens') {
       syncGraticuleCompanions(checked);
-    } else if (isPrimaryInstance && legacyId) {
+    } else if (isPrimaryInstance && legacyId && !isPerKeyLayer) {
       basemapLayersStore.setLayerVisibility(legacyId, checked);
     }
     basemapAuxLayersStore.setVisible(basemapFile, renderKey, checked);

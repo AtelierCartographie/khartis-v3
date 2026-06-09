@@ -432,7 +432,7 @@ describe('layers reorder characterization (golden contract)', () => {
     layersActions.syncWithVisualizations();
     layersActions.reorderLayers(
       idx('basemap::rivieres'),
-      idx('basemap::frontieres')
+      idx('basemap::world-limit-countries.parquet')
     );
 
     const setOrderCalls = mockBasemapAuxLayersStore.setOrder.mock.calls;
