@@ -1050,6 +1050,7 @@
     if (scale.kind === 'proportional' && !scale.secondary && type) {
       const values = getNumericColumnValues(viz, viz.mapping.sizeColumn);
       if (values.length > 0) {
+        const maxSize = getSymbolPrimitive(viz)?.maxSize ?? 18;
         return {
           key: 'point-size',
           className: 'legend-svg--symbols',
@@ -1059,7 +1060,7 @@
               draw_symbols_legend(values, {
                 ...options,
                 type,
-                size: 18,
+                size: maxSize,
                 fill: scale.fillColor,
                 stroke: scale.strokeColor,
                 nodata: context.includeMissingDataFooter
@@ -1796,14 +1797,17 @@
       legendState.position === LegendPosition.BOTTOM_CENTER
         ? `translateX(-50%) scale(${scale})`
         : `scale(${scale})`;
+    const legendFontSize = clampFontSize(
+      legendState.style.fontSize,
+      layoutTokens.legend.fontSize
+    );
     const styles: string[] = [
       `--legend-page-scale: ${scale}`,
       `--legend-padding-inline: ${shellPaddingInline}px`,
       `--legend-padding-block: ${shellPaddingBlock}px`,
-      `--legend-max-width: ${layoutTokens.legend.maxWidth}px`,
       `--legend-item-gap: ${Math.max(8, Math.round(layoutTokens.legend.fontSize * 0.7))}px`,
       `font-family: ${resolveFontFamilyStack(legendState.style.fontFamily)}`,
-      `font-size: ${clampFontSize(legendState.style.fontSize, layoutTokens.legend.fontSize)}px`,
+      `font-size: ${legendFontSize}px`,
       `color: ${textHex}`,
       'border-radius: 0px',
       `transform: ${transform}`,
@@ -2177,7 +2181,6 @@
     --legend-page-scale: 1;
     --legend-padding-inline: 0px;
     --legend-padding-block: 0px;
-    --legend-max-width: 160px;
     --legend-item-gap: 4px;
     position: absolute;
     display: flex;
@@ -2187,7 +2190,7 @@
     padding: var(--legend-padding-block) var(--legend-padding-inline);
     border-radius: 0;
     box-shadow: none;
-    max-width: var(--legend-max-width);
+    max-width: 90%;
     overflow-wrap: anywhere;
     pointer-events: auto;
     cursor: pointer;
