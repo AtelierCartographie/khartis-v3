@@ -414,23 +414,28 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     }
   });
 
+  let lastRestoredBasemapKey: string | undefined = undefined;
+
   $effect(() => {
     const projectBasemap = runtimePersistedBasemap;
     const basemapCount = basemapCatalogService.basemaps.length;
 
-    void basemapCount;
-
     if (projectBasemap?.id) {
-      void restorePersistedBasemapSelection(projectBasemap).then(() => {
-        selectedBasemapId = projectBasemap.id;
-        rememberPreferredBasemap(
-          projectBasemap.id,
-          resolveBasemapSource(projectBasemap.type)
-        );
-      });
+      const restoreKey = `${projectBasemap.id}::${projectBasemap.type}::${basemapCount}`;
+      if (restoreKey !== lastRestoredBasemapKey) {
+        lastRestoredBasemapKey = restoreKey;
+        void restorePersistedBasemapSelection(projectBasemap).then(() => {
+          selectedBasemapId = projectBasemap.id;
+          rememberPreferredBasemap(
+            projectBasemap.id,
+            resolveBasemapSource(projectBasemap.type)
+          );
+        });
+      }
       return;
     }
 
+    lastRestoredBasemapKey = undefined;
     selectedBasemapId = basemapStyleStore.referenceBasemapId ?? undefined;
     if (selectedBasemapId) {
       rememberPreferredBasemap(selectedBasemapId, BasemapSource.CATALOG);
