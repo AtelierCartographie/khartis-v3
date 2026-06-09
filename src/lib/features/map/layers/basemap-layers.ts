@@ -2374,6 +2374,7 @@ export interface BasemapAdditionalData {
   frontieresTable?: ArrowTable;
   metadataLayers?: MetadataLayerEntry[];
   availableMetadataLayerTypes?: BasemapLayerType[];
+  hasLandMetadataLayers?: boolean;
   stylePresets?: StylePresets | null;
 }
 
@@ -2454,7 +2455,7 @@ export function createBasemapLayers(
             if (landLayers.length > 0) {
               targetGroups.push(landLayers);
             }
-          } else if (worldBaseTable) {
+          } else if (worldBaseTable && !additionalData?.hasLandMetadataLayers) {
             const terreLayers = createTerreLayers(
               worldBaseTable,
               terreConfig,

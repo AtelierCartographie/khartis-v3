@@ -1231,6 +1231,22 @@
     }
   }
 
+  function resolveUserDataBounds() {
+    if (firstTable) {
+      const bounds = calculateBoundsFromGeoArrow(firstTable);
+      if (bounds) {
+        return bounds;
+      }
+    }
+    if (firstGeoJSON) {
+      const bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
+      if (bounds) {
+        return bounds;
+      }
+    }
+    return null;
+  }
+
   function applyPendingMapLibreViewportPreset(): void {
     if (
       !pendingMapLibreViewportPreset ||
@@ -1240,9 +1256,9 @@
       return;
     }
 
-    const bounds = pendingMapLibreViewportPreset;
+    const presetBounds = pendingMapLibreViewportPreset;
     pendingMapLibreViewportPreset = null;
-    mapBounds.fitToBounds(bounds, {
+    mapBounds.fitToBounds(resolveUserDataBounds() ?? presetBounds, {
       animate: true,
       reason: 'basemap'
     });
@@ -1275,20 +1291,10 @@
       }
     }
 
-    if (firstTable) {
-      const bounds = calculateBoundsFromGeoArrow(firstTable);
-      if (bounds) {
-        mapBounds.fitToBounds(bounds, { reason });
-        return;
-      }
-    }
-
-    if (firstGeoJSON) {
-      const bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
-      if (bounds) {
-        mapBounds.fitToBounds(bounds, { reason });
-        return;
-      }
+    const dataBounds = resolveUserDataBounds();
+    if (dataBounds) {
+      mapBounds.fitToBounds(dataBounds, { reason });
+      return;
     }
 
     const styleViewportPreset = getBasemapViewportPreset(

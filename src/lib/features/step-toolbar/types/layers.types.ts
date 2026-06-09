@@ -49,6 +49,7 @@ export interface Layer {
   basemapLayerKey?: string;
   basemapLayerKeys?: string[];
   basemapLayerPrimary?: boolean;
+  basemapAuxPerKey?: boolean;
   tiledLayerGroupIds?: LayerGroupId[];
   tiledLayerDefaultVisible?: boolean;
 }

@@ -769,7 +769,7 @@ describe('layers store flattened model', () => {
     expect(mersRows[0].parentId).toBeUndefined();
   });
 
-  it('uses LAND metadata to expose Terre only as a generic basemap row', () => {
+  it('exposes each LAND metadata layer as its own per-key basemap row', () => {
     const visualization = createVisualization();
     mockVisualizationStore.visualizations = [visualization];
     mockVisualizationStore.activeVisualizations = [visualization];
@@ -777,6 +777,12 @@ describe('layers store flattened model', () => {
     mockBasemapService.currentMetadata = {
       file: 'world',
       layers: [
+        {
+          title_fr: 'Territoire NUTS',
+          title_en: 'NUTS territory',
+          type: BasemapLayerType.LAND,
+          file: 'world-nuts-land.parquet'
+        },
         {
           title_fr: 'Territoire',
           title_en: 'Territory',
@@ -791,14 +797,26 @@ describe('layers store flattened model', () => {
     expect(flat()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: 'basemap::terre',
+          id: 'basemap::world-nuts-land.parquet',
           kind: 'basemap-aux',
           basemapLayerId: 'terre',
-          name: 'Terre'
+          basemapFile: 'world',
+          basemapLayerKey: 'world-nuts-land.parquet',
+          basemapAuxPerKey: true,
+          name: 'Territoire NUTS'
+        }),
+        expect.objectContaining({
+          id: 'basemap::world-land.parquet',
+          kind: 'basemap-aux',
+          basemapLayerId: 'terre',
+          basemapFile: 'world',
+          basemapLayerKey: 'world-land.parquet',
+          basemapAuxPerKey: true,
+          name: 'Territoire'
         })
       ])
     );
-    expect(flat().some((layer) => layer.name === 'Territoire')).toBe(false);
+    expect(flat().some((layer) => layer.name === 'Terre')).toBe(false);
   });
 
   it('builds basemap rows from active metadata instead of static legacy layers', () => {
@@ -849,15 +867,20 @@ describe('layers store flattened model', () => {
           basemapLayerId: 'sphere'
         }),
         expect.objectContaining({
-          id: 'basemap::frontieres',
+          id: 'basemap::world-limit-countries.parquet',
           kind: 'basemap-aux',
           basemapLayerId: 'frontieres',
           basemapFile: 'world',
-          basemapLayerKeys: [
-            'world-limit-countries.parquet',
-            'world-limit-admin.parquet'
-          ],
-          name: 'Frontières/Limites'
+          basemapLayerKey: 'world-limit-countries.parquet',
+          name: 'Frontières des pays'
+        }),
+        expect.objectContaining({
+          id: 'basemap::world-limit-admin.parquet',
+          kind: 'basemap-aux',
+          basemapLayerId: 'frontieres',
+          basemapFile: 'world',
+          basemapLayerKey: 'world-limit-admin.parquet',
+          name: 'Frontières administratives'
         }),
         expect.objectContaining({
           id: 'basemap::meridiens',
@@ -881,7 +904,7 @@ describe('layers store flattened model', () => {
     ).toBe(true);
   });
 
-  it('toggles the generic Frontieres row through metadata aux visibility and the basemap layer store', () => {
+  it('toggles a limit row through its own metadata aux visibility', () => {
     const visualization = createVisualization();
     mockVisualizationStore.visualizations = [visualization];
     mockVisualizationStore.activeVisualizations = [visualization];
@@ -899,15 +922,13 @@ describe('layers store flattened model', () => {
     };
 
     layersActions.syncWithVisualizations();
-    layersActions.toggleLayerVisibility('basemap::frontieres');
+    layersActions.toggleLayerVisibility(
+      'basemap::world-limit-countries.parquet'
+    );
 
     expect(mockBasemapAuxLayersStore.setVisible).toHaveBeenCalledWith(
       'world',
       'world-limit-countries.parquet',
-      false
-    );
-    expect(mockBasemapLayersStore.setLayerVisibility).toHaveBeenCalledWith(
-      'frontieres',
       false
     );
   });
@@ -964,7 +985,7 @@ describe('layers store flattened model', () => {
     expect(mockVisualizationStore.setVisualizationOrder).not.toHaveBeenCalled();
   });
 
-  it('keeps same-type metadata entries grouped behind the generic basemap row', () => {
+  it('exposes each limit metadata layer as its own independent row', () => {
     const visualization = createVisualization();
     mockVisualizationStore.visualizations = [visualization];
     mockVisualizationStore.activeVisualizations = [visualization];
@@ -988,21 +1009,26 @@ describe('layers store flattened model', () => {
     };
 
     layersActions.syncWithVisualizations();
-    const frontieresLayer = findById('basemap::frontieres');
 
-    expect(frontieresLayer).toEqual(
+    expect(findById('basemap::world-limit-countries.parquet')).toEqual(
       expect.objectContaining({
         basemapLayerId: 'frontieres',
-        basemapLayerKeys: [
-          'world-limit-countries.parquet',
-          'world-limit-admin.parquet'
-        ],
-        name: 'Frontières/Limites'
+        basemapLayerKey: 'world-limit-countries.parquet',
+        basemapAuxPerKey: true,
+        name: 'Frontières des pays'
       })
     );
-    expect(
-      flat().some((layer) => layer.id.includes('world-limit-admin.parquet'))
-    ).toBe(false);
+    expect(findById('basemap::world-limit-admin.parquet')).toEqual(
+      expect.objectContaining({
+        basemapLayerId: 'frontieres',
+        basemapLayerKey: 'world-limit-admin.parquet',
+        basemapAuxPerKey: true,
+        name: 'Frontières administratives'
+      })
+    );
+    expect(flat().some((layer) => layer.id === 'basemap::frontieres')).toBe(
+      false
+    );
   });
 
   it('exposes tiled basemap groups and toggles MapLibre group visibility', () => {
