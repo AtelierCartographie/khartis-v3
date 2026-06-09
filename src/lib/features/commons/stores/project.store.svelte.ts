@@ -6,6 +6,7 @@ import type {
 } from '$lib/features/project-management';
 import * as m from '$lib/paraglide/messages';
 import { persistenceRegistry } from '$lib/features/project-management';
+import { shouldSkipLastProjectRestore } from '../utils/pwa-reset';
 import type {
   ColumnTransformation,
   UploadedFile
@@ -68,7 +69,9 @@ function createProjectStore() {
   async function initialize(): Promise<void> {
     state.isLoading = true;
     try {
-      await loadLastProjectFn(container);
+      if (!shouldSkipLastProjectRestore()) {
+        await loadLastProjectFn(container);
+      }
     } finally {
       state.isLoading = false;
       state.isInitialized = true;
