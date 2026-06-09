@@ -509,10 +509,6 @@ function isBasemapLayersToolRenderableType(type: BasemapLayerType): boolean {
   );
 }
 
-function isEntryScopedMetadataLayer(type: BasemapLayerType): boolean {
-  return type !== BasemapLayerType.LAND;
-}
-
 function getCustomBaseLayerType(
   metadata: BasemapMetadata
 ): BasemapLayerType | undefined {
@@ -556,6 +552,7 @@ interface BasemapDisplayEntry {
   layerId?: BasemapLayerId;
   file?: string;
   key?: string;
+  type?: BasemapLayerType;
   name: string;
   visible: boolean;
   color: string;
@@ -618,10 +615,7 @@ function buildBasemapDisplayEntries(): BasemapDisplayEntry[] {
     if (!isBasemapLayersToolRenderableType(layer.type)) continue;
     const instanceIndex = typeCounters.get(layer.type) ?? 0;
     typeCounters.set(layer.type, instanceIndex + 1);
-    const usesEntryScopedVisibility = isEntryScopedMetadataLayer(layer.type);
-    const layerKey = usesEntryScopedVisibility
-      ? (layer.file ?? `${metadata.file}:${layer.type}`)
-      : undefined;
+    const layerKey = layer.file ?? `${metadata.file}:${layer.type}`;
     const basemapLayerId = mapMetadataLayerTypeToBasemapLayerId(
       layer.type,
       isCustom,
@@ -630,16 +624,23 @@ function buildBasemapDisplayEntries(): BasemapDisplayEntry[] {
     const config = basemapLayerId
       ? basemapLayersStore.getLayer(basemapLayerId)
       : undefined;
-    const entryVisible = layerKey
-      ? basemapAuxLayersStore.isVisible(metadata.file, layerKey, true)
-      : true;
+    const entryVisible = basemapAuxLayersStore.isVisible(
+      metadata.file,
+      layerKey,
+      true
+    );
+
+    const isPerKey = isPerKeyAuxLayerType(layer.type);
 
     entries.push({
       layerId: basemapLayerId ?? undefined,
-      file: layerKey ? metadata.file : undefined,
+      file: metadata.file,
       key: layerKey,
+      type: layer.type,
       name: pickMetadataLayerName(layer),
-      visible: entryVisible && (config?.visible ?? true),
+      visible: isPerKey
+        ? entryVisible
+        : entryVisible && (config?.visible ?? true),
       color: config ? getBasemapLayerColor(config) : BASEMAP_SUBLAYER_COLOR,
       opacity: config ? getBasemapLayerOpacity(config) : 100,
       renderGroup: basemapLayerId
@@ -701,12 +702,19 @@ function getBasemapDisplayOrder(layerId: BasemapLayerId | undefined): number {
   return fallbackIndex === -1 ? Number.MAX_SAFE_INTEGER : fallbackIndex;
 }
 
+function isPerKeyAuxLayerType(type: BasemapLayerType | undefined): boolean {
+  return type === BasemapLayerType.LIMIT || type === BasemapLayerType.LAND;
+}
+
 function buildVectorBasemapSubLayers(): Layer[] {
   const entries = buildBasemapDisplayEntries();
   const grouped = new Map<string, BasemapDisplayEntry[]>();
 
   for (const entry of entries) {
-    const groupKey = entry.layerId ?? entry.key ?? entry.name;
+    const groupKey =
+      isPerKeyAuxLayerType(entry.type) && entry.key
+        ? entry.key
+        : (entry.layerId ?? entry.key ?? entry.name);
     grouped.set(groupKey, [...(grouped.get(groupKey) ?? []), entry]);
   }
 
@@ -724,12 +732,20 @@ function buildVectorBasemapSubLayers(): Layer[] {
       .filter((key): key is string => typeof key === 'string');
     const basemapFile = orderedEntries.find((entry) => entry.file)?.file;
     const visibleEntries = orderedEntries.some((entry) => entry.visible);
-    const visible = config ? config.visible && visibleEntries : visibleEntries;
+    const isPerKeyGroup = orderedEntries.every((entry) =>
+      isPerKeyAuxLayerType(entry.type)
+    );
+    const visible =
+      config && !isPerKeyGroup
+        ? config.visible && visibleEntries
+        : visibleEntries;
 
     rows.push({
       displayOrder: getBasemapDisplayOrder(layerId),
       layer: {
-        id: buildBasemapSubLayerId(layerId ?? groupKey),
+        id: buildBasemapSubLayerId(
+          isPerKeyGroup ? groupKey : (layerId ?? groupKey)
+        ),
         isSubLayer: true,
         kind: 'basemap-aux',
         type: 'geographic',
@@ -738,12 +754,17 @@ function buildVectorBasemapSubLayers(): Layer[] {
         basemapLayerKey: keys.length === 1 ? keys[0] : undefined,
         basemapLayerKeys: keys.length > 0 ? keys : undefined,
         basemapLayerPrimary: orderedEntries.some((entry) => entry.primary),
+        basemapAuxPerKey: isPerKeyGroup,
         basemapRenderGroup: firstEntry.renderGroup.replace(
           'geographic-',
           ''
         ) as Layer['basemapRenderGroup'],
         basemapRenderBelowThematic: config?.renderBelowThematic ?? false,
-        name: layerId ? getBasemapLayerName(layerId) : firstEntry.name,
+        name: isPerKeyAuxLayerType(firstEntry.type)
+          ? firstEntry.name
+          : layerId
+            ? getBasemapLayerName(layerId)
+            : firstEntry.name,
         visible,
         color: config ? getBasemapLayerColor(config) : firstEntry.color,
         opacity: config ? getBasemapLayerOpacity(config) : firstEntry.opacity,
@@ -1154,7 +1175,7 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
             );
           }
 
-          if (layer.basemapLayerId) {
+          if (layer.basemapLayerId && !layer.basemapAuxPerKey) {
             basemapLayersStore.setLayerVisibility(
               layer.basemapLayerId as BasemapLayerId,
               !layer.visible

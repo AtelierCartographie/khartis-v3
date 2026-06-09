@@ -278,8 +278,17 @@ export function resolveClassificationColors({
       userPalette &&
       (!ignorePatternPalette || userPalette.type !== PALETTE_TYPE.PATTERN)
     ) {
+      const effectivePalette =
+        paletteType === PALETTE_TYPE.DIVERGING &&
+        userPalette.type === PALETTE_TYPE.SEQUENTIAL
+          ? {
+              ...userPalette,
+              type: PALETTE_TYPE.DIVERGING,
+              colors: [userPalette.colors[userPalette.colors.length - 1]]
+            }
+          : userPalette;
       colors = generatePaletteColors(
-        userPalette,
+        effectivePalette,
         resolvedClassCount,
         contrast,
         undefined,

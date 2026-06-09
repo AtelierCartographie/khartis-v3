@@ -21,6 +21,7 @@
   import * as m from '$lib/paraglide/messages';
   import { EVENT } from '$lib/features/commons/constants/dom.constants';
   import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
+  import { factoryResetPwa } from '$lib/features/commons/utils/pwa-reset';
 
   import '$lib/features/commons/stores/locale.store.svelte';
   import { setLocale, locales, cookieName } from '$lib/paraglide/runtime.js';
@@ -158,6 +159,18 @@
       window.addEventListener(EVENT.BEFOREUNLOAD, handleBeforeUnload);
     }
 
+    const handleRescueShortcut = (event: KeyboardEvent) => {
+      const isModifier = event.metaKey || event.ctrlKey;
+      if (isModifier && event.altKey && event.code === 'KeyR') {
+        event.preventDefault();
+        event.stopPropagation();
+        void factoryResetPwa({ reload: true });
+      }
+    };
+    window.addEventListener(EVENT.KEYDOWN, handleRescueShortcut, {
+      capture: true
+    });
+
     const handleLifecycleFlush = () => {
       void persistenceRegistry.flush();
     };
@@ -266,6 +279,9 @@
       if (ENABLE_BEFOREUNLOAD_CONFIRMATION) {
         window.removeEventListener(EVENT.BEFOREUNLOAD, handleBeforeUnload);
       }
+      window.removeEventListener(EVENT.KEYDOWN, handleRescueShortcut, {
+        capture: true
+      });
       ariaObserver.disconnect();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handleLifecycleFlush);

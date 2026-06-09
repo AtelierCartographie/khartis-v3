@@ -153,9 +153,6 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     opacity: 100
   },
   {
-    // Cartographic grayscale default: keep land (figure) lighter than the sea
-    // (ground) so the coastline reads. Fallback used when no `land` style preset
-    // applies; kept in sync with style-presets.json `land`/`nuts-land`.
     id: 'terre',
     visible: true,
     fillColor: '#f2f2f2',
@@ -168,8 +165,6 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     strokeOpacity: 100
   },
   {
-    // Light neutral gray sea: distinctly darker than the land so the figure-ground
-    // contrast is legible, while staying quiet enough to recede behind thematic data.
     id: 'mers',
     visible: true,
     color: '#c8c8c8',
