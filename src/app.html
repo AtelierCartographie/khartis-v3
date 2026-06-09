@@ -8,6 +8,11 @@
           var params = new URLSearchParams(window.location.search);
           if (!params.has('reset')) return;
           document.documentElement.style.background = '#ffffff';
+          try {
+            window.sessionStorage.setItem('kh:reset-skip-restore', '1');
+          } catch (flagError) {
+            console.error('Khartis reset flag persistence failed', flagError);
+          }
           var clearSw =
             'serviceWorker' in navigator
               ? navigator.serviceWorker
