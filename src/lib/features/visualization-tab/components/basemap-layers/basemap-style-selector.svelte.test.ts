@@ -47,18 +47,13 @@ describe('BasemapStyleSelector', () => {
     expect(source).not.toContain('ToggleWithLabel');
   });
 
-  it('offers an explicit world globe checkbox and keeps France on the flat projection', () => {
+  it('keeps France on the flat projection and delegates the globe toggle to the projection tool', () => {
     expect(source).toContain('mapProjectionStore.isGlobe');
     expect(source).toContain("selectedZone === 'france'");
     expect(source).toContain('MAP_PROJECTION_TYPE.MERCATOR');
 
-    expect(source).not.toContain(
-      "selectedZone === 'monde' &&\n      mapProjectionStore.isGlobe &&\n      !mapProjectionStore.isGlobeExplicitlyEnabled"
-    );
-    expect(source).toContain('labelText={m.map_projection_globe()}');
-    expect(source).toContain('checked={isGlobeProjectionEnabled}');
-    expect(source).toContain('onchange={handleGlobeProjectionToggle}');
-    expect(source).toContain('explicit: true');
+    expect(source).not.toContain('labelText={m.map_projection_globe()}');
+    expect(source).not.toContain('handleGlobeProjectionToggle');
   });
 
   it('filters layer controls to the groups available in the active Carte Facile style', () => {

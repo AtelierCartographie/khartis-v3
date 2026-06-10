@@ -91,6 +91,16 @@ describe('ProjectionMain', () => {
     expect(source).not.toContain('handleViewModeChange');
   });
 
+  it('shows only the tiled map projection controls when the reference basemap is active', () => {
+    expect(source).toContain('{#if isTiledBasemapEnabled}');
+    expect(source).toContain('m.map_projection_label()');
+    expect(source).toContain('m.projection_tiled_helper()');
+    expect(source).toContain("{#if tiledZone === 'monde'}");
+    expect(source).toContain('labelText={m.map_projection_globe()}');
+    expect(source).toContain('onchange={handleGlobeProjectionToggle}');
+    expect(source).toContain('explicit: true');
+  });
+
   it('stretches compact suggestion cards across the available popover body', () => {
     expect(source).toContain('.projection-content {');
     expect(source).toContain('width: 100%;');
