@@ -535,6 +535,7 @@
   "geo_orientation_compass": "Compass rose",
   "geo_orientation_size": "Size (mm)",
   "geo_orientation_color": "Color",
+  "geo_orientation_valid_at_map_center": "The orientation is valid at the center of the map.",
   "geo_inset_map_type": "Type",
   "geo_inset_map_globe": "Globe",
   "geo_inset_map_planisphere": "Planisphere",
