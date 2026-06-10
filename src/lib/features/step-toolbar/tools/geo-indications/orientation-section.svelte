@@ -44,6 +44,10 @@
   onToggleChange={() => store.toggleOrientation()}
 >
   <div class="section-content">
+    <p class="orientation-center-note">
+      {m.geo_orientation_valid_at_map_center()}
+    </p>
+
     <Grid noGutter>
       <Row>
         <Column>
@@ -95,5 +99,12 @@
 <style>
   .section-content :global(.bx--row + .bx--row) {
     margin-top: var(--cds-spacing-05);
+  }
+
+  .orientation-center-note {
+    margin: 0 0 var(--cds-spacing-05);
+    color: var(--cds-text-secondary);
+    font-size: var(--cds-body-compact-01-font-size, 0.875rem);
+    line-height: var(--cds-body-compact-01-line-height, 1.28572);
   }
 </style>
