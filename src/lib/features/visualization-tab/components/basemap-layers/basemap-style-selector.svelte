@@ -106,8 +106,6 @@
   const selectedZoneIndex = $derived(
     zoneOptions.findIndex((zone) => zone.id === selectedZone)
   );
-  const isGlobeProjectionEnabled = $derived(mapProjectionStore.isGlobe);
-
   $effect(() => {
     if (selectedZone === 'france' && mapProjectionStore.isGlobe) {
       setFlatProjection();
@@ -252,17 +250,6 @@
 
     handleZoneChange(zone.id);
   }
-
-  function handleGlobeProjectionToggle(checked: boolean): void {
-    if (!checked || selectedZone !== 'monde') {
-      setFlatProjection();
-      return;
-    }
-
-    mapProjectionStore.setProjection(MAP_PROJECTION_TYPE.GLOBE, {
-      explicit: true
-    });
-  }
 </script>
 
 <div class="basemap-style-selector">
@@ -282,17 +269,6 @@
       hideInactiveLabel={true}
     />
   </div>
-
-  {#if selectedZone === 'monde'}
-    <div class="projection-option">
-      <span class="field-label">{m.map_projection_label()}</span>
-      <SimpleCheckbox
-        labelText={m.map_projection_globe()}
-        checked={isGlobeProjectionEnabled}
-        onchange={handleGlobeProjectionToggle}
-      />
-    </div>
-  {/if}
 
   <div class="styles-section">
     <div class="style-rail" role="list" aria-label={m.basemap_style_label()}>
@@ -363,16 +339,6 @@
 
   .scale-selector {
     position: relative;
-  }
-
-  .projection-option {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
-  }
-
-  .projection-option :global(.kh-checkbox-native) {
-    width: fit-content;
   }
 
   .field-label {

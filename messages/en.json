@@ -1259,6 +1259,8 @@
   "basemap_tiled_zoom_helper": "Some layers or information levels are only displayed from a certain zoom level.",
   "basemap_reference_data_learn_more": "Learn more about the reference background data",
   "basemap_tiled_info": "Activates the reference background (IGN & OpenStreetMap) instead of the vector layers. Useful for the geographic context but hides the customizable layers.",
+  "basemap_projection_shortcut": "Click here to customize the projection.",
+  "projection_tiled_helper": "The reference background (IGN & OpenStreetMap) is displayed in the Web Mercator projection.",
   "geo_reference_info": "Entities: associate your data with place names (countries, regions, cities). Coordinates: use latitude/longitude columns.",
   "geo_linked_variable_info": "Column of your data that contains geographic identifiers (country names, ISO codes, region names, etc.).",
   "geo_longitude_info": "Column containing longitude values (East-West coordinate, between -180 and 180).",
