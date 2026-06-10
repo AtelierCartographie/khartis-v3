@@ -595,6 +595,8 @@
   "error_invalid_json_format": "Format JSON invalide",
   "warning_duplicate_rows_title": "Lignes en double détectées",
   "warning_performance_title": "Performance",
+  "warning_column_type_invalidated_title": "Conversion partielle de « {columnName} »",
+  "warning_column_type_invalidated_subtitle": "{count} valeur(s) non convertible(s) en {newType} ont été vidées.",
   "validation_no_files_title": "Aucun fichier",
   "validation_no_files_message": "Veuillez ajouter au moins un fichier valide",
   "validation_invalid_khartis_file": "Veuillez sélectionner un fichier .kh ou .khartis valide",
