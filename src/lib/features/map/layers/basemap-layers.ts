@@ -655,10 +655,10 @@ export function createTerreLayers(
         new PathLayer({
           id: `${layerId}-shadow`,
           ...createPathLayerProps(outlineData),
-          getColor: withOpacity([80, 80, 80], 0.3),
+          getColor: withOpacity([80, 80, 80], 0.45),
           widthUnits: 'pixels',
-          getWidth: 2,
-          widthMinPixels: 1.5,
+          getWidth: 3.5,
+          widthMinPixels: 2,
           widthMaxPixels: 6,
           ...baseProps,
           updateTriggers: {
@@ -719,10 +719,10 @@ export function createTerreLayers(
             data: geojson,
             filled: false,
             stroked: true,
-            getLineColor: withOpacity([80, 80, 80], 0.3),
+            getLineColor: withOpacity([80, 80, 80], 0.45),
             lineWidthUnits: 'pixels',
-            getLineWidth: 2,
-            lineWidthMinPixels: 1.5,
+            getLineWidth: 3.5,
+            lineWidthMinPixels: 2,
             lineWidthMaxPixels: 6,
             ...baseProps,
             updateTriggers: {
