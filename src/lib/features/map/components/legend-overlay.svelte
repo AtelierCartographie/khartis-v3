@@ -718,8 +718,25 @@
       return null;
     }
 
-    const primitive = resolveLegendColorSwatchPrimitive(viz);
-    const classification = getLegendClassedColorClassification(viz);
+    let primitive = resolveLegendColorSwatchPrimitive(viz);
+    let classification = getLegendClassedColorClassification(viz);
+
+    if (!classification?.colors?.length && primitive !== 'area') {
+      const polygon = getPolygonPrimitive(viz);
+      const polygonClassification = getPrimitiveClassification(
+        viz,
+        PrimitiveFilterType.POLYGON
+      );
+      if (
+        polygon?.enabled &&
+        polygon.fillMode === FillMode.CLASSES &&
+        polygonClassification?.colors?.length
+      ) {
+        primitive = 'area';
+        classification = polygonClassification;
+      }
+    }
+
     const colors = classification?.colors ?? [];
 
     if (!classification || colors.length === 0) {
