@@ -194,6 +194,7 @@ describe('geo indications overlay dragging', () => {
     projectionStore.reset();
     mapInstanceStore.reset();
     globalActions.resetNavigationState();
+    globalActions.setPageZoomScale(1);
     globalState.selectedTool = StylingTools.GeoIndications;
   });
 
@@ -303,6 +304,50 @@ describe('geo indications overlay dragging', () => {
     expect(geoIndicationsState.orientation.dragPosition).toEqual({
       x: 243,
       y: 39
+    });
+  });
+
+  it('tracks the cursor 1:1 while dragging when the page is zoomed', async () => {
+    // Regression: the figure used to move at 1/scale of the cursor because the
+    // logical drag position was rendered without multiplying back by the page
+    // scale. At scale 2 the stored position must stay logical (cursor delta /
+    // scale) while the rendered offset is multiplied by the scale.
+    geoIndicationsActions.toggleOrientation();
+    formatActions.toggleGrid();
+    globalActions.setPageZoomScale(2);
+
+    const { container } = render(GeoIndicationsOverlay);
+    const overlay = container.querySelector('.geo-indications-overlay');
+    const orientation = container.querySelector('.north-arrow');
+
+    if (
+      !(overlay instanceof HTMLDivElement) ||
+      !(orientation instanceof HTMLDivElement)
+    ) {
+      throw new Error('overlay or orientation not rendered');
+    }
+
+    // Screen-pixel boxes (the overlay is rendered at screen scale).
+    bindElementBox(overlay, { left: 0, top: 0, width: 300, height: 200 });
+    bindElementBox(orientation, { left: 200, top: 20, width: 30, height: 40 });
+
+    // Grab the element's top-left corner (zero grab offset).
+    await fireEvent.pointerDown(orientation, { clientX: 200, clientY: 20 });
+    // Move the cursor by +40 screen px on each axis.
+    await fireEvent.pointerMove(window, { clientX: 240, clientY: 60 });
+
+    // Logical position advances by the screen delta divided by the scale.
+    expect(geoIndicationsState.orientation.dragPosition).toEqual({
+      x: 120,
+      y: 30
+    });
+
+    // …and the rendered offset multiplies it back, so on screen the figure
+    // follows the cursor 1:1 (240/60, not 120/30).
+    await waitFor(() => {
+      const style = orientation.getAttribute('style') ?? '';
+      expect(style).toContain('left: 240px');
+      expect(style).toContain('top: 60px');
     });
   });
 
