@@ -185,6 +185,24 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     labelColor: '#161616'
   },
   {
+    id: 'sphere',
+    visible: true,
+    renderBelowThematic: true,
+    color: '#5a5a5a',
+    thickness: 1,
+    opacity: 100
+  },
+  {
+    id: 'frontieres',
+    visible: true,
+    renderBelowThematic: true,
+    color: '#8d8d8d',
+    dotted: false,
+    dottedPattern: BasemapDottedPattern.DOTS,
+    thickness: 0.5,
+    opacity: 100
+  },
+  {
     id: 'equateur',
     visible: false,
     renderBelowThematic: true,
@@ -203,24 +221,6 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     color: '#8d8d8d',
     dotted: true,
     dottedPattern: BasemapDottedPattern.DOTS,
-    thickness: 1,
-    opacity: 100
-  },
-  {
-    id: 'frontieres',
-    visible: true,
-    renderBelowThematic: true,
-    color: '#8d8d8d',
-    dotted: false,
-    dottedPattern: BasemapDottedPattern.DOTS,
-    thickness: 0.5,
-    opacity: 100
-  },
-  {
-    id: 'sphere',
-    visible: true,
-    renderBelowThematic: true,
-    color: '#5a5a5a',
     thickness: 1,
     opacity: 100
   }
