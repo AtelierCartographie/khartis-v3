@@ -26,9 +26,11 @@ Applies to all code in this repo. These are decision rules for _how_ to write an
 - Before editing a shared function, class, or method, run GitNexus impact analysis (see `CLAUDE.md` → GitNexus) and surface HIGH/CRITICAL blast radius before proceeding; run `detect_changes` before committing.
 - Preserve existing behavior unless the task says otherwise: keep public signatures, store contracts, and the binary geometry path (`DuckDB → Arrow → Deck.gl`) intact. Validate the edited area with the smallest relevant check (`pnpm check`, the nearest Vitest target) and report honestly when a check could not run.
 
-## Comments only when essential
+## Do not add comments
 
-- Prefer self-explanatory names over comments. Add a comment only for a non-obvious invariant, a workaround, or a "why" — never to restate what the code already says. Do not add or expand comments or docstrings on code you did not change.
+- **Default to ZERO comments.** Write self-explanatory code (clear names, small functions) instead. Do not narrate intent, summarize what a block does, restate the code, or annotate a fix/change with a "why" comment.
+- The only admissible comment is a genuinely **non-obvious invariant or workaround** that would cause a real bug if a future editor changed the code without knowing it — and even then, keep it to one line. When unsure, do **not** add the comment.
+- Never add comments just because you wrote or changed the code. Never add or expand comments/docstrings on code you did not change. If a reviewer needs the rationale, it goes in the commit message or PR description, not in the source.
 
 ## Tests only when they add real value
 
