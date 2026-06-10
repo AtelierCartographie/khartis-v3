@@ -10,6 +10,7 @@ import {
   type ArrowTableLike
 } from '../types';
 import { SQL_FUNCTIONS } from '../constants';
+import { buildNormalizedNumericTextSql } from '$lib/features/commons/utils/numeric-format.utils';
 
 export interface DuckDBClient {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
@@ -130,13 +131,22 @@ export async function renameColumn(
   await maybeAnalyse(tableName, Duck, options);
 }
 
+export interface ChangeColumnTypeResult {
+  /**
+   * Number of originally non-empty values that became NULL because they could
+   * not be cast to the new type. Lets the interactive caller warn the user
+   * about silent data loss.
+   */
+  invalidatedCount: number;
+}
+
 export async function changeColumnType(
   tableName: string,
   columnName: string,
   newType: string,
   Duck: DuckDBClient,
   options?: { skipAnalysis?: boolean }
-): Promise<void> {
+): Promise<ChangeColumnTypeResult> {
   const escapedTable = escapeIdentifier(tableName);
   const escapedCol = escapeIdentifier(columnName);
 
@@ -145,15 +155,33 @@ export async function changeColumnType(
     throw new DuckDBError(m.error_unsupported_column_type({ newType }));
   }
 
-  const usingClause = isNumericColumnType(normalizedType)
-    ? ` USING TRY_CAST("${escapedCol}" AS ${normalizedType})`
-    : '';
+  // Numeric targets normalize locale-formatted strings (comma decimals,
+  // thousands separators) before casting; other targets cast as-is. Every
+  // target uses TRY_CAST so unparsable values become NULL instead of failing
+  // the whole statement (the #166 contract).
+  const usingExpr = isNumericColumnType(normalizedType)
+    ? buildNormalizedNumericTextSql(`trim("${escapedCol}"::VARCHAR)`)
+    : `"${escapedCol}"`;
+  const castExpr = `TRY_CAST(${usingExpr} AS ${normalizedType})`;
+
+  const invalidatedResult = (await Duck.query(
+    `SELECT COUNT(*) FILTER (
+       WHERE "${escapedCol}" IS NOT NULL
+         AND trim("${escapedCol}"::VARCHAR) <> ''
+         AND ${castExpr} IS NULL
+     ) AS invalidated
+     FROM "${escapedTable}"`,
+    { format: 'array' }
+  )) as Array<{ invalidated?: number | bigint }> | undefined;
+  const invalidatedCount = Number(invalidatedResult?.[0]?.invalidated ?? 0);
 
   await Duck.query(
-    `ALTER TABLE "${escapedTable}" ALTER COLUMN "${escapedCol}" SET DATA TYPE ${normalizedType}${usingClause}`
+    `ALTER TABLE "${escapedTable}" ALTER COLUMN "${escapedCol}" SET DATA TYPE ${normalizedType} USING ${castExpr}`
   );
 
   await maybeAnalyse(tableName, Duck, options);
+
+  return { invalidatedCount };
 }
 
 export async function dropColumn(
