@@ -13,18 +13,23 @@ export type AnnotationCreationMode = 'idle' | 'placing' | 'drawing';
  * WGS84 data anchor (lon/lat) tying a `coordinateSpace:'map'` annotation to the
  * basemap so it stays glued to the geometry when the MAP is zoomed/panned.
  *
- * Invariant — single-anchor contract: the anchor pins ONE reference point (the
- * annotation's top-left in map-area coordinates). For multi-point marks
- * (vector arrows/lines, freehand drawings) the relative geometry stays in
- * `style.points` / `content` as unzoomed map-area pixel offsets from that
- * anchor, exactly like a proportional symbol — only the anchor reprojects, the
- * offsets do not. A `'map'` annotation WITHOUT an anchor is legacy: it keeps the
- * historical pixel-page behavior (positioned relative to the map frame, ignores
- * the map viewState).
+ * Invariant — anchor + span contract: `lon`/`lat` pin the annotation's top-left
+ * in map-area coordinates. `spanLon`/`spanLat` pin a SECOND geographic point
+ * that sat exactly `ANNOTATION_ANCHOR_SPAN_PX × current scale factor` logical
+ * px to the right of the anchor when it was written; reprojecting both points
+ * and dividing the on-screen distance by the span yields the map scale factor
+ * applied to the mark, so it zooms at the same rate as the basemap. The mark's
+ * own geometry (`style.points` / `content`) stays in unzoomed map-area pixel
+ * offsets from the anchor. An anchor WITHOUT a span (older project) keeps the
+ * translate-only behavior, and a `'map'` annotation WITHOUT an anchor is
+ * legacy: it keeps the historical pixel-page behavior (positioned relative to
+ * the map frame, ignores the map viewState).
  */
 export interface AnnotationDataAnchor {
   lon: number;
   lat: number;
+  spanLon?: number;
+  spanLat?: number;
 }
 
 export interface Annotation {
