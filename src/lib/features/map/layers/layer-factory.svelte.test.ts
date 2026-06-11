@@ -687,6 +687,13 @@ describe('createTextOverlayLayers', () => {
     );
   });
 
+  it('keeps text filters independent from symbol filters on raw point datasets', () => {
+    expect(source).toContain('table: ctx.textPointTable ?? jsTable,');
+    expect(source).toContain(
+      '(representativePointSource ? jsTable : (textPointSource?.table ?? jsTable))'
+    );
+  });
+
   it('wraps text labels and places labels to the right when symbols are rendered', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 2,
