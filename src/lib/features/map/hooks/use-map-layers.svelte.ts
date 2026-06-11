@@ -1255,6 +1255,29 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             if (filteredTable !== table && filteredTable.numRows === 0) {
               hasEmptyFilteredVisualization = true;
             }
+            // Raw point datasets have no representative-point table, so the
+            // text layer renders from the main table; give it its own
+            // TEXT-filtered copy so Texts filters apply and Symbols filters
+            // don't leak onto the labels.
+            ctx.textPointTable =
+              geoInfo?.type === GeometryType.POINT
+                ? split
+                  ? filterSplitGeometryTableByDatasetRows(
+                      table,
+                      split,
+                      viz.dataFilters,
+                      PrimitiveFilterType.TEXT,
+                      tableFilters
+                    )
+                  : filterArrowTableByTableFilters(
+                      filterArrowTableByDataFilters(
+                        table,
+                        viz.dataFilters,
+                        PrimitiveFilterType.TEXT
+                      ),
+                      tableFilters
+                    )
+                : undefined;
             const joinedBasemapId = split
               ? getDatasetJoinedBasemap(datasetId)
               : null;

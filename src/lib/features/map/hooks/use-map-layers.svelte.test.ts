@@ -202,6 +202,9 @@ describe('useMapLayers source', () => {
       'ctx.textRepresentativePointTable =\n                filteredTextRepresentativePointTable;'
     );
     expect(source).toContain(
+      'ctx.textPointTable =\n              geoInfo?.type === GeometryType.POINT'
+    );
+    expect(source).toContain(
       'getSplitMatchedGeometryRowIndices(\n      matchedGeometryTable,\n      filteredDataset,'
     );
   });
