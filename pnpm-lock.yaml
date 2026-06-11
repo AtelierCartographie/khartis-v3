@@ -111,8 +111,8 @@ importers:
         specifier: ^0.8.3
         version: 0.8.3
       geoarrow-deck-stream:
-        specifier: github:AtelierCartographie/geoarrow-deck-stream#v1.1.0
-        version: git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#09e3e412815ed6463ed83a95543b2cca44ba4066(@deck.gl/core@9.3.3)(@deck.gl/layers@9.3.3(@deck.gl/core@9.3.3)(@loaders.gl/core@4.4.2)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.1.0))(apache-arrow@21.1.0)
+        specifier: github:AtelierCartographie/geoarrow-deck-stream#v1.1.2
+        version: git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#8f3ea7fc0b45a7713fee4c9bd922c5229700189f(@deck.gl/core@9.3.3)(@deck.gl/layers@9.3.3(@deck.gl/core@9.3.3)(@loaders.gl/core@4.4.2)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.1.0))(apache-arrow@21.1.0)
       html-to-image:
         specifier: ^1.11.13
         version: 1.11.13
@@ -3248,9 +3248,9 @@ packages:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
     engines: {node: '>=6.9.0'}
 
-  geoarrow-deck-stream@git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#09e3e412815ed6463ed83a95543b2cca44ba4066:
-    resolution: {commit: 09e3e412815ed6463ed83a95543b2cca44ba4066, repo: git@github.com:AtelierCartographie/geoarrow-deck-stream.git, type: git}
-    version: 1.1.0
+  geoarrow-deck-stream@git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#8f3ea7fc0b45a7713fee4c9bd922c5229700189f:
+    resolution: {commit: 8f3ea7fc0b45a7713fee4c9bd922c5229700189f, repo: git@github.com:AtelierCartographie/geoarrow-deck-stream.git, type: git}
+    version: 1.1.2
     peerDependencies:
       '@deck.gl/core': '>=9.0.0'
       '@deck.gl/layers': '>=9.0.0'
@@ -8749,7 +8749,7 @@ snapshots:
 
   gensync@1.0.0-beta.2: {}
 
-  geoarrow-deck-stream@git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#09e3e412815ed6463ed83a95543b2cca44ba4066(@deck.gl/core@9.3.3)(@deck.gl/layers@9.3.3(@deck.gl/core@9.3.3)(@loaders.gl/core@4.4.2)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.1.0))(apache-arrow@21.1.0):
+  geoarrow-deck-stream@git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#8f3ea7fc0b45a7713fee4c9bd922c5229700189f(@deck.gl/core@9.3.3)(@deck.gl/layers@9.3.3(@deck.gl/core@9.3.3)(@loaders.gl/core@4.4.2)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.1.0))(apache-arrow@21.1.0):
     dependencies:
       '@deck.gl/core': 9.3.3
       '@deck.gl/layers': 9.3.3(@deck.gl/core@9.3.3)(@loaders.gl/core@4.4.2)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))
