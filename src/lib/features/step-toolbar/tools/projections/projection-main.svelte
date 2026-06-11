@@ -35,7 +35,7 @@
   const INITIAL_VISIBLE_SUGGESTIONS = 3;
   const SUGGESTION_INCREMENT = 3;
 
-  const description = m.projection_description();
+  const description = $derived(m.projection_description());
   const isTiledBasemapEnabled = $derived(
     shouldUseMapLibreInterleaved({
       requiresMapLibre: basemapStyleStore.requiresMapLibre,
@@ -94,36 +94,40 @@
 
     return [...suggestions.national, ...suggestions.generic];
   });
-  const filterOptions: ReadonlyArray<{
-    id: ProjectionFilterId;
-    label: string;
-  }> = [
-    { id: 'all', label: m.projection_filter_all() },
-    { id: 'Rectangulaire', label: m.projection_filter_rectangular() },
-    { id: 'Arrondie', label: m.projection_filter_rounded() },
-    { id: 'Discontinue', label: m.projection_filter_discontinuous() }
-  ];
-  const projectionGroups: ReadonlyArray<{
-    id: ProjectionShapeFilterId;
-    label: string;
-    shape: string;
-  }> = [
-    {
-      id: 'Rectangulaire',
-      label: m.projection_group_rectangular(),
-      shape: 'rectangular'
-    },
-    {
-      id: 'Arrondie',
-      label: m.projection_group_rounded(),
-      shape: 'round'
-    },
-    {
-      id: 'Discontinue',
-      label: m.projection_group_discontinuous(),
-      shape: 'discontinuous'
-    }
-  ];
+  const filterOptions = $derived.by(
+    (): ReadonlyArray<{
+      id: ProjectionFilterId;
+      label: string;
+    }> => [
+      { id: 'all', label: m.projection_filter_all() },
+      { id: 'Rectangulaire', label: m.projection_filter_rectangular() },
+      { id: 'Arrondie', label: m.projection_filter_rounded() },
+      { id: 'Discontinue', label: m.projection_filter_discontinuous() }
+    ]
+  );
+  const projectionGroups = $derived.by(
+    (): ReadonlyArray<{
+      id: ProjectionShapeFilterId;
+      label: string;
+      shape: string;
+    }> => [
+      {
+        id: 'Rectangulaire',
+        label: m.projection_group_rectangular(),
+        shape: 'rectangular'
+      },
+      {
+        id: 'Arrondie',
+        label: m.projection_group_rounded(),
+        shape: 'round'
+      },
+      {
+        id: 'Discontinue',
+        label: m.projection_group_discontinuous(),
+        shape: 'discontinuous'
+      }
+    ]
+  );
   const availableFilterOptions = $derived(
     filterOptions.filter(
       (option) =>

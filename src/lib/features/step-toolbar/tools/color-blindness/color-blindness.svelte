@@ -15,7 +15,7 @@
     isColorBlindnessActive(colorBlindnessState) && !notificationDismissed
   );
 
-  const simulationOptions = [
+  const simulationOptions = $derived.by(() => [
     { value: 'none', text: m.colorblind_none() },
     { value: 'protanopia', text: m.colorblind_protanopia() },
     { value: 'deuteranopia', text: m.colorblind_deuteranopia() },
@@ -25,7 +25,7 @@
     { value: 'tritanomaly', text: m.colorblind_tritanomaly() },
     { value: 'achromatopsia', text: m.colorblind_achromatopsia() },
     { value: 'achromatomaly', text: m.colorblind_achromatomaly() }
-  ];
+  ]);
 
   function handleSimulationChange(event: Event) {
     const selectElement = event.target as HTMLSelectElement;

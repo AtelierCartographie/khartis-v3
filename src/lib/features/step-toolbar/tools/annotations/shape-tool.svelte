@@ -58,13 +58,13 @@
     );
   }
 
-  const shapes: { value: ShapeTypeValue; text: string }[] = [
+  const shapes = $derived.by<{ value: ShapeTypeValue; text: string }[]>(() => [
     { value: SHAPE_TYPE.ARROW, text: m.annotations_shape_arrow() },
     { value: SHAPE_TYPE.LINE, text: m.annotations_shape_line() },
     { value: SHAPE_TYPE.RECTANGLE, text: m.annotations_shape_rectangle() },
     { value: SHAPE_TYPE.CIRCLE, text: m.annotations_shape_circle() },
     { value: SHAPE_TYPE.TRIANGLE, text: m.triangle() }
-  ];
+  ]);
 
   const FILLED_SHAPES: ShapeTypeValue[] = [
     SHAPE_TYPE.RECTANGLE,

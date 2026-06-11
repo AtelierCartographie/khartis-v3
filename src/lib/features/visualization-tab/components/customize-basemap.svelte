@@ -110,15 +110,15 @@
   }
 
   const sphereSyntheticLayer: BasemapLayer = {
-    title_fr: m.basemap_layer_sphere(),
-    title_en: m.basemap_layer_sphere(),
+    title_fr: m.basemap_layer_sphere({}, { locale: 'fr' }),
+    title_en: m.basemap_layer_sphere({}, { locale: 'en' }),
     type: BasemapLayerType.SPHERE,
     file: SYNTHETIC_AUX_LAYER_KEY.SPHERE,
     style: null
   };
   const oceanSyntheticLayer: BasemapLayer = {
-    title_fr: m.basemap_layer_mers(),
-    title_en: m.basemap_layer_mers(),
+    title_fr: m.basemap_layer_mers({}, { locale: 'fr' }),
+    title_en: m.basemap_layer_mers({}, { locale: 'en' }),
     type: BasemapLayerType.POLYGON,
     file: SYNTHETIC_AUX_LAYER_KEY.MERS,
     style: null

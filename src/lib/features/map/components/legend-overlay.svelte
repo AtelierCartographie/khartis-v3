@@ -133,6 +133,7 @@
     type LegendSvgDefinition,
     type SymbolType
   } from '$lib/features/commons/components/legend';
+  import { getLocale } from '$lib/paraglide/runtime.js';
   import {
     getLineWidthLegendScale,
     getPointSizeLegendScale,
@@ -1750,6 +1751,7 @@
   });
 
   $effect(() => {
+    void getLocale();
     void visualizationStore.version;
     legendActions.syncWithVisualizations();
   });
