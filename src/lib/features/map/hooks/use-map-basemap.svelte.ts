@@ -1,9 +1,11 @@
 import type {
+  LayerSpecification,
   Map as MapLibreMap,
   StyleSpecification,
   TransformStyleFunction
 } from 'maplibre-gl';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { getLocale } from '$lib/paraglide/runtime';
 import { OSMSourceId } from '../constants';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
 import { mapLoadingStore } from '../stores/map-loading.store.svelte';
@@ -25,6 +27,7 @@ export interface UseMapBasemapProps {
 export interface UseMapBasemapReturn {
   syncBasemapStyle: () => void;
   syncOSMRasterLayer: () => void;
+  syncBasemapLanguage: () => void;
   syncLabelsVisibility: () => void;
   syncGroupVisibility: () => void;
   syncProjection: () => void;
@@ -41,12 +44,95 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     onStyleLoaded
   } = props;
   const REFERENCE_BASEMAP_LOAD_TIMEOUT_MS = 10_000;
+  const OPENMAPTILES_SOURCE_ID = 'openmaptiles';
+
+  type BasemapLabelLocale = 'fr' | 'en';
+  type TextFieldExpression = string | unknown[];
 
   function getStyleKey(style: string | StyleSpecification): string {
     if (typeof style === 'string') {
       return style;
     }
     return style.name || 'inline-style';
+  }
+
+  function getBasemapLabelLocale(): BasemapLabelLocale {
+    return getLocale() === 'fr' ? 'fr' : 'en';
+  }
+
+  function getLayerSource(layer: LayerSpecification): string | null {
+    return 'source' in layer && typeof layer.source === 'string'
+      ? layer.source
+      : null;
+  }
+
+  function getLayerSourceLayer(layer: LayerSpecification): string | null {
+    return 'source-layer' in layer && typeof layer['source-layer'] === 'string'
+      ? layer['source-layer']
+      : null;
+  }
+
+  function getLayerTextField(layer: LayerSpecification): unknown {
+    if (!('layout' in layer) || !layer.layout) {
+      return undefined;
+    }
+
+    return (layer.layout as Record<string, unknown>)['text-field'];
+  }
+
+  function hasOpenMapTilesNameLabel(textField: unknown): boolean {
+    if (typeof textField === 'string') {
+      return /\{name(?::[^}]+)?\}/.test(textField);
+    }
+
+    return (
+      Array.isArray(textField) &&
+      textField.some((value) =>
+        typeof value === 'string'
+          ? value.includes('name:')
+          : Array.isArray(value) && hasOpenMapTilesNameLabel(value)
+      )
+    );
+  }
+
+  function buildLocalizedNameExpression(locale: BasemapLabelLocale): unknown[] {
+    return [
+      'coalesce',
+      ['get', `name:${locale}`],
+      ['get', 'name:latin'],
+      ['get', 'name']
+    ];
+  }
+
+  function buildLocalizedOpenMapTilesTextField(
+    layer: LayerSpecification,
+    locale: BasemapLabelLocale
+  ): TextFieldExpression | null {
+    const textField = getLayerTextField(layer);
+    if (!hasOpenMapTilesNameLabel(textField)) {
+      return null;
+    }
+
+    const localizedName = buildLocalizedNameExpression(locale);
+    const sourceLayer = getLayerSourceLayer(layer);
+
+    if (sourceLayer === 'mountain_peak') {
+      return layer.id === 'peak_main-no-elevation'
+        ? ['concat', localizedName, '\n▲']
+        : [
+            'concat',
+            localizedName,
+            '\n',
+            ['to-string', ['get', 'ele']],
+            'm\n▲'
+          ];
+    }
+
+    if (layer.id.startsWith('place_city_') && layer.id.endsWith('_point')) {
+      return ['concat', '• ', localizedName];
+    }
+
+    return localizedName;
   }
 
   const currentStyleKey = getStyleKey(basemapStyleStore.selectedStyleUrl);
@@ -303,6 +389,40 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     }
   }
 
+  function syncBasemapLanguage(): void {
+    const map = getMap();
+    if (!map || !getIsMapLoaded() || isStyleLoading || !map.isStyleLoaded())
+      return;
+
+    const locale = getBasemapLabelLocale();
+
+    try {
+      const style = map.getStyle();
+      if (!style?.layers) return;
+
+      for (const layer of style.layers) {
+        if (layer.type !== 'symbol') {
+          continue;
+        }
+
+        if (getLayerSource(layer) !== OPENMAPTILES_SOURCE_ID) {
+          continue;
+        }
+
+        const textField = buildLocalizedOpenMapTilesTextField(layer, locale);
+        if (textField) {
+          map.setLayoutProperty(layer.id, 'text-field', textField);
+        }
+      }
+    } catch (error) {
+      logger.error(
+        'Failed to sync MapLibre basemap label language',
+        LogCategory.MAP,
+        error
+      );
+    }
+  }
+
   function syncLabelsVisibility(): void {
     const map = getMap();
     if (!map || !getIsMapLoaded() || isStyleLoading || !map.isStyleLoaded())
@@ -423,6 +543,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
   return {
     syncBasemapStyle,
     syncOSMRasterLayer,
+    syncBasemapLanguage,
     syncLabelsVisibility,
     syncGroupVisibility,
     syncProjection,

@@ -6,6 +6,7 @@
   import type { LngLatBoundsLike, Map as MapLibreMap } from 'maplibre-gl';
   import { onMount, untrack } from 'svelte';
   import { fade } from 'svelte/transition';
+  import { getLocale } from '$lib/paraglide/runtime';
   import { basemapStyleStore } from '../../commons/stores/basemap-style.store.svelte';
   import {
     BasemapStyle,
@@ -1258,7 +1259,7 @@
 
     const presetBounds = pendingMapLibreViewportPreset;
     pendingMapLibreViewportPreset = null;
-    mapBounds.fitToBounds(resolveUserDataBounds() ?? presetBounds, {
+    mapBounds.fitToBounds(presetBounds, {
       animate: true,
       reason: 'basemap'
     });
@@ -1335,6 +1336,7 @@
     },
     onStyleLoaded: () => {
       mapBasemap.syncOSMRasterLayer();
+      mapBasemap.syncBasemapLanguage();
       mapBasemap.syncLabelsVisibility();
       mapBasemap.syncGroupVisibility();
 
@@ -1952,6 +1954,11 @@
   $effect(() => {
     void basemapStyleStore.showLabels;
     untrack(() => mapBasemap.syncLabelsVisibility());
+  });
+
+  $effect(() => {
+    void getLocale();
+    untrack(() => mapBasemap.syncBasemapLanguage());
   });
 
   $effect(() => {

@@ -98,6 +98,21 @@ describe('ThematicMap source', () => {
     expect(presetGuardIndex).toBeLessThan(datasetFitIndex);
   });
 
+  it('uses requested basemap viewport presets instead of user data bounds', () => {
+    const helperStart = source.indexOf(
+      'function applyPendingMapLibreViewportPreset'
+    );
+    const helperEnd = source.indexOf(
+      'function fitMapLibreViewportAfterViewModeSwitch',
+      helperStart
+    );
+    const helperSource = source.slice(helperStart, helperEnd);
+
+    expect(helperSource).toContain('const presetBounds =');
+    expect(helperSource).toContain('mapBounds.fitToBounds(presetBounds, {');
+    expect(helperSource).not.toContain('resolveUserDataBounds()');
+  });
+
   it('does not inherit catalog projection metadata for standalone geofiles', () => {
     expect(source).toContain('if (!datasetId) {');
     expect(source).toContain('if (!duckDataset?.joinedBasemap) {');
@@ -166,6 +181,17 @@ describe('ThematicMap source', () => {
     expect(source).toContain('mapLayers.syncInterleavedLayerOrder();');
     expect(source).toContain(
       "scheduleLayerUpdateAfterStyleIdle(map, 'effect:selectedStyle-idle')"
+    );
+  });
+
+  it('resyncs MapLibre basemap label language when the app locale changes', () => {
+    expect(source).toContain(
+      "import { getLocale } from '$lib/paraglide/runtime';"
+    );
+    expect(source).toContain('mapBasemap.syncBasemapLanguage();');
+    expect(source).toContain('void getLocale();');
+    expect(source).toContain(
+      'untrack(() => mapBasemap.syncBasemapLanguage());'
     );
   });
 
