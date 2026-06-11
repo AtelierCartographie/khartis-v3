@@ -33,15 +33,23 @@ const anchorMocks = vi.hoisted(() => ({
   dataToScreenPx: vi.fn<
     (anchor: { lon: number; lat: number }) => { x: number; y: number } | null
   >(() => ({ x: 0, y: 0 })),
-  screenPxToData: vi.fn<
-    (x: number, y: number) => { lon: number; lat: number } | null
-  >(() => ({ lon: 0, lat: 0 }))
+  buildAnchorFromScreenPx: vi.fn<
+    (
+      x: number,
+      y: number,
+      scaleFactor?: number
+    ) => { lon: number; lat: number } | null
+  >(() => ({ lon: 0, lat: 0 })),
+  getAnchorScaleFactor: vi.fn<(anchor: { lon: number; lat: number }) => number>(
+    () => 1
+  )
 }));
 
 vi.mock('../utils/map-anchor-projection.utils', () => ({
   canAnchorToMap: anchorMocks.canAnchorToMap,
   dataToScreenPx: anchorMocks.dataToScreenPx,
-  screenPxToData: anchorMocks.screenPxToData
+  buildAnchorFromScreenPx: anchorMocks.buildAnchorFromScreenPx,
+  getAnchorScaleFactor: anchorMocks.getAnchorScaleFactor
 }));
 
 function extractPathPoints(
@@ -762,6 +770,54 @@ describe('annotation overlay drawing interactions', () => {
 
     anchorMocks.dataToScreenPx.mockReset();
     anchorMocks.dataToScreenPx.mockReturnValue({ x: 0, y: 0 });
+    mapInstanceStore.reset();
+  });
+
+  it('scales a data-anchored map annotation with the map zoom factor', async () => {
+    anchorMocks.canAnchorToMap.mockReturnValue(true);
+    anchorMocks.dataToScreenPx.mockReturnValue({ x: 40, y: 20 });
+    anchorMocks.getAnchorScaleFactor.mockImplementation(
+      () => mapInstanceStore.deckViewState.zoom
+    );
+
+    annotationsActions.beginPlacement(AnnotationKind.SHAPE, 'circle');
+    const placed = annotationsActions.commitPlacement({
+      coordinateSpace: 'page',
+      type: AnnotationKind.SHAPE,
+      position: { x: 10, y: 10 },
+      size: { width: 56, height: 56 },
+      content: 'circle'
+    });
+    if (!placed) {
+      throw new Error('Expected a placed shape annotation');
+    }
+    annotationsActions.updateAnnotation(placed.id, {
+      coordinateSpace: 'map',
+      anchor: { lon: 2.35, lat: 48.86, spanLon: 3.35, spanLat: 48.86 }
+    });
+
+    mapInstanceStore.updateDeckViewState({ target: [0, 0, 0], zoom: 2 });
+
+    const { container } = render(AnnotationOverlay);
+    const item = container.querySelector('.annotation-item');
+    if (!(item instanceof HTMLElement)) {
+      throw new Error('Annotation item was not rendered');
+    }
+
+    await waitFor(() => {
+      expect(item.getAttribute('style')).toContain('transform: scale(2)');
+    });
+
+    mapInstanceStore.updateDeckViewState({ target: [0, 0, 0], zoom: 4 });
+
+    await waitFor(() => {
+      expect(item.getAttribute('style')).toContain('transform: scale(4)');
+    });
+
+    anchorMocks.dataToScreenPx.mockReset();
+    anchorMocks.dataToScreenPx.mockReturnValue({ x: 0, y: 0 });
+    anchorMocks.getAnchorScaleFactor.mockReset();
+    anchorMocks.getAnchorScaleFactor.mockReturnValue(1);
     mapInstanceStore.reset();
   });
 });

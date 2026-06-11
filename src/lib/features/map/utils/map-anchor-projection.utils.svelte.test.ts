@@ -26,8 +26,11 @@ vi.mock('../stores/projection.store.svelte', () => ({
 }));
 
 import {
+  ANNOTATION_ANCHOR_SPAN_PX,
+  buildAnchorFromScreenPx,
   canAnchorToMap,
   dataToScreenPx,
+  getAnchorScaleFactor,
   screenPxToData
 } from './map-anchor-projection.utils';
 
@@ -144,6 +147,59 @@ describe('map-anchor-projection helper', () => {
     expect(canAnchorToMap()).toBe(false);
     expect(dataToScreenPx({ lon: 1, lat: 2 })).toBeNull();
     expect(screenPxToData(10, 20)).toBeNull();
+  });
+
+  it('writes a span point with the anchor and derives the map scale factor from it', () => {
+    const map = createMapLibreMock();
+    mocks.mapInstanceStore.map = map;
+    mocks.mapInstanceStore.isMapLoaded = true;
+
+    // project = ×10 → the span point 100px right of (40,50) inverts to lon 14.
+    const anchor = buildAnchorFromScreenPx(40, 50);
+    expect(anchor).toEqual({ lon: 4, lat: 5, spanLon: 14, spanLat: 5 });
+
+    // Same zoom as written → factor 1.
+    expect(getAnchorScaleFactor(anchor!)).toBe(1);
+
+    // Map zoomed ×2 (project = ×20) → span distance 200px → factor 2.
+    map.project.mockImplementation((lngLat: [number, number]) => ({
+      x: lngLat[0] * 20,
+      y: lngLat[1] * 20
+    }));
+    expect(getAnchorScaleFactor(anchor!)).toBe(2);
+  });
+
+  it('preserves the current scale factor when re-anchoring and falls back to 1 without a span', () => {
+    const map = createMapLibreMock();
+    mocks.mapInstanceStore.map = map;
+    mocks.mapInstanceStore.isMapLoaded = true;
+
+    // Re-anchor at factor 2: the span is written 2×SPAN px away, so the factor
+    // read back at the same zoom is still 2 (no size snap).
+    const reAnchored = buildAnchorFromScreenPx(0, 0, 2);
+    expect(reAnchored).toEqual({
+      lon: 0,
+      lat: 0,
+      spanLon: (ANNOTATION_ANCHOR_SPAN_PX * 2) / 10,
+      spanLat: 0
+    });
+    expect(getAnchorScaleFactor(reAnchored!)).toBe(2);
+
+    expect(getAnchorScaleFactor({ lon: 4, lat: 5 })).toBe(1);
+  });
+
+  it('rejects an anchor whose inversion does not project back to its screen position', () => {
+    const map = createMapLibreMock();
+    // Aliased inversion (e.g. outside the projected world outline): unproject
+    // answers, but projecting that answer lands somewhere else.
+    map.unproject.mockImplementation((point: [number, number]) => ({
+      lng: point[0] / 10 + 50,
+      lat: point[1] / 10
+    }));
+    mocks.mapInstanceStore.map = map;
+    mocks.mapInstanceStore.isMapLoaded = true;
+
+    expect(buildAnchorFromScreenPx(40, 50)).toBeNull();
   });
 
   it('refuses anchoring for a pre-projected CRS without a render projection', () => {
