@@ -20,6 +20,7 @@
   } from '$lib/features/commons/constants/visualization.constants';
   import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
   import { webglToHex } from '$lib/features/commons/utils/color-utils';
+  import { dashArrayToDottedPattern } from '$lib/features/map/layers/layer-helpers';
   import type { BasemapLayer } from '$lib/features/map/types/basemap.types';
 
   interface Props {
@@ -111,13 +112,25 @@
     return webglToHex([r, g, b, a ?? 255]);
   }
 
-  function getPresetPathStyle(): { color?: string; width?: number } {
+  function getPresetPathStyle(): {
+    color?: string;
+    width?: number;
+    dotted?: boolean;
+    dottedPattern?: BasemapDottedPattern;
+  } {
     const presets = basemapService.stylePresets;
     if (!layer.style || !presets) return {};
     const preset = presets[layer.style];
     if (preset?.layer_type !== 'path') return {};
     const [r, g, b, a] = preset.color;
-    return { color: webglToHex([r, g, b, a ?? 255]), width: preset.width };
+    return {
+      color: webglToHex([r, g, b, a ?? 255]),
+      width: preset.width,
+      dotted: preset.dashArray ? true : undefined,
+      dottedPattern: preset.dashArray
+        ? dashArrayToDottedPattern(preset.dashArray)
+        : undefined
+    };
   }
 
   function pickString(
@@ -169,9 +182,10 @@
     const preset = getPresetPathStyle();
     return {
       color: pickString(override.color, preset.color ?? base?.color),
-      dotted: pickBoolean(override.dotted, base?.dotted),
+      dotted: pickBoolean(override.dotted, preset.dotted ?? base?.dotted),
       dottedPattern:
         (override.dottedPattern as BasemapDottedPattern | undefined) ??
+        preset.dottedPattern ??
         base?.dottedPattern,
       thickness: pickNumber(
         override.thickness,

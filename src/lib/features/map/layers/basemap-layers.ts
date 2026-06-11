@@ -68,7 +68,11 @@ import {
 import type { BBox, DeckDataRow, GeometryInfo, RGBColor } from '../types';
 import type { StylePreset, StylePresets } from '../types/basemap.types';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
-import { withOpacity, dottedPatternToDashArray } from './layer-helpers';
+import {
+  withOpacity,
+  dottedPatternToDashArray,
+  dashArrayToDottedPattern
+} from './layer-helpers';
 import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
 import {
   DEFAULT_TEXT_FONT_SETTINGS_RASTER,
@@ -2174,7 +2178,11 @@ function createMetadataLimitLayers(
 type StyledMetadataLineConfig = Pick<
   FrontieresLayerConfig,
   'color' | 'dotted' | 'dottedPattern' | 'thickness' | 'opacity'
->;
+> & {
+  // Exact dash authored in the style preset (e.g. `limit-dashed`), used until
+  // the user picks an explicit pattern in the UI.
+  presetDashArray?: [number, number];
+};
 
 // Resolves one limit layer's line style: per-file override (aux store) wins,
 // then the `limit-level-*` style preset (so nested levels keep their designed
@@ -2211,6 +2219,8 @@ function resolveMetadataLineStyle(
   const pickBoolean = (value: unknown, fallback: boolean): boolean =>
     typeof value === 'boolean' ? value : fallback;
 
+  const presetDashArray = preset?.dashArray;
+
   return {
     color: pickString(override.color, presetColorHex ?? config.color),
     thickness: pickNumber(
@@ -2218,10 +2228,17 @@ function resolveMetadataLineStyle(
       preset?.width ?? config.thickness
     ),
     opacity: pickNumber(override.opacity, config.opacity),
-    dotted: pickBoolean(override.dotted, config.dotted),
+    dotted: pickBoolean(
+      override.dotted,
+      presetDashArray ? true : config.dotted
+    ),
     dottedPattern:
       (override.dottedPattern as StyledMetadataLineConfig['dottedPattern']) ??
-      config.dottedPattern
+      (presetDashArray
+        ? dashArrayToDottedPattern(presetDashArray)
+        : config.dottedPattern),
+    presetDashArray:
+      override.dottedPattern === undefined ? presetDashArray : undefined
   };
 }
 
@@ -2248,11 +2265,12 @@ function createMetadataLineLayers(
     const effectiveOpacity = effective.opacity / 100;
     const effectiveThickness = clampBasemapLayerThickness(effective.thickness);
     const dashArray: [number, number] = effective.dotted
-      ? dottedPatternToDashArray(effective.dottedPattern)
+      ? (effective.presetDashArray ??
+        dottedPatternToDashArray(effective.dottedPattern))
       : [0, 0];
     const updateTriggers = {
       getLineColor: [effective.color, effectiveOpacity],
-      getDashArray: [effective.dotted, effective.dottedPattern]
+      getDashArray: [dashArray[0], dashArray[1]]
     };
 
     const layerId = buildLayerId(
@@ -2288,7 +2306,7 @@ function createMetadataLineLayers(
           widthUnits: 'pixels',
           widthMinPixels: 0,
           widthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
-          extensions: config.dotted ? [DASH_EXTENSION] : [],
+          extensions: effective.dotted ? [DASH_EXTENSION] : [],
           getDashArray: dashArray,
           dashJustified: true,
           ...baseProps,
@@ -2321,7 +2339,7 @@ function createMetadataLineLayers(
           widthUnits: 'pixels',
           widthMinPixels: 0,
           widthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
-          extensions: config.dotted ? [DASH_EXTENSION] : [],
+          extensions: effective.dotted ? [DASH_EXTENSION] : [],
           getDashArray: dashArray,
           dashJustified: true,
           ...baseProps,
@@ -2349,11 +2367,11 @@ function createMetadataLineLayers(
             getLineWidth: effectiveThickness,
             lineWidthMinPixels: 0,
             lineWidthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
-            extensions: config.dotted ? [DASH_EXTENSION] : [],
+            extensions: effective.dotted ? [DASH_EXTENSION] : [],
             getDashArray: dashArray,
             dashJustified: true,
             _subLayerProps: createDashedGeoJsonLineSubLayerProps(
-              config.dotted,
+              effective.dotted,
               dashArray
             ),
             ...baseProps,
