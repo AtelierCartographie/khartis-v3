@@ -83,8 +83,7 @@
 
   function resetAll() {
     if (!canApplyProjectionSettings) return;
-    projectionActions.setCenter(0, 0);
-    projectionActions.setRotation(0);
+    projectionActions.resetSettings();
   }
 </script>
 

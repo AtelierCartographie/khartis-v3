@@ -51,6 +51,29 @@ describe('projection store', () => {
     expect(source).toContain('activateManualProjectionOverride();');
   });
 
+  it('captures the basemap simple projection when settings activate a manual override', () => {
+    expect(source).toContain('if (!s.overrideActive) {');
+    expect(source).toContain(
+      "if (projTo?.type === 'simple' && projTo.proj4) {"
+    );
+    expect(source).toContain('s.customCode = projTo.proj4;');
+  });
+
+  it('reset settings restores the pre-override state for a captured basemap projection', () => {
+    expect(source).toContain('resetSettings: () => {');
+    expect(source).toContain(
+      's.customCode === basemapService.currentMetadata?.proj_to?.proj4'
+    );
+    const resetIndex = source.indexOf('resetSettings: () => {');
+    const resetBody = source.slice(
+      resetIndex,
+      source.indexOf('},', resetIndex)
+    );
+    expect(resetBody).toContain('s.center = undefined;');
+    expect(resetBody).toContain('s.overrideActive = false;');
+    expect(resetBody).toContain('s.overrideSource = undefined;');
+  });
+
   it('persists projection choices and user settings while omitting only computed suggestions', () => {
     const serializeFilterIndex = source.indexOf('serializeFilter: ({');
     const serializeFilterEndIndex = source.indexOf(
