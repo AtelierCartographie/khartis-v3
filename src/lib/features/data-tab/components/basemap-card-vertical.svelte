@@ -1,5 +1,6 @@
 <script lang="ts">
   import TilePreview from '$lib/features/commons/components/tile-preview.svelte';
+  import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
@@ -65,6 +66,16 @@
   );
 
   const aspectRatio = '16:9';
+
+  const thumbnailUrl = $derived.by(() => {
+    if (basemap.isCustom) return undefined;
+    const baseName = basemap.simplification_level
+      ? basemap.file.replace(`-${basemap.simplification_level}`, '')
+      : basemap.file;
+    return resolveStaticAssetUrl(`/basemaps/thumbnails/${baseName}.avif`);
+  });
+
+  let thumbnailFailed = $state(false);
 </script>
 
 <div
@@ -90,11 +101,21 @@
       />
     </div>
 
-    <TilePreview
-      ratio={aspectRatio ?? '2:1'}
-      label={m.basemap_preview_label()}
-      theme={isSuggestion ? 'suggestion' : 'default'}
-    />
+    {#if thumbnailUrl && !thumbnailFailed}
+      <img
+        class="preview-thumbnail"
+        src={thumbnailUrl}
+        alt={m.basemap_preview_label()}
+        loading="lazy"
+        onerror={() => (thumbnailFailed = true)}
+      />
+    {:else}
+      <TilePreview
+        ratio={aspectRatio ?? '2:1'}
+        label={m.basemap_preview_label()}
+        theme={isSuggestion ? 'suggestion' : 'default'}
+      />
+    {/if}
   </div>
 
   <div class="content-section">
@@ -278,6 +299,13 @@
       --basemap-card-icon-disabled,
       var(--basemap-card-text-disabled)
     );
+  }
+
+  .preview-thumbnail {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
   }
 
   .preview-radio {
