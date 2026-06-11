@@ -22,6 +22,7 @@
     type LayerGroupId,
     type StyleConfig
   } from '$lib/features/map/constants/carte-facile-layer-groups';
+  import type { Locale } from '$lib/paraglide/runtime.js';
   import {
     resolveNextTiledStyleSelection,
     resolveTiledStyleContext
@@ -112,17 +113,20 @@
     }
   });
 
-  function getZoneLabel(zone: ZoneId): string {
+  function getZoneLabel(zone: ZoneId, locale?: Locale): string {
+    const options = locale ? { locale } : undefined;
     return zone === 'france'
-      ? m.carte_facile_zone_france()
-      : m.carte_facile_zone_monde();
+      ? m.carte_facile_zone_france({}, options)
+      : m.carte_facile_zone_monde({}, options);
   }
 
-  function getVariantLabel(variant: StyleVariantId): string {
-    if (variant === 'couleurs') return m.carte_facile_style_couleurs();
+  function getVariantLabel(variant: StyleVariantId, locale?: Locale): string {
+    const options = locale ? { locale } : undefined;
+    if (variant === 'couleurs')
+      return m.carte_facile_style_couleurs({}, options);
     if (variant === 'niveaux-de-gris')
-      return m.carte_facile_style_niveaux_de_gris();
-    return m.carte_facile_style_satellite();
+      return m.carte_facile_style_niveaux_de_gris({}, options);
+    return m.carte_facile_style_satellite({}, options);
   }
 
   function getReferenceLayerLabel(item: ReferenceLayerItem): string {
@@ -149,8 +153,8 @@
   function getStyleCardBasemap(styleConfig: StyleConfig): BasemapMetadata {
     return {
       file: styleConfig.id,
-      title_fr: getVariantLabel(styleConfig.style),
-      title_en: getVariantLabel(styleConfig.style),
+      title_fr: getVariantLabel(styleConfig.style, 'fr'),
+      title_en: getVariantLabel(styleConfig.style, 'en'),
       source: getZoneLabel(styleConfig.zone),
       date: '',
       bbox: [0, 0, 16, 9],

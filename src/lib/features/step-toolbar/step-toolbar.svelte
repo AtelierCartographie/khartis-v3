@@ -68,11 +68,11 @@
     }
   });
 
-  const stepLabels = {
+  const stepLabels = $derived.by(() => ({
     [ToolbarStep.Data]: m.step_data(),
     [ToolbarStep.Visualizations]: m.step_visualizations(),
     [ToolbarStep.Styling]: m.step_styling()
-  };
+  }));
 
   let selectedList = $derived<Snippet | undefined>(
     globalState.selectedStep

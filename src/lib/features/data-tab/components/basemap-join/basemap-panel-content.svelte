@@ -25,11 +25,11 @@
     showJoinSection = false
   }: Props = $props();
 
-  const tabItems = [
+  const tabItems = $derived.by(() => [
     { icon: List, label: m.basemap_catalog(), iconSize: 16 },
     { icon: Upload, label: m.basemap_import(), iconSize: 16 },
     { icon: Grid, label: m.basemap_osm(), iconSize: 16 }
-  ];
+  ]);
 
   const TAB_INDEX_TO_SOURCE: readonly BasemapSource[] = [
     BasemapSource.CATALOG,

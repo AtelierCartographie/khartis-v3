@@ -20,10 +20,10 @@
   } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
 
-  const scaleUnitsOptions = [
+  const scaleUnitsOptions = $derived.by(() => [
     { value: DistanceUnit.KILOMETERS, labelText: m.geo_kilometers() },
     { value: DistanceUnit.MILES, labelText: m.geo_miles() }
-  ];
+  ]);
   import {
     AVAILABLE_FONTS,
     CARTOGRAPHIC_FONT_FAMILY,
@@ -79,10 +79,10 @@
     };
   });
 
-  const formOptions = [
+  const formOptions = $derived.by(() => [
     { value: ScaleForm.LINE, text: m.geo_scale_form_line() },
     { value: ScaleForm.BOX, text: m.geo_scale_form_box() }
-  ];
+  ]);
 
   const scaleHex = $derived(
     hslToHex(

@@ -22,6 +22,7 @@
   import { CSS_CLASSES, DOM_IDS, LEGEND_DEFAULTS } from './legend.constants';
   import { getLegendState, legendActions } from './legend.store.svelte';
   import type { LegendItem } from '../../types/legend.types';
+  import { getLocale } from '$lib/paraglide/runtime.js';
 
   type ColorPickerValidateEvent = {
     hex: string;
@@ -90,6 +91,7 @@
   );
 
   $effect(() => {
+    void getLocale();
     void visualizationStore.version;
     legendActions.syncWithVisualizations();
   });
