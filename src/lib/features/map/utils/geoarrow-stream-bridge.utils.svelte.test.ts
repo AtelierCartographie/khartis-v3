@@ -126,7 +126,7 @@ describe('geoarrow stream bridge path attributes', () => {
     expect(Array.from(data.featureIds.slice(0, data.length))).toEqual([0, 1]);
   });
 
-  it('routes composite projection streams through the matching geographic inset only', () => {
+  it('clips composite projection streams to the cell frames and renders insets in their cell', () => {
     const presets: ProjectionPresets = {
       TEST_EUROPE_DOM_TOM: {
         entries: [
@@ -181,10 +181,36 @@ describe('geoarrow stream bridge path attributes', () => {
 
     const points = collectStreamedPoints(projection, ring);
 
+    const subProjections = (
+      projection as unknown as {
+        getSubProjections: () => {
+          id: string;
+          screenExtent: [[number, number], [number, number]];
+        }[];
+      }
+    ).getSubProjections();
+    const madeiraExtent = subProjections.find(
+      (entry) => entry.id === 'madeira'
+    )?.screenExtent;
+    if (!madeiraExtent) throw new Error('Expected madeira sub-projection');
+
+    const withinExtent = (
+      [x, y]: [number, number],
+      [[x0, y0], [x1, y1]]: [[number, number], [number, number]]
+    ) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
+
     expect(points.length).toBeGreaterThan(0);
+    // Every streamed point stays inside one of the cell frames: the visible
+    // cut is the rectangular screen clipExtent, never a geographic edge.
     expect(
-      points.every(([x, y]) => x >= 602 && x <= 698 && y >= 402 && y <= 448)
+      points.every((point) =>
+        subProjections.some((entry) => withinExtent(point, entry.screenExtent))
+      )
     ).toBe(true);
+    // The Madeira ring lands in the Madeira inset cell.
+    expect(points.some((point) => withinExtent(point, madeiraExtent))).toBe(
+      true
+    );
   });
 
   it('does not crash when a ring falls entirely outside a composite inset', () => {

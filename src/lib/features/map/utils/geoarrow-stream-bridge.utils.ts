@@ -29,6 +29,7 @@ const { geoNaturalEarth2 } = _d3GeoProjection as unknown as {
 };
 import type {
   BasemapMetadata,
+  ProjectionPreset,
   ProjectionPresetEntry,
   ProjectionPresets
 } from '../types/basemap.types';
@@ -231,6 +232,49 @@ function isWithinBounds(lon: number, lat: number, bounds: GeoBounds): boolean {
   );
 }
 
+// Routing margin around each sub-projection's geographic bounds. The visible
+// cut must come from the sub-projection's rectangular screen clipExtent (the
+// cell frame), not from this geographic box: a lon/lat cut projects as curved
+// parallels / oblique meridians (the curved Maghreb edge and the diagonal cut
+// through Russia on the Europe composite). The margin pushes the geographic
+// cut far enough outside the cell that only the screen rectangle shows, while
+// still bounding how much far-away geometry is fed to proj4.
+const ROUTING_BOUNDS_MARGIN_RATIO = 0.5;
+
+function expandBoundsForRouting(bounds: GeoBounds): GeoBounds {
+  const lonMargin = (bounds[2] - bounds[0]) * ROUTING_BOUNDS_MARGIN_RATIO;
+  const latMargin = (bounds[3] - bounds[1]) * ROUTING_BOUNDS_MARGIN_RATIO;
+  return [
+    bounds[0] - lonMargin,
+    Math.max(-90, bounds[1] - latMargin),
+    bounds[2] + lonMargin,
+    Math.min(90, bounds[3] + latMargin)
+  ];
+}
+
+// Splits an open line string into contiguous in-bounds runs. Dropping
+// out-of-bounds points and keeping a single run would reconnect the surviving
+// points straight across the gap when a line exits and re-enters the box.
+function splitLineToBounds(
+  line: readonly [number, number][],
+  bounds: GeoBounds
+): [number, number][][] {
+  const runs: [number, number][][] = [];
+  let current: [number, number][] = [];
+  for (const point of line) {
+    if (isWithinBounds(point[0], point[1], bounds)) {
+      current.push(point);
+    } else if (current.length > 0) {
+      runs.push(current);
+      current = [];
+    }
+  }
+  if (current.length > 0) {
+    runs.push(current);
+  }
+  return runs;
+}
+
 // Sutherland-Hodgman clip of a polygon ring against an axis-aligned lon/lat
 // rectangle (bounds = [west, south, east, north]). Routing a composite ring to
 // a sub-projection by merely *dropping* out-of-bounds points reconnects the
@@ -332,11 +376,15 @@ function withGeographicBoundsRouting(
 
     const entries = projection.getSubProjections();
     const streams = entries.map((entry) => entry.projection.stream(sink));
+    const routingBounds = entries.map((entry) =>
+      expandBoundsForRouting(entry.bounds)
+    );
 
-    // Collect the FULL ring, then route to each sub-projection: polygon rings
-    // are Sutherland-Hodgman clipped to the sub-projection bounds (so they hug
-    // the inset edge instead of fanning across it — fixes the grey wedge), while
-    // open line strings keep the cheap in-bounds point filter.
+    // Collect the FULL ring, then route to each sub-projection whose expanded
+    // bounds it touches. The geographic clip (Sutherland-Hodgman for rings,
+    // run-splitting for lines) happens on the expanded box, so the visible cut
+    // is always the sub-projection's rectangular screen clipExtent — the cell
+    // frame — never a curved parallel or oblique meridian.
     let ringBuffer: [number, number][] | null = null;
     let inPolygon = false;
 
@@ -355,7 +403,7 @@ function withGeographicBoundsRouting(
           ringBuffer.push([lon, lat]);
         } else {
           for (let index = 0; index < entries.length; index++) {
-            if (isWithinBounds(lon, lat, entries[index].bounds)) {
+            if (isWithinBounds(lon, lat, routingBounds[index])) {
               streams[index].point(lon, lat);
             }
           }
@@ -374,7 +422,7 @@ function withGeographicBoundsRouting(
         const ring = ringBuffer;
         ringBuffer = null;
         for (let index = 0; index < streams.length; index++) {
-          const bounds = entries[index].bounds;
+          const bounds = routingBounds[index];
           // Only route the ring to a sub-projection it actually touches. A ring
           // that merely *encloses* a distant inset's bounds (e.g. the mainland
           // outline around a DOM-TOM box) has no vertex inside it; clipping such
@@ -384,10 +432,13 @@ function withGeographicBoundsRouting(
           if (!ring.some(([lon, lat]) => isWithinBounds(lon, lat, bounds))) {
             continue;
           }
-          const points = inPolygon
-            ? clipRingToBounds(ring, bounds)
-            : ring.filter(([lon, lat]) => isWithinBounds(lon, lat, bounds));
-          emitRing(index, points);
+          if (inPolygon) {
+            emitRing(index, clipRingToBounds(ring, bounds));
+          } else {
+            for (const run of splitLineToBounds(ring, bounds)) {
+              emitRing(index, run);
+            }
+          }
         }
       },
       polygonStart(): void {
@@ -585,6 +636,81 @@ export function buildProjectionForBasemap(
   return geoIdentity();
 }
 
+type PresetLayout = ProjectionPresetEntry['layout'];
+
+// The preset layouts are normalized to a design frame with a fixed
+// width/height ratio (the IGN/Eurostat reference arrangement). Applying them
+// to the raw canvas stretches the arrangement with the viewport: the mainland
+// gets centered in an oversized cell while the insets stay pinned in absolute
+// canvas coordinates, drifting away from it (the detached DOM-TOM arc on the
+// France basemap). Letterboxing the design frame into the canvas keeps the
+// authored arrangement at any viewport ratio.
+function resolveCompositeLayoutTransform(
+  preset: ProjectionPreset,
+  width: number,
+  height: number
+): (layout: PresetLayout) => PresetLayout {
+  const designAspect = preset.layoutAspect ?? deriveDesignAspect(preset);
+  const canvasAspect = width / height;
+  if (
+    !Number.isFinite(designAspect) ||
+    !Number.isFinite(canvasAspect) ||
+    designAspect === null ||
+    designAspect <= 0 ||
+    canvasAspect <= 0
+  ) {
+    return (layout) => layout;
+  }
+
+  let boxWidth = 1;
+  let boxHeight = 1;
+  if (canvasAspect > designAspect) {
+    boxWidth = designAspect / canvasAspect;
+  } else {
+    boxHeight = canvasAspect / designAspect;
+  }
+  const boxX = (1 - boxWidth) / 2;
+  const boxY = (1 - boxHeight) / 2;
+
+  return (layout) => ({
+    x: boxX + layout.x * boxWidth,
+    y: boxY + layout.y * boxHeight,
+    width: layout.width * boxWidth,
+    height: layout.height * boxHeight
+  });
+}
+
+// Design ratio under which the mainland geometry exactly fills its layout
+// cell — the arrangement the cells were authored around.
+function deriveDesignAspect(preset: ProjectionPreset): number | null {
+  const mainland =
+    preset.entries.find((entry) => entry.id === 'mainland') ??
+    preset.entries[0];
+  const { layout } = mainland;
+  if (!(layout.width > 0) || !(layout.height > 0)) {
+    return null;
+  }
+
+  try {
+    const projection = resolveSimpleProjection(mainland.proj4);
+    const projected = sampleProjectedBbox(
+      projection,
+      projectionPresetEntryToBbox(mainland)
+    );
+    if (!projected) {
+      return null;
+    }
+    const projectedWidth = projected[2] - projected[0];
+    const projectedHeight = projected[3] - projected[1];
+    if (!(projectedWidth > 0) || !(projectedHeight > 0)) {
+      return null;
+    }
+    return (projectedWidth / projectedHeight) * (layout.height / layout.width);
+  } catch {
+    return null;
+  }
+}
+
 export function buildCompositeProjectionFromPresetId(
   presetId: string,
   width: number,
@@ -601,6 +727,11 @@ export function buildCompositeProjectionFromPresetId(
   }
 
   try {
+    const transformLayout = resolveCompositeLayoutTransform(
+      preset,
+      width,
+      height
+    );
     const projection = buildCompositeProjection({
       width,
       height,
@@ -613,7 +744,7 @@ export function buildCompositeProjectionFromPresetId(
           entry.bounds[1][0],
           entry.bounds[1][1]
         ],
-        layout: entry.layout,
+        layout: transformLayout(entry.layout),
         scaleMultiplier: entry.scaleMultiplier
       }))
     });
