@@ -8,8 +8,10 @@ import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants'
 import * as m from '$lib/paraglide/messages';
 import type { Table as ArrowTable } from 'apache-arrow';
 import { convertGeoPackageToGeoJsonFile } from '$lib/features/map/utils/geopackage-browser-fallback.utils';
+import { normalizeProj4CrsCode } from '$lib/features/commons/utils/proj4-crs.utils';
 import { DUCK_CONST, EXTENSIONS, SQL_FUNCTIONS } from '../constants';
 import { executeQuery } from '../core/query';
+import { isProjectionSupported } from './reprojection';
 import type {
   DuckDBContext,
   DuckDBMetadata,
@@ -41,15 +43,40 @@ function isGeoPackageFile(filename: string): boolean {
   return filename.toLowerCase().endsWith('.gpkg');
 }
 
-async function runGeofileReadWithThreadFallback(
-  ctx: DuckDBContext,
+function isCrsNotFoundError(error: unknown): boolean {
+  return (
+    error instanceof Error && /crs not found/i.test(error.message.toLowerCase())
+  );
+}
+
+/**
+ * The DuckDB WASM spatial build ships without a PROJ database, so GDAL fails
+ * with "crs not found" when it has to resolve a projected CRS while
+ * materialising the GEOMETRY type. `keep_wkb` skips that resolution (raw WKB);
+ * we then re-tag the geometry with the detected source CRS via a plain type
+ * cast (metadata only, no PROJ lookup), so the render path's proj4 fallback can
+ * reproject it to WGS84 in JS — honouring the import-time normalisation.
+ */
+function buildCrsTaggedReadQuery(
   escapedFinalTable: string,
   escapedGeoFileId: string,
   selectedLayerClause: string,
-  finalTablename: string,
+  sourceCrs: string
+): string {
+  return `CREATE OR REPLACE TABLE "${escapedFinalTable}" AS
+    SELECT * EXCLUDE ("${INTERNAL_COLUMN.WKB_GEOMETRY}"),
+      ST_GeomFromWKB("${INTERNAL_COLUMN.WKB_GEOMETRY}")::GEOMETRY('${escapeSqlString(
+        sourceCrs
+      )}') AS "${INTERNAL_COLUMN.GEOM}"
+    FROM ST_Read('${escapedGeoFileId}', keep_wkb := true${selectedLayerClause});`;
+}
+
+async function runGeofileReadWithThreadFallback(
+  ctx: DuckDBContext,
+  escapedFinalTable: string,
+  readQuery: string,
   retryWithSerializedExecution: boolean
 ): Promise<void> {
-  const readQuery = `CREATE OR REPLACE TABLE "${escapedFinalTable}" AS FROM ST_Read('${escapedGeoFileId}'${selectedLayerClause});`;
   const runRead = async () => {
     let tableCreated = false;
 
@@ -347,31 +374,51 @@ export async function readGeofile(
   const selectedLayerClause = geoMeta.selectedLayer
     ? `, layer = '${escapeSqlString(geoMeta.selectedLayer)}'`
     : '';
+  const readQuery = `CREATE OR REPLACE TABLE "${escapedFinalTable}" AS FROM ST_Read('${escapedGeoFileId}'${selectedLayerClause});`;
 
   try {
     await runGeofileReadWithThreadFallback(
       ctx,
       escapedFinalTable,
-      escapedGeoFileId,
-      selectedLayerClause,
-      finalTablename!,
+      readQuery,
       ctx.threadsSupported
     );
   } catch (error) {
-    if (!isGeoPackageFile(geofile.name) || !isThreadPoolError(error)) {
+    const sourceCrs = geoMeta.crs ? normalizeProj4CrsCode(geoMeta.crs) : null;
+
+    if (
+      isCrsNotFoundError(error) &&
+      sourceCrs &&
+      isProjectionSupported(sourceCrs)
+    ) {
+      await runGeofileReadWithThreadFallback(
+        ctx,
+        escapedFinalTable,
+        buildCrsTaggedReadQuery(
+          escapedFinalTable,
+          escapedGeoFileId,
+          selectedLayerClause,
+          sourceCrs
+        ),
+        ctx.threadsSupported
+      );
+    } else if (isGeoPackageFile(geofile.name) && isThreadPoolError(error)) {
+      const fallbackGeoJsonFile = await convertGeoPackageToGeoJsonFile(
+        geofile,
+        {
+          preferredLayer: geoMeta.selectedLayer ?? undefined
+        }
+      );
+
+      usedGeoPackageBrowserFallback = true;
+      await readGeofile(ctx, fallbackGeoJsonFile, {
+        ...options,
+        tablename: finalTablename,
+        layer: undefined
+      });
+    } else {
       throw error;
     }
-
-    const fallbackGeoJsonFile = await convertGeoPackageToGeoJsonFile(geofile, {
-      preferredLayer: geoMeta.selectedLayer ?? undefined
-    });
-
-    usedGeoPackageBrowserFallback = true;
-    await readGeofile(ctx, fallbackGeoJsonFile, {
-      ...options,
-      tablename: finalTablename,
-      layer: undefined
-    });
   }
 
   if (!tablename) {

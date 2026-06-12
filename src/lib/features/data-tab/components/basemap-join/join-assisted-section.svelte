@@ -469,6 +469,12 @@
   });
 
   $effect(() => {
+    if (hasInitializedExpanded && !loading && toVerifyCount === 0) {
+      toVerifyExpanded = false;
+    }
+  });
+
+  $effect(() => {
     if (!loading) {
       notificationSnapshot = currentNotificationState;
     }

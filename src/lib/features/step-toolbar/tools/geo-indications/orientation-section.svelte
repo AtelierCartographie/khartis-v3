@@ -8,7 +8,7 @@
   import { Column, Grid, Row } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
 
-  const orientationStyleOptions = [
+  const orientationStyleOptions = $derived.by(() => [
     {
       value: OrientationIndicatorStyle.ARROW,
       labelText: m.geo_orientation_arrow()
@@ -17,7 +17,7 @@
       value: OrientationIndicatorStyle.COMPASS,
       labelText: m.geo_orientation_compass()
     }
-  ];
+  ]);
   import {
     geoIndicationsActions,
     geoIndicationsState

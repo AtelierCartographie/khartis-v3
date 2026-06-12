@@ -49,17 +49,17 @@
 
   let activeVizSubTab = $state<VizSubTab>(VizSubTab.CHOOSE);
 
-  const vizSubTabs = [
+  const vizSubTabs = $derived.by(() => [
     { id: VizSubTab.CHOOSE, label: m.mobile_viz_tab_choose() },
     { id: VizSubTab.CONFIGURE, label: m.mobile_viz_tab_configure() },
     { id: VizSubTab.CUSTOMIZE, label: m.mobile_viz_tab_customize() }
-  ] as const;
+  ]);
 
-  const stepLabels = {
+  const stepLabels = $derived.by(() => ({
     [ToolbarStep.Data]: m.step_data(),
     [ToolbarStep.Visualizations]: m.step_visualizations(),
     [ToolbarStep.Styling]: m.step_styling()
-  };
+  }));
 
   const vizCount = $derived(
     visualizationStore.activeVisualizations?.length ?? 0

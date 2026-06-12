@@ -30,12 +30,24 @@
     onclick
   }: BasemapCardVerticalProps = $props();
 
-  const lang = getLocale();
-  const title = $derived(lang === 'fr' ? basemap.title_fr : basemap.title_en);
+  const lang = $derived(getLocale());
+  const isOSMBasemap = $derived(basemap.file.startsWith('osm_'));
+  const title = $derived(
+    isOSMBasemap
+      ? m.basemap_osm()
+      : lang === 'fr'
+        ? basemap.title_fr
+        : basemap.title_en
+  );
   const subtitle = $derived(
-    lang === 'fr'
-      ? (basemap.subtitle_fr ?? '').trim()
-      : (basemap.subtitle_en ?? '').trim()
+    isOSMBasemap
+      ? m.osm_basemap_description()
+      : lang === 'fr'
+        ? (basemap.subtitle_fr ?? '').trim()
+        : (basemap.subtitle_en ?? '').trim()
+  );
+  const source = $derived(
+    isOSMBasemap ? m.osm_basemap_source() : basemap.source
   );
 
   function handleCardClick() {
@@ -109,7 +121,7 @@
 
     {#if showMetadata}
       <div class="metadata-row">
-        <span class="source">{basemap.source}</span>
+        <span class="source">{source}</span>
         <span class="date">
           <Calendar size={16} />
           {basemap.date}

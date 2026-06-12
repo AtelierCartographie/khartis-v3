@@ -8,8 +8,13 @@
     globalState
   } from '$lib/features/commons/stores/global.svelte';
   import type { ProjectionFilterId } from '$lib/features/commons/types/global';
+  import SimpleCheckbox from '$lib/features/commons/components/simple-checkbox.svelte';
+  import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
+  import { getStyleConfig } from '$lib/features/map/constants/carte-facile-layer-groups';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+  import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
   import { projectionStore as mapRenderProjectionStore } from '$lib/features/map/stores/projection.store.svelte';
   import {
     resolveProjectionAvailabilityContext,
@@ -30,7 +35,29 @@
   const INITIAL_VISIBLE_SUGGESTIONS = 3;
   const SUGGESTION_INCREMENT = 3;
 
-  const description = m.projection_description();
+  const description = $derived(m.projection_description());
+  const isTiledBasemapEnabled = $derived(
+    shouldUseMapLibreInterleaved({
+      requiresMapLibre: basemapStyleStore.requiresMapLibre,
+      hasOSMBasemap: osmBasemapStore.isActive
+    })
+  );
+  const tiledZone = $derived(
+    getStyleConfig(basemapStyleStore.selectedStyle)?.zone ?? 'monde'
+  );
+  const isGlobeProjectionEnabled = $derived(mapProjectionStore.isGlobe);
+
+  function handleGlobeProjectionToggle(checked: boolean): void {
+    if (!checked || tiledZone !== 'monde') {
+      mapProjectionStore.setProjection(MAP_PROJECTION_TYPE.MERCATOR);
+      return;
+    }
+
+    mapProjectionStore.setProjection(MAP_PROJECTION_TYPE.GLOBE, {
+      explicit: true
+    });
+  }
+
   const projectionState = $derived(getProjectionState());
   const projectionContext = $derived(
     resolveProjectionAvailabilityContext({
@@ -67,36 +94,40 @@
 
     return [...suggestions.national, ...suggestions.generic];
   });
-  const filterOptions: ReadonlyArray<{
-    id: ProjectionFilterId;
-    label: string;
-  }> = [
-    { id: 'all', label: m.projection_filter_all() },
-    { id: 'Rectangulaire', label: m.projection_filter_rectangular() },
-    { id: 'Arrondie', label: m.projection_filter_rounded() },
-    { id: 'Discontinue', label: m.projection_filter_discontinuous() }
-  ];
-  const projectionGroups: ReadonlyArray<{
-    id: ProjectionShapeFilterId;
-    label: string;
-    shape: string;
-  }> = [
-    {
-      id: 'Rectangulaire',
-      label: m.projection_group_rectangular(),
-      shape: 'rectangular'
-    },
-    {
-      id: 'Arrondie',
-      label: m.projection_group_rounded(),
-      shape: 'round'
-    },
-    {
-      id: 'Discontinue',
-      label: m.projection_group_discontinuous(),
-      shape: 'discontinuous'
-    }
-  ];
+  const filterOptions = $derived.by(
+    (): ReadonlyArray<{
+      id: ProjectionFilterId;
+      label: string;
+    }> => [
+      { id: 'all', label: m.projection_filter_all() },
+      { id: 'Rectangulaire', label: m.projection_filter_rectangular() },
+      { id: 'Arrondie', label: m.projection_filter_rounded() },
+      { id: 'Discontinue', label: m.projection_filter_discontinuous() }
+    ]
+  );
+  const projectionGroups = $derived.by(
+    (): ReadonlyArray<{
+      id: ProjectionShapeFilterId;
+      label: string;
+      shape: string;
+    }> => [
+      {
+        id: 'Rectangulaire',
+        label: m.projection_group_rectangular(),
+        shape: 'rectangular'
+      },
+      {
+        id: 'Arrondie',
+        label: m.projection_group_rounded(),
+        shape: 'round'
+      },
+      {
+        id: 'Discontinue',
+        label: m.projection_group_discontinuous(),
+        shape: 'discontinuous'
+      }
+    ]
+  );
   const availableFilterOptions = $derived(
     filterOptions.filter(
       (option) =>
@@ -320,54 +351,68 @@
 </script>
 
 <div class="projection-content">
-  <div class="projection-header">
-    <p class="projection-helper">{description}</p>
-  </div>
-
-  <div class="projection-tags">
-    {#each availableFilterOptions as opt (opt.id)}
-      <button
-        type="button"
-        class="projection-tag"
-        class:projection-tag--selected={activeFilter === opt.id}
-        onclick={() => setFilter(opt.id)}>{opt.label}</button
-      >
-    {/each}
-  </div>
-
-  {#if filteredListSuggestions.length > 0}
-    <div class="projection-cards">
-      {#each visibleListSuggestions as suggestion (suggestion.id)}
-        <ProjectionCard
-          title={getSuggestionTitle(suggestion)}
-          subtitle=""
-          tag={getSuggestionTag(suggestion)}
-          ratio="1:1"
-          previewLabel={m.projection_preview_label()}
-          selected={isSuggestionSelected(suggestion)}
-          variant="blue"
-          equalArea={suggestion.equalArea}
-          description={getSuggestionDescription(suggestion)}
-          onclick={() => applySuggestion(suggestion)}
+  {#if isTiledBasemapEnabled}
+    <div class="tiled-projection-section">
+      <span class="tiled-projection-label">{m.map_projection_label()}</span>
+      <p class="projection-helper">{m.projection_tiled_helper()}</p>
+      {#if tiledZone === 'monde'}
+        <SimpleCheckbox
+          labelText={m.map_projection_globe()}
+          checked={isGlobeProjectionEnabled}
+          onchange={handleGlobeProjectionToggle}
         />
-      {/each}
+      {/if}
     </div>
   {:else}
-    <div class="projection-empty-state">
-      <p class="projection-empty-title">{suggestionEmptyTitle}</p>
-      <p class="projection-empty-subtitle">{suggestionEmptySubtitle}</p>
+    <div class="projection-header">
+      <p class="projection-helper">{description}</p>
     </div>
-  {/if}
 
-  {#if hasMoreListSuggestions}
-    <Button
-      kind="tertiary"
-      size="small"
-      icon={MagicWandFilled}
-      class="show-more-btn"
-      disabled={!suggestionCardsEnabled}
-      on:click={showMoreSuggestions}>{m.show_other_suggestions()}</Button
-    >
+    <div class="projection-tags">
+      {#each availableFilterOptions as opt (opt.id)}
+        <button
+          type="button"
+          class="projection-tag"
+          class:projection-tag--selected={activeFilter === opt.id}
+          onclick={() => setFilter(opt.id)}>{opt.label}</button
+        >
+      {/each}
+    </div>
+
+    {#if filteredListSuggestions.length > 0}
+      <div class="projection-cards">
+        {#each visibleListSuggestions as suggestion (suggestion.id)}
+          <ProjectionCard
+            title={getSuggestionTitle(suggestion)}
+            subtitle=""
+            tag={getSuggestionTag(suggestion)}
+            ratio="1:1"
+            previewLabel={m.projection_preview_label()}
+            selected={isSuggestionSelected(suggestion)}
+            variant="blue"
+            equalArea={suggestion.equalArea}
+            description={getSuggestionDescription(suggestion)}
+            onclick={() => applySuggestion(suggestion)}
+          />
+        {/each}
+      </div>
+    {:else}
+      <div class="projection-empty-state">
+        <p class="projection-empty-title">{suggestionEmptyTitle}</p>
+        <p class="projection-empty-subtitle">{suggestionEmptySubtitle}</p>
+      </div>
+    {/if}
+
+    {#if hasMoreListSuggestions}
+      <Button
+        kind="tertiary"
+        size="small"
+        icon={MagicWandFilled}
+        class="show-more-btn"
+        disabled={!suggestionCardsEnabled}
+        on:click={showMoreSuggestions}>{m.show_other_suggestions()}</Button
+      >
+    {/if}
   {/if}
 </div>
 
@@ -385,6 +430,23 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: var(--cds-spacing-03);
+  }
+
+  .tiled-projection-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+  }
+
+  .tiled-projection-label {
+    color: var(--cds-text-secondary, #525252);
+    font-size: var(--cds-label-01-font-size, 0.75rem);
+    line-height: var(--cds-label-01-line-height, 1rem);
+    letter-spacing: var(--cds-label-01-letter-spacing, 0.32px);
+  }
+
+  .tiled-projection-section :global(.kh-checkbox-native) {
+    width: fit-content;
   }
 
   .projection-helper {

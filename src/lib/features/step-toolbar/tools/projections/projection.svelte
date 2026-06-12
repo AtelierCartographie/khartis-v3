@@ -13,7 +13,7 @@
   import ProjectionOther from './projection-other.svelte';
   import ProjectionSettings from './projection-settings.svelte';
 
-  const title = m.projection_title();
+  const title = $derived(m.projection_title());
 
   let crsError = $state(false);
 

@@ -126,6 +126,93 @@ export function dataToScreenPx(
   return mapInstanceStore.projectDataToViewportPx(projected[0], projected[1]);
 }
 
+export const ANNOTATION_ANCHOR_SPAN_PX = 100;
+
+const ANCHOR_ROUND_TRIP_EPSILON_PX = 1;
+
+// Outside the projected world outline (e.g. the corners around an equal-earth
+// ellipse) `invert` aliases the longitude instead of failing, so an anchor
+// written there would render somewhere else entirely. Only accept points whose
+// inversion projects back to where they came from.
+function invertScreenPxIfRoundTrips(
+  x: number,
+  y: number
+): AnnotationDataAnchor | null {
+  const anchor = screenPxToData(x, y);
+  if (!anchor) {
+    return null;
+  }
+  const back = dataToScreenPx(anchor);
+  if (
+    !back ||
+    Math.hypot(back.x - x, back.y - y) > ANCHOR_ROUND_TRIP_EPSILON_PX
+  ) {
+    return null;
+  }
+  return anchor;
+}
+
+/**
+ * Build a data anchor for a map-area-local position, including the span point
+ * that lets the renderer derive the map scale factor (see
+ * `AnnotationDataAnchor`). `scaleFactor` is the annotation's CURRENT factor so
+ * a re-anchor (drag, resize) preserves the rendered size instead of snapping
+ * it back to factor 1. Returns `null` when the position does not invert
+ * cleanly (outside the projected world), and falls back to a span-less anchor
+ * (translate-only) when neither side offers a valid span point.
+ */
+export function buildAnchorFromScreenPx(
+  x: number,
+  y: number,
+  scaleFactor = 1
+): AnnotationDataAnchor | null {
+  const anchor = invertScreenPxIfRoundTrips(x, y);
+  if (!anchor) {
+    return null;
+  }
+
+  const spanOffset = ANNOTATION_ANCHOR_SPAN_PX * Math.max(scaleFactor, 0.0001);
+  const span =
+    invertScreenPxIfRoundTrips(x + spanOffset, y) ??
+    invertScreenPxIfRoundTrips(x - spanOffset, y);
+  if (!span) {
+    return anchor;
+  }
+
+  return { ...anchor, spanLon: span.lon, spanLat: span.lat };
+}
+
+/**
+ * Map scale factor of an anchored annotation: the on-screen distance between
+ * the anchor and its span point, relative to the span they were written with.
+ * Returns 1 (translate-only) for span-less anchors or when either point cannot
+ * be projected.
+ */
+export function getAnchorScaleFactor(anchor: AnnotationDataAnchor): number {
+  if (
+    !Number.isFinite(anchor.spanLon ?? NaN) ||
+    !Number.isFinite(anchor.spanLat ?? NaN)
+  ) {
+    return 1;
+  }
+
+  const origin = dataToScreenPx(anchor);
+  const span = dataToScreenPx({
+    lon: anchor.spanLon as number,
+    lat: anchor.spanLat as number
+  });
+  if (!origin || !span) {
+    return 1;
+  }
+
+  const distance = Math.hypot(span.x - origin.x, span.y - origin.y);
+  if (!Number.isFinite(distance) || distance <= 0) {
+    return 1;
+  }
+
+  return distance / ANNOTATION_ANCHOR_SPAN_PX;
+}
+
 /**
  * Invert a map-area-local logical pixel position back to a WGS84 anchor, or
  * `null` when the active engine/reference cannot perform the inverse.

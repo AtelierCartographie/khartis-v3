@@ -13,10 +13,10 @@
   import { Button, Column, Grid, Row, Slider } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
 
-  const drawingTypeOptions = [
+  const drawingTypeOptions = $derived.by(() => [
     { value: DrawingType.LINE, labelText: m.annotations_drawing_line() },
     { value: DrawingType.ZONE, labelText: m.annotations_drawing_area() }
-  ];
+  ]);
   import { Add, TrashCan } from 'carbon-icons-svelte';
   import {
     annotationsActions,

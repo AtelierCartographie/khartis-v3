@@ -58,4 +58,16 @@ describe('useMapBasemap loading state', () => {
       'if (!map || !getIsMapLoaded() || !map.isStyleLoaded())'
     );
   });
+
+  it('localizes OpenMapTiles labels from the active app language', () => {
+    expect(source).toContain(
+      "import { getLocale } from '$lib/paraglide/runtime';"
+    );
+    expect(source).toContain("const OPENMAPTILES_SOURCE_ID = 'openmaptiles';");
+    expect(source).toContain('function syncBasemapLanguage(): void');
+    expect(source).toContain("['get', `name:${locale}`]");
+    expect(source).toContain("['get', 'name:latin']");
+    expect(source).toContain("map.setLayoutProperty(layer.id, 'text-field'");
+    expect(source).toContain('syncBasemapLanguage,');
+  });
 });

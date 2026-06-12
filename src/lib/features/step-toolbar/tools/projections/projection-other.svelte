@@ -117,24 +117,28 @@
     }
   ]);
 
-  const filterOptions: ReadonlyArray<{
-    id: ProjectionFilterId;
-    label: string;
-  }> = [
-    { id: 'all', label: m.projection_filter_all() },
-    { id: 'Rectangulaire', label: m.projection_filter_rectangular() },
-    { id: 'Arrondie', label: m.projection_filter_rounded() },
-    { id: 'Discontinue', label: m.projection_filter_discontinuous() }
-  ];
+  const filterOptions = $derived.by(
+    (): ReadonlyArray<{
+      id: ProjectionFilterId;
+      label: string;
+    }> => [
+      { id: 'all', label: m.projection_filter_all() },
+      { id: 'Rectangulaire', label: m.projection_filter_rectangular() },
+      { id: 'Arrondie', label: m.projection_filter_rounded() },
+      { id: 'Discontinue', label: m.projection_filter_discontinuous() }
+    ]
+  );
 
-  const projectionGroups: ReadonlyArray<{
-    id: ProjectionShapeFilterId;
-    label: string;
-  }> = [
-    { id: 'Rectangulaire', label: m.projection_group_rectangular() },
-    { id: 'Arrondie', label: m.projection_group_rounded() },
-    { id: 'Discontinue', label: m.projection_group_discontinuous() }
-  ];
+  const projectionGroups = $derived.by(
+    (): ReadonlyArray<{
+      id: ProjectionShapeFilterId;
+      label: string;
+    }> => [
+      { id: 'Rectangulaire', label: m.projection_group_rectangular() },
+      { id: 'Arrondie', label: m.projection_group_rounded() },
+      { id: 'Discontinue', label: m.projection_group_discontinuous() }
+    ]
+  );
 
   const items = $derived.by((): ProjectionCatalogueItem[] =>
     [
@@ -168,16 +172,16 @@
       (item) => activeFilter === 'all' || item.shapeFilterId === activeFilter
     )
   );
-  const catalogueLabel = m.projection_catalog_label();
-  const viewCodeLabel = m.projection_view_code();
+  const catalogueLabel = $derived(m.projection_catalog_label());
+  const viewCodeLabel = $derived(m.projection_view_code());
 
-  const description = m.projection_description();
-  const codeIntro = m.projection_code_intro?.() ?? '';
-  const codeLabel = m.projection_code_label();
-  const codePlaceholder = m.projection_code_placeholder?.() ?? '';
-  const codeHelper = m.projection_code_helper?.() ?? '';
-  const resetLabel = m.projection_code_reset();
-  const submitLabel = m.projection_code_submit();
+  const description = $derived(m.projection_description());
+  const codeIntro = $derived(m.projection_code_intro?.() ?? '');
+  const codeLabel = $derived(m.projection_code_label());
+  const codePlaceholder = $derived(m.projection_code_placeholder?.() ?? '');
+  const codeHelper = $derived(m.projection_code_helper?.() ?? '');
+  const resetLabel = $derived(m.projection_code_reset());
+  const submitLabel = $derived(m.projection_code_submit());
   const activeCatalogueSelectionId = $derived.by(() => {
     if (!isCatalogueProjectionActive()) {
       return undefined;

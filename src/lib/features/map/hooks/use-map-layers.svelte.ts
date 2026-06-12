@@ -29,7 +29,13 @@ import {
 import { extractGeometryInfo } from '../io';
 import { buildProjectionForBasemap } from '../utils/geoarrow-stream-bridge.utils';
 import { DeckLayerId, GeometryType } from '../constants';
-import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
+import {
+  PrimitiveFilterType,
+  getSymbolPrimitive,
+  getLinePrimitive,
+  getTextPrimitive,
+  getPolygonPrimitive
+} from '$lib/features/commons/stores/visualization.store.svelte';
 import type { PrimitiveFilter } from '$lib/features/commons/stores/visualization.store.svelte';
 import type {
   BBox,
@@ -63,6 +69,7 @@ import {
   shouldShowGeneratedOrthographicOceanLayer,
   shouldShowOrthographicBasemapLayers
 } from '../utils/orthographic-basemap-visibility.utils';
+import { getBasemapAuxLayerDefaultVisibility } from '../utils/basemap-aux-layer-visibility.utils';
 import { resolveProjectionForRender } from '../utils/projection-priority.utils';
 import {
   applyProjectionSphereMask,
@@ -151,6 +158,15 @@ export interface UseMapLayersReturn {
     densityTables?: Map<string, ArrowTable>
   ) => void;
   syncInterleavedLayerOrder: () => boolean;
+}
+
+function visualizationHasEnabledPrimitive(viz: VisualizationConfig): boolean {
+  return (
+    getSymbolPrimitive(viz)?.enabled === true ||
+    getLinePrimitive(viz)?.enabled === true ||
+    getTextPrimitive(viz)?.enabled === true ||
+    getPolygonPrimitive(viz)?.enabled === true
+  );
 }
 
 export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
@@ -1101,11 +1117,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               const entry = metadataLayerByKey.get(layerKey);
               if (!entry) continue;
               const { layer } = entry;
+              const defaultVisible = getBasemapAuxLayerDefaultVisibility(
+                layer,
+                currentMetadata.layers
+              );
               if (
                 !basemapAuxLayersStore.isVisible(
                   currentMetadata.file,
                   layerKey,
-                  true
+                  defaultVisible
                 )
               ) {
                 continue;
@@ -1255,6 +1275,29 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             if (filteredTable !== table && filteredTable.numRows === 0) {
               hasEmptyFilteredVisualization = true;
             }
+            // Raw point datasets have no representative-point table, so the
+            // text layer renders from the main table; give it its own
+            // TEXT-filtered copy so Texts filters apply and Symbols filters
+            // don't leak onto the labels.
+            ctx.textPointTable =
+              geoInfo?.type === GeometryType.POINT
+                ? split
+                  ? filterSplitGeometryTableByDatasetRows(
+                      table,
+                      split,
+                      viz.dataFilters,
+                      PrimitiveFilterType.TEXT,
+                      tableFilters
+                    )
+                  : filterArrowTableByTableFilters(
+                      filterArrowTableByDataFilters(
+                        table,
+                        viz.dataFilters,
+                        PrimitiveFilterType.TEXT
+                      ),
+                      tableFilters
+                    )
+                : undefined;
             const joinedBasemapId = split
               ? getDatasetJoinedBasemap(datasetId)
               : null;
@@ -1531,7 +1574,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       layers.length = 0;
       layers.push(...maskedOrderedLayers);
 
-      const hasExpectedActiveViz = activeVisualizations.length > 0;
+      const hasExpectedActiveViz = activeVisualizations.some(
+        visualizationHasEnabledPrimitive
+      );
       const hasExpectedDatasetFallbacks =
         shouldRenderDatasetFallbacks && (tables.size > 0 || geoJSONs.size > 0);
       const hasVisibleBasemapConfig =

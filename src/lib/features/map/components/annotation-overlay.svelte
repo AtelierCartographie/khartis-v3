@@ -54,9 +54,10 @@
   import { resolveAnnotationCoordinateSpace } from '$lib/features/step-toolbar/tools/annotations';
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
   import {
+    buildAnchorFromScreenPx,
     canAnchorToMap,
     dataToScreenPx,
-    screenPxToData
+    getAnchorScaleFactor
   } from '../utils/map-anchor-projection.utils';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
 
@@ -283,16 +284,18 @@
     return anchor;
   }
 
-  // Resolve the on-screen (map-area-local, logical px) position of every
-  // data-anchored annotation. Recomputed whenever the map viewState changes so
-  // the marks track the basemap; legacy `'map'` annotations (no anchor) and page
-  // annotations are absent from this map and keep the pixel-page path.
+  // Resolve the on-screen (map-area-local, logical px) position and map scale
+  // factor of every data-anchored annotation. Recomputed whenever the map
+  // viewState changes so the marks track AND zoom with the basemap; legacy
+  // `'map'` annotations (no anchor) and page annotations are absent from this
+  // map and keep the pixel-page path.
   const anchoredScreenPositions = $derived.by(() => {
     // Establish reactive dependencies on both engines' viewport.
     void mapViewRevision;
     void mapInstanceStore.deckViewState;
 
-    const positions: Record<string, { x: number; y: number }> = {};
+    const positions: Record<string, { x: number; y: number; scale: number }> =
+      {};
     for (const item of visibleItems) {
       const anchor = getAnnotationAnchor(item);
       if (!anchor) {
@@ -300,11 +303,26 @@
       }
       const screen = dataToScreenPx(anchor);
       if (screen) {
-        positions[item.id] = screen;
+        positions[item.id] = { ...screen, scale: getAnchorScaleFactor(anchor) };
       }
     }
     return positions;
   });
+
+  function getMapScaleFactor(item: Annotation): number {
+    return anchoredScreenPositions[item.id]?.scale ?? 1;
+  }
+
+  function getLocalRenderedPosition(item: Annotation): {
+    x: number;
+    y: number;
+  } {
+    if (getAnnotationScope(item) === 'page') {
+      return item.position;
+    }
+    const anchored = item.anchor ? anchoredScreenPositions[item.id] : undefined;
+    return anchored ? { x: anchored.x, y: anchored.y } : item.position;
+  }
 
   function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
@@ -516,8 +534,7 @@
     // the annotation stays glued to the basemap. Falls back to the stored
     // pixel-page position when the anchor cannot be projected (map not ready /
     // composite projection), preserving the legacy behavior.
-    const anchored = item.anchor ? anchoredScreenPositions[item.id] : undefined;
-    const localPosition = anchored ?? item.position;
+    const localPosition = getLocalRenderedPosition(item);
 
     return {
       x: localPosition.x + pageMargins.left,
@@ -548,25 +565,34 @@
     const { x, y } = getRenderedPosition(item);
     const boundsOrigin = getVectorShapeBoundsOrigin(item);
     const scale = getPageScale();
-    return `left: ${(x + boundsOrigin.x) * scale}px; top: ${(y + boundsOrigin.y) * scale}px; transform: scale(${scale});`;
+    const mapFactor = getMapScaleFactor(item);
+    return `left: ${(x + boundsOrigin.x * mapFactor) * scale}px; top: ${(y + boundsOrigin.y * mapFactor) * scale}px; transform: scale(${scale * mapFactor});`;
   }
 
   // Persist (or refresh) the WGS84 anchor of a map-scoped annotation from its
   // finalized map-area-local logical position, so it stays glued to the basemap.
+  // The current map scale factor is carried into the rewritten span so a
+  // re-anchor (drag, resize) never snaps the rendered size back to factor 1.
   // Page-scoped, role and legacy non-projectable annotations are left untouched
   // (no anchor written), preserving the historical pixel-page behavior.
   function writeMapAnchor(
     item: Annotation,
     localPosition: { x: number; y: number }
-  ): void {
+  ): boolean {
     if (getAnnotationScope(item) !== 'map' || !canAnchorToMap()) {
-      return;
+      return false;
     }
 
-    const anchor = screenPxToData(localPosition.x, localPosition.y);
-    if (anchor) {
-      annotationsActions.updateAnnotation(item.id, { anchor });
+    const anchor = buildAnchorFromScreenPx(
+      localPosition.x,
+      localPosition.y,
+      getMapScaleFactor(item)
+    );
+    if (!anchor) {
+      return false;
     }
+    annotationsActions.updateAnnotation(item.id, { anchor });
+    return true;
   }
 
   // Keep an already-anchored annotation's anchor in sync with its top-left when a
@@ -597,14 +623,14 @@
   // arrow/line, freehand drawing) the first time it renders. The store creates it
   // in `'map'` space with a map-area-local `position` but cannot reach the
   // projection helpers, so its anchor is written here, gluing it to the basemap.
-  // When the active engine/reference cannot round-trip a data anchor (composite /
-  // pre-projected CRS), the shape is downgraded back to `'page'` — re-adding the
-  // page margins it was created without — so the on-screen placement is identical
-  // and it keeps the historical page behavior. Either branch runs once: the item
-  // then has an anchor or is `'page'`, so it leaves this effect's selection.
+  // When the anchor cannot be written — composite / pre-projected CRS, or a
+  // position outside the projected world outline that would not round-trip —
+  // the shape is downgraded back to `'page'`, re-adding the page margins it was
+  // created without, so the on-screen placement is identical and it keeps the
+  // historical page behavior. Either branch runs once: the item then has an
+  // anchor or is `'page'`, so it leaves this effect's selection.
   function anchorOrDowngradeNewMapShape(item: Annotation): void {
-    if (canAnchorToMap()) {
-      writeMapAnchor(item, item.position);
+    if (writeMapAnchor(item, item.position)) {
       return;
     }
 
@@ -774,7 +800,7 @@
     ) {
       return;
     }
-    const scale = Math.max(pageScale, 0.0001);
+    const scale = Math.max(pageScale * getMapScaleFactor(item), 0.0001);
     const dx = (event.clientX - tensionDragState.startClientX) / scale;
     const dy = (event.clientY - tensionDragState.startClientY) / scale;
     const deltaPerpendicular =
@@ -821,7 +847,7 @@
       (i) => i.id === anchorDragState!.id
     );
     if (!item) return;
-    const scale = Math.max(pageScale, 0.0001);
+    const scale = Math.max(pageScale * getMapScaleFactor(item), 0.0001);
     const dx = (event.clientX - anchorDragState.startClientX) / scale;
     const dy = (event.clientY - anchorDragState.startClientY) / scale;
     const newPoints = anchorDragState.startPoints.map((point, index) =>
@@ -1050,11 +1076,12 @@
       currentTarget instanceof HTMLElement
         ? currentTarget.getBoundingClientRect()
         : null;
+    const localPosition = getLocalRenderedPosition(item);
     dragState = {
       id: item.id,
       scope,
-      offsetX: (event.clientX - rect.left) / scale - item.position.x,
-      offsetY: (event.clientY - rect.top) / scale - item.position.y,
+      offsetX: (event.clientX - rect.left) / scale - localPosition.x,
+      offsetY: (event.clientY - rect.top) / scale - localPosition.y,
       width: targetRect ? targetRect.width / scale : 0,
       height: targetRect ? targetRect.height / scale : 0,
       startClientX: event.clientX,
@@ -1363,12 +1390,12 @@
   function handleResizePointerMove(event: PointerEvent): void {
     if (!resizeState) return;
 
-    const scale = getPageScale();
-    const dx = (event.clientX - resizeState.startPointerX) / scale;
-    const dy = (event.clientY - resizeState.startPointerY) / scale;
-
     const item = annotationsState.items.find((i) => i.id === resizeState!.id);
     if (!item) return;
+
+    const scale = getPageScale() * getMapScaleFactor(item);
+    const dx = (event.clientX - resizeState.startPointerX) / scale;
+    const dy = (event.clientY - resizeState.startPointerY) / scale;
 
     const resizedBounds = resolveResizedShapeBounds(
       item,
@@ -1425,8 +1452,11 @@
             x: renderedPosition.x - pageMargins.left,
             y: renderedPosition.y - pageMargins.top
           };
-    const centerX = rect.left + (localPosition.x + shapeW / 2) * scale;
-    const centerY = rect.top + (localPosition.y + shapeH / 2) * scale;
+    const mapFactor = getMapScaleFactor(item);
+    const centerX =
+      rect.left + (localPosition.x + (shapeW / 2) * mapFactor) * scale;
+    const centerY =
+      rect.top + (localPosition.y + (shapeH / 2) * mapFactor) * scale;
 
     const startAngle =
       Math.atan2(event.clientY - centerY, event.clientX - centerX) *

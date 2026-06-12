@@ -1568,6 +1568,78 @@ function matchesExpectedSubset(
   );
 }
 
+function isColorPalettePrefix(
+  currentColors: unknown,
+  expectedColors: unknown
+): boolean {
+  if (!Array.isArray(currentColors) || !Array.isArray(expectedColors)) {
+    return areVisualizationPresetValuesEqual(currentColors, expectedColors);
+  }
+  if (currentColors.length > expectedColors.length) {
+    return false;
+  }
+  return currentColors.every((color, index) =>
+    areVisualizationPresetValuesEqual(color, expectedColors[index])
+  );
+}
+
+/**
+ * Like matchesExpectedSubset, but tolerant of the data-derived parts of a
+ * primitive's classification: applying a categorical suggestion trims the
+ * default palette to the number of actual categories (and adds per-category
+ * labels), so the live `classification.colors` is a prefix of the suggestion's
+ * full default palette and `labels` are dataset-specific. Comparing those
+ * strictly would wrongly mark the suggestion as not applied.
+ */
+function matchesPrimitiveSubset(
+  currentValue: unknown,
+  expectedValue: unknown
+): boolean {
+  if (
+    !expectedValue ||
+    typeof expectedValue !== 'object' ||
+    Array.isArray(expectedValue)
+  ) {
+    return matchesExpectedSubset(currentValue, expectedValue);
+  }
+
+  const expected = expectedValue as Record<string, unknown>;
+  const current = (
+    currentValue && typeof currentValue === 'object' ? currentValue : {}
+  ) as Record<string, unknown>;
+
+  return Object.entries(expected).every(([key, value]) => {
+    if (key !== 'classification' || !value || typeof value !== 'object') {
+      return matchesExpectedSubset(current[key], value);
+    }
+
+    const expectedClassification = value as Record<string, unknown>;
+    const currentClassification = (
+      current.classification && typeof current.classification === 'object'
+        ? current.classification
+        : {}
+    ) as Record<string, unknown>;
+
+    return Object.entries(expectedClassification).every(
+      ([classificationKey, classificationValue]) => {
+        if (classificationKey === 'labels') {
+          return true;
+        }
+        if (classificationKey === 'colors') {
+          return isColorPalettePrefix(
+            currentClassification.colors,
+            classificationValue
+          );
+        }
+        return matchesExpectedSubset(
+          currentClassification[classificationKey],
+          classificationValue
+        );
+      }
+    );
+  });
+}
+
 export function isVisualizationMatchingSuggestion(
   visualization: VisualizationConfig,
   dataset: ProcessedDataset | DatasetResult,
@@ -1587,9 +1659,9 @@ export function isVisualizationMatchingSuggestion(
       behavior.primitiveFilters
     ) &&
     matchesExpectedSubset(visualization.mapping, behavior.mapping) &&
-    matchesExpectedSubset(visualization.polygon, behavior.polygon) &&
-    matchesExpectedSubset(visualization.symbol, behavior.symbol) &&
-    matchesExpectedSubset(visualization.line, behavior.line) &&
+    matchesPrimitiveSubset(visualization.polygon, behavior.polygon) &&
+    matchesPrimitiveSubset(visualization.symbol, behavior.symbol) &&
+    matchesPrimitiveSubset(visualization.line, behavior.line) &&
     matchesExpectedSubset(visualization.text, behavior.text)
   );
 }
