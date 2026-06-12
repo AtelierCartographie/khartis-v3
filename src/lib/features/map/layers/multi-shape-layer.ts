@@ -55,6 +55,100 @@ const multiShapeModule = {
   }
 };
 
+const LINEAR_SHAPE_GLSL_CONDITION = LINEAR_SHAPE_ORDINALS.map(
+  (ordinal) => `shapeOrdinal == ${ordinal}`
+).join(' || ');
+
+// Mirrors @deck.gl/layers ScatterplotLayer's vertex shader (9.3.x), with one
+// addition: linear shapes (BAR/SPIKE) encode the value as a height, so their
+// quad is lifted by half its height along its local +y axis (the SPIKE apex
+// direction in the fragment SDF) to anchor the shape's base on the data point.
+// Area shapes keep the default centered anchoring. A shader-hook injection
+// cannot do this: luma.gl emits hook functions before the main shader source,
+// where outerRadiusPixels is not yet declared.
+const vertexShader = `#version 300 es
+#define SHADER_NAME multi-shape-layer-vertex-shader
+
+in vec3 positions;
+in vec3 instancePositions;
+in vec3 instancePositions64Low;
+in float instanceRadius;
+in float instanceLineWidths;
+in vec4 instanceFillColors;
+in vec4 instanceLineColors;
+in vec3 instancePickingColors;
+in vec2 instancePixelOffset;
+in float instanceShapes;
+
+out vec4 vFillColor;
+out vec4 vLineColor;
+out vec2 unitPosition;
+out float innerUnitRadius;
+out float outerRadiusPixels;
+out float vShape;
+out float vRadius;
+
+bool isBottomAnchoredShape(float shape) {
+  int shapeOrdinal = int(shape + 0.5);
+  return ${LINEAR_SHAPE_GLSL_CONDITION};
+}
+
+void main(void) {
+  geometry.worldPosition = instancePositions;
+
+  outerRadiusPixels = clamp(
+    project_size_to_pixel(scatterplot.radiusScale * instanceRadius, scatterplot.radiusUnits),
+    scatterplot.radiusMinPixels, scatterplot.radiusMaxPixels
+  );
+
+  float lineWidthPixels = clamp(
+    project_size_to_pixel(scatterplot.lineWidthScale * instanceLineWidths, scatterplot.lineWidthUnits),
+    scatterplot.lineWidthMinPixels, scatterplot.lineWidthMaxPixels
+  );
+
+  outerRadiusPixels += scatterplot.stroked * lineWidthPixels / 2.0;
+
+  float edgePadding = scatterplot.antialiasing
+    ? (outerRadiusPixels + SMOOTH_EDGE_RADIUS) / outerRadiusPixels
+    : 1.0;
+
+  unitPosition = edgePadding * positions.xy;
+  geometry.uv = unitPosition;
+  geometry.pickingColor = instancePickingColors;
+
+  innerUnitRadius = 1.0 - scatterplot.stroked * lineWidthPixels / outerRadiusPixels;
+
+  vShape = instanceShapes;
+  vRadius = instanceRadius;
+
+  float anchorShiftPixels = isBottomAnchoredShape(instanceShapes)
+    ? outerRadiusPixels
+    : 0.0;
+
+  if (scatterplot.billboard) {
+    gl_Position = project_position_to_clipspace(instancePositions, instancePositions64Low, vec3(0.0), geometry.position);
+    DECKGL_FILTER_GL_POSITION(gl_Position, geometry);
+    vec3 offset = edgePadding * positions * outerRadiusPixels;
+    offset.y += anchorShiftPixels;
+    offset.xy += instancePixelOffset;
+    DECKGL_FILTER_SIZE(offset, geometry);
+    gl_Position.xy += project_pixel_size_to_clipspace(offset.xy);
+  } else {
+    vec3 offset = edgePadding * positions * project_pixel_size(outerRadiusPixels);
+    offset.y += project_pixel_size(anchorShiftPixels);
+    offset.xy += project_pixel_size(instancePixelOffset);
+    DECKGL_FILTER_SIZE(offset, geometry);
+    gl_Position = project_position_to_clipspace(instancePositions, instancePositions64Low, offset, geometry.position);
+    DECKGL_FILTER_GL_POSITION(gl_Position, geometry);
+  }
+
+  vFillColor = vec4(instanceFillColors.rgb, instanceFillColors.a * layer.opacity);
+  DECKGL_FILTER_COLOR(vFillColor, geometry);
+  vLineColor = vec4(instanceLineColors.rgb, instanceLineColors.a * layer.opacity);
+  DECKGL_FILTER_COLOR(vLineColor, geometry);
+}
+`;
+
 const fragmentShader = `#version 300 es
 #define SHADER_NAME multi-shape-layer-fragment-shader
 
@@ -366,20 +460,9 @@ export class MultiShapeLayer<DataT = unknown> extends ScatterplotLayer<
 
     return {
       ...parentShaders,
+      vs: vertexShader,
       fs: fragmentShader,
-      modules: [...parentModules, multiShapeModule],
-      inject: {
-        ...((parentShaders.inject as Record<string, string>) ?? {}),
-        'vs:#decl': `
-in float instanceShapes;
-out float vShape;
-out float vRadius;
-`,
-        'vs:#main-end': `
-vShape = instanceShapes;
-vRadius = instanceRadius;
-`
-      }
+      modules: [...parentModules, multiShapeModule]
     };
   }
 

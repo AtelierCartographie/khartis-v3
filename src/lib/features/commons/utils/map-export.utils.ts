@@ -1137,13 +1137,13 @@ function serializePointShape(
       return `<path d="M ${roundSvgValue(x)} ${roundSvgValue(y - radius)} L ${roundSvgValue(x + radius)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x - radius)} ${roundSvgValue(y + radius)} Z" ${common} />`;
     case 3: {
       const spikeHalfWidth = (barWidth * 1.5) / 2;
-      return `<path d="M ${roundSvgValue(x - spikeHalfWidth)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x)} ${roundSvgValue(y - radius)} L ${roundSvgValue(x + spikeHalfWidth)} ${roundSvgValue(y + radius)} Z" ${common} />`;
+      return `<path d="M ${roundSvgValue(x - spikeHalfWidth)} ${roundSvgValue(y)} L ${roundSvgValue(x)} ${roundSvgValue(y - radius * 2)} L ${roundSvgValue(x + spikeHalfWidth)} ${roundSvgValue(y)} Z" ${common} />`;
     }
     case 7:
       return `<path d="M ${roundSvgValue(x)} ${roundSvgValue(y - radius)} L ${roundSvgValue(x + radius * 0.22)} ${roundSvgValue(y - radius * 0.22)} L ${roundSvgValue(x + radius)} ${roundSvgValue(y - radius * 0.15)} L ${roundSvgValue(x + radius * 0.36)} ${roundSvgValue(y + radius * 0.18)} L ${roundSvgValue(x + radius * 0.58)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x)} ${roundSvgValue(y + radius * 0.5)} L ${roundSvgValue(x - radius * 0.58)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x - radius * 0.36)} ${roundSvgValue(y + radius * 0.18)} L ${roundSvgValue(x - radius)} ${roundSvgValue(y - radius * 0.15)} L ${roundSvgValue(x - radius * 0.22)} ${roundSvgValue(y - radius * 0.22)} Z" ${common} />`;
     case 2: {
       const barHalfWidth = barWidth / 2;
-      return `<rect x="${roundSvgValue(x - barHalfWidth)}" y="${roundSvgValue(y - radius)}" width="${roundSvgValue(barHalfWidth * 2)}" height="${roundSvgValue(radius * 2)}" ${common} />`;
+      return `<rect x="${roundSvgValue(x - barHalfWidth)}" y="${roundSvgValue(y - radius * 2)}" width="${roundSvgValue(barHalfWidth * 2)}" height="${roundSvgValue(radius * 2)}" ${common} />`;
     }
     case 8:
       return `<rect x="${roundSvgValue(x - radius * 0.9)}" y="${roundSvgValue(y - radius * 0.27)}" width="${roundSvgValue(radius * 1.8)}" height="${roundSvgValue(radius * 0.54)}" ${common} />`;
