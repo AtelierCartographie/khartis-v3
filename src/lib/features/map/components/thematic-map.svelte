@@ -1259,9 +1259,11 @@
 
     const presetBounds = pendingMapLibreViewportPreset;
     pendingMapLibreViewportPreset = null;
-    mapBounds.fitToBounds(presetBounds, {
+
+    const dataBounds = resolveUserDataBounds();
+    mapBounds.fitToBounds(dataBounds ?? presetBounds, {
       animate: true,
-      reason: 'basemap'
+      reason: dataBounds ? 'dataset' : 'basemap'
     });
   }
 
@@ -1281,6 +1283,12 @@
       return;
     }
 
+    const dataBounds = resolveUserDataBounds();
+    if (dataBounds) {
+      mapBounds.fitToBounds(dataBounds, { reason });
+      return;
+    }
+
     const refBasemapId = basemapStyleStore.referenceBasemapId;
     const currentWorldBaseTable = worldBaseTable;
 
@@ -1290,12 +1298,6 @@
         mapBounds.fitToBounds(bounds, { reason });
         return;
       }
-    }
-
-    const dataBounds = resolveUserDataBounds();
-    if (dataBounds) {
-      mapBounds.fitToBounds(dataBounds, { reason });
-      return;
     }
 
     const styleViewportPreset = getBasemapViewportPreset(
@@ -1697,7 +1699,16 @@
           triggerOnReady();
           return;
         }
-        if (refBasemapId && worldBaseTable) {
+        const hasOwnDataGeometry = Boolean(
+          calculateBoundsFromGeoArrow(firstTable)
+        );
+        if (hasOwnDataGeometry) {
+          untrack(() =>
+            mapBounds.fitToArrowBounds(firstTable, firstDatasetId, {
+              reason: 'dataset'
+            })
+          );
+        } else if (refBasemapId && worldBaseTable) {
           const bBounds = calculateBoundsFromGeoArrow(worldBaseTable);
           if (bBounds) {
             untrack(() =>
@@ -1707,12 +1718,6 @@
               })
             );
           }
-        } else {
-          untrack(() =>
-            mapBounds.fitToArrowBounds(firstTable, firstDatasetId, {
-              reason: 'dataset'
-            })
-          );
         }
       }
     }
