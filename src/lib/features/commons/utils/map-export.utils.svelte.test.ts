@@ -586,10 +586,10 @@ describe('map export DOM mutations', () => {
     const blob = await exportMapToSvg({ width: 400, height: 300 });
     const markup = await blob.text();
 
-    expect(markup).toContain('<rect x="6"');
+    expect(markup).toContain('<rect x="6" y="-10"');
     expect(markup).toContain('width="8"');
     expect(markup).toContain('height="20"');
-    expect(markup).toMatch(/<path d="M 24 40 L 30 20 L 36 40 Z"/);
+    expect(markup).toMatch(/<path d="M 24 30 L 30 10 L 36 30 Z"/);
   });
 
   it('exports every MultiShapeLayer symbol shape as vector SVG primitives', async () => {
@@ -664,8 +664,8 @@ describe('map export DOM mutations', () => {
     expect(markup).toContain('data-khartis-layer-type="MultiShapeLayer"');
     expect(markup).toContain('<circle cx="10" cy="10" r="10"');
     expect(markup).toContain('<rect x="25" y="0" width="20" height="20"');
-    expect(markup).toContain('<rect x="56" y="0" width="8" height="20"');
-    expect(markup).toContain('<path d="M 79 20 L 85 0 L 91 20 Z"');
+    expect(markup).toContain('<rect x="56" y="-10" width="8" height="20"');
+    expect(markup).toContain('<path d="M 79 10 L 85 -10 L 91 10 Z"');
     expect(markup).toContain('<path d="M 107.5 2.5 L 112.5 2.5 L 112.5 7.5');
     expect(markup).toContain('<path d="M 135 0 L 145 10 L 135 20 L 125 10 Z"');
     expect(markup).toContain('<path d="M 160 0 L 170 20 L 150 20 Z"');
