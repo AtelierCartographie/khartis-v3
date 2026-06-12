@@ -4328,13 +4328,6 @@ export function createPointLayers(
     sortScatterBinaryDataByRadius(scatterBinaryData);
   }
 
-  const useMultiShapeLayer =
-    pointShape !== ShapeType.CIRCLE ||
-    missingPointShape !== ShapeType.CIRCLE ||
-    useCategoryShape ||
-    symbolPatternType !== null ||
-    usesPointCategories ||
-    (pointStrokeDashed && showPointStroke);
   const baseLayerProps = {
     id:
       symbolPatternType !== null
@@ -4433,23 +4426,19 @@ export function createPointLayers(
     }
   };
 
-  if (useMultiShapeLayer) {
-    return [
-      new MultiShapeLayer({
-        ...baseLayerProps,
-        dashed: showPointStroke && pointStrokeDashed,
-        dashLength: pointStrokeDashSpec.shader.dash,
-        gapLength: pointStrokeDashSpec.shader.gap,
-        dotLength: pointStrokeDashSpec.shader.dot,
-        dotGap: pointStrokeDashSpec.shader.dotGap,
-        barWidth: pointBarWidth,
-        patternEnabled: symbolPatternType !== null,
-        patternType: symbolPatternType ?? SYMBOL_PATTERN_TYPE.DOTS
-      })
-    ];
-  }
-
-  return [new ScatterplotLayer(baseLayerProps)];
+  return [
+    new MultiShapeLayer({
+      ...baseLayerProps,
+      dashed: showPointStroke && pointStrokeDashed,
+      dashLength: pointStrokeDashSpec.shader.dash,
+      gapLength: pointStrokeDashSpec.shader.gap,
+      dotLength: pointStrokeDashSpec.shader.dot,
+      dotGap: pointStrokeDashSpec.shader.dotGap,
+      barWidth: pointBarWidth,
+      patternEnabled: symbolPatternType !== null,
+      patternType: symbolPatternType ?? SYMBOL_PATTERN_TYPE.DOTS
+    })
+  ];
 }
 
 export function createLineLayers(
