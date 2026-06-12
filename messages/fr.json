@@ -1262,6 +1262,8 @@
   "basemap_tiled_zoom_helper": "Certains calques ou niveaux d'information ne s'affichent qu'à partir d'un certain niveau de zoom.",
   "basemap_reference_data_learn_more": "En savoir plus sur les données du fond de référence",
   "basemap_tiled_info": "Active le fond de référence (IGN & OpenStreetMap) en remplacement des couches vectorielles. Utile pour le contexte géographique mais masque les couches personnalisables.",
+  "basemap_projection_shortcut": "Cliquer ici pour personnaliser la projection.",
+  "projection_tiled_helper": "Le fond de référence (IGN & OpenStreetMap) est affiché en projection Web Mercator.",
   "geo_reference_info": "Entités : associez vos données à des noms de lieux (pays, régions, villes). Coordonnées : utilisez des colonnes latitude/longitude.",
   "geo_linked_variable_info": "Colonne de vos données qui contient les identifiants géographiques (noms de pays, codes ISO, noms de régions, etc.).",
   "geo_longitude_info": "Colonne contenant les valeurs de longitude (coordonnée Est-Ouest, entre -180 et 180).",

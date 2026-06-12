@@ -50,12 +50,12 @@
 
   const effectiveStyle = $derived(selectedText?.style ?? defaultStyle);
 
-  const predefinedStyles = [
+  const predefinedStyles = $derived.by(() => [
     { value: ANNOTATION_ROLE.NOTE, text: m.annotations_note() },
     { value: ANNOTATION_ROLE.TITLE, text: m.annotations_style_title() },
     { value: ANNOTATION_ROLE.SUBTITLE, text: m.annotations_style_subtitle() },
     { value: 'caption', text: m.annotations_style_caption() }
-  ];
+  ]);
 
   function handleAlignChange(align: TextAlign) {
     annotationsActions.applyStyle({ textAlign: align });

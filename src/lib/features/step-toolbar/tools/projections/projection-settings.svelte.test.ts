@@ -37,9 +37,8 @@ describe('ProjectionSettings', () => {
     expect(source).toContain('debounceMs={0}');
   });
 
-  it('keeps reset scoped to center and rotation values', () => {
-    expect(source).toContain('projectionActions.setCenter(0, 0);');
-    expect(source).toContain('projectionActions.setRotation(0);');
+  it('delegates reset to the store action that restores the pre-override state', () => {
+    expect(source).toContain('projectionActions.resetSettings();');
     expect(source).not.toContain('projectionActions.setSelected(');
     expect(source).not.toContain('projectionActions.setCustomCode(');
   });

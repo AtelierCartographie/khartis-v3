@@ -5,6 +5,9 @@
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
 
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import { VisualizationTools } from '$lib/features/commons/types/global';
+  import { selectTool } from '$lib/features/step-toolbar/tools-list/tool-list.utils.svelte';
   import { InfoPopover } from './shared';
   import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
   import BasemapStyleSelector from './basemap-layers/basemap-style-selector.svelte';
@@ -24,6 +27,7 @@
   import { resolveTiledStyleFromToggle } from '../services/tiled-basemap-selection.service';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
   import { resolveActiveBasemapMetadata } from '$lib/features/map/utils/basemap-metadata-resolution.utils';
+  import { getBasemapAuxLayerDefaultVisibility } from '$lib/features/map/utils/basemap-aux-layer-visibility.utils';
   import type { BasemapLayer } from '$lib/features/map/types/basemap.types';
   import type { BasemapLayerId } from '$lib/features/map/stores/basemap-layers.store.svelte';
 
@@ -107,15 +111,15 @@
   }
 
   const sphereSyntheticLayer: BasemapLayer = {
-    title_fr: m.basemap_layer_sphere(),
-    title_en: m.basemap_layer_sphere(),
+    title_fr: m.basemap_layer_sphere({}, { locale: 'fr' }),
+    title_en: m.basemap_layer_sphere({}, { locale: 'en' }),
     type: BasemapLayerType.SPHERE,
     file: SYNTHETIC_AUX_LAYER_KEY.SPHERE,
     style: null
   };
   const oceanSyntheticLayer: BasemapLayer = {
-    title_fr: m.basemap_layer_mers(),
-    title_en: m.basemap_layer_mers(),
+    title_fr: m.basemap_layer_mers({}, { locale: 'fr' }),
+    title_en: m.basemap_layer_mers({}, { locale: 'en' }),
     type: BasemapLayerType.POLYGON,
     file: SYNTHETIC_AUX_LAYER_KEY.MERS,
     style: null
@@ -125,6 +129,7 @@
     layer: BasemapLayer;
     sharedLegacyId: BasemapLayerId | null;
     instanceIndex: number;
+    defaultVisible: boolean;
   }
 
   function isSection3RenderableType(type: BasemapLayerType): boolean {
@@ -153,14 +158,16 @@
       {
         layer: oceanSyntheticLayer,
         sharedLegacyId: 'mers',
-        instanceIndex: 0
+        instanceIndex: 0,
+        defaultVisible: true
       },
       ...(supportsProjectionSphere
         ? [
             {
               layer: sphereSyntheticLayer,
               sharedLegacyId: 'sphere' as BasemapLayerId,
-              instanceIndex: 0
+              instanceIndex: 0,
+              defaultVisible: true
             }
           ]
         : [])
@@ -178,7 +185,11 @@
           isCustomBasemap,
           isCustomLineBasemap
         ),
-        instanceIndex: count
+        instanceIndex: count,
+        defaultVisible: getBasemapAuxLayerDefaultVisibility(
+          layer,
+          metadata.layers
+        )
       });
     }
     return entries;
@@ -290,6 +301,21 @@
   }
 </script>
 
+{#snippet referenceBasemapSettings()}
+  <div class="reference-basemap-tool">
+    <p class="kh-help">{m.basemap_tiled_helper()}</p>
+    <BasemapStyleSelector />
+    <Button
+      kind="ghost"
+      size="small"
+      class="projection-shortcut-btn"
+      on:click={() => selectTool(VisualizationTools.Projection)}
+    >
+      {m.basemap_projection_shortcut()}
+    </Button>
+  </div>
+{/snippet}
+
 <section id="customize-basemap">
   <MainToolBarHeader title={m.step3_title()} icon={PaintBrush} showDivider />
 
@@ -299,7 +325,10 @@
     </div>
   {/if}
 
-  <div class="layers-list">
+  <div
+    class="layers-list"
+    class:has-bottom-border={isTiledBasemapEnabled || Boolean(currentMetadata)}
+  >
     {#if !isTiledBasemapEnabled && currentMetadata}
       {#each layerEntries as entry (entry.layer.file ?? `${currentMetadata.file}:${entry.layer.type}:${entry.instanceIndex}`)}
         <AuxLayerConfigSection
@@ -307,28 +336,32 @@
           basemapFile={currentMetadata.file}
           sharedLegacyId={entry.sharedLegacyId ?? undefined}
           instanceIndex={entry.instanceIndex}
+          defaultVisible={entry.defaultVisible}
           allowRemarkable={supportsRemarkableGraticule}
         />
       {/each}
     {/if}
 
     {#if !currentMetadata || isTiledBasemapEnabled}
-      <ExpandableSection
-        title={m.basemap_tiled_label()}
-        defaultOpen={isTiledBasemapEnabled}
-        showToggle={true}
-        toggleVariant="suggestions"
-        toggleChecked={isTiledBasemapEnabled}
-        onToggleChange={handleTiledBasemapToggle}
-      >
-        {#snippet icon()}
-          <InfoPopover text={m.basemap_tiled_info()} />
-        {/snippet}
-        <div class="reference-basemap-tool">
-          <p class="kh-help">{m.basemap_tiled_helper()}</p>
-          <BasemapStyleSelector />
+      {#if isTiledBasemapEnabled && !currentMetadata}
+        <div class="reference-basemap-bare">
+          {@render referenceBasemapSettings()}
         </div>
-      </ExpandableSection>
+      {:else}
+        <ExpandableSection
+          title={m.basemap_tiled_label()}
+          defaultOpen={isTiledBasemapEnabled}
+          showToggle={true}
+          toggleVariant="suggestions"
+          toggleChecked={isTiledBasemapEnabled}
+          onToggleChange={handleTiledBasemapToggle}
+        >
+          {#snippet icon()}
+            <InfoPopover text={m.basemap_tiled_info()} />
+          {/snippet}
+          {@render referenceBasemapSettings()}
+        </ExpandableSection>
+      {/if}
     {/if}
   </div>
 </section>
@@ -356,6 +389,9 @@
     --khartis-expandable-section-body-padding: 8px 48px 24px 16px;
     display: flex;
     flex-direction: column;
+  }
+
+  .layers-list.has-bottom-border {
     border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
   }
 
@@ -364,5 +400,14 @@
     flex-direction: column;
     gap: var(--cds-spacing-05);
     background-color: var(--cds-layer-01);
+  }
+
+  .reference-basemap-bare {
+    padding: 16px 48px 24px 16px;
+  }
+
+  .layers-list :global(.projection-shortcut-btn) {
+    align-self: flex-start;
+    padding-left: 0;
   }
 </style>

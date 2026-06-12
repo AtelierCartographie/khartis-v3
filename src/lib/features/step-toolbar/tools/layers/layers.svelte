@@ -17,11 +17,13 @@
   } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { tick } from 'svelte';
+  import { getLocale } from '$lib/paraglide/runtime.js';
 
   const store = layersActions;
   const currentState = $derived(layersState);
 
   $effect(() => {
+    void getLocale();
     void visualizationStore.version;
     void basemapLayersStore.version;
     void basemapAuxLayersStore.version;

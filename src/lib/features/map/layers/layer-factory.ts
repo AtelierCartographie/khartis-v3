@@ -2728,15 +2728,21 @@ function createTextOverlayLayers(
   let textLayerData: TextLayerDatum[] | null = null;
   let secondaryLabelLayerData: TextLayerDatum[] | null = null;
   const representativePointSource = getTextRepresentativePointSource(ctx);
+  // Raw point datasets render labels from the main table; `textPointTable` is
+  // its TEXT-filtered counterpart (built in use-map-layers) so Texts filters
+  // apply to labels while Symbols filters stay on the circles. Attributes are
+  // read from the SAME table to keep row indices aligned with the geometry.
   const textPointSource =
     representativePointSource ??
     (geometryInfo.type === GeometryType.POINT
       ? {
-          table: jsTable,
+          table: ctx.textPointTable ?? jsTable,
           geometryInfo
         }
       : null);
-  const textAttributeTable = ctx.splitDatasetTable ?? jsTable;
+  const textAttributeTable =
+    ctx.splitDatasetTable ??
+    (representativePointSource ? jsTable : (textPointSource?.table ?? jsTable));
   const textFeatureIdColumn =
     ctx.splitDatasetTable && textPointSource
       ? resolveSplitMappingFeatureIdColumn(

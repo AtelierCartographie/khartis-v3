@@ -509,10 +509,11 @@ describe('mapInstanceStore orthographic data anchoring', () => {
     mapInstanceStore.setMapLoaded(true);
     mapInstanceStore.updateDeckViewState({ target: [20, -10, 0], zoom: 1 });
 
-    // world = [2*x, 2*y]; center = (400, 300); zoomScale = 2.
+    // world = [2*x, 2*y]; center = (400, 300); zoomScale = 2; flipY:false →
+    // world +y points UP the screen.
     expect(mapInstanceStore.projectDataToViewportPx(0, 0)).toEqual({
       x: (2 * 0 - 20) * 2 + 400,
-      y: (2 * 0 + 10) * 2 + 300
+      y: 300 - (2 * 0 + 10) * 2
     });
 
     // The visible-bounds center maps to the canvas center.

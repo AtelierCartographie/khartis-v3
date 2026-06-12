@@ -59,6 +59,7 @@ type ProjectionActions = {
   setViewMode: (mode: ViewMode) => void;
   setCenter: (longitude: number, latitude: number) => void;
   setRotation: (rotation: number) => void;
+  resetSettings: () => void;
   setSimplifiedPreview: (value: boolean) => void;
   suggestProjectionForCurrentData: () => void;
   applySuggestion: (suggestion: ProjectionSuggestion) => void;
@@ -204,6 +205,14 @@ const { actions, getState } = createToolStore<
   DEFAULT_STATE,
   (s) => {
     const activateManualProjectionOverride = () => {
+      if (!s.overrideActive) {
+        // Capture the basemap's effective projection so settings rotate it
+        // instead of silently switching the render to `selected` (mercator).
+        const projTo = basemapService.currentMetadata?.proj_to;
+        if (projTo?.type === 'simple' && projTo.proj4) {
+          s.customCode = projTo.proj4;
+        }
+      }
       s.overrideActive = true;
       s.overrideSource = 'manual';
     };
@@ -299,6 +308,21 @@ const { actions, getState } = createToolStore<
       setRotation: (rotation: number) => {
         s.rotation = rotation;
         activateManualProjectionOverride();
+      },
+      resetSettings: () => {
+        s.longitude = 0;
+        s.latitude = 0;
+        s.rotation = 0;
+        s.center = undefined;
+        if (
+          s.overrideSource === 'manual' &&
+          s.customCode &&
+          s.customCode === basemapService.currentMetadata?.proj_to?.proj4
+        ) {
+          s.customCode = undefined;
+          s.overrideActive = false;
+          s.overrideSource = undefined;
+        }
       },
       setSimplifiedPreview: (value: boolean) => {
         s.simplifiedPreview = value;

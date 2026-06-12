@@ -346,10 +346,11 @@ function createMapInstanceStore() {
 
     const target = normalizeTarget(state.deckViewState.target);
     // Scaled-device-px viewport center (OrthographicView places target there).
+    // The view is created with flipY:false, so world +y points UP the screen.
     const centerXScaled = (ctx.canvasSize.width * renderScale) / 2;
     const centerYScaled = (ctx.canvasSize.height * renderScale) / 2;
     const screenXScaled = (world[0] - target[0]) * zoomScale + centerXScaled;
-    const screenYScaled = (world[1] - target[1]) * zoomScale + centerYScaled;
+    const screenYScaled = centerYScaled - (world[1] - target[1]) * zoomScale;
 
     if (!Number.isFinite(screenXScaled) || !Number.isFinite(screenYScaled)) {
       return null;
@@ -390,7 +391,7 @@ function createMapInstanceStore() {
     const screenXScaled = viewportX * renderScale;
     const screenYScaled = viewportY * renderScale;
     const worldX = (screenXScaled - centerXScaled) / zoomScale + target[0];
-    const worldY = (screenYScaled - centerYScaled) / zoomScale + target[1];
+    const worldY = (centerYScaled - screenYScaled) / zoomScale + target[1];
 
     const data = worldToData([worldX, worldY, 0]);
     if (!Number.isFinite(data[0]) || !Number.isFinite(data[1])) return null;
@@ -675,7 +676,8 @@ function createMapInstanceStore() {
       markViewportManual();
       pendingOrthographicRestore = null;
       state.deckViewState = resolveDeckViewState({
-        zoom: ORTHOGRAPHIC_MAP_BASE_ZOOM
+        zoom: ORTHOGRAPHIC_MAP_BASE_ZOOM,
+        target: [0, 0, 0]
       });
       applyDeckViewState();
       updateZoomFromMap();

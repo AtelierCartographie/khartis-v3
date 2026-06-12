@@ -21,6 +21,14 @@ describe('useMapLayers source', () => {
     );
   });
 
+  it('uses per-layer default visibility before rendering catalog metadata layers', () => {
+    expect(source).toContain('getBasemapAuxLayerDefaultVisibility');
+    expect(source).toContain('const defaultVisible =');
+    expect(source).toContain(
+      'basemapAuxLayersStore.isVisible(\n                  currentMetadata.file,\n                  layerKey,\n                  defaultVisible\n                )'
+    );
+  });
+
   it('falls back to DuckDB metadata when resolving source table names', () => {
     expect(source).toContain(
       'duckDBOrchestrator.getDatasetBySourceFile(dataset.sourceFileId)'
@@ -202,6 +210,9 @@ describe('useMapLayers source', () => {
       'ctx.textRepresentativePointTable =\n                filteredTextRepresentativePointTable;'
     );
     expect(source).toContain(
+      'ctx.textPointTable =\n              geoInfo?.type === GeometryType.POINT'
+    );
+    expect(source).toContain(
       'getSplitMatchedGeometryRowIndices(\n      matchedGeometryTable,\n      filteredDataset,'
     );
   });
@@ -238,7 +249,7 @@ describe('useMapLayers source', () => {
       '(getShouldRenderDatasetFallbacks?.() ?? false) &&\n        !shouldUseSimplifiedProjectionPreview'
     );
     expect(source).toContain(
-      'const hasExpectedActiveViz = activeVisualizations.length > 0;'
+      'const hasExpectedActiveViz = activeVisualizations.some(\n        visualizationHasEnabledPrimitive\n      );'
     );
   });
 

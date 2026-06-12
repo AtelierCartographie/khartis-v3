@@ -6,7 +6,7 @@
 
   const selectedModel = $derived(formatState.model);
 
-  const modelOptions = [
+  const modelOptions = $derived.by(() => [
     { value: PageModel.A4_LANDSCAPE, text: m.format_model_a4_landscape() },
     { value: PageModel.A4_PORTRAIT, text: m.format_model_a4_portrait() },
     { value: PageModel.A3_LANDSCAPE, text: m.format_model_a3_landscape() },
@@ -16,7 +16,7 @@
       text: m.format_model_screen_landscape()
     },
     { value: PageModel.SCREEN_PORTRAIT, text: m.format_model_screen_portrait() }
-  ];
+  ]);
 
   function handleModelChange(event: Event): void {
     const model = (event.target as HTMLSelectElement).value as PageModel;
