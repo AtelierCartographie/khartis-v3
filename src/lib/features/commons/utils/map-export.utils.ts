@@ -11,6 +11,7 @@ import {
   PATTERN_TYPE_MAP,
   type PatternName
 } from '$lib/features/map/layers/pattern-texture';
+import { SYMBOL_SDF_EXTENT } from '$lib/features/commons/constants/visualization.constants';
 
 interface ExportOptions {
   width: number;
@@ -1114,6 +1115,14 @@ function resolveStartIndices(
     : null;
 }
 
+// Mirrors of the MultiShapeLayer SDF proportions (multi-shape-layer.ts,
+// getDistance), converted to attribute-radius units (SDF unit ÷ extent).
+const SQUARE_HALF_RATIO = 0.6 / SYMBOL_SDF_EXTENT;
+const CROSS_ARM_RATIO = 0.7 / SYMBOL_SDF_EXTENT;
+const CROSS_HALF_THICKNESS_RATIO = CROSS_ARM_RATIO / 3;
+const RECTANGLE_HALF_WIDTH_RATIO = 0.9 / SYMBOL_SDF_EXTENT;
+const RECTANGLE_HALF_HEIGHT_RATIO = 0.27 / SYMBOL_SDF_EXTENT;
+
 function serializePointShape(
   shape: number,
   x: number,
@@ -1127,10 +1136,15 @@ function serializePointShape(
   const common = `${fillAttributes} ${strokeAttributes} stroke-width="${roundSvgValue(strokeWidth)}"`;
 
   switch (Math.round(shape)) {
-    case 1:
-      return `<rect x="${roundSvgValue(x - radius)}" y="${roundSvgValue(y - radius)}" width="${roundSvgValue(radius * 2)}" height="${roundSvgValue(radius * 2)}" ${common} />`;
-    case 4:
-      return `<path d="M ${roundSvgValue(x - radius * 0.25)} ${roundSvgValue(y - radius * 0.75)} L ${roundSvgValue(x + radius * 0.25)} ${roundSvgValue(y - radius * 0.75)} L ${roundSvgValue(x + radius * 0.25)} ${roundSvgValue(y - radius * 0.25)} L ${roundSvgValue(x + radius * 0.75)} ${roundSvgValue(y - radius * 0.25)} L ${roundSvgValue(x + radius * 0.75)} ${roundSvgValue(y + radius * 0.25)} L ${roundSvgValue(x + radius * 0.25)} ${roundSvgValue(y + radius * 0.25)} L ${roundSvgValue(x + radius * 0.25)} ${roundSvgValue(y + radius * 0.75)} L ${roundSvgValue(x - radius * 0.25)} ${roundSvgValue(y + radius * 0.75)} L ${roundSvgValue(x - radius * 0.25)} ${roundSvgValue(y + radius * 0.25)} L ${roundSvgValue(x - radius * 0.75)} ${roundSvgValue(y + radius * 0.25)} L ${roundSvgValue(x - radius * 0.75)} ${roundSvgValue(y - radius * 0.25)} L ${roundSvgValue(x - radius * 0.25)} ${roundSvgValue(y - radius * 0.25)} Z" ${common} />`;
+    case 1: {
+      const half = radius * SQUARE_HALF_RATIO;
+      return `<rect x="${roundSvgValue(x - half)}" y="${roundSvgValue(y - half)}" width="${roundSvgValue(half * 2)}" height="${roundSvgValue(half * 2)}" ${common} />`;
+    }
+    case 4: {
+      const arm = radius * CROSS_ARM_RATIO;
+      const half = radius * CROSS_HALF_THICKNESS_RATIO;
+      return `<path d="M ${roundSvgValue(x - half)} ${roundSvgValue(y - arm)} L ${roundSvgValue(x + half)} ${roundSvgValue(y - arm)} L ${roundSvgValue(x + half)} ${roundSvgValue(y - half)} L ${roundSvgValue(x + arm)} ${roundSvgValue(y - half)} L ${roundSvgValue(x + arm)} ${roundSvgValue(y + half)} L ${roundSvgValue(x + half)} ${roundSvgValue(y + half)} L ${roundSvgValue(x + half)} ${roundSvgValue(y + arm)} L ${roundSvgValue(x - half)} ${roundSvgValue(y + arm)} L ${roundSvgValue(x - half)} ${roundSvgValue(y + half)} L ${roundSvgValue(x - arm)} ${roundSvgValue(y + half)} L ${roundSvgValue(x - arm)} ${roundSvgValue(y - half)} L ${roundSvgValue(x - half)} ${roundSvgValue(y - half)} Z" ${common} />`;
+    }
     case 5:
       return `<path d="M ${roundSvgValue(x)} ${roundSvgValue(y - radius)} L ${roundSvgValue(x + radius)} ${roundSvgValue(y)} L ${roundSvgValue(x)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x - radius)} ${roundSvgValue(y)} Z" ${common} />`;
     case 6:
@@ -1145,8 +1159,11 @@ function serializePointShape(
       const barHalfWidth = barWidth / 2;
       return `<rect x="${roundSvgValue(x - barHalfWidth)}" y="${roundSvgValue(y - radius * 2)}" width="${roundSvgValue(barHalfWidth * 2)}" height="${roundSvgValue(radius * 2)}" ${common} />`;
     }
-    case 8:
-      return `<rect x="${roundSvgValue(x - radius * 0.9)}" y="${roundSvgValue(y - radius * 0.27)}" width="${roundSvgValue(radius * 1.8)}" height="${roundSvgValue(radius * 0.54)}" ${common} />`;
+    case 8: {
+      const halfWidth = radius * RECTANGLE_HALF_WIDTH_RATIO;
+      const halfHeight = radius * RECTANGLE_HALF_HEIGHT_RATIO;
+      return `<rect x="${roundSvgValue(x - halfWidth)}" y="${roundSvgValue(y - halfHeight)}" width="${roundSvgValue(halfWidth * 2)}" height="${roundSvgValue(halfHeight * 2)}" ${common} />`;
+    }
     case 0:
     default:
       return `<circle cx="${roundSvgValue(x)}" cy="${roundSvgValue(y)}" r="${roundSvgValue(radius)}" ${common} />`;

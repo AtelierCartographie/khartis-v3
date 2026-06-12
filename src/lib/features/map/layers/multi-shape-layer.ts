@@ -1,4 +1,5 @@
 import { ScatterplotLayer } from '@deck.gl/layers';
+import { SYMBOL_SDF_EXTENT } from '$lib/features/commons/constants/visualization.constants';
 
 export enum ShapeTypeOrdinal {
   CIRCLE = 0,
@@ -59,13 +60,15 @@ const LINEAR_SHAPE_GLSL_CONDITION = LINEAR_SHAPE_ORDINALS.map(
   (ordinal) => `shapeOrdinal == ${ordinal}`
 ).join(' || ');
 
-// Mirrors @deck.gl/layers ScatterplotLayer's vertex shader (9.3.x), with one
-// addition: linear shapes (BAR/SPIKE) encode the value as a height, so their
-// quad is lifted by half its height along its local +y axis (the SPIKE apex
-// direction in the fragment SDF) to anchor the shape's base on the data point.
-// Area shapes keep the default centered anchoring. A shader-hook injection
-// cannot do this: luma.gl emits hook functions before the main shader source,
-// where outerRadiusPixels is not yet declared.
+// Mirrors @deck.gl/layers ScatterplotLayer's vertex shader (9.3.x), with two
+// additions. (1) Linear shapes (BAR/SPIKE) encode the value as a height, so
+// their quad is lifted by half its height along its local +y axis (the SPIKE
+// apex direction in the fragment SDF) to anchor the shape's base on the data
+// point; area shapes keep the default centered anchoring. (2) The quad of 2D
+// shapes is scaled by 1/SYMBOL_SDF_EXTENT so their visual weight matches the
+// stock ScatterplotLayer circle. A shader-hook injection cannot do either:
+// luma.gl emits hook functions before the main shader source, where
+// outerRadiusPixels is not yet declared.
 const vertexShader = `#version 300 es
 #define SHADER_NAME multi-shape-layer-vertex-shader
 
@@ -100,6 +103,13 @@ void main(void) {
     project_size_to_pixel(scatterplot.radiusScale * instanceRadius, scatterplot.radiusUnits),
     scatterplot.radiusMinPixels, scatterplot.radiusMaxPixels
   );
+
+  // 2D SDF shapes occupy SYMBOL_SDF_EXTENT of the quad: grow the quad by the
+  // inverse so the SDF circle matches the stock ScatterplotLayer circle and
+  // the legend radius. Linear shapes already span the full quad height.
+  if (!isBottomAnchoredShape(instanceShapes)) {
+    outerRadiusPixels /= ${SYMBOL_SDF_EXTENT};
+  }
 
   float lineWidthPixels = clamp(
     project_size_to_pixel(scatterplot.lineWidthScale * instanceLineWidths, scatterplot.lineWidthUnits),
@@ -271,7 +281,9 @@ float getDistance(vec2 uv, float radiusPixels, int shapeType, float radius) {
             }
         default: // CIRCLE (0)
             {
-                return length(uv) * radiusPixels / 0.7;
+                // True euclidean distance (not a scaled one) so stroke width
+                // and antialiasing stay in real pixels, like the other SDFs.
+                return (length(uv) - ${SYMBOL_SDF_EXTENT}) * radiusPixels + radiusPixels;
             }
     }
 }
