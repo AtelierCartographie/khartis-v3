@@ -98,7 +98,7 @@ describe('ThematicMap source', () => {
     expect(presetGuardIndex).toBeLessThan(datasetFitIndex);
   });
 
-  it('uses requested basemap viewport presets instead of user data bounds', () => {
+  it('prefers user data bounds over the requested basemap viewport preset', () => {
     const helperStart = source.indexOf(
       'function applyPendingMapLibreViewportPreset'
     );
@@ -109,8 +109,8 @@ describe('ThematicMap source', () => {
     const helperSource = source.slice(helperStart, helperEnd);
 
     expect(helperSource).toContain('const presetBounds =');
-    expect(helperSource).toContain('mapBounds.fitToBounds(presetBounds, {');
-    expect(helperSource).not.toContain('resolveUserDataBounds()');
+    expect(helperSource).toContain('resolveUserDataBounds()');
+    expect(helperSource).toContain('?? presetBounds');
   });
 
   it('does not inherit catalog projection metadata for standalone geofiles', () => {
