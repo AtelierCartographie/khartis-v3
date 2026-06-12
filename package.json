@@ -156,7 +156,8 @@
       "cookie": ">=0.7.0"
     },
     "patchedDependencies": {
-      "carbon-components-svelte": "patches/carbon-components-svelte.patch"
+      "carbon-components-svelte": "patches/carbon-components-svelte.patch",
+      "vite-plugin-pwa@1.3.0": "patches/vite-plugin-pwa@1.3.0.patch"
     }
   },
   "lint-staged": {
