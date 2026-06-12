@@ -27,6 +27,7 @@
     basemapFile: string;
     sharedLegacyId?: BasemapLayerId;
     instanceIndex?: number;
+    defaultVisible?: boolean;
     allowRemarkable?: boolean;
   }
 
@@ -35,6 +36,7 @@
     basemapFile,
     sharedLegacyId,
     instanceIndex = 0,
+    defaultVisible = true,
     allowRemarkable = true
   }: Props = $props();
 
@@ -69,10 +71,14 @@
     if (isPrimaryInstance && legacyId && !isPerKeyLayer) {
       return (
         (getConfig(legacyId)?.visible ?? true) &&
-        basemapAuxLayersStore.isVisible(basemapFile, renderKey, true)
+        basemapAuxLayersStore.isVisible(basemapFile, renderKey, defaultVisible)
       );
     }
-    return basemapAuxLayersStore.isVisible(basemapFile, renderKey, true);
+    return basemapAuxLayersStore.isVisible(
+      basemapFile,
+      renderKey,
+      defaultVisible
+    );
   }
 
   const visible = $derived.by(() => {

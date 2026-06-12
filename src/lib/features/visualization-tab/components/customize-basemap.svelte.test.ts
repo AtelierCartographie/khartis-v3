@@ -143,6 +143,21 @@ describe('CustomizeBasemap', () => {
       'basemap_aux_secondary_limit_helper()'
     );
   });
+
+  it('passes catalog metadata default visibility to the rendered aux layer sections', () => {
+    expect(source).toContain('getBasemapAuxLayerDefaultVisibility');
+    expect(source).toContain(
+      'defaultVisible: getBasemapAuxLayerDefaultVisibility'
+    );
+    expect(source).toContain('defaultVisible={entry.defaultVisible}');
+    expect(auxSectionSource).toContain('defaultVisible = true');
+    expect(auxSectionSource).toContain(
+      'basemapAuxLayersStore.isVisible(basemapFile, renderKey, defaultVisible)'
+    );
+    expect(auxSectionSource).toContain(
+      'basemapAuxLayersStore.isVisible(\n      basemapFile,\n      renderKey,\n      defaultVisible\n    )'
+    );
+  });
 });
 
 function catalogLayerTypes(): Set<string> {
