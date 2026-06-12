@@ -27,6 +27,7 @@
   import { resolveTiledStyleFromToggle } from '../services/tiled-basemap-selection.service';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
   import { resolveActiveBasemapMetadata } from '$lib/features/map/utils/basemap-metadata-resolution.utils';
+  import { getBasemapAuxLayerDefaultVisibility } from '$lib/features/map/utils/basemap-aux-layer-visibility.utils';
   import type { BasemapLayer } from '$lib/features/map/types/basemap.types';
   import type { BasemapLayerId } from '$lib/features/map/stores/basemap-layers.store.svelte';
 
@@ -128,6 +129,7 @@
     layer: BasemapLayer;
     sharedLegacyId: BasemapLayerId | null;
     instanceIndex: number;
+    defaultVisible: boolean;
   }
 
   function isSection3RenderableType(type: BasemapLayerType): boolean {
@@ -156,14 +158,16 @@
       {
         layer: oceanSyntheticLayer,
         sharedLegacyId: 'mers',
-        instanceIndex: 0
+        instanceIndex: 0,
+        defaultVisible: true
       },
       ...(supportsProjectionSphere
         ? [
             {
               layer: sphereSyntheticLayer,
               sharedLegacyId: 'sphere' as BasemapLayerId,
-              instanceIndex: 0
+              instanceIndex: 0,
+              defaultVisible: true
             }
           ]
         : [])
@@ -181,7 +185,11 @@
           isCustomBasemap,
           isCustomLineBasemap
         ),
-        instanceIndex: count
+        instanceIndex: count,
+        defaultVisible: getBasemapAuxLayerDefaultVisibility(
+          layer,
+          metadata.layers
+        )
       });
     }
     return entries;
@@ -317,7 +325,10 @@
     </div>
   {/if}
 
-  <div class="layers-list">
+  <div
+    class="layers-list"
+    class:has-bottom-border={isTiledBasemapEnabled || Boolean(currentMetadata)}
+  >
     {#if !isTiledBasemapEnabled && currentMetadata}
       {#each layerEntries as entry (entry.layer.file ?? `${currentMetadata.file}:${entry.layer.type}:${entry.instanceIndex}`)}
         <AuxLayerConfigSection
@@ -325,6 +336,7 @@
           basemapFile={currentMetadata.file}
           sharedLegacyId={entry.sharedLegacyId ?? undefined}
           instanceIndex={entry.instanceIndex}
+          defaultVisible={entry.defaultVisible}
           allowRemarkable={supportsRemarkableGraticule}
         />
       {/each}
@@ -377,6 +389,9 @@
     --khartis-expandable-section-body-padding: 8px 48px 24px 16px;
     display: flex;
     flex-direction: column;
+  }
+
+  .layers-list.has-bottom-border {
     border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
   }
 
