@@ -36,6 +36,7 @@
     formatScaleDistance,
     getScaleDistanceLimit,
     getCurrentScaleDistanceContext,
+    getNorthBearingAtCenter,
     getScaleMetersPerPixel,
     getSuggestedScaleDistance,
     getInsetMapGeographicBounds,
@@ -81,6 +82,12 @@
   const MM_TO_PAGE_PX = 72 / 25.4;
   const SCALE_PADDING = 6;
   const SCALE_SEGMENT_COUNT = 4;
+  const SCALE_BAR_THICKNESS = 8;
+  const SCALE_SVG_BOTTOM_PADDING = 2;
+  // Average glyph advance as a fraction of the font size — used to estimate the
+  // label width without a DOM measurement (the layout is fully derived). Biased
+  // slightly high so a large label is never clipped horizontally.
+  const SCALE_CHAR_WIDTH_RATIO = 0.62;
   const SCALE_SEGMENTS = Array.from(
     { length: SCALE_SEGMENT_COUNT },
     (_, index) => index
@@ -542,8 +549,29 @@
     Math.max(2, Math.round(scaleRenderedWidth / SCALE_SEGMENT_COUNT))
   );
   const scaleBarWidth = $derived(scaleSegmentWidth * SCALE_SEGMENT_COUNT);
-  const scaleSvgWidth = $derived(scaleBarWidth + SCALE_PADDING * 2);
-  const scaleLabelX = $derived(scaleBarWidth / 2 + SCALE_PADDING);
+  // The viewport widens to the wider of the bar and the (estimated) label so a
+  // large label overflows neither the bar line nor the SVG; the bar stays
+  // centered within it.
+  const scaleLabelWidth = $derived(
+    Math.ceil(scaleLabel.length * scaleFontSize * SCALE_CHAR_WIDTH_RATIO)
+  );
+  const scaleContentWidth = $derived(Math.max(scaleBarWidth, scaleLabelWidth));
+  const scaleSvgWidth = $derived(scaleContentWidth + SCALE_PADDING * 2);
+  const scaleBarStartX = $derived(
+    SCALE_PADDING + (scaleContentWidth - scaleBarWidth) / 2
+  );
+  const scaleLabelX = $derived(scaleSvgWidth / 2);
+
+  // Vertical layout follows the font size so a larger label is never clipped by
+  // a fixed-height viewport: label baseline near the top, bar/line below it,
+  // SVG height bounded by the bar bottom.
+  const scaleLabelBaselineY = $derived(scaleFontSize);
+  const scaleLabelGap = $derived(Math.max(4, Math.round(scaleFontSize * 0.35)));
+  const scaleBarTopY = $derived(scaleLabelBaselineY + scaleLabelGap);
+  const scaleLineY = $derived(scaleBarTopY + SCALE_BAR_THICKNESS / 2);
+  const scaleSvgHeight = $derived(
+    scaleBarTopY + SCALE_BAR_THICKNESS + SCALE_SVG_BOTTOM_PADDING
+  );
 
   const orientationSize = $derived.by(() => {
     const rawSize = toFiniteNumber(geoIndicationsState.orientation.size, 10);
@@ -551,6 +579,18 @@
     return Math.round(
       clamp(sizeInPx, ORIENTATION_MIN_SIZE_PX, ORIENTATION_MAX_SIZE_PX)
     );
+  });
+
+  // Rotation that makes the north indicator point to geographic north at the
+  // center of the current framing, recomputed on map move/zoom/resize and on
+  // projection change — same reactivity contract as the scale bar.
+  const orientationAngle = $derived.by(() => {
+    const _revision = mapViewRevision;
+    const _zoomLevel = mapInstanceStore.zoomLevel;
+    void _revision;
+    void _zoomLevel;
+
+    return getNorthBearingAtCenter(getCurrentScaleDistanceContext()) ?? 0;
   });
 
   const insetDimensions = $derived.by(() => {
@@ -603,16 +643,24 @@
     orientationEnabled: geoIndicationsState.orientation.enabled,
     orientationDragged: geoIndicationsState.orientation.dragPosition !== null
   }));
+  // Drag positions are stored in logical page coordinates (the pointer handler
+  // divides screen deltas by the page scale). The overlay itself is rendered at
+  // screen scale with no CSS transform, so the position must be multiplied back
+  // by the page scale here — otherwise the element tracks the cursor at 1/scale
+  // speed. (Unlike the legend, the figures are not transform-scaled: the scale
+  // bar is calibrated in screen pixels and scaling it would falsify it.)
   const scaleStyle = $derived.by(() => {
     if (geoIndicationsState.scale.dragPosition) {
-      return `left: ${geoIndicationsState.scale.dragPosition.x}px; top: ${geoIndicationsState.scale.dragPosition.y}px; bottom: auto; right: auto;`;
+      const scale = getPageScale();
+      return `left: ${geoIndicationsState.scale.dragPosition.x * scale}px; top: ${geoIndicationsState.scale.dragPosition.y * scale}px; bottom: auto; right: auto;`;
     }
 
     return getDefaultScaleStyle(placementContext);
   });
   const orientationStyle = $derived.by(() => {
     if (geoIndicationsState.orientation.dragPosition) {
-      return `left: ${geoIndicationsState.orientation.dragPosition.x}px; top: ${geoIndicationsState.orientation.dragPosition.y}px; bottom: auto; right: auto;`;
+      const scale = getPageScale();
+      return `left: ${geoIndicationsState.orientation.dragPosition.x * scale}px; top: ${geoIndicationsState.orientation.dragPosition.y * scale}px; bottom: auto; right: auto;`;
     }
 
     return getDefaultOrientationStyle(placementContext);
@@ -622,9 +670,10 @@
     const styles = [getDefaultInsetStyle(placementContext)];
 
     if (geoIndicationsState.insetMap.dragPosition) {
+      const scale = getPageScale();
       styles.push(
-        `left: ${geoIndicationsState.insetMap.dragPosition.x}px`,
-        `top: ${geoIndicationsState.insetMap.dragPosition.y}px`,
+        `left: ${geoIndicationsState.insetMap.dragPosition.x * scale}px`,
+        `top: ${geoIndicationsState.insetMap.dragPosition.y * scale}px`,
         'bottom: auto',
         'right: auto'
       );
@@ -764,9 +813,12 @@
       return null;
     }
 
+    // offsetWidth/Height are screen pixels; convert to logical page units so
+    // the drag bounds match the logical drag position.
+    const scale = getPageScale();
     return {
-      width: overlayElement.offsetWidth,
-      height: overlayElement.offsetHeight
+      width: overlayElement.offsetWidth / scale,
+      height: overlayElement.offsetHeight / scale
     };
   }
 
@@ -846,11 +898,15 @@
       return position;
     }
 
+    // The element is rendered at screen scale (no CSS transform), so its
+    // offset size is in screen pixels — convert to logical page units to match
+    // the logical position and overlay bounds.
+    const scale = getPageScale();
     return snapPointWithinBounds(
       position,
       getDragBounds(overlaySize, {
-        width: dragElement.offsetWidth,
-        height: dragElement.offsetHeight
+        width: dragElement.offsetWidth / scale,
+        height: dragElement.offsetHeight / scale
       }),
       snapEnabled
     );
@@ -1192,13 +1248,13 @@
     >
       <svg
         width={scaleSvgWidth}
-        height="26"
+        height={scaleSvgHeight}
         aria-label={m.geo_scale_bar_aria()}
       >
         {#if geoIndicationsState.scale.form === ScaleForm.BOX}
           <text
             x={scaleLabelX}
-            y="9"
+            y={scaleLabelBaselineY}
             text-anchor="middle"
             fill={scaleColor}
             font-size={scaleFontSize}
@@ -1208,10 +1264,10 @@
           </text>
           {#each SCALE_SEGMENTS as segment (segment)}
             <rect
-              x={SCALE_PADDING + segment * scaleSegmentWidth}
-              y="13"
+              x={scaleBarStartX + segment * scaleSegmentWidth}
+              y={scaleBarTopY}
               width={scaleSegmentWidth}
-              height="8"
+              height={SCALE_BAR_THICKNESS}
               fill={segment % 2 === 0 ? scaleColor : 'transparent'}
               stroke={scaleColor}
               stroke-width="1.5"
@@ -1219,16 +1275,16 @@
           {/each}
         {:else}
           <line
-            x1={SCALE_PADDING}
-            y1="20"
-            x2={scaleBarWidth + SCALE_PADDING}
-            y2="20"
+            x1={scaleBarStartX}
+            y1={scaleLineY}
+            x2={scaleBarStartX + scaleBarWidth}
+            y2={scaleLineY}
             stroke={scaleColor}
             stroke-width="2"
           />
           <text
             x={scaleLabelX}
-            y="10"
+            y={scaleLabelBaselineY}
             text-anchor="middle"
             fill={scaleColor}
             font-size={scaleFontSize}
@@ -1263,62 +1319,65 @@
         width={orientationSize}
         height={orientationSize}
         viewBox="0 0 40 50"
+        style="overflow: visible;"
         aria-label={m.geo_north_indicator_aria()}
       >
-        {#if geoIndicationsState.orientation.style === OrientationIndicatorStyle.ARROW}
-          <polygon
-            points="20,5 30,35 20,28 10,35"
-            fill={orientationColor}
-            stroke={orientationColor}
-            stroke-width="1"
-          />
-          <text
-            x="20"
-            y="47"
-            text-anchor="middle"
-            font-size={PRINT_STANDARD_TOKENS.geoIndications.scaleFontSize}
-            font-weight="bold"
-            fill={orientationColor}
-            font-family={orientationFontFamily}
-          >
-            {m.orientation_north()}
-          </text>
-        {:else}
-          <circle
-            cx="20"
-            cy="20"
-            r="15"
-            fill="none"
-            stroke={orientationColor}
-            stroke-width="2"
-          />
-          <polygon points="20,7 23,20 20,15 17,20" fill={orientationColor} />
-          <polygon
-            points="20,33 23,20 20,25 17,20"
-            fill="none"
-            stroke={orientationColor}
-            stroke-width="1"
-          />
-          <line
-            x1="7"
-            y1="20"
-            x2="33"
-            y2="20"
-            stroke={orientationColor}
-            stroke-width="1"
-          />
-          <text
-            x="20"
-            y="47"
-            text-anchor="middle"
-            font-size={PRINT_STANDARD_TOKENS.annotations.captionFontSize}
-            font-weight="bold"
-            fill={orientationColor}
-            font-family={orientationFontFamily}
-          >
-            {m.orientation_north()}
-          </text>
-        {/if}
+        <g transform={`rotate(${orientationAngle.toFixed(1)} 20 25)`}>
+          {#if geoIndicationsState.orientation.style === OrientationIndicatorStyle.ARROW}
+            <polygon
+              points="20,5 30,35 20,28 10,35"
+              fill={orientationColor}
+              stroke={orientationColor}
+              stroke-width="1"
+            />
+            <text
+              x="20"
+              y="47"
+              text-anchor="middle"
+              font-size={PRINT_STANDARD_TOKENS.geoIndications.scaleFontSize}
+              font-weight="bold"
+              fill={orientationColor}
+              font-family={orientationFontFamily}
+            >
+              {m.orientation_north()}
+            </text>
+          {:else}
+            <circle
+              cx="20"
+              cy="20"
+              r="15"
+              fill="none"
+              stroke={orientationColor}
+              stroke-width="2"
+            />
+            <polygon points="20,7 23,20 20,15 17,20" fill={orientationColor} />
+            <polygon
+              points="20,33 23,20 20,25 17,20"
+              fill="none"
+              stroke={orientationColor}
+              stroke-width="1"
+            />
+            <line
+              x1="7"
+              y1="20"
+              x2="33"
+              y2="20"
+              stroke={orientationColor}
+              stroke-width="1"
+            />
+            <text
+              x="20"
+              y="47"
+              text-anchor="middle"
+              font-size={PRINT_STANDARD_TOKENS.annotations.captionFontSize}
+              font-weight="bold"
+              fill={orientationColor}
+              font-family={orientationFontFamily}
+            >
+              {m.orientation_north()}
+            </text>
+          {/if}
+        </g>
       </svg>
     </div>
   {/if}

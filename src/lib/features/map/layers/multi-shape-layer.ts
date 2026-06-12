@@ -1,4 +1,5 @@
 import { ScatterplotLayer } from '@deck.gl/layers';
+import { SYMBOL_SDF_EXTENT } from '$lib/features/commons/constants/visualization.constants';
 
 export enum ShapeTypeOrdinal {
   CIRCLE = 0,
@@ -54,6 +55,109 @@ const multiShapeModule = {
     patternType: 'f32'
   }
 };
+
+const LINEAR_SHAPE_GLSL_CONDITION = LINEAR_SHAPE_ORDINALS.map(
+  (ordinal) => `shapeOrdinal == ${ordinal}`
+).join(' || ');
+
+// Mirrors @deck.gl/layers ScatterplotLayer's vertex shader (9.3.x), with two
+// additions. (1) Linear shapes (BAR/SPIKE) encode the value as a height, so
+// their quad is lifted by half its height along its local +y axis (the SPIKE
+// apex direction in the fragment SDF) to anchor the shape's base on the data
+// point; area shapes keep the default centered anchoring. (2) The quad of 2D
+// shapes is scaled by 1/SYMBOL_SDF_EXTENT so their visual weight matches the
+// stock ScatterplotLayer circle. A shader-hook injection cannot do either:
+// luma.gl emits hook functions before the main shader source, where
+// outerRadiusPixels is not yet declared.
+const vertexShader = `#version 300 es
+#define SHADER_NAME multi-shape-layer-vertex-shader
+
+in vec3 positions;
+in vec3 instancePositions;
+in vec3 instancePositions64Low;
+in float instanceRadius;
+in float instanceLineWidths;
+in vec4 instanceFillColors;
+in vec4 instanceLineColors;
+in vec3 instancePickingColors;
+in vec2 instancePixelOffset;
+in float instanceShapes;
+
+out vec4 vFillColor;
+out vec4 vLineColor;
+out vec2 unitPosition;
+out float innerUnitRadius;
+out float outerRadiusPixels;
+out float vShape;
+out float vRadius;
+
+bool isBottomAnchoredShape(float shape) {
+  int shapeOrdinal = int(shape + 0.5);
+  return ${LINEAR_SHAPE_GLSL_CONDITION};
+}
+
+void main(void) {
+  geometry.worldPosition = instancePositions;
+
+  outerRadiusPixels = clamp(
+    project_size_to_pixel(scatterplot.radiusScale * instanceRadius, scatterplot.radiusUnits),
+    scatterplot.radiusMinPixels, scatterplot.radiusMaxPixels
+  );
+
+  // 2D SDF shapes occupy SYMBOL_SDF_EXTENT of the quad: grow the quad by the
+  // inverse so the SDF circle matches the stock ScatterplotLayer circle and
+  // the legend radius. Linear shapes already span the full quad height.
+  if (!isBottomAnchoredShape(instanceShapes)) {
+    outerRadiusPixels /= ${SYMBOL_SDF_EXTENT};
+  }
+
+  float lineWidthPixels = clamp(
+    project_size_to_pixel(scatterplot.lineWidthScale * instanceLineWidths, scatterplot.lineWidthUnits),
+    scatterplot.lineWidthMinPixels, scatterplot.lineWidthMaxPixels
+  );
+
+  outerRadiusPixels += scatterplot.stroked * lineWidthPixels / 2.0;
+
+  float edgePadding = scatterplot.antialiasing
+    ? (outerRadiusPixels + SMOOTH_EDGE_RADIUS) / outerRadiusPixels
+    : 1.0;
+
+  unitPosition = edgePadding * positions.xy;
+  geometry.uv = unitPosition;
+  geometry.pickingColor = instancePickingColors;
+
+  innerUnitRadius = 1.0 - scatterplot.stroked * lineWidthPixels / outerRadiusPixels;
+
+  vShape = instanceShapes;
+  vRadius = instanceRadius;
+
+  float anchorShiftPixels = isBottomAnchoredShape(instanceShapes)
+    ? outerRadiusPixels
+    : 0.0;
+
+  if (scatterplot.billboard) {
+    gl_Position = project_position_to_clipspace(instancePositions, instancePositions64Low, vec3(0.0), geometry.position);
+    DECKGL_FILTER_GL_POSITION(gl_Position, geometry);
+    vec3 offset = edgePadding * positions * outerRadiusPixels;
+    offset.y += anchorShiftPixels;
+    offset.xy += instancePixelOffset;
+    DECKGL_FILTER_SIZE(offset, geometry);
+    gl_Position.xy += project_pixel_size_to_clipspace(offset.xy);
+  } else {
+    vec3 offset = edgePadding * positions * project_pixel_size(outerRadiusPixels);
+    offset.y += project_pixel_size(anchorShiftPixels);
+    offset.xy += project_pixel_size(instancePixelOffset);
+    DECKGL_FILTER_SIZE(offset, geometry);
+    gl_Position = project_position_to_clipspace(instancePositions, instancePositions64Low, offset, geometry.position);
+    DECKGL_FILTER_GL_POSITION(gl_Position, geometry);
+  }
+
+  vFillColor = vec4(instanceFillColors.rgb, instanceFillColors.a * layer.opacity);
+  DECKGL_FILTER_COLOR(vFillColor, geometry);
+  vLineColor = vec4(instanceLineColors.rgb, instanceLineColors.a * layer.opacity);
+  DECKGL_FILTER_COLOR(vLineColor, geometry);
+}
+`;
 
 const fragmentShader = `#version 300 es
 #define SHADER_NAME multi-shape-layer-fragment-shader
@@ -177,7 +281,9 @@ float getDistance(vec2 uv, float radiusPixels, int shapeType, float radius) {
             }
         default: // CIRCLE (0)
             {
-                return length(uv) * radiusPixels / 0.7;
+                // True euclidean distance (not a scaled one) so stroke width
+                // and antialiasing stay in real pixels, like the other SDFs.
+                return (length(uv) - ${SYMBOL_SDF_EXTENT}) * radiusPixels + radiusPixels;
             }
     }
 }
@@ -366,20 +472,9 @@ export class MultiShapeLayer<DataT = unknown> extends ScatterplotLayer<
 
     return {
       ...parentShaders,
+      vs: vertexShader,
       fs: fragmentShader,
-      modules: [...parentModules, multiShapeModule],
-      inject: {
-        ...((parentShaders.inject as Record<string, string>) ?? {}),
-        'vs:#decl': `
-in float instanceShapes;
-out float vShape;
-out float vRadius;
-`,
-        'vs:#main-end': `
-vShape = instanceShapes;
-vRadius = instanceRadius;
-`
-      }
+      modules: [...parentModules, multiShapeModule]
     };
   }
 

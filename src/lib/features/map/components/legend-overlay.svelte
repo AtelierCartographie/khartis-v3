@@ -101,6 +101,7 @@
     CategoryShapeMode,
     ColorMode,
     DEFAULT_COLORS,
+    DEFAULT_LINEAR_SYMBOL_BAR_WIDTH,
     FillMode,
     ShapeType,
     SizeMode,
@@ -1068,19 +1069,24 @@
     if (scale.kind === 'proportional' && !scale.secondary && type) {
       const values = getNumericColumnValues(viz, viz.mapping.sizeColumn);
       if (values.length > 0) {
-        const maxSize = getSymbolPrimitive(viz)?.maxSize ?? 18;
+        const symbol = getSymbolPrimitive(viz);
+        const maxSize = symbol?.maxSize ?? 18;
+        const barWidth = symbol?.barWidth ?? DEFAULT_LINEAR_SYMBOL_BAR_WIDTH;
         return {
           key: 'point-size',
           className: 'legend-svg--symbols',
           consumesMissingData: isLegendMissingDataShown(viz, 'point'),
           create: (options, context) =>
             toLegendSvg(
+              // Proportional-size legend stays neutral (black outline, no
+              // fill): it encodes size only, the symbol color says nothing.
               draw_symbols_legend(values, {
                 ...options,
                 type,
                 size: maxSize,
                 fill: scale.fillColor,
                 stroke: scale.strokeColor,
+                bar_width: barWidth,
                 nodata: context.includeMissingDataFooter
                   ? isLegendMissingDataShown(viz, 'point')
                   : false,
