@@ -407,21 +407,23 @@
       </div>
     {:else}
       {#each filteredExamples as example (example.id)}
-        <ProjectCard
-          title={example.title}
-          subtitle={example.subtitle}
-          thumbnail={example.thumbnail}
-          variant="gray"
-          selected={selectedExample === example.id}
-          disabled={isLoading}
-          onclick={() => handleExampleClick(example.id)}
-        >
-          {#snippet footer()}
-            <span class="example-tags text-xs text-grey"
-              >{example.tags?.join(m.separator_bullet_space()) || ''}</span
-            >
-          {/snippet}
-        </ProjectCard>
+        <div class="example-project-card">
+          <ProjectCard
+            title={example.title}
+            subtitle={example.subtitle}
+            thumbnail={example.thumbnail}
+            variant="gray"
+            selected={selectedExample === example.id}
+            disabled={isLoading}
+            onclick={() => handleExampleClick(example.id)}
+          >
+            {#snippet footer()}
+              <span class="example-tags text-xs text-grey"
+                >{example.tags?.join(m.separator_bullet_space()) || ''}</span
+              >
+            {/snippet}
+          </ProjectCard>
+        </div>
       {/each}
     {/if}
   </div>
@@ -439,5 +441,26 @@
     line-clamp: 2;
     overflow: hidden;
     min-height: 2lh;
+  }
+
+  .example-project-card :global(#kh-card) {
+    height: 15.5rem;
+  }
+
+  .example-project-card :global(#kh-card .title-text) {
+    font-size: 0.875rem;
+    line-height: 1.25;
+  }
+
+  .example-project-card :global(#kh-card .top-section > svg) {
+    width: 1.5rem;
+    height: 1.5rem;
+    flex-shrink: 0;
+  }
+
+  .example-project-card :global(#kh-card .top-section > .text-sm) {
+    font-size: 0.75rem;
+    line-height: 1.25;
+    text-align: center;
   }
 </style>
