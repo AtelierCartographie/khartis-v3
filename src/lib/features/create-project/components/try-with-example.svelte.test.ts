@@ -64,6 +64,15 @@ describe('try-with-example project initialization', () => {
     expect(source).toContain('await applyExampleReferenceBasemap(example);');
   });
 
+  it('keeps example cards taller with smaller fallback map icons', () => {
+    expect(source).toContain(
+      '.example-project-card :global(#kh-card) {\n    height: 15.5rem;'
+    );
+    expect(source).toContain(
+      '.example-project-card :global(#kh-card .top-section > svg) {\n    width: 1.5rem;\n    height: 1.5rem;'
+    );
+  });
+
   it('synchronises the in-memory geolocation linked variable with the catalog join geoColumn', () => {
     expect(source).toContain('syncGeolocationStateForCatalogJoin(');
     expect(source).toContain('geoReference: GeoreferenceType.ENTITIES');
