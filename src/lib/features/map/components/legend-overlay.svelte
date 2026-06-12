@@ -101,6 +101,7 @@
     CategoryShapeMode,
     ColorMode,
     DEFAULT_COLORS,
+    DEFAULT_LINEAR_SYMBOL_BAR_WIDTH,
     FillMode,
     ShapeType,
     SizeMode,
@@ -1050,7 +1051,9 @@
     if (scale.kind === 'proportional' && !scale.secondary && type) {
       const values = getNumericColumnValues(viz, viz.mapping.sizeColumn);
       if (values.length > 0) {
-        const maxSize = getSymbolPrimitive(viz)?.maxSize ?? 18;
+        const symbol = getSymbolPrimitive(viz);
+        const maxSize = symbol?.maxSize ?? 18;
+        const barWidth = symbol?.barWidth ?? DEFAULT_LINEAR_SYMBOL_BAR_WIDTH;
         return {
           key: 'point-size',
           className: 'legend-svg--symbols',
@@ -1061,6 +1064,7 @@
                 ...options,
                 type,
                 size: maxSize,
+                bar_width: barWidth,
                 fill: scale.fillColor,
                 stroke: scale.strokeColor,
                 nodata: context.includeMissingDataFooter

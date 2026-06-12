@@ -1,6 +1,7 @@
 import { m } from '$lib/paraglide/messages.js';
 import Textbox from '@borgar/textbox';
 import { extent, ticks as d3_ticks } from 'd3-array';
+import { SYMBOL_SDF_EXTENT } from '$lib/features/commons/constants/visualization.constants';
 
 import {
   createLegendCanvasRect,
@@ -18,6 +19,11 @@ import {
 } from './utils';
 
 export type SymbolType = 'circle' | 'square' | 'bar' | 'spike' | 'text';
+
+// The map draws squares at 0.6 of the SDF quad (MultiShapeLayer getDistance),
+// i.e. 0.6/SYMBOL_SDF_EXTENT of the symbol radius: mirror that ratio so the
+// legend square is the size actually rendered on the map.
+const SQUARE_SIDE_RATIO = 0.6 / SYMBOL_SDF_EXTENT;
 
 export interface SymbolsLegendOptions extends CommonLegendTextOptions {
   type?: SymbolType;
@@ -204,6 +210,8 @@ export function draw_symbols_legend(
     const x = type === 'circle' ? r + margin : margin;
     const x_link = x + bar_width / 2;
     const last = values.length - 1;
+    const symbol_height = (d: number): number =>
+      type === 'square' ? d * 2 * SQUARE_SIDE_RATIO : d * 2;
 
     values.forEach((d, i) => {
       const end_link = label_anchor_x - label_widths[i] - label_gap;
@@ -216,13 +224,10 @@ export function draw_symbols_legend(
           label(label_anchor_x, bottom_min_alone - d, ticks[i] * label_sign)
         );
       } else {
+        const top = bottom_symbols - symbol_height(d);
         symbols.push(symbol(type, x, bottom_symbols, d, bar_width));
-        links.push(
-          link(x_link, bottom_symbols - d * 2, end_link, bottom_symbols - d * 2)
-        );
-        labels.push(
-          label(label_anchor_x, bottom_symbols - d * 2, ticks[i] * label_sign)
-        );
+        links.push(link(x_link, top, end_link, top));
+        labels.push(label(label_anchor_x, top, ticks[i] * label_sign));
       }
     });
 
@@ -321,7 +326,12 @@ function removeOverlappingSymbolTicks(
 ): number[] {
   if (ticks.length <= 1) return ticks;
 
-  const multiplier = type !== 'bar' && type !== 'spike' ? 2 : 1;
+  const multiplier =
+    type === 'square'
+      ? 2 * SQUARE_SIDE_RATIO
+      : type !== 'bar' && type !== 'spike'
+        ? 2
+        : 1;
   const minLabelGap = fontSize * 1.2;
   const result: number[] = [];
 
@@ -407,8 +417,10 @@ function symbol(
   switch (type) {
     case 'circle':
       return `<circle cx="${x}" cy="${y - r}" r="${r}" />`;
-    case 'square':
-      return `<rect x="${x}" y="${y - r * 2}" width="${r * 2}" height="${r * 2}" />`;
+    case 'square': {
+      const side = r * 2 * SQUARE_SIDE_RATIO;
+      return `<rect x="${x}" y="${y - side}" width="${side}" height="${side}" />`;
+    }
     case 'bar':
       return `<rect x="${x}" y="${y - r * 2}" width="${bar_width}" height="${r * 2}" />`;
     case 'spike': {
