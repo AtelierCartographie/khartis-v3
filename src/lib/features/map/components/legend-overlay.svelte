@@ -1060,13 +1060,13 @@
           consumesMissingData: isLegendMissingDataShown(viz, 'point'),
           create: (options, context) =>
             toLegendSvg(
+              // Proportional-size legend stays neutral (black outline, no
+              // fill): it encodes size only, the symbol color says nothing.
               draw_symbols_legend(values, {
                 ...options,
                 type,
                 size: maxSize,
                 bar_width: barWidth,
-                fill: scale.fillColor,
-                stroke: scale.strokeColor,
                 nodata: context.includeMissingDataFooter
                   ? isLegendMissingDataShown(viz, 'point')
                   : false,
