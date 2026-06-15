@@ -37,7 +37,8 @@ import {
   addColumnTransformation as addColumnTransformationFn,
   clearColumnTransformations as clearColumnTransformationsFn,
   updateFileJoinedBasemap as updateFileJoinedBasemapFn,
-  addDeletedRows as addDeletedRowsFn
+  addDeletedRows as addDeletedRowsFn,
+  type SaveCurrentProjectOptions
 } from './project';
 
 function createProjectStore() {
@@ -147,8 +148,10 @@ function createProjectStore() {
     return loadProjectFn(container, id);
   }
 
-  async function saveCurrentProject(): Promise<void> {
-    return saveCurrentProjectFn(container);
+  async function saveCurrentProject(
+    options?: SaveCurrentProjectOptions
+  ): Promise<void> {
+    return saveCurrentProjectFn(container, options);
   }
 
   async function deleteProject(id: string): Promise<void> {

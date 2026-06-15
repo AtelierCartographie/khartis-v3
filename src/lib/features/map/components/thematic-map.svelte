@@ -164,13 +164,17 @@
     logicalMapViewportFitPaddingPx * pageDisplayScale
   );
   const showPageGrid = $derived(
-    fmtState.gridEnabled && globalState.selectedStep === ToolbarStep.Styling
+    fmtState.gridEnabled &&
+      (globalState.selectedStep === ToolbarStep.Styling ||
+        globalState.isMapExporting)
   );
   const isVisualizationMode = $derived(
-    globalState.selectedStep === ToolbarStep.Visualizations
+    globalState.selectedStep === ToolbarStep.Visualizations &&
+      !globalState.isMapExporting
   );
   const isStylingMode = $derived(
-    globalState.selectedStep === ToolbarStep.Styling
+    globalState.selectedStep === ToolbarStep.Styling ||
+      globalState.isMapExporting
   );
   const showLegendPreview = $derived(isVisualizationMode || isStylingMode);
   const logicalMapCanvasWidth = $derived(
@@ -237,7 +241,9 @@
     void visualizationStore.version;
 
     return globalState.selectedStep === ToolbarStep.Data
-      ? []
+      ? globalState.isMapExporting
+        ? visualizationStore.activeVisualizations
+        : []
       : visualizationStore.activeVisualizations;
   });
 
@@ -522,7 +528,9 @@
     },
     getActiveVisualizations: () =>
       globalState.selectedStep === ToolbarStep.Data
-        ? []
+        ? globalState.isMapExporting
+          ? visualizationStore.activeVisualizations
+          : []
         : visualizationStore.activeVisualizations,
     onOrthographicViewStateChanged: (target, zoom) => {
       mapInstanceStore.markViewportManual();
@@ -2061,7 +2069,8 @@
     filtersVersion,
     visualizationDataFiltersVersion,
     projectionVersion: projectionRenderTrigger,
-    selectedStep: globalState.selectedStep
+    selectedStep: globalState.selectedStep,
+    isMapExporting: globalState.isMapExporting
   });
 
   $effect(() => {

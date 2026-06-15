@@ -5,15 +5,56 @@ import {
   SHAPE_ORDINAL,
   ShapeType
 } from '$lib/features/commons/constants/visualization.constants';
+import {
+  globalActions,
+  globalState
+} from '$lib/features/commons/stores/global.svelte';
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
+import { ToolbarStep } from '$lib/features/commons/types/global';
 import { exportMapToJpg, exportMapToSvg } from './map-export.utils';
 
 const htmlToImage = vi.hoisted(() => ({
   toCanvas: vi.fn()
 }));
 
+const globalStore = vi.hoisted(() => {
+  const state = {
+    selectedStep: 'data',
+    isMapExporting: false
+  };
+
+  return {
+    state,
+    globalActions: {
+      setNavigationState: vi.fn((step: string) => {
+        state.selectedStep = step;
+      }),
+      resetNavigationState: vi.fn(() => {
+        state.selectedStep = 'data';
+        state.isMapExporting = false;
+      }),
+      setMapExporting: vi.fn((value: boolean) => {
+        state.isMapExporting = value;
+      })
+    },
+    globalState: {
+      get selectedStep() {
+        return state.selectedStep;
+      },
+      get isMapExporting() {
+        return state.isMapExporting;
+      }
+    }
+  };
+});
+
 vi.mock('html-to-image', () => ({
   toCanvas: htmlToImage.toCanvas
+}));
+
+vi.mock('$lib/features/commons/stores/global.svelte', () => ({
+  globalActions: globalStore.globalActions,
+  globalState: globalStore.globalState
 }));
 
 vi.mock('@ateliercartographie/motif.js', () => ({
@@ -132,6 +173,11 @@ describe('map export DOM mutations', () => {
   beforeEach(() => {
     htmlToImage.toCanvas.mockReset();
     htmlToImage.toCanvas.mockResolvedValue(createExportCanvas(3840, 2160));
+    globalStore.state.selectedStep = ToolbarStep.Data;
+    globalStore.state.isMapExporting = false;
+    globalStore.globalActions.setMapExporting.mockClear();
+    globalStore.globalActions.setNavigationState.mockClear();
+    globalStore.globalActions.resetNavigationState.mockClear();
 
     vi.stubGlobal('OffscreenCanvas', FakeOffscreenCanvas);
     vi.stubGlobal(
@@ -928,6 +974,37 @@ describe('map export DOM mutations', () => {
       page.querySelector('img[data-khartis-export-frozen-canvas="true"]')
     ).toBeNull();
     expect(canvas.toDataURL).toHaveBeenCalledWith('image/png');
+  });
+
+  it('captures JPEG exports in layout export mode without changing the current step', async () => {
+    globalActions.setNavigationState(ToolbarStep.Visualizations);
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="geo-indications-overlay hidden"></div>
+        <div class="annotation-overlay hidden"></div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    if (!page) {
+      throw new Error('Missing export fixture node');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 960, height: 540 });
+    htmlToImage.toCanvas.mockImplementation(async (node) => {
+      expect(node).toBe(page);
+      expect(globalState.selectedStep).toBe(ToolbarStep.Visualizations);
+      expect(globalState.isMapExporting).toBe(true);
+      expect(page.classList.contains('is-exporting-map')).toBe(true);
+
+      return createExportCanvas(1920, 1080);
+    });
+
+    await exportMapToJpg({ width: 1920, height: 1080 });
+
+    expect(globalState.selectedStep).toBe(ToolbarStep.Visualizations);
+    expect(globalState.isMapExporting).toBe(false);
+    expect(page.classList.contains('is-exporting-map')).toBe(false);
   });
 
   it('exports the shared facets WebGL canvas when a map collection is active', () => {

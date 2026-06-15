@@ -47,7 +47,8 @@ function createGlobalStore() {
         ? window.innerWidth < MOBILE_BREAKPOINT
         : false,
     isMobileToolbarOpen: false,
-    isToolbarTransitioning: false
+    isToolbarTransitioning: false,
+    isMapExporting: false
   });
   const selectedDataButtonState = $state<{
     id: string | undefined;
@@ -277,6 +278,10 @@ function createGlobalStore() {
     state.isToolbarTransitioning = value;
   }
 
+  function setMapExporting(value: boolean): void {
+    state.isMapExporting = value;
+  }
+
   function setPageZoom(level: number): void {
     state.zoom.pageZoomLevel = Math.max(
       state.zoom.minPageZoom,
@@ -308,6 +313,7 @@ function createGlobalStore() {
     state.projectionViewMode = 'list';
     state.zoom.pageZoomLevel = 100;
     state.zoom.pagePanOffset = { x: 0, y: 0 };
+    state.isMapExporting = false;
 
     selectedDataButtonState.id = undefined;
     pendingDatasetSelections.clear();
@@ -437,6 +443,9 @@ function createGlobalStore() {
     set isToolbarTransitioning(value: boolean) {
       state.isToolbarTransitioning = value;
     },
+    get isMapExporting() {
+      return state.isMapExporting;
+    },
     ensureTabSelected,
     setMobileView,
     openMobileToolbar,
@@ -456,6 +465,7 @@ function createGlobalStore() {
     setPagePanOffset,
     resetPagePan,
     setToolbarTransitioning,
+    setMapExporting,
     resetNavigationState,
     restoreFromSerialized
   };
@@ -483,6 +493,7 @@ export const globalActions = {
   closeMobileToolbar: globalState.closeMobileToolbar,
   toggleMobileToolbar: globalState.toggleMobileToolbar,
   setToolbarTransitioning: globalState.setToolbarTransitioning,
+  setMapExporting: globalState.setMapExporting,
   resetNavigationState: globalState.resetNavigationState
 };
 

@@ -12,18 +12,18 @@ const suggestionCatalogueSource = readFileSync(
 );
 
 describe('ProjectionOther', () => {
-  it('renders the catalogue as neutral projection cards instead of a ComboBox', () => {
-    expect(source).toContain(
+  it('renders the catalogue as a searchable ComboBox bound to the active selection', () => {
+    expect(source).toContain('ComboBox');
+    expect(source).toContain('items={catalogueComboItems}');
+    expect(source).toContain('selectedId={activeCatalogueSelectionId}');
+    expect(source).toContain('on:select={handleCatalogueSelect}');
+    expect(source).not.toContain(
       "import ProjectionCard from '$lib/features/commons/components/projection-card.svelte';"
     );
-    expect(source).toContain('variant="gray"');
-    expect(source).toContain('selected={isCatalogueItemSelected(item)}');
-    expect(source).not.toContain('ComboBox');
-    expect(source).not.toContain('selectedId={activeCatalogueSelectionId}');
   });
 
-  it('keeps the catalogue cards in a single list without display mode controls', () => {
-    expect(source).toContain('{#each filteredItems as item (item.id)}');
+  it('keeps the catalogue in a single searchable list without display mode controls', () => {
+    expect(source).toContain('{#key catalogueItemsSignature}');
     expect(source).toContain('className="projection-view-tabs"');
     expect(source).not.toContain(
       "import { ViewMode } from '$lib/features/commons/constants/ui.constants';"
@@ -39,7 +39,7 @@ describe('ProjectionOther', () => {
       'const projectionState = $derived(getProjectionState());'
     );
     expect(source).toContain('const activeCatalogueSelectionId = $derived.by');
-    expect(source).toContain('projectionState.selected === item.projectionId');
+    expect(source).toContain('item.projectionId === projectionState.selected');
   });
 
   it('filters catalogue cards already present in Khartis suggestions', () => {

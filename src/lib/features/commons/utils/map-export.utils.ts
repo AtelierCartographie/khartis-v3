@@ -1,4 +1,5 @@
 import * as m from '$lib/paraglide/messages';
+import { globalActions } from '$lib/features/commons/stores/global.svelte';
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
 import { toCanvas as htmlToImageCanvas } from 'html-to-image';
@@ -2847,18 +2848,26 @@ export async function exportMapToSvg(
     return Promise.reject(new Error(m.export_map_not_loaded()));
   }
 
-  const pageGeometry = resolvePageExportGeometry(pageContainer);
-  const pixelRatio = getExportPixelRatioForSize(
-    pageGeometry.width,
-    pageGeometry.height,
-    opts
-  );
-
-  const restoreRatio = await prerenderWebgl(pixelRatio);
-  const restoreDom = mutateDomForExport(pageContainer);
-  await waitForNextFrame();
+  let restoreRatio: RestoreExportRender = async () => {};
+  let restoreDom = (): void => {};
+  let shouldRestoreExportMode = false;
 
   try {
+    restoreDom = mutateDomForExport(pageContainer);
+    globalActions.setMapExporting(true);
+    shouldRestoreExportMode = true;
+    await waitForNextFrame();
+
+    const pageGeometry = resolvePageExportGeometry(pageContainer);
+    const pixelRatio = getExportPixelRatioForSize(
+      pageGeometry.width,
+      pageGeometry.height,
+      opts
+    );
+
+    restoreRatio = await prerenderWebgl(pixelRatio);
+    await waitForNextFrame();
+
     const mapLibreBackgroundDataUrl =
       await captureMapLibreBackgroundForSvg(pageContainer);
     const markup = buildStructuredSvgMarkup(
@@ -2873,8 +2882,12 @@ export async function exportMapToSvg(
 
     return new Blob([markup], { type: 'image/svg+xml;charset=utf-8' });
   } finally {
-    restoreDom();
     await restoreRatio();
+    if (shouldRestoreExportMode) {
+      globalActions.setMapExporting(false);
+    }
+    restoreDom();
+    await waitForNextFrame();
   }
 }
 
@@ -2891,14 +2904,20 @@ export async function exportMapToJpg(
     return Promise.reject(new Error(m.export_map_not_loaded()));
   }
 
-  const pagePixelRatio = getExportPixelRatio(pageContainer, opts);
-
-  const restoreRatio = await prerenderWebgl(pagePixelRatio);
-  const restoreDom = mutateDomForExport(pageContainer);
+  let restoreRatio: RestoreExportRender = async () => {};
+  let restoreDom = (): void => {};
   let restoreFrozenCanvases: RestoreExportRender = async () => {};
+  let shouldRestoreExportMode = false;
 
   const pageCanvas = await (async (): Promise<HTMLCanvasElement | null> => {
     try {
+      restoreDom = mutateDomForExport(pageContainer);
+      globalActions.setMapExporting(true);
+      shouldRestoreExportMode = true;
+      await waitForNextFrame();
+
+      const pagePixelRatio = getExportPixelRatio(pageContainer, opts);
+      restoreRatio = await prerenderWebgl(pagePixelRatio);
       await waitForNextFrame();
       restoreFrozenCanvases = await freezeCanvasesForExport(pageContainer);
       await waitForNextFrame();
@@ -2911,8 +2930,12 @@ export async function exportMapToJpg(
       });
     } finally {
       await restoreFrozenCanvases();
-      restoreDom();
       await restoreRatio();
+      if (shouldRestoreExportMode) {
+        globalActions.setMapExporting(false);
+      }
+      restoreDom();
+      await waitForNextFrame();
     }
   })();
 

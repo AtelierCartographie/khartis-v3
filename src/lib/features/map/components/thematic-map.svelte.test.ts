@@ -24,6 +24,17 @@ describe('ThematicMap source', () => {
     );
   });
 
+  it('treats map export capture as a styling layout render without changing navigation state', () => {
+    expect(source).toContain('globalState.isMapExporting');
+    expect(source).toContain(
+      'globalState.selectedStep === ToolbarStep.Visualizations &&\n      !globalState.isMapExporting'
+    );
+    expect(source).toContain(
+      'globalState.selectedStep === ToolbarStep.Styling ||\n      globalState.isMapExporting'
+    );
+    expect(source).toContain('isMapExporting: globalState.isMapExporting');
+  });
+
   it('throttles live MapLibre facet sync and caps facet cell pixel ratio', () => {
     expect(source).toContain('const FACET_CELL_RENDER_PIXEL_RATIO_MAX = 1;');
     expect(source).toContain(
