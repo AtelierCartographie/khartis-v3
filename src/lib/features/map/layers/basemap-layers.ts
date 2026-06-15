@@ -783,7 +783,12 @@ export function createMersLayer(
   );
 
   if (ctx.projection) {
-    const sphereData = getSpherePolygon(ctx.projection);
+    // For composites, `parseSphere` only yields the mainland sub-projection's
+    // sphere, which under-covers the DOM-TOM insets (#195); use the union of
+    // sub-projection extents below instead.
+    const sphereData = hasCompositeGraticuleSubProjections(ctx.projection)
+      ? null
+      : getSpherePolygon(ctx.projection);
 
     if (sphereData) {
       try {
