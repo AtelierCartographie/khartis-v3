@@ -56,15 +56,23 @@ describe('VisualizationSuggestionCard', () => {
     expect(source).toContain('interactive={false}');
   });
 
-  it('uses the shared preview tile and localized preview label', () => {
+  it('uses the static suggestion preview and localized preview label', () => {
     expect(source).toContain(
-      "import TilePreview from '$lib/features/commons/components/tile-preview.svelte';"
+      "import VisualizationSuggestionPreview from './visualization-suggestion-preview.svelte';"
     );
     expect(source).toContain('label={m.viz_preview_label()}');
+    expect(source).toContain('suggestionId={suggestion.id}');
   });
 
-  it('maps hover state to the figma hover tokens', () => {
+  it('maps hover state to the card token while keeping the preview white', () => {
     expect(source).toContain('--khartis-additions-layer-hover-01-suggestions');
+    expect(source).toContain('background: #ffffff;');
+    expect(source).toContain('min-height: 120px;');
+    expect(source).toContain('align-self: stretch;');
+    expect(source).toContain('align-items: center;');
+    expect(source).not.toContain(
+      '.viz-suggestion-card:hover:not(.disabled) .preview-panel'
+    );
   });
 
   it('keeps a simple header layout without the stacking helper', () => {

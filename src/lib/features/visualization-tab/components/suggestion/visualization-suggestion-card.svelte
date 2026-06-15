@@ -6,10 +6,10 @@
     SimplifiedGeometryType,
     VizSuggestion
   } from '$lib/features/commons/services/viz-suggester.service';
-  import TilePreview from '$lib/features/commons/components/tile-preview.svelte';
   import * as m from '$lib/paraglide/messages';
   import SimpleRadio from '$lib/features/commons/components/simple-radio.svelte';
   import clsx from 'clsx';
+  import VisualizationSuggestionPreview from './visualization-suggestion-preview.svelte';
 
   interface Props {
     suggestion: VizSuggestion;
@@ -92,11 +92,11 @@
   onkeydown={handleKeyDown}
 >
   <div class="preview-panel">
-    <TilePreview
-      ratio="1:1"
+    <VisualizationSuggestionPreview
+      suggestionId={suggestion.id}
       label={m.viz_preview_label()}
-      theme="suggestion"
-      icon="palette"
+      semioTypes={suggestion.semioTypes}
+      geometries={suggestion.geometries}
     />
   </div>
 
@@ -260,8 +260,15 @@
   .preview-panel {
     width: 120px;
     min-width: 120px;
+    min-height: 120px;
+    flex: 0 0 120px;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     padding: 1px;
     box-sizing: border-box;
+    background: #ffffff;
     --tile-preview-background: var(
       --khartis-additions-layer-02-suggestions,
       #ffffff
@@ -269,13 +276,6 @@
     --tile-preview-color: var(
       --khartis-additions-interactive-suggestions,
       #0072c3
-    );
-  }
-
-  .viz-suggestion-card:hover:not(.disabled) .preview-panel {
-    --tile-preview-background: var(
-      --khartis-additions-layer-hover-01-suggestions,
-      #cceeff
     );
   }
 

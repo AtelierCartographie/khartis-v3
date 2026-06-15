@@ -1,11 +1,12 @@
 <script lang="ts">
-  import TilePreview from '$lib/features/commons/components/tile-preview.svelte';
+  import ProjectionPreview from '$lib/features/commons/components/projection-preview.svelte';
   import { InfoPopover } from '$lib/features/commons/components/viz-controls';
   import * as m from '$lib/paraglide/messages';
   import SimpleRadio from './simple-radio.svelte';
   import { CheckmarkFilled } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { KEY } from '../constants/dom.constants';
+  import { overflowTitle } from '../utils/overflow-title';
 
   interface ProjectionCardProps {
     title: string;
@@ -13,6 +14,7 @@
     tag?: string;
     ratio?: string;
     previewLabel?: string;
+    projectionId?: string;
     selected?: boolean;
     disabled?: boolean;
     variant?: 'default' | 'blue' | 'gray';
@@ -31,6 +33,7 @@
     tag = m.tag_rectangular(),
     ratio = '1:1',
     previewLabel = m.projection_preview_label(),
+    projectionId,
     selected = false,
     disabled = false,
     variant = 'default',
@@ -93,19 +96,18 @@
   aria-pressed={selected}
   aria-disabled={disabled}
 >
-  <div class="preview-section">
-    <TilePreview
-      ratio={ratio}
+  <div class="preview-section" data-preview-ratio={ratio}>
+    <ProjectionPreview
+      projectionId={projectionId}
       label={previewLabel}
       theme={useSuggestionTheme ? 'suggestion' : 'default'}
-      icon="none"
     />
   </div>
 
   <div class="content-section">
     <div class="header">
       <div class="title-copy">
-        <p class="title">{title}</p>
+        <p class="title" use:overflowTitle={title}>{title}</p>
         {#if hasSubtitle}
           <p class="subtitle">{subtitle}</p>
         {/if}
@@ -241,8 +243,15 @@
     position: relative;
     width: 120px;
     min-width: 120px;
+    min-height: 120px;
+    flex: 0 0 120px;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     padding: 1px;
     box-sizing: border-box;
+    background: #ffffff;
     --tile-preview-background: var(--cds-layer-02, #ffffff);
     --tile-preview-color: var(--cds-interactive-03, #726e6e);
   }
@@ -250,7 +259,10 @@
   .projection-card--vertical .preview-section {
     width: 100%;
     min-width: 0;
-    height: 104px;
+    height: auto;
+    align-self: auto;
+    aspect-ratio: 1 / 1;
+    flex: 0 0 auto;
   }
 
   .projection-card--suggestion .preview-section {
@@ -262,17 +274,6 @@
       --khartis-additions-interactive-suggestions,
       #0072c3
     );
-  }
-
-  .projection-card--suggestion:hover:not(.disabled) .preview-section {
-    --tile-preview-background: var(
-      --khartis-additions-layer-hover-02-suggestions,
-      #cceeff
-    );
-  }
-
-  .projection-card--default:hover:not(.disabled) .preview-section {
-    --tile-preview-background: var(--cds-layer-hover-02, #e8e8e8);
   }
 
   .content-section {
