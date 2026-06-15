@@ -1447,6 +1447,8 @@
   "simplification_no_variants_active_level": "The active background already uses level {level}.",
   "simplification_no_variants_fallback": "This basemap does not expose another predefined level to choose from.",
   "simplification_success": "Geometry simplified from {originalVertices} to {simplifiedVertices} ({reductionPercentage}% reduction)",
+  "simplification_failed_title": "Simplification failed",
+  "simplification_failed_subtitle": "Khartis could not simplify this file: its geometry could not be repaired. The original geometry has been kept.",
   "simplification_geo_dataset_label": "Dataset to simplify",
   "halo_color": "Outline color",
   "thickness_according": "Thickness according to",
