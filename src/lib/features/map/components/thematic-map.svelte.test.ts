@@ -119,9 +119,14 @@ describe('ThematicMap source', () => {
     );
     const helperSource = source.slice(helperStart, helperEnd);
 
-    expect(helperSource).toContain('const presetBounds =');
-    expect(helperSource).toContain('resolveUserDataBounds()');
+    expect(helperSource).toContain('bounds: presetBounds');
     expect(helperSource).toContain('?? presetBounds');
+    // Default framing prefers user data bounds, but an explicit scale-zone
+    // change (preferPreset, carried with the pending request) must skip the
+    // data bounds and reframe to the chosen zone extent.
+    expect(helperSource).toContain(
+      'preferPreset ? null : resolveUserDataBounds()'
+    );
   });
 
   it('does not inherit catalog projection metadata for standalone geofiles', () => {

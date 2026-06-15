@@ -49,7 +49,8 @@ function createBasemapStyleStore() {
     referenceBasemapId: null as string | null,
     showLabels: true,
     groupVisibility: {} as Record<string, boolean>,
-    requestedViewportStyle: null as BasemapStyle | null
+    requestedViewportStyle: null as BasemapStyle | null,
+    requestedViewportPreferPreset: false
   });
 
   let groupVisibilityVersion = $state(0);
@@ -97,9 +98,11 @@ function createBasemapStyleStore() {
   }
 
   function requestViewportReset(
-    style: BasemapStyle = state.selectedStyle
+    style: BasemapStyle = state.selectedStyle,
+    options?: { preferPreset?: boolean }
   ): void {
     state.requestedViewportStyle = style;
+    state.requestedViewportPreferPreset = options?.preferPreset ?? false;
     viewportRequestVersion++;
   }
 
@@ -111,6 +114,7 @@ function createBasemapStyleStore() {
     state.showLabels = true;
     state.groupVisibility = {};
     state.requestedViewportStyle = null;
+    state.requestedViewportPreferPreset = false;
     groupVisibilityVersion++;
     viewportRequestVersion = 0;
     styleVersion++;
@@ -202,6 +206,9 @@ function createBasemapStyleStore() {
     },
     get requestedViewportStyle(): BasemapStyle | null {
       return state.requestedViewportStyle;
+    },
+    get requestedViewportPreferPreset(): boolean {
+      return state.requestedViewportPreferPreset;
     },
     get viewportRequestVersion(): number {
       return viewportRequestVersion;
