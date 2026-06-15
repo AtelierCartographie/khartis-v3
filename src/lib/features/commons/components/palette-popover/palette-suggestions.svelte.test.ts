@@ -30,29 +30,43 @@ describe('PaletteSuggestions — shared heading', () => {
 });
 
 describe('PaletteSuggestions — QUALITATIVE branch (Figma 893:153398)', () => {
-  const qualitativeBlock = source
-    .split('{#if isQualitative}')[1]
-    ?.split('{:else}')[0];
-
   it('should expose the Vif/Pastel/Sépia/Daltonisme filter tags', () => {
-    expect(qualitativeBlock).toBeDefined();
-    expect(qualitativeBlock).toContain('{m.preset_vif()}');
-    expect(qualitativeBlock).toContain('{m.preset_pastel()}');
-    expect(qualitativeBlock).toContain('{m.preset_sepia()}');
-    expect(qualitativeBlock).toContain('{m.preset_colorblind()}');
+    expect(source).toContain('{m.preset_vif()}');
+    expect(source).toContain('{m.preset_pastel()}');
+    expect(source).toContain('{m.preset_sepia()}');
+    expect(source).toContain('{m.preset_colorblind()}');
   });
 
-  it('should render three themed QualitativeColorGrid rows (Mixte/Chaud/Froid)', () => {
-    expect(qualitativeBlock).toContain('{m.palette_theme_mixte()}');
-    expect(qualitativeBlock).toContain('{m.palette_theme_chaud()}');
-    expect(qualitativeBlock).toContain('{m.palette_theme_froid()}');
-    const gridCount = (qualitativeBlock?.match(/<QualitativeColorGrid/g) || [])
-      .length;
+  it('should expose the Niveaux de gris tag only in categories mode', () => {
+    expect(source).toContain('{#if isCategoriesQualitative}');
+    expect(source).toContain('{m.preset_grayscale()}');
+  });
+
+  it('should select a whole palette band (Mixte/Chaud/Froid) in categories mode', () => {
+    expect(source).toContain('qualitativeBands');
+    expect(source).toContain('{m.palette_theme_mixte()}');
+    expect(source).toContain('{m.palette_theme_chaud()}');
+    expect(source).toContain('{m.palette_theme_froid()}');
+    expect(source).toContain('selectQualitativePalette([...band.colors])');
+    expect(source).toContain('isCategoryBandSelected(band.colors)');
+    expect(source).toContain('onPaletteSelect?.(colors)');
+  });
+
+  it('should mark the band selected when its first color matches the active color', () => {
+    expect(source).toContain('function isCategoryBandSelected');
+    expect(source).toContain(
+      'colors[0].toLowerCase() === qualitativeSelectedColor.toLowerCase()'
+    );
+  });
+
+  it('should keep individual color grids for single (non-categories) qualitative mode', () => {
+    const gridCount = (source.match(/<QualitativeColorGrid/g) || []).length;
     expect(gridCount).toBe(3);
+    expect(source).toContain('onColorSelect={selectQualitativeColor}');
   });
 
-  it('should render the Intensité section with 7 shades from generateIntensityShadesForColor', () => {
-    expect(qualitativeBlock).toContain('{m.palette_intensity()}');
+  it('should render the Intensité section only outside categories mode', () => {
+    expect(source).toContain('{m.palette_intensity()}');
     expect(source).toContain(
       'generateIntensityShadesForColor(qualitativeSelectedColor)'
     );
@@ -66,30 +80,26 @@ describe('PaletteSuggestions — QUALITATIVE branch (Figma 893:153398)', () => {
     expect(source).toContain('onQualitativePresetChange?.(preset)');
   });
 
-  it('should propagate color selection via onColorSelect(hex)', () => {
+  it('should propagate single-color selection via onColorSelect(hex)', () => {
     expect(source).toContain('onColorSelect?.(hex)');
   });
 });
 
 describe('PaletteSuggestions — SEQUENTIAL branch (Figma 930:114478)', () => {
-  const sequentialBlock = source.split('{:else}')[1];
-
   it('should keep the Monochrome/Bicolore/Sépia/Daltonisme filter tags', () => {
-    expect(sequentialBlock).toBeDefined();
-    expect(sequentialBlock).toContain('{m.preset_monochrome()}');
-    expect(sequentialBlock).toContain('{m.preset_bicolor()}');
-    expect(sequentialBlock).toContain('{m.preset_sepia()}');
-    expect(sequentialBlock).toContain('{m.preset_colorblind()}');
+    expect(source).toContain('{m.preset_monochrome()}');
+    expect(source).toContain('{m.preset_bicolor()}');
+    expect(source).toContain('{m.preset_colorblind()}');
   });
 
-  it('should render individual palette rows with family name labels', () => {
-    expect(sequentialBlock).toContain('class="palette-label"');
-    expect(sequentialBlock).toContain('{getPaletteDisplayName(palette)}');
-    expect(sequentialBlock).toContain('{#each sequentialPalettes as palette');
+  it('should render sequential palette rows with family name labels', () => {
+    expect(source).toContain('class="palette-label"');
+    expect(source).toContain('{getPaletteDisplayName(palette)}');
+    expect(source).toContain('{#each sequentialPalettes as palette');
   });
 
   it('should emit onSelect when a palette row is clicked', () => {
-    expect(sequentialBlock).toContain('onclick={() => selectPalette(palette)}');
+    expect(source).toContain('onclick={() => selectPalette(palette)}');
     expect(source).toContain('onSelect?.(palette)');
   });
 

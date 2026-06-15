@@ -73,6 +73,31 @@
     selectedColor ?? VIF_MIXTE_COLORS[0]
   );
 
+  const qualitativeBands = $derived([
+    {
+      key: 'mixte',
+      label: m.palette_theme_mixte(),
+      colors: qualitativeGroups.mixte
+    },
+    {
+      key: 'chaud',
+      label: m.palette_theme_chaud(),
+      colors: qualitativeGroups.chaud
+    },
+    {
+      key: 'froid',
+      label: m.palette_theme_froid(),
+      colors: qualitativeGroups.froid
+    }
+  ]);
+
+  function isCategoryBandSelected(colors: readonly string[]): boolean {
+    return (
+      colors.length > 0 &&
+      colors[0].toLowerCase() === qualitativeSelectedColor.toLowerCase()
+    );
+  }
+
   const intensityShades = $derived.by(() => {
     if (isQualitative) {
       return generateIntensityShadesForColor(qualitativeSelectedColor);
@@ -180,27 +205,57 @@
       </button>
     </div>
 
-    <QualitativeColorGrid
-      label={m.palette_theme_mixte()}
-      colors={qualitativeGroups.mixte}
-      selectedColor={qualitativeSelectedColor}
-      onColorSelect={selectQualitativeColor}
-      onPaletteSelect={onPaletteSelect ? selectQualitativePalette : undefined}
-    />
-    <QualitativeColorGrid
-      label={m.palette_theme_chaud()}
-      colors={qualitativeGroups.chaud}
-      selectedColor={qualitativeSelectedColor}
-      onColorSelect={selectQualitativeColor}
-      onPaletteSelect={onPaletteSelect ? selectQualitativePalette : undefined}
-    />
-    <QualitativeColorGrid
-      label={m.palette_theme_froid()}
-      colors={qualitativeGroups.froid}
-      selectedColor={qualitativeSelectedColor}
-      onColorSelect={selectQualitativeColor}
-      onPaletteSelect={onPaletteSelect ? selectQualitativePalette : undefined}
-    />
+    {#if isCategoriesQualitative}
+      {#each qualitativeBands as band (band.key)}
+        <div class="palette-box">
+          <p class="palette-label">{band.label}</p>
+          <button
+            type="button"
+            class="palette-row"
+            class:selected={isCategoryBandSelected(band.colors)}
+            onclick={() => selectQualitativePalette([...band.colors])}
+            aria-label={band.label}
+            aria-pressed={isCategoryBandSelected(band.colors)}
+          >
+            <div class="swatch-row">
+              {#each band.colors as color (color)}
+                <div
+                  class="swatch-cell"
+                  style="background-color: {color}"
+                ></div>
+              {/each}
+            </div>
+            {#if isCategoryBandSelected(band.colors)}
+              <div class="check-icon">
+                <Checkmark size={20} />
+              </div>
+            {/if}
+          </button>
+        </div>
+      {/each}
+    {:else}
+      <QualitativeColorGrid
+        label={m.palette_theme_mixte()}
+        colors={qualitativeGroups.mixte}
+        selectedColor={qualitativeSelectedColor}
+        onColorSelect={selectQualitativeColor}
+        onPaletteSelect={onPaletteSelect ? selectQualitativePalette : undefined}
+      />
+      <QualitativeColorGrid
+        label={m.palette_theme_chaud()}
+        colors={qualitativeGroups.chaud}
+        selectedColor={qualitativeSelectedColor}
+        onColorSelect={selectQualitativeColor}
+        onPaletteSelect={onPaletteSelect ? selectQualitativePalette : undefined}
+      />
+      <QualitativeColorGrid
+        label={m.palette_theme_froid()}
+        colors={qualitativeGroups.froid}
+        selectedColor={qualitativeSelectedColor}
+        onColorSelect={selectQualitativeColor}
+        onPaletteSelect={onPaletteSelect ? selectQualitativePalette : undefined}
+      />
+    {/if}
 
     {#if !isCategoriesQualitative}
       <div class="intensity-section">
