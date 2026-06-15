@@ -595,6 +595,53 @@ describe('basemap projection fallbacks', () => {
     ]);
   });
 
+  it('skips the mainland-only sphere polygon for composite projections so DOM-TOM insets stay covered (#195)', () => {
+    const composite = Object.assign(geoEquirectangular(), {
+      getSubProjections: () => [
+        {
+          id: 'mainland',
+          projection: geoEquirectangular(),
+          bounds: [-10, 35, 40, 72] as BBox,
+          screenExtent: [
+            [0, 0],
+            [960, 600]
+          ] as [[number, number], [number, number]]
+        },
+        {
+          id: 'overseas',
+          projection: geoEquirectangular(),
+          bounds: [50, -22, 56, -12] as BBox,
+          screenExtent: [
+            [0, 500],
+            [120, 600]
+          ] as [[number, number], [number, number]]
+        }
+      ]
+    }) as unknown as ProjectionLike;
+
+    const layer = createMersLayer(
+      {
+        id: 'mers',
+        visible: true,
+        color: '#006dff',
+        opacity: 100
+      },
+      {
+        projection: composite,
+        graticuleClipExtent: [
+          [0, 0],
+          [1030, 704]
+        ]
+      }
+    );
+
+    // geoEquirectangular alone yields a SolidPolygonLayer sphere (see above);
+    // wrapped as a composite, the mainland-only sphere must be bypassed in
+    // favour of the full composite coverage so the insets are not clipped out.
+    expect(layer).toBeInstanceOf(GeoJsonLayer);
+    expect(layer).not.toBeInstanceOf(SolidPolygonLayer);
+  });
+
   it('does not fall back to a raw lon/lat ocean rectangle when projected sphere parsing is empty', () => {
     const emptyProjection = {
       stream: () => ({

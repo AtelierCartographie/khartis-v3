@@ -196,11 +196,13 @@
         osmBasemapStore.clear();
       }
       if (nextStyle === basemapStyleStore.selectedStyle) {
-        basemapStyleStore.requestViewportReset(nextStyle);
+        basemapStyleStore.requestViewportReset(nextStyle, {
+          preferPreset: true
+        });
         return;
       }
       basemapStyleStore.setStyle(nextStyle);
-      basemapStyleStore.requestViewportReset(nextStyle);
+      basemapStyleStore.requestViewportReset(nextStyle, { preferPreset: true });
     }
   }
 
