@@ -272,7 +272,10 @@
   let pendingViewReset = false;
   let pendingOrthographicFit = $state(false);
   let pendingOrthographicFitReason = $state<ViewportFitReason>('dataset');
-  let pendingMapLibreViewportPreset = $state<LngLatBoundsLike | null>(null);
+  let pendingMapLibreViewportPreset = $state<{
+    bounds: LngLatBoundsLike;
+    preferPreset: boolean;
+  } | null>(null);
   let pendingViewportAutoRefitReason = $state<ViewportFitReason | null>(null);
   let lastMapViewportSnapshot: string | null = null;
   let pendingMapLibreManualInteraction = false;
@@ -1265,10 +1268,15 @@
       return;
     }
 
-    const presetBounds = pendingMapLibreViewportPreset;
+    const { bounds: presetBounds, preferPreset } =
+      pendingMapLibreViewportPreset;
     pendingMapLibreViewportPreset = null;
 
-    const dataBounds = resolveUserDataBounds();
+    // Default framing prefers the loaded data bounds; an explicit scale-zone
+    // change (preferPreset) must reframe to the chosen zone extent instead.
+    // The intent travels with the pending request so every consumer — immediate
+    // apply, style.load (onStyleLoaded) and view-mode switch — honours it.
+    const dataBounds = preferPreset ? null : resolveUserDataBounds();
     mapBounds.fitToBounds(dataBounds ?? presetBounds, {
       animate: true,
       reason: dataBounds ? 'dataset' : 'basemap'
@@ -1286,7 +1294,10 @@
       return;
     }
 
-    if (reason === 'basemap' && pendingMapLibreViewportPreset) {
+    if (
+      pendingMapLibreViewportPreset?.preferPreset ||
+      (reason === 'basemap' && pendingMapLibreViewportPreset)
+    ) {
       applyPendingMapLibreViewportPreset();
       return;
     }
@@ -1960,7 +1971,10 @@
 
     const preset = getBasemapViewportPreset(selectedStyle);
     if (preset) {
-      pendingMapLibreViewportPreset = preset.bounds;
+      pendingMapLibreViewportPreset = {
+        bounds: preset.bounds,
+        preferPreset: false
+      };
     }
   });
 
@@ -1983,6 +1997,7 @@
     void basemapStyleStore.viewportRequestVersion;
 
     const requestedStyle = basemapStyleStore.requestedViewportStyle;
+    const preferPreset = basemapStyleStore.requestedViewportPreferPreset;
     const preset = requestedStyle
       ? getBasemapViewportPreset(requestedStyle)
       : null;
@@ -1991,7 +2006,7 @@
       return;
     }
 
-    pendingMapLibreViewportPreset = preset.bounds;
+    pendingMapLibreViewportPreset = { bounds: preset.bounds, preferPreset };
 
     untrack(() => {
       if (
