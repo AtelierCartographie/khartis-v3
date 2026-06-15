@@ -31,3 +31,27 @@ describe('MainMap joined basemap display loading', () => {
     );
   });
 });
+
+describe('MainMap map-object resize (#184)', () => {
+  it('resizes the map object via page margins instead of the page format', () => {
+    expect(source).toContain('formatActions.setMargins({');
+    expect(source).toContain('startMargins: { ...formatState.margins }');
+    expect(source).not.toContain('formatActions.setSize(');
+    expect(source).not.toContain('formatActions.setMode(');
+  });
+
+  it('frames the resize handles on the map area inside the margins, not the page', () => {
+    expect(source).toContain('const mapAreaInsetLeftPx = $derived(');
+    expect(source).toContain('const mapAreaWidthPx = $derived(');
+    expect(source).toContain(
+      'style="left: {mapAreaInsetLeftPx}px; top: {mapAreaInsetTopPx}px; width: {mapAreaWidthPx}px; height: {mapAreaHeightPx}px;"'
+    );
+  });
+
+  it('grows the margin when an edge is dragged inward and shrinks it when dragged outward', () => {
+    expect(source).toContain('right = startMargins.right - dx');
+    expect(source).toContain('left = startMargins.left + dx');
+    expect(source).toContain('bottom = startMargins.bottom - dy');
+    expect(source).toContain('top = startMargins.top + dy');
+  });
+});

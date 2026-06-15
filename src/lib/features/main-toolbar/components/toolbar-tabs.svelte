@@ -400,7 +400,6 @@
     return vizs.map((viz, idx) => ({
       id: viz.id,
       label: viz.name || m.viz_tab_label({ number: idx + 1 }),
-      shortLabel: String(idx + 1),
       isSelected: visualizationStore.selectedVisualization?.id === viz.id
     }));
   });
@@ -536,7 +535,7 @@
           >
             <div class="tab-content">
               <span class="tab-label">
-                {vizTab.shortLabel}
+                {vizTab.label}
               </span>
             </div>
             <button
@@ -874,7 +873,9 @@
     display: flex;
     align-items: center;
     flex: 1 1 0;
-    min-width: 0;
+    /* Browser-tab behaviour: shrink down to a readable minimum that still
+       shows part of the title, then let the scroller overflow horizontally. */
+    min-width: 5.5rem;
     max-width: 250px;
   }
 
@@ -888,7 +889,7 @@
   }
 
   .tab-button-wrapper.with-menu :global(.tab-button) {
-    padding-right: calc(var(--cds-spacing-08) + 24px);
+    padding-right: calc(var(--cds-spacing-07) + 8px);
   }
 
   .tab-content {

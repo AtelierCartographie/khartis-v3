@@ -10,7 +10,10 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as m from '$lib/paraglide/messages';
 import { resetExclusiveContextualSurfaces } from '$lib/features/commons/utils/contextual-surface-coordinator';
-import { generateCategoricalColorsFromSeed } from './palette.constants';
+import {
+  DEFAULT_QUALITATIVE_PRESET,
+  getQualitativeColorGroups
+} from './palette.constants';
 import CategoriesAspectPopover from './categories-aspect-popover.svelte';
 
 vi.hoisted(() => {
@@ -317,7 +320,7 @@ describe('CategoriesAspectPopover runtime', () => {
     ).toBeInTheDocument();
   });
 
-  it('applies a Khartis suggestion to every category before validation', async () => {
+  it('applies a whole Khartis palette band to every category before validation', async () => {
     const onvalidate = vi.fn();
 
     render(CategoriesAspectPopover, {
@@ -346,7 +349,14 @@ describe('CategoriesAspectPopover runtime', () => {
       onvalidate
     });
 
-    await fireEvent.click(screen.getByRole('radio', { name: '#00ad92' }));
+    const mixteColors = getQualitativeColorGroups(
+      DEFAULT_QUALITATIVE_PRESET,
+      false
+    ).mixte;
+
+    await fireEvent.click(
+      screen.getByRole('button', { name: m.palette_theme_mixte() })
+    );
     await fireEvent.click(
       screen.getByRole('button', { name: m.button_validate() })
     );
@@ -356,7 +366,9 @@ describe('CategoriesAspectPopover runtime', () => {
 
     expect(
       nextCategories.map((category: { color: string }) => category.color)
-    ).toEqual(generateCategoricalColorsFromSeed('#00ad92', 3));
+    ).toEqual(
+      [0, 1, 2].map((index) => mixteColors[index % mixteColors.length])
+    );
   });
 
   it('keeps the parent dialog open after selecting a category color preset', async () => {

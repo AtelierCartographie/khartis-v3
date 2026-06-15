@@ -369,6 +369,66 @@ describe('annotation overlay drawing interactions', () => {
     });
   });
 
+  it('keeps geometric shape strokes non-scaling under asymmetric sizing', () => {
+    const stretchedShapes = [
+      {
+        type: SHAPE_TYPE.RECTANGLE,
+        width: 180,
+        height: 48,
+        selector: 'path'
+      },
+      {
+        type: SHAPE_TYPE.CIRCLE,
+        width: 160,
+        height: 64,
+        selector: 'circle'
+      },
+      {
+        type: SHAPE_TYPE.TRIANGLE,
+        width: 140,
+        height: 52,
+        selector: 'path'
+      }
+    ] as const;
+
+    for (const shape of stretchedShapes) {
+      annotationsActions.addAnnotation(AnnotationKind.SHAPE, shape.type);
+      const item = getAnnotationsState().items.at(-1);
+      if (!item) {
+        throw new Error(`Expected a ${shape.type} annotation`);
+      }
+
+      annotationsActions.updateAnnotation(item.id, {
+        id: `stretched-${shape.type}`,
+        coordinateSpace: 'page',
+        style: {
+          ...(item.style ?? {}),
+          shapeWidth: shape.width,
+          shapeHeight: shape.height,
+          strokeWidth: 6
+        }
+      });
+    }
+
+    const { container } = render(AnnotationOverlay);
+    const svgs = Array.from(container.querySelectorAll('svg.annotation-shape'));
+
+    expect(svgs).toHaveLength(stretchedShapes.length);
+
+    for (const [index, shape] of stretchedShapes.entries()) {
+      const svg = svgs[index];
+      const strokedElement = svg?.querySelector(shape.selector);
+
+      expect(svg?.getAttribute('width')).toBe(String(shape.width));
+      expect(svg?.getAttribute('height')).toBe(String(shape.height));
+      expect(svg?.getAttribute('preserveAspectRatio')).toBe('none');
+      expect(strokedElement?.getAttribute('stroke-width')).toBe('6');
+      expect(strokedElement?.getAttribute('vector-effect')).toBe(
+        'non-scaling-stroke'
+      );
+    }
+  });
+
   it('keeps zone drawings active when the pointer is released away from the starting point', async () => {
     annotationsActions.beginDrawing(DrawingType.ZONE);
 

@@ -94,6 +94,7 @@ describe('globalState project persistence boundary', () => {
     globalState.isCreateProjectModalOpen = true;
     globalState.selectedStep = ToolbarStep.Styling;
     globalState.selectedTool = VisualizationTools.Search;
+    globalActions.setMapExporting(true);
     globalActions.setPageZoom(140);
     globalActions.setPagePanOffset({ x: 5, y: 7 });
 
@@ -107,5 +108,19 @@ describe('globalState project persistence boundary', () => {
     });
     expect(serialized).not.toHaveProperty('isSideNavOpen');
     expect(serialized).not.toHaveProperty('isCreateProjectModalOpen');
+    expect(serialized).not.toHaveProperty('isMapExporting');
+  });
+
+  it('keeps map export mode transient and resettable', () => {
+    globalActions.setNavigationState(ToolbarStep.Visualizations);
+    globalActions.setMapExporting(true);
+
+    expect(globalState.selectedStep).toBe(ToolbarStep.Visualizations);
+    expect(globalState.isMapExporting).toBe(true);
+
+    globalActions.resetNavigationState();
+
+    expect(globalState.selectedStep).toBe(ToolbarStep.Data);
+    expect(globalState.isMapExporting).toBe(false);
   });
 });

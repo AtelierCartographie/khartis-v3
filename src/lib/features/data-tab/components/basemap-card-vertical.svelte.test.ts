@@ -43,11 +43,16 @@ describe('BasemapCardVertical', () => {
     await setTestLocale('fr');
   });
 
-  it('maps gray and suggestion hover states to figma card and preview tokens', () => {
+  it('maps hover states to card tokens while keeping previews white', () => {
     expect(source).toContain('--cds-layer-hover-01');
-    expect(source).toContain('--cds-layer-hover-02');
     expect(source).toContain('--khartis-additions-layer-hover-01-suggestions');
-    expect(source).toContain('--khartis-additions-layer-hover-02-suggestions');
+    expect(source).toContain('background: #ffffff;');
+    expect(source).not.toContain(
+      '.basemap-card--suggestion:hover:not(.disabled) .preview-section'
+    );
+    expect(source).not.toContain(
+      '.basemap-card--default:hover:not(.disabled) .preview-section'
+    );
   });
 
   it('uses explicit disabled tokens instead of fading the whole card', () => {
@@ -85,6 +90,14 @@ describe('BasemapCardVertical', () => {
   it('can hide catalogue metadata for reused gray cards', () => {
     expect(source).toContain('showMetadata = true');
     expect(source).toContain('{#if showMetadata}');
+  });
+
+  it('uses lazy static thumbnails for catalog basemaps with a shared fallback', () => {
+    expect(source).toContain(
+      "import ThumbnailPreview from '$lib/features/commons/components/thumbnail-preview.svelte';"
+    );
+    expect(source).toContain('/basemaps/thumbnails/${thumbnailBaseName}.avif');
+    expect(source).toContain('objectFit="contain"');
   });
 
   it('updates catalogue labels when the locale changes without a reload', async () => {

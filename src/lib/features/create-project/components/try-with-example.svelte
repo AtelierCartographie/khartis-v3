@@ -13,6 +13,7 @@
     loadExampleData
   } from '$lib/features/commons/constants/examples.data';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { horizontalWheelScroll } from '$lib/features/commons/utils/horizontal-wheel-scroll';
   import { m } from '$lib/paraglide/messages';
   import { useProjectNavigation } from '../hooks/use-project-navigation.svelte';
   import { InlineNotification, Tag } from 'carbon-components-svelte';
@@ -35,7 +36,6 @@
   import type { ExampleProject } from '$lib/features/commons/types/create-project.types';
   import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-  import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 
   interface Props {
     onClose?: () => void;
@@ -350,7 +350,9 @@
         await applyExampleReferenceBasemap(example);
       }
       applyExampleVisualizations(example, processedExampleFile);
-      await persistenceRegistry.flush();
+      await projectStore.saveCurrentProject({
+        fallbackThumbnail: example.thumbnail
+      });
 
       await navigateAfterAction();
     } catch (err) {
@@ -400,7 +402,10 @@
     </div>
   </div>
 
-  <div class="flex gap-5 overflow-x-auto pb-3">
+  <div
+    class="flex gap-5 overflow-x-auto pb-3 card-rail"
+    use:horizontalWheelScroll
+  >
     {#if filteredExamples.length === 0}
       <div class="no-examples">
         <p class="text-grey">{m.create_project_no_examples_category()}</p>
@@ -434,17 +439,37 @@
     min-width: 100%;
   }
 
+  .card-rail {
+    scrollbar-width: thin;
+    scrollbar-color: var(--cds-border-strong) var(--cds-layer-02);
+  }
+
+  .card-rail::-webkit-scrollbar {
+    height: 8px;
+    -webkit-appearance: none;
+  }
+
+  .card-rail::-webkit-scrollbar-track {
+    background: var(--cds-layer-02, #e8e8e8);
+    border-radius: 4px;
+  }
+
+  .card-rail::-webkit-scrollbar-thumb {
+    background-color: var(--cds-border-strong, #8d8d8d);
+    border-radius: 4px;
+  }
+
+  .card-rail::-webkit-scrollbar-thumb:hover {
+    background-color: var(--cds-text-secondary, #525252);
+  }
+
   .example-tags {
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
     overflow: hidden;
-    min-height: 2lh;
-  }
-
-  .example-project-card :global(#kh-card) {
-    height: 15.5rem;
+    min-height: 1lh;
   }
 
   .example-project-card :global(#kh-card .title-text) {
