@@ -39,6 +39,7 @@
   "projection_national_region_australia": "Australia",
   "projection_national_region_russia": "Russia",
   "projection_catalog_label": "Catalogue",
+  "projection_catalog_search_placeholder": "Search or browse the list",
   "projection_catalog_unavailable_title": "Projection unavailable",
   "projection_catalog_unavailable_subtitle": "The active projection is not available in this context.",
   "projection_view_code": "Code",
