@@ -86,6 +86,7 @@ Errors derive from `PipelineError` (`commons/pipeline.errors.ts`); user-facing e
 - **Carbon Design System for all UI** — never raw native `<input>`/`<button>`/`<select>`. Carbon is shipped as Svelte 4 source, so some events misfire under Svelte 5: `<Slider>` use `on:input` only (never `on:change`); `<Checkbox>` use `on:change` only (never `on:check`); `<RadioButtonGroup on:change>` early-return when the value didn't change.
 - **i18n via Paraglide** — all visible text through `import * as m from '$lib/paraglide/messages'` then `m.key()`. Keys are `snake_case` in `messages/fr.json` + `messages/en.json` (update **both**; FR is the reference). Never edit generated files in `src/lib/paraglide/`.
 - **Logging** — use `$lib/features/commons/utils/logger`, never `console.log` in production code.
+- **Map exports** — image/SVG export must render the layout as Habillage through `globalState.isMapExporting`; do not switch `selectedStep` just to capture an export.
 - **TypeScript strict** — no `any`; prefer `unknown` + narrowing.
 - **kebab-case** file names. No magic strings (use constants/enums/literal types). No comments unless they explain a non-obvious invariant or workaround.
 - **Conventional Commits** (`feat:`, `fix:`, `refactor:`, `perf:`, `test:`, `docs:`, `chore:`).

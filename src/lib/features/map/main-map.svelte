@@ -16,7 +16,6 @@
   import { globalActions, globalState } from '../commons/stores/global.svelte';
   import { ToolbarStep } from '../commons/types/global';
   import { LogCategory, logger } from '../commons/utils/logger';
-  import { FormatMode } from '../commons/constants/ui.constants';
   import {
     formatActions,
     formatState
@@ -172,6 +171,39 @@
   );
   const renderedPageHeight = $derived(
     Math.max(1, Math.round(formatState.height * renderedPageScale))
+  );
+
+  // The map object occupies the page minus its margins (ThematicMap renders the
+  // map area inside the margins). The resize handles act on THIS rectangle, not
+  // the page format, so dragging them grows/shrinks the map while the page size
+  // stays fixed.
+  const mapAreaInsetLeftPx = $derived(
+    Math.round(formatState.margins.left * renderedPageScale)
+  );
+  const mapAreaInsetTopPx = $derived(
+    Math.round(formatState.margins.top * renderedPageScale)
+  );
+  const mapAreaWidthPx = $derived(
+    Math.max(
+      1,
+      Math.round(
+        (formatState.width -
+          formatState.margins.left -
+          formatState.margins.right) *
+          renderedPageScale
+      )
+    )
+  );
+  const mapAreaHeightPx = $derived(
+    Math.max(
+      1,
+      Math.round(
+        (formatState.height -
+          formatState.margins.top -
+          formatState.margins.bottom) *
+          renderedPageScale
+      )
+    )
   );
 
   function applyWorkspaceResize(entry: ResizeObserverEntry): void {
@@ -1051,9 +1083,14 @@
     edge: ResizeEdge;
     startX: number;
     startY: number;
-    startW: number;
-    startH: number;
+    startMargins: { top: number; right: number; bottom: number; left: number };
+    pageW: number;
+    pageH: number;
   } | null>(null);
+
+  function clampMargin(value: number, max: number): number {
+    return Math.min(Math.max(value, 0), Math.max(0, max));
+  }
 
   function handleResizePointerDown(
     event: PointerEvent,
@@ -1065,33 +1102,42 @@
       edge,
       startX: event.clientX,
       startY: event.clientY,
-      startW: formatState.width,
-      startH: formatState.height
+      startMargins: { ...formatState.margins },
+      pageW: formatState.width,
+      pageH: formatState.height
     };
-    formatActions.setMode(FormatMode.CUSTOM);
     window.addEventListener(EVENT.POINTERMOVE, handleResizeMove);
     window.addEventListener(EVENT.POINTERUP, handleResizeUp);
   }
 
+  // Resize the map object by adjusting the page margins, keeping the page format
+  // fixed: dragging an edge inward grows that margin (shrinks the map), dragging
+  // it outward shrinks the margin (grows the map toward the page edge).
   function handleResizeMove(event: PointerEvent): void {
     if (!resizeState) return;
-    const { edge, startX, startY, startW, startH } = resizeState;
+    const { edge, startX, startY, startMargins, pageW, pageH } = resizeState;
     const scale = Math.max(globalState.zoom.pageZoomScale, 0.1);
     const dx = (event.clientX - startX) / scale;
     const dy = (event.clientY - startY) / scale;
 
-    let newW = startW;
-    let newH = startH;
+    let { top, right, bottom, left } = startMargins;
 
-    if (edge.includes('e')) newW = startW + dx;
-    if (edge.includes('w')) newW = startW - dx;
-    if (edge.includes('s')) newH = startH + dy;
-    if (edge.includes('n')) newH = startH - dy;
+    if (edge.includes('e')) right = startMargins.right - dx;
+    if (edge.includes('w')) left = startMargins.left + dx;
+    if (edge.includes('s')) bottom = startMargins.bottom - dy;
+    if (edge.includes('n')) top = startMargins.top + dy;
 
-    formatActions.setSize(
-      Math.max(MIN_MAP_SIZE, Math.round(newW)),
-      Math.max(MIN_MAP_SIZE, Math.round(newH))
-    );
+    left = clampMargin(left, pageW - startMargins.right - MIN_MAP_SIZE);
+    right = clampMargin(right, pageW - startMargins.left - MIN_MAP_SIZE);
+    top = clampMargin(top, pageH - startMargins.bottom - MIN_MAP_SIZE);
+    bottom = clampMargin(bottom, pageH - startMargins.top - MIN_MAP_SIZE);
+
+    formatActions.setMargins({
+      top: Math.round(top),
+      right: Math.round(right),
+      bottom: Math.round(bottom),
+      left: Math.round(left)
+    });
   }
 
   function handleResizeUp(): void {
@@ -1175,31 +1221,32 @@
           <span class="map-status-loader-text">{mapStatusLoaderText}</span>
         </div>
       {/if}
-    </div>
-  {/if}
 
-  {#if showResizeHandles}
-    <div
-      class="resize-handles-frame"
-      class:highlighted={hoveredResizeEdge !== null || resizeState !== null}
-      style="width: {renderedPageWidth}px; height: {renderedPageHeight}px;"
-    >
-      {#each RESIZE_EDGES as edge (edge)}
+      {#if showResizeHandles}
         <div
-          class="resize-handle resize-{edge}"
-          role="separator"
-          aria-orientation={edge === 'n' || edge === 's'
-            ? 'horizontal'
-            : 'vertical'}
-          onpointerenter={() => (hoveredResizeEdge = edge)}
-          onpointerleave={() => {
-            if (hoveredResizeEdge === edge) {
-              hoveredResizeEdge = null;
-            }
-          }}
-          onpointerdown={(e: PointerEvent) => handleResizePointerDown(e, edge)}
-        ></div>
-      {/each}
+          class="resize-handles-frame"
+          class:highlighted={hoveredResizeEdge !== null || resizeState !== null}
+          style="left: {mapAreaInsetLeftPx}px; top: {mapAreaInsetTopPx}px; width: {mapAreaWidthPx}px; height: {mapAreaHeightPx}px;"
+        >
+          {#each RESIZE_EDGES as edge (edge)}
+            <div
+              class="resize-handle resize-{edge}"
+              role="separator"
+              aria-orientation={edge === 'n' || edge === 's'
+                ? 'horizontal'
+                : 'vertical'}
+              onpointerenter={() => (hoveredResizeEdge = edge)}
+              onpointerleave={() => {
+                if (hoveredResizeEdge === edge) {
+                  hoveredResizeEdge = null;
+                }
+              }}
+              onpointerdown={(e: PointerEvent) =>
+                handleResizePointerDown(e, edge)}
+            ></div>
+          {/each}
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
