@@ -343,25 +343,19 @@
     {/if}
 
     {#if !currentMetadata || isTiledBasemapEnabled}
-      {#if isTiledBasemapEnabled && !currentMetadata}
-        <div class="reference-basemap-bare">
-          {@render referenceBasemapSettings()}
-        </div>
-      {:else}
-        <ExpandableSection
-          title={m.basemap_tiled_label()}
-          defaultOpen={isTiledBasemapEnabled}
-          showToggle={true}
-          toggleVariant="suggestions"
-          toggleChecked={isTiledBasemapEnabled}
-          onToggleChange={handleTiledBasemapToggle}
-        >
-          {#snippet icon()}
-            <InfoPopover text={m.basemap_tiled_info()} />
-          {/snippet}
-          {@render referenceBasemapSettings()}
-        </ExpandableSection>
-      {/if}
+      <ExpandableSection
+        title={m.basemap_tiled_label()}
+        defaultOpen={isTiledBasemapEnabled}
+        showToggle={true}
+        toggleVariant="suggestions"
+        toggleChecked={isTiledBasemapEnabled}
+        onToggleChange={handleTiledBasemapToggle}
+      >
+        {#snippet icon()}
+          <InfoPopover text={m.basemap_tiled_info()} />
+        {/snippet}
+        {@render referenceBasemapSettings()}
+      </ExpandableSection>
     {/if}
   </div>
 </section>
@@ -400,10 +394,6 @@
     flex-direction: column;
     gap: var(--cds-spacing-05);
     background-color: var(--cds-layer-01);
-  }
-
-  .reference-basemap-bare {
-    padding: 16px 48px 24px 16px;
   }
 
   .layers-list :global(.projection-shortcut-btn) {
