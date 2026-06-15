@@ -5,6 +5,7 @@
   import clsx from 'clsx';
   import type { Snippet } from 'svelte';
   import { KEY } from '../constants/dom.constants';
+  import { overflowTitle } from '../utils/overflow-title';
 
   interface ProjectCardProps {
     title: string;
@@ -142,15 +143,17 @@
         style="color: var(--icon-color); fill: var(--icon-color);"
       />
 
-      <h4 class="mt-2">16:9</h4>
+      <h4 class="mt-2 preview-ratio">16:9</h4>
 
-      <span class="text-sm">{subtitle}</span>
+      <span class="text-sm preview-subtitle">{subtitle}</span>
     {/if}
   </div>
 
   <div class={bottomSectionClasses}>
     <div class="flex items-start justify-between">
-      <h6 class="flex-1 pr-2 title-text">{title}</h6>
+      <h6 class="flex-1 pr-2 title-text" use:overflowTitle={title}>
+        {title}
+      </h6>
 
       <div class="ml-2 radio-button-wrapper">
         <SimpleRadio
@@ -179,11 +182,14 @@
   .top-section {
     position: relative;
     aspect-ratio: 16 / 9;
+    box-sizing: border-box;
+    flex: 0 0 auto;
     overflow: hidden;
   }
 
   .top-section.has-thumbnail {
     padding: 0;
+    background: #ffffff;
   }
 
   .thumbnail-skeleton {
@@ -194,7 +200,8 @@
   .thumbnail-image {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
+    background: #ffffff;
     display: block;
     opacity: 0;
     transition: opacity 0.2s ease-in-out;
@@ -215,11 +222,12 @@
     flex-shrink: 0;
   }
 
-  #kh-card:hover:not(.opacity-50) .top-section {
+  #kh-card:hover:not(.opacity-50) .top-section:not(.has-thumbnail) {
     background-color: var(--cds-medium-blue);
   }
 
-  #kh-card:hover:not(.opacity-50) .top-section.variant-gray {
+  #kh-card:hover:not(.opacity-50)
+    .top-section.variant-gray:not(.has-thumbnail) {
     background-color: var(--cds-medium-gray);
   }
 
@@ -242,6 +250,19 @@
 
   .text-sm {
     font-size: 0.875rem;
+  }
+
+  .preview-ratio {
+    margin-bottom: 0;
+    line-height: 1.25rem;
+  }
+
+  .preview-subtitle {
+    max-width: 100%;
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .opacity-50 {

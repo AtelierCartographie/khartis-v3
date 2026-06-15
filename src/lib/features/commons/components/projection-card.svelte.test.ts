@@ -8,9 +8,18 @@ const source = readFileSync(
 );
 
 describe('ProjectionCard', () => {
-  it('maps hover states to figma hover tokens for card and preview', () => {
+  it('maps hover states to figma card tokens while keeping previews white', () => {
     expect(source).toContain('--khartis-additions-layer-hover-01-suggestions');
-    expect(source).toContain('--khartis-additions-layer-hover-02-suggestions');
+    expect(source).toContain('background: #ffffff;');
+    expect(source).toContain('min-height: 120px;');
+    expect(source).toContain('align-self: stretch;');
+    expect(source).toContain('align-items: center;');
+    expect(source).not.toContain(
+      '.projection-card--suggestion:hover:not(.disabled) .preview-section'
+    );
+    expect(source).not.toContain(
+      '.projection-card--default:hover:not(.disabled) .preview-section'
+    );
   });
 
   it('positions the radio in the title area to match the projection card design', () => {
@@ -45,7 +54,18 @@ describe('ProjectionCard', () => {
     );
   });
 
-  it('uses a neutral preview glyph instead of a static globe icon', () => {
-    expect(source).toContain('icon="none"');
+  it('renders a dynamic simplified projection preview', () => {
+    expect(source).toContain(
+      "import ProjectionPreview from '$lib/features/commons/components/projection-preview.svelte';"
+    );
+    expect(source).toContain('{projectionId}');
+    expect(source).not.toContain('icon="none"');
+  });
+
+  it('shows the full title through a tooltip only when the rendered title overflows', () => {
+    expect(source).toContain(
+      "import { overflowTitle } from '../utils/overflow-title';"
+    );
+    expect(source).toContain('use:overflowTitle={title}');
   });
 });

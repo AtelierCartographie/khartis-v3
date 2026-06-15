@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" role="img" aria-label="Europe population choropleth thumbnail">
+  <rect width="320" height="180" fill="#ffffff"/>
+  <path d="M98 38 134 28 152 52 140 74 112 78 94 58Z" fill="#c6dbff"/>
+  <path d="M152 52 188 40 212 58 198 82 164 80 140 74Z" fill="#78a9ff"/>
+  <path d="M112 78 140 74 164 80 160 112 130 124 106 106Z" fill="#4589ff"/>
+  <path d="M164 80 198 82 226 96 216 128 182 134 160 112Z" fill="#1f6bff"/>
+  <path d="M130 124 160 112 182 134 170 158 140 160 122 142Z" fill="#0043ce"/>
+</svg>

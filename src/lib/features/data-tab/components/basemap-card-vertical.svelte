@@ -1,6 +1,7 @@
 <script lang="ts">
-  import TilePreview from '$lib/features/commons/components/tile-preview.svelte';
+  import ThumbnailPreview from '$lib/features/commons/components/thumbnail-preview.svelte';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
+  import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
   import { getLocale } from '$lib/paraglide/runtime';
@@ -77,6 +78,19 @@
   );
 
   const aspectRatio = '16:9';
+  const thumbnailUrl = $derived.by(() => {
+    if (basemap.isCustom || isOSMBasemap) {
+      return undefined;
+    }
+
+    const thumbnailBaseName = basemap.simplification_level
+      ? basemap.file.replace(`-${basemap.simplification_level}`, '')
+      : basemap.file;
+
+    return resolveStaticAssetUrl(
+      `/basemaps/thumbnails/${thumbnailBaseName}.avif`
+    );
+  });
 </script>
 
 <div
@@ -102,10 +116,13 @@
       />
     </div>
 
-    <TilePreview
-      ratio={aspectRatio ?? '2:1'}
+    <ThumbnailPreview
+      src={thumbnailUrl}
+      alt={m.basemap_preview_label()}
+      ratio={aspectRatio}
       label={m.basemap_preview_label()}
       theme={isSuggestion ? 'suggestion' : 'default'}
+      objectFit="contain"
     />
   </div>
 
@@ -259,6 +276,7 @@
     overflow: hidden;
     padding: 1px;
     box-sizing: border-box;
+    background: #ffffff;
     --tile-preview-background: var(--cds-layer-02, #ffffff);
     --tile-preview-color: var(--cds-interactive-03, #726e6e);
   }
@@ -272,17 +290,6 @@
       --khartis-additions-interactive-suggestions,
       #0072c3
     );
-  }
-
-  .basemap-card--suggestion:hover:not(.disabled) .preview-section {
-    --tile-preview-background: var(
-      --khartis-additions-layer-hover-02-suggestions,
-      #cceeff
-    );
-  }
-
-  .basemap-card--default:hover:not(.disabled) .preview-section {
-    --tile-preview-background: var(--cds-layer-hover-02, #e8e8e8);
   }
 
   .basemap-card.disabled .preview-section {
