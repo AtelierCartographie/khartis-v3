@@ -1,12 +1,6 @@
 <script lang="ts">
-  import ButtonNative from '$lib/features/commons/components/button-native.svelte';
-  import ProjectionCard from '$lib/features/commons/components/projection-card.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
-  import {
-    globalActions,
-    globalState
-  } from '$lib/features/commons/stores/global.svelte';
   import type { ProjectionFilterId } from '$lib/features/commons/types/global';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
@@ -19,6 +13,7 @@
   import { m } from '$lib/paraglide/messages';
   import {
     Button,
+    ComboBox,
     InlineNotification,
     TextArea
   } from 'carbon-components-svelte';
@@ -117,18 +112,6 @@
     }
   ]);
 
-  const filterOptions = $derived.by(
-    (): ReadonlyArray<{
-      id: ProjectionFilterId;
-      label: string;
-    }> => [
-      { id: 'all', label: m.projection_filter_all() },
-      { id: 'Rectangulaire', label: m.projection_filter_rectangular() },
-      { id: 'Arrondie', label: m.projection_filter_rounded() },
-      { id: 'Discontinue', label: m.projection_filter_discontinuous() }
-    ]
-  );
-
   const projectionGroups = $derived.by(
     (): ReadonlyArray<{
       id: ProjectionShapeFilterId;
@@ -151,26 +134,20 @@
           .length > 0
     )
   );
-  const availableFilterOptions = $derived(
-    filterOptions.filter(
-      (option) =>
-        option.id === 'all' ||
-        items.some((item) => item.shapeFilterId === option.id)
-    )
+  type ProjectionCatalogueComboItem = {
+    id: string;
+    text: string;
+    item: ProjectionCatalogueItem;
+  };
+  const catalogueComboItems = $derived.by((): ProjectionCatalogueComboItem[] =>
+    items.map((item) => ({
+      id: item.id,
+      text: item.tag ? `${item.title} · ${item.tag}` : item.title,
+      item
+    }))
   );
-  const activeFilter = $derived.by(() => {
-    const requestedFilter = globalState.projectionFilter ?? 'all';
-
-    return availableFilterOptions.some(
-      (option) => option.id === requestedFilter
-    )
-      ? requestedFilter
-      : 'all';
-  });
-  const filteredItems = $derived(
-    items.filter(
-      (item) => activeFilter === 'all' || item.shapeFilterId === activeFilter
-    )
+  const catalogueItemsSignature = $derived(
+    items.map((item) => item.id).join('|')
   );
   const catalogueLabel = $derived(m.projection_catalog_label());
   const viewCodeLabel = $derived(m.projection_view_code());
@@ -244,19 +221,20 @@
         : crsCode;
   }
 
-  function setFilter(id: ProjectionFilterId): void {
-    globalActions.setProjectionFilter(id);
-  }
-
   function selectCatalogueProjection(item: ProjectionCatalogueItem): void {
     projectionActions.setSelected(item.projectionId);
   }
 
-  function isCatalogueItemSelected(item: ProjectionCatalogueItem): boolean {
-    return (
-      isCatalogueProjectionActive() &&
-      projectionState.selected === item.projectionId
-    );
+  function handleCatalogueSelect(
+    event: CustomEvent<{
+      selectedId: string;
+      selectedItem?: ProjectionCatalogueComboItem;
+    }>
+  ): void {
+    const selected = event.detail.selectedItem;
+    if (selected) {
+      selectCatalogueProjection(selected.item);
+    }
   }
 
   function isCatalogueProjectionActive(): boolean {
@@ -344,37 +322,18 @@
           <p class="projection-helper">{description}</p>
         </div>
 
-        <div class="projection-tags">
-          {#each availableFilterOptions as opt (opt.id)}
-            <ButtonNative
-              type="button"
-              class="projection-tag {activeFilter === opt.id
-                ? 'projection-tag--selected'
-                : ''}"
-              kind="ghost"
-              size="small"
-              onclick={() => setFilter(opt.id)}>{opt.label}</ButtonNative
-            >
-          {/each}
-        </div>
-
-        {#if filteredItems.length > 0}
-          <div class="projection-cards">
-            {#each filteredItems as item (item.id)}
-              <ProjectionCard
-                title={item.title}
-                subtitle=""
-                tag={item.tag}
-                ratio="1:1"
-                previewLabel={m.projection_preview_label()}
-                selected={isCatalogueItemSelected(item)}
-                variant="gray"
-                equalArea={item.equalArea}
-                description={item.description}
-                onclick={() => selectCatalogueProjection(item)}
-              />
-            {/each}
-          </div>
+        {#if items.length > 0}
+          {#key catalogueItemsSignature}
+            <ComboBox
+              items={catalogueComboItems}
+              selectedId={activeCatalogueSelectionId}
+              placeholder={m.projection_catalog_search_placeholder()}
+              shouldFilterItem={(comboItem, value) =>
+                !value ||
+                comboItem.text.toLowerCase().includes(value.toLowerCase())}
+              on:select={handleCatalogueSelect}
+            />
+          {/key}
         {:else}
           <div class="projection-empty-state">
             <p class="projection-empty-title">
@@ -494,45 +453,6 @@
     font-size: 0.75rem;
     line-height: 1rem;
     letter-spacing: 0.32px;
-  }
-
-  .projection-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-
-  .projection-tags :global(.projection-tag) {
-    display: inline-flex;
-    align-items: center;
-    padding: 1px 8px;
-    border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-    border-radius: 9px;
-    background-color: var(--cds-layer-01, #f4f4f4);
-    color: var(--cds-text-primary, #161616);
-    cursor: pointer;
-    font-size: 0.75rem;
-    line-height: 1rem;
-    letter-spacing: 0.32px;
-  }
-
-  .projection-tags
-    :global(.projection-tag:hover:not(.projection-tag--selected)) {
-    background-color: var(--cds-layer-hover-01, #e8e8e8);
-  }
-
-  .projection-tags :global(.projection-tag--selected) {
-    border-color: transparent;
-    background-color: var(--cds-text-primary, #161616);
-    color: var(--cds-text-inverse, #ffffff);
-  }
-
-  .projection-cards {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--cds-spacing-03);
-    width: 100%;
   }
 
   .projection-empty-state {
