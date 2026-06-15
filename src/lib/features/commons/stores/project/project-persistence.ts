@@ -32,6 +32,10 @@ import {
   resetProjectRuntimeState
 } from './project-runtime.svelte';
 
+export interface SaveCurrentProjectOptions {
+  fallbackThumbnail?: string;
+}
+
 function syncGeoInfoToSourceFiles(container: ProjectStateContainer): void {
   const files = container._state.currentProject?.data?.sourceFiles;
   if (!files) return;
@@ -141,7 +145,8 @@ async function mergePersistedSourceFiles(
 }
 
 export async function saveCurrentProject(
-  container: ProjectStateContainer
+  container: ProjectStateContainer,
+  options: SaveCurrentProjectOptions = {}
 ): Promise<void> {
   if (!container._state.currentProject) {
     return;
@@ -160,7 +165,8 @@ export async function saveCurrentProject(
 
     container._state.currentProject.manifest.updatedAt = new Date();
 
-    const thumbnail = captureMapThumbnail()?.dataUrl;
+    const thumbnail =
+      captureMapThumbnail()?.dataUrl ?? options.fallbackThumbnail;
 
     await projectRepository.save(container._state.currentProject, thumbnail);
     persistenceRegistry.markClean();
