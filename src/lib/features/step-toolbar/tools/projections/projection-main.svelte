@@ -388,6 +388,7 @@
             tag={getSuggestionTag(suggestion)}
             ratio="1:1"
             previewLabel={m.projection_preview_label()}
+            projectionId={getCatalogueProjectionIdForSuggestion(suggestion)}
             selected={isSuggestionSelected(suggestion)}
             variant="blue"
             equalArea={suggestion.equalArea}

@@ -12,11 +12,12 @@ const suggestionCatalogueSource = readFileSync(
 );
 
 describe('ProjectionOther', () => {
-  it('renders the catalogue as neutral projection cards instead of a ComboBox', () => {
+  it('renders the catalogue as suggestion-styled projection cards instead of a ComboBox', () => {
     expect(source).toContain(
       "import ProjectionCard from '$lib/features/commons/components/projection-card.svelte';"
     );
-    expect(source).toContain('variant="gray"');
+    expect(source).toContain('variant="blue"');
+    expect(source).not.toContain('variant="gray"');
     expect(source).toContain('selected={isCatalogueItemSelected(item)}');
     expect(source).not.toContain('ComboBox');
     expect(source).not.toContain('selectedId={activeCatalogueSelectionId}');
