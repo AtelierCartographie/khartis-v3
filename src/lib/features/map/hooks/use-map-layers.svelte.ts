@@ -1558,8 +1558,13 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             };
           })()
         : undefined;
+      // A catalog basemap's default projection is a flat ('simple') or
+      // composite window, whose "sphere" is just a bounding rectangle — drawing
+      // its outline put a weird dark frame around every basemap. Only outline
+      // the sphere when the user explicitly picks a projection (where a genuine
+      // globe boundary is meaningful); never on a basemap's default projection.
       const projectionSphereOutlineLayer =
-        sphereProjectionInput && sphereVisible
+        sphereProjectionInput && sphereVisible && hasManualProjectionOverride
           ? createProjectionSphereOutlineLayer({
               projection: sphereProjectionInput,
               modelMatrix: matrixToApply,
