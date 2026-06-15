@@ -77,6 +77,22 @@ beforeAll(async () => {
       ('Alpha', ST_GeomFromText('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))')),
       ('Beta',  ST_GeomFromText('POLYGON((10 0, 20 0, 20 10, 10 10, 10 0))'))`
   );
+
+  // Two adjacent valid squares plus a touching OGC-invalid self-intersecting
+  // "bowtie". GEOS topology ops (ST_ReducePrecision in the snap step,
+  // ST_Intersection in extract_innerlines) throw on such geometry, so both must
+  // repair validity (ST_MakeValid) before any topology operation.
+  await run(
+    db,
+    'CREATE OR REPLACE TABLE invalid_coverage (_gid INTEGER, geom GEOMETRY)'
+  );
+  await run(
+    db,
+    `INSERT INTO invalid_coverage VALUES
+      (1, ST_GeomFromText('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))')),
+      (2, ST_GeomFromText('POLYGON((10 0, 20 0, 20 10, 10 10, 10 0))')),
+      (3, ST_GeomFromText('POLYGON((20 0, 30 10, 30 0, 20 10, 20 0))'))`
+  );
 });
 
 afterAll(async () => {
@@ -195,6 +211,17 @@ describe('extract_innerlines macro', () => {
     expect(rows[0].is_empty).toBe(false);
     expect(String(rows[0].wkt)).toMatch(/LINESTRING|MULTILINESTRING/);
   });
+
+  it('should not throw on an OGC-invalid polygon and still derive inner borders', async () => {
+    const rows = await query(
+      db,
+      `FROM extract_innerlines('invalid_coverage')
+       SELECT ST_AsText(geom) AS wkt, ST_IsEmpty(geom) AS is_empty`
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].is_empty).toBe(false);
+    expect(String(rows[0].wkt)).toMatch(/LINESTRING|MULTILINESTRING/);
+  });
 });
 
 describe('simplify_and_clean macro (polygon wrapper)', () => {
@@ -217,5 +244,14 @@ describe('simplify_and_clean macro (polygon wrapper)', () => {
        SELECT SUM(ST_NPoints(geom)) AS total_points FROM simplified`
     );
     expect(Number(rows[0].total_points)).toBeGreaterThan(0);
+  });
+
+  it('should not throw on an OGC-invalid polygon and keep every row', async () => {
+    const rows = await query(
+      db,
+      `FROM simplify_and_clean('invalid_coverage', 'geom', 0.3)
+       SELECT COUNT(*) AS cnt`
+    );
+    expect(Number(rows[0].cnt)).toBe(3);
   });
 });

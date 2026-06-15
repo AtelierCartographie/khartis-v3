@@ -1,6 +1,7 @@
 <script lang="ts">
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
   import {
     SimplificationLevel,
     SimplificationSource
@@ -211,6 +212,10 @@
         'Failed to apply simplification from step-toolbar',
         LogCategory.UI,
         { trigger, error }
+      );
+      showWarning(
+        m.simplification_failed_title(),
+        m.simplification_failed_subtitle()
       );
     }
   }

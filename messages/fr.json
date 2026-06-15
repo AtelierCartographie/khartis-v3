@@ -1447,6 +1447,8 @@
   "simplification_no_variants_active_level": "Le fond actif utilise déjà le niveau {level}.",
   "simplification_no_variants_fallback": "Ce fond de carte n'expose pas d'autre niveau prédéfini à choisir.",
   "simplification_success": "Géométrie simplifiée de {originalVertices} à {simplifiedVertices} (réduction de {reductionPercentage}%)",
+  "simplification_failed_title": "Simplification impossible",
+  "simplification_failed_subtitle": "Khartis n'a pas pu simplifier ce fichier : sa géométrie n'a pas pu être réparée. La géométrie d'origine est conservée.",
   "simplification_geo_dataset_label": "Jeu de données à simplifier",
   "halo_color": "Couleur du contour",
   "thickness_according": "Épaisseur selon",
