@@ -35,10 +35,11 @@ describe('ToolbarTabs dataset rename persistence', () => {
     );
   });
 
-  it('uses compact visualisation tab labels while preserving the full accessible label', () => {
-    expect(source).toContain('shortLabel: String(idx + 1)');
+  it('shows the visualisation title in the tab, truncated with a browser-style minimum width', () => {
+    expect(source).toContain('{vizTab.label}');
     expect(source).toContain('aria-label={vizTab.label}');
-    expect(source).toContain('{vizTab.shortLabel}');
+    expect(source).toContain('min-width: 5.5rem;');
+    expect(source).not.toContain('shortLabel');
   });
 
   it('hides generated facet visualisations from the main tab bar', () => {
