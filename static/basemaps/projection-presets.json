@@ -1,164 +1,183 @@
 {
   "FRANCE_DOM_TOM": {
-    "description_fr": "France métropolitaine avec DOM-TOM en encarts (Lambert-93 / EPSG:2154)",
-    "description_en": "Metropolitan France with overseas departments and regions as insets (Lambert-93 / EPSG:2154)",
+    "description_fr": "France métropolitaine avec DOM-TOM en encarts (Lambert-93 / EPSG:2154), disposition calquée sur ADMIN EXPRESS COG CARTO PLUS PE de l'IGN",
+    "description_en": "Metropolitan France with overseas departments and regions as insets (Lambert-93 / EPSG:2154), layout matching IGN's ADMIN EXPRESS COG CARTO PLUS PE",
     "entries": [
       {
         "id": "mainland",
         "proj4": "+proj=lcc +lat_0=46.5 +lon_0=3 +lat_1=49 +lat_2=44 +x_0=700000 +y_0=6600000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
-          [-5.15, 41.33],
-          [9.56, 51.09]
+          [-5.5, 41.0],
+          [10.0, 51.5]
         ],
-        "layout": { "x": 0, "y": 0, "width": 0.76, "height": 1.0 }
-      },
-      {
-        "id": "guyane",
-        "proj4": "+proj=utm +zone=22 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
-        "bounds": [
-          [-54.61, 2.11],
-          [-51.63, 5.75]
-        ],
-        "layout": { "x": 0.76, "y": 0.0, "width": 0.12, "height": 0.3 }
-      },
-      {
-        "id": "martinique",
-        "proj4": "+proj=utm +zone=20 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
-        "bounds": [
-          [-61.24, 14.39],
-          [-60.81, 14.88]
-        ],
-        "layout": { "x": 0.88, "y": 0.0, "width": 0.12, "height": 0.17 },
-        "scaleMultiplier": 1.2
+        "layout": {
+          "x": -0.1009,
+          "y": -0.0826,
+          "width": 1.1427,
+          "height": 1.0931
+        }
       },
       {
         "id": "guadeloupe",
         "proj4": "+proj=utm +zone=20 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
-          [-61.81, 15.83],
-          [-61.0, 16.51]
+          [-61.9, 15.8],
+          [-60.9, 16.6]
         ],
-        "layout": { "x": 0.76, "y": 0.3, "width": 0.12, "height": 0.17 }
+        "layout": {
+          "x": -0.002,
+          "y": 0.4122,
+          "width": 0.1506,
+          "height": 0.1303
+        }
+      },
+      {
+        "id": "martinique",
+        "proj4": "+proj=utm +zone=20 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
+        "bounds": [
+          [-61.3, 14.35],
+          [-60.75, 14.95]
+        ],
+        "layout": {
+          "x": 0.0102,
+          "y": 0.5537,
+          "width": 0.0837,
+          "height": 0.0976
+        }
+      },
+      {
+        "id": "guyane",
+        "proj4": "+proj=utm +zone=22 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
+        "bounds": [
+          [-54.7, 2.0],
+          [-51.5, 5.85]
+        ],
+        "layout": {
+          "x": 0.0277,
+          "y": 0.6804,
+          "width": 0.0935,
+          "height": 0.1167
+        }
       },
       {
         "id": "la_reunion",
         "proj4": "+proj=utm +zone=40 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
-          [55.21, -21.39],
-          [55.84, -20.87]
+          [55.15, -21.45],
+          [55.9, -20.8]
         ],
-        "layout": { "x": 0.88, "y": 0.17, "width": 0.12, "height": 0.17 }
-      },
-      {
-        "id": "mayotte",
-        "proj4": "+proj=utm +zone=38 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
-        "bounds": [
-          [45.02, -13.0],
-          [45.3, -12.64]
-        ],
-        "layout": { "x": 0.76, "y": 0.47, "width": 0.12, "height": 0.15 },
-        "scaleMultiplier": 1.5
+        "layout": {
+          "x": 0.0596,
+          "y": 0.8224,
+          "width": 0.0893,
+          "height": 0.0861
+        }
       },
       {
         "id": "saint_pierre_miquelon",
         "proj4": "+proj=utm +zone=21 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
-          [-56.41, 46.74],
-          [-56.11, 47.15]
+          [-56.45, 46.7],
+          [-56.1, 47.2]
         ],
-        "layout": { "x": 0.88, "y": 0.34, "width": 0.12, "height": 0.13 },
-        "scaleMultiplier": 1.3
-      }
-    ]
-  },
-
-  "EUROPE_DOM_TOM": {
-    "description_fr": "Europe avec territoires ultramarins en encarts (ETRS89-LAEA / EPSG:3035)",
-    "description_en": "Europe with overseas territories as insets (ETRS89-LAEA / EPSG:3035)",
-    "entries": [
-      {
-        "id": "mainland",
-        "proj4": "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
-        "bounds": [
-          [-11.0, 34.5],
-          [42.0, 71.6]
-        ],
-        "layout": { "x": 0, "y": 0, "width": 1.0, "height": 1.0 }
-      },
-      {
-        "id": "guadeloupe",
-        "proj4": "+proj=utm +zone=20 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
-        "bounds": [
-          [-61.81, 15.83],
-          [-61.0, 16.51]
-        ],
-        "layout": { "x": 0.0, "y": 0.8, "width": 0.1, "height": 0.1 }
-      },
-      {
-        "id": "martinique",
-        "proj4": "+proj=utm +zone=20 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
-        "bounds": [
-          [-61.24, 14.39],
-          [-60.81, 14.88]
-        ],
-        "layout": { "x": 0.1, "y": 0.8, "width": 0.1, "height": 0.1 },
-        "scaleMultiplier": 1.2
-      },
-      {
-        "id": "guyane",
-        "proj4": "+proj=utm +zone=22 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
-        "bounds": [
-          [-54.61, 2.11],
-          [-51.63, 5.75]
-        ],
-        "layout": { "x": 0.2, "y": 0.8, "width": 0.1, "height": 0.1 }
-      },
-      {
-        "id": "la_reunion",
-        "proj4": "+proj=utm +zone=40 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
-        "bounds": [
-          [55.21, -21.39],
-          [55.84, -20.87]
-        ],
-        "layout": { "x": 0.3, "y": 0.8, "width": 0.1, "height": 0.1 }
+        "layout": { "x": 0.172, "y": 0.8352, "width": 0.076, "height": 0.1627 }
       },
       {
         "id": "mayotte",
         "proj4": "+proj=utm +zone=38 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
-          [45.02, -13.0],
-          [45.3, -12.64]
+          [44.95, -13.05],
+          [45.35, -12.58]
         ],
-        "layout": { "x": 0.4, "y": 0.8, "width": 0.1, "height": 0.1 },
-        "scaleMultiplier": 1.5
+        "layout": { "x": 0.2824, "y": 0.8995, "width": 0.0874, "height": 0.109 }
+      }
+    ]
+  },
+
+  "EUROPE_DOM_TOM": {
+    "description_fr": "Europe (ETRS89-LAEA / EPSG:3035) avec territoires ultramarins en bande pleine largeur sous la carte, cellules aux proportions des formes, ordre ouest-est",
+    "description_en": "Europe (ETRS89-LAEA / EPSG:3035) with overseas territories in a full-width strip below the map, cells proportional to shapes, west-east order",
+    "entries": [
+      {
+        "id": "mainland",
+        "proj4": "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
+        "bounds": [
+          [-10.5, 33.0],
+          [42.3, 70.2]
+        ],
+        "layout": { "x": 0, "y": 0, "width": 1.0, "height": 0.92 }
       },
       {
-        "id": "canarias",
-        "proj4": "+proj=utm +zone=28 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
+        "id": "guadeloupe",
+        "proj4": "+proj=utm +zone=20 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
-          [-18.17, 27.64],
-          [-13.42, 29.42]
+          [-61.95, 15.75],
+          [-60.95, 16.6]
         ],
-        "layout": { "x": 0.5, "y": 0.8, "width": 0.1, "height": 0.1 }
+        "layout": { "x": 0.0, "y": 0.93, "width": 0.1152, "height": 0.07 }
       },
       {
-        "id": "madeira",
-        "proj4": "+proj=utm +zone=28 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
+        "id": "martinique",
+        "proj4": "+proj=utm +zone=20 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
-          [-17.28, 32.62],
-          [-16.27, 33.14]
+          [-61.3, 14.35],
+          [-60.75, 14.95]
         ],
-        "layout": { "x": 0.6, "y": 0.8, "width": 0.1, "height": 0.1 },
-        "scaleMultiplier": 1.3
+        "layout": { "x": 0.1152, "y": 0.93, "width": 0.0908, "height": 0.07 }
+      },
+      {
+        "id": "guyane",
+        "proj4": "+proj=utm +zone=22 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
+        "bounds": [
+          [-54.7, 2.0],
+          [-51.5, 5.85]
+        ],
+        "layout": { "x": 0.206, "y": 0.93, "width": 0.0847, "height": 0.07 }
       },
       {
         "id": "acores",
         "proj4": "+proj=utm +zone=26 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
         "bounds": [
-          [-31.27, 36.93],
-          [-24.78, 40.0]
+          [-31.4, 36.8],
+          [-24.85, 39.85]
         ],
-        "layout": { "x": 0.7, "y": 0.8, "width": 0.1, "height": 0.1 }
+        "layout": { "x": 0.2907, "y": 0.93, "width": 0.1717, "height": 0.07 }
+      },
+      {
+        "id": "canarias",
+        "proj4": "+proj=utm +zone=28 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
+        "bounds": [
+          [-18.3, 27.5],
+          [-13.3, 29.5]
+        ],
+        "layout": { "x": 0.4624, "y": 0.93, "width": 0.2229, "height": 0.07 }
+      },
+      {
+        "id": "madeira",
+        "proj4": "+proj=utm +zone=28 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
+        "bounds": [
+          [-17.4, 32.35],
+          [-16.2, 33.2]
+        ],
+        "layout": { "x": 0.6853, "y": 0.93, "width": 0.1203, "height": 0.07 }
+      },
+      {
+        "id": "mayotte",
+        "proj4": "+proj=utm +zone=38 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
+        "bounds": [
+          [44.95, -13.05],
+          [45.35, -12.58]
+        ],
+        "layout": { "x": 0.8056, "y": 0.93, "width": 0.0848, "height": 0.07 }
+      },
+      {
+        "id": "la_reunion",
+        "proj4": "+proj=utm +zone=40 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
+        "bounds": [
+          [55.15, -21.45],
+          [55.9, -20.8]
+        ],
+        "layout": { "x": 0.8904, "y": 0.93, "width": 0.1096, "height": 0.07 }
       }
     ]
   }

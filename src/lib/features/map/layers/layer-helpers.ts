@@ -372,6 +372,15 @@ export function createGeoJsonChoroplethColorAccessor(
   };
 }
 
+export function dashArrayToDottedPattern(
+  dashArray: [number, number]
+): BasemapDottedPattern {
+  const [dash] = dashArray;
+  if (dash < 4) return BasemapDottedPattern.DOTS;
+  if (dash >= 12) return BasemapDottedPattern.LONG_DASH;
+  return BasemapDottedPattern.DASHES;
+}
+
 export function dottedPatternToDashArray(
   pattern: BasemapDottedPattern
 ): [number, number] {

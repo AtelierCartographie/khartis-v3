@@ -2463,7 +2463,7 @@ describe('basemap projection fallbacks', () => {
     expect(dottedProps._subLayerProps.linestrings.extensions).toHaveLength(1);
     expect(dottedProps.updateTriggers).toMatchObject({
       getLineColor: ['#123456', 1],
-      getDashArray: [true, BasemapDottedPattern.DASHES],
+      getDashArray: [8, 4],
       getLineWidth: [BASEMAP_LAYER_CONFIG.thickness.max]
     });
   });

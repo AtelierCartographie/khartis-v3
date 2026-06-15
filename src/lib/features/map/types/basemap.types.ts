@@ -23,6 +23,9 @@ export interface ProjectionPresetEntry {
 export interface ProjectionPreset {
   description_fr?: string;
   description_en?: string;
+  // Width/height ratio the normalized layouts were authored for. When absent
+  // it is derived so the mainland geometry exactly fills its layout cell.
+  layoutAspect?: number;
   entries: ProjectionPresetEntry[];
 }
 
@@ -35,6 +38,7 @@ export interface PathStylePreset {
   width: number;
   widthUnits: string;
   color: [number, number, number, number];
+  dashArray?: [number, number];
 }
 
 export interface PolygonStylePreset {
