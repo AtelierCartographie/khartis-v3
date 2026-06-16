@@ -47,7 +47,8 @@ export {
   exportProject,
   importProject,
   markDirty,
-  markDirtyAndSave
+  markDirtyAndSave,
+  type SaveCurrentProjectOptions
 } from './project-persistence';
 
 export {

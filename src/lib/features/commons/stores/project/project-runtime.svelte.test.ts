@@ -24,7 +24,9 @@ describe('projectRuntime', () => {
   });
 
   it('keeps project runtime reset centralized', () => {
-    expect(source).toContain('export function resetProjectRuntimeState()');
+    expect(source).toContain('export function resetProjectRuntimeState(');
+    expect(source).toContain('options: ResetProjectRuntimeStateOptions = {}');
+    expect(source).toContain('if (options.resetPersistence ?? true) {');
     expect(source).toContain('persistenceRegistry.resetAll();');
     expect(source).toContain('datasetsStore.clear();');
     expect(source).toContain('basemapService.reset();');

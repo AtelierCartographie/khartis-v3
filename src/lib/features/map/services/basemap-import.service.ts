@@ -370,8 +370,8 @@ function buildBasemapLayers(
 
   if (isPolygonBasemapLayerType(layerType)) {
     layers.push({
-      title_fr: m.layer_title_limits(),
-      title_en: m.layer_title_limits(),
+      title_fr: m.layer_title_limits({}, { locale: 'fr' }),
+      title_en: m.layer_title_limits({}, { locale: 'en' }),
       type: BasemapLayerType.LIMIT,
       file: getBasemapInnerlinesTableName(tableName),
       style: null
@@ -383,8 +383,8 @@ function buildBasemapLayers(
   }
 
   layers.push({
-    title_fr: m.layer_title_centroids(),
-    title_en: m.layer_title_centroids(),
+    title_fr: m.layer_title_centroids({}, { locale: 'fr' }),
+    title_en: m.layer_title_centroids({}, { locale: 'en' }),
     type: BasemapLayerType.CENTROID,
     file: getBasemapCentroidsTableName(tableName),
     style: null
@@ -697,10 +697,10 @@ export function createOSMBasemap(
 ): BasemapMetadata {
   return {
     file: `osm_${style.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`,
-    title_fr: m.basemap_osm(),
-    title_en: m.basemap_osm(),
-    subtitle_fr: m.osm_basemap_description(),
-    subtitle_en: m.osm_basemap_description(),
+    title_fr: m.basemap_osm({}, { locale: 'fr' }),
+    title_en: m.basemap_osm({}, { locale: 'en' }),
+    subtitle_fr: m.osm_basemap_description({}, { locale: 'fr' }),
+    subtitle_en: m.osm_basemap_description({}, { locale: 'en' }),
     source: m.osm_basemap_source(),
     date: new Date().getFullYear().toString(),
     bbox: [-180, -90, 180, 90],
@@ -708,8 +708,8 @@ export function createOSMBasemap(
     proj_to: { type: 'identity' },
     layers: [
       {
-        title_fr: m.layer_title_base(),
-        title_en: m.layer_title_base(),
+        title_fr: m.layer_title_base({}, { locale: 'fr' }),
+        title_en: m.layer_title_base({}, { locale: 'en' }),
         type: BasemapLayerType.POLYGON,
         style: null
       }

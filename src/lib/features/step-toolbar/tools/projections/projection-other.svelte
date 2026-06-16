@@ -1,14 +1,6 @@
 <script lang="ts">
-  import ButtonNative from '$lib/features/commons/components/button-native.svelte';
-  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
-  import ProjectionCard from '$lib/features/commons/components/projection-card.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
-  import { ViewMode } from '$lib/features/commons/constants/ui.constants';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
-  import {
-    globalActions,
-    globalState
-  } from '$lib/features/commons/stores/global.svelte';
   import type { ProjectionFilterId } from '$lib/features/commons/types/global';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
@@ -21,10 +13,11 @@
   import { m } from '$lib/paraglide/messages';
   import {
     Button,
+    ComboBox,
     InlineNotification,
     TextArea
   } from 'carbon-components-svelte';
-  import { Code, Grid, List as ListIcon } from 'carbon-icons-svelte';
+  import { Code, List as ListIcon } from 'carbon-icons-svelte';
   import { createEventDispatcher } from 'svelte';
   import {
     PROJECTIONS as PROJECTION_CATALOG,
@@ -35,7 +28,7 @@
     getProjectionState,
     projectionActions
   } from './projection.store.svelte';
-  import type { ProjectionSuggestion } from './projection-suggest.service';
+  import { getCatalogueProjectionIdForSuggestion } from './projection-suggestion-catalogue.utils';
 
   type ProjectionShapeFilterId = Exclude<ProjectionFilterId, 'all'>;
 
@@ -58,52 +51,6 @@
     'bonne',
     'interrupted-mollweide'
   ]);
-  const SUGGESTION_ID_TO_PROJECTION_ID = new Map([
-    ['aitoff', 'aitoff'],
-    ['albers', 'albers'],
-    ['armadillo', 'armadillo'],
-    ['atlantis', 'atlantis'],
-    ['azimuthalequalarea', 'azimuthal-equal-area'],
-    ['bertin1953', 'bertin-1953'],
-    ['bonne', 'bonne'],
-    ['equalearth', 'equal-earth'],
-    ['equirectangular', 'equirectangular'],
-    ['gallpeters', 'gall-peters'],
-    ['interruptedmollweide', 'interrupted-mollweide'],
-    ['laea', 'azimuthal-equal-area'],
-    ['lambertconformal', 'lambert-conformal'],
-    ['mercator', 'mercator'],
-    ['mollweide', 'mollweide'],
-    ['mollweide2hemisphere', 'interrupted-mollweide'],
-    ['mollweideinterrupted', 'interrupted-mollweide'],
-    ['mollweideocean', 'interrupted-mollweide'],
-    ['naturalearth', 'natural-earth'],
-    ['peters', 'gall-peters'],
-    ['robinson', 'robinson'],
-    ['stereographic', 'stereographic'],
-    ['winkel3', 'winkel-tripel'],
-    ['winkeltripel', 'winkel-tripel']
-  ]);
-  const SUGGESTION_D3_TO_PROJECTION_ID = new Map([
-    ['geoAitoff', 'aitoff'],
-    ['geoAlbers', 'albers'],
-    ['geoArmadillo', 'armadillo'],
-    ['geoAzimuthalEqualArea', 'azimuthal-equal-area'],
-    ['geoBertin1953', 'bertin-1953'],
-    ['geoBonne', 'bonne'],
-    ['geoConicConformal', 'lambert-conformal'],
-    ['geoCylindricalEqualArea', 'gall-peters'],
-    ['geoEqualEarth', 'equal-earth'],
-    ['geoEquirectangular', 'equirectangular'],
-    ['geoInterruptedMollweide', 'interrupted-mollweide'],
-    ['geoMercator', 'mercator'],
-    ['geoMollweide', 'mollweide'],
-    ['geoNaturalEarth1', 'natural-earth'],
-    ['geoRobinson', 'robinson'],
-    ['geoStereographic', 'stereographic'],
-    ['geoWinkel3', 'winkel-tripel']
-  ]);
-
   const dispatch = createEventDispatcher<{
     apply: { code: string };
     reset: void;
@@ -126,7 +73,6 @@
         .filter((projectionId): projectionId is string => Boolean(projectionId))
     );
   });
-  const viewMode = $derived(globalState.projectionViewMode ?? ViewMode.LIST);
   const projectionContext = $derived(
     resolveProjectionAvailabilityContext({
       requiresMapLibre: basemapStyleStore.requiresMapLibre,
@@ -166,24 +112,16 @@
     }
   ]);
 
-  const filterOptions: ReadonlyArray<{
-    id: ProjectionFilterId;
-    label: string;
-  }> = [
-    { id: 'all', label: m.projection_filter_all() },
-    { id: 'Rectangulaire', label: m.projection_filter_rectangular() },
-    { id: 'Arrondie', label: m.projection_filter_rounded() },
-    { id: 'Discontinue', label: m.projection_filter_discontinuous() }
-  ];
-
-  const projectionGroups: ReadonlyArray<{
-    id: ProjectionShapeFilterId;
-    label: string;
-  }> = [
-    { id: 'Rectangulaire', label: m.projection_group_rectangular() },
-    { id: 'Arrondie', label: m.projection_group_rounded() },
-    { id: 'Discontinue', label: m.projection_group_discontinuous() }
-  ];
+  const projectionGroups = $derived.by(
+    (): ReadonlyArray<{
+      id: ProjectionShapeFilterId;
+      label: string;
+    }> => [
+      { id: 'Rectangulaire', label: m.projection_group_rectangular() },
+      { id: 'Arrondie', label: m.projection_group_rounded() },
+      { id: 'Discontinue', label: m.projection_group_discontinuous() }
+    ]
+  );
 
   const items = $derived.by((): ProjectionCatalogueItem[] =>
     [
@@ -196,48 +134,31 @@
           .length > 0
     )
   );
-  const availableFilterOptions = $derived(
-    filterOptions.filter(
-      (option) =>
-        option.id === 'all' ||
-        items.some((item) => item.shapeFilterId === option.id)
-    )
+  type ProjectionCatalogueComboItem = {
+    id: string;
+    text: string;
+    item: ProjectionCatalogueItem;
+  };
+  const catalogueComboItems = $derived.by((): ProjectionCatalogueComboItem[] =>
+    items.map((item) => ({
+      id: item.id,
+      text: item.tag ? `${item.title} · ${item.tag}` : item.title,
+      item
+    }))
   );
-  const activeFilter = $derived.by(() => {
-    const requestedFilter = globalState.projectionFilter ?? 'all';
+  const catalogueItemsSignature = $derived(
+    items.map((item) => item.id).join('|')
+  );
+  const catalogueLabel = $derived(m.projection_catalog_label());
+  const viewCodeLabel = $derived(m.projection_view_code());
 
-    return availableFilterOptions.some(
-      (option) => option.id === requestedFilter
-    )
-      ? requestedFilter
-      : 'all';
-  });
-  const filteredItems = $derived(
-    items.filter(
-      (item) => activeFilter === 'all' || item.shapeFilterId === activeFilter
-    )
-  );
-  const unclassifiedGridItems = $derived(
-    items.filter((item) => !item.shapeFilterId)
-  );
-  const gridGroups = $derived(
-    projectionGroups
-      .map((group) => ({
-        ...group,
-        items: items.filter((item) => item.shapeFilterId === group.id)
-      }))
-      .filter((group) => group.items.length > 0)
-  );
-  const catalogueLabel = m.projection_catalog_label();
-  const viewCodeLabel = m.projection_view_code();
-
-  const description = m.projection_description();
-  const codeIntro = m.projection_code_intro?.() ?? '';
-  const codeLabel = m.projection_code_label();
-  const codePlaceholder = m.projection_code_placeholder?.() ?? '';
-  const codeHelper = m.projection_code_helper?.() ?? '';
-  const resetLabel = m.projection_code_reset();
-  const submitLabel = m.projection_code_submit();
+  const description = $derived(m.projection_description());
+  const codeIntro = $derived(m.projection_code_intro?.() ?? '');
+  const codeLabel = $derived(m.projection_code_label());
+  const codePlaceholder = $derived(m.projection_code_placeholder?.() ?? '');
+  const codeHelper = $derived(m.projection_code_helper?.() ?? '');
+  const resetLabel = $derived(m.projection_code_reset());
+  const submitLabel = $derived(m.projection_code_submit());
   const activeCatalogueSelectionId = $derived.by(() => {
     if (!isCatalogueProjectionActive()) {
       return undefined;
@@ -300,23 +221,20 @@
         : crsCode;
   }
 
-  function setFilter(id: ProjectionFilterId): void {
-    globalActions.setProjectionFilter(id);
-  }
-
   function selectCatalogueProjection(item: ProjectionCatalogueItem): void {
     projectionActions.setSelected(item.projectionId);
   }
 
-  function setViewMode(mode: ViewMode): void {
-    projectionActions.setViewMode(mode);
-  }
-
-  function isCatalogueItemSelected(item: ProjectionCatalogueItem): boolean {
-    return (
-      isCatalogueProjectionActive() &&
-      projectionState.selected === item.projectionId
-    );
+  function handleCatalogueSelect(
+    event: CustomEvent<{
+      selectedId: string;
+      selectedItem?: ProjectionCatalogueComboItem;
+    }>
+  ): void {
+    const selected = event.detail.selectedItem;
+    if (selected) {
+      selectCatalogueProjection(selected.item);
+    }
   }
 
   function isCatalogueProjectionActive(): boolean {
@@ -343,31 +261,6 @@
       equalArea: EQUAL_AREA_PROJECTION_IDS.has(projection.id),
       shapeFilterId
     };
-  }
-
-  function getCatalogueProjectionIdForSuggestion(
-    suggestion: ProjectionSuggestion
-  ): string | undefined {
-    if (suggestion.type !== 'generic') {
-      return undefined;
-    }
-
-    const normalizedSuggestionId = normalizeSuggestionId(suggestion.id);
-    const projectionId = SUGGESTION_ID_TO_PROJECTION_ID.get(
-      normalizedSuggestionId
-    );
-    if (projectionId) {
-      return projectionId;
-    }
-
-    const d3Projection = suggestion.d3Config?.projection;
-    return d3Projection
-      ? SUGGESTION_D3_TO_PROJECTION_ID.get(d3Projection)
-      : undefined;
-  }
-
-  function normalizeSuggestionId(id: string): string {
-    return id.toLowerCase().replace(/[^a-z0-9]/g, '');
   }
 
   function getProjectionShapeFilterId(
@@ -414,10 +307,7 @@
     />
 
     {#if !isCodeView}
-      <div
-        class="projection-content"
-        class:projection-content--grid={viewMode === ViewMode.GRID}
-      >
+      <div class="projection-content">
         {#if selectedCatalogueUnavailable}
           <InlineNotification
             kind="warning"
@@ -430,125 +320,20 @@
 
         <div class="projection-header">
           <p class="projection-helper">{description}</p>
-          <div class="projection-buttons">
-            <IconButton
-              kind="ghost"
-              icon={ListIcon}
-              size="small"
-              class={viewMode === ViewMode.LIST
-                ? 'projection-view-button projection-view-button--active'
-                : 'projection-view-button'}
-              iconDescription={m.view_list()}
-              isSelected={viewMode === ViewMode.LIST}
-              aria-pressed={viewMode === ViewMode.LIST}
-              on:click={() => setViewMode(ViewMode.LIST)}
-            />
-
-            <IconButton
-              kind="ghost"
-              icon={Grid}
-              size="small"
-              class={viewMode === ViewMode.GRID
-                ? 'projection-view-button projection-view-button--active'
-                : 'projection-view-button'}
-              iconDescription={m.view_grid()}
-              isSelected={viewMode === ViewMode.GRID}
-              aria-pressed={viewMode === ViewMode.GRID}
-              on:click={() => setViewMode(ViewMode.GRID)}
-            />
-          </div>
         </div>
 
-        {#if viewMode === ViewMode.LIST}
-          <div class="projection-tags">
-            {#each availableFilterOptions as opt (opt.id)}
-              <ButtonNative
-                type="button"
-                class="projection-tag {activeFilter === opt.id
-                  ? 'projection-tag--selected'
-                  : ''}"
-                kind="ghost"
-                size="small"
-                onclick={() => setFilter(opt.id)}>{opt.label}</ButtonNative
-              >
-            {/each}
-          </div>
-
-          {#if filteredItems.length > 0}
-            <div class="projection-cards">
-              {#each filteredItems as item (item.id)}
-                <ProjectionCard
-                  title={item.title}
-                  subtitle=""
-                  tag={item.tag}
-                  ratio="1:1"
-                  previewLabel={m.projection_preview_label()}
-                  selected={isCatalogueItemSelected(item)}
-                  variant="gray"
-                  equalArea={item.equalArea}
-                  description={item.description}
-                  onclick={() => selectCatalogueProjection(item)}
-                />
-              {/each}
-            </div>
-          {:else}
-            <div class="projection-empty-state">
-              <p class="projection-empty-title">
-                {m.projection_catalog_unavailable_title()}
-              </p>
-              <p class="projection-empty-subtitle">
-                {m.projection_catalog_unavailable_subtitle()}
-              </p>
-            </div>
-          {/if}
-        {:else if items.length > 0}
-          {#if unclassifiedGridItems.length > 0}
-            <div class="projection-grid-featured">
-              {#each unclassifiedGridItems as item (item.id)}
-                <ProjectionCard
-                  title={item.title}
-                  subtitle=""
-                  tag={item.tag}
-                  ratio="16:9"
-                  previewLabel={m.projection_preview_label()}
-                  selected={isCatalogueItemSelected(item)}
-                  variant="gray"
-                  equalArea={item.equalArea}
-                  description={item.description}
-                  layout="vertical"
-                  fullWidth
-                  onclick={() => selectCatalogueProjection(item)}
-                />
-              {/each}
-            </div>
-          {/if}
-
-          <div class="projection-grid">
-            {#each gridGroups as group (group.id)}
-              <section class="projection-grid-column" aria-label={group.label}>
-                <h3>{group.label}</h3>
-                <div class="projection-grid-cards">
-                  {#each group.items as item (item.id)}
-                    <ProjectionCard
-                      title={item.title}
-                      subtitle=""
-                      tag={item.tag}
-                      ratio="16:9"
-                      previewLabel={m.projection_preview_label()}
-                      selected={isCatalogueItemSelected(item)}
-                      variant="gray"
-                      equalArea={item.equalArea}
-                      description={item.description}
-                      layout="vertical"
-                      fullWidth
-                      showTag={false}
-                      onclick={() => selectCatalogueProjection(item)}
-                    />
-                  {/each}
-                </div>
-              </section>
-            {/each}
-          </div>
+        {#if items.length > 0}
+          {#key catalogueItemsSignature}
+            <ComboBox
+              items={catalogueComboItems}
+              selectedId={activeCatalogueSelectionId}
+              placeholder={m.projection_catalog_search_placeholder()}
+              shouldFilterItem={(comboItem, value) =>
+                !value ||
+                comboItem.text.toLowerCase().includes(value.toLowerCase())}
+              on:select={handleCatalogueSelect}
+            />
+          {/key}
         {:else}
           <div class="projection-empty-state">
             <p class="projection-empty-title">
@@ -653,10 +438,6 @@
     min-width: 0;
   }
 
-  .projection-content--grid {
-    gap: var(--cds-spacing-05);
-  }
-
   .projection-header {
     display: flex;
     align-items: flex-start;
@@ -672,66 +453,6 @@
     font-size: 0.75rem;
     line-height: 1rem;
     letter-spacing: 0.32px;
-  }
-
-  .projection-buttons {
-    display: flex;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 2px;
-  }
-
-  .projection-buttons :global(.projection-view-button.bx--btn) {
-    width: 32px;
-    min-width: 32px;
-    height: 32px;
-    min-height: 32px;
-    padding: 8px;
-    color: var(--cds-icon-primary, #161616);
-  }
-
-  .projection-buttons
-    :global(.projection-view-button.projection-view-button--active.bx--btn) {
-    background: var(--cds-background-active, rgba(141, 141, 141, 0.5));
-  }
-
-  .projection-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-
-  .projection-tags :global(.projection-tag) {
-    display: inline-flex;
-    align-items: center;
-    padding: 1px 8px;
-    border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-    border-radius: 9px;
-    background-color: var(--cds-layer-01, #f4f4f4);
-    color: var(--cds-text-primary, #161616);
-    cursor: pointer;
-    font-size: 0.75rem;
-    line-height: 1rem;
-    letter-spacing: 0.32px;
-  }
-
-  .projection-tags
-    :global(.projection-tag:hover:not(.projection-tag--selected)) {
-    background-color: var(--cds-layer-hover-01, #e8e8e8);
-  }
-
-  .projection-tags :global(.projection-tag--selected) {
-    border-color: transparent;
-    background-color: var(--cds-text-primary, #161616);
-    color: var(--cds-text-inverse, #ffffff);
-  }
-
-  .projection-cards {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--cds-spacing-03);
-    width: 100%;
   }
 
   .projection-empty-state {
@@ -759,62 +480,5 @@
     color: var(--cds-text-secondary, #525252);
     font-size: 0.75rem;
     line-height: 1rem;
-  }
-
-  .projection-grid-featured,
-  .projection-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 184px);
-    gap: var(--cds-spacing-05);
-    width: 100%;
-    align-items: start;
-  }
-
-  @media (max-width: 1023px) {
-    .projection-grid-featured,
-    .projection-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-
-    .projection-grid-featured :global(.projection-card),
-    .projection-grid-cards :global(.projection-card) {
-      width: 100%;
-      height: auto;
-      min-height: 140px;
-    }
-  }
-
-  @media (max-width: 480px) {
-    .projection-grid-featured,
-    .projection-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .projection-grid-column {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
-    min-width: 0;
-  }
-
-  .projection-grid-column h3 {
-    margin: 0;
-    color: var(--cds-text-primary, #161616);
-    font-size: 0.75rem;
-    font-weight: 600;
-    line-height: 1rem;
-  }
-
-  .projection-grid-cards {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
-  }
-
-  .projection-grid-featured :global(.projection-card),
-  .projection-grid-cards :global(.projection-card) {
-    width: 184px;
-    height: 176px;
   }
 </style>

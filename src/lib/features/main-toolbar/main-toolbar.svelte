@@ -50,6 +50,7 @@
     if (idx === 0) return m.data_tab_control();
     if (dataTabStore.isGeographicMode) return m.data_tab_enrich();
     if (idx === 1) return m.data_tab_geolocate();
+    if (dataTabStore.isTabularGPSMode) return m.data_tab_basemap();
     return m.data_tab_join();
   });
 
@@ -239,7 +240,9 @@
             <ProgressStep
               complete={dataTabStore.hasCompletedStep[2]}
               disabled={!dataTabStore.canNavigateToStep[2]}
-              label={m.data_tab_join()}
+              label={dataTabStore.isTabularGPSMode
+                ? m.data_tab_basemap()
+                : m.data_tab_join()}
               description={dataTabStore.hasCompletedStep[2]
                 ? m.join_status_done()
                 : m.join_status_pending()}

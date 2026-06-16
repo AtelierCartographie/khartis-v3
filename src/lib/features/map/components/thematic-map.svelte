@@ -6,6 +6,7 @@
   import type { LngLatBoundsLike, Map as MapLibreMap } from 'maplibre-gl';
   import { onMount, untrack } from 'svelte';
   import { fade } from 'svelte/transition';
+  import { getLocale } from '$lib/paraglide/runtime';
   import { basemapStyleStore } from '../../commons/stores/basemap-style.store.svelte';
   import {
     BasemapStyle,
@@ -163,13 +164,17 @@
     logicalMapViewportFitPaddingPx * pageDisplayScale
   );
   const showPageGrid = $derived(
-    fmtState.gridEnabled && globalState.selectedStep === ToolbarStep.Styling
+    fmtState.gridEnabled &&
+      (globalState.selectedStep === ToolbarStep.Styling ||
+        globalState.isMapExporting)
   );
   const isVisualizationMode = $derived(
-    globalState.selectedStep === ToolbarStep.Visualizations
+    globalState.selectedStep === ToolbarStep.Visualizations &&
+      !globalState.isMapExporting
   );
   const isStylingMode = $derived(
-    globalState.selectedStep === ToolbarStep.Styling
+    globalState.selectedStep === ToolbarStep.Styling ||
+      globalState.isMapExporting
   );
   const showLegendPreview = $derived(isVisualizationMode || isStylingMode);
   const logicalMapCanvasWidth = $derived(
@@ -236,7 +241,9 @@
     void visualizationStore.version;
 
     return globalState.selectedStep === ToolbarStep.Data
-      ? []
+      ? globalState.isMapExporting
+        ? visualizationStore.activeVisualizations
+        : []
       : visualizationStore.activeVisualizations;
   });
 
@@ -265,7 +272,10 @@
   let pendingViewReset = false;
   let pendingOrthographicFit = $state(false);
   let pendingOrthographicFitReason = $state<ViewportFitReason>('dataset');
-  let pendingMapLibreViewportPreset = $state<LngLatBoundsLike | null>(null);
+  let pendingMapLibreViewportPreset = $state<{
+    bounds: LngLatBoundsLike;
+    preferPreset: boolean;
+  } | null>(null);
   let pendingViewportAutoRefitReason = $state<ViewportFitReason | null>(null);
   let lastMapViewportSnapshot: string | null = null;
   let pendingMapLibreManualInteraction = false;
@@ -521,7 +531,9 @@
     },
     getActiveVisualizations: () =>
       globalState.selectedStep === ToolbarStep.Data
-        ? []
+        ? globalState.isMapExporting
+          ? visualizationStore.activeVisualizations
+          : []
         : visualizationStore.activeVisualizations,
     onOrthographicViewStateChanged: (target, zoom) => {
       mapInstanceStore.markViewportManual();
@@ -738,6 +750,7 @@
         getProjectionMetadataForDataset(firstDatasetId)
       ),
     getModelMatrix: () => renderModelMatrix,
+    getPageDisplayScale: () => pageDisplayScale,
     getShouldRenderDatasetFallbacks: () =>
       globalState.selectedStep === ToolbarStep.Data,
     getTableFilters: getTableFiltersForDataset,
@@ -1096,12 +1109,19 @@
   }
 
   function syncOrthographicViewportAfterViewModeSwitch(
-    reasonOverride?: ViewportFitReason
+    reasonOverride?: ViewportFitReason,
+    options: { fitViewport?: boolean } = {}
   ): void {
     if (mapInit.viewMode !== ViewMode.ORTHOGRAPHIC) {
       return;
     }
 
+    const shouldFitViewport = options.fitViewport ?? true;
+    const fitViewport = (reason: ViewportFitReason): void => {
+      if (shouldFitViewport) {
+        fitOrthographicViewport(reason);
+      }
+    };
     const refBasemapId = basemapStyleStore.referenceBasemapId;
     const currentWorldBaseTable = worldBaseTable;
 
@@ -1147,21 +1167,21 @@
           );
         }
 
-        fitOrthographicViewport(
+        fitViewport(
           reasonOverride ?? (shouldUseBasemapReference ? 'basemap' : 'dataset')
         );
         return;
       }
 
       if (shouldUseBasemapReference && projectionStore.referenceBbox) {
-        fitOrthographicViewport(reasonOverride ?? 'basemap');
+        fitViewport(reasonOverride ?? 'basemap');
         return;
       }
 
       const geoMetadata = firstTable.schema.metadata?.get('geo');
       if (geoMetadata) {
         projectionStore.setReferenceBboxFromMetadata(geoMetadata);
-        fitOrthographicViewport(reasonOverride ?? 'dataset');
+        fitViewport(reasonOverride ?? 'dataset');
         return;
       }
     }
@@ -1181,7 +1201,7 @@
             referenceState.isProjected,
             referenceState.renderProjection
           );
-          fitOrthographicViewport(reasonOverride ?? 'basemap');
+          fitViewport(reasonOverride ?? 'basemap');
           return;
         }
       }
@@ -1199,7 +1219,7 @@
           false,
           null
         );
-        fitOrthographicViewport(reasonOverride ?? 'dataset');
+        fitViewport(reasonOverride ?? 'dataset');
         return;
       }
     }
@@ -1217,10 +1237,26 @@
           referenceState.isProjected,
           referenceState.renderProjection
         );
-        fitOrthographicViewport(reasonOverride ?? 'basemap');
+        fitViewport(reasonOverride ?? 'basemap');
         return;
       }
     }
+  }
+
+  function resolveUserDataBounds() {
+    if (firstTable) {
+      const bounds = calculateBoundsFromGeoArrow(firstTable);
+      if (bounds) {
+        return bounds;
+      }
+    }
+    if (firstGeoJSON) {
+      const bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
+      if (bounds) {
+        return bounds;
+      }
+    }
+    return null;
   }
 
   function applyPendingMapLibreViewportPreset(): void {
@@ -1232,11 +1268,18 @@
       return;
     }
 
-    const bounds = pendingMapLibreViewportPreset;
+    const { bounds: presetBounds, preferPreset } =
+      pendingMapLibreViewportPreset;
     pendingMapLibreViewportPreset = null;
-    mapBounds.fitToBounds(bounds, {
+
+    // Default framing prefers the loaded data bounds; an explicit scale-zone
+    // change (preferPreset) must reframe to the chosen zone extent instead.
+    // The intent travels with the pending request so every consumer — immediate
+    // apply, style.load (onStyleLoaded) and view-mode switch — honours it.
+    const dataBounds = preferPreset ? null : resolveUserDataBounds();
+    mapBounds.fitToBounds(dataBounds ?? presetBounds, {
       animate: true,
-      reason: 'basemap'
+      reason: dataBounds ? 'dataset' : 'basemap'
     });
   }
 
@@ -1251,8 +1294,17 @@
       return;
     }
 
-    if (reason === 'basemap' && pendingMapLibreViewportPreset) {
+    if (
+      pendingMapLibreViewportPreset?.preferPreset ||
+      (reason === 'basemap' && pendingMapLibreViewportPreset)
+    ) {
       applyPendingMapLibreViewportPreset();
+      return;
+    }
+
+    const dataBounds = resolveUserDataBounds();
+    if (dataBounds) {
+      mapBounds.fitToBounds(dataBounds, { reason });
       return;
     }
 
@@ -1261,22 +1313,6 @@
 
     if (refBasemapId && currentWorldBaseTable) {
       const bounds = calculateBoundsFromGeoArrow(currentWorldBaseTable);
-      if (bounds) {
-        mapBounds.fitToBounds(bounds, { reason });
-        return;
-      }
-    }
-
-    if (firstTable) {
-      const bounds = calculateBoundsFromGeoArrow(firstTable);
-      if (bounds) {
-        mapBounds.fitToBounds(bounds, { reason });
-        return;
-      }
-    }
-
-    if (firstGeoJSON) {
-      const bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
       if (bounds) {
         mapBounds.fitToBounds(bounds, { reason });
         return;
@@ -1321,6 +1357,7 @@
     },
     onStyleLoaded: () => {
       mapBasemap.syncOSMRasterLayer();
+      mapBasemap.syncBasemapLanguage();
       mapBasemap.syncLabelsVisibility();
       mapBasemap.syncGroupVisibility();
 
@@ -1681,7 +1718,16 @@
           triggerOnReady();
           return;
         }
-        if (refBasemapId && worldBaseTable) {
+        const hasOwnDataGeometry = Boolean(
+          calculateBoundsFromGeoArrow(firstTable)
+        );
+        if (hasOwnDataGeometry) {
+          untrack(() =>
+            mapBounds.fitToArrowBounds(firstTable, firstDatasetId, {
+              reason: 'dataset'
+            })
+          );
+        } else if (refBasemapId && worldBaseTable) {
           const bBounds = calculateBoundsFromGeoArrow(worldBaseTable);
           if (bBounds) {
             untrack(() =>
@@ -1691,12 +1737,6 @@
               })
             );
           }
-        } else {
-          untrack(() =>
-            mapBounds.fitToArrowBounds(firstTable, firstDatasetId, {
-              reason: 'dataset'
-            })
-          );
         }
       }
     }
@@ -1931,13 +1971,21 @@
 
     const preset = getBasemapViewportPreset(selectedStyle);
     if (preset) {
-      pendingMapLibreViewportPreset = preset.bounds;
+      pendingMapLibreViewportPreset = {
+        bounds: preset.bounds,
+        preferPreset: false
+      };
     }
   });
 
   $effect(() => {
     void basemapStyleStore.showLabels;
     untrack(() => mapBasemap.syncLabelsVisibility());
+  });
+
+  $effect(() => {
+    void getLocale();
+    untrack(() => mapBasemap.syncBasemapLanguage());
   });
 
   $effect(() => {
@@ -1949,6 +1997,7 @@
     void basemapStyleStore.viewportRequestVersion;
 
     const requestedStyle = basemapStyleStore.requestedViewportStyle;
+    const preferPreset = basemapStyleStore.requestedViewportPreferPreset;
     const preset = requestedStyle
       ? getBasemapViewportPreset(requestedStyle)
       : null;
@@ -1957,7 +2006,7 @@
       return;
     }
 
-    pendingMapLibreViewportPreset = preset.bounds;
+    pendingMapLibreViewportPreset = { bounds: preset.bounds, preferPreset };
 
     untrack(() => {
       if (
@@ -2035,7 +2084,8 @@
     filtersVersion,
     visualizationDataFiltersVersion,
     projectionVersion: projectionRenderTrigger,
-    selectedStep: globalState.selectedStep
+    selectedStep: globalState.selectedStep,
+    isMapExporting: globalState.isMapExporting
   });
 
   $effect(() => {
@@ -2055,7 +2105,12 @@
       mapInit.viewMode === ViewMode.ORTHOGRAPHIC &&
       !isSwitchingViewMode
     ) {
-      untrack(() => syncOrthographicViewportAfterViewModeSwitch('projection'));
+      untrack(() => {
+        syncOrthographicViewportAfterViewModeSwitch('projection', {
+          fitViewport: false
+        });
+        scheduleLayerUpdate('effect:projectionRenderTrigger');
+      });
     }
   });
 

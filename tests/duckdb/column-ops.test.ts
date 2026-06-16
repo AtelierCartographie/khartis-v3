@@ -30,7 +30,10 @@ afterAll(async () => {
 
 function duckClient(): DuckDBClient {
   return {
-    async query(sql: string): Promise<unknown> {
+    async query(sql: string, options?: { format?: string }): Promise<unknown> {
+      if (options?.format === 'array') {
+        return query(db, sql);
+      }
       await db.connection.run(sql);
       return undefined;
     },
@@ -71,6 +74,103 @@ describe('changeColumnType', () => {
       { id: 3, value: null, value_type: 'DOUBLE' },
       { id: 4, value: null, value_type: 'DOUBLE' }
     ]);
+  });
+
+  it('parses comma-decimal and thousands-separated values when forcing a number type', async () => {
+    await run(db, 'DROP TABLE IF EXISTS "type_change_comma"');
+    await run(
+      db,
+      `CREATE TABLE "type_change_comma" (id INTEGER, value VARCHAR)`
+    );
+    // Mixed column: the 'N/D' token blocks import-time auto-normalization, so it
+    // reaches manual coercion as VARCHAR with French comma decimals.
+    await run(
+      db,
+      `INSERT INTO "type_change_comma" VALUES
+        (1, '1,5'),
+        (2, '2,3'),
+        (3, '1.234,56'),
+        (4, '1 234,5'),
+        (5, 'N/D')`
+    );
+
+    const Duck = duckClient();
+    const result = await changeColumnType(
+      'type_change_comma',
+      'value',
+      'DOUBLE',
+      Duck
+    );
+
+    const rows = await query(
+      db,
+      `SELECT id, value FROM "type_change_comma" ORDER BY id`
+    );
+
+    expect(rows).toEqual([
+      { id: 1, value: 1.5 },
+      { id: 2, value: 2.3 },
+      { id: 3, value: 1234.56 },
+      { id: 4, value: 1234.5 },
+      { id: 5, value: null }
+    ]);
+    expect(result.invalidatedCount).toBe(1);
+  });
+
+  it('does not interpret US thousands as comma decimals', async () => {
+    await run(db, 'DROP TABLE IF EXISTS "type_change_us"');
+    await run(db, `CREATE TABLE "type_change_us" (id INTEGER, value VARCHAR)`);
+    await run(
+      db,
+      `INSERT INTO "type_change_us" VALUES (1, '1,234'), (2, '1,234,567')`
+    );
+
+    const Duck = duckClient();
+    await changeColumnType('type_change_us', 'value', 'DOUBLE', Duck);
+
+    const rows = await query(
+      db,
+      `SELECT id, value FROM "type_change_us" ORDER BY id`
+    );
+
+    expect(rows).toEqual([
+      { id: 1, value: 1234 },
+      { id: 2, value: 1234567 }
+    ]);
+  });
+
+  it('tolerates unparsable values when forcing a date type instead of failing', async () => {
+    await run(db, 'DROP TABLE IF EXISTS "type_change_date"');
+    await run(
+      db,
+      `CREATE TABLE "type_change_date" (id INTEGER, value VARCHAR)`
+    );
+    await run(
+      db,
+      `INSERT INTO "type_change_date" VALUES
+        (1, '2024-01-15'),
+        (2, 'not-a-date')`
+    );
+
+    const Duck = duckClient();
+    const result = await changeColumnType(
+      'type_change_date',
+      'value',
+      'DATE',
+      Duck
+    );
+
+    const rows = await query(
+      db,
+      `SELECT id, typeof(value) AS value_type, value IS NULL AS is_null
+       FROM "type_change_date" ORDER BY id`
+    );
+
+    expect(rows).toEqual([
+      { id: 1, value_type: 'DATE', is_null: false },
+      { id: 2, value_type: 'DATE', is_null: true }
+    ]);
+    expect(result.invalidatedCount).toBe(1);
   });
 });
 

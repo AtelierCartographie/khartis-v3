@@ -391,6 +391,10 @@ describe('basemap projection fallbacks', () => {
     expect(layer).toBeInstanceOf(GeoJsonLayer);
     expect(layer?.props.id).toContain('basemap-mers');
     expect(layer?.props.getFillColor).toEqual([18, 52, 86, 64]);
+    expect(layer?.props.parameters).toMatchObject({
+      depthCompare: 'always',
+      depthWriteEnabled: false
+    });
     expect(layer?.props.updateTriggers).toEqual({
       getFillColor: ['#123456', 25]
     });
@@ -422,6 +426,10 @@ describe('basemap projection fallbacks', () => {
     expect(layer).toBeInstanceOf(SolidPolygonLayer);
     expect(layer?.props.coordinateSystem).toBe(COORDINATE_SYSTEM.CARTESIAN);
     expect(layer?.props.getFillColor).toEqual([0, 109, 255, 255]);
+    expect(layer?.props.parameters).toMatchObject({
+      depthCompare: 'always',
+      depthWriteEnabled: false
+    });
     const polygonData = layer?.props.data as
       | {
           length: number;
@@ -516,6 +524,10 @@ describe('basemap projection fallbacks', () => {
 
     expect(layer).toBeInstanceOf(GeoJsonLayer);
     expect(layer?.props.coordinateSystem).toBe(COORDINATE_SYSTEM.CARTESIAN);
+    expect(layer?.props.parameters).toMatchObject({
+      depthCompare: 'always',
+      depthWriteEnabled: false
+    });
     expect(data?.features).toHaveLength(1);
     expect(coordinates).toEqual([
       [0, 0],
@@ -583,6 +595,53 @@ describe('basemap projection fallbacks', () => {
     ]);
   });
 
+  it('skips the mainland-only sphere polygon for composite projections so DOM-TOM insets stay covered (#195)', () => {
+    const composite = Object.assign(geoEquirectangular(), {
+      getSubProjections: () => [
+        {
+          id: 'mainland',
+          projection: geoEquirectangular(),
+          bounds: [-10, 35, 40, 72] as BBox,
+          screenExtent: [
+            [0, 0],
+            [960, 600]
+          ] as [[number, number], [number, number]]
+        },
+        {
+          id: 'overseas',
+          projection: geoEquirectangular(),
+          bounds: [50, -22, 56, -12] as BBox,
+          screenExtent: [
+            [0, 500],
+            [120, 600]
+          ] as [[number, number], [number, number]]
+        }
+      ]
+    }) as unknown as ProjectionLike;
+
+    const layer = createMersLayer(
+      {
+        id: 'mers',
+        visible: true,
+        color: '#006dff',
+        opacity: 100
+      },
+      {
+        projection: composite,
+        graticuleClipExtent: [
+          [0, 0],
+          [1030, 704]
+        ]
+      }
+    );
+
+    // geoEquirectangular alone yields a SolidPolygonLayer sphere (see above);
+    // wrapped as a composite, the mainland-only sphere must be bypassed in
+    // favour of the full composite coverage so the insets are not clipped out.
+    expect(layer).toBeInstanceOf(GeoJsonLayer);
+    expect(layer).not.toBeInstanceOf(SolidPolygonLayer);
+  });
+
   it('does not fall back to a raw lon/lat ocean rectangle when projected sphere parsing is empty', () => {
     const emptyProjection = {
       stream: () => ({
@@ -642,6 +701,46 @@ describe('basemap projection fallbacks', () => {
       ctx.projection
     );
     expect(layer).toBeInstanceOf(SolidPolygonLayer);
+  });
+
+  it('renders no stroke layer on the Arrow native path when strokeThickness is 0', () => {
+    const table = {} as ArrowTable;
+    const ctx = createProjectionContext();
+
+    extractGeometryInfoMock.mockReturnValue(createNativePolygonGeometryInfo());
+
+    const layers = createTerreLayers(
+      table,
+      { ...createTerreConfig(), strokeThickness: 0 },
+      ctx
+    );
+
+    expect(layers).toHaveLength(1);
+    expect(layers[0]).toBeInstanceOf(SolidPolygonLayer);
+    expect(layers.some((layer) => String(layer.id).endsWith('-stroke'))).toBe(
+      false
+    );
+  });
+
+  it('disables the stroke on the GeoJSON fallback path when strokeThickness is 0', () => {
+    const sourceGeoJSON = createPolygonGeoJSON('raw-land');
+    const table = {} as ArrowTable;
+    const ctx = createProjectionContext();
+
+    extractGeometryInfoMock.mockReturnValue(createPolygonGeometryInfo());
+    arrowTableToGeoJSONMock.mockReturnValue(sourceGeoJSON);
+    projectGeoJSONMock.mockImplementation((geojson) => geojson);
+
+    const layers = createTerreLayers(
+      table,
+      { ...createTerreConfig(), strokeThickness: 0 },
+      ctx
+    );
+    const layer = layers[0] as GeoJsonLayer | undefined;
+
+    expect(layer).toBeInstanceOf(GeoJsonLayer);
+    expect(layer?.props.stroked).toBe(false);
+    expect(layer?.props.getLineWidth).toBe(0);
   });
 
   it('projects generated equator lines when a custom projection is active', () => {
@@ -1146,6 +1245,75 @@ describe('basemap projection fallbacks', () => {
     expect(foregroundIds).not.toContain('basemap-meta-graticule');
   });
 
+  it('renders the Territoire from land metadata using the style preset fill', () => {
+    const landTable = { id: 'metadata-land' } as unknown as ArrowTable;
+    const worldBaseTable = { id: 'world-base' } as unknown as ArrowTable;
+    const ctx = createCompositeProjectionContext();
+
+    extractGeometryInfoMock.mockImplementation((table) =>
+      table === landTable ? createNativePolygonGeometryInfo() : null
+    );
+
+    const layers = createBasemapLayers(worldBaseTable, ctx, {
+      metadataLayers: [
+        {
+          table: landTable,
+          style: 'land',
+          type: BasemapLayerType.LAND,
+          file: 'monde-land.parquet'
+        }
+      ],
+      availableMetadataLayerTypes: [BasemapLayerType.LAND],
+      stylePresets: {
+        land: {
+          layer_type: 'solid-polygon',
+          fillColor: [220, 220, 220, 255],
+          stroked: false
+        }
+      }
+    });
+
+    const landLayer = layers.background.find(
+      (layer) =>
+        String(layer.props.id) === 'basemap-terre-basemap-default-land-0'
+    ) as SolidPolygonLayer | undefined;
+
+    expect(landLayer).toBeInstanceOf(SolidPolygonLayer);
+    expect(parseSolidPolygonsWithProjectionMock).toHaveBeenCalledWith(
+      landTable,
+      ctx.projection
+    );
+    expect(parseSolidPolygonsWithProjectionMock).not.toHaveBeenCalledWith(
+      worldBaseTable,
+      ctx.projection
+    );
+    expect(landLayer?.props.getFillColor).toEqual([220, 220, 220, 255]);
+  });
+
+  it('falls back to worldBaseTable for the Territoire when no land metadata exists', () => {
+    const worldBaseTable = { id: 'world-base' } as unknown as ArrowTable;
+    const ctx = createCompositeProjectionContext();
+
+    extractGeometryInfoMock.mockImplementation((table) =>
+      table === worldBaseTable ? createNativePolygonGeometryInfo() : null
+    );
+
+    const layers = createBasemapLayers(worldBaseTable, ctx, {
+      metadataLayers: [],
+      availableMetadataLayerTypes: [],
+      stylePresets: null
+    });
+
+    const ids = layers.background.map((layer) => String(layer.props.id));
+
+    expect(ids).toContain('basemap-terre-basemap-default');
+    expect(ids).not.toContain('basemap-terre-basemap-default-land-0');
+    expect(parseSolidPolygonsWithProjectionMock).toHaveBeenCalledWith(
+      worldBaseTable,
+      ctx.projection
+    );
+  });
+
   it('normalizes legacy meridiens remarquables while restoring serialized layers', () => {
     basemapLayersStore.restoreFromSerialized([
       {
@@ -1164,6 +1332,34 @@ describe('basemap projection fallbacks', () => {
     expect(layer?.spacingDegrees).toBe(15);
     expect(layer?.color).toBe('#123456');
     expect('remarquables' in (layer ?? {})).toBe(false);
+  });
+
+  it('preserves serialized basemap layer order while restoring', () => {
+    const meridiens = basemapLayersStore.getLayer(BASEMAP_LAYER_ID.MERIDIENS);
+    const equateur = basemapLayersStore.getLayer(BASEMAP_LAYER_ID.EQUATEUR);
+
+    if (!meridiens || !equateur) {
+      throw new Error('Expected default foreground basemap layers');
+    }
+
+    basemapLayersStore.restoreFromSerialized([
+      {
+        ...meridiens,
+        visible: true
+      },
+      {
+        ...equateur,
+        visible: true
+      }
+    ]);
+
+    expect(
+      basemapLayersStore.layers.map((layer) => layer.id).slice(0, 2)
+    ).toEqual([BASEMAP_LAYER_ID.MERIDIENS, BASEMAP_LAYER_ID.EQUATEUR]);
+    expect(
+      basemapLayersStore.getLayer(BASEMAP_LAYER_ID.MERIDIENS)?.visible
+    ).toBe(true);
+    expect(basemapLayersStore.layers).toHaveLength(10);
   });
 
   it('falls back to the default meridiens mode when serialized mode is invalid', () => {
@@ -1855,15 +2051,15 @@ describe('basemap projection fallbacks', () => {
     expect(labelLayer?.props.data).toBe(projectedCities);
   });
 
-  it('does not render meta-land when worldBaseTable is null', () => {
+  it('renders the Territoire from LAND metadata even when worldBaseTable is null', () => {
     const metadataTable = { id: 'land' } as unknown as ArrowTable;
-    const ctx = createProjectionContext();
+    const ctx = createCompositeProjectionContext();
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.FRONTIERES, false);
 
     extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === metadataTable ? createPolygonGeometryInfo() : null
+      table === metadataTable ? createNativePolygonGeometryInfo() : null
     );
 
     const layers = createBasemapLayers(null, ctx, {
@@ -1872,40 +2068,37 @@ describe('basemap projection fallbacks', () => {
           table: metadataTable,
           style: null,
           type: BasemapLayerType.LAND,
-          file: 'land.geojson'
+          file: 'land.parquet'
         } satisfies MetadataLayerEntry
       ],
       availableMetadataLayerTypes: [BasemapLayerType.LAND],
       stylePresets: null
     });
 
-    const metaLandLayer = layers.background.find((layer) =>
-      String(layer.props.id).includes('basemap-meta-land')
-    );
     const terreLayer = layers.background.find((layer) =>
       String(layer.props.id).includes('basemap-terre')
     );
 
-    expect(metaLandLayer).toBeUndefined();
-    expect(terreLayer).toBeUndefined();
+    expect(terreLayer).toBeDefined();
+    expect(String(terreLayer?.props.id)).toBe(
+      'basemap-terre-basemap-default-land-0'
+    );
+    expect(parseSolidPolygonsWithProjectionMock).toHaveBeenCalledWith(
+      metadataTable,
+      ctx.projection
+    );
   });
 
-  it('renders terre only (no meta-land) when both worldBaseTable and LAND metadata exist', () => {
+  it('renders the Territoire from LAND metadata, not worldBaseTable, when both exist', () => {
     const worldBaseTable = { id: 'world-base' } as unknown as ArrowTable;
     const metadataTable = { id: 'land-backdrop' } as unknown as ArrowTable;
-    const worldGeoJSON = createPolygonGeoJSON('raw-world-land');
-    const ctx = createProjectionContext();
+    const ctx = createCompositeProjectionContext();
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.FRONTIERES, false);
 
     extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === worldBaseTable || table === metadataTable
-        ? createPolygonGeometryInfo()
-        : null
-    );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
-      table === worldBaseTable ? worldGeoJSON : null
+      table === metadataTable ? createNativePolygonGeometryInfo() : null
     );
 
     const layers = createBasemapLayers(worldBaseTable, ctx, {
@@ -1914,22 +2107,29 @@ describe('basemap projection fallbacks', () => {
           table: metadataTable,
           style: 'land',
           type: BasemapLayerType.LAND,
-          file: 'land.geojson'
+          file: 'land.parquet'
         } satisfies MetadataLayerEntry
       ],
       availableMetadataLayerTypes: [BasemapLayerType.LAND],
       stylePresets: null
     });
 
-    const metaLandLayer = layers.background.find((layer) =>
-      String(layer.props.id).includes('basemap-meta-land')
-    );
     const terreLayer = layers.background.find((layer) =>
       String(layer.props.id).includes('basemap-terre')
     );
 
-    expect(metaLandLayer).toBeUndefined();
     expect(terreLayer).toBeDefined();
+    expect(String(terreLayer?.props.id)).toBe(
+      'basemap-terre-basemap-default-land-0'
+    );
+    expect(parseSolidPolygonsWithProjectionMock).toHaveBeenCalledWith(
+      metadataTable,
+      ctx.projection
+    );
+    expect(parseSolidPolygonsWithProjectionMock).not.toHaveBeenCalledWith(
+      worldBaseTable,
+      ctx.projection
+    );
   });
 
   it('projects metadata limit fallbacks inside createBasemapLayers', () => {
@@ -2310,7 +2510,7 @@ describe('basemap projection fallbacks', () => {
     expect(dottedProps._subLayerProps.linestrings.extensions).toHaveLength(1);
     expect(dottedProps.updateTriggers).toMatchObject({
       getLineColor: ['#123456', 1],
-      getDashArray: [true, BasemapDottedPattern.DASHES],
+      getDashArray: [8, 4],
       getLineWidth: [BASEMAP_LAYER_CONFIG.thickness.max]
     });
   });

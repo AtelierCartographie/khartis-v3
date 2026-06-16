@@ -86,6 +86,7 @@ Errors derive from `PipelineError` (`commons/pipeline.errors.ts`); user-facing e
 - **Carbon Design System for all UI** — never raw native `<input>`/`<button>`/`<select>`. Carbon is shipped as Svelte 4 source, so some events misfire under Svelte 5: `<Slider>` use `on:input` only (never `on:change`); `<Checkbox>` use `on:change` only (never `on:check`); `<RadioButtonGroup on:change>` early-return when the value didn't change.
 - **i18n via Paraglide** — all visible text through `import * as m from '$lib/paraglide/messages'` then `m.key()`. Keys are `snake_case` in `messages/fr.json` + `messages/en.json` (update **both**; FR is the reference). Never edit generated files in `src/lib/paraglide/`.
 - **Logging** — use `$lib/features/commons/utils/logger`, never `console.log` in production code.
+- **Map exports** — image/SVG export must render the layout as Habillage through `globalState.isMapExporting`; do not switch `selectedStep` just to capture an export.
 - **TypeScript strict** — no `any`; prefer `unknown` + narrowing.
 - **kebab-case** file names. No magic strings (use constants/enums/literal types). No comments unless they explain a non-obvious invariant or workaround.
 - **Conventional Commits** (`feat:`, `fix:`, `refactor:`, `perf:`, `test:`, `docs:`, `chore:`).
@@ -94,24 +95,24 @@ Errors derive from `PipelineError` (`commons/pipeline.errors.ts`); user-facing e
 
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **khartis-v3** (15891 symbols, 29354 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **khartis-v3** (16032 symbols, 29627 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
-> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
+> Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
 ## Always Do
 
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "staging"})`.
 - **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
+- When exploring unfamiliar code, use `query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
 
 ## Never Do
 
-- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
+- NEVER edit a function, class, or method without first running `impact` on it.
 - NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
-- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
+- NEVER rename symbols with find-and-replace — use `rename` which understands the call graph.
+- NEVER commit changes without running `detect_changes()` to check affected scope.
 
 ## Resources
 

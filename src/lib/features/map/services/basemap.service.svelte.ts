@@ -1177,7 +1177,7 @@ function createBasemapService() {
           tempTableName
         );
       } catch (error) {
-        logger.error(
+        logger.warn(
           'Failed to materialize catalog parquet with ST_Read, using read_parquet fallback',
           LogCategory.MAP,
           error

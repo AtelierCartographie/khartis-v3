@@ -16,18 +16,18 @@
     Add,
     ChevronDown,
     ColorPalette,
-    DataBase,
-    Earth,
-    EdgeNode,
-    Edit,
+    Compass,
+    Crop,
+    DataTable,
+    Globe,
     Grid as GridIcon,
     Layers,
     Legend,
-    Location,
-    RulerAlt,
     Search,
-    TextFont,
-    View
+    SettingsView,
+    ToolsAlt,
+    WatsonHealthScalpelSelect,
+    WatsonHealthTextAnnotationToggle
   } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import ToolPopover from '../step-toolbar/tool-popover.svelte';
@@ -49,17 +49,17 @@
 
   let activeVizSubTab = $state<VizSubTab>(VizSubTab.CHOOSE);
 
-  const vizSubTabs = [
+  const vizSubTabs = $derived.by(() => [
     { id: VizSubTab.CHOOSE, label: m.mobile_viz_tab_choose() },
     { id: VizSubTab.CONFIGURE, label: m.mobile_viz_tab_configure() },
     { id: VizSubTab.CUSTOMIZE, label: m.mobile_viz_tab_customize() }
-  ] as const;
+  ]);
 
-  const stepLabels = {
+  const stepLabels = $derived.by(() => ({
     [ToolbarStep.Data]: m.step_data(),
     [ToolbarStep.Visualizations]: m.step_visualizations(),
     [ToolbarStep.Styling]: m.step_styling()
-  };
+  }));
 
   const vizCount = $derived(
     visualizationStore.activeVisualizations?.length ?? 0
@@ -139,10 +139,10 @@
           <ColorPalette size={20} />
           <h2>{m.step_visualizations()} ({vizCount})</h2>
         {:else if globalState.selectedStep === ToolbarStep.Data}
-          <DataBase size={20} />
+          <DataTable size={20} />
           <h2>{stepLabels[ToolbarStep.Data]}</h2>
         {:else}
-          <RulerAlt size={20} />
+          <ToolsAlt size={20} />
           <h2>{stepLabels[ToolbarStep.Styling]}</h2>
         {/if}
       </div>
@@ -241,7 +241,7 @@
           {#if globalState.selectedTool === VisualizationTools.Projection}
             <span class="tool-active-indicator"></span>
           {/if}
-          <Earth size={20} />
+          <Globe size={20} />
         </button>
         <button
           type="button"
@@ -255,7 +255,7 @@
           {#if globalState.selectedTool === VisualizationTools.Simplification}
             <span class="tool-active-indicator"></span>
           {/if}
-          <EdgeNode size={20} />
+          <WatsonHealthScalpelSelect size={20} />
         </button>
         <button
           type="button"
@@ -280,7 +280,7 @@
           {#if globalState.selectedTool === StylingTools.Format}
             <span class="tool-active-indicator"></span>
           {/if}
-          <TextFont size={20} />
+          <Crop size={20} />
         </button>
         <div class="mobile-tool-wrapper">
           <button
@@ -311,7 +311,7 @@
           {#if globalState.selectedTool === StylingTools.GeoIndications}
             <span class="tool-active-indicator"></span>
           {/if}
-          <Location size={20} />
+          <Compass size={20} />
         </button>
         <button
           type="button"
@@ -323,7 +323,7 @@
           {#if globalState.selectedTool === StylingTools.Annotations}
             <span class="tool-active-indicator"></span>
           {/if}
-          <Edit size={20} />
+          <WatsonHealthTextAnnotationToggle size={20} />
         </button>
         <button
           type="button"
@@ -337,7 +337,7 @@
           {#if globalState.selectedTool === StylingTools.ColorBlindness}
             <span class="tool-active-indicator"></span>
           {/if}
-          <View size={20} />
+          <SettingsView size={20} />
         </button>
       {/if}
     </nav>
@@ -366,7 +366,7 @@
       onclick={() => selectStep(ToolbarStep.Data)}
       aria-pressed={isStepSelected(ToolbarStep.Data)}
     >
-      <DataBase size={24} />
+      <DataTable size={24} />
       <span>{stepLabels[ToolbarStep.Data]}</span>
     </button>
 
@@ -388,7 +388,7 @@
       onclick={() => selectStep(ToolbarStep.Styling)}
       aria-pressed={isStepSelected(ToolbarStep.Styling)}
     >
-      <RulerAlt size={24} />
+      <ToolsAlt size={24} />
       <span>{stepLabels[ToolbarStep.Styling]}</span>
     </button>
   </nav>

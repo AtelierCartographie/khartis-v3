@@ -20,7 +20,6 @@ export interface GlobalState {
   isCreateProjectModalOpen: boolean;
   isDuplicateModalOpen: boolean;
   isDeleteModalOpen: boolean;
-  isOfflinePanelOpen: boolean;
   selectedStep: ToolbarStep;
   selectedTool?: StylingTools | VisualizationTools;
   toolbarState: ToolbarState;
@@ -30,6 +29,7 @@ export interface GlobalState {
   isMobileView: boolean;
   isMobileToolbarOpen: boolean;
   isToolbarTransitioning: boolean;
+  isMapExporting: boolean;
 }
 
 export const enum ToolbarStep {

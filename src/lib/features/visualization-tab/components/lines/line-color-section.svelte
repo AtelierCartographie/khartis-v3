@@ -37,7 +37,12 @@
     getSelectedFieldIds(slot: FacetSlotPath): number[];
     isActiveForSlot(slot: FacetSlotPath): boolean;
     updateVariables(column: string, slot: FacetSlotPath, ids: number[]): void;
-    toggle(column: string, slot: FacetSlotPath, enabled: boolean): void;
+    toggle(
+      column: string,
+      slot: FacetSlotPath,
+      enabled: boolean,
+      fieldIds?: number[]
+    ): void;
   }
 
   interface Props {
@@ -224,8 +229,8 @@
           FACET_SLOT.LINE_VALUE,
           ids
         )}
-      onToggleCollection={(en) =>
-        facetsSelection.toggle(valueColumnName, FACET_SLOT.LINE_VALUE, en)}
+      onToggleCollection={(en, ids) =>
+        facetsSelection.toggle(valueColumnName, FACET_SLOT.LINE_VALUE, en, ids)}
     />
   </div>
   <DiscretizationRow
@@ -280,11 +285,12 @@
           FACET_SLOT.LINE_CATEGORY,
           ids
         )}
-      onToggleCollection={(en) =>
+      onToggleCollection={(en, ids) =>
         facetsSelection.toggle(
           categoryColumnName,
           FACET_SLOT.LINE_CATEGORY,
-          en
+          en,
+          ids
         )}
     />
   </div>

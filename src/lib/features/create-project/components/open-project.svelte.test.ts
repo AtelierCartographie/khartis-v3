@@ -16,4 +16,9 @@ describe('OpenProject', () => {
     expect(source).toContain('<div use:appendToBody>');
     expect(source).toContain('bind:open={showDeleteConfirm}');
   });
+
+  it('uses neutral gray cards for saved backup previews', () => {
+    expect(source).toContain('variant="gray"');
+    expect(source).not.toContain('variant="blue"');
+  });
 });

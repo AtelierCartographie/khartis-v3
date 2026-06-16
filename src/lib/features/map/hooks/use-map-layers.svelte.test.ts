@@ -21,6 +21,14 @@ describe('useMapLayers source', () => {
     );
   });
 
+  it('uses per-layer default visibility before rendering catalog metadata layers', () => {
+    expect(source).toContain('getBasemapAuxLayerDefaultVisibility');
+    expect(source).toContain('const defaultVisible =');
+    expect(source).toContain(
+      'basemapAuxLayersStore.isVisible(\n                  currentMetadata.file,\n                  layerKey,\n                  defaultVisible\n                )'
+    );
+  });
+
   it('falls back to DuckDB metadata when resolving source table names', () => {
     expect(source).toContain(
       'duckDBOrchestrator.getDatasetBySourceFile(dataset.sourceFileId)'
@@ -46,6 +54,8 @@ describe('useMapLayers source', () => {
       /function getRequestedMetadataLayerTypes[\s\S]*?return \[\.\.\.requestedTypes\];\n\s*\}/
     )?.[0];
 
+    expect(body).toContain("case 'terre':");
+    expect(body).toContain('requestedTypes.add(BasemapLayerType.LAND)');
     expect(body).toContain("case 'frontieres':");
     expect(body).toContain('requestedTypes.add(BasemapLayerType.LIMIT)');
     expect(body).toContain("case 'villes':");
@@ -176,7 +186,7 @@ describe('useMapLayers source', () => {
       'getMatchedSplitTable(rawRepresentativePointBaseTable, split)'
     );
     expect(source).not.toContain('manualProjectionBasemapTable');
-    expect(source).toContain('getRequestedMetadataLayerTypes(worldBaseTable)');
+    expect(source).toContain('getRequestedMetadataLayerTypes()');
     expect(source).toContain(
       'createBasemapLayers(\n            shouldShowBasemapLayers ? worldBaseTable : null,'
     );
@@ -185,10 +195,22 @@ describe('useMapLayers source', () => {
   it('filters split representative point tables through the joined dataset rows', () => {
     expect(source).toContain('function filterSplitGeometryTableByDatasetRows(');
     expect(source).toContain(
+      'function filterRepresentativePointTableByPrimitive('
+    );
+    expect(source).toContain(
       'const dataFilteredDataset = filterArrowTableByDataFilters(\n      split.dataset,'
     );
     expect(source).toContain(
-      'filterSplitGeometryTableByDatasetRows(\n                    representativePointBaseTable,\n                    split,\n                    viz.dataFilters,\n                    PrimitiveFilterType.POINT'
+      'filterRepresentativePointTableByPrimitive(\n                  representativePointBaseTable,\n                  split,\n                  viz.dataFilters,\n                  PrimitiveFilterType.POINT,'
+    );
+    expect(source).toContain(
+      'filterRepresentativePointTableByPrimitive(\n                  representativePointBaseTable,\n                  split,\n                  viz.dataFilters,\n                  PrimitiveFilterType.TEXT,'
+    );
+    expect(source).toContain(
+      'ctx.textRepresentativePointTable =\n                filteredTextRepresentativePointTable;'
+    );
+    expect(source).toContain(
+      'ctx.textPointTable =\n              geoInfo?.type === GeometryType.POINT'
     );
     expect(source).toContain(
       'getSplitMatchedGeometryRowIndices(\n      matchedGeometryTable,\n      filteredDataset,'
@@ -215,19 +237,19 @@ describe('useMapLayers source', () => {
     );
   });
 
-  it('applies simplified projection preview by masking visualization and fallback layers', () => {
+  it('keeps active visualizations while simplified projection preview masks fallback layers', () => {
     expect(source).toContain('const shouldUseSimplifiedProjectionPreview =');
     expect(source).toContain(
       'computeSimplifiedProjectionPreview(isOrthographicMode, projectionState)'
     );
     expect(source).toContain(
-      'const visualizationsToRender = shouldUseSimplifiedProjectionPreview\n        ? []'
+      'const visualizationsToRender =\n        getVisualizationRenderOrder(activeVisualizations);'
     );
     expect(source).toContain(
       '(getShouldRenderDatasetFallbacks?.() ?? false) &&\n        !shouldUseSimplifiedProjectionPreview'
     );
     expect(source).toContain(
-      'const hasExpectedActiveViz =\n        !shouldUseSimplifiedProjectionPreview &&\n        activeVisualizations.length > 0;'
+      'const hasExpectedActiveViz = activeVisualizations.some(\n        visualizationHasEnabledPrimitive\n      );'
     );
   });
 

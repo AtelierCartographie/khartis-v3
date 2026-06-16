@@ -5,15 +5,16 @@
   import { m } from '$lib/paraglide/messages.js';
   import { Column, Grid, Row } from 'carbon-components-svelte';
   import {
-    Earth,
-    EdgeNode,
+    Globe,
     Grid as GridIcon,
     Layers,
-    Search
+    Search,
+    WatsonHealthScalpelSelect
   } from 'carbon-icons-svelte';
   import { selectTool } from './tool-list.utils.svelte';
   import ToolsListContainer from './tools-list-container.svelte';
   import { STORAGE_KEYS, CSS_CLASSES } from '../step-toolbar.constants';
+  import { facetsStore } from '../tools/facets';
 
   let hasOpenedProjectionTool = $state(
     typeof window !== 'undefined' &&
@@ -27,7 +28,7 @@
   );
 
   const showProjectionBadge = $derived(!hasOpenedProjectionTool);
-  const showFacetsBadge = $derived(!hasOpenedFacetsTool);
+  const showFacetsBadge = $derived(!hasOpenedFacetsTool || facetsStore.enabled);
 
   function handleProjectionClick() {
     hasOpenedProjectionTool = true;
@@ -89,7 +90,7 @@
             tooltipPosition="right"
             kind="ghost"
             iconDescription={m.tool_projection()}
-            icon={Earth}
+            icon={Globe}
             size="small"
             isSelected={globalState.selectedTool ===
               VisualizationTools.Projection}
@@ -108,7 +109,7 @@
           tooltipPosition="right"
           kind="ghost"
           iconDescription={m.tool_simplification()}
-          icon={EdgeNode}
+          icon={WatsonHealthScalpelSelect}
           size="small"
           isSelected={globalState.selectedTool ===
             VisualizationTools.Simplification}

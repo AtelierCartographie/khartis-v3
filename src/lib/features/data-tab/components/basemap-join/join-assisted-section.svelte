@@ -126,6 +126,10 @@
     availableBasemapValues.map((value) => buildBasemapComboBoxItem(value))
   );
 
+  const joinedValueSignature = $derived(
+    Array.from(joinedBasemapValueSet).sort().join('')
+  );
+
   function buildBasemapComboBoxItem(value: string): ComboBoxItem {
     const aliases = basemapAliasesByValue?.[value] ?? [];
     const searchText = [value, ...aliases.map((alias) => alias.value)]
@@ -465,6 +469,12 @@
   });
 
   $effect(() => {
+    if (hasInitializedExpanded && !loading && toVerifyCount === 0) {
+      toVerifyExpanded = false;
+    }
+  });
+
+  $effect(() => {
     if (!loading) {
       notificationSnapshot = currentNotificationState;
     }
@@ -595,35 +605,37 @@
                           {@const joinedRowOptions = buildJoinedRowOptions(
                             row.basemapValue
                           )}
-                          <ComboBox
-                            items={joinedRowOptions}
-                            selectedId={row.basemapValue}
-                            placeholder={row.basemapValue}
-                            labelText={m.join_select_label_joined({
-                              entity: row.dataValue
-                            })}
-                            hideLabel
-                            size="sm"
-                            shouldFilterItem={shouldFilterBasemapItem}
-                            on:select={(e) => {
-                              const item = e.detail.selectedItem as
-                                | ComboBoxItem
-                                | undefined;
-                              const nextValue = item?.text;
-                              if (
-                                nextValue &&
-                                nextValue !== row.basemapValue &&
-                                onManualCorrection
-                              ) {
-                                onManualCorrection(row.dataValue, nextValue);
-                                announce(
-                                  m.join_announce_remapped({
-                                    entity: row.dataValue
-                                  })
-                                );
-                              }
-                            }}
-                          />
+                          {#key joinedValueSignature}
+                            <ComboBox
+                              items={joinedRowOptions}
+                              selectedId={row.basemapValue}
+                              placeholder={row.basemapValue}
+                              labelText={m.join_select_label_joined({
+                                entity: row.dataValue
+                              })}
+                              hideLabel
+                              size="sm"
+                              shouldFilterItem={shouldFilterBasemapItem}
+                              on:select={(e) => {
+                                const item = e.detail.selectedItem as
+                                  | ComboBoxItem
+                                  | undefined;
+                                const nextValue = item?.text;
+                                if (
+                                  nextValue &&
+                                  nextValue !== row.basemapValue &&
+                                  onManualCorrection
+                                ) {
+                                  onManualCorrection(row.dataValue, nextValue);
+                                  announce(
+                                    m.join_announce_remapped({
+                                      entity: row.dataValue
+                                    })
+                                  );
+                                }
+                              }}
+                            />
+                          {/key}
                         {:else}
                           <div class="select-placeholder" aria-hidden="true">
                             {row.basemapValue}
@@ -849,23 +861,25 @@
                     <div class="table-cell cell-select">
                       {#if visibleUnrecognizedRows.has(entity)}
                         {#if basemapComboBoxItems.length > 0 && onManualCorrection}
-                          <ComboBox
-                            items={basemapComboBoxItems}
-                            placeholder={m.join_unrecognized_correction_placeholder()}
-                            labelText={m.join_select_label_unrecognized({
-                              entity
-                            })}
-                            hideLabel
-                            size="sm"
-                            shouldFilterItem={shouldFilterBasemapItem}
-                            on:select={(e) =>
-                              handleUnrecognizedSelect(
-                                entity,
-                                e.detail.selectedItem as
-                                  | ComboBoxItem
-                                  | undefined
-                              )}
-                          />
+                          {#key basemapComboBoxItems}
+                            <ComboBox
+                              items={basemapComboBoxItems}
+                              placeholder={m.join_unrecognized_correction_placeholder()}
+                              labelText={m.join_select_label_unrecognized({
+                                entity
+                              })}
+                              hideLabel
+                              size="sm"
+                              shouldFilterItem={shouldFilterBasemapItem}
+                              on:select={(e) =>
+                                handleUnrecognizedSelect(
+                                  entity,
+                                  e.detail.selectedItem as
+                                    | ComboBoxItem
+                                    | undefined
+                                )}
+                            />
+                          {/key}
                         {:else}
                           <Select
                             id={`unrecognized-${entity}`}

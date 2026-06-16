@@ -1,5 +1,6 @@
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import * as m from '$lib/paraglide/messages';
 import { DUCK_CONST } from '../constants';
 import type { DuckDBClientForArrow } from '../orchestrator/arrow-ops';
@@ -16,43 +17,6 @@ export interface SimplificationOptions {
   createView?: boolean;
   inputTableName?: string;
   targetTableName?: string;
-}
-
-function buildFallbackSimplificationSelect(
-  inputTableName: string,
-  geometryColumn: string,
-  tolerance: number
-): string {
-  const escapedInputTable = escapeIdentifier(inputTableName);
-  const escapedGeometryColumn = escapeIdentifier(geometryColumn);
-  const escapedGeom = escapeIdentifier('geom');
-  const metricExpression = `CASE
-    WHEN CAST(ST_GeometryType("${escapedGeometryColumn}") AS VARCHAR) IN ('LINESTRING', 'MULTILINESTRING')
-      THEN ST_Length("${escapedGeometryColumn}")
-    ELSE ST_Perimeter("${escapedGeometryColumn}")
-  END`;
-  const simplifiedExpression = `CASE
-    WHEN "${escapedGeometryColumn}" IS NULL THEN NULL
-    ELSE ST_Simplify("${escapedGeometryColumn}", COALESCE(computed_tolerance, 0.0))
-  END`;
-
-  if (geometryColumn === 'geom') {
-    return `WITH simplification_metric AS (
-      SELECT COALESCE(AVG(${metricExpression}) * ${tolerance} * 0.05, 0.0) AS computed_tolerance
-      FROM "${escapedInputTable}"
-      WHERE "${escapedGeometryColumn}" IS NOT NULL
-    )
-    SELECT * REPLACE (${simplifiedExpression} AS "${escapedGeom}")
-    FROM "${escapedInputTable}", simplification_metric`;
-  }
-
-  return `WITH simplification_metric AS (
-    SELECT COALESCE(AVG(${metricExpression}) * ${tolerance} * 0.05, 0.0) AS computed_tolerance
-    FROM "${escapedInputTable}"
-    WHERE "${escapedGeometryColumn}" IS NOT NULL
-  )
-  SELECT * EXCLUDE ("${escapedGeometryColumn}"), ${simplifiedExpression} AS "${escapedGeom}"
-  FROM "${escapedInputTable}", simplification_metric`;
 }
 
 async function countVertices(
@@ -116,18 +80,20 @@ export async function simplifyGeometryTable(
     `);
   } catch (error) {
     logger.error(
-      'Failed to simplify geometry with simplify_and_clean macro, using SQL fallback',
+      'Topology-preserving simplification failed; geometry left unsimplified',
       LogCategory.DUCKDB,
       error
     );
-    await Duck.query(`
-      ${createStatement} "${escapedTarget}" AS
-      ${buildFallbackSimplificationSelect(
+    throw new DuckDBError(
+      'Topology-preserving simplification failed',
+      undefined,
+      {
+        sourceTable,
         inputTableName,
-        geometryColumn,
-        tolerance
-      )}
-    `);
+        tolerance,
+        cause: error instanceof Error ? error.message : String(error)
+      }
+    );
   }
 
   // The simplify_and_clean macro always normalizes the geometry column to 'geom'

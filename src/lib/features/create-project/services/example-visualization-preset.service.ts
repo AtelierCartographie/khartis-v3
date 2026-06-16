@@ -410,9 +410,17 @@ export function applyExampleVisualizationPresets(
       );
     const suggestionKey = getSuggestionSignature(suggestion);
 
+    // Examples are pre-configured suggestions, not user-diverged visualizations.
+    // Tagging them `custom` made `resolveDisplayedSuggestionKey` return
+    // undefined (custom => unchecked), so the suggestion card radio never
+    // reflected the applied suggestion — and the first click on that card
+    // resolved to `clear` (origin.suggestionKey === card key), toggling the
+    // suggestion OFF instead of showing it selected. Tagging the applied
+    // suggestion as `manual-suggestion` lets the persisted key drive the radio,
+    // so it reads as selected and the click semantics (re-click = deselect) work.
     applySuggestionToVisualization(targetVisualization.id, suggestion, {
       origin: buildSuggestionOrigin(targetVisualization, {
-        mode: 'custom',
+        mode: 'manual-suggestion',
         suggestionKey
       })
     });

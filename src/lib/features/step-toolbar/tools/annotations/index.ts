@@ -8,6 +8,7 @@ export type {
   AnnotationCoordinateSpace,
   AnnotationCreationMode,
   Annotation,
+  AnnotationDataAnchor,
   AnnotationStyle,
   AnnotationPlacementPreview
 } from '../../types/annotations.types';

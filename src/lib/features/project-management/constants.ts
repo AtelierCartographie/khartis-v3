@@ -19,5 +19,5 @@ export const PROJECT_CONST = {
   TIMINGS: {
     AUTO_SAVE_DELAY: 750
   },
-  APP_VERSION: '3.7.0'
+  APP_VERSION: '3.8.0'
 } as const;

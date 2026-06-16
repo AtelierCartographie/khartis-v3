@@ -405,9 +405,11 @@ export async function deserializeProjectData(
     }
   }
 
-  persistenceRegistry.resetAll();
-  const storeData = mapSerializedFormatToRegistry(data);
-  persistenceRegistry.deserializeAll(storeData);
+  await persistenceRegistry.withPersistenceSuspended(() => {
+    persistenceRegistry.resetAll();
+    const storeData = mapSerializedFormatToRegistry(data);
+    persistenceRegistry.deserializeAll(storeData);
+  });
 
   return deserialized;
 }

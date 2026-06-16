@@ -19,6 +19,7 @@ import { dataTabState } from '../data-tab.store.svelte';
 import { datasetsStore } from '../datasets.store.svelte';
 import { downloadFile } from '../../utils/file-export.utils';
 import { LogCategory, logger } from '../../utils/logger';
+import { captureMapThumbnail } from '../../utils/map-thumbnail.utils';
 import { showError } from '../../utils/notification.utils.svelte';
 import { resolvePersistedJoinState } from '../../utils/persisted-join-state.utils';
 import { generateProjectFilename } from '../../utils/string.utils';
@@ -30,6 +31,10 @@ import {
   beginProjectRuntime,
   resetProjectRuntimeState
 } from './project-runtime.svelte';
+
+export interface SaveCurrentProjectOptions {
+  fallbackThumbnail?: string;
+}
 
 function syncGeoInfoToSourceFiles(container: ProjectStateContainer): void {
   const files = container._state.currentProject?.data?.sourceFiles;
@@ -140,7 +145,8 @@ async function mergePersistedSourceFiles(
 }
 
 export async function saveCurrentProject(
-  container: ProjectStateContainer
+  container: ProjectStateContainer,
+  options: SaveCurrentProjectOptions = {}
 ): Promise<void> {
   if (!container._state.currentProject) {
     return;
@@ -159,7 +165,10 @@ export async function saveCurrentProject(
 
     container._state.currentProject.manifest.updatedAt = new Date();
 
-    await projectRepository.save(container._state.currentProject);
+    const thumbnail =
+      captureMapThumbnail()?.dataUrl ?? options.fallbackThumbnail;
+
+    await projectRepository.save(container._state.currentProject, thumbnail);
     persistenceRegistry.markClean();
     container._state.isDirty = false;
     container._state.lastSaved = new Date();
@@ -215,7 +224,7 @@ export async function importProject(
 
     container._state.currentProject = project;
     beginProjectRuntime(project.id);
-    resetProjectRuntimeState();
+    resetProjectRuntimeState({ resetPersistence: false });
     container._state.isDirty = false;
     container._state.lastSaved = new Date();
     resetHistory(container);

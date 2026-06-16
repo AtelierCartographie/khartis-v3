@@ -76,6 +76,13 @@ describe('ZoomToolbar debug panel', () => {
     expect(source).toContain('triggerText={`${metric.label} ${metric.value}`}');
   });
 
+  it('exposes a visible reset zoom button wired to the fit action', () => {
+    expect(source).toContain('ZoomReset');
+    expect(source).toContain('iconDescription={m.zoom_reset()}');
+    expect(source).toContain('on:click={fitActiveMode}');
+    expect(source).toContain('grid-template-columns: repeat(3, 50px);');
+  });
+
   it('maps debug badge states to green, yellow, and red backgrounds', () => {
     expect(source).toContain('.zoom-debug-metric--good');
     expect(source).toContain(

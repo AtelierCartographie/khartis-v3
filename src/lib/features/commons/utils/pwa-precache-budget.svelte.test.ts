@@ -42,10 +42,10 @@ describe.skipIf(!hasBuild)('PWA precache budget', () => {
     expect(cssCount).toBeLessThanOrEqual(CSS_PRECACHE_LIMIT);
   });
 
-  it('precaches the navigation fallback (index.html)', () => {
-    const matchesUrl = /url:["'][^"']*index\.html["']/.test(swContent);
-    const matchesString = /["'][^"']*\/index\.html["']/.test(swContent);
-    expect(matchesUrl || matchesString).toBe(true);
+  it('precaches the navigation fallback scope root', () => {
+    const matchesUrl =
+      /["']?url["']?:["']\/cartographie\/khartisnewpprd\/["']/.test(swContent);
+    expect(matchesUrl).toBe(true);
   });
 
   it('registers the geopf-vector-tiles runtime cache', () => {
@@ -60,7 +60,7 @@ describe.skipIf(!hasBuild)('PWA precache budget', () => {
     expect(swContent).toMatch(/presets/);
   });
 
-  it('handles CLEAR_OFFLINE_CACHE messages from clients', () => {
-    expect(swContent).toContain('CLEAR_OFFLINE_CACHE');
+  it('handles FACTORY_RESET messages from clients', () => {
+    expect(swContent).toContain('FACTORY_RESET');
   });
 });

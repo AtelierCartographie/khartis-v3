@@ -24,7 +24,28 @@ describe('serializer restore contract', () => {
     );
   });
 
+  it('restores registry-backed stores with persistence notifications suspended', () => {
+    const deserializeProjectDataSource = getDeserializeProjectDataSource();
+
+    expect(deserializeProjectDataSource).toContain(
+      'await persistenceRegistry.withPersistenceSuspended(() => {'
+    );
+    expect(deserializeProjectDataSource).toContain(
+      'persistenceRegistry.resetAll();'
+    );
+    expect(deserializeProjectDataSource).toContain(
+      'persistenceRegistry.deserializeAll(storeData);'
+    );
+  });
+
   it('uses structured logging instead of console.error in the persistence core', () => {
     expect(source).not.toContain('console.error(');
+  });
+
+  it('persists and restores projection layout settings through project data', () => {
+    expect(source).toContain('projection: stores.projection');
+    expect(source).toContain(
+      'if (ls.projection) stores.projection = ls.projection;'
+    );
   });
 });

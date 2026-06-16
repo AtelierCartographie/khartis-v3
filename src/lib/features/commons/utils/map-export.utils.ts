@@ -1,4 +1,5 @@
 import * as m from '$lib/paraglide/messages';
+import { globalActions } from '$lib/features/commons/stores/global.svelte';
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
 import { toCanvas as htmlToImageCanvas } from 'html-to-image';
@@ -11,6 +12,7 @@ import {
   PATTERN_TYPE_MAP,
   type PatternName
 } from '$lib/features/map/layers/pattern-texture';
+import { SYMBOL_SDF_EXTENT } from '$lib/features/commons/constants/visualization.constants';
 
 interface ExportOptions {
   width: number;
@@ -1114,6 +1116,14 @@ function resolveStartIndices(
     : null;
 }
 
+// Mirrors of the MultiShapeLayer SDF proportions (multi-shape-layer.ts,
+// getDistance), converted to attribute-radius units (SDF unit ÷ extent).
+const SQUARE_HALF_RATIO = 0.6 / SYMBOL_SDF_EXTENT;
+const CROSS_ARM_RATIO = 0.7 / SYMBOL_SDF_EXTENT;
+const CROSS_HALF_THICKNESS_RATIO = CROSS_ARM_RATIO / 3;
+const RECTANGLE_HALF_WIDTH_RATIO = 0.9 / SYMBOL_SDF_EXTENT;
+const RECTANGLE_HALF_HEIGHT_RATIO = 0.27 / SYMBOL_SDF_EXTENT;
+
 function serializePointShape(
   shape: number,
   x: number,
@@ -1127,26 +1137,34 @@ function serializePointShape(
   const common = `${fillAttributes} ${strokeAttributes} stroke-width="${roundSvgValue(strokeWidth)}"`;
 
   switch (Math.round(shape)) {
-    case 1:
-      return `<rect x="${roundSvgValue(x - radius)}" y="${roundSvgValue(y - radius)}" width="${roundSvgValue(radius * 2)}" height="${roundSvgValue(radius * 2)}" ${common} />`;
-    case 4:
-      return `<path d="M ${roundSvgValue(x - radius * 0.25)} ${roundSvgValue(y - radius * 0.75)} L ${roundSvgValue(x + radius * 0.25)} ${roundSvgValue(y - radius * 0.75)} L ${roundSvgValue(x + radius * 0.25)} ${roundSvgValue(y - radius * 0.25)} L ${roundSvgValue(x + radius * 0.75)} ${roundSvgValue(y - radius * 0.25)} L ${roundSvgValue(x + radius * 0.75)} ${roundSvgValue(y + radius * 0.25)} L ${roundSvgValue(x + radius * 0.25)} ${roundSvgValue(y + radius * 0.25)} L ${roundSvgValue(x + radius * 0.25)} ${roundSvgValue(y + radius * 0.75)} L ${roundSvgValue(x - radius * 0.25)} ${roundSvgValue(y + radius * 0.75)} L ${roundSvgValue(x - radius * 0.25)} ${roundSvgValue(y + radius * 0.25)} L ${roundSvgValue(x - radius * 0.75)} ${roundSvgValue(y + radius * 0.25)} L ${roundSvgValue(x - radius * 0.75)} ${roundSvgValue(y - radius * 0.25)} L ${roundSvgValue(x - radius * 0.25)} ${roundSvgValue(y - radius * 0.25)} Z" ${common} />`;
+    case 1: {
+      const half = radius * SQUARE_HALF_RATIO;
+      return `<rect x="${roundSvgValue(x - half)}" y="${roundSvgValue(y - half)}" width="${roundSvgValue(half * 2)}" height="${roundSvgValue(half * 2)}" ${common} />`;
+    }
+    case 4: {
+      const arm = radius * CROSS_ARM_RATIO;
+      const half = radius * CROSS_HALF_THICKNESS_RATIO;
+      return `<path d="M ${roundSvgValue(x - half)} ${roundSvgValue(y - arm)} L ${roundSvgValue(x + half)} ${roundSvgValue(y - arm)} L ${roundSvgValue(x + half)} ${roundSvgValue(y - half)} L ${roundSvgValue(x + arm)} ${roundSvgValue(y - half)} L ${roundSvgValue(x + arm)} ${roundSvgValue(y + half)} L ${roundSvgValue(x + half)} ${roundSvgValue(y + half)} L ${roundSvgValue(x + half)} ${roundSvgValue(y + arm)} L ${roundSvgValue(x - half)} ${roundSvgValue(y + arm)} L ${roundSvgValue(x - half)} ${roundSvgValue(y + half)} L ${roundSvgValue(x - arm)} ${roundSvgValue(y + half)} L ${roundSvgValue(x - arm)} ${roundSvgValue(y - half)} L ${roundSvgValue(x - half)} ${roundSvgValue(y - half)} Z" ${common} />`;
+    }
     case 5:
       return `<path d="M ${roundSvgValue(x)} ${roundSvgValue(y - radius)} L ${roundSvgValue(x + radius)} ${roundSvgValue(y)} L ${roundSvgValue(x)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x - radius)} ${roundSvgValue(y)} Z" ${common} />`;
     case 6:
       return `<path d="M ${roundSvgValue(x)} ${roundSvgValue(y - radius)} L ${roundSvgValue(x + radius)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x - radius)} ${roundSvgValue(y + radius)} Z" ${common} />`;
     case 3: {
       const spikeHalfWidth = (barWidth * 1.5) / 2;
-      return `<path d="M ${roundSvgValue(x - spikeHalfWidth)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x)} ${roundSvgValue(y - radius)} L ${roundSvgValue(x + spikeHalfWidth)} ${roundSvgValue(y + radius)} Z" ${common} />`;
+      return `<path d="M ${roundSvgValue(x - spikeHalfWidth)} ${roundSvgValue(y)} L ${roundSvgValue(x)} ${roundSvgValue(y - radius * 2)} L ${roundSvgValue(x + spikeHalfWidth)} ${roundSvgValue(y)} Z" ${common} />`;
     }
     case 7:
       return `<path d="M ${roundSvgValue(x)} ${roundSvgValue(y - radius)} L ${roundSvgValue(x + radius * 0.22)} ${roundSvgValue(y - radius * 0.22)} L ${roundSvgValue(x + radius)} ${roundSvgValue(y - radius * 0.15)} L ${roundSvgValue(x + radius * 0.36)} ${roundSvgValue(y + radius * 0.18)} L ${roundSvgValue(x + radius * 0.58)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x)} ${roundSvgValue(y + radius * 0.5)} L ${roundSvgValue(x - radius * 0.58)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x - radius * 0.36)} ${roundSvgValue(y + radius * 0.18)} L ${roundSvgValue(x - radius)} ${roundSvgValue(y - radius * 0.15)} L ${roundSvgValue(x - radius * 0.22)} ${roundSvgValue(y - radius * 0.22)} Z" ${common} />`;
     case 2: {
       const barHalfWidth = barWidth / 2;
-      return `<rect x="${roundSvgValue(x - barHalfWidth)}" y="${roundSvgValue(y - radius)}" width="${roundSvgValue(barHalfWidth * 2)}" height="${roundSvgValue(radius * 2)}" ${common} />`;
+      return `<rect x="${roundSvgValue(x - barHalfWidth)}" y="${roundSvgValue(y - radius * 2)}" width="${roundSvgValue(barHalfWidth * 2)}" height="${roundSvgValue(radius * 2)}" ${common} />`;
     }
-    case 8:
-      return `<rect x="${roundSvgValue(x - radius * 0.9)}" y="${roundSvgValue(y - radius * 0.27)}" width="${roundSvgValue(radius * 1.8)}" height="${roundSvgValue(radius * 0.54)}" ${common} />`;
+    case 8: {
+      const halfWidth = radius * RECTANGLE_HALF_WIDTH_RATIO;
+      const halfHeight = radius * RECTANGLE_HALF_HEIGHT_RATIO;
+      return `<rect x="${roundSvgValue(x - halfWidth)}" y="${roundSvgValue(y - halfHeight)}" width="${roundSvgValue(halfWidth * 2)}" height="${roundSvgValue(halfHeight * 2)}" ${common} />`;
+    }
     case 0:
     default:
       return `<circle cx="${roundSvgValue(x)}" cy="${roundSvgValue(y)}" r="${roundSvgValue(radius)}" ${common} />`;
@@ -2830,18 +2848,26 @@ export async function exportMapToSvg(
     return Promise.reject(new Error(m.export_map_not_loaded()));
   }
 
-  const pageGeometry = resolvePageExportGeometry(pageContainer);
-  const pixelRatio = getExportPixelRatioForSize(
-    pageGeometry.width,
-    pageGeometry.height,
-    opts
-  );
-
-  const restoreRatio = await prerenderWebgl(pixelRatio);
-  const restoreDom = mutateDomForExport(pageContainer);
-  await waitForNextFrame();
+  let restoreRatio: RestoreExportRender = async () => {};
+  let restoreDom = (): void => {};
+  let shouldRestoreExportMode = false;
 
   try {
+    restoreDom = mutateDomForExport(pageContainer);
+    globalActions.setMapExporting(true);
+    shouldRestoreExportMode = true;
+    await waitForNextFrame();
+
+    const pageGeometry = resolvePageExportGeometry(pageContainer);
+    const pixelRatio = getExportPixelRatioForSize(
+      pageGeometry.width,
+      pageGeometry.height,
+      opts
+    );
+
+    restoreRatio = await prerenderWebgl(pixelRatio);
+    await waitForNextFrame();
+
     const mapLibreBackgroundDataUrl =
       await captureMapLibreBackgroundForSvg(pageContainer);
     const markup = buildStructuredSvgMarkup(
@@ -2856,8 +2882,12 @@ export async function exportMapToSvg(
 
     return new Blob([markup], { type: 'image/svg+xml;charset=utf-8' });
   } finally {
-    restoreDom();
     await restoreRatio();
+    if (shouldRestoreExportMode) {
+      globalActions.setMapExporting(false);
+    }
+    restoreDom();
+    await waitForNextFrame();
   }
 }
 
@@ -2874,14 +2904,20 @@ export async function exportMapToJpg(
     return Promise.reject(new Error(m.export_map_not_loaded()));
   }
 
-  const pagePixelRatio = getExportPixelRatio(pageContainer, opts);
-
-  const restoreRatio = await prerenderWebgl(pagePixelRatio);
-  const restoreDom = mutateDomForExport(pageContainer);
+  let restoreRatio: RestoreExportRender = async () => {};
+  let restoreDom = (): void => {};
   let restoreFrozenCanvases: RestoreExportRender = async () => {};
+  let shouldRestoreExportMode = false;
 
   const pageCanvas = await (async (): Promise<HTMLCanvasElement | null> => {
     try {
+      restoreDom = mutateDomForExport(pageContainer);
+      globalActions.setMapExporting(true);
+      shouldRestoreExportMode = true;
+      await waitForNextFrame();
+
+      const pagePixelRatio = getExportPixelRatio(pageContainer, opts);
+      restoreRatio = await prerenderWebgl(pagePixelRatio);
       await waitForNextFrame();
       restoreFrozenCanvases = await freezeCanvasesForExport(pageContainer);
       await waitForNextFrame();
@@ -2894,8 +2930,12 @@ export async function exportMapToJpg(
       });
     } finally {
       await restoreFrozenCanvases();
-      restoreDom();
       await restoreRatio();
+      if (shouldRestoreExportMode) {
+        globalActions.setMapExporting(false);
+      }
+      restoreDom();
+      await waitForNextFrame();
     }
   })();
 

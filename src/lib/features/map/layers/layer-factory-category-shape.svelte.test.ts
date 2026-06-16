@@ -23,14 +23,14 @@ describe('layer-factory — CategoryShapeMode routing to MultiShapeLayer', () =>
     );
   });
 
-  it('picks MultiShapeLayer over ScatterplotLayer when useCategoryShape is true (native scatter path)', () => {
+  it('always renders point symbols through MultiShapeLayer (native scatter path)', () => {
+    // MultiShapeLayer fully replaces ScatterplotLayer for symbols: a single
+    // renderer keeps the radius semantics (and deck layer state) consistent
+    // across every shape, including plain circles.
     expect(source).toMatch(
-      /const useMultiShapeLayer\s*=\s*[\s\S]{0,220}useCategoryShape[\s\S]{0,120}\(pointStrokeDashed && showPointStroke\)/
+      /return \[\s*new MultiShapeLayer\(\{\s*\.\.\.baseLayerProps,/
     );
-    expect(source).toMatch(/if \(useMultiShapeLayer\) \{/);
-    expect(source).toMatch(
-      /return \[new ScatterplotLayer\(baseLayerProps\)\];/
-    );
+    expect(source).not.toMatch(/new ScatterplotLayer\(baseLayerProps\)/);
   });
 
   it('uses MultiShapeLayer for the centroid path (Polygon/Line symbols)', () => {

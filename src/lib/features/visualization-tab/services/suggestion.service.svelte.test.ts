@@ -533,7 +533,7 @@ describe('suggestion.service', () => {
     ).toBe(true);
   });
 
-  it('keeps polygon symbol suggestions on points with neutral gray polygon support', () => {
+  it('keeps polygon symbol suggestions symbol-only', () => {
     const dataset = createPolygonDataset();
     mocks.datasets = [dataset];
     mocks.selectedDatasetId = dataset.id;
@@ -551,13 +551,11 @@ describe('suggestion.service', () => {
     );
 
     expect(updatedVisualization?.primitiveFilters).toEqual([
-      PrimitiveFilterType.POINT,
-      PrimitiveFilterType.POLYGON
+      PrimitiveFilterType.POINT
     ]);
     expect(updatedVisualization?.modes?.symbol).toBe(SymbolMode.PROPORTIONAL);
-    expect(updatedVisualization?.polygon?.enabled).toBe(true);
-    expect(updatedVisualization?.polygon?.fillMode).toBe(FillMode.UNIQUE);
-    expect(updatedVisualization?.polygon?.fillColor).toBe(DEFAULT_COLORS.gray);
+    expect(updatedVisualization?.polygon?.enabled).toBe(false);
+    expect(updatedVisualization?.symbol?.enabled).toBe(true);
     expect(updatedVisualization?.symbols?.opacity).toBe(1);
     expect(
       isVisualizationMatchingSuggestion(

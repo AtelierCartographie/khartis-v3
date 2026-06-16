@@ -6,6 +6,7 @@ import type {
 } from '$lib/features/project-management';
 import * as m from '$lib/paraglide/messages';
 import { persistenceRegistry } from '$lib/features/project-management';
+import { shouldSkipLastProjectRestore } from '../utils/pwa-reset';
 import type {
   ColumnTransformation,
   UploadedFile
@@ -36,7 +37,8 @@ import {
   addColumnTransformation as addColumnTransformationFn,
   clearColumnTransformations as clearColumnTransformationsFn,
   updateFileJoinedBasemap as updateFileJoinedBasemapFn,
-  addDeletedRows as addDeletedRowsFn
+  addDeletedRows as addDeletedRowsFn,
+  type SaveCurrentProjectOptions
 } from './project';
 
 function createProjectStore() {
@@ -68,7 +70,9 @@ function createProjectStore() {
   async function initialize(): Promise<void> {
     state.isLoading = true;
     try {
-      await loadLastProjectFn(container);
+      if (!shouldSkipLastProjectRestore()) {
+        await loadLastProjectFn(container);
+      }
     } finally {
       state.isLoading = false;
       state.isInitialized = true;
@@ -144,8 +148,10 @@ function createProjectStore() {
     return loadProjectFn(container, id);
   }
 
-  async function saveCurrentProject(): Promise<void> {
-    return saveCurrentProjectFn(container);
+  async function saveCurrentProject(
+    options?: SaveCurrentProjectOptions
+  ): Promise<void> {
+    return saveCurrentProjectFn(container, options);
   }
 
   async function deleteProject(id: string): Promise<void> {

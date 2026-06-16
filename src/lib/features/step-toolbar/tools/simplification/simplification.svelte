@@ -1,6 +1,7 @@
 <script lang="ts">
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
   import {
     SimplificationLevel,
     SimplificationSource
@@ -212,6 +213,10 @@
         LogCategory.UI,
         { trigger, error }
       );
+      showWarning(
+        m.simplification_failed_title(),
+        m.simplification_failed_subtitle()
+      );
     }
   }
 
@@ -385,6 +390,15 @@
       size="small"
       icon={Undo}
       on:click={() => {
+        if (simplState.source === SimplificationSource.Basemap) {
+          // Predefined-level basemaps (radio buttons): reset re-applies the
+          // default "Medium" level and reloads the basemap at that level,
+          // rather than undoing to the previous level.
+          store.setLevel(SimplificationLevel.Medium);
+          scheduleSimplificationApply('level-change');
+          lastResult = null;
+          return;
+        }
         void store.undoLastSimplification().then((undone) => {
           if (undone) {
             lastResult = null;

@@ -52,6 +52,8 @@ export interface SavedProjectMetadata {
   createdAt: Date;
   updatedAt: Date;
   size: number;
+  /** Low-resolution JPEG data URL of the map, captured best-effort on save. */
+  thumbnail?: string;
 }
 
 export enum ProjectStorageKey {

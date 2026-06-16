@@ -396,13 +396,71 @@
   let fileToDelete = $state<{ id: string; name: string } | null>(null);
 
   const vizTabs = $derived.by(() => {
-    const vizs = visualizationStore.visualizations;
+    const vizs = visualizationStore.visualizations.filter((viz) => !viz.facet);
     return vizs.map((viz, idx) => ({
       id: viz.id,
-      label: m.viz_tab_label({ number: idx + 1 }),
+      label: viz.name || m.viz_tab_label({ number: idx + 1 }),
       isSelected: visualizationStore.selectedVisualization?.id === viz.id
     }));
   });
+
+  let editingVizId = $state<string | null>(null);
+  let editedVizName = $state('');
+  let vizToDelete = $state<{ id: string; name: string } | null>(null);
+  let isVizDeleteConfirmOpen = $state(false);
+
+  function handleVizRenameFromMenu(vizId: string, label: string, event: Event) {
+    event.stopPropagation();
+    editingVizId = vizId;
+    editedVizName = label;
+  }
+
+  function saveVizRename() {
+    const trimmed = editedVizName.trim();
+    if (editingVizId && trimmed) {
+      visualizationStore.renameVisualization(editingVizId, trimmed);
+    }
+    editingVizId = null;
+    closeTabMenu();
+  }
+
+  function handleVizRenameKeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter') {
+      saveVizRename();
+    } else if (event.key === 'Escape') {
+      editingVizId = null;
+    }
+  }
+
+  function handleDuplicateViz(vizId: string, event: Event) {
+    event.stopPropagation();
+    closeTabMenu();
+    visualizationStore.duplicateVisualization(vizId);
+  }
+
+  function handleVizDeleteFromMenu(
+    vizId: string,
+    vizName: string,
+    event: Event
+  ) {
+    event.stopPropagation();
+    closeTabMenu();
+    vizToDelete = { id: vizId, name: vizName };
+    isVizDeleteConfirmOpen = true;
+  }
+
+  function confirmVizDelete() {
+    if (vizToDelete) {
+      visualizationStore.removeVisualization(vizToDelete.id);
+    }
+    isVizDeleteConfirmOpen = false;
+    vizToDelete = null;
+  }
+
+  function cancelVizDelete() {
+    isVizDeleteConfirmOpen = false;
+    vizToDelete = null;
+  }
 
   function handleAddVizTab() {
     const dataset = datasetsStore.selectedDataset;
@@ -466,20 +524,84 @@
   >
     {#if isVizStep}
       {#each vizTabs as vizTab (vizTab.id)}
-        <div class="tab-button-wrapper">
+        <div class="tab-button-wrapper with-menu">
           <Button
             isSelected={vizTab.isSelected}
             kind={vizTab.isSelected ? ButtonKind.Primary : ButtonKind.Ghost}
             on:click={() => visualizationStore.selectVisualization(vizTab.id)}
             class="tab-button"
             title={vizTab.label}
+            aria-label={vizTab.label}
           >
             <div class="tab-content">
               <span class="tab-label">
                 {vizTab.label}
               </span>
             </div>
+            <button
+              type="button"
+              class="tab-menu-button"
+              onclick={(e: MouseEvent) => toggleTabMenu(vizTab.id, e)}
+              aria-label={m.file_options()}
+              title={m.file_options()}
+              aria-haspopup="true"
+              aria-expanded={menuOpenTabId === vizTab.id}
+            >
+              <OverflowMenuVertical size={16} />
+            </button>
           </Button>
+          {#if menuOpenTabId === vizTab.id}
+            <div
+              class="tab-context-menu"
+              style="top: {menuPosition.top}px; left: {menuPosition.left}px;"
+              role="menu"
+            >
+              {#if editingVizId === vizTab.id}
+                <div class="tab-menu-item-dataset-row">
+                  <TextInput
+                    size="sm"
+                    hideLabel
+                    labelText={m.viz_list_rename()}
+                    bind:value={editedVizName}
+                    on:keydown={handleVizRenameKeydown}
+                    on:blur={saveVizRename}
+                    on:click={(e) => e.stopPropagation()}
+                  />
+                </div>
+              {:else}
+                <button
+                  type="button"
+                  class="tab-menu-item"
+                  onclick={(e: Event) =>
+                    handleVizRenameFromMenu(vizTab.id, vizTab.label, e)}
+                  role="menuitem"
+                >
+                  <Edit size={16} />
+                  {m.viz_list_rename()}
+                </button>
+              {/if}
+              <button
+                type="button"
+                class="tab-menu-item"
+                onclick={(e: Event) => handleDuplicateViz(vizTab.id, e)}
+                role="menuitem"
+              >
+                <Copy size={16} />
+                {m.viz_list_duplicate()}
+              </button>
+              <div class="tab-menu-divider"></div>
+              <button
+                type="button"
+                class="tab-menu-item tab-menu-item-danger"
+                onclick={(e: Event) =>
+                  handleVizDeleteFromMenu(vizTab.id, vizTab.label, e)}
+                role="menuitem"
+              >
+                <TrashCan size={16} />
+                {m.viz_list_delete()}
+              </button>
+            </div>
+          {/if}
         </div>
       {/each}
 
@@ -495,7 +617,10 @@
           datasetCount > 1 && selectedDataset
             ? selectedDataset.name
             : fileInfo.name}
-        <div class="tab-button-wrapper" use:registerTab={dataButton.id}>
+        <div
+          class="tab-button-wrapper with-menu"
+          use:registerTab={dataButton.id}
+        >
           <Button
             isSelected={dataButton.isSelected}
             kind={dataButton.isSelected ? ButtonKind.Primary : ButtonKind.Ghost}
@@ -660,6 +785,22 @@
 
 <Modal
   danger
+  open={isVizDeleteConfirmOpen}
+  modalHeading={m.viz_list_delete_title()}
+  primaryButtonText={m.delete_confirm_button()}
+  secondaryButtonText={m.cancel()}
+  size="sm"
+  on:click:button--secondary={cancelVizDelete}
+  on:click:button--primary={confirmVizDelete}
+  on:close={cancelVizDelete}
+>
+  <p>
+    {m.viz_list_delete_message({ name: vizToDelete?.name ?? '' })}
+  </p>
+</Modal>
+
+<Modal
+  danger
   open={isDeleteConfirmOpen}
   modalHeading={m.file_delete_title()}
   primaryButtonText={m.delete_confirm_button()}
@@ -731,20 +872,33 @@
     position: relative;
     display: flex;
     align-items: center;
+    flex: 1 1 0;
+    /* Browser-tab behaviour: shrink down to a readable minimum that still
+       shows part of the title, then let the scroller overflow horizontally. */
+    min-width: 5.5rem;
+    max-width: 250px;
   }
 
   .tab-button-wrapper :global(.tab-button) {
     position: relative;
-    padding-right: calc(var(--cds-spacing-08) + 24px);
-    min-width: 120px;
-    max-width: 250px;
+    padding-left: var(--cds-spacing-04);
+    padding-right: var(--cds-spacing-04);
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .tab-button-wrapper.with-menu :global(.tab-button) {
+    padding-right: calc(var(--cds-spacing-07) + 8px);
   }
 
   .tab-content {
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-03);
-    padding-right: var(--cds-spacing-05);
+    padding-right: var(--cds-spacing-02);
+    min-width: 0;
+    overflow: hidden;
   }
 
   .tab-label {
@@ -752,7 +906,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 120px;
+    max-width: 100%;
     cursor: text;
     padding: 2px 4px;
     border-radius: 2px;

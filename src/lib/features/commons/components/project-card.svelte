@@ -1,13 +1,16 @@
 <script lang="ts">
   import SimpleRadio from './simple-radio.svelte';
   import { Earth } from 'carbon-icons-svelte';
+  import { SkeletonPlaceholder } from 'carbon-components-svelte';
   import clsx from 'clsx';
   import type { Snippet } from 'svelte';
   import { KEY } from '../constants/dom.constants';
+  import { overflowTitle } from '../utils/overflow-title';
 
   interface ProjectCardProps {
     title: string;
     subtitle: string;
+    thumbnail?: string;
     selected?: boolean;
     disabled?: boolean;
     variant?: 'default' | 'blue' | 'gray';
@@ -18,12 +21,18 @@
   let {
     title,
     subtitle,
+    thumbnail,
     selected = false,
     disabled = false,
     variant = 'default',
     onclick,
     footer
   }: ProjectCardProps = $props();
+
+  let thumbnailLoaded = $state(false);
+  let thumbnailFailed = $state(false);
+
+  const showThumbnail = $derived(Boolean(thumbnail) && !thumbnailFailed);
 
   function handleCardClick() {
     if (!disabled && onclick) {
@@ -111,20 +120,40 @@
   onkeydown={handleKeyDown}
   style="--icon-color: {iconColor}; --calendar-color: {calendarColor}; --icon-hover-color: {iconHoverColor}; --calendar-hover-color: {calendarHoverColor};"
 >
-  <div class={topSectionClasses}>
-    <Earth
-      size={32}
-      style="color: var(--icon-color); fill: var(--icon-color);"
-    />
+  <div class={topSectionClasses} class:has-thumbnail={showThumbnail}>
+    {#if showThumbnail}
+      {#if !thumbnailLoaded}
+        <div class="thumbnail-skeleton">
+          <SkeletonPlaceholder style="width: 100%; height: 100%;" />
+        </div>
+      {/if}
+      <img
+        class="thumbnail-image"
+        class:is-loaded={thumbnailLoaded}
+        src={thumbnail}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        onload={() => (thumbnailLoaded = true)}
+        onerror={() => (thumbnailFailed = true)}
+      />
+    {:else}
+      <Earth
+        size={32}
+        style="color: var(--icon-color); fill: var(--icon-color);"
+      />
 
-    <h4 class="mt-2">16:9</h4>
+      <h4 class="mt-2 preview-ratio">16:9</h4>
 
-    <span class="text-sm">{subtitle}</span>
+      <span class="text-sm preview-subtitle">{subtitle}</span>
+    {/if}
   </div>
 
   <div class={bottomSectionClasses}>
     <div class="flex items-start justify-between">
-      <h6 class="flex-1 pr-2 title-text">{title}</h6>
+      <h6 class="flex-1 pr-2 title-text" use:overflowTitle={title}>
+        {title}
+      </h6>
 
       <div class="ml-2 radio-button-wrapper">
         <SimpleRadio
@@ -150,6 +179,38 @@
     overflow: hidden;
   }
 
+  .top-section {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    overflow: hidden;
+  }
+
+  .top-section.has-thumbnail {
+    padding: 0;
+    background: #ffffff;
+  }
+
+  .thumbnail-skeleton {
+    position: absolute;
+    inset: 0;
+  }
+
+  .thumbnail-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #ffffff;
+    display: block;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+  }
+
+  .thumbnail-image.is-loaded {
+    opacity: 1;
+  }
+
   .title-text {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -161,11 +222,12 @@
     flex-shrink: 0;
   }
 
-  #kh-card:hover:not(.opacity-50) .top-section {
+  #kh-card:hover:not(.opacity-50) .top-section:not(.has-thumbnail) {
     background-color: var(--cds-medium-blue);
   }
 
-  #kh-card:hover:not(.opacity-50) .top-section.variant-gray {
+  #kh-card:hover:not(.opacity-50)
+    .top-section.variant-gray:not(.has-thumbnail) {
     background-color: var(--cds-medium-gray);
   }
 
@@ -188,6 +250,19 @@
 
   .text-sm {
     font-size: 0.875rem;
+  }
+
+  .preview-ratio {
+    margin-bottom: 0;
+    line-height: 1.25rem;
+  }
+
+  .preview-subtitle {
+    max-width: 100%;
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .opacity-50 {

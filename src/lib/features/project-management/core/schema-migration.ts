@@ -435,6 +435,17 @@ function normalizePersistenceSchema(
   return clone;
 }
 
+// Annotations gained an optional WGS84 `anchor` ({lon,lat}) that glues a
+// `coordinateSpace:'map'` annotation to the basemap. The field is purely
+// additive: a legacy annotation without an anchor keeps the historical
+// pixel-page behavior, so no data transform is required — this entry only marks
+// the shape bump so older `.kh` projects stamp the new version.
+function backfillAnnotationAnchor(
+  data: Record<string, unknown>
+): Record<string, unknown> {
+  return data;
+}
+
 const migrations: SchemaMigration[] = [
   { from: '3.0.0', to: '3.1.0', migrate: remapLegacyPointShape },
   { from: '3.1.0', to: '3.2.0', migrate: remapLegacyPointShape },
@@ -442,7 +453,8 @@ const migrations: SchemaMigration[] = [
   { from: '3.3.0', to: '3.4.0', migrate: backfillPrimitiveConfigs },
   { from: '3.4.0', to: '3.5.0', migrate: backfillSymbolDoubleFields },
   { from: '3.5.0', to: '3.6.0', migrate: normalizePersistenceSchema },
-  { from: '3.6.0', to: '3.7.0', migrate: clampLegacySliderValues }
+  { from: '3.6.0', to: '3.7.0', migrate: clampLegacySliderValues },
+  { from: '3.7.0', to: '3.8.0', migrate: backfillAnnotationAnchor }
 ];
 
 export function migrateIfNeeded(

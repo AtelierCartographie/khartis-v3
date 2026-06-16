@@ -118,3 +118,7 @@ export function showError(
 export function showWarning(title: string, subtitle?: string): void {
   notificationManager.warning({ title, subtitle });
 }
+
+export function showInfo(title: string, subtitle?: string): void {
+  notificationManager.info({ title, subtitle });
+}

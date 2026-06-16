@@ -29,7 +29,7 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     subtitle: m.example_world_population_subtitle(),
     description: m.example_world_population_description(),
     category: ExampleCategory.POLYGONS,
-    thumbnail: resolveExampleAssetPath('/examples/world-population-thumb.png'),
+    thumbnail: resolveExampleAssetPath('/examples/world-population-thumb.svg'),
     dataUrl: resolveExampleAssetPath(
       '/examples/data/countries-population-simple.csv'
     ),
@@ -56,7 +56,7 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     subtitle: m.example_european_cities_subtitle(),
     description: m.example_european_cities_description(),
     category: ExampleCategory.SYMBOLS,
-    thumbnail: resolveExampleAssetPath('/examples/european-cities-thumb.png'),
+    thumbnail: resolveExampleAssetPath('/examples/european-cities-thumb.svg'),
     dataUrl: resolveExampleAssetPath('/examples/data/european-cities.csv'),
     baseMapId: undefined,
     referenceBasemapId: 'europe-nuts1-2024-medium',
@@ -83,7 +83,7 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     subtitle: m.example_world_countries_subtitle(),
     description: m.example_world_countries_description(),
     category: ExampleCategory.POLYGONS,
-    thumbnail: resolveExampleAssetPath('/examples/world-countries-thumb.png'),
+    thumbnail: resolveExampleAssetPath('/examples/world-countries-thumb.svg'),
     dataUrl: resolveExampleAssetPath('/examples/data/world-countries.geojson'),
     visualizations: [
       {
@@ -106,7 +106,7 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     subtitle: m.example_gdp_evolution_subtitle(),
     description: m.example_gdp_evolution_description(),
     category: ExampleCategory.HYBRIDS,
-    thumbnail: resolveExampleAssetPath('/examples/gdp-evolution-thumb.png'),
+    thumbnail: resolveExampleAssetPath('/examples/gdp-evolution-thumb.svg'),
     dataUrl: resolveExampleAssetPath('/examples/data/gdp-growth-2023.csv'),
     baseMapId: 'monde-countries-2024-medium',
     visualizations: [
@@ -130,7 +130,7 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     subtitle: m.example_transport_flows_subtitle(),
     description: m.example_transport_flows_description(),
     category: ExampleCategory.LINES,
-    thumbnail: resolveExampleAssetPath('/examples/transport-flows-thumb.png'),
+    thumbnail: resolveExampleAssetPath('/examples/transport-flows-thumb.svg'),
     dataUrl: resolveExampleAssetPath('/examples/data/transport-flows.geojson'),
     visualizations: [
       {

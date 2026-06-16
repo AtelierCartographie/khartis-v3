@@ -88,11 +88,12 @@ describe('useDatasetAnalysis', () => {
     expect(items.map((i) => i.text)).toEqual(['pop', 'name']);
   });
 
-  it('isNumericDataField returns true only for number columns', () => {
+  it('isNumericDataField returns true for number and numeric columns', () => {
     const dataset = {
       id: 'ds-1',
       columns: [
         { name: 'pop', type: 'number' },
+        { name: 'ratio', type: 'numeric' },
         { name: 'name', type: 'string' }
       ]
     };
@@ -101,6 +102,7 @@ describe('useDatasetAnalysis', () => {
       getSelectedVisualization: () => ({ datasetId: 'ds-1' }) as never
     });
     expect(analysis.isNumericDataField('pop')).toBe(true);
+    expect(analysis.isNumericDataField('ratio')).toBe(true);
     expect(analysis.isNumericDataField('name')).toBe(false);
     expect(analysis.isNumericDataField(undefined)).toBe(false);
   });

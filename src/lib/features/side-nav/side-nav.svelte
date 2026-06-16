@@ -14,7 +14,6 @@
     Column,
     ComposedModal,
     Grid,
-    InlineNotification,
     ModalBody,
     ModalFooter,
     ModalHeader,
@@ -30,6 +29,7 @@
     Download,
     DocumentAdd,
     FolderOpen,
+    Information,
     Launch,
     Save,
     TrashCan
@@ -39,8 +39,6 @@
   import Separator from '../commons/components/separator.svelte';
   import Switch from '../commons/components/switch.svelte';
   import ClearCacheButton from './components/clear-cache-button.svelte';
-  import OfflineButton from './components/offline-button.svelte';
-  import OfflinePanel from './components/offline-panel.svelte';
   import { useSideNav } from './hooks/use-side-nav.svelte';
 
   const DEFAULT_APP_VERSION = '1.6.0-staging.1';
@@ -475,8 +473,6 @@
               </span>
             </Button>
 
-            <OfflineButton />
-
             <ClearCacheButton />
           </Column>
         </Row>
@@ -633,8 +629,6 @@
   onConfirm={() => sideNav.handleDeleteConfirm(closeDeleteModal)}
 />
 
-<OfflinePanel />
-
 <div id="khartis-install-dialog">
   <ComposedModal
     open={isInstallDialogOpen}
@@ -645,17 +639,25 @@
     <ModalHeader title={m.sidenav_install_help_title()} />
 
     <ModalBody class="install-help-body">
-      <InlineNotification
-        kind="info"
-        lowContrast
-        hideCloseButton
-        title={m.sidenav_install_help_intro_title()}
-        subtitle={currentBrowser === 'other'
-          ? m.sidenav_install_help_intro_generic()
-          : m.sidenav_install_help_intro_detected({
-              browser: getDetectedBrowserLabel()
-            })}
-      />
+      <div class="install-help-notification" role="alert">
+        <span class="install-help-notification-icon" aria-hidden="true">
+          <Information size={20} />
+        </span>
+
+        <div class="install-help-notification-copy">
+          <p class="install-help-notification-title">
+            <strong>{m.sidenav_install_help_intro_title()}</strong>
+          </p>
+
+          <p class="install-help-notification-subtitle">
+            {currentBrowser === 'other'
+              ? m.sidenav_install_help_intro_generic()
+              : m.sidenav_install_help_intro_detected({
+                  browser: getDetectedBrowserLabel()
+                })}
+          </p>
+        </div>
+      </div>
 
       <Accordion class="install-help-accordion">
         {#each getInstallInstructions() as instruction (instruction.key)}
@@ -858,26 +860,50 @@
     padding-right: var(--cds-spacing-03);
   }
 
-  #khartis-install-dialog :global(.install-help-body .bx--inline-notification) {
+  .install-help-notification {
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: 1.25rem minmax(0, 1fr);
+    column-gap: var(--cds-spacing-04);
+    align-items: flex-start;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: var(--cds-spacing-05) 0;
+    padding: var(--cds-spacing-05) var(--cds-spacing-05) var(--cds-spacing-05)
+      var(--cds-spacing-04);
+    color: var(--cds-text-primary, var(--cds-text-01));
+    background-color: var(--cds-notification-background-info);
+    border-left: 3px solid var(--cds-support-info);
+  }
+
+  .install-help-notification-icon {
+    display: flex;
+    flex: 0 0 auto;
+    margin-top: 0.0625rem;
+  }
+
+  .install-help-notification-copy {
+    display: flex;
+    flex-direction: column;
     width: 100%;
     max-width: 100%;
     min-width: 0;
   }
 
-  #khartis-install-dialog
-    :global(.install-help-body .bx--inline-notification__details),
-  #khartis-install-dialog
-    :global(.install-help-body .bx--inline-notification__text-wrapper) {
-    min-width: 0;
-  }
-
-  #khartis-install-dialog
-    :global(.install-help-body .bx--inline-notification__title),
-  #khartis-install-dialog
-    :global(.install-help-body .bx--inline-notification__subtitle) {
+  .install-help-notification-title,
+  .install-help-notification-subtitle {
+    margin: 0;
     max-width: 100%;
+    font-size: 0.875rem;
+    line-height: 1.28572;
     white-space: normal;
     overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .install-help-notification-title {
+    margin-bottom: var(--cds-spacing-01);
   }
 
   #khartis-install-dialog :global(.install-help-accordion) {

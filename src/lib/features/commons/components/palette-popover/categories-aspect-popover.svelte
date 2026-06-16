@@ -239,6 +239,16 @@
     applySuggestionPalette(hex);
   }
 
+  function applyExactPalette(colors: string[]) {
+    if (colors.length === 0) return;
+
+    draftSuggestionSeedColor = colors[0];
+    draftCategories = draftCategories.map((category, index) => ({
+      ...category,
+      color: colors[index % colors.length]
+    }));
+  }
+
   function handleQualitativePresetChange(preset: QualitativePreset) {
     draftQualitativePreset = preset;
   }
@@ -479,6 +489,7 @@
             selectedColor={draftSuggestionSeedColor ?? selectedCategory?.color}
             numClasses={draftCategories.length}
             onColorSelect={handleSuggestionColor}
+            onPaletteSelect={applyExactPalette}
             onQualitativePresetChange={handleQualitativePresetChange}
           />
         {/if}

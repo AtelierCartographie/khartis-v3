@@ -9,7 +9,7 @@
   } from '$lib/features/commons/types/global';
   import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
   import { m } from '$lib/paraglide/messages.js';
-  import { ColorPalette, DataBase, RulerAlt } from 'carbon-icons-svelte';
+  import { ColorPalette, DataTable, ToolsAlt } from 'carbon-icons-svelte';
   import { Popover } from 'carbon-components-svelte';
   import clsx from 'clsx';
   import { tick, untrack } from 'svelte';
@@ -68,11 +68,11 @@
     }
   });
 
-  const stepLabels = {
+  const stepLabels = $derived.by(() => ({
     [ToolbarStep.Data]: m.step_data(),
     [ToolbarStep.Visualizations]: m.step_visualizations(),
     [ToolbarStep.Styling]: m.step_styling()
-  };
+  }));
 
   let selectedList = $derived<Snippet | undefined>(
     globalState.selectedStep
@@ -131,7 +131,7 @@
         aria-pressed={isStepSelected(ToolbarStep.Data)}
         aria-label={m.step_data_aria()}
       >
-        <DataBase size={32} />
+        <DataTable size={32} />
         <span>{stepLabels[ToolbarStep.Data]}</span>
       </button>
 
@@ -159,7 +159,7 @@
         aria-pressed={isStepSelected(ToolbarStep.Styling)}
         aria-label={m.step_styling_aria()}
       >
-        <RulerAlt size={32} />
+        <ToolsAlt size={32} />
         <span>{stepLabels[ToolbarStep.Styling]}</span>
       </button>
     </div>

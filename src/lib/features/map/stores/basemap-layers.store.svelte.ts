@@ -155,7 +155,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
     id: 'terre',
     visible: true,
-    fillColor: '#ffffff',
+    fillColor: '#f2f2f2',
     fillShadow: false,
     fillOpacity: 100,
     strokeColor: '#a8a8a8',
@@ -167,7 +167,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
     id: 'mers',
     visible: true,
-    color: '#e0e0e0',
+    color: '#c8c8c8',
     opacity: 100
   },
   {
@@ -183,6 +183,24 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     labelFontFamily: 'Cabin',
     labelSize: 12,
     labelColor: '#161616'
+  },
+  {
+    id: 'sphere',
+    visible: true,
+    renderBelowThematic: true,
+    color: '#5a5a5a',
+    thickness: 1,
+    opacity: 100
+  },
+  {
+    id: 'frontieres',
+    visible: true,
+    renderBelowThematic: true,
+    color: '#8d8d8d',
+    dotted: false,
+    dottedPattern: BasemapDottedPattern.DOTS,
+    thickness: 0.5,
+    opacity: 100
   },
   {
     id: 'equateur',
@@ -203,24 +221,6 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     color: '#8d8d8d',
     dotted: true,
     dottedPattern: BasemapDottedPattern.DOTS,
-    thickness: 1,
-    opacity: 100
-  },
-  {
-    id: 'frontieres',
-    visible: true,
-    renderBelowThematic: true,
-    color: '#8d8d8d',
-    dotted: false,
-    dottedPattern: BasemapDottedPattern.DOTS,
-    thickness: 0.5,
-    opacity: 100
-  },
-  {
-    id: 'sphere',
-    visible: true,
-    renderBelowThematic: true,
-    color: '#5a5a5a',
     thickness: 1,
     opacity: 100
   }
@@ -373,21 +373,42 @@ function normalizeSerializedLayers(
     return cloneDefaults();
   }
 
-  return DEFAULT_LAYERS.map((defaults) => {
-    const candidate = layers.find((layer) => layer?.id === defaults.id);
+  const defaultsById = new Map(
+    DEFAULT_LAYERS.map((layer) => [layer.id, layer] as const)
+  );
+  const normalizedLayers = new Map<BasemapLayerId, BasemapLayerConfig>();
 
-    if (defaults.id === 'meridiens') {
-      return normalizeLegacyMeridiensConfig(
-        defaults,
-        candidate as LegacyMeridiensLayerConfig | undefined
-      );
+  for (const candidate of layers) {
+    const defaults = defaultsById.get(candidate?.id);
+    if (!defaults || normalizedLayers.has(defaults.id)) {
+      continue;
     }
 
-    return mergeLayerWithDefaults(
-      defaults,
-      candidate as Partial<typeof defaults> | undefined
+    if (defaults.id === 'meridiens') {
+      normalizedLayers.set(
+        defaults.id,
+        normalizeLegacyMeridiensConfig(
+          defaults,
+          candidate as LegacyMeridiensLayerConfig | undefined
+        )
+      );
+      continue;
+    }
+
+    normalizedLayers.set(
+      defaults.id,
+      mergeLayerWithDefaults(
+        defaults,
+        candidate as Partial<typeof defaults> | undefined
+      )
     );
-  });
+  }
+
+  const missingLayers = DEFAULT_LAYERS.filter(
+    (defaults) => !normalizedLayers.has(defaults.id)
+  ).map((defaults) => deepClone(defaults));
+
+  return [...Array.from(normalizedLayers.values()), ...missingLayers];
 }
 
 interface BasemapLayersState {
