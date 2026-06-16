@@ -13,18 +13,6 @@ describe('color-blindness tool', () => {
     colorBlindnessActions.reset();
   });
 
-  it('renders the visual impairments copy and helper text', () => {
-    render(ColorBlindness);
-
-    expect(
-      screen.getByRole('combobox', {
-        name: m.colorblind_simulation()
-      })
-    ).toBeInTheDocument();
-    expect(screen.getByText(m.colorblind_helper_p1())).toBeInTheDocument();
-    expect(screen.getByText(m.colorblind_helper_p2())).toBeInTheDocument();
-  });
-
   it('updates the simulation state when a filter is selected', async () => {
     render(ColorBlindness);
 

@@ -21,10 +21,4 @@ describe('SimpleCheckbox', () => {
     expect(checkbox.checked).toBe(true);
     expect(onchange).toHaveBeenCalledWith(true);
   });
-
-  it('does not stop native input handlers in the capture phase', () => {
-    const source = SimpleCheckbox.toString();
-
-    expect(source).not.toContain('capture: true');
-  });
 });

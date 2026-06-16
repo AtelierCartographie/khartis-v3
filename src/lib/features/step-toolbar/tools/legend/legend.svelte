@@ -21,6 +21,7 @@
   } from '$lib/features/step-toolbar/fonts.constants';
   import { CSS_CLASSES, DOM_IDS, LEGEND_DEFAULTS } from './legend.constants';
   import { getLegendState, legendActions } from './legend.store.svelte';
+  import { selectRenderedLegendItems } from './legend-items.utils';
   import type { LegendItem } from '../../types/legend.types';
   import { getLocale } from '$lib/paraglide/runtime.js';
 
@@ -34,7 +35,10 @@
   type LegendItemTextField = 'title' | 'subtitle' | 'note';
 
   const legendState = $derived(getLegendState());
-  const items = $derived(legendState.items);
+  // Only expose the legends that are actually drawn on the map. In a collection
+  // the base visualization renders no legend, so listing it here would surface a
+  // phantom "Visualisation" entry that edits nothing visible.
+  const items = $derived(selectRenderedLegendItems(legendState.items));
   const isContentTab = $derived(legendState.activeTab === LegendTab.CONTENT);
 
   let localFontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);

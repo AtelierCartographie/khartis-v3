@@ -357,6 +357,33 @@ describe('palette.constants — getPalettesForType', () => {
   });
 });
 
+describe('palette.constants — diverging colour-blind-safe flags are truthful', () => {
+  const flagFor = (id: string) =>
+    divergingPalettes.find((p) => p.id === id)?.colorBlindSafe;
+
+  it('should mark the red-green rdylgn and piyg ramps as not colour-blind-safe', () => {
+    expect(flagFor('rdylgn')).toBe(false);
+    expect(flagFor('piyg')).toBe(false);
+  });
+
+  it('should mark rdbu, brbg and prgn as colour-blind-safe', () => {
+    expect(flagFor('rdbu')).toBe(true);
+    expect(flagFor('brbg')).toBe(true);
+    expect(flagFor('prgn')).toBe(true);
+  });
+
+  it('should exclude rdylgn and piyg from getPalettesForType under the colour-blind filter', () => {
+    const ids = getPalettesForType(PALETTE_TYPE.DIVERGING, true).map(
+      (p) => p.id
+    );
+    expect(ids).not.toContain('rdylgn');
+    expect(ids).not.toContain('piyg');
+    expect(ids).toContain('rdbu');
+    expect(ids).toContain('brbg');
+    expect(ids).toContain('prgn');
+  });
+});
+
 describe('palette.constants — findPaletteById', () => {
   it('should find a palette across all collections by id', () => {
     expect(findPaletteById(monochromePalettes[0].id)?.id).toBe(

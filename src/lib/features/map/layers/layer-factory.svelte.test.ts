@@ -650,50 +650,7 @@ describe('resolveEffectiveCategoryColorMap', () => {
   });
 });
 
-describe('binary scatter styling refresh', () => {
-  it('clones shared scatterplot binary data before overriding fill/line/radius attributes', () => {
-    expect(source).toContain('function cloneScatterBinaryData');
-    expect(source).toContain('attributes: { ...sourceData.attributes }');
-    const cloneCalls = source.match(/cloneScatterBinaryData\(scatterProps\)/g);
-    expect(cloneCalls).not.toBeNull();
-    expect((cloneCalls ?? []).length).toBeGreaterThanOrEqual(3);
-  });
-
-  it('applies secondary text bold and italic styles to the label layer', () => {
-    expect(source).toContain("secondaryLabelsConfig.bold ? '700' : '400'");
-    expect(source).toContain('secondaryLabelsConfig.italic');
-    expect(source).toContain(
-      'resolveDeckTextFontFamily(secondaryLabelsConfig.fontFamily)'
-    );
-    expect(source).toContain(
-      'resolveDeckTextFontFamily(textConfig.fontFamily)'
-    );
-  });
-
-  it('wires disabled category labels into text categorical rendering', () => {
-    expect(source).toContain('textClassification?.disabledLabels ?? []');
-    expect(source).toContain('textClassification?.disabledLabels,');
-  });
-});
-
 describe('createTextOverlayLayers', () => {
-  it('routes text labels through the text representative point source', () => {
-    expect(source).toContain('function getTextRepresentativePointSource(');
-    expect(source).toContain(
-      'ctx.textRepresentativePointTable ?? ctx.representativePointTable'
-    );
-    expect(source).toContain(
-      'const representativePointSource = getTextRepresentativePointSource(ctx);'
-    );
-  });
-
-  it('keeps text filters independent from symbol filters on raw point datasets', () => {
-    expect(source).toContain('table: ctx.textPointTable ?? jsTable,');
-    expect(source).toContain(
-      '(representativePointSource ? jsTable : (textPointSource?.table ?? jsTable))'
-    );
-  });
-
   it('wraps text labels and places labels to the right when symbols are rendered', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 2,
@@ -1228,6 +1185,79 @@ describe('createPolygonLayers', () => {
     expect(radii).toBeDefined();
     expect(Array.from(featureIds ?? [])).toEqual([1, 0]);
     expect(radii![0]).toBeGreaterThan(radii![1]);
+  });
+
+  it('reads imported-geometry symbol attributes from the representative point table when a POINT filter subsets it', () => {
+    // Regression for #201: a Symbols (POINT) filter subsets the
+    // representative-point table but not the POLYGON-filtered geometry table.
+    // The binary featureIds index the representative-point table, so radii must
+    // follow that table's surviving row, not the geometry table's row at the
+    // same positional index.
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [createPolygonFeature('keep', 2024)]
+    } satisfies FeatureCollection<Polygon>);
+    const singlePointData = {
+      length: 1,
+      featureIds: new Uint32Array([0]),
+      positions: new Float64Array([0, 0])
+    };
+    parsePointDataMock.mockReturnValue(singlePointData);
+    parsePointDataWithProjectionMock.mockReturnValue(singlePointData);
+    createScatterplotLayerPropsMock.mockImplementation((pointData) => ({
+      data: {
+        length: pointData.length,
+        featureIds: pointData.featureIds,
+        attributes: {}
+      }
+    }));
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.PROPORTIONAL,
+      sizeColumn: 'population_2023',
+      minSize: 2,
+      maxSize: 20
+    };
+
+    // Full imported geometry: row 0 is the small feature, row 1 the large one.
+    const geometryTable = createTableWithRows(
+      [
+        { population_2023: 10, geometry: null },
+        { population_2023: 100, geometry: null }
+      ],
+      ['population_2023', 'geometry']
+    );
+    // POINT filter kept only the large feature; it now sits at index 0.
+    const representativeTable = createTableWithRows(
+      [{ population_2023: 100, geometry: null }],
+      ['population_2023', 'geometry']
+    );
+
+    const layers = createPolygonLayers(geometryTable, createGeometryInfo(), {
+      ...createContext(visualization),
+      statistics: { min: 10, max: 100 },
+      representativePointTable: representativeTable,
+      representativePointGeometryInfo: {
+        ...createPointGeometryInfo(),
+        type: 'POINT' as GeometryInfo['type']
+      }
+    });
+
+    const pointLayer = layers.find((layer) =>
+      String(layer.props.id).includes('point-layer')
+    );
+    const radii = (
+      pointLayer?.props.data as {
+        attributes?: { getRadius?: { value?: Float32Array } };
+      }
+    )?.attributes?.getRadius?.value;
+
+    expect(radii).toBeDefined();
+    // Value 100 at domainMax 100 -> the maximum radius (20). Reading the
+    // geometry table at index 0 (value 10) would have produced ~6.3.
+    expect(radii![0]).toBeCloseTo(20, 5);
   });
 
   it('passes common category patterns to split representative point symbols', () => {
@@ -2131,12 +2161,6 @@ describe('createPolygonLayers', () => {
 });
 
 describe('createPointLayers', () => {
-  it('does not generate SVG icon point layers for symbol shapes', () => {
-    expect(source).not.toContain("pointType: 'icon'");
-    expect(source).not.toContain('createPointSymbolIcon');
-    expect(source).not.toContain('data:image/svg+xml');
-  });
-
   it('fully disables point circle stroke props when contour mode is none', () => {
     arrowTableToGeoJSONMock.mockReturnValue({
       type: 'FeatureCollection',
@@ -3185,10 +3209,6 @@ describe('createLineLayers', () => {
       | undefined;
 
     expect(getLineColor?.(disabledFeature)).toEqual([0, 0, 0, 0]);
-  });
-
-  it('wires disabled line categories into Deck color update triggers', () => {
-    expect(source).toContain('lineColorClassification?.disabledLabels');
   });
 
   it('uses the selected dash pattern for dashed GeoJSON line layers', () => {

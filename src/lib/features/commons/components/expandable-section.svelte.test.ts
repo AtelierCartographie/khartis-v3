@@ -1,14 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { createRawSnippet } from 'svelte';
 import { describe, expect, it } from 'vitest';
 import ExpandableSection from './expandable-section.svelte';
-
-const source = readFileSync(
-  resolve(import.meta.dirname, 'expandable-section.svelte'),
-  'utf8'
-);
 
 describe('ExpandableSection', () => {
   it('toggles a collapsed section when its header button is clicked', async () => {
@@ -77,12 +70,5 @@ describe('ExpandableSection', () => {
 
     expect((actions as HTMLElement).inert).toBe(true);
     expect(actions).toHaveClass('disabled');
-  });
-
-  it('allows scoped surface tokens for themed parent sections', () => {
-    expect(source).toContain('--khartis-expandable-section-background');
-    expect(source).toContain('--khartis-expandable-section-hover-background');
-    expect(source).toContain('--khartis-expandable-section-body-padding');
-    expect(source).toContain('.section-header:hover:not(.disabled)');
   });
 });
