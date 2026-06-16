@@ -1,6 +1,27 @@
 import '@testing-library/jest-dom/vitest';
 import { vi } from 'vitest';
 
+if (typeof globalThis.Worker === 'undefined') {
+  class WorkerStub {
+    onmessage: ((event: MessageEvent) => void) | null = null;
+
+    onerror: ((event: ErrorEvent) => void) | null = null;
+
+    postMessage(): void {}
+
+    terminate(): void {}
+
+    addEventListener(): void {}
+
+    removeEventListener(): void {}
+
+    dispatchEvent(): boolean {
+      return false;
+    }
+  }
+  vi.stubGlobal('Worker', WorkerStub);
+}
+
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   enumerable: true,

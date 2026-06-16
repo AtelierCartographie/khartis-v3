@@ -566,9 +566,17 @@ function usesDoubleProportionalSymbols(viz: LayerContext['viz']): boolean {
 function createDoubleProportionalPointLayers(
   pointData: BinaryPointData,
   jsTable: ArrowTable,
+  symbolRowTable: ArrowTable,
   ctx: LayerContext,
   layerId: string
 ): Layer<DeckDataRow>[] {
+  // Outside the split (joined-basemap) path the binary `featureIds` index into
+  // the representative-point table, so per-row attributes must be read from it
+  // — keeping symbols aligned with their polygon when a POINT filter subsets
+  // the points. The split path keeps reading the matched geometry table.
+  const attributeTable = hasSplitRenderingContext(ctx)
+    ? jsTable
+    : symbolRowTable;
   const {
     viz,
     symbolFillColor: fillColor,
@@ -877,7 +885,7 @@ function createDoubleProportionalPointLayers(
     };
 
   const primaryFillByFeatureId = rowAccessor(
-    jsTable,
+    attributeTable,
     createFillAccessor(
       pointSizeColumn,
       fillColor,
@@ -886,7 +894,7 @@ function createDoubleProportionalPointLayers(
     )
   );
   const secondaryFillByFeatureId = rowAccessor(
-    jsTable,
+    attributeTable,
     createFillAccessor(
       pointValueColumn,
       secondaryFillColor,
@@ -895,19 +903,19 @@ function createDoubleProportionalPointLayers(
     )
   );
   const primaryLineByFeatureId = rowAccessor(
-    jsTable,
+    attributeTable,
     createLineAccessor(pointSizeColumn)
   );
   const secondaryLineByFeatureId = rowAccessor(
-    jsTable,
+    attributeTable,
     createLineAccessor(pointValueColumn)
   );
   const primaryRadiusByFeatureId = rowAccessor(
-    jsTable,
+    attributeTable,
     createRadiusAccessor(pointSizeColumn, primaryRadiusAccessor)
   );
   const secondaryRadiusByFeatureId = rowAccessor(
-    jsTable,
+    attributeTable,
     createRadiusAccessor(pointValueColumn, secondaryRadiusAccessor)
   );
 
@@ -967,7 +975,12 @@ function createDoubleProportionalPointLayers(
     const layoutProps = offsetForRole(role);
     const scatterProps = createScatterplotLayerProps(pointData);
     const scatterBinaryData = cloneScatterBinaryData(scatterProps);
-    attachBinaryPickingMetadata(scatterBinaryData, jsTable, pointData, ctx);
+    attachBinaryPickingMetadata(
+      scatterBinaryData,
+      attributeTable,
+      pointData,
+      ctx
+    );
     scatterBinaryData.attributes.getFillColor = pointColorAttr(
       pointData,
       fillByFeatureId
@@ -982,7 +995,7 @@ function createDoubleProportionalPointLayers(
     );
     scatterBinaryData.attributes.getShape = buildShapeAttribute(
       scatterBinaryData.featureIds,
-      jsTable,
+      attributeTable,
       triggerColumn,
       shapeOrdinal,
       missingShapeOrdinal
@@ -1192,12 +1205,21 @@ function createRepresentativePointSymbolLayers(
     representativePointSource.table
   );
 
+  // The binary point `featureIds` index into the representative-point table, so
+  // every per-row symbol accessor must read its attributes from that same table
+  // — not from `jsTable`. When a Symbols (POINT) filter is active the two tables
+  // are filtered with different primitives and diverge, which would otherwise
+  // shift each symbol onto the wrong polygon's data. The split (joined-basemap)
+  // path is unaffected: its accessor maps by feature-id column, not row order.
+  const symbolRowTable = representativePointSource.table;
+
   const pointLayerId = createThematicLayerId(DeckLayerId.POINT_LAYER, ctx);
 
   if (usesDoubleProportionalSymbols(viz)) {
     return createDoubleProportionalPointLayers(
       pointData,
       jsTable,
+      symbolRowTable,
       ctx,
       pointLayerId
     );
@@ -1419,19 +1441,19 @@ function createRepresentativePointSymbolLayers(
 
   const fillColorByFeatureId = ctxRowAccessor(
     ctx,
-    jsTable,
+    symbolRowTable,
     resolveFillColorForRow,
     representativePointSource.table
   );
   const lineColorByFeatureId = ctxRowAccessor(
     ctx,
-    jsTable,
+    symbolRowTable,
     resolveLineColorForRow,
     representativePointSource.table
   );
   const radiusByFeatureId = ctxRowAccessor(
     ctx,
-    jsTable,
+    symbolRowTable,
     resolveRadiusForRow,
     representativePointSource.table
   );
@@ -1533,7 +1555,7 @@ function createRepresentativePointSymbolLayers(
 
   const shapeByFeatureId = ctxRowAccessor(
     ctx,
-    jsTable,
+    symbolRowTable,
     (row) => {
       if (
         pointMissingColumn &&
@@ -1571,7 +1593,7 @@ function createRepresentativePointSymbolLayers(
   if (categoryRankRadiusMap && pointCategoryColumn) {
     const categoryRankRadiusByFeatureId = ctxRowAccessor(
       ctx,
-      jsTable,
+      symbolRowTable,
       (row) => {
         if (isDisabledPointCategoryRow(row)) {
           return 0;
@@ -3950,6 +3972,7 @@ export function createPointLayers(
   if (usesDoubleProportionalSymbols(viz)) {
     return createDoubleProportionalPointLayers(
       pointData,
+      jsTable,
       jsTable,
       ctx,
       layerId
