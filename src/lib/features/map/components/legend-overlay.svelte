@@ -86,16 +86,13 @@
   import { setStylingToolPopoverDragging } from '../utils/tool-popover-drag-visibility.utils';
   import {
     getLegendState,
-    legendActions
+    legendActions,
+    selectRenderedLegendItems
   } from '$lib/features/step-toolbar/tools/legend';
   import {
     getFormatLayoutSizingContext,
     getFormatState
   } from '$lib/features/step-toolbar/tools/format';
-  import {
-    facetsStore,
-    SCALE_MODE
-  } from '$lib/features/step-toolbar/tools/facets';
   import {
     CATEGORY_SHAPE_CYCLE,
     CategoryShapeMode,
@@ -154,14 +151,18 @@
   // renders its own LegendOverlay scoped to one visualization, laid out inline
   // inside the cell instead of absolutely-positioned/draggable in the viewport.
   // Both default to the legacy behaviour (single, viewport-positioned legend).
+  // `sizeScale` shrinks the inline legend so it stays proportional to its facet
+  // cell (a full-page legend dropped into a small multiple reads as oversized).
   let {
     hidden = false,
     scopeVizId = null,
-    inline = false
+    inline = false,
+    sizeScale = 1
   }: {
     hidden?: boolean;
     scopeVizId?: string | null;
     inline?: boolean;
+    sizeScale?: number;
   } = $props();
 
   function getPatternOverlayColor(fillColor: string | undefined): string {
@@ -1718,29 +1719,12 @@
 
   const legendState = $derived(getLegendState());
   const formatState = $derived(getFormatState());
-  const visibleItems = $derived.by(() => {
-    const items = legendState.items.filter((i) => i.visible);
-    if (scopeVizId) {
-      return items.filter((item) => item.variableId === scopeVizId);
-    }
-    if (!facetsStore.enabled) {
-      return items;
-    }
-
-    // In a map collection the base visualization is hidden, so its legend must
-    // not appear; only the generated facets get a legend. With a shared scale
-    // every facet shares the same breaks, so a single legend stands for all.
-    const generatedIds = new Set(facetsStore.generatedVisualizationIds);
-    const facetItems = items.filter(
-      (item) => item.variableId != null && generatedIds.has(item.variableId)
-    );
-
-    if (facetsStore.scaleMode === SCALE_MODE.SHARED) {
-      return facetItems.slice(0, 1);
-    }
-
-    return facetItems;
-  });
+  const visibleItems = $derived.by(() =>
+    selectRenderedLegendItems(
+      legendState.items.filter((i) => i.visible),
+      { scopeVizId }
+    )
+  );
 
   const vizByItemId = $derived.by(() => {
     void visualizationStore.version;
@@ -1808,7 +1792,8 @@
   });
 
   const containerStyle = $derived.by(() => {
-    const scale = getPageScale();
+    const scale =
+      getPageScale() * (inline ? Math.max(0, Math.min(1, sizeScale)) : 1);
     const hasBackground = legendState.style.background.enabled;
     const shellPaddingInline = hasBackground
       ? Math.max(4, Math.round(layoutTokens.legend.paddingInline * 0.35))

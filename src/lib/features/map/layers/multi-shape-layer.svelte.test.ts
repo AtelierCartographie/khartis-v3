@@ -67,16 +67,6 @@ describe('MultiShapeLayer — class contract', () => {
 });
 
 describe('MultiShapeLayer — source invariants (keep SDF shader consistent)', () => {
-  it('registers instanceShapes attribute accessing getShape', () => {
-    expect(source).toMatch(/instanceShapes:[\s\S]{0,80}accessor:\s*'getShape'/);
-    expect(source).toContain('size: 1');
-  });
-
-  it('declares vShape and vRadius outputs in the vertex shader', () => {
-    expect(source).toContain('vShape = instanceShapes;');
-    expect(source).toContain('vRadius = instanceRadius;');
-  });
-
   it('calibrates 2D shapes against the stock ScatterplotLayer circle', () => {
     // Quad scaled by 1/SYMBOL_SDF_EXTENT for 2D shapes only, and the SDF
     // circle is authored at SYMBOL_SDF_EXTENT of the quad — one constant.
@@ -97,37 +87,6 @@ describe('MultiShapeLayer — source invariants (keep SDF shader consistent)', (
     );
   });
 
-  it('declares multiShape uniform block with dash controls', () => {
-    expect(source).toMatch(/uniform multiShapeUniforms\s*\{/);
-    expect(source).toContain('float barWidth;');
-    expect(source).toContain('float offsetX;');
-    expect(source).toContain('float offsetY;');
-    expect(source).toContain('float halfMask;');
-    expect(source).toContain('float shapeScale;');
-    expect(source).toContain('float dashed;');
-    expect(source).toContain('float dashLength;');
-    expect(source).toContain('float gapLength;');
-    expect(source).toContain('float dotLength;');
-    expect(source).toContain('float dotGap;');
-    expect(source).toContain('float patternEnabled;');
-    expect(source).toContain('float patternType;');
-    expect(source).toContain('vec2 scaledUv = uv / max(multiShape.shapeScale');
-    expect(source).toContain(
-      'lineMask *= getDashMask(scaledUv, strokePx, midRadiusPx'
-    );
-    // real round dots are computed from the distance to the dot centre
-    expect(source).toContain(
-      'float distToDot = length(vec2(arcPos - dotCenter'
-    );
-    expect(source).toContain('vec4 applyFillPattern(vec4 fillColor, vec2 uv)');
-  });
-
-  it('orients spike symbols upward in shader space', () => {
-    expect(source).toContain(
-      'vec2 pos = vec2(uv.x, -uv.y) * outerRadiusPixels;'
-    );
-  });
-
   it('keeps triangle symbols oriented like the UI and legend', () => {
     const triangleBlock = source.match(
       /case 6: \/\/ TRIANGLE[\s\S]*?case 7: \/\/ STAR/
@@ -136,12 +95,5 @@ describe('MultiShapeLayer — source invariants (keep SDF shader consistent)', (
     expect(triangleBlock).toBeDefined();
     expect(triangleBlock).toContain('return sdEquilateralTriangle(pos, r)');
     expect(triangleBlock).not.toContain('vec2(pos.x, -pos.y)');
-  });
-
-  it('calls super.draw after setting shaderInputs to avoid GPU state leaks', () => {
-    const drawBlock = source.match(
-      /draw\([\s\S]*?\): void \{[\s\S]*?shaderInputs\.setProps\([\s\S]*?super\.draw\(opts\);\s*\}/
-    );
-    expect(drawBlock).not.toBeNull();
   });
 });

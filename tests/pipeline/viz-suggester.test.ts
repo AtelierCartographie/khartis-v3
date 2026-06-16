@@ -256,3 +256,34 @@ describe('suggestVisualizations — maxSuggestions', () => {
     expect(results.length).toBeLessThanOrEqual(3);
   });
 });
+
+describe('suggestVisualizations — ranking by confidence', () => {
+  it('returns the best suggestion first in non-increasing score order', () => {
+    const results = vizSuggester.suggestVisualizations(
+      [qlCol, qtaCol],
+      'Polygon',
+      { maxSuggestions: 10 }
+    );
+
+    expect(results.length).toBeGreaterThan(1);
+
+    const scores = results.map((s) => s.score ?? 0);
+    const sortedDescending = [...scores].sort((a, b) => b - a);
+    expect(scores).toEqual(sortedDescending);
+  });
+
+  it('assigns every suggestion a finite score within 0..100', () => {
+    const results = vizSuggester.suggestVisualizations(
+      [qlCol, qtaCol],
+      'Polygon',
+      { maxSuggestions: 10 }
+    );
+
+    expect(results.length).toBeGreaterThan(0);
+    for (const s of results) {
+      expect(Number.isFinite(s.score)).toBe(true);
+      expect(s.score).toBeGreaterThanOrEqual(0);
+      expect(s.score).toBeLessThanOrEqual(100);
+    }
+  });
+});

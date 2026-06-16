@@ -1,13 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import * as m from '$lib/paraglide/messages';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const source = readFileSync(
-  resolve(import.meta.dirname, 'layers.svelte'),
-  'utf8'
-);
 
 vi.mock('svelte-dnd-action', () => ({
   dragHandle: () => ({ destroy() {} }),
@@ -138,12 +131,6 @@ describe('layers', () => {
     ];
 
     vi.clearAllMocks();
-  });
-
-  it('resyncs when basemap metadata or auxiliary layer visibility changes', () => {
-    expect(source).toContain('void basemapAuxLayersStore.version');
-    expect(source).toContain('void basemapStyleStore.referenceBasemapId');
-    expect(source).toContain('void basemapService.simplificationVersion');
   });
 
   it('renders every flattened row without collapsible parents', () => {

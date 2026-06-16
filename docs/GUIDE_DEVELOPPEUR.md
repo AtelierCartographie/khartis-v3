@@ -74,7 +74,7 @@ features/mon-outil/
 
 Chaque feature expose son API publique via `index.ts`. Les imports inter-features
 doivent passer par ce barrel ; les imports profonds dans les internes d'une
-autre feature sont interdits (vérifié par `architecture-boundaries.test.ts`).
+autre feature sont interdits (vérifié par `architecture-boundaries.svelte.test.ts`).
 
 > Pour le **rationale** derrière le découpage de chaque feature et les
 > guidelines pour en créer une nouvelle, voir

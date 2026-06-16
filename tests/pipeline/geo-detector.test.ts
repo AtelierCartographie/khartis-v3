@@ -166,6 +166,56 @@ describe('GeoColumnDetector.detectByHeader', () => {
   });
 });
 
+describe('GeoColumnDetector.detectColumnType arbitration', () => {
+  const ISO2_VALUES = [
+    'FR',
+    'DE',
+    'US',
+    'GB',
+    'IT',
+    'ES',
+    'PL',
+    'NL',
+    'BE',
+    'PT'
+  ];
+
+  it('keeps the max confidence and merges matchedPatterns when header and values agree', () => {
+    const result = GeoColumnDetector.detectColumnType('iso2', ISO2_VALUES);
+    expect(result?.type).toBe('iso2');
+    expect(result?.confidence).toBe(1);
+    expect(result?.matchedPatterns).toEqual(
+      expect.arrayContaining(['Header keywords: ISO2', 'Value pattern: ISO2'])
+    );
+  });
+
+  it('lets the value subtype win when its confidence exceeds the header by more than 0.15', () => {
+    const headerOnly = GeoColumnDetector.detectByHeader('entity', ISO2_VALUES);
+    expect(headerOnly?.type).toBe('country_name');
+
+    const result = GeoColumnDetector.detectColumnType('entity', ISO2_VALUES);
+    expect(result?.type).toBe('iso2');
+  });
+
+  it('keeps the header type when the value subtype does not beat it by more than 0.15', () => {
+    const regionValues = ['NORMANDIE', 'BRETAGNE', 'OCCITANIE', 'CORSE'];
+    const headerOnly = GeoColumnDetector.detectByHeader(
+      'country',
+      regionValues
+    );
+    expect(headerOnly?.type).toBe('country_name');
+
+    const valueOnly = GeoColumnDetector.detectByValues(regionValues);
+    expect(valueOnly?.type).toBe('region');
+    expect(valueOnly?.confidence).toBeLessThanOrEqual(
+      (headerOnly?.confidence ?? 0) + 0.15
+    );
+
+    const result = GeoColumnDetector.detectColumnType('country', regionValues);
+    expect(result?.type).toBe('country_name');
+  });
+});
+
 describe('resolveGPSCoordinateColumns', () => {
   it('resolves lat/lon by column name pattern', () => {
     const columns = [{ name: 'lat' }, { name: 'lon' }, { name: 'population' }];

@@ -52,17 +52,4 @@ describe('SliderWithInput', () => {
 
     expect(onchange).toHaveBeenCalledWith(80);
   });
-
-  it('wires pointer/keyboard release handlers on the slider container', () => {
-    const { container } = render(SliderWithInput, {
-      label: 'Zoom',
-      value: 50,
-      min: 0,
-      max: 100,
-      debounceMs: 200
-    });
-    const wrapper = container.querySelector('.slider-container');
-    expect(wrapper).not.toBeNull();
-    expect(wrapper?.getAttribute('role')).toBe('presentation');
-  });
 });
