@@ -11,7 +11,7 @@ import { basemapCatalogService } from '$lib/features/map/services/basemap-catalo
 import {
   disableFacets,
   getFacetsBaseVisualizationId
-} from '$lib/features/step-toolbar/tools/facets/facets-access';
+} from '$lib/features/step-toolbar/tools/facets';
 import { toJsonValue } from '$lib/features/commons/utils/json.utils';
 import type { UploadedFile } from '../../types/create-project.types';
 import { DataSourceType, FileType } from '../../types/create-project.types';
