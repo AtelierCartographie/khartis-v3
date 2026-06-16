@@ -138,6 +138,20 @@
       primarySlotPath: facetsStore.primarySlotPath
     })
   );
+  // Shrink each anchored legend proportionally to its facet cell so a full-page
+  // legend doesn't read as oversized in a small multiple. Floored to stay
+  // legible when many columns make the cells tiny.
+  const FACET_LEGEND_MIN_SCALE = 0.4;
+  const facetLegendScale = $derived.by(() => {
+    const cellWidth = descriptors[0]?.frame.width ?? 0;
+    if (cellWidth <= 0 || containerWidth <= 0) {
+      return 1;
+    }
+    return Math.max(
+      FACET_LEGEND_MIN_SCALE,
+      Math.min(1, cellWidth / containerWidth)
+    );
+  });
   const isStylingMode = $derived(
     globalState.selectedStep === ToolbarStep.Styling
   );
@@ -1128,7 +1142,11 @@
             style:height="{descriptor.frame.height}px"
           >
             {#if showAnchoredLegends}
-              <LegendOverlay scopeVizId={descriptor.vizId} inline />
+              <LegendOverlay
+                scopeVizId={descriptor.vizId}
+                inline
+                sizeScale={facetLegendScale}
+              />
             {/if}
           </div>
         </div>
