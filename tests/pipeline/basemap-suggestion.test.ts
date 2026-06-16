@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { GPSBounds } from '$lib/features/duckdb';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
+import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import {
   rankBasemapsByGPSBbox,
   rankBasemapsByJoinSynthesis,
-  calculateGeoColumnBasemapMatchScore
+  calculateGeoColumnBasemapMatchScore,
+  rankBasemapsByGeoColumn
 } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
 
@@ -288,5 +290,99 @@ describe('[S02] calculateGeoColumnBasemapMatchScore', () => {
       GEO_COLUMN_TYPE.ISO3
     );
     expect(result.score).toBeLessThanOrEqual(100);
+  });
+});
+
+describe('[S02] rankBasemapsByGeoColumn — ISO country column planisphere fallback', () => {
+  const GENERIC_WORLD = basemap({
+    file: 'world-borders-2000-medium',
+    title_fr: 'World borders',
+    title_en: 'World borders',
+    date: '2000',
+    bbox: [-180, -90, 180, 90],
+    simplification_level: 'medium'
+  });
+  const FRANCE_REGIONS_OLD = basemap({
+    file: 'france-region-2000-high',
+    title_fr: 'France · par régions',
+    title_en: 'France by regions',
+    date: '2000',
+    bbox: [-61.81, -21.39, 55.83, 51.09],
+    simplification_level: 'high'
+  });
+  const FRANCE_DEPARTMENTS_OLD = basemap({
+    file: 'france-departement-2000-high',
+    title_fr: 'France · par départements',
+    title_en: 'France by departments',
+    date: '2000',
+    bbox: [-61.81, -21.39, 55.83, 51.09],
+    simplification_level: 'high'
+  });
+
+  function isoCountryDataset(columnName: string): ProcessedDataset {
+    return {
+      id: 'ds-iso',
+      name: 'iso dataset',
+      format: 'csv',
+      data: [],
+      rowCount: 0,
+      columns: [
+        { name: columnName, type: 'string', nullable: false, unique: true }
+      ],
+      analysis: {} as ProcessedDataset['analysis'],
+      createdAt: new Date(),
+      fileSize: 0,
+      metadata: { processedAt: new Date(), transformations: [] },
+      geoDetection: {
+        geoColumns: [{ columnName, type: GEO_COLUMN_TYPE.ISO3 }]
+      } as ProcessedDataset['geoDetection']
+    };
+  }
+
+  it('surfaces world basemaps and drops zero-score region/department basemaps', () => {
+    const suggestions = rankBasemapsByGeoColumn(
+      [
+        GENERIC_WORLD,
+        FRANCE_REGIONS_OLD,
+        WORLD_BASEMAP,
+        FRANCE_DEPARTMENTS_OLD
+      ],
+      isoCountryDataset('code'),
+      'code'
+    );
+
+    const files = suggestions.map((suggestion) => suggestion.file);
+    expect(files).toContain('monde-countries-2024-medium');
+    expect(files).not.toContain('france-region-2000-high');
+    expect(files).not.toContain('france-departement-2000-high');
+    expect(suggestions.every((suggestion) => suggestion.matchScore > 0)).toBe(
+      true
+    );
+  });
+
+  it('sorts surviving basemaps by descending match score', () => {
+    const suggestions = rankBasemapsByGeoColumn(
+      [GENERIC_WORLD, WORLD_BASEMAP],
+      isoCountryDataset('code'),
+      'code'
+    );
+
+    expect(suggestions).toHaveLength(2);
+    expect(suggestions[0].file).toBe('monde-countries-2024-medium');
+    expect(suggestions[0].matchScore).toBeGreaterThan(
+      suggestions[1].matchScore
+    );
+  });
+
+  it('respects the limit while keeping the highest-scoring basemap first', () => {
+    const suggestions = rankBasemapsByGeoColumn(
+      [GENERIC_WORLD, WORLD_BASEMAP],
+      isoCountryDataset('code'),
+      'code',
+      1
+    );
+
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0].file).toBe('monde-countries-2024-medium');
   });
 });
