@@ -6,7 +6,7 @@ import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrat
 import {
   disableFacets,
   getFacetsBaseVisualizationId
-} from '$lib/features/step-toolbar/tools/facets/facets-access';
+} from '$lib/features/step-toolbar/tools/facets';
 import type { DatasetsState, DatasetsInternals } from './datasets-state.svelte';
 import type { VisualizationStoreOperations } from './datasets-processing';
 import { sanitizeTextInput } from '../../utils/sanitize.utils';

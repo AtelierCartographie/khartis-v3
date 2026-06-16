@@ -84,7 +84,7 @@ src/
 | `step-toolbar/`       | Panneau droit : 10 outils (search, layers, projections, legend, annotations…) |
 | `visualization-tab/`  | Onglet « Visualisations » : suggestions, primitives, fond de carte            |
 
-Chaque feature expose son API publique via `index.ts`. Les imports inter-features doivent passer par ce barrel ; les imports profonds dans les internes d'une autre feature sont interdits (vérifié par `architecture-boundaries.test.ts`).
+Chaque feature expose son API publique via `index.ts`. Les imports inter-features doivent passer par ce barrel ; les imports profonds dans les internes d'une autre feature sont interdits (vérifié par `architecture-boundaries.svelte.test.ts`).
 
 > Pour comprendre **pourquoi** chaque feature est organisée comme elle l'est et savoir comment structurer une nouvelle feature, voir [ARCHITECTURE_FEATURES.md](ARCHITECTURE_FEATURES.md).
 
