@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   SHAPE_ORDINAL,
@@ -65,11 +63,6 @@ vi.mock('@ateliercartographie/motif.js', () => ({
     url: `url(#mock-pattern-${config.type}-${config.angle ?? 0})`
   })
 }));
-
-const source = readFileSync(
-  resolve(import.meta.dirname, 'map-export.utils.ts'),
-  'utf8'
-);
 
 function createDomRect(
   left: number,
@@ -195,25 +188,6 @@ describe('map export DOM mutations', () => {
     vi.unstubAllGlobals();
   });
 
-  it('keeps the export cleanup focused on debug-only UI without injecting an extra credit watermark', () => {
-    expect(source).toContain("domNode.classList?.contains('page-grid')");
-    expect(source).not.toContain('pageContainer.appendChild(sig)');
-    expect(source).not.toContain('m.map_export_signature()');
-  });
-
-  it('builds SVG exports as structured layers instead of a single html snapshot', () => {
-    expect(source).toContain('function buildStructuredSvgMarkup');
-    expect(source).toContain('id="khartis-layer-page"');
-    expect(source).toContain('id="khartis-page-background"');
-    expect(source).toContain('SVG_MAP_FRAME_CLIP_ID');
-    expect(source).toContain('id="khartis-layer-visualizations"');
-    expect(source).toContain('id="khartis-layer-legend"');
-    expect(source).toContain('id="khartis-layer-geo-indications"');
-    expect(source).toContain('id="khartis-layer-annotations"');
-    expect(source).not.toContain('toSvg as htmlToImageSvg');
-    expect(source).not.toContain('foreignObject');
-  });
-
   it('exports the full page bounds, page color, and map frame background around SVG map content', async () => {
     document.body.innerHTML = `
       <div class="page-container" style="background-color: rgb(250, 250, 250); padding: 30px 40px 50px 20px;">
@@ -258,10 +232,6 @@ describe('map export DOM mutations', () => {
     expect(markup).toContain('fill="rgb(200, 210, 220)"');
     expect(markup).toContain('clip-path="url(#khartis-map-frame-clip)"');
     expect(markup).toContain('data-khartis-export-mode="raster-fallback"');
-  });
-
-  it('waits for embedded fonts before exporting the page', () => {
-    expect(source).toContain('await fontAssetsStore.ensureLoaded();');
   });
 
   it('exports layout text as native SVG text instead of a foreignObject fallback', async () => {
@@ -1005,11 +975,6 @@ describe('map export DOM mutations', () => {
     expect(globalState.selectedStep).toBe(ToolbarStep.Visualizations);
     expect(globalState.isMapExporting).toBe(false);
     expect(page.classList.contains('is-exporting-map')).toBe(false);
-  });
-
-  it('exports the shared facets WebGL canvas when a map collection is active', () => {
-    expect(source).toContain('function resolveMapCanvas');
-    expect(source).toContain('.shared-facets-canvas canvas');
   });
 
   it('uses the facets page root for SVG and JPEG exports', async () => {

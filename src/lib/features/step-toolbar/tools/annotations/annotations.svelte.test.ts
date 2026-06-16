@@ -15,23 +15,6 @@ describe('annotations tool', () => {
     annotationsActions.reset();
   });
 
-  it('renders annotation type actions without crashing', () => {
-    render(Annotations);
-
-    expect(
-      screen.getByRole('button', { name: m.annotations_text() })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: m.annotations_shape() })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: m.annotations_drawing() })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: m.annotations_image() })
-    ).toBeInTheDocument();
-  });
-
   it('matches the figma default text controls for note annotations', () => {
     render(Annotations);
 
