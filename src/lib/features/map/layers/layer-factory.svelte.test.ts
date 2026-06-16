@@ -1230,6 +1230,79 @@ describe('createPolygonLayers', () => {
     expect(radii![0]).toBeGreaterThan(radii![1]);
   });
 
+  it('reads imported-geometry symbol attributes from the representative point table when a POINT filter subsets it', () => {
+    // Regression for #201: a Symbols (POINT) filter subsets the
+    // representative-point table but not the POLYGON-filtered geometry table.
+    // The binary featureIds index the representative-point table, so radii must
+    // follow that table's surviving row, not the geometry table's row at the
+    // same positional index.
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [createPolygonFeature('keep', 2024)]
+    } satisfies FeatureCollection<Polygon>);
+    const singlePointData = {
+      length: 1,
+      featureIds: new Uint32Array([0]),
+      positions: new Float64Array([0, 0])
+    };
+    parsePointDataMock.mockReturnValue(singlePointData);
+    parsePointDataWithProjectionMock.mockReturnValue(singlePointData);
+    createScatterplotLayerPropsMock.mockImplementation((pointData) => ({
+      data: {
+        length: pointData.length,
+        featureIds: pointData.featureIds,
+        attributes: {}
+      }
+    }));
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.PROPORTIONAL,
+      sizeColumn: 'population_2023',
+      minSize: 2,
+      maxSize: 20
+    };
+
+    // Full imported geometry: row 0 is the small feature, row 1 the large one.
+    const geometryTable = createTableWithRows(
+      [
+        { population_2023: 10, geometry: null },
+        { population_2023: 100, geometry: null }
+      ],
+      ['population_2023', 'geometry']
+    );
+    // POINT filter kept only the large feature; it now sits at index 0.
+    const representativeTable = createTableWithRows(
+      [{ population_2023: 100, geometry: null }],
+      ['population_2023', 'geometry']
+    );
+
+    const layers = createPolygonLayers(geometryTable, createGeometryInfo(), {
+      ...createContext(visualization),
+      statistics: { min: 10, max: 100 },
+      representativePointTable: representativeTable,
+      representativePointGeometryInfo: {
+        ...createPointGeometryInfo(),
+        type: 'POINT' as GeometryInfo['type']
+      }
+    });
+
+    const pointLayer = layers.find((layer) =>
+      String(layer.props.id).includes('point-layer')
+    );
+    const radii = (
+      pointLayer?.props.data as {
+        attributes?: { getRadius?: { value?: Float32Array } };
+      }
+    )?.attributes?.getRadius?.value;
+
+    expect(radii).toBeDefined();
+    // Value 100 at domainMax 100 -> the maximum radius (20). Reading the
+    // geometry table at index 0 (value 10) would have produced ~6.3.
+    expect(radii![0]).toBeCloseTo(20, 5);
+  });
+
   it('passes common category patterns to split representative point symbols', () => {
     arrowTableToGeoJSONMock.mockReturnValue({
       type: 'FeatureCollection',
