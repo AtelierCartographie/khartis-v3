@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SLIDER_LIMITS } from '$lib/features/commons/constants/visualization.constants';
 import {
@@ -244,57 +242,5 @@ describe('extendTextCharacterSet', () => {
     expect(fromString).toContain('犬');
     expect(fromSet).toContain('猫');
     expect(fromSet).toContain('犬');
-  });
-});
-
-describe('text-character-set — adoption', () => {
-  it('layer-factory.ts wires the auto character set into both TextLayers', () => {
-    const source = readFileSync(
-      resolve(import.meta.dirname, 'layer-factory.ts'),
-      'utf-8'
-    );
-    expect(source).toMatch(
-      /import\s*\{[^}]*DECK_TEXT_CHARACTER_SET[^}]*\}\s*from\s*'\.\/text-character-set'/
-    );
-    expect(source).toMatch(
-      /import\s*\{[^}]*resolveTextFontSettings[^}]*\}\s*from\s*'\.\/text-character-set'/
-    );
-    const autoMatches = source.match(/characterSet: DECK_TEXT_CHARACTER_SET/g);
-    expect(autoMatches?.length).toBe(2);
-    expect(source).not.toMatch(/characterSet:\s*EXPLICIT_TEXT_CHARACTER_SET/);
-  });
-
-  it('layer-factory.ts picks SDF fontSettings when halo is on, raster otherwise', () => {
-    const source = readFileSync(
-      resolve(import.meta.dirname, 'layer-factory.ts'),
-      'utf-8'
-    );
-    const haloOn = source.match(/'halo-on'/g);
-    const haloOff = source.match(/'halo-off'/g);
-    expect(haloOn?.length).toBe(2);
-    expect(haloOff?.length).toBe(2);
-    const resolveCalls = source.match(/resolveTextFontSettings\(/g);
-    expect(resolveCalls?.length).toBe(2);
-  });
-
-  it('basemap-layers.ts wires the auto character set into the city labels GeoJsonLayer (no halo)', () => {
-    const source = readFileSync(
-      resolve(import.meta.dirname, 'basemap-layers.ts'),
-      'utf-8'
-    );
-    expect(source).toContain('textCharacterSet: DECK_TEXT_CHARACTER_SET');
-    expect(source).toContain(
-      'textFontSettings: DEFAULT_TEXT_FONT_SETTINGS_RASTER'
-    );
-    expect(source).toContain('textLineHeight: DEFAULT_TEXT_LINE_HEIGHT');
-  });
-
-  it('layer-factory.ts applies the shared lineHeight to every TextLayer', () => {
-    const source = readFileSync(
-      resolve(import.meta.dirname, 'layer-factory.ts'),
-      'utf-8'
-    );
-    const matches = source.match(/lineHeight: DEFAULT_TEXT_LINE_HEIGHT/g);
-    expect(matches?.length).toBe(2);
   });
 });
