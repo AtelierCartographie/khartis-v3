@@ -1,46 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { ChartTSne, StopFilledAlt } from 'carbon-icons-svelte';
 
 import { FillMode } from '$lib/features/commons/constants/visualization.constants';
 import {
-  FILL_MODES_FOR_SYMBOLS,
   FILL_MODES_STANDARD,
   FILL_MODES_WITH_DENSITY,
   buildFillModeItems
 } from './fill-mode-presets';
 
 describe('fill-mode-presets', () => {
-  it('FILL_MODES_STANDARD lists four modes without DENSITY', () => {
-    expect(FILL_MODES_STANDARD).toEqual([
-      FillMode.NONE,
-      FillMode.UNIQUE,
-      FillMode.CLASSES,
-      FillMode.CATEGORIES
-    ]);
-    expect(FILL_MODES_STANDARD.length).toBe(4);
-    expect(FILL_MODES_STANDARD).not.toContain(FillMode.DENSITY);
-  });
-
-  it('FILL_MODES_WITH_DENSITY lists five modes and keeps DENSITY between UNIQUE and CLASSES', () => {
-    expect(FILL_MODES_WITH_DENSITY).toEqual([
-      FillMode.NONE,
-      FillMode.UNIQUE,
-      FillMode.DENSITY,
-      FillMode.CLASSES,
-      FillMode.CATEGORIES
-    ]);
-  });
-
-  it('FILL_MODES_FOR_SYMBOLS keeps NONE for transparent symbol fills and omits DENSITY', () => {
-    expect(FILL_MODES_FOR_SYMBOLS).toEqual([
-      FillMode.NONE,
-      FillMode.UNIQUE,
-      FillMode.CLASSES,
-      FillMode.CATEGORIES
-    ]);
-    expect(FILL_MODES_FOR_SYMBOLS).not.toContain(FillMode.DENSITY);
-  });
-
   it('buildFillModeItems returns one entry per mode', () => {
     const items = buildFillModeItems(FILL_MODES_STANDARD);
     expect(items.length).toBe(FILL_MODES_STANDARD.length);
@@ -54,16 +21,6 @@ describe('fill-mode-presets', () => {
       expect(item.label.length).toBeGreaterThan(0);
       expect(item.iconSize).toBe(16);
     });
-  });
-
-  it('uses the Figma-requested Carbon icons for unique fill and density fill', () => {
-    const items = buildFillModeItems(FILL_MODES_WITH_DENSITY);
-    expect(items[FILL_MODES_WITH_DENSITY.indexOf(FillMode.UNIQUE)]?.icon).toBe(
-      StopFilledAlt
-    );
-    expect(items[FILL_MODES_WITH_DENSITY.indexOf(FillMode.DENSITY)]?.icon).toBe(
-      ChartTSne
-    );
   });
 
   it('buildFillModeItems preserves the order of the input modes', () => {

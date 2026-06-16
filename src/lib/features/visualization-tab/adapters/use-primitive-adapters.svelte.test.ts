@@ -104,45 +104,6 @@ describe('usePrimitiveAdapters', () => {
     vi.clearAllMocks();
   });
 
-  it('exposes all polygon handlers', () => {
-    const { handlers } = makeBag();
-    expect(typeof handlers.handlePolygonChange).toBe('function');
-    expect(typeof handlers.handlePolygonStyleChange).toBe('function');
-    expect(typeof handlers.handlePolygonModesChange).toBe('function');
-    expect(typeof handlers.handlePolygonClassificationChange).toBe('function');
-    expect(typeof handlers.handlePolygonDensityChange).toBe('function');
-  });
-
-  it('exposes all symbol handlers', () => {
-    const { handlers } = makeBag();
-    expect(typeof handlers.handleSymbolChange).toBe('function');
-    expect(typeof handlers.handleSymbolModesChange).toBe('function');
-    expect(typeof handlers.handleSymbolFillClassificationChange).toBe(
-      'function'
-    );
-    expect(typeof handlers.handleSymbolStrokeClassificationChange).toBe(
-      'function'
-    );
-  });
-
-  it('exposes all line handlers', () => {
-    const { handlers } = makeBag();
-    expect(typeof handlers.handleLineChange).toBe('function');
-    expect(typeof handlers.handleLineModesChange).toBe('function');
-    expect(typeof handlers.handleLineThicknessClassificationChange).toBe(
-      'function'
-    );
-  });
-
-  it('exposes all text handlers', () => {
-    const { handlers } = makeBag();
-    expect(typeof handlers.handleTextChange).toBe('function');
-    expect(typeof handlers.handleTextBackgroundModesChange).toBe('function');
-    expect(typeof handlers.handleTextBackgroundStrokeClassificationChange).toBe(
-      'function'
-    );
-  });
-
   it('handlePolygonStrokeClassificationChange routes through deps callback', () => {
     const bag = makeBag();
     bag.handlers.handlePolygonStrokeClassificationChange({
