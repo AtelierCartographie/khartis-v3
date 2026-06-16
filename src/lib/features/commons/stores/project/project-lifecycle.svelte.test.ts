@@ -15,6 +15,18 @@ describe('project lifecycle runtime reset', () => {
     );
   });
 
+  it('preserves deserialized stores while loading an existing project', () => {
+    const loadProjectBody = source.slice(
+      source.indexOf('export async function loadProject'),
+      source.indexOf('export async function deleteProject')
+    );
+
+    expect(loadProjectBody).toContain('projectRepository.load(id)');
+    expect(loadProjectBody).toContain(
+      'resetProjectRuntimeState({ resetPersistence: false });'
+    );
+  });
+
   it('clears the runtime when deleting or clearing the current project', () => {
     const nullRuntimeResets = source.match(/beginProjectRuntime\(null\);/g);
 

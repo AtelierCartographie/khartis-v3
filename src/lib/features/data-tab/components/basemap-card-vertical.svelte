@@ -1,12 +1,11 @@
 <script lang="ts">
-  import TilePreview from '$lib/features/commons/components/tile-preview.svelte';
+  import ThumbnailPreview from '$lib/features/commons/components/thumbnail-preview.svelte';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
-  import { connectivityStore } from '$lib/features/commons/stores/connectivity.store.svelte';
+  import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
   import { getLocale } from '$lib/paraglide/runtime';
   import SimpleRadio from '$lib/features/commons/components/simple-radio.svelte';
-  import { Tag } from 'carbon-components-svelte';
   import { Calendar } from 'carbon-icons-svelte';
   import clsx from 'clsx';
 
@@ -32,12 +31,24 @@
     onclick
   }: BasemapCardVerticalProps = $props();
 
-  const lang = getLocale();
-  const title = $derived(lang === 'fr' ? basemap.title_fr : basemap.title_en);
+  const lang = $derived(getLocale());
+  const isOSMBasemap = $derived(basemap.file.startsWith('osm_'));
+  const title = $derived(
+    isOSMBasemap
+      ? m.basemap_osm()
+      : lang === 'fr'
+        ? basemap.title_fr
+        : basemap.title_en
+  );
   const subtitle = $derived(
-    lang === 'fr'
-      ? (basemap.subtitle_fr ?? '').trim()
-      : (basemap.subtitle_en ?? '').trim()
+    isOSMBasemap
+      ? m.osm_basemap_description()
+      : lang === 'fr'
+        ? (basemap.subtitle_fr ?? '').trim()
+        : (basemap.subtitle_en ?? '').trim()
+  );
+  const source = $derived(
+    isOSMBasemap ? m.osm_basemap_source() : basemap.source
   );
 
   function handleCardClick() {
@@ -67,9 +78,19 @@
   );
 
   const aspectRatio = '16:9';
+  const thumbnailUrl = $derived.by(() => {
+    if (basemap.isCustom || isOSMBasemap) {
+      return undefined;
+    }
 
-  const offlineEntry = $derived(connectivityStore.basemaps.get(basemap.file));
-  const isOfflineCached = $derived(offlineEntry?.status === 'cached');
+    const thumbnailBaseName = basemap.simplification_level
+      ? basemap.file.replace(`-${basemap.simplification_level}`, '')
+      : basemap.file;
+
+    return resolveStaticAssetUrl(
+      `/basemaps/thumbnails/${thumbnailBaseName}.avif`
+    );
+  });
 </script>
 
 <div
@@ -95,10 +116,13 @@
       />
     </div>
 
-    <TilePreview
-      ratio={aspectRatio ?? '2:1'}
+    <ThumbnailPreview
+      src={thumbnailUrl}
+      alt={m.basemap_preview_label()}
+      ratio={aspectRatio}
       label={m.basemap_preview_label()}
       theme={isSuggestion ? 'suggestion' : 'default'}
+      objectFit="contain"
     />
   </div>
 
@@ -114,21 +138,11 @@
 
     {#if showMetadata}
       <div class="metadata-row">
-        <span class="source">{basemap.source}</span>
+        <span class="source">{source}</span>
         <span class="date">
           <Calendar size={16} />
           {basemap.date}
         </span>
-      </div>
-    {/if}
-
-    {#if isOfflineCached}
-      <div class="offline-tag-row">
-        <Tag type="blue" size="sm">{m.basemap_offline_available()}</Tag>
-      </div>
-    {:else if !connectivityStore.isOnline}
-      <div class="offline-tag-row">
-        <Tag type="warm-gray" size="sm">{m.basemap_offline_required()}</Tag>
       </div>
     {/if}
   </div>
@@ -153,11 +167,6 @@
 </div>
 
 <style>
-  .offline-tag-row {
-    display: flex;
-    margin-top: var(--cds-spacing-02);
-  }
-
   .basemap-card {
     --basemap-card-background: var(--cds-layer-01, #f4f4f4);
     --basemap-card-border-color: var(--cds-border-subtle-01, #c6c6c6);
@@ -267,6 +276,7 @@
     overflow: hidden;
     padding: 1px;
     box-sizing: border-box;
+    background: #ffffff;
     --tile-preview-background: var(--cds-layer-02, #ffffff);
     --tile-preview-color: var(--cds-interactive-03, #726e6e);
   }
@@ -280,17 +290,6 @@
       --khartis-additions-interactive-suggestions,
       #0072c3
     );
-  }
-
-  .basemap-card--suggestion:hover:not(.disabled) .preview-section {
-    --tile-preview-background: var(
-      --khartis-additions-layer-hover-02-suggestions,
-      #cceeff
-    );
-  }
-
-  .basemap-card--default:hover:not(.disabled) .preview-section {
-    --tile-preview-background: var(--cds-layer-hover-02, #e8e8e8);
   }
 
   .basemap-card.disabled .preview-section {

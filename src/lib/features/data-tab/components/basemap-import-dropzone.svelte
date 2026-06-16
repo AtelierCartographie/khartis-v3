@@ -39,7 +39,7 @@
     onClearError
   }: Props = $props();
 
-  const lang = getLocale();
+  const lang = $derived(getLocale());
 
   let isDragging = $state(false);
   let urlInput = $state('');

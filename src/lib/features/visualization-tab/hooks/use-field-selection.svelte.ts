@@ -17,7 +17,12 @@ function matchesFieldSelectionKind(
   }
 
   if (kind === 'numeric') {
-    return item.type === 'number';
+    // Two type vocabularies coexist in the app: the column pipeline emits
+    // 'number' (fromDuckDBType), while the deep-validator / badge layer uses
+    // 'numeric'. The variable badge already treats both as numeric, so the
+    // select must too — otherwise a numeric column tagged 'numeric' shows a
+    // numeric badge yet silently disappears from "Couleur selon".
+    return item.type === 'number' || item.type === 'numeric';
   }
 
   return (

@@ -573,6 +573,105 @@ export function getScaleMetersPerPixel(
   return getFallbackMetersPerPixel(context.zoom, context.centerLatitude);
 }
 
+// Degrees of latitude sampled toward the pole to read the local north
+// direction. Small enough to stay a local tangent, large enough to dodge
+// floating-point noise in the projection.
+const NORTH_SAMPLE_OFFSET_DEGREES = 0.5;
+
+function isCallableProjection(
+  candidate: unknown
+): candidate is (point: [number, number]) => unknown {
+  return typeof candidate === 'function';
+}
+
+function forwardProject(
+  projection: unknown,
+  coordinates: [number, number]
+): [number, number] | null {
+  if (!isCallableProjection(projection)) {
+    return null;
+  }
+  const projected = projection(coordinates);
+  return isValidLongitudeLatitudePair(projected) ? projected : null;
+}
+
+// Screen Y points down (SVG / d3 output convention), so a vector pointing
+// "up" is (0, -1). The clockwise SVG rotation that turns up onto (dx, dy) is
+// atan2(dx, -dy): north straight up (dx = 0, dy < 0) yields 0°.
+function screenDeltaToBearingDegrees(dx: number, dy: number): number | null {
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) {
+    return null;
+  }
+  if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) {
+    return null;
+  }
+  return (Math.atan2(dx, -dy) * 180) / Math.PI;
+}
+
+// Near the north pole we sample southward instead and flip the vector, so the
+// returned direction is always "toward the north".
+function getNorthwardSample(latitude: number): {
+  latitude: number;
+  flip: boolean;
+} {
+  if (latitude + NORTH_SAMPLE_OFFSET_DEGREES > 90) {
+    return { latitude: latitude - NORTH_SAMPLE_OFFSET_DEGREES, flip: true };
+  }
+  return { latitude: latitude + NORTH_SAMPLE_OFFSET_DEGREES, flip: false };
+}
+
+function getProjectionNorthBearing(
+  projection: unknown,
+  bounds: InsetMapBounds | null | undefined
+): number | null {
+  if (!hasProjectionInvert(projection) || !bounds) {
+    return null;
+  }
+
+  const centerX =
+    (toFiniteNumber(bounds.east, 0) + toFiniteNumber(bounds.west, 0)) / 2;
+  const centerY =
+    (toFiniteNumber(bounds.north, 0) + toFiniteNumber(bounds.south, 0)) / 2;
+  const center = projection.invert([centerX, centerY]);
+  if (!isValidLongitudeLatitudePair(center)) {
+    return null;
+  }
+
+  const [longitude, latitude] = center;
+  const sample = getNorthwardSample(latitude);
+  const origin = forwardProject(projection, [longitude, latitude]);
+  const northward = forwardProject(projection, [longitude, sample.latitude]);
+  if (origin === null || northward === null) {
+    return null;
+  }
+
+  const dx = northward[0] - origin[0];
+  const dy = northward[1] - origin[1];
+  return screenDeltaToBearingDegrees(
+    sample.flip ? -dx : dx,
+    sample.flip ? -dy : dy
+  );
+}
+
+// Rotation (degrees, clockwise) to apply to an upward-pointing north indicator
+// so it points to geographic north at the center of the current framing —
+// mirrors how the scale bar reads distance at the center. Returns null when it
+// cannot be resolved (caller falls back to 0 = north up).
+export function getNorthBearingAtCenter(
+  context: ScaleDistanceContext
+): number | null {
+  // MapLibre engine: the map bearing is locked at 0 and the indicator is read
+  // at the view center, so geographic north is always vertical there — no
+  // rotation needed. (Revisit if a map-bearing/rotation control is ever added.)
+  if (context.map) {
+    return null;
+  }
+
+  // Deck orthographic engine: invert the bounds center back to lng/lat with the
+  // active d3 projection, then read the local north direction.
+  return getProjectionNorthBearing(context.projection, context.bounds);
+}
+
 export function normalizeScaleDistanceValue(distance: number): number {
   if (!Number.isFinite(distance) || distance <= 0) {
     return 0;

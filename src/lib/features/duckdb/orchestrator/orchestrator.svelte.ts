@@ -223,6 +223,9 @@ function invalidateDatasetCache(tableName: string): void {
     Duck.invalidateTableCache(tableName);
   }
   invalidateJoinedArrowCacheForTable(tableName);
+  // Row/value mutations change which entities exist, so the cached join
+  // similarity (used to grade joined/unrecognized buckets) is now stale.
+  joinOps.invalidateSimilarityCache(tableName);
 }
 
 async function createArrowTableWithMetadata(tableName: string): Promise<{
@@ -895,11 +898,11 @@ export const duckDBOrchestrator = {
     columnName: string,
     newType: string,
     options?: { skipAnalysis?: boolean }
-  ): Promise<void> {
+  ): Promise<columnOps.ChangeColumnTypeResult> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
-    await columnOps.changeColumnType(
+    const result = await columnOps.changeColumnType(
       tableName,
       columnName,
       newType,
@@ -910,6 +913,7 @@ export const duckDBOrchestrator = {
       invalidateDatasetCache(tableName);
       state.bumpDatasetsVersion();
     }
+    return result;
   },
 
   async dropColumn(

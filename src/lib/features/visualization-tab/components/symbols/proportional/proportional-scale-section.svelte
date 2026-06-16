@@ -15,7 +15,12 @@
     getSelectedFieldIds(slot: FacetSlotPath): number[];
     isActiveForSlot(slot: FacetSlotPath): boolean;
     updateVariables(column: string, slot: FacetSlotPath, ids: number[]): void;
-    toggle(column: string, slot: FacetSlotPath, enabled: boolean): void;
+    toggle(
+      column: string,
+      slot: FacetSlotPath,
+      enabled: boolean,
+      fieldIds?: number[]
+    ): void;
   }
 
   interface DropdownItem {
@@ -77,8 +82,8 @@
     onSelect={onFieldSelect}
     onCollectionChange={(ids) =>
       facetsSelection.updateVariables(columnName, facetSlot, ids)}
-    onToggleCollection={(enabled) =>
-      facetsSelection.toggle(columnName, facetSlot, enabled)}
+    onToggleCollection={(enabled, ids) =>
+      facetsSelection.toggle(columnName, facetSlot, enabled, ids)}
   />
 </div>
 

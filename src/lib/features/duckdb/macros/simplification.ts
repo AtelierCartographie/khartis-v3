@@ -23,7 +23,7 @@ const snap_topology_normalized_macro = `CREATE OR REPLACE MACRO snap_topology_no
     WITH
     source_data AS (
         FROM query_table(input_table)
-        SELECT _gid, geom
+        SELECT _gid, ST_CollectionExtract(ST_MakeValid(geom), 3) AS geom
         WHERE geom IS NOT NULL
     ),
     calc_grid AS (
@@ -114,7 +114,7 @@ const extract_innerlines_macro = `CREATE OR REPLACE MACRO extract_innerlines(inp
     WITH
     source_data AS (
         FROM query_table(input_table)
-        SELECT row_number() OVER () as _gid, geom
+        SELECT row_number() OVER () as _gid, ST_CollectionExtract(ST_MakeValid(geom), 3) AS geom
         WHERE geom IS NOT NULL
     ),
     touching_pairs AS (

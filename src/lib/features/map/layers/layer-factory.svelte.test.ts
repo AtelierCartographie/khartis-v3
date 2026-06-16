@@ -677,6 +677,23 @@ describe('binary scatter styling refresh', () => {
 });
 
 describe('createTextOverlayLayers', () => {
+  it('routes text labels through the text representative point source', () => {
+    expect(source).toContain('function getTextRepresentativePointSource(');
+    expect(source).toContain(
+      'ctx.textRepresentativePointTable ?? ctx.representativePointTable'
+    );
+    expect(source).toContain(
+      'const representativePointSource = getTextRepresentativePointSource(ctx);'
+    );
+  });
+
+  it('keeps text filters independent from symbol filters on raw point datasets', () => {
+    expect(source).toContain('table: ctx.textPointTable ?? jsTable,');
+    expect(source).toContain(
+      '(representativePointSource ? jsTable : (textPointSource?.table ?? jsTable))'
+    );
+  });
+
   it('wraps text labels and places labels to the right when symbols are rendered', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 2,
@@ -832,6 +849,48 @@ describe('createTextOverlayLayers', () => {
     expect(textProps?.getPixelOffset?.(datum)).toEqual([0, 0]);
     expect(resolvedBackgroundColor).toEqual([0, 0, 0, 0]);
     expect(textProps?.getBorderWidth).toBe(0);
+  });
+
+  it('keeps a thick text contour below the SDF saturation point so the halo is not clipped', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 1,
+      featureIds: new Uint32Array([0]),
+      positions: new Float32Array([0, 0])
+    });
+
+    const visualization = createTextVisualization();
+    visualization.text = {
+      ...visualization.text!,
+      halo: true,
+      haloWidth: 20
+    };
+
+    const layers = createDeckLayers(
+      createTableWithRows([{ name: 'Contour' }], ['name']),
+      {
+        ...createContext(visualization),
+        geometryInfo: {
+          ...createPointGeometryInfo(),
+          type: 'POINT' as GeometryInfo['type']
+        }
+      }
+    );
+
+    const textLayer = layers.find((layer) => layer instanceof TextLayer) as
+      | TextLayer
+      | undefined;
+    const textProps = textLayer?.props as
+      | {
+          fontSettings?: { buffer?: number; radius?: number; sdf?: boolean };
+          outlineWidth?: number;
+        }
+      | undefined;
+
+    expect(textProps?.outlineWidth).toBeGreaterThan(0);
+    expect(textProps?.outlineWidth).toBeLessThan(1);
+    expect(textProps?.fontSettings?.sdf).toBe(true);
+    expect(textProps?.fontSettings?.buffer).toBeGreaterThanOrEqual(20);
+    expect(textProps?.fontSettings?.radius).toBeGreaterThanOrEqual(20);
   });
 
   it('places text labels above point layers when primitiveOrder lists TEXT first', () => {
@@ -3407,6 +3466,6 @@ describe('createLineLayers', () => {
 
   it('does not route text contour through legacy background boxes', () => {
     expect(source).not.toContain('textBackgroundConfig');
-    expect(source).toContain('outlineWidth: textConfig.halo');
+    expect(source).toContain('outlineWidth: resolveTextOutlineWidth(');
   });
 });

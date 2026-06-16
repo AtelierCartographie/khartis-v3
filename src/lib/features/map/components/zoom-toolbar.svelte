@@ -1,6 +1,12 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages';
-  import { Add, Document, Earth, Subtract } from 'carbon-icons-svelte';
+  import {
+    Add,
+    Document,
+    Earth,
+    Subtract,
+    ZoomReset
+  } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import IconButton from '../../commons/components/carbon/icon-button.svelte';
   import ToggleTabs from '../../commons/components/toggle-tabs.svelte';
@@ -358,6 +364,16 @@
           kind="ghost"
           size="small"
           class="zoom-button"
+          icon={ZoomReset}
+          iconDescription={m.zoom_reset()}
+          tooltipPosition={zoomButtonTooltipPosition}
+          on:click={fitActiveMode}
+        />
+
+        <IconButton
+          kind="ghost"
+          size="small"
+          class="zoom-button"
           icon={Subtract}
           iconDescription={m.zoom_out()}
           tooltipPosition={zoomButtonTooltipPosition}
@@ -429,7 +445,7 @@
 
   .zoom-toolbar {
     padding: 0;
-    width: 180px;
+    width: 230px;
     background: var(--cds-background, #ffffff);
     border-radius: 0;
     font-family: 'IBM Plex Sans', sans-serif;
@@ -662,7 +678,7 @@
 
   .zoom-controls {
     display: grid;
-    grid-template-columns: 50px 50px;
+    grid-template-columns: repeat(3, 50px);
     align-items: center;
     justify-items: center;
     align-self: stretch;
@@ -670,8 +686,7 @@
     position: relative;
   }
 
-  .zoom-controls::before,
-  .zoom-controls::after {
+  .zoom-controls::before {
     content: '';
     position: absolute;
     top: 8px;
@@ -682,11 +697,6 @@
 
   .zoom-controls::before {
     left: 0;
-  }
-
-  .zoom-controls::after {
-    left: 50%;
-    transform: translateX(-0.5px);
   }
 
   #khartis-zoom-toolbar :global(.zoom-button.bx--btn) {
@@ -701,6 +711,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  #khartis-zoom-toolbar :global(.zoom-button.bx--btn + .zoom-button.bx--btn) {
+    box-shadow: inset 1px 0 0 var(--cds-border-subtle-01, #c6c6c6);
   }
 
   #khartis-zoom-toolbar :global(.zoom-button.bx--btn:hover),
@@ -721,7 +735,7 @@
     }
 
     .zoom-toolbar {
-      width: 100px;
+      width: 150px;
     }
 
     .zoom-section {

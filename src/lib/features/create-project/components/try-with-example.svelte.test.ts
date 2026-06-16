@@ -17,6 +17,19 @@ const typesSource = readFileSync(
   'utf8'
 );
 
+const exampleThumbnailSources = [
+  'world-population-thumb.svg',
+  'european-cities-thumb.svg',
+  'world-countries-thumb.svg',
+  'gdp-evolution-thumb.svg',
+  'transport-flows-thumb.svg'
+].map((fileName) =>
+  readFileSync(
+    resolve(import.meta.dirname, '../../../../../static/examples', fileName),
+    'utf8'
+  )
+);
+
 describe('try-with-example project initialization', () => {
   it('mirrors finalized catalog joins into the dataset store before rendering visualizations', () => {
     expect(source).toContain(
@@ -30,18 +43,19 @@ describe('try-with-example project initialization', () => {
     ).toBeLessThan(source.indexOf('applyReferenceBasemapToProject(basemap);'));
   });
 
-  it('persists the full DuckDB analysis and flushes autosave after presets are applied', () => {
+  it('persists the full DuckDB analysis and saves after presets are applied', () => {
     expect(source).toContain('duckDBOrchestrator.getFullAnalysis(');
     expect(source).not.toContain('Duck.analyse');
     expect(source).toContain(
       'applyExampleVisualizations(example, processedExampleFile);'
     );
-    expect(source).toContain('await persistenceRegistry.flush();');
+    expect(source).toContain('await projectStore.saveCurrentProject({');
+    expect(source).toContain('fallbackThumbnail: example.thumbnail');
     expect(
       source.indexOf(
         'applyExampleVisualizations(example, processedExampleFile);'
       )
-    ).toBeLessThan(source.indexOf('await persistenceRegistry.flush();'));
+    ).toBeLessThan(source.indexOf('await projectStore.saveCurrentProject({'));
   });
 
   it('does not restore the project runtime after applying example presets', () => {
@@ -51,7 +65,7 @@ describe('try-with-example project initialization', () => {
       )
     );
 
-    expect(loadTail).toContain('await persistenceRegistry.flush();');
+    expect(loadTail).toContain('await projectStore.saveCurrentProject({');
     expect(loadTail).not.toContain('dataOrchestratorService.onProjectChanged');
   });
 
@@ -62,6 +76,31 @@ describe('try-with-example project initialization', () => {
       "referenceBasemapId: 'europe-nuts1-2024-medium'"
     );
     expect(source).toContain('await applyExampleReferenceBasemap(example);');
+  });
+
+  it('uses existing SVG thumbnails for every bundled example card', () => {
+    expect(examplesSource).toContain('/examples/world-population-thumb.svg');
+    expect(examplesSource).toContain('/examples/european-cities-thumb.svg');
+    expect(examplesSource).toContain('/examples/world-countries-thumb.svg');
+    expect(examplesSource).toContain('/examples/gdp-evolution-thumb.svg');
+    expect(examplesSource).toContain('/examples/transport-flows-thumb.svg');
+    expect(examplesSource).not.toContain('-thumb.png');
+  });
+
+  it('keeps bundled example thumbnails on a white background', () => {
+    for (const thumbnailSource of exampleThumbnailSources) {
+      expect(thumbnailSource).toContain('fill="#ffffff"');
+      expect(thumbnailSource).not.toContain('#f4f4f4');
+    }
+  });
+
+  it('matches saved project card height instead of forcing extra height', () => {
+    expect(source).not.toContain('height: 15.5rem');
+    expect(source).toContain('-webkit-line-clamp: 1;');
+    expect(source).toContain('min-height: 1lh;');
+    expect(source).toContain(
+      '.example-project-card :global(#kh-card .top-section > svg) {\n    width: 1.5rem;\n    height: 1.5rem;'
+    );
   });
 
   it('synchronises the in-memory geolocation linked variable with the catalog join geoColumn', () => {

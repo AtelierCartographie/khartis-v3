@@ -24,6 +24,17 @@ describe('ThematicMap source', () => {
     );
   });
 
+  it('treats map export capture as a styling layout render without changing navigation state', () => {
+    expect(source).toContain('globalState.isMapExporting');
+    expect(source).toContain(
+      'globalState.selectedStep === ToolbarStep.Visualizations &&\n      !globalState.isMapExporting'
+    );
+    expect(source).toContain(
+      'globalState.selectedStep === ToolbarStep.Styling ||\n      globalState.isMapExporting'
+    );
+    expect(source).toContain('isMapExporting: globalState.isMapExporting');
+  });
+
   it('throttles live MapLibre facet sync and caps facet cell pixel ratio', () => {
     expect(source).toContain('const FACET_CELL_RENDER_PIXEL_RATIO_MAX = 1;');
     expect(source).toContain(
@@ -98,6 +109,26 @@ describe('ThematicMap source', () => {
     expect(presetGuardIndex).toBeLessThan(datasetFitIndex);
   });
 
+  it('prefers user data bounds over the requested basemap viewport preset', () => {
+    const helperStart = source.indexOf(
+      'function applyPendingMapLibreViewportPreset'
+    );
+    const helperEnd = source.indexOf(
+      'function fitMapLibreViewportAfterViewModeSwitch',
+      helperStart
+    );
+    const helperSource = source.slice(helperStart, helperEnd);
+
+    expect(helperSource).toContain('bounds: presetBounds');
+    expect(helperSource).toContain('?? presetBounds');
+    // Default framing prefers user data bounds, but an explicit scale-zone
+    // change (preferPreset, carried with the pending request) must skip the
+    // data bounds and reframe to the chosen zone extent.
+    expect(helperSource).toContain(
+      'preferPreset ? null : resolveUserDataBounds()'
+    );
+  });
+
   it('does not inherit catalog projection metadata for standalone geofiles', () => {
     expect(source).toContain('if (!datasetId) {');
     expect(source).toContain('if (!duckDataset?.joinedBasemap) {');
@@ -122,6 +153,19 @@ describe('ThematicMap source', () => {
     );
     expect(helperSource).toContain('Boolean(datasetBbox)');
     expect(helperSource).not.toContain('!basemapStyleStore.referenceBasemapId');
+  });
+
+  it('refreshes projection references without refitting the viewport on parameter changes', () => {
+    expect(source).toContain('options: { fitViewport?: boolean } = {}');
+    expect(source).toContain(
+      'const shouldFitViewport = options.fitViewport ?? true;'
+    );
+    expect(source).toContain(
+      "syncOrthographicViewportAfterViewModeSwitch('projection', {\n          fitViewport: false\n        })"
+    );
+    expect(source).toContain(
+      "scheduleLayerUpdate('effect:projectionRenderTrigger')"
+    );
   });
 
   it('invalidates Deck layers when visualization data filters change', () => {
@@ -153,6 +197,17 @@ describe('ThematicMap source', () => {
     expect(source).toContain('mapLayers.syncInterleavedLayerOrder();');
     expect(source).toContain(
       "scheduleLayerUpdateAfterStyleIdle(map, 'effect:selectedStyle-idle')"
+    );
+  });
+
+  it('resyncs MapLibre basemap label language when the app locale changes', () => {
+    expect(source).toContain(
+      "import { getLocale } from '$lib/paraglide/runtime';"
+    );
+    expect(source).toContain('mapBasemap.syncBasemapLanguage();');
+    expect(source).toContain('void getLocale();');
+    expect(source).toContain(
+      'untrack(() => mapBasemap.syncBasemapLanguage());'
     );
   });
 

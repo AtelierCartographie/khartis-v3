@@ -72,9 +72,29 @@ describe('MultiShapeLayer — source invariants (keep SDF shader consistent)', (
     expect(source).toContain('size: 1');
   });
 
-  it('injects vShape and vRadius outputs in the vertex shader', () => {
+  it('declares vShape and vRadius outputs in the vertex shader', () => {
     expect(source).toContain('vShape = instanceShapes;');
     expect(source).toContain('vRadius = instanceRadius;');
+  });
+
+  it('calibrates 2D shapes against the stock ScatterplotLayer circle', () => {
+    // Quad scaled by 1/SYMBOL_SDF_EXTENT for 2D shapes only, and the SDF
+    // circle is authored at SYMBOL_SDF_EXTENT of the quad — one constant.
+    expect(source).toContain('outerRadiusPixels /= ${SYMBOL_SDF_EXTENT};');
+    expect(source).toContain(
+      'return (length(uv) - ${SYMBOL_SDF_EXTENT}) * radiusPixels + radiusPixels;'
+    );
+  });
+
+  it('anchors linear shapes (BAR/SPIKE) at their base in the vertex shader', () => {
+    // The condition is generated from LINEAR_SHAPE_ORDINALS — one source of truth.
+    expect(source).toContain('bool isBottomAnchoredShape(float shape)');
+    expect(source).toContain('return ${LINEAR_SHAPE_GLSL_CONDITION};');
+    // Quad lift applied in both billboard (pixels) and map-space branches.
+    expect(source).toContain('offset.y += anchorShiftPixels;');
+    expect(source).toContain(
+      'offset.y += project_pixel_size(anchorShiftPixels);'
+    );
   });
 
   it('declares multiShape uniform block with dash controls', () => {

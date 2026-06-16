@@ -75,12 +75,17 @@ describe('TextStylePopover', () => {
     expect(sectionSource).toContain('class="quick-format-toolbar"');
     expect(sectionSource).toContain('TextColor');
     expect(sectionSource).toContain('TextUnderline');
-    expect(sectionSource).toContain('quickColorInput');
-    expect(sectionSource).toContain('quickHaloColorInput');
+    expect(sectionSource).toContain(
+      "import ColorPicker from '$lib/features/commons/components/color-picker.svelte'"
+    );
+    expect(sectionSource).toContain('hexToHsl');
+    expect(sectionSource).toContain('triggerTitle={m.halo_color()}');
+    expect(sectionSource).toContain('onBeforeOpen={enableHaloColorPicker}');
+    expect(sectionSource).not.toContain('type="color"');
     expect(sectionSource).toContain('resolveAlignmentIcon');
     expect(sectionSource).toContain('nextAlignment(align)');
     expect(sectionSource).toContain('class="outline-text-icon"');
-    expect(sectionSource).toContain('handleQuickHaloColorInput');
+    expect(sectionSource).toContain('handleQuickHaloColorValidate');
     expect(sectionSource).toContain('width: 32px;');
   });
 

@@ -2,6 +2,7 @@
   import Tooltip from '$lib/features/commons/components/carbon/tooltip.svelte';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { horizontalWheelScroll } from '$lib/features/commons/utils/horizontal-wheel-scroll';
   import type { SavedProjectMetadata } from '$lib/features/project-management';
   import { m } from '$lib/paraglide/messages';
   import { appendToBody } from '$lib/features/commons/utils/append-to-body';
@@ -207,11 +208,14 @@
     />
   {/if}
 
-  <div class="flex gap-5 overflow-x-auto pb-3">
+  <div
+    class="flex gap-5 overflow-x-auto pb-3 card-rail"
+    use:horizontalWheelScroll
+  >
     {#if isLoading}
       {#each Array(3) as _item, idx (idx)}
         <div class="project-card-skeleton">
-          <SkeletonPlaceholder style="width: 200px; height: 150px;" />
+          <SkeletonPlaceholder style="width: 180px; height: 135px;" />
         </div>
       {/each}
     {:else if savedProjects.length === 0}
@@ -224,7 +228,8 @@
           <ProjectCard
             title={project.name}
             subtitle={project.description || formatFileSize(project.size)}
-            variant="blue"
+            thumbnail={project.thumbnail}
+            variant="gray"
             selected={selectedProjectId === project.id}
             onclick={() => handleProjectClick(project.id)}
           >
@@ -318,7 +323,31 @@
   }
 
   .project-card-skeleton {
-    min-width: 200px;
+    min-width: 180px;
+  }
+
+  .card-rail {
+    scrollbar-width: thin;
+    scrollbar-color: var(--cds-border-strong) var(--cds-layer-02);
+  }
+
+  .card-rail::-webkit-scrollbar {
+    height: 8px;
+    -webkit-appearance: none;
+  }
+
+  .card-rail::-webkit-scrollbar-track {
+    background: var(--cds-layer-02, #e8e8e8);
+    border-radius: 4px;
+  }
+
+  .card-rail::-webkit-scrollbar-thumb {
+    background-color: var(--cds-border-strong, #8d8d8d);
+    border-radius: 4px;
+  }
+
+  .card-rail::-webkit-scrollbar-thumb:hover {
+    background-color: var(--cds-text-secondary, #525252);
   }
 
   .no-projects {

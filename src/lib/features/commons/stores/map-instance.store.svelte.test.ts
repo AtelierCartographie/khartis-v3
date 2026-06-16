@@ -479,3 +479,70 @@ describe('mapInstanceStore map zoom bounds', () => {
     expect(setPropsMock).not.toHaveBeenCalled();
   });
 });
+
+describe('mapInstanceStore orthographic data anchoring', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.projectionStoreMock.referenceBbox = [-200, -100, 200, 100];
+    mocks.projectionStoreMock.canvasSize = { width: 800, height: 600 };
+    mocks.projectionStoreMock.fitPaddingPx = 0;
+    mocks.projectionStoreMock.isProjectedCoordinates = false;
+    mocks.getBboxCenterMock.mockReturnValue([0, 0]);
+    mocks.getMaxScaleMock.mockReturnValue(2);
+    injectProjectionContext(() => ({
+      referenceBbox: mocks.projectionStoreMock.referenceBbox,
+      canvasSize: mocks.projectionStoreMock.canvasSize,
+      fitPaddingPx: mocks.projectionStoreMock.fitPaddingPx,
+      isProjectedCoordinates: mocks.projectionStoreMock.isProjectedCoordinates
+    }));
+    mapInstanceStore.reset();
+  });
+
+  it('returns null without a deck reference', () => {
+    expect(mapInstanceStore.projectDataToViewportPx(0, 0)).toBeNull();
+    expect(mapInstanceStore.unprojectViewportPxToData(400, 300)).toBeNull();
+  });
+
+  it('projects a data point to a viewport pixel and inverts it back', () => {
+    const { deck } = createDeckMock();
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+    mapInstanceStore.updateDeckViewState({ target: [20, -10, 0], zoom: 1 });
+
+    // world = [2*x, 2*y]; center = (400, 300); zoomScale = 2; flipY:false →
+    // world +y points UP the screen.
+    expect(mapInstanceStore.projectDataToViewportPx(0, 0)).toEqual({
+      x: (2 * 0 - 20) * 2 + 400,
+      y: 300 - (2 * 0 + 10) * 2
+    });
+
+    // The visible-bounds center maps to the canvas center.
+    expect(mapInstanceStore.projectDataToViewportPx(10, -5)).toEqual({
+      x: 400,
+      y: 300
+    });
+
+    const inverted = mapInstanceStore.unprojectViewportPxToData(400, 300);
+    expect(inverted?.x).toBeCloseTo(10, 10);
+    expect(inverted?.y).toBeCloseTo(-5, 10);
+  });
+
+  it('moves the projected pixel when the deck view state zooms', () => {
+    const { deck } = createDeckMock();
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+
+    mapInstanceStore.updateDeckViewState({ target: [0, 0, 0], zoom: 1 });
+    const atZoom1 = mapInstanceStore.projectDataToViewportPx(50, 0);
+
+    mapInstanceStore.updateDeckViewState({ target: [0, 0, 0], zoom: 2 });
+    const atZoom2 = mapInstanceStore.projectDataToViewportPx(50, 0);
+
+    expect(atZoom1).not.toBeNull();
+    expect(atZoom2).not.toBeNull();
+    // Same anchor, deeper zoom → further from the unchanged viewport center.
+    const offsetAtZoom1 = Math.abs((atZoom1?.x ?? 0) - 400);
+    const offsetAtZoom2 = Math.abs((atZoom2?.x ?? 0) - 400);
+    expect(offsetAtZoom2).toBeGreaterThan(offsetAtZoom1);
+  });
+});

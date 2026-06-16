@@ -1,10 +1,7 @@
 <script lang="ts">
   import { dev } from '$app/environment';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import { connectivityStore } from '$lib/features/commons/stores/connectivity.store.svelte';
-  import { factoryResetPwa } from '$lib/features/commons/utils/pwa-offline';
-  import { startProgressiveWarmup } from '$lib/features/commons/utils/offline-warmup-scheduler';
-  import { isSwToClientMessage } from '$lib/types/sw-messages';
+  import { factoryResetPwa } from '$lib/features/commons/utils/pwa-reset';
   import { onDestroy, onMount } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
   import {
@@ -17,8 +14,6 @@
   const AUTO_RELOAD_GUARD_WINDOW_MS = 10 * 1000;
   const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
-  let warmupAbortController: AbortController | null = null;
-  let swMessageHandler: ((event: MessageEvent) => void) | null = null;
   let preloadErrorHandler: ((event: Event) => void) | null = null;
   let updateCheckIntervalId: ReturnType<typeof setInterval> | null = null;
 
@@ -140,53 +135,11 @@
     }
   }
 
-  function attachSwMessageListener(): void {
-    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
-      return;
-    }
-
-    swMessageHandler = (event: MessageEvent) => {
-      if (isSwToClientMessage(event.data)) {
-        connectivityStore.handleSwMessage(event.data);
-      }
-    };
-    navigator.serviceWorker.addEventListener('message', swMessageHandler);
-  }
-
-  function detachSwMessageListener(): void {
-    if (
-      swMessageHandler &&
-      typeof navigator !== 'undefined' &&
-      'serviceWorker' in navigator
-    ) {
-      navigator.serviceWorker.removeEventListener('message', swMessageHandler);
-      swMessageHandler = null;
-    }
-  }
-
-  async function bootstrapOfflineWarmup(): Promise<void> {
-    await Promise.allSettled([
-      connectivityStore.refreshStorageEstimate(),
-      connectivityStore.refreshCachedBasemaps()
-    ]);
-
-    warmupAbortController = new AbortController();
-    startProgressiveWarmup({
-      store: connectivityStore,
-      signal: warmupAbortController.signal
-    });
-  }
-
   onDestroy(() => {
-    if (warmupAbortController) {
-      warmupAbortController.abort();
-      warmupAbortController = null;
-    }
     if (updateCheckIntervalId !== null) {
       clearInterval(updateCheckIntervalId);
       updateCheckIntervalId = null;
     }
-    detachSwMessageListener();
     detachStaleAssetRecovery();
   });
 
@@ -197,9 +150,7 @@
     }
 
     void requestPersistentStorage();
-    attachSwMessageListener();
     attachStaleAssetRecovery();
-    void bootstrapOfflineWarmup();
   });
 
   async function cleanupDevServiceWorker(): Promise<void> {

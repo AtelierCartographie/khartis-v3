@@ -11,6 +11,10 @@ export interface ProjectRuntimeSnapshot {
   projectId: string | null;
 }
 
+export interface ResetProjectRuntimeStateOptions {
+  resetPersistence?: boolean;
+}
+
 const runtime = $state<ProjectRuntimeSnapshot>({
   generation: 0,
   projectId: null
@@ -52,8 +56,12 @@ export function isCurrentProjectRuntime(
   );
 }
 
-export function resetProjectRuntimeState(): void {
-  persistenceRegistry.resetAll();
+export function resetProjectRuntimeState(
+  options: ResetProjectRuntimeStateOptions = {}
+): void {
+  if (options.resetPersistence ?? true) {
+    persistenceRegistry.resetAll();
+  }
   datasetsStore.clear();
   basemapService.reset();
   projectionStore.reset();

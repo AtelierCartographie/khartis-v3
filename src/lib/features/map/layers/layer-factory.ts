@@ -68,7 +68,8 @@ import { MultiShapeLayer } from './multi-shape-layer';
 import {
   DEFAULT_TEXT_LINE_HEIGHT,
   DECK_TEXT_CHARACTER_SET,
-  resolveTextFontSettings
+  resolveTextFontSettings,
+  resolveTextOutlineWidth
 } from './text-character-set';
 import type {
   DeckDataRow,
@@ -185,6 +186,25 @@ const SELECTED_POLYGON_STROKE_WIDTH = 3;
 const DASH_EXTENSION = new PathStyleExtension({ dash: true });
 const DEFAULT_MISSING_DATA_PATTERN_ID: PatternName = 'diagonal';
 const DEFAULT_DASH_ARRAY: [number, number] = [3, 2];
+
+/**
+ * Page-zoom factor applied to pixel-sized marks (symbol radius, line width,
+ * label size) so they scale together with the canvas and the SVG legend.
+ *
+ * The render `modelMatrix` already scales geometry positions by this same
+ * factor (orthographic mode only); marks use `*Units: 'pixels'`, an orthogonal
+ * shader path the matrix never touches, so they must be multiplied explicitly.
+ * `ctx.pageDisplayScale` is left at 1 in MapLibre interleaved mode (no render
+ * matrix), keeping mark size consistent with position handling in both engines.
+ */
+function resolvePageDisplayScale(
+  ctx: Pick<LayerContext, 'pageDisplayScale'>
+): number {
+  const scale = ctx.pageDisplayScale;
+  return typeof scale === 'number' && Number.isFinite(scale) && scale > 0
+    ? scale
+    : 1;
+}
 
 function resolveThematicStrokeDashArray(
   pattern: BasemapDottedPattern | undefined
@@ -489,6 +509,37 @@ export function getRepresentativePointSource(
   };
 }
 
+function getTextRepresentativePointSource(
+  ctx: LayerContext
+): { table: ArrowTable; geometryInfo: GeometryInfo } | null {
+  const representativePointTable =
+    ctx.textRepresentativePointTable ?? ctx.representativePointTable;
+  if (!representativePointTable) {
+    return null;
+  }
+
+  const geometryInfo =
+    (ctx.textRepresentativePointTable
+      ? ctx.textRepresentativePointGeometryInfo
+      : ctx.representativePointGeometryInfo) ??
+    extractGeometryInfo(representativePointTable);
+  if (!geometryInfo) {
+    return null;
+  }
+
+  if (
+    geometryInfo.type !== GeometryType.POINT &&
+    geometryInfo.type !== GeometryType.MULTIPOINT
+  ) {
+    return null;
+  }
+
+  return {
+    table: representativePointTable,
+    geometryInfo
+  };
+}
+
 function requiresRepresentativePointSource(
   geometryType: GeometryInfo['type'] | GeometryType | undefined
 ): boolean {
@@ -532,6 +583,7 @@ function createDoubleProportionalPointLayers(
     modelMatrix,
     beforeId
   } = ctx;
+  const pageDisplayScale = resolvePageDisplayScale(ctx);
   const pointStatistics = ctx.pointStatistics ?? statistics;
   const pointCategoryColorMap = ctx.pointCategoryColorMap ?? categoryColorMap;
   const pointSecondaryStatistics =
@@ -957,10 +1009,12 @@ function createDoubleProportionalPointLayers(
       patternEnabled: symbolPatternType !== null,
       patternType: symbolPatternType ?? SYMBOL_PATTERN_TYPE.DOTS,
       opacity: 1,
-      radiusScale: layoutProps.radiusScale,
+      radiusScale: layoutProps.radiusScale * pageDisplayScale,
       radiusUnits: 'pixels',
       lineWidthUnits: 'pixels',
-      lineWidthScale: showPointStroke ? pointStrokeWidth / 3 : 0,
+      lineWidthScale: showPointStroke
+        ? (pointStrokeWidth / 3) * pageDisplayScale
+        : 0,
       pickable,
       parameters: THEMATIC_OVERLAY_PARAMETERS,
       ...resolveHoverHighlightProps(pickable),
@@ -1086,6 +1140,7 @@ function createRepresentativePointSymbolLayers(
     modelMatrix,
     beforeId
   } = ctx;
+  const pageDisplayScale = resolvePageDisplayScale(ctx);
   const pointStatistics = ctx.pointStatistics ?? statistics;
   const pointCategoryColorMap = ctx.pointCategoryColorMap ?? categoryColorMap;
 
@@ -1570,10 +1625,12 @@ function createRepresentativePointSymbolLayers(
       patternEnabled: symbolPatternType !== null,
       patternType: symbolPatternType ?? SYMBOL_PATTERN_TYPE.DOTS,
       opacity: 1,
-      radiusScale: 1,
+      radiusScale: pageDisplayScale,
       radiusUnits: 'pixels',
       lineWidthUnits: 'pixels',
-      lineWidthScale: showPointStroke ? pointStrokeWidth / 3 : 0,
+      lineWidthScale: showPointStroke
+        ? (pointStrokeWidth / 3) * pageDisplayScale
+        : 0,
       pickable: true,
       parameters: THEMATIC_OVERLAY_PARAMETERS,
       ...resolveHoverHighlightProps(),
@@ -2641,6 +2698,7 @@ function createTextOverlayLayers(
   if (!fontAssetsStore.ready) {
     return [];
   }
+  const pageDisplayScale = resolvePageDisplayScale(ctx);
   const textStatistics = ctx.textStatistics ?? ctx.statistics;
 
   const secondaryLabelsConfig = textConfig.secondaryLabels;
@@ -2669,16 +2727,22 @@ function createTextOverlayLayers(
     (geometryInfo.encoding && geometryInfo.encoding.startsWith('geoarrow.'));
   let textLayerData: TextLayerDatum[] | null = null;
   let secondaryLabelLayerData: TextLayerDatum[] | null = null;
-  const representativePointSource = getRepresentativePointSource(ctx);
+  const representativePointSource = getTextRepresentativePointSource(ctx);
+  // Raw point datasets render labels from the main table; `textPointTable` is
+  // its TEXT-filtered counterpart (built in use-map-layers) so Texts filters
+  // apply to labels while Symbols filters stay on the circles. Attributes are
+  // read from the SAME table to keep row indices aligned with the geometry.
   const textPointSource =
     representativePointSource ??
     (geometryInfo.type === GeometryType.POINT
       ? {
-          table: jsTable,
+          table: ctx.textPointTable ?? jsTable,
           geometryInfo
         }
       : null);
-  const textAttributeTable = ctx.splitDatasetTable ?? jsTable;
+  const textAttributeTable =
+    ctx.splitDatasetTable ??
+    (representativePointSource ? jsTable : (textPointSource?.table ?? jsTable));
   const textFeatureIdColumn =
     ctx.splitDatasetTable && textPointSource
       ? resolveSplitMappingFeatureIdColumn(
@@ -2953,6 +3017,12 @@ function createTextOverlayLayers(
 
   const backgroundBorderWidth = 0;
   const backgroundBorderColor = TRANSPARENT_BACKGROUND_COLOR;
+  const primaryHaloWidth = textConfig.halo
+    ? (textConfig.haloWidth ?? DEFAULT_HALO_WIDTH)
+    : 0;
+  const secondaryHaloWidth = secondaryLabelsConfig.halo
+    ? (secondaryLabelsConfig.haloWidth ?? DEFAULT_HALO_WIDTH)
+    : 0;
   const sharedBackgroundPadding = textConfig.dxpMasking
     ? DEFAULT_TEXT_MASK_PADDING
     : TEXT_COLLISION_SAFE_PADDING;
@@ -3058,6 +3128,7 @@ function createTextOverlayLayers(
         getColor: withOpacity(labelColor, labelOpacity),
         getSize: labelSizeAccessor,
         sizeUnits: 'pixels',
+        sizeScale: pageDisplayScale,
         getTextAnchor: resolveSecondaryTextAnchor,
         getAlignmentBaseline: (d) =>
           resolveSecondaryPlacement(d).secondaryAlignmentBaseline,
@@ -3081,9 +3152,10 @@ function createTextOverlayLayers(
           resolveStyleColor(secondaryLabelsConfig.haloColor, [255, 255, 255]),
           1
         ),
-        outlineWidth: secondaryLabelsConfig.halo
-          ? (secondaryLabelsConfig.haloWidth ?? DEFAULT_HALO_WIDTH)
-          : 0,
+        outlineWidth: resolveTextOutlineWidth(
+          secondaryHaloWidth,
+          SLIDER_LIMITS.haloWidth.max
+        ),
         background: true,
         getBackgroundColor: backgroundColorAccessor,
         getBorderWidth: backgroundBorderWidth,
@@ -3223,6 +3295,7 @@ function createTextOverlayLayers(
           getColor: textColorAccessor,
           getSize: textSizeAccessor,
           sizeUnits: 'pixels',
+          sizeScale: pageDisplayScale,
           getTextAnchor: resolvePrimaryTextAnchor,
           getAlignmentBaseline: (d) =>
             resolvePrimaryPlacement(d).primaryAlignmentBaseline,
@@ -3244,9 +3317,10 @@ function createTextOverlayLayers(
             resolveStyleColor(textConfig.haloColor, [255, 255, 255]),
             1
           ),
-          outlineWidth: textConfig.halo
-            ? (textConfig.haloWidth ?? DEFAULT_HALO_WIDTH)
-            : 0,
+          outlineWidth: resolveTextOutlineWidth(
+            primaryHaloWidth,
+            SLIDER_LIMITS.haloWidth.max
+          ),
           background: true,
           getBackgroundColor: backgroundColorAccessor,
           getBorderWidth: backgroundBorderWidth,
@@ -3379,6 +3453,7 @@ function createDotDensityLayers(
   const { viz, modelMatrix, beforeId } = ctx;
   if (!viz?.density) return [];
 
+  const pageDisplayScale = resolvePageDisplayScale(ctx);
   const dotSize = Math.max(
     0.1,
     viz.density.dotSize ?? DENSITY_DEFAULTS.dotSize
@@ -3422,6 +3497,7 @@ function createDotDensityLayers(
     getFillColor: fillColor,
     getRadius: dotSize,
     radiusUnits: 'pixels',
+    radiusScale: pageDisplayScale,
     pickable: false,
     ...(modelMatrix && { modelMatrix }),
     ...(beforeId && { beforeId }),
@@ -3452,6 +3528,7 @@ export function createPointLayers(
     modelMatrix,
     beforeId
   } = ctx;
+  const pageDisplayScale = resolvePageDisplayScale(ctx);
   const pointStatistics = ctx.pointStatistics ?? statistics;
   const pointCategoryColorMap = ctx.pointCategoryColorMap ?? categoryColorMap;
   const hasHighlights = highlightedRowIds && highlightedRowIds.size > 0;
@@ -3807,8 +3884,11 @@ export function createPointLayers(
           return getGeoJsonPointRadius(feature);
         },
         pointRadiusUnits: 'pixels',
+        pointRadiusScale: pageDisplayScale,
         lineWidthUnits: 'pixels',
-        getLineWidth: showPointStroke ? pointStrokeWidth / 3 : 0,
+        getLineWidth: showPointStroke
+          ? (pointStrokeWidth / 3) * pageDisplayScale
+          : 0,
         opacity: hasHighlights ? 1 : pointFillOpacity,
         pickable: true,
         ...resolveHoverHighlightProps(),
@@ -4248,13 +4328,6 @@ export function createPointLayers(
     sortScatterBinaryDataByRadius(scatterBinaryData);
   }
 
-  const useMultiShapeLayer =
-    pointShape !== ShapeType.CIRCLE ||
-    missingPointShape !== ShapeType.CIRCLE ||
-    useCategoryShape ||
-    symbolPatternType !== null ||
-    usesPointCategories ||
-    (pointStrokeDashed && showPointStroke);
   const baseLayerProps = {
     id:
       symbolPatternType !== null
@@ -4274,10 +4347,12 @@ export function createPointLayers(
     opacity: hasHighlights ? 1 : pointFillOpacity,
     ...(!radiusBinAttr && { getRadius: uniquePointRadius }),
     ...(!scatterBinaryData.attributes.getShape && { getShape: shapeOrdinal }),
-    radiusScale: 1,
+    radiusScale: pageDisplayScale,
     radiusUnits: 'pixels' as const,
     lineWidthUnits: 'pixels' as const,
-    lineWidthScale: showPointStroke ? pointStrokeWidth / 3 : 0,
+    lineWidthScale: showPointStroke
+      ? (pointStrokeWidth / 3) * pageDisplayScale
+      : 0,
     pickable: true,
     ...resolveHoverHighlightProps(),
     ...(modelMatrix && { modelMatrix }),
@@ -4351,23 +4426,19 @@ export function createPointLayers(
     }
   };
 
-  if (useMultiShapeLayer) {
-    return [
-      new MultiShapeLayer({
-        ...baseLayerProps,
-        dashed: showPointStroke && pointStrokeDashed,
-        dashLength: pointStrokeDashSpec.shader.dash,
-        gapLength: pointStrokeDashSpec.shader.gap,
-        dotLength: pointStrokeDashSpec.shader.dot,
-        dotGap: pointStrokeDashSpec.shader.dotGap,
-        barWidth: pointBarWidth,
-        patternEnabled: symbolPatternType !== null,
-        patternType: symbolPatternType ?? SYMBOL_PATTERN_TYPE.DOTS
-      })
-    ];
-  }
-
-  return [new ScatterplotLayer(baseLayerProps)];
+  return [
+    new MultiShapeLayer({
+      ...baseLayerProps,
+      dashed: showPointStroke && pointStrokeDashed,
+      dashLength: pointStrokeDashSpec.shader.dash,
+      gapLength: pointStrokeDashSpec.shader.gap,
+      dotLength: pointStrokeDashSpec.shader.dot,
+      dotGap: pointStrokeDashSpec.shader.dotGap,
+      barWidth: pointBarWidth,
+      patternEnabled: symbolPatternType !== null,
+      patternType: symbolPatternType ?? SYMBOL_PATTERN_TYPE.DOTS
+    })
+  ];
 }
 
 export function createLineLayers(
@@ -4386,6 +4457,7 @@ export function createLineLayers(
     modelMatrix,
     beforeId
   } = ctx;
+  const pageDisplayScale = resolvePageDisplayScale(ctx);
   const lineStatistics = ctx.lineStatistics ?? statistics;
   const lineCategoryColorMap = ctx.lineCategoryColorMap ?? categoryColorMap;
 
@@ -4649,6 +4721,7 @@ export function createLineLayers(
       dashJustified: true,
       capRounded: lineCapRounded,
       widthUnits: 'pixels',
+      widthScale: pageDisplayScale,
       ...(!widthBinaryAttr && { getWidth: resolvedLineWidth }),
       widthMinPixels: 1,
       pickable: true,
@@ -4882,6 +4955,7 @@ export function createLineLayers(
     dashJustified: true,
     capRounded: lineCapRounded,
     lineWidthUnits: 'pixels',
+    lineWidthScale: pageDisplayScale,
     getLineWidth: geoJsonLineWidth,
     lineWidthMinPixels: 1,
     pickable: true,
@@ -4966,6 +5040,7 @@ export function createPolygonLayers(
     beforeId,
     categoryColorMap
   } = ctx;
+  const pageDisplayScale = resolvePageDisplayScale(ctx);
   const polygonCategoryColorMap =
     ctx.polygonCategoryColorMap ?? categoryColorMap;
   const hasPolyHighlights =
@@ -5006,6 +5081,7 @@ export function createPolygonLayers(
     rawPolyFillOpacity
   );
   const polygonStrokeWidth = polygonConfig?.strokeWidth ?? strokeWidth;
+  const polygonStrokeWidthPx = (polygonStrokeWidth / 4) * pageDisplayScale;
   const polygonStrokeOpacity = normalizeOpacity(
     polygonConfig?.strokeOpacity,
     rawPolyStrokeOpacity
@@ -5334,7 +5410,7 @@ export function createPolygonLayers(
           dashJustified: true,
           capRounded: strokeCapRounded,
           widthUnits: 'pixels',
-          getWidth: polygonStrokeWidth / 4,
+          getWidth: polygonStrokeWidthPx,
           widthMinPixels: 0.5,
           pickable: false,
           ...(modelMatrix && { modelMatrix }),
@@ -5353,7 +5429,7 @@ export function createPolygonLayers(
             getColor: withOpacity(polygonStrokeColor, polygonStrokeOpacity)
           }),
           widthUnits: 'pixels',
-          getWidth: polygonStrokeWidth / 4,
+          getWidth: polygonStrokeWidthPx,
           widthMinPixels: 0.5,
           pickable: false,
           ...(modelMatrix && { modelMatrix }),
@@ -5814,7 +5890,7 @@ export function createPolygonLayers(
               dashJustified: true,
               capRounded: strokeCapRounded,
               lineWidthUnits: 'pixels',
-              lineWidthScale: polygonStrokeWidth / 4,
+              lineWidthScale: polygonStrokeWidthPx,
               lineWidthMinPixels: 0.5,
               pickable: false,
               parameters: {
@@ -5859,7 +5935,7 @@ export function createPolygonLayers(
         capRounded: showGeoJsonStroke && strokeCapRounded,
         opacity: hasPolyHighlights ? 1 : polygonFillOpacity,
         lineWidthUnits: 'pixels',
-        lineWidthScale: showGeoJsonStroke ? polygonStrokeWidth / 4 : 0,
+        lineWidthScale: showGeoJsonStroke ? polygonStrokeWidthPx : 0,
         lineWidthMinPixels: showGeoJsonStroke ? 0.5 : 0,
         pickable: true,
         ...resolveHoverHighlightProps(),

@@ -5,15 +5,15 @@ index 5bcd32e6090a5329ac3482f23b1aff04f6a89fb6..016d4d05981dfd22512bd563060ad01a
 @@ -36,23 +36,15 @@
     */
    export let style = undefined;
- 
+
 -  import { getContext, onMount } from "svelte";
 +  import { getContext } from "svelte";
- 
+
    const id = `ccs-${Math.random().toString(36)}`;
    const ctx =
      getContext("carbon:Select") || getContext("carbon:TimePickerSelect");
 +  const selectedValue = ctx.selectedValue;
- 
+
    $: ctx?.setDefaultValue?.(id, value);
 -
 -  let selected = false;
@@ -27,5 +27,5 @@ index 5bcd32e6090a5329ac3482f23b1aff04f6a89fb6..016d4d05981dfd22512bd563060ad01a
 -  });
 +  $: selected = $selectedValue === value;
  </script>
- 
+
  <option

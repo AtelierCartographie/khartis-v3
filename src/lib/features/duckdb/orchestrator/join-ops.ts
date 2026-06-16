@@ -728,10 +728,16 @@ export async function getBasemapAttributeValues(
   await ensureBasemapHasAttributes(basemapId, Duck);
 
   const escapedBasemapId = escapeSqlString(basemapId);
-  const displayVariant = getBasemapDisplayVariant(basemap);
-  const displayOrder = displayVariant
-    ? `CASE WHEN variant = '${escapeSqlString(displayVariant)}' THEN 0 ELSE 1 END,`
-    : '';
+  const displayVariants = getBasemapDisplayVariants(basemap);
+  const displayOrder =
+    displayVariants.length > 0
+      ? `CASE ${displayVariants
+          .map(
+            (variant, index) =>
+              `WHEN variant = '${escapeSqlString(variant)}' THEN ${index}`
+          )
+          .join(' ')} ELSE ${displayVariants.length} END,`
+      : '';
   const rows = (await Duck.query(
     `WITH source AS (
        SELECT
@@ -766,12 +772,26 @@ export interface BasemapAlias {
   variant: string | null;
 }
 
-function getBasemapDisplayVariant(basemap: BasemapMetadata): string | null {
-  const locale = getLocale();
-  if (locale === 'fr') {
-    return basemap.display_id_fr ?? basemap.display_id_en ?? null;
-  }
-  return basemap.display_id_en ?? basemap.display_id_fr ?? null;
+const FALLBACK_DISPLAY_VARIANTS: Record<'fr' | 'en', string[]> = {
+  fr: ['name_fren', 'name_engl'],
+  en: ['name_engl', 'name_fren']
+};
+
+function getBasemapDisplayVariants(basemap: BasemapMetadata): string[] {
+  const locale = getLocale() === 'fr' ? 'fr' : 'en';
+  const configured =
+    locale === 'fr'
+      ? [basemap.display_id_fr, basemap.display_id_en]
+      : [basemap.display_id_en, basemap.display_id_fr];
+
+  const variants = [
+    ...configured.filter((variant): variant is string => Boolean(variant)),
+    ...FALLBACK_DISPLAY_VARIANTS[locale]
+  ];
+
+  return variants.filter(
+    (variant, index) => variants.indexOf(variant) === index
+  );
 }
 
 /**

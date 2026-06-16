@@ -22,6 +22,7 @@
     type LayerGroupId,
     type StyleConfig
   } from '$lib/features/map/constants/carte-facile-layer-groups';
+  import type { Locale } from '$lib/paraglide/runtime.js';
   import {
     resolveNextTiledStyleSelection,
     resolveTiledStyleContext
@@ -106,25 +107,26 @@
   const selectedZoneIndex = $derived(
     zoneOptions.findIndex((zone) => zone.id === selectedZone)
   );
-  const isGlobeProjectionEnabled = $derived(mapProjectionStore.isGlobe);
-
   $effect(() => {
     if (selectedZone === 'france' && mapProjectionStore.isGlobe) {
       setFlatProjection();
     }
   });
 
-  function getZoneLabel(zone: ZoneId): string {
+  function getZoneLabel(zone: ZoneId, locale?: Locale): string {
+    const options = locale ? { locale } : undefined;
     return zone === 'france'
-      ? m.carte_facile_zone_france()
-      : m.carte_facile_zone_monde();
+      ? m.carte_facile_zone_france({}, options)
+      : m.carte_facile_zone_monde({}, options);
   }
 
-  function getVariantLabel(variant: StyleVariantId): string {
-    if (variant === 'couleurs') return m.carte_facile_style_couleurs();
+  function getVariantLabel(variant: StyleVariantId, locale?: Locale): string {
+    const options = locale ? { locale } : undefined;
+    if (variant === 'couleurs')
+      return m.carte_facile_style_couleurs({}, options);
     if (variant === 'niveaux-de-gris')
-      return m.carte_facile_style_niveaux_de_gris();
-    return m.carte_facile_style_satellite();
+      return m.carte_facile_style_niveaux_de_gris({}, options);
+    return m.carte_facile_style_satellite({}, options);
   }
 
   function getReferenceLayerLabel(item: ReferenceLayerItem): string {
@@ -151,8 +153,8 @@
   function getStyleCardBasemap(styleConfig: StyleConfig): BasemapMetadata {
     return {
       file: styleConfig.id,
-      title_fr: getVariantLabel(styleConfig.style),
-      title_en: getVariantLabel(styleConfig.style),
+      title_fr: getVariantLabel(styleConfig.style, 'fr'),
+      title_en: getVariantLabel(styleConfig.style, 'en'),
       source: getZoneLabel(styleConfig.zone),
       date: '',
       bbox: [0, 0, 16, 9],
@@ -194,11 +196,13 @@
         osmBasemapStore.clear();
       }
       if (nextStyle === basemapStyleStore.selectedStyle) {
-        basemapStyleStore.requestViewportReset(nextStyle);
+        basemapStyleStore.requestViewportReset(nextStyle, {
+          preferPreset: true
+        });
         return;
       }
       basemapStyleStore.setStyle(nextStyle);
-      basemapStyleStore.requestViewportReset(nextStyle);
+      basemapStyleStore.requestViewportReset(nextStyle, { preferPreset: true });
     }
   }
 
@@ -252,17 +256,6 @@
 
     handleZoneChange(zone.id);
   }
-
-  function handleGlobeProjectionToggle(checked: boolean): void {
-    if (!checked || selectedZone !== 'monde') {
-      setFlatProjection();
-      return;
-    }
-
-    mapProjectionStore.setProjection(MAP_PROJECTION_TYPE.GLOBE, {
-      explicit: true
-    });
-  }
 </script>
 
 <div class="basemap-style-selector">
@@ -282,17 +275,6 @@
       hideInactiveLabel={true}
     />
   </div>
-
-  {#if selectedZone === 'monde'}
-    <div class="projection-option">
-      <span class="field-label">{m.map_projection_label()}</span>
-      <SimpleCheckbox
-        labelText={m.map_projection_globe()}
-        checked={isGlobeProjectionEnabled}
-        onchange={handleGlobeProjectionToggle}
-      />
-    </div>
-  {/if}
 
   <div class="styles-section">
     <div class="style-rail" role="list" aria-label={m.basemap_style_label()}>
@@ -363,16 +345,6 @@
 
   .scale-selector {
     position: relative;
-  }
-
-  .projection-option {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
-  }
-
-  .projection-option :global(.kh-checkbox-native) {
-    width: fit-content;
   }
 
   .field-label {

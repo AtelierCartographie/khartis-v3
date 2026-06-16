@@ -37,7 +37,7 @@
     [VisualizationTools.Facets]: Facets
   };
 
-  const titles = {
+  const titles = $derived.by(() => ({
     [StylingTools.Annotations]: m.tool_annotations(),
     [StylingTools.Format]: m.tool_format(),
     [StylingTools.Legend]: m.tool_legend(),
@@ -48,7 +48,7 @@
     [VisualizationTools.Projection]: m.tool_projection(),
     [VisualizationTools.Simplification]: m.tool_simplification(),
     [VisualizationTools.Facets]: m.tool_facets()
-  };
+  }));
 
   let SelectedComponent = $derived<Component | undefined>(
     globalState.selectedTool

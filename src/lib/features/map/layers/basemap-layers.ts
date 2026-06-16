@@ -30,7 +30,7 @@ import type {
   Polygon,
   MultiPolygon
 } from 'geojson';
-import { hexToRgb } from '$lib/features/commons/utils/color-utils';
+import { hexToRgb, webglToHex } from '$lib/features/commons/utils/color-utils';
 import {
   ArrowExtension,
   createLayerId,
@@ -66,9 +66,13 @@ import {
   resolveFontFamilyStack
 } from '$lib/features/step-toolbar/fonts.constants';
 import type { BBox, DeckDataRow, GeometryInfo, RGBColor } from '../types';
-import type { StylePresets } from '../types/basemap.types';
+import type { StylePreset, StylePresets } from '../types/basemap.types';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
-import { withOpacity, dottedPatternToDashArray } from './layer-helpers';
+import {
+  withOpacity,
+  dottedPatternToDashArray,
+  dashArrayToDottedPattern
+} from './layer-helpers';
 import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
 import {
   DEFAULT_TEXT_FONT_SETTINGS_RASTER,
@@ -81,6 +85,10 @@ const DASH_EXTENSION = new PathStyleExtension({
   highPrecisionDash: true
 });
 const SOLID_DASH_ARRAY: [number, number] = [1, 0];
+const BASEMAP_BACKGROUND_FILL_PARAMETERS = {
+  depthCompare: 'always' as const,
+  depthWriteEnabled: false
+} as const;
 const basemapGeoJsonCache = new WeakMap<
   ArrowTable,
   Map<string, FeatureCollection | null>
@@ -651,10 +659,10 @@ export function createTerreLayers(
         new PathLayer({
           id: `${layerId}-shadow`,
           ...createPathLayerProps(outlineData),
-          getColor: withOpacity([80, 80, 80], 0.3),
+          getColor: withOpacity([80, 80, 80], 0.45),
           widthUnits: 'pixels',
-          getWidth: 2,
-          widthMinPixels: 1.5,
+          getWidth: 3.5,
+          widthMinPixels: 2,
           widthMaxPixels: 6,
           ...baseProps,
           updateTriggers: {
@@ -715,10 +723,10 @@ export function createTerreLayers(
             data: geojson,
             filled: false,
             stroked: true,
-            getLineColor: withOpacity([80, 80, 80], 0.3),
+            getLineColor: withOpacity([80, 80, 80], 0.45),
             lineWidthUnits: 'pixels',
-            getLineWidth: 2,
-            lineWidthMinPixels: 1.5,
+            getLineWidth: 3.5,
+            lineWidthMinPixels: 2,
             lineWidthMaxPixels: 6,
             ...baseProps,
             updateTriggers: {
@@ -775,7 +783,12 @@ export function createMersLayer(
   );
 
   if (ctx.projection) {
-    const sphereData = getSpherePolygon(ctx.projection);
+    // For composites, `parseSphere` only yields the mainland sub-projection's
+    // sphere, which under-covers the DOM-TOM insets (#195); use the union of
+    // sub-projection extents below instead.
+    const sphereData = hasCompositeGraticuleSubProjections(ctx.projection)
+      ? null
+      : getSpherePolygon(ctx.projection);
 
     if (sphereData) {
       try {
@@ -785,6 +798,7 @@ export function createMersLayer(
           ...polygonProps,
           coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
           getFillColor: withOpacity(fillColor, opacity),
+          parameters: BASEMAP_BACKGROUND_FILL_PARAMETERS,
           ...getBaseLayerProps(ctx),
           updateTriggers: {
             getFillColor: [config.color, config.opacity]
@@ -813,6 +827,7 @@ export function createMersLayer(
         stroked: false,
         coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
         getFillColor: withOpacity(fillColor, opacity),
+        parameters: BASEMAP_BACKGROUND_FILL_PARAMETERS,
         ...getBaseLayerProps(ctx),
         updateTriggers: {
           getFillColor: [config.color, config.opacity]
@@ -851,6 +866,7 @@ export function createMersLayer(
     filled: true,
     stroked: false,
     getFillColor: withOpacity(fillColor, opacity),
+    parameters: BASEMAP_BACKGROUND_FILL_PARAMETERS,
     ...getBaseLayerProps(ctx),
     updateTriggers: {
       getFillColor: [config.color, config.opacity]
@@ -2051,53 +2067,216 @@ export interface MetadataLayerEntry {
   style: string | null;
   type: BasemapLayerType;
   file: string;
+  // Per-layer style override (keyed by basemap file + layer file in the aux
+  // store). Lets two land layers sharing the legacy `terre` config — e.g. the
+  // NUTS territory and the surrounding land of a NUTS basemap — be coloured and
+  // styled independently instead of being driven by the single shared config.
+  styleOverride?: Record<string, unknown>;
+}
+
+function isPolygonStylePreset(
+  preset: StylePreset | undefined
+): preset is Extract<StylePreset, { layer_type: 'solid-polygon' }> {
+  return preset?.layer_type === 'solid-polygon';
+}
+
+export function resolveLandFillColorHex(
+  styleName: string | null,
+  stylePresets: StylePresets | null | undefined,
+  fallbackHex: string
+): string {
+  if (!styleName || !stylePresets) {
+    return fallbackHex;
+  }
+  const preset = stylePresets[styleName];
+  if (!isPolygonStylePreset(preset)) {
+    return fallbackHex;
+  }
+  const [r, g, b] = preset.fillColor;
+  return webglToHex([r, g, b, preset.fillColor[3] ?? 255]);
+}
+
+// Merges a per-layer style override (from the aux store) on top of the
+// style-preset default, on top of the shared `terre` config. This is what lets
+// each land layer of a multi-land basemap (NUTS territory vs. surrounding land)
+// keep its own colour, opacity and stroke instead of all of them tracking the
+// single shared config — the user-set value wins, the preset is the default,
+// the shared config is the last-resort fallback.
+function resolveLandConfig(
+  entry: MetadataLayerEntry,
+  config: TerreLayerConfig,
+  stylePresets: StylePresets | null | undefined
+): TerreLayerConfig {
+  const presetFillColor = resolveLandFillColorHex(
+    entry.style,
+    stylePresets,
+    config.fillColor
+  );
+  const override = entry.styleOverride ?? {};
+  const pickString = (value: unknown, fallback: string): string =>
+    typeof value === 'string' && value.length > 0 ? value : fallback;
+  const pickNumber = (value: unknown, fallback: number): number =>
+    typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+  const pickBoolean = (value: unknown, fallback: boolean): boolean =>
+    typeof value === 'boolean' ? value : fallback;
+
+  return {
+    ...config,
+    fillColor: pickString(override.fillColor, presetFillColor),
+    fillOpacity: pickNumber(override.fillOpacity, config.fillOpacity),
+    fillShadow: pickBoolean(override.fillShadow, config.fillShadow),
+    strokeColor: pickString(override.strokeColor, config.strokeColor),
+    strokeOpacity: pickNumber(override.strokeOpacity, config.strokeOpacity),
+    strokeThickness: pickNumber(
+      override.strokeThickness,
+      config.strokeThickness
+    ),
+    strokeDotted: pickBoolean(override.strokeDotted, config.strokeDotted),
+    strokeDottedPattern:
+      (override.strokeDottedPattern as TerreLayerConfig['strokeDottedPattern']) ??
+      config.strokeDottedPattern
+  };
+}
+
+function createLandLayers(
+  entries: MetadataLayerEntry[],
+  config: TerreLayerConfig,
+  ctx: BasemapLayerContext,
+  stylePresets: StylePresets | null | undefined,
+  options?: { suppressStroke?: boolean }
+): Layer<DeckDataRow>[] {
+  const layers: Layer<DeckDataRow>[] = [];
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    if (!hasArrowRows(entry.table)) continue;
+
+    const landConfig = resolveLandConfig(entry, config, stylePresets);
+    const landCtx: BasemapLayerContext = {
+      ...ctx,
+      projectionSuffix: `${ctx.projectionSuffix || DEFAULT_PROJECTION_SUFFIX}-land-${i}`
+    };
+
+    layers.push(
+      ...createTerreLayers(entry.table, landConfig, landCtx, options)
+    );
+  }
+
+  return layers;
 }
 
 function createMetadataLimitLayers(
   entries: MetadataLayerEntry[],
   ctx: BasemapLayerContext,
-  config: FrontieresLayerConfig
+  config: FrontieresLayerConfig,
+  stylePresets: StylePresets | null | undefined
 ): Layer<DeckDataRow>[] {
   return createMetadataLineLayers(
     entries,
     ctx,
     config,
-    DeckLayerId.BASEMAP_META_LIMIT
+    DeckLayerId.BASEMAP_META_LIMIT,
+    stylePresets
   );
 }
 
 type StyledMetadataLineConfig = Pick<
   FrontieresLayerConfig,
   'color' | 'dotted' | 'dottedPattern' | 'thickness' | 'opacity'
->;
+> & {
+  // Exact dash authored in the style preset (e.g. `limit-dashed`), used until
+  // the user picks an explicit pattern in the UI.
+  presetDashArray?: [number, number];
+};
+
+// Resolves one limit layer's line style: per-file override (aux store) wins,
+// then the `limit-level-*` style preset (so nested levels keep their designed
+// width/colour hierarchy — NUTS 1 thicker/darker than NUTS 3), then the shared
+// Frontières config as a last resort. Without presets (e.g. graticule
+// companions) the shared config is returned unchanged.
+function resolveMetadataLineStyle(
+  entry: MetadataLayerEntry,
+  config: StyledMetadataLineConfig,
+  stylePresets: StylePresets | null | undefined
+): StyledMetadataLineConfig {
+  const preset =
+    stylePresets &&
+    entry.style &&
+    stylePresets[entry.style]?.layer_type === 'path'
+      ? (stylePresets[entry.style] as Extract<
+          StylePreset,
+          { layer_type: 'path' }
+        >)
+      : null;
+  const override = entry.styleOverride ?? {};
+  const presetColorHex = preset
+    ? webglToHex([
+        preset.color[0],
+        preset.color[1],
+        preset.color[2],
+        preset.color[3] ?? 255
+      ])
+    : undefined;
+  const pickString = (value: unknown, fallback: string): string =>
+    typeof value === 'string' && value.length > 0 ? value : fallback;
+  const pickNumber = (value: unknown, fallback: number): number =>
+    typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+  const pickBoolean = (value: unknown, fallback: boolean): boolean =>
+    typeof value === 'boolean' ? value : fallback;
+
+  const presetDashArray = preset?.dashArray;
+
+  return {
+    color: pickString(override.color, presetColorHex ?? config.color),
+    thickness: pickNumber(
+      override.thickness,
+      preset?.width ?? config.thickness
+    ),
+    opacity: pickNumber(override.opacity, config.opacity),
+    dotted: pickBoolean(
+      override.dotted,
+      presetDashArray ? true : config.dotted
+    ),
+    dottedPattern:
+      (override.dottedPattern as StyledMetadataLineConfig['dottedPattern']) ??
+      (presetDashArray
+        ? dashArrayToDottedPattern(presetDashArray)
+        : config.dottedPattern),
+    presetDashArray:
+      override.dottedPattern === undefined ? presetDashArray : undefined
+  };
+}
 
 function createMetadataLineLayers(
   entries: MetadataLayerEntry[],
   ctx: BasemapLayerContext,
   config: StyledMetadataLineConfig,
-  idPrefix: DeckLayerId
+  idPrefix: DeckLayerId,
+  stylePresets?: StylePresets | null
 ): Layer<DeckDataRow>[] {
   if (entries.length === 0) return [];
 
   const layers: Layer<DeckDataRow>[] = [];
   const baseProps = getBaseLayerProps(ctx);
-  const strokeColor = toRgbColor(config.color);
-  const opacity = config.opacity / 100;
-  const effectiveThickness = clampBasemapLayerThickness(config.thickness);
-  const effectiveOpacity = opacity;
-  const dashArray: [number, number] = config.dotted
-    ? dottedPatternToDashArray(config.dottedPattern)
-    : [0, 0];
-  const updateTriggers = {
-    getLineColor: [config.color, effectiveOpacity],
-    getDashArray: [config.dotted, config.dottedPattern]
-  };
 
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
     const geometryInfo = extractGeometryInfo(entry.table);
     if (!geometryInfo) continue;
     if (!hasArrowRows(entry.table)) continue;
+
+    const effective = resolveMetadataLineStyle(entry, config, stylePresets);
+    const strokeColor = toRgbColor(effective.color);
+    const effectiveOpacity = effective.opacity / 100;
+    const effectiveThickness = clampBasemapLayerThickness(effective.thickness);
+    const dashArray: [number, number] = effective.dotted
+      ? (effective.presetDashArray ??
+        dottedPatternToDashArray(effective.dottedPattern))
+      : [0, 0];
+    const updateTriggers = {
+      getLineColor: [effective.color, effectiveOpacity],
+      getDashArray: [dashArray[0], dashArray[1]]
+    };
 
     const layerId = buildLayerId(
       idPrefix,
@@ -2132,7 +2311,7 @@ function createMetadataLineLayers(
           widthUnits: 'pixels',
           widthMinPixels: 0,
           widthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
-          extensions: config.dotted ? [DASH_EXTENSION] : [],
+          extensions: effective.dotted ? [DASH_EXTENSION] : [],
           getDashArray: dashArray,
           dashJustified: true,
           ...baseProps,
@@ -2165,7 +2344,7 @@ function createMetadataLineLayers(
           widthUnits: 'pixels',
           widthMinPixels: 0,
           widthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
-          extensions: config.dotted ? [DASH_EXTENSION] : [],
+          extensions: effective.dotted ? [DASH_EXTENSION] : [],
           getDashArray: dashArray,
           dashJustified: true,
           ...baseProps,
@@ -2193,11 +2372,11 @@ function createMetadataLineLayers(
             getLineWidth: effectiveThickness,
             lineWidthMinPixels: 0,
             lineWidthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
-            extensions: config.dotted ? [DASH_EXTENSION] : [],
+            extensions: effective.dotted ? [DASH_EXTENSION] : [],
             getDashArray: dashArray,
             dashJustified: true,
             _subLayerProps: createDashedGeoJsonLineSubLayerProps(
-              config.dotted,
+              effective.dotted,
               dashArray
             ),
             ...baseProps,
@@ -2218,6 +2397,7 @@ export interface BasemapAdditionalData {
   frontieresTable?: ArrowTable;
   metadataLayers?: MetadataLayerEntry[];
   availableMetadataLayerTypes?: BasemapLayerType[];
+  hasLandMetadataLayers?: boolean;
   stylePresets?: StylePresets | null;
 }
 
@@ -2247,6 +2427,7 @@ export function createBasemapLayers(
     metaLayers.filter((l) => l.type === type);
 
   const limitEntries = metaByType(BasemapLayerType.LIMIT);
+  const landEntries = metaByType(BasemapLayerType.LAND);
   const polygonEntries = metaByType(BasemapLayerType.POLYGON);
   const lineEntries = metaByType(BasemapLayerType.LINE);
   const geographicLineEntries = metaByType(BasemapLayerType.GEOGRAPHIC_LINES);
@@ -2282,15 +2463,27 @@ export function createBasemapLayers(
 
         case BASEMAP_LAYER_ID.TERRE: {
           const terreConfig = config as TerreLayerConfig;
+          const terreOptions = {
+            suppressStroke: hasMetadataLimits && isFrontieresVisible
+          };
 
-          if (worldBaseTable) {
+          if (landEntries.length > 0) {
+            const landLayers = createLandLayers(
+              landEntries,
+              terreConfig,
+              ctx,
+              additionalData?.stylePresets,
+              terreOptions
+            );
+            if (landLayers.length > 0) {
+              targetGroups.push(landLayers);
+            }
+          } else if (worldBaseTable && !additionalData?.hasLandMetadataLayers) {
             const terreLayers = createTerreLayers(
               worldBaseTable,
               terreConfig,
               ctx,
-              {
-                suppressStroke: hasMetadataLimits && isFrontieresVisible
-              }
+              terreOptions
             );
             if (terreLayers.length > 0) {
               targetGroups.push(terreLayers);
@@ -2333,7 +2526,8 @@ export function createBasemapLayers(
             const limitLayers = createMetadataLimitLayers(
               limitEntries,
               ctx,
-              config as FrontieresLayerConfig
+              config as FrontieresLayerConfig,
+              additionalData?.stylePresets
             );
             if (limitLayers.length > 0) {
               targetGroups.push(limitLayers);

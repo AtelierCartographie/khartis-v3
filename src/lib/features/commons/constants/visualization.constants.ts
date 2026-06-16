@@ -112,6 +112,13 @@ export const LINEAR_SHAPES: readonly ShapeType[] = [
 ];
 export const DEFAULT_LINEAR_SYMBOL_BAR_WIDTH = 6;
 
+// 2D SDF shapes in MultiShapeLayer are authored within this fraction of the
+// symbol quad (circle = 0.7·R, square = 0.6·R, …) so that square corners fit.
+// The layer's vertex shader scales the quad by the inverse so the rendered
+// circle matches the stock ScatterplotLayer circle and the legend radius,
+// keeping the visual weight constant when switching shapes.
+export const SYMBOL_SDF_EXTENT = 0.7;
+
 export function isLinearShape(shape: ShapeType): boolean {
   return LINEAR_SHAPES.includes(shape);
 }

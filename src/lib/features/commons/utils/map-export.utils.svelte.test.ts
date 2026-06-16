@@ -5,15 +5,56 @@ import {
   SHAPE_ORDINAL,
   ShapeType
 } from '$lib/features/commons/constants/visualization.constants';
+import {
+  globalActions,
+  globalState
+} from '$lib/features/commons/stores/global.svelte';
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
+import { ToolbarStep } from '$lib/features/commons/types/global';
 import { exportMapToJpg, exportMapToSvg } from './map-export.utils';
 
 const htmlToImage = vi.hoisted(() => ({
   toCanvas: vi.fn()
 }));
 
+const globalStore = vi.hoisted(() => {
+  const state = {
+    selectedStep: 'data',
+    isMapExporting: false
+  };
+
+  return {
+    state,
+    globalActions: {
+      setNavigationState: vi.fn((step: string) => {
+        state.selectedStep = step;
+      }),
+      resetNavigationState: vi.fn(() => {
+        state.selectedStep = 'data';
+        state.isMapExporting = false;
+      }),
+      setMapExporting: vi.fn((value: boolean) => {
+        state.isMapExporting = value;
+      })
+    },
+    globalState: {
+      get selectedStep() {
+        return state.selectedStep;
+      },
+      get isMapExporting() {
+        return state.isMapExporting;
+      }
+    }
+  };
+});
+
 vi.mock('html-to-image', () => ({
   toCanvas: htmlToImage.toCanvas
+}));
+
+vi.mock('$lib/features/commons/stores/global.svelte', () => ({
+  globalActions: globalStore.globalActions,
+  globalState: globalStore.globalState
 }));
 
 vi.mock('@ateliercartographie/motif.js', () => ({
@@ -132,6 +173,11 @@ describe('map export DOM mutations', () => {
   beforeEach(() => {
     htmlToImage.toCanvas.mockReset();
     htmlToImage.toCanvas.mockResolvedValue(createExportCanvas(3840, 2160));
+    globalStore.state.selectedStep = ToolbarStep.Data;
+    globalStore.state.isMapExporting = false;
+    globalStore.globalActions.setMapExporting.mockClear();
+    globalStore.globalActions.setNavigationState.mockClear();
+    globalStore.globalActions.resetNavigationState.mockClear();
 
     vi.stubGlobal('OffscreenCanvas', FakeOffscreenCanvas);
     vi.stubGlobal(
@@ -586,10 +632,10 @@ describe('map export DOM mutations', () => {
     const blob = await exportMapToSvg({ width: 400, height: 300 });
     const markup = await blob.text();
 
-    expect(markup).toContain('<rect x="6"');
+    expect(markup).toContain('<rect x="6" y="-10"');
     expect(markup).toContain('width="8"');
     expect(markup).toContain('height="20"');
-    expect(markup).toMatch(/<path d="M 24 40 L 30 20 L 36 40 Z"/);
+    expect(markup).toMatch(/<path d="M 24 30 L 30 10 L 36 30 Z"/);
   });
 
   it('exports every MultiShapeLayer symbol shape as vector SVG primitives', async () => {
@@ -663,14 +709,20 @@ describe('map export DOM mutations', () => {
     expect(markup).toContain('data-khartis-layer-id="editable-symbol-shapes"');
     expect(markup).toContain('data-khartis-layer-type="MultiShapeLayer"');
     expect(markup).toContain('<circle cx="10" cy="10" r="10"');
-    expect(markup).toContain('<rect x="25" y="0" width="20" height="20"');
-    expect(markup).toContain('<rect x="56" y="0" width="8" height="20"');
-    expect(markup).toContain('<path d="M 79 20 L 85 0 L 91 20 Z"');
-    expect(markup).toContain('<path d="M 107.5 2.5 L 112.5 2.5 L 112.5 7.5');
+    expect(markup).toContain(
+      '<rect x="26.429" y="1.429" width="17.143" height="17.143"'
+    );
+    expect(markup).toContain('<rect x="56" y="-10" width="8" height="20"');
+    expect(markup).toContain('<path d="M 79 10 L 85 -10 L 91 10 Z"');
+    expect(markup).toContain(
+      '<path d="M 106.667 0 L 113.333 0 L 113.333 6.667'
+    );
     expect(markup).toContain('<path d="M 135 0 L 145 10 L 135 20 L 125 10 Z"');
     expect(markup).toContain('<path d="M 160 0 L 170 20 L 150 20 Z"');
     expect(markup).toContain('<path d="M 185 0 L 187.2 7.8');
-    expect(markup).toContain('<rect x="201" y="7.3" width="18" height="5.4"');
+    expect(markup).toContain(
+      '<rect x="197.143" y="6.143" width="25.714" height="7.714"'
+    );
     expect(markup).not.toContain('data:image/svg+xml');
   });
 
@@ -922,6 +974,37 @@ describe('map export DOM mutations', () => {
       page.querySelector('img[data-khartis-export-frozen-canvas="true"]')
     ).toBeNull();
     expect(canvas.toDataURL).toHaveBeenCalledWith('image/png');
+  });
+
+  it('captures JPEG exports in layout export mode without changing the current step', async () => {
+    globalActions.setNavigationState(ToolbarStep.Visualizations);
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="geo-indications-overlay hidden"></div>
+        <div class="annotation-overlay hidden"></div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    if (!page) {
+      throw new Error('Missing export fixture node');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 960, height: 540 });
+    htmlToImage.toCanvas.mockImplementation(async (node) => {
+      expect(node).toBe(page);
+      expect(globalState.selectedStep).toBe(ToolbarStep.Visualizations);
+      expect(globalState.isMapExporting).toBe(true);
+      expect(page.classList.contains('is-exporting-map')).toBe(true);
+
+      return createExportCanvas(1920, 1080);
+    });
+
+    await exportMapToJpg({ width: 1920, height: 1080 });
+
+    expect(globalState.selectedStep).toBe(ToolbarStep.Visualizations);
+    expect(globalState.isMapExporting).toBe(false);
+    expect(page.classList.contains('is-exporting-map')).toBe(false);
   });
 
   it('exports the shared facets WebGL canvas when a map collection is active', () => {

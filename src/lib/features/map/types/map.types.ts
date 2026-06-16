@@ -104,6 +104,7 @@ export interface LayerContext {
   highlightVersion?: number;
 
   modelMatrix?: Matrix4 | null;
+  pageDisplayScale?: number;
   projectionSuffix?: string;
   beforeId?: string;
 
@@ -112,6 +113,12 @@ export interface LayerContext {
   representativePointTable?: ArrowTable;
 
   representativePointGeometryInfo?: GeometryInfo;
+
+  textRepresentativePointTable?: ArrowTable;
+
+  textRepresentativePointGeometryInfo?: GeometryInfo;
+
+  textPointTable?: ArrowTable;
 
   customProjection?: ProjectionLike;
 

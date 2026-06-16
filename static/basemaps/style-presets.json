@@ -23,6 +23,23 @@
     "widthUnits": "pixels",
     "color": [60, 60, 60, 255]
   },
+  "limit-dashed": {
+    "description_fr": "Limites tiretées (frontières contestées, lignes d'armistice ou de séparation)",
+    "description_en": "Dashed boundaries (disputed borders, armistice or separation lines)",
+    "layer_type": "path",
+    "width": 0.5,
+    "widthUnits": "pixels",
+    "color": [150, 150, 150, 200],
+    "dashArray": [4, 3]
+  },
+  "limit-country": {
+    "description_fr": "Frontières nationales (niveau le plus marqué, au-dessus des subdivisions NUTS)",
+    "description_en": "National borders (most prominent level, above NUTS subdivisions)",
+    "layer_type": "path",
+    "width": 2.0,
+    "widthUnits": "pixels",
+    "color": [40, 40, 40, 255]
+  },
   "land": {
     "description_fr": "Territoire général (fond polygone)",
     "description_en": "General territory (polygon fill)",

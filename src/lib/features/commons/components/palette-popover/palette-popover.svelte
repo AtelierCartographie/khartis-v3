@@ -215,6 +215,17 @@
     }
   }
 
+  function handleQualitativePaletteSelect(colors: string[]) {
+    if (colors.length === 0) return;
+    draftPaletteId = '__custom__';
+    draftInverted = false;
+    draftPatternParams = undefined;
+    draftColors = Array.from(
+      { length: Math.max(numClasses, 1) },
+      (_, index) => colors[index % colors.length]
+    );
+  }
+
   $effect(() => {
     if (open) {
       initDraft();
@@ -293,6 +304,7 @@
           onColorBlindChange={handleColorBlindChange}
           onSelect={handlePaletteSelect}
           onColorSelect={handleQualitativeColorSelect}
+          onPaletteSelect={handleQualitativePaletteSelect}
           onIntensitySelect={handleQualitativeColorSelect}
           onQualitativePresetChange={handleQualitativePresetChange}
         />

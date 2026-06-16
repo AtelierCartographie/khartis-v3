@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { factoryResetPwa } from '$lib/features/commons/utils/pwa-offline';
+  import { factoryResetPwa } from '$lib/features/commons/utils/pwa-reset';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages.js';
   import {
@@ -67,6 +67,7 @@
       hideCloseButton
       title={m.sidenav_clear_cache_confirm_warning()}
     />
+    <p class="update-modal-hint">{m.sidenav_clear_cache_frozen_hint()}</p>
   </ModalBody>
   <div class="update-modal-footer">
     <Button kind="secondary" disabled={isBusy} on:click={closeModal}>
@@ -96,6 +97,11 @@
     margin: 0;
     color: var(--cds-text-02);
     line-height: 1.5;
+  }
+
+  :global(.update-modal-body p.update-modal-hint) {
+    font-size: 0.75rem;
+    color: var(--cds-text-03);
   }
 
   .update-modal-footer {

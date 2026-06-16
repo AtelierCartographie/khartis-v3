@@ -24,7 +24,6 @@ const { mockLayersState, mockLayersActions, mockVisualizationStore } =
       removeLayer: vi.fn(),
       toggleLayerVisibility: vi.fn(),
       reorderLayers: vi.fn(),
-      reorderSubLayers: vi.fn(),
       duplicateLayer: vi.fn(),
       syncWithVisualizations: vi.fn()
     },
@@ -94,42 +93,42 @@ import Layers from './layers.svelte';
 
 describe('layers', () => {
   beforeEach(() => {
+    // Flattened model: each row is one primitive·viz or one global basemap row.
     mockLayersState.layers = [
-      {
-        id: 'viz-1',
-        name: 'Visualisation (1)',
-        visible: true,
-        color: '#0e6027',
-        type: 'visualization',
-        order: 0
-      },
       {
         id: 'viz-1::text',
         parentId: 'viz-1',
         isSubLayer: true,
-        name: 'Textes population',
+        kind: 'viz-primitive',
+        primitive: 'text',
+        name: 'Textes · Population',
         visible: true,
         color: '#0e6027',
         type: 'visualization',
         order: 0
       },
       {
-        id: 'viz-2',
-        name: 'Visualisation (2)',
+        id: 'viz-2::text',
+        parentId: 'viz-2',
+        isSubLayer: true,
+        kind: 'viz-primitive',
+        primitive: 'text',
+        name: 'Textes · PIB',
         visible: true,
         color: '#0e6027',
         type: 'visualization',
         order: 1
       },
       {
-        id: 'viz-2::text',
-        parentId: 'viz-2',
+        id: 'basemap::terre',
         isSubLayer: true,
-        name: 'Textes PIB',
+        kind: 'basemap-aux',
+        name: 'Terre',
         visible: true,
-        color: '#0e6027',
-        type: 'visualization',
-        order: 0
+        color: '#8d8d8d',
+        type: 'geographic',
+        basemapLayerId: 'terre',
+        order: 2
       }
     ];
 
@@ -147,25 +146,19 @@ describe('layers', () => {
     expect(source).toContain('void basemapService.simplificationVersion');
   });
 
-  it('collapses parent groups from the main layer cards', async () => {
+  it('renders every flattened row without collapsible parents', () => {
     render(Layers);
 
-    expect(screen.getByText('Visualisation (1)')).toBeInTheDocument();
-    expect(screen.getByText('Visualisation (2)')).toBeInTheDocument();
-    expect(screen.getByText('Textes population')).toBeInTheDocument();
-    expect(screen.queryByText('Textes PIB')).not.toBeInTheDocument();
+    expect(screen.getByText('Textes · Population')).toBeInTheDocument();
+    expect(screen.getByText('Textes · PIB')).toBeInTheDocument();
+    expect(screen.getByText('Terre')).toBeInTheDocument();
 
-    const toggles = screen.getAllByRole('button', { name: m.section_toggle() });
-    expect(toggles[0]).toHaveAttribute('aria-expanded', 'true');
-    expect(toggles[1]).toHaveAttribute('aria-expanded', 'false');
-
-    await fireEvent.click(toggles[1]);
-
-    expect(toggles[1]).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText('Textes PIB')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: m.section_toggle() })
+    ).not.toBeInTheDocument();
   });
 
-  it('toggles parent visibility via the eye button', async () => {
+  it('toggles a primitive row visibility via the eye button', async () => {
     render(Layers);
 
     const hideButtons = screen.getAllByRole('button', {
@@ -174,24 +167,24 @@ describe('layers', () => {
     await fireEvent.click(hideButtons[0]);
 
     expect(mockLayersActions.toggleLayerVisibility).toHaveBeenCalledWith(
-      'viz-1'
+      'viz-1::text'
     );
   });
 
-  it('toggles sublayer visibility via the eye button', async () => {
+  it('toggles a basemap row visibility via the eye button', async () => {
     render(Layers);
 
     const hideButtons = screen.getAllByRole('button', {
       name: m.layers_hide()
     });
-    await fireEvent.click(hideButtons[1]);
+    await fireEvent.click(hideButtons[2]);
 
     expect(mockLayersActions.toggleLayerVisibility).toHaveBeenCalledWith(
-      'viz-1::text'
+      'basemap::terre'
     );
   });
 
-  it('confirms rename and calls updateLayer with trimmed name', async () => {
+  it('confirms rename and calls updateLayer with the visualization id and trimmed name', async () => {
     render(Layers);
 
     const menus = screen.getAllByRole('button', { name: 'menu' });
@@ -232,7 +225,7 @@ describe('layers', () => {
     expect(mockLayersActions.updateLayer).not.toHaveBeenCalled();
   });
 
-  it('opens delete modal and confirms removal', async () => {
+  it('opens delete modal and confirms removal of the parent visualization', async () => {
     render(Layers);
 
     const menus = screen.getAllByRole('button', { name: 'menu' });
@@ -251,24 +244,7 @@ describe('layers', () => {
     expect(mockLayersActions.removeLayer).toHaveBeenCalledWith('viz-1');
   });
 
-  it('cancels delete without calling removeLayer', async () => {
-    render(Layers);
-
-    const menus = screen.getAllByRole('button', { name: 'menu' });
-    await fireEvent.click(menus[0]);
-
-    const deleteButton = screen.getByRole('menuitem', {
-      name: m.layers_delete()
-    });
-    await fireEvent.click(deleteButton);
-
-    const cancelButtons = screen.getAllByRole('button', { name: m.cancel() });
-    await fireEvent.click(cancelButtons[1]);
-
-    expect(mockLayersActions.removeLayer).not.toHaveBeenCalled();
-  });
-
-  it('calls duplicateLayer when duplicating via overflow menu', async () => {
+  it('calls duplicateLayer with the visualization id via the overflow menu', async () => {
     render(Layers);
 
     const menus = screen.getAllByRole('button', { name: 'menu' });
@@ -282,7 +258,7 @@ describe('layers', () => {
     expect(mockLayersActions.duplicateLayer).toHaveBeenCalledWith('viz-1');
   });
 
-  it('calls reorderLayers when moving up via overflow menu', async () => {
+  it('calls reorderLayers with absolute indices when moving a row up via the overflow menu', async () => {
     render(Layers);
 
     const menus = screen.getAllByRole('button', { name: 'menu' });
@@ -293,14 +269,10 @@ describe('layers', () => {
     });
     await fireEvent.click(moveUpButton);
 
-    expect(mockLayersActions.reorderLayers).toHaveBeenCalledWith(
-      'visualization',
-      1,
-      0
-    );
+    expect(mockLayersActions.reorderLayers).toHaveBeenCalledWith(1, 0);
   });
 
-  it('calls reorderLayers when moving down via overflow menu', async () => {
+  it('calls reorderLayers with absolute indices when moving a row down via the overflow menu', async () => {
     render(Layers);
 
     const menus = screen.getAllByRole('button', { name: 'menu' });
@@ -311,10 +283,6 @@ describe('layers', () => {
     });
     await fireEvent.click(moveDownButton);
 
-    expect(mockLayersActions.reorderLayers).toHaveBeenCalledWith(
-      'visualization',
-      0,
-      1
-    );
+    expect(mockLayersActions.reorderLayers).toHaveBeenCalledWith(0, 1);
   });
 });

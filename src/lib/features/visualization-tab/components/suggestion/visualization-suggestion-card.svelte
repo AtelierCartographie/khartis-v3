@@ -2,11 +2,14 @@
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
   import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
-  import type { VizSuggestion } from '$lib/features/commons/services/viz-suggester.service';
-  import TilePreview from '$lib/features/commons/components/tile-preview.svelte';
+  import type {
+    SimplifiedGeometryType,
+    VizSuggestion
+  } from '$lib/features/commons/services/viz-suggester.service';
   import * as m from '$lib/paraglide/messages';
   import SimpleRadio from '$lib/features/commons/components/simple-radio.svelte';
   import clsx from 'clsx';
+  import VisualizationSuggestionPreview from './visualization-suggestion-preview.svelte';
 
   interface Props {
     suggestion: VizSuggestion;
@@ -32,6 +35,11 @@
   const visibleColumns = $derived(columns.slice(0, 2));
   const extraColumnsCount = $derived(Math.max(0, columns.length - 1));
   const showCollection = $derived(suggestion.nbColumns > 2);
+  const primitiveLabel = $derived(
+    (suggestion.geometries ?? [])
+      .map((geometry) => getPrimitiveLabel(geometry))
+      .join(' · ')
+  );
   const cardClasses = $derived(
     clsx('viz-suggestion-card', {
       selected,
@@ -48,6 +56,16 @@
     };
 
     return labels[semioType]?.() ?? semioType;
+  }
+
+  function getPrimitiveLabel(geometry: SimplifiedGeometryType): string {
+    const labels: Record<SimplifiedGeometryType, () => string> = {
+      point: m.primitive_point,
+      line: m.primitive_line,
+      polygon: m.primitive_polygon
+    };
+
+    return labels[geometry]?.() ?? geometry;
   }
 
   function handleActivate() {
@@ -74,11 +92,11 @@
   onkeydown={handleKeyDown}
 >
   <div class="preview-panel">
-    <TilePreview
-      ratio="1:1"
+    <VisualizationSuggestionPreview
+      suggestionId={suggestion.id}
       label={m.viz_preview_label()}
-      theme="suggestion"
-      icon="palette"
+      semioTypes={suggestion.semioTypes}
+      geometries={suggestion.geometries}
     />
   </div>
 
@@ -96,6 +114,10 @@
         />
       </div>
     </div>
+
+    {#if primitiveLabel}
+      <p class="primitive-label">{primitiveLabel}</p>
+    {/if}
 
     <div class="details">
       {#if visibleColumns.length > 0}
@@ -238,8 +260,15 @@
   .preview-panel {
     width: 120px;
     min-width: 120px;
+    min-height: 120px;
+    flex: 0 0 120px;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     padding: 1px;
     box-sizing: border-box;
+    background: #ffffff;
     --tile-preview-background: var(
       --khartis-additions-layer-02-suggestions,
       #ffffff
@@ -247,13 +276,6 @@
     --tile-preview-color: var(
       --khartis-additions-interactive-suggestions,
       #0072c3
-    );
-  }
-
-  .viz-suggestion-card:hover:not(.disabled) .preview-panel {
-    --tile-preview-background: var(
-      --khartis-additions-layer-hover-01-suggestions,
-      #cceeff
     );
   }
 
@@ -290,6 +312,14 @@
   .radio-wrapper {
     flex-shrink: 0;
     padding-right: var(--cds-spacing-02);
+  }
+
+  .primitive-label {
+    margin: 0 0 var(--cds-spacing-02);
+    color: var(--cds-text-02, #525252);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0.32px;
   }
 
   .details {

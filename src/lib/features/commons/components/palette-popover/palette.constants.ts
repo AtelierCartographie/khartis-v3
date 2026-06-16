@@ -433,7 +433,10 @@ export function generatePaletteColors(
     }
     case PALETTE_TYPE.DIVERGING: {
       const colorA = palette.colors[0];
-      const colorB = palette.colors[palette.colors.length - 1];
+      const colorB =
+        palette.colors.length > 1
+          ? palette.colors[palette.colors.length - 1]
+          : undefined;
       const split = divergingSplit ?? {
         lowerCount: Math.floor(count / 2),
         upperCount: Math.floor(count / 2),

@@ -93,10 +93,15 @@
     getFormatState
   } from '$lib/features/step-toolbar/tools/format';
   import {
+    facetsStore,
+    SCALE_MODE
+  } from '$lib/features/step-toolbar/tools/facets';
+  import {
     CATEGORY_SHAPE_CYCLE,
     CategoryShapeMode,
     ColorMode,
     DEFAULT_COLORS,
+    DEFAULT_LINEAR_SYMBOL_BAR_WIDTH,
     FillMode,
     ShapeType,
     SizeMode,
@@ -129,6 +134,7 @@
     type LegendSvgDefinition,
     type SymbolType
   } from '$lib/features/commons/components/legend';
+  import { getLocale } from '$lib/paraglide/runtime.js';
   import {
     getLineWidthLegendScale,
     getPointSizeLegendScale,
@@ -144,7 +150,19 @@
   } from '../utils/legend.utils';
   import type { LegendItem } from '$lib/features/step-toolbar/tools/legend';
 
-  let { hidden = false }: { hidden?: boolean } = $props();
+  // `scopeVizId` + `inline` drive the per-facet anchored legend: each facet cell
+  // renders its own LegendOverlay scoped to one visualization, laid out inline
+  // inside the cell instead of absolutely-positioned/draggable in the viewport.
+  // Both default to the legacy behaviour (single, viewport-positioned legend).
+  let {
+    hidden = false,
+    scopeVizId = null,
+    inline = false
+  }: {
+    hidden?: boolean;
+    scopeVizId?: string | null;
+    inline?: boolean;
+  } = $props();
 
   function getPatternOverlayColor(fillColor: string | undefined): string {
     if (!fillColor?.startsWith('#') || fillColor.length !== 7) {
@@ -702,8 +720,25 @@
       return null;
     }
 
-    const primitive = resolveLegendColorSwatchPrimitive(viz);
-    const classification = getLegendClassedColorClassification(viz);
+    let primitive = resolveLegendColorSwatchPrimitive(viz);
+    let classification = getLegendClassedColorClassification(viz);
+
+    if (!classification?.colors?.length && primitive !== 'area') {
+      const polygon = getPolygonPrimitive(viz);
+      const polygonClassification = getPrimitiveClassification(
+        viz,
+        PrimitiveFilterType.POLYGON
+      );
+      if (
+        polygon?.enabled &&
+        polygon.fillMode === FillMode.CLASSES &&
+        polygonClassification?.colors?.length
+      ) {
+        primitive = 'area';
+        classification = polygonClassification;
+      }
+    }
+
     const colors = classification?.colors ?? [];
 
     if (!classification || colors.length === 0) {
@@ -1034,18 +1069,24 @@
     if (scale.kind === 'proportional' && !scale.secondary && type) {
       const values = getNumericColumnValues(viz, viz.mapping.sizeColumn);
       if (values.length > 0) {
+        const symbol = getSymbolPrimitive(viz);
+        const maxSize = symbol?.maxSize ?? 18;
+        const barWidth = symbol?.barWidth ?? DEFAULT_LINEAR_SYMBOL_BAR_WIDTH;
         return {
           key: 'point-size',
           className: 'legend-svg--symbols',
           consumesMissingData: isLegendMissingDataShown(viz, 'point'),
           create: (options, context) =>
             toLegendSvg(
+              // Proportional-size legend stays neutral (black outline, no
+              // fill): it encodes size only, the symbol color says nothing.
               draw_symbols_legend(values, {
                 ...options,
                 type,
-                size: 18,
+                size: maxSize,
                 fill: scale.fillColor,
                 stroke: scale.strokeColor,
+                bar_width: barWidth,
                 nodata: context.includeMissingDataFooter
                   ? isLegendMissingDataShown(viz, 'point')
                   : false,
@@ -1677,7 +1718,29 @@
 
   const legendState = $derived(getLegendState());
   const formatState = $derived(getFormatState());
-  const visibleItems = $derived(legendState.items.filter((i) => i.visible));
+  const visibleItems = $derived.by(() => {
+    const items = legendState.items.filter((i) => i.visible);
+    if (scopeVizId) {
+      return items.filter((item) => item.variableId === scopeVizId);
+    }
+    if (!facetsStore.enabled) {
+      return items;
+    }
+
+    // In a map collection the base visualization is hidden, so its legend must
+    // not appear; only the generated facets get a legend. With a shared scale
+    // every facet shares the same breaks, so a single legend stands for all.
+    const generatedIds = new Set(facetsStore.generatedVisualizationIds);
+    const facetItems = items.filter(
+      (item) => item.variableId != null && generatedIds.has(item.variableId)
+    );
+
+    if (facetsStore.scaleMode === SCALE_MODE.SHARED) {
+      return facetItems.slice(0, 1);
+    }
+
+    return facetItems;
+  });
 
   const vizByItemId = $derived.by(() => {
     void visualizationStore.version;
@@ -1694,6 +1757,7 @@
   });
 
   $effect(() => {
+    void getLocale();
     void visualizationStore.version;
     legendActions.syncWithVisualizations();
   });
@@ -1710,7 +1774,8 @@
     hslToHex(textColor.hue, textColor.saturation, textColor.lightness)
   );
   const isLegendActive = $derived(
-    globalState.selectedStep === ToolbarStep.Styling &&
+    !inline &&
+      globalState.selectedStep === ToolbarStep.Styling &&
       globalState.selectedTool === StylingTools.Legend
   );
   const pageScale = $derived(Math.max(globalState.zoom.pageZoomScale, 0.1));
@@ -1736,7 +1801,7 @@
   }
 
   const positionClass = $derived.by(() => {
-    if (legendState.dragPosition) {
+    if (inline || legendState.dragPosition) {
       return '';
     }
     return getPositionClass(legendState.position);
@@ -1752,22 +1817,26 @@
       ? Math.max(3, Math.round(layoutTokens.legend.paddingBlock * 0.35))
       : 0;
     const transform =
+      !inline &&
       !legendState.dragPosition &&
       legendState.position === LegendPosition.BOTTOM_CENTER
         ? `translateX(-50%) scale(${scale})`
         : `scale(${scale})`;
+    const legendFontSize = clampFontSize(
+      legendState.style.fontSize,
+      layoutTokens.legend.fontSize
+    );
     const styles: string[] = [
       `--legend-page-scale: ${scale}`,
       `--legend-padding-inline: ${shellPaddingInline}px`,
       `--legend-padding-block: ${shellPaddingBlock}px`,
-      `--legend-max-width: ${layoutTokens.legend.maxWidth}px`,
       `--legend-item-gap: ${Math.max(8, Math.round(layoutTokens.legend.fontSize * 0.7))}px`,
       `font-family: ${resolveFontFamilyStack(legendState.style.fontFamily)}`,
-      `font-size: ${clampFontSize(legendState.style.fontSize, layoutTokens.legend.fontSize)}px`,
+      `font-size: ${legendFontSize}px`,
       `color: ${textHex}`,
       'border-radius: 0px',
       `transform: ${transform}`,
-      `transform-origin: ${getLegendTransformOrigin(legendState.position, Boolean(legendState.dragPosition))}`
+      `transform-origin: ${inline ? 'bottom right' : getLegendTransformOrigin(legendState.position, Boolean(legendState.dragPosition))}`
     ];
 
     if (hasBackground) {
@@ -1778,7 +1847,7 @@
       styles.push('box-shadow: none');
     }
 
-    if (legendState.dragPosition) {
+    if (!inline && legendState.dragPosition) {
       styles.push(`left: ${legendState.dragPosition.x * scale}px`);
       styles.push(`top: ${legendState.dragPosition.y * scale}px`);
     }
@@ -2044,7 +2113,12 @@
 </script>
 
 {#if legendState.visible && visibleItems.length > 0}
-  <div class="legend-overlay" class:hidden={hidden} bind:this={overlayElement}>
+  <div
+    class="legend-overlay"
+    class:hidden={hidden}
+    class:inline={inline}
+    bind:this={overlayElement}
+  >
     <div
       bind:this={legendElement}
       class="legend-container {positionClass}"
@@ -2055,7 +2129,7 @@
       role="button"
       tabindex="0"
       aria-label={m.tool_legend()}
-      onclick={handleLegendFocusClick}
+      ondblclick={handleLegendFocusClick}
       onblur={handleLegendBlur}
       onkeydown={handleLegendKeyDown}
       onpointerdown={handleLegendPointerDown}
@@ -2113,11 +2187,25 @@
     visibility: visible;
   }
 
+  /* Per-facet anchored legend: fills its cell and pins the legend to the
+     bottom-right corner of the map, without viewport-absolute positioning. */
+  .legend-overlay.inline {
+    position: absolute;
+    inset: 0;
+  }
+
+  .legend-overlay.inline .legend-container {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    cursor: default;
+    pointer-events: none;
+  }
+
   .legend-container {
     --legend-page-scale: 1;
     --legend-padding-inline: 0px;
     --legend-padding-block: 0px;
-    --legend-max-width: 160px;
     --legend-item-gap: 4px;
     position: absolute;
     display: flex;
@@ -2127,7 +2215,7 @@
     padding: var(--legend-padding-block) var(--legend-padding-inline);
     border-radius: 0;
     box-shadow: none;
-    max-width: var(--legend-max-width);
+    max-width: 90%;
     overflow-wrap: anywhere;
     pointer-events: auto;
     cursor: pointer;

@@ -64,7 +64,10 @@ async function ensureDb(): Promise<IDBDatabase> {
   return openProjectDatabase();
 }
 
-export async function saveProject(project: KhartisProject): Promise<void> {
+export async function saveProject(
+  project: KhartisProject,
+  thumbnail?: string
+): Promise<void> {
   const database = await ensureDb();
   project.manifest.version = PROJECT_CONST.APP_VERSION;
 
@@ -88,7 +91,7 @@ export async function saveProject(project: KhartisProject): Promise<void> {
   });
 
   await syncProjectAssetRefs(project.id, project.data?.sourceFiles ?? []);
-  await updateMetadata(project);
+  await updateMetadata(project, thumbnail);
 }
 
 export async function loadProject(id: string): Promise<KhartisProject | null> {
@@ -197,7 +200,10 @@ export async function listMetadata(): Promise<SavedProjectMetadata[]> {
   );
 }
 
-async function updateMetadata(project: KhartisProject): Promise<void> {
+async function updateMetadata(
+  project: KhartisProject,
+  thumbnail?: string
+): Promise<void> {
   const metadata = await loadProjectMetadata();
   const index = metadata.findIndex((entry) => entry.id === project.id);
 
@@ -207,7 +213,9 @@ async function updateMetadata(project: KhartisProject): Promise<void> {
     description: project.manifest.description,
     createdAt: project.manifest.createdAt,
     updatedAt: project.manifest.updatedAt,
-    size: calculateProjectSize(project)
+    size: calculateProjectSize(project),
+    // Preserve the previous thumbnail when this save could not capture one.
+    thumbnail: thumbnail ?? (index >= 0 ? metadata[index].thumbnail : undefined)
   };
 
   if (index >= 0) {

@@ -46,11 +46,19 @@
   import { setStylingToolPopoverDragging } from '../utils/tool-popover-drag-visibility.utils';
   import type {
     Annotation,
+    AnnotationDataAnchor,
     AnnotationPlacementPreview,
     AnnotationStyle,
     PageElementRole
   } from '$lib/features/step-toolbar/tools/annotations';
   import { resolveAnnotationCoordinateSpace } from '$lib/features/step-toolbar/tools/annotations';
+  import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
+  import {
+    buildAnchorFromScreenPx,
+    canAnchorToMap,
+    dataToScreenPx,
+    getAnchorScaleFactor
+  } from '../utils/map-anchor-projection.utils';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
 
   let {
@@ -146,6 +154,7 @@
     id: string;
     pointIndex: number;
     startPoints: { x: number; y: number }[];
+    startPosition: { x: number; y: number };
     startClientX: number;
     startClientY: number;
   } | null>(null);
@@ -160,6 +169,7 @@
   } | null>(null);
   let drawingPointerId = $state<number | null>(null);
   let drawingCloseToStart = $state(false);
+  let mapViewRevision = $state(0);
   let centeredAnnotationId = $state<string | null>(null);
   let focusResetTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let suppressedClickAnnotationId: string | null = null;
@@ -233,6 +243,86 @@
       : []
   );
   const selectedId = $derived(annotationsState.selectedId);
+
+  // Keep map-anchored annotations reactive to MapLibre interactions. The deck
+  // orthographic engine drives reactivity through `mapInstanceStore.deckViewState`
+  // (read below), but MapLibre mutates its viewport imperatively, so mirror the
+  // `mapViewRevision` bump pattern from geo-indications-overlay.
+  $effect(() => {
+    const map = mapInstanceStore.map;
+    if (!map) {
+      return;
+    }
+
+    const refresh = () => {
+      mapViewRevision += 1;
+    };
+
+    map.on('move', refresh);
+    map.on('zoom', refresh);
+    map.on('resize', refresh);
+
+    return () => {
+      map.off('move', refresh);
+      map.off('zoom', refresh);
+      map.off('resize', refresh);
+    };
+  });
+
+  function getAnnotationAnchor(item: Annotation): AnnotationDataAnchor | null {
+    if (getAnnotationScope(item) !== 'map') {
+      return null;
+    }
+    const anchor = item.anchor;
+    if (
+      !anchor ||
+      !Number.isFinite(anchor.lon) ||
+      !Number.isFinite(anchor.lat)
+    ) {
+      return null;
+    }
+    return anchor;
+  }
+
+  // Resolve the on-screen (map-area-local, logical px) position and map scale
+  // factor of every data-anchored annotation. Recomputed whenever the map
+  // viewState changes so the marks track AND zoom with the basemap; legacy
+  // `'map'` annotations (no anchor) and page annotations are absent from this
+  // map and keep the pixel-page path.
+  const anchoredScreenPositions = $derived.by(() => {
+    // Establish reactive dependencies on both engines' viewport.
+    void mapViewRevision;
+    void mapInstanceStore.deckViewState;
+
+    const positions: Record<string, { x: number; y: number; scale: number }> =
+      {};
+    for (const item of visibleItems) {
+      const anchor = getAnnotationAnchor(item);
+      if (!anchor) {
+        continue;
+      }
+      const screen = dataToScreenPx(anchor);
+      if (screen) {
+        positions[item.id] = { ...screen, scale: getAnchorScaleFactor(anchor) };
+      }
+    }
+    return positions;
+  });
+
+  function getMapScaleFactor(item: Annotation): number {
+    return anchoredScreenPositions[item.id]?.scale ?? 1;
+  }
+
+  function getLocalRenderedPosition(item: Annotation): {
+    x: number;
+    y: number;
+  } {
+    if (getAnnotationScope(item) === 'page') {
+      return item.position;
+    }
+    const anchored = item.anchor ? anchoredScreenPositions[item.id] : undefined;
+    return anchored ? { x: anchored.x, y: anchored.y } : item.position;
+  }
 
   function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
@@ -440,17 +530,137 @@
       return item.position;
     }
 
+    // Data-anchored: reproject the WGS84 anchor through the live map viewState so
+    // the annotation stays glued to the basemap. Falls back to the stored
+    // pixel-page position when the anchor cannot be projected (map not ready /
+    // composite projection), preserving the legacy behavior.
+    const localPosition = getLocalRenderedPosition(item);
+
     return {
-      x: item.position.x + pageMargins.left,
-      y: item.position.y + pageMargins.top
+      x: localPosition.x + pageMargins.left,
+      y: localPosition.y + pageMargins.top
     };
+  }
+
+  function getVectorShapeBoundsOrigin(item: Annotation): {
+    x: number;
+    y: number;
+  } {
+    if (!isVectorShapeItem(item)) {
+      return { x: 0, y: 0 };
+    }
+
+    const vectorStyle = getVectorStyle(item.style);
+    const bounds = computeVectorPathBounds(
+      getVectorPoints(item),
+      item.style?.controlOffsets,
+      vectorStyle.strokeWidth,
+      hasArrowHead(item.content)
+    );
+
+    return { x: bounds.originX, y: bounds.originY };
   }
 
   function getAnnotationPositionStyle(item: Annotation): string {
     const { x, y } = getRenderedPosition(item);
+    const boundsOrigin = getVectorShapeBoundsOrigin(item);
     const scale = getPageScale();
-    return `left: ${x * scale}px; top: ${y * scale}px; transform: scale(${scale});`;
+    const mapFactor = getMapScaleFactor(item);
+    return `left: ${(x + boundsOrigin.x * mapFactor) * scale}px; top: ${(y + boundsOrigin.y * mapFactor) * scale}px; transform: scale(${scale * mapFactor});`;
   }
+
+  // Persist (or refresh) the WGS84 anchor of a map-scoped annotation from its
+  // finalized map-area-local logical position, so it stays glued to the basemap.
+  // The current map scale factor is carried into the rewritten span so a
+  // re-anchor (drag, resize) never snaps the rendered size back to factor 1.
+  // Page-scoped, role and legacy non-projectable annotations are left untouched
+  // (no anchor written), preserving the historical pixel-page behavior.
+  function writeMapAnchor(
+    item: Annotation,
+    localPosition: { x: number; y: number }
+  ): boolean {
+    if (getAnnotationScope(item) !== 'map' || !canAnchorToMap()) {
+      return false;
+    }
+
+    const anchor = buildAnchorFromScreenPx(
+      localPosition.x,
+      localPosition.y,
+      getMapScaleFactor(item)
+    );
+    if (!anchor) {
+      return false;
+    }
+    annotationsActions.updateAnnotation(item.id, { anchor });
+    return true;
+  }
+
+  // Keep an already-anchored annotation's anchor in sync with its top-left when a
+  // shape edit (resize, anchor-point drag) shifts `position`. Does NOT opt a
+  // legacy (un-anchored) annotation into map anchoring — only an explicit body
+  // drag does that — so shape editing never changes placement semantics.
+  function refreshMapAnchorIfPresent(
+    item: Annotation,
+    localPosition: { x: number; y: number }
+  ): void {
+    if (!item.anchor) {
+      return;
+    }
+    writeMapAnchor(item, localPosition);
+  }
+
+  // A shape created on the map by the store carries an EXPLICIT `coordinateSpace:
+  // 'map'` and no anchor yet. Legacy `'map'` items (loaded from older projects)
+  // leave `coordinateSpace` undefined, so this guard targets only fresh shapes and
+  // never disturbs legacy ones, which keep their opt-in-on-first-drag behavior.
+  function isUnanchoredFreshMapShape(item: Annotation): boolean {
+    return (
+      item.coordinateSpace === 'map' && !item.role && item.anchor === undefined
+    );
+  }
+
+  // Finalize a freshly created `'map'` shape (rectangle/circle/triangle, vector
+  // arrow/line, freehand drawing) the first time it renders. The store creates it
+  // in `'map'` space with a map-area-local `position` but cannot reach the
+  // projection helpers, so its anchor is written here, gluing it to the basemap.
+  // When the anchor cannot be written — composite / pre-projected CRS, or a
+  // position outside the projected world outline that would not round-trip —
+  // the shape is downgraded back to `'page'`, re-adding the page margins it was
+  // created without, so the on-screen placement is identical and it keeps the
+  // historical page behavior. Either branch runs once: the item then has an
+  // anchor or is `'page'`, so it leaves this effect's selection.
+  function anchorOrDowngradeNewMapShape(item: Annotation): void {
+    if (writeMapAnchor(item, item.position)) {
+      return;
+    }
+
+    annotationsActions.updateAnnotation(item.id, {
+      coordinateSpace: 'page',
+      position: {
+        x: item.position.x + pageMargins.left,
+        y: item.position.y + pageMargins.top
+      }
+    });
+  }
+
+  // Drive the one-time anchoring of newly created map shapes. Kept reactive to the
+  // map viewport so a shape created before the map is ready still gets anchored
+  // once the projection becomes available; already-anchored and page items are
+  // skipped, so this never disturbs existing annotations or fights a live drag.
+  $effect(() => {
+    void mapViewRevision;
+    void mapInstanceStore.deckViewState;
+
+    if (dragState || resizeState || anchorDragState) {
+      return;
+    }
+
+    for (const item of annotationsState.items) {
+      if (isUnanchoredFreshMapShape(item)) {
+        anchorOrDowngradeNewMapShape(item);
+      }
+    }
+  });
 
   function getScaledPreviewStyle(
     position: { x: number; y: number },
@@ -590,7 +800,7 @@
     ) {
       return;
     }
-    const scale = Math.max(pageScale, 0.0001);
+    const scale = Math.max(pageScale * getMapScaleFactor(item), 0.0001);
     const dx = (event.clientX - tensionDragState.startClientX) / scale;
     const dy = (event.clientY - tensionDragState.startClientY) / scale;
     const deltaPerpendicular =
@@ -623,6 +833,7 @@
       id: item.id,
       pointIndex,
       startPoints: points.map((point) => ({ x: point.x, y: point.y })),
+      startPosition: { x: item.position.x, y: item.position.y },
       startClientX: event.clientX,
       startClientY: event.clientY
     };
@@ -636,7 +847,7 @@
       (i) => i.id === anchorDragState!.id
     );
     if (!item) return;
-    const scale = Math.max(pageScale, 0.0001);
+    const scale = Math.max(pageScale * getMapScaleFactor(item), 0.0001);
     const dx = (event.clientX - anchorDragState.startClientX) / scale;
     const dy = (event.clientY - anchorDragState.startClientY) / scale;
     const newPoints = anchorDragState.startPoints.map((point, index) =>
@@ -644,6 +855,19 @@
         ? { x: point.x + dx, y: point.y + dy }
         : { x: point.x, y: point.y }
     );
+    if (isVectorShapeItem(item)) {
+      const normalized = normalizeToOrigin(newPoints);
+      const nextPosition = {
+        x: anchorDragState.startPosition.x + normalized.minX,
+        y: anchorDragState.startPosition.y + normalized.minY
+      };
+      annotationsActions.updateAnnotation(item.id, {
+        position: nextPosition,
+        style: { ...(item.style ?? {}), points: normalized.points }
+      });
+      refreshMapAnchorIfPresent(item, nextPosition);
+      return;
+    }
     applyEditablePoints(item, newPoints);
   }
 
@@ -814,6 +1038,15 @@
     y = clamp(y, minY, maxY);
 
     annotationsActions.moveAnnotation(dragState.id, { x, y });
+
+    if (dragState.scope === 'map') {
+      const draggedItem = annotationsState.items.find(
+        (i) => i.id === dragState!.id
+      );
+      if (draggedItem) {
+        writeMapAnchor(draggedItem, { x, y });
+      }
+    }
   }
 
   function handleAnnotationPointerDown(
@@ -843,11 +1076,12 @@
       currentTarget instanceof HTMLElement
         ? currentTarget.getBoundingClientRect()
         : null;
+    const localPosition = getLocalRenderedPosition(item);
     dragState = {
       id: item.id,
       scope,
-      offsetX: (event.clientX - rect.left) / scale - item.position.x,
-      offsetY: (event.clientY - rect.top) / scale - item.position.y,
+      offsetX: (event.clientX - rect.left) / scale - localPosition.x,
+      offsetY: (event.clientY - rect.top) / scale - localPosition.y,
       width: targetRect ? targetRect.width / scale : 0,
       height: targetRect ? targetRect.height / scale : 0,
       startClientX: event.clientX,
@@ -870,11 +1104,6 @@
       return;
     }
 
-    if (!isAnnotationEditing) {
-      activateStylingToolFromMap(StylingTools.Annotations);
-      annotationsActions.setPageElementsVisibility(true);
-    }
-
     centeredAnnotationId = itemId;
     cancelFocusedAnnotationReset();
 
@@ -886,6 +1115,16 @@
     void tick().then(() => {
       centerAnnotationInViewport(currentTarget);
     });
+    annotationsActions.selectAnnotation(itemId);
+  }
+
+  function handleAnnotationDoubleClick(
+    event: MouseEvent,
+    itemId: string
+  ): void {
+    event.stopPropagation();
+    activateStylingToolFromMap(StylingTools.Annotations);
+    annotationsActions.setPageElementsVisibility(true);
     annotationsActions.selectAnnotation(itemId);
   }
 
@@ -1151,12 +1390,12 @@
   function handleResizePointerMove(event: PointerEvent): void {
     if (!resizeState) return;
 
-    const scale = getPageScale();
-    const dx = (event.clientX - resizeState.startPointerX) / scale;
-    const dy = (event.clientY - resizeState.startPointerY) / scale;
-
     const item = annotationsState.items.find((i) => i.id === resizeState!.id);
     if (!item) return;
+
+    const scale = getPageScale() * getMapScaleFactor(item);
+    const dx = (event.clientX - resizeState.startPointerX) / scale;
+    const dy = (event.clientY - resizeState.startPointerY) / scale;
 
     const resizedBounds = resolveResizedShapeBounds(
       item,
@@ -1178,6 +1417,11 @@
         shapeWidth: Math.round(resizedBounds.width),
         shapeHeight: Math.round(resizedBounds.height)
       }
+    });
+
+    refreshMapAnchorIfPresent(item, {
+      x: resizedBounds.x,
+      y: resizedBounds.y
     });
   }
 
@@ -1208,8 +1452,11 @@
             x: renderedPosition.x - pageMargins.left,
             y: renderedPosition.y - pageMargins.top
           };
-    const centerX = rect.left + (localPosition.x + shapeW / 2) * scale;
-    const centerY = rect.top + (localPosition.y + shapeH / 2) * scale;
+    const mapFactor = getMapScaleFactor(item);
+    const centerX =
+      rect.left + (localPosition.x + (shapeW / 2) * mapFactor) * scale;
+    const centerY =
+      rect.top + (localPosition.y + (shapeH / 2) * mapFactor) * scale;
 
     const startAngle =
       Math.atan2(event.clientY - centerY, event.clientX - centerX) *
@@ -2005,6 +2252,7 @@
                       stroke={guideStyle.stroke}
                       stroke-width={guideStyle.strokeWidth}
                       stroke-dasharray={guideStyle.strokeDasharray}
+                      vector-effect="non-scaling-stroke"
                     />
                     <circle
                       cx={previewShapeData.cx}
@@ -2014,6 +2262,7 @@
                       stroke={previewStyle.stroke}
                       stroke-width={previewStyle.strokeWidth}
                       stroke-dasharray={previewStyle.strokeDasharray}
+                      vector-effect="non-scaling-stroke"
                     />
                   {:else}
                     <path
@@ -2024,6 +2273,7 @@
                       stroke-dasharray={guideStyle.strokeDasharray}
                       stroke-linejoin="round"
                       stroke-linecap="round"
+                      vector-effect="non-scaling-stroke"
                     />
                     <path
                       d={previewShapeData.path}
@@ -2035,6 +2285,7 @@
                       stroke-dasharray={previewStyle.strokeDasharray}
                       stroke-linecap="round"
                       stroke-linejoin="round"
+                      vector-effect="non-scaling-stroke"
                     />
                   {/if}
                 </svg>
@@ -2145,6 +2396,8 @@
         ? item.content.trim()
         : m.annotationImageAlt()}
       onclick={(event: MouseEvent) => handleAnnotationClick(event, item.id)}
+      ondblclick={(event: MouseEvent) =>
+        handleAnnotationDoubleClick(event, item.id)}
       onblur={(event: FocusEvent) => handleAnnotationBlur(event, item.id)}
       onpointerdown={(event: PointerEvent) =>
         handleAnnotationPointerDown(event, item)}
@@ -2293,6 +2546,7 @@
                     stroke={shapeStyle.stroke}
                     stroke-width={shapeStyle.strokeWidth}
                     stroke-dasharray={shapeStyle.strokeDasharray}
+                    vector-effect="non-scaling-stroke"
                   />
                 {:else if shapeData.type === SHAPE_TYPE.ARROW}
                   <path
@@ -2313,6 +2567,7 @@
                     stroke-dasharray={shapeStyle.strokeDasharray}
                     stroke-linecap="round"
                     stroke-linejoin="round"
+                    vector-effect="non-scaling-stroke"
                   />
                 {/if}
               </svg>

@@ -35,13 +35,13 @@ describe('calculateToleranceFromRate', () => {
 });
 
 describe('simplifyGeometryTable', () => {
-  it('scales fallback ST_Simplify with the same normalized factor as the macro path', async () => {
+  it('throws without falling back to topology-breaking ST_Simplify when the macro fails', async () => {
     const queries: string[] = [];
     const Duck = {
       query: vi.fn(async (sql: string) => {
         queries.push(sql);
 
-        if (sql.includes('SUM(ST_NPoints') && queries.length === 1) {
+        if (sql.includes('SUM(ST_NPoints')) {
           return [{ total_vertices: 100 }];
         }
 
@@ -49,23 +49,18 @@ describe('simplifyGeometryTable', () => {
           throw new Error('simplify_and_clean failed');
         }
 
-        if (sql.includes('SUM(ST_NPoints') && queries.length >= 4) {
-          return [{ total_vertices: 50 }];
-        }
-
         return [];
       })
     };
 
-    await simplifyGeometryTable(
-      Duck as unknown as Parameters<typeof simplifyGeometryTable>[0],
-      'source_table',
-      0.5
-    );
+    await expect(
+      simplifyGeometryTable(
+        Duck as unknown as Parameters<typeof simplifyGeometryTable>[0],
+        'source_table',
+        0.5
+      )
+    ).rejects.toThrow('Topology-preserving simplification failed');
 
-    const fallbackQuery = queries.find((sql) => sql.includes('ST_Simplify'));
-
-    expect(fallbackQuery).toContain('* 0.05');
-    expect(fallbackQuery).toContain('AVG(');
+    expect(queries.some((sql) => sql.includes('ST_Simplify'))).toBe(false);
   });
 });
