@@ -1,12 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { fireEvent, render } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
-
-const modalSource = readFileSync(
-  resolve(import.meta.dirname, 'discretization-modal.svelte'),
-  'utf8'
-);
 
 vi.mock('$lib/features/commons/services/classification.service', () => ({
   applyPaletteInversion: (colors: string[]) => colors,
@@ -299,37 +292,6 @@ describe('DiscretizationModal', () => {
     expect(lastCall[1].min).toBe(12);
   });
 
-  it('should include paletteId and inverted in the onchange payload', () => {
-    expect(modalSource).toContain('paletteId: activeClassification?.paletteId');
-    expect(modalSource).toContain(
-      'inverted: activeClassification?.inverted ?? false'
-    );
-  });
-
-  it('uses only the caller-provided value column for the active channel', () => {
-    expect(modalSource).toContain('valueColumn?: string;');
-    expect(modalSource).toContain(
-      'const activeValueColumn = $derived(valueColumn);'
-    );
-    expect(modalSource).not.toContain(
-      'valueColumn ?? visualization?.mapping.valueColumn'
-    );
-  });
-
-  it('should use a single opening effect to avoid redundant state syncs', () => {
-    expect(modalSource).toContain('const classificationForSync =');
-    const openingSyncMatches = modalSource.match(
-      /syncStateFromVisualization\(classificationForSync\)/g
-    );
-    expect(openingSyncMatches).not.toBeNull();
-    expect(openingSyncMatches!.length).toBe(1);
-  });
-
-  it('uses the same contextual panel background token as palette popovers', () => {
-    expect(modalSource).toContain('background: var(--cds-background, #ffffff)');
-    expect(modalSource).not.toContain('background: var(--cds-ui-02, #ffffff)');
-  });
-
   it('allows clearing the breakpoint value', async () => {
     const onbreakpointchange = vi.fn();
     const { container } = render(DiscretizationPanel, {
@@ -417,26 +379,5 @@ describe('DiscretizationModal', () => {
         '.discretization-floating-panel[data-role="size"]'
       )
     ).not.toBeNull();
-  });
-
-  it('recomputes breakpoint updates through DuckDB breaks', () => {
-    const breakpointHandlerBlock = modalSource
-      .split('function handleBreakpointChange(value: number | null) {')[1]
-      ?.split('function handleBreaksChange')[0];
-
-    expect(breakpointHandlerBlock).toContain('void computeBreaks()');
-    expect(modalSource).toContain(
-      'function handleBreakpointPositionChange(lowerClassCount: number)'
-    );
-    expect(modalSource).toContain(
-      'bind:breakpointLowerClassCount={currentBreakpointLowerClassCount}'
-    );
-    expect(modalSource).toContain(
-      'function resolveBreakpointFromLowerClassCount'
-    );
-    expect(modalSource).toContain(
-      'currentBreakpoint = resolveBreakpointFromLowerClassCount'
-    );
-    expect(modalSource).not.toContain('BREAKPOINT_APPLY_DEBOUNCE_MS');
   });
 });

@@ -132,6 +132,22 @@ describe('[D-06][D-07] validateGPSColumns — clean GPS data (CSV-04, CSV-06, CS
   });
 });
 
+describe('[D-07] validateGPSColumns — no parseable coordinates (CSV-12)', () => {
+  it('reports invalid with null stats and a warning when no lat/lon pair parses', async () => {
+    const result = await validateGPSColumns(
+      'tbl',
+      'lat',
+      'long',
+      mockDuck({ lat_min: null as unknown as number })
+    );
+    expect(result.isValid).toBe(false);
+    expect(result.possibleInversion).toBe(false);
+    expect(result.latStats).toBeNull();
+    expect(result.lonStats).toBeNull();
+    expect(result.warning).toBeTruthy();
+  });
+});
+
 describe('[D-08] getGPSArrowTable — transient GPS materialization', () => {
   it('materializes GPS rows in a temp table and drops it after Arrow export', async () => {
     const queries: string[] = [];

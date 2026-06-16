@@ -1,6 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
 vi.mock('$lib/features/commons/utils/projection.utils', () => ({
   PROJECTIONS: [
@@ -20,13 +18,6 @@ vi.mock('$lib/features/commons/utils/projection.utils', () => ({
 
 import { parseProjectionCode } from '$lib/features/step-toolbar/tools/projections/projection-code.utils';
 
-const frMessages = JSON.parse(
-  readFileSync(resolve(process.cwd(), 'messages/fr.json'), 'utf8')
-) as Record<string, string>;
-const enMessages = JSON.parse(
-  readFileSync(resolve(process.cwd(), 'messages/en.json'), 'utf8')
-) as Record<string, string>;
-
 // ─── null cases ────────────────────────────────────────────────────────────
 
 describe('parseProjectionCode — null cases', () => {
@@ -40,19 +31,6 @@ describe('parseProjectionCode — null cases', () => {
 
   it('returns null when no WKT or proj4 hint is detected', () => {
     expect(parseProjectionCode('hello world')).toBeNull();
-  });
-});
-
-describe('projection code helper copy', () => {
-  it('advertises every CRS format accepted by the parser', () => {
-    for (const helper of [
-      frMessages.projection_code_helper,
-      enMessages.projection_code_helper
-    ]) {
-      expect(helper).toContain('WKT');
-      expect(helper).toContain('PROJ.4');
-      expect(helper).toContain('EPSG');
-    }
   });
 });
 

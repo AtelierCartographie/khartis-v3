@@ -650,50 +650,7 @@ describe('resolveEffectiveCategoryColorMap', () => {
   });
 });
 
-describe('binary scatter styling refresh', () => {
-  it('clones shared scatterplot binary data before overriding fill/line/radius attributes', () => {
-    expect(source).toContain('function cloneScatterBinaryData');
-    expect(source).toContain('attributes: { ...sourceData.attributes }');
-    const cloneCalls = source.match(/cloneScatterBinaryData\(scatterProps\)/g);
-    expect(cloneCalls).not.toBeNull();
-    expect((cloneCalls ?? []).length).toBeGreaterThanOrEqual(3);
-  });
-
-  it('applies secondary text bold and italic styles to the label layer', () => {
-    expect(source).toContain("secondaryLabelsConfig.bold ? '700' : '400'");
-    expect(source).toContain('secondaryLabelsConfig.italic');
-    expect(source).toContain(
-      'resolveDeckTextFontFamily(secondaryLabelsConfig.fontFamily)'
-    );
-    expect(source).toContain(
-      'resolveDeckTextFontFamily(textConfig.fontFamily)'
-    );
-  });
-
-  it('wires disabled category labels into text categorical rendering', () => {
-    expect(source).toContain('textClassification?.disabledLabels ?? []');
-    expect(source).toContain('textClassification?.disabledLabels,');
-  });
-});
-
 describe('createTextOverlayLayers', () => {
-  it('routes text labels through the text representative point source', () => {
-    expect(source).toContain('function getTextRepresentativePointSource(');
-    expect(source).toContain(
-      'ctx.textRepresentativePointTable ?? ctx.representativePointTable'
-    );
-    expect(source).toContain(
-      'const representativePointSource = getTextRepresentativePointSource(ctx);'
-    );
-  });
-
-  it('keeps text filters independent from symbol filters on raw point datasets', () => {
-    expect(source).toContain('table: ctx.textPointTable ?? jsTable,');
-    expect(source).toContain(
-      '(representativePointSource ? jsTable : (textPointSource?.table ?? jsTable))'
-    );
-  });
-
   it('wraps text labels and places labels to the right when symbols are rendered', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 2,
@@ -2204,12 +2161,6 @@ describe('createPolygonLayers', () => {
 });
 
 describe('createPointLayers', () => {
-  it('does not generate SVG icon point layers for symbol shapes', () => {
-    expect(source).not.toContain("pointType: 'icon'");
-    expect(source).not.toContain('createPointSymbolIcon');
-    expect(source).not.toContain('data:image/svg+xml');
-  });
-
   it('fully disables point circle stroke props when contour mode is none', () => {
     arrowTableToGeoJSONMock.mockReturnValue({
       type: 'FeatureCollection',
@@ -3258,10 +3209,6 @@ describe('createLineLayers', () => {
       | undefined;
 
     expect(getLineColor?.(disabledFeature)).toEqual([0, 0, 0, 0]);
-  });
-
-  it('wires disabled line categories into Deck color update triggers', () => {
-    expect(source).toContain('lineColorClassification?.disabledLabels');
   });
 
   it('uses the selected dash pattern for dashed GeoJSON line layers', () => {

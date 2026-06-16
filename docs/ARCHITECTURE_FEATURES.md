@@ -11,7 +11,7 @@
 Khartis v3 est organisé en _features_ autonomes sous `src/lib/features/`. Trois principes guident l'organisation interne de chaque feature :
 
 1. **L'organisation suit la responsabilité, pas le type de fichier.** Une feature qui ne fait que de l'UI utilise un découpage UI standard. Une feature moteur découpe par couche technique (lecture, transformation, façade). On ne force jamais un pattern qui ne sert pas la feature.
-2. **L'index.ts est l'unique surface publique.** Les autres features ne peuvent importer que depuis `index.ts`. Tout le reste est interne. Cette contrainte est vérifiée par `architecture-boundaries.test.ts`.
+2. **L'index.ts est l'unique surface publique.** Les autres features ne peuvent importer que depuis `index.ts`. Tout le reste est interne. Cette contrainte est vérifiée par `architecture-boundaries.svelte.test.ts`.
 3. **Le minimum suffisant.** Une feature ne crée un sous-dossier que lorsqu'il y a au moins deux fichiers à y mettre. On préfère un fichier à la racine de la feature plutôt qu'un dossier à un seul élément.
 
 ---
@@ -177,7 +177,7 @@ Chaque outil de `tools/<nom>/` est lui-même une mini-feature avec son propre `i
 
 - d'ajouter un outil sans modifier les autres ;
 - d'utiliser le pattern `createToolStore()` de `commons/` pour la persistance automatique ;
-- d'enforcer une limite : aucun fichier en dehors de `step-toolbar/tools/<X>/` ne peut importer profondément un détail de l'outil — passage obligé par `tools/<X>/index.ts`. C'est testé par `architecture-boundaries.test.ts`.
+- d'enforcer une limite : aucun fichier en dehors de `step-toolbar/tools/<X>/` ne peut importer profondément un détail de l'outil — passage obligé par `tools/<X>/index.ts`. C'est testé par `architecture-boundaries.svelte.test.ts`.
 
 **Règle qui en découle** : si une feature contient un ensemble homogène de N choses (outils, formats, processeurs…), un dossier `<choses>/<nom>/` avec mini-feature interne est un pattern valide. Le pluriel dans le nom du dossier est intentionnel.
 
@@ -298,7 +298,7 @@ Conventions appliquées dans tout le repo :
 
 ### Étape 6 : valider avec un test d'architecture
 
-Si la feature introduit un nouveau type de frontière (par ex. un dossier `tools/<X>/`), ajoute un test à `architecture-boundaries.test.ts` pour interdire les imports profonds. Ces tests sont la seule garantie réelle contre la dérive du couplage.
+Si la feature introduit un nouveau type de frontière (par ex. un dossier `tools/<X>/`), ajoute un test à `architecture-boundaries.svelte.test.ts` pour interdire les imports profonds. Ces tests sont la seule garantie réelle contre la dérive du couplage.
 
 ---
 
