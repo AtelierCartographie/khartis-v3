@@ -61,6 +61,11 @@
   const processedDataset = $derived.by(() =>
     selectedDataset ? normalizeToProcessedDataset(selectedDataset) : null
   );
+  const affectedVisualizationCount = $derived(
+    selectedDataset?.id
+      ? visualizationStore.getVisualizationsByDataset(selectedDataset.id).length
+      : 0
+  );
   const isProcessingFiles = $derived(datasetsStore.isProcessing);
 
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
@@ -758,12 +763,14 @@
     <DeleteRowsModal
       bind:open={deleteModalOpen}
       rowCount={selectedRowIds.length}
+      affectedVisualizationCount={affectedVisualizationCount}
       onConfirm={handleDeleteRows}
     />
 
     <DeleteRowsModal
       bind:open={deleteFilteredModalOpen}
       rowCount={filteredRowsToDelete}
+      affectedVisualizationCount={affectedVisualizationCount}
       onConfirm={handleDeleteFilteredRows}
     />
 

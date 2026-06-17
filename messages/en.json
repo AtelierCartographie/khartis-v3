@@ -691,6 +691,7 @@
   "delete_rows_modal_title": "Delete selected rows",
   "delete_rows_confirm_message": "Are you sure you want to delete {count} row(s)?",
   "delete_rows_warning": "You can undo this action by resetting the data.",
+  "delete_rows_visualization_warning": "These rows feed {count} visualization(s); deleting them will update those visualizations.",
   "delete_confirm_button": "Delete",
   "deleting": "Deleting...",
   "cancel": "Cancel",
