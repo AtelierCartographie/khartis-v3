@@ -581,6 +581,8 @@
             <Select
               light
               size="sm"
+              labelText={m.sidenav_language_label()}
+              hideLabel
               selected={sideNav.currentLocale}
               on:change={sideNav.handleLanguageChange}
             >
