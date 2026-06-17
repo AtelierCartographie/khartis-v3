@@ -581,6 +581,8 @@
             <Select
               light
               size="sm"
+              labelText={m.sidenav_language_label()}
+              hideLabel
               selected={sideNav.currentLocale}
               on:change={sideNav.handleLanguageChange}
             >
@@ -661,11 +663,7 @@
 
       <Accordion class="install-help-accordion">
         {#each getInstallInstructions() as instruction (instruction.key)}
-          <AccordionItem
-            title={instruction.title}
-            open={instruction.open}
-            iconDescription={m.section_toggle()}
-          >
+          <AccordionItem title={instruction.title} open={instruction.open}>
             <ol class="install-help-steps">
               {#each instruction.steps as step, i (i)}
                 <li>{step}</li>

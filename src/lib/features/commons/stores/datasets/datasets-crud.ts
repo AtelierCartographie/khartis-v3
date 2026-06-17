@@ -117,6 +117,10 @@ export function updateDatasetJoinBasemap(
     return;
   }
 
+  if (state.datasets[datasetIndex].joinedBasemap === joinedBasemap) {
+    return;
+  }
+
   state.datasets = replaceAtIndex(state.datasets, datasetIndex, {
     ...state.datasets[datasetIndex],
     joinedBasemap

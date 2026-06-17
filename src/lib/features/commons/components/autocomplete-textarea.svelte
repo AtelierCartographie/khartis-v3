@@ -182,8 +182,7 @@
     onkeydown={handleKeydown}
     oninput={handleInput}
     onblur={handleBlur}
-    onfocus={handleFocus}
-  ></textarea>
+    onfocus={handleFocus}></textarea>
 
   {#if showDropdown && filteredSuggestions.length > 0}
     <div class="suggestions-dropdown">
