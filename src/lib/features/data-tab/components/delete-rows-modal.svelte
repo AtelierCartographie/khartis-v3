@@ -1,15 +1,17 @@
 <script lang="ts">
-  import { Modal } from 'carbon-components-svelte';
+  import { InlineNotification, Modal } from 'carbon-components-svelte';
   import * as m from '$lib/paraglide/messages';
 
   let {
     open = $bindable(false),
     rowCount,
+    affectedVisualizationCount = 0,
     onConfirm,
     onCancel
   }: {
     open: boolean;
     rowCount: number;
+    affectedVisualizationCount?: number;
     onConfirm: () => Promise<void>;
     onCancel?: () => void;
   } = $props();
@@ -48,6 +50,16 @@
   <p>
     {m.delete_rows_confirm_message({ count: rowCount })}
   </p>
+  {#if affectedVisualizationCount > 0}
+    <InlineNotification
+      kind="warning"
+      lowContrast
+      hideCloseButton
+      title={m.delete_rows_visualization_warning({
+        count: affectedVisualizationCount
+      })}
+    />
+  {/if}
   <p style="margin-top: 1rem; color: var(--cds-text-error);">
     {m.delete_rows_warning()}
   </p>

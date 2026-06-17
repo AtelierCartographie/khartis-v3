@@ -691,6 +691,7 @@
   "delete_rows_modal_title": "Supprimer les lignes sélectionnées",
   "delete_rows_confirm_message": "Êtes-vous sûr de vouloir supprimer {count} ligne(s) ?",
   "delete_rows_warning": "Vous pouvez annuler cette action en réinitialisant les données.",
+  "delete_rows_visualization_warning": "Ces lignes alimentent {count} visualisation(s) ; leur suppression les mettra à jour.",
   "delete_confirm_button": "Supprimer",
   "deleting": "Suppression...",
   "cancel": "Annuler",
