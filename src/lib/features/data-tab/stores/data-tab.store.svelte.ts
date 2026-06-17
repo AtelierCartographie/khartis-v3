@@ -129,17 +129,30 @@ function resetStepCompletion(index: number) {
   notifyPersistence();
 }
 
-function updateNavigationPermissions() {
-  state.canNavigateToStep[0] = true;
+function buildNavigationPermissions(): [boolean, boolean, boolean] {
+  const next: [boolean, boolean, boolean] = [true, false, false];
 
-  if (isTwoStepMode()) {
-    state.canNavigateToStep[1] = state.hasCompletedStep[0];
-    state.canNavigateToStep[2] = false;
-  } else {
-    state.canNavigateToStep[1] = state.hasCompletedStep[0];
-    state.canNavigateToStep[2] = state.hasCompletedStep[1];
+  next[1] = state.hasCompletedStep[0];
+
+  if (!isTwoStepMode()) {
+    next[2] = state.hasCompletedStep[1];
   }
 
+  return next;
+}
+
+function updateNavigationPermissions() {
+  const next = buildNavigationPermissions();
+
+  if (
+    state.canNavigateToStep[0] === next[0] &&
+    state.canNavigateToStep[1] === next[1] &&
+    state.canNavigateToStep[2] === next[2]
+  ) {
+    return;
+  }
+
+  state.canNavigateToStep = next;
   notifyPersistence();
 }
 

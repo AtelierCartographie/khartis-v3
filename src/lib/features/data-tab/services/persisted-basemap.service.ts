@@ -1,6 +1,9 @@
 import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
-import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
+import {
+  dataTabActions,
+  dataTabState
+} from '$lib/features/commons/stores/data-tab.store.svelte';
 import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
@@ -183,10 +186,15 @@ export async function restorePersistedBasemapSelection(
   }
 
   const basemapSource = resolveBasemapSource(savedBasemap.type);
-  dataTabActions.setBasemapJoinState({
-    selectedBasemap: savedBasemap.id,
-    basemapSource
-  });
+  if (
+    dataTabState.basemapJoin.selectedBasemap !== savedBasemap.id ||
+    dataTabState.basemapJoin.basemapSource !== basemapSource
+  ) {
+    dataTabActions.setBasemapJoinState({
+      selectedBasemap: savedBasemap.id,
+      basemapSource
+    });
+  }
   if (savedBasemap.type === PERSISTED_BASEMAP_TYPE.OSM) {
     basemapStyleStore.setReferenceBasemap(null);
     activateReferenceTiledStyle();

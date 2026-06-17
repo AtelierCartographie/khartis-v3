@@ -150,7 +150,7 @@ export default defineConfig(({ mode }) => {
         registerType: 'autoUpdate',
         injectRegister: false,
         devOptions: {
-          enabled: false,
+          enabled: true,
           type: 'module'
         },
         injectManifest: {

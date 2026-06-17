@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  dataTabStateMock: {
+    basemapJoin: {
+      selectedBasemap: '',
+      basemapSource: 'catalog'
+    }
+  },
   setBasemapJoinStateMock: vi.fn(),
   setReferenceBasemapMock: vi.fn(),
   setStyleMock: vi.fn(),
@@ -13,6 +19,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('$lib/features/commons/stores/data-tab.store.svelte', () => ({
+  dataTabState: mocks.dataTabStateMock,
   dataTabActions: {
     setBasemapJoinState: (updates: unknown) =>
       mocks.setBasemapJoinStateMock(updates)
@@ -61,6 +68,8 @@ import {
 describe('restorePersistedBasemapSelection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.dataTabStateMock.basemapJoin.selectedBasemap = '';
+    mocks.dataTabStateMock.basemapJoin.basemapSource = 'catalog';
     mocks.getBasemapByIdMock.mockReturnValue(undefined);
   });
 
@@ -95,6 +104,22 @@ describe('restorePersistedBasemapSelection', () => {
     expect(mocks.addCustomBasemapMock).toHaveBeenCalledTimes(1);
     expect(mocks.clearOsmMock).toHaveBeenCalledTimes(1);
     expect(mocks.setOSMBasemapMock).not.toHaveBeenCalled();
+  });
+
+  it('does not rewrite the basemap join state when the restored selection is already active', async () => {
+    mocks.dataTabStateMock.basemapJoin.selectedBasemap =
+      'monde-countries-2024-medium';
+    mocks.dataTabStateMock.basemapJoin.basemapSource = BasemapSource.CATALOG;
+
+    await restorePersistedBasemapSelection({
+      id: 'monde-countries-2024-medium',
+      type: 'catalog'
+    });
+
+    expect(mocks.setBasemapJoinStateMock).not.toHaveBeenCalled();
+    expect(mocks.setReferenceBasemapMock).toHaveBeenCalledWith(
+      'monde-countries-2024-medium'
+    );
   });
 
   it('prefers the selected dataset joined basemap over an unrelated project basemap', () => {
