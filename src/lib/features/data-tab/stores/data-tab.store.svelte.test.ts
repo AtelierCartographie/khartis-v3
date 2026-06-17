@@ -27,6 +27,7 @@ vi.mock('$lib/features/commons/utils/geo-detector.utils', () => ({
 
 import { dataTabStore } from './data-tab.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 
 type MockedDatasets = {
   datasets: Array<Record<string, unknown>>;
@@ -34,6 +35,7 @@ type MockedDatasets = {
 };
 
 const mockDatasets = datasetsStore as unknown as MockedDatasets;
+const notifyChangeMock = vi.mocked(persistenceRegistry.notifyChange);
 
 function setSelected(dataset: Record<string, unknown> | undefined) {
   mockDatasets.selectedDataset = dataset;
@@ -43,6 +45,7 @@ function setSelected(dataset: Record<string, unknown> | undefined) {
 beforeEach(() => {
   dataTabStore.reset();
   setSelected(undefined);
+  notifyChangeMock.mockClear();
 });
 
 describe('[S06] dataTabStore — workflow mode detection', () => {
@@ -108,6 +111,16 @@ describe('[S06] dataTabStore — step progression', () => {
     dataTabStore.markStepComplete(0);
     dataTabStore.resetStepCompletion(0);
     expect(dataTabStore.hasCompletedStep[0]).toBe(false);
+  });
+
+  it('does not persist unchanged navigation permissions', () => {
+    setSelected({ geometry: null, columns: [], geoDetection: {} });
+
+    dataTabStore.updateNavigationPermissions();
+    dataTabStore.updateNavigationPermissions();
+
+    expect(dataTabStore.canNavigateToStep).toEqual([true, false, false]);
+    expect(notifyChangeMock).not.toHaveBeenCalled();
   });
 });
 
