@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   clearColumnTransformationsMock: vi.fn(),
   disableFacetsMock: vi.fn(),
   getFacetsBaseVisualizationIdMock: vi.fn(),
+  dataTabResetMock: vi.fn(),
   currentProject: undefined as
     | {
         data: {
@@ -79,7 +80,8 @@ vi.mock('$lib/features/commons/stores/project.store.svelte', () => ({
 
 vi.mock('$lib/features/commons/stores/data-tab.store.svelte', () => ({
   dataTabActions: {
-    setEnrichDataState: mocks.setEnrichDataStateMock
+    setEnrichDataState: mocks.setEnrichDataStateMock,
+    reset: mocks.dataTabResetMock
   }
 }));
 
@@ -105,6 +107,9 @@ vi.mock('$lib/features/step-toolbar/tools/facets/facets-access', () => ({
 }));
 
 import { datasetsStore } from './datasets.store.svelte';
+import { selectDataset as selectDatasetState } from './datasets/datasets-selection';
+import { updateDatasetJoinBasemap as updateDatasetJoinBasemapState } from './datasets/datasets-crud';
+import type { DatasetsState } from './datasets/datasets-state.svelte';
 
 function makeDataset(id: string, sourceFileId = `source-${id}`) {
   return {
@@ -216,6 +221,46 @@ describe('datasetsStore persisted view state', () => {
       'dataset-2'
     ]);
     expect(datasetsStore.selectedDatasetId).toBe('dataset-2');
+  });
+
+  it('does not rewrite the selected dataset id when it is already active', () => {
+    const state = {
+      datasets: [makeDataset('dataset-1')],
+      enabledDatasetIds: new Set(),
+      isProcessing: false,
+      hiddenColumns: new Map()
+    } as unknown as DatasetsState;
+    let selectedDatasetId = 'dataset-1';
+    let writes = 0;
+    Object.defineProperty(state, 'selectedDatasetId', {
+      get: () => selectedDatasetId,
+      set: (value: string | undefined) => {
+        writes++;
+        selectedDatasetId = value ?? '';
+      }
+    });
+
+    selectDatasetState(state, 'dataset-1');
+
+    expect(writes).toBe(0);
+    expect(mocks.dataTabResetMock).not.toHaveBeenCalled();
+  });
+
+  it('does not replace a dataset when the joined basemap is unchanged', () => {
+    const dataset = {
+      ...makeDataset('dataset-1'),
+      joinedBasemap: 'world-countries'
+    };
+    const state = {
+      datasets: [dataset],
+      enabledDatasetIds: new Set(),
+      isProcessing: false,
+      hiddenColumns: new Map()
+    } as unknown as DatasetsState;
+
+    updateDatasetJoinBasemapState(state, 'dataset-1', 'world-countries');
+
+    expect(state.datasets[0]).toBe(dataset);
   });
 
   it('replays the pipeline from asset refs instead of exposing a stale preprocessed table', async () => {
