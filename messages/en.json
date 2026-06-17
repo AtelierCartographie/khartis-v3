@@ -817,6 +817,8 @@
   "warning_zip_files_skipped_message": "The following files from the archive could not be processed: {files}",
   "warning_no_geo_column_title": "No geographic column detected",
   "warning_no_geo_column_message": "The file does not contain an identifiable geographic column. You can join it manually to a basemap.",
+  "warning_kml_extended_data_title": "KML attributes not imported",
+  "warning_kml_extended_data_message": "This KML file's extended attributes (ExtendedData) could not be read; only the name and description are available. Convert the file to GeoJSON or GeoPackage to keep all attributes.",
   "error_invalid_content_type": "Unsupported content type: {type}",
   "error_download_timeout": "The download has timed out. Please try again.",
   "error_shapefile_too_large_message": "The total size of the shapefile ({size}) exceeds the {max} limit",
