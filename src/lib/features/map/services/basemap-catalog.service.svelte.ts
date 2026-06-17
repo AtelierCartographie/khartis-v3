@@ -6,8 +6,7 @@ import { LogCategory, logger } from '../../commons/utils/logger';
 import { resolveStaticAssetUrl } from '../../commons/utils/static-asset-url';
 import {
   getBasemapVariantFamily,
-  getPreferredBasemapFile,
-  getPreferredCatalogBasemapLevel
+  getPreferredBasemapFile
 } from './basemap.service.svelte';
 import type {
   BasemapMetadata,
@@ -17,6 +16,7 @@ import type {
 const BASEMAP_METADATA_PATH = '/basemaps/all-basemaps-metadata.json';
 const GPS_SCORE_EPSILON = 1e-9;
 const GPS_TEXT_REFINEMENT_MIN_SCORE = 80;
+const CATALOG_SIMPLIFICATION_PRIORITY = ['medium', 'high', 'low'] as const;
 const GPS_AUTO_SELECTION_FAMILY_PRIORITY = [
   'france-region-',
   'france-departement-',
@@ -42,13 +42,12 @@ interface JoinSynthesisLike {
 }
 
 function getCatalogVariantRank(
-  basemaps: BasemapMetadata[],
+  preferredLevelsByFamily: Map<string, string>,
   basemap: BasemapMetadata
 ): number {
   const level = basemap.simplification_level;
-  const preferredLevel = getPreferredCatalogBasemapLevel(
-    basemaps,
-    basemap.file
+  const preferredLevel = preferredLevelsByFamily.get(
+    getBasemapVariantFamily(basemap.file)
   );
 
   if (!level || !preferredLevel) {
@@ -61,6 +60,29 @@ function getCatalogVariantRank(
 export function getCatalogBasemapsForDisplay(
   basemaps: BasemapMetadata[]
 ): BasemapMetadata[] {
+  const levelsByFamily = new Map<string, Set<string>>();
+
+  for (const basemap of basemaps) {
+    if (basemap.isCustom || !basemap.simplification_level) {
+      continue;
+    }
+
+    const family = getBasemapVariantFamily(basemap.file);
+    const levels = levelsByFamily.get(family) ?? new Set<string>();
+    levels.add(basemap.simplification_level);
+    levelsByFamily.set(family, levels);
+  }
+
+  const preferredLevelsByFamily = new Map<string, string>();
+  for (const [family, levels] of levelsByFamily) {
+    const preferredLevel = CATALOG_SIMPLIFICATION_PRIORITY.find((level) =>
+      levels.has(level)
+    );
+    if (preferredLevel) {
+      preferredLevelsByFamily.set(family, preferredLevel);
+    }
+  }
+
   const byBaseName = new Map<string, BasemapMetadata>();
 
   for (const basemap of basemaps) {
@@ -77,8 +99,8 @@ export function getCatalogBasemapsForDisplay(
     }
 
     if (
-      getCatalogVariantRank(basemaps, basemap) >
-      getCatalogVariantRank(basemaps, existing)
+      getCatalogVariantRank(preferredLevelsByFamily, basemap) >
+      getCatalogVariantRank(preferredLevelsByFamily, existing)
     ) {
       byBaseName.set(baseName, basemap);
     }
@@ -452,6 +474,15 @@ function createBasemapCatalogService() {
     basemaps: [],
     isLoaded: false
   });
+  let catalogBasemapsVersion = 0;
+  let catalogBasemapsCache:
+    | { version: number; basemaps: BasemapMetadata[] }
+    | undefined;
+
+  function invalidateCatalogBasemapsCache(): void {
+    catalogBasemapsVersion++;
+    catalogBasemapsCache = undefined;
+  }
 
   async function loadCatalog(): Promise<void> {
     if (state.isLoaded) {
@@ -468,6 +499,7 @@ function createBasemapCatalogService() {
       }
 
       state.basemaps = await response.json();
+      invalidateCatalogBasemapsCache();
       state.isLoaded = true;
     } catch (error) {
       logger.error('Failed to load basemap catalog', LogCategory.MAP, error);
@@ -538,10 +570,20 @@ function createBasemapCatalogService() {
     } else {
       state.basemaps.push(basemap);
     }
+    invalidateCatalogBasemapsCache();
   }
 
   function getCatalogBasemaps(): BasemapMetadata[] {
-    return getCatalogBasemapsForDisplay(state.basemaps);
+    if (catalogBasemapsCache?.version === catalogBasemapsVersion) {
+      return catalogBasemapsCache.basemaps;
+    }
+
+    const basemaps = getCatalogBasemapsForDisplay(state.basemaps);
+    catalogBasemapsCache = {
+      version: catalogBasemapsVersion,
+      basemaps
+    };
+    return basemaps;
   }
 
   return {
