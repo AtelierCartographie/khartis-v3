@@ -233,4 +233,22 @@ describe('getCatalogBasemapsForDisplay', () => {
     const result = getCatalogBasemapsForDisplay(basemaps);
     expect(result).toHaveLength(1);
   });
+
+  it('keeps the preferred medium simplification variant', () => {
+    const basemaps = [
+      makeBasemap('world-countries-2024-low', {
+        simplification_level: 'low'
+      }),
+      makeBasemap('world-countries-2024-medium', {
+        simplification_level: 'medium'
+      }),
+      makeBasemap('world-countries-2024-high', {
+        simplification_level: 'high'
+      })
+    ];
+
+    expect(getCatalogBasemapsForDisplay(basemaps)).toEqual([
+      expect.objectContaining({ file: 'world-countries-2024-medium' })
+    ]);
+  });
 });
