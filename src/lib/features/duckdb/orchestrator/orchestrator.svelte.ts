@@ -5,7 +5,10 @@ import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.type
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import { detectSemioType } from '$lib/features/commons/utils/semio-detector.utils';
 import {
   extractGeoArrowMetadata,
@@ -754,23 +757,42 @@ export const duckDBOrchestrator = {
 
     try {
       const tableInfo = await Duck.describe_table(dataset.tableName);
-      const geometryColumn = tableInfo.name.find((_, index) =>
-        isGeometryColumnType(tableInfo.type[index])
+      const geometryIndex = tableInfo.type.findIndex((type) =>
+        isGeometryColumnType(type)
       );
-      if (!geometryColumn) {
+      if (geometryIndex === -1) {
         return null;
       }
+      const geometryColumn = tableInfo.name[geometryIndex];
 
       const escapedTable = escapeIdentifier(dataset.tableName);
       const escapedGeometryColumn = escapeIdentifier(geometryColumn);
+
+      // The suggester ranks projections for a WGS84 bbox. Reproject the geometry
+      // through PROJ (ST_Transform) when its source CRS is not already EPSG:4326,
+      // keeping the bounds path on the bundled PROJ engine instead of the
+      // hand-maintained proj4 definition list.
+      const sourceCrs =
+        tableInfo.type[geometryIndex].match(/\(\s*'([^']+)'\s*\)/)?.[1] ?? null;
+      const geometryExpression =
+        sourceCrs && !/^epsg:4326$/i.test(sourceCrs)
+          ? `ST_Transform("${escapedGeometryColumn}", '${escapeSqlString(
+              sourceCrs
+            )}', 'EPSG:4326', true)`
+          : `"${escapedGeometryColumn}"`;
+
       const rows = (await Duck.query(
-        `SELECT
-           MIN(ST_XMin("${escapedGeometryColumn}")) AS minx,
-           MIN(ST_YMin("${escapedGeometryColumn}")) AS miny,
-           MAX(ST_XMax("${escapedGeometryColumn}")) AS maxx,
-           MAX(ST_YMax("${escapedGeometryColumn}")) AS maxy
-         FROM "${escapedTable}"
-         WHERE "${escapedGeometryColumn}" IS NOT NULL`,
+        `WITH __extent_geom AS (
+           SELECT ${geometryExpression} AS geom
+           FROM "${escapedTable}"
+           WHERE "${escapedGeometryColumn}" IS NOT NULL
+         )
+         SELECT
+           MIN(ST_XMin(geom)) AS minx,
+           MIN(ST_YMin(geom)) AS miny,
+           MAX(ST_XMax(geom)) AS maxx,
+           MAX(ST_YMax(geom)) AS maxy
+         FROM __extent_geom`,
         { format: 'array' }
       )) as Array<{
         minx: number | null;

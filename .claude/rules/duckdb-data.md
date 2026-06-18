@@ -27,9 +27,10 @@ Table names, column names, and values almost always originate from user files, s
 - ❌ Never `table.replace(/"/g, '""')` inline, and never string-concatenate unescaped input.
 - Don't confuse the two: identifiers use `"…"`, values use `'…'`.
 
-## Geometry: normalize to WGS84, keep the binary path
+## Geometry: keep the source CRS, reproject only when rendering needs it
 
-- Reproject every imported geometry to **EPSG:4326** on load (`ST_Transform`), so the render pipeline receives a single known CRS.
+- **Keep imported geometry in its source CRS by default** — Khartis renders it as-is in the orthographic engine (this is what lets it display already-projected files and offer arbitrary d3 projections). Do **not** blanket-reproject to EPSG:4326 on load.
+- Reproject to **EPSG:4326** with `ST_Transform` (PROJ is bundled in the WASM spatial build and covers the vast majority of EPSG codes) only when the render path actually needs WGS84: (1) a **tiled/MapLibre basemap** is active (Web Mercator requires it), or (2) the user applies a **d3 projection** to a non-WGS84 dataset (`geoarrow-deck-stream`'s d3 stream only accepts WGS84 lon/lat). Fall back to client-side proj4 only when `ST_Transform` fails.
 - Return geometry as **Arrow IPC (binary)**, not JSON — stream it (`queryStreaming` / `arrow-ipc` format) so large datasets don't blow the WASM memory limit. The binary buffer feeds `geoarrow-deck-stream` directly (see `render-pipeline.md`).
 - Keep tabular results as Arrow tables; only materialize to JS arrays (`toArray()`) at the UI boundary that actually needs rows.
 
