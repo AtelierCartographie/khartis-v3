@@ -4,7 +4,7 @@ import {
   type ProjectionSuggestion
 } from './projection-suggest.service';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-import { normalizeBoundsForProjectionSuggestion } from '$lib/features/map/utils/dataset-crs.utils';
+import { canUseBoundsForProjectionSuggestion } from '$lib/features/map/utils/dataset-crs.utils';
 import {
   resolveProjectionAvailabilityContext,
   resolveProjectionSuggestionBoundsFromBasemap,
@@ -146,14 +146,14 @@ async function resolveSuggestionBounds(): Promise<
   const candidates = getSuggestionCandidates();
 
   for (const dataset of candidates) {
-    if (dataset.geometry?.bounds) {
-      const normalizedBounds = normalizeBoundsForProjectionSuggestion(
-        dataset.geometry.bounds,
-        dataset.geometry.crs
-      );
-      if (normalizedBounds) {
-        return normalizedBounds;
-      }
+    // WGS84-like datasets already carry WGS84 bounds — use them directly,
+    // no DuckDB round-trip. Non-WGS84 sources fall through to getGeometryExtent,
+    // which reprojects to WGS84 via ST_Transform (PROJ).
+    if (
+      dataset.geometry?.bounds &&
+      canUseBoundsForProjectionSuggestion(dataset.geometry.crs)
+    ) {
+      return dataset.geometry.bounds;
     }
 
     if (!dataset.sourceFileId) {

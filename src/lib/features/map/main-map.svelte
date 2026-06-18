@@ -25,6 +25,7 @@
   import ThematicMap from './components/thematic-map.svelte';
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
   import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
+  import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
   import FacetsPage from '$lib/features/step-toolbar/tools/facets/facets-page.svelte';
   import { loadDatasetsSequentially } from './utils/load-datasets-sequentially.utils';
   import { resolveWorkspaceFitScale } from '../commons/utils/workspace-viewport.utils';
@@ -115,6 +116,14 @@
       requiresMapLibre: basemapStyleStore.requiresMapLibre,
       hasOSMBasemap: Boolean(activeOSMBasemap)
     })
+  );
+  // A d3 projection is fed unprojected WGS84 lon/lat by geoarrow-deck-stream, so
+  // a non-WGS84 source dataset must be reprojected before the projection tool
+  // can apply it (orthographic engine). Tracks only the on/off state, not the
+  // projection parameters, so live parameter edits never re-fetch the table.
+  const hasManualProjectionOverride = $derived(
+    getProjectionState().overrideActive === true &&
+      getProjectionState().overrideSource === 'manual'
   );
   const shouldHideMapOutput = $derived(
     mapLoadingStore.isHoldingPreviewForSuggestedBasemap
@@ -435,11 +444,13 @@
         }
 
         if (tableName) {
-          const shouldReprojectForTiledBasemap =
-            usesTiledBasemap &&
+          const isNonWgs84Source =
             Boolean(dataset.geometry?.crs) &&
             !isWgs84LikeCrs(dataset.geometry?.crs);
-          const arrowTable = shouldReprojectForTiledBasemap
+          const shouldReprojectToWgs84 =
+            isNonWgs84Source &&
+            (usesTiledBasemap || hasManualProjectionOverride);
+          const arrowTable = shouldReprojectToWgs84
             ? await duckDBOrchestrator.getArrowTableReprojectedToWGS84(
                 tableName
               )
@@ -836,6 +847,7 @@
     void duckDBDatasetsVersion;
     void densityReloadSignature;
     void basemapService.simplificationVersion;
+    void hasManualProjectionOverride;
     const currentMapDisplayDatasets = mapDisplayDatasets;
 
     if (isInitializing) {
