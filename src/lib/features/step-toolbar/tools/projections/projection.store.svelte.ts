@@ -46,7 +46,7 @@ const DEFAULT_STATE: ProjectionState = {
   customCode: undefined,
   activeSuggestionId: undefined,
   suggestionD3Config: undefined,
-  simplifiedPreview: false,
+  suggestionScale: undefined,
   suggestions: undefined
 };
 
@@ -60,7 +60,6 @@ type ProjectionActions = {
   setCenter: (longitude: number, latitude: number) => void;
   setRotation: (rotation: number) => void;
   resetSettings: () => void;
-  setSimplifiedPreview: (value: boolean) => void;
   suggestProjectionForCurrentData: () => void;
   applySuggestion: (suggestion: ProjectionSuggestion) => void;
   applyBasemapPreferredProjection: () => void;
@@ -217,6 +216,25 @@ const { actions, getState } = createToolStore<
       s.overrideSource = 'manual';
     };
 
+    const seedOrientationFromProjection = () => {
+      let lambda = 0;
+      let phi = 0;
+      if (s.suggestionD3Config?.rotate) {
+        lambda = s.suggestionD3Config.rotate[0] ?? 0;
+        phi = s.suggestionD3Config.rotate[1] ?? 0;
+      } else if (!s.customCode) {
+        const rotate = getProjectionById(s.selected)?.projection().rotate();
+        if (rotate) {
+          lambda = rotate[0] ?? 0;
+          phi = rotate[1] ?? 0;
+        }
+      }
+      s.longitude = -lambda;
+      s.latitude = -phi;
+      s.rotation = 0;
+      s.center = lambda === 0 && phi === 0 ? undefined : [-lambda, -phi];
+    };
+
     const setSelectedInternal = (
       projectionId: string,
       applyToMap: boolean,
@@ -228,6 +246,7 @@ const { actions, getState } = createToolStore<
       s.activeSuggestionId = undefined;
       s.overrideActive = overrideSource !== undefined;
       s.overrideSource = overrideSource;
+      seedOrientationFromProjection();
       if (applyToMap) {
         mapProjectionStore.setProjection(toMapProjectionType(projectionId), {
           explicit: true
@@ -242,6 +261,7 @@ const { actions, getState } = createToolStore<
       s.activeSuggestionId = undefined;
       s.overrideActive = false;
       s.overrideSource = undefined;
+      seedOrientationFromProjection();
       if (applyToMap) {
         mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);
       }
@@ -291,6 +311,7 @@ const { actions, getState } = createToolStore<
         s.activeSuggestionId = undefined;
         s.overrideActive = Boolean(s.customCode);
         s.overrideSource = s.customCode ? 'manual' : undefined;
+        seedOrientationFromProjection();
         if (s.customCode) {
           mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);
         }
@@ -310,10 +331,6 @@ const { actions, getState } = createToolStore<
         activateManualProjectionOverride();
       },
       resetSettings: () => {
-        s.longitude = 0;
-        s.latitude = 0;
-        s.rotation = 0;
-        s.center = undefined;
         if (
           s.overrideSource === 'manual' &&
           s.customCode &&
@@ -323,9 +340,7 @@ const { actions, getState } = createToolStore<
           s.overrideActive = false;
           s.overrideSource = undefined;
         }
-      },
-      setSimplifiedPreview: (value: boolean) => {
-        s.simplifiedPreview = value;
+        seedOrientationFromProjection();
       },
       suggestProjectionForCurrentData: () => {
         const requestId = ++suggestionRequestId;
@@ -390,10 +405,12 @@ const { actions, getState } = createToolStore<
       if (builtProjection?.source === 'proj4' && suggestion.proj4String) {
         s.customCode = suggestion.proj4String;
         s.suggestionD3Config = undefined;
+        s.suggestionScale = undefined;
         s.activeSuggestionId = activeSuggestionId;
         s.selected = DEFAULT_PROJECTION;
         s.overrideActive = true;
         s.overrideSource = overrideSource;
+        seedOrientationFromProjection();
         mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);
         return;
       }
@@ -402,9 +419,11 @@ const { actions, getState } = createToolStore<
         s.selected = DEFAULT_PROJECTION;
         s.customCode = undefined;
         s.suggestionD3Config = cloneD3UsageConfig(suggestion.d3Config);
+        s.suggestionScale = suggestion.scale;
         s.activeSuggestionId = activeSuggestionId;
         s.overrideActive = true;
         s.overrideSource = overrideSource;
+        seedOrientationFromProjection();
         mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);
         return;
       }

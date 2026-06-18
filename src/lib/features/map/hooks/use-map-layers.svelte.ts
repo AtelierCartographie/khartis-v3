@@ -57,10 +57,7 @@ import {
   getVisualizationRenderOrder
 } from '../utils/layer-order.utils';
 import type { DataTableFilter } from '$lib/features/duckdb/types';
-import {
-  getProjectionState,
-  computeSimplifiedProjectionPreview
-} from '$lib/features/step-toolbar/tools/projections';
+import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
 import type { BasemapMetadata } from '../types/basemap.types';
 import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs.utils';
@@ -949,13 +946,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const hasManualProjectionOverride =
         projectionState.overrideActive === true &&
         projectionState.overrideSource === 'manual';
-      const shouldUseSimplifiedProjectionPreview =
-        computeSimplifiedProjectionPreview(isOrthographicMode, projectionState);
       const visualizationsToRender =
         getVisualizationRenderOrder(activeVisualizations);
       const shouldRenderDatasetFallbacks =
-        (getShouldRenderDatasetFallbacks?.() ?? false) &&
-        !shouldUseSimplifiedProjectionPreview;
+        getShouldRenderDatasetFallbacks?.() ?? false;
       const basemapProjection = getProjectionFromMetadata(
         currentMetadata,
         isOrthographicMode,

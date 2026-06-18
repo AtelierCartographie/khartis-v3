@@ -14,7 +14,7 @@ export interface ProjectionState {
   customCode?: string;
   activeSuggestionId?: string;
   suggestionD3Config?: D3Usage;
-  simplifiedPreview?: boolean;
+  suggestionScale?: string[];
   suggestions?: {
     national: ProjectionSuggestion[];
     generic: ProjectionSuggestion[];

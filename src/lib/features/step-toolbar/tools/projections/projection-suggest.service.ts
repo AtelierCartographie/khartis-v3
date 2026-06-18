@@ -30,9 +30,7 @@ export interface BuiltProjectionSuggestion {
   source: 'proj4' | 'd3';
 }
 
-const UNSUPPORTED_SUGGESTION_IDS = new Set(['orthographic']);
-
-function isUsableProjection(projection: GeoProjection): boolean {
+export function isUsableProjection(projection: GeoProjection): boolean {
   const projected = projection([0, 0]);
   return (
     Array.isArray(projected) &&
@@ -77,15 +75,11 @@ function genericToSuggestion(
 function isSupportedProjectionSuggestion(
   suggestion: ProjectionSuggestion
 ): boolean {
-  if (UNSUPPORTED_SUGGESTION_IDS.has(suggestion.id.toLowerCase())) {
-    return false;
+  if (suggestion.d3Config && buildD3ProjectionFromConfig(suggestion.d3Config)) {
+    return true;
   }
 
-  if (suggestion.d3Config?.projection === 'geoOrthographic') {
-    return false;
-  }
-
-  return !/\+proj=ortho\b/i.test(suggestion.proj4String ?? '');
+  return Boolean(suggestion.proj4String);
 }
 
 function buildD3SuggestionProjection(

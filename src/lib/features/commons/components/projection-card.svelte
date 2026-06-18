@@ -8,13 +8,20 @@
   import { KEY } from '../constants/dom.constants';
   import { overflowTitle } from '../utils/overflow-title';
 
+  interface PreviewPaths {
+    sphere: string;
+    graticule: string;
+    land: string;
+    borders: string;
+  }
+
   interface ProjectionCardProps {
     title: string;
     subtitle?: string;
     tag?: string;
     ratio?: string;
     previewLabel?: string;
-    projectionId?: string;
+    paths: PreviewPaths;
     selected?: boolean;
     disabled?: boolean;
     variant?: 'default' | 'blue' | 'gray';
@@ -33,7 +40,7 @@
     tag = m.tag_rectangular(),
     ratio = '1:1',
     previewLabel = m.projection_preview_label(),
-    projectionId,
+    paths,
     selected = false,
     disabled = false,
     variant = 'default',
@@ -98,7 +105,7 @@
 >
   <div class="preview-section" data-preview-ratio={ratio}>
     <ProjectionPreview
-      projectionId={projectionId}
+      paths={paths}
       label={previewLabel}
       theme={useSuggestionTheme ? 'suggestion' : 'default'}
     />
@@ -316,9 +323,7 @@
     font-weight: 600;
     line-height: 1.125rem;
     letter-spacing: 0.16px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: break-word;
     color: var(--khartis-additions-text-primary-suggestions, #003a6d);
   }
 

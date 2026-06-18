@@ -86,15 +86,6 @@ describe('buildProjectionRenderKey', () => {
     expect(key1).not.toBe(key2);
   });
 
-  it('changes when simplified preview toggles because layer visibility changes', () => {
-    const key1 = buildProjectionRenderKey(DEFAULT_STATE);
-    const key2 = buildProjectionRenderKey({
-      ...DEFAULT_STATE,
-      simplifiedPreview: true
-    });
-    expect(key1).not.toBe(key2);
-  });
-
   it('ignores suggestions payload and view-only state', () => {
     const key1 = buildProjectionRenderKey(DEFAULT_STATE);
     const key2 = buildProjectionRenderKey({

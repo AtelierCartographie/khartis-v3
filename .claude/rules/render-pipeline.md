@@ -45,7 +45,6 @@ Labels are a primitive (see `cartography-invariants.md`) and the glyph atlas is 
 
 ## Performance escape hatches
 
-- During projection drag/edit a **simplified preview** hides user visualizations and renders only basemap/graticule so re-projection stays fluid — preserve this when touching layer assembly (see `projections.md`).
 - Geometry generalization/simplification happens in DuckDB (`ST_Simplify` / coverage simplify), not by decimating buffers in JS.
 
 ## Export

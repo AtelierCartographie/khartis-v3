@@ -1,7 +1,6 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages';
   import { Button, InlineNotification } from 'carbon-components-svelte';
-  import Switch from '$lib/features/commons/components/switch.svelte';
   import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
@@ -51,9 +50,6 @@
       ? m.projection_settings_unavailable_projection()
       : m.projection_settings_unavailable_render_engine()
   );
-  const simplifiedPreview = $derived(
-    projectionState.simplifiedPreview === true
-  );
   const isDirty = $derived(
     projectionState.longitude !== 0 ||
       projectionState.latitude !== 0 ||
@@ -74,11 +70,6 @@
   function handleRotationChange(value: number): void {
     if (!canApplyProjectionSettings) return;
     projectionActions.setRotation(value);
-  }
-
-  function handleSimplifiedPreviewChange(checked: boolean): void {
-    if (!canApplyProjectionSettings) return;
-    projectionActions.setSimplifiedPreview(checked);
   }
 
   function resetAll() {
@@ -152,28 +143,6 @@
           icon={Renew}
           on:click={resetAll}>{m.projection_settings_reset()}</Button
         >
-
-        <div class="toggle-row">
-          <Switch
-            size="sm"
-            labelText={m.projection_settings_simplified_preview()}
-            labelA={m.projection_settings_no()}
-            labelB={m.projection_settings_yes()}
-            showStateLabel
-            toggled={simplifiedPreview}
-            onchange={handleSimplifiedPreviewChange}
-          />
-        </div>
-
-        {#if simplifiedPreview}
-          <InlineNotification
-            kind="info"
-            title={m.projection_settings_info_title()}
-            subtitle={m.projection_settings_info_subtitle()}
-            lowContrast
-            hideCloseButton
-          />
-        {/if}
       {/if}
     </div>
   </div>
@@ -216,11 +185,6 @@
     :global(.controls .bx--slider__range-label) {
     min-width: 2rem;
     font-size: 0.75rem;
-  }
-
-  .toggle-row {
-    display: flex;
-    align-items: flex-start;
   }
 
   #khartis-projection-settings-tool :global(.reset) {
