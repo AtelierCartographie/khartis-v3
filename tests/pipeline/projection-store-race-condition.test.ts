@@ -117,19 +117,11 @@ describe('projection store — core actions', () => {
     expect(getProjectionState().rotation).toBe(30);
   });
 
-  it('setSimplifiedPreview toggles the flag', () => {
-    projectionActions.setSimplifiedPreview(false);
-    expect(getProjectionState().simplifiedPreview).toBe(false);
-    projectionActions.setSimplifiedPreview(true);
-    expect(getProjectionState().simplifiedPreview).toBe(true);
-  });
-
   it('reset restores default state', () => {
     projectionActions.setSelected('robinson');
     projectionActions.setCustomCode('+proj=robin');
     projectionActions.setCenter(10, 45);
     projectionActions.setRotation(30);
-    projectionActions.setSimplifiedPreview(false);
 
     projectionActions.reset();
 
@@ -139,6 +131,5 @@ describe('projection store — core actions', () => {
     expect(state.longitude).toBe(0);
     expect(state.latitude).toBe(0);
     expect(state.rotation).toBe(0);
-    expect(state.simplifiedPreview).toBe(false);
   });
 });
