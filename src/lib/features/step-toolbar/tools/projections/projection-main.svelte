@@ -29,6 +29,11 @@
   } from './projection.store.svelte';
   import type { ProjectionSuggestion } from './projection-suggest.service';
   import { getCatalogueProjectionIdForSuggestion } from './projection-suggestion-catalogue.utils';
+  import { getThumbnailPaths } from './projection-thumbnail';
+  import {
+    getThumbnailGeometrySync,
+    loadThumbnailGeometry
+  } from '$lib/features/commons/utils/projection-thumbnail-geometry';
 
   type ProjectionShapeFilterId = Exclude<ProjectionFilterId, 'all'>;
 
@@ -57,6 +62,23 @@
       explicit: true
     });
   }
+
+  let thumbnailGeometry = $state(getThumbnailGeometrySync());
+
+  $effect(() => {
+    if (thumbnailGeometry) {
+      return;
+    }
+    let cancelled = false;
+    void loadThumbnailGeometry().then((geometry) => {
+      if (!cancelled) {
+        thumbnailGeometry = geometry;
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  });
 
   const projectionState = $derived(getProjectionState());
   const projectionContext = $derived(
@@ -190,19 +212,19 @@
       return false;
     }
 
-    if (projectionState.activeSuggestionId === suggestion.id) {
-      return true;
+    // When a suggestion is actively applied, match ONLY by its id: distinct
+    // suggestions can resolve to an identical d3Config (e.g. transverse CEA and
+    // transverse Mercator both → geoTransverseMercator), so a config match would
+    // light up several cards at once.
+    if (projectionState.activeSuggestionId) {
+      return projectionState.activeSuggestionId === suggestion.id;
     }
 
     if (isStoredSuggestionConfigSelected(suggestion)) {
       return true;
     }
 
-    if (
-      projectionState.customCode ||
-      projectionState.suggestionD3Config ||
-      projectionState.activeSuggestionId
-    ) {
+    if (projectionState.customCode || projectionState.suggestionD3Config) {
       return false;
     }
 
@@ -331,9 +353,11 @@
       case 'bertin1953':
         return m.projection_name_bertin_1953();
       case 'mollweide_interrupted':
-      case 'mollweide_2_hemisphere':
-      case 'mollweide_ocean':
         return m.projection_name_interrupted_mollweide();
+      case 'mollweide_2_hemisphere':
+        return m.projection_name_mollweide_hemispheres();
+      case 'mollweide_ocean':
+        return m.projection_name_mollweide_oceans();
       case 'laea':
         return m.projection_name_azimuthal_equal_area();
       default:
@@ -388,7 +412,7 @@
             tag={getSuggestionTag(suggestion)}
             ratio="1:1"
             previewLabel={m.projection_preview_label()}
-            projectionId={getCatalogueProjectionIdForSuggestion(suggestion)}
+            paths={getThumbnailPaths(suggestion, thumbnailGeometry)}
             selected={isSuggestionSelected(suggestion)}
             variant="blue"
             equalArea={suggestion.equalArea}

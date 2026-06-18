@@ -194,12 +194,13 @@ export function getProjectedBboxForBbox(
   return [minX, minY, maxX, maxY];
 }
 
-function createProjectionFitTarget(bbox: [number, number, number, number]) {
+export function isGlobalBbox(bbox: [number, number, number, number]): boolean {
   const [west, south, east, north] = bbox;
-  const isWorldBbox =
-    west <= -179.5 && south <= -89.5 && east >= 179.5 && north >= 89.5;
+  return west <= -179.5 && south <= -89.5 && east >= 179.5 && north >= 89.5;
+}
 
-  return isWorldBbox
+function createProjectionFitTarget(bbox: [number, number, number, number]) {
+  return isGlobalBbox(bbox)
     ? { type: 'Sphere' as const }
     : {
         type: GEOJSON_TYPE.FEATURE,

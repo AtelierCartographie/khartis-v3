@@ -1154,6 +1154,8 @@
   "projection_desc_bertin_1953": "Compromise projection by Jacques Bertin",
   "projection_name_interrupted_mollweide": "Interrupted Mollweide",
   "projection_desc_interrupted_mollweide": "Equal-area with interrupted lobes",
+  "projection_name_mollweide_hemispheres": "Mollweide (2 hemispheres)",
+  "projection_name_mollweide_oceans": "Interrupted Mollweide (oceans)",
   "data_quality_critical_issues": "{count} critical issue(s) detected. Please fix them before continuing.",
   "data_quality_report_title": "=== DATA ANALYSIS REPORT ===\n",
   "data_quality_report_counts": "Rows: {rows} | Columns: {columns}",

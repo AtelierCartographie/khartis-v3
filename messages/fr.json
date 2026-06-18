@@ -1154,6 +1154,8 @@
   "projection_desc_bertin_1953": "Projection de compromis de Jacques Bertin",
   "projection_name_interrupted_mollweide": "Mollweide interrompue",
   "projection_desc_interrupted_mollweide": "Équivalente avec lobes interrompus",
+  "projection_name_mollweide_hemispheres": "Mollweide (2 hémisphères)",
+  "projection_name_mollweide_oceans": "Mollweide océans interrompus",
   "data_quality_critical_issues": "{count} problème(s) critique(s) détecté(s). Corrigez-les avant de continuer.",
   "data_quality_report_title": "=== RAPPORT D'ANALYSE DES DONNÉES ===\n",
   "data_quality_report_counts": "Lignes : {rows} | Colonnes : {columns}",
