@@ -1,10 +1,14 @@
 import {
   suggestProjectionsForBbox,
+  suggestProjectionsForFeatureBounds,
   buildProjectionFromSuggestion,
   type ProjectionSuggestion
 } from './projection-suggest.service';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-import { normalizeBoundsForProjectionSuggestion } from '$lib/features/map/utils/dataset-crs.utils';
+import {
+  canUseBoundsForProjectionSuggestion,
+  normalizeBoundsForProjectionSuggestion
+} from '$lib/features/map/utils/dataset-crs.utils';
 import {
   resolveProjectionAvailabilityContext,
   resolveProjectionSuggestionBoundsFromBasemap,
@@ -140,47 +144,62 @@ function getProjectionAvailabilityContext() {
   });
 }
 
-async function resolveSuggestionBounds(): Promise<
-  [number, number, number, number] | null
-> {
+type SuggestionBounds =
+  | { kind: 'single'; bbox: [number, number, number, number] }
+  | { kind: 'features'; boxes: Array<[number, number, number, number]> };
+
+async function resolveSuggestionBounds(): Promise<SuggestionBounds | null> {
   const candidates = getSuggestionCandidates();
 
   for (const dataset of candidates) {
+    const duckDataset = dataset.sourceFileId
+      ? duckDBOrchestrator.getDatasetBySourceFile(dataset.sourceFileId)
+      : null;
+
+    // Prefer the per-feature bbox proxy for WGS84 geometry datasets: passing one
+    // bbox per feature lets proj-suggest discard detached territories (Alaska,
+    // DOM-TOM…) that would otherwise inflate the extent to world scale. Gated on
+    // a WGS84-like CRS because these bboxes are read straight off the stored
+    // geometry; non-WGS84 datasets keep the metadata-bounds reprojection path.
+    if (
+      duckDataset &&
+      canUseBoundsForProjectionSuggestion(dataset.geometry?.crs)
+    ) {
+      const featureBounds =
+        await duckDBOrchestrator.getGeometryPerFeatureBounds(duckDataset.id);
+      if (featureBounds && featureBounds.length > 1) {
+        return { kind: 'features', boxes: featureBounds };
+      }
+    }
+
     if (dataset.geometry?.bounds) {
       const normalizedBounds = normalizeBoundsForProjectionSuggestion(
         dataset.geometry.bounds,
         dataset.geometry.crs
       );
       if (normalizedBounds) {
-        return normalizedBounds;
+        return { kind: 'single', bbox: normalizedBounds };
       }
     }
 
-    if (!dataset.sourceFileId) {
-      continue;
-    }
-
-    const duckDataset = duckDBOrchestrator.getDatasetBySourceFile(
-      dataset.sourceFileId
-    );
     if (!duckDataset) {
       continue;
     }
 
     const gpsBounds = await duckDBOrchestrator.getGPSBounds(duckDataset.id);
     if (gpsBounds) {
-      return toBoundsFromGpsBounds(gpsBounds);
+      return { kind: 'single', bbox: toBoundsFromGpsBounds(gpsBounds) };
     }
 
     const geomExtent = await duckDBOrchestrator.getGeometryExtent(
       duckDataset.id
     );
     if (geomExtent) {
-      return geomExtent;
+      return { kind: 'single', bbox: geomExtent };
     }
   }
 
-  return resolveProjectionSuggestionBoundsFromBasemap({
+  const basemapBounds = resolveProjectionSuggestionBoundsFromBasemap({
     currentStyle: basemapStyleStore.selectedStyle,
     preferredStyle: basemapStyleStore.preferredTiledStyle,
     referenceBasemapBbox: basemapStyleStore.referenceBasemapId
@@ -189,6 +208,8 @@ async function resolveSuggestionBounds(): Promise<
     currentBasemapBbox: basemapService.currentMetadata?.bbox ?? null,
     osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null
   });
+
+  return basemapBounds ? { kind: 'single', bbox: basemapBounds } : null;
 }
 
 function toMapProjectionType(projectionId: string): 'mercator' | 'globe' {
@@ -357,7 +378,10 @@ const { actions, getState } = createToolStore<
           const bounds = await resolveSuggestionBounds();
           if (!bounds) return;
 
-          const result = suggestProjectionsForBbox(bounds);
+          const result =
+            bounds.kind === 'features'
+              ? suggestProjectionsForFeatureBounds(bounds.boxes)
+              : suggestProjectionsForBbox(bounds.bbox);
 
           if (!result) return;
 

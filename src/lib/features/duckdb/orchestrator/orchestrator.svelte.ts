@@ -799,6 +799,66 @@ export const duckDBOrchestrator = {
     }
   },
 
+  async getGeometryPerFeatureBounds(
+    datasetId: string
+  ): Promise<Array<[number, number, number, number]> | null> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    const dataset = state.findDatasetByIdOrSourceFile(datasetId);
+    if (!dataset || !dataset.tableName) return null;
+
+    try {
+      const tableInfo = await Duck.describe_table(dataset.tableName);
+      const geometryColumn = tableInfo.name.find((_, index) =>
+        isGeometryColumnType(tableInfo.type[index])
+      );
+      if (!geometryColumn) {
+        return null;
+      }
+
+      const escapedTable = escapeIdentifier(dataset.tableName);
+      const escapedGeometryColumn = escapeIdentifier(geometryColumn);
+      const rows = (await Duck.query(
+        `SELECT
+           ST_XMin("${escapedGeometryColumn}") AS minx,
+           ST_YMin("${escapedGeometryColumn}") AS miny,
+           ST_XMax("${escapedGeometryColumn}") AS maxx,
+           ST_YMax("${escapedGeometryColumn}") AS maxy
+         FROM "${escapedTable}"
+         WHERE "${escapedGeometryColumn}" IS NOT NULL`,
+        { format: 'array' }
+      )) as Array<{
+        minx: number | null;
+        miny: number | null;
+        maxx: number | null;
+        maxy: number | null;
+      }>;
+
+      const bounds: Array<[number, number, number, number]> = [];
+      for (const row of rows) {
+        if (
+          row.minx == null ||
+          row.miny == null ||
+          row.maxx == null ||
+          row.maxy == null
+        ) {
+          continue;
+        }
+        bounds.push([
+          Number(row.minx),
+          Number(row.miny),
+          Number(row.maxx),
+          Number(row.maxy)
+        ]);
+      }
+
+      return bounds.length > 0 ? bounds : null;
+    } catch {
+      return null;
+    }
+  },
+
   async getTableData(
     tableName: string,
     options?: tableDataOps.GetTableDataOptions
