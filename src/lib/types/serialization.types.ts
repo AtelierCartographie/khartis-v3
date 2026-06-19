@@ -170,6 +170,8 @@ export interface SerializedProjectData {
   visualizationSettings?: SerializedVisualizationSettings;
   layoutSettings?: SerializedLayoutSettings;
   uiSettings?: SerializedUiSettings;
+  /** Flat layer stacking order (panel row ids, top→bottom = front→back). */
+  layerOrder?: string[];
   [key: string]: unknown;
 }
 

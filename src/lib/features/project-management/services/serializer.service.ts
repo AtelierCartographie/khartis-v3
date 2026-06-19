@@ -135,7 +135,11 @@ function mapRegistryToSerializedFormat(
   stores: Record<string, unknown>
 ): Pick<
   SerializedProjectData,
-  'basemapSettings' | 'visualizationSettings' | 'layoutSettings' | 'uiSettings'
+  | 'basemapSettings'
+  | 'visualizationSettings'
+  | 'layoutSettings'
+  | 'uiSettings'
+  | 'layerOrder'
 > {
   const uiSettingsKeys = [
     'globalUi',
@@ -185,7 +189,10 @@ function mapRegistryToSerializedFormat(
       geoIndications: stores.geoIndications,
       projection: stores.projection
     } as SerializedProjectData['layoutSettings'],
-    uiSettings: Object.keys(uiSettings).length > 0 ? uiSettings : undefined
+    uiSettings: Object.keys(uiSettings).length > 0 ? uiSettings : undefined,
+    layerOrder: Array.isArray(stores.layerOrder)
+      ? (stores.layerOrder as string[])
+      : undefined
   };
 }
 
@@ -217,6 +224,10 @@ function mapSerializedFormatToRegistry(
 
   if (data.visualizationSettings) {
     stores.visualization = data.visualizationSettings;
+  }
+
+  if (data.layerOrder !== undefined) {
+    stores.layerOrder = data.layerOrder;
   }
 
   if (data.layoutSettings) {
