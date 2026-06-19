@@ -133,7 +133,7 @@ importers:
         version: 0.7.1
       proj-suggest:
         specifier: github:AtelierCartographie/proj-suggest
-        version: git+https://git@github.com:AtelierCartographie/proj-suggest.git#f6771dbcddcf3a5efe5480efc3b3e13092f57726
+        version: git+https://git@github.com:AtelierCartographie/proj-suggest.git#445c428cc0b1f7ac70410e76dadf30d6cdde689e
       proj4:
         specifier: ^2.20.9
         version: 2.20.9
@@ -4464,8 +4464,8 @@ packages:
   process-nextick-args@2.0.1:
     resolution: {integrity: sha512-3ouUOpQhtgrbOa17J7+uxOTpITYWaGP7/AhoR3+A+/1e9skrzelGi/dXzEYyvbxubEF6Wn2ypscTKiKJFFn1ag==}
 
-  proj-suggest@git+https://git@github.com:AtelierCartographie/proj-suggest.git#f6771dbcddcf3a5efe5480efc3b3e13092f57726:
-    resolution: {commit: f6771dbcddcf3a5efe5480efc3b3e13092f57726, repo: git@github.com:AtelierCartographie/proj-suggest.git, type: git}
+  proj-suggest@git+https://git@github.com:AtelierCartographie/proj-suggest.git#445c428cc0b1f7ac70410e76dadf30d6cdde689e:
+    resolution: {commit: 445c428cc0b1f7ac70410e76dadf30d6cdde689e, repo: git@github.com:AtelierCartographie/proj-suggest.git, type: git}
     version: 0.0.1
 
   proj4@2.20.9:
@@ -9900,7 +9900,7 @@ snapshots:
 
   process-nextick-args@2.0.1: {}
 
-  proj-suggest@git+https://git@github.com:AtelierCartographie/proj-suggest.git#f6771dbcddcf3a5efe5480efc3b3e13092f57726: {}
+  proj-suggest@git+https://git@github.com:AtelierCartographie/proj-suggest.git#445c428cc0b1f7ac70410e76dadf30d6cdde689e: {}
 
   proj4@2.20.9:
     dependencies:

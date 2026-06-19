@@ -12,7 +12,11 @@
   import { fade } from 'svelte/transition';
   import { datasetsStore } from '../commons/stores/datasets.store.svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
-  import { isWgs84LikeCrs } from './utils/dataset-crs.utils';
+  import {
+    isWgs84LikeCrs,
+    shouldReprojectDatasetForActiveProjection
+  } from './utils/dataset-crs.utils';
+  import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
   import { globalActions, globalState } from '../commons/stores/global.svelte';
   import { ToolbarStep } from '../commons/types/global';
   import { LogCategory, logger } from '../commons/utils/logger';
@@ -25,7 +29,6 @@
   import ThematicMap from './components/thematic-map.svelte';
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
   import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
-  import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
   import FacetsPage from '$lib/features/step-toolbar/tools/facets/facets-page.svelte';
   import { loadDatasetsSequentially } from './utils/load-datasets-sequentially.utils';
   import { resolveWorkspaceFitScale } from '../commons/utils/workspace-viewport.utils';
@@ -117,14 +120,6 @@
       hasOSMBasemap: Boolean(activeOSMBasemap)
     })
   );
-  // A d3 projection is fed unprojected WGS84 lon/lat by geoarrow-deck-stream, so
-  // a non-WGS84 source dataset must be reprojected before the projection tool
-  // can apply it (orthographic engine). Tracks only the on/off state, not the
-  // projection parameters, so live parameter edits never re-fetch the table.
-  const hasManualProjectionOverride = $derived(
-    getProjectionState().overrideActive === true &&
-      getProjectionState().overrideSource === 'manual'
-  );
   const shouldHideMapOutput = $derived(
     mapLoadingStore.isHoldingPreviewForSuggestedBasemap
   );
@@ -148,6 +143,23 @@
       .filter((value): value is string => value !== null)
       .join('|')
   );
+  // Reload signature for the orthographic reproject opt-in: changes only when a
+  // non-WGS84 dataset is displayed AND the user toggles a manual projection, so
+  // the dataset's render table is re-fetched (reprojected to WGS84) or restored.
+  const projectionReprojectSignature = $derived.by(() => {
+    const hasNonWgs84Dataset = mapDisplayDatasets.some(
+      (dataset) =>
+        Boolean(dataset.geometry?.crs) && !isWgs84LikeCrs(dataset.geometry?.crs)
+    );
+    if (!hasNonWgs84Dataset) {
+      return 'none';
+    }
+    const projState = getProjectionState();
+    return projState.overrideActive === true &&
+      projState.overrideSource === 'manual'
+      ? 'projected'
+      : 'native';
+  });
   const facetsEnabled = $derived(facetsStore.enabled);
   const facetsLayout = $derived(facetsStore.layout);
   const facetVisualizations = $derived(facetsStore.facetVisualizations);
@@ -444,12 +456,23 @@
         }
 
         if (tableName) {
-          const isNonWgs84Source =
+          const projState = getProjectionState();
+          const hasManualProjectionOverride =
+            projState.overrideActive === true &&
+            projState.overrideSource === 'manual';
+          const isNonWgs84 =
             Boolean(dataset.geometry?.crs) &&
             !isWgs84LikeCrs(dataset.geometry?.crs);
+          // Reproject to WGS84 for the tiled (MapLibre) engine, or — in the
+          // orthographic engine — when the user applies a d3 projection to a
+          // non-WGS84 dataset (so it can be projected like a WGS84 one).
           const shouldReprojectToWgs84 =
-            isNonWgs84Source &&
-            (usesTiledBasemap || hasManualProjectionOverride);
+            isNonWgs84 &&
+            (usesTiledBasemap ||
+              shouldReprojectDatasetForActiveProjection(
+                dataset.geometry?.crs,
+                hasManualProjectionOverride
+              ));
           const arrowTable = shouldReprojectToWgs84
             ? await duckDBOrchestrator.getArrowTableReprojectedToWGS84(
                 tableName
@@ -847,7 +870,7 @@
     void duckDBDatasetsVersion;
     void densityReloadSignature;
     void basemapService.simplificationVersion;
-    void hasManualProjectionOverride;
+    void projectionReprojectSignature;
     const currentMapDisplayDatasets = mapDisplayDatasets;
 
     if (isInitializing) {

@@ -965,14 +965,14 @@
         ? computeProjectedBboxForProjection(renderProjection, bbox)
         : null;
 
-    // A manual projection override reprojects a non-WGS84 dataset to WGS84 and
-    // applies a d3 projection, so its reference bbox must be projected too —
-    // otherwise the model matrix stays in geographic (non-flipped) space and the
-    // projected geometry renders Y-flipped.
     const projectionState = getProjectionState();
     const hasManualProjectionOverride =
       projectionState.overrideActive === true &&
       projectionState.overrideSource === 'manual';
+    // A manual projection override reprojects a non-WGS84 dataset to WGS84 and
+    // applies a d3 projection, so its reference bbox must be projected too —
+    // otherwise the model matrix stays in geographic (non-flipped) space and the
+    // projected geometry renders Y-flipped.
     const shouldUseIdentityReferenceBounds =
       shouldUseIdentityProjectionForDatasetCrs(dataset?.geometry?.crs) &&
       !hasManualProjectionOverride;

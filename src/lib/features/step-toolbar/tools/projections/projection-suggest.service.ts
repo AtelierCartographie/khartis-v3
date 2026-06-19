@@ -4,6 +4,7 @@ import {
   type BBox,
   type D3Usage,
   type MatchedCountry,
+  type ProjectionSuggestions,
   type ResolvedProjection
 } from 'proj-suggest';
 import type { GeoProjection } from 'd3-geo';
@@ -100,20 +101,15 @@ function buildD3SuggestionProjection(
   };
 }
 
-export function suggestProjectionsForBbox(
-  bbox: [number, number, number, number]
-): {
+export interface ProjectionSuggestionResult {
   national: ProjectionSuggestion[];
   generic: ProjectionSuggestion[];
-} | null {
-  const bboxInput: BBox = bbox;
-  const validation = validate_bbox(bboxInput);
-  if (!validation.valid) {
-    return null;
-  }
+}
 
-  const result = suggest_projections(bboxInput);
-
+function buildSuggestionResult(
+  result: ProjectionSuggestions,
+  bbox: [number, number, number, number]
+): ProjectionSuggestionResult {
   return {
     national: result.national
       .map((country) => nationalToSuggestion(country, bbox))
@@ -122,6 +118,30 @@ export function suggestProjectionsForBbox(
       .map((projection) => genericToSuggestion(projection, bbox))
       .filter(isSupportedProjectionSuggestion)
   };
+}
+
+export function suggestProjectionsForBbox(
+  bbox: BBox
+): ProjectionSuggestionResult | null {
+  if (!validate_bbox(bbox).valid) {
+    return null;
+  }
+
+  return buildSuggestionResult(suggest_projections(bbox), bbox);
+}
+
+export function suggestProjectionsForFeatureBounds(
+  boxes: BBox[]
+): ProjectionSuggestionResult | null {
+  const validBoxes = boxes.filter((box) => validate_bbox(box).valid);
+  if (validBoxes.length === 0) {
+    return null;
+  }
+
+  const result = suggest_projections(validBoxes);
+  const effectiveBbox = result.reduced?.bbox ?? validBoxes[0];
+
+  return buildSuggestionResult(result, effectiveBbox);
 }
 
 export function buildProjectionFromSuggestion(
