@@ -659,7 +659,7 @@
     padding: 0;
     border: none;
     background: transparent;
-    color: var(--text-emphasis, #161616);
+    color: var(--cds-text-primary, var(--cds-text-01, #161616));
     font: inherit;
     font-size: 0.875rem;
     font-weight: 400;
@@ -707,7 +707,7 @@
     padding: 0;
     border: none;
     background: transparent;
-    color: var(--text-emphasis, #161616);
+    color: var(--cds-text-primary, var(--cds-text-01, #161616));
     display: flex;
     align-items: center;
     justify-content: center;
