@@ -60,7 +60,10 @@ import type { DataTableFilter } from '$lib/features/duckdb/types';
 import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
 import type { BasemapMetadata } from '../types/basemap.types';
-import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs.utils';
+import {
+  shouldReprojectDatasetForActiveProjection,
+  shouldUseIdentityProjectionForDatasetCrs
+} from '../utils/dataset-crs.utils';
 import { fitBasemapRenderProjection } from '../utils/fit-basemap-render-projection.utils';
 import {
   shouldShowGeneratedOrthographicOceanLayer,
@@ -1214,7 +1217,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           );
           const datasetGeometryCrs = getDatasetGeometryCrs(datasetId);
           const allowProjectionOverride =
-            !shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs);
+            !shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs) ||
+            shouldReprojectDatasetForActiveProjection(
+              datasetGeometryCrs,
+              hasManualProjectionOverride
+            );
           const datasetDefaultProjection = getDatasetDefaultProjection(
             datasetId,
             datasetProjectionMetadata,
@@ -1441,7 +1448,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           );
           const datasetGeometryCrs = getDatasetGeometryCrs(datasetId);
           const allowProjectionOverride =
-            !shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs);
+            !shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs) ||
+            shouldReprojectDatasetForActiveProjection(
+              datasetGeometryCrs,
+              hasManualProjectionOverride
+            );
           const datasetDefaultProjection = getDatasetDefaultProjection(
             datasetId,
             datasetProjectionMetadata,
