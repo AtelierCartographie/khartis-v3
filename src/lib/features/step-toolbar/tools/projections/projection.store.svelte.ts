@@ -1,5 +1,6 @@
 import {
   suggestProjectionsForBbox,
+  suggestProjectionsForFeatureBounds,
   buildProjectionFromSuggestion,
   type ProjectionSuggestion
 } from './projection-suggest.service';
@@ -140,47 +141,62 @@ function getProjectionAvailabilityContext() {
   });
 }
 
-async function resolveSuggestionBounds(): Promise<
-  [number, number, number, number] | null
-> {
+type SuggestionBounds =
+  | { kind: 'single'; bbox: [number, number, number, number] }
+  | { kind: 'features'; boxes: Array<[number, number, number, number]> };
+
+async function resolveSuggestionBounds(): Promise<SuggestionBounds | null> {
   const candidates = getSuggestionCandidates();
 
   for (const dataset of candidates) {
-    // WGS84-like datasets already carry WGS84 bounds — use them directly,
-    // no DuckDB round-trip. Non-WGS84 sources fall through to getGeometryExtent,
+    const duckDataset = dataset.sourceFileId
+      ? duckDBOrchestrator.getDatasetBySourceFile(dataset.sourceFileId)
+      : null;
+
+    // Prefer the per-feature bbox proxy: passing one bbox per feature lets
+    // proj-suggest discard detached territories (Alaska, DOM-TOM…) that would
+    // otherwise inflate the extent to world scale. Geometry is stored in its
+    // source CRS, so a non-WGS84 dataset is reprojected to WGS84 in DuckDB.
+    if (duckDataset) {
+      const featureBounds =
+        await duckDBOrchestrator.getGeometryPerFeatureBounds(duckDataset.id, {
+          reprojectToWgs84: !canUseBoundsForProjectionSuggestion(
+            dataset.geometry?.crs
+          )
+        });
+      if (featureBounds && featureBounds.length > 1) {
+        return { kind: 'features', boxes: featureBounds };
+      }
+    }
+
+    // WGS84-like datasets already carry WGS84 bounds — use them directly, no
+    // DuckDB round-trip. Non-WGS84 sources fall through to getGeometryExtent,
     // which reprojects to WGS84 via ST_Transform (PROJ).
     if (
       dataset.geometry?.bounds &&
       canUseBoundsForProjectionSuggestion(dataset.geometry.crs)
     ) {
-      return dataset.geometry.bounds;
+      return { kind: 'single', bbox: dataset.geometry.bounds };
     }
 
-    if (!dataset.sourceFileId) {
-      continue;
-    }
-
-    const duckDataset = duckDBOrchestrator.getDatasetBySourceFile(
-      dataset.sourceFileId
-    );
     if (!duckDataset) {
       continue;
     }
 
     const gpsBounds = await duckDBOrchestrator.getGPSBounds(duckDataset.id);
     if (gpsBounds) {
-      return toBoundsFromGpsBounds(gpsBounds);
+      return { kind: 'single', bbox: toBoundsFromGpsBounds(gpsBounds) };
     }
 
     const geomExtent = await duckDBOrchestrator.getGeometryExtent(
       duckDataset.id
     );
     if (geomExtent) {
-      return geomExtent;
+      return { kind: 'single', bbox: geomExtent };
     }
   }
 
-  return resolveProjectionSuggestionBoundsFromBasemap({
+  const basemapBounds = resolveProjectionSuggestionBoundsFromBasemap({
     currentStyle: basemapStyleStore.selectedStyle,
     preferredStyle: basemapStyleStore.preferredTiledStyle,
     referenceBasemapBbox: basemapStyleStore.referenceBasemapId
@@ -189,6 +205,8 @@ async function resolveSuggestionBounds(): Promise<
     currentBasemapBbox: basemapService.currentMetadata?.bbox ?? null,
     osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null
   });
+
+  return basemapBounds ? { kind: 'single', bbox: basemapBounds } : null;
 }
 
 function toMapProjectionType(projectionId: string): 'mercator' | 'globe' {
@@ -357,7 +375,10 @@ const { actions, getState } = createToolStore<
           const bounds = await resolveSuggestionBounds();
           if (!bounds) return;
 
-          const result = suggestProjectionsForBbox(bounds);
+          const result =
+            bounds.kind === 'features'
+              ? suggestProjectionsForFeatureBounds(bounds.boxes)
+              : suggestProjectionsForBbox(bounds.bbox);
 
           if (!result) return;
 
