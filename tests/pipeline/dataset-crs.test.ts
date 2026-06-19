@@ -1,48 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import {
-  isWgs84LikeCrs,
-  normalizeBoundsForProjectionSuggestion
+  canUseBoundsForProjectionSuggestion,
+  isWgs84LikeCrs
 } from '$lib/features/map/utils/dataset-crs.utils';
 
-describe('normalizeBoundsForProjectionSuggestion', () => {
-  it('recognizes CRS84 GeoJSON metadata as WGS84-like', () => {
+describe('isWgs84LikeCrs', () => {
+  it('recognizes WGS84 / CRS84 spellings as WGS84-like', () => {
+    expect(isWgs84LikeCrs('EPSG:4326')).toBe(true);
+    expect(isWgs84LikeCrs('WGS 84')).toBe(true);
     expect(isWgs84LikeCrs('urn:ogc:def:crs:OGC:1.3:CRS84')).toBe(true);
     expect(isWgs84LikeCrs('OGC:CRS84')).toBe(true);
   });
 
-  it('keeps WGS84 bounds unchanged', () => {
-    expect(
-      normalizeBoundsForProjectionSuggestion([2, 48, 3, 49], 'EPSG:4326')
-    ).toEqual([2, 48, 3, 49]);
+  it('treats other datums/projections as non-WGS84', () => {
+    expect(isWgs84LikeCrs('EPSG:4269')).toBe(false); // NAD83 geographic
+    expect(isWgs84LikeCrs('EPSG:2154')).toBe(false); // Lambert-93
+    expect(isWgs84LikeCrs(null)).toBe(false);
+    expect(isWgs84LikeCrs(undefined)).toBe(false);
   });
+});
 
-  it('reprojects Lambert-93 bounds to WGS84 for projection suggestions', () => {
-    const result = normalizeBoundsForProjectionSuggestion(
-      [652000, 6861000, 652000, 6861000],
-      'EPSG:2154'
-    );
-
-    expect(result).not.toBeNull();
-    expect(result?.[0]).toBeCloseTo(2.34, 1);
-    expect(result?.[1]).toBeCloseTo(48.85, 1);
-    expect(result?.[2]).toBeCloseTo(2.34, 1);
-    expect(result?.[3]).toBeCloseTo(48.85, 1);
-  });
-
-  it('supports ETRS89-LAEA Europe bounds', () => {
-    const result = normalizeBoundsForProjectionSuggestion(
-      [4321000, 3210000, 4321000, 3210000],
-      'EPSG:3035'
-    );
-
-    expect(result).not.toBeNull();
-    expect(result?.[0]).toBeCloseTo(10, 1);
-    expect(result?.[1]).toBeCloseTo(52, 1);
-  });
-
-  it('returns null when the CRS cannot be reprojected', () => {
-    expect(
-      normalizeBoundsForProjectionSuggestion([0, 0, 1, 1], 'EPSG:99999')
-    ).toBeNull();
+describe('canUseBoundsForProjectionSuggestion', () => {
+  it('uses dataset bounds directly only when they are already WGS84', () => {
+    // No CRS or WGS84-like → bounds are WGS84, usable as-is.
+    expect(canUseBoundsForProjectionSuggestion(null)).toBe(true);
+    expect(canUseBoundsForProjectionSuggestion('EPSG:4326')).toBe(true);
+    // Non-WGS84 → bounds must be reprojected (ST_Transform) before use.
+    expect(canUseBoundsForProjectionSuggestion('EPSG:4269')).toBe(false);
+    expect(canUseBoundsForProjectionSuggestion('EPSG:2154')).toBe(false);
   });
 });

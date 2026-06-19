@@ -497,6 +497,36 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       ?.geometry?.crs;
   }
 
+  function resolveRenderedGeometryCrs(
+    datasetId: string,
+    table: ArrowTable | null | undefined,
+    geojson: FeatureCollection | null | undefined
+  ): string | null | undefined {
+    if (table) {
+      const geoMetadata = table.schema.metadata?.get('geo');
+      if (geoMetadata) {
+        try {
+          const geo = JSON.parse(geoMetadata);
+          const crs = geo.columns?.[geo.primary_column]?.crs;
+          if (crs?.id?.authority && crs?.id?.code) {
+            return `${crs.id.authority}:${crs.id.code}`;
+          }
+          if (typeof crs?.name === 'string') {
+            return crs.name;
+          }
+        } catch {
+          // Fall back to the dataset's declared source CRS below.
+        }
+      }
+      return getDatasetGeometryCrs(datasetId);
+    }
+    // GeoJSON display payloads are always WGS84 (RFC 7946 / proj4 fallback target).
+    if (geojson) {
+      return undefined;
+    }
+    return getDatasetGeometryCrs(datasetId);
+  }
+
   function getDatasetTableName(datasetId: string): string | null {
     const dataset = datasetsStore.datasets.find(
       (item) => item.id === datasetId
@@ -1212,9 +1242,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             datasetId,
             currentMetadata
           );
-          const datasetGeometryCrs = getDatasetGeometryCrs(datasetId);
           const allowProjectionOverride =
-            !shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs);
+            !shouldUseIdentityProjectionForDatasetCrs(
+              resolveRenderedGeometryCrs(datasetId, table, geojson)
+            );
           const datasetDefaultProjection = getDatasetDefaultProjection(
             datasetId,
             datasetProjectionMetadata,
@@ -1439,9 +1470,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             datasetId,
             currentMetadata
           );
-          const datasetGeometryCrs = getDatasetGeometryCrs(datasetId);
           const allowProjectionOverride =
-            !shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs);
+            !shouldUseIdentityProjectionForDatasetCrs(
+              resolveRenderedGeometryCrs(datasetId, table, geojson)
+            );
           const datasetDefaultProjection = getDatasetDefaultProjection(
             datasetId,
             datasetProjectionMetadata,

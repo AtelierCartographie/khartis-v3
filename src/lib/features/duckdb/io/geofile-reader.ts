@@ -50,12 +50,12 @@ function isCrsNotFoundError(error: unknown): boolean {
 }
 
 /**
- * The DuckDB WASM spatial build ships without a PROJ database, so GDAL fails
- * with "crs not found" when it has to resolve a projected CRS while
- * materialising the GEOMETRY type. `keep_wkb` skips that resolution (raw WKB);
- * we then re-tag the geometry with the detected source CRS via a plain type
- * cast (metadata only, no PROJ lookup), so the render path's proj4 fallback can
- * reproject it to WGS84 in JS — honouring the import-time normalisation.
+ * `ST_Read` can still fail with "crs not found" while materialising the GEOMETRY
+ * type for some source CRS, even though PROJ is bundled and `ST_Transform`
+ * resolves most EPSG codes. `keep_wkb` skips that resolution (raw WKB); we then
+ * re-tag the geometry with the detected source CRS via a plain type cast
+ * (metadata only), so a later `ST_Transform` (or proj4 fallback) can reproject
+ * it to WGS84 when the render path actually needs it.
  */
 function buildCrsTaggedReadQuery(
   escapedFinalTable: string,
