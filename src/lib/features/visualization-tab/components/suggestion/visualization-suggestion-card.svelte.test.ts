@@ -1,4 +1,4 @@
-import { fireEvent, render } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import type { VizSuggestion } from '$lib/features/commons/services/viz-suggester.service';
 import VisualizationSuggestionCard from './visualization-suggestion-card.svelte';
@@ -43,5 +43,23 @@ describe('VisualizationSuggestionCard', () => {
     await fireEvent.click(getAllByRole('radio')[0]);
 
     expect(onclick).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders every variable and representation type for hybrid suggestions', () => {
+    render(VisualizationSuggestionCard, {
+      suggestion: createSuggestion({
+        label: 'Symboles proportionnels avec fond en classes',
+        nbColumns: 3,
+        semioTypes: ['QTA', 'QTR', 'QL'],
+        geometries: ['point', 'polygon'],
+        columns: ['population', 'density_class', 'region_name']
+      }),
+      resolveBadgeType: () => 'numeric'
+    });
+
+    expect(screen.getByText('population')).toBeInTheDocument();
+    expect(screen.getByText('density_class')).toBeInTheDocument();
+    expect(screen.getByText('region_name')).toBeInTheDocument();
+    expect(screen.queryByText(/^\+/)).not.toBeInTheDocument();
   });
 });

@@ -32,8 +32,12 @@
   }: Props = $props();
 
   const columns = $derived(suggestion.columns ?? []);
-  const visibleColumns = $derived(columns.slice(0, 2));
-  const extraColumnsCount = $derived(Math.max(0, columns.length - 1));
+  const suggestionRows = $derived(
+    columns.map((columnName, index) => ({
+      columnName,
+      semioType: suggestion.semioTypes[index]
+    }))
+  );
   const showCollection = $derived(suggestion.nbColumns > 2);
   const primitiveLabel = $derived(
     (suggestion.geometries ?? [])
@@ -120,12 +124,12 @@
     {/if}
 
     <div class="details">
-      {#if visibleColumns.length > 0}
-        {#each visibleColumns as columnName, idx (columnName)}
+      {#if suggestionRows.length > 0}
+        {#each suggestionRows as row, idx (`${row.columnName}-${idx}`)}
           <div class="detail-row">
-            {#if suggestion.semioTypes[idx]}
+            {#if row.semioType}
               <p class="type-label">
-                {getSemioTypeLabel(suggestion.semioTypes[idx])}
+                {getSemioTypeLabel(row.semioType)}
               </p>
             {/if}
 
@@ -143,14 +147,10 @@
               </span>
 
               <VariableBadge
-                label={columnName}
-                type={resolveBadgeType(columnName)}
+                label={row.columnName}
+                type={resolveBadgeType(row.columnName)}
                 interactive={false}
               />
-
-              {#if columns.length > 2 && idx === 0}
-                <span class="overflow-chip">+ {extraColumnsCount}</span>
-              {/if}
             </div>
           </div>
         {/each}
@@ -366,22 +366,6 @@
 
   .variable-row :global(.variable-badge) {
     min-width: 0;
-  }
-
-  .overflow-chip {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    height: 18px;
-    flex-shrink: 0;
-    padding: 0 var(--cds-spacing-03);
-    border-radius: 9px;
-    background: var(--tag-background, #bae6ff);
-    color: var(--tag-color, #00539a);
-    font-size: 0.75rem;
-    line-height: 1rem;
-    letter-spacing: 0.32px;
-    white-space: nowrap;
   }
 
   .collection-row {
