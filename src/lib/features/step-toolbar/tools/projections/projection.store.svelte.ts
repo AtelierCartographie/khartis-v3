@@ -156,17 +156,17 @@ async function resolveSuggestionBounds(): Promise<SuggestionBounds | null> {
       ? duckDBOrchestrator.getDatasetBySourceFile(dataset.sourceFileId)
       : null;
 
-    // Prefer the per-feature bbox proxy for WGS84 geometry datasets: passing one
-    // bbox per feature lets proj-suggest discard detached territories (Alaska,
-    // DOM-TOM…) that would otherwise inflate the extent to world scale. Gated on
-    // a WGS84-like CRS because these bboxes are read straight off the stored
-    // geometry; non-WGS84 datasets keep the metadata-bounds reprojection path.
-    if (
-      duckDataset &&
-      canUseBoundsForProjectionSuggestion(dataset.geometry?.crs)
-    ) {
+    // Prefer the per-feature bbox proxy: passing one bbox per feature lets
+    // proj-suggest discard detached territories (Alaska, DOM-TOM…) that would
+    // otherwise inflate the extent to world scale. Geometry is stored in its
+    // source CRS, so a non-WGS84 dataset is reprojected to WGS84 in DuckDB.
+    if (duckDataset) {
       const featureBounds =
-        await duckDBOrchestrator.getGeometryPerFeatureBounds(duckDataset.id);
+        await duckDBOrchestrator.getGeometryPerFeatureBounds(duckDataset.id, {
+          reprojectToWgs84: !canUseBoundsForProjectionSuggestion(
+            dataset.geometry?.crs
+          )
+        });
       if (featureBounds && featureBounds.length > 1) {
         return { kind: 'features', boxes: featureBounds };
       }

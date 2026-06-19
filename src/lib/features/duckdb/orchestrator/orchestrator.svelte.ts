@@ -800,7 +800,8 @@ export const duckDBOrchestrator = {
   },
 
   async getGeometryPerFeatureBounds(
-    datasetId: string
+    datasetId: string,
+    options?: { reprojectToWgs84?: boolean }
   ): Promise<Array<[number, number, number, number]> | null> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
@@ -819,14 +820,24 @@ export const duckDBOrchestrator = {
 
       const escapedTable = escapeIdentifier(dataset.tableName);
       const escapedGeometryColumn = escapeIdentifier(geometryColumn);
+      // proj-suggest expects WGS84 lon/lat. Geometry is never reprojected on
+      // import, so for a non-WGS84 dataset transform each feature in DuckDB
+      // using the geometry's own embedded CRS (the third arg keeps lon/lat axis
+      // order). proj.db resolves the source; proj4-JS often lacks the definition.
+      const projectedGeometry = options?.reprojectToWgs84
+        ? `ST_Transform("${escapedGeometryColumn}", 'EPSG:4326', true)`
+        : `"${escapedGeometryColumn}"`;
       const rows = (await Duck.query(
         `SELECT
-           ST_XMin("${escapedGeometryColumn}") AS minx,
-           ST_YMin("${escapedGeometryColumn}") AS miny,
-           ST_XMax("${escapedGeometryColumn}") AS maxx,
-           ST_YMax("${escapedGeometryColumn}") AS maxy
-         FROM "${escapedTable}"
-         WHERE "${escapedGeometryColumn}" IS NOT NULL`,
+           ST_XMin(g) AS minx,
+           ST_YMin(g) AS miny,
+           ST_XMax(g) AS maxx,
+           ST_YMax(g) AS maxy
+         FROM (
+           SELECT ${projectedGeometry} AS g
+           FROM "${escapedTable}"
+           WHERE "${escapedGeometryColumn}" IS NOT NULL
+         )`,
         { format: 'array' }
       )) as Array<{
         minx: number | null;
