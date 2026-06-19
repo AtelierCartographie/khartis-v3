@@ -969,9 +969,10 @@
     const hasManualProjectionOverride =
       projectionState.overrideActive === true &&
       projectionState.overrideSource === 'manual';
-    // When the user applies a projection to a non-WGS84 dataset, its geometry is
-    // reprojected to WGS84 (main-map) and projected like any WGS84 dataset, so
-    // it must use the projected reference bbox rather than its raw source-CRS one.
+    // A manual projection override reprojects a non-WGS84 dataset to WGS84 and
+    // applies a d3 projection, so its reference bbox must be projected too —
+    // otherwise the model matrix stays in geographic (non-flipped) space and the
+    // projected geometry renders Y-flipped.
     const shouldUseIdentityReferenceBounds =
       shouldUseIdentityProjectionForDatasetCrs(dataset?.geometry?.crs) &&
       !hasManualProjectionOverride;
