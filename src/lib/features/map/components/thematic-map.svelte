@@ -965,8 +965,16 @@
         ? computeProjectedBboxForProjection(renderProjection, bbox)
         : null;
 
+    const projectionState = getProjectionState();
+    const hasManualProjectionOverride =
+      projectionState.overrideActive === true &&
+      projectionState.overrideSource === 'manual';
+    // When the user applies a projection to a non-WGS84 dataset, its geometry is
+    // reprojected to WGS84 (main-map) and projected like any WGS84 dataset, so
+    // it must use the projected reference bbox rather than its raw source-CRS one.
     const shouldUseIdentityReferenceBounds =
-      shouldUseIdentityProjectionForDatasetCrs(dataset?.geometry?.crs);
+      shouldUseIdentityProjectionForDatasetCrs(dataset?.geometry?.crs) &&
+      !hasManualProjectionOverride;
     const basemapReference = resolveOrthographicBasemapReferenceBboxes({
       basemapMeta,
       projectionPresets: basemapService.projectionPresets,
