@@ -40,6 +40,14 @@
     "widthUnits": "pixels",
     "color": [40, 40, 40, 255]
   },
+  "limit-context": {
+    "description_fr": "Limites de contexte des territoires voisins qui débordent du cadrage (fonds départementaux/régionaux) — mutées pour ne pas concurrencer le territoire focal",
+    "description_en": "Context boundaries of neighbouring territories bleeding out of the frame (department/region basemaps) — muted so they don't compete with the focal territory",
+    "layer_type": "path",
+    "width": 0.75,
+    "widthUnits": "pixels",
+    "color": [165, 165, 165, 150]
+  },
   "land": {
     "description_fr": "Territoire général (fond polygone)",
     "description_en": "General territory (polygon fill)",
