@@ -879,8 +879,28 @@ function createBasemapService() {
 
       const escapedFileId = escapeSqlString(fileId);
 
+      const countsRows = availableBasemaps
+        .filter((basemap) => typeof basemap.entity_count === 'number')
+        .map(
+          (basemap) =>
+            `('${escapeSqlString(basemap.file)}', ${basemap.entity_count})`
+        )
+        .join(', ');
+
+      if (!countsRows) {
+        throw new Error('Missing basemap entity counts for attributes table');
+      }
+
       const result = await Duck.query(
-        `CREATE OR REPLACE TABLE basemap_attributes AS SELECT * FROM parquet_scan('${escapedFileId}')`
+        `CREATE OR REPLACE TABLE basemap_attributes AS
+         WITH flat AS (
+           SELECT raw, id, variant, normalized, UNNEST(basemaps) AS basemap
+           FROM parquet_scan('${escapedFileId}')
+         ),
+         basemap_counts(basemap, basemap_count) AS (VALUES ${countsRows})
+         SELECT f.raw, f.id, f.variant, f.normalized, f.basemap, c.basemap_count
+         FROM flat f
+         LEFT JOIN basemap_counts c ON c.basemap = f.basemap`
       );
 
       if (!result) {
