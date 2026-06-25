@@ -78,6 +78,7 @@ export interface BasemapMetadata {
   proj_source: string;
   proj_to: ProjectionConfig;
   simplification_level?: string;
+  entity_count?: number;
   layers: BasemapLayer[];
   isCustom?: boolean;
 }

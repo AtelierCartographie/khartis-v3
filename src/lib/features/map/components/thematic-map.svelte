@@ -65,6 +65,7 @@
   import { getSimplificationState } from '$lib/features/step-toolbar/tools/simplification';
   import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
   import { buildProjectionRenderKey } from '$lib/features/step-toolbar/tools/projections';
+  import { layerOrderStore } from '$lib/features/step-toolbar/tools/layers/layer-order.store.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { getFiltersMap } from '$lib/features/duckdb/orchestrator/state.svelte';
   import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations';
@@ -965,8 +966,17 @@
         ? computeProjectedBboxForProjection(renderProjection, bbox)
         : null;
 
+    const projectionState = getProjectionState();
+    const hasManualProjectionOverride =
+      projectionState.overrideActive === true &&
+      projectionState.overrideSource === 'manual';
+    // A manual projection override reprojects a non-WGS84 dataset to WGS84 and
+    // applies a d3 projection, so its reference bbox must be projected too —
+    // otherwise the model matrix stays in geographic (non-flipped) space and the
+    // projected geometry renders Y-flipped.
     const shouldUseIdentityReferenceBounds =
-      shouldUseIdentityProjectionForDatasetCrs(dataset?.geometry?.crs);
+      shouldUseIdentityProjectionForDatasetCrs(dataset?.geometry?.crs) &&
+      !hasManualProjectionOverride;
     const basemapReference = resolveOrthographicBasemapReferenceBboxes({
       basemapMeta,
       projectionPresets: basemapService.projectionPresets,
@@ -1385,6 +1395,15 @@
       mapLoadingStore.markSuggestedPreviewViewportSettled();
       triggerOnReady();
     }
+  });
+
+  // A layer reorder (drag in the layers panel) rewrites the flat layer-order
+  // store; re-run the render so the GPU stack matches the panel order. The
+  // actual order is read inside the (debounced, untracked) updateLayers call,
+  // so the version bump is what re-triggers the schedule here.
+  $effect(() => {
+    void layerOrderStore.version;
+    scheduleLayerUpdate('effect:layerOrder');
   });
 
   $effect(() => {

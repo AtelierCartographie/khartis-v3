@@ -1,4 +1,5 @@
 import {
+  simplifyGeometryType,
   vizSuggester,
   type GeometryType,
   type VizSuggestion
@@ -88,9 +89,15 @@ export function computeVisualizationSuggestions(
     (dataset.geometry?.type as GeometryType | undefined) ||
     null;
 
-  return vizSuggester.suggestVisualizations(columnAnalysis, geometryType, {
-    maxSuggestions: UI_CONSTANTS.SUGGESTIONS_PER_PAGE
-  });
+  const dataGeometry = geometryType
+    ? simplifyGeometryType(geometryType)
+    : undefined;
+
+  return vizSuggester
+    .suggestVisualizations(columnAnalysis, geometryType, {
+      maxSuggestions: UI_CONSTANTS.SUGGESTIONS_PER_PAGE
+    })
+    .map((suggestion) => ({ ...suggestion, dataGeometry }));
 }
 
 export function resolveColumnBadgeType(

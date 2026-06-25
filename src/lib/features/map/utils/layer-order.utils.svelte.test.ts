@@ -1,122 +1,112 @@
 import type { Layer } from '@deck.gl/core';
 import { describe, expect, it } from 'vitest';
-import { getMapLayerRenderOrder } from './layer-order.utils';
+import { applyPanelRenderOrder } from './layer-order.utils';
 
-function makeLayer(id: string): Layer {
-  return { id } as unknown as Layer;
+function makeLayer(id: string, rowId?: string): Layer {
+  return { id, rowId } as unknown as Layer;
 }
 
-describe('getMapLayerRenderOrder', () => {
-  it('keeps non-text thematic layers above basemap background but below the foreground frontiers', () => {
-    const polygonFill = makeLayer('polygon-layer-viz1');
-    const polygonStroke = makeLayer('polygon-layer-viz1-stroke-solid');
-    const pointCentroid = makeLayer('point-layer-viz1-centroids');
-    const result = getMapLayerRenderOrder({
-      basemapBackgroundLayers: [makeLayer('basemap-terre')],
-      thematicLayers: [polygonFill, polygonStroke, pointCentroid],
-      basemapForegroundLayers: [makeLayer('basemap-frontieres')]
-    });
+const rowIdForLayer = (layer: Layer): string | null =>
+  (layer as unknown as { rowId?: string }).rowId ?? null;
 
-    expect(result.map((layer) => layer.id)).toEqual([
+describe('applyPanelRenderOrder', () => {
+  it('draws the GPU array as the reverse of the flat panel (top of panel = front = drawn last)', () => {
+    const layers = [
+      makeLayer('basemap-terre', 'basemap::terre'),
+      makeLayer('polygon-layer-viz1', 'viz1::polygon'),
+      makeLayer('point-layer-viz1', 'viz1::point')
+    ];
+    // Panel top→bottom: symbol (front), polygon, basemap (back).
+    const result = applyPanelRenderOrder(
+      layers,
+      ['viz1::point', 'viz1::polygon', 'basemap::terre'],
+      rowIdForLayer
+    );
+    expect(result.map((l) => l.id)).toEqual([
       'basemap-terre',
+      'polygon-layer-viz1',
+      'point-layer-viz1'
+    ]);
+  });
+
+  // The bug the flat order fixes: with the old five-dimension model a polygon
+  // could be placed above a symbol but not directly below it. The flat order is
+  // symmetric — the panel order alone decides, both directions are reachable.
+  it('lets a polygon sit directly BELOW a symbol when the panel says so', () => {
+    const layers = [
+      makeLayer('point-layer-viz1', 'viz1::point'),
+      makeLayer('polygon-layer-viz1', 'viz1::polygon')
+    ];
+    const result = applyPanelRenderOrder(
+      layers,
+      ['viz1::point', 'viz1::polygon'],
+      rowIdForLayer
+    );
+    // Symbol in front (drawn last), polygon behind it (drawn first).
+    expect(result.map((l) => l.id)).toEqual([
+      'polygon-layer-viz1',
+      'point-layer-viz1'
+    ]);
+  });
+
+  it('lets the SAME polygon sit directly ABOVE the symbol when dragged there', () => {
+    const layers = [
+      makeLayer('point-layer-viz1', 'viz1::point'),
+      makeLayer('polygon-layer-viz1', 'viz1::polygon')
+    ];
+    const result = applyPanelRenderOrder(
+      layers,
+      ['viz1::polygon', 'viz1::point'],
+      rowIdForLayer
+    );
+    expect(result.map((l) => l.id)).toEqual([
+      'point-layer-viz1',
+      'polygon-layer-viz1'
+    ]);
+  });
+
+  it('keeps layers sharing a panel row (fill + stroke) in their incoming sub-stack order', () => {
+    const layers = [
+      makeLayer('polygon-layer-viz1', 'viz1::polygon'),
+      makeLayer('polygon-layer-viz1-stroke-solid', 'viz1::polygon'),
+      makeLayer('point-layer-viz1', 'viz1::point')
+    ];
+    const result = applyPanelRenderOrder(
+      layers,
+      ['viz1::point', 'viz1::polygon'],
+      rowIdForLayer
+    );
+    expect(result.map((l) => l.id)).toEqual([
       'polygon-layer-viz1',
       'polygon-layer-viz1-stroke-solid',
-      'point-layer-viz1-centroids',
-      'basemap-frontieres'
+      'point-layer-viz1'
     ]);
   });
 
-  it('preserves the position of thematic TextLayers inside the thematic block so primitiveOrder controls Z-stack', () => {
-    const polygonFill = makeLayer('polygon-layer-viz1');
-    const textLayer = makeLayer('text-layer-viz1');
-    const labelLayer = makeLayer('label-layer-viz1');
-    const result = getMapLayerRenderOrder({
-      basemapBackgroundLayers: [makeLayer('basemap-terre')],
-      thematicLayers: [textLayer, labelLayer, polygonFill],
-      basemapForegroundLayers: [
-        makeLayer('basemap-frontieres'),
-        makeLayer('basemap-villes-labels')
-      ]
-    });
-
-    expect(result.map((layer) => layer.id)).toEqual([
-      'basemap-terre',
-      'text-layer-viz1',
-      'label-layer-viz1',
+  it('carries an unmapped layer (e.g. GeoJSON fallback) forward on its neighbour rank', () => {
+    const layers = [
+      makeLayer('polygon-layer-viz1', 'viz1::polygon'),
+      makeLayer('geojson-layer-viz1'),
+      makeLayer('point-layer-viz1', 'viz1::point')
+    ];
+    const result = applyPanelRenderOrder(
+      layers,
+      ['viz1::point', 'viz1::polygon'],
+      rowIdForLayer
+    );
+    expect(result.map((l) => l.id)).toEqual([
       'polygon-layer-viz1',
-      'basemap-frontieres',
-      'basemap-villes-labels'
+      'geojson-layer-viz1',
+      'point-layer-viz1'
     ]);
   });
 
-  it('keeps every layer in the same input order when no basemap layers are provided', () => {
-    const labelA = makeLayer('label-layer-vizA');
-    const textA = makeLayer('text-layer-vizA');
-    const labelB = makeLayer('label-layer-vizB');
-    const textB = makeLayer('text-layer-vizB');
-    const result = getMapLayerRenderOrder({
-      basemapBackgroundLayers: [],
-      thematicLayers: [labelA, textA, labelB, textB],
-      basemapForegroundLayers: []
-    });
-
-    expect(result.map((layer) => layer.id)).toEqual([
-      'label-layer-vizA',
-      'text-layer-vizA',
-      'label-layer-vizB',
-      'text-layer-vizB'
-    ]);
-  });
-
-  it('renders below-thematic foreground basemap above thematic polygons but below thematic markers', () => {
-    const polygonFill = makeLayer('polygon-layer-viz1');
-    const pointLayer = makeLayer('point-layer-viz1');
-    const result = getMapLayerRenderOrder({
-      basemapBackgroundLayers: [makeLayer('basemap-terre')],
-      basemapForegroundBelowThematicLayers: [makeLayer('basemap-frontieres')],
-      thematicLayers: [polygonFill, pointLayer],
-      basemapForegroundLayers: [makeLayer('basemap-villes-labels')]
-    });
-
-    expect(result.map((layer) => layer.id)).toEqual([
-      'basemap-terre',
-      'polygon-layer-viz1',
-      'basemap-frontieres',
-      'point-layer-viz1',
-      'basemap-villes-labels'
-    ]);
-  });
-
-  it('renders below-thematic foreground basemap under all markers when the thematic block has no polygons', () => {
-    const pointLayer = makeLayer('point-layer-viz1');
-    const textLayer = makeLayer('text-layer-viz1');
-    const result = getMapLayerRenderOrder({
-      basemapBackgroundLayers: [makeLayer('basemap-terre')],
-      basemapForegroundBelowThematicLayers: [makeLayer('basemap-frontieres')],
-      thematicLayers: [pointLayer, textLayer],
-      basemapForegroundLayers: []
-    });
-
-    expect(result.map((layer) => layer.id)).toEqual([
-      'basemap-terre',
-      'basemap-frontieres',
-      'point-layer-viz1',
-      'text-layer-viz1'
-    ]);
-  });
-
-  it('keeps basemap foreground helpers (e.g. basemap-villes-labels) in the foreground segment', () => {
-    const villesLabels = makeLayer('basemap-villes-labels');
-    const textLayer = makeLayer('text-layer-vizA');
-    const result = getMapLayerRenderOrder({
-      basemapBackgroundLayers: [],
-      thematicLayers: [textLayer],
-      basemapForegroundLayers: [villesLabels]
-    });
-
-    expect(result.map((layer) => layer.id)).toEqual([
-      'text-layer-vizA',
-      'basemap-villes-labels'
-    ]);
+  it('keeps every layer in its incoming order when the panel order is empty', () => {
+    const layers = [
+      makeLayer('a', 'viz1::point'),
+      makeLayer('b', 'viz1::polygon')
+    ];
+    const result = applyPanelRenderOrder(layers, [], rowIdForLayer);
+    expect(result.map((l) => l.id)).toEqual(['a', 'b']);
   });
 });

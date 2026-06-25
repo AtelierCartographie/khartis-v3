@@ -9,16 +9,21 @@ Khartis v3 is a fully client-side thematic mapping tool (SvelteKit SPA, static b
 Use **pnpm** via Corepack — never npm. Node >= 22, < 25.
 
 ```bash
-cp .env.example .env   # required before first run; copies non-sensitive defaults
 pnpm install           # postinstall downloads DuckDB WASM extensions (scripts/download-duckdb-extensions.sh)
-pnpm dev               # dev server → http://localhost:5176/<BASE_PATH>/
+pnpm dev               # dev server → http://localhost:5176/
 pnpm build             # NODE_ENV=production vite build → build/
 pnpm check             # compiles Paraglide, svelte-kit sync, then svelte-check (typecheck)
 pnpm lint              # prettier --check . && eslint .
 pnpm format            # prettier --write .
+pnpm deploy:pprd:dry-run # validate latest staging release, CI gate, and build without SFTP
+pnpm deploy:pprd       # deploy latest staging release to PPRD through the local SFTP helper
 ```
 
-`.env` **must exist** before running locally. `BASE_PATH` (default `/cartographie/khartisnewpprd`) is part of the dev URL; set it empty for a root URL.
+The app can run locally without a `.env` file. The committed `.env.example` is
+only for the local PPRD deployment helper and must contain placeholders only.
+Real SFTP hosts, users, remote paths, fingerprints, passwords, private keys,
+VPN details, and GitLab credentials must stay in ignored local env files or the
+user's shell. PRD deployment is intentionally unsupported by the local helper.
 
 ### Tests
 
@@ -43,11 +48,11 @@ CI (`.github/workflows/pr-validation.yml`) on PRs to `staging`/`main`: lint + ty
 
 ## Architecture
 
-Deep docs live in `docs/` (French) — `ARCHITECTURE.md`, `ARCHITECTURE_FEATURES.md`, `GESTION_ETAT.md` (state), `DUCKDB.md`, `MAP.md`, `PIPELINE_DONNEES.md`, `VISUALISATIONS.md`, `REFERENCE.md`. Consult them before non-trivial work.
+Deep docs live in `docs/` (French) — `ARCHITECTURE.md`, `ARCHITECTURE_FEATURES.md`, `GESTION_ETAT.md` (state), `DUCKDB.md`, `MAP.md`, `PIPELINE_DONNEES.md`, `VISUALISATIONS.md`, `REFERENCE.md`, and `DEPLOYMENT.md`. Consult them before non-trivial work.
 
 **Four pillars:**
 
-1. **Client-only** — all compute happens in the browser (DuckDB WASM + memory + IndexedDB); works offline after first load.
+1. **Client-only** — all compute happens in the browser (DuckDB WASM + memory + IndexedDB); static assets are service-worker cached, but remote basemaps and never-visited resources can still require the network.
 2. **Feature-based** — code lives in `src/lib/features/<feature>/`, each owning its stores, components, services, types. Cross-feature imports go **only through the feature's `index.ts` barrel**; deep imports into another feature's internals are forbidden (enforced for `visualization-tab` by `architecture-boundaries.svelte.test.ts`).
 3. **DuckDB-first** — all data work (import, join, classification, reprojection, aggregation, search) goes through DuckDB WASM (`read_csv`, `ST_Read`, `read_parquet`). Do not add JS parsers for formats DuckDB handles.
 4. **GPU-first** — thematic layers render via Deck.gl from binary GeoArrow buffers uploaded straight to VRAM. GeoJSON is only a fallback / export format.
@@ -95,24 +100,24 @@ Errors derive from `PipelineError` (`commons/pipeline.errors.ts`); user-facing e
 
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **khartis-v3** (16032 symbols, 29627 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **khartis-v3** (15968 symbols, 29595 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
-> Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
+> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
 ## Always Do
 
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "staging"})`.
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
 - **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, use `query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
+- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
 
 ## Never Do
 
-- NEVER edit a function, class, or method without first running `impact` on it.
+- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
 - NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use `rename` which understands the call graph.
-- NEVER commit changes without running `detect_changes()` to check affected scope.
+- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
+- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
 
 ## Resources
 

@@ -59,7 +59,7 @@ User data (rows, geo files, place names, joined results) **must never leave the 
 
 ## The map reflects parameters live
 
-Style, classification, color, projection, and layout changes update the map **immediately** — keep the data → DuckDB → render path reactive. The only sanctioned exception is the explicit **simplified preview** during heavy interactions such as projection drag (see `projections.md` and `render-pipeline.md`).
+Style, classification, color, projection, and layout changes update the map **immediately** — keep the data → DuckDB → render path reactive.
 
 ## Suggestions are scored, ranked, and overridable
 

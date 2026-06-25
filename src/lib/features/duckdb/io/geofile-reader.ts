@@ -43,6 +43,21 @@ function isGeoPackageFile(filename: string): boolean {
   return filename.toLowerCase().endsWith('.gpkg');
 }
 
+function shouldUseGeoPackageBrowserFallback(
+  ctx: DuckDBContext,
+  geofile: File,
+  meta: boolean,
+  shapefile: boolean
+): boolean {
+  return (
+    !meta &&
+    !shapefile &&
+    isGeoPackageFile(geofile.name) &&
+    typeof window !== 'undefined' &&
+    !ctx.threadsSupported
+  );
+}
+
 function isCrsNotFoundError(error: unknown): boolean {
   return (
     error instanceof Error && /crs not found/i.test(error.message.toLowerCase())
@@ -50,12 +65,12 @@ function isCrsNotFoundError(error: unknown): boolean {
 }
 
 /**
- * The DuckDB WASM spatial build ships without a PROJ database, so GDAL fails
- * with "crs not found" when it has to resolve a projected CRS while
- * materialising the GEOMETRY type. `keep_wkb` skips that resolution (raw WKB);
- * we then re-tag the geometry with the detected source CRS via a plain type
- * cast (metadata only, no PROJ lookup), so the render path's proj4 fallback can
- * reproject it to WGS84 in JS — honouring the import-time normalisation.
+ * `ST_Read` can still fail with "crs not found" while materialising the GEOMETRY
+ * type for some source CRS, even though PROJ is bundled and `ST_Transform`
+ * resolves most EPSG codes. `keep_wkb` skips that resolution (raw WKB); we then
+ * re-tag the geometry with the detected source CRS via a plain type cast
+ * (metadata only), so a later `ST_Transform` (or proj4 fallback) can reproject
+ * it to WGS84 when the render path actually needs it.
  */
 function buildCrsTaggedReadQuery(
   escapedFinalTable: string,
@@ -360,6 +375,21 @@ export async function readGeofile(
 
   if (!tablename) {
     tablename = generateUniqueTableName(geofile.name, ctx.loaded_files);
+  }
+
+  if (shouldUseGeoPackageBrowserFallback(ctx, geofile, meta, shapefile)) {
+    const fallbackGeoJsonFile = await convertGeoPackageToGeoJsonFile(geofile, {
+      preferredLayer: requestedLayer ?? undefined
+    });
+
+    await readGeofile(ctx, fallbackGeoJsonFile, {
+      ...options,
+      tablename,
+      layer: undefined
+    });
+
+    ctx.loaded_files.set(tablename, geofile.name);
+    return tablename;
   }
 
   const geoMeta = await detectGeofileMetadata(

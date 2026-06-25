@@ -31,8 +31,14 @@ Support pasting a CRS as **WKT** or **PROJ.4**. Normalize codes to `EPSG:XXXX` a
 - Translate a suggestion's parameters through `buildD3ProjectionFromConfig` (`d3-projection-config.utils.ts`): apply `rotate` ([λ, φ, γ]), `center`, and `parallels` (conics) from the config — don't re-implement per-projection setup inline.
 - Expose longitude / latitude / rotation parameters with a **reset to defaults** action.
 
+### Clip-polygon projections (interrupted / polyhedral)
+
+- **Source the clip-included variants from `d3-geo-polygon`, not `d3-geo-projection`.** `geoInterruptedMollweide`, `geoInterruptedMollweideHemispheres`, `geoPolyhedralWaterman`, `geoAirocean`, `geoImago` (and the interrupted-ocean Mollweide built via `geoInterrupt`) must come from `d3-geo-polygon`: its versions carry a `geoClipPolygon` pre-clip that keeps land inside the sphere. The `d3-geo-projection` equivalents leave a thin Antarctic bar (their polygon clip mis-winds the polar ring). Because `geoarrow-deck-stream` renders via `projection.stream(sink)`, this pre-clip clips **both** the suggestion vignette (`geoPath`) and the Deck map — no WebGL/SVG `<clipPath>` is needed.
+- **Sub-degree longitude offset (`CLIP_DEGENERACY_LON_EPSILON`).** `geoClipPolygon` degenerates when an interruption meridian is exactly collinear with the round-degree ring edges of the world basemap — at an integer orientation the clip flips inside/outside and the territory layer renders inverted. `applyUserProjectionTransform` adds a `0.01°` longitude offset for projections in `isClipPolygonProjection(...)` so no integer slider value lands on a degenerate meridian. It is imperceptible (~0.03px at world scale) and a strict no-op (offset `0`) for every other projection. Do not remove it without re-checking ocean/waterman at the default orientation.
+- **World-scale clip-polygon projections fit to the Sphere, not the data bbox** (carried via `state.suggestionScale`) — fitting them to a sub-global bbox collapses them to a sliver.
+
 ## Performance & collections
 
-- Re-projection is heavy: while the user drags projection parameters, switch to the **simplified preview** (visualizations hidden, basemap only) and reproject on settle — keep this path intact (see `render-pipeline.md`).
+- Re-projection runs live: projection parameter edits reproject and update the map immediately — there is no hidden-visualizations "simplified preview" mode.
 - In a map collection (small multiples / facets), **one projection and its parameters apply to every map** — never let facets drift to different projections.
 - Reprojecting source geometry for analysis stays in DuckDB (`ST_Transform`, see `duckdb-data.md`); the d3 projection is a render-time transform, not a data mutation.

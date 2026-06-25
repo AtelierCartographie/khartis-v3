@@ -16,7 +16,6 @@ export function selectDataset(state: DatasetsState, datasetId: string): void {
   if (!dataset) return;
 
   if (state.selectedDatasetId === datasetId) {
-    state.selectedDatasetId = datasetId;
     return;
   }
 

@@ -10,7 +10,11 @@ import {
   fitProjectionToBbox,
   getProjectionById
 } from '$lib/features/commons/utils/projection.utils';
-import { buildD3ProjectionFromConfig } from '$lib/features/commons/utils/d3-projection-config.utils';
+import {
+  buildD3ProjectionFromConfig,
+  CLIP_DEGENERACY_LON_EPSILON,
+  isClipPolygonProjection
+} from '$lib/features/commons/utils/d3-projection-config.utils';
 
 export const COMPOSITE_PROJECTION_PREFIX = 'composite:';
 
@@ -21,14 +25,13 @@ const MERCATOR_ENGINE_SELECTION_IDS = new Set([
   'lambert-conformal',
   'gall-peters'
 ]);
-const NEUTRAL_TRANSFORM_EPSILON = 1e-9;
-
 type ProjectionOverrideState = Pick<
   ProjectionState,
   | 'selected'
   | 'overrideActive'
   | 'customCode'
   | 'suggestionD3Config'
+  | 'suggestionScale'
   | 'center'
   | 'longitude'
   | 'latitude'
@@ -57,18 +60,6 @@ function getBboxCenter(bbox: BBox): [number, number] {
   return [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
 }
 
-function hasUserCenterOverride(state: ProjectionOverrideState): boolean {
-  const center = state.center ?? [state.longitude, state.latitude];
-  return (
-    Math.abs(center[0]) > NEUTRAL_TRANSFORM_EPSILON ||
-    Math.abs(center[1]) > NEUTRAL_TRANSFORM_EPSILON
-  );
-}
-
-function hasUserRotationOverride(state: ProjectionOverrideState): boolean {
-  return Math.abs(state.rotation) > NEUTRAL_TRANSFORM_EPSILON;
-}
-
 function applyUserProjectionTransform(
   projection: GeoProjection,
   state: ProjectionOverrideState
@@ -77,13 +68,18 @@ function applyUserProjectionTransform(
     state.longitude,
     state.latitude
   ];
-  const [lambda = 0, phi = 0, gamma = 0] = projection.rotate();
-
-  if (hasUserCenterOverride(state)) {
-    projection.rotate([lambda - longitude, phi - latitude, gamma]);
-  }
-
-  if (hasUserRotationOverride(state)) {
+  // longitude/latitude are absolute: the projection is centered there. The
+  // intrinsic roll (gamma) of the base projection is preserved so oblique
+  // suggestions (e.g. Atlantis) keep their orientation; rotation adds an
+  // in-plane angle on top.
+  const [, , gamma = 0] = projection.rotate();
+  const lonEpsilon = isClipPolygonProjection(
+    state.suggestionD3Config?.projection
+  )
+    ? CLIP_DEGENERACY_LON_EPSILON
+    : 0;
+  projection.rotate([-longitude + lonEpsilon, -latitude, gamma]);
+  if (state.rotation) {
     projection.angle(projection.angle() + state.rotation);
   }
 }
@@ -211,13 +207,30 @@ export function resolveUserProjectionOverride({
         return undefined;
       }
 
-      fitProjectionToBbox(
-        projection,
-        fitBbox,
-        viewportSize.width,
-        viewportSize.height,
-        padding
-      );
+      // World-scale projections (Armadillo, interrupted Mollweide, Waterman,
+      // …) must be fit to the whole sphere, not the data bbox, or they
+      // collapse/wrap; fitting to a sub-global bbox produces degenerate slivers.
+      const isWorldScale =
+        state.suggestionScale !== undefined &&
+        state.suggestionScale.length > 0 &&
+        state.suggestionScale.every((value) => value === 'world');
+      if (isWorldScale) {
+        projection.fitExtent(
+          [
+            [padding, padding],
+            [viewportSize.width - padding, viewportSize.height - padding]
+          ],
+          { type: 'Sphere' as const }
+        );
+      } else {
+        fitProjectionToBbox(
+          projection,
+          fitBbox,
+          viewportSize.width,
+          viewportSize.height,
+          padding
+        );
+      }
       applyUserProjectionTransform(projection, state);
 
       return isUsableGeoProjection(projection, fitBbox)

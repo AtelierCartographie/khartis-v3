@@ -293,17 +293,19 @@ Convention de clés : `snake_case` sémantique par feature. Sources : `messages/
 
 ## Commandes de développement
 
-| Commande                 | Description                                        |
-| ------------------------ | -------------------------------------------------- |
-| `pnpm dev`               | Serveur de développement (port 5176)               |
-| `pnpm build`             | Build production statique (`build/`)               |
-| `pnpm check`             | svelte-kit sync + svelte-check (typecheck)         |
-| `pnpm lint`              | prettier --check + eslint                          |
-| `pnpm format`            | prettier --write                                   |
-| `pnpm test:unit`         | Tous les tests Vitest (client jsdom + server Node) |
-| `pnpm test:pipeline`     | Tests serveur pipeline + DuckDB                    |
-| `pnpm test:duckdb`       | Tests d'intégration DuckDB uniquement              |
-| `pnpm test:all`          | Suite complète                                     |
-| `pnpm machine-translate` | Génère les traductions manquantes via Inlang       |
+| Commande                   | Description                                                               |
+| -------------------------- | ------------------------------------------------------------------------- |
+| `pnpm dev`                 | Serveur de développement (port 5176)                                      |
+| `pnpm build`               | Build production statique (`build/`)                                      |
+| `pnpm check`               | svelte-kit sync + svelte-check (typecheck)                                |
+| `pnpm lint`                | prettier --check + eslint                                                 |
+| `pnpm format`              | prettier --write                                                          |
+| `pnpm deploy:pprd:dry-run` | Vérifie le tag PPRD, le gate CI et le build sans SFTP                     |
+| `pnpm deploy:pprd`         | Déploie la dernière release staging vers la PPRD via le helper SFTP local |
+| `pnpm test:unit`           | Tous les tests Vitest (client jsdom + server Node)                        |
+| `pnpm test:pipeline`       | Tests serveur pipeline + DuckDB                                           |
+| `pnpm test:duckdb`         | Tests d'intégration DuckDB uniquement                                     |
+| `pnpm test:all`            | Suite complète                                                            |
+| `pnpm machine-translate`   | Génère les traductions manquantes via Inlang                              |
 
 Node ≥ 22 (< 25), pnpm 10 via Corepack. Toujours utiliser `vitest run` (ou les scripts `pnpm test:*`) — jamais `vitest` seul qui démarre le mode watch. Utiliser `--reporter=agent` pour minimiser la sortie.

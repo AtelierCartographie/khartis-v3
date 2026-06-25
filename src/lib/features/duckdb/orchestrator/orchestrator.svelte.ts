@@ -5,7 +5,10 @@ import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.type
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import { detectSemioType } from '$lib/features/commons/utils/semio-detector.utils';
 import {
   extractGeoArrowMetadata,
@@ -754,23 +757,42 @@ export const duckDBOrchestrator = {
 
     try {
       const tableInfo = await Duck.describe_table(dataset.tableName);
-      const geometryColumn = tableInfo.name.find((_, index) =>
-        isGeometryColumnType(tableInfo.type[index])
+      const geometryIndex = tableInfo.type.findIndex((type) =>
+        isGeometryColumnType(type)
       );
-      if (!geometryColumn) {
+      if (geometryIndex === -1) {
         return null;
       }
+      const geometryColumn = tableInfo.name[geometryIndex];
 
       const escapedTable = escapeIdentifier(dataset.tableName);
       const escapedGeometryColumn = escapeIdentifier(geometryColumn);
+
+      // The suggester ranks projections for a WGS84 bbox. Reproject the geometry
+      // through PROJ (ST_Transform) when its source CRS is not already EPSG:4326,
+      // keeping the bounds path on the bundled PROJ engine instead of the
+      // hand-maintained proj4 definition list.
+      const sourceCrs =
+        tableInfo.type[geometryIndex].match(/\(\s*'([^']+)'\s*\)/)?.[1] ?? null;
+      const geometryExpression =
+        sourceCrs && !/^epsg:4326$/i.test(sourceCrs)
+          ? `ST_Transform("${escapedGeometryColumn}", '${escapeSqlString(
+              sourceCrs
+            )}', 'EPSG:4326', true)`
+          : `"${escapedGeometryColumn}"`;
+
       const rows = (await Duck.query(
-        `SELECT
-           MIN(ST_XMin("${escapedGeometryColumn}")) AS minx,
-           MIN(ST_YMin("${escapedGeometryColumn}")) AS miny,
-           MAX(ST_XMax("${escapedGeometryColumn}")) AS maxx,
-           MAX(ST_YMax("${escapedGeometryColumn}")) AS maxy
-         FROM "${escapedTable}"
-         WHERE "${escapedGeometryColumn}" IS NOT NULL`,
+        `WITH __extent_geom AS (
+           SELECT ${geometryExpression} AS geom
+           FROM "${escapedTable}"
+           WHERE "${escapedGeometryColumn}" IS NOT NULL
+         )
+         SELECT
+           MIN(ST_XMin(geom)) AS minx,
+           MIN(ST_YMin(geom)) AS miny,
+           MAX(ST_XMax(geom)) AS maxx,
+           MAX(ST_YMax(geom)) AS maxy
+         FROM __extent_geom`,
         { format: 'array' }
       )) as Array<{
         minx: number | null;
@@ -794,6 +816,77 @@ export const duckDBOrchestrator = {
         Number(row.maxx),
         Number(row.maxy)
       ];
+    } catch {
+      return null;
+    }
+  },
+
+  async getGeometryPerFeatureBounds(
+    datasetId: string,
+    options?: { reprojectToWgs84?: boolean }
+  ): Promise<Array<[number, number, number, number]> | null> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    const dataset = state.findDatasetByIdOrSourceFile(datasetId);
+    if (!dataset || !dataset.tableName) return null;
+
+    try {
+      const tableInfo = await Duck.describe_table(dataset.tableName);
+      const geometryColumn = tableInfo.name.find((_, index) =>
+        isGeometryColumnType(tableInfo.type[index])
+      );
+      if (!geometryColumn) {
+        return null;
+      }
+
+      const escapedTable = escapeIdentifier(dataset.tableName);
+      const escapedGeometryColumn = escapeIdentifier(geometryColumn);
+      // proj-suggest expects WGS84 lon/lat. Geometry is never reprojected on
+      // import, so for a non-WGS84 dataset transform each feature in DuckDB
+      // using the geometry's own embedded CRS (the third arg keeps lon/lat axis
+      // order). proj.db resolves the source; proj4-JS often lacks the definition.
+      const projectedGeometry = options?.reprojectToWgs84
+        ? `ST_Transform("${escapedGeometryColumn}", 'EPSG:4326', true)`
+        : `"${escapedGeometryColumn}"`;
+      const rows = (await Duck.query(
+        `SELECT
+           ST_XMin(g) AS minx,
+           ST_YMin(g) AS miny,
+           ST_XMax(g) AS maxx,
+           ST_YMax(g) AS maxy
+         FROM (
+           SELECT ${projectedGeometry} AS g
+           FROM "${escapedTable}"
+           WHERE "${escapedGeometryColumn}" IS NOT NULL
+         )`,
+        { format: 'array' }
+      )) as Array<{
+        minx: number | null;
+        miny: number | null;
+        maxx: number | null;
+        maxy: number | null;
+      }>;
+
+      const bounds: Array<[number, number, number, number]> = [];
+      for (const row of rows) {
+        if (
+          row.minx == null ||
+          row.miny == null ||
+          row.maxx == null ||
+          row.maxy == null
+        ) {
+          continue;
+        }
+        bounds.push([
+          Number(row.minx),
+          Number(row.miny),
+          Number(row.maxx),
+          Number(row.maxy)
+        ]);
+      }
+
+      return bounds.length > 0 ? bounds : null;
     } catch {
       return null;
     }

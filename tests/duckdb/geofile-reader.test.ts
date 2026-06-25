@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DuckDBContext } from '$lib/features/duckdb/types';
 
 const {
@@ -75,6 +75,58 @@ describe('readGeofile', () => {
     );
 
     addRowIdMock.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('uses the browser GeoPackage fallback before ST_Read in mono-thread runtimes', async () => {
+    vi.stubGlobal('window', {});
+
+    const ctx = createContext();
+    const gpkgFile = new File(['gpkg'], 'compagnies-herault-l93.gpkg', {
+      type: 'application/geopackage+sqlite3'
+    });
+    const fallbackGeoJsonFile = new File(
+      ['{"type":"FeatureCollection","features":[]}'],
+      'compagnies-herault-l93.geojson',
+      { type: 'application/geo+json' }
+    );
+
+    convertGeoPackageToGeoJsonFileMock.mockResolvedValue(fallbackGeoJsonFile);
+    executeQueryMock
+      .mockResolvedValueOnce([
+        {
+          layer_index: 1,
+          layer_name: 'features',
+          feature_count: 11,
+          crs_code: 4326,
+          geom_name: 'geom',
+          geom_type: 'MULTIPOLYGON'
+        }
+      ])
+      .mockResolvedValueOnce(new Uint8Array());
+
+    const tableName = await readGeofile(ctx, gpkgFile, {
+      tablename: 'compagnies_table'
+    });
+
+    expect(tableName).toBe('compagnies_table');
+    expect(convertGeoPackageToGeoJsonFileMock).toHaveBeenCalledWith(gpkgFile, {
+      preferredLayer: undefined
+    });
+    expect(registerFilesMock).toHaveBeenCalledTimes(2);
+    expect(addRowIdMock).toHaveBeenCalledWith(
+      ctx.connection,
+      'compagnies_table'
+    );
+    expect(ctx.loaded_files.get('compagnies_table')).toBe(gpkgFile.name);
+    expect(
+      executeQueryMock.mock.calls.some(([_, sql]) =>
+        String(sql).includes('registered:compagnies-herault-l93.gpkg')
+      )
+    ).toBe(false);
   });
 
   it('falls back to browser GeoJSON conversion for GeoPackage thread errors in mono-thread runtimes', async () => {
