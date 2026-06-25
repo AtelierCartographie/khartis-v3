@@ -61,14 +61,22 @@ import type {
   BasemapLayer,
   BasemapMetadata
 } from '$lib/features/map/types/basemap.types';
+import {
+  buildBasemapSubLayerId,
+  buildTiledBasemapLayerId,
+  buildVisualizationSubLayerId,
+  getCustomBaseLayerType,
+  isBasemapLayersToolRenderableType,
+  isPerKeyAuxLayerType,
+  mapMetadataLayerTypeToBasemapLayerId,
+  mergeLayerOrder
+} from '$lib/features/map/utils/layer-panel-row.utils';
+import { layerOrderStore } from './layer-order.store.svelte';
 
 const DEFAULT_STATE: LayersState = {
   layers: []
 };
 
-const VISUALIZATION_SUBLAYER_SEPARATOR = '::';
-const GLOBAL_BASEMAP_LAYER_PREFIX = 'basemap';
-const TILED_BASEMAP_LAYER_SEPARATOR = 'tiled-basemap::';
 const VISUALIZATION_SUBLAYER_ORDER: PrimitiveFilter[] = [
   PrimitiveFilterType.TEXT,
   PrimitiveFilterType.POINT,
@@ -287,24 +295,6 @@ export function getBasemapLayerColor(layer: BasemapLayerConfig): string {
   return BASEMAP_SUBLAYER_COLOR;
 }
 
-function buildVisualizationSubLayerId(
-  visualizationId: string,
-  primitive: PrimitiveFilter
-): string {
-  return `${visualizationId}${VISUALIZATION_SUBLAYER_SEPARATOR}${primitive}`;
-}
-
-// Basemap auxiliary layers are deduplicated globally in the flattened panel
-// (#182): a single row drives the one shared GPU basemap stack, so its id no
-// longer carries a per-visualization prefix.
-function buildBasemapSubLayerId(basemapLayerKey: string): string {
-  return `${GLOBAL_BASEMAP_LAYER_PREFIX}${VISUALIZATION_SUBLAYER_SEPARATOR}${basemapLayerKey}`;
-}
-
-function buildTiledBasemapLayerId(layerId: string): string {
-  return `${TILED_BASEMAP_LAYER_SEPARATOR}${layerId}`;
-}
-
 function getVisualizationPrimitiveName(primitive: PrimitiveFilter): string {
   switch (primitive) {
     case PrimitiveFilterType.POINT:
@@ -416,44 +406,6 @@ function reorderIds<T>(items: T[], fromIndex: number, toIndex: number): T[] {
   return next;
 }
 
-/**
- * Recovers the single (from → to) move that turns `current` into `next` when
- * `next` is a one-element reordering of the same set. Used to translate a flat
- * drag of facet rows into `facetsStore.reorderVariables(from, to)`. Returns
- * `null` when the orders are equal, differ in membership, or differ by more
- * than a single move (in which case the caller leaves the facet order alone).
- */
-function deriveSingleMove(
-  current: readonly string[],
-  next: readonly string[]
-): { from: number; to: number } | null {
-  if (
-    current.length !== next.length ||
-    current.length === 0 ||
-    arraysShallowEqual(current, next)
-  ) {
-    return null;
-  }
-  if (new Set(current).size !== current.length) {
-    return null;
-  }
-  const sameMembers =
-    new Set(current).size === new Set([...current, ...next]).size;
-  if (!sameMembers) {
-    return null;
-  }
-
-  for (let from = 0; from < current.length; from += 1) {
-    for (let to = 0; to < current.length; to += 1) {
-      if (from === to) continue;
-      if (arraysShallowEqual(reorderIds([...current], from, to), next)) {
-        return { from, to };
-      }
-    }
-  }
-  return null;
-}
-
 function arraysShallowEqual(
   left: readonly string[],
   right: readonly string[]
@@ -500,52 +452,6 @@ function getActiveReferenceBasemapMetadata(): BasemapMetadata | null {
 function pickMetadataLayerName(layer: BasemapLayer): string {
   const title = getLocale() === 'fr' ? layer.title_fr : layer.title_en;
   return title?.trim() || layer.title_fr?.trim() || layer.type;
-}
-
-function isBasemapLayersToolRenderableType(type: BasemapLayerType): boolean {
-  return (
-    type !== BasemapLayerType.CENTROID &&
-    type !== BasemapLayerType.GEOGRAPHIC_LINES
-  );
-}
-
-function getCustomBaseLayerType(
-  metadata: BasemapMetadata
-): BasemapLayerType | undefined {
-  return metadata.layers.find(
-    (layer) =>
-      layer.type === BasemapLayerType.POLYGON ||
-      layer.type === BasemapLayerType.LINE ||
-      layer.type === BasemapLayerType.POINT
-  )?.type;
-}
-
-function mapMetadataLayerTypeToBasemapLayerId(
-  type: BasemapLayerType,
-  isCustom: boolean,
-  isCustomLine: boolean
-): BasemapLayerId | null {
-  switch (type) {
-    case BasemapLayerType.LAND:
-      return isCustomLine ? null : BASEMAP_LAYER_ID.TERRE;
-    case BasemapLayerType.LIMIT:
-      return BASEMAP_LAYER_ID.FRONTIERES;
-    case BasemapLayerType.CENTROID:
-    case BasemapLayerType.POINT:
-      return isCustom ? null : BASEMAP_LAYER_ID.VILLES;
-    case BasemapLayerType.GRATICULE:
-      return BASEMAP_LAYER_ID.MERIDIENS;
-    case BasemapLayerType.GEOGRAPHIC_LINES:
-      return BASEMAP_LAYER_ID.MERIDIENS;
-    case BasemapLayerType.POLYGON:
-      return isCustom ? BASEMAP_LAYER_ID.TERRE : BASEMAP_LAYER_ID.MERS;
-    case BasemapLayerType.LINE:
-      return isCustom ? BASEMAP_LAYER_ID.FRONTIERES : BASEMAP_LAYER_ID.RIVIERES;
-    case BasemapLayerType.SPHERE:
-      return BASEMAP_LAYER_ID.SPHERE;
-    default:
-      return null;
-  }
 }
 
 interface BasemapDisplayEntry {
@@ -702,10 +608,6 @@ function getBasemapDisplayOrder(layerId: BasemapLayerId | undefined): number {
   return fallbackIndex === -1 ? Number.MAX_SAFE_INTEGER : fallbackIndex;
 }
 
-function isPerKeyAuxLayerType(type: BasemapLayerType | undefined): boolean {
-  return type === BasemapLayerType.LIMIT || type === BasemapLayerType.LAND;
-}
-
 function buildVectorBasemapSubLayers(): Layer[] {
   const entries = buildBasemapDisplayEntries();
   const grouped = new Map<string, BasemapDisplayEntry[]>();
@@ -839,18 +741,6 @@ function buildTiledBasemapSubLayers(): Layer[] {
   );
 }
 
-// Top→bottom of the flattened panel maps to front→back of the render. Within
-// the global thematic block the foreground-below basemap layers insert after
-// the last marker (non-polygon) primitive in panel order — which is the first
-// marker in the reversed Deck array, matching `getMapLayerRenderOrder`.
-function isMarkerPrimitiveLayer(layer: Layer): boolean {
-  return (
-    layer.kind === 'viz-primitive' &&
-    layer.primitive !== undefined &&
-    layer.primitive !== PrimitiveFilterType.POLYGON
-  );
-}
-
 function buildLayers(): Layer[] {
   const activeVisualizationIds = new Set(
     visualizationStore.activeVisualizations.map((v) => v.id)
@@ -858,31 +748,25 @@ function buildLayers(): Layer[] {
 
   const facetsEnabled = facetsStore.enabled;
   const facetBaseVizId = facetsStore.baseVisualizationId;
-  const facetVizIds = new Set(facetsStore.generatedVisualizationIds);
 
+  // In facet mode the collection reads as a single visualization: one row per
+  // primitive. The per-facet copies share that styling and are mapped onto
+  // these rows at render time, so the panel shows the base viz only.
   const displayVisualizations = facetsEnabled
-    ? visualizationStore.visualizations.filter((v) => v.id !== facetBaseVizId)
+    ? visualizationStore.visualizations.filter((v) => v.id === facetBaseVizId)
     : visualizationStore.visualizations;
 
-  let facetIndex = 0;
-
-  // Global thematic block: every active primitive of every visualization, in
-  // visualization order (viz[0] is front = top of the panel) then primitive
-  // order within each. No separate parent row — each line is a primitive·viz.
+  // Thematic rows: one row per enabled primitive of every shown visualization.
+  // No separate parent row — each line is a primitive·viz.
   const thematicLayers = displayVisualizations.flatMap(
     (viz, vizOrder): Layer[] => {
       const primitiveFilters = getEnabledPrimitiveFilters(viz);
-      const isFacetViz = facetsEnabled && facetVizIds.has(viz.id);
+      const isFacetCollection = facetsEnabled && viz.id === facetBaseVizId;
 
-      let vizLabel: string;
-      if (isFacetViz) {
-        facetIndex += 1;
-        vizLabel = `${m.layers_carte_title()} ${facetIndex} (${viz.name})`;
-      } else {
-        vizLabel = viz.name || m.viz_tab_label({ number: vizOrder + 1 });
-      }
-
-      const vizVisible = isFacetViz || activeVisualizationIds.has(viz.id);
+      const vizLabel = viz.name || m.viz_tab_label({ number: vizOrder + 1 });
+      const vizVisible = isFacetCollection
+        ? true
+        : activeVisualizationIds.has(viz.id);
 
       const vizPrimitiveOrder = (
         viz.primitiveOrder ?? VISUALIZATION_SUBLAYER_ORDER
@@ -921,173 +805,26 @@ function buildLayers(): Layer[] {
     (layer): Layer => ({ ...layer, accentColor: BASEMAP_LAYER_ACCENT_COLOR })
   );
 
-  const foregroundAboveLayers = basemapLayers.filter(
-    (layer) =>
-      layer.basemapRenderGroup === 'foreground' &&
-      !layer.basemapRenderBelowThematic
-  );
-  const foregroundBelowLayers = basemapLayers.filter(
-    (layer) =>
-      layer.basemapRenderGroup === 'foreground' &&
-      layer.basemapRenderBelowThematic
-  );
-  const backgroundLayers = basemapLayers.filter(
-    (layer) => layer.basemapRenderGroup === 'background'
-  );
-
-  const lastMarkerIndex = thematicLayers.reduce(
-    (last, layer, index) => (isMarkerPrimitiveLayer(layer) ? index : last),
-    -1
-  );
-  const thematicWithForegroundBelow = [
-    ...thematicLayers.slice(0, lastMarkerIndex + 1),
-    ...foregroundBelowLayers,
-    ...thematicLayers.slice(lastMarkerIndex + 1)
-  ];
-
-  return withFlatOrder([
-    ...foregroundAboveLayers,
-    ...thematicWithForegroundBelow,
-    ...backgroundLayers
-  ]);
-}
-
-/**
- * Back-projects a reordered flat panel list onto the three render stores.
- *
- * The flat list is the single source the user drags; this re-derives the five
- * ordering dimensions the render path actually consumes. `buildLayers` then
- * re-clamps to the back→thematic→front invariant on the next sync, so an
- * impossible drop (e.g. a background layer dropped between two primitives)
- * snaps back without ever corrupting the GPU stack.
- */
-function backProjectFlatOrder(reordered: Layer[]): void {
-  // Each setter is only called when its own dimension actually changed, so a
-  // drag that only moves a primitive (or a basemap row) never writes the
-  // visualization order, and vice-versa — matching the pre-flatten behaviour
-  // and avoiding parasitic re-renders / saves.
-
-  // 1. Visualization order: first appearance of each parent visualization,
-  //    top→bottom (= front→back). Reversed nowhere — viz[0] stays in front.
-  const seenVizIds = new Set<string>();
-  const orderedVizIds: string[] = [];
-  for (const layer of reordered) {
-    if (
-      layer.kind === 'viz-primitive' &&
-      typeof layer.parentId === 'string' &&
-      !seenVizIds.has(layer.parentId)
-    ) {
-      seenVizIds.add(layer.parentId);
-      orderedVizIds.push(layer.parentId);
-    }
-  }
-  if (orderedVizIds.length > 0) {
-    // When facets are active the displayed visualizations are the generated
-    // facets; their order must flow through `facetsStore.reorderVariables` so
-    // the facet `variables` and `generatedVisualizationIds` stay in lockstep —
-    // never a raw `setVisualizationOrder` (which would desync the collection).
-    if (facetsStore.enabled) {
-      const facetMove = deriveSingleMove(
-        facetsStore.generatedVisualizationIds,
-        orderedVizIds
-      );
-      if (facetMove) {
-        void facetsStore.reorderVariables(facetMove.from, facetMove.to);
-      }
-    } else {
-      const currentVizOrder = visualizationStore.visualizations.map(
-        (v) => v.id
-      );
-      if (!arraysShallowEqual(currentVizOrder, orderedVizIds)) {
-        visualizationStore.setVisualizationOrder(orderedVizIds);
-      }
-    }
-  }
-
-  // 2. Primitive order within each visualization, top→bottom.
-  const primitivesByViz = new Map<string, PrimitiveFilter[]>();
-  for (const layer of reordered) {
-    if (
-      layer.kind === 'viz-primitive' &&
-      typeof layer.parentId === 'string' &&
-      layer.primitive
-    ) {
-      const list = primitivesByViz.get(layer.parentId) ?? [];
-      list.push(layer.primitive);
-      primitivesByViz.set(layer.parentId, list);
-    }
-  }
-  for (const [vizId, primitives] of primitivesByViz) {
-    if (primitives.length === 0) continue;
-    const currentOrder = (
-      visualizationStore.visualizations.find((v) => v.id === vizId)
-        ?.primitiveOrder ?? []
-    ).filter((primitive) => primitives.includes(primitive));
-    if (!arraysShallowEqual(currentOrder, primitives)) {
-      visualizationStore.setPrimitiveFilterOrder(vizId, primitives);
-    }
-  }
-
-  // 3. Basemap render-group order (deduplicated global layers). The store is
-  //    the single source of intra-group order, so this is all that is needed —
-  //    no separate module-level display order to update.
-  const basemapLayers = reordered.filter(
-    (layer) => layer.kind === 'basemap-aux' && layer.basemapLayerId
+  // Single source of truth for stacking: project the live rows onto the
+  // persisted flat order (manual drags win, new rows slot in at their default
+  // position, stale ids drop out). The same projection runs in the render path
+  // (`use-map-layers`) so the panel and the GPU stack stay in lockstep without
+  // this build ever having to write back — opening the panel never dirties the
+  // project, and any row can sit above or below any other.
+  const rows = [...thematicLayers, ...basemapLayers];
+  const merged = mergeLayerOrder(
+    rows,
+    layerOrderStore.order,
+    visualizationStore.visualizations.map((v) => v.id)
   );
 
-  const foreground = basemapLayers
-    .filter((layer) => layer.basemapRenderGroup === 'foreground')
-    .map((layer) => layer.basemapLayerId as BasemapLayerId);
-  const background = basemapLayers
-    .filter((layer) => layer.basemapRenderGroup === 'background')
-    .map((layer) => layer.basemapLayerId as BasemapLayerId);
-  // `setLayerRenderGroupOrder` is idempotent and group-scoped, so it is safe to
-  // call unconditionally — it never touches the visualization order.
-  if (foreground.length > 0) {
-    basemapLayersStore.setLayerRenderGroupOrder('foreground', foreground);
-  }
-  if (background.length > 0) {
-    basemapLayersStore.setLayerRenderGroupOrder('background', background);
-  }
-
-  // 4. Above/below-thematic flag for foreground basemap layers: below when the
-  //    row sits under the last marker (non-polygon) primitive in panel order —
-  //    the same rule `buildLayers` and `getMapLayerRenderOrder` apply.
-  const lastMarkerIndex = reordered.reduce(
-    (last, layer, index) => (isMarkerPrimitiveLayer(layer) ? index : last),
-    -1
+  const rank = new Map(merged.map((id, index) => [id, index] as const));
+  const ordered = [...rows].sort(
+    (a, b) =>
+      (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+      (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER)
   );
-  reordered.forEach((layer, index) => {
-    if (
-      layer.kind === 'basemap-aux' &&
-      layer.basemapRenderGroup === 'foreground' &&
-      typeof layer.basemapLayerId === 'string'
-    ) {
-      basemapLayersStore.setLayerThematicPlacement(
-        layer.basemapLayerId as BasemapLayerId,
-        lastMarkerIndex < 0 || index > lastMarkerIndex
-      );
-    }
-  });
-
-  // 5. Aux-key order for metadata-backed basemap layers (per basemap file).
-  const basemapEntryLayers = reordered.filter(
-    (layer) => layer.kind === 'basemap-aux' && layer.basemapFile
-  );
-  const basemapFile = basemapEntryLayers[0]?.basemapFile;
-  if (basemapFile && basemapEntryLayers.length > 0) {
-    const orderedKeys = basemapEntryLayers.flatMap(
-      (layer) =>
-        layer.basemapLayerKeys ??
-        (layer.basemapLayerKey ? [layer.basemapLayerKey] : [])
-    );
-    basemapAuxLayersStore.setOrder(
-      basemapFile,
-      orderedKeys.filter(
-        (layerKey, index, keys) => keys.indexOf(layerKey) === index
-      )
-    );
-  }
+  return withFlatOrder(ordered);
 }
 
 const { state, actions } = createToolStore<LayersState, LayersActions>(
@@ -1193,11 +930,14 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
         syncFromSources();
       },
       reorderLayers: (fromIndex: number, toIndex: number) => {
-        const reordered = reorderIds([...s.layers], fromIndex, toIndex);
-        if (reordered === s.layers) {
+        // The flat list the user dragged IS the order — persist it verbatim and
+        // rebuild. No back-projection, no clamp: any row can go anywhere.
+        const currentIds = s.layers.map((layer) => layer.id);
+        const nextIds = reorderIds(currentIds, fromIndex, toIndex);
+        if (arraysShallowEqual(currentIds, nextIds)) {
           return;
         }
-        backProjectFlatOrder(reordered);
+        layerOrderStore.setOrder(nextIds);
         syncFromSources();
       },
       duplicateLayer: (id: string): Layer | null => {

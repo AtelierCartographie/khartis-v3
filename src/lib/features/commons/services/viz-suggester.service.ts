@@ -38,6 +38,7 @@ export interface VizSuggestion {
   geometries: SimplifiedGeometryType[];
   columns?: string[];
   score?: number;
+  dataGeometry?: SimplifiedGeometryType;
 }
 
 export interface EnrichedColumn extends ColumnAnalysis {
@@ -272,7 +273,9 @@ const ID_COLUMN_KEYWORDS = [
 ] as const;
 const MAX_TEXT_POINT_FEATURES = 150;
 
-function simplifyGeometryType(geomType: GeometryType): SimplifiedGeometryType {
+export function simplifyGeometryType(
+  geomType: GeometryType
+): SimplifiedGeometryType {
   if (geomType.includes('Point')) return 'point';
   if (geomType.includes('Line')) return 'line';
   if (geomType.includes('Polygon')) return 'polygon';

@@ -119,7 +119,7 @@ describe('[S04] suggestProjectionsForBbox — Europe vs France disambiguation', 
     expect(result?.generic.length).toBeGreaterThan(0);
   });
 
-  it('does not suggest orthographic for the full NUTS-2 bbox', () => {
+  it('suggests orthographic and builds it (orthographic is supported)', () => {
     const result = suggestProjectionsForBbox([-63.09, -21.39, 55.84, 71.12]);
     expect(result).not.toBeNull();
 
@@ -128,17 +128,13 @@ describe('[S04] suggestProjectionsForBbox — Europe vs France disambiguation', 
       ...(result?.generic ?? [])
     ];
 
-    expect(suggestions.map((suggestion) => suggestion.id)).not.toContain(
-      'orthographic'
+    const orthographic = suggestions.find(
+      (suggestion) => suggestion.id === 'orthographic'
     );
-    expect(
-      suggestions.map((suggestion) => suggestion.d3Config?.projection)
-    ).not.toContain('geoOrthographic');
-    expect(
-      suggestions.some((suggestion) =>
-        /\+proj=ortho\b/i.test(suggestion.proj4String ?? '')
-      )
-    ).toBe(false);
+    expect(orthographic).toBeTruthy();
+    if (orthographic) {
+      expect(buildProjectionFromSuggestion(orthographic)).not.toBeNull();
+    }
   });
 });
 
@@ -225,7 +221,7 @@ describe('[S06] buildProjectionFromSuggestion — proj4 fallback contract', () =
     expect(result?.projection.rotate()[1]).toBeCloseTo(-24.87);
   });
 
-  it('rejects orthographic suggestions', () => {
+  it('builds orthographic suggestions via the d3 backend', () => {
     const suggestion: ProjectionSuggestion = {
       id: 'orthographic',
       name: 'Orthographic',
@@ -239,6 +235,10 @@ describe('[S06] buildProjectionFromSuggestion — proj4 fallback contract', () =
       }
     };
 
-    expect(buildProjectionFromSuggestion(suggestion)).toBeNull();
+    const result = buildProjectionFromSuggestion(suggestion);
+
+    expect(result).not.toBeNull();
+    expect(result?.source).toBe('d3');
+    expect(result?.projection([0, 0])?.every(Number.isFinite)).toBe(true);
   });
 });

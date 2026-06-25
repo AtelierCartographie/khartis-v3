@@ -39,6 +39,7 @@ import {
   DEFAULT_PROJECTION_SUFFIX
 } from '../constants';
 import { GEOJSON_TYPE } from '$lib/features/commons/constants';
+import { buildBasemapSubLayerId } from '$lib/features/map/utils/layer-panel-row.utils';
 import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
 import {
   basemapLayersStore,
@@ -2067,6 +2068,10 @@ export interface MetadataLayerEntry {
   style: string | null;
   type: BasemapLayerType;
   file: string;
+  // Panel row id this metadata layer's deck layers belong to (computed by the
+  // caller via `resolveMetadataPanelRowId`); lets the render map a per-key
+  // LIMIT/LAND layer back to its individual panel row.
+  panelRowId?: string;
   // Per-layer style override (keyed by basemap file + layer file in the aux
   // store). Lets two land layers sharing the legacy `terre` config — e.g. the
   // NUTS territory and the surrounding land of a NUTS basemap — be coloured and
@@ -2143,7 +2148,8 @@ function createLandLayers(
   config: TerreLayerConfig,
   ctx: BasemapLayerContext,
   stylePresets: StylePresets | null | undefined,
-  options?: { suppressStroke?: boolean }
+  options?: { suppressStroke?: boolean },
+  rowIds?: Map<string, string>
 ): Layer<DeckDataRow>[] {
   const layers: Layer<DeckDataRow>[] = [];
 
@@ -2157,9 +2163,17 @@ function createLandLayers(
       projectionSuffix: `${ctx.projectionSuffix || DEFAULT_PROJECTION_SUFFIX}-land-${i}`
     };
 
-    layers.push(
-      ...createTerreLayers(entry.table, landConfig, landCtx, options)
+    const created = createTerreLayers(
+      entry.table,
+      landConfig,
+      landCtx,
+      options
     );
+    if (rowIds && entry.panelRowId) {
+      for (const layer of created)
+        rowIds.set(String(layer.id), entry.panelRowId);
+    }
+    layers.push(...created);
   }
 
   return layers;
@@ -2169,14 +2183,16 @@ function createMetadataLimitLayers(
   entries: MetadataLayerEntry[],
   ctx: BasemapLayerContext,
   config: FrontieresLayerConfig,
-  stylePresets: StylePresets | null | undefined
+  stylePresets: StylePresets | null | undefined,
+  rowIds?: Map<string, string>
 ): Layer<DeckDataRow>[] {
   return createMetadataLineLayers(
     entries,
     ctx,
     config,
     DeckLayerId.BASEMAP_META_LIMIT,
-    stylePresets
+    stylePresets,
+    rowIds
   );
 }
 
@@ -2252,7 +2268,8 @@ function createMetadataLineLayers(
   ctx: BasemapLayerContext,
   config: StyledMetadataLineConfig,
   idPrefix: DeckLayerId,
-  stylePresets?: StylePresets | null
+  stylePresets?: StylePresets | null,
+  rowIds?: Map<string, string>
 ): Layer<DeckDataRow>[] {
   if (entries.length === 0) return [];
 
@@ -2282,6 +2299,9 @@ function createMetadataLineLayers(
       idPrefix,
       `${ctx.projectionSuffix || DEFAULT_PROJECTION_SUFFIX}-${i}`
     );
+    if (rowIds && entry.panelRowId) {
+      rowIds.set(layerId, entry.panelRowId);
+    }
     const preferProjectedGeoJsonFallback = shouldPreferProjectedGeoJsonFallback(
       geometryInfo,
       ctx.projection
@@ -2407,6 +2427,10 @@ export interface BasemapLayerGroups {
   foreground: Layer<DeckDataRow>[];
 
   foregroundBelowThematic: Layer<DeckDataRow>[];
+
+  // Maps each produced deck layer id to the panel row it belongs to, so the
+  // render can order the whole pool by the flat layer order.
+  rowIdByLayerId: Map<string, string>;
 }
 
 export function createBasemapLayers(
@@ -2417,6 +2441,10 @@ export function createBasemapLayers(
   const backgroundGroups: Layer<DeckDataRow>[][] = [];
   const foregroundBelowGroups: Layer<DeckDataRow>[][] = [];
   const foregroundAboveGroups: Layer<DeckDataRow>[][] = [];
+  // Per-config rows default to `basemap::<configId>`; per-key metadata layers
+  // (LAND/LIMIT) get their precise per-file row from the entry's `panelRowId`
+  // via the creators, which set it before this fallback runs.
+  const rowIdByLayerId = new Map<string, string>();
 
   const metaLayers = additionalData?.metadataLayers ?? [];
   const availableMetadataLayerTypes = new Set(
@@ -2453,6 +2481,8 @@ export function createBasemapLayers(
           : config.renderBelowThematic
             ? foregroundBelowGroups
             : foregroundAboveGroups;
+      const groupStart = targetGroups.length;
+      const configRowId = buildBasemapSubLayerId(config.id);
 
       switch (config.id) {
         case BASEMAP_LAYER_ID.MERS: {
@@ -2473,7 +2503,8 @@ export function createBasemapLayers(
               terreConfig,
               ctx,
               additionalData?.stylePresets,
-              terreOptions
+              terreOptions,
+              rowIdByLayerId
             );
             if (landLayers.length > 0) {
               targetGroups.push(landLayers);
@@ -2527,7 +2558,8 @@ export function createBasemapLayers(
               limitEntries,
               ctx,
               config as FrontieresLayerConfig,
-              additionalData?.stylePresets
+              additionalData?.stylePresets,
+              rowIdByLayerId
             );
             if (limitLayers.length > 0) {
               targetGroups.push(limitLayers);
@@ -2621,6 +2653,18 @@ export function createBasemapLayers(
           break;
         }
       }
+
+      // Default each layer this config produced to its `basemap::<configId>`
+      // row. Per-key metadata layers already recorded a more specific row via
+      // the creators above, so `has` guards against overwriting them.
+      for (let g = groupStart; g < targetGroups.length; g += 1) {
+        for (const layer of targetGroups[g]) {
+          const id = String(layer.id);
+          if (!rowIdByLayerId.has(id)) {
+            rowIdByLayerId.set(id, configRowId);
+          }
+        }
+      }
     } catch (error) {
       logger.error(
         'Failed to create catalog basemap layer group',
@@ -2636,6 +2680,7 @@ export function createBasemapLayers(
   return {
     background: [...backgroundGroups].reverse().flat(),
     foreground: [...foregroundBelowThematic, ...foregroundAboveThematic],
-    foregroundBelowThematic
+    foregroundBelowThematic,
+    rowIdByLayerId
   };
 }

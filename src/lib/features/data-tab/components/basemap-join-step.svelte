@@ -53,7 +53,7 @@
   import { resolveNextBasemapSelectionId } from '../utils/basemap-selection.utils';
   import { resolveDatasetIdForOrchestrator } from '../utils/dataset-resolution.utils';
   import { persistTabularSourceSnapshot } from '../services/tabular-source-snapshot.service';
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import {
     dataTabActions,
     dataTabState
@@ -135,7 +135,6 @@
   const DATASET_READY_RETRY_DELAY_MS = 200;
   const DATASET_READY_MAX_RETRIES = 15;
   const MAX_EAGER_BASEMAP_ALIAS_VALUES = 5000;
-
   const hasGPSCoordinates = $derived.by(() => {
     if (!selectedDataset) return false;
     const columns = selectedDataset.columns || [];
@@ -1511,6 +1510,8 @@
 
   $effect(() => {
     const controller = new AbortController();
+    // Reactive dep: restore the active dataset's persisted basemap on tab switch too, not only on mount (else blank map).
+    void getDatasetIdentity(selectedDataset);
 
     async function initializeBasemapCatalog() {
       const stepIndex = basemapStepIndex;
@@ -1713,10 +1714,22 @@
   });
 
   $effect(() => {
+    const datasetSnapshot = selectedDataset;
+    const columnsKey =
+      datasetSnapshot?.columns
+        ?.map((column) => `${column.name}:${column.type}`)
+        .join('|') ?? '';
+
     void duckDBDatasetsVersion;
     void dataTabState.geolocation.linkedVariableName;
+    void getDatasetIdentity(datasetSnapshot);
+    void datasetSnapshot?.tableName;
+    void datasetSnapshot?.rowCount;
+    void datasetSnapshot?.geometry;
+    void columnsKey;
+
     if (selectedDataset) {
-      void loadSuggestions();
+      void untrack(() => loadSuggestions());
     } else {
       abortLoadSuggestions();
     }

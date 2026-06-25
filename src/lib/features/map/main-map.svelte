@@ -12,7 +12,11 @@
   import { fade } from 'svelte/transition';
   import { datasetsStore } from '../commons/stores/datasets.store.svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
-  import { isWgs84LikeCrs } from './utils/dataset-crs.utils';
+  import {
+    isWgs84LikeCrs,
+    shouldReprojectDatasetForActiveProjection
+  } from './utils/dataset-crs.utils';
+  import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
   import { globalActions, globalState } from '../commons/stores/global.svelte';
   import { ToolbarStep } from '../commons/types/global';
   import { LogCategory, logger } from '../commons/utils/logger';
@@ -139,6 +143,23 @@
       .filter((value): value is string => value !== null)
       .join('|')
   );
+  // Reload signature for the orthographic reproject opt-in: changes only when a
+  // non-WGS84 dataset is displayed AND the user toggles a manual projection, so
+  // the dataset's render table is re-fetched (reprojected to WGS84) or restored.
+  const projectionReprojectSignature = $derived.by(() => {
+    const hasNonWgs84Dataset = mapDisplayDatasets.some(
+      (dataset) =>
+        Boolean(dataset.geometry?.crs) && !isWgs84LikeCrs(dataset.geometry?.crs)
+    );
+    if (!hasNonWgs84Dataset) {
+      return 'none';
+    }
+    const projState = getProjectionState();
+    return projState.overrideActive === true &&
+      projState.overrideSource === 'manual'
+      ? 'projected'
+      : 'native';
+  });
   const facetsEnabled = $derived(facetsStore.enabled);
   const facetsLayout = $derived(facetsStore.layout);
   const facetVisualizations = $derived(facetsStore.facetVisualizations);
@@ -435,11 +456,24 @@
         }
 
         if (tableName) {
-          const shouldReprojectForTiledBasemap =
-            usesTiledBasemap &&
+          const projState = getProjectionState();
+          const hasManualProjectionOverride =
+            projState.overrideActive === true &&
+            projState.overrideSource === 'manual';
+          const isNonWgs84 =
             Boolean(dataset.geometry?.crs) &&
             !isWgs84LikeCrs(dataset.geometry?.crs);
-          const arrowTable = shouldReprojectForTiledBasemap
+          // Reproject to WGS84 for the tiled (MapLibre) engine, or — in the
+          // orthographic engine — when the user applies a d3 projection to a
+          // non-WGS84 dataset (so it can be projected like a WGS84 one).
+          const shouldReprojectToWgs84 =
+            isNonWgs84 &&
+            (usesTiledBasemap ||
+              shouldReprojectDatasetForActiveProjection(
+                dataset.geometry?.crs,
+                hasManualProjectionOverride
+              ));
+          const arrowTable = shouldReprojectToWgs84
             ? await duckDBOrchestrator.getArrowTableReprojectedToWGS84(
                 tableName
               )
@@ -836,6 +870,7 @@
     void duckDBDatasetsVersion;
     void densityReloadSignature;
     void basemapService.simplificationVersion;
+    void projectionReprojectSignature;
     const currentMapDisplayDatasets = mapDisplayDatasets;
 
     if (isInitializing) {

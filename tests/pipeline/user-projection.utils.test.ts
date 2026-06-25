@@ -157,16 +157,16 @@ describe('user projection utils', () => {
     expect(projected.every(Number.isFinite)).toBe(true);
   });
 
-  it('preserves the native Atlantis rotation when controls are neutral', () => {
+  it('reproduces the native Atlantis rotation from its seeded orientation', () => {
     const atlantis = asGeoProjection(
       resolveUserProjectionOverride({
         state: {
           selected: 'atlantis',
           overrideActive: true,
           customCode: undefined,
-          center: undefined,
-          longitude: 0,
-          latitude: 0,
+          center: [-30, 45],
+          longitude: -30,
+          latitude: 45,
           rotation: 0
         },
         fitBbox: [-24.6, 34.8, 45.8, 71.2],
@@ -198,16 +198,16 @@ describe('user projection utils', () => {
     expect(atlantis([0, 0])).not.toEqual(mollweide([0, 0]));
   });
 
-  it('applies user rotation relative to the projection native rotation', () => {
+  it('adds user rotation as a planar angle on top of the Atlantis orientation', () => {
     const projection = asGeoProjection(
       resolveUserProjectionOverride({
         state: {
           selected: 'atlantis',
           overrideActive: true,
           customCode: undefined,
-          center: undefined,
-          longitude: 0,
-          latitude: 0,
+          center: [-30, 45],
+          longitude: -30,
+          latitude: 45,
           rotation: 15
         },
         fitBbox: [-24.6, 34.8, 45.8, 71.2],
@@ -333,7 +333,7 @@ describe('user projection utils', () => {
     expect(shiftedPoint).not.toEqual(basePoint);
   });
 
-  it('preserves d3 suggestion rotation when proj4 fallback is used', () => {
+  it('reproduces a d3 suggestion rotation from its seeded orientation', () => {
     const projection = asGeoProjection(
       resolveUserProjectionOverride({
         state: {
@@ -341,9 +341,9 @@ describe('user projection utils', () => {
           overrideActive: true,
           customCode: undefined,
           suggestionD3Config: europeLaeaD3Config,
-          center: undefined,
-          longitude: 0,
-          latitude: 0,
+          center: [10, 52],
+          longitude: 10,
+          latitude: 52,
           rotation: 0
         },
         fitBbox: [-24.6, 34.8, 45.8, 71.2],
@@ -357,7 +357,7 @@ describe('user projection utils', () => {
     expect(projection.rotate()[1]).toBeCloseTo(-52);
   });
 
-  it('applies user rotation relative to a d3 suggestion rotation', () => {
+  it('adds user rotation as a planar angle on top of a d3 suggestion rotation', () => {
     const projection = asGeoProjection(
       resolveUserProjectionOverride({
         state: {
@@ -365,9 +365,9 @@ describe('user projection utils', () => {
           overrideActive: true,
           customCode: undefined,
           suggestionD3Config: europeLaeaD3Config,
-          center: undefined,
-          longitude: 0,
-          latitude: 0,
+          center: [10, 52],
+          longitude: 10,
+          latitude: 52,
           rotation: 15
         },
         fitBbox: [-24.6, 34.8, 45.8, 71.2],

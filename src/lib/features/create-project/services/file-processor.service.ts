@@ -16,7 +16,6 @@ type ProcessFileResult = Awaited<ReturnType<typeof dataPipeline.processFile>>;
 
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
-import { DataValidator } from '$lib/features/commons/utils/validation.utils';
 import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
 
@@ -89,7 +88,6 @@ function getMimeTypeFromFileType(fileType: FileType): string {
   }
 }
 
-const ERROR_INVALID_JSON_FORMAT = () => m.error_invalid_json_format();
 const WARNING_NO_GEO_COLUMN_TITLE = () => m.warning_no_geo_column_title();
 const WARNING_NO_GEO_COLUMN_MESSAGE = () => m.warning_no_geo_column_message();
 const WARNING_DUPLICATE_ROWS_TITLE = () => m.warning_duplicate_rows_title();
@@ -135,19 +133,236 @@ import {
 } from '../utils/file-processor.utils';
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import { FILE_EXTENSIONS, MIME } from '$lib/features/commons/constants';
-import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import {
+  EXCLUDED_COLUMNS,
+  INTERNAL_COLUMN
+} from '$lib/features/commons/constants/data.constants';
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import { FileType } from '$lib/features/commons/types/create-project.types';
-import { DeepDataValidator } from '$lib/features/commons/utils/deep-validator.utils';
-import { getFileExtension } from '$lib/features/commons/utils/file.utils';
 import {
-  readFileContent,
-  validateGeospatialFile
-} from '$lib/features/commons/utils/file-import.utils';
+  DeepDataValidator,
+  type DataAnalysisResult
+} from '$lib/features/commons/utils/deep-validator.utils';
+import { sanitizePreparedGeoJSON } from '$lib/features/commons/utils/persisted-geojson.utils';
+import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import { getFileExtension } from '$lib/features/commons/utils/file.utils';
+import { readFileContent } from '$lib/features/commons/utils/file-import.utils';
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 
 interface FileProcessor {
   process: (uploadedFile: UploadedFile, file: File) => Promise<void>;
+}
+
+const PREPARED_GEOJSON_GEOMETRY_COLUMN = '__khartis_geometry_json';
+
+function withGeometryDetection(
+  deepAnalysis: DataAnalysisResult,
+  geometry: DatasetResult['geometry']
+): DataAnalysisResult {
+  if (!geometry) {
+    return deepAnalysis;
+  }
+
+  return {
+    ...deepAnalysis,
+    geoDetection: {
+      hasGeoColumns: true,
+      geoColumns: [
+        {
+          columnName: geometry.columnName ?? INTERNAL_COLUMN.GEOM,
+          type: 'unknown',
+          confidence: 1,
+          index: 0
+        }
+      ],
+      warnings: []
+    }
+  };
+}
+
+function toPreparedGeoJSONValue(value: unknown): unknown {
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value ?? null;
+  }
+
+  if (typeof value === 'bigint') {
+    return Number.isSafeInteger(Number(value)) ? Number(value) : String(value);
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => toPreparedGeoJSONValue(item));
+  }
+
+  if (typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        toPreparedGeoJSONValue(item)
+      ])
+    );
+  }
+
+  return String(value);
+}
+
+function parsePreparedGeometry(geometryJson: unknown): unknown {
+  if (typeof geometryJson !== 'string') {
+    return null;
+  }
+
+  try {
+    return JSON.parse(geometryJson);
+  } catch {
+    return null;
+  }
+}
+
+async function buildPreparedGeoJSONFromDuckTable(
+  duck: typeof Duck,
+  tableName: string,
+  geometryColumnName: string,
+  propertyColumnNames: string[]
+): Promise<string> {
+  const escapedTableName = escapeIdentifier(tableName);
+  const escapedGeometryColumn = escapeIdentifier(geometryColumnName);
+  const propertySelect =
+    propertyColumnNames.length > 0
+      ? `${propertyColumnNames
+          .map((name) => `"${escapeIdentifier(name)}"`)
+          .join(', ')},`
+      : '';
+
+  const rows = (await duck.query(
+    `SELECT ${propertySelect}
+            ST_AsGeoJSON("${escapedGeometryColumn}"::GEOMETRY) AS "${PREPARED_GEOJSON_GEOMETRY_COLUMN}"
+     FROM "${escapedTableName}"`,
+    { format: 'array' }
+  )) as Array<Record<string, unknown>>;
+
+  const serialized = JSON.stringify({
+    type: 'FeatureCollection',
+    features: rows.map((row) => ({
+      type: 'Feature',
+      geometry: parsePreparedGeometry(row[PREPARED_GEOJSON_GEOMETRY_COLUMN]),
+      properties: Object.fromEntries(
+        propertyColumnNames.map((columnName) => [
+          columnName,
+          toPreparedGeoJSONValue(row[columnName])
+        ])
+      )
+    }))
+  });
+
+  return sanitizePreparedGeoJSON(serialized) ?? serialized;
+}
+
+async function updateFileFromDuckDBDataset(
+  callbacks: ProcessingCallbacks,
+  uploadedFile: UploadedFile,
+  dataset: DatasetResult,
+  fileContent: UploadedFile['content'],
+  duck: typeof Duck
+): Promise<void> {
+  const { tableName, columns, rowCount, geometry } = dataset;
+  const headers = columns.map((col) => col.name);
+
+  callbacks.onProgress(uploadedFile.id, 50);
+
+  const statistics = buildColumnStatistics(columns as ColumnInfo[], rowCount);
+
+  const sampleData = (await duck.query(
+    `SELECT * FROM "${tableName}" LIMIT 100`,
+    { format: 'array' }
+  )) as Array<Record<string, unknown>>;
+
+  const tabularData = convertRowsToTabular(sampleData);
+
+  callbacks.onProgress(uploadedFile.id, 80);
+
+  const geometryColumnName = geometry?.columnName ?? INTERNAL_COLUMN.GEOM;
+  const preparedGeoJSON = geometry
+    ? await buildPreparedGeoJSONFromDuckTable(
+        duck,
+        tableName,
+        geometryColumnName,
+        headers.filter(
+          (header) =>
+            header !== geometryColumnName &&
+            !EXCLUDED_COLUMNS.includes(
+              header as (typeof EXCLUDED_COLUMNS)[number]
+            )
+        )
+      )
+    : undefined;
+
+  callbacks.onDataUpdate(uploadedFile.id, {
+    parsedData: tabularData,
+    statistics,
+    content: fileContent,
+    duckdbTableName: tableName,
+    ...(preparedGeoJSON ? { preparedGeoJSON } : {})
+  });
+
+  const dataMatrix = createDataMatrix(sampleData, headers);
+
+  const deepAnalysis = withGeometryDetection(
+    await DeepDataValidator.analyzeDataContent(headers, dataMatrix, {
+      sampleSize: Math.min(100, dataMatrix.length)
+    }),
+    geometry
+  );
+
+  callbacks.onDataUpdate(uploadedFile.id, { deepAnalysis });
+  callbacks.onProgress(uploadedFile.id, 100);
+  callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
+
+  warnIfKmlExtendedDataDropped(uploadedFile, fileContent);
+}
+
+// The DuckDB spatial GDAL build ships the basic KML driver (no LIBKML), so a KML
+// <ExtendedData>/<SchemaData> attribute set is silently dropped to Name/Description.
+// Warn the user when the source actually carried extended attributes.
+function warnIfKmlExtendedDataDropped(
+  uploadedFile: UploadedFile,
+  fileContent: UploadedFile['content']
+): void {
+  if (uploadedFile.fileType !== FileType.KML) return;
+  if (typeof fileContent !== 'string') return;
+  if (!/<(?:ExtendedData|SchemaData)\b/.test(fileContent)) return;
+  showWarning(
+    m.warning_kml_extended_data_title(),
+    m.warning_kml_extended_data_message()
+  );
+}
+
+async function readDuckDBGeofileContent(
+  callbacks: ProcessingCallbacks,
+  uploadedFile: UploadedFile,
+  file: File
+): Promise<UploadedFile['content']> {
+  callbacks.onProgress(uploadedFile.id, 20);
+
+  const shouldReadAsText =
+    uploadedFile.fileType === FileType.GEOJSON ||
+    uploadedFile.fileType === FileType.KML ||
+    uploadedFile.fileType === FileType.GPX;
+
+  const content = shouldReadAsText
+    ? await file.text()
+    : await file.arrayBuffer();
+  callbacks.onProgress(uploadedFile.id, 40);
+
+  return content;
 }
 
 async function validateAsync(
@@ -291,59 +506,7 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
   return { process };
 }
 
-function createGeoJsonProcessor(callbacks: ProcessingCallbacks): FileProcessor {
-  async function process(
-    uploadedFile: UploadedFile,
-    file: File
-  ): Promise<void> {
-    if (!(await validateAsync(callbacks, uploadedFile, file))) return;
-
-    const content = await readFileContent(file, (progress) => {
-      callbacks.onProgress(uploadedFile.id, progress);
-    });
-
-    try {
-      const parsedData = JSON.parse(content as string);
-
-      const geoValidation = DataValidator.validateGeoData(parsedData);
-      if (!geoValidation.isValid) {
-        callbacks.onStatusChange(
-          uploadedFile.id,
-          FileStatus.ERROR,
-          geoValidation.errors.join(', ')
-        );
-        return;
-      }
-
-      callbacks.onDataUpdate(uploadedFile.id, {
-        content,
-        parsedData
-      });
-
-      const spatialValidation = await validateGeospatialFile(content as string);
-      if (!spatialValidation.isValid) {
-        callbacks.onStatusChange(
-          uploadedFile.id,
-          FileStatus.ERROR,
-          spatialValidation.errors[0]
-        );
-        return;
-      }
-
-      callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
-    } catch {
-      callbacks.onStatusChange(
-        uploadedFile.id,
-        FileStatus.ERROR,
-        ERROR_INVALID_JSON_FORMAT()
-      );
-    }
-  }
-
-  return { process };
-}
-
-function createGeoPackageProcessor(
+function createDuckDBGeofileProcessor(
   callbacks: ProcessingCallbacks
 ): FileProcessor {
   async function process(
@@ -352,35 +515,36 @@ function createGeoPackageProcessor(
   ): Promise<void> {
     if (!(await validateAsync(callbacks, uploadedFile, file))) return;
 
-    const content = await readFileContent(file, (progress) => {
-      callbacks.onProgress(uploadedFile.id, progress);
-    });
+    const content = await readDuckDBGeofileContent(
+      callbacks,
+      uploadedFile,
+      file
+    );
 
-    const dataset = (await dataPipeline.processFile(file)) as DatasetResult;
-    const { tableName } = dataset;
+    const result = await dataPipeline.processUploadedFile(uploadedFile, file);
 
-    const sampleData = (await Duck.query(
-      `SELECT * FROM "${tableName}" LIMIT 100`,
-      { format: 'array' }
-    )) as Array<Record<string, unknown>>;
-
-    const tabularData = convertRowsToTabular(sampleData);
-
-    callbacks.onDataUpdate(uploadedFile.id, {
+    await updateFileFromDuckDBDataset(
+      callbacks,
+      uploadedFile,
+      result as DatasetResult,
       content,
-      parsedData: tabularData
-    });
-
-    callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
+      Duck
+    );
   }
 
   return { process };
 }
 
+function createGeoPackageProcessor(
+  callbacks: ProcessingCallbacks
+): FileProcessor {
+  return createDuckDBGeofileProcessor(callbacks);
+}
+
 function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
   async function processSingleDataset(
     uploadedFile: UploadedFile,
-    dataset: ProcessFileResult & {
+    dataset: DatasetResult & {
       tableName: string;
       columns: Array<{
         name: string;
@@ -432,15 +596,17 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     callbacks.onDataUpdate(uploadedFile.id, {
       parsedData: tabularData,
       statistics,
-      content: fileContent
+      content: fileContent,
+      duckdbTableName: tableName
     });
 
     const dataMatrix = createDataMatrix(sampleData, headers);
 
-    const deepAnalysis = await DeepDataValidator.analyzeDataContent(
-      headers,
-      dataMatrix,
-      { sampleSize: Math.min(100, dataMatrix.length) }
+    const deepAnalysis = withGeometryDetection(
+      await DeepDataValidator.analyzeDataContent(headers, dataMatrix, {
+        sampleSize: Math.min(100, dataMatrix.length)
+      }),
+      dataset.geometry
     );
 
     callbacks.onDataUpdate(uploadedFile.id, { deepAnalysis });
@@ -596,15 +762,19 @@ function getProcessor(
     return createCsvProcessor(callbacks);
   }
 
-  if (fileType === FileType.GEOJSON) {
-    return createGeoJsonProcessor(callbacks);
+  if (
+    fileType === FileType.GEOJSON ||
+    fileType === FileType.KML ||
+    fileType === FileType.GPX
+  ) {
+    return createDuckDBGeofileProcessor(callbacks);
   }
 
   if (fileType === FileType.GEOPACKAGE) {
     return createGeoPackageProcessor(callbacks);
   }
 
-  if (fileType === FileType.ZIP) {
+  if (fileType === FileType.ZIP || fileType === FileType.KMZ) {
     return createZipProcessor(callbacks);
   }
 

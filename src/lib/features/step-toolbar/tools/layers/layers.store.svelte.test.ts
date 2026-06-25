@@ -243,6 +243,7 @@ import {
   layersState
 } from './layers.store.svelte';
 import type { Layer } from '../../types/layers.types';
+import { layerOrderStore } from './layer-order.store.svelte';
 import {
   SEPIA_MIXTE_COLORS,
   VIF_MIXTE_COLORS
@@ -385,6 +386,7 @@ describe('layers color helpers', () => {
     mockFacetsStore.baseVisualizationId = null;
     mockFacetsStore.generatedVisualizationIds = [];
     resetBasemapLayerMocks();
+    layerOrderStore.reset();
   });
 
   it('uses the classification palette before a white outline for choropleths', () => {
@@ -464,6 +466,7 @@ describe('layers store flattened model', () => {
     mockFacetsStore.baseVisualizationId = null;
     mockFacetsStore.generatedVisualizationIds = [];
     resetBasemapLayerMocks();
+    layerOrderStore.reset();
   });
 
   it('produces a flat list with no standalone visualization parent rows', () => {
@@ -573,26 +576,23 @@ describe('layers store flattened model', () => {
     );
   });
 
-  it('reorders Textes among the other primitive rows via setPrimitiveFilterOrder', () => {
+  it('persists a primitive drag as a flat order, not through the visualization primitiveOrder', () => {
     const visualization = createVisualization();
     mockVisualizationStore.visualizations = [visualization];
     mockVisualizationStore.activeVisualizations = [visualization];
 
     layersActions.syncWithVisualizations();
-    layersActions.reorderLayers(
-      indexOf('viz-1::text'),
-      indexOf('viz-1::point')
-    );
+    // Drag Polygones (default bottom of the band) to the very top — impossible
+    // under the old five-dimension clamp, trivial with the flat order.
+    layersActions.reorderLayers(indexOf('viz-1::polygon'), 0);
 
-    expect(mockVisualizationStore.setPrimitiveFilterOrder).toHaveBeenCalledWith(
-      'viz-1',
-      [
-        PrimitiveFilterType.TEXT,
-        PrimitiveFilterType.POINT,
-        PrimitiveFilterType.LINE,
-        PrimitiveFilterType.POLYGON
-      ]
-    );
+    expect(flat()[0].id).toBe('viz-1::polygon');
+    // The flat order is the single source of truth: no back-projection onto the
+    // per-visualization primitiveOrder or the visualization list.
+    expect(
+      mockVisualizationStore.setPrimitiveFilterOrder
+    ).not.toHaveBeenCalled();
+    expect(mockVisualizationStore.setVisualizationOrder).not.toHaveBeenCalled();
   });
 
   it('renames a visualization addressed by id through the dedicated immediate path', () => {
@@ -634,7 +634,7 @@ describe('layers store flattened model', () => {
     expect(mockVisualizationStore.removeVisualization).not.toHaveBeenCalled();
   });
 
-  it('reorders visualizations when one visualization block is dragged ahead of another', () => {
+  it('persists a cross-visualization drag as a flat z-order without reordering the visualizations (tabs stay put)', () => {
     const viz1 = createVisualization({ id: 'viz-1', name: 'Viz 1' });
     const viz2 = createVisualization({ id: 'viz-2', name: 'Viz 2' });
 
@@ -642,15 +642,12 @@ describe('layers store flattened model', () => {
     mockVisualizationStore.activeVisualizations = [viz1, viz2];
 
     layersActions.syncWithVisualizations();
-    layersActions.reorderLayers(
-      indexOf('viz-2::point'),
-      indexOf('viz-1::point')
-    );
+    layersActions.reorderLayers(indexOf('viz-1::polygon'), 0);
 
-    expect(mockVisualizationStore.setVisualizationOrder).toHaveBeenCalledWith([
-      'viz-2',
-      'viz-1'
-    ]);
+    expect(flat()[0].id).toBe('viz-1::polygon');
+    // Z-order is decoupled from the visualization (tab) order: dragging a layer
+    // never reorders the visualization list anymore.
+    expect(mockVisualizationStore.setVisualizationOrder).not.toHaveBeenCalled();
   });
 
   it('duplicates a visualization addressed by id and returns one of its primitive rows', () => {
@@ -933,40 +930,7 @@ describe('layers store flattened model', () => {
     );
   });
 
-  it('moves a foreground basemap layer above the thematic block when dragged above the primitives', () => {
-    const visualization = createVisualization({ id: 'viz-place-above' });
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-    mockBasemapStyleStore.referenceBasemapId = 'world';
-    mockBasemapService.currentMetadata = { file: 'world', layers: [] };
-
-    layersActions.syncWithVisualizations();
-    layersActions.reorderLayers(indexOf('basemap::equateur'), 0);
-
-    expect(
-      mockBasemapLayersStore.setLayerThematicPlacement
-    ).toHaveBeenCalledWith('equateur', false);
-  });
-
-  it('keeps a foreground basemap layer below the thematic block when it stays under the primitives', () => {
-    const visualization = createVisualization({ id: 'viz-place-below' });
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-    mockBasemapStyleStore.referenceBasemapId = 'world';
-    mockBasemapService.currentMetadata = { file: 'world', layers: [] };
-
-    layersActions.syncWithVisualizations();
-    layersActions.reorderLayers(
-      indexOf('basemap::sphere'),
-      indexOf('basemap::equateur')
-    );
-
-    expect(
-      mockBasemapLayersStore.setLayerThematicPlacement
-    ).toHaveBeenCalledWith('sphere', true);
-  });
-
-  it('reorders basemap rows inside their render groups', () => {
+  it('moves a background basemap above the whole thematic block as a flat order, with no render-group back-projection', () => {
     const visualization = createVisualization();
     mockVisualizationStore.visualizations = [visualization];
     mockVisualizationStore.activeVisualizations = [visualization];
@@ -974,15 +938,37 @@ describe('layers store flattened model', () => {
     mockBasemapService.currentMetadata = { file: 'world', layers: [] };
 
     layersActions.syncWithVisualizations();
-    layersActions.reorderLayers(
-      indexOf('basemap::sphere'),
-      indexOf('basemap::equateur')
-    );
+    // Lift the sea (a background layer) above every primitive — previously
+    // impossible (background was clamped under thematic); now a free drag.
+    layersActions.reorderLayers(indexOf('basemap::mers'), 0);
 
+    expect(flat()[0].id).toBe('basemap::mers');
+    expect(
+      mockBasemapLayersStore.setLayerThematicPlacement
+    ).not.toHaveBeenCalled();
     expect(
       mockBasemapLayersStore.setLayerRenderGroupOrder
-    ).toHaveBeenCalledWith('foreground', ['sphere', 'equateur', 'meridiens']);
+    ).not.toHaveBeenCalled();
     expect(mockVisualizationStore.setVisualizationOrder).not.toHaveBeenCalled();
+  });
+
+  it('reorders foreground basemap rows freely without render-group / thematic-placement back-projection', () => {
+    const visualization = createVisualization();
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+    mockBasemapStyleStore.referenceBasemapId = 'world';
+    mockBasemapService.currentMetadata = { file: 'world', layers: [] };
+
+    layersActions.syncWithVisualizations();
+    layersActions.reorderLayers(indexOf('basemap::sphere'), 0);
+
+    expect(flat()[0].id).toBe('basemap::sphere');
+    expect(
+      mockBasemapLayersStore.setLayerRenderGroupOrder
+    ).not.toHaveBeenCalled();
+    expect(
+      mockBasemapLayersStore.setLayerThematicPlacement
+    ).not.toHaveBeenCalled();
   });
 
   it('exposes each limit metadata layer as its own independent row', () => {
@@ -1070,7 +1056,7 @@ describe('layers store flattened model', () => {
     );
   });
 
-  it('builds facet layers when facets mode is enabled', () => {
+  it('builds one row per primitive of the base visualization when facets mode is enabled', () => {
     const baseViz = createVisualization({ id: 'viz-1', name: 'Base' });
     const facetViz = createVisualization({ id: 'viz-2', name: 'Facet' });
 
@@ -1083,21 +1069,18 @@ describe('layers store flattened model', () => {
 
     layersActions.syncWithVisualizations();
 
-    const facetPrimitives = flat().filter(
-      (layer) => layer.parentId === 'viz-2'
-    );
-    expect(facetPrimitives.length).toBeGreaterThan(0);
-    expect(facetPrimitives[0].name).toContain('Facet');
-
-    // The base visualization is not shown as its own rows in facets mode.
-    expect(flat().some((layer) => layer.parentId === 'viz-1')).toBe(false);
+    // The collection reads as one visualization: only the base viz's rows (one
+    // per primitive), never one row per generated facet.
+    const baseRows = flat().filter((layer) => layer.parentId === 'viz-1');
+    expect(baseRows.length).toBeGreaterThan(0);
+    expect(flat().some((layer) => layer.parentId === 'viz-2')).toBe(false);
 
     mockFacetsStore.enabled = false;
     mockFacetsStore.baseVisualizationId = null;
     mockFacetsStore.generatedVisualizationIds = [];
   });
 
-  it('shows the base visualization name in facet row titles', () => {
+  it('labels the base-viz rows with the base visualization name in facets mode', () => {
     const baseViz = createVisualization({ id: 'viz-1', name: 'Monde' });
     const facetViz = createVisualization({ id: 'viz-2', name: 'Monde' });
 
@@ -1110,43 +1093,40 @@ describe('layers store flattened model', () => {
 
     layersActions.syncWithVisualizations();
 
-    const facetPrimitive = flat().find((layer) => layer.parentId === 'viz-2');
-    expect(facetPrimitive?.name).toContain('1');
-    expect(facetPrimitive?.name).toContain('Monde');
+    const baseRow = flat().find((layer) => layer.parentId === 'viz-1');
+    expect(baseRow?.subtitle).toContain('Monde');
 
     mockFacetsStore.enabled = false;
     mockFacetsStore.baseVisualizationId = null;
     mockFacetsStore.generatedVisualizationIds = [];
   });
 
-  it('routes facet reordering through facetsStore.reorderVariables', () => {
+  it('reorders the single per-primitive facet row as a flat z-order without touching the facet grid', () => {
     const baseViz = createVisualization({ id: 'viz-1', name: 'Base' });
     const facetA = createVisualization({ id: 'facet-a', name: 'A' });
     const facetB = createVisualization({ id: 'facet-b', name: 'B' });
-    const facetC = createVisualization({ id: 'facet-c', name: 'C' });
 
-    mockVisualizationStore.visualizations = [baseViz, facetA, facetB, facetC];
-    mockVisualizationStore.activeVisualizations = [
-      baseViz,
-      facetA,
-      facetB,
-      facetC
-    ];
+    mockVisualizationStore.visualizations = [baseViz, facetA, facetB];
+    mockVisualizationStore.activeVisualizations = [baseViz, facetA, facetB];
     mockFacetsStore.enabled = true;
     mockFacetsStore.baseVisualizationId = 'viz-1';
-    mockFacetsStore.generatedVisualizationIds = [
-      'facet-a',
-      'facet-b',
-      'facet-c'
-    ];
+    mockFacetsStore.generatedVisualizationIds = ['facet-a', 'facet-b'];
 
     layersActions.syncWithVisualizations();
-    layersActions.reorderLayers(
-      indexOf('facet-c::point'),
-      indexOf('facet-a::point')
-    );
 
-    expect(mockFacetsStore.reorderVariables).toHaveBeenCalledWith(2, 0);
+    // The collection reads as one visualization: one row per primitive (the
+    // base viz), never one row per facet.
+    const ids = flat().map((layer) => layer.id);
+    expect(ids).toContain('viz-1::polygon');
+    expect(
+      ids.some((id) => id.startsWith('facet-a') || id.startsWith('facet-b'))
+    ).toBe(false);
+
+    // Dragging that row is a pure z-order change: it must NOT reorder the facet
+    // grid (variables) nor the visualization list.
+    layersActions.reorderLayers(indexOf('viz-1::polygon'), 0);
+    expect(flat()[0].id).toBe('viz-1::polygon');
+    expect(mockFacetsStore.reorderVariables).not.toHaveBeenCalled();
     expect(mockVisualizationStore.setVisualizationOrder).not.toHaveBeenCalled();
 
     mockFacetsStore.enabled = false;

@@ -11,7 +11,6 @@ export function buildProjectionRenderKey(state: ProjectionState): string {
     state.overrideActive ? 'override' : 'default',
     state.overrideSource ?? 'none',
     center,
-    state.rotation ?? 0,
-    state.simplifiedPreview === true
+    state.rotation ?? 0
   ].join('|');
 }

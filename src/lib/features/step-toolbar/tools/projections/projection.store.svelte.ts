@@ -1,10 +1,11 @@
 import {
   suggestProjectionsForBbox,
+  suggestProjectionsForFeatureBounds,
   buildProjectionFromSuggestion,
   type ProjectionSuggestion
 } from './projection-suggest.service';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-import { normalizeBoundsForProjectionSuggestion } from '$lib/features/map/utils/dataset-crs.utils';
+import { canUseBoundsForProjectionSuggestion } from '$lib/features/map/utils/dataset-crs.utils';
 import {
   resolveProjectionAvailabilityContext,
   resolveProjectionSuggestionBoundsFromBasemap,
@@ -46,7 +47,7 @@ const DEFAULT_STATE: ProjectionState = {
   customCode: undefined,
   activeSuggestionId: undefined,
   suggestionD3Config: undefined,
-  simplifiedPreview: false,
+  suggestionScale: undefined,
   suggestions: undefined
 };
 
@@ -60,7 +61,6 @@ type ProjectionActions = {
   setCenter: (longitude: number, latitude: number) => void;
   setRotation: (rotation: number) => void;
   resetSettings: () => void;
-  setSimplifiedPreview: (value: boolean) => void;
   suggestProjectionForCurrentData: () => void;
   applySuggestion: (suggestion: ProjectionSuggestion) => void;
   applyBasemapPreferredProjection: () => void;
@@ -141,47 +141,62 @@ function getProjectionAvailabilityContext() {
   });
 }
 
-async function resolveSuggestionBounds(): Promise<
-  [number, number, number, number] | null
-> {
+type SuggestionBounds =
+  | { kind: 'single'; bbox: [number, number, number, number] }
+  | { kind: 'features'; boxes: Array<[number, number, number, number]> };
+
+async function resolveSuggestionBounds(): Promise<SuggestionBounds | null> {
   const candidates = getSuggestionCandidates();
 
   for (const dataset of candidates) {
-    if (dataset.geometry?.bounds) {
-      const normalizedBounds = normalizeBoundsForProjectionSuggestion(
-        dataset.geometry.bounds,
-        dataset.geometry.crs
-      );
-      if (normalizedBounds) {
-        return normalizedBounds;
+    const duckDataset = dataset.sourceFileId
+      ? duckDBOrchestrator.getDatasetBySourceFile(dataset.sourceFileId)
+      : null;
+
+    // Prefer the per-feature bbox proxy: passing one bbox per feature lets
+    // proj-suggest discard detached territories (Alaska, DOM-TOM…) that would
+    // otherwise inflate the extent to world scale. Geometry is stored in its
+    // source CRS, so a non-WGS84 dataset is reprojected to WGS84 in DuckDB.
+    if (duckDataset) {
+      const featureBounds =
+        await duckDBOrchestrator.getGeometryPerFeatureBounds(duckDataset.id, {
+          reprojectToWgs84: !canUseBoundsForProjectionSuggestion(
+            dataset.geometry?.crs
+          )
+        });
+      if (featureBounds && featureBounds.length > 1) {
+        return { kind: 'features', boxes: featureBounds };
       }
     }
 
-    if (!dataset.sourceFileId) {
-      continue;
+    // WGS84-like datasets already carry WGS84 bounds — use them directly, no
+    // DuckDB round-trip. Non-WGS84 sources fall through to getGeometryExtent,
+    // which reprojects to WGS84 via ST_Transform (PROJ).
+    if (
+      dataset.geometry?.bounds &&
+      canUseBoundsForProjectionSuggestion(dataset.geometry.crs)
+    ) {
+      return { kind: 'single', bbox: dataset.geometry.bounds };
     }
 
-    const duckDataset = duckDBOrchestrator.getDatasetBySourceFile(
-      dataset.sourceFileId
-    );
     if (!duckDataset) {
       continue;
     }
 
     const gpsBounds = await duckDBOrchestrator.getGPSBounds(duckDataset.id);
     if (gpsBounds) {
-      return toBoundsFromGpsBounds(gpsBounds);
+      return { kind: 'single', bbox: toBoundsFromGpsBounds(gpsBounds) };
     }
 
     const geomExtent = await duckDBOrchestrator.getGeometryExtent(
       duckDataset.id
     );
     if (geomExtent) {
-      return geomExtent;
+      return { kind: 'single', bbox: geomExtent };
     }
   }
 
-  return resolveProjectionSuggestionBoundsFromBasemap({
+  const basemapBounds = resolveProjectionSuggestionBoundsFromBasemap({
     currentStyle: basemapStyleStore.selectedStyle,
     preferredStyle: basemapStyleStore.preferredTiledStyle,
     referenceBasemapBbox: basemapStyleStore.referenceBasemapId
@@ -190,6 +205,8 @@ async function resolveSuggestionBounds(): Promise<
     currentBasemapBbox: basemapService.currentMetadata?.bbox ?? null,
     osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null
   });
+
+  return basemapBounds ? { kind: 'single', bbox: basemapBounds } : null;
 }
 
 function toMapProjectionType(projectionId: string): 'mercator' | 'globe' {
@@ -217,6 +234,25 @@ const { actions, getState } = createToolStore<
       s.overrideSource = 'manual';
     };
 
+    const seedOrientationFromProjection = () => {
+      let lambda = 0;
+      let phi = 0;
+      if (s.suggestionD3Config?.rotate) {
+        lambda = s.suggestionD3Config.rotate[0] ?? 0;
+        phi = s.suggestionD3Config.rotate[1] ?? 0;
+      } else if (!s.customCode) {
+        const rotate = getProjectionById(s.selected)?.projection().rotate();
+        if (rotate) {
+          lambda = rotate[0] ?? 0;
+          phi = rotate[1] ?? 0;
+        }
+      }
+      s.longitude = -lambda;
+      s.latitude = -phi;
+      s.rotation = 0;
+      s.center = lambda === 0 && phi === 0 ? undefined : [-lambda, -phi];
+    };
+
     const setSelectedInternal = (
       projectionId: string,
       applyToMap: boolean,
@@ -228,6 +264,7 @@ const { actions, getState } = createToolStore<
       s.activeSuggestionId = undefined;
       s.overrideActive = overrideSource !== undefined;
       s.overrideSource = overrideSource;
+      seedOrientationFromProjection();
       if (applyToMap) {
         mapProjectionStore.setProjection(toMapProjectionType(projectionId), {
           explicit: true
@@ -242,6 +279,7 @@ const { actions, getState } = createToolStore<
       s.activeSuggestionId = undefined;
       s.overrideActive = false;
       s.overrideSource = undefined;
+      seedOrientationFromProjection();
       if (applyToMap) {
         mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);
       }
@@ -291,6 +329,7 @@ const { actions, getState } = createToolStore<
         s.activeSuggestionId = undefined;
         s.overrideActive = Boolean(s.customCode);
         s.overrideSource = s.customCode ? 'manual' : undefined;
+        seedOrientationFromProjection();
         if (s.customCode) {
           mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);
         }
@@ -310,10 +349,6 @@ const { actions, getState } = createToolStore<
         activateManualProjectionOverride();
       },
       resetSettings: () => {
-        s.longitude = 0;
-        s.latitude = 0;
-        s.rotation = 0;
-        s.center = undefined;
         if (
           s.overrideSource === 'manual' &&
           s.customCode &&
@@ -323,9 +358,7 @@ const { actions, getState } = createToolStore<
           s.overrideActive = false;
           s.overrideSource = undefined;
         }
-      },
-      setSimplifiedPreview: (value: boolean) => {
-        s.simplifiedPreview = value;
+        seedOrientationFromProjection();
       },
       suggestProjectionForCurrentData: () => {
         const requestId = ++suggestionRequestId;
@@ -342,7 +375,10 @@ const { actions, getState } = createToolStore<
           const bounds = await resolveSuggestionBounds();
           if (!bounds) return;
 
-          const result = suggestProjectionsForBbox(bounds);
+          const result =
+            bounds.kind === 'features'
+              ? suggestProjectionsForFeatureBounds(bounds.boxes)
+              : suggestProjectionsForBbox(bounds.bbox);
 
           if (!result) return;
 
@@ -390,10 +426,12 @@ const { actions, getState } = createToolStore<
       if (builtProjection?.source === 'proj4' && suggestion.proj4String) {
         s.customCode = suggestion.proj4String;
         s.suggestionD3Config = undefined;
+        s.suggestionScale = undefined;
         s.activeSuggestionId = activeSuggestionId;
         s.selected = DEFAULT_PROJECTION;
         s.overrideActive = true;
         s.overrideSource = overrideSource;
+        seedOrientationFromProjection();
         mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);
         return;
       }
@@ -402,9 +440,11 @@ const { actions, getState } = createToolStore<
         s.selected = DEFAULT_PROJECTION;
         s.customCode = undefined;
         s.suggestionD3Config = cloneD3UsageConfig(suggestion.d3Config);
+        s.suggestionScale = suggestion.scale;
         s.activeSuggestionId = activeSuggestionId;
         s.overrideActive = true;
         s.overrideSource = overrideSource;
+        seedOrientationFromProjection();
         mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);
         return;
       }

@@ -446,6 +446,21 @@ function backfillAnnotationAnchor(
   return data;
 }
 
+// The layer panel order moved from five derived dimensions (viz order,
+// per-viz primitiveOrder, basemap render-group order, renderBelowThematic,
+// aux-key order) to a single persisted flat `layerOrder` list. There is no
+// reliable translation of the legacy dimensions at migration time (the aux-key
+// order depends on the active basemap file, unavailable here), so legacy
+// projects start with no `layerOrder` and `buildLayers` rebuilds the canonical
+// default arrangement from the still-persisted stores. The primitiveOrder /
+// renderBelowThematic fields stay on their stores (used for layer production),
+// they just no longer drive the panel order. This entry only stamps the bump.
+function backfillLayerOrder(
+  data: Record<string, unknown>
+): Record<string, unknown> {
+  return data;
+}
+
 const migrations: SchemaMigration[] = [
   { from: '3.0.0', to: '3.1.0', migrate: remapLegacyPointShape },
   { from: '3.1.0', to: '3.2.0', migrate: remapLegacyPointShape },
@@ -454,7 +469,8 @@ const migrations: SchemaMigration[] = [
   { from: '3.4.0', to: '3.5.0', migrate: backfillSymbolDoubleFields },
   { from: '3.5.0', to: '3.6.0', migrate: normalizePersistenceSchema },
   { from: '3.6.0', to: '3.7.0', migrate: clampLegacySliderValues },
-  { from: '3.7.0', to: '3.8.0', migrate: backfillAnnotationAnchor }
+  { from: '3.7.0', to: '3.8.0', migrate: backfillAnnotationAnchor },
+  { from: '3.8.0', to: '3.9.0', migrate: backfillLayerOrder }
 ];
 
 export function migrateIfNeeded(

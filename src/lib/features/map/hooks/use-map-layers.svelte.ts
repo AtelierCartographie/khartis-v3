@@ -53,17 +53,25 @@ import {
 import { get_bbox_center, get_max_scale } from '../core/projscreen';
 import { getSplitMatchedGeometryRowIndices } from '../layers/split-rendering-accessors';
 import {
-  getMapLayerRenderOrder,
+  applyPanelRenderOrder,
   getVisualizationRenderOrder
 } from '../utils/layer-order.utils';
-import type { DataTableFilter } from '$lib/features/duckdb/types';
 import {
-  getProjectionState,
-  computeSimplifiedProjectionPreview
-} from '$lib/features/step-toolbar/tools/projections';
+  buildVisualizationSubLayerId,
+  classifyThematicLayerPrimitive,
+  mergeLayerOrder,
+  type LayerOrderRow
+} from '../utils/layer-panel-row.utils';
+import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
+import { layerOrderStore } from '$lib/features/step-toolbar/tools/layers/layer-order.store.svelte';
+import type { DataTableFilter } from '$lib/features/duckdb/types';
+import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
 import type { BasemapMetadata } from '../types/basemap.types';
-import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs.utils';
+import {
+  shouldReprojectDatasetForActiveProjection,
+  shouldUseIdentityProjectionForDatasetCrs
+} from '../utils/dataset-crs.utils';
 import { fitBasemapRenderProjection } from '../utils/fit-basemap-render-projection.utils';
 import {
   shouldShowGeneratedOrthographicOceanLayer,
@@ -949,13 +957,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const hasManualProjectionOverride =
         projectionState.overrideActive === true &&
         projectionState.overrideSource === 'manual';
-      const shouldUseSimplifiedProjectionPreview =
-        computeSimplifiedProjectionPreview(isOrthographicMode, projectionState);
       const visualizationsToRender =
         getVisualizationRenderOrder(activeVisualizations);
       const shouldRenderDatasetFallbacks =
-        (getShouldRenderDatasetFallbacks?.() ?? false) &&
-        !shouldUseSimplifiedProjectionPreview;
+        getShouldRenderDatasetFallbacks?.() ?? false;
       const basemapProjection = getProjectionFromMetadata(
         currentMetadata,
         isOrthographicMode,
@@ -1047,6 +1052,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       let basemapBackgroundLayers: Layer<DeckDataRow>[] = [];
       let basemapForegroundLayers: Layer<DeckDataRow>[] = [];
       let basemapForegroundBelowThematicLayers: Layer<DeckDataRow>[] = [];
+      // Deck layer id → panel row id for the basemap pool (computed by
+      // `createBasemapLayers`); the thematic half is filled in the viz loop.
+      let basemapRowIdByLayerId = new Map<string, string>();
 
       if (shouldKeepOrthographicBasemapLayers) {
         try {
@@ -1185,6 +1193,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           basemapForegroundLayers = basemapGroups.foreground.filter(
             (layer) => !foregroundBelowSet.has(layer)
           );
+          basemapRowIdByLayerId = basemapGroups.rowIdByLayerId;
         } catch (error) {
           logger.error(
             'Basemap layer creation failed; rendering thematic layers only',
@@ -1194,8 +1203,47 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         }
       }
 
+      // Flat layer order (single source of truth, shared with the layer
+      // panel): map every thematic deck layer to its panel row id so the render
+      // can be ordered by the same `mergeLayerOrder` projection the panel runs,
+      // and the GPU stack stays the exact reverse of the panel. In facet mode
+      // the collection reads as one visualization (one row per primitive), so
+      // every generated facet viz maps its layers onto the base viz's rows.
+      const facetsEnabledForOrder = facetsStore.enabled;
+      const facetBaseVizIdForOrder = facetsStore.baseVisualizationId;
+      const facetGeneratedVizIds = new Set(
+        facetsStore.generatedVisualizationIds
+      );
+      const resolveOrderVizId = (vizId: string): string =>
+        facetsEnabledForOrder &&
+        facetBaseVizIdForOrder &&
+        (vizId === facetBaseVizIdForOrder || facetGeneratedVizIds.has(vizId))
+          ? facetBaseVizIdForOrder
+          : vizId;
+      const thematicRowIdByLayerId = new Map<string, string>();
+      const thematicOrderRows = new Map<string, LayerOrderRow>();
+      const recordThematicRows = (vizId: string, fromIndex: number): void => {
+        const rowVizId = resolveOrderVizId(vizId);
+        for (let i = fromIndex; i < layers.length; i += 1) {
+          const layerId = String(layers[i].id);
+          const primitive = classifyThematicLayerPrimitive(layerId);
+          if (!primitive) continue;
+          const rowId = buildVisualizationSubLayerId(rowVizId, primitive);
+          thematicRowIdByLayerId.set(layerId, rowId);
+          if (!thematicOrderRows.has(rowId)) {
+            thematicOrderRows.set(rowId, {
+              id: rowId,
+              kind: 'viz-primitive',
+              primitive,
+              parentId: rowVizId
+            });
+          }
+        }
+      };
+
       const renderedDatasetIds = new Set<string>();
       for (const viz of visualizationsToRender) {
+        const vizLayerStart = layers.length;
         try {
           const datasetId = viz.datasetId;
           const split = splitData?.get(datasetId);
@@ -1220,7 +1268,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           );
           const datasetGeometryCrs = getDatasetGeometryCrs(datasetId);
           const allowProjectionOverride =
-            !shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs);
+            !shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs) ||
+            shouldReprojectDatasetForActiveProjection(
+              datasetGeometryCrs,
+              hasManualProjectionOverride
+            );
           const datasetDefaultProjection = getDatasetDefaultProjection(
             datasetId,
             datasetProjectionMetadata,
@@ -1366,6 +1418,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             }
           );
         }
+        recordThematicRows(viz.id, vizLayerStart);
       }
 
       if (shouldRenderDatasetFallbacks) {
@@ -1447,7 +1500,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           );
           const datasetGeometryCrs = getDatasetGeometryCrs(datasetId);
           const allowProjectionOverride =
-            !shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs);
+            !shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs) ||
+            shouldReprojectDatasetForActiveProjection(
+              datasetGeometryCrs,
+              hasManualProjectionOverride
+            );
           const datasetDefaultProjection = getDatasetDefaultProjection(
             datasetId,
             datasetProjectionMetadata,
@@ -1483,12 +1540,60 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         }
       }
 
-      const orderedLayers = getMapLayerRenderOrder({
-        basemapBackgroundLayers,
+      // Basemap order-rows from the three render buckets: each row's group +
+      // below-thematic flag feeds the canonical default slot (via
+      // `computeDefaultLayerOrder` inside `mergeLayerOrder`) for rows the
+      // persisted order has never seen, while a user drag overrides it. Mirrors
+      // the panel's basemap rows so both sides project onto the same order.
+      const basemapOrderRows = new Map<string, LayerOrderRow>();
+      const addBasemapOrderRows = (
+        bucket: readonly Layer<DeckDataRow>[],
+        group: 'foreground' | 'background',
+        belowThematic: boolean
+      ): void => {
+        for (const layer of bucket) {
+          const rowId = basemapRowIdByLayerId.get(String(layer.id));
+          if (!rowId || basemapOrderRows.has(rowId)) continue;
+          basemapOrderRows.set(rowId, {
+            id: rowId,
+            kind: 'basemap-aux',
+            basemapRenderGroup: group,
+            basemapRenderBelowThematic: belowThematic
+          });
+        }
+      };
+      addBasemapOrderRows(basemapBackgroundLayers, 'background', false);
+      addBasemapOrderRows(
         basemapForegroundBelowThematicLayers,
-        thematicLayers: layers,
-        basemapForegroundLayers
-      });
+        'foreground',
+        true
+      );
+      addBasemapOrderRows(basemapForegroundLayers, 'foreground', false);
+
+      // The flat panel order is the single source of truth: project the live
+      // rows onto the persisted drag order (manual drags win, new rows slot in
+      // at their default position, stale ids drop out), then draw the reverse —
+      // top of the panel = front of the map. Any row can sit above or below any
+      // other; there is no bucket clamp.
+      const panelLayerOrder = mergeLayerOrder(
+        [...thematicOrderRows.values(), ...basemapOrderRows.values()],
+        layerOrderStore.order,
+        activeVisualizations.map((viz) => viz.id)
+      );
+      const rowIdForLayer = (layer: Layer): string | null =>
+        thematicRowIdByLayerId.get(String(layer.id)) ??
+        basemapRowIdByLayerId.get(String(layer.id)) ??
+        null;
+      const orderedLayers = applyPanelRenderOrder(
+        [
+          ...basemapBackgroundLayers,
+          ...basemapForegroundBelowThematicLayers,
+          ...basemapForegroundLayers,
+          ...layers
+        ],
+        panelLayerOrder,
+        rowIdForLayer
+      );
       // The projected-sphere ocean mask should appear for any non-identity
       // projection driving the render — both manual overrides and a basemap's
       // own default projection (e.g. Equal Earth on the World map). Gating it
