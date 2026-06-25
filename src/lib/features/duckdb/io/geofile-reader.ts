@@ -43,6 +43,21 @@ function isGeoPackageFile(filename: string): boolean {
   return filename.toLowerCase().endsWith('.gpkg');
 }
 
+function shouldUseGeoPackageBrowserFallback(
+  ctx: DuckDBContext,
+  geofile: File,
+  meta: boolean,
+  shapefile: boolean
+): boolean {
+  return (
+    !meta &&
+    !shapefile &&
+    isGeoPackageFile(geofile.name) &&
+    typeof window !== 'undefined' &&
+    !ctx.threadsSupported
+  );
+}
+
 function isCrsNotFoundError(error: unknown): boolean {
   return (
     error instanceof Error && /crs not found/i.test(error.message.toLowerCase())
@@ -360,6 +375,21 @@ export async function readGeofile(
 
   if (!tablename) {
     tablename = generateUniqueTableName(geofile.name, ctx.loaded_files);
+  }
+
+  if (shouldUseGeoPackageBrowserFallback(ctx, geofile, meta, shapefile)) {
+    const fallbackGeoJsonFile = await convertGeoPackageToGeoJsonFile(geofile, {
+      preferredLayer: requestedLayer ?? undefined
+    });
+
+    await readGeofile(ctx, fallbackGeoJsonFile, {
+      ...options,
+      tablename,
+      layer: undefined
+    });
+
+    ctx.loaded_files.set(tablename, geofile.name);
+    return tablename;
   }
 
   const geoMeta = await detectGeofileMetadata(

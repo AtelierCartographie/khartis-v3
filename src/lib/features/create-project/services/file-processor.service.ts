@@ -133,13 +133,18 @@ import {
 } from '../utils/file-processor.utils';
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import { FILE_EXTENSIONS, MIME } from '$lib/features/commons/constants';
-import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import {
+  EXCLUDED_COLUMNS,
+  INTERNAL_COLUMN
+} from '$lib/features/commons/constants/data.constants';
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import { FileType } from '$lib/features/commons/types/create-project.types';
 import {
   DeepDataValidator,
   type DataAnalysisResult
 } from '$lib/features/commons/utils/deep-validator.utils';
+import { sanitizePreparedGeoJSON } from '$lib/features/commons/utils/persisted-geojson.utils';
+import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { getFileExtension } from '$lib/features/commons/utils/file.utils';
 import { readFileContent } from '$lib/features/commons/utils/file-import.utils';
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
@@ -147,6 +152,8 @@ import { FileValidator } from '$lib/features/commons/utils/file-validator.utils'
 interface FileProcessor {
   process: (uploadedFile: UploadedFile, file: File) => Promise<void>;
 }
+
+const PREPARED_GEOJSON_GEOMETRY_COLUMN = '__khartis_geometry_json';
 
 function withGeometryDetection(
   deepAnalysis: DataAnalysisResult,
@@ -173,6 +180,92 @@ function withGeometryDetection(
   };
 }
 
+function toPreparedGeoJSONValue(value: unknown): unknown {
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value ?? null;
+  }
+
+  if (typeof value === 'bigint') {
+    return Number.isSafeInteger(Number(value)) ? Number(value) : String(value);
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => toPreparedGeoJSONValue(item));
+  }
+
+  if (typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        toPreparedGeoJSONValue(item)
+      ])
+    );
+  }
+
+  return String(value);
+}
+
+function parsePreparedGeometry(geometryJson: unknown): unknown {
+  if (typeof geometryJson !== 'string') {
+    return null;
+  }
+
+  try {
+    return JSON.parse(geometryJson);
+  } catch {
+    return null;
+  }
+}
+
+async function buildPreparedGeoJSONFromDuckTable(
+  duck: typeof Duck,
+  tableName: string,
+  geometryColumnName: string,
+  propertyColumnNames: string[]
+): Promise<string> {
+  const escapedTableName = escapeIdentifier(tableName);
+  const escapedGeometryColumn = escapeIdentifier(geometryColumnName);
+  const propertySelect =
+    propertyColumnNames.length > 0
+      ? `${propertyColumnNames
+          .map((name) => `"${escapeIdentifier(name)}"`)
+          .join(', ')},`
+      : '';
+
+  const rows = (await duck.query(
+    `SELECT ${propertySelect}
+            ST_AsGeoJSON("${escapedGeometryColumn}"::GEOMETRY) AS "${PREPARED_GEOJSON_GEOMETRY_COLUMN}"
+     FROM "${escapedTableName}"`,
+    { format: 'array' }
+  )) as Array<Record<string, unknown>>;
+
+  const serialized = JSON.stringify({
+    type: 'FeatureCollection',
+    features: rows.map((row) => ({
+      type: 'Feature',
+      geometry: parsePreparedGeometry(row[PREPARED_GEOJSON_GEOMETRY_COLUMN]),
+      properties: Object.fromEntries(
+        propertyColumnNames.map((columnName) => [
+          columnName,
+          toPreparedGeoJSONValue(row[columnName])
+        ])
+      )
+    }))
+  });
+
+  return sanitizePreparedGeoJSON(serialized) ?? serialized;
+}
+
 async function updateFileFromDuckDBDataset(
   callbacks: ProcessingCallbacks,
   uploadedFile: UploadedFile,
@@ -196,11 +289,28 @@ async function updateFileFromDuckDBDataset(
 
   callbacks.onProgress(uploadedFile.id, 80);
 
+  const geometryColumnName = geometry?.columnName ?? INTERNAL_COLUMN.GEOM;
+  const preparedGeoJSON = geometry
+    ? await buildPreparedGeoJSONFromDuckTable(
+        duck,
+        tableName,
+        geometryColumnName,
+        headers.filter(
+          (header) =>
+            header !== geometryColumnName &&
+            !EXCLUDED_COLUMNS.includes(
+              header as (typeof EXCLUDED_COLUMNS)[number]
+            )
+        )
+      )
+    : undefined;
+
   callbacks.onDataUpdate(uploadedFile.id, {
     parsedData: tabularData,
     statistics,
     content: fileContent,
-    duckdbTableName: tableName
+    duckdbTableName: tableName,
+    ...(preparedGeoJSON ? { preparedGeoJSON } : {})
   });
 
   const dataMatrix = createDataMatrix(sampleData, headers);
