@@ -4,10 +4,16 @@ yarn.lock
 pnpm-lock.yaml
 bun.lock
 bun.lockb
-SOTU.parquet
+*.parquet
 
 # MCP browser test artifacts
 .playwright-mcp/
+.codex-artifacts/
+test-results/
+
+# Local QA notes and generated presentation drafts
+cdc-qa-*.md
+*.pid
 
 # Auto-generated i18n files (Paraglide)
 src/lib/paraglide/
