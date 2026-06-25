@@ -699,6 +699,10 @@
     align-items: start;
   }
 
+  .projection-grid-featured {
+    align-items: stretch;
+  }
+
   .projection-grid-column {
     display: flex;
     flex-direction: column;
