@@ -2,10 +2,7 @@
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
   import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
-  import type {
-    SimplifiedGeometryType,
-    VizSuggestion
-  } from '$lib/features/commons/services/viz-suggester.service';
+  import type { VizSuggestion } from '$lib/features/commons/services/viz-suggester.service';
   import * as m from '$lib/paraglide/messages';
   import SimpleRadio from '$lib/features/commons/components/simple-radio.svelte';
   import clsx from 'clsx';
@@ -31,15 +28,9 @@
     onClick
   }: Props = $props();
 
-  const columns = $derived(suggestion.columns ?? []);
-  const visibleColumns = $derived(columns.slice(0, 2));
-  const extraColumnsCount = $derived(Math.max(0, columns.length - 1));
+  const displayRows = $derived(buildDisplayRows(suggestion));
   const showCollection = $derived(suggestion.nbColumns > 2);
-  const primitiveLabel = $derived(
-    (suggestion.geometries ?? [])
-      .map((geometry) => getPrimitiveLabel(geometry))
-      .join(' · ')
-  );
+  const primitiveLabel = $derived(getPrimitiveLabel(suggestion));
   const cardClasses = $derived(
     clsx('viz-suggestion-card', {
       selected,
@@ -47,25 +38,100 @@
     })
   );
 
-  function getSemioTypeLabel(semioType: string): string {
+  function getModeLabel(semioType: string): string {
     const labels: Record<string, () => string> = {
-      QTA: m.semio_label_QTA,
-      QTR: m.semio_label_QTR,
-      QL: m.semio_label_QL,
-      QLO: m.semio_label_QLO
+      QTA: m.viz_suggestion_mode_proportional,
+      QTR: m.viz_suggestion_mode_classes,
+      QL: m.viz_suggestion_mode_categories,
+      QLO: m.viz_suggestion_mode_categories
     };
 
     return labels[semioType]?.() ?? semioType;
   }
 
-  function getPrimitiveLabel(geometry: SimplifiedGeometryType): string {
-    const labels: Record<SimplifiedGeometryType, () => string> = {
-      point: m.primitive_point,
-      line: m.primitive_line,
-      polygon: m.primitive_polygon
-    };
+  function getPrimitiveLabel(suggestion: VizSuggestion): string {
+    if ((suggestion.id ?? '').startsWith('texts_')) {
+      return m.viz_suggestion_primitive_texts();
+    }
 
-    return labels[geometry]?.() ?? geometry;
+    const geometries = suggestion.geometries ?? [];
+    if (geometries.includes('point')) {
+      return m.viz_suggestion_primitive_symbols();
+    }
+    if (geometries.includes('line')) {
+      return m.viz_suggestion_primitive_lines();
+    }
+    return m.viz_suggestion_primitive_polygons();
+  }
+
+  function getFondLabel(semioType: string): string {
+    if (semioType === 'QTR') {
+      return m.viz_suggestion_mode_fond_classes();
+    }
+    return m.viz_suggestion_mode_fond_categories();
+  }
+
+  interface DisplayRow {
+    typeLabel: string | null;
+    variable: string | null;
+  }
+
+  function buildDisplayRows(suggestion: VizSuggestion): DisplayRow[] {
+    const id = suggestion.id ?? '';
+    const columns = suggestion.columns ?? [];
+    const semioTypes = suggestion.semioTypes ?? [];
+    const geometries = suggestion.geometries ?? [];
+    const rows: DisplayRow[] = [];
+
+    if (id.startsWith('texts_')) {
+      columns.forEach((columnName, index) => {
+        rows.push({
+          typeLabel: index === 0 ? null : getModeLabel(semioTypes[index]),
+          variable: columnName
+        });
+      });
+      return rows;
+    }
+
+    if (geometries.includes('point')) {
+      const isPolygonData = suggestion.dataGeometry === 'polygon';
+      if (!semioTypes.includes('QTA')) {
+        rows.push({
+          typeLabel: m.viz_suggestion_mode_unique(),
+          variable: null
+        });
+      }
+      columns.forEach((columnName, index) => {
+        const semioType = semioTypes[index];
+        if (semioType === 'QTA') {
+          rows.push({
+            typeLabel: m.viz_suggestion_mode_proportional(),
+            variable: columnName
+          });
+        } else {
+          rows.push({
+            typeLabel: isPolygonData
+              ? getFondLabel(semioType)
+              : getModeLabel(semioType),
+            variable: columnName
+          });
+        }
+      });
+      return rows;
+    }
+
+    if (columns.length === 0) {
+      rows.push({ typeLabel: m.viz_suggestion_mode_unique(), variable: null });
+      return rows;
+    }
+
+    columns.forEach((columnName, index) => {
+      rows.push({
+        typeLabel: getModeLabel(semioTypes[index]),
+        variable: columnName
+      });
+    });
+    return rows;
   }
 
   function handleActivate() {
@@ -102,7 +168,7 @@
 
   <div class="content-panel">
     <div class="header">
-      <p class="title">{suggestion.label}</p>
+      <p class="title">{primitiveLabel}</p>
 
       <div class="radio-wrapper kh-card-radio">
         <SimpleRadio
@@ -115,20 +181,14 @@
       </div>
     </div>
 
-    {#if primitiveLabel}
-      <p class="primitive-label">{primitiveLabel}</p>
-    {/if}
-
     <div class="details">
-      {#if visibleColumns.length > 0}
-        {#each visibleColumns as columnName, idx (columnName)}
-          <div class="detail-row">
-            {#if suggestion.semioTypes[idx]}
-              <p class="type-label">
-                {getSemioTypeLabel(suggestion.semioTypes[idx])}
-              </p>
-            {/if}
+      {#each displayRows as row, idx (`${row.variable ?? 'mode'}-${idx}`)}
+        <div class="detail-row">
+          {#if row.typeLabel}
+            <p class="type-label">{row.typeLabel}</p>
+          {/if}
 
+          {#if row.variable}
             <div class="variable-row">
               <span class="variable-arrow" aria-hidden="true">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -143,22 +203,14 @@
               </span>
 
               <VariableBadge
-                label={columnName}
-                type={resolveBadgeType(columnName)}
+                label={row.variable}
+                type={resolveBadgeType(row.variable)}
                 interactive={false}
               />
-
-              {#if columns.length > 2 && idx === 0}
-                <span class="overflow-chip">+ {extraColumnsCount}</span>
-              {/if}
             </div>
-          </div>
-        {/each}
-      {:else}
-        <div class="detail-row detail-row--empty">
-          <span class="empty-label">{m.no_variable()}</span>
+          {/if}
         </div>
-      {/if}
+      {/each}
     </div>
 
     {#if showCollection}
@@ -314,14 +366,6 @@
     padding-right: var(--cds-spacing-02);
   }
 
-  .primitive-label {
-    margin: 0 0 var(--cds-spacing-02);
-    color: var(--cds-text-02, #525252);
-    font-size: 0.75rem;
-    line-height: 1rem;
-    letter-spacing: 0.32px;
-  }
-
   .details {
     display: flex;
     flex-direction: column;
@@ -335,13 +379,7 @@
     min-width: 0;
   }
 
-  .detail-row--empty {
-    min-height: 2rem;
-    justify-content: center;
-  }
-
-  .type-label,
-  .empty-label {
+  .type-label {
     margin: 0;
     color: var(--khartis-additions-text-secondary-suggestions, #00539a);
     font-size: 0.75rem;
@@ -366,22 +404,6 @@
 
   .variable-row :global(.variable-badge) {
     min-width: 0;
-  }
-
-  .overflow-chip {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    height: 18px;
-    flex-shrink: 0;
-    padding: 0 var(--cds-spacing-03);
-    border-radius: 9px;
-    background: var(--tag-background, #bae6ff);
-    color: var(--tag-color, #00539a);
-    font-size: 0.75rem;
-    line-height: 1rem;
-    letter-spacing: 0.32px;
-    white-space: nowrap;
   }
 
   .collection-row {

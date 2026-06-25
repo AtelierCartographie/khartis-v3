@@ -1510,6 +1510,8 @@
 
   $effect(() => {
     const controller = new AbortController();
+    // Reactive dep: restore the active dataset's persisted basemap on tab switch too, not only on mount (else blank map).
+    void getDatasetIdentity(selectedDataset);
 
     async function initializeBasemapCatalog() {
       const stepIndex = basemapStepIndex;
