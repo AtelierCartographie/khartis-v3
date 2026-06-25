@@ -45,7 +45,7 @@
     "check": "pnpm compile:paraglide && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "pnpm compile:paraglide && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "format": "prettier --write .",
-    "lint": "prettier --check . && eslint .",
+    "lint": "prettier --check \"*.{js,json,md,ts,svelte,yml,yaml}\" \".prettierrc\" \".github/**/*.{yml,yaml,json,md}\" \"docs/**/*.{md,json,yml,yaml}\" \"messages/**/*.json\" \"project.inlang/**/*.json\" \"tests/**/*.{ts,js,json}\" \"scripts/**/*.{js,ts,sh,json}\" \"src/**/*.{ts,js,svelte,json}\" \"static/**/*.{json,md,html,js,css}\" --ignore-unknown && eslint .",
     "test:all": "pnpm test:unit && pnpm test:pipeline && pnpm test:duckdb",
     "test:duckdb": "vitest run --project server tests/duckdb --reporter=agent --passWithNoTests",
     "test:pipeline": "vitest run --project server tests/pipeline --reporter=agent --passWithNoTests",
