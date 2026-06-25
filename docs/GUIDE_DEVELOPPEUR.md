@@ -16,10 +16,9 @@
 corepack enable pnpm
 git clone https://github.com/AtelierCartographie/khartis-v3.git
 cd khartis-v3
-cp .env.sample .env
 pnpm install
 pnpm dev
-# → http://localhost:5176/cartographie/khartisnewpprd/
+# → http://localhost:5176/
 ```
 
 ---
@@ -220,7 +219,7 @@ Deux projets Vitest coexistent dans `vite.config.ts` :
 1. **TypeScript strict** — jamais `any`, utiliser `unknown` + narrowing.
 2. **Svelte 5 Runes** — `$state`, `$derived`, `$effect`. Pas de `writable()`, `$:`, `export let`.
 3. **Carbon Design System** pour toute l'UI — jamais `<input>`, `<button>`, `<select>` natifs bruts.
-4. **Carbon × Svelte 5 event traps** — `carbon-components-svelte@0.106.x` est distribué en source Svelte 4 ; certains events dispatchent de façon parasite sous Svelte 5 :
+4. **Carbon × Svelte 5 event traps** — `carbon-components-svelte` est distribué en source Svelte 4 ; certains events dispatchent de façon parasite sous Svelte 5 :
    - `<Slider>` → `on:input` uniquement (jamais `on:change`)
    - `<Checkbox>` → `on:change` uniquement (jamais `on:check`)
    - `<RadioButtonGroup on:change>` → early-return si la valeur n'a pas changé
@@ -249,14 +248,20 @@ Les tests client jsdom ne tournent pas en CI car `jsdom` ne simule pas DuckDB WA
 
 ## Déploiement
 
-Khartis est un site statique déployé sur FTP :
+Khartis est un site statique. Le déploiement local versionné est limité à la
+PPRD et documenté dans [DEPLOYMENT.md](DEPLOYMENT.md). Il récupère les tags
+depuis GitHub, sélectionne la dernière release staging sémantique, vérifie que
+le workflow `release.yml` est vert pour le commit du tag, puis build dans un
+worktree temporaire avant toute connexion SFTP.
 
 ```bash
-# 1. S'assurer que la CI est verte (Quality Checks GitHub)
-# 2. Valider l'UX manuellement (import → viz → export)
-pnpm build          # Génère build/ (HTML + JS + assets + fonds de carte)
-# 3. Déployer build/ sur le FTP
+pnpm deploy:pprd:dry-run
+pnpm deploy:pprd
 ```
+
+Ne pas documenter ni ajouter de commande de déploiement PRD sans redéfinir le
+modèle de sécurité. Ne jamais committer de valeurs réelles SFTP, VPN, GitLab,
+chemins distants ou empreintes d'hôte.
 
 ---
 

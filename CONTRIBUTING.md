@@ -17,7 +17,7 @@ Thank you for your interest in improving Khartis v3. This guide explains how to 
 corepack enable pnpm
 git clone https://github.com/AtelierCartographie/khartis-v3.git
 cd khartis-v3
-pnpm init:project    # Install deps + setup Husky hooks
+pnpm install         # Install deps
 
 # Start development
 pnpm dev             # → http://localhost:5176
@@ -124,7 +124,7 @@ BREAKING CHANGE: Legacy authentication method removed
 
 ### Testing
 
-- [ ] `pnpm test` passes
+- [ ] Relevant `pnpm test:*` scripts pass
 - [ ] `pnpm test:unit` passes when client, store, or utility code changed
 - [ ] New features include tests; bug fixes include regression tests
 - [ ] Manual validation on dev build
@@ -162,7 +162,7 @@ BREAKING CHANGE: Legacy authentication method removed
 - **Feature‑based structure**: each feature in `src/lib/features/`; shared resources in `src/lib/features/commons/`
 - **Isolation**: features do not depend on each other; import only from commons or well‑defined APIs
 - **UI**: prefer Carbon components; avoid inline styles; use scoped CSS/utilities
-- **Carbon × Svelte 5 events**: `carbon-components-svelte@0.96.3` is Svelte 4 and dispatches phantom events on external prop updates. Use `on:input` on `<Slider>`, `on:change` (not `on:check`) on `<Checkbox>`, and a value guard on `<RadioButtonGroup on:change>`. Full rules in [`.claude/rules/carbon-svelte5.md`](.claude/rules/carbon-svelte5.md).
+- **Carbon × Svelte 5 events**: `carbon-components-svelte` is distributed as Svelte 4 source and can dispatch phantom events on external prop updates. Use `on:input` on `<Slider>`, `on:change` (not `on:check`) on `<Checkbox>`, and a value guard on `<RadioButtonGroup on:change>`. Full rules in [`.claude/rules/carbon-svelte5.md`](.claude/rules/carbon-svelte5.md).
 - **i18n**: all user‑facing text must go through Paraglide; no hardcoded strings
 - **Data/performance**: heavy tasks in Web Workers; be mindful of memory and large datasets
 
@@ -301,6 +301,8 @@ pnpm build         # Ensure production build works
 - `check` / `check:watch`: Svelte type checks
 - `lint` / `format`: linting and formatting
 - `test:unit` / `test:pipeline` / `test:duckdb` / `test:all`: run tests
+- `deploy:pprd:dry-run`: validate the latest staging release, CI gate, and build without SFTP
+- `deploy:pprd`: deploy the latest staging release to PPRD through the guarded local SFTP helper
 - `generate-pwa-assets`: build PWA icons
 - `machine-translate`: generate/update i18n translations
 
@@ -308,8 +310,6 @@ pnpm build         # Ensure production build works
 
 - **Documentation**: See `/docs` folder for comprehensive guides:
   - `README.md` - Documentation overview
-  - `GUIDE_UTILISATEUR.md` - User guide (data import, visualization, export)
-  - `CHEAT_SHEET_EXEMPLES.md` - Five URL-based examples to get started
   - `GLOSSAIRE.md` - Cartographic and technical glossary
   - `GUIDE_DEVELOPPEUR.md` - Developer quick start and common tasks
   - `ARCHITECTURE.md` - System design and principles
@@ -321,7 +321,8 @@ pnpm build         # Ensure production build works
   - `FONDS_DE_CARTE.md` - Basemap preparation and catalog
   - `GESTION_ETAT.md` - State management patterns
   - `REFERENCE.md` - Types, errors, keyboard shortcuts
-  - `PWA.md` - Progressive Web App and offline support
+  - `PWA.md` - Progressive Web App, service worker cache, and update flow
+  - `DEPLOYMENT.md` - Public-safe PPRD deployment helper and guardrails
 - **Issues**: Search existing ones or open a new issue
 - **Discussions**: Use GitHub Discussions for ideas and Q&A
 - **Maintainers**: See contributors in package.json
