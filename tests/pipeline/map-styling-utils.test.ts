@@ -192,7 +192,7 @@ import {
 } from '$lib/features/map/utils/data-styling.utils';
 import {
   getVisualizationRenderOrder,
-  getMapLayerRenderOrder
+  applyPanelRenderOrder
 } from '$lib/features/map/utils/layer-order.utils';
 import {
   ColorMode,
@@ -860,20 +860,65 @@ describe('getVisualizationRenderOrder', () => {
   });
 });
 
-describe('getMapLayerRenderOrder', () => {
-  it('returns background + thematic + foreground in correct order', () => {
-    const bg = [{ id: 'bg' }];
-    const thematic = [{ id: 'th' }];
-    const fg = [{ id: 'fg' }];
-    const result = getMapLayerRenderOrder({
-      basemapBackgroundLayers: bg as never,
-      thematicLayers: thematic as never,
-      basemapForegroundLayers: fg as never
-    });
+describe('applyPanelRenderOrder', () => {
+  const rowIdForLayer = (layer: { rowId?: string }): string | null =>
+    layer.rowId ?? null;
+
+  it('draws the GPU array as the reverse of the panel (top of panel = front = drawn last)', () => {
+    const layers = [
+      { id: 'bg', rowId: 'basemap::terre' },
+      { id: 'poly', rowId: 'viz1::polygon' },
+      { id: 'point', rowId: 'viz1::point' }
+    ];
+    // Panel top→bottom: point (front), polygon, basemap (back).
+    const panelOrder = ['viz1::point', 'viz1::polygon', 'basemap::terre'];
+    const result = applyPanelRenderOrder(
+      layers as never,
+      panelOrder,
+      rowIdForLayer as never
+    );
     expect(result.map((l) => (l as { id: string }).id)).toEqual([
       'bg',
-      'th',
-      'fg'
+      'poly',
+      'point'
+    ]);
+  });
+
+  it('keeps layers sharing a panel row in their incoming sub-stack order', () => {
+    const layers = [
+      { id: 'fill', rowId: 'viz1::polygon' },
+      { id: 'stroke', rowId: 'viz1::polygon' },
+      { id: 'point', rowId: 'viz1::point' }
+    ];
+    const panelOrder = ['viz1::point', 'viz1::polygon'];
+    const result = applyPanelRenderOrder(
+      layers as never,
+      panelOrder,
+      rowIdForLayer as never
+    );
+    expect(result.map((l) => (l as { id: string }).id)).toEqual([
+      'fill',
+      'stroke',
+      'point'
+    ]);
+  });
+
+  it('carries an unmapped layer forward on its neighbour rank instead of jumping to an extreme', () => {
+    const layers = [
+      { id: 'poly', rowId: 'viz1::polygon' },
+      { id: 'fallback' },
+      { id: 'point', rowId: 'viz1::point' }
+    ];
+    const panelOrder = ['viz1::point', 'viz1::polygon'];
+    const result = applyPanelRenderOrder(
+      layers as never,
+      panelOrder,
+      rowIdForLayer as never
+    );
+    expect(result.map((l) => (l as { id: string }).id)).toEqual([
+      'poly',
+      'fallback',
+      'point'
     ]);
   });
 });
