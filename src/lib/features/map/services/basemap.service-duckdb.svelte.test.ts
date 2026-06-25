@@ -58,7 +58,22 @@ beforeEach(() => {
   mocks.queryMock.mockResolvedValue([]);
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () => new Response(new Uint8Array([1, 2, 3, 4])))
+    vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes('all-basemaps-metadata.json')) {
+        return new Response(
+          JSON.stringify([
+            {
+              file: 'monde-countries-2024-medium',
+              entity_count: 249,
+              layers: []
+            }
+          ])
+        );
+      }
+
+      return new Response(new Uint8Array([1, 2, 3, 4]));
+    })
   );
 });
 
@@ -68,13 +83,21 @@ afterEach(() => {
 });
 
 describe('basemapService.ensureAttributesLoaded', () => {
-  it('loads the parquet straight into basemap_attributes without runtime repair', async () => {
+  it('flattens deduplicated parquet attributes with metadata counts', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: string | URL | Request) => {
         const url = String(input);
         if (url.includes('all-basemaps-metadata.json')) {
-          return new Response(JSON.stringify([]));
+          return new Response(
+            JSON.stringify([
+              {
+                file: 'monde-countries-2024-medium',
+                entity_count: 249,
+                layers: []
+              }
+            ])
+          );
         }
         if (
           url.includes('projection-presets.json') ||
@@ -96,8 +119,13 @@ describe('basemapService.ensureAttributesLoaded', () => {
 
     expect(createAttributesQuery).toBeDefined();
     expect(createAttributesQuery).toContain(
-      "SELECT * FROM parquet_scan('duck-file-id')"
+      "FROM parquet_scan('duck-file-id')"
     );
+    expect(createAttributesQuery).toContain('UNNEST(basemaps) AS basemap');
+    expect(createAttributesQuery).toContain(
+      "('monde-countries-2024-medium', 249)"
+    );
+    expect(createAttributesQuery).toContain('basemap_count');
 
     expect(createAttributesQuery).not.toContain('__row_idx__');
     expect(createAttributesQuery).not.toContain('file_row_number');
