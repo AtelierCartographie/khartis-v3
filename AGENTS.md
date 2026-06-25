@@ -42,3 +42,9 @@ This project is indexed by GitNexus as **khartis-v3** (15968 symbols, 29595 rela
 | Index, status, clean, wiki CLI commands      | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md`             |
 
 <!-- gitnexus:end -->
+
+## Local Deployment Safety
+
+- The versioned local deployment helper is PPRD-only. Do not add local PRD deploy scripts unless the user explicitly reopens that risk and the safety model is redesigned.
+- Never commit real SFTP hosts, usernames, remote paths, passwords, private keys, VPN details, or GitLab credentials. Keep them in ignored local env files or the user's shell.
+- Keep `docs/DEPLOYMENT.md` public-safe: document placeholders, commands, and guardrails, not institution-specific secrets or infrastructure values.

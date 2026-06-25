@@ -8,14 +8,13 @@ Khartis est un outil de cartographie thématique open source pour créer des car
 
 ```bash
 corepack enable pnpm        # Active pnpm via Corepack (Node >= 22)
-cp .env.sample .env         # Copie la configuration locale (aucun secret)
 pnpm install                # Installe les dépendances
 pnpm dev                    # Lance le serveur de dev
 ```
 
-L'application est accessible à `http://localhost:5176/cartographie/khartisnewpprd/`.
+L'application est accessible à `http://localhost:5176/`.
 
-> **BASE_PATH** : `.env.sample` configure `BASE_PATH=/cartographie/khartisnewpprd` pour correspondre à l'URL de déploiement PPRD. Pour servir l'application à la racine en local, définissez `BASE_PATH=` dans `.env` avant de lancer le serveur.
+Le fichier `.env.example` sert uniquement au helper de déploiement local PPRD. Il ne doit contenir que des placeholders publics, jamais de valeurs réelles d'infrastructure.
 
 ---
 
@@ -29,7 +28,7 @@ L'application est accessible à `http://localhost:5176/cartographie/khartisnewpp
 | Deck.gl                             | 9.x       | Rendu cartographique GPU, couches thématiques sur buffers GeoArrow  |
 | MapLibre GL                         | 5.x       | Rendu des fonds de carte en tuiles vectorielles (OSM)               |
 | Apache Arrow + geoarrow-deck-stream | —         | Passerelle binaire DuckDB → Deck.gl pour un rendu haute performance |
-| Carbon Components Svelte            | 0.106.x   | Composants UI (IBM Design System) — Svelte 4 source                 |
+| Carbon Components Svelte            | 0.109.x   | Composants UI (IBM Design System) — Svelte 4 source                 |
 | d3-geo + d3-geo-projection          | —         | Projections intégrées (Robinson, Natural Earth, Mercator…)          |
 | proj4                               | —         | Fallback reprojection pour EPSG:2154 et variantes françaises        |
 | parquet-wasm                        | —         | Lecture GeoParquet côté client sans DuckDB                          |
@@ -37,24 +36,26 @@ L'application est accessible à `http://localhost:5176/cartographie/khartisnewpp
 | IndexedDB                           | —         | Persistance locale des projets et assets source (chunks 8 Mo)       |
 | Vitest                              | 4.x       | Tests unitaires (jsdom) et intégration (Node)                       |
 
-> Versions exactes au moment de la rédaction : SvelteKit 2.58, Svelte 5.55, TypeScript 6.0, DuckDB WASM 1.33-dev, Deck.gl 9.x, MapLibre GL 5.24, Carbon 0.106.2, Paraglide 2.16, Vitest 4.1. Vérifier `package.json` pour la valeur exacte avant toute mise à niveau.
+> Versions exactes au moment de la rédaction : vérifier `package.json` avant toute mise à niveau. Les valeurs mineures évoluent avec les dépendances.
 
 ---
 
 ## Commandes essentielles
 
-| Commande                 | Description                                                        |
-| ------------------------ | ------------------------------------------------------------------ |
-| `pnpm dev`               | Serveur de développement (port 5176, HMR)                          |
-| `pnpm build`             | Build de production → `build/` (SvelteKit adapter-static)          |
-| `pnpm check`             | Typecheck TypeScript + Svelte (`svelte-kit sync` + `svelte-check`) |
-| `pnpm lint`              | Prettier (vérification) + ESLint                                   |
-| `pnpm format`            | Prettier (réécriture)                                              |
-| `pnpm test:unit`         | Vitest client jsdom — co-localisé `src/**/*.svelte.test.ts`        |
-| `pnpm test:pipeline`     | Vitest server Node — `tests/pipeline/**`                           |
-| `pnpm test:duckdb`       | Vitest server Node — `tests/duckdb/**` (DuckDB natif)              |
-| `pnpm test:all`          | Suite complète (unit + pipeline + duckdb)                          |
-| `pnpm machine-translate` | Génère les clés i18n manquantes via Inlang                         |
+| Commande                   | Description                                                        |
+| -------------------------- | ------------------------------------------------------------------ |
+| `pnpm dev`                 | Serveur de développement (port 5176, HMR)                          |
+| `pnpm build`               | Build de production → `build/` (SvelteKit adapter-static)          |
+| `pnpm check`               | Typecheck TypeScript + Svelte (`svelte-kit sync` + `svelte-check`) |
+| `pnpm lint`                | Prettier (vérification) + ESLint                                   |
+| `pnpm format`              | Prettier (réécriture)                                              |
+| `pnpm deploy:pprd:dry-run` | Vérifie le tag PPRD, le gate CI et le build sans SFTP              |
+| `pnpm deploy:pprd`         | Déploie le dernier tag PPRD via le helper local SFTP               |
+| `pnpm test:unit`           | Vitest client jsdom — co-localisé `src/**/*.svelte.test.ts`        |
+| `pnpm test:pipeline`       | Vitest server Node — `tests/pipeline/**`                           |
+| `pnpm test:duckdb`         | Vitest server Node — `tests/duckdb/**` (DuckDB natif)              |
+| `pnpm test:all`            | Suite complète (unit + pipeline + duckdb)                          |
+| `pnpm machine-translate`   | Génère les clés i18n manquantes via Inlang                         |
 
 > Utiliser toujours `vitest run` (ou les scripts `pnpm test:*`), jamais `vitest` seul qui démarre le mode watch. En CI ou agent, ajouter `--reporter=agent` pour minimiser la sortie.
 
@@ -78,6 +79,7 @@ L'application est accessible à `http://localhost:5176/cartographie/khartisnewpp
 | [REFERENCE.md](REFERENCE.md)                         | Types TypeScript, hiérarchie d'erreurs, logger, raccourcis clavier           |
 | [PWA.md](PWA.md)                                     | Progressive Web App, stratégies de cache Workbox, mises à jour               |
 | [GLOSSAIRE.md](GLOSSAIRE.md)                         | Termes cartographiques et techniques du point de vue du développeur          |
+| [DEPLOYMENT.md](DEPLOYMENT.md)                       | Déploiement local PPRD, variables locales, garde-fous SFTP                   |
 
 ---
 
