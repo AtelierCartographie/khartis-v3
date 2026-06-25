@@ -4,7 +4,7 @@ Use this when validating a change or reproducing a bug in the running app. Khart
 
 ## Where the app runs
 
-- `pnpm dev` serves at `http://localhost:5176/<BASE_PATH>/` — `BASE_PATH` defaults to `/cartographie/khartisnewpprd`. The app is **not at the root**; navigate to the full prefixed path (static assets too).
+- `pnpm dev` serves at `http://localhost:5176/` by default. If a test explicitly sets `BASE_PATH`, navigate to the matching prefixed URL and keep static asset URLs under that same prefix.
 - DuckDB WASM requires **cross-origin isolation**; the dev and preview servers send the `COOP`/`COEP` headers for it. A plain static file server without those headers makes DuckDB fail to initialise — not an app bug.
 
 ## Set up a test scenario — always create a project through the UI
@@ -12,7 +12,7 @@ Use this when validating a change or reproducing a bug in the running app. Khart
 Pick the data-loading path that matches what you're testing:
 
 1. **Paste CSV** into the paste-data input of the create-project modal — fastest for an ad-hoc case. Import, then test in the app.
-2. **Import by URL from localhost**, pointing at a file under `static/tests-datasets/` — e.g. `http://localhost:5176/<BASE_PATH>/tests-datasets/csv/<file>.csv`. Reproducible, and exercises the real import pipeline for every supported format.
+2. **Import by URL from localhost**, pointing at a file under `static/tests-datasets/` — e.g. `http://localhost:5176/tests-datasets/csv/<file>.csv` in the default dev setup. Reproducible, and exercises the real import pipeline for every supported format.
 3. **"Try with an example"** (the try-with-example entry) — a ready-made, pre-styled project when you need a full map fast.
 
 ## Choose the dataset that targets the bug

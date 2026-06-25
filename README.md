@@ -66,9 +66,6 @@ Khartis is a web application to create professional thematic maps without prior 
 # Enable Corepack (once)
 corepack enable pnpm
 
-# Create your local environment file
-cp .env.example .env
-
 # Install dependencies (also downloads DuckDB WASM extensions)
 pnpm install
 
@@ -79,21 +76,23 @@ pnpm dev
 pnpm build && pnpm preview
 ```
 
-`.env` must exist before running the app locally. The committed sample (`.env.example`) only contains non-sensitive values. By default it uses the pre-production `BASE_PATH`, which is convenient for testing deployed path prefixes; set `BASE_PATH=` in `.env` if you want a root local URL.
+The app can run locally without a `.env` file. The committed `.env.example` is for the local PPRD deployment helper only and contains placeholders, not real infrastructure values.
 
 ## Commands
 
-| Command              | Description                                |
-| -------------------- | ------------------------------------------ |
-| `pnpm dev`           | Development server on :5176                |
-| `pnpm build`         | Production build                           |
-| `pnpm check`         | TypeScript + Svelte type check             |
-| `pnpm lint`          | ESLint + Prettier check                    |
-| `pnpm format`        | Auto-format code                           |
-| `pnpm test:unit`     | Unit tests (components, stores, utils)     |
-| `pnpm test:pipeline` | Server-side pipeline tests (DuckDB-backed) |
-| `pnpm test:duckdb`   | DuckDB integration tests                   |
-| `pnpm test:all`      | Full suite (unit + pipeline + DuckDB)      |
+| Command                    | Description                                                   |
+| -------------------------- | ------------------------------------------------------------- |
+| `pnpm dev`                 | Development server on :5176                                   |
+| `pnpm build`               | Production build                                              |
+| `pnpm check`               | TypeScript + Svelte type check                                |
+| `pnpm lint`                | ESLint + Prettier check                                       |
+| `pnpm format`              | Auto-format code                                              |
+| `pnpm deploy:pprd:dry-run` | Validate the latest PPRD tag, CI gate, and build without SFTP |
+| `pnpm deploy:pprd`         | Deploy the latest PPRD tag via the local SFTP helper          |
+| `pnpm test:unit`           | Unit tests (components, stores, utils)                        |
+| `pnpm test:pipeline`       | Server-side pipeline tests (DuckDB-backed)                    |
+| `pnpm test:duckdb`         | DuckDB integration tests                                      |
+| `pnpm test:all`            | Full suite (unit + pipeline + DuckDB)                         |
 
 > All `pnpm test:*` scripts use `vitest run` (single pass, no watch mode). Run `vitest --project client` directly if you want watch mode during development.
 
@@ -103,6 +102,7 @@ pnpm build && pnpm preview
 
 - **Client-side only**: imported data never leaves the browser; optional analytics loads only after user consent
 - Optional Google Analytics can be configured through `PUBLIC_GA_MEASUREMENT_ID` for consent-first audience analytics
+- Local PPRD deployment setup is documented in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md); PRD deployment is intentionally unsupported by the local helper
 - All processing and persistence run in-browser via DuckDB WASM and IndexedDB (metadata + binary asset store)
 - Dependency scanning via Dependabot
 - To report a security vulnerability, see [SECURITY.md](SECURITY.md)
