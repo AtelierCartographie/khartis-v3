@@ -167,7 +167,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
     id: 'mers',
     visible: true,
-    color: '#d4d4d4',
+    color: '#b8b8b8',
     opacity: 100
   },
   {
@@ -408,7 +408,20 @@ function normalizeSerializedLayers(
     (defaults) => !normalizedLayers.has(defaults.id)
   ).map((defaults) => deepClone(defaults));
 
-  return [...Array.from(normalizedLayers.values()), ...missingLayers];
+  const result = [...Array.from(normalizedLayers.values()), ...missingLayers];
+
+  // Migrate projects saved with the legacy MERS default (#c8c8c8) to the current default
+  const mersLayer = result.find((l) => l.id === 'mers') as
+    | MersLayerConfig
+    | undefined;
+  const mersDefault = DEFAULT_LAYERS.find(
+    (l) => l.id === 'mers'
+  ) as MersLayerConfig;
+  if (mersLayer && mersLayer.color === '#c8c8c8') {
+    mersLayer.color = mersDefault.color;
+  }
+
+  return result;
 }
 
 interface BasemapLayersState {
