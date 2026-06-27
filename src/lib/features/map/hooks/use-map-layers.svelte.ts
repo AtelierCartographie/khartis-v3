@@ -424,7 +424,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     const cacheKey = [
       `${viewportSize.width}x${viewportSize.height}`,
       `padding:${fitPaddingPx}`,
-      `bbox:${fitBbox?.join(',') ?? 'none'}`
+      `bbox:${fitBbox?.join(',') ?? 'none'}`,
+      `presets:${basemapService.projectionPresets !== null ? '1' : '0'}`
     ].join('|');
     const cached = basemapProjectionCache.get(metadata)?.get(cacheKey);
     if (cached) {

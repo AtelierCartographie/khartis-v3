@@ -1820,6 +1820,11 @@
   });
 
   $effect(() => {
+    void basemapService.projectionPresets;
+    untrack(() => scheduleLayerUpdate('effect:projectionPresets'));
+  });
+
+  $effect(() => {
     const currentCount = datasetsStore.datasets.length;
     const sourceFileCount = untrack(
       () => projectStore.currentProject?.data?.sourceFiles?.length ?? 0

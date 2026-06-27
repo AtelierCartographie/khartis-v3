@@ -239,36 +239,26 @@ function createScreenExtentPolygon(
 
 function createProjectedCompositeOceanData(
   projection: ProjectionLike,
-  bbox?: BBox | null,
   visibleProjectedExtent?: GraticuleClipExtent | null
 ): FeatureCollection<Polygon> | null {
-  if (visibleProjectedExtent) {
-    const canvasFeature = createScreenExtentPolygon(visibleProjectedExtent);
-    if (canvasFeature) {
-      return {
-        type: GEOJSON_TYPE.FEATURE_COLLECTION,
-        features: [canvasFeature]
-      };
-    }
-  }
-
-  if (!hasCompositeGraticuleSubProjections(projection)) {
+  if (
+    !hasCompositeGraticuleSubProjections(projection) &&
+    !visibleProjectedExtent
+  ) {
     return null;
   }
 
-  const features = projection
-    .getSubProjections()
-    .filter((entry) => !bbox || bboxIntersects(entry.bounds, bbox))
-    .map((entry) =>
-      entry.screenExtent ? createScreenExtentPolygon(entry.screenExtent) : null
-    )
-    .filter((feature): feature is Feature<Polygon> => feature !== null);
-
-  return features.length > 0
-    ? {
-        type: GEOJSON_TYPE.FEATURE_COLLECTION,
-        features
-      }
+  // A large sentinel rectangle in referenceBbox space covers the full viewport at
+  // any zoom level; Deck.gl clips it to the visible area in COORDINATE_SYSTEM.CARTESIAN
+  // mode. Using the reference bbox itself under-covers the viewport at zoom < 100%,
+  // and composite sub-projection insets live outside the main reference bbox.
+  const LARGE_EXTENT: GraticuleClipExtent = [
+    [-99999, -99999],
+    [99999, 99999]
+  ];
+  const feature = createScreenExtentPolygon(LARGE_EXTENT);
+  return feature
+    ? { type: GEOJSON_TYPE.FEATURE_COLLECTION, features: [feature] }
     : null;
 }
 
@@ -660,11 +650,11 @@ export function createTerreLayers(
         new PathLayer({
           id: `${layerId}-shadow`,
           ...createPathLayerProps(outlineData),
-          getColor: withOpacity([80, 80, 80], 0.45),
+          getColor: withOpacity([80, 80, 80], 0.65),
           widthUnits: 'pixels',
-          getWidth: 3.5,
-          widthMinPixels: 2,
-          widthMaxPixels: 6,
+          getWidth: 5,
+          widthMinPixels: 3,
+          widthMaxPixels: 8,
           ...baseProps,
           updateTriggers: {
             getWidth: [config.strokeThickness]
@@ -724,11 +714,11 @@ export function createTerreLayers(
             data: geojson,
             filled: false,
             stroked: true,
-            getLineColor: withOpacity([80, 80, 80], 0.45),
+            getLineColor: withOpacity([80, 80, 80], 0.65),
             lineWidthUnits: 'pixels',
-            getLineWidth: 3.5,
-            lineWidthMinPixels: 2,
-            lineWidthMaxPixels: 6,
+            getLineWidth: 5,
+            lineWidthMinPixels: 3,
+            lineWidthMaxPixels: 8,
             ...baseProps,
             updateTriggers: {
               getLineWidth: [config.strokeThickness]
@@ -816,7 +806,6 @@ export function createMersLayer(
 
     const projectedCompositeOceanData = createProjectedCompositeOceanData(
       ctx.projection,
-      ctx.bbox,
       ctx.graticuleClipExtent
     );
 
