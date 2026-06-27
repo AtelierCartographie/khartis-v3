@@ -167,7 +167,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
     id: 'mers',
     visible: true,
-    color: '#b0c8e0',
+    color: '#d4d4d4',
     opacity: 100
   },
   {
