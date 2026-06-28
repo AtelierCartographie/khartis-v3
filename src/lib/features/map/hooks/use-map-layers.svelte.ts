@@ -1563,7 +1563,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           });
         }
       };
-      addBasemapOrderRows(basemapBackgroundLayers, 'background', false);
+      addBasemapOrderRows(
+        [...basemapBackgroundLayers].reverse(),
+        'background',
+        false
+      );
       addBasemapOrderRows(
         basemapForegroundBelowThematicLayers,
         'foreground',
