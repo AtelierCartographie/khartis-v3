@@ -1505,11 +1505,13 @@
         pendingViewportAutoRefitReason = getCurrentViewportAutoFitReason();
       }
 
-      annotationsActions.redistributePageElements({
-        width: fmtState.width,
-        height: fmtState.height,
-        margins
-      });
+      if (!globalState.isResizingMapFrame) {
+        annotationsActions.redistributePageElements({
+          width: fmtState.width,
+          height: fmtState.height,
+          margins
+        });
+      }
       if (mapInit.isMapLoaded && !isSwitchingViewMode) {
         scheduleLayerUpdate('effect:formatLayoutChange');
       }

@@ -30,6 +30,7 @@ export interface GlobalState {
   isMobileToolbarOpen: boolean;
   isToolbarTransitioning: boolean;
   isMapExporting: boolean;
+  isResizingMapFrame: boolean;
 }
 
 export const enum ToolbarStep {
