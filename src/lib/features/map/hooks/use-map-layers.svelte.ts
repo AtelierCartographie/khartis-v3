@@ -1170,6 +1170,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               currentMetadata?.layers.some(
                 (layer) => layer.type === BasemapLayerType.LAND
               ) ?? false,
+            hasLimitMetadataLayers:
+              currentMetadata?.layers.some(
+                (layer) => layer.type === BasemapLayerType.LIMIT
+              ) ?? false,
             metadataLayers,
             stylePresets: shouldShowBasemapLayers
               ? basemapService.stylePresets

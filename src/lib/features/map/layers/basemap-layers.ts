@@ -2407,6 +2407,7 @@ export interface BasemapAdditionalData {
   metadataLayers?: MetadataLayerEntry[];
   availableMetadataLayerTypes?: BasemapLayerType[];
   hasLandMetadataLayers?: boolean;
+  hasLimitMetadataLayers?: boolean;
   stylePresets?: StylePresets | null;
 }
 
@@ -2553,7 +2554,10 @@ export function createBasemapLayers(
             if (limitLayers.length > 0) {
               targetGroups.push(limitLayers);
             }
-          } else if (worldBaseTable) {
+          } else if (
+            worldBaseTable &&
+            !additionalData?.hasLimitMetadataLayers
+          ) {
             const layer = createFrontieresLayer(
               additionalData?.frontieresTable ?? worldBaseTable,
               config as FrontieresLayerConfig,
