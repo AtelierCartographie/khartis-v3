@@ -52,9 +52,25 @@
   } from '../hooks/use-classification-color-sync.svelte';
   import { usePrimitiveAdapters } from '../adapters/use-primitive-adapters.svelte';
   import { useVisualizationOrchestration } from '../hooks/use-visualization-orchestration.svelte';
-  import { facetsStore } from '../adapters/facets-adapter';
+  import { facetsStore, SCALE_MODE } from '../adapters/facets-adapter';
+  import Switch from '$lib/features/commons/components/switch.svelte';
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
+
+  const isCollectionActive = $derived(
+    facetsStore.enabled && facetsStore.variables.length > 1
+  );
+  const isSharedScale = $derived(facetsStore.scaleMode === SCALE_MODE.SHARED);
+
+  async function handleScaleModeChange(shared: boolean) {
+    if (
+      (shared && facetsStore.scaleMode === SCALE_MODE.SHARED) ||
+      (!shared && facetsStore.scaleMode === SCALE_MODE.INDEPENDENT)
+    ) {
+      return;
+    }
+    await facetsStore.toggleScaleMode();
+  }
   const classificationBreaks = useClassificationBreaksController({
     resolveDatasetSourceFileId: (datasetId) =>
       datasetsStore.datasets.find((dataset) => dataset.id === datasetId)
@@ -604,6 +620,16 @@
     <p class="kh-help">
       {m.step2_description()}
     </p>
+    {#if isCollectionActive}
+      <div class="collection-scale-toggle">
+        <Switch
+          size="sm"
+          labelText={m.facets_scale_shared_label()}
+          toggled={isSharedScale}
+          onchange={handleScaleModeChange}
+        />
+      </div>
+    {/if}
   </div>
 
   <div class="config-accordion">
@@ -729,6 +755,10 @@
     font-size: 0.875rem;
     line-height: 1.125rem;
     letter-spacing: 0.16px;
+  }
+
+  .collection-scale-toggle {
+    margin-top: 12px;
   }
 
   .config-accordion {
