@@ -273,7 +273,7 @@ describe('facetsStore', () => {
       expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
         mocks.visualizations[0],
         ['a', 'b'],
-        SCALE_MODE.INDEPENDENT,
+        SCALE_MODE.SHARED,
         FACET_SLOT.POLYGON_VALUE
       );
     });
@@ -312,7 +312,7 @@ describe('facetsStore', () => {
       expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
         mocks.visualizations[0],
         ['a', 'b'],
-        SCALE_MODE.INDEPENDENT,
+        SCALE_MODE.SHARED,
         FACET_SLOT.POLYGON_VALUE
       );
     });
@@ -354,7 +354,7 @@ describe('facetsStore', () => {
       expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
         mocks.visualizations[0],
         ['capacity_total', 'population_total'],
-        SCALE_MODE.INDEPENDENT,
+        SCALE_MODE.SHARED,
         FACET_SLOT.SYMBOL_FILL_VALUE
       );
     });
@@ -394,7 +394,7 @@ describe('facetsStore', () => {
       expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
         mocks.visualizations[0],
         ['category', 'segment'],
-        SCALE_MODE.INDEPENDENT,
+        SCALE_MODE.SHARED,
         FACET_SLOT.SYMBOL_FILL_CATEGORY
       );
     });
@@ -433,7 +433,7 @@ describe('facetsStore', () => {
       expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
         mocks.visualizations[0],
         ['a', 'b'],
-        SCALE_MODE.INDEPENDENT,
+        SCALE_MODE.SHARED,
         FACET_SLOT.SYMBOL_FILL_VALUE
       );
     });
@@ -472,7 +472,7 @@ describe('facetsStore', () => {
       expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
         mocks.visualizations[0],
         ['a', 'b'],
-        SCALE_MODE.INDEPENDENT,
+        SCALE_MODE.SHARED,
         FACET_SLOT.POLYGON_VALUE
       );
     });
@@ -911,7 +911,7 @@ describe('facetsStore', () => {
       expect(facetsStore.enabled).toBe(false);
       expect(facetsStore.variables).toEqual([]);
       expect(facetsStore.layout.columns).toBe(3);
-      expect(facetsStore.scaleMode).toBe(SCALE_MODE.INDEPENDENT);
+      expect(facetsStore.scaleMode).toBe(SCALE_MODE.SHARED);
     });
 
     it('should fall back to defaults when given a non-object', () => {
@@ -942,7 +942,7 @@ describe('facetsStore', () => {
         scaleMode: 'bogus'
       });
 
-      expect(facetsStore.scaleMode).toBe(SCALE_MODE.INDEPENDENT);
+      expect(facetsStore.scaleMode).toBe(SCALE_MODE.SHARED);
     });
 
     it('should filter out non-string entries from variables array', () => {
@@ -1028,7 +1028,7 @@ describe('facetsStore', () => {
       expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
         mocks.visualizations[0],
         expectedCapped,
-        SCALE_MODE.INDEPENDENT,
+        SCALE_MODE.SHARED,
         FACET_SLOT.POLYGON_VALUE
       );
     });

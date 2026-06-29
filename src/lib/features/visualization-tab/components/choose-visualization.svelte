@@ -1,7 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
-  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
   import type { VizSuggestion } from '$lib/features/commons/services/viz-suggester.service';
@@ -12,15 +11,8 @@
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { ComboBox, Link, Modal } from 'carbon-components-svelte';
-  import {
-    Edit,
-    Launch,
-    MagicWandFilled,
-    Pin,
-    TrashCan,
-    Copy
-  } from 'carbon-icons-svelte';
+  import { ComboBox, Link } from 'carbon-components-svelte';
+  import { Edit, Launch, MagicWandFilled, Pin } from 'carbon-icons-svelte';
   import VisualizationSuggestionCard from './suggestion/visualization-suggestion-card.svelte';
   import { InfoPopover } from './shared';
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
@@ -40,7 +32,6 @@
     shouldAutoApplySuggestion
   } from '../utils/suggestion-selection.utils';
   import { UI_CONSTANTS } from '$lib/features/commons/constants/visualization.constants';
-  import { appendToBody } from '$lib/features/commons/utils/append-to-body';
   import {
     computeVisualizationSuggestions,
     resolveColumnBadgeType
@@ -58,10 +49,6 @@
   let autoAppliedSuggestionKey = $state<string | undefined>(undefined);
   let previousSuggestionDatasetId = $state<string | undefined>(undefined);
   let selectedSuggestionKey = $state<string | undefined>(undefined);
-  let renamingVizId = $state<string | undefined>(undefined);
-  let renameValue = $state<string>('');
-  let deletingViz = $state<{ id: string; name: string } | null>(null);
-  let isDeleteConfirmOpen = $state(false);
 
   const datasetItems = $derived.by(() =>
     datasetsStore.datasets.map((ds, id) => ({
@@ -293,54 +280,6 @@
     return `${targetViz.datasetId}::${targetViz.id}::${joinSignature}::${suggestionSignature}`;
   });
 
-  function handleSelectViz(id: string) {
-    selectedSuggestionKey = undefined;
-    visualizationStore.selectVisualization(id);
-  }
-
-  function handleDuplicateViz(id: string) {
-    visualizationStore.duplicateVisualization(id);
-  }
-
-  function handleDeleteViz(viz: { id: string; name: string }) {
-    deletingViz = viz;
-    isDeleteConfirmOpen = true;
-  }
-
-  function confirmDeleteViz() {
-    if (deletingViz) {
-      visualizationStore.removeVisualization(deletingViz.id);
-    }
-    isDeleteConfirmOpen = false;
-    deletingViz = null;
-  }
-
-  function cancelDeleteViz() {
-    isDeleteConfirmOpen = false;
-    deletingViz = null;
-  }
-
-  function handleStartRename(viz: { id: string; name: string }) {
-    renamingVizId = viz.id;
-    renameValue = viz.name;
-  }
-
-  function handleConfirmRename(id: string) {
-    const trimmed = renameValue.trim();
-    if (trimmed) {
-      visualizationStore.renameVisualization(id, trimmed);
-    }
-    renamingVizId = undefined;
-  }
-
-  function handleRenameKeydown(e: KeyboardEvent, id: string) {
-    if (e.key === 'Enter') {
-      handleConfirmRename(id);
-    } else if (e.key === 'Escape') {
-      renamingVizId = undefined;
-    }
-  }
-
   $effect(() => {
     const datasets = datasetsStore.datasets;
     if (!datasets.length) {
@@ -498,65 +437,6 @@
       />
     </div>
 
-    {#if datasetVisualizations.length > 0}
-      <div class="viz-list" role="list">
-        {#each datasetVisualizations as viz (viz.id)}
-          {@const isSelected =
-            visualizationStore.selectedVisualization?.id === viz.id}
-          {@const isRenaming = renamingVizId === viz.id}
-          <div class="viz-item" class:selected={isSelected} role="listitem">
-            <button
-              type="button"
-              class="viz-item-select"
-              onclick={() => handleSelectViz(viz.id)}
-              aria-pressed={isSelected}
-            >
-              {#if isRenaming}
-                <input
-                  class="viz-rename-input"
-                  type="text"
-                  aria-label={m.viz_list_rename()}
-                  bind:value={renameValue}
-                  onkeydown={(e: KeyboardEvent) =>
-                    handleRenameKeydown(e, viz.id)}
-                  onblur={() => handleConfirmRename(viz.id)}
-                  onclick={(e: MouseEvent) => e.stopPropagation()}
-                />
-              {:else}
-                <span class="viz-item-name">{viz.name}</span>
-              {/if}
-            </button>
-            <div class="viz-item-actions">
-              <IconButton
-                kind="ghost"
-                size="small"
-                icon={Edit}
-                iconDescription={m.viz_list_rename()}
-                tooltipPosition="top"
-                on:click={() => handleStartRename(viz)}
-              />
-              <IconButton
-                kind="ghost"
-                size="small"
-                icon={Copy}
-                iconDescription={m.viz_list_duplicate()}
-                tooltipPosition="top"
-                on:click={() => handleDuplicateViz(viz.id)}
-              />
-              <IconButton
-                kind="ghost"
-                size="small"
-                icon={TrashCan}
-                iconDescription={m.viz_list_delete()}
-                tooltipPosition="top"
-                on:click={() => handleDeleteViz(viz)}
-              />
-            </div>
-          </div>
-        {/each}
-      </div>
-    {/if}
-
     <div class="suggestions-section">
       <ExpandableSection
         title={m.section_suggestions()}
@@ -623,26 +503,6 @@
     </div>
   </div>
 </section>
-
-{#if isDeleteConfirmOpen}
-  <div use:appendToBody>
-    <Modal
-      danger
-      bind:open={isDeleteConfirmOpen}
-      modalHeading={m.viz_list_delete_title()}
-      primaryButtonText={m.delete_confirm_button()}
-      secondaryButtonText={m.cancel()}
-      size="sm"
-      on:click:button--secondary={cancelDeleteViz}
-      on:click:button--primary={confirmDeleteViz}
-      on:close={cancelDeleteViz}
-    >
-      <p>
-        {m.viz_list_delete_message({ name: deletingViz?.name ?? '' })}
-      </p>
-    </Modal>
-  </div>
-{/if}
 
 <style lang="scss">
   #choose-visualization {
@@ -736,74 +596,5 @@
 
   .learn-more :global(svg) {
     color: var(--khartis-additions-interactive-suggestions, #0072c3);
-  }
-
-  .viz-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-    padding: 0 var(--cds-spacing-05);
-  }
-
-  .viz-item {
-    display: flex;
-    align-items: center;
-    border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-    background: var(--cds-layer-01, #f4f4f4);
-    min-height: 40px;
-    transition: border-color 0.15s ease;
-
-    &:hover {
-      border-color: var(--cds-border-strong-01, #8d8d8d);
-
-      .viz-item-actions {
-        opacity: 1;
-      }
-    }
-
-    &.selected {
-      border-color: var(--cds-border-interactive, #726e6e);
-      background: var(--cds-layer-selected-01, #e8e8e8);
-    }
-  }
-
-  .viz-item-select {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    padding: 0 var(--cds-spacing-04);
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    text-align: left;
-    min-height: 40px;
-    overflow: hidden;
-  }
-
-  .viz-item-name {
-    font-size: 0.875rem;
-    color: var(--cds-text-primary, #161616);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .viz-rename-input {
-    width: 100%;
-    border: none;
-    border-bottom: 2px solid var(--cds-border-interactive, #726e6e);
-    background: transparent;
-    font-size: 0.875rem;
-    color: var(--cds-text-primary, #161616);
-    outline: none;
-    padding: 0;
-  }
-
-  .viz-item-actions {
-    display: flex;
-    align-items: center;
-    opacity: 0;
-    transition: opacity 0.15s ease;
-    flex-shrink: 0;
   }
 </style>
