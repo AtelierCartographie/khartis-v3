@@ -821,7 +821,7 @@ function createBasemapService() {
   let currentBasemap: LoadedBasemap | null = null;
   let simplificationVersion = $state(0);
   let attributesLoaded = false;
-  let projectionPresetsData: ProjectionPresets | null = null;
+  let projectionPresetsData: ProjectionPresets | null = $state(null);
   let stylePresetsData: StylePresets | null = null;
   const basemapCache = new Map<string, LoadedBasemap>();
   const geometryTablesInDuckDB = new Set<string>();
