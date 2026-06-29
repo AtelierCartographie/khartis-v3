@@ -34,6 +34,7 @@ import {
 
 export interface SaveCurrentProjectOptions {
   fallbackThumbnail?: string;
+  exampleId?: string;
 }
 
 function syncGeoInfoToSourceFiles(container: ProjectStateContainer): void {
@@ -168,7 +169,11 @@ export async function saveCurrentProject(
     const thumbnail =
       captureMapThumbnail()?.dataUrl ?? options.fallbackThumbnail;
 
-    await projectRepository.save(container._state.currentProject, thumbnail);
+    await projectRepository.save(
+      container._state.currentProject,
+      thumbnail,
+      options.exampleId
+    );
     persistenceRegistry.markClean();
     container._state.isDirty = false;
     container._state.lastSaved = new Date();
