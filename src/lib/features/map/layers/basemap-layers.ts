@@ -248,15 +248,32 @@ function createProjectedCompositeOceanData(
     return null;
   }
 
-  // A large sentinel rectangle in referenceBbox space covers the full viewport at
-  // any zoom level; Deck.gl clips it to the visible area in COORDINATE_SYSTEM.CARTESIAN
-  // mode. Using the reference bbox itself under-covers the viewport at zoom < 100%,
-  // and composite sub-projection insets live outside the main reference bbox.
+  const extents = hasCompositeGraticuleSubProjections(projection)
+    ? projection
+        .getSubProjections()
+        .map((subProjection) => subProjection.screenExtent)
+        .filter((extent): extent is GraticuleClipExtent => extent !== undefined)
+    : [];
+  const compositeExtent =
+    extents.length > 0
+      ? ([
+          [
+            Math.min(...extents.map((extent) => extent[0][0])),
+            Math.min(...extents.map((extent) => extent[0][1]))
+          ],
+          [
+            Math.max(...extents.map((extent) => extent[1][0])),
+            Math.max(...extents.map((extent) => extent[1][1]))
+          ]
+        ] satisfies GraticuleClipExtent)
+      : null;
   const LARGE_EXTENT: GraticuleClipExtent = [
     [-99999, -99999],
     [99999, 99999]
   ];
-  const feature = createScreenExtentPolygon(LARGE_EXTENT);
+  const feature = createScreenExtentPolygon(
+    visibleProjectedExtent ?? compositeExtent ?? LARGE_EXTENT
+  );
   return feature
     ? { type: GEOJSON_TYPE.FEATURE_COLLECTION, features: [feature] }
     : null;
