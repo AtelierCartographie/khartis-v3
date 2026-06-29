@@ -54,6 +54,8 @@ export interface SavedProjectMetadata {
   size: number;
   /** Low-resolution JPEG data URL of the map, captured best-effort on save. */
   thumbnail?: string;
+  /** Identifies which example project this was created from, if any. */
+  exampleId?: string;
 }
 
 export enum ProjectStorageKey {

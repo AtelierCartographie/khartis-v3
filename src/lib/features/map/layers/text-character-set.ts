@@ -76,7 +76,7 @@ const ARROWS_AND_GEOMETRIC = [
 export const TEXT_HALO_ATLAS_RADIUS = 32;
 export const TEXT_HALO_ATLAS_BUFFER = 48;
 
-export const MAX_TEXT_OUTLINE_WIDTH = 0.17;
+export const MAX_TEXT_OUTLINE_WIDTH = 0.5;
 
 export const DEFAULT_TEXT_FONT_SETTINGS_SDF = {
   sdf: true,

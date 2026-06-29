@@ -877,6 +877,11 @@
        shows part of the title, then let the scroller overflow horizontally. */
     min-width: 5.5rem;
     max-width: 250px;
+    border-right: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+
+    &:last-child {
+      border-right: none;
+    }
   }
 
   .tab-button-wrapper :global(.tab-button) {
@@ -970,6 +975,15 @@
 
   .tab-menu-button:hover :global(svg) {
     fill: var(--cds-text-01);
+  }
+
+  :global(.bx--btn--primary) .tab-menu-button :global(svg) {
+    fill: var(--cds-icon-on-color, #ffffff);
+    opacity: 1;
+  }
+
+  :global(.bx--btn--primary) .tab-menu-button:hover {
+    background-color: rgba(255, 255, 255, 0.15);
   }
 
   .tab-context-menu {
