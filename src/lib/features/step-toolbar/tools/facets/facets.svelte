@@ -6,7 +6,7 @@
     Launch,
     SettingsAdjust
   } from 'carbon-icons-svelte';
-  import { facetsStore, SCALE_MODE } from './facets.store.svelte';
+  import { facetsStore } from './facets.store.svelte';
   import {
     getLinePrimitive,
     getPolygonPrimitive,
@@ -33,7 +33,6 @@
   import { isAutoFacetNumericColumn } from '$lib/features/commons/utils/visualization-columns.utils';
   import { getFacetSlotVariable } from '$lib/features/commons/utils/facet-visualization-updates';
   import SliderWithInput from '$lib/features/commons/components/viz-controls/slider-with-input.svelte';
-  import Switch from '$lib/features/commons/components/switch.svelte';
 
   const FACETS_HELP_URL =
     'https://www.sciencespo.fr/cartographie/khartis/docs/';
@@ -54,8 +53,6 @@
 
   const mapCount = $derived(facetVisualizations.length);
   const columnsValue = $derived(layout.columns);
-  const isSharedScale = $derived(facetsStore.scaleMode === SCALE_MODE.SHARED);
-
   const mapRows = $derived.by(() => {
     const rows: number[][] = [];
     const cols = Math.max(1, layout.columns);
@@ -302,17 +299,6 @@
     facetsStore.setColumns(clamped);
   }
 
-  async function handleScaleModeChange(shared: boolean) {
-    if (
-      (shared && facetsStore.scaleMode === SCALE_MODE.SHARED) ||
-      (!shared && facetsStore.scaleMode === SCALE_MODE.INDEPENDENT)
-    ) {
-      return;
-    }
-
-    await facetsStore.toggleScaleMode();
-  }
-
   const isActive = $derived(enabled && facetVisualizations.length > 0);
 </script>
 
@@ -337,14 +323,6 @@
         showMinMax
         onchange={handleColumnsChange}
       />
-      <div class="field-group">
-        <Switch
-          size="sm"
-          labelText={m.facets_scale_shared_label()}
-          toggled={isSharedScale}
-          onchange={handleScaleModeChange}
-        />
-      </div>
     </section>
 
     <section class="section">
@@ -509,12 +487,6 @@
     font-weight: 400;
   }
 
-  .field-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03, 8px);
-  }
-
   .maps-picker {
     display: flex;
     flex-direction: column;
@@ -555,7 +527,7 @@
 
   .map-btn.selected {
     background-color: var(--cds-layer-selected-inverse, #cac5c4);
-    color: var(--cds-text-primary, #161616);
+    color: var(--cds-text-inverse, #ffffff);
   }
 
   .map-btn:focus-visible {

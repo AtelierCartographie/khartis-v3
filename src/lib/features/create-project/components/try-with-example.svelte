@@ -12,6 +12,7 @@
     getExamplesByCategory,
     loadExampleData
   } from '$lib/features/commons/constants/examples.data';
+  import { SvelteMap } from 'svelte/reactivity';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { horizontalWheelScroll } from '$lib/features/commons/utils/horizontal-wheel-scroll';
   import { m } from '$lib/paraglide/messages';
@@ -33,6 +34,7 @@
   import { persistTabularSourceSnapshot } from '$lib/features/data-tab/services/tabular-source-snapshot.service';
   import { dataTabStore } from '$lib/features/data-tab/stores/data-tab.store.svelte';
   import { applyExampleVisualizationPresets } from '../services/example-visualization-preset.service';
+  import { projectRepository } from '$lib/features/project-management';
   import type { ExampleProject } from '$lib/features/commons/types/create-project.types';
   import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
@@ -51,6 +53,19 @@
   let selectedExample = $state<string | null>(null);
   let isLoading = $state(false);
   let error = $state<string>('');
+  let savedExampleThumbnails = $state(new SvelteMap<string, string>());
+
+  $effect(() => {
+    projectRepository.listMetadata().then((metadata) => {
+      const map = new SvelteMap<string, string>();
+      for (const entry of metadata) {
+        if (entry.exampleId && entry.thumbnail && !map.has(entry.exampleId)) {
+          map.set(entry.exampleId, entry.thumbnail);
+        }
+      }
+      savedExampleThumbnails = map;
+    });
+  });
 
   const filteredExamples = $derived(getExamplesByCategory(selectedCategory));
 
@@ -351,7 +366,8 @@
       }
       applyExampleVisualizations(example, processedExampleFile);
       await projectStore.saveCurrentProject({
-        fallbackThumbnail: example.thumbnail
+        fallbackThumbnail: example.thumbnail,
+        exampleId: example.id
       });
 
       await navigateAfterAction();
@@ -416,7 +432,8 @@
           <ProjectCard
             title={example.title}
             subtitle={example.subtitle}
-            thumbnail={example.thumbnail}
+            thumbnail={savedExampleThumbnails.get(example.id) ??
+              example.thumbnail}
             variant="gray"
             selected={selectedExample === example.id}
             disabled={isLoading}

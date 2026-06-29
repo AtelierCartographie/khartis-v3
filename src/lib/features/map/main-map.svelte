@@ -1133,6 +1133,7 @@
   ): void {
     event.preventDefault();
     event.stopPropagation();
+    globalState.isResizingMapFrame = true;
     resizeState = {
       edge,
       startX: event.clientX,
@@ -1176,6 +1177,7 @@
   }
 
   function handleResizeUp(): void {
+    globalState.isResizingMapFrame = false;
     resizeState = null;
     hoveredResizeEdge = null;
     window.removeEventListener(EVENT.POINTERMOVE, handleResizeMove);

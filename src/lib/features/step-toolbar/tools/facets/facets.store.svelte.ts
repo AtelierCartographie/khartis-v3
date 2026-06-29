@@ -171,7 +171,7 @@ const DEFAULT_STATE: FacetsState = {
     columns: 3,
     gap: 16
   },
-  scaleMode: SCALE_MODE.INDEPENDENT,
+  scaleMode: SCALE_MODE.SHARED,
   generatedVisualizationIds: [],
   facetTitles: {}
 };
