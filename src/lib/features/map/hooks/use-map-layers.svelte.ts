@@ -424,7 +424,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     const cacheKey = [
       `${viewportSize.width}x${viewportSize.height}`,
       `padding:${fitPaddingPx}`,
-      `bbox:${fitBbox?.join(',') ?? 'none'}`
+      `bbox:${fitBbox?.join(',') ?? 'none'}`,
+      `presets:${basemapService.projectionPresets !== null ? '1' : '0'}`
     ].join('|');
     const cached = basemapProjectionCache.get(metadata)?.get(cacheKey);
     if (cached) {
@@ -1169,6 +1170,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               currentMetadata?.layers.some(
                 (layer) => layer.type === BasemapLayerType.LAND
               ) ?? false,
+            hasLimitMetadataLayers:
+              currentMetadata?.layers.some(
+                (layer) => layer.type === BasemapLayerType.LIMIT
+              ) ?? false,
             metadataLayers,
             stylePresets: shouldShowBasemapLayers
               ? basemapService.stylePresets
@@ -1562,7 +1567,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           });
         }
       };
-      addBasemapOrderRows(basemapBackgroundLayers, 'background', false);
+      addBasemapOrderRows(
+        [...basemapBackgroundLayers].reverse(),
+        'background',
+        false
+      );
       addBasemapOrderRows(
         basemapForegroundBelowThematicLayers,
         'foreground',

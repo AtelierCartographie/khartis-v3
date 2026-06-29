@@ -48,7 +48,8 @@ function createGlobalStore() {
         : false,
     isMobileToolbarOpen: false,
     isToolbarTransitioning: false,
-    isMapExporting: false
+    isMapExporting: false,
+    isResizingMapFrame: false
   });
   const selectedDataButtonState = $state<{
     id: string | undefined;
@@ -314,6 +315,7 @@ function createGlobalStore() {
     state.zoom.pageZoomLevel = 100;
     state.zoom.pagePanOffset = { x: 0, y: 0 };
     state.isMapExporting = false;
+    state.isResizingMapFrame = false;
 
     selectedDataButtonState.id = undefined;
     pendingDatasetSelections.clear();
@@ -445,6 +447,12 @@ function createGlobalStore() {
     },
     get isMapExporting() {
       return state.isMapExporting;
+    },
+    get isResizingMapFrame() {
+      return state.isResizingMapFrame;
+    },
+    set isResizingMapFrame(value: boolean) {
+      state.isResizingMapFrame = value;
     },
     ensureTabSelected,
     setMobileView,
