@@ -40,13 +40,25 @@
   <ModalBody class="data-privacy-body">
     <section>
       <h3>{m.data_privacy_modal_privacy_heading()}</h3>
-      <p>{m.data_privacy_modal_privacy_local()}</p>
-      <p>{m.data_privacy_modal_privacy_analytics()}</p>
-      <p>{m.data_privacy_modal_privacy_remote()}</p>
-      <p>
-        {m.data_privacy_modal_privacy_dpo()}
-        <a href={`mailto:${DPO_EMAIL}`}>{DPO_EMAIL}</a>.
-      </p>
+      <ul class="data-privacy-list">
+        <li>
+          <strong>{m.data_privacy_modal_privacy_local_label()} :</strong>
+          {m.data_privacy_modal_privacy_local()}
+        </li>
+        <li>
+          <strong>{m.data_privacy_modal_privacy_analytics_label()} :</strong>
+          {m.data_privacy_modal_privacy_analytics()}
+        </li>
+        <li>
+          <strong>{m.data_privacy_modal_privacy_remote_label()} :</strong>
+          {m.data_privacy_modal_privacy_remote()}
+        </li>
+        <li>
+          <strong>{m.data_privacy_modal_privacy_dpo_label()} :</strong>
+          {m.data_privacy_modal_privacy_dpo()}
+          <a href={`mailto:${DPO_EMAIL}`}>{DPO_EMAIL}</a>.
+        </li>
+      </ul>
     </section>
 
     <section>
@@ -119,12 +131,6 @@
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--cds-text-01);
-  }
-
-  :global(.data-privacy-body p) {
-    margin: 0;
-    color: var(--cds-text-02);
-    line-height: 1.5;
   }
 
   .data-privacy-list {
