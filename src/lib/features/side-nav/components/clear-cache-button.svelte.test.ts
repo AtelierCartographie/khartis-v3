@@ -23,12 +23,14 @@ describe('ClearCacheButton', () => {
 
     await fireEvent.click(screen.getByTestId('sidenav-clear-cache-button'));
 
-    expect(screen.getByText('Mettre à jour Khartis ?')).toBeTruthy();
+    expect(screen.getByText('Actualiser Khartis ?')).toBeTruthy();
     expect(
-      screen.getByText('Vos projets sauvegardés restent conservés.')
+      screen.getByText(
+        'Khartis va nettoyer son moteur puis recharger la page. Vos projets sauvegardés restent conservés et se rouvrent depuis le menu.'
+      )
     ).toBeTruthy();
 
-    await fireEvent.click(screen.getByText('Mettre à jour maintenant'));
+    await fireEvent.click(screen.getByText('Actualiser'));
 
     await waitFor(() => {
       expect(mocks.factoryResetPwaMock).toHaveBeenCalledWith({ reload: true });

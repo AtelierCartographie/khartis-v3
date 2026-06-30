@@ -28,6 +28,7 @@
     CopyFile,
     Download,
     DocumentAdd,
+    Education,
     FolderOpen,
     Information,
     Launch,
@@ -157,20 +158,6 @@
     }
   }
 
-  function getInstallButtonStatus() {
-    if (isInstalledAsApp) {
-      return m.sidenav_install_app_active();
-    }
-    if (deferredInstallPrompt) {
-      return m.sidenav_install_app_ready();
-    }
-    return m.sidenav_install_app_manual();
-  }
-
-  function getInstallButtonAriaLabel() {
-    return `${m.sidenav_install_app()}: ${getInstallButtonStatus()}`;
-  }
-
   function getInstallInstructions(): InstallInstruction[] {
     return [
       {
@@ -189,8 +176,7 @@
         open: currentBrowser === 'chrome',
         steps: [
           m.sidenav_install_help_chromium_step_1(),
-          m.sidenav_install_help_chromium_step_2(),
-          m.sidenav_install_help_chromium_step_3()
+          m.sidenav_install_help_chromium_step_2()
         ]
       },
       {
@@ -242,6 +228,10 @@
 
   const isDarkTheme = $derived(
     currentTheme === 'g80' || currentTheme === 'g90' || currentTheme === 'g100'
+  );
+
+  const khartisSiteBase = $derived(
+    `https://www.sciencespo.fr/cartographie/${sideNav.currentLocale === 'en' ? 'en' : 'fr'}/outils/khartis`
   );
 
   function handleThemeToggle(checked: boolean) {
@@ -457,20 +447,14 @@
               size="small"
               kind="ghost"
               icon={Download}
-              class="menu-bar-item app-action-button"
+              class="menu-bar-item"
               data-testid="sidenav-install-app"
               disabled={isInstalledAsApp}
-              aria-label={getInstallButtonAriaLabel()}
               on:click={handleInstallApp}
             >
-              <span class="app-action-copy">
-                <span class="app-action-title">
-                  {isInstalledAsApp
-                    ? m.sidenav_install_app_installed()
-                    : m.sidenav_install_app()}
-                </span>
-                <span class="app-action-meta">{getInstallButtonStatus()}</span>
-              </span>
+              {isInstalledAsApp
+                ? m.sidenav_install_app_installed()
+                : m.sidenav_install_app()}
             </Button>
 
             <ClearCacheButton />
@@ -494,27 +478,37 @@
               kind="ghost"
               icon={Launch}
               class="menu-bar-item"
-              href="https://www.sciencespo.fr/cartographie/khartis/docs/"
+              href={`${khartisSiteBase}/prise-en-main`}
               target="_blank"
-              rel="noopener noreferrer">{m.sidenav_documentation()}</Button
+              rel="noopener noreferrer">{m.sidenav_getting_started()}</Button
             >
             <Button
               size="small"
               kind="ghost"
               icon={Launch}
               class="menu-bar-item"
-              href="https://github.com/AtelierCartographie/Khartis/issues/new?template=bug_report.md"
+              href={`${khartisSiteBase}/mode-emploi`}
               target="_blank"
-              rel="noopener noreferrer">{m.sidenav_report_bug()}</Button
+              rel="noopener noreferrer">{m.sidenav_user_guide()}</Button
             >
+            <Button
+              size="small"
+              kind="ghost"
+              icon={Education}
+              class="menu-bar-item"
+              disabled
+            >
+              {m.sidenav_carto_culture()}
+              <span class="coming-soon">{m.sidenav_coming_soon()}</span>
+            </Button>
             <Button
               size="small"
               kind="ghost"
               icon={Launch}
               class="menu-bar-item"
-              href="https://github.com/AtelierCartographie/Khartis/issues/new?template=feature_request.md"
+              href={`${khartisSiteBase}/retours`}
               target="_blank"
-              rel="noopener noreferrer">{m.sidenav_suggest_feature()}</Button
+              rel="noopener noreferrer">{m.sidenav_feedback()}</Button
             >
           </Column>
         </Row>
@@ -536,16 +530,26 @@
               kind="ghost"
               icon={Launch}
               class="menu-bar-item"
-              href="https://www.sciencespo.fr/cartographie/khartis/"
+              href={khartisSiteBase}
               target="_blank"
               rel="noopener noreferrer">{m.sidenav_presentation_page()}</Button
             >
             <Button
               size="small"
               kind="ghost"
+              icon={Information}
+              class="menu-bar-item"
+              disabled
+            >
+              {m.sidenav_data_privacy()}
+              <span class="coming-soon">{m.sidenav_coming_soon()}</span>
+            </Button>
+            <Button
+              size="small"
+              kind="ghost"
               icon={Launch}
               class="menu-bar-item"
-              href="https://github.com/AtelierCartographie/Khartis"
+              href="https://github.com/AtelierCartographie/khartis-v3/"
               target="_blank"
               rel="noopener noreferrer">{m.sidenav_github()}</Button
             >
@@ -554,16 +558,7 @@
               kind="ghost"
               icon={Launch}
               class="menu-bar-item"
-              href="https://www.sciencespo.fr/cartographie/khartis/docs/FAQ/"
-              target="_blank"
-              rel="noopener noreferrer">{m.sidenav_data_privacy()}</Button
-            >
-            <Button
-              size="small"
-              kind="ghost"
-              icon={Launch}
-              class="menu-bar-item"
-              href="https://www.sciencespo.fr/cartographie/khartis/"
+              href={`${khartisSiteBase}/old`}
               target="_blank"
               rel="noopener noreferrer">{m.sidenav_khartis_v2()}</Button
             >
@@ -698,44 +693,6 @@
     width: 100%;
   }
 
-  #khartis-side-nav :global(.app-action-button) {
-    min-height: 2.25rem;
-    padding-top: var(--cds-spacing-01);
-    padding-bottom: var(--cds-spacing-01);
-  }
-
-  #khartis-side-nav :global(.app-action-button .bx--btn__icon) {
-    flex: 0 0 auto;
-  }
-
-  #khartis-side-nav :global(.app-action-copy) {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    min-width: 0;
-    line-height: 1.1;
-  }
-
-  #khartis-side-nav :global(.app-action-title),
-  #khartis-side-nav :global(.app-action-meta) {
-    overflow: hidden;
-    max-width: 100%;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  #khartis-side-nav :global(.app-action-title) {
-    color: currentColor;
-    font-size: 0.875rem;
-  }
-
-  #khartis-side-nav :global(.app-action-meta) {
-    margin-top: 0.0625rem;
-    color: var(--cds-text-03);
-    font-size: 0.6875rem;
-    font-weight: 400;
-  }
-
   #khartis-side-nav :global(.bx--side-nav) {
     top: var(--khartis-side-nav-top);
     height: calc(100dvh - var(--khartis-side-nav-top)) !important;
@@ -834,6 +791,12 @@
   }
 
   .shortcut-icon {
+    font-size: 0.65rem;
+    color: var(--cds-text-03);
+    margin-left: auto;
+  }
+
+  .coming-soon {
     font-size: 0.65rem;
     color: var(--cds-text-03);
     margin-left: auto;
