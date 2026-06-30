@@ -40,6 +40,7 @@
   import Separator from '../commons/components/separator.svelte';
   import Switch from '../commons/components/switch.svelte';
   import ClearCacheButton from './components/clear-cache-button.svelte';
+  import DataPrivacyModal from './components/data-privacy-modal.svelte';
   import { useSideNav } from './hooks/use-side-nav.svelte';
 
   const DEFAULT_APP_VERSION = '1.6.0-staging.1';
@@ -534,16 +535,7 @@
               target="_blank"
               rel="noopener noreferrer">{m.sidenav_presentation_page()}</Button
             >
-            <Button
-              size="small"
-              kind="ghost"
-              icon={Information}
-              class="menu-bar-item"
-              disabled
-            >
-              {m.sidenav_data_privacy()}
-              <span class="coming-soon">{m.sidenav_coming_soon()}</span>
-            </Button>
+            <DataPrivacyModal />
             <Button
               size="small"
               kind="ghost"
