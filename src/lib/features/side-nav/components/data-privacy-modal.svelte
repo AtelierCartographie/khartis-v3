@@ -9,6 +9,10 @@
   } from 'carbon-components-svelte';
   import { Information } from 'carbon-icons-svelte';
 
+  const DPO_EMAIL = 'dpo@sciencespo.fr';
+  const CONTACT_EMAIL = 'carto@sciencespo.fr';
+  const GITHUB_URL = 'https://github.com/AtelierCartographie/khartis-v3/';
+
   let isOpen = $state(false);
 
   function openModal() {
@@ -39,16 +43,56 @@
       <p>{m.data_privacy_modal_privacy_local()}</p>
       <p>{m.data_privacy_modal_privacy_analytics()}</p>
       <p>{m.data_privacy_modal_privacy_remote()}</p>
+      <p>
+        {m.data_privacy_modal_privacy_dpo()}
+        <a href={`mailto:${DPO_EMAIL}`}>{DPO_EMAIL}</a>.
+      </p>
     </section>
 
     <section>
       <h3>{m.data_privacy_modal_legal_heading()}</h3>
-      <ul class="data-privacy-legal">
-        <li>{m.data_privacy_modal_legal_publisher()}</li>
-        <li>{m.data_privacy_modal_legal_address()}</li>
-        <li>{m.data_privacy_modal_legal_director()}</li>
-        <li>{m.data_privacy_modal_legal_host()}</li>
-        <li>{m.data_privacy_modal_legal_contact()}</li>
+      <ul class="data-privacy-list">
+        <li>
+          <strong>{m.data_privacy_modal_legal_publisher_label()} :</strong>
+          {m.data_privacy_modal_legal_publisher_value()}
+        </li>
+        <li>
+          <strong>{m.data_privacy_modal_legal_address_label()} :</strong>
+          {m.data_privacy_modal_legal_address_value()}
+        </li>
+        <li>
+          <strong>{m.data_privacy_modal_legal_phone_label()} :</strong>
+          {m.data_privacy_modal_legal_phone_value()}
+        </li>
+        <li>
+          <strong>{m.data_privacy_modal_legal_director_label()} :</strong>
+          {m.data_privacy_modal_legal_director_value()}
+        </li>
+        <li>
+          <strong>{m.data_privacy_modal_legal_host_label()} :</strong>
+          {m.data_privacy_modal_legal_host_value()}
+        </li>
+        <li>
+          <strong>{m.data_privacy_modal_legal_contact_label()} :</strong>
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+        </li>
+      </ul>
+    </section>
+
+    <section>
+      <h3>{m.data_privacy_modal_license_heading()}</h3>
+      <ul class="data-privacy-list">
+        <li>
+          <strong>{m.data_privacy_modal_license_software_label()} :</strong>
+          {m.data_privacy_modal_license_software_text()}
+          <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer"
+            >{m.data_privacy_modal_license_software_link()}</a
+          >.
+        </li>
+        <li>
+          <strong>{m.data_privacy_modal_license_data_label()} :</strong>
+          {m.data_privacy_modal_license_data_value()}
+        </li>
       </ul>
     </section>
   </ModalBody>
@@ -83,7 +127,7 @@
     line-height: 1.5;
   }
 
-  .data-privacy-legal {
+  .data-privacy-list {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-02);
@@ -91,5 +135,9 @@
     padding-left: 1.25rem;
     color: var(--cds-text-02);
     line-height: 1.5;
+  }
+
+  .data-privacy-list strong {
+    color: var(--cds-text-01);
   }
 </style>
