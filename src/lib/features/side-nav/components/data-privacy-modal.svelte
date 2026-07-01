@@ -38,6 +38,8 @@
 <ComposedModal bind:open={isOpen} size="sm" on:close={closeModal}>
   <ModalHeader title={m.sidenav_data_privacy()} />
   <ModalBody class="data-privacy-body">
+    <p class="data-privacy-intro">{m.data_privacy_modal_intro()}</p>
+
     <section>
       <h3>{m.data_privacy_modal_privacy_heading()}</h3>
       <ul class="data-privacy-list">
@@ -93,7 +95,6 @@
 
     <section>
       <h3>{m.data_privacy_modal_team_heading()}</h3>
-      <p class="data-privacy-intro">{m.data_privacy_modal_team_intro()}</p>
       <ul class="data-privacy-list">
         <li>
           <strong>{m.data_privacy_modal_team_design_label()} :</strong>
