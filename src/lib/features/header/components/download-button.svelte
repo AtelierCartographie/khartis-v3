@@ -103,12 +103,6 @@
 
   const exportTargets = $derived([
     {
-      id: ExportTab.PROJECT,
-      label: m.download_tab_project(),
-      description: m.download_project_description(),
-      icon: DocumentExport
-    },
-    {
       id: ExportTab.MAP,
       label: m.download_tab_map(),
       description: m.download_map_description(),
@@ -119,19 +113,23 @@
       label: m.download_tab_data(),
       description: m.download_data_description(),
       icon: DataStructured
+    },
+    {
+      id: ExportTab.PROJECT,
+      label: m.download_tab_project(),
+      description: m.download_project_description(),
+      icon: DocumentExport
     }
   ]);
 
   const mapFormatOptions = $derived([
     {
       id: MAP_FORMAT.SVG,
-      label: m.download_map_svg(),
-      description: m.download_map_svg_note()
+      label: m.download_map_svg()
     },
     {
       id: MAP_FORMAT.JPG,
-      label: m.download_map_jpg(),
-      description: m.download_map_jpg_note()
+      label: m.download_map_jpg()
     }
   ]);
 
@@ -275,11 +273,6 @@
             selected={modal.mapFormat}
             onchange={(value) => handleMapFormatChange(value)}
           />
-
-          <p class="option-note">
-            {mapFormatOptions.find((option) => option.id === modal.mapFormat)
-              ?.description}
-          </p>
 
           <section class="export-summary" aria-live="polite">
             <p class="summary-heading">{m.download_map_current_page()}</p>
@@ -544,14 +537,6 @@
   .option-section {
     display: grid;
     gap: var(--cds-spacing-03);
-  }
-
-  .option-note {
-    max-width: 34rem;
-    margin: calc(var(--cds-spacing-02) * -1) 0 0;
-    color: var(--cds-text-secondary, #525252);
-    font-size: 0.75rem;
-    line-height: 1.45;
   }
 
   .export-summary {
