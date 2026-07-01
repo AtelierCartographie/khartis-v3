@@ -364,12 +364,27 @@
     width: 100%;
     overflow-x: auto;
     overflow-y: hidden;
-    scrollbar-width: none;
     scroll-snap-type: x proximity;
+    overscroll-behavior-x: contain;
   }
 
   .style-rail::-webkit-scrollbar {
-    display: none;
+    height: 8px;
+    -webkit-appearance: none;
+  }
+
+  .style-rail::-webkit-scrollbar-track {
+    background: var(--cds-layer-02, #e8e8e8);
+    border-radius: 4px;
+  }
+
+  .style-rail::-webkit-scrollbar-thumb {
+    background-color: var(--cds-border-strong, #8d8d8d);
+    border-radius: 4px;
+  }
+
+  .style-rail::-webkit-scrollbar-thumb:hover {
+    background-color: var(--cds-text-secondary, #525252);
   }
 
   .style-rail-track {
@@ -378,6 +393,7 @@
     grid-auto-columns: 184px;
     gap: var(--cds-spacing-03);
     width: max-content;
+    padding-bottom: var(--cds-spacing-03);
   }
 
   .groups-section {
