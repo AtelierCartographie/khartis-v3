@@ -185,8 +185,7 @@ function installFakeIndexedDb(database: FakeDatabase): void {
           onsuccess: (() => void) | null;
           onerror: (() => void) | null;
           onupgradeneeded:
-            | ((event: { target: { result: FakeDatabase } }) => void)
-            | null;
+            ((event: { target: { result: FakeDatabase } }) => void) | null;
         } = {
           result: database,
           error: null,

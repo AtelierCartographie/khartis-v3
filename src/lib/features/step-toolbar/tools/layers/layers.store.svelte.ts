@@ -723,22 +723,20 @@ function buildTiledBasemapSubLayers(): Layer[] {
 
   return TILED_LAYER_ITEMS.filter((item) =>
     item.groupIds.every((groupId) => visibleGroupIds.has(groupId))
-  ).map(
-    (item, index): Layer => ({
-      id: buildBasemapSubLayerId(buildTiledBasemapLayerId(item.id)),
-      isSubLayer: true,
-      kind: 'basemap-aux',
-      type: 'geographic',
-      basemapRenderGroup: 'background',
-      tiledLayerGroupIds: item.groupIds,
-      tiledLayerDefaultVisible: item.defaultVisible,
-      name: getTiledLayerName(item.id),
-      visible: isTiledLayerVisible(config, item.groupIds, item.defaultVisible),
-      color: BASEMAP_SUBLAYER_COLOR,
-      opacity: 100,
-      order: index
-    })
-  );
+  ).map((item, index): Layer => ({
+    id: buildBasemapSubLayerId(buildTiledBasemapLayerId(item.id)),
+    isSubLayer: true,
+    kind: 'basemap-aux',
+    type: 'geographic',
+    basemapRenderGroup: 'background',
+    tiledLayerGroupIds: item.groupIds,
+    tiledLayerDefaultVisible: item.defaultVisible,
+    name: getTiledLayerName(item.id),
+    visible: isTiledLayerVisible(config, item.groupIds, item.defaultVisible),
+    color: BASEMAP_SUBLAYER_COLOR,
+    opacity: 100,
+    order: index
+  }));
 }
 
 function buildLayers(): Layer[] {
@@ -774,24 +772,22 @@ function buildLayers(): Layer[] {
 
       const vizAccentColor = getVisualizationAccentColor(vizOrder);
 
-      return vizPrimitiveOrder.map(
-        (primitive, i): Layer => ({
-          id: buildVisualizationSubLayerId(viz.id, primitive),
-          parentId: viz.id,
-          isSubLayer: true,
-          kind: 'viz-primitive',
-          primitive,
-          name: getPrimitiveLayerName(primitive, vizLabel),
-          primitiveLabel: getVisualizationPrimitiveName(primitive),
-          subtitle: vizLabel,
-          accentColor: vizAccentColor,
-          visible: vizVisible && primitiveFilters.includes(primitive),
-          type: 'visualization',
-          color: getVisualizationPrimitiveColor(viz, primitive),
-          opacity: getVisualizationPrimitiveOpacity(viz, primitive),
-          order: i
-        })
-      );
+      return vizPrimitiveOrder.map((primitive, i): Layer => ({
+        id: buildVisualizationSubLayerId(viz.id, primitive),
+        parentId: viz.id,
+        isSubLayer: true,
+        kind: 'viz-primitive',
+        primitive,
+        name: getPrimitiveLayerName(primitive, vizLabel),
+        primitiveLabel: getVisualizationPrimitiveName(primitive),
+        subtitle: vizLabel,
+        accentColor: vizAccentColor,
+        visible: vizVisible && primitiveFilters.includes(primitive),
+        type: 'visualization',
+        color: getVisualizationPrimitiveColor(viz, primitive),
+        opacity: getVisualizationPrimitiveOpacity(viz, primitive),
+        order: i
+      }));
     }
   );
 
@@ -801,9 +797,10 @@ function buildLayers(): Layer[] {
     resolveTiledStyleConfig() !== null
       ? buildTiledBasemapSubLayers()
       : buildVectorBasemapSubLayers()
-  ).map(
-    (layer): Layer => ({ ...layer, accentColor: BASEMAP_LAYER_ACCENT_COLOR })
-  );
+  ).map((layer): Layer => ({
+    ...layer,
+    accentColor: BASEMAP_LAYER_ACCENT_COLOR
+  }));
 
   // Single source of truth for stacking: project the live rows onto the
   // persisted flat order (manual drags win, new rows slot in at their default

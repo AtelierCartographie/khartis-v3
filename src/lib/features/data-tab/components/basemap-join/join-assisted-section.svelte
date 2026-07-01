@@ -618,8 +618,7 @@
                               shouldFilterItem={shouldFilterBasemapItem}
                               on:select={(e) => {
                                 const item = e.detail.selectedItem as
-                                  | ComboBoxItem
-                                  | undefined;
+                                  ComboBoxItem | undefined;
                                 const nextValue = item?.text;
                                 if (
                                   nextValue &&
@@ -875,8 +874,7 @@
                                 handleUnrecognizedSelect(
                                   entity,
                                   e.detail.selectedItem as
-                                    | ComboBoxItem
-                                    | undefined
+                                    ComboBoxItem | undefined
                                 )}
                             />
                           {/key}

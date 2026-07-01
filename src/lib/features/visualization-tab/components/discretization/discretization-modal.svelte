@@ -272,8 +272,7 @@
   }
 
   function getLocalClassificationBase():
-    | Partial<ClassificationConfig>
-    | undefined {
+    Partial<ClassificationConfig> | undefined {
     return lastLocalContextKey === activeContextKey
       ? (lastLocalClassification ?? activeClassification)
       : activeClassification;
@@ -392,8 +391,7 @@
     const classificationForSync =
       lastLocalContextKey === activeContextKey
         ? ((lastLocalClassification ?? activeClassification) as
-            | ClassificationConfig
-            | undefined)
+            ClassificationConfig | undefined)
         : activeClassification;
 
     syncStateFromVisualization(classificationForSync);

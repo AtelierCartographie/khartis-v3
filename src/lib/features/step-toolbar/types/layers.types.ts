@@ -5,9 +5,7 @@ import type { LayerGroupId } from '$lib/features/map/constants/carte-facile-laye
 
 export type LayerType = 'visualization' | 'geographic';
 export type LayerReorderScope =
-  | 'visualization'
-  | 'geographic-background'
-  | 'geographic-foreground';
+  'visualization' | 'geographic-background' | 'geographic-foreground';
 
 /**
  * Row category in the flattened layers panel (#182):

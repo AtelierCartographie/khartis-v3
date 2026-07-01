@@ -361,8 +361,7 @@ async function deriveJoinQualityFromCache(
     source_dup_count: number;
     status: 'matched' | 'check' | 'ambiguous' | 'not_found' | 'duplicate';
     candidates:
-      | { id: string; name: string; score: number; type: string }[]
-      | null;
+      { id: string; name: string; score: number; type: string }[] | null;
     best_score: number | null;
   }>;
 
@@ -375,8 +374,7 @@ function buildJoinQualityFromRows(
     source_dup_count: number;
     status: 'matched' | 'check' | 'ambiguous' | 'not_found' | 'duplicate';
     candidates:
-      | { id: string; name: string; score: number; type: string }[]
-      | null;
+      { id: string; name: string; score: number; type: string }[] | null;
     best_score: number | null;
   }>
 ): JoinQuality {

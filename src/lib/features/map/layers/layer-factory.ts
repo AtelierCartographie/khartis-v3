@@ -398,8 +398,7 @@ function reorderBinaryAttribute(
 function sortScatterBinaryDataByRadius(scatterBinaryData: ScatterBinaryData) {
   const featureIds = scatterBinaryData.featureIds;
   const radiusAttribute = scatterBinaryData.attributes.getRadius as
-    | { value?: unknown; size?: unknown }
-    | undefined;
+    { value?: unknown; size?: unknown } | undefined;
   const radiusValues = radiusAttribute?.value;
   if (
     !featureIds ||

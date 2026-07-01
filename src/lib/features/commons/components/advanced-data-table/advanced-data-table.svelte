@@ -55,11 +55,7 @@
     DataTableSkeleton as unknown as Component<DataTableSkeletonRuntimeProps>;
 
   export type HighlightType =
-    | 'exact'
-    | 'contains'
-    | 'partial'
-    | 'current'
-    | null;
+    'exact' | 'contains' | 'partial' | 'current' | null;
 
   export interface CellHighlight {
     rowId: number;

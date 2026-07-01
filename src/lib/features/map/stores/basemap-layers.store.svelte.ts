@@ -412,8 +412,7 @@ function normalizeSerializedLayers(
 
   // Migrate projects saved with the legacy MERS default (#c8c8c8) to the current default
   const mersLayer = result.find((l) => l.id === 'mers') as
-    | MersLayerConfig
-    | undefined;
+    MersLayerConfig | undefined;
   const mersDefault = DEFAULT_LAYERS.find(
     (l) => l.id === 'mers'
   ) as MersLayerConfig;
@@ -444,8 +443,7 @@ function createBasemapLayersStore() {
     id: T
   ): Extract<BasemapLayerConfig, { id: T }> | undefined {
     return state.layers.find((layer) => layer.id === id) as
-      | Extract<BasemapLayerConfig, { id: T }>
-      | undefined;
+      Extract<BasemapLayerConfig, { id: T }> | undefined;
   }
 
   function setLayerVisibility(id: BasemapLayerId, visible: boolean): void {

@@ -165,8 +165,7 @@ describe('createProjectActions.removeUploadedFile', () => {
     (
       projectStore as unknown as {
         currentProject:
-          | { data?: { sourceFiles?: Array<{ name: string }> } }
-          | undefined;
+          { data?: { sourceFiles?: Array<{ name: string }> } } | undefined;
       }
     ).currentProject = undefined;
     createProjectState.tryExample.selectedCategory = ExampleCategory.ALL;
