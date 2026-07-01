@@ -8,9 +8,7 @@ import * as m from '$lib/paraglide/messages';
 export type TextAlignment = 'left' | 'center' | 'right';
 
 export type AlignmentIcon =
-  | typeof TextAlignLeft
-  | typeof TextAlignCenter
-  | typeof TextAlignRight;
+  typeof TextAlignLeft | typeof TextAlignCenter | typeof TextAlignRight;
 
 export const TEXT_ALIGNMENTS: readonly TextAlignment[] = [
   'left',

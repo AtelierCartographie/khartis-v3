@@ -6,8 +6,7 @@ const mocks = vi.hoisted(() => ({
   datasetsStoreMock: {
     datasets: [] as Array<{ id: string; sourceFileId: string }>,
     selectedDataset: undefined as
-      | { id: string; sourceFileId: string }
-      | undefined,
+      { id: string; sourceFileId: string } | undefined,
     getDatasetBySourceFile: vi.fn(),
     waitForDatasetBySourceFile: vi.fn(),
     selectDataset: vi.fn(),

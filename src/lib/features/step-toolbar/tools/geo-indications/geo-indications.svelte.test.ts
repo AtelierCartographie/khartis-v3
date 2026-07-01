@@ -97,8 +97,7 @@ describe('geo-indications tool', () => {
     render(GeoIndications);
 
     const fontSizeSelect = screen.getAllByRole('combobox').at(-1) as
-      | HTMLSelectElement
-      | undefined;
+      HTMLSelectElement | undefined;
 
     expect(fontSizeSelect).toBeDefined();
     expect(fontSizeSelect?.value).toBe('16');

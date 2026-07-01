@@ -64,8 +64,7 @@
     id: T
   ): Extract<BasemapLayerConfig, { id: T }> | undefined {
     return layerConfigs.get(id) as
-      | Extract<BasemapLayerConfig, { id: T }>
-      | undefined;
+      Extract<BasemapLayerConfig, { id: T }> | undefined;
   }
 
   function isVisible(): boolean {

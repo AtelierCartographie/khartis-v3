@@ -64,8 +64,7 @@ export interface AnnotationStyle {
   curvature?: number;
 
   backgroundColor?:
-    | string
-    | { hue: number; saturation: number; lightness: number };
+    string | { hue: number; saturation: number; lightness: number };
   backgroundOpacity?: number;
 
   smoothness?: number;

@@ -36,12 +36,7 @@ export interface FileValidation {
 }
 
 export type ColumnTransformationType =
-  | 'rename'
-  | 'drop'
-  | 'type_change'
-  | 'refine'
-  | 'calculate'
-  | 'replace';
+  'rename' | 'drop' | 'type_change' | 'refine' | 'calculate' | 'replace';
 
 export const COLUMN_TRANSFORMATION_TYPES = {
   RENAME: 'rename',

@@ -28,11 +28,7 @@ import {
 type DeckInstance = Deck<View | View[] | null>;
 export type ViewportFitMode = 'auto' | 'manual';
 export type ViewportFitReason =
-  | 'dataset'
-  | 'basemap'
-  | 'projection'
-  | 'reset'
-  | 'restore';
+  'dataset' | 'basemap' | 'projection' | 'reset' | 'restore';
 
 interface DeckViewState {
   target: [number, number, number];

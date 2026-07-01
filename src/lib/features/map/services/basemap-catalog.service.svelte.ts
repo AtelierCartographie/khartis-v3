@@ -476,8 +476,7 @@ function createBasemapCatalogService() {
   });
   let catalogBasemapsVersion = 0;
   let catalogBasemapsCache:
-    | { version: number; basemaps: BasemapMetadata[] }
-    | undefined;
+    { version: number; basemaps: BasemapMetadata[] } | undefined;
 
   function invalidateCatalogBasemapsCache(): void {
     catalogBasemapsVersion++;

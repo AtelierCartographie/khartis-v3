@@ -56,9 +56,6 @@ export const enum VisualizationTools {
 }
 
 export type ProjectionFilterId =
-  | 'all'
-  | 'Rectangulaire'
-  | 'Arrondie'
-  | 'Discontinue';
+  'all' | 'Rectangulaire' | 'Arrondie' | 'Discontinue';
 
 export type ProjectionViewMode = 'list' | 'grid';

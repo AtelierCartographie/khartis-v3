@@ -56,12 +56,7 @@
   let currentTheme = $state<'white' | 'g10' | 'g80' | 'g90' | 'g100'>('white');
 
   type BrowserFamily =
-    | 'ios'
-    | 'chrome'
-    | 'safari'
-    | 'firefox'
-    | 'opera'
-    | 'other';
+    'ios' | 'chrome' | 'safari' | 'firefox' | 'opera' | 'other';
 
   interface BeforeInstallPromptEvent extends Event {
     readonly platforms?: string[];

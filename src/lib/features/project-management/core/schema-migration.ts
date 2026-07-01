@@ -477,8 +477,7 @@ export function migrateIfNeeded(
   data: Record<string, unknown>
 ): Record<string, unknown> {
   const inputManifest = data.manifest as
-    | { version?: string; [k: string]: unknown }
-    | undefined;
+    { version?: string; [k: string]: unknown } | undefined;
   let currentVersion = inputManifest?.version ?? '3.0.0';
   let migrated = data;
 
@@ -502,8 +501,7 @@ export function migrateIfNeeded(
   }
 
   const outputManifest = migrated.manifest as
-    | { version?: string; [k: string]: unknown }
-    | undefined;
+    { version?: string; [k: string]: unknown } | undefined;
   if (outputManifest) {
     outputManifest.version = PROJECT_CONST.APP_VERSION;
   }

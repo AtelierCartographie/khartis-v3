@@ -701,8 +701,7 @@ function createDataOrchestratorService() {
 
     const currentProject = projectStore.currentProject;
     const serializedData = currentProject?.data as
-      | SerializedProjectData
-      | undefined;
+      SerializedProjectData | undefined;
     const shouldSuggestProjection =
       !serializedData?.layoutSettings?.projection?.overrideActive;
 

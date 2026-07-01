@@ -376,8 +376,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   }
 
   function getVisibleProjectedCanvasExtent():
-    | [[number, number], [number, number]]
-    | null {
+    [[number, number], [number, number]] | null {
     const referenceBbox = projectionStore.referenceBbox;
     if (!referenceBbox) {
       const viewportSize = getProjectionViewportSize();

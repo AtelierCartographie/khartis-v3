@@ -190,6 +190,9 @@
   const mapCanvasHeight = $derived(
     Math.max(1, Math.round(logicalMapCanvasHeight * pageDisplayScale))
   );
+  const legendStageStyle = $derived(
+    `left: ${renderedPageMargins.left}px; top: ${renderedPageMargins.top}px; width: ${mapCanvasWidth}px; height: ${mapCanvasHeight}px;`
+  );
   const renderModelMatrix = $derived.by(() => {
     const modelMatrix = projectionStore.modelMatrix;
     if (!modelMatrix) {
@@ -1351,6 +1354,12 @@
       : mapInstanceStore.hasPendingOrthographicRestore;
   }
 
+  function shouldPreserveManualViewport(): boolean {
+    return (
+      !mapInstanceStore.isViewportAutoFitManaged && !hasPendingViewportRestore()
+    );
+  }
+
   const mapBasemap = useMapBasemap({
     getMap: () => mapInit.map,
     getIsMapLoaded: () => mapInit.isMapLoaded,
@@ -1695,6 +1704,10 @@
       if (shouldFit) {
         lastFittedDatasetId = firstDatasetId;
       }
+      const preserveManualViewport = untrack(() =>
+        shouldPreserveManualViewport()
+      );
+      const shouldFitViewport = shouldFit && !preserveManualViewport;
       const refBasemapId = basemapStyleStore.referenceBasemapId;
       if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
         const dataset = getRenderedDataset(firstDatasetId);
@@ -1715,12 +1728,12 @@
         ) {
           untrack(() => {
             scheduleLayerUpdate('effect:firstTable-bounds');
-            if (shouldFit) fitOrthographicViewport('dataset');
+            if (shouldFitViewport) fitOrthographicViewport('dataset');
           });
           triggerOnReady();
         } else if (shouldUseBasemapReference && projectionStore.referenceBbox) {
           untrack(() => {
-            if (shouldFit) fitOrthographicViewport('basemap');
+            if (shouldFitViewport) fitOrthographicViewport('basemap');
           });
           triggerOnReady();
         } else if (!shouldUseBasemapReference) {
@@ -1729,13 +1742,17 @@
             untrack(() => {
               projectionStore.setReferenceBboxFromMetadata(geoMetadata);
               scheduleLayerUpdate('effect:firstTable-metadata');
-              if (shouldFit) fitOrthographicViewport('dataset');
+              if (shouldFitViewport) fitOrthographicViewport('dataset');
             });
             triggerOnReady();
           }
         }
       } else if (mapInit.map && shouldFit) {
         if (mapInstanceStore.applyPendingMapLibreRestore()) {
+          triggerOnReady();
+          return;
+        }
+        if (preserveManualViewport) {
           triggerOnReady();
           return;
         }
@@ -1771,6 +1788,10 @@
           triggerOnReady();
           return;
         }
+        if (untrack(() => shouldPreserveManualViewport())) {
+          triggerOnReady();
+          return;
+        }
         untrack(() =>
           mapBounds.fitToGeoJSONBounds(firstGeoJSON, {
             reason: 'dataset'
@@ -1778,6 +1799,7 @@
         );
       } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
         untrack(() => {
+          const preserveManualViewport = shouldPreserveManualViewport();
           const refBasemapId = basemapStyleStore.referenceBasemapId;
           if (refBasemapId && worldBaseTable) {
             const referenceState = resolveOrthographicBasemapReferenceState(
@@ -1793,7 +1815,7 @@
                 referenceState.renderProjection
               );
               scheduleLayerUpdate('effect:firstGeoJSON-basemap');
-              fitOrthographicViewport('basemap');
+              if (!preserveManualViewport) fitOrthographicViewport('basemap');
               return;
             }
           }
@@ -1811,7 +1833,7 @@
               null
             );
             scheduleLayerUpdate('effect:firstGeoJSON');
-            fitOrthographicViewport('dataset');
+            if (!preserveManualViewport) fitOrthographicViewport('dataset');
           }
         });
         triggerOnReady();
@@ -2197,10 +2219,18 @@
                   ];
                 }
                 if (bounds) {
-                  mapBounds.fitToBounds(bounds, {
-                    animate: true,
-                    reason: 'basemap'
-                  });
+                  if (mapInstanceStore.applyPendingMapLibreRestore()) {
+                    if (shouldReleaseSuggestedPreview) {
+                      queueSuggestedPreviewViewportSettled();
+                    }
+                  } else if (!shouldPreserveManualViewport()) {
+                    mapBounds.fitToBounds(bounds, {
+                      animate: true,
+                      reason: 'basemap'
+                    });
+                  } else if (shouldReleaseSuggestedPreview) {
+                    queueSuggestedPreviewViewportSettled();
+                  }
                 } else if (shouldReleaseSuggestedPreview) {
                   queueSuggestedPreviewViewportSettled();
                 }
@@ -2217,11 +2247,13 @@
                     referenceState.renderProjection
                   );
                 }
-                if (mapInit.isMapLoaded) {
-                  mapInstanceStore.fitToOrthographicBounds('basemap');
-                } else {
-                  pendingOrthographicFit = true;
-                  pendingOrthographicFitReason = 'basemap';
+                if (!shouldPreserveManualViewport()) {
+                  if (mapInit.isMapLoaded) {
+                    mapInstanceStore.fitToOrthographicBounds('basemap');
+                  } else {
+                    pendingOrthographicFit = true;
+                    pendingOrthographicFitReason = 'basemap';
+                  }
                 }
                 if (shouldReleaseSuggestedPreview) {
                   queueSuggestedPreviewViewportSettled();
@@ -2416,10 +2448,6 @@
         </div>
       {/if}
 
-      {#if showLegendOverlay}
-        <LegendOverlay hidden={!showLegendPreview} />
-      {/if}
-
       {#if showGeoIndicationsOverlay}
         <GeoIndicationsOverlay
           interactive={isStylingMode}
@@ -2427,6 +2455,12 @@
         />
       {/if}
     </div>
+
+    {#if showLegendOverlay}
+      <div class="legend-stage" style={legendStageStyle}>
+        <LegendOverlay hidden={!showLegendPreview} />
+      </div>
+    {/if}
 
     {#if showAnnotationOverlay}
       <AnnotationOverlay interactive={isStylingMode} hidden={!isStylingMode} />
@@ -2452,6 +2486,11 @@
   .map-stage {
     position: relative;
     overflow: hidden;
+  }
+
+  .legend-stage {
+    position: absolute;
+    pointer-events: none;
   }
 
   .map-stage.is-empty {

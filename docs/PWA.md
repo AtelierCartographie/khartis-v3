@@ -36,9 +36,7 @@ VitePWA({
     ],
     maximumFileSizeToCacheInBytes: 10 * 1024 * 1024
   },
-  manifest: {
-    /* voir ci-dessous */
-  }
+  manifest: {/* voir ci-dessous */}
 });
 ```
 

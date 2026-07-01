@@ -124,8 +124,7 @@ describe('persistenceRegistry.flush', () => {
     await flushMicrotasks();
 
     const lastStatus = statusCallback.mock.calls.at(-1)?.[0] as
-      | { isDirty: boolean; lastSaved?: Date }
-      | undefined;
+      { isDirty: boolean; lastSaved?: Date } | undefined;
 
     expect(lastStatus?.isDirty).toBe(false);
     expect(lastStatus?.lastSaved).toBeInstanceOf(Date);

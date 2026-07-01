@@ -77,9 +77,7 @@ function notifyPersistence(
 
 function restoreFromSerialized(data: unknown): void {
   const restored = data as
-    | Partial<DataTabState>
-    | Partial<SerializedDataTabState>
-    | undefined;
+    Partial<DataTabState> | Partial<SerializedDataTabState> | undefined;
   const nextState = structuredClone(DEFAULT_STATE);
 
   if (restored?.dataControl) {

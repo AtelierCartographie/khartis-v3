@@ -19,8 +19,7 @@ import type { ProjectionPresets } from '../types/basemap.types';
 import { getCompositeProjectionPresetId } from './user-projection.utils';
 
 export type GlobeProjectionDisableReason =
-  | 'france-zone'
-  | 'custom-reference-basemap';
+  'france-zone' | 'custom-reference-basemap';
 
 export interface ProjectionAvailabilityContext {
   engine: MapRenderEngine;

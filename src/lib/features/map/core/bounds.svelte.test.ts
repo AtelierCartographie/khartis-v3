@@ -19,8 +19,7 @@ describe('calculateBoundsFromGeoArrow', () => {
     });
 
     const bounds = calculateBoundsFromGeoArrow(table) as
-      | [[number, number], [number, number]]
-      | null;
+      [[number, number], [number, number]] | null;
 
     expect(bounds).not.toBeNull();
     expect(bounds?.[0][0]).toBeCloseTo(5.36, 6);

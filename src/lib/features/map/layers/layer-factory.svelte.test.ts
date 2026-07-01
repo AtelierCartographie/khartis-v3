@@ -677,8 +677,7 @@ describe('createTextOverlayLayers', () => {
     );
 
     const textLayer = layers.find((layer) => layer instanceof TextLayer) as
-      | TextLayer
-      | undefined;
+      TextLayer | undefined;
     const textProps = textLayer?.props as
       | {
           data: unknown[];
@@ -732,8 +731,7 @@ describe('createTextOverlayLayers', () => {
     );
 
     const textLayer = layers.find((layer) => layer instanceof TextLayer) as
-      | TextLayer
-      | undefined;
+      TextLayer | undefined;
     const getSize = (textLayer?.props as { getSize?: unknown } | undefined)
       ?.getSize as ((datum: { rowIndex: number }) => number) | undefined;
 
@@ -782,8 +780,7 @@ describe('createTextOverlayLayers', () => {
     );
 
     const textLayer = layers.find((layer) => layer instanceof TextLayer) as
-      | TextLayer
-      | undefined;
+      TextLayer | undefined;
     const textProps = textLayer?.props as
       | {
           data: unknown[];
@@ -834,8 +831,7 @@ describe('createTextOverlayLayers', () => {
     );
 
     const textLayer = layers.find((layer) => layer instanceof TextLayer) as
-      | TextLayer
-      | undefined;
+      TextLayer | undefined;
     const textProps = textLayer?.props as
       | {
           fontSettings?: { buffer?: number; radius?: number; sdf?: boolean };
@@ -1498,8 +1494,7 @@ describe('createPolygonLayers', () => {
       );
       const strokeLayer = layers.find((layer) => layer.id.includes('-stroke'));
       const props = strokeLayer?.props as
-        | { getDashArray?: [number, number]; capRounded?: boolean }
-        | undefined;
+        { getDashArray?: [number, number]; capRounded?: boolean } | undefined;
       return { dash: props?.getDashArray, capRounded: props?.capRounded };
     };
 
@@ -1838,8 +1833,7 @@ describe('createPolygonLayers', () => {
     });
 
     const fillLayer = layers.find((layer) => layer instanceof GeoJsonLayer) as
-      | GeoJsonLayer
-      | undefined;
+      GeoJsonLayer | undefined;
     const getFillColor = fillLayer?.props.getFillColor as
       | ((feature: Feature<Polygon, { id: string; year: number }>) => number[])
       | undefined;
@@ -1974,8 +1968,7 @@ describe('createPolygonLayers', () => {
     );
     const patternLayer = getPatternLayer(layers);
     const patternLayerProps = patternLayer?.props as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
 
     expect(getPatternAtlasForPatternMock).toHaveBeenCalledWith('diagonal', {
       angle: 315,
@@ -2048,8 +2041,7 @@ describe('createPolygonLayers', () => {
       String(layer.props.id).includes('missing-data-pattern')
     ) as GeoJsonLayer | undefined;
     const patternData = missingPatternLayer?.props.data as
-      | FeatureCollection<Polygon>
-      | undefined;
+      FeatureCollection<Polygon> | undefined;
 
     expect(missingPatternLayer).toBeInstanceOf(GeoJsonLayer);
     expect(
@@ -2113,8 +2105,7 @@ describe('createPolygonLayers', () => {
       String(layer.props.id).includes('missing-data-pattern')
     ) as GeoJsonLayer | undefined;
     const patternData = missingPatternLayer?.props.data as
-      | FeatureCollection<Polygon>
-      | undefined;
+      FeatureCollection<Polygon> | undefined;
 
     expect(missingPatternLayer).toBeInstanceOf(GeoJsonLayer);
     expect(
@@ -3202,8 +3193,7 @@ describe('createLineLayers', () => {
       createContext(visualization)
     );
     const lineLayer = layers.find((layer) => layer instanceof GeoJsonLayer) as
-      | GeoJsonLayer
-      | undefined;
+      GeoJsonLayer | undefined;
     const getLineColor = lineLayer?.props.getLineColor as
       | ((feature: typeof disabledFeature) => [number, number, number, number])
       | undefined;
@@ -3255,8 +3245,7 @@ describe('createLineLayers', () => {
       createContext(visualization)
     );
     const lineLayer = layers.find((layer) => layer instanceof GeoJsonLayer) as
-      | GeoJsonLayer
-      | undefined;
+      GeoJsonLayer | undefined;
     const lineLayerProps = lineLayer?.props as
       | { getDashArray?: (item: TestLineFeature) => [number, number] }
       | undefined;
@@ -3393,8 +3382,7 @@ describe('createLineLayers', () => {
       createContext(visualization)
     );
     const lineLayer = layers.find((layer) => layer instanceof GeoJsonLayer) as
-      | GeoJsonLayer
-      | undefined;
+      GeoJsonLayer | undefined;
     const lineLayerProps = lineLayer?.props as
       | {
           getLineColor?: (
