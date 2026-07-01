@@ -196,6 +196,8 @@
   "save_tooltip": "Project automatically saved in the browser",
   "logo_sciences_po_alt": "Sciences Po logo",
   "logo_khartis_alt": "Khartis logo",
+  "logo_beta_tag": "beta",
+  "logo_beta_tag_label": "Beta version: the application is still unstable.",
   "help_tooltip": "Help",
   "open_panel_tooltip": "Open panel",
   "invert_palette_tooltip": "Invert palette",
