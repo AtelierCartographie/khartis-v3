@@ -196,6 +196,8 @@
   "save_tooltip": "Projet automatiquement enregistré dans le navigateur",
   "logo_sciences_po_alt": "Logo de Sciences Po",
   "logo_khartis_alt": "Logo de Khartis",
+  "logo_beta_tag": "bêta",
+  "logo_beta_tag_label": "Version bêta : l'application est encore instable.",
   "help_tooltip": "Aide",
   "open_panel_tooltip": "Ouvrir le panneau",
   "invert_palette_tooltip": "Inverser la palette",

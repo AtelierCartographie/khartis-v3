@@ -2,7 +2,7 @@
   import logoKhartis from '$lib/features/commons/assets/images/logos/logo-khartis-desktop.svg';
   import logoSciencesPo from '$lib/features/commons/assets/images/logos/logo-sciences-po-desktop.svg';
   import { m } from '$lib/paraglide/messages.js';
-  import { Column, Grid, Row } from 'carbon-components-svelte';
+  import { Column, Grid, Row, Tag } from 'carbon-components-svelte';
   import Separator from '../../commons/components/separator.svelte';
   import { EnvironmentUtils } from '../../commons/utils/environment.utils';
 
@@ -34,6 +34,14 @@
           alt={m.logo_khartis_alt()}
           class="khartis-logo"
         />
+        <Tag
+          type="blue"
+          size="sm"
+          class="beta-tag"
+          title={m.logo_beta_tag_label()}
+        >
+          {m.logo_beta_tag()}
+        </Tag>
       </Column>
     </Row>
   </Grid>
@@ -43,6 +51,11 @@
   #khartis-logo :global(.logo-column) {
     display: flex;
     align-items: center;
+  }
+
+  #khartis-logo :global(.beta-tag) {
+    flex-shrink: 0;
+    margin: 0 0 0 var(--cds-spacing-02);
   }
 
   .sciences-po-logo {
@@ -81,6 +94,10 @@
 
     .khartis-logo {
       width: 54px;
+    }
+
+    :global(.beta-tag) {
+      display: none;
     }
   }
 </style>
