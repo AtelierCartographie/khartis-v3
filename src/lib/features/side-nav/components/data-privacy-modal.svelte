@@ -92,6 +92,29 @@
     </section>
 
     <section>
+      <h3>{m.data_privacy_modal_team_heading()}</h3>
+      <p class="data-privacy-intro">{m.data_privacy_modal_team_intro()}</p>
+      <ul class="data-privacy-list">
+        <li>
+          <strong>{m.data_privacy_modal_team_design_label()} :</strong>
+          {m.data_privacy_modal_team_design_value()}
+        </li>
+        <li>
+          <strong>{m.data_privacy_modal_team_uiux_label()} :</strong>
+          {m.data_privacy_modal_team_uiux_value()}
+        </li>
+        <li>
+          <strong>{m.data_privacy_modal_team_dev_label()} :</strong>
+          {m.data_privacy_modal_team_dev_value()}
+        </li>
+        <li>
+          <strong>{m.data_privacy_modal_team_oss_label()} :</strong>
+          {m.data_privacy_modal_team_oss_value()}
+        </li>
+      </ul>
+    </section>
+
+    <section>
       <h3>{m.data_privacy_modal_license_heading()}</h3>
       <ul class="data-privacy-list">
         <li>
@@ -131,6 +154,12 @@
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--cds-text-01);
+  }
+
+  .data-privacy-intro {
+    margin: 0;
+    color: var(--cds-text-02);
+    line-height: 1.5;
   }
 
   .data-privacy-list {
