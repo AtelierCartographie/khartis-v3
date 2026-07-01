@@ -190,6 +190,35 @@
   const mapCanvasHeight = $derived(
     Math.max(1, Math.round(logicalMapCanvasHeight * pageDisplayScale))
   );
+  let frozenLegendFrame = $state<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const legendStageStyle = $derived.by(() => {
+    const frame = frozenLegendFrame ?? {
+      left: renderedPageMargins.left,
+      top: renderedPageMargins.top,
+      width: mapCanvasWidth,
+      height: mapCanvasHeight
+    };
+    return `left: ${frame.left}px; top: ${frame.top}px; width: ${frame.width}px; height: ${frame.height}px;`;
+  });
+  $effect(() => {
+    if (globalState.isResizingMapFrame) {
+      if (!frozenLegendFrame) {
+        frozenLegendFrame = untrack(() => ({
+          left: renderedPageMargins.left,
+          top: renderedPageMargins.top,
+          width: mapCanvasWidth,
+          height: mapCanvasHeight
+        }));
+      }
+    } else if (frozenLegendFrame) {
+      frozenLegendFrame = null;
+    }
+  });
   const renderModelMatrix = $derived.by(() => {
     const modelMatrix = projectionStore.modelMatrix;
     if (!modelMatrix) {
@@ -2445,10 +2474,6 @@
         </div>
       {/if}
 
-      {#if showLegendOverlay}
-        <LegendOverlay hidden={!showLegendPreview} />
-      {/if}
-
       {#if showGeoIndicationsOverlay}
         <GeoIndicationsOverlay
           interactive={isStylingMode}
@@ -2456,6 +2481,12 @@
         />
       {/if}
     </div>
+
+    {#if showLegendOverlay}
+      <div class="legend-stage" style={legendStageStyle}>
+        <LegendOverlay hidden={!showLegendPreview} />
+      </div>
+    {/if}
 
     {#if showAnnotationOverlay}
       <AnnotationOverlay interactive={isStylingMode} hidden={!isStylingMode} />
@@ -2481,6 +2512,11 @@
   .map-stage {
     position: relative;
     overflow: hidden;
+  }
+
+  .legend-stage {
+    position: absolute;
+    pointer-events: none;
   }
 
   .map-stage.is-empty {

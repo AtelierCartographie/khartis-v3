@@ -1933,6 +1933,10 @@
     void legendState.style.fontSize;
     void legendState.style.background.enabled;
 
+    if (globalState.isResizingMapFrame) {
+      return;
+    }
+
     if (isDragging || !legendState.dragPosition) {
       return;
     }
