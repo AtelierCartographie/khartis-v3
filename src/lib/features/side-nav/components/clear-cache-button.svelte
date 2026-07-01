@@ -5,7 +5,6 @@
   import {
     Button,
     ComposedModal,
-    InlineNotification,
     Loading,
     ModalBody,
     ModalHeader
@@ -41,15 +40,11 @@
   size="small"
   kind="ghost"
   icon={Renew}
-  class="menu-bar-item app-action-button"
+  class="menu-bar-item"
   data-testid="sidenav-clear-cache-button"
   on:click={openModal}
-  aria-label={`${m.sidenav_clear_cache_button()}: ${m.sidenav_clear_cache_hint()}`}
 >
-  <span class="app-action-copy">
-    <span class="app-action-title">{m.sidenav_clear_cache_button()}</span>
-    <span class="app-action-meta">{m.sidenav_clear_cache_hint()}</span>
-  </span>
+  {m.sidenav_clear_cache_button()}
 </Button>
 
 <ComposedModal
@@ -61,13 +56,6 @@
   <ModalHeader title={m.sidenav_clear_cache_confirm_title()} />
   <ModalBody class="update-modal-body">
     <p>{m.sidenav_clear_cache_confirm_body()}</p>
-    <InlineNotification
-      kind="info"
-      lowContrast
-      hideCloseButton
-      title={m.sidenav_clear_cache_confirm_warning()}
-    />
-    <p class="update-modal-hint">{m.sidenav_clear_cache_frozen_hint()}</p>
   </ModalBody>
   <div class="update-modal-footer">
     <Button kind="secondary" disabled={isBusy} on:click={closeModal}>
@@ -97,11 +85,6 @@
     margin: 0;
     color: var(--cds-text-02);
     line-height: 1.5;
-  }
-
-  :global(.update-modal-body p.update-modal-hint) {
-    font-size: 0.75rem;
-    color: var(--cds-text-03);
   }
 
   .update-modal-footer {
