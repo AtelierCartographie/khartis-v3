@@ -66,8 +66,7 @@
       sourceFiles: projectStore.currentProject?.data?.sourceFiles,
       projectBasemap:
         (projectStore.currentProject?.data?.basemap as
-          | PersistedProjectBasemap
-          | undefined) ?? undefined,
+          PersistedProjectBasemap | undefined) ?? undefined,
       selectedBasemapId: dataTabState.basemapJoin.selectedBasemap,
       selectedBasemapSource: dataTabState.basemapJoin.basemapSource,
       hasMultipleDatasets: datasetsStore.datasets.length > 1

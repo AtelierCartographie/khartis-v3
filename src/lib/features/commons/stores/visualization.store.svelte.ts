@@ -2007,8 +2007,7 @@ function touchesVisualizationSemantics(
                 : visualization.textClassification;
 
       const nextClassification = updates[key] as
-        | Partial<ClassificationConfig>
-        | undefined;
+        Partial<ClassificationConfig> | undefined;
 
       if (
         isDerivedClassificationUpdate(currentClassification, nextClassification)
@@ -2020,8 +2019,7 @@ function touchesVisualizationSemantics(
     if (isPrimitiveConfigUpdateKey(key)) {
       const currentPrimitive = visualization[key];
       const nextPrimitive = updates[key] as
-        | PrimitiveConfigMap[PrimitiveConfigKind]
-        | undefined;
+        PrimitiveConfigMap[PrimitiveConfigKind] | undefined;
 
       if (
         isDerivedPrimitiveClassificationUpdate(currentPrimitive, nextPrimitive)

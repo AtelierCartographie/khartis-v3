@@ -154,8 +154,7 @@ function projectFeatureCollectionIfNeeded<
   const projectionKey = ctx.projection as ProjectionLike & object;
   let projectionCache = projectedBasemapGeoJsonCache.get(geojson);
   const cached = projectionCache?.get(projectionKey) as
-    | FeatureCollection<T, P>
-    | undefined;
+    FeatureCollection<T, P> | undefined;
   if (cached) {
     return cached;
   }
@@ -1943,11 +1942,7 @@ function createVillesLabelLayer(
 }
 
 type MetadataGeometry =
-  | Polygon
-  | MultiPolygon
-  | LineString
-  | MultiLineString
-  | Point;
+  Polygon | MultiPolygon | LineString | MultiLineString | Point;
 
 function collectMetadataGeoJsonByGeometry<T extends MetadataGeometry>(
   entries: MetadataLayerEntry[],

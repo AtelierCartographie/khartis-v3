@@ -10,9 +10,7 @@ import {
 
 export type KhartisLegendSwatchType = 'box' | 'line' | 'symbol' | 'pattern';
 export type KhartisDoubleSymbolPosition =
-  | 'overlay'
-  | 'juxtaposition'
-  | 'division';
+  'overlay' | 'juxtaposition' | 'division';
 
 export interface KhartisLegendSwatchItem {
   label: string;

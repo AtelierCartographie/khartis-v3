@@ -4,13 +4,7 @@ import {
 } from '$lib/features/duckdb';
 
 export type SemioType =
-  | 'geoid'
-  | 'geolat'
-  | 'geolon'
-  | 'QTA'
-  | 'QTR'
-  | 'QL'
-  | 'QLO';
+  'geoid' | 'geolat' | 'geolon' | 'QTA' | 'QTR' | 'QL' | 'QLO';
 
 export interface SemioDetectionResult {
   semioType: SemioType;

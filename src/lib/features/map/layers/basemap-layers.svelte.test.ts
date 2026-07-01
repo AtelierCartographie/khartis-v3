@@ -1800,11 +1800,9 @@ describe('basemap projection fallbacks', () => {
       String(layer.props.id).includes('basemap-villes-labels')
     ) as GeoJsonLayer | undefined;
     const symbolData = symbolLayer?.props.data as
-      | FeatureCollection<Point, { id: string }>
-      | undefined;
+      FeatureCollection<Point, { id: string }> | undefined;
     const labelData = labelLayer?.props.data as
-      | FeatureCollection<Point, { name: string }>
-      | undefined;
+      FeatureCollection<Point, { name: string }> | undefined;
 
     expect(symbolLayer).toBeInstanceOf(GeoJsonLayer);
     expect(labelLayer).toBeInstanceOf(GeoJsonLayer);
@@ -1883,11 +1881,9 @@ describe('basemap projection fallbacks', () => {
       String(layer.props.id).includes('basemap-villes-labels')
     ) as GeoJsonLayer | undefined;
     const symbolData = symbolLayer?.props.data as
-      | FeatureCollection<Point, { id: string }>
-      | undefined;
+      FeatureCollection<Point, { id: string }> | undefined;
     const labelData = labelLayer?.props.data as
-      | FeatureCollection<Point, { name: string }>
-      | undefined;
+      FeatureCollection<Point, { name: string }> | undefined;
 
     expect(symbolLayer).toBeInstanceOf(GeoJsonLayer);
     expect(labelLayer).toBeInstanceOf(GeoJsonLayer);
@@ -1959,8 +1955,7 @@ describe('basemap projection fallbacks', () => {
       String(layer.props.id).includes('basemap-villes-labels')
     ) as GeoJsonLayer | undefined;
     const labelData = labelLayer?.props.data as
-      | FeatureCollection<Point, { name: string }>
-      | undefined;
+      FeatureCollection<Point, { name: string }> | undefined;
 
     expect(symbolLayer).toBeInstanceOf(GeoJsonLayer);
     expect(labelLayer).toBeInstanceOf(GeoJsonLayer);

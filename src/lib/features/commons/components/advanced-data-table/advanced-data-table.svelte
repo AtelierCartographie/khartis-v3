@@ -55,11 +55,7 @@
     DataTableSkeleton as unknown as Component<DataTableSkeletonRuntimeProps>;
 
   export type HighlightType =
-    | 'exact'
-    | 'contains'
-    | 'partial'
-    | 'current'
-    | null;
+    'exact' | 'contains' | 'partial' | 'current' | null;
 
   export interface CellHighlight {
     rowId: number;
@@ -956,22 +952,26 @@
     overflow-y: auto;
     overflow-x: auto;
     background-color: var(--cds-ui-01, #ffffff);
-    scrollbar-width: thin;
-    scrollbar-color: var(--cds-border-subtle) transparent;
   }
 
   .table-container::-webkit-scrollbar {
     width: 8px;
     height: 8px;
+    -webkit-appearance: none;
   }
 
   .table-container::-webkit-scrollbar-track {
-    background: transparent;
+    background: var(--cds-layer-02, #e8e8e8);
+    border-radius: 4px;
   }
 
   .table-container::-webkit-scrollbar-thumb {
-    background-color: var(--cds-border-subtle);
+    background-color: var(--cds-border-strong, #8d8d8d);
     border-radius: 4px;
+  }
+
+  .table-container::-webkit-scrollbar-thumb:hover {
+    background-color: var(--cds-text-secondary, #525252);
   }
 
   table {

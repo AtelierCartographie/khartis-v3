@@ -326,11 +326,6 @@
     min-width: 180px;
   }
 
-  .card-rail {
-    scrollbar-width: thin;
-    scrollbar-color: var(--cds-border-strong) var(--cds-layer-02);
-  }
-
   .card-rail::-webkit-scrollbar {
     height: 8px;
     -webkit-appearance: none;
