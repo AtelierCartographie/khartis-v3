@@ -1088,7 +1088,6 @@ describe('suggestion.service', () => {
 
         if (
           suggestionId === 'choropleth' ||
-          suggestionId === 'choropleth_derived_ratio' ||
           suggestionId.startsWith('polygons_')
         ) {
           return [

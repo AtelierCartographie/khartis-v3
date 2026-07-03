@@ -108,7 +108,7 @@
     return getEditableVisualizationsByDataset(dataset.id)[0];
   }
 
-  async function handleSelectSuggestion(suggestion: VizSuggestion) {
+  function handleSelectSuggestion(suggestion: VizSuggestion) {
     const dataset = selectedDataset;
     const targetViz = getCurrentTargetVisualization();
     if (!dataset || !targetViz) return;
@@ -136,7 +136,7 @@
     }
 
     const suggestionKey = getSuggestionSignature(suggestion);
-    await applySuggestionToVisualization(targetViz.id, suggestion, {
+    applySuggestionToVisualization(targetViz.id, suggestion, {
       origin: buildSuggestionOrigin(targetViz, {
         mode: 'manual-suggestion',
         suggestionKey
@@ -402,14 +402,13 @@
 
     autoAppliedSuggestionKey = autoContextKey;
     const suggestionKey = getSuggestionSignature(topSuggestion);
-    void applySuggestionToVisualization(targetViz.id, topSuggestion, {
+    applySuggestionToVisualization(targetViz.id, topSuggestion, {
       origin: buildSuggestionOrigin(targetViz, {
         mode: 'auto-suggestion',
         suggestionKey
       })
-    }).then(() => {
-      selectedSuggestionKey = suggestionKey;
     });
+    selectedSuggestionKey = suggestionKey;
   });
 </script>
 
