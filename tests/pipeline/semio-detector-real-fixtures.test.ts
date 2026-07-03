@@ -1,12 +1,10 @@
 import { describe, expect, it, afterAll, beforeAll, vi } from 'vitest';
-import path from 'node:path';
 import {
   createTestInstance,
   destroyTestInstance,
-  query,
-  run,
   type TestDuckDB
 } from './duckdb-node-helper';
+import { listColumns, loadCsv, summarizeColumn } from './semio-fixture-helper';
 
 vi.mock('$lib/features/duckdb', () => ({
   DuckDBSimplifiedType: {
@@ -22,36 +20,8 @@ vi.mock('$lib/features/duckdb', () => ({
 import { detectSemioType } from '$lib/features/commons/utils/semio-detector.utils';
 
 const SIMPLE_TYPE = {
-  NUMERIC: 'numeric',
-  BOOLEAN: 'boolean',
-  DATE: 'date',
-  STRING: 'string'
+  NUMERIC: 'numeric'
 } as const;
-
-const FIXTURES = path.resolve(__dirname, '../../static/tests-datasets/csv');
-
-interface ColumnSummary {
-  name: string;
-  type_simple: string;
-  count: number;
-  uniques: number;
-  nulls: number;
-  min?: number;
-  max?: number;
-  share_integers?: number;
-  share_floats?: number;
-  share_rank_interval?: number;
-  extent_magnitude?: number;
-  skewness?: number;
-  categories?: string[];
-  share_uniques?: number;
-  share_nulls?: number;
-  id_words?: boolean;
-  lat_words?: boolean;
-  lon_words?: boolean;
-  ratio_words?: boolean;
-  rank_words?: boolean;
-}
 
 let db: TestDuckDB;
 
@@ -63,130 +33,6 @@ afterAll(async () => {
   await destroyTestInstance(db);
 });
 
-async function loadCsv(
-  file: string,
-  tableName: string,
-  delimiter?: string
-): Promise<void> {
-  const escapedFile = path.join(FIXTURES, file).replace(/'/g, "''");
-  const delimClause = delimiter ? `, delim = '${delimiter}'` : '';
-  await run(
-    db,
-    `CREATE OR REPLACE TABLE "${tableName}" AS SELECT * FROM read_csv_auto('${escapedFile}'${delimClause}, header = true)`
-  );
-}
-
-function classifyType(sqlType: string): string {
-  const upper = sqlType.toUpperCase();
-  if (
-    upper.includes('INT') ||
-    upper.includes('DOUBLE') ||
-    upper.includes('FLOAT') ||
-    upper.includes('DECIMAL') ||
-    upper.includes('BIGINT') ||
-    upper.includes('REAL') ||
-    upper.includes('NUMERIC')
-  )
-    return SIMPLE_TYPE.NUMERIC;
-  if (upper.includes('BOOL')) return SIMPLE_TYPE.BOOLEAN;
-  if (upper.includes('DATE') || upper.includes('TIMESTAMP'))
-    return SIMPLE_TYPE.DATE;
-  return SIMPLE_TYPE.STRING;
-}
-
-function matchesKeywords(name: string, keywords: string[]): boolean {
-  const parts = name.toLowerCase().split(/[^a-z0-9%]+/);
-  return keywords.some((kw) => parts.includes(kw));
-}
-
-async function summarizeColumn(
-  table: string,
-  column: string
-): Promise<ColumnSummary> {
-  const escapedCol = column.replace(/"/g, '""');
-  const typeRows = await query(
-    db,
-    `SELECT data_type FROM information_schema.columns WHERE table_name = '${table}' AND column_name = '${column.replace(/'/g, "''")}'`
-  );
-  const sqlType = String(typeRows[0]?.data_type ?? 'VARCHAR');
-  const rows = await query(
-    db,
-    `SELECT
-       COUNT(*) AS total,
-       COUNT(DISTINCT "${escapedCol}") AS uniques,
-       COUNT(*) - COUNT("${escapedCol}") AS nulls
-     FROM "${table}"`
-  );
-  const row = rows[0];
-  const type_simple = classifyType(sqlType);
-  const totalCount = Number(row.total ?? 0);
-  const uniqueCount = Number(row.uniques ?? 0);
-  const nullCount = Number(row.nulls ?? 0);
-
-  const summary: ColumnSummary = {
-    name: column,
-    type_simple,
-    count: totalCount,
-    uniques: uniqueCount,
-    nulls: nullCount,
-    share_uniques: totalCount > 0 ? uniqueCount / totalCount : 0,
-    share_nulls: totalCount > 0 ? nullCount / totalCount : 0,
-    id_words: matchesKeywords(column, ['id', 'code', 'name', 'nom', 'iso']),
-    lat_words: matchesKeywords(column, ['lat', 'latitude']),
-    lon_words: matchesKeywords(column, ['lon', 'lng', 'long', 'longitude']),
-    ratio_words: matchesKeywords(column, [
-      'ratio',
-      'rate',
-      'percent',
-      'pct',
-      '%',
-      'taux'
-    ]),
-    rank_words: matchesKeywords(column, ['rank', 'order', 'niveau', 'level'])
-  };
-
-  if (type_simple === SIMPLE_TYPE.NUMERIC) {
-    const stats = await query(
-      db,
-      `SELECT
-         MIN(TRY_CAST("${escapedCol}" AS DOUBLE)) AS min_v,
-         MAX(TRY_CAST("${escapedCol}" AS DOUBLE)) AS max_v,
-         AVG(CASE WHEN TRY_CAST("${escapedCol}" AS BIGINT) IS NOT NULL THEN 1.0 ELSE 0.0 END) AS share_ints,
-         AVG(CASE WHEN TRY_CAST("${escapedCol}" AS DOUBLE) IS NOT NULL
-                   AND TRY_CAST("${escapedCol}" AS BIGINT) IS NULL
-                  THEN 1.0 ELSE 0.0 END) AS share_floats,
-         skewness(TRY_CAST("${escapedCol}" AS DOUBLE)) AS skew
-       FROM "${table}"
-       WHERE "${escapedCol}" IS NOT NULL`
-    );
-    const s = stats[0];
-    summary.min = Number(s.min_v ?? 0);
-    summary.max = Number(s.max_v ?? 0);
-    summary.share_integers = Number(s.share_ints ?? 0);
-    summary.share_floats = Number(s.share_floats ?? 0);
-    summary.skewness = s.skew != null ? Number(s.skew) : undefined;
-    summary.extent_magnitude =
-      summary.max && summary.max > 0
-        ? Math.log10(summary.max / Math.max(summary.min ?? 1, 1))
-        : 0;
-    summary.share_rank_interval = 0;
-  }
-
-  if (
-    type_simple === SIMPLE_TYPE.STRING &&
-    uniqueCount > 0 &&
-    uniqueCount <= 24
-  ) {
-    const catRows = await query(
-      db,
-      `SELECT DISTINCT "${escapedCol}" AS category FROM "${table}" WHERE "${escapedCol}" IS NOT NULL LIMIT 24`
-    );
-    summary.categories = catRows.map((r) => String(r.category));
-  }
-
-  return summary;
-}
-
 const GEOID_THRESHOLD = 0.6;
 
 async function classifyCsv(
@@ -194,15 +40,11 @@ async function classifyCsv(
   tableName: string,
   delimiter?: string
 ): Promise<Map<string, string>> {
-  await loadCsv(fileName, tableName, delimiter);
-  const colRows = await query(
-    db,
-    `SELECT column_name FROM information_schema.columns WHERE table_name = '${tableName}' ORDER BY ordinal_position`
-  );
+  await loadCsv(db, fileName, tableName, delimiter);
+  const columnNames = await listColumns(db, tableName);
   const classifications = new Map<string, string>();
-  for (const r of colRows) {
-    const name = String(r.column_name);
-    const summary = await summarizeColumn(tableName, name);
+  for (const name of columnNames) {
+    const summary = await summarizeColumn(db, tableName, name);
     const result = detectSemioType(summary as never);
     // Apply the UI's threshold: geoid only counts when score >= 4
     const effective =
