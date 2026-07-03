@@ -410,6 +410,47 @@ describe('suggestVisualizations — label columns', () => {
     expect(text!.score ?? 0).toBeLessThan(choropleth!.score ?? 0);
   });
 
+  it('suggests a labeled choropleth when a ratio and a label coexist on polygons', () => {
+    const results = vizSuggester.suggestVisualizations(
+      [labelCol, ratioCol],
+      'Polygon',
+      { maxSuggestions: 10 }
+    );
+    const labeled = results.find((s) => s.id === 'choropleth_labeled');
+    const plain = results.find((s) => s.id === 'choropleth');
+    expect(labeled).toBeDefined();
+    expect(labeled?.columns).toEqual(['taux_pauvrete', 'nom_commune']);
+    expect(labeled!.score ?? 0).toBeLessThan(plain!.score ?? 0);
+    expect(results.map((s) => s.id)).not.toContain('polygons_uniques');
+  });
+
+  it('never emits a text suggestion for a column too weak to drive a thematic viz', () => {
+    const weakRatioCol = col({
+      name: 'valeur',
+      type: 'number',
+      stats: {
+        totalCount: 100,
+        uniqueCount: 60,
+        nullCount: 0,
+        min: 200,
+        max: 900,
+        share_integers: 0.6,
+        share_floats: 0.4,
+        share_rank_interval: 0.5,
+        extent_magnitude: 1
+      }
+    });
+    const results = vizSuggester.suggestVisualizations(
+      [labelCol, weakRatioCol],
+      'Polygon',
+      { maxSuggestions: 10 }
+    );
+    for (const s of results) {
+      expect(s.id.startsWith('texts_')).toBe(false);
+      expect(s.columns ?? []).not.toContain('valeur');
+    }
+  });
+
   it('label column feeds text suggestions but not thematic ones', () => {
     const results = vizSuggester.suggestVisualizations(
       [labelCol, ratioCol],
@@ -420,7 +461,10 @@ describe('suggestVisualizations — label columns', () => {
     expect(textSuggestions.length).toBeGreaterThan(0);
     expect(textSuggestions[0].columns).toContain('nom_commune');
 
-    for (const s of results.filter((s) => !s.id.startsWith('texts_'))) {
+    const thematicOnly = results.filter(
+      (s) => !s.id.startsWith('texts_') && !s.id.endsWith('_labeled')
+    );
+    for (const s of thematicOnly) {
       expect(s.columns ?? []).not.toContain('nom_commune');
     }
   });
