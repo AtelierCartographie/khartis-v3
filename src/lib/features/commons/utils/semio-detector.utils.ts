@@ -19,7 +19,7 @@ const TYPE_MAX_SCORE: Record<SemioType, number> = {
   geoid: 6.5,
   geolat: 6,
   geolon: 6,
-  label: 5,
+  label: 5.5,
   QTA: 7.5,
   QTR: 6.5,
   QL: 3,
@@ -212,7 +212,7 @@ function scoreLabel(indicators: LabelIndicators): SemioScore {
   }
 
   let score = 0;
-  if (indicators.labelWords) score += 3;
+  if (indicators.labelWords) score += 3.5;
   if (indicators.shareUniques >= 0.4) score += 1;
   if (indicators.uniqueCount >= 20) score += 1;
   return { semioType: SEMIO_TYPES.LABEL, score };
@@ -366,7 +366,9 @@ const LABEL_KEYWORDS = [
   'station',
   'stop',
   'entity',
-  'entite'
+  'entite',
+  'pays',
+  'country'
 ];
 
 interface NameKeywords {
@@ -468,7 +470,7 @@ export function detectSemioType(
           extentMagnitude,
           shareIntegers,
           shareRankInterval,
-          stockWords: keywords.stockWords,
+          stockWords: keywords.stockWords && !keywords.ratioWords,
           skewness
         }),
         scoreQTR({
