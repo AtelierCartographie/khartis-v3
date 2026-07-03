@@ -239,12 +239,9 @@ describe('[S01 Phase 2] semio-detector on real CSV fixtures', () => {
     expect(classes.get('Naissances')).toBe('QTA');
   });
 
-  it('CSV-03 fuzzy-countries: entity classifies as QL in the absence of id-word (no code/name/nom in header)', async () => {
+  it('CSV-03 fuzzy-countries: entity classifies as label (near-unique text names)', async () => {
     const classes = await classifyCsv('fuzzy-countries.csv', 'csv03');
-    // "entity" has no id keyword (id/code/name/nom/iso) so score stays < threshold.
-    // Effective classification is QL — the user still picks it as the geo reference
-    // in the geolocation step, but the auto-detector does not claim it as geoid.
-    expect(classes.get('entity')).toBe('QL');
+    expect(classes.get('entity')).toBe('label');
   });
 
   it('CSV-04 sites-seveso-idf: Lat → geolat, Long → geolon', async () => {

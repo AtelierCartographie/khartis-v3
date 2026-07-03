@@ -18,7 +18,15 @@ export interface AnalysisResult {
   nulls?: number;
   duplicates?: number;
   count?: number;
-  semioType?: 'geoid' | 'geolat' | 'geolon' | 'QTA' | 'QTR' | 'QL' | 'QLO';
+  semioType?:
+    | 'geoid'
+    | 'geolat'
+    | 'geolon'
+    | 'label'
+    | 'QTA'
+    | 'QTR'
+    | 'QL'
+    | 'QLO';
   semioScore?: number;
   [key: string]: unknown;
 }

@@ -278,6 +278,45 @@ describe('suggestVisualizations — categorical legibility guards', () => {
   });
 });
 
+describe('suggestVisualizations — label columns', () => {
+  const labelCol = col({
+    name: 'nom_commune',
+    type: 'string',
+    stats: { totalCount: 100, uniqueCount: 95, nullCount: 0 }
+  });
+
+  const ratioCol = col({
+    name: 'taux_pauvrete',
+    type: 'number',
+    stats: {
+      totalCount: 100,
+      uniqueCount: 90,
+      nullCount: 0,
+      min: 2,
+      max: 40,
+      share_integers: 0.05,
+      share_floats: 0.95,
+      share_rank_interval: 0,
+      extent_magnitude: 1
+    }
+  });
+
+  it('label column feeds text suggestions but not thematic ones', () => {
+    const results = vizSuggester.suggestVisualizations(
+      [labelCol, ratioCol],
+      'Polygon',
+      { maxSuggestions: 10 }
+    );
+    const textSuggestions = results.filter((s) => s.id.startsWith('texts_'));
+    expect(textSuggestions.length).toBeGreaterThan(0);
+    expect(textSuggestions[0].columns).toContain('nom_commune');
+
+    for (const s of results.filter((s) => !s.id.startsWith('texts_'))) {
+      expect(s.columns ?? []).not.toContain('nom_commune');
+    }
+  });
+});
+
 describe('suggestVisualizations — weak thematic columns', () => {
   it('falls back to nbColumns=0 when the only column has a near-zero semio score', () => {
     const weakNumericCol = col({

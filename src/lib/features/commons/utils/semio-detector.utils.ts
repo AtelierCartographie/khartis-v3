@@ -7,6 +7,7 @@ export type SemioType =
   | 'geoid'
   | 'geolat'
   | 'geolon'
+  | 'label'
   | 'QTA'
   | 'QTR'
   | 'QL'
@@ -18,6 +19,7 @@ const TYPE_MAX_SCORE: Record<SemioType, number> = {
   geoid: 6.5,
   geolat: 6,
   geolon: 6,
+  label: 5,
   QTA: 7.5,
   QTR: 6.5,
   QL: 3,
@@ -47,6 +49,7 @@ export const SEMIO_TYPES = {
   GEOID: 'geoid' as const,
   GEOLAT: 'geolat' as const,
   GEOLON: 'geolon' as const,
+  LABEL: 'label' as const,
   QTA: 'QTA' as const,
   QTR: 'QTR' as const,
   QL: 'QL' as const,
@@ -109,6 +112,13 @@ interface QLOIndicators {
   yearLikely: boolean;
   ordinalCategories: boolean;
   likertLikely: boolean;
+}
+
+interface LabelIndicators {
+  labelWords: boolean;
+  idWords: boolean;
+  shareUniques: number;
+  uniqueCount: number;
 }
 
 function scoreGeoId(indicators: GeoIdIndicators): SemioScore {
@@ -188,6 +198,18 @@ function scoreQLO(indicators: QLOIndicators): SemioScore {
   if (indicators.ordinalCategories) score += 4;
   if (indicators.likertLikely) score += 1.5;
   return { semioType: SEMIO_TYPES.QLO, score };
+}
+
+function scoreLabel(indicators: LabelIndicators): SemioScore {
+  if (indicators.idWords && !indicators.labelWords) {
+    return { semioType: SEMIO_TYPES.LABEL, score: 0 };
+  }
+
+  let score = 0;
+  if (indicators.labelWords) score += 3;
+  if (indicators.shareUniques >= 0.4) score += 1;
+  if (indicators.uniqueCount >= 20) score += 1;
+  return { semioType: SEMIO_TYPES.LABEL, score };
 }
 
 const ORDINAL_SEQUENCES: readonly (readonly string[])[] = [
@@ -320,6 +342,26 @@ const RANK_KEYWORDS = [
   'level'
 ];
 const YEAR_KEYWORDS = ['year', 'years', 'yr', 'annee', 'annees'];
+const LABEL_KEYWORDS = [
+  'name',
+  'nom',
+  'noms',
+  'label',
+  'libelle',
+  'title',
+  'titre',
+  'address',
+  'adresse',
+  'city',
+  'ville',
+  'commune',
+  'quartier',
+  'site',
+  'station',
+  'stop',
+  'entity',
+  'entite'
+];
 
 interface NameKeywords {
   idWords: boolean;
@@ -329,6 +371,7 @@ interface NameKeywords {
   rankWords: boolean;
   stockWords: boolean;
   yearWords: boolean;
+  labelWords: boolean;
 }
 
 function detectKeywordsFromName(columnName: string): NameKeywords {
@@ -351,7 +394,8 @@ function detectKeywordsFromName(columnName: string): NameKeywords {
       RATIO_NAME_MARKERS.some((marker) => normalizedName.includes(marker)),
     rankWords: hasKeyword(RANK_KEYWORDS),
     stockWords: hasKeyword(STOCK_KEYWORDS),
-    yearWords: hasKeyword(YEAR_KEYWORDS)
+    yearWords: hasKeyword(YEAR_KEYWORDS),
+    labelWords: hasKeyword(LABEL_KEYWORDS)
   };
 }
 
@@ -478,6 +522,12 @@ export function detectSemioType(
           idWords: keywords.idWords,
           shareRankInterval,
           isNumeric: false
+        }),
+        scoreLabel({
+          labelWords: keywords.labelWords,
+          idWords: keywords.idWords,
+          shareUniques,
+          uniqueCount
         })
       );
       break;
