@@ -35,13 +35,15 @@ export async function loadCsv(
   db: TestDuckDB,
   file: string,
   tableName: string,
-  delimiter?: string
+  delimiter?: string,
+  readOptions?: string
 ): Promise<void> {
   const escapedFile = path.join(CSV_FIXTURES_DIR, file).replace(/'/g, "''");
   const delimClause = delimiter ? `, delim = '${delimiter}'` : '';
+  const extraClause = readOptions ? `, ${readOptions}` : '';
   await run(
     db,
-    `CREATE OR REPLACE TABLE "${tableName}" AS SELECT * FROM read_csv_auto('${escapedFile}'${delimClause}, header = true)`
+    `CREATE OR REPLACE TABLE "${tableName}" AS SELECT * FROM read_csv_auto('${escapedFile}'${delimClause}${extraClause}, header = true)`
   );
 }
 
@@ -131,7 +133,21 @@ export async function summarizeColumn(
       summary.max && summary.max > 0
         ? Math.log10(summary.max / Math.max(summary.min ?? 1, 1))
         : 0;
-    summary.share_rank_interval = 0;
+
+    const rankRows = await query(
+      db,
+      `WITH ordered_values AS (
+         SELECT TRY_CAST("${escapedCol}" AS DOUBLE) AS v
+         FROM "${table}"
+         WHERE "${escapedCol}" IS NOT NULL
+       ),
+       diffs AS (
+         SELECT v - LAG(v) OVER (ORDER BY v) AS diff FROM ordered_values
+       )
+       SELECT COALESCE(SUM(CASE WHEN diff = 1 THEN 1 ELSE 0 END) * 1.0 / NULLIF(COUNT(diff), 0), 0) AS share_rank
+       FROM diffs WHERE diff IS NOT NULL`
+    );
+    summary.share_rank_interval = Number(rankRows[0]?.share_rank ?? 0);
   }
 
   if (

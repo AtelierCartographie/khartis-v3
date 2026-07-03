@@ -254,6 +254,7 @@ const COMFORT_CATEGORY_SHAPE_CLASSES = 4;
 const CROWDED_CATEGORY_PENALTY = 0.85;
 const FLAT_PROPORTIONAL_RATIO = 2;
 const FLAT_PROPORTIONAL_PENALTY = 0.6;
+const TEXT_SUGGESTION_SCORE_FACTOR = 0.7;
 const SHAPE_CATEGORY_VIZ_IDS = new Set([
   'symbols_differents',
   'symbols_differents_QLO'
@@ -482,8 +483,9 @@ function generateTextSuggestions(
         ...viz,
         columns: [labelCandidate.name, bestQualitative.name],
         score: computeSuggestionScore(
-          [labelCandidate, bestQualitative],
-          computeLegibilityFactor(viz, [labelCandidate, bestQualitative])
+          [bestQualitative],
+          computeLegibilityFactor(viz, [labelCandidate, bestQualitative]) *
+            TEXT_SUGGESTION_SCORE_FACTOR
         )
       });
     }
@@ -496,8 +498,9 @@ function generateTextSuggestions(
         ...viz,
         columns: [labelCandidate.name, bestRatio.name],
         score: computeSuggestionScore(
-          [labelCandidate, bestRatio],
-          computeLegibilityFactor(viz, [labelCandidate, bestRatio])
+          [bestRatio],
+          computeLegibilityFactor(viz, [labelCandidate, bestRatio]) *
+            TEXT_SUGGESTION_SCORE_FACTOR
         )
       });
     }
@@ -510,8 +513,9 @@ function generateTextSuggestions(
         ...viz,
         columns: [labelCandidate.name, bestAbsolute.name],
         score: computeSuggestionScore(
-          [labelCandidate, bestAbsolute],
-          computeLegibilityFactor(viz, [labelCandidate, bestAbsolute])
+          [bestAbsolute],
+          computeLegibilityFactor(viz, [labelCandidate, bestAbsolute]) *
+            TEXT_SUGGESTION_SCORE_FACTOR
         )
       });
     }

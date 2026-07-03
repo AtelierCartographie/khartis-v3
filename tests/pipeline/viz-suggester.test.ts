@@ -365,6 +365,19 @@ describe('suggestVisualizations — label columns', () => {
     }
   });
 
+  it('ranks core visualizations (choropleth) above text suggestions for the same column', () => {
+    const results = vizSuggester.suggestVisualizations(
+      [labelCol, ratioCol],
+      'Polygon',
+      { maxSuggestions: 10 }
+    );
+    const choropleth = results.find((s) => s.id === 'choropleth');
+    const text = results.find((s) => s.id === 'texts_colorful_QTR');
+    expect(choropleth).toBeDefined();
+    expect(text).toBeDefined();
+    expect(text!.score ?? 0).toBeLessThan(choropleth!.score ?? 0);
+  });
+
   it('label column feeds text suggestions but not thematic ones', () => {
     const results = vizSuggester.suggestVisualizations(
       [labelCol, ratioCol],
