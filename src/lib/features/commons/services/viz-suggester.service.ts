@@ -10,7 +10,6 @@ import {
   type SemioType
 } from '$lib/features/commons/utils/semio-detector.utils';
 import type { ColumnAnalysis } from '$lib/features/data-pipeline';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { DuckDBSimplifiedType } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
 
@@ -41,12 +40,6 @@ export interface VizSuggestion {
   columns?: string[];
   score?: number;
   dataGeometry?: SimplifiedGeometryType;
-  derivedColumn?: {
-    name: string;
-    expression: string;
-    numerator: string;
-    denominator: string;
-  };
 }
 
 export interface EnrichedColumn extends ColumnAnalysis {
@@ -77,13 +70,6 @@ const VIZ_CRITERIA: readonly VizSuggestion[] = [
   {
     id: 'choropleth',
     label: m.viz_suggestion_choropleth(),
-    nbColumns: 1,
-    semioTypes: ['QTR'],
-    geometries: ['polygon']
-  },
-  {
-    id: 'choropleth_derived_ratio',
-    label: m.viz_suggestion_choropleth_derived_ratio(),
     nbColumns: 1,
     semioTypes: ['QTR'],
     geometries: ['polygon']
@@ -272,15 +258,6 @@ const SHAPE_CATEGORY_VIZ_IDS = new Set([
   'symbols_differents',
   'symbols_differents_QLO'
 ]);
-const DERIVED_RATIO_VIZ_ID = 'choropleth_derived_ratio';
-const DENOMINATOR_KEYWORDS = [
-  'population',
-  'pop',
-  'habitants',
-  'superficie',
-  'surface',
-  'area'
-];
 
 export function simplifyGeometryType(
   geomType: GeometryType
@@ -577,7 +554,6 @@ function searchVizByType(
         viz.geometries.includes(geometryType) &&
         viz.nbColumns === nbColumns &&
         !viz.id.startsWith('texts_') &&
-        viz.id !== DERIVED_RATIO_VIZ_ID &&
         viz.semioTypes.includes(dataset.semioType) &&
         fitsCategoricalLegibility(viz, [dataset])
     ).map((viz) => ({
@@ -685,67 +661,6 @@ function generateSuggestions(
   );
 
   return unique;
-}
-
-function hasDenominatorKeyword(columnName: string): boolean {
-  const tokens = columnName
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .split(/[^a-z0-9%]/);
-  return tokens.some((token) => DENOMINATOR_KEYWORDS.includes(token));
-}
-
-function generateDerivedRatioSuggestions(
-  columns: EnrichedColumn[],
-  geometryType: SimplifiedGeometryType
-): VizSuggestion[] {
-  if (geometryType !== SIMPLIFIED_GEOMETRY_TYPE.POLYGON) {
-    return [];
-  }
-
-  const criteria = VIZ_CRITERIA.find(
-    (entry) => entry.id === DERIVED_RATIO_VIZ_ID
-  );
-  if (!criteria) {
-    return [];
-  }
-
-  const stockColumns = columns.filter(
-    (column) => column.semioType === SEMIO_TYPES.QTA
-  );
-  if (stockColumns.length < 2) {
-    return [];
-  }
-
-  const denominator = stockColumns
-    .filter((column) => hasDenominatorKeyword(column.name))
-    .sort((a, b) => b.score - a.score)[0];
-  if (!denominator) {
-    return [];
-  }
-
-  const numerator = stockColumns
-    .filter((column) => column.name !== denominator.name)
-    .sort((a, b) => b.score - a.score)[0];
-  if (!numerator) {
-    return [];
-  }
-
-  const derivedName = `${numerator.name} / ${denominator.name}`;
-  return [
-    {
-      ...criteria,
-      columns: [derivedName],
-      derivedColumn: {
-        name: derivedName,
-        expression: `"${escapeIdentifier(numerator.name)}" / NULLIF("${escapeIdentifier(denominator.name)}", 0)`,
-        numerator: numerator.name,
-        denominator: denominator.name
-      },
-      score: computeSuggestionScore([numerator, denominator])
-    }
-  ];
 }
 
 function getImplementationSignature(
@@ -881,7 +796,6 @@ function suggestVisualizations(
 
   const suggestions = [
     ...generateSuggestions(rankedColumns, simplifiedGeomType),
-    ...generateDerivedRatioSuggestions(rankedColumns, simplifiedGeomType),
     ...generateTextSuggestions(textEligibleColumns, simplifiedGeomType)
   ];
 

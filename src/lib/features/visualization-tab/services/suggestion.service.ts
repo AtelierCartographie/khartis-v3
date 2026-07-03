@@ -1,10 +1,7 @@
-import {
-  readDatasetTableSnapshot,
-  type DatasetResult,
-  type ProcessedDataset
+import type {
+  DatasetResult,
+  ProcessedDataset
 } from '$lib/features/data-pipeline';
-import { COLUMN_TRANSFORMATION_TYPES } from '$lib/features/commons/types/create-project.types';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type {
   GeometryType,
   VizSuggestion
@@ -132,7 +129,6 @@ const SUGGESTION_VISUALIZATION_TYPES = {
   polygons_uniques: VisualizationType.CHOROPLETH,
   lines_uniques: VisualizationType.CHOROPLETH,
   choropleth: VisualizationType.CHOROPLETH,
-  choropleth_derived_ratio: VisualizationType.CHOROPLETH,
   symbols_uniques_colorful_QTR: VisualizationType.CHOROPLETH,
   lines_colorful_QTR: VisualizationType.CHOROPLETH,
   symbols_proportional: VisualizationType.PROPORTIONAL,
@@ -192,7 +188,6 @@ const POLYGON_SUGGESTION_IDS = new Set([
   'polygons_uniques',
   'polygons_colorful_QL',
   'choropleth',
-  'choropleth_derived_ratio',
   'polygons_colorful_QLO'
 ]);
 
@@ -218,7 +213,6 @@ const CATEGORY_SUGGESTION_IDS = new Set([
 
 const CLASS_SUGGESTION_IDS = new Set([
   'choropleth',
-  'choropleth_derived_ratio',
   'symbols_uniques_colorful_QTR',
   'lines_colorful_QTR',
   'symbols_proportional_colorful_QTR',
@@ -666,10 +660,7 @@ export function resolveSuggestionBehavior(
   }
 
   if (POLYGON_SUGGESTION_IDS.has(suggestion.id)) {
-    if (
-      suggestion.id === 'choropleth' ||
-      suggestion.id === 'choropleth_derived_ratio'
-    ) {
+    if (suggestion.id === 'choropleth') {
       return {
         visualizationType,
         primaryPrimitives: [PrimitiveFilterType.POLYGON],
@@ -1729,42 +1720,11 @@ function adaptSuggestedClassification(
   };
 }
 
-async function ensureSuggestionDerivedColumn(
-  derived: NonNullable<VizSuggestion['derivedColumn']>,
-  dataset: DatasetResult
-): Promise<void> {
-  if (dataset.columns?.some((column) => column.name === derived.name)) {
-    return;
-  }
-
-  await duckDBOrchestrator.addCalculatedColumn(
-    dataset.tableName,
-    derived.name,
-    derived.expression
-  );
-
-  if (dataset.sourceFileId) {
-    await projectStore.addColumnTransformation(dataset.sourceFileId, {
-      type: COLUMN_TRANSFORMATION_TYPES.CALCULATE,
-      column: derived.name,
-      newValue: derived.expression,
-      timestamp: new Date().toISOString()
-    });
-  }
-
-  const snapshot = await readDatasetTableSnapshot(dataset.tableName, {
-    force: true
-  });
-  datasetsStore.updateDataset(dataset.id, {
-    columns: [...snapshot.enrichedColumns]
-  });
-}
-
-export async function applySuggestionToVisualization(
+export function applySuggestionToVisualization(
   vizId: string,
   suggestion: VizSuggestion,
   options: { origin?: VisualizationOrigin } = {}
-): Promise<VisualizationType | null> {
+): VisualizationType | null {
   const currentVisualization = visualizationStore.visualizations.find(
     (item) => item.id === vizId
   );
@@ -1775,28 +1735,11 @@ export async function applySuggestionToVisualization(
     return null;
   }
 
-  let dataset = datasetsStore.datasets.find(
+  const dataset = datasetsStore.datasets.find(
     (item) => item.id === currentVisualization.datasetId
   );
   if (!dataset) {
     return null;
-  }
-
-  if (suggestion.derivedColumn) {
-    try {
-      await ensureSuggestionDerivedColumn(suggestion.derivedColumn, dataset);
-    } catch (error) {
-      logger.error(
-        'Failed to create the derived ratio column for a suggestion',
-        LogCategory.VISUALIZATION,
-        error
-      );
-      return null;
-    }
-    dataset =
-      datasetsStore.datasets.find(
-        (item) => item.id === currentVisualization.datasetId
-      ) ?? dataset;
   }
 
   const behavior = resolveSuggestionBehavior(
