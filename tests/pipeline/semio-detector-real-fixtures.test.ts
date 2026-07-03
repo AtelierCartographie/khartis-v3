@@ -43,6 +43,7 @@ interface ColumnSummary {
   share_rank_interval?: number;
   extent_magnitude?: number;
   skewness?: number;
+  categories?: string[];
   share_uniques?: number;
   share_nulls?: number;
   id_words?: boolean;
@@ -169,6 +170,18 @@ async function summarizeColumn(
         ? Math.log10(summary.max / Math.max(summary.min ?? 1, 1))
         : 0;
     summary.share_rank_interval = 0;
+  }
+
+  if (
+    type_simple === SIMPLE_TYPE.STRING &&
+    uniqueCount > 0 &&
+    uniqueCount <= 24
+  ) {
+    const catRows = await query(
+      db,
+      `SELECT DISTINCT "${escapedCol}" AS category FROM "${table}" WHERE "${escapedCol}" IS NOT NULL LIMIT 24`
+    );
+    summary.categories = catRows.map((r) => String(r.category));
   }
 
   return summary;

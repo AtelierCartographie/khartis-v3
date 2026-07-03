@@ -375,7 +375,8 @@ function getColumnSemioType(column: ColumnAnalysis): EnrichedColumn {
     share_floats: column.stats?.share_floats,
     share_rank_interval: column.stats?.share_rank_interval,
     extent_magnitude: column.stats?.extent_magnitude,
-    skewness: column.stats?.skewness
+    skewness: column.stats?.skewness,
+    categories: column.stats?.categories
   };
 
   const { semioType, semioScore } = geoSemioType

@@ -28,6 +28,7 @@ interface DatasetColumn {
     share_rank_interval?: number;
     extent_magnitude?: number;
     skewness?: number;
+    categories?: string[];
   };
 }
 
@@ -81,7 +82,8 @@ export function computeVisualizationSuggestions(
         share_floats: col.stats?.share_floats,
         share_rank_interval: col.stats?.share_rank_interval,
         extent_magnitude: col.stats?.extent_magnitude,
-        skewness: col.stats?.skewness
+        skewness: col.stats?.skewness,
+        categories: col.stats?.categories
       }
     } as ColumnAnalysis;
   });
