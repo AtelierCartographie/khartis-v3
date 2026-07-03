@@ -42,6 +42,7 @@ interface ColumnSummary {
   share_floats?: number;
   share_rank_interval?: number;
   extent_magnitude?: number;
+  skewness?: number;
   share_uniques?: number;
   share_nulls?: number;
   id_words?: boolean;
@@ -152,7 +153,8 @@ async function summarizeColumn(
          AVG(CASE WHEN TRY_CAST("${escapedCol}" AS BIGINT) IS NOT NULL THEN 1.0 ELSE 0.0 END) AS share_ints,
          AVG(CASE WHEN TRY_CAST("${escapedCol}" AS DOUBLE) IS NOT NULL
                    AND TRY_CAST("${escapedCol}" AS BIGINT) IS NULL
-                  THEN 1.0 ELSE 0.0 END) AS share_floats
+                  THEN 1.0 ELSE 0.0 END) AS share_floats,
+         skewness(TRY_CAST("${escapedCol}" AS DOUBLE)) AS skew
        FROM "${table}"
        WHERE "${escapedCol}" IS NOT NULL`
     );
@@ -161,6 +163,7 @@ async function summarizeColumn(
     summary.max = Number(s.max_v ?? 0);
     summary.share_integers = Number(s.share_ints ?? 0);
     summary.share_floats = Number(s.share_floats ?? 0);
+    summary.skewness = s.skew != null ? Number(s.skew) : undefined;
     summary.extent_magnitude =
       summary.max && summary.max > 0
         ? Math.log10(summary.max / Math.max(summary.min ?? 1, 1))
@@ -171,7 +174,7 @@ async function summarizeColumn(
   return summary;
 }
 
-const GEOID_THRESHOLD = 4;
+const GEOID_THRESHOLD = 0.6;
 
 async function classifyCsv(
   fileName: string,

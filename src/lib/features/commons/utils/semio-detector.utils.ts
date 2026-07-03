@@ -12,9 +12,19 @@ export type SemioType =
   | 'QL'
   | 'QLO';
 
-export const MAX_SEMIO_SCORE = 6.5;
-
 const YEAR_RANGE = { MIN: 1200, MAX: 2100 } as const;
+
+const TYPE_MAX_SCORE: Record<SemioType, number> = {
+  geoid: 6.5,
+  geolat: 6,
+  geolon: 6,
+  QTA: 7.5,
+  QTR: 6.5,
+  QL: 3,
+  QLO: 7
+};
+
+const DATE_FIXED_SCORE = 0.5;
 
 export function toStatNumber(value: unknown): number | undefined {
   if (typeof value === 'number') {
@@ -27,6 +37,10 @@ export function toStatNumber(value: unknown): number | undefined {
 export interface SemioDetectionResult {
   semioType: SemioType;
   semioScore: number;
+  runnerUp?: {
+    semioType: SemioType;
+    semioScore: number;
+  };
 }
 
 export const SEMIO_TYPES = {
@@ -85,6 +99,7 @@ interface QTRIndicators {
 interface QLIndicators {
   shareUniques: number;
   uniqueCount: number;
+  isNumeric: boolean;
 }
 
 interface QLOIndicators {
@@ -156,8 +171,8 @@ function scoreQTR(indicators: QTRIndicators): SemioScore {
 
 function scoreQL(indicators: QLIndicators): SemioScore {
   let score = 0;
-  if (indicators.shareUniques <= 0.2) score += 2;
-  if (indicators.uniqueCount <= 10) score += 1;
+  if (indicators.shareUniques <= 0.2) score += indicators.isNumeric ? 1 : 2;
+  if (indicators.uniqueCount <= 10) score += indicators.isNumeric ? 0.5 : 1;
   return { semioType: SEMIO_TYPES.QL, score };
 }
 
@@ -330,7 +345,7 @@ export function detectSemioType(
           shareFloats,
           skewness
         }),
-        scoreQL({ shareUniques, uniqueCount }),
+        scoreQL({ shareUniques, uniqueCount, isNumeric: true }),
         scoreQLO({
           rankWords: keywords.rankWords,
           shareRankInterval,
@@ -349,16 +364,15 @@ export function detectSemioType(
       break;
 
     case DuckDBSimplifiedType.DATE:
-      results.push({
+      return {
         semioType: uniqueCount <= 10 ? SEMIO_TYPES.QL : SEMIO_TYPES.QTR,
-        score: 2
-      });
-      break;
+        semioScore: DATE_FIXED_SCORE
+      };
 
     case DuckDBSimplifiedType.STRING:
     default:
       results.push(
-        scoreQL({ shareUniques, uniqueCount }),
+        scoreQL({ shareUniques, uniqueCount, isNumeric: false }),
         scoreQLO({
           rankWords: keywords.rankWords,
           shareRankInterval,
@@ -375,7 +389,14 @@ export function detectSemioType(
       break;
   }
 
-  const best = results.sort((a, b) => b.score - a.score)[0];
+  const ranked = results
+    .map((entry) => ({
+      semioType: entry.semioType,
+      score: Math.min(entry.score / TYPE_MAX_SCORE[entry.semioType], 1)
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  const best = ranked[0];
 
   if (best.semioType === SEMIO_TYPES.QL && uniqueCount === 1) {
     best.score = 0;
@@ -385,8 +406,15 @@ export function detectSemioType(
     best.score = 0;
   }
 
+  const second = ranked[1];
+  const runnerUp =
+    best.score > 0 && second && second.score > 0
+      ? { semioType: second.semioType, semioScore: second.score }
+      : undefined;
+
   return {
     semioType: best.semioType,
-    semioScore: Math.min(best.score, MAX_SEMIO_SCORE)
+    semioScore: best.score,
+    ...(runnerUp ? { runnerUp } : {})
   };
 }
