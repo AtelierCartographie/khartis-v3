@@ -121,7 +121,8 @@ Deux règles ne se négocient pas : la **choroplèthe est réservée aux ratios*
 Les libellés sont une primitive à part entière, mais une carte d'étiquettes seule est rarement la bonne première réponse. Deux mécanismes l'encodent :
 
 - les suggestions de texte pur (`texts_*`) sont **scorées sur leur colonne thématique uniquement**, multipliée par une pénalité de rôle complémentaire (×0.7) — elles ne passent jamais devant une choroplèthe ou des symboles proportionnels de même confiance ;
-- quand un stock et un libellé coexistent, la suggestion mise en avant est la **combinaison** : symboles proportionnels + étiquettes limitées aux 10 plus fortes valeurs (un filtre de données `top_desc` restreint à la primitive texte), qui mobilise le texte là où il sert la hiérarchie visuelle au lieu de la concurrencer.
+- quand une variable thématique et un libellé coexistent, la suggestion mise en avant est la **combinaison** : symboles proportionnels + étiquettes (stock) ou choroplèthe + étiquettes (ratio, sur polygones), limitées aux 10 plus fortes valeurs — un filtre de données `top_desc` restreint à la primitive texte. Le texte sert la hiérarchie visuelle au lieu de la concurrencer ;
+- une colonne trop faible pour porter une visualisation thématique (confiance < 0.3) ne peut pas non plus alimenter une suggestion de texte : jamais de « Textes en classes » sans la choroplèthe correspondante.
 
 ### Garde-fous de lisibilité
 

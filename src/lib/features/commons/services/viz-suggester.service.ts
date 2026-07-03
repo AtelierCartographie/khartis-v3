@@ -75,6 +75,13 @@ const VIZ_CRITERIA: readonly VizSuggestion[] = [
     geometries: ['polygon']
   },
   {
+    id: 'choropleth_labeled',
+    label: m.viz_suggestion_choropleth_labeled(),
+    nbColumns: 2,
+    semioTypes: ['QTR', 'label'],
+    geometries: ['polygon']
+  },
+  {
     id: 'symbols_uniques_colorful_QTR',
     label: m.viz_suggestion_symbols_unique_colorful_qtr(),
     nbColumns: 1,
@@ -262,8 +269,9 @@ const CROWDED_CATEGORY_PENALTY = 0.85;
 const FLAT_PROPORTIONAL_RATIO = 2;
 const FLAT_PROPORTIONAL_PENALTY = 0.6;
 const TEXT_SUGGESTION_SCORE_FACTOR = 0.7;
-const LABELED_PROPORTIONAL_SCORE_FACTOR = 0.9;
+const LABELED_SCORE_FACTOR = 0.9;
 const LABELED_PROPORTIONAL_VIZ_ID = 'symbols_proportional_labeled';
+const LABELED_CHOROPLETH_VIZ_ID = 'choropleth_labeled';
 const SHAPE_CATEGORY_VIZ_IDS = new Set([
   'symbols_differents',
   'symbols_differents_QLO'
@@ -437,7 +445,35 @@ function findLabelCandidate(
     .sort((a, b) => b.score - a.score)[0];
 }
 
-function generateLabeledProportionalSuggestions(
+function findBestThematicColumn(
+  columns: EnrichedColumn[],
+  semioType: SemioType
+): EnrichedColumn | undefined {
+  return columns
+    .filter((column) => column.semioType === semioType)
+    .filter((column) => column.score >= MIN_THEMATIC_SEMIO_SCORE)
+    .sort((a, b) => b.score - a.score)[0];
+}
+
+function buildLabeledSuggestion(
+  vizId: string,
+  thematic: EnrichedColumn,
+  labelCandidate: EnrichedColumn
+): VizSuggestion | undefined {
+  const criteria = VIZ_CRITERIA.find((entry) => entry.id === vizId);
+  if (!criteria) return undefined;
+
+  return {
+    ...criteria,
+    columns: [thematic.name, labelCandidate.name],
+    score: computeSuggestionScore(
+      [thematic],
+      computeLegibilityFactor(criteria, [thematic]) * LABELED_SCORE_FACTOR
+    )
+  };
+}
+
+function generateLabeledSuggestions(
   columns: EnrichedColumn[],
   geometryType: SimplifiedGeometryType
 ): VizSuggestion[] {
@@ -445,30 +481,36 @@ function generateLabeledProportionalSuggestions(
     return [];
   }
 
-  const criteria = VIZ_CRITERIA.find(
-    (entry) => entry.id === LABELED_PROPORTIONAL_VIZ_ID
-  );
   const labelCandidate = findLabelCandidate(columns);
-  const bestAbsolute = columns
-    .filter((column) => column.semioType === SEMIO_TYPES.QTA)
-    .filter((column) => column.score >= MIN_THEMATIC_SEMIO_SCORE)
-    .sort((a, b) => b.score - a.score)[0];
-
-  if (!criteria || !labelCandidate || !bestAbsolute) {
+  if (!labelCandidate) {
     return [];
   }
 
-  return [
-    {
-      ...criteria,
-      columns: [bestAbsolute.name, labelCandidate.name],
-      score: computeSuggestionScore(
-        [bestAbsolute],
-        computeLegibilityFactor(criteria, [bestAbsolute]) *
-          LABELED_PROPORTIONAL_SCORE_FACTOR
-      )
+  const results: VizSuggestion[] = [];
+
+  const bestAbsolute = findBestThematicColumn(columns, SEMIO_TYPES.QTA);
+  if (bestAbsolute) {
+    const suggestion = buildLabeledSuggestion(
+      LABELED_PROPORTIONAL_VIZ_ID,
+      bestAbsolute,
+      labelCandidate
+    );
+    if (suggestion) results.push(suggestion);
+  }
+
+  if (geometryType === SIMPLIFIED_GEOMETRY_TYPE.POLYGON) {
+    const bestRatio = findBestThematicColumn(columns, SEMIO_TYPES.QTR);
+    if (bestRatio) {
+      const suggestion = buildLabeledSuggestion(
+        LABELED_CHOROPLETH_VIZ_ID,
+        bestRatio,
+        labelCandidate
+      );
+      if (suggestion) results.push(suggestion);
     }
-  ];
+  }
+
+  return results;
 }
 
 function generateTextSuggestions(
@@ -499,6 +541,7 @@ function generateTextSuggestions(
   const thematicCandidates = columns.filter((column) => {
     if (column.name === labelCandidate.name) return false;
     if (column.semioType === SEMIO_TYPES.GEOID) return false;
+    if (column.score < MIN_THEMATIC_SEMIO_SCORE) return false;
     if (
       column.semioType === SEMIO_TYPES.QL ||
       column.semioType === SEMIO_TYPES.QLO
@@ -608,6 +651,7 @@ function searchVizByType(
         viz.nbColumns === nbColumns &&
         !viz.id.startsWith('texts_') &&
         viz.id !== LABELED_PROPORTIONAL_VIZ_ID &&
+        viz.id !== LABELED_CHOROPLETH_VIZ_ID &&
         ((viz.semioTypes[0] === dataset[0].semioType &&
           viz.semioTypes[1] === dataset[1].semioType) ||
           (viz.semioTypes[1] === dataset[0].semioType &&
@@ -832,10 +876,7 @@ function suggestVisualizations(
 
   const suggestions = [
     ...generateSuggestions(rankedColumns, simplifiedGeomType),
-    ...generateLabeledProportionalSuggestions(
-      textEligibleColumns,
-      simplifiedGeomType
-    ),
+    ...generateLabeledSuggestions(textEligibleColumns, simplifiedGeomType),
     ...generateTextSuggestions(textEligibleColumns, simplifiedGeomType)
   ];
 

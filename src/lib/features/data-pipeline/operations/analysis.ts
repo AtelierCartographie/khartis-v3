@@ -27,7 +27,7 @@ function toStatBoundary(value: unknown): unknown {
 
 const CATEGORY_SAMPLE_LIMIT = 24;
 
-function extractCategories(histogram: unknown): string[] | undefined {
+export function extractCategories(histogram: unknown): string[] | undefined {
   const table = histogram as { toArray?: () => unknown[] } | null | undefined;
   if (!table || typeof table.toArray !== 'function') return undefined;
 
@@ -100,7 +100,9 @@ export function buildStatisticsSnapshot(
         share_integers: toOptionalNumber(column.share_integers),
         share_floats: toOptionalNumber(column.share_floats),
         share_rank_interval: toOptionalNumber(column.share_rank_interval),
-        extent_magnitude: toOptionalNumber(column.extent_magnitude)
+        extent_magnitude: toOptionalNumber(column.extent_magnitude),
+        skewness: toOptionalNumber(column.skewness),
+        categories: extractCategories(column.histogram)
       }
     ])
   );

@@ -132,6 +132,7 @@ const SUGGESTION_VISUALIZATION_TYPES = {
   polygons_uniques: VisualizationType.CHOROPLETH,
   lines_uniques: VisualizationType.CHOROPLETH,
   choropleth: VisualizationType.CHOROPLETH,
+  choropleth_labeled: VisualizationType.CHOROPLETH,
   symbols_uniques_colorful_QTR: VisualizationType.CHOROPLETH,
   lines_colorful_QTR: VisualizationType.CHOROPLETH,
   symbols_proportional: VisualizationType.PROPORTIONAL,
@@ -193,6 +194,7 @@ const POLYGON_SUGGESTION_IDS = new Set([
   'polygons_uniques',
   'polygons_colorful_QL',
   'choropleth',
+  'choropleth_labeled',
   'polygons_colorful_QLO'
 ]);
 
@@ -218,6 +220,7 @@ const CATEGORY_SUGGESTION_IDS = new Set([
 
 const CLASS_SUGGESTION_IDS = new Set([
   'choropleth',
+  'choropleth_labeled',
   'symbols_uniques_colorful_QTR',
   'lines_colorful_QTR',
   'symbols_proportional_colorful_QTR',
@@ -665,20 +668,35 @@ export function resolveSuggestionBehavior(
   }
 
   if (POLYGON_SUGGESTION_IDS.has(suggestion.id)) {
-    if (suggestion.id === 'choropleth') {
+    if (
+      suggestion.id === 'choropleth' ||
+      suggestion.id === 'choropleth_labeled'
+    ) {
+      const isLabeledChoropleth = suggestion.id === 'choropleth_labeled';
+      const choroplethLabelColumn = isLabeledChoropleth
+        ? (suggestion.columns?.[1] ?? primaryTextColumn)
+        : undefined;
+
       return {
         visualizationType,
-        primaryPrimitives: [PrimitiveFilterType.POLYGON],
+        primaryPrimitives: isLabeledChoropleth
+          ? [PrimitiveFilterType.POLYGON, 'text']
+          : [PrimitiveFilterType.POLYGON],
         supportPrimitives: [],
-        forcedOffPrimitives: [
-          PrimitiveFilterType.POINT,
-          PrimitiveFilterType.LINE,
-          'text',
-          'label'
-        ],
-        primitiveFilters: [PrimitiveFilterType.POLYGON],
+        forcedOffPrimitives: isLabeledChoropleth
+          ? [PrimitiveFilterType.POINT, PrimitiveFilterType.LINE, 'label']
+          : [
+              PrimitiveFilterType.POINT,
+              PrimitiveFilterType.LINE,
+              'text',
+              'label'
+            ],
+        primitiveFilters: isLabeledChoropleth
+          ? [PrimitiveFilterType.POLYGON, PrimitiveFilterType.TEXT]
+          : [PrimitiveFilterType.POLYGON],
         mapping: buildClearedMapping(preset.mapping.geometryColumn, {
-          valueColumn: primaryNumericColumn
+          valueColumn: primaryNumericColumn,
+          labelColumn: choroplethLabelColumn
         }),
         modes: {
           ...preset.modes,
@@ -703,9 +721,35 @@ export function resolveSuggestionBehavior(
         line: {
           enabled: false
         },
-        text: {
-          enabled: false
-        }
+        text:
+          isLabeledChoropleth && choroplethLabelColumn
+            ? buildTextPrimitiveConfig(preset, visualization, {
+                labelColumn: choroplethLabelColumn,
+                colorMode: ColorMode.UNIQUE,
+                sizeMode: SizeMode.FIXED,
+                missingData: buildDisabledMissingData(preset.missingData),
+                secondaryLabels: {
+                  enabled: false,
+                  labelColumn: undefined
+                }
+              })
+            : {
+                enabled: false
+              },
+        ...(isLabeledChoropleth && primaryNumericColumn
+          ? {
+              dataFilters: [
+                {
+                  id: crypto.randomUUID(),
+                  column: primaryNumericColumn,
+                  operator: 'top_desc' as const,
+                  value: String(TOP_LABELED_SYMBOLS_LIMIT),
+                  limit: TOP_LABELED_SYMBOLS_LIMIT,
+                  primitiveType: PrimitiveFilterType.TEXT
+                }
+              ]
+            }
+          : {})
       };
     }
 
