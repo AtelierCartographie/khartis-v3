@@ -249,6 +249,11 @@ const MAX_CATEGORY_COLOR_CLASSES = 8;
 const MAX_CATEGORY_SHAPE_CLASSES = 5;
 const MAX_CATEGORY_SHARE_UNIQUES = 0.5;
 const MIN_THEMATIC_SEMIO_SCORE = 0.3;
+const COMFORT_CATEGORY_COLOR_CLASSES = 6;
+const COMFORT_CATEGORY_SHAPE_CLASSES = 4;
+const CROWDED_CATEGORY_PENALTY = 0.85;
+const FLAT_PROPORTIONAL_RATIO = 2;
+const FLAT_PROPORTIONAL_PENALTY = 0.6;
 const SHAPE_CATEGORY_VIZ_IDS = new Set([
   'symbols_differents',
   'symbols_differents_QLO'
@@ -365,11 +370,47 @@ function getColumnSemioType(column: ColumnAnalysis): EnrichedColumn {
   };
 }
 
-function computeSuggestionScore(columns: EnrichedColumn[]): number {
+function computeSuggestionScore(
+  columns: EnrichedColumn[],
+  legibilityFactor = 1
+): number {
   if (columns.length === 0) return 0;
   const totalScore = columns.reduce((sum, col) => sum + col.score, 0);
   const avgScore = totalScore / columns.length;
-  return Math.round(Math.min(avgScore, 1) * 100);
+  return Math.round(Math.min(avgScore, 1) * legibilityFactor * 100);
+}
+
+function computeLegibilityFactor(
+  viz: VizSuggestion,
+  columns: EnrichedColumn[]
+): number {
+  let factor = 1;
+
+  for (const column of columns) {
+    if (isCategoricalColumn(column)) {
+      const comfortLimit = SHAPE_CATEGORY_VIZ_IDS.has(viz.id)
+        ? COMFORT_CATEGORY_SHAPE_CLASSES
+        : COMFORT_CATEGORY_COLOR_CLASSES;
+      if (getUniqueCount(column) > comfortLimit) {
+        factor *= CROWDED_CATEGORY_PENALTY;
+      }
+    }
+
+    if (column.semioType === SEMIO_TYPES.QTA) {
+      const min = toStatNumber(column.stats?.min);
+      const max = toStatNumber(column.stats?.max);
+      if (
+        min !== undefined &&
+        max !== undefined &&
+        min > 0 &&
+        max / min < FLAT_PROPORTIONAL_RATIO
+      ) {
+        factor *= FLAT_PROPORTIONAL_PENALTY;
+      }
+    }
+  }
+
+  return factor;
 }
 
 function getShareUniques(column: EnrichedColumn): number {
@@ -440,7 +481,10 @@ function generateTextSuggestions(
       results.push({
         ...viz,
         columns: [labelCandidate.name, bestQualitative.name],
-        score: computeSuggestionScore([labelCandidate, bestQualitative])
+        score: computeSuggestionScore(
+          [labelCandidate, bestQualitative],
+          computeLegibilityFactor(viz, [labelCandidate, bestQualitative])
+        )
       });
     }
   }
@@ -451,7 +495,10 @@ function generateTextSuggestions(
       results.push({
         ...viz,
         columns: [labelCandidate.name, bestRatio.name],
-        score: computeSuggestionScore([labelCandidate, bestRatio])
+        score: computeSuggestionScore(
+          [labelCandidate, bestRatio],
+          computeLegibilityFactor(viz, [labelCandidate, bestRatio])
+        )
       });
     }
   }
@@ -462,7 +509,10 @@ function generateTextSuggestions(
       results.push({
         ...viz,
         columns: [labelCandidate.name, bestAbsolute.name],
-        score: computeSuggestionScore([labelCandidate, bestAbsolute])
+        score: computeSuggestionScore(
+          [labelCandidate, bestAbsolute],
+          computeLegibilityFactor(viz, [labelCandidate, bestAbsolute])
+        )
       });
     }
   }
@@ -509,7 +559,10 @@ function searchVizByType(
     ).map((viz) => ({
       ...viz,
       columns: [dataset.name],
-      score: computeSuggestionScore([dataset])
+      score: computeSuggestionScore(
+        [dataset],
+        computeLegibilityFactor(viz, [dataset])
+      )
     })) as VizSuggestion[];
   }
 
@@ -529,7 +582,10 @@ function searchVizByType(
       columns: orderSuggestionColumns(dataset, viz.semioTypes).map(
         (column) => column.name
       ),
-      score: computeSuggestionScore(dataset)
+      score: computeSuggestionScore(
+        dataset,
+        computeLegibilityFactor(viz, dataset)
+      )
     })) as VizSuggestion[];
   }
 
