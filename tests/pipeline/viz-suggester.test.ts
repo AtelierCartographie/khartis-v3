@@ -381,6 +381,87 @@ describe('suggestVisualizations — label columns', () => {
   });
 });
 
+describe('suggestVisualizations — derived ratio', () => {
+  const stockCol = col({
+    name: 'naissances',
+    type: 'number',
+    stats: {
+      totalCount: 100,
+      uniqueCount: 80,
+      nullCount: 0,
+      min: 10,
+      max: 90000,
+      share_integers: 1.0,
+      share_rank_interval: 0.05,
+      extent_magnitude: 4,
+      skewness: 3
+    }
+  });
+
+  const denominatorCol = col({
+    name: 'population',
+    type: 'number',
+    stats: {
+      totalCount: 100,
+      uniqueCount: 95,
+      nullCount: 0,
+      min: 1000,
+      max: 2000000,
+      share_integers: 1.0,
+      share_rank_interval: 0.05,
+      extent_magnitude: 4,
+      skewness: 3
+    }
+  });
+
+  it('suggests a computed ratio choropleth when a stock and a denominator coexist', () => {
+    const results = vizSuggester.suggestVisualizations(
+      [stockCol, denominatorCol],
+      'Polygon',
+      { maxSuggestions: 10 }
+    );
+    const derived = results.find((s) => s.id === 'choropleth_derived_ratio');
+    expect(derived).toBeDefined();
+    expect(derived?.derivedColumn?.numerator).toBe('naissances');
+    expect(derived?.derivedColumn?.denominator).toBe('population');
+    expect(derived?.derivedColumn?.expression).toContain('NULLIF');
+    expect(derived?.columns).toEqual(['naissances / population']);
+  });
+
+  it('does not suggest a derived ratio without a denominator-keyword column', () => {
+    const otherStock = col({
+      name: 'deces',
+      type: 'number',
+      stats: {
+        totalCount: 100,
+        uniqueCount: 80,
+        nullCount: 0,
+        min: 10,
+        max: 60000,
+        share_integers: 1.0,
+        share_rank_interval: 0.05,
+        extent_magnitude: 4,
+        skewness: 3
+      }
+    });
+    const results = vizSuggester.suggestVisualizations(
+      [stockCol, otherStock],
+      'Polygon',
+      { maxSuggestions: 10 }
+    );
+    expect(results.map((s) => s.id)).not.toContain('choropleth_derived_ratio');
+  });
+
+  it('does not suggest a derived ratio on point datasets', () => {
+    const results = vizSuggester.suggestVisualizations(
+      [stockCol, denominatorCol],
+      'Point',
+      { maxSuggestions: 10 }
+    );
+    expect(results.map((s) => s.id)).not.toContain('choropleth_derived_ratio');
+  });
+});
+
 describe('suggestVisualizations — weak thematic columns', () => {
   it('falls back to nbColumns=0 when the only column has a near-zero semio score', () => {
     const weakNumericCol = col({
