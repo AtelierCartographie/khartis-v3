@@ -4,14 +4,7 @@ import {
 } from '$lib/features/duckdb';
 
 export type SemioType =
-  | 'geoid'
-  | 'geolat'
-  | 'geolon'
-  | 'label'
-  | 'QTA'
-  | 'QTR'
-  | 'QL'
-  | 'QLO';
+  'geoid' | 'geolat' | 'geolon' | 'label' | 'QTA' | 'QTR' | 'QL' | 'QLO';
 
 const YEAR_RANGE = { MIN: 1200, MAX: 2100 } as const;
 
@@ -89,6 +82,7 @@ interface QTAIndicators {
   shareIntegers: number;
   shareRankInterval: number;
   stockWords: boolean;
+  ratioWords: boolean;
   skewness: number | undefined;
 }
 
@@ -126,7 +120,9 @@ interface LabelIndicators {
 function scoreGeoId(indicators: GeoIdIndicators): SemioScore {
   let score = 0;
   if (indicators.shareUniques >= 0.9) score += indicators.isNumeric ? 0.5 : 1;
-  if (indicators.shareNulls <= 0.1) score += indicators.isNumeric ? 0.5 : 1.5;
+  if (indicators.shareNulls <= 0.1) {
+    score += indicators.isNumeric ? 0.5 : indicators.idWords ? 1.5 : 1;
+  }
   if (indicators.idWords) {
     score += indicators.shareUniques >= 0.5 ? 4 : 3.5;
   }
@@ -172,7 +168,8 @@ function scoreQTA(indicators: QTAIndicators): SemioScore {
   if (indicators.extentMagnitude >= 2) score += 1;
   if (indicators.stockWords) score += 2.5;
   if (indicators.skewness !== undefined && indicators.skewness >= 2) score += 1;
-  return { semioType: SEMIO_TYPES.QTA, score };
+  if (indicators.ratioWords && !indicators.stockWords) score -= 2;
+  return { semioType: SEMIO_TYPES.QTA, score: Math.max(score, 0) };
 }
 
 function scoreQTR(indicators: QTRIndicators): SemioScore {
@@ -288,6 +285,8 @@ const ID_KEYWORDS = [
   'pk',
   'code',
   'iso',
+  'iso2',
+  'iso3',
   'objectid',
   'object_id',
   'rowid'
@@ -325,7 +324,6 @@ const STOCK_KEYWORDS = [
   'population',
   'pop',
   'nombre',
-  'number',
   'nb',
   'count',
   'total',
@@ -347,7 +345,7 @@ const RANK_KEYWORDS = [
   'niveau',
   'level'
 ];
-const YEAR_KEYWORDS = ['year', 'years', 'yr', 'annee', 'annees'];
+const YEAR_KEYWORDS = ['year', 'years', 'yr', 'annee', 'annees', 'date'];
 const LABEL_KEYWORDS = [
   'name',
   'nom',
@@ -471,6 +469,7 @@ export function detectSemioType(
           shareIntegers,
           shareRankInterval,
           stockWords: keywords.stockWords && !keywords.ratioWords,
+          ratioWords: keywords.ratioWords,
           skewness
         }),
         scoreQTR({
