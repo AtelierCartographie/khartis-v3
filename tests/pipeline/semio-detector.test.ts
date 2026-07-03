@@ -190,6 +190,86 @@ describe('detectSemioType — NUMERIC columns', () => {
     expect(result.semioScore).toBe(0);
   });
 
+  it('detects QLO for a year column (keyword + plausible range)', () => {
+    const result = detectSemioType(
+      analysis('Année', NUMERIC, {
+        uniques: 30,
+        min: 1990,
+        max: 2020,
+        share_integers: 1.0,
+        share_floats: 0,
+        share_rank_interval: 0.4,
+        extent_magnitude: 0
+      }) as never
+    );
+    expect(result.semioType).toBe('QLO');
+  });
+
+  it('detects QLO for a year column with BigInt min/max from DuckDB', () => {
+    const result = detectSemioType(
+      analysis('year', NUMERIC, {
+        uniques: 30,
+        min: 1990n,
+        max: 2020n,
+        share_integers: 1.0,
+        share_floats: 0,
+        share_rank_interval: 0.4,
+        extent_magnitude: 0
+      }) as never
+    );
+    expect(result.semioType).toBe('QLO');
+  });
+
+  it('does NOT treat a year-keyword column outside the plausible range as QLO', () => {
+    const result = detectSemioType(
+      analysis('annees_experience', NUMERIC, {
+        uniques: 40,
+        min: 0,
+        max: 45,
+        share_integers: 1.0,
+        share_floats: 0,
+        share_rank_interval: 0.05,
+        extent_magnitude: 1
+      }) as never
+    );
+    expect(result.semioType).not.toBe('QLO');
+  });
+
+  it('detects QTR for accented ratio keyword (densité) without explicit taux/rate', () => {
+    const result = detectSemioType(
+      analysis('densité', NUMERIC, {
+        uniques: 90,
+        min: 2,
+        max: 900,
+        share_integers: 0.1,
+        share_floats: 0.9,
+        share_rank_interval: 0,
+        extent_magnitude: 2
+      }) as never
+    );
+    expect(result.semioType).toBe('QTR');
+  });
+
+  it('QTA score is boosted by stock keywords vs anonymous integer column', () => {
+    const stats = {
+      uniques: 100,
+      min: 1000,
+      max: 1000000,
+      share_integers: 1.0,
+      share_floats: 0,
+      share_rank_interval: 0.05,
+      extent_magnitude: 3
+    };
+    const withKeyword = detectSemioType(
+      analysis('total_naissances', NUMERIC, stats) as never
+    );
+    const withoutKeyword = detectSemioType(
+      analysis('valeur', NUMERIC, stats) as never
+    );
+    expect(withKeyword.semioType).toBe('QTA');
+    expect(withKeyword.semioScore).toBeGreaterThan(withoutKeyword.semioScore);
+  });
+
   it('QTR score is boosted by ratio keywords vs plain float column', () => {
     const withKeyword = detectSemioType(
       analysis('taux', NUMERIC, {
