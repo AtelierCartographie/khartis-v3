@@ -25,6 +25,24 @@ function toStatBoundary(value: unknown): unknown {
   return typeof value === 'bigint' ? Number(value) : value;
 }
 
+const CATEGORY_SAMPLE_LIMIT = 24;
+
+function extractCategories(histogram: unknown): string[] | undefined {
+  const table = histogram as { toArray?: () => unknown[] } | null | undefined;
+  if (!table || typeof table.toArray !== 'function') return undefined;
+
+  try {
+    const categories = table
+      .toArray()
+      .map((row) => (row as { category?: unknown }).category)
+      .filter((value): value is string => typeof value === 'string')
+      .slice(0, CATEGORY_SAMPLE_LIMIT);
+    return categories.length > 0 ? categories : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function enrichColumns(
   columns: DuckAnalyticsColumn[]
 ): EnrichedColumn[] {
@@ -57,7 +75,8 @@ export function enrichColumns(
         column.extent_magnitude != null
           ? Number(column.extent_magnitude)
           : undefined,
-      skewness: toOptionalNumber(column.skewness)
+      skewness: toOptionalNumber(column.skewness),
+      categories: extractCategories(column.histogram)
     }
   }));
 }

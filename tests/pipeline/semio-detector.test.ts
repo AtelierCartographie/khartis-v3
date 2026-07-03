@@ -58,6 +58,41 @@ describe('detectSemioType — STRING columns', () => {
   });
 });
 
+describe('detectSemioType — ordinal text categories', () => {
+  it('detects QLO for ordered text categories (faible/moyen/élevé)', () => {
+    const result = detectSemioType(
+      analysis('risque', STRING, {
+        count: 300,
+        uniques: 3,
+        categories: ['Faible', 'Moyen', 'Élevé']
+      }) as never
+    );
+    expect(result.semioType).toBe('QLO');
+  });
+
+  it('detects QLO for numeric-prefixed category labels', () => {
+    const result = detectSemioType(
+      analysis('classe', STRING, {
+        count: 300,
+        uniques: 4,
+        categories: ['1 - Très faible', '2 - Faible', '3 - Moyen', '4 - Élevé']
+      }) as never
+    );
+    expect(result.semioType).toBe('QLO');
+  });
+
+  it('keeps unordered text categories as QL', () => {
+    const result = detectSemioType(
+      analysis('occupation_sol', STRING, {
+        count: 300,
+        uniques: 3,
+        categories: ['Forêt', 'Prairie', 'Urbain']
+      }) as never
+    );
+    expect(result.semioType).toBe('QL');
+  });
+});
+
 describe('detectSemioType — NUMERIC columns', () => {
   it('detects GEOLAT for lat column with valid range', () => {
     const result = detectSemioType(

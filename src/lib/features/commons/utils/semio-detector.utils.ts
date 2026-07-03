@@ -100,12 +100,15 @@ interface QLIndicators {
   shareUniques: number;
   uniqueCount: number;
   isNumeric: boolean;
+  ordinalCategories: boolean;
 }
 
 interface QLOIndicators {
   rankWords: boolean;
   shareRankInterval: number;
   yearLikely: boolean;
+  ordinalCategories: boolean;
+  likertLikely: boolean;
 }
 
 function scoreGeoId(indicators: GeoIdIndicators): SemioScore {
@@ -173,7 +176,8 @@ function scoreQL(indicators: QLIndicators): SemioScore {
   let score = 0;
   if (indicators.shareUniques <= 0.2) score += indicators.isNumeric ? 1 : 2;
   if (indicators.uniqueCount <= 10) score += indicators.isNumeric ? 0.5 : 1;
-  return { semioType: SEMIO_TYPES.QL, score };
+  if (indicators.ordinalCategories) score -= 1.5;
+  return { semioType: SEMIO_TYPES.QL, score: Math.max(score, 0) };
 }
 
 function scoreQLO(indicators: QLOIndicators): SemioScore {
@@ -181,7 +185,71 @@ function scoreQLO(indicators: QLOIndicators): SemioScore {
   if (indicators.rankWords) score += 4;
   if (indicators.shareRankInterval >= 0.8) score += 2;
   if (indicators.yearLikely) score += 5;
+  if (indicators.ordinalCategories) score += 4;
+  if (indicators.likertLikely) score += 1.5;
   return { semioType: SEMIO_TYPES.QLO, score };
+}
+
+const ORDINAL_SEQUENCES: readonly (readonly string[])[] = [
+  [
+    'tres faible',
+    'faible',
+    'plutot faible',
+    'moyen',
+    'moyenne',
+    'intermediaire',
+    'plutot eleve',
+    'eleve',
+    'tres eleve',
+    'fort',
+    'tres fort'
+  ],
+  ['very low', 'low', 'medium', 'moderate', 'average', 'high', 'very high'],
+  ['bas', 'plutot bas', 'moyen', 'haut', 'tres haut'],
+  ['petit', 'moyen', 'grand', 'tres grand'],
+  ['small', 'medium', 'large', 'extra large'],
+  ['xs', 's', 'm', 'l', 'xl', 'xxl'],
+  ['jamais', 'rarement', 'parfois', 'souvent', 'toujours'],
+  ['never', 'rarely', 'sometimes', 'often', 'always'],
+  ['insuffisant', 'passable', 'moyen', 'bien', 'tres bien', 'excellent'],
+  ['poor', 'fair', 'good', 'very good', 'excellent']
+];
+
+const ORDINAL_NUMERIC_PREFIX = /^\d+\s*[-–.):]/;
+const ORDINAL_MATCH_MIN_SHARE = 0.6;
+const ORDINAL_MAX_CATEGORIES = 12;
+
+function normalizeCategoryLabel(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+function detectOrdinalCategories(categories: string[] | undefined): boolean {
+  if (
+    !categories ||
+    categories.length < 2 ||
+    categories.length > ORDINAL_MAX_CATEGORIES
+  ) {
+    return false;
+  }
+
+  const normalized = categories.map(normalizeCategoryLabel);
+
+  if (normalized.every((value) => ORDINAL_NUMERIC_PREFIX.test(value))) {
+    return true;
+  }
+
+  return ORDINAL_SEQUENCES.some((sequence) => {
+    const matches = normalized.filter((value) =>
+      sequence.includes(value)
+    ).length;
+    return (
+      matches >= 2 && matches / normalized.length >= ORDINAL_MATCH_MIN_SHARE
+    );
+  });
 }
 
 const ID_KEYWORDS = [
@@ -319,12 +387,24 @@ export function detectSemioType(
   const shareFloats = (analysis.share_floats as number) ?? 0;
   const shareRankInterval = (analysis.share_rank_interval as number) ?? 0;
   const skewness = toStatNumber(analysis.skewness);
+  const categories = Array.isArray(analysis.categories)
+    ? (analysis.categories as string[])
+    : undefined;
 
   const yearLikely =
     keywords.yearWords &&
     shareIntegers >= 0.9 &&
     min >= YEAR_RANGE.MIN &&
     max <= YEAR_RANGE.MAX;
+
+  const likertLikely =
+    shareIntegers >= 0.9 &&
+    uniqueCount >= 3 &&
+    uniqueCount <= 7 &&
+    min >= 0 &&
+    max <= 10;
+
+  const ordinalCategories = detectOrdinalCategories(categories);
 
   switch (typeSimple) {
     case DuckDBSimplifiedType.NUMERIC:
@@ -345,11 +425,18 @@ export function detectSemioType(
           shareFloats,
           skewness
         }),
-        scoreQL({ shareUniques, uniqueCount, isNumeric: true }),
+        scoreQL({
+          shareUniques,
+          uniqueCount,
+          isNumeric: true,
+          ordinalCategories
+        }),
         scoreQLO({
           rankWords: keywords.rankWords,
           shareRankInterval,
-          yearLikely
+          yearLikely,
+          ordinalCategories,
+          likertLikely
         }),
         scoreGeoId({
           shareUniques,
@@ -372,11 +459,18 @@ export function detectSemioType(
     case DuckDBSimplifiedType.STRING:
     default:
       results.push(
-        scoreQL({ shareUniques, uniqueCount, isNumeric: false }),
+        scoreQL({
+          shareUniques,
+          uniqueCount,
+          isNumeric: false,
+          ordinalCategories
+        }),
         scoreQLO({
           rankWords: keywords.rankWords,
           shareRankInterval,
-          yearLikely
+          yearLikely,
+          ordinalCategories,
+          likertLikely
         }),
         scoreGeoId({
           shareUniques,
