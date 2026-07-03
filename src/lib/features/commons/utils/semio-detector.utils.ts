@@ -70,6 +70,7 @@ interface QTAIndicators {
   shareIntegers: number;
   shareRankInterval: number;
   stockWords: boolean;
+  skewness: number | undefined;
 }
 
 interface QTRIndicators {
@@ -78,6 +79,7 @@ interface QTRIndicators {
   min: number;
   max: number;
   shareFloats: number;
+  skewness: number | undefined;
 }
 
 interface QLIndicators {
@@ -135,6 +137,7 @@ function scoreQTA(indicators: QTAIndicators): SemioScore {
   if (indicators.shareRankInterval <= 0.1) score += 1;
   if (indicators.extentMagnitude >= 2) score += 1;
   if (indicators.stockWords) score += 2.5;
+  if (indicators.skewness !== undefined && indicators.skewness >= 2) score += 1;
   return { semioType: SEMIO_TYPES.QTA, score };
 }
 
@@ -145,6 +148,9 @@ function scoreQTR(indicators: QTRIndicators): SemioScore {
   if (indicators.ratioWords) score += 3;
   if (indicators.extentMagnitude <= 2) score += 0.5;
   if (indicators.min < 0 && indicators.max > 0) score += 0.5;
+  if (indicators.min >= 0 && indicators.max <= 100) score += 0.5;
+  if (indicators.skewness !== undefined && Math.abs(indicators.skewness) <= 1)
+    score += 0.5;
   return { semioType: SEMIO_TYPES.QTR, score };
 }
 
@@ -297,6 +303,7 @@ export function detectSemioType(
   const shareIntegers = (analysis.share_integers as number) ?? 0;
   const shareFloats = (analysis.share_floats as number) ?? 0;
   const shareRankInterval = (analysis.share_rank_interval as number) ?? 0;
+  const skewness = toStatNumber(analysis.skewness);
 
   const yearLikely =
     keywords.yearWords &&
@@ -312,14 +319,16 @@ export function detectSemioType(
           extentMagnitude,
           shareIntegers,
           shareRankInterval,
-          stockWords: keywords.stockWords
+          stockWords: keywords.stockWords,
+          skewness
         }),
         scoreQTR({
           ratioWords: keywords.ratioWords,
           extentMagnitude,
           min,
           max,
-          shareFloats
+          shareFloats,
+          skewness
         }),
         scoreQL({ shareUniques, uniqueCount }),
         scoreQLO({

@@ -52,7 +52,8 @@ export function enrichColumns(
       extent_magnitude:
         column.extent_magnitude != null
           ? Number(column.extent_magnitude)
-          : undefined
+          : undefined,
+      skewness: toOptionalNumber(column.skewness)
     }
   }));
 }

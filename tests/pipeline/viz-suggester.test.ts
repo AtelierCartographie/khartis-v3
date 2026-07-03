@@ -287,11 +287,11 @@ describe('suggestVisualizations — weak thematic columns', () => {
         totalCount: 100,
         uniqueCount: 60,
         nullCount: 0,
-        min: 5,
-        max: 80,
-        share_integers: 0.5,
-        share_floats: 0.5,
-        share_rank_interval: 0.3,
+        min: 200,
+        max: 900,
+        share_integers: 0.6,
+        share_floats: 0.4,
+        share_rank_interval: 0.5,
         extent_magnitude: 1
       }
     });
