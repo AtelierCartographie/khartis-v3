@@ -19,14 +19,7 @@ export interface AnalysisResult {
   duplicates?: number;
   count?: number;
   semioType?:
-    | 'geoid'
-    | 'geolat'
-    | 'geolon'
-    | 'label'
-    | 'QTA'
-    | 'QTR'
-    | 'QL'
-    | 'QLO';
+    'geoid' | 'geolat' | 'geolon' | 'label' | 'QTA' | 'QTR' | 'QL' | 'QLO';
   semioScore?: number;
   [key: string]: unknown;
 }

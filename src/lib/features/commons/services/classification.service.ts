@@ -110,12 +110,7 @@ export function suggestClassificationDefaults(
 }
 
 export type ClassificationMacro =
-  | 'kmeans'
-  | 'quantile'
-  | 'equi_width'
-  | 'nested_means'
-  | 'q6'
-  | 'headtail2';
+  'kmeans' | 'quantile' | 'equi_width' | 'nested_means' | 'q6' | 'headtail2';
 
 export function mapMethodToMacro(
   method: ClassificationMethod | string
