@@ -244,34 +244,6 @@ const STRING_LIKE_COLUMN_TYPES = [
   COLUMN_TYPE.TEXT,
   COLUMN_TYPE.BOOLEAN
 ] as const;
-const LABEL_COLUMN_KEYWORDS = [
-  'name',
-  'nom',
-  'label',
-  'title',
-  'libelle',
-  'libellé',
-  'address',
-  'adresse',
-  'city',
-  'commune',
-  'quartier',
-  'site',
-  'station',
-  'stop'
-] as const;
-const ID_COLUMN_KEYWORDS = [
-  'id',
-  'fid',
-  'gid',
-  'oid',
-  'pk',
-  'code',
-  'iso',
-  'objectid',
-  'object_id',
-  'rowid'
-] as const;
 const MAX_TEXT_POINT_FEATURES = 150;
 const MAX_CATEGORY_COLOR_CLASSES = 8;
 const MAX_CATEGORY_SHAPE_CLASSES = 5;
@@ -406,57 +378,6 @@ function getShareUniques(column: EnrichedColumn): number {
   return getUniqueCount(column) / totalCount;
 }
 
-function isStringLikeColumn(column: EnrichedColumn): boolean {
-  return (
-    STRING_LIKE_COLUMN_TYPES.includes(
-      column.type.toLowerCase() as (typeof STRING_LIKE_COLUMN_TYPES)[number]
-    ) || column.type.toLowerCase() === COLUMN_TYPE.DATE
-  );
-}
-
-function getNameTokens(columnName: string): string[] {
-  return columnName
-    .toLowerCase()
-    .split(/[^a-zA-Z0-9%]/)
-    .filter(Boolean);
-}
-
-function hasNamedKeyword(
-  columnName: string,
-  keywords: readonly string[]
-): boolean {
-  const tokens = getNameTokens(columnName);
-  return (
-    tokens.some((token) => keywords.includes(token)) ||
-    keywords.some((keyword) => columnName.toLowerCase().includes(keyword))
-  );
-}
-
-function isLabelCandidate(column: EnrichedColumn): boolean {
-  if (!isStringLikeColumn(column)) return false;
-
-  const uniqueCount = getUniqueCount(column);
-  if (uniqueCount <= 1) return false;
-
-  const shareUniques = getShareUniques(column);
-  const hasLabelKeyword = hasNamedKeyword(column.name, LABEL_COLUMN_KEYWORDS);
-  const hasIdKeyword = hasNamedKeyword(column.name, ID_COLUMN_KEYWORDS);
-
-  if (hasIdKeyword && !hasLabelKeyword) return false;
-
-  return hasLabelKeyword || shareUniques >= 0.4 || uniqueCount >= 20;
-}
-
-function scoreLabelCandidate(column: EnrichedColumn): number {
-  const hasLabelKeyword = hasNamedKeyword(column.name, LABEL_COLUMN_KEYWORDS);
-
-  return (
-    (hasLabelKeyword ? 2 : 0) +
-    Math.min(getShareUniques(column), 1) +
-    Math.min(getUniqueCount(column) / 50, 1)
-  );
-}
-
 function generateTextSuggestions(
   columns: EnrichedColumn[],
   geometryType: SimplifiedGeometryType
@@ -477,8 +398,8 @@ function generateTextSuggestions(
   }
 
   const labelCandidate = columns
-    .filter((column) => isLabelCandidate(column))
-    .sort((a, b) => scoreLabelCandidate(b) - scoreLabelCandidate(a))[0];
+    .filter((column) => column.semioType === SEMIO_TYPES.LABEL)
+    .sort((a, b) => b.score - a.score)[0];
 
   if (!labelCandidate) {
     return [];
@@ -811,9 +732,9 @@ function suggestVisualizations(
     .filter((col) => col.semioType !== SEMIO_TYPES.GEOLON)
     .filter((col) => getUniqueCount(col) > 1);
 
-  const rankedColumns = thematicColumns.filter(
-    (col) => col.score >= MIN_THEMATIC_SEMIO_SCORE
-  );
+  const rankedColumns = thematicColumns
+    .filter((col) => col.semioType !== SEMIO_TYPES.LABEL)
+    .filter((col) => col.score >= MIN_THEMATIC_SEMIO_SCORE);
 
   const textEligibleColumns = thematicColumns;
 

@@ -47,6 +47,37 @@ describe('detectSemioType — STRING columns', () => {
     expect(result.semioType).toBe('QL');
   });
 
+  it('detects LABEL for a name-keyword column with distinct values', () => {
+    const result = detectSemioType(
+      analysis('nom_commune', STRING, {
+        count: 200,
+        uniques: 195
+      }) as never
+    );
+    expect(result.semioType).toBe('label');
+    expect(result.semioScore).toBeGreaterThanOrEqual(0.6);
+  });
+
+  it('detects LABEL for keyword-less near-unique text values over geoid', () => {
+    const result = detectSemioType(
+      analysis('entity', STRING, {
+        count: 100,
+        uniques: 95
+      }) as never
+    );
+    expect(result.semioType).toBe('label');
+  });
+
+  it('keeps id-keyword columns as GEOID, not label', () => {
+    const result = detectSemioType(
+      analysis('code_insee', STRING, {
+        count: 100,
+        uniques: 100
+      }) as never
+    );
+    expect(result.semioType).toBe('geoid');
+  });
+
   it('QL score increases when both shareUniques and uniqueCount are low', () => {
     const high = detectSemioType(
       analysis('cat', STRING, { count: 100, uniques: 5 }) as never
