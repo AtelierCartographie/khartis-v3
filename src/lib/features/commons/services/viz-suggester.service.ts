@@ -103,6 +103,13 @@ const VIZ_CRITERIA: readonly VizSuggestion[] = [
     geometries: ['point', 'polygon']
   },
   {
+    id: 'symbols_proportional_labeled',
+    label: m.viz_suggestion_symbols_proportional_labeled(),
+    nbColumns: 2,
+    semioTypes: ['QTA', 'label'],
+    geometries: ['point', 'polygon']
+  },
+  {
     id: 'symbols_proportional_colorful_QL',
     label: m.viz_suggestion_symbols_proportional_colorful_ql(),
     nbColumns: 2,
@@ -255,6 +262,8 @@ const CROWDED_CATEGORY_PENALTY = 0.85;
 const FLAT_PROPORTIONAL_RATIO = 2;
 const FLAT_PROPORTIONAL_PENALTY = 0.6;
 const TEXT_SUGGESTION_SCORE_FACTOR = 0.7;
+const LABELED_PROPORTIONAL_SCORE_FACTOR = 0.9;
+const LABELED_PROPORTIONAL_VIZ_ID = 'symbols_proportional_labeled';
 const SHAPE_CATEGORY_VIZ_IDS = new Set([
   'symbols_differents',
   'symbols_differents_QLO'
@@ -420,6 +429,48 @@ function getShareUniques(column: EnrichedColumn): number {
   return getUniqueCount(column) / totalCount;
 }
 
+function findLabelCandidate(
+  columns: EnrichedColumn[]
+): EnrichedColumn | undefined {
+  return columns
+    .filter((column) => column.semioType === SEMIO_TYPES.LABEL)
+    .sort((a, b) => b.score - a.score)[0];
+}
+
+function generateLabeledProportionalSuggestions(
+  columns: EnrichedColumn[],
+  geometryType: SimplifiedGeometryType
+): VizSuggestion[] {
+  if (geometryType === SIMPLIFIED_GEOMETRY_TYPE.LINE) {
+    return [];
+  }
+
+  const criteria = VIZ_CRITERIA.find(
+    (entry) => entry.id === LABELED_PROPORTIONAL_VIZ_ID
+  );
+  const labelCandidate = findLabelCandidate(columns);
+  const bestAbsolute = columns
+    .filter((column) => column.semioType === SEMIO_TYPES.QTA)
+    .filter((column) => column.score >= MIN_THEMATIC_SEMIO_SCORE)
+    .sort((a, b) => b.score - a.score)[0];
+
+  if (!criteria || !labelCandidate || !bestAbsolute) {
+    return [];
+  }
+
+  return [
+    {
+      ...criteria,
+      columns: [bestAbsolute.name, labelCandidate.name],
+      score: computeSuggestionScore(
+        [bestAbsolute],
+        computeLegibilityFactor(criteria, [bestAbsolute]) *
+          LABELED_PROPORTIONAL_SCORE_FACTOR
+      )
+    }
+  ];
+}
+
 function generateTextSuggestions(
   columns: EnrichedColumn[],
   geometryType: SimplifiedGeometryType
@@ -439,9 +490,7 @@ function generateTextSuggestions(
     return [];
   }
 
-  const labelCandidate = columns
-    .filter((column) => column.semioType === SEMIO_TYPES.LABEL)
-    .sort((a, b) => b.score - a.score)[0];
+  const labelCandidate = findLabelCandidate(columns);
 
   if (!labelCandidate) {
     return [];
@@ -470,9 +519,6 @@ function generateTextSuggestions(
   const bestRatio = thematicCandidates.find(
     (column) => column.semioType === SEMIO_TYPES.QTR
   );
-  const bestAbsolute = thematicCandidates.find(
-    (column) => column.semioType === SEMIO_TYPES.QTA
-  );
 
   const results: VizSuggestion[] = [];
 
@@ -500,21 +546,6 @@ function generateTextSuggestions(
         score: computeSuggestionScore(
           [bestRatio],
           computeLegibilityFactor(viz, [labelCandidate, bestRatio]) *
-            TEXT_SUGGESTION_SCORE_FACTOR
-        )
-      });
-    }
-  }
-
-  if (bestAbsolute) {
-    const viz = VIZ_CRITERIA.find((entry) => entry.id === 'texts_proportional');
-    if (viz) {
-      results.push({
-        ...viz,
-        columns: [labelCandidate.name, bestAbsolute.name],
-        score: computeSuggestionScore(
-          [bestAbsolute],
-          computeLegibilityFactor(viz, [labelCandidate, bestAbsolute]) *
             TEXT_SUGGESTION_SCORE_FACTOR
         )
       });
@@ -576,6 +607,7 @@ function searchVizByType(
         viz.geometries.includes(geometryType) &&
         viz.nbColumns === nbColumns &&
         !viz.id.startsWith('texts_') &&
+        viz.id !== LABELED_PROPORTIONAL_VIZ_ID &&
         ((viz.semioTypes[0] === dataset[0].semioType &&
           viz.semioTypes[1] === dataset[1].semioType) ||
           (viz.semioTypes[1] === dataset[0].semioType &&
@@ -800,6 +832,10 @@ function suggestVisualizations(
 
   const suggestions = [
     ...generateSuggestions(rankedColumns, simplifiedGeomType),
+    ...generateLabeledProportionalSuggestions(
+      textEligibleColumns,
+      simplifiedGeomType
+    ),
     ...generateTextSuggestions(textEligibleColumns, simplifiedGeomType)
   ];
 
