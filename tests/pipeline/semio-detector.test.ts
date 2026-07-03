@@ -155,6 +155,51 @@ describe('detectSemioType — NUMERIC columns', () => {
     expect(result.semioType).toBe('geolon');
   });
 
+  it('vetoes GEOLAT when a lat-keyword column is out of coordinate range', () => {
+    const result = detectSemioType(
+      analysis('lat', NUMERIC, {
+        uniques: 100,
+        min: 100,
+        max: 2000,
+        share_integers: 0,
+        share_floats: 1.0,
+        share_rank_interval: 0,
+        extent_magnitude: 1
+      }) as never
+    );
+    expect(result.semioType).not.toBe('geolat');
+  });
+
+  it('detects GEOLAT for a y column with plausible coordinate values', () => {
+    const result = detectSemioType(
+      analysis('y', NUMERIC, {
+        uniques: 100,
+        min: -48.5,
+        max: 48.2,
+        share_integers: 0,
+        share_floats: 1.0,
+        share_rank_interval: 0,
+        extent_magnitude: 1
+      }) as never
+    );
+    expect(result.semioType).toBe('geolat');
+  });
+
+  it('does not read projected x coordinates (Lambert) as longitude', () => {
+    const result = detectSemioType(
+      analysis('x', NUMERIC, {
+        uniques: 100,
+        min: 610000,
+        max: 720000,
+        share_integers: 0,
+        share_floats: 1.0,
+        share_rank_interval: 0,
+        extent_magnitude: 1
+      }) as never
+    );
+    expect(result.semioType).not.toBe('geolon');
+  });
+
   it('detects QTA for integer column with large extent', () => {
     const result = detectSemioType(
       analysis('population', NUMERIC, {
