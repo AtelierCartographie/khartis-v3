@@ -106,7 +106,10 @@ interface SuggestionBehavior {
   symbol?: Partial<SymbolPrimitiveConfig>;
   line?: Partial<LinePrimitiveConfig>;
   text?: Partial<TextPrimitiveConfig>;
+  dataFilters?: VisualizationConfig['dataFilters'];
 }
+
+const TOP_LABELED_SYMBOLS_LIMIT = 10;
 
 function hasGpsCoordinateDetection(
   dataset?: DatasetGeometrySource | null
@@ -132,6 +135,7 @@ const SUGGESTION_VISUALIZATION_TYPES = {
   symbols_uniques_colorful_QTR: VisualizationType.CHOROPLETH,
   lines_colorful_QTR: VisualizationType.CHOROPLETH,
   symbols_proportional: VisualizationType.PROPORTIONAL,
+  symbols_proportional_labeled: VisualizationType.PROPORTIONAL,
   lines_proportional: VisualizationType.PROPORTIONAL,
   polygons_colorful_QL: VisualizationType.CATEGORICAL,
   symbols_differents: VisualizationType.CATEGORICAL,
@@ -169,6 +173,7 @@ const SYMBOL_CATEGORY_SHAPE_IDS = new Set([
 
 const SYMBOL_PROPORTIONAL_SUGGESTION_IDS = new Set([
   'symbols_proportional',
+  'symbols_proportional_labeled',
   'symbols_proportional_colorful_QL',
   'symbols_proportional_colorful_QTR',
   'symbols_proportional_double'
@@ -894,6 +899,11 @@ export function resolveSuggestionBehavior(
   const isProportionalSymbol = SYMBOL_PROPORTIONAL_SUGGESTION_IDS.has(
     suggestion.id
   );
+  const isLabeledProportional =
+    suggestion.id === 'symbols_proportional_labeled';
+  const labeledProportionalLabelColumn = isLabeledProportional
+    ? (suggestion.columns?.[1] ?? primaryTextColumn)
+    : undefined;
   const symbolValueColumn = isClassedSymbol
     ? primaryNumericColumn
     : suggestion.id === 'symbols_proportional_colorful_QTR' ||
@@ -913,19 +923,26 @@ export function resolveSuggestionBehavior(
 
   return {
     visualizationType,
-    primaryPrimitives: [PrimitiveFilterType.POINT],
+    primaryPrimitives: isLabeledProportional
+      ? [PrimitiveFilterType.POINT, 'text']
+      : [PrimitiveFilterType.POINT],
     supportPrimitives: [],
-    forcedOffPrimitives: [
-      PrimitiveFilterType.POLYGON,
-      PrimitiveFilterType.LINE,
-      'text',
-      'label'
-    ],
-    primitiveFilters: symbolPrimitiveFilters,
+    forcedOffPrimitives: isLabeledProportional
+      ? [PrimitiveFilterType.POLYGON, PrimitiveFilterType.LINE, 'label']
+      : [
+          PrimitiveFilterType.POLYGON,
+          PrimitiveFilterType.LINE,
+          'text',
+          'label'
+        ],
+    primitiveFilters: isLabeledProportional
+      ? [...symbolPrimitiveFilters, PrimitiveFilterType.TEXT]
+      : symbolPrimitiveFilters,
     mapping: buildClearedMapping(preset.mapping.geometryColumn, {
       valueColumn: symbolValueColumn,
       categoryColumn: symbolCategoryColumn,
-      sizeColumn: isProportionalSymbol ? proportionalSizeColumn : undefined
+      sizeColumn: isProportionalSymbol ? proportionalSizeColumn : undefined,
+      labelColumn: labeledProportionalLabelColumn
     }),
     modes: {
       ...preset.modes,
@@ -1018,9 +1035,35 @@ export function resolveSuggestionBehavior(
     line: {
       enabled: false
     },
-    text: {
-      enabled: false
-    }
+    text:
+      isLabeledProportional && labeledProportionalLabelColumn
+        ? buildTextPrimitiveConfig(preset, visualization, {
+            labelColumn: labeledProportionalLabelColumn,
+            colorMode: ColorMode.UNIQUE,
+            sizeMode: SizeMode.FIXED,
+            missingData: buildDisabledMissingData(preset.missingData),
+            secondaryLabels: {
+              enabled: false,
+              labelColumn: undefined
+            }
+          })
+        : {
+            enabled: false
+          },
+    ...(isLabeledProportional && proportionalSizeColumn
+      ? {
+          dataFilters: [
+            {
+              id: crypto.randomUUID(),
+              column: proportionalSizeColumn,
+              operator: 'top_desc' as const,
+              value: String(TOP_LABELED_SYMBOLS_LIMIT),
+              limit: TOP_LABELED_SYMBOLS_LIMIT,
+              primitiveType: PrimitiveFilterType.TEXT
+            }
+          ]
+        }
+      : {})
   };
 }
 
@@ -1526,6 +1569,7 @@ function buildSuggestionUpdate(
         }
       : visualization.style,
     primitiveFilters: behavior.primitiveFilters,
+    dataFilters: behavior.dataFilters,
     classification: behavior.classification,
     symbols: behavior.symbols,
     missingData: behavior.missingData,
@@ -1802,7 +1846,7 @@ export function applySuggestionToVisualization(
           ...suggestionUpdate,
           origin: options.origin,
           primitiveOrder: undefined,
-          dataFilters: undefined
+          dataFilters: suggestionUpdate.dataFilters
         },
     SavePriority.IMMEDIATE
   );

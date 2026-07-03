@@ -365,6 +365,38 @@ describe('suggestVisualizations — label columns', () => {
     }
   });
 
+  it('suggests proportional symbols with top-N labels when a stock and a label coexist', () => {
+    const stockCol = col({
+      name: 'population',
+      type: 'number',
+      stats: {
+        totalCount: 800,
+        uniqueCount: 750,
+        nullCount: 0,
+        min: 1000,
+        max: 2000000,
+        share_integers: 1.0,
+        share_rank_interval: 0.05,
+        extent_magnitude: 4,
+        skewness: 3
+      }
+    });
+    const results = vizSuggester.suggestVisualizations(
+      [labelCol, stockCol],
+      'Point',
+      { maxSuggestions: 10 }
+    );
+    const combined = results.find(
+      (s) => s.id === 'symbols_proportional_labeled'
+    );
+    const plain = results.find((s) => s.id === 'symbols_proportional');
+    expect(combined).toBeDefined();
+    expect(combined?.columns).toEqual(['population', 'nom_commune']);
+    expect(plain).toBeDefined();
+    expect(combined!.score ?? 0).toBeLessThan(plain!.score ?? 0);
+    expect(results.map((s) => s.id)).not.toContain('texts_proportional');
+  });
+
   it('ranks core visualizations (choropleth) above text suggestions for the same column', () => {
     const results = vizSuggester.suggestVisualizations(
       [labelCol, ratioCol],
