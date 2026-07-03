@@ -11,8 +11,8 @@ export interface DuckDBMetadata {
 export interface AnalysisResult {
   name: string;
   type_simple: DuckDBSimplifiedType;
-  min?: number | Date;
-  max?: number | Date;
+  min?: number | bigint | Date;
+  max?: number | bigint | Date;
   histogram?: unknown;
   uniques?: number;
   nulls?: number;

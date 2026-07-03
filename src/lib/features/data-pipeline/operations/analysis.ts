@@ -21,6 +21,10 @@ function toOptionalNumber(value: unknown): number | undefined {
   return value != null && value !== '' ? Number(value) : undefined;
 }
 
+function toStatBoundary(value: unknown): unknown {
+  return typeof value === 'bigint' ? Number(value) : value;
+}
+
 export function enrichColumns(
   columns: DuckAnalyticsColumn[]
 ): EnrichedColumn[] {
@@ -34,8 +38,8 @@ export function enrichColumns(
       count: Number(column.count || 0),
       nulls: Number(column.nulls || 0),
       uniques: Number(column.uniques || 0),
-      min: column.min,
-      max: column.max,
+      min: toStatBoundary(column.min),
+      max: toStatBoundary(column.max),
       mean: toOptionalNumber(column.mean),
       median: toOptionalNumber(column.median),
       stdDev: toOptionalNumber(column.stddev),
@@ -69,8 +73,8 @@ export function buildStatisticsSnapshot(
         count: toOptionalNumber(column.count) ?? 0,
         nullCount: toOptionalNumber(column.nulls) ?? 0,
         unique: toOptionalNumber(column.uniques) ?? 0,
-        min: typeof column.min === 'bigint' ? Number(column.min) : column.min,
-        max: typeof column.max === 'bigint' ? Number(column.max) : column.max,
+        min: toStatBoundary(column.min),
+        max: toStatBoundary(column.max),
         mean: toOptionalNumber(column.mean),
         median: toOptionalNumber(column.median),
         stdDev: toOptionalNumber(column.stddev),

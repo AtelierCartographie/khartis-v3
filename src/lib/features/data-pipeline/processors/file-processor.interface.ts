@@ -28,8 +28,8 @@ export interface DuckDBClient {
 export interface AnalysisResultForProcessor {
   name: string;
   type_simple: string;
-  min?: number | Date;
-  max?: number | Date;
+  min?: number | bigint | Date;
+  max?: number | bigint | Date;
   histogram?: unknown;
   uniques?: number;
   nulls?: number;
