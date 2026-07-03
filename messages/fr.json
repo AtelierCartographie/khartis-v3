@@ -1123,6 +1123,7 @@
   "viz_suggestion_symbols_uniques": "Symboles uniques",
   "viz_suggestion_polygons_colorful_ql": "Aplats de couleur (qualitatif)",
   "viz_suggestion_choropleth": "Carte choroplèthe",
+  "viz_suggestion_choropleth_derived_ratio": "Choroplèthe d'un ratio calculé",
   "viz_suggestion_symbols_unique_colorful_qtr": "Symboles colorés (quantitatif relatif)",
   "viz_suggestion_symbols_different_ql": "Symboles différents (qualitatif)",
   "viz_suggestion_symbols_unique_colorful_ql": "Symboles colorés (qualitatif)",

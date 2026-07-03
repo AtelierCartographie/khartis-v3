@@ -991,19 +991,39 @@ function getSuggestions(dataset: DatasetResult): VizSuggestion[] {
   );
 }
 
-function assertRenderInvariant(
+async function assertRenderInvariant(
   dataset: DatasetResult,
   suggestion: VizSuggestion
-): void {
-  mocks.datasets = [dataset];
+): Promise<void> {
+  const effectiveDataset = suggestion.derivedColumn
+    ? {
+        ...dataset,
+        columns: [
+          ...dataset.columns,
+          {
+            name: suggestion.derivedColumn.name,
+            values: [],
+            type: 'number',
+            stats: {
+              name: suggestion.derivedColumn.name,
+              type: 'number',
+              count: dataset.rowCount,
+              nulls: 0,
+              uniques: dataset.rowCount
+            }
+          } as unknown as DatasetResult['columns'][number]
+        ]
+      }
+    : dataset;
+  mocks.datasets = [effectiveDataset];
   mocks.selectedDatasetId = dataset.id;
 
   const visualization = visualizationStore.createVisualization(
-    resolveBlankVisualizationType(dataset),
+    resolveBlankVisualizationType(effectiveDataset),
     dataset.id
   );
 
-  applySuggestionToVisualization(visualization.id, suggestion);
+  await applySuggestionToVisualization(visualization.id, suggestion);
 
   const updatedVisualization = visualizationStore.visualizations.find(
     (item) => item.id === visualization.id
@@ -1013,7 +1033,7 @@ function assertRenderInvariant(
   expect(
     isVisualizationMatchingSuggestion(
       updatedVisualization!,
-      dataset,
+      effectiveDataset,
       suggestion
     )
   ).toBe(true);
@@ -1072,11 +1092,27 @@ function assertSuggestionColumnsAreSafe(
 
   for (const suggestion of suggestions) {
     for (const columnName of suggestion.columns ?? []) {
-      expect(dataset.columns.some((column) => column.name === columnName)).toBe(
-        true
-      );
+      const isPlannedDerivedColumn =
+        suggestion.derivedColumn?.name === columnName;
+      expect(
+        isPlannedDerivedColumn ||
+          dataset.columns.some((column) => column.name === columnName)
+      ).toBe(true);
       expect(geometryColumns.has(columnName)).toBe(false);
       expect(detectedCoordinateColumns.has(columnName)).toBe(false);
+    }
+
+    if (suggestion.derivedColumn) {
+      for (const sourceColumn of [
+        suggestion.derivedColumn.numerator,
+        suggestion.derivedColumn.denominator
+      ]) {
+        expect(
+          dataset.columns.some((column) => column.name === sourceColumn)
+        ).toBe(true);
+        expect(geometryColumns.has(sourceColumn)).toBe(false);
+        expect(detectedCoordinateColumns.has(sourceColumn)).toBe(false);
+      }
     }
   }
 }
@@ -1131,7 +1167,7 @@ describe('visualization suggestions audit', () => {
     );
 
     expect(suggestionIds).toContain('lines_colorful_QL');
-    assertRenderInvariant(entry.dataset, coloredLineSuggestion!);
+    await assertRenderInvariant(entry.dataset, coloredLineSuggestion!);
   });
 
   for (const source of sources) {
@@ -1164,7 +1200,7 @@ describe('visualization suggestions audit', () => {
         }
 
         for (const suggestion of suggestions) {
-          assertRenderInvariant(dataset, suggestion);
+          await assertRenderInvariant(dataset, suggestion);
         }
 
         if (dataset.name === 'sites-seveso-idf.csv') {

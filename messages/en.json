@@ -1123,6 +1123,7 @@
   "viz_suggestion_symbols_uniques": "Unique symbols",
   "viz_suggestion_polygons_colorful_ql": "Color fills (qualitative)",
   "viz_suggestion_choropleth": "Choropleth map",
+  "viz_suggestion_choropleth_derived_ratio": "Choropleth of a computed ratio",
   "viz_suggestion_symbols_unique_colorful_qtr": "Colored symbols (quantitative relative)",
   "viz_suggestion_symbols_different_ql": "Different symbols (qualitative)",
   "viz_suggestion_symbols_unique_colorful_ql": "Colored symbols (qualitative)",
