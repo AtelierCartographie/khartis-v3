@@ -71,12 +71,14 @@ interface GeoIdIndicators {
 
 interface GeoLatIndicators {
   latWords: boolean;
+  coordWord: boolean;
   min: number;
   max: number;
 }
 
 interface GeoLonIndicators {
   lonWords: boolean;
+  coordWord: boolean;
   min: number;
   max: number;
 }
@@ -135,27 +137,31 @@ function scoreGeoId(indicators: GeoIdIndicators): SemioScore {
 }
 
 function scoreGeoLat(indicators: GeoLatIndicators): SemioScore {
-  let score = 0;
-  if (!indicators.latWords) {
-    return { semioType: SEMIO_TYPES.GEOLAT, score };
+  if (!indicators.latWords && !indicators.coordWord) {
+    return { semioType: SEMIO_TYPES.GEOLAT, score: 0 };
+  }
+  if (Math.abs(indicators.min) > 90 || Math.abs(indicators.max) > 90) {
+    return { semioType: SEMIO_TYPES.GEOLAT, score: 0 };
   }
 
-  if (indicators.latWords) score += 4;
-  if (Math.abs(indicators.min) < 90 && Math.abs(indicators.max) < 90)
-    score += 2;
-  return { semioType: SEMIO_TYPES.GEOLAT, score };
+  return {
+    semioType: SEMIO_TYPES.GEOLAT,
+    score: (indicators.latWords ? 4 : 2) + 2
+  };
 }
 
 function scoreGeoLon(indicators: GeoLonIndicators): SemioScore {
-  let score = 0;
-  if (!indicators.lonWords) {
-    return { semioType: SEMIO_TYPES.GEOLON, score };
+  if (!indicators.lonWords && !indicators.coordWord) {
+    return { semioType: SEMIO_TYPES.GEOLON, score: 0 };
+  }
+  if (Math.abs(indicators.min) > 180 || Math.abs(indicators.max) > 180) {
+    return { semioType: SEMIO_TYPES.GEOLON, score: 0 };
   }
 
-  if (indicators.lonWords) score += 4;
-  if (Math.abs(indicators.min) < 180 && Math.abs(indicators.max) < 180)
-    score += 2;
-  return { semioType: SEMIO_TYPES.GEOLON, score };
+  return {
+    semioType: SEMIO_TYPES.GEOLON,
+    score: (indicators.lonWords ? 4 : 2) + 2
+  };
 }
 
 function scoreQTA(indicators: QTAIndicators): SemioScore {
@@ -372,6 +378,8 @@ interface NameKeywords {
   stockWords: boolean;
   yearWords: boolean;
   labelWords: boolean;
+  xWord: boolean;
+  yWord: boolean;
 }
 
 function detectKeywordsFromName(columnName: string): NameKeywords {
@@ -395,7 +403,9 @@ function detectKeywordsFromName(columnName: string): NameKeywords {
     rankWords: hasKeyword(RANK_KEYWORDS),
     stockWords: hasKeyword(STOCK_KEYWORDS),
     yearWords: hasKeyword(YEAR_KEYWORDS),
-    labelWords: hasKeyword(LABEL_KEYWORDS)
+    labelWords: hasKeyword(LABEL_KEYWORDS),
+    xWord: nameParts.includes('x'),
+    yWord: nameParts.includes('y')
   };
 }
 
@@ -489,8 +499,18 @@ export function detectSemioType(
           shareRankInterval,
           isNumeric: true
         }),
-        scoreGeoLat({ latWords: keywords.latWords, min, max }),
-        scoreGeoLon({ lonWords: keywords.lonWords, min, max })
+        scoreGeoLat({
+          latWords: keywords.latWords,
+          coordWord: keywords.yWord,
+          min,
+          max
+        }),
+        scoreGeoLon({
+          lonWords: keywords.lonWords,
+          coordWord: keywords.xWord,
+          min,
+          max
+        })
       );
       break;
 
