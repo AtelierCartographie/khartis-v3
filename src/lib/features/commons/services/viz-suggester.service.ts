@@ -5,7 +5,6 @@ import {
 
 import {
   detectSemioType,
-  MAX_SEMIO_SCORE,
   SEMIO_TYPES,
   toStatNumber,
   type SemioType
@@ -277,7 +276,7 @@ const MAX_TEXT_POINT_FEATURES = 150;
 const MAX_CATEGORY_COLOR_CLASSES = 8;
 const MAX_CATEGORY_SHAPE_CLASSES = 5;
 const MAX_CATEGORY_SHARE_UNIQUES = 0.5;
-const MIN_THEMATIC_SEMIO_SCORE = 1;
+const MIN_THEMATIC_SEMIO_SCORE = 0.3;
 const SHAPE_CATEGORY_VIZ_IDS = new Set([
   'symbols_differents',
   'symbols_differents_QLO'
@@ -380,7 +379,7 @@ function getColumnSemioType(column: ColumnAnalysis): EnrichedColumn {
   };
 
   const { semioType, semioScore } = geoSemioType
-    ? { semioType: geoSemioType, semioScore: 6.5 }
+    ? { semioType: geoSemioType, semioScore: 1 }
     : detectSemioType(analysisLike);
 
   return {
@@ -397,7 +396,7 @@ function computeSuggestionScore(columns: EnrichedColumn[]): number {
   if (columns.length === 0) return 0;
   const totalScore = columns.reduce((sum, col) => sum + col.score, 0);
   const avgScore = totalScore / columns.length;
-  return Math.round((avgScore / MAX_SEMIO_SCORE) * 100);
+  return Math.round(Math.min(avgScore, 1) * 100);
 }
 
 function getShareUniques(column: EnrichedColumn): number {

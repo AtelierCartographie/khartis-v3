@@ -164,7 +164,7 @@ describe('detectSemioType — NUMERIC columns', () => {
       }) as never
     );
     expect(result.semioType).toBe('geoid');
-    expect(result.semioScore).toBeGreaterThanOrEqual(4);
+    expect(result.semioScore).toBeGreaterThanOrEqual(0.6);
   });
 
   it('detects GEOID for denormalized string code column (code_departement)', () => {
@@ -176,7 +176,7 @@ describe('detectSemioType — NUMERIC columns', () => {
       }) as never
     );
     expect(result.semioType).toBe('geoid');
-    expect(result.semioScore).toBeGreaterThanOrEqual(4);
+    expect(result.semioScore).toBeGreaterThanOrEqual(0.6);
   });
 
   it('does NOT classify as GEOID when id-keyword column has only 1 unique value', () => {
@@ -300,6 +300,26 @@ describe('detectSemioType — NUMERIC columns', () => {
       }) as never
     );
     expect(result.semioType).toBe('QTR');
+  });
+
+  it('normalizes scores to [0, 1] and exposes the runner-up type', () => {
+    const result = detectSemioType(
+      analysis('taux_pauvrete', NUMERIC, {
+        uniques: 100,
+        min: 0,
+        max: 1,
+        share_integers: 0,
+        share_floats: 0.95,
+        share_rank_interval: 0.3,
+        extent_magnitude: 1
+      }) as never
+    );
+    expect(result.semioType).toBe('QTR');
+    expect(result.semioScore).toBeGreaterThan(0);
+    expect(result.semioScore).toBeLessThanOrEqual(1);
+    expect(result.runnerUp).toBeDefined();
+    expect(result.runnerUp?.semioType).not.toBe('QTR');
+    expect(result.runnerUp?.semioScore).toBeLessThanOrEqual(result.semioScore);
   });
 
   it('QTR score is boosted by ratio keywords vs plain float column', () => {
