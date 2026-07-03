@@ -278,6 +278,70 @@ describe('suggestVisualizations — categorical legibility guards', () => {
   });
 });
 
+describe('suggestVisualizations — legibility factor', () => {
+  it('penalizes proportional symbols when values barely differ', () => {
+    const flatCol = col({
+      name: 'population',
+      type: 'number',
+      stats: {
+        totalCount: 100,
+        uniqueCount: 50,
+        nullCount: 0,
+        min: 900,
+        max: 1100,
+        share_integers: 1.0,
+        share_rank_interval: 0.05,
+        extent_magnitude: 0
+      }
+    });
+    const wideCol = col({
+      name: 'population',
+      type: 'number',
+      stats: {
+        totalCount: 100,
+        uniqueCount: 50,
+        nullCount: 0,
+        min: 1000,
+        max: 1000000,
+        share_integers: 1.0,
+        share_rank_interval: 0.05,
+        extent_magnitude: 3
+      }
+    });
+
+    const flat = vizSuggester
+      .suggestVisualizations([flatCol], 'Point', { maxSuggestions: 10 })
+      .find((s) => s.id === 'symbols_proportional');
+    const wide = vizSuggester
+      .suggestVisualizations([wideCol], 'Point', { maxSuggestions: 10 })
+      .find((s) => s.id === 'symbols_proportional');
+
+    expect(flat?.score ?? 0).toBeLessThan(wide?.score ?? 0);
+  });
+
+  it('penalizes crowded categorical palettes vs comfortable ones', () => {
+    const comfy = col({
+      name: 'land_use',
+      type: 'string',
+      stats: { totalCount: 300, uniqueCount: 5, nullCount: 0 }
+    });
+    const crowded = col({
+      name: 'land_use',
+      type: 'string',
+      stats: { totalCount: 300, uniqueCount: 8, nullCount: 0 }
+    });
+
+    const comfyScore = vizSuggester
+      .suggestVisualizations([comfy], 'Polygon', { maxSuggestions: 10 })
+      .find((s) => s.id === 'polygons_colorful_QL')?.score;
+    const crowdedScore = vizSuggester
+      .suggestVisualizations([crowded], 'Polygon', { maxSuggestions: 10 })
+      .find((s) => s.id === 'polygons_colorful_QL')?.score;
+
+    expect(crowdedScore ?? 0).toBeLessThan(comfyScore ?? 0);
+  });
+});
+
 describe('suggestVisualizations — label columns', () => {
   const labelCol = col({
     name: 'nom_commune',
