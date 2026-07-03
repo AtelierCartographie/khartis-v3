@@ -24,10 +24,12 @@ import {
   type VisualizationAppliedSuggestionState,
   type VisualizationRestoreSnapshot,
   type VisualizationRestoreState,
+  ClassificationMethod,
   resolveVisualizationPreset,
   visualizationStore,
   VisualizationType
 } from '$lib/features/commons/stores/visualization.store.svelte';
+import { suggestClassificationDefaults } from '$lib/features/commons/services/classification.service';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
 import {
@@ -1678,6 +1680,46 @@ function ensureVisualizationActive(vizId: string): void {
   visualizationStore.toggleVisualization(vizId);
 }
 
+function adaptSuggestedClassification(
+  classification: VisualizationConfig['classification'],
+  mapping: VisualizationConfig['mapping'] | undefined,
+  dataset: DatasetResult | ProcessedDataset
+): VisualizationConfig['classification'] {
+  if (
+    !classification ||
+    classification.method === ClassificationMethod.MANUAL
+  ) {
+    return classification;
+  }
+
+  const columnName = mapping?.valueColumn ?? mapping?.colorColumn;
+  const column = columnName
+    ? dataset.columns?.find((col) => col.name === columnName)
+    : undefined;
+  const stats = (column as { stats?: { skewness?: number } } | undefined)
+    ?.stats;
+
+  const defaults = suggestClassificationDefaults({
+    method: classification.method,
+    classes: classification.classes,
+    skewness: stats?.skewness,
+    rowCount: dataset.rowCount
+  });
+
+  if (
+    defaults.method === classification.method &&
+    defaults.classes === classification.classes
+  ) {
+    return classification;
+  }
+
+  return {
+    ...classification,
+    method: defaults.method,
+    classes: defaults.classes
+  };
+}
+
 export function applySuggestionToVisualization(
   vizId: string,
   suggestion: VizSuggestion,
@@ -1733,6 +1775,11 @@ export function applySuggestionToVisualization(
     },
     dataset,
     suggestion
+  );
+  suggestionUpdate.classification = adaptSuggestedClassification(
+    suggestionUpdate.classification,
+    suggestionUpdate.mapping,
+    dataset
   );
   const rememberedAppliedState = options.origin?.appliedSuggestionState;
   const suggestionKey = getSuggestionSignature(suggestion);
