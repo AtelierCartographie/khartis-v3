@@ -270,6 +270,38 @@ describe('detectSemioType — NUMERIC columns', () => {
     expect(withKeyword.semioScore).toBeGreaterThan(withoutKeyword.semioScore);
   });
 
+  it('detects QTA for a heavily skewed decimal stock without any keyword', () => {
+    const result = detectSemioType(
+      analysis('pib_2022', NUMERIC, {
+        uniques: 100,
+        min: 0.4,
+        max: 25000,
+        share_integers: 0.05,
+        share_floats: 0.95,
+        share_rank_interval: 0,
+        extent_magnitude: 5,
+        skewness: 4.2
+      }) as never
+    );
+    expect(result.semioType).toBe('QTA');
+  });
+
+  it('detects QTR for a bounded symmetric float column without any keyword', () => {
+    const result = detectSemioType(
+      analysis('valeur', NUMERIC, {
+        uniques: 100,
+        min: 3,
+        max: 97,
+        share_integers: 0.05,
+        share_floats: 0.95,
+        share_rank_interval: 0,
+        extent_magnitude: 2,
+        skewness: 0.2
+      }) as never
+    );
+    expect(result.semioType).toBe('QTR');
+  });
+
   it('QTR score is boosted by ratio keywords vs plain float column', () => {
     const withKeyword = detectSemioType(
       analysis('taux', NUMERIC, {
