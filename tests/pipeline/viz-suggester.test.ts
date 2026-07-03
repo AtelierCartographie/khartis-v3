@@ -225,6 +225,85 @@ describe('suggestVisualizations — Point thematic', () => {
   });
 });
 
+describe('suggestVisualizations — categorical legibility guards', () => {
+  const tenCategoriesCol = col({
+    name: 'commune_type',
+    type: 'string',
+    stats: { totalCount: 300, uniqueCount: 10, nullCount: 0 }
+  });
+
+  const sixCategoriesCol = col({
+    name: 'land_cover',
+    type: 'string',
+    stats: { totalCount: 200, uniqueCount: 6, nullCount: 0 }
+  });
+
+  const nearUniqueCategoriesCol = col({
+    name: 'commune_type',
+    type: 'string',
+    stats: { totalCount: 12, uniqueCount: 8, nullCount: 0 }
+  });
+
+  it('does not suggest categorical color viz above the color class limit', () => {
+    const results = vizSuggester.suggestVisualizations(
+      [tenCategoriesCol],
+      'Polygon',
+      { maxSuggestions: 10 }
+    );
+    const ids = results.map((s) => s.id);
+    expect(ids).not.toContain('polygons_colorful_QL');
+    expect(ids).not.toContain('symbols_differents');
+  });
+
+  it('does not suggest categorical viz when categories are nearly one per entity', () => {
+    const results = vizSuggester.suggestVisualizations(
+      [nearUniqueCategoriesCol],
+      'Polygon',
+      { maxSuggestions: 10 }
+    );
+    for (const s of results) {
+      expect(s.columns ?? []).not.toContain('commune_type');
+    }
+  });
+
+  it('keeps color categorical viz but drops shape viz between the two limits', () => {
+    const results = vizSuggester.suggestVisualizations(
+      [sixCategoriesCol],
+      'Point',
+      { maxSuggestions: 10 }
+    );
+    const ids = results.map((s) => s.id);
+    expect(ids).toContain('symbols_uniques_colorful_QL');
+    expect(ids).not.toContain('symbols_differents');
+  });
+});
+
+describe('suggestVisualizations — weak thematic columns', () => {
+  it('falls back to nbColumns=0 when the only column has a near-zero semio score', () => {
+    const weakNumericCol = col({
+      name: 'valeur',
+      type: 'number',
+      stats: {
+        totalCount: 100,
+        uniqueCount: 60,
+        nullCount: 0,
+        min: 5,
+        max: 80,
+        share_integers: 0.5,
+        share_floats: 0.5,
+        share_rank_interval: 0.3,
+        extent_magnitude: 1
+      }
+    });
+    const results = vizSuggester.suggestVisualizations(
+      [weakNumericCol],
+      'Polygon',
+      { maxSuggestions: 10 }
+    );
+    for (const s of results) expect(s.nbColumns).toBe(0);
+  });
+});
+
 describe('suggestVisualizations — maxSuggestions', () => {
   it('respects maxSuggestions=1', () => {
     const results = vizSuggester.suggestVisualizations(

@@ -5,7 +5,9 @@ import {
 
 import {
   detectSemioType,
+  MAX_SEMIO_SCORE,
   SEMIO_TYPES,
+  toStatNumber,
   type SemioType
 } from '$lib/features/commons/utils/semio-detector.utils';
 import type { ColumnAnalysis } from '$lib/features/data-pipeline';
@@ -272,6 +274,14 @@ const ID_COLUMN_KEYWORDS = [
   'rowid'
 ] as const;
 const MAX_TEXT_POINT_FEATURES = 150;
+const MAX_CATEGORY_COLOR_CLASSES = 8;
+const MAX_CATEGORY_SHAPE_CLASSES = 5;
+const MAX_CATEGORY_SHARE_UNIQUES = 0.5;
+const MIN_THEMATIC_SEMIO_SCORE = 1;
+const SHAPE_CATEGORY_VIZ_IDS = new Set([
+  'symbols_differents',
+  'symbols_differents_QLO'
+]);
 
 export function simplifyGeometryType(
   geomType: GeometryType
@@ -360,8 +370,8 @@ function getColumnSemioType(column: ColumnAnalysis): EnrichedColumn {
     count: getTotalCount(column),
     uniques: getUniqueCount(column),
     nulls: getNullCount(column),
-    min: typeof column.stats?.min === 'number' ? column.stats.min : undefined,
-    max: typeof column.stats?.max === 'number' ? column.stats.max : undefined,
+    min: toStatNumber(column.stats?.min),
+    max: toStatNumber(column.stats?.max),
     share_integers: column.stats?.share_integers,
     share_floats: column.stats?.share_floats,
     share_rank_interval: column.stats?.share_rank_interval,
@@ -386,7 +396,6 @@ function computeSuggestionScore(columns: EnrichedColumn[]): number {
   if (columns.length === 0) return 0;
   const totalScore = columns.reduce((sum, col) => sum + col.score, 0);
   const avgScore = totalScore / columns.length;
-  const MAX_SEMIO_SCORE = 6.5;
   return Math.round((avgScore / MAX_SEMIO_SCORE) * 100);
 }
 
@@ -481,7 +490,7 @@ function generateTextSuggestions(
       column.semioType === SEMIO_TYPES.QL ||
       column.semioType === SEMIO_TYPES.QLO
     ) {
-      return getUniqueCount(column) <= 12;
+      return getUniqueCount(column) <= MAX_CATEGORY_COLOR_CLASSES;
     }
     return (
       column.semioType === SEMIO_TYPES.QTR ||
@@ -539,6 +548,29 @@ function generateTextSuggestions(
   return results;
 }
 
+function isCategoricalColumn(column: EnrichedColumn): boolean {
+  return (
+    column.semioType === SEMIO_TYPES.QL || column.semioType === SEMIO_TYPES.QLO
+  );
+}
+
+function fitsCategoricalLegibility(
+  viz: VizSuggestion,
+  columns: EnrichedColumn[]
+): boolean {
+  const maxCategories = SHAPE_CATEGORY_VIZ_IDS.has(viz.id)
+    ? MAX_CATEGORY_SHAPE_CLASSES
+    : MAX_CATEGORY_COLOR_CLASSES;
+
+  return columns
+    .filter(isCategoricalColumn)
+    .every(
+      (column) =>
+        getUniqueCount(column) <= maxCategories &&
+        getShareUniques(column) <= MAX_CATEGORY_SHARE_UNIQUES
+    );
+}
+
 function searchVizByType(
   dataset: EnrichedColumn | EnrichedColumn[],
   geometryType: SimplifiedGeometryType,
@@ -550,7 +582,8 @@ function searchVizByType(
         viz.geometries.includes(geometryType) &&
         viz.nbColumns === nbColumns &&
         !viz.id.startsWith('texts_') &&
-        viz.semioTypes.includes(dataset.semioType)
+        viz.semioTypes.includes(dataset.semioType) &&
+        fitsCategoricalLegibility(viz, [dataset])
     ).map((viz) => ({
       ...viz,
       columns: [dataset.name],
@@ -567,7 +600,8 @@ function searchVizByType(
         ((viz.semioTypes[0] === dataset[0].semioType &&
           viz.semioTypes[1] === dataset[1].semioType) ||
           (viz.semioTypes[1] === dataset[0].semioType &&
-            viz.semioTypes[0] === dataset[1].semioType))
+            viz.semioTypes[0] === dataset[1].semioType)) &&
+        fitsCategoricalLegibility(viz, dataset)
     ).map((viz) => ({
       ...viz,
       columns: orderSuggestionColumns(dataset, viz.semioTypes).map(
@@ -770,17 +804,17 @@ function suggestVisualizations(
       return aNulls - bNulls;
     });
 
-  const rankedColumns = enrichedColumns
+  const thematicColumns = enrichedColumns
     .filter((col) => col.semioType !== SEMIO_TYPES.GEOID)
     .filter((col) => col.semioType !== SEMIO_TYPES.GEOLAT)
     .filter((col) => col.semioType !== SEMIO_TYPES.GEOLON)
     .filter((col) => getUniqueCount(col) > 1);
 
-  const textEligibleColumns = enrichedColumns
-    .filter((col) => col.semioType !== SEMIO_TYPES.GEOID)
-    .filter((col) => col.semioType !== SEMIO_TYPES.GEOLAT)
-    .filter((col) => col.semioType !== SEMIO_TYPES.GEOLON)
-    .filter((col) => getUniqueCount(col) > 1);
+  const rankedColumns = thematicColumns.filter(
+    (col) => col.score >= MIN_THEMATIC_SEMIO_SCORE
+  );
+
+  const textEligibleColumns = thematicColumns;
 
   const suggestions = [
     ...generateSuggestions(rankedColumns, simplifiedGeomType),

@@ -4,7 +4,25 @@ import {
 } from '$lib/features/duckdb';
 
 export type SemioType =
-  'geoid' | 'geolat' | 'geolon' | 'QTA' | 'QTR' | 'QL' | 'QLO';
+  | 'geoid'
+  | 'geolat'
+  | 'geolon'
+  | 'QTA'
+  | 'QTR'
+  | 'QL'
+  | 'QLO';
+
+export const MAX_SEMIO_SCORE = 6.5;
+
+const YEAR_RANGE = { MIN: 1200, MAX: 2100 } as const;
+
+export function toStatNumber(value: unknown): number | undefined {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : undefined;
+  }
+  if (typeof value === 'bigint') return Number(value);
+  return undefined;
+}
 
 export interface SemioDetectionResult {
   semioType: SemioType;
@@ -51,6 +69,7 @@ interface QTAIndicators {
   extentMagnitude: number;
   shareIntegers: number;
   shareRankInterval: number;
+  stockWords: boolean;
 }
 
 interface QTRIndicators {
@@ -69,6 +88,7 @@ interface QLIndicators {
 interface QLOIndicators {
   rankWords: boolean;
   shareRankInterval: number;
+  yearLikely: boolean;
 }
 
 function scoreGeoId(indicators: GeoIdIndicators): SemioScore {
@@ -114,6 +134,7 @@ function scoreQTA(indicators: QTAIndicators): SemioScore {
   if (indicators.shareIntegers >= 0.9) score += 1;
   if (indicators.shareRankInterval <= 0.1) score += 1;
   if (indicators.extentMagnitude >= 2) score += 1;
+  if (indicators.stockWords) score += 2.5;
   return { semioType: SEMIO_TYPES.QTA, score };
 }
 
@@ -138,45 +159,110 @@ function scoreQLO(indicators: QLOIndicators): SemioScore {
   let score = 0;
   if (indicators.rankWords) score += 4;
   if (indicators.shareRankInterval >= 0.8) score += 2;
+  if (indicators.yearLikely) score += 5;
   return { semioType: SEMIO_TYPES.QLO, score };
 }
 
-function detectKeywordsFromName(columnName: string): {
+const ID_KEYWORDS = [
+  'id',
+  'fid',
+  'gid',
+  'oid',
+  'pk',
+  'code',
+  'iso',
+  'objectid',
+  'object_id',
+  'rowid'
+];
+const LAT_KEYWORDS = ['lat', 'latitude'];
+const LON_KEYWORDS = ['lon', 'long', 'lng', 'longitude'];
+const RATIO_KEYWORDS = [
+  'ratio',
+  'rate',
+  'taux',
+  'tx',
+  'percent',
+  'pct',
+  '%',
+  'pour',
+  'part',
+  'share',
+  'proportion',
+  'indice',
+  'densite',
+  'density',
+  'per',
+  'capita',
+  'habitant',
+  'habitants',
+  'moyenne',
+  'mean',
+  'avg',
+  'median',
+  'mediane',
+  'esperance'
+];
+const RATIO_NAME_MARKERS = ['%', '‰', '/'];
+const STOCK_KEYWORDS = [
+  'population',
+  'pop',
+  'nombre',
+  'number',
+  'nb',
+  'count',
+  'total',
+  'effectif',
+  'effectifs',
+  'superficie',
+  'surface',
+  'area',
+  'montant',
+  'somme',
+  'sum'
+];
+const RANK_KEYWORDS = [
+  'rank',
+  'ranking',
+  'rang',
+  'classement',
+  'order',
+  'niveau',
+  'level'
+];
+const YEAR_KEYWORDS = ['year', 'years', 'yr', 'annee', 'annees'];
+
+interface NameKeywords {
   idWords: boolean;
   latWords: boolean;
   lonWords: boolean;
   ratioWords: boolean;
   rankWords: boolean;
-} {
-  const lowerName = columnName.toLowerCase();
-  const nameParts = lowerName.split(/[^a-zA-Z0-9%]/);
-  const idKeywords = [
-    'id',
-    'fid',
-    'gid',
-    'oid',
-    'pk',
-    'code',
-    'iso',
-    'objectid',
-    'object_id',
-    'rowid'
-  ];
+  stockWords: boolean;
+  yearWords: boolean;
+}
+
+function detectKeywordsFromName(columnName: string): NameKeywords {
+  const normalizedName = columnName
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  const nameParts = normalizedName.split(/[^a-z0-9%]/);
+  const hasKeyword = (keywords: readonly string[]) =>
+    nameParts.some((p) => keywords.includes(p));
 
   return {
     idWords:
-      nameParts.some((p) => idKeywords.includes(p)) ||
-      idKeywords.some((keyword) => lowerName === keyword),
-    latWords: nameParts.some((p) => ['lat', 'latitude'].includes(p)),
-    lonWords: nameParts.some((p) =>
-      ['lon', 'long', 'lng', 'longitude'].includes(p)
-    ),
-    ratioWords: nameParts.some((p) =>
-      ['ratio', 'rate', 'percent', 'pct', '%', 'pour', 'taux'].includes(p)
-    ),
-    rankWords: nameParts.some((p) =>
-      ['rank', 'order', 'niveau', 'level'].includes(p)
-    )
+      hasKeyword(ID_KEYWORDS) ||
+      ID_KEYWORDS.some((keyword) => normalizedName === keyword),
+    latWords: hasKeyword(LAT_KEYWORDS),
+    lonWords: hasKeyword(LON_KEYWORDS),
+    ratioWords:
+      hasKeyword(RATIO_KEYWORDS) ||
+      RATIO_NAME_MARKERS.some((marker) => normalizedName.includes(marker)),
+    rankWords: hasKeyword(RANK_KEYWORDS),
+    stockWords: hasKeyword(STOCK_KEYWORDS),
+    yearWords: hasKeyword(YEAR_KEYWORDS)
   };
 }
 
@@ -199,19 +285,10 @@ export function detectSemioType(
     (analysis.share_nulls as number) ??
     (totalCount > 0 ? nullCount / totalCount : 0);
 
-  const min = typeof analysis.min === 'number' ? analysis.min : 0;
-  const max = typeof analysis.max === 'number' ? analysis.max : 0;
+  const min = toStatNumber(analysis.min) ?? 0;
+  const max = toStatNumber(analysis.max) ?? 0;
 
-  const keywords =
-    analysis.id_words !== undefined
-      ? {
-          idWords: Boolean(analysis.id_words),
-          latWords: Boolean(analysis.lat_words),
-          lonWords: Boolean(analysis.lon_words),
-          ratioWords: Boolean(analysis.ratio_words),
-          rankWords: Boolean(analysis.rank_words)
-        }
-      : detectKeywordsFromName(columnName);
+  const keywords = detectKeywordsFromName(columnName);
 
   const extentMagnitude =
     (analysis.extent_magnitude as number) ??
@@ -221,6 +298,12 @@ export function detectSemioType(
   const shareFloats = (analysis.share_floats as number) ?? 0;
   const shareRankInterval = (analysis.share_rank_interval as number) ?? 0;
 
+  const yearLikely =
+    keywords.yearWords &&
+    shareIntegers >= 0.9 &&
+    min >= YEAR_RANGE.MIN &&
+    max <= YEAR_RANGE.MAX;
+
   switch (typeSimple) {
     case DuckDBSimplifiedType.NUMERIC:
       results.push(
@@ -228,7 +311,8 @@ export function detectSemioType(
           uniqueCount,
           extentMagnitude,
           shareIntegers,
-          shareRankInterval
+          shareRankInterval,
+          stockWords: keywords.stockWords
         }),
         scoreQTR({
           ratioWords: keywords.ratioWords,
@@ -238,7 +322,11 @@ export function detectSemioType(
           shareFloats
         }),
         scoreQL({ shareUniques, uniqueCount }),
-        scoreQLO({ rankWords: keywords.rankWords, shareRankInterval }),
+        scoreQLO({
+          rankWords: keywords.rankWords,
+          shareRankInterval,
+          yearLikely
+        }),
         scoreGeoId({
           shareUniques,
           shareNulls,
@@ -262,7 +350,11 @@ export function detectSemioType(
     default:
       results.push(
         scoreQL({ shareUniques, uniqueCount }),
-        scoreQLO({ rankWords: keywords.rankWords, shareRankInterval }),
+        scoreQLO({
+          rankWords: keywords.rankWords,
+          shareRankInterval,
+          yearLikely
+        }),
         scoreGeoId({
           shareUniques,
           shareNulls,
@@ -286,6 +378,6 @@ export function detectSemioType(
 
   return {
     semioType: best.semioType,
-    semioScore: best.score
+    semioScore: Math.min(best.score, MAX_SEMIO_SCORE)
   };
 }

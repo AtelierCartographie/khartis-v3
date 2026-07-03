@@ -201,7 +201,7 @@ async function classifyCsv(
 }
 
 describe('[S01 Phase 2] semio-detector on real CSV fixtures', () => {
-  it('CSV-01 fossil-fuel-subsidies: Code → geoid (ISO3), numeric year and % detected', async () => {
+  it('CSV-01 fossil-fuel-subsidies: Code → geoid (ISO3), year detected as ordered (QLO)', async () => {
     const classes = await classifyCsv(
       'fossil-fuel-subsidies-gdp-2021.csv',
       'csv01'
@@ -209,7 +209,7 @@ describe('[S01 Phase 2] semio-detector on real CSV fixtures', () => {
     expect(classes.get('Code')).toBe('geoid');
     const yearClass =
       classes.get('Year') ?? classes.get('Année') ?? classes.get('_year');
-    expect(['QL', 'QTA', 'QTR']).toContain(yearClass);
+    expect(yearClass).toBe('QLO');
   });
 
   it('CSV-02 naissances: Code INSEE Commune + Code Département → geoid, Naissances → QTA', async () => {
