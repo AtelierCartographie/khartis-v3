@@ -65,8 +65,8 @@ export async function convertToProcessedDataset(
       ),
       nullable: (Number(col.nulls) || 0) > 0,
       unique: Boolean(col.unique),
-      min: col.min,
-      max: col.max,
+      min: typeof col.min === 'bigint' ? Number(col.min) : col.min,
+      max: typeof col.max === 'bigint' ? Number(col.max) : col.max,
       uniqueValues: col.unique ? new Set() : undefined,
       sampleValues: []
     })),
@@ -80,8 +80,8 @@ export async function convertToProcessedDataset(
         ),
         nullable: (Number(col.nulls) || 0) > 0,
         unique: Boolean(col.unique),
-        min: col.min,
-        max: col.max,
+        min: typeof col.min === 'bigint' ? Number(col.min) : col.min,
+        max: typeof col.max === 'bigint' ? Number(col.max) : col.max,
         sampleValues: []
       })),
       geoColumns: mappedGeoColumns,

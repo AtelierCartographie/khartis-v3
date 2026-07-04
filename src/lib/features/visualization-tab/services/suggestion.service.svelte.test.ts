@@ -1088,6 +1088,7 @@ describe('suggestion.service', () => {
 
         if (
           suggestionId === 'choropleth' ||
+          suggestionId === 'choropleth_labeled' ||
           suggestionId.startsWith('polygons_')
         ) {
           return [

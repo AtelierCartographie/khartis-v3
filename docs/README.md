@@ -63,23 +63,24 @@ Le fichier `.env.example` sert uniquement au helper de déploiement local PPRD. 
 
 ## Documents disponibles
 
-| Document                                             | Ce qu'il couvre                                                              |
-| ---------------------------------------------------- | ---------------------------------------------------------------------------- |
-| [ARCHITECTURE.md](ARCHITECTURE.md)                   | Principes fondamentaux, flux global, couches techniques                      |
-| [ARCHITECTURE_FEATURES.md](ARCHITECTURE_FEATURES.md) | Justification du découpage de chaque feature et guidelines pour en créer     |
-| [GUIDE_DEVELOPPEUR.md](GUIDE_DEVELOPPEUR.md)         | Structure du projet, patterns Svelte 5, règles et conventions                |
-| [PIPELINE_DONNEES.md](PIPELINE_DONNEES.md)           | Import de fichiers : formats supportés, détection, validation, processeurs   |
-| [DUCKDB.md](DUCKDB.md)                               | Moteur DuckDB WASM : façade Duck, orchestrateur, macros SQL                  |
-| [MAP.md](MAP.md)                                     | Rendu Deck.gl / MapLibre : pipeline, caches WeakMap, projections, layers     |
-| [CARTOGRAPHIE.md](CARTOGRAPHIE.md)                   | Concepts cartographiques : sémiotique, discrétisation, couleurs, projections |
-| [VISUALISATIONS.md](VISUALISATIONS.md)               | Workflow 3 étapes, outils de la barre droite, habillage, export              |
-| [GESTION_ETAT.md](GESTION_ETAT.md)                   | Stores Svelte 5, persistance IndexedDB, snapshot projet, undo/redo           |
-| [FONDS_DE_CARTE.md](FONDS_DE_CARTE.md)               | Format GeoParquet, préparation et catalogue des fonds inclus                 |
-| [LEGENDES.md](LEGENDES.md)                           | Système de légendes SVG, familles, extensions Khartis, sécurité              |
-| [REFERENCE.md](REFERENCE.md)                         | Types TypeScript, hiérarchie d'erreurs, logger, raccourcis clavier           |
-| [PWA.md](PWA.md)                                     | Progressive Web App, stratégies de cache Workbox, mises à jour               |
-| [GLOSSAIRE.md](GLOSSAIRE.md)                         | Termes cartographiques et techniques du point de vue du développeur          |
-| [DEPLOYMENT.md](DEPLOYMENT.md)                       | Déploiement local PPRD, variables locales, garde-fous SFTP                   |
+| Document                                                   | Ce qu'il couvre                                                               |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [ARCHITECTURE.md](ARCHITECTURE.md)                         | Principes fondamentaux, flux global, couches techniques                       |
+| [ARCHITECTURE_FEATURES.md](ARCHITECTURE_FEATURES.md)       | Justification du découpage de chaque feature et guidelines pour en créer      |
+| [GUIDE_DEVELOPPEUR.md](GUIDE_DEVELOPPEUR.md)               | Structure du projet, patterns Svelte 5, règles et conventions                 |
+| [PIPELINE_DONNEES.md](PIPELINE_DONNEES.md)                 | Import de fichiers : formats supportés, détection, validation, processeurs    |
+| [DUCKDB.md](DUCKDB.md)                                     | Moteur DuckDB WASM : façade Duck, orchestrateur, macros SQL                   |
+| [MAP.md](MAP.md)                                           | Rendu Deck.gl / MapLibre : pipeline, caches WeakMap, projections, layers      |
+| [CARTOGRAPHIE.md](CARTOGRAPHIE.md)                         | Concepts cartographiques : sémiotique, discrétisation, couleurs, projections  |
+| [VISUALISATIONS.md](VISUALISATIONS.md)                     | Workflow 3 étapes, outils de la barre droite, habillage, export               |
+| [SUGGESTION_VISUALISATION.md](SUGGESTION_VISUALISATION.md) | Algorithme de suggestion : typage sémiologique des colonnes, patterns, scores |
+| [GESTION_ETAT.md](GESTION_ETAT.md)                         | Stores Svelte 5, persistance IndexedDB, snapshot projet, undo/redo            |
+| [FONDS_DE_CARTE.md](FONDS_DE_CARTE.md)                     | Format GeoParquet, préparation et catalogue des fonds inclus                  |
+| [LEGENDES.md](LEGENDES.md)                                 | Système de légendes SVG, familles, extensions Khartis, sécurité               |
+| [REFERENCE.md](REFERENCE.md)                               | Types TypeScript, hiérarchie d'erreurs, logger, raccourcis clavier            |
+| [PWA.md](PWA.md)                                           | Progressive Web App, stratégies de cache Workbox, mises à jour                |
+| [GLOSSAIRE.md](GLOSSAIRE.md)                               | Termes cartographiques et techniques du point de vue du développeur           |
+| [DEPLOYMENT.md](DEPLOYMENT.md)                             | Déploiement local PPRD, variables locales, garde-fous SFTP                    |
 
 ---
 

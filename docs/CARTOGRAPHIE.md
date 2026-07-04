@@ -143,16 +143,9 @@ Les couleurs par défaut : séquentielle `#f7fbff` → `#08519c` ; divergente `#
 
 **Fichier** : `commons/services/viz-suggester.service.ts`
 
-24 patterns combinant géométrie, semioTypes et nombre de colonnes. Algorithme :
+L'algorithme complet — typage sémiologique des colonnes (QTA/QTR/QL/QLO/geoid/geolat/geolon/label), scoring normalisé, patterns, garde-fous de lisibilité et défauts appliqués — est documenté dans [SUGGESTION_VISUALISATION.md](SUGGESTION_VISUALISATION.md).
 
-1. Enrichir chaque colonne avec son semioType + score.
-2. Trier par score décroissant, écarter `geoid`, `geolat`, `geolon`.
-3. Générer les suggestions 1-colonne (choroplèthe, proportionnel, catégoriel…) puis 2-colonnes (bivarié).
-4. Retourner les 3 meilleures par score (`avgScore / 6.5 * 100`).
-
-La sélection d'une suggestion applique le preset complet du type cible (modes, primitives, style, mapping, classification), puis des overrides spécifiques au pattern (`QTA+QL` → couleur catégorielle, `QTA+QTR` → couleur en classes, `QTA+QTA` → double proportionnel).
-
-Les suggestions `texts_*` reconfigurent explicitement le rendu texte : `labelColumn` pour le contenu, variable secondaire pour taille/couleur, couches symboles rendues invisibles.
+En résumé : chaque colonne est typée à partir des statistiques DuckDB et de lexiques fr/en, les patterns compatibles `primitive × type` sont scorés (confiance sémio × lisibilité), et les 3 meilleures suggestions sont proposées. La sélection d'une suggestion applique le preset complet du type cible (modes, primitives, style, mapping, classification adaptée à la distribution), puis des overrides spécifiques au pattern.
 
 ---
 
