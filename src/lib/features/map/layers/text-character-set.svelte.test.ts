@@ -8,6 +8,7 @@ import {
   EXPLICIT_TEXT_CHARACTER_SET,
   extendTextCharacterSet,
   resolveTextFontSettings,
+  resolveTextHaloWidthPx,
   resolveTextOutlineWidth
 } from './text-character-set';
 
@@ -205,6 +206,26 @@ describe('resolveTextOutlineWidth', () => {
     const full = resolveTextOutlineWidth(max, max);
     expect(quarter).toBeLessThan(half);
     expect(half).toBeLessThan(full);
+  });
+});
+
+describe('resolveTextHaloWidthPx', () => {
+  const max = SLIDER_LIMITS.haloWidth.max;
+
+  it('returns 0 when the outline width is disabled or invalid', () => {
+    expect(resolveTextHaloWidthPx(0, max)).toBe(0);
+    expect(resolveTextHaloWidthPx(-1, max)).toBe(0);
+    expect(resolveTextHaloWidthPx(Number.NaN, max)).toBe(0);
+  });
+
+  it('inverts resolveTextOutlineWidth back to the original halo pixel width', () => {
+    for (const haloWidth of [1, max * 0.25, max * 0.5, max]) {
+      const outlineWidth = resolveTextOutlineWidth(haloWidth, max);
+      expect(resolveTextHaloWidthPx(outlineWidth, max)).toBeCloseTo(
+        haloWidth,
+        5
+      );
+    }
   });
 });
 

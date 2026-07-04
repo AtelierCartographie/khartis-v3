@@ -116,6 +116,21 @@ export function resolveTextOutlineWidth(
   return MAX_TEXT_OUTLINE_WIDTH * Math.sqrt(ratio);
 }
 
+export function resolveTextHaloWidthPx(
+  outlineWidth: number,
+  maxHaloWidth: number
+): number {
+  if (
+    !Number.isFinite(outlineWidth) ||
+    outlineWidth <= 0 ||
+    maxHaloWidth <= 0
+  ) {
+    return 0;
+  }
+  const ratio = outlineWidth / MAX_TEXT_OUTLINE_WIDTH;
+  return maxHaloWidth * ratio * ratio;
+}
+
 export const DEFAULT_TEXT_LINE_HEIGHT = 1.15;
 
 function rangeToChars(start: number, end: number): string[] {
