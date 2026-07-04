@@ -2,6 +2,11 @@ import * as m from '$lib/paraglide/messages';
 import { globalActions } from '$lib/features/commons/stores/global.svelte';
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
+import {
+  visualizationStore,
+  getTextPrimitive
+} from '$lib/features/commons/stores/visualization.store.svelte';
+import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { toCanvas as htmlToImageCanvas } from 'html-to-image';
 import type { Deck, View } from '@deck.gl/core';
 import type { Map as MapLibreMap } from 'maplibre-gl';
@@ -17,6 +22,9 @@ import {
   SYMBOL_SDF_EXTENT
 } from '$lib/features/commons/constants/visualization.constants';
 import { resolveTextHaloWidthPx } from '$lib/features/map/layers/text-character-set';
+import { DeckLayerId } from '$lib/features/map/constants/map.constants';
+import { findById } from '$lib/features/commons/utils/array-helpers';
+import { ANNOTATION_ROLE } from '$lib/features/commons/constants';
 
 interface ExportOptions {
   width: number;
@@ -82,10 +90,23 @@ interface BinaryAttributeLike {
   normalized?: boolean;
 }
 
+interface SvgArrowVectorLike {
+  get(row: number): unknown;
+}
+
+interface SvgArrowTableLike {
+  numRows: number;
+  schema: { fields: { name: string }[] };
+  getChild(name: string): SvgArrowVectorLike | null | undefined;
+}
+
 interface BinaryLayerDataLike {
   length?: number;
   startIndices?: ArrayLike<number>;
   attributes?: Record<string, BinaryAttributeLike | undefined>;
+  featureIds?: ArrayLike<number>;
+  khartisSourceTable?: SvgArrowTableLike;
+  khartisSplitDatasetRowByGeomRow?: ArrayLike<number>;
 }
 
 interface SvgProjectionContext {
@@ -586,6 +607,26 @@ function sanitizeSvgId(value: string): string {
   return normalized || 'layer';
 }
 
+function sanitizeLocalizedSvgId(label: string): string {
+  const stripped = label.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const sanitized = sanitizeSvgId(stripped);
+
+  return /^\d/.test(sanitized) ? `id-${sanitized}` : sanitized;
+}
+
+type SvgIdDeduper = (baseId: string) => string;
+
+function createSvgIdDeduper(): SvgIdDeduper {
+  const usedCounts = new Map<string, number>();
+
+  return (baseId: string): string => {
+    const nextCount = (usedCounts.get(baseId) ?? 0) + 1;
+    usedCounts.set(baseId, nextCount);
+
+    return nextCount === 1 ? baseId : `${baseId}-${nextCount}`;
+  };
+}
+
 function getLayerProps(layer: SvgDeckLayerLike): Record<string, unknown> {
   return isRecord(layer.props) ? layer.props : {};
 }
@@ -599,6 +640,97 @@ function getLayerId(layer: SvgDeckLayerLike, index: number): string {
 
 function getLayerTypeName(layer: SvgDeckLayerLike): string {
   return layer.constructor?.layerName ?? layer.constructor?.name ?? 'DeckLayer';
+}
+
+const BASEMAP_PREFIX_LABELS: [string, () => string][] = [
+  [DeckLayerId.BASEMAP_META_LAND, m.svg_export_basemap_meta_land],
+  [DeckLayerId.BASEMAP_META_LIMIT, m.svg_export_basemap_meta_limit],
+  [DeckLayerId.BASEMAP_META_GRATICULE, m.svg_export_basemap_meta_graticule],
+  [DeckLayerId.BASEMAP_META_GEO_LINES, m.svg_export_basemap_meta_geo_lines],
+  [DeckLayerId.BASEMAP_META_CENTROID, m.svg_export_basemap_meta_centroid],
+  [DeckLayerId.BASEMAP_VILLES_LABELS, m.svg_export_basemap_villes_labels],
+  [DeckLayerId.BASEMAP_TERRE, m.svg_export_basemap_terre],
+  [DeckLayerId.BASEMAP_MERS, m.svg_export_basemap_mers],
+  [DeckLayerId.BASEMAP_LACS, m.svg_export_basemap_lacs],
+  [DeckLayerId.BASEMAP_RIVIERES, m.svg_export_basemap_rivieres],
+  [DeckLayerId.BASEMAP_RELIEF, m.svg_export_basemap_relief],
+  [DeckLayerId.BASEMAP_EQUATEUR, m.svg_export_basemap_equateur],
+  [DeckLayerId.BASEMAP_MERIDIENS, m.svg_export_basemap_meridiens],
+  [DeckLayerId.BASEMAP_FRONTIERES, m.svg_export_basemap_frontieres],
+  [DeckLayerId.BASEMAP_VILLES, m.svg_export_basemap_villes],
+  [DeckLayerId.WORLD_BASE_LAYER, m.svg_export_basemap_world_base],
+  ['projection-sphere', m.svg_export_basemap_projection_sphere]
+];
+
+const VISUALIZATION_PREFIX_LABELS: [string, () => string][] = [
+  [DeckLayerId.POLYGON_LAYER, m.svg_export_primitive_polygon],
+  [DeckLayerId.POINT_LAYER, m.svg_export_primitive_symbol],
+  [DeckLayerId.LINE_LAYER, m.svg_export_primitive_line],
+  [DeckLayerId.LABEL_LAYER, m.svg_export_primitive_label],
+  [DeckLayerId.TEXT_LAYER, m.svg_export_primitive_text],
+  [DeckLayerId.GEOJSON_LAYER, m.svg_export_primitive_geojson]
+];
+
+function matchLongestPrefix(
+  layerId: string,
+  entries: [string, () => string][]
+): { prefix: string; label: string } | null {
+  let best: { prefix: string; label: string } | null = null;
+
+  for (const [prefix, labelFn] of entries) {
+    if (!layerId.startsWith(prefix)) continue;
+    if (best && prefix.length <= best.prefix.length) continue;
+    best = { prefix, label: labelFn() };
+  }
+
+  return best;
+}
+
+function resolveScopeName(scopeId: string): string | null {
+  const visualization = findById(visualizationStore.visualizations, scopeId);
+  if (visualization) {
+    return visualization.name;
+  }
+
+  const dataset = findById(datasetsStore.datasets, scopeId);
+  return dataset ? dataset.name : null;
+}
+
+function resolveVisualizationScopeName(remainder: string): string {
+  if (remainder === 'default') {
+    return remainder;
+  }
+
+  const exactMatch = resolveScopeName(remainder);
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  const withoutSuffixMatch = remainder.match(/^(.+)-[a-zA-Z0-9]+$/);
+  if (withoutSuffixMatch) {
+    const truncatedName = resolveScopeName(withoutSuffixMatch[1]);
+    if (truncatedName) {
+      return truncatedName;
+    }
+  }
+
+  return remainder;
+}
+
+function resolveDeckLayerNameLabel(layerId: string): string {
+  const basemapMatch = matchLongestPrefix(layerId, BASEMAP_PREFIX_LABELS);
+  if (basemapMatch) {
+    return basemapMatch.label;
+  }
+
+  const vizMatch = matchLongestPrefix(layerId, VISUALIZATION_PREFIX_LABELS);
+  if (vizMatch) {
+    const remainder = layerId.slice(vizMatch.prefix.length + 1);
+    const vizName = resolveVisualizationScopeName(remainder);
+    return `${vizMatch.label}-${vizName}`;
+  }
+
+  return layerId;
 }
 
 function isDeckLayerLike(value: unknown): value is SvgDeckLayerLike {
@@ -788,6 +920,30 @@ function readFeatureBinaryTuple(
     : index;
 
   return readBinaryTuple(attribute, readIndex);
+}
+
+function readFeatureId(
+  featureIds: ArrayLike<number> | undefined,
+  index: number,
+  startIndices?: ArrayLike<number>
+): number | null {
+  if (!featureIds) return null;
+
+  const featureCount = startIndices ? startIndices.length - 1 : -1;
+  const vertexCount = startIndices
+    ? Math.floor(Number(startIndices[startIndices.length - 1]))
+    : -1;
+  const isPerVertex =
+    Boolean(startIndices) &&
+    featureIds.length === vertexCount &&
+    vertexCount !== featureCount;
+  const readIndex =
+    isPerVertex && startIndices
+      ? Math.floor(Number(startIndices[index]))
+      : index;
+
+  const featureId = Math.floor(Number(featureIds[readIndex]));
+  return Number.isInteger(featureId) && featureId >= 0 ? featureId : null;
 }
 
 function getLayerNumber(
@@ -1079,17 +1235,23 @@ function buildLayerGroup(
   layer: SvgDeckLayerLike,
   index: number,
   content: string,
+  dedupeId: SvgIdDeduper,
   idSuffix: string = ''
 ): string {
   if (!content.trim()) return '';
 
   const layerId = getLayerId(layer, index);
   const layerType = getLayerTypeName(layer);
-  const safeSuffix = idSuffix ? `-${sanitizeSvgId(idSuffix)}` : '';
+  const nameLabel = resolveDeckLayerNameLabel(layerId);
+  const baseId = sanitizeLocalizedSvgId(nameLabel);
+  const groupId = dedupeId(
+    idSuffix ? `${baseId}-${sanitizeSvgId(idSuffix)}` : baseId
+  );
 
   return `
     <g
-      id="khartis-deck-layer-${escapeXml(sanitizeSvgId(layerId))}${escapeXml(safeSuffix)}"
+      id="${escapeXml(groupId)}"
+      data-name="${escapeXml(nameLabel)}"
       data-khartis-layer-id="${escapeXml(layerId)}"
       data-khartis-layer-type="${escapeXml(layerType)}"
     >
@@ -1147,6 +1309,85 @@ function resolveStartIndices(
     : null;
 }
 
+const NAME_COLUMN_PATTERN = /name|nom|label|libelle/i;
+const CODE_COLUMN_PATTERN = /code|iso|id/i;
+
+function resolveVisualizationLabelColumn(layerId: string): string | undefined {
+  const vizMatch = matchLongestPrefix(layerId, VISUALIZATION_PREFIX_LABELS);
+  if (!vizMatch) return undefined;
+
+  const remainder = layerId.slice(vizMatch.prefix.length + 1);
+  const visualization =
+    findById(visualizationStore.visualizations, remainder) ??
+    (remainder !== 'default'
+      ? findById(
+          visualizationStore.visualizations,
+          remainder.match(/^(.+)-[a-zA-Z0-9]+$/)?.[1] ?? ''
+        )
+      : undefined);
+
+  return getTextPrimitive(visualization)?.labelColumn;
+}
+
+function resolveFeatureNameColumn(
+  table: SvgArrowTableLike,
+  layerId: string
+): string | null {
+  const labelColumn = resolveVisualizationLabelColumn(layerId);
+  const fieldNames = table.schema.fields.map((field) => field.name);
+
+  if (labelColumn && fieldNames.includes(labelColumn)) {
+    return labelColumn;
+  }
+
+  const nameColumn = fieldNames.find((name) => NAME_COLUMN_PATTERN.test(name));
+  if (nameColumn) {
+    return nameColumn;
+  }
+
+  const codeColumn = fieldNames.find((name) => CODE_COLUMN_PATTERN.test(name));
+  return codeColumn ?? null;
+}
+
+function resolveFeatureTableRow(
+  data: BinaryLayerDataLike,
+  featureId: number
+): number | null {
+  const sourceTable = data.khartisSourceTable;
+  if (!sourceTable) return null;
+
+  const splitMap = data.khartisSplitDatasetRowByGeomRow;
+  if (splitMap) {
+    if (featureId < 0 || featureId >= splitMap.length) return null;
+    const datasetRow = Math.floor(Number(splitMap[featureId]));
+    return Number.isInteger(datasetRow) &&
+      datasetRow >= 0 &&
+      datasetRow < sourceTable.numRows
+      ? datasetRow
+      : null;
+  }
+
+  return featureId >= 0 && featureId < sourceTable.numRows ? featureId : null;
+}
+
+function resolveFeatureName(
+  data: BinaryLayerDataLike,
+  layerId: string,
+  featureId: number
+): string | null {
+  const sourceTable = data.khartisSourceTable;
+  if (!sourceTable) return null;
+
+  const row = resolveFeatureTableRow(data, featureId);
+  if (row === null) return null;
+
+  const nameColumn = resolveFeatureNameColumn(sourceTable, layerId);
+  if (!nameColumn) return null;
+
+  const value = sourceTable.getChild(nameColumn)?.get(row);
+  return value === null || value === undefined ? null : String(value);
+}
+
 // Mirrors of the MultiShapeLayer SDF proportions (multi-shape-layer.ts,
 // getDistance), converted to attribute-radius units (SDF unit ÷ extent).
 const SQUARE_HALF_RATIO = 0.6 / SYMBOL_SDF_EXTENT;
@@ -1163,9 +1404,10 @@ function serializePointShape(
   fillAttributes: string,
   strokeAttributes: string,
   strokeWidth: number,
-  barWidth: number = 6
+  barWidth: number = 6,
+  nameAttribute: string = ''
 ): string {
-  const common = `${fillAttributes} ${strokeAttributes} stroke-width="${roundSvgValue(strokeWidth)}"`;
+  const common = `${fillAttributes} ${strokeAttributes} stroke-width="${roundSvgValue(strokeWidth)}" ${nameAttribute}`;
 
   switch (Math.round(shape)) {
     case 1: {
@@ -1233,6 +1475,8 @@ function serializePointLayer(
   const stroked = props.stroked === true || Boolean(strokeAttribute);
   const lineWidthScale = getLayerNumber(props, 'lineWidthScale', 1);
   const barWidth = getLayerNumber(props, 'barWidth', 6);
+  const layerId = getLayerId(layer, 0);
+  const dedupeId = createSvgIdDeduper();
   const parts: string[] = [];
 
   for (let index = 0; index < length; index++) {
@@ -1292,6 +1536,13 @@ function serializePointLayer(
 
     if (fillColor.opacity <= 0 && strokeColor.opacity <= 0) continue;
 
+    const featureId = readFeatureId(data.featureIds, index);
+    const featureName =
+      featureId !== null ? resolveFeatureName(data, layerId, featureId) : null;
+    const nameAttribute = featureName
+      ? `id="${escapeXml(dedupeId(sanitizeLocalizedSvgId(featureName)))}" data-name="${escapeXml(featureName)}"`
+      : '';
+
     parts.push(
       serializePointShape(
         shape,
@@ -1301,7 +1552,8 @@ function serializePointLayer(
         colorAttributes('fill', fillColor),
         colorAttributes('stroke', strokeColor),
         strokeWidth,
-        barWidth
+        barWidth,
+        nameAttribute
       )
     );
   }
@@ -1398,6 +1650,12 @@ function serializePathLayer(
   return parts.join('');
 }
 
+interface PolygonFeatureGroup {
+  featureId: number | null;
+  paths: string[];
+  fillColor: SvgColor;
+}
+
 function serializePolygonLayer(
   layer: SvgDeckLayerLike,
   context: SvgProjectionContext
@@ -1417,7 +1675,8 @@ function serializePolygonLayer(
     getBinaryAttribute(data, 'instanceVertexValid') ??
     getBinaryAttribute(data, 'vertexValid');
   const layerOpacity = getLayerNumber(props, 'opacity', 1);
-  const parts: string[] = [];
+  const layerId = getLayerId(layer, 0);
+  const groups: PolygonFeatureGroup[] = [];
 
   for (let index = 0; index < length; index++) {
     const start = Math.floor(Number(startIndices[index]));
@@ -1448,17 +1707,44 @@ function serializePolygonLayer(
     );
     if (fillColor.opacity <= 0) continue;
 
-    parts.push(`
-      <path
-        d="${path}"
-        ${colorAttributes('fill', fillColor)}
-        stroke="none"
-        fill-rule="evenodd"
-      />
-    `);
+    const featureId = readFeatureId(data.featureIds, index, startIndices);
+    const currentGroup = groups[groups.length - 1];
+
+    if (
+      currentGroup &&
+      featureId !== null &&
+      currentGroup.featureId === featureId
+    ) {
+      currentGroup.paths.push(path);
+      continue;
+    }
+
+    groups.push({ featureId, paths: [path], fillColor });
   }
 
-  return parts.join('');
+  const dedupeId = createSvgIdDeduper();
+
+  return groups
+    .map((group) => {
+      const featureName =
+        group.featureId !== null
+          ? resolveFeatureName(data, layerId, group.featureId)
+          : null;
+      const nameAttribute = featureName
+        ? `id="${escapeXml(dedupeId(sanitizeLocalizedSvgId(featureName)))}" data-name="${escapeXml(featureName)}"`
+        : '';
+
+      return `
+        <path
+          d="${group.paths.join(' ')}"
+          ${colorAttributes('fill', group.fillColor)}
+          stroke="none"
+          fill-rule="evenodd"
+          ${nameAttribute}
+        />
+      `;
+    })
+    .join('');
 }
 
 function isGeoJsonFeature(value: unknown): value is GeoJsonFeatureLike {
@@ -2125,6 +2411,7 @@ function buildDeckVisualizationLayer(
 
   const canvasRect = getRelativeRect(mapCanvas, pageContainer);
   const layers = resolveDeckLayers(deck);
+  const dedupeId = createSvgIdDeduper();
 
   if (viewports.length === 1) {
     const context: SvgProjectionContext = {
@@ -2134,7 +2421,12 @@ function buildDeckVisualizationLayer(
 
     return layers
       .map((layer, index) =>
-        buildLayerGroup(layer, index, serializeDeckLayer(layer, context))
+        buildLayerGroup(
+          layer,
+          index,
+          serializeDeckLayer(layer, context),
+          dedupeId
+        )
       )
       .filter(Boolean)
       .join('');
@@ -2160,6 +2452,7 @@ function buildDeckVisualizationLayer(
                 layer,
                 layerIndex,
                 serializeDeckLayer(layer, context),
+                dedupeId,
                 viewportId
               )
             : ''
@@ -2348,12 +2641,74 @@ function inlineSvgComputedStyles(source: SVGElement, clone: SVGElement): void {
   });
 }
 
+function parseSvgViewBox(
+  value: string | null
+): { width: number; height: number } | null {
+  if (!value) return null;
+
+  const parts = value
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number);
+  if (parts.length !== 4 || parts.some((part) => !Number.isFinite(part))) {
+    return null;
+  }
+
+  return { width: parts[2], height: parts[3] };
+}
+
+const SCALE_EPSILON = 0.001;
+
+function convertNestedSvgToGroup(
+  clone: SVGElement,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): void {
+  const viewBox = parseSvgViewBox(clone.getAttribute('viewBox'));
+  const scaleX = viewBox && viewBox.width > 0 ? width / viewBox.width : 1;
+  const scaleY = viewBox && viewBox.height > 0 ? height / viewBox.height : 1;
+  const needsScale =
+    Math.abs(scaleX - 1) > SCALE_EPSILON ||
+    Math.abs(scaleY - 1) > SCALE_EPSILON;
+  const transform = needsScale
+    ? `translate(${roundSvgValue(x)}, ${roundSvgValue(y)}) scale(${roundSvgValue(scaleX)}, ${roundSvgValue(scaleY)})`
+    : `translate(${roundSvgValue(x)}, ${roundSvgValue(y)})`;
+
+  clone.removeAttribute('x');
+  clone.removeAttribute('y');
+  clone.removeAttribute('width');
+  clone.removeAttribute('height');
+  clone.removeAttribute('viewBox');
+  clone.setAttribute('transform', transform);
+}
+
 function serializeSvgNode(
   element: SVGElement,
   position?: Partial<RelativeRect>
 ): string {
   const clone = element.cloneNode(true) as SVGElement;
   inlineSvgComputedStyles(element, clone);
+
+  const x = position?.x ?? 0;
+  const y = position?.y ?? 0;
+  const width = position?.width ?? 0;
+  const height = position?.height ?? 0;
+
+  if (clone.tagName.toLowerCase() === 'svg') {
+    convertNestedSvgToGroup(clone, x, y, width, height);
+
+    const outer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    Array.from(clone.attributes).forEach((attribute) => {
+      outer.setAttribute(attribute.name, attribute.value);
+    });
+    Array.from(clone.childNodes).forEach((child) => {
+      outer.appendChild(child);
+    });
+
+    return new XMLSerializer().serializeToString(outer);
+  }
 
   if (position?.x !== undefined) {
     clone.setAttribute('x', roundSvgValue(position.x));
@@ -2369,6 +2724,10 @@ function serializeSvgNode(
   }
 
   return new XMLSerializer().serializeToString(clone);
+}
+
+function injectRootAttribute(markup: string, attribute: string): string {
+  return markup.replace(/^(\s*)<(svg|g)/, `$1<$2 ${attribute}`);
 }
 
 let dropShadowFilterCounter = 0;
@@ -2686,7 +3045,33 @@ function buildImageLayer(
   `;
 }
 
-function buildLegendLayer(pageContainer: HTMLElement): string {
+function buildTopLevelLayer(
+  nameLabel: string,
+  content: string,
+  dedupeId: SvgIdDeduper,
+  extraAttributes: string = ''
+): string {
+  if (!content.trim()) return '';
+
+  const groupId = dedupeId(sanitizeLocalizedSvgId(nameLabel));
+
+  return `
+    <g
+      id="${escapeXml(groupId)}"
+      inkscape:groupmode="layer"
+      inkscape:label="${escapeXml(nameLabel)}"
+      data-name="${escapeXml(nameLabel)}"
+      ${extraAttributes}
+    >
+      ${content}
+    </g>
+  `;
+}
+
+function buildLegendLayer(
+  pageContainer: HTMLElement,
+  dedupeId: SvgIdDeduper
+): string {
   const legendContainer = pageContainer.querySelector(
     '.legend-container'
   ) as HTMLElement | null;
@@ -2725,12 +3110,15 @@ function buildLegendLayer(pageContainer: HTMLElement): string {
   legendSvgs.forEach((svg, index) => {
     const svgRect = getRelativeRect(svg, legendContainer);
     parts.push(
-      serializeSvgNode(svg, {
-        x: svgRect.x,
-        y: svgRect.y,
-        width: svgRect.width,
-        height: svgRect.height
-      }).replace('<svg', `<svg id="khartis-legend-segment-${index + 1}"`)
+      injectRootAttribute(
+        serializeSvgNode(svg, {
+          x: svgRect.x,
+          y: svgRect.y,
+          width: svgRect.width,
+          height: svgRect.height
+        }),
+        `id="khartis-legend-segment-${index + 1}"`
+      )
     );
   });
 
@@ -2757,96 +3145,170 @@ function buildLegendLayer(pageContainer: HTMLElement): string {
     return '';
   }
 
-  return `
-    <g
-      id="khartis-layer-legend"
-      transform="translate(${roundSvgValue(legendRect.x)}, ${roundSvgValue(legendRect.y)})"
-    >
-      ${parts.join('')}
-    </g>
-  `;
-}
-
-function getGeoIndicationId(element: HTMLElement, index: number): string {
-  if (element.classList.contains('scale-bar')) {
-    return 'scale';
-  }
-
-  if (element.classList.contains('north-arrow')) {
-    return 'orientation';
-  }
-
-  if (element.classList.contains('inset-map-panel')) {
-    return 'inset-map';
-  }
-
-  return `item-${index + 1}`;
-}
-
-function buildGeoIndicationsLayer(pageContainer: HTMLElement): string {
-  const geoItems = pageContainer.querySelectorAll<HTMLElement>(
-    '.geo-indications-overlay .scale-bar, .geo-indications-overlay .north-arrow, .geo-indications-overlay .inset-map-panel'
+  return buildTopLevelLayer(
+    m.svg_export_layer_legend(),
+    parts.join(''),
+    dedupeId,
+    `transform="translate(${roundSvgValue(legendRect.x)}, ${roundSvgValue(legendRect.y)})"`
   );
+}
 
-  if (geoItems.length === 0) {
+interface GeoIndicationKind {
+  selector: string;
+  nameLabel: () => string;
+}
+
+const GEO_INDICATION_KINDS: GeoIndicationKind[] = [
+  { selector: '.scale-bar', nameLabel: m.svg_export_layer_scale },
+  { selector: '.north-arrow', nameLabel: m.svg_export_layer_orientation },
+  { selector: '.inset-map-panel', nameLabel: m.svg_export_layer_inset_map }
+];
+
+function buildGeoIndicationItem(
+  item: HTMLElement,
+  pageContainer: HTMLElement,
+  itemDedupeId: SvgIdDeduper
+): string {
+  const itemRect = getRelativeRect(item, pageContainer);
+  if (itemRect.width <= 0 || itemRect.height <= 0) {
     return '';
   }
 
-  const parts: string[] = [];
+  const itemParts = [
+    buildElementBackgroundRect(item, itemRect.width, itemRect.height)
+  ];
 
-  geoItems.forEach((item, index) => {
-    const itemRect = getRelativeRect(item, pageContainer);
-    if (itemRect.width <= 0 || itemRect.height <= 0) {
-      return;
-    }
-
-    const itemParts = [
-      buildElementBackgroundRect(item, itemRect.width, itemRect.height)
-    ];
-
-    const svgs = item.querySelectorAll<SVGSVGElement>('svg');
-    svgs.forEach((svg, svgIndex) => {
-      const svgRect = getRelativeRect(svg, item);
-      itemParts.push(
+  const svgs = item.querySelectorAll<SVGSVGElement>('svg');
+  svgs.forEach((svg, svgIndex) => {
+    const svgRect = getRelativeRect(svg, item);
+    itemParts.push(
+      injectRootAttribute(
         serializeSvgNode(svg, {
           x: svgRect.x,
           y: svgRect.y,
           width: svgRect.width,
           height: svgRect.height
-        }).replace(
-          '<svg',
-          `<svg id="khartis-geo-indication-${getGeoIndicationId(item, index)}-${svgIndex + 1}"`
-        )
-      );
-    });
-
-    const itemMarkup = itemParts.filter(Boolean).join('');
-    if (!itemMarkup) {
-      return;
-    }
-
-    parts.push(`
-      <g
-        id="khartis-geo-indication-${getGeoIndicationId(item, index)}"
-        transform="translate(${roundSvgValue(itemRect.x)}, ${roundSvgValue(itemRect.y)})"
-      >
-        ${itemMarkup}
-      </g>
-    `);
+        }),
+        `id="${itemDedupeId(`segment-${svgIndex + 1}`)}"`
+      )
+    );
   });
 
-  if (parts.length === 0) {
+  const itemMarkup = itemParts.filter(Boolean).join('');
+  if (!itemMarkup) {
     return '';
   }
 
   return `
-    <g id="khartis-layer-geo-indications">
-      ${parts.join('')}
+    <g transform="translate(${roundSvgValue(itemRect.x)}, ${roundSvgValue(itemRect.y)})">
+      ${itemMarkup}
     </g>
   `;
 }
 
-function buildAnnotationLayer(pageContainer: HTMLElement): string {
+function buildGeoIndicationKindLayer(
+  pageContainer: HTMLElement,
+  kind: GeoIndicationKind,
+  dedupeId: SvgIdDeduper
+): string {
+  const items = pageContainer.querySelectorAll<HTMLElement>(
+    `.geo-indications-overlay ${kind.selector}`
+  );
+  if (items.length === 0) {
+    return '';
+  }
+
+  const itemDedupeId = createSvgIdDeduper();
+  const content = Array.from(items)
+    .map((item) => buildGeoIndicationItem(item, pageContainer, itemDedupeId))
+    .filter(Boolean)
+    .join('');
+
+  return buildTopLevelLayer(kind.nameLabel(), content, dedupeId);
+}
+
+function buildGeoIndicationsLayers(
+  pageContainer: HTMLElement,
+  dedupeId: SvgIdDeduper
+): string[] {
+  return GEO_INDICATION_KINDS.map((kind) =>
+    buildGeoIndicationKindLayer(pageContainer, kind, dedupeId)
+  );
+}
+
+const ANNOTATION_ROLE_LABELS: Record<string, () => string> = {
+  [ANNOTATION_ROLE.TITLE]: m.svg_export_role_title,
+  [ANNOTATION_ROLE.SUBTITLE]: m.svg_export_role_subtitle,
+  [ANNOTATION_ROLE.SOURCE]: m.svg_export_role_source,
+  [ANNOTATION_ROLE.BASEMAP_SOURCE]: m.svg_export_role_basemap_source,
+  [ANNOTATION_ROLE.SIGNATURE]: m.svg_export_role_signature,
+  [ANNOTATION_ROLE.CREDIT]: m.svg_export_role_credit,
+  [ANNOTATION_ROLE.NOTE]: m.svg_export_role_note
+};
+
+function resolveAnnotationRoleLabel(item: HTMLElement): string {
+  const role = item.dataset.annotationRole;
+  return (
+    (role && ANNOTATION_ROLE_LABELS[role]?.()) ?? m.svg_export_role_annotation()
+  );
+}
+
+function buildAnnotationItem(
+  item: HTMLElement,
+  pageContainer: HTMLElement,
+  dedupeId: SvgIdDeduper
+): string {
+  const nameLabel = resolveAnnotationRoleLabel(item);
+  const id = dedupeId(sanitizeLocalizedSvgId(nameLabel));
+  const nameAttribute = `data-name="${escapeXml(nameLabel)}"`;
+
+  const textElement = item.querySelector('.annotation-text');
+  if (textElement instanceof HTMLElement) {
+    return injectRootAttribute(
+      buildNativeTextLayer(
+        textElement,
+        getRelativeRect(item, pageContainer),
+        id,
+        pageContainer
+      ),
+      nameAttribute
+    );
+  }
+
+  const svgElement = item.querySelector('svg');
+  if (svgElement instanceof SVGElement) {
+    const svgRect = getRelativeRect(svgElement, pageContainer);
+    return `
+      <g id="${escapeXml(id)}" ${nameAttribute}>
+        ${serializeSvgNode(svgElement, {
+          x: svgRect.x,
+          y: svgRect.y,
+          width: svgRect.width,
+          height: svgRect.height
+        })}
+      </g>
+    `;
+  }
+
+  const imageElement = item.querySelector('img');
+  if (imageElement instanceof HTMLImageElement) {
+    return injectRootAttribute(
+      buildImageLayer(
+        imageElement,
+        getRelativeRect(imageElement, pageContainer),
+        id
+      ),
+      nameAttribute
+    );
+  }
+
+  return '';
+}
+
+function buildAnnotationLayer(
+  pageContainer: HTMLElement,
+  dedupeId: SvgIdDeduper
+): string {
   const annotationItems = pageContainer.querySelectorAll<HTMLElement>(
     '.annotation-overlay .annotation-item'
   );
@@ -2855,65 +3317,22 @@ function buildAnnotationLayer(pageContainer: HTMLElement): string {
     return '';
   }
 
-  const parts: string[] = [];
+  const itemDedupeId = createSvgIdDeduper();
+  const content = Array.from(annotationItems)
+    .map((item) => buildAnnotationItem(item, pageContainer, itemDedupeId))
+    .filter(Boolean)
+    .join('');
 
-  annotationItems.forEach((item, index) => {
-    const role = item.dataset.annotationRole || item.dataset.annotationType;
-    const id = `khartis-annotation-${role ?? 'item'}-${index + 1}`;
-    const textElement = item.querySelector('.annotation-text');
-    if (textElement instanceof HTMLElement) {
-      parts.push(
-        buildNativeTextLayer(
-          textElement,
-          getRelativeRect(item, pageContainer),
-          id,
-          pageContainer
-        )
-      );
-      return;
-    }
-
-    const svgElement = item.querySelector('svg');
-    if (svgElement instanceof SVGElement) {
-      const svgRect = getRelativeRect(svgElement, pageContainer);
-      parts.push(`
-        <g id="${escapeXml(id)}">
-          ${serializeSvgNode(svgElement, {
-            x: svgRect.x,
-            y: svgRect.y,
-            width: svgRect.width,
-            height: svgRect.height
-          })}
-        </g>
-      `);
-      return;
-    }
-
-    const imageElement = item.querySelector('img');
-    if (imageElement instanceof HTMLImageElement) {
-      parts.push(
-        buildImageLayer(
-          imageElement,
-          getRelativeRect(imageElement, pageContainer),
-          id
-        )
-      );
-    }
-  });
-
-  if (parts.length === 0) {
-    return '';
-  }
-
-  return `
-    <g id="khartis-layer-annotations">
-      ${parts.join('')}
-    </g>
-  `;
+  return buildTopLevelLayer(
+    m.svg_export_layer_annotations(),
+    content,
+    dedupeId
+  );
 }
 
 function buildVisualizationLayer(
   pageContainer: HTMLElement,
+  dedupeId: SvgIdDeduper,
   structuredOptions: StructuredSvgOptions = {},
   geometry: PageExportGeometry = resolvePageExportGeometry(pageContainer)
 ): string {
@@ -2939,14 +3358,12 @@ function buildVisualizationLayer(
     return '';
   }
 
-  return `
-    <g
-      id="khartis-layer-visualizations"
-      ${geometry.mapFrame ? `clip-path="url(#${SVG_MAP_FRAME_CLIP_ID})"` : ''}
-    >
-      ${parts.join('')}
-    </g>
-  `;
+  return buildTopLevelLayer(
+    m.svg_export_layer_map(),
+    parts.join(''),
+    dedupeId,
+    geometry.mapFrame ? `clip-path="url(#${SVG_MAP_FRAME_CLIP_ID})"` : ''
+  );
 }
 
 function resolveMapCanvas(
@@ -2971,7 +3388,8 @@ function resolveElementBackgroundColor(
 
 function buildPageLayer(
   pageContainer: HTMLElement,
-  geometry: PageExportGeometry
+  geometry: PageExportGeometry,
+  dedupeId: SvgIdDeduper
 ): string {
   const pageBackgroundColor = resolveElementBackgroundColor(
     pageContainer,
@@ -3018,11 +3436,11 @@ function buildPageLayer(
     `);
   }
 
-  return `
-    <g id="khartis-layer-page">
-      ${parts.join('')}
-    </g>
-  `;
+  return buildTopLevelLayer(
+    m.svg_export_layer_page(),
+    parts.join(''),
+    dedupeId
+  );
 }
 
 function buildSvgDefinitions(geometry: PageExportGeometry): string {
@@ -3064,23 +3482,30 @@ function buildStructuredSvgMarkup(
 ): string {
   svgPatternDefsCache.clear();
   dropShadowFilterCounter = 0;
+  const dedupeId = createSvgIdDeduper();
   const layers = [
-    buildVisualizationLayer(pageContainer, structuredOptions, geometry),
-    buildLegendLayer(pageContainer),
-    buildGeoIndicationsLayer(pageContainer),
-    buildAnnotationLayer(pageContainer)
+    buildPageLayer(pageContainer, geometry, dedupeId),
+    buildVisualizationLayer(
+      pageContainer,
+      dedupeId,
+      structuredOptions,
+      geometry
+    ),
+    buildLegendLayer(pageContainer, dedupeId),
+    ...buildGeoIndicationsLayers(pageContainer, dedupeId),
+    buildAnnotationLayer(pageContainer, dedupeId)
   ].filter(Boolean);
 
   return `
     <svg
       xmlns="http://www.w3.org/2000/svg"
+      xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
       width="${roundSvgValue(options.width)}"
       height="${roundSvgValue(options.height)}"
       viewBox="0 0 ${roundSvgValue(geometry.width)} ${roundSvgValue(geometry.height)}"
       preserveAspectRatio="xMidYMid meet"
     >
       ${buildSvgDefinitions(geometry)}
-      ${buildPageLayer(pageContainer, geometry)}
       ${layers.join('')}
     </svg>
   `.trim();
