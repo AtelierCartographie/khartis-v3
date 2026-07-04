@@ -1172,6 +1172,7 @@
   "projection_desc_azimuthal_equal_area": "Preserves surfaces",
   "projection_name_france_dom_tom": "France + DOM-TOM (insets)",
   "projection_name_europe_dom_tom": "Europe + Overseas (insets)",
+  "projection_name_usa_albers": "United States + Alaska/Hawaii (insets)",
   "projection_name_gall_peters": "Gall-Peters",
   "projection_desc_gall_peters": "Cylindrical equal-area",
   "projection_name_equal_earth": "Equal Earth",

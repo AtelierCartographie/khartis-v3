@@ -60,7 +60,7 @@ function getBboxCenter(bbox: BBox): [number, number] {
   return [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
 }
 
-function applyUserProjectionTransform(
+function orientProjectionToState(
   projection: GeoProjection,
   state: ProjectionOverrideState
 ): void {
@@ -79,9 +79,24 @@ function applyUserProjectionTransform(
     ? CLIP_DEGENERACY_LON_EPSILON
     : 0;
   projection.rotate([-longitude + lonEpsilon, -latitude, gamma]);
+}
+
+function applyUserProjectionTransform(
+  projection: GeoProjection,
+  state: ProjectionOverrideState
+): void {
+  orientProjectionToState(projection, state);
   if (state.rotation) {
     projection.angle(projection.angle() + state.rotation);
   }
+}
+
+function hasExplicitProjectionOrientation(
+  state: ProjectionOverrideState
+): boolean {
+  return (
+    state.center !== undefined || state.longitude !== 0 || state.latitude !== 0
+  );
 }
 
 function bboxesIntersect(a: BBox, b: BBox): boolean {
@@ -277,6 +292,32 @@ export function resolveUserProjectionOverride({
       padding
     );
     applyUserProjectionTransform(projection, state);
+
+    if (isUsableGeoProjection(projection, fitBbox)) {
+      return projection;
+    }
+
+    // The projection's orientation leaves the basemap outside its visible
+    // hemisphere — e.g. an azimuthal projection (orthographic, stereographic…)
+    // still facing lon 0 while the basemap sits over the Americas. fitExtent
+    // only scales/translates, so it then collapses to a degenerate extent.
+    // When the user hasn't pinned an orientation, re-center the projection on
+    // the basemap and refit so fitExtent measures the visible hemisphere.
+    if (hasExplicitProjectionOrientation(state)) {
+      return undefined;
+    }
+
+    orientProjectionToState(projection, {
+      ...state,
+      center: getBboxCenter(fitBbox)
+    });
+    fitProjectionToBbox(
+      projection,
+      fitBbox,
+      viewportSize.width,
+      viewportSize.height,
+      padding
+    );
 
     return isUsableGeoProjection(projection, fitBbox) ? projection : undefined;
   } catch (error) {
