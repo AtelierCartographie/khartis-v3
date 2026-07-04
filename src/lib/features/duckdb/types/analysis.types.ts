@@ -11,14 +11,15 @@ export interface DuckDBMetadata {
 export interface AnalysisResult {
   name: string;
   type_simple: DuckDBSimplifiedType;
-  min?: number | Date;
-  max?: number | Date;
+  min?: number | bigint | Date;
+  max?: number | bigint | Date;
   histogram?: unknown;
   uniques?: number;
   nulls?: number;
   duplicates?: number;
   count?: number;
-  semioType?: 'geoid' | 'geolat' | 'geolon' | 'QTA' | 'QTR' | 'QL' | 'QLO';
+  semioType?:
+    'geoid' | 'geolat' | 'geolon' | 'label' | 'QTA' | 'QTR' | 'QL' | 'QLO';
   semioScore?: number;
   [key: string]: unknown;
 }

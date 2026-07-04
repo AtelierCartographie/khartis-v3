@@ -414,7 +414,7 @@ export const DeepDataValidator = {
         column.min !== undefined &&
         column.max !== undefined
       ) {
-        const range = (column.max as number) - (column.min as number);
+        const range = Number(column.max) - Number(column.min);
         if (range === 0) {
           issues.push({
             severity: 'warning',

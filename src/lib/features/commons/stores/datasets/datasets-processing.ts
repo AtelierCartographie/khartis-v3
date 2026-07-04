@@ -249,6 +249,8 @@ export function createDatasetFromPreprocessedFile(
       share_floats?: number;
       share_rank_interval?: number;
       extent_magnitude?: number;
+      skewness?: number;
+      categories?: string[];
     }
   >;
 
@@ -271,7 +273,13 @@ export function createDatasetFromPreprocessedFile(
         share_integers: toOptionalNumber(stats.share_integers),
         share_floats: toOptionalNumber(stats.share_floats),
         share_rank_interval: toOptionalNumber(stats.share_rank_interval),
-        extent_magnitude: toOptionalNumber(stats.extent_magnitude)
+        extent_magnitude: toOptionalNumber(stats.extent_magnitude),
+        skewness: toOptionalNumber(stats.skewness),
+        categories: Array.isArray(stats.categories)
+          ? stats.categories.filter(
+              (value): value is string => typeof value === 'string'
+            )
+          : undefined
       }
     })
   );

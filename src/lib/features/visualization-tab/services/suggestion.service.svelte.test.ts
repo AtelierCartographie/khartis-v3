@@ -98,9 +98,11 @@ const ALL_SUGGESTION_IDS = [
   'polygons_uniques',
   'lines_uniques',
   'choropleth',
+  'choropleth_labeled',
   'symbols_uniques_colorful_QTR',
   'lines_colorful_QTR',
   'symbols_proportional',
+  'symbols_proportional_labeled',
   'lines_proportional',
   'polygons_colorful_QL',
   'symbols_differents',
@@ -1114,6 +1116,7 @@ describe('suggestion.service', () => {
 
         if (
           suggestionId === 'choropleth' ||
+          suggestionId === 'choropleth_labeled' ||
           suggestionId.startsWith('polygons_')
         ) {
           return [

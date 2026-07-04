@@ -24,10 +24,12 @@ import {
   type VisualizationAppliedSuggestionState,
   type VisualizationRestoreSnapshot,
   type VisualizationRestoreState,
+  ClassificationMethod,
   resolveVisualizationPreset,
   visualizationStore,
   VisualizationType
 } from '$lib/features/commons/stores/visualization.store.svelte';
+import { suggestClassificationDefaults } from '$lib/features/commons/services/classification.service';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
 import {
@@ -94,7 +96,10 @@ interface SuggestionBehavior {
   symbol?: Partial<SymbolPrimitiveConfig>;
   line?: Partial<LinePrimitiveConfig>;
   text?: Partial<TextPrimitiveConfig>;
+  dataFilters?: VisualizationConfig['dataFilters'];
 }
+
+const TOP_LABELED_SYMBOLS_LIMIT = 10;
 
 function hasGpsCoordinateDetection(
   dataset?: DatasetGeometrySource | null
@@ -117,9 +122,11 @@ const SUGGESTION_VISUALIZATION_TYPES = {
   polygons_uniques: VisualizationType.CHOROPLETH,
   lines_uniques: VisualizationType.CHOROPLETH,
   choropleth: VisualizationType.CHOROPLETH,
+  choropleth_labeled: VisualizationType.CHOROPLETH,
   symbols_uniques_colorful_QTR: VisualizationType.CHOROPLETH,
   lines_colorful_QTR: VisualizationType.CHOROPLETH,
   symbols_proportional: VisualizationType.PROPORTIONAL,
+  symbols_proportional_labeled: VisualizationType.PROPORTIONAL,
   lines_proportional: VisualizationType.PROPORTIONAL,
   polygons_colorful_QL: VisualizationType.CATEGORICAL,
   symbols_differents: VisualizationType.CATEGORICAL,
@@ -163,6 +170,7 @@ type SuggestionBehaviorDefinition = {
   sizeColumn?: SuggestionColumnSource;
   secondaryLabelColumn?: SuggestionColumnSource;
   doubleSymbol?: boolean;
+  topLabelFilter?: boolean;
 };
 
 const SUGGESTION_BEHAVIOR_DEFINITIONS = {
@@ -186,6 +194,14 @@ const SUGGESTION_BEHAVIOR_DEFINITIONS = {
     classification: 'class',
     valueColumn: 'primaryNumeric'
   },
+  choropleth_labeled: {
+    family: 'polygon',
+    fillMode: FillMode.CLASSES,
+    classification: 'class',
+    valueColumn: 'primaryNumeric',
+    labelColumn: 'secondaryText',
+    topLabelFilter: true
+  },
   symbols_uniques_colorful_QTR: {
     family: 'symbol',
     symbolMode: SymbolMode.UNIQUE,
@@ -205,6 +221,14 @@ const SUGGESTION_BEHAVIOR_DEFINITIONS = {
     symbolMode: SymbolMode.PROPORTIONAL,
     fillMode: FillMode.UNIQUE,
     sizeColumn: 'proportionalSize'
+  },
+  symbols_proportional_labeled: {
+    family: 'symbol',
+    symbolMode: SymbolMode.PROPORTIONAL,
+    fillMode: FillMode.UNIQUE,
+    sizeColumn: 'proportionalSize',
+    labelColumn: 'secondaryText',
+    topLabelFilter: true
   },
   lines_proportional: {
     family: 'line',
@@ -392,6 +416,19 @@ function buildDisabledMissingData(
     show: false,
     enabled: false,
     pattern: false
+  };
+}
+
+function buildTopTextDataFilter(
+  column: string
+): NonNullable<VisualizationConfig['dataFilters']>[number] {
+  return {
+    id: crypto.randomUUID(),
+    column,
+    operator: 'top_desc',
+    value: String(TOP_LABELED_SYMBOLS_LIMIT),
+    limit: TOP_LABELED_SYMBOLS_LIMIT,
+    primitiveType: PrimitiveFilterType.TEXT
   };
 }
 
@@ -742,19 +779,29 @@ export function resolveSuggestionBehavior(
       suggestionColumns,
       behaviorDefinition.categoryColumn
     );
+    const labelColumn = getSuggestionColumn(
+      suggestionColumns,
+      behaviorDefinition.labelColumn
+    );
     const fillMode = behaviorDefinition.fillMode ?? FillMode.UNIQUE;
     const classification = getSuggestionClassification(
       behaviorDefinition.classification,
       categoricalPreset,
       choroplethPreset
     );
+    const hasTopLabelFilter =
+      behaviorDefinition.topLabelFilter === true && Boolean(labelColumn);
+    const polygonPrimitiveFilters: PrimitiveFilter[] = hasTopLabelFilter
+      ? [PrimitiveFilterType.POLYGON, PrimitiveFilterType.TEXT]
+      : [PrimitiveFilterType.POLYGON];
 
     return {
       visualizationType,
-      primitiveFilters: [PrimitiveFilterType.POLYGON],
+      primitiveFilters: polygonPrimitiveFilters,
       mapping: buildClearedMapping(preset.mapping.geometryColumn, {
         valueColumn,
-        categoryColumn
+        categoryColumn,
+        labelColumn: hasTopLabelFilter ? labelColumn : undefined
       }),
       modes: {
         ...preset.modes,
@@ -783,9 +830,24 @@ export function resolveSuggestionBehavior(
       line: {
         enabled: false
       },
-      text: {
-        enabled: false
-      }
+      text:
+        hasTopLabelFilter && labelColumn
+          ? buildTextPrimitiveConfig(preset, visualization, {
+              labelColumn,
+              colorMode: ColorMode.UNIQUE,
+              sizeMode: SizeMode.FIXED,
+              missingData: buildDisabledMissingData(preset.missingData),
+              secondaryLabels: {
+                enabled: false,
+                labelColumn: undefined
+              }
+            })
+          : {
+              enabled: false
+            },
+      ...(hasTopLabelFilter && valueColumn
+        ? { dataFilters: [buildTopTextDataFilter(valueColumn)] }
+        : {})
     };
   }
 
@@ -873,14 +935,25 @@ export function resolveSuggestionBehavior(
     categoricalPreset,
     choroplethPreset
   );
+  const symbolLabelColumn = getSuggestionColumn(
+    suggestionColumns,
+    behaviorDefinition.labelColumn
+  );
+  const hasTopSymbolLabelFilter =
+    behaviorDefinition.topLabelFilter === true && Boolean(symbolLabelColumn);
+  const activeSymbolPrimitiveFilters: PrimitiveFilter[] =
+    hasTopSymbolLabelFilter
+      ? [...symbolPrimitiveFilters, PrimitiveFilterType.TEXT]
+      : symbolPrimitiveFilters;
 
   return {
     visualizationType,
-    primitiveFilters: symbolPrimitiveFilters,
+    primitiveFilters: activeSymbolPrimitiveFilters,
     mapping: buildClearedMapping(preset.mapping.geometryColumn, {
       valueColumn: symbolValueColumn,
       categoryColumn: symbolCategoryColumn,
-      sizeColumn: symbolSizeColumn
+      sizeColumn: symbolSizeColumn,
+      labelColumn: hasTopSymbolLabelFilter ? symbolLabelColumn : undefined
     }),
     modes: {
       ...preset.modes,
@@ -941,9 +1014,24 @@ export function resolveSuggestionBehavior(
     line: {
       enabled: false
     },
-    text: {
-      enabled: false
-    }
+    text:
+      hasTopSymbolLabelFilter && symbolLabelColumn
+        ? buildTextPrimitiveConfig(preset, visualization, {
+            labelColumn: symbolLabelColumn,
+            colorMode: ColorMode.UNIQUE,
+            sizeMode: SizeMode.FIXED,
+            missingData: buildDisabledMissingData(preset.missingData),
+            secondaryLabels: {
+              enabled: false,
+              labelColumn: undefined
+            }
+          })
+        : {
+            enabled: false
+          },
+    ...(hasTopSymbolLabelFilter && symbolSizeColumn
+      ? { dataFilters: [buildTopTextDataFilter(symbolSizeColumn)] }
+      : {})
   };
 }
 
@@ -1443,6 +1531,7 @@ function buildSuggestionUpdate(
         }
       : visualization.style,
     primitiveFilters: behavior.primitiveFilters,
+    dataFilters: behavior.dataFilters,
     classification: behavior.classification,
     symbols: behavior.symbols,
     missingData: behavior.missingData,
@@ -1597,6 +1686,46 @@ function ensureVisualizationActive(vizId: string): void {
   visualizationStore.toggleVisualization(vizId);
 }
 
+function adaptSuggestedClassification(
+  classification: VisualizationConfig['classification'],
+  mapping: VisualizationConfig['mapping'] | undefined,
+  dataset: DatasetResult | ProcessedDataset
+): VisualizationConfig['classification'] {
+  if (
+    !classification ||
+    classification.method === ClassificationMethod.MANUAL
+  ) {
+    return classification;
+  }
+
+  const columnName = mapping?.valueColumn ?? mapping?.colorColumn;
+  const column = columnName
+    ? dataset.columns?.find((col) => col.name === columnName)
+    : undefined;
+  const stats = (column as { stats?: { skewness?: number } } | undefined)
+    ?.stats;
+
+  const defaults = suggestClassificationDefaults({
+    method: classification.method,
+    classes: classification.classes,
+    skewness: stats?.skewness,
+    rowCount: dataset.rowCount
+  });
+
+  if (
+    defaults.method === classification.method &&
+    defaults.classes === classification.classes
+  ) {
+    return classification;
+  }
+
+  return {
+    ...classification,
+    method: defaults.method,
+    classes: defaults.classes
+  };
+}
+
 export function applySuggestionToVisualization(
   vizId: string,
   suggestion: VizSuggestion,
@@ -1653,6 +1782,11 @@ export function applySuggestionToVisualization(
     dataset,
     suggestion
   );
+  suggestionUpdate.classification = adaptSuggestedClassification(
+    suggestionUpdate.classification,
+    suggestionUpdate.mapping,
+    dataset
+  );
   const rememberedAppliedState = options.origin?.appliedSuggestionState;
   const suggestionKey = getSuggestionSignature(suggestion);
   const rememberedSuggestionUpdate =
@@ -1674,7 +1808,7 @@ export function applySuggestionToVisualization(
           ...suggestionUpdate,
           origin: options.origin,
           primitiveOrder: undefined,
-          dataFilters: undefined
+          dataFilters: suggestionUpdate.dataFilters
         },
     SavePriority.IMMEDIATE
   );

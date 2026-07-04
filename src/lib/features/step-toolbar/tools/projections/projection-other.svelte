@@ -112,6 +112,13 @@
       title: m.projection_name_europe_dom_tom(),
       tag: m.projection_group_discontinuous(),
       shapeFilterId: 'Discontinue' as ProjectionShapeFilterId
+    },
+    {
+      id: getCompositeProjectionSelectionId('USA_ALBERS'),
+      projectionId: getCompositeProjectionSelectionId('USA_ALBERS'),
+      title: m.projection_name_usa_albers(),
+      tag: m.projection_group_discontinuous(),
+      shapeFilterId: 'Discontinue' as ProjectionShapeFilterId
     }
   ]);
 
