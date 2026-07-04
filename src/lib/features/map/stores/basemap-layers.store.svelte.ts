@@ -155,7 +155,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
     id: 'terre',
     visible: true,
-    fillColor: '#f2f2f2',
+    fillColor: '#e0e0e0',
     fillShadow: false,
     fillOpacity: 100,
     strokeColor: '#a8a8a8',

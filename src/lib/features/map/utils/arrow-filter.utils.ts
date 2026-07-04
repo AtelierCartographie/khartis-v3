@@ -84,6 +84,35 @@ export function selectRowsByIndices(
 
 type FilterOperator = VizFilterOperator | string;
 
+function normalizeComparableNumberText(value: string): string | null {
+  const normalized = value.trim().replace(/[\s\u00a0\u202f']/g, '');
+  if (!normalized) {
+    return null;
+  }
+
+  const commaIndex = normalized.lastIndexOf(',');
+  const dotIndex = normalized.lastIndexOf('.');
+  if (commaIndex !== -1 && dotIndex !== -1) {
+    return commaIndex > dotIndex
+      ? normalized.replace(/\./g, '').replace(',', '.')
+      : normalized.replace(/,/g, '');
+  }
+
+  if (/^[-+]?\d{1,3}(,\d{3})+$/.test(normalized)) {
+    return normalized.replace(/,/g, '');
+  }
+
+  if (/^[-+]?\d+,(\d{1,2}|\d{4,})$/.test(normalized)) {
+    return normalized.replace(',', '.');
+  }
+
+  if (/^[-+]?\d{1,3}(\.\d{3})+$/.test(normalized)) {
+    return normalized.replace(/\./g, '');
+  }
+
+  return normalized;
+}
+
 function toComparableNumber(value: unknown): number | null {
   if (value instanceof Date) {
     const timestamp = value.getTime();
@@ -107,7 +136,7 @@ function toComparableNumber(value: unknown): number | null {
     return null;
   }
 
-  const numericValue = Number(normalized);
+  const numericValue = Number(normalizeComparableNumberText(normalized));
   if (Number.isFinite(numericValue)) {
     return numericValue;
   }

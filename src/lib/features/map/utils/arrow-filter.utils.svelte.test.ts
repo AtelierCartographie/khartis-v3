@@ -78,6 +78,28 @@ describe('arrow-filter utils', () => {
     expect(result.getChild('city')?.toArray()).toEqual(['Paris', 'Marseille']);
   });
 
+  it('keeps top operators working with formatted numeric strings', () => {
+    const table = new Table({
+      city: vectorFromArray(['Paris', 'Lyon', 'Marseille']),
+      population: vectorFromArray(['9\u202f904\u202f000', '1,500', '900'])
+    });
+
+    const filters = [
+      {
+        id: 'top-formatted-population',
+        column: 'population',
+        operator: 'top_desc',
+        value: '',
+        limit: 2
+      }
+    ] as VizDataFilter[];
+
+    const result = filterArrowTableByDataFilters(table, filters);
+
+    expect(result.numRows).toBe(2);
+    expect(result.getChild('city')?.toArray()).toEqual(['Paris', 'Lyon']);
+  });
+
   it('applies table filters through the shared row path', () => {
     const table = new Table({
       age: vectorFromArray([30, 40, 50]),
