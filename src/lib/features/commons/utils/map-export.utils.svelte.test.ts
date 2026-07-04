@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as m from '$lib/paraglide/messages';
 import {
   SHAPE_ORDINAL,
   ShapeType,
@@ -263,8 +264,13 @@ describe('map export DOM mutations', () => {
     const blob = await exportMapToSvg({ width: 400, height: 300 });
     const markup = await blob.text();
 
-    expect(markup).toContain('id="khartis-layer-annotations"');
-    expect(markup).toContain('id="khartis-annotation-title-1"');
+    expect(markup).toContain(`id="${m.svg_export_layer_annotations()}"`);
+    expect(markup).toContain('inkscape:groupmode="layer"');
+    expect(markup).toContain(
+      `inkscape:label="${m.svg_export_layer_annotations()}"`
+    );
+    expect(markup).toContain(`id="${m.svg_export_role_title()}"`);
+    expect(markup).toContain(`data-name="${m.svg_export_role_title()}"`);
     expect(markup).toContain('<text');
     expect(markup).toContain('Native title');
     expect(markup).toContain('text-anchor="middle"');
@@ -1486,10 +1492,186 @@ describe('map export DOM mutations', () => {
     const blob = await exportMapToSvg({ width: 400, height: 300 });
     const markup = await blob.text();
 
-    expect(markup).toContain('id="khartis-layer-geo-indications"');
+    expect(markup).toContain(`id="${m.svg_export_layer_scale()}"`);
+    expect(markup).toContain('inkscape:groupmode="layer"');
     expect(markup).toContain('fill="rgb(0, 0, 0)"');
     expect(markup).toContain('200 km');
     expect(markup).toContain('fill="rgb(255, 255, 255)"');
+    expect(markup.match(/<svg[\s>]/g)).toHaveLength(1);
+  });
+
+  it('names top-level layers with localized ids and Inkscape layer metadata', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="map-canvas"><canvas></canvas></div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const canvas = document.querySelector('canvas');
+    if (!page || !canvas) {
+      throw new Error('Missing export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(canvas, { left: 0, top: 0, width: 400, height: 300 });
+    vi.spyOn(canvas, 'toDataURL').mockReturnValue('data:image/png;base64,AAAA');
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    expect(markup).toContain(
+      'xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"'
+    );
+    expect(markup).toContain(`id="${m.svg_export_layer_page()}"`);
+    expect(markup).toContain(`inkscape:label="${m.svg_export_layer_page()}"`);
+    expect(markup).toContain(`data-name="${m.svg_export_layer_page()}"`);
+    expect(markup).toContain(`id="${m.svg_export_layer_map()}"`);
+    expect(markup).toContain(`inkscape:label="${m.svg_export_layer_map()}"`);
+    expect(markup.match(/inkscape:groupmode="layer"/g)?.length).toBe(2);
+  });
+
+  it('dedupes duplicate annotation ids sharing the same role with numeric suffixes', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="annotation-overlay">
+          <div class="annotation-item" data-annotation-role="note">
+            <div class="annotation-text" style="font-family: Arial; font-size: 12px;">First note</div>
+          </div>
+          <div class="annotation-item" data-annotation-role="note">
+            <div class="annotation-text" style="font-family: Arial; font-size: 12px;">Second note</div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const items = document.querySelectorAll('.annotation-item');
+    const texts = document.querySelectorAll('.annotation-text');
+    if (!page || items.length !== 2 || texts.length !== 2) {
+      throw new Error('Missing export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    items.forEach((item, index) =>
+      bindElementBox(item, { left: 0, top: index * 40, width: 200, height: 30 })
+    );
+    texts.forEach((text, index) =>
+      bindElementBox(text, { left: 0, top: index * 40, width: 200, height: 30 })
+    );
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    expect(markup).toContain(`id="${m.svg_export_role_note()}"`);
+    expect(markup).toContain(`id="${m.svg_export_role_note()}-2"`);
+    expect(markup).toContain('First note');
+    expect(markup).toContain('Second note');
+  });
+
+  it('converts nested SVG legend segments into scaled <g transform> groups', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="legend-container">
+          <svg width="100" height="50" viewBox="0 0 50 25">
+            <rect x="0" y="0" width="10" height="10" />
+          </svg>
+        </div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const legend = document.querySelector('.legend-container');
+    const svg = document.querySelector('.legend-container svg');
+    if (!page || !legend || !svg) {
+      throw new Error('Missing export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(legend, { left: 20, top: 30, width: 100, height: 50 });
+    bindElementBox(svg, { left: 20, top: 30, width: 100, height: 50 });
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    expect(markup.match(/<svg[\s>]/g)).toHaveLength(1);
+    expect(markup).toContain('id="khartis-legend-segment-1"');
+    expect(markup).toContain('transform="translate(0, 0) scale(2, 2)"');
+    expect(markup).toMatch(/<rect x="0" y="0" width="10" height="10"[^>]*\/?>/);
+  });
+
+  it('merges consecutive polygons sharing a featureId into one compound path named from the source table', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="map-canvas"><canvas></canvas></div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const canvas = document.querySelector('canvas');
+    if (!page || !canvas) {
+      throw new Error('Missing export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(canvas, { left: 0, top: 0, width: 400, height: 300 });
+    vi.spyOn(canvas, 'toDataURL').mockReturnValue('data:image/png;base64,AAAA');
+
+    const names = ['France', 'Germany'];
+    const khartisSourceTable = {
+      numRows: 2,
+      schema: { fields: [{ name: 'name' }] },
+      getChild: (columnName: string) =>
+        columnName === 'name' ? { get: (row: number) => names[row] } : undefined
+    };
+
+    const polygonLayer = createDeckLayer(
+      'SolidPolygonLayer',
+      'named-countries',
+      {
+        data: {
+          length: 3,
+          startIndices: new Uint32Array([0, 4, 8, 12]),
+          featureIds: new Uint32Array([0, 0, 1]),
+          khartisSourceTable,
+          attributes: {
+            getPolygon: {
+              value: new Float32Array([
+                0, 0, 10, 0, 10, 10, 0, 10, 20, 0, 30, 0, 30, 10, 20, 10, 40, 0,
+                50, 0, 50, 10, 40, 10
+              ]),
+              size: 2
+            },
+            getFillColor: {
+              value: new Uint8Array([
+                255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255,
+                255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255,
+                0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255
+              ]),
+              size: 4
+            }
+          }
+        }
+      }
+    );
+    const deck = createDeckExportFixture([polygonLayer]);
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    const pathCount = markup.match(/<path/g)?.length ?? 0;
+    expect(pathCount).toBe(2);
+    expect(markup).toContain('id="France"');
+    expect(markup).toContain('data-name="France"');
+    expect(markup).toContain('id="Germany"');
+    expect(markup).toContain('data-name="Germany"');
+    expect(markup).toContain(
+      'M 0 0 L 10 0 L 10 10 L 0 10 Z M 20 0 L 30 0 L 30 10 L 20 10 Z'
+    );
+    expect(markup).toContain('fill="rgb(255, 0, 0)"');
+    expect(markup).toContain('fill="rgb(0, 0, 255)"');
   });
 });
 
