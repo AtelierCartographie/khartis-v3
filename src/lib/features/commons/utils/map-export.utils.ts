@@ -12,7 +12,11 @@ import {
   PATTERN_TYPE_MAP,
   type PatternName
 } from '$lib/features/map/layers/pattern-texture';
-import { SYMBOL_SDF_EXTENT } from '$lib/features/commons/constants/visualization.constants';
+import {
+  SLIDER_LIMITS,
+  SYMBOL_SDF_EXTENT
+} from '$lib/features/commons/constants/visualization.constants';
+import { resolveTextHaloWidthPx } from '$lib/features/map/layers/text-character-set';
 
 interface ExportOptions {
   width: number;
@@ -759,6 +763,33 @@ function readBinaryNumber(
   return tuple ? toFiniteNumber(tuple[0], fallback) : fallback;
 }
 
+function isPerVertexFeatureAttribute(
+  attribute: BinaryAttributeLike,
+  startIndices: ArrayLike<number>
+): boolean {
+  const size = Math.max(1, Math.floor(attribute.size ?? 1));
+  const stride = Math.max(size, Math.floor(attribute.stride ?? size));
+  const elementCount = Math.floor((attribute.value?.length ?? 0) / stride);
+  const vertexCount = Math.floor(Number(startIndices[startIndices.length - 1]));
+  const featureCount = startIndices.length - 1;
+
+  return elementCount === vertexCount && vertexCount !== featureCount;
+}
+
+function readFeatureBinaryTuple(
+  attribute: BinaryAttributeLike | null,
+  index: number,
+  startIndices: ArrayLike<number>
+): number[] | null {
+  if (!attribute) return null;
+
+  const readIndex = isPerVertexFeatureAttribute(attribute, startIndices)
+    ? Math.floor(Number(startIndices[index]))
+    : index;
+
+  return readBinaryTuple(attribute, readIndex);
+}
+
 function getLayerNumber(
   props: Record<string, unknown>,
   key: string,
@@ -1329,7 +1360,7 @@ function serializePathLayer(
     const color = applyLayerOpacity(
       colorAttribute
         ? normalizeSvgColor(
-            readBinaryTuple(colorAttribute, index),
+            readFeatureBinaryTuple(colorAttribute, index, startIndices),
             [0, 0, 0, 255]
           )
         : normalizeSvgColor(
@@ -1340,11 +1371,13 @@ function serializePathLayer(
     );
     if (color.opacity <= 0) continue;
 
+    const featureWidthTuple = widthAttribute
+      ? readFeatureBinaryTuple(widthAttribute, index, startIndices)
+      : null;
     const width = Math.max(
       widthMinPixels,
-      readBinaryNumber(
-        widthAttribute,
-        index,
+      toFiniteNumber(
+        featureWidthTuple?.[0],
         getLayerNumber(props, 'getWidth', 1)
       ) * widthScale
     );
@@ -1407,7 +1440,7 @@ function serializePolygonLayer(
     const fillColor = applyLayerOpacity(
       fillAttribute
         ? normalizeSvgColor(
-            readBinaryTuple(fillAttribute, index),
+            readFeatureBinaryTuple(fillAttribute, index, startIndices),
             [141, 141, 141, 255]
           )
         : normalizeSvgColor(props.getFillColor, [141, 141, 141, 255]),
@@ -1662,13 +1695,6 @@ function textAnchorToSvg(value: unknown): string {
   return 'middle';
 }
 
-function baselineToSvg(value: unknown): string {
-  const baseline = String(value ?? 'center');
-  if (baseline === 'top') return 'text-before-edge';
-  if (baseline === 'bottom') return 'text-after-edge';
-  return 'central';
-}
-
 function normalizeTextPadding(value: unknown): [number, number] {
   const tuple = toNumberTuple(value, 2);
   if (tuple) return [tuple[0], tuple[1]];
@@ -1677,32 +1703,208 @@ function normalizeTextPadding(value: unknown): [number, number] {
   return [padding, padding];
 }
 
-function estimateTextBox(
+let textMeasurementContext: CanvasRenderingContext2D | null | undefined;
+
+function getTextMeasurementContext(): CanvasRenderingContext2D | null {
+  if (textMeasurementContext !== undefined) return textMeasurementContext;
+
+  if (typeof document === 'undefined') {
+    textMeasurementContext = null;
+    return textMeasurementContext;
+  }
+
+  const canvas = document.createElement('canvas');
+  textMeasurementContext = canvas.getContext('2d');
+  return textMeasurementContext;
+}
+
+function buildCanvasFont(
+  fontSize: number,
+  fontFamily: string,
+  fontWeight: string
+): string {
+  return `${fontWeight} ${roundSvgValue(fontSize)}px ${fontFamily}`;
+}
+
+function measureTextWidth(
   text: string,
-  x: number,
+  fontSize: number,
+  fontFamily: string,
+  fontWeight: string
+): number {
+  const context = getTextMeasurementContext();
+  if (context) {
+    context.font = buildCanvasFont(fontSize, fontFamily, fontWeight);
+    return context.measureText(text).width;
+  }
+
+  return text.length * fontSize * 0.58;
+}
+
+function splitLongWord(
+  word: string,
+  maxWidth: number,
+  measure: (text: string) => number
+): string[] {
+  const chunks: string[] = [];
+  let current = '';
+
+  for (const character of word) {
+    const candidate = current + character;
+    if (current && measure(candidate) > maxWidth) {
+      chunks.push(current);
+      current = character;
+    } else {
+      current = candidate;
+    }
+  }
+
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+function wrapLine(
+  line: string,
+  maxWidth: number,
+  measure: (text: string) => number
+): string[] {
+  if (maxWidth <= 0 || measure(line) <= maxWidth) return [line];
+
+  const words = line.split(' ');
+  const rows: string[] = [];
+  let current = '';
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+
+    if (measure(candidate) <= maxWidth) {
+      current = candidate;
+      continue;
+    }
+
+    if (current) {
+      rows.push(current);
+    }
+
+    if (measure(word) > maxWidth) {
+      const chunks = splitLongWord(word, maxWidth, measure);
+      rows.push(...chunks.slice(0, -1));
+      current = chunks[chunks.length - 1] ?? '';
+    } else {
+      current = word;
+    }
+  }
+
+  if (current) rows.push(current);
+  return rows;
+}
+
+function computeTextLines(
+  text: string,
+  fontSize: number,
+  maxWidth: number,
+  fontFamily: string,
+  fontWeight: string
+): string[] {
+  const measure = (value: string): number =>
+    measureTextWidth(value, fontSize, fontFamily, fontWeight);
+
+  return text.split('\n').flatMap((line) => wrapLine(line, maxWidth, measure));
+}
+
+const TEXT_CENTRAL_BASELINE_OFFSET_EM = 0.35;
+const TEXT_TOP_ASCENT_OFFSET_EM = 0.8;
+const TEXT_BOTTOM_DESCENT_OFFSET_EM = 0.2;
+
+function computeFirstBaselineY(
   y: number,
-  size: number,
+  lineCount: number,
+  lineHeightPx: number,
+  fontSize: number,
+  baseline: 'top' | 'center' | 'bottom'
+): number {
+  if (baseline === 'top') {
+    return y + fontSize * TEXT_TOP_ASCENT_OFFSET_EM;
+  }
+
+  if (baseline === 'bottom') {
+    const lastBaselineY = y - fontSize * TEXT_BOTTOM_DESCENT_OFFSET_EM;
+    return lastBaselineY - (lineCount - 1) * lineHeightPx;
+  }
+
+  return (
+    y -
+    ((lineCount - 1) * lineHeightPx) / 2 +
+    fontSize * TEXT_CENTRAL_BASELINE_OFFSET_EM
+  );
+}
+
+function resolveTextBaselineMode(value: unknown): 'top' | 'center' | 'bottom' {
+  const baseline = String(value ?? 'center');
+  if (baseline === 'top') return 'top';
+  if (baseline === 'bottom') return 'bottom';
+  return 'center';
+}
+
+function estimateTextBox(
+  lines: string[],
+  x: number,
+  firstBaselineY: number,
+  fontSize: number,
+  lineHeightPx: number,
+  fontFamily: string,
+  fontWeight: string,
   anchor: string,
   padding: [number, number]
 ): RelativeRect {
-  const lines = text.split('\n');
-  const textWidth =
-    Math.max(...lines.map((line) => line.length), 1) * size * 0.58;
+  const textWidth = Math.max(
+    ...lines.map((line) =>
+      measureTextWidth(line, fontSize, fontFamily, fontWeight)
+    ),
+    1
+  );
   const width = textWidth + padding[0] * 2;
-  const height = lines.length * size * 1.2 + padding[1] * 2;
+  const height = lines.length * lineHeightPx + padding[1] * 2;
   const left =
     anchor === 'start'
       ? x - padding[0]
       : anchor === 'end'
         ? x - width + padding[0]
         : x - width / 2;
+  const top =
+    firstBaselineY - fontSize * TEXT_TOP_ASCENT_OFFSET_EM - padding[1];
 
   return {
     x: left,
-    y: y - height / 2,
+    y: top,
     width,
     height
   };
+}
+
+function buildTspans(lines: string[], x: number, lineHeightPx: number): string {
+  return lines
+    .map(
+      (line, lineIndex) =>
+        `<tspan x="${roundSvgValue(x)}" dy="${roundSvgValue(lineIndex === 0 ? 0 : lineHeightPx)}">${escapeXml(line)}</tspan>`
+    )
+    .join('');
+}
+
+function buildTextElement(
+  lines: string[],
+  x: number,
+  firstBaselineY: number,
+  lineHeightPx: number,
+  attributes: string
+): string {
+  return `
+    <text
+      x="${roundSvgValue(x)}"
+      y="${roundSvgValue(firstBaselineY)}"
+      ${attributes}
+    >${buildTspans(lines, x, lineHeightPx)}</text>
+  `;
 }
 
 function serializeTextLayer(
@@ -1717,8 +1919,11 @@ function serializeTextLayer(
     typeof props.fontFamily === 'string' ? props.fontFamily : 'sans-serif';
   const fontWeight = String(props.fontWeight ?? '400');
   const lineHeight = getLayerNumber(props, 'lineHeight', 1.2);
+  const sizeScale = getLayerNumber(props, 'sizeScale', 1);
+  const maxWidthMultiplier = getLayerNumber(props, 'maxWidth', -1);
   const backgroundEnabled = props.background === true;
   const backgroundPadding = normalizeTextPadding(props.backgroundPadding);
+  const maxHaloWidthPx = SLIDER_LIMITS.haloWidth.max;
   const parts: string[] = [];
 
   props.data.forEach((datum, index) => {
@@ -1742,10 +1947,9 @@ function serializeTextLayer(
       index,
       [0, 0]
     );
-    const size = Math.max(
-      1,
-      resolveAccessorNumber(props.getSize, datum, index, 12)
-    );
+    const size =
+      Math.max(1, resolveAccessorNumber(props.getSize, datum, index, 12)) *
+      sizeScale;
     const x = projected[0] + (pixelOffset[0] ?? 0);
     const y = projected[1] + (pixelOffset[1] ?? 0);
     const color = applyLayerOpacity(
@@ -1760,11 +1964,30 @@ function serializeTextLayer(
     const anchor = textAnchorToSvg(
       resolveAccessorValue(props.getTextAnchor, datum, index)
     );
-    const baseline = baselineToSvg(
+    const baseline = resolveTextBaselineMode(
       resolveAccessorValue(props.getAlignmentBaseline, datum, index)
     );
-    const outlineWidth = getLayerNumber(props, 'outlineWidth', 0);
-    const outlineColor = normalizeSvgColor(
+    const lineHeightPx = lineHeight * size;
+    const maxWidthPx = maxWidthMultiplier > 0 ? maxWidthMultiplier * size : -1;
+    const lines = computeTextLines(
+      text,
+      size,
+      maxWidthPx,
+      fontFamily,
+      fontWeight
+    );
+    const firstBaselineY = computeFirstBaselineY(
+      y,
+      lines.length,
+      lineHeightPx,
+      size,
+      baseline
+    );
+    const haloWidthPx = resolveTextHaloWidthPx(
+      getLayerNumber(props, 'outlineWidth', 0),
+      maxHaloWidthPx
+    );
+    const haloColor = normalizeSvgColor(
       props.outlineColor,
       [255, 255, 255, 255]
     );
@@ -1788,7 +2011,17 @@ function serializeTextLayer(
       backgroundColor.opacity > 0 ||
       (borderColor.opacity > 0 && borderWidth > 0)
     ) {
-      const box = estimateTextBox(text, x, y, size, anchor, backgroundPadding);
+      const box = estimateTextBox(
+        lines,
+        x,
+        firstBaselineY,
+        size,
+        lineHeightPx,
+        fontFamily,
+        fontWeight,
+        anchor,
+        backgroundPadding
+      );
       const radius = getLayerNumber(props, 'backgroundBorderRadius', 0);
       parts.push(`
         <rect
@@ -1805,25 +2038,43 @@ function serializeTextLayer(
       `);
     }
 
-    const stroke =
-      outlineWidth > 0 && outlineColor.opacity > 0
-        ? `${colorAttributes('stroke', outlineColor)} stroke-width="${roundSvgValue(outlineWidth * 2)}" paint-order="stroke fill"`
-        : 'stroke="none"';
+    if (haloWidthPx > 0 && haloColor.opacity > 0) {
+      parts.push(
+        buildTextElement(
+          lines,
+          x,
+          firstBaselineY,
+          lineHeightPx,
+          [
+            colorAttributes('fill', haloColor),
+            colorAttributes('stroke', haloColor),
+            `stroke-width="${roundSvgValue(2 * haloWidthPx * sizeScale)}"`,
+            'stroke-linejoin="round"',
+            `font-family="${escapeXml(fontFamily)}"`,
+            `font-size="${roundSvgValue(size)}"`,
+            `font-weight="${escapeXml(fontWeight)}"`,
+            `text-anchor="${escapeXml(anchor)}"`
+          ].join('\n          ')
+        )
+      );
+    }
 
-    parts.push(`
-      <text
-        x="${roundSvgValue(x)}"
-        y="${roundSvgValue(y)}"
-        ${colorAttributes('fill', color)}
-        ${stroke}
-        font-family="${escapeXml(fontFamily)}"
-        font-size="${roundSvgValue(size)}"
-        font-weight="${escapeXml(fontWeight)}"
-        line-height="${roundSvgValue(lineHeight)}"
-        text-anchor="${escapeXml(anchor)}"
-        dominant-baseline="${escapeXml(baseline)}"
-      >${escapeXml(text)}</text>
-    `);
+    parts.push(
+      buildTextElement(
+        lines,
+        x,
+        firstBaselineY,
+        lineHeightPx,
+        [
+          colorAttributes('fill', color),
+          'stroke="none"',
+          `font-family="${escapeXml(fontFamily)}"`,
+          `font-size="${roundSvgValue(size)}"`,
+          `font-weight="${escapeXml(fontWeight)}"`,
+          `text-anchor="${escapeXml(anchor)}"`
+        ].join('\n          ')
+      )
+    );
   });
 
   return parts.join('');
