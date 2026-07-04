@@ -11,6 +11,7 @@ import {
 } from '$lib/features/project-management';
 import { m } from '$lib/paraglide/messages';
 import { dataOrchestratorService } from '../../services/data-orchestrator.service.svelte';
+import { DataValidationError } from '../../pipeline.errors';
 import { LogCategory, logger } from '../../utils/logger';
 import { showError } from '../../utils/notification.utils.svelte';
 import { sanitizeProjectName } from '../../utils/sanitize.utils';
@@ -36,7 +37,9 @@ export async function createProject(
 
   const nameValidation = ProjectValidator.validateProjectName(name);
   if (!nameValidation.isValid) {
-    throw new Error(nameValidation.errors.join(', '));
+    throw new DataValidationError(nameValidation.errors.join(', '), 'name', {
+      errors: nameValidation.errors
+    });
   }
 
   const sanitizedName = sanitizeProjectName(name);
@@ -45,7 +48,7 @@ export async function createProject(
   const project: KhartisProject = {
     id: crypto.randomUUID(),
     manifest: {
-      version: PROJECT_CONST.APP_VERSION,
+      version: PROJECT_CONST.SCHEMA_VERSION,
       createdAt: new Date(),
       updatedAt: new Date(),
       name: sanitizedName,
@@ -125,7 +128,11 @@ export async function duplicateProject(
     const originalProject = await projectRepository.load(id);
 
     if (!originalProject) {
-      throw new Error(m.history_project_not_found());
+      throw new DataValidationError(
+        m.history_project_not_found(),
+        'projectId',
+        { projectId: id }
+      );
     }
 
     const projects = await listProjects();
@@ -133,18 +140,24 @@ export async function duplicateProject(
       projects.length
     );
     if (!capacityCheck.isValid) {
-      throw new Error(capacityCheck.errors.join(', '));
+      throw new DataValidationError(
+        capacityCheck.errors.join(', '),
+        'projectCapacity',
+        {
+          errors: capacityCheck.errors,
+          projectCount: projects.length
+        }
+      );
     }
 
-    const duplicationSuffix =
-      typeof m.project_duplicate_suffix === 'function'
-        ? m.project_duplicate_suffix()
-        : '(copy)';
+    const duplicationSuffix = m.project_duplicate_suffix();
     const duplicatedName =
       newName || `${originalProject.manifest.name} ${duplicationSuffix}`;
     const nameValidation = ProjectValidator.validateProjectName(duplicatedName);
     if (!nameValidation.isValid) {
-      throw new Error(nameValidation.errors.join(', '));
+      throw new DataValidationError(nameValidation.errors.join(', '), 'name', {
+        errors: nameValidation.errors
+      });
     }
 
     const duplicatedProject = duplicateProjectEntity(

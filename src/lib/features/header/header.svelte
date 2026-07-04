@@ -1,14 +1,14 @@
 <script lang="ts">
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
-  import { m } from '$lib/paraglide/messages.js';
+  import { m } from '$lib/paraglide/messages';
   import {
     Header as CbsHeader,
     HeaderUtilities
   } from 'carbon-components-svelte';
   import { Help } from 'carbon-icons-svelte';
   import DownloadButton from './components/download-button.svelte';
-  import Logo from './components/logo.svelte';
+  import Logo from '$lib/features/commons/components/logo.svelte';
   import ProjectTitle from './components/project-title.svelte';
 </script>
 

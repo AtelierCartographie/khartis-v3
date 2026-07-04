@@ -4,10 +4,9 @@ import {
   generateExportFilename
 } from '$lib/features/commons/utils/file-export.utils';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
-import { m } from '$lib/paraglide/messages.js';
+import { m } from '$lib/paraglide/messages';
 import { DATA_FORMAT, type DataExportFormat } from '../types';
-import { Duck, initDuckDB } from '$lib/features/duckdb';
-import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import { Duck, duckDBOrchestrator, initDuckDB } from '$lib/features/duckdb';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { parseGeoJsonGeometry } from '$lib/features/map/io/geometry-parser';
 import { resolveGPSCoordinateColumns } from '$lib/features/commons/utils/geo-detector.utils';
@@ -40,14 +39,20 @@ import {
   exportMapToJpg
 } from '$lib/features/commons/utils/map-export.utils';
 import { normalizeDatasets } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
+import {
+  DataValidationError,
+  DuckDBError
+} from '$lib/features/commons/pipeline.errors';
 
-export interface ExportError extends Error {
+export class ExportError extends Error {
   title: string;
-}
 
-interface ExportErrorConstructor {
-  new (title: string, message: string): ExportError;
-  readonly prototype: ExportError;
+  constructor(title: string, message: string) {
+    super(message);
+    this.name = 'ExportError';
+    this.title = title;
+    Error.captureStackTrace?.(this, ExportError);
+  }
 }
 
 interface JoinedGeometryExportSource {
@@ -69,21 +74,6 @@ const GEOPACKAGE_WKB_COLUMN = '__khartis_wkb_geometry';
 const EXPORT_PAGE_SELECTOR = '.page-container, .facets-page';
 const EXPORT_MAP_CANVAS_SELECTOR =
   '.map-canvas canvas, .shared-facets-canvas canvas, canvas';
-
-export const ExportError: ExportErrorConstructor = function ExportError(
-  this: ExportError,
-  title: string,
-  message: string
-): ExportError {
-  const error = new Error(message) as ExportError;
-  Object.setPrototypeOf(error, ExportError.prototype);
-  error.name = 'ExportError';
-  error.title = title;
-  Error.captureStackTrace?.(error, ExportError);
-  return error;
-} as unknown as ExportErrorConstructor;
-
-Object.setPrototypeOf(ExportError.prototype, Error.prototype);
 
 export async function exportProject(fileName: string): Promise<void> {
   if (!projectStore.currentProject) {
@@ -449,7 +439,11 @@ async function createJoinedGeometryExportView(options: {
   const datasetTableName =
     options.sourceTableName ?? options.dataset.duckdbTableName;
   if (!datasetTableName) {
-    throw new Error('Missing DuckDB source table for joined export');
+    throw new DataValidationError(
+      'Missing DuckDB source table for joined export',
+      'duckdbTableName',
+      { datasetId: options.dataset.id }
+    );
   }
 
   const geometryTable = await basemapService.loadGeometryIntoDuckDB(
@@ -639,7 +633,11 @@ async function fetchGpsDatasetWithGeometry(
   gpsColumns: { lat: string; lon: string }
 ): Promise<ProcessedDataset> {
   if (!dataset.duckdbTableName) {
-    throw new Error('Missing DuckDB source table for GPS export');
+    throw new DataValidationError(
+      'Missing DuckDB source table for GPS export',
+      'duckdbTableName',
+      { datasetId: dataset.id }
+    );
   }
 
   const geometryColumnName = INTERNAL_COLUMN.GEOM;
@@ -822,7 +820,7 @@ async function exportDatasetsToGeoPackage(
 ): Promise<Blob> {
   await initDuckDB();
   if (!Duck.db) {
-    throw new Error(m.error_duckdb_not_initialized());
+    throw new DuckDBError(m.error_duckdb_not_initialized());
   }
 
   const sources = (
@@ -832,7 +830,11 @@ async function exportDatasetsToGeoPackage(
   ).filter((source): source is GeoPackageExportSource => Boolean(source));
 
   if (sources.length === 0) {
-    throw new Error(m.error_no_geometric_data_export());
+    throw new DataValidationError(
+      m.error_no_geometric_data_export(),
+      'geometry',
+      { format: DATA_FORMAT.GEOPACKAGE }
+    );
   }
 
   try {
@@ -865,7 +867,11 @@ async function exportDatasetsToGeoPackage(
     }
 
     if (layers.length === 0) {
-      throw new Error(m.error_no_geometric_data_export());
+      throw new DataValidationError(
+        m.error_no_geometric_data_export(),
+        'geometry',
+        { format: DATA_FORMAT.GEOPACKAGE }
+      );
     }
 
     return exportGeoPackageLayers(layers);
@@ -965,7 +971,7 @@ async function fetchDatasetsWithGeometry(
         })
         .join(', ');
 
-      const query = `SELECT ${selectList} FROM "${dataset.duckdbTableName}"`;
+      const query = `SELECT ${selectList} FROM "${escapeIdentifier(dataset.duckdbTableName)}"`;
 
       const rows = (await Duck.query(query, { format: 'array' })) as Record<
         string,

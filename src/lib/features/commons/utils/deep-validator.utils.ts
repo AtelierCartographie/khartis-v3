@@ -4,6 +4,7 @@ import {
   GeoColumnDetector,
   type GeoDetectionResult
 } from './geo-detector.utils';
+import { isConfiguredNullValue } from './null-values.utils';
 
 export interface ColumnStatistics {
   name: string;
@@ -37,7 +38,6 @@ export interface DataAnalysisResult {
   qualityIssues: DataQualityIssue[];
   performanceWarnings: string[];
   suggestions: string[];
-  estimatedProcessingTime?: number;
 }
 
 const PERFORMANCE_THRESHOLDS = {
@@ -50,12 +50,30 @@ const PERFORMANCE_THRESHOLDS = {
 } as const;
 
 const TYPE_DETECTION_SAMPLES = 100;
+const PRE_IMPORT_PREVIEW_ROW_LIMIT = 100;
 
 const PROCESSING_CHUNK_SIZES = {
   COLUMN_CHUNK: 10,
   VALUE_CHUNK: 1_000,
   ROW_CHUNK: 20
 } as const;
+
+function getPreImportPreviewRows(
+  data: unknown[][],
+  sampleSize?: number
+): unknown[][] {
+  const requestedLimit = sampleSize ?? PRE_IMPORT_PREVIEW_ROW_LIMIT;
+  const boundedLimit = Math.max(
+    0,
+    Math.min(data.length, Math.floor(requestedLimit))
+  );
+
+  return data.slice(0, boundedLimit);
+}
+
+function calculatePercentage(count: number, total: number): number {
+  return total > 0 ? (count / total) * 100 : 0;
+}
 
 export const DeepDataValidator = {
   async analyzeDataContent(
@@ -66,26 +84,32 @@ export const DeepDataValidator = {
       sampleSize?: number;
     } = {}
   ): Promise<DataAnalysisResult> {
-    const rowCount = data.length;
+    const previewRows = getPreImportPreviewRows(data, options.sampleSize);
+    const rowCount = previewRows.length;
     const columnCount = headers.length;
 
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const columns = await DeepDataValidator.analyzeColumns(headers, data);
+    const columns = await DeepDataValidator.analyzeColumns(
+      headers,
+      previewRows
+    );
 
     const geoDetection = options.skipGeoDetection
       ? { hasGeoColumns: false, geoColumns: [], warnings: [] }
-      : await GeoColumnDetector.detectGeoColumns(headers, data);
+      : await GeoColumnDetector.detectGeoColumns(headers, previewRows, {
+          sampleSize: rowCount
+        });
 
     const qualityIssues = await DeepDataValidator.detectQualityIssues(
       columns,
-      data
+      previewRows
     );
 
     const performanceWarnings = DeepDataValidator.checkPerformance(
       rowCount,
       columnCount,
-      data
+      previewRows
     );
 
     const suggestions = DeepDataValidator.generateSuggestions(
@@ -95,11 +119,6 @@ export const DeepDataValidator = {
       performanceWarnings
     );
 
-    const estimatedProcessingTime = DeepDataValidator.estimateProcessingTime(
-      rowCount,
-      columnCount
-    );
-
     return {
       rowCount,
       columnCount,
@@ -107,8 +126,7 @@ export const DeepDataValidator = {
       geoDetection,
       qualityIssues,
       performanceWarnings,
-      suggestions,
-      estimatedProcessingTime
+      suggestions
     };
   },
 
@@ -159,12 +177,7 @@ export const DeepDataValidator = {
 
       const chunk = values.slice(i, i + CHUNK_SIZE);
       for (const value of chunk) {
-        if (
-          value == null ||
-          value === '' ||
-          value === 'null' ||
-          value === 'NULL'
-        ) {
+        if (isConfiguredNullValue(value)) {
           nullCount++;
           continue;
         }
@@ -178,9 +191,7 @@ export const DeepDataValidator = {
       }
     }
 
-    const nonNullValues = values.filter(
-      (v) => v != null && v !== '' && v !== 'null' && v !== 'NULL'
-    );
+    const nonNullValues = values.filter((v) => !isConfiguredNullValue(v));
 
     const uniqueCount = uniqueValues.size;
     const duplicateCount = Array.from(valueOccurrences.values()).filter(
@@ -193,9 +204,9 @@ export const DeepDataValidator = {
       name,
       type,
       nullCount,
-      nullPercentage: (nullCount / values.length) * 100,
+      nullPercentage: calculatePercentage(nullCount, values.length),
       uniqueCount,
-      uniquePercentage: (uniqueCount / values.length) * 100,
+      uniquePercentage: calculatePercentage(uniqueCount, values.length),
       duplicateCount,
       sampleValues
     };
@@ -296,7 +307,7 @@ export const DeepDataValidator = {
     };
 
     for (const value of sample) {
-      if (value == null) continue;
+      if (isConfiguredNullValue(value)) continue;
 
       const strValue = String(value).trim();
 
@@ -553,77 +564,5 @@ export const DeepDataValidator = {
     }
 
     return suggestions;
-  },
-
-  estimateProcessingTime(rowCount: number, columnCount: number): number {
-    const baseTime = 100;
-    const rowFactor = rowCount * 0.5;
-    const columnFactor = columnCount * 10;
-    const complexityFactor = Math.log10(rowCount * columnCount) * 100;
-
-    return Math.round(baseTime + rowFactor + columnFactor + complexityFactor);
-  },
-
-  formatQualityReport(analysis: DataAnalysisResult): string {
-    const lines: string[] = [];
-
-    lines.push(m.data_quality_report_title());
-    lines.push(
-      m.data_quality_report_counts({
-        rows: analysis.rowCount,
-        columns: analysis.columnCount
-      })
-    );
-    lines.push(
-      m.data_quality_report_estimated_time({
-        ms: analysis.estimatedProcessingTime ?? 0
-      })
-    );
-
-    if (analysis.geoDetection.hasGeoColumns) {
-      lines.push(m.data_quality_report_geo_columns_title());
-      analysis.geoDetection.geoColumns.forEach((col) => {
-        lines.push(
-          m.data_quality_report_geo_column_item({
-            column: col.columnName,
-            type: col.type,
-            confidence: (col.confidence * 100).toFixed(0)
-          })
-        );
-      });
-      lines.push('');
-    }
-
-    if (analysis.qualityIssues.length > 0) {
-      lines.push(m.data_quality_report_quality_issues_title());
-      analysis.qualityIssues.forEach((issue) => {
-        const icon =
-          issue.severity === 'error'
-            ? '❌'
-            : issue.severity === 'warning'
-              ? '⚠️'
-              : 'ℹ️';
-        lines.push(
-          m.data_quality_report_issue_item({ icon, message: issue.message })
-        );
-        if (issue.suggestion) {
-          lines.push(
-            m.data_quality_report_issue_suggestion({
-              suggestion: issue.suggestion
-            })
-          );
-        }
-      });
-      lines.push('');
-    }
-
-    if (analysis.suggestions.length > 0) {
-      lines.push(m.data_quality_report_suggestions_title());
-      analysis.suggestions.forEach((suggestion) => {
-        lines.push(m.data_quality_report_suggestion_item({ suggestion }));
-      });
-    }
-
-    return lines.join('\n');
   }
 } as const;

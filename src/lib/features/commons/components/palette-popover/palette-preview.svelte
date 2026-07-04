@@ -214,13 +214,6 @@
     return commonAspect.patternId ?? 'diagonal';
   }
 
-  function handleCategoriesValidateWithAspect(
-    next: CategoryDraft[],
-    commonAspect: CategoriesCommonAspect
-  ) {
-    handleCategoriesValidate(next, commonAspect);
-  }
-
   function handleCategoriesValidate(
     next: CategoryDraft[],
     commonAspect: CategoriesCommonAspect
@@ -384,7 +377,7 @@
   showCommonAspect={resolvedShowCategoriesCommonAspect}
   commonAspect={categoriesCommonAspect}
   onclose={handleCategoriesClose}
-  onvalidate={handleCategoriesValidateWithAspect}
+  onvalidate={handleCategoriesValidate}
 />
 
 <style lang="scss">

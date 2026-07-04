@@ -1,4 +1,5 @@
 import {
+  FILE_VALIDATION_INSPECTION,
   getMaxFileSizeForType,
   getWarningFileSizeForType,
   STORAGE_LIMITS,
@@ -7,16 +8,27 @@ import {
 import { FileType } from '../types/create-project.types';
 import { getFileExtension } from './file.utils';
 import {
-  FILE_EXTENSIONS,
+  detectFileType,
+  SHAPEFILE_AUX_EXTENSIONS
+} from './file-type-detection.utils';
+import { EnvironmentUtils } from './environment.utils';
+import {
   GEOJSON_TYPE,
-  MIME_TYPE_PATTERNS,
   SIMPLE_GEOMETRY_TYPES
 } from '$lib/features/commons/constants';
 import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
 import * as m from '$lib/paraglide/messages';
 
-const TABULAR_TEXT_EXTENSION = 'txt';
-const SHAPEFILE_AUX_EXTENSIONS = ['sbn', 'sbx'] as const;
+const REQUIRED_SHAPEFILE_EXTENSIONS = ['shp', 'shx', 'dbf'] as const;
+const SHAPEFILE_GROUP_EXTENSIONS = [
+  ...REQUIRED_SHAPEFILE_EXTENSIONS,
+  'prj',
+  'cpg',
+  ...SHAPEFILE_AUX_EXTENSIONS
+] as const;
+const SHAPEFILE_GROUP_EXTENSION_SET = new Set<string>(
+  SHAPEFILE_GROUP_EXTENSIONS
+);
 
 export interface FileValidationConfig {
   maxFileSize: number;
@@ -126,7 +138,10 @@ export const FileValidator = {
     const result = { ...initialResult };
 
     try {
-      const buffer = await FileValidator.readFileHeader(file, 512);
+      const buffer = await FileValidator.readFileHeader(
+        file,
+        FILE_VALIDATION_INSPECTION.HEADER_READ_BYTES
+      );
       result.metadata!.magicNumber = FileValidator.getMagicNumber(buffer);
 
       switch (result.fileType) {
@@ -263,117 +278,48 @@ export const FileValidator = {
   },
 
   detectFileType(file: File): FileType {
-    const extension = getFileExtension(file.name);
-    const mimeType = file.type?.toLowerCase() || '';
-    const hasExtension = <T extends readonly string[]>(values: T): boolean =>
-      values.includes(extension as T[number]);
-    const hasMimePattern = (pattern: string): boolean =>
-      mimeType.includes(pattern);
-
-    if (
-      hasExtension(FILE_EXTENSIONS.CSV) ||
-      hasMimePattern(MIME_TYPE_PATTERNS.CSV)
-    ) {
-      return FileType.CSV;
-    }
-    if (
-      hasExtension(FILE_EXTENSIONS.TSV) ||
-      hasMimePattern(MIME_TYPE_PATTERNS.TAB_SEPARATED)
-    ) {
-      return FileType.TSV;
-    }
-    if (
-      extension === TABULAR_TEXT_EXTENSION &&
-      !hasMimePattern(FILE_EXTENSIONS.GEOJSON[1])
-    ) {
-      return FileType.CSV;
-    }
-
-    if (
-      hasExtension(FILE_EXTENSIONS.GEOJSON) ||
-      hasMimePattern('geo+json') ||
-      hasMimePattern(FILE_EXTENSIONS.GEOJSON[1])
-    ) {
-      return FileType.GEOJSON;
-    }
-
-    if (
-      hasExtension(FILE_EXTENSIONS.SHAPEFILE) ||
-      SHAPEFILE_AUX_EXTENSIONS.includes(
-        extension as (typeof SHAPEFILE_AUX_EXTENSIONS)[number]
-      )
-    ) {
-      return FileType.SHAPEFILE;
-    }
-
-    if (
-      hasExtension(FILE_EXTENSIONS.GEOPACKAGE) ||
-      hasMimePattern('geopackage')
-    ) {
-      return FileType.GEOPACKAGE;
-    }
-
-    if (
-      hasExtension(FILE_EXTENSIONS.GEOPARQUET) ||
-      hasMimePattern(MIME_TYPE_PATTERNS.PARQUET)
-    ) {
-      return FileType.GEOPARQUET;
-    }
-
-    if (hasExtension(FILE_EXTENSIONS.ARROW) || hasMimePattern('arrow')) {
-      return FileType.ARROW;
-    }
-
-    if (hasExtension(FILE_EXTENSIONS.KML) || hasMimePattern('kml')) {
-      return FileType.KML;
-    }
-    if (hasExtension(FILE_EXTENSIONS.KMZ) || hasMimePattern('kmz')) {
-      return FileType.KMZ;
-    }
-    if (hasExtension(FILE_EXTENSIONS.GPX) || hasMimePattern('gpx')) {
-      return FileType.GPX;
-    }
-    if (
-      hasExtension(FILE_EXTENSIONS.ZIP) ||
-      hasMimePattern(MIME_TYPE_PATTERNS.ZIP)
-    ) {
-      return FileType.ZIP;
-    }
-
-    return FileType.UNKNOWN;
+    return detectFileType(file);
   },
 
   validateByType(file: File, result: DetailedValidationResult): void {
     switch (result.fileType) {
       case FileType.CSV:
       case FileType.TSV:
-        if (file.size > 10 * 1024 * 1024) {
+        if (
+          file.size > FILE_VALIDATION_INSPECTION.CSV_LARGE_WARNING_SIZE_BYTES
+        ) {
           result.warnings.push(m.validation_csv_large_slow());
         }
         break;
 
       case FileType.SHAPEFILE: {
         const ext = getFileExtension(file.name);
-        if (ext === 'shp' && file.size < 100) {
+        if (
+          ext === 'shp' &&
+          file.size < FILE_VALIDATION_INSPECTION.SHAPEFILE_MIN_SIZE_BYTES
+        ) {
           result.warnings.push(m.validation_shp_too_small());
         }
         break;
       }
 
       case FileType.GEOPACKAGE:
-        if (file.size < 1024) {
+        if (file.size < FILE_VALIDATION_INSPECTION.GEOPACKAGE_MIN_SIZE_BYTES) {
           result.errors.push(m.validation_gpkg_too_small());
         }
         break;
 
       case FileType.GEOPARQUET:
-        if (file.size < 1024) {
+        if (file.size < FILE_VALIDATION_INSPECTION.GEOPARQUET_MIN_SIZE_BYTES) {
           result.errors.push(m.validation_geoparquet_too_small());
         }
         break;
 
       case FileType.GEOJSON:
-        if (file.size > 20 * 1024 * 1024) {
+        if (
+          file.size >
+          FILE_VALIDATION_INSPECTION.GEOJSON_LARGE_WARNING_SIZE_BYTES
+        ) {
           result.warnings.push(m.validation_geojson_large());
         }
         break;
@@ -420,7 +366,12 @@ export const FileValidator = {
     const firstLineColumns = lines[0].split(detectedSeparator).length;
     let inconsistentLines = 0;
 
-    for (let i = 1; i < Math.min(lines.length, 10); i++) {
+    for (
+      let i = 1;
+      i <
+      Math.min(lines.length, FILE_VALIDATION_INSPECTION.CSV_SAMPLE_LINE_COUNT);
+      i++
+    ) {
       if (lines[i].split(detectedSeparator).length !== firstLineColumns) {
         inconsistentLines++;
       }
@@ -431,10 +382,10 @@ export const FileValidator = {
     }
 
     const hasBOM =
-      buffer.byteLength >= 3 &&
-      new Uint8Array(buffer)[0] === 0xef &&
-      new Uint8Array(buffer)[1] === 0xbb &&
-      new Uint8Array(buffer)[2] === 0xbf;
+      buffer.byteLength >= FILE_VALIDATION_INSPECTION.UTF8_BOM_BYTES.length &&
+      FILE_VALIDATION_INSPECTION.UTF8_BOM_BYTES.every(
+        (byte, index) => new Uint8Array(buffer)[index] === byte
+      );
 
     if (hasBOM) {
       result.metadata!.encoding = `${PIPELINE_CONST.ENCODING.DEFAULT} with BOM`;
@@ -460,7 +411,9 @@ export const FileValidator = {
         return;
       }
 
-      if (file.size < 1024 * 1024) {
+      if (
+        file.size < FILE_VALIDATION_INSPECTION.GEOJSON_PARSE_SIZE_LIMIT_BYTES
+      ) {
         const parsed = JSON.parse(text);
 
         if (!parsed.type) {
@@ -486,7 +439,9 @@ export const FileValidator = {
         }
       }
     } catch {
-      if (file.size < 1024 * 1024) {
+      if (
+        file.size < FILE_VALIDATION_INSPECTION.GEOJSON_PARSE_SIZE_LIMIT_BYTES
+      ) {
         result.errors.push(m.validation_json_invalid());
       } else {
         result.warnings.push(m.validation_json_too_large_to_validate());
@@ -504,15 +459,14 @@ export const FileValidator = {
 
     if (ext === 'shp' && buffer.byteLength >= 4) {
       const magic = view.getUint32(0, false);
-      if (magic !== 0x0000270a) {
+      if (magic !== FILE_VALIDATION_INSPECTION.SHP_MAGIC_NUMBER) {
         result.errors.push(m.validation_shp_invalid_signature());
       }
     }
 
     if (ext === 'dbf' && buffer.byteLength >= 1) {
       const version = view.getUint8(0);
-      const validVersions = [0x03, 0x83, 0x8b, 0xcb, 0xf5, 0xfb];
-      if (!validVersions.includes(version)) {
+      if (!FILE_VALIDATION_INSPECTION.DBF_VALID_VERSIONS.includes(version)) {
         result.warnings.push(m.validation_dbf_nonstandard());
       }
     }
@@ -531,16 +485,61 @@ export const FileValidator = {
       return;
     }
 
-    if (file.size < 10 * 1024) {
+    if (
+      file.size <
+      FILE_VALIDATION_INSPECTION.GEOPACKAGE_SUSPICIOUS_SMALL_SIZE_BYTES
+    ) {
       result.warnings.push(m.validation_gpkg_suspicious_small());
     }
   },
 
   validateShapefileGroup(
-    _files: File[],
-    _results: Map<string, DetailedValidationResult>,
-    _globalErrors: string[]
-  ): void {},
+    files: File[],
+    results: Map<string, DetailedValidationResult>,
+    globalErrors: string[]
+  ): void {
+    const groups = new Map<string, Map<string, File[]>>();
+
+    for (const file of files) {
+      const extension = getFileExtension(file.name).toLowerCase();
+      if (!SHAPEFILE_GROUP_EXTENSION_SET.has(extension)) {
+        continue;
+      }
+
+      const baseName = file.name
+        .slice(0, Math.max(0, file.name.length - extension.length - 1))
+        .toLowerCase();
+      const group = groups.get(baseName) ?? new Map<string, File[]>();
+      const filesForExtension = group.get(extension) ?? [];
+      filesForExtension.push(file);
+      group.set(extension, filesForExtension);
+      groups.set(baseName, group);
+    }
+
+    for (const group of groups.values()) {
+      const missing = REQUIRED_SHAPEFILE_EXTENSIONS.filter(
+        (extension) => !group.has(extension)
+      );
+      if (missing.length === 0) {
+        continue;
+      }
+
+      const message = m.shapefile_incomplete_message({
+        missing: missing.map((extension) => `.${extension}`).join(', ')
+      });
+      globalErrors.push(message);
+
+      for (const groupFiles of group.values()) {
+        for (const file of groupFiles) {
+          const result = results.get(file.name);
+          if (result) {
+            result.errors.push(message);
+            result.isValid = false;
+          }
+        }
+      }
+    }
+  },
 
   requiresAsyncValidation(fileType: FileType): boolean {
     return [
@@ -570,7 +569,9 @@ export const FileValidator = {
   },
 
   getMagicNumber(buffer: ArrayBuffer): string {
-    const bytes = new Uint8Array(buffer.slice(0, 8));
+    const bytes = new Uint8Array(
+      buffer.slice(0, FILE_VALIDATION_INSPECTION.MAGIC_NUMBER_BYTES)
+    );
     return Array.from(bytes)
       .map((b) => b.toString(16).padStart(2, '0'))
       .join(' ')
@@ -594,8 +595,10 @@ export const FileValidator = {
       }
 
       const blockedDomains = ['localhost', '127.0.0.1', '0.0.0.0'];
-      const isDev = typeof import.meta !== 'undefined' && import.meta.env?.DEV;
-      if (!isDev && blockedDomains.includes(parsed.hostname)) {
+      if (
+        !EnvironmentUtils.isDevelopment() &&
+        blockedDomains.includes(parsed.hostname)
+      ) {
         result.errors.push(m.validation_url_domain_blocked());
       }
 
@@ -627,22 +630,30 @@ export const SUPPORTED_FILE_TYPES = {
   tabular: {
     extensions: ['.csv', '.tsv', '.txt'],
     mimeTypes: ['text/csv', 'text/tab-separated-values', 'text/plain'],
-    description: m.file_type_tabular()
+    get description() {
+      return m.file_type_tabular();
+    }
   },
   geojson: {
     extensions: ['.geojson', '.json'],
     mimeTypes: ['application/geo+json', 'application/json'],
-    description: m.file_type_geojson()
+    get description() {
+      return m.file_type_geojson();
+    }
   },
   shapefile: {
     extensions: ['.shp', '.shx', '.dbf', '.prj', '.cpg'],
     mimeTypes: ['application/x-shapefile', 'application/octet-stream'],
-    description: m.file_type_shapefile()
+    get description() {
+      return m.file_type_shapefile();
+    }
   },
   geopackage: {
     extensions: ['.gpkg'],
     mimeTypes: ['application/geopackage+sqlite3'],
-    description: m.file_type_geopackage()
+    get description() {
+      return m.file_type_geopackage();
+    }
   },
   geoparquet: {
     extensions: ['.geoparquet', '.gpq', '.parquet'],
@@ -651,7 +662,9 @@ export const SUPPORTED_FILE_TYPES = {
       'application/x-parquet',
       'application/parquet'
     ],
-    description: m.file_type_geoparquet()
+    get description() {
+      return m.file_type_geoparquet();
+    }
   },
   kml: {
     extensions: ['.kml', '.kmz'],
@@ -659,16 +672,22 @@ export const SUPPORTED_FILE_TYPES = {
       'application/vnd.google-earth.kml+xml',
       'application/vnd.google-earth.kmz'
     ],
-    description: m.file_type_kml()
+    get description() {
+      return m.file_type_kml();
+    }
   },
   gpx: {
     extensions: ['.gpx'],
     mimeTypes: ['application/gpx+xml'],
-    description: m.file_type_gpx()
+    get description() {
+      return m.file_type_gpx();
+    }
   },
   zip: {
     extensions: ['.zip'],
     mimeTypes: ['application/zip', 'application/x-zip-compressed'],
-    description: m.file_type_zip()
+    get description() {
+      return m.file_type_zip();
+    }
   }
 };

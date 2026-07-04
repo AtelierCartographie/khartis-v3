@@ -133,6 +133,14 @@ describe('createLineHandlers', () => {
     });
   });
 
+  it('handleLineChange recomputes primitiveFilters from the line enabled override', () => {
+    const bag = makeBag();
+    bag.handlers.handleLineChange({ enabled: false } as never);
+    expect(bag.buildNextPrimitiveFilters).toHaveBeenCalledWith({
+      line: false
+    });
+  });
+
   it('handleLinePaletteInvert delegates to invertPrimitivePalette', () => {
     const bag = makeBag();
     bag.handlers.handleLinePaletteInvert();

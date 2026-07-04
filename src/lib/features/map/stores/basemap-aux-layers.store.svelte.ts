@@ -1,10 +1,9 @@
 import {
   persistenceRegistry,
   SavePriority
-} from '$lib/features/project-management/core/persistence-registry';
+} from '$lib/features/project-management/core';
 
 const STORE_KEY = 'basemapAuxLayers';
-const SINGLETON_KEY = '__khartisBasemapAuxLayersStore';
 
 export type AuxLayerStyleOverride = Record<string, unknown>;
 
@@ -12,10 +11,6 @@ interface SerializedAuxLayers {
   visibility: Record<string, boolean>;
   styles?: Record<string, AuxLayerStyleOverride>;
   order?: Record<string, string[]>;
-}
-
-interface GlobalRegistry {
-  [SINGLETON_KEY]?: BasemapAuxLayersStore;
 }
 
 interface BasemapAuxLayersState {
@@ -158,7 +153,6 @@ function createBasemapAuxLayersStore() {
     clearStyle,
     getOrderedLayerKeys,
     setOrder,
-    reset,
     serialize,
     deserialize,
     get version() {
@@ -171,25 +165,17 @@ export type BasemapAuxLayersStore = ReturnType<
   typeof createBasemapAuxLayersStore
 >;
 
-function getOrCreateStore(): BasemapAuxLayersStore {
-  const globalRef = globalThis as unknown as GlobalRegistry;
-  if (!globalRef[SINGLETON_KEY]) {
-    const instance = createBasemapAuxLayersStore();
-    globalRef[SINGLETON_KEY] = instance;
-    persistenceRegistry.register<SerializedAuxLayers>({
-      key: STORE_KEY,
-      priority: SavePriority.DEBOUNCED,
-      serialize: () => instance.serialize(),
-      deserialize: (data) => instance.deserialize(data),
-      reset: () => {
-        // Intentionally a no-op: state lifecycle is fully driven by deserialize.
-        // The registry resetAll() runs after deserialize during project load,
-        // so doing a hard reset here would wipe the value we just restored.
-        // A fresh project triggers deserialize(undefined) which clears state.
-      }
-    });
-  }
-  return globalRef[SINGLETON_KEY];
-}
+export const basemapAuxLayersStore = createBasemapAuxLayersStore();
 
-export const basemapAuxLayersStore = getOrCreateStore();
+persistenceRegistry.register<SerializedAuxLayers>({
+  key: STORE_KEY,
+  priority: SavePriority.DEBOUNCED,
+  serialize: () => basemapAuxLayersStore.serialize(),
+  deserialize: (data) => basemapAuxLayersStore.deserialize(data),
+  reset: () => {
+    // Intentionally a no-op: state lifecycle is fully driven by deserialize.
+    // The registry resetAll() runs after deserialize during project load,
+    // so doing a hard reset here would wipe the value we just restored.
+    // A fresh project triggers deserialize(undefined) which clears state.
+  }
+});

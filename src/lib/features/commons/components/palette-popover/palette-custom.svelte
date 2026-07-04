@@ -8,12 +8,12 @@
     ColorSelector,
     ToggleWithLabel
   } from '$lib/features/commons/components/viz-controls';
+  import type { ContrastMode } from '@ateliercartographie/ok-palette';
   import {
     PALETTE_TYPE,
     type Palette,
     type PaletteType,
     type PatternParams,
-    type ContrastMode,
     getPatternPalettes,
     generateSequentialFromColor,
     generateSequentialFromColors
@@ -28,7 +28,6 @@
     allowPattern?: boolean;
     onColorsChange?: (colors: string[]) => void;
     onPatternSelect?: (palette: Palette, params: PatternParams) => void;
-    onContrastChange?: (contrast: ContrastMode | undefined) => void;
     onInvertToggle?: (value: boolean) => void;
   }
 
@@ -36,12 +35,11 @@
     selectedPaletteId,
     paletteType = PALETTE_TYPE.SEQUENTIAL,
     numClasses,
-    colorBlindFilter: _colorBlindFilter = false,
-    inverted = $bindable(false),
+    colorBlindFilter = false,
+    inverted = false,
     allowPattern = true,
     onColorsChange,
     onPatternSelect,
-    onContrastChange,
     onInvertToggle
   }: Props = $props();
 
@@ -89,7 +87,11 @@
   });
 
   const resolvedContrast = $derived<ContrastMode | undefined>(
-    contrastMode === 'normal' ? undefined : contrastMode
+    contrastMode === 'normal'
+      ? colorBlindFilter
+        ? 'high'
+        : undefined
+      : contrastMode
   );
 
   function handleTabChange(index: number) {
@@ -121,7 +123,6 @@
     const next = value as 'low' | 'normal' | 'high';
     if (next === contrastMode) return;
     contrastMode = next;
-    onContrastChange?.(resolvedContrast);
 
     if (activeTab === 0) {
       const colors = generateSequentialFromColor(
@@ -184,7 +185,6 @@
   }
 
   function handleInvertToggle(value: boolean) {
-    inverted = value;
     onInvertToggle?.(value);
   }
 
@@ -237,6 +237,7 @@
   {:else}
     <ContentSwitcher
       items={tabLabels}
+      ariaLabel={m.palette_custom()}
       activeIndex={activeTab}
       onchange={handleTabChange}
     />

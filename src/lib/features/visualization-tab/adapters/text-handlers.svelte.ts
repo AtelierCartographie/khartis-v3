@@ -1,7 +1,7 @@
 import {
   PrimitiveFilterType,
   type ClassificationConfig,
-  type MissingDataConfig,
+  type PrimitiveFilter,
   type TextPrimitiveConfig,
   type TextSecondaryLabelsConfig,
   type VisualizationConfig,
@@ -17,6 +17,7 @@ import {
   resolveTextSizeModeTransition
 } from '../hooks/use-text-mode-state.svelte';
 import { pickOwnedKeys, pickRenamedKeys } from './pick-owned.utils';
+import { createPrimitiveAdapter } from './primitive-adapter.factory';
 
 type TextBackgroundUpdater = (
   background: TextPrimitiveConfig['background']
@@ -61,6 +62,9 @@ export interface TextHandlersDeps {
     updates: Partial<VisualizationConfig>,
     afterUpdate?: (next: VisualizationConfig) => void
   ) => void;
+  buildNextPrimitiveFilters: (
+    updates: Partial<Record<PrimitiveFilter, boolean>>
+  ) => PrimitiveFilter[];
   updatePrimitiveClassificationState: (
     primitive: PrimitiveFilterType,
     updates: Partial<ClassificationConfig>
@@ -106,11 +110,12 @@ export interface TextHandlersDeps {
 }
 
 export function createTextHandlers(deps: TextHandlersDeps) {
-  function handleTextChange(updates: Partial<TextPrimitiveConfig>): void {
-    const text = getTextPrimitive(deps.getSelectedVisualization());
-    if (!text) return;
-    deps.updateSelectedVisualization({ text: { ...text, ...updates } });
-  }
+  const textAdapter = createPrimitiveAdapter<TextPrimitiveConfig>(deps, {
+    primitive: PrimitiveFilterType.TEXT,
+    getConfig: getTextPrimitive,
+    buildUpdate: (text) => ({ text })
+  });
+  const handleTextChange = textAdapter.handleChange;
 
   function handleTextStyleChange(
     updates: Partial<VisualizationConfig['style']>
@@ -195,25 +200,11 @@ export function createTextHandlers(deps: TextHandlersDeps) {
     );
   }
 
-  function handleTextMissingDataChange(
-    updates: Partial<MissingDataConfig>
-  ): void {
-    const text = getTextPrimitive(deps.getSelectedVisualization());
-    if (!text?.missingData) return;
-    handleTextChange({ missingData: { ...text.missingData, ...updates } });
-  }
+  const handleTextMissingDataChange = textAdapter.handleMissingDataChange;
 
-  function handleTextClassificationChange(
-    updates: Partial<ClassificationConfig>
-  ): void {
-    deps.updatePrimitiveClassificationState(PrimitiveFilterType.TEXT, updates);
-  }
+  const handleTextClassificationChange = textAdapter.handleClassificationChange;
 
-  function handleTextMappingChange(
-    updates: Partial<VisualizationConfig['mapping']>
-  ): void {
-    deps.applyPrimitiveMappingUpdate(PrimitiveFilterType.TEXT, updates);
-  }
+  const handleTextMappingChange = textAdapter.handleMappingChange;
 
   function handleTextSecondaryLabelsChange(
     updates: Partial<TextSecondaryLabelsConfig>
@@ -236,9 +227,7 @@ export function createTextHandlers(deps: TextHandlersDeps) {
     });
   }
 
-  function handleTextPaletteInvert(): void {
-    deps.invertPrimitivePalette(PrimitiveFilterType.TEXT);
-  }
+  const handleTextPaletteInvert = textAdapter.handlePaletteInvert;
 
   function handleTextBackgroundStyleChange(
     updates: Partial<VisualizationConfig['style']>

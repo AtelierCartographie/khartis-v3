@@ -275,7 +275,7 @@
       <ToggleTabs
         items={symbolModeItems}
         activeIndex={symbolModeIndex}
-        onChange={handleSymbolModeChange}
+        onchange={handleSymbolModeChange}
         hideInactiveLabel={true}
       />
     </div>

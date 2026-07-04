@@ -16,6 +16,10 @@ const DEFAULT_STATE: ConsentState = {
   consentVersion: 0
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function createConsentStore() {
   const state = $state<ConsentState>({ ...DEFAULT_STATE });
 
@@ -28,10 +32,17 @@ function createConsentStore() {
       const stored = localStorage.getItem(CONSENT_STORAGE_KEY);
       if (!stored) return;
 
-      const parsed: ConsentState = JSON.parse(stored);
-      state.analytics = parsed.analytics;
-      state.consentDate = parsed.consentDate;
-      state.consentVersion = parsed.consentVersion;
+      const parsed: unknown = JSON.parse(stored);
+      if (!isRecord(parsed)) return;
+
+      state.analytics = parsed.analytics === true;
+      state.consentDate =
+        typeof parsed.consentDate === 'string' ? parsed.consentDate : null;
+      state.consentVersion =
+        typeof parsed.consentVersion === 'number' &&
+        Number.isInteger(parsed.consentVersion)
+          ? parsed.consentVersion
+          : 0;
 
       if (state.analytics && state.consentVersion >= CURRENT_CONSENT_VERSION) {
         analyticsService.enable();

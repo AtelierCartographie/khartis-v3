@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  detectRequiredFonts,
-  mergeRequiredFonts
-} from './detect-required-fonts';
+import { detectRequiredFonts } from './detect-required-fonts';
 
 describe('detectRequiredFonts', () => {
   it('detects Arabic characters', () => {
@@ -43,16 +40,5 @@ describe('detectRequiredFonts', () => {
   it('returns empty set for Latin-only text', () => {
     const result = detectRequiredFonts('Hello World!');
     expect(result.size).toBe(0);
-  });
-});
-
-describe('mergeRequiredFonts', () => {
-  it('merges two sets', () => {
-    const a = new Set<'arabic' | 'sc' | 'jp'>(['arabic']);
-    const b = new Set<'arabic' | 'sc' | 'jp'>(['sc']);
-    const merged = mergeRequiredFonts(a, b);
-    expect(merged.has('arabic')).toBe(true);
-    expect(merged.has('sc')).toBe(true);
-    expect(merged.has('jp')).toBe(false);
   });
 });

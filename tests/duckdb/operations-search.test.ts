@@ -1,10 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { LogCategory } from '$lib/features/commons/utils/logger';
 
-const { executeQueryMock } = vi.hoisted(() => ({ executeQueryMock: vi.fn() }));
+const { executeQueryMock, loggerErrorMock } = vi.hoisted(() => ({
+  executeQueryMock: vi.fn(),
+  loggerErrorMock: vi.fn()
+}));
 
 vi.mock('$lib/features/duckdb/core/query', () => ({
   executeQuery: executeQueryMock
 }));
+vi.mock('$lib/features/commons/utils/logger', async () => {
+  const actual = await vi.importActual<
+    typeof import('$lib/features/commons/utils/logger')
+  >('$lib/features/commons/utils/logger');
+
+  return {
+    ...actual,
+    logger: {
+      ...actual.logger,
+      error: loggerErrorMock
+    }
+  };
+});
 vi.mock('$lib/features/duckdb/cache/cache-manager', () => ({
   registerTableMutationCallback: vi.fn(),
   getTableMetadata: vi.fn(() => ({}))
@@ -115,5 +132,24 @@ describe('searchInTable', () => {
     });
 
     expect(executeQueryMock).toHaveBeenCalledTimes(8);
+  });
+
+  it('logs and rethrows query failures instead of returning an empty result', async () => {
+    const error = new Error('search query failed');
+    executeQueryMock.mockRejectedValue(error);
+
+    await expect(
+      searchInTable(ctx(), 'broken_search_table', 'needle')
+    ).rejects.toBe(error);
+
+    expect(loggerErrorMock).toHaveBeenCalledWith(
+      'Search query failed',
+      LogCategory.DUCKDB,
+      {
+        table: 'broken_search_table',
+        searchQuery: 'needle',
+        error
+      }
+    );
   });
 });

@@ -265,21 +265,12 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
   let currentViewMode = $state<ViewMode>(initialViewMode);
   let containerRef = $state<HTMLDivElement | null>(null);
 
-  function syncDeckDebugState(
-    viewMode: ViewMode,
-    canvasSize: { width: number; height: number } | null = null,
-    clearMetrics = false
-  ): void {
+  function syncDeckDebugState(viewMode: ViewMode, clearMetrics = false): void {
     if (!isDeckDebugEnabled()) {
       return;
     }
 
     deckDebugStore.setViewMode(viewMode);
-    deckDebugStore.setRenderPixelRatio(renderPixelRatio);
-
-    if (canvasSize) {
-      deckDebugStore.setCanvasSize(canvasSize);
-    }
 
     if (clearMetrics) {
       deckDebugStore.setMetrics(null);
@@ -292,7 +283,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     }
 
     deckDebugStore.setViewMode(currentViewMode);
-    deckDebugStore.setRenderPixelRatio(renderPixelRatio);
     deckDebugStore.setMetrics(metrics);
   }
 
@@ -386,11 +376,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     isMapLoaded = false;
     removeOrthographicFallbackCanvas();
 
-    const canvasSize = {
-      width: container.clientWidth || 800,
-      height: container.clientHeight || 600
-    };
-    syncDeckDebugState(ViewMode.ORTHOGRAPHIC, canvasSize, true);
+    syncDeckDebugState(ViewMode.ORTHOGRAPHIC, true);
 
     if (!supportsWebGL2()) {
       ensureOrthographicFallbackCanvas(container);
@@ -478,8 +464,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
               }
             );
           },
-          onResize: ({ width, height }) => {
-            syncDeckDebugState(currentViewMode, { width, height });
+          onResize: () => {
+            syncDeckDebugState(currentViewMode);
           }
         })
     );
@@ -503,14 +489,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     containerRef = container;
     currentViewMode = ViewMode.MAPLIBRE;
     removeOrthographicFallbackCanvas();
-    syncDeckDebugState(
-      ViewMode.MAPLIBRE,
-      {
-        width: container.clientWidth || 800,
-        height: container.clientHeight || 600
-      },
-      true
-    );
+    syncDeckDebugState(ViewMode.MAPLIBRE, true);
 
     map = new maplibregl.Map({
       container,
@@ -592,16 +571,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
 
     mapEventSubscriptions.push(
       map.on('resize', () => {
-        const mapCanvas = map?.getCanvas();
-        syncDeckDebugState(
-          currentViewMode,
-          mapCanvas
-            ? {
-                width: mapCanvas.clientWidth || mapCanvas.width,
-                height: mapCanvas.clientHeight || mapCanvas.height
-              }
-            : null
-        );
+        syncDeckDebugState(currentViewMode);
       }),
       map.on('zoom', onZoom),
       map.on('moveend', onMoveEnd),

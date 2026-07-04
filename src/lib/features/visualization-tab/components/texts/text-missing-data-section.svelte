@@ -16,12 +16,31 @@
 
   let {
     show,
-    label = $bindable(),
+    label,
     color,
     onShowChange,
     onLabelChange,
     onColorChange
   }: Props = $props();
+
+  type CarbonTextInputEvent = Event & {
+    detail?: string | number | null | { value?: string | number | null };
+  };
+
+  function readTextInputValue(event: CarbonTextInputEvent): string {
+    const detail = event.detail;
+    if (typeof detail === 'string') return detail;
+    if (typeof detail === 'number') return String(detail);
+    if (
+      detail &&
+      typeof detail === 'object' &&
+      'value' in detail &&
+      (typeof detail.value === 'string' || typeof detail.value === 'number')
+    ) {
+      return String(detail.value);
+    }
+    return event.target instanceof HTMLInputElement ? event.target.value : '';
+  }
 </script>
 
 <div class="missing-data-block">
@@ -49,9 +68,9 @@
         <div class="text-input-field">
           <TextInput
             id="texts-missing-data-label"
-            bind:value={label}
+            value={label}
             placeholder={m.missing_data_text()}
-            on:input={() => onLabelChange(label)}
+            on:input={(event) => onLabelChange(readTextInputValue(event))}
           />
         </div>
       </label>

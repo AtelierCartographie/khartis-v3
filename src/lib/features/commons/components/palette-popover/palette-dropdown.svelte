@@ -3,12 +3,13 @@
   import { Button } from 'carbon-components-svelte';
   import { ColorPalette, Checkmark } from 'carbon-icons-svelte';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
-  import { clampDropdownToViewport } from './dropdown-position.utils';
+  import { clickOutside } from '$lib/features/commons/utils/click-outside';
+  import { portal } from '$lib/features/commons/utils/portal';
+  import { computeFlippedPosition } from '$lib/features/commons/utils/dropdown-position.utils';
   import {
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
-  import { globalState } from '$lib/features/commons/stores/global.svelte';
 
   import {
     type DivergingPaletteSplit,
@@ -17,8 +18,10 @@
     getPalettesForType,
     generatePaletteColors,
     buildPatternBackground,
-    PALETTE_TYPE
+    PALETTE_TYPE,
+    getPaletteDisplayName
   } from './palette.constants';
+  import PaletteSwatchRow from './palette-swatch-row.svelte';
 
   interface Props {
     open: boolean;
@@ -71,36 +74,16 @@
     );
   }
 
-  function portal(node: HTMLElement) {
-    document.body.appendChild(node);
-    return {
-      destroy() {
-        node.remove();
-      }
-    };
-  }
-
-  function updatePosition() {
+  function updatePosition(dropdownHeight = 300) {
     if (!triggerElement) return;
     const rect = triggerElement.getBoundingClientRect();
-    const top = rect.top;
-    const bottom = rect.bottom;
-    const left = rect.left;
-    const width = rect.width;
-    const estimatedDropdownHeight = 300;
-    const spaceBelow = window.innerHeight - bottom;
-    const shouldFlip = spaceBelow < estimatedDropdownHeight && top > spaceBelow;
 
-    dropdownPos = clampDropdownToViewport(
-      {
-        top: shouldFlip ? top - estimatedDropdownHeight : bottom,
-        left,
-        width
-      },
-      estimatedDropdownHeight,
-      window.innerWidth,
-      window.innerHeight
-    );
+    dropdownPos = computeFlippedPosition({
+      triggerRect: rect,
+      dropdownHeight,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight
+    });
   }
 
   function handleSelect(palette: Palette) {
@@ -125,35 +108,27 @@
     onclose?.();
   }
 
+  function handleDropdownOutsideClick(event: CustomEvent) {
+    const target = event.detail?.originalEvent?.target as Node | undefined;
+    if (target && triggerElement?.contains(target)) return;
+    handleClose();
+  }
+
   $effect(() => {
-    if (open) {
-      updatePosition();
-      requestAnimationFrame(() => {
-        if (dropdownRef) {
-          const scale = globalState.zoom.pageZoomLevel / 100;
-          const actualHeight =
-            dropdownRef.getBoundingClientRect().height / scale;
-          if (!triggerElement) return;
-          const rect = triggerElement.getBoundingClientRect();
-          const top = rect.top / scale;
-          const bottom = rect.bottom / scale;
-          const left = rect.left / scale;
-          const width = rect.width / scale;
-          const spaceBelow = window.innerHeight / scale - bottom;
-          const shouldFlip = spaceBelow < actualHeight && top > spaceBelow;
-          dropdownPos = clampDropdownToViewport(
-            {
-              top: shouldFlip ? top - actualHeight : bottom,
-              left,
-              width
-            },
-            actualHeight,
-            window.innerWidth / scale,
-            window.innerHeight / scale
-          );
-        }
-      });
+    if (!open) {
+      return;
     }
+
+    updatePosition();
+    const frameId = requestAnimationFrame(() => {
+      if (dropdownRef) {
+        updatePosition(dropdownRef.getBoundingClientRect().height);
+      }
+    });
+
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
   });
 
   $effect(() => {
@@ -183,18 +158,6 @@
   $effect(() => {
     if (!open) return;
 
-    function handleClick(e: MouseEvent) {
-      const target = e.target as Node;
-      if (dropdownRef && !dropdownRef.contains(target)) {
-        if (triggerElement && triggerElement.contains(target)) return;
-        const path = e.composedPath() as Element[];
-        if (path.some((el) => el.id === 'khartis-color-picker-dropdown')) {
-          return;
-        }
-        handleClose();
-      }
-    }
-
     function handleKeydown(e: KeyboardEvent) {
       if (e.key === KEY.ESCAPE) {
         handleClose();
@@ -207,17 +170,12 @@
 
     const scrollParent = findScrollableParent(triggerElement ?? null);
 
-    const timer = setTimeout(() => {
-      document.addEventListener(EVENT.CLICK, handleClick);
-    }, 0);
     document.addEventListener(EVENT.KEYDOWN, handleKeydown);
     scrollParent?.addEventListener(EVENT.SCROLL, handleScroll, {
       passive: true
     });
 
     return () => {
-      clearTimeout(timer);
-      document.removeEventListener(EVENT.CLICK, handleClick);
       document.removeEventListener(EVENT.KEYDOWN, handleKeydown);
       scrollParent?.removeEventListener(EVENT.SCROLL, handleScroll);
     };
@@ -232,6 +190,11 @@
       style="top: {dropdownPos.top}px; left: {dropdownPos.left}px; width: {dropdownPos.width}px;"
       role="listbox"
       aria-label={m.color_palette()}
+      use:clickOutside={{
+        enabled: open,
+        excludeSelectors: ['#khartis-color-picker-dropdown']
+      }}
+      onoutsideclick={handleDropdownOutsideClick}
     >
       <div class="dropdown-list">
         {#each palettes as palette (palette.id)}
@@ -241,22 +204,23 @@
             class:selected={selectedPaletteId === palette.id}
             role="option"
             aria-selected={selectedPaletteId === palette.id}
+            aria-label={getPaletteDisplayName(palette)}
             onclick={() => handleSelect(palette)}
           >
             {#if palette.type === PALETTE_TYPE.PATTERN}
-              <div
-                class="swatch-row pattern-row"
-                style="background: {buildPatternBackground(palette)}"
-              ></div>
+              <PaletteSwatchRow
+                background={buildPatternBackground(palette)}
+                height="18px"
+                bordered
+                flexFill
+              />
             {:else}
-              <div class="swatch-row">
-                {#each getPalettePreviewColors(palette) as color, i (i)}
-                  <div
-                    class="swatch-cell"
-                    style="background-color: {color}"
-                  ></div>
-                {/each}
-              </div>
+              <PaletteSwatchRow
+                colors={getPalettePreviewColors(palette)}
+                height="18px"
+                bordered
+                flexFill
+              />
             {/if}
             {#if selectedPaletteId === palette.id}
               <div class="check-icon">
@@ -333,26 +297,6 @@
     &.selected {
       border-color: #012749;
     }
-  }
-
-  .swatch-row {
-    display: flex;
-    flex: 1;
-    height: 18px;
-    border: 1px solid var(--khartis-palette-swatch-border-color);
-    overflow: hidden;
-  }
-
-  .pattern-row {
-    background-size:
-      auto,
-      8px 8px,
-      auto;
-  }
-
-  .swatch-cell {
-    flex: 1;
-    height: 100%;
   }
 
   .check-icon {

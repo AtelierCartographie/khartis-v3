@@ -89,12 +89,6 @@ describe('geo indications store responsive defaults', () => {
 
     expect(geoIndicationsState.insetMap.type).toBe(InsetMapType.GLOBE);
     expect(geoIndicationsState.insetMap.useBasemapColors).toBe(false);
-
-    geoIndicationsActions.setInsetMapType(InsetMapType.PLANISPHERE);
-    geoIndicationsActions.setInsetMapUseBasemapColors(true);
-
-    expect(geoIndicationsState.insetMap.type).toBe(InsetMapType.GLOBE);
-    expect(geoIndicationsState.insetMap.useBasemapColors).toBe(false);
   });
 
   it('promotes default sizes to the A3 profile on first enable', () => {

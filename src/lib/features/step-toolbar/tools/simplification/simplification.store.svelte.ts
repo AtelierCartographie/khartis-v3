@@ -14,11 +14,11 @@ import {
   getBasemapSimplificationLevel,
   getBasemapVariantFamily,
   getPreferredBasemapSimplificationLevel,
+  osmBasemapStore,
   resolveBasemapVariantFile
-} from '$lib/features/map/services/basemap.service.svelte';
+} from '$lib/features/map';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
-import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import {
   simplifyGeometryTable,
@@ -34,6 +34,7 @@ import {
 } from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
+import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 
 const DEFAULT_STATE: SimplificationState = {
   source: SimplificationSource.Basemap,
@@ -68,7 +69,7 @@ const { actions, getState } = createToolStore<
     async function simplifyCustomBasemap(): Promise<SimplificationResult> {
       const currentBasemap = basemapService.currentBasemap;
       if (!currentBasemap) {
-        throw new Error('No basemap loaded');
+        throw new DataValidationError('No basemap loaded', 'basemap');
       }
 
       const metadata = currentBasemap.metadata;
@@ -79,7 +80,7 @@ const { actions, getState } = createToolStore<
         { format: 'array' }
       )) as Array<{ table_name: string }>;
 
-      const tolerance = calculateToleranceFromRate(s.rate, metadata.bbox);
+      const tolerance = calculateToleranceFromRate(s.rate);
 
       const metrics = await simplifyGeometryTable(
         Duck,
@@ -120,7 +121,7 @@ const { actions, getState } = createToolStore<
     async function simplifyBasemapVariant(): Promise<SimplificationResult> {
       const currentBasemap = basemapService.currentBasemap;
       if (!currentBasemap) {
-        throw new Error('No basemap loaded');
+        throw new DataValidationError('No basemap loaded', 'basemap');
       }
 
       const metadata = currentBasemap.metadata;
@@ -192,21 +193,31 @@ const { actions, getState } = createToolStore<
         : datasetsStore.selectedDataset;
 
       if (!dataset) {
-        throw new Error('No dataset found');
+        throw new DataValidationError('No dataset found', 'datasetId', {
+          datasetId
+        });
       }
 
       if (dataset.joinedBasemap) {
-        throw new Error('Cannot simplify a catalog basemap dataset');
+        throw new DataValidationError(
+          'Cannot simplify a catalog basemap dataset',
+          'joinedBasemap',
+          {
+            datasetId: dataset.id,
+            joinedBasemap: dataset.joinedBasemap
+          }
+        );
       }
 
       if (!dataset.geometry?.bounds) {
-        throw new Error('Dataset has no geometry bounds');
+        throw new DataValidationError(
+          'Dataset has no geometry bounds',
+          'geometry.bounds',
+          { datasetId: dataset.id }
+        );
       }
 
-      const tolerance = calculateToleranceFromRate(
-        s.rate,
-        dataset.geometry.bounds
-      );
+      const tolerance = calculateToleranceFromRate(s.rate);
       const datasetBaseTableName =
         s.lastApplied?.source === SimplificationSource.Geo &&
         s.lastApplied.datasetId === dataset.id &&

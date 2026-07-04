@@ -7,6 +7,7 @@ import {
 } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  CategoryShapeMode,
   FillMode,
   ProportionalType,
   ShapeType,
@@ -163,5 +164,28 @@ describe('SymbolModeCategories runtime', () => {
     });
 
     expect(screen.getByText('Contour')).toBeInTheDocument();
+  });
+
+  it('migrates legacy ordered category shape mode to unique', async () => {
+    const visualization = buildVisualization();
+    const symbolConfig = visualization.symbol;
+    if (!symbolConfig) {
+      throw new Error('Expected symbol configuration');
+    }
+    symbolConfig.categoryShape = CategoryShapeMode.ORDERED;
+    const onModesChange = vi.fn();
+
+    render(SymbolModeCategories, {
+      dataFields: [{ id: 1, text: 'category', type: 'text' }],
+      visualization,
+      onModesChange
+    });
+
+    await waitFor(() => {
+      expect(onModesChange).toHaveBeenCalledWith({
+        categoryShape: CategoryShapeMode.UNIQUE
+      });
+    });
+    expect(onModesChange).toHaveBeenCalledTimes(1);
   });
 });

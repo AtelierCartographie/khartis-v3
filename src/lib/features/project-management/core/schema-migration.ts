@@ -5,6 +5,9 @@ import {
   CARTOGRAPHIC_FONT_FAMILY,
   normalizeFontFamily
 } from '$lib/features/step-toolbar/fonts.constants';
+import { PipelineError } from '$lib/features/commons/pipeline.errors';
+
+const SCHEMA_MIGRATION_FAILED_ERROR_CODE = 'SCHEMA_MIGRATION_FAILED';
 
 export interface SchemaMigration {
   from: string;
@@ -435,33 +438,21 @@ function normalizePersistenceSchema(
   return clone;
 }
 
-// Annotations gained an optional WGS84 `anchor` ({lon,lat}) that glues a
-// `coordinateSpace:'map'` annotation to the basemap. The field is purely
-// additive: a legacy annotation without an anchor keeps the historical
-// pixel-page behavior, so no data transform is required — this entry only marks
-// the shape bump so older `.kh` projects stamp the new version.
+// Annotation anchors are additive; this migration only stamps the schema bump.
 function backfillAnnotationAnchor(
   data: Record<string, unknown>
 ): Record<string, unknown> {
   return data;
 }
 
-// The layer panel order moved from five derived dimensions (viz order,
-// per-viz primitiveOrder, basemap render-group order, renderBelowThematic,
-// aux-key order) to a single persisted flat `layerOrder` list. There is no
-// reliable translation of the legacy dimensions at migration time (the aux-key
-// order depends on the active basemap file, unavailable here), so legacy
-// projects start with no `layerOrder` and `buildLayers` rebuilds the canonical
-// default arrangement from the still-persisted stores. The primitiveOrder /
-// renderBelowThematic fields stay on their stores (used for layer production),
-// they just no longer drive the panel order. This entry only stamps the bump.
+// Legacy layer-order dimensions cannot be translated without the active basemap file.
 function backfillLayerOrder(
   data: Record<string, unknown>
 ): Record<string, unknown> {
   return data;
 }
 
-const migrations: SchemaMigration[] = [
+export const schemaMigrations: readonly SchemaMigration[] = [
   { from: '3.0.0', to: '3.1.0', migrate: remapLegacyPointShape },
   { from: '3.1.0', to: '3.2.0', migrate: remapLegacyPointShape },
   { from: '3.2.0', to: '3.3.0', migrate: backfillSymbolFillColor },
@@ -473,6 +464,11 @@ const migrations: SchemaMigration[] = [
   { from: '3.8.0', to: '3.9.0', migrate: backfillLayerOrder }
 ];
 
+function resolveCurrentSchemaVersion(): string {
+  const latestMigration = schemaMigrations[schemaMigrations.length - 1];
+  return latestMigration?.to ?? PROJECT_CONST.SCHEMA_VERSION;
+}
+
 export function migrateIfNeeded(
   data: Record<string, unknown>
 ): Record<string, unknown> {
@@ -481,19 +477,23 @@ export function migrateIfNeeded(
   let currentVersion = inputManifest?.version ?? '3.0.0';
   let migrated = data;
 
-  for (const migration of migrations) {
+  for (const migration of schemaMigrations) {
     if (currentVersion === migration.from) {
       try {
         migrated = migration.migrate(migrated);
         currentVersion = migration.to;
       } catch (error) {
-        throw new Error(
+        throw new PipelineError(
           m.error_schema_migration_failed({
             fromVersion: migration.from,
             toVersion: migration.to
           }),
+          SCHEMA_MIGRATION_FAILED_ERROR_CODE,
           {
-            cause: error
+            fromVersion: migration.from,
+            toVersion: migration.to,
+            originalError:
+              error instanceof Error ? error.message : String(error)
           }
         );
       }
@@ -503,7 +503,7 @@ export function migrateIfNeeded(
   const outputManifest = migrated.manifest as
     { version?: string; [k: string]: unknown } | undefined;
   if (outputManifest) {
-    outputManifest.version = PROJECT_CONST.APP_VERSION;
+    outputManifest.version = resolveCurrentSchemaVersion();
   }
 
   return migrated;

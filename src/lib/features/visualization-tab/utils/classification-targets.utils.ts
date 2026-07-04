@@ -43,6 +43,11 @@ export interface StrokeClassificationTarget {
   usesCategories: boolean;
 }
 
+export interface ClassificationBreakTarget {
+  valueColumn?: string;
+  classification?: ClassificationConfig;
+}
+
 export interface LineThicknessTarget {
   valueColumn: string | undefined;
   classification: ClassificationConfig | undefined;

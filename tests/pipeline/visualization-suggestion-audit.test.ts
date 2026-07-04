@@ -53,7 +53,7 @@ const mocks = vi.hoisted(() => ({
   selectedDatasetId: undefined as string | undefined
 }));
 
-vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
+vi.mock('$lib/features/project-management/core', () => ({
   SavePriority: {
     IMMEDIATE: 'immediate',
     DEBOUNCED: 'debounced'

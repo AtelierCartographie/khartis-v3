@@ -43,31 +43,6 @@ async function processWithSTRead(
   };
 }
 
-async function processWithLegacy(
-  ctx: ProcessContext,
-  file: UploadedFile
-): Promise<ProcessorDataset> {
-  const duckFile = createGeoFile(file);
-  await ctx.Duck.register_files([duckFile]);
-  await ctx.Duck.read_geofile(duckFile, { tablename: ctx.tableName });
-
-  const [columns, rowCount] = await Promise.all([
-    ctx.Duck.analyse(ctx.tableName),
-    ctx.callbacks.getRowCount(ctx.tableName)
-  ]);
-
-  return {
-    id: file.datasetId ?? file.id,
-    tableName: ctx.tableName,
-    sourceFileId: file.id,
-    name: file.name,
-    columns,
-    rowCount,
-    metadata: { processedAt: new Date(), fileType: file.fileType },
-    geoDetection: file.deepAnalysis?.geoDetection
-  };
-}
-
 export const geojsonProcessor: FileProcessor = {
   supportedFileTypes: [FileType.GEOJSON],
 
@@ -84,12 +59,6 @@ export const geojsonProcessor: FileProcessor = {
     ctx: ProcessContext,
     file: UploadedFile
   ): Promise<ProcessorDataset> {
-    try {
-      return await processWithSTRead(ctx, file);
-    } catch {
-      // Fallback path handles GeoJSON variants that ST_Read cannot ingest.
-    }
-
-    return processWithLegacy(ctx, file);
+    return processWithSTRead(ctx, file);
   }
 };

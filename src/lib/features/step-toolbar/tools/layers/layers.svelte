@@ -3,18 +3,21 @@
   import { Modal, TextInput } from 'carbon-components-svelte';
   import LayersList from './layers-list.svelte';
   import { layersActions, layersState } from './layers.store.svelte';
+  import {
+    readCarbonStringValue,
+    type CarbonValueEvent
+  } from '$lib/features/commons/utils/carbon-events.utils';
   import type { Layer } from '../../types/layers.types';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
-  import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
-  import { basemapAuxLayersStore } from '$lib/features/map/stores/basemap-aux-layers.store.svelte';
-  import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
-  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
   import {
-    globalActions,
-    globalState
-  } from '$lib/features/commons/stores/global.svelte';
+    basemapAuxLayersStore,
+    basemapLayersStore,
+    basemapService,
+    osmBasemapStore
+  } from '$lib/features/map';
+  import { globalActions } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { tick } from 'svelte';
   import { getLocale } from '$lib/paraglide/runtime.js';
@@ -75,7 +78,7 @@
     const layer = layers.find((item) => item.id === layerId);
     if (!layer) return;
 
-    globalState.selectedTool = undefined;
+    globalActions.setSelectedTool(undefined);
     globalActions.setNavigationState(ToolbarStep.Visualizations);
 
     if (layer.kind === 'basemap-aux') {
@@ -125,6 +128,10 @@
     renameModalOpen = false;
     renameLayerId = null;
     renameValue = '';
+  }
+
+  function handleRenameValueInput(event: CarbonValueEvent): void {
+    renameValue = readCarbonStringValue(event, renameValue);
   }
 
   function handleDuplicateLayer(visualizationId: string): void {
@@ -202,8 +209,9 @@
 >
   <TextInput
     labelText={m.layers_rename_prompt()}
-    bind:value={renameValue}
+    value={renameValue}
     bind:ref={renameInputRef}
+    on:input={handleRenameValueInput}
   />
 </Modal>
 

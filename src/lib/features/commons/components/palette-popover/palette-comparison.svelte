@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import { PALETTE_TYPE, type PaletteType } from './palette.constants';
+  import PaletteSwatchRow from './palette-swatch-row.svelte';
 
   interface Props {
     currentColors: string[];
@@ -36,19 +37,11 @@
   {:else}
     <div class="comparison-box">
       <span class="comparison-label">{m.palette_current()}</span>
-      <div class="swatch-row">
-        {#each currentColors as color, i (i)}
-          <div class="swatch-cell" style="background-color: {color}"></div>
-        {/each}
-      </div>
+      <PaletteSwatchRow colors={currentColors} height="16px" />
     </div>
     <div class="comparison-box">
       <span class="comparison-label">{m.palette_new()}</span>
-      <div class="swatch-row">
-        {#each newColors as color, i (i)}
-          <div class="swatch-cell" style="background-color: {color}"></div>
-        {/each}
-      </div>
+      <PaletteSwatchRow colors={newColors} height="16px" />
     </div>
   {/if}
 </div>
@@ -90,18 +83,6 @@
     line-height: 16px;
     letter-spacing: 0.32px;
     color: var(--cds-text-secondary, #525252);
-  }
-
-  .swatch-row {
-    display: flex;
-    width: 100%;
-    height: 16px;
-    overflow: hidden;
-  }
-
-  .swatch-cell {
-    flex: 1;
-    height: 100%;
   }
 
   .solid-swatch {

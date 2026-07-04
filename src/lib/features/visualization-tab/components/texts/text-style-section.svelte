@@ -1,5 +1,6 @@
 <script lang="ts">
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
+  import { Dropdown } from 'carbon-components-svelte';
   import { hexToHsl } from '$lib/features/commons/utils/color-utils';
   import {
     AVAILABLE_FONTS,
@@ -10,13 +11,7 @@
     resolveFontSizeOptions
   } from '$lib/features/step-toolbar/fonts.constants';
   import * as m from '$lib/paraglide/messages';
-  import {
-    ChevronDown,
-    TextBold,
-    TextColor,
-    TextItalic,
-    TextUnderline
-  } from 'carbon-icons-svelte';
+  import { TextBold, TextColor, TextItalic } from 'carbon-icons-svelte';
   import {
     nextAlignment,
     resolveAlignmentIcon,
@@ -27,14 +22,12 @@
   export interface TextStyleSectionHandlers {
     fontFamily: string;
     color: string;
-    opacity?: number;
     bold?: boolean;
     italic?: boolean;
     size: number;
     align: TextAlignment;
     halo?: boolean;
     haloColor?: string;
-    haloWidth?: number;
     onFontFamilyChange: (value: string) => void;
     onColorChange: (value: string) => void;
     onBoldChange?: (value: boolean) => void;
@@ -52,6 +45,10 @@
     lightness: number;
   };
 
+  type DropdownSelectEvent = CustomEvent<{
+    selectedId?: string | number;
+  }>;
+
   interface Props {
     title: string;
     section: TextStyleSectionHandlers | undefined;
@@ -60,40 +57,42 @@
 
   let { title, section, fallbackSize = MIN_FONT_SIZE }: Props = $props();
 
-  let fontSelectRef = $state<HTMLSelectElement>();
-  let sizeSelectRef = $state<HTMLSelectElement>();
-
   const enabled = $derived(Boolean(section));
   const align = $derived<TextAlignment>(section?.align ?? 'center');
   const AlignmentIcon = $derived(resolveAlignmentIcon(align));
   const fontSizes = $derived(
     resolveFontSizeOptions(section?.size ?? fallbackSize)
   );
+  const fontItems = $derived(
+    AVAILABLE_FONTS.map((fontFamily) => ({
+      id: fontFamily,
+      text: fontFamily
+    }))
+  );
+  const fontSizeItems = $derived(
+    fontSizes.map((fontSize) => ({
+      id: String(fontSize),
+      text: String(fontSize)
+    }))
+  );
   const textColorHsl = $derived(hexToHsl(section?.color ?? '#8d8d8d'));
   const haloColorHsl = $derived(hexToHsl(section?.haloColor ?? '#ffffff'));
 
-  function handleFontFamilySelect(event: Event) {
+  function handleFontFamilySelect(event: DropdownSelectEvent) {
     if (!section) return;
-    const value = (event.currentTarget as HTMLSelectElement).value;
-    if (!value) return;
+    const value =
+      typeof event.detail.selectedId === 'string'
+        ? event.detail.selectedId
+        : undefined;
+    if (value === undefined) return;
     section.onFontFamilyChange(value);
   }
 
-  function handleSizeSelect(event: Event) {
+  function handleSizeSelect(event: DropdownSelectEvent) {
     if (!section) return;
-    const value = Number((event.currentTarget as HTMLSelectElement).value);
+    const value = Number(event.detail.selectedId);
     if (!Number.isFinite(value)) return;
     section.onSizeChange(clampFontSize(value, MIN_FONT_SIZE));
-  }
-
-  function openSelectPicker(select?: HTMLSelectElement) {
-    if (!select || select.disabled) return;
-    select.focus();
-    if (typeof select.showPicker === 'function') {
-      select.showPicker();
-      return;
-    }
-    select.click();
   }
 
   function enableHaloColorPicker() {
@@ -126,53 +125,37 @@
     <div class="compact-field compact-field--wide">
       <span class="compact-field__label">{m.annotations_font()}</span>
       <div class="compact-field__control" aria-disabled={!enabled}>
-        <select
-          bind:this={fontSelectRef}
+        <Dropdown
+          class="compact-dropdown"
+          hideLabel
+          labelText={m.annotations_font()}
           aria-label={m.annotations_font()}
-          value={normalizeFontFamily(section?.fontFamily) ??
+          items={fontItems}
+          selectedId={normalizeFontFamily(section?.fontFamily) ??
             CARTOGRAPHIC_FONT_FAMILY}
           disabled={!enabled}
-          onchange={handleFontFamilySelect}
-        >
-          {#each AVAILABLE_FONTS as fontFamily (fontFamily)}
-            <option value={fontFamily}>{fontFamily}</option>
-          {/each}
-        </select>
-        <button
-          type="button"
-          class="compact-field__picker-trigger"
-          aria-label={m.annotations_font()}
-          disabled={!enabled}
-          onclick={() => openSelectPicker(fontSelectRef)}
-        >
-          <ChevronDown size={16} />
-        </button>
+          size="sm"
+          type="default"
+          on:select={handleFontFamilySelect}
+        />
       </div>
     </div>
 
     <div class="compact-field compact-field--size">
       <span class="compact-field__label">{m.annotations_size()}</span>
       <div class="compact-field__control">
-        <select
-          bind:this={sizeSelectRef}
+        <Dropdown
+          class="compact-dropdown"
+          hideLabel
+          labelText={m.annotations_size()}
           aria-label={m.annotations_size()}
-          value={String(clampFontSize(section?.size, fallbackSize))}
+          items={fontSizeItems}
+          selectedId={String(clampFontSize(section?.size, fallbackSize))}
           disabled={!enabled}
-          onchange={handleSizeSelect}
-        >
-          {#each fontSizes as fontSize (fontSize)}
-            <option value={fontSize}>{fontSize}</option>
-          {/each}
-        </select>
-        <button
-          type="button"
-          class="compact-field__picker-trigger"
-          aria-label={m.annotations_size()}
-          disabled={!enabled}
-          onclick={() => openSelectPicker(sizeSelectRef)}
-        >
-          <ChevronDown size={16} />
-        </button>
+          size="sm"
+          type="default"
+          on:select={handleSizeSelect}
+        />
       </div>
     </div>
   </div>
@@ -200,16 +183,6 @@
       onclick={() => section?.onItalicChange?.(!section.italic)}
     >
       <TextItalic size={16} />
-    </button>
-
-    <button
-      type="button"
-      class="quick-format-button"
-      aria-label={m.annotations_underline()}
-      title={m.annotations_underline()}
-      disabled
-    >
-      <TextUnderline size={16} />
     </button>
 
     <div
@@ -364,55 +337,18 @@
     color: var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
   }
 
-  .compact-field select {
+  .compact-field__control :global(.compact-dropdown) {
     width: 100%;
     height: 32px;
     min-height: 32px;
-    padding: 0 40px 0 var(--cds-spacing-05, 16px);
-    border: none;
     background: transparent;
-    appearance: none;
-    outline: none;
-    cursor: pointer;
-    color: var(--cds-text-primary, #161616);
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 0.875rem;
-    font-weight: 400;
-    line-height: 1.2857;
-    letter-spacing: 0.16px;
-  }
-
-  .compact-field select:disabled,
-  .text-style-section--disabled .compact-field select {
-    color: var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
-    cursor: not-allowed;
-  }
-
-  .compact-field__picker-trigger {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 40px;
-    height: 100%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
     border: none;
-    background: transparent;
-    color: var(--cds-icon-primary, #161616);
-    cursor: pointer;
   }
 
-  .compact-field__picker-trigger:focus-visible {
-    outline: 2px solid var(--cds-focus, #0f62fe);
-    outline-offset: 2px;
-  }
-
-  .compact-field__picker-trigger:disabled,
-  .text-style-section--disabled .compact-field__picker-trigger {
-    color: var(--cds-icon-on-color-disabled, #8d8d8d);
-    cursor: not-allowed;
+  .compact-field__control :global(.compact-dropdown .bx--list-box__field) {
+    height: 32px;
+    min-height: 32px;
+    padding-inline-start: var(--cds-spacing-05, 16px);
   }
 
   .quick-format-toolbar {

@@ -14,10 +14,11 @@
     getQualitativeColorGroups,
     getPaletteDisplayName,
     generatePaletteColors,
-    generateIntensityShadesForColor,
+    generateIntensityShades,
     buildPatternBackground,
     VIF_MIXTE_COLORS
   } from './palette.constants';
+  import PaletteSwatchRow from './palette-swatch-row.svelte';
 
   interface Props {
     paletteType: PaletteType;
@@ -27,7 +28,6 @@
     numClasses: number;
     divergingSplit?: DivergingPaletteSplit;
     qualitativeMode?: 'single' | 'categories';
-    onTypeChange?: (type: PaletteType) => void;
     onColorBlindChange?: (enabled: boolean) => void;
     onSelect?: (palette: Palette) => void;
     onColorSelect?: (color: string) => void;
@@ -44,7 +44,6 @@
     numClasses,
     divergingSplit,
     qualitativeMode = 'single',
-    onTypeChange: _onTypeChange,
     onColorBlindChange,
     onSelect,
     onColorSelect,
@@ -100,11 +99,11 @@
 
   const intensityShades = $derived.by(() => {
     if (isQualitative) {
-      return generateIntensityShadesForColor(qualitativeSelectedColor);
+      return generateIntensityShades(qualitativeSelectedColor);
     }
     const selected = sequentialPalettes.find((p) => p.id === selectedPaletteId);
     const seedColor = selected?.colors?.[0] ?? '#08519c';
-    return generateIntensityShadesForColor(seedColor);
+    return generateIntensityShades(seedColor);
   });
 
   let selectedIntensityIndex = $state<number>(-1);
@@ -217,14 +216,7 @@
             aria-label={band.label}
             aria-pressed={isCategoryBandSelected(band.colors)}
           >
-            <div class="swatch-row">
-              {#each band.colors as color (color)}
-                <div
-                  class="swatch-cell"
-                  style="background-color: {color}"
-                ></div>
-              {/each}
-            </div>
+            <PaletteSwatchRow colors={band.colors} />
             {#if isCategoryBandSelected(band.colors)}
               <div class="check-icon">
                 <Checkmark size={20} />
@@ -327,19 +319,17 @@
             aria-pressed={selectedPaletteId === palette.id}
           >
             {#if palette.type === PALETTE_TYPE.PATTERN}
-              <div
-                class="swatch-row pattern-row"
-                style="background: {buildPatternBackground(palette)}"
-              ></div>
+              <PaletteSwatchRow background={buildPatternBackground(palette)} />
             {:else}
-              <div class="swatch-row">
-                {#each generatePaletteColors(palette, numClasses, colorBlindFilter ? 'high' : undefined, undefined, divergingSplit) as color, i (i)}
-                  <div
-                    class="swatch-cell"
-                    style="background-color: {color}"
-                  ></div>
-                {/each}
-              </div>
+              <PaletteSwatchRow
+                colors={generatePaletteColors(
+                  palette,
+                  numClasses,
+                  colorBlindFilter ? 'high' : undefined,
+                  undefined,
+                  divergingSplit
+                )}
+              />
             {/if}
             {#if selectedPaletteId === palette.id}
               <div class="check-icon">
@@ -478,25 +468,6 @@
     &.selected {
       border-color: #012749;
     }
-  }
-
-  .swatch-row {
-    display: flex;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-  }
-
-  .pattern-row {
-    background-size:
-      auto,
-      8px 8px,
-      auto;
-  }
-
-  .swatch-cell {
-    flex: 1;
-    height: 100%;
   }
 
   .check-icon {

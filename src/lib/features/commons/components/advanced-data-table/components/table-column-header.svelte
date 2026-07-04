@@ -9,13 +9,15 @@
   import OverflowMenuVertical from 'carbon-icons-svelte/lib/OverflowMenuVertical.svelte';
   import WarningAlt from 'carbon-icons-svelte/lib/WarningAlt.svelte';
   import { GEOID_SCORE_THRESHOLD } from '../column-type-styles';
+  import { clickOutside } from '$lib/features/commons/utils/click-outside';
+  import { KEY } from '$lib/features/commons/constants/dom.constants';
   import type { ColumnInfo, ColumnType } from '../types';
   import Portal from './portal.svelte';
+  import { tick } from 'svelte';
 
   interface Props {
     column: ColumnInfo;
     analysis?: AnalysisResult;
-    columnAnalysis: Map<string, AnalysisResult>;
     sortColumn: string | null;
     sortOrder: 'ASC' | 'DESC' | null;
     showSummaryPlots: boolean;
@@ -45,8 +47,7 @@
     onDelete
   }: Props = $props();
 
-  // App locale (fr-FR / en-US) for number and date formatting, so the summary
-  // plots follow the language selected in Khartis rather than the browser's.
+  // Summary plots use the app locale, not the browser default.
   const numberLocale = $derived(resolveLocale());
 
   const typeOptions: { value: ColumnType; label: string }[] = [
@@ -97,9 +98,7 @@
     );
   }
 
-  // DuckDB COUNT() values arrive as BIGINT (JS BigInt). Normalize counts to
-  // numbers at the boundary so the rest of the component never mixes BigInt
-  // with numbers in arithmetic (Math.max, divisions), which throws.
+  // Normalize DuckDB BIGINT counts before numeric arithmetic.
   function toNum(value: unknown): number {
     return typeof value === 'bigint' ? Number(value) : (value as number);
   }
@@ -173,8 +172,7 @@
         .filter((b) => b.bin !== null)
         .map((b) => ({ bin: b.bin, count: toNum(b.count) }));
       const nullCount = toNum(nullBin?.count ?? analysis.nulls ?? 0);
-      // The null bar shares the histogram's scale: it must be part of the same
-      // domain as the value bins so its height is comparable to the purple bars.
+      // Include nulls in the histogram domain so bar heights stay comparable.
       const maxCount = Math.max(...bins.map((b) => b.count), nullCount, 1);
       return {
         kind: 'numeric' as const,
@@ -241,7 +239,13 @@
 
   let menuOpen = $state(false);
   let menuButton = $state<HTMLButtonElement | null>(null);
+  let menuElement = $state<HTMLElement | null>(null);
+  let typeSubmenuElement = $state<HTMLElement | null>(null);
+  let refineSubmenuElement = $state<HTMLElement | null>(null);
   let menuPosition = $state({ top: 0, left: 0 });
+
+  type ColumnSubmenu = 'type' | 'refine';
+  const COLUMN_MENU_FOCUSABLE_SELECTOR = 'button:not([disabled])';
 
   let warningTooltipOpen = $state(false);
   let warningBadgeRef = $state<HTMLElement | null>(null);
@@ -251,8 +255,65 @@
   let pillRef = $state<HTMLButtonElement | undefined>(undefined);
   let typeTooltipPosition = $state({ top: 0, left: 0 });
 
-  // 'unique' is the sentinel category produced by the categorical SQL macro to
-  // bucket every value that occurs exactly once.
+  type TooltipPosition = { top: number; left: number };
+  type TooltipController = {
+    isOpen: () => boolean;
+    setOpen: (open: boolean) => void;
+    setPosition: (position: TooltipPosition) => void;
+    getAnchor: () => HTMLElement | null | undefined;
+  };
+
+  function getTooltipPosition(anchor: HTMLElement): TooltipPosition {
+    const rect = anchor.getBoundingClientRect();
+    return {
+      top: rect.bottom + 4,
+      left: rect.left + rect.width / 2
+    };
+  }
+
+  function showTooltip(tooltip: TooltipController): void {
+    const anchor = tooltip.getAnchor();
+    if (anchor) {
+      tooltip.setPosition(getTooltipPosition(anchor));
+    }
+    tooltip.setOpen(true);
+  }
+
+  function hideTooltip(tooltip: TooltipController): void {
+    tooltip.setOpen(false);
+  }
+
+  function toggleTooltip(tooltip: TooltipController): void {
+    if (tooltip.isOpen()) {
+      hideTooltip(tooltip);
+    } else {
+      showTooltip(tooltip);
+    }
+  }
+
+  const warningTooltip = {
+    isOpen: () => warningTooltipOpen,
+    setOpen: (open) => {
+      warningTooltipOpen = open;
+    },
+    setPosition: (position) => {
+      warningTooltipPosition = position;
+    },
+    getAnchor: () => warningBadgeRef
+  } satisfies TooltipController;
+
+  const typeTooltip = {
+    isOpen: () => typeTooltipOpen,
+    setOpen: (open) => {
+      typeTooltipOpen = open;
+    },
+    setPosition: (position) => {
+      typeTooltipPosition = position;
+    },
+    getAnchor: () => pillRef
+  } satisfies TooltipController;
+
+  // `unique` is the categorical SQL sentinel for values occurring once.
   function catColor(category: string | null): string {
     if (category === null) return '#ff832b';
     if (category === 'unique') return '#005d5d';
@@ -280,24 +341,73 @@
   let catTooltipOpen = $state(false);
   let catTooltipContent = $state('');
   let catTooltipPosition = $state({ top: 0, left: 0 });
+  let catTooltipAnchor: HTMLElement | null = null;
+
+  const catTooltip = {
+    isOpen: () => catTooltipOpen,
+    setOpen: (open) => {
+      catTooltipOpen = open;
+    },
+    setPosition: (position) => {
+      catTooltipPosition = position;
+    },
+    getAnchor: () => catTooltipAnchor
+  } satisfies TooltipController;
 
   function showCatTooltip(event: MouseEvent, content: string) {
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    catTooltipPosition = {
-      top: rect.bottom + 4,
-      left: rect.left + rect.width / 2
-    };
+    catTooltipAnchor = event.currentTarget as HTMLElement;
     catTooltipContent = content;
-    catTooltipOpen = true;
+    showTooltip(catTooltip);
   }
 
-  function hideCatTooltip() {
-    catTooltipOpen = false;
+  function getMenuItems(container: HTMLElement | null): HTMLElement[] {
+    if (!container) return [];
+
+    return Array.from(
+      container.querySelectorAll<HTMLElement>(COLUMN_MENU_FOCUSABLE_SELECTOR)
+    ).filter((element) => element.getClientRects().length > 0);
+  }
+
+  function moveMenuFocus(container: HTMLElement | null, direction: 1 | -1) {
+    const items = getMenuItems(container);
+    if (items.length === 0) return;
+
+    const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+    const nextIndex =
+      currentIndex === -1
+        ? direction === 1
+          ? 0
+          : items.length - 1
+        : (currentIndex + direction + items.length) % items.length;
+
+    items[nextIndex]?.focus();
+  }
+
+  async function focusFirstMenuItem(getContainer: () => HTMLElement | null) {
+    await tick();
+    getMenuItems(getContainer())[0]?.focus();
+  }
+
+  async function focusMenuButton() {
+    await tick();
+    menuButton?.focus();
+  }
+
+  function getSubmenuElement(submenu: ColumnSubmenu): HTMLElement | null {
+    return submenu === 'type' ? typeSubmenuElement : refineSubmenuElement;
+  }
+
+  function getSubmenuTrigger(submenu: ColumnSubmenu): HTMLElement | null {
+    return submenu === 'type' ? typeSubmenuTriggerRef : refineSubmenuTriggerRef;
+  }
+
+  function focusSubmenuTrigger(submenu: ColumnSubmenu) {
+    getSubmenuTrigger(submenu)?.focus();
   }
 
   function toggleMenu() {
     if (menuOpen) {
-      menuOpen = false;
+      closeMenu();
     } else {
       if (menuButton) {
         const rect = menuButton.getBoundingClientRect();
@@ -307,17 +417,22 @@
         };
       }
       menuOpen = true;
+      void focusFirstMenuItem(() => menuElement);
     }
   }
 
-  function closeMenu() {
+  function closeMenu(restoreFocus = false) {
     menuOpen = false;
     activeSubmenu = null;
+    if (restoreFocus) {
+      void focusMenuButton();
+    }
   }
 
-  function openSubmenu(
-    submenu: 'type' | 'refine',
-    trigger: HTMLElement | null
+  async function openSubmenu(
+    submenu: ColumnSubmenu,
+    trigger: HTMLElement | null,
+    options: { focusFirst?: boolean } = {}
   ) {
     if (trigger) {
       const rect = trigger.getBoundingClientRect();
@@ -325,65 +440,110 @@
     }
 
     activeSubmenu = submenu;
+
+    if (options.focusFirst) {
+      await focusFirstMenuItem(() => getSubmenuElement(submenu));
+    }
   }
 
-  function handleClickOutside(event: MouseEvent) {
-    const path = event.composedPath() as Element[];
-    if (path.some((el) => el.id === 'khartis-color-picker-dropdown')) return;
-    if (menuButton && !menuButton.contains(event.target as Node)) {
-      closeMenu();
+  function handleMenuKeydown(event: KeyboardEvent) {
+    if (event.key === KEY.ESCAPE) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeMenu(true);
+      return;
     }
+
+    if (event.key === KEY.ARROW_DOWN) {
+      event.preventDefault();
+      moveMenuFocus(menuElement, 1);
+      return;
+    }
+
+    if (event.key === KEY.ARROW_UP) {
+      event.preventDefault();
+      moveMenuFocus(menuElement, -1);
+      return;
+    }
+
+    if (event.key === KEY.HOME) {
+      event.preventDefault();
+      getMenuItems(menuElement)[0]?.focus();
+      return;
+    }
+
+    if (event.key === KEY.END) {
+      event.preventDefault();
+      getMenuItems(menuElement).at(-1)?.focus();
+    }
+  }
+
+  function handleSubmenuTriggerKeydown(
+    event: KeyboardEvent,
+    submenu: ColumnSubmenu,
+    trigger: HTMLElement | null
+  ) {
+    if (
+      event.key !== KEY.ARROW_RIGHT &&
+      event.key !== KEY.ENTER &&
+      event.key !== KEY.SPACE
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    void openSubmenu(submenu, trigger, { focusFirst: true });
+  }
+
+  function handleSubmenuKeydown(event: KeyboardEvent, submenu: ColumnSubmenu) {
+    if (event.key === KEY.ESCAPE) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeMenu(true);
+      return;
+    }
+
+    if (event.key === KEY.ARROW_LEFT) {
+      event.preventDefault();
+      activeSubmenu = null;
+      void tick().then(() => focusSubmenuTrigger(submenu));
+      return;
+    }
+
+    if (event.key === KEY.ARROW_DOWN) {
+      event.preventDefault();
+      moveMenuFocus(getSubmenuElement(submenu), 1);
+      return;
+    }
+
+    if (event.key === KEY.ARROW_UP) {
+      event.preventDefault();
+      moveMenuFocus(getSubmenuElement(submenu), -1);
+      return;
+    }
+
+    if (event.key === KEY.HOME) {
+      event.preventDefault();
+      getMenuItems(getSubmenuElement(submenu))[0]?.focus();
+      return;
+    }
+
+    if (event.key === KEY.END) {
+      event.preventDefault();
+      getMenuItems(getSubmenuElement(submenu)).at(-1)?.focus();
+    }
+  }
+
+  function handleMenuOutsideClick(event: CustomEvent) {
+    const target = event.detail?.originalEvent?.target as Node | undefined;
+    if (target && menuButton?.contains(target)) return;
+    closeMenu();
   }
 
   function handleMenuAction(action: () => void) {
     action();
     closeMenu();
   }
-
-  function showWarningTooltip() {
-    if (warningBadgeRef) {
-      const rect = warningBadgeRef.getBoundingClientRect();
-      warningTooltipPosition = {
-        top: rect.bottom + 4,
-        left: rect.left + rect.width / 2
-      };
-    }
-    warningTooltipOpen = true;
-  }
-
-  function hideWarningTooltip() {
-    warningTooltipOpen = false;
-  }
-
-  function toggleWarningTooltip() {
-    if (warningTooltipOpen) {
-      hideWarningTooltip();
-    } else {
-      showWarningTooltip();
-    }
-  }
-
-  function showTypeTooltip() {
-    if (pillRef) {
-      const rect = pillRef.getBoundingClientRect();
-      typeTooltipPosition = {
-        top: rect.bottom + 4,
-        left: rect.left + rect.width / 2
-      };
-    }
-    typeTooltipOpen = true;
-  }
-
-  function hideTypeTooltip() {
-    typeTooltipOpen = false;
-  }
-
-  $effect(() => {
-    if (menuOpen) {
-      document.addEventListener('click', handleClickOutside);
-      return () => document.removeEventListener('click', handleClickOutside);
-    }
-  });
 </script>
 
 <th scope="col">
@@ -393,10 +553,10 @@
         label={column.name}
         type={badgeType}
         bind:element={pillRef}
-        onmouseenter={showTypeTooltip}
-        onmouseleave={hideTypeTooltip}
-        onfocus={showTypeTooltip}
-        onblur={hideTypeTooltip}
+        onmouseenter={() => showTooltip(typeTooltip)}
+        onmouseleave={() => hideTooltip(typeTooltip)}
+        onfocus={() => showTooltip(typeTooltip)}
+        onblur={() => hideTooltip(typeTooltip)}
         ariaLabel={m.column_type_badge_label({
           column: column.name,
           type: typeTooltipMessage
@@ -420,11 +580,11 @@
           type="button"
           class="warning-badge"
           bind:this={warningBadgeRef}
-          onclick={toggleWarningTooltip}
-          onmouseenter={showWarningTooltip}
-          onmouseleave={hideWarningTooltip}
-          onfocus={showWarningTooltip}
-          onblur={hideWarningTooltip}
+          onclick={() => toggleTooltip(warningTooltip)}
+          onmouseenter={() => showTooltip(warningTooltip)}
+          onmouseleave={() => hideTooltip(warningTooltip)}
+          onfocus={() => showTooltip(warningTooltip)}
+          onblur={() => hideTooltip(warningTooltip)}
           aria-label={m.column_warning_label()}
           aria-describedby="warning-tooltip-{column.name}"
         >
@@ -457,7 +617,7 @@
             class="menu-trigger"
             bind:this={menuButton}
             onclick={toggleMenu}
-            aria-haspopup="true"
+            aria-haspopup="menu"
             aria-expanded={menuOpen}
             aria-label={m.column_menu_options({ column: column.name })}
           >
@@ -467,17 +627,40 @@
             <Portal>
               <div
                 class="dropdown-menu"
+                bind:this={menuElement}
                 style="top: {menuPosition.top}px; left: {menuPosition.left}px;"
                 role="menu"
+                aria-label={m.column_menu_options({ column: column.name })}
+                tabindex="-1"
+                use:clickOutside={{
+                  enabled: menuOpen,
+                  excludeSelectors: ['#khartis-color-picker-dropdown']
+                }}
+                onoutsideclick={handleMenuOutsideClick}
+                onkeydown={handleMenuKeydown}
               >
                 {#if onChangeType}
                   <button
                     type="button"
                     class="menu-item submenu-trigger"
+                    role="menuitem"
+                    aria-haspopup="menu"
+                    aria-expanded={activeSubmenu === 'type'}
                     bind:this={typeSubmenuTriggerRef}
+                    onclick={() =>
+                      void openSubmenu('type', typeSubmenuTriggerRef, {
+                        focusFirst: true
+                      })}
+                    onkeydown={(event: KeyboardEvent) =>
+                      handleSubmenuTriggerKeydown(
+                        event,
+                        'type',
+                        typeSubmenuTriggerRef
+                      )}
                     onmouseenter={() =>
-                      openSubmenu('type', typeSubmenuTriggerRef)}
-                    onfocus={() => openSubmenu('type', typeSubmenuTriggerRef)}
+                      void openSubmenu('type', typeSubmenuTriggerRef)}
+                    onfocus={() =>
+                      void openSubmenu('type', typeSubmenuTriggerRef)}
                   >
                     {m.column_type_change()}
                     <span class="submenu-arrow">&#9654;</span>
@@ -487,10 +670,24 @@
                 <button
                   type="button"
                   class="menu-item submenu-trigger"
+                  role="menuitem"
+                  aria-haspopup="menu"
+                  aria-expanded={activeSubmenu === 'refine'}
                   bind:this={refineSubmenuTriggerRef}
+                  onclick={() =>
+                    void openSubmenu('refine', refineSubmenuTriggerRef, {
+                      focusFirst: true
+                    })}
+                  onkeydown={(event: KeyboardEvent) =>
+                    handleSubmenuTriggerKeydown(
+                      event,
+                      'refine',
+                      refineSubmenuTriggerRef
+                    )}
                   onmouseenter={() =>
-                    openSubmenu('refine', refineSubmenuTriggerRef)}
-                  onfocus={() => openSubmenu('refine', refineSubmenuTriggerRef)}
+                    void openSubmenu('refine', refineSubmenuTriggerRef)}
+                  onfocus={() =>
+                    void openSubmenu('refine', refineSubmenuTriggerRef)}
                 >
                   {m.column_refine_label()}
                   <span class="submenu-arrow">&#9654;</span>
@@ -502,6 +699,7 @@
                   <button
                     type="button"
                     class="menu-item"
+                    role="menuitem"
                     onclick={() =>
                       handleMenuAction(() => onRename(column.name))}
                   >
@@ -513,6 +711,7 @@
                   <button
                     type="button"
                     class="menu-item"
+                    role="menuitem"
                     onclick={() => handleMenuAction(() => onHide(column.name))}
                   >
                     {isHidden ? m.column_show() : m.column_hide()}
@@ -525,6 +724,7 @@
                   <button
                     type="button"
                     class="menu-item menu-item-danger"
+                    role="menuitem"
                     onclick={() =>
                       handleMenuAction(() => onDelete(column.name))}
                   >
@@ -536,17 +736,23 @@
           {/if}
           {#if activeSubmenu === 'type' && onChangeType}
             <Portal>
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
                 class="dropdown-menu submenu-portal"
+                bind:this={typeSubmenuElement}
                 style="top: {submenuPosition.top}px; left: {submenuPosition.left}px;"
+                role="menu"
+                aria-label={m.column_type_change()}
+                tabindex="-1"
                 onmouseenter={() => (activeSubmenu = 'type')}
                 onmouseleave={() => (activeSubmenu = null)}
+                onkeydown={(event: KeyboardEvent) =>
+                  handleSubmenuKeydown(event, 'type')}
               >
                 {#each typeOptions as option (option.value)}
                   <button
                     type="button"
                     class="menu-item"
+                    role="menuitem"
                     onclick={() =>
                       handleMenuAction(() =>
                         onChangeType(column.name, option.value)
@@ -560,17 +766,23 @@
           {/if}
           {#if activeSubmenu === 'refine'}
             <Portal>
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
                 class="dropdown-menu submenu-portal"
+                bind:this={refineSubmenuElement}
                 style="top: {submenuPosition.top}px; left: {submenuPosition.left}px;"
+                role="menu"
+                aria-label={m.column_refine_label()}
+                tabindex="-1"
                 onmouseenter={() => (activeSubmenu = 'refine')}
                 onmouseleave={() => (activeSubmenu = null)}
+                onkeydown={(event: KeyboardEvent) =>
+                  handleSubmenuKeydown(event, 'refine')}
               >
                 {#each refineOptions as option (option.value)}
                   <button
                     type="button"
                     class="menu-item"
+                    role="menuitem"
                     onclick={() =>
                       handleMenuAction(() =>
                         onRefine(column.name, option.value)
@@ -684,7 +896,7 @@
                     aria-label={catTooltipText(item)}
                     onmouseenter={(e: MouseEvent) =>
                       showCatTooltip(e, catTooltipText(item))}
-                    onmouseleave={hideCatTooltip}
+                    onmouseleave={() => hideTooltip(catTooltip)}
                   >
                     <span class="hist-cat-label">{catLabel(item)}</span>
                   </div>
@@ -836,6 +1048,12 @@
     color: var(--cds-text-01, #161616);
   }
 
+  .menu-trigger:focus-visible,
+  :global(.dropdown-menu .menu-item:focus-visible) {
+    outline: 2px solid var(--cds-focus, #0f62fe);
+    outline-offset: -2px;
+  }
+
   :global(.dropdown-menu) {
     position: fixed;
     transform: translateX(-100%);
@@ -861,6 +1079,10 @@
   }
 
   :global(.dropdown-menu .menu-item:hover) {
+    background-color: var(--cds-hover-ui);
+  }
+
+  :global(.dropdown-menu .menu-item:focus-visible) {
     background-color: var(--cds-hover-ui);
   }
 
@@ -970,8 +1192,7 @@
     overflow: hidden;
   }
 
-  /* Reserve the same footer height as the histograms (their min/max labels)
-     so the unique-values box bottom lands on the shared X-axis baseline. */
+  /* Match histogram footer height so unique-values align to the X-axis. */
   .hist-unique-area {
     flex: 1;
     display: flex;
@@ -1016,8 +1237,7 @@
   }
 
   .hist-cat-bar {
-    /* flex-grow is set inline to each category count so box widths are
-       proportional to the number of values in the category. */
+    /* Inline flex-grow makes widths proportional to category counts. */
     flex: 1 1 0;
     display: flex;
     align-items: center;
@@ -1046,8 +1266,7 @@
     letter-spacing: 0.32px;
     white-space: nowrap;
     overflow: hidden;
-    /* Clip at the end (start of the label stays readable) — the full label is
-       always available through the hover tooltip. */
+    /* Keep the label start visible; the full label is available in the tooltip. */
     text-overflow: clip;
     text-align: left;
     padding-left: 4px;
@@ -1275,8 +1494,7 @@
     border-bottom: 5px solid var(--cds-inverse-01, #393939);
   }
 
-  /* Category names can be long, so allow the tooltip to wrap instead of
-     overflowing the box like the (short) type tooltip. */
+  /* Category names can be long, so this tooltip wraps. */
   :global(.cat-tooltip) {
     white-space: normal;
     max-width: 240px;

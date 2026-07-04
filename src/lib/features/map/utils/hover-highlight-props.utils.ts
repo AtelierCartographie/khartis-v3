@@ -1,4 +1,4 @@
-export function resolveHoverHighlightProps(_pickable = true): {
+export function resolveHoverHighlightProps(): {
   autoHighlight: boolean;
   highlightedObjectIndex: number;
 } {

@@ -26,10 +26,12 @@ import {
   type ProjectionInfo
 } from '$lib/features/commons/utils/projection.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
-import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
-import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
-import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
-import { projectionStore as mapRenderProjectionStore } from '$lib/features/map/stores/projection.store.svelte';
+import {
+  basemapService,
+  mapProjectionStore,
+  osmBasemapStore,
+  projectionStore as mapRenderProjectionStore
+} from '$lib/features/map';
 import type { ProjectionState } from '../../types/projections.types';
 import type { D3Usage } from 'proj-suggest';
 
@@ -61,7 +63,7 @@ type ProjectionActions = {
   setCenter: (longitude: number, latitude: number) => void;
   setRotation: (rotation: number) => void;
   resetSettings: () => void;
-  suggestProjectionForCurrentData: () => void;
+  suggestProjectionForCurrentData: () => Promise<void>;
   applySuggestion: (suggestion: ProjectionSuggestion) => void;
   applyBasemapPreferredProjection: () => void;
   getCurrentProjectionInfo: () => ProjectionInfo | undefined;
@@ -360,38 +362,36 @@ const { actions, getState } = createToolStore<
         }
         seedOrientationFromProjection();
       },
-      suggestProjectionForCurrentData: () => {
+      suggestProjectionForCurrentData: async () => {
         const requestId = ++suggestionRequestId;
-        void (async () => {
-          if (
-            !supportsProjectionSuggestions(getProjectionAvailabilityContext())
-          ) {
-            if (requestId === suggestionRequestId) {
-              s.suggestions = undefined;
-            }
-            return;
+        if (
+          !supportsProjectionSuggestions(getProjectionAvailabilityContext())
+        ) {
+          if (requestId === suggestionRequestId) {
+            s.suggestions = undefined;
           }
+          return;
+        }
 
-          const bounds = await resolveSuggestionBounds();
-          if (!bounds) return;
+        const bounds = await resolveSuggestionBounds();
+        if (!bounds) return;
 
-          const result =
-            bounds.kind === 'features'
-              ? suggestProjectionsForFeatureBounds(bounds.boxes)
-              : suggestProjectionsForBbox(bounds.bbox);
+        const result =
+          bounds.kind === 'features'
+            ? suggestProjectionsForFeatureBounds(bounds.boxes)
+            : suggestProjectionsForBbox(bounds.bbox);
 
-          if (!result) return;
+        if (!result) return;
 
-          if (requestId !== suggestionRequestId) {
-            return;
-          }
+        if (requestId !== suggestionRequestId) {
+          return;
+        }
 
-          s.suggestions = result;
+        s.suggestions = result;
 
-          if (s.overrideSource === 'auto') {
-            clearSelectedInternal(true);
-          }
-        })();
+        if (s.overrideSource === 'auto') {
+          clearSelectedInternal(true);
+        }
       },
       applySuggestion: (suggestion: ProjectionSuggestion) => {
         if (

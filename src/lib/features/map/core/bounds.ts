@@ -1,11 +1,25 @@
 import { GEO_COLUMN_NAMES } from '$lib/features/commons/constants/data.constants';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import type {
+  BinaryPathData,
+  BinaryPointData,
+  BinaryPolygonData
+} from 'geoarrow-deck-stream';
 import type { FeatureCollection, Geometry } from 'geojson';
 import type { LngLatBoundsLike } from 'maplibre-gl';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { GeoArrowMetadataKey } from '../constants';
+import {
+  ArrowExtension,
+  GeoArrowMetadataKey,
+  GeometryType
+} from '../constants';
 import { parseGeoJsonGeometry } from '../io/geometry-parser';
 import { GEOJSON_TYPE } from '$lib/features/commons/constants';
+import {
+  parsePaths,
+  parsePointData,
+  parseSolidPolygons
+} from '../utils/geoarrow-stream-bridge.utils';
 
 const MIN_LAT = -90;
 const MAX_LAT = 90;
@@ -15,6 +29,12 @@ const DEGENERATE_BOUNDS_PADDING_DEGREES = 0.01;
 const BOUNDS_READ_WARNING_LIMIT = 3;
 const boundsReadWarnings = new Map<string, number>();
 type RowInclusionPredicate = (rowIndex: number) => boolean;
+type BoundsAccumulator = {
+  minLng: number;
+  minLat: number;
+  maxLng: number;
+  maxLat: number;
+};
 
 function warnBoundsReadFailureOnce(
   geoColumn: string,
@@ -84,6 +104,30 @@ function isValidBbox(
   }
 
   return true;
+}
+
+function createBoundsAccumulator(): BoundsAccumulator {
+  return {
+    minLng: Infinity,
+    minLat: Infinity,
+    maxLng: -Infinity,
+    maxLat: -Infinity
+  };
+}
+
+function addCoordinateToBounds(
+  accumulator: BoundsAccumulator,
+  lng: number,
+  lat: number
+): void {
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+    return;
+  }
+
+  if (lng < accumulator.minLng) accumulator.minLng = lng;
+  if (lng > accumulator.maxLng) accumulator.maxLng = lng;
+  if (lat < accumulator.minLat) accumulator.minLat = lat;
+  if (lat > accumulator.maxLat) accumulator.maxLat = lat;
 }
 
 function expandDegenerateAxis(
@@ -189,57 +233,10 @@ function extractCoordFromValue(value: unknown): [number, number] | null {
   return null;
 }
 
-function calculateBoundsFromGeometryData(
-  jsTable: ArrowTable,
-  geoColumn: string,
-  includeRow?: RowInclusionPredicate
+function finalizeBoundsAccumulator(
+  accumulator: BoundsAccumulator
 ): LngLatBoundsLike | null {
-  const geomVector = jsTable.getChild(geoColumn);
-  if (!geomVector) {
-    return null;
-  }
-
-  let minLng = Infinity;
-  let minLat = Infinity;
-  let maxLng = -Infinity;
-  let maxLat = -Infinity;
-  const maxSamples = includeRow
-    ? jsTable.numRows
-    : Math.min(jsTable.numRows, 10000);
-  const step = Math.max(1, Math.floor(jsTable.numRows / maxSamples));
-
-  for (let i = 0; i < jsTable.numRows; i += step) {
-    if (includeRow && !includeRow(i)) {
-      continue;
-    }
-
-    const geom = safeReadGeometryValue(geomVector, geoColumn, i);
-
-    const parsed = parseGeoJsonGeometry(geom);
-    if (parsed) {
-      const coords = extractCoordsFromGeometry(parsed);
-      for (const coord of coords) {
-        if (!Array.isArray(coord) || coord.length < 2) continue;
-        const [lng, lat] = coord;
-        if (typeof lng === 'number' && typeof lat === 'number') {
-          if (lng < minLng) minLng = lng;
-          if (lng > maxLng) maxLng = lng;
-          if (lat < minLat) minLat = lat;
-          if (lat > maxLat) maxLat = lat;
-        }
-      }
-      continue;
-    }
-
-    const coord = extractCoordFromValue(geom);
-    if (coord) {
-      const [lng, lat] = coord;
-      if (lng < minLng) minLng = lng;
-      if (lng > maxLng) maxLng = lng;
-      if (lat < minLat) minLat = lat;
-      if (lat > maxLat) maxLat = lat;
-    }
-  }
+  const { minLng, minLat, maxLng, maxLat } = accumulator;
 
   if (
     !isFinite(minLng) ||
@@ -273,6 +270,195 @@ function calculateBoundsFromGeometryData(
   ];
 }
 
+function calculateBoundsFromGeometryData(
+  jsTable: ArrowTable,
+  geoColumn: string,
+  includeRow?: RowInclusionPredicate
+): LngLatBoundsLike | null {
+  const geomVector = jsTable.getChild(geoColumn);
+  if (!geomVector) {
+    return null;
+  }
+
+  const bounds = createBoundsAccumulator();
+  const maxSamples = includeRow
+    ? jsTable.numRows
+    : Math.min(jsTable.numRows, 10000);
+  const step = Math.max(1, Math.floor(jsTable.numRows / maxSamples));
+
+  for (let i = 0; i < jsTable.numRows; i += step) {
+    if (includeRow && !includeRow(i)) {
+      continue;
+    }
+
+    const geom = safeReadGeometryValue(geomVector, geoColumn, i);
+
+    const parsed = parseGeoJsonGeometry(geom);
+    if (parsed) {
+      const coords = extractCoordsFromGeometry(parsed);
+      for (const coord of coords) {
+        if (!Array.isArray(coord) || coord.length < 2) continue;
+        const [lng, lat] = coord;
+        if (typeof lng === 'number' && typeof lat === 'number') {
+          addCoordinateToBounds(bounds, lng, lat);
+        }
+      }
+      continue;
+    }
+
+    const coord = extractCoordFromValue(geom);
+    if (coord) {
+      addCoordinateToBounds(bounds, coord[0], coord[1]);
+    }
+  }
+
+  return finalizeBoundsAccumulator(bounds);
+}
+
+function addBinaryPositionRangeToBounds(
+  accumulator: BoundsAccumulator,
+  positions: Float32Array,
+  startVertex: number,
+  endVertex: number
+): void {
+  const vertexCount = Math.floor(positions.length / 2);
+  const start = Math.max(0, Math.min(startVertex, vertexCount));
+  const end = Math.max(start, Math.min(endVertex, vertexCount));
+
+  for (let vertexIndex = start; vertexIndex < end; vertexIndex += 1) {
+    const positionIndex = vertexIndex * 2;
+    addCoordinateToBounds(
+      accumulator,
+      positions[positionIndex],
+      positions[positionIndex + 1]
+    );
+  }
+}
+
+function calculateBoundsFromBinaryPoints(
+  data: BinaryPointData,
+  includeRow: RowInclusionPredicate
+): LngLatBoundsLike | null {
+  const bounds = createBoundsAccumulator();
+  const pointCount = Math.min(
+    data.length,
+    data.featureIds.length,
+    Math.floor(data.positions.length / 2)
+  );
+
+  for (let pointIndex = 0; pointIndex < pointCount; pointIndex += 1) {
+    if (!includeRow(data.featureIds[pointIndex])) {
+      continue;
+    }
+
+    const positionIndex = pointIndex * 2;
+    addCoordinateToBounds(
+      bounds,
+      data.positions[positionIndex],
+      data.positions[positionIndex + 1]
+    );
+  }
+
+  return finalizeBoundsAccumulator(bounds);
+}
+
+function calculateBoundsFromBinaryPaths(
+  data: BinaryPathData,
+  includeRow: RowInclusionPredicate
+): LngLatBoundsLike | null {
+  const bounds = createBoundsAccumulator();
+  const pathCount = Math.min(
+    data.length,
+    data.featureIds.length,
+    Math.max(0, data.startIndices.length - 1)
+  );
+
+  for (let pathIndex = 0; pathIndex < pathCount; pathIndex += 1) {
+    if (!includeRow(data.featureIds[pathIndex])) {
+      continue;
+    }
+
+    addBinaryPositionRangeToBounds(
+      bounds,
+      data.positions,
+      data.startIndices[pathIndex],
+      data.startIndices[pathIndex + 1]
+    );
+  }
+
+  return finalizeBoundsAccumulator(bounds);
+}
+
+function calculateBoundsFromBinaryPolygons(
+  data: BinaryPolygonData,
+  includeRow: RowInclusionPredicate
+): LngLatBoundsLike | null {
+  const bounds = createBoundsAccumulator();
+  const polygonCount = Math.min(
+    data.length,
+    data.featureIds.length,
+    Math.max(0, data.polygonIndices.length - 1)
+  );
+
+  for (let polygonIndex = 0; polygonIndex < polygonCount; polygonIndex += 1) {
+    if (!includeRow(data.featureIds[polygonIndex])) {
+      continue;
+    }
+
+    addBinaryPositionRangeToBounds(
+      bounds,
+      data.positions,
+      data.polygonIndices[polygonIndex],
+      data.polygonIndices[polygonIndex + 1]
+    );
+  }
+
+  return finalizeBoundsAccumulator(bounds);
+}
+
+function isNativeGeoArrowExtension(extensionName: string | null): boolean {
+  return (
+    extensionName !== null &&
+    extensionName.startsWith('geoarrow.') &&
+    extensionName !== ArrowExtension.GEOARROW_WKB
+  );
+}
+
+function calculateBoundsFromNativeGeoArrowRows(
+  jsTable: ArrowTable,
+  geometryType: GeometryType | null,
+  includeRow: RowInclusionPredicate
+): LngLatBoundsLike | null {
+  try {
+    switch (geometryType) {
+      case GeometryType.POINT:
+      case GeometryType.MULTIPOINT:
+        return calculateBoundsFromBinaryPoints(
+          parsePointData(jsTable),
+          includeRow
+        );
+      case GeometryType.LINESTRING:
+      case GeometryType.MULTILINESTRING:
+        return calculateBoundsFromBinaryPaths(parsePaths(jsTable), includeRow);
+      case GeometryType.POLYGON:
+      case GeometryType.MULTIPOLYGON:
+        return calculateBoundsFromBinaryPolygons(
+          parseSolidPolygons(jsTable),
+          includeRow
+        );
+      default:
+        return null;
+    }
+  } catch (error) {
+    logger.error(
+      'Failed to calculate native GeoArrow row bounds',
+      LogCategory.MAP,
+      error
+    );
+    return null;
+  }
+}
+
 export function calculateBoundsFromGeoArrowRows(
   jsTable: ArrowTable,
   includeRow: RowInclusionPredicate
@@ -284,10 +470,30 @@ export function calculateBoundsFromGeoArrowRows(
 
     const geoMetadata = jsTable.schema.metadata.get(GeoArrowMetadataKey.GEO);
     let primaryColumn: string | null = null;
+    let primaryGeometryType: GeometryType | null = null;
+    let isNativePrimaryColumn = false;
 
     if (geoMetadata) {
       const jsonMeta = JSON.parse(geoMetadata);
       primaryColumn = jsonMeta.primary_column ?? null;
+      const primaryColumnMeta = primaryColumn
+        ? jsonMeta.columns?.[primaryColumn]
+        : null;
+      const rawGeometryType = Array.isArray(primaryColumnMeta?.geometry_types)
+        ? primaryColumnMeta.geometry_types[0]
+        : null;
+      primaryGeometryType =
+        typeof rawGeometryType === 'string'
+          ? (rawGeometryType.toUpperCase() as GeometryType)
+          : null;
+      const primaryField = primaryColumn
+        ? jsTable.schema.fields.find((field) => field.name === primaryColumn)
+        : null;
+      const extensionName =
+        primaryField?.metadata
+          ?.get(GeoArrowMetadataKey.EXTENSION_NAME)
+          ?.toLowerCase() ?? null;
+      isNativePrimaryColumn = isNativeGeoArrowExtension(extensionName);
     }
 
     if (primaryColumn) {
@@ -318,6 +524,17 @@ export function calculateBoundsFromGeoArrowRows(
       const bounds = calculateBoundsFromGeometryData(
         jsTable,
         field.name,
+        includeRow
+      );
+      if (bounds) {
+        return bounds;
+      }
+    }
+
+    if (isNativePrimaryColumn) {
+      const bounds = calculateBoundsFromNativeGeoArrowRows(
+        jsTable,
+        primaryGeometryType,
         includeRow
       );
       if (bounds) {

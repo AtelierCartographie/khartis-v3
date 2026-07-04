@@ -2,10 +2,7 @@ import type { UploadedFile } from '$lib/features/commons/types/create-project.ty
 import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
+import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { generateTableName } from '$lib/features/data-pipeline';
 import {
   getProcessor,
@@ -27,6 +24,7 @@ import {
 
 export interface DuckDBClientForDataset {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
+  dropTable(tableName: string): Promise<void>;
   analyse(
     tableName: string,
     options?: { force?: boolean }
@@ -227,7 +225,7 @@ export async function dropTable(
   const state = getState();
 
   try {
-    await Duck.query(`DROP TABLE IF EXISTS "${escapeIdentifier(tableName)}"`);
+    await Duck.dropTable(tableName);
 
     let idToDelete: string | undefined;
     for (const [id, dataset] of state.datasets.entries()) {

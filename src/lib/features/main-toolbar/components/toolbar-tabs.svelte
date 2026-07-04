@@ -1,6 +1,7 @@
 <script lang="ts">
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import { dataTabActions as persistedDataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {
     globalActions,
@@ -17,6 +18,7 @@
     showError,
     showSuccess
   } from '$lib/features/commons/utils/notification.utils.svelte';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import * as m from '$lib/paraglide/messages';
   import { Modal, Tag, TextInput } from 'carbon-components-svelte';
   import {
@@ -36,9 +38,14 @@
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import { UI_CONSTANTS } from '$lib/features/commons/constants/visualization.constants';
   import {
+    readCarbonStringValue,
+    type CarbonValueEvent
+  } from '$lib/features/commons/utils/carbon-events.utils';
+  import {
     visualizationStore,
     VisualizationType
   } from '$lib/features/commons/stores/visualization.store.svelte';
+  import { useToolbarTabMenu } from '../hooks/use-toolbar-tab-menu.svelte';
 
   const isVizStep = $derived(
     globalState.selectedStep === ToolbarStep.Visualizations
@@ -82,6 +89,22 @@
     return datasets.find((d) => d.isSelected) ?? datasets[0];
   }
 
+  function getDatasetSourceFileId(datasetId: string): string | undefined {
+    return datasetsStore.datasets.find((dataset) => dataset.id === datasetId)
+      ?.sourceFileId;
+  }
+
+  function resetPersistedDataTabForDatasetChange(
+    previousSourceFileId: string | undefined,
+    nextSourceFileId: string | undefined
+  ): void {
+    if (!nextSourceFileId || previousSourceFileId === nextSourceFileId) {
+      return;
+    }
+
+    persistedDataTabActions.reset({ notify: true });
+  }
+
   function resetDataTabStores() {
     dataTabStore.reset();
     dataToolsStore.reset();
@@ -90,17 +113,27 @@
   function handleSelectDataset(datasetId: string, event: Event) {
     event.stopPropagation();
     const previousDatasetId = datasetsStore.selectedDatasetId;
+    const previousSourceFileId = previousDatasetId
+      ? getDatasetSourceFileId(previousDatasetId)
+      : undefined;
+    const nextSourceFileId = getDatasetSourceFileId(datasetId);
     datasetsStore.selectDataset(datasetId);
     if (previousDatasetId !== datasetId) {
+      resetPersistedDataTabForDatasetChange(
+        previousSourceFileId,
+        nextSourceFileId
+      );
       resetDataTabStores();
     }
-    closeTabMenu();
+    tabMenu.close();
   }
 
   function handleTabClick(sourceFileId: string, isCurrentlySelected: boolean) {
     if (!isCurrentlySelected) {
       resetDataTabStores();
-      globalActions.selectDataButton(sourceFileId);
+      globalActions.selectDataButton(sourceFileId, {
+        notifyDataTabReset: true
+      });
     }
   }
 
@@ -161,23 +194,35 @@
 
   function handleDeleteDataset(datasetId: string, name: string, event: Event) {
     event.stopPropagation();
-    closeTabMenu();
+    tabMenu.close();
     datasetToDelete = { id: datasetId, name };
     isDeleteDatasetConfirmOpen = true;
   }
 
   async function confirmDeleteDataset() {
-    if (datasetToDelete) {
-      const success = await datasetsStore.deleteDataset(datasetToDelete.id);
-      if (success) {
-        showSuccess(
-          m.success_dataset_deleted_title(),
-          m.success_dataset_deleted_message({ name: datasetToDelete.name })
-        );
+    try {
+      if (datasetToDelete) {
+        const success = await datasetsStore.deleteDataset(datasetToDelete.id);
+        if (success) {
+          showSuccess(
+            m.success_dataset_deleted_title(),
+            m.success_dataset_deleted_message({ name: datasetToDelete.name })
+          );
+        } else {
+          showError(m.error_delete_dataset_title(), m.error_generic_message());
+        }
       }
+    } catch (error) {
+      logger.error(
+        'Failed to delete dataset from toolbar tabs',
+        LogCategory.DATA,
+        error
+      );
+      showError(m.error_delete_dataset_title(), m.error_generic_message());
+    } finally {
+      isDeleteDatasetConfirmOpen = false;
+      datasetToDelete = null;
     }
-    isDeleteDatasetConfirmOpen = false;
-    datasetToDelete = null;
   }
 
   function cancelDeleteDataset() {
@@ -191,9 +236,8 @@
   let editedName = $state('');
   let nameInputRef = $state<HTMLInputElement | null>(null);
   let tabRefs = new SvelteMap<string, HTMLDivElement>();
-
-  let menuOpenTabId = $state<string | null>(null);
-  let menuPosition = $state({ top: 0, left: 0 });
+  const tabMenu = useToolbarTabMenu();
+  const registerMenuButton = tabMenu.registerMenuButton;
 
   function registerTab(node: HTMLDivElement, id: string) {
     tabRefs.set(id, node);
@@ -254,38 +298,9 @@
     }
   }
 
-  function toggleTabMenu(tabId: string, event: MouseEvent) {
-    event.stopPropagation();
-    if (menuOpenTabId === tabId) {
-      menuOpenTabId = null;
-    } else {
-      const button = event.currentTarget as HTMLButtonElement;
-      const rect = button.getBoundingClientRect();
-      menuPosition = {
-        top: rect.bottom + 4,
-        left: rect.left
-      };
-      menuOpenTabId = tabId;
-    }
-  }
-
-  function closeTabMenu() {
-    menuOpenTabId = null;
-  }
-
-  function handleTabMenuClickOutside(event: MouseEvent) {
-    const path = event.composedPath() as Element[];
-    if (path.some((el) => el.id === 'khartis-color-picker-dropdown')) return;
-    const target = event.target as Node;
-    const menuElement = document.querySelector('.tab-context-menu');
-    if (menuElement && !menuElement.contains(target)) {
-      closeTabMenu();
-    }
-  }
-
   async function handleDuplicateTab(tabId: string, event: Event) {
     event.stopPropagation();
-    closeTabMenu();
+    tabMenu.close();
 
     const dataset = datasetsStore.datasets.find(
       (d) => d.sourceFileId === tabId
@@ -301,14 +316,17 @@
     try {
       const newDatasetId = await datasetsStore.duplicateDataset(dataset.id);
       if (newDatasetId) {
-        datasetsStore.selectDataset(newDatasetId);
         const newDataset = datasetsStore.datasets.find(
           (d) => d.id === newDatasetId
         );
         if (newDataset?.sourceFileId) {
-          globalActions.selectDataButton(newDataset.sourceFileId);
+          globalActions.selectDataButton(newDataset.sourceFileId, {
+            notifyDataTabReset: true
+          });
           await tick();
           await dataOrchestratorService.restoreSelectedDataTabState();
+        } else {
+          datasetsStore.selectDataset(newDatasetId);
         }
         showSuccess(
           m.success_dataset_duplicated_title(),
@@ -327,7 +345,7 @@
 
   function handleRenameFromMenu(tabId: string, label: string, event: Event) {
     event.stopPropagation();
-    closeTabMenu();
+    tabMenu.close();
     startEditingTab(tabId, label);
   }
 
@@ -337,16 +355,16 @@
     event: Event
   ) {
     event.stopPropagation();
-    closeTabMenu();
+    tabMenu.close();
     fileToDelete = { id: fileId, name: fileName };
     isDeleteConfirmOpen = true;
   }
 
   $effect(() => {
-    if (menuOpenTabId) {
-      document.addEventListener('click', handleTabMenuClickOutside);
+    if (tabMenu.openTabId) {
+      document.addEventListener('click', tabMenu.handleClickOutside);
       return () =>
-        document.removeEventListener('click', handleTabMenuClickOutside);
+        document.removeEventListener('click', tabMenu.handleClickOutside);
     }
   });
 
@@ -421,7 +439,7 @@
       visualizationStore.renameVisualization(editingVizId, trimmed);
     }
     editingVizId = null;
-    closeTabMenu();
+    tabMenu.close();
   }
 
   function handleVizRenameKeydown(event: KeyboardEvent) {
@@ -432,9 +450,17 @@
     }
   }
 
+  function handleVizNameInput(event: CarbonValueEvent) {
+    editedVizName = readCarbonStringValue(event, editedVizName);
+  }
+
+  function handleDatasetNameInput(event: CarbonValueEvent) {
+    editedDatasetName = readCarbonStringValue(event, editedDatasetName);
+  }
+
   function handleDuplicateViz(vizId: string, event: Event) {
     event.stopPropagation();
-    closeTabMenu();
+    tabMenu.close();
     visualizationStore.duplicateVisualization(vizId);
   }
 
@@ -444,17 +470,30 @@
     event: Event
   ) {
     event.stopPropagation();
-    closeTabMenu();
+    tabMenu.close();
     vizToDelete = { id: vizId, name: vizName };
     isVizDeleteConfirmOpen = true;
   }
 
   function confirmVizDelete() {
-    if (vizToDelete) {
-      visualizationStore.removeVisualization(vizToDelete.id);
+    try {
+      if (vizToDelete) {
+        visualizationStore.removeVisualization(vizToDelete.id);
+      }
+    } catch (error) {
+      logger.error(
+        'Failed to delete visualization from toolbar tabs',
+        LogCategory.VISUALIZATION,
+        error
+      );
+      showError(
+        m.error_delete_visualization_title(),
+        m.error_generic_message()
+      );
+    } finally {
+      isVizDeleteConfirmOpen = false;
+      vizToDelete = null;
     }
-    isVizDeleteConfirmOpen = false;
-    vizToDelete = null;
   }
 
   function cancelVizDelete() {
@@ -476,11 +515,21 @@
   };
 
   const handleDeleteFile = async () => {
-    if (fileToDelete && projectStore.currentProject) {
-      await projectStore.removeFileFromProject(fileToDelete.id);
+    try {
+      if (fileToDelete && projectStore.currentProject) {
+        await projectStore.removeFileFromProject(fileToDelete.id);
+      }
+    } catch (error) {
+      logger.error(
+        'Failed to remove file from toolbar tabs',
+        LogCategory.PROJECT,
+        error
+      );
+      showError(m.error_delete_file_title(), m.error_generic_message());
+    } finally {
+      isDeleteConfirmOpen = false;
+      fileToDelete = null;
     }
-    isDeleteConfirmOpen = false;
-    fileToDelete = null;
   };
 
   const cancelDelete = () => {
@@ -524,7 +573,10 @@
   >
     {#if isVizStep}
       {#each vizTabs as vizTab (vizTab.id)}
-        <div class="tab-button-wrapper with-menu">
+        <div
+          class="tab-button-wrapper with-menu"
+          class:selected={vizTab.isSelected}
+        >
           <Button
             isSelected={vizTab.isSelected}
             kind={vizTab.isSelected ? ButtonKind.Primary : ButtonKind.Ghost}
@@ -538,23 +590,28 @@
                 {vizTab.label}
               </span>
             </div>
-            <button
-              type="button"
-              class="tab-menu-button"
-              onclick={(e: MouseEvent) => toggleTabMenu(vizTab.id, e)}
-              aria-label={m.file_options()}
-              title={m.file_options()}
-              aria-haspopup="true"
-              aria-expanded={menuOpenTabId === vizTab.id}
-            >
-              <OverflowMenuVertical size={16} />
-            </button>
           </Button>
-          {#if menuOpenTabId === vizTab.id}
+          <button
+            type="button"
+            class="tab-menu-button"
+            use:registerMenuButton={vizTab.id}
+            onclick={(e: MouseEvent) => tabMenu.toggle(vizTab.id, e)}
+            aria-label={m.file_options()}
+            title={m.file_options()}
+            aria-haspopup="menu"
+            aria-expanded={tabMenu.openTabId === vizTab.id}
+          >
+            <OverflowMenuVertical size={16} />
+          </button>
+          {#if tabMenu.openTabId === vizTab.id}
             <div
               class="tab-context-menu"
-              style="top: {menuPosition.top}px; left: {menuPosition.left}px;"
+              style="top: {tabMenu.position.top}px; left: {tabMenu.position
+                .left}px;"
               role="menu"
+              aria-label={m.file_options()}
+              tabindex="-1"
+              onkeydown={tabMenu.handleKeydown}
             >
               {#if editingVizId === vizTab.id}
                 <div class="tab-menu-item-dataset-row">
@@ -562,7 +619,8 @@
                     size="sm"
                     hideLabel
                     labelText={m.viz_list_rename()}
-                    bind:value={editedVizName}
+                    value={editedVizName}
+                    on:input={handleVizNameInput}
                     on:keydown={handleVizRenameKeydown}
                     on:blur={saveVizRename}
                     on:click={(e) => e.stopPropagation()}
@@ -619,6 +677,7 @@
             : fileInfo.name}
         <div
           class="tab-button-wrapper with-menu"
+          class:selected={dataButton.isSelected}
           use:registerTab={dataButton.id}
         >
           <Button
@@ -652,24 +711,29 @@
                 </Tag>
               {/if}
             </div>
-            <button
-              type="button"
-              class="tab-menu-button"
-              onclick={(e: MouseEvent) => toggleTabMenu(dataButton.id, e)}
-              aria-label={m.file_options()}
-              title={m.file_options()}
-              aria-haspopup="true"
-              aria-expanded={menuOpenTabId === dataButton.id}
-            >
-              <OverflowMenuVertical size={16} />
-            </button>
           </Button>
-          {#if menuOpenTabId === dataButton.id}
+          <button
+            type="button"
+            class="tab-menu-button"
+            use:registerMenuButton={dataButton.id}
+            onclick={(e: MouseEvent) => tabMenu.toggle(dataButton.id, e)}
+            aria-label={m.file_options()}
+            title={m.file_options()}
+            aria-haspopup="menu"
+            aria-expanded={tabMenu.openTabId === dataButton.id}
+          >
+            <OverflowMenuVertical size={16} />
+          </button>
+          {#if tabMenu.openTabId === dataButton.id}
             {@const menuDatasets = getDatasetsForTab(dataButton.id)}
             <div
               class="tab-context-menu"
-              style="top: {menuPosition.top}px; left: {menuPosition.left}px;"
+              style="top: {tabMenu.position.top}px; left: {tabMenu.position
+                .left}px;"
               role="menu"
+              aria-label={m.file_options()}
+              tabindex="-1"
+              onkeydown={tabMenu.handleKeydown}
             >
               {#if menuDatasets.length > 1}
                 <div class="tab-menu-section-label">
@@ -682,7 +746,8 @@
                         size="sm"
                         hideLabel
                         labelText={m.dataset_name_label()}
-                        bind:value={editedDatasetName}
+                        value={editedDatasetName}
+                        on:input={handleDatasetNameInput}
                         on:keydown={handleDatasetEditKeyPress}
                         on:blur={saveDatasetRename}
                         on:click={(e) => e.stopPropagation()}
@@ -708,6 +773,7 @@
                     <IconButton
                       kind="ghost"
                       size="small"
+                      role="menuitem"
                       iconDescription={m.dataset_rename_action()}
                       icon={Edit}
                       on:click={(e) =>
@@ -716,6 +782,7 @@
                     <IconButton
                       kind="danger-ghost"
                       size="small"
+                      role="menuitem"
                       iconDescription={m.dataset_delete_action()}
                       icon={TrashCan}
                       on:click={(e) =>
@@ -781,7 +848,7 @@
   </div>
 </div>
 
-<AddDataModal bind:open={isAddDataModalOpen} addDataButton={openAddDataModal} />
+<AddDataModal bind:open={isAddDataModalOpen} />
 
 <Modal
   danger
@@ -969,6 +1036,12 @@
     background-color: var(--cds-hover-ui);
   }
 
+  .tab-menu-button:focus-visible,
+  .tab-menu-item:focus-visible {
+    outline: 2px solid var(--cds-focus, #0f62fe);
+    outline-offset: -2px;
+  }
+
   .tab-menu-button :global(svg) {
     fill: var(--cds-text-02);
   }
@@ -977,12 +1050,12 @@
     fill: var(--cds-text-01);
   }
 
-  :global(.bx--btn--primary) .tab-menu-button :global(svg) {
+  .tab-button-wrapper.selected .tab-menu-button :global(svg) {
     fill: var(--cds-icon-on-color, #ffffff);
     opacity: 1;
   }
 
-  :global(.bx--btn--primary) .tab-menu-button:hover {
+  .tab-button-wrapper.selected .tab-menu-button:hover {
     background-color: rgba(255, 255, 255, 0.15);
   }
 
@@ -1011,6 +1084,10 @@
   }
 
   .tab-menu-item:hover {
+    background-color: var(--cds-hover-ui);
+  }
+
+  .tab-menu-item:focus-visible {
     background-color: var(--cds-hover-ui);
   }
 

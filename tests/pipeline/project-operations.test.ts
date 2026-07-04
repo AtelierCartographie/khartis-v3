@@ -12,7 +12,7 @@ function makeProject(overrides: Partial<KhartisProject> = {}): KhartisProject {
   return {
     id: 'original-id',
     manifest: {
-      version: PROJECT_CONST.APP_VERSION,
+      version: PROJECT_CONST.SCHEMA_VERSION,
       name: 'My Project',
       format: 'kh',
       createdAt: new Date('2024-01-01'),
@@ -69,13 +69,13 @@ describe('duplicateProject', () => {
     const original = makeProject({
       manifest: {
         ...makeProject().manifest,
-        version: PROJECT_CONST.APP_VERSION,
+        version: PROJECT_CONST.SCHEMA_VERSION,
         author: 'Jean',
         format: 'kh'
       }
     });
     const dup = duplicateProject(original, 'Copy');
-    expect(dup.manifest.version).toBe(PROJECT_CONST.APP_VERSION);
+    expect(dup.manifest.version).toBe(PROJECT_CONST.SCHEMA_VERSION);
     expect(dup.manifest.format).toBe('kh');
     expect(dup.manifest.author).toBe('Jean');
   });

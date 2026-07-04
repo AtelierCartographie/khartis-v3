@@ -1,4 +1,5 @@
-import { m } from '$lib/paraglide/messages.js';
+import { m } from '$lib/paraglide/messages';
+import { formatValue } from '$lib/features/commons/utils/format.utils';
 import Textbox from '@borgar/textbox';
 import { bisectLeft, bisectRight } from 'd3-array';
 import {
@@ -8,10 +9,13 @@ import {
   escapeSvgText,
   linearScale,
   magnitude,
+  renderLegendHeader,
+  renderLegendNote,
   resolveLegendFontFamily,
   round,
   round_extreme,
-  type CommonLegendTextOptions
+  type CommonLegendTextOptions,
+  type LegendSvgDefinition
 } from './utils';
 
 export interface QuantiColorLegendOptions extends CommonLegendTextOptions {
@@ -24,7 +28,7 @@ export function draw_quanti_color_legend(
   thresholds: number[],
   colors: string[],
   options: QuantiColorLegendOptions = {}
-): string {
+): LegendSvgDefinition {
   let { variable_width, title, subtitle, note, fontSize, nodata } = options;
   variable_width ??= false;
   title ??= null;
@@ -43,7 +47,7 @@ export function draw_quanti_color_legend(
   let x: number[] = [];
   const font = createLegendFont({ fontSize, fontFamily: resolvedFontFamily });
   const labels_length = thresholds.map((d) =>
-    Textbox.measureText(d.toLocaleString(), font)
+    Textbox.measureText(formatValue(d), font)
   );
   const label_gap = 10;
   const label_safety_padding = Math.max(6, Math.round(fontSize * 0.6));
@@ -102,26 +106,34 @@ export function draw_quanti_color_legend(
     fontSize: noteSize,
     fontFamily: resolvedFontFamily
   });
-  const title_lines = title ? wrap_text(title, title_font, max_text_width) : [];
-  const subtitle_lines = subtitle
-    ? wrap_text(subtitle, subtitle_font, max_text_width)
-    : [];
-  const note_lines = note ? wrap_text(note, note_font, max_text_width) : [];
-  const actual_header_height =
-    (title_lines.length > 0
-      ? title_lines.length * (titleSize * 1.2) + header_gap
-      : 0) +
-    (subtitle_lines.length > 0
-      ? subtitle_lines.length * (subtitleSize * 1.2) + header_gap
-      : 0);
-  const actual_box_top = margin_top + actual_header_height + 5;
+  const header = renderLegendHeader({
+    title,
+    subtitle,
+    x: margin_left,
+    y: margin_top,
+    maxWidth: max_text_width,
+    titleSize,
+    subtitleSize,
+    fontFamily: resolvedFontFamily,
+    gap: header_gap,
+    titleFont: title_font,
+    subtitleFont: subtitle_font
+  });
+  const actual_box_top = margin_top + header.height + 5;
   const actual_tick_end = actual_box_top + box_height + 5;
   const actual_labels_bottom = actual_tick_end + 5 + fontSize;
   const nodata_section_height = nodata ? section_gap + nodata_box_h + 5 : 0;
+  const noteBlock = renderLegendNote({
+    note,
+    x: margin_left,
+    y: actual_labels_bottom + nodata_section_height + section_gap,
+    maxWidth: max_text_width,
+    noteSize,
+    fontFamily: resolvedFontFamily,
+    noteFont: note_font
+  });
   const actual_note_height =
-    note_lines.length > 0
-      ? section_gap + note_lines.length * (noteSize * 1.2)
-      : 0;
+    noteBlock.height > 0 ? section_gap + noteBlock.height : 0;
   const width = body_width;
   const height =
     actual_labels_bottom +
@@ -144,29 +156,8 @@ export function draw_quanti_color_legend(
     boxes: string[],
     ticks: string[],
     labels: string[]
-  ): string {
+  ): LegendSvgDefinition {
     const safeFontFamily = escapeSvgAttribute(resolvedFontFamily);
-    let header_markup = '';
-    let y_cursor = margin_top;
-
-    if (title_lines.length > 0) {
-      const line_h = titleSize * 1.2;
-      header_markup += `<g class="title" text-anchor="start" dominant-baseline="hanging" font-size="${titleSize}" font-weight="bold">`;
-      title_lines.forEach((line, i) => {
-        header_markup += `<text x="${margin_left}" y="${y_cursor + i * line_h}">${escapeSvgText(line)}</text>`;
-      });
-      header_markup += `</g>`;
-      y_cursor += title_lines.length * line_h + header_gap;
-    }
-
-    if (subtitle_lines.length > 0) {
-      const line_h = subtitleSize * 1.2;
-      header_markup += `<g class="subtitle" text-anchor="start" dominant-baseline="hanging" font-size="${subtitleSize}">`;
-      subtitle_lines.forEach((line, i) => {
-        header_markup += `<text x="${margin_left}" y="${y_cursor + i * line_h}">${escapeSvgText(line)}</text>`;
-      });
-      header_markup += `</g>`;
-    }
 
     let nodata_markup = '';
     if (nodata) {
@@ -178,18 +169,8 @@ export function draw_quanti_color_legend(
       </g>`;
     }
 
-    let note_markup = '';
-    if (note_lines.length > 0) {
-      const note_y = actual_labels_bottom + nodata_section_height + section_gap;
-      const line_h = noteSize * 1.2;
-      note_markup += `<g class="note" text-anchor="start" dominant-baseline="hanging" font-size="${noteSize}">`;
-      note_lines.forEach((line, i) => {
-        note_markup += `<text x="${margin_left}" y="${note_y + i * line_h}">${escapeSvgText(line)}</text>`;
-      });
-      note_markup += `</g>`;
-    }
-
-    return `<g class="quantitative_legend" font-family="${safeFontFamily}">
+    return {
+      markup: `<g class="quantitative_legend" font-family="${safeFontFamily}">
       ${createLegendCanvasRect(width, height)}
       <g class="box" stroke="none">
         ${boxes.join('')}
@@ -201,10 +182,13 @@ export function draw_quanti_color_legend(
          font-variant="tabular-nums" transform="translate(0,5)">
         ${labels.join('')}
       </g>
-      ${header_markup}
+      ${header.markup}
       ${nodata_markup}
-      ${note_markup}
-    </g>`;
+      ${noteBlock.markup}
+    </g>`,
+      width,
+      height
+    };
   }
 }
 
@@ -261,27 +245,5 @@ function tick(x: number, y1: number, y2: number): string {
 }
 
 function label(x: number, y: number, text: number): string {
-  return `<text x="${x}" y="${y}">${escapeSvgText(text.toLocaleString())}</text>`;
-}
-
-function wrap_text(text: string, font: string, maxWidth: number): string[] {
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let currentLine = words[0] ?? '';
-
-  for (let i = 1; i < words.length; i++) {
-    const candidate = `${currentLine} ${words[i]}`;
-    if (Textbox.measureText(candidate, font) <= maxWidth) {
-      currentLine = candidate;
-    } else {
-      lines.push(currentLine);
-      currentLine = words[i];
-    }
-  }
-
-  if (currentLine) {
-    lines.push(currentLine);
-  }
-
-  return lines;
+  return `<text x="${x}" y="${y}">${escapeSvgText(formatValue(text))}</text>`;
 }

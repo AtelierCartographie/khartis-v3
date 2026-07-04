@@ -11,9 +11,7 @@
     activeIndex?: number;
     items?: ToggleItem[];
     onchange?: (index: number) => void;
-    onChange?: (index: number) => void;
     ondblclick?: (index: number) => void;
-    onDoubleClick?: (index: number) => void;
     className?: string;
     activeClass?: string;
     fullWidthClass?: string;
@@ -25,9 +23,7 @@
     activeIndex = 0,
     items = [],
     onchange,
-    onChange = () => {},
     ondblclick,
-    onDoubleClick,
     className = '',
     activeClass = 'active',
     fullWidthClass = 'full-width',
@@ -40,15 +36,15 @@
       return;
     }
 
-    (onchange ?? onChange)(index);
+    onchange?.(index);
   }
 
   function handleDoubleClick(index: number): void {
-    (ondblclick ?? onDoubleClick)?.(index);
+    ondblclick?.(index);
   }
 </script>
 
-<div id="khartis-toggle-tabs" class="toggle-tabs {className}">
+<div class="khartis-toggle-tabs toggle-tabs {className}">
   {#each items as item, index (index)}
     <button
       type="button"
@@ -61,6 +57,7 @@
         ? 'expand-left'
         : ''}"
       title={tabTitle?.(index, activeIndex === index)}
+      aria-pressed={activeIndex === index}
       onclick={() => handleClick(index)}
       ondblclick={() => handleDoubleClick(index)}
     >
@@ -155,7 +152,7 @@
     border: 0;
   }
 
-  #khartis-toggle-tabs :global(.toggle-icon) {
+  .khartis-toggle-tabs :global(.toggle-icon) {
     flex-shrink: 0;
   }
 

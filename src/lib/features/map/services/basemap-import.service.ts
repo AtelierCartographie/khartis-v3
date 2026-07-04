@@ -4,12 +4,13 @@ import type {
   BasemapMetadata
 } from '$lib/features/map/types/basemap.types';
 import { Duck, GEO_CONSTANTS } from '$lib/features/duckdb';
-import {
-  addGeoArrowMetadataFromDuckDB,
-  fetchArrowTableWithGeometry
-} from '$lib/features/duckdb/orchestrator/arrow-ops';
 import { generateCustomBasemapAttributes } from './generate-basemap-attributes.service';
-import { getCustomBasemapGeometryProjectColumns } from './custom-basemap-columns.service';
+import { resolveCustomBasemapGeometryProjectColumns } from './custom-basemap-columns.service';
+import { createCustomBasemapGeometryTableFromDuck } from './custom-basemap-geometry.service';
+import {
+  type GeoParquetColumnMeta,
+  readGeoParquetMetadataFromDuck
+} from './geo-parquet-metadata.service';
 import * as m from '$lib/paraglide/messages';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import {
@@ -24,6 +25,12 @@ import {
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import {
+  DataValidationError,
+  DuckDBError,
+  ParseError,
+  PipelineError
+} from '$lib/features/commons/pipeline.errors';
 
 export interface BasemapImportResult {
   basemap: BasemapMetadata;
@@ -38,28 +45,11 @@ export interface BasemapBounds {
   maxY: number;
 }
 
-interface GeoParquetColumnMeta {
-  encoding?: string;
-  geometry_types?: string[];
-  bbox?: [number, number, number, number];
-}
-
-interface GeoParquetMeta {
-  primary_column?: string;
-  columns?: Record<string, GeoParquetColumnMeta>;
-}
-
 const RAW_TABLE_SUFFIX = '__raw';
 const INNERLINES_TABLE_SUFFIX = '__innerlines';
 const CENTROIDS_TABLE_SUFFIX = '__centroids';
-
-async function resolveCustomBasemapProjectColumns(
-  duck: typeof Duck,
-  tableName: string
-): Promise<string[]> {
-  const columns = await duck.analyse(tableName);
-  return getCustomBasemapGeometryProjectColumns(columns);
-}
+const BASEMAP_URL_LOAD_ERROR_CODE = 'BASEMAP_URL_LOAD_ERROR';
+const SHAPEFILE_FILE_TYPE = 'shapefile';
 
 export function getBasemapRawTableName(tableName: string): string {
   return `${tableName}${RAW_TABLE_SUFFIX}`;
@@ -83,16 +73,21 @@ export async function processBasemapImport(
 
   const isShapefile = file.name.toLowerCase().endsWith('.shp');
   if (isShapefile) {
-    throw new Error(
-      m.error_shapefile_missing_components({ components: '.shx, .dbf' })
+    throw new ParseError(
+      m.error_shapefile_missing_components({ components: '.shx, .dbf' }),
+      SHAPEFILE_FILE_TYPE,
+      {
+        fileName: file.name,
+        missingComponents: ['.shx', '.dbf']
+      }
     );
   }
 
-  const duck = Duck;
-  if (!duck) {
-    throw new Error('DuckDB not initialized');
+  if (!Duck.db) {
+    throw new DuckDBError(m.error_duckdb_not_initialized());
   }
 
+  const duck = Duck;
   await duck.register_files([file]);
 
   const tableName = `custom_basemap_${Date.now()}`;
@@ -135,10 +130,15 @@ async function processZipShapefileImport(
 ): Promise<BasemapImportResult> {
   const extraction = await extractZip(zipFile);
   if (!extraction.isShapefileArchive || !extraction.shapefileBaseName) {
-    throw new Error(
+    throw new ParseError(
       m.error_shapefile_missing_components({
         components: '.shp, .shx, .dbf'
-      })
+      }),
+      SHAPEFILE_FILE_TYPE,
+      {
+        fileName: zipFile.name,
+        missingComponents: ['.shp', '.shx', '.dbf']
+      }
     );
   }
 
@@ -154,14 +154,20 @@ async function processZipShapefileImport(
   );
 
   if (!mainShpFile) {
-    throw new Error(m.error_shapefile_no_shp_found());
+    throw new ParseError(
+      m.error_shapefile_no_shp_found(),
+      SHAPEFILE_FILE_TYPE,
+      {
+        fileName: zipFile.name
+      }
+    );
+  }
+
+  if (!Duck.db) {
+    throw new DuckDBError(m.error_duckdb_not_initialized());
   }
 
   const duck = Duck;
-  if (!duck) {
-    throw new Error('DuckDB not initialized');
-  }
-
   await duck.register_files(shapefileFiles, { shapefile: true });
 
   const tableName = `custom_basemap_${Date.now()}`;
@@ -192,21 +198,20 @@ async function processGeofileBasemapImport(
     await preparePointBasemapTables(duck, tableName, geometryColumn);
   }
 
-  const analysis = await duck.analyse(tableName);
   const bounds = await queryBasemapBounds(duck, tableName, geometryColumn);
 
   if (!bounds) {
-    throw new Error(m.basemap_import_modal_error_invalid_geometry());
+    throw new DataValidationError(
+      m.basemap_import_modal_error_invalid_geometry(),
+      INTERNAL_COLUMN.GEOM,
+      {
+        fileName: file.name,
+        tableName
+      }
+    );
   }
 
-  const rowCount =
-    Number(analysis.find((col) => col.name === geometryColumn)?.count) || 0;
-  const layers = buildBasemapLayers(
-    tableName,
-    geometryColumn,
-    layerType,
-    rowCount
-  );
+  const layers = buildBasemapLayers(tableName, layerType);
 
   const customBasemap: BasemapMetadata = {
     file: tableName,
@@ -241,7 +246,11 @@ async function processParquetBasemapImport(
     { format: 'arrow-ipc' }
   );
 
-  const geoMeta = await readGeoParquetMetadata(duck, escapedFileId);
+  const geoMeta = await readGeoParquetMetadataFromDuck(
+    duck,
+    escapedFileId,
+    'Failed to read imported basemap GeoParquet metadata'
+  );
   let geomColName = geoMeta?.primary_column ?? INTERNAL_COLUMN.GEOM;
   const colMeta = geoMeta?.columns?.[geomColName];
   let layerType = colMeta
@@ -262,18 +271,17 @@ async function processParquetBasemapImport(
 
   const bounds = await queryBasemapBounds(duck, tableName, geomColName);
   if (!bounds) {
-    throw new Error(m.basemap_import_modal_error_invalid_geometry());
+    throw new DataValidationError(
+      m.basemap_import_modal_error_invalid_geometry(),
+      geomColName,
+      {
+        fileName: file.name,
+        tableName
+      }
+    );
   }
 
-  const analysis = await duck.analyse(tableName);
-  const rowCount =
-    Number(analysis.find((col) => col.name === geomColName)?.count) || 0;
-  const layers = buildBasemapLayers(
-    tableName,
-    geomColName,
-    layerType,
-    rowCount
-  );
+  const layers = buildBasemapLayers(tableName, layerType);
 
   const customBasemap: BasemapMetadata = {
     file: tableName,
@@ -292,29 +300,6 @@ async function processParquetBasemapImport(
   const geometryTable = await createArrowTableFromDuckTable(duck, tableName);
 
   return { basemap: customBasemap, tableName, geometryTable };
-}
-
-async function readGeoParquetMetadata(
-  duck: typeof Duck,
-  escapedFileId: string
-): Promise<GeoParquetMeta | null> {
-  try {
-    const result = (await duck.query(
-      `SELECT value FROM parquet_kv_metadata('${escapedFileId}') WHERE key = 'geo'`,
-      { format: 'array', useProxy: false }
-    )) as Array<{ value: string }>;
-
-    if (result.length > 0 && result[0].value) {
-      return JSON.parse(result[0].value) as GeoParquetMeta;
-    }
-  } catch (error) {
-    logger.error(
-      'Failed to read imported basemap GeoParquet metadata',
-      LogCategory.MAP,
-      error
-    );
-  }
-  return null;
 }
 
 function extractGeometryTypeFromMeta(
@@ -355,9 +340,7 @@ function shouldCreateCentroidLayer(layerType: BasemapLayerType): boolean {
 
 function buildBasemapLayers(
   tableName: string,
-  _geometryColumn: string,
-  layerType: BasemapLayerType,
-  _rowCount: number
+  layerType: BasemapLayerType
 ): BasemapLayer[] {
   const layers: BasemapLayer[] = [
     {
@@ -397,24 +380,13 @@ async function createArrowTableFromDuckTable(
   duck: typeof Duck,
   tableName: string
 ): Promise<ArrowTable> {
-  const projectColumns = await resolveCustomBasemapProjectColumns(
+  const projectColumns = await resolveCustomBasemapGeometryProjectColumns(
     duck,
     tableName
   );
-  const { table: rawTable, geomColumn } = await fetchArrowTableWithGeometry(
-    tableName,
-    duck,
-    null,
-    null,
+  return createCustomBasemapGeometryTableFromDuck(duck, tableName, {
     projectColumns
-  );
-  return addGeoArrowMetadataFromDuckDB(
-    rawTable,
-    tableName,
-    duck,
-    undefined,
-    geomColumn
-  );
+  });
 }
 
 function getRepresentativePointExpression(
@@ -680,8 +652,13 @@ async function ensureFeatureIdColumn(
 export async function loadBasemapFromUrl(url: string): Promise<File> {
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(
-      m.basemap_url_error_load({ status: response.status.toString() })
+    throw new PipelineError(
+      m.basemap_url_error_load({ status: response.status.toString() }),
+      BASEMAP_URL_LOAD_ERROR_CODE,
+      {
+        url,
+        status: response.status
+      }
     );
   }
 

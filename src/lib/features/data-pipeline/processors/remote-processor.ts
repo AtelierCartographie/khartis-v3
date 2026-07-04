@@ -9,6 +9,13 @@ import type { DatasetResult, ZipDatasetResult } from '../types';
 import { processZipFile } from './zip-processor';
 import { isZipArchiveName } from '../utils/zip-handler';
 import { MIME } from '$lib/features/commons/constants';
+import { FileType } from '$lib/features/commons/utils/file-import.utils';
+import {
+  ParseError,
+  PipelineError
+} from '$lib/features/commons/pipeline.errors';
+
+const REMOTE_FILE_FETCH_ERROR_CODE = 'REMOTE_FILE_FETCH_FAILED';
 
 export async function processRemoteFile(
   url: string,
@@ -28,7 +35,14 @@ export async function processRemoteFile(
   }
 
   if (filename.toLowerCase().endsWith('.shp')) {
-    throw new Error(m.pipeline_error_shp_standalone());
+    throw new ParseError(
+      m.pipeline_error_shp_standalone(),
+      FileType.SHAPEFILE,
+      {
+        fileName: filename,
+        url
+      }
+    );
   }
 
   const tableName = providedTableName ?? generateTableName(filename);
@@ -61,11 +75,17 @@ export async function processRemoteZipFile(
 ): Promise<DatasetResult | ZipDatasetResult> {
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(
+    throw new PipelineError(
       m.pipeline_error_fetch_failed({
         status: String(response.status),
         statusText: response.statusText
-      })
+      }),
+      REMOTE_FILE_FETCH_ERROR_CODE,
+      {
+        status: response.status,
+        statusText: response.statusText,
+        url
+      }
     );
   }
 

@@ -20,7 +20,7 @@ function createOSMBasemap(file: string): BasemapMetadata {
 }
 
 describe('syncProjectOSMBasemap', () => {
-  it('keeps project OSM metadata available without restoring legacy OSM raster tiles', () => {
+  it('keeps project OSM metadata available and restores the active OSM state', () => {
     const osmBasemap = createOSMBasemap('osm_standard_123');
     const basemapLookup = {
       getBasemapById: vi.fn(() => undefined),
@@ -43,11 +43,11 @@ describe('syncProjectOSMBasemap', () => {
     );
 
     expect(basemapLookup.addCustomBasemap).toHaveBeenCalledWith(osmBasemap);
-    expect(osmState.setOSMBasemap).not.toHaveBeenCalled();
+    expect(osmState.setOSMBasemap).toHaveBeenCalledWith(osmBasemap);
     expect(osmState.clear).not.toHaveBeenCalled();
   });
 
-  it('does not reuse catalog OSM basemaps as legacy raster tiles', () => {
+  it('restores catalog OSM basemaps as the active OSM state', () => {
     const osmBasemap = createOSMBasemap('osm_standard_456');
     const basemapLookup = {
       getBasemapById: vi.fn(() => osmBasemap),
@@ -69,12 +69,12 @@ describe('syncProjectOSMBasemap', () => {
       osmState
     );
 
-    expect(osmState.setOSMBasemap).not.toHaveBeenCalled();
+    expect(osmState.setOSMBasemap).toHaveBeenCalledWith(osmBasemap);
     expect(basemapLookup.addCustomBasemap).not.toHaveBeenCalled();
     expect(osmState.clear).not.toHaveBeenCalled();
   });
 
-  it('does not restore Carte Facile reference selections as legacy OSM raster tiles', () => {
+  it('switches the active OSM state when the project uses another OSM metadata entry', () => {
     const referenceBasemap = createOSMBasemap('osm_monde-couleurs_456');
     const basemapLookup = {
       getBasemapById: vi.fn(() => referenceBasemap),
@@ -96,8 +96,8 @@ describe('syncProjectOSMBasemap', () => {
       osmState
     );
 
-    expect(osmState.clear).toHaveBeenCalledOnce();
-    expect(osmState.setOSMBasemap).not.toHaveBeenCalled();
+    expect(osmState.clear).not.toHaveBeenCalled();
+    expect(osmState.setOSMBasemap).toHaveBeenCalledWith(referenceBasemap);
     expect(basemapLookup.addCustomBasemap).not.toHaveBeenCalled();
   });
 

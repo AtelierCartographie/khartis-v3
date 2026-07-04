@@ -7,6 +7,10 @@
     BASEMAP_LAYER_CONFIG,
     BasemapRepresentation
   } from '$lib/features/commons/constants/visualization.constants';
+  import {
+    createLayerConfigSelectedIdHandler,
+    createLayerConfigValueHandler
+  } from './layer-config-handlers.utils';
 
   interface RepresentationOption {
     id: BasemapRepresentation;
@@ -44,19 +48,21 @@
     onchange
   }: Props = $props();
 
-  function handleRepresentationChange(e: CustomEvent<{ selectedId: string }>) {
-    onchange?.({
-      representation: e.detail.selectedId as BasemapRepresentation
-    });
-  }
-
-  function handleColorChange(value: string) {
-    onchange?.({ color: value });
-  }
-
-  function handleOpacityChange(value: number) {
-    onchange?.({ opacity: value });
-  }
+  const getOnChange = () => onchange;
+  const handleRepresentationChange =
+    createLayerConfigSelectedIdHandler<BasemapRepresentation>(
+      getOnChange,
+      'representation',
+      (selectedId) => selectedId as BasemapRepresentation
+    );
+  const handleColorChange = createLayerConfigValueHandler<string>(
+    getOnChange,
+    'color'
+  );
+  const handleOpacityChange = createLayerConfigValueHandler<number>(
+    getOnChange,
+    'opacity'
+  );
 </script>
 
 <div class="layer-config-content">

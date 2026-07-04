@@ -13,6 +13,10 @@
     Select,
     SelectItem
   } from 'carbon-components-svelte';
+  import {
+    readCarbonStringValue,
+    type CarbonValueEvent
+  } from '$lib/features/commons/utils/carbon-events.utils';
 
   export interface CsvOptions {
     header: boolean;
@@ -99,6 +103,27 @@
       canUseThousandsSeparator(opt.value, decimalSeparator)
     )
   );
+
+  function isThousandsSeparatorSelectValue(
+    value: string
+  ): value is ThousandsSeparatorSelectValue {
+    return thousandsOptions.some((opt) => opt.value === value);
+  }
+
+  function handleDelimiterChange(event: CarbonValueEvent) {
+    delimiter = readCarbonStringValue(event, delimiter);
+  }
+
+  function handleDecimalSeparatorChange(event: CarbonValueEvent) {
+    decimalSeparator = readCarbonStringValue(event, decimalSeparator);
+  }
+
+  function handleThousandsSeparatorChange(event: CarbonValueEvent) {
+    const nextSeparator = readCarbonStringValue(event, thousandsSeparator);
+    if (isThousandsSeparatorSelectValue(nextSeparator)) {
+      thousandsSeparator = nextSeparator;
+    }
+  }
 </script>
 
 <Modal
@@ -129,8 +154,9 @@
     <div class="option-group">
       <Select
         labelText={m.csv_options_delimiter()}
-        bind:selected={delimiter}
+        selected={delimiter}
         disabled={isApplying}
+        onchange={handleDelimiterChange}
       >
         {#each delimiterOptions as opt (opt.value)}
           <SelectItem value={opt.value} text={opt.label} />
@@ -141,8 +167,9 @@
     <div class="option-group">
       <Select
         labelText={m.csv_options_decimal_separator()}
-        bind:selected={decimalSeparator}
+        selected={decimalSeparator}
         disabled={isApplying}
+        onchange={handleDecimalSeparatorChange}
       >
         {#each decimalOptions as opt (opt.value)}
           <SelectItem value={opt.value} text={opt.label} />
@@ -153,8 +180,9 @@
     <div class="option-group">
       <Select
         labelText={m.csv_options_thousands_separator()}
-        bind:selected={thousandsSeparator}
+        selected={thousandsSeparator}
         disabled={isApplying}
+        onchange={handleThousandsSeparatorChange}
       >
         {#each filteredThousandsOptions as opt (opt.value)}
           <SelectItem value={opt.value} text={opt.label} />

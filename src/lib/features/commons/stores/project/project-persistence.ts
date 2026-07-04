@@ -2,11 +2,13 @@ import {
   ProjectStorageKey,
   projectFiles,
   projectRepository,
-  projectStorage,
+  projectStorage
+} from '$lib/features/project-management';
+import {
   persistenceRegistry,
   SavePriority,
   type SavePriorityType
-} from '$lib/features/project-management';
+} from '$lib/features/project-management/core';
 import { deserializeUploadedFile } from '$lib/features/project-management/services/serializer.service';
 import type {
   SerializedProjectData,
@@ -15,6 +17,7 @@ import type {
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { m } from '$lib/paraglide/messages';
 import { dataOrchestratorService } from '../../services/data-orchestrator.service.svelte';
+import { DataValidationError } from '../../pipeline.errors';
 import { dataTabState } from '../data-tab.store.svelte';
 import { datasetsStore } from '../datasets.store.svelte';
 import { downloadFile } from '../../utils/file-export.utils';
@@ -161,7 +164,14 @@ export async function saveCurrentProject(
       container._state.currentProject
     );
     if (!projectValidation.isValid) {
-      throw new Error(projectValidation.errors.join(', '));
+      throw new DataValidationError(
+        projectValidation.errors.join(', '),
+        'projectSize',
+        {
+          errors: projectValidation.errors,
+          projectId: container._state.currentProject.id
+        }
+      );
     }
 
     container._state.currentProject.manifest.updatedAt = new Date();

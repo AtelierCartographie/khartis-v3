@@ -291,6 +291,11 @@
     &:hover {
       background: var(--cds-field-hover-01, #e8e8e8);
     }
+
+    &:focus-visible {
+      outline: 2px solid var(--cds-focus);
+      outline-offset: -2px;
+    }
   }
 
   .trigger-value {
@@ -354,6 +359,11 @@
 
     &:hover {
       background: var(--cds-layer-hover-01, #e8e8e8);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--cds-focus);
+      outline-offset: -2px;
     }
 
     &.selected {

@@ -6,7 +6,10 @@ import {
 } from '$lib/features/commons/constants/ui.constants';
 import type { LayoutSizingContext } from '$lib/features/commons/utils/layout-sizing.utils';
 export { PAGE_GRID_SIZE_PX } from '$lib/features/commons/utils/page-grid.utils';
-import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
+import {
+  createReadonlyStateFacade,
+  createToolStore
+} from '$lib/features/commons/utils/store.utils.svelte';
 import type { FormatState } from '../../types/format.types';
 
 const HUE_MAX = 359;
@@ -117,7 +120,7 @@ const { state, actions, getState } = createToolStore<
   { key: 'format' }
 );
 
-export const formatState = state;
+export const formatState = createReadonlyStateFacade(state);
 export const formatActions = actions;
 export const getFormatState = getState;
 

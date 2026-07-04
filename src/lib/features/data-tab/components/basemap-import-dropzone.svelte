@@ -11,6 +11,10 @@
     Upload
   } from 'carbon-icons-svelte';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
+  import {
+    readCarbonStringValue,
+    type CarbonValueEvent
+  } from '$lib/features/commons/utils/carbon-events.utils';
 
   interface Props {
     acceptedExtensions?: string[];
@@ -68,6 +72,10 @@
     }
   }
 
+  function handleUrlInput(event: CarbonValueEvent) {
+    urlInput = readCarbonStringValue(event, urlInput);
+  }
+
   function handleDragOver(event: DragEvent) {
     event.preventDefault();
     isDragging = true;
@@ -118,9 +126,10 @@
     <span class="url-label">{m.basemap_import_url_label()}</span>
     <div class="url-import-row">
       <TextInput
-        bind:value={urlInput}
+        value={urlInput}
         placeholder={m.url_placeholder()}
         size="sm"
+        on:input={handleUrlInput}
       />
       <Button
         kind="tertiary"

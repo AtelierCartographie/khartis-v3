@@ -63,7 +63,7 @@ import { getVisualizationLegendSubtitle } from '$lib/features/commons/utils/lege
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { deepClone } from '$lib/features/commons/utils/clone.utils';
-import { SavePriority } from '$lib/features/project-management/core/persistence-registry';
+import { SavePriority } from '$lib/features/project-management/core';
 import { getSuggestionSignature } from '../utils/suggestion-selection.utils';
 
 interface DatasetGeometrySource {
@@ -77,13 +77,6 @@ interface DatasetGeometrySource {
   };
 }
 
-type SuggestionPrimitive =
-  | PrimitiveFilterType.POINT
-  | PrimitiveFilterType.LINE
-  | PrimitiveFilterType.POLYGON
-  | 'text'
-  | 'label';
-
 type DatasetPrimitive =
   | PrimitiveFilterType.POINT
   | PrimitiveFilterType.LINE
@@ -92,9 +85,6 @@ type DatasetPrimitive =
 
 interface SuggestionBehavior {
   visualizationType: VisualizationType;
-  primaryPrimitives: SuggestionPrimitive[];
-  supportPrimitives: SuggestionPrimitive[];
-  forcedOffPrimitives: SuggestionPrimitive[];
   primitiveFilters: VisualizationConfig['primitiveFilters'];
   mapping: VisualizationConfig['mapping'];
   modes?: Partial<VisualizationConfig['modes']>;
@@ -156,77 +146,222 @@ const SUGGESTION_VISUALIZATION_TYPES = {
   texts_proportional: VisualizationType.BIVARIATE
 } as const satisfies Record<string, VisualizationType>;
 
-export const SUGGESTION_BEHAVIOR_IDS = Object.keys(
-  SUGGESTION_VISUALIZATION_TYPES
-);
+type SuggestionBehaviorId = keyof typeof SUGGESTION_VISUALIZATION_TYPES;
+type SuggestionBehaviorFamily = 'symbol' | 'polygon' | 'line' | 'text';
+type SuggestionClassificationKind = 'category' | 'class';
+type SuggestionColumnSource =
+  | 'primaryNumeric'
+  | 'secondaryNumeric'
+  | 'proportionalSize'
+  | 'primaryText'
+  | 'secondaryText';
 
-const SYMBOL_UNIQUE_SUGGESTION_IDS = new Set([
-  'symbols_uniques',
-  'symbols_uniques_colorful_QTR',
-  'symbols_uniques_colorful_QL',
-  'symbols_uniques_colorful_QLO'
-]);
+type SuggestionBehaviorDefinition = {
+  family: SuggestionBehaviorFamily;
+  classification?: SuggestionClassificationKind;
+  fillMode?: FillMode;
+  colorMode?: ColorMode;
+  sizeMode?: SizeMode;
+  thicknessMode?: ThicknessMode;
+  symbolMode?: SymbolMode;
+  labelColumn?: SuggestionColumnSource;
+  valueColumn?: SuggestionColumnSource;
+  categoryColumn?: SuggestionColumnSource;
+  sizeColumn?: SuggestionColumnSource;
+  secondaryLabelColumn?: SuggestionColumnSource;
+  doubleSymbol?: boolean;
+  topLabelFilter?: boolean;
+};
 
-const SYMBOL_CATEGORY_SHAPE_IDS = new Set([
-  'symbols_differents',
-  'symbols_differents_QLO'
-]);
+const SUGGESTION_BEHAVIOR_DEFINITIONS = {
+  symbols_uniques: {
+    family: 'symbol',
+    symbolMode: SymbolMode.UNIQUE,
+    fillMode: FillMode.UNIQUE
+  },
+  polygons_uniques: {
+    family: 'polygon',
+    fillMode: FillMode.UNIQUE
+  },
+  lines_uniques: {
+    family: 'line',
+    colorMode: ColorMode.UNIQUE,
+    thicknessMode: ThicknessMode.UNIQUE
+  },
+  choropleth: {
+    family: 'polygon',
+    fillMode: FillMode.CLASSES,
+    classification: 'class',
+    valueColumn: 'primaryNumeric'
+  },
+  choropleth_labeled: {
+    family: 'polygon',
+    fillMode: FillMode.CLASSES,
+    classification: 'class',
+    valueColumn: 'primaryNumeric',
+    labelColumn: 'secondaryText',
+    topLabelFilter: true
+  },
+  symbols_uniques_colorful_QTR: {
+    family: 'symbol',
+    symbolMode: SymbolMode.UNIQUE,
+    fillMode: FillMode.CLASSES,
+    classification: 'class',
+    valueColumn: 'primaryNumeric'
+  },
+  lines_colorful_QTR: {
+    family: 'line',
+    colorMode: ColorMode.CLASSES,
+    thicknessMode: ThicknessMode.UNIQUE,
+    classification: 'class',
+    valueColumn: 'primaryNumeric'
+  },
+  symbols_proportional: {
+    family: 'symbol',
+    symbolMode: SymbolMode.PROPORTIONAL,
+    fillMode: FillMode.UNIQUE,
+    sizeColumn: 'proportionalSize'
+  },
+  symbols_proportional_labeled: {
+    family: 'symbol',
+    symbolMode: SymbolMode.PROPORTIONAL,
+    fillMode: FillMode.UNIQUE,
+    sizeColumn: 'proportionalSize',
+    labelColumn: 'secondaryText',
+    topLabelFilter: true
+  },
+  lines_proportional: {
+    family: 'line',
+    colorMode: ColorMode.UNIQUE,
+    thicknessMode: ThicknessMode.PROPORTIONAL,
+    sizeColumn: 'proportionalSize'
+  },
+  polygons_colorful_QL: {
+    family: 'polygon',
+    fillMode: FillMode.CATEGORIES,
+    classification: 'category',
+    categoryColumn: 'primaryText'
+  },
+  symbols_differents: {
+    family: 'symbol',
+    symbolMode: SymbolMode.CATEGORIES,
+    fillMode: FillMode.CATEGORIES,
+    classification: 'category',
+    categoryColumn: 'primaryText'
+  },
+  symbols_uniques_colorful_QL: {
+    family: 'symbol',
+    symbolMode: SymbolMode.UNIQUE,
+    fillMode: FillMode.CATEGORIES,
+    classification: 'category',
+    categoryColumn: 'primaryText'
+  },
+  lines_colorful_QL: {
+    family: 'line',
+    colorMode: ColorMode.CATEGORIES,
+    thicknessMode: ThicknessMode.UNIQUE,
+    classification: 'category',
+    categoryColumn: 'primaryText'
+  },
+  polygons_colorful_QLO: {
+    family: 'polygon',
+    fillMode: FillMode.CATEGORIES,
+    classification: 'category',
+    categoryColumn: 'primaryText'
+  },
+  symbols_differents_QLO: {
+    family: 'symbol',
+    symbolMode: SymbolMode.CATEGORIES,
+    fillMode: FillMode.CATEGORIES,
+    classification: 'category',
+    categoryColumn: 'primaryText'
+  },
+  symbols_uniques_colorful_QLO: {
+    family: 'symbol',
+    symbolMode: SymbolMode.UNIQUE,
+    fillMode: FillMode.CATEGORIES,
+    classification: 'category',
+    categoryColumn: 'primaryText'
+  },
+  lines_colorful_QLO: {
+    family: 'line',
+    colorMode: ColorMode.CATEGORIES,
+    thicknessMode: ThicknessMode.UNIQUE,
+    classification: 'category',
+    categoryColumn: 'primaryText'
+  },
+  symbols_proportional_colorful_QL: {
+    family: 'symbol',
+    symbolMode: SymbolMode.PROPORTIONAL,
+    fillMode: FillMode.CATEGORIES,
+    classification: 'category',
+    categoryColumn: 'secondaryText',
+    sizeColumn: 'proportionalSize'
+  },
+  symbols_proportional_colorful_QTR: {
+    family: 'symbol',
+    symbolMode: SymbolMode.PROPORTIONAL,
+    fillMode: FillMode.CLASSES,
+    classification: 'class',
+    valueColumn: 'secondaryNumeric',
+    sizeColumn: 'proportionalSize'
+  },
+  symbols_proportional_double: {
+    family: 'symbol',
+    symbolMode: SymbolMode.PROPORTIONAL,
+    fillMode: FillMode.UNIQUE,
+    valueColumn: 'secondaryNumeric',
+    sizeColumn: 'proportionalSize',
+    doubleSymbol: true
+  },
+  lines_proportional_colorful_QL: {
+    family: 'line',
+    colorMode: ColorMode.CATEGORIES,
+    thicknessMode: ThicknessMode.PROPORTIONAL,
+    classification: 'category',
+    categoryColumn: 'secondaryText',
+    sizeColumn: 'proportionalSize'
+  },
+  lines_proportional_colorful_QTR: {
+    family: 'line',
+    colorMode: ColorMode.CLASSES,
+    thicknessMode: ThicknessMode.PROPORTIONAL,
+    classification: 'class',
+    valueColumn: 'secondaryNumeric',
+    sizeColumn: 'proportionalSize'
+  },
+  texts_colorful_QL: {
+    family: 'text',
+    colorMode: ColorMode.CATEGORIES,
+    sizeMode: SizeMode.FIXED,
+    classification: 'category',
+    labelColumn: 'primaryText',
+    categoryColumn: 'secondaryText'
+  },
+  texts_colorful_QTR: {
+    family: 'text',
+    colorMode: ColorMode.CLASSES,
+    sizeMode: SizeMode.FIXED,
+    classification: 'class',
+    labelColumn: 'primaryText',
+    valueColumn: 'secondaryNumeric',
+    secondaryLabelColumn: 'secondaryNumeric'
+  },
+  texts_proportional: {
+    family: 'text',
+    colorMode: ColorMode.UNIQUE,
+    sizeMode: SizeMode.PROPORTIONAL,
+    labelColumn: 'primaryText',
+    valueColumn: 'secondaryNumeric',
+    secondaryLabelColumn: 'secondaryNumeric'
+  }
+} as const satisfies Record<SuggestionBehaviorId, SuggestionBehaviorDefinition>;
 
-const SYMBOL_PROPORTIONAL_SUGGESTION_IDS = new Set([
-  'symbols_proportional',
-  'symbols_proportional_labeled',
-  'symbols_proportional_colorful_QL',
-  'symbols_proportional_colorful_QTR',
-  'symbols_proportional_double'
-]);
-
-const LINE_SUGGESTION_IDS = new Set([
-  'lines_uniques',
-  'lines_colorful_QL',
-  'lines_colorful_QTR',
-  'lines_proportional',
-  'lines_proportional_colorful_QL',
-  'lines_proportional_colorful_QTR',
-  'lines_colorful_QLO'
-]);
-
-const POLYGON_SUGGESTION_IDS = new Set([
-  'polygons_uniques',
-  'polygons_colorful_QL',
-  'choropleth',
-  'choropleth_labeled',
-  'polygons_colorful_QLO'
-]);
-
-const TEXT_SUGGESTION_IDS = new Set([
-  'texts_colorful_QL',
-  'texts_colorful_QTR',
-  'texts_proportional'
-]);
-
-const CATEGORY_SUGGESTION_IDS = new Set([
-  'polygons_colorful_QL',
-  'polygons_colorful_QLO',
-  'symbols_differents',
-  'symbols_uniques_colorful_QL',
-  'symbols_differents_QLO',
-  'symbols_uniques_colorful_QLO',
-  'lines_colorful_QL',
-  'lines_colorful_QLO',
-  'symbols_proportional_colorful_QL',
-  'lines_proportional_colorful_QL',
-  'texts_colorful_QL'
-]);
-
-const CLASS_SUGGESTION_IDS = new Set([
-  'choropleth',
-  'choropleth_labeled',
-  'symbols_uniques_colorful_QTR',
-  'lines_colorful_QTR',
-  'symbols_proportional_colorful_QTR',
-  'lines_proportional_colorful_QTR',
-  'texts_colorful_QTR'
-]);
+const FALLBACK_SUGGESTION_BEHAVIOR: SuggestionBehaviorDefinition = {
+  family: 'symbol',
+  symbolMode: SymbolMode.PROPORTIONAL,
+  fillMode: FillMode.UNIQUE
+};
 
 function resolveDatasetPrimitive(
   dataset?: DatasetGeometrySource | null
@@ -281,6 +416,19 @@ function buildDisabledMissingData(
     show: false,
     enabled: false,
     pattern: false
+  };
+}
+
+function buildTopTextDataFilter(
+  column: string
+): NonNullable<VisualizationConfig['dataFilters']>[number] {
+  return {
+    id: crypto.randomUUID(),
+    column,
+    operator: 'top_desc',
+    value: String(TOP_LABELED_SYMBOLS_LIMIT),
+    limit: TOP_LABELED_SYMBOLS_LIMIT,
+    primitiveType: PrimitiveFilterType.TEXT
   };
 }
 
@@ -426,7 +574,7 @@ export function resolveDatasetGeometryType(
     return 'Polygon';
   }
 
-  const datasetId = (dataset as { id?: string }).id;
+  const datasetId = dataset.id;
   if (datasetId) {
     const vizs = visualizationStore.getVisualizationsByDataset(datasetId);
     if (vizs.length > 0) {
@@ -455,6 +603,46 @@ export function mapSuggestionToType(suggestionId: string): VisualizationType {
       suggestionId as keyof typeof SUGGESTION_VISUALIZATION_TYPES
     ] ?? VisualizationType.CHOROPLETH
   );
+}
+
+type SuggestionColumnValues = {
+  primaryNumeric: string | undefined;
+  secondaryNumeric: string | undefined;
+  proportionalSize: string | undefined;
+  primaryText: string | undefined;
+  secondaryText: string | undefined;
+};
+
+function resolveSuggestionBehaviorDefinition(
+  suggestionId: string
+): SuggestionBehaviorDefinition {
+  return (
+    SUGGESTION_BEHAVIOR_DEFINITIONS[suggestionId as SuggestionBehaviorId] ??
+    FALLBACK_SUGGESTION_BEHAVIOR
+  );
+}
+
+function getSuggestionColumn(
+  columns: SuggestionColumnValues,
+  source: SuggestionColumnSource | undefined
+): string | undefined {
+  return source ? columns[source] : undefined;
+}
+
+function getSuggestionClassification(
+  classification: SuggestionClassificationKind | undefined,
+  categoricalPreset: VisualizationPreset,
+  choroplethPreset: VisualizationPreset
+): VisualizationConfig['classification'] {
+  if (classification === 'category') {
+    return categoricalPreset.classification;
+  }
+
+  if (classification === 'class') {
+    return choroplethPreset.classification;
+  }
+
+  return undefined;
 }
 
 export function resolveSuggestionBehavior(
@@ -492,167 +680,82 @@ export function resolveSuggestionBehavior(
   const secondaryTextColumn = findPreferredTextColumn(dataset.columns, {
     preferred: suggestion.columns?.[1]
   });
+  const behaviorDefinition = resolveSuggestionBehaviorDefinition(suggestion.id);
+  const suggestionColumns: SuggestionColumnValues = {
+    primaryNumeric: primaryNumericColumn,
+    secondaryNumeric: secondaryNumericColumn,
+    proportionalSize: proportionalSizeColumn,
+    primaryText: primaryTextColumn,
+    secondaryText: secondaryTextColumn
+  };
   const symbolPrimitiveFilters: PrimitiveFilter[] = [PrimitiveFilterType.POINT];
   const textPrimitiveFilters: PrimitiveFilter[] = isPolygonDataset
     ? [PrimitiveFilterType.POLYGON]
     : [];
 
-  const baseMapping = buildClearedMapping(preset.mapping.geometryColumn);
   const baseSymbols = preset.symbols
     ? {
         ...preset.symbols,
-        opacity:
-          visualization?.symbols?.opacity ??
-          preset.symbols.opacity ??
-          preset.symbols.opacity
+        opacity: visualization?.symbols?.opacity ?? preset.symbols.opacity
       }
     : preset.symbols;
 
-  if (TEXT_SUGGESTION_IDS.has(suggestion.id)) {
-    if (suggestion.id === 'texts_colorful_QL') {
-      return {
-        visualizationType,
-        primaryPrimitives: ['text'],
-        supportPrimitives: isPolygonDataset
-          ? [PrimitiveFilterType.POLYGON]
-          : [],
-        forcedOffPrimitives: [
-          PrimitiveFilterType.POINT,
-          PrimitiveFilterType.LINE,
-          'label'
-        ],
-        primitiveFilters: textPrimitiveFilters,
-        mapping: buildClearedMapping(preset.mapping.geometryColumn, {
-          labelColumn: primaryTextColumn,
-          categoryColumn: secondaryTextColumn
-        }),
-        modes: {
-          ...preset.modes,
-          color: ColorMode.CATEGORIES,
-          size: SizeMode.FIXED,
-          symbol: SymbolMode.UNIQUE
-        },
-        style: {
-          textOpacity: 1
-        },
-        classification: categoricalPreset.classification,
-        symbols: baseSymbols,
-        missingData: buildDisabledMissingData(preset.missingData),
-        text: buildTextPrimitiveConfig(preset, visualization, {
-          labelColumn: primaryTextColumn,
-          categoryColumn: secondaryTextColumn,
-          colorMode: ColorMode.CATEGORIES,
-          sizeMode: SizeMode.FIXED,
-          classification: categoricalPreset.classification,
-          missingData: buildDisabledMissingData(preset.missingData),
-          secondaryLabels: {
-            enabled: false,
-            labelColumn: undefined
-          }
-        }),
-        symbol: {
-          enabled: false
-        },
-        line: {
-          enabled: false
-        },
-        ...(isPolygonDataset
-          ? { polygon: buildSupportPolygonConfig(preset, visualization) }
-          : {})
-      };
-    }
-
-    if (suggestion.id === 'texts_colorful_QTR') {
-      return {
-        visualizationType,
-        primaryPrimitives: ['text'],
-        supportPrimitives: isPolygonDataset
-          ? [PrimitiveFilterType.POLYGON]
-          : [],
-        forcedOffPrimitives: [
-          PrimitiveFilterType.POINT,
-          PrimitiveFilterType.LINE,
-          'label'
-        ],
-        primitiveFilters: textPrimitiveFilters,
-        mapping: buildClearedMapping(preset.mapping.geometryColumn, {
-          labelColumn: primaryTextColumn,
-          valueColumn: secondaryNumericColumn,
-          secondaryLabelColumn: secondaryNumericColumn
-        }),
-        modes: {
-          ...preset.modes,
-          color: ColorMode.CLASSES,
-          size: SizeMode.FIXED,
-          symbol: SymbolMode.UNIQUE
-        },
-        style: {
-          textOpacity: 1
-        },
-        classification: choroplethPreset.classification,
-        symbols: baseSymbols,
-        missingData: buildDisabledMissingData(preset.missingData),
-        text: buildTextPrimitiveConfig(preset, visualization, {
-          labelColumn: primaryTextColumn,
-          valueColumn: secondaryNumericColumn,
-          colorMode: ColorMode.CLASSES,
-          sizeMode: SizeMode.FIXED,
-          classification: choroplethPreset.classification,
-          missingData: buildDisabledMissingData(preset.missingData),
-          secondaryLabels: {
-            enabled: false,
-            labelColumn: secondaryNumericColumn
-          }
-        }),
-        symbol: {
-          enabled: false
-        },
-        line: {
-          enabled: false
-        },
-        ...(isPolygonDataset
-          ? { polygon: buildSupportPolygonConfig(preset, visualization) }
-          : {})
-      };
-    }
+  if (behaviorDefinition.family === 'text') {
+    const labelColumn = getSuggestionColumn(
+      suggestionColumns,
+      behaviorDefinition.labelColumn
+    );
+    const valueColumn = getSuggestionColumn(
+      suggestionColumns,
+      behaviorDefinition.valueColumn
+    );
+    const categoryColumn = getSuggestionColumn(
+      suggestionColumns,
+      behaviorDefinition.categoryColumn
+    );
+    const secondaryLabelColumn = getSuggestionColumn(
+      suggestionColumns,
+      behaviorDefinition.secondaryLabelColumn
+    );
+    const classification = getSuggestionClassification(
+      behaviorDefinition.classification,
+      categoricalPreset,
+      choroplethPreset
+    );
+    const missingData = buildDisabledMissingData(preset.missingData);
 
     return {
       visualizationType,
-      primaryPrimitives: ['text'],
-      supportPrimitives: isPolygonDataset ? [PrimitiveFilterType.POLYGON] : [],
-      forcedOffPrimitives: [
-        PrimitiveFilterType.POINT,
-        PrimitiveFilterType.LINE,
-        'label'
-      ],
       primitiveFilters: textPrimitiveFilters,
       mapping: buildClearedMapping(preset.mapping.geometryColumn, {
-        labelColumn: primaryTextColumn,
-        valueColumn: secondaryNumericColumn,
-        secondaryLabelColumn: secondaryNumericColumn
+        labelColumn,
+        valueColumn,
+        categoryColumn,
+        secondaryLabelColumn
       }),
       modes: {
         ...preset.modes,
-        color: ColorMode.UNIQUE,
-        size: SizeMode.PROPORTIONAL,
+        color: behaviorDefinition.colorMode ?? ColorMode.UNIQUE,
+        size: behaviorDefinition.sizeMode ?? SizeMode.FIXED,
         symbol: SymbolMode.UNIQUE
       },
       style: {
         textOpacity: 1
       },
-      classification: undefined,
+      classification,
       symbols: baseSymbols,
-      missingData: buildDisabledMissingData(preset.missingData),
+      missingData,
       text: buildTextPrimitiveConfig(preset, visualization, {
-        labelColumn: primaryTextColumn,
-        valueColumn: secondaryNumericColumn,
-        colorMode: ColorMode.UNIQUE,
-        sizeMode: SizeMode.PROPORTIONAL,
-        classification: undefined,
-        missingData: buildDisabledMissingData(preset.missingData),
+        labelColumn,
+        valueColumn,
+        categoryColumn,
+        colorMode: behaviorDefinition.colorMode ?? ColorMode.UNIQUE,
+        sizeMode: behaviorDefinition.sizeMode ?? SizeMode.FIXED,
+        classification,
+        missingData,
         secondaryLabels: {
           enabled: false,
-          labelColumn: secondaryNumericColumn
+          labelColumn: secondaryLabelColumn
         }
       }),
       symbol: {
@@ -667,163 +770,58 @@ export function resolveSuggestionBehavior(
     };
   }
 
-  if (POLYGON_SUGGESTION_IDS.has(suggestion.id)) {
-    if (
-      suggestion.id === 'choropleth' ||
-      suggestion.id === 'choropleth_labeled'
-    ) {
-      const isLabeledChoropleth = suggestion.id === 'choropleth_labeled';
-      const choroplethLabelColumn = isLabeledChoropleth
-        ? (suggestion.columns?.[1] ?? primaryTextColumn)
-        : undefined;
-
-      return {
-        visualizationType,
-        primaryPrimitives: isLabeledChoropleth
-          ? [PrimitiveFilterType.POLYGON, 'text']
-          : [PrimitiveFilterType.POLYGON],
-        supportPrimitives: [],
-        forcedOffPrimitives: isLabeledChoropleth
-          ? [PrimitiveFilterType.POINT, PrimitiveFilterType.LINE, 'label']
-          : [
-              PrimitiveFilterType.POINT,
-              PrimitiveFilterType.LINE,
-              'text',
-              'label'
-            ],
-        primitiveFilters: isLabeledChoropleth
-          ? [PrimitiveFilterType.POLYGON, PrimitiveFilterType.TEXT]
-          : [PrimitiveFilterType.POLYGON],
-        mapping: buildClearedMapping(preset.mapping.geometryColumn, {
-          valueColumn: primaryNumericColumn,
-          labelColumn: choroplethLabelColumn
-        }),
-        modes: {
-          ...preset.modes,
-          fill: FillMode.CLASSES,
-          stroke: StrokeMode.NONE
-        },
-        style: {},
-        classification: choroplethPreset.classification,
-        symbols: baseSymbols,
-        missingData: preset.missingData,
-        polygon: {
-          enabled: true,
-          fillMode: FillMode.CLASSES,
-          strokeMode: StrokeMode.NONE,
-          valueColumn: primaryNumericColumn,
-          classification: choroplethPreset.classification,
-          missingData: preset.missingData
-        },
-        symbol: {
-          enabled: false
-        },
-        line: {
-          enabled: false
-        },
-        text:
-          isLabeledChoropleth && choroplethLabelColumn
-            ? buildTextPrimitiveConfig(preset, visualization, {
-                labelColumn: choroplethLabelColumn,
-                colorMode: ColorMode.UNIQUE,
-                sizeMode: SizeMode.FIXED,
-                missingData: buildDisabledMissingData(preset.missingData),
-                secondaryLabels: {
-                  enabled: false,
-                  labelColumn: undefined
-                }
-              })
-            : {
-                enabled: false
-              },
-        ...(isLabeledChoropleth && primaryNumericColumn
-          ? {
-              dataFilters: [
-                {
-                  id: crypto.randomUUID(),
-                  column: primaryNumericColumn,
-                  operator: 'top_desc' as const,
-                  value: String(TOP_LABELED_SYMBOLS_LIMIT),
-                  limit: TOP_LABELED_SYMBOLS_LIMIT,
-                  primitiveType: PrimitiveFilterType.TEXT
-                }
-              ]
-            }
-          : {})
-      };
-    }
-
-    if (CATEGORY_SUGGESTION_IDS.has(suggestion.id)) {
-      return {
-        visualizationType,
-        primaryPrimitives: [PrimitiveFilterType.POLYGON],
-        supportPrimitives: [],
-        forcedOffPrimitives: [
-          PrimitiveFilterType.POINT,
-          PrimitiveFilterType.LINE,
-          'text',
-          'label'
-        ],
-        primitiveFilters: [PrimitiveFilterType.POLYGON],
-        mapping: buildClearedMapping(preset.mapping.geometryColumn, {
-          categoryColumn: primaryTextColumn
-        }),
-        modes: {
-          ...preset.modes,
-          fill: FillMode.CATEGORIES,
-          stroke: StrokeMode.NONE
-        },
-        style: {},
-        classification: categoricalPreset.classification,
-        symbols: baseSymbols,
-        missingData: preset.missingData,
-        polygon: {
-          enabled: true,
-          fillMode: FillMode.CATEGORIES,
-          strokeMode: StrokeMode.NONE,
-          categoryColumn: primaryTextColumn,
-          classification: categoricalPreset.classification,
-          missingData: preset.missingData
-        },
-        symbol: {
-          enabled: false
-        },
-        line: {
-          enabled: false
-        },
-        text: {
-          enabled: false
-        }
-      };
-    }
+  if (behaviorDefinition.family === 'polygon') {
+    const valueColumn = getSuggestionColumn(
+      suggestionColumns,
+      behaviorDefinition.valueColumn
+    );
+    const categoryColumn = getSuggestionColumn(
+      suggestionColumns,
+      behaviorDefinition.categoryColumn
+    );
+    const labelColumn = getSuggestionColumn(
+      suggestionColumns,
+      behaviorDefinition.labelColumn
+    );
+    const fillMode = behaviorDefinition.fillMode ?? FillMode.UNIQUE;
+    const classification = getSuggestionClassification(
+      behaviorDefinition.classification,
+      categoricalPreset,
+      choroplethPreset
+    );
+    const hasTopLabelFilter =
+      behaviorDefinition.topLabelFilter === true && Boolean(labelColumn);
+    const polygonPrimitiveFilters: PrimitiveFilter[] = hasTopLabelFilter
+      ? [PrimitiveFilterType.POLYGON, PrimitiveFilterType.TEXT]
+      : [PrimitiveFilterType.POLYGON];
 
     return {
       visualizationType,
-      primaryPrimitives: [PrimitiveFilterType.POLYGON],
-      supportPrimitives: [],
-      forcedOffPrimitives: [
-        PrimitiveFilterType.POINT,
-        PrimitiveFilterType.LINE,
-        'text',
-        'label'
-      ],
-      primitiveFilters: [PrimitiveFilterType.POLYGON],
-      mapping: baseMapping,
+      primitiveFilters: polygonPrimitiveFilters,
+      mapping: buildClearedMapping(preset.mapping.geometryColumn, {
+        valueColumn,
+        categoryColumn,
+        labelColumn: hasTopLabelFilter ? labelColumn : undefined
+      }),
       modes: {
         ...preset.modes,
-        fill: FillMode.UNIQUE,
+        fill: fillMode,
         stroke: StrokeMode.NONE
       },
-      style: { fillColor: DEFAULT_COLORS.fill },
-      classification: undefined,
+      style:
+        fillMode === FillMode.UNIQUE ? { fillColor: DEFAULT_COLORS.fill } : {},
+      classification,
       symbols: baseSymbols,
       missingData: preset.missingData,
       polygon: {
         enabled: true,
-        fillMode: FillMode.UNIQUE,
+        fillMode,
         strokeMode: StrokeMode.NONE,
-        fillColor: DEFAULT_COLORS.fill,
-        classification: undefined,
+        valueColumn,
+        categoryColumn,
+        fillColor:
+          fillMode === FillMode.UNIQUE ? DEFAULT_COLORS.fill : undefined,
+        classification,
         missingData: preset.missingData
       },
       symbol: {
@@ -832,98 +830,77 @@ export function resolveSuggestionBehavior(
       line: {
         enabled: false
       },
-      text: {
-        enabled: false
-      }
+      text:
+        hasTopLabelFilter && labelColumn
+          ? buildTextPrimitiveConfig(preset, visualization, {
+              labelColumn,
+              colorMode: ColorMode.UNIQUE,
+              sizeMode: SizeMode.FIXED,
+              missingData: buildDisabledMissingData(preset.missingData),
+              secondaryLabels: {
+                enabled: false,
+                labelColumn: undefined
+              }
+            })
+          : {
+              enabled: false
+            },
+      ...(hasTopLabelFilter && valueColumn
+        ? { dataFilters: [buildTopTextDataFilter(valueColumn)] }
+        : {})
     };
   }
 
-  if (LINE_SUGGESTION_IDS.has(suggestion.id)) {
-    const isCategoricalLine = CATEGORY_SUGGESTION_IDS.has(suggestion.id);
-    const isClassedLine = CLASS_SUGGESTION_IDS.has(suggestion.id);
-    const isProportionalLine = [
-      'lines_proportional',
-      'lines_proportional_colorful_QL',
-      'lines_proportional_colorful_QTR'
-    ].includes(suggestion.id);
+  if (behaviorDefinition.family === 'line') {
+    const valueColumn = getSuggestionColumn(
+      suggestionColumns,
+      behaviorDefinition.valueColumn
+    );
+    const categoryColumn = getSuggestionColumn(
+      suggestionColumns,
+      behaviorDefinition.categoryColumn
+    );
+    const sizeColumn = getSuggestionColumn(
+      suggestionColumns,
+      behaviorDefinition.sizeColumn
+    );
+    const colorMode = behaviorDefinition.colorMode ?? ColorMode.UNIQUE;
+    const thicknessMode =
+      behaviorDefinition.thicknessMode ?? ThicknessMode.UNIQUE;
+    const isUniqueColorLine = colorMode === ColorMode.UNIQUE;
+    const classification = getSuggestionClassification(
+      behaviorDefinition.classification,
+      categoricalPreset,
+      choroplethPreset
+    );
 
     return {
       visualizationType,
-      primaryPrimitives: [PrimitiveFilterType.LINE],
-      supportPrimitives: [],
-      forcedOffPrimitives: [
-        PrimitiveFilterType.POINT,
-        PrimitiveFilterType.POLYGON,
-        'text',
-        'label'
-      ],
       primitiveFilters: [PrimitiveFilterType.LINE],
       mapping: buildClearedMapping(preset.mapping.geometryColumn, {
-        valueColumn: isClassedLine
-          ? primaryNumericColumn
-          : suggestion.id === 'lines_proportional_colorful_QTR'
-            ? secondaryNumericColumn
-            : undefined,
-        categoryColumn: isCategoricalLine
-          ? isProportionalLine
-            ? secondaryTextColumn
-            : primaryTextColumn
-          : undefined,
-        sizeColumn: isProportionalLine ? proportionalSizeColumn : undefined
+        valueColumn,
+        categoryColumn,
+        sizeColumn
       }),
       modes: {
         ...preset.modes,
         fill: FillMode.NONE,
-        color: isCategoricalLine
-          ? ColorMode.CATEGORIES
-          : isClassedLine
-            ? ColorMode.CLASSES
-            : ColorMode.UNIQUE,
-        thickness: isProportionalLine
-          ? ThicknessMode.PROPORTIONAL
-          : ThicknessMode.UNIQUE
+        color: colorMode,
+        thickness: thicknessMode
       },
-      style:
-        !isCategoricalLine && !isClassedLine
-          ? { lineColor: DEFAULT_COLORS.fill }
-          : {},
-      classification: isCategoricalLine
-        ? categoricalPreset.classification
-        : isClassedLine
-          ? choroplethPreset.classification
-          : undefined,
+      style: isUniqueColorLine ? { lineColor: DEFAULT_COLORS.fill } : {},
+      classification,
       symbols: baseSymbols,
       missingData: preset.missingData,
       line: {
         enabled: true,
-        colorMode: isCategoricalLine
-          ? ColorMode.CATEGORIES
-          : isClassedLine
-            ? ColorMode.CLASSES
-            : ColorMode.UNIQUE,
-        thicknessMode: isProportionalLine
-          ? ThicknessMode.PROPORTIONAL
-          : ThicknessMode.UNIQUE,
-        valueColumn: isClassedLine
-          ? primaryNumericColumn
-          : suggestion.id === 'lines_proportional_colorful_QTR'
-            ? secondaryNumericColumn
-            : undefined,
-        categoryColumn: isCategoricalLine
-          ? isProportionalLine
-            ? secondaryTextColumn
-            : primaryTextColumn
-          : undefined,
-        sizeColumn: isProportionalLine ? proportionalSizeColumn : undefined,
-        color:
-          !isCategoricalLine && !isClassedLine
-            ? DEFAULT_COLORS.fill
-            : undefined,
-        classification: isCategoricalLine
-          ? categoricalPreset.classification
-          : isClassedLine
-            ? choroplethPreset.classification
-            : undefined,
+        colorMode,
+        thicknessMode,
+        valueColumn,
+        categoryColumn,
+        sizeColumn,
+        color: isUniqueColorLine ? DEFAULT_COLORS.fill : undefined,
+        classification,
         missingData: preset.missingData
       },
       symbol: {
@@ -938,138 +915,96 @@ export function resolveSuggestionBehavior(
     };
   }
 
-  const isCategoricalSymbol = CATEGORY_SUGGESTION_IDS.has(suggestion.id);
-  const isClassedSymbol = CLASS_SUGGESTION_IDS.has(suggestion.id);
-  const isProportionalSymbol = SYMBOL_PROPORTIONAL_SUGGESTION_IDS.has(
-    suggestion.id
+  const symbolMode = behaviorDefinition.symbolMode ?? SymbolMode.PROPORTIONAL;
+  const symbolFillMode = behaviorDefinition.fillMode ?? FillMode.UNIQUE;
+  const isDoubleSymbol = behaviorDefinition.doubleSymbol === true;
+  const symbolValueColumn = getSuggestionColumn(
+    suggestionColumns,
+    behaviorDefinition.valueColumn
   );
-  const isLabeledProportional =
-    suggestion.id === 'symbols_proportional_labeled';
-  const labeledProportionalLabelColumn = isLabeledProportional
-    ? (suggestion.columns?.[1] ?? primaryTextColumn)
-    : undefined;
-  const symbolValueColumn = isClassedSymbol
-    ? primaryNumericColumn
-    : suggestion.id === 'symbols_proportional_colorful_QTR' ||
-        suggestion.id === 'symbols_proportional_double'
-      ? secondaryNumericColumn
-      : undefined;
-  const symbolCategoryColumn = isCategoricalSymbol
-    ? isProportionalSymbol
-      ? secondaryTextColumn
-      : primaryTextColumn
-    : undefined;
-  const symbolFillClassification = isCategoricalSymbol
-    ? categoricalPreset.classification
-    : isClassedSymbol
-      ? choroplethPreset.classification
-      : undefined;
+  const symbolCategoryColumn = getSuggestionColumn(
+    suggestionColumns,
+    behaviorDefinition.categoryColumn
+  );
+  const symbolSizeColumn = getSuggestionColumn(
+    suggestionColumns,
+    behaviorDefinition.sizeColumn
+  );
+  const symbolFillClassification = getSuggestionClassification(
+    behaviorDefinition.classification,
+    categoricalPreset,
+    choroplethPreset
+  );
+  const symbolLabelColumn = getSuggestionColumn(
+    suggestionColumns,
+    behaviorDefinition.labelColumn
+  );
+  const hasTopSymbolLabelFilter =
+    behaviorDefinition.topLabelFilter === true && Boolean(symbolLabelColumn);
+  const activeSymbolPrimitiveFilters: PrimitiveFilter[] =
+    hasTopSymbolLabelFilter
+      ? [...symbolPrimitiveFilters, PrimitiveFilterType.TEXT]
+      : symbolPrimitiveFilters;
 
   return {
     visualizationType,
-    primaryPrimitives: isLabeledProportional
-      ? [PrimitiveFilterType.POINT, 'text']
-      : [PrimitiveFilterType.POINT],
-    supportPrimitives: [],
-    forcedOffPrimitives: isLabeledProportional
-      ? [PrimitiveFilterType.POLYGON, PrimitiveFilterType.LINE, 'label']
-      : [
-          PrimitiveFilterType.POLYGON,
-          PrimitiveFilterType.LINE,
-          'text',
-          'label'
-        ],
-    primitiveFilters: isLabeledProportional
-      ? [...symbolPrimitiveFilters, PrimitiveFilterType.TEXT]
-      : symbolPrimitiveFilters,
+    primitiveFilters: activeSymbolPrimitiveFilters,
     mapping: buildClearedMapping(preset.mapping.geometryColumn, {
       valueColumn: symbolValueColumn,
       categoryColumn: symbolCategoryColumn,
-      sizeColumn: isProportionalSymbol ? proportionalSizeColumn : undefined,
-      labelColumn: labeledProportionalLabelColumn
+      sizeColumn: symbolSizeColumn,
+      labelColumn: hasTopSymbolLabelFilter ? symbolLabelColumn : undefined
     }),
     modes: {
       ...preset.modes,
-      symbol: SYMBOL_CATEGORY_SHAPE_IDS.has(suggestion.id)
-        ? SymbolMode.CATEGORIES
-        : SYMBOL_UNIQUE_SUGGESTION_IDS.has(suggestion.id)
-          ? SymbolMode.UNIQUE
-          : SymbolMode.PROPORTIONAL,
-      fill: isCategoricalSymbol
-        ? FillMode.CATEGORIES
-        : isClassedSymbol
-          ? FillMode.CLASSES
-          : FillMode.UNIQUE,
-      stroke:
-        suggestion.id === 'symbols_proportional_double'
-          ? StrokeMode.UNIQUE
-          : preset.modes?.stroke,
-      proportionalType:
-        suggestion.id === 'symbols_proportional_double'
-          ? ProportionalType.DOUBLE
-          : ProportionalType.SINGLE
+      symbol: symbolMode,
+      fill: symbolFillMode,
+      stroke: isDoubleSymbol ? StrokeMode.UNIQUE : preset.modes?.stroke,
+      proportionalType: isDoubleSymbol
+        ? ProportionalType.DOUBLE
+        : ProportionalType.SINGLE
     },
     style: {
       symbolFillColor:
         visualization?.style.symbolFillColor ?? DEFAULT_COLORS.fill,
-      ...(suggestion.id === 'symbols_proportional_double'
+      ...(isDoubleSymbol
         ? {
             fillColorB:
               visualization?.style.fillColorB ?? DEFAULT_COLORS.secondary
           }
         : {})
     },
-    classification: isCategoricalSymbol
-      ? categoricalPreset.classification
-      : isClassedSymbol
-        ? choroplethPreset.classification
-        : undefined,
+    classification: symbolFillClassification,
     symbols: baseSymbols,
     missingData: preset.missingData,
     symbol: {
       enabled: true,
-      mode: SYMBOL_CATEGORY_SHAPE_IDS.has(suggestion.id)
-        ? SymbolMode.CATEGORIES
-        : SYMBOL_UNIQUE_SUGGESTION_IDS.has(suggestion.id)
-          ? SymbolMode.UNIQUE
-          : SymbolMode.PROPORTIONAL,
-      fillMode: isCategoricalSymbol
-        ? FillMode.CATEGORIES
-        : isClassedSymbol
-          ? FillMode.CLASSES
-          : FillMode.UNIQUE,
-      strokeMode:
-        suggestion.id === 'symbols_proportional_double'
-          ? StrokeMode.UNIQUE
-          : preset.symbol?.strokeMode,
-      proportionalType:
-        suggestion.id === 'symbols_proportional_double'
-          ? ProportionalType.DOUBLE
-          : ProportionalType.SINGLE,
-      commonScale: suggestion.id !== 'symbols_proportional_double',
-      positionMode:
-        suggestion.id === 'symbols_proportional_double'
-          ? SymbolDoublePosition.OVERLAY
-          : SymbolDoublePosition.OVERLAY,
+      mode: symbolMode,
+      fillMode: symbolFillMode,
+      strokeMode: isDoubleSymbol
+        ? StrokeMode.UNIQUE
+        : preset.symbol?.strokeMode,
+      proportionalType: isDoubleSymbol
+        ? ProportionalType.DOUBLE
+        : ProportionalType.SINGLE,
+      commonScale: !isDoubleSymbol,
+      positionMode: SymbolDoublePosition.OVERLAY,
       breakValueA: null,
       breakValueB: null,
-      valueColumn: isClassedSymbol ? primaryNumericColumn : symbolValueColumn,
+      valueColumn: symbolValueColumn,
       categoryColumn: symbolCategoryColumn,
-      sizeColumn: isProportionalSymbol ? proportionalSizeColumn : undefined,
-      fillValueColumn: isClassedSymbol ? symbolValueColumn : undefined,
-      fillCategoryColumn: isCategoricalSymbol
-        ? symbolCategoryColumn
-        : undefined,
+      sizeColumn: symbolSizeColumn,
+      fillValueColumn:
+        symbolFillMode === FillMode.CLASSES ? symbolValueColumn : undefined,
+      fillCategoryColumn:
+        symbolFillMode === FillMode.CATEGORIES
+          ? symbolCategoryColumn
+          : undefined,
       fillColor: visualization?.style.symbolFillColor ?? DEFAULT_COLORS.fill,
-      fillColorB:
-        suggestion.id === 'symbols_proportional_double'
-          ? (visualization?.style.fillColorB ?? DEFAULT_COLORS.secondary)
-          : undefined,
-      classification: isCategoricalSymbol
-        ? categoricalPreset.classification
-        : isClassedSymbol
-          ? choroplethPreset.classification
-          : undefined,
+      fillColorB: isDoubleSymbol
+        ? (visualization?.style.fillColorB ?? DEFAULT_COLORS.secondary)
+        : undefined,
+      classification: symbolFillClassification,
       fillClassification: symbolFillClassification,
       missingData: preset.missingData
     },
@@ -1080,9 +1015,9 @@ export function resolveSuggestionBehavior(
       enabled: false
     },
     text:
-      isLabeledProportional && labeledProportionalLabelColumn
+      hasTopSymbolLabelFilter && symbolLabelColumn
         ? buildTextPrimitiveConfig(preset, visualization, {
-            labelColumn: labeledProportionalLabelColumn,
+            labelColumn: symbolLabelColumn,
             colorMode: ColorMode.UNIQUE,
             sizeMode: SizeMode.FIXED,
             missingData: buildDisabledMissingData(preset.missingData),
@@ -1094,19 +1029,8 @@ export function resolveSuggestionBehavior(
         : {
             enabled: false
           },
-    ...(isLabeledProportional && proportionalSizeColumn
-      ? {
-          dataFilters: [
-            {
-              id: crypto.randomUUID(),
-              column: proportionalSizeColumn,
-              operator: 'top_desc' as const,
-              value: String(TOP_LABELED_SYMBOLS_LIMIT),
-              limit: TOP_LABELED_SYMBOLS_LIMIT,
-              primitiveType: PrimitiveFilterType.TEXT
-            }
-          ]
-        }
+    ...(hasTopSymbolLabelFilter && symbolSizeColumn
+      ? { dataFilters: [buildTopTextDataFilter(symbolSizeColumn)] }
       : {})
   };
 }
@@ -1555,12 +1479,6 @@ export function isVisualizationBlank(
   );
 }
 
-function getLegendSubtitleForVisualization(
-  visualization: VisualizationConfig
-): string {
-  return getVisualizationLegendSubtitle(visualization);
-}
-
 function syncLegendSubtitleAfterSuggestion(
   vizId: string,
   previousAutoSubtitle: string,
@@ -1573,7 +1491,7 @@ function syncLegendSubtitleAfterSuggestion(
     return;
   }
 
-  const nextAutoSubtitle = getLegendSubtitleForVisualization(visualization);
+  const nextAutoSubtitle = getVisualizationLegendSubtitle(visualization);
   const usesAutomaticSubtitle =
     !legendItem.subtitle || legendItem.subtitle === previousAutoSubtitle;
 
@@ -1817,7 +1735,7 @@ export function applySuggestionToVisualization(
     (item) => item.id === vizId
   );
   const previousAutoSubtitle = currentVisualization
-    ? getLegendSubtitleForVisualization(currentVisualization)
+    ? getVisualizationLegendSubtitle(currentVisualization)
     : '';
   if (!currentVisualization) {
     return null;

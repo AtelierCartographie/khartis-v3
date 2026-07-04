@@ -2,6 +2,8 @@
   import { Information } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import { clickOutside } from '$lib/features/commons/utils/click-outside';
+  import { portal } from '$lib/features/commons/utils/portal';
 
   interface Props {
     text: string;
@@ -14,21 +16,10 @@
 
   let open = $state(false);
   let pinned = $state(false);
-  let hoverTimeout = $state<ReturnType<typeof setTimeout> | undefined>(
-    undefined
-  );
+  let hoverTimeout: ReturnType<typeof setTimeout> | undefined;
   let btnRef = $state<HTMLButtonElement | undefined>(undefined);
   let tooltipRef = $state<HTMLDivElement | undefined>(undefined);
   let tooltipPos = $state({ top: 0, left: 0 });
-
-  function portal(node: HTMLElement) {
-    document.body.appendChild(node);
-    return {
-      destroy() {
-        node.remove();
-      }
-    };
-  }
 
   function updatePosition() {
     if (!btnRef) return;
@@ -58,6 +49,21 @@
     }
   }
 
+  function clearHoverTimeout() {
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout);
+      hoverTimeout = undefined;
+    }
+  }
+
+  function scheduleHide() {
+    clearHoverTimeout();
+    hoverTimeout = setTimeout(() => {
+      hoverTimeout = undefined;
+      hide();
+    }, 150);
+  }
+
   function toggle() {
     if (disabled) return;
     if (pinned) {
@@ -71,37 +77,37 @@
   }
 
   function handleMouseEnter() {
-    clearTimeout(hoverTimeout);
+    clearHoverTimeout();
     show();
   }
 
   function handleMouseLeave() {
-    hoverTimeout = setTimeout(hide, 150);
+    scheduleHide();
   }
 
   function handleTooltipMouseEnter() {
-    clearTimeout(hoverTimeout);
+    clearHoverTimeout();
   }
 
   function handleTooltipMouseLeave() {
-    hoverTimeout = setTimeout(hide, 150);
+    scheduleHide();
+  }
+
+  function handleTooltipOutsideClick(event: CustomEvent) {
+    const target = event.detail?.originalEvent?.target as Node | undefined;
+    if (target && btnRef?.contains(target)) return;
+    pinned = false;
+    open = false;
   }
 
   $effect(() => {
-    if (!open) return;
+    return () => {
+      clearHoverTimeout();
+    };
+  });
 
-    function handleClick(e: MouseEvent) {
-      const target = e.target as Node;
-      if (
-        btnRef &&
-        !btnRef.contains(target) &&
-        tooltipRef &&
-        !tooltipRef.contains(target)
-      ) {
-        pinned = false;
-        open = false;
-      }
-    }
+  $effect(() => {
+    if (!open) return;
 
     function handleKeydown(e: KeyboardEvent) {
       if (e.key === KEY.ESCAPE) {
@@ -111,14 +117,9 @@
       }
     }
 
-    const timer = setTimeout(() => {
-      document.addEventListener(EVENT.CLICK, handleClick);
-    }, 0);
     document.addEventListener(EVENT.KEYDOWN, handleKeydown);
 
     return () => {
-      clearTimeout(timer);
-      document.removeEventListener(EVENT.CLICK, handleClick);
       document.removeEventListener(EVENT.KEYDOWN, handleKeydown);
     };
   });
@@ -144,7 +145,12 @@
 </span>
 
 {#if open}
-  <div use:portal class="info-portal-container">
+  <div
+    use:portal
+    use:clickOutside={{ enabled: open }}
+    onoutsideclick={handleTooltipOutsideClick}
+    class="info-portal-container"
+  >
     <div
       bind:this={tooltipRef}
       class="info-tooltip {align === 'top'

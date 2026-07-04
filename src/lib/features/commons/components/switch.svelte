@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { stopBubbleEvents } from '$lib/features/commons/utils/stop-bubble-events';
+
   interface Props {
     toggled?: boolean;
     disabled?: boolean;
@@ -25,31 +27,6 @@
     onchange
   }: Props = $props();
 
-  function stopBubbleEvents(node: HTMLElement) {
-    const events = [
-      'click',
-      'mousedown',
-      'mouseup',
-      'pointerdown',
-      'pointerup',
-      'keydown',
-      'keyup'
-    ] as const;
-    const handler = (event: Event) => event.stopPropagation();
-
-    events.forEach((eventName) => {
-      node.addEventListener(eventName, handler, { capture: true });
-    });
-
-    return {
-      destroy() {
-        events.forEach((eventName) => {
-          node.removeEventListener(eventName, handler, { capture: true });
-        });
-      }
-    };
-  }
-
   function handleChange(event: Event): void {
     const next = (event.currentTarget as HTMLInputElement).checked;
     toggled = next;
@@ -62,7 +39,7 @@
   class:disabled={disabled}
   class:sm={size === 'sm'}
   class:variant-suggestions={variant === 'suggestions'}
-  use:stopBubbleEvents
+  use:stopBubbleEvents={{ capture: true }}
 >
   {#if !hideLabel && labelText}
     <span class="kh-switch-label">{labelText}</span>

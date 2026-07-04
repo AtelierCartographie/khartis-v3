@@ -42,6 +42,22 @@ export const STORAGE_LIMITS: StorageLimits = {
   maxFileCount: 20
 };
 
+export const FILE_VALIDATION_INSPECTION = {
+  CSV_LARGE_WARNING_SIZE_BYTES: 10 * 1024 * 1024,
+  GEOJSON_LARGE_WARNING_SIZE_BYTES: 20 * 1024 * 1024,
+  CSV_SAMPLE_LINE_COUNT: 10,
+  GEOJSON_PARSE_SIZE_LIMIT_BYTES: 1024 * 1024,
+  SHAPEFILE_MIN_SIZE_BYTES: 100,
+  GEOPACKAGE_MIN_SIZE_BYTES: 1024,
+  GEOPACKAGE_SUSPICIOUS_SMALL_SIZE_BYTES: 10 * 1024,
+  GEOPARQUET_MIN_SIZE_BYTES: 1024,
+  HEADER_READ_BYTES: 512,
+  MAGIC_NUMBER_BYTES: 8,
+  SHP_MAGIC_NUMBER: 0x0000270a,
+  UTF8_BOM_BYTES: [0xef, 0xbb, 0xbf] as readonly number[],
+  DBF_VALID_VERSIONS: [0x03, 0x83, 0x8b, 0xcb, 0xf5, 0xfb] as readonly number[]
+} as const;
+
 export function getMaxFileSizeForType(fileType: FileType): number {
   return FILE_SIZE_LIMITS[fileType] ?? STORAGE_LIMITS.maxFileSize;
 }

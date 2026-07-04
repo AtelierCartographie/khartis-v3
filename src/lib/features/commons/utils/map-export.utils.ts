@@ -25,6 +25,7 @@ import { resolveTextHaloWidthPx } from '$lib/features/map/layers/text-character-
 import { DeckLayerId } from '$lib/features/map/constants/map.constants';
 import { findById } from '$lib/features/commons/utils/array-helpers';
 import { ANNOTATION_ROLE } from '$lib/features/commons/constants';
+import { LogCategory, logger } from './logger';
 
 interface ExportOptions {
   width: number;
@@ -159,6 +160,8 @@ const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   width: 1920,
   height: 1080
 };
+const EXPORT_BACKGROUND_COLOR = '#ffffff';
+const JPEG_EXPORT_QUALITY = 1.0;
 const EXPORT_RENDER_TIMEOUT_MS = 10000;
 const PIXEL_RATIO_EPSILON = 0.001;
 const FROZEN_CANVAS_ATTRIBUTE = 'data-khartis-export-frozen-canvas';
@@ -322,6 +325,18 @@ function mutateDomForExport(pageContainer: HTMLElement): () => void {
     grid.style.display = 'none';
   });
 
+  const exportPlaceholders = Array.from(
+    pageContainer.querySelectorAll<HTMLElement>(
+      '[data-khartis-export-placeholder="true"]'
+    )
+  );
+  const exportPlaceholderDisplays = exportPlaceholders.map(
+    (placeholder) => placeholder.style.display
+  );
+  exportPlaceholders.forEach((placeholder) => {
+    placeholder.style.display = 'none';
+  });
+
   const mapStage = pageContainer.querySelector(
     EXPORT_MAP_STAGE_SELECTOR
   ) as HTMLElement | null;
@@ -332,6 +347,9 @@ function mutateDomForExport(pageContainer: HTMLElement): () => void {
     pageContainer.classList.remove('is-exporting-map');
     pageGrids.forEach((grid, index) => {
       grid.style.display = pageGridDisplays[index] ?? '';
+    });
+    exportPlaceholders.forEach((placeholder, index) => {
+      placeholder.style.display = exportPlaceholderDisplays[index] ?? '';
     });
     if (mapStage) mapStage.style.filter = savedFilter;
   };
@@ -2673,7 +2691,20 @@ async function captureMapLibreBackgroundForSvg(
     setLayers({ layers: [] });
     await waitForMapRender(map);
     return mapCanvas.toDataURL('image/png');
-  } catch {
+  } catch (error) {
+    logger.warn(
+      'Failed to capture MapLibre background for SVG export',
+      LogCategory.EXPORT,
+      {
+        error,
+        flow: 'svg_export_maplibre_background',
+        extra: {
+          layerCount: layers.length,
+          canvasWidth: mapCanvas.width,
+          canvasHeight: mapCanvas.height
+        }
+      }
+    );
     return null;
   } finally {
     try {
@@ -3407,13 +3438,18 @@ function buildAnnotationLayer(
 
   const itemDedupeId = createSvgIdDeduper();
   const content = Array.from(annotationItems)
+    .filter((item) => item.dataset.khartisExportPlaceholder !== 'true')
     .map((item) => buildAnnotationItem(item, pageContainer, itemDedupeId))
     .filter(Boolean)
     .join('');
 
   return buildTopLevelLayer(
     m.svg_export_layer_annotations(),
-    content,
+    `
+      <g id="khartis-layer-annotations">
+        ${content}
+      </g>
+    `,
     dedupeId
   );
 }
@@ -3599,6 +3635,47 @@ function buildStructuredSvgMarkup(
   `.trim();
 }
 
+interface PreparedMapExportContext {
+  prerenderWebgl(pixelRatio: number): Promise<void>;
+  freezeCanvases(): Promise<void>;
+}
+
+async function withPreparedMapExport<T>(
+  pageContainer: HTMLElement,
+  operation: (context: PreparedMapExportContext) => Promise<T>
+): Promise<T> {
+  let restoreRatio: RestoreExportRender = async () => {};
+  let restoreDom = (): void => {};
+  let restoreFrozenCanvases: RestoreExportRender = async () => {};
+  let shouldRestoreExportMode = false;
+
+  try {
+    restoreDom = mutateDomForExport(pageContainer);
+    globalActions.setMapExporting(true);
+    shouldRestoreExportMode = true;
+    await waitForNextFrame();
+
+    return await operation({
+      async prerenderWebgl(pixelRatio) {
+        restoreRatio = await prerenderWebgl(pixelRatio);
+        await waitForNextFrame();
+      },
+      async freezeCanvases() {
+        restoreFrozenCanvases = await freezeCanvasesForExport(pageContainer);
+        await waitForNextFrame();
+      }
+    });
+  } finally {
+    await restoreFrozenCanvases();
+    await restoreRatio();
+    if (shouldRestoreExportMode) {
+      globalActions.setMapExporting(false);
+    }
+    restoreDom();
+    await waitForNextFrame();
+  }
+}
+
 export async function exportMapToSvg(
   options: Partial<ExportOptions> = {}
 ): Promise<Blob> {
@@ -3612,16 +3689,7 @@ export async function exportMapToSvg(
     return Promise.reject(new Error(m.export_map_not_loaded()));
   }
 
-  let restoreRatio: RestoreExportRender = async () => {};
-  let restoreDom = (): void => {};
-  let shouldRestoreExportMode = false;
-
-  try {
-    restoreDom = mutateDomForExport(pageContainer);
-    globalActions.setMapExporting(true);
-    shouldRestoreExportMode = true;
-    await waitForNextFrame();
-
+  return withPreparedMapExport(pageContainer, async ({ prerenderWebgl }) => {
     const pageGeometry = resolvePageExportGeometry(pageContainer);
     const pixelRatio = getExportPixelRatioForSize(
       pageGeometry.width,
@@ -3629,8 +3697,7 @@ export async function exportMapToSvg(
       opts
     );
 
-    restoreRatio = await prerenderWebgl(pixelRatio);
-    await waitForNextFrame();
+    await prerenderWebgl(pixelRatio);
 
     const mapLibreBackgroundDataUrl =
       await captureMapLibreBackgroundForSvg(pageContainer);
@@ -3645,14 +3712,7 @@ export async function exportMapToSvg(
     );
 
     return new Blob([markup], { type: 'image/svg+xml;charset=utf-8' });
-  } finally {
-    await restoreRatio();
-    if (shouldRestoreExportMode) {
-      globalActions.setMapExporting(false);
-    }
-    restoreDom();
-    await waitForNextFrame();
-  }
+  });
 }
 
 export async function exportMapToJpg(
@@ -3668,40 +3728,21 @@ export async function exportMapToJpg(
     return Promise.reject(new Error(m.export_map_not_loaded()));
   }
 
-  let restoreRatio: RestoreExportRender = async () => {};
-  let restoreDom = (): void => {};
-  let restoreFrozenCanvases: RestoreExportRender = async () => {};
-  let shouldRestoreExportMode = false;
-
-  const pageCanvas = await (async (): Promise<HTMLCanvasElement | null> => {
-    try {
-      restoreDom = mutateDomForExport(pageContainer);
-      globalActions.setMapExporting(true);
-      shouldRestoreExportMode = true;
-      await waitForNextFrame();
-
+  const pageCanvas = await withPreparedMapExport(
+    pageContainer,
+    async ({ freezeCanvases, prerenderWebgl }) => {
       const pagePixelRatio = getExportPixelRatio(pageContainer, opts);
-      restoreRatio = await prerenderWebgl(pagePixelRatio);
-      await waitForNextFrame();
-      restoreFrozenCanvases = await freezeCanvasesForExport(pageContainer);
-      await waitForNextFrame();
+      await prerenderWebgl(pagePixelRatio);
+      await freezeCanvases();
 
       return await htmlToImageCanvas(pageContainer, {
         pixelRatio: pagePixelRatio,
-        backgroundColor: '#ffffff',
+        backgroundColor: EXPORT_BACKGROUND_COLOR,
         style: { boxShadow: 'none' },
         filter: exportFilter
       });
-    } finally {
-      await restoreFrozenCanvases();
-      await restoreRatio();
-      if (shouldRestoreExportMode) {
-        globalActions.setMapExporting(false);
-      }
-      restoreDom();
-      await waitForNextFrame();
     }
-  })();
+  );
 
   if (!pageCanvas) {
     return Promise.reject(new Error(m.error_capture_page_failed()));
@@ -3713,7 +3754,7 @@ export async function exportMapToJpg(
     return Promise.reject(new Error(m.error_export_canvas_context_failed()));
   }
 
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = EXPORT_BACKGROUND_COLOR;
   ctx.fillRect(0, 0, opts.width, opts.height);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
@@ -3723,5 +3764,8 @@ export async function exportMapToJpg(
     Math.round((opts.height - pageCanvas.height) / 2)
   );
 
-  return offscreen.convertToBlob({ type: 'image/jpeg', quality: 1.0 });
+  return offscreen.convertToBlob({
+    type: 'image/jpeg',
+    quality: JPEG_EXPORT_QUALITY
+  });
 }

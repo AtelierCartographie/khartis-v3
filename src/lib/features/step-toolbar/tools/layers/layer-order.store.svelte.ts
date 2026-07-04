@@ -1,7 +1,7 @@
 import {
   persistenceRegistry,
   SavePriority
-} from '$lib/features/project-management/core/persistence-registry';
+} from '$lib/features/project-management/core';
 
 /**
  * Single source of truth for the layer stacking order.

@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
     buildCompositeProjectionFromPresetId: vi.fn(),
     getPreferredBasemapFile: vi.fn((_: unknown, file: string) => file),
     initializeBasemap: vi.fn(),
+    loggerWarn: vi.fn(),
     shouldUseBasemapReferenceInOrthographicView: vi.fn()
   };
 });
@@ -102,6 +103,13 @@ vi.mock('../utils/projection-priority.utils', () => ({
   )
 }));
 
+vi.mock('$lib/features/commons/utils/logger', () => ({
+  LogCategory: { MAP: 'MAP' },
+  logger: {
+    warn: mocks.loggerWarn
+  }
+}));
+
 vi.mock('../stores/projection.store.svelte', () => ({
   projectionStore: {
     isProjectedCoordinates: true,
@@ -122,6 +130,7 @@ describe('resolveCenterCoordinates', () => {
     mocks.buildCompositeProjectionFromPresetId.mockReset();
     mocks.getPreferredBasemapFile.mockClear();
     mocks.initializeBasemap.mockReset();
+    mocks.loggerWarn.mockReset();
     mocks.shouldUseBasemapReferenceInOrthographicView.mockReset();
     mocks.shouldUseBasemapReferenceInOrthographicView.mockReturnValue(true);
 
@@ -193,5 +202,37 @@ describe('resolveCenterCoordinates', () => {
       x: 2.35,
       y: 48.86
     });
+  });
+
+  it('logs and keeps native coordinates when projection resolution fails', async () => {
+    const fallbackError = new Error('projection unavailable');
+    mocks.initializeBasemap.mockRejectedValue(fallbackError);
+
+    const { resolveCenterCoordinates } =
+      await import('./orthographic-center.service');
+
+    const center = await resolveCenterCoordinates({
+      lon: 2.35,
+      lat: 48.86,
+      sourceFileId: 'source-1'
+    });
+
+    expect(center).toEqual({
+      x: 2.35,
+      y: 48.86
+    });
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(
+      'Failed to resolve projected center coordinates; using native coordinates',
+      'MAP',
+      expect.objectContaining({
+        error: fallbackError,
+        flow: 'orthographic_center_projection_fallback',
+        extra: expect.objectContaining({
+          lon: 2.35,
+          lat: 48.86,
+          sourceFileId: 'source-1'
+        })
+      })
+    );
   });
 });

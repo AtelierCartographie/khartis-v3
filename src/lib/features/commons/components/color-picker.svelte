@@ -2,6 +2,7 @@
   import { resolveColorPickerDropdownPosition } from '$lib/features/commons/utils/color-picker-position';
   import { hexToHsl, hslToHex } from '$lib/features/commons/utils/color-utils';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
+  import { portal } from '$lib/features/commons/utils/portal';
   import {
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
@@ -10,7 +11,11 @@
   import { Button, Column, Grid, Row, Slider } from 'carbon-components-svelte';
   import { ChevronDown } from 'carbon-icons-svelte';
   import clsx from 'clsx';
-  import { EVENT } from '../constants/dom.constants';
+  import { KEY, EVENT } from '../constants/dom.constants';
+  import {
+    readCarbonNumberValue,
+    type CarbonValueEvent
+  } from '$lib/features/commons/utils/carbon-events.utils';
 
   type ColorPayload = {
     hex: string;
@@ -50,17 +55,6 @@
   const effectiveTriggerTitle = $derived(
     triggerTitle || triggerAriaLabel || triggerLabel || undefined
   );
-
-  function portal(node: HTMLElement): { destroy: () => void } {
-    document.body.appendChild(node);
-    return {
-      destroy() {
-        if (node.parentNode) {
-          node.parentNode.removeChild(node);
-        }
-      }
-    };
-  }
 
   function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
@@ -106,6 +100,18 @@
     hue = color.hue;
     saturation = color.saturation;
     lightness = color.lightness;
+  }
+
+  function handleHueSliderInput(event: CarbonValueEvent): void {
+    hue = readCarbonNumberValue(event, hue);
+  }
+
+  function handleSaturationSliderInput(event: CarbonValueEvent): void {
+    saturation = readCarbonNumberValue(event, saturation);
+  }
+
+  function handleLightnessSliderInput(event: CarbonValueEvent): void {
+    lightness = readCarbonNumberValue(event, lightness);
   }
 
   function getValidatedColor(): ColorPayload {
@@ -175,6 +181,12 @@
     colorOpen = false;
   }
 
+  function closeColorPickerFromKeyboard(): void {
+    revertPreviewState();
+    colorOpen = false;
+    triggerEl?.focus();
+  }
+
   function toggleColorPicker() {
     if (disabled) {
       return;
@@ -217,6 +229,27 @@
     }
 
     initialColor = null;
+  });
+
+  $effect(() => {
+    if (!colorOpen) {
+      return;
+    }
+
+    function handleKeydown(event: KeyboardEvent): void {
+      if (event.key !== KEY.ESCAPE) {
+        return;
+      }
+
+      event.preventDefault();
+      closeColorPickerFromKeyboard();
+    }
+
+    document.addEventListener(EVENT.KEYDOWN, handleKeydown);
+
+    return () => {
+      document.removeEventListener(EVENT.KEYDOWN, handleKeydown);
+    };
   });
 </script>
 
@@ -265,9 +298,10 @@
                 min={0}
                 max={359}
                 step={1}
-                bind:value={hue}
+                value={hue}
                 hideTextInput
                 labelText={m.color_hue()}
+                on:input={handleHueSliderInput}
               />
             </div>
           </Column>
@@ -296,9 +330,10 @@
                 min={0}
                 max={100}
                 step={1}
-                bind:value={saturation}
+                value={saturation}
                 hideTextInput
                 labelText={m.color_saturation()}
+                on:input={handleSaturationSliderInput}
               />
             </div>
           </Column>
@@ -327,9 +362,10 @@
                 min={0}
                 max={100}
                 step={1}
-                bind:value={lightness}
+                value={lightness}
                 hideTextInput
                 labelText={m.color_brightness()}
+                on:input={handleLightnessSliderInput}
               />
             </div>
           </Column>
@@ -559,8 +595,12 @@
   }
 
   .input-wrapper .number:focus {
-    outline: none;
     border-bottom-color: var(--cds-border-strong);
+  }
+
+  .input-wrapper .number:focus-visible {
+    outline: 2px solid var(--cds-focus);
+    outline-offset: -2px;
   }
 
   .input-wrapper .number:disabled {

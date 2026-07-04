@@ -1,8 +1,5 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
+import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { GEOMETRY_COLUMN_TYPE } from '$lib/features/commons/constants';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { buildOrderClause } from '../utils/html-like-text.utils';
@@ -15,7 +12,6 @@ export interface DuckDBClientForTableData {
   describe_table(
     tableName: string
   ): Promise<{ name: string[]; type: string[] }>;
-  describeColumns(tableName: string): Promise<AnalysisResult[]>;
   analyse(
     tableName: string,
     options?: { force?: boolean }
@@ -106,7 +102,7 @@ export async function getTableData(
     return (await Duck.query(query)) as ArrowTableLike;
   } catch (error) {
     logger.error('Failed to fetch table data', LogCategory.DUCKDB, error);
-    return { numRows: 0, get: () => ({}), toArray: () => [] };
+    throw error;
   }
 }
 
@@ -142,7 +138,7 @@ export async function getRowCount(
       LogCategory.DUCKDB,
       error
     );
-    return 0;
+    throw error;
   }
 }
 
@@ -268,33 +264,6 @@ export async function getExcludedRowIds(
   }
 
   return rowIds;
-}
-
-export async function analyzeTable(
-  tableName: string,
-  Duck: DuckDBClientForTableData
-): Promise<Record<string, unknown>[]> {
-  const escapedTableNameForColumns = escapeSqlString(tableName);
-  const result = (await Duck.query(`
-    SELECT
-      column_name as name,
-      data_type as type
-    FROM duckdb_columns()
-    WHERE table_name = '${escapedTableNameForColumns}'
-  `)) as ArrowTableLike;
-
-  const columns = [];
-  for (let i = 0; i < result.numRows; i++) {
-    columns.push(result.get(i));
-  }
-  return columns;
-}
-
-export async function getBasicColumnInfo(
-  tableName: string,
-  Duck: DuckDBClientForTableData
-): Promise<AnalysisResult[]> {
-  return Duck.describeColumns(tableName);
 }
 
 export async function getFullAnalysis(

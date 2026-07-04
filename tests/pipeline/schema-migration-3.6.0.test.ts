@@ -47,7 +47,7 @@ describe('schema-migration 3.6.0 → 3.7.0', () => {
     const migrated = migrateIfNeeded(buildV360Project());
 
     const manifest = migrated.manifest as { version?: string };
-    expect(manifest.version).toBe(PROJECT_CONST.APP_VERSION);
+    expect(manifest.version).toBe(PROJECT_CONST.SCHEMA_VERSION);
 
     const viz = (migrated.visualizations as Array<Record<string, unknown>>)[0];
     const symbol = viz.symbol as Record<string, number>;

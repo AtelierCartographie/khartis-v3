@@ -60,15 +60,9 @@ export function mapGeoColumnResult(
   return {
     index: geoColumn.index,
     columnName: geoColumn.columnName,
-    type: mapGeoColumnType(geoColumn.type),
+    type: geoColumn.type,
     confidence: geoColumn.confidence
   };
-}
-
-export function mapGeoColumnType(
-  type: GeoColumnResult['type']
-): GeoColumnInfo['type'] {
-  return type;
 }
 
 export function mapDuckDBType(

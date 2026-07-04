@@ -1,4 +1,4 @@
-import { persistenceRegistry } from '$lib/features/project-management';
+import { persistenceRegistry } from '$lib/features/project-management/core';
 import { dataTabStore } from '$lib/features/data-tab/stores/data-tab.store.svelte';
 import { dataToolsStore } from '$lib/features/data-tab/stores/data-tools.store.svelte';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';

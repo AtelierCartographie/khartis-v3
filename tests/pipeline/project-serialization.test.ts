@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PROJECT_CONST } from '$lib/features/project-management/constants';
-import { migrateIfNeeded } from '$lib/features/project-management/core/schema-migration';
+import {
+  migrateIfNeeded,
+  schemaMigrations
+} from '$lib/features/project-management/core/schema-migration';
 import {
   serializeUploadedFile,
   deserializeUploadedFile
@@ -14,28 +17,40 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
 // ─── migrateIfNeeded ───────────────────────────────────────────────────────
 
 describe('migrateIfNeeded', () => {
+  it('keeps the migration chain continuous up to SCHEMA_VERSION', () => {
+    expect(schemaMigrations.length).toBeGreaterThan(0);
+
+    for (let index = 0; index < schemaMigrations.length - 1; index++) {
+      expect(schemaMigrations[index].to).toBe(schemaMigrations[index + 1].from);
+    }
+
+    expect(schemaMigrations[schemaMigrations.length - 1]?.to).toBe(
+      PROJECT_CONST.SCHEMA_VERSION
+    );
+  });
+
   it('is a no-op when manifest version is already current', () => {
     const data = {
-      manifest: { version: PROJECT_CONST.APP_VERSION },
+      manifest: { version: PROJECT_CONST.SCHEMA_VERSION },
       settings: { value: 42 }
     };
     const result = migrateIfNeeded(data);
     expect(result.settings).toEqual({ value: 42 });
     expect((result.manifest as { version: string }).version).toBe(
-      PROJECT_CONST.APP_VERSION
+      PROJECT_CONST.SCHEMA_VERSION
     );
   });
 
-  it('stamps APP_VERSION when no migration runs (no-op path)', () => {
+  it('stamps SCHEMA_VERSION when no migration runs (no-op path)', () => {
     const data = {
-      manifest: { version: PROJECT_CONST.APP_VERSION, extra: 'preserved' }
+      manifest: { version: PROJECT_CONST.SCHEMA_VERSION, extra: 'preserved' }
     };
     const result = migrateIfNeeded(data);
     expect((result.manifest as Record<string, unknown>).extra).toBe(
       'preserved'
     );
     expect((result.manifest as { version: string }).version).toBe(
-      PROJECT_CONST.APP_VERSION
+      PROJECT_CONST.SCHEMA_VERSION
     );
   });
 
@@ -174,7 +189,7 @@ describe('migrateIfNeeded — .kh roundtrip', () => {
 
   it('accepts a current-version project without mutation on roundtrip', () => {
     const currentProject = {
-      manifest: { version: PROJECT_CONST.APP_VERSION, name: 'Current' },
+      manifest: { version: PROJECT_CONST.SCHEMA_VERSION, name: 'Current' },
       visualizationSettings: [{ symbols: { type: 'circle', size: 14 } }]
     };
 

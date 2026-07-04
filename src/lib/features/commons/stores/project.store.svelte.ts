@@ -5,7 +5,7 @@ import type {
   SavedProjectMetadata
 } from '$lib/features/project-management';
 import * as m from '$lib/paraglide/messages';
-import { persistenceRegistry } from '$lib/features/project-management';
+import { persistenceRegistry } from '$lib/features/project-management/core';
 import { shouldSkipLastProjectRestore } from '../utils/pwa-reset';
 import type {
   ColumnTransformation,
@@ -24,6 +24,7 @@ import {
   addFilesToProject as addFilesToProjectFn,
   addVirtualSourceFile as addVirtualSourceFileFn,
   removeFileFromProject as removeFileFromProjectFn,
+  clearSourceFiles as clearSourceFilesFn,
   renameFile as renameFileFn,
   addToHistory as addToHistoryFn,
   undo as undoFn,
@@ -46,13 +47,7 @@ function createProjectStore() {
   let initPromise: Promise<void> | undefined;
 
   const container: ProjectStateContainer = {
-    _state: state,
-    get initPromise() {
-      return initPromise;
-    },
-    set initPromise(value: Promise<void> | undefined) {
-      initPromise = value;
-    }
+    _state: state
   };
 
   persistenceRegistry.setSaveCallback(() => saveCurrentProject());
@@ -96,6 +91,10 @@ function createProjectStore() {
 
   async function removeFileFromProject(fileId: string): Promise<void> {
     return removeFileFromProjectFn(container, fileId);
+  }
+
+  async function clearSourceFiles(): Promise<void> {
+    return clearSourceFilesFn(container);
   }
 
   async function renameFile(fileId: string, newName: string): Promise<void> {
@@ -227,14 +226,6 @@ function createProjectStore() {
   }
 
   return {
-    _state: state,
-    get initPromise(): Promise<void> | undefined {
-      return initPromise;
-    },
-    set initPromise(value: Promise<void> | undefined) {
-      initPromise = value;
-      container.initPromise = value;
-    },
     waitForInit,
     get currentProject(): KhartisProject | undefined {
       return state.currentProject;
@@ -263,6 +254,7 @@ function createProjectStore() {
     addFilesToProject,
     addVirtualSourceFile,
     removeFileFromProject,
+    clearSourceFiles,
     renameFile,
     addColumnTransformation,
     clearColumnTransformations,

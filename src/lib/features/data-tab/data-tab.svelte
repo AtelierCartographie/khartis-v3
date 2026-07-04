@@ -4,7 +4,7 @@
   import { dataTabStore } from './stores/data-tab.store.svelte';
   import EnrichDataStep from './components/enrich-data-step.svelte';
   import GeolocationStep from './components/geolocation-step.svelte';
-  import ToolbarTabLayout from '$lib/features/main-toolbar/components/toolbar-tab-layout.svelte';
+  import { ToolbarTabLayout } from '$lib/features/main-toolbar';
 
   const isGeographicMode = $derived(dataTabStore.isGeographicMode);
 

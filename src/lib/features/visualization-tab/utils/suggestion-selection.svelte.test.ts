@@ -140,6 +140,17 @@ describe('shouldAutoApplySuggestion', () => {
       })
     ).toBe(false);
   });
+
+  it('does not auto-apply over a restored persisted suggestion', () => {
+    expect(
+      shouldAutoApplySuggestion({
+        hasPersistedSuggestionKey: true,
+        suggestionCount: 1,
+        visualizationCount: 1,
+        targetVisualizationOriginMode: 'auto-suggestion'
+      })
+    ).toBe(false);
+  });
 });
 
 describe('resolveDisplayedSuggestionKey', () => {

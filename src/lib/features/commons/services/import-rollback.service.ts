@@ -9,7 +9,6 @@ import { LogCategory, logger } from '../utils/logger';
 interface ImportSnapshot {
   fileId: string;
   fileName: string;
-  timestamp: Date;
 
   hadProjectFile: boolean;
   hadDataset: boolean;
@@ -35,7 +34,6 @@ function createImportRollbackService() {
     const snapshot: ImportSnapshot = {
       fileId: file.id,
       fileName: file.name,
-      timestamp: new Date(),
       hadProjectFile: !!currentProject?.data?.sourceFiles?.some(
         (f) => f.id === file.id
       ),
@@ -59,20 +57,36 @@ function createImportRollbackService() {
     };
 
     try {
+      let removedViaProjectStore = false;
+
       if (!snapshot.hadProjectFile) {
         const currentProject = projectStore.currentProject;
-        if (currentProject?.data?.sourceFiles) {
-          const fileIndex = currentProject.data.sourceFiles.findIndex(
-            (f) => f.id === snapshot.fileId
-          );
-          if (fileIndex !== -1) {
-            currentProject.data.sourceFiles.splice(fileIndex, 1);
-            cleanupResults.projectFile = true;
-          }
+        const shouldRemoveProjectFile = currentProject?.data?.sourceFiles?.some(
+          (f) => f.id === snapshot.fileId
+        );
+
+        if (shouldRemoveProjectFile) {
+          const dataset = datasetsStore.getDatasetBySourceFile(snapshot.fileId);
+          const duckDataset = duckDBOrchestrator
+            .getAllDatasets()
+            .find((d) => d.sourceFileId === snapshot.fileId);
+
+          const visualizationCount = dataset
+            ? visualizationStore.getVisualizationsByDataset(dataset.id).length
+            : 0;
+
+          await projectStore.removeFileFromProject(snapshot.fileId);
+
+          cleanupResults.projectFile = true;
+          cleanupResults.dataset = !!dataset;
+          cleanupResults.duckDBTable = !!duckDataset;
+          cleanupResults.duckDBCache = !!duckDataset;
+          cleanupResults.visualizations = visualizationCount;
+          removedViaProjectStore = true;
         }
       }
 
-      if (!snapshot.hadDataset) {
+      if (!snapshot.hadDataset && !removedViaProjectStore) {
         const dataset = datasetsStore.getDatasetBySourceFile(snapshot.fileId);
         if (dataset) {
           const visualizations = visualizationStore.getVisualizationsByDataset(
@@ -88,7 +102,7 @@ function createImportRollbackService() {
         }
       }
 
-      if (!snapshot.hadDuckDBTable) {
+      if (!snapshot.hadDuckDBTable && !removedViaProjectStore) {
         const duckDataset = duckDBOrchestrator
           .getAllDatasets()
           .find((d) => d.sourceFileId === snapshot.fileId);

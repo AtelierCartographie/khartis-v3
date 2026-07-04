@@ -1,3 +1,5 @@
+import { LogCategory, logger } from './logger';
+
 const DEFAULT_NOTIFICATION_TIMEOUT_MS = 5_000;
 const ERROR_NOTIFICATION_TIMEOUT_MS = 10_000;
 
@@ -110,8 +112,11 @@ export function showSuccess(title: string, subtitle?: string): void {
 export function showError(
   title: string,
   subtitle?: string,
-  _logDetails?: unknown
+  logDetails?: unknown
 ): void {
+  if (logDetails !== undefined) {
+    logger.error('Notification error shown', LogCategory.UI, logDetails);
+  }
   notificationManager.error({ title, subtitle });
 }
 

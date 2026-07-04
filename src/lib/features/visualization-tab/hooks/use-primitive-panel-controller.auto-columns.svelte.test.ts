@@ -149,4 +149,205 @@ describe('usePrimitivePanelController auto columns', () => {
       sizeColumn: '_2020'
     });
   }, 10000);
+
+  it('inverts primitive classification palettes through the shared helper', async () => {
+    vi.stubGlobal('Worker', WorkerStub);
+    const { usePrimitivePanelController } =
+      await import('./use-primitive-panel-controller.svelte');
+    const { PrimitiveFilterType } =
+      await import('$lib/features/commons/stores/visualization.store.svelte');
+    const baseVisualization = createVisualization();
+    const visualization = {
+      ...baseVisualization,
+      symbol: {
+        ...baseVisualization.symbol,
+        classification: {
+          method: KMEANS,
+          classes: 5,
+          colors: ['#111111', '#222222'],
+          inverted: false
+        }
+      }
+    } as unknown as VisualizationConfig;
+    const updatePrimitiveClassification = vi.fn();
+    const controller = usePrimitivePanelController({
+      getDataFields: () => [],
+      getVisualization: () => visualization,
+      updatePrimitiveClassification,
+      updateLineThicknessClassification: () => {},
+      updatePrimitiveStrokeClassification: () => {},
+      updateTextPrimitive: () => {},
+      updateVisualization: () => {}
+    });
+
+    controller.invertPrimitivePalette(PrimitiveFilterType.POINT);
+
+    expect(updatePrimitiveClassification).toHaveBeenCalledWith(
+      PrimitiveFilterType.POINT,
+      {
+        colors: ['#222222', '#111111'],
+        inverted: true
+      }
+    );
+  }, 10000);
+
+  it('includes text when rebuilding primitive filters from enabled states', async () => {
+    vi.stubGlobal('Worker', WorkerStub);
+    const { usePrimitivePanelController } =
+      await import('./use-primitive-panel-controller.svelte');
+    const { PrimitiveFilterType } =
+      await import('$lib/features/commons/stores/visualization.store.svelte');
+    const visualization = {
+      ...createVisualization(),
+      symbol: {
+        ...createVisualization().symbol,
+        enabled: false
+      },
+      text: {
+        enabled: true
+      }
+    } as unknown as VisualizationConfig;
+    const controller = usePrimitivePanelController({
+      getDataFields: () => [],
+      getVisualization: () => visualization,
+      updatePrimitiveClassification: () => {},
+      updateLineThicknessClassification: () => {},
+      updatePrimitiveStrokeClassification: () => {},
+      updateTextPrimitive: () => {},
+      updateVisualization: () => {}
+    });
+
+    expect(
+      controller.buildNextPrimitiveFilters({
+        [PrimitiveFilterType.POINT]: false
+      })
+    ).toEqual([PrimitiveFilterType.TEXT]);
+  }, 10000);
+
+  it('seeds polygon break defaults through the shared defaults helper', async () => {
+    vi.stubGlobal('Worker', WorkerStub);
+    const { usePrimitivePanelController } =
+      await import('./use-primitive-panel-controller.svelte');
+    const { PrimitiveFilterType } =
+      await import('$lib/features/commons/stores/visualization.store.svelte');
+    const visualization = {
+      ...createVisualization(),
+      primitiveFilters: [PrimitiveFilterType.POLYGON],
+      polygon: {
+        enabled: true,
+        fillMode: FillMode.CLASSES,
+        classification: {}
+      }
+    } as unknown as VisualizationConfig;
+    const updatePrimitiveClassification = vi.fn();
+    const controller = usePrimitivePanelController({
+      getDataFields: () => [],
+      getVisualization: () => visualization,
+      updatePrimitiveClassification,
+      updateLineThicknessClassification: () => {},
+      updatePrimitiveStrokeClassification: () => {},
+      updateTextPrimitive: () => {},
+      updateVisualization: () => {}
+    });
+
+    controller.ensurePrimitiveClassificationDefaults(
+      PrimitiveFilterType.POLYGON,
+      visualization
+    );
+
+    expect(updatePrimitiveClassification).toHaveBeenCalledWith(
+      PrimitiveFilterType.POLYGON,
+      {
+        method: KMEANS,
+        classes: 4,
+        numClasses: 4
+      },
+      { preserveOrigin: true }
+    );
+  }, 10000);
+
+  it('seeds categorical colors and labels through the shared defaults helper', async () => {
+    vi.stubGlobal('Worker', WorkerStub);
+    const { usePrimitivePanelController } =
+      await import('./use-primitive-panel-controller.svelte');
+    const { PrimitiveFilterType } =
+      await import('$lib/features/commons/stores/visualization.store.svelte');
+    const baseVisualization = createVisualization();
+    const visualization = {
+      ...baseVisualization,
+      symbol: {
+        ...baseVisualization.symbol,
+        mode: SymbolMode.CATEGORIES,
+        classification: {
+          method: KMEANS,
+          classes: 5
+        }
+      }
+    } as unknown as VisualizationConfig;
+    const updatePrimitiveClassification = vi.fn();
+    const controller = usePrimitivePanelController({
+      getDataFields: () => [],
+      getVisualization: () => visualization,
+      updatePrimitiveClassification,
+      updateLineThicknessClassification: () => {},
+      updatePrimitiveStrokeClassification: () => {},
+      updateTextPrimitive: () => {},
+      updateVisualization: () => {}
+    });
+
+    controller.ensurePrimitiveClassificationDefaults(
+      PrimitiveFilterType.POINT,
+      visualization
+    );
+
+    expect(updatePrimitiveClassification).toHaveBeenCalledWith(
+      PrimitiveFilterType.POINT,
+      expect.objectContaining({
+        colors: expect.any(Array),
+        inverted: false,
+        labels: []
+      }),
+      { preserveOrigin: true }
+    );
+  }, 10000);
+
+  it('auto-selects symbol fill value columns through the shared helper', async () => {
+    vi.stubGlobal('Worker', WorkerStub);
+    const { usePrimitivePanelController } =
+      await import('./use-primitive-panel-controller.svelte');
+    const baseVisualization = createVisualization();
+    let visualization = {
+      ...baseVisualization,
+      symbol: {
+        ...baseVisualization.symbol,
+        valueColumn: undefined,
+        fillMode: FillMode.CLASSES,
+        fillValueColumn: undefined
+      }
+    } as unknown as VisualizationConfig;
+    const controller = usePrimitivePanelController({
+      getDataFields: () => [
+        { id: 0, text: 'region', type: 'text' },
+        { id: 1, text: 'population', type: 'number' }
+      ],
+      getVisualization: () => visualization,
+      updatePrimitiveClassification: () => {},
+      updateLineThicknessClassification: () => {},
+      updatePrimitiveStrokeClassification: () => {},
+      updateTextPrimitive: () => {},
+      updateVisualization: (updates, afterUpdate) => {
+        visualization = {
+          ...visualization,
+          ...updates
+        } as VisualizationConfig;
+        afterUpdate?.(visualization);
+      }
+    });
+
+    controller.ensureSymbolFillAutoColumns(visualization);
+
+    expect(visualization.symbol).toMatchObject({
+      fillValueColumn: 'population'
+    });
+  }, 10000);
 });
