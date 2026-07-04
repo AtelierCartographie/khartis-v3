@@ -53,8 +53,11 @@ import {
   calculateBreakCounts,
   calculateDivergingBreaks,
   calculateBreaks,
-  generateColorsForBreaks
+  generateColorsForBreaks,
+  suggestClassificationDefaults
 } from '$lib/features/commons/services/classification.service';
+import { ClassificationMethod } from '$lib/features/commons/stores/visualization.store.svelte';
+import { logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 
@@ -63,6 +66,7 @@ const mockedDuckQuery = vi.mocked(Duck.query);
 const mockedGetDatasetBySourceFile = vi.mocked(
   duckDBOrchestrator.getDatasetBySourceFile
 );
+const mockedLoggerWarn = vi.mocked(logger.warn);
 
 function makeTable(row: Record<string, unknown>) {
   return {
@@ -76,6 +80,7 @@ function makeTable(row: Record<string, unknown>) {
 beforeEach(() => {
   mockedDuckQuery.mockReset();
   mockedGetDatasetBySourceFile.mockReset();
+  mockedLoggerWarn.mockReset();
 });
 
 describe('generateColorsForBreaks — sequential', () => {
@@ -415,6 +420,38 @@ describe('calculateBreaks — macro methods', () => {
     expect(result?.breaks).toEqual([20, 40, 60, 80]);
   });
 
+  it('should keep raw breaks and log when break rounding fails', async () => {
+    mockedGetDatasetBySourceFile.mockReturnValue({
+      tableName: uniqueTable()
+    } as never);
+    mockedDuckQuery
+      .mockResolvedValueOnce(makeStatsTable() as never)
+      .mockResolvedValueOnce(makeBreaksTable([20, 40, 60, 80]) as never)
+      .mockRejectedValueOnce(new Error('rounding failed'))
+      .mockResolvedValueOnce(makeCountsTable() as never);
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName: 'value',
+      method: 'quantiles' as never,
+      numClasses: 5
+    });
+
+    expect(result?.breaks).toEqual([20, 40, 60, 80]);
+    expect(mockedLoggerWarn).toHaveBeenCalledWith(
+      'Failed to round classification breaks; using unrounded breaks',
+      'DATA',
+      expect.objectContaining({
+        error: expect.any(Error),
+        flow: 'classification_breaks',
+        extra: expect.objectContaining({
+          columnName: 'value',
+          breakCount: 4
+        })
+      })
+    );
+  });
+
   it('should parse results when the macro returns a generic iterable (Arrow Vector-like)', async () => {
     const vectorLike: Iterable<number> = {
       *[Symbol.iterator]() {
@@ -659,5 +696,73 @@ describe('calculateBreaks — Flechette edge cases', () => {
     });
 
     expect(result?.breaks).toEqual([20, 40, 60, 80]);
+  });
+});
+
+describe('suggestClassificationDefaults', () => {
+  it('keeps the base method and class count for balanced distributions', () => {
+    const result = suggestClassificationDefaults({
+      method: ClassificationMethod.KMEANS,
+      classes: 4,
+      skewness: 0.4,
+      rowCount: 300
+    });
+    expect(result).toEqual({ method: ClassificationMethod.KMEANS, classes: 4 });
+  });
+
+  it('switches to head/tail for heavy right-tailed distributions', () => {
+    const result = suggestClassificationDefaults({
+      method: ClassificationMethod.KMEANS,
+      classes: 4,
+      skewness: 4.5,
+      rowCount: 300
+    });
+    expect(result.method).toBe(ClassificationMethod.HEAD_TAIL);
+  });
+
+  it('switches to quantiles for moderately skewed distributions (both signs)', () => {
+    expect(
+      suggestClassificationDefaults({
+        method: ClassificationMethod.KMEANS,
+        classes: 4,
+        skewness: 2,
+        rowCount: 300
+      }).method
+    ).toBe(ClassificationMethod.QUANTILES);
+    expect(
+      suggestClassificationDefaults({
+        method: ClassificationMethod.KMEANS,
+        classes: 4,
+        skewness: -2,
+        rowCount: 300
+      }).method
+    ).toBe(ClassificationMethod.QUANTILES);
+  });
+
+  it('caps the class count to a third of the entity count', () => {
+    const result = suggestClassificationDefaults({
+      method: ClassificationMethod.KMEANS,
+      classes: 4,
+      rowCount: 10
+    });
+    expect(result.classes).toBe(3);
+  });
+
+  it('never drops below two classes and never touches manual classifications', () => {
+    expect(
+      suggestClassificationDefaults({
+        method: ClassificationMethod.KMEANS,
+        classes: 4,
+        rowCount: 4
+      }).classes
+    ).toBe(2);
+    expect(
+      suggestClassificationDefaults({
+        method: ClassificationMethod.MANUAL,
+        classes: 5,
+        skewness: 5,
+        rowCount: 300
+      }).method
+    ).toBe(ClassificationMethod.MANUAL);
   });
 });

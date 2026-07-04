@@ -4,7 +4,7 @@ import type { Map as MapLibreMap } from 'maplibre-gl';
 import {
   persistenceRegistry,
   type SavePriorityType
-} from '$lib/features/project-management/core/persistence-registry';
+} from '$lib/features/project-management/core';
 import type { SerializedMapViewState } from '$lib/types/serialization.types';
 import {
   clampOrthographicZoomLevel,
@@ -28,11 +28,7 @@ import {
 type DeckInstance = Deck<View | View[] | null>;
 export type ViewportFitMode = 'auto' | 'manual';
 export type ViewportFitReason =
-  | 'dataset'
-  | 'basemap'
-  | 'projection'
-  | 'reset'
-  | 'restore';
+  'dataset' | 'basemap' | 'projection' | 'reset' | 'restore';
 
 interface DeckViewState {
   target: [number, number, number];
@@ -155,6 +151,7 @@ function createMapInstanceStore() {
     map: MapLibreMap | null;
     deckOverlay: MapboxOverlay | null;
     deckInstance: DeckInstance | null;
+    workspaceViewportElement: HTMLElement | null;
     isMapLoaded: boolean;
     zoomLevel: number;
     baseZoomLevel: number;
@@ -165,6 +162,7 @@ function createMapInstanceStore() {
     map: null,
     deckOverlay: null,
     deckInstance: null,
+    workspaceViewportElement: null,
     isMapLoaded: false,
     zoomLevel: 100,
     baseZoomLevel: DEFAULT_MAP_BASE_ZOOM,
@@ -259,6 +257,10 @@ function createMapInstanceStore() {
     }
   }
 
+  function setWorkspaceViewportElement(element: HTMLElement | null) {
+    state.workspaceViewportElement = element;
+  }
+
   function setMapLoaded(loaded: boolean) {
     state.isMapLoaded = loaded;
   }
@@ -317,15 +319,7 @@ function createMapInstanceStore() {
     return getDeckMapBounds();
   }
 
-  /**
-   * Project an orthographic data-space point (lon/lat, or projected pixel coords
-   * when a render projection is active) to the on-screen position inside the map
-   * area, expressed in LOGICAL (unscaled) pixels relative to the map-area
-   * top-left. This is the inverse-free companion of `getDeckMapBounds`: it
-   * composes the same `dataToWorld` mapping with the deck OrthographicView
-   * (flipY:false) pan/zoom, so an annotation anchored here tracks the basemap as
-   * the deck viewState changes. Returns `null` when no reference is available.
-   */
+  /** Project orthographic data coordinates to logical map-area screen pixels. */
   function projectDataToViewportPx(
     dataX: number,
     dataY: number
@@ -345,8 +339,7 @@ function createMapInstanceStore() {
     if (!Number.isFinite(world[0]) || !Number.isFinite(world[1])) return null;
 
     const target = normalizeTarget(state.deckViewState.target);
-    // Scaled-device-px viewport center (OrthographicView places target there).
-    // The view is created with flipY:false, so world +y points UP the screen.
+    // OrthographicView centers target in scaled device px with flipY:false.
     const centerXScaled = (ctx.canvasSize.width * renderScale) / 2;
     const centerYScaled = (ctx.canvasSize.height * renderScale) / 2;
     const screenXScaled = (world[0] - target[0]) * zoomScale + centerXScaled;
@@ -356,20 +349,14 @@ function createMapInstanceStore() {
       return null;
     }
 
-    // Convert scaled device px back to logical (unscaled) map-area px so the
-    // overlay can apply its own pageScale exactly once.
+    // Return logical px so overlays apply pageScale exactly once.
     return {
       x: screenXScaled / renderScale,
       y: screenYScaled / renderScale
     };
   }
 
-  /**
-   * Inverse of `projectDataToViewportPx`: map a logical (unscaled) map-area
-   * pixel position back to orthographic data-space coordinates (lon/lat or
-   * projected pixels, matching `dataToWorld`'s input space). Returns `null` when
-   * no reference is available.
-   */
+  /** Unproject logical map-area pixels back to orthographic data coordinates. */
   function unprojectViewportPxToData(
     viewportX: number,
     viewportY: number
@@ -819,6 +806,7 @@ function createMapInstanceStore() {
     state.map = null;
     state.deckOverlay = null;
     state.deckInstance = null;
+    state.workspaceViewportElement = null;
     state.isMapLoaded = false;
     state.zoomLevel = 100;
     state.baseZoomLevel = DEFAULT_MAP_BASE_ZOOM;
@@ -840,6 +828,9 @@ function createMapInstanceStore() {
     },
     get deckInstance() {
       return state.deckInstance;
+    },
+    get workspaceViewportElement() {
+      return state.workspaceViewportElement;
     },
     get isMapLoaded() {
       return state.isMapLoaded;
@@ -884,6 +875,7 @@ function createMapInstanceStore() {
     setMapInstance,
     setDeckOverlay,
     setDeckInstance,
+    setWorkspaceViewportElement,
     setMapLoaded,
     getMapCanvas,
     getDeckMapBounds,

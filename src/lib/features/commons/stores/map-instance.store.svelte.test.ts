@@ -24,7 +24,7 @@ const mocks = vi.hoisted(() => ({
   }
 }));
 
-vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
+vi.mock('$lib/features/project-management/core', () => ({
   persistenceRegistry: {
     register: mocks.registerMock,
     notifyChange: mocks.notifyChangeMock

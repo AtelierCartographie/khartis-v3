@@ -25,7 +25,7 @@ vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
   duckDBOrchestrator: {}
 }));
 
-vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
+vi.mock('$lib/features/project-management/core', () => ({
   SavePriority: {
     IMMEDIATE: 'immediate',
     DEBOUNCED: 'debounced'
@@ -34,81 +34,123 @@ vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
 }));
 
 import {
-  resolveProportionalSymbolMaxSize,
-  resolveProportionalSymbolMinSize,
-  SPARSE_POLYGON_THRESHOLD,
-  SPARSE_SYMBOL_FLOOR_PX,
-  DENSE_SYMBOL_FLOOR_PX
+  resolveVisualizationPreset,
+  VisualizationType
 } from '$lib/features/commons/stores/visualization.store.svelte';
+import type { DatasetResult } from '$lib/features/data-pipeline/types/dataset.types';
 
-describe('resolveProportionalSymbolMaxSize — density-aware floor', () => {
+function createPolygonDataset(rowCount: number): DatasetResult {
+  return {
+    id: 'dataset',
+    name: 'Dataset',
+    sourceFileId: 'source-file',
+    tableName: 'dataset_table',
+    columns: [],
+    rowCount,
+    geometry: {
+      type: 'Polygon',
+      bounds: [0, 0, 1, 1],
+      centroid: [0.5, 0.5]
+    },
+    metadata: {
+      processedAt: new Date('2026-01-01T00:00:00.000Z'),
+      fileType: 'geojson',
+      parserUsed: 'test'
+    }
+  };
+}
+
+function resolveProportionalSymbolSizes(rowCount: number) {
+  const preset = resolveVisualizationPreset(
+    VisualizationType.PROPORTIONAL,
+    createPolygonDataset(rowCount)
+  );
+  if (!preset.symbols) {
+    throw new Error('Expected proportional preset symbols');
+  }
+  return {
+    maxSize: preset.symbols.maxSize,
+    minSize: preset.symbols.minSize
+  };
+}
+
+describe('proportional symbol defaults — density-aware floor', () => {
   it('caps at 24 px for very small datasets', () => {
-    expect(resolveProportionalSymbolMaxSize(1)).toBe(24);
-    expect(resolveProportionalSymbolMaxSize(0)).toBe(24);
+    expect(resolveProportionalSymbolSizes(1).maxSize).toBe(24);
+    expect(resolveProportionalSymbolSizes(0).maxSize).toBe(24);
   });
 
   it('returns 14 px for ~96 features (French départements)', () => {
-    expect(resolveProportionalSymbolMaxSize(96)).toBe(14);
+    expect(resolveProportionalSymbolSizes(96).maxSize).toBe(14);
   });
 
   it('respects the sparse floor (10 px) for 332 features (NUTS 2)', () => {
     // raw formula: round(140 / sqrt(332)) = 8 → clamped up to floor 10
-    expect(resolveProportionalSymbolMaxSize(332)).toBe(SPARSE_SYMBOL_FLOOR_PX);
+    expect(resolveProportionalSymbolSizes(332).maxSize).toBe(10);
   });
 
   it('respects the sparse floor for 499 features (just under threshold)', () => {
-    expect(resolveProportionalSymbolMaxSize(499)).toBe(SPARSE_SYMBOL_FLOOR_PX);
+    expect(resolveProportionalSymbolSizes(499).maxSize).toBe(10);
   });
 
   it('switches to the dense floor (6 px) at 500 features', () => {
     // raw formula: round(140 / sqrt(500)) = 6 → already at dense floor
-    expect(resolveProportionalSymbolMaxSize(SPARSE_POLYGON_THRESHOLD)).toBe(
-      DENSE_SYMBOL_FLOOR_PX
-    );
+    expect(resolveProportionalSymbolSizes(500).maxSize).toBe(6);
   });
 
   it('keeps the dense floor for 1000 features', () => {
     // raw formula: round(140 / sqrt(1000)) = 4 → clamped up to dense floor 6
-    expect(resolveProportionalSymbolMaxSize(1000)).toBe(DENSE_SYMBOL_FLOOR_PX);
+    expect(resolveProportionalSymbolSizes(1000).maxSize).toBe(6);
   });
 
   it('keeps the dense floor for 5000 features (commune scale)', () => {
-    expect(resolveProportionalSymbolMaxSize(5000)).toBe(DENSE_SYMBOL_FLOOR_PX);
+    expect(resolveProportionalSymbolSizes(5000).maxSize).toBe(6);
   });
 
   it('keeps the dense floor for 35000 features (IRIS scale)', () => {
-    expect(resolveProportionalSymbolMaxSize(35000)).toBe(DENSE_SYMBOL_FLOOR_PX);
+    expect(resolveProportionalSymbolSizes(35000).maxSize).toBe(6);
   });
 
   it('the formula is monotonically non-increasing in rowCount', () => {
-    let last = resolveProportionalSymbolMaxSize(1);
+    let last = resolveProportionalSymbolSizes(1).maxSize;
     for (const n of [10, 50, 100, 200, 500, 1000, 5000, 35000]) {
-      const next = resolveProportionalSymbolMaxSize(n);
+      const next = resolveProportionalSymbolSizes(n).maxSize;
       expect(next).toBeLessThanOrEqual(last);
       last = next;
     }
   });
 });
 
-describe('resolveProportionalSymbolMinSize — companion', () => {
-  it('returns max/4 within [1, 4] bounds', () => {
-    expect(resolveProportionalSymbolMinSize(24)).toBe(4);
-    expect(resolveProportionalSymbolMinSize(14)).toBe(4); // 14/4 = 3.5 → 4
-    expect(resolveProportionalSymbolMinSize(10)).toBe(3); // 10/4 = 2.5 → 3
-    expect(resolveProportionalSymbolMinSize(6)).toBe(2);
-    expect(resolveProportionalSymbolMinSize(2)).toBe(1);
+describe('proportional symbol defaults — min size companion', () => {
+  it('returns max/4 within [1, 4] bounds for density tiers', () => {
+    expect(resolveProportionalSymbolSizes(1)).toMatchObject({
+      maxSize: 24,
+      minSize: 4
+    });
+    expect(resolveProportionalSymbolSizes(96)).toMatchObject({
+      maxSize: 14,
+      minSize: 4
+    });
+    expect(resolveProportionalSymbolSizes(332)).toMatchObject({
+      maxSize: 10,
+      minSize: 3
+    });
+    expect(resolveProportionalSymbolSizes(500)).toMatchObject({
+      maxSize: 6,
+      minSize: 2
+    });
   });
 
   it('never returns less than 1 px', () => {
-    expect(resolveProportionalSymbolMinSize(0)).toBe(1);
-    expect(resolveProportionalSymbolMinSize(1)).toBe(1);
+    expect(
+      resolveProportionalSymbolSizes(35000).minSize
+    ).toBeGreaterThanOrEqual(1);
   });
 
   it('keeps minSize ≤ maxSize for every density tier', () => {
     for (const n of [1, 50, 96, 332, 500, 1000, 5000, 35000]) {
-      const max = resolveProportionalSymbolMaxSize(n);
-      const min = resolveProportionalSymbolMinSize(max);
-      expect(min).toBeLessThanOrEqual(max);
+      const sizes = resolveProportionalSymbolSizes(n);
+      expect(sizes.minSize).toBeLessThanOrEqual(sizes.maxSize);
     }
   });
 });

@@ -1,4 +1,7 @@
-import { DuckDBError } from '$lib/features/commons/pipeline.errors';
+import {
+  DataValidationError,
+  DuckDBError
+} from '$lib/features/commons/pipeline.errors';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
@@ -18,7 +21,7 @@ import { isGeometryColumnType } from '$lib/features/data-pipeline/operations/geo
 import {
   SavePriority,
   persistenceRegistry
-} from '$lib/features/project-management/core/persistence-registry';
+} from '$lib/features/project-management/core';
 import * as m from '$lib/paraglide/messages';
 import type {
   SerializedTableFilterRecord,
@@ -44,6 +47,7 @@ import {
   type GPSColumns,
   type SearchStats
 } from '../types';
+import { isMissingDuckTableError } from '../utils/duckdb-error.utils';
 
 import * as arrowOps from './arrow-ops';
 import * as columnOps from './column-ops';
@@ -177,15 +181,6 @@ async function prefetchArrowMetadata(dataset: DuckDBDataset): Promise<void> {
 }
 
 const joinedArrowCache: Map<string, Table> = new Map();
-
-function isMissingDuckTableError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    /Catalog Error:\s*Table with name .*?(does not exist|not found)/i.test(
-      error.message
-    )
-  );
-}
 
 function shouldIgnoreFinalizeJoinError(
   datasetId: string,
@@ -440,7 +435,11 @@ export const duckDBOrchestrator = {
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     const dataset = state.findDatasetByIdOrSourceFile(datasetId);
-    if (!dataset) throw new Error(m.error_dataset_not_found());
+    if (!dataset) {
+      throw new DataValidationError(m.error_dataset_not_found(), 'datasetId', {
+        datasetId
+      });
+    }
 
     const filterClause = buildFilterWhereClause(
       state.getFiltersMap().get(dataset.tableName)
@@ -462,7 +461,11 @@ export const duckDBOrchestrator = {
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     const dataset = state.findDatasetByIdOrSourceFile(datasetId);
-    if (!dataset) throw new Error(m.error_dataset_not_found());
+    if (!dataset) {
+      throw new DataValidationError(m.error_dataset_not_found(), 'datasetId', {
+        datasetId
+      });
+    }
 
     const filterClause = buildFilterWhereClause(
       state.getFiltersMap().get(dataset.tableName)
@@ -479,7 +482,11 @@ export const duckDBOrchestrator = {
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     const dataset = state.findDatasetByIdOrSourceFile(datasetId);
-    if (!dataset) throw new Error(m.error_dataset_not_found());
+    if (!dataset) {
+      throw new DataValidationError(m.error_dataset_not_found(), 'datasetId', {
+        datasetId
+      });
+    }
 
     await joinOps.applyJoinCorrections(dataset, geoColumn, corrections, Duck);
 
@@ -491,14 +498,17 @@ export const duckDBOrchestrator = {
   async finalizeJoin(
     datasetId: string,
     basemap: BasemapMetadata,
-    geoColumn: string,
-    options?: joinOps.FinalizeJoinOptions
+    geoColumn: string
   ): Promise<void> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     const requestedDataset = state.findDatasetByIdOrSourceFile(datasetId);
-    if (!requestedDataset) throw new Error(m.error_dataset_not_found());
+    if (!requestedDataset) {
+      throw new DataValidationError(m.error_dataset_not_found(), 'datasetId', {
+        datasetId
+      });
+    }
 
     const targetDatasetId = requestedDataset.id;
     const targetTableName = requestedDataset.tableName;
@@ -522,8 +532,7 @@ export const duckDBOrchestrator = {
             dataset,
             basemap,
             geoColumn,
-            Duck,
-            options
+            Duck
           );
 
           if (!isCurrentJoinRequest(targetDatasetId, requestId, generation)) {
@@ -728,7 +737,11 @@ export const duckDBOrchestrator = {
 
     const dataset = state.findDatasetByIdOrSourceFile(datasetId);
     if (!dataset) {
-      throw new Error(m.error_dataset_not_found_id({ datasetId }));
+      throw new DataValidationError(
+        m.error_dataset_not_found_id({ datasetId }),
+        'datasetId',
+        { datasetId }
+      );
     }
 
     return gpsOps.getGPSArrowTable(dataset, Duck, (tn) =>
@@ -816,7 +829,15 @@ export const duckDBOrchestrator = {
         Number(row.maxx),
         Number(row.maxy)
       ];
-    } catch {
+    } catch (error) {
+      logger.warn('Failed to compute geometry extent', LogCategory.DUCKDB, {
+        error,
+        flow: 'geometry_extent',
+        extra: {
+          datasetId,
+          tableName: dataset.tableName
+        }
+      });
       return null;
     }
   },
@@ -887,7 +908,20 @@ export const duckDBOrchestrator = {
       }
 
       return bounds.length > 0 ? bounds : null;
-    } catch {
+    } catch (error) {
+      logger.warn(
+        'Failed to compute per-feature geometry bounds',
+        LogCategory.DUCKDB,
+        {
+          error,
+          flow: 'geometry_per_feature_bounds',
+          extra: {
+            datasetId,
+            tableName: dataset.tableName,
+            reprojectToWgs84: Boolean(options?.reprojectToWgs84)
+          }
+        }
+      );
       return null;
     }
   },
@@ -929,20 +963,6 @@ export const duckDBOrchestrator = {
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     return tableDataOps.getRowStats(tableName, Duck);
-  },
-
-  async analyzeTable(tableName: string): Promise<Record<string, unknown>[]> {
-    await ensureInitialized();
-    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
-
-    return tableDataOps.analyzeTable(tableName, Duck);
-  },
-
-  async getBasicColumnInfo(tableName: string): Promise<AnalysisResult[]> {
-    await ensureInitialized();
-    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
-
-    return tableDataOps.getBasicColumnInfo(tableName, Duck);
   },
 
   async getFullAnalysis(
@@ -1282,24 +1302,6 @@ export const duckDBOrchestrator = {
       duckDataset,
       (tableName, options) =>
         duckDBOrchestrator.getTableData(tableName, options)
-    );
-  },
-
-  async joinDataWithBasemap(
-    dataTableName: string,
-    dataColumnName: string,
-    basemapTableName: string,
-    basemapColumnName: string
-  ): Promise<string> {
-    await ensureInitialized();
-    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
-
-    return joinOps.joinDataWithBasemap(
-      dataTableName,
-      dataColumnName,
-      basemapTableName,
-      basemapColumnName,
-      Duck
     );
   },
 

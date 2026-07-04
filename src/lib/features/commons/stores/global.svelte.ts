@@ -8,11 +8,82 @@ import {
   type ProjectionViewMode
 } from '$lib/features/commons/types/global';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
+import { persistenceRegistry } from '$lib/features/project-management/core';
+import { dataTabActions } from './data-tab.store.svelte';
 import { datasetsStore } from './datasets.store.svelte';
 import { projectStore } from './project.store.svelte';
 
 export const MOBILE_BREAKPOINT = 1024;
+
+interface SelectDataButtonOptions {
+  notifyDataTabReset?: boolean;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isToolbarStep(value: unknown): value is ToolbarStep {
+  return (
+    value === ToolbarStep.Data ||
+    value === ToolbarStep.Visualizations ||
+    value === ToolbarStep.Styling
+  );
+}
+
+function isToolbarState(value: unknown): value is ToolbarState {
+  return (
+    value === ToolbarState.Full ||
+    value === ToolbarState.Collapsed ||
+    value === ToolbarState.Compact
+  );
+}
+
+function isSelectedTool(
+  value: unknown
+): value is StylingTools | VisualizationTools {
+  return (
+    value === StylingTools.Format ||
+    value === StylingTools.Legend ||
+    value === StylingTools.GeoIndications ||
+    value === StylingTools.Annotations ||
+    value === StylingTools.ColorBlindness ||
+    value === VisualizationTools.Search ||
+    value === VisualizationTools.Layers ||
+    value === VisualizationTools.Projection ||
+    value === VisualizationTools.Simplification ||
+    value === VisualizationTools.Facets
+  );
+}
+
+function isProjectionFilterId(value: unknown): value is ProjectionFilterId {
+  return (
+    value === 'all' ||
+    value === 'Rectangulaire' ||
+    value === 'Arrondie' ||
+    value === 'Discontinue'
+  );
+}
+
+function isProjectionViewMode(value: unknown): value is ProjectionViewMode {
+  return value === 'list' || value === 'grid';
+}
+
+function restorePageZoom(
+  value: unknown,
+  minPageZoom: number,
+  maxPageZoom: number
+): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return 100;
+  }
+
+  return Math.max(minPageZoom, Math.min(value, maxPageZoom));
+}
+
+function restorePanOffsetCoordinate(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
 
 function resolveInitialToolbarState(step: ToolbarStep): ToolbarState {
   if (step === ToolbarStep.Styling) return ToolbarState.Collapsed;
@@ -59,12 +130,37 @@ function createGlobalStore() {
   let isUpdatingSelection = false;
   const pendingDatasetSelections = new Set<string>();
 
-  function ensureDatasetSelectionForSourceFile(sourceFileId: string): void {
+  function resetDataTabForSourceChange(
+    previousSourceFileId: string | undefined,
+    nextSourceFileId: string,
+    options: SelectDataButtonOptions = {}
+  ): void {
+    if (previousSourceFileId === nextSourceFileId) {
+      return;
+    }
+
+    dataTabActions.reset({ notify: options.notifyDataTabReset === true });
+  }
+
+  function selectDatasetForSourceFile(
+    sourceFileId: string,
+    datasetId: string,
+    options: SelectDataButtonOptions = {}
+  ): void {
+    const previousSourceFileId = datasetsStore.selectedDataset?.sourceFileId;
+    datasetsStore.selectDataset(datasetId);
+    resetDataTabForSourceChange(previousSourceFileId, sourceFileId, options);
+  }
+
+  function ensureDatasetSelectionForSourceFile(
+    sourceFileId: string,
+    options: SelectDataButtonOptions = {}
+  ): void {
     if (!sourceFileId) return;
 
     const dataset = datasetsStore.getDatasetBySourceFile(sourceFileId);
     if (dataset) {
-      datasetsStore.selectDataset(dataset.id);
+      selectDatasetForSourceFile(sourceFileId, dataset.id, options);
       return;
     }
 
@@ -77,7 +173,7 @@ function createGlobalStore() {
       .waitForDatasetBySourceFile(sourceFileId)
       .then((datasetId) => {
         if (selectedDataButtonState.id === sourceFileId) {
-          datasetsStore.selectDataset(datasetId);
+          selectDatasetForSourceFile(sourceFileId, datasetId, options);
         }
       })
       .catch((error) => {
@@ -191,27 +287,29 @@ function createGlobalStore() {
     notifyPersistence();
   }
 
+  function setSelectedTool(
+    tool: StylingTools | VisualizationTools | undefined
+  ): void {
+    state.selectedTool = tool;
+    notifyPersistence();
+  }
+
   function syncMapVisibilityWithSelectedTab(
     selectedSourceFileId: string
   ): void {
-    const allDatasets = datasetsStore.datasets;
-
-    for (const dataset of allDatasets) {
-      if (dataset.sourceFileId === selectedSourceFileId) {
-        datasetsStore.enableDataset(dataset.id);
-      } else {
-        datasetsStore.disableDataset(dataset.id);
-      }
-    }
+    datasetsStore.syncMapVisibilityWithSourceFile(selectedSourceFileId);
   }
 
-  function selectDataButton(id: string): void {
+  function selectDataButton(
+    id: string,
+    options: SelectDataButtonOptions = {}
+  ): void {
     if (selectedDataButtonState.id === id) {
       return;
     }
     selectedDataButtonState.id = id;
 
-    ensureDatasetSelectionForSourceFile(id);
+    ensureDatasetSelectionForSourceFile(id, options);
     syncMapVisibilityWithSelectedTab(id);
     notifyPersistence();
   }
@@ -322,34 +420,41 @@ function createGlobalStore() {
   }
 
   function restoreFromSerialized(data: unknown): void {
-    const persisted = (data ?? {}) as {
-      selectedStep?: ToolbarStep;
-      selectedTool?: StylingTools | VisualizationTools;
-      toolbarState?: ToolbarState;
-      projectionFilter?: ProjectionFilterId;
-      projectionViewMode?: ProjectionViewMode;
-      selectedSourceFileId?: string;
-      pageZoomLevel?: number;
-      pagePanOffset?: { x?: number; y?: number };
-    };
+    const persisted = isRecord(data) ? data : {};
+    const persistedPanOffset = isRecord(persisted.pagePanOffset)
+      ? persisted.pagePanOffset
+      : {};
 
-    state.selectedStep = persisted.selectedStep ?? ToolbarStep.Data;
-    state.selectedTool = persisted.selectedTool;
-    state.toolbarState = persisted.toolbarState ?? ToolbarState.Full;
-    state.projectionFilter = persisted.projectionFilter ?? 'all';
-    state.projectionViewMode = persisted.projectionViewMode ?? 'list';
-    state.zoom.pageZoomLevel =
-      typeof persisted.pageZoomLevel === 'number'
-        ? Math.max(
-            state.zoom.minPageZoom,
-            Math.min(persisted.pageZoomLevel, state.zoom.maxPageZoom)
-          )
-        : 100;
+    state.selectedStep = isToolbarStep(persisted.selectedStep)
+      ? persisted.selectedStep
+      : ToolbarStep.Data;
+    state.selectedTool = isSelectedTool(persisted.selectedTool)
+      ? persisted.selectedTool
+      : undefined;
+    state.toolbarState = isToolbarState(persisted.toolbarState)
+      ? persisted.toolbarState
+      : ToolbarState.Full;
+    state.projectionFilter = isProjectionFilterId(persisted.projectionFilter)
+      ? persisted.projectionFilter
+      : 'all';
+    state.projectionViewMode = isProjectionViewMode(
+      persisted.projectionViewMode
+    )
+      ? persisted.projectionViewMode
+      : 'list';
+    state.zoom.pageZoomLevel = restorePageZoom(
+      persisted.pageZoomLevel,
+      state.zoom.minPageZoom,
+      state.zoom.maxPageZoom
+    );
     state.zoom.pagePanOffset = {
-      x: persisted.pagePanOffset?.x ?? 0,
-      y: persisted.pagePanOffset?.y ?? 0
+      x: restorePanOffsetCoordinate(persistedPanOffset.x),
+      y: restorePanOffsetCoordinate(persistedPanOffset.y)
     };
-    selectedDataButtonState.id = persisted.selectedSourceFileId;
+    selectedDataButtonState.id =
+      typeof persisted.selectedSourceFileId === 'string'
+        ? persisted.selectedSourceFileId
+        : undefined;
   }
 
   return {
@@ -461,6 +566,7 @@ function createGlobalStore() {
     toggleMobileToolbar,
     setNavigationState,
     setToolbarState,
+    setSelectedTool,
     selectDataButton,
     setProjectionFilter,
     setProjectionViewMode,
@@ -484,6 +590,7 @@ export const globalState = createGlobalStore();
 export const globalActions = {
   setNavigationState: globalState.setNavigationState,
   setToolbarState: globalState.setToolbarState,
+  setSelectedTool: globalState.setSelectedTool,
   selectDataButton: globalState.selectDataButton,
   ensureTabSelected: globalState.ensureTabSelected,
   setProjectionFilter: globalState.setProjectionFilter,

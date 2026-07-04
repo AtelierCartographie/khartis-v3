@@ -19,6 +19,14 @@ describe('buildD3ProjectionFromConfig', () => {
     expect(point?.every(Number.isFinite)).toBe(true);
   });
 
+  it('should build Aitoff from the shared d3 projection registry', () => {
+    const projection = buildD3ProjectionFromConfig({
+      projection: 'geoAitoff'
+    });
+    expect(projection).not.toBeNull();
+    expect(projection?.([2.3, 48.8])?.every(Number.isFinite)).toBe(true);
+  });
+
   it('should apply rotate and default gamma to 0 when only [lambda, phi] is given', () => {
     const projection = buildD3ProjectionFromConfig({
       projection: 'geoMercator',

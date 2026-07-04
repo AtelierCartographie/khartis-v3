@@ -55,7 +55,7 @@
     <ToggleTabs
       activeIndex={activeTabIndex}
       items={tabItems}
-      onChange={handleTabChange}
+      onchange={handleTabChange}
     />
   </div>
 

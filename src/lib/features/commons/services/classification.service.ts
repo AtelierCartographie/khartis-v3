@@ -67,13 +67,50 @@ interface ColumnStats {
   max: number;
 }
 
+const ADAPTIVE_HEAD_TAIL_SKEWNESS = 3;
+const ADAPTIVE_QUANTILES_SKEWNESS = 1.5;
+const ADAPTIVE_MIN_CLASSES = 2;
+const ADAPTIVE_ROWS_PER_CLASS = 3;
+
+export interface ClassificationDefaultsInput {
+  method: ClassificationMethod;
+  classes: number;
+  skewness?: number;
+  rowCount?: number;
+}
+
+export function suggestClassificationDefaults(
+  input: ClassificationDefaultsInput
+): { method: ClassificationMethod; classes: number } {
+  let method = input.method;
+  if (
+    input.method !== ClassificationMethod.MANUAL &&
+    input.skewness !== undefined &&
+    Number.isFinite(input.skewness)
+  ) {
+    if (input.skewness >= ADAPTIVE_HEAD_TAIL_SKEWNESS) {
+      method = ClassificationMethod.HEAD_TAIL;
+    } else if (Math.abs(input.skewness) >= ADAPTIVE_QUANTILES_SKEWNESS) {
+      method = ClassificationMethod.QUANTILES;
+    }
+  }
+
+  let classes = input.classes;
+  if (input.rowCount !== undefined && input.rowCount > 0) {
+    classes = Math.min(
+      classes,
+      Math.max(
+        ADAPTIVE_MIN_CLASSES,
+        Math.floor(input.rowCount / ADAPTIVE_ROWS_PER_CLASS)
+      )
+    );
+  }
+
+  return { method, classes };
+}
+
 export type ClassificationMacro =
-  | 'kmeans'
-  | 'quantile'
-  | 'equi_width'
-  | 'nested_means'
-  | 'q6'
-  | 'headtail2';
+  'kmeans' | 'quantile' | 'equi_width' | 'nested_means' | 'q6' | 'headtail2';
 
 export function mapMethodToMacro(
   method: ClassificationMethod | string
@@ -212,7 +249,20 @@ async function roundBreaks(
         return sanitized;
       }
     }
-  } catch {
+  } catch (error) {
+    logger.warn(
+      'Failed to round classification breaks; using unrounded breaks',
+      LogCategory.DATA,
+      {
+        error,
+        flow: 'classification_breaks',
+        extra: {
+          tableName: context.tableName,
+          columnName: context.columnName,
+          breakCount: breaks.length
+        }
+      }
+    );
     return breaks;
   }
 
@@ -491,12 +541,7 @@ export async function calculateDivergingBreaks(
   };
 }
 
-/**
- * Detects whether a numeric column straddles zero (negative AND positive
- * values). When it does, zero is the natural diverging breakpoint, so the
- * classification can be proposed as a diverging ramp pivoted at 0. Returns the
- * pivot value (`0`) when the column crosses zero, otherwise `null`.
- */
+/** Return zero as the diverging pivot only when a numeric column crosses zero. */
 export async function detectDivergingBreakpoint(options: {
   datasetId: string;
   columnName: string;
@@ -512,7 +557,19 @@ export async function detectDivergingBreakpoint(options: {
       return null;
     }
     return stats.min < 0 && stats.max > 0 ? 0 : null;
-  } catch {
+  } catch (error) {
+    logger.warn(
+      'Failed to detect diverging classification breakpoint',
+      LogCategory.DATA,
+      {
+        error,
+        flow: 'classification_breakpoint_detection',
+        extra: {
+          datasetId: options.datasetId,
+          columnName: options.columnName
+        }
+      }
+    );
     return null;
   }
 }

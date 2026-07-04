@@ -2,7 +2,7 @@
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import type { FeatureCollection } from 'geojson';
   import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
-  import type { SplitRenderingTable } from '$lib/features/map/types';
+  import type { SplitRenderingTable } from '$lib/features/map';
   import AnnotationOverlay from '$lib/features/map/components/annotation-overlay.svelte';
   import GeoIndicationsOverlay from '$lib/features/map/components/geo-indications-overlay.svelte';
   import LegendOverlay from '$lib/features/map/components/legend-overlay.svelte';

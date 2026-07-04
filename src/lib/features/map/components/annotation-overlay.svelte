@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import {
-    getShapeDefaultDimensions,
+    ANNOTATION_ROLE,
     isShapeAspectRatioLocked,
     SHAPE_TYPE
   } from '$lib/features/commons/constants';
@@ -14,15 +14,11 @@
     AnnotationKind,
     DrawingType
   } from '$lib/features/commons/constants/ui.constants';
-  import { hslToHex } from '$lib/features/commons/utils/color-utils';
-  import {
-    clampFontSize,
-    resolveFontFamilyStack
-  } from '$lib/features/step-toolbar/fonts.constants';
   import { onDestroy, tick } from 'svelte';
   import {
     annotationsActions,
-    getAnnotationsState
+    getAnnotationsState,
+    getKnownPageElementDefaultContents
   } from '$lib/features/step-toolbar/tools/annotations';
   import { getFormatState } from '$lib/features/step-toolbar/tools/format';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
@@ -37,13 +33,28 @@
   import {
     buildVectorLinePath,
     computeVectorPathBounds,
+    distanceToSegmentSq,
     getArrowHeadGeometry,
     getSegmentTensionHandle,
     insertControlOffsetAt,
     removeControlOffsetForPoint,
     type VectorPoint
   } from '../utils/annotation-vector.utils';
-  import { setStylingToolPopoverDragging } from '../utils/tool-popover-drag-visibility.utils';
+  import {
+    getGuideVectorStyle,
+    getTextStyleFromStyle,
+    getVectorStyle,
+    toOpacityUnit
+  } from '../utils/annotation-style.utils';
+  import {
+    getShapeDefaultSize,
+    getShapeViewBox,
+    MIN_SHAPE_SIZE,
+    renderShape,
+    resolveResizedShapeBounds
+  } from '../utils/annotation-shape-path.utils';
+  import { createDraggablePageItemController } from '../utils/use-draggable-page-item';
+  import { getKeyboardMoveDelta } from '../utils/keyboard-position.utils';
   import type {
     Annotation,
     AnnotationDataAnchor,
@@ -60,6 +71,7 @@
     getAnchorScaleFactor
   } from '../utils/map-anchor-projection.utils';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import { PAGE_GRID_SIZE_PX } from '$lib/features/commons/utils/page-grid.utils';
 
   let {
     interactive = true,
@@ -72,9 +84,13 @@
   const FOCUS_RESET_DEBOUNCE_MS = 200;
   const ANNOTATION_DRAG_THRESHOLD_PX = 3;
   const DRAG_CLICK_SUPPRESSION_MS = 120;
-  const MIN_SHAPE_SIZE = 24;
-  const SHAPE_VIEWBOX_PADDING = 8;
   const DEFAULT_VECTOR_LINE_LENGTH = 120;
+  const KEYBOARD_FAST_MOVE_GRID_MULTIPLIER = 5;
+  const KEYBOARD_FAST_MOVE_STEP_PX = 10;
+  const DEFAULT_TEXT_PLACEMENT_SIZE = { width: 220, height: 64 } as const;
+  const MIN_IMAGE_PLACEMENT_SIZE_PX = 40;
+  const DEFAULT_IMAGE_PLACEMENT_SIZE_PX = 200;
+  const DEFAULT_DRAWING_PLACEMENT_SIZE = { width: 132, height: 80 } as const;
 
   function isVectorShapeContent(content: unknown): boolean {
     return content === SHAPE_TYPE.ARROW || content === SHAPE_TYPE.LINE;
@@ -82,6 +98,20 @@
 
   function hasArrowHead(content: unknown): boolean {
     return content === SHAPE_TYPE.ARROW;
+  }
+
+  function isExportPlaceholderPageElement(item: Annotation): boolean {
+    if (
+      !item.role ||
+      item.role === ANNOTATION_ROLE.CREDIT ||
+      typeof item.content !== 'string'
+    ) {
+      return false;
+    }
+
+    return getKnownPageElementDefaultContents(item.role, '', true).has(
+      item.content
+    );
   }
 
   function getVectorPoints(item: Annotation): VectorPoint[] {
@@ -112,14 +142,18 @@
   }
 
   type AnnotationInteractionScope = 'map' | 'page';
+  type AnnotationPositionBoundsContext = {
+    scope: AnnotationInteractionScope;
+    width: number;
+    height: number;
+    role?: PageElementRole;
+  };
 
   let overlayElement = $state<HTMLDivElement | null>(null);
   let mapLayerElement = $state<HTMLDivElement | null>(null);
   let dragState = $state<{
     id: string;
     scope: AnnotationInteractionScope;
-    offsetX: number;
-    offsetY: number;
     width: number;
     height: number;
     startClientX: number;
@@ -244,10 +278,7 @@
   );
   const selectedId = $derived(annotationsState.selectedId);
 
-  // Keep map-anchored annotations reactive to MapLibre interactions. The deck
-  // orthographic engine drives reactivity through `mapInstanceStore.deckViewState`
-  // (read below), but MapLibre mutates its viewport imperatively, so mirror the
-  // `mapViewRevision` bump pattern from geo-indications-overlay.
+  // MapLibre viewport mutations must bump `mapViewRevision` like deck viewState does.
   $effect(() => {
     const map = mapInstanceStore.map;
     if (!map) {
@@ -284,13 +315,8 @@
     return anchor;
   }
 
-  // Resolve the on-screen (map-area-local, logical px) position and map scale
-  // factor of every data-anchored annotation. Recomputed whenever the map
-  // viewState changes so the marks track AND zoom with the basemap; legacy
-  // `'map'` annotations (no anchor) and page annotations are absent from this
-  // map and keep the pixel-page path.
+  // Data-anchored annotations track map viewport changes in map-area logical px.
   const anchoredScreenPositions = $derived.by(() => {
-    // Establish reactive dependencies on both engines' viewport.
     void mapViewRevision;
     void mapInstanceStore.deckViewState;
 
@@ -332,17 +358,14 @@
     return pageScale;
   }
 
-  function getShapeDefaultSize(shapeType: string): {
-    width: number;
-    height: number;
-  } {
-    return getShapeDefaultDimensions(shapeType);
+  function getKeyboardMoveStep(): number {
+    return formatState.gridEnabled ? PAGE_GRID_SIZE_PX : 1;
   }
 
-  function getShapeViewBox(shapeType: string): string {
-    const { width, height } = getShapeDefaultSize(shapeType);
-
-    return `${-SHAPE_VIEWBOX_PADDING} ${-SHAPE_VIEWBOX_PADDING} ${width + SHAPE_VIEWBOX_PADDING * 2} ${height + SHAPE_VIEWBOX_PADDING * 2}`;
+  function getKeyboardFastMoveStep(): number {
+    return formatState.gridEnabled
+      ? PAGE_GRID_SIZE_PX * KEYBOARD_FAST_MOVE_GRID_MULTIPLIER
+      : KEYBOARD_FAST_MOVE_STEP_PX;
   }
 
   function getDefaultPlacementSize(
@@ -351,11 +374,14 @@
     style: AnnotationStyle | undefined
   ): { width: number; height: number } {
     if (type === AnnotationKind.TEXT) {
-      return { width: 220, height: 64 };
+      return DEFAULT_TEXT_PLACEMENT_SIZE;
     }
 
     if (type === AnnotationKind.IMAGE) {
-      const size = Math.max(40, Number(style?.size ?? 200));
+      const size = Math.max(
+        MIN_IMAGE_PLACEMENT_SIZE_PX,
+        Number(style?.size ?? DEFAULT_IMAGE_PLACEMENT_SIZE_PX)
+      );
       return { width: size, height: size };
     }
 
@@ -372,7 +398,7 @@
       };
     }
 
-    return { width: 132, height: 80 };
+    return DEFAULT_DRAWING_PLACEMENT_SIZE;
   }
 
   function clampPreviewPosition(
@@ -530,10 +556,7 @@
       return item.position;
     }
 
-    // Data-anchored: reproject the WGS84 anchor through the live map viewState so
-    // the annotation stays glued to the basemap. Falls back to the stored
-    // pixel-page position when the anchor cannot be projected (map not ready /
-    // composite projection), preserving the legacy behavior.
+    // Fall back to pixel-page placement when a WGS84 anchor cannot be projected.
     const localPosition = getLocalRenderedPosition(item);
 
     return {
@@ -569,12 +592,47 @@
     return `left: ${(x + boundsOrigin.x * mapFactor) * scale}px; top: ${(y + boundsOrigin.y * mapFactor) * scale}px; transform: scale(${scale * mapFactor});`;
   }
 
-  // Persist (or refresh) the WGS84 anchor of a map-scoped annotation from its
-  // finalized map-area-local logical position, so it stays glued to the basemap.
-  // The current map scale factor is carried into the rewritten span so a
-  // re-anchor (drag, resize) never snaps the rendered size back to factor 1.
-  // Page-scoped, role and legacy non-projectable annotations are left untouched
-  // (no anchor written), preserving the historical pixel-page behavior.
+  function getShapeAccessibleLabel(item: Annotation): string {
+    switch (item.content) {
+      case SHAPE_TYPE.ARROW:
+        return m.annotations_shape_arrow();
+      case SHAPE_TYPE.CIRCLE:
+        return m.annotations_shape_circle();
+      case SHAPE_TYPE.LINE:
+        return m.annotations_shape_line();
+      case SHAPE_TYPE.RECTANGLE:
+      default:
+        return m.annotations_shape_rectangle();
+    }
+  }
+
+  function getDrawingAccessibleLabel(item: Annotation): string {
+    return item.style?.drawingType === DrawingType.ZONE
+      ? m.annotations_drawing_area()
+      : m.annotations_drawing_line();
+  }
+
+  function getAnnotationAccessibleLabel(item: Annotation): string {
+    if (
+      item.type === AnnotationKind.TEXT &&
+      typeof item.content === 'string' &&
+      item.content.trim()
+    ) {
+      return item.content.trim();
+    }
+
+    if (item.type === AnnotationKind.SHAPE) {
+      return getShapeAccessibleLabel(item);
+    }
+
+    if (item.type === AnnotationKind.DRAWING) {
+      return getDrawingAccessibleLabel(item);
+    }
+
+    return m.annotationImageAlt();
+  }
+
+  // Re-anchor map-scoped annotations from map-area logical px without changing scale.
   function writeMapAnchor(
     item: Annotation,
     localPosition: { x: number; y: number }
@@ -595,10 +653,7 @@
     return true;
   }
 
-  // Keep an already-anchored annotation's anchor in sync with its top-left when a
-  // shape edit (resize, anchor-point drag) shifts `position`. Does NOT opt a
-  // legacy (un-anchored) annotation into map anchoring — only an explicit body
-  // drag does that — so shape editing never changes placement semantics.
+  // Shape edits refresh existing anchors only; they never opt legacy items into anchoring.
   function refreshMapAnchorIfPresent(
     item: Annotation,
     localPosition: { x: number; y: number }
@@ -609,26 +664,14 @@
     writeMapAnchor(item, localPosition);
   }
 
-  // A shape created on the map by the store carries an EXPLICIT `coordinateSpace:
-  // 'map'` and no anchor yet. Legacy `'map'` items (loaded from older projects)
-  // leave `coordinateSpace` undefined, so this guard targets only fresh shapes and
-  // never disturbs legacy ones, which keep their opt-in-on-first-drag behavior.
+  // Fresh map-created shapes have explicit `'map'` space and no anchor yet.
   function isUnanchoredFreshMapShape(item: Annotation): boolean {
     return (
       item.coordinateSpace === 'map' && !item.role && item.anchor === undefined
     );
   }
 
-  // Finalize a freshly created `'map'` shape (rectangle/circle/triangle, vector
-  // arrow/line, freehand drawing) the first time it renders. The store creates it
-  // in `'map'` space with a map-area-local `position` but cannot reach the
-  // projection helpers, so its anchor is written here, gluing it to the basemap.
-  // When the anchor cannot be written — composite / pre-projected CRS, or a
-  // position outside the projected world outline that would not round-trip —
-  // the shape is downgraded back to `'page'`, re-adding the page margins it was
-  // created without, so the on-screen placement is identical and it keeps the
-  // historical page behavior. Either branch runs once: the item then has an
-  // anchor or is `'page'`, so it leaves this effect's selection.
+  // First render anchors fresh map shapes, or downgrades them to page space if projection fails.
   function anchorOrDowngradeNewMapShape(item: Annotation): void {
     if (writeMapAnchor(item, item.position)) {
       return;
@@ -643,10 +686,7 @@
     });
   }
 
-  // Drive the one-time anchoring of newly created map shapes. Kept reactive to the
-  // map viewport so a shape created before the map is ready still gets anchored
-  // once the projection becomes available; already-anchored and page items are
-  // skipped, so this never disturbs existing annotations or fights a live drag.
+  // Retry one-time anchoring when the map viewport becomes projectable.
   $effect(() => {
     void mapViewRevision;
     void mapInstanceStore.deckViewState;
@@ -678,10 +718,6 @@
     return `left: ${bounds.originX * scale}px; top: ${bounds.originY * scale}px; transform: scale(${scale});`;
   }
 
-  function setAnnotationDragVisualState(active: boolean): void {
-    setStylingToolPopoverDragging(active);
-  }
-
   function clearSuppressedAnnotationClick(): void {
     if (suppressedClickTimeoutId) {
       clearTimeout(suppressedClickTimeoutId);
@@ -701,10 +737,7 @@
   }
 
   function stopDragging(): void {
-    window.removeEventListener('pointermove', handlePointerMove);
-    window.removeEventListener('pointerup', handlePointerUp);
-    setAnnotationDragVisualState(false);
-    dragState = null;
+    annotationDragController.stop();
   }
 
   function stopResizing(): void {
@@ -898,37 +931,6 @@
     }
     applyEditablePoints(item, newPoints);
   }
-
-  function distanceToSegmentSq(
-    point: { x: number; y: number },
-    segStart: { x: number; y: number },
-    segEnd: { x: number; y: number }
-  ): { distSq: number; closest: { x: number; y: number }; t: number } {
-    const dx = segEnd.x - segStart.x;
-    const dy = segEnd.y - segStart.y;
-    const lengthSq = dx * dx + dy * dy;
-    if (lengthSq < 0.0001) {
-      const ddx = point.x - segStart.x;
-      const ddy = point.y - segStart.y;
-      return {
-        distSq: ddx * ddx + ddy * ddy,
-        closest: { x: segStart.x, y: segStart.y },
-        t: 0
-      };
-    }
-    const t = Math.max(
-      0,
-      Math.min(
-        1,
-        ((point.x - segStart.x) * dx + (point.y - segStart.y) * dy) / lengthSq
-      )
-    );
-    const closest = { x: segStart.x + t * dx, y: segStart.y + t * dy };
-    const ddx = point.x - closest.x;
-    const ddy = point.y - closest.y;
-    return { distSq: ddx * ddx + ddy * ddy, closest, t };
-  }
-
   function handleDrawingPathDoubleClick(
     event: MouseEvent,
     item: Annotation
@@ -983,26 +985,17 @@
     annotationsActions.updateAnnotation(item.id, { content: newPoints });
   }
 
-  function handlePointerUp(): void {
+  function suppressCurrentAnnotationClickAfterDrag(): void {
     if (dragState?.didDrag) {
       suppressNextAnnotationClick(dragState.id);
     }
-
-    stopDragging();
   }
 
-  function handlePointerMove(event: PointerEvent): void {
+  function trackAnnotationDragMove(event: PointerEvent): void {
     if (!dragState) {
       return;
     }
 
-    const layer = getInteractionLayer(dragState.scope);
-    if (!layer) {
-      return;
-    }
-
-    const scale = getPageScale();
-    const rect = layer.getBoundingClientRect();
     const pointerDistance = Math.hypot(
       event.clientX - dragState.startClientX,
       event.clientY - dragState.startClientY
@@ -1011,43 +1004,92 @@
     if (!dragState.didDrag && pointerDistance >= ANNOTATION_DRAG_THRESHOLD_PX) {
       dragState.didDrag = true;
     }
+  }
+
+  function getDraggedAnnotation(): Annotation | null {
+    if (!dragState) {
+      return null;
+    }
+
+    const draggedId = dragState.id;
+    return annotationsState.items.find((item) => item.id === draggedId) ?? null;
+  }
+
+  function normalizeAnnotationPositionForContext(
+    position: { x: number; y: number },
+    context: AnnotationPositionBoundsContext
+  ): { x: number; y: number } {
+    const layer = getInteractionLayer(context.scope);
+    if (!layer) {
+      return position;
+    }
+
+    const scale = getPageScale();
+    const rect = layer.getBoundingClientRect();
 
     const minX =
-      dragState.scope === 'page' && dragState.role ? pageMargins.left : 0;
-    const minY =
-      dragState.scope === 'page' && dragState.role ? pageMargins.top : 0;
+      context.scope === 'page' && context.role ? pageMargins.left : 0;
+    const minY = context.scope === 'page' && context.role ? pageMargins.top : 0;
     const maxX =
-      dragState.scope === 'page' && dragState.role
-        ? Math.max(
-            minX,
-            formatState.width - pageMargins.right - dragState.width
-          )
-        : Math.max(0, rect.width / scale - dragState.width);
+      context.scope === 'page' && context.role
+        ? Math.max(minX, formatState.width - pageMargins.right - context.width)
+        : Math.max(0, rect.width / scale - context.width);
     const maxY =
-      dragState.scope === 'page' && dragState.role
+      context.scope === 'page' && context.role
         ? Math.max(
             minY,
-            formatState.height - pageMargins.bottom - dragState.height
+            formatState.height - pageMargins.bottom - context.height
           )
-        : Math.max(0, rect.height / scale - dragState.height);
+        : Math.max(0, rect.height / scale - context.height);
 
-    let x = (event.clientX - rect.left) / scale - dragState.offsetX;
-    let y = (event.clientY - rect.top) / scale - dragState.offsetY;
+    return {
+      x: clamp(position.x, minX, maxX),
+      y: clamp(position.y, minY, maxY)
+    };
+  }
 
-    x = clamp(x, minX, maxX);
-    y = clamp(y, minY, maxY);
+  function normalizeAnnotationDragPosition(position: {
+    x: number;
+    y: number;
+  }): { x: number; y: number } {
+    if (!dragState) {
+      return position;
+    }
 
-    annotationsActions.moveAnnotation(dragState.id, { x, y });
+    return normalizeAnnotationPositionForContext(position, dragState);
+  }
 
-    if (dragState.scope === 'map') {
-      const draggedItem = annotationsState.items.find(
-        (i) => i.id === dragState!.id
-      );
-      if (draggedItem) {
-        writeMapAnchor(draggedItem, { x, y });
-      }
+  function setAnnotationDragPosition(position: { x: number; y: number }): void {
+    if (!dragState) {
+      return;
+    }
+
+    const draggedItem = getDraggedAnnotation();
+    annotationsActions.moveAnnotation(dragState.id, position);
+
+    if (dragState.scope === 'map' && draggedItem) {
+      writeMapAnchor(draggedItem, position);
     }
   }
+
+  const annotationDragController = createDraggablePageItemController({
+    getOverlayElement: () =>
+      dragState ? getInteractionLayer(dragState.scope) : null,
+    getPageScale,
+    getCurrentPosition: () => {
+      const draggedItem = getDraggedAnnotation();
+      return draggedItem ? getLocalRenderedPosition(draggedItem) : null;
+    },
+    normalizePosition: normalizeAnnotationDragPosition,
+    setPosition: setAnnotationDragPosition,
+    onDraggingChange: (active) => {
+      if (!active) {
+        dragState = null;
+      }
+    },
+    onPointerMove: trackAnnotationDragMove,
+    onPointerUp: suppressCurrentAnnotationClickAfterDrag
+  });
 
   function handleAnnotationPointerDown(
     event: PointerEvent,
@@ -1070,29 +1112,31 @@
     annotationsActions.selectAnnotation(item.id);
 
     const scale = getPageScale();
-    const rect = layer.getBoundingClientRect();
     const currentTarget = event.currentTarget;
-    const targetRect =
-      currentTarget instanceof HTMLElement
-        ? currentTarget.getBoundingClientRect()
-        : null;
-    const localPosition = getLocalRenderedPosition(item);
+    if (!(currentTarget instanceof HTMLElement)) {
+      return;
+    }
+
+    const targetRect = currentTarget.getBoundingClientRect();
     dragState = {
       id: item.id,
       scope,
-      offsetX: (event.clientX - rect.left) / scale - localPosition.x,
-      offsetY: (event.clientY - rect.top) / scale - localPosition.y,
-      width: targetRect ? targetRect.width / scale : 0,
-      height: targetRect ? targetRect.height / scale : 0,
+      width: targetRect.width / scale,
+      height: targetRect.height / scale,
       startClientX: event.clientX,
       startClientY: event.clientY,
       didDrag: false,
       role: item.role
     };
-    setAnnotationDragVisualState(true);
 
-    window.addEventListener(EVENT.POINTERMOVE, handlePointerMove);
-    window.addEventListener(EVENT.POINTERUP, handlePointerUp);
+    const started = annotationDragController.start({
+      event,
+      itemElement: currentTarget
+    });
+
+    if (!started) {
+      dragState = null;
+    }
   }
 
   function handleAnnotationClick(event: MouseEvent, itemId: string): void {
@@ -1144,6 +1188,63 @@
     globalActions.panPageBy(delta.x, delta.y);
   }
 
+  function getAnnotationKeyboardBounds(
+    item: Annotation,
+    target: EventTarget | null
+  ): AnnotationPositionBoundsContext {
+    const targetElement = target instanceof HTMLElement ? target : null;
+    const rect = targetElement?.getBoundingClientRect();
+    const scale = getPageScale();
+
+    return {
+      scope: getAnnotationScope(item),
+      width: rect ? rect.width / scale : 0,
+      height: rect ? rect.height / scale : 0,
+      role: item.role
+    };
+  }
+
+  function moveAnnotationWithKeyboard(
+    event: KeyboardEvent,
+    item: Annotation
+  ): boolean {
+    const delta = getKeyboardMoveDelta(
+      event,
+      getKeyboardMoveStep(),
+      getKeyboardFastMoveStep()
+    );
+    if (!delta) {
+      return false;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!isAnnotationEditing) {
+      activateStylingToolFromMap(StylingTools.Annotations);
+      annotationsActions.setPageElementsVisibility(true);
+    }
+
+    const bounds = getAnnotationKeyboardBounds(item, event.currentTarget);
+    const currentPosition = getLocalRenderedPosition(item);
+    const nextPosition = normalizeAnnotationPositionForContext(
+      {
+        x: currentPosition.x + delta.x,
+        y: currentPosition.y + delta.y
+      },
+      bounds
+    );
+
+    annotationsActions.selectAnnotation(item.id);
+    annotationsActions.moveAnnotation(item.id, nextPosition);
+
+    if (bounds.scope === 'map') {
+      writeMapAnchor(item, nextPosition);
+    }
+
+    return true;
+  }
+
   function handleAnnotationKeyDown(event: KeyboardEvent, itemId: string): void {
     if (event.key === KEY.DELETE || event.key === KEY.BACKSPACE) {
       event.preventDefault();
@@ -1155,6 +1256,24 @@
       }
 
       annotationsActions.removeAnnotation(itemId);
+      return;
+    }
+
+    if (event.key === KEY.ESCAPE) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (centeredAnnotationId === itemId) {
+        cancelFocusedAnnotationReset();
+        resetCenteredAnnotationPan();
+      }
+
+      annotationsActions.selectAnnotation(null);
+      return;
+    }
+
+    const item = annotationsState.items.find(({ id }) => id === itemId);
+    if (item && moveAnnotationWithKeyboard(event, item)) {
       return;
     }
 
@@ -1244,147 +1363,6 @@
 
   function handleResizePointerUp(): void {
     stopResizing();
-  }
-
-  function resolveResizedShapeBounds(
-    item: Annotation,
-    handle: string,
-    dx: number,
-    dy: number,
-    startBounds: {
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-    }
-  ): { x: number; y: number; width: number; height: number } {
-    const shapeType = String(item.content ?? '');
-    const preserveAspectRatio = isShapeAspectRatioLocked(shapeType);
-    const startRight = startBounds.x + startBounds.width;
-    const startBottom = startBounds.y + startBounds.height;
-    const startCenterX = startBounds.x + startBounds.width / 2;
-    const startCenterY = startBounds.y + startBounds.height / 2;
-
-    let nextX = startBounds.x;
-    let nextY = startBounds.y;
-    let nextWidth = startBounds.width;
-    let nextHeight = startBounds.height;
-
-    switch (handle) {
-      case 'nw':
-        nextWidth = Math.max(MIN_SHAPE_SIZE, startBounds.width - dx);
-        nextHeight = Math.max(MIN_SHAPE_SIZE, startBounds.height - dy);
-        nextX = startRight - nextWidth;
-        nextY = startBottom - nextHeight;
-        break;
-      case 'n':
-        nextHeight = Math.max(MIN_SHAPE_SIZE, startBounds.height - dy);
-        nextY = startBottom - nextHeight;
-        break;
-      case 'ne':
-        nextWidth = Math.max(MIN_SHAPE_SIZE, startBounds.width + dx);
-        nextHeight = Math.max(MIN_SHAPE_SIZE, startBounds.height - dy);
-        nextY = startBottom - nextHeight;
-        break;
-      case 'e':
-        nextWidth = Math.max(MIN_SHAPE_SIZE, startBounds.width + dx);
-        break;
-      case 'se':
-        nextWidth = Math.max(MIN_SHAPE_SIZE, startBounds.width + dx);
-        nextHeight = Math.max(MIN_SHAPE_SIZE, startBounds.height + dy);
-        break;
-      case 's':
-        nextHeight = Math.max(MIN_SHAPE_SIZE, startBounds.height + dy);
-        break;
-      case 'sw':
-        nextWidth = Math.max(MIN_SHAPE_SIZE, startBounds.width - dx);
-        nextHeight = Math.max(MIN_SHAPE_SIZE, startBounds.height + dy);
-        nextX = startRight - nextWidth;
-        break;
-      case 'w':
-        nextWidth = Math.max(MIN_SHAPE_SIZE, startBounds.width - dx);
-        nextX = startRight - nextWidth;
-        break;
-    }
-
-    if (!preserveAspectRatio) {
-      return {
-        x: nextX,
-        y: nextY,
-        width: nextWidth,
-        height: nextHeight
-      };
-    }
-
-    const aspectRatio = startBounds.width / Math.max(startBounds.height, 1);
-    const horizontalHandle = handle === 'e' || handle === 'w';
-    const verticalHandle = handle === 'n' || handle === 's';
-    const widthRatio = nextWidth / startBounds.width;
-    const heightRatio = nextHeight / startBounds.height;
-    const scale = Math.max(
-      MIN_SHAPE_SIZE / Math.max(startBounds.width, startBounds.height),
-      horizontalHandle
-        ? widthRatio
-        : verticalHandle
-          ? heightRatio
-          : Math.max(widthRatio, heightRatio)
-    );
-
-    nextWidth = Math.max(MIN_SHAPE_SIZE, startBounds.width * scale);
-    nextHeight = Math.max(
-      MIN_SHAPE_SIZE,
-      nextWidth / Math.max(aspectRatio, 0.01)
-    );
-
-    if (verticalHandle) {
-      nextWidth = Math.max(
-        MIN_SHAPE_SIZE,
-        startBounds.height * scale * aspectRatio
-      );
-      nextHeight = Math.max(MIN_SHAPE_SIZE, startBounds.height * scale);
-    }
-
-    switch (handle) {
-      case 'e':
-        nextX = startBounds.x;
-        nextY = startCenterY - nextHeight / 2;
-        break;
-      case 'w':
-        nextX = startRight - nextWidth;
-        nextY = startCenterY - nextHeight / 2;
-        break;
-      case 'n':
-        nextX = startCenterX - nextWidth / 2;
-        nextY = startBottom - nextHeight;
-        break;
-      case 's':
-        nextX = startCenterX - nextWidth / 2;
-        nextY = startBounds.y;
-        break;
-      case 'nw':
-        nextX = startRight - nextWidth;
-        nextY = startBottom - nextHeight;
-        break;
-      case 'ne':
-        nextX = startBounds.x;
-        nextY = startBottom - nextHeight;
-        break;
-      case 'se':
-        nextX = startBounds.x;
-        nextY = startBounds.y;
-        break;
-      case 'sw':
-        nextX = startRight - nextWidth;
-        nextY = startBounds.y;
-        break;
-    }
-
-    return {
-      x: nextX,
-      y: nextY,
-      width: nextWidth,
-      height: nextHeight
-    };
   }
 
   function handleResizePointerMove(event: PointerEvent): void {
@@ -1839,7 +1817,7 @@
     }
 
     function handleKeydown(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
+      if (e.key === KEY.ESCAPE) {
         e.preventDefault();
         if (isDrawingMode) {
           annotationsActions.cancelDrawing();
@@ -1859,8 +1837,8 @@
       }
     }
 
-    window.addEventListener('keydown', handleKeydown);
-    return () => window.removeEventListener('keydown', handleKeydown);
+    window.addEventListener(EVENT.KEYDOWN, handleKeydown);
+    return () => window.removeEventListener(EVENT.KEYDOWN, handleKeydown);
   });
 
   $effect(() => {
@@ -1886,115 +1864,8 @@
     resetDrawingPointerState();
   });
 
-  function getColorValue(
-    color:
-      | string
-      | { hue: number; saturation: number; lightness: number }
-      | undefined,
-    fallback: string
-  ): string {
-    if (!color) return fallback;
-    if (typeof color === 'string') return color;
-    return hslToHex(color.hue, color.saturation, color.lightness);
-  }
-
-  function toOpacityUnit(opacity: number | undefined): number {
-    if (opacity === undefined) {
-      return 1;
-    }
-
-    const rawValue = Number(opacity);
-    if (!Number.isFinite(rawValue)) {
-      return 1;
-    }
-
-    const percentValue = rawValue <= 1 ? rawValue * 100 : rawValue;
-    const clampedPercent = Math.max(0, Math.min(100, percentValue));
-    return clampedPercent / 100;
-  }
-
-  function getTextStyleFromStyle(style: AnnotationStyle | undefined): string {
-    const resolvedStyle = style ?? {};
-    const styles: string[] = [];
-
-    if (resolvedStyle.font) {
-      styles.push(`font-family: ${resolveFontFamilyStack(resolvedStyle.font)}`);
-    }
-    if (resolvedStyle.fontSize) {
-      styles.push(`font-size: ${clampFontSize(resolvedStyle.fontSize, 8)}px`);
-    }
-    if (resolvedStyle.bold) {
-      styles.push('font-weight: bold');
-    }
-    if (resolvedStyle.italic) {
-      styles.push('font-style: italic');
-    }
-    if (resolvedStyle.underlined) {
-      styles.push('text-decoration: underline');
-    }
-    if (resolvedStyle.textAlign) {
-      styles.push(`text-align: ${resolvedStyle.textAlign}`);
-    }
-    styles.push(`opacity: ${toOpacityUnit(resolvedStyle.opacity)}`);
-
-    const color = getColorValue(resolvedStyle.color, '#000000');
-    styles.push(`color: ${color}`);
-
-    if (resolvedStyle.backgroundColor) {
-      const bgColor = getColorValue(resolvedStyle.backgroundColor, '#ffffff');
-      const bgOpacity =
-        resolvedStyle.backgroundOpacity !== undefined
-          ? Math.max(0, Math.min(100, resolvedStyle.backgroundOpacity)) / 100
-          : 0.9;
-      styles.push(
-        `background: color-mix(in srgb, ${bgColor} ${bgOpacity * 100}%, transparent)`
-      );
-    } else {
-      styles.push('background: transparent');
-      styles.push('box-shadow: none');
-    }
-
-    return styles.join('; ');
-  }
-
   function getTextStyle(item: Annotation): string {
     return getTextStyleFromStyle(item.style);
-  }
-
-  function getVectorStyle(style: AnnotationStyle | undefined): {
-    fill: string;
-    stroke: string;
-    strokeWidth: number;
-    strokeDasharray?: string;
-    opacity: number;
-  } {
-    const resolvedStyle = style ?? {};
-    return {
-      fill: getColorValue(resolvedStyle.fillColor, 'none'),
-      stroke: getColorValue(resolvedStyle.strokeColor, '#000000'),
-      strokeWidth: resolvedStyle.strokeWidth ?? 2,
-      strokeDasharray:
-        resolvedStyle.strokeStyle === 'dashed'
-          ? '5,5'
-          : resolvedStyle.strokeStyle === 'dotted'
-            ? '2,2'
-            : undefined,
-      opacity: toOpacityUnit(resolvedStyle.opacity)
-    };
-  }
-
-  function getGuideVectorStyle(style: AnnotationStyle | null | undefined): {
-    stroke: string;
-    strokeWidth: number;
-    strokeDasharray: string;
-  } {
-    const resolvedStyle = style ?? {};
-
-    return {
-      stroke: 'rgba(82, 82, 82, 0.9)',
-      strokeWidth: Math.max((resolvedStyle.strokeWidth ?? 2) + 1, 3),
-      strokeDasharray: '6,4'
-    };
   }
 
   function buildPlacementPreviewAnnotation(
@@ -2018,93 +1889,6 @@
           : {})
       }
     };
-  }
-
-  function renderShape(
-    item: Annotation,
-    shapeType: string
-  ): { type: string; path?: string; cx?: number; cy?: number; r?: number } {
-    const { width, height } = getShapeDefaultSize(shapeType);
-    const centerX = width / 2;
-    const centerY = height / 2;
-
-    switch (shapeType) {
-      case SHAPE_TYPE.ARROW: {
-        const curvature = item.style?.curvature ?? 50;
-        const shaftEnd = width * 0.7;
-        const headTop = centerY - height * 0.28;
-        const headBottom = centerY + height * 0.28;
-        const curveOffset = ((curvature - 50) / 50) * height * 0.35;
-        const controlY = centerY - curveOffset;
-        const shaft =
-          Math.abs(curvature - 50) < 2
-            ? `M 0,${centerY} L ${shaftEnd},${centerY}`
-            : `M 0,${centerY} Q ${width * 0.35},${controlY} ${shaftEnd},${centerY}`;
-        const head = `M ${shaftEnd},${headTop} L ${width},${centerY} L ${shaftEnd},${headBottom} Z`;
-
-        return { type: SHAPE_TYPE.ARROW, path: `${shaft} ${head}` };
-      }
-      case SHAPE_TYPE.LINE:
-        return {
-          type: 'path',
-          path: `M 0,${centerY} L ${width},${centerY}`
-        };
-      case SHAPE_TYPE.RECTANGLE:
-        return {
-          type: 'path',
-          path: `M 0,0 L ${width},0 L ${width},${height} L 0,${height} Z`
-        };
-      case SHAPE_TYPE.CIRCLE:
-        return {
-          type: SHAPE_TYPE.CIRCLE,
-          cx: centerX,
-          cy: centerY,
-          r: Math.min(width, height) / 2
-        };
-      case SHAPE_TYPE.TRIANGLE:
-        return {
-          type: 'path',
-          path: `M ${centerX},0 L ${width},${height} L 0,${height} Z`
-        };
-      case SHAPE_TYPE.STAR:
-        return {
-          type: 'path',
-          path: createStarPath(
-            centerX,
-            centerY,
-            5,
-            Math.min(width, height) / 2,
-            Math.min(width, height) / 4
-          )
-        };
-      default:
-        return {
-          type: SHAPE_TYPE.CIRCLE,
-          cx: centerX,
-          cy: centerY,
-          r: Math.min(width, height) / 2
-        };
-    }
-  }
-
-  function createStarPath(
-    cx: number,
-    cy: number,
-    spikes: number,
-    outerRadius: number,
-    innerRadius: number
-  ): string {
-    let path = '';
-    const step = Math.PI / spikes;
-
-    for (let i = 0; i < 2 * spikes; i++) {
-      const radius = i % 2 === 0 ? outerRadius : innerRadius;
-      const angle = i * step - Math.PI / 2;
-      const x = cx + Math.cos(angle) * radius;
-      const y = cy + Math.sin(angle) * radius;
-      path += i === 0 ? `M ${x},${y}` : ` L ${x},${y}`;
-    }
-    return path + ' Z';
   }
 </script>
 
@@ -2385,16 +2169,15 @@
         item.type !== AnnotationKind.SHAPE}
       class:dragging={dragState?.id === item.id}
       data-annotation-role={item.role}
+      data-khartis-export-placeholder={isExportPlaceholderPageElement(item)
+        ? 'true'
+        : undefined}
       data-workspace-pan-ignore="true"
       style={getAnnotationPositionStyle(item)}
       role="button"
       tabindex="0"
       aria-disabled="false"
-      aria-label={item.type === AnnotationKind.TEXT &&
-      typeof item.content === 'string' &&
-      item.content.trim()
-        ? item.content.trim()
-        : m.annotationImageAlt()}
+      aria-label={getAnnotationAccessibleLabel(item)}
       onclick={(event: MouseEvent) => handleAnnotationClick(event, item.id)}
       ondblclick={(event: MouseEvent) =>
         handleAnnotationDoubleClick(event, item.id)}
@@ -2576,55 +2359,73 @@
               <div class="shape-handles" role="presentation">
                 <div
                   class="resize-handle resize-nw"
-                  role="presentation"
+                  role="button"
+                  tabindex="-1"
+                  aria-label={m.annotations_shape_resize_handle()}
                   onpointerdown={(e: PointerEvent) =>
                     handleResizePointerDown(e, item, 'nw')}
                 ></div>
                 <div
                   class="resize-handle resize-n"
-                  role="presentation"
+                  role="button"
+                  tabindex="-1"
+                  aria-label={m.annotations_shape_resize_handle()}
                   onpointerdown={(e: PointerEvent) =>
                     handleResizePointerDown(e, item, 'n')}
                 ></div>
                 <div
                   class="resize-handle resize-ne"
-                  role="presentation"
+                  role="button"
+                  tabindex="-1"
+                  aria-label={m.annotations_shape_resize_handle()}
                   onpointerdown={(e: PointerEvent) =>
                     handleResizePointerDown(e, item, 'ne')}
                 ></div>
                 <div
                   class="resize-handle resize-e"
-                  role="presentation"
+                  role="button"
+                  tabindex="-1"
+                  aria-label={m.annotations_shape_resize_handle()}
                   onpointerdown={(e: PointerEvent) =>
                     handleResizePointerDown(e, item, 'e')}
                 ></div>
                 <div
                   class="resize-handle resize-se"
-                  role="presentation"
+                  role="button"
+                  tabindex="-1"
+                  aria-label={m.annotations_shape_resize_handle()}
                   onpointerdown={(e: PointerEvent) =>
                     handleResizePointerDown(e, item, 'se')}
                 ></div>
                 <div
                   class="resize-handle resize-s"
-                  role="presentation"
+                  role="button"
+                  tabindex="-1"
+                  aria-label={m.annotations_shape_resize_handle()}
                   onpointerdown={(e: PointerEvent) =>
                     handleResizePointerDown(e, item, 's')}
                 ></div>
                 <div
                   class="resize-handle resize-sw"
-                  role="presentation"
+                  role="button"
+                  tabindex="-1"
+                  aria-label={m.annotations_shape_resize_handle()}
                   onpointerdown={(e: PointerEvent) =>
                     handleResizePointerDown(e, item, 'sw')}
                 ></div>
                 <div
                   class="resize-handle resize-w"
-                  role="presentation"
+                  role="button"
+                  tabindex="-1"
+                  aria-label={m.annotations_shape_resize_handle()}
                   onpointerdown={(e: PointerEvent) =>
                     handleResizePointerDown(e, item, 'w')}
                 ></div>
                 <div
                   class="rotate-handle"
-                  role="presentation"
+                  role="button"
+                  tabindex="-1"
+                  aria-label={m.annotations_shape_rotate_handle()}
                   onpointerdown={(e: PointerEvent) =>
                     handleRotatePointerDown(e, item)}
                 ></div>

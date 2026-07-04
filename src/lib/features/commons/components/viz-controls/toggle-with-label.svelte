@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import Switch from '$lib/features/commons/components/switch.svelte';
+  import { stopBubbleEvents } from '$lib/features/commons/utils/stop-bubble-events';
   import InfoPopover from './info-popover.svelte';
 
   interface Props {
@@ -25,31 +26,6 @@
     ontoggle
   }: Props = $props();
 
-  function stopBubbleEvents(node: HTMLElement) {
-    const events = [
-      'click',
-      'mousedown',
-      'mouseup',
-      'pointerdown',
-      'pointerup',
-      'keydown',
-      'keyup'
-    ] as const;
-    const handler = (event: Event) => event.stopPropagation();
-
-    events.forEach((eventName) => {
-      node.addEventListener(eventName, handler, { capture: true });
-    });
-
-    return {
-      destroy() {
-        events.forEach((eventName) => {
-          node.removeEventListener(eventName, handler, { capture: true });
-        });
-      }
-    };
-  }
-
   function handleToggleChange(next: boolean) {
     if (next === toggled) {
       return;
@@ -66,7 +42,7 @@
       <InfoPopover text={infoText} />
     {/if}
   </span>
-  <div class="toggle-with-label" use:stopBubbleEvents>
+  <div class="toggle-with-label" use:stopBubbleEvents={{ capture: true }}>
     <Switch
       toggled={toggled}
       disabled={disabled}

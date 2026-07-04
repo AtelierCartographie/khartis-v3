@@ -7,9 +7,9 @@
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
-  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import { osmBasemapStore } from '$lib/features/map';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
-  import * as m from '$lib/paraglide/messages.js';
+  import * as m from '$lib/paraglide/messages';
   import {
     Column,
     Grid,

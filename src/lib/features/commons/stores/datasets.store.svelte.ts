@@ -5,7 +5,7 @@ import type {
 import {
   SavePriority,
   persistenceRegistry
-} from '$lib/features/project-management/core/persistence-registry';
+} from '$lib/features/project-management/core';
 import type { SerializedDatasetsViewState } from '$lib/types/serialization.types';
 import { LogCategory, logger } from '../utils/logger';
 import type { UploadedFile } from '../types/create-project.types';
@@ -206,6 +206,27 @@ function createDatasetsStore() {
     notifyPersistence('IMMEDIATE');
   }
 
+  function syncMapVisibilityWithSourceFile(sourceFileId: string): void {
+    let didUpdateVisibility = false;
+
+    for (const dataset of datasetsState.datasets) {
+      const shouldBeEnabled = dataset.sourceFileId === sourceFileId;
+      const isEnabled = isDatasetEnabledFn(datasetsState, dataset.id);
+
+      if (shouldBeEnabled && !isEnabled) {
+        enableDatasetFn(datasetsState, dataset.id);
+        didUpdateVisibility = true;
+      } else if (!shouldBeEnabled && isEnabled) {
+        disableDatasetFn(datasetsState, dataset.id);
+        didUpdateVisibility = true;
+      }
+    }
+
+    if (didUpdateVisibility) {
+      notifyPersistence('IMMEDIATE');
+    }
+  }
+
   function addProcessedDataset(dataset: DatasetResult): void {
     addProcessedDatasetFn(datasetsState, dataset);
   }
@@ -399,6 +420,7 @@ function createDatasetsStore() {
     toggleDatasetVisibility,
     enableDataset,
     disableDataset,
+    syncMapVisibilityWithSourceFile,
     addProcessedDataset,
     processFiles,
     addFile,

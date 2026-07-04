@@ -42,7 +42,9 @@
                       })
                     );
                   })
-                  .catch(function () {})
+                  .catch(function (error) {
+                    console.error('Khartis reset cache cleanup failed', error);
+                  })
               : Promise.resolve();
           Promise.all([clearSw, clearCaches]).then(function () {
             var url = new URL(window.location.href);
@@ -52,6 +54,78 @@
         } catch (error) {
           console.error('Khartis reset bootstrap failed', error);
         }
+      })();
+    </script>
+    <script>
+      (function () {
+        var RELOAD_GUARD_KEY = 'khartis:auto-reloaded-at';
+        var RELOAD_GUARD_WINDOW_MS = 10 * 1000;
+        var STALE_ASSET_PATTERNS = [
+          'Failed to fetch dynamically imported module',
+          'Importing a module script failed',
+          'error loading dynamically imported module',
+          'Loading chunk'
+        ];
+
+        function getMessage(reason) {
+          if (!reason) return '';
+          if (typeof reason === 'string') return reason;
+          if (reason.message) return String(reason.message);
+          return String(reason);
+        }
+
+        function isStaleAssetError(reason) {
+          var message = getMessage(reason);
+          return STALE_ASSET_PATTERNS.some(function (pattern) {
+            return message.indexOf(pattern) !== -1;
+          });
+        }
+
+        function resetWithCacheCleanup() {
+          var url = new URL(window.location.href);
+          url.searchParams.set('reset', '1');
+          window.location.replace(url.pathname + url.search + url.hash);
+        }
+
+        function recoverFromStaleAsset() {
+          try {
+            var lastReload = Number(
+              window.sessionStorage.getItem(RELOAD_GUARD_KEY) || '0'
+            );
+            if (
+              Number.isFinite(lastReload) &&
+              Date.now() - lastReload < RELOAD_GUARD_WINDOW_MS
+            ) {
+              resetWithCacheCleanup();
+              return;
+            }
+            window.sessionStorage.setItem(RELOAD_GUARD_KEY, String(Date.now()));
+            window.location.reload();
+          } catch (error) {
+            resetWithCacheCleanup();
+          }
+        }
+
+        window.addEventListener('vite:preloadError', function (event) {
+          event.preventDefault();
+          recoverFromStaleAsset();
+        });
+
+        window.addEventListener('unhandledrejection', function (event) {
+          if (!isStaleAssetError(event.reason)) return;
+          event.preventDefault();
+          recoverFromStaleAsset();
+        });
+
+        window.addEventListener(
+          'error',
+          function (event) {
+            if (!isStaleAssetError(event.error || event.message)) return;
+            event.preventDefault();
+            recoverFromStaleAsset();
+          },
+          true
+        );
       })();
     </script>
     <meta charset="utf-8" />
@@ -68,11 +142,8 @@
     <meta name="apple-mobile-web-app-title" content="%app.name%" />
     <meta name="theme-color" content="#ffffff" />
 
-    <title>Khartis</title>
-    <meta
-      name="description"
-      content="Khartis — outil de cartographie thématique en ligne par l'Atelier de cartographie de Sciences Po. Créez des cartes thématiques directement dans votre navigateur."
-    />
+    <title>%app.name%</title>
+    <meta name="description" content="%app.description%" />
 
     <base href="%sveltekit.assets%/" />
 

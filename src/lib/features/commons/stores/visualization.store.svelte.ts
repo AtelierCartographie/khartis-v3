@@ -1,1184 +1,114 @@
-import type {
-  DatasetResult,
-  ProcessedDataset
-} from '$lib/features/data-pipeline';
 import {
   SavePriority,
   persistenceRegistry,
   type SavePriorityType
-} from '$lib/features/project-management/core/persistence-registry';
+} from '$lib/features/project-management/core';
 import {
-  BasemapDottedPattern,
-  CategoryShapeMode,
-  ColorMode,
-  DEFAULT_COLORS,
-  DEFAULT_LINEAR_SYMBOL_BAR_WIDTH,
-  type DensityConfig,
   FillMode,
-  MissingDataShape,
-  ProportionalType,
-  ShapeType,
-  SizeMode,
-  StrokeMode,
-  SymbolDoublePosition,
-  SymbolMode,
-  ThicknessMode,
+  VisualizationType,
   VISUALIZATION_DEFAULTS,
-  DEFAULT_DISCRETIZATION_CLASS_COUNT,
-  availableShapesForSymbolMode
+  DEFAULT_DISCRETIZATION_CLASS_COUNT
 } from '$lib/features/commons/constants/visualization.constants';
 import { deepClone } from '../utils/clone.utils';
+import { DataValidationError } from '../pipeline.errors';
 import { generateUniqueNameWithCounter } from '../utils/naming.utils';
 import { sanitizeTextInput } from '../utils/sanitize.utils';
 import { datasetsStore } from './datasets.store.svelte';
 import { findById, updateById } from '../utils/array-helpers';
-import {
-  DEFAULT_STROKE_COLOR,
-  DEFAULT_FILL_COLOR,
-  DEFAULT_STYLE_OPACITY,
-  DEFAULT_STROKE_WIDTH
-} from '../constants/colors.constants';
-import { DEFAULT_CATEGORICAL_COLORS as FIGMA_DEFAULT_CATEGORICAL_COLORS } from '../constants/qualitative-palette.constants';
-import { PatternType } from '../components/palette-popover/categories-aspect-popover.types';
-import {
-  COLUMN_TYPE_GEOMETRY,
-  GEO_COLUMN_TYPE
-} from '../constants/data.constants';
-import { GEOJSON_TYPE } from '../constants/geojson.constants';
-import {
-  findPreferredNumericColumn,
-  findPreferredTextColumn
-} from '../utils/visualization-columns.utils';
-import {
-  clampFontSize,
-  CARTOGRAPHIC_FONT_FAMILY,
-  normalizeFontFamily
-} from '$lib/features/step-toolbar/fonts.constants';
 import * as m from '$lib/paraglide/messages';
 
-export enum VisualizationType {
-  CHOROPLETH = 'choropleth',
-  PROPORTIONAL = 'proportional',
-  CATEGORICAL = 'categorical',
-  BIVARIATE = 'bivariate'
-}
-
-export enum ClassificationMethod {
-  EQUAL_INTERVAL = 'equal_interval',
-  QUANTILES = 'quantiles',
-  KMEANS = 'kmeans',
-  MANUAL = 'manual',
-  Q6 = 'q6',
-  NESTED_MEANS = 'nested_means',
-  HEAD_TAIL = 'head_tail'
-}
-
-export enum ScaleType {
-  LINEAR = 'linear',
-  SQRT = 'sqrt',
-  LOG = 'log'
-}
-
-export enum PrimitiveFilterType {
-  POINT = 'point',
-  LINE = 'line',
-  POLYGON = 'polygon',
-  TEXT = 'text'
-}
-
-export interface VisualizationModes {
-  symbol?: SymbolMode;
-  fill?: FillMode;
-  stroke?: StrokeMode;
-  thickness?: ThicknessMode;
-  color?: ColorMode;
-  size?: SizeMode;
-  proportionalType?: ProportionalType;
-  categoryShape?: CategoryShapeMode;
-  strokeShowMissing?: boolean;
-}
-
-export interface PatternParams {
-  angle?: 0 | 45 | 315;
-  size?: number;
-  scale?: number;
-}
-
-export interface ClassificationConfig {
-  method: ClassificationMethod;
-  classes: number;
-  numClasses?: number;
-  breaks?: number[];
-  counts?: number[];
-  colors?: string[];
-  paletteId?: string;
-  inverted?: boolean;
-  labels?: string[];
-  categoryValues?: string[];
-  disabledLabels?: string[];
-  breakpointValue?: number | null;
-  breakpointLowerClassCount?: number;
-  patternId?: string;
-  patternParams?: PatternParams;
-  categoryShapes?: ShapeType[];
-  categorySizes?: number[];
-  categoryStrokeColors?: string[];
-  categoryStrokeWidths?: number[];
-}
-
-export interface MissingDataConfig {
-  show: boolean;
-  enabled?: boolean;
-  shape: MissingDataShape;
-  size: number;
-  color: string;
-  opacity?: number;
-  pattern?: boolean;
-  patternId?: string;
-  patternParams?: PatternParams;
-  /**
-   * Legacy: older projects stored a coarse PatternType. New code writes
-   * patternId + patternParams; this is read as a fallback so older saved
-   * projects still render their missing-data pattern.
-   */
-  patternType?: PatternType;
-  dashed?: boolean;
-  dashedPattern?: BasemapDottedPattern;
-  label?: string;
-}
-
-export interface PolygonPrimitiveConfig {
-  enabled: boolean;
-  fillMode: FillMode;
-  fillColor?: string | string[];
-  fillOpacity: number;
-  strokeMode: StrokeMode;
-  strokeColor?: string | string[];
-  strokeWidth: number;
-  strokeOpacity: number;
-  strokeDashed: boolean;
-  strokeDashedPattern?: BasemapDottedPattern;
-  strokeValueColumn?: string;
-  strokeCategoryColumn?: string;
-  valueColumn?: string;
-  categoryColumn?: string;
-  classification?: ClassificationConfig;
-  strokeClassification?: ClassificationConfig;
-  missingData?: MissingDataConfig;
-}
-
-export interface SymbolModeState {
-  size?: number;
-  minSize?: number;
-  maxSize?: number;
-  barWidth?: number;
-  sizeScale?: ScaleType;
-  valueColumn?: string;
-  categoryColumn?: string;
-  sizeColumn?: string;
-  classification?: ClassificationConfig;
-  fillValueColumn?: string;
-  fillCategoryColumn?: string;
-  fillClassification?: ClassificationConfig;
-  categoryShape?: CategoryShapeMode;
-  proportionalType?: ProportionalType;
-  commonScale?: boolean;
-  positionMode?: SymbolDoublePosition;
-  breakValueA?: number | null;
-  breakValueB?: number | null;
-  fillMode?: FillMode;
-  strokeMode?: StrokeMode;
-  strokeColor?: string | string[];
-  strokeWidth?: number;
-  strokeOpacity?: number;
-  strokeDashed?: boolean;
-  strokeDashedPattern?: BasemapDottedPattern;
-  strokeClassification?: ClassificationConfig;
-  strokeValueColumn?: string;
-  strokeCategoryColumn?: string;
-}
-
-export interface LineColorModeState {
-  color?: string | string[];
-  valueColumn?: string;
-  categoryColumn?: string;
-  classification?: ClassificationConfig;
-}
-
-export interface LineThicknessModeState {
-  width?: number;
-  maxWidth?: number;
-  valueColumn?: string;
-  sizeColumn?: string;
-  thicknessClassification?: ClassificationConfig;
-}
-
-export interface TextColorModeState {
-  color?: string | string[];
-  valueColumn?: string;
-  categoryColumn?: string;
-  classification?: ClassificationConfig;
-}
-
-export interface TextSizeModeState {
-  size?: number;
-  valueColumn?: string;
-  classification?: ClassificationConfig;
-}
-
-export interface SymbolPrimitiveConfig {
-  enabled: boolean;
-  mode: SymbolMode;
-  shape: ShapeType;
-  size: number;
-  minSize: number;
-  maxSize: number;
-  barWidth?: number;
-  sizeScale: ScaleType;
-  opacity: number;
-  fillMode: FillMode;
-  fillColor?: string | string[];
-  fillColorB?: string;
-  strokeMode: StrokeMode;
-  strokeColor?: string | string[];
-  strokeWidth: number;
-  strokeOpacity: number;
-  strokeDashed: boolean;
-  strokeDashedPattern?: BasemapDottedPattern;
-  strokeValueColumn?: string;
-  strokeCategoryColumn?: string;
-  strokeClassification?: ClassificationConfig;
-  proportionalType: ProportionalType;
-  categoryShape: CategoryShapeMode;
-  commonScale?: boolean;
-  positionMode?: SymbolDoublePosition;
-  breakValueA?: number | null;
-  breakValueB?: number | null;
-  valueColumn?: string;
-  categoryColumn?: string;
-  sizeColumn?: string;
-  classification?: ClassificationConfig;
-  fillValueColumn?: string;
-  fillCategoryColumn?: string;
-  fillClassification?: ClassificationConfig;
-  missingData?: MissingDataConfig;
-  modeStates?: Partial<Record<SymbolMode, SymbolModeState>>;
-}
-
-export interface LinePrimitiveConfig {
-  enabled: boolean;
-  colorMode: ColorMode;
-  thicknessMode: ThicknessMode;
-  color?: string | string[];
-  width: number;
-  maxWidth: number;
-  opacity: number;
-  dashed: boolean;
-  dashedPattern?: BasemapDottedPattern;
-  valueColumn?: string;
-  categoryColumn?: string;
-  sizeColumn?: string;
-  classification?: ClassificationConfig;
-  thicknessClassification?: ClassificationConfig;
-  missingData?: MissingDataConfig;
-  colorModeStates?: Partial<Record<ColorMode, LineColorModeState>>;
-  thicknessModeStates?: Partial<Record<ThicknessMode, LineThicknessModeState>>;
-}
-
-export interface TextSecondaryLabelsConfig {
-  enabled: boolean;
-  labelColumn?: string;
-  fontFamily: string;
-  color?: string | string[];
-  opacity: number;
-  size: number;
-  bold: boolean;
-  italic: boolean;
-  align: 'left' | 'center' | 'right';
-  halo: boolean;
-  haloColor?: string;
-  haloWidth: number;
-  collisionDetection: boolean;
-  dxpMasking: boolean;
-}
-
-export interface TextBackgroundConfig {
-  fillMode: FillMode;
-  fillColor?: string | string[];
-  fillOpacity: number;
-  strokeMode: StrokeMode;
-  strokeColor?: string | string[];
-  strokeWidth: number;
-  strokeOpacity: number;
-  strokeDashed: boolean;
-  strokeDashedPattern?: BasemapDottedPattern;
-  strokeValueColumn?: string;
-  strokeCategoryColumn?: string;
-  valueColumn?: string;
-  categoryColumn?: string;
-  classification?: ClassificationConfig;
-  strokeClassification?: ClassificationConfig;
-}
-
-export interface TextPrimitiveConfig {
-  enabled: boolean;
-  labelColumn?: string;
-  colorMode: ColorMode;
-  sizeMode: SizeMode;
-  fontFamily: string;
-  color?: string | string[];
-  opacity: number;
-  size: number;
-  bold: boolean;
-  italic: boolean;
-  align: 'left' | 'center' | 'right';
-  halo: boolean;
-  haloColor?: string;
-  haloWidth: number;
-  collisionDetection: boolean;
-  dxpMasking: boolean;
-  valueColumn?: string;
-  categoryColumn?: string;
-  classification?: ClassificationConfig;
-  missingData?: MissingDataConfig;
-  secondaryLabels: TextSecondaryLabelsConfig;
-  background: TextBackgroundConfig;
-  colorModeStates?: Partial<Record<ColorMode, TextColorModeState>>;
-  sizeModeStates?: Partial<Record<SizeMode, TextSizeModeState>>;
-}
-
-export type PrimitiveFilter =
-  | PrimitiveFilterType.POINT
-  | PrimitiveFilterType.LINE
-  | PrimitiveFilterType.POLYGON
-  | PrimitiveFilterType.TEXT;
-
-export type VisualizationOriginMode =
-  | 'auto-suggestion'
-  | 'manual-suggestion'
-  | 'manual-blank'
-  | 'custom'
-  | 'legacy';
-
-export interface VisualizationRestoreSnapshot {
-  type: VisualizationType;
-  modes?: VisualizationModes;
-  primitiveFilters?: PrimitiveFilter[];
-  primitiveOrder?: PrimitiveFilter[];
-  polygon?: PolygonPrimitiveConfig;
-  symbol?: SymbolPrimitiveConfig;
-  line?: LinePrimitiveConfig;
-  text?: TextPrimitiveConfig;
-  style: VisualizationConfig['style'];
-  mapping: VisualizationConfig['mapping'];
-  classification?: ClassificationConfig;
-  symbols?: VisualizationConfig['symbols'];
-  missingData?: MissingDataConfig;
-  density?: DensityConfig;
-  dataFilters?: VizDataFilter[];
-}
-
-export interface VisualizationRestoreState {
-  origin: {
-    mode: VisualizationOriginMode;
-    suggestionKey?: string;
-  };
-  visualization: VisualizationRestoreSnapshot;
-}
-
-export interface VisualizationAppliedSuggestionState {
-  suggestionKey: string;
-  visualization: VisualizationRestoreSnapshot;
-}
-
-export interface VisualizationOrigin {
-  mode: VisualizationOriginMode;
-  suggestionKey?: string;
-  restoreState?: VisualizationRestoreState;
-  appliedSuggestionState?: VisualizationAppliedSuggestionState;
-}
-
-export const ALL_PRIMITIVE_FILTERS: PrimitiveFilter[] = [
-  PrimitiveFilterType.TEXT,
-  PrimitiveFilterType.POINT,
-  PrimitiveFilterType.LINE,
-  PrimitiveFilterType.POLYGON
-];
-
-export type VizFilterOperator =
-  | 'gte'
-  | 'lte'
-  | 'contains'
-  | 'equals'
-  | 'not_equals'
-  | 'between'
-  | 'top_asc'
-  | 'top_desc'
-  | 'empty'
-  | 'not_empty';
-
-export interface VizDataFilter {
-  id: string;
-  column: string;
-  operator: VizFilterOperator;
-  value: string;
-  secondaryValue?: string;
-  limit?: number;
-  primitiveType?: PrimitiveFilter;
-}
-
-export interface VisualizationConfig {
-  id: string;
-  name: string;
-  type: VisualizationType;
-  datasetId: string;
-  enabled: boolean;
-  origin?: VisualizationOrigin;
-  facet?: {
-    baseVisualizationId: string;
-  };
-  polygon?: PolygonPrimitiveConfig;
-  symbol?: SymbolPrimitiveConfig;
-  line?: LinePrimitiveConfig;
-  text?: TextPrimitiveConfig;
-  modes?: VisualizationModes;
-  primitiveFilters?: PrimitiveFilter[];
-  primitiveOrder?: PrimitiveFilter[];
-  style: {
-    fillColor?: string | string[];
-    fillColorB?: string;
-    symbolFillColor?: string | string[];
-    fillOpacity?: number;
-    strokeColor?: string;
-    strokeWidth?: number;
-    strokeOpacity?: number;
-    strokeDashed?: boolean;
-    strokeDashedPattern?: BasemapDottedPattern;
-    lineWidth?: number;
-    lineMaxWidth?: number;
-    lineColor?: string | string[];
-    lineOpacity?: number;
-    lineDashed?: boolean;
-    lineDashedPattern?: BasemapDottedPattern;
-    textColor?: string | string[];
-    textOpacity?: number;
-    textFontFamily?: string;
-    textSize?: number;
-    textBold?: boolean;
-    textItalic?: boolean;
-    textAlign?: 'left' | 'center' | 'right';
-    textHalo?: boolean;
-    textHaloColor?: string;
-    textHaloWidth?: number;
-    textCollisionDetection?: boolean;
-    textDxpMasking?: boolean;
-    labelColor?: string | string[];
-    labelOpacity?: number;
-    labelFontFamily?: string;
-    labelSize?: number;
-    labelBold?: boolean;
-    labelItalic?: boolean;
-    labelAlign?: 'left' | 'center' | 'right';
-    labelHalo?: boolean;
-    labelHaloColor?: string;
-    labelHaloWidth?: number;
-    labelCollisionDetection?: boolean;
-    labelDxpMasking?: boolean;
-  };
-  mapping: {
-    valueColumn?: string;
-    categoryColumn?: string;
-    sizeColumn?: string;
-    colorColumn?: string;
-    geometryColumn?: string;
-    labelColumn?: string;
-    secondaryLabelColumn?: string;
-  };
-  classification?: ClassificationConfig;
-  symbolClassification?: ClassificationConfig;
-  lineClassification?: ClassificationConfig;
-  lineThicknessClassification?: ClassificationConfig;
-  textClassification?: ClassificationConfig;
-  symbols?: {
-    type: ShapeType;
-    size?: number;
-    minSize: number;
-    maxSize: number;
-    barWidth?: number;
-    sizeScale: ScaleType;
-    opacity?: number;
-  };
-  missingData?: MissingDataConfig;
-  density?: DensityConfig;
-  dataFilters?: VizDataFilter[];
-}
-
-export type VisualizationPreset = Pick<
+import {
+  ALL_PRIMITIVE_FILTERS,
+  ClassificationMethod,
+  PrimitiveFilterType,
+  type ClassificationConfig,
+  type LinePrimitiveConfig,
+  type MissingDataConfig,
+  type PolygonPrimitiveConfig,
+  type PrimitiveConfigKind,
+  type PrimitiveConfigMap,
+  type PrimitiveFilter,
+  type SymbolPrimitiveConfig,
+  type TextBackgroundConfig,
+  type TextPrimitiveConfig,
+  type VisualizationConfig,
+  type VisualizationModes,
+  type VisualizationOrigin,
+  type VisualizationRestoreSnapshot,
+  type VisualizationState,
+  type VizDataFilter
+} from './visualization.types';
+export {
+  ALL_PRIMITIVE_FILTERS,
+  ClassificationMethod,
+  getVisualizationOriginMode,
+  PrimitiveFilterType,
+  ScaleType,
+  VisualizationType
+} from './visualization.types';
+export type {
+  ClassificationConfig,
+  LineColorModeState,
+  LinePrimitiveConfig,
+  LineThicknessModeState,
+  MissingDataConfig,
+  PolygonPrimitiveConfig,
+  PrimitiveConfigKind,
+  PrimitiveFilter,
+  SymbolModeState,
+  SymbolPrimitiveConfig,
+  TextBackgroundConfig,
+  TextColorModeState,
+  TextPrimitiveConfig,
+  TextSecondaryLabelsConfig,
+  TextSizeModeState,
+  VisualizationAppliedSuggestionState,
   VisualizationConfig,
-  | 'type'
-  | 'polygon'
-  | 'symbol'
-  | 'line'
-  | 'text'
-  | 'modes'
-  | 'primitiveFilters'
-  | 'style'
-  | 'mapping'
-  | 'classification'
-  | 'symbols'
-  | 'missingData'
->;
+  VisualizationModes,
+  VisualizationOrigin,
+  VisualizationOriginMode,
+  VisualizationPreset,
+  VisualizationRestoreSnapshot,
+  VisualizationRestoreState,
+  VizDataFilter,
+  VizFilterOperator
+} from './visualization.types';
 
-interface VisualizationState {
-  visualizations: VisualizationConfig[];
-  selectedVisualizationId?: string;
-  activeVisualizationIds: Set<string>;
-  version: number;
-}
-
-export function getVisualizationOriginMode(
-  visualization?: Pick<VisualizationConfig, 'origin'> | null
-): VisualizationOriginMode {
-  return visualization?.origin?.mode ?? 'legacy';
-}
-
-export type PrimitiveConfigKind = 'polygon' | 'symbol' | 'line' | 'text';
-
-type PrimitiveConfigMap = {
-  polygon: PolygonPrimitiveConfig;
-  symbol: SymbolPrimitiveConfig;
-  line: LinePrimitiveConfig;
-  text: TextPrimitiveConfig;
-};
-
-function resolvePrimitiveKind(
-  primitive: PrimitiveFilter | PrimitiveConfigKind
-): PrimitiveConfigKind {
-  switch (primitive) {
-    case PrimitiveFilterType.POINT:
-      return 'symbol';
-    case PrimitiveFilterType.LINE:
-      return 'line';
-    case PrimitiveFilterType.TEXT:
-      return 'text';
-    case PrimitiveFilterType.POLYGON:
-    default:
-      return 'polygon';
-  }
-}
-
-function resolveLegacyPrimitiveEnabled(
-  visualization: VisualizationConfig,
-  primitive: PrimitiveFilter
-): boolean {
-  const primitiveFilters =
-    visualization.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
-
-  if (primitive === PrimitiveFilterType.TEXT) {
-    if (visualization.text?.enabled !== undefined) {
-      return visualization.text.enabled;
-    }
-
-    return (
-      primitiveFilters.includes(primitive) ||
-      (visualization.style.textOpacity ?? 0) > 0
-    );
-  }
-
-  return primitiveFilters.includes(primitive);
-}
-
-function buildSecondaryLabelsConfig(
-  visualization: VisualizationConfig
-): TextSecondaryLabelsConfig {
-  const existing = visualization.text?.secondaryLabels;
-
-  return {
-    enabled:
-      existing?.enabled ??
-      Boolean(
-        visualization.mapping.secondaryLabelColumn &&
-        (visualization.style.labelOpacity ?? 0) > 0
-      ),
-    labelColumn:
-      existing?.labelColumn ?? visualization.mapping.secondaryLabelColumn,
-    fontFamily:
-      normalizeFontFamily(
-        existing?.fontFamily ?? visualization.style.labelFontFamily
-      ) ?? CARTOGRAPHIC_FONT_FAMILY,
-    color: existing?.color ?? visualization.style.labelColor,
-    opacity: existing?.opacity ?? visualization.style.labelOpacity ?? 0,
-    size: clampFontSize(
-      existing?.size ??
-        visualization.style.labelSize ??
-        VISUALIZATION_DEFAULTS.labelSize,
-      VISUALIZATION_DEFAULTS.labelSize
-    ),
-    bold: existing?.bold ?? visualization.style.labelBold ?? false,
-    italic: existing?.italic ?? visualization.style.labelItalic ?? false,
-    align: existing?.align ?? visualization.style.labelAlign ?? 'center',
-    halo: existing?.halo ?? visualization.style.labelHalo ?? false,
-    haloColor:
-      existing?.haloColor ??
-      visualization.style.labelHaloColor ??
-      DEFAULT_COLORS.halo,
-    haloWidth:
-      existing?.haloWidth ??
-      visualization.style.labelHaloWidth ??
-      VISUALIZATION_DEFAULTS.haloWidth,
-    collisionDetection:
-      existing?.collisionDetection ??
-      visualization.style.labelCollisionDetection ??
-      true,
-    dxpMasking:
-      existing?.dxpMasking ?? visualization.style.labelDxpMasking ?? false
-  };
-}
-
-function buildPolygonPrimitiveConfig(
-  visualization: VisualizationConfig
-): PolygonPrimitiveConfig {
-  const existing = visualization.polygon;
-
-  return {
-    enabled: resolveLegacyPrimitiveEnabled(
-      visualization,
-      PrimitiveFilterType.POLYGON
-    ),
-    fillMode:
-      existing?.fillMode ?? visualization.modes?.fill ?? FillMode.UNIQUE,
-    fillColor: existing?.fillColor ?? visualization.style.fillColor,
-    fillOpacity: existing?.fillOpacity ?? visualization.style.fillOpacity ?? 1,
-    strokeMode:
-      existing?.strokeMode ?? visualization.modes?.stroke ?? StrokeMode.UNIQUE,
-    strokeColor:
-      existing?.strokeColor ??
-      visualization.style.strokeColor ??
-      DEFAULT_COLORS.stroke,
-    strokeWidth:
-      existing?.strokeWidth ??
-      visualization.style.strokeWidth ??
-      VISUALIZATION_DEFAULTS.strokeWidth,
-    strokeOpacity:
-      existing?.strokeOpacity ?? visualization.style.strokeOpacity ?? 1,
-    strokeDashed:
-      existing?.strokeDashed ?? visualization.style.strokeDashed ?? false,
-    strokeDashedPattern:
-      existing?.strokeDashedPattern ?? visualization.style.strokeDashedPattern,
-    valueColumn: existing?.valueColumn ?? visualization.mapping.valueColumn,
-    categoryColumn:
-      existing?.categoryColumn ?? visualization.mapping.categoryColumn,
-    strokeValueColumn: existing?.strokeValueColumn,
-    strokeCategoryColumn: existing?.strokeCategoryColumn,
-    classification: existing?.classification ?? visualization.classification,
-    strokeClassification: existing?.strokeClassification,
-    missingData: existing?.missingData ?? visualization.missingData
-  };
-}
-
-function hasOwnClassificationKey<K extends keyof ClassificationConfig>(
-  classification: ClassificationConfig | undefined,
-  key: K
-): classification is ClassificationConfig & Pick<ClassificationConfig, K> {
-  return (
-    classification !== undefined &&
-    Object.prototype.hasOwnProperty.call(classification, key)
-  );
-}
-
-function resolveSymbolClassification(
-  existing: ClassificationConfig | undefined,
-  mirror: ClassificationConfig | undefined,
-  fallback: ClassificationConfig | undefined
-): ClassificationConfig | undefined {
-  const base = existing ?? mirror ?? fallback;
-  if (!base || !mirror || mirror === base) {
-    return base;
-  }
-
-  return {
-    ...base,
-    ...(hasOwnClassificationKey(mirror, 'colors')
-      ? { colors: mirror.colors }
-      : {}),
-    ...(hasOwnClassificationKey(mirror, 'labels')
-      ? { labels: mirror.labels }
-      : {}),
-    ...(hasOwnClassificationKey(mirror, 'categoryValues')
-      ? { categoryValues: mirror.categoryValues }
-      : {}),
-    ...(hasOwnClassificationKey(mirror, 'disabledLabels')
-      ? { disabledLabels: mirror.disabledLabels }
-      : {}),
-    ...(hasOwnClassificationKey(mirror, 'paletteId')
-      ? { paletteId: mirror.paletteId }
-      : {}),
-    ...(hasOwnClassificationKey(mirror, 'inverted')
-      ? { inverted: mirror.inverted }
-      : {}),
-    ...(hasOwnClassificationKey(mirror, 'patternId')
-      ? { patternId: mirror.patternId }
-      : {}),
-    ...(hasOwnClassificationKey(mirror, 'patternParams')
-      ? { patternParams: mirror.patternParams }
-      : {})
-  };
-}
-
-function buildSymbolPrimitiveConfig(
-  visualization: VisualizationConfig
-): SymbolPrimitiveConfig {
-  const existing = visualization.symbol;
-  const legacySymbols = visualization.symbols;
-  const legacyFillClassification =
-    existing?.fillMode === FillMode.CLASSES ||
-    existing?.fillMode === FillMode.CATEGORIES
-      ? (existing?.classification ??
-        visualization.symbolClassification ??
-        visualization.classification)
-      : undefined;
-  const legacyFillValueColumn =
-    existing?.fillMode === FillMode.CLASSES
-      ? (existing?.valueColumn ?? visualization.mapping.valueColumn)
-      : undefined;
-  const legacyFillCategoryColumn =
-    existing?.fillMode === FillMode.CATEGORIES
-      ? (existing?.categoryColumn ?? visualization.mapping.categoryColumn)
-      : undefined;
-
-  return {
-    enabled: resolveLegacyPrimitiveEnabled(
-      visualization,
-      PrimitiveFilterType.POINT
-    ),
-    mode: existing?.mode ?? visualization.modes?.symbol ?? SymbolMode.UNIQUE,
-    shape: existing?.shape ?? legacySymbols?.type ?? ShapeType.CIRCLE,
-    size: existing?.size ?? legacySymbols?.size ?? DEFAULT_SYMBOL_SIZE,
-    minSize:
-      existing?.minSize ?? legacySymbols?.minSize ?? DEFAULT_SYMBOL_MIN_SIZE,
-    maxSize:
-      existing?.maxSize ?? legacySymbols?.maxSize ?? DEFAULT_SYMBOL_MAX_SIZE,
-    barWidth:
-      existing?.barWidth ??
-      legacySymbols?.barWidth ??
-      DEFAULT_LINEAR_SYMBOL_BAR_WIDTH,
-    sizeScale:
-      existing?.sizeScale ?? legacySymbols?.sizeScale ?? ScaleType.LINEAR,
-    opacity:
-      existing?.opacity ??
-      legacySymbols?.opacity ??
-      visualization.style.fillOpacity ??
-      DEFAULT_SYMBOL_OPACITY,
-    fillMode:
-      existing?.fillMode ?? visualization.modes?.fill ?? FillMode.UNIQUE,
-    fillColor:
-      existing?.fillColor ??
-      visualization.style.symbolFillColor ??
-      visualization.style.fillColor,
-    fillColorB: existing?.fillColorB ?? visualization.style.fillColorB,
-    strokeMode:
-      existing?.strokeMode ?? visualization.modes?.stroke ?? StrokeMode.UNIQUE,
-    strokeColor:
-      existing?.strokeColor ??
-      visualization.style.strokeColor ??
-      DEFAULT_COLORS.stroke,
-    strokeWidth:
-      existing?.strokeWidth ??
-      visualization.style.strokeWidth ??
-      VISUALIZATION_DEFAULTS.strokeWidth,
-    strokeOpacity:
-      existing?.strokeOpacity ?? visualization.style.strokeOpacity ?? 1,
-    strokeDashed:
-      existing?.strokeDashed ?? visualization.style.strokeDashed ?? false,
-    strokeDashedPattern:
-      existing?.strokeDashedPattern ?? visualization.style.strokeDashedPattern,
-    proportionalType:
-      existing?.proportionalType ??
-      visualization.modes?.proportionalType ??
-      ProportionalType.SINGLE,
-    categoryShape:
-      existing?.categoryShape ??
-      visualization.modes?.categoryShape ??
-      CategoryShapeMode.UNIQUE,
-    commonScale: existing?.commonScale ?? true,
-    positionMode: existing?.positionMode ?? SymbolDoublePosition.OVERLAY,
-    breakValueA: existing?.breakValueA ?? null,
-    breakValueB: existing?.breakValueB ?? null,
-    valueColumn: existing?.valueColumn ?? visualization.mapping.valueColumn,
-    categoryColumn:
-      existing?.categoryColumn ?? visualization.mapping.categoryColumn,
-    sizeColumn: existing?.sizeColumn ?? visualization.mapping.sizeColumn,
-    fillValueColumn: existing?.fillValueColumn ?? legacyFillValueColumn,
-    fillCategoryColumn:
-      existing?.fillCategoryColumn ?? legacyFillCategoryColumn,
-    fillClassification:
-      existing?.fillClassification ?? legacyFillClassification,
-    strokeValueColumn: existing?.strokeValueColumn,
-    strokeCategoryColumn: existing?.strokeCategoryColumn,
-    classification: resolveSymbolClassification(
-      existing?.classification,
-      visualization.symbolClassification,
-      visualization.classification
-    ),
-    strokeClassification: existing?.strokeClassification,
-    missingData: existing?.missingData ?? visualization.missingData,
-    modeStates: existing?.modeStates
-  };
-}
-
-function buildLinePrimitiveConfig(
-  visualization: VisualizationConfig
-): LinePrimitiveConfig {
-  const existing = visualization.line;
-  const colorMode =
-    existing?.colorMode ?? visualization.modes?.color ?? ColorMode.UNIQUE;
-  const thicknessMode =
-    existing?.thicknessMode ??
-    visualization.modes?.thickness ??
-    ThicknessMode.UNIQUE;
-  const usesColorClassification =
-    colorMode === ColorMode.CLASSES || colorMode === ColorMode.CATEGORIES;
-  const colorClassification =
-    existing?.classification ??
-    (usesColorClassification
-      ? (visualization.lineClassification ?? visualization.classification)
-      : undefined);
-  const thicknessClassification =
-    existing?.thicknessClassification ??
-    (thicknessMode === ThicknessMode.CLASSES
-      ? visualization.lineThicknessClassification
-      : undefined);
-
-  return {
-    enabled: resolveLegacyPrimitiveEnabled(
-      visualization,
-      PrimitiveFilterType.LINE
-    ),
-    colorMode,
-    thicknessMode,
-    color: existing?.color ?? visualization.style.lineColor,
-    width:
-      existing?.width ??
-      visualization.style.lineWidth ??
-      VISUALIZATION_DEFAULTS.lineWidth,
-    maxWidth:
-      existing?.maxWidth ??
-      visualization.style.lineMaxWidth ??
-      VISUALIZATION_DEFAULTS.lineMaxWidth,
-    opacity: existing?.opacity ?? visualization.style.lineOpacity ?? 1,
-    dashed: existing?.dashed ?? visualization.style.lineDashed ?? false,
-    dashedPattern:
-      existing?.dashedPattern ??
-      visualization.style.lineDashedPattern ??
-      BasemapDottedPattern.DOTS,
-    valueColumn: existing?.valueColumn ?? visualization.mapping.valueColumn,
-    categoryColumn:
-      existing?.categoryColumn ?? visualization.mapping.categoryColumn,
-    sizeColumn: existing?.sizeColumn ?? visualization.mapping.sizeColumn,
-    classification: colorClassification,
-    thicknessClassification,
-    missingData: existing?.missingData ?? visualization.missingData,
-    colorModeStates: existing?.colorModeStates,
-    thicknessModeStates: existing?.thicknessModeStates
-  };
-}
-
-function buildTextBackgroundConfig(
-  existing: TextBackgroundConfig | undefined
-): TextBackgroundConfig {
-  const defaultFillOpacity = VISUALIZATION_DEFAULTS.fillOpacity / 100;
-  return {
-    fillMode: existing?.fillMode ?? FillMode.NONE,
-    fillColor: existing?.fillColor,
-    fillOpacity: existing?.fillOpacity ?? defaultFillOpacity,
-    strokeMode: existing?.strokeMode ?? StrokeMode.NONE,
-    strokeColor: existing?.strokeColor,
-    strokeWidth: existing?.strokeWidth ?? VISUALIZATION_DEFAULTS.strokeWidth,
-    strokeOpacity: existing?.strokeOpacity ?? 1,
-    strokeDashed: existing?.strokeDashed ?? false,
-    strokeDashedPattern: existing?.strokeDashedPattern,
-    valueColumn: existing?.valueColumn,
-    categoryColumn: existing?.categoryColumn,
-    classification: existing?.classification,
-    strokeClassification: existing?.strokeClassification,
-    strokeValueColumn: existing?.strokeValueColumn,
-    strokeCategoryColumn: existing?.strokeCategoryColumn
-  };
-}
-
-function buildTextPrimitiveConfig(
-  visualization: VisualizationConfig
-): TextPrimitiveConfig {
-  const existing = visualization.text;
-  const enabled = resolveLegacyPrimitiveEnabled(
-    visualization,
-    PrimitiveFilterType.TEXT
-  );
-  const fallbackOpacity = VISUALIZATION_DEFAULTS.textOpacity / 100;
-  const styleTextOpacity = visualization.style.textOpacity;
-  const normalizedOpacity =
-    existing?.opacity !== undefined
-      ? existing.opacity > 0
-        ? existing.opacity
-        : enabled && (styleTextOpacity ?? 0) > 0
-          ? (styleTextOpacity ?? existing.opacity)
-          : existing.opacity
-      : (styleTextOpacity ?? (enabled ? fallbackOpacity : 0));
-
-  return {
-    enabled,
-    labelColumn: existing?.labelColumn ?? visualization.mapping.labelColumn,
-    colorMode:
-      existing?.colorMode ?? visualization.modes?.color ?? ColorMode.UNIQUE,
-    sizeMode: existing?.sizeMode ?? visualization.modes?.size ?? SizeMode.FIXED,
-    fontFamily:
-      normalizeFontFamily(
-        existing?.fontFamily ?? visualization.style.textFontFamily
-      ) ?? CARTOGRAPHIC_FONT_FAMILY,
-    color: existing?.color ?? visualization.style.textColor,
-    opacity: normalizedOpacity,
-    size: clampFontSize(
-      existing?.size ??
-        visualization.style.textSize ??
-        VISUALIZATION_DEFAULTS.textSize,
-      VISUALIZATION_DEFAULTS.textSize
-    ),
-    bold: existing?.bold ?? visualization.style.textBold ?? false,
-    italic: existing?.italic ?? visualization.style.textItalic ?? false,
-    align: existing?.align ?? visualization.style.textAlign ?? 'center',
-    halo: existing?.halo ?? visualization.style.textHalo ?? false,
-    haloColor:
-      existing?.haloColor ??
-      visualization.style.textHaloColor ??
-      DEFAULT_COLORS.halo,
-    haloWidth:
-      existing?.haloWidth ??
-      visualization.style.textHaloWidth ??
-      VISUALIZATION_DEFAULTS.haloWidth,
-    collisionDetection:
-      existing?.collisionDetection ??
-      visualization.style.textCollisionDetection ??
-      true,
-    dxpMasking:
-      existing?.dxpMasking ?? visualization.style.textDxpMasking ?? false,
-    valueColumn: existing?.valueColumn ?? visualization.mapping.valueColumn,
-    categoryColumn:
-      existing?.categoryColumn ?? visualization.mapping.categoryColumn,
-    classification:
-      existing?.classification ??
-      visualization.textClassification ??
-      visualization.classification,
-    missingData: existing?.missingData ?? visualization.missingData,
-    secondaryLabels: buildSecondaryLabelsConfig(visualization),
-    background: buildTextBackgroundConfig(existing?.background)
-  };
-}
-
-export function getPolygonPrimitive(
-  visualization: VisualizationConfig | null | undefined
-): PolygonPrimitiveConfig | undefined {
-  return visualization ? buildPolygonPrimitiveConfig(visualization) : undefined;
-}
-
-export function getSymbolPrimitive(
-  visualization: VisualizationConfig | null | undefined
-): SymbolPrimitiveConfig | undefined {
-  return visualization ? buildSymbolPrimitiveConfig(visualization) : undefined;
-}
-
-export function getSymbolFillValueColumn(
-  visualization: VisualizationConfig | null | undefined
-): string | undefined {
-  return getSymbolPrimitive(visualization)?.fillValueColumn;
-}
-
-export function getSymbolFillCategoryColumn(
-  visualization: VisualizationConfig | null | undefined
-): string | undefined {
-  return getSymbolPrimitive(visualization)?.fillCategoryColumn;
-}
-
-export function getSymbolFillClassification(
-  visualization:
-    | Pick<
-        VisualizationConfig,
-        'symbol' | 'classification' | 'symbolClassification'
-      >
-    | null
-    | undefined
-): ClassificationConfig | undefined {
-  if (!visualization) {
-    return undefined;
-  }
-
-  return getSymbolPrimitive(visualization as VisualizationConfig)
-    ?.fillClassification;
-}
-
-export function getLinePrimitive(
-  visualization: VisualizationConfig | null | undefined
-): LinePrimitiveConfig | undefined {
-  return visualization ? buildLinePrimitiveConfig(visualization) : undefined;
-}
-
-export function getLineThicknessClassification(
-  visualization:
-    | Pick<
-        VisualizationConfig,
-        | 'line'
-        | 'classification'
-        | 'lineClassification'
-        | 'lineThicknessClassification'
-      >
-    | null
-    | undefined
-): ClassificationConfig | undefined {
-  if (!visualization) {
-    return undefined;
-  }
-
-  const line = visualization.line;
-  const usesThicknessClasses = line?.thicknessMode === ThicknessMode.CLASSES;
-
-  return (
-    line?.thicknessClassification ??
-    (usesThicknessClasses
-      ? visualization.lineThicknessClassification
-      : undefined)
-  );
-}
-
-export function getTextPrimitive(
-  visualization: VisualizationConfig | null | undefined
-): TextPrimitiveConfig | undefined {
-  return visualization ? buildTextPrimitiveConfig(visualization) : undefined;
-}
-
-export function getPrimitive(
-  visualization: VisualizationConfig | null | undefined,
-  primitive: PrimitiveFilter | PrimitiveConfigKind
-): PrimitiveConfigMap[PrimitiveConfigKind] | undefined {
-  if (!visualization) {
-    return undefined;
-  }
-
-  switch (resolvePrimitiveKind(primitive)) {
-    case 'symbol':
-      return buildSymbolPrimitiveConfig(visualization);
-    case 'line':
-      return buildLinePrimitiveConfig(visualization);
-    case 'text':
-      return buildTextPrimitiveConfig(visualization);
-    case 'polygon':
-    default:
-      return buildPolygonPrimitiveConfig(visualization);
-  }
-}
-
-export function getEnabledPrimitiveFilters(
-  visualization: VisualizationConfig | null | undefined
-): PrimitiveFilter[] {
-  if (!visualization) {
-    return [];
-  }
-
-  const enabledFilters: PrimitiveFilter[] = [];
-
-  if (buildSymbolPrimitiveConfig(visualization).enabled) {
-    enabledFilters.push(PrimitiveFilterType.POINT);
-  }
-  if (buildLinePrimitiveConfig(visualization).enabled) {
-    enabledFilters.push(PrimitiveFilterType.LINE);
-  }
-  if (buildPolygonPrimitiveConfig(visualization).enabled) {
-    enabledFilters.push(PrimitiveFilterType.POLYGON);
-  }
-  if (buildTextPrimitiveConfig(visualization).enabled) {
-    enabledFilters.push(PrimitiveFilterType.TEXT);
-  }
-
-  return enabledFilters;
-}
-
-export function getPrimitiveValueColumn(
-  visualization: VisualizationConfig | null | undefined,
-  primitive: PrimitiveFilter
-): string | undefined {
-  const resolved = getPrimitive(visualization, primitive);
-  return 'valueColumn' in (resolved ?? {}) ? resolved?.valueColumn : undefined;
-}
-
-export function getPrimitiveCategoryColumn(
-  visualization: VisualizationConfig | null | undefined,
-  primitive: PrimitiveFilter
-): string | undefined {
-  const resolved = getPrimitive(visualization, primitive);
-  return 'categoryColumn' in (resolved ?? {})
-    ? resolved?.categoryColumn
-    : undefined;
-}
-
-export function getPrimitiveSizeColumn(
-  visualization: VisualizationConfig | null | undefined,
-  primitive: PrimitiveFilter
-): string | undefined {
-  switch (primitive) {
-    case PrimitiveFilterType.POINT:
-      return getSymbolPrimitive(visualization)?.sizeColumn;
-    case PrimitiveFilterType.LINE:
-      return getLinePrimitive(visualization)?.sizeColumn;
-    default:
-      return undefined;
-  }
-}
-
-export function getPrimitiveClassification(
-  visualization:
-    | Pick<
-        VisualizationConfig,
-        | 'polygon'
-        | 'symbol'
-        | 'line'
-        | 'text'
-        | 'classification'
-        | 'symbolClassification'
-        | 'lineClassification'
-        | 'textClassification'
-      >
-    | null
-    | undefined,
-  primitive: PrimitiveFilter
-): ClassificationConfig | undefined {
-  if (!visualization) return undefined;
-
-  const resolvedPrimitive = getPrimitive(
-    visualization as VisualizationConfig,
-    primitive
-  );
-  if (primitive === PrimitiveFilterType.POINT) {
-    return resolveSymbolClassification(
-      resolvedPrimitive && 'classification' in resolvedPrimitive
-        ? resolvedPrimitive.classification
-        : undefined,
-      visualization.symbolClassification,
-      visualization.classification
-    );
-  }
-
-  if (resolvedPrimitive && 'classification' in resolvedPrimitive) {
-    return resolvedPrimitive.classification;
-  }
-
-  switch (primitive) {
-    case PrimitiveFilterType.LINE:
-      return visualization.lineClassification ?? visualization.classification;
-    case PrimitiveFilterType.TEXT:
-      return visualization.textClassification ?? visualization.classification;
-    case PrimitiveFilterType.POLYGON:
-    default:
-      return visualization.classification;
-  }
-}
+import {
+  buildLinePrimitiveConfig,
+  buildPolygonPrimitiveConfig,
+  buildSymbolPrimitiveConfig,
+  buildTextPrimitiveConfig,
+  getPrimitive,
+  normalizeVisualizationConfig,
+  resolvePrimitiveKind
+} from './visualization-normalize';
+import {
+  resolveDuplicatedVisualizationOrigin,
+  resolveNextVisualizationOrigin
+} from './visualization-origin';
+import { buildVisualizationPreset } from './visualization-presets';
+export {
+  DEFAULT_CATEGORICAL_COLORS,
+  resolveVisualizationPreset
+} from './visualization-presets';
+export {
+  getEnabledPrimitiveFilters,
+  getLinePrimitive,
+  getLineThicknessClassification,
+  getPolygonPrimitive,
+  getPrimitive,
+  getPrimitiveCategoryColumn,
+  getPrimitiveClassification,
+  getPrimitiveSizeColumn,
+  getPrimitiveValueColumn,
+  getSymbolFillCategoryColumn,
+  getSymbolFillClassification,
+  getSymbolFillValueColumn,
+  getSymbolPrimitive,
+  getTextPrimitive,
+  resolveAllowedPrimitiveFilters
+} from './visualization-normalize';
 
 interface SerializedVisualizationSettings {
   visualizations: VisualizationConfig[];
@@ -1281,19 +211,6 @@ export interface VisualizationStore {
 const getDefaultVisualizationName = () => m.default_visualization_name();
 const getDatasetNotFoundError = () => m.dataset_not_found_error();
 
-const DEFAULT_SYMBOL_SIZE = VISUALIZATION_DEFAULTS.symbolSize;
-const DEFAULT_SYMBOL_MIN_SIZE = 5;
-const DEFAULT_SYMBOL_MAX_SIZE = VISUALIZATION_DEFAULTS.symbolMaxSize;
-const DEFAULT_SYMBOL_OPACITY = VISUALIZATION_DEFAULTS.symbolOpacity / 100;
-const DEFAULT_LABEL_OPACITY = 0;
-const DEFAULT_TEXT_OPACITY = 0;
-
-const DEFAULT_MISSING_DATA_COLOR = '#c6c6c6';
-
-const DEFAULT_CHOROPLETH_COLORS = ['#eff3ff', '#bdd7e7', '#6baed6', '#08519c'];
-
-export const DEFAULT_CATEGORICAL_COLORS = [...FIGMA_DEFAULT_CATEGORICAL_COLORS];
-
 const VISUALIZATION_MAPPING_KEYS = [
   'valueColumn',
   'categoryColumn',
@@ -1313,523 +230,12 @@ const CLASSIFICATION_DEPENDENT_MAPPING_KEYS = new Set([
 
 type VisualizationMappingKey = (typeof VISUALIZATION_MAPPING_KEYS)[number];
 
-type GeometryFamily = 'point' | 'line' | 'polygon' | 'unknown';
-
-const GEOMETRY_FAMILY_KEYWORDS: Record<
-  Exclude<GeometryFamily, 'unknown'>,
-  readonly string[]
-> = {
-  polygon: ['polygon', 'multisurface'],
-  line: ['line', 'curve'],
-  point: ['point']
-};
-
-const GEOMETRY_COLLECTION_KEYWORD =
-  GEOJSON_TYPE.GEOMETRY_COLLECTION.toLowerCase();
-
 function incrementVersion(
   state: VisualizationState,
   priority: SavePriorityType = SavePriority.DEBOUNCED
 ): void {
   state.version++;
   persistenceRegistry.notifyChange('visualization', priority);
-}
-
-function getDefaultStyle(
-  type: VisualizationType
-): VisualizationConfig['style'] {
-  const textOverlayDefaults: VisualizationConfig['style'] = {
-    labelColor: DEFAULT_COLORS.text,
-    labelOpacity: DEFAULT_LABEL_OPACITY,
-    labelFontFamily: CARTOGRAPHIC_FONT_FAMILY,
-    labelBold: false,
-    labelItalic: false,
-    labelCollisionDetection: true,
-    textColor: DEFAULT_COLORS.text,
-    textOpacity: DEFAULT_TEXT_OPACITY,
-    textFontFamily: CARTOGRAPHIC_FONT_FAMILY,
-    textCollisionDetection: true
-  };
-
-  switch (type) {
-    case VisualizationType.CHOROPLETH:
-      return {
-        ...textOverlayDefaults,
-        fillOpacity: DEFAULT_STYLE_OPACITY.FILL_HIGH,
-        strokeColor: DEFAULT_STROKE_COLOR,
-        strokeWidth: DEFAULT_STROKE_WIDTH.THIN,
-        strokeOpacity: DEFAULT_STYLE_OPACITY.STROKE
-      };
-
-    case VisualizationType.PROPORTIONAL:
-      return {
-        ...textOverlayDefaults,
-        symbolFillColor: DEFAULT_FILL_COLOR,
-        fillOpacity: DEFAULT_STYLE_OPACITY.FILL_LOW,
-        strokeColor: DEFAULT_STROKE_COLOR,
-        strokeWidth: DEFAULT_STROKE_WIDTH.MEDIUM,
-        strokeOpacity: DEFAULT_STYLE_OPACITY.STROKE
-      };
-
-    case VisualizationType.CATEGORICAL:
-      return {
-        ...textOverlayDefaults,
-        fillOpacity: DEFAULT_STYLE_OPACITY.FILL_HIGH,
-        strokeColor: DEFAULT_STROKE_COLOR,
-        strokeWidth: DEFAULT_STROKE_WIDTH.THIN,
-        strokeOpacity: DEFAULT_STYLE_OPACITY.STROKE
-      };
-
-    default:
-      return {
-        ...textOverlayDefaults,
-        fillColor: DEFAULT_FILL_COLOR,
-        fillOpacity: DEFAULT_STYLE_OPACITY.FILL,
-        strokeColor: DEFAULT_STROKE_COLOR,
-        strokeWidth: DEFAULT_STROKE_WIDTH.THIN,
-        strokeOpacity: DEFAULT_STYLE_OPACITY.STROKE
-      };
-  }
-}
-
-function getDefaultMapping(
-  type: VisualizationType,
-  dataset: ProcessedDataset | DatasetResult
-): VisualizationConfig['mapping'] {
-  const geometryColumn = dataset.columns.find(
-    (column) => column.type === COLUMN_TYPE_GEOMETRY
-  );
-  const firstNumericColumn = findPreferredNumericColumn(dataset.columns, {
-    allowIdLikeFallback: true,
-    excludeLikelyCoordinates: true
-  });
-  const secondNumericColumn = findPreferredNumericColumn(dataset.columns, {
-    exclude: [firstNumericColumn],
-    allowIdLikeFallback: true,
-    excludeLikelyCoordinates: true
-  });
-  const firstTextColumn = findPreferredTextColumn(dataset.columns);
-
-  const mapping: VisualizationConfig['mapping'] = {
-    geometryColumn: geometryColumn?.name
-  };
-
-  switch (type) {
-    case VisualizationType.CHOROPLETH:
-      mapping.valueColumn = firstNumericColumn;
-      break;
-
-    case VisualizationType.PROPORTIONAL:
-      mapping.sizeColumn = firstNumericColumn;
-      break;
-
-    case VisualizationType.CATEGORICAL:
-      mapping.categoryColumn = firstTextColumn;
-      break;
-
-    case VisualizationType.BIVARIATE:
-      mapping.sizeColumn = firstNumericColumn;
-      mapping.valueColumn = secondNumericColumn;
-      break;
-  }
-
-  return mapping;
-}
-
-function getDefaultClassification(
-  type: VisualizationType
-): ClassificationConfig | undefined {
-  if (
-    type === VisualizationType.CHOROPLETH ||
-    type === VisualizationType.BIVARIATE
-  ) {
-    return {
-      method: ClassificationMethod.KMEANS,
-      classes: DEFAULT_DISCRETIZATION_CLASS_COUNT,
-      colors: [...DEFAULT_CHOROPLETH_COLORS]
-    };
-  }
-
-  if (type === VisualizationType.CATEGORICAL) {
-    return {
-      method: ClassificationMethod.MANUAL,
-      classes: 0,
-      colors: [...DEFAULT_CATEGORICAL_COLORS]
-    };
-  }
-
-  return undefined;
-}
-
-function getDefaultModes(type: VisualizationType): VisualizationModes {
-  switch (type) {
-    case VisualizationType.PROPORTIONAL:
-      return {
-        symbol: SymbolMode.PROPORTIONAL,
-        fill: FillMode.UNIQUE,
-        stroke: StrokeMode.UNIQUE
-      };
-    case VisualizationType.CATEGORICAL:
-      return {
-        symbol: SymbolMode.CATEGORIES,
-        fill: FillMode.CATEGORIES,
-        stroke: StrokeMode.NONE
-      };
-    case VisualizationType.CHOROPLETH:
-      return {
-        symbol: SymbolMode.UNIQUE,
-        fill: FillMode.CLASSES,
-        stroke: StrokeMode.UNIQUE
-      };
-    case VisualizationType.BIVARIATE:
-      return {
-        symbol: SymbolMode.PROPORTIONAL,
-        fill: FillMode.CLASSES,
-        stroke: StrokeMode.NONE
-      };
-    default:
-      return {
-        symbol: SymbolMode.UNIQUE,
-        fill: FillMode.UNIQUE,
-        stroke: StrokeMode.NONE
-      };
-  }
-}
-
-export const SPARSE_POLYGON_THRESHOLD = 500;
-export const SPARSE_SYMBOL_FLOOR_PX = 10;
-export const DENSE_SYMBOL_FLOOR_PX = 6;
-const SYMBOL_DENSITY_COEFFICIENT = 140;
-
-export function resolveProportionalSymbolMaxSize(rowCount: number): number {
-  const safeRowCount = Math.max(rowCount, 1);
-  const floor =
-    safeRowCount < SPARSE_POLYGON_THRESHOLD
-      ? SPARSE_SYMBOL_FLOOR_PX
-      : DENSE_SYMBOL_FLOOR_PX;
-  return Math.max(
-    floor,
-    Math.min(
-      VISUALIZATION_DEFAULTS.symbolMaxSize,
-      Math.round(SYMBOL_DENSITY_COEFFICIENT / Math.sqrt(safeRowCount))
-    )
-  );
-}
-
-export function resolveProportionalSymbolMinSize(maxSize: number): number {
-  return Math.max(1, Math.min(4, Math.round(maxSize / 4)));
-}
-
-function getDefaultSymbols(
-  type: VisualizationType,
-  dataset: ProcessedDataset | DatasetResult
-): VisualizationSymbols {
-  const geometryType =
-    typeof dataset.geometry === 'string'
-      ? dataset.geometry
-      : dataset.geometry?.type;
-  const isPolygonGeometry =
-    geometryType?.toLowerCase().includes('polygon') ?? false;
-  const rowCount = 'rowCount' in dataset ? (dataset.rowCount ?? 0) : 0;
-  const densityAdjustedMaxSize =
-    isPolygonGeometry &&
-    (type === VisualizationType.PROPORTIONAL ||
-      type === VisualizationType.BIVARIATE)
-      ? resolveProportionalSymbolMaxSize(rowCount)
-      : DEFAULT_SYMBOL_MAX_SIZE;
-  const minSize = isPolygonGeometry
-    ? resolveProportionalSymbolMinSize(densityAdjustedMaxSize)
-    : DEFAULT_SYMBOL_MIN_SIZE;
-
-  return {
-    type: ShapeType.CIRCLE,
-    size: DEFAULT_SYMBOL_SIZE,
-    minSize,
-    maxSize: densityAdjustedMaxSize,
-    barWidth: DEFAULT_LINEAR_SYMBOL_BAR_WIDTH,
-    sizeScale:
-      type === VisualizationType.PROPORTIONAL
-        ? ScaleType.SQRT
-        : ScaleType.LINEAR,
-    opacity: DEFAULT_SYMBOL_OPACITY
-  };
-}
-
-function resolveGeometryFamilyFromDataset(
-  dataset: ProcessedDataset | DatasetResult
-): GeometryFamily {
-  const geometryType =
-    typeof dataset.geometry === 'string'
-      ? dataset.geometry
-      : dataset.geometry?.type;
-  const normalized = geometryType?.toLowerCase() ?? '';
-
-  if (normalized === GEOMETRY_COLLECTION_KEYWORD) {
-    return 'unknown';
-  }
-
-  for (const [family, keywords] of Object.entries(GEOMETRY_FAMILY_KEYWORDS)) {
-    if (keywords.some((keyword) => normalized.includes(keyword))) {
-      return family as Exclude<GeometryFamily, 'unknown'>;
-    }
-  }
-
-  if (
-    'joinedBasemap' in dataset &&
-    typeof dataset.joinedBasemap === 'string' &&
-    dataset.joinedBasemap.length > 0
-  ) {
-    return 'polygon';
-  }
-
-  if (datasetHasGpsPointColumns(dataset)) {
-    return 'point';
-  }
-
-  return 'unknown';
-}
-
-function datasetHasGpsPointColumns(
-  dataset: ProcessedDataset | DatasetResult
-): boolean {
-  const columns = dataset.geoDetection?.geoColumns ?? [];
-  if (columns.length === 0) {
-    return false;
-  }
-
-  const detectedTypes = new Set(columns.map((column) => column.type));
-  if (detectedTypes.has(GEO_COLUMN_TYPE.COORDINATES)) {
-    return true;
-  }
-
-  return (
-    detectedTypes.has(GEO_COLUMN_TYPE.LATITUDE) &&
-    detectedTypes.has(GEO_COLUMN_TYPE.LONGITUDE)
-  );
-}
-
-export function resolveAllowedPrimitiveFilters(
-  _type: VisualizationType,
-  dataset: ProcessedDataset | DatasetResult
-): PrimitiveFilter[] {
-  switch (resolveGeometryFamilyFromDataset(dataset)) {
-    case 'polygon':
-      return [
-        PrimitiveFilterType.POINT,
-        PrimitiveFilterType.POLYGON,
-        PrimitiveFilterType.TEXT
-      ];
-
-    case 'line':
-      return [
-        PrimitiveFilterType.POINT,
-        PrimitiveFilterType.LINE,
-        PrimitiveFilterType.TEXT
-      ];
-
-    case 'point':
-      return [PrimitiveFilterType.POINT, PrimitiveFilterType.TEXT];
-
-    default:
-      return [];
-  }
-}
-
-function resolveDefaultPrimitiveFilters(
-  type: VisualizationType,
-  dataset: ProcessedDataset | DatasetResult
-): PrimitiveFilter[] {
-  switch (resolveGeometryFamilyFromDataset(dataset)) {
-    case 'polygon':
-      if (
-        type === VisualizationType.PROPORTIONAL ||
-        type === VisualizationType.BIVARIATE
-      ) {
-        return [PrimitiveFilterType.POINT, PrimitiveFilterType.POLYGON];
-      }
-
-      return [PrimitiveFilterType.POLYGON];
-
-    case 'line':
-      return [PrimitiveFilterType.LINE];
-
-    case 'point':
-      return [PrimitiveFilterType.POINT];
-
-    default:
-      return [];
-  }
-}
-
-function sanitizePrimitiveFilters(
-  filters: PrimitiveFilter[] | undefined,
-  allowedFilters: PrimitiveFilter[],
-  defaultFilters: PrimitiveFilter[]
-): PrimitiveFilter[] {
-  if (filters === undefined) {
-    return [...defaultFilters];
-  }
-
-  const sourceFilters = filters;
-  const sanitized = [...new Set(sourceFilters)].filter((filter) =>
-    allowedFilters.includes(filter)
-  );
-
-  return sanitized;
-}
-
-function sanitizePrimitiveOrder(
-  order: PrimitiveFilter[] | undefined,
-  allowedFilters: PrimitiveFilter[]
-): PrimitiveFilter[] {
-  const sourceOrder = order && order.length > 0 ? order : ALL_PRIMITIVE_FILTERS;
-  const sanitized = [
-    ...new Set([...sourceOrder, ...ALL_PRIMITIVE_FILTERS])
-  ].filter((filter) => allowedFilters.includes(filter));
-
-  return sanitized.length > 0 ? sanitized : [...allowedFilters];
-}
-
-function sanitizeDataFilters(
-  dataFilters: VizDataFilter[] | undefined,
-  allowedFilters: PrimitiveFilter[]
-): VizDataFilter[] | undefined {
-  if (!dataFilters) {
-    return undefined;
-  }
-
-  return dataFilters.filter(
-    (filter) =>
-      !filter.primitiveType ||
-      filter.primitiveType === PrimitiveFilterType.TEXT ||
-      allowedFilters.includes(filter.primitiveType)
-  );
-}
-
-function normalizeLegacyLabelStyle(
-  visualization: VisualizationConfig
-): VisualizationConfig['style'] {
-  const style = { ...visualization.style };
-  const labelOpacity = style.labelOpacity ?? 0;
-  const textOpacity = style.textOpacity ?? 0;
-  const hasLegacyLabelLayer =
-    labelOpacity > 0 && Boolean(visualization.mapping.labelColumn);
-  const hasActiveTextLayer = textOpacity > 0;
-
-  if (hasLegacyLabelLayer && !hasActiveTextLayer) {
-    style.textOpacity = labelOpacity;
-    style.textColor = style.labelColor ?? style.textColor;
-    style.textFontFamily = style.labelFontFamily ?? style.textFontFamily;
-    style.textSize = style.labelSize ?? style.textSize;
-    style.textBold = style.labelBold ?? style.textBold;
-    style.textItalic = style.labelItalic ?? style.textItalic;
-    style.textAlign = style.labelAlign ?? style.textAlign;
-    style.textHalo = style.labelHalo ?? style.textHalo;
-    style.textHaloColor = style.labelHaloColor ?? style.textHaloColor;
-    style.textHaloWidth = style.labelHaloWidth ?? style.textHaloWidth;
-    style.textCollisionDetection =
-      style.labelCollisionDetection ?? style.textCollisionDetection;
-    style.textDxpMasking = style.labelDxpMasking ?? style.textDxpMasking;
-  }
-
-  style.labelOpacity = 0;
-
-  return style;
-}
-
-function withPrimitiveConfigs(
-  visualization: VisualizationConfig
-): VisualizationConfig {
-  const style = visualization.style;
-  const primitiveFilters =
-    visualization.primitiveFilters ?? getEnabledPrimitiveFilters(visualization);
-
-  const nextVisualization: VisualizationConfig = {
-    ...visualization,
-    primitiveFilters,
-    polygon: buildPolygonPrimitiveConfig({
-      ...visualization,
-      style,
-      primitiveFilters
-    }),
-    symbol: buildSymbolPrimitiveConfig({
-      ...visualization,
-      style,
-      primitiveFilters
-    }),
-    line: buildLinePrimitiveConfig({
-      ...visualization,
-      style,
-      primitiveFilters
-    }),
-    text: buildTextPrimitiveConfig({
-      ...visualization,
-      style,
-      primitiveFilters
-    })
-  };
-
-  return nextVisualization;
-}
-
-function normalizeVisualizationConfig(
-  visualization: VisualizationConfig,
-  dataset: ProcessedDataset | DatasetResult
-): VisualizationConfig {
-  const allowedFilters = resolveAllowedPrimitiveFilters(
-    visualization.type,
-    dataset
-  );
-  const defaultFilters = resolveDefaultPrimitiveFilters(
-    visualization.type,
-    dataset
-  );
-
-  const symbolMode = visualization.modes?.symbol ?? SymbolMode.UNIQUE;
-  const proportionalType =
-    visualization.modes?.proportionalType ?? ProportionalType.SINGLE;
-  const allowedShapes = availableShapesForSymbolMode(
-    symbolMode,
-    proportionalType
-  );
-  const currentShape = visualization.symbols?.type;
-  const normalizedShape =
-    currentShape && allowedShapes.includes(currentShape)
-      ? currentShape
-      : (allowedShapes[0] ?? ShapeType.CIRCLE);
-  const normalizedSymbols = visualization.symbols
-    ? { ...visualization.symbols, type: normalizedShape }
-    : visualization.symbols;
-  const normalizedStyle = normalizeLegacyLabelStyle(visualization);
-  const primitiveBackfilledVisualization = withPrimitiveConfigs({
-    ...visualization,
-    style: normalizedStyle,
-    symbols: normalizedSymbols
-  });
-  const enabledPrimitiveFilters = getEnabledPrimitiveFilters(
-    primitiveBackfilledVisualization
-  );
-  const primitiveFilters = sanitizePrimitiveFilters(
-    visualization.primitiveFilters ?? enabledPrimitiveFilters,
-    allowedFilters,
-    defaultFilters
-  );
-  const primitiveConfigVisualization = withPrimitiveConfigs({
-    ...primitiveBackfilledVisualization,
-    primitiveFilters
-  });
-
-  return {
-    ...primitiveConfigVisualization,
-    style: normalizedStyle,
-    symbols: normalizedSymbols,
-    primitiveFilters,
-    primitiveOrder: sanitizePrimitiveOrder(
-      visualization.primitiveOrder,
-      allowedFilters
-    ),
-    dataFilters: sanitizeDataFilters(visualization.dataFilters, allowedFilters)
-  };
 }
 
 function getNormalizedVisualization(
@@ -1842,313 +248,6 @@ function getNormalizedVisualization(
   }
 
   return normalizeVisualizationConfig(visualization, dataset);
-}
-
-function getDefaultPrimitiveFilters(
-  type: VisualizationType,
-  dataset: ProcessedDataset | DatasetResult
-): PrimitiveFilter[] {
-  return resolveDefaultPrimitiveFilters(type, dataset);
-}
-
-const ORIGIN_TRACKED_UPDATE_KEYS = [
-  'polygon',
-  'symbol',
-  'line',
-  'text',
-  'modes',
-  'primitiveFilters',
-  'style',
-  'mapping',
-  'classification',
-  'symbolClassification',
-  'lineClassification',
-  'lineThicknessClassification',
-  'textClassification',
-  'symbols',
-  'missingData',
-  'dataFilters'
-] as const;
-
-const DERIVED_CLASSIFICATION_UPDATE_KEYS = new Set<keyof ClassificationConfig>([
-  'breaks',
-  'counts',
-  'colors',
-  'labels'
-]);
-
-function isDerivedClassificationUpdate(
-  currentClassification: VisualizationConfig['classification'],
-  classification: Partial<ClassificationConfig> | undefined
-): boolean {
-  if (!classification) {
-    return false;
-  }
-
-  const updateKeys = (
-    Object.keys(classification) as Array<keyof ClassificationConfig>
-  ).filter((key) => {
-    const currentValue = currentClassification?.[key];
-    const nextValue = classification[key];
-
-    return JSON.stringify(currentValue ?? null) !== JSON.stringify(nextValue);
-  });
-
-  return (
-    updateKeys.length > 0 &&
-    updateKeys.every((key) => DERIVED_CLASSIFICATION_UPDATE_KEYS.has(key))
-  );
-}
-
-const CLASSIFICATION_LIKE_UPDATE_KEYS = new Set<
-  keyof Pick<
-    VisualizationConfig,
-    | 'classification'
-    | 'symbolClassification'
-    | 'lineClassification'
-    | 'lineThicknessClassification'
-    | 'textClassification'
-  >
->([
-  'classification',
-  'symbolClassification',
-  'lineClassification',
-  'lineThicknessClassification',
-  'textClassification'
-]);
-
-function isClassificationLikeUpdateKey(
-  key: (typeof ORIGIN_TRACKED_UPDATE_KEYS)[number]
-): key is
-  | 'classification'
-  | 'symbolClassification'
-  | 'lineClassification'
-  | 'lineThicknessClassification'
-  | 'textClassification' {
-  return CLASSIFICATION_LIKE_UPDATE_KEYS.has(
-    key as
-      | 'classification'
-      | 'symbolClassification'
-      | 'lineClassification'
-      | 'lineThicknessClassification'
-      | 'textClassification'
-  );
-}
-
-function isPrimitiveConfigUpdateKey(
-  key: (typeof ORIGIN_TRACKED_UPDATE_KEYS)[number]
-): key is PrimitiveConfigKind {
-  return (
-    key === 'polygon' || key === 'symbol' || key === 'line' || key === 'text'
-  );
-}
-
-function isDerivedPrimitiveClassificationUpdate(
-  currentPrimitive: PrimitiveConfigMap[PrimitiveConfigKind] | undefined,
-  nextPrimitive: PrimitiveConfigMap[PrimitiveConfigKind] | undefined
-): boolean {
-  if (!currentPrimitive || !nextPrimitive) {
-    return false;
-  }
-
-  const updateKeys = Object.keys(nextPrimitive).filter((key) => {
-    const typedKey = key as keyof typeof nextPrimitive;
-    return (
-      JSON.stringify(currentPrimitive[typedKey] ?? null) !==
-      JSON.stringify(nextPrimitive[typedKey] ?? null)
-    );
-  });
-
-  if (updateKeys.length !== 1) {
-    return false;
-  }
-
-  const [onlyKey] = updateKeys;
-  if (
-    onlyKey === 'classification' &&
-    isDerivedClassificationUpdate(
-      currentPrimitive.classification,
-      nextPrimitive.classification
-    )
-  ) {
-    return true;
-  }
-
-  return (
-    onlyKey === 'thicknessClassification' &&
-    'thicknessClassification' in currentPrimitive &&
-    'thicknessClassification' in nextPrimitive &&
-    isDerivedClassificationUpdate(
-      currentPrimitive.thicknessClassification,
-      nextPrimitive.thicknessClassification
-    )
-  );
-}
-
-function touchesVisualizationSemantics(
-  visualization: VisualizationConfig,
-  updates: Partial<VisualizationConfig>
-): boolean {
-  return ORIGIN_TRACKED_UPDATE_KEYS.some((key) => {
-    if (!Object.prototype.hasOwnProperty.call(updates, key)) {
-      return false;
-    }
-
-    if (isClassificationLikeUpdateKey(key)) {
-      const currentClassification =
-        key === 'classification'
-          ? visualization.classification
-          : key === 'symbolClassification'
-            ? visualization.symbolClassification
-            : key === 'lineClassification'
-              ? visualization.lineClassification
-              : key === 'lineThicknessClassification'
-                ? visualization.lineThicknessClassification
-                : visualization.textClassification;
-
-      const nextClassification = updates[key] as
-        | Partial<ClassificationConfig>
-        | undefined;
-
-      if (
-        isDerivedClassificationUpdate(currentClassification, nextClassification)
-      ) {
-        return false;
-      }
-    }
-
-    if (isPrimitiveConfigUpdateKey(key)) {
-      const currentPrimitive = visualization[key];
-      const nextPrimitive = updates[key] as
-        | PrimitiveConfigMap[PrimitiveConfigKind]
-        | undefined;
-
-      if (
-        isDerivedPrimitiveClassificationUpdate(currentPrimitive, nextPrimitive)
-      ) {
-        return false;
-      }
-    }
-
-    return true;
-  });
-}
-
-function resolveNextVisualizationOrigin(
-  visualization: VisualizationConfig,
-  updates: Partial<VisualizationConfig>
-): VisualizationConfig['origin'] {
-  // An explicit `origin` in the update wins outright. This is also the
-  // mechanism the derived/automatic post-suggestion mutations use to stay
-  // pinned: callers pass `preserveOrigin` (auto-columns, classification
-  // defaults, breaks/colour recompute), which spreads the CURRENT origin into
-  // `updates` so a freshly-applied suggestion is never mislabelled `custom`.
-  if (Object.prototype.hasOwnProperty.call(updates, 'origin')) {
-    return updates.origin;
-  }
-
-  const currentMode = getVisualizationOriginMode(visualization);
-  if (
-    currentMode !== 'auto-suggestion' &&
-    currentMode !== 'manual-suggestion'
-  ) {
-    return visualization.origin;
-  }
-
-  if (!touchesVisualizationSemantics(visualization, updates)) {
-    return visualization.origin;
-  }
-
-  return {
-    mode: 'custom',
-    ...(visualization.origin?.suggestionKey
-      ? { suggestionKey: visualization.origin.suggestionKey }
-      : {}),
-    ...(visualization.origin?.restoreState
-      ? { restoreState: deepClone(visualization.origin.restoreState) }
-      : {}),
-    ...(visualization.origin?.appliedSuggestionState
-      ? {
-          appliedSuggestionState: deepClone(
-            visualization.origin.appliedSuggestionState
-          )
-        }
-      : {})
-  };
-}
-
-function resolveDuplicatedVisualizationOrigin(
-  origin: VisualizationConfig['origin']
-): VisualizationConfig['origin'] {
-  if (!origin) {
-    return undefined;
-  }
-
-  if (
-    origin.mode === 'auto-suggestion' ||
-    origin.mode === 'manual-suggestion'
-  ) {
-    return {
-      mode: 'custom',
-      ...(origin.suggestionKey ? { suggestionKey: origin.suggestionKey } : {})
-    };
-  }
-
-  return {
-    mode: origin.mode,
-    ...(origin.suggestionKey ? { suggestionKey: origin.suggestionKey } : {})
-  };
-}
-
-function buildVisualizationPreset(
-  type: VisualizationType,
-  dataset: ProcessedDataset | DatasetResult
-): VisualizationPreset {
-  const preset: VisualizationPreset = {
-    type,
-    modes: getDefaultModes(type),
-    primitiveFilters: getDefaultPrimitiveFilters(type, dataset),
-    style: getDefaultStyle(type),
-    mapping: getDefaultMapping(type, dataset),
-    classification: getDefaultClassification(type),
-    symbols: getDefaultSymbols(type, dataset),
-    missingData: getDefaultMissingData()
-  };
-
-  const normalizedPreset = withPrimitiveConfigs({
-    id: '__preset__',
-    name: '__preset__',
-    datasetId: dataset.id,
-    enabled: true,
-    ...preset
-  } as VisualizationConfig);
-
-  return {
-    ...preset,
-    polygon: normalizedPreset.polygon,
-    symbol: normalizedPreset.symbol,
-    line: normalizedPreset.line,
-    text: normalizedPreset.text
-  };
-}
-
-export function resolveVisualizationPreset(
-  type: VisualizationType,
-  dataset: ProcessedDataset | DatasetResult
-): VisualizationPreset {
-  return buildVisualizationPreset(type, dataset);
-}
-
-function getDefaultMissingData(): MissingDataConfig {
-  return {
-    show: true,
-    shape: MissingDataShape.CIRCLE,
-    size: 2,
-    color: DEFAULT_MISSING_DATA_COLOR,
-    pattern: false,
-    dashed: false,
-    dashedPattern: BasemapDottedPattern.DOTS
-  };
 }
 
 function createVisualizationStore(): VisualizationStore {
@@ -2211,7 +310,9 @@ function createVisualizationStore(): VisualizationStore {
   ): VisualizationConfig {
     const dataset = findById(datasetsStore.datasets, datasetId);
     if (!dataset) {
-      throw new Error(getDatasetNotFoundError());
+      throw new DataValidationError(getDatasetNotFoundError(), 'datasetId', {
+        datasetId
+      });
     }
 
     const visualization = getNormalizedVisualization({
@@ -3282,15 +1383,340 @@ function createVisualizationStore(): VisualizationStore {
 
 export const visualizationStore = createVisualizationStore();
 
+type ClassificationPropertyKey =
+  | 'classification'
+  | 'strokeClassification'
+  | 'fillClassification'
+  | 'thicknessClassification';
+
+type ClassificationContainer = Partial<
+  Record<ClassificationPropertyKey, ClassificationConfig | undefined>
+>;
+
+const ROOT_CLASSIFICATION_KEYS = [
+  'classification',
+  'symbolClassification',
+  'lineClassification',
+  'lineThicknessClassification',
+  'textClassification'
+] as const;
+
+type RootClassificationPropertyKey = (typeof ROOT_CLASSIFICATION_KEYS)[number];
+
+type RootClassificationContainer = Partial<
+  Record<RootClassificationPropertyKey, ClassificationConfig | undefined>
+>;
+
+function stripClassificationCounts(
+  classification: ClassificationConfig | undefined
+): ClassificationConfig | undefined {
+  if (!classification?.counts) {
+    return classification;
+  }
+
+  // Strip query-derived counts while preserving manual/custom fields.
+  const { counts: _counts, ...persistentClassification } = classification;
+  return persistentClassification;
+}
+
+function stripClassificationProperties<T extends object>(
+  value: T | undefined,
+  keys: readonly ClassificationPropertyKey[]
+): T | undefined {
+  if (!value) {
+    return value;
+  }
+
+  const container = value as T & ClassificationContainer;
+  let next: (T & ClassificationContainer) | undefined;
+
+  for (const key of keys) {
+    const stripped = stripClassificationCounts(container[key]);
+    if (stripped !== container[key]) {
+      next ??= { ...container };
+      next[key] = stripped;
+    }
+  }
+
+  return next ?? value;
+}
+
+function stripRootClassificationProperties(
+  visualization: VisualizationConfig
+): VisualizationConfig {
+  const container = visualization as VisualizationConfig &
+    RootClassificationContainer;
+  let next: (VisualizationConfig & RootClassificationContainer) | undefined;
+
+  for (const key of ROOT_CLASSIFICATION_KEYS) {
+    const stripped = stripClassificationCounts(container[key]);
+    if (stripped !== container[key]) {
+      next ??= { ...container };
+      next[key] = stripped;
+    }
+  }
+
+  return next ?? visualization;
+}
+
+function stripModeStateClassifications<K extends string, T extends object>(
+  states: Partial<Record<K, T>> | undefined,
+  keys: readonly ClassificationPropertyKey[]
+): Partial<Record<K, T>> | undefined {
+  if (!states) {
+    return states;
+  }
+
+  let changed = false;
+  const strippedEntries = (
+    Object.entries(states) as Array<[K, T | undefined]>
+  ).map(([mode, state]) => {
+    const strippedState = stripClassificationProperties(state, keys);
+    if (strippedState !== state) {
+      changed = true;
+    }
+    return [mode, strippedState] as const;
+  });
+
+  return changed
+    ? (Object.fromEntries(strippedEntries) as Partial<Record<K, T>>)
+    : states;
+}
+
+function stripPolygonDerivedSerialization(
+  polygon: PolygonPrimitiveConfig | undefined
+): PolygonPrimitiveConfig | undefined {
+  return stripClassificationProperties(polygon, [
+    'classification',
+    'strokeClassification'
+  ]);
+}
+
+function stripSymbolDerivedSerialization(
+  symbol: SymbolPrimitiveConfig | undefined
+): SymbolPrimitiveConfig | undefined {
+  const stripped = stripClassificationProperties(symbol, [
+    'classification',
+    'fillClassification',
+    'strokeClassification'
+  ]);
+
+  const modeStates = stripModeStateClassifications(stripped?.modeStates, [
+    'classification',
+    'fillClassification',
+    'strokeClassification'
+  ]);
+
+  return modeStates !== stripped?.modeStates && stripped
+    ? { ...stripped, modeStates }
+    : stripped;
+}
+
+function stripLineDerivedSerialization(
+  line: LinePrimitiveConfig | undefined
+): LinePrimitiveConfig | undefined {
+  let stripped = stripClassificationProperties(line, [
+    'classification',
+    'thicknessClassification'
+  ]);
+
+  const colorModeStates = stripModeStateClassifications(
+    stripped?.colorModeStates,
+    ['classification']
+  );
+  if (colorModeStates !== stripped?.colorModeStates && stripped) {
+    stripped = { ...stripped, colorModeStates };
+  }
+
+  const thicknessModeStates = stripModeStateClassifications(
+    stripped?.thicknessModeStates,
+    ['thicknessClassification']
+  );
+
+  return thicknessModeStates !== stripped?.thicknessModeStates && stripped
+    ? { ...stripped, thicknessModeStates }
+    : stripped;
+}
+
+function stripTextBackgroundDerivedSerialization(
+  background: TextBackgroundConfig
+): TextBackgroundConfig {
+  return (
+    stripClassificationProperties(background, [
+      'classification',
+      'strokeClassification'
+    ]) ?? background
+  );
+}
+
+function stripTextDerivedSerialization(
+  text: TextPrimitiveConfig | undefined
+): TextPrimitiveConfig | undefined {
+  let stripped = stripClassificationProperties(text, ['classification']);
+
+  const colorModeStates = stripModeStateClassifications(
+    stripped?.colorModeStates,
+    ['classification']
+  );
+  if (colorModeStates !== stripped?.colorModeStates && stripped) {
+    stripped = { ...stripped, colorModeStates };
+  }
+
+  const sizeModeStates = stripModeStateClassifications(
+    stripped?.sizeModeStates,
+    ['classification']
+  );
+  if (sizeModeStates !== stripped?.sizeModeStates && stripped) {
+    stripped = { ...stripped, sizeModeStates };
+  }
+
+  if (stripped) {
+    const background = stripTextBackgroundDerivedSerialization(
+      stripped.background
+    );
+    if (background !== stripped.background) {
+      stripped = { ...stripped, background };
+    }
+  }
+
+  return stripped;
+}
+
+function stripVisualizationRestoreSnapshotDerivedSerialization(
+  snapshot: VisualizationRestoreSnapshot
+): VisualizationRestoreSnapshot {
+  let next =
+    stripClassificationProperties(snapshot, ['classification']) ?? snapshot;
+
+  const polygon = stripPolygonDerivedSerialization(next.polygon);
+  if (polygon !== next.polygon) {
+    next = { ...next, polygon };
+  }
+
+  const symbol = stripSymbolDerivedSerialization(next.symbol);
+  if (symbol !== next.symbol) {
+    next = { ...next, symbol };
+  }
+
+  const line = stripLineDerivedSerialization(next.line);
+  if (line !== next.line) {
+    next = { ...next, line };
+  }
+
+  const text = stripTextDerivedSerialization(next.text);
+  if (text !== next.text) {
+    next = { ...next, text };
+  }
+
+  return next;
+}
+
+function stripVisualizationOriginDerivedSerialization(
+  origin: VisualizationOrigin | undefined
+): VisualizationOrigin | undefined {
+  if (!origin) {
+    return origin;
+  }
+
+  let next: VisualizationOrigin | undefined;
+
+  if (origin.restoreState) {
+    const restoreVisualization =
+      stripVisualizationRestoreSnapshotDerivedSerialization(
+        origin.restoreState.visualization
+      );
+    if (restoreVisualization !== origin.restoreState.visualization) {
+      next = {
+        ...origin,
+        restoreState: {
+          ...origin.restoreState,
+          visualization: restoreVisualization
+        }
+      };
+    }
+  }
+
+  if (origin.appliedSuggestionState) {
+    const appliedVisualization =
+      stripVisualizationRestoreSnapshotDerivedSerialization(
+        origin.appliedSuggestionState.visualization
+      );
+    if (appliedVisualization !== origin.appliedSuggestionState.visualization) {
+      next = {
+        ...(next ?? origin),
+        appliedSuggestionState: {
+          ...origin.appliedSuggestionState,
+          visualization: appliedVisualization
+        }
+      };
+    }
+  }
+
+  return next ?? origin;
+}
+
+function stripVisualizationDerivedSerialization(
+  visualization: VisualizationConfig
+): VisualizationConfig | undefined {
+  if (visualization.facet) {
+    return undefined;
+  }
+
+  let next = stripRootClassificationProperties(visualization);
+
+  const polygon = stripPolygonDerivedSerialization(next.polygon);
+  if (polygon !== next.polygon) {
+    next = { ...next, polygon };
+  }
+
+  const symbol = stripSymbolDerivedSerialization(next.symbol);
+  if (symbol !== next.symbol) {
+    next = { ...next, symbol };
+  }
+
+  const line = stripLineDerivedSerialization(next.line);
+  if (line !== next.line) {
+    next = { ...next, line };
+  }
+
+  const text = stripTextDerivedSerialization(next.text);
+  if (text !== next.text) {
+    next = { ...next, text };
+  }
+
+  const origin = stripVisualizationOriginDerivedSerialization(next.origin);
+  if (origin !== next.origin) {
+    next = { ...next, origin };
+  }
+
+  return next;
+}
+
+function serializePersistentVisualizations(): VisualizationConfig[] {
+  return visualizationStore.visualizations
+    .map(stripVisualizationDerivedSerialization)
+    .filter((viz): viz is VisualizationConfig => viz !== undefined);
+}
+
 persistenceRegistry.register({
   key: 'visualization',
-  serialize: () => ({
-    visualizations: visualizationStore.visualizations,
-    selectedVisualizationId: visualizationStore.selectedVisualization?.id,
-    activeVisualizationIds: visualizationStore.activeVisualizations.map(
-      (v) => v.id
-    )
-  }),
+  serialize: () => {
+    const visualizations = serializePersistentVisualizations();
+    const persistedIds = new Set(visualizations.map((viz) => viz.id));
+    const selectedVisualizationId =
+      visualizationStore.selectedVisualization?.id;
+
+    return {
+      visualizations,
+      selectedVisualizationId:
+        selectedVisualizationId && persistedIds.has(selectedVisualizationId)
+          ? selectedVisualizationId
+          : undefined,
+      activeVisualizationIds: visualizationStore.activeVisualizations
+        .map((viz) => viz.id)
+        .filter((id) => persistedIds.has(id))
+    };
+  },
   deserialize: (data: unknown) => {
     const settings = data as {
       visualizations?: unknown[];

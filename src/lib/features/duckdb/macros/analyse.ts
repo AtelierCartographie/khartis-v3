@@ -112,7 +112,11 @@ const summary_numeric_macro = `CREATE OR REPLACE MACRO summary_numeric(tabname, 
 	        END AS max_mag,
 	        max_mag - min_mag AS extent_magnitude,
 	        SUM(CASE WHEN MOD("colname", 1) = 0 THEN 1 ELSE 0 END) * 1.0 / count(*) AS share_integers,
-	        SUM(CASE WHEN MOD("colname", 1) <> 0 THEN 1 ELSE 0 END) * 1.0 / count(*) AS share_floats
+	        SUM(CASE WHEN MOD("colname", 1) <> 0 THEN 1 ELSE 0 END) * 1.0 / count(*) AS share_floats,
+	        avg("colname") AS mean,
+	        median("colname") AS median,
+	        stddev("colname") AS stddev,
+	        skewness("colname") AS skewness
 	 ) FROM t1 POSITIONAL JOIN (SELECT share_rank_interval(tabname, "colname") as share_rank_interval)
 );`;
 

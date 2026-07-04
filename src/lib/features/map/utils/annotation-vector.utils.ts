@@ -1,5 +1,11 @@
 export type VectorPoint = { x: number; y: number };
 
+export type SegmentDistance = {
+  distSq: number;
+  closest: VectorPoint;
+  t: number;
+};
+
 const CURVE_EPSILON = 0.5;
 const ARROW_HEAD_BASE_LENGTH = 7;
 const ARROW_HEAD_LENGTH_FACTOR = 3;
@@ -8,6 +14,36 @@ const ARROW_HEAD_WIDTH_FACTOR = 2.4;
 
 function round(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+export function distanceToSegmentSq(
+  point: VectorPoint,
+  segStart: VectorPoint,
+  segEnd: VectorPoint
+): SegmentDistance {
+  const dx = segEnd.x - segStart.x;
+  const dy = segEnd.y - segStart.y;
+  const lengthSq = dx * dx + dy * dy;
+  if (lengthSq < 0.0001) {
+    const ddx = point.x - segStart.x;
+    const ddy = point.y - segStart.y;
+    return {
+      distSq: ddx * ddx + ddy * ddy,
+      closest: { x: segStart.x, y: segStart.y },
+      t: 0
+    };
+  }
+  const t = Math.max(
+    0,
+    Math.min(
+      1,
+      ((point.x - segStart.x) * dx + (point.y - segStart.y) * dy) / lengthSq
+    )
+  );
+  const closest = { x: segStart.x + t * dx, y: segStart.y + t * dy };
+  const ddx = point.x - closest.x;
+  const ddy = point.y - closest.y;
+  return { distSq: ddx * ddx + ddy * ddy, closest, t };
 }
 
 export function getArrowHeadSize(strokeWidth: number): {

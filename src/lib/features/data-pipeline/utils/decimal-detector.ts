@@ -1,5 +1,6 @@
 import { PIPELINE_CONST } from '../constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { parseCsvLine, unquoteCsvValue } from './csv-line-parser';
 
 export interface DecimalDetectionResult {
   separator: '.' | ',';
@@ -21,7 +22,6 @@ const STANDARD_THOUSANDS_COMMA_PATTERN = /^-?\d{1,3}(?:,\d{3})+\.\d+$/;
 const INTEGER_THOUSANDS_DOT_PATTERN = /^-?\d{1,3}(?:\.\d{3})+$/;
 const INTEGER_THOUSANDS_SPACE_PATTERN = /^-?\d{1,3}(?: \d{3})+$/;
 const INTEGER_THOUSANDS_COMMA_PATTERN = /^-?\d{1,3}(?:,\d{3})+$/;
-const QUOTED_VALUE_PATTERN = /^["'](.*)["']$/;
 
 /**
  * Read the first N lines of a file as text. Exported so callers can share
@@ -60,10 +60,10 @@ export async function detectDecimalSeparator(
     let integerThousandsCommaMatches = 0;
 
     for (let i = 1; i < lines.length; i++) {
-      const values = parseCSVLine(lines[i], delimiter);
+      const values = parseCsvLine(lines[i], delimiter);
 
       for (const value of values) {
-        const trimmed = unquote(value.trim());
+        const trimmed = unquoteCsvValue(value.trim());
 
         if (EUROPEAN_DECIMAL_PATTERN.test(trimmed)) {
           europeanMatches++;
@@ -184,30 +184,4 @@ function detectFieldDelimiter(headerLine: string): string {
   }
 
   return detected;
-}
-
-function parseCSVLine(line: string, delimiter: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (const char of line) {
-    if (char === '"') {
-      inQuotes = !inQuotes;
-      current += char;
-    } else if (char === delimiter && !inQuotes) {
-      result.push(current);
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  result.push(current);
-
-  return result;
-}
-
-function unquote(value: string): string {
-  const match = value.match(QUOTED_VALUE_PATTERN);
-  return match ? match[1] : value;
 }

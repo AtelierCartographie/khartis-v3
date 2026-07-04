@@ -180,5 +180,58 @@
         "layout": { "x": 0.8904, "y": 0.93, "width": 0.1096, "height": 0.07 }
       }
     ]
+  },
+
+  "USA_ALBERS": {
+    "description_fr": "États-Unis en Albers equal-area à la d3.geoAlbersUsa : conus + encarts Alaska (×0,35) et Hawaï en bas à gauche, Porto Rico en bas à droite ; Aléoutiennes à l'ouest de l'antiméridien non couvertes",
+    "description_en": "United States in Albers equal-area matching d3.geoAlbersUsa: conus + Alaska (×0.35) and Hawaii insets bottom left, Puerto Rico bottom right; Aleutians west of the antimeridian not covered",
+    "entries": [
+      {
+        "id": "mainland",
+        "proj4": "+proj=aea +lat_0=23 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
+        "bounds": [
+          [-124.85, 24.4],
+          [-66.88, 49.4]
+        ],
+        "layout": {
+          "x": -0.0016,
+          "y": -0.0083,
+          "width": 1.0259,
+          "height": 1.0418
+        }
+      },
+      {
+        "id": "alaska",
+        "proj4": "+proj=aea +lat_0=50 +lon_0=-154 +lat_1=55 +lat_2=65 +x_0=0 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
+        "bounds": [
+          [-180.0, 51.0],
+          [-129.97, 71.44]
+        ],
+        "layout": {
+          "x": 0.0556,
+          "y": 0.7404,
+          "width": 0.2108,
+          "height": 0.2878
+        }
+      },
+      {
+        "id": "hawaii",
+        "proj4": "+proj=aea +lat_0=13 +lon_0=-157 +lat_1=8 +lat_2=18 +x_0=0 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
+        "bounds": [
+          [-160.25, 18.9],
+          [-154.8, 22.24]
+        ],
+        "layout": { "x": 0.2666, "y": 0.867, "width": 0.1006, "height": 0.1243 }
+      },
+      {
+        "id": "puerto_rico",
+        "proj4": "+proj=aea +lat_0=18 +lon_0=-66 +lat_1=8 +lat_2=18 +x_0=0 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs",
+        "bounds": [
+          [-67.97, 17.83],
+          [-65.2, 18.57]
+        ],
+        "layout": { "x": 0.934, "y": 0.9662, "width": 0.0514, "height": 0.0278 }
+      }
+    ]
   }
 }

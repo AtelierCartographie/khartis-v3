@@ -100,6 +100,17 @@ describe('buildFilterSQL — all 10 operators', () => {
     expect(sql).toContain('LIMIT 5');
   });
 
+  it('TOP_ASC — escapes quoted table and column identifiers', () => {
+    const sql = buildFilterSQL('table"withquote', {
+      column: 'x" -- injection',
+      operator: FilterOperatorEnum.TOP_ASC,
+      value: 2
+    });
+
+    expect(sql).toContain('FROM "table""withquote"');
+    expect(sql).toContain('ORDER BY "x"" -- injection" ASC');
+  });
+
   it('TOP_DESC — generates ORDER BY DESC with LIMIT', () => {
     const sql = buildFilterSQL(tbl, filter(FilterOperatorEnum.TOP_DESC, 3));
     expect(sql).toContain('DESC');

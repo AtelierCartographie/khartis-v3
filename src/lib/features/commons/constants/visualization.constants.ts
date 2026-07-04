@@ -12,6 +12,13 @@ export enum SymbolMode {
   CATEGORIES = 'categories'
 }
 
+export enum VisualizationType {
+  CHOROPLETH = 'choropleth',
+  PROPORTIONAL = 'proportional',
+  CATEGORICAL = 'categorical',
+  BIVARIATE = 'bivariate'
+}
+
 export type DensityLevelName = 'more' | 'standard' | 'less';
 
 export const DENSITY_LEVEL = {
@@ -94,7 +101,7 @@ export const CATEGORY_SHAPE_CYCLE: readonly ShapeType[] = [
   ShapeType.RECTANGLE
 ];
 
-export const SHAPE_ORDINAL: Record<ShapeType, number> = {
+export const SHAPE_ORDINAL = {
   [ShapeType.CIRCLE]: 0,
   [ShapeType.SQUARE]: 1,
   [ShapeType.BAR]: 2,
@@ -104,7 +111,7 @@ export const SHAPE_ORDINAL: Record<ShapeType, number> = {
   [ShapeType.TRIANGLE]: 6,
   [ShapeType.STAR]: 7,
   [ShapeType.RECTANGLE]: 8
-};
+} as const satisfies Record<ShapeType, number>;
 
 export const LINEAR_SHAPES: readonly ShapeType[] = [
   ShapeType.BAR,
@@ -218,6 +225,8 @@ export const SLIDER_LIMITS = {
 } as const;
 
 export const MIN_VISIBLE_STROKE_WIDTH = 1;
+
+export const DEFAULT_CLASSIFICATION_CLASS_COUNT = 5;
 
 export const DEFAULT_DISCRETIZATION_CLASS_COUNT = 4;
 

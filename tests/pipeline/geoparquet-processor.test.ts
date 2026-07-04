@@ -38,6 +38,7 @@ function ctx() {
     Duck: {
       register_files: vi.fn().mockResolvedValue(undefined),
       query: vi.fn().mockResolvedValue(undefined),
+      read_tabular: vi.fn().mockResolvedValue('tbl_parquet'),
       analyse: vi.fn().mockResolvedValue([{ name: 'geom' }])
     },
     callbacks: {
@@ -77,14 +78,13 @@ describe('geoparquetProcessor', () => {
     ).toBe(false);
   });
 
-  it('registers parquet file, creates table via read_parquet SQL, and adds __id column', async () => {
+  it('loads parquet through DuckDB tabular import and returns the dataset', async () => {
     const c = ctx();
     const result = await geoparquetProcessor.process(c as never, file());
-    expect(c.Duck.register_files).toHaveBeenCalledOnce();
-    expect(c.Duck.query).toHaveBeenCalledWith(
-      expect.stringContaining('read_parquet')
-    );
-    expect(c.Duck.query).toHaveBeenCalledWith(expect.stringContaining('__id'));
+    expect(c.Duck.read_tabular).toHaveBeenCalledWith(expect.any(File), {
+      tablename: 'tbl_parquet',
+      format: 'parquet'
+    });
     expect(result.columns).toHaveLength(1);
     expect(result.rowCount).toBe(10);
   });

@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => {
   const selectedDataset = {
     id: 'dataset-1',
     tableName: 'geo_table',
+    sourceFileId: undefined as string | undefined,
     columns: [{ name: 'id', type: 'TEXT' }],
     geometry: { columnName: 'geom' as const }
   };
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => {
     computeDatasetJoinStatsMock: vi.fn(),
     dropTableMock: vi.fn(),
     queryMock: vi.fn(),
+    persistTabularSourceSnapshotMock: vi.fn(),
     refreshDatasetMetadataMock: vi.fn(),
     setEnrichDataStateMock: vi.fn(),
     updateDatasetMock: vi.fn(
@@ -99,11 +101,17 @@ vi.mock('../services/join-stats.service', () => ({
     mocks.computeDatasetJoinStatsMock(...args)
 }));
 
+vi.mock('../services/tabular-source-snapshot.service', () => ({
+  persistTabularSourceSnapshot: (...args: unknown[]) =>
+    mocks.persistTabularSourceSnapshotMock(...args)
+}));
+
 describe('useEnrichmentJoin', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.selectedDataset.id = 'dataset-1';
     mocks.selectedDataset.tableName = 'geo_table';
+    mocks.selectedDataset.sourceFileId = undefined;
     mocks.selectedDataset.columns = [{ name: 'id', type: 'TEXT' }];
 
     vi.spyOn(Date, 'now').mockReturnValue(1_777_777_777_777);
@@ -130,6 +138,7 @@ describe('useEnrichmentJoin', () => {
       rowCount: 3
     });
     mocks.dropTableMock.mockResolvedValue(undefined);
+    mocks.persistTabularSourceSnapshotMock.mockResolvedValue(undefined);
     mocks.updateDatasetTableNameMock.mockResolvedValue(undefined);
   });
 
@@ -219,6 +228,43 @@ describe('useEnrichmentJoin', () => {
     expect(mocks.selectedDataset.columns).not.toBe(previousColumns);
     expect(mocks.selectedDataset.columns).not.toBe(enrichedColumns);
     expect(mocks.selectedDataset.columns).toEqual(enrichedColumns);
+  });
+
+  it('persists enriched source snapshots through the shared tabular snapshot service', async () => {
+    mocks.selectedDataset.sourceFileId = 'source-1';
+    const duckColumns = [
+      { name: 'geom', type_simple: 'geometry' },
+      { name: 'id', type_simple: 'text' },
+      { name: 'population_2024', type_simple: 'number' }
+    ];
+    mocks.refreshDatasetMetadataMock.mockResolvedValueOnce({
+      duckColumns,
+      enrichedColumns: [],
+      rowCount: 3
+    });
+
+    const hook = useEnrichmentJoin({
+      getEnrichmentDataset: () =>
+        ({
+          tableName: 'enrichment_table',
+          columns: [{ name: 'id' }, { name: 'population_2024' }]
+        }) as never,
+      getEnrichLinkedVariableId: () => 1,
+      getGeoFileColumnId: () => 2,
+      getEnrichDataFieldItems: () => [{ id: 1, columnName: 'id' }],
+      getGeoFileColumns: () => [{ id: 2, columnName: 'id' }],
+      onJoinFinalized: vi.fn()
+    });
+
+    await hook.computeEnrichmentJoinStats();
+    await hook.handleFinalizeEnrichment();
+
+    expect(mocks.persistTabularSourceSnapshotMock).toHaveBeenCalledWith({
+      sourceFileId: 'source-1',
+      tableName: 'geo_table_enriched_1777777777777',
+      duckColumns,
+      geometryColumnName: 'geom'
+    });
   });
 
   it('does not compute join stats when enrichment is blocked', async () => {

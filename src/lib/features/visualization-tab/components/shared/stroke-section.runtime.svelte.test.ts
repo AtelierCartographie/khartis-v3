@@ -1,4 +1,11 @@
-import { cleanup, render, screen, within } from '@testing-library/svelte';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within
+} from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_COLORS,
@@ -124,5 +131,56 @@ describe('StrokeSection runtime', () => {
     expect(
       screen.queryByText("Afficher l'absence de données")
     ).not.toBeInTheDocument();
+  });
+
+  it('does not emit stroke width corrections during initial render', async () => {
+    const visualization = buildVisualization(StrokeMode.UNIQUE);
+    visualization.style.strokeWidth = 0;
+    const onStyleChange = vi.fn();
+
+    render(StrokeSection, {
+      visualization,
+      dataFields: [],
+      onStyleChange,
+      onStrokeClassificationChange: vi.fn()
+    });
+
+    await tick();
+    await tick();
+
+    expect(onStyleChange).not.toHaveBeenCalled();
+  });
+
+  it('maps class color field selections through the shared handler', async () => {
+    const onStrokeMappingChange = vi.fn();
+    const { container } = render(StrokeSection, {
+      visualization: buildVisualization(),
+      dataFields: [
+        { id: 1, text: 'metric', type: 'number' },
+        { id: 2, text: 'score', type: 'number' }
+      ],
+      strokeValueColumn: 'metric',
+      strokeClassification: {
+        method: ClassificationMethod.QUANTILES,
+        classes: 4,
+        numClasses: 4,
+        colors: ['#f7fbff', '#6baed6', '#2171b5', '#08306b'],
+        labels: []
+      },
+      onStrokeMappingChange,
+      onStrokeClassificationChange: vi.fn()
+    });
+
+    const trigger = container.querySelector(
+      '.variable-dropdown .dropdown-trigger'
+    );
+    expect(trigger).toBeInstanceOf(HTMLButtonElement);
+
+    await fireEvent.click(trigger as HTMLButtonElement);
+    await fireEvent.click(screen.getByRole('option', { name: /score/i }));
+
+    expect(onStrokeMappingChange).toHaveBeenCalledWith({
+      valueColumn: 'score'
+    });
   });
 });

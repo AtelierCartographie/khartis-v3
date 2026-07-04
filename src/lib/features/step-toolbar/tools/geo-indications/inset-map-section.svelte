@@ -3,9 +3,9 @@
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
-  import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
+  import { projectionStore } from '$lib/features/map';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
-  import * as m from '$lib/paraglide/messages.js';
+  import * as m from '$lib/paraglide/messages';
   import { Column, Grid, Row } from 'carbon-components-svelte';
   import {
     geoIndicationsActions,

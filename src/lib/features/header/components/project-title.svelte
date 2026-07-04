@@ -2,10 +2,14 @@
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { sanitizeProjectName } from '$lib/features/commons/utils/sanitize.utils';
-  import { m } from '$lib/paraglide/messages.js';
+  import { m } from '$lib/paraglide/messages';
   import { TextInput } from 'carbon-components-svelte';
   import { Save } from 'carbon-icons-svelte';
   import { KEY } from '../../commons/constants/dom.constants';
+  import {
+    readCarbonStringValue,
+    type CarbonValueEvent
+  } from '$lib/features/commons/utils/carbon-events.utils';
 
   let inputValue = $state(projectStore.projectName);
   let originalName = $state(projectStore.projectName);
@@ -50,6 +54,10 @@
   function handleBlur() {
     void handleSave();
   }
+
+  function handleTitleInput(event: CarbonValueEvent) {
+    inputValue = readCarbonStringValue(event, inputValue);
+  }
 </script>
 
 <div
@@ -61,8 +69,9 @@
   <TextInput
     light
     size="sm"
-    bind:value={inputValue}
+    value={inputValue}
     placeholder={m.project_placeholder()}
+    on:input={handleTitleInput}
     on:blur={handleBlur}
     on:keydown={handleKeydown}
     disabled={!projectStore.currentProject}

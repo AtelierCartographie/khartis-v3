@@ -6,8 +6,7 @@ import { SolidPolygonLayer, PathLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import {
   createPathLayerProps,
-  parseSphere,
-  type BinaryPolygonData
+  type ProjectionLike
 } from 'geoarrow-deck-stream';
 import {
   parsePaths,
@@ -19,7 +18,6 @@ import {
   projectGeoJSON as _projectGeoJSON
 } from '../utils/geoarrow-stream-bridge.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import type { ProjectionLike } from 'geoarrow-deck-stream';
 import type {
   FeatureCollection,
   Feature,
@@ -30,7 +28,7 @@ import type {
   Polygon,
   MultiPolygon
 } from 'geojson';
-import { hexToRgb, webglToHex } from '$lib/features/commons/utils/color-utils';
+import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import {
   ArrowExtension,
   createLayerId,
@@ -59,37 +57,72 @@ import {
   BASEMAP_LAYER_CONFIG,
   BasemapGraticuleMode,
   BasemapRepresentation,
-  BasemapCityCategory,
   BasemapCitySymbol
 } from '$lib/features/commons/constants/visualization.constants';
 import {
   CARTOGRAPHIC_FONT_FAMILY,
   resolveFontFamilyStack
-} from '$lib/features/step-toolbar/fonts.constants';
+} from '$lib/features/step-toolbar';
+import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
 import type { BBox, DeckDataRow, GeometryInfo, RGBColor } from '../types';
-import type { StylePreset, StylePresets } from '../types/basemap.types';
+import type { StylePresets } from '../types/basemap.types';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
-import {
-  withOpacity,
-  dottedPatternToDashArray,
-  dashArrayToDottedPattern
-} from './layer-helpers';
+import { withOpacity, dottedPatternToDashArray } from './layer-helpers';
 import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
 import {
   DEFAULT_TEXT_FONT_SETTINGS_RASTER,
   DEFAULT_TEXT_LINE_HEIGHT,
-  DECK_TEXT_CHARACTER_SET
+  extendTextCharacterSet
 } from './text-character-set';
+import {
+  getCachedSpherePolygon,
+  SPHERE_BACKGROUND_PARAMETERS as BASEMAP_BACKGROUND_FILL_PARAMETERS
+} from '../utils/projection-sphere-mask.utils';
+import {
+  createProjectedCompositeOceanData,
+  getEquatorGeoJSON,
+  getGraticuleGeoJSON,
+  hasCompositeGraticuleSubProjections,
+  normalizeLineBbox,
+  projectGraticuleFeatureCollectionIfNeeded,
+  type GraticuleClipExtent
+} from './basemap-graticule';
+import {
+  getCitiesFilterKey,
+  getFilteredCitiesForConfig,
+  getLabelledCitiesForConfig,
+  getPolygonCitiesForConfig,
+  resolveCityLabel
+} from './basemap-cities';
+import {
+  resolveLandConfig,
+  resolveMetadataLineStyle,
+  type StyledMetadataLineConfig
+} from './basemap-style-resolve';
 
 const DASH_EXTENSION = new PathStyleExtension({
   dash: true,
   highPrecisionDash: true
 });
 const SOLID_DASH_ARRAY: [number, number] = [1, 0];
-const BASEMAP_BACKGROUND_FILL_PARAMETERS = {
-  depthCompare: 'always' as const,
-  depthWriteEnabled: false
-} as const;
+const BASEMAP_DEFAULT_THICKNESS_PX = 0.5;
+const BASEMAP_TERRE_STROKE_THICKNESS_MAX_PX = 0.5;
+const BASEMAP_TERRE_STROKE_OPACITY_MAX = 0.4;
+const BASEMAP_TERRE_SHADOW_COLOR: RGBColor = [80, 80, 80];
+const BASEMAP_TERRE_SHADOW_OPACITY = 0.65;
+const BASEMAP_TERRE_SHADOW_WIDTH_PX = 5;
+const BASEMAP_TERRE_SHADOW_MIN_WIDTH_PX = 3;
+const BASEMAP_TERRE_SHADOW_MAX_WIDTH_PX = 8;
+const BASEMAP_WATER_FILL_OPACITY_RATIO = 0.5;
+const BASEMAP_RELIEF_ELEVATION_FILL_OPACITY_RATIO = 0.8;
+const BASEMAP_RELIEF_DEFAULT_FILL_OPACITY_RATIO = 0.5;
+const BASEMAP_RELIEF_ELEVATION_LINE_OPACITY_RATIO = 0.7;
+const BASEMAP_RELIEF_DEFAULT_LINE_OPACITY_RATIO = 0.45;
+const BASEMAP_RELIEF_CONTOUR_LINE_WIDTH_PX = 0.8;
+const BASEMAP_RELIEF_ELEVATION_LINE_WIDTH_PX = 0.5;
+const BASEMAP_RELIEF_DEFAULT_LINE_WIDTH_PX = 0.35;
+const BASEMAP_CITY_STROKE_COLOR: RGBColor = [0, 0, 0];
+const BASEMAP_CITY_STROKE_OPACITY_RATIO = 0.5;
 const basemapGeoJsonCache = new WeakMap<
   ArrowTable,
   Map<string, FeatureCollection | null>
@@ -98,30 +131,6 @@ const projectedBasemapGeoJsonCache = new WeakMap<
   FeatureCollection,
   WeakMap<object, FeatureCollection>
 >();
-
-type GraticuleAxis = 'meridian' | 'parallel';
-type GraticuleLineProperties = {
-  name: string;
-  axis: GraticuleAxis;
-  value: number;
-  subProjectionId?: string;
-};
-type GraticuleClipExtent = [[number, number], [number, number]];
-
-type CompositeGraticuleSubProjection = {
-  id: string;
-  projection: ProjectionLike;
-  bounds: BBox;
-  screenExtent?: [[number, number], [number, number]];
-};
-
-type CompositeGraticuleProjection = ProjectionLike & {
-  getSubProjections: () => CompositeGraticuleSubProjection[];
-};
-type ProjectionWithClipExtent = ProjectionLike & {
-  clipExtent(): GraticuleClipExtent | null;
-  clipExtent(extent: GraticuleClipExtent | null): ProjectionWithClipExtent;
-};
 
 function getCachedBasemapGeoJSON(
   table: ArrowTable,
@@ -154,8 +163,7 @@ function projectFeatureCollectionIfNeeded<
   const projectionKey = ctx.projection as ProjectionLike & object;
   let projectionCache = projectedBasemapGeoJsonCache.get(geojson);
   const cached = projectionCache?.get(projectionKey) as
-    | FeatureCollection<T, P>
-    | undefined;
+    FeatureCollection<T, P> | undefined;
   if (cached) {
     return cached;
   }
@@ -178,278 +186,6 @@ function projectFeatureCollectionIfNeeded<
   return result;
 }
 
-function hasSpherePolygon(sphereData: BinaryPolygonData): boolean {
-  if (!sphereData || sphereData.length === 0) return false;
-  if (!sphereData.positions || sphereData.positions.length === 0) return false;
-  const positionsValue = (sphereData.positions as { value?: ArrayBufferView })
-    .value;
-  if (positionsValue && positionsValue.byteLength === 0) return false;
-  return true;
-}
-
-const spherePolygonCache = new WeakMap<ProjectionLike, BinaryPolygonData>();
-
-function getSpherePolygon(
-  projection: ProjectionLike
-): BinaryPolygonData | null {
-  const cached = spherePolygonCache.get(projection);
-  if (cached) return hasSpherePolygon(cached) ? cached : null;
-  try {
-    const sphereData = parseSphere(projection, {
-      output: 'polygon'
-    }) as BinaryPolygonData;
-    if (!hasSpherePolygon(sphereData)) return null;
-    spherePolygonCache.set(projection, sphereData);
-    return sphereData;
-  } catch (error) {
-    logger.error(
-      'Failed to parse sphere polygon for mers layer',
-      LogCategory.MAP,
-      error
-    );
-    return null;
-  }
-}
-
-function createScreenExtentPolygon(
-  screenExtent: [[number, number], [number, number]]
-): Feature<Polygon> | null {
-  const [[x0, y0], [x1, y1]] = screenExtent;
-  if (![x0, y0, x1, y1].every(Number.isFinite) || x0 === x1 || y0 === y1) {
-    return null;
-  }
-
-  return {
-    type: GEOJSON_TYPE.FEATURE,
-    properties: {},
-    geometry: {
-      type: GEOJSON_TYPE.POLYGON,
-      coordinates: [
-        [
-          [x0, y0],
-          [x1, y0],
-          [x1, y1],
-          [x0, y1],
-          [x0, y0]
-        ]
-      ]
-    }
-  };
-}
-
-function createProjectedCompositeOceanData(
-  projection: ProjectionLike,
-  visibleProjectedExtent?: GraticuleClipExtent | null
-): FeatureCollection<Polygon> | null {
-  if (
-    !hasCompositeGraticuleSubProjections(projection) &&
-    !visibleProjectedExtent
-  ) {
-    return null;
-  }
-
-  const extents = hasCompositeGraticuleSubProjections(projection)
-    ? projection
-        .getSubProjections()
-        .map((subProjection) => subProjection.screenExtent)
-        .filter((extent): extent is GraticuleClipExtent => extent !== undefined)
-    : [];
-  const compositeExtent =
-    extents.length > 0
-      ? ([
-          [
-            Math.min(...extents.map((extent) => extent[0][0])),
-            Math.min(...extents.map((extent) => extent[0][1]))
-          ],
-          [
-            Math.max(...extents.map((extent) => extent[1][0])),
-            Math.max(...extents.map((extent) => extent[1][1]))
-          ]
-        ] satisfies GraticuleClipExtent)
-      : null;
-  const LARGE_EXTENT: GraticuleClipExtent = [
-    [-99999, -99999],
-    [99999, 99999]
-  ];
-  const feature = createScreenExtentPolygon(
-    visibleProjectedExtent ?? compositeExtent ?? LARGE_EXTENT
-  );
-  return feature
-    ? { type: GEOJSON_TYPE.FEATURE_COLLECTION, features: [feature] }
-    : null;
-}
-
-function hasCompositeGraticuleSubProjections(
-  projection: ProjectionLike
-): projection is CompositeGraticuleProjection {
-  return (
-    typeof (projection as { getSubProjections?: unknown }).getSubProjections ===
-    'function'
-  );
-}
-
-function hasClipExtent(
-  projection: ProjectionLike
-): projection is ProjectionWithClipExtent {
-  return (
-    typeof (projection as { clipExtent?: unknown }).clipExtent === 'function'
-  );
-}
-
-function projectGraticuleLineToSegments(
-  coordinates: GeoJSON.Position[],
-  projection: ProjectionLike,
-  clipExtent?: GraticuleClipExtent | null
-): GeoJSON.Position[][] {
-  const segments: GeoJSON.Position[][] = [];
-  let currentSegment: GeoJSON.Position[] = [];
-  const previousClipExtent =
-    clipExtent && hasClipExtent(projection) ? projection.clipExtent() : null;
-
-  if (clipExtent && hasClipExtent(projection)) {
-    projection.clipExtent(clipExtent);
-  }
-
-  const stream = projection.stream({
-    point(x: number, y: number): void {
-      if (Number.isFinite(x) && Number.isFinite(y)) {
-        currentSegment.push([x, y]);
-      }
-    },
-    lineStart(): void {
-      currentSegment = [];
-    },
-    lineEnd(): void {
-      if (currentSegment.length >= 2) {
-        segments.push(currentSegment);
-      }
-      currentSegment = [];
-    },
-    polygonStart(): void {},
-    polygonEnd(): void {}
-  });
-
-  try {
-    stream.lineStart();
-    for (const coordinate of coordinates) {
-      const [longitude, latitude] = coordinate;
-      if (Number.isFinite(longitude) && Number.isFinite(latitude)) {
-        stream.point(longitude, latitude);
-      }
-    }
-    stream.lineEnd();
-  } finally {
-    if (clipExtent && hasClipExtent(projection)) {
-      projection.clipExtent(previousClipExtent);
-    }
-  }
-
-  return segments;
-}
-
-function bboxIntersects(first: BBox, second: BBox): boolean {
-  return (
-    rangesOverlap(first[0], first[2], second[0], second[2]) &&
-    rangesOverlap(first[1], first[3], second[1], second[3])
-  );
-}
-
-function projectGraticuleWithSubProjections(
-  geojson: FeatureCollection<LineString, GraticuleLineProperties>,
-  entries: CompositeGraticuleSubProjection[],
-  routingBbox: BBox,
-  clipExtent?: GraticuleClipExtent | null
-): FeatureCollection<LineString | MultiLineString, GraticuleLineProperties> {
-  const features: Feature<
-    LineString | MultiLineString,
-    GraticuleLineProperties
-  >[] = [];
-
-  for (const feature of geojson.features) {
-    for (const entry of entries) {
-      if (!bboxIntersects(entry.bounds, routingBbox)) {
-        continue;
-      }
-
-      const segments = projectGraticuleLineToSegments(
-        feature.geometry.coordinates,
-        entry.projection,
-        clipExtent
-      );
-      if (segments.length === 0) {
-        continue;
-      }
-
-      features.push({
-        ...feature,
-        properties: {
-          ...feature.properties,
-          subProjectionId: entry.id
-        },
-        geometry:
-          segments.length === 1
-            ? {
-                type: GEOJSON_TYPE.LINE_STRING,
-                coordinates: segments[0]
-              }
-            : {
-                type: GEOJSON_TYPE.MULTI_LINE_STRING,
-                coordinates: segments
-              }
-      });
-    }
-  }
-
-  return {
-    ...geojson,
-    features
-  };
-}
-
-function projectGraticuleFeatureCollectionIfNeeded(
-  geojson: FeatureCollection<LineString, GraticuleLineProperties>,
-  ctx: Pick<BasemapLayerContext, 'projection' | 'graticuleClipExtent'>,
-  routingBbox: BBox
-): FeatureCollection<LineString | MultiLineString, GraticuleLineProperties> {
-  if (!ctx.projection) {
-    return geojson;
-  }
-
-  if (hasCompositeGraticuleSubProjections(ctx.projection)) {
-    const entries = ctx.projection.getSubProjections();
-    return entries.length > 0
-      ? projectGraticuleWithSubProjections(
-          geojson,
-          entries,
-          routingBbox,
-          ctx.graticuleClipExtent
-        )
-      : projectFeatureCollectionIfNeeded(geojson, ctx);
-  }
-
-  const projectionKey = ctx.projection as ProjectionLike & object;
-  let projectionCache = projectedBasemapGeoJsonCache.get(geojson);
-  const cached = projectionCache?.get(projectionKey) as
-    | FeatureCollection<LineString | MultiLineString, GraticuleLineProperties>
-    | undefined;
-  if (cached) {
-    return cached;
-  }
-
-  const result: FeatureCollection<
-    LineString | MultiLineString,
-    GraticuleLineProperties
-  > = projectFeatureCollectionIfNeeded(geojson, ctx);
-
-  if (!projectionCache) {
-    projectionCache = new WeakMap<object, FeatureCollection>();
-    projectedBasemapGeoJsonCache.set(geojson, projectionCache);
-  }
-  projectionCache.set(projectionKey, result);
-
-  return result;
-}
-
 function getPreparedBasemapGeoJSON<T extends GeoJSON.Geometry>(
   table: ArrowTable,
   geoColumn: string,
@@ -462,22 +198,8 @@ function getPreparedBasemapGeoJSON<T extends GeoJSON.Geometry>(
   return geojson ? projectFeatureCollectionIfNeeded(geojson, ctx) : null;
 }
 
-let cachedGraticuleKey: string | null = null;
-let cachedGraticuleData: FeatureCollection<
-  LineString,
-  GraticuleLineProperties
-> | null = null;
-let cachedEquatorKey: string | null = null;
-let cachedEquatorData: FeatureCollection<
-  LineString,
-  GraticuleLineProperties
-> | null = null;
-
-let cachedCitiesKey: string | null = null;
-let cachedCitiesSource: FeatureCollection<Point> | null = null;
-let cachedFilteredCities: FeatureCollection<Point> | null = null;
-let cachedPolygonCitiesKey: string | null = null;
-let cachedPolygonCities: FeatureCollection<Polygon> | null = null;
+let cachedMetadataPointSources: FeatureCollection[] | null = null;
+let cachedMetadataPointGeoJson: FeatureCollection<Point> | null = null;
 
 interface BasemapLayerContext {
   modelMatrix?: Matrix4 | null;
@@ -530,7 +252,11 @@ function isGeoArrowLineEncoding(geometryInfo: GeometryInfo): boolean {
 }
 
 function isLineGeometry(geometryInfo: GeometryInfo): boolean {
-  return geometryInfo.type.includes('LINE');
+  return geometryInfo.type.toUpperCase().includes('LINE');
+}
+
+function isPolygonGeometry(geometryInfo: GeometryInfo): boolean {
+  return geometryInfo.type.toUpperCase().includes('POLYGON');
 }
 
 function canRenderViaGeoJsonFallback(geometryInfo: GeometryInfo): boolean {
@@ -541,13 +267,6 @@ function canRenderViaGeoJsonFallback(geometryInfo: GeometryInfo): boolean {
   );
 }
 
-function shouldPreferProjectedGeoJsonFallback(
-  _geometryInfo: GeometryInfo,
-  _projection: ProjectionLike | undefined
-): boolean {
-  return false;
-}
-
 function toRgbColor(hex: string): RGBColor {
   const [r, g, b] = hexToRgb(hex);
   return [r, g, b];
@@ -555,7 +274,7 @@ function toRgbColor(hex: string): RGBColor {
 
 function clampBasemapLayerThickness(value: number): number {
   if (!Number.isFinite(value)) {
-    return 0.5;
+    return BASEMAP_DEFAULT_THICKNESS_PX;
   }
 
   return Math.min(
@@ -624,8 +343,14 @@ export function createTerreLayers(
   const fillOpacity = config.fillOpacity / 100;
   const strokeOpacity = config.strokeOpacity / 100;
 
-  const effectiveStrokeThickness = Math.min(config.strokeThickness, 0.5);
-  const effectiveStrokeOpacity = Math.min(strokeOpacity, 0.4);
+  const effectiveStrokeThickness = Math.min(
+    config.strokeThickness,
+    BASEMAP_TERRE_STROKE_THICKNESS_MAX_PX
+  );
+  const effectiveStrokeOpacity = Math.min(
+    strokeOpacity,
+    BASEMAP_TERRE_STROKE_OPACITY_MAX
+  );
   const shouldRenderStroke =
     effectiveStrokeThickness > 0 && !options?.suppressStroke;
 
@@ -643,14 +368,9 @@ export function createTerreLayers(
   };
 
   const layers: Layer<DeckDataRow>[] = [];
-  const preferProjectedGeoJsonFallback = shouldPreferProjectedGeoJsonFallback(
-    geometryInfo,
-    ctx.projection
-  );
-
   if (
-    !preferProjectedGeoJsonFallback &&
-    (isGeoArrowPolygonEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
+    isGeoArrowPolygonEncoding(geometryInfo) ||
+    geometryInfo.isNativeGeoArrow
   ) {
     const polyData = ctx.projection
       ? parseSolidPolygonsWithProjection(worldBaseTable, ctx.projection)
@@ -667,11 +387,14 @@ export function createTerreLayers(
         new PathLayer({
           id: `${layerId}-shadow`,
           ...createPathLayerProps(outlineData),
-          getColor: withOpacity([80, 80, 80], 0.65),
+          getColor: withOpacity(
+            BASEMAP_TERRE_SHADOW_COLOR,
+            BASEMAP_TERRE_SHADOW_OPACITY
+          ),
           widthUnits: 'pixels',
-          getWidth: 5,
-          widthMinPixels: 3,
-          widthMaxPixels: 8,
+          getWidth: BASEMAP_TERRE_SHADOW_WIDTH_PX,
+          widthMinPixels: BASEMAP_TERRE_SHADOW_MIN_WIDTH_PX,
+          widthMaxPixels: BASEMAP_TERRE_SHADOW_MAX_WIDTH_PX,
           ...baseProps,
           updateTriggers: {
             getWidth: [config.strokeThickness]
@@ -701,7 +424,7 @@ export function createTerreLayers(
           widthUnits: 'pixels',
           getWidth: effectiveStrokeThickness,
           widthMinPixels: 0,
-          widthMaxPixels: 0.5,
+          widthMaxPixels: BASEMAP_TERRE_STROKE_THICKNESS_MAX_PX,
           extensions: config.strokeDotted ? [DASH_EXTENSION] : [],
           getDashArray: dashArray,
           ...baseProps,
@@ -731,11 +454,14 @@ export function createTerreLayers(
             data: geojson,
             filled: false,
             stroked: true,
-            getLineColor: withOpacity([80, 80, 80], 0.65),
+            getLineColor: withOpacity(
+              BASEMAP_TERRE_SHADOW_COLOR,
+              BASEMAP_TERRE_SHADOW_OPACITY
+            ),
             lineWidthUnits: 'pixels',
-            getLineWidth: 5,
-            lineWidthMinPixels: 3,
-            lineWidthMaxPixels: 8,
+            getLineWidth: BASEMAP_TERRE_SHADOW_WIDTH_PX,
+            lineWidthMinPixels: BASEMAP_TERRE_SHADOW_MIN_WIDTH_PX,
+            lineWidthMaxPixels: BASEMAP_TERRE_SHADOW_MAX_WIDTH_PX,
             ...baseProps,
             updateTriggers: {
               getLineWidth: [config.strokeThickness]
@@ -757,7 +483,7 @@ export function createTerreLayers(
           lineWidthUnits: 'pixels',
           getLineWidth: shouldRenderStroke ? effectiveStrokeThickness : 0,
           lineWidthMinPixels: 0,
-          lineWidthMaxPixels: 0.5,
+          lineWidthMaxPixels: BASEMAP_TERRE_STROKE_THICKNESS_MAX_PX,
           extensions:
             shouldRenderStroke && config.strokeDotted ? [DASH_EXTENSION] : [],
           getDashArray: shouldRenderStroke ? dashArray : [0, 0],
@@ -796,7 +522,7 @@ export function createMersLayer(
     // sub-projection extents below instead.
     const sphereData = hasCompositeGraticuleSubProjections(ctx.projection)
       ? null
-      : getSpherePolygon(ctx.projection);
+      : getCachedSpherePolygon(ctx.projection);
 
     if (sphereData) {
       try {
@@ -911,13 +637,7 @@ export function createFrontieresLayer(
     getLineColor: [config.color, effectiveOpacity],
     getDashArray: [config.dotted, config.dottedPattern]
   };
-  const preferProjectedGeoJsonFallback = shouldPreferProjectedGeoJsonFallback(
-    geometryInfo,
-    ctx.projection
-  );
-
   if (
-    !preferProjectedGeoJsonFallback &&
     isLineGeometry(geometryInfo) &&
     (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
   ) {
@@ -985,8 +705,8 @@ export function createFrontieresLayer(
   }
 
   if (
-    !preferProjectedGeoJsonFallback &&
-    (isGeoArrowPolygonEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
+    isGeoArrowPolygonEncoding(geometryInfo) ||
+    geometryInfo.isNativeGeoArrow
   ) {
     const outlineData = ctx.projection
       ? parsePathsWithProjection(frontieresTable, ctx.projection)
@@ -1051,240 +771,6 @@ export function createFrontieresLayer(
   return null;
 }
 
-const WORLD_BBOX: BBox = [-180, -90, 180, 90];
-const TROPIC_LATITUDE = 23.4366;
-const POLAR_CIRCLE_LATITUDE = 66.5634;
-const COORDINATE_PRECISION = 1_000_000;
-const LINE_SAMPLE_STEP_DEGREES = 1;
-const EQUATOR_EPSILON = 0.000001;
-
-function roundCoordinate(value: number): number {
-  const rounded =
-    Math.round(value * COORDINATE_PRECISION) / COORDINATE_PRECISION;
-  return Object.is(rounded, -0) ? 0 : rounded;
-}
-
-function clampCoordinate(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-function bboxToKey(bbox: BBox): string {
-  return bbox.map((value) => roundCoordinate(value)).join(',');
-}
-
-function normalizeLineBbox(bbox: BBox | null | undefined): BBox {
-  if (
-    !bbox ||
-    bbox.length !== 4 ||
-    bbox.some((value) => !Number.isFinite(value))
-  ) {
-    return WORLD_BBOX;
-  }
-
-  const west = clampCoordinate(Math.min(bbox[0], bbox[2]), -180, 180);
-  const east = clampCoordinate(Math.max(bbox[0], bbox[2]), -180, 180);
-  const south = clampCoordinate(Math.min(bbox[1], bbox[3]), -90, 90);
-  const north = clampCoordinate(Math.max(bbox[1], bbox[3]), -90, 90);
-
-  if (west >= east || south >= north) {
-    return WORLD_BBOX;
-  }
-
-  return [
-    roundCoordinate(west),
-    roundCoordinate(south),
-    roundCoordinate(east),
-    roundCoordinate(north)
-  ];
-}
-
-function isEquatorLatitude(latitude: number): boolean {
-  return Math.abs(latitude) <= EQUATOR_EPSILON;
-}
-
-function isWithin(value: number, min: number, max: number): boolean {
-  return value >= min - EQUATOR_EPSILON && value <= max + EQUATOR_EPSILON;
-}
-
-function rangesOverlap(
-  firstMin: number,
-  firstMax: number,
-  secondMin: number,
-  secondMax: number
-): boolean {
-  return (
-    firstMin <= secondMax + EQUATOR_EPSILON &&
-    secondMin <= firstMax + EQUATOR_EPSILON
-  );
-}
-
-function createSampledRange(min: number, max: number): number[] {
-  const roundedMax = roundCoordinate(max);
-  const values: number[] = [roundCoordinate(min)];
-  let current = min;
-
-  while (current + LINE_SAMPLE_STEP_DEGREES < max) {
-    current += LINE_SAMPLE_STEP_DEGREES;
-    values.push(roundCoordinate(current));
-  }
-
-  if (values[values.length - 1] !== roundedMax) {
-    values.push(roundedMax);
-  }
-
-  return values;
-}
-
-function createDegreeSeries(
-  min: number,
-  max: number,
-  spacing: number
-): number[] {
-  const step = normalizeGraticuleSpacing(spacing);
-  const first = Math.ceil(min / step) * step;
-  const values: number[] = [];
-
-  for (let current = first; current <= max + EQUATOR_EPSILON; current += step) {
-    values.push(roundCoordinate(current));
-  }
-
-  return values;
-}
-
-function normalizeGraticuleSpacing(value: unknown): number {
-  const parsed = typeof value === 'number' ? value : Number(value);
-
-  if (!Number.isFinite(parsed)) {
-    return 10;
-  }
-
-  return clampCoordinate(
-    Math.round(parsed),
-    BASEMAP_LAYER_CONFIG.graticuleSpacing.min,
-    BASEMAP_LAYER_CONFIG.graticuleSpacing.max
-  );
-}
-
-function createLineFeature(
-  name: string,
-  axis: GraticuleAxis,
-  value: number,
-  coordinates: [number, number][]
-): Feature<LineString, GraticuleLineProperties> {
-  return {
-    type: GEOJSON_TYPE.FEATURE,
-    properties: { name, axis, value: roundCoordinate(value) },
-    geometry: {
-      type: GEOJSON_TYPE.LINE_STRING,
-      coordinates
-    }
-  };
-}
-
-function createParallelFeature(
-  latitude: number
-): Feature<LineString, GraticuleLineProperties> {
-  const coordinates = createSampledRange(WORLD_BBOX[0], WORLD_BBOX[2]).map(
-    (longitude) => [longitude, roundCoordinate(latitude)] as [number, number]
-  );
-  return createLineFeature(
-    `parallel-${roundCoordinate(latitude)}`,
-    'parallel',
-    latitude,
-    coordinates
-  );
-}
-
-function createMeridianFeature(
-  longitude: number
-): Feature<LineString, GraticuleLineProperties> {
-  const coordinates = createSampledRange(WORLD_BBOX[1], WORLD_BBOX[3]).map(
-    (latitude) => [roundCoordinate(longitude), latitude] as [number, number]
-  );
-  return createLineFeature(
-    `meridian-${roundCoordinate(longitude)}`,
-    'meridian',
-    longitude,
-    coordinates
-  );
-}
-
-function createEquatorGeoJSON(): FeatureCollection<
-  LineString,
-  GraticuleLineProperties
-> {
-  const key = 'equator:complete-domain';
-  if (cachedEquatorKey === key && cachedEquatorData) {
-    return cachedEquatorData;
-  }
-
-  cachedEquatorData = {
-    type: GEOJSON_TYPE.FEATURE_COLLECTION,
-    features: [createParallelFeature(0)]
-  };
-  cachedEquatorKey = key;
-  return cachedEquatorData;
-}
-
-function createRegularGraticuleGeoJSON(
-  bbox: BBox,
-  spacingDegrees: number,
-  excludeEquator: boolean
-): FeatureCollection<LineString, GraticuleLineProperties> {
-  const [west, south, east, north] = bbox;
-  const features: Feature<LineString, GraticuleLineProperties>[] = [];
-
-  for (const longitude of createDegreeSeries(west, east, spacingDegrees)) {
-    features.push(createMeridianFeature(longitude));
-  }
-
-  for (const latitude of createDegreeSeries(south, north, spacingDegrees)) {
-    if (excludeEquator && isEquatorLatitude(latitude)) {
-      continue;
-    }
-    features.push(createParallelFeature(latitude));
-  }
-
-  return {
-    type: GEOJSON_TYPE.FEATURE_COLLECTION,
-    features
-  };
-}
-
-function createRemarkableGraticuleGeoJSON(
-  bbox: BBox,
-  excludeEquator: boolean
-): FeatureCollection<LineString, GraticuleLineProperties> {
-  const features: Feature<LineString, GraticuleLineProperties>[] = [];
-  const [west, south, east, north] = bbox;
-  const remarkableParallels = [
-    -POLAR_CIRCLE_LATITUDE,
-    -TROPIC_LATITUDE,
-    0,
-    TROPIC_LATITUDE,
-    POLAR_CIRCLE_LATITUDE
-  ];
-
-  if (isWithin(0, west, east)) {
-    features.push(createMeridianFeature(0));
-  }
-
-  for (const latitude of remarkableParallels) {
-    if (!isWithin(latitude, south, north)) {
-      continue;
-    }
-    if (excludeEquator && isEquatorLatitude(latitude)) {
-      continue;
-    }
-    features.push(createParallelFeature(latitude));
-  }
-
-  return {
-    type: GEOJSON_TYPE.FEATURE_COLLECTION,
-    features
-  };
-}
-
 export function createEquateurLayer(
   config: EquateurLayerConfig,
   ctx: BasemapLayerContext
@@ -1299,8 +785,7 @@ export function createEquateurLayer(
     ctx.projectionSuffix
   );
   const bbox = normalizeLineBbox(ctx.bbox);
-  const equatorKey = 'equator:complete-domain';
-  const equatorGeoJSON = createEquatorGeoJSON();
+  const equatorGeoJSON = getEquatorGeoJSON();
 
   const dashArray = config.dotted
     ? dottedPatternToDashArray(config.dottedPattern)
@@ -1321,8 +806,7 @@ export function createEquateurLayer(
     updateTriggers: {
       getLineColor: [config.color, config.opacity],
       getLineWidth: [config.thickness],
-      getDashArray: [config.dotted, config.dottedPattern],
-      data: [equatorKey]
+      getDashArray: [config.dotted, config.dottedPattern]
     }
   });
 }
@@ -1341,30 +825,12 @@ export function createMeridiensLayer(
     ctx.projectionSuffix
   );
   const routingBbox = normalizeLineBbox(ctx.bbox);
-  const spacingDegrees = normalizeGraticuleSpacing(config.spacingDegrees);
-  const selectionBbox = WORLD_BBOX;
-  const mode = config.mode ?? BasemapGraticuleMode.REMARKABLE;
   const excludeEquator = Boolean(ctx.excludeEquator);
-
-  const graticuleKey = [
-    mode,
-    spacingDegrees,
-    bboxToKey(selectionBbox),
-    excludeEquator ? 'exclude-equator' : 'include-equator'
-  ].join(':');
-  if (cachedGraticuleKey !== graticuleKey || !cachedGraticuleData) {
-    cachedGraticuleData =
-      mode === BasemapGraticuleMode.REGULAR
-        ? createRegularGraticuleGeoJSON(
-            selectionBbox,
-            spacingDegrees,
-            excludeEquator
-          )
-        : createRemarkableGraticuleGeoJSON(selectionBbox, excludeEquator);
-    cachedGraticuleKey = graticuleKey;
-  }
-
-  const featuresCollection = cachedGraticuleData;
+  const featuresCollection = getGraticuleGeoJSON(
+    config.spacingDegrees,
+    config.mode,
+    excludeEquator
+  );
 
   const dashArray = config.dotted
     ? dottedPatternToDashArray(config.dottedPattern)
@@ -1382,63 +848,189 @@ export function createMeridiensLayer(
     getLineColor: withOpacity(strokeColor, opacity),
     getLineWidth: config.thickness,
     lineWidthUnits: 'pixels',
-    lineWidthMinPixels: 0.5,
+    lineWidthMinPixels: BASEMAP_DEFAULT_THICKNESS_PX,
     extensions: [DASH_EXTENSION],
     getDashArray: dashArray,
     ...getBaseLayerProps(ctx),
     updateTriggers: {
       getLineColor: [config.color, config.opacity],
       getLineWidth: [config.thickness],
-      getDashArray: [config.dotted, config.dottedPattern],
-      data: [graticuleKey]
+      getDashArray: [config.dotted, config.dottedPattern]
     }
   });
 }
 
-export function createLacsLayer(
+function createLacsLayer(
   lakesData: FeatureCollection<Polygon | MultiPolygon>,
   config: LacsLayerConfig,
-  ctx: BasemapLayerContext
+  ctx: BasemapLayerContext,
+  layerId = buildLayerId(DeckLayerId.BASEMAP_LACS, ctx.projectionSuffix)
 ): Layer<DeckDataRow> | null {
   if (!config.visible) return null;
 
   const strokeColor = toRgbColor(config.color);
   const opacity = config.opacity / 100;
-
-  const layerId = buildLayerId(DeckLayerId.BASEMAP_LACS, ctx.projectionSuffix);
 
   return new GeoJsonLayer({
     id: layerId,
     data: projectFeatureCollectionIfNeeded(lakesData, ctx),
     filled: true,
     stroked: config.thickness > 0,
-    getFillColor: withOpacity(strokeColor, opacity * 0.5),
+    getFillColor: withOpacity(
+      strokeColor,
+      opacity * BASEMAP_WATER_FILL_OPACITY_RATIO
+    ),
     getLineColor: withOpacity(strokeColor, opacity),
     lineWidthUnits: 'pixels',
     lineWidthMinPixels: config.thickness,
     ...getBaseLayerProps(ctx),
     updateTriggers: {
       getFillColor: [config.color, config.opacity],
-      getLineColor: [config.color, config.opacity],
-      lineWidthMinPixels: [config.thickness]
+      getLineColor: [config.color, config.opacity]
     }
   });
 }
 
-export function createRivieresLayer(
+function filterMetadataGeoJsonByGeometry<T extends MetadataGeometry>(
+  geojson: FeatureCollection,
+  geometryTypes: ReadonlySet<string>
+): FeatureCollection<T> | null {
+  const features: Feature<T>[] = [];
+
+  for (const feature of geojson.features) {
+    const geometryType = feature.geometry?.type;
+    if (!geometryType || !geometryTypes.has(geometryType)) {
+      continue;
+    }
+
+    features.push(feature as Feature<T>);
+  }
+
+  if (features.length === 0) {
+    return null;
+  }
+
+  return {
+    type: GEOJSON_TYPE.FEATURE_COLLECTION,
+    features
+  };
+}
+
+function createBinaryLacsLayers(
+  table: ArrowTable,
+  config: LacsLayerConfig,
+  ctx: BasemapLayerContext,
+  layerId: string
+): Layer<DeckDataRow>[] {
+  if (!config.visible) return [];
+
+  const strokeColor = toRgbColor(config.color);
+  const opacity = config.opacity / 100;
+  const baseProps = getBaseLayerProps(ctx);
+  const polyData = ctx.projection
+    ? parseSolidPolygonsWithProjection(table, ctx.projection)
+    : parseSolidPolygons(table);
+  const layers: Layer<DeckDataRow>[] = [
+    new SolidPolygonLayer({
+      id: layerId,
+      ...createCompatibleSolidPolygonLayerProps(polyData),
+      getFillColor: withOpacity(
+        strokeColor,
+        opacity * BASEMAP_WATER_FILL_OPACITY_RATIO
+      ),
+      ...baseProps,
+      updateTriggers: {
+        getFillColor: [config.color, config.opacity]
+      }
+    })
+  ];
+
+  if (config.thickness > 0) {
+    const outlineData = ctx.projection
+      ? parsePathsWithProjection(table, ctx.projection)
+      : parsePaths(table);
+    layers.push(
+      new PathLayer({
+        id: `${layerId}-stroke`,
+        ...createStyledBasemapPathLayerProps(
+          outlineData,
+          withOpacity(strokeColor, opacity) as [number, number, number, number],
+          clampBasemapLayerThickness(config.thickness)
+        ),
+        widthUnits: 'pixels',
+        widthMinPixels: 0,
+        widthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
+        ...baseProps,
+        updateTriggers: {
+          getColor: [config.color, config.opacity],
+          getWidth: [config.thickness]
+        }
+      })
+    );
+  }
+
+  return layers;
+}
+
+function createMetadataLacsLayers(
+  entries: MetadataLayerEntry[],
+  config: LacsLayerConfig,
+  ctx: BasemapLayerContext
+): Layer<DeckDataRow>[] {
+  if (entries.length === 0) return [];
+
+  const layers: Layer<DeckDataRow>[] = [];
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const geometryInfo = extractGeometryInfo(entry.table);
+    if (!geometryInfo) continue;
+    if (!hasArrowRows(entry.table)) continue;
+
+    const layerId = buildLayerId(
+      DeckLayerId.BASEMAP_LACS,
+      `${ctx.projectionSuffix || DEFAULT_PROJECTION_SUFFIX}-${i}`
+    );
+
+    if (
+      isPolygonGeometry(geometryInfo) &&
+      (isGeoArrowPolygonEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
+    ) {
+      layers.push(...createBinaryLacsLayers(entry.table, config, ctx, layerId));
+    } else if (canRenderViaGeoJsonFallback(geometryInfo)) {
+      const geojson = getPreparedBasemapGeoJSON(
+        entry.table,
+        geometryInfo.geoColumn,
+        ctx
+      );
+      const lakesData = geojson
+        ? filterMetadataGeoJsonByGeometry<Polygon | MultiPolygon>(
+            geojson,
+            new Set([GEOJSON_TYPE.POLYGON, GEOJSON_TYPE.MULTI_POLYGON])
+          )
+        : null;
+      const layer = lakesData
+        ? createLacsLayer(lakesData, config, ctx, layerId)
+        : null;
+      if (layer) {
+        layers.push(layer);
+      }
+    }
+  }
+
+  return layers;
+}
+
+function createRivieresLayer(
   riversData: FeatureCollection<LineString | MultiLineString>,
   config: RivieresLayerConfig,
-  ctx: BasemapLayerContext
+  ctx: BasemapLayerContext,
+  layerId = buildLayerId(DeckLayerId.BASEMAP_RIVIERES, ctx.projectionSuffix)
 ): Layer<DeckDataRow> | null {
   if (!config.visible) return null;
 
   const strokeColor = toRgbColor(config.color);
   const opacity = config.opacity / 100;
-
-  const layerId = buildLayerId(
-    DeckLayerId.BASEMAP_RIVIERES,
-    ctx.projectionSuffix
-  );
 
   const dashArray = config.dotted
     ? dottedPatternToDashArray(config.dottedPattern)
@@ -1452,7 +1044,7 @@ export function createRivieresLayer(
     getLineColor: withOpacity(strokeColor, opacity),
     getLineWidth: config.thickness,
     lineWidthUnits: 'pixels',
-    lineWidthMinPixels: 0.5,
+    lineWidthMinPixels: BASEMAP_DEFAULT_THICKNESS_PX,
     extensions: config.dotted ? [DASH_EXTENSION] : [],
     getDashArray: dashArray,
     ...getBaseLayerProps(ctx),
@@ -1462,6 +1054,102 @@ export function createRivieresLayer(
       getDashArray: [config.dotted, config.dottedPattern]
     }
   });
+}
+
+function createBinaryRivieresLayer(
+  table: ArrowTable,
+  config: RivieresLayerConfig,
+  ctx: BasemapLayerContext,
+  layerId: string
+): Layer<DeckDataRow> | null {
+  if (!config.visible) return null;
+
+  const strokeColor = toRgbColor(config.color);
+  const opacity = config.opacity / 100;
+  const lineData = ctx.projection
+    ? parsePathsWithProjection(table, ctx.projection)
+    : parsePaths(table);
+  const dashArray: [number, number] = config.dotted
+    ? dottedPatternToDashArray(config.dottedPattern)
+    : [0, 0];
+
+  return new PathLayer({
+    id: layerId,
+    ...createStyledBasemapPathLayerProps(
+      lineData,
+      withOpacity(strokeColor, opacity) as [number, number, number, number],
+      clampBasemapLayerThickness(config.thickness)
+    ),
+    widthUnits: 'pixels',
+    widthMinPixels: BASEMAP_DEFAULT_THICKNESS_PX,
+    widthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
+    extensions: config.dotted ? [DASH_EXTENSION] : [],
+    getDashArray: dashArray,
+    dashJustified: true,
+    ...getBaseLayerProps(ctx),
+    updateTriggers: {
+      getColor: [config.color, config.opacity],
+      getWidth: [config.thickness],
+      getDashArray: [config.dotted, config.dottedPattern]
+    }
+  });
+}
+
+function createMetadataRivieresLayers(
+  entries: MetadataLayerEntry[],
+  config: RivieresLayerConfig,
+  ctx: BasemapLayerContext
+): Layer<DeckDataRow>[] {
+  if (entries.length === 0) return [];
+
+  const layers: Layer<DeckDataRow>[] = [];
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const geometryInfo = extractGeometryInfo(entry.table);
+    if (!geometryInfo) continue;
+    if (!hasArrowRows(entry.table)) continue;
+
+    const layerId = buildLayerId(
+      DeckLayerId.BASEMAP_RIVIERES,
+      `${ctx.projectionSuffix || DEFAULT_PROJECTION_SUFFIX}-${i}`
+    );
+
+    if (
+      isLineGeometry(geometryInfo) &&
+      (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
+    ) {
+      const layer = createBinaryRivieresLayer(
+        entry.table,
+        config,
+        ctx,
+        layerId
+      );
+      if (layer) {
+        layers.push(layer);
+      }
+    } else if (canRenderViaGeoJsonFallback(geometryInfo)) {
+      const geojson = getPreparedBasemapGeoJSON(
+        entry.table,
+        geometryInfo.geoColumn,
+        ctx
+      );
+      const riversData = geojson
+        ? filterMetadataGeoJsonByGeometry<LineString | MultiLineString>(
+            geojson,
+            new Set([GEOJSON_TYPE.LINE_STRING, GEOJSON_TYPE.MULTI_LINE_STRING])
+          )
+        : null;
+      const layer = riversData
+        ? createRivieresLayer(riversData, config, ctx, layerId)
+        : null;
+      if (layer) {
+        layers.push(layer);
+      }
+    }
+  }
+
+  return layers;
 }
 
 export function createReliefLayers(
@@ -1484,14 +1172,18 @@ export function createReliefLayers(
   const fillOpacity = isContours
     ? 0
     : isElevation
-      ? Math.min(baseOpacity * 0.8, 1)
-      : Math.min(baseOpacity * 0.5, 1);
+      ? Math.min(baseOpacity * BASEMAP_RELIEF_ELEVATION_FILL_OPACITY_RATIO, 1)
+      : Math.min(baseOpacity * BASEMAP_RELIEF_DEFAULT_FILL_OPACITY_RATIO, 1);
   const lineOpacity = isContours
     ? baseOpacity
     : isElevation
-      ? Math.min(baseOpacity * 0.7, 1)
-      : Math.min(baseOpacity * 0.45, 1);
-  const lineWidth = isContours ? 0.8 : isElevation ? 0.5 : 0.35;
+      ? Math.min(baseOpacity * BASEMAP_RELIEF_ELEVATION_LINE_OPACITY_RATIO, 1)
+      : Math.min(baseOpacity * BASEMAP_RELIEF_DEFAULT_LINE_OPACITY_RATIO, 1);
+  const lineWidth = isContours
+    ? BASEMAP_RELIEF_CONTOUR_LINE_WIDTH_PX
+    : isElevation
+      ? BASEMAP_RELIEF_ELEVATION_LINE_WIDTH_PX
+      : BASEMAP_RELIEF_DEFAULT_LINE_WIDTH_PX;
   const lineColor = isElevation ? ([96, 96, 96] as RGBColor) : baseColor;
 
   const layerId = buildLayerId(
@@ -1504,14 +1196,9 @@ export function createReliefLayers(
     getFillColor: [config.color, config.opacity, config.representation],
     getLineColor: [config.color, config.opacity, config.representation]
   };
-  const preferProjectedGeoJsonFallback = shouldPreferProjectedGeoJsonFallback(
-    geometryInfo,
-    ctx.projection
-  );
-
   if (
-    !preferProjectedGeoJsonFallback &&
-    (isGeoArrowPolygonEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
+    isGeoArrowPolygonEncoding(geometryInfo) ||
+    geometryInfo.isNativeGeoArrow
   ) {
     const result: Layer<DeckDataRow>[] = [];
     const outlineData = ctx.projection
@@ -1587,224 +1274,6 @@ export function createReliefLayers(
   return [];
 }
 
-function getSymbolPolygonSides(symbol: BasemapCitySymbol): number {
-  switch (symbol) {
-    case BasemapCitySymbol.POINT:
-      return 32;
-    case BasemapCitySymbol.SQUARE:
-      return 4;
-    case BasemapCitySymbol.DIAMOND:
-      return 4;
-    case BasemapCitySymbol.STAR:
-      return 10;
-    default:
-      return 32;
-  }
-}
-
-function getSymbolAngleOffset(symbol: BasemapCitySymbol): number {
-  switch (symbol) {
-    case BasemapCitySymbol.SQUARE:
-      return 45;
-    case BasemapCitySymbol.DIAMOND:
-      return 0;
-    default:
-      return 0;
-  }
-}
-
-function isStarSymbol(symbol: BasemapCitySymbol): boolean {
-  return symbol === BasemapCitySymbol.STAR;
-}
-
-function createSymbolPolygon(
-  center: [number, number],
-  sizePx: number,
-  sides: number,
-  angleOffset: number,
-  isStar: boolean,
-  radiusScale = 0.00001
-): number[][] {
-  const [cx, cy] = center;
-  const radius = sizePx * radiusScale;
-  const points: number[][] = [];
-  const startAngle = (angleOffset * Math.PI) / 180;
-
-  if (isStar) {
-    const outerRadius = radius;
-    const innerRadius = radius * 0.4;
-    for (let i = 0; i < sides; i++) {
-      const angle = startAngle + (i * 2 * Math.PI) / sides;
-      const r = i % 2 === 0 ? outerRadius : innerRadius;
-      points.push([cx + r * Math.cos(angle), cy + r * Math.sin(angle)]);
-    }
-  } else {
-    for (let i = 0; i < sides; i++) {
-      const angle = startAngle + (i * 2 * Math.PI) / sides;
-      points.push([
-        cx + radius * Math.cos(angle),
-        cy + radius * Math.sin(angle)
-      ]);
-    }
-  }
-
-  points.push(points[0]);
-  return points;
-}
-
-function convertCitiesToPolygons(
-  cities: FeatureCollection<Point>,
-  symbol: BasemapCitySymbol,
-  sizePx: number,
-  radiusScale?: number
-): FeatureCollection<Polygon> {
-  const sides = getSymbolPolygonSides(symbol);
-  const angleOffset = getSymbolAngleOffset(symbol);
-  const isStar = isStarSymbol(symbol);
-
-  const features = cities.features.map((f) => {
-    const coords = f.geometry.coordinates as [number, number];
-    const polygon = createSymbolPolygon(
-      coords,
-      sizePx,
-      sides,
-      angleOffset,
-      isStar,
-      radiusScale
-    );
-    return {
-      type: GEOJSON_TYPE.FEATURE,
-      properties: f.properties,
-      geometry: {
-        type: GEOJSON_TYPE.POLYGON,
-        coordinates: [polygon]
-      }
-    };
-  });
-
-  return { type: GEOJSON_TYPE.FEATURE_COLLECTION, features };
-}
-
-function filterCitiesByCategory(
-  cities: FeatureCollection<Point>,
-  category: BasemapCityCategory
-): FeatureCollection<Point> {
-  const features = cities.features.filter((f) => {
-    const props = f.properties ?? {};
-    const isCapital =
-      props.adm0cap === 1 || props.featurecla?.includes('capital');
-    const pop = props.pop_max ?? 0;
-
-    switch (category) {
-      case BasemapCityCategory.CAPITALS:
-        return isCapital;
-      case BasemapCityCategory.POP_100K:
-        return pop >= 100000;
-      case BasemapCityCategory.POP_250K:
-        return pop >= 250000;
-      case BasemapCityCategory.POP_500K:
-        return pop >= 500000;
-      default:
-        return isCapital;
-    }
-  });
-
-  return { type: GEOJSON_TYPE.FEATURE_COLLECTION, features };
-}
-
-function clampBasemapCityCount(count: number | undefined): number | undefined {
-  if (count === undefined || !Number.isFinite(count)) {
-    return undefined;
-  }
-
-  return Math.max(
-    BASEMAP_LAYER_CONFIG.cityCount.min,
-    Math.min(BASEMAP_LAYER_CONFIG.cityCount.max, Math.round(count))
-  );
-}
-
-function getCityPopulation(feature: Feature<Point>): number {
-  const props = feature.properties ?? {};
-  const rawValue =
-    props.pop_max ?? props.population ?? props.pop ?? props.POP_MAX ?? 0;
-  const value = Number(rawValue);
-  return Number.isFinite(value) ? value : 0;
-}
-
-function filterCitiesByCount(
-  cities: FeatureCollection<Point>,
-  count: number
-): FeatureCollection<Point> {
-  const features = cities.features
-    .map((feature, index) => ({
-      feature,
-      index,
-      population: getCityPopulation(feature)
-    }))
-    .sort((left, right) => {
-      const populationDelta = right.population - left.population;
-      return populationDelta === 0 ? left.index - right.index : populationDelta;
-    })
-    .slice(0, count)
-    .map(({ feature }) => feature);
-
-  return { type: GEOJSON_TYPE.FEATURE_COLLECTION, features };
-}
-
-function getCitiesFilterKey(config: VillesLayerConfig): string {
-  const count = clampBasemapCityCount(config.count);
-  return count === undefined ? `category:${config.category}` : `count:${count}`;
-}
-
-function getFilteredCitiesForConfig(
-  citiesData: FeatureCollection<Point>,
-  config: VillesLayerConfig
-): FeatureCollection<Point> {
-  const filterKey = getCitiesFilterKey(config);
-  const isNewSource = cachedCitiesSource !== citiesData;
-
-  if (isNewSource || cachedCitiesKey !== filterKey || !cachedFilteredCities) {
-    const count = clampBasemapCityCount(config.count);
-    cachedFilteredCities =
-      count === undefined
-        ? filterCitiesByCategory(citiesData, config.category)
-        : filterCitiesByCount(citiesData, count);
-    cachedCitiesKey = filterKey;
-    cachedCitiesSource = citiesData;
-    cachedPolygonCitiesKey = null;
-    cachedPolygonCities = null;
-  }
-
-  return cachedFilteredCities;
-}
-
-function resolveCityLabel(feature: Feature<Point>): string {
-  const props = feature.properties ?? {};
-  const keys = [
-    'label',
-    'name',
-    'name_fr',
-    'name_en',
-    'nameascii',
-    'NAME',
-    'NOM',
-    'nom',
-    'id'
-  ];
-
-  for (const key of keys) {
-    const value = props[key];
-    if (typeof value === 'string' && value.trim()) {
-      return value;
-    }
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return String(value);
-    }
-  }
-
-  return '';
-}
-
 export function createVillesLayer(
   citiesData: FeatureCollection<Point>,
   config: VillesLayerConfig,
@@ -1840,7 +1309,10 @@ export function createVillesLayer(
       pointType: 'circle',
       getPointRadius: config.size,
       getFillColor: withOpacity(fillColor, opacity),
-      getLineColor: withOpacity([0, 0, 0], opacity * 0.5),
+      getLineColor: withOpacity(
+        BASEMAP_CITY_STROKE_COLOR,
+        opacity * BASEMAP_CITY_STROKE_OPACITY_RATIO
+      ),
       lineWidthUnits: 'pixels',
       lineWidthMinPixels: 1,
       pointRadiusUnits: 'pixels',
@@ -1848,41 +1320,34 @@ export function createVillesLayer(
       ...getBaseLayerProps(ctx),
       updateTriggers: {
         getFillColor: [config.color, config.opacity],
-        getPointRadius: [config.size],
-        data: [filterKey, Boolean(ctx.projection)]
+        getPointRadius: [config.size]
       }
     });
   }
 
-  const polygonKey = `${filterKey}:${config.symbol}:${config.size}`;
   const shouldUseProjectedSymbols = Boolean(ctx.projection);
-  if (
-    shouldUseProjectedSymbols ||
-    cachedPolygonCitiesKey !== polygonKey ||
-    !cachedPolygonCities
-  ) {
-    cachedPolygonCities = convertCitiesToPolygons(
-      projectedCities,
-      config.symbol,
-      config.size,
-      shouldUseProjectedSymbols ? 0.5 : undefined
-    );
-    cachedPolygonCitiesKey = shouldUseProjectedSymbols ? null : polygonKey;
-  }
+  const resolvedPolygonCities = getPolygonCitiesForConfig(
+    projectedCities,
+    config,
+    filterKey,
+    { projected: shouldUseProjectedSymbols }
+  );
 
   return new GeoJsonLayer({
     id: layerId,
-    data: cachedPolygonCities,
+    data: resolvedPolygonCities,
     filled: true,
     stroked: true,
     getFillColor: withOpacity(fillColor, opacity),
-    getLineColor: withOpacity([0, 0, 0], opacity * 0.5),
+    getLineColor: withOpacity(
+      BASEMAP_CITY_STROKE_COLOR,
+      opacity * BASEMAP_CITY_STROKE_OPACITY_RATIO
+    ),
     lineWidthUnits: 'pixels',
     lineWidthMinPixels: 1,
     ...getBaseLayerProps(ctx),
     updateTriggers: {
-      getFillColor: [config.color, config.opacity],
-      data: [filterKey, config.symbol, config.size, Boolean(ctx.projection)]
+      getFillColor: [config.color, config.opacity]
     }
   });
 }
@@ -1893,14 +1358,9 @@ function createVillesLabelLayer(
   ctx: BasemapLayerContext
 ): Layer<DeckDataRow> | null {
   if (!config.visible) return null;
+  if (!fontAssetsStore.ready) return null;
 
-  const filteredCities = getFilteredCitiesForConfig(citiesData, config);
-  const labelledCities = {
-    type: GEOJSON_TYPE.FEATURE_COLLECTION,
-    features: filteredCities.features.filter((feature) =>
-      Boolean(resolveCityLabel(feature))
-    )
-  } satisfies FeatureCollection<Point>;
+  const labelledCities = getLabelledCitiesForConfig(citiesData, config);
 
   if (labelledCities.features.length === 0) return null;
 
@@ -1911,6 +1371,12 @@ function createVillesLabelLayer(
   const labelColor = toRgbColor(config.labelColor ?? '#161616');
   const labelSize = config.labelSize ?? 12;
   const labelFontFamily = config.labelFontFamily ?? CARTOGRAPHIC_FONT_FAMILY;
+  const labelGlyphs = new Set<string>();
+  for (const feature of projectedCities.features) {
+    for (const char of resolveCityLabel(feature)) {
+      labelGlyphs.add(char);
+    }
+  }
   const layerId = buildLayerId(
     DeckLayerId.BASEMAP_VILLES_LABELS,
     ctx.projectionSuffix
@@ -1927,7 +1393,7 @@ function createVillesLabelLayer(
     getTextAlignmentBaseline: 'top',
     getTextPixelOffset: [0, Math.max(config.size, 1) + 4],
     textFontFamily: resolveFontFamilyStack(labelFontFamily),
-    textCharacterSet: DECK_TEXT_CHARACTER_SET,
+    textCharacterSet: extendTextCharacterSet(labelGlyphs),
     textFontSettings: DEFAULT_TEXT_FONT_SETTINGS_RASTER,
     textLineHeight: DEFAULT_TEXT_LINE_HEIGHT,
     textSizeUnits: 'pixels',
@@ -1936,54 +1402,13 @@ function createVillesLabelLayer(
       getTextColor: [config.labelColor],
       getTextSize: [labelSize],
       getTextPixelOffset: [config.size],
-      textFontFamily: [labelFontFamily],
-      data: [getCitiesFilterKey(config), Boolean(ctx.projection)]
+      textFontFamily: [labelFontFamily]
     }
   });
 }
 
 type MetadataGeometry =
-  | Polygon
-  | MultiPolygon
-  | LineString
-  | MultiLineString
-  | Point;
-
-function collectMetadataGeoJsonByGeometry<T extends MetadataGeometry>(
-  entries: MetadataLayerEntry[],
-  geometryTypes: ReadonlySet<string>
-): FeatureCollection<T> | null {
-  const features: Feature<T>[] = [];
-
-  for (const entry of entries) {
-    const geometryInfo = extractGeometryInfo(entry.table);
-    if (!geometryInfo) continue;
-
-    const geojson = getCachedBasemapGeoJSON(
-      entry.table,
-      geometryInfo.geoColumn
-    );
-    if (!geojson) continue;
-
-    for (const feature of geojson.features) {
-      const geometryType = feature.geometry?.type;
-      if (!geometryType || !geometryTypes.has(geometryType)) {
-        continue;
-      }
-
-      features.push(feature as Feature<T>);
-    }
-  }
-
-  if (features.length === 0) {
-    return null;
-  }
-
-  return {
-    type: GEOJSON_TYPE.FEATURE_COLLECTION,
-    features
-  };
-}
+  Polygon | MultiPolygon | LineString | MultiLineString | Point;
 
 function createPointFeatureFromCoordinates(
   sourceFeature: Feature<MetadataGeometry>,
@@ -2004,10 +1429,21 @@ function createPointFeatureFromCoordinates(
   };
 }
 
+function areSameFeatureCollectionSources(
+  sources: FeatureCollection[],
+  cachedSources: FeatureCollection[] | null
+): boolean {
+  return (
+    cachedSources !== null &&
+    cachedSources.length === sources.length &&
+    cachedSources.every((source, index) => source === sources[index])
+  );
+}
+
 function collectMetadataPointGeoJson(
   entries: MetadataLayerEntry[]
 ): FeatureCollection<Point> | null {
-  const features: Feature<Point>[] = [];
+  const sources: FeatureCollection[] = [];
 
   for (const entry of entries) {
     const geometryInfo = extractGeometryInfo(entry.table);
@@ -2019,6 +1455,16 @@ function collectMetadataPointGeoJson(
     );
     if (!geojson) continue;
 
+    sources.push(geojson);
+  }
+
+  if (areSameFeatureCollectionSources(sources, cachedMetadataPointSources)) {
+    return cachedMetadataPointGeoJson;
+  }
+
+  const features: Feature<Point>[] = [];
+
+  for (const geojson of sources) {
     for (const feature of geojson.features as Feature<
       Point | MultiPoint | LineString
     >[]) {
@@ -2055,13 +1501,17 @@ function collectMetadataPointGeoJson(
   }
 
   if (features.length === 0) {
+    cachedMetadataPointSources = sources;
+    cachedMetadataPointGeoJson = null;
     return null;
   }
 
-  return {
+  cachedMetadataPointSources = sources;
+  cachedMetadataPointGeoJson = {
     type: GEOJSON_TYPE.FEATURE_COLLECTION,
     features
   };
+  return cachedMetadataPointGeoJson;
 }
 
 function hasArrowRows(table: ArrowTable): boolean {
@@ -2083,70 +1533,6 @@ export interface MetadataLayerEntry {
   // NUTS territory and the surrounding land of a NUTS basemap — be coloured and
   // styled independently instead of being driven by the single shared config.
   styleOverride?: Record<string, unknown>;
-}
-
-function isPolygonStylePreset(
-  preset: StylePreset | undefined
-): preset is Extract<StylePreset, { layer_type: 'solid-polygon' }> {
-  return preset?.layer_type === 'solid-polygon';
-}
-
-export function resolveLandFillColorHex(
-  styleName: string | null,
-  stylePresets: StylePresets | null | undefined,
-  fallbackHex: string
-): string {
-  if (!styleName || !stylePresets) {
-    return fallbackHex;
-  }
-  const preset = stylePresets[styleName];
-  if (!isPolygonStylePreset(preset)) {
-    return fallbackHex;
-  }
-  const [r, g, b] = preset.fillColor;
-  return webglToHex([r, g, b, preset.fillColor[3] ?? 255]);
-}
-
-// Merges a per-layer style override (from the aux store) on top of the
-// style-preset default, on top of the shared `terre` config. This is what lets
-// each land layer of a multi-land basemap (NUTS territory vs. surrounding land)
-// keep its own colour, opacity and stroke instead of all of them tracking the
-// single shared config — the user-set value wins, the preset is the default,
-// the shared config is the last-resort fallback.
-function resolveLandConfig(
-  entry: MetadataLayerEntry,
-  config: TerreLayerConfig,
-  stylePresets: StylePresets | null | undefined
-): TerreLayerConfig {
-  const presetFillColor = resolveLandFillColorHex(
-    entry.style,
-    stylePresets,
-    config.fillColor
-  );
-  const override = entry.styleOverride ?? {};
-  const pickString = (value: unknown, fallback: string): string =>
-    typeof value === 'string' && value.length > 0 ? value : fallback;
-  const pickNumber = (value: unknown, fallback: number): number =>
-    typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-  const pickBoolean = (value: unknown, fallback: boolean): boolean =>
-    typeof value === 'boolean' ? value : fallback;
-
-  return {
-    ...config,
-    fillColor: pickString(override.fillColor, presetFillColor),
-    fillOpacity: pickNumber(override.fillOpacity, config.fillOpacity),
-    fillShadow: pickBoolean(override.fillShadow, config.fillShadow),
-    strokeColor: pickString(override.strokeColor, config.strokeColor),
-    strokeOpacity: pickNumber(override.strokeOpacity, config.strokeOpacity),
-    strokeThickness: pickNumber(
-      override.strokeThickness,
-      config.strokeThickness
-    ),
-    strokeDotted: pickBoolean(override.strokeDotted, config.strokeDotted),
-    strokeDottedPattern:
-      (override.strokeDottedPattern as TerreLayerConfig['strokeDottedPattern']) ??
-      config.strokeDottedPattern
-  };
 }
 
 function createLandLayers(
@@ -2202,73 +1588,6 @@ function createMetadataLimitLayers(
   );
 }
 
-type StyledMetadataLineConfig = Pick<
-  FrontieresLayerConfig,
-  'color' | 'dotted' | 'dottedPattern' | 'thickness' | 'opacity'
-> & {
-  // Exact dash authored in the style preset (e.g. `limit-dashed`), used until
-  // the user picks an explicit pattern in the UI.
-  presetDashArray?: [number, number];
-};
-
-// Resolves one limit layer's line style: per-file override (aux store) wins,
-// then the `limit-level-*` style preset (so nested levels keep their designed
-// width/colour hierarchy — NUTS 1 thicker/darker than NUTS 3), then the shared
-// Frontières config as a last resort. Without presets (e.g. graticule
-// companions) the shared config is returned unchanged.
-function resolveMetadataLineStyle(
-  entry: MetadataLayerEntry,
-  config: StyledMetadataLineConfig,
-  stylePresets: StylePresets | null | undefined
-): StyledMetadataLineConfig {
-  const preset =
-    stylePresets &&
-    entry.style &&
-    stylePresets[entry.style]?.layer_type === 'path'
-      ? (stylePresets[entry.style] as Extract<
-          StylePreset,
-          { layer_type: 'path' }
-        >)
-      : null;
-  const override = entry.styleOverride ?? {};
-  const presetColorHex = preset
-    ? webglToHex([
-        preset.color[0],
-        preset.color[1],
-        preset.color[2],
-        preset.color[3] ?? 255
-      ])
-    : undefined;
-  const pickString = (value: unknown, fallback: string): string =>
-    typeof value === 'string' && value.length > 0 ? value : fallback;
-  const pickNumber = (value: unknown, fallback: number): number =>
-    typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-  const pickBoolean = (value: unknown, fallback: boolean): boolean =>
-    typeof value === 'boolean' ? value : fallback;
-
-  const presetDashArray = preset?.dashArray;
-
-  return {
-    color: pickString(override.color, presetColorHex ?? config.color),
-    thickness: pickNumber(
-      override.thickness,
-      preset?.width ?? config.thickness
-    ),
-    opacity: pickNumber(override.opacity, config.opacity),
-    dotted: pickBoolean(
-      override.dotted,
-      presetDashArray ? true : config.dotted
-    ),
-    dottedPattern:
-      (override.dottedPattern as StyledMetadataLineConfig['dottedPattern']) ??
-      (presetDashArray
-        ? dashArrayToDottedPattern(presetDashArray)
-        : config.dottedPattern),
-    presetDashArray:
-      override.dottedPattern === undefined ? presetDashArray : undefined
-  };
-}
-
 function createMetadataLineLayers(
   entries: MetadataLayerEntry[],
   ctx: BasemapLayerContext,
@@ -2308,13 +1627,7 @@ function createMetadataLineLayers(
     if (rowIds && entry.panelRowId) {
       rowIds.set(layerId, entry.panelRowId);
     }
-    const preferProjectedGeoJsonFallback = shouldPreferProjectedGeoJsonFallback(
-      geometryInfo,
-      ctx.projection
-    );
-
     if (
-      !preferProjectedGeoJsonFallback &&
       isLineGeometry(geometryInfo) &&
       (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
     ) {
@@ -2348,8 +1661,8 @@ function createMetadataLineLayers(
         })
       );
     } else if (
-      !preferProjectedGeoJsonFallback &&
-      (isGeoArrowPolygonEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
+      isGeoArrowPolygonEncoding(geometryInfo) ||
+      geometryInfo.isNativeGeoArrow
     ) {
       const outlineData = ctx.projection
         ? parsePathsWithProjection(entry.table, ctx.projection)
@@ -2531,17 +1844,13 @@ export function createBasemapLayers(
         }
 
         case BASEMAP_LAYER_ID.LACS: {
-          const lakesData = collectMetadataGeoJsonByGeometry<
-            Polygon | MultiPolygon
-          >(
+          const lakesLayers = createMetadataLacsLayers(
             polygonEntries,
-            new Set([GEOJSON_TYPE.POLYGON, GEOJSON_TYPE.MULTI_POLYGON])
+            config as LacsLayerConfig,
+            ctx
           );
-          const layer = lakesData
-            ? createLacsLayer(lakesData, config as LacsLayerConfig, ctx)
-            : null;
-          if (layer) {
-            targetGroups.push([layer]);
+          if (lakesLayers.length > 0) {
+            targetGroups.push(lakesLayers);
           }
           break;
         }
@@ -2586,21 +1895,13 @@ export function createBasemapLayers(
         }
 
         case BASEMAP_LAYER_ID.RIVIERES: {
-          const riversData = collectMetadataGeoJsonByGeometry<
-            LineString | MultiLineString
-          >(
+          const riverLayers = createMetadataRivieresLayers(
             lineEntries,
-            new Set([GEOJSON_TYPE.LINE_STRING, GEOJSON_TYPE.MULTI_LINE_STRING])
+            config as RivieresLayerConfig,
+            ctx
           );
-          const layer = riversData
-            ? createRivieresLayer(
-                riversData,
-                config as RivieresLayerConfig,
-                ctx
-              )
-            : null;
-          if (layer) {
-            targetGroups.push([layer]);
+          if (riverLayers.length > 0) {
+            targetGroups.push(riverLayers);
           }
           break;
         }

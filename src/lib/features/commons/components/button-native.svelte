@@ -49,7 +49,7 @@
   type={type}
   class="bx--btn {kindClass} {sizeClass} {iconOnlyClass} {className}"
   disabled={disabled}
-  aria-label={iconDescription}
+  aria-label={iconDescription || undefined}
   onclick={onclick}
 >
   {#if children}{@render children()}{/if}

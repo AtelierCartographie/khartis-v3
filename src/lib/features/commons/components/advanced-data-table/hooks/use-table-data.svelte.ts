@@ -3,7 +3,6 @@ import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { type AnalysisResult } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { SvelteMap } from 'svelte/reactivity';
-import { datasetsStore } from '../../../stores/datasets.store.svelte';
 import {
   isTextLikeColumnType,
   projectHtmlLikeText
@@ -11,14 +10,20 @@ import {
 import { LogCategory, logger } from '../../../utils/logger';
 import { EXCLUDED_COLUMNS } from '../../../constants/data.constants';
 import type { ColumnInfo, SortOrder, TableRow } from '../types';
+import {
+  isMissingRequestedTableError,
+  isRequestedTableAvailable,
+  resolveHookValue,
+  type HookValue
+} from './table-hook.utils';
 
 export interface UseTableDataProps {
-  tableName?: string | (() => string | undefined);
-  dataset?: ProcessedDataset | (() => ProcessedDataset | undefined);
-  startIndex: number | (() => number);
-  rowIndices: number[] | (() => number[]);
-  sortColumn?: string | null | (() => string | null);
-  sortOrder?: SortOrder | (() => SortOrder);
+  tableName?: HookValue<string | undefined>;
+  dataset?: HookValue<ProcessedDataset | undefined>;
+  startIndex: HookValue<number>;
+  rowIndices: HookValue<number[]>;
+  sortColumn?: HookValue<string | null>;
+  sortOrder?: HookValue<SortOrder>;
 }
 
 export interface UseTableDataReturn {
@@ -36,32 +41,6 @@ export interface UseTableDataReturn {
     currentSortColumn: string | null,
     onReset: () => void
   ) => void;
-}
-
-function getValue<T>(prop: T | (() => T)): T {
-  return typeof prop === 'function' ? (prop as () => T)() : prop;
-}
-
-function isMissingDuckTableError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    /Catalog Error:\s*Table with name .*?(does not exist|not found)/i.test(
-      error.message
-    )
-  );
-}
-
-function isRequestedTableAvailable(tableName: string | undefined): boolean {
-  if (!tableName) {
-    return false;
-  }
-
-  return (
-    Boolean(duckDBOrchestrator.getDatasetByTable(tableName)) ||
-    datasetsStore
-      .getAllDatasets()
-      .some((dataset) => dataset.tableName === tableName)
-  );
 }
 
 function normalizeRowId(value: unknown): number | undefined {
@@ -134,16 +113,12 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
       return true;
     }
 
-    if (!requestedTableName || !isMissingDuckTableError(err)) {
-      return false;
-    }
-
-    return !isRequestedTableAvailable(requestedTableName);
+    return isMissingRequestedTableError(err, requestedTableName);
   }
 
   async function loadColumnsInfo(): Promise<void> {
-    const tableName = getValue(props.tableName);
-    const dataset = getValue(props.dataset);
+    const tableName = resolveHookValue(props.tableName);
+    const dataset = resolveHookValue(props.dataset);
     const requestedDatasetId = dataset?.id;
     const requestId = ++columnsRequestId;
 
@@ -240,12 +215,12 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
   }
 
   async function loadRowsData(): Promise<void> {
-    const tableName = getValue(props.tableName);
-    const dataset = getValue(props.dataset);
+    const tableName = resolveHookValue(props.tableName);
+    const dataset = resolveHookValue(props.dataset);
     const requestedDatasetId = dataset?.id;
-    const rowIndices = getValue(props.rowIndices);
-    const sortColumn = getValue(props.sortColumn);
-    const sortOrder = getValue(props.sortOrder);
+    const rowIndices = resolveHookValue(props.rowIndices);
+    const sortColumn = resolveHookValue(props.sortColumn);
+    const sortOrder = resolveHookValue(props.sortOrder);
     const requestId = ++rowsRequestId;
 
     if (!tableName && !dataset) {
@@ -293,8 +268,7 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
               row[col.name] = rowProxy[col.name];
             }
 
-            const normalizedRowId =
-              normalizeRowId(rowProxy.__id) ?? normalizeRowId(rowProxy['__id']);
+            const normalizedRowId = normalizeRowId(rowProxy.__id);
 
             if (normalizedRowId !== undefined) {
               row.__id = normalizedRowId;

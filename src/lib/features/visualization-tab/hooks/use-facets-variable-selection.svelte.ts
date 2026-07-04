@@ -16,10 +16,26 @@ interface FacetsVariableSelectionOptions {
   getDataFields: () => DataFieldOption[];
 }
 
+export interface FacetsVariableSelection {
+  getSelectedFieldIds(slotPath: FacetSlotPath | undefined): number[];
+  isActiveForSlot(slotPath: FacetSlotPath | undefined): boolean;
+  updateVariables(
+    baseVariableName: string,
+    slotPath: FacetSlotPath | undefined,
+    fieldIds: number[]
+  ): Promise<void>;
+  toggle(
+    baseVariableName: string,
+    slotPath: FacetSlotPath | undefined,
+    enabled: boolean,
+    seedFieldIds?: number[]
+  ): Promise<void>;
+}
+
 export function useFacetsVariableSelection({
   getVisualizationId,
   getDataFields
-}: FacetsVariableSelectionOptions) {
+}: FacetsVariableSelectionOptions): FacetsVariableSelection {
   const activeSlotPath = $derived.by(() => {
     const visualizationId = getVisualizationId();
     if (

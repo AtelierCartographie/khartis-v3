@@ -4,13 +4,9 @@ import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { BBox } from '../types';
 
 type OrthographicDatasetRef =
-  | Pick<DatasetResult, 'geometry'>
-  | null
-  | undefined;
+  Pick<DatasetResult, 'geometry'> | null | undefined;
 type OrthographicDuckDatasetRef =
-  | Pick<DuckDBDataset, 'joinedBasemap'>
-  | null
-  | undefined;
+  Pick<DuckDBDataset, 'joinedBasemap'> | null | undefined;
 
 interface ResolveOrthographicReferenceTableOptions {
   dataset: OrthographicDatasetRef;

@@ -156,9 +156,16 @@ export async function persistTabularSourceSnapshot(input: {
   sourceFileId: string;
   tableName: string;
   duckColumns: DuckAnalyticsColumn[];
+  geometryColumnName?: string | null;
   joinState?: JoinSnapshotUpdates;
 }): Promise<void> {
-  const { sourceFileId, tableName, duckColumns, joinState = {} } = input;
+  const {
+    sourceFileId,
+    tableName,
+    duckColumns,
+    geometryColumnName: fallbackGeometryColumnName = null,
+    joinState = {}
+  } = input;
   const sourceFile = projectStore.currentProject?.data?.sourceFiles?.find(
     (file) => file.id === sourceFileId
   );
@@ -169,6 +176,7 @@ export async function persistTabularSourceSnapshot(input: {
 
   const geometryColumnName =
     duckColumns.find((column) => column.type_simple === 'geometry')?.name ??
+    fallbackGeometryColumnName ??
     undefined;
   const propertyColumnNames = duckColumns
     .filter((column) => column.name !== geometryColumnName)

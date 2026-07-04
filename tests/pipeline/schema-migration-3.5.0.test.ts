@@ -43,7 +43,7 @@ describe('schema-migration 3.4.0 → 3.5.0', () => {
   it('backfills commonScale, positionMode and breakValue A/B on symbol configs', () => {
     const migrated = migrateIfNeeded(buildV340Project());
     const manifest = migrated.manifest as { version?: string };
-    expect(manifest.version).toBe(PROJECT_CONST.APP_VERSION);
+    expect(manifest.version).toBe(PROJECT_CONST.SCHEMA_VERSION);
 
     const vizList = migrated.visualizations as Array<{
       symbol: Record<string, unknown>;

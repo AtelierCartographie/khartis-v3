@@ -86,13 +86,14 @@ export async function analyse(
   const SAMPLE_THRESHOLD = 50000;
   let analysisTable = table;
   const sampleViewName = `${table}_sample_${Date.now()}`;
+  const escapedSampleViewName = escapeIdentifier(sampleViewName);
 
   if (rowCount > SAMPLE_THRESHOLD) {
     try {
       const escapedTableForSample = escapeIdentifier(table);
       await executeQuery(
         ctx.connection,
-        `CREATE TEMP TABLE "${sampleViewName}" AS SELECT * FROM "${escapedTableForSample}" USING SAMPLE ${SAMPLE_THRESHOLD} ROWS`
+        `CREATE TEMP TABLE "${escapedSampleViewName}" AS SELECT * FROM "${escapedTableForSample}" USING SAMPLE ${SAMPLE_THRESHOLD} ROWS`
       );
       analysisTable = sampleViewName;
     } catch (error) {
@@ -103,6 +104,28 @@ export async function analyse(
       );
     }
   }
+
+  const logAnalysisStatisticFailure = (
+    error: unknown,
+    columnName: string,
+    statistic: string
+  ): null => {
+    logger.warn(
+      'Failed to compute DuckDB analysis statistic',
+      LogCategory.DUCKDB,
+      {
+        error,
+        flow: 'duckdb_analysis',
+        extra: {
+          tableName: table,
+          analysisTable,
+          columnName,
+          statistic
+        }
+      }
+    );
+    return null;
+  };
 
   const processColumnBatch = async (
     columns: Record<string, unknown>[],
@@ -126,7 +149,8 @@ export async function analyse(
           let summary_date: ArrowTableLike | null = null;
           let histogram = null;
 
-          const escapedColName = escapeIdentifier(d.name as string);
+          const columnName = d.name as string;
+          const escapedColName = escapeIdentifier(columnName);
           const escapedAnalysisTable = escapeSqlString(analysisTable);
 
           const generalPromise = executeQuery(
@@ -135,7 +159,9 @@ export async function analyse(
             { useProxy: false }
           )
             .then((r) => r as ArrowTableLike)
-            .catch(() => null);
+            .catch((error: unknown) =>
+              logAnalysisStatisticFailure(error, columnName, 'summary_general')
+            );
 
           switch (type) {
             case DuckDBSimplifiedType.NUMERIC: {
@@ -147,11 +173,23 @@ export async function analyse(
                   { useProxy: false }
                 )
                   .then((r) => r as ArrowTableLike)
-                  .catch(() => null),
+                  .catch((error: unknown) =>
+                    logAnalysisStatisticFailure(
+                      error,
+                      columnName,
+                      'summary_numeric'
+                    )
+                  ),
                 executeQuery(
                   ctx.connection,
                   `FROM histogram_numeric('${escapedAnalysisTable}', "${escapedColName}")`
-                ).catch(() => null)
+                ).catch((error: unknown) =>
+                  logAnalysisStatisticFailure(
+                    error,
+                    columnName,
+                    'histogram_numeric'
+                  )
+                )
               ]);
               summary_general = general;
               summary_numeric = numeric;
@@ -168,11 +206,23 @@ export async function analyse(
                   { useProxy: false }
                 )
                   .then((r) => r as ArrowTableLike)
-                  .catch(() => null),
+                  .catch((error: unknown) =>
+                    logAnalysisStatisticFailure(
+                      error,
+                      columnName,
+                      'summary_date'
+                    )
+                  ),
                 executeQuery(
                   ctx.connection,
                   `FROM histogram_date('${escapedAnalysisTable}', "${escapedColName}")`
-                ).catch(() => null)
+                ).catch((error: unknown) =>
+                  logAnalysisStatisticFailure(
+                    error,
+                    columnName,
+                    'histogram_date'
+                  )
+                )
               ]);
               summary_general = general;
               summary_date = dateSum;
@@ -237,7 +287,7 @@ export async function analyse(
     try {
       await executeQuery(
         ctx.connection,
-        `DROP TABLE IF EXISTS "${sampleViewName}"`
+        `DROP TABLE IF EXISTS "${escapedSampleViewName}"`
       );
     } catch {
       /* ignore cleanup errors */

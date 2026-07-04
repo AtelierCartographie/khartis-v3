@@ -1,6 +1,5 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import type { DatasetsState } from './datasets-state.svelte';
-import { dataTabActions } from '../data-tab.store.svelte';
 import { findById } from '../../utils/array-helpers';
 
 export function getSelectedDataset(
@@ -19,17 +18,7 @@ export function selectDataset(state: DatasetsState, datasetId: string): void {
     return;
   }
 
-  const previousDataset = state.selectedDatasetId
-    ? findById(state.datasets, state.selectedDatasetId)
-    : undefined;
-  const isSameSourceFile =
-    previousDataset?.sourceFileId === dataset.sourceFileId;
-
   state.selectedDatasetId = datasetId;
-
-  if (!isSameSourceFile) {
-    dataTabActions.reset();
-  }
 }
 
 export function getDatasetBySourceFile(

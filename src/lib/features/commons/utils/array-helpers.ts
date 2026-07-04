@@ -1,3 +1,5 @@
+import { DataValidationError } from '$lib/features/commons/pipeline.errors';
+
 export function findById<T extends { id: string }>(
   array: T[],
   id: string | undefined
@@ -25,8 +27,10 @@ export function removeById<T extends { id: string }>(
 
 export function replaceAtIndex<T>(array: T[], index: number, newItem: T): T[] {
   if (index < 0 || index >= array.length) {
-    throw new Error(
-      `replaceAtIndex: index ${index} out of bounds for array of length ${array.length}`
+    throw new DataValidationError(
+      `replaceAtIndex: index ${index} out of bounds for array of length ${array.length}`,
+      'index',
+      { index, length: array.length }
     );
   }
   return [...array.slice(0, index), newItem, ...array.slice(index + 1)];

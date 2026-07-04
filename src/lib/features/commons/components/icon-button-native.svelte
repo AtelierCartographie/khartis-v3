@@ -14,9 +14,6 @@
     size?: 'default' | 'field' | 'small' | 'lg' | 'xl';
     disabled?: boolean;
     class?: string;
-    tooltipPosition?: string;
-    tooltipAlignment?: string;
-    hideTooltip?: boolean;
     onclick?: (event: MouseEvent) => void;
   }
 

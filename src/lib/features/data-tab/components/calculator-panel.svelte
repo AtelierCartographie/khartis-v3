@@ -17,6 +17,10 @@
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
   import {
+    readCarbonStringValue,
+    type CarbonValueEvent
+  } from '$lib/features/commons/utils/carbon-events.utils';
+  import {
     INTERNAL_COLUMN,
     COLUMN_TYPE_GEOMETRY
   } from '$lib/features/commons/constants/data.constants';
@@ -71,7 +75,8 @@
     return null;
   });
 
-  function handleVariableNameInput() {
+  function handleVariableNameInput(event: CarbonValueEvent) {
+    variableName = readCarbonStringValue(event, variableName);
     dataToolsStore.setCalculatorName(variableName);
     if (errorMessage) errorMessage = null;
   }
@@ -218,6 +223,17 @@
     dataToolsStore.setCalculatorFormula(formula);
   }
 
+  function handleVariableSelect(event: CarbonValueEvent) {
+    selectedVariable = readCarbonStringValue(event, selectedVariable);
+  }
+
+  function handleFunctionSelect(event: CarbonValueEvent) {
+    const nextFunction = readCarbonStringValue(event, selectedFunction);
+    if (FUNCTIONS.some((fn) => fn.value === nextFunction)) {
+      selectedFunction = nextFunction;
+    }
+  }
+
   async function handleTest() {
     if (!tableName || !formula.trim()) return;
 
@@ -323,7 +339,7 @@
         size="sm"
         labelText={m.calc_variable_name()}
         placeholder={m.calc_name_placeholder()}
-        bind:value={variableName}
+        value={variableName}
         invalid={!!columnNameError}
         invalidText={columnNameError || ''}
         on:input={handleVariableNameInput}
@@ -350,7 +366,8 @@
         <Select
           size="sm"
           labelText={m.calc_variables()}
-          bind:selected={selectedVariable}
+          selected={selectedVariable}
+          onchange={handleVariableSelect}
         >
           <SelectItem value="" text={m.calc_select_variable()} />
           {#each columns as column (column.name)}
@@ -388,7 +405,8 @@
         <Select
           size="sm"
           labelText={m.calc_functions()}
-          bind:selected={selectedFunction}
+          selected={selectedFunction}
+          onchange={handleFunctionSelect}
         >
           {#each FUNCTIONS as fn (fn.value)}
             <SelectItem value={fn.value} text={fn.label} />

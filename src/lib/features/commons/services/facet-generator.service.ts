@@ -1,4 +1,4 @@
-import { m } from '$lib/paraglide/messages.js';
+import { m } from '$lib/paraglide/messages';
 import {
   PrimitiveFilterType,
   type PrimitiveConfigKind,
@@ -15,34 +15,16 @@ import {
   type FacetSlotPath,
   type ScaleMode
 } from '$lib/features/commons/constants/facets.constants';
+import { DEFAULT_CLASSIFICATION_CLASS_COUNT } from '$lib/features/commons/constants/visualization.constants';
 import { applyFacetVariablePatch } from '$lib/features/commons/utils/facet-visualization-updates';
+import { calculateBreaks } from './classification.service';
 import {
   findPaletteById,
   generatePaletteColors,
   PALETTE_TYPE,
   type Palette
 } from '$lib/features/commons/components/palette-popover/palette.constants';
-
-function buildEqualIntervalBreaks(
-  min: number,
-  max: number,
-  classes: number
-): number[] {
-  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) {
-    return [min, max];
-  }
-
-  const totalClasses = Math.max(2, classes);
-  const step = (max - min) / totalClasses;
-  const breaks = [min];
-
-  for (let i = 1; i < totalClasses; i += 1) {
-    breaks.push(min + step * i);
-  }
-
-  breaks.push(max);
-  return breaks;
-}
+import { DataValidationError } from '../pipeline.errors';
 
 function resolveFacetClassification(
   visualization: VisualizationConfig,
@@ -141,14 +123,6 @@ function buildCategoricalFacetClassification(
     labels: labels.length > 0 ? labels : (baseClassification.labels ?? []),
     colors
   };
-}
-
-function applyFacetVariableToVisualization(
-  visualization: VisualizationConfig,
-  slotPath: FacetSlotPath,
-  variable: string
-): void {
-  applyFacetVariablePatch(visualization, slotPath, variable);
 }
 
 function applyFacetClassificationToVisualization(
@@ -275,12 +249,12 @@ function applyFacetClassificationToVisualization(
   }
 }
 
-function buildFacetClassification(
+async function buildFacetClassification(
   baseViz: VisualizationConfig,
   variable: string,
   scaleMode: ScaleMode,
   slotPath: FacetSlotPath
-): VisualizationConfig['classification'] {
+): Promise<VisualizationConfig['classification']> {
   const baseClassification = resolveFacetClassification(baseViz, slotPath);
   if (!baseClassification) {
     return baseClassification;
@@ -302,41 +276,40 @@ function buildFacetClassification(
     return { ...baseClassification };
   }
 
-  const stats = datasetsStore.getColumnStatistics(baseViz.datasetId, variable);
-  if (
-    !stats ||
-    !('min' in stats) ||
-    !('max' in stats) ||
-    typeof stats.min !== 'number' ||
-    typeof stats.max !== 'number' ||
-    !Number.isFinite(stats.min) ||
-    !Number.isFinite(stats.max)
-  ) {
+  if (!baseViz.datasetId) {
     return { ...baseClassification };
   }
 
   const classes =
-    baseClassification.numClasses ?? baseClassification.classes ?? 5;
-  const independentBreaks = buildEqualIntervalBreaks(
-    stats.min,
-    stats.max,
-    classes
-  );
+    baseClassification.numClasses ??
+    baseClassification.classes ??
+    DEFAULT_CLASSIFICATION_CLASS_COUNT;
+  const result = await calculateBreaks({
+    datasetId: baseViz.datasetId,
+    columnName: variable,
+    method: baseClassification.method,
+    numClasses: classes
+  });
+
+  if (!result) {
+    return { ...baseClassification };
+  }
+
+  const actualClasses = result.counts.length || classes;
 
   return {
     ...baseClassification,
-    numClasses: classes,
-    classes,
-    breaks: independentBreaks
+    numClasses: actualClasses,
+    classes: actualClasses,
+    breaks: result.breaks,
+    counts: result.counts,
+    ...(result.breakpointLowerClassCount != null
+      ? { breakpointLowerClassCount: result.breakpointLowerClassCount }
+      : {})
   };
 }
 
-// A facet slot path is `<primitiveKind>.<column>` (e.g. `polygon.valueColumn`),
-// so its leading segment is exactly a PrimitiveConfigKind. This map keeps that
-// link explicit and exhaustive (TS enforces every kind is mapped). It is built
-// lazily, not at module load: PrimitiveFilterType lives in the visualization
-// store, which is part of an import cycle with this module, so reading the enum
-// at evaluation time would see it still undefined.
+// Build lazily because PrimitiveFilterType participates in an import cycle.
 let facetPrimitiveBySlotKind: Record<
   PrimitiveConfigKind,
   PrimitiveFilter
@@ -359,10 +332,7 @@ function isPrimitiveConfigKind(value: string): value is PrimitiveConfigKind {
   return value in getFacetPrimitiveBySlotKind();
 }
 
-/**
- * Maps a facet slot path to the single primitive it drives, so a collection
- * keeps only the facetted primitive and hides the others (issue #177 bridage).
- */
+/** Map a facet slot path to the only primitive shown by the collection. */
 export function resolveFacetPrimitiveFilter(
   slotPath: FacetSlotPath
 ): PrimitiveFilter {
@@ -372,7 +342,7 @@ export function resolveFacetPrimitiveFilter(
     : PrimitiveFilterType.POLYGON;
 }
 
-export function buildFacetVisualizationUpdates({
+export async function buildFacetVisualizationUpdates({
   baseViz,
   visualization,
   variable,
@@ -384,18 +354,20 @@ export function buildFacetVisualizationUpdates({
   variable: string;
   scaleMode: ScaleMode;
   primarySlotPath: FacetSlotPath;
-}): Partial<VisualizationConfig> {
+}): Promise<Partial<VisualizationConfig>> {
   const nextVisualization = deepClone(visualization);
 
-  applyFacetVariableToVisualization(
-    nextVisualization,
-    primarySlotPath,
-    variable
+  applyFacetVariablePatch(nextVisualization, primarySlotPath, variable);
+  const classification = await buildFacetClassification(
+    baseViz,
+    variable,
+    scaleMode,
+    primarySlotPath
   );
   applyFacetClassificationToVisualization(
     nextVisualization,
     primarySlotPath,
-    buildFacetClassification(baseViz, variable, scaleMode, primarySlotPath)
+    classification
   );
 
   return {
@@ -425,7 +397,11 @@ export async function generateFacetVisualizations(
   const tableName = baseViz.datasetId;
 
   if (!tableName) {
-    throw new Error(m.error_facet_base_viz_no_dataset());
+    throw new DataValidationError(
+      m.error_facet_base_viz_no_dataset(),
+      'datasetId',
+      { visualizationId: baseViz.id }
+    );
   }
 
   const facetConfigs: VisualizationConfig[] = [];
@@ -442,13 +418,13 @@ export async function generateFacetVisualizations(
       facet: {
         baseVisualizationId: baseViz.id
       },
-      ...buildFacetVisualizationUpdates({
+      ...(await buildFacetVisualizationUpdates({
         baseViz,
         visualization: cloned,
         variable,
         scaleMode,
         primarySlotPath
-      })
+      }))
     };
 
     facetConfigs.push(facetConfig);

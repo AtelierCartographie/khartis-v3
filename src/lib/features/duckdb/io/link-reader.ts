@@ -17,14 +17,23 @@ import {
 } from './file-registry';
 import { addRowId, restoreNormalizedColumnNames } from './reader-utils';
 
+const SAFE_CSV_DECIMAL_SEPARATORS = new Set(['.', ',']);
+
+function resolveCsvDecimalSeparator(value: string): string {
+  return value.length === 1 && SAFE_CSV_DECIMAL_SEPARATORS.has(value)
+    ? value
+    : DUCK_CONST.DEFAULT.DECIMAL_SEPARATOR;
+}
+
 export async function readLink(
   ctx: DuckDBContext,
   url: string,
   options: ReadLinkOptions = {}
 ): Promise<string> {
   let { tablename } = options;
-  const decimal_separator =
-    options.decimal_separator ?? DUCK_CONST.DEFAULT.DECIMAL_SEPARATOR;
+  const decimal_separator = resolveCsvDecimalSeparator(
+    options.decimal_separator ?? DUCK_CONST.DEFAULT.DECIMAL_SEPARATOR
+  );
 
   const filename = extractFilename(url);
   const file_type = getFileType(filename);

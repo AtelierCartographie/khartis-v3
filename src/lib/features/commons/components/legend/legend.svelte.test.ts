@@ -11,6 +11,12 @@ import {
   draw_symbols_legend,
   round_thresholds
 } from '.';
+import {
+  renderLegendHeader,
+  renderLegendNote,
+  sanitizeDataImageUrl,
+  wrapLegendText
+} from './utils';
 
 const measureCanvas = {
   getContext: () => ({
@@ -26,6 +32,70 @@ describe('common legend generators', () => {
 
   afterAll(() => {
     Textbox.setMeasureCanvas(null);
+  });
+
+  it('wraps legend text with the shared Textbox measurement', () => {
+    expect(wrapLegendText('Alpha beta gamma', '12px Inter', 75)).toEqual([
+      'Alpha beta',
+      'gamma'
+    ]);
+  });
+
+  it('renders shared header and note blocks with escaped wrapped text', () => {
+    const header = renderLegendHeader({
+      title: 'Alpha <title> beta gamma',
+      subtitle: 'Delta epsilon',
+      x: 4,
+      y: 6,
+      maxWidth: 75,
+      titleSize: 12,
+      subtitleSize: 10,
+      fontFamily: 'Inter'
+    });
+    const note = renderLegendNote({
+      note: 'Source <unsafe> beta gamma',
+      x: 4,
+      y: header.height + 10,
+      maxWidth: 75,
+      noteSize: 9,
+      fontFamily: 'Inter'
+    });
+    const emptyHeader = renderLegendHeader({
+      title: '   ',
+      subtitle: '   ',
+      x: 4,
+      y: 6,
+      maxWidth: 75,
+      titleSize: 12,
+      subtitleSize: 10,
+      fontFamily: 'Inter'
+    });
+
+    expect(header.markup).toContain('class="title"');
+    expect(header.markup).toContain('class="subtitle"');
+    expect(header.markup).toContain('&lt;title&gt;');
+    expect(header.markup).not.toContain('<title>');
+    expect(header.height).toBeGreaterThan(0);
+    expect(note.markup).toContain('class="note"');
+    expect(note.markup).toContain('&lt;unsafe&gt;');
+    expect(note.height).toBeGreaterThan(0);
+    expect(emptyHeader).toEqual({ markup: '', height: 0 });
+  });
+
+  it('sanitizes data image URLs for legend patterns', () => {
+    expect(sanitizeDataImageUrl('data:image/png;base64,aGVsbG8=')).toBe(
+      'data:image/png;base64,aGVsbG8='
+    );
+    expect(sanitizeDataImageUrl('data:image/webp;base64,aGVsbG8=')).toBe(
+      'data:image/webp;base64,aGVsbG8='
+    );
+    expect(sanitizeDataImageUrl('data:image/svg+xml;base64,PHN2Zz4=')).toBe(
+      'data:image/svg+xml;base64,PHN2Zz4='
+    );
+    expect(sanitizeDataImageUrl('javascript:alert(1)')).toBeNull();
+    expect(
+      sanitizeDataImageUrl('data:text/html;base64,PHNjcmlwdD4=')
+    ).toBeNull();
   });
 
   it('draws a quantitative color legend from precomputed thresholds', () => {
@@ -198,7 +268,7 @@ describe('common legend generators', () => {
   });
 
   it('keeps legend canvases transparent and applies the selected font family', () => {
-    const markups = [
+    const svgDefinitions = [
       draw_categorical_legend([{ label: 'Actif', fill: '#4585f5' }], {
         fontFamily: 'Cabin'
       }),
@@ -213,7 +283,7 @@ describe('common legend generators', () => {
       })
     ];
 
-    for (const markup of markups) {
+    for (const { markup } of svgDefinitions) {
       expect(markup).toContain('font-family="&quot;Cabin&quot;, sans-serif"');
       expect(markup).toContain('fill="transparent"');
       expect(markup).not.toContain('fill="white"');
@@ -397,7 +467,7 @@ describe('common legend generators', () => {
   });
 
   it('aligns each double symbol label with its own symbol center', () => {
-    const markup = draw_khartis_double_symbols_legend([
+    const svgDefinition = draw_khartis_double_symbols_legend([
       {
         label: '227,119',
         size: 18,
@@ -421,7 +491,7 @@ describe('common legend generators', () => {
       }
     ]);
     const host = document.createElement('div');
-    host.innerHTML = `<svg>${markup}</svg>`;
+    host.innerHTML = `<svg>${svgDefinition.markup}</svg>`;
 
     const rowGroups = [...host.querySelectorAll('.double-symbol-pair')];
     const labelTexts = ['227,119', '113,567', '14'].map((label) =>
@@ -444,7 +514,7 @@ describe('common legend generators', () => {
   });
 
   it('bottom-aligns double symbol rows so smaller symbols sit lower relative to previous row', () => {
-    const markup = draw_khartis_double_symbols_legend([
+    const svgDefinition = draw_khartis_double_symbols_legend([
       {
         label: '227,119',
         size: 18,
@@ -468,7 +538,7 @@ describe('common legend generators', () => {
       }
     ]);
     const host = document.createElement('div');
-    host.innerHTML = `<svg>${markup}</svg>`;
+    host.innerHTML = `<svg>${svgDefinition.markup}</svg>`;
 
     const rowGroups = [...host.querySelectorAll('.double-symbol-pair')];
     const cyValues = rowGroups.map((group) => {
@@ -507,6 +577,38 @@ describe('common legend generators', () => {
     expect(svg.markup).toContain('&lt;script&gt;');
     expect(svg.markup).not.toContain('<script>');
     expect(svg.markup).not.toContain('javascript:alert');
+  });
+
+  it('keeps Khartis pattern ids unique across simultaneous legends', () => {
+    const firstSvg = draw_khartis_swatch_legend(
+      [
+        {
+          label: 'A',
+          fill: '#ffffff',
+          patternUrl: 'data:image/png;base64,AA=='
+        }
+      ],
+      { type: 'pattern' }
+    );
+    const secondSvg = draw_khartis_swatch_legend(
+      [
+        {
+          label: 'B',
+          fill: '#ffffff',
+          patternUrl: 'data:image/png;base64,AA=='
+        }
+      ],
+      { type: 'pattern' }
+    );
+
+    const firstId = firstSvg.markup.match(/<pattern id="([^"]+)"/)?.[1];
+    const secondId = secondSvg.markup.match(/<pattern id="([^"]+)"/)?.[1];
+
+    expect(firstId).toBeTruthy();
+    expect(secondId).toBeTruthy();
+    expect(firstId).not.toBe(secondId);
+    expect(firstSvg.markup).toContain(`fill="url(#${firstId})"`);
+    expect(secondSvg.markup).toContain(`fill="url(#${secondId})"`);
   });
 
   it('centralizes raw SVG markup rendering in LegendSvg', () => {

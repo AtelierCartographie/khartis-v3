@@ -18,9 +18,14 @@ PRD deployment.
 5. Builds the tagged version in a temporary detached worktree.
 6. Copies the generated `build/` directory to a local temporary upload snapshot.
 7. Connects to SFTP only after the checks pass.
-8. Uploads the snapshot to a temporary remote sibling directory.
-9. Replaces the configured remote PPRD directory only after the upload completes.
-10. Optionally checks the public PPRD URL.
+8. Removes stale temporary directories left by previous interrupted deployments.
+9. Uploads the snapshot to a temporary remote sibling directory, showing a live
+   progress bar with the percentage, the number of files left, and an ETA.
+10. Swaps the temporary directory into place with two quick renames, so the
+    site is unavailable only for a fraction of a second.
+11. Removes the previous remote version after the swap. If the swap fails, the
+    script restores the previous version instead.
+12. Optionally checks the public PPRD URL.
 
 `pnpm deploy:pprd:dry-run` performs the same tag, CI, install, and build checks,
 but skips SFTP entirely.
@@ -32,7 +37,8 @@ pnpm deploy:pprd:dry-run
 pnpm deploy:pprd
 ```
 
-For advanced use:
+By default the latest staging tag is deployed. To deploy an older staging
+release, for example to roll back, pass its tag explicitly:
 
 ```bash
 pnpm deploy:pprd:dry-run -- --tag vX.Y.Z-staging.N
@@ -95,8 +101,9 @@ multiple host keys, store the accepted fingerprints as a comma-separated list.
 - The script refuses PRD targets.
 - The script uses `ssh2-sftp-client` with host-key verification enabled.
 - The dry-run command never opens an SFTP connection.
-- Real uploads use a temporary remote directory first, then replace PPRD after
-  the upload completes.
+- Real uploads use a temporary remote directory first, then swap it into place
+  with fast renames. The previous version is removed only after the swap; if
+  the swap fails, the previous version is restored.
 
 ## Recommended Flow
 
@@ -114,9 +121,14 @@ multiple host keys, store the accepted fingerprints as a comma-separated list.
    pnpm deploy:pprd
    ```
 
-5. Type the exact confirmation requested by the script.
+5. Check the tag shown by the confirmation prompt, then answer `y`. If the tag
+   is not the one you want, answer `n` and re-run with `--tag`.
 6. Enter the SFTP password when prompted.
 
-The script replaces the PPRD remote directory after the temporary upload
-completes. Do not run the real deployment command unless the selected tag and
-target are correct.
+## Deployment Window
+
+The remote swap replaces the whole PPRD directory in two quick renames, so the
+site is unavailable only for a fraction of a second. However, the hashed assets
+of the previous release disappear at that moment: visitors with an open session
+may need to reload the page before lazy-loaded chunks resolve again. Prefer
+low-traffic windows, for example at night, for extra safety.

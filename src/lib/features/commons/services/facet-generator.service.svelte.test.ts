@@ -2,15 +2,18 @@ import { m } from '$lib/paraglide/messages';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  getColumnStatistics: vi.fn(),
+  calculateBreaks: vi.fn(),
   getUniqueValues: vi.fn()
 }));
 
 vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   datasetsStore: {
-    getColumnStatistics: mocks.getColumnStatistics,
     getUniqueValues: mocks.getUniqueValues
   }
+}));
+
+vi.mock('./classification.service', () => ({
+  calculateBreaks: mocks.calculateBreaks
 }));
 
 vi.mock('$lib/features/commons/utils/logger', () => ({
@@ -53,6 +56,12 @@ function makeBaseViz(overrides = {}) {
 describe('generateFacetVisualizations', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.calculateBreaks.mockResolvedValue({
+      breaks: [20, 30, 40],
+      counts: [1, 1, 1, 1],
+      min: 10,
+      max: 50
+    });
   });
 
   it('should generate one config per variable', async () => {
@@ -243,7 +252,6 @@ describe('generateFacetVisualizations', () => {
   });
 
   it('should seed labels for targeted categorical facets', async () => {
-    mocks.getColumnStatistics.mockReturnValue(null);
     mocks.getUniqueValues.mockReturnValue(['A', 'B', 'C']);
     const base = makeBaseViz({
       mapping: { categoryColumn: 'region' },
@@ -290,8 +298,6 @@ describe('generateFacetVisualizations', () => {
   });
 
   it('should recalculate breaks in independent mode', async () => {
-    mocks.getColumnStatistics.mockReturnValue({ min: 10, max: 50 });
-
     const base = makeBaseViz();
     const result = await generateFacetVisualizations(
       base as never,
@@ -300,12 +306,17 @@ describe('generateFacetVisualizations', () => {
       FACET_SLOT.POLYGON_VALUE
     );
 
-    expect(result[0].classification?.breaks).toEqual([10, 20, 30, 40, 50]);
+    expect(mocks.calculateBreaks).toHaveBeenCalledWith({
+      datasetId: 'table1',
+      columnName: 'gdp',
+      method: 'equal_interval',
+      numClasses: 4
+    });
+    expect(result[0].classification?.breaks).toEqual([20, 30, 40]);
+    expect(result[0].classification?.counts).toEqual([1, 1, 1, 1]);
   });
 
   it('should recalculate line thickness breaks in independent mode', async () => {
-    mocks.getColumnStatistics.mockReturnValue({ min: 10, max: 50 });
-
     const base = makeBaseViz({
       line: {
         valueColumn: 'traffic',
@@ -328,15 +339,13 @@ describe('generateFacetVisualizations', () => {
 
     expect(result[0].line?.valueColumn).toBe('length');
     expect(result[0].line?.thicknessClassification?.breaks).toEqual([
-      10, 20, 30, 40, 50
+      20, 30, 40
     ]);
   });
 
-  it('builds an in-place visualization update for scale mode changes without changing ids', () => {
-    mocks.getColumnStatistics.mockReturnValue({ min: 10, max: 50 });
-
+  it('builds an in-place visualization update for scale mode changes without changing ids', async () => {
     const base = makeBaseViz();
-    const update = buildFacetVisualizationUpdates({
+    const update = await buildFacetVisualizationUpdates({
       baseViz: base as never,
       visualization: {
         ...makeBaseViz({
@@ -360,10 +369,10 @@ describe('generateFacetVisualizations', () => {
       sizeColumn: 'area'
     });
     expect(update.polygon?.valueColumn).toBe('gdp');
-    expect(update.classification?.breaks).toEqual([10, 20, 30, 40, 50]);
+    expect(update.classification?.breaks).toEqual([20, 30, 40]);
   });
 
-  it('can sync non-faceted primitive changes from the base visualization', () => {
+  it('can sync non-faceted primitive changes from the base visualization', async () => {
     const base = makeBaseViz({
       symbol: {
         enabled: true,
@@ -380,7 +389,7 @@ describe('generateFacetVisualizations', () => {
       }
     });
 
-    const update = buildFacetVisualizationUpdates({
+    const update = await buildFacetVisualizationUpdates({
       baseViz: base as never,
       visualization: base as never,
       variable: 'gdp',
@@ -401,8 +410,8 @@ describe('generateFacetVisualizations', () => {
     expect(update.primitiveFilters).toEqual([PrimitiveFilterType.POLYGON]);
   });
 
-  it('should fall back to base breaks when stats are missing in independent mode', async () => {
-    mocks.getColumnStatistics.mockReturnValue(null);
+  it('should fall back to base breaks when break calculation returns null in independent mode', async () => {
+    mocks.calculateBreaks.mockResolvedValueOnce(null);
 
     const base = makeBaseViz();
     const result = await generateFacetVisualizations(

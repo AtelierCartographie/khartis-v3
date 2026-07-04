@@ -1,11 +1,15 @@
 <script lang="ts">
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {
     globalActions,
     globalState
   } from '$lib/features/commons/stores/global.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
-  import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
+  import {
+    visualizationStore,
+    VisualizationType
+  } from '$lib/features/commons/stores/visualization.store.svelte';
   import {
     StylingTools,
     ToolbarStep,
@@ -30,22 +34,74 @@
     WatsonHealthTextAnnotationToggle
   } from 'carbon-icons-svelte';
   import clsx from 'clsx';
-  import ToolPopover from '../step-toolbar/tool-popover.svelte';
-  import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations';
   import {
-    getLegendState,
-    legendActions
-  } from '$lib/features/step-toolbar/tools/legend';
-  import {
+    annotationsActions,
     closeSelectedToolPanel,
-    selectTool
-  } from '../step-toolbar/tools-list/tool-list.utils.svelte';
-  import ToolContainer from '../step-toolbar/tools/tool-container.svelte';
+    getLegendState,
+    legendActions,
+    selectTool,
+    ToolContainer,
+    ToolPopover
+  } from '$lib/features/step-toolbar';
   import { VizSubTab } from './main-toolbar.constants';
-  import DataTab from '$lib/features/data-tab/data-tab.svelte';
-  import ChooseVisualization from '$lib/features/visualization-tab/components/choose-visualization.svelte';
-  import ConfigureVisualization from '$lib/features/visualization-tab/components/configure-visualization.svelte';
-  import CustomizeBasemap from '$lib/features/visualization-tab/components/customize-basemap.svelte';
+  import { DataTab } from '$lib/features/data-tab';
+  import { KEY } from '$lib/features/commons/constants/dom.constants';
+  import {
+    ChooseVisualization,
+    ConfigureVisualization,
+    CustomizeBasemap
+  } from '$lib/features/visualization-tab';
+  import type { Component } from 'svelte';
+
+  type MobileToolButtonConfig<TTool extends VisualizationTools | StylingTools> =
+    {
+      tool: TTool;
+      icon: Component;
+      label: () => string;
+      badge?: 'legend';
+    };
+
+  const VISUALIZATION_TOOL_BUTTONS: MobileToolButtonConfig<VisualizationTools>[] =
+    [
+      { tool: VisualizationTools.Search, icon: Search, label: m.tool_search },
+      { tool: VisualizationTools.Layers, icon: Layers, label: m.tool_layers },
+      {
+        tool: VisualizationTools.Projection,
+        icon: Globe,
+        label: m.tool_projection
+      },
+      {
+        tool: VisualizationTools.Simplification,
+        icon: WatsonHealthScalpelSelect,
+        label: m.tool_simplification
+      },
+      { tool: VisualizationTools.Facets, icon: GridIcon, label: m.tool_facets }
+    ];
+
+  const STYLING_TOOL_BUTTONS: MobileToolButtonConfig<StylingTools>[] = [
+    { tool: StylingTools.Format, icon: Crop, label: m.tool_format },
+    {
+      tool: StylingTools.Legend,
+      icon: Legend,
+      label: m.tool_legend,
+      badge: 'legend'
+    },
+    {
+      tool: StylingTools.GeoIndications,
+      icon: Compass,
+      label: m.tool_geo_indications
+    },
+    {
+      tool: StylingTools.Annotations,
+      icon: WatsonHealthTextAnnotationToggle,
+      label: m.tool_annotations
+    },
+    {
+      tool: StylingTools.ColorBlindness,
+      icon: SettingsView,
+      label: m.tool_color_blindness
+    }
+  ];
 
   let activeVizSubTab = $state<VizSubTab>(VizSubTab.CHOOSE);
 
@@ -80,7 +136,6 @@
     }
     closeSelectedToolPanel();
   };
-
   const isStepSelected = (step: ToolbarStep): boolean => {
     return globalState.selectedStep === step;
   };
@@ -89,9 +144,26 @@
     globalActions.closeMobileToolbar();
   };
 
+  const handleOverlayKeydown = (event: KeyboardEvent) => {
+    if (event.key !== KEY.ESCAPE || !globalState.isMobileToolbarOpen) return;
+
+    event.stopPropagation();
+    handleClose();
+  };
+
   const handleToolSelect = (tool: VisualizationTools) => {
     globalActions.closeMobileToolbar();
     selectTool(tool);
+  };
+
+  const handleAddVizTab = () => {
+    const dataset = datasetsStore.selectedDataset;
+    if (!dataset) return;
+
+    visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      dataset.id
+    );
   };
 
   const handleStylingToolSelect = (tool: StylingTools) => {
@@ -130,8 +202,11 @@
       'with-tools-bar': showToolsBar
     })}
     role="dialog"
-    aria-modal="true"
+    aria-modal={globalState.isMobileToolbarOpen}
+    aria-hidden={!globalState.isMobileToolbarOpen}
     aria-label={stepLabels[globalState.selectedStep]}
+    inert={!globalState.isMobileToolbarOpen}
+    onkeydown={handleOverlayKeydown}
   >
     <header class="mobile-toolbar-header">
       <div class="header-left">
@@ -153,6 +228,7 @@
             size="small"
             icon={Add}
             iconDescription={m.new_visualization_button()}
+            on:click={handleAddVizTab}
           />
         {/if}
         <IconButton
@@ -205,140 +281,21 @@
   {#if showToolsBar && hasProject}
     <nav class="mobile-tools-bar app-shadow" aria-label={m.mobile_tools_aria()}>
       {#if globalState.selectedStep === ToolbarStep.Visualizations}
-        <button
-          type="button"
-          class="mobile-tool-btn"
-          class:active={globalState.selectedTool === VisualizationTools.Search}
-          aria-pressed={globalState.selectedTool === VisualizationTools.Search}
-          onclick={() => handleToolSelect(VisualizationTools.Search)}
-        >
-          {#if globalState.selectedTool === VisualizationTools.Search}
-            <span class="tool-active-indicator"></span>
-          {/if}
-          <Search size={20} />
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-btn"
-          class:active={globalState.selectedTool === VisualizationTools.Layers}
-          aria-pressed={globalState.selectedTool === VisualizationTools.Layers}
-          onclick={() => handleToolSelect(VisualizationTools.Layers)}
-        >
-          {#if globalState.selectedTool === VisualizationTools.Layers}
-            <span class="tool-active-indicator"></span>
-          {/if}
-          <Layers size={20} />
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-btn"
-          class:active={globalState.selectedTool ===
-            VisualizationTools.Projection}
-          aria-pressed={globalState.selectedTool ===
-            VisualizationTools.Projection}
-          onclick={() => handleToolSelect(VisualizationTools.Projection)}
-        >
-          {#if globalState.selectedTool === VisualizationTools.Projection}
-            <span class="tool-active-indicator"></span>
-          {/if}
-          <Globe size={20} />
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-btn"
-          class:active={globalState.selectedTool ===
-            VisualizationTools.Simplification}
-          aria-pressed={globalState.selectedTool ===
-            VisualizationTools.Simplification}
-          onclick={() => handleToolSelect(VisualizationTools.Simplification)}
-        >
-          {#if globalState.selectedTool === VisualizationTools.Simplification}
-            <span class="tool-active-indicator"></span>
-          {/if}
-          <WatsonHealthScalpelSelect size={20} />
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-btn"
-          class:active={globalState.selectedTool === VisualizationTools.Facets}
-          aria-pressed={globalState.selectedTool === VisualizationTools.Facets}
-          onclick={() => handleToolSelect(VisualizationTools.Facets)}
-        >
-          {#if globalState.selectedTool === VisualizationTools.Facets}
-            <span class="tool-active-indicator"></span>
-          {/if}
-          <GridIcon size={20} />
-        </button>
+        {#each VISUALIZATION_TOOL_BUTTONS as toolButton (toolButton.tool)}
+          {@render mobileToolButton(
+            toolButton,
+            globalState.selectedTool === toolButton.tool,
+            () => handleToolSelect(toolButton.tool)
+          )}
+        {/each}
       {:else if globalState.selectedStep === ToolbarStep.Styling}
-        <button
-          type="button"
-          class="mobile-tool-btn"
-          class:active={globalState.selectedTool === StylingTools.Format}
-          aria-pressed={globalState.selectedTool === StylingTools.Format}
-          onclick={() => handleStylingToolSelect(StylingTools.Format)}
-        >
-          {#if globalState.selectedTool === StylingTools.Format}
-            <span class="tool-active-indicator"></span>
-          {/if}
-          <Crop size={20} />
-        </button>
-        <div class="mobile-tool-wrapper">
-          <button
-            type="button"
-            class="mobile-tool-btn"
-            class:active={globalState.selectedTool === StylingTools.Legend}
-            aria-pressed={globalState.selectedTool === StylingTools.Legend}
-            onclick={() => handleStylingToolSelect(StylingTools.Legend)}
-          >
-            {#if globalState.selectedTool === StylingTools.Legend}
-              <span class="tool-active-indicator"></span>
-            {/if}
-            <Legend size={20} />
-          </button>
-          {#if showLegendBadge}
-            <span class="notification-badge"></span>
-          {/if}
-        </div>
-        <button
-          type="button"
-          class="mobile-tool-btn"
-          class:active={globalState.selectedTool ===
-            StylingTools.GeoIndications}
-          aria-pressed={globalState.selectedTool ===
-            StylingTools.GeoIndications}
-          onclick={() => handleStylingToolSelect(StylingTools.GeoIndications)}
-        >
-          {#if globalState.selectedTool === StylingTools.GeoIndications}
-            <span class="tool-active-indicator"></span>
-          {/if}
-          <Compass size={20} />
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-btn"
-          class:active={globalState.selectedTool === StylingTools.Annotations}
-          aria-pressed={globalState.selectedTool === StylingTools.Annotations}
-          onclick={() => handleStylingToolSelect(StylingTools.Annotations)}
-        >
-          {#if globalState.selectedTool === StylingTools.Annotations}
-            <span class="tool-active-indicator"></span>
-          {/if}
-          <WatsonHealthTextAnnotationToggle size={20} />
-        </button>
-        <button
-          type="button"
-          class="mobile-tool-btn"
-          class:active={globalState.selectedTool ===
-            StylingTools.ColorBlindness}
-          aria-pressed={globalState.selectedTool ===
-            StylingTools.ColorBlindness}
-          onclick={() => handleStylingToolSelect(StylingTools.ColorBlindness)}
-        >
-          {#if globalState.selectedTool === StylingTools.ColorBlindness}
-            <span class="tool-active-indicator"></span>
-          {/if}
-          <SettingsView size={20} />
-        </button>
+        {#each STYLING_TOOL_BUTTONS as toolButton (toolButton.tool)}
+          {@render mobileToolButton(
+            toolButton,
+            globalState.selectedTool === toolButton.tool,
+            () => handleStylingToolSelect(toolButton.tool)
+          )}
+        {/each}
       {/if}
     </nav>
 
@@ -393,6 +350,50 @@
     </button>
   </nav>
 {/if}
+
+{#snippet mobileToolButton(
+  config:
+    | MobileToolButtonConfig<VisualizationTools>
+    | MobileToolButtonConfig<StylingTools>,
+  isActive: boolean,
+  onSelect: () => void
+)}
+  {@const Icon = config.icon}
+  {#if config.badge === 'legend'}
+    <div class="mobile-tool-wrapper">
+      <button
+        type="button"
+        class="mobile-tool-btn"
+        class:active={isActive}
+        aria-label={config.label()}
+        aria-pressed={isActive}
+        onclick={onSelect}
+      >
+        {#if isActive}
+          <span class="tool-active-indicator"></span>
+        {/if}
+        <Icon size={20} />
+      </button>
+      {#if showLegendBadge}
+        <span class="notification-badge"></span>
+      {/if}
+    </div>
+  {:else}
+    <button
+      type="button"
+      class="mobile-tool-btn"
+      class:active={isActive}
+      aria-label={config.label()}
+      aria-pressed={isActive}
+      onclick={onSelect}
+    >
+      {#if isActive}
+        <span class="tool-active-indicator"></span>
+      {/if}
+      <Icon size={20} />
+    </button>
+  {/if}
+{/snippet}
 
 <style>
   .mobile-toolbar-overlay {

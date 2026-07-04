@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { dragHandle, dragHandleZone } from 'svelte-dnd-action';
-  import { Dropdown } from 'carbon-components-svelte';
+  import { Dropdown, TextInput } from 'carbon-components-svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
@@ -17,9 +17,15 @@
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
+  import { clickOutside } from '$lib/features/commons/utils/click-outside';
+  import { portal } from '$lib/features/commons/utils/portal';
+  import {
+    readCarbonStringValue,
+    type CarbonValueEvent
+  } from '$lib/features/commons/utils/carbon-events.utils';
   import { SliderWithInput } from '$lib/features/commons/components/viz-controls';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
-  import { ToolbarState } from '$lib/features/commons/types/global';
+  import { resolveToolbarWidth } from '$lib/features/commons/utils/toolbar-width.utils';
   import PaletteSuggestions from './palette-suggestions.svelte';
   import SingleColorPreview from './single-color-preview.svelte';
   import PatternPicker from './pattern-picker.svelte';
@@ -63,7 +69,7 @@
   }: Props = $props();
 
   let popoverRef = $state<HTMLDivElement>();
-  let popoverRight = $state('50vw');
+  let popoverRight = $state(resolveToolbarWidth(globalState.toolbarState));
   let draftCategories = $state<CategoryDraft[]>([]);
   let selectedCategoryId = $state<string | null>(null);
   let draftColorBlindFilter = $state(false);
@@ -126,16 +132,7 @@
     { id: 'za', text: m.palette_categories_sort_za() }
   ]);
 
-  const toolbarWidth = $derived.by(() => {
-    switch (globalState.toolbarState) {
-      case ToolbarState.Collapsed:
-        return '50px';
-      case ToolbarState.Compact:
-        return '434px';
-      default:
-        return '50vw';
-    }
-  });
+  const toolbarWidth = $derived(resolveToolbarWidth(globalState.toolbarState));
 
   const selectedCategory = $derived(
     draftCategories.find((category) => category.id === selectedCategoryId)
@@ -149,15 +146,6 @@
   const hiddenCategoryCount = $derived(
     Math.max(0, draftCategories.length - MAX_VISIBLE_CATEGORIES)
   );
-
-  function portal(node: HTMLElement) {
-    document.body.appendChild(node);
-    return {
-      destroy() {
-        node.remove();
-      }
-    };
-  }
 
   function initDraft() {
     draftCategories = categories.map((category, index) => ({
@@ -291,6 +279,14 @@
     );
   }
 
+  function handleCategoryLabelInput(
+    id: string,
+    fallback: string,
+    event: CarbonValueEvent
+  ) {
+    handleCategoryLabel(id, readCarbonStringValue(event, fallback));
+  }
+
   function handleCategoryToggle(id: string, enabled: boolean) {
     draftCategories = draftCategories.map((category) =>
       category.id === id ? { ...category, enabled } : category
@@ -321,6 +317,16 @@
         target.classList.contains('bx--list-box__menu-item')
       );
     });
+  }
+
+  function handlePopoverOutsideClick(event: CustomEvent) {
+    const originalEvent = event.detail?.originalEvent as MouseEvent | undefined;
+    const target = originalEvent?.target as Node | undefined;
+    if (target && triggerElement?.contains(target)) return;
+    if (originalEvent && isNestedPopoverSurface(originalEvent.composedPath())) {
+      return;
+    }
+    handleClose();
   }
 
   function applyVisibleCategoryOrder(items: CategoryDraft[]) {
@@ -412,15 +418,6 @@
   $effect(() => {
     if (!open) return;
 
-    function handleClick(e: MouseEvent) {
-      const path = e.composedPath();
-      if (popoverRef && !path.includes(popoverRef)) {
-        if (triggerElement && path.includes(triggerElement)) return;
-        if (isNestedPopoverSurface(path)) return;
-        handleClose();
-      }
-    }
-
     function handleKeydown(e: KeyboardEvent) {
       if (e.key === KEY.ESCAPE) {
         handleClose();
@@ -446,14 +443,9 @@
       }
     }
 
-    const timer = setTimeout(() => {
-      document.addEventListener(EVENT.CLICK, handleClick);
-    }, 0);
     document.addEventListener(EVENT.KEYDOWN, handleKeydown);
 
     return () => {
-      clearTimeout(timer);
-      document.removeEventListener(EVENT.CLICK, handleClick);
       document.removeEventListener(EVENT.KEYDOWN, handleKeydown);
     };
   });
@@ -467,6 +459,17 @@
       style:right={popoverRight}
       role="dialog"
       aria-label={m.palette_categories_aspect_title()}
+      use:clickOutside={{
+        enabled: open,
+        excludeSelectors: [
+          '#khartis-color-picker-dropdown',
+          '.single-color-dropdown',
+          '.palette-popover',
+          '.bx--list-box__menu',
+          '.bx--list-box__menu-item'
+        ]
+      }}
+      onoutsideclick={handlePopoverOutsideClick}
     >
       <header class="popover-header">
         <h3>{m.palette_categories_aspect_title()}</h3>
@@ -509,6 +512,7 @@
                   <span class="field-label">{m.shape()}</span>
                   <select
                     class="common-select"
+                    aria-label={m.shape()}
                     value={draftCommonAspect.shape ?? ShapeType.CIRCLE}
                     onchange={(e: Event) =>
                       handleCommonAspectChange(
@@ -792,18 +796,21 @@
                       {/if}
                     </div>
 
-                    <input
-                      type="text"
-                      class="category-label-input"
-                      aria-label={m.palette_categories_list_label()}
-                      value={category.label}
-                      onfocus={() => selectCategory(category.id)}
-                      oninput={(e: Event) =>
-                        handleCategoryLabel(
-                          category.id,
-                          (e.currentTarget as HTMLInputElement).value
-                        )}
-                    />
+                    <div class="category-label-input">
+                      <TextInput
+                        hideLabel
+                        labelText={m.palette_categories_list_label()}
+                        size="sm"
+                        value={category.label}
+                        on:focus={() => selectCategory(category.id)}
+                        on:input={(event) =>
+                          handleCategoryLabelInput(
+                            category.id,
+                            category.label,
+                            event
+                          )}
+                      />
+                    </div>
 
                     <div class="toggle-only-control">
                       <Switch
@@ -841,6 +848,7 @@
                             >
                             <select
                               class="common-select"
+                              aria-label={m.per_category_shape()}
                               value={category.shape ?? ShapeType.CIRCLE}
                               onchange={(e: Event) =>
                                 handleCategoryShape(
@@ -1354,6 +1362,9 @@
   .category-label-input {
     flex: 1;
     min-width: 0;
+  }
+
+  .category-label-input :global(.bx--text-input) {
     height: 32px;
     padding: 7px 16px;
     border: none;
@@ -1366,7 +1377,7 @@
     color: var(--cds-text-primary, #161616);
   }
 
-  .category-label-input:focus {
+  .category-label-input :global(.bx--text-input:focus) {
     outline: 2px solid var(--cds-focus, #0f62fe);
     outline-offset: 2px;
   }

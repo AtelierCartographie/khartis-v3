@@ -1,5 +1,6 @@
 import { unzipSync, zipSync } from 'fflate';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ParseError } from '$lib/features/commons/pipeline.errors';
 
 const ensureUploadedFileAssets = vi.fn(async (file) => file);
 const readAssetBytes = vi.fn(async () => new Uint8Array([1, 2, 3, 4]));
@@ -114,6 +115,43 @@ describe('project archive format', () => {
     );
   });
 
+  it('exports from an asset-prepared copy without mutating the project', async () => {
+    const { createArchive } =
+      await import('$lib/features/project-management/io/exporter');
+    const project = createProjectFixture();
+    const sourceFile = {
+      ...project.data.sourceFiles[0],
+      assetRef: undefined
+    };
+    const preparedFile = {
+      ...sourceFile,
+      assetRef: {
+        assetId: 'asset-prepared',
+        originalName: 'data.csv',
+        mimeType: 'text/csv',
+        size: 4,
+        kind: 'primary' as const
+      }
+    };
+    project.data.sourceFiles = [sourceFile as never];
+    ensureUploadedFileAssets.mockResolvedValueOnce(preparedFile);
+
+    await createArchive(project as never);
+
+    const serializedProject = serialize.mock.calls[0]?.[0] as {
+      data: { sourceFiles: unknown[] };
+    };
+
+    expect(project.data.sourceFiles[0]).toBe(sourceFile);
+    expect(project.data.sourceFiles[0].assetRef).toBeUndefined();
+    expect(serializedProject).not.toBe(project);
+    expect(serializedProject.data.sourceFiles).toEqual([preparedFile]);
+    expect(serializedProject.data.sourceFiles).not.toBe(
+      project.data.sourceFiles
+    );
+    expect(readAssetBytes).toHaveBeenCalledWith('asset-prepared');
+  });
+
   it('imports a .kh archive by restoring assets before saving the project', async () => {
     const { importProject } =
       await import('$lib/features/project-management/io/importer');
@@ -195,5 +233,34 @@ describe('project archive format', () => {
     expect(deserialize).toHaveBeenCalledTimes(1);
     expect(saveProject).toHaveBeenCalledTimes(1);
     expect(imported.id).toBe('project-1');
+  });
+
+  it('rejects invalid .kh archives with a typed parse error', async () => {
+    const { importProject } =
+      await import('$lib/features/project-management/io/importer');
+
+    const archive = zipSync({
+      'manifest.json': new TextEncoder().encode('{}')
+    });
+    const archiveBuffer = archive.buffer.slice(
+      archive.byteOffset,
+      archive.byteOffset + archive.byteLength
+    ) as ArrayBuffer;
+    const file = new File([archiveBuffer], 'broken.kh', {
+      type: 'application/octet-stream'
+    });
+
+    const request = importProject(file);
+
+    await expect(request).rejects.toMatchObject({
+      name: 'ParseError',
+      code: 'PARSE_ERROR',
+      fileType: 'khartis-project',
+      details: {
+        fileName: 'broken.kh',
+        fileType: 'khartis-project'
+      }
+    });
+    await expect(request).rejects.toBeInstanceOf(ParseError);
   });
 });

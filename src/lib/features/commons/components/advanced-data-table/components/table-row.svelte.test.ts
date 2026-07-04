@@ -34,7 +34,9 @@ describe('table-row', () => {
       showRowNumbers: false
     });
 
-    expect(screen.getByRole('checkbox')).toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', { name: 'Sélectionner la ligne 7' })
+    ).toBeInTheDocument();
     expect(screen.queryByText('7')).not.toBeInTheDocument();
   });
 

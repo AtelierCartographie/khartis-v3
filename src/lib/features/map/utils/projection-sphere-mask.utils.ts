@@ -10,6 +10,7 @@ import {
 import type { Matrix4 } from '@math.gl/core';
 import type { DeckDataRow } from '../types';
 import { createCompatibleSolidPolygonLayerProps } from './solid-polygon-layer-props.utils';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 export const PROJECTION_SPHERE_MASK_LAYER_ID = 'projection-sphere-mask';
 export const PROJECTION_SPHERE_OUTLINE_LAYER_ID = 'projection-sphere-outline';
@@ -21,7 +22,8 @@ const DEFAULT_SPHERE_OUTLINE_COLOR: [number, number, number, number] = [
   90, 90, 90, 200
 ];
 const DEFAULT_SPHERE_OUTLINE_WIDTH = 1;
-const SPHERE_BACKGROUND_PARAMETERS = {
+
+export const SPHERE_BACKGROUND_PARAMETERS = {
   depthCompare: 'always' as const,
   depthWriteEnabled: false
 } as const;
@@ -53,7 +55,7 @@ function hasSpherePath(pathData: BinaryPathData): boolean {
 const spherePolygonCache = new WeakMap<ProjectionLike, BinaryPolygonData>();
 const spherePathCache = new WeakMap<ProjectionLike, BinaryPathData>();
 
-function getCachedSpherePolygon(
+export function getCachedSpherePolygon(
   projection: ProjectionLike
 ): BinaryPolygonData | null {
   const cached = spherePolygonCache.get(projection);
@@ -65,7 +67,11 @@ function getCachedSpherePolygon(
     if (!hasSpherePolygon(sphereData)) return null;
     spherePolygonCache.set(projection, sphereData);
     return sphereData;
-  } catch {
+  } catch (error) {
+    logger.warn('Failed to parse projection sphere polygon', LogCategory.MAP, {
+      error,
+      flow: 'projection_sphere_polygon_parse'
+    });
     return null;
   }
 }
@@ -82,7 +88,15 @@ function getCachedSpherePath(
     if (!hasSpherePath(pathData)) return null;
     spherePathCache.set(projection, pathData);
     return pathData;
-  } catch {
+  } catch (error) {
+    logger.warn(
+      'Failed to parse projection sphere outline path',
+      LogCategory.MAP,
+      {
+        error,
+        flow: 'projection_sphere_outline_path_parse'
+      }
+    );
     return null;
   }
 }
@@ -118,7 +132,18 @@ export function createProjectionSphereMaskLayer({
       },
       ...(modelMatrix && { modelMatrix })
     });
-  } catch {
+  } catch (error) {
+    logger.warn(
+      'Failed to create projection sphere mask layer',
+      LogCategory.MAP,
+      {
+        error,
+        flow: 'projection_sphere_mask_layer_create',
+        extra: {
+          layerId: PROJECTION_SPHERE_MASK_LAYER_ID
+        }
+      }
+    );
     return null;
   }
 }
@@ -158,7 +183,18 @@ export function createProjectionSphereOutlineLayer({
       },
       ...(modelMatrix && { modelMatrix })
     });
-  } catch {
+  } catch (error) {
+    logger.warn(
+      'Failed to create projection sphere outline layer',
+      LogCategory.MAP,
+      {
+        error,
+        flow: 'projection_sphere_outline_layer_create',
+        extra: {
+          layerId: PROJECTION_SPHERE_OUTLINE_LAYER_ID
+        }
+      }
+    );
     return null;
   }
 }

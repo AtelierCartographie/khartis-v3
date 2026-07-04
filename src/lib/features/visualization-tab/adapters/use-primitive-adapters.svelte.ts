@@ -1,7 +1,4 @@
-import {
-  type ClassificationConfig,
-  type PrimitiveFilterType
-} from '$lib/features/commons/stores/visualization.store.svelte';
+import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   createLineHandlers,
   type LineHandlersDeps
@@ -52,4 +49,3 @@ export function usePrimitiveAdapters(deps: PrimitiveAdaptersDeps) {
 }
 
 export type PrimitiveAdapters = ReturnType<typeof usePrimitiveAdapters>;
-export type _ReexportedPrimitiveFilterType = PrimitiveFilterType;

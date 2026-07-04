@@ -1,13 +1,11 @@
 import type { Component } from 'svelte';
 import type { PrimitiveFilter } from '$lib/features/commons/stores/visualization.store.svelte';
-import type { BasemapRenderGroup } from '$lib/features/map/stores/basemap-layers.store.svelte';
+import type { BasemapRenderGroup } from '$lib/features/map';
 import type { LayerGroupId } from '$lib/features/map/constants/carte-facile-layer-groups';
 
 export type LayerType = 'visualization' | 'geographic';
 export type LayerReorderScope =
-  | 'visualization'
-  | 'geographic-background'
-  | 'geographic-foreground';
+  'visualization' | 'geographic-background' | 'geographic-foreground';
 
 /**
  * Row category in the flattened layers panel (#182):

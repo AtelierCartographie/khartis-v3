@@ -2,6 +2,7 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { DatasetResult } from '$lib/features/data-pipeline/types';
 import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import { isMissingDuckTableError } from '$lib/features/duckdb/utils/duckdb-error.utils';
 import { BasemapStyle } from '$lib/features/map/constants';
 import {
   basemapCatalogService,
@@ -31,6 +32,7 @@ import {
 } from '../services/persisted-basemap.service';
 import { resolveDatasetIdForOrchestrator } from '../utils/dataset-resolution.utils';
 import { resolveNextBasemapSelectionId } from '../utils/basemap-selection.utils';
+import { waitForDatasetAvailability } from '../utils/dataset-availability.utils';
 import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
 import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
 import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
@@ -52,45 +54,6 @@ const COORDINATE_GEO_TYPES = new Set<string>([
   GEO_COLUMN_TYPE.LONGITUDE,
   GEO_COLUMN_TYPE.COORDINATES
 ]);
-const DATASET_READY_RETRY_DELAY_MS = 200;
-const DATASET_READY_MAX_RETRIES = 15;
-
-async function waitForDatasetAvailability(
-  datasetId: string,
-  isCancelled: () => boolean
-): Promise<boolean> {
-  for (let attempt = 0; attempt <= DATASET_READY_MAX_RETRIES; attempt++) {
-    if (isCancelled()) {
-      return false;
-    }
-
-    const dataset =
-      duckDBOrchestrator.getDataset(datasetId) ||
-      duckDBOrchestrator.getDatasetBySourceFile(datasetId);
-    if (dataset) {
-      return true;
-    }
-
-    if (attempt === DATASET_READY_MAX_RETRIES) {
-      return false;
-    }
-
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, DATASET_READY_RETRY_DELAY_MS);
-    });
-  }
-
-  return false;
-}
-
-function isMissingDuckTableError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    /Catalog Error:\s*Table with name .*?(does not exist|not found)/i.test(
-      error.message
-    )
-  );
-}
 
 export function pickAutoLinkedGeoColumn(
   dataset: DatasetResult
@@ -159,8 +122,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       sourceFiles: projectStore.currentProject?.data?.sourceFiles,
       projectBasemap:
         (projectStore.currentProject?.data?.basemap as
-          | PersistedProjectBasemap
-          | undefined) ?? undefined,
+          PersistedProjectBasemap | undefined) ?? undefined,
       selectedBasemapId: selectedBasemapId,
       selectedBasemapSource: dataTabState.basemapJoin.basemapSource,
       hasMultipleDatasets: datasetsStore.datasets.length > 1
@@ -362,7 +324,8 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     const osmBasemap = createOSMBasemap(referenceStyle);
 
     hasDismissedSuggestedBasemap = false;
-    osmBasemapStore.clear();
+    basemapCatalogService.addCustomBasemap(osmBasemap);
+    osmBasemapStore.setOSMBasemap(osmBasemap);
     if (mapProjectionStore.isGlobe) {
       mapProjectionStore.setProjection(MAP_PROJECTION_TYPE.MERCATOR);
     }
@@ -501,10 +464,9 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       let suggestions: BasemapSuggestion[] = [];
 
       if (datasetId && geoColumnName) {
-        const datasetReady = await waitForDatasetAvailability(
-          datasetId,
-          () => cancelled
-        );
+        const datasetReady = await waitForDatasetAvailability(datasetId, {
+          isCancelled: () => cancelled
+        });
 
         if (
           datasetReady &&

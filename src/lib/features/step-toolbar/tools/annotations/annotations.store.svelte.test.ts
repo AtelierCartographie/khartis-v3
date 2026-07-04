@@ -8,13 +8,15 @@ import {
 } from '$lib/features/commons/constants/ui.constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
 import { formatActions } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+import { setLocale } from '$lib/paraglide/runtime.js';
 import {
   annotationsActions,
   getAnnotationsState
 } from './annotations.store.svelte';
 
 describe('annotations store', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await Promise.resolve(setLocale('fr', { reload: false }));
     formatActions.reset();
     annotationsActions.reset();
   });
@@ -111,6 +113,34 @@ describe('annotations store', () => {
     expect(itemsByRole.get(ANNOTATION_ROLE.SUBTITLE)?.style?.textAlign).toBe(
       TextAlign.Left
     );
+  });
+
+  it('refreshes default page element placeholders when locale changes', async () => {
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const getTitle = () =>
+      getAnnotationsState().items.find(
+        (item) => item.role === ANNOTATION_ROLE.TITLE
+      );
+
+    expect(getTitle()?.content).toBe('Ajouter un titre');
+
+    await Promise.resolve(setLocale('en', { reload: false }));
+    annotationsActions.refreshPageElementPlaceholders();
+
+    expect(getTitle()?.content).toBe('Add a title');
+
+    const title = getTitle();
+    expect(title).toBeDefined();
+    if (!title) {
+      return;
+    }
+
+    annotationsActions.updateAnnotation(title.id, { content: 'Custom title' });
+    await Promise.resolve(setLocale('fr', { reload: false }));
+    annotationsActions.refreshPageElementPlaceholders();
+
+    expect(getTitle()?.content).toBe('Custom title');
   });
 
   it('reconciles legacy auto-positioned title and subtitle from center to left alignment', () => {

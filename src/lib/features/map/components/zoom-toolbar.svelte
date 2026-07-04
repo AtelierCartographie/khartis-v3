@@ -28,6 +28,28 @@
   } from '../utils/map-zoom.utils';
 
   type DebugMetricTone = 'neutral' | 'good' | 'warn' | 'bad';
+  type FrameTimeInsightMessages = {
+    good: () => string;
+    ok: () => string;
+    warn: () => string;
+    bad: () => string;
+  };
+
+  const FRAME_TIME_GOOD_MAX_MS = 4;
+  const FRAME_TIME_OK_MAX_MS = 8;
+  const FRAME_TIME_WARN_MAX_MS = 16;
+  const CPU_FRAME_TIME_MESSAGES: FrameTimeInsightMessages = {
+    good: m.deck_debug_metric_cpu_state_good,
+    ok: m.deck_debug_metric_cpu_state_ok,
+    warn: m.deck_debug_metric_cpu_state_warn,
+    bad: m.deck_debug_metric_cpu_state_bad
+  };
+  const GPU_FRAME_TIME_MESSAGES: FrameTimeInsightMessages = {
+    good: m.deck_debug_metric_gpu_state_good,
+    ok: m.deck_debug_metric_gpu_state_ok,
+    warn: m.deck_debug_metric_gpu_state_warn,
+    bad: m.deck_debug_metric_gpu_state_bad
+  };
 
   const activeTabIndex = $derived(zoomModeStore.isMapMode ? 0 : 1);
   const showDeckDebugPanel = $derived(isDeckDebugEnabled());
@@ -214,44 +236,27 @@
     return m.deck_debug_metric_fps_state_bad();
   }
 
-  function getCpuInsight(value: number | null | undefined): string {
+  function getFrameTimeInsight(
+    value: number | null | undefined,
+    messages: FrameTimeInsightMessages
+  ): string {
     if (!isFiniteDebugMetric(value)) {
       return m.deck_debug_metric_pending();
     }
 
-    if (value <= 4) {
-      return m.deck_debug_metric_cpu_state_good();
+    if (value <= FRAME_TIME_GOOD_MAX_MS) {
+      return messages.good();
     }
 
-    if (value <= 8) {
-      return m.deck_debug_metric_cpu_state_ok();
+    if (value <= FRAME_TIME_OK_MAX_MS) {
+      return messages.ok();
     }
 
-    if (value <= 16) {
-      return m.deck_debug_metric_cpu_state_warn();
+    if (value <= FRAME_TIME_WARN_MAX_MS) {
+      return messages.warn();
     }
 
-    return m.deck_debug_metric_cpu_state_bad();
-  }
-
-  function getGpuInsight(value: number | null | undefined): string {
-    if (!isFiniteDebugMetric(value)) {
-      return m.deck_debug_metric_pending();
-    }
-
-    if (value <= 4) {
-      return m.deck_debug_metric_gpu_state_good();
-    }
-
-    if (value <= 8) {
-      return m.deck_debug_metric_gpu_state_ok();
-    }
-
-    if (value <= 16) {
-      return m.deck_debug_metric_gpu_state_warn();
-    }
-
-    return m.deck_debug_metric_gpu_state_bad();
+    return messages.bad();
   }
 
   function getFpsTone(value: number | null | undefined): DebugMetricTone {
@@ -270,32 +275,16 @@
     return 'bad';
   }
 
-  function getCpuTone(value: number | null | undefined): DebugMetricTone {
+  function getFrameTimeTone(value: number | null | undefined): DebugMetricTone {
     if (!isFiniteDebugMetric(value)) {
       return 'neutral';
     }
 
-    if (value <= 8) {
+    if (value <= FRAME_TIME_OK_MAX_MS) {
       return 'good';
     }
 
-    if (value <= 16) {
-      return 'warn';
-    }
-
-    return 'bad';
-  }
-
-  function getGpuTone(value: number | null | undefined): DebugMetricTone {
-    if (!isFiniteDebugMetric(value)) {
-      return 'neutral';
-    }
-
-    if (value <= 8) {
-      return 'good';
-    }
-
-    if (value <= 16) {
+    if (value <= FRAME_TIME_WARN_MAX_MS) {
       return 'warn';
     }
 
@@ -314,15 +303,21 @@
       key: 'cpu',
       label: m.deck_debug_metric_cpu(),
       value: formatDebugMilliseconds(deckDebugMetrics?.cpuTimePerFrame),
-      insight: getCpuInsight(deckDebugMetrics?.cpuTimePerFrame),
-      tone: getCpuTone(deckDebugMetrics?.cpuTimePerFrame)
+      insight: getFrameTimeInsight(
+        deckDebugMetrics?.cpuTimePerFrame,
+        CPU_FRAME_TIME_MESSAGES
+      ),
+      tone: getFrameTimeTone(deckDebugMetrics?.cpuTimePerFrame)
     },
     {
       key: 'gpu',
       label: m.deck_debug_metric_gpu(),
       value: formatDebugMilliseconds(deckDebugMetrics?.gpuTimePerFrame),
-      insight: getGpuInsight(deckDebugMetrics?.gpuTimePerFrame),
-      tone: getGpuTone(deckDebugMetrics?.gpuTimePerFrame)
+      insight: getFrameTimeInsight(
+        deckDebugMetrics?.gpuTimePerFrame,
+        GPU_FRAME_TIME_MESSAGES
+      ),
+      tone: getFrameTimeTone(deckDebugMetrics?.gpuTimePerFrame)
     }
   ]);
 </script>
@@ -332,8 +327,8 @@
     <ToggleTabs
       items={zoomItems}
       activeIndex={activeTabIndex}
-      onChange={handleZoomModeChange}
-      onDoubleClick={handleTabDoubleClick}
+      onchange={handleZoomModeChange}
+      ondblclick={handleTabDoubleClick}
       tabTitle={tabTitle}
       className="zoom-mode-tabs"
       activeClass="active"

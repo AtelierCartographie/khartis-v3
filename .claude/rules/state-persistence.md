@@ -3,6 +3,7 @@ paths:
   - 'src/lib/features/commons/stores/**'
   - 'src/lib/features/commons/utils/store.utils.svelte.ts'
   - 'src/lib/features/project-management/**'
+  - 'src/lib/features/step-toolbar/tools/**'
 ---
 
 # State & persistence
@@ -19,6 +20,9 @@ State flows local `$state` → feature store (`*.store.svelte.ts`) → global si
 - Register a persisted store with `persistenceRegistry.register({ key, serialize, deserialize, reset })` (`project-management/core/persistence-registry.ts`).
 - After **every** public mutation that changes saved state, call the store's `notifyPersistence(...)` / `persistenceRegistry.notifyChange(key, SavePriority.…)`. A mutation that skips it silently loses the user's work on reload — if a method intentionally doesn't persist, say why.
 - `step-toolbar` tools get this for free from `createToolStore` (`store.utils.svelte.ts`) via `DEFAULT_STATE` + a serialization `key`; reuse it instead of re-implementing serialize/deserialize.
+- Documented `step-toolbar` exceptions:
+  - `facets.store.svelte.ts` hand-registers `key: 'facets'` because its persisted state combines user choices with generated visualization ids and restore-specific synchronization.
+  - `layers.store.svelte.ts` intentionally does not register a `layers` snapshot. The panel rows are rebuilt from visualization and basemap stores; renames, visibility, and deletes delegate to those source stores. Manual drag order is the only layer-panel state with its own persistence, registered by `layer-order.store.svelte.ts` as `key: 'layerOrder'` with `SavePriority.IMMEDIATE`.
 
 ## Restore defensively, and version the shape
 
@@ -29,3 +33,9 @@ State flows local `$state` → feature store (`*.store.svelte.ts`) → global si
 ## Import order is fragile — keep it idempotent
 
 On import the order is **assets (IndexedDB) → metadata → DuckDB replay** (`project-management/io/importer.ts`, `exporter.ts`). Reading asset references before the assets are written leaves dangling refs. `import → export → import` must yield the same project.
+
+## Serializer singleton coupling is documented high-risk debt
+
+- `serializeProjectData(data)` does not serialize only from the `data` argument. It starts from that project payload, then overlays `persistenceRegistry.serializeAll()` and reads live singletons/services such as `datasetsStore`, `dataTabState`, `duckDBOrchestrator`, `basemapCatalogService`, and the DuckDB custom-basemap table to enrich source files and basemap metadata.
+- Do not try to make this path pure or remove those singleton reads without a dedicated round-trip test harness covering save, `.kh` export, `.kh` import, stale-store state, source-file asset refs, joins, geolocation, and custom basemaps.
+- New persisted store fields should normally flow through `persistenceRegistry`; new source-file enrichment should be explicit in the save/export preparation path so call order stays testable.

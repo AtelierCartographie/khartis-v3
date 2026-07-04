@@ -101,12 +101,23 @@
   let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
   let missingDataSize = $state<number>(2);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
+  let isSyncingFromVisualization = $state(true);
+  let syncToken = 0;
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
+
+  function runUserChange<T>(callback: () => T): T | undefined {
+    if (isSyncingFromVisualization) {
+      return undefined;
+    }
+    return callback();
+  }
+
   const categoryFieldSelection = useFieldSelectionHandler({
     getDataFields: () => dataFields,
     columnKey: 'categoryColumn',
-    onMappingChange: (updates) => onMappingChange?.(updates)
+    onMappingChange: (updates) =>
+      runUserChange(() => onMappingChange?.(updates))
   });
   const facetsSelection = useFacetsVariableSelection({
     getVisualizationId: () => visualization?.id,
@@ -147,6 +158,21 @@
     return mode;
   }
 
+  function syncCategoryShapeModeFromPersisted(
+    persistedMode: CategoryShapeMode | undefined,
+    fallbackMode?: CategoryShapeMode
+  ) {
+    const nextCategoryShapeMode = coerceCategoryShapeMode(
+      persistedMode ?? fallbackMode
+    );
+    categoryShapeMode = nextCategoryShapeMode;
+    if (persistedMode === CategoryShapeMode.ORDERED) {
+      queueMicrotask(() =>
+        onModesChange?.({ categoryShape: nextCategoryShapeMode })
+      );
+    }
+  }
+
   function syncFetchedCategoryLabels(nextLabels: string[]) {
     const persistedLabels = symbolClassification?.labels ?? [];
     if (
@@ -162,24 +188,28 @@
   }
 
   function handleShapeDropdownSelect(value: string | number) {
-    const next =
-      availableShapes.find((type) => type === value) ?? ShapeType.CIRCLE;
-    shapeType = next;
-    onSymbolsChange?.({
-      type: next,
-      sizeScale: getDefaultScaleForShape(next)
+    runUserChange(() => {
+      const next =
+        availableShapes.find((type) => type === value) ?? ShapeType.CIRCLE;
+      shapeType = next;
+      onSymbolsChange?.({
+        type: next,
+        sizeScale: getDefaultScaleForShape(next)
+      });
     });
   }
 
   function handleCategoryShapeModeChange(next: CategoryShapeMode) {
-    if (next === categoryShapeMode) return;
-    categoryShapeMode = next;
-    onModesChange?.({ categoryShape: next });
-    if (next === CategoryShapeMode.UNIQUE) {
-      onClassificationChange?.({ categoryShapes: undefined });
-    } else if (next === CategoryShapeMode.DIFFERENT) {
-      onClassificationChange?.({ categoryShapes: undefined });
-    }
+    runUserChange(() => {
+      if (next === categoryShapeMode) return;
+      categoryShapeMode = next;
+      onModesChange?.({ categoryShape: next });
+      if (next === CategoryShapeMode.UNIQUE) {
+        onClassificationChange?.({ categoryShapes: undefined });
+      } else if (next === CategoryShapeMode.DIFFERENT) {
+        onClassificationChange?.({ categoryShapes: undefined });
+      }
+    });
   }
 
   const categoriesVariant = $derived<CategoriesAspectVariant>(
@@ -217,6 +247,9 @@
   });
 
   $effect(() => {
+    const currentSyncToken = ++syncToken;
+    isSyncingFromVisualization = true;
+
     const categoryCol =
       visualization?.symbol?.categoryColumn ??
       visualization?.mapping.categoryColumn;
@@ -233,15 +266,10 @@
       shapeType = availableShapes.includes(persistedShape)
         ? persistedShape
         : ShapeType.CIRCLE;
-      const nextCategoryShapeMode = coerceCategoryShapeMode(
-        symbolConfig.categoryShape ?? untrack(() => categoryShapeMode)
+      syncCategoryShapeModeFromPersisted(
+        symbolConfig.categoryShape,
+        untrack(() => categoryShapeMode)
       );
-      categoryShapeMode = nextCategoryShapeMode;
-      if (symbolConfig.categoryShape === CategoryShapeMode.ORDERED) {
-        queueMicrotask(() =>
-          onModesChange?.({ categoryShape: nextCategoryShapeMode })
-        );
-      }
     } else if (visualization?.symbols) {
       symbolOpacity = parseOpacityToSlider(
         visualization.symbols.opacity,
@@ -252,28 +280,12 @@
         ? persistedShape
         : ShapeType.CIRCLE;
       if (visualization?.modes?.categoryShape) {
-        const nextCategoryShapeMode = coerceCategoryShapeMode(
-          visualization.modes.categoryShape
-        );
-        categoryShapeMode = nextCategoryShapeMode;
-        if (visualization.modes.categoryShape === CategoryShapeMode.ORDERED) {
-          queueMicrotask(() =>
-            onModesChange?.({ categoryShape: nextCategoryShapeMode })
-          );
-        }
+        syncCategoryShapeModeFromPersisted(visualization.modes.categoryShape);
       }
     } else {
       symbolOpacity = 100;
       if (visualization?.modes?.categoryShape) {
-        const nextCategoryShapeMode = coerceCategoryShapeMode(
-          visualization.modes.categoryShape
-        );
-        categoryShapeMode = nextCategoryShapeMode;
-        if (visualization.modes.categoryShape === CategoryShapeMode.ORDERED) {
-          queueMicrotask(() =>
-            onModesChange?.({ categoryShape: nextCategoryShapeMode })
-          );
-        }
+        syncCategoryShapeModeFromPersisted(visualization.modes.categoryShape);
       }
     }
     if (visualization?.missingData) {
@@ -290,31 +302,47 @@
       4,
       resolvedCategoryLabels
     );
+
+    queueMicrotask(() => {
+      if (syncToken === currentSyncToken) {
+        isSyncingFromVisualization = false;
+      }
+    });
   });
 
   function handleMissingDataShowChange(show: boolean) {
-    showMissingData = show;
-    onMissingDataChange?.({ show });
+    runUserChange(() => {
+      showMissingData = show;
+      onMissingDataChange?.({ show });
+    });
   }
 
   function handleMissingDataShapeChange(shape: MissingDataShape) {
-    missingDataShape = shape;
-    onMissingDataChange?.({ shape });
+    runUserChange(() => {
+      missingDataShape = shape;
+      onMissingDataChange?.({ shape });
+    });
   }
 
   function handleMissingDataSizeChange(size: number) {
-    missingDataSize = size;
-    onMissingDataChange?.({ size });
+    runUserChange(() => {
+      missingDataSize = size;
+      onMissingDataChange?.({ size });
+    });
   }
 
   function handleMissingDataColorChange(color: string) {
-    missingDataColor = color;
-    onMissingDataChange?.({ color });
+    runUserChange(() => {
+      missingDataColor = color;
+      onMissingDataChange?.({ color });
+    });
   }
 
   function handleOpacityChange(value: number) {
-    symbolOpacity = value;
-    onSymbolsChange?.({ opacity: value / 100 });
+    runUserChange(() => {
+      symbolOpacity = value;
+      onSymbolsChange?.({ opacity: value / 100 });
+    });
   }
 
   const strokeDiscretizationLabel = $derived.by(() =>
@@ -325,88 +353,110 @@
     )
   );
 
+  function handleClassificationChange(
+    classification: Parameters<NonNullable<typeof onClassificationChange>>[0]
+  ) {
+    runUserChange(() => onClassificationChange?.(classification));
+  }
+
+  function handleStrokeDiscretizationChange(
+    classification: Parameters<
+      NonNullable<typeof onStrokeClassificationChange>
+    >[0]
+  ) {
+    runUserChange(() => onStrokeClassificationChange?.(classification));
+  }
+
   function handleCategoriesCommonAspectChange(
     commonAspect: CategoriesCommonAspect,
     nextCategories: CategoryDraft[]
   ) {
-    const symbolUpdates: Partial<
-      NonNullable<Parameters<NonNullable<typeof onSymbolPrimitiveChange>>[0]>
-    > = {};
-    const useCategoryStrokeColors =
-      !commonAspect.stroke || !commonAspect.autoColor;
-    const useCategoryStrokeWidths =
-      !commonAspect.stroke || commonAspect.strokeUnique === false;
-    const useStroke =
-      commonAspect.stroke || useCategoryStrokeColors || useCategoryStrokeWidths;
+    runUserChange(() => {
+      const symbolUpdates: Partial<
+        NonNullable<Parameters<NonNullable<typeof onSymbolPrimitiveChange>>[0]>
+      > = {};
+      const useCategoryStrokeColors =
+        !commonAspect.stroke || !commonAspect.autoColor;
+      const useCategoryStrokeWidths =
+        !commonAspect.stroke || commonAspect.strokeUnique === false;
+      const useStroke =
+        commonAspect.stroke ||
+        useCategoryStrokeColors ||
+        useCategoryStrokeWidths;
 
-    if (commonAspect.sizeUnique) {
-      symbolUpdates.size = commonAspect.size;
-    }
-
-    if (useStroke) {
-      symbolUpdates.strokeMode = useCategoryStrokeColors
-        ? StrokeMode.CATEGORIES
-        : commonAspect.autoColor
-          ? StrokeMode.UNIQUE
-          : StrokeMode.CATEGORIES;
-      if (commonAspect.autoColor) {
-        symbolUpdates.strokeColor = AUTO_CATEGORY_STROKE_COLOR;
-        symbolUpdates.strokeOpacity = AUTO_CATEGORY_STROKE_OPACITY;
+      if (commonAspect.sizeUnique) {
+        symbolUpdates.size = commonAspect.size;
       }
-      symbolUpdates.strokeWidth = Math.max(1, commonAspect.strokeSize);
-    } else {
-      symbolUpdates.strokeMode = StrokeMode.NONE;
-      symbolUpdates.strokeWidth = 0;
-    }
 
-    if (Object.keys(symbolUpdates).length > 0) {
-      onSymbolPrimitiveChange?.(symbolUpdates);
-    }
+      if (useStroke) {
+        symbolUpdates.strokeMode = useCategoryStrokeColors
+          ? StrokeMode.CATEGORIES
+          : commonAspect.autoColor
+            ? StrokeMode.UNIQUE
+            : StrokeMode.CATEGORIES;
+        if (commonAspect.autoColor) {
+          symbolUpdates.strokeColor = AUTO_CATEGORY_STROKE_COLOR;
+          symbolUpdates.strokeOpacity = AUTO_CATEGORY_STROKE_OPACITY;
+        }
+        symbolUpdates.strokeWidth = Math.max(1, commonAspect.strokeSize);
+      } else {
+        symbolUpdates.strokeMode = StrokeMode.NONE;
+        symbolUpdates.strokeWidth = 0;
+      }
 
-    if (useCategoryStrokeColors || useCategoryStrokeWidths) {
-      onStrokeClassificationChange?.({
-        colors: useCategoryStrokeColors
-          ? nextCategories.map(
-              (category) => category.strokeColor ?? AUTO_CATEGORY_STROKE_COLOR
-            )
-          : nextCategories.map(() => AUTO_CATEGORY_STROKE_COLOR),
-        labels: nextCategories.map((category) => category.label),
-        categoryValues: nextCategories.map(
-          (category) => category.value ?? category.label
-        ),
-        disabledLabels: nextCategories
-          .filter((category) => !category.enabled)
-          .map((category) => category.value ?? category.label),
-        categoryStrokeWidths: useCategoryStrokeWidths
-          ? nextCategories.map(
-              (category) =>
-                category.customStrokeWidth ?? commonAspect.strokeSize
-            )
-          : undefined,
-        paletteId: undefined,
-        inverted: false,
-        patternId: undefined,
-        patternParams: undefined
-      });
-    } else {
-      onStrokeClassificationChange?.(resetCategoryVisualClassification());
-    }
+      if (Object.keys(symbolUpdates).length > 0) {
+        onSymbolPrimitiveChange?.(symbolUpdates);
+      }
+
+      if (useCategoryStrokeColors || useCategoryStrokeWidths) {
+        onStrokeClassificationChange?.({
+          colors: useCategoryStrokeColors
+            ? nextCategories.map(
+                (category) => category.strokeColor ?? AUTO_CATEGORY_STROKE_COLOR
+              )
+            : nextCategories.map(() => AUTO_CATEGORY_STROKE_COLOR),
+          labels: nextCategories.map((category) => category.label),
+          categoryValues: nextCategories.map(
+            (category) => category.value ?? category.label
+          ),
+          disabledLabels: nextCategories
+            .filter((category) => !category.enabled)
+            .map((category) => category.value ?? category.label),
+          categoryStrokeWidths: useCategoryStrokeWidths
+            ? nextCategories.map(
+                (category) =>
+                  category.customStrokeWidth ?? commonAspect.strokeSize
+              )
+            : undefined,
+          paletteId: undefined,
+          inverted: false,
+          patternId: undefined,
+          patternParams: undefined
+        });
+      } else {
+        onStrokeClassificationChange?.(resetCategoryVisualClassification());
+      }
+    });
   }
 
   async function handleFacetsVariablesChange(fieldIds: number[]) {
-    await facetsSelection.updateVariables(
-      categoryColumnName,
-      FACET_SLOT.SYMBOL_CATEGORY,
-      fieldIds
+    await runUserChange(() =>
+      facetsSelection.updateVariables(
+        categoryColumnName,
+        FACET_SLOT.SYMBOL_CATEGORY,
+        fieldIds
+      )
     );
   }
 
   async function handleFacetsToggle(enabled: boolean, fieldIds?: number[]) {
-    await facetsSelection.toggle(
-      categoryColumnName,
-      FACET_SLOT.SYMBOL_CATEGORY,
-      enabled,
-      fieldIds
+    await runUserChange(() =>
+      facetsSelection.toggle(
+        categoryColumnName,
+        FACET_SLOT.SYMBOL_CATEGORY,
+        enabled,
+        fieldIds
+      )
     );
   }
 </script>
@@ -511,7 +561,7 @@
   categoriesCommonAspect={categoriesCommonAspect}
   showCategoriesCommonAspect={true}
   bind:categoriesPopoverOpen={categoriesAspectOpen}
-  onClassificationChange={onClassificationChange}
+  onClassificationChange={handleClassificationChange}
   onCategoriesCommonAspectChange={handleCategoriesCommonAspectChange}
 />
 <SliderWithInput
@@ -569,7 +619,7 @@
   classification={visualization?.symbol?.strokeClassification}
   valueColumn={visualization?.symbol?.strokeValueColumn}
   role="stroke"
-  onchange={onStrokeClassificationChange ?? (() => {})}
+  onchange={handleStrokeDiscretizationChange}
 />
 
 <style lang="scss">

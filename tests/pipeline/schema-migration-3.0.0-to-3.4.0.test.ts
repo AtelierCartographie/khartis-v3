@@ -70,7 +70,7 @@ describe('schema-migration 3.0.0 → 3.2.0 (remapLegacyPointShape)', () => {
   it('remaps symbols.type from point to circle', () => {
     const migrated = migrateIfNeeded(buildV300Project());
     const manifest = migrated.manifest as { version?: string };
-    expect(manifest.version).toBe(PROJECT_CONST.APP_VERSION);
+    expect(manifest.version).toBe(PROJECT_CONST.SCHEMA_VERSION);
 
     const vizList = migrated.visualizations as Array<{
       symbols: Record<string, unknown>;

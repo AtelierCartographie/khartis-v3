@@ -4,7 +4,7 @@
   import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { OrientationIndicatorStyle } from '$lib/features/commons/constants/ui.constants';
-  import * as m from '$lib/paraglide/messages.js';
+  import * as m from '$lib/paraglide/messages';
   import { Column, Grid, Row } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
 

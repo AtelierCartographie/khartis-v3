@@ -39,12 +39,9 @@
     showDragHandle = true
   }: Props = $props();
 
-  // Vivid accent for thematic primitive rows, sepia for shared basemap layers.
   const isVizPrimitive = $derived(layer.kind === 'viz-primitive');
   const visualizationId = $derived(layer.parentId);
-  // Bold primitive label ("Textes") with the source visualization as a subtitle for
-  // primitive rows; a single regular line for basemap rows. Falls back to `name` so
-  // rows without the split fields still render a title.
+  // Primitive rows use split title/subtitle fields; basemap rows fall back to `name`.
   const title = $derived(layer.primitiveLabel ?? layer.name);
   const accentColor = $derived(layer.accentColor ?? layer.color);
 </script>
@@ -142,8 +139,6 @@
     background-color: var(--cds-layer-hover, #e8e8e8);
   }
 
-  /* Per-visualization Vivid accent (primitives) vs the shared Sepia accent (basemap),
-     rendered as the left edge bar. Taller two-line rows for primitives. */
   .layer-row--viz {
     min-height: 48px;
   }
@@ -194,7 +189,6 @@
     white-space: nowrap;
   }
 
-  /* Heading 01/02 — primitive titles read as the foreground item. */
   .layer-name--strong {
     font-size: 14px;
     line-height: 20px;

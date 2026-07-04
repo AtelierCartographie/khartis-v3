@@ -14,8 +14,6 @@
     disabled?: boolean;
     resolveBadgeType: (columnName: string) => VariableBadgeType;
     activate?: () => void;
-    onclick?: () => void;
-    onClick?: () => void;
   }
 
   let {
@@ -23,9 +21,7 @@
     selected = false,
     disabled = false,
     resolveBadgeType,
-    activate,
-    onclick,
-    onClick
+    activate
   }: Props = $props();
 
   const displayRows = $derived(buildDisplayRows(suggestion));
@@ -136,7 +132,7 @@
 
   function handleActivate() {
     if (!disabled) {
-      (activate ?? onclick ?? onClick)?.();
+      activate?.();
     }
   }
 

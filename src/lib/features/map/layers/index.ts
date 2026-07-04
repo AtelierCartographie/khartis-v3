@@ -1,32 +1,5 @@
-export {
-  createCategoricalColorAccessor,
-  createChoroplethColorAccessor,
-  createGeoJsonCategoricalColorAccessor,
-  createGeoJsonChoroplethColorAccessor,
-  createGeoJsonProportionalSizeAccessor,
-  createGeoJsonProportionalSymbolSizeAccessor,
-  createProportionalSizeAccessor,
-  createProportionalSymbolSizeAccessor,
-  HIGHLIGHT_FILL_COLOR,
-  sortBySizeDescending,
-  withGeoJsonRowHighlight,
-  withGeoJsonRowHighlightAccessor,
-  withOpacity,
-  withRowHighlight,
-  withRowHighlightAccessor
-} from './layer-helpers';
+export { HIGHLIGHT_FILL_COLOR } from './layer-helpers';
 
-export {
-  createDeckLayers,
-  createGeoJsonLayers,
-  createLineLayers,
-  createPointLayers,
-  createPolygonLayers,
-  type LayerContext
-} from './layer-factory';
+export { createDeckLayers, createGeoJsonLayers } from './layer-factory';
 
-export {
-  createBasemapLayers,
-  type BasemapLayerGroups,
-  type MetadataLayerEntry
-} from './basemap-layers';
+export { createBasemapLayers, type MetadataLayerEntry } from './basemap-layers';

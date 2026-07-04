@@ -6,6 +6,10 @@ const CURRENT_KEY = 'khartis_current_project';
 const mocks = vi.hoisted(() => ({
   localforageGetItem: vi.fn<(key: string) => Promise<string | null>>(),
   localforageRemoveItem: vi.fn<(key: string) => Promise<void>>(),
+  ensureUploadedFileAssets: vi.fn(),
+  removeProjectAssetRefs: vi.fn(),
+  syncProjectAssetRefs: vi.fn(),
+  prepareForIndexedDB: vi.fn(),
   registerAssetStores: vi.fn(),
   loggerInfo: vi.fn(),
   loggerWarn: vi.fn(),
@@ -20,15 +24,15 @@ vi.mock('localforage', () => ({
 }));
 
 vi.mock('./asset-store.service', () => ({
-  ensureUploadedFileAssets: vi.fn(),
+  ensureUploadedFileAssets: mocks.ensureUploadedFileAssets,
   registerAssetStores: mocks.registerAssetStores,
-  removeProjectAssetRefs: vi.fn(),
-  syncProjectAssetRefs: vi.fn()
+  removeProjectAssetRefs: mocks.removeProjectAssetRefs,
+  syncProjectAssetRefs: mocks.syncProjectAssetRefs
 }));
 
 vi.mock('./serializer.service', () => ({
   deserialize: vi.fn(),
-  prepareForIndexedDB: vi.fn()
+  prepareForIndexedDB: mocks.prepareForIndexedDB
 }));
 
 vi.mock('../core/schema-migration', () => ({
@@ -88,7 +92,10 @@ class FakeTransaction {
 
   private completionQueued = false;
 
-  constructor(private readonly stores: Map<string, FakeStoreData>) {}
+  constructor(
+    private readonly stores: Map<string, FakeStoreData>,
+    private readonly transactionError: Error | null = null
+  ) {}
 
   objectStore(name: string): FakeObjectStore {
     const store = this.stores.get(name);
@@ -106,6 +113,11 @@ class FakeTransaction {
 
     this.completionQueued = true;
     setTimeout(() => {
+      if (this.transactionError) {
+        this.error = this.transactionError;
+        this.onerror?.();
+        return;
+      }
       this.oncomplete?.();
     }, 0);
   }
@@ -113,6 +125,8 @@ class FakeTransaction {
 
 class FakeDatabase {
   private readonly stores = new Map<string, FakeStoreData>();
+
+  private readonly transactionErrors: Error[] = [];
 
   readonly objectStoreNames = {
     contains: (name: string) => this.stores.has(name)
@@ -132,7 +146,14 @@ class FakeDatabase {
   }
 
   transaction(_storeNames: string[], _mode: string): FakeTransaction {
-    return new FakeTransaction(this.stores);
+    return new FakeTransaction(
+      this.stores,
+      this.transactionErrors.shift() ?? null
+    );
+  }
+
+  failNextTransaction(error: Error): void {
+    this.transactionErrors.push(error);
   }
 
   seedStore(
@@ -185,8 +206,7 @@ function installFakeIndexedDb(database: FakeDatabase): void {
           onsuccess: (() => void) | null;
           onerror: (() => void) | null;
           onupgradeneeded:
-            | ((event: { target: { result: FakeDatabase } }) => void)
-            | null;
+            ((event: { target: { result: FakeDatabase } }) => void) | null;
         } = {
           result: database,
           error: null,
@@ -218,12 +238,76 @@ function createMetadataEntry(id: string, name: string) {
   };
 }
 
-describe('project persistence localforage migration', () => {
+describe('project persistence', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
     mocks.localforageGetItem.mockResolvedValue(null);
     mocks.localforageRemoveItem.mockResolvedValue();
+    mocks.ensureUploadedFileAssets.mockImplementation(async (file) => file);
+    mocks.removeProjectAssetRefs.mockResolvedValue(undefined);
+    mocks.syncProjectAssetRefs.mockResolvedValue(undefined);
+    mocks.prepareForIndexedDB.mockImplementation(async (project) => project);
+  });
+
+  it('saves an asset-prepared copy without mutating the live project', async () => {
+    const database = new FakeDatabase();
+    installFakeIndexedDb(database);
+
+    const sourceFile = {
+      id: 'file-1',
+      name: 'data.csv',
+      size: 4,
+      type: 'text/csv',
+      fileType: 'csv',
+      status: 'complete',
+      sourceType: 'file_upload'
+    };
+    const preparedFile = {
+      ...sourceFile,
+      assetRef: {
+        assetId: 'asset-1',
+        originalName: 'data.csv',
+        mimeType: 'text/csv',
+        size: 4,
+        kind: 'primary' as const
+      }
+    };
+    const project = {
+      id: 'project-1',
+      manifest: {
+        version: '3.0.0',
+        createdAt: new Date('2026-04-16T00:00:00.000Z'),
+        updatedAt: new Date('2026-04-16T00:00:00.000Z'),
+        name: 'Save Project',
+        format: 'kh' as const
+      },
+      data: {
+        sourceFiles: [sourceFile]
+      }
+    };
+    mocks.ensureUploadedFileAssets.mockResolvedValue(preparedFile);
+
+    const { saveProject } = await import('./persistence.service');
+    const { PROJECT_CONST } = await import('../constants');
+
+    await saveProject(project as never);
+
+    const storedProject = mocks.prepareForIndexedDB.mock.calls[0]?.[0] as {
+      manifest: { version: string };
+      data: { sourceFiles: unknown[] };
+    };
+
+    expect(project.manifest.version).toBe('3.0.0');
+    expect(project.data.sourceFiles[0]).toBe(sourceFile);
+    expect(project.data.sourceFiles[0]).not.toHaveProperty('assetRef');
+    expect(storedProject).not.toBe(project);
+    expect(storedProject.manifest.version).toBe(PROJECT_CONST.SCHEMA_VERSION);
+    expect(storedProject.data.sourceFiles).toEqual([preparedFile]);
+    expect(storedProject.data.sourceFiles).not.toBe(project.data.sourceFiles);
+    expect(mocks.syncProjectAssetRefs).toHaveBeenCalledWith('project-1', [
+      preparedFile
+    ]);
   });
 
   it('waits for legacy metadata migration before listing saved projects', async () => {
@@ -303,5 +387,35 @@ describe('project persistence localforage migration', () => {
       expect.anything(),
       expect.objectContaining({ key: CURRENT_KEY })
     );
+  });
+
+  it('throws a typed quota error when project storage save exceeds browser quota', async () => {
+    const database = new FakeDatabase();
+    installFakeIndexedDb(database);
+    const quotaError = new Error('Quota exceeded');
+    quotaError.name = 'QuotaExceededError';
+    database.failNextTransaction(quotaError);
+
+    const { projectStorage } = await import('./storage.service');
+
+    let error: unknown;
+    try {
+      await projectStorage.save(CURRENT_KEY, 'current-project');
+    } catch (caught) {
+      error = caught;
+    }
+
+    const { PipelineError } =
+      await import('$lib/features/commons/pipeline.errors');
+
+    expect(error).toBeInstanceOf(PipelineError);
+    expect(error).toMatchObject({
+      name: 'PipelineError',
+      code: 'PROJECT_STORAGE_QUOTA_EXCEEDED',
+      details: expect.objectContaining({
+        key: CURRENT_KEY,
+        cause: quotaError
+      })
+    });
   });
 });

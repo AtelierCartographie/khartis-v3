@@ -19,7 +19,7 @@ vi.mock(
     dataOrchestratorService: { onFileAdded: vi.fn(), onFileRemoved: vi.fn() }
   })
 );
-vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
+vi.mock('$lib/features/project-management/core', () => ({
   persistenceRegistry: { notifyChange: vi.fn(), register: vi.fn() },
   SavePriority: { DEBOUNCED: 'DEBOUNCED', IMMEDIATE: 'IMMEDIATE' }
 }));
@@ -269,6 +269,26 @@ describe('getColumnStatistics — numeric fallback (computed from data)', () => 
     expect(result.nullCount).toBe(1);
   });
 
+  it('counts configured null tokens in the legacy numeric fallback', () => {
+    const state = makeState([
+      makeDataset(
+        'd1',
+        [{ name: 'v', type: 'number' }],
+        [{ v: 10 }, { v: 'NA' }, { v: 'none' }, { v: '-' }]
+      )
+    ]);
+    const result = getColumnStatistics(state as never, 'd1', 'v') as {
+      count: number;
+      nullCount: number;
+      min: number;
+      max: number;
+    };
+    expect(result.count).toBe(1);
+    expect(result.nullCount).toBe(3);
+    expect(result.min).toBe(10);
+    expect(result.max).toBe(10);
+  });
+
   it('parses BigInt values as numbers', () => {
     const state = makeState([
       makeDataset(
@@ -365,6 +385,33 @@ describe('getColumnStatistics — categorical', () => {
     };
     expect(result.uniqueCount).toBe(2);
     expect(result.nullCount).toBe(1);
+  });
+
+  it('counts configured null tokens in the legacy categorical fallback', () => {
+    const state = makeState([
+      {
+        id: 'd1',
+        name: 'd1',
+        sourceFileId: 's',
+        tableName: 't',
+        rowCount: 4,
+        metadata: {
+          processedAt: new Date(),
+          fileType: 'csv',
+          parserUsed: 'test'
+        },
+        columns: [
+          { name: 'cat', type: 'string', values: [], stats: null as never }
+        ],
+        data: [{ cat: 'A' }, { cat: 'NA' }, { cat: 'none' }, { cat: '-' }]
+      }
+    ]);
+    const result = getColumnStatistics(state as never, 'd1', 'cat') as {
+      uniqueCount: number;
+      nullCount: number;
+    };
+    expect(result.uniqueCount).toBe(1);
+    expect(result.nullCount).toBe(3);
   });
 });
 

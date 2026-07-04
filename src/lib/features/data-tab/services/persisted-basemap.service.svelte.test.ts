@@ -102,8 +102,8 @@ describe('restorePersistedBasemapSelection', () => {
       'monde-couleurs'
     );
     expect(mocks.addCustomBasemapMock).toHaveBeenCalledTimes(1);
-    expect(mocks.clearOsmMock).toHaveBeenCalledTimes(1);
-    expect(mocks.setOSMBasemapMock).not.toHaveBeenCalled();
+    expect(mocks.setOSMBasemapMock).toHaveBeenCalledWith(basemap.data);
+    expect(mocks.clearOsmMock).not.toHaveBeenCalled();
   });
 
   it('does not rewrite the basemap join state when the restored selection is already active', async () => {
@@ -119,6 +119,24 @@ describe('restorePersistedBasemapSelection', () => {
     expect(mocks.setBasemapJoinStateMock).not.toHaveBeenCalled();
     expect(mocks.setReferenceBasemapMock).toHaveBeenCalledWith(
       'monde-countries-2024-medium'
+    );
+  });
+
+  it('keeps an explicit display reference while restoring the joined basemap selection', async () => {
+    await restorePersistedBasemapSelection(
+      {
+        id: 'monde-countries-2024-medium',
+        type: 'catalog'
+      },
+      { referenceBasemapId: 'europe-nuts1-2024-medium' }
+    );
+
+    expect(mocks.setBasemapJoinStateMock).toHaveBeenCalledWith({
+      selectedBasemap: 'monde-countries-2024-medium',
+      basemapSource: BasemapSource.CATALOG
+    });
+    expect(mocks.setReferenceBasemapMock).toHaveBeenCalledWith(
+      'europe-nuts1-2024-medium'
     );
   });
 

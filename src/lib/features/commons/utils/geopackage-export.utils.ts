@@ -1,5 +1,7 @@
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
+import * as m from '$lib/paraglide/messages';
 import { MIME } from '../constants';
+import { DataValidationError, PipelineError } from '../pipeline.errors';
 import { escapeIdentifier } from './sanitize.utils';
 
 type SqliteModule = Awaited<ReturnType<typeof sqlite3InitModule>>;
@@ -27,6 +29,7 @@ interface GeoPackagePropertyColumnMapping {
 const GEOPACKAGE_GEOMETRY_COLUMN = 'geom';
 const GEOPACKAGE_ID_COLUMN = 'fid';
 const GEOPACKAGE_LAYER_NAME_MAX_LENGTH = 48;
+const GEOPACKAGE_EXPORT_DB_CLOSED_ERROR_CODE = 'GEOPACKAGE_EXPORT_DB_CLOSED';
 const SQLITE_APPLICATION_ID_GEOPACKAGE = 1196444487;
 const SQLITE_USER_VERSION_GEOPACKAGE_1_2 = 10200;
 const GEOPACKAGE_RESERVED_COLUMN_NAMES = new Set([
@@ -434,7 +437,13 @@ export async function exportGeoPackage(
   options: GeoPackageExportOptions
 ): Promise<Blob> {
   if (features.length === 0) {
-    throw new Error('No feature rows to export');
+    throw new DataValidationError(
+      m.error_geopackage_no_features_to_export(),
+      'features',
+      {
+        layerName: options.layerName
+      }
+    );
   }
 
   return exportGeoPackageLayers([{ ...options, features }]);
@@ -445,7 +454,13 @@ export async function exportGeoPackageLayers(
 ): Promise<Blob> {
   const exportableLayers = layers.filter((layer) => layer.features.length > 0);
   if (exportableLayers.length === 0) {
-    throw new Error('No feature rows to export');
+    throw new DataValidationError(
+      m.error_geopackage_no_features_to_export(),
+      'features',
+      {
+        layerCount: layers.length
+      }
+    );
   }
 
   const sqlite3 = await getSqliteModule();
@@ -486,7 +501,11 @@ export async function exportGeoPackageLayers(
 
     const dbPointer = db.pointer;
     if (dbPointer === undefined) {
-      throw new Error('SQLite database is closed');
+      throw new PipelineError(
+        m.error_geopackage_database_closed(),
+        GEOPACKAGE_EXPORT_DB_CLOSED_ERROR_CODE,
+        { layerCount: preparedLayers.length }
+      );
     }
 
     const exported = sqlite3.capi.sqlite3_js_db_export(dbPointer);

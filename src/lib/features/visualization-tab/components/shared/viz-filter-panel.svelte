@@ -2,15 +2,20 @@
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import { portal } from '$lib/features/commons/utils/portal';
+  import { resolveLocale } from '$lib/features/commons/utils/format.utils';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
-  import { ToolbarState } from '$lib/features/commons/types/global';
+  import {
+    MAIN_TOOLBAR_ID,
+    resolveToolbarPanelWidth
+  } from '$lib/features/commons/utils/toolbar-width.utils';
   import type { VizDataFilter } from '$lib/features/commons/stores/visualization.store.svelte';
   import * as m from '$lib/paraglide/messages';
   import { Add, Close, Launch } from 'carbon-icons-svelte';
   import { untrack } from 'svelte';
   import FilterCard from './filter-card.svelte';
   import {
-    normalizeFieldType,
+    DEFAULT_FILTER_LIMIT,
+    getFilterColumnType,
     getOperatorDef,
     defaultOperatorForType
   } from './filter-operators.utils';
@@ -48,26 +53,17 @@
     onClose
   }: Props = $props();
 
-  const MAIN_TOOLBAR_ID = 'khartis-main-toolbar';
-
-  function getFallbackPanelRight(toolbarState: ToolbarState): string {
-    switch (toolbarState) {
-      case ToolbarState.Collapsed:
-        return '50px';
-      case ToolbarState.Compact:
-        return '434px';
-      default:
-        return 'clamp(400px, 50vw, 800px)';
-    }
+  function getFallbackPanelRight(): string {
+    return resolveToolbarPanelWidth(globalState.toolbarState);
   }
 
   function readPanelRight(): string {
     if (typeof window === 'undefined') {
-      return getFallbackPanelRight(globalState.toolbarState);
+      return getFallbackPanelRight();
     }
     const toolbar = document.getElementById(MAIN_TOOLBAR_ID);
     if (!toolbar) {
-      return getFallbackPanelRight(globalState.toolbarState);
+      return getFallbackPanelRight();
     }
     const toolbarRect = toolbar.getBoundingClientRect();
     const rightOffset = Math.max(0, window.innerWidth - toolbarRect.left);
@@ -112,22 +108,17 @@
     };
   });
 
-  function getColumnType(columnName: string) {
-    const field = dataFields.find((f) => f.text === columnName);
-    return normalizeFieldType(field?.type);
-  }
-
   function handleAddFilterClick(): void {
     if (dataFields.length === 0) return;
     const firstColumn = dataFields[0].text;
-    const type = getColumnType(firstColumn);
+    const type = getFilterColumnType(dataFields, firstColumn);
     const defaultOp = defaultOperatorForType(type);
     const opDef = getOperatorDef(defaultOp);
     onAddFilter({
       column: firstColumn,
       operator: defaultOp,
-      value: opDef?.requiresLimit ? '5' : '',
-      limit: opDef?.requiresLimit ? 5 : undefined
+      value: opDef?.requiresLimit ? String(DEFAULT_FILTER_LIMIT) : '',
+      limit: opDef?.requiresLimit ? DEFAULT_FILTER_LIMIT : undefined
     });
   }
 
@@ -146,9 +137,16 @@
   );
 
   const hasFilters = $derived(filters.length > 0);
+  const numberLocale = $derived(resolveLocale());
 
   function formatFilteredCount(value: number): string {
-    return new Intl.NumberFormat().format(value);
+    return new Intl.NumberFormat(numberLocale).format(value);
+  }
+
+  function formatFilteredPercent(value: number): string {
+    return new Intl.NumberFormat(numberLocale, {
+      maximumFractionDigits: 1
+    }).format(value);
   }
 </script>
 
@@ -190,7 +188,7 @@
         <span class="stats-secondary">
           {m.filter_stats_total({
             total: formatFilteredCount(stats.total),
-            percent: String(percent).replace('.', ',')
+            percent: formatFilteredPercent(percent)
           })}
         </span>
       </div>
@@ -353,6 +351,11 @@
       background: var(--cds-layer-inverse-active, #6f6f6f);
     }
 
+    &:focus-visible {
+      outline: 2px solid var(--cds-focus);
+      outline-offset: -2px;
+    }
+
     &:disabled {
       opacity: 0.5;
       cursor: not-allowed;
@@ -371,6 +374,11 @@
     &:hover {
       text-decoration: underline;
     }
+
+    &:focus-visible {
+      outline: 2px solid var(--cds-focus);
+      outline-offset: 2px;
+    }
   }
 
   .learn-more-link {
@@ -383,6 +391,11 @@
 
     &:hover {
       text-decoration: underline;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--cds-focus);
+      outline-offset: 2px;
     }
   }
 

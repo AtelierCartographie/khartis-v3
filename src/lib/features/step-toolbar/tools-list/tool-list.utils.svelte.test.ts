@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
     selectedTool: undefined as unknown
   },
   globalActions: {
+    setSelectedTool: vi.fn(),
     resetPagePan: vi.fn()
   }
 }));
@@ -23,6 +24,10 @@ import { closeSelectedToolPanel, selectTool } from './tool-list.utils.svelte';
 describe('tool list selection utils', () => {
   beforeEach(() => {
     mocks.globalState.selectedTool = undefined;
+    mocks.globalActions.setSelectedTool.mockImplementation((tool) => {
+      mocks.globalState.selectedTool = tool;
+    });
+    mocks.globalActions.setSelectedTool.mockClear();
     mocks.globalActions.resetPagePan.mockClear();
   });
 

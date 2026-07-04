@@ -72,4 +72,38 @@ describe('consentStore', () => {
 
     expect(mocks.analyticsEnableMock).toHaveBeenCalledOnce();
   });
+
+  it('does not enable analytics from a non-boolean stored consent flag', async () => {
+    localStorage.setItem(
+      'khartis_consent',
+      JSON.stringify({
+        analytics: 'true',
+        consentDate: '2026-04-26T00:00:00.000Z',
+        consentVersion: 1
+      })
+    );
+
+    const { consentStore } = await loadConsentStore();
+
+    expect(consentStore.hasConsented).toBe(true);
+    expect(consentStore.analyticsAllowed).toBe(false);
+    expect(mocks.analyticsEnableMock).not.toHaveBeenCalled();
+  });
+
+  it('ignores stored consent versions that are not integers', async () => {
+    localStorage.setItem(
+      'khartis_consent',
+      JSON.stringify({
+        analytics: true,
+        consentDate: '2026-04-26T00:00:00.000Z',
+        consentVersion: 1.5
+      })
+    );
+
+    const { consentStore } = await loadConsentStore();
+
+    expect(consentStore.hasConsented).toBe(false);
+    expect(consentStore.analyticsAllowed).toBe(true);
+    expect(mocks.analyticsEnableMock).not.toHaveBeenCalled();
+  });
 });

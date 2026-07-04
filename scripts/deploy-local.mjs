@@ -3,7 +3,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { cp, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { cp, mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -56,7 +56,10 @@ Optional:
   KHARTIS_PUBLIC_URL_PPRD
 
 Local env files:
-  ${LOCAL_ENV_FILES.join(', ')} are supported. Remote PPRD is replaced after a temporary upload completes.
+  ${LOCAL_ENV_FILES.join(', ')} are supported.
+  The build is uploaded to a temporary remote directory, then swapped into
+  place with two quick renames; the previous version is removed afterwards.
+  Use --tag to deploy an older staging release than the latest tag.
   PRD is intentionally not supported by this local deployment script.
   Do not commit real SFTP values. Keep secrets in ignored local env files or your shell.`;
 
@@ -511,13 +514,14 @@ async function promptHidden(question) {
 }
 
 async function confirmDeployment(target, tag, remoteDir, dryRun) {
-  const suffix = dryRun ? 'dry-run' : 'deploy';
-  const expected = `${target}:${tag}:${suffix}`;
+  const action = dryRun ? 'dry run' : 'deployment';
   const answer = await promptVisible(
-    `Type "${expected}" to continue (remote target: ${remoteDir}): `
+    `Confirm ${action} of ${tag} to ${target} (remote target: ${remoteDir})? [y/N] `
   );
-  if (answer !== expected) {
-    throw new Error('Deployment cancelled.');
+  if (!/^y(es)?$/i.test(answer)) {
+    throw new Error(
+      'Deployment cancelled. Use --tag <tag> to pick another release.'
+    );
   }
 }
 
@@ -543,22 +547,18 @@ function promptVisible(question) {
 
 async function uploadBuild(config, buildDir, remoteDir, expectedRemoteDirLeaf) {
   const safeRemoteDir = assertSafeRemoteDir(remoteDir, expectedRemoteDirLeaf);
-  const tempRemoteDir = createRemoteUploadTempDir(
+  const tempRemoteDir = createRemoteSiblingDir(
     safeRemoteDir,
-    expectedRemoteDirLeaf
+    expectedRemoteDirLeaf,
+    'upload'
   );
-  const tempRemoteLeaf = path.posix.basename(tempRemoteDir);
+  const manifest = await collectUploadManifest(buildDir);
+  const progress = createUploadProgress(manifest);
   const client = new SftpClient('khartis-local-deploy');
-  let uploaded = 0;
-  let finalReplacementStarted = false;
-  let finalReplaced = false;
+  let swapped = false;
+  let preserveTempDir = false;
 
-  client.on('upload', () => {
-    uploaded += 1;
-    if (uploaded % 50 === 0) {
-      log(`Uploaded ${uploaded} files...`);
-    }
-  });
+  client.on('upload', (info) => progress.onFileUploaded(info.source));
 
   try {
     log('Connecting to SFTP...');
@@ -568,42 +568,197 @@ async function uploadBuild(config, buildDir, remoteDir, expectedRemoteDirLeaf) {
       throw new Error('Remote target exists but is not a directory.');
     }
 
-    log(`Preparing temporary remote ${expectedRemoteDirLeaf} upload...`);
-    await client.rmdir(tempRemoteDir, true).catch(() => undefined);
+    await removeStaleRemoteSiblings(
+      client,
+      safeRemoteDir,
+      expectedRemoteDirLeaf
+    );
     await client.mkdir(tempRemoteDir, true);
 
     log(
-      `Uploading build/ to temporary remote ${expectedRemoteDirLeaf} directory...`
+      `Uploading ${manifest.totalFiles} files (${formatBytes(manifest.totalBytes)}) to a temporary remote ${expectedRemoteDirLeaf} directory...`
     );
     await client.uploadDir(buildDir, tempRemoteDir, { useFastput: false });
-    log(`Upload complete (${uploaded} files).`);
+    progress.finish();
+    log('Upload complete.');
 
-    log(`Replacing remote ${expectedRemoteDirLeaf} directory...`);
-    if (remoteType) {
-      finalReplacementStarted = true;
-      await client.rmdir(safeRemoteDir, true);
+    log(`Swapping remote ${expectedRemoteDirLeaf} directory...`);
+    const previousRemoteDir = remoteType
+      ? createRemoteSiblingDir(safeRemoteDir, expectedRemoteDirLeaf, 'old')
+      : null;
+    if (previousRemoteDir) {
+      await client.rename(safeRemoteDir, previousRemoteDir);
     }
-    await client.rename(tempRemoteDir, safeRemoteDir);
-    finalReplaced = true;
-    log(`Remote ${expectedRemoteDirLeaf} directory replaced.`);
-  } finally {
-    if (!finalReplaced) {
-      if (finalReplacementStarted) {
-        warn(
-          `Temporary remote upload "${tempRemoteLeaf}" was left in place because final replacement did not complete.`
-        );
-      } else {
-        await client.rmdir(tempRemoteDir, true).catch(() => undefined);
+    try {
+      await client.rename(tempRemoteDir, safeRemoteDir);
+    } catch (error) {
+      if (previousRemoteDir) {
+        try {
+          await client.rename(previousRemoteDir, safeRemoteDir);
+          warn('Swap failed; the previous remote version was restored.');
+        } catch {
+          preserveTempDir = true;
+          warn(
+            `Swap failed and the previous version could not be restored. Previous version: ${previousRemoteDir}, new upload: ${tempRemoteDir}. Restore one of them manually.`
+          );
+        }
       }
+      throw error;
+    }
+    swapped = true;
+    log(`Remote ${expectedRemoteDirLeaf} directory swapped.`);
+
+    if (previousRemoteDir) {
+      log('Removing the previous remote version...');
+      await client
+        .rmdir(previousRemoteDir, true)
+        .catch(() =>
+          warn(
+            `Could not remove the previous remote version: ${previousRemoteDir}. Remove it manually.`
+          )
+        );
+    }
+  } finally {
+    progress.finish();
+    if (!swapped && !preserveTempDir) {
+      await client.rmdir(tempRemoteDir, true).catch(() => undefined);
     }
     await client.end().catch(() => undefined);
   }
 }
 
-function createRemoteUploadTempDir(remoteDir, expectedLeaf) {
-  const parent = remoteDir.replace(/\/[^/]+$/, '');
-  const tempLeaf = `${expectedLeaf}.upload-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
-  return `${parent}/${tempLeaf}`;
+async function collectUploadManifest(buildDir) {
+  const entries = await readdir(buildDir, {
+    recursive: true,
+    withFileTypes: true
+  });
+  const fileSizes = new Map();
+  let totalBytes = 0;
+
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const filePath = path.join(entry.parentPath, entry.name);
+    const { size } = await stat(filePath);
+    fileSizes.set(filePath, size);
+    totalBytes += size;
+  }
+
+  return { fileSizes, totalFiles: fileSizes.size, totalBytes };
+}
+
+const PROGRESS_BAR_WIDTH = 24;
+const PROGRESS_RENDER_INTERVAL_MS = 200;
+
+function createUploadProgress({ fileSizes, totalFiles, totalBytes }) {
+  const startedAt = Date.now();
+  const interactive = process.stdout.isTTY === true;
+  let uploadedFiles = 0;
+  let uploadedBytes = 0;
+  let lastRenderAt = 0;
+  let lastLoggedDecile = 0;
+  let finished = false;
+
+  const statusLine = () => {
+    const ratio =
+      totalBytes > 0
+        ? uploadedBytes / totalBytes
+        : totalFiles > 0
+          ? uploadedFiles / totalFiles
+          : 1;
+    const percent = Math.floor(ratio * 100);
+    const filled = Math.round(ratio * PROGRESS_BAR_WIDTH);
+    const bar = '█'.repeat(filled) + '░'.repeat(PROGRESS_BAR_WIDTH - filled);
+    const remainingFiles = totalFiles - uploadedFiles;
+    const elapsedMs = Date.now() - startedAt;
+    const eta =
+      uploadedBytes > 0 && elapsedMs > 0
+        ? formatDuration(
+            ((totalBytes - uploadedBytes) / uploadedBytes) * elapsedMs
+          )
+        : '--';
+    return `[${bar}] ${percent}% | ${remainingFiles}/${totalFiles} files left | ETA ${eta}`;
+  };
+
+  return {
+    onFileUploaded(source) {
+      uploadedFiles += 1;
+      uploadedBytes += fileSizes.get(source) ?? 0;
+
+      if (interactive) {
+        const now = Date.now();
+        if (
+          now - lastRenderAt < PROGRESS_RENDER_INTERVAL_MS &&
+          uploadedFiles < totalFiles
+        ) {
+          return;
+        }
+        lastRenderAt = now;
+        process.stdout.write(`\r\u001B[2K[deploy-local] ${statusLine()}`);
+        return;
+      }
+
+      const decile =
+        totalFiles > 0 ? Math.floor((uploadedFiles / totalFiles) * 10) : 10;
+      if (decile > lastLoggedDecile) {
+        lastLoggedDecile = decile;
+        log(statusLine());
+      }
+    },
+    finish() {
+      if (finished) return;
+      finished = true;
+      if (interactive && uploadedFiles > 0) {
+        process.stdout.write(`\r\u001B[2K[deploy-local] ${statusLine()}\n`);
+      }
+    }
+  };
+}
+
+function formatDuration(ms) {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h${String(minutes).padStart(2, '0')}m`;
+  if (minutes > 0) return `${minutes}m${String(seconds).padStart(2, '0')}s`;
+  return `${seconds}s`;
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let value = bytes;
+  let unitIndex = -1;
+  do {
+    value /= 1024;
+    unitIndex += 1;
+  } while (value >= 1024 && unitIndex < units.length - 1);
+  return `${value.toFixed(1)} ${units[unitIndex]}`;
+}
+
+async function removeStaleRemoteSiblings(client, safeRemoteDir, expectedLeaf) {
+  const parent = path.posix.dirname(safeRemoteDir);
+  const stalePrefixes = [`${expectedLeaf}.upload-`, `${expectedLeaf}.old-`];
+  const entries = await client.list(parent).catch(() => []);
+
+  for (const entry of entries) {
+    if (entry.type !== 'd') continue;
+    if (!stalePrefixes.some((prefix) => entry.name.startsWith(prefix))) {
+      continue;
+    }
+    log(`Removing stale remote directory ${entry.name}...`);
+    await client
+      .rmdir(`${parent}/${entry.name}`, true)
+      .catch(() =>
+        warn(`Could not remove stale remote directory: ${parent}/${entry.name}`)
+      );
+  }
+}
+
+function createRemoteSiblingDir(remoteDir, expectedLeaf, kind) {
+  const parent = path.posix.dirname(remoteDir);
+  const leaf = `${expectedLeaf}.${kind}-${process.pid}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+  return `${parent}/${leaf}`;
 }
 
 function assertSafeRemoteDir(remoteDir, expectedLeaf) {

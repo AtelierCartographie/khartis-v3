@@ -1,26 +1,28 @@
 import { ScatterplotLayer } from '@deck.gl/layers';
-import { SYMBOL_SDF_EXTENT } from '$lib/features/commons/constants/visualization.constants';
+import {
+  LINEAR_SHAPES,
+  SHAPE_ORDINAL,
+  ShapeType,
+  SYMBOL_SDF_EXTENT
+} from '$lib/features/commons/constants/visualization.constants';
 
-export enum ShapeTypeOrdinal {
-  CIRCLE = 0,
-  SQUARE = 1,
-  BAR = 2,
-  SPIKE = 3,
-  CROSS = 4,
-  DIAMOND = 5,
-  TRIANGLE = 6,
-  STAR = 7,
-  RECTANGLE = 8
-}
+export const ShapeTypeOrdinal = {
+  CIRCLE: SHAPE_ORDINAL[ShapeType.CIRCLE],
+  SQUARE: SHAPE_ORDINAL[ShapeType.SQUARE],
+  BAR: SHAPE_ORDINAL[ShapeType.BAR],
+  SPIKE: SHAPE_ORDINAL[ShapeType.SPIKE],
+  CROSS: SHAPE_ORDINAL[ShapeType.CROSS],
+  DIAMOND: SHAPE_ORDINAL[ShapeType.DIAMOND],
+  TRIANGLE: SHAPE_ORDINAL[ShapeType.TRIANGLE],
+  STAR: SHAPE_ORDINAL[ShapeType.STAR],
+  RECTANGLE: SHAPE_ORDINAL[ShapeType.RECTANGLE]
+} as const;
 
-export const LINEAR_SHAPE_ORDINALS: readonly ShapeTypeOrdinal[] = [
-  ShapeTypeOrdinal.BAR,
-  ShapeTypeOrdinal.SPIKE
-];
+export type ShapeTypeOrdinal =
+  (typeof ShapeTypeOrdinal)[keyof typeof ShapeTypeOrdinal];
 
-export function isLinearShapeOrdinal(shape: number): boolean {
-  return LINEAR_SHAPE_ORDINALS.includes(shape);
-}
+export const LINEAR_SHAPE_ORDINALS: readonly ShapeTypeOrdinal[] =
+  LINEAR_SHAPES.map((shape) => SHAPE_ORDINAL[shape]);
 
 const multiShapeModule = {
   name: 'multiShape',
@@ -231,49 +233,49 @@ float sdIsoscelesTriangle(in vec2 p, in vec2 q) {
 
 float getDistance(vec2 uv, float radiusPixels, int shapeType, float radius) {
     switch (shapeType) {
-        case 1: // SQUARE
+        case ${ShapeTypeOrdinal.SQUARE}: // SQUARE
             {
                 vec2 pos = uv * outerRadiusPixels;
                 return sdBox(pos, vec2(0.6 * outerRadiusPixels)) + outerRadiusPixels;
             }
-        case 2: // BAR
+        case ${ShapeTypeOrdinal.BAR}: // BAR
             {
                 float w = multiShape.barWidth;
                 vec2 pos = uv * outerRadiusPixels;
                 return sdBox(pos, vec2(w / 2.0, outerRadiusPixels)) + outerRadiusPixels;
             }
-        case 3: // SPIKE
+        case ${ShapeTypeOrdinal.SPIKE}: // SPIKE
             {
                 float w = multiShape.barWidth * 1.5;
                 vec2 pos = vec2(uv.x, -uv.y) * outerRadiusPixels;
                 pos.y += outerRadiusPixels;
                 return sdIsoscelesTriangle(pos, vec2(w / 2.0, 2.0 * outerRadiusPixels)) + outerRadiusPixels;
             }
-        case 4: // CROSS
+        case ${ShapeTypeOrdinal.CROSS}: // CROSS
             {
                 vec2 pos = uv * outerRadiusPixels;
                 float r = 0.7 * outerRadiusPixels;
                 float thick = r / 3.0;
                 return sdCross(pos, vec2(r, thick), 0.0) + outerRadiusPixels;
             }
-        case 5: // DIAMOND
+        case ${ShapeTypeOrdinal.DIAMOND}: // DIAMOND
             {
                  vec2 pos = uv * outerRadiusPixels;
                  float d = abs(pos.x) + abs(pos.y);
                  return d - (0.7 * outerRadiusPixels) + outerRadiusPixels;
             }
-        case 6: // TRIANGLE
+        case ${ShapeTypeOrdinal.TRIANGLE}: // TRIANGLE
             {
                 vec2 pos = uv * outerRadiusPixels;
                 float r = 0.7 * outerRadiusPixels;
                 return sdEquilateralTriangle(pos, r) + outerRadiusPixels;
             }
-        case 7: // STAR
+        case ${ShapeTypeOrdinal.STAR}: // STAR
             {
                 vec2 rUV = rotate(uv, 0.31);
                 return sdStar5(rUV, 5, 0.1) * radiusPixels / 0.8;
             }
-        case 8: // RECTANGLE
+        case ${ShapeTypeOrdinal.RECTANGLE}: // RECTANGLE
             {
                 vec2 pos = uv * outerRadiusPixels;
                 vec2 size = vec2(outerRadiusPixels * 0.9, 0.27 * outerRadiusPixels);

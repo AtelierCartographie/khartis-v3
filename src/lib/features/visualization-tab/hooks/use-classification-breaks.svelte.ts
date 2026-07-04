@@ -33,7 +33,7 @@ import {
   resolveBreakpointLowerClassCount,
   resolveComputedClassCount,
   resolveRequestedClassCount
-} from '../components/discretization/discretization.utils';
+} from '$lib/features/commons/utils/discretization.utils';
 
 type BreaksResult = Awaited<ReturnType<typeof calculateBreaks>>;
 
@@ -105,7 +105,7 @@ export interface ClassificationBreaksComputation {
   actualClassCount: number;
   result: NonNullable<BreaksResult>;
   breakpointLowerClassCount?: number;
-  /** Breakpoint actually used; set when a diverging pivot was auto-detected. */
+  /** Effective diverging pivot, including auto-detected values. */
   breakpointValue?: number | null;
   autoBreakpointApplied?: boolean;
   autoBreakpointCleared?: boolean;
@@ -329,14 +329,7 @@ export async function computeClassificationBreaks(
     ? options.breakpointValue
     : classification?.breakpointValue;
 
-  // Auto-manage a diverging pivot at zero from the data, never overriding an
-  // explicit user breakpoint (the discretization modal passes one explicitly,
-  // and a manual non-zero pivot is left untouched). A pivot at 0 — or its
-  // absence — is treated as auto-managed and resolved from the column each
-  // recompute: applied when the column crosses zero, cleared when it does not.
-  // This keeps the ramp diverging for zero-crossing data and sequential
-  // otherwise, symmetrically on first classification and on column changes
-  // (a freshly selected 100 % positive column falls back to sequential).
+  // Auto-managed zero pivots follow zero-crossing data unless the user set one.
   let autoBreakpointApplied = false;
   let autoBreakpointCleared = false;
   if (
@@ -398,10 +391,7 @@ export async function computeClassificationBreaks(
             numClasses: requestedClassCount
           });
 
-  // A diverging split fails when one side of the auto-detected pivot has too
-  // few distinct values for its class count (common on zero-crossing columns
-  // like a growth rate). Rather than leave the polygons grey, fall back to a
-  // plain sequential discretization so the choropleth still renders.
+  // Fall back to sequential breaks when an auto diverging split cannot classify.
   if (!result && usedDiverging) {
     breakpointValue = undefined;
     autoBreakpointApplied = false;

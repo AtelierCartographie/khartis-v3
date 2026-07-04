@@ -31,13 +31,3 @@ export function engageExclusiveContextualSurface(
     }
   };
 }
-
-export function getActiveExclusiveContextualSurfaceId(): string | null {
-  return activeSurfaceId;
-}
-
-export function resetExclusiveContextualSurfaces(): void {
-  registry.clear();
-  activeSurfaceId = null;
-  nextSurfaceSequence = 0;
-}

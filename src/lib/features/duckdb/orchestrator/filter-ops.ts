@@ -67,6 +67,7 @@ export function buildFilterSQL(
   filter: DataTableFilterInput
 ): string {
   const columnRef = `"${escapeIdentifier(filter.column)}"`;
+  const tableRef = `"${escapeIdentifier(tableName)}"`;
   const textRef = buildStripHtmlTextSqlExpression(columnRef);
   const value = formatFilterValue(filter.value);
   const secondValue = formatFilterValue(filter.secondaryValue);
@@ -77,7 +78,7 @@ export function buildFilterSQL(
     if (!Number.isFinite(limit) || limit <= 0) {
       throw new DuckDBError(m.filter_top_requires_number());
     }
-    return `${INTERNAL_COLUMN.ID} IN (SELECT ${INTERNAL_COLUMN.ID} FROM "${tableName}" ORDER BY ${columnRef} ${direction} NULLS LAST LIMIT ${limit})`;
+    return `${INTERNAL_COLUMN.ID} IN (SELECT ${INTERNAL_COLUMN.ID} FROM ${tableRef} ORDER BY ${columnRef} ${direction} NULLS LAST LIMIT ${limit})`;
   };
 
   const isNumericValue = isNumericLiteral(value);

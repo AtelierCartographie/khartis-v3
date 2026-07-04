@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { m } from '$lib/paraglide/messages.js';
+  import { m } from '$lib/paraglide/messages';
   import { Slider } from 'carbon-components-svelte';
   import CompactNumberInput from './compact-number-input.svelte';
 

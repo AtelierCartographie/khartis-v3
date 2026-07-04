@@ -3,12 +3,7 @@ import type {
   AtlasResult,
   PatternOptions
 } from '@ateliercartographie/motif.js';
-import {
-  categoricalPatterns,
-  sequentialPatterns
-} from '@ateliercartographie/ok-palette';
-import type { PatternParams as OkPatternParams } from '@ateliercartographie/ok-palette';
-import type { PatternParams } from '$lib/features/commons/stores/visualization.store.svelte';
+import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';
 
 const PATTERN_NAMES = [
   'diagonal',
@@ -111,6 +106,8 @@ const PATTERN_CONFIGS: Record<PatternName, PatternOptions> = {
 let cachedResult: AtlasResult | null = null;
 const customAtlasCache = new Map<string, AtlasResult>();
 
+export const CUSTOM_PATTERN_ATLAS_CACHE_LIMIT = 32;
+
 export function getPatternAtlas(): {
   atlas: HTMLCanvasElement;
   mapping: Record<
@@ -125,6 +122,32 @@ export function getPatternAtlas(): {
   cachedResult = motifAtlas(PATTERN_CONFIGS);
 
   return { atlas: cachedResult.canvas, mapping: cachedResult.mapping };
+}
+
+function getCachedCustomPatternAtlas(cacheKey: string): AtlasResult | null {
+  const cached = customAtlasCache.get(cacheKey);
+  if (!cached) {
+    return null;
+  }
+
+  customAtlasCache.delete(cacheKey);
+  customAtlasCache.set(cacheKey, cached);
+  return cached;
+}
+
+function cacheCustomPatternAtlas(cacheKey: string, result: AtlasResult): void {
+  if (customAtlasCache.has(cacheKey)) {
+    customAtlasCache.delete(cacheKey);
+  }
+  customAtlasCache.set(cacheKey, result);
+
+  while (customAtlasCache.size > CUSTOM_PATTERN_ATLAS_CACHE_LIMIT) {
+    const oldestKey = customAtlasCache.keys().next().value;
+    if (oldestKey === undefined) {
+      break;
+    }
+    customAtlasCache.delete(oldestKey);
+  }
 }
 
 /**
@@ -177,7 +200,7 @@ export function getPatternAtlasForPattern(
     size: params.size,
     scale: params.scale
   });
-  const cachedCustomResult = customAtlasCache.get(cacheKey);
+  const cachedCustomResult = getCachedCustomPatternAtlas(cacheKey);
   if (cachedCustomResult) {
     return {
       atlas: cachedCustomResult.canvas,
@@ -188,7 +211,7 @@ export function getPatternAtlasForPattern(
   const result = motifAtlas({
     [patternId]: createParameterizedPatternOptions(patternId, params)
   });
-  customAtlasCache.set(cacheKey, result);
+  cacheCustomPatternAtlas(cacheKey, result);
 
   return { atlas: result.canvas, mapping: result.mapping };
 }
@@ -198,41 +221,4 @@ export function isValidPatternId(
 ): patternId is PatternName {
   if (!patternId) return false;
   return (PATTERN_NAMES as readonly string[]).includes(patternId);
-}
-
-function toMotifOptions(params: OkPatternParams): PatternOptions {
-  return {
-    type: params.type as PatternOptions['type'],
-    angle: params.angle,
-    scale: params.scale,
-    size: params.size,
-    fill: params.fill,
-    background: params.background,
-    patchSize: params.patchSize
-  };
-}
-
-export function generatePatternAtlas(
-  count: number,
-  mode: 'categorical' | 'sequential' = 'categorical'
-): {
-  atlas: HTMLCanvasElement;
-  mapping: Record<
-    string,
-    { x: number; y: number; width: number; height: number }
-  >;
-} {
-  const patternParams: OkPatternParams[] =
-    mode === 'sequential'
-      ? sequentialPatterns(count)
-      : categoricalPatterns(count);
-
-  const configs: Record<string, PatternOptions> = {};
-  patternParams.forEach((p, i) => {
-    configs[`class-${i}`] = toMotifOptions(p);
-  });
-
-  const result = motifAtlas(configs);
-
-  return { atlas: result.canvas, mapping: result.mapping };
 }

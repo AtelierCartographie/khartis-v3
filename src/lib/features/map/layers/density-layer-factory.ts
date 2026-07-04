@@ -8,9 +8,11 @@ import {
 } from '../utils/geoarrow-stream-bridge.utils';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import { DENSITY_DEFAULTS } from '$lib/features/commons/constants/visualization.constants';
 import type { DeckDataRow, LayerContext } from '../types';
-import { normalizeOpacity } from './layer-factory';
+import { normalizeOpacity, resolvePageDisplayScale } from './layer-style.utils';
+import * as m from '$lib/paraglide/messages';
 
 export function createDotDensityLayers(
   jsTable: ArrowTable,
@@ -20,6 +22,7 @@ export function createDotDensityLayers(
   const { viz, modelMatrix, beforeId } = ctx;
   if (!viz?.density) return [];
 
+  const pageDisplayScale = resolvePageDisplayScale(ctx);
   const dotSize = Math.max(
     0.1,
     viz.density.dotSize ?? DENSITY_DEFAULTS.dotSize
@@ -45,6 +48,10 @@ export function createDotDensityLayers(
         LogCategory.MAP,
         error
       );
+      showWarning(
+        m.density_layer_warning_title(),
+        m.density_layer_warning_message()
+      );
       return null;
     }
   })();
@@ -62,6 +69,7 @@ export function createDotDensityLayers(
     getFillColor: fillColor,
     getRadius: dotSize,
     radiusUnits: 'pixels',
+    radiusScale: pageDisplayScale,
     pickable: false,
     ...(modelMatrix && { modelMatrix }),
     ...(beforeId && { beforeId }),

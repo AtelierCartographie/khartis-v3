@@ -46,12 +46,6 @@ function makeDuckClient(testDb: TestDuckDB): DuckDBClientForJoin {
         return reader.getRowObjectsJson();
       }
       return reader.getRowObjectsJson();
-    },
-    async join_by_id() {
-      throw new Error('not implemented in test');
-    },
-    async apply_join_association() {
-      throw new Error('not implemented in test');
     }
   };
 }

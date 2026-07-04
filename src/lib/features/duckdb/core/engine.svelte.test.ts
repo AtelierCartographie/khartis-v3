@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => {
   return {
     db,
     executeQuery: vi.fn(async (_connection: unknown, _query: string) => []),
+    showWarning: vi.fn(),
     selectBundle: vi.fn(async () => ({
       eh: null,
       mainModule: 'duckdb-eh.wasm',
@@ -21,6 +22,10 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('./query', () => ({
   executeQuery: mocks.executeQuery
+}));
+
+vi.mock('$lib/features/commons/utils/notification.utils.svelte', () => ({
+  showWarning: mocks.showWarning
 }));
 
 vi.mock('@duckdb/duckdb-wasm', () => ({
@@ -77,5 +82,20 @@ describe('DuckDB engine initialization', () => {
     expect(warmupIndex).toBeGreaterThan(-1);
     expect(loadSpatialIndex).toBeGreaterThan(-1);
     expect(warmupIndex).toBeLessThan(loadSpatialIndex);
+  });
+
+  it('warns but keeps DuckDB initialized when spatial preload fails', async () => {
+    mocks.executeQuery.mockImplementation(async (_connection, query) => {
+      if (String(query).includes('LOAD spatial')) {
+        throw new Error('spatial unavailable');
+      }
+      return [];
+    });
+    const { initEngine, getContext } = await import('./engine');
+
+    await expect(initEngine()).resolves.toBeUndefined();
+
+    expect(getContext().extensionsLoaded.spatial).toBe(false);
+    expect(mocks.showWarning).toHaveBeenCalledTimes(1);
   });
 });

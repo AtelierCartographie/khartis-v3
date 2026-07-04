@@ -17,14 +17,14 @@
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import { Undo, Earth, LicenseGlobal } from 'carbon-icons-svelte';
   import type { SimplificationResult } from '../../types/simplification.types';
-  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
   import {
     basemapService,
     getAvailableBasemapSimplificationLevels,
-    getPreferredBasemapSimplificationLevel
-  } from '$lib/features/map/services/basemap.service.svelte';
+    getPreferredBasemapSimplificationLevel,
+    osmBasemapStore
+  } from '$lib/features/map';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {
     simplificationActions,
@@ -249,7 +249,7 @@
   <ToggleTabs
     items={sources}
     activeIndex={sourceIndex}
-    onChange={onSourceChange}
+    onchange={onSourceChange}
     className="source-tabs"
     activeClass="active"
     fullWidthClass="full-width"

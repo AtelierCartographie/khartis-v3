@@ -94,7 +94,7 @@ export async function executeQueryStreaming(
         let header = await bindings.startPendingQuery(conn, query, true);
         while (header === null) {
           if (bindings.isDetached?.()) {
-            throw new Error(m.error_worker_detached_query());
+            throw new DuckDBError(m.error_worker_detached_query(), query);
           }
           header = await bindings.pollPendingQuery(conn);
         }
@@ -110,7 +110,7 @@ export async function executeQueryStreaming(
           let result = await bindings.fetchQueryResults(conn);
           while (result === null) {
             if (bindings.isDetached?.()) {
-              throw new Error(m.error_worker_detached_results());
+              throw new DuckDBError(m.error_worker_detached_results(), query);
             }
             result = await bindings.fetchQueryResults(conn);
           }

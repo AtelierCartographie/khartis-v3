@@ -592,6 +592,7 @@
     fetchSymbolFillCategoryLabels,
     fetchTextBackgroundCategoryLabels,
     fetchTextBackgroundStrokeCategoryLabels,
+    abortCategoryLabelFetches: categoryLabelsFetcher.abort,
     getColorSyncDeps: () => ({
       getSelectedVisualizationId: () => selectedViz?.id,
       getPrimitiveTargets: () => primitiveClassificationTargets,

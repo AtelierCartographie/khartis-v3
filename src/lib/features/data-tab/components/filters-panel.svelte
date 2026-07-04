@@ -21,6 +21,10 @@
   import TrashCan from 'carbon-icons-svelte/lib/TrashCan.svelte';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+  import {
+    readCarbonStringValue,
+    type CarbonValueEvent
+  } from '$lib/features/commons/utils/carbon-events.utils';
 
   interface Props {
     tableName?: string;
@@ -232,6 +236,32 @@
     };
   }
 
+  function isFilterOperator(value: string): value is FilterOperator {
+    return ALL_FILTER_OPERATORS.some((op) => op.value === value);
+  }
+
+  function handleColumnChange(event: CarbonValueEvent) {
+    newFilter.column = readCarbonStringValue(event, newFilter.column);
+  }
+
+  function handleOperatorChange(event: CarbonValueEvent) {
+    const nextOperator = readCarbonStringValue(event, newFilter.operator);
+    if (isFilterOperator(nextOperator)) {
+      newFilter.operator = nextOperator;
+    }
+  }
+
+  function handleValueChange(event: CarbonValueEvent) {
+    newFilter.value = readCarbonStringValue(event, newFilter.value);
+  }
+
+  function handleSecondaryValueChange(event: CarbonValueEvent) {
+    newFilter.secondaryValue = readCarbonStringValue(
+      event,
+      newFilter.secondaryValue
+    );
+  }
+
   $effect(() => {
     void datasetVersion;
     if (tableName) {
@@ -273,7 +303,8 @@
         <Select
           size="sm"
           labelText={m.filter_column()}
-          bind:selected={newFilter.column}
+          selected={newFilter.column}
+          onchange={handleColumnChange}
         >
           <SelectItem value="" text={m.filter_select_column()} />
           {#each columns as column (column.name)}
@@ -286,7 +317,8 @@
         <Select
           size="sm"
           labelText={m.filter_operator()}
-          bind:selected={newFilter.operator}
+          selected={newFilter.operator}
+          onchange={handleOperatorChange}
         >
           {#each FILTER_OPERATORS as op (op.value)}
             <SelectItem value={op.value} text={op.label} />
@@ -300,7 +332,8 @@
             size="sm"
             labelText={m.filter_value_min()}
             placeholder={m.filter_placeholder_min()}
-            bind:value={newFilter.value}
+            value={newFilter.value}
+            on:input={handleValueChange}
           />
         </div>
         <div class="field-group">
@@ -308,7 +341,8 @@
             size="sm"
             labelText={m.filter_value_max()}
             placeholder={m.filter_placeholder_max()}
-            bind:value={newFilter.secondaryValue}
+            value={newFilter.secondaryValue}
+            on:input={handleSecondaryValueChange}
           />
         </div>
       {:else if currentOperator.requiresValue}
@@ -317,7 +351,8 @@
             size="sm"
             labelText={m.filter_value()}
             placeholder={m.filter_value()}
-            bind:value={newFilter.value}
+            value={newFilter.value}
+            on:input={handleValueChange}
           />
         </div>
       {:else if currentOperator.requiresLimit}

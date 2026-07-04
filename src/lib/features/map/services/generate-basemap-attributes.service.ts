@@ -7,6 +7,8 @@ import { getCustomBasemapJoinCandidateColumns } from './custom-basemap-columns.s
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 
+const MAX_NULL_RATIO = 0.5;
+
 export async function generateCustomBasemapAttributes(
   tableName: string,
   basemapId: string
@@ -44,7 +46,7 @@ export async function generateCustomBasemapAttributes(
   const validColumns = candidateColumns.filter((col) => {
     const nullCount = Number(col.nulls ?? 0);
     const recordCount = Number(col.count ?? 0);
-    if (recordCount > 0 && nullCount > recordCount * 0.5) {
+    if (recordCount > 0 && nullCount > recordCount * MAX_NULL_RATIO) {
       return false;
     }
     return true;

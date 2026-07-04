@@ -2,13 +2,14 @@ import {
   PrimitiveFilterType,
   type ClassificationConfig,
   type LinePrimitiveConfig,
-  type MissingDataConfig,
+  type PrimitiveFilter,
   type VisualizationConfig,
   type VisualizationModes,
   getLinePrimitive
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { resolveLineModeTransition } from '../hooks/use-line-mode-state.svelte';
 import { pickOwnedKeys, pickRenamedKeys } from './pick-owned.utils';
+import { createPrimitiveAdapter } from './primitive-adapter.factory';
 
 export interface LineHandlersDeps {
   getSelectedVisualization: () => VisualizationConfig | undefined;
@@ -17,8 +18,8 @@ export interface LineHandlersDeps {
     afterUpdate?: (next: VisualizationConfig) => void
   ) => void;
   buildNextPrimitiveFilters: (
-    updates: Partial<Record<PrimitiveFilterType, boolean>>
-  ) => PrimitiveFilterType[];
+    updates: Partial<Record<PrimitiveFilter, boolean>>
+  ) => PrimitiveFilter[];
   updatePrimitiveClassificationState: (
     primitive: PrimitiveFilterType,
     updates: Partial<ClassificationConfig>
@@ -42,26 +43,12 @@ export interface LineHandlersDeps {
 }
 
 export function createLineHandlers(deps: LineHandlersDeps) {
-  function handleLineChange(updates: Partial<LinePrimitiveConfig>): void {
-    const line = getLinePrimitive(deps.getSelectedVisualization());
-    if (!line) return;
-
-    const enabledHasUpdate = Object.prototype.hasOwnProperty.call(
-      updates,
-      'enabled'
-    );
-
-    deps.updateSelectedVisualization({
-      line: { ...line, ...updates },
-      ...(enabledHasUpdate
-        ? {
-            primitiveFilters: deps.buildNextPrimitiveFilters({
-              [PrimitiveFilterType.LINE]: updates.enabled ?? line.enabled
-            })
-          }
-        : {})
-    });
-  }
+  const lineAdapter = createPrimitiveAdapter<LinePrimitiveConfig>(deps, {
+    primitive: PrimitiveFilterType.LINE,
+    getConfig: getLinePrimitive,
+    buildUpdate: (line) => ({ line })
+  });
+  const handleLineChange = lineAdapter.handleChange;
 
   function handleLineStyleChange(
     updates: Partial<VisualizationConfig['style']>
@@ -131,22 +118,9 @@ export function createLineHandlers(deps: LineHandlersDeps) {
     );
   }
 
-  function handleLineMissingDataChange(
-    updates: Partial<MissingDataConfig>
-  ): void {
-    const line = getLinePrimitive(deps.getSelectedVisualization());
-    if (!line?.missingData) return;
+  const handleLineMissingDataChange = lineAdapter.handleMissingDataChange;
 
-    handleLineChange({
-      missingData: { ...line.missingData, ...updates }
-    });
-  }
-
-  function handleLineClassificationChange(
-    updates: Partial<ClassificationConfig>
-  ): void {
-    deps.updatePrimitiveClassificationState(PrimitiveFilterType.LINE, updates);
-  }
+  const handleLineClassificationChange = lineAdapter.handleClassificationChange;
 
   function handleLineThicknessClassificationChange(
     updates: Partial<ClassificationConfig>
@@ -154,15 +128,9 @@ export function createLineHandlers(deps: LineHandlersDeps) {
     deps.updateLineThicknessClassificationState(updates);
   }
 
-  function handleLineMappingChange(
-    updates: Partial<VisualizationConfig['mapping']>
-  ): void {
-    deps.applyPrimitiveMappingUpdate(PrimitiveFilterType.LINE, updates);
-  }
+  const handleLineMappingChange = lineAdapter.handleMappingChange;
 
-  function handleLinePaletteInvert(): void {
-    deps.invertPrimitivePalette(PrimitiveFilterType.LINE);
-  }
+  const handleLinePaletteInvert = lineAdapter.handlePaletteInvert;
 
   return {
     handleLineChange,

@@ -3,6 +3,8 @@ import {
   resolveFontFamilyStack
 } from '$lib/features/step-toolbar/fonts.constants';
 import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
+import Textbox from '@borgar/textbox';
+import { bisectRight } from 'd3-array';
 
 export type ScaleFn = (value: number) => number;
 
@@ -26,6 +28,35 @@ export interface CommonLegendTextOptions {
   fontFamily?: string;
 }
 
+export interface RenderedLegendTextBlock {
+  markup: string;
+  height: number;
+}
+
+export interface RenderLegendHeaderOptions {
+  title?: string | null;
+  subtitle?: string | null;
+  x: number;
+  y: number;
+  maxWidth: number;
+  titleSize: number;
+  subtitleSize: number;
+  fontFamily?: string;
+  gap?: number;
+  titleFont?: string;
+  subtitleFont?: string;
+}
+
+export interface RenderLegendNoteOptions {
+  note?: string | null;
+  x: number;
+  y: number;
+  maxWidth: number;
+  noteSize: number;
+  fontFamily?: string;
+  noteFont?: string;
+}
+
 export function escapeSvgText(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -37,13 +68,39 @@ export function escapeSvgAttribute(value: string): string {
   return escapeSvgText(value).replace(/"/g, '&quot;');
 }
 
-export function createLegendSvg(markup: string): LegendSvgDefinition {
-  const size = /<rect[^>]*width="([^"]+)"[^>]*height="([^"]+)"/.exec(markup);
-  const width = Number(size?.[1] ?? 0);
-  const height = Number(size?.[2] ?? 0);
+export function sanitizeDataImageUrl(
+  value: string | null | undefined
+): string | null {
+  if (!value) {
+    return null;
+  }
+
+  if (
+    /^data:image\/(?:png|webp|jpeg|svg\+xml);base64,[a-z0-9+/=]+$/i.test(value)
+  ) {
+    return escapeSvgAttribute(value);
+  }
+
+  return null;
+}
+
+export function createLegendSvg(svg: LegendSvgDefinition): LegendSvgDefinition;
+export function createLegendSvg(
+  markup: string,
+  width?: number,
+  height?: number
+): LegendSvgDefinition;
+export function createLegendSvg(
+  input: LegendSvgDefinition | string,
+  width = 0,
+  height = 0
+): LegendSvgDefinition {
+  if (typeof input !== 'string') {
+    return input;
+  }
 
   return {
-    markup,
+    markup: input,
     width: Number.isFinite(width) ? width : 0,
     height: Number.isFinite(height) ? height : 0
   };
@@ -74,6 +131,123 @@ export function createLegendCanvasRect(width: number, height: number): string {
   return `<rect width="${width}" height="${height}" fill="transparent" pointer-events="none" />`;
 }
 
+export function wrapLegendText(
+  text: string,
+  font: string,
+  maxWidth: number
+): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let currentLine = words[0] ?? '';
+
+  for (let index = 1; index < words.length; index++) {
+    const candidate = `${currentLine} ${words[index]}`;
+    if (Textbox.measureText(candidate, font) <= maxWidth) {
+      currentLine = candidate;
+    } else {
+      lines.push(currentLine);
+      currentLine = words[index];
+    }
+  }
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines;
+}
+
+export function renderLegendHeader({
+  title,
+  subtitle,
+  x,
+  y,
+  maxWidth,
+  titleSize,
+  subtitleSize,
+  fontFamily,
+  gap = 3,
+  titleFont,
+  subtitleFont
+}: RenderLegendHeaderOptions): RenderedLegendTextBlock {
+  let markup = '';
+  let cursor = y;
+
+  if (title) {
+    const lines = wrapLegendText(
+      title,
+      titleFont ??
+        createLegendFont({
+          fontSize: titleSize,
+          fontFamily,
+          weight: 'bold'
+        }),
+      maxWidth
+    );
+    const lineHeight = titleSize * 1.2;
+    if (lines.length > 0) {
+      markup += `<g class="title" text-anchor="start" dominant-baseline="hanging" font-size="${titleSize}" font-weight="bold">`;
+      lines.forEach((line, index) => {
+        markup += `<text x="${x}" y="${cursor + index * lineHeight}">${escapeSvgText(line)}</text>`;
+      });
+      markup += `</g>`;
+      cursor += lines.length * lineHeight + gap;
+    }
+  }
+
+  if (subtitle) {
+    const lines = wrapLegendText(
+      subtitle,
+      subtitleFont ?? createLegendFont({ fontSize: subtitleSize, fontFamily }),
+      maxWidth
+    );
+    const lineHeight = subtitleSize * 1.2;
+    if (lines.length > 0) {
+      markup += `<g class="subtitle" text-anchor="start" dominant-baseline="hanging" font-size="${subtitleSize}">`;
+      lines.forEach((line, index) => {
+        markup += `<text x="${x}" y="${cursor + index * lineHeight}">${escapeSvgText(line)}</text>`;
+      });
+      markup += `</g>`;
+      cursor += lines.length * lineHeight + gap;
+    }
+  }
+
+  return { markup, height: Math.max(0, cursor - y) };
+}
+
+export function renderLegendNote({
+  note,
+  x,
+  y,
+  maxWidth,
+  noteSize,
+  fontFamily,
+  noteFont
+}: RenderLegendNoteOptions): RenderedLegendTextBlock {
+  if (!note) {
+    return { markup: '', height: 0 };
+  }
+
+  const lines = wrapLegendText(
+    note,
+    noteFont ?? createLegendFont({ fontSize: noteSize, fontFamily }),
+    maxWidth
+  );
+
+  if (lines.length === 0) {
+    return { markup: '', height: 0 };
+  }
+
+  const lineHeight = noteSize * 1.2;
+  let markup = `<g class="note" text-anchor="start" dominant-baseline="hanging" font-size="${noteSize}">`;
+  lines.forEach((line, index) => {
+    markup += `<text x="${x}" y="${y + index * lineHeight}">${escapeSvgText(line)}</text>`;
+  });
+  markup += `</g>`;
+
+  return { markup, height: lines.length * lineHeight };
+}
+
 export function linearScale(
   [d0, d1]: [number, number],
   [r0, r1]: [number, number]
@@ -98,22 +272,6 @@ export function sqrtScale(
 
   return (value: number) =>
     r0 + ((Math.sqrt(value) - sd0) / (sd1 - sd0)) * (r1 - r0);
-}
-
-function bisectRight(values: ArrayLike<number>, value: number): number {
-  let low = 0;
-  let high = values.length;
-
-  while (low < high) {
-    const mid = (low + high) >>> 1;
-    if (value < values[mid]) {
-      high = mid;
-    } else {
-      low = mid + 1;
-    }
-  }
-
-  return low;
 }
 
 export function magnitude(value: number): MagnitudeResult {
@@ -150,7 +308,7 @@ export function filter_candidates_by_distances(
   return candidates.filter((_, index) => !exit_indices.has(index));
 }
 
-export function candidates_distances_from_data(
+function candidates_distances_from_data(
   sorted_data: ArrayLike<number>,
   candidates: number[]
 ): number[] {

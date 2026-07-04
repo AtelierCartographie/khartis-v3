@@ -21,9 +21,8 @@ export interface GeoJSONFeatureCollection {
   };
 }
 
-export type GeoJSONData = GeoJSONFeature | GeoJSONFeatureCollection;
-
-export type ParsedData = TabularData | GeoJSONData;
+export type ParsedData =
+  TabularData | GeoJSONFeature | GeoJSONFeatureCollection;
 
 export function isGeoJSONFeatureCollection(
   data: ParsedData

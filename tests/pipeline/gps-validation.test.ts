@@ -6,6 +6,7 @@ import {
   type DuckDBClientForGPS
 } from '$lib/features/duckdb/orchestrator/gps-ops';
 import { FileType, type DuckDBDataset } from '$lib/features/duckdb/types';
+import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 
 function mockDuck(result: Record<string, number>): DuckDBClientForGPS {
   return {
@@ -149,6 +150,34 @@ describe('[D-07] validateGPSColumns — no parseable coordinates (CSV-12)', () =
 });
 
 describe('[D-08] getGPSArrowTable — transient GPS materialization', () => {
+  it('throws a DataValidationError when the dataset is not in GPS mode', async () => {
+    const dataset: DuckDBDataset = {
+      id: 'dataset-without-gps',
+      tableName: 'sites',
+      sourceFileId: 'source-1',
+      name: 'sites.csv',
+      columns: [],
+      rowCount: 1,
+      metadata: {
+        processedAt: new Date('2026-04-18T00:00:00.000Z'),
+        fileType: FileType.CSV
+      }
+    };
+
+    const request = getGPSArrowTable(dataset, mockDuck({}), vi.fn());
+
+    await expect(request).rejects.toMatchObject({
+      name: 'DataValidationError',
+      code: 'DATA_VALIDATION_ERROR',
+      field: 'gpsMode',
+      details: {
+        datasetId: 'dataset-without-gps',
+        field: 'gpsMode'
+      }
+    });
+    await expect(request).rejects.toBeInstanceOf(DataValidationError);
+  });
+
   it('materializes GPS rows in a temp table and drops it after Arrow export', async () => {
     const queries: string[] = [];
     const duck: DuckDBClientForGPS = {

@@ -30,6 +30,7 @@ export {
   addFilesToProject,
   addVirtualSourceFile,
   removeFileFromProject,
+  clearSourceFiles,
   renameFile
 } from './project-files';
 

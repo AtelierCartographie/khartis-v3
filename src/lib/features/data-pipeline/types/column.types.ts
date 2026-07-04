@@ -16,6 +16,8 @@ export interface ColumnStats {
   share_floats?: number;
   share_rank_interval?: number;
   extent_magnitude?: number;
+  skewness?: number;
+  categories?: string[];
 }
 
 export interface RawColumn {
@@ -83,4 +85,6 @@ export interface DuckAnalyticsColumn {
   share_floats?: number | string;
   share_rank_interval?: number | string;
   extent_magnitude?: number | string;
+  skewness?: number | string;
+  histogram?: unknown;
 }

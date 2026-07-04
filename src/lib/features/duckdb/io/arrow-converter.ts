@@ -1,5 +1,6 @@
 import { Table, tableToIPC, vectorFromArray, type Vector } from 'apache-arrow';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import * as m from '$lib/paraglide/messages';
 import { getContext, isInitialized } from '../core/engine';
 
@@ -31,13 +32,13 @@ export async function insertArrowTableIntoDuckDB(
   tableName: string
 ): Promise<void> {
   if (!isInitialized()) {
-    throw new Error(m.error_duckdb_not_initialized_arrow());
+    throw new DuckDBError(m.error_duckdb_not_initialized_arrow());
   }
 
   const ctx = getContext();
 
   if (!ctx.connection) {
-    throw new Error(m.error_duckdb_connection_null());
+    throw new DuckDBError(m.error_duckdb_connection_null());
   }
 
   const ipcStream = tableToIPC(table);

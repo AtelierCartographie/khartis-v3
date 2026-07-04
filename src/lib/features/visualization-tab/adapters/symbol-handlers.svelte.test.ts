@@ -150,6 +150,14 @@ describe('createSymbolHandlers', () => {
     });
   });
 
+  it('handleSymbolChange recomputes primitiveFilters from the point enabled override', () => {
+    const bag = makeBag();
+    bag.handlers.handleSymbolChange({ enabled: false } as never);
+    expect(bag.buildNextPrimitiveFilters).toHaveBeenCalledWith({
+      point: false
+    });
+  });
+
   it('handleSymbolStrokeClassificationChange delegates to stroke state setter for POINT', () => {
     const bag = makeBag();
     bag.handlers.handleSymbolStrokeClassificationChange({
