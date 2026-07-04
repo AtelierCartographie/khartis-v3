@@ -8,6 +8,7 @@ import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
+import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 import * as m from '$lib/paraglide/messages';
 import {
   DENSITY_LEVEL,
@@ -223,12 +224,20 @@ export async function generateDotDensityFromJoin(
   const geomCols = await getTableColumns(geometryTableName);
   const joinColumn = findJoinColumn(geomCols);
   if (!joinColumn) {
-    throw new Error(m.error_density_no_feature_id({ geometryTableName }));
+    throw new DataValidationError(
+      m.error_density_no_feature_id({ geometryTableName }),
+      'featureId',
+      { geometryTableName }
+    );
   }
 
   const geometryColumn = findGeometryColumn(geomCols);
   if (!geometryColumn) {
-    throw new Error(m.error_density_no_geometry({ geometryTableName }));
+    throw new DataValidationError(
+      m.error_density_no_geometry({ geometryTableName }),
+      'geometry',
+      { geometryTableName }
+    );
   }
 
   const cacheTableId = `${datasetTableName}+${geometryTableName}`;
@@ -285,7 +294,11 @@ async function createGpsDensitySourceView(
   const geomCols = await getTableColumns(geometryTableName);
   const geometryColumn = findGeometryColumn(geomCols);
   if (!geometryColumn) {
-    throw new Error(m.error_density_no_geometry({ geometryTableName }));
+    throw new DataValidationError(
+      m.error_density_no_geometry({ geometryTableName }),
+      'geometry',
+      { geometryTableName }
+    );
   }
 
   const escapedView = escapeIdentifier(viewName);
@@ -456,7 +469,11 @@ export async function generateDotDensityFromGeoTable(
   const cols = await getTableColumns(tableName);
   const geometryColumn = findGeometryColumn(cols);
   if (!geometryColumn) {
-    throw new Error(m.error_table_no_geometry_density({ tableName }));
+    throw new DataValidationError(
+      m.error_table_no_geometry_density({ tableName }),
+      'geometry',
+      { tableName }
+    );
   }
 
   const arrow = await generateDotDensityArrow(

@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
+import {
+  DataValidationError,
+  DuckDBError
+} from '$lib/features/commons/pipeline.errors';
+import type { DuckDBDataset } from '$lib/features/duckdb/types';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import type { DuckDBClientForJoin } from './join-ops';
 
@@ -14,12 +19,22 @@ vi.mock('$lib/features/map/services/basemap.service.svelte', () => ({
   }
 }));
 
-vi.mock('$lib/paraglide/runtime', () => ({
-  getLocale: mocks.getLocale
-}));
+vi.mock('$lib/paraglide/runtime', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('$lib/paraglide/runtime')>();
+  return {
+    ...actual,
+    getLocale: mocks.getLocale
+  };
+});
 
-const { getBasemapAttributeValues, getBasemapAttributeAliasesByValue } =
-  await import('./join-ops');
+const {
+  applyJoinCorrections,
+  finalizeJoin,
+  getJoinedArrowTable,
+  getBasemapAttributeValues,
+  getBasemapAttributeAliasesByValue
+} = await import('./join-ops');
 
 function createBasemap(): BasemapMetadata {
   return {
@@ -58,10 +73,20 @@ function createDuck() {
           return [{ raw: 'Brésil' }, { raw: 'France' }];
         }
         return [];
-      }),
-      join_by_id: vi.fn(),
-      apply_join_association: vi.fn()
+      })
     } satisfies DuckDBClientForJoin
+  };
+}
+
+function createDataset(tableName: string): DuckDBDataset {
+  return {
+    id: 'dataset',
+    tableName,
+    sourceFileId: 'source',
+    name: 'Dataset',
+    columns: [],
+    rowCount: 0,
+    metadata: { processedAt: new Date(), fileType: 'csv' as never }
   };
 }
 
@@ -82,6 +107,76 @@ describe('join-ops basemap attribute values', () => {
     );
     expect(valueQuery).toContain("variant = 'name_fren'");
     expect(valueQuery).toContain('COALESCE(id, raw) AS entity_id');
+  });
+});
+
+describe('join-ops error typing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('throws a DuckDBError when basemap attributes cannot be loaded', async () => {
+    const duck = {
+      query: vi.fn(async () => [])
+    } satisfies DuckDBClientForJoin;
+
+    const request = getBasemapAttributeValues(createBasemap(), duck);
+
+    await expect(request).rejects.toMatchObject({
+      name: 'DuckDBError',
+      code: 'DUCKDB_ERROR',
+      details: {
+        tableName: 'basemap_attributes'
+      }
+    });
+    await expect(request).rejects.toBeInstanceOf(DuckDBError);
+  });
+
+  it('throws a DataValidationError when the requested join column is absent', async () => {
+    const { duck } = createDuck();
+
+    const request = finalizeJoin(
+      createDataset('user_data'),
+      createBasemap(),
+      'region',
+      duck
+    );
+
+    await expect(request).rejects.toMatchObject({
+      name: 'DataValidationError',
+      code: 'DATA_VALIDATION_ERROR',
+      field: 'region',
+      details: {
+        datasetId: 'dataset',
+        field: 'region',
+        tableName: 'user_data'
+      }
+    });
+    await expect(request).rejects.toBeInstanceOf(DataValidationError);
+  });
+
+  it('throws a DataValidationError when joined geometry is unavailable', async () => {
+    const duck = {
+      query: vi.fn(async () => [{ column_name: 'id', data_type: 'VARCHAR' }])
+    } satisfies DuckDBClientForJoin;
+
+    await expect(
+      getJoinedArrowTable(
+        'user_data',
+        'basemap-id',
+        duck,
+        async () => 'geometry_table',
+        vi.fn()
+      )
+    ).rejects.toMatchObject({
+      name: 'DataValidationError',
+      code: 'DATA_VALIDATION_ERROR',
+      field: 'geometry',
+      details: {
+        field: 'geometry',
+        geometryTable: 'geometry_table'
+      }
+    });
   });
 });
 
@@ -124,9 +219,7 @@ describe('join-ops basemap aliases', () => {
           ];
         }
         return [];
-      }),
-      join_by_id: vi.fn(),
-      apply_join_association: vi.fn()
+      })
     } satisfies DuckDBClientForJoin;
 
     const aliases = await getBasemapAttributeAliasesByValue(
@@ -143,5 +236,34 @@ describe('join-ops basemap aliases', () => {
       { value: 'Brazil', variant: 'name_engl' }
     ]);
     expect(queries.join('\n')).not.toContain('SUM(CASE WHEN variant');
+  });
+});
+
+describe('join-ops correction cleanup', () => {
+  it('drops the temporary correction table when the update fails', async () => {
+    const queries: string[] = [];
+    const updateError = new Error('update failed');
+    const duck = {
+      query: vi.fn(async (sql: string) => {
+        queries.push(sql);
+        if (sql.includes('UPDATE "user_data"')) {
+          throw updateError;
+        }
+        return [];
+      })
+    } satisfies DuckDBClientForJoin;
+
+    await expect(
+      applyJoinCorrections(
+        createDataset('user_data'),
+        'geo',
+        { France: 'FR' },
+        duck
+      )
+    ).rejects.toThrow(updateError);
+
+    expect(queries.at(-1)).toMatch(
+      /^DROP TABLE IF EXISTS "corrections_[a-f0-9_]+"/
+    );
   });
 });

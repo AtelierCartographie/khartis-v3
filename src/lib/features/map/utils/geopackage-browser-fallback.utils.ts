@@ -1,10 +1,13 @@
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import proj4 from 'proj4';
 import { reprojectPoint } from '$lib/features/duckdb/io/reprojection';
+import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { parseWkbToGeoJson } from '$lib/features/map/io/geometry-parser';
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
+
+// Browser GeoPackage reads use sqlite-wasm because the DuckDB-WASM spatial path needs threads.
 
 type SqliteModule = Awaited<ReturnType<typeof sqlite3InitModule>>;
 
@@ -142,9 +145,9 @@ function ensureProjectionDefinition(
 function reprojectGeometryCoordinates(
   coords: unknown,
   sourceCrs: string
-): void {
+): number {
   if (!Array.isArray(coords)) {
-    return;
+    return 0;
   }
 
   if (
@@ -161,24 +164,32 @@ function reprojectGeometryCoordinates(
     if (result.success && result.coordinates) {
       coords[0] = result.coordinates[0];
       coords[1] = result.coordinates[1];
+      return 0;
     }
-    return;
+    return 1;
   }
 
+  let failedCount = 0;
   for (const child of coords) {
-    reprojectGeometryCoordinates(child, sourceCrs);
+    failedCount += reprojectGeometryCoordinates(child, sourceCrs);
   }
+
+  return failedCount;
 }
 
-function reprojectGeometryInPlace(geometry: Geometry, sourceCrs: string): void {
+function reprojectGeometryInPlace(
+  geometry: Geometry,
+  sourceCrs: string
+): number {
   if (geometry.type === 'GeometryCollection') {
+    let failedCount = 0;
     for (const child of geometry.geometries) {
-      reprojectGeometryInPlace(child, sourceCrs);
+      failedCount += reprojectGeometryInPlace(child, sourceCrs);
     }
-    return;
+    return failedCount;
   }
 
-  reprojectGeometryCoordinates(geometry.coordinates, sourceCrs);
+  return reprojectGeometryCoordinates(geometry.coordinates, sourceCrs);
 }
 
 export function extractWkbFromGeoPackageGeometry(
@@ -289,7 +300,11 @@ async function selectPreferredLayer(
   })[0];
 
   if (!selectedLayer) {
-    throw new Error('No feature layer found in GeoPackage');
+    throw new DataValidationError(
+      'No feature layer found in GeoPackage',
+      'geopackageLayer',
+      { preferredLayer }
+    );
   }
 
   return selectedLayer;
@@ -323,6 +338,7 @@ export async function convertGeoPackageToGeoJsonFile(
     ) as SqliteRow[];
 
     const features: Feature[] = [];
+    let failedReprojectionCount = 0;
     for (const row of rows) {
       const geometryValue = normalizeSqliteBlob(
         row[selectedLayer.geometryColumn]
@@ -347,7 +363,10 @@ export async function convertGeoPackageToGeoJsonFile(
         selectedLayer.sourceCrs &&
         selectedLayer.sourceCrs.toUpperCase() !== 'EPSG:4326'
       ) {
-        reprojectGeometryInPlace(geometry, selectedLayer.sourceCrs);
+        failedReprojectionCount += reprojectGeometryInPlace(
+          geometry,
+          selectedLayer.sourceCrs
+        );
       }
 
       const properties: Record<string, unknown> = {};
@@ -363,6 +382,19 @@ export async function convertGeoPackageToGeoJsonFile(
         geometry,
         properties
       });
+    }
+
+    if (failedReprojectionCount > 0) {
+      logger.warn(
+        'Failed to reproject GeoPackage coordinates',
+        LogCategory.MAP,
+        {
+          fileName: file.name,
+          layerName: selectedLayer.layerName,
+          sourceCrs: selectedLayer.sourceCrs,
+          failedCoordinateCount: failedReprojectionCount
+        }
+      );
     }
 
     const featureCollection: FeatureCollection = {

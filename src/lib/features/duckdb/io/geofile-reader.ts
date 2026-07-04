@@ -86,53 +86,13 @@ function buildCrsTaggedReadQuery(
     FROM ST_Read('${escapedGeoFileId}', keep_wkb := true${selectedLayerClause});`;
 }
 
-async function runGeofileReadWithThreadFallback(
+async function runGeofileRead(
   ctx: DuckDBContext,
-  escapedFinalTable: string,
-  readQuery: string,
-  retryWithSerializedExecution: boolean
+  readQuery: string
 ): Promise<void> {
-  const runRead = async () => {
-    let tableCreated = false;
-
-    try {
-      // Handle recoverable GeoPackage thread failures locally so the higher-level
-      // browser fallback can retry without emitting a shared rollback error.
-      await executeQuery(ctx.connection, readQuery, {
-        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-      });
-      tableCreated = true;
-    } catch (error) {
-      if (tableCreated) {
-        await executeQuery(
-          ctx.connection,
-          `DROP TABLE IF EXISTS "${escapedFinalTable}";`,
-          { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-        ).catch(() => undefined);
-      }
-      throw error;
-    }
-  };
-  try {
-    await runRead();
-  } catch (error) {
-    if (!isThreadPoolError(error)) throw error;
-    if (!retryWithSerializedExecution) {
-      throw error;
-    }
-    // Reduce DuckDB threads to 1 to avoid pthread_create exhaustion for large
-    // multi-layer GPKG files, then retry the read. Restore threads afterwards.
-    await executeQuery(ctx.connection, 'PRAGMA threads=1', {
-      format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-    }).catch(() => undefined);
-    try {
-      await runRead();
-    } finally {
-      await executeQuery(ctx.connection, 'PRAGMA threads=4', {
-        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-      }).catch(() => undefined);
-    }
-  }
+  await executeQuery(ctx.connection, readQuery, {
+    format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+  });
 }
 
 interface GeofileLayerMetadata {
@@ -407,12 +367,7 @@ export async function readGeofile(
   const readQuery = `CREATE OR REPLACE TABLE "${escapedFinalTable}" AS FROM ST_Read('${escapedGeoFileId}'${selectedLayerClause});`;
 
   try {
-    await runGeofileReadWithThreadFallback(
-      ctx,
-      escapedFinalTable,
-      readQuery,
-      ctx.threadsSupported
-    );
+    await runGeofileRead(ctx, readQuery);
   } catch (error) {
     const sourceCrs = geoMeta.crs ? normalizeProj4CrsCode(geoMeta.crs) : null;
 
@@ -421,16 +376,14 @@ export async function readGeofile(
       sourceCrs &&
       isProjectionSupported(sourceCrs)
     ) {
-      await runGeofileReadWithThreadFallback(
+      await runGeofileRead(
         ctx,
-        escapedFinalTable,
         buildCrsTaggedReadQuery(
           escapedFinalTable,
           escapedGeoFileId,
           selectedLayerClause,
           sourceCrs
-        ),
-        ctx.threadsSupported
+        )
       );
     } else if (isGeoPackageFile(geofile.name) && isThreadPoolError(error)) {
       const fallbackGeoJsonFile = await convertGeoPackageToGeoJsonFile(

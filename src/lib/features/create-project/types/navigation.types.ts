@@ -1,7 +1,10 @@
-export interface UseProjectNavigationProps {
-  getOnClose: () => (() => void) | undefined;
+export interface ProjectNavigationOptions {
+  onClose?: () => void;
 }
 
-export interface UseProjectNavigationReturn {
+export interface ProjectNavigation {
   navigateAfterAction: () => Promise<void>;
 }
+
+export type UseProjectNavigationProps = ProjectNavigationOptions;
+export type UseProjectNavigationReturn = ProjectNavigation;

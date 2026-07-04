@@ -8,12 +8,12 @@
     VisualizationTools as VisualizationToolId
   } from '$lib/features/commons/types/global';
   import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
-  import { m } from '$lib/paraglide/messages.js';
+  import { m } from '$lib/paraglide/messages';
   import { ColorPalette, DataTable, ToolsAlt } from 'carbon-icons-svelte';
   import { Popover } from 'carbon-components-svelte';
   import clsx from 'clsx';
   import { tick, untrack } from 'svelte';
-  import type { Snippet } from 'svelte';
+  import type { Component } from 'svelte';
   import {
     DOM_IDS,
     CSS_CLASSES,
@@ -36,7 +36,9 @@
   const MAIN_TOOLBAR_CONTENT_SELECTOR =
     '#khartis-main-toolbar .toolbar-content';
 
-  const listToolsComponents = {
+  type ListToolsStep = ToolbarStep.Visualizations | ToolbarStep.Styling;
+
+  const listToolsComponents: Record<ListToolsStep, Component> = {
     [ToolbarStep.Visualizations]: VisualizationTools,
     [ToolbarStep.Styling]: StylingTools
   };
@@ -74,12 +76,10 @@
     [ToolbarStep.Styling]: m.step_styling()
   }));
 
-  let selectedList = $derived<Snippet | undefined>(
-    globalState.selectedStep
-      ? listToolsComponents[
-          globalState.selectedStep as ToolbarStep.Visualizations &
-            ToolbarStep.Styling
-        ]
+  let SelectedList = $derived<Component | undefined>(
+    globalState.selectedStep === ToolbarStep.Visualizations ||
+      globalState.selectedStep === ToolbarStep.Styling
+      ? listToolsComponents[globalState.selectedStep]
       : undefined
   );
 
@@ -164,7 +164,9 @@
       </button>
     </div>
 
-    {@render selectedList?.()}
+    {#if SelectedList}
+      <SelectedList />
+    {/if}
   </div>
 
   <ToolPopover
@@ -251,9 +253,13 @@
     gap: 0.3rem;
     width: 100%;
     padding: var(--cds-spacing-03) var(--cds-spacing-04);
-    outline: none;
     border: none;
     cursor: pointer;
+  }
+
+  .nav-item:focus-visible {
+    outline: 2px solid var(--cds-focus);
+    outline-offset: -2px;
   }
 
   :global(#khartis-step-toolbar .nav-item svg) {

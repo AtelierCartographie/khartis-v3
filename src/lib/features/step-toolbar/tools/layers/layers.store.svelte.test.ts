@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
-import type { BasemapLayerConfig } from '$lib/features/map/stores/basemap-layers.store.svelte';
 
 const {
   mockVisualizationStore,
@@ -235,13 +234,7 @@ import {
   ShapeType
 } from '$lib/features/commons/constants/visualization.constants';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
-import {
-  getBasemapLayerColor,
-  getVisualizationColor,
-  getVisualizationPrimitiveColor,
-  layersActions,
-  layersState
-} from './layers.store.svelte';
+import { layersActions, layersState } from './layers.store.svelte';
 import type { Layer } from '../../types/layers.types';
 import { layerOrderStore } from './layer-order.store.svelte';
 import {
@@ -377,7 +370,7 @@ function resetBasemapLayerMocks(): void {
   ];
 }
 
-describe('layers color helpers', () => {
+describe('layers row colors', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockVisualizationStore.activeVisualizations = [];
@@ -398,10 +391,12 @@ describe('layers color helpers', () => {
       }
     });
 
-    expect(getVisualizationColor(visualization)).toBe('#c8ddf0');
-    expect(
-      getVisualizationPrimitiveColor(visualization, PrimitiveFilterType.POLYGON)
-    ).toBe('#c8ddf0');
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+
+    expect(findById('viz-1::polygon')?.color).toBe('#c8ddf0');
   });
 
   it('keeps the actual primitive color when a line visualization has one', () => {
@@ -412,9 +407,12 @@ describe('layers color helpers', () => {
       }
     });
 
-    expect(
-      getVisualizationPrimitiveColor(visualization, PrimitiveFilterType.LINE)
-    ).toBe('#1e3a5f');
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+
+    expect(findById('viz-1::line')?.color).toBe('#1e3a5f');
   });
 
   it('uses the neutral polygon stroke when support polygons have no fill', () => {
@@ -427,33 +425,35 @@ describe('layers color helpers', () => {
       }
     });
 
-    expect(
-      getVisualizationPrimitiveColor(visualization, PrimitiveFilterType.POLYGON)
-    ).toBe('#8d8d8d');
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+
+    expect(findById('viz-1::polygon')?.color).toBe('#8d8d8d');
   });
 
   it('shows land with its contour color and water with its own color', () => {
-    const terre = {
-      id: 'terre',
-      visible: true,
-      fillColor: '#ffffff',
-      fillShadow: false,
-      fillOpacity: 100,
-      strokeColor: '#a8a8a8',
-      strokeDotted: false,
-      strokeDottedPattern: BasemapDottedPattern.DOTS,
-      strokeThickness: 1,
-      strokeOpacity: 100
-    } satisfies BasemapLayerConfig;
-    const mers = {
-      id: 'mers',
-      visible: true,
-      color: '#d0e2ff',
-      opacity: 100
-    } satisfies BasemapLayerConfig;
+    const visualization = createVisualization();
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+    mockBasemapStyleStore.referenceBasemapId = 'world';
+    mockBasemapService.currentMetadata = {
+      file: 'world',
+      layers: [
+        {
+          title_fr: 'Territoire',
+          title_en: 'Territory',
+          type: BasemapLayerType.LAND,
+          file: 'world-land.parquet'
+        }
+      ]
+    };
 
-    expect(getBasemapLayerColor(terre)).toBe('#a8a8a8');
-    expect(getBasemapLayerColor(mers)).toBe('#d0e2ff');
+    layersActions.syncWithVisualizations();
+
+    expect(findById('basemap::world-land.parquet')?.color).toBe('#a8a8a8');
+    expect(findById('basemap::mers')?.color).toBe('#d0e2ff');
   });
 });
 

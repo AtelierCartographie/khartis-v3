@@ -12,27 +12,18 @@ import {
   TEXT_BACKGROUND_SCOPE_TARGET
 } from './use-classification-breaks.svelte';
 import type {
+  ClassificationTarget,
+  StrokeClassificationTarget
+} from '../utils/classification-targets.utils';
+import type {
   ClassifiablePrimitive,
   StrokeClassifiablePrimitive
 } from './use-primitive-panel-controller.svelte';
 
-export interface ClassificationTarget {
-  primitive: ClassifiablePrimitive;
-  valueColumn: string | undefined;
-  categoryColumn: string | undefined;
-  classification: ClassificationConfig | undefined;
-  usesBreaks: boolean;
-  usesCategories: boolean;
-}
-
-export interface StrokeClassificationTarget {
-  primitive: StrokeClassifiablePrimitive;
-  valueColumn: string | undefined;
-  categoryColumn: string | undefined;
-  classification: ClassificationConfig | undefined;
-  usesBreaks: boolean;
-  usesCategories: boolean;
-}
+export type {
+  ClassificationTarget,
+  StrokeClassificationTarget
+} from '../utils/classification-targets.utils';
 
 export interface ScopeTarget {
   classification: ClassificationConfig | undefined;
@@ -73,9 +64,7 @@ export interface UseClassificationColorSyncDeps {
   ) => void;
 }
 
-// Colour syncing is DERIVED (regenerating palette colours), never a user edit:
-// preserve the origin so it doesn't re-tag a freshly-applied suggestion as
-// `custom` and uncheck its card.
+// Palette colour syncing is derived output, not a custom user edit.
 const PRESERVE_ORIGIN = { preserveOrigin: true } as const;
 
 export function buildPrimitiveColorParamsKey(

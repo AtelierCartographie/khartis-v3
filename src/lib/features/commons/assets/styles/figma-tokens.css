@@ -38,7 +38,7 @@
   --color-error: #9f1853; /* Magenta */
   --color-warning: #ff832b; /* Orange */
   --color-info-bg: #e5f6ff; /* Light blue background */
-  --color-success: #00a878; /* Green (à ajuster selon Carbon) */
+  --color-success: #00a878; /* Green, adjust to Carbon if needed */
 
   /* Status-specific colors */
   --color-purple: #6929c4; /* Categories, tags */

@@ -298,4 +298,47 @@ describe('search store tooltip integration', () => {
     expect(columnNames).not.toContain('basemap_id');
     expect(columnNames).not.toContain('typo_match');
   });
+
+  it('omits sampled-result state from persisted search settings', async () => {
+    mocks.searchInTable.mockResolvedValue({
+      exactCount: 1,
+      containsCount: 0,
+      fuzzyCount: 0,
+      totalCount: 1,
+      isSampled: true,
+      results: [
+        {
+          rowId: 55,
+          columnName: 'NAME_LATN',
+          value: 'Braunschweig',
+          score: 1
+        }
+      ]
+    });
+
+    const { persistenceRegistry } =
+      await import('$lib/features/project-management/core');
+    const { searchActions, searchState } =
+      await import('./search.store.svelte');
+
+    searchActions.clearSearch();
+    searchActions.setSearchValue('Braunschweig');
+    await searchActions.performSearch();
+
+    expect(searchState.isSampled).toBe(true);
+
+    const serializedSearch = persistenceRegistry.serializeAll()
+      .search as Record<string, unknown>;
+
+    expect(serializedSearch).toMatchObject({
+      searchValue: 'Braunschweig',
+      selectedSource: 'all',
+      caseSensitive: false,
+      wholeWord: false
+    });
+    expect(serializedSearch).not.toHaveProperty('isSampled');
+    expect(serializedSearch).not.toHaveProperty('results');
+    expect(serializedSearch).not.toHaveProperty('currentResultIndex');
+    expect(serializedSearch).not.toHaveProperty('isSearching');
+  });
 });

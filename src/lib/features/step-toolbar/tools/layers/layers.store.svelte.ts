@@ -11,36 +11,37 @@ import {
   visualizationStore,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
-import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
+import {
+  createReadonlyStateFacade,
+  createToolStore
+} from '$lib/features/commons/utils/store.utils.svelte';
 import {
   FillMode,
   SymbolMode
 } from '$lib/features/commons/constants/visualization.constants';
 import {
+  BasemapStyle,
+  DEFAULT_TILED_BASEMAP_STYLE,
+  basemapAuxLayersStore,
   basemapLayersStore,
+  basemapService,
+  osmBasemapStore,
+  type BasemapLayer,
+  type BasemapMetadata,
   BASEMAP_LAYER_ID,
   getBasemapRenderGroup,
+  getPreferredBasemapFile,
   type BasemapLayerConfig,
   type BasemapLayerId
-} from '$lib/features/map/stores/basemap-layers.store.svelte';
-import { basemapAuxLayersStore } from '$lib/features/map/stores/basemap-aux-layers.store.svelte';
+} from '$lib/features/map';
 import { SYNTHETIC_AUX_LAYER_KEY } from '$lib/features/commons/constants/basemap.constants';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
-import {
-  BasemapStyle,
-  DEFAULT_TILED_BASEMAP_STYLE
-} from '$lib/features/map/constants/basemap-styles';
 import {
   getStyleConfig,
   getToggleableGroups,
   type LayerGroupId,
   type StyleConfig
 } from '$lib/features/map/constants/carte-facile-layer-groups';
-import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
-import {
-  basemapService,
-  getPreferredBasemapFile
-} from '$lib/features/map/services/basemap.service.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { resolveActiveBasemapMetadata } from '$lib/features/map/utils/basemap-metadata-resolution.utils';
 import { facetsStore } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
@@ -57,10 +58,6 @@ import type {
   LayerReorderScope,
   LayersState
 } from '../../types/layers.types';
-import type {
-  BasemapLayer,
-  BasemapMetadata
-} from '$lib/features/map/types/basemap.types';
 import {
   buildBasemapSubLayerId,
   buildTiledBasemapLayerId,
@@ -119,14 +116,7 @@ type LayersActions = {
   updateLayer: (id: string, updates: Partial<Layer>) => void;
   removeLayer: (id: string) => void;
   toggleLayerVisibility: (id: string) => void;
-  /**
-   * Single flat reorder action (#182): moves a row in the flattened panel list
-   * and back-projects the resulting absolute order onto the three render
-   * stores (visualization order, primitive order, basemap render-group order,
-   * above/below-thematic flag, aux-key order). The render-store semantics —
-   * `getMapLayerRenderOrder` / `getVisualizationRenderOrder` — never change, so
-   * `buildLayers` re-clamps the result to the back→thematic→front invariant.
-   */
+  /** Flat reorder persists absolute panel order without mutating render stores. */
   reorderLayers: (fromIndex: number, toIndex: number) => void;
   duplicateLayer: (id: string) => Layer | null;
   syncWithVisualizations: () => void;
@@ -146,7 +136,7 @@ function getClassificationColor(
   );
 }
 
-export function getVisualizationColor(viz: VisualizationConfig): string {
+function getVisualizationColor(viz: VisualizationConfig): string {
   const polygon = getPolygonPrimitive(viz);
   const symbol = getSymbolPrimitive(viz);
   const line = getLinePrimitive(viz);
@@ -198,7 +188,7 @@ export function getVisualizationColor(viz: VisualizationConfig): string {
   return VIZ_SUBLAYER_COLOR;
 }
 
-export function getStyleColor(color?: string | string[]): string | null {
+function getStyleColor(color?: string | string[]): string | null {
   if (typeof color === 'string' && color) {
     return color;
   }
@@ -210,7 +200,7 @@ export function getStyleColor(color?: string | string[]): string | null {
   return null;
 }
 
-export function getVisualizationPrimitiveColor(
+function getVisualizationPrimitiveColor(
   viz: VisualizationConfig,
   primitive: PrimitiveFilter
 ): string {
@@ -283,7 +273,7 @@ export function getVisualizationPrimitiveColor(
   }
 }
 
-export function getBasemapLayerColor(layer: BasemapLayerConfig): string {
+function getBasemapLayerColor(layer: BasemapLayerConfig): string {
   if (layer.id === BASEMAP_LAYER_ID.TERRE) {
     return layer.strokeColor || layer.fillColor || BASEMAP_SUBLAYER_COLOR;
   }
@@ -310,8 +300,7 @@ function getVisualizationPrimitiveName(primitive: PrimitiveFilter): string {
   }
 }
 
-// Flattened panel rows have no parent header, so each primitive row carries its
-// visualization name: "<primitive> · <visualization>".
+// Flattened primitive rows include their visualization name.
 function getPrimitiveLayerName(
   primitive: PrimitiveFilter,
   visualizationLabel: string
@@ -591,11 +580,7 @@ function orderBasemapEntriesForDisplay(
   });
 }
 
-// Intra-group ordering of basemap auxiliary rows is read straight from the
-// store (the single source of truth, reordered by `setLayerRenderGroupOrder`),
-// falling back to the canonical order for layers the store doesn't carry. The
-// inter-group placement (foreground/background vs thematic) is owned by
-// `buildLayers`, so there is no separate module-level order to keep in sync.
+// Basemap aux row order comes from the store, then the canonical fallback.
 function getBasemapDisplayOrder(layerId: BasemapLayerId | undefined): number {
   if (!layerId) return Number.MAX_SAFE_INTEGER;
   const storeIndex = basemapLayersStore.layers.findIndex(
@@ -747,15 +732,12 @@ function buildLayers(): Layer[] {
   const facetsEnabled = facetsStore.enabled;
   const facetBaseVizId = facetsStore.baseVisualizationId;
 
-  // In facet mode the collection reads as a single visualization: one row per
-  // primitive. The per-facet copies share that styling and are mapped onto
-  // these rows at render time, so the panel shows the base viz only.
+  // Facet mode displays only the base visualization rows.
   const displayVisualizations = facetsEnabled
     ? visualizationStore.visualizations.filter((v) => v.id === facetBaseVizId)
     : visualizationStore.visualizations;
 
-  // Thematic rows: one row per enabled primitive of every shown visualization.
-  // No separate parent row — each line is a primitive·viz.
+  // Thematic rows are flat primitive-visualization rows.
   const thematicLayers = displayVisualizations.flatMap(
     (viz, vizOrder): Layer[] => {
       const primitiveFilters = getEnabledPrimitiveFilters(viz);
@@ -791,8 +773,7 @@ function buildLayers(): Layer[] {
     }
   );
 
-  // Global, deduplicated basemap auxiliary block (one row per shared layer). Every
-  // basemap row shares the single muted Sepia accent so they recede behind primitives.
+  // Basemap auxiliary rows are global and share the muted accent.
   const basemapLayers = (
     resolveTiledStyleConfig() !== null
       ? buildTiledBasemapSubLayers()
@@ -802,12 +783,7 @@ function buildLayers(): Layer[] {
     accentColor: BASEMAP_LAYER_ACCENT_COLOR
   }));
 
-  // Single source of truth for stacking: project the live rows onto the
-  // persisted flat order (manual drags win, new rows slot in at their default
-  // position, stale ids drop out). The same projection runs in the render path
-  // (`use-map-layers`) so the panel and the GPU stack stay in lockstep without
-  // this build ever having to write back — opening the panel never dirties the
-  // project, and any row can sit above or below any other.
+  // Project live rows onto persisted flat order without dirtying the project.
   const rows = [...thematicLayers, ...basemapLayers];
   const merged = mergeLayerOrder(
     rows,
@@ -840,8 +816,7 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
       updateLayer: (id: string, updates: Partial<Layer>) => {
         const layer = findLayer(id);
         if (!layer) {
-          // Visualization-scoped update addressed by visualization id (rename
-          // from the row context menu — there is no standalone parent row).
+          // Row menu rename targets the visualization id.
           const visualization = visualizationStore.visualizations.find(
             (v) => v.id === id
           );
@@ -865,8 +840,7 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
         syncFromSources();
       },
       removeLayer: (id: string) => {
-        // Addressed by visualization id (the row context menu targets a whole
-        // visualization, not a single primitive row).
+        // Row menu removal targets the whole visualization id.
         const visualization = visualizationStore.visualizations.find(
           (v) => v.id === id
         );
@@ -878,7 +852,7 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
       toggleLayerVisibility: (id: string) => {
         const layer = findLayer(id);
         if (!layer) {
-          // A whole visualization, toggled by id from the row context menu.
+          // Row menu visibility targets the whole visualization id.
           if (visualizationStore.visualizations.some((v) => v.id === id)) {
             visualizationStore.toggleVisualization(id);
             syncFromSources();
@@ -927,8 +901,7 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
         syncFromSources();
       },
       reorderLayers: (fromIndex: number, toIndex: number) => {
-        // The flat list the user dragged IS the order — persist it verbatim and
-        // rebuild. No back-projection, no clamp: any row can go anywhere.
+        // Persist the dragged flat list verbatim.
         const currentIds = s.layers.map((layer) => layer.id);
         const nextIds = reorderIds(currentIds, fromIndex, toIndex);
         if (arraysShallowEqual(currentIds, nextIds)) {
@@ -963,5 +936,5 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
   }
 );
 
-export const layersState = state;
+export const layersState = createReadonlyStateFacade(state);
 export const layersActions = actions;

@@ -8,6 +8,10 @@ export interface CustomBasemapColumnSummary {
   type_simple?: string | null;
 }
 
+export interface CustomBasemapColumnAnalyzer {
+  analyse(tableName: string): Promise<readonly CustomBasemapColumnSummary[]>;
+}
+
 export function isCustomBasemapJoinCandidateColumn(
   columnName: string
 ): boolean {
@@ -53,4 +57,12 @@ export function getCustomBasemapGeometryProjectColumns(
       (column) => column.name
     )
   ];
+}
+
+export async function resolveCustomBasemapGeometryProjectColumns(
+  analyzer: CustomBasemapColumnAnalyzer,
+  tableName: string
+): Promise<string[]> {
+  const columns = await analyzer.analyse(tableName);
+  return getCustomBasemapGeometryProjectColumns(columns);
 }

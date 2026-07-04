@@ -86,13 +86,7 @@
     return isVisible();
   });
 
-  // Some basemaps expose several sections mapped to a single legacy config:
-  // multiple `land` layers (NUTS territory + surrounding land → `terre`) or
-  // several nested `limit` levels (NUTS 3/2/1 → `frontieres`). Styling them
-  // through that shared config couples their sliders and loses each level's
-  // designed style. Land and limit sections therefore keep their own per-file
-  // style override (in the aux store); the style preset is the default and the
-  // shared config the fallback.
+  // Land/limit sections keep per-file overrides because legacy shared config couples levels.
   const isLandLayer = $derived(
     legacyId === 'terre' && layer.type === BasemapLayerType.LAND
   );

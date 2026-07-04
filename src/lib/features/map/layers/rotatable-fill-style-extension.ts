@@ -211,7 +211,7 @@ const defaultProps: DefaultProps<RotatableFillStyleExtensionProps> = {
   getFillPatternRotation: { type: 'accessor', value: 0 }
 };
 
-export default class RotatableFillStyleExtension extends LayerExtension<RotatableFillStyleExtensionOptions> {
+export class RotatableFillStyleExtension extends LayerExtension<RotatableFillStyleExtensionOptions> {
   static defaultProps = defaultProps;
 
   static extensionName = 'RotatableFillStyleExtension';

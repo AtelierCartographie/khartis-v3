@@ -2,7 +2,7 @@
   import * as m from '$lib/paraglide/messages';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import { Dropdown } from 'carbon-components-svelte';
-  import { SliderWithInput } from '../shared';
+  import { SectionHeading, SliderWithInput } from '../shared';
   import {
     AVAILABLE_FONTS,
     CARTOGRAPHIC_FONT_FAMILY,
@@ -14,6 +14,10 @@
     BASEMAP_LAYER_CONFIG,
     BasemapCitySymbol
   } from '$lib/features/commons/constants/visualization.constants';
+  import {
+    createLayerConfigSelectedIdHandler,
+    createLayerConfigValueHandler
+  } from './layer-config-handlers.utils';
 
   interface SymbolOption {
     id: BasemapCitySymbol;
@@ -78,37 +82,44 @@
     onchange
   }: Props = $props();
 
-  function handleSymbolChange(e: CustomEvent<{ selectedId: string }>) {
-    onchange?.({ symbol: e.detail.selectedId as BasemapCitySymbol });
-  }
-
-  function handleCountChange(value: number) {
-    onchange?.({ count: value });
-  }
-
-  function handleColorChange(value: string) {
-    onchange?.({ color: value });
-  }
-
-  function handleSizeChange(value: number) {
-    onchange?.({ size: value });
-  }
-
-  function handleOpacityChange(value: number) {
-    onchange?.({ opacity: value });
-  }
-
-  function handleLabelFontFamilyChange(e: CustomEvent<{ selectedId: string }>) {
-    onchange?.({ labelFontFamily: e.detail.selectedId });
-  }
-
-  function handleLabelSizeChange(e: CustomEvent<{ selectedId: string }>) {
-    onchange?.({ labelSize: clampFontSize(e.detail.selectedId) });
-  }
-
-  function handleLabelColorChange(value: string) {
-    onchange?.({ labelColor: value });
-  }
+  const getOnChange = () => onchange;
+  const handleSymbolChange =
+    createLayerConfigSelectedIdHandler<BasemapCitySymbol>(
+      getOnChange,
+      'symbol',
+      (selectedId) => selectedId as BasemapCitySymbol
+    );
+  const handleCountChange = createLayerConfigValueHandler<number>(
+    getOnChange,
+    'count'
+  );
+  const handleColorChange = createLayerConfigValueHandler<string>(
+    getOnChange,
+    'color'
+  );
+  const handleSizeChange = createLayerConfigValueHandler<number>(
+    getOnChange,
+    'size'
+  );
+  const handleOpacityChange = createLayerConfigValueHandler<number>(
+    getOnChange,
+    'opacity'
+  );
+  const handleLabelFontFamilyChange =
+    createLayerConfigSelectedIdHandler<string>(
+      getOnChange,
+      'labelFontFamily',
+      (selectedId) => selectedId
+    );
+  const handleLabelSizeChange = createLayerConfigSelectedIdHandler<number>(
+    getOnChange,
+    'labelSize',
+    (selectedId) => clampFontSize(selectedId)
+  );
+  const handleLabelColorChange = createLayerConfigValueHandler<string>(
+    getOnChange,
+    'labelColor'
+  );
 </script>
 
 <div class="layer-config-content">
@@ -164,10 +175,7 @@
     onchange={handleOpacityChange}
   />
 
-  <div class="section-heading">
-    <span>{m.basemap_config_labels()}</span>
-    <span aria-hidden="true"></span>
-  </div>
+  <SectionHeading title={m.basemap_config_labels()} />
 
   <div class="label-style-row">
     <div class="label-font-control">
@@ -215,27 +223,6 @@
   .field-label {
     font-size: 0.75rem;
     color: var(--cds-text-02);
-  }
-
-  .section-heading {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-    font-size: 0.875rem;
-    font-weight: 600;
-    line-height: 1.125rem;
-    letter-spacing: 0.16px;
-    color: var(--cds-text-primary);
-  }
-
-  .section-heading span:first-child {
-    flex: 0 0 auto;
-  }
-
-  .section-heading span:last-child {
-    flex: 1 1 auto;
-    height: 1px;
-    background: var(--cds-border-subtle-01);
   }
 
   .label-style-row {

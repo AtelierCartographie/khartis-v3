@@ -2,8 +2,8 @@
   import { ChevronDown, ChevronUp } from 'carbon-icons-svelte';
   import type { Snippet } from 'svelte';
   import { untrack } from 'svelte';
+  import { stopBubbleEvents } from '$lib/features/commons/utils/stop-bubble-events';
   import Switch from './switch.svelte';
-  import { KEY } from '../constants/dom.constants';
 
   interface Props {
     title: string;
@@ -72,31 +72,6 @@
     onToggle?.(expanded);
   }
 
-  function stopBubbleEvents(node: HTMLElement) {
-    const events = [
-      'click',
-      'mousedown',
-      'mouseup',
-      'pointerdown',
-      'pointerup',
-      'keydown',
-      'keyup'
-    ] as const;
-    const handler = (event: Event) => event.stopPropagation();
-
-    events.forEach((eventName) => {
-      node.addEventListener(eventName, handler);
-    });
-
-    return {
-      destroy() {
-        events.forEach((eventName) => {
-          node.removeEventListener(eventName, handler);
-        });
-      }
-    };
-  }
-
   function handleToggleChange(toggled: boolean): void {
     expanded = toggled;
     onToggle?.(expanded);
@@ -138,9 +113,6 @@
       title={disabled && disabledReason ? disabledReason : undefined}
       disabled={disabled}
       onclick={toggle}
-      onkeydown={(e: KeyboardEvent) =>
-        (e.key === KEY.ENTER || e.key === KEY.SPACE) &&
-        (e.preventDefault(), toggle())}
     >
       <div class="section-title-group">
         <span class="section-title {titleClass}">
@@ -243,6 +215,11 @@
     cursor: pointer;
     user-select: none;
     box-sizing: border-box;
+  }
+
+  .section-expand-btn:focus-visible {
+    outline: 2px solid var(--cds-focus);
+    outline-offset: -2px;
   }
 
   .section-header.has-toggle .section-expand-btn {

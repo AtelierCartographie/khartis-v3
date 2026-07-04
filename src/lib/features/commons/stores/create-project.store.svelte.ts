@@ -16,6 +16,7 @@ import {
   getMaxFileSizeForType,
   STORAGE_LIMITS
 } from '../constants/validation.config';
+import { DataValidationError, PipelineError } from '../pipeline.errors';
 import {
   createUploadedFile,
   extractDataFromPaste,
@@ -30,6 +31,7 @@ import {
 import { formatFileSize } from '../utils/format.utils';
 import { LogCategory, logger } from '../utils/logger';
 import { showError } from '../utils/notification.utils.svelte';
+import { createReadonlyStateFacade } from '../utils/store.utils.svelte';
 import type {
   CreateProjectState,
   ExampleProject,
@@ -42,6 +44,9 @@ import { projectStore } from './project.store.svelte';
 import { visualizationStore } from './visualization.store.svelte';
 
 const FILE_FETCH_TIMEOUT_MS = 30_000;
+const REMOTE_FILE_OFFLINE_ERROR_CODE = 'REMOTE_FILE_OFFLINE';
+const REMOTE_FILE_FETCH_FAILED_ERROR_CODE = 'REMOTE_FILE_FETCH_FAILED';
+const REMOTE_FILE_DOWNLOAD_TIMEOUT_ERROR_CODE = 'REMOTE_FILE_DOWNLOAD_TIMEOUT';
 
 const REQUIRED_SHAPEFILE_EXTENSIONS = ['.shp', '.shx', '.dbf'];
 
@@ -66,26 +71,27 @@ const DEFAULT_STATE: CreateProjectState = {
   }
 };
 
-export const createProjectState = $state<CreateProjectState>({
-  ...DEFAULT_STATE
-});
+const createProjectInternalState = $state<CreateProjectState>(
+  structuredClone(DEFAULT_STATE)
+);
+
+export const createProjectState = createReadonlyStateFacade(
+  createProjectInternalState
+);
 
 function hasDuplicateFileName(fileName: string): boolean {
-  const uploadingFiles = $state.snapshot(
-    createProjectState.newProject.uploadedFiles
-  );
-  return uploadingFiles.some(
+  return createProjectInternalState.newProject.uploadedFiles.some(
     (file) => file.name === fileName && file.status !== FileStatus.ERROR
   );
 }
 
 export const createProjectActions = {
   selectTab(tab: ProjectTab): void {
-    createProjectState.selectedTab = tab;
+    createProjectInternalState.selectedTab = tab;
   },
 
   addUploadedFile(file: UploadedFile): void {
-    createProjectState.newProject.uploadedFiles.push(file);
+    createProjectInternalState.newProject.uploadedFiles.push(file);
   },
 
   isFileDuplicate(fileName: string): boolean {
@@ -93,7 +99,7 @@ export const createProjectActions = {
   },
 
   findIncompleteShapefile(baseName: string): UploadedFile | undefined {
-    return createProjectState.newProject.uploadedFiles.find(
+    return createProjectInternalState.newProject.uploadedFiles.find(
       (f) =>
         f.status === FileStatus.INCOMPLETE &&
         f.shapefileBaseName?.toLowerCase() === baseName.toLowerCase()
@@ -102,7 +108,7 @@ export const createProjectActions = {
 
   findCompleteShapefile(baseName: string): UploadedFile | undefined {
     const normalizedBaseName = baseName.toLowerCase();
-    return createProjectState.newProject.uploadedFiles.find((file) => {
+    return createProjectInternalState.newProject.uploadedFiles.find((file) => {
       if (
         file.status !== FileStatus.COMPLETE ||
         file.fileType !== FileType.SHAPEFILE
@@ -137,9 +143,14 @@ export const createProjectActions = {
 
     if (stillMissing.length === 0) {
       const fileIndex =
-        createProjectState.newProject.uploadedFiles.indexOf(incompleteFile);
+        createProjectInternalState.newProject.uploadedFiles.indexOf(
+          incompleteFile
+        );
       if (fileIndex !== -1) {
-        createProjectState.newProject.uploadedFiles.splice(fileIndex, 1);
+        createProjectInternalState.newProject.uploadedFiles.splice(
+          fileIndex,
+          1
+        );
       }
 
       await this.processShapefileGroup(baseName, allFiles, sourceType);
@@ -232,7 +243,8 @@ export const createProjectActions = {
       const nonShapefileErrors = validationResult.globalErrors.filter(
         (err) => !err.includes('Incomplete shapefile')
       );
-      createProjectState.newProject.validationErrors = nonShapefileErrors;
+      createProjectInternalState.newProject.validationErrors =
+        nonShapefileErrors;
 
       const duplicates: string[] = [];
       const toProcess: SvelteMap<string, File[]> = new SvelteMap();
@@ -498,24 +510,25 @@ export const createProjectActions = {
   },
 
   removeUploadedFile(fileId: string): void {
-    const index = createProjectState.newProject.uploadedFiles.findIndex(
+    const index = createProjectInternalState.newProject.uploadedFiles.findIndex(
       (f) => f.id === fileId
     );
     if (index !== -1) {
-      const fileToRemove = createProjectState.newProject.uploadedFiles[index];
+      const fileToRemove =
+        createProjectInternalState.newProject.uploadedFiles[index];
       if (fileToRemove) {
         fileToRemove.originalFile = undefined;
         fileToRemove.relatedFileObjects = undefined;
         fileToRemove.content = undefined;
         fileToRemove.relatedFilesData = undefined;
       }
-      createProjectState.newProject.uploadedFiles.splice(index, 1);
+      createProjectInternalState.newProject.uploadedFiles.splice(index, 1);
       this.recomputeGlobalValidationErrors();
     }
   },
 
   updateFileData(fileId: string, data: Partial<UploadedFile>): void {
-    const file = createProjectState.newProject.uploadedFiles.find(
+    const file = createProjectInternalState.newProject.uploadedFiles.find(
       (f) => f.id === fileId
     );
     if (file) {
@@ -528,7 +541,7 @@ export const createProjectActions = {
     status: UploadedFile['status'],
     errorMessage?: string
   ): void {
-    const file = createProjectState.newProject.uploadedFiles.find(
+    const file = createProjectInternalState.newProject.uploadedFiles.find(
       (f) => f.id === fileId
     );
     if (file) {
@@ -540,7 +553,7 @@ export const createProjectActions = {
   },
 
   updateFileProgress(fileId: string, progress: number): void {
-    const file = createProjectState.newProject.uploadedFiles.find(
+    const file = createProjectInternalState.newProject.uploadedFiles.find(
       (f) => f.id === fileId
     );
     if (file) {
@@ -549,36 +562,36 @@ export const createProjectActions = {
   },
 
   setPastedData(data: string): void {
-    createProjectState.newProject.pastedData = data;
+    createProjectInternalState.newProject.pastedData = data;
   },
 
   setOnlineFileUrl(url: string): void {
-    createProjectState.newProject.onlineFileUrl = url;
+    createProjectInternalState.newProject.onlineFileUrl = url;
   },
 
   setProjectName(name: string): void {
-    createProjectState.newProject.projectName = name;
+    createProjectInternalState.newProject.projectName = name;
   },
 
   setNewProjectLoading(loading: boolean): void {
-    createProjectState.newProject.isLoading = loading;
+    createProjectInternalState.newProject.isLoading = loading;
   },
 
   setProcessingFiles(isProcessing: boolean, count: number = 0): void {
-    createProjectState.newProject.isProcessingFiles = isProcessing;
-    createProjectState.newProject.processingFileCount = count;
+    createProjectInternalState.newProject.isProcessingFiles = isProcessing;
+    createProjectInternalState.newProject.processingFileCount = count;
   },
 
   setNewProjectError(error?: string): void {
-    createProjectState.newProject.error = error;
+    createProjectInternalState.newProject.error = error;
   },
 
   setNewProjectWarning(warning?: string): void {
-    createProjectState.newProject.warning = warning;
+    createProjectInternalState.newProject.warning = warning;
   },
 
   async loadOnlineFile(): Promise<void> {
-    const inputValue = createProjectState.newProject.onlineFileUrl;
+    const inputValue = createProjectInternalState.newProject.onlineFileUrl;
     const urls = extractUrlsFromInput(inputValue);
 
     if (urls.length === 0) {
@@ -636,7 +649,11 @@ export const createProjectActions = {
 
   async downloadRemoteFile(url: string, index: number): Promise<File> {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      throw new Error(m.error_offline_url_import());
+      throw new PipelineError(
+        m.error_offline_url_import(),
+        REMOTE_FILE_OFFLINE_ERROR_CODE,
+        { url }
+      );
     }
 
     const controller = new AbortController();
@@ -650,12 +667,18 @@ export const createProjectActions = {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(
+        throw new PipelineError(
           m.error_http_fetch({
             status: String(response.status),
             statusText: response.statusText,
             url
-          })
+          }),
+          REMOTE_FILE_FETCH_FAILED_ERROR_CODE,
+          {
+            status: response.status,
+            statusText: response.statusText,
+            url
+          }
         );
       }
 
@@ -687,7 +710,11 @@ export const createProjectActions = {
         contentType.includes('octet-stream') ||
         contentType === '';
       if (!isAllowed) {
-        throw new Error(m.error_invalid_content_type({ type: contentType }));
+        throw new DataValidationError(
+          m.error_invalid_content_type({ type: contentType }),
+          'contentType',
+          { contentType, url }
+        );
       }
 
       const blob = await response.blob();
@@ -707,21 +734,29 @@ export const createProjectActions = {
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(m.error_download_timeout(), { cause: error });
+        throw new PipelineError(
+          m.error_download_timeout(),
+          REMOTE_FILE_DOWNLOAD_TIMEOUT_ERROR_CODE,
+          {
+            timeoutMs: FILE_FETCH_TIMEOUT_MS,
+            url,
+            originalError: error.message
+          }
+        );
       }
       throw error;
     }
   },
 
   async clearAllFiles(saveProject: boolean = false): Promise<void> {
-    for (const file of createProjectState.newProject.uploadedFiles) {
+    for (const file of createProjectInternalState.newProject.uploadedFiles) {
       file.originalFile = undefined;
       file.relatedFileObjects = undefined;
       file.content = undefined;
       file.relatedFilesData = undefined;
     }
-    createProjectState.newProject.uploadedFiles = [];
-    createProjectState.newProject.validationErrors = [];
+    createProjectInternalState.newProject.uploadedFiles = [];
+    createProjectInternalState.newProject.validationErrors = [];
 
     datasetsStore.clear();
     visualizationStore.clear();
@@ -732,19 +767,17 @@ export const createProjectActions = {
       projectStore.currentProject?.id &&
       projectStore.currentProject.data
     ) {
-      projectStore.currentProject.data.sourceFiles = [];
-      projectStore.markAsDirty();
-      await projectStore.saveCurrentProject();
+      await projectStore.clearSourceFiles();
     }
   },
 
   clearUploadState(): void {
-    createProjectState.newProject.uploadedFiles = [];
-    createProjectState.newProject.validationErrors = [];
+    createProjectInternalState.newProject.uploadedFiles = [];
+    createProjectInternalState.newProject.validationErrors = [];
   },
 
   recomputeGlobalValidationErrors(): void {
-    const uploadedFiles = createProjectState.newProject.uploadedFiles;
+    const uploadedFiles = createProjectInternalState.newProject.uploadedFiles;
     const totalSize = uploadedFiles.reduce((sum, file) => sum + file.size, 0);
     const validationErrors: string[] = [];
 
@@ -764,65 +797,65 @@ export const createProjectActions = {
       );
     }
 
-    createProjectState.newProject.validationErrors = validationErrors;
+    createProjectInternalState.newProject.validationErrors = validationErrors;
   },
 
   getFilesByStatus(status: UploadedFile['status']): UploadedFile[] {
-    return createProjectState.newProject.uploadedFiles.filter(
+    return createProjectInternalState.newProject.uploadedFiles.filter(
       (f) => f.status === status
     );
   },
 
   hasValidFiles(): boolean {
-    return createProjectState.newProject.uploadedFiles.some(
+    return createProjectInternalState.newProject.uploadedFiles.some(
       (f) => f.status === FileStatus.COMPLETE
     );
   },
 
   getTotalFileSize(): number {
-    return createProjectState.newProject.uploadedFiles.reduce(
+    return createProjectInternalState.newProject.uploadedFiles.reduce(
       (sum, file) => sum + file.size,
       0
     );
   },
 
   setExamples(examples: ExampleProject[]): void {
-    createProjectState.tryExample.examples = examples;
+    createProjectInternalState.tryExample.examples = examples;
   },
 
   selectExample(exampleId?: string): void {
-    createProjectState.tryExample.selectedExampleId = exampleId;
+    createProjectInternalState.tryExample.selectedExampleId = exampleId;
   },
 
   setExampleCategory(category: ExampleCategory): void {
-    createProjectState.tryExample.selectedCategory = category;
-    createProjectState.tryExample.selectedExampleId = undefined;
+    createProjectInternalState.tryExample.selectedCategory = category;
+    createProjectInternalState.tryExample.selectedExampleId = undefined;
   },
 
   setTryExampleLoading(loading: boolean): void {
-    createProjectState.tryExample.isLoading = loading;
+    createProjectInternalState.tryExample.isLoading = loading;
   },
 
   setTryExampleError(error?: string): void {
-    createProjectState.tryExample.error = error;
+    createProjectInternalState.tryExample.error = error;
   },
 
   resetNewProject(): void {
-    createProjectState.newProject.uploadedFiles = [];
-    createProjectState.newProject.pastedData = '';
-    createProjectState.newProject.onlineFileUrl = '';
-    createProjectState.newProject.projectName = '';
-    createProjectState.newProject.isLoading = false;
-    createProjectState.newProject.isProcessingFiles = false;
-    createProjectState.newProject.processingFileCount = 0;
-    createProjectState.newProject.error = undefined;
-    createProjectState.newProject.warning = undefined;
-    createProjectState.newProject.validationErrors = [];
+    createProjectInternalState.newProject.uploadedFiles = [];
+    createProjectInternalState.newProject.pastedData = '';
+    createProjectInternalState.newProject.onlineFileUrl = '';
+    createProjectInternalState.newProject.projectName = '';
+    createProjectInternalState.newProject.isLoading = false;
+    createProjectInternalState.newProject.isProcessingFiles = false;
+    createProjectInternalState.newProject.processingFileCount = 0;
+    createProjectInternalState.newProject.error = undefined;
+    createProjectInternalState.newProject.warning = undefined;
+    createProjectInternalState.newProject.validationErrors = [];
   },
 
   resetTryExample(): void {
-    const examples = createProjectState.tryExample.examples;
-    createProjectState.tryExample = {
+    const examples = createProjectInternalState.tryExample.examples;
+    createProjectInternalState.tryExample = {
       ...DEFAULT_STATE.tryExample,
       examples,
       selectedExampleId: undefined,
@@ -833,11 +866,11 @@ export const createProjectActions = {
   resetAllTabs(): void {
     this.resetNewProject();
     this.resetTryExample();
-    createProjectState.selectedTab = 1;
+    createProjectInternalState.selectedTab = 1;
   },
 
   reset(): void {
-    Object.assign(createProjectState, DEFAULT_STATE);
+    Object.assign(createProjectInternalState, structuredClone(DEFAULT_STATE));
   }
 };
 

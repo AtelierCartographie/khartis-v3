@@ -7,7 +7,7 @@ export interface ProjectManifest {
   name: string;
   author?: string;
   description?: string;
-  format: 'kh' | 'khartis';
+  format: 'kh';
 }
 
 export interface ProjectData {

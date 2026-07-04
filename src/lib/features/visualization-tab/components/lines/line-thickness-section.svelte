@@ -16,29 +16,16 @@
     SLIDER_LIMITS,
     ThicknessMode
   } from '$lib/features/commons/constants/visualization.constants';
+  import { FACET_SLOT } from '../../adapters/facets-adapter';
   import {
-    FACET_SLOT,
-    type FacetSlotPath
-  } from '../../adapters/facets-adapter';
-  import { filterFieldsByKind } from '../../hooks/use-field-selection.svelte';
-
-  interface FieldSelection {
-    selectedFieldId: number;
-    selectedFieldName: string | undefined;
-    handleSelect: (fieldId: number) => void;
-  }
-
-  interface FacetsSelection {
-    getSelectedFieldIds(slot: FacetSlotPath): number[];
-    isActiveForSlot(slot: FacetSlotPath): boolean;
-    updateVariables(column: string, slot: FacetSlotPath, ids: number[]): void;
-    toggle(
-      column: string,
-      slot: FacetSlotPath,
-      enabled: boolean,
-      fieldIds?: number[]
-    ): void;
-  }
+    filterFieldsByKind,
+    type FieldSelectionWithHandler
+  } from '../../hooks/use-field-selection.svelte';
+  import type { FacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
+  import {
+    buildDashedPatternItems,
+    coerceDashedPattern
+  } from '../shared/dashed-pattern.utils';
 
   interface Props {
     thicknessMode: ThicknessMode;
@@ -56,9 +43,9 @@
     pickerOpen: boolean;
     dataFields: Array<{ id: number; text: string; type?: string }>;
     selectableDataFields: Array<{ id: number; text: string; type?: string }>;
-    valueFieldSelection: FieldSelection;
-    sizeFieldSelection: FieldSelection;
-    facetsSelection: FacetsSelection;
+    valueFieldSelection: FieldSelectionWithHandler;
+    sizeFieldSelection: FieldSelectionWithHandler;
+    facetsSelection: FacetsVariableSelection;
     onThicknessModeChange: (index: number) => void;
     onThicknessChange: (value: number) => void;
     onMaxThicknessChange: (value: number) => void;
@@ -132,21 +119,10 @@
       valueFieldSelection.selectedFieldId
     )
   );
-  const dashedPatternItems = $derived([
-    { id: BasemapDottedPattern.DOTS, text: m.dashed_pattern_dots() },
-    { id: BasemapDottedPattern.DASHES, text: m.dashed_pattern_dashes() },
-    { id: BasemapDottedPattern.DASH_DOT, text: m.dashed_pattern_dash_dot() },
-    {
-      id: BasemapDottedPattern.LONG_DASH,
-      text: m.dashed_pattern_long_dash()
-    }
-  ]);
+  const dashedPatternItems = $derived(buildDashedPatternItems());
 
   function handleDashedPatternSelect(value: string | number) {
-    const next =
-      Object.values(BasemapDottedPattern).find(
-        (pattern) => pattern === value
-      ) ?? BasemapDottedPattern.DOTS;
+    const next = coerceDashedPattern(value);
     onDashedPatternChange(next);
   }
 </script>
@@ -174,7 +150,7 @@
   <ToggleTabs
     items={thicknessModeItems}
     activeIndex={thicknessModeIndex}
-    onChange={onThicknessModeChange}
+    onchange={onThicknessModeChange}
     hideInactiveLabel={true}
   />
 </div>

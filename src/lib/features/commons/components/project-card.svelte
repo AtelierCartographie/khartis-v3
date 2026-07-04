@@ -52,7 +52,7 @@
   const isDefaultVariant = $derived(variant === 'default');
 
   const cardClasses = $derived(
-    clsx('flex flex-col justify-between', {
+    clsx('kh-card flex flex-col justify-between', {
       'border-2 border-dark-gray': selected && (disabled || isGrayVariant),
       'border-2 border-blue': selected && !disabled && isBlueVariant,
       'border-2 border-pale-blue': selected && !disabled && isDefaultVariant,
@@ -112,7 +112,6 @@
 </script>
 
 <div
-  id="kh-card"
   class={cardClasses}
   role="button"
   tabindex={disabled ? -1 : 0}
@@ -161,6 +160,8 @@
           disabled={disabled}
           labelText={title}
           hideLabel
+          ariaHidden
+          tabIndex={-1}
         />
       </div>
     </div>
@@ -172,7 +173,7 @@
 </div>
 
 <style>
-  #kh-card {
+  .kh-card {
     min-width: 180px;
     width: 180px;
     box-sizing: border-box;
@@ -232,30 +233,31 @@
     flex-shrink: 0;
   }
 
-  #kh-card:hover:not(.opacity-50) .top-section:not(.has-thumbnail) {
+  .kh-card:hover:not(.opacity-50) .top-section:not(.has-thumbnail) {
     background-color: var(--cds-medium-blue);
   }
 
-  #kh-card:hover:not(.opacity-50)
+  .kh-card:hover:not(.opacity-50)
     .top-section.variant-gray:not(.has-thumbnail) {
     background-color: var(--cds-layer-hover-01, #e8e8e8);
   }
 
-  #kh-card:hover:not(.opacity-50) .bottom-section {
+  .kh-card:hover:not(.opacity-50) .bottom-section {
     background-color: var(--cds-medium-blue);
   }
 
-  #kh-card:hover:not(.opacity-50) .bottom-section.variant-gray {
+  .kh-card:hover:not(.opacity-50) .bottom-section.variant-gray {
     background-color: var(--cds-layer-hover-01, #e8e8e8);
   }
 
-  #kh-card:hover:not(.opacity-50) {
+  .kh-card:hover:not(.opacity-50) {
     --icon-color: var(--icon-hover-color);
     --calendar-color: var(--calendar-hover-color);
   }
 
-  #kh-card:focus {
-    outline: none;
+  .kh-card:focus-visible {
+    outline: 2px solid var(--cds-focus);
+    outline-offset: -2px;
   }
 
   .text-sm {

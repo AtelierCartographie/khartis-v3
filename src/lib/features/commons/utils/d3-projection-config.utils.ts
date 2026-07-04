@@ -103,6 +103,7 @@ const D3_FACTORY_MAP: Record<string, GeoProjectionFactory | undefined> = {
   geoCylindricalEqualArea: getD3ProjectionFactory('geoCylindricalEqualArea'),
   geoRobinson: getD3ProjectionFactory('geoRobinson'),
   geoWinkel3: getD3ProjectionFactory('geoWinkel3'),
+  geoAitoff: getD3ProjectionFactory('geoAitoff'),
   geoPolyhedralWaterman
 };
 

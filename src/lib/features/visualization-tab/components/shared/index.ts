@@ -1,4 +1,4 @@
-export { default as SliderWithInput } from '$lib/features/commons/components/viz-controls/slider-with-input.svelte';
+export { default as SliderWithInput } from '$lib/features/commons/components/viz-controls/visualization-slider-with-input.svelte';
 export { default as SectionTitle } from './section-title.svelte';
 export { default as SectionHeading } from '$lib/features/commons/components/viz-controls/section-heading.svelte';
 export { default as ColorSelector } from './color-selector.svelte';

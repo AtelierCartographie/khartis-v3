@@ -11,6 +11,7 @@
     BasemapGraticuleMode,
     BasemapDottedPattern
   } from '$lib/features/commons/constants/visualization.constants';
+  import { createLayerConfigValueHandler } from './layer-config-handlers.utils';
 
   interface Props {
     mode?: BasemapGraticuleMode;
@@ -50,29 +51,32 @@
     }
   }
 
-  function handleSpacingChange(value: number) {
-    onchange?.({ spacingDegrees: value });
-  }
-
-  function handleColorChange(value: string) {
-    onchange?.({ color: value });
-  }
-
-  function handleDottedChange(enabled: boolean) {
-    onchange?.({ dotted: enabled });
-  }
-
-  function handleDottedPatternChange(pattern: BasemapDottedPattern) {
-    onchange?.({ dottedPattern: pattern });
-  }
-
-  function handleThicknessChange(value: number) {
-    onchange?.({ thickness: value });
-  }
-
-  function handleOpacityChange(value: number) {
-    onchange?.({ opacity: value });
-  }
+  const getOnChange = () => onchange;
+  const handleSpacingChange = createLayerConfigValueHandler<number>(
+    getOnChange,
+    'spacingDegrees'
+  );
+  const handleColorChange = createLayerConfigValueHandler<string>(
+    getOnChange,
+    'color'
+  );
+  const handleDottedChange = createLayerConfigValueHandler<boolean>(
+    getOnChange,
+    'dotted'
+  );
+  const handleDottedPatternChange =
+    createLayerConfigValueHandler<BasemapDottedPattern>(
+      getOnChange,
+      'dottedPattern'
+    );
+  const handleThicknessChange = createLayerConfigValueHandler<number>(
+    getOnChange,
+    'thickness'
+  );
+  const handleOpacityChange = createLayerConfigValueHandler<number>(
+    getOnChange,
+    'opacity'
+  );
 </script>
 
 <div class="layer-config-content">

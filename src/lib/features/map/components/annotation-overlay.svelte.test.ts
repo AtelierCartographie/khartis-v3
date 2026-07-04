@@ -15,7 +15,10 @@ import {
   globalState
 } from '$lib/features/commons/stores/global.svelte';
 import { StylingTools } from '$lib/features/commons/types/global';
-import { formatActions } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+import {
+  formatActions,
+  getFormatState
+} from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import {
   annotationsActions,
   getAnnotationsState
@@ -601,6 +604,22 @@ describe('annotation overlay drawing interactions', () => {
     expect(style).toContain(`top: ${12 * 1.2}px`);
     expect(style).toContain('transform: scale(1.2)');
   });
+
+  it('marks default page element placeholders for export filtering', () => {
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const { container } = render(AnnotationOverlay);
+    const title = container.querySelector(
+      '.annotation-item[data-annotation-role="title"]'
+    );
+    const credit = container.querySelector(
+      '.annotation-item[data-annotation-role="credit"]'
+    );
+
+    expect(title?.getAttribute('data-khartis-export-placeholder')).toBe('true');
+    expect(credit?.hasAttribute('data-khartis-export-placeholder')).toBe(false);
+  });
+
   it('recenters the page when a centered annotation loses focus', async () => {
     annotationsActions.addAnnotation(AnnotationKind.TEXT, 'Focus item');
 
@@ -781,6 +800,37 @@ describe('annotation overlay drawing interactions', () => {
       expect(getAnnotationsState().items).toHaveLength(0);
       expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 0 });
     });
+  });
+
+  it('moves a focused annotation with arrow keys and deselects it with Escape', async () => {
+    if (getFormatState().gridEnabled) {
+      formatActions.toggleGrid();
+    }
+
+    annotationsActions.addAnnotation(AnnotationKind.TEXT, 'Move me');
+    const [note] = getAnnotationsState().items;
+    if (!note) {
+      throw new Error('Expected a note annotation');
+    }
+    annotationsActions.updateAnnotation(note.id, {
+      coordinateSpace: 'page',
+      position: { x: 40, y: 50 }
+    });
+
+    const { item } = setupAnnotationViewport();
+
+    item.focus();
+    await fireEvent.keyDown(item, { key: 'ArrowRight' });
+
+    expect(getAnnotationsState().items[0]?.position).toEqual({
+      x: 41,
+      y: 50
+    });
+    expect(getAnnotationsState().selectedId).toBe(note.id);
+
+    await fireEvent.keyDown(item, { key: 'Escape' });
+
+    expect(getAnnotationsState().selectedId).toBeNull();
   });
 
   it('repositions a data-anchored map annotation when the map view state changes', async () => {

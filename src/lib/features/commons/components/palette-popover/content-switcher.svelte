@@ -1,21 +1,21 @@
 <script lang="ts">
   interface Props {
     items: string[];
+    ariaLabel?: string;
     activeIndex?: number;
     onchange?: (index: number) => void;
   }
 
-  let { items, activeIndex = 0, onchange }: Props = $props();
+  let { items, ariaLabel, activeIndex = 0, onchange }: Props = $props();
 </script>
 
-<div class="content-switcher" role="tablist">
+<div class="content-switcher" role="group" aria-label={ariaLabel}>
   {#each items as item, i (i)}
     <button
       type="button"
       class="switcher-item"
       class:active={activeIndex === i}
-      role="tab"
-      aria-selected={activeIndex === i}
+      aria-pressed={activeIndex === i}
       onclick={() => onchange?.(i)}
     >
       <span class="switcher-label">{item}</span>

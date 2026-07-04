@@ -1,5 +1,5 @@
 import { deepClone } from '$lib/features/commons/utils/clone.utils';
-import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
+import { persistenceRegistry } from '$lib/features/project-management/core';
 import {
   BasemapDottedPattern,
   BasemapGraticuleMode,

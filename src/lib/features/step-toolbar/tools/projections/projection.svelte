@@ -17,8 +17,8 @@
 
   let crsError = $state(false);
 
-  function handleProjectionCodeApply(event: CustomEvent<{ code: string }>) {
-    const parsed = parseProjectionCode(event.detail.code);
+  function handleProjectionCodeApply({ code }: { code: string }) {
+    const parsed = parseProjectionCode(code);
     if (!parsed) {
       crsError = true;
       return;
@@ -56,8 +56,8 @@
       {/snippet}
 
       <ProjectionOther
-        on:apply={handleProjectionCodeApply}
-        on:reset={handleProjectionCodeReset}
+        onapply={handleProjectionCodeApply}
+        onreset={handleProjectionCodeReset}
       />
       {#if crsError}
         <InlineNotification

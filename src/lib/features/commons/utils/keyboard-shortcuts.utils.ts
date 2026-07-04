@@ -1,3 +1,5 @@
+import { m } from '$lib/paraglide/messages';
+
 type NavigatorLike = {
   platform?: string;
   userAgentData?: {
@@ -29,10 +31,6 @@ export const PROJECT_SHORTCUT_TIMEOUT_MS = 2000;
 
 const APPLE_PLATFORM_PATTERN = /(mac|iphone|ipad|ipod|ios)/i;
 const CHORD_SEPARATOR = ' ';
-import { m } from '$lib/paraglide/messages';
-
-const PROJECT_SHORTCUT_PREFIX_LABEL_APPLE = m.shortcut_prefix_apple();
-const PROJECT_SHORTCUT_PREFIX_LABEL_OTHER = m.shortcut_prefix_other();
 
 const SIDE_NAV_SHORTCUT_LETTER: Record<SideNavShortcutKey, string> = {
   newProject: 'N',
@@ -66,8 +64,8 @@ export function getSideNavShortcutLabels(
   isApplePlatform: boolean
 ): Record<SideNavShortcutKey, string> {
   const prefixLabel = isApplePlatform
-    ? PROJECT_SHORTCUT_PREFIX_LABEL_APPLE
-    : PROJECT_SHORTCUT_PREFIX_LABEL_OTHER;
+    ? m.shortcut_prefix_apple()
+    : m.shortcut_prefix_other();
 
   return {
     newProject: [prefixLabel, SIDE_NAV_SHORTCUT_LETTER.newProject].join(

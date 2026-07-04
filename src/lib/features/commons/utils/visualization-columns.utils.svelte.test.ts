@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isAutoFacetDataColumn,
   filterVisualizableDataColumns,
+  findLatestYearNumericColumn,
   isAutoFacetNumericColumn,
   isVisualizableDataColumn
 } from './visualization-columns.utils';
@@ -57,5 +58,19 @@ describe('visualization column helpers', () => {
       false
     );
     expect(isAutoFacetDataColumn({ name: 'id', type: 'text' })).toBe(false);
+  });
+
+  it('selects the latest numeric year column while respecting bounds and exclusions', () => {
+    const columns = [
+      { text: '_1799', type: 'number' },
+      { text: '_1960', type: 'number' },
+      { text: '_2020', type: 'number' },
+      { text: '_2201', type: 'number' },
+      { text: '__2024', type: 'number' },
+      { text: '_2023', type: 'text' }
+    ];
+
+    expect(findLatestYearNumericColumn(columns)).toBe('_2020');
+    expect(findLatestYearNumericColumn(columns, ['_2020'])).toBe('_1960');
   });
 });

@@ -14,7 +14,10 @@ import {
   PRINT_STANDARD_TOKENS,
   resolveLayoutSizingTokens
 } from '$lib/features/commons/utils/layout-sizing.utils';
-import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
+import {
+  createReadonlyStateFacade,
+  createToolStore
+} from '$lib/features/commons/utils/store.utils.svelte';
 import { globalActions } from '$lib/features/commons/stores/global.svelte';
 import {
   getFormatLayoutSizingContext,
@@ -284,7 +287,6 @@ type GeoIndicationsActions = {
   setOrientationSize: (size: number) => void;
   setOrientationColor: (colorState: ColorState) => void;
   setOrientationColorFromHex: (hex: string) => void;
-  setInsetMapType: (type: InsetMapType) => void;
   setInsetMapSize: (size: number) => void;
   setInsetMapWindowColor: (colorState: ColorState) => void;
   setInsetMapWindowColorFromHex: (hex: string) => void;
@@ -292,7 +294,6 @@ type GeoIndicationsActions = {
   setInsetMapContinentColorFromHex: (hex: string) => void;
   setInsetMapSeaColor: (colorState: ColorState) => void;
   setInsetMapSeaColorFromHex: (hex: string) => void;
-  setInsetMapUseBasemapColors: (use: boolean) => void;
   setInsetMapZoom: (zoom: number) => void;
   setInsetMapCenterLongitude: (longitude: number) => void;
   setInsetMapCenterLatitude: (latitude: number) => void;
@@ -435,15 +436,6 @@ const { state, actions } = createToolStore<
     setOrientationColorFromHex: (hex: string) => {
       s.orientation.color = hexToHsl(hex);
     },
-    setInsetMapType: (_type: InsetMapType) => {
-      s.insetMap.type = InsetMapType.GLOBE;
-      s.insetMap.size = clampNumber(
-        s.insetMap.size,
-        INSET_MAP_SIZE_LIMITS[InsetMapType.GLOBE].min,
-        INSET_MAP_SIZE_LIMITS[InsetMapType.GLOBE].max,
-        s.insetMap.size
-      );
-    },
     setInsetMapSize: (size: number) => {
       s.insetMap.size = clampNumber(
         size,
@@ -469,9 +461,6 @@ const { state, actions } = createToolStore<
     },
     setInsetMapSeaColorFromHex: (hex: string) => {
       s.insetMap.seaColor = hexToHsl(hex);
-    },
-    setInsetMapUseBasemapColors: (_use: boolean) => {
-      s.insetMap.useBasemapColors = false;
     },
     setInsetMapZoom: (zoom: number) => {
       s.insetMap.zoom = clampNumber(zoom, 0, 100, s.insetMap.zoom);
@@ -505,5 +494,5 @@ const { state, actions } = createToolStore<
   { key: 'geoIndications' }
 );
 
-export const geoIndicationsState = state;
+export const geoIndicationsState = createReadonlyStateFacade(state);
 export const geoIndicationsActions = actions;

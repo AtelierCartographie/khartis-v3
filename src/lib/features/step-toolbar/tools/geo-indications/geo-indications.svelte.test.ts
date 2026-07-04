@@ -3,8 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DistanceUnit } from '$lib/features/commons/constants/ui.constants';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
-import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
-import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
+import { BasemapStyle, projectionStore } from '$lib/features/map';
 import * as m from '$lib/paraglide/messages';
 
 const mocks = vi.hoisted(() => ({
@@ -259,11 +258,11 @@ describe('geo-indications tool', () => {
     projectionStore.setReferenceBbox(
       [-30000, 0, 30000, 60000],
       undefined,
-      true
+      true,
+      {
+        invert: ([x, y]: [number, number]) => [x / 1000, y / 1000]
+      } as never
     );
-    projectionStore.setRenderProjection({
-      invert: ([x, y]: [number, number]) => [x / 1000, y / 1000]
-    } as never);
 
     render(GeoIndications);
 

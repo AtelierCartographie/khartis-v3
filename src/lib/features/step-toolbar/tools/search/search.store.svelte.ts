@@ -11,12 +11,18 @@ import type { DatasetResult } from '$lib/features/data-pipeline';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { projectHtmlLikeText } from '$lib/features/commons/utils/html-like-text.utils';
-import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
+import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  createReadonlyStateFacade,
+  createToolStore
+} from '$lib/features/commons/utils/store.utils.svelte';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-import { mapHighlightStore } from '$lib/features/map/stores/map-highlight.store.svelte';
-import { mapTooltipStore } from '$lib/features/map/stores/map-tooltip.store.svelte';
-import type { TooltipEntry } from '$lib/features/map/types';
+import {
+  mapHighlightStore,
+  mapTooltipStore,
+  type TooltipEntry
+} from '$lib/features/map';
 import { centerMapOnTableRow } from '$lib/features/map/services/center-on-table-row.service';
 import type { SearchState } from '../../types/search.types';
 
@@ -145,9 +151,12 @@ async function showTooltipForResult(
   rowId: number,
   searchContext: SearchContext
 ): Promise<void> {
+  if (!Number.isInteger(rowId)) return;
+
   try {
+    const escapedTable = escapeIdentifier(searchContext.tableName);
     const rows = (await Duck.query(
-      `SELECT * FROM "${searchContext.tableName}" WHERE ${INTERNAL_COLUMN.ID} = ${rowId} LIMIT 1`,
+      `SELECT * FROM "${escapedTable}" WHERE ${INTERNAL_COLUMN.ID} = ${rowId} LIMIT 1`,
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
 
@@ -394,10 +403,11 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
       results: _results,
       currentResultIndex: _currentResultIndex,
       isSearching: _isSearching,
+      isSampled: _isSampled,
       ...persisted
     }) => persisted
   }
 );
 
-export const searchState = state;
+export const searchState = createReadonlyStateFacade(state);
 export const searchActions = actions;

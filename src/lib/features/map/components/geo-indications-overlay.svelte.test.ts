@@ -17,13 +17,41 @@ import {
 import { DRAGGING_STYLING_TARGET_BODY_CLASS } from '../utils/tool-popover-drag-visibility.utils';
 import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
 
-const { mockFetch, mockWaitForInitialization, mockInitDuckDb } = vi.hoisted(
-  () => ({
-    mockFetch: vi.fn(async () => ({ ok: false }) as Response),
-    mockWaitForInitialization: vi.fn(async () => undefined),
-    mockInitDuckDb: vi.fn(async () => undefined)
-  })
-);
+const {
+  mockFetch,
+  mockWaitForInitialization,
+  mockInitDuckDb,
+  mockReadGeoParquetViaDuckDB,
+  mockExtractGeometryInfo,
+  mockArrowTableToGeoJSON
+} = vi.hoisted(() => ({
+  mockFetch: vi.fn(async () => ({ ok: false }) as Response),
+  mockWaitForInitialization: vi.fn(async () => undefined),
+  mockInitDuckDb: vi.fn(async () => undefined),
+  mockReadGeoParquetViaDuckDB: vi.fn(async () => ({})),
+  mockExtractGeometryInfo: vi.fn(() => ({ geoColumn: 'geometry' })),
+  mockArrowTableToGeoJSON: vi.fn(() => ({
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [-10, 0],
+              [10, 0],
+              [10, 10],
+              [-10, 10],
+              [-10, 0]
+            ]
+          ]
+        }
+      }
+    ]
+  }))
+}));
 
 vi.mock('$lib/features/duckdb', () => ({
   Duck: class DuckMock {},
@@ -40,6 +68,15 @@ vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
   duckDBOrchestrator: {
     waitForInitialization: mockWaitForInitialization
   }
+}));
+
+vi.mock('../services/read-geojson-arrow.service', () => ({
+  readGeoParquetViaDuckDB: mockReadGeoParquetViaDuckDB
+}));
+
+vi.mock('../io', () => ({
+  arrowTableToGeoJSON: mockArrowTableToGeoJSON,
+  extractGeometryInfo: mockExtractGeometryInfo
 }));
 
 vi.hoisted(() => {
@@ -182,6 +219,9 @@ describe('geo indications overlay dragging', () => {
     mockFetch.mockClear();
     mockWaitForInitialization.mockClear();
     formatActions.reset();
+    mockReadGeoParquetViaDuckDB.mockClear();
+    mockExtractGeometryInfo.mockClear();
+    mockArrowTableToGeoJSON.mockClear();
     formatActions.setSize(300, 200);
     formatActions.setMargins({
       top: 0,
@@ -268,6 +308,38 @@ describe('geo indications overlay dragging', () => {
     ).toBe(false);
   });
 
+  it('suppresses the click that follows a dragged scale indication', async () => {
+    geoIndicationsActions.toggleScale();
+
+    const { scale } = setupGeoViewport();
+    const overlay = document.querySelector('.geo-indications-overlay');
+
+    if (!(overlay instanceof HTMLDivElement)) {
+      throw new Error('Geo indications overlay was not rendered');
+    }
+
+    bindElementBox(overlay, {
+      left: 0,
+      top: 0,
+      width: 300,
+      height: 200
+    });
+
+    await fireEvent.pointerDown(scale, {
+      clientX: 75,
+      clientY: 110
+    });
+    await fireEvent.pointerMove(window, {
+      clientX: 95,
+      clientY: 130
+    });
+    await fireEvent.pointerUp(window);
+    await fireEvent.click(scale);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 0 });
+  });
+
   it('keeps orientation dragging free-form when the grid is disabled', async () => {
     geoIndicationsActions.toggleOrientation();
     formatActions.toggleGrid();
@@ -305,6 +377,36 @@ describe('geo indications overlay dragging', () => {
       x: 243,
       y: 39
     });
+  });
+
+  it('moves a focused scale indication with arrow keys', async () => {
+    geoIndicationsActions.toggleScale();
+    formatActions.toggleGrid();
+
+    const { container } = render(GeoIndicationsOverlay);
+    const overlay = container.querySelector('.geo-indications-overlay');
+    const scale = container.querySelector('.scale-bar');
+
+    expect(overlay).toBeInstanceOf(HTMLDivElement);
+    expect(scale).toBeInstanceOf(HTMLDivElement);
+
+    if (
+      !(overlay instanceof HTMLDivElement) ||
+      !(scale instanceof HTMLDivElement)
+    ) {
+      return;
+    }
+
+    bindElementBox(overlay, { left: 0, top: 0, width: 300, height: 200 });
+    bindElementBox(scale, { left: 14, top: 130, width: 60, height: 26 });
+
+    await fireEvent.keyDown(scale, { key: 'ArrowRight' });
+
+    expect(geoIndicationsState.scale.dragPosition).toEqual({
+      x: 15,
+      y: 130
+    });
+    expect(globalState.selectedTool).toBe(StylingTools.GeoIndications);
   });
 
   it('tracks the cursor 1:1 while dragging when the page is zoomed', async () => {
@@ -415,8 +517,58 @@ describe('geo indications overlay dragging', () => {
       );
     });
 
+    expect(container.querySelector('clipPath path')?.getAttribute('fill')).toBe(
+      'none'
+    );
+    expect(
+      container.querySelector('clipPath path')?.getAttribute('style')
+    ).toContain('fill: none');
+    expect(
+      container.querySelector('.inset-graticule-path')?.getAttribute('style')
+    ).toContain('fill: none');
+    expect(
+      container.querySelector('.inset-outline')?.getAttribute('style')
+    ).toContain('fill: none');
+    expect(
+      container.querySelector('.inset-extent-path')?.getAttribute('style')
+    ).toContain('fill: none');
     expect(container.querySelector('.inset-map-planisphere')).toBeNull();
     expect(container.querySelector('.inset-extent-point')).toBeNull();
+  });
+
+  it('keeps inset land and sea paint inline for image export serialization', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      arrayBuffer: async () => new ArrayBuffer(0)
+    } as Response);
+    mapInstanceStore.setMapInstance(
+      createBoundsMap({
+        north: 60,
+        south: 0,
+        east: 30,
+        west: -30
+      }) as never
+    );
+    geoIndicationsActions.toggleInsetMap();
+
+    const { container } = render(GeoIndicationsOverlay);
+
+    await waitFor(() => {
+      expect(container.querySelector('.inset-land-path')?.tagName).toBe('path');
+    });
+
+    const seaPath = container.querySelector(
+      '.inset-map-svg > path:not([class])'
+    );
+    const landPath = container.querySelector('.inset-land-path');
+
+    expect(seaPath?.getAttribute('fill')).toBeTruthy();
+    expect(seaPath?.getAttribute('style')).toContain('fill:');
+    expect(landPath?.getAttribute('fill')).toBeTruthy();
+    expect(landPath?.getAttribute('stroke')).toBeTruthy();
+    expect(landPath?.getAttribute('style')).toContain('fill:');
+    expect(landPath?.getAttribute('style')).toContain('stroke:');
+    expect(landPath?.getAttribute('vector-effect')).toBe('non-scaling-stroke');
   });
 
   it('converts projected map bounds before rendering the inset extent', async () => {
@@ -432,11 +584,11 @@ describe('geo indications overlay dragging', () => {
     projectionStore.setReferenceBbox(
       [-30000, 0, 30000, 60000],
       undefined,
-      true
+      true,
+      {
+        invert
+      } as never
     );
-    projectionStore.setRenderProjection({
-      invert
-    } as never);
     geoIndicationsActions.toggleInsetMap();
 
     const { container } = render(GeoIndicationsOverlay);

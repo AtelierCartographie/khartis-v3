@@ -20,3 +20,13 @@ export {
   type UseMapInitReturn,
   type MapInitConfig
 } from './use-map-init.svelte';
+export {
+  useMapDisplayData,
+  type UseMapDisplayDataProps,
+  type UseMapDisplayDataReturn
+} from './use-map-display-data.svelte';
+export {
+  useMapReferenceBasemap,
+  type UseMapReferenceBasemapProps,
+  type UseMapReferenceBasemapReturn
+} from './use-map-reference-basemap.svelte';

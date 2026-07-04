@@ -9,28 +9,12 @@
   } from '../shared';
   import FacetsVariablePicker from '../shared/facets-variable-picker.svelte';
   import { SizeMode } from '$lib/features/commons/constants/visualization.constants';
+  import { FACET_SLOT } from '../../adapters/facets-adapter';
   import {
-    FACET_SLOT,
-    type FacetSlotPath
-  } from '../../adapters/facets-adapter';
-  import { filterFieldsByKind } from '../../hooks/use-field-selection.svelte';
-
-  interface FieldSelection {
-    selectedFieldId: number;
-    selectedFieldName: string | undefined;
-  }
-
-  interface FacetsSelectionLike {
-    getSelectedFieldIds(slot: FacetSlotPath): number[];
-    isActiveForSlot(slot: FacetSlotPath): boolean;
-    updateVariables(column: string, slot: FacetSlotPath, ids: number[]): void;
-    toggle(
-      column: string,
-      slot: FacetSlotPath,
-      enabled: boolean,
-      fieldIds?: number[]
-    ): void;
-  }
+    filterFieldsByKind,
+    type FieldSelection
+  } from '../../hooks/use-field-selection.svelte';
+  import type { FacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
 
   interface Props {
     sizeMode: SizeMode;
@@ -42,7 +26,7 @@
     dataFields: Array<{ id: number; text: string; type?: string }>;
     selectableDataFields: Array<{ id: number; text: string; type?: string }>;
     sizeFieldSelection: FieldSelection;
-    facetsSelection: FacetsSelectionLike;
+    facetsSelection: FacetsVariableSelection;
     discretizationLabel?: string;
     onSizeModeChange: (index: number) => void;
     onSizeChange: (value: number) => void;
@@ -108,7 +92,7 @@
   <ToggleTabs
     items={sizeModeItems}
     activeIndex={sizeModeIndex}
-    onChange={onSizeModeChange}
+    onchange={onSizeModeChange}
     hideInactiveLabel={true}
   />
 </div>

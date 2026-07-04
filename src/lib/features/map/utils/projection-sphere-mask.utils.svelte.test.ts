@@ -1,6 +1,7 @@
 import * as d3geo from 'd3-geo';
 import { ScatterplotLayer } from '@deck.gl/layers';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { LogCategory } from '$lib/features/commons/utils/logger';
 import {
   applyProjectionSphereMask,
   createProjectionSphereMaskLayer,
@@ -8,6 +9,12 @@ import {
   PROJECTION_SPHERE_MASK_LAYER_ID,
   PROJECTION_SPHERE_OUTLINE_LAYER_ID
 } from './projection-sphere-mask.utils';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.doUnmock('geoarrow-deck-stream');
+  vi.doUnmock('./solid-polygon-layer-props.utils');
+});
 
 describe('projection sphere mask utils', () => {
   it('creates a Deck polygon layer from the projected d3 sphere', () => {
@@ -117,5 +124,130 @@ describe('projection sphere mask utils', () => {
     expect(layer?.id).toBe(PROJECTION_SPHERE_OUTLINE_LAYER_ID);
     expect(layer?.props.getColor).toEqual([40, 50, 60, 128]);
     expect(layer?.props.getWidth).toBe(2.5);
+  });
+
+  it('logs and returns null when sphere parsing fails', async () => {
+    vi.resetModules();
+    const parseError = new Error('sphere parse failed');
+    vi.doMock('geoarrow-deck-stream', async () => {
+      const actual = await vi.importActual<
+        typeof import('geoarrow-deck-stream')
+      >('geoarrow-deck-stream');
+
+      return {
+        ...actual,
+        parseSphere: vi.fn(() => {
+          throw parseError;
+        })
+      };
+    });
+
+    const utils = await import('./projection-sphere-mask.utils');
+    const { logger } = await import('$lib/features/commons/utils/logger');
+    const loggerWarn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const projection = {
+      stream: vi.fn()
+    } as unknown as Parameters<
+      typeof utils.createProjectionSphereMaskLayer
+    >[0]['projection'];
+
+    expect(
+      utils.createProjectionSphereMaskLayer({ projection, modelMatrix: null })
+    ).toBeNull();
+    expect(
+      utils.createProjectionSphereOutlineLayer({
+        projection,
+        modelMatrix: null
+      })
+    ).toBeNull();
+    expect(loggerWarn).toHaveBeenCalledWith(
+      'Failed to parse projection sphere polygon',
+      LogCategory.MAP,
+      expect.objectContaining({
+        error: parseError,
+        flow: 'projection_sphere_polygon_parse'
+      })
+    );
+    expect(loggerWarn).toHaveBeenCalledWith(
+      'Failed to parse projection sphere outline path',
+      LogCategory.MAP,
+      expect.objectContaining({
+        error: parseError,
+        flow: 'projection_sphere_outline_path_parse'
+      })
+    );
+  });
+
+  it('logs and returns null when sphere layer builders fail', async () => {
+    vi.resetModules();
+    const maskError = new Error('mask layer failed');
+    const outlineError = new Error('outline layer failed');
+    const sphereData = {
+      length: 1,
+      positions: {
+        length: 2,
+        value: new Float32Array([0, 0])
+      }
+    };
+
+    vi.doMock('./solid-polygon-layer-props.utils', () => ({
+      createCompatibleSolidPolygonLayerProps: vi.fn(() => {
+        throw maskError;
+      })
+    }));
+    vi.doMock('geoarrow-deck-stream', async () => {
+      const actual = await vi.importActual<
+        typeof import('geoarrow-deck-stream')
+      >('geoarrow-deck-stream');
+
+      return {
+        ...actual,
+        createPathLayerProps: vi.fn(() => {
+          throw outlineError;
+        }),
+        parseSphere: vi.fn(() => sphereData)
+      };
+    });
+
+    const utils = await import('./projection-sphere-mask.utils');
+    const { logger } = await import('$lib/features/commons/utils/logger');
+    const loggerWarn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const projection = {
+      stream: vi.fn()
+    } as unknown as Parameters<
+      typeof utils.createProjectionSphereMaskLayer
+    >[0]['projection'];
+
+    expect(
+      utils.createProjectionSphereMaskLayer({ projection, modelMatrix: null })
+    ).toBeNull();
+    expect(
+      utils.createProjectionSphereOutlineLayer({
+        projection,
+        modelMatrix: null
+      })
+    ).toBeNull();
+    expect(loggerWarn).toHaveBeenCalledWith(
+      'Failed to create projection sphere mask layer',
+      LogCategory.MAP,
+      expect.objectContaining({
+        error: maskError,
+        flow: 'projection_sphere_mask_layer_create',
+        extra: expect.objectContaining({
+          layerId: PROJECTION_SPHERE_MASK_LAYER_ID
+        })
+      })
+    );
+    expect(loggerWarn).toHaveBeenCalledWith(
+      'Failed to create projection sphere outline layer',
+      LogCategory.MAP,
+      expect.objectContaining({
+        error: outlineError,
+        flow: 'projection_sphere_outline_layer_create',
+        extra: expect.objectContaining({
+          layerId: PROJECTION_SPHERE_OUTLINE_LAYER_ID
+        })
+      })
+    );
   });
 });

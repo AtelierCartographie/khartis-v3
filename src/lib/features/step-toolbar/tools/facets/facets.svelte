@@ -18,10 +18,7 @@
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import { FACET_SLOT, type FacetSlotPath } from './facets.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
-  import {
-    globalActions,
-    globalState
-  } from '$lib/features/commons/stores/global.svelte';
+  import { globalActions } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import {
     FillMode,
@@ -32,7 +29,7 @@
   } from '$lib/features/commons/constants/visualization.constants';
   import { isAutoFacetNumericColumn } from '$lib/features/commons/utils/visualization-columns.utils';
   import { getFacetSlotVariable } from '$lib/features/commons/utils/facet-visualization-updates';
-  import SliderWithInput from '$lib/features/commons/components/viz-controls/slider-with-input.svelte';
+  import SliderWithInput from '$lib/features/commons/components/viz-controls/visualization-slider-with-input.svelte';
 
   const FACETS_HELP_URL =
     'https://www.sciencespo.fr/cartographie/khartis/docs/';
@@ -281,7 +278,7 @@
   }
 
   function handleConfigureVisualization() {
-    globalState.selectedTool = undefined;
+    globalActions.setSelectedTool(undefined);
     globalActions.setNavigationState(ToolbarStep.Visualizations);
 
     setTimeout(() => {
@@ -337,7 +334,7 @@
           <span class="field-label">{m.facets_maps_label()}</span>
           <div
             class="maps-grid"
-            role="radiogroup"
+            role="group"
             aria-label={m.facets_maps_label()}
           >
             {#each mapRows as row, rowIdx (rowIdx)}

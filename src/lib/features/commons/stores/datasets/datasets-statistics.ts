@@ -1,4 +1,5 @@
 import type { DatasetsState } from './datasets-state.svelte';
+import { isConfiguredNullValue } from '../../utils/null-values.utils';
 
 export interface NumericStatistics {
   min: number;
@@ -18,6 +19,10 @@ export interface CategoricalStatistics {
 export type ColumnStatistics = NumericStatistics | CategoricalStatistics;
 
 function parseNumericValue(value: unknown): number | null {
+  if (isConfiguredNullValue(value)) {
+    return null;
+  }
+
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : null;
   }
@@ -103,7 +108,7 @@ export function getColumnStatistics(
   }
 
   const values = getColumnValues(state, datasetId, columnName);
-  const nonNullValues = values.filter((v) => v !== null && v !== undefined);
+  const nonNullValues = values.filter((v) => !isConfiguredNullValue(v));
 
   if (column.type === 'number') {
     const numbers = nonNullValues

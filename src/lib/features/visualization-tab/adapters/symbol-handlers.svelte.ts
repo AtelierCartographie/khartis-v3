@@ -1,18 +1,16 @@
 import {
   PrimitiveFilterType,
   type ClassificationConfig,
-  type MissingDataConfig,
+  type PrimitiveFilter,
   type SymbolPrimitiveConfig,
   type VisualizationConfig,
   type VisualizationModes,
-  getSymbolPrimitive,
-  getPolygonPrimitive,
-  getLinePrimitive,
-  getTextPrimitive
+  getSymbolPrimitive
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { SymbolMode } from '$lib/features/commons/constants/visualization.constants';
 import { resolveSymbolModeTransition } from '../hooks/use-symbol-mode-state.svelte';
 import { pickOwnedKeys, pickRenamedKeys } from './pick-owned.utils';
+import { createPrimitiveAdapter } from './primitive-adapter.factory';
 
 export interface SymbolHandlersDeps {
   getSelectedVisualization: () => VisualizationConfig | undefined;
@@ -21,8 +19,8 @@ export interface SymbolHandlersDeps {
     afterUpdate?: (next: VisualizationConfig) => void
   ) => void;
   buildNextPrimitiveFilters: (
-    updates: Partial<Record<PrimitiveFilterType, boolean>>
-  ) => PrimitiveFilterType[];
+    updates: Partial<Record<PrimitiveFilter, boolean>>
+  ) => PrimitiveFilter[];
   updatePrimitiveClassificationState: (
     primitive: PrimitiveFilterType,
     updates: Partial<ClassificationConfig>
@@ -73,33 +71,12 @@ export interface SymbolHandlersDeps {
 }
 
 export function createSymbolHandlers(deps: SymbolHandlersDeps) {
-  function handleSymbolChange(updates: Partial<SymbolPrimitiveConfig>): void {
-    const viz = deps.getSelectedVisualization();
-    const symbol = getSymbolPrimitive(viz);
-    if (!symbol) return;
-
-    const enabledHasUpdate = Object.prototype.hasOwnProperty.call(
-      updates,
-      'enabled'
-    );
-
-    deps.updateSelectedVisualization({
-      symbol: { ...symbol, ...updates },
-      ...(enabledHasUpdate
-        ? {
-            primitiveFilters: deps.buildNextPrimitiveFilters({
-              [PrimitiveFilterType.POINT]: updates.enabled ?? symbol.enabled,
-              [PrimitiveFilterType.POLYGON]:
-                getPolygonPrimitive(viz)?.enabled ?? false,
-              [PrimitiveFilterType.LINE]:
-                getLinePrimitive(viz)?.enabled ?? false,
-              [PrimitiveFilterType.TEXT]:
-                getTextPrimitive(viz)?.enabled ?? false
-            })
-          }
-        : {})
-    });
-  }
+  const symbolAdapter = createPrimitiveAdapter<SymbolPrimitiveConfig>(deps, {
+    primitive: PrimitiveFilterType.POINT,
+    getConfig: getSymbolPrimitive,
+    buildUpdate: (symbol) => ({ symbol })
+  });
+  const handleSymbolChange = symbolAdapter.handleChange;
 
   function handleSymbolStyleChange(
     updates: Partial<VisualizationConfig['style']>
@@ -213,22 +190,10 @@ export function createSymbolHandlers(deps: SymbolHandlersDeps) {
     handleSymbolChange({ ...renamed, ...withFallback });
   }
 
-  function handleSymbolMissingDataChange(
-    updates: Partial<MissingDataConfig>
-  ): void {
-    const symbol = getSymbolPrimitive(deps.getSelectedVisualization());
-    if (!symbol?.missingData) return;
+  const handleSymbolMissingDataChange = symbolAdapter.handleMissingDataChange;
 
-    handleSymbolChange({
-      missingData: { ...symbol.missingData, ...updates }
-    });
-  }
-
-  function handleSymbolClassificationChange(
-    updates: Partial<ClassificationConfig>
-  ): void {
-    deps.updatePrimitiveClassificationState(PrimitiveFilterType.POINT, updates);
-  }
+  const handleSymbolClassificationChange =
+    symbolAdapter.handleClassificationChange;
 
   function handleSymbolFillClassificationChange(
     updates: Partial<ClassificationConfig>
@@ -245,11 +210,7 @@ export function createSymbolHandlers(deps: SymbolHandlersDeps) {
     );
   }
 
-  function handleSymbolMappingChange(
-    updates: Partial<VisualizationConfig['mapping']>
-  ): void {
-    deps.applyPrimitiveMappingUpdate(PrimitiveFilterType.POINT, updates);
-  }
+  const handleSymbolMappingChange = symbolAdapter.handleMappingChange;
 
   function handleSymbolFillMappingChange(
     updates: Partial<VisualizationConfig['mapping']>
@@ -263,9 +224,7 @@ export function createSymbolHandlers(deps: SymbolHandlersDeps) {
     deps.applyPrimitiveStrokeMappingUpdate(PrimitiveFilterType.POINT, updates);
   }
 
-  function handleSymbolPaletteInvert(): void {
-    deps.invertPrimitivePalette(PrimitiveFilterType.POINT);
-  }
+  const handleSymbolPaletteInvert = symbolAdapter.handlePaletteInvert;
 
   function handleSymbolFillPaletteInvert(): void {
     deps.invertSymbolFillPalette();

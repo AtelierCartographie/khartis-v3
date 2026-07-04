@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { strToU8, zipSync } from 'fflate';
+import * as m from '$lib/paraglide/messages';
 
 function makeZip(entries: Record<string, string | Uint8Array>): File {
   const normalized: Record<string, Uint8Array> = {};
@@ -81,7 +82,17 @@ describe('zip-handler', () => {
     const zip = new File([new Uint8Array([1])], 'huge.zip', {
       type: 'application/zip'
     });
-    await expect(extractZip(zip)).rejects.toThrow();
+    await expect(extractZip(zip)).rejects.toMatchObject({
+      name: 'ParseError',
+      code: 'PARSE_ERROR',
+      fileType: 'zip',
+      message: m.error_zip_size_exceeded({ limit: 500 }),
+      details: {
+        fileName: 'huge.zip',
+        limitMb: 500,
+        totalSize: 501 * 1024 * 1024
+      }
+    });
   });
 
   it('wraps unzip errors as pipeline errors', async () => {
@@ -94,6 +105,14 @@ describe('zip-handler', () => {
     const zip = new File([new Uint8Array([1])], 'bad.zip', {
       type: 'application/zip'
     });
-    await expect(extractZip(zip)).rejects.toThrow();
+    await expect(extractZip(zip)).rejects.toMatchObject({
+      name: 'ParseError',
+      code: 'PARSE_ERROR',
+      fileType: 'zip',
+      details: {
+        cause: 'corrupt zip',
+        fileName: 'bad.zip'
+      }
+    });
   });
 });

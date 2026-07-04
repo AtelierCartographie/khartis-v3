@@ -3,17 +3,11 @@ import {
   DrawingType
 } from '$lib/features/commons/constants/ui.constants';
 import {
-  ANNOTATION_ROLES,
   ANNOTATION_ROLE,
   getShapeDefaultDimensions
 } from '$lib/features/commons/constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
-import {
-  clampToRange,
-  PAGE_GRID_SIZE_PX,
-  snapPointToPageGrid,
-  snapPointWithinBounds
-} from '$lib/features/commons/utils/page-grid.utils';
+import { snapPointToPageGrid } from '$lib/features/commons/utils/page-grid.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import {
   PRINT_STANDARD_TOKENS,
@@ -28,18 +22,35 @@ import {
   getFormatLayoutSizingContext,
   getFormatState
 } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
-import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+import { basemapService } from '$lib/features/map';
 import { m } from '$lib/paraglide/messages';
-import { getLocale, type Locale } from '$lib/paraglide/runtime.js';
+import { getLocale } from '$lib/paraglide/runtime.js';
 import type {
   Annotation,
-  AnnotationCoordinateSpace,
   AnnotationPlacementPreview,
   AnnotationsState,
   AnnotationStyle,
   PageElementRole
 } from '../../types/annotations.types';
 import { resolveAnnotationCoordinateSpace } from '../../types/annotations.types';
+import {
+  clampAnnotationPosition,
+  clampPageElementPosition,
+  getNonPageAnnotationSpawnPosition,
+  getPageElementPosition,
+  getPageNoteSpawnPosition,
+  isBottomRightPageElementRole,
+  isGridEnabled,
+  isPageElementRole,
+  reconcileAutoPageElementStyle,
+  resolvePageLayout,
+  shouldSnapAutoPageElement,
+  type PageLayout
+} from './annotations-page-layout.utils';
+import {
+  getKnownPageElementDefaultContents,
+  getPageElementDefaultContent
+} from './annotations-placeholders.utils';
 
 const ANNOTATION_ID_PREFIX = 'annotation-';
 const DEFAULT_NOTE_FONT_SIZE = 8;
@@ -186,270 +197,10 @@ function getPredefinedStyleForItem(item: Annotation): string | null {
   }
 }
 
-type PageLayout = {
-  width: number;
-  height: number;
-  margins: {
-    top: number;
-    bottom: number;
-    left: number;
-    right: number;
-  };
-};
-
-type PageFrame = {
-  left: number;
-  top: number;
-  right: number;
-  bottom: number;
-  width: number;
-  height: number;
-};
-
-const PAGE_ELEMENT_WIDTHS: Record<PageElementRole, number> = {
-  [ANNOTATION_ROLE.TITLE]: 324,
-  [ANNOTATION_ROLE.SUBTITLE]: 324,
-  [ANNOTATION_ROLE.SOURCE]: 216,
-  [ANNOTATION_ROLE.BASEMAP_SOURCE]: 216,
-  [ANNOTATION_ROLE.SIGNATURE]: 216,
-  [ANNOTATION_ROLE.CREDIT]: 216,
-  [ANNOTATION_ROLE.NOTE]: 216
-};
-
-const PAGE_ELEMENT_HEIGHTS: Record<PageElementRole, number> = {
-  [ANNOTATION_ROLE.TITLE]: 24,
-  [ANNOTATION_ROLE.SUBTITLE]: 24,
-  [ANNOTATION_ROLE.SOURCE]: 24,
-  [ANNOTATION_ROLE.BASEMAP_SOURCE]: 24,
-  [ANNOTATION_ROLE.SIGNATURE]: 24,
-  [ANNOTATION_ROLE.CREDIT]: 24,
-  [ANNOTATION_ROLE.NOTE]: 24
-};
-
-const BOTTOM_RIGHT_STACK_ORDER: PageElementRole[] = [
-  ANNOTATION_ROLE.CREDIT,
-  ANNOTATION_ROLE.BASEMAP_SOURCE,
-  ANNOTATION_ROLE.SIGNATURE,
-  ANNOTATION_ROLE.SOURCE
-];
-const TOP_LEFT_SAFE_OFFSET = PAGE_GRID_SIZE_PX;
-const RIGHT_COLUMN_SAFE_OFFSET = PAGE_GRID_SIZE_PX * 2;
-const BOTTOM_RIGHT_SAFE_OFFSET = PAGE_GRID_SIZE_PX * 3;
-const BOTTOM_RIGHT_STACK_STEP = PAGE_GRID_SIZE_PX * 2;
-const TITLE_TOP_OFFSET = PAGE_GRID_SIZE_PX;
-const SUBTITLE_TOP_OFFSET = PAGE_GRID_SIZE_PX * 3;
-const NON_PAGE_ANNOTATION_LEFT_OFFSET = PAGE_GRID_SIZE_PX * 2;
-const NON_PAGE_IMAGE_LEFT_OFFSET = PAGE_GRID_SIZE_PX * 6;
-const NON_PAGE_ANNOTATION_TOP_OFFSET = PAGE_GRID_SIZE_PX * 2;
-const NON_PAGE_ANNOTATION_ROW_STEP = PAGE_GRID_SIZE_PX * 4;
-const NON_PAGE_ANNOTATION_COLUMN_STEP = PAGE_GRID_SIZE_PX * 10;
-
-const DEFAULT_ANNOTATION_BOUNDS: Record<
-  AnnotationKind,
-  { width: number; height: number }
-> = {
-  [AnnotationKind.TEXT]: { width: 220, height: PAGE_GRID_SIZE_PX * 3 },
-  [AnnotationKind.SHAPE]: { width: 56, height: 56 },
-  [AnnotationKind.DRAWING]: { width: 132, height: 80 },
-  [AnnotationKind.IMAGE]: { width: 120, height: 120 }
-};
-
 type DrawingPoint = {
   x: number;
   y: number;
 };
-
-type MapCanvasLayout = {
-  width: number;
-  height: number;
-};
-
-type CoordinateLayout = {
-  width: number;
-  height: number;
-};
-
-type PageElementMessageBundle = {
-  annotations_placeholder_title: () => string;
-  annotations_placeholder_subtitle: () => string;
-  annotations_placeholder_source: () => string;
-  annotations_placeholder_note: () => string;
-  basemap_source: () => string;
-  map_export_signature: () => string;
-};
-
-const PAGE_ELEMENT_MESSAGE_BUNDLES = {
-  en: {
-    annotations_placeholder_title: () =>
-      String(m.annotations_placeholder_title({}, { locale: 'en' })),
-    annotations_placeholder_subtitle: () =>
-      String(m.annotations_placeholder_subtitle({}, { locale: 'en' })),
-    annotations_placeholder_source: () =>
-      String(m.annotations_placeholder_source({}, { locale: 'en' })),
-    annotations_placeholder_note: () =>
-      String(m.annotations_placeholder_note({}, { locale: 'en' })),
-    basemap_source: () => String(m.basemap_source({}, { locale: 'en' })),
-    map_export_signature: () =>
-      String(m.map_export_signature({}, { locale: 'en' }))
-  },
-  fr: {
-    annotations_placeholder_title: () =>
-      String(m.annotations_placeholder_title({}, { locale: 'fr' })),
-    annotations_placeholder_subtitle: () =>
-      String(m.annotations_placeholder_subtitle({}, { locale: 'fr' })),
-    annotations_placeholder_source: () =>
-      String(m.annotations_placeholder_source({}, { locale: 'fr' })),
-    annotations_placeholder_note: () =>
-      String(m.annotations_placeholder_note({}, { locale: 'fr' })),
-    basemap_source: () => String(m.basemap_source({}, { locale: 'fr' })),
-    map_export_signature: () =>
-      String(m.map_export_signature({}, { locale: 'fr' }))
-  }
-} satisfies Record<'en' | 'fr', PageElementMessageBundle>;
-
-function isGridEnabled(): boolean {
-  return getFormatState().gridEnabled;
-}
-
-function resolveMapFrame(layout: PageLayout): PageFrame {
-  const left = layout.margins.left;
-  const top = layout.margins.top;
-  const right = Math.max(left, layout.width - layout.margins.right);
-  const bottom = Math.max(top, layout.height - layout.margins.bottom);
-
-  return {
-    left,
-    top,
-    right,
-    bottom,
-    width: Math.max(1, right - left),
-    height: Math.max(1, bottom - top)
-  };
-}
-
-function clampPageElementPosition(
-  position: { x: number; y: number },
-  role: PageElementRole,
-  layout: PageLayout,
-  snapToGridEnabled = true
-): { x: number; y: number } {
-  const frame = resolveMapFrame(layout);
-  const roleWidth = PAGE_ELEMENT_WIDTHS[role];
-  const roleHeight = PAGE_ELEMENT_HEIGHTS[role];
-  const minX = frame.left;
-  const maxX = Math.max(minX, frame.right - roleWidth);
-  const minY = frame.top;
-  const maxY = Math.max(minY, frame.bottom - roleHeight);
-
-  return snapPointWithinBounds(
-    position,
-    {
-      minX,
-      maxX,
-      minY,
-      maxY
-    },
-    isGridEnabled() && snapToGridEnabled
-  );
-}
-
-function resolvePageLayout(overrides?: {
-  width?: number;
-  height?: number;
-  margins?: {
-    top: number;
-    bottom: number;
-    left: number;
-    right: number;
-  };
-}): PageLayout {
-  const format = getFormatState();
-
-  return {
-    width: overrides?.width ?? format.width,
-    height: overrides?.height ?? format.height,
-    margins: overrides?.margins ?? format.margins
-  };
-}
-
-function resolveMapCanvasLayout(layout: PageLayout): MapCanvasLayout {
-  return {
-    width: Math.max(
-      1,
-      layout.width - layout.margins.left - layout.margins.right
-    ),
-    height: Math.max(
-      1,
-      layout.height - layout.margins.top - layout.margins.bottom
-    )
-  };
-}
-
-function resolveCoordinateLayout(
-  layout: PageLayout,
-  coordinateSpace: AnnotationCoordinateSpace
-): CoordinateLayout {
-  return coordinateSpace === 'page'
-    ? {
-        width: Math.max(1, layout.width),
-        height: Math.max(1, layout.height)
-      }
-    : resolveMapCanvasLayout(layout);
-}
-
-function getAnnotationBounds(
-  type: AnnotationKind,
-  style: AnnotationStyle,
-  content?: unknown
-): { width: number; height: number } {
-  if (type === AnnotationKind.IMAGE) {
-    const resolvedSize = Number(
-      style.size ?? DEFAULT_ANNOTATION_BOUNDS.image.width
-    );
-    const safeSize = Number.isFinite(resolvedSize)
-      ? Math.max(40, resolvedSize)
-      : DEFAULT_ANNOTATION_BOUNDS.image.width;
-    return { width: safeSize, height: safeSize };
-  }
-
-  if (type === AnnotationKind.SHAPE) {
-    const defaultDimensions = getShapeDefaultDimensions(String(content ?? ''));
-    return {
-      width: Math.max(24, style.shapeWidth ?? defaultDimensions.width),
-      height: Math.max(24, style.shapeHeight ?? defaultDimensions.height)
-    };
-  }
-
-  return DEFAULT_ANNOTATION_BOUNDS[type];
-}
-
-function clampAnnotationPosition(
-  position: { x: number; y: number },
-  type: AnnotationKind,
-  style: AnnotationStyle,
-  layout: PageLayout,
-  coordinateSpace: AnnotationCoordinateSpace,
-  content?: unknown
-): { x: number; y: number } {
-  const coordinateLayout = resolveCoordinateLayout(layout, coordinateSpace);
-  const bounds = getAnnotationBounds(type, style, content);
-
-  const minX = 0;
-  const minY = 0;
-  const maxX = Math.max(minX, coordinateLayout.width - bounds.width);
-  const maxY = Math.max(minY, coordinateLayout.height - bounds.height);
-
-  return snapPointWithinBounds(
-    position,
-    {
-      minX,
-      maxX,
-      minY,
-      maxY
-    },
-    isGridEnabled()
-  );
-}
 
 function cloneStyle(
   style: AnnotationStyle | null | undefined
@@ -490,10 +241,7 @@ function clearCreationState(state: AnnotationsState): void {
   state.drawingInProgress = [];
 }
 
-// Convert a page-space position (origin = page top-left, margins included) to a
-// map-area-local position (origin = map frame top-left, margins excluded), the
-// space data-anchored `'map'` annotations live in. `annotation-overlay` re-adds
-// the margins in `getRenderedPosition`, so the on-screen placement is identical.
+// Map anchors use map-area coordinates; the overlay re-adds page margins.
 function toMapAreaLocalPosition(
   position: { x: number; y: number },
   layout: PageLayout
@@ -504,19 +252,13 @@ function toMapAreaLocalPosition(
   };
 }
 
-// Marks drawn directly on the map — shapes (rectangle/circle/triangle), vector
-// arrows/lines and freehand drawings. Text notes (page-elements, `role`) and
-// imported images stay page-anchored, so they are excluded here.
+// Only marks drawn directly on the map can be map-anchored.
 const MAP_ANCHORABLE_SHAPE_KINDS: ReadonlySet<AnnotationKind> = new Set([
   AnnotationKind.SHAPE,
   AnnotationKind.DRAWING
 ]);
 
-// Drawn-on-the-map shapes (no `role`) are created in `'map'` space so they stay
-// glued to the basemap. The WGS84 anchor is written by `annotation-overlay` on
-// first render (it owns the projection helpers); a `'map'` annotation without an
-// anchor renders exactly like the historical page placement, which is also the
-// composite-projection fallback.
+// The overlay writes WGS84 anchors for new map-space shapes on first render.
 function anchorShapeToMap(
   annotation: Annotation,
   layout: PageLayout
@@ -589,245 +331,8 @@ function createDefaultDrawingPoints(type: DrawingType): DrawingPoint[] {
   ];
 }
 
-function getNonPageAnnotationSpawnPosition(
-  type: AnnotationKind,
-  style: AnnotationStyle,
-  existingAnnotationsCount: number,
-  layout: PageLayout,
-  coordinateSpace: AnnotationCoordinateSpace,
-  content?: unknown
-): { x: number; y: number } {
-  const coordinateLayout = resolveCoordinateLayout(layout, coordinateSpace);
-  const bounds = getAnnotationBounds(type, style, content);
-  const availableVerticalSpace = Math.max(
-    0,
-    coordinateLayout.height - NON_PAGE_ANNOTATION_TOP_OFFSET - bounds.height
-  );
-  const maxRows = Math.max(
-    1,
-    Math.floor(availableVerticalSpace / NON_PAGE_ANNOTATION_ROW_STEP) + 1
-  );
-  const column = Math.floor(existingAnnotationsCount / maxRows);
-  const row = existingAnnotationsCount % maxRows;
-  const leftOffset =
-    type === AnnotationKind.IMAGE
-      ? NON_PAGE_IMAGE_LEFT_OFFSET
-      : NON_PAGE_ANNOTATION_LEFT_OFFSET;
-
-  const x = leftOffset + column * NON_PAGE_ANNOTATION_COLUMN_STEP;
-  const y = NON_PAGE_ANNOTATION_TOP_OFFSET + row * NON_PAGE_ANNOTATION_ROW_STEP;
-
-  return clampAnnotationPosition(
-    { x, y },
-    type,
-    style,
-    layout,
-    coordinateSpace,
-    content
-  );
-}
-
-function getPageNoteSpawnPosition(
-  bottomRightItemsCount: number,
-  layout: PageLayout
-): { x: number; y: number } {
-  const frame = resolveMapFrame(layout);
-  const noteWidth = PAGE_ELEMENT_WIDTHS[ANNOTATION_ROLE.NOTE];
-  const baseY = frame.bottom - BOTTOM_RIGHT_SAFE_OFFSET;
-
-  return clampPageElementPosition(
-    {
-      x: frame.right - noteWidth - RIGHT_COLUMN_SAFE_OFFSET,
-      y: baseY - bottomRightItemsCount * BOTTOM_RIGHT_STACK_STEP
-    },
-    ANNOTATION_ROLE.NOTE,
-    layout
-  );
-}
-
-function getPageElementPosition(
-  role: PageElementRole,
-  layout: PageLayout
-): { x: number; y: number } {
-  const frame = resolveMapFrame(layout);
-  const roleWidth = PAGE_ELEMENT_WIDTHS[role];
-  const roleHeight = PAGE_ELEMENT_HEIGHTS[role];
-  const minX = frame.left;
-  const maxX = Math.max(minX, frame.right - roleWidth);
-  const titleX = clampToRange(frame.left + TOP_LEFT_SAFE_OFFSET, minX, maxX);
-  const rightColumnX = clampToRange(
-    frame.right - roleWidth - RIGHT_COLUMN_SAFE_OFFSET,
-    minX,
-    maxX
-  );
-  const minY = frame.top;
-  const maxY = Math.max(minY, frame.bottom - roleHeight);
-  const bottomStackIndex = BOTTOM_RIGHT_STACK_ORDER.indexOf(role);
-
-  if (bottomStackIndex !== -1) {
-    const baseY = frame.bottom - BOTTOM_RIGHT_SAFE_OFFSET;
-    return {
-      x: rightColumnX,
-      y: clampToRange(
-        baseY - bottomStackIndex * BOTTOM_RIGHT_STACK_STEP,
-        minY,
-        maxY
-      )
-    };
-  }
-
-  switch (role) {
-    case ANNOTATION_ROLE.TITLE:
-      return {
-        x: titleX,
-        y: clampToRange(frame.top + TITLE_TOP_OFFSET, minY, maxY)
-      };
-    case ANNOTATION_ROLE.SUBTITLE:
-      return {
-        x: titleX,
-        y: clampToRange(frame.top + SUBTITLE_TOP_OFFSET, minY, maxY)
-      };
-    case ANNOTATION_ROLE.NOTE:
-      return {
-        x: rightColumnX,
-        y: clampToRange(frame.bottom - BOTTOM_RIGHT_SAFE_OFFSET, minY, maxY)
-      };
-    default:
-      return {
-        x: titleX,
-        y: clampToRange(frame.top + PAGE_GRID_SIZE_PX * 2, minY, maxY)
-      };
-  }
-}
-
-function isBottomRightPageElementRole(role: PageElementRole): boolean {
-  return BOTTOM_RIGHT_STACK_ORDER.includes(role);
-}
-
-function isTopLeftPageElementRole(role: PageElementRole): boolean {
-  return role === ANNOTATION_ROLE.TITLE || role === ANNOTATION_ROLE.SUBTITLE;
-}
-
-function shouldSnapAutoPageElement(role: PageElementRole): boolean {
-  return isPageElementRole(role);
-}
-
-function reconcileAutoPageElementStyle(
-  role: PageElementRole,
-  positionMode: 'auto' | 'manual' | undefined,
-  style: AnnotationStyle | undefined
-): AnnotationStyle | undefined {
-  const nextStyle = { ...(style ?? {}) };
-
-  if (
-    positionMode !== 'manual' &&
-    isBottomRightPageElementRole(role) &&
-    (nextStyle.textAlign === undefined ||
-      nextStyle.textAlign === TextAlign.Left)
-  ) {
-    nextStyle.textAlign = TextAlign.Right;
-  }
-
-  if (
-    positionMode !== 'manual' &&
-    isTopLeftPageElementRole(role) &&
-    (nextStyle.textAlign === undefined ||
-      nextStyle.textAlign === TextAlign.Center)
-  ) {
-    nextStyle.textAlign = TextAlign.Left;
-  }
-
-  return Object.keys(nextStyle).length > 0 ? nextStyle : undefined;
-}
-
 function isEmptyContent(content: unknown): boolean {
   return typeof content !== 'string' || content.trim().length === 0;
-}
-
-function isPageElementRole(role: unknown): role is PageElementRole {
-  return (
-    typeof role === 'string' &&
-    ANNOTATION_ROLES.includes(role as (typeof ANNOTATION_ROLES)[number])
-  );
-}
-
-function getPageElementDefaultContent(
-  role: PageElementRole,
-  basemapSource: string,
-  withPlaceholders: boolean
-): string {
-  switch (role) {
-    case ANNOTATION_ROLE.TITLE:
-      return withPlaceholders ? m.annotations_placeholder_title() : '';
-    case ANNOTATION_ROLE.SUBTITLE:
-      return withPlaceholders ? m.annotations_placeholder_subtitle() : '';
-    case ANNOTATION_ROLE.SOURCE:
-      return withPlaceholders ? m.annotations_placeholder_source() : '';
-    case ANNOTATION_ROLE.BASEMAP_SOURCE:
-      return basemapSource || (withPlaceholders ? m.basemap_source() : '');
-    case ANNOTATION_ROLE.SIGNATURE:
-      return withPlaceholders ? m.annotations_placeholder_note() : '';
-    case ANNOTATION_ROLE.CREDIT:
-      return m.map_export_signature();
-    case ANNOTATION_ROLE.NOTE:
-      return withPlaceholders ? m.annotations_placeholder_note() : '';
-    default:
-      return '';
-  }
-}
-
-function resolvePageElementMessageBundle(
-  locale: Locale
-): PageElementMessageBundle {
-  return locale === 'en'
-    ? PAGE_ELEMENT_MESSAGE_BUNDLES.en
-    : PAGE_ELEMENT_MESSAGE_BUNDLES.fr;
-}
-
-function getPageElementDefaultContentForLocale(
-  role: PageElementRole,
-  basemapSource: string,
-  withPlaceholders: boolean,
-  locale: Locale
-): string {
-  const bundle = resolvePageElementMessageBundle(locale);
-
-  switch (role) {
-    case ANNOTATION_ROLE.TITLE:
-      return withPlaceholders ? bundle.annotations_placeholder_title() : '';
-    case ANNOTATION_ROLE.SUBTITLE:
-      return withPlaceholders ? bundle.annotations_placeholder_subtitle() : '';
-    case ANNOTATION_ROLE.SOURCE:
-      return withPlaceholders ? bundle.annotations_placeholder_source() : '';
-    case ANNOTATION_ROLE.BASEMAP_SOURCE:
-      return basemapSource || (withPlaceholders ? bundle.basemap_source() : '');
-    case ANNOTATION_ROLE.SIGNATURE:
-      return withPlaceholders ? bundle.annotations_placeholder_note() : '';
-    case ANNOTATION_ROLE.CREDIT:
-      return bundle.map_export_signature();
-    case ANNOTATION_ROLE.NOTE:
-      return withPlaceholders ? bundle.annotations_placeholder_note() : '';
-    default:
-      return '';
-  }
-}
-
-function getKnownPageElementDefaultContents(
-  role: PageElementRole,
-  basemapSource: string,
-  withPlaceholders: boolean
-): Set<string> {
-  return new Set(
-    (Object.keys(PAGE_ELEMENT_MESSAGE_BUNDLES) as Array<'en' | 'fr'>).map(
-      (locale) =>
-        getPageElementDefaultContentForLocale(
-          role,
-          basemapSource,
-          withPlaceholders,
-          locale
-        )
-    )
-  );
 }
 
 function normalizeOpacityPercent(
@@ -1398,7 +903,7 @@ const { actions, getState } = createToolStore<
 
         return {
           ...item,
-          content: getPageElementDefaultContentForLocale(
+          content: getPageElementDefaultContent(
             item.role,
             basemapSource,
             true,

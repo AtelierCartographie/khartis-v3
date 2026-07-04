@@ -6,7 +6,10 @@ import { globalState } from '$lib/features/commons/stores/global.svelte';
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { projectsStore } from '$lib/features/commons/stores/projects.store.svelte';
 import { getLocale, setLocale, type Locale } from '$lib/paraglide/runtime.js';
+import * as m from '$lib/paraglide/messages';
 import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations';
+import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 const SIDENAV_CONTAINER_ID = 'khartis-side-nav';
 const HAMBURGER_SELECTOR = '.bx--header__menu-trigger';
@@ -82,6 +85,13 @@ export function useSideNav(): UseSideNavReturn {
         if (duplicatedProject) {
           await projectsStore.openProject(duplicatedProject.id);
         }
+      } catch (error) {
+        logger.error(
+          'Failed to duplicate project from side nav',
+          LogCategory.PROJECT,
+          error
+        );
+        showError(m.error_duplicate_project_title(), m.error_generic_message());
       } finally {
         isDuplicating = false;
         closeModal();
@@ -90,14 +100,26 @@ export function useSideNav(): UseSideNavReturn {
   }
 
   async function handleDeleteConfirm(closeModal: () => void) {
-    if (projectStore.currentProject) {
+    try {
+      if (!projectStore.currentProject) {
+        return;
+      }
+
       const projectId = projectStore.currentProject.id;
       await projectStore.deleteProject(projectId);
       await projectsStore.refresh();
       globalState.isCreateProjectModalOpen = true;
       closeSideNav();
+    } catch (error) {
+      logger.error(
+        'Failed to delete project from side nav',
+        LogCategory.PROJECT,
+        error
+      );
+      showError(m.error_delete_project_title(), m.error_generic_message());
+    } finally {
+      closeModal();
     }
-    closeModal();
   }
 
   async function handleLanguageChange(event: Event) {

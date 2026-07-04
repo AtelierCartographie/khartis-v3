@@ -2,7 +2,10 @@ import {
   DataValidationError,
   DuckDBError
 } from '$lib/features/commons/pipeline.errors';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
@@ -14,6 +17,33 @@ import {
   registerFiles
 } from './file-registry';
 import { addRowId, restoreNormalizedColumnNames } from './reader-utils';
+
+const SAFE_CSV_DELIMITERS = new Set([';', ',', '\t', '|']);
+const SAFE_CSV_DECIMAL_SEPARATORS = new Set(['.', ',']);
+const SAFE_CSV_THOUSANDS_SEPARATORS = new Set(['.', ',', ' ']);
+
+function resolveCsvDecimalSeparator(value: string): string {
+  return value.length === 1 && SAFE_CSV_DECIMAL_SEPARATORS.has(value)
+    ? value
+    : DUCK_CONST.DEFAULT.DECIMAL_SEPARATOR;
+}
+
+function resolveCsvThousandsSeparator(
+  value: string | undefined
+): string | undefined {
+  if (!value) return undefined;
+  return value.length === 1 && SAFE_CSV_THOUSANDS_SEPARATORS.has(value)
+    ? value
+    : undefined;
+}
+
+function resolveCsvDelimiter(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  if (value.length !== 1 || !SAFE_CSV_DELIMITERS.has(value)) {
+    throw new DuckDBError(m.error_invalid_csv_delimiter());
+  }
+  return value;
+}
 
 /**
  * Reads tabular data from a given input and creates a table in DuckDB.
@@ -34,10 +64,13 @@ export async function readTabular(
   options: ReadTabularOptions = {}
 ): Promise<string> {
   let { tablename } = options;
-  const decimal_separator =
-    options.decimal_separator ?? DUCK_CONST.DEFAULT.DECIMAL_SEPARATOR;
-  const thousands_separator = options.thousands_separator;
-  const delimiter = options.delimiter;
+  const decimal_separator = resolveCsvDecimalSeparator(
+    options.decimal_separator ?? DUCK_CONST.DEFAULT.DECIMAL_SEPARATOR
+  );
+  const thousands_separator = resolveCsvThousandsSeparator(
+    options.thousands_separator
+  );
+  const delimiter = resolveCsvDelimiter(options.delimiter);
   const header = options.header ?? true;
   const ignoreErrors = options.ignore_errors ?? false;
   const allVarchar = options.all_varchar ?? false;
@@ -128,7 +161,7 @@ export async function readTabular(
               } = {}
             ): Promise<void> => {
               const csvOptions = buildCsvOptions(retryOptions);
-              const query = `CREATE OR REPLACE TABLE "${finalTablename}" AS FROM read_csv('${escapedFileId}', ${csvOptions.join(', ')});`;
+              const query = `CREATE OR REPLACE TABLE "${escapeIdentifier(finalTablename)}" AS FROM read_csv('${escapedFileId}', ${csvOptions.join(', ')});`;
               await executeQuery(ctx.connection, query, {
                 format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
               });
@@ -143,7 +176,7 @@ export async function readTabular(
             if (shouldRetryWithIgnoreErrors && !recoveryMode) {
               const rowCountResult = (await executeQuery(
                 ctx.connection,
-                `SELECT COUNT(*) AS cnt FROM "${finalTablename}"`,
+                `SELECT COUNT(*) AS cnt FROM "${escapeIdentifier(finalTablename)}"`,
                 { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
               )) as Array<{ cnt: number | string }>;
               const parsedRowCount = Number(rowCountResult?.[0]?.cnt ?? 0);
@@ -163,7 +196,7 @@ export async function readTabular(
             const escapedFileIdBinary = escapeSqlString(fileid);
             await executeQuery(
               ctx.connection,
-              `CREATE OR REPLACE TABLE "${finalTablename}" AS FROM read_parquet('${escapedFileIdBinary}');`,
+              `CREATE OR REPLACE TABLE "${escapeIdentifier(finalTablename)}" AS FROM read_parquet('${escapedFileIdBinary}');`,
               { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
             );
           }

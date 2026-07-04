@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   showInfoMock: vi.fn()
 }));
 
-vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
+vi.mock('$lib/features/project-management/core', () => ({
   SavePriority: {
     IMMEDIATE: 'immediate',
     DEBOUNCED: 'debounced'
@@ -137,7 +137,7 @@ describe('facetsStore', () => {
     ]);
   });
 
-  it('syncs generated facets from the latest base visualization without changing ids', () => {
+  it('syncs generated facets from the latest base visualization without changing ids', async () => {
     const baseViz = {
       id: 'base-viz',
       name: 'Base visualization',
@@ -171,7 +171,7 @@ describe('facetsStore', () => {
       generatedVisualizationIds: ['facet-a', 'facet-b']
     });
 
-    facetsStore.syncGeneratedVisualizationsFromBase('base-viz');
+    await facetsStore.syncGeneratedVisualizationsFromBase('base-viz');
 
     expect(mocks.buildFacetVisualizationUpdatesMock).toHaveBeenNthCalledWith(
       1,
@@ -203,7 +203,7 @@ describe('facetsStore', () => {
     });
   });
 
-  it('does not sync generated facets when a non-base visualization changes', () => {
+  it('does not sync generated facets when a non-base visualization changes', async () => {
     mocks.visualizations = [
       {
         id: 'base-viz',
@@ -223,7 +223,7 @@ describe('facetsStore', () => {
       generatedVisualizationIds: ['facet-a']
     });
 
-    facetsStore.syncGeneratedVisualizationsFromBase('facet-a');
+    await facetsStore.syncGeneratedVisualizationsFromBase('facet-a');
 
     expect(mocks.buildFacetVisualizationUpdatesMock).not.toHaveBeenCalled();
     expect(updateVisualizationMock).not.toHaveBeenCalled();
@@ -1133,7 +1133,7 @@ describe('facetsStore', () => {
   });
 
   describe('facetVisualizations', () => {
-    it('should auto-disable when base visualization is deleted', () => {
+    it('returns an empty list without mutating when the base visualization is deleted', () => {
       facetsStore.restoreFromSerialized({
         enabled: true,
         baseVisualizationId: 'deleted-viz',
@@ -1149,7 +1149,32 @@ describe('facetsStore', () => {
       const result = facetsStore.facetVisualizations;
 
       expect(result).toEqual([]);
+      expect(facetsStore.enabled).toBe(true);
+      expect(mocks.removeBulkVisualizationsMock).not.toHaveBeenCalled();
+      expect(mocks.notifyChangeMock).not.toHaveBeenCalled();
+    });
+
+    it('disables from sync when the base visualization is deleted', async () => {
+      facetsStore.restoreFromSerialized({
+        enabled: true,
+        baseVisualizationId: 'deleted-viz',
+        primarySlotPath: FACET_SLOT.POLYGON_VALUE,
+        variables: ['a', 'b'],
+        layout: { columns: 2, gap: 16 },
+        scaleMode: SCALE_MODE.SHARED,
+        generatedVisualizationIds: ['facet-a', 'facet-b']
+      });
+
+      mocks.visualizations = [];
+
+      await facetsStore.syncGeneratedVisualizationsFromBase();
+
       expect(facetsStore.enabled).toBe(false);
+      expect(mocks.removeBulkVisualizationsMock).toHaveBeenCalledWith([
+        'facet-a',
+        'facet-b'
+      ]);
+      expect(mocks.notifyChangeMock).toHaveBeenCalledWith('facets');
     });
   });
 });

@@ -510,7 +510,7 @@
     flex-shrink: 0;
   }
 
-  /* Arrière plan : toggle + color picker côte à côte */
+  /* Background controls: toggle and color picker side by side. */
   .bg-row {
     display: flex;
     align-items: flex-end;

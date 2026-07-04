@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { SimplificationLevel } from '$lib/features/commons/types/enums';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { BasemapMetadata } from '../types/basemap.types';
 import {
+  basemapService,
   findBasemapLayerByType,
   getCustomBasemapLayerGeometryTypeOverride,
   getAvailableBasemapSimplificationLevels,
@@ -12,6 +14,10 @@ import {
   getPreferredCatalogBasemapLevel,
   resolveBasemapVariantFile
 } from './basemap.service.svelte';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 function createBasemapMetadata(): BasemapMetadata {
   return {
@@ -101,6 +107,72 @@ describe('findBasemapLayerByType', () => {
     );
 
     expect(layer).toBeNull();
+  });
+});
+
+describe('basemapService.initialize', () => {
+  it('rejects when catalog initialization fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+      new Error('metadata unavailable')
+    );
+    const loggerError = vi.spyOn(logger, 'error').mockImplementation(() => {});
+
+    await expect(basemapService.initialize()).rejects.toMatchObject({
+      name: 'PipelineError',
+      code: 'BASEMAP_INIT_FAILED'
+    });
+    expect(loggerError).toHaveBeenCalledWith(
+      'Failed to initialize basemap service',
+      LogCategory.MAP,
+      expect.any(Error)
+    );
+  });
+
+  it('logs missing projection and style presets without blocking initialization', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async (input: string | URL | Request) => {
+        const url = String(input);
+
+        if (url.includes('all-basemaps-metadata.json')) {
+          return new Response(JSON.stringify([createBasemapMetadata()]), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        return new Response(null, { status: 404, statusText: 'Not Found' });
+      }
+    );
+    const loggerWarn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    await expect(basemapService.initialize()).resolves.toBeUndefined();
+
+    expect(loggerWarn).toHaveBeenCalledWith(
+      'Failed to load projection presets',
+      LogCategory.MAP,
+      expect.objectContaining({
+        flow: 'load_projection_presets',
+        extra: expect.objectContaining({
+          url: expect.stringContaining('projection-presets.json'),
+          status: 404,
+          statusText: 'Not Found'
+        })
+      })
+    );
+    expect(loggerWarn).toHaveBeenCalledWith(
+      'Failed to load style presets',
+      LogCategory.MAP,
+      expect.objectContaining({
+        flow: 'load_style_presets',
+        extra: expect.objectContaining({
+          url: expect.stringContaining('style-presets.json'),
+          status: 404,
+          statusText: 'Not Found'
+        })
+      })
+    );
+    expect(basemapService.projectionPresets).toBeNull();
+    expect(basemapService.stylePresets).toBeNull();
   });
 });
 

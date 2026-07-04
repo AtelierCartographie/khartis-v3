@@ -6,7 +6,7 @@
     detectApplePlatform,
     getSideNavShortcutLabels
   } from '$lib/features/commons/utils/keyboard-shortcuts.utils';
-  import { m } from '$lib/paraglide/messages.js';
+  import { m } from '$lib/paraglide/messages';
   import {
     Accordion,
     AccordionItem,
@@ -43,11 +43,11 @@
   import DataPrivacyModal from './components/data-privacy-modal.svelte';
   import { useSideNav } from './hooks/use-side-nav.svelte';
 
-  const DEFAULT_APP_VERSION = '1.6.0-staging.1';
   const sideNav = useSideNav();
-  const appVersion = (
-    import.meta.env.VITE_APP_VERSION || DEFAULT_APP_VERSION
-  ).replace(/^v/i, '');
+  const appVersion = (import.meta.env.VITE_APP_VERSION || 'dev').replace(
+    /^v/i,
+    ''
+  );
   let shortcutLabels = $state(getSideNavShortcutLabels(false));
   let deferredInstallPrompt = $state<BeforeInstallPromptEvent | null>(null);
   let isInstallDialogOpen = $state(false);

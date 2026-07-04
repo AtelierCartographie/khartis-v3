@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  loggerWarn: vi.fn(),
   tableName: 't' as string | null,
   queryMock: vi.fn()
 }));
@@ -25,6 +26,13 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
     Q6: 'q6',
     NESTED_MEANS: 'nested_means',
     HEAD_TAIL: 'head_tail'
+  }
+}));
+
+vi.mock('$lib/features/commons/utils/logger', () => ({
+  LogCategory: { DATA: 'DATA' },
+  logger: {
+    warn: mocks.loggerWarn
   }
 }));
 
@@ -99,5 +107,17 @@ describe('detectDivergingBreakpoint (automatic divergent palette rule)', () => {
     await expect(
       detectDivergingBreakpoint({ datasetId: 'ds', columnName: 'v' })
     ).resolves.toBeNull();
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(
+      'Failed to detect diverging classification breakpoint',
+      'DATA',
+      expect.objectContaining({
+        error: expect.any(Error),
+        flow: 'classification_breakpoint_detection',
+        extra: expect.objectContaining({
+          datasetId: 'ds',
+          columnName: 'v'
+        })
+      })
+    );
   });
 });

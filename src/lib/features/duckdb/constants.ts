@@ -1,3 +1,11 @@
+import { NULL_VALUE_TOKENS } from '$lib/features/commons/constants/detection.constants';
+
+function formatDuckDBStringLiteral(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+const DUCKDB_NULL_VALUES = `[${NULL_VALUE_TOKENS.map(formatDuckDBStringLiteral).join(', ')}]`;
+
 /**
  * DuckDB configuration constants.
  */
@@ -9,7 +17,7 @@ export const DUCK_CONST = {
     /** Default format for tabular data */
     FORMAT_TABULAR: 'csv',
     /** Common null value representations recognized during parsing */
-    NULL_VALUES: `['', ':', '-', '...', 'null', 'NULL', 'NA', 'N/A', 'n/a', '#N/A', 'NaN', 'nil', 'NIL', 'none', 'NONE', 'None']`,
+    NULL_VALUES: DUCKDB_NULL_VALUES,
     /** Default data source identifier */
     SOURCE: 'user'
   },

@@ -25,17 +25,20 @@ const COLUMN_NAME_PATTERNS = {
   latitude: /^(lat|latitude|y_coord|y|lat_dd|latitude_dd|geo_lat)$/i,
   longitude:
     /^(lon|long|longitude|x_coord|x|lon_dd|longitude_dd|lng|geo_lon)$/i,
-  country: /^(country[\s_]?(name|code)?|pays|nation|state|etat|entity|area)$/i,
   iso2: /^(iso[\s_]?2|iso[\s_]?alpha[\s_]?2|country[\s_]?iso[\s_]?2|code[\s_]?iso[\s_]?2|alpha[\s_]?2)$/i,
   iso3: /^(iso[\s_]?3|iso[\s_]?alpha[\s_]?3|country[\s_]?iso[\s_]?3|code[\s_]?iso[\s_]?3|alpha[\s_]?3|country[\s_]?code)$/i,
   nuts: /^(nuts[\s_]?(code|id|2|3)?|code[\s_]?nuts|nuts[\s_]?level[\s_]?\d?)$/i,
-  region:
-    /^(region|province|department|departement|county|oblast|prefecture)$/i,
-  city: /^(city|ville|town|commune|municipality|ciudad|stadt)$/i,
-  coordinates: /^(coord|coords|coordinates|point|location|geometry|wkt)$/i,
-  name: /^(name|nom|designation|libelle|label|title)$/i,
-  code: /^(code|id|identifier|identifiant|key|geocode)$/i
+  coordinates: /^(coord|coords|coordinates|point|location|geometry|wkt)$/i
 } as const;
+
+const VALIDATED_COLUMN_NAME_PATTERNS = [
+  [GEO_COLUMN_TYPE.LATITUDE, COLUMN_NAME_PATTERNS.latitude],
+  [GEO_COLUMN_TYPE.LONGITUDE, COLUMN_NAME_PATTERNS.longitude],
+  [GEO_COLUMN_TYPE.ISO2, COLUMN_NAME_PATTERNS.iso2],
+  [GEO_COLUMN_TYPE.ISO3, COLUMN_NAME_PATTERNS.iso3],
+  [GEO_COLUMN_TYPE.NUTS, COLUMN_NAME_PATTERNS.nuts],
+  [GEO_COLUMN_TYPE.COORDINATES, COLUMN_NAME_PATTERNS.coordinates]
+] as const;
 
 const VALUE_PATTERNS = {
   latitude: (value: string) => {
@@ -508,7 +511,8 @@ function validateGPSColumnRange(
   );
   const looksSwapped =
     numericValues.length > 0 &&
-    outOfRange.length / numericValues.length >= 0.5 &&
+    outOfRange.length / numericValues.length >=
+      GEO_DETECTION.GPS_SWAPPED_MIN_OUT_OF_RANGE_SHARE &&
     numericValues.every((n) => n >= swapRange[0] && n <= swapRange[1]);
   return {
     column,
@@ -545,12 +549,19 @@ function detectMagnitudeSwap(
 ): boolean {
   const latStats = numericStats(latValues);
   const lonStats = numericStats(lonValues);
-  if (latStats.count < 2 || lonStats.count < 2) return false;
+  if (
+    latStats.count < GEO_DETECTION.GPS_SWAP_MIN_SAMPLE_COUNT ||
+    lonStats.count < GEO_DETECTION.GPS_SWAP_MIN_SAMPLE_COUNT
+  ) {
+    return false;
+  }
 
   const latLooksLikeEuropeanLongitude =
-    latStats.maxAbs < 15 && latStats.minAbs < 15;
+    latStats.maxAbs < GEO_DETECTION.EUROPE_LONGITUDE_MAX_ABS &&
+    latStats.minAbs < GEO_DETECTION.EUROPE_LONGITUDE_MAX_ABS;
   const lonLooksLikeEuropeanLatitude =
-    lonStats.minAbs > 40 && lonStats.maxAbs < 90;
+    lonStats.minAbs > GEO_DETECTION.EUROPE_LATITUDE_MIN_ABS &&
+    lonStats.maxAbs < GEO_DETECTION.EUROPE_LATITUDE_MAX_ABS;
   return latLooksLikeEuropeanLongitude && lonLooksLikeEuropeanLatitude;
 }
 
@@ -564,7 +575,7 @@ export function collectGPSRangeWarnings(
   }
 ): string[] {
   const warnings: string[] = [];
-  const { headers, data, sampleSize } = context;
+  const { data, sampleSize } = context;
   const effectiveSample = sampleSize ?? Math.min(100, data.length);
 
   function valuesFor(columnIndex: number): unknown[] {
@@ -648,8 +659,6 @@ export function collectGPSRangeWarnings(
       );
     }
   }
-
-  void headers;
   return warnings;
 }
 
@@ -809,7 +818,9 @@ export const GeoColumnDetector = {
     header: string,
     values: unknown[]
   ): Omit<GeoColumnResult, 'index' | 'columnName'> | null {
-    const sampleValues = values.slice(0, 5).map((v) => String(v));
+    const sampleValues = values
+      .slice(0, GEO_DETECTION.SAMPLE_VALUE_COUNT)
+      .map((v) => String(v));
     const headerDetection = GeoColumnDetector.detectByHeader(header, values);
 
     const valueBasedType = GeoColumnDetector.detectByValues(values);
@@ -829,7 +840,10 @@ export const GeoColumnDetector = {
         };
       }
 
-      if (valueBasedType.confidence > headerDetection.confidence + 0.15) {
+      if (
+        valueBasedType.confidence >
+        headerDetection.confidence + GEO_DETECTION.VALUE_TYPE_OVERRIDE_MARGIN
+      ) {
         return {
           ...valueBasedType,
           sampleValues
@@ -923,7 +937,7 @@ export const GeoColumnDetector = {
           collapsedHeader,
           HEADER_KEYWORDS.country.strong
         ),
-        confidence: 0.75,
+        confidence: GEO_DETECTION.COUNTRY_HEADER_CONFIDENCE,
         reason: 'Header keywords: country'
       },
       {
@@ -933,7 +947,7 @@ export const GeoColumnDetector = {
           collapsedHeader,
           HEADER_KEYWORDS.country.weak
         ),
-        confidence: 0.6,
+        confidence: GEO_DETECTION.COUNTRY_WEAK_HEADER_CONFIDENCE,
         reason: 'Header keywords: entity'
       },
       {
@@ -943,7 +957,7 @@ export const GeoColumnDetector = {
           collapsedHeader,
           HEADER_KEYWORDS.region
         ),
-        confidence: 0.75,
+        confidence: GEO_DETECTION.REGION_HEADER_CONFIDENCE,
         reason: 'Header keywords: region'
       },
       {
@@ -953,7 +967,7 @@ export const GeoColumnDetector = {
           collapsedHeader,
           HEADER_KEYWORDS.city
         ),
-        confidence: 0.72,
+        confidence: GEO_DETECTION.CITY_HEADER_CONFIDENCE,
         reason: 'Header keywords: city'
       },
       {
@@ -963,7 +977,7 @@ export const GeoColumnDetector = {
           collapsedHeader,
           HEADER_KEYWORDS.coordinates
         ),
-        confidence: 0.7,
+        confidence: GEO_DETECTION.COORDINATES_HEADER_CONFIDENCE,
         reason: 'Header keywords: coordinates'
       }
     ];
@@ -991,7 +1005,7 @@ export const GeoColumnDetector = {
       if (
         (matcher.type === GEO_COLUMN_TYPE.COUNTRY_NAME ||
           matcher.type === GEO_COLUMN_TYPE.CITY) &&
-        numericLikeShare > 0.8 &&
+        numericLikeShare > GEO_DETECTION.NUMERIC_GEO_TEXT_SHARE_LIMIT &&
         !(
           matcher.type === GEO_COLUMN_TYPE.CITY &&
           isCityCodeHeader(tokens, collapsedHeader)
@@ -1002,7 +1016,7 @@ export const GeoColumnDetector = {
 
       if (
         matcher.type === GEO_COLUMN_TYPE.REGION &&
-        numericLikeShare > 0.8 &&
+        numericLikeShare > GEO_DETECTION.NUMERIC_GEO_TEXT_SHARE_LIMIT &&
         !collapsedHeader.includes('code')
       ) {
         continue;
@@ -1026,12 +1040,12 @@ export const GeoColumnDetector = {
       }
     }
 
-    for (const [type, pattern] of Object.entries(COLUMN_NAME_PATTERNS)) {
+    for (const [type, pattern] of VALIDATED_COLUMN_NAME_PATTERNS) {
       if (pattern.test(header)) {
         const confidence = GeoColumnDetector.validateColumnValues(type, values);
         if (confidence > GEO_DETECTION.MIN_CONFIDENCE) {
           return {
-            type: type as GeoColumnResult['type'],
+            type,
             confidence,
             matchedPatterns: [pattern.source]
           };

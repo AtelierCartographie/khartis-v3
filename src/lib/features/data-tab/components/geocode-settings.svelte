@@ -107,7 +107,7 @@
     <ToggleTabs
       activeIndex={activeTabIndex}
       items={tabItems}
-      onChange={handleTabChange}
+      onchange={handleTabChange}
       className="geocode-tabs"
     />
   </div>

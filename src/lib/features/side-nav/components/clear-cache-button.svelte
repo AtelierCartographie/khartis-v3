@@ -1,7 +1,7 @@
 <script lang="ts">
   import { factoryResetPwa } from '$lib/features/commons/utils/pwa-reset';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import { m } from '$lib/paraglide/messages.js';
+  import { m } from '$lib/paraglide/messages';
   import {
     Button,
     ComposedModal,

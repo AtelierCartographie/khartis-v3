@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import { LogCategory } from '$lib/features/commons/utils/logger';
 import type { DataTableFilter } from '$lib/features/duckdb/types';
 import {
+  getRowCount,
   getRowPosition,
   getTableData
 } from '$lib/features/duckdb/orchestrator/table-data-ops';
@@ -9,6 +11,24 @@ import {
   clearState,
   setFilters
 } from '$lib/features/duckdb/orchestrator/state.svelte';
+
+const mocks = vi.hoisted(() => ({
+  loggerError: vi.fn()
+}));
+
+vi.mock('$lib/features/commons/utils/logger', async () => {
+  const actual = await vi.importActual<
+    typeof import('$lib/features/commons/utils/logger')
+  >('$lib/features/commons/utils/logger');
+
+  return {
+    ...actual,
+    logger: {
+      ...actual.logger,
+      error: mocks.loggerError
+    }
+  };
+});
 
 function createDuck(queryResult?: { position?: number }) {
   return {
@@ -49,6 +69,36 @@ describe('getTableData', () => {
     );
     expect(query).toContain('LIMIT 10');
     expect(query).toContain('OFFSET 5');
+  });
+
+  it('logs and rethrows query failures instead of returning an empty table', async () => {
+    const error = new Error('table data query failed');
+    const duck = createDuck();
+    duck.query.mockRejectedValue(error);
+
+    await expect(getTableData('places', duck)).rejects.toBe(error);
+
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      'Failed to fetch table data',
+      LogCategory.DUCKDB,
+      error
+    );
+  });
+});
+
+describe('getRowCount', () => {
+  it('logs and rethrows count failures instead of returning zero', async () => {
+    const error = new Error('row count query failed');
+    const duck = createDuck();
+    duck.query.mockRejectedValue(error);
+
+    await expect(getRowCount('places', duck)).rejects.toBe(error);
+
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      'Failed to count DuckDB table rows',
+      LogCategory.DUCKDB,
+      error
+    );
   });
 });
 

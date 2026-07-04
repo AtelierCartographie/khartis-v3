@@ -11,8 +11,8 @@
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { ComboBox, Link } from 'carbon-components-svelte';
-  import { Edit, Launch, MagicWandFilled, Pin } from 'carbon-icons-svelte';
+  import { ComboBox } from 'carbon-components-svelte';
+  import { Edit, MagicWandFilled, Pin } from 'carbon-icons-svelte';
   import VisualizationSuggestionCard from './suggestion/visualization-suggestion-card.svelte';
   import { InfoPopover } from './shared';
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
@@ -264,6 +264,7 @@
 
     if (
       !shouldAutoApplySuggestion({
+        hasPersistedSuggestionKey: Boolean(targetViz.origin?.suggestionKey),
         suggestionCount: suggestions.length,
         visualizationCount: datasetVisualizations.length,
         targetVisualizationOriginMode
@@ -495,11 +496,6 @@
       >
         {m.create_visualization_button()}
       </Button>
-
-      <div class="learn-more">
-        <Link href="#" size="sm">{m.learn_more_visualizations()}</Link>
-        <Launch size={16} />
-      </div>
     </div>
   </div>
 </section>
@@ -582,19 +578,5 @@
     gap: var(--cds-spacing-04);
     margin: 0;
     padding: 0 var(--cds-spacing-05);
-  }
-
-  .learn-more {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-  }
-
-  .learn-more :global(a) {
-    color: var(--cds-text-secondary, #525252);
-  }
-
-  .learn-more :global(svg) {
-    color: var(--khartis-additions-interactive-suggestions, #0072c3);
   }
 </style>

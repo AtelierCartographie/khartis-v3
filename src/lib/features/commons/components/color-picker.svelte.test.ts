@@ -67,4 +67,26 @@ describe('ColorPicker', () => {
       lightness: 50
     });
   });
+
+  it('closes the picker with Escape and returns focus to the trigger', async () => {
+    render(ColorPicker, {
+      triggerLabel: 'Couleur des textes'
+    });
+
+    const trigger = screen.getByRole('button', {
+      name: /couleur des textes/i
+    });
+
+    await fireEvent.click(trigger);
+    expect(
+      screen.getByRole('spinbutton', { name: /teinte/i })
+    ).toBeInTheDocument();
+
+    await fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(
+      screen.queryByRole('spinbutton', { name: /teinte/i })
+    ).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
 });

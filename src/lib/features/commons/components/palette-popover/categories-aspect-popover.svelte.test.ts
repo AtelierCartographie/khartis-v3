@@ -7,7 +7,6 @@ import {
 } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as m from '$lib/paraglide/messages';
-import { resetExclusiveContextualSurfaces } from '$lib/features/commons/utils/contextual-surface-coordinator';
 import {
   DEFAULT_QUALITATIVE_PRESET,
   getQualitativeColorGroups
@@ -50,7 +49,6 @@ vi.mock('@ateliercartographie/ok-palette', async () => {
 
 afterEach(() => {
   cleanup();
-  resetExclusiveContextualSurfaces();
 });
 
 describe('CategoriesAspectPopover runtime', () => {

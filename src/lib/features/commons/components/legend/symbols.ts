@@ -1,4 +1,5 @@
-import { m } from '$lib/paraglide/messages.js';
+import { m } from '$lib/paraglide/messages';
+import { formatValue } from '$lib/features/commons/utils/format.utils';
 import Textbox from '@borgar/textbox';
 import { extent, ticks as d3_ticks } from 'd3-array';
 import { SYMBOL_SDF_EXTENT } from '$lib/features/commons/constants/visualization.constants';
@@ -11,18 +12,19 @@ import {
   filter_candidates_by_distances,
   linearScale,
   magnitude,
+  renderLegendHeader,
+  renderLegendNote,
   resolveLegendFontFamily,
   round_extreme,
   sqrtScale,
   type CommonLegendTextOptions,
+  type LegendSvgDefinition,
   type ScaleFn
 } from './utils';
 
 export type SymbolType = 'circle' | 'square' | 'bar' | 'spike' | 'text';
 
-// The map draws squares at 0.6 of the SDF quad (MultiShapeLayer getDistance),
-// i.e. 0.6/SYMBOL_SDF_EXTENT of the symbol radius: mirror that ratio so the
-// legend square is the size actually rendered on the map.
+// Mirror the map's square SDF ratio so legend squares match rendered symbols.
 const SQUARE_SIDE_RATIO = 0.6 / SYMBOL_SDF_EXTENT;
 
 export interface SymbolsLegendOptions extends CommonLegendTextOptions {
@@ -47,7 +49,7 @@ interface GetTicksOptions {
 export function draw_symbols_legend(
   data: ArrayLike<number>,
   options: SymbolsLegendOptions = {}
-): string {
+): LegendSvgDefinition {
   const {
     type = 'circle',
     size = 40,
@@ -126,7 +128,7 @@ export function draw_symbols_legend(
       : margin + x_max + 20;
   const label_widths = ticks
     .map((d) => d * label_sign)
-    .map((d) => Textbox.measureText(d.toLocaleString(), font));
+    .map((d) => Textbox.measureText(formatValue(d), font));
   const max_label_width = Math.max(...label_widths) + label_safety_padding;
   const nodata_dash_width = 10;
   const nodata_label = options.nodataLabel ?? m.legend_no_data_label();
@@ -159,25 +161,22 @@ export function draw_symbols_legend(
     fontSize: noteSize,
     fontFamily: resolvedFontFamily
   });
-  const title_lines = title
-    ? wrap_text_symbols(title, title_font, max_text_width)
-    : [];
-  const subtitle_lines = subtitle
-    ? wrap_text_symbols(subtitle, subtitle_font, max_text_width)
-    : [];
-  const note_lines = note
-    ? wrap_text_symbols(note, note_font, max_text_width)
-    : [];
-  const actual_header_height =
-    (title_lines.length > 0
-      ? title_lines.length * (titleSize * 1.2) + header_gap
-      : 0) +
-    (subtitle_lines.length > 0
-      ? subtitle_lines.length * (subtitleSize * 1.2) + header_gap
-      : 0);
+  const header = renderLegendHeader({
+    title,
+    subtitle,
+    x: margin,
+    y: margin,
+    maxWidth: max_text_width,
+    titleSize,
+    subtitleSize,
+    fontFamily: resolvedFontFamily,
+    gap: header_gap,
+    titleFont: title_font,
+    subtitleFont: subtitle_font
+  });
   const title_margin_bottom = Math.max(15, fontSize);
   const bottom_symbols =
-    margin + actual_header_height + title_margin_bottom + y_max * 2;
+    margin + header.height + title_margin_bottom + y_max * 2;
   const bottom_min_alone = bottom_symbols + 10;
   const symbols_bottom = is_min_alone ? bottom_min_alone : bottom_symbols;
   const section_gap = Math.max(10, Math.round(fontSize * 0.6));
@@ -188,10 +187,17 @@ export function draw_symbols_legend(
     ? sign_legend_y + sign_legend_section_height
     : symbols_bottom;
   const nodata_section_height = nodata ? section_gap + fontSize : 0;
+  const noteBlock = renderLegendNote({
+    note,
+    x: margin,
+    y: sign_legend_bottom + nodata_section_height + section_gap,
+    maxWidth: max_text_width,
+    noteSize,
+    fontFamily: resolvedFontFamily,
+    noteFont: note_font
+  });
   const note_section_height =
-    note_lines.length > 0
-      ? section_gap + note_lines.length * (noteSize * 1.2)
-      : 0;
+    noteBlock.height > 0 ? section_gap + noteBlock.height : 0;
   const height =
     sign_legend_bottom + nodata_section_height + note_section_height + margin;
   const { symbols, links, labels } = create_symbols();
@@ -238,29 +244,8 @@ export function draw_symbols_legend(
     symbols: string[],
     links: string[],
     labels: string[]
-  ): string {
+  ): LegendSvgDefinition {
     const safeFontFamily = escapeSvgAttribute(resolvedFontFamily);
-    let header_markup = '';
-    let y_cursor = margin;
-
-    if (title_lines.length > 0) {
-      const line_h = titleSize * 1.2;
-      header_markup += `<g class="title" text-anchor="start" dominant-baseline="hanging" font-size="${titleSize}" font-weight="bold">`;
-      title_lines.forEach((line, i) => {
-        header_markup += `<text x="${margin}" y="${y_cursor + i * line_h}">${escapeSvgText(line)}</text>`;
-      });
-      header_markup += `</g>`;
-      y_cursor += title_lines.length * line_h + header_gap;
-    }
-
-    if (subtitle_lines.length > 0) {
-      const line_h = subtitleSize * 1.2;
-      header_markup += `<g class="subtitle" text-anchor="start" dominant-baseline="hanging" font-size="${subtitleSize}">`;
-      subtitle_lines.forEach((line, i) => {
-        header_markup += `<text x="${margin}" y="${y_cursor + i * line_h}">${escapeSvgText(line)}</text>`;
-      });
-      header_markup += `</g>`;
-    }
 
     let nodata_markup = '';
     if (nodata) {
@@ -270,17 +255,6 @@ export function draw_symbols_legend(
         <path d="M${nodata_dash_x + nodata_dash_width / 2},${dash_y}L${nodata_label_x - label_gap},${dash_y}" fill="none" stroke="currentColor" stroke-width="0.75" stroke-dasharray="3,2"/>
         <text x="${nodata_label_x}" y="${dash_y}" text-anchor="start" font-size="${fontSize}" font-variant="tabular-nums" dominant-baseline="middle">${escapeSvgText(nodata_label)}</text>
       </g>`;
-    }
-
-    let note_markup = '';
-    if (note_lines.length > 0) {
-      const note_y = sign_legend_bottom + nodata_section_height + section_gap;
-      const line_h = noteSize * 1.2;
-      note_markup += `<g class="note" text-anchor="start" dominant-baseline="hanging" font-size="${noteSize}">`;
-      note_lines.forEach((line, i) => {
-        note_markup += `<text x="${margin}" y="${note_y + i * line_h}">${escapeSvgText(line)}</text>`;
-      });
-      note_markup += `</g>`;
     }
 
     let sign_legend_markup = '';
@@ -299,7 +273,8 @@ export function draw_symbols_legend(
       </g>`;
     }
 
-    return `<g class="symbol_legend" font-family="${safeFontFamily}">
+    return {
+      markup: `<g class="symbol_legend" font-family="${safeFontFamily}">
       ${createLegendCanvasRect(width, height)}
       <g class="symbols" fill="${escapeSvgAttribute(fill)}" stroke="${escapeSvgAttribute(stroke)}">
         ${symbols.join('')}
@@ -310,11 +285,14 @@ export function draw_symbols_legend(
       <g class="labels" text-anchor="end" font-size="${fontSize}" font-variant="tabular-nums">
         ${labels.join('')}
       </g>
-      ${header_markup}
+      ${header.markup}
       ${sign_legend_markup}
       ${nodata_markup}
-      ${note_markup}
-    </g>`;
+      ${noteBlock.markup}
+    </g>`,
+      width,
+      height
+    };
   }
 }
 
@@ -440,37 +418,18 @@ function link(x1: number, y1: number, x2: number, y2: number): string {
 }
 
 function label(x: number, y: number, text: number): string {
-  return `<text x="${x}" y="${y}">${escapeSvgText(text.toLocaleString())}</text>`;
+  return `<text x="${x}" y="${y}">${escapeSvgText(formatValue(text))}</text>`;
 }
 
-function wrap_text_symbols(
-  text: string,
-  font: string,
-  maxWidth: number
-): string[] {
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let currentLine = words[0] ?? '';
-
-  for (let i = 1; i < words.length; i++) {
-    const candidate = `${currentLine} ${words[i]}`;
-    if (Textbox.measureText(candidate, font) <= maxWidth) {
-      currentLine = candidate;
-    } else {
-      lines.push(currentLine);
-      currentLine = words[i];
-    }
-  }
-
-  if (currentLine) {
-    lines.push(currentLine);
-  }
-
-  return lines;
-}
-
-function empty_symbol_legend(fontSize: number, fontFamily?: string): string {
+function empty_symbol_legend(
+  fontSize: number,
+  fontFamily?: string
+): LegendSvgDefinition {
   const width = fontSize * 2;
   const height = fontSize * 2;
-  return `<g class="symbol_legend" font-family="${escapeSvgAttribute(resolveLegendFontFamily(fontFamily))}">${createLegendCanvasRect(width, height)}</g>`;
+  return {
+    markup: `<g class="symbol_legend" font-family="${escapeSvgAttribute(resolveLegendFontFamily(fontFamily))}">${createLegendCanvasRect(width, height)}</g>`,
+    width,
+    height
+  };
 }

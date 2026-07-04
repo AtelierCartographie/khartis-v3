@@ -30,6 +30,7 @@
         min={1}
         max={Number.MAX_SAFE_INTEGER}
         width="100%"
+        stepperWidth="32px"
         onchange={(value) => updateSize(value, height)}
       />
     </div>
@@ -44,6 +45,7 @@
         min={1}
         max={Number.MAX_SAFE_INTEGER}
         width="100%"
+        stepperWidth="32px"
         onchange={(value) => updateSize(width, value)}
       />
     </div>

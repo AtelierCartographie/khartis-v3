@@ -24,7 +24,7 @@ function isStylingTool(
 export function closeSelectedToolPanel(): void {
   const selectedTool = globalState.selectedTool;
 
-  globalState.selectedTool = undefined;
+  globalActions.setSelectedTool(undefined);
 
   if (isStylingTool(selectedTool)) {
     globalActions.resetPagePan();
@@ -41,6 +41,6 @@ export function selectTool(tool?: StylingTools | VisualizationTools): void {
       globalActions.resetPagePan();
     }
 
-    globalState.selectedTool = tool;
+    globalActions.setSelectedTool(tool);
   }
 }

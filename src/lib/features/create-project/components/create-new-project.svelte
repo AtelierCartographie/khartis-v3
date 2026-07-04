@@ -9,6 +9,10 @@
   import { debounce } from '$lib/features/commons/utils/debounce.utils';
   import { formatFileSize } from '$lib/features/commons/utils/file-import.utils';
   import { SUPPORTED_FILE_TYPES } from '$lib/features/commons/utils/file-validator.utils';
+  import {
+    readCarbonStringValue,
+    type CarbonValueEvent
+  } from '$lib/features/commons/utils/carbon-events.utils';
   import { m } from '$lib/paraglide/messages';
   import {
     FileUploaderDropContainer,
@@ -22,16 +26,12 @@
     TextInput,
     Tile
   } from 'carbon-components-svelte';
-  import {
-    CloudDownload,
-    DocumentBlank,
-    Link,
-    TrashCan
-  } from 'carbon-icons-svelte';
+  import { CloudDownload, DocumentBlank, TrashCan } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { SvelteSet } from 'svelte/reactivity';
   import ProjectName from './project-name.svelte';
   import { CreateProjectValidationService } from '../services/validation.service';
+  import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
   import type { ValidationResult } from '$lib/features/data-pipeline/types';
 
   interface Props {
@@ -117,7 +117,15 @@
     }
   }
 
-  let deletingFileIds = $state(new Set<string>());
+  function handlePastedDataInput(event: CarbonValueEvent) {
+    pastedDataValue = readCarbonStringValue(event, pastedDataValue);
+  }
+
+  function handleOnlineUrlInput(event: CarbonValueEvent) {
+    onlineUrlValue = readCarbonStringValue(event, onlineUrlValue);
+  }
+
+  let deletingFileIds = $state<SvelteSet<string>>(new SvelteSet());
   let isDeletingAll = $state(false);
 
   async function handleRemoveFile(fileId: string) {
@@ -133,10 +141,13 @@
 
   async function handleClearAllFiles() {
     isDeletingAll = true;
-    await createProjectActions.clearAllFiles(true);
-    lastProcessedFiles = new SvelteSet();
-    internalResetKey++;
-    isDeletingAll = false;
+    try {
+      await createProjectActions.clearAllFiles(true);
+      lastProcessedFiles = new SvelteSet();
+      internalResetKey++;
+    } finally {
+      isDeletingAll = false;
+    }
   }
 
   type TagColor = 'blue' | 'green' | 'purple' | 'teal' | 'magenta' | 'gray';
@@ -154,10 +165,26 @@
     [FileType.GPX]: { label: 'GPX', color: 'magenta' },
     [FileType.ZIP]: { label: 'ZIP', color: 'gray' },
     [FileType.UNKNOWN]: {
-      label: m.create_project_file_type_unknown(),
+      get label() {
+        return m.create_project_file_type_unknown();
+      },
       color: 'gray'
     }
   };
+
+  const SHAPEFILE_REQUIRED_EXTENSIONS =
+    PIPELINE_CONST.EXTENSIONS.SHAPEFILE_REQUIRED;
+  const SHAPEFILE_REQUIRED_EXTENSION_SET = new Set<string>(
+    SHAPEFILE_REQUIRED_EXTENSIONS
+  );
+  const SHAPEFILE_OPTIONAL_EXTENSIONS =
+    SUPPORTED_FILE_TYPES.shapefile.extensions.filter(
+      (extension) => !SHAPEFILE_REQUIRED_EXTENSION_SET.has(extension)
+    );
+  const SHAPEFILE_COMPONENT_GROUPS = [
+    { key: 'required', extensions: SHAPEFILE_REQUIRED_EXTENSIONS },
+    { key: 'optional', extensions: SHAPEFILE_OPTIONAL_EXTENSIONS }
+  ];
 
   let urlValidation = $state<ValidationResult | null>(null);
 
@@ -179,6 +206,19 @@
 
   const getFileTypeTag = (fileType: FileType) =>
     FILE_TYPE_TAGS[fileType] ?? FILE_TYPE_TAGS[FileType.UNKNOWN];
+
+  function getFileExtension(fileName: string): string {
+    const extensionStart = fileName.lastIndexOf('.');
+    return extensionStart >= 0
+      ? fileName.substring(extensionStart).toLowerCase()
+      : '';
+  }
+
+  function getPresentShapefileExtensions(
+    relatedFiles?: readonly string[]
+  ): Set<string> {
+    return new Set(relatedFiles?.map(getFileExtension) ?? []);
+  }
 </script>
 
 <section
@@ -220,9 +260,10 @@
 
     <div class="paste-container">
       <TextArea
-        bind:value={pastedDataValue}
+        value={pastedDataValue}
         placeholder={m.create_project_paste_data()}
         rows={4}
+        on:input={handlePastedDataInput}
         invalid={!!(pastedDataValidation && !pastedDataValidation.isValid)}
         invalidText={pastedDataValidation?.errors[0] || ''}
         warn={!!(
@@ -254,10 +295,11 @@
   <div class="grid grid-cols-1 gap-7">
     <div class="url-input-row">
       <TextInput
-        bind:value={onlineUrlValue}
+        value={onlineUrlValue}
         labelText={m.create_project_online_file_link()}
         placeholder={m.url_placeholder_example()}
         disabled={createProjectState.newProject.isLoading}
+        on:input={handleOnlineUrlInput}
         invalid={!!(urlValidation && !urlValidation.isValid)}
         invalidText={urlValidation?.errors[0] || ''}
         warn={!!(urlValidation && urlValidation.warnings.length > 0)}
@@ -465,26 +507,7 @@
                   </Button>
                 </div>
 
-                {@const requiredExts = ['.shp', '.shx', '.dbf']}
-                {@const optionalExts = ['.prj', '.cpg']}
-                {@const presentExts =
-                  file.relatedFiles?.map((f) =>
-                    f.substring(f.lastIndexOf('.')).toLowerCase()
-                  ) || []}
-                <div class="shapefile-components">
-                  {#each requiredExts as ext (ext)}
-                    {@const isPresent = presentExts.includes(ext)}
-                    <Tag size="sm" type={isPresent ? 'teal' : 'gray'}
-                      >{ext}{isPresent ? m.separator_check_mark() : ''}</Tag
-                    >
-                  {/each}
-                  {#each optionalExts as ext (ext)}
-                    {@const isPresent = presentExts.includes(ext)}
-                    <Tag size="sm" type={isPresent ? 'teal' : 'gray'}
-                      >{ext}{isPresent ? m.separator_check_mark() : ''}</Tag
-                    >
-                  {/each}
-                </div>
+                {@render shapefileComponents(file.relatedFiles)}
               </Tile>
             </div>
           {:else if file.status === FileStatus.COMPLETE}
@@ -535,26 +558,7 @@
                 </div>
 
                 {#if file.fileType === FileType.SHAPEFILE && file.relatedFiles && file.relatedFiles.length > 0}
-                  {@const requiredExts = ['.shp', '.shx', '.dbf']}
-                  {@const optionalExts = ['.prj', '.cpg']}
-                  {@const presentExts =
-                    file.relatedFiles?.map((f) =>
-                      f.substring(f.lastIndexOf('.')).toLowerCase()
-                    ) || []}
-                  <div class="shapefile-components">
-                    {#each requiredExts as ext (ext)}
-                      {@const isPresent = presentExts.includes(ext)}
-                      <Tag size="sm" type={isPresent ? 'teal' : 'gray'}
-                        >{ext}{isPresent ? m.separator_check_mark() : ''}</Tag
-                      >
-                    {/each}
-                    {#each optionalExts as ext (ext)}
-                      {@const isPresent = presentExts.includes(ext)}
-                      <Tag size="sm" type={isPresent ? 'teal' : 'gray'}
-                        >{ext}{isPresent ? m.separator_check_mark() : ''}</Tag
-                      >
-                    {/each}
-                  </div>
+                  {@render shapefileComponents(file.relatedFiles)}
                 {/if}
 
                 {#if file.validation?.errors && file.validation.errors.length > 0}
@@ -586,18 +590,26 @@
         </div>
       {/each}
     </div>
-
-    <div class="flex items-center gap-3 text-grey">
-      <span>{m.create_project_learn_more_data()}</span>
-
-      <Link size={24} />
-    </div>
   </div>
 
   {#if !isModal}
     <ProjectName onClose={onClose} />
   {/if}
 </section>
+
+{#snippet shapefileComponents(relatedFiles?: readonly string[])}
+  {@const presentExtensions = getPresentShapefileExtensions(relatedFiles)}
+  <div class="shapefile-components">
+    {#each SHAPEFILE_COMPONENT_GROUPS as group (group.key)}
+      {#each group.extensions as extension (extension)}
+        {@const isPresent = presentExtensions.has(extension)}
+        <Tag size="sm" type={isPresent ? 'teal' : 'gray'}>
+          {extension}{isPresent ? m.separator_check_mark() : ''}
+        </Tag>
+      {/each}
+    {/each}
+  </div>
+{/snippet}
 
 <style>
   #khartis-create-new-project {

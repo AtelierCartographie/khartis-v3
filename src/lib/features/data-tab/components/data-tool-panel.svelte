@@ -6,7 +6,10 @@
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
-  import { ToolbarState } from '$lib/features/commons/types/global';
+  import {
+    MAIN_TOOLBAR_ID,
+    resolveToolbarPanelWidth
+  } from '$lib/features/commons/utils/toolbar-width.utils';
   import * as m from '$lib/paraglide/messages';
   import { Close } from 'carbon-icons-svelte';
   import { onMount, type Snippet } from 'svelte';
@@ -19,29 +22,21 @@
 
   let { title, children }: Props = $props();
 
-  const MAIN_TOOLBAR_ID = 'khartis-main-toolbar';
   const contextualSurfaceId =
     createExclusiveContextualSurfaceId('data-tool-panel');
 
-  function getFallbackPanelRight(toolbarState: ToolbarState): string {
-    switch (toolbarState) {
-      case ToolbarState.Collapsed:
-        return '50px';
-      case ToolbarState.Compact:
-        return '434px';
-      default:
-        return 'clamp(400px, 50vw, 800px)';
-    }
+  function getFallbackPanelRight(): string {
+    return resolveToolbarPanelWidth(globalState.toolbarState);
   }
 
   function readPanelRight(): string {
     if (typeof window === 'undefined') {
-      return getFallbackPanelRight(globalState.toolbarState);
+      return getFallbackPanelRight();
     }
 
     const toolbar = document.getElementById(MAIN_TOOLBAR_ID);
     if (!toolbar) {
-      return getFallbackPanelRight(globalState.toolbarState);
+      return getFallbackPanelRight();
     }
 
     const toolbarRect = toolbar.getBoundingClientRect();

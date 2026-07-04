@@ -13,11 +13,17 @@
   import { type SearchStats } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { SearchSource } from '$lib/features/main-toolbar/main-toolbar.constants';
   import { UI_CONSTANTS } from '$lib/features/commons/constants/visualization.constants';
+  import {
+    readCarbonStringValue,
+    type CarbonValueEvent
+  } from '$lib/features/commons/utils/carbon-events.utils';
   import { ChevronLeft, ChevronRight } from 'carbon-icons-svelte';
   import { onMount, untrack } from 'svelte';
-  import { dataToolsStore } from '../stores/data-tools.store.svelte';
+  import {
+    dataToolsStore,
+    SearchSource
+  } from '../stores/data-tools.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 
   export type CellHighlightType = 'exact' | 'contains' | 'partial';
@@ -122,7 +128,8 @@
     });
   }
 
-  function handleSearchInput() {
+  function handleSearchInput(event: CarbonValueEvent) {
+    searchQuery = readCarbonStringValue(event, searchQuery);
     dataToolsStore.setSearchQuery(searchQuery);
 
     if (searchDebounceTimer) {
@@ -221,11 +228,8 @@
     }
   }
 
-  function handleSourceChange(event: Event) {
-    const target = event.target as HTMLSelectElement | null;
-    if (target?.value) {
-      searchSource = target.value;
-    }
+  function handleSourceChange(event: CarbonValueEvent) {
+    searchSource = readCarbonStringValue(event, String(searchSource));
     dataToolsStore.setSearchSource(searchSource);
     if (searchQuery.trim().length >= UI_CONSTANTS.MIN_SEARCH_LENGTH) {
       isSearching = true;
@@ -243,7 +247,8 @@
     onReplace?.(query, value, source);
   }
 
-  function handleReplaceInput() {
+  function handleReplaceInput(event: CarbonValueEvent) {
+    replaceValue = readCarbonStringValue(event, replaceValue);
     dataToolsStore.setReplaceValue(replaceValue);
   }
 
@@ -345,7 +350,7 @@
       <Search
         size="sm"
         placeholder={m.search_placeholder()}
-        bind:value={searchQuery}
+        value={searchQuery}
         bind:ref={searchInputRef}
         on:input={handleSearchInput}
         on:clear={handleClear}
@@ -357,8 +362,8 @@
       <Select
         size="sm"
         labelText={m.search_source()}
-        bind:selected={searchSource}
-        on:change={handleSourceChange}
+        selected={searchSource}
+        onchange={handleSourceChange}
       >
         <SelectItem value="all" text={m.search_all_variables()} />
         {#each columns as column (column.name)}
@@ -413,7 +418,7 @@
         size="sm"
         labelText={m.search_replace_with()}
         placeholder={m.search_replace_placeholder()}
-        bind:value={replaceValue}
+        value={replaceValue}
         on:input={handleReplaceInput}
       />
     </div>

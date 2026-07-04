@@ -2,16 +2,18 @@ import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import {
   buildDecimalLikeConditionSql,
   buildNormalizedNumericTextSql
 } from '$lib/features/commons/utils/numeric-format.utils';
 
 const MIN_NON_EMPTY_VALUES = 2;
-const INTERNAL_COLUMNS = new Set(['_row_id']);
+const INTERNAL_COLUMNS: Set<string> = new Set([INTERNAL_COLUMN.ID]);
 
 interface DuckQueryClient {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
+  invalidateTableCache?(tableName: string): void;
 }
 
 interface DescribeRow {
@@ -114,6 +116,7 @@ export async function normalizeFormattedNumericColumns(
         ALTER COLUMN "${escapedColumn}" SET DATA TYPE ${targetType}
         USING TRY_CAST(${normalizedNumericText} AS ${targetType})`
     );
+    duck.invalidateTableCache?.(tableName);
 
     convertedColumns.push(columnName);
   }

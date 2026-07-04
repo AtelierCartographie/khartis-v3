@@ -54,7 +54,7 @@ import {
 import {
   SavePriority,
   persistenceRegistry
-} from '$lib/features/project-management/core/persistence-registry';
+} from '$lib/features/project-management/core';
 
 function buildColumn(name: string, type: ColumnType): EnrichedColumn {
   return {
@@ -1159,6 +1159,67 @@ describe('visualizationStore LinePrimitiveConfig round-trip persistence', () => 
     };
   }
 
+  it('omits derived classification counts and facet-generated visualizations from persistence', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+    const input = buildRichLineVisualization();
+    const facetVisualization: VisualizationConfig = {
+      ...input,
+      id: 'viz-line-facet',
+      name: 'Facet line',
+      facet: { baseVisualizationId: input.id }
+    };
+
+    visualizationStore.restoreFromSerialized({
+      visualizations: [input],
+      selectedVisualizationId: input.id,
+      activeVisualizationIds: [input.id]
+    });
+    visualizationStore.createBulkVisualizations([facetVisualization]);
+
+    const serialized = persistenceRegistry.serializeAll().visualization as {
+      visualizations: VisualizationConfig[];
+      selectedVisualizationId?: string;
+      activeVisualizationIds?: string[];
+    };
+
+    expect(serialized.visualizations.map((viz) => viz.id)).toEqual([input.id]);
+    expect(serialized.selectedVisualizationId).toBe(input.id);
+    expect(serialized.activeVisualizationIds).toEqual([input.id]);
+
+    const [persistedVisualization] = serialized.visualizations;
+    expect(persistedVisualization).toBeDefined();
+    if (!persistedVisualization) {
+      throw new Error('persisted visualization missing');
+    }
+
+    expect(persistedVisualization.lineThicknessClassification?.counts).toBe(
+      undefined
+    );
+    expect(persistedVisualization.lineThicknessClassification?.breaks).toEqual([
+      10, 20
+    ]);
+    expect(persistedVisualization.lineThicknessClassification?.colors).toEqual([
+      '#f7fbff',
+      '#6baed6',
+      '#08519c'
+    ]);
+    expect(persistedVisualization.line?.thicknessClassification?.counts).toBe(
+      undefined
+    );
+    expect(
+      persistedVisualization.line?.thicknessModeStates?.[ThicknessMode.CLASSES]
+        ?.thicknessClassification?.counts
+    ).toBe(undefined);
+    expect(
+      persistedVisualization.line?.thicknessModeStates?.[ThicknessMode.CLASSES]
+        ?.thicknessClassification?.breaks
+    ).toEqual([8, 16, 24]);
+
+    const serializedText = JSON.stringify(serialized);
+    expect(serializedText).not.toContain('"counts"');
+    expect(serializedText).not.toContain('viz-line-facet');
+  });
+
   it('keeps proportional size mapping and categorical classification through the persistence registry round-trip used by project saves', () => {
     datasetsStore.addProcessedDataset(buildDataset());
     const input = buildRichLineVisualization();
@@ -1203,7 +1264,8 @@ describe('visualizationStore LinePrimitiveConfig round-trip persistence', () => 
     expect(viz.line?.classification?.disabledLabels).toEqual(['D']);
     expect(viz.line?.classification?.paletteId).toBe('categorical-set1');
     expect(viz.line?.thicknessClassification?.breaks).toEqual([10, 20]);
-    expect(viz.lineThicknessClassification?.counts).toEqual([2, 3, 1]);
+    expect(viz.lineThicknessClassification?.breaks).toEqual([10, 20]);
+    expect(viz.lineThicknessClassification?.counts).toBe(undefined);
     expect(viz.line?.colorModeStates?.[ColorMode.CLASSES]?.valueColumn).toBe(
       'capacity'
     );
