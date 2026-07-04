@@ -270,7 +270,7 @@
     <ToggleTabs
       items={zoneOptions}
       activeIndex={selectedZoneIndex}
-      onChange={handleZoneToggle}
+      onchange={handleZoneToggle}
       className="scale-toggle-tabs"
       hideInactiveLabel={true}
     />

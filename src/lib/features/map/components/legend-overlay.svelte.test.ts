@@ -56,6 +56,16 @@ const { mockVisualizationStore, mockDatasetsStore } = vi.hoisted(() => ({
         default:
           return null;
       }
+    },
+    getColumnValues: (columnName?: string) => {
+      switch (columnName) {
+        case 'population':
+          return [30_359, 8_200_000, 15_907_951];
+        case 'secondary-population':
+          return [22_120, 4_500_000, 9_431_204];
+        default:
+          return [];
+      }
     }
   }
 }));
@@ -78,7 +88,9 @@ vi.mock(
 vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   datasetsStore: {
     getColumnStatistics: (_datasetId: string, columnName?: string) =>
-      mockDatasetsStore.getColumnStatistics(columnName)
+      mockDatasetsStore.getColumnStatistics(columnName),
+    getColumnValues: (_datasetId: string, columnName?: string) =>
+      mockDatasetsStore.getColumnValues(columnName)
   }
 }));
 
@@ -371,7 +383,7 @@ describe('legend overlay visibility', () => {
       container.querySelector('.legend-svg--double-symbols')
     ).toBeInTheDocument();
     expect(pair?.querySelectorAll('path')).toHaveLength(2);
-    expect(screen.getByText('15,907,951')).toBeInTheDocument();
+    expect(screen.getByText('15 907 951')).toBeInTheDocument();
     expect(
       container.querySelector('.khartis_double_symbol_legend .subtitle')
         ?.textContent
@@ -466,8 +478,8 @@ describe('legend overlay visibility', () => {
     expect(screen.queryByText('category')).not.toBeInTheDocument();
     expect(screen.getByText('< 610')).toBeInTheDocument();
     expect(screen.getByText('610 – 980')).toBeInTheDocument();
-    expect(screen.getByText('980 – 1,200')).toBeInTheDocument();
-    expect(screen.getByText('≥ 1,200')).toBeInTheDocument();
+    expect(screen.getByText('980 – 1 200')).toBeInTheDocument();
+    expect(screen.getByText('≥ 1 200')).toBeInTheDocument();
   });
 
   it('renders classed choropleth colors with the integrated quantitative SVG legend', () => {
@@ -597,9 +609,9 @@ describe('legend overlay visibility', () => {
     expect(screen.getByText('capacity_total')).toBeInTheDocument();
     expect(screen.getByText('< 610')).toBeInTheDocument();
     expect(screen.getByText('610 – 980')).toBeInTheDocument();
-    expect(screen.getByText('980 – 1,200')).toBeInTheDocument();
-    expect(screen.getByText('≥ 1,200')).toBeInTheDocument();
-    expect(screen.queryAllByText('1,200')).toHaveLength(0);
+    expect(screen.getByText('980 – 1 200')).toBeInTheDocument();
+    expect(screen.getByText('≥ 1 200')).toBeInTheDocument();
+    expect(screen.queryAllByText('1 200')).toHaveLength(0);
   });
 
   it('uses symbol missing data visibility for point size legends', () => {
@@ -781,6 +793,32 @@ describe('legend overlay visibility', () => {
     });
 
     expect(getLegendState().dragPosition).toEqual({ x: 37, y: 35 });
+  });
+
+  it('moves the focused legend with arrow keys', async () => {
+    formatActions.toggleGrid();
+
+    const { container } = render(LegendOverlay);
+    const overlay = container.querySelector('.legend-overlay');
+    const legend = container.querySelector('.legend-container');
+
+    expect(overlay).toBeInstanceOf(HTMLDivElement);
+    expect(legend).toBeInstanceOf(HTMLDivElement);
+
+    if (
+      !(overlay instanceof HTMLDivElement) ||
+      !(legend instanceof HTMLDivElement)
+    ) {
+      return;
+    }
+
+    bindElementBox(overlay, { left: 0, top: 0, width: 300, height: 200 });
+    bindElementBox(legend, { left: 14, top: 10, width: 50, height: 40 });
+
+    await fireEvent.keyDown(legend, { key: 'ArrowRight' });
+
+    expect(getLegendState().dragPosition).toEqual({ x: 15, y: 10 });
+    expect(globalState.selectedTool).toBe(StylingTools.Legend);
   });
 
   it('keeps dragged legend coordinates logical when the rendered page is scaled', async () => {

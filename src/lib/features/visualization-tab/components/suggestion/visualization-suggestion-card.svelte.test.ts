@@ -33,19 +33,6 @@ describe('VisualizationSuggestionCard', () => {
     expect(activate).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the onclick callback as a backward-compatible fallback', async () => {
-    const onclick = vi.fn();
-    const { getAllByRole } = render(VisualizationSuggestionCard, {
-      suggestion: createSuggestion(),
-      resolveBadgeType: () => 'string',
-      onclick
-    });
-
-    await fireEvent.click(getAllByRole('radio')[0]);
-
-    expect(onclick).toHaveBeenCalledTimes(1);
-  });
-
   it('renders every variable and representation type for hybrid suggestions', () => {
     render(VisualizationSuggestionCard, {
       suggestion: createSuggestion({

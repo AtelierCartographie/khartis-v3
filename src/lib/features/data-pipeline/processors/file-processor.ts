@@ -3,6 +3,7 @@ import {
   DataSourceType,
   FileType
 } from '$lib/features/commons/utils/file-import.utils';
+import { ParseError } from '$lib/features/commons/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
 import { createArrowTableWithMetadata } from '$lib/features/duckdb/orchestrator/arrow-ops';
@@ -127,7 +128,13 @@ export async function processFileInternal(
     isShapefile &&
     (!options.companionFiles || options.companionFiles.length === 0)
   ) {
-    throw new Error(m.pipeline_error_shp_standalone());
+    throw new ParseError(
+      m.pipeline_error_shp_standalone(),
+      FileType.SHAPEFILE,
+      {
+        fileName: fileInfo.name
+      }
+    );
   }
 
   let detectedCsvOptions: CsvImportOptions | undefined;
@@ -292,7 +299,14 @@ export async function createFileFromUpload(
       fileId: uploadedFile.id,
       fileName: uploadedFile.name
     });
-    throw new Error(m.pipeline_error_no_content());
+    throw new ParseError(
+      m.pipeline_error_no_content(),
+      uploadedFile.fileType ?? FileType.UNKNOWN,
+      {
+        fileId: uploadedFile.id,
+        fileName: uploadedFile.name
+      }
+    );
   }
   return createFileFromUploadContent(
     uploadedFile.content,

@@ -59,7 +59,7 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
 }));
 
-vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
+vi.mock('$lib/features/project-management/core', () => ({
   persistenceRegistry: {
     register: vi.fn(),
     notifyChange: vi.fn()

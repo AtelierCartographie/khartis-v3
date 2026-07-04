@@ -37,7 +37,6 @@ export type {
 export type {
   AnalyseOptions,
   FileWithId,
-  JoinByIdOptions,
   ReadGeofileOptions,
   ReadLinkOptions,
   ReadTabularOptions,

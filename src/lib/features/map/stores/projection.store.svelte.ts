@@ -116,11 +116,6 @@ function createProjectionStore() {
     }
   }
 
-  function refitToCanvas(): void {
-    needsCanvasFit = true;
-    recalculateModelMatrix();
-  }
-
   function setFitPadding(fitPaddingPx: number): void {
     const nextFitPaddingPx =
       Number.isFinite(fitPaddingPx) && fitPaddingPx >= 0
@@ -141,10 +136,6 @@ function createProjectionStore() {
       Number.isFinite(renderScale) && renderScale > 0 ? renderScale : 1;
 
     state.renderScale = nextRenderScale;
-  }
-
-  function setRenderProjection(projection: ProjectionLike | null): void {
-    state.renderProjection = projection;
   }
 
   function clear(): void {
@@ -198,10 +189,8 @@ function createProjectionStore() {
     setReferenceBboxFromMetadata,
     setReferenceBbox,
     updateCanvasSize,
-    refitToCanvas,
     setFitPadding,
     setRenderScale,
-    setRenderProjection,
     clear,
     reset
   };

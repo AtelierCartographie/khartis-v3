@@ -16,6 +16,11 @@
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { horizontalWheelScroll } from '$lib/features/commons/utils/horizontal-wheel-scroll';
   import { m } from '$lib/paraglide/messages';
+  import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
+  import {
+    DataValidationError,
+    PipelineError
+  } from '$lib/features/commons/pipeline.errors';
   import { useProjectNavigation } from '../hooks/use-project-navigation.svelte';
   import { InlineNotification, Tag } from 'carbon-components-svelte';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
@@ -27,12 +32,13 @@
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
-  import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
-  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { detectGPSColumns } from '$lib/features/duckdb/orchestrator/gps-ops';
-  import { PERSISTED_BASEMAP_TYPE } from '$lib/features/data-tab/services/persisted-basemap.service';
-  import { persistTabularSourceSnapshot } from '$lib/features/data-tab/services/tabular-source-snapshot.service';
-  import { dataTabStore } from '$lib/features/data-tab/stores/data-tab.store.svelte';
+  import { basemapCatalogService } from '$lib/features/map';
+  import { detectGPSColumns, duckDBOrchestrator } from '$lib/features/duckdb';
+  import {
+    dataTabStore,
+    PERSISTED_BASEMAP_TYPE,
+    persistTabularSourceSnapshot
+  } from '$lib/features/data-tab';
   import { applyExampleVisualizationPresets } from '../services/example-visualization-preset.service';
   import { projectRepository } from '$lib/features/project-management';
   import type { ExampleProject } from '$lib/features/commons/types/create-project.types';
@@ -46,7 +52,7 @@
   const { onClose }: Props = $props();
 
   const { navigateAfterAction } = useProjectNavigation({
-    getOnClose: () => onClose
+    onClose: () => onClose?.()
   });
 
   let selectedCategory = $state<ExampleCategory>(ExampleCategory.ALL);
@@ -113,11 +119,16 @@
     return sorted[0]?.columnName ?? suggested;
   }
 
-  function applyReferenceBasemapToProject(basemap: BasemapMetadata): void {
-    dataTabActions.setBasemapJoinState({
-      selectedBasemap: basemap.file,
-      basemapSource: BasemapSource.CATALOG
-    });
+  function applyReferenceBasemapToProject(
+    basemap: BasemapMetadata,
+    options: { syncJoinState?: boolean } = {}
+  ): void {
+    if (options.syncJoinState ?? true) {
+      dataTabActions.setBasemapJoinState({
+        selectedBasemap: basemap.file,
+        basemapSource: BasemapSource.CATALOG
+      });
+    }
     basemapStyleStore.setReferenceBasemap(basemap.file);
     projectStore.updateProjectData({
       basemap: {
@@ -177,7 +188,16 @@
       for (let i = 0; i <= basemapStepIndex; i++) {
         dataTabStore.markStepComplete(i);
       }
-    } catch {
+    } catch (error) {
+      logger.error(
+        'Failed to finalize example basemap join',
+        LogCategory.PROJECT,
+        error
+      );
+      showWarning(
+        m.try_example_auto_setup_warning_title(),
+        m.try_example_auto_setup_warning_message()
+      );
       return;
     }
   }
@@ -223,7 +243,9 @@
       return;
     }
 
-    applyReferenceBasemapToProject(basemap);
+    applyReferenceBasemapToProject(basemap, {
+      syncJoinState: !example.baseMapId
+    });
   }
 
   async function applyExampleGPSPreset(file: UploadedFile): Promise<void> {
@@ -321,7 +343,11 @@
     try {
       const example = EXAMPLE_PROJECTS.find((e) => e.id === exampleId);
       if (!example) {
-        throw new Error(m.error_example_not_found());
+        throw new DataValidationError(
+          m.error_example_not_found(),
+          'exampleId',
+          { exampleId }
+        );
       }
 
       const data = await loadExampleData(example);
@@ -332,8 +358,7 @@
       const fileName = example.dataUrl
         ? example.dataUrl.split('/').pop()
         : DEFAULT_DATA_FILENAME;
-      const fileContent =
-        typeof data === 'string' ? data : JSON.stringify(data);
+      const fileContent = data;
       const file = new File([fileContent], fileName || DEFAULT_DATA_FILENAME, {
         type: getExampleMimeType(example.dataUrl)
       });
@@ -351,8 +376,10 @@
         );
 
       if (!processedExampleFile) {
-        throw new Error(
-          createProjectState.newProject.error ?? m.error_example_load_failed()
+        throw new PipelineError(
+          createProjectState.newProject.error ?? m.error_example_load_failed(),
+          'EXAMPLE_FILE_PROCESSING_FAILED',
+          { exampleId, fileName: file.name }
         );
       }
 
@@ -362,9 +389,9 @@
       await applyExamplePreset(example, processedExampleFile);
       if (!example.baseMapId) {
         await applyExampleGPSPreset(processedExampleFile);
-        await applyExampleReferenceBasemap(example);
       }
       applyExampleVisualizations(example, processedExampleFile);
+      await applyExampleReferenceBasemap(example);
       await projectStore.saveCurrentProject({
         fallbackThumbnail: example.thumbnail,
         exampleId: example.id
@@ -484,18 +511,18 @@
     min-height: 1lh;
   }
 
-  .example-project-card :global(#kh-card .title-text) {
+  .example-project-card :global(.kh-card .title-text) {
     font-size: 0.875rem;
     line-height: 1.25;
   }
 
-  .example-project-card :global(#kh-card .top-section > svg) {
+  .example-project-card :global(.kh-card .top-section > svg) {
     width: 1.5rem;
     height: 1.5rem;
     flex-shrink: 0;
   }
 
-  .example-project-card :global(#kh-card .top-section > .text-sm) {
+  .example-project-card :global(.kh-card .top-section > .text-sm) {
     font-size: 0.75rem;
     line-height: 1.25;
     text-align: center;

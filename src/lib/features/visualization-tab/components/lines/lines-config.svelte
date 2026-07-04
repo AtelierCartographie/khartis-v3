@@ -37,6 +37,7 @@
   import { useCategoryLabels } from '../../hooks/use-category-labels.svelte';
   import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
   import { coerceString, parseOpacityToSlider } from '../../utils/coerce.utils';
+  import { coerceDashedPattern } from '../shared/dashed-pattern.utils';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -210,16 +211,6 @@
         missingData.dashedPattern ?? BasemapDottedPattern.DOTS;
     }
   });
-
-  function coerceDashedPattern(
-    value: BasemapDottedPattern | string | number | undefined
-  ): BasemapDottedPattern {
-    return (
-      Object.values(BasemapDottedPattern).find(
-        (pattern) => pattern === value
-      ) ?? BasemapDottedPattern.DOTS
-    );
-  }
 
   function handleThicknessModeChange(index: number) {
     const modes = [

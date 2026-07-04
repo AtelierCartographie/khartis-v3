@@ -43,9 +43,19 @@
   const canDismiss = $derived(!!projectStore.currentProject);
 
   const TAB_COUNT = 3;
+  const CREATE_PROJECT_TABPANEL_ID = 'create-project-tabpanel';
+  const CREATE_PROJECT_TAB_IDS = {
+    1: 'create-project-tab-new',
+    2: 'create-project-tab-open',
+    3: 'create-project-tab-example'
+  } as const;
+
   let tabRefs = $state<HTMLElement[]>([]);
   let resetToken = $state(0);
   let wasOpen = $state(false);
+  const activeProjectTabId = $derived(
+    CREATE_PROJECT_TAB_IDS[createProjectState.selectedTab]
+  );
 
   $effect(() => {
     if (open && !wasOpen) {
@@ -127,6 +137,8 @@
         >
           <div class="tab-wrapper" bind:this={tabRefs[0]}>
             <ProjectTab
+              id={CREATE_PROJECT_TAB_IDS[1]}
+              ariaControls={CREATE_PROJECT_TABPANEL_ID}
               selected={createProjectState.selectedTab === 1}
               onclick={() => selectTile(1)}
               onkeydown={(e) => handleTabKeydown(e, 1)}
@@ -142,6 +154,8 @@
 
           <div class="tab-wrapper" bind:this={tabRefs[1]}>
             <ProjectTab
+              id={CREATE_PROJECT_TAB_IDS[2]}
+              ariaControls={CREATE_PROJECT_TABPANEL_ID}
               selected={createProjectState.selectedTab === 2}
               onclick={() => selectTile(2)}
               onkeydown={(e) => handleTabKeydown(e, 2)}
@@ -157,6 +171,8 @@
 
           <div class="tab-wrapper" bind:this={tabRefs[2]}>
             <ProjectTab
+              id={CREATE_PROJECT_TAB_IDS[3]}
+              ariaControls={CREATE_PROJECT_TABPANEL_ID}
               selected={createProjectState.selectedTab === 3}
               onclick={() => selectTile(3)}
               onkeydown={(e) => handleTabKeydown(e, 3)}
@@ -171,7 +187,13 @@
           </div>
         </div>
 
-        <div class="tab-content" data-testid="tab-content">
+        <div
+          id={CREATE_PROJECT_TABPANEL_ID}
+          class="tab-content"
+          data-testid="tab-content"
+          role="tabpanel"
+          aria-labelledby={activeProjectTabId}
+        >
           {#if createProjectState.selectedTab === 1}
             <CreateNewProject
               onClose={handleClose}

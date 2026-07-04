@@ -16,6 +16,22 @@ describe('ToggleTabs', () => {
     expect(onchange).toHaveBeenCalledWith(1);
   });
 
+  it('exposes the active tab as pressed', () => {
+    const { getByRole } = render(ToggleTabs, {
+      activeIndex: 0,
+      items: [{ label: 'Unique' }, { label: 'Classes' }]
+    });
+
+    expect(getByRole('button', { name: 'Unique' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(getByRole('button', { name: 'Classes' })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
+  });
+
   it('ignores clicks on the already active tab', async () => {
     const onchange = vi.fn();
     const { getByRole } = render(ToggleTabs, {

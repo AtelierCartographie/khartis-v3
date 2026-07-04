@@ -2,12 +2,13 @@
   import { Button as CarbonButton } from 'carbon-components-svelte';
   import type { Snippet } from 'svelte';
   import { tick } from 'svelte';
-  import { appendToBody } from '$lib/features/commons/utils/append-to-body';
+  import { portal } from '$lib/features/commons/utils/portal';
   import {
     resolveCarbonTooltipPosition,
     type CarbonTooltipAlignment,
     type CarbonTooltipDirection
   } from '$lib/features/commons/utils/carbon-tooltip-position';
+  import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
 
   interface Props extends Record<string, unknown> {
     children?: Snippet;
@@ -148,6 +149,27 @@
       tooltipOpen = false;
     }
   });
+
+  $effect(() => {
+    if (!tooltipOpen || !canShowPortalTooltip) {
+      return;
+    }
+
+    function handleKeydown(event: KeyboardEvent): void {
+      if (event.key !== KEY.ESCAPE) {
+        return;
+      }
+
+      tooltipOpen = false;
+      triggerElement?.focus();
+    }
+
+    document.addEventListener(EVENT.KEYDOWN, handleKeydown);
+
+    return () => {
+      document.removeEventListener(EVENT.KEYDOWN, handleKeydown);
+    };
+  });
 </script>
 
 {#if children}
@@ -197,7 +219,7 @@
 {/if}
 
 {#if tooltipOpen && canShowPortalTooltip}
-  <div use:appendToBody class="khartis-carbon-tooltip-portal">
+  <div use:portal class="khartis-carbon-tooltip-portal">
     <div
       bind:this={tooltipElement}
       class="khartis-carbon-tooltip khartis-carbon-tooltip--{tooltipPosition}"

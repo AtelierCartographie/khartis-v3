@@ -1,27 +1,22 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import type {
-  DatasetResult,
-  DuckAnalyticsColumn
-} from '$lib/features/data-pipeline';
+import type { DatasetResult } from '$lib/features/data-pipeline';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { SvelteMap } from 'svelte/reactivity';
-import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
-import type { JsonValue } from '$lib/types/data';
 import type { JoinStats } from '../components/index';
 import { refreshDatasetMetadata } from '../services/dataset-metadata.service';
-import { extractCategories } from '$lib/features/data-pipeline';
 import { computeDatasetJoinStats } from '../services/join-stats.service';
+import { persistTabularSourceSnapshot } from '../services/tabular-source-snapshot.service';
 import { canFinalizeJoin } from '../utils/join-validation.utils';
 import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
 import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
-import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
 import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
-import { sanitizePreparedGeoJSON } from '$lib/features/commons/utils/persisted-geojson.utils';
+import * as m from '$lib/paraglide/messages';
 
 export interface UseEnrichmentJoinProps {
   getEnrichmentDataset: () => DatasetResult | null;
@@ -151,186 +146,6 @@ export function useEnrichmentJoin(
     return selectedDataset.tableName || null;
   }
 
-  function toOptionalNumber(value: unknown): number | undefined {
-    return value != null && value !== '' ? Number(value) : undefined;
-  }
-
-  function buildStatisticsSnapshot(
-    columns: DuckAnalyticsColumn[]
-  ): UploadedFile['statistics'] {
-    return Object.fromEntries(
-      columns.map((column) => [
-        column.name,
-        {
-          type: column.type_simple || 'text',
-          count: toOptionalNumber(column.count) ?? 0,
-          nullCount: toOptionalNumber(column.nulls) ?? 0,
-          unique: toOptionalNumber(column.uniques) ?? 0,
-          min: typeof column.min === 'bigint' ? Number(column.min) : column.min,
-          max: typeof column.max === 'bigint' ? Number(column.max) : column.max,
-          mean: toOptionalNumber(column.mean),
-          median: toOptionalNumber(column.median),
-          stdDev: toOptionalNumber(column.stddev),
-          share_integers: toOptionalNumber(column.share_integers),
-          share_floats: toOptionalNumber(column.share_floats),
-          share_rank_interval: toOptionalNumber(column.share_rank_interval),
-          extent_magnitude: toOptionalNumber(column.extent_magnitude),
-          skewness: toOptionalNumber(column.skewness),
-          categories: extractCategories(column.histogram)
-        }
-      ])
-    );
-  }
-
-  function toSnapshotValue(value: unknown): JsonValue {
-    if (
-      value === null ||
-      value === undefined ||
-      typeof value === 'string' ||
-      typeof value === 'number' ||
-      typeof value === 'boolean'
-    ) {
-      return value ?? null;
-    }
-
-    if (typeof value === 'bigint') {
-      return Number.isSafeInteger(Number(value))
-        ? Number(value)
-        : String(value);
-    }
-
-    if (value instanceof Date) {
-      return value.toISOString();
-    }
-
-    if (Array.isArray(value)) {
-      return value.map((item) => toSnapshotValue(item));
-    }
-
-    if (typeof value === 'object') {
-      return Object.fromEntries(
-        Object.entries(value).map(([key, item]) => [key, toSnapshotValue(item)])
-      );
-    }
-
-    return String(value);
-  }
-
-  function toSnapshotRow(
-    row: Record<string, unknown>,
-    columnNames: string[]
-  ): Record<string, JsonValue> {
-    return Object.fromEntries(
-      columnNames.map((columnName) => [
-        columnName,
-        toSnapshotValue(row[columnName])
-      ])
-    );
-  }
-
-  async function buildTabularSnapshot(
-    tableName: string,
-    columnNames: string[]
-  ): Promise<Record<string, JsonValue>[]> {
-    if (columnNames.length === 0) {
-      return [];
-    }
-
-    const escapedTableName = escapeIdentifier(tableName);
-    const selectColumns = columnNames
-      .map((name) => `"${escapeIdentifier(name)}"`)
-      .join(', ');
-
-    const rows = (await Duck.query(
-      `SELECT ${selectColumns}
-       FROM "${escapedTableName}"`,
-      { format: 'array' }
-    )) as Record<string, unknown>[];
-
-    return rows.map((row) => toSnapshotRow(row, columnNames));
-  }
-
-  async function buildPreparedGeoJsonSnapshot(
-    tableName: string,
-    geometryColumnName: string,
-    propertyColumnNames: string[]
-  ): Promise<string> {
-    const escapedTableName = escapeIdentifier(tableName);
-    const escapedGeometryColumn = escapeIdentifier(geometryColumnName);
-    const propertySelect =
-      propertyColumnNames.length > 0
-        ? `${propertyColumnNames
-            .map((name) => `"${escapeIdentifier(name)}"`)
-            .join(', ')},`
-        : '';
-
-    const rows = (await Duck.query(
-      `SELECT ${propertySelect}
-              ST_AsGeoJSON("${escapedGeometryColumn}"::GEOMETRY) AS __khartis_geometry_json
-       FROM "${escapedTableName}"`,
-      { format: 'array' }
-    )) as Array<Record<string, unknown>>;
-
-    const serialized = JSON.stringify({
-      type: 'FeatureCollection',
-      features: rows.map((row) => {
-        const geometryJson = row.__khartis_geometry_json;
-        const properties = toSnapshotRow(row, propertyColumnNames);
-
-        return {
-          type: 'Feature',
-          geometry:
-            typeof geometryJson === 'string' ? JSON.parse(geometryJson) : null,
-          properties
-        };
-      })
-    });
-
-    return sanitizePreparedGeoJSON(serialized) ?? serialized;
-  }
-
-  async function persistEnrichedSourceSnapshot(
-    tableName: string,
-    columns: DuckAnalyticsColumn[]
-  ): Promise<void> {
-    if (!selectedDataset?.sourceFileId) {
-      return;
-    }
-
-    const currentProject = projectStore.currentProject;
-    const sourceFile = currentProject?.data?.sourceFiles?.find(
-      (file) => file.id === selectedDataset.sourceFileId
-    );
-
-    if (!sourceFile) {
-      return;
-    }
-
-    const geometryColumnName =
-      columns.find((column) => column.type_simple === 'geometry')?.name ??
-      selectedDataset.geometry?.columnName;
-    const propertyColumnNames = columns
-      .filter((column) => column.name !== geometryColumnName)
-      .map((column) => column.name);
-
-    sourceFile.duckdbTableName = tableName;
-    sourceFile.statistics = buildStatisticsSnapshot(columns);
-    sourceFile.parsedData = await buildTabularSnapshot(
-      tableName,
-      propertyColumnNames
-    );
-
-    if (geometryColumnName) {
-      sourceFile.preparedGeoJSON = await buildPreparedGeoJsonSnapshot(
-        tableName,
-        geometryColumnName,
-        propertyColumnNames
-      );
-    }
-
-    await projectStore.saveCurrentProject();
-  }
-
   async function computeEnrichmentJoinStats(): Promise<void> {
     if (isJoinBlocked()) {
       joinStats = null;
@@ -402,6 +217,7 @@ export function useEnrichmentJoin(
       );
       joinStats = null;
       targetOptions = [];
+      showError(m.join_error_title(), m.join_error_message());
     } finally {
       isComputingJoin = false;
     }
@@ -613,10 +429,14 @@ export function useEnrichmentJoin(
         enrichedTableName,
         { force: true }
       );
-      await persistEnrichedSourceSnapshot(
-        enrichedTableName,
-        snapshot.duckColumns
-      );
+      if (selectedDataset.sourceFileId) {
+        await persistTabularSourceSnapshot({
+          sourceFileId: selectedDataset.sourceFileId,
+          tableName: enrichedTableName,
+          duckColumns: snapshot.duckColumns,
+          geometryColumnName: selectedDataset.geometry?.columnName
+        });
+      }
 
       try {
         await duckDBOrchestrator.updateDatasetTableName(
@@ -654,6 +474,7 @@ export function useEnrichmentJoin(
       });
     } catch (error) {
       logger.error('Failed to finalize enrichment', LogCategory.DATA, error);
+      showError(m.join_error_title(), m.join_error_message());
     } finally {
       isFinalizingJoin = false;
     }

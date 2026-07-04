@@ -76,7 +76,7 @@
         return;
       }
 
-      globalState.selectedTool = undefined;
+      globalActions.setSelectedTool(undefined);
       if (isStylingTool(selectedTool)) {
         globalActions.resetPagePan();
       }
@@ -86,6 +86,7 @@
       return (
         target.tagName === 'INPUT' ||
         target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
         target.contentEditable === 'true'
       );
     }
@@ -164,7 +165,7 @@
       if (!tool) return false;
 
       event.preventDefault();
-      globalState.selectedTool = tool;
+      globalActions.setSelectedTool(tool);
       return true;
     }
 

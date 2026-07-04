@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DataValidationError } from '$lib/features/commons/pipeline.errors';
+import { setLocale } from '$lib/paraglide/runtime.js';
 import {
   formatFileSize,
   formatValue,
@@ -23,24 +25,39 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
   LogCategory: { DATA: 'DATA' }
 }));
 
+async function setTestLocale(locale: 'fr' | 'en'): Promise<void> {
+  await Promise.resolve(setLocale(locale, { reload: false }));
+}
+
 describe('formatFileSize', () => {
+  afterEach(async () => {
+    await setTestLocale('fr');
+  });
+
   it('returns "0 B" for 0 bytes', () => {
     expect(formatFileSize(0)).toMatch(/^0 (B|o)$/);
   });
 
-  it('formats bytes', () => {
+  it('formats bytes using the active app locale', async () => {
+    await setTestLocale('en');
     expect(formatFileSize(512)).toMatch(/^512\.00 (B|o)$/);
+
+    await setTestLocale('fr');
+    expect(formatFileSize(512)).toMatch(/^512,00 (B|o)$/);
   });
 
-  it('formats kilobytes', () => {
+  it('formats kilobytes', async () => {
+    await setTestLocale('en');
     expect(formatFileSize(1024)).toMatch(/^1\.00 (KB|Ko)$/);
   });
 
-  it('formats megabytes', () => {
+  it('formats megabytes', async () => {
+    await setTestLocale('en');
     expect(formatFileSize(1024 * 1024)).toMatch(/^1\.00 (MB|Mo)$/);
   });
 
-  it('formats gigabytes', () => {
+  it('formats gigabytes', async () => {
+    await setTestLocale('en');
     expect(formatFileSize(1024 ** 3)).toMatch(/^1\.00 (GB|Go)$/);
   });
 });
@@ -176,11 +193,11 @@ describe('replaceAtIndex', () => {
   });
 
   it('throws for negative index', () => {
-    expect(() => replaceAtIndex(arr, -1, 0)).toThrow();
+    expect(() => replaceAtIndex(arr, -1, 0)).toThrow(DataValidationError);
   });
 
   it('throws for out-of-bounds index', () => {
-    expect(() => replaceAtIndex(arr, 3, 0)).toThrow();
+    expect(() => replaceAtIndex(arr, 3, 0)).toThrow(DataValidationError);
   });
 });
 

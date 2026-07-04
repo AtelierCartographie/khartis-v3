@@ -74,6 +74,15 @@ export function renameDatasetColumn(
   oldName: string,
   newName: string
 ): void {
+  const hiddenSet = state.hiddenColumns.get(datasetId);
+  if (hiddenSet?.has(oldName) && oldName !== newName) {
+    const updatedHiddenSet = new SvelteSet(hiddenSet);
+    updatedHiddenSet.delete(oldName);
+    updatedHiddenSet.add(newName);
+    state.hiddenColumns.set(datasetId, updatedHiddenSet);
+    state.hiddenColumns = new Map(state.hiddenColumns);
+  }
+
   state.datasets = state.datasets.map((d) => {
     if (d.id !== datasetId) return d;
 

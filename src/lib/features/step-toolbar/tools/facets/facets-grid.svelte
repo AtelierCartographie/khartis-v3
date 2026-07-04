@@ -2,7 +2,7 @@
   import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import type { FeatureCollection } from 'geojson';
-  import type { SplitRenderingTable } from '$lib/features/map/types';
+  import type { SplitRenderingTable } from '$lib/features/map';
   import FacetsSharedRenderer from './facets-shared-renderer.svelte';
   import type { FacetsLayout } from './facets.store.svelte';
 

@@ -8,7 +8,7 @@ import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelt
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showInfo } from '$lib/features/commons/utils/notification.utils.svelte';
 import * as m from '$lib/paraglide/messages';
-import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
+import { persistenceRegistry } from '$lib/features/project-management/core';
 import {
   buildFacetVisualizationUpdates,
   generateFacetVisualizations,
@@ -134,7 +134,7 @@ function applyFacetVariableToVisualization(
   return buildFacetVariablePatch(visualization, slotPath, variableName);
 }
 
-export function computeBestColumns(
+function computeBestColumns(
   mapCount: number,
   maxCols: number = MAX_FACETS_COLUMNS
 ): number {
@@ -350,7 +350,6 @@ function createFacetsStore() {
         (v) => v.id === state.baseVisualizationId
       )
     ) {
-      disable();
       return [];
     }
 
@@ -495,7 +494,9 @@ function createFacetsStore() {
     }
   }
 
-  function syncGeneratedVisualizationsFromBase(baseVizId?: string): void {
+  async function syncGeneratedVisualizationsFromBase(
+    baseVizId?: string
+  ): Promise<void> {
     if (
       isRegenerating ||
       !state.enabled ||
@@ -534,27 +535,35 @@ function createFacetsStore() {
       return;
     }
 
-    generatedVisualizations.forEach((visualization, index) => {
-      const variable =
-        getFacetSlotVariable(visualization, primarySlotPath) ??
-        state.variables[index];
-      if (!variable) {
-        return;
+    try {
+      for (const [index, visualization] of generatedVisualizations.entries()) {
+        const variable =
+          getFacetSlotVariable(visualization, primarySlotPath) ??
+          state.variables[index];
+        if (!variable) {
+          continue;
+        }
+
+        visualizationStore.updateVisualization(
+          visualization.id,
+          await buildFacetVisualizationUpdates({
+            baseViz,
+            visualization: baseViz,
+            variable,
+            scaleMode: state.scaleMode,
+            primarySlotPath
+          })
+        );
       }
 
-      visualizationStore.updateVisualization(
-        visualization.id,
-        buildFacetVisualizationUpdates({
-          baseViz,
-          visualization: baseViz,
-          variable,
-          scaleMode: state.scaleMode,
-          primarySlotPath
-        })
+      notifyPersistence();
+    } catch (error) {
+      logger.error(
+        'Failed to sync generated facet visualizations',
+        LogCategory.STORE,
+        error
       );
-    });
-
-    notifyPersistence();
+    }
   }
 
   function disable(): void {
@@ -806,15 +815,18 @@ function createFacetsStore() {
             generatedVisualizations.length ===
             state.generatedVisualizationIds.length
           ) {
-            generatedVisualizations.forEach((visualization, index) => {
+            for (const [
+              index,
+              visualization
+            ] of generatedVisualizations.entries()) {
               const variable = state.variables[index];
               if (!variable) {
-                return;
+                continue;
               }
 
               visualizationStore.updateVisualization(
                 visualization.id,
-                buildFacetVisualizationUpdates({
+                await buildFacetVisualizationUpdates({
                   baseViz,
                   visualization,
                   variable,
@@ -822,7 +834,7 @@ function createFacetsStore() {
                   primarySlotPath
                 })
               );
-            });
+            }
 
             nextGeneratedIds = generatedVisualizations.map(
               (visualization) => visualization.id

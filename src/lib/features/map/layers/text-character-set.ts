@@ -91,8 +91,6 @@ export const DEFAULT_TEXT_FONT_SETTINGS_RASTER = {
   buffer: 4
 } as const;
 
-export const DEFAULT_TEXT_FONT_SETTINGS = DEFAULT_TEXT_FONT_SETTINGS_SDF;
-
 export type TextFontSettingsHaloMode = 'halo-on' | 'halo-off';
 
 export function resolveTextFontSettings(
@@ -169,25 +167,43 @@ export const EXPLICIT_TEXT_CHARACTER_SET: string[] = Object.freeze(
   buildBaseCharacterSet()
 ) as string[];
 
-export const DECK_TEXT_CHARACTER_SET = 'auto' as const;
+function isSupportedTextCharacter(char: string): boolean {
+  const codePoint = char.codePointAt(0);
+  if (codePoint === undefined) return false;
+  if (codePoint < ASCII_PRINTABLE_START) return false;
+  return codePoint < 0x7f || codePoint > 0x9f;
+}
+
+function* iterateTextCharacters(
+  extra: readonly string[] | string | Set<string>
+): Iterable<string> {
+  const values =
+    typeof extra === 'string'
+      ? [extra]
+      : extra instanceof Set
+        ? Array.from(extra)
+        : Array.from(extra);
+
+  for (const value of values) {
+    for (const char of value) {
+      yield char;
+    }
+  }
+}
 
 export function extendTextCharacterSet(
   extra: readonly string[] | string | Set<string> | undefined
 ): string[] {
   if (!extra) return EXPLICIT_TEXT_CHARACTER_SET;
-  const extras =
-    typeof extra === 'string'
-      ? Array.from(extra)
-      : extra instanceof Set
-        ? Array.from(extra)
-        : Array.from(extra);
-  if (extras.length === 0) return EXPLICIT_TEXT_CHARACTER_SET;
   const seen = new Set(EXPLICIT_TEXT_CHARACTER_SET);
   const merged = [...EXPLICIT_TEXT_CHARACTER_SET];
-  for (const char of extras) {
-    if (!char || seen.has(char)) continue;
+  let added = false;
+  for (const char of iterateTextCharacters(extra)) {
+    if (!isSupportedTextCharacter(char) || seen.has(char)) continue;
     seen.add(char);
     merged.push(char);
+    added = true;
   }
+  if (!added) return EXPLICIT_TEXT_CHARACTER_SET;
   return Object.freeze(merged) as string[];
 }

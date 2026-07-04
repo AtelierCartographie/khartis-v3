@@ -105,6 +105,7 @@ export interface VisualizationOrchestrationDeps {
     column: string,
     dataset: CategoryLabelsDataset
   ) => void;
+  abortCategoryLabelFetches: () => void;
   getColorSyncDeps: () => UseClassificationColorSyncDeps;
 }
 
@@ -119,27 +120,29 @@ export function useVisualizationOrchestration(
       return;
     }
 
-    for (const primitive of CLASSIFIABLE_PRIMITIVES) {
-      deps.ensurePrimitiveClassificationDefaults(primitive, visualization);
-      deps.ensureAutoColumns(primitive, visualization);
-    }
+    untrack(() => {
+      for (const primitive of CLASSIFIABLE_PRIMITIVES) {
+        deps.ensurePrimitiveClassificationDefaults(primitive, visualization);
+        deps.ensureAutoColumns(primitive, visualization);
+      }
 
-    deps.ensureLineThicknessClassificationDefaults(visualization);
+      deps.ensureLineThicknessClassificationDefaults(visualization);
 
-    for (const primitive of STROKE_CLASSIFIABLE_PRIMITIVES) {
-      deps.ensurePrimitiveStrokeClassificationDefaults(
-        primitive,
-        visualization
-      );
-      deps.ensurePrimitiveStrokeAutoColumns(primitive, visualization);
-    }
+      for (const primitive of STROKE_CLASSIFIABLE_PRIMITIVES) {
+        deps.ensurePrimitiveStrokeClassificationDefaults(
+          primitive,
+          visualization
+        );
+        deps.ensurePrimitiveStrokeAutoColumns(primitive, visualization);
+      }
 
-    deps.ensureSymbolFillClassificationDefaults(visualization);
-    deps.ensureSymbolFillAutoColumns(visualization);
-    deps.ensureTextBackgroundClassificationDefaults(visualization);
-    deps.ensureTextBackgroundAutoColumns(visualization);
-    deps.ensureTextBackgroundStrokeClassificationDefaults(visualization);
-    deps.ensureTextBackgroundStrokeAutoColumns(visualization);
+      deps.ensureSymbolFillClassificationDefaults(visualization);
+      deps.ensureSymbolFillAutoColumns(visualization);
+      deps.ensureTextBackgroundClassificationDefaults(visualization);
+      deps.ensureTextBackgroundAutoColumns(visualization);
+      deps.ensureTextBackgroundStrokeClassificationDefaults(visualization);
+      deps.ensureTextBackgroundStrokeAutoColumns(visualization);
+    });
   });
 
   $effect(() => {
@@ -230,51 +233,57 @@ export function useVisualizationOrchestration(
       return;
     }
 
-    for (const target of deps.getPrimitiveClassificationTargets()) {
-      if (shouldFetchCategoryLabels(target)) {
-        deps.fetchCategoryLabels(
-          target.primitive,
-          target.categoryColumn,
-          dataset,
-          true
+    untrack(() => {
+      for (const target of deps.getPrimitiveClassificationTargets()) {
+        if (shouldFetchCategoryLabels(target)) {
+          deps.fetchCategoryLabels(
+            target.primitive,
+            target.categoryColumn,
+            dataset,
+            true
+          );
+        }
+      }
+
+      for (const target of deps.getPrimitiveStrokeClassificationTargets()) {
+        if (shouldFetchCategoryLabels(target)) {
+          deps.fetchStrokeCategoryLabels(
+            target.primitive,
+            target.categoryColumn,
+            dataset,
+            true
+          );
+        }
+      }
+
+      const symbolFillTarget = deps.getSymbolFillTarget();
+      if (shouldFetchCategoryLabels(symbolFillTarget)) {
+        deps.fetchSymbolFillCategoryLabels(
+          symbolFillTarget.categoryColumn,
+          dataset
         );
       }
-    }
 
-    for (const target of deps.getPrimitiveStrokeClassificationTargets()) {
-      if (shouldFetchCategoryLabels(target)) {
-        deps.fetchStrokeCategoryLabels(
-          target.primitive,
-          target.categoryColumn,
-          dataset,
-          true
+      const textBackgroundTarget = deps.getTextBackgroundTarget();
+      if (shouldFetchCategoryLabels(textBackgroundTarget)) {
+        deps.fetchTextBackgroundCategoryLabels(
+          textBackgroundTarget.categoryColumn,
+          dataset
         );
       }
-    }
 
-    const symbolFillTarget = deps.getSymbolFillTarget();
-    if (shouldFetchCategoryLabels(symbolFillTarget)) {
-      deps.fetchSymbolFillCategoryLabels(
-        symbolFillTarget.categoryColumn,
-        dataset
-      );
-    }
+      const textBackgroundStrokeTarget = deps.getTextBackgroundStrokeTarget();
+      if (shouldFetchCategoryLabels(textBackgroundStrokeTarget)) {
+        deps.fetchTextBackgroundStrokeCategoryLabels(
+          textBackgroundStrokeTarget.categoryColumn,
+          dataset
+        );
+      }
+    });
 
-    const textBackgroundTarget = deps.getTextBackgroundTarget();
-    if (shouldFetchCategoryLabels(textBackgroundTarget)) {
-      deps.fetchTextBackgroundCategoryLabels(
-        textBackgroundTarget.categoryColumn,
-        dataset
-      );
-    }
-
-    const textBackgroundStrokeTarget = deps.getTextBackgroundStrokeTarget();
-    if (shouldFetchCategoryLabels(textBackgroundStrokeTarget)) {
-      deps.fetchTextBackgroundStrokeCategoryLabels(
-        textBackgroundStrokeTarget.categoryColumn,
-        dataset
-      );
-    }
+    return () => {
+      deps.abortCategoryLabelFetches();
+    };
   });
 
   $effect(() => {

@@ -1,6 +1,6 @@
 import localforage from 'localforage';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { m } from '$lib/paraglide/messages.js';
+import { m } from '$lib/paraglide/messages';
 import { PROJECT_CONST } from '../constants';
 import { ProjectStorageKey } from '../types';
 
@@ -117,7 +117,7 @@ export async function loadMetadataStoreValue(
       );
     };
     request.onerror = () =>
-      reject(request.error || new Error('Failed to read metadata'));
+      reject(request.error || new Error(m.error_storage_load_failed()));
   });
 }
 

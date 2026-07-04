@@ -18,6 +18,7 @@
     showSuccess,
     showWarning
   } from '$lib/features/commons/utils/notification.utils.svelte';
+  import { DataValidationError } from '$lib/features/commons/pipeline.errors';
   import { normalizeFormattedNumericColumns } from '$lib/features/data-pipeline/operations/tabular-numeric-normalization';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
   import { Duck } from '$lib/features/duckdb';
@@ -339,7 +340,11 @@
 
   async function executeReimport(options: CsvOptions): Promise<void> {
     if (!sourceFile || !currentDuckTable || !selectedDataset) {
-      throw new Error(m.csv_error_no_source());
+      throw new DataValidationError(m.csv_error_no_source(), 'sourceFile', {
+        hasSourceFile: Boolean(sourceFile),
+        hasDuckTable: Boolean(currentDuckTable),
+        hasSelectedDataset: Boolean(selectedDataset)
+      });
     }
 
     let file = sourceFile.originalFile;
@@ -355,7 +360,11 @@
     }
 
     if (!file) {
-      throw new Error(m.csv_error_file_not_available());
+      throw new DataValidationError(
+        m.csv_error_file_not_available(),
+        'sourceFile',
+        { sourceFileId: sourceFile.id }
+      );
     }
 
     const previousOptions = currentCsvOptions;

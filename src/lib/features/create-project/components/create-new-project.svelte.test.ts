@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import CreateNewProject from './create-new-project.svelte';
 
@@ -214,5 +214,69 @@ describe('CreateNewProject', () => {
 
     expect(urlInput).toHaveValue('');
     expect(pastedDataInput).toHaveValue('');
+  });
+
+  it('disables an individual remove button while the file is being removed', async () => {
+    let resolveRemove: (() => void) | undefined;
+    mocks.removeUploadedFileMock.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRemove = resolve;
+        })
+    );
+    mocks.createProjectState.newProject.uploadedFiles = [
+      {
+        id: 'file-1',
+        name: 'data.csv',
+        size: 12,
+        fileType: 'csv',
+        status: 'complete',
+        sourceType: 'file_upload'
+      }
+    ];
+
+    render(CreateNewProject, {
+      props: {
+        isModal: true
+      }
+    });
+
+    const removeButton = screen.getByRole('button', {
+      name: /supprimer le fichier/i
+    });
+
+    await fireEvent.click(removeButton);
+
+    await waitFor(() => expect(removeButton).toBeDisabled());
+
+    resolveRemove?.();
+
+    await waitFor(() => expect(removeButton).toBeEnabled());
+  });
+
+  it('shows shapefile component tags for incomplete shapefiles', () => {
+    mocks.createProjectState.newProject.uploadedFiles = [
+      {
+        id: 'file-1',
+        name: 'roads.shp',
+        size: 12,
+        fileType: 'shapefile',
+        status: 'incomplete',
+        relatedFiles: ['roads.shp', 'roads.dbf', 'roads.cpg'],
+        sourceType: 'file_upload'
+      }
+    ];
+
+    render(CreateNewProject, {
+      props: {
+        isModal: true
+      }
+    });
+
+    expect(screen.getByText('.shp ✓')).toBeInTheDocument();
+    expect(screen.getByText('.shx')).toBeInTheDocument();
+    expect(screen.getByText('.dbf ✓')).toBeInTheDocument();
+    expect(screen.getByText('.prj')).toBeInTheDocument();
+    expect(screen.getByText('.cpg ✓')).toBeInTheDocument();
   });
 });

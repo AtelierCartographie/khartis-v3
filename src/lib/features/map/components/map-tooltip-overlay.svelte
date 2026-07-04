@@ -3,10 +3,10 @@
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
   import { mapTooltipStore } from '../stores/map-tooltip.store.svelte';
-  import { DECK_CANVAS_ID } from '../constants';
   import { resolveTooltipViewportPosition } from '../utils/tooltip-position.utils';
   import * as m from '$lib/paraglide/messages';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { Tag } from 'carbon-components-svelte';
   import Close from 'carbon-icons-svelte/lib/Close.svelte';
 
@@ -58,41 +58,7 @@
     width: number;
     height: number;
   } | null {
-    if (typeof document === 'undefined') {
-      return null;
-    }
-
-    const workspaceViewport = document.querySelector('.workspace-viewport');
-    if (workspaceViewport instanceof HTMLElement) {
-      const { left, top, width, height } =
-        workspaceViewport.getBoundingClientRect();
-      return { left, top, width, height };
-    }
-
-    const mainContent = document.querySelector('.main-content');
-    if (mainContent instanceof HTMLElement) {
-      const { left, top, width, height } = mainContent.getBoundingClientRect();
-      return { left, top, width, height };
-    }
-
-    const thematicMapWrapper = document.querySelector('.thematic-map-wrapper');
-    if (thematicMapWrapper instanceof HTMLElement) {
-      const { left, top, width, height } =
-        thematicMapWrapper.getBoundingClientRect();
-      return { left, top, width, height };
-    }
-
-    const pageContainer = document.querySelector('.page-container');
-    if (pageContainer instanceof HTMLElement) {
-      const { left, top, width, height } =
-        pageContainer.getBoundingClientRect();
-      return { left, top, width, height };
-    }
-
-    const mapCanvas = mapInstanceStore.map?.getCanvas() ?? null;
-    const orthographicCanvas = document.getElementById(DECK_CANVAS_ID);
-    const viewportElement = mapCanvas ?? orthographicCanvas;
-
+    const viewportElement = mapInstanceStore.workspaceViewportElement;
     if (!(viewportElement instanceof HTMLElement)) {
       return null;
     }
@@ -255,13 +221,6 @@
   function handleClose(): void {
     mapTooltipStore.unpin();
   }
-
-  function handleCloseKeyDown(event: KeyboardEvent): void {
-    if (event.key === KEY.ENTER || event.key === KEY.SPACE) {
-      event.preventDefault();
-      handleClose();
-    }
-  }
 </script>
 
 {#if tooltipState.visible && !isStylingStep}
@@ -282,15 +241,16 @@
           <div class="mobile-sheet-grabber" aria-hidden="true"></div>
         {/if}
         <div class="tooltip-shell-actions">
-          <button
-            type="button"
+          <IconButton
             class="tooltip-close"
-            aria-label={m.close()}
-            onclick={handleClose}
-            onkeydown={handleCloseKeyDown}
-          >
-            <Close size={16} />
-          </button>
+            kind="ghost"
+            size="small"
+            icon={Close}
+            iconDescription={m.close()}
+            tooltipPosition="left"
+            hideTooltip
+            on:click={handleClose}
+          />
         </div>
 
         {#if headlineEntry}
@@ -454,12 +414,13 @@
     align-self: center;
   }
 
-  .tooltip-close {
+  .tooltip-shell-actions :global(.tooltip-close.bx--btn) {
     display: flex;
     align-items: center;
     justify-content: center;
     width: 20px;
     height: 20px;
+    min-height: 20px;
     padding: 0;
     border: none;
     border-radius: 0;
@@ -468,12 +429,12 @@
     cursor: pointer;
   }
 
-  .tooltip-close:hover {
+  .tooltip-shell-actions :global(.tooltip-close.bx--btn:hover) {
     background: rgba(22, 22, 22, 0.06);
     color: #161616;
   }
 
-  .tooltip-close:focus-visible {
+  .tooltip-shell-actions :global(.tooltip-close.bx--btn:focus-visible) {
     outline: 1px solid rgba(15, 98, 254, 0.6);
     outline-offset: 1px;
   }

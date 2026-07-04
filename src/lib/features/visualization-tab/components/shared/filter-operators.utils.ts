@@ -11,51 +11,89 @@ export interface OperatorDef {
   allowedTypes?: ColumnType[];
 }
 
+export interface FilterColumnOption {
+  text: string;
+  type?: string;
+}
+
+export const DEFAULT_FILTER_LIMIT = 5;
+export const MAX_FILTER_LIMIT = 1000;
+
 export const operators: OperatorDef[] = [
   {
     value: 'gte',
-    label: m.filter_op_gte(),
+    get label() {
+      return m.filter_op_gte();
+    },
     requiresValue: true,
     allowedTypes: [ColumnType.NUMBER, ColumnType.DATE]
   },
   {
     value: 'lte',
-    label: m.filter_op_lte(),
+    get label() {
+      return m.filter_op_lte();
+    },
     requiresValue: true,
     allowedTypes: [ColumnType.NUMBER, ColumnType.DATE]
   },
   {
     value: 'contains',
-    label: m.filter_op_contains(),
+    get label() {
+      return m.filter_op_contains();
+    },
     requiresValue: true,
     allowedTypes: [ColumnType.TEXT]
   },
-  { value: 'equals', label: m.filter_op_equals(), requiresValue: true },
+  {
+    value: 'equals',
+    get label() {
+      return m.filter_op_equals();
+    },
+    requiresValue: true
+  },
   {
     value: 'not_equals',
-    label: m.filter_op_not_equals(),
+    get label() {
+      return m.filter_op_not_equals();
+    },
     requiresValue: true
   },
   {
     value: 'between',
-    label: m.filter_op_between(),
+    get label() {
+      return m.filter_op_between();
+    },
     requiresRange: true,
     allowedTypes: [ColumnType.NUMBER, ColumnType.DATE]
   },
   {
     value: 'top_asc',
-    label: m.filter_op_top_asc(),
+    get label() {
+      return m.filter_op_top_asc();
+    },
     requiresLimit: true,
     allowedTypes: [ColumnType.NUMBER, ColumnType.DATE]
   },
   {
     value: 'top_desc',
-    label: m.filter_op_top_desc(),
+    get label() {
+      return m.filter_op_top_desc();
+    },
     requiresLimit: true,
     allowedTypes: [ColumnType.NUMBER, ColumnType.DATE]
   },
-  { value: 'empty', label: m.filter_op_empty() },
-  { value: 'not_empty', label: m.filter_op_not_empty() }
+  {
+    value: 'empty',
+    get label() {
+      return m.filter_op_empty();
+    }
+  },
+  {
+    value: 'not_empty',
+    get label() {
+      return m.filter_op_not_empty();
+    }
+  }
 ];
 
 export function normalizeFieldType(
@@ -90,6 +128,14 @@ export function normalizeFieldType(
     return ColumnType.BOOLEAN;
   }
   return null;
+}
+
+export function getFilterColumnType(
+  fields: readonly FilterColumnOption[],
+  columnName: string
+): ColumnType | null {
+  const field = fields.find((f) => f.text === columnName);
+  return normalizeFieldType(field?.type);
 }
 
 export function getOperatorDef(

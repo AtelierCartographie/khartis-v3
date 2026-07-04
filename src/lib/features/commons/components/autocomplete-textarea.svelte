@@ -1,6 +1,6 @@
 <script lang="ts">
   import { KEY } from '../constants/dom.constants';
-  import { m } from '$lib/paraglide/messages.js';
+  import { m } from '$lib/paraglide/messages';
 
   export interface Suggestion {
     label: string;
@@ -32,6 +32,18 @@
   let filteredSuggestions = $state<Suggestion[]>([]);
   let selectedIndex = $state(0);
   let cursorPosition = $state(0);
+  const componentId = $props.id();
+  const textareaId = `autocomplete-textarea-${componentId}`;
+  const suggestionsId = `autocomplete-suggestions-${componentId}`;
+  const activeSuggestionId = $derived(
+    showDropdown && filteredSuggestions.length > 0
+      ? getSuggestionId(selectedIndex)
+      : undefined
+  );
+
+  function getSuggestionId(index: number): string {
+    return `${suggestionsId}-option-${index}`;
+  }
 
   function getWordAtCursor(
     text: string,
@@ -169,28 +181,37 @@
 
 <div class="autocomplete-container">
   {#if labelText}
-    <label class="field-label" for="formula-textarea">{labelText}</label>
+    <label class="field-label" for={textareaId}>{labelText}</label>
   {/if}
 
   <textarea
-    id="formula-textarea"
+    id={textareaId}
     bind:this={textareaRef}
     bind:value={value}
     rows={rows}
     placeholder={placeholder}
     class="formula-textarea"
+    role="combobox"
+    aria-autocomplete="list"
+    aria-expanded={showDropdown && filteredSuggestions.length > 0}
+    aria-controls={showDropdown ? suggestionsId : undefined}
+    aria-activedescendant={activeSuggestionId}
+    aria-label={!labelText && placeholder ? placeholder : undefined}
     onkeydown={handleKeydown}
     oninput={handleInput}
     onblur={handleBlur}
     onfocus={handleFocus}></textarea>
 
   {#if showDropdown && filteredSuggestions.length > 0}
-    <div class="suggestions-dropdown">
+    <div id={suggestionsId} class="suggestions-dropdown" role="listbox">
       {#each filteredSuggestions as suggestion, i (suggestion.value)}
         <button
+          id={getSuggestionId(i)}
           type="button"
           class="suggestion-item"
           class:selected={i === selectedIndex}
+          role="option"
+          aria-selected={i === selectedIndex}
           onmousedown={() => insertSuggestion(suggestion)}
           onmouseenter={() => (selectedIndex = i)}
         >

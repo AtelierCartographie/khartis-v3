@@ -14,13 +14,6 @@ export interface FillModeItem {
   iconSize: number;
 }
 
-export const FILL_MODES_STANDARD: readonly FillMode[] = [
-  FillMode.NONE,
-  FillMode.UNIQUE,
-  FillMode.CLASSES,
-  FillMode.CATEGORIES
-];
-
 export const FILL_MODES_WITH_DENSITY: readonly FillMode[] = [
   FillMode.NONE,
   FillMode.UNIQUE,
@@ -41,27 +34,37 @@ const DEFAULT_ICON_SIZE = 16;
 const FILL_MODE_ITEMS: Record<FillMode, FillModeItem> = {
   [FillMode.NONE]: {
     icon: MisuseOutline,
-    label: m.fill_mode_none(),
+    get label() {
+      return m.fill_mode_none();
+    },
     iconSize: DEFAULT_ICON_SIZE
   },
   [FillMode.UNIQUE]: {
     icon: StopFilledAlt,
-    label: m.fill_mode_unique(),
+    get label() {
+      return m.fill_mode_unique();
+    },
     iconSize: DEFAULT_ICON_SIZE
   },
   [FillMode.DENSITY]: {
     icon: ChartTSne,
-    label: m.symbol_mode_density(),
+    get label() {
+      return m.symbol_mode_density();
+    },
     iconSize: DEFAULT_ICON_SIZE
   },
   [FillMode.CLASSES]: {
     icon: Table,
-    label: m.fill_mode_classes(),
+    get label() {
+      return m.fill_mode_classes();
+    },
     iconSize: DEFAULT_ICON_SIZE
   },
   [FillMode.CATEGORIES]: {
     icon: Tag,
-    label: m.fill_mode_categories(),
+    get label() {
+      return m.fill_mode_categories();
+    },
     iconSize: DEFAULT_ICON_SIZE
   }
 };

@@ -1,11 +1,16 @@
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { type DataTableFilter, type FilterStats } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-import { datasetsStore } from '../../../stores/datasets.store.svelte';
+import {
+  isMissingRequestedTableError,
+  isRequestedTableAvailable,
+  resolveHookValue,
+  type HookValue
+} from './table-hook.utils';
 
 export interface UseTableFiltersProps {
-  tableName?: string | (() => string | undefined);
-  dataset?: ProcessedDataset | (() => ProcessedDataset | undefined);
+  tableName?: HookValue<string | undefined>;
+  dataset?: HookValue<ProcessedDataset | undefined>;
   onRecordTransformation?: (summary: string) => void;
 }
 
@@ -17,32 +22,6 @@ export interface UseTableFiltersReturn {
   afterFilterChange: (transformationLabel?: string) => Promise<void>;
 }
 
-function getValue<T>(prop: T | (() => T)): T {
-  return typeof prop === 'function' ? (prop as () => T)() : prop;
-}
-
-function isMissingDuckTableError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    /Catalog Error:\s*Table with name .*?(does not exist|not found)/i.test(
-      error.message
-    )
-  );
-}
-
-function hasRequestedTable(tableName: string | undefined): boolean {
-  if (!tableName) {
-    return false;
-  }
-
-  return (
-    Boolean(duckDBOrchestrator.getDatasetByTable(tableName)) ||
-    datasetsStore
-      .getAllDatasets()
-      .some((dataset) => dataset.tableName === tableName)
-  );
-}
-
 export function useTableFilters(
   props: UseTableFiltersProps
 ): UseTableFiltersReturn {
@@ -52,8 +31,8 @@ export function useTableFilters(
   let refreshRequestId = 0;
 
   async function refreshFiltersState(): Promise<void> {
-    const tableName = getValue(props.tableName);
-    const dataset = getValue(props.dataset);
+    const tableName = resolveHookValue(props.tableName);
+    const dataset = resolveHookValue(props.dataset);
     const requestId = ++refreshRequestId;
     const fallbackStats: FilterStats = {
       total: dataset?.rowCount ?? 0,
@@ -71,7 +50,7 @@ export function useTableFilters(
       return;
     }
 
-    if (!hasRequestedTable(tableName)) {
+    if (!isRequestedTableAvailable(tableName)) {
       if (requestId !== refreshRequestId) {
         return;
       }
@@ -96,7 +75,7 @@ export function useTableFilters(
     } catch (error) {
       if (
         requestId !== refreshRequestId ||
-        (isMissingDuckTableError(error) && !hasRequestedTable(tableName))
+        isMissingRequestedTableError(error, tableName)
       ) {
         if (requestId === refreshRequestId) {
           filters = [];

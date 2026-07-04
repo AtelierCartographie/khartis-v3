@@ -21,6 +21,10 @@
   import { CreateProjectValidationService } from '../services/validation.service';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { projectsStore } from '$lib/features/commons/stores/projects.store.svelte';
+  import {
+    readCarbonStringValue,
+    type CarbonValueEvent
+  } from '$lib/features/commons/utils/carbon-events.utils';
 
   interface Props {
     onClose?: () => void;
@@ -29,7 +33,7 @@
   const { onClose }: Props = $props();
 
   const { navigateAfterAction } = useProjectNavigation({
-    getOnClose: () => onClose
+    onClose: () => onClose?.()
   });
 
   function getNextProjectName(): string {
@@ -123,7 +127,6 @@
     try {
       const safeName = sanitizeProjectName(effectiveName);
 
-      creationStep = m.create_project_processing_status();
       await projectStore.createProject(safeName, validFiles);
 
       await projectsStore.refresh();
@@ -159,6 +162,10 @@
       handleCreate();
     }
   }
+
+  function handleProjectNameInput(event: CarbonValueEvent) {
+    localProjectName = readCarbonStringValue(event, localProjectName);
+  }
 </script>
 
 <div class="project-name-footer">
@@ -173,7 +180,8 @@
       <TextInput
         data-testid="project-name-input"
         placeholder={m.project_name_placeholder()}
-        bind:value={localProjectName}
+        value={localProjectName}
+        on:input={handleProjectNameInput}
         on:keydown={handleKeyDown}
         disabled={isCreating}
         invalid={nameErrors.length > 0}

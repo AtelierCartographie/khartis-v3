@@ -10,8 +10,6 @@ import { exportToCsv } from './io/exporters';
 import { registerFiles } from './io/file-registry';
 import { readGeofile, readLink, readTabular } from './io';
 import { analyse, describeColumns } from './operations/analysis';
-
-import { applyJoinAssociation, joinById } from './operations/join';
 import { searchInTable } from './operations/search';
 import { describeTable, dropRows, getRowCount } from './operations/table-ops';
 
@@ -21,12 +19,12 @@ import { density_macros } from './macros/density';
 import { join_macros } from './macros/join';
 import { search_macros } from './macros/search';
 import { simplification_macros } from './macros/simplification';
+import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 
 import type {
   AnalyseOptions,
   AnalysisResults,
   DuckDBMetadata,
-  JoinByIdOptions,
   QueryOptions,
   ReadGeofileOptions,
   ReadLinkOptions,
@@ -36,31 +34,7 @@ import type {
   TableMetadata
 } from './types';
 
-/**
- * DuckDB facade object exposing the legacy public API.
- *
- * Provides helpers to initialize the engine, ingest files, run queries,
- * run analyses/search/join operations, export datasets and manage table metadata.
- *
- * Main API methods:
- * - initDuckDB()
- * - query(sql, options?)
- * - register_files(files, options?)
- * - read_tabular(input, options?)
- * - read_geofile(geofile, options?)
- * - read_link(url, options?)
- * - describe_table(table)
- * - get_row_count(table)
- * - describeColumns(table)
- * - analyse(table, options?)
- * - searchInTable(table, searchQuery, options?)
- * - join_by_id(table, tableId, options?)
- * - apply_join_association(table, basemap)
- * - copy_to_csv_as_string(table, options?)
- * - drop_rows(table, rowsId)
- * - get_table_metadata(table)
- * - invalidateTableCache(table)
- */
+/** Legacy DuckDB facade for engine setup, ingestion, querying, analysis, and metadata. */
 export const Duck = {
   get db() {
     return isInitialized() ? getContext().db : null;
@@ -87,10 +61,7 @@ export const Duck = {
     return executeQuery(ctx.connection, sql, options);
   },
 
-  /**
-   * Execute a query in streaming mode — reduces peak WASM memory for large results.
-   * Returns a raw IPC buffer (Uint8Array). Use for full-table exports with geometry.
-   */
+  /** Execute a streaming query and return raw Arrow IPC bytes. */
   async queryStreaming(sql: string): Promise<Uint8Array> {
     const ctx = getContext();
     return executeQueryStreaming(ctx.connection, sql);
@@ -172,36 +143,17 @@ export const Duck = {
     return searchInTable(ctx, table, searchQuery, options);
   },
 
-  async join_by_id(
-    table: string,
-    tableId: string,
-    options?: JoinByIdOptions
-  ): Promise<AnalysisResults> {
-    const ctx = getContext();
-    return joinById(ctx, table, tableId, options);
-  },
-
-  async apply_join_association(table: string, basemap: string): Promise<void> {
-    const ctx = getContext();
-    return applyJoinAssociation(ctx, table, basemap);
-  },
-
   invalidateTableCache(table: string): void {
     const ctx = getContext();
     markTableMutated(ctx, table);
   },
 
-  /**
-   * Drop a table and invalidate its cache atomically.
-   * Use this instead of a raw `DROP TABLE` query when removing a tracked
-   * table so that describe/rowCount caches never reference a dead table.
-   * Safe for both real datasets and temporary tables.
-   */
+  /** Drop a tracked table and invalidate its metadata cache atomically. */
   async dropTable(table: string): Promise<void> {
     const ctx = getContext();
     await executeQuery(
       ctx.connection,
-      `DROP TABLE IF EXISTS "${table.replace(/"/g, '""')}"`
+      `DROP TABLE IF EXISTS "${escapeIdentifier(table)}"`
     );
     markTableMutated(ctx, table);
   },

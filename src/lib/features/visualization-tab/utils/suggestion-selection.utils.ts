@@ -7,6 +7,7 @@ type SuggestionSignatureSource = Pick<
 >;
 
 interface AutoApplySuggestionOptions {
+  hasPersistedSuggestionKey?: boolean;
   suggestionCount: number;
   visualizationCount: number;
   targetVisualizationOriginMode: VisualizationOriginMode;
@@ -71,11 +72,13 @@ export function resolveSuggestionCardAction(
 }
 
 export function shouldAutoApplySuggestion({
+  hasPersistedSuggestionKey = false,
   suggestionCount,
   visualizationCount,
   targetVisualizationOriginMode
 }: AutoApplySuggestionOptions): boolean {
   return (
+    !hasPersistedSuggestionKey &&
     suggestionCount > 0 &&
     visualizationCount === 1 &&
     targetVisualizationOriginMode === 'auto-suggestion'

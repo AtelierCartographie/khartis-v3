@@ -40,10 +40,19 @@
   import type { FacetSlotPath } from '../../adapters/facets-adapter';
   import { useCategoryLabels } from '../../hooks/use-category-labels.svelte';
   import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
-  import { filterFieldsByKind } from '../../hooks/use-field-selection.svelte';
+  import {
+    NONE_FIELD_ID,
+    filterFieldsByKind,
+    useFieldSelectionHandler
+  } from '../../hooks/use-field-selection.svelte';
   import { parseOpacityToSlider } from '../../utils/coerce.utils';
   import { resetVisualClassification } from './classification-reset.utils';
+  import {
+    buildDashedPatternItems,
+    coerceDashedPattern
+  } from './dashed-pattern.utils';
   import MissingDataSection from './missing-data-section.svelte';
+  import { untrack } from 'svelte';
 
   interface Props {
     visualization?: VisualizationConfig;
@@ -122,7 +131,6 @@
       : datasetsStore.selectedDataset
   );
 
-  const NONE_FIELD_ID = -1;
   let strokeMode = $state<StrokeMode>(StrokeMode.NONE);
   let strokeWidth = $state<number>(VISUALIZATION_DEFAULTS.strokeWidth);
   let strokeColor = $state<string>(DEFAULT_COLORS.stroke);
@@ -131,15 +139,27 @@
   let strokeDashedPattern = $state<BasemapDottedPattern>(
     BasemapDottedPattern.DOTS
   );
-  let colorFieldId = $state<number>(NONE_FIELD_ID);
+  const colorFieldSelection = useFieldSelectionHandler({
+    getDataFields: () => dataFields,
+    columnKey: () =>
+      strokeMode === StrokeMode.CLASSES ? 'valueColumn' : 'categoryColumn',
+    onMappingChange: (updates) => {
+      const handleMappingChange = onStrokeMappingChange ?? onMappingChange;
+      handleMappingChange?.(updates);
+    }
+  });
   let facetsPickerOpen = $state(false);
   let categoriesPopoverOpen = $state(false);
-  const resolvedShowMissingData = $derived(
-    showMissingData ??
+  function resolveShowMissingData(): boolean {
+    return (
+      showMissingData ??
       visualization?.missingData?.show ??
       visualization?.modes?.strokeShowMissing ??
       true
-  );
+    );
+  }
+
+  const resolvedShowMissingData = $derived(resolveShowMissingData());
   const resolvedMissingDataColor = $derived(
     missingDataColor ??
       visualization?.missingData?.color ??
@@ -151,14 +171,22 @@
       Math.min(maxStrokeWidth, SLIDER_LIMITS.strokeWidth.max)
     )
   );
-  let strokeShowMissing = $derived(resolvedShowMissingData);
+  let strokeShowMissing = $state(resolveShowMissingData());
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
   const selectableValueDataFields = $derived(
-    filterFieldsByKind(selectableDataFields, 'numeric', colorFieldId)
+    filterFieldsByKind(
+      selectableDataFields,
+      'numeric',
+      colorFieldSelection.selectedFieldId
+    )
   );
   const selectableCategoryDataFields = $derived(
-    filterFieldsByKind(selectableDataFields, 'textual', colorFieldId)
+    filterFieldsByKind(
+      selectableDataFields,
+      'textual',
+      colorFieldSelection.selectedFieldId
+    )
   );
   const facetsSelection = useFacetsVariableSelection({
     getVisualizationId: () => visualization?.id,
@@ -167,13 +195,13 @@
 
   const valueColumnName = $derived(
     strokeMode === StrokeMode.CLASSES
-      ? (dataFields.find((field) => field.id === colorFieldId)?.text ?? '')
+      ? (colorFieldSelection.selectedFieldName ?? '')
       : ''
   );
 
   const categoryColumnName = $derived(
     strokeMode === StrokeMode.CATEGORIES
-      ? (dataFields.find((field) => field.id === colorFieldId)?.text ?? '')
+      ? (colorFieldSelection.selectedFieldName ?? '')
       : ''
   );
   const currentCategoryColumnName = $derived(
@@ -181,6 +209,14 @@
       visualization?.mapping.categoryColumn ??
       categoryColumnName
   );
+
+  $effect(() => {
+    const next = resolvedShowMissingData;
+    untrack(() => {
+      strokeShowMissing = next;
+    });
+  });
+
   const categoryLabels = useCategoryLabels({
     enabled: () => strokeMode === StrokeMode.CATEGORIES,
     getDataset: () => dataset,
@@ -213,13 +249,9 @@
           ? (strokeValueColumn ?? visualization?.mapping.valueColumn)
           : undefined;
     if (mappedFieldName && dataFields.length > 0) {
-      const fieldIndex = dataFields.findIndex(
-        (field) => field.text === mappedFieldName
-      );
-      colorFieldId =
-        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
+      colorFieldSelection.sync(mappedFieldName);
     } else {
-      colorFieldId = NONE_FIELD_ID;
+      colorFieldSelection.sync(undefined);
     }
   });
 
@@ -238,15 +270,7 @@
   ];
 
   const strokeModeIndex = $derived(STROKE_MODES.indexOf(strokeMode));
-  const dashedPatternItems = $derived([
-    { id: BasemapDottedPattern.DOTS, text: m.dashed_pattern_dots() },
-    { id: BasemapDottedPattern.DASHES, text: m.dashed_pattern_dashes() },
-    { id: BasemapDottedPattern.DASH_DOT, text: m.dashed_pattern_dash_dot() },
-    {
-      id: BasemapDottedPattern.LONG_DASH,
-      text: m.dashed_pattern_long_dash()
-    }
-  ]);
+  const dashedPatternItems = $derived(buildDashedPatternItems());
 
   function handleStrokeModeChange(index: number) {
     strokeMode = STROKE_MODES[index] || StrokeMode.NONE;
@@ -294,10 +318,7 @@
   }
 
   function handleStrokeDashedPatternSelect(value: string | number) {
-    const next =
-      Object.values(BasemapDottedPattern).find(
-        (pattern) => pattern === value
-      ) ?? BasemapDottedPattern.DOTS;
+    const next = coerceDashedPattern(value);
     strokeDashedPattern = next;
     onStyleChange?.({ strokeDashedPattern: next });
   }
@@ -325,40 +346,6 @@
   function clampVisibleStrokeWidth(value: number) {
     return Math.min(Math.max(value, MIN_VISIBLE_STROKE_WIDTH), strokeWidthMax);
   }
-
-  $effect(() => {
-    ensureVisibleStrokeWidth();
-  });
-
-  function handleColorFieldSelect(fieldId: number) {
-    colorFieldId = fieldId;
-    const handleMappingChange = onStrokeMappingChange ?? onMappingChange;
-    if (!handleMappingChange) {
-      return;
-    }
-
-    if (strokeMode === StrokeMode.CLASSES) {
-      if (fieldId === NONE_FIELD_ID) {
-        handleMappingChange({ valueColumn: undefined });
-        return;
-      }
-      const field = dataFields.find((item) => item.id === fieldId);
-      if (field) {
-        handleMappingChange({ valueColumn: field.text });
-      }
-    }
-
-    if (strokeMode === StrokeMode.CATEGORIES) {
-      if (fieldId === NONE_FIELD_ID) {
-        handleMappingChange({ categoryColumn: undefined });
-        return;
-      }
-      const field = dataFields.find((item) => item.id === fieldId);
-      if (field) {
-        handleMappingChange({ categoryColumn: field.text });
-      }
-    }
-  }
 </script>
 
 <SectionHeading title={m.stroke()} infoText={infoText} />
@@ -367,7 +354,7 @@
   <ToggleTabs
     items={strokeModeItems}
     activeIndex={strokeModeIndex}
-    onChange={handleStrokeModeChange}
+    onchange={handleStrokeModeChange}
     hideInactiveLabel={true}
   />
 </div>
@@ -397,14 +384,14 @@
         titleText={m.color_according()}
         dataFields={dataFields}
         singleSelectItems={selectableValueDataFields}
-        selectedFieldId={colorFieldId}
+        selectedFieldId={colorFieldSelection.selectedFieldId}
         selectedFieldIds={facetsSelection.getSelectedFieldIds(
           facetsValueSlotPath
         )}
         isCollectionEnabled={facetsSelection.isActiveForSlot(
           facetsValueSlotPath
         )}
-        onSelect={handleColorFieldSelect}
+        onSelect={colorFieldSelection.handleSelect}
         onCollectionChange={(ids) =>
           facetsSelection.updateVariables(
             valueColumnName,
@@ -452,14 +439,14 @@
         titleText={m.color_according()}
         dataFields={dataFields}
         singleSelectItems={selectableCategoryDataFields}
-        selectedFieldId={colorFieldId}
+        selectedFieldId={colorFieldSelection.selectedFieldId}
         selectedFieldIds={facetsSelection.getSelectedFieldIds(
           facetsCategorySlotPath
         )}
         isCollectionEnabled={facetsSelection.isActiveForSlot(
           facetsCategorySlotPath
         )}
-        onSelect={handleColorFieldSelect}
+        onSelect={colorFieldSelection.handleSelect}
         onCollectionChange={(ids) =>
           facetsSelection.updateVariables(
             categoryColumnName,

@@ -94,4 +94,27 @@ describe('gpxProcessor', () => {
     expect(result.metadata.fileType).toBe(FileType.GPX);
     expect(result.rowCount).toBeGreaterThanOrEqual(0);
   });
+
+  it('does not double-decode XML entities in GPX properties', async () => {
+    const c = ctx('tbl_gpx');
+    const f = file('track.gpx', FileType.GPX);
+    f.content =
+      '<?xml version="1.0"?><gpx version="1.1"><wpt lat="48.8" lon="2.3"><name>&amp;lt;b&amp;gt;Station&amp;lt;/b&amp;gt;</name><desc>AT&amp;amp;T</desc></wpt></gpx>';
+
+    await gpxProcessor.process(c as never, f);
+
+    const registeredFile = c.Duck.register_files.mock.calls[0]?.[0]?.[0];
+    expect(registeredFile).toBeInstanceOf(File);
+
+    const geojson = JSON.parse(await registeredFile.text()) as {
+      features: Array<{
+        properties: Record<string, unknown>;
+      }>;
+    };
+
+    expect(geojson.features[0].properties.name).toBe(
+      '&lt;b&gt;Station&lt;/b&gt;'
+    );
+    expect(geojson.features[0].properties.desc).toBe('AT&amp;T');
+  });
 });

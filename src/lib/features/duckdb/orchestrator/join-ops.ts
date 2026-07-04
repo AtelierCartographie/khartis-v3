@@ -10,6 +10,10 @@ import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  DataValidationError,
+  DuckDBError
+} from '$lib/features/commons/pipeline.errors';
 import * as m from '$lib/paraglide/messages';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { isOSMBasemap } from '$lib/features/map/services/osm-tile.service';
@@ -27,15 +31,6 @@ export type { FinalizeJoinResult };
 
 export interface DuckDBClientForJoin {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
-  join_by_id(
-    tableName: string,
-    geoColumn: string,
-    options: { basemaps_table: string }
-  ): Promise<unknown>;
-  apply_join_association(
-    tableName: string,
-    basemapFile: string
-  ): Promise<unknown>;
 }
 
 interface InformationSchemaColumn {
@@ -78,10 +73,7 @@ function getSimilarityCacheBuildKey(
   return `${datasetTable}::${geoColumn}::${filterClause ?? ''}`;
 }
 
-/**
- * Invalidates the similarity cache for a given dataset. Must be called after
- * data mutations (e.g. corrections) that change the source values.
- */
+/** Invalidate cached similarity rows after source-value mutations. */
 export function invalidateSimilarityCache(datasetTableName?: string): void {
   if (
     !datasetTableName ||
@@ -91,11 +83,7 @@ export function invalidateSimilarityCache(datasetTableName?: string): void {
   }
 }
 
-/**
- * Builds the similarity cache by running get_similarity once against ALL
- * basemap_attributes. The cache is a temp table with raw match rows
- * (one per source_value × basemap_attribute match).
- */
+/** Build or reuse the cross-basemap similarity temp table. */
 async function ensureSimilarityCached(
   dataset: DuckDBDataset,
   geoColumn: string,
@@ -110,14 +98,14 @@ async function ensureSimilarityCached(
     normalizedFilter
   );
 
-  // Return existing cache if it matches the current dataset + geoColumn + filters
+  // Reuse only a cache matching the current dataset, column, and filters.
   if (
     activeSimilarityCache &&
     activeSimilarityCache.tableName === dataset.tableName &&
     activeSimilarityCache.geoColumn === geoColumn &&
     activeSimilarityCache.filterClause === normalizedFilter
   ) {
-    // Verify the table still exists in DuckDB
+    // Rebuild if DuckDB dropped the temp table externally.
     const check = (await Duck.query(
       `SELECT table_name FROM information_schema.tables WHERE table_name = '${escapeSqlString(cacheTableName)}'`,
       { format: 'array' }
@@ -126,7 +114,6 @@ async function ensureSimilarityCached(
     if (check && check.length > 0) {
       return cacheTableName;
     }
-    // Table was dropped externally — rebuild
     activeSimilarityCache = null;
   }
 
@@ -285,10 +272,7 @@ async function ensureSimilarityCached(
   }
 }
 
-/**
- * Derives JoinQuality for a specific basemap from the cached similarity table.
- * Reproduces the same logic as analyze_join_quality but filtered by basemap.
- */
+/** Derive one basemap's join quality from cached similarity rows. */
 async function deriveJoinQualityFromCache(
   cacheTableName: string,
   basemapId: string,
@@ -413,33 +397,14 @@ function buildJoinQualityFromRows(
   };
 }
 
-/**
- * Join synthesis result: per-basemap share scores derived from similarity cache.
- *
- *   shareCandidate ∈ [0, 100]   — % of distinct dataset names that found ≥ 1 match
- *   shareBasemap   ∈ [0, +∞)    — ratio matched_names / basemap_entity_count
- *                                 (1 = perfect granularity, >1 = over-coverage,
- *                                  <1 = under-coverage)
- *
- * The two scales are intentionally different: shareCandidate is the user-facing
- * "match score" displayed as a percentage, while shareBasemap is an internal
- * granularity signal used as a tiebreaker (see rankBasemapsByJoinSynthesis).
- *
- * Mirrors the POC's `join_synthesis` macro
- * (https://github.com/AtelierCartographie/khartis-pipeline/blob/main/src/lib/duckdb/join.ts)
- * but uses `COUNT(DISTINCT original_name)` so that CSVs with duplicate rows for
- * the same entity (e.g. one row per year) don't inflate the share.
- */
+/** Per-basemap similarity scores; candidate share and basemap share use different scales. */
 export interface JoinSynthesisResult {
   basemap: string;
   shareBasemap: number;
   shareCandidate: number;
 }
 
-/**
- * Computes join_synthesis metrics from the similarity cache for all basemaps.
- * Returns per-basemap coverage scores sorted by shareBasemap descending.
- */
+/** Compute per-basemap synthesis metrics from cached similarity rows. */
 export async function computeJoinSynthesis(
   dataset: DuckDBDataset,
   geoColumn: string,
@@ -507,7 +472,9 @@ async function ensureBasemapAttributesLoaded(
     )) as Array<{ table_name: string }>;
 
     if (!recheck || recheck.length === 0) {
-      throw new Error(m.error_basemap_attributes_load());
+      throw new DuckDBError(m.error_basemap_attributes_load(), undefined, {
+        tableName: 'basemap_attributes'
+      });
     }
   }
 }
@@ -630,10 +597,10 @@ export async function computeJoinStats(
 ): Promise<JoinQuality> {
   const basemapId = getBasemapAttributesId(basemap);
 
-  // Ensure basemap has attributes (generate from geometry if needed)
+  // Generate basemap attributes when needed.
   await ensureBasemapHasAttributes(basemapId, Duck);
 
-  // Build or reuse the similarity cache (one computation across ALL basemaps)
+  // One similarity cache covers all basemaps.
   const cacheTableName = await ensureSimilarityCached(
     dataset,
     geoColumn,
@@ -641,7 +608,6 @@ export async function computeJoinStats(
     filterClause
   );
 
-  // Derive per-basemap stats from the cached raw matches
   const quality = await deriveJoinQualityFromCache(
     cacheTableName,
     basemapId,
@@ -677,10 +643,7 @@ export async function computeJoinStats(
   return quality;
 }
 
-/**
- * Ensures a specific basemap has entries in basemap_attributes.
- * If not, generates them from the basemap geometry table.
- */
+/** Ensure a basemap has generated attribute rows before matching. */
 async function ensureBasemapHasAttributes(
   basemapId: string,
   Duck: DuckDBClientForJoin
@@ -696,7 +659,11 @@ async function ensureBasemapHasAttributes(
   if (!attributeCount?.[0]?.cnt || attributeCount[0].cnt === 0) {
     const generated = await generateAttributesForBasemap(basemapId, Duck);
     if (!generated) {
-      throw new Error(m.error_no_attributes_basemap({ basemapId }));
+      throw new DataValidationError(
+        m.error_no_attributes_basemap({ basemapId }),
+        'basemapId',
+        { basemapId }
+      );
     }
 
     const recheck = (await Duck.query(
@@ -705,19 +672,19 @@ async function ensureBasemapHasAttributes(
     )) as Array<{ cnt: number }>;
 
     if (!recheck?.[0]?.cnt || recheck[0].cnt === 0) {
-      throw new Error(m.error_no_attributes_basemap_generated({ basemapId }));
+      throw new DuckDBError(
+        m.error_no_attributes_basemap_generated({ basemapId }),
+        undefined,
+        { basemapId, tableName: 'basemap_attributes' }
+      );
     }
 
-    // New basemap attributes were added — invalidate cache so they're included
+    // New basemap attributes must be included in future cache builds.
     invalidateSimilarityCache();
   }
 }
 
-/**
- * Returns distinct raw attribute values for a given basemap from the
- * basemap_attributes table. Used to populate the manual correction dropdown
- * for unrecognized entities.
- */
+/** Return manual-correction values for one basemap. */
 export async function getBasemapAttributeValues(
   basemap: BasemapMetadata,
   Duck: DuckDBClientForJoin
@@ -792,11 +759,7 @@ function getBasemapDisplayVariants(basemap: BasemapMetadata): string[] {
   );
 }
 
-/**
- * Returns alias rows grouped by the entity id supplied by basemap_attributes.
- * The same map is keyed by every variant so a manual value can always resolve
- * every other identifier of the entity.
- */
+/** Return aliases keyed by every raw value variant for manual correction. */
 export async function getBasemapAttributeAliasesByValue(
   basemap: BasemapMetadata,
   Duck: DuckDBClientForJoin
@@ -869,29 +832,27 @@ export async function applyJoinCorrections(
 
   const correctionsTable = `corrections_${crypto.randomUUID().replace(/-/g, '_')}`;
 
-  await Duck.query(
-    `CREATE TEMP TABLE "${correctionsTable}" (original VARCHAR, corrected VARCHAR)`
-  );
-  await Duck.query(`INSERT INTO "${correctionsTable}" VALUES ${valueRows}`);
-
   const escapedTableName = escapeIdentifier(dataset.tableName);
   const escapedGeoCol = escapeIdentifier(geoColumn);
 
-  await Duck.query(`
-    UPDATE "${escapedTableName}"
-    SET "${escapedGeoCol}" = c.corrected
-    FROM "${correctionsTable}" c
-    WHERE "${escapedGeoCol}" = c.original
-  `);
+  try {
+    await Duck.query(
+      `CREATE TEMP TABLE "${correctionsTable}" (original VARCHAR, corrected VARCHAR)`
+    );
+    await Duck.query(`INSERT INTO "${correctionsTable}" VALUES ${valueRows}`);
 
-  await Duck.query(`DROP TABLE "${correctionsTable}"`);
+    await Duck.query(`
+      UPDATE "${escapedTableName}"
+      SET "${escapedGeoCol}" = c.corrected
+      FROM "${correctionsTable}" c
+      WHERE "${escapedGeoCol}" = c.original
+    `);
+  } finally {
+    await Duck.query(`DROP TABLE IF EXISTS "${correctionsTable}"`);
+  }
 
-  // Source values changed — similarity cache must be rebuilt
+  // Corrected source values require a fresh similarity cache.
   invalidateSimilarityCache(dataset.tableName);
-}
-
-export interface FinalizeJoinOptions {
-  skipJoinComputation?: boolean;
 }
 
 async function applyCachedJoinAssociation(
@@ -963,8 +924,7 @@ export async function finalizeJoin(
   dataset: DuckDBDataset,
   basemap: BasemapMetadata,
   geoColumn: string,
-  Duck: DuckDBClientForJoin,
-  _options?: FinalizeJoinOptions
+  Duck: DuckDBClientForJoin
 ): Promise<FinalizeJoinResult> {
   if (isOSMBasemap(basemap)) {
     return finalizeGPSJoin(dataset, basemap);
@@ -978,11 +938,17 @@ export async function finalizeJoin(
   if (geoColumn) {
     const columnExists = dataset.columns.some((c) => c.name === geoColumn);
     if (!columnExists) {
-      throw new Error(
+      throw new DataValidationError(
         m.error_column_not_found({
           geoColumn,
           columns: dataset.columns.map((c) => c.name).join(', ')
-        })
+        }),
+        geoColumn,
+        {
+          columns: dataset.columns.map((c) => c.name),
+          datasetId: dataset.id,
+          tableName: dataset.tableName
+        }
       );
     }
   }
@@ -1014,7 +980,14 @@ function finalizeGPSJoin(
 ): FinalizeJoinResult {
   const gpsColumns = detectGPSColumns(dataset.columns, dataset.geoDetection);
   if (!gpsColumns) {
-    throw new Error(m.error_gps_columns_not_found());
+    throw new DataValidationError(
+      m.error_gps_columns_not_found(),
+      'gpsColumns',
+      {
+        datasetId: dataset.id,
+        tableName: dataset.tableName
+      }
+    );
   }
 
   return {
@@ -1050,7 +1023,11 @@ export async function getJoinedArrowTable(
   );
 
   if (!geometryColumn) {
-    throw new Error(m.error_no_geometry_column({ geometryTable }));
+    throw new DataValidationError(
+      m.error_no_geometry_column({ geometryTable }),
+      'geometry',
+      { geometryTable }
+    );
   }
 
   const featureIdColumn = geometryTableColumns.find(
@@ -1064,11 +1041,9 @@ export async function getJoinedArrowTable(
   const escapedGeomCol = escapeIdentifier(geometryColumn.column_name);
   const escapedBasemapIdCol = escapeIdentifier(JOINED_BASEMAP_COLUMN.ID);
 
-  if (featureIdColumn || nativeIdColumn) {
-    const joinColumn = featureIdColumn ?? nativeIdColumn;
-    if (!joinColumn) {
-      throw new Error('Unreachable: join column presence already verified');
-    }
+  const joinColumn = featureIdColumn ?? nativeIdColumn;
+
+  if (joinColumn) {
     const escapedJoinCol = escapeIdentifier(joinColumn.column_name);
     await Duck.query(`
       CREATE OR REPLACE VIEW "${joinedView}" AS
@@ -1117,30 +1092,4 @@ export async function getJoinedArrowTable(
   arrowTable = addGeoArrowMetadata(arrowTable);
 
   return arrowTable;
-}
-
-export async function joinDataWithBasemap(
-  dataTableName: string,
-  dataColumnName: string,
-  basemapTableName: string,
-  basemapColumnName: string,
-  Duck: DuckDBClientForJoin
-): Promise<string> {
-  const joinedTableName = `joined_${Date.now().toString(36)}`;
-  const escapedDataTable = escapeIdentifier(dataTableName);
-  const escapedDataCol = escapeIdentifier(dataColumnName);
-  const escapedBasemapTable = escapeIdentifier(basemapTableName);
-  const escapedBasemapCol = escapeIdentifier(basemapColumnName);
-
-  await Duck.query(`
-    CREATE TABLE "${joinedTableName}" AS
-    SELECT
-      b.*,
-      d.* EXCLUDE ("${escapedDataCol}")
-    FROM "${escapedBasemapTable}" b
-    INNER JOIN "${escapedDataTable}" d
-    ON LOWER(TRIM(b."${escapedBasemapCol}")) = LOWER(TRIM(d."${escapedDataCol}"))
-  `);
-
-  return joinedTableName;
 }

@@ -141,7 +141,7 @@ Le drag-and-drop ne mélange pas ces groupes. Actions disponibles : affichage/ma
 
 **Dossier** : `step-toolbar/tools/projections/` + `visualization-tab/map-projection-selector.svelte`
 
-12 projections intégrées via d3-geo + d3-geo-projection. Suggestions algorithmiques par emprise des données (`map-projection-availability.ts`). Projections composites (France DOM-TOM, Europe DOM-TOM) définies dans `static/basemaps/projection-presets.json`.
+12 projections intégrées via d3-geo + d3-geo-projection. Suggestions algorithmiques par emprise des données (`map/utils/projection-availability.utils.ts`). Projections composites (France DOM-TOM, Europe DOM-TOM) définies dans `static/basemaps/projection-presets.json`.
 
 `proj4d3(proj4string)` (`map/utils/proj4d3.ts`) crée un objet `GeoProjection` compatible d3-geo à partir d'une chaîne PROJ.4 — bridge nécessaire car `geoarrow-deck-stream` attend une interface d3-geo.
 

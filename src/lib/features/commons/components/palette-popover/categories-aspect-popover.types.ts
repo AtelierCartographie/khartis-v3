@@ -1,5 +1,5 @@
 import { ShapeType } from '$lib/features/commons/constants/visualization.constants';
-import type { PatternParams } from '$lib/features/commons/stores/visualization.store.svelte';
+import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';
 
 export type CategoriesAspectVariant =
   | 'symbols-unique'
@@ -8,13 +8,6 @@ export type CategoriesAspectVariant =
   | 'polygons'
   | 'lines'
   | 'texts';
-
-export enum PatternType {
-  DOTS = 'dots',
-  LINES = 'lines',
-  CROSSHATCH = 'crosshatch',
-  DASHES = 'dashes'
-}
 
 export interface CategoryDraft {
   id: string;

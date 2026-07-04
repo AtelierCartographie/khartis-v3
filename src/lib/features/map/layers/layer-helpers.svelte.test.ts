@@ -4,6 +4,7 @@ import {
   createCategoricalColorAccessor,
   createGeoJsonCategoricalColorAccessor,
   createStrokeClassificationAccessor,
+  resolveMissingDataRenderProps,
   withGeoJsonRowHighlightAccessor,
   withOpacityPreservingAlpha,
   withRowHighlightAccessor
@@ -25,6 +26,24 @@ vi.hoisted(() => {
 });
 
 describe('layer-helpers — disabled category labels', () => {
+  it('uses shared hex parsing for missing-data colors with fallback on invalid input', () => {
+    expect(
+      resolveMissingDataRenderProps({ missingData: { color: '#123456' } })
+    ).toEqual({
+      color: [18, 52, 86],
+      show: true
+    });
+    expect(
+      resolveMissingDataRenderProps(
+        { missingData: { color: '#12zz56', show: false } },
+        [9, 8, 7]
+      )
+    ).toEqual({
+      color: [9, 8, 7],
+      show: false
+    });
+  });
+
   it('hides disabled categorical labels instead of rendering them as missing data', () => {
     const accessor = createCategoricalColorAccessor(
       'segment',

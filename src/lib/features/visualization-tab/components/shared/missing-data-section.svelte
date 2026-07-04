@@ -22,6 +22,10 @@
   } from '$lib/features/commons/components/viz-controls';
   import PatternPicker from '$lib/features/commons/components/palette-popover/pattern-picker.svelte';
   import type { PatternParams } from '$lib/features/commons/components/palette-popover/palette.constants';
+  import {
+    buildDashedPatternItems,
+    coerceDashedPattern
+  } from './dashed-pattern.utils';
 
   interface Props {
     show: boolean;
@@ -79,15 +83,7 @@
     onpatternstylechange
   }: Props = $props();
 
-  const dashedPatternItems = $derived([
-    { id: BasemapDottedPattern.DOTS, text: m.dashed_pattern_dots() },
-    { id: BasemapDottedPattern.DASHES, text: m.dashed_pattern_dashes() },
-    { id: BasemapDottedPattern.DASH_DOT, text: m.dashed_pattern_dash_dot() },
-    {
-      id: BasemapDottedPattern.LONG_DASH,
-      text: m.dashed_pattern_long_dash()
-    }
-  ]);
+  const dashedPatternItems = $derived(buildDashedPatternItems());
 
   function handleShowToggle(value: boolean) {
     show = value;
@@ -106,10 +102,7 @@
   }
 
   function handleDashedPatternSelect(value: string | number) {
-    const next =
-      Object.values(BasemapDottedPattern).find(
-        (pattern) => pattern === value
-      ) ?? BasemapDottedPattern.DOTS;
+    const next = coerceDashedPattern(value);
     dashedPattern = next;
     ondashedpatternchange?.(next);
   }
@@ -164,7 +157,6 @@
             exclusive
             label={m.color()}
             value={color}
-            size="small"
             onchange={oncolorchange}
           />
         </Column>

@@ -36,7 +36,7 @@
         style="background-color: {color}"
         role="radio"
         aria-checked={selectedColor === color}
-        aria-label={color}
+        aria-label={m.palette_color_option({ color })}
         onclick={() => onColorSelect?.(color)}
       >
         {#if selectedColor === color}

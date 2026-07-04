@@ -10,7 +10,9 @@
   import { Dropdown, TextInput } from 'carbon-components-svelte';
   import { TrashCan } from 'carbon-icons-svelte';
   import {
-    normalizeFieldType,
+    DEFAULT_FILTER_LIMIT,
+    MAX_FILTER_LIMIT,
+    getFilterColumnType,
     getOperatorDef,
     getAvailableOperatorsForType,
     defaultOperatorForType
@@ -62,27 +64,25 @@
     return event.target instanceof HTMLInputElement ? event.target.value : '';
   }
 
-  function getColumnType(columnName: string): ColumnType | null {
-    const field = dataFields.find((f) => f.text === columnName);
-    return normalizeFieldType(field?.type);
-  }
-
-  const availOps = $derived(
-    getAvailableOperatorsForType(getColumnType(filter.column))
+  const currentColumnType = $derived(
+    getFilterColumnType(dataFields, filter.column)
   );
+  const availOps = $derived(getAvailableOperatorsForType(currentColumnType));
   const opDef = $derived(getOperatorDef(filter.operator));
 
   function handleColumnChange(newColumn: string): void {
     if (newColumn === filter.column) return;
-    const oldType = getColumnType(filter.column);
-    const newType = getColumnType(newColumn);
+    const oldType = getFilterColumnType(dataFields, filter.column);
+    const newType = getFilterColumnType(dataFields, newColumn);
     const updates: Partial<Omit<VizDataFilter, 'id'>> = { column: newColumn };
     if (oldType !== newType) {
       const nextOp = defaultOperatorForType(newType);
       updates.operator = nextOp;
       updates.value = '';
       updates.secondaryValue = undefined;
-      updates.limit = getOperatorDef(nextOp)?.requiresLimit ? 5 : undefined;
+      updates.limit = getOperatorDef(nextOp)?.requiresLimit
+        ? DEFAULT_FILTER_LIMIT
+        : undefined;
     }
     onUpdateFilter?.(filter.id, updates);
   }
@@ -94,7 +94,7 @@
       operator: newOperator
     };
     if (def?.requiresLimit) {
-      updates.limit = filter.limit ?? 5;
+      updates.limit = filter.limit ?? DEFAULT_FILTER_LIMIT;
       updates.value = String(updates.limit);
       updates.secondaryValue = undefined;
     } else if (def?.requiresRange) {
@@ -189,9 +189,9 @@
       </label>
       <CompactNumberInput
         id="filter-limit-{filter.id}"
-        value={filter.limit ?? 5}
+        value={filter.limit ?? DEFAULT_FILTER_LIMIT}
         min={1}
-        max={1000}
+        max={MAX_FILTER_LIMIT}
         width="100%"
         onchange={(val) =>
           onUpdateFilter?.(filter.id, { limit: val, value: String(val) })}
@@ -199,7 +199,7 @@
     </div>
   {:else if opDef?.requiresValue}
     <div class="filter-field">
-      {#if getColumnType(filter.column) === ColumnType.NUMBER}
+      {#if currentColumnType === ColumnType.NUMBER}
         <label class="filter-field-label" for="filter-value-{filter.id}">
           {m.filter_value()}
         </label>

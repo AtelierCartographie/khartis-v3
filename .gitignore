@@ -161,3 +161,6 @@ playwright-report/
 # Codex agent artifacts (screenshots, ad-hoc captures, browser plans)
 .codex/
 .codex-artifacts/
+
+# Ragmir
+.ragmir/

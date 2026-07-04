@@ -2,14 +2,17 @@
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import * as m from '$lib/paraglide/messages';
+  import { untrack } from 'svelte';
   import { ArrowRight, Close } from 'carbon-icons-svelte';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import { clickOutside } from '$lib/features/commons/utils/click-outside';
+  import { portal } from '$lib/features/commons/utils/portal';
+  import { resolveToolbarWidth } from '$lib/features/commons/utils/toolbar-width.utils';
   import {
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
-  import { ToolbarState } from '$lib/features/commons/types/global';
   import PaletteSuggestions from './palette-suggestions.svelte';
   import PaletteCustom from './palette-custom.svelte';
   import PaletteComparison from './palette-comparison.svelte';
@@ -19,7 +22,6 @@
     type PaletteType,
     type Palette,
     type PatternParams,
-    type ContrastMode,
     type QualitativePreset,
     DEFAULT_QUALITATIVE_PRESET,
     generatePaletteColors,
@@ -65,7 +67,7 @@
   }: Props = $props();
 
   let popoverRef = $state<HTMLDivElement>();
-  let popoverRight = $state('50vw');
+  let popoverRight = $state(resolveToolbarWidth(globalState.toolbarState));
 
   let draftPaletteId = $state('blues');
   let draftColors = $state<string[]>([]);
@@ -92,25 +94,7 @@
     }
   });
 
-  function portal(node: HTMLElement) {
-    document.body.appendChild(node);
-    return {
-      destroy() {
-        node.remove();
-      }
-    };
-  }
-
-  const toolbarWidth = $derived.by(() => {
-    switch (globalState.toolbarState) {
-      case ToolbarState.Collapsed:
-        return '50px';
-      case ToolbarState.Compact:
-        return '434px';
-      default:
-        return '50vw';
-    }
-  });
+  const toolbarWidth = $derived(resolveToolbarWidth(globalState.toolbarState));
 
   function updatePosition() {
     popoverRight = toolbarWidth;
@@ -143,6 +127,16 @@
     open = false;
   }
 
+  function handlePopoverOutsideClick(event: CustomEvent) {
+    const originalEvent = event.detail?.originalEvent as MouseEvent | undefined;
+    const target = originalEvent?.target as Node | undefined;
+    if (target && triggerElement?.contains(target)) return;
+    if (originalEvent && isNestedColorSurface(originalEvent.composedPath())) {
+      return;
+    }
+    handleClose();
+  }
+
   function handlePaletteSelect(palette: Palette) {
     draftPaletteId = palette.id;
     draftInverted = false;
@@ -156,10 +150,6 @@
       undefined,
       divergingSplit
     );
-  }
-
-  function handleTypeChange(type: PaletteType) {
-    draftType = type;
   }
 
   function handleColorBlindChange(enabled: boolean) {
@@ -177,8 +167,6 @@
     draftPaletteId = palette.id;
     draftPatternParams = params;
   }
-
-  function handleContrastChange(_contrast: ContrastMode | undefined) {}
 
   function handleQualitativePresetChange(preset: QualitativePreset) {
     draftQualitativePreset = preset;
@@ -228,7 +216,12 @@
 
   $effect(() => {
     if (open) {
-      initDraft();
+      untrack(initDraft);
+    }
+  });
+
+  $effect(() => {
+    if (open) {
       updatePosition();
     }
   });
@@ -244,29 +237,15 @@
   $effect(() => {
     if (!open) return;
 
-    function handleClick(e: MouseEvent) {
-      const target = e.target as Node;
-      if (popoverRef && !popoverRef.contains(target)) {
-        if (triggerElement && triggerElement.contains(target)) return;
-        if (isNestedColorSurface(e.composedPath())) return;
-        handleClose();
-      }
-    }
-
     function handleKeydown(e: KeyboardEvent) {
       if (e.key === KEY.ESCAPE) {
         handleClose();
       }
     }
 
-    const timer = setTimeout(() => {
-      document.addEventListener(EVENT.CLICK, handleClick);
-    }, 0);
     document.addEventListener(EVENT.KEYDOWN, handleKeydown);
 
     return () => {
-      clearTimeout(timer);
-      document.removeEventListener(EVENT.CLICK, handleClick);
       document.removeEventListener(EVENT.KEYDOWN, handleKeydown);
     };
   });
@@ -280,6 +259,14 @@
       style:right={popoverRight}
       role="dialog"
       aria-label={popoverTitle}
+      use:clickOutside={{
+        enabled: open,
+        excludeSelectors: [
+          '#khartis-color-picker-dropdown',
+          '.single-color-dropdown'
+        ]
+      }}
+      onoutsideclick={handlePopoverOutsideClick}
     >
       <header class="popover-header">
         <h3>{popoverTitle}</h3>
@@ -300,7 +287,6 @@
           selectedColor={draftColors[0]}
           numClasses={numClasses}
           divergingSplit={divergingSplit}
-          onTypeChange={handleTypeChange}
           onColorBlindChange={handleColorBlindChange}
           onSelect={handlePaletteSelect}
           onColorSelect={handleQualitativeColorSelect}
@@ -315,10 +301,9 @@
           numClasses={numClasses}
           colorBlindFilter={draftColorBlindFilter}
           allowPattern={allowPattern}
-          bind:inverted={draftInverted}
+          inverted={draftInverted}
           onColorsChange={handleCustomColorsChange}
           onPatternSelect={handlePatternSelect}
-          onContrastChange={handleContrastChange}
           onInvertToggle={handleInvertToggle}
         />
       </div>

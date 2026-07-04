@@ -42,6 +42,38 @@ describe('getArrowTableReprojected', () => {
     expect(geomColumn?.column_type).toBe("GEOMETRY('EPSG:4326')");
   });
 
+  it('escapes quoted table, projected column, and geometry identifiers', async () => {
+    const transformedTable = tableFromArrays({
+      ['label"col']: ['Paris'],
+      ['geom"col']: [new Uint8Array([1, 2, 3])]
+    });
+
+    const Duck = {
+      describe_table: vi.fn().mockResolvedValue({
+        name: ['geom"col', 'label"col'],
+        type: ["GEOMETRY('EPSG:2154')", 'VARCHAR']
+      }),
+      queryStreaming: vi.fn().mockResolvedValue(toIpcBuffer(transformedTable)),
+      query: vi.fn()
+    };
+
+    await fetchArrowTableWithGeometry('table"one', Duck, null, 'EPSG:4326', [
+      'label"col'
+    ]);
+
+    expect(Duck.queryStreaming).toHaveBeenCalledWith(
+      expect.stringContaining(`FROM "table""one"`)
+    );
+    expect(Duck.queryStreaming).toHaveBeenCalledWith(
+      expect.stringContaining(`"label""col"`)
+    );
+    expect(Duck.queryStreaming).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `ST_Transform("geom""col", 'EPSG:2154', 'EPSG:4326', true) AS "geom""col"`
+      )
+    );
+  });
+
   it('falls back to client-side proj4 when DuckDB ST_Transform fails', async () => {
     const rawTable = tableFromArrays({
       label: ['Paris'],

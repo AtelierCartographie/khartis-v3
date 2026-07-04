@@ -49,6 +49,21 @@ export const SEMIO_TYPES = {
   QLO: 'QLO' as const
 };
 
+export const MAX_SEMIO_SCORE = 6.5;
+
+export const ID_COLUMN_KEYWORDS = [
+  'id',
+  'fid',
+  'gid',
+  'oid',
+  'pk',
+  'code',
+  'iso',
+  'objectid',
+  'object_id',
+  'rowid'
+] as const;
+
 interface SemioScore {
   semioType: SemioType;
   score: number;
@@ -129,7 +144,10 @@ function scoreGeoId(indicators: GeoIdIndicators): SemioScore {
   if (indicators.isNumeric && indicators.shareRankInterval >= 0.8) score += 2;
   if (indicators.isNumeric && indicators.shareRankInterval >= 0.95)
     score += 0.5;
-  return { semioType: SEMIO_TYPES.GEOID, score: Math.min(score, 6.5) };
+  return {
+    semioType: SEMIO_TYPES.GEOID,
+    score: Math.min(score, MAX_SEMIO_SCORE)
+  };
 }
 
 function scoreGeoLat(indicators: GeoLatIndicators): SemioScore {

@@ -12,13 +12,7 @@ export interface MapThumbnail {
   height: number;
 }
 
-/**
- * Resolve the live map canvas. MapLibre is created with
- * `preserveDrawingBuffer: true` (`use-map-init`), so reading its pixels is
- * reliable. The standalone Deck.gl orthographic context has no preserved
- * drawing buffer, so a direct read returns an empty canvas — handled by the
- * blank-frame guard in {@link captureMapThumbnail}.
- */
+/** Resolve the live map canvas; blank-frame detection handles non-preserved Deck buffers. */
 function resolveMapCanvas(): HTMLCanvasElement | null {
   const mapLibreCanvas = mapInstanceStore.getMapCanvas();
   if (mapLibreCanvas) {
@@ -49,11 +43,7 @@ function computeThumbnailSize(
   };
 }
 
-/**
- * A WebGL context without a preserved drawing buffer reads back as fully
- * transparent. Detect that case so callers can fall back to a placeholder
- * instead of persisting a blank thumbnail.
- */
+/** Detect transparent readback from non-preserved WebGL buffers. */
 function isBlankFrame(
   context: CanvasRenderingContext2D,
   width: number,
@@ -72,15 +62,7 @@ function isBlankFrame(
   }
 }
 
-/**
- * Capture a low-resolution preview of the current map for the project gallery.
- *
- * Best-effort and non-blocking by design: it reads the already-rendered canvas
- * without mutating the DOM, changing the device pixel ratio, or forcing a
- * redraw, so it never introduces a frame stutter. Returns `null` when no
- * readable frame is available (e.g. orthographic Deck.gl), letting the gallery
- * fall back to its placeholder.
- */
+/** Capture a best-effort low-resolution map preview without forcing a redraw. */
 export function captureMapThumbnail(): MapThumbnail | null {
   if (typeof document === 'undefined') {
     return null;

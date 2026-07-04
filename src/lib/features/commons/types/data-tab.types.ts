@@ -86,7 +86,11 @@ export interface DataTabState {
 
 export type SerializedBasemapJoinState = Omit<
   BasemapJoinState,
-  'selectedBasemap' | 'basemapSource' | 'duplicateLines'
+  | 'selectedBasemap'
+  | 'basemapSource'
+  | 'joinedEntities'
+  | 'entitiesToVerify'
+  | 'duplicateLines'
 >;
 
 export interface SerializedDataTabState extends Omit<

@@ -26,6 +26,7 @@ import {
   type PaletteType
 } from '$lib/features/commons/components/palette-popover/palette.constants';
 import {
+  findLatestYearNumericColumn,
   findPreferredNumericColumn,
   findPreferredTextColumn,
   isHiddenTechnicalColumnName,
@@ -38,6 +39,7 @@ import {
 } from '$lib/features/step-toolbar/tools/legend';
 import {
   ColorMode,
+  DEFAULT_CLASSIFICATION_CLASS_COUNT,
   FillMode,
   StrokeMode,
   SymbolMode,
@@ -48,7 +50,8 @@ import type { FieldSelectionItem } from './use-field-selection.svelte';
 export const CORE_PRIMITIVES = [
   PrimitiveFilterType.POINT,
   PrimitiveFilterType.LINE,
-  PrimitiveFilterType.POLYGON
+  PrimitiveFilterType.POLYGON,
+  PrimitiveFilterType.TEXT
 ] as const;
 
 export const CLASSIFIABLE_PRIMITIVES = [
@@ -81,6 +84,33 @@ type VisualizationWriteOptions = {
 type TextBackgroundUpdater = (
   background: TextPrimitiveConfig['background']
 ) => Partial<TextPrimitiveConfig['background']>;
+type ClassificationDefaultsTarget = {
+  getClassification: (
+    visualization: VisualizationConfig
+  ) => ClassificationConfig | undefined;
+  update: (updates: Partial<ClassificationConfig>) => void;
+  usesBreaks: (visualization: VisualizationConfig) => boolean;
+  usesCategories?: (visualization: VisualizationConfig) => boolean;
+  defaultClassCount?: number;
+};
+type ClassificationAutoColumnsTarget = {
+  usesBreaks: (visualization: VisualizationConfig) => boolean;
+  getValueColumn: (visualization: VisualizationConfig) => string | undefined;
+  findValueColumn: (visualization: VisualizationConfig) => string | undefined;
+  applyValueColumn: (
+    column: string,
+    visualization: VisualizationConfig
+  ) => void;
+  usesCategories: (visualization: VisualizationConfig) => boolean;
+  getCategoryColumn: (visualization: VisualizationConfig) => string | undefined;
+  findCategoryColumn: (
+    visualization: VisualizationConfig
+  ) => string | undefined;
+  applyCategoryColumn: (
+    column: string,
+    visualization: VisualizationConfig
+  ) => void;
+};
 
 interface PrimitivePanelControllerOptions {
   getDataFields: () => FieldSelectionItem[];
@@ -115,7 +145,7 @@ function mergeClassificationConfig(
 ): ClassificationConfig {
   return {
     method: existing?.method ?? ClassificationMethod.KMEANS,
-    classes: existing?.classes ?? 5,
+    classes: existing?.classes ?? DEFAULT_CLASSIFICATION_CLASS_COUNT,
     ...existing,
     ...updates
   };
@@ -138,7 +168,21 @@ function resetClassificationComputedValues(
   };
 }
 
-const DEFAULT_CLASS_COUNT = 5;
+function invertClassificationPalette(
+  classification: ClassificationConfig | undefined,
+  update: (updates: Partial<ClassificationConfig>) => void
+): void {
+  const colors = classification?.colors;
+  if (!classification || !colors?.length) {
+    return;
+  }
+
+  update({
+    colors: [...colors].reverse(),
+    inverted: !(classification.inverted ?? false)
+  });
+}
+
 const DEFAULT_POLYGON_FILL_CLASS_COUNT = 4;
 
 function getDefaultPrimitiveClassCount(
@@ -146,7 +190,7 @@ function getDefaultPrimitiveClassCount(
 ): number {
   return primitive === PrimitiveFilterType.POLYGON
     ? DEFAULT_POLYGON_FILL_CLASS_COUNT
-    : DEFAULT_CLASS_COUNT;
+    : DEFAULT_CLASSIFICATION_CLASS_COUNT;
 }
 
 export function usePrimitivePanelController({
@@ -187,46 +231,6 @@ export function usePrimitivePanelController({
       exclude: reservedColumns,
       allowIdLikeFallback: true
     });
-  }
-
-  function resolveYearColumnName(name: string): number | undefined {
-    const normalized = name.trim().replace(/^_+/, '');
-    if (!/^\d{4}$/.test(normalized)) {
-      return undefined;
-    }
-
-    const year = Number(normalized);
-    return year >= 1800 && year <= 2200 ? year : undefined;
-  }
-
-  function findLatestYearNumericColumn(
-    reservedColumns: Array<string | undefined>
-  ): string | undefined {
-    const reserved = new Set(
-      reservedColumns.filter((name): name is string => Boolean(name))
-    );
-    const latestYearColumn = getDataFields().reduce<
-      { name: string; year: number } | undefined
-    >((latest, column) => {
-      const name = column.text;
-      if (
-        !name ||
-        column.type !== 'number' ||
-        reserved.has(name) ||
-        isHiddenTechnicalColumnName(name)
-      ) {
-        return latest;
-      }
-
-      const year = resolveYearColumnName(name);
-      if (year === undefined) {
-        return latest;
-      }
-
-      return latest && latest.year >= year ? latest : { name, year };
-    }, undefined);
-
-    return latestYearColumn?.name;
   }
 
   function findAutoCategoryColumn(
@@ -479,16 +483,10 @@ export function usePrimitivePanelController({
   }
 
   function invertSymbolFillPalette(): void {
-    const classification = getSymbolFillClassification(getVisualization());
-    const colors = classification?.colors;
-    if (!classification || !colors?.length) {
-      return;
-    }
-
-    updateSymbolFillClassificationState({
-      colors: [...colors].reverse(),
-      inverted: !(classification.inverted ?? false)
-    });
+    invertClassificationPalette(
+      getSymbolFillClassification(getVisualization()),
+      updateSymbolFillClassificationState
+    );
   }
 
   function getPrimitiveStrokeValueColumn(
@@ -623,47 +621,26 @@ export function usePrimitivePanelController({
           return getLinePrimitive(visualization)?.enabled ?? false;
         case PrimitiveFilterType.POLYGON:
           return getPolygonPrimitive(visualization)?.enabled ?? false;
+        case PrimitiveFilterType.TEXT:
+          return getTextPrimitive(visualization)?.enabled ?? false;
       }
     });
   }
 
   function invertPrimitivePalette(primitive: ClassifiablePrimitive): void {
-    const classification = getPrimitiveClassification(
-      getVisualization(),
-      primitive
+    invertClassificationPalette(
+      getPrimitiveClassification(getVisualization(), primitive),
+      (updates) => updatePrimitiveClassification(primitive, updates)
     );
-    if (!classification?.colors?.length) {
-      return;
-    }
-
-    updatePrimitiveClassification(primitive, {
-      colors: [...classification.colors].reverse(),
-      inverted: !(classification.inverted ?? false)
-    });
-  }
-
-  function updateLineThicknessClassificationState(
-    updates: Partial<ClassificationConfig>,
-    options?: ClassificationUpdateOptions
-  ): void {
-    updateLineThicknessClassification(updates, options);
   }
 
   function invertPrimitiveStrokePalette(
     primitive: StrokeClassifiablePrimitive
   ): void {
-    const classification = getPrimitiveStrokeClassification(
-      getVisualization(),
-      primitive
+    invertClassificationPalette(
+      getPrimitiveStrokeClassification(getVisualization(), primitive),
+      (updates) => updatePrimitiveStrokeClassification(primitive, updates)
     );
-    if (!classification?.colors?.length) {
-      return;
-    }
-
-    updatePrimitiveStrokeClassification(primitive, {
-      colors: [...classification.colors].reverse(),
-      inverted: !(classification.inverted ?? false)
-    });
   }
 
   function updateTextBackground(updater: TextBackgroundUpdater): void {
@@ -795,78 +772,48 @@ export function usePrimitivePanelController({
   }
 
   function invertTextBackgroundPalette(): void {
-    const classification =
-      getTextPrimitive(getVisualization())?.background.classification;
-    const colors = classification?.colors;
-    if (!classification || !colors?.length) {
-      return;
-    }
-
-    updateTextBackgroundClassificationState({
-      colors: [...colors].reverse(),
-      inverted: !(classification.inverted ?? false)
-    });
+    invertClassificationPalette(
+      getTextPrimitive(getVisualization())?.background.classification,
+      updateTextBackgroundClassificationState
+    );
   }
 
   function invertTextBackgroundStrokePalette(): void {
-    const classification =
-      getTextPrimitive(getVisualization())?.background.strokeClassification;
-    const colors = classification?.colors;
-    if (!classification || !colors?.length) {
-      return;
-    }
-
-    updateTextBackgroundStrokeClassificationState({
-      colors: [...colors].reverse(),
-      inverted: !(classification.inverted ?? false)
-    });
+    invertClassificationPalette(
+      getTextPrimitive(getVisualization())?.background.strokeClassification,
+      updateTextBackgroundStrokeClassificationState
+    );
   }
 
-  function ensurePrimitiveClassificationDefaults(
-    primitive: ClassifiablePrimitive,
-    visualization: VisualizationConfig
+  function ensureClassificationDefaults(
+    visualization: VisualizationConfig,
+    target: ClassificationDefaultsTarget
   ): void {
-    const classification = getPrimitiveClassification(visualization, primitive);
+    const classification = target.getClassification(visualization);
     const currentPaletteType = resolveClassificationPaletteType(classification);
-    const line = getLinePrimitive(visualization);
 
-    const usesBreaks =
-      primitive === PrimitiveFilterType.LINE
-        ? line?.colorMode === ColorMode.CLASSES
-        : usesBreakClassification(visualization, primitive);
-
-    if (usesBreaks) {
+    if (target.usesBreaks(visualization)) {
       const hasIncompatiblePalette =
         currentPaletteType === PALETTE_TYPE.QUALITATIVE;
       const resetPaletteFields = hasIncompatiblePalette
         ? { paletteId: undefined, colors: [] }
         : {};
       if (!classification?.method || !classification?.numClasses) {
-        const defaultClassCount = getDefaultPrimitiveClassCount(primitive);
-        updatePrimitiveClassification(
-          primitive,
-          {
-            method: ClassificationMethod.KMEANS,
-            classes: defaultClassCount,
-            numClasses: defaultClassCount,
-            ...resetPaletteFields
-          },
-          { preserveOrigin: true }
-        );
-      } else if (hasIncompatiblePalette) {
-        updatePrimitiveClassification(primitive, resetPaletteFields, {
-          preserveOrigin: true
+        const defaultClassCount =
+          target.defaultClassCount ?? DEFAULT_CLASSIFICATION_CLASS_COUNT;
+        target.update({
+          method: ClassificationMethod.KMEANS,
+          classes: defaultClassCount,
+          numClasses: defaultClassCount,
+          ...resetPaletteFields
         });
+      } else if (hasIncompatiblePalette) {
+        target.update(resetPaletteFields);
       }
       return;
     }
 
-    const usesCategories =
-      primitive === PrimitiveFilterType.LINE
-        ? line?.colorMode === ColorMode.CATEGORIES
-        : usesCategoricalClassification(visualization, primitive);
-
-    if (usesCategories) {
+    if (target.usesCategories?.(visualization)) {
       const hasIncompatiblePalette =
         currentPaletteType !== undefined &&
         currentPaletteType !== PALETTE_TYPE.QUALITATIVE;
@@ -874,49 +821,75 @@ export function usePrimitivePanelController({
       const needsLabels = classification?.labels === undefined;
 
       if (hasIncompatiblePalette || needsColors || needsLabels) {
-        updatePrimitiveClassification(
-          primitive,
-          {
-            colors: needsColors
-              ? [...DEFAULT_CATEGORICAL_COLORS]
-              : (classification?.colors ?? []),
-            inverted: classification?.inverted ?? false,
-            ...(needsLabels ? { labels: [] } : {}),
-            ...(hasIncompatiblePalette ? { paletteId: undefined } : {})
-          },
-          { preserveOrigin: true }
-        );
+        target.update({
+          colors: needsColors
+            ? [...DEFAULT_CATEGORICAL_COLORS]
+            : (classification?.colors ?? []),
+          inverted: classification?.inverted ?? false,
+          ...(needsLabels ? { labels: [] } : {}),
+          ...(hasIncompatiblePalette ? { paletteId: undefined } : {})
+        });
       }
     }
+  }
+
+  function ensurePrimitiveClassificationDefaults(
+    primitive: ClassifiablePrimitive,
+    visualization: VisualizationConfig
+  ): void {
+    ensureClassificationDefaults(visualization, {
+      getClassification: (currentVisualization) =>
+        getPrimitiveClassification(currentVisualization, primitive),
+      update: (updates) =>
+        updatePrimitiveClassification(primitive, updates, {
+          preserveOrigin: true
+        }),
+      usesBreaks: (currentVisualization) =>
+        primitive === PrimitiveFilterType.LINE
+          ? getLinePrimitive(currentVisualization)?.colorMode ===
+            ColorMode.CLASSES
+          : usesBreakClassification(currentVisualization, primitive),
+      usesCategories: (currentVisualization) =>
+        primitive === PrimitiveFilterType.LINE
+          ? getLinePrimitive(currentVisualization)?.colorMode ===
+            ColorMode.CATEGORIES
+          : usesCategoricalClassification(currentVisualization, primitive),
+      defaultClassCount: getDefaultPrimitiveClassCount(primitive)
+    });
   }
 
   function ensureLineThicknessClassificationDefaults(
     visualization: VisualizationConfig
   ): void {
-    if (!usesLineThicknessBreakClassification(visualization)) {
-      return;
+    ensureClassificationDefaults(visualization, {
+      getClassification: getLineThicknessClassification,
+      update: updateLineThicknessClassification,
+      usesBreaks: usesLineThicknessBreakClassification
+    });
+  }
+
+  function ensureClassificationAutoColumns(
+    visualization: VisualizationConfig,
+    target: ClassificationAutoColumnsTarget
+  ): void {
+    if (
+      target.usesBreaks(visualization) &&
+      !target.getValueColumn(visualization)
+    ) {
+      const nextValueColumn = target.findValueColumn(visualization);
+      if (nextValueColumn) {
+        target.applyValueColumn(nextValueColumn, visualization);
+      }
     }
 
-    const classification = getLineThicknessClassification(visualization);
-    const currentPaletteType = resolveClassificationPaletteType(classification);
-    const hasIncompatiblePalette =
-      currentPaletteType === PALETTE_TYPE.QUALITATIVE;
-    const resetPaletteFields = hasIncompatiblePalette
-      ? { paletteId: undefined, colors: [] }
-      : {};
-
-    if (!classification?.method || !classification?.numClasses) {
-      updateLineThicknessClassification({
-        method: ClassificationMethod.KMEANS,
-        classes: 5,
-        numClasses: 5,
-        ...resetPaletteFields
-      });
-      return;
-    }
-
-    if (hasIncompatiblePalette) {
-      updateLineThicknessClassification(resetPaletteFields);
+    if (
+      target.usesCategories(visualization) &&
+      !target.getCategoryColumn(visualization)
+    ) {
+      const nextCategoryColumn = target.findCategoryColumn(visualization);
+      if (nextCategoryColumn) {
+        target.applyCategoryColumn(nextCategoryColumn, visualization);
+      }
     }
   }
 
@@ -924,46 +897,44 @@ export function usePrimitivePanelController({
     primitive: ClassifiablePrimitive,
     visualization: VisualizationConfig
   ): void {
-    const valueColumn = getPrimitiveValueColumn(visualization, primitive);
-    const categoryColumn = getPrimitiveCategoryColumn(visualization, primitive);
     const sizeColumn = getPrimitiveSizeColumn(visualization, primitive);
 
-    if (usesBreakClassification(visualization, primitive) && !valueColumn) {
-      const reservedColumns = getReservedColumnsForValue(
-        visualization,
-        primitive
-      );
-      const autoValueColumn =
-        findAutoValueColumn(reservedColumns) ??
-        findFallbackNumericColumn(reservedColumns);
-      if (autoValueColumn) {
+    ensureClassificationAutoColumns(visualization, {
+      usesBreaks: (currentVisualization) =>
+        usesBreakClassification(currentVisualization, primitive),
+      getValueColumn: (currentVisualization) =>
+        getPrimitiveValueColumn(currentVisualization, primitive),
+      findValueColumn: (currentVisualization) => {
+        const reservedColumns = getReservedColumnsForValue(
+          currentVisualization,
+          primitive
+        );
+        return (
+          findAutoValueColumn(reservedColumns) ??
+          findFallbackNumericColumn(reservedColumns)
+        );
+      },
+      applyValueColumn: (column, currentVisualization) =>
         applyPrimitiveMappingUpdate(
           primitive,
-          {
-            valueColumn: autoValueColumn
-          },
-          { visualization }
-        );
-      }
-    }
-
-    if (
-      usesCategoricalClassification(visualization, primitive) &&
-      !categoryColumn
-    ) {
-      const autoCategoryColumn = findAutoCategoryColumn(
-        getReservedColumnsForCategory(visualization, primitive)
-      );
-      if (autoCategoryColumn) {
+          { valueColumn: column },
+          { visualization: currentVisualization }
+        ),
+      usesCategories: (currentVisualization) =>
+        usesCategoricalClassification(currentVisualization, primitive),
+      getCategoryColumn: (currentVisualization) =>
+        getPrimitiveCategoryColumn(currentVisualization, primitive),
+      findCategoryColumn: (currentVisualization) =>
+        findAutoCategoryColumn(
+          getReservedColumnsForCategory(currentVisualization, primitive)
+        ),
+      applyCategoryColumn: (column, currentVisualization) =>
         applyPrimitiveMappingUpdate(
           primitive,
-          {
-            categoryColumn: autoCategoryColumn
-          },
-          { visualization }
-        );
-      }
-    }
+          { categoryColumn: column },
+          { visualization: currentVisualization }
+        )
+    });
 
     if (primitive === PrimitiveFilterType.POINT && !sizeColumn) {
       const symbol = getSymbolPrimitive(visualization);
@@ -975,7 +946,7 @@ export function usePrimitivePanelController({
             symbol.valueColumn === 'id')
             ? symbol.valueColumn
             : undefined;
-        const latestYearColumn = findLatestYearNumericColumn([
+        const latestYearColumn = findLatestYearNumericColumn(getDataFields(), [
           symbol.categoryColumn
         ]);
         const nextSizeColumn =
@@ -1028,317 +999,143 @@ export function usePrimitivePanelController({
     primitive: StrokeClassifiablePrimitive,
     visualization: VisualizationConfig
   ): void {
-    const classification = getPrimitiveStrokeClassification(
-      visualization,
-      primitive
-    );
-    const currentPaletteType = resolveClassificationPaletteType(classification);
-
-    if (usesStrokeBreakClassification(visualization, primitive)) {
-      const hasIncompatiblePalette =
-        currentPaletteType === PALETTE_TYPE.QUALITATIVE;
-      const resetPaletteFields = hasIncompatiblePalette
-        ? { paletteId: undefined, colors: [] }
-        : {};
-      if (!classification?.method || !classification?.numClasses) {
-        updatePrimitiveStrokeClassification(primitive, {
-          method: ClassificationMethod.KMEANS,
-          classes: 5,
-          numClasses: 5,
-          ...resetPaletteFields
-        });
-      } else if (hasIncompatiblePalette) {
-        updatePrimitiveStrokeClassification(primitive, resetPaletteFields);
-      }
-      return;
-    }
-
-    if (usesStrokeCategoricalClassification(visualization, primitive)) {
-      const hasIncompatiblePalette =
-        currentPaletteType !== undefined &&
-        currentPaletteType !== PALETTE_TYPE.QUALITATIVE;
-      const needsColors = !classification?.colors?.length;
-      const needsLabels = classification?.labels === undefined;
-
-      if (hasIncompatiblePalette || needsColors || needsLabels) {
-        updatePrimitiveStrokeClassification(primitive, {
-          colors: needsColors
-            ? [...DEFAULT_CATEGORICAL_COLORS]
-            : (classification?.colors ?? []),
-          inverted: classification?.inverted ?? false,
-          ...(needsLabels ? { labels: [] } : {}),
-          ...(hasIncompatiblePalette ? { paletteId: undefined } : {})
-        });
-      }
-    }
+    ensureClassificationDefaults(visualization, {
+      getClassification: (currentVisualization) =>
+        getPrimitiveStrokeClassification(currentVisualization, primitive),
+      update: (updates) =>
+        updatePrimitiveStrokeClassification(primitive, updates),
+      usesBreaks: (currentVisualization) =>
+        usesStrokeBreakClassification(currentVisualization, primitive),
+      usesCategories: (currentVisualization) =>
+        usesStrokeCategoricalClassification(currentVisualization, primitive)
+    });
   }
 
   function ensurePrimitiveStrokeAutoColumns(
     primitive: StrokeClassifiablePrimitive,
     visualization: VisualizationConfig
   ): void {
-    const strokeValueColumn = getPrimitiveStrokeValueColumn(
-      visualization,
-      primitive
-    );
-    const strokeCategoryColumn = getPrimitiveStrokeCategoryColumn(
-      visualization,
-      primitive
-    );
-
-    if (
-      usesStrokeBreakClassification(visualization, primitive) &&
-      !strokeValueColumn
-    ) {
-      const reservedColumns = getReservedColumnsForValue(
-        visualization,
-        primitive
-      );
-      const nextValueColumn =
-        (primitive === PrimitiveFilterType.POINT
-          ? getSymbolFillValueColumn(visualization)
-          : undefined) ??
-        getPrimitiveValueColumn(visualization, primitive) ??
-        findAutoValueColumn(reservedColumns) ??
-        findFallbackNumericColumn(reservedColumns);
-      if (nextValueColumn) {
+    ensureClassificationAutoColumns(visualization, {
+      usesBreaks: (currentVisualization) =>
+        usesStrokeBreakClassification(currentVisualization, primitive),
+      getValueColumn: (currentVisualization) =>
+        getPrimitiveStrokeValueColumn(currentVisualization, primitive),
+      findValueColumn: (currentVisualization) => {
+        const reservedColumns = getReservedColumnsForValue(
+          currentVisualization,
+          primitive
+        );
+        return (
+          (primitive === PrimitiveFilterType.POINT
+            ? getSymbolFillValueColumn(currentVisualization)
+            : undefined) ??
+          getPrimitiveValueColumn(currentVisualization, primitive) ??
+          findAutoValueColumn(reservedColumns) ??
+          findFallbackNumericColumn(reservedColumns)
+        );
+      },
+      applyValueColumn: (column, currentVisualization) =>
         applyPrimitiveStrokeMappingUpdate(
           primitive,
-          {
-            valueColumn: nextValueColumn
-          },
-          { visualization }
-        );
-      }
-    }
-
-    if (
-      usesStrokeCategoricalClassification(visualization, primitive) &&
-      !strokeCategoryColumn
-    ) {
-      const nextCategoryColumn =
+          { valueColumn: column },
+          { visualization: currentVisualization }
+        ),
+      usesCategories: (currentVisualization) =>
+        usesStrokeCategoricalClassification(currentVisualization, primitive),
+      getCategoryColumn: (currentVisualization) =>
+        getPrimitiveStrokeCategoryColumn(currentVisualization, primitive),
+      findCategoryColumn: (currentVisualization) =>
         (primitive === PrimitiveFilterType.POINT
-          ? getSymbolFillCategoryColumn(visualization)
+          ? getSymbolFillCategoryColumn(currentVisualization)
           : undefined) ??
-        getPrimitiveCategoryColumn(visualization, primitive) ??
+        getPrimitiveCategoryColumn(currentVisualization, primitive) ??
         findAutoCategoryColumn(
-          getReservedColumnsForCategory(visualization, primitive)
-        );
-      if (nextCategoryColumn) {
+          getReservedColumnsForCategory(currentVisualization, primitive)
+        ),
+      applyCategoryColumn: (column, currentVisualization) =>
         applyPrimitiveStrokeMappingUpdate(
           primitive,
-          {
-            categoryColumn: nextCategoryColumn
-          },
-          { visualization }
-        );
-      }
-    }
+          { categoryColumn: column },
+          { visualization: currentVisualization }
+        )
+    });
   }
 
   function ensureSymbolFillClassificationDefaults(
     visualization: VisualizationConfig
   ): void {
-    const classification = getSymbolFillClassification(visualization);
-    const currentPaletteType = resolveClassificationPaletteType(classification);
-
-    if (usesSymbolFillBreakClassification(visualization)) {
-      const hasIncompatiblePalette =
-        currentPaletteType === PALETTE_TYPE.QUALITATIVE;
-      const resetPaletteFields = hasIncompatiblePalette
-        ? { paletteId: undefined, colors: [] }
-        : {};
-      if (!classification?.method || !classification?.numClasses) {
-        updateSymbolFillClassificationState(
-          {
-            method: ClassificationMethod.KMEANS,
-            classes: 5,
-            numClasses: 5,
-            ...resetPaletteFields
-          },
-          { visualization }
-        );
-      } else if (hasIncompatiblePalette) {
-        updateSymbolFillClassificationState(resetPaletteFields, {
-          visualization
-        });
-      }
-      return;
-    }
-
-    if (usesSymbolFillCategoricalClassification(visualization)) {
-      const hasIncompatiblePalette =
-        currentPaletteType !== undefined &&
-        currentPaletteType !== PALETTE_TYPE.QUALITATIVE;
-      const needsColors = !classification?.colors?.length;
-      const needsLabels = classification?.labels === undefined;
-
-      if (hasIncompatiblePalette || needsColors || needsLabels) {
-        updateSymbolFillClassificationState(
-          {
-            colors: needsColors
-              ? [...DEFAULT_CATEGORICAL_COLORS]
-              : (classification?.colors ?? []),
-            inverted: classification?.inverted ?? false,
-            ...(needsLabels ? { labels: [] } : {}),
-            ...(hasIncompatiblePalette ? { paletteId: undefined } : {})
-          },
-          { visualization }
-        );
-      }
-    }
+    ensureClassificationDefaults(visualization, {
+      getClassification: getSymbolFillClassification,
+      update: (updates) =>
+        updateSymbolFillClassificationState(updates, { visualization }),
+      usesBreaks: usesSymbolFillBreakClassification,
+      usesCategories: usesSymbolFillCategoricalClassification
+    });
   }
 
   function ensureSymbolFillAutoColumns(
     visualization: VisualizationConfig
   ): void {
-    if (
-      usesSymbolFillBreakClassification(visualization) &&
-      !getSymbolFillValueColumn(visualization)
-    ) {
-      const symbol = getSymbolPrimitive(visualization);
-      const reservedColumns =
-        getReservedColumnsForSymbolFillValue(visualization);
-      const nextValueColumn =
-        symbol?.valueColumn ??
-        symbol?.sizeColumn ??
-        findAutoValueColumn(reservedColumns) ??
-        findFallbackNumericColumn(reservedColumns);
-      if (nextValueColumn) {
-        applySymbolFillMappingUpdate(
-          { valueColumn: nextValueColumn },
-          { visualization }
+    ensureClassificationAutoColumns(visualization, {
+      usesBreaks: usesSymbolFillBreakClassification,
+      getValueColumn: getSymbolFillValueColumn,
+      findValueColumn: (currentVisualization) => {
+        const symbol = getSymbolPrimitive(currentVisualization);
+        const reservedColumns =
+          getReservedColumnsForSymbolFillValue(currentVisualization);
+        return (
+          symbol?.valueColumn ??
+          symbol?.sizeColumn ??
+          findAutoValueColumn(reservedColumns) ??
+          findFallbackNumericColumn(reservedColumns)
         );
-      }
-    }
-
-    if (
-      usesSymbolFillCategoricalClassification(visualization) &&
-      !getSymbolFillCategoryColumn(visualization)
-    ) {
-      const symbol = getSymbolPrimitive(visualization);
-      const nextCategoryColumn =
-        symbol?.categoryColumn ??
+      },
+      applyValueColumn: (column, currentVisualization) =>
+        applySymbolFillMappingUpdate(
+          { valueColumn: column },
+          { visualization: currentVisualization }
+        ),
+      usesCategories: usesSymbolFillCategoricalClassification,
+      getCategoryColumn: getSymbolFillCategoryColumn,
+      findCategoryColumn: (currentVisualization) =>
+        getSymbolPrimitive(currentVisualization)?.categoryColumn ??
         findAutoCategoryColumn(
-          getReservedColumnsForSymbolFillCategory(visualization)
-        );
-      if (nextCategoryColumn) {
+          getReservedColumnsForSymbolFillCategory(currentVisualization)
+        ),
+      applyCategoryColumn: (column, currentVisualization) =>
         applySymbolFillMappingUpdate(
-          {
-            categoryColumn: nextCategoryColumn
-          },
-          { visualization }
-        );
-      }
-    }
+          { categoryColumn: column },
+          { visualization: currentVisualization }
+        )
+    });
   }
 
   function ensureTextBackgroundClassificationDefaults(
     visualization: VisualizationConfig
   ): void {
-    const background = getTextBackgroundConfig(visualization);
-    const classification = background?.classification;
-    const currentPaletteType = resolveClassificationPaletteType(classification);
-
-    if (usesTextBackgroundBreakClassification(visualization)) {
-      const hasIncompatiblePalette =
-        currentPaletteType === PALETTE_TYPE.QUALITATIVE;
-      const resetPaletteFields = hasIncompatiblePalette
-        ? { paletteId: undefined, colors: [] }
-        : {};
-      if (!classification?.method || !classification?.numClasses) {
-        updateTextBackgroundClassificationState(
-          {
-            method: ClassificationMethod.KMEANS,
-            classes: 5,
-            numClasses: 5,
-            ...resetPaletteFields
-          },
-          { visualization }
-        );
-      } else if (hasIncompatiblePalette) {
-        updateTextBackgroundClassificationState(resetPaletteFields, {
-          visualization
-        });
-      }
-      return;
-    }
-
-    if (usesTextBackgroundCategoricalClassification(visualization)) {
-      const hasIncompatiblePalette =
-        currentPaletteType !== undefined &&
-        currentPaletteType !== PALETTE_TYPE.QUALITATIVE;
-      const needsColors = !classification?.colors?.length;
-      const needsLabels = classification?.labels === undefined;
-
-      if (hasIncompatiblePalette || needsColors || needsLabels) {
-        updateTextBackgroundClassificationState(
-          {
-            colors: needsColors
-              ? [...DEFAULT_CATEGORICAL_COLORS]
-              : (classification?.colors ?? []),
-            inverted: classification?.inverted ?? false,
-            ...(needsLabels ? { labels: [] } : {}),
-            ...(hasIncompatiblePalette ? { paletteId: undefined } : {})
-          },
-          { visualization }
-        );
-      }
-    }
+    ensureClassificationDefaults(visualization, {
+      getClassification: (currentVisualization) =>
+        getTextBackgroundConfig(currentVisualization)?.classification,
+      update: (updates) =>
+        updateTextBackgroundClassificationState(updates, { visualization }),
+      usesBreaks: usesTextBackgroundBreakClassification,
+      usesCategories: usesTextBackgroundCategoricalClassification
+    });
   }
 
   function ensureTextBackgroundStrokeClassificationDefaults(
     visualization: VisualizationConfig
   ): void {
-    const background = getTextBackgroundConfig(visualization);
-    const classification = background?.strokeClassification;
-    const currentPaletteType = resolveClassificationPaletteType(classification);
-
-    if (usesTextBackgroundStrokeBreakClassification(visualization)) {
-      const hasIncompatiblePalette =
-        currentPaletteType === PALETTE_TYPE.QUALITATIVE;
-      const resetPaletteFields = hasIncompatiblePalette
-        ? { paletteId: undefined, colors: [] }
-        : {};
-      if (!classification?.method || !classification?.numClasses) {
-        updateTextBackgroundStrokeClassificationState(
-          {
-            method: ClassificationMethod.KMEANS,
-            classes: 5,
-            numClasses: 5,
-            ...resetPaletteFields
-          },
-          { visualization }
-        );
-      } else if (hasIncompatiblePalette) {
-        updateTextBackgroundStrokeClassificationState(resetPaletteFields, {
+    ensureClassificationDefaults(visualization, {
+      getClassification: (currentVisualization) =>
+        getTextBackgroundConfig(currentVisualization)?.strokeClassification,
+      update: (updates) =>
+        updateTextBackgroundStrokeClassificationState(updates, {
           visualization
-        });
-      }
-      return;
-    }
-
-    if (usesTextBackgroundStrokeCategoricalClassification(visualization)) {
-      const hasIncompatiblePalette =
-        currentPaletteType !== undefined &&
-        currentPaletteType !== PALETTE_TYPE.QUALITATIVE;
-      const needsColors = !classification?.colors?.length;
-      const needsLabels = classification?.labels === undefined;
-
-      if (hasIncompatiblePalette || needsColors || needsLabels) {
-        updateTextBackgroundStrokeClassificationState(
-          {
-            colors: needsColors
-              ? [...DEFAULT_CATEGORICAL_COLORS]
-              : (classification?.colors ?? []),
-            inverted: classification?.inverted ?? false,
-            ...(needsLabels ? { labels: [] } : {}),
-            ...(hasIncompatiblePalette ? { paletteId: undefined } : {})
-          },
-          { visualization }
-        );
-      }
-    }
+        }),
+      usesBreaks: usesTextBackgroundStrokeBreakClassification,
+      usesCategories: usesTextBackgroundStrokeCategoricalClassification
+    });
   }
 
   function ensureTextBackgroundAutoColumns(
@@ -1349,44 +1146,43 @@ export function usePrimitivePanelController({
       return;
     }
 
-    if (
-      usesTextBackgroundBreakClassification(visualization) &&
-      !background.valueColumn
-    ) {
-      const reservedColumns = getReservedColumnsForValue(
-        visualization,
-        PrimitiveFilterType.TEXT
-      );
-      const nextValueColumn =
-        getTextPrimitive(visualization)?.valueColumn ??
-        findAutoValueColumn(reservedColumns) ??
-        findFallbackNumericColumn(reservedColumns);
-      if (nextValueColumn) {
-        applyTextBackgroundMappingUpdate(
-          { valueColumn: nextValueColumn },
-          { visualization }
+    ensureClassificationAutoColumns(visualization, {
+      usesBreaks: usesTextBackgroundBreakClassification,
+      getValueColumn: (currentVisualization) =>
+        getTextBackgroundConfig(currentVisualization)?.valueColumn,
+      findValueColumn: (currentVisualization) => {
+        const reservedColumns = getReservedColumnsForValue(
+          currentVisualization,
+          PrimitiveFilterType.TEXT
         );
-      }
-    }
-
-    if (
-      usesTextBackgroundCategoricalClassification(visualization) &&
-      !background.categoryColumn
-    ) {
-      const nextCategoryColumn =
-        getTextPrimitive(visualization)?.categoryColumn ??
+        return (
+          getTextPrimitive(currentVisualization)?.valueColumn ??
+          findAutoValueColumn(reservedColumns) ??
+          findFallbackNumericColumn(reservedColumns)
+        );
+      },
+      applyValueColumn: (column, currentVisualization) =>
+        applyTextBackgroundMappingUpdate(
+          { valueColumn: column },
+          { visualization: currentVisualization }
+        ),
+      usesCategories: usesTextBackgroundCategoricalClassification,
+      getCategoryColumn: (currentVisualization) =>
+        getTextBackgroundConfig(currentVisualization)?.categoryColumn,
+      findCategoryColumn: (currentVisualization) =>
+        getTextPrimitive(currentVisualization)?.categoryColumn ??
         findAutoCategoryColumn(
-          getReservedColumnsForCategory(visualization, PrimitiveFilterType.TEXT)
-        );
-      if (nextCategoryColumn) {
+          getReservedColumnsForCategory(
+            currentVisualization,
+            PrimitiveFilterType.TEXT
+          )
+        ),
+      applyCategoryColumn: (column, currentVisualization) =>
         applyTextBackgroundMappingUpdate(
-          {
-            categoryColumn: nextCategoryColumn
-          },
-          { visualization }
-        );
-      }
-    }
+          { categoryColumn: column },
+          { visualization: currentVisualization }
+        )
+    });
   }
 
   function ensureTextBackgroundStrokeAutoColumns(
@@ -1397,48 +1193,50 @@ export function usePrimitivePanelController({
       return;
     }
 
-    if (
-      usesTextBackgroundStrokeBreakClassification(visualization) &&
-      !background.strokeValueColumn
-    ) {
-      const reservedColumns = getReservedColumnsForValue(
-        visualization,
-        PrimitiveFilterType.TEXT
-      );
-      const nextValueColumn =
-        background.valueColumn ??
-        getTextPrimitive(visualization)?.valueColumn ??
-        findAutoValueColumn(reservedColumns) ??
-        findFallbackNumericColumn(reservedColumns);
-      if (nextValueColumn) {
+    ensureClassificationAutoColumns(visualization, {
+      usesBreaks: usesTextBackgroundStrokeBreakClassification,
+      getValueColumn: (currentVisualization) =>
+        getTextBackgroundConfig(currentVisualization)?.strokeValueColumn,
+      findValueColumn: (currentVisualization) => {
+        const reservedColumns = getReservedColumnsForValue(
+          currentVisualization,
+          PrimitiveFilterType.TEXT
+        );
+        const currentBackground = getTextBackgroundConfig(currentVisualization);
+        return (
+          currentBackground?.valueColumn ??
+          getTextPrimitive(currentVisualization)?.valueColumn ??
+          findAutoValueColumn(reservedColumns) ??
+          findFallbackNumericColumn(reservedColumns)
+        );
+      },
+      applyValueColumn: (column, currentVisualization) =>
         applyTextBackgroundStrokeMappingUpdate(
-          {
-            valueColumn: nextValueColumn
-          },
-          { visualization }
+          { valueColumn: column },
+          { visualization: currentVisualization }
+        ),
+      usesCategories: usesTextBackgroundStrokeCategoricalClassification,
+      getCategoryColumn: (currentVisualization) =>
+        getTextBackgroundConfig(currentVisualization)?.strokeCategoryColumn,
+      findCategoryColumn: (currentVisualization) => {
+        const currentBackground = getTextBackgroundConfig(currentVisualization);
+        return (
+          currentBackground?.categoryColumn ??
+          getTextPrimitive(currentVisualization)?.categoryColumn ??
+          findAutoCategoryColumn(
+            getReservedColumnsForCategory(
+              currentVisualization,
+              PrimitiveFilterType.TEXT
+            )
+          )
         );
-      }
-    }
-
-    if (
-      usesTextBackgroundStrokeCategoricalClassification(visualization) &&
-      !background.strokeCategoryColumn
-    ) {
-      const nextCategoryColumn =
-        background.categoryColumn ??
-        getTextPrimitive(visualization)?.categoryColumn ??
-        findAutoCategoryColumn(
-          getReservedColumnsForCategory(visualization, PrimitiveFilterType.TEXT)
-        );
-      if (nextCategoryColumn) {
+      },
+      applyCategoryColumn: (column, currentVisualization) =>
         applyTextBackgroundStrokeMappingUpdate(
-          {
-            categoryColumn: nextCategoryColumn
-          },
-          { visualization }
-        );
-      }
-    }
+          { categoryColumn: column },
+          { visualization: currentVisualization }
+        )
+    });
   }
 
   function getLegendSubtitleForPrimitive(
@@ -1629,7 +1427,7 @@ export function usePrimitivePanelController({
           ? {
               ...(symbol.classification ?? {
                 method: ClassificationMethod.KMEANS,
-                classes: 5
+                classes: DEFAULT_CLASSIFICATION_CLASS_COUNT
               }),
               labels: [],
               disabledLabels: undefined,
@@ -2012,8 +1810,8 @@ export function usePrimitivePanelController({
     invertSymbolFillPalette,
     invertTextBackgroundPalette,
     invertTextBackgroundStrokePalette,
+    updateLineThicknessClassificationState: updateLineThicknessClassification,
     updateSymbolFillClassificationState,
-    updateLineThicknessClassificationState,
     updateTextBackground,
     updateTextBackgroundClassificationState,
     updateTextBackgroundStrokeClassificationState,

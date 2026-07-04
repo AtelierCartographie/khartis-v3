@@ -5,7 +5,8 @@
     "src/routes/**/+*.{js,ts}",
     "src/sw.ts",
     "pwa-assets.config.js",
-    "scripts/**/*.sh"
+    "scripts/**/*.sh",
+    "scripts/**/*.mjs"
   ],
   "project": ["src/**/*.{ts,js,svelte,css,scss}"],
   "ignore": [

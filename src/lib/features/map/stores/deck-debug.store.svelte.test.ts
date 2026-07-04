@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { ViewMode } from '../constants/map.constants';
 import { deckDebugStore } from './deck-debug.store.svelte';
 
@@ -27,39 +27,23 @@ const SAMPLE_METRICS = {
 describe('deck debug store', () => {
   beforeEach(() => {
     deckDebugStore.clear();
-    vi.restoreAllMocks();
   });
 
-  it('stores a metrics snapshot alongside the current rendering context', () => {
-    vi.spyOn(Date, 'now').mockReturnValue(1713427200000);
-
+  it('stores a metrics snapshot alongside the current view mode', () => {
     deckDebugStore.setViewMode(ViewMode.ORTHOGRAPHIC);
-    deckDebugStore.setRenderPixelRatio(2);
-    deckDebugStore.setCanvasSize({ width: 1279.6, height: 719.8 });
     deckDebugStore.setMetrics(SAMPLE_METRICS);
 
     expect(deckDebugStore.viewMode).toBe(ViewMode.ORTHOGRAPHIC);
-    expect(deckDebugStore.renderPixelRatio).toBe(2);
-    expect(deckDebugStore.canvasSize).toEqual({ width: 1280, height: 720 });
     expect(deckDebugStore.metrics).toEqual(SAMPLE_METRICS);
-    expect(deckDebugStore.lastUpdatedAt).toBe(1713427200000);
   });
 
-  it('normalizes invalid inputs and clears the debug snapshot', () => {
+  it('clears the debug snapshot', () => {
     deckDebugStore.setViewMode(ViewMode.MAPLIBRE);
-    deckDebugStore.setRenderPixelRatio(Number.NaN);
-    deckDebugStore.setCanvasSize({ width: -1, height: 0 });
     deckDebugStore.setMetrics(null);
-
-    expect(deckDebugStore.renderPixelRatio).toBe(1);
-    expect(deckDebugStore.canvasSize).toBeNull();
-    expect(deckDebugStore.lastUpdatedAt).toBeNull();
 
     deckDebugStore.clear();
 
     expect(deckDebugStore.viewMode).toBeNull();
     expect(deckDebugStore.metrics).toBeNull();
-    expect(deckDebugStore.canvasSize).toBeNull();
-    expect(deckDebugStore.renderPixelRatio).toBe(1);
   });
 });

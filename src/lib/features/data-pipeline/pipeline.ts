@@ -1,4 +1,4 @@
-import { Duck, initDuckDB } from '$lib/features/duckdb';
+import { initDuckDB } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
 import { validateFile } from './core/validators';
 import {
@@ -137,33 +137,6 @@ const Pipeline = {
       options.type ?? MIME.CSV
     );
     return this.processFile(file) as Promise<DatasetResult>;
-  },
-
-  async joinDatasetById(
-    tableName: string,
-    idColumn: string,
-    options: {
-      basemapsTable?: string;
-      basemapTable?: string;
-      basemapId?: string;
-      basemapOthersId?: string;
-    }
-  ): Promise<unknown> {
-    await this.initialize();
-    return Duck.join_by_id(tableName, idColumn, {
-      basemaps_table: options.basemapsTable,
-      basemap_table: options.basemapTable,
-      basemap_id: options.basemapId,
-      basemap_others_id: options.basemapOthersId
-    });
-  },
-
-  async applyJoinAssociation(
-    tableName: string,
-    basemap: string
-  ): Promise<void> {
-    await this.initialize();
-    await Duck.apply_join_association(tableName, basemap);
   },
 
   async validateFile(file: File): Promise<ValidationResult> {

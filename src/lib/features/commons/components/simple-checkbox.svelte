@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { stopBubbleEvents } from '$lib/features/commons/utils/stop-bubble-events';
+
   interface Props {
     checked?: boolean;
     indeterminate?: boolean;
@@ -22,31 +24,6 @@
   }: Props = $props();
 
   let checkboxInput = $state<HTMLInputElement>();
-
-  function stopBubbleEvents(node: HTMLElement) {
-    const events = [
-      'click',
-      'mousedown',
-      'mouseup',
-      'pointerdown',
-      'pointerup',
-      'keydown',
-      'keyup'
-    ] as const;
-    const handler = (event: Event) => event.stopPropagation();
-
-    events.forEach((eventName) => {
-      node.addEventListener(eventName, handler);
-    });
-
-    return {
-      destroy() {
-        events.forEach((eventName) => {
-          node.removeEventListener(eventName, handler);
-        });
-      }
-    };
-  }
 
   function handleChange(event: Event): void {
     const next = (event.currentTarget as HTMLInputElement).checked;

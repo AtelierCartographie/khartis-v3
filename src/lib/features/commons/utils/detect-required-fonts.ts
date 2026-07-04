@@ -15,10 +15,3 @@ export function detectRequiredFonts(text: string): Set<RequiredFallbackFont> {
   }
   return result;
 }
-
-export function mergeRequiredFonts(
-  a: Set<RequiredFallbackFont>,
-  b: Set<RequiredFallbackFont>
-): Set<RequiredFallbackFont> {
-  return new Set([...a, ...b]);
-}

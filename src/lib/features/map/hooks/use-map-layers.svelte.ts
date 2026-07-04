@@ -5,8 +5,11 @@ import type { Map as MapLibreMap } from 'maplibre-gl';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { Duck } from '$lib/features/duckdb';
-import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import {
+  Duck,
+  duckDBOrchestrator,
+  type DataTableFilter
+} from '$lib/features/duckdb';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
@@ -64,7 +67,6 @@ import {
 } from '../utils/layer-panel-row.utils';
 import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
 import { layerOrderStore } from '$lib/features/step-toolbar/tools/layers/layer-order.store.svelte';
-import type { DataTableFilter } from '$lib/features/duckdb/types';
 import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
 import type { BasemapMetadata } from '../types/basemap.types';
@@ -362,6 +364,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   const representativePointLoadFailures = new WeakSet<ArrowTable>();
   const representativePointNotifyOnReady = new WeakSet<ArrowTable>();
   const matchedSplitTableCache = new WeakMap<
+    ArrowTable,
+    WeakMap<ArrowTable, Map<string, ArrowTable>>
+  >();
+  const matchedSplitFilteredTableCache = new WeakMap<
     ArrowTable,
     WeakMap<ArrowTable, Map<string, ArrowTable>>
   >();
@@ -797,6 +803,41 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     return getMatchedSplitTable(split.geometry, split);
   }
 
+  function getFilteredMatchedSplitTable(
+    matchedGeometryTable: ArrowTable,
+    filteredDataset: ArrowTable,
+    featureIdColumn: string
+  ): ArrowTable {
+    let datasetCache = matchedSplitFilteredTableCache.get(matchedGeometryTable);
+    if (!datasetCache) {
+      datasetCache = new WeakMap();
+      matchedSplitFilteredTableCache.set(matchedGeometryTable, datasetCache);
+    }
+
+    let columnCache = datasetCache.get(filteredDataset);
+    if (!columnCache) {
+      columnCache = new Map();
+      datasetCache.set(filteredDataset, columnCache);
+    }
+
+    const cached = columnCache.get(featureIdColumn);
+    if (cached) {
+      return cached;
+    }
+
+    const matchingRows = getSplitMatchedGeometryRowIndices(
+      matchedGeometryTable,
+      filteredDataset,
+      featureIdColumn
+    );
+    const filteredTable =
+      matchingRows.length === matchedGeometryTable.numRows
+        ? matchedGeometryTable
+        : selectRowsByIndices(matchedGeometryTable, matchingRows);
+    columnCache.set(featureIdColumn, filteredTable);
+    return filteredTable;
+  }
+
   function filterSplitGeometryTableByDatasetRows(
     geometryTable: ArrowTable,
     split: SplitRenderingTable,
@@ -814,20 +855,16 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       dataFilteredDataset,
       tableFilters
     );
-    const filteredDataset = tableFilteredDataset;
 
-    if (filteredDataset === split.dataset) {
+    if (tableFilteredDataset === split.dataset) {
       return matchedGeometryTable;
     }
 
-    const matchingRows = getSplitMatchedGeometryRowIndices(
+    return getFilteredMatchedSplitTable(
       matchedGeometryTable,
-      filteredDataset,
+      tableFilteredDataset,
       split.featureIdColumn
     );
-    return matchingRows.length === matchedGeometryTable.numRows
-      ? matchedGeometryTable
-      : selectRowsByIndices(matchedGeometryTable, matchingRows);
   }
 
   function filterRepresentativePointTableByPrimitive(
@@ -983,7 +1020,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       // `activeBasemapProjection` from here too would race that path and could
       // store a differently-fit instance, leaving consumers that invert against
       // the reference bbox — the scale bar — mismatched. So we deliberately do
-      // not touch projectionStore.setRenderProjection here.
+      // not publish render projections outside projectionStore.setReferenceBbox.
 
       const beforeId =
         map && deckOverlay ? findFirstSymbolLayerId(map) : undefined;

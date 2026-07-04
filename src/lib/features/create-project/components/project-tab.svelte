@@ -3,10 +3,12 @@
   import type { Snippet } from 'svelte';
   import { KEY } from '../../commons/constants/dom.constants';
 
-  interface ProjectCardProps {
+  interface ProjectTabProps {
+    id?: string;
     title: string;
     icon: Snippet;
     selected?: boolean;
+    ariaControls?: string;
     onclick?: (e: Event) => void | undefined;
     onkeydown?: (e: KeyboardEvent) => void | undefined;
     tabIndex?: number;
@@ -14,14 +16,16 @@
   }
 
   let {
+    id,
     title,
     icon,
     selected = false,
+    ariaControls,
     onclick,
     onkeydown,
     tabIndex = 0,
     'data-testid': dataTestId
-  }: ProjectCardProps = $props();
+  }: ProjectTabProps = $props();
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === KEY.ENTER || e.key === KEY.SPACE) {
@@ -33,6 +37,7 @@
 </script>
 
 <div
+  id={id}
   class={clsx(
     'project-card w-full cursor-pointer pl-5 pr-5 pt-5 pb-5',
     selected && 'selected'
@@ -42,6 +47,7 @@
   onclick={onclick}
   onkeydown={handleKeydown}
   aria-selected={selected}
+  aria-controls={ariaControls}
   data-testid={dataTestId}
 >
   <div class="flex justify-between w-full items-start pb-3">

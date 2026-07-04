@@ -5,7 +5,6 @@
     globalActions,
     globalState
   } from '$lib/features/commons/stores/global.svelte';
-  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import {
     ToolbarState,
     ToolbarStep
@@ -25,11 +24,8 @@
   import ToolbarTabs from './components/toolbar-tabs.svelte';
   import { dataTabStore } from '$lib/features/data-tab/stores/data-tab.store.svelte';
   import DataTab from '$lib/features/data-tab/data-tab.svelte';
-  import VizualisationTab from '$lib/features/visualization-tab/visualization.svelte';
-  import {
-    mainToolbarActions,
-    mainToolbarState
-  } from './stores/main-toolbar.store.svelte';
+  import { Visualization as VizualisationTab } from '$lib/features/visualization-tab';
+  import { mainToolbarActions } from './stores/main-toolbar.store.svelte';
 
   let toolbarContent = $state<HTMLElement | null>(null);
 
@@ -56,11 +52,6 @@
 
   const DATA_STEP_SECTION_IDS: Record<string, string[]> = {
     geo: ['data-control-step', 'enrich-data-step'],
-    'tabular-gps': [
-      'data-control-step',
-      'geolocation-step',
-      'basemap-join-step'
-    ],
     tabular: ['data-control-step', 'geolocation-step', 'basemap-join-step']
   };
 
@@ -68,11 +59,7 @@
     if (dataTabStore.canNavigateToStep[stepIndex]) {
       dataTabStore.setActiveStep(stepIndex);
       await tick();
-      const mode = dataTabStore.isGeographicMode
-        ? 'geo'
-        : dataTabStore.isTabularGPSMode
-          ? 'tabular-gps'
-          : 'tabular';
+      const mode = dataTabStore.isGeographicMode ? 'geo' : 'tabular';
       const sectionId = DATA_STEP_SECTION_IDS[mode][stepIndex];
       const section = toolbarContent?.querySelector(`#${sectionId}`);
       if (section) {
@@ -118,16 +105,6 @@
     if (toolbarContent) {
       toolbarContent.scrollTop = 0;
     }
-  });
-
-  $effect(() => {
-    const project = projectStore.currentProject;
-
-    const hasFiles = (project?.data?.sourceFiles?.length ?? 0) > 0;
-
-    mainToolbarState.canNavigateToVisualization = hasFiles;
-    mainToolbarState.hasValidData = hasFiles;
-    mainToolbarState.currentProjectName = project?.manifest.name || '';
   });
 </script>
 

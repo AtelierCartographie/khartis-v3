@@ -1,9 +1,5 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { SvelteSet } from 'svelte/reactivity';
-import {
-  createProcessingSemaphore,
-  type ProcessingSemaphore
-} from '../../utils/processing-semaphore';
 
 export interface DatasetsState {
   datasets: DatasetResult[];
@@ -17,7 +13,6 @@ export interface DatasetsState {
 export interface DatasetsInternals {
   activeOperations: number;
   pendingDatasetResolvers: Map<string, Array<(datasetId: string) => void>>;
-  processingSemaphore: ProcessingSemaphore;
 }
 
 function createInitialState(): DatasetsState {
@@ -32,8 +27,7 @@ function createInitialState(): DatasetsState {
 function createInternals(): DatasetsInternals {
   return {
     activeOperations: 0,
-    pendingDatasetResolvers: new Map(),
-    processingSemaphore: createProcessingSemaphore(2)
+    pendingDatasetResolvers: new Map()
   };
 }
 

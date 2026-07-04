@@ -2,7 +2,6 @@
   import { Deck, OrthographicView, type DeckProps } from '@deck.gl/core';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import type { FeatureCollection } from 'geojson';
-  import type { LngLatBoundsLike } from 'maplibre-gl';
   import { onMount, untrack } from 'svelte';
   import * as m from '$lib/paraglide/messages';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
@@ -37,25 +36,28 @@
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import {
+    basemapLayersStore,
     basemapService,
-    getPreferredBasemapFile
-  } from '$lib/features/map/services/basemap.service.svelte';
-  import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
-  import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
-  import { mapHighlightStore } from '$lib/features/map/stores/map-highlight.store.svelte';
-  import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
-  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+    getPreferredBasemapFile,
+    mapHighlightStore,
+    mapProjectionStore,
+    osmBasemapStore,
+    projectionStore,
+    type BBox,
+    type SplitRenderingTable
+  } from '$lib/features/map';
   import { getProjectionState } from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
   import { getSimplificationState } from '$lib/features/step-toolbar/tools/simplification/simplification.store.svelte';
   import { getMainlandBboxForBasemap } from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
-  import { fitBasemapRenderProjection } from '$lib/features/map/utils/fit-basemap-render-projection.utils';
   import { resolveActiveBasemapMetadata } from '$lib/features/map/utils/basemap-metadata-resolution.utils';
-  import { buildProjectionForBasemap } from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
-  import { computeProjectedBboxForProjection } from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
-  import { resolveOrthographicBasemapReferenceBboxes } from '$lib/features/map/utils/orthographic-basemap-reference.utils';
-  import { resolveProjectionForRender } from '$lib/features/map/utils/projection-priority.utils';
   import { resolveUserProjectionOverride } from '$lib/features/map/utils/user-projection.utils';
-  import { shouldUseIdentityProjectionForDatasetCrs } from '$lib/features/map/utils/dataset-crs.utils';
+  import {
+    resolveOrthographicBasemapReferenceState as resolveSharedOrthographicBasemapReferenceState,
+    resolveOrthographicReferenceState as resolveSharedOrthographicReferenceState,
+    resolveOrthographicRenderProjection,
+    toBboxFromOrthographicBounds,
+    toOrthographicBounds
+  } from '$lib/features/map/utils/orthographic-render-resolution.utils';
   import {
     getBrowserMaxRenderBufferSizePx,
     resolveMapRenderPixelRatio
@@ -63,7 +65,6 @@
   import {
     resolveOrthographicDatasetBounds,
     resolveOrthographicProjectionFitBbox,
-    resolveOrthographicReferenceBbox,
     resolveOrthographicReferenceTable,
     shouldUseBasemapReferenceInOrthographicView
   } from '$lib/features/map/utils/orthographic-reference.utils';
@@ -77,7 +78,6 @@
     extractGeometryInfo
   } from '$lib/features/map/io';
   import { resolveOrthographicInteractionController } from '$lib/features/map/utils/map-interaction-mode.utils';
-  import type { BBox, SplitRenderingTable } from '$lib/features/map/types';
   import type { ProjectionLike } from 'geoarrow-deck-stream';
   import {
     buildFacetRenderDescriptors,
@@ -138,9 +138,7 @@
       primarySlotPath: facetsStore.primarySlotPath
     })
   );
-  // Shrink each anchored legend proportionally to its facet cell so a full-page
-  // legend doesn't read as oversized in a small multiple. Floored to stay
-  // legible when many columns make the cells tiny.
+  // Scale anchored legends to facet cells while keeping a legible floor.
   const FACET_LEGEND_MIN_SCALE = 0.4;
   const facetLegendScale = $derived.by(() => {
     const cellWidth = descriptors[0]?.frame.width ?? 0;
@@ -155,8 +153,7 @@
   const isStylingMode = $derived(
     globalState.selectedStep === ToolbarStep.Styling
   );
-  // Anchored per-cell legends are shown from the Visualizations step onward and
-  // only with an independent scale (a shared scale uses one global legend).
+  // Independent-scale facets use per-cell legends; shared scale uses the global legend.
   const showAnchoredLegends = $derived(
     (globalState.selectedStep === ToolbarStep.Visualizations ||
       isStylingMode) &&
@@ -171,12 +168,24 @@
     facetsStore.setFacetTitle(variable, value);
   }
 
-  // Map collections render through the orthographic Deck.gl engine only, which
-  // cannot draw tiled basemaps (OSM raster / MapLibre vector styles need the
-  // MapLibre engine). A vector reference basemap, when present, still renders
-  // and serves as the collection background. Warn once only when a tiled
-  // basemap is the SOLE background, so the empty map is explained rather than
-  // read as a silent failure.
+  function handleFacetTitleKeydown(
+    variable: string,
+    event: KeyboardEvent & { currentTarget: HTMLSpanElement }
+  ): void {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      event.currentTarget.blur();
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.currentTarget.textContent = resolveFacetTitle(variable);
+      event.currentTarget.blur();
+    }
+  }
+
+  // Facets use orthographic Deck.gl only; warn once when a tiled basemap cannot render.
   let hasWarnedTiledBasemap = false;
   $effect(() => {
     const tiledBasemapOnly =
@@ -200,11 +209,7 @@
     height: Math.max(1, descriptors[0]?.frame.height ?? 1)
   }));
 
-  // Facets are small multiples: a fixed, modest viewport padding lets each map
-  // fill its cell. The page-scale fit padding (40-72px) is sized for the whole
-  // page and would shrink a facet cell drastically, so it is not reused here.
-  // Keep it constant (not derived from the cell size) so it never feeds back
-  // into the fit/relayout effect below and starves the render loop.
+  // Keep facet fit padding fixed so viewport fitting cannot feed back into relayout.
   const mapViewportFitPaddingPx = FACET_VIEWPORT_FIT_PADDING_PX;
   const firstTable = $derived(
     tables.size > 0 ? tables.values().next().value : null
@@ -276,57 +281,6 @@
     return (
       duckDBOrchestrator.getDatasetBySourceFile(dataset.sourceFileId) ?? null
     );
-  }
-
-  function toOrthographicBounds(
-    bounds: LngLatBoundsLike | null
-  ): [[number, number], [number, number]] | null {
-    if (!bounds) {
-      return null;
-    }
-
-    if (
-      Array.isArray(bounds) &&
-      bounds.length === 2 &&
-      Array.isArray(bounds[0]) &&
-      Array.isArray(bounds[1])
-    ) {
-      return [
-        [bounds[0][0], bounds[0][1]],
-        [bounds[1][0], bounds[1][1]]
-      ];
-    }
-
-    if (
-      typeof bounds === 'object' &&
-      bounds !== null &&
-      'toArray' in bounds &&
-      typeof bounds.toArray === 'function'
-    ) {
-      const arrayBounds = bounds.toArray();
-      return [
-        [arrayBounds[0][0], arrayBounds[0][1]],
-        [arrayBounds[1][0], arrayBounds[1][1]]
-      ];
-    }
-
-    if (Array.isArray(bounds) && bounds.length === 4) {
-      const flatBounds = bounds as [number, number, number, number];
-      return [
-        [flatBounds[0], flatBounds[1]],
-        [flatBounds[2], flatBounds[3]]
-      ];
-    }
-
-    return null;
-  }
-
-  function toBboxFromOrthographicBounds(
-    bounds: [[number, number], [number, number]] | null
-  ): BBox | null {
-    return bounds
-      ? [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]]
-      : null;
   }
 
   function getSplitDatasetBounds(datasetId: string | undefined) {
@@ -469,37 +423,16 @@
     allowManualOverride = true
   ): ProjectionLike | undefined {
     const projectionState = getProjectionState();
-    const viewportSize = getProjectionViewportSize();
-    const fitBbox = getProjectionFitBbox();
-
-    const defaultProjection =
-      basemapMeta &&
-      !basemapMeta.isCustom &&
-      basemapMeta.proj_to?.type !== 'identity'
-        ? fitBasemapRenderProjection({
-            projection: buildProjectionForBasemap(
-              basemapMeta,
-              viewportSize.width,
-              viewportSize.height,
-              basemapService.projectionPresets
-            ),
-            metadata: basemapMeta,
-            fitBbox,
-            width: viewportSize.width,
-            height: viewportSize.height,
-            padding: mapViewportFitPaddingPx
-          })
-        : undefined;
-
-    if (!allowManualOverride) {
-      return defaultProjection;
-    }
-
-    return resolveProjectionForRender(
-      defaultProjection,
-      getProjectionOverrideForRender(),
-      projectionState.overrideSource
-    );
+    return resolveOrthographicRenderProjection({
+      basemapMeta,
+      projectionState,
+      viewportSize: getProjectionViewportSize(),
+      projectionPresets: basemapService.projectionPresets,
+      fitBbox: getProjectionFitBbox(),
+      padding: mapViewportFitPaddingPx,
+      userOverride: getProjectionOverrideForRender(),
+      allowManualOverride
+    });
   }
 
   function resolveOrthographicReferenceState(
@@ -512,53 +445,26 @@
     isProjected: boolean;
     renderProjection: ProjectionLike | null;
   } {
-    if (!bounds) {
-      return { bbox: null, isProjected: false, renderProjection: null };
-    }
-
-    // Resolve the render projection ONCE and reuse the same instance to project
-    // every bbox below, then hand it to setReferenceBbox paired with the bbox it
-    // produced — otherwise the stored projection drifts from the reference bbox
-    // pixel space and facets render oversized / off-centre.
     const renderProjection =
       getOrthographicRenderProjection(basemapMeta, true) ?? null;
-    const projectBboxWith = (bbox: BBox | null): BBox | null =>
-      renderProjection && bbox
-        ? computeProjectedBboxForProjection(renderProjection, bbox)
-        : null;
+    const projectionState = getProjectionState();
+    const hasManualProjectionOverride =
+      projectionState.overrideActive === true &&
+      projectionState.overrideSource === 'manual';
 
-    const shouldUseIdentityReferenceBounds =
-      shouldUseIdentityProjectionForDatasetCrs(dataset?.geometry?.crs);
-    const basemapReference = resolveOrthographicBasemapReferenceBboxes({
+    return resolveSharedOrthographicReferenceState({
+      dataset,
+      bounds,
       basemapMeta,
       projectionPresets: basemapService.projectionPresets,
       viewportSize: getProjectionViewportSize(),
-      projectBbox: projectBboxWith
-    });
-    const [[minX, minY], [maxX, maxY]] = bounds;
-    const datasetBbox: BBox = [minX, minY, maxX, maxY];
-    const preferDatasetBbox = shouldPreferDatasetProjectionBbox(datasetBbox);
-    const datasetProjectedBbox = shouldUseIdentityReferenceBounds
-      ? null
-      : projectBboxWith(datasetBbox);
-    const referenceBbox = resolveOrthographicReferenceBbox({
-      datasetBounds: datasetBbox,
-      datasetProjectedBbox,
       shouldUseBasemapReference,
-      basemapProjectedBbox: basemapReference.projectedBbox,
-      basemapMainlandBbox: basemapReference.fallbackBbox,
-      preferDatasetBbox
+      renderProjection,
+      preferDatasetBbox: shouldPreferDatasetProjectionBbox(
+        toBboxFromOrthographicBounds(bounds)
+      ),
+      hasManualProjectionOverride
     });
-
-    const isProjected =
-      referenceBbox === basemapReference.projectedBbox ||
-      referenceBbox === datasetProjectedBbox;
-
-    return {
-      bbox: referenceBbox,
-      isProjected,
-      renderProjection: isProjected ? renderProjection : null
-    };
   }
 
   function resolveOrthographicBasemapReferenceState(
@@ -569,58 +475,16 @@
     isProjected: boolean;
     renderProjection: ProjectionLike | null;
   } {
-    if (!basemapMeta) {
-      return { bbox: null, isProjected: false, renderProjection: null };
-    }
-
     const renderProjection =
       getOrthographicRenderProjection(basemapMeta, true) ?? null;
-    const projectBboxWith = (bbox: BBox | null): BBox | null =>
-      renderProjection && bbox
-        ? computeProjectedBboxForProjection(renderProjection, bbox)
-        : null;
 
-    const basemapReference = resolveOrthographicBasemapReferenceBboxes({
+    return resolveSharedOrthographicBasemapReferenceState({
       basemapMeta,
+      basemapTable,
+      renderProjection,
       projectionPresets: basemapService.projectionPresets,
-      viewportSize: getProjectionViewportSize(),
-      projectBbox: projectBboxWith
+      viewportSize: getProjectionViewportSize()
     });
-
-    if (basemapReference.projectedBbox) {
-      return {
-        bbox: basemapReference.projectedBbox,
-        isProjected: true,
-        renderProjection
-      };
-    }
-
-    if (basemapReference.fallbackBbox) {
-      return {
-        bbox: basemapReference.fallbackBbox,
-        isProjected: false,
-        renderProjection: null
-      };
-    }
-
-    const bounds = basemapTable
-      ? calculateBoundsFromGeoArrow(basemapTable)
-      : null;
-    const orthographicBounds = toOrthographicBounds(bounds);
-    if (orthographicBounds) {
-      const [[minX, minY], [maxX, maxY]] = orthographicBounds;
-      return {
-        bbox: [minX, minY, maxX, maxY],
-        isProjected: false,
-        renderProjection: null
-      };
-    }
-
-    return {
-      bbox: basemapMeta.bbox ?? null,
-      isProjected: false,
-      renderProjection: null
-    };
   }
 
   function getProjectionFitBbox(): BBox | null {
@@ -703,9 +567,7 @@
         );
         return;
       }
-      // No dataset bounds (e.g. catalog basemap geometry isn't readable by
-      // calculateBoundsFromGeoArrow): fall through to the basemap reference
-      // below instead of leaving the projection unfit.
+      // Fall through to basemap reference bounds when dataset bounds are unavailable.
     }
 
     if (firstGeoJSON) {
@@ -977,9 +839,7 @@
       if (isRendererLoaded) {
         updateDeckProps();
         refreshReferenceBbox();
-        // Cell size drives the render projection fit: rebuild layers so the
-        // basemap/data projection is refitted to the facet cell, not the
-        // full shared canvas (otherwise maps render oversized and off-centre).
+        // Refit render projection to the facet cell before rebuilding layers.
         mapLayers.updateLayers(tables, geoJSONs, splitData, densityTables);
         if (mapInstanceStore.isViewportAutoFitManaged) {
           mapInstanceStore.fitToOrthographicBounds(
@@ -1124,12 +984,8 @@
                   )}
                 onkeydown={(
                   event: KeyboardEvent & { currentTarget: HTMLSpanElement }
-                ) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    event.currentTarget.blur();
-                  }
-                }}>{resolveFacetTitle(descriptor.title)}</span
+                ) => handleFacetTitleKeydown(descriptor.title, event)}
+                >{resolveFacetTitle(descriptor.title)}</span
               >
             {:else}
               {resolveFacetTitle(descriptor.title)}

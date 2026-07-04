@@ -7,6 +7,10 @@
     TextArea,
     TextInput
   } from 'carbon-components-svelte';
+  import {
+    readCarbonStringValue,
+    type CarbonValueEvent
+  } from '$lib/features/commons/utils/carbon-events.utils';
 
   interface Props {
     open: boolean;
@@ -101,6 +105,38 @@
     handleClose();
   }
 
+  function handleNameInput(event: CarbonValueEvent) {
+    name = readCarbonStringValue(event, name);
+  }
+
+  function handleSourceInput(event: CarbonValueEvent) {
+    source = readCarbonStringValue(event, source);
+  }
+
+  function handleDescriptionInput(event: CarbonValueEvent) {
+    description = readCarbonStringValue(event, description);
+  }
+
+  function handleGeoLevelChange(event: CarbonValueEvent) {
+    geoLevel = readCarbonStringValue(event, geoLevel);
+  }
+
+  function handleGeoAreaChange(event: CarbonValueEvent) {
+    geoArea = readCarbonStringValue(event, geoArea);
+  }
+
+  function handleYearInput(event: CarbonValueEvent) {
+    year = readCarbonStringValue(event, year);
+  }
+
+  function handleDataLinkInput(event: CarbonValueEvent) {
+    dataLink = readCarbonStringValue(event, dataLink);
+  }
+
+  function handleCommentsInput(event: CarbonValueEvent) {
+    comments = readCarbonStringValue(event, comments);
+  }
+
   const isValid = $derived(name.trim() !== '' && source.trim() !== '');
 </script>
 
@@ -122,7 +158,8 @@
       <TextInput
         labelText={m.basemap_suggestion_name()}
         placeholder={m.basemap_suggestion_name_placeholder()}
-        bind:value={name}
+        value={name}
+        on:input={handleNameInput}
         required
       />
     </div>
@@ -131,7 +168,8 @@
       <TextInput
         labelText={m.basemap_suggestion_source()}
         placeholder={m.basemap_suggestion_source_placeholder()}
-        bind:value={source}
+        value={source}
+        on:input={handleSourceInput}
         required
       />
     </div>
@@ -140,7 +178,8 @@
       <TextInput
         labelText={m.basemap_suggestion_desc_label()}
         placeholder={m.basemap_suggestion_desc_placeholder()}
-        bind:value={description}
+        value={description}
+        on:input={handleDescriptionInput}
       />
     </div>
 
@@ -148,7 +187,8 @@
       <div class="form-group half">
         <Select
           labelText={m.basemap_suggestion_level()}
-          bind:selected={geoLevel}
+          selected={geoLevel}
+          onchange={handleGeoLevelChange}
         >
           {#each geoLevelOptions as opt (opt.value)}
             <SelectItem value={opt.value} text={opt.label} />
@@ -156,7 +196,11 @@
         </Select>
       </div>
       <div class="form-group half">
-        <Select labelText={m.basemap_suggestion_area()} bind:selected={geoArea}>
+        <Select
+          labelText={m.basemap_suggestion_area()}
+          selected={geoArea}
+          onchange={handleGeoAreaChange}
+        >
           {#each geoAreaOptions as opt (opt.value)}
             <SelectItem value={opt.value} text={opt.label} />
           {/each}
@@ -169,14 +213,16 @@
         <TextInput
           labelText={m.basemap_suggestion_year()}
           placeholder={m.year_placeholder()}
-          bind:value={year}
+          value={year}
+          on:input={handleYearInput}
         />
       </div>
       <div class="form-group half">
         <TextInput
           labelText={m.basemap_suggestion_link()}
           placeholder={m.url_placeholder_ellipsis()}
-          bind:value={dataLink}
+          value={dataLink}
+          on:input={handleDataLinkInput}
         />
       </div>
     </div>
@@ -185,7 +231,8 @@
       <TextArea
         labelText={m.basemap_suggestion_comments()}
         placeholder={m.basemap_suggestion_comments_placeholder()}
-        bind:value={comments}
+        value={comments}
+        on:input={handleCommentsInput}
         rows={3}
       />
     </div>

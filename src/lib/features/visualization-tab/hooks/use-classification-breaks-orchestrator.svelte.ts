@@ -2,6 +2,7 @@ import type {
   ClassificationConfig,
   VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
+import type { ClassificationBreakTarget } from '../utils/classification-targets.utils';
 import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   buildClassificationScopeKey,
@@ -19,11 +20,6 @@ import type {
 type ClassificationBreaksController = ReturnType<
   typeof useClassificationBreaksController
 >;
-
-export interface ClassificationTarget {
-  valueColumn?: string;
-  classification?: ClassificationConfig;
-}
 
 export interface ClassificationBreaksOrchestratorOptions {
   classificationBreaks: ClassificationBreaksController;
@@ -46,10 +42,11 @@ export interface ClassificationBreaksOrchestratorOptions {
     primitive: StrokeClassifiablePrimitive
   ) => ClassificationConfig | undefined;
   getSelectedVisualization: () => VisualizationConfig | undefined;
-  getLineThicknessTarget: () => ClassificationTarget | null | undefined;
-  getSymbolFillTarget: () => ClassificationTarget | null | undefined;
-  getTextBackgroundTarget: () => ClassificationTarget | null | undefined;
-  getTextBackgroundStrokeTarget: () => ClassificationTarget | null | undefined;
+  getLineThicknessTarget: () => ClassificationBreakTarget | null | undefined;
+  getSymbolFillTarget: () => ClassificationBreakTarget | null | undefined;
+  getTextBackgroundTarget: () => ClassificationBreakTarget | null | undefined;
+  getTextBackgroundStrokeTarget: () =>
+    ClassificationBreakTarget | null | undefined;
   updatePrimitiveClassificationState: (
     primitive: ClassifiablePrimitive,
     updates: Partial<ClassificationConfig>,
@@ -78,10 +75,7 @@ export interface ClassificationBreaksOrchestratorOptions {
   ) => void;
 }
 
-// Automatic breaks/colors recomputation is a DERIVED output, not a user edit:
-// applying it must not flip a freshly-applied suggestion's origin to `custom`
-// (which would uncheck its suggestion card). Preserve the origin on every
-// orchestrator-driven recompute.
+// Orchestrator-driven recomputes are derived outputs, not custom user edits.
 const PRESERVE_ORIGIN = { preserveOrigin: true } as const;
 
 export function useClassificationBreaksOrchestrator(

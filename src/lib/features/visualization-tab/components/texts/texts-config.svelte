@@ -28,6 +28,8 @@
   } from '$lib/features/step-toolbar/fonts.constants';
   import DiscretizationModal from '../discretization/discretization-modal.svelte';
   import TextStylePopover from './text-style-popover.svelte';
+  import { makeTextStyleHandlers } from './text-style-handlers.utils';
+  import type { TextAlignment } from './text-alignment.utils';
   import { resolveDiscretizationLabel } from '../discretization/discretization.utils';
   import {
     NONE_FIELD_ID,
@@ -84,6 +86,7 @@
   let {
     dataFields = [],
     visualization,
+    backgroundVisualization,
     disabled = false,
     onStyleChange,
     onMissingDataChange,
@@ -92,6 +95,14 @@
     onToggleVisibility,
     onModesChange,
     onSecondaryLabelsChange,
+    onBackgroundStyleChange,
+    onBackgroundModesChange,
+    onBackgroundClassificationChange,
+    onBackgroundStrokeClassificationChange,
+    onBackgroundStrokeMappingChange,
+    onBackgroundMappingChange,
+    onBackgroundInvertPalette,
+    onBackgroundStrokeInvertPalette,
     filters = [],
     onAddFilter,
     onUpdateFilter,
@@ -121,25 +132,19 @@
   let italic = $state<boolean>(false);
   let size = $state<number>(VISUALIZATION_DEFAULTS.textSize);
   let sizeMode = $state<SizeMode>(SizeMode.FIXED);
-  let alignment = $state<'left' | 'center' | 'right'>('center');
+  let alignment = $state<TextAlignment>('center');
   let halo = $state<boolean>(false);
   let haloColor = $state<string>(DEFAULT_COLORS.halo);
   let haloWidth = $state<number>(VISUALIZATION_DEFAULTS.haloWidth);
-  let collisionDetection = $state<boolean>(true);
-  let dxpMasking = $state<boolean>(false);
 
   let secondaryColor = $state<string>(DEFAULT_COLORS.text);
-  let secondaryOpacity = $state<number>(VISUALIZATION_DEFAULTS.labelOpacity);
   let secondaryFontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
   let secondarySize = $state<number>(VISUALIZATION_DEFAULTS.labelSize);
   let secondaryBold = $state<boolean>(false);
   let secondaryItalic = $state<boolean>(false);
-  let secondaryAlignment = $state<'left' | 'center' | 'right'>('center');
+  let secondaryAlignment = $state<TextAlignment>('center');
   let secondaryHalo = $state<boolean>(false);
   let secondaryHaloColor = $state<string>(DEFAULT_COLORS.halo);
-  let secondaryHaloWidth = $state<number>(VISUALIZATION_DEFAULTS.haloWidth);
-  let secondaryCollisionDetection = $state<boolean>(true);
-  let secondaryDxpMasking = $state<boolean>(false);
 
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
@@ -218,18 +223,12 @@
       haloColor = visualization.style.textHaloColor ?? DEFAULT_COLORS.halo;
       haloWidth =
         visualization.style.textHaloWidth ?? VISUALIZATION_DEFAULTS.haloWidth;
-      collisionDetection = visualization.style.textCollisionDetection ?? false;
-      dxpMasking = visualization.style.textDxpMasking ?? false;
 
       secondaryColor =
         coerceString(visualization.style.labelColor) ?? DEFAULT_COLORS.text;
       secondaryFontFamily =
         normalizeFontFamily(visualization.style.labelFontFamily) ??
         CARTOGRAPHIC_FONT_FAMILY;
-      secondaryOpacity = parseOpacityToSlider(
-        visualization.style.labelOpacity,
-        VISUALIZATION_DEFAULTS.labelOpacity
-      );
       secondarySize = clampFontSize(
         visualization.style.labelSize,
         VISUALIZATION_DEFAULTS.labelSize
@@ -240,11 +239,6 @@
       secondaryHalo = visualization.style.labelHalo ?? false;
       secondaryHaloColor =
         visualization.style.labelHaloColor ?? DEFAULT_COLORS.halo;
-      secondaryHaloWidth =
-        visualization.style.labelHaloWidth ?? VISUALIZATION_DEFAULTS.haloWidth;
-      secondaryCollisionDetection =
-        visualization.style.labelCollisionDetection ?? true;
-      secondaryDxpMasking = visualization.style.labelDxpMasking ?? false;
     }
 
     if (visualization?.missingData) {
@@ -307,35 +301,45 @@
     onSecondaryLabelsChange?.(updates);
   }
 
-  function handleTextColorChange(value: string) {
-    textColor = value;
-    onStyleChange?.({ textColor: value });
-  }
+  const primaryTextStyleHandlers = makeTextStyleHandlers({
+    defaultSize: VISUALIZATION_DEFAULTS.textSize,
+    setColor: (value) => {
+      textColor = value;
+    },
+    emitColor: (value) => onStyleChange?.({ textColor: value }),
+    setFontFamily: (value) => {
+      fontFamily = value;
+    },
+    emitFontFamily: (value) => onStyleChange?.({ textFontFamily: value }),
+    setBold: (value) => {
+      bold = value;
+    },
+    emitBold: (value) => onStyleChange?.({ textBold: value }),
+    setItalic: (value) => {
+      italic = value;
+    },
+    emitItalic: (value) => onStyleChange?.({ textItalic: value }),
+    setSize: (value) => {
+      size = value;
+    },
+    emitSize: (value) => onStyleChange?.({ textSize: value }),
+    setAlignment: (value) => {
+      alignment = value;
+    },
+    emitAlignment: (value) => onStyleChange?.({ textAlign: value }),
+    setHalo: (value) => {
+      halo = value;
+    },
+    emitHalo: (value) => onStyleChange?.({ textHalo: value }),
+    setHaloColor: (value) => {
+      haloColor = value;
+    },
+    emitHaloColor: (value) => onStyleChange?.({ textHaloColor: value })
+  });
 
   function handleTextOpacityChange(value: number) {
     textOpacity = value;
     onStyleChange?.({ textOpacity: value / 100 });
-  }
-
-  function handleFontFamilyChange(value: string) {
-    fontFamily = value;
-    onStyleChange?.({ textFontFamily: value });
-  }
-
-  function handleBoldChange(value: boolean) {
-    bold = value;
-    onStyleChange?.({ textBold: value });
-  }
-
-  function handleItalicChange(value: boolean) {
-    italic = value;
-    onStyleChange?.({ textItalic: value });
-  }
-
-  function handleSizeChange(value: number) {
-    const nextSize = clampFontSize(value, VISUALIZATION_DEFAULTS.textSize);
-    size = nextSize;
-    onStyleChange?.({ textSize: nextSize });
   }
 
   function handleSizeModeChange(index: number) {
@@ -361,96 +365,46 @@
     }
   }
 
-  function handleAlignmentChange(value: 'left' | 'center' | 'right') {
-    alignment = value;
-    onStyleChange?.({ textAlign: value });
-  }
-
-  function handleHaloToggle(value: boolean) {
-    halo = value;
-    onStyleChange?.({ textHalo: value });
-  }
-
-  function handleHaloColorChange(value: string) {
-    haloColor = value;
-    onStyleChange?.({ textHaloColor: value });
-  }
-
   function handleHaloWidthChange(value: number) {
     haloWidth = value;
     onStyleChange?.({ textHaloWidth: value });
   }
 
-  function handleCollisionDetectionChange(value: boolean) {
-    collisionDetection = value;
-    onStyleChange?.({ textCollisionDetection: value });
-  }
-
-  function handleDxpMaskingChange(value: boolean) {
-    dxpMasking = value;
-    onStyleChange?.({ textDxpMasking: value });
-  }
-
-  function handleSecondaryColorChange(value: string) {
-    secondaryColor = value;
-    onSecondaryLabelsChange?.({ color: value });
-  }
-
-  function handleSecondaryOpacityChange(value: number) {
-    secondaryOpacity = value;
-    onSecondaryLabelsChange?.({ opacity: value / 100 });
-  }
-
-  function handleSecondaryFontFamilyChange(value: string) {
-    secondaryFontFamily = value;
-    onSecondaryLabelsChange?.({ fontFamily: value });
-  }
-
-  function handleSecondarySizeChange(value: number) {
-    const nextSize = clampFontSize(value, VISUALIZATION_DEFAULTS.labelSize);
-    secondarySize = nextSize;
-    onSecondaryLabelsChange?.({ size: nextSize });
-  }
-
-  function handleSecondaryBoldChange(value: boolean) {
-    secondaryBold = value;
-    onSecondaryLabelsChange?.({ bold: value });
-  }
-
-  function handleSecondaryItalicChange(value: boolean) {
-    secondaryItalic = value;
-    onSecondaryLabelsChange?.({ italic: value });
-  }
-
-  function handleSecondaryAlignmentChange(value: 'left' | 'center' | 'right') {
-    secondaryAlignment = value;
-    onSecondaryLabelsChange?.({ align: value });
-  }
-
-  function handleSecondaryHaloToggle(value: boolean) {
-    secondaryHalo = value;
-    onSecondaryLabelsChange?.({ halo: value });
-  }
-
-  function handleSecondaryHaloColorChange(value: string) {
-    secondaryHaloColor = value;
-    onSecondaryLabelsChange?.({ haloColor: value });
-  }
-
-  function handleSecondaryHaloWidthChange(value: number) {
-    secondaryHaloWidth = value;
-    onSecondaryLabelsChange?.({ haloWidth: value });
-  }
-
-  function handleSecondaryCollisionChange(value: boolean) {
-    secondaryCollisionDetection = value;
-    onSecondaryLabelsChange?.({ collisionDetection: value });
-  }
-
-  function handleSecondaryDxpMaskingChange(value: boolean) {
-    secondaryDxpMasking = value;
-    onSecondaryLabelsChange?.({ dxpMasking: value });
-  }
+  const secondaryTextStyleHandlers = makeTextStyleHandlers({
+    defaultSize: VISUALIZATION_DEFAULTS.labelSize,
+    setColor: (value) => {
+      secondaryColor = value;
+    },
+    emitColor: (value) => onSecondaryLabelsChange?.({ color: value }),
+    setFontFamily: (value) => {
+      secondaryFontFamily = value;
+    },
+    emitFontFamily: (value) => onSecondaryLabelsChange?.({ fontFamily: value }),
+    setBold: (value) => {
+      secondaryBold = value;
+    },
+    emitBold: (value) => onSecondaryLabelsChange?.({ bold: value }),
+    setItalic: (value) => {
+      secondaryItalic = value;
+    },
+    emitItalic: (value) => onSecondaryLabelsChange?.({ italic: value }),
+    setSize: (value) => {
+      secondarySize = value;
+    },
+    emitSize: (value) => onSecondaryLabelsChange?.({ size: value }),
+    setAlignment: (value) => {
+      secondaryAlignment = value;
+    },
+    emitAlignment: (value) => onSecondaryLabelsChange?.({ align: value }),
+    setHalo: (value) => {
+      secondaryHalo = value;
+    },
+    emitHalo: (value) => onSecondaryLabelsChange?.({ halo: value }),
+    setHaloColor: (value) => {
+      secondaryHaloColor = value;
+    },
+    emitHaloColor: (value) => onSecondaryLabelsChange?.({ haloColor: value })
+  });
 
   function handleToggleChange(checked: boolean) {
     if (checked && textOpacity <= 0) {
@@ -555,7 +509,7 @@
 
       <TextMissingDataSection
         show={showMissingData}
-        bind:label={missingDataLabel}
+        label={missingDataLabel}
         color={missingDataColor}
         onShowChange={handleMissingDataShowChange}
         onLabelChange={handleMissingDataLabelChange}
@@ -575,22 +529,32 @@
         facetsSelection={textFacetsSelection}
         discretizationLabel={textSizeDiscretizationLabel}
         onSizeModeChange={handleSizeModeChange}
-        onSizeChange={handleSizeChange}
+        onSizeChange={primaryTextStyleHandlers.onSizeChange}
         onSizeFieldSelect={handleSizeFieldSelect}
         onOpenDiscretization={openTextSizeDiscretization}
       />
 
       <TextBackgroundSection
+        visualization={backgroundVisualization}
+        dataFields={dataFields}
         color={textColor}
         opacity={textOpacity}
         halo={halo}
         haloColor={haloColor}
         haloWidth={haloWidth}
-        onColorChange={handleTextColorChange}
+        onColorChange={primaryTextStyleHandlers.onColorChange}
         onOpacityChange={handleTextOpacityChange}
-        onHaloToggle={handleHaloToggle}
-        onHaloColorChange={handleHaloColorChange}
+        onHaloToggle={primaryTextStyleHandlers.onHaloChange}
+        onHaloColorChange={primaryTextStyleHandlers.onHaloColorChange}
         onHaloWidthChange={handleHaloWidthChange}
+        onStyleChange={onBackgroundStyleChange}
+        onModesChange={onBackgroundModesChange}
+        onClassificationChange={onBackgroundClassificationChange}
+        onStrokeClassificationChange={onBackgroundStrokeClassificationChange}
+        onMappingChange={onBackgroundMappingChange}
+        onStrokeMappingChange={onBackgroundStrokeMappingChange}
+        onInvertPalette={onBackgroundInvertPalette}
+        onStrokeInvertPalette={onBackgroundStrokeInvertPalette}
       />
     </div>
   </ExpandableSection>
@@ -624,7 +588,6 @@
     triggerElement={stylePopoverTrigger}
     primary={{
       color: textColor,
-      opacity: textOpacity,
       fontFamily,
       bold,
       italic,
@@ -632,26 +595,11 @@
       align: alignment,
       halo,
       haloColor,
-      haloWidth,
-      collisionDetection,
-      dxpMasking,
-      onColorChange: handleTextColorChange,
-      onOpacityChange: handleTextOpacityChange,
-      onFontFamilyChange: handleFontFamilyChange,
-      onBoldChange: handleBoldChange,
-      onItalicChange: handleItalicChange,
-      onSizeChange: handleSizeChange,
-      onAlignmentChange: handleAlignmentChange,
-      onHaloChange: handleHaloToggle,
-      onHaloColorChange: handleHaloColorChange,
-      onHaloWidthChange: handleHaloWidthChange,
-      onCollisionDetectionChange: handleCollisionDetectionChange,
-      onDxpMaskingChange: handleDxpMaskingChange
+      ...primaryTextStyleHandlers
     }}
     secondary={hasSecondaryField
       ? {
           color: secondaryColor,
-          opacity: secondaryOpacity,
           fontFamily: secondaryFontFamily,
           size: secondarySize,
           bold: secondaryBold,
@@ -659,21 +607,7 @@
           align: secondaryAlignment,
           halo: secondaryHalo,
           haloColor: secondaryHaloColor,
-          haloWidth: secondaryHaloWidth,
-          collisionDetection: secondaryCollisionDetection,
-          dxpMasking: secondaryDxpMasking,
-          onColorChange: handleSecondaryColorChange,
-          onOpacityChange: handleSecondaryOpacityChange,
-          onFontFamilyChange: handleSecondaryFontFamilyChange,
-          onSizeChange: handleSecondarySizeChange,
-          onBoldChange: handleSecondaryBoldChange,
-          onItalicChange: handleSecondaryItalicChange,
-          onAlignmentChange: handleSecondaryAlignmentChange,
-          onHaloChange: handleSecondaryHaloToggle,
-          onHaloColorChange: handleSecondaryHaloColorChange,
-          onHaloWidthChange: handleSecondaryHaloWidthChange,
-          onCollisionDetectionChange: handleSecondaryCollisionChange,
-          onDxpMaskingChange: handleSecondaryDxpMaskingChange
+          ...secondaryTextStyleHandlers
         }
       : undefined}
   />

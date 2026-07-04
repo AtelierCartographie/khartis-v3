@@ -5,7 +5,7 @@
     PageModel
   } from '$lib/features/commons/constants/ui.constants';
   import { getFormatState } from '$lib/features/step-toolbar/tools/format';
-  import { m } from '$lib/paraglide/messages.js';
+  import { m } from '$lib/paraglide/messages';
   import { Modal, TextInput } from 'carbon-components-svelte';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import {
@@ -19,10 +19,12 @@
     ExportTab,
     MAP_FORMAT,
     DATA_FORMAT,
-    EXPORT_RESOLUTION,
+    EXPORT_RESOLUTION
+  } from '../types';
+  import {
     formatExportDimensions,
     getExportDimensionsForPage
-  } from '../types';
+  } from '../export-dimensions.utils';
   import type {
     MapExportFormat,
     DataExportFormat,

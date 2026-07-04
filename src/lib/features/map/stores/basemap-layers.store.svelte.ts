@@ -1,5 +1,5 @@
 import { deepClone } from '$lib/features/commons/utils/clone.utils';
-import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
+import { persistenceRegistry } from '$lib/features/project-management/core';
 import {
   BasemapDottedPattern,
   BasemapGraticuleMode,
@@ -155,10 +155,10 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
     id: 'terre',
     visible: true,
-    fillColor: '#f2f2f2',
+    fillColor: '#c6c6c6',
     fillShadow: false,
     fillOpacity: 100,
-    strokeColor: '#a8a8a8',
+    strokeColor: '#8d8d8d',
     strokeDotted: false,
     strokeDottedPattern: BasemapDottedPattern.DOTS,
     strokeThickness: 0.5,
