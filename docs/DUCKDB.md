@@ -95,7 +95,7 @@ get_similarity(text1, text2)
   -- Score Jaro-Winkler (0–1) entre deux chaînes normalisées
 ```
 
-Utilisées dans `join_by_id` et `finalizeJoin` pour le matching approximatif des entités géographiques avec le fond de carte.
+Utilisées par les opérations de jointure de `join-ops` et `finalizeJoin` pour le matching approximatif des entités géographiques avec le fond de carte.
 
 ### Macros de simplification (`simplification_macros`)
 
@@ -172,7 +172,7 @@ await duckDBOrchestrator.addCalculatedColumn(table, name, expression);
 await duckDBOrchestrator.testExpression(table, expression);  // → valeur ou null
 ```
 
-> Sur les opérations en batch, passer `skipAnalysis: true` et appeler `analyzeTable()` une seule fois à la fin. Chaque mutation sans `skipAnalysis` déclenche un `Duck.analyse()` complet.
+> Sur les opérations en batch, passer `skipAnalysis: true` et appeler `getFullAnalysis(tableName, true)` une seule fois à la fin. Chaque mutation sans `skipAnalysis` déclenche un `Duck.analyse()` complet.
 
 ### Sécurité des expressions SQL
 
@@ -208,7 +208,7 @@ await duckDBOrchestrator.finalizeJoin(datasetId, basemap, geoColumn);
 // → { joinedBasemap, geoColumn, gpsMode, gpsColumns }
 ```
 
-`finalizeJoin` utilise le **cache de similarité** quand le dataset a déjà été joint. Il appelle `join_by_id()` (legacy) uniquement si le cache n'existe pas. `invalidateSimilarityCache()` est appelé après toute correction utilisateur.
+`finalizeJoin` utilise le **cache de similarité**. `ensureSimilarityCached()` le construit si nécessaire, puis `applyCachedJoinAssociation()` applique l'association. `invalidateSimilarityCache()` est appelé après toute correction utilisateur.
 
 Le cache de similarité est une table DuckDB nommée avec le préfixe `__similarity_cache__` + l'identifiant du dataset. Elle est construite par `ensureSimilarityCached()` via un cross-join `dataset × basemap_attributes` filtré par `jaro_winkler_similarity(normalize_text_join(left), normalize_text_join(right), 0.85)`. La construction est coûteuse (O(N×M)) mais n'a lieu qu'une fois par dataset/fond ; les corrections utilisateur réutilisent cette table sans la recalculer.
 
@@ -280,5 +280,5 @@ Les tables CENTROID sont le chemin nominal pour le rendu des **Textes** et **Sym
 | Utiliser `Duck` au lieu de `duckDBOrchestrator`      | Cache pas invalidé, état désynchronisé                     | Toujours passer par `duckDBOrchestrator` depuis le code applicatif                 |
 | Modifier une table sans `markTableMutated`           | Cache garde les anciennes métadonnées                      | Appeler `Duck.invalidateTableCache()` explicitement si mutation via `Duck.query()` |
 | `getArrowTableDirect` sur le chemin de rendu         | Cache WeakMap invalidé, re-parsing GeoArrow à chaque frame | Utiliser `getArrowTable()` pour le rendu, `getArrowTableDirect()` pour le prefetch |
-| Batch sans `skipAnalysis: true`                      | N appels `analyse()` coûteux                               | Passer `skipAnalysis: true` + 1 seul `analyzeTable()` à la fin                     |
+| Batch sans `skipAnalysis: true`                      | N appels `analyse()` coûteux                               | Passer `skipAnalysis: true` + 1 seul `getFullAnalysis(tableName, true)` à la fin   |
 | Mock `Duck` sans enregistrer le callback de mutation | Cache ne se nettoie pas entre tests                        | Enregistrer et nettoyer le callback dans `beforeEach` / `afterEach`                |
