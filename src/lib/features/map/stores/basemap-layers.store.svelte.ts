@@ -155,10 +155,10 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
     id: 'terre',
     visible: true,
-    fillColor: '#e0e0e0',
+    fillColor: '#c6c6c6',
     fillShadow: false,
     fillOpacity: 100,
-    strokeColor: '#a8a8a8',
+    strokeColor: '#8d8d8d',
     strokeDotted: false,
     strokeDottedPattern: BasemapDottedPattern.DOTS,
     strokeThickness: 0.5,
