@@ -325,7 +325,7 @@ export async function searchInTable(
       searchQuery,
       error
     });
-    return emptyResult;
+    throw error;
   } finally {
     if (isSampled) {
       try {

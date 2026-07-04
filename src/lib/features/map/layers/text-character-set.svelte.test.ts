@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SLIDER_LIMITS } from '$lib/features/commons/constants/visualization.constants';
 import {
-  DEFAULT_TEXT_FONT_SETTINGS,
   DEFAULT_TEXT_FONT_SETTINGS_RASTER,
   DEFAULT_TEXT_FONT_SETTINGS_SDF,
   DEFAULT_TEXT_LINE_HEIGHT,
@@ -127,10 +126,6 @@ describe('text-character-set — DEFAULT_TEXT_FONT_SETTINGS_SDF', () => {
       (DEFAULT_TEXT_FONT_SETTINGS_SDF as { smoothing?: number }).smoothing
     ).toBeUndefined();
   });
-
-  it('aliases the legacy DEFAULT_TEXT_FONT_SETTINGS export to the SDF preset', () => {
-    expect(DEFAULT_TEXT_FONT_SETTINGS).toBe(DEFAULT_TEXT_FONT_SETTINGS_SDF);
-  });
 });
 
 describe('text-character-set — DEFAULT_TEXT_FONT_SETTINGS_RASTER', () => {
@@ -242,5 +237,21 @@ describe('extendTextCharacterSet', () => {
     expect(fromString).toContain('犬');
     expect(fromSet).toContain('猫');
     expect(fromSet).toContain('犬');
+  });
+
+  it('keeps the pinned base reference when data only uses covered glyphs', () => {
+    expect(extendTextCharacterSet(['Paris', 'Lyon', 'Marseille'])).toBe(
+      EXPLICIT_TEXT_CHARACTER_SET
+    );
+  });
+
+  it('ignores control characters while extending with real label glyphs', () => {
+    const extended = extendTextCharacterSet('東京\n大阪\u007f');
+    expect(extended).toContain('東');
+    expect(extended).toContain('京');
+    expect(extended).toContain('大');
+    expect(extended).toContain('阪');
+    expect(extended).not.toContain('\n');
+    expect(extended).not.toContain('\u007f');
   });
 });

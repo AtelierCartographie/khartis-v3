@@ -1,4 +1,5 @@
 import { readFileHead } from './decimal-detector';
+import { parseCsvLine, unquoteCsvValue } from './csv-line-parser';
 
 interface DetectionOptions {
   sampleLines?: number;
@@ -15,7 +16,6 @@ export interface CsvHeaderDetectionResult {
 
 const NUMERIC_PATTERN =
   /^[-+]?(?:(?:\d+)|(?:\d*\.\d+)|(?:\d*,\d+)|(?:\d{1,3}(?:,\d{3})+(?:\.\d+)?)|(?:\d{1,3}(?:\.\d{3})+(?:,\d+)?))(?:[eE][-+]?\d+)?$/;
-const QUOTED_VALUE_PATTERN = /^["'](.*)["']$/;
 
 export async function detectCsvHeader(
   file: File,
@@ -37,8 +37,8 @@ export async function detectCsvHeader(
     };
   }
 
-  const firstRow = parseCSVLine(lines[0], delimiter).map(classifyCell);
-  const secondRow = parseCSVLine(lines[1], delimiter).map(classifyCell);
+  const firstRow = parseCsvLine(lines[0], delimiter).map(classifyCell);
+  const secondRow = parseCsvLine(lines[1], delimiter).map(classifyCell);
 
   if (
     firstRow.length === 0 ||
@@ -85,29 +85,8 @@ export async function detectCsvHeader(
   };
 }
 
-function parseCSVLine(line: string, delimiter: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (const char of line) {
-    if (char === '"') {
-      inQuotes = !inQuotes;
-      current += char;
-    } else if (char === delimiter && !inQuotes) {
-      result.push(current);
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-
-  result.push(current);
-  return result;
-}
-
 function classifyCell(value: string): CellCategory {
-  const unquoted = unquote(value).trim();
+  const unquoted = unquoteCsvValue(value).trim();
   if (!unquoted) {
     return 'empty';
   }
@@ -119,9 +98,4 @@ function classifyCell(value: string): CellCategory {
       : compact;
 
   return NUMERIC_PATTERN.test(normalized) ? 'numeric' : 'text';
-}
-
-function unquote(value: string): string {
-  const match = value.match(QUOTED_VALUE_PATTERN);
-  return match ? match[1] : value;
 }

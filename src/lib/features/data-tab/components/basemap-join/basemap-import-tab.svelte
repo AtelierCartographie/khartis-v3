@@ -6,6 +6,10 @@
   import { CloudUpload, Launch } from 'carbon-icons-svelte';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import BasemapCardVertical from '../basemap-card-vertical.svelte';
+  import {
+    readCarbonStringValue,
+    type CarbonValueEvent
+  } from '$lib/features/commons/utils/carbon-events.utils';
 
   interface Props {
     importedBasemap: BasemapMetadata | null;
@@ -45,6 +49,10 @@
     if (!importError) {
       importUrl = '';
     }
+  }
+
+  function handleImportUrlInput(event: CarbonValueEvent) {
+    importUrl = readCarbonStringValue(event, importUrl);
   }
 </script>
 
@@ -89,7 +97,11 @@
   <div class="url-import-section">
     <span class="section-label">{m.basemap_import_url_label()}</span>
     <div class="url-import-row">
-      <TextInput bind:value={importUrl} placeholder={m.url_placeholder()} />
+      <TextInput
+        value={importUrl}
+        placeholder={m.url_placeholder()}
+        on:input={handleImportUrlInput}
+      />
       <Button
         kind="tertiary"
         size="field"

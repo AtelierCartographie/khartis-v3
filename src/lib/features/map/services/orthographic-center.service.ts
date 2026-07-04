@@ -20,6 +20,7 @@ import { fitBasemapRenderProjection } from '../utils/fit-basemap-render-projecti
 import { shouldUseBasemapReferenceInOrthographicView } from '../utils/orthographic-reference.utils';
 import { resolveProjectionForRender } from '../utils/projection-priority.utils';
 import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 interface OrthographicCenterInput {
   lon: number;
@@ -194,7 +195,20 @@ export async function resolveCenterCoordinates({
       x: projected[0],
       y: projected[1]
     };
-  } catch {
+  } catch (error) {
+    logger.warn(
+      'Failed to resolve projected center coordinates; using native coordinates',
+      LogCategory.MAP,
+      {
+        error,
+        flow: 'orthographic_center_projection_fallback',
+        extra: {
+          lon,
+          lat,
+          sourceFileId
+        }
+      }
+    );
     return { x: lon, y: lat };
   }
 }

@@ -12,13 +12,15 @@ import type {
   CategoricalColorOptions
 } from '@ateliercartographie/ok-palette';
 import { motif } from '@ateliercartographie/motif.js';
-import type { PatternParams } from '$lib/features/commons/stores/visualization.store.svelte';
-import { webglToHex } from '$lib/features/commons/utils/color-utils';
+import {
+  PatternType,
+  type PatternParams
+} from '$lib/features/commons/constants/pattern.constants';
+import { hexToHsl, webglToHex } from '$lib/features/commons/utils/color-utils';
 import {
   PATTERN_TYPE_MAP,
   resolveMotifFillPercent
 } from '$lib/features/map/layers/pattern-texture';
-import { PatternType } from './categories-aspect-popover.types';
 import {
   DEFAULT_QUALITATIVE_PRESET,
   GRAYSCALE_COLORS,
@@ -37,8 +39,6 @@ import {
 } from '$lib/features/commons/constants/qualitative-palette.constants';
 
 export type { PatternParams };
-export { presets };
-export type { ContrastMode, CategoricalColorOptions };
 export {
   DEFAULT_QUALITATIVE_PRESET,
   GRAYSCALE_COLORS,
@@ -82,7 +82,7 @@ export type PatternId =
   | 'diamond'
   | 'plus';
 
-export const PATTERN_TYPE_TO_PATTERN_ID: Record<PatternType, PatternId> = {
+const PATTERN_TYPE_TO_PATTERN_ID: Record<PatternType, PatternId> = {
   [PatternType.DOTS]: 'dots',
   [PatternType.LINES]: 'horizontal',
   [PatternType.CROSSHATCH]: 'cross',
@@ -185,7 +185,7 @@ export const monochromePalettes: Palette[] = [
   }
 ];
 
-export const bicolorPalettes: Palette[] = [
+const bicolorPalettes: Palette[] = [
   {
     id: 'blues',
     colors: ['#f7fbff', '#08519c'],
@@ -805,10 +805,6 @@ export function getQualitativeColorGroups(
   };
 }
 
-export function generateIntensityShadesForColor(seedHex: string): string[] {
-  return generateIntensityShades(seedHex);
-}
-
 export function generateCategoricalColorsFromSeed(
   seedHex: string,
   count: number,
@@ -840,19 +836,5 @@ export function generateCategoricalColorsFromSeed(
 }
 
 function extractHueFromHex(hex: string): number {
-  const clean = hex.replace(/^#/, '');
-  const r = parseInt(clean.slice(0, 2), 16) / 255;
-  const g = parseInt(clean.slice(2, 4), 16) / 255;
-  const b = parseInt(clean.slice(4, 6), 16) / 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const d = max - min;
-  if (d === 0) return 0;
-  let h: number;
-  if (max === r) h = ((g - b) / d) % 6;
-  else if (max === g) h = (b - r) / d + 2;
-  else h = (r - g) / d + 4;
-  h = h * 60;
-  if (h < 0) h += 360;
-  return Math.round(h);
+  return hexToHsl(hex.startsWith('#') ? hex : `#${hex}`).hue;
 }

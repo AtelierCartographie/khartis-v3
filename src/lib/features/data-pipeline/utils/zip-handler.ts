@@ -7,6 +7,11 @@ import { unzip, type Unzipped, type FlateError } from 'fflate';
 import { MIME } from '$lib/features/commons/constants';
 import { PIPELINE_CONST } from '../constants';
 import { getFileExtensionWithDot } from '$lib/features/commons/utils/file.utils';
+import { FileType } from '$lib/features/commons/utils/file-import.utils';
+import {
+  isPipelineError,
+  ParseError
+} from '$lib/features/commons/pipeline.errors';
 
 export interface ExtractedFile {
   name: string;
@@ -56,6 +61,7 @@ export async function extractZip(file: File): Promise<ZipExtractionResult> {
     });
 
     const MAX_DECOMPRESSED_SIZE = 500 * 1024 * 1024;
+    const maxDecompressedSizeMb = MAX_DECOMPRESSED_SIZE / (1024 * 1024);
     let totalSize = 0;
     const files: ExtractedFile[] = [];
 
@@ -63,10 +69,16 @@ export async function extractZip(file: File): Promise<ZipExtractionResult> {
       if (shouldIgnoreFile(path)) continue;
       totalSize += content.byteLength;
       if (totalSize > MAX_DECOMPRESSED_SIZE) {
-        throw new Error(
+        throw new ParseError(
           m.error_zip_size_exceeded({
-            limit: MAX_DECOMPRESSED_SIZE / (1024 * 1024)
-          })
+            limit: maxDecompressedSizeMb
+          }),
+          FileType.ZIP,
+          {
+            fileName: file.name,
+            limitMb: maxDecompressedSizeMb,
+            totalSize
+          }
         );
       }
       files.push({ name: getFileName(path), path, content });
@@ -79,11 +91,20 @@ export async function extractZip(file: File): Promise<ZipExtractionResult> {
       ...shapefileInfo
     };
   } catch (error) {
-    throw new Error(
+    if (isPipelineError(error)) {
+      throw error;
+    }
+
+    const cause = error instanceof Error ? error.message : String(error);
+    throw new ParseError(
       m.pipeline_error_zip_extract_failed({
-        error: error instanceof Error ? error.message : String(error)
+        error: cause
       }),
-      { cause: error }
+      FileType.ZIP,
+      {
+        cause,
+        fileName: file.name
+      }
     );
   }
 }

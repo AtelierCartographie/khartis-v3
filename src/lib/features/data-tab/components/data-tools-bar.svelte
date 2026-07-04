@@ -72,7 +72,6 @@
       size="small"
       icon={ChartHistogram}
       iconDescription={m.data_toggle_summary_plots()}
-      tooltipPosition="bottom"
       class={showSummaryPlots ? 'active' : ''}
       onclick={() => onToggleSummaryPlots?.()}
     />
@@ -81,7 +80,6 @@
       size="small"
       icon={Search}
       iconDescription={m.data_tool_search_icon()}
-      tooltipPosition="bottom"
       class={isSearchActive ? 'active' : ''}
       onclick={() => dataToolsStore.toggleTool(DataToolType.Search)}
     />
@@ -91,7 +89,6 @@
         size="small"
         icon={Filter}
         iconDescription={m.data_tool_filters_icon()}
-        tooltipPosition="bottom"
         class={isFiltersActive ? 'active' : ''}
         onclick={() => dataToolsStore.toggleTool(DataToolType.Filters)}
       />
@@ -104,7 +101,6 @@
       size="small"
       icon={Calculator}
       iconDescription={m.data_tool_calculator_icon()}
-      tooltipPosition="bottom"
       class={isCalculatorActive ? 'active' : ''}
       onclick={() => dataToolsStore.toggleTool(DataToolType.Calculator)}
     />
@@ -113,7 +109,6 @@
       size="small"
       icon={TrashCan}
       iconDescription={m.data_tool_trash()}
-      tooltipPosition="bottom"
       disabled={effectiveDeleteDisabled}
       class={deleteActive ? 'active' : ''}
       onclick={() => onDelete?.()}
@@ -129,7 +124,6 @@
         size="small"
         icon={View}
         iconDescription={m.column_show()}
-        tooltipPosition="bottom"
         onclick={() => onShowHiddenColumns?.()}
       />
     {/if}
@@ -139,7 +133,6 @@
         size="small"
         icon={Settings}
         iconDescription={m.csv_options_button()}
-        tooltipPosition="bottom"
         onclick={() => onCsvOptions?.()}
       />
     {/if}
@@ -148,7 +141,6 @@
       size="small"
       icon={Reset}
       iconDescription={m.data_tool_reset_icon()}
-      tooltipPosition="bottom"
       disabled={resetDisabled}
       onclick={() => onReset?.()}
     />

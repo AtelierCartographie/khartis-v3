@@ -6,6 +6,10 @@ import { escapeIdentifier, escapeSqlString } from './sanitize.utils';
 import { generateFilename } from './string.utils';
 import { MIME, GEOJSON_TYPE } from '../constants';
 import { isDatasetGeometryColumn } from './geometry-column.utils';
+import {
+  DataValidationError,
+  DuckDBError
+} from '$lib/features/commons/pipeline.errors';
 
 const CSV_BOM = '\uFEFF';
 const CSV_MIME_TYPE_UTF8 = `${MIME.CSV};charset=utf-8`;
@@ -23,7 +27,7 @@ export async function exportToCsv(
 
     await initDuckDB();
     if (!Duck) {
-      throw new Error(m.error_duckdb_not_initialized());
+      throw new DuckDBError(m.error_duckdb_not_initialized());
     }
 
     const csvString = await Duck.copy_to_csv_as_string(tableName, {
@@ -78,13 +82,16 @@ export async function exportDatasetToCsv(
   if (dataset.duckdbTableName) {
     await initDuckDB();
     if (!Duck) {
-      throw new Error(m.error_duckdb_not_initialized());
+      throw new DuckDBError(m.error_duckdb_not_initialized());
     }
 
     const viewName = `export_view_${Date.now()}`;
     const nonGeomColumnNames = getExportableColumnNames(dataset);
     if (nonGeomColumnNames.length === 0) {
-      throw new Error(m.error_no_valid_data_export());
+      throw new DataValidationError(m.error_no_valid_data_export(), 'columns', {
+        datasetId: dataset.id,
+        format: 'csv'
+      });
     }
 
     const nonGeomColumns = nonGeomColumnNames
@@ -114,7 +121,10 @@ export async function exportDatasetToCsv(
     .filter((col) => !isDatasetGeometryColumn(dataset, col))
     .map((col) => col.name);
   if (headers.length === 0) {
-    throw new Error(m.error_no_valid_data_export());
+    throw new DataValidationError(m.error_no_valid_data_export(), 'columns', {
+      datasetId: dataset.id,
+      format: 'csv'
+    });
   }
 
   const data = dataset.data.map((row) => {
@@ -200,7 +210,11 @@ export function exportToGeoJson(data: unknown): Blob {
         })
     };
   } else {
-    throw new Error(m.error_invalid_data_format_geojson());
+    throw new DataValidationError(
+      m.error_invalid_data_format_geojson(),
+      'format',
+      { format: 'geojson' }
+    );
   }
 
   const jsonString = JSON.stringify(geojson, bigIntReplacer, 2);
@@ -217,7 +231,9 @@ export async function exportProcessedDatasets(
   format: 'csv' | 'geojson' | 'json' = 'json'
 ): Promise<Blob> {
   if (datasets.length === 0) {
-    throw new Error(m.error_no_datasets_to_export());
+    throw new DataValidationError(m.error_no_datasets_to_export(), 'datasets', {
+      format
+    });
   }
 
   if (format === 'csv') {
@@ -230,7 +246,7 @@ export async function exportProcessedDatasets(
     if (haveDuckDBTables) {
       await initDuckDB();
       if (!Duck) {
-        throw new Error(m.error_duckdb_not_initialized());
+        throw new DuckDBError(m.error_duckdb_not_initialized());
       }
 
       const unionViewName = `export_union_${Date.now()}`;
@@ -328,7 +344,11 @@ export async function exportProcessedDatasets(
     }
 
     if (allFeatures.length === 0) {
-      throw new Error(m.error_no_geometric_data_export());
+      throw new DataValidationError(
+        m.error_no_geometric_data_export(),
+        'geometry',
+        { format: 'geojson' }
+      );
     }
 
     return exportToGeoJson({

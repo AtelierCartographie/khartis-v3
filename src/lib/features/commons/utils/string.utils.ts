@@ -1,3 +1,5 @@
+import { m } from '$lib/paraglide/messages';
+
 export function slugify(text: string): string {
   if (!text) return '';
 
@@ -11,8 +13,6 @@ export function slugify(text: string): string {
     .replace(/^-+|-+$/g, '')
     .replace(/-{2,}/g, '-');
 }
-
-import { m } from '$lib/paraglide/messages.js';
 
 export function generateFilename(
   name: string,

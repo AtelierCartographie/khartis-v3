@@ -47,6 +47,7 @@
         min={0}
         max={Number.MAX_SAFE_INTEGER}
         width="100%"
+        stepperWidth="32px"
         onchange={(value) => updateMargin(Position.Top, value)}
       />
     </div>
@@ -61,6 +62,7 @@
         min={0}
         max={Number.MAX_SAFE_INTEGER}
         width="100%"
+        stepperWidth="32px"
         onchange={(value) => updateMargin(Position.Bottom, value)}
       />
     </div>
@@ -75,6 +77,7 @@
         min={0}
         max={Number.MAX_SAFE_INTEGER}
         width="100%"
+        stepperWidth="32px"
         onchange={(value) => updateMargin(Position.Left, value)}
       />
     </div>
@@ -89,6 +92,7 @@
         min={0}
         max={Number.MAX_SAFE_INTEGER}
         width="100%"
+        stepperWidth="32px"
         onchange={(value) => updateMargin(Position.Right, value)}
       />
     </div>

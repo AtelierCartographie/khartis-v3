@@ -21,27 +21,29 @@ import {
 } from '$lib/features/commons/constants/visualization.constants';
 import { hexToRgb } from '../../commons/utils/color-utils';
 
+const MISSING_CLASS_COLOR = '#808080';
+
 export function getColorForValue(
   value: number,
   breaks: readonly number[] | undefined,
   colors: readonly string[] | undefined
 ): [number, number, number] {
   if (!breaks?.length || !colors?.length) {
-    return [128, 128, 128];
+    return hexToRgb(MISSING_CLASS_COLOR);
   }
 
   if (colors.length === breaks.length + 1) {
     if (breaks.length === 0) {
-      return hexToRgb(colors[0] ?? '#808080');
+      return hexToRgb(colors[0] ?? MISSING_CLASS_COLOR);
     }
 
     const firstBreak = breaks[0];
     if (firstBreak === undefined) {
-      return hexToRgb(colors[0] ?? '#808080');
+      return hexToRgb(colors[0] ?? MISSING_CLASS_COLOR);
     }
 
     if (value < firstBreak) {
-      return hexToRgb(colors[0] ?? '#808080');
+      return hexToRgb(colors[0] ?? MISSING_CLASS_COLOR);
     }
 
     for (let i = 1; i < breaks.length; i++) {
@@ -52,7 +54,7 @@ export function getColorForValue(
       }
     }
 
-    return hexToRgb(colors[colors.length - 1] ?? '#808080');
+    return hexToRgb(colors[colors.length - 1] ?? MISSING_CLASS_COLOR);
   }
 
   if (breaks.length === colors.length) {
@@ -64,11 +66,11 @@ export function getColorForValue(
       }
     }
 
-    return hexToRgb(colors[0] ?? '#808080');
+    return hexToRgb(colors[0] ?? MISSING_CLASS_COLOR);
   }
 
   if (breaks.length < 2) {
-    return hexToRgb(colors[colors.length - 1] ?? '#808080');
+    return hexToRgb(colors[colors.length - 1] ?? MISSING_CLASS_COLOR);
   }
 
   for (let i = 0; i < breaks.length - 1; i++) {
@@ -86,7 +88,7 @@ export function getColorForValue(
     }
   }
 
-  return hexToRgb(colors[colors.length - 1] ?? '#808080');
+  return hexToRgb(colors[colors.length - 1] ?? MISSING_CLASS_COLOR);
 }
 
 export function getSizeForValue(

@@ -1,4 +1,8 @@
 import { ExampleCategory } from '$lib/features/commons/constants/ui.constants';
+import {
+  DataValidationError,
+  PipelineError
+} from '$lib/features/commons/pipeline.errors';
 import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
 import * as m from '$lib/paraglide/messages';
 import type { ExampleProject } from '../types/create-project.types';
@@ -25,15 +29,22 @@ function resolveExampleAssetPath(path?: string): string | undefined {
 export const EXAMPLE_PROJECTS: ExampleProject[] = [
   {
     id: 'world-population',
-    title: m.example_world_population_title(),
-    subtitle: m.example_world_population_subtitle(),
-    description: m.example_world_population_description(),
+    get title() {
+      return m.example_world_population_title();
+    },
+    get subtitle() {
+      return m.example_world_population_subtitle();
+    },
+    get description() {
+      return m.example_world_population_description();
+    },
     category: ExampleCategory.POLYGONS,
     thumbnail: resolveExampleAssetPath('/examples/world-population-thumb.svg'),
     dataUrl: resolveExampleAssetPath(
       '/examples/data/countries-population-simple.csv'
     ),
     baseMapId: 'monde-countries-2024-medium',
+    referenceBasemapId: 'europe-nuts1-2024-medium',
     visualizations: [
       {
         type: 'choropleth',
@@ -43,18 +54,26 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
         palette: 'Blues'
       }
     ],
-    tags: [
-      m.example_tag_population(),
-      m.example_tag_europe(),
-      m.example_tag_choropleth()
-    ]
+    get tags() {
+      return [
+        m.example_tag_population(),
+        m.example_tag_europe(),
+        m.example_tag_choropleth()
+      ];
+    }
   },
 
   {
     id: 'european-cities',
-    title: m.example_european_cities_title(),
-    subtitle: m.example_european_cities_subtitle(),
-    description: m.example_european_cities_description(),
+    get title() {
+      return m.example_european_cities_title();
+    },
+    get subtitle() {
+      return m.example_european_cities_subtitle();
+    },
+    get description() {
+      return m.example_european_cities_description();
+    },
     category: ExampleCategory.SYMBOLS,
     thumbnail: resolveExampleAssetPath('/examples/european-cities-thumb.svg'),
     dataUrl: resolveExampleAssetPath('/examples/data/european-cities.csv'),
@@ -70,18 +89,26 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
         color: '#E6142D'
       }
     ],
-    tags: [
-      m.example_tag_cities(),
-      m.example_tag_europe(),
-      m.example_tag_symbols()
-    ]
+    get tags() {
+      return [
+        m.example_tag_cities(),
+        m.example_tag_europe(),
+        m.example_tag_symbols()
+      ];
+    }
   },
 
   {
     id: 'world-countries-map',
-    title: m.example_world_countries_title(),
-    subtitle: m.example_world_countries_subtitle(),
-    description: m.example_world_countries_description(),
+    get title() {
+      return m.example_world_countries_title();
+    },
+    get subtitle() {
+      return m.example_world_countries_subtitle();
+    },
+    get description() {
+      return m.example_world_countries_description();
+    },
     category: ExampleCategory.POLYGONS,
     thumbnail: resolveExampleAssetPath('/examples/world-countries-thumb.svg'),
     dataUrl: resolveExampleAssetPath('/examples/data/world-countries.geojson'),
@@ -93,18 +120,26 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
         strokeWidth: 1
       }
     ],
-    tags: [
-      m.example_tag_world(),
-      m.example_tag_countries(),
-      m.example_tag_borders()
-    ]
+    get tags() {
+      return [
+        m.example_tag_world(),
+        m.example_tag_countries(),
+        m.example_tag_borders()
+      ];
+    }
   },
 
   {
     id: 'gdp-evolution',
-    title: m.example_gdp_evolution_title(),
-    subtitle: m.example_gdp_evolution_subtitle(),
-    description: m.example_gdp_evolution_description(),
+    get title() {
+      return m.example_gdp_evolution_title();
+    },
+    get subtitle() {
+      return m.example_gdp_evolution_subtitle();
+    },
+    get description() {
+      return m.example_gdp_evolution_description();
+    },
     category: ExampleCategory.HYBRIDS,
     thumbnail: resolveExampleAssetPath('/examples/gdp-evolution-thumb.svg'),
     dataUrl: resolveExampleAssetPath('/examples/data/gdp-growth-2023.csv'),
@@ -117,18 +152,26 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
         palette: 'PurpleGreen'
       }
     ],
-    tags: [
-      m.example_tag_economy(),
-      m.example_tag_gdp(),
-      m.example_tag_bivariate()
-    ]
+    get tags() {
+      return [
+        m.example_tag_economy(),
+        m.example_tag_gdp(),
+        m.example_tag_bivariate()
+      ];
+    }
   },
 
   {
     id: 'transport-flows',
-    title: m.example_transport_flows_title(),
-    subtitle: m.example_transport_flows_subtitle(),
-    description: m.example_transport_flows_description(),
+    get title() {
+      return m.example_transport_flows_title();
+    },
+    get subtitle() {
+      return m.example_transport_flows_subtitle();
+    },
+    get description() {
+      return m.example_transport_flows_description();
+    },
     category: ExampleCategory.LINES,
     thumbnail: resolveExampleAssetPath('/examples/transport-flows-thumb.svg'),
     dataUrl: resolveExampleAssetPath('/examples/data/transport-flows.geojson'),
@@ -139,11 +182,13 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
         curved: true
       }
     ],
-    tags: [
-      m.example_tag_transport(),
-      m.example_tag_flows(),
-      m.example_tag_lines()
-    ]
+    get tags() {
+      return [
+        m.example_tag_transport(),
+        m.example_tag_flows(),
+        m.example_tag_lines()
+      ];
+    }
   }
 ];
 
@@ -158,29 +203,39 @@ export function getExamplesByCategory(
 
 export async function loadExampleData(
   example: ExampleProject
-): Promise<unknown> {
+): Promise<string> {
   try {
     if (!example.dataUrl) {
-      throw new Error(m.error_example_data_url_missing());
+      throw new DataValidationError(
+        m.error_example_data_url_missing(),
+        'dataUrl',
+        { exampleId: example.id }
+      );
     }
     const response = await fetch(example.dataUrl);
 
     if (!response.ok) {
-      throw new Error(
-        m.error_example_data_load_failed({ status: response.statusText })
+      throw new PipelineError(
+        m.error_example_data_load_failed({ status: response.statusText }),
+        'EXAMPLE_DATA_LOAD_FAILED',
+        {
+          exampleId: example.id,
+          dataUrl: example.dataUrl,
+          status: response.status,
+          statusText: response.statusText
+        }
       );
     }
 
-    const contentType = response.headers.get('content-type');
-
-    if (contentType?.includes('json')) {
-      return await response.json();
-    } else {
-      return await response.text();
-    }
+    return await response.text();
   } catch (error) {
-    throw new Error(`${m.error_example_load_failed()}: ${String(error)}`, {
-      cause: error
-    });
+    throw new PipelineError(
+      `${m.error_example_load_failed()}: ${String(error)}`,
+      'EXAMPLE_LOAD_FAILED',
+      {
+        exampleId: example.id,
+        cause: error
+      }
+    );
   }
 }

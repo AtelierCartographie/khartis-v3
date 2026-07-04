@@ -15,6 +15,10 @@ const htmlToImage = vi.hoisted(() => ({
   toCanvas: vi.fn()
 }));
 
+const loggerMock = vi.hoisted(() => ({
+  warn: vi.fn()
+}));
+
 const globalStore = vi.hoisted(() => {
   const state = {
     selectedStep: 'data',
@@ -53,6 +57,13 @@ vi.mock('html-to-image', () => ({
 vi.mock('$lib/features/commons/stores/global.svelte', () => ({
   globalActions: globalStore.globalActions,
   globalState: globalStore.globalState
+}));
+
+vi.mock('$lib/features/commons/utils/logger', () => ({
+  LogCategory: { EXPORT: 'EXPORT' },
+  logger: {
+    warn: loggerMock.warn
+  }
 }));
 
 vi.mock('@ateliercartographie/motif.js', () => ({
@@ -171,6 +182,7 @@ describe('map export DOM mutations', () => {
     globalStore.globalActions.setMapExporting.mockClear();
     globalStore.globalActions.setNavigationState.mockClear();
     globalStore.globalActions.resetNavigationState.mockClear();
+    loggerMock.warn.mockReset();
 
     vi.stubGlobal('OffscreenCanvas', FakeOffscreenCanvas);
     vi.stubGlobal(
@@ -268,6 +280,80 @@ describe('map export DOM mutations', () => {
     expect(markup).toContain('Native title');
     expect(markup).toContain('text-anchor="middle"');
     expect(markup).not.toContain('<foreignObject');
+  });
+
+  it('omits empty page element placeholders from annotation export', async () => {
+    document.body.innerHTML = `
+      <div class="page-container" style="background: white;">
+        <div class="annotation-overlay">
+          <div
+            class="annotation-item"
+            data-annotation-role="title"
+            data-khartis-export-placeholder="true"
+          >
+            <div
+              class="annotation-text"
+              style="color: rgb(1, 2, 3); font-family: Arial; font-size: 14px; line-height: 18px;"
+            >Ajouter un titre</div>
+          </div>
+          <div class="annotation-item">
+            <div
+              class="annotation-text"
+              style="color: rgb(4, 5, 6); font-family: Arial; font-size: 14px; line-height: 18px;"
+            >User annotation</div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const placeholder = document.querySelector(
+      '.annotation-item[data-annotation-role="title"]'
+    );
+    const placeholderText = placeholder?.querySelector('.annotation-text');
+    const userAnnotation = document.querySelector(
+      '.annotation-item:not([data-annotation-role])'
+    );
+    const userAnnotationText =
+      userAnnotation?.querySelector('.annotation-text');
+    if (
+      !page ||
+      !placeholder ||
+      !placeholderText ||
+      !userAnnotation ||
+      !userAnnotationText
+    ) {
+      throw new Error('Missing annotation export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(placeholder, { left: 20, top: 24, width: 140, height: 24 });
+    bindElementBox(placeholderText, {
+      left: 20,
+      top: 24,
+      width: 140,
+      height: 24
+    });
+    bindElementBox(userAnnotation, {
+      left: 120,
+      top: 140,
+      width: 180,
+      height: 30
+    });
+    bindElementBox(userAnnotationText, {
+      left: 120,
+      top: 140,
+      width: 180,
+      height: 30
+    });
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    expect(markup).toContain('id="khartis-layer-annotations"');
+    expect(markup).not.toContain('Ajouter un titre');
+    expect(markup).not.toContain('id="khartis-annotation-title-1"');
+    expect(markup).toContain('User annotation');
   });
 
   it('exports MapLibre interleaved Deck point layers as editable SVG primitives', async () => {
@@ -414,6 +500,89 @@ describe('map export DOM mutations', () => {
     expect(markup).toContain('data-khartis-layer-id="osm-symbols"');
     expect(markup).toContain('<circle');
     expect(markup).not.toContain('data-khartis-export-mode="raster-fallback"');
+  });
+
+  it('logs and keeps SVG export usable when MapLibre background capture fails', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="map-canvas">
+          <canvas width="400" height="300"></canvas>
+        </div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const canvas = document.querySelector('canvas');
+    if (!page || !canvas) {
+      throw new Error('Missing export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(canvas, { left: 0, top: 0, width: 400, height: 300 });
+    const captureError = new Error('capture failed');
+    vi.spyOn(canvas, 'toDataURL').mockImplementation(() => {
+      throw captureError;
+    });
+
+    const layer = createDeckLayer('ScatterplotLayer', 'osm-symbols', {
+      data: {
+        length: 1,
+        attributes: {
+          getPosition: {
+            value: new Float32Array([12, 24]),
+            size: 2
+          },
+          getFillColor: {
+            value: new Uint8Array([255, 0, 0, 255]),
+            size: 4
+          },
+          getRadius: {
+            value: new Float32Array([5]),
+            size: 1
+          }
+        }
+      },
+      filled: true,
+      stroked: false
+    });
+    const deck = createDeckExportFixture([layer]);
+    const map = {
+      __deck: deck,
+      getCanvas: vi.fn(() => canvas),
+      getPixelRatio: vi.fn(() => 1),
+      setPixelRatio: vi.fn(),
+      triggerRepaint: vi.fn(),
+      once: vi.fn((_event: string, callback: () => void) => callback()),
+      getMaxZoom: vi.fn(() => 22),
+      setMaxZoom: vi.fn(),
+      setMinZoom: vi.fn(),
+      getZoom: vi.fn(() => 1),
+      setZoom: vi.fn()
+    };
+    mapInstanceStore.setMapInstance(map as never);
+    mapInstanceStore.setMapLoaded(true);
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    expect(markup).toContain('data-khartis-layer-id="osm-symbols"');
+    expect(markup).toContain('<circle');
+    expect(markup).not.toContain(
+      'data-khartis-export-mode="maplibre-background"'
+    );
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      'Failed to capture MapLibre background for SVG export',
+      'EXPORT',
+      expect.objectContaining({
+        error: captureError,
+        flow: 'svg_export_maplibre_background',
+        extra: expect.objectContaining({
+          layerCount: 1,
+          canvasWidth: 400,
+          canvasHeight: 300
+        })
+      })
+    );
   });
 
   it('exports Deck line and polygon layers as SVG paths', async () => {
@@ -944,6 +1113,42 @@ describe('map export DOM mutations', () => {
       page.querySelector('img[data-khartis-export-frozen-canvas="true"]')
     ).toBeNull();
     expect(canvas.toDataURL).toHaveBeenCalledWith('image/png');
+  });
+
+  it('hides empty page element placeholders while html-to-image captures JPEG exports', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div
+          class="annotation-item"
+          data-khartis-export-placeholder="true"
+        >Ajouter un titre</div>
+        <div class="annotation-item">User annotation</div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const placeholder = document.querySelector(
+      '[data-khartis-export-placeholder="true"]'
+    ) as HTMLElement | null;
+    const userAnnotation = Array.from(
+      document.querySelectorAll<HTMLElement>('.annotation-item')
+    ).find((item) => item.textContent?.includes('User annotation'));
+    if (!page || !placeholder || !userAnnotation) {
+      throw new Error('Missing placeholder export fixture nodes');
+    }
+
+    placeholder.style.display = 'inline-block';
+    bindElementBox(page, { left: 0, top: 0, width: 960, height: 540 });
+    htmlToImage.toCanvas.mockImplementation(async () => {
+      expect(placeholder.style.display).toBe('none');
+      expect(userAnnotation.style.display).toBe('');
+
+      return createExportCanvas(1920, 1080);
+    });
+
+    await exportMapToJpg({ width: 1920, height: 1080 });
+
+    expect(placeholder.style.display).toBe('inline-block');
   });
 
   it('captures JPEG exports in layout export mode without changing the current step', async () => {

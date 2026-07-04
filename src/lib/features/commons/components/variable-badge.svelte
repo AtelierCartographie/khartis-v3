@@ -1,6 +1,6 @@
 <script lang="ts">
   import Calendar from 'carbon-icons-svelte/lib/Calendar.svelte';
-  import { m } from '$lib/paraglide/messages.js';
+  import { m } from '$lib/paraglide/messages';
   import LocationFilled from 'carbon-icons-svelte/lib/LocationFilled.svelte';
   import LocationStarFilled from 'carbon-icons-svelte/lib/LocationStarFilled.svelte';
   import {
@@ -100,7 +100,11 @@
   .variable-badge:hover,
   .variable-badge:focus {
     filter: brightness(0.95);
-    outline: none;
+  }
+
+  .variable-badge:focus-visible {
+    outline: 2px solid var(--cds-focus);
+    outline-offset: -2px;
   }
 
   .badge-label {

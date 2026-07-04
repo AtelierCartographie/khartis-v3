@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte';
+  import { untrack, type Snippet } from 'svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import PalettePreview from '$lib/features/commons/components/palette-popover/palette-preview.svelte';
@@ -209,7 +209,18 @@
     onFillModeChange(nextMode);
   }
 
-  let missingDataShow = $derived(showMissingData);
+  function resolveMissingDataShow(): boolean {
+    return showMissingData;
+  }
+
+  let missingDataShow = $state(resolveMissingDataShow());
+
+  $effect(() => {
+    const next = resolveMissingDataShow();
+    untrack(() => {
+      missingDataShow = next;
+    });
+  });
 </script>
 
 {#if sectionTitle !== undefined}
@@ -220,7 +231,7 @@
   <ToggleTabs
     items={fillModeItems}
     activeIndex={fillModeIndex}
-    onChange={handleToggleChange}
+    onchange={handleToggleChange}
     hideInactiveLabel={true}
   />
 </div>

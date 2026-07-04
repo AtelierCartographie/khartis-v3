@@ -169,10 +169,6 @@ function getSmoothedDrawingPoints(
     smoothedPoints = cutDrawingCorners(smoothedPoints, cutRatio, closed);
   }
 
-  if (closed && smoothedPoints.length > 1) {
-    return dedupeDrawingPoints(smoothedPoints);
-  }
-
   return dedupeDrawingPoints(smoothedPoints);
 }
 

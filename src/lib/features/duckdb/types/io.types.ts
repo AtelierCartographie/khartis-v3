@@ -32,10 +32,3 @@ export interface RegisterFilesOptions {
 export interface AnalyseOptions {
   force?: boolean;
 }
-
-export interface JoinByIdOptions {
-  basemaps_table?: string;
-  basemap_table?: string;
-  basemap_id?: string;
-  basemap_others_id?: string;
-}

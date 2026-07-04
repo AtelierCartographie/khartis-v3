@@ -2,7 +2,7 @@
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { StylingTools } from '$lib/features/commons/types/global';
-  import { m } from '$lib/paraglide/messages.js';
+  import { m } from '$lib/paraglide/messages';
   import { Column, Grid, Row } from 'carbon-components-svelte';
   import {
     Compass,

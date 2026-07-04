@@ -41,7 +41,8 @@
   let fillOpacity = $state<number>(100);
   let levelOptions = $state<DensityLevelOption[]>([]);
   let loadingLevels = $state<boolean>(false);
-  let lastRequestedColumn = $state<string | null>(null);
+  let lastRequestedColumn: string | null = null;
+  let densityLevelsRequestId = 0;
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
   const selectableNumericFields = $derived(
@@ -114,18 +115,24 @@
     const column = visualization?.density?.valueColumn;
     const datasetId = visualization?.datasetId;
     if (!column || !datasetId) {
+      densityLevelsRequestId += 1;
       levelOptions = [];
       lastRequestedColumn = null;
+      loadingLevels = false;
       return;
     }
 
-    const hasRatio = Boolean(visualization?.density?.ratio);
-    const signature = `${datasetId}::${column}::${hasRatio ? 'r' : 'no-r'}`;
+    const signature = `${datasetId}::${column}`;
     if (signature === lastRequestedColumn) return;
     lastRequestedColumn = signature;
+    const requestId = ++densityLevelsRequestId;
     loadingLevels = true;
 
     (async () => {
+      const isStale = () =>
+        requestId !== densityLevelsRequestId ||
+        signature !== lastRequestedColumn;
+
       try {
         const result = datasetsStore.datasets.find((d) => d.id === datasetId);
         const duckDataset =
@@ -160,6 +167,7 @@
                   column,
                   MAX_POINTS_BUDGET
                 );
+        if (isStale()) return;
         if (!fresh || fresh.length === 0) {
           levelOptions = [];
           return;
@@ -178,6 +186,7 @@
           });
         }
       } catch (error) {
+        if (isStale()) return;
         logger.error(
           'Failed to compute density levels',
           LogCategory.VISUALIZATION,
@@ -185,7 +194,9 @@
         );
         levelOptions = [];
       } finally {
-        loadingLevels = false;
+        if (!isStale()) {
+          loadingLevels = false;
+        }
       }
     })();
   });

@@ -1,7 +1,6 @@
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
-import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
-import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
+import { osmBasemapStore, projectionStore } from '$lib/features/map';
 import type { ScaleDistanceContext } from './geo-indications.utils';
 
 export function getCurrentScaleDistanceContext(): ScaleDistanceContext {

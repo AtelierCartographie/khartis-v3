@@ -9,6 +9,7 @@ import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrat
 import { showWarning } from '../../../utils/notification.utils.svelte';
 import { LogCategory, logger } from '../../../utils/logger';
 import type { ColumnInfo, ColumnType } from '../types';
+import { resolveHookValue, type HookValue } from './table-hook.utils';
 
 const DUCKDB_COLUMN_TYPE: Record<ColumnType, string> = {
   text: 'VARCHAR',
@@ -18,9 +19,9 @@ const DUCKDB_COLUMN_TYPE: Record<ColumnType, string> = {
 };
 
 export interface UseColumnOperationsProps {
-  tableName?: string | (() => string | undefined);
-  datasetId?: string | (() => string | undefined);
-  columns: ColumnInfo[] | (() => ColumnInfo[]);
+  tableName?: HookValue<string | undefined>;
+  datasetId?: HookValue<string | undefined>;
+  columns: HookValue<ColumnInfo[]>;
   onColumnsChange: () => Promise<void>;
   onColumnRefined?: () => Promise<void>;
   onRecordTransformation?: (summary: string) => void;
@@ -42,16 +43,12 @@ export interface UseColumnOperationsReturn {
   getAffectedVisualizations: (columnName: string) => VisualizationConfig[];
 }
 
-function getValue<T>(prop: T | (() => T)): T {
-  return typeof prop === 'function' ? (prop as () => T)() : prop;
-}
-
 export function useColumnOperations(
   props: UseColumnOperationsProps
 ): UseColumnOperationsReturn {
   const visibleColumns = $derived.by(() => {
-    const columns = getValue(props.columns);
-    const datasetId = getValue(props.datasetId);
+    const columns = resolveHookValue(props.columns);
+    const datasetId = resolveHookValue(props.datasetId);
 
     if (!datasetId) return columns;
 
@@ -60,7 +57,7 @@ export function useColumnOperations(
   });
 
   function isColumnHidden(columnName: string): boolean {
-    const datasetId = getValue(props.datasetId);
+    const datasetId = resolveHookValue(props.datasetId);
     if (!datasetId) return false;
     return datasetsStore.isColumnHidden(datasetId, columnName);
   }
@@ -69,7 +66,7 @@ export function useColumnOperations(
     columnName: string,
     operation: RefineOperation
   ): Promise<void> {
-    const tableName = getValue(props.tableName);
+    const tableName = resolveHookValue(props.tableName);
 
     if (!tableName) {
       return;
@@ -100,7 +97,7 @@ export function useColumnOperations(
     columnName: string,
     newType: ColumnType
   ): Promise<void> {
-    const tableName = getValue(props.tableName);
+    const tableName = resolveHookValue(props.tableName);
 
     if (!tableName) {
       return;
@@ -128,7 +125,7 @@ export function useColumnOperations(
   }
 
   function handleHide(columnName: string): void {
-    const datasetId = getValue(props.datasetId);
+    const datasetId = resolveHookValue(props.datasetId);
 
     if (!datasetId) {
       return;
@@ -138,7 +135,7 @@ export function useColumnOperations(
   }
 
   async function handleDelete(columnName: string): Promise<void> {
-    const tableName = getValue(props.tableName);
+    const tableName = resolveHookValue(props.tableName);
 
     if (!tableName) {
       return;
@@ -157,7 +154,7 @@ export function useColumnOperations(
   function getAffectedVisualizations(
     columnName: string
   ): VisualizationConfig[] {
-    const datasetId = getValue(props.datasetId);
+    const datasetId = resolveHookValue(props.datasetId);
     if (!datasetId) {
       return [];
     }

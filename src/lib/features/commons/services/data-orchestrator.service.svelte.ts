@@ -4,8 +4,11 @@ import {
   dataPipeline,
   isZipDatasetResult
 } from '$lib/features/data-pipeline';
-import { Duck, RefineOperation } from '$lib/features/duckdb';
-import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import {
+  Duck,
+  RefineOperation,
+  duckDBOrchestrator
+} from '$lib/features/duckdb';
 import {
   isGeoJSONFeatureCollection,
   type GeoJSONFeatureCollection
@@ -14,13 +17,18 @@ import { cleanupDuckDBResources } from '$lib/features/commons/utils/duckdb-clean
 import { buildFileErrorContext } from '$lib/features/commons/utils/file-error-context.utils';
 import { toJsonValue } from '$lib/features/commons/utils/json.utils';
 import type { SerializedProjectData } from '$lib/types/serialization.types';
-import { persistenceRegistry } from '$lib/features/project-management';
+import { persistenceRegistry } from '$lib/features/project-management/core';
 import { createCompanionFilesFromAssetRefs } from '$lib/features/project-management/services/asset-store.service';
 import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
 import { layersActions } from '$lib/features/step-toolbar/tools/layers';
 import { legendActions } from '$lib/features/step-toolbar/tools/legend';
 import { projectionActions } from '$lib/features/step-toolbar/tools/projections';
-import { formatError, isFatalError, ParseError } from '../pipeline.errors';
+import {
+  DuckDBError,
+  formatError,
+  isFatalError,
+  ParseError
+} from '../pipeline.errors';
 import type { UploadedFile } from '../types/create-project.types';
 import {
   FileType,
@@ -49,6 +57,7 @@ import {
 } from '../utils/notification.utils.svelte';
 import { sanitizePreparedGeoJSON } from '../utils/persisted-geojson.utils';
 import { resolvePersistedJoinState } from '../utils/persisted-join-state.utils';
+import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
 import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { importRollbackService } from './import-rollback.service';
 import {
@@ -58,7 +67,10 @@ import {
   computeDivergingSplit,
   generateColorsForBreaks
 } from './classification.service';
-import { FillMode } from '$lib/features/commons/constants/visualization.constants';
+import {
+  DEFAULT_CLASSIFICATION_CLASS_COUNT,
+  FillMode
+} from '$lib/features/commons/constants/visualization.constants';
 import {
   getColorBlindnessState,
   isColorBlindnessActive
@@ -73,7 +85,7 @@ import {
   resolveBreakpointLowerClassCount,
   resolveComputedClassCount,
   resolveRequestedClassCount
-} from '$lib/features/visualization-tab/components/discretization/discretization.utils';
+} from '$lib/features/commons/utils/discretization.utils';
 import * as m from '$lib/paraglide/messages';
 
 function createDataOrchestratorService() {
@@ -114,26 +126,26 @@ function createDataOrchestratorService() {
     }
   }
 
-  async function convertKMLForDuckDB(
-    file: UploadedFile
-  ): Promise<UploadedFile> {
+  function convertKMLForDuckDB(file: UploadedFile): UploadedFile {
     try {
       let geojsonObject: GeoJSONFeatureCollection;
 
       if (file.parsedData && isGeoJSONFeatureCollection(file.parsedData)) {
-        geojsonObject = file.parsedData as GeoJSONFeatureCollection;
+        geojsonObject = file.parsedData;
       } else {
-        throw new Error(
-          'KML files should be processed by the data pipeline, not here'
+        throw new ParseError(
+          'KML files should be processed by the data pipeline, not here',
+          file.fileType,
+          {
+            fileId: file.id,
+            fileName: file.name
+          }
         );
       }
 
       const geojsonString =
         file.preparedGeoJSON ?? JSON.stringify(geojsonObject);
-      file.preparedGeoJSON = geojsonString;
       const normalizedName = file.name.replace(/\.(kml|kmz)$/i, '.geojson');
-      const parsedGeoJSON =
-        geojsonObject as unknown as GeoJSONFeatureCollection;
 
       return {
         ...file,
@@ -142,7 +154,7 @@ function createDataOrchestratorService() {
         fileType: FileType.GEOJSON,
         content: geojsonString,
         preparedGeoJSON: geojsonString,
-        parsedData: parsedGeoJSON
+        parsedData: geojsonObject
       };
     } catch (error) {
       throw new ParseError(m.error_kml_conversion_failed(), file.fileType, {
@@ -202,8 +214,12 @@ function createDataOrchestratorService() {
     dataset: DatasetResult
   ): Promise<void> {
     try {
-      if (!Duck) {
-        throw new Error(m.error_duckdb_not_initialized());
+      if (!Duck.db) {
+        throw new DuckDBError(m.error_duckdb_not_initialized(), undefined, {
+          datasetId: dataset.id,
+          fileId: file.id,
+          tableName
+        });
       }
 
       const jsonData = JSON.stringify(file.parsedData);
@@ -214,9 +230,10 @@ function createDataOrchestratorService() {
 
       await Duck.register_files([jsonFile]);
 
-      const escapedTableName = tableName.replace(/"/g, '""');
+      const escapedTableName = escapeIdentifier(tableName);
+      const escapedJsonPath = escapeSqlString(`${tableName}.json`);
       await Duck.query(
-        `CREATE TABLE "${escapedTableName}" AS SELECT * FROM read_json_auto('${tableName}.json')`
+        `CREATE TABLE "${escapedTableName}" AS SELECT * FROM read_json_auto('${escapedJsonPath}')`
       );
 
       await duckDBOrchestrator.registerExistingTable(
@@ -641,7 +658,31 @@ function createDataOrchestratorService() {
             }
             break;
         }
-      } catch {
+      } catch (error) {
+        logger.error(
+          'Failed to replay persisted column transformation during project restore',
+          LogCategory.DATA,
+          error,
+          {
+            flow: 'project_restore',
+            extra: {
+              fileId: file.id,
+              fileName: file.name,
+              datasetId: dataset.id,
+              tableName: dataset.tableName,
+              transformationType: transformation.type,
+              column: transformation.column
+            }
+          }
+        );
+        showWarning(
+          m.project_restore_transformation_warning_title(),
+          m.project_restore_transformation_warning_message({
+            type: transformation.type,
+            column: transformation.column,
+            fileName: file.name
+          })
+        );
         continue;
       }
     }
@@ -663,8 +704,28 @@ function createDataOrchestratorService() {
         ? await Duck.get_row_count(dataset.tableName)
         : 0;
       datasetsStore.updateDatasetRowCount(dataset.id, newRowCount);
-    } catch {
-      return;
+    } catch (error) {
+      logger.error(
+        'Failed to replay persisted row deletions during project restore',
+        LogCategory.DATA,
+        error,
+        {
+          flow: 'project_restore',
+          extra: {
+            fileId: file.id,
+            fileName: file.name,
+            datasetId: dataset.id,
+            tableName: dataset.tableName,
+            deletedRowCount: file.deletedRowIds.length
+          }
+        }
+      );
+      showWarning(
+        m.project_restore_row_deletions_warning_title(),
+        m.project_restore_row_deletions_warning_message({
+          fileName: file.name
+        })
+      );
     }
   }
 
@@ -720,7 +781,25 @@ function createDataOrchestratorService() {
               file.relatedFileObjects = await createCompanionFilesFromAssetRefs(
                 file.companionAssetRefs
               );
-            } catch {
+            } catch (error) {
+              logger.error(
+                'Failed to restore shapefile companion assets during project restore',
+                LogCategory.DATA,
+                error,
+                {
+                  flow: 'project_restore',
+                  extra: {
+                    ...buildFileErrorContext(file),
+                    companionAssetRefCount: file.companionAssetRefs.length
+                  }
+                }
+              );
+              showWarning(
+                m.project_restore_companion_files_warning_title(),
+                m.project_restore_companion_files_warning_message({
+                  fileName: file.name
+                })
+              );
               file.relatedFileObjects = [];
             }
           }
@@ -733,7 +812,25 @@ function createDataOrchestratorService() {
               try {
                 const restoredFile = new File([buffer as ArrayBuffer], name);
                 companionFiles.push(restoredFile);
-              } catch {
+              } catch (error) {
+                logger.error(
+                  'Failed to recreate shapefile companion file during project restore',
+                  LogCategory.DATA,
+                  error,
+                  {
+                    flow: 'project_restore',
+                    extra: {
+                      ...buildFileErrorContext(file),
+                      companionFileName: name
+                    }
+                  }
+                );
+                showWarning(
+                  m.project_restore_companion_files_warning_title(),
+                  m.project_restore_companion_files_warning_message({
+                    fileName: file.name
+                  })
+                );
                 continue;
               }
             }
@@ -750,7 +847,22 @@ function createDataOrchestratorService() {
         if (!file.originalFile && file.content) {
           try {
             file.originalFile = await createFileFromUpload(file);
-          } catch {
+          } catch (error) {
+            logger.error(
+              'Failed to recreate source file during project restore',
+              LogCategory.DATA,
+              error,
+              {
+                flow: 'project_restore',
+                extra: buildFileErrorContext(file)
+              }
+            );
+            showWarning(
+              m.project_restore_source_file_warning_title(),
+              m.project_restore_source_file_warning_message({
+                fileName: file.name
+              })
+            );
             return;
           }
         }
@@ -873,7 +985,9 @@ function createDataOrchestratorService() {
 
       const method = viz.classification!.method;
       const numClasses =
-        viz.classification!.numClasses ?? viz.classification!.classes ?? 5;
+        viz.classification!.numClasses ??
+        viz.classification!.classes ??
+        DEFAULT_CLASSIFICATION_CLASS_COUNT;
       const normalizedMethod = normalizeClassificationMethod(method);
       if (normalizedMethod === ClassificationMethod.MANUAL) {
         continue;
@@ -988,8 +1102,29 @@ function createDataOrchestratorService() {
               }
             : {})
         });
-      } catch {
-        return;
+      } catch (error) {
+        logger.error(
+          'Failed to recompute visualization breaks during project restore',
+          LogCategory.DATA,
+          error,
+          {
+            flow: 'project_restore',
+            extra: {
+              visualizationId: viz.id,
+              visualizationName: viz.name,
+              datasetId: viz.datasetId,
+              columnName: viz.mapping.valueColumn,
+              method: normalizedMethod
+            }
+          }
+        );
+        showWarning(
+          m.project_restore_classification_warning_title(),
+          m.project_restore_classification_warning_message({
+            visualizationName: viz.name
+          })
+        );
+        continue;
       }
     }
   }
@@ -1082,6 +1217,7 @@ function createDataOrchestratorService() {
 
   async function restoreTabularJoinCompletion(
     sourceFileId: string,
+    fileName: string,
     joinedBasemap: string,
     geoColumn: string,
     restoreRun: ProjectRuntimeSnapshot
@@ -1121,7 +1257,27 @@ function createDataOrchestratorService() {
       }
 
       dataTabStore.markStepComplete(stepIndex);
-    } catch {
+    } catch (error) {
+      logger.error(
+        'Failed to restore tabular join completion during project restore',
+        LogCategory.DATA,
+        error,
+        {
+          flow: 'project_restore',
+          extra: {
+            sourceFileId,
+            fileName,
+            joinedBasemap,
+            geoColumn
+          }
+        }
+      );
+      showWarning(
+        m.project_restore_join_warning_title(),
+        m.project_restore_join_warning_message({
+          fileName
+        })
+      );
       return;
     }
   }
@@ -1211,6 +1367,7 @@ function createDataOrchestratorService() {
       if (restoredPrimaryJoinState.joinedBasemap) {
         await restoreTabularJoinCompletion(
           restoredFile.id,
+          restoredFile.name,
           restoredPrimaryJoinState.joinedBasemap,
           restoredPrimaryJoinState.geoColumn,
           restoreRun
@@ -1226,6 +1383,9 @@ function createDataOrchestratorService() {
     const vizSettings = (
       currentProject?.data as SerializedProjectData | undefined
     )?.visualizationSettings;
+    const basemapSettings = (
+      currentProject?.data as SerializedProjectData | undefined
+    )?.basemapSettings;
     const facetsSettings = (
       currentProject?.data as SerializedProjectData | undefined
     )?.uiSettings?.facets;
@@ -1277,6 +1437,18 @@ function createDataOrchestratorService() {
             annotations: layoutSettings.annotations,
             legend: layoutSettings.legend,
             geoIndications: layoutSettings.geoIndications
+          });
+        }
+
+        if (basemapSettings) {
+          persistenceRegistry.deserializeAll({
+            basemapStyle: {
+              style: basemapSettings.style,
+              lastSelectedTiledStyle: basemapSettings.lastSelectedTiledStyle,
+              referenceBasemapId: basemapSettings.referenceBasemapId,
+              showLabels: basemapSettings.showLabels,
+              groupVisibility: basemapSettings.groupVisibility
+            }
           });
         }
 

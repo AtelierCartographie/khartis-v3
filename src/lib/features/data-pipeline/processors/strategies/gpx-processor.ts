@@ -26,11 +26,11 @@ function decodeXmlEntities(input: string): string {
     .replace(/&#([0-9]+);/g, (_, code: string) =>
       String.fromCodePoint(Number.parseInt(code, 10))
     )
-    .replaceAll('&amp;', '&')
     .replaceAll('&lt;', '<')
     .replaceAll('&gt;', '>')
     .replaceAll('&quot;', '"')
-    .replaceAll('&apos;', "'");
+    .replaceAll('&apos;', "'")
+    .replaceAll('&amp;', '&');
 }
 
 function toPropertyKey(tagName: string): string {

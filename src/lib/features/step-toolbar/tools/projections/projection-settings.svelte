@@ -3,9 +3,11 @@
   import { Button, InlineNotification } from 'carbon-components-svelte';
   import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
-  import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
-  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
-  import { projectionStore as mapRenderProjectionStore } from '$lib/features/map/stores/projection.store.svelte';
+  import {
+    basemapService,
+    osmBasemapStore,
+    projectionStore as mapRenderProjectionStore
+  } from '$lib/features/map';
   import {
     resolveProjectionAvailabilityContext,
     supportsCustomProjectionCode

@@ -1,12 +1,56 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import '$lib/features/commons/stores/locale.store.svelte';
 import { setLocale } from '$lib/paraglide/runtime.js';
 import * as m from '$lib/paraglide/messages';
-import { createOSMBasemap } from './basemap-import.service';
+import {
+  createOSMBasemap,
+  loadBasemapFromUrl,
+  processBasemapImport
+} from './basemap-import.service';
 
 async function setTestLocale(locale: 'fr' | 'en'): Promise<void> {
   await Promise.resolve(setLocale(locale, { reload: false }));
 }
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('processBasemapImport', () => {
+  it('throws a ParseError for standalone shapefiles without companions', async () => {
+    await expect(
+      processBasemapImport(new File([''], 'regions.shp'))
+    ).rejects.toMatchObject({
+      name: 'ParseError',
+      code: 'PARSE_ERROR',
+      fileType: 'shapefile',
+      details: {
+        fileName: 'regions.shp',
+        missingComponents: ['.shx', '.dbf']
+      }
+    });
+  });
+});
+
+describe('loadBasemapFromUrl', () => {
+  it('throws a PipelineError when the remote basemap cannot be fetched', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 404 } as Response)
+    );
+
+    await expect(
+      loadBasemapFromUrl('https://example.test/missing.geojson')
+    ).rejects.toMatchObject({
+      name: 'PipelineError',
+      code: 'BASEMAP_URL_LOAD_ERROR',
+      details: {
+        url: 'https://example.test/missing.geojson',
+        status: 404
+      }
+    });
+  });
+});
 
 describe('createOSMBasemap', () => {
   it('stores separate French and English metadata labels regardless of the active locale', async () => {

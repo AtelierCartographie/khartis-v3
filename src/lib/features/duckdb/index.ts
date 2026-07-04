@@ -1,6 +1,6 @@
 export { Duck, initDuckDB } from './duck';
 export { duckDBOrchestrator } from './orchestrator/orchestrator.svelte';
-export { validateGPSColumns } from './orchestrator/gps-ops';
+export { detectGPSColumns, validateGPSColumns } from './orchestrator/gps-ops';
 export type { GPSValidationResult } from './orchestrator/gps-ops';
 export { DuckDBSimplifiedType, RefineOperation } from './types';
 export { GEO_CONSTANTS } from './constants';
@@ -20,7 +20,6 @@ export type {
   FinalizeJoinResult,
   GPSBounds,
   GPSColumns,
-  JoinByIdOptions,
   QueryOptions,
   ReadGeofileOptions,
   ReadLinkOptions,

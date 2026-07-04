@@ -7,10 +7,22 @@ import type {
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import type { DataTableFilter } from '$lib/features/duckdb/types';
 import { FilterOperatorEnum } from '$lib/features/duckdb/types';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 const dataFilterCache = new WeakMap<ArrowTable, Map<string, ArrowTable>>();
 
 const tableFilterCache = new WeakMap<ArrowTable, Map<string, ArrowTable>>();
+
+const warnedUnsupportedArrowOperators = new Set<string>();
+
+interface ArrowRowFilter {
+  id: string;
+  column: string;
+  operator: FilterOperator;
+  value?: string;
+  secondaryValue?: string;
+  limit?: number;
+}
 
 function buildFilterCacheKey(
   filters: Array<{
@@ -120,6 +132,18 @@ function isFilterIncomplete(filter: VizDataFilter): boolean {
   return false;
 }
 
+function warnUnsupportedArrowFilterOperator(operator: FilterOperator): void {
+  const operatorKey = String(operator);
+  if (warnedUnsupportedArrowOperators.has(operatorKey)) {
+    return;
+  }
+
+  warnedUnsupportedArrowOperators.add(operatorKey);
+  logger.warn('Unsupported Arrow filter operator', LogCategory.MAP, {
+    operator: operatorKey
+  });
+}
+
 function matchesOperator(
   cellValue: unknown,
   operator: FilterOperator,
@@ -173,7 +197,8 @@ function matchesOperator(
       return numCell >= numFilter && numCell <= numSecondary;
     }
     default:
-      return true;
+      warnUnsupportedArrowFilterOperator(operator);
+      return false;
   }
 }
 
@@ -219,35 +244,43 @@ function getTopFilterMatchSet(
   );
 }
 
-export function filterArrowTableByDataFilters(
+function getCachedFilterResult(
   table: ArrowTable,
-  filters: VizDataFilter[] | undefined,
-  primitiveType?: PrimitiveFilter
-): ArrowTable {
-  if (!filters?.length) return table;
+  cache: WeakMap<ArrowTable, Map<string, ArrowTable>>,
+  cacheKey: string
+): ArrowTable | null {
+  return cache.get(table)?.get(cacheKey) ?? null;
+}
 
-  const applicableFilters = (
-    primitiveType
-      ? filters.filter(
-          (f) => !f.primitiveType || f.primitiveType === primitiveType
-        )
-      : filters
-  ).filter((f) => !isFilterIncomplete(f));
-  if (!applicableFilters.length) return table;
-
-  const cacheKey = buildFilterCacheKey(applicableFilters);
-  const tableCache = dataFilterCache.get(table);
-  if (tableCache) {
-    const cached = tableCache.get(cacheKey);
-    if (cached) return cached;
+function cacheFilterResult(
+  table: ArrowTable,
+  cache: WeakMap<ArrowTable, Map<string, ArrowTable>>,
+  cacheKey: string,
+  result: ArrowTable
+): void {
+  const existing = cache.get(table);
+  if (existing) {
+    existing.set(cacheKey, result);
+  } else {
+    cache.set(table, new Map([[cacheKey, result]]));
   }
+}
+
+function filterRows(
+  table: ArrowTable,
+  filters: ArrowRowFilter[],
+  cache: WeakMap<ArrowTable, Map<string, ArrowTable>>,
+  cacheKey: string
+): ArrowTable {
+  const cached = getCachedFilterResult(table, cache, cacheKey);
+  if (cached) return cached;
 
   const columnVectors = new Map<
     string,
     { index: number; vector: ReturnType<ArrowTable['getChildAt']> }
   >();
 
-  for (const filter of applicableFilters) {
+  for (const filter of filters) {
     if (columnVectors.has(filter.column)) continue;
     const colIndex = table.schema.fields.findIndex(
       (f) => f.name === filter.column
@@ -261,9 +294,7 @@ export function filterArrowTableByDataFilters(
     }
   }
 
-  const validFilters = applicableFilters.filter((f) =>
-    columnVectors.has(f.column)
-  );
+  const validFilters = filters.filter((f) => columnVectors.has(f.column));
   if (validFilters.length === 0) return table;
 
   const topFilterMatches = new Map<string, Set<number>>();
@@ -320,23 +351,38 @@ export function filterArrowTableByDataFilters(
     }
   }
 
-  function cacheDataResult(result: ArrowTable): void {
-    const existing = dataFilterCache.get(table);
-    if (existing) {
-      existing.set(cacheKey, result);
-    } else {
-      dataFilterCache.set(table, new Map([[cacheKey, result]]));
-    }
-  }
-
   if (matchingIndices.length === table.numRows) {
-    cacheDataResult(table);
+    cacheFilterResult(table, cache, cacheKey, table);
     return table;
   }
 
   const result = selectRowsByIndices(table, matchingIndices);
-  cacheDataResult(result);
+  cacheFilterResult(table, cache, cacheKey, result);
   return result;
+}
+
+export function filterArrowTableByDataFilters(
+  table: ArrowTable,
+  filters: VizDataFilter[] | undefined,
+  primitiveType?: PrimitiveFilter
+): ArrowTable {
+  if (!filters?.length) return table;
+
+  const applicableFilters = (
+    primitiveType
+      ? filters.filter(
+          (f) => !f.primitiveType || f.primitiveType === primitiveType
+        )
+      : filters
+  ).filter((f) => !isFilterIncomplete(f));
+  if (!applicableFilters.length) return table;
+
+  return filterRows(
+    table,
+    applicableFilters,
+    dataFilterCache,
+    buildFilterCacheKey(applicableFilters)
+  );
 }
 
 const ARROW_COMPATIBLE_OPERATORS = new Set<string>([
@@ -362,72 +408,20 @@ export function filterArrowTableByTableFilters(
   if (compatible.length === 0) return table;
 
   const cacheKey = buildFilterCacheKey(compatible);
-  const tblCache = tableFilterCache.get(table);
-  if (tblCache) {
-    const cached = tblCache.get(cacheKey);
-    if (cached) return cached;
-  }
-
-  const columnVectors = new Map<
-    string,
-    { index: number; vector: ReturnType<ArrowTable['getChildAt']> }
-  >();
-
-  for (const filter of compatible) {
-    if (columnVectors.has(filter.column)) continue;
-    const colIndex = table.schema.fields.findIndex(
-      (f) => f.name === filter.column
-    );
-    if (colIndex === -1) continue;
-    const vector = table.getChildAt(colIndex);
-    if (vector) {
-      columnVectors.set(filter.column, { index: colIndex, vector });
-    }
-  }
-
-  const validFilters = compatible.filter((f) => columnVectors.has(f.column));
-  if (validFilters.length === 0) return table;
-
-  const matchingIndices: number[] = [];
-  for (let i = 0; i < table.numRows; i++) {
-    let matches = true;
-    for (const filter of validFilters) {
-      const col = columnVectors.get(filter.column)!;
-      const cellValue = col.vector!.get(i);
-      if (
-        !matchesOperator(
-          cellValue,
-          filter.operator,
-          filter.value !== undefined ? String(filter.value) : undefined,
-          filter.secondaryValue !== undefined
-            ? String(filter.secondaryValue)
-            : undefined
-        )
-      ) {
-        matches = false;
-        break;
-      }
-    }
-    if (matches) {
-      matchingIndices.push(i);
-    }
-  }
-
-  function cacheTableResult(result: ArrowTable): void {
-    const existing = tableFilterCache.get(table);
-    if (existing) {
-      existing.set(cacheKey, result);
-    } else {
-      tableFilterCache.set(table, new Map([[cacheKey, result]]));
-    }
-  }
-
-  if (matchingIndices.length === table.numRows) {
-    cacheTableResult(table);
-    return table;
-  }
-
-  const result = selectRowsByIndices(table, matchingIndices);
-  cacheTableResult(result);
-  return result;
+  return filterRows(
+    table,
+    compatible.map((filter) => ({
+      id: filter.id,
+      column: filter.column,
+      operator: filter.operator,
+      value: filter.value !== undefined ? String(filter.value) : undefined,
+      secondaryValue:
+        filter.secondaryValue !== undefined
+          ? String(filter.secondaryValue)
+          : undefined,
+      limit: filter.limit
+    })),
+    tableFilterCache,
+    cacheKey
+  );
 }

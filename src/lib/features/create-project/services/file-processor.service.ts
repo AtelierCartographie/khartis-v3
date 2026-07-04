@@ -6,18 +6,40 @@ export type {
   ProcessingCallbacks,
   FileProcessorService
 } from '../types/file-processing.service.types';
+import { FILE_EXTENSIONS, MIME } from '$lib/features/commons/constants';
+import {
+  EXCLUDED_COLUMNS,
+  INTERNAL_COLUMN
+} from '$lib/features/commons/constants/data.constants';
+import { FileStatus } from '$lib/features/commons/constants/ui.constants';
+import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
+import { FileType } from '$lib/features/commons/types/create-project.types';
+import {
+  DeepDataValidator,
+  type DataAnalysisResult
+} from '$lib/features/commons/utils/deep-validator.utils';
+import { getFileExtension } from '$lib/features/commons/utils/file.utils';
+import { readFileContent } from '$lib/features/commons/utils/file-import.utils';
+import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { sanitizePreparedGeoJSON } from '$lib/features/commons/utils/persisted-geojson.utils';
+import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import {
   dataPipeline,
   isZipDatasetResult,
   type DatasetResult
 } from '$lib/features/data-pipeline';
-
-type ProcessFileResult = Awaited<ReturnType<typeof dataPipeline.processFile>>;
-
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
+import {
+  buildColumnStatistics,
+  convertRowsToTabular,
+  createDataMatrix,
+  type ColumnInfo
+} from '../utils/file-processor.utils';
+
+type ProcessFileResult = Awaited<ReturnType<typeof dataPipeline.processFile>>;
 
 const TABULAR_TEXT_EXTENSION = 'txt';
 const DUPLICATE_SCAN_ROW_LIMIT = 10_000;
@@ -124,30 +146,6 @@ function getReadableErrorMessage(error: unknown): string {
 
   return m.pipeline_error_generic();
 }
-
-import {
-  buildColumnStatistics,
-  convertRowsToTabular,
-  createDataMatrix,
-  type ColumnInfo
-} from '../utils/file-processor.utils';
-import { FileStatus } from '$lib/features/commons/constants/ui.constants';
-import { FILE_EXTENSIONS, MIME } from '$lib/features/commons/constants';
-import {
-  EXCLUDED_COLUMNS,
-  INTERNAL_COLUMN
-} from '$lib/features/commons/constants/data.constants';
-import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
-import { FileType } from '$lib/features/commons/types/create-project.types';
-import {
-  DeepDataValidator,
-  type DataAnalysisResult
-} from '$lib/features/commons/utils/deep-validator.utils';
-import { sanitizePreparedGeoJSON } from '$lib/features/commons/utils/persisted-geojson.utils';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
-import { getFileExtension } from '$lib/features/commons/utils/file.utils';
-import { readFileContent } from '$lib/features/commons/utils/file-import.utils';
-import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 
 interface FileProcessor {
   process: (uploadedFile: UploadedFile, file: File) => Promise<void>;
@@ -413,8 +411,12 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
           m.warning_duplicate_rows_message({ count: String(duplicateCount) })
         );
       }
-    } catch {
-      return;
+    } catch (error) {
+      logger.warn('Failed to compute duplicate row count', LogCategory.FILE, {
+        fileId,
+        tableName,
+        error
+      });
     }
   }
 
@@ -422,7 +424,7 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     uploadedFile: UploadedFile,
     sampleData: Array<Record<string, unknown>>,
     headers: string[]
-  ): Promise<boolean> {
+  ): Promise<void> {
     const dataMatrix = createDataMatrix(sampleData, headers);
 
     const deepAnalysis = await DeepDataValidator.analyzeDataContent(
@@ -445,7 +447,6 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     }
 
     callbacks.onDataUpdate(uploadedFile.id, { deepAnalysis });
-    return true;
   }
 
   async function process(
@@ -487,15 +488,7 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       statistics
     });
 
-    const deepAnalysisCompleted = await performDeepAnalysis(
-      uploadedFile,
-      sampleData,
-      headers
-    );
-
-    if (!deepAnalysisCompleted) {
-      return;
-    }
+    await performDeepAnalysis(uploadedFile, sampleData, headers);
 
     callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
     if (rowCount <= DUPLICATE_SCAN_ROW_LIMIT) {

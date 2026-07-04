@@ -4,6 +4,7 @@ import {
   SimplificationLevel,
   SimplificationSource
 } from '$lib/features/commons/types/enums';
+import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 
 const mocks = vi.hoisted(() => ({
   duckQuery: vi.fn(),
@@ -40,7 +41,10 @@ const mocks = vi.hoisted(() => ({
   currentBasemap: {
     metadata: null as unknown,
     activeSimplificationLevel: undefined as string | undefined
-  } as { metadata: unknown; activeSimplificationLevel?: string | undefined },
+  } as {
+    metadata: unknown;
+    activeSimplificationLevel?: string | undefined;
+  } | null,
   availableBasemaps: [] as unknown[],
   osmIsActive: false,
   requiresMapLibre: false,
@@ -420,6 +424,25 @@ describe('simplification store — applySimplification dispatch', () => {
     expect(getSimplificationState().lastApplied).toBeUndefined();
   });
 
+  it('should throw a validation error when no basemap is loaded', async () => {
+    mocks.currentBasemap = null;
+
+    simplificationActions.setSource(SimplificationSource.Basemap);
+    let error: unknown;
+    try {
+      await simplificationActions.applySimplification();
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(DataValidationError);
+    expect(error).toMatchObject({
+      message: 'No basemap loaded',
+      field: 'basemap',
+      details: expect.objectContaining({ field: 'basemap' })
+    });
+  });
+
   it('should call simplifyGeometryTable for custom imported basemaps', async () => {
     mocks.currentBasemap = {
       metadata: {
@@ -521,6 +544,29 @@ describe('simplification store — applySimplification dispatch', () => {
     );
   });
 
+  it('should throw a validation error when the target dataset is missing', async () => {
+    simplificationActions.setSource(SimplificationSource.Geo);
+    let error: unknown;
+    try {
+      await simplificationActions.applySimplification({
+        datasetId: 'missing-ds'
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(DataValidationError);
+    expect(error).toMatchObject({
+      message: 'No dataset found',
+      field: 'datasetId',
+      details: expect.objectContaining({
+        field: 'datasetId',
+        datasetId: 'missing-ds'
+      })
+    });
+    expect(mocks.simplifyGeometryTable).not.toHaveBeenCalled();
+  });
+
   it('should throw when trying to simplify a dataset joined to a catalog basemap', async () => {
     const dataset = {
       id: 'joined-ds',
@@ -542,10 +588,49 @@ describe('simplification store — applySimplification dispatch', () => {
       error = caught;
     }
 
-    expect(error).toBeInstanceOf(Error);
-    expect((error as Error).message).toBe(
-      'Cannot simplify a catalog basemap dataset'
-    );
+    expect(error).toBeInstanceOf(DataValidationError);
+    expect(error).toMatchObject({
+      message: 'Cannot simplify a catalog basemap dataset',
+      field: 'joinedBasemap',
+      details: expect.objectContaining({
+        field: 'joinedBasemap',
+        datasetId: 'joined-ds',
+        joinedBasemap: 'europe.parquet'
+      })
+    });
+    expect(mocks.simplifyGeometryTable).not.toHaveBeenCalled();
+  });
+
+  it('should throw a validation error when the target dataset has no geometry bounds', async () => {
+    const dataset = {
+      id: 'no-bounds-ds',
+      sourceFileId: 'src-3',
+      tableName: 'no_bounds_table',
+      joinedBasemap: undefined,
+      geometry: {}
+    };
+    mocks.datasets = [dataset];
+    mocks.selectedDataset = dataset;
+
+    simplificationActions.setSource(SimplificationSource.Geo);
+    let error: unknown;
+    try {
+      await simplificationActions.applySimplification({
+        datasetId: 'no-bounds-ds'
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(DataValidationError);
+    expect(error).toMatchObject({
+      message: 'Dataset has no geometry bounds',
+      field: 'geometry.bounds',
+      details: expect.objectContaining({
+        field: 'geometry.bounds',
+        datasetId: 'no-bounds-ds'
+      })
+    });
     expect(mocks.simplifyGeometryTable).not.toHaveBeenCalled();
   });
 });

@@ -4,40 +4,17 @@
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
+  import { portal } from '$lib/features/commons/utils/portal';
+  import { resolveToolbarWidth } from '$lib/features/commons/utils/toolbar-width.utils';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
-  import { ToolbarState } from '$lib/features/commons/types/global';
   import { MIN_FONT_SIZE } from '$lib/features/step-toolbar/fonts.constants';
   import * as m from '$lib/paraglide/messages';
   import { Close } from 'carbon-icons-svelte';
-  import type { TextAlignment } from './text-alignment.utils';
-  import TextStyleSection from './text-style-section.svelte';
+  import TextStyleSection, {
+    type TextStyleSectionHandlers
+  } from './text-style-section.svelte';
 
-  interface SectionHandlers {
-    fontFamily: string;
-    color: string;
-    opacity?: number;
-    bold?: boolean;
-    italic?: boolean;
-    size: number;
-    align: TextAlignment;
-    halo?: boolean;
-    haloColor?: string;
-    haloWidth?: number;
-    collisionDetection?: boolean;
-    dxpMasking?: boolean;
-    onFontFamilyChange: (value: string) => void;
-    onColorChange: (value: string) => void;
-    onOpacityChange?: (value: number) => void;
-    onBoldChange?: (value: boolean) => void;
-    onItalicChange?: (value: boolean) => void;
-    onSizeChange: (value: number) => void;
-    onAlignmentChange: (align: TextAlignment) => void;
-    onHaloChange?: (value: boolean) => void;
-    onHaloColorChange?: (value: string) => void;
-    onHaloWidthChange?: (value: number) => void;
-    onCollisionDetectionChange?: (value: boolean) => void;
-    onDxpMaskingChange?: (value: boolean) => void;
-  }
+  type SectionHandlers = TextStyleSectionHandlers;
 
   type VisibleSection = 'primary' | 'secondary' | 'both';
 
@@ -69,43 +46,15 @@
   const contextualSurfaceId =
     createExclusiveContextualSurfaceId('text-style-popover');
 
-  function portal(node: HTMLElement) {
-    document.body.appendChild(node);
-    return {
-      destroy() {
-        node.remove();
-      }
-    };
-  }
-
   const popoverPosition = $derived.by(() => {
     if (typeof window === 'undefined' || !triggerElement) {
-      switch (globalState.toolbarState) {
-        case ToolbarState.Collapsed:
-          return {
-            width: `${DEFAULT_POPOVER_WIDTH}px`,
-            right: '50px',
-            top: '50%',
-            left: undefined,
-            transform: 'translateY(-50%)'
-          };
-        case ToolbarState.Compact:
-          return {
-            width: `${DEFAULT_POPOVER_WIDTH}px`,
-            right: '434px',
-            top: '50%',
-            left: undefined,
-            transform: 'translateY(-50%)'
-          };
-        default:
-          return {
-            width: `${DEFAULT_POPOVER_WIDTH}px`,
-            right: '50vw',
-            top: '50%',
-            left: undefined,
-            transform: 'translateY(-50%)'
-          };
-      }
+      return {
+        width: `${DEFAULT_POPOVER_WIDTH}px`,
+        right: resolveToolbarWidth(globalState.toolbarState),
+        top: '50%',
+        left: undefined,
+        transform: 'translateY(-50%)'
+      };
     }
 
     const rect = triggerElement.getBoundingClientRect();

@@ -3,7 +3,9 @@
   import { Button } from 'carbon-components-svelte';
   import { ColorPalette, Checkmark } from 'carbon-icons-svelte';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
-  import { clampDropdownToViewport } from './dropdown-position.utils';
+  import { clickOutside } from '$lib/features/commons/utils/click-outside';
+  import { portal } from '$lib/features/commons/utils/portal';
+  import { computeFlippedPosition } from '$lib/features/commons/utils/dropdown-position.utils';
   import {
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
@@ -38,35 +40,17 @@
     'single-color-dropdown'
   );
 
-  function portal(node: HTMLElement) {
-    document.body.appendChild(node);
-    return {
-      destroy() {
-        node.remove();
-      }
-    };
-  }
-
   function updatePosition() {
     if (!triggerElement) return;
     const rect = triggerElement.getBoundingClientRect();
-    const top = rect.top;
-    const bottom = rect.bottom;
-    const left = rect.left;
-    const width = rect.width;
     const estimatedDropdownHeight = 260;
-    const spaceBelow = window.innerHeight - bottom;
-    const shouldFlip = spaceBelow < estimatedDropdownHeight && top > spaceBelow;
-    dropdownPos = clampDropdownToViewport(
-      {
-        top: shouldFlip ? top - estimatedDropdownHeight : bottom,
-        left,
-        width
-      },
-      estimatedDropdownHeight,
-      window.innerWidth,
-      window.innerHeight
-    );
+
+    dropdownPos = computeFlippedPosition({
+      triggerRect: rect,
+      dropdownHeight: estimatedDropdownHeight,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight
+    });
   }
 
   function handleSelect(hex: string) {
@@ -84,6 +68,12 @@
     onclose?.();
   }
 
+  function handleDropdownOutsideClick(event: CustomEvent) {
+    const target = event.detail?.originalEvent?.target as Node | undefined;
+    if (target && triggerElement?.contains(target)) return;
+    handleClose();
+  }
+
   $effect(() => {
     if (open) updatePosition();
   });
@@ -99,26 +89,13 @@
   $effect(() => {
     if (!open) return;
 
-    function handleClick(e: MouseEvent) {
-      const target = e.target as Node;
-      if (dropdownRef && !dropdownRef.contains(target)) {
-        if (triggerElement && triggerElement.contains(target)) return;
-        handleClose();
-      }
-    }
-
     function handleKeydown(e: KeyboardEvent) {
       if (e.key === KEY.ESCAPE) handleClose();
     }
 
-    const timer = setTimeout(() => {
-      document.addEventListener(EVENT.CLICK, handleClick);
-    }, 0);
     document.addEventListener(EVENT.KEYDOWN, handleKeydown);
 
     return () => {
-      clearTimeout(timer);
-      document.removeEventListener(EVENT.CLICK, handleClick);
       document.removeEventListener(EVENT.KEYDOWN, handleKeydown);
     };
   });
@@ -132,6 +109,8 @@
       style="top: {dropdownPos.top}px; left: {dropdownPos.left}px; width: {dropdownPos.width}px;"
       role="listbox"
       aria-label={m.color()}
+      use:clickOutside={{ enabled: open }}
+      onoutsideclick={handleDropdownOutsideClick}
     >
       <div class="dropdown-list">
         {#each presets as preset (preset)}
@@ -141,6 +120,7 @@
             class:selected={selectedColor === preset}
             role="option"
             aria-selected={selectedColor === preset}
+            aria-label={m.palette_color_option({ color: preset })}
             onclick={() => handleSelect(preset)}
           >
             <div class="color-bar" style="background-color: {preset}"></div>

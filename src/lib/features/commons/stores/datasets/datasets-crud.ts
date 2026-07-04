@@ -11,7 +11,7 @@ import type { DatasetsState, DatasetsInternals } from './datasets-state.svelte';
 import type { VisualizationStoreOperations } from './datasets-processing';
 import { sanitizeTextInput } from '../../utils/sanitize.utils';
 import { projectStore } from '../project.store.svelte';
-import { dataTabActions } from '../data-tab.store.svelte';
+import { dataTabActions, dataTabState } from '../data-tab.store.svelte';
 import {
   findById,
   removeById,
@@ -72,12 +72,14 @@ export async function deleteDataset(
 
   removeDataset(state, datasetId);
 
-  dataTabActions.setEnrichDataState({
-    enrichmentDatasetId: undefined,
-    enrichmentColumn: undefined,
-    targetColumn: undefined,
-    isEnrichmentActive: false
-  });
+  if (dataTabState.enrichData.enrichmentDatasetId === datasetId) {
+    dataTabActions.setEnrichDataState({
+      enrichmentDatasetId: undefined,
+      enrichmentColumn: undefined,
+      targetColumn: undefined,
+      isEnrichmentActive: false
+    });
+  }
 
   return true;
 }

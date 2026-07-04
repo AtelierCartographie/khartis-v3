@@ -3,7 +3,6 @@
     createProjectActions,
     createProjectState
   } from '$lib/features/commons/stores/create-project.store.svelte';
-  import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
   import { globalActions } from '$lib/features/commons/stores/global.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { DataSourceType } from '$lib/features/commons/types/create-project.types';
@@ -21,10 +20,9 @@
 
   interface Props {
     open: boolean;
-    addDataButton: () => void;
   }
 
-  let { open = $bindable(), addDataButton: _addDataButton }: Props = $props();
+  let { open = $bindable() }: Props = $props();
 
   let uploaderResetKey = $state(0);
   let previousOpen = false;
@@ -69,10 +67,11 @@
         await projectStore.addFilesToProject(validFiles);
         const firstFile = validFiles[0];
         if (firstFile?.id) {
-          dataTabActions.reset();
           dataTabStore.reset();
           dataToolsStore.reset();
-          globalActions.selectDataButton(firstFile.id);
+          globalActions.selectDataButton(firstFile.id, {
+            notifyDataTabReset: true
+          });
         }
 
         closeModal(true);

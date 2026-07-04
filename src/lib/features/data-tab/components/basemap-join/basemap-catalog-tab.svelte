@@ -13,6 +13,10 @@
   import { Add, List, MagicWand } from 'carbon-icons-svelte';
   import BasemapCardVertical from '../basemap-card-vertical.svelte';
   import { getLocale } from '$lib/paraglide/runtime.js';
+  import {
+    readCarbonStringValue,
+    type CarbonValueEvent
+  } from '$lib/features/commons/utils/carbon-events.utils';
 
   interface SuggestedBasemap {
     basemap: BasemapMetadata;
@@ -153,6 +157,10 @@
     searchQuery = '';
     searchSelectedId = undefined;
   }
+
+  function handleSearchInput(event: CarbonValueEvent) {
+    searchQuery = readCarbonStringValue(event, searchQuery);
+  }
 </script>
 
 <div class="tab-content">
@@ -209,7 +217,7 @@
         <ComboBox
           items={searchComboBoxItems}
           selectedId={searchSelectedId}
-          bind:value={searchQuery}
+          value={searchQuery}
           placeholder={m.basemap_search_placeholder()}
           shouldFilterItem={(item, value) => {
             if (!value) return true;
@@ -225,6 +233,7 @@
               basemap.source.toLowerCase().includes(query)
             );
           }}
+          on:input={handleSearchInput}
           on:select={handleSearchSelect}
           on:clear={handleSearchClear}
         />

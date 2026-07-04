@@ -1,4 +1,5 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 import { resolveGPSCoordinateColumns } from '$lib/features/commons/utils/geo-detector.utils';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
@@ -191,7 +192,11 @@ export async function getGPSArrowTable(
   lonColumn: string;
 }> {
   if (!dataset.gpsMode || !dataset.gpsColumns) {
-    throw new Error(m.gps_error_not_in_gps_mode({ id: dataset.id }));
+    throw new DataValidationError(
+      m.gps_error_not_in_gps_mode({ id: dataset.id }),
+      'gpsMode',
+      { datasetId: dataset.id }
+    );
   }
 
   const { lat, lon } = dataset.gpsColumns;

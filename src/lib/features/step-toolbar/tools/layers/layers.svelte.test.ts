@@ -69,7 +69,8 @@ vi.mock('$lib/features/map/stores/osm-basemap.store.svelte', () => ({
 
 vi.mock('$lib/features/commons/stores/global.svelte', () => ({
   globalActions: {
-    setNavigationState: vi.fn()
+    setNavigationState: vi.fn(),
+    setSelectedTool: vi.fn()
   },
   globalState: {
     selectedTool: undefined

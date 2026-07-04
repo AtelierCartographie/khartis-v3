@@ -25,7 +25,7 @@ export interface PersistenceEntry<T = unknown> {
   priority: SavePriorityType;
 }
 
-const DEFAULT_DEBOUNCE_INTERVAL = 750;
+export const DEFAULT_DEBOUNCE_INTERVAL = 750;
 
 class PersistenceRegistryImpl {
   private entries = new Map<string, PersistenceEntry>();
@@ -104,6 +104,7 @@ class PersistenceRegistryImpl {
   }
 
   register<T>(entry: PersistenceEntry<T>): void {
+    // HMR can re-run store modules; replacing by key keeps registration idempotent.
     this.entries.set(entry.key, entry as PersistenceEntry);
   }
 
@@ -111,13 +112,13 @@ class PersistenceRegistryImpl {
     this.entries.delete(key);
   }
 
-  notifyChange(_key: string, priority?: SavePriorityType): void {
+  notifyChange(key: string, priority?: SavePriorityType): void {
     if (this.suppressedNotificationsDepth > 0) {
       return;
     }
 
     const resolvedPriority =
-      priority ?? this.entries.get(_key)?.priority ?? SavePriority.DEBOUNCED;
+      priority ?? this.entries.get(key)?.priority ?? SavePriority.DEBOUNCED;
 
     this.dirty = true;
     this.emitStatus();

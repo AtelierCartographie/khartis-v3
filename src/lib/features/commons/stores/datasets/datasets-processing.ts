@@ -18,24 +18,21 @@ import { LogCategory, logger } from '../../utils/logger';
 import * as m from '$lib/paraglide/messages';
 import { showWarning } from '../../utils/notification.utils.svelte';
 import { sanitizePreparedGeoJSON } from '../../utils/persisted-geojson.utils';
+import { DataValidationError } from '../../pipeline.errors';
 import {
   isGeoJSONFeatureCollection,
   type GeoJSONFeatureCollection
 } from '$lib/types/data';
 import { fontAssetsStore } from '../font-assets.store.svelte';
 import { detectFontsInDataset } from '../../services/font-detection.service';
+import { VisualizationType } from '$lib/features/commons/constants/visualization.constants';
 
 export interface VisualizationConfig {
   id: string;
   datasetId: string;
 }
 
-export enum VisualizationType {
-  CHOROPLETH = 'choropleth',
-  PROPORTIONAL = 'proportional',
-  CATEGORICAL = 'categorical',
-  BIVARIATE = 'bivariate'
-}
+export { VisualizationType };
 
 export interface VisualizationStoreOperations {
   getVisualizationsByDataset: (datasetId: string) => VisualizationConfig[];
@@ -45,6 +42,18 @@ export interface VisualizationStoreOperations {
     datasetId: string,
     name: string
   ) => void;
+}
+
+function loadFallbackFontsForDataset(dataset: DatasetResult): void {
+  detectFontsInDataset(dataset)
+    .then((fonts) => {
+      if (fonts.size > 0) {
+        void fontAssetsStore.loadFallbackFonts(fonts);
+      }
+    })
+    .catch(() => {
+      // Font detection is best-effort and must not block dataset processing.
+    });
 }
 
 function isNonEmptyRow(
@@ -400,49 +409,70 @@ function notifySkippedFiles(
   }
 }
 
+async function processUploadedDatasetFile(
+  file: UploadedFile,
+  options: { useDuckDbSnapshotWhenAvailable: boolean }
+): Promise<DatasetResult | ZipDatasetResult> {
+  const hasRestorableBinarySource = Boolean(
+    file.content ||
+    file.originalFile ||
+    file.assetRef ||
+    file.companionAssetRefs?.length
+  );
+  const restorableGeoSnapshot = createRestorableGeoSnapshot(file);
+  if (restorableGeoSnapshot) {
+    return dataPipeline.processUploadedFile(restorableGeoSnapshot);
+  }
+
+  const hasPersistedAssetSource = Boolean(
+    file.assetRef || file.companionAssetRefs?.length
+  );
+  const hasInlineReplaySource = Boolean(file.content || file.originalFile);
+
+  if (
+    file.duckdbTableName &&
+    (options.useDuckDbSnapshotWhenAvailable ||
+      !hasPersistedAssetSource ||
+      hasInlineReplaySource)
+  ) {
+    return createDatasetFromPreprocessedFile(file);
+  }
+
+  if (!hasRestorableBinarySource && file.parsedData && file.statistics) {
+    return createDatasetFromPreprocessedFile(file);
+  }
+
+  if (!hasRestorableBinarySource) {
+    throw new DataValidationError(
+      m.error_file_no_content({ fileName: file.name }),
+      'fileContent',
+      {
+        fileId: file.id,
+        fileName: file.name
+      }
+    );
+  }
+
+  return dataPipeline.processUploadedFile(file, file.originalFile);
+}
+
 export async function processFiles(
   state: DatasetsState,
-  internals: DatasetsInternals,
+  _internals: DatasetsInternals,
   files: UploadedFile[]
 ): Promise<void> {
   startProcessing();
   state.error = undefined;
 
   try {
-    const results = await Promise.all(
-      files.map(async (file) => {
-        return internals.processingSemaphore.run(async () => {
-          const restorableGeoSnapshot = createRestorableGeoSnapshot(file);
-          if (restorableGeoSnapshot) {
-            return dataPipeline.processUploadedFile(restorableGeoSnapshot);
-          }
-
-          if (file.duckdbTableName) {
-            return createDatasetFromPreprocessedFile(file);
-          }
-
-          if (
-            !file.content &&
-            !file.originalFile &&
-            file.parsedData &&
-            file.statistics
-          ) {
-            return createDatasetFromPreprocessedFile(file);
-          }
-
-          if (!file.content && !file.originalFile) {
-            throw new Error(m.error_file_no_content({ fileName: file.name }));
-          }
-
-          const result = await dataPipeline.processUploadedFile(
-            file,
-            file.originalFile
-          );
-
-          return result;
-        });
-      })
-    );
+    const results: (DatasetResult | ZipDatasetResult)[] = [];
+    for (const file of files) {
+      results.push(
+        await processUploadedDatasetFile(file, {
+          useDuckDbSnapshotWhenAvailable: true
+        })
+      );
+    }
 
     const newDatasets: DatasetResult[] = results.flatMap((result) =>
       isZipDatasetResult(result) ? result.datasets : [result]
@@ -454,17 +484,7 @@ export async function processFiles(
       state.enabledDatasetIds.add(dataset.id);
     }
 
-    for (const dataset of newDatasets) {
-      detectFontsInDataset(dataset)
-        .then((fonts) => {
-          if (fonts.size > 0) {
-            void fontAssetsStore.loadFallbackFonts(fonts);
-          }
-        })
-        .catch(() => {
-          // ignore font detection errors — non-critical
-        });
-    }
+    newDatasets.forEach(loadFallbackFontsForDataset);
 
     if (newDatasets.length > 0 && !state.selectedDatasetId) {
       state.selectedDatasetId = newDatasets[0].id;
@@ -497,39 +517,8 @@ export async function addFile(
   let addedDataset: DatasetResult | null = null;
 
   try {
-    const result = await internals.processingSemaphore.run(async () => {
-      const hasRestorableBinarySource = Boolean(
-        file.content ||
-        file.originalFile ||
-        file.assetRef ||
-        file.companionAssetRefs?.length
-      );
-      const restorableGeoSnapshot = createRestorableGeoSnapshot(file);
-      if (restorableGeoSnapshot) {
-        return dataPipeline.processUploadedFile(restorableGeoSnapshot);
-      }
-
-      const hasPersistedAssetSource = Boolean(
-        file.assetRef || file.companionAssetRefs?.length
-      );
-      const hasInlineReplaySource = Boolean(file.content || file.originalFile);
-
-      if (
-        file.duckdbTableName &&
-        (!hasPersistedAssetSource || hasInlineReplaySource)
-      ) {
-        return createDatasetFromPreprocessedFile(file);
-      }
-
-      if (!hasRestorableBinarySource && file.parsedData && file.statistics) {
-        return createDatasetFromPreprocessedFile(file);
-      }
-
-      if (!hasRestorableBinarySource) {
-        throw new Error(m.error_file_no_content({ fileName: file.name }));
-      }
-
-      return await dataPipeline.processUploadedFile(file, file.originalFile);
+    const result = await processUploadedDatasetFile(file, {
+      useDuckDbSnapshotWhenAvailable: false
     });
 
     const datasets: DatasetResult[] = (
@@ -579,17 +568,7 @@ export async function addFile(
       }
     }
 
-    for (const dataset of datasets) {
-      detectFontsInDataset(dataset)
-        .then((fonts) => {
-          if (fonts.size > 0) {
-            void fontAssetsStore.loadFallbackFonts(fonts);
-          }
-        })
-        .catch(() => {
-          // ignore font detection errors — non-critical
-        });
-    }
+    datasets.forEach(loadFallbackFontsForDataset);
 
     return addedDataset;
   } catch (error) {

@@ -7,7 +7,7 @@ vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   }
 }));
 
-vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
+vi.mock('$lib/features/project-management/core', () => ({
   SavePriority: {
     IMMEDIATE: 'immediate',
     DEBOUNCED: 'debounced'
@@ -27,7 +27,7 @@ vi.mock('$lib/features/commons/utils/geo-detector.utils', () => ({
 
 import { dataTabStore } from './data-tab.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
-import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
+import { persistenceRegistry } from '$lib/features/project-management/core';
 
 type MockedDatasets = {
   datasets: Array<Record<string, unknown>>;

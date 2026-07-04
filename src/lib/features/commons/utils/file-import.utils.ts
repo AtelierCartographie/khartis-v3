@@ -1,10 +1,10 @@
 import * as m from '$lib/paraglide/messages';
-import { FileStatus, GEOJSON_TYPE } from '$lib/features/commons/constants';
 import {
   FILE_EXTENSIONS,
-  MIME_TYPE_PATTERNS,
-  TABULAR_DELIMITERS
-} from '$lib/features/commons/constants/file-types.constants';
+  FileStatus,
+  GEOJSON_TYPE
+} from '$lib/features/commons/constants';
+import { TABULAR_DELIMITERS } from '$lib/features/commons/constants/file-types.constants';
 import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
 import { ParseError } from '../pipeline.errors';
 import {
@@ -13,6 +13,7 @@ import {
   DataSourceType,
   FileType
 } from '../types/create-project.types';
+import { detectFileType } from './file-type-detection.utils';
 import { LogCategory, logger } from './logger';
 import { sanitizeDisplayName } from './string.utils';
 
@@ -33,69 +34,7 @@ export type ColumnStatSummary = {
 
 export { DataSourceType, FileType } from '../types/create-project.types';
 export { formatFileSize } from './format.utils';
-
-export function detectFileType(file: File): FileType {
-  const extension = file.name.toLowerCase().split('.').pop() || '';
-  const mimeType = file.type.toLowerCase();
-
-  if (
-    FILE_EXTENSIONS.CSV.includes(extension as never) ||
-    mimeType.includes(MIME_TYPE_PATTERNS.CSV)
-  ) {
-    return FileType.CSV;
-  }
-
-  if (FILE_EXTENSIONS.GEOJSON.includes(extension as never)) {
-    return FileType.GEOJSON;
-  }
-
-  if (FILE_EXTENSIONS.SHAPEFILE.includes(extension as never)) {
-    return FileType.SHAPEFILE;
-  }
-
-  if (FILE_EXTENSIONS.GEOPACKAGE.includes(extension as never)) {
-    return FileType.GEOPACKAGE;
-  }
-
-  if (
-    FILE_EXTENSIONS.GEOPARQUET.includes(extension as never) ||
-    mimeType.includes(MIME_TYPE_PATTERNS.PARQUET)
-  ) {
-    return FileType.GEOPARQUET;
-  }
-
-  if (FILE_EXTENSIONS.KML.includes(extension as never)) {
-    return FileType.KML;
-  }
-
-  if (FILE_EXTENSIONS.KMZ.includes(extension as never)) {
-    return FileType.KMZ;
-  }
-
-  if (FILE_EXTENSIONS.GPX.includes(extension as never)) {
-    return FileType.GPX;
-  }
-
-  if (
-    FILE_EXTENSIONS.ZIP.includes(extension as never) ||
-    mimeType.includes(MIME_TYPE_PATTERNS.ZIP)
-  ) {
-    return FileType.ZIP;
-  }
-
-  if (
-    FILE_EXTENSIONS.TSV.includes(extension as never) ||
-    mimeType.includes(MIME_TYPE_PATTERNS.TAB_SEPARATED)
-  ) {
-    return FileType.TSV;
-  }
-
-  if (FILE_EXTENSIONS.ARROW.includes(extension as never)) {
-    return FileType.ARROW;
-  }
-
-  return FileType.UNKNOWN;
-}
+export { detectFileType } from './file-type-detection.utils';
 
 export function isShapefileComponent(filename: string): boolean {
   const extension = filename.toLowerCase().split('.').pop() || '';

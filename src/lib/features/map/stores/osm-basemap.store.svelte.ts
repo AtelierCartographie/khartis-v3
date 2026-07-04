@@ -1,4 +1,4 @@
-import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
+import { persistenceRegistry } from '$lib/features/project-management/core';
 import { basemapCatalogService } from '../services/basemap-catalog.service.svelte';
 import type { OSMTileConfig } from '../services/osm-tile.service';
 import { getOSMTileConfig, isOSMBasemap } from '../services/osm-tile.service';

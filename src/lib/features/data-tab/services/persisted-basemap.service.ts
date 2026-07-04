@@ -7,10 +7,9 @@ import {
 import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+import { isOSMBasemapFileId } from '$lib/features/map/services/osm-tile.service';
 import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-
-const OSM_BASEMAP_PREFIX = 'osm_';
 
 export const PERSISTED_BASEMAP_TYPE = {
   CATALOG: 'catalog',
@@ -73,7 +72,7 @@ export function resolveBasemapSource(
 }
 
 function isOSMBasemapId(basemapId: string): boolean {
-  return basemapId.startsWith(OSM_BASEMAP_PREFIX);
+  return isOSMBasemapFileId(basemapId);
 }
 
 function activateReferenceTiledStyle(): void {
@@ -179,7 +178,8 @@ export function resolveRelevantPersistedBasemap(input: {
 }
 
 export async function restorePersistedBasemapSelection(
-  savedBasemap: PersistedProjectBasemap | null | undefined
+  savedBasemap: PersistedProjectBasemap | null | undefined,
+  options: { referenceBasemapId?: string | null } = {}
 ): Promise<void> {
   if (!savedBasemap?.id) {
     return;
@@ -199,7 +199,10 @@ export async function restorePersistedBasemapSelection(
     basemapStyleStore.setReferenceBasemap(null);
     activateReferenceTiledStyle();
   } else {
-    basemapStyleStore.setReferenceBasemap(savedBasemap.id);
+    const referenceBasemapId = options.referenceBasemapId?.trim();
+    basemapStyleStore.setReferenceBasemap(
+      referenceBasemapId || savedBasemap.id
+    );
   }
 
   if (
@@ -219,11 +222,7 @@ export async function restorePersistedBasemapSelection(
       return;
     }
 
-    if (isOSMBasemapId(basemapData.file)) {
-      osmBasemapStore.clear();
-    } else {
-      osmBasemapStore.setOSMBasemap(basemapData);
-    }
+    osmBasemapStore.setOSMBasemap(basemapData);
     return;
   }
 

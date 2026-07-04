@@ -186,6 +186,46 @@
     })
   );
 
+  let toVerifySelectedMappings = $state<Record<string, string>>({});
+
+  function getToVerifyRowKey(index: number): string {
+    return `verify-${index}`;
+  }
+
+  function getToVerifySelectedMapping(
+    rowKey: string,
+    fallback: string
+  ): string {
+    return toVerifySelectedMappings[rowKey] ?? fallback;
+  }
+
+  function normalizeSelectedValue(
+    value: string | number | undefined,
+    fallback: string
+  ): string {
+    if (value === undefined || value === '') return fallback;
+    return String(value);
+  }
+
+  function handleToVerifyMappingChange(
+    rowKey: string,
+    index: number,
+    fallback: string,
+    value: string | number | undefined
+  ): void {
+    const selectedValue = normalizeSelectedValue(value, fallback);
+    toVerifySelectedMappings[rowKey] = selectedValue;
+    onMappingChange?.(index, selectedValue);
+  }
+
+  $effect(() => {
+    const nextSelections: Record<string, string> = {};
+    deduplicatedJoinRows.forEach((row, index) => {
+      nextSelections[getToVerifyRowKey(index)] = row.selectedMapping;
+    });
+    toVerifySelectedMappings = nextSelections;
+  });
+
   interface RowVirtualizer {
     visibleRows: SvelteSet<string>;
     pendingRows: Map<Element, string>;
@@ -350,51 +390,6 @@
   const duplicateLinesByValue = $derived<Record<string, number[]>>(
     Object.fromEntries(duplicateLines.map((d) => [d.dataValue, d.lines]))
   );
-
-  $effect(() => {
-    const targets: Array<[string, string]> = [];
-
-    if (toVerifyExpanded) {
-      deduplicatedJoinRows.forEach((row, i) => {
-        if (row.selectedMapping) {
-          targets.push([`join-${i}`, row.selectedMapping]);
-        }
-      });
-    }
-
-    if (joinedExpanded) {
-      joinedEntitiesList.forEach((row) => {
-        if (row.basemapValue) {
-          targets.push([`joined-${row.dataValue}`, row.basemapValue]);
-        }
-      });
-    }
-
-    if (targets.length === 0) return;
-
-    let cancelled = false;
-    requestAnimationFrame(() => {
-      if (cancelled) return;
-      requestAnimationFrame(() => {
-        if (cancelled) return;
-        for (const [id, expected] of targets) {
-          const node = document.getElementById(id);
-          if (!(node instanceof HTMLSelectElement)) continue;
-          if (node.value === expected) continue;
-          const hasOption = Array.from(node.options).some(
-            (opt) => opt.value === expected
-          );
-          if (!hasOption) continue;
-          node.value = expected;
-          node.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-      });
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  });
 
   let joinedExpanded = $state(false);
   let toVerifyExpanded = $state(true);
@@ -727,8 +722,12 @@
               </div>
               <div class="join-table-scroll" bind:this={toVerifyScrollEl}>
                 {#each deduplicatedJoinRows as row, i (i)}
-                  {@const rowKey = `verify-${i}`}
-                  {@const verifyTooltip = buildRowTooltip(row.selectedMapping)}
+                  {@const rowKey = getToVerifyRowKey(i)}
+                  {@const selectedMapping = getToVerifySelectedMapping(
+                    rowKey,
+                    row.selectedMapping
+                  )}
+                  {@const verifyTooltip = buildRowTooltip(selectedMapping)}
                   <div class="table-row" use:observeToVerifyRow={rowKey}>
                     <div class="table-cell cell-data">{row.dataValue}</div>
                     <div
@@ -748,13 +747,20 @@
                             entity: row.dataValue
                           })}
                           hideLabel
-                          selected={row.selectedMapping}
-                          on:change={(e) => {
-                            const target = e.target as HTMLSelectElement;
-                            const selectedValue =
-                              target?.value || row.selectedMapping;
-                            onMappingChange?.(i, selectedValue);
-                          }}
+                          bind:selected={
+                            () =>
+                              getToVerifySelectedMapping(
+                                rowKey,
+                                row.selectedMapping
+                              ),
+                            (value) =>
+                              handleToVerifyMappingChange(
+                                rowKey,
+                                i,
+                                row.selectedMapping,
+                                value
+                              )
+                          }
                           size="sm"
                         >
                           {#each toVerifyOptions as opt (opt)}
@@ -783,7 +789,7 @@
                           handleIgnore(
                             row.dataValue,
                             'to_verify',
-                            row.selectedMapping
+                            selectedMapping
                           )}
                       >
                         <Misuse size={20} />
@@ -792,9 +798,9 @@
                         type="button"
                         class="row-action row-action-validate"
                         aria-label={m.join_action_validate()}
-                        disabled={!row.selectedMapping}
+                        disabled={!selectedMapping}
                         onclick={() =>
-                          handleValidate(row.dataValue, row.selectedMapping)}
+                          handleValidate(row.dataValue, selectedMapping)}
                       >
                         <CheckmarkFilled size={20} />
                       </button>

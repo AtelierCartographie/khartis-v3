@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { portal } from '$lib/features/commons/utils/portal';
   import type { Snippet } from 'svelte';
 
   interface Props {
@@ -6,15 +7,6 @@
   }
 
   let { children }: Props = $props();
-
-  function portal(node: HTMLElement) {
-    document.body.appendChild(node);
-    return {
-      destroy() {
-        node.remove();
-      }
-    };
-  }
 </script>
 
 <div use:portal class="portal-container">

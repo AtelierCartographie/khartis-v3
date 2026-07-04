@@ -5,6 +5,8 @@ import {
 
 import {
   detectSemioType,
+  ID_COLUMN_KEYWORDS,
+  MAX_SEMIO_SCORE,
   SEMIO_TYPES,
   type SemioType
 } from '$lib/features/commons/utils/semio-detector.utils';
@@ -54,168 +56,216 @@ export { SEMIO_TYPES };
 const VIZ_CRITERIA: readonly VizSuggestion[] = [
   {
     id: 'symbols_uniques',
-    label: m.viz_suggestion_symbols_uniques(),
+    get label() {
+      return m.viz_suggestion_symbols_uniques();
+    },
     nbColumns: 0,
     semioTypes: [],
     geometries: ['point', 'polygon']
   },
   {
     id: 'polygons_colorful_QL',
-    label: m.viz_suggestion_polygons_colorful_ql(),
+    get label() {
+      return m.viz_suggestion_polygons_colorful_ql();
+    },
     nbColumns: 1,
     semioTypes: ['QL'],
     geometries: ['polygon']
   },
   {
     id: 'choropleth',
-    label: m.viz_suggestion_choropleth(),
+    get label() {
+      return m.viz_suggestion_choropleth();
+    },
     nbColumns: 1,
     semioTypes: ['QTR'],
     geometries: ['polygon']
   },
   {
     id: 'symbols_uniques_colorful_QTR',
-    label: m.viz_suggestion_symbols_unique_colorful_qtr(),
+    get label() {
+      return m.viz_suggestion_symbols_unique_colorful_qtr();
+    },
     nbColumns: 1,
     semioTypes: ['QTR'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_differents',
-    label: m.viz_suggestion_symbols_different_ql(),
+    get label() {
+      return m.viz_suggestion_symbols_different_ql();
+    },
     nbColumns: 1,
     semioTypes: ['QL'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_uniques_colorful_QL',
-    label: m.viz_suggestion_symbols_unique_colorful_ql(),
+    get label() {
+      return m.viz_suggestion_symbols_unique_colorful_ql();
+    },
     nbColumns: 1,
     semioTypes: ['QL'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_proportional',
-    label: m.viz_suggestion_symbols_proportional(),
+    get label() {
+      return m.viz_suggestion_symbols_proportional();
+    },
     nbColumns: 1,
     semioTypes: ['QTA'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_proportional_colorful_QL',
-    label: m.viz_suggestion_symbols_proportional_colorful_ql(),
+    get label() {
+      return m.viz_suggestion_symbols_proportional_colorful_ql();
+    },
     nbColumns: 2,
     semioTypes: ['QTA', 'QL'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_proportional_colorful_QTR',
-    label: m.viz_suggestion_symbols_proportional_colorful_qtr(),
+    get label() {
+      return m.viz_suggestion_symbols_proportional_colorful_qtr();
+    },
     nbColumns: 2,
     semioTypes: ['QTA', 'QTR'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_proportional_double',
-    label: m.viz_suggestion_symbols_proportional_double(),
+    get label() {
+      return m.viz_suggestion_symbols_proportional_double();
+    },
     nbColumns: 2,
     semioTypes: ['QTA', 'QTA'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'polygons_uniques',
-    label: m.viz_suggestion_polygons_unique(),
+    get label() {
+      return m.viz_suggestion_polygons_unique();
+    },
     nbColumns: 0,
     semioTypes: [],
     geometries: ['polygon']
   },
   {
     id: 'lines_uniques',
-    label: m.viz_suggestion_lines_unique(),
+    get label() {
+      return m.viz_suggestion_lines_unique();
+    },
     nbColumns: 0,
     semioTypes: [],
     geometries: ['line']
   },
   {
     id: 'lines_colorful_QL',
-    label: m.viz_suggestion_lines_colorful_ql(),
+    get label() {
+      return m.viz_suggestion_lines_colorful_ql();
+    },
     nbColumns: 1,
     semioTypes: ['QL'],
     geometries: ['line']
   },
   {
     id: 'lines_colorful_QTR',
-    label: m.viz_suggestion_lines_colorful_qtr(),
+    get label() {
+      return m.viz_suggestion_lines_colorful_qtr();
+    },
     nbColumns: 1,
     semioTypes: ['QTR'],
     geometries: ['line']
   },
   {
     id: 'lines_proportional',
-    label: m.viz_suggestion_lines_proportional(),
+    get label() {
+      return m.viz_suggestion_lines_proportional();
+    },
     nbColumns: 1,
     semioTypes: ['QTA'],
     geometries: ['line']
   },
   {
     id: 'lines_proportional_colorful_QL',
-    label: m.viz_suggestion_lines_proportional_colorful_ql(),
+    get label() {
+      return m.viz_suggestion_lines_proportional_colorful_ql();
+    },
     nbColumns: 2,
     semioTypes: ['QTA', 'QL'],
     geometries: ['line']
   },
   {
     id: 'lines_proportional_colorful_QTR',
-    label: m.viz_suggestion_lines_proportional_colorful_qtr(),
+    get label() {
+      return m.viz_suggestion_lines_proportional_colorful_qtr();
+    },
     nbColumns: 2,
     semioTypes: ['QTA', 'QTR'],
     geometries: ['line']
   },
   {
     id: 'polygons_colorful_QLO',
-    label: m.viz_suggestion_polygons_colorful_qlo(),
+    get label() {
+      return m.viz_suggestion_polygons_colorful_qlo();
+    },
     nbColumns: 1,
     semioTypes: ['QLO'],
     geometries: ['polygon']
   },
   {
     id: 'symbols_differents_QLO',
-    label: m.viz_suggestion_symbols_different_qlo(),
+    get label() {
+      return m.viz_suggestion_symbols_different_qlo();
+    },
     nbColumns: 1,
     semioTypes: ['QLO'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_uniques_colorful_QLO',
-    label: m.viz_suggestion_symbols_unique_colorful_qlo(),
+    get label() {
+      return m.viz_suggestion_symbols_unique_colorful_qlo();
+    },
     nbColumns: 1,
     semioTypes: ['QLO'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'lines_colorful_QLO',
-    label: m.viz_suggestion_lines_colorful_qlo(),
+    get label() {
+      return m.viz_suggestion_lines_colorful_qlo();
+    },
     nbColumns: 1,
     semioTypes: ['QLO'],
     geometries: ['line']
   },
   {
     id: 'texts_colorful_QL',
-    label: m.viz_suggestion_texts_colorful_ql(),
+    get label() {
+      return m.viz_suggestion_texts_colorful_ql();
+    },
     nbColumns: 2,
     semioTypes: ['QL', 'QL'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'texts_colorful_QTR',
-    label: m.viz_suggestion_texts_colorful_qtr(),
+    get label() {
+      return m.viz_suggestion_texts_colorful_qtr();
+    },
     nbColumns: 2,
     semioTypes: ['QL', 'QTR'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'texts_proportional',
-    label: m.viz_suggestion_texts_proportional(),
+    get label() {
+      return m.viz_suggestion_texts_proportional();
+    },
     nbColumns: 2,
     semioTypes: ['QL', 'QTA'],
     geometries: ['point', 'polygon']
@@ -259,18 +309,6 @@ const LABEL_COLUMN_KEYWORDS = [
   'station',
   'stop'
 ] as const;
-const ID_COLUMN_KEYWORDS = [
-  'id',
-  'fid',
-  'gid',
-  'oid',
-  'pk',
-  'code',
-  'iso',
-  'objectid',
-  'object_id',
-  'rowid'
-] as const;
 const MAX_TEXT_POINT_FEATURES = 150;
 
 export function simplifyGeometryType(
@@ -292,13 +330,6 @@ function mapTypeToSimple(columnType: string): DuckDBSimplifiedType {
   }
   if (columnType === COLUMN_TYPE.DATE) {
     return DuckDBSimplifiedType.DATE;
-  }
-  if (
-    STRING_LIKE_COLUMN_TYPES.includes(
-      columnType as (typeof STRING_LIKE_COLUMN_TYPES)[number]
-    )
-  ) {
-    return DuckDBSimplifiedType.STRING;
   }
   return DuckDBSimplifiedType.STRING;
 }
@@ -369,7 +400,7 @@ function getColumnSemioType(column: ColumnAnalysis): EnrichedColumn {
   };
 
   const { semioType, semioScore } = geoSemioType
-    ? { semioType: geoSemioType, semioScore: 6.5 }
+    ? { semioType: geoSemioType, semioScore: MAX_SEMIO_SCORE }
     : detectSemioType(analysisLike);
 
   return {
@@ -386,7 +417,6 @@ function computeSuggestionScore(columns: EnrichedColumn[]): number {
   if (columns.length === 0) return 0;
   const totalScore = columns.reduce((sum, col) => sum + col.score, 0);
   const avgScore = totalScore / columns.length;
-  const MAX_SEMIO_SCORE = 6.5;
   return Math.round((avgScore / MAX_SEMIO_SCORE) * 100);
 }
 
@@ -776,15 +806,9 @@ function suggestVisualizations(
     .filter((col) => col.semioType !== SEMIO_TYPES.GEOLON)
     .filter((col) => getUniqueCount(col) > 1);
 
-  const textEligibleColumns = enrichedColumns
-    .filter((col) => col.semioType !== SEMIO_TYPES.GEOID)
-    .filter((col) => col.semioType !== SEMIO_TYPES.GEOLAT)
-    .filter((col) => col.semioType !== SEMIO_TYPES.GEOLON)
-    .filter((col) => getUniqueCount(col) > 1);
-
   const suggestions = [
     ...generateSuggestions(rankedColumns, simplifiedGeomType),
-    ...generateTextSuggestions(textEligibleColumns, simplifiedGeomType)
+    ...generateTextSuggestions(rankedColumns, simplifiedGeomType)
   ];
 
   return dedupeSuggestionsByImplementation(

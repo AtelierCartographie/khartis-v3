@@ -9,6 +9,15 @@ const WOFF2_PRECACHE_LIMIT = 60;
 const JS_PRECACHE_LIMIT = 200;
 const CSS_PRECACHE_LIMIT = 60;
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getExpectedNavigationFallbackUrl(): string {
+  const basePath = process.env.BASE_PATH?.replace(/\/+$/, '') ?? '';
+  return basePath ? `${basePath}/` : '/';
+}
+
 describe.skipIf(!hasBuild)('PWA precache budget', () => {
   const swContent = hasBuild ? readFileSync(swPath, 'utf8') : '';
 
@@ -43,8 +52,10 @@ describe.skipIf(!hasBuild)('PWA precache budget', () => {
   });
 
   it('precaches the navigation fallback scope root', () => {
-    const matchesUrl =
-      /["']?url["']?:["']\/cartographie\/khartisnewpprd\/["']/.test(swContent);
+    const expectedUrl = getExpectedNavigationFallbackUrl();
+    const matchesUrl = new RegExp(
+      `["']?url["']?:["']${escapeRegExp(expectedUrl)}["']`
+    ).test(swContent);
     expect(matchesUrl).toBe(true);
   });
 

@@ -2,7 +2,7 @@ import {
   persistenceRegistry,
   SavePriority,
   type SavePriorityType
-} from '$lib/features/project-management/core/persistence-registry';
+} from '$lib/features/project-management/core';
 
 export type BaseActions<T extends object> = {
   setState: (newState: Partial<T>) => void;
@@ -14,6 +14,21 @@ export type ToolStoreResult<T extends object, A extends object = object> = {
   actions: BaseActions<T> & A;
   getState: () => T;
 };
+
+export function createReadonlyStateFacade<T extends object>(
+  state: T
+): Readonly<T> {
+  const facade = {} as Record<keyof T, unknown>;
+
+  for (const key of Object.keys(state) as Array<keyof T>) {
+    Object.defineProperty(facade, key, {
+      enumerable: true,
+      get: () => state[key]
+    });
+  }
+
+  return facade as Readonly<T>;
+}
 
 export interface ToolStorePersistenceConfig<T extends object> {
   key: string;
@@ -54,6 +69,8 @@ export function createToolStore<T extends object, A extends object = object>(
   const custom = notifyPersistence
     ? wrapActionsWithNotify(rawCustom, notifyPersistence)
     : rawCustom;
+  const persistedSetState =
+    getSetStateOverride<T>(custom) ?? baseActions.setState;
 
   const serializeState = () =>
     persistence?.serializeFilter
@@ -72,13 +89,81 @@ export function createToolStore<T extends object, A extends object = object>(
     persistenceRegistry.register({
       key: persistence.key,
       serialize: () => serializeState(),
-      deserialize: (data: unknown) => baseActions.setState(data as Partial<T>),
+      deserialize: (data: unknown) =>
+        persistedSetState(createPersistedState(defaultState, data)),
       reset: () => baseActions.reset(),
       priority: persistence.priority ?? SavePriority.DEBOUNCED
     });
   }
 
   return result;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function cloneStateValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => cloneStateValue(item));
+  }
+
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, cloneStateValue(entry)])
+    );
+  }
+
+  return value;
+}
+
+function mergeKnownStateShape(
+  defaultValue: unknown,
+  persistedValue: unknown
+): unknown {
+  if (Array.isArray(defaultValue)) {
+    return Array.isArray(persistedValue)
+      ? cloneStateValue(persistedValue)
+      : cloneStateValue(defaultValue);
+  }
+
+  if (isRecord(defaultValue)) {
+    const nextValue = cloneStateValue(defaultValue) as Record<string, unknown>;
+    if (!isRecord(persistedValue)) {
+      return nextValue;
+    }
+
+    for (const key of Object.keys(nextValue)) {
+      if (Object.prototype.hasOwnProperty.call(persistedValue, key)) {
+        nextValue[key] = mergeKnownStateShape(
+          nextValue[key],
+          persistedValue[key]
+        );
+      }
+    }
+
+    return nextValue;
+  }
+
+  return persistedValue === undefined
+    ? cloneStateValue(defaultValue)
+    : cloneStateValue(persistedValue);
+}
+
+function createPersistedState<T extends object>(
+  defaultState: T,
+  persistedState: unknown
+): Partial<T> {
+  return mergeKnownStateShape(defaultState, persistedState) as Partial<T>;
+}
+
+function getSetStateOverride<T extends object>(
+  actions: object
+): ((newState: Partial<T>) => void) | undefined {
+  const candidate = (actions as { setState?: unknown }).setState;
+  return typeof candidate === 'function'
+    ? (candidate as (newState: Partial<T>) => void)
+    : undefined;
 }
 
 function wrapActionsWithNotify<A extends object>(

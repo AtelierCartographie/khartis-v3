@@ -46,7 +46,6 @@ vi.mock('@ateliercartographie/motif.js', () => ({
 import {
   PALETTE_TYPE,
   monochromePalettes,
-  bicolorPalettes,
   sepiaPalettes,
   sequentialPalettes,
   divergingPalettes,
@@ -56,7 +55,6 @@ import {
   generateSequentialFromColor,
   generateSequentialFromColors,
   generateIntensityShades,
-  generateIntensityShadesForColor,
   generateCategoricalColorsFromSeed,
   getSuggestionPalettes,
   getPalettesForType,
@@ -111,16 +109,12 @@ describe('palette.constants — palette collections', () => {
     });
   });
 
-  it('should define bicolor palettes with exactly two seed colors per palette', () => {
-    expect(bicolorPalettes.length).toBeGreaterThan(0);
-    bicolorPalettes.forEach((p) => {
+  it('should define sequential palettes with exactly two seed colors per palette', () => {
+    expect(sequentialPalettes.length).toBeGreaterThan(0);
+    sequentialPalettes.forEach((p) => {
       expect(p.type).toBe(PALETTE_TYPE.SEQUENTIAL);
       expect(p.colors.length).toBe(2);
     });
-  });
-
-  it('should expose sequentialPalettes aliased from bicolorPalettes', () => {
-    expect(sequentialPalettes).toBe(bicolorPalettes);
   });
 
   it('should mark all sepia palettes as colorBlindSafe', () => {
@@ -196,7 +190,7 @@ describe('palette.constants — generatePaletteColors', () => {
   });
 
   it('should generate N hex colors for a SEQUENTIAL bicolor palette', () => {
-    const p = bicolorPalettes[0];
+    const p = sequentialPalettes[0];
     const result = generatePaletteColors(p, 7);
     expect(result).toHaveLength(7);
     result.forEach((c) => expect(c).toMatch(HEX_REGEX));
@@ -312,7 +306,7 @@ describe('palette.constants — getSuggestionPalettes', () => {
 
   it('should return bicolor palettes for the bicolor preset', () => {
     const result = getSuggestionPalettes('bicolor', false);
-    expect(result).toEqual(bicolorPalettes);
+    expect(result).toEqual(sequentialPalettes);
   });
 
   it('should return sepia palettes for the sepia preset', () => {
@@ -389,8 +383,8 @@ describe('palette.constants — findPaletteById', () => {
     expect(findPaletteById(monochromePalettes[0].id)?.id).toBe(
       monochromePalettes[0].id
     );
-    expect(findPaletteById(bicolorPalettes[0].id)?.id).toBe(
-      bicolorPalettes[0].id
+    expect(findPaletteById(sequentialPalettes[0].id)?.id).toBe(
+      sequentialPalettes[0].id
     );
     expect(findPaletteById(divergingPalettes[0].id)?.id).toBe(
       divergingPalettes[0].id
@@ -422,7 +416,7 @@ describe('palette.constants — getPaletteDisplayName', () => {
   it('should resolve a translated display name for every exported palette', () => {
     const palettes = [
       ...monochromePalettes,
-      ...bicolorPalettes,
+      ...sequentialPalettes,
       ...sepiaPalettes,
       ...divergingPalettes,
       ...qualitativePalettes,
@@ -498,11 +492,9 @@ describe('palette.constants — getQualitativeColorGroups', () => {
   });
 });
 
-describe('palette.constants — generateIntensityShadesForColor', () => {
-  it('should alias to generateIntensityShades (7 shades)', () => {
-    const shades = generateIntensityShadesForColor('#f287ac');
-    const ref = generateIntensityShades('#f287ac');
-    expect(shades).toEqual(ref);
+describe('palette.constants — generateIntensityShades', () => {
+  it('should generate 7 shades from a seed color', () => {
+    const shades = generateIntensityShades('#f287ac');
     expect(shades).toHaveLength(7);
   });
 });
@@ -520,6 +512,12 @@ describe('palette.constants — generateCategoricalColorsFromSeed', () => {
 
   it('should return N hex colors when count > 1 under the Vif preset', () => {
     const colors = generateCategoricalColorsFromSeed('#f287ac', 5, 'vif');
+    expect(colors).toHaveLength(5);
+    colors.forEach((c) => expect(c).toMatch(HEX_REGEX));
+  });
+
+  it('should accept a seed without a hash prefix', () => {
+    const colors = generateCategoricalColorsFromSeed('f287ac', 5, 'vif');
     expect(colors).toHaveLength(5);
     colors.forEach((c) => expect(c).toMatch(HEX_REGEX));
   });

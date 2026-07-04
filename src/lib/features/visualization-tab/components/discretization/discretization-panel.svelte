@@ -8,8 +8,9 @@
   import {
     DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
     NESTED_MEANS_CLASS_COUNTS,
+    normalizeClassificationMethod,
     resolveBreakpointLowerClassCount
-  } from './discretization.utils';
+  } from '$lib/features/commons/utils/discretization.utils';
   import {
     Select,
     SelectItem,
@@ -19,15 +20,7 @@
   import { Launch } from 'carbon-icons-svelte';
   import DiscretizationHistogram from './discretization-histogram.svelte';
   import type { ShapeType } from '$lib/features/commons/constants/visualization.constants';
-
-  type ClassificationMethod =
-    | 'kmeans'
-    | 'quantile'
-    | 'equal-interval'
-    | 'manual'
-    | 'q6'
-    | 'nested-means'
-    | 'head-tail';
+  import { ClassificationMethod } from '$lib/features/commons/stores/visualization.store.svelte';
 
   interface ClassBreak {
     min: number;
@@ -67,7 +60,7 @@
   }
 
   let {
-    method = $bindable<ClassificationMethod>('kmeans'),
+    method = $bindable<ClassificationMethod>(ClassificationMethod.KMEANS),
     numClasses = $bindable(DEFAULT_DISCRETIZATION_CLASS_COUNT),
     classCountMax = DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
     breaks = $bindable<ClassBreak[]>([
@@ -97,38 +90,19 @@
   });
 
   const METHOD_DESCRIPTIONS: Record<ClassificationMethod, () => string> = {
-    kmeans: m.discretization_desc_kmeans,
-    quantile: m.discretization_desc_quantile,
-    'equal-interval': m.discretization_desc_equal_interval,
-    manual: m.discretization_desc_manual,
-    q6: m.discretization_desc_q6,
-    'nested-means': m.discretization_desc_nested_means,
-    'head-tail': m.discretization_desc_head_tail
+    [ClassificationMethod.KMEANS]: m.discretization_desc_kmeans,
+    [ClassificationMethod.QUANTILES]: m.discretization_desc_quantile,
+    [ClassificationMethod.EQUAL_INTERVAL]: m.discretization_desc_equal_interval,
+    [ClassificationMethod.MANUAL]: m.discretization_desc_manual,
+    [ClassificationMethod.Q6]: m.discretization_desc_q6,
+    [ClassificationMethod.NESTED_MEANS]: m.discretization_desc_nested_means,
+    [ClassificationMethod.HEAD_TAIL]: m.discretization_desc_head_tail
   };
-
-  function isClassificationMethod(
-    value: string
-  ): value is ClassificationMethod {
-    switch (value) {
-      case 'kmeans':
-      case 'quantile':
-      case 'equal-interval':
-      case 'manual':
-      case 'q6':
-      case 'nested-means':
-      case 'head-tail':
-        return true;
-      default:
-        return false;
-    }
-  }
 
   function normalizePanelMethod(
     value: string | null | undefined
   ): ClassificationMethod {
-    return typeof value === 'string' && isClassificationMethod(value)
-      ? value
-      : 'kmeans';
+    return normalizeClassificationMethod(value);
   }
 
   function getMethodDescription(
@@ -141,8 +115,8 @@
     return Math.max(...breaks.map((b) => b.count), 1);
   });
 
-  const isClassCountLocked = $derived(method === 'q6');
-  const isNestedMeans = $derived(method === 'nested-means');
+  const isClassCountLocked = $derived(method === ClassificationMethod.Q6);
+  const isNestedMeans = $derived(method === ClassificationMethod.NESTED_MEANS);
 
   const dataMin = $derived(breaks[0]?.min ?? 0);
   const dataMax = $derived.by(() => {
@@ -209,10 +183,10 @@
     const target = e.currentTarget as HTMLSelectElement;
     const newMethod = normalizePanelMethod(target.value);
     method = newMethod;
-    if (newMethod === 'q6') {
+    if (newMethod === ClassificationMethod.Q6) {
       numClasses = 6;
       onclasseschange?.(6);
-    } else if (newMethod === 'nested-means') {
+    } else if (newMethod === ClassificationMethod.NESTED_MEANS) {
       const closest = NESTED_MEANS_CLASS_COUNTS.reduce((prev, curr) =>
         Math.abs(curr - numClasses) < Math.abs(prev - numClasses) ? curr : prev
       );
@@ -326,10 +300,10 @@
     const nextBreaks = breaks.map((breakItem) => ({ ...breakItem }));
     validationErrors = validateBreaks(nextBreaks);
     if (validationErrors.length === 0) {
-      if (method !== 'manual') {
-        const wasQ6 = method === 'q6';
-        method = 'manual';
-        onmethodchange?.('manual');
+      if (method !== ClassificationMethod.MANUAL) {
+        const wasQ6 = method === ClassificationMethod.Q6;
+        method = ClassificationMethod.MANUAL;
+        onmethodchange?.(ClassificationMethod.MANUAL);
         if (wasQ6) {
           onclasseschange?.(nextBreaks.length);
         }
@@ -347,22 +321,34 @@
       selected={method}
       on:change={handleMethodChange}
     >
-      <SelectItem value="kmeans" text={m.discretization_method_kmeans()} />
-      <SelectItem value="quantile" text={m.discretization_method_quantile()} />
       <SelectItem
-        value="equal-interval"
+        value={ClassificationMethod.KMEANS}
+        text={m.discretization_method_kmeans()}
+      />
+      <SelectItem
+        value={ClassificationMethod.QUANTILES}
+        text={m.discretization_method_quantile()}
+      />
+      <SelectItem
+        value={ClassificationMethod.EQUAL_INTERVAL}
         text={m.discretization_method_equal_interval()}
       />
-      <SelectItem value="q6" text={m.discretization_method_q6()} />
       <SelectItem
-        value="nested-means"
+        value={ClassificationMethod.Q6}
+        text={m.discretization_method_q6()}
+      />
+      <SelectItem
+        value={ClassificationMethod.NESTED_MEANS}
         text={m.discretization_method_nested_means()}
       />
       <SelectItem
-        value="head-tail"
+        value={ClassificationMethod.HEAD_TAIL}
         text={m.discretization_method_head_tail()}
       />
-      <SelectItem value="manual" text={m.discretization_method_manual()} />
+      <SelectItem
+        value={ClassificationMethod.MANUAL}
+        text={m.discretization_method_manual()}
+      />
     </Select>
   </div>
 

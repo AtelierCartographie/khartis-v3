@@ -28,7 +28,7 @@
           className="format-mode-tabs"
           activeClass="active"
           fullWidthClass="full-width"
-          onChange={(index) => {
+          onchange={(index) => {
             formatActions.setMode(
               index === 0 ? FormatMode.PRESET : FormatMode.CUSTOM
             );

@@ -10,6 +10,7 @@ import {
 import { BasemapDottedPattern } from '$lib/features/commons/constants/visualization.constants';
 import { ScaleType } from '$lib/features/commons/stores/visualization.store.svelte';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 
 export const HIGHLIGHT_FILL_COLOR: RGBColor = [180, 180, 180];
 
@@ -21,13 +22,9 @@ export function resolveMissingDataRenderProps(
   const rawColor = viz?.missingData?.color;
   if (!rawColor) return { color: fallbackColor, show };
 
-  const clean = rawColor.replace('#', '');
-  const bigint = parseInt(clean, 16);
-  if (Number.isNaN(bigint)) return { color: fallbackColor, show };
-  return {
-    color: [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255],
-    show
-  };
+  const color = hexToRgb(rawColor);
+  if (!color.every(Number.isFinite)) return { color: fallbackColor, show };
+  return { color, show };
 }
 
 export function withOpacity(color: number[], opacity = 1): Color {

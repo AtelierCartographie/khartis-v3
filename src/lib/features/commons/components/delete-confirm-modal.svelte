@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { m } from '$lib/paraglide/messages.js';
+  import { m } from '$lib/paraglide/messages';
   import { Modal } from 'carbon-components-svelte';
 
   interface Props {

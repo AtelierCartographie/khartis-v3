@@ -6,6 +6,7 @@ import type { ProjectionPresets } from '$lib/features/map/types/basemap.types';
 import type { BBox } from '$lib/features/map/types';
 import type { D3Usage } from 'proj-suggest';
 import { PROJECTIONS } from '$lib/features/commons/utils/projection.utils';
+import { CLIP_DEGENERACY_LON_EPSILON } from '$lib/features/commons/utils/d3-projection-config.utils';
 import { computeProjectedBboxForProjection } from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
 import {
   getCompositeProjectionPresetId,
@@ -220,6 +221,53 @@ describe('user projection utils', () => {
     expect(projection.rotate()[0]).toBeCloseTo(30);
     expect(projection.rotate()[1]).toBeCloseTo(-45);
     expect(projection.angle()).toBeCloseTo(15);
+  });
+
+  it('adds clip-polygon longitude epsilon to catalogue projections', () => {
+    for (const projectionId of ['armadillo', 'interrupted-mollweide']) {
+      const projection = asGeoProjection(
+        resolveUserProjectionOverride({
+          state: {
+            selected: projectionId,
+            overrideActive: true,
+            customCode: undefined,
+            center: undefined,
+            longitude: 0,
+            latitude: 0,
+            rotation: 0
+          },
+          fitBbox: [-180, -60, 180, 80],
+          viewportSize: { width: 960, height: 600 },
+          padding: 40,
+          projectionPresets
+        })
+      );
+
+      expect(
+        projection.rotate()[0],
+        `${projectionId} should avoid integer interruption meridians`
+      ).toBeCloseTo(CLIP_DEGENERACY_LON_EPSILON);
+    }
+
+    const mollweide = asGeoProjection(
+      resolveUserProjectionOverride({
+        state: {
+          selected: 'mollweide',
+          overrideActive: true,
+          customCode: undefined,
+          center: undefined,
+          longitude: 0,
+          latitude: 0,
+          rotation: 0
+        },
+        fitBbox: [-180, -60, 180, 80],
+        viewportSize: { width: 960, height: 600 },
+        padding: 40,
+        projectionPresets
+      })
+    );
+
+    expect(mollweide.rotate()[0]).toBeCloseTo(0);
   });
 
   it('applies longitude and latitude as spherical rotation offsets', () => {

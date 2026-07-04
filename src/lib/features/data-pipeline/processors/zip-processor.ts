@@ -1,5 +1,7 @@
 import * as m from '$lib/paraglide/messages';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { FileType } from '$lib/features/commons/utils/file-import.utils';
+import { ParseError } from '$lib/features/commons/pipeline.errors';
 import type { DatasetResult, ZipDatasetResult } from '../types';
 import {
   createFileFromExtracted,
@@ -36,7 +38,9 @@ async function processShapefileArchive(
     f.name.toLowerCase().endsWith('.shp')
   );
   if (!shpExtracted) {
-    throw new Error(m.pipeline_error_shp_not_found());
+    throw new ParseError(m.pipeline_error_shp_not_found(), FileType.SHAPEFILE, {
+      fileName: file.name
+    });
   }
 
   const shpFile = createFileFromExtracted(shpExtracted);
@@ -114,7 +118,9 @@ async function processGenericZip(
   const supportedFiles = getSupportedFilesFromArchive(extraction.files);
 
   if (supportedFiles.length === 0) {
-    throw new Error(m.pipeline_error_no_supported_files());
+    throw new ParseError(m.pipeline_error_no_supported_files(), FileType.ZIP, {
+      fileName: file.name
+    });
   }
 
   if (supportedFiles.length === 1) {
@@ -168,7 +174,10 @@ async function processMultipleFilesFromZip(
   }
 
   if (datasets.length === 0) {
-    throw new Error(m.pipeline_error_no_supported_files());
+    throw new ParseError(m.pipeline_error_no_supported_files(), FileType.ZIP, {
+      fileName: zipFile.name,
+      skippedFiles
+    });
   }
 
   const result: ZipDatasetResult = {

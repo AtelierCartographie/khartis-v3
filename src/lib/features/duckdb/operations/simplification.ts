@@ -1,6 +1,12 @@
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { DuckDBError } from '$lib/features/commons/pipeline.errors';
+import {
+  DataValidationError,
+  DuckDBError
+} from '$lib/features/commons/pipeline.errors';
 import * as m from '$lib/paraglide/messages';
 import { DUCK_CONST } from '../constants';
 import type { DuckDBClientForArrow } from '../orchestrator/arrow-ops';
@@ -59,15 +65,21 @@ export async function simplifyGeometryTable(
   );
 
   if (!Number.isFinite(tolerance) || tolerance < 0) {
-    throw new Error(m.error_invalid_simplification({ tolerance }));
+    throw new DataValidationError(
+      m.error_invalid_simplification({ tolerance }),
+      'tolerance',
+      { tolerance }
+    );
   }
 
-  const escapedInput = escapeIdentifier(inputTableName);
+  const escapedInputValue = escapeSqlString(inputTableName);
+  const escapedGeometryColumnValue = escapeSqlString(geometryColumn);
   const targetTable = createView
     ? `vw_${sourceTable}_simplified`
     : `${sourceTable}_simplified`;
   const resolvedTargetTable = options.targetTableName ?? targetTable;
   const escapedTarget = escapeIdentifier(resolvedTargetTable);
+  const escapedTargetValue = escapeSqlString(resolvedTargetTable);
 
   const createStatement = createView
     ? 'CREATE OR REPLACE VIEW'
@@ -76,24 +88,21 @@ export async function simplifyGeometryTable(
   try {
     await Duck.query(`
       ${createStatement} "${escapedTarget}" AS
-      FROM simplify_and_clean('${escapedInput}', '${geometryColumn}', ${tolerance})
+      FROM simplify_and_clean('${escapedInputValue}', '${escapedGeometryColumnValue}', ${tolerance})
     `);
+    Duck.invalidateTableCache?.(resolvedTargetTable);
   } catch (error) {
     logger.error(
       'Topology-preserving simplification failed; geometry left unsimplified',
       LogCategory.DUCKDB,
       error
     );
-    throw new DuckDBError(
-      'Topology-preserving simplification failed',
-      undefined,
-      {
-        sourceTable,
-        inputTableName,
-        tolerance,
-        cause: error instanceof Error ? error.message : String(error)
-      }
-    );
+    throw new DuckDBError(m.error_simplification_topology_failed(), undefined, {
+      sourceTable,
+      inputTableName,
+      tolerance,
+      cause: error instanceof Error ? error.message : String(error)
+    });
   }
 
   // The simplify_and_clean macro always normalizes the geometry column to 'geom'
@@ -109,8 +118,9 @@ export async function simplifyGeometryTable(
   try {
     await Duck.query(`
       CREATE OR REPLACE TABLE "${escapedInnerlines}" AS
-      FROM extract_innerlines('${escapedTarget}')
+      FROM extract_innerlines('${escapedTargetValue}')
     `);
+    Duck.invalidateTableCache?.(innerlinesTable);
   } catch (error) {
     logger.error(
       'Failed to rebuild simplified geometry innerlines',
@@ -136,9 +146,6 @@ export async function simplifyGeometryTable(
   };
 }
 
-export function calculateToleranceFromRate(
-  rate: number,
-  _bounds?: [number, number, number, number]
-): number {
+export function calculateToleranceFromRate(rate: number): number {
   return Math.max(0, Math.min(1, rate / 100));
 }

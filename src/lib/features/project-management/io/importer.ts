@@ -1,5 +1,6 @@
 import { unzipSync } from 'fflate';
-import { m } from '$lib/paraglide/messages.js';
+import { m } from '$lib/paraglide/messages';
+import { ParseError } from '$lib/features/commons/pipeline.errors';
 import type { AssetRef } from '$lib/features/commons/types/create-project.types';
 import type { SerializedProject } from '$lib/types/serialization.types';
 import { persistAssetBytes } from '../services/asset-store.service';
@@ -7,6 +8,8 @@ import { saveProject } from '../services/persistence.service';
 import { migrateIfNeeded } from '../core/schema-migration';
 import { deserialize } from '../services/serializer.service';
 import type { KhartisProject } from '../types';
+
+const KHARTIS_PROJECT_FILE_TYPE = 'khartis-project';
 
 interface ProjectArchiveAssetEntry extends AssetRef {
   path: string;
@@ -25,9 +28,14 @@ function decodeJson<T>(payload: Uint8Array, label: string): T {
   try {
     return JSON.parse(new TextDecoder().decode(payload)) as T;
   } catch (error) {
-    throw new Error(m.error_invalid_project_archive_entry({ label }), {
-      cause: error
-    });
+    throw new ParseError(
+      m.error_invalid_project_archive_entry({ label }),
+      KHARTIS_PROJECT_FILE_TYPE,
+      {
+        cause: error instanceof Error ? error.message : String(error),
+        label
+      }
+    );
   }
 }
 
@@ -35,7 +43,10 @@ function assertArchiveManifest(
   value: unknown
 ): asserts value is ProjectArchiveManifest {
   if (!value || typeof value !== 'object') {
-    throw new Error(m.error_invalid_project_manifest());
+    throw new ParseError(
+      m.error_invalid_project_manifest(),
+      KHARTIS_PROJECT_FILE_TYPE
+    );
   }
 
   const candidate = value as Record<string, unknown>;
@@ -44,7 +55,14 @@ function assertArchiveManifest(
     !Array.isArray(candidate.assets) ||
     typeof candidate.projectId !== 'string'
   ) {
-    throw new Error(m.error_unsupported_project_manifest());
+    throw new ParseError(
+      m.error_unsupported_project_manifest(),
+      KHARTIS_PROJECT_FILE_TYPE,
+      {
+        archiveVersion: candidate.archiveVersion,
+        projectId: candidate.projectId
+      }
+    );
   }
 }
 
@@ -55,8 +73,14 @@ async function restoreArchiveAssets(
   for (const asset of manifest.assets) {
     const payload = archiveEntries[asset.path];
     if (!payload) {
-      throw new Error(
-        m.error_missing_archived_asset({ originalName: asset.originalName })
+      throw new ParseError(
+        m.error_missing_archived_asset({ originalName: asset.originalName }),
+        KHARTIS_PROJECT_FILE_TYPE,
+        {
+          assetId: asset.assetId,
+          originalName: asset.originalName,
+          path: asset.path
+        }
       );
     }
 
@@ -68,14 +92,20 @@ function assertSerializedProject(
   value: unknown
 ): asserts value is SerializedProject {
   if (!value || typeof value !== 'object') {
-    throw new Error(m.error_invalid_project_payload());
+    throw new ParseError(
+      m.error_invalid_project_payload(),
+      KHARTIS_PROJECT_FILE_TYPE
+    );
   }
 
   const candidate = value as Record<string, unknown>;
   const manifest = candidate.manifest as Record<string, unknown> | undefined;
 
   if (!manifest || typeof manifest.name !== 'string') {
-    throw new Error(m.error_invalid_project_payload());
+    throw new ParseError(
+      m.error_invalid_project_payload(),
+      KHARTIS_PROJECT_FILE_TYPE
+    );
   }
 }
 
@@ -87,7 +117,11 @@ export async function importProject(file: File): Promise<KhartisProject> {
   const projectPayload = archiveEntries['project.json'];
 
   if (!manifestPayload || !projectPayload) {
-    throw new Error(m.error_invalid_kh_archive_structure());
+    throw new ParseError(
+      m.error_invalid_kh_archive_structure(),
+      KHARTIS_PROJECT_FILE_TYPE,
+      { fileName: file.name }
+    );
   }
 
   const archiveManifest = decodeJson<unknown>(manifestPayload, 'manifest.json');
@@ -98,9 +132,8 @@ export async function importProject(file: File): Promise<KhartisProject> {
   const serializedProject = decodeJson<unknown>(projectPayload, 'project.json');
   assertSerializedProject(serializedProject);
 
-  const migrated = migrateIfNeeded(
-    serializedProject as unknown as Record<string, unknown>
-  ) as unknown as SerializedProject;
+  const migrated = migrateIfNeeded({ ...serializedProject });
+  assertSerializedProject(migrated);
 
   const project = await deserialize({
     ...migrated,

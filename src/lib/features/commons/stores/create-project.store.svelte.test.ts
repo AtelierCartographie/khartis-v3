@@ -11,6 +11,7 @@ import {
 const mocks = vi.hoisted(() => ({
   clearDuckMock: vi.fn(),
   clearDatasetsMock: vi.fn(),
+  clearSourceFilesMock: vi.fn(async () => undefined),
   clearVisualizationsMock: vi.fn(),
   processFileMock: vi.fn(),
   showErrorMock: vi.fn(),
@@ -91,6 +92,7 @@ vi.mock('./datasets.store.svelte', () => ({
 
 vi.mock('./project.store.svelte', () => ({
   projectStore: {
+    clearSourceFiles: mocks.clearSourceFilesMock,
     currentProject: undefined,
     markAsDirty: vi.fn(),
     saveCurrentProject: vi.fn()
@@ -201,7 +203,7 @@ describe('createProjectActions.removeUploadedFile', () => {
   });
 
   it('resetAllTabs clears stale modal state across create/example tabs', () => {
-    createProjectState.selectedTab = 3;
+    createProjectActions.selectTab(3);
     createProjectState.newProject.uploadedFiles = [
       makeUploadedFile('stale', 1)
     ];
@@ -256,5 +258,45 @@ describe('createProjectActions.removeUploadedFile', () => {
     ];
 
     expect(createProjectActions.isFileDuplicate('existing.csv')).toBe(true);
+  });
+
+  it('checks duplicate names without reading file payloads', () => {
+    const file = {
+      ...makeUploadedFile('large', 1),
+      name: 'large.csv',
+      status: FileStatus.COMPLETE
+    };
+    Object.defineProperty(file, 'content', {
+      get() {
+        throw new Error('content should not be read');
+      }
+    });
+    createProjectState.newProject.uploadedFiles = [file];
+
+    expect(createProjectActions.isFileDuplicate('large.csv')).toBe(true);
+  });
+
+  it('clears persisted source files through the project store API', async () => {
+    createProjectState.newProject.uploadedFiles = [makeUploadedFile('file', 1)];
+    createProjectState.newProject.validationErrors = ['stale-validation'];
+    (
+      projectStore as unknown as {
+        currentProject: { id: string; data: { sourceFiles: Array<unknown> } };
+      }
+    ).currentProject = {
+      id: 'project-1',
+      data: {
+        sourceFiles: [{ id: 'file' }]
+      }
+    };
+
+    await createProjectActions.clearAllFiles(true);
+
+    expect(createProjectState.newProject.uploadedFiles).toEqual([]);
+    expect(createProjectState.newProject.validationErrors).toEqual([]);
+    expect(mocks.clearDatasetsMock).toHaveBeenCalled();
+    expect(mocks.clearVisualizationsMock).toHaveBeenCalled();
+    expect(mocks.clearDuckMock).toHaveBeenCalled();
+    expect(mocks.clearSourceFilesMock).toHaveBeenCalled();
   });
 });

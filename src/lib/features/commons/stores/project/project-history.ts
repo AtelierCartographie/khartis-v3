@@ -2,8 +2,46 @@ import type {
   KhartisProject,
   ProjectHistoryEntry
 } from '$lib/features/project-management';
-import { bigIntReplacer } from '$lib/features/commons/utils/clone.utils';
+import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
+import { deepCloneForStorage } from '$lib/features/commons/utils/clone-for-storage.utils';
 import type { ProjectStateContainer } from './project-state.svelte';
+
+function cloneDate(value: unknown): Date {
+  if (value instanceof Date) {
+    return new Date(value.getTime());
+  }
+
+  return new Date(value as string | number);
+}
+
+function cloneFileMetadataForHistory(file: UploadedFile): UploadedFile {
+  const {
+    content: _content,
+    originalFile: _originalFile,
+    relatedFileObjects: _relatedFileObjects,
+    relatedFilesData: _relatedFilesData,
+    parsedData: _parsedData,
+    preparedGeoJSON: _preparedGeoJSON,
+    ...metadata
+  } = file;
+
+  return metadata as UploadedFile;
+}
+
+function cloneProjectForHistory(project: KhartisProject): KhartisProject {
+  return deepCloneForStorage({
+    ...project,
+    manifest: {
+      ...project.manifest,
+      createdAt: cloneDate(project.manifest.createdAt),
+      updatedAt: cloneDate(project.manifest.updatedAt)
+    },
+    data: {
+      ...project.data,
+      sourceFiles: project.data.sourceFiles.map(cloneFileMetadataForHistory)
+    }
+  }) as KhartisProject;
+}
 
 export function resetHistory(container: ProjectStateContainer): void {
   container._state.history = [];
@@ -24,9 +62,7 @@ export function addToHistory(
 
   const projectToSnapshot = snapshot || container._state.currentProject;
   const clonedSnapshot = projectToSnapshot
-    ? (JSON.parse(
-        JSON.stringify(projectToSnapshot, bigIntReplacer)
-      ) as KhartisProject)
+    ? cloneProjectForHistory(projectToSnapshot)
     : undefined;
 
   const entry: ProjectHistoryEntry = {
@@ -53,9 +89,9 @@ export function undo(container: ProjectStateContainer): boolean {
   const entry = container._state.history[container._state.historyIndex];
 
   if (entry.snapshot) {
-    container._state.currentProject = JSON.parse(
-      JSON.stringify(entry.snapshot, bigIntReplacer)
-    ) as KhartisProject;
+    container._state.currentProject = cloneProjectForHistory(
+      entry.snapshot as KhartisProject
+    );
     return true;
   }
   return false;
@@ -70,9 +106,9 @@ export function redo(container: ProjectStateContainer): boolean {
   const entry = container._state.history[container._state.historyIndex];
 
   if (entry.snapshot) {
-    container._state.currentProject = JSON.parse(
-      JSON.stringify(entry.snapshot, bigIntReplacer)
-    ) as KhartisProject;
+    container._state.currentProject = cloneProjectForHistory(
+      entry.snapshot as KhartisProject
+    );
     return true;
   }
   return false;

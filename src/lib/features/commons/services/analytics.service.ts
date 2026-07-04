@@ -144,12 +144,9 @@ function createAnalyticsService() {
     }
   }
 
-  function captureException(): void {}
-
   return {
     enable,
     disable,
-    captureException,
     trackPageView,
     trackEvent
   };

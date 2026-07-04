@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Subtract, Add } from 'carbon-icons-svelte';
-  import { m } from '$lib/paraglide/messages.js';
+  import { m } from '$lib/paraglide/messages';
 
   interface Props {
     value: number;
@@ -9,6 +9,7 @@
     step?: number;
     width?: string;
     height?: string;
+    stepperWidth?: string;
     valueMinWidth?: string;
     disabled?: boolean;
     id?: string;
@@ -26,6 +27,7 @@
     step = 1,
     width = '100%',
     height = '32px',
+    stepperWidth = '40px',
     valueMinWidth = '3rem',
     disabled = false,
     id,
@@ -96,6 +98,7 @@
   class:has-steppers={showSteppers}
   style:--compact-number-input-width={width}
   style:--compact-number-input-height={height}
+  style:--compact-number-input-stepper-width={stepperWidth}
   style:--compact-number-input-value-min-width={valueMinWidth}
 >
   <input

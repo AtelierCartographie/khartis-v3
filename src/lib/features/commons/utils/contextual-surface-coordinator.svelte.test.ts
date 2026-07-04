@@ -1,16 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   createExclusiveContextualSurfaceId,
-  engageExclusiveContextualSurface,
-  getActiveExclusiveContextualSurfaceId,
-  resetExclusiveContextualSurfaces
+  engageExclusiveContextualSurface
 } from './contextual-surface-coordinator';
 
 describe('contextual-surface-coordinator', () => {
-  beforeEach(() => {
-    resetExclusiveContextualSurfaces();
-  });
-
   it('should close the previous surface when a new one opens', () => {
     let firstClosed = 0;
     let secondClosed = 0;
@@ -29,20 +23,29 @@ describe('contextual-surface-coordinator', () => {
 
     expect(firstClosed).toBe(1);
     expect(secondClosed).toBe(0);
-    expect(getActiveExclusiveContextualSurfaceId()).toBe(secondId);
 
     releaseFirst();
     releaseSecond();
   });
 
-  it('should clear the active surface when it is released', () => {
-    const surfaceId = createExclusiveContextualSurfaceId('surface');
-    const release = engageExclusiveContextualSurface(surfaceId, () => {});
+  it('should unregister a released surface', () => {
+    let firstClosed = 0;
+    const releaseFirst = engageExclusiveContextualSurface(
+      createExclusiveContextualSurfaceId('surface'),
+      () => {
+        firstClosed += 1;
+      }
+    );
 
-    expect(getActiveExclusiveContextualSurfaceId()).toBe(surfaceId);
+    releaseFirst();
 
-    release();
+    const releaseSecond = engageExclusiveContextualSurface(
+      createExclusiveContextualSurfaceId('second'),
+      () => {}
+    );
 
-    expect(getActiveExclusiveContextualSurfaceId()).toBeNull();
+    expect(firstClosed).toBe(0);
+
+    releaseSecond();
   });
 });

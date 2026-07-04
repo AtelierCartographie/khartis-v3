@@ -19,7 +19,6 @@
     title: string;
     subtitle?: string;
     tag?: string;
-    ratio?: string;
     previewLabel?: string;
     paths: PreviewPaths;
     selected?: boolean;
@@ -38,7 +37,6 @@
     title,
     subtitle = m.card_subtitle_surfaces(),
     tag = m.tag_rectangular(),
-    ratio = '1:1',
     previewLabel = m.projection_preview_label(),
     paths,
     selected = false,
@@ -103,7 +101,7 @@
   aria-pressed={selected}
   aria-disabled={disabled}
 >
-  <div class="preview-section" data-preview-ratio={ratio}>
+  <div class="preview-section">
     <ProjectionPreview
       paths={paths}
       label={previewLabel}
@@ -126,6 +124,8 @@
           disabled={disabled}
           labelText={title}
           hideLabel
+          ariaHidden
+          tabIndex={-1}
         />
       </div>
     </div>

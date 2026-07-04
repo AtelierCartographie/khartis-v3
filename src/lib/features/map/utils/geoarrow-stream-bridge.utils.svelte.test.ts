@@ -126,6 +126,25 @@ describe('geoarrow stream bridge path attributes', () => {
     expect(Array.from(data.featureIds.slice(0, data.length))).toEqual([0, 1]);
   });
 
+  it('bounds projected point cache entries per table with LRU eviction', () => {
+    const table = makeTable({
+      geometry: binaryVector([wkbPoint(2, 3), wkbPoint(-4, 5)])
+    }) as ArrowTable;
+    const projectionA = geoIdentity().scale(2).translate([10, 0]);
+    const projectionB = geoIdentity().scale(3).translate([0, 10]);
+    const projectionC = geoIdentity().scale(4).translate([5, 5]);
+
+    const firstA = parsePointDataWithProjection(table, projectionA);
+    const firstB = parsePointDataWithProjection(table, projectionB);
+    const secondA = parsePointDataWithProjection(table, projectionA);
+    const firstC = parsePointDataWithProjection(table, projectionC);
+    const secondB = parsePointDataWithProjection(table, projectionB);
+
+    expect(secondA).toBe(firstA);
+    expect(firstC).toBe(parsePointDataWithProjection(table, projectionC));
+    expect(secondB).not.toBe(firstB);
+  });
+
   it('clips composite projection streams to the cell frames and renders insets in their cell', () => {
     const presets: ProjectionPresets = {
       TEST_EUROPE_DOM_TOM: {

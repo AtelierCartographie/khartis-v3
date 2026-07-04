@@ -20,15 +20,17 @@ const { clearState, getDatasetsVersion, getState } =
   await import('./state.svelte');
 
 describe('dataset-ops', () => {
-  it('escapes table names as SQL identifiers when dropping a table', async () => {
+  it('drops tables through Duck so cache invalidation runs', async () => {
     const query = vi.fn().mockResolvedValue([]);
-    const duck = { query } as unknown as DuckDBClientForDataset;
+    const duck = {
+      query,
+      dropTable: vi.fn().mockResolvedValue(undefined)
+    } as unknown as DuckDBClientForDataset;
 
     await dropTable('imported"table', duck);
 
-    expect(query).toHaveBeenCalledWith(
-      'DROP TABLE IF EXISTS "imported""table"'
-    );
+    expect(duck.dropTable).toHaveBeenCalledWith('imported"table');
+    expect(query).not.toHaveBeenCalled();
   });
 
   it('does not bump the datasets version when join info is unchanged', () => {

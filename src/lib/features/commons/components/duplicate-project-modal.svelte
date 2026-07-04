@@ -1,8 +1,12 @@
 <script lang="ts">
-  import { m } from '$lib/paraglide/messages.js';
+  import { m } from '$lib/paraglide/messages';
   import { InlineLoading, Modal, TextInput } from 'carbon-components-svelte';
   import SimpleRadioGroup from './simple-radio-group.svelte';
   import { projectsStore } from '../stores/projects.store.svelte';
+  import {
+    readCarbonStringValue,
+    type CarbonValueEvent
+  } from '$lib/features/commons/utils/carbon-events.utils';
 
   interface Props {
     open: boolean;
@@ -20,6 +24,7 @@
 
   let selectedProjectId = $state('');
   let newProjectName = $state('');
+  let hasInitializedOpenState = false;
 
   $effect(() => {
     if (open) {
@@ -28,15 +33,27 @@
   });
 
   $effect(() => {
-    if (open && projectsStore.projects.length > 0) {
-      selectedProjectId =
-        projectsStore.currentProject?.id || projectsStore.projects[0].id;
-      const selectedProject = projectsStore.getProjectById(selectedProjectId);
-      newProjectName = selectedProject
-        ? `${selectedProject.name}${m.copy_suffix()}`
-        : '';
+    if (!open) {
+      hasInitializedOpenState = false;
+      return;
     }
+
+    if (hasInitializedOpenState || projectsStore.projects.length === 0) {
+      return;
+    }
+
+    initializeFormFromCurrentProject();
+    hasInitializedOpenState = true;
   });
+
+  function initializeFormFromCurrentProject() {
+    selectedProjectId =
+      projectsStore.currentProject?.id || projectsStore.projects[0].id;
+    const selectedProject = projectsStore.getProjectById(selectedProjectId);
+    newProjectName = selectedProject
+      ? `${selectedProject.name}${m.copy_suffix()}`
+      : '';
+  }
 
   function handleProjectSelection(value: string) {
     selectedProjectId = value;
@@ -59,6 +76,10 @@
       onConfirm(selectedProjectId, newProjectName);
       resetForm();
     }
+  }
+
+  function handleNewProjectNameInput(event: CarbonValueEvent) {
+    newProjectName = readCarbonStringValue(event, newProjectName);
   }
 
   function handleCancel() {
@@ -112,8 +133,9 @@
           light
           labelText={m.duplicate_project_modal_new_name()}
           placeholder={m.duplicate_project_modal_name_placeholder()}
-          bind:value={newProjectName}
+          value={newProjectName}
           disabled={isLoading}
+          on:input={handleNewProjectNameInput}
         />
       </div>
 
