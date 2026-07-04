@@ -973,18 +973,16 @@ describe('map export DOM mutations', () => {
     expect(markup).toContain('data-khartis-layer-type="MultiShapeLayer"');
     expect(markup).toContain('<circle cx="10" cy="10" r="10"');
     expect(markup).toContain(
-      '<rect x="26.429" y="1.429" width="17.143" height="17.143"'
+      '<rect x="26.43" y="1.43" width="17.14" height="17.14"'
     );
     expect(markup).toContain('<rect x="56" y="-10" width="8" height="20"');
     expect(markup).toContain('<path d="M 79 10 L 85 -10 L 91 10 Z"');
-    expect(markup).toContain(
-      '<path d="M 106.667 0 L 113.333 0 L 113.333 6.667'
-    );
+    expect(markup).toContain('<path d="M 106.67 0 L 113.33 0 L 113.33 6.67');
     expect(markup).toContain('<path d="M 135 0 L 145 10 L 135 20 L 125 10 Z"');
     expect(markup).toContain('<path d="M 160 0 L 170 20 L 150 20 Z"');
     expect(markup).toContain('<path d="M 185 0 L 187.2 7.8');
     expect(markup).toContain(
-      '<rect x="197.143" y="6.143" width="25.714" height="7.714"'
+      '<rect x="197.14" y="6.14" width="25.71" height="7.71"'
     );
     expect(markup).not.toContain('data:image/svg+xml');
   });
@@ -1672,6 +1670,174 @@ describe('map export DOM mutations', () => {
     );
     expect(markup).toContain('fill="rgb(255, 0, 0)"');
     expect(markup).toContain('fill="rgb(0, 0, 255)"');
+  });
+
+  it('merges consecutive featureless polygons sharing the same fill into one compound path', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="map-canvas"><canvas></canvas></div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const canvas = document.querySelector('canvas');
+    if (!page || !canvas) {
+      throw new Error('Missing export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(canvas, { left: 0, top: 0, width: 400, height: 300 });
+    vi.spyOn(canvas, 'toDataURL').mockReturnValue('data:image/png;base64,AAAA');
+
+    const polygonLayer = createDeckLayer('SolidPolygonLayer', 'basemap-land', {
+      data: {
+        length: 3,
+        startIndices: new Uint32Array([0, 4, 8, 12]),
+        attributes: {
+          getPolygon: {
+            value: new Float32Array([
+              0, 0, 10, 0, 10, 10, 0, 10, 20, 0, 30, 0, 30, 10, 20, 10, 40, 0,
+              50, 0, 50, 10, 40, 10
+            ]),
+            size: 2
+          },
+          getFillColor: {
+            value: new Uint8Array([
+              255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255,
+              255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 0,
+              0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255
+            ]),
+            size: 4
+          }
+        }
+      }
+    });
+    const deck = createDeckExportFixture([polygonLayer]);
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    const pathCount = markup.match(/<path/g)?.length ?? 0;
+    expect(pathCount).toBe(2);
+    expect(markup).toContain(
+      'M 0 0 L 10 0 L 10 10 L 0 10 Z M 20 0 L 30 0 L 30 10 L 20 10 Z'
+    );
+    expect(markup).toContain('M 40 0 L 50 0 L 50 10 L 40 10 Z');
+    expect(markup).toContain('fill="rgb(255, 0, 0)"');
+    expect(markup).toContain('fill="rgb(0, 0, 255)"');
+  });
+
+  it('merges consecutive PathLayer segments sharing the same stroke style into one compound path', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="map-canvas"><canvas></canvas></div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const canvas = document.querySelector('canvas');
+    if (!page || !canvas) {
+      throw new Error('Missing export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(canvas, { left: 0, top: 0, width: 400, height: 300 });
+    vi.spyOn(canvas, 'toDataURL').mockReturnValue('data:image/png;base64,AAAA');
+
+    const lineLayer = createDeckLayer('PathLayer', 'basemap-borders', {
+      data: {
+        length: 3,
+        startIndices: new Uint32Array([0, 2, 4, 6]),
+        attributes: {
+          getPath: {
+            value: new Float32Array([0, 0, 10, 0, 20, 0, 30, 0, 40, 0, 50, 0]),
+            size: 2
+          },
+          getColor: {
+            value: new Uint8Array([
+              0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0,
+              255, 0, 0, 0, 255
+            ]),
+            size: 4
+          },
+          getWidth: {
+            value: new Float32Array([1, 1, 1, 1, 1, 1]),
+            size: 1
+          }
+        }
+      }
+    });
+    const deck = createDeckExportFixture([lineLayer]);
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    const pathCount = markup.match(/<path/g)?.length ?? 0;
+    expect(pathCount).toBe(1);
+    expect(markup).toContain('M 0 0 L 10 0 M 20 0 L 30 0 M 40 0 L 50 0');
+    expect(markup).toContain('stroke="rgb(0, 0, 0)"');
+  });
+
+  it('hoists shared font-family, font-size, text-anchor and fill onto the text layer group', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="map-canvas"><canvas></canvas></div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const canvas = document.querySelector('canvas');
+    if (!page || !canvas) {
+      throw new Error('Missing export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(canvas, { left: 0, top: 0, width: 400, height: 300 });
+    vi.spyOn(canvas, 'toDataURL').mockReturnValue('data:image/png;base64,AAAA');
+
+    const textLayer = createDeckLayer('TextLayer', 'uniform-texts', {
+      data: [
+        { position: [10, 20], text: 'France' },
+        { position: [30, 40], text: 'Germany' }
+      ],
+      getPosition: (d: { position: number[] }) => d.position,
+      getText: (d: { text: string }) => d.text,
+      getColor: () => [0, 0, 0, 255],
+      getSize: () => 14,
+      sizeUnits: 'pixels',
+      fontFamily: 'Arial',
+      fontWeight: '400',
+      background: false
+    });
+    const deck = createDeckExportFixture([textLayer]);
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    const textLayerGroupMatch = markup.match(
+      /<g[^>]*font-family="Arial"[^>]*>/
+    );
+    expect(textLayerGroupMatch).not.toBeNull();
+    const groupTag = textLayerGroupMatch?.[0] ?? '';
+    expect(groupTag).toContain('font-family="Arial"');
+    expect(groupTag).toContain('font-weight="400"');
+    expect(groupTag).toContain('font-size="14"');
+    expect(groupTag).toContain('text-anchor="middle"');
+    expect(groupTag).toContain('fill="rgb(0, 0, 0)"');
+
+    const textElements = markup.match(/<text[^>]*>/g) ?? [];
+    expect(textElements).toHaveLength(2);
+    textElements.forEach((textElement) => {
+      expect(textElement).not.toContain('font-size');
+      expect(textElement).not.toContain('text-anchor');
+      expect(textElement).not.toContain('fill=');
+    });
   });
 });
 
