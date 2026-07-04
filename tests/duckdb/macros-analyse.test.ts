@@ -52,6 +52,21 @@ describe('describe_full macro', () => {
   });
 });
 
+describe('summary_numeric macro', () => {
+  it('returns distribution stats (mean, median, stddev, skewness)', async () => {
+    await run(
+      db,
+      'CREATE OR REPLACE TABLE skewed (v DOUBLE); INSERT INTO skewed SELECT 1.0 + (i % 7) * 0.5 FROM range(50) t(i); INSERT INTO skewed VALUES (500.0), (800.0)'
+    );
+    const rows = await query(db, "FROM summary_numeric('skewed', v)");
+    const row = rows[0] as Record<string, unknown>;
+    expect(Number(row.mean)).toBeGreaterThan(0);
+    expect(Number(row.median)).toBeLessThan(Number(row.mean));
+    expect(Number(row.stddev)).toBeGreaterThan(0);
+    expect(Number(row.skewness)).toBeGreaterThan(2);
+  });
+});
+
 describe('normalize_text macro', () => {
   it('lowercases and trims plain ASCII input', async () => {
     const rows = await query(

@@ -1,1 +1,1 @@
-export const GEOID_SCORE_THRESHOLD = 3;
+export const GEOID_SCORE_THRESHOLD = 0.45;

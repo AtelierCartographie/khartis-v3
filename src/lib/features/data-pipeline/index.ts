@@ -47,3 +47,5 @@ export {
   extractGeoArrowMetadata,
   tableHasGeoArrowMetadata
 } from './io/geoarrow-metadata';
+
+export { extractCategories } from './operations/analysis';

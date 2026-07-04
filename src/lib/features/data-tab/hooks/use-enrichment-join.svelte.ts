@@ -10,6 +10,7 @@ import type { UploadedFile } from '$lib/features/commons/types/create-project.ty
 import type { JsonValue } from '$lib/types/data';
 import type { JoinStats } from '../components/index';
 import { refreshDatasetMetadata } from '../services/dataset-metadata.service';
+import { extractCategories } from '$lib/features/data-pipeline';
 import { computeDatasetJoinStats } from '../services/join-stats.service';
 import { canFinalizeJoin } from '../utils/join-validation.utils';
 import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
@@ -173,7 +174,9 @@ export function useEnrichmentJoin(
           share_integers: toOptionalNumber(column.share_integers),
           share_floats: toOptionalNumber(column.share_floats),
           share_rank_interval: toOptionalNumber(column.share_rank_interval),
-          extent_magnitude: toOptionalNumber(column.extent_magnitude)
+          extent_magnitude: toOptionalNumber(column.extent_magnitude),
+          skewness: toOptionalNumber(column.skewness),
+          categories: extractCategories(column.histogram)
         }
       ])
     );
