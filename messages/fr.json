@@ -1212,6 +1212,7 @@
   "projection_desc_azimuthal_equal_area": "Préserve les surfaces",
   "projection_name_france_dom_tom": "France + DOM-TOM (encarts)",
   "projection_name_europe_dom_tom": "Europe + Outre-mer (encarts)",
+  "projection_name_usa_albers": "États-Unis + Alaska/Hawaï (encarts)",
   "projection_name_gall_peters": "Gall-Peters",
   "projection_desc_gall_peters": "Cylindrique équivalente",
   "projection_name_equal_earth": "Equal Earth",

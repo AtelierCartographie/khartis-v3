@@ -47,7 +47,8 @@ const builtInProjectionIds = FULL_PROJECTION_CATALOG.map(
 );
 const compositeProjectionIds = [
   getCompositeProjectionSelectionId('FRANCE_DOM_TOM'),
-  getCompositeProjectionSelectionId('EUROPE_DOM_TOM')
+  getCompositeProjectionSelectionId('EUROPE_DOM_TOM'),
+  getCompositeProjectionSelectionId('USA_ALBERS')
 ];
 
 const projectionPresets: ProjectionPresets = {
