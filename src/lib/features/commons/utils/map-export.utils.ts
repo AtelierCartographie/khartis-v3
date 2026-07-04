@@ -558,6 +558,10 @@ function roundSvgValue(value: number): string {
   return Number.isFinite(value) ? Number(value.toFixed(3)).toString() : '0';
 }
 
+function roundSvgCoord(value: number): string {
+  return Number.isFinite(value) ? Number(value.toFixed(2)).toString() : '0';
+}
+
 function clamp(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
   return Math.min(max, Math.max(min, value));
@@ -1149,6 +1153,10 @@ function colorAttributes(
   return `${attribute}="${escapeXml(value)}" ${opacityName}="${roundSvgValue(color.opacity)}"`;
 }
 
+function svgColorKey(color: SvgColor): string {
+  return `${color.red},${color.green},${color.blue},${color.opacity}`;
+}
+
 function transformByModelMatrix(
   position: number[],
   modelMatrix: unknown
@@ -1280,7 +1288,7 @@ function buildProjectedPath(
     if (!projected) continue;
 
     commands.push(
-      `${isSubpathOpen ? 'L' : 'M'} ${roundSvgValue(projected[0])} ${roundSvgValue(projected[1])}`
+      `${isSubpathOpen ? 'L' : 'M'} ${roundSvgCoord(projected[0])} ${roundSvgCoord(projected[1])}`
     );
     isSubpathOpen = true;
 
@@ -1412,35 +1420,35 @@ function serializePointShape(
   switch (Math.round(shape)) {
     case 1: {
       const half = radius * SQUARE_HALF_RATIO;
-      return `<rect x="${roundSvgValue(x - half)}" y="${roundSvgValue(y - half)}" width="${roundSvgValue(half * 2)}" height="${roundSvgValue(half * 2)}" ${common} />`;
+      return `<rect x="${roundSvgCoord(x - half)}" y="${roundSvgCoord(y - half)}" width="${roundSvgCoord(half * 2)}" height="${roundSvgCoord(half * 2)}" ${common} />`;
     }
     case 4: {
       const arm = radius * CROSS_ARM_RATIO;
       const half = radius * CROSS_HALF_THICKNESS_RATIO;
-      return `<path d="M ${roundSvgValue(x - half)} ${roundSvgValue(y - arm)} L ${roundSvgValue(x + half)} ${roundSvgValue(y - arm)} L ${roundSvgValue(x + half)} ${roundSvgValue(y - half)} L ${roundSvgValue(x + arm)} ${roundSvgValue(y - half)} L ${roundSvgValue(x + arm)} ${roundSvgValue(y + half)} L ${roundSvgValue(x + half)} ${roundSvgValue(y + half)} L ${roundSvgValue(x + half)} ${roundSvgValue(y + arm)} L ${roundSvgValue(x - half)} ${roundSvgValue(y + arm)} L ${roundSvgValue(x - half)} ${roundSvgValue(y + half)} L ${roundSvgValue(x - arm)} ${roundSvgValue(y + half)} L ${roundSvgValue(x - arm)} ${roundSvgValue(y - half)} L ${roundSvgValue(x - half)} ${roundSvgValue(y - half)} Z" ${common} />`;
+      return `<path d="M ${roundSvgCoord(x - half)} ${roundSvgCoord(y - arm)} L ${roundSvgCoord(x + half)} ${roundSvgCoord(y - arm)} L ${roundSvgCoord(x + half)} ${roundSvgCoord(y - half)} L ${roundSvgCoord(x + arm)} ${roundSvgCoord(y - half)} L ${roundSvgCoord(x + arm)} ${roundSvgCoord(y + half)} L ${roundSvgCoord(x + half)} ${roundSvgCoord(y + half)} L ${roundSvgCoord(x + half)} ${roundSvgCoord(y + arm)} L ${roundSvgCoord(x - half)} ${roundSvgCoord(y + arm)} L ${roundSvgCoord(x - half)} ${roundSvgCoord(y + half)} L ${roundSvgCoord(x - arm)} ${roundSvgCoord(y + half)} L ${roundSvgCoord(x - arm)} ${roundSvgCoord(y - half)} L ${roundSvgCoord(x - half)} ${roundSvgCoord(y - half)} Z" ${common} />`;
     }
     case 5:
-      return `<path d="M ${roundSvgValue(x)} ${roundSvgValue(y - radius)} L ${roundSvgValue(x + radius)} ${roundSvgValue(y)} L ${roundSvgValue(x)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x - radius)} ${roundSvgValue(y)} Z" ${common} />`;
+      return `<path d="M ${roundSvgCoord(x)} ${roundSvgCoord(y - radius)} L ${roundSvgCoord(x + radius)} ${roundSvgCoord(y)} L ${roundSvgCoord(x)} ${roundSvgCoord(y + radius)} L ${roundSvgCoord(x - radius)} ${roundSvgCoord(y)} Z" ${common} />`;
     case 6:
-      return `<path d="M ${roundSvgValue(x)} ${roundSvgValue(y - radius)} L ${roundSvgValue(x + radius)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x - radius)} ${roundSvgValue(y + radius)} Z" ${common} />`;
+      return `<path d="M ${roundSvgCoord(x)} ${roundSvgCoord(y - radius)} L ${roundSvgCoord(x + radius)} ${roundSvgCoord(y + radius)} L ${roundSvgCoord(x - radius)} ${roundSvgCoord(y + radius)} Z" ${common} />`;
     case 3: {
       const spikeHalfWidth = (barWidth * 1.5) / 2;
-      return `<path d="M ${roundSvgValue(x - spikeHalfWidth)} ${roundSvgValue(y)} L ${roundSvgValue(x)} ${roundSvgValue(y - radius * 2)} L ${roundSvgValue(x + spikeHalfWidth)} ${roundSvgValue(y)} Z" ${common} />`;
+      return `<path d="M ${roundSvgCoord(x - spikeHalfWidth)} ${roundSvgCoord(y)} L ${roundSvgCoord(x)} ${roundSvgCoord(y - radius * 2)} L ${roundSvgCoord(x + spikeHalfWidth)} ${roundSvgCoord(y)} Z" ${common} />`;
     }
     case 7:
-      return `<path d="M ${roundSvgValue(x)} ${roundSvgValue(y - radius)} L ${roundSvgValue(x + radius * 0.22)} ${roundSvgValue(y - radius * 0.22)} L ${roundSvgValue(x + radius)} ${roundSvgValue(y - radius * 0.15)} L ${roundSvgValue(x + radius * 0.36)} ${roundSvgValue(y + radius * 0.18)} L ${roundSvgValue(x + radius * 0.58)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x)} ${roundSvgValue(y + radius * 0.5)} L ${roundSvgValue(x - radius * 0.58)} ${roundSvgValue(y + radius)} L ${roundSvgValue(x - radius * 0.36)} ${roundSvgValue(y + radius * 0.18)} L ${roundSvgValue(x - radius)} ${roundSvgValue(y - radius * 0.15)} L ${roundSvgValue(x - radius * 0.22)} ${roundSvgValue(y - radius * 0.22)} Z" ${common} />`;
+      return `<path d="M ${roundSvgCoord(x)} ${roundSvgCoord(y - radius)} L ${roundSvgCoord(x + radius * 0.22)} ${roundSvgCoord(y - radius * 0.22)} L ${roundSvgCoord(x + radius)} ${roundSvgCoord(y - radius * 0.15)} L ${roundSvgCoord(x + radius * 0.36)} ${roundSvgCoord(y + radius * 0.18)} L ${roundSvgCoord(x + radius * 0.58)} ${roundSvgCoord(y + radius)} L ${roundSvgCoord(x)} ${roundSvgCoord(y + radius * 0.5)} L ${roundSvgCoord(x - radius * 0.58)} ${roundSvgCoord(y + radius)} L ${roundSvgCoord(x - radius * 0.36)} ${roundSvgCoord(y + radius * 0.18)} L ${roundSvgCoord(x - radius)} ${roundSvgCoord(y - radius * 0.15)} L ${roundSvgCoord(x - radius * 0.22)} ${roundSvgCoord(y - radius * 0.22)} Z" ${common} />`;
     case 2: {
       const barHalfWidth = barWidth / 2;
-      return `<rect x="${roundSvgValue(x - barHalfWidth)}" y="${roundSvgValue(y - radius * 2)}" width="${roundSvgValue(barHalfWidth * 2)}" height="${roundSvgValue(radius * 2)}" ${common} />`;
+      return `<rect x="${roundSvgCoord(x - barHalfWidth)}" y="${roundSvgCoord(y - radius * 2)}" width="${roundSvgCoord(barHalfWidth * 2)}" height="${roundSvgCoord(radius * 2)}" ${common} />`;
     }
     case 8: {
       const halfWidth = radius * RECTANGLE_HALF_WIDTH_RATIO;
       const halfHeight = radius * RECTANGLE_HALF_HEIGHT_RATIO;
-      return `<rect x="${roundSvgValue(x - halfWidth)}" y="${roundSvgValue(y - halfHeight)}" width="${roundSvgValue(halfWidth * 2)}" height="${roundSvgValue(halfHeight * 2)}" ${common} />`;
+      return `<rect x="${roundSvgCoord(x - halfWidth)}" y="${roundSvgCoord(y - halfHeight)}" width="${roundSvgCoord(halfWidth * 2)}" height="${roundSvgCoord(halfHeight * 2)}" ${common} />`;
     }
     case 0:
     default:
-      return `<circle cx="${roundSvgValue(x)}" cy="${roundSvgValue(y)}" r="${roundSvgValue(radius)}" ${common} />`;
+      return `<circle cx="${roundSvgCoord(x)}" cy="${roundSvgCoord(y)}" r="${roundSvgCoord(radius)}" ${common} />`;
   }
 }
 
@@ -1561,6 +1569,13 @@ function serializePointLayer(
   return parts.join('');
 }
 
+interface PathStrokeGroup {
+  groupKey: string;
+  paths: string[];
+  color: SvgColor;
+  width: number;
+}
+
 function serializePathLayer(
   layer: SvgDeckLayerLike,
   context: SvgProjectionContext
@@ -1590,7 +1605,7 @@ function serializePathLayer(
   const dashAttribute = dashArray
     ? `stroke-dasharray="${roundSvgValue(dashArray[0])} ${roundSvgValue(dashArray[1])}"`
     : '';
-  const parts: string[] = [];
+  const groups: PathStrokeGroup[] = [];
 
   for (let index = 0; index < length; index++) {
     const start = Math.floor(Number(startIndices[index]));
@@ -1634,24 +1649,37 @@ function serializePathLayer(
       ) * widthScale
     );
 
-    parts.push(`
+    const groupKey = `${svgColorKey(color)}|${width}`;
+    const currentGroup = groups[groups.length - 1];
+
+    if (currentGroup && currentGroup.groupKey === groupKey) {
+      currentGroup.paths.push(path);
+      continue;
+    }
+
+    groups.push({ groupKey, paths: [path], color, width });
+  }
+
+  return groups
+    .map(
+      (group) => `
       <path
-        d="${path}"
+        d="${group.paths.join(' ')}"
         fill="none"
-        ${colorAttributes('stroke', color)}
-        stroke-width="${roundSvgValue(width)}"
+        ${colorAttributes('stroke', group.color)}
+        stroke-width="${roundSvgValue(group.width)}"
         stroke-linecap="${escapeXml(String(props.lineCap ?? 'round'))}"
         stroke-linejoin="${escapeXml(String(props.lineJoin ?? 'round'))}"
         ${dashAttribute}
       />
-    `);
-  }
-
-  return parts.join('');
+    `
+    )
+    .join('');
 }
 
 interface PolygonFeatureGroup {
   featureId: number | null;
+  groupKey: string;
   paths: string[];
   fillColor: SvgColor;
 }
@@ -1708,18 +1736,18 @@ function serializePolygonLayer(
     if (fillColor.opacity <= 0) continue;
 
     const featureId = readFeatureId(data.featureIds, index, startIndices);
+    const groupKey =
+      featureId !== null
+        ? `feature:${featureId}`
+        : `fill:${svgColorKey(fillColor)}`;
     const currentGroup = groups[groups.length - 1];
 
-    if (
-      currentGroup &&
-      featureId !== null &&
-      currentGroup.featureId === featureId
-    ) {
+    if (currentGroup && currentGroup.groupKey === groupKey) {
       currentGroup.paths.push(path);
       continue;
     }
 
-    groups.push({ featureId, paths: [path], fillColor });
+    groups.push({ featureId, groupKey, paths: [path], fillColor });
   }
 
   const dedupeId = createSvgIdDeduper();
@@ -1814,7 +1842,7 @@ function buildCoordinatePath(
     if (!projected) return;
 
     commands.push(
-      `${index === 0 ? 'M' : 'L'} ${roundSvgValue(projected[0])} ${roundSvgValue(projected[1])}`
+      `${index === 0 ? 'M' : 'L'} ${roundSvgCoord(projected[0])} ${roundSvgCoord(projected[1])}`
     );
   });
 
@@ -1882,7 +1910,7 @@ function serializeGeoJsonGeometry(
     );
     if (!projected) return '';
 
-    return `<circle cx="${roundSvgValue(projected[0])}" cy="${roundSvgValue(projected[1])}" r="${roundSvgValue(radius)}" ${fillAttributes(fillColor, pattern)} ${colorAttributes('stroke', lineColor)} stroke-width="${roundSvgValue(lineWidth)}" />`;
+    return `<circle cx="${roundSvgCoord(projected[0])}" cy="${roundSvgCoord(projected[1])}" r="${roundSvgCoord(radius)}" ${fillAttributes(fillColor, pattern)} ${colorAttributes('stroke', lineColor)} stroke-width="${roundSvgValue(lineWidth)}" />`;
   }
 
   if (geometry.type === 'MultiPoint' && Array.isArray(geometry.coordinates)) {
@@ -2172,7 +2200,7 @@ function buildTspans(lines: string[], x: number, lineHeightPx: number): string {
   return lines
     .map(
       (line, lineIndex) =>
-        `<tspan x="${roundSvgValue(x)}" dy="${roundSvgValue(lineIndex === 0 ? 0 : lineHeightPx)}">${escapeXml(line)}</tspan>`
+        `<tspan x="${roundSvgCoord(x)}" dy="${roundSvgValue(lineIndex === 0 ? 0 : lineHeightPx)}">${escapeXml(line)}</tspan>`
     )
     .join('');
 }
@@ -2186,11 +2214,58 @@ function buildTextElement(
 ): string {
   return `
     <text
-      x="${roundSvgValue(x)}"
-      y="${roundSvgValue(firstBaselineY)}"
+      x="${roundSvgCoord(x)}"
+      y="${roundSvgCoord(firstBaselineY)}"
       ${attributes}
     >${buildTspans(lines, x, lineHeightPx)}</text>
   `;
+}
+
+function findCommonValue<T>(values: T[]): T | null {
+  if (values.length === 0) return null;
+  return values.every((value) => value === values[0]) ? values[0] : null;
+}
+
+interface PendingTextElement {
+  lines: string[];
+  x: number;
+  firstBaselineY: number;
+  lineHeightPx: number;
+  size: number;
+  anchor: string;
+  fillColor: SvgColor;
+  strokeColor: SvgColor | null;
+  strokeWidth: number;
+}
+
+function buildTextElementMarkup(
+  element: PendingTextElement,
+  fontFamily: string,
+  fontWeight: string,
+  hoistSize: boolean,
+  hoistAnchor: boolean,
+  hoistFill: boolean
+): string {
+  const attributes = [
+    hoistFill ? '' : colorAttributes('fill', element.fillColor),
+    element.strokeColor
+      ? `${colorAttributes('stroke', element.strokeColor)} stroke-width="${roundSvgValue(element.strokeWidth)}" stroke-linejoin="round"`
+      : 'stroke="none"',
+    `font-family="${escapeXml(fontFamily)}"`,
+    hoistSize ? '' : `font-size="${roundSvgValue(element.size)}"`,
+    `font-weight="${escapeXml(fontWeight)}"`,
+    hoistAnchor ? '' : `text-anchor="${escapeXml(element.anchor)}"`
+  ]
+    .filter(Boolean)
+    .join('\n          ');
+
+  return buildTextElement(
+    element.lines,
+    element.x,
+    element.firstBaselineY,
+    element.lineHeightPx,
+    attributes
+  );
 }
 
 function serializeTextLayer(
@@ -2210,7 +2285,8 @@ function serializeTextLayer(
   const backgroundEnabled = props.background === true;
   const backgroundPadding = normalizeTextPadding(props.backgroundPadding);
   const maxHaloWidthPx = SLIDER_LIMITS.haloWidth.max;
-  const parts: string[] = [];
+  const rectParts: string[] = [];
+  const textElements: PendingTextElement[] = [];
 
   props.data.forEach((datum, index) => {
     const position = resolveAccessorTuple(
@@ -2309,12 +2385,12 @@ function serializeTextLayer(
         backgroundPadding
       );
       const radius = getLayerNumber(props, 'backgroundBorderRadius', 0);
-      parts.push(`
+      rectParts.push(`
         <rect
-          x="${roundSvgValue(box.x)}"
-          y="${roundSvgValue(box.y)}"
-          width="${roundSvgValue(box.width)}"
-          height="${roundSvgValue(box.height)}"
+          x="${roundSvgCoord(box.x)}"
+          y="${roundSvgCoord(box.y)}"
+          width="${roundSvgCoord(box.width)}"
+          height="${roundSvgCoord(box.height)}"
           rx="${roundSvgValue(radius)}"
           ry="${roundSvgValue(radius)}"
           ${colorAttributes('fill', backgroundColor)}
@@ -2325,45 +2401,68 @@ function serializeTextLayer(
     }
 
     if (haloWidthPx > 0 && haloColor.opacity > 0) {
-      parts.push(
-        buildTextElement(
-          lines,
-          x,
-          firstBaselineY,
-          lineHeightPx,
-          [
-            colorAttributes('fill', haloColor),
-            colorAttributes('stroke', haloColor),
-            `stroke-width="${roundSvgValue(2 * haloWidthPx * sizeScale)}"`,
-            'stroke-linejoin="round"',
-            `font-family="${escapeXml(fontFamily)}"`,
-            `font-size="${roundSvgValue(size)}"`,
-            `font-weight="${escapeXml(fontWeight)}"`,
-            `text-anchor="${escapeXml(anchor)}"`
-          ].join('\n          ')
-        )
-      );
-    }
-
-    parts.push(
-      buildTextElement(
+      textElements.push({
         lines,
         x,
         firstBaselineY,
         lineHeightPx,
-        [
-          colorAttributes('fill', color),
-          'stroke="none"',
-          `font-family="${escapeXml(fontFamily)}"`,
-          `font-size="${roundSvgValue(size)}"`,
-          `font-weight="${escapeXml(fontWeight)}"`,
-          `text-anchor="${escapeXml(anchor)}"`
-        ].join('\n          ')
-      )
-    );
+        size,
+        anchor,
+        fillColor: haloColor,
+        strokeColor: haloColor,
+        strokeWidth: 2 * haloWidthPx * sizeScale
+      });
+    }
+
+    textElements.push({
+      lines,
+      x,
+      firstBaselineY,
+      lineHeightPx,
+      size,
+      anchor,
+      fillColor: color,
+      strokeColor: null,
+      strokeWidth: 0
+    });
   });
 
-  return parts.join('');
+  const hoistSize = findCommonValue(textElements.map((el) => el.size)) !== null;
+  const hoistAnchor =
+    findCommonValue(textElements.map((el) => el.anchor)) !== null;
+  const hoistFill =
+    textElements.every((el) => el.strokeColor === null) &&
+    findCommonValue(textElements.map((el) => svgColorKey(el.fillColor))) !==
+      null;
+  const textParts = textElements.map((element) =>
+    buildTextElementMarkup(
+      element,
+      fontFamily,
+      fontWeight,
+      hoistSize,
+      hoistAnchor,
+      hoistFill
+    )
+  );
+  const groupAttributes = [
+    `font-family="${escapeXml(fontFamily)}"`,
+    `font-weight="${escapeXml(fontWeight)}"`,
+    hoistSize && textElements[0]
+      ? `font-size="${roundSvgValue(textElements[0].size)}"`
+      : '',
+    hoistAnchor && textElements[0]
+      ? `text-anchor="${escapeXml(textElements[0].anchor)}"`
+      : '',
+    hoistFill && textElements[0]
+      ? colorAttributes('fill', textElements[0].fillColor)
+      : ''
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const parts = [...rectParts, ...textParts];
+  if (parts.length === 0) return '';
+
+  return `<g ${groupAttributes}>${parts.join('')}</g>`;
 }
 
 function serializeDeckLayer(
