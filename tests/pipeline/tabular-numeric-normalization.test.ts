@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { analyse as analyseMacros } from '$lib/features/duckdb/macros/analyse';
 import { normalizeFormattedNumericColumns } from '$lib/features/data-pipeline/operations/tabular-numeric-normalization';
 import {
@@ -10,6 +10,7 @@ import {
 
 interface DuckQueryClient {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
+  invalidateTableCache?(tableName: string): void;
 }
 
 function wrapDuckDB(db: TestDuckDB): DuckQueryClient {
@@ -54,11 +55,14 @@ async function getColumnType(
 describe('normalizeFormattedNumericColumns', () => {
   it('promotes european-formatted decimals (comma separator) to DOUBLE', async () => {
     await createTable('tbl_eu_decimal', ['2.148.000,50', '789,50', '18,50']);
+    const duck = wrapDuckDB(db);
+    duck.invalidateTableCache = vi.fn();
     const converted = await normalizeFormattedNumericColumns(
       'tbl_eu_decimal',
-      wrapDuckDB(db)
+      duck
     );
     expect(converted).toContain('value');
+    expect(duck.invalidateTableCache).toHaveBeenCalledWith('tbl_eu_decimal');
     const type = await getColumnType('tbl_eu_decimal', 'value');
     expect(type.toLowerCase()).toContain('double');
   });

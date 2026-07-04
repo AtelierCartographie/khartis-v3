@@ -1,6 +1,6 @@
 <script lang="ts">
   import { loadingStore } from '$lib/features/commons/stores/loading.store.svelte';
-  import { m } from '$lib/paraglide/messages.js';
+  import { m } from '$lib/paraglide/messages';
 </script>
 
 {#if loadingStore.isLoading}

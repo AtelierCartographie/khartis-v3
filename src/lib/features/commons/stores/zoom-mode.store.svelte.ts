@@ -1,4 +1,4 @@
-import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
+import { persistenceRegistry } from '$lib/features/project-management/core';
 
 export type ZoomMode = 'map' | 'page';
 const ZOOM_MODE_MAP: ZoomMode = 'map';

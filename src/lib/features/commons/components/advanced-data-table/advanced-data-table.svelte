@@ -16,8 +16,11 @@
   import ChevronUp from 'carbon-icons-svelte/lib/ChevronUp.svelte';
   import ChevronDown from 'carbon-icons-svelte/lib/ChevronDown.svelte';
   import { onDestroy, onMount, tick, untrack, type Component } from 'svelte';
-  import { SvelteMap, SvelteSet } from 'svelte/reactivity';
   import { LogCategory, logger } from '../../utils/logger';
+  import {
+    readCarbonStringValue,
+    type CarbonValueEvent
+  } from '$lib/features/commons/utils/carbon-events.utils';
 
   import { useColumnOperations } from './hooks/use-column-operations.svelte';
   import { useRowSelection } from './hooks/use-row-selection.svelte';
@@ -55,11 +58,7 @@
     DataTableSkeleton as unknown as Component<DataTableSkeletonRuntimeProps>;
 
   export type HighlightType =
-    | 'exact'
-    | 'contains'
-    | 'partial'
-    | 'current'
-    | null;
+    'exact' | 'contains' | 'partial' | 'current' | null;
 
   export interface CellHighlight {
     rowId: number;
@@ -363,6 +362,10 @@
     }
   }
 
+  function handleNewColumnNameInput(event: CarbonValueEvent) {
+    newColumnName = readCarbonStringValue(event, newColumnName);
+  }
+
   function handleDeleteRequest(columnName: string) {
     columnToDelete = columnName;
     deleteConfirmOpen = true;
@@ -396,7 +399,8 @@
   }
 
   const cellHighlightMap = $derived.by(() => {
-    const map = new SvelteMap<string, 'exact' | 'contains' | 'partial'>();
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Recreated wholesale in a derived value; mutation tracking is unnecessary.
+    const map = new Map<string, 'exact' | 'contains' | 'partial'>();
     for (const h of cellHighlights) {
       map.set(`${h.rowId}:${h.columnName}`, h.type);
     }
@@ -441,7 +445,8 @@
   );
 
   const geoidColumns = $derived.by(() => {
-    const set = new SvelteSet<string>();
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- Recreated wholesale in a derived value; mutation tracking is unnecessary.
+    const set = new Set<string>();
     if (activeJoinColumn) {
       set.add(activeJoinColumn);
       return set;
@@ -589,7 +594,11 @@
             sortColumnType: currentSortColumnType,
             sortOrder: currentSortOrder
           }).catch((error) => {
-            logger.error(m.error_scroll_search_result(), LogCategory.UI, error);
+            logger.error(
+              'Failed to scroll to current search result',
+              LogCategory.UI,
+              error
+            );
           });
         });
       }, SCROLL_TO_CELL_DEBOUNCE_MS);
@@ -719,7 +728,7 @@
     virtualScroll.setTableContainer(tableContainer);
   });
 
-  let expandEffectInitialized = $state(false);
+  let expandEffectInitialized = false;
   $effect(() => {
     void isExpanded;
     if (!expandEffectInitialized) {
@@ -777,6 +786,8 @@
                       checked={areVisibleRowsSelected}
                       indeterminate={hasVisibleSelection &&
                         !areVisibleRowsSelected}
+                      labelText={m.table_select_visible_rows()}
+                      hideLabel
                       onchange={handleToggleVisibleRowsSelection}
                     />
                   </div>
@@ -788,6 +799,7 @@
                         class="histogram-toggle"
                         onclick={toggleHistograms}
                         title={m.data_toggle_summary_plots()}
+                        aria-label={m.data_toggle_summary_plots()}
                       >
                         {#if histogramVisible}
                           <ChevronUp size={16} />
@@ -811,7 +823,6 @@
                 <TableColumnHeader
                   column={column}
                   analysis={tableData.columnAnalysis.get(column.name)}
-                  columnAnalysis={tableData.columnAnalysis}
                   sortColumn={sort.sortColumn}
                   sortOrder={sort.sortOrder}
                   showSummaryPlots={effectiveShowSummaryPlots}
@@ -896,9 +907,10 @@
       {m.column_rename_description({ column: columnToRename ?? '' })}
     </p>
     <TextInput
-      bind:value={newColumnName}
+      value={newColumnName}
       labelText={m.column_rename_label()}
       placeholder={m.column_rename_placeholder()}
+      on:input={handleNewColumnNameInput}
     />
   </div>
 </Modal>
@@ -956,22 +968,26 @@
     overflow-y: auto;
     overflow-x: auto;
     background-color: var(--cds-ui-01, #ffffff);
-    scrollbar-width: thin;
-    scrollbar-color: var(--cds-border-subtle) transparent;
   }
 
   .table-container::-webkit-scrollbar {
     width: 8px;
     height: 8px;
+    -webkit-appearance: none;
   }
 
   .table-container::-webkit-scrollbar-track {
-    background: transparent;
+    background: var(--cds-layer-02, #e8e8e8);
+    border-radius: 4px;
   }
 
   .table-container::-webkit-scrollbar-thumb {
-    background-color: var(--cds-border-subtle);
+    background-color: var(--cds-border-strong, #8d8d8d);
     border-radius: 4px;
+  }
+
+  .table-container::-webkit-scrollbar-thumb:hover {
+    background-color: var(--cds-text-secondary, #525252);
   }
 
   table {

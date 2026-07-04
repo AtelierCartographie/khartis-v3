@@ -10,9 +10,6 @@ function createDensityLoadingStore() {
     },
     end(): void {
       count = Math.max(0, count - 1);
-    },
-    reset(): void {
-      count = 0;
     }
   };
 }

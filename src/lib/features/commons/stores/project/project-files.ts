@@ -1,5 +1,6 @@
 import * as m from '$lib/paraglide/messages';
 import { dataOrchestratorService } from '../../services/data-orchestrator.service.svelte';
+import { DataValidationError } from '../../pipeline.errors';
 import { LogCategory, logger } from '../../utils/logger';
 import type { UploadedFile } from '../../types/create-project.types';
 import type { ProjectStateContainer } from './project-state.svelte';
@@ -61,7 +62,7 @@ export async function addFilesToProject(
   newFiles: UploadedFile[]
 ): Promise<void> {
   if (!container._state.currentProject) {
-    throw new Error(m.history_no_project_loaded());
+    throw new DataValidationError(m.history_no_project_loaded(), 'projectId');
   }
 
   if (!container._state.currentProject.data) {
@@ -154,6 +155,32 @@ export async function removeFileFromProject(
   };
 
   await dataOrchestratorService.onFileRemoved(fileId);
+
+  await markDirtyAndSave(container);
+}
+
+export async function clearSourceFiles(
+  container: ProjectStateContainer
+): Promise<void> {
+  const project = container._state.currentProject;
+  const sourceFiles = project?.data?.sourceFiles;
+  if (!project?.data || !sourceFiles?.length) {
+    return;
+  }
+
+  const fileIds = sourceFiles.map((file) => file.id);
+
+  container._state.currentProject = {
+    ...project,
+    data: {
+      ...project.data,
+      sourceFiles: []
+    }
+  };
+
+  for (const fileId of fileIds) {
+    await dataOrchestratorService.onFileRemoved(fileId);
+  }
 
   await markDirtyAndSave(container);
 }

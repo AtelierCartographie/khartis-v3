@@ -35,7 +35,7 @@
   import {
     NONE_FIELD_ID,
     filterFieldsByKind,
-    useFieldSelection
+    useFieldSelectionHandler
   } from '../../hooks/use-field-selection.svelte';
   import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
   import { resetVisualClassification } from '../shared/classification-reset.utils';
@@ -97,10 +97,31 @@
   let positionMode = $state<SymbolDoublePosition>(SymbolDoublePosition.OVERLAY);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
-  const primaryFieldSelection = useFieldSelection(() => dataFields);
-  const secondaryValueFieldSelection = useFieldSelection(() => dataFields);
-  const fillClassFieldSelection = useFieldSelection(() => dataFields);
-  const fillCategoryFieldSelection = useFieldSelection(() => dataFields);
+  const primaryFieldSelection = useFieldSelectionHandler({
+    getDataFields: () => dataFields,
+    columnKey: () =>
+      symbolMode === SymbolMode.PROPORTIONAL ? 'sizeColumn' : 'valueColumn',
+    onMappingChange: (updates) =>
+      runUserChange(() => onMappingChange?.(updates))
+  });
+  const secondaryValueFieldSelection = useFieldSelectionHandler({
+    getDataFields: () => dataFields,
+    columnKey: 'valueColumn',
+    onMappingChange: (updates) =>
+      runUserChange(() => onMappingChange?.(updates))
+  });
+  const fillClassFieldSelection = useFieldSelectionHandler({
+    getDataFields: () => dataFields,
+    columnKey: 'valueColumn',
+    onMappingChange: (updates) =>
+      runUserChange(() => onFillMappingChange?.(updates))
+  });
+  const fillCategoryFieldSelection = useFieldSelectionHandler({
+    getDataFields: () => dataFields,
+    columnKey: 'categoryColumn',
+    onMappingChange: (updates) =>
+      runUserChange(() => onFillMappingChange?.(updates))
+  });
   const selectableNumericDataFields = $derived(
     filterFieldsByKind(
       selectableDataFields,
@@ -121,6 +142,13 @@
   });
   let isSyncingFromVisualization = $state(true);
   let syncToken = 0;
+
+  function runUserChange<T>(callback: () => T): T | undefined {
+    if (isSyncingFromVisualization) {
+      return undefined;
+    }
+    return callback();
+  }
 
   $effect(() => {
     const currentSyncToken = ++syncToken;
@@ -252,60 +280,42 @@
   );
 
   function handleProportionalTypeChange(type: ProportionalType) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    if (type === proportionalType) {
-      return;
-    }
-    proportionalType = type;
-    onModesChange?.({ proportionalType: type });
-    if (type === ProportionalType.SINGLE) {
-      onMappingChange?.({ valueColumn: undefined });
-      secondaryValueFieldSelection.set(NONE_FIELD_ID);
-      fillColorB = DEFAULT_COLORS.secondary;
-      onSymbolPrimitiveChange?.({
-        commonScale: true,
-        positionMode: SymbolDoublePosition.OVERLAY,
-        breakValueA: null,
-        breakValueB: null
-      });
-      onStyleChange?.({ fillColorB: DEFAULT_COLORS.secondary });
-    } else {
-      if (isLinearShape(shapeType)) {
-        handleShapeTypeChange(ShapeType.CIRCLE);
+    runUserChange(() => {
+      if (type === proportionalType) {
+        return;
       }
-      if (positionMode === SymbolDoublePosition.JUXTAPOSITION) {
-        positionMode = SymbolDoublePosition.OVERLAY;
+      proportionalType = type;
+      onModesChange?.({ proportionalType: type });
+      if (type === ProportionalType.SINGLE) {
+        onMappingChange?.({ valueColumn: undefined });
+        secondaryValueFieldSelection.set(NONE_FIELD_ID);
+        fillColorB = DEFAULT_COLORS.secondary;
         onSymbolPrimitiveChange?.({
-          positionMode: SymbolDoublePosition.OVERLAY
+          commonScale: true,
+          positionMode: SymbolDoublePosition.OVERLAY,
+          breakValueA: null,
+          breakValueB: null
         });
+        onStyleChange?.({ fillColorB: DEFAULT_COLORS.secondary });
+      } else {
+        if (isLinearShape(shapeType)) {
+          handleShapeTypeChange(ShapeType.CIRCLE);
+        }
+        if (positionMode === SymbolDoublePosition.JUXTAPOSITION) {
+          positionMode = SymbolDoublePosition.OVERLAY;
+          onSymbolPrimitiveChange?.({
+            positionMode: SymbolDoublePosition.OVERLAY
+          });
+        }
       }
-    }
-  }
-
-  function handleFieldBSelect(fieldId: number) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    secondaryValueFieldSelection.set(fieldId);
-    if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ valueColumn: undefined });
-      return;
-    }
-
-    const field = dataFields.find((item) => item.id === fieldId);
-    if (field) {
-      onMappingChange?.({ valueColumn: field.text });
-    }
+    });
   }
 
   function handleFillColorBChange(value: string) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    fillColorB = value;
-    onStyleChange?.({ fillColorB: value });
+    runUserChange(() => {
+      fillColorB = value;
+      onStyleChange?.({ fillColorB: value });
+    });
   }
 
   const shapeTypes = $derived(
@@ -317,14 +327,13 @@
   const showBarWidthControl = $derived(isLinearShape(shapeType));
 
   function handleShapeTypeChange(value: ShapeType) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    shapeType = value;
-    onSymbolsChange?.({
-      type: value,
-      sizeScale: getDefaultScaleForShape(value),
-      ...(isLinearShape(value) ? { barWidth } : {})
+    runUserChange(() => {
+      shapeType = value;
+      onSymbolsChange?.({
+        type: value,
+        sizeScale: getDefaultScaleForShape(value),
+        ...(isLinearShape(value) ? { barWidth } : {})
+      });
     });
   }
 
@@ -334,156 +343,90 @@
   }
 
   function handleMissingDataShowChange(show: boolean) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    showMissingData = show;
-    onMissingDataChange?.({ show });
+    runUserChange(() => {
+      showMissingData = show;
+      onMissingDataChange?.({ show });
+    });
   }
 
   function handleMissingDataShapeChange(shape: MissingDataShape) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    missingDataShape = shape;
-    onMissingDataChange?.({ shape });
+    runUserChange(() => {
+      missingDataShape = shape;
+      onMissingDataChange?.({ shape });
+    });
   }
 
   function handleMissingDataSizeChange(size: number) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    missingDataSize = size;
-    onMissingDataChange?.({ size });
+    runUserChange(() => {
+      missingDataSize = size;
+      onMissingDataChange?.({ size });
+    });
   }
 
   function handleMissingDataColorChange(color: string) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    missingDataColor = color;
-    onMissingDataChange?.({ color });
+    runUserChange(() => {
+      missingDataColor = color;
+      onMissingDataChange?.({ color });
+    });
   }
 
   function handleFillModeChange(mode: FillMode) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    fillMode = mode;
-    if (fillMode === FillMode.CATEGORIES) {
-      onModesChange?.({
-        fill: FillMode.CATEGORIES,
-        symbol: SymbolMode.CATEGORIES
-      });
-    } else {
-      onModesChange?.({ fill: fillMode });
-    }
-    if (fillMode === FillMode.NONE) {
-      fillColor = DEFAULT_COLORS.fill;
-      fillColorB = DEFAULT_COLORS.secondary;
-      onStyleChange?.({
-        symbolFillColor: DEFAULT_COLORS.fill,
-        fillColorB: DEFAULT_COLORS.secondary
-      });
-      onFillClassificationChange?.(resetVisualClassification());
-    }
+    runUserChange(() => {
+      fillMode = mode;
+      if (fillMode === FillMode.CATEGORIES) {
+        onModesChange?.({
+          fill: FillMode.CATEGORIES,
+          symbol: SymbolMode.CATEGORIES
+        });
+      } else {
+        onModesChange?.({ fill: fillMode });
+      }
+      if (fillMode === FillMode.NONE) {
+        fillColor = DEFAULT_COLORS.fill;
+        fillColorB = DEFAULT_COLORS.secondary;
+        onStyleChange?.({
+          symbolFillColor: DEFAULT_COLORS.fill,
+          fillColorB: DEFAULT_COLORS.secondary
+        });
+        onFillClassificationChange?.(resetVisualClassification());
+      }
+    });
   }
 
   function handleFillColorChange(value: string) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    fillColor = value;
-    onStyleChange?.({ symbolFillColor: value });
+    runUserChange(() => {
+      fillColor = value;
+      onStyleChange?.({ symbolFillColor: value });
+    });
   }
 
   function handleFillOpacityChange(value: number) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    fillOpacity = value;
-    onSymbolsChange?.({ opacity: value / 100 });
+    runUserChange(() => {
+      fillOpacity = value;
+      onSymbolsChange?.({ opacity: value / 100 });
+    });
   }
 
   function handleSymbolMaxSizeChange(value: number) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    symbolMaxSize = value;
-    onSymbolsChange?.({ maxSize: value });
+    runUserChange(() => {
+      symbolMaxSize = value;
+      onSymbolsChange?.({ maxSize: value });
+    });
   }
 
   function handleBarWidthChange(value: number) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    barWidth = value;
-    onSymbolsChange?.({ barWidth: value });
-  }
-
-  function handleFieldSelect(fieldId: number) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    primaryFieldSelection.set(fieldId);
-    if (fieldId === NONE_FIELD_ID) {
-      if (symbolMode === SymbolMode.PROPORTIONAL) {
-        onMappingChange?.({ sizeColumn: undefined });
-      } else {
-        onMappingChange?.({ valueColumn: undefined });
-      }
-      return;
-    }
-
-    const field = dataFields.find((f) => f.id === fieldId);
-    if (field) {
-      if (symbolMode === SymbolMode.PROPORTIONAL) {
-        onMappingChange?.({ sizeColumn: field.text });
-      } else {
-        onMappingChange?.({ valueColumn: field.text });
-      }
-    }
+    runUserChange(() => {
+      barWidth = value;
+      onSymbolsChange?.({ barWidth: value });
+    });
   }
 
   function handleStrokeDiscretizationChange(
     classification: Partial<ClassificationConfig>
   ) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    onStrokeClassificationChange?.(classification);
-  }
-
-  function handleFillClassFieldSelect(fieldId: number) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    fillClassFieldSelection.set(fieldId);
-    if (fieldId === NONE_FIELD_ID) {
-      onFillMappingChange?.({ valueColumn: undefined });
-      return;
-    }
-
-    const field = dataFields.find((item) => item.id === fieldId);
-    if (field) {
-      onFillMappingChange?.({ valueColumn: field.text });
-    }
-  }
-
-  function handleFillCategoryFieldSelect(fieldId: number) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    fillCategoryFieldSelection.set(fieldId);
-    if (fieldId === NONE_FIELD_ID) {
-      onFillMappingChange?.({ categoryColumn: undefined });
-      return;
-    }
-
-    const field = dataFields.find((item) => item.id === fieldId);
-    if (field) {
-      onFillMappingChange?.({ categoryColumn: field.text });
-    }
+    runUserChange(() => {
+      onStrokeClassificationChange?.(classification);
+    });
   }
 
   const sizeColumnName = $derived(
@@ -495,18 +438,20 @@
   );
 
   function handleCommonScaleChange(value: boolean) {
-    if (isSyncingFromVisualization) return;
-    commonScale = value;
-    onSymbolPrimitiveChange?.({ commonScale: value });
+    runUserChange(() => {
+      commonScale = value;
+      onSymbolPrimitiveChange?.({ commonScale: value });
+    });
   }
 
   function handlePositionModeChange(value: string | number) {
-    if (isSyncingFromVisualization) return;
-    const next =
-      (value as SymbolDoublePosition) ?? SymbolDoublePosition.OVERLAY;
-    if (next === positionMode) return;
-    positionMode = next;
-    onSymbolPrimitiveChange?.({ positionMode: next });
+    runUserChange(() => {
+      const next =
+        (value as SymbolDoublePosition) ?? SymbolDoublePosition.OVERLAY;
+      if (next === positionMode) return;
+      positionMode = next;
+      onSymbolPrimitiveChange?.({ positionMode: next });
+    });
   }
 
   const positionModeItems = [
@@ -553,8 +498,8 @@
       shapeDropdownItems={shapeDropdownItems}
       positionModeItems={positionModeItems}
       onCommonScaleChange={handleCommonScaleChange}
-      onFieldSelect={handleFieldSelect}
-      onFieldBSelect={handleFieldBSelect}
+      onFieldSelect={primaryFieldSelection.handleSelect}
+      onFieldBSelect={secondaryValueFieldSelection.handleSelect}
       onSymbolMaxSizeChange={handleSymbolMaxSizeChange}
       onShapeDropdownSelect={handleShapeDropdownSelect}
       onPositionModeChange={handlePositionModeChange}
@@ -571,7 +516,7 @@
       columnName={sizeColumnName}
       shapeDropdownItems={shapeDropdownItems}
       shapeType={shapeType}
-      onFieldSelect={handleFieldSelect}
+      onFieldSelect={primaryFieldSelection.handleSelect}
       onMaxSizeChange={handleSymbolMaxSizeChange}
       onShapeDropdownSelect={handleShapeDropdownSelect}
     />
@@ -590,7 +535,7 @@
     columnName={valueColumnName}
     shapeDropdownItems={shapeDropdownItems}
     shapeType={shapeType}
-    onFieldSelect={handleFieldSelect}
+    onFieldSelect={primaryFieldSelection.handleSelect}
     onMaxSizeChange={handleSymbolMaxSizeChange}
     onShapeDropdownSelect={handleShapeDropdownSelect}
   >
@@ -682,8 +627,8 @@
     onFillModeChange={handleFillModeChange}
     onFillColorChange={handleFillColorChange}
     onFillOpacityChange={handleFillOpacityChange}
-    onValueFieldSelect={handleFillClassFieldSelect}
-    onCategoryFieldSelect={handleFillCategoryFieldSelect}
+    onValueFieldSelect={fillClassFieldSelection.handleSelect}
+    onCategoryFieldSelect={fillCategoryFieldSelection.handleSelect}
     onFacetsVariablesChange={facetsSelection.updateVariables}
     onFacetsToggle={facetsSelection.toggle}
     onOpenDiscretization={onOpenFillDiscretization ?? (() => {})}

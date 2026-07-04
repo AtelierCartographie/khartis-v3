@@ -32,8 +32,6 @@ export {
 } from './symbols';
 export {
   createLegendSvg,
-  escapeSvgAttribute,
-  escapeSvgText,
   type CommonLegendTextOptions,
   type LegendSvgDefinition
 } from './utils';

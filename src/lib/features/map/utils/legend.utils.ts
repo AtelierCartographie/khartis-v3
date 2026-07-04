@@ -34,6 +34,8 @@ import {
   getSizeForValue
 } from './data-styling.utils';
 
+const LEGEND_MIN_SWATCH_OPACITY = 0.2;
+
 export type LegendSwatchPrimitive = 'area' | 'point' | 'line';
 
 type LegendContinuousStep = {
@@ -514,7 +516,10 @@ export function getPointSizeLegendScale(
   const minSize = Math.max(1, symbol.minSize ?? 1);
   const maxSize = Math.max(minSize, symbol.maxSize ?? minSize);
   const proportionalMaxSize = Math.max(0, symbol.maxSize ?? maxSize);
-  const fillOpacity = Math.max(0.2, normalizeOpacity(symbol.opacity, 1));
+  const fillOpacity = Math.max(
+    LEGEND_MIN_SWATCH_OPACITY,
+    normalizeOpacity(symbol.opacity, 1)
+  );
 
   if (symbol.mode === SymbolMode.PROPORTIONAL && !!symbol.sizeColumn) {
     const minValue = toFiniteNumber(getStatisticsValue(statistics, 'min'));
@@ -595,7 +600,10 @@ export function getLineWidthLegendScale(
   }
 
   const maxLineWidth = Math.max(1, line.maxWidth ?? 1);
-  const opacity = Math.max(0.2, normalizeOpacity(line.opacity, 1));
+  const opacity = Math.max(
+    LEGEND_MIN_SWATCH_OPACITY,
+    normalizeOpacity(line.opacity, 1)
+  );
 
   if (line.thicknessMode === ThicknessMode.PROPORTIONAL && !!line.sizeColumn) {
     const minValue = toFiniteNumber(getStatisticsValue(statistics, 'min'));

@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { downloadFile, exportProcessedDatasets } from './file-export.utils';
+import {
+  downloadFile,
+  exportProcessedDatasets,
+  exportToGeoJson
+} from './file-export.utils';
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
+import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 
 function createGeometryDataset(
   geometryValue: Record<string, unknown> | string,
@@ -172,7 +177,59 @@ describe('file export utils', () => {
     );
     dataset.data = dataset.data.map((row) => ({ geom: row.geom }));
 
-    await expect(exportProcessedDatasets([dataset], 'csv')).rejects.toThrow();
+    const request = exportProcessedDatasets([dataset], 'csv');
+
+    await expect(request).rejects.toMatchObject({
+      name: 'DataValidationError',
+      code: 'DATA_VALIDATION_ERROR',
+      field: 'columns',
+      details: {
+        datasetId: 'dataset-1',
+        field: 'columns',
+        format: 'csv'
+      }
+    });
+    await expect(request).rejects.toBeInstanceOf(DataValidationError);
+  });
+
+  it('fails exports with a typed error when there are no datasets', async () => {
+    await expect(exportProcessedDatasets([], 'geojson')).rejects.toMatchObject({
+      name: 'DataValidationError',
+      code: 'DATA_VALIDATION_ERROR',
+      field: 'datasets',
+      details: {
+        field: 'datasets',
+        format: 'geojson'
+      }
+    });
+  });
+
+  it('fails geojson exports with a typed error when no geometry is available', async () => {
+    const dataset = createGeometryDataset({
+      type: 'Point',
+      coordinates: [2.3522, 48.8566]
+    });
+    dataset.geometry = undefined;
+    dataset.analysis.hasGeoData = false;
+    dataset.analysis.geoColumns = [];
+
+    await expect(
+      exportProcessedDatasets([dataset], 'geojson')
+    ).rejects.toMatchObject({
+      name: 'DataValidationError',
+      code: 'DATA_VALIDATION_ERROR',
+      field: 'geometry',
+      details: {
+        field: 'geometry',
+        format: 'geojson'
+      }
+    });
+  });
+
+  it('fails invalid geojson payloads with a typed error', () => {
+    expect(() => exportToGeoJson({ type: 'Table' })).toThrow(
+      DataValidationError
+    );
   });
 
   it('builds valid geojson exports from recognized geometry columns', async () => {

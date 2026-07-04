@@ -13,5 +13,5 @@ export function activateStylingToolFromMap(tool: StylingTools): void {
     globalActions.openMobileToolbar();
   }
 
-  globalState.selectedTool = tool;
+  globalActions.setSelectedTool(tool);
 }

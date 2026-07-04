@@ -2,9 +2,11 @@
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import type { ProjectionFilterId } from '$lib/features/commons/types/global';
-  import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
-  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
-  import { projectionStore as mapRenderProjectionStore } from '$lib/features/map/stores/projection.store.svelte';
+  import {
+    basemapService,
+    osmBasemapStore,
+    projectionStore as mapRenderProjectionStore
+  } from '$lib/features/map';
   import {
     getAvailableProjectionIds,
     resolveProjectionAvailabilityContext,
@@ -18,7 +20,6 @@
     TextArea
   } from 'carbon-components-svelte';
   import { Code, List as ListIcon } from 'carbon-icons-svelte';
-  import { createEventDispatcher } from 'svelte';
   import {
     PROJECTIONS as PROJECTION_CATALOG,
     type ProjectionInfo
@@ -42,6 +43,13 @@
     shapeFilterId?: ProjectionShapeFilterId;
   };
 
+  type Props = {
+    onapply?: (payload: { code: string }) => void;
+    onreset?: () => void;
+  };
+
+  let { onapply, onreset }: Props = $props();
+
   const EQUAL_AREA_PROJECTION_IDS = new Set([
     'albers',
     'azimuthal-equal-area',
@@ -51,11 +59,6 @@
     'bonne',
     'interrupted-mollweide'
   ]);
-  const dispatch = createEventDispatcher<{
-    apply: { code: string };
-    reset: void;
-  }>();
-
   let requestedTabIndex = $state(0);
   let crsCodeDraft = $state<string | null>(null);
 
@@ -109,6 +112,13 @@
       title: m.projection_name_europe_dom_tom(),
       tag: m.projection_group_discontinuous(),
       shapeFilterId: 'Discontinue' as ProjectionShapeFilterId
+    },
+    {
+      id: getCompositeProjectionSelectionId('USA_ALBERS'),
+      projectionId: getCompositeProjectionSelectionId('USA_ALBERS'),
+      title: m.projection_name_usa_albers(),
+      tag: m.projection_group_discontinuous(),
+      shapeFilterId: 'Discontinue' as ProjectionShapeFilterId
     }
   ]);
 
@@ -153,10 +163,10 @@
   const viewCodeLabel = $derived(m.projection_view_code());
 
   const description = $derived(m.projection_description());
-  const codeIntro = $derived(m.projection_code_intro?.() ?? '');
+  const codeIntro = $derived(m.projection_code_intro());
   const codeLabel = $derived(m.projection_code_label());
-  const codePlaceholder = $derived(m.projection_code_placeholder?.() ?? '');
-  const codeHelper = $derived(m.projection_code_helper?.() ?? '');
+  const codePlaceholder = $derived(m.projection_code_placeholder());
+  const codeHelper = $derived(m.projection_code_helper());
   const resetLabel = $derived(m.projection_code_reset());
   const submitLabel = $derived(m.projection_code_submit());
   const activeCatalogueSelectionId = $derived.by(() => {
@@ -200,12 +210,12 @@
   function onReset() {
     if (isEmpty()) return;
     crsCodeDraft = '';
-    dispatch('reset');
+    onreset?.();
   }
 
   function onApply() {
     if (isEmpty()) return;
-    dispatch('apply', { code: crsCode.trim() });
+    onapply?.({ code: crsCode.trim() });
   }
 
   function handleCrsCodeInput(event: CustomEvent<string> | Event): void {
@@ -301,7 +311,7 @@
     <ToggleTabs
       items={viewTabs}
       activeIndex={activeTabIndex}
-      onChange={handleViewChange}
+      onchange={handleViewChange}
       className="projection-view-tabs"
       hideInactiveLabel={true}
     />

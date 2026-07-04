@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import {
   ShapeTypeOrdinal,
   LINEAR_SHAPE_ORDINALS,
-  isLinearShapeOrdinal,
   MultiShapeLayer
 } from './multi-shape-layer';
 
@@ -13,7 +12,7 @@ const source = readFileSync(
   'utf8'
 );
 
-describe('MultiShapeLayer — ShapeTypeOrdinal enum', () => {
+describe('MultiShapeLayer — ShapeTypeOrdinal mapping', () => {
   it('assigns stable ordinals to every shape (keep in sync with SDF shader branches)', () => {
     expect(ShapeTypeOrdinal.CIRCLE).toBe(0);
     expect(ShapeTypeOrdinal.SQUARE).toBe(1);
@@ -31,13 +30,6 @@ describe('MultiShapeLayer — ShapeTypeOrdinal enum', () => {
     expect(LINEAR_SHAPE_ORDINALS).toContain(ShapeTypeOrdinal.SPIKE);
     expect(LINEAR_SHAPE_ORDINALS).not.toContain(ShapeTypeOrdinal.CIRCLE);
     expect(LINEAR_SHAPE_ORDINALS).not.toContain(ShapeTypeOrdinal.SQUARE);
-  });
-
-  it('detects linear shapes via isLinearShapeOrdinal', () => {
-    expect(isLinearShapeOrdinal(ShapeTypeOrdinal.BAR)).toBe(true);
-    expect(isLinearShapeOrdinal(ShapeTypeOrdinal.SPIKE)).toBe(true);
-    expect(isLinearShapeOrdinal(ShapeTypeOrdinal.CIRCLE)).toBe(false);
-    expect(isLinearShapeOrdinal(ShapeTypeOrdinal.STAR)).toBe(false);
   });
 });
 
@@ -89,7 +81,7 @@ describe('MultiShapeLayer — source invariants (keep SDF shader consistent)', (
 
   it('keeps triangle symbols oriented like the UI and legend', () => {
     const triangleBlock = source.match(
-      /case 6: \/\/ TRIANGLE[\s\S]*?case 7: \/\/ STAR/
+      /case \$\{ShapeTypeOrdinal\.TRIANGLE\}: \/\/ TRIANGLE[\s\S]*?case \$\{ShapeTypeOrdinal\.STAR\}: \/\/ STAR/
     )?.[0];
 
     expect(triangleBlock).toBeDefined();

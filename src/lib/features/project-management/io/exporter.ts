@@ -54,18 +54,24 @@ async function ensureProjectAssets(
     return project;
   }
 
-  project.data.sourceFiles = await Promise.all(
+  const sourceFiles = await Promise.all(
     project.data.sourceFiles.map((file) => ensureUploadedFileAssets(file))
   );
 
-  return project;
+  return {
+    ...project,
+    data: {
+      ...project.data,
+      sourceFiles
+    }
+  };
 }
 
 async function createArchivePayload(project: KhartisProject): Promise<Blob> {
-  await ensureProjectAssets(project);
+  const projectWithAssets = await ensureProjectAssets(project);
 
-  const serialized = await serialize(project);
-  const sourceFiles = project.data?.sourceFiles ?? [];
+  const serialized = await serialize(projectWithAssets);
+  const sourceFiles = projectWithAssets.data?.sourceFiles ?? [];
   const assetRefs = collectUniqueAssetRefs(sourceFiles);
   const manifestAssets: ProjectArchiveAssetEntry[] = assetRefs.map(
     (assetRef) => ({
@@ -76,7 +82,7 @@ async function createArchivePayload(project: KhartisProject): Promise<Blob> {
 
   const manifest: ProjectArchiveManifest = {
     archiveVersion: 2,
-    appVersion: PROJECT_CONST.APP_VERSION,
+    appVersion: PROJECT_CONST.SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
     projectId: project.id,
     assetCount: manifestAssets.length,
@@ -108,10 +114,6 @@ async function createArchivePayload(project: KhartisProject): Promise<Blob> {
   return new Blob([toArrayBuffer(archive)], {
     type: 'application/octet-stream'
   });
-}
-
-export async function exportProject(project: KhartisProject): Promise<Blob> {
-  return createArchivePayload(project);
 }
 
 export async function createArchive(project: KhartisProject): Promise<Blob> {

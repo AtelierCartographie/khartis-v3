@@ -221,11 +221,9 @@ await dataPipeline.initialize();
 
 const result = await dataPipeline.processFile(file);
 const result = await dataPipeline.processRemoteFile(url, { tableName });
-const result = await dataPipeline.processPastedData(csvContent, 'pasted');
-
-await dataPipeline.joinDatasetById(tableName, idColumn, {
-  basemapTable,
-  basemapId
+const result = await dataPipeline.processPastedData(csvContent, {
+  name: 'pasted'
 });
+
 const validation = await dataPipeline.validateFile(file);
 ```

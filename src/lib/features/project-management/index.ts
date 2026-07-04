@@ -25,11 +25,10 @@ export { projectStorage } from './services/storage.service';
 
 export { duplicateProject } from './operations/duplicate';
 
-import { exportProject, createArchive } from './io/exporter';
+import { createArchive } from './io/exporter';
 import { importProject } from './io/importer';
 
 export const projectFiles = {
-  exportProject,
   createArchive,
   importProject
 };

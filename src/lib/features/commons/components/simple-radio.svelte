@@ -8,6 +8,8 @@
     hideLabel?: boolean;
     name?: string;
     value?: string;
+    ariaHidden?: boolean;
+    tabIndex?: number;
     onchange?: (checked: boolean) => void;
   }
 
@@ -20,6 +22,8 @@
     hideLabel = false,
     name,
     value,
+    ariaHidden,
+    tabIndex,
     onchange
   }: Props = $props();
 
@@ -45,6 +49,8 @@
     value={value}
     aria-checked={checked}
     aria-label={hideLabel ? labelText : undefined}
+    aria-hidden={ariaHidden}
+    tabindex={tabIndex}
     onchange={handleChange}
   />
 

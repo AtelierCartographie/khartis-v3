@@ -17,6 +17,7 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
 interface DepsBag {
   visualization: { id: string; text: Record<string, unknown> };
   updateSelectedVisualization: Mock;
+  buildNextPrimitiveFilters: Mock;
   updatePrimitiveClassificationState: Mock;
   updateTextBackgroundClassificationState: Mock;
   updateTextBackgroundStrokeClassificationState: Mock;
@@ -38,6 +39,7 @@ interface DepsBag {
 
 function makeBag(): DepsBag {
   const text = {
+    enabled: true,
     color: '#abc',
     opacity: 0.8,
     fontFamily: 'Arial',
@@ -68,6 +70,7 @@ function makeBag(): DepsBag {
   const visualization = { id: 'viz', text };
   const mocks = {
     updateSelectedVisualization: vi.fn(),
+    buildNextPrimitiveFilters: vi.fn().mockReturnValue([]),
     updatePrimitiveClassificationState: vi.fn(),
     updateTextBackgroundClassificationState: vi.fn(),
     updateTextBackgroundStrokeClassificationState: vi.fn(),
@@ -109,6 +112,14 @@ describe('createTextHandlers', () => {
     expect(arg.text.color).toBe('#fff');
     expect(arg.text.opacity).toBe(0.8);
     expect(arg.text.size).toBe(14);
+  });
+
+  it('handleTextChange recomputes primitiveFilters from the text enabled override', () => {
+    const bag = makeBag();
+    bag.handlers.handleTextChange({ enabled: false } as never);
+    expect(bag.buildNextPrimitiveFilters).toHaveBeenCalledWith({
+      text: false
+    });
   });
 
   it('handleTextStyleChange dual-writes the legacy style mirror so the picker UI does not revert', () => {

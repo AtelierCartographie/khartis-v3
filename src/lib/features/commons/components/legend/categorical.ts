@@ -4,8 +4,12 @@ import {
   createLegendFont,
   escapeSvgAttribute,
   escapeSvgText,
+  renderLegendHeader,
+  renderLegendNote,
   resolveLegendFontFamily,
-  type CommonLegendTextOptions
+  sanitizeDataImageUrl,
+  type CommonLegendTextOptions,
+  type LegendSvgDefinition
 } from './utils';
 
 export type CategoricalShapeType = 'box' | 'line' | 'symbol';
@@ -46,7 +50,7 @@ interface ColumnInfo {
 export function draw_categorical_legend(
   raw_categories: CategoryItem[],
   options: CategoricalLegendOptions = {}
-): string {
+): LegendSvgDefinition {
   let { type, title, subtitle, note, fontSize } = options;
   type ??= 'box';
   title ??= null;
@@ -178,21 +182,20 @@ export function draw_categorical_legend(
     fontFamily: resolvedFontFamily,
     lineHeight: noteSize * 1.2
   });
-  const title_lines = title
-    ? wrap_text_cat(title, title_font, max_text_width)
-    : [];
-  const subtitle_lines = subtitle
-    ? wrap_text_cat(subtitle, subtitle_font, max_text_width)
-    : [];
-  const note_lines = note ? wrap_text_cat(note, note_font, max_text_width) : [];
-  const actual_header_height =
-    (title_lines.length > 0
-      ? title_lines.length * (titleSize * 1.2) + header_gap
-      : 0) +
-    (subtitle_lines.length > 0
-      ? subtitle_lines.length * (subtitleSize * 1.2) + header_gap
-      : 0);
-  const y_start = margin.top + actual_header_height + gap * 2;
+  const header = renderLegendHeader({
+    title,
+    subtitle,
+    x: margin.left,
+    y: margin.top,
+    maxWidth: max_text_width,
+    titleSize,
+    subtitleSize,
+    fontFamily: resolvedFontFamily,
+    gap: header_gap,
+    titleFont: title_font,
+    subtitleFont: subtitle_font
+  });
+  const y_start = margin.top + header.height + gap * 2;
   categories.forEach((d) => {
     const x = margin.left + columns_width[d.x_index].x;
     const y = y_start + d.y_index * row_step;
@@ -271,10 +274,17 @@ export function draw_categorical_legend(
       : categories_bottom;
   const content_bottom =
     footerItems.length > 0 ? footer_bottom : categories_bottom;
+  const noteBlock = renderLegendNote({
+    note,
+    x: margin.left,
+    y: content_bottom + section_gap,
+    maxWidth: max_text_width,
+    noteSize,
+    fontFamily: resolvedFontFamily,
+    noteFont: note_font
+  });
   const note_section_height =
-    note_lines.length > 0
-      ? section_gap + note_lines.length * (noteSize * 1.2)
-      : 0;
+    noteBlock.height > 0 ? section_gap + noteBlock.height : 0;
   const width = body_width;
   const height = content_bottom + note_section_height + margin.bottom;
 
@@ -341,43 +351,15 @@ export function draw_categorical_legend(
     return { x_index, y_index };
   }
 
-  function create_svg_markup(boxes: string[], labels: string[]): string {
+  function create_svg_markup(
+    boxes: string[],
+    labels: string[]
+  ): LegendSvgDefinition {
     const dx = gap;
     const safeFontFamily = escapeSvgAttribute(resolvedFontFamily);
-    let header_markup = '';
-    let y_cursor = margin.top;
 
-    if (title_lines.length > 0) {
-      const line_h = titleSize * 1.2;
-      header_markup += `<g class="title" text-anchor="start" dominant-baseline="hanging" font-size="${titleSize}" font-weight="bold">`;
-      title_lines.forEach((line, i) => {
-        header_markup += `<text x="${margin.left}" y="${y_cursor + i * line_h}">${escapeSvgText(line)}</text>`;
-      });
-      header_markup += `</g>`;
-      y_cursor += title_lines.length * line_h + header_gap;
-    }
-
-    if (subtitle_lines.length > 0) {
-      const line_h = subtitleSize * 1.2;
-      header_markup += `<g class="subtitle" text-anchor="start" dominant-baseline="hanging" font-size="${subtitleSize}">`;
-      subtitle_lines.forEach((line, i) => {
-        header_markup += `<text x="${margin.left}" y="${y_cursor + i * line_h}">${escapeSvgText(line)}</text>`;
-      });
-      header_markup += `</g>`;
-    }
-
-    let note_markup = '';
-    if (note_lines.length > 0) {
-      const note_y = content_bottom + section_gap;
-      const line_h = noteSize * 1.2;
-      note_markup += `<g class="note" text-anchor="start" dominant-baseline="hanging" font-size="${noteSize}">`;
-      note_lines.forEach((line, i) => {
-        note_markup += `<text x="${margin.left}" y="${note_y + i * line_h}">${escapeSvgText(line)}</text>`;
-      });
-      note_markup += `</g>`;
-    }
-
-    return `<g class="categorical_legend" font-family="${safeFontFamily}">
+    return {
+      markup: `<g class="categorical_legend" font-family="${safeFontFamily}">
       ${createLegendCanvasRect(width, height)}
       <g class="box">
         ${boxes.join('')}
@@ -385,9 +367,12 @@ export function draw_categorical_legend(
       <g class="labels" text-anchor="start" dominant-baseline="middle" font-size="${fontSize}" transform="translate(${dx},0)">
         ${labels.join('')}
       </g>
-      ${header_markup}
-      ${note_markup}
-    </g>`;
+      ${header.markup}
+      ${noteBlock.markup}
+    </g>`,
+      width,
+      height
+    };
   }
 }
 
@@ -423,7 +408,7 @@ function create_shape(
       return `<path d="${escapeSvgAttribute(symbol ?? '')}" transform="translate(${cx},${cy})${scale}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" />`;
     }
     case 'pattern': {
-      const id = patternId ?? 'categorical-legend-pattern';
+      const id = patternId;
       const url = sanitizeDataImageUrl(patternUrl);
       if (!url) {
         return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" />`;
@@ -444,49 +429,13 @@ function create_label(
   const centerY = y + rowHeight / 2;
 
   if (text.nb_lines === 1) {
-    return `<text x="${x}" y="${centerY}">${escapeSvgText(text.lines[0]?.toLocaleString() ?? '')}</text>`;
+    return `<text x="${x}" y="${centerY}">${escapeSvgText(text.lines[0] ?? '')}</text>`;
   }
 
   return `<text>${text.lines
     .map((d, i) => {
       const lineY = centerY + (i - (text.nb_lines - 1) / 2) * dy;
-      return `<tspan x="${x}" y="${lineY}">${escapeSvgText(d.toLocaleString())}</tspan>`;
+      return `<tspan x="${x}" y="${lineY}">${escapeSvgText(d)}</tspan>`;
     })
     .join('')}</text>`;
-}
-
-function wrap_text_cat(text: string, font: string, maxWidth: number): string[] {
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let currentLine = words[0] ?? '';
-
-  for (let i = 1; i < words.length; i++) {
-    const candidate = `${currentLine} ${words[i]}`;
-    if (Textbox.measureText(candidate, font) <= maxWidth) {
-      currentLine = candidate;
-    } else {
-      lines.push(currentLine);
-      currentLine = words[i];
-    }
-  }
-
-  if (currentLine) {
-    lines.push(currentLine);
-  }
-
-  return lines;
-}
-
-function sanitizeDataImageUrl(value: string | null | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-
-  if (
-    /^data:image\/(?:png|webp|jpeg|svg\+xml);base64,[a-z0-9+/=]+$/i.test(value)
-  ) {
-    return escapeSvgAttribute(value);
-  }
-
-  return null;
 }

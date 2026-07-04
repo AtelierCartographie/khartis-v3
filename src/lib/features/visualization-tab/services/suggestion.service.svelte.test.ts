@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   selectedDatasetId: undefined as string | undefined
 }));
 
-vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
+vi.mock('$lib/features/project-management/core', () => ({
   SavePriority: {
     IMMEDIATE: 'immediate',
     DEBOUNCED: 'debounced'
@@ -76,7 +76,6 @@ import {
   buildSuggestionOrigin,
   mapSuggestionToType,
   resolveBlankVisualizationType,
-  SUGGESTION_BEHAVIOR_IDS,
   isVisualizationBlank,
   isVisualizationMatchingSuggestion,
   rememberAppliedSuggestionState,
@@ -93,6 +92,35 @@ type SuggestionScenario = {
   dataset: SuggestionTestDataset;
   geometry: 'point' | 'polygon' | 'line';
 };
+
+const ALL_SUGGESTION_IDS = [
+  'symbols_uniques',
+  'polygons_uniques',
+  'lines_uniques',
+  'choropleth',
+  'choropleth_labeled',
+  'symbols_uniques_colorful_QTR',
+  'lines_colorful_QTR',
+  'symbols_proportional',
+  'symbols_proportional_labeled',
+  'lines_proportional',
+  'polygons_colorful_QL',
+  'symbols_differents',
+  'symbols_uniques_colorful_QL',
+  'lines_colorful_QL',
+  'polygons_colorful_QLO',
+  'symbols_differents_QLO',
+  'symbols_uniques_colorful_QLO',
+  'lines_colorful_QLO',
+  'symbols_proportional_colorful_QL',
+  'symbols_proportional_colorful_QTR',
+  'symbols_proportional_double',
+  'lines_proportional_colorful_QL',
+  'lines_proportional_colorful_QTR',
+  'texts_colorful_QL',
+  'texts_colorful_QTR',
+  'texts_proportional'
+];
 
 function createPointDataset(): SuggestionTestDataset {
   return {
@@ -1074,7 +1102,7 @@ describe('suggestion.service', () => {
     const polygonDataset = createPolygonDataset();
     const lineDataset = createLineDataset();
 
-    const scenarios: SuggestionScenario[] = SUGGESTION_BEHAVIOR_IDS.flatMap(
+    const scenarios: SuggestionScenario[] = ALL_SUGGESTION_IDS.flatMap(
       (suggestionId): SuggestionScenario[] => {
         if (suggestionId.startsWith('lines_')) {
           return [
@@ -1088,6 +1116,7 @@ describe('suggestion.service', () => {
 
         if (
           suggestionId === 'choropleth' ||
+          suggestionId === 'choropleth_labeled' ||
           suggestionId.startsWith('polygons_')
         ) {
           return [

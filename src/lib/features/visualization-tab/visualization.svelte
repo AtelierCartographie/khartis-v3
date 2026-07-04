@@ -12,7 +12,7 @@
   import ConfigureVisualization from './components/configure-visualization.svelte';
   import CustomizeBasemap from './components/customize-basemap.svelte';
   import { syncProjectOSMBasemap } from './services/osm-basemap-sync.service';
-  import ToolbarTabLayout from '$lib/features/main-toolbar/components/toolbar-tab-layout.svelte';
+  import { ToolbarTabLayout } from '$lib/features/main-toolbar';
   import {
     applyBlankVisualizationPreset,
     resolveBlankVisualizationType
@@ -66,8 +66,7 @@
       sourceFiles: projectStore.currentProject?.data?.sourceFiles,
       projectBasemap:
         (projectStore.currentProject?.data?.basemap as
-          | PersistedProjectBasemap
-          | undefined) ?? undefined,
+          PersistedProjectBasemap | undefined) ?? undefined,
       selectedBasemapId: dataTabState.basemapJoin.selectedBasemap,
       selectedBasemapSource: dataTabState.basemapJoin.basemapSource,
       hasMultipleDatasets: datasetsStore.datasets.length > 1

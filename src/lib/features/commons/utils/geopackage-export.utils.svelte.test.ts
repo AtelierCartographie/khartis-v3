@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { logger } from '$lib/features/commons/utils/logger';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 import {
   exportGeoPackage,
@@ -242,5 +242,50 @@ describe('GeoPackage export utils', () => {
     expect(rows[0].organization).toBe('EPSG');
     expect(rows[0].organization_coordsys_id).toBe(2154);
     expect(rows[0].definition).toContain('Lambert_Conformal_Conic_2SP');
+  });
+
+  it('warns when browser GeoPackage fallback cannot reproject coordinates', async () => {
+    const blob = await exportGeoPackage(
+      [
+        {
+          properties: { name: 'Unknown CRS point' },
+          wkb: createPointWkb(700000, 6600000)
+        }
+      ],
+      {
+        layerName: 'unsupported_crs',
+        sourceCrs: 'EPSG:99999'
+      }
+    );
+    const warn = vi.spyOn(logger, 'warn');
+
+    try {
+      const geojsonFile = await convertGeoPackageToGeoJsonFile(
+        new File([blob], 'unsupported-crs.gpkg', {
+          type: 'application/geopackage+sqlite3'
+        })
+      );
+      const geojson = JSON.parse(await geojsonFile.text()) as {
+        features: Array<{
+          geometry: { type: string; coordinates: [number, number] };
+        }>;
+      };
+
+      expect(geojson.features[0].geometry.coordinates).toEqual([
+        700000, 6600000
+      ]);
+      expect(warn).toHaveBeenCalledWith(
+        'Failed to reproject GeoPackage coordinates',
+        LogCategory.MAP,
+        expect.objectContaining({
+          fileName: 'unsupported-crs.gpkg',
+          layerName: 'unsupported_crs',
+          sourceCrs: 'EPSG:99999',
+          failedCoordinateCount: 1
+        })
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

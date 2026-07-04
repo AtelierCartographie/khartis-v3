@@ -16,7 +16,7 @@ export function duplicateProject(
     id: crypto.randomUUID(),
     manifest: {
       ...clone.manifest,
-      version: PROJECT_CONST.APP_VERSION,
+      version: PROJECT_CONST.SCHEMA_VERSION,
       name: sanitizedName,
       createdAt: now,
       updatedAt: now

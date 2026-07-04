@@ -1,10 +1,5 @@
 export type VariableBadgeType =
-  | 'geo'
-  | 'geo-ref'
-  | 'numeric'
-  | 'boolean'
-  | 'string'
-  | 'date';
+  'geo' | 'geo-ref' | 'numeric' | 'boolean' | 'string' | 'date';
 
 export interface VariableBadgeStyle {
   color: string;

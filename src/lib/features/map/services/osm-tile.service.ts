@@ -1,6 +1,8 @@
 import { MapLibreLayerType } from '../constants';
 import type { BasemapMetadata } from '../types/basemap.types';
 
+export const OSM_BASEMAP_ID_PREFIX = 'osm_';
+
 export interface OSMTileConfig {
   urlTemplate: string;
   attribution: string;
@@ -9,14 +11,38 @@ export interface OSMTileConfig {
   tileSize: number;
 }
 
-export function isOSMBasemap(_basemap: BasemapMetadata | null): boolean {
-  return false;
+export function isOSMBasemapFileId(fileId: string): boolean {
+  return fileId.startsWith(OSM_BASEMAP_ID_PREFIX);
+}
+
+export function isOSMBasemap(basemap: BasemapMetadata | null): boolean {
+  return basemap !== null && isOSMBasemapFileId(basemap.file);
+}
+
+function isOSMTileConfig(value: unknown): value is OSMTileConfig {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Partial<OSMTileConfig>;
+  return (
+    typeof candidate.urlTemplate === 'string' &&
+    candidate.urlTemplate.length > 0 &&
+    typeof candidate.attribution === 'string' &&
+    Number.isFinite(candidate.minZoom) &&
+    Number.isFinite(candidate.maxZoom) &&
+    Number.isFinite(candidate.tileSize)
+  );
 }
 
 export function getOSMTileConfig(
-  _basemap: BasemapMetadata
+  basemap: BasemapMetadata
 ): OSMTileConfig | null {
-  return null;
+  if (!isOSMBasemap(basemap) || !('osmTileConfig' in basemap)) {
+    return null;
+  }
+
+  return isOSMTileConfig(basemap.osmTileConfig) ? basemap.osmTileConfig : null;
 }
 
 export function createOSMRasterSource(config: OSMTileConfig) {

@@ -45,7 +45,7 @@ export function installRandomUUIDPolyfill(
       writable: true
     });
   } catch {
-    // Ignore non-extensible runtimes; generateId still provides a fallback.
+    // Ignore non-extensible runtimes; consumers can continue without the polyfill.
   }
 }
 

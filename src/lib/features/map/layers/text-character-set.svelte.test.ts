@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { SLIDER_LIMITS } from '$lib/features/commons/constants/visualization.constants';
 import {
-  DEFAULT_TEXT_FONT_SETTINGS,
   DEFAULT_TEXT_FONT_SETTINGS_RASTER,
   DEFAULT_TEXT_FONT_SETTINGS_SDF,
   DEFAULT_TEXT_LINE_HEIGHT,
   EXPLICIT_TEXT_CHARACTER_SET,
   extendTextCharacterSet,
   resolveTextFontSettings,
+  resolveTextHaloWidthPx,
   resolveTextOutlineWidth
 } from './text-character-set';
 
@@ -127,10 +127,6 @@ describe('text-character-set — DEFAULT_TEXT_FONT_SETTINGS_SDF', () => {
       (DEFAULT_TEXT_FONT_SETTINGS_SDF as { smoothing?: number }).smoothing
     ).toBeUndefined();
   });
-
-  it('aliases the legacy DEFAULT_TEXT_FONT_SETTINGS export to the SDF preset', () => {
-    expect(DEFAULT_TEXT_FONT_SETTINGS).toBe(DEFAULT_TEXT_FONT_SETTINGS_SDF);
-  });
 });
 
 describe('text-character-set — DEFAULT_TEXT_FONT_SETTINGS_RASTER', () => {
@@ -208,6 +204,26 @@ describe('resolveTextOutlineWidth', () => {
   });
 });
 
+describe('resolveTextHaloWidthPx', () => {
+  const max = SLIDER_LIMITS.haloWidth.max;
+
+  it('returns 0 when the outline width is disabled or invalid', () => {
+    expect(resolveTextHaloWidthPx(0, max)).toBe(0);
+    expect(resolveTextHaloWidthPx(-1, max)).toBe(0);
+    expect(resolveTextHaloWidthPx(Number.NaN, max)).toBe(0);
+  });
+
+  it('inverts resolveTextOutlineWidth back to the original halo pixel width', () => {
+    for (const haloWidth of [1, max * 0.25, max * 0.5, max]) {
+      const outlineWidth = resolveTextOutlineWidth(haloWidth, max);
+      expect(resolveTextHaloWidthPx(outlineWidth, max)).toBeCloseTo(
+        haloWidth,
+        5
+      );
+    }
+  });
+});
+
 describe('text-character-set — DEFAULT_TEXT_LINE_HEIGHT', () => {
   it('leaves room between primary and secondary label rows', () => {
     expect(DEFAULT_TEXT_LINE_HEIGHT).toBeGreaterThan(1);
@@ -242,5 +258,21 @@ describe('extendTextCharacterSet', () => {
     expect(fromString).toContain('犬');
     expect(fromSet).toContain('猫');
     expect(fromSet).toContain('犬');
+  });
+
+  it('keeps the pinned base reference when data only uses covered glyphs', () => {
+    expect(extendTextCharacterSet(['Paris', 'Lyon', 'Marseille'])).toBe(
+      EXPLICIT_TEXT_CHARACTER_SET
+    );
+  });
+
+  it('ignores control characters while extending with real label glyphs', () => {
+    const extended = extendTextCharacterSet('東京\n大阪\u007f');
+    expect(extended).toContain('東');
+    expect(extended).toContain('京');
+    expect(extended).toContain('大');
+    expect(extended).toContain('阪');
+    expect(extended).not.toContain('\n');
+    expect(extended).not.toContain('\u007f');
   });
 });

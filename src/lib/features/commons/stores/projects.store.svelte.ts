@@ -1,6 +1,7 @@
 import type { SavedProjectMetadata } from '$lib/features/project-management';
 import { projectRepository } from '$lib/features/project-management';
 import * as m from '$lib/paraglide/messages';
+import { DataValidationError } from '../pipeline.errors';
 import { sanitizeProjectName } from '../utils/sanitize.utils';
 import { ProjectValidator } from '../utils/validation.utils';
 import { projectStore } from './project.store.svelte';
@@ -68,7 +69,11 @@ function createProjectsStore() {
     const project = await projectRepository.load(id);
 
     if (!project) {
-      throw new Error(m.history_project_not_found());
+      throw new DataValidationError(
+        m.history_project_not_found(),
+        'projectId',
+        { projectId: id }
+      );
     }
 
     if (updates.name !== undefined) {
@@ -76,7 +81,9 @@ function createProjectsStore() {
       const validation = ProjectValidator.validateProjectName(sanitized);
 
       if (!validation.isValid) {
-        throw new Error(validation.errors.join(', '));
+        throw new DataValidationError(validation.errors.join(', '), 'name', {
+          errors: validation.errors
+        });
       }
 
       project.manifest.name = sanitized;

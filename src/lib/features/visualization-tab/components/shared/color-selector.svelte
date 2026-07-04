@@ -4,18 +4,11 @@
   interface Props {
     label?: string;
     value: string;
-    size?: 'default' | 'small';
     exclusive?: boolean;
     onchange?: (color: string) => void;
   }
 
-  let {
-    label = '',
-    value,
-    size: _size = 'default',
-    exclusive = false,
-    onchange
-  }: Props = $props();
+  let { label = '', value, exclusive = false, onchange }: Props = $props();
 </script>
 
 <SingleColorPreview

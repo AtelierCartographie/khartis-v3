@@ -54,7 +54,12 @@
 >
   {#if isSelectable}
     <td class="checkbox-cell">
-      <SimpleCheckbox checked={isSelected} onchange={handleCheckboxChange} />
+      <SimpleCheckbox
+        checked={isSelected}
+        labelText={m.table_select_row({ index: displayIndex })}
+        hideLabel
+        onchange={handleCheckboxChange}
+      />
     </td>
   {/if}
   {#if showRowNumbers}

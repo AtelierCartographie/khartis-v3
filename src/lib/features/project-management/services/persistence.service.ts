@@ -1,5 +1,5 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { m } from '$lib/paraglide/messages.js';
+import { m } from '$lib/paraglide/messages';
 import type { SerializedProject } from '$lib/types/serialization.types';
 import { PROJECT_CONST } from '../constants';
 import type { KhartisProject, SavedProjectMetadata } from '../types';
@@ -64,21 +64,36 @@ async function ensureDb(): Promise<IDBDatabase> {
   return openProjectDatabase();
 }
 
+async function prepareProjectForStorage(
+  project: KhartisProject
+): Promise<KhartisProject> {
+  const sourceFiles = project.data.sourceFiles.length
+    ? await Promise.all(
+        project.data.sourceFiles.map((file) => ensureUploadedFileAssets(file))
+      )
+    : project.data.sourceFiles;
+
+  return {
+    ...project,
+    manifest: {
+      ...project.manifest,
+      version: PROJECT_CONST.SCHEMA_VERSION
+    },
+    data: {
+      ...project.data,
+      sourceFiles
+    }
+  };
+}
+
 export async function saveProject(
   project: KhartisProject,
   thumbnail?: string,
   exampleId?: string
 ): Promise<void> {
   const database = await ensureDb();
-  project.manifest.version = PROJECT_CONST.APP_VERSION;
-
-  if (project.data?.sourceFiles?.length) {
-    project.data.sourceFiles = await Promise.all(
-      project.data.sourceFiles.map((file) => ensureUploadedFileAssets(file))
-    );
-  }
-
-  const serialized = await prepareForIndexedDB(project);
+  const projectForStorage = await prepareProjectForStorage(project);
+  const serialized = await prepareForIndexedDB(projectForStorage);
   await new Promise<void>((resolve, reject) => {
     const transaction = database.transaction(
       [PROJECT_CONST.DB.STORE_NAME],
@@ -91,8 +106,11 @@ export async function saveProject(
       reject(transaction.error || new Error(m.error_failed_save_project()));
   });
 
-  await syncProjectAssetRefs(project.id, project.data?.sourceFiles ?? []);
-  await updateMetadata(project, thumbnail, exampleId);
+  await syncProjectAssetRefs(
+    projectForStorage.id,
+    projectForStorage.data.sourceFiles
+  );
+  await updateMetadata(projectForStorage, thumbnail, exampleId);
 }
 
 export async function loadProject(id: string): Promise<KhartisProject | null> {
@@ -217,9 +235,9 @@ async function updateMetadata(
     createdAt: project.manifest.createdAt,
     updatedAt: project.manifest.updatedAt,
     size: calculateProjectSize(project),
-    // Preserve the previous thumbnail when this save could not capture one.
+    // Keep the last thumbnail when this save cannot capture one.
     thumbnail: thumbnail ?? previous?.thumbnail,
-    // Preserve exampleId once set; never overwrite with undefined.
+    // Keep exampleId once set.
     exampleId: exampleId ?? previous?.exampleId
   };
 

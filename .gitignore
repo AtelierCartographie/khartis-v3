@@ -98,6 +98,9 @@ dist
 # Sveltekit cache directory
 .svelte-kit/
 
+# Production build output
+/build
+
 # vitepress build output
 **/.vitepress/dist
 
@@ -158,3 +161,6 @@ playwright-report/
 # Codex agent artifacts (screenshots, ad-hoc captures, browser plans)
 .codex/
 .codex-artifacts/
+
+# Ragmir
+.ragmir/

@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import { FillMode } from '$lib/features/commons/constants/visualization.constants';
 import {
-  FILL_MODES_STANDARD,
+  FILL_MODES_FOR_SYMBOLS,
   FILL_MODES_WITH_DENSITY,
   buildFillModeItems
 } from './fill-mode-presets';
 
 describe('fill-mode-presets', () => {
   it('buildFillModeItems returns one entry per mode', () => {
-    const items = buildFillModeItems(FILL_MODES_STANDARD);
-    expect(items.length).toBe(FILL_MODES_STANDARD.length);
+    const items = buildFillModeItems(FILL_MODES_FOR_SYMBOLS);
+    expect(items.length).toBe(FILL_MODES_FOR_SYMBOLS.length);
   });
 
   it('buildFillModeItems attaches a carbon icon, an i18n label, and the default icon size', () => {

@@ -2,7 +2,7 @@ import type { UseExportModalReturn } from '../types';
 export type { UseExportModalReturn } from '../types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { getFormatState } from '$lib/features/step-toolbar/tools/format';
-import { m } from '$lib/paraglide/messages.js';
+import { m } from '$lib/paraglide/messages';
 import {
   type MapExportFormat,
   type DataExportFormat,
@@ -11,9 +11,9 @@ import {
   ExportTab,
   MAP_FORMAT,
   DATA_FORMAT,
-  EXPORT_RESOLUTION,
-  getExportDimensionsForPage
+  EXPORT_RESOLUTION
 } from '../types';
+import { getExportDimensionsForPage } from '../export-dimensions.utils';
 import {
   exportProject,
   exportMapAsSvg,
@@ -24,19 +24,21 @@ import {
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
 
-const DEFAULT_FILE_NAME = m.export_default_filename();
+function getDefaultFileName(): string {
+  return m.export_default_filename();
+}
 
 export function useExportModal(): UseExportModalReturn {
   let isOpen = $state(false);
   let isExporting = $state(false);
   let selectedTab = $state<ExportTabType>(ExportTab.PROJECT);
-  let fileName = $state(projectStore.projectName || DEFAULT_FILE_NAME);
+  let fileName = $state(projectStore.projectName || getDefaultFileName());
   let mapFormat = $state<MapExportFormat>(MAP_FORMAT.SVG);
   let dataFormat = $state<DataExportFormat>(DATA_FORMAT.CSV);
   let resolution = $state<ExportResolution>(EXPORT_RESOLUTION.HD_1080P);
 
   function open(): void {
-    fileName = projectStore.projectName || DEFAULT_FILE_NAME;
+    fileName = projectStore.projectName || getDefaultFileName();
     selectedTab = ExportTab.PROJECT;
     isOpen = true;
   }

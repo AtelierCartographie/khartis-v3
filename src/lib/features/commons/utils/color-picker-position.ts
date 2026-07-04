@@ -1,3 +1,5 @@
+import { computeFlippedScrollablePosition } from './dropdown-position.utils';
+
 interface RectLike {
   top: number;
   left: number;
@@ -31,14 +33,6 @@ interface ResolvedColorPickerDropdownPosition {
 const DEFAULT_DROPDOWN_WIDTH = 370;
 const DEFAULT_MARGIN = 16;
 
-function clamp(value: number, min: number, max: number): number {
-  if (max < min) {
-    return min;
-  }
-
-  return Math.min(Math.max(value, min), max);
-}
-
 export function resolveColorPickerDropdownPosition({
   triggerRect,
   dropdownHeight,
@@ -48,29 +42,20 @@ export function resolveColorPickerDropdownPosition({
 }: ResolveColorPickerDropdownPositionOptions): ResolvedColorPickerDropdownPosition {
   const availableWidth = Math.max(viewport.width - margin * 2, 0);
   const width = Math.min(preferredWidth, availableWidth);
-  const left = clamp(triggerRect.left, margin, viewport.width - margin - width);
-
-  const maxViewportHeight = Math.max(viewport.height - margin * 2, 0);
-  const measuredHeight = Math.min(
-    Math.max(dropdownHeight, 0),
-    maxViewportHeight
-  );
-  const spaceBelow = Math.max(viewport.height - triggerRect.bottom - margin, 0);
-  const spaceAbove = Math.max(triggerRect.top - margin, 0);
-  const openUpward = spaceBelow < measuredHeight && spaceAbove > spaceBelow;
-  const availableHeight = openUpward ? spaceAbove : spaceBelow;
-  const visibleHeight = Math.min(measuredHeight, availableHeight);
-  const top = clamp(
-    openUpward ? triggerRect.top - visibleHeight : triggerRect.bottom,
+  const position = computeFlippedScrollablePosition({
+    triggerRect,
+    dropdownHeight,
+    viewportWidth: viewport.width,
+    viewportHeight: viewport.height,
     margin,
-    viewport.height - margin - visibleHeight
-  );
+    width
+  });
 
   return {
-    top,
-    left,
-    width,
-    maxHeight: availableHeight,
-    openUpward
+    top: position.top,
+    left: position.left,
+    width: position.width,
+    maxHeight: position.maxHeight,
+    openUpward: position.openUpward
   };
 }

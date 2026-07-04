@@ -2,21 +2,23 @@ import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import type { GeoColumnInfo } from '$lib/features/data-pipeline/types';
 import type { GPSBounds } from '$lib/features/duckdb';
 import { GEO_COLUMN_TYPE } from '../../commons/constants/data.constants';
+import { PipelineError } from '../../commons/pipeline.errors';
 import { LogCategory, logger } from '../../commons/utils/logger';
 import { resolveStaticAssetUrl } from '../../commons/utils/static-asset-url';
 import {
+  CATALOG_SIMPLIFICATION_PRIORITY,
   getBasemapVariantFamily,
   getPreferredBasemapFile
-} from './basemap.service.svelte';
+} from './basemap-variants.utils';
 import type {
   BasemapMetadata,
   BasemapSuggestion
 } from '../types/basemap.types';
 
 const BASEMAP_METADATA_PATH = '/basemaps/all-basemaps-metadata.json';
+const BASEMAP_CATALOG_FETCH_ERROR_CODE = 'BASEMAP_CATALOG_FETCH_FAILED';
 const GPS_SCORE_EPSILON = 1e-9;
 const GPS_TEXT_REFINEMENT_MIN_SCORE = 80;
-const CATALOG_SIMPLIFICATION_PRIORITY = ['medium', 'high', 'low'] as const;
 const GPS_AUTO_SELECTION_FAMILY_PRIORITY = [
   'france-region-',
   'france-departement-',
@@ -109,7 +111,7 @@ export function getCatalogBasemapsForDisplay(
   return Array.from(byBaseName.values());
 }
 
-export function getCatalogBasemapById(
+function getCatalogBasemapById(
   basemaps: BasemapMetadata[],
   basemapId: string
 ): BasemapMetadata | null {
@@ -476,8 +478,7 @@ function createBasemapCatalogService() {
   });
   let catalogBasemapsVersion = 0;
   let catalogBasemapsCache:
-    | { version: number; basemaps: BasemapMetadata[] }
-    | undefined;
+    { version: number; basemaps: BasemapMetadata[] } | undefined;
 
   function invalidateCatalogBasemapsCache(): void {
     catalogBasemapsVersion++;
@@ -495,7 +496,14 @@ function createBasemapCatalogService() {
       );
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch catalog: ${response.statusText}`);
+        throw new PipelineError(
+          `Failed to fetch catalog: ${response.statusText}`,
+          BASEMAP_CATALOG_FETCH_ERROR_CODE,
+          {
+            status: response.status,
+            statusText: response.statusText
+          }
+        );
       }
 
       state.basemaps = await response.json();
@@ -533,31 +541,8 @@ function createBasemapCatalogService() {
     return rankBasemapsByGPSBbox(getCatalogBasemaps(), gpsBounds, limit);
   }
 
-  function searchBasemaps(query: string): BasemapMetadata[] {
-    if (state.basemaps.length === 0) {
-      return [];
-    }
-
-    const queryLower = query.toLowerCase();
-
-    return getCatalogBasemaps().filter((basemap) => {
-      return getSearchableText(basemap).includes(queryLower);
-    });
-  }
-
   function getBasemapById(basemapId: string): BasemapMetadata | null {
     return getCatalogBasemapById(state.basemaps, basemapId);
-  }
-
-  function filterByYear(minYear: number, maxYear?: number): BasemapMetadata[] {
-    return state.basemaps.filter((basemap) => {
-      const year = parseInt(basemap.date);
-      if (isNaN(year)) return false;
-      if (maxYear) {
-        return year >= minYear && year <= maxYear;
-      }
-      return year >= minYear;
-    });
   }
 
   function addCustomBasemap(basemap: BasemapMetadata): void {
@@ -599,9 +584,7 @@ function createBasemapCatalogService() {
     loadCatalog,
     getSuggestions,
     getSuggestionsByGPSBbox,
-    searchBasemaps,
     getBasemapById,
-    filterByYear,
     addCustomBasemap
   };
 }

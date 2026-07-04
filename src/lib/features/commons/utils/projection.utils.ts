@@ -1,10 +1,70 @@
 import * as m from '$lib/paraglide/messages';
 import type { GeoProjection } from 'd3-geo';
-import * as d3geo from 'd3-geo';
-import * as d3geoProjection from 'd3-geo-projection';
 import { GEOJSON_TYPE } from '$lib/features/commons/constants/geojson.constants';
+import { DataValidationError } from '$lib/features/commons/pipeline.errors';
+import type { D3Usage } from 'proj-suggest';
+import { buildD3ProjectionFromConfig } from './d3-projection-config.utils';
 
-type D3GeoProjectionModule = Record<string, (() => GeoProjection) | undefined>;
+const CATALOGUE_PROJECTION_D3_CONFIGS: Record<string, D3Usage> = {
+  mercator: { projection: 'geoMercator' },
+  'natural-earth': { projection: 'geoNaturalEarth1' },
+  equirectangular: { projection: 'geoEquirectangular' },
+  orthographic: { projection: 'geoOrthographic' },
+  albers: { projection: 'geoAlbers' },
+  'lambert-conformal': { projection: 'geoConicConformal' },
+  robinson: { projection: 'geoRobinson' },
+  'winkel-tripel': { projection: 'geoWinkel3' },
+  aitoff: { projection: 'geoAitoff' },
+  mollweide: { projection: 'geoMollweide' },
+  stereographic: { projection: 'geoStereographic' },
+  'azimuthal-equal-area': { projection: 'geoAzimuthalEqualArea' },
+  'gall-peters': { projection: 'geoCylindricalEqualArea' },
+  'equal-earth': { projection: 'geoEqualEarth' },
+  bonne: { projection: 'geoBonne' },
+  armadillo: { projection: 'geoArmadillo' },
+  atlantis: { projection: 'geoMollweide', rotate: [30, -45, 0] },
+  'bertin-1953': { projection: 'geoBertin1953' },
+  'interrupted-mollweide': { projection: 'geoInterruptedMollweide' }
+};
+
+function cloneD3UsageConfig(config: D3Usage): D3Usage {
+  return {
+    projection: config.projection,
+    ...(config.rotate ? { rotate: [...config.rotate] } : {}),
+    ...(config.center ? { center: [...config.center] } : {}),
+    ...(config.parallels ? { parallels: [...config.parallels] } : {}),
+    ...(config.snippet ? { snippet: config.snippet } : {})
+  };
+}
+
+export function getProjectionD3ConfigById(id: string): D3Usage | undefined {
+  const config = CATALOGUE_PROJECTION_D3_CONFIGS[id];
+  return config ? cloneD3UsageConfig(config) : undefined;
+}
+
+function buildConfiguredCatalogueProjection(id: string): GeoProjection {
+  const config = CATALOGUE_PROJECTION_D3_CONFIGS[id];
+  const projection = config ? buildD3ProjectionFromConfig(config) : null;
+  if (!projection) {
+    throw new DataValidationError(
+      `Unsupported catalogue projection: ${id}`,
+      'projectionId',
+      { projectionId: id }
+    );
+  }
+  return projection;
+}
+
+export function buildProjectionFromCatalogueId(
+  id: string
+): GeoProjection | undefined {
+  const config = getProjectionD3ConfigById(id);
+  if (config) {
+    return buildD3ProjectionFromConfig(config) ?? undefined;
+  }
+
+  return getProjectionById(id)?.projection();
+}
 
 export interface ProjectionInfo {
   id: string;
@@ -19,143 +79,217 @@ export interface ProjectionInfo {
 export const PROJECTIONS: ProjectionInfo[] = [
   {
     id: 'mercator',
-    name: m.projection_name_mercator(),
+    get name() {
+      return m.projection_name_mercator();
+    },
     category: 'cylindrical',
-    description: m.projection_desc_mercator(),
-    projection: () => d3geo.geoMercator(),
+    get description() {
+      return m.projection_desc_mercator();
+    },
+    projection: () => buildConfiguredCatalogueProjection('mercator'),
     recommended: true
   },
   {
     id: 'natural-earth',
-    name: m.projection_name_natural_earth(),
+    get name() {
+      return m.projection_name_natural_earth();
+    },
     category: 'other',
-    description: m.projection_desc_natural_earth(),
-    projection: () => d3geo.geoNaturalEarth1(),
+    get description() {
+      return m.projection_desc_natural_earth();
+    },
+    projection: () => buildConfiguredCatalogueProjection('natural-earth'),
     recommended: true
   },
   {
     id: 'equirectangular',
-    name: m.projection_name_equirectangular(),
+    get name() {
+      return m.projection_name_equirectangular();
+    },
     category: 'cylindrical',
-    description: m.projection_desc_equirectangular(),
-    projection: () => d3geo.geoEquirectangular()
+    get description() {
+      return m.projection_desc_equirectangular();
+    },
+    projection: () => buildConfiguredCatalogueProjection('equirectangular')
   },
   {
     id: 'orthographic',
-    name: m.projection_name_orthographic(),
+    get name() {
+      return m.projection_name_orthographic();
+    },
     category: 'azimuthal',
-    description: m.projection_desc_orthographic(),
-    projection: () => d3geo.geoOrthographic()
+    get description() {
+      return m.projection_desc_orthographic();
+    },
+    projection: () => buildConfiguredCatalogueProjection('orthographic')
   },
   {
     id: 'albers',
-    name: m.projection_name_albers(),
+    get name() {
+      return m.projection_name_albers();
+    },
     category: 'conic',
-    description: m.projection_desc_albers(),
-    projection: () => d3geo.geoAlbers()
+    get description() {
+      return m.projection_desc_albers();
+    },
+    projection: () => buildConfiguredCatalogueProjection('albers')
   },
   {
     id: 'lambert-conformal',
-    name: m.projection_name_lambert_conformal(),
+    get name() {
+      return m.projection_name_lambert_conformal();
+    },
     category: 'conic',
-    description: m.projection_desc_lambert_conformal(),
-    projection: () => d3geo.geoConicConformal()
+    get description() {
+      return m.projection_desc_lambert_conformal();
+    },
+    projection: () => buildConfiguredCatalogueProjection('lambert-conformal')
   },
   {
     id: 'robinson',
-    name: m.projection_name_robinson(),
+    get name() {
+      return m.projection_name_robinson();
+    },
     category: 'other',
-    description: m.projection_desc_robinson(),
-    projection: () => d3geoProjection.geoRobinson(),
+    get description() {
+      return m.projection_desc_robinson();
+    },
+    projection: () => buildConfiguredCatalogueProjection('robinson'),
     recommended: true
   },
   {
     id: 'winkel-tripel',
-    name: m.projection_name_winkel_tripel(),
+    get name() {
+      return m.projection_name_winkel_tripel();
+    },
     category: 'other',
-    description: m.projection_desc_winkel_tripel(),
-    projection: () => d3geoProjection.geoWinkel3(),
+    get description() {
+      return m.projection_desc_winkel_tripel();
+    },
+    projection: () => buildConfiguredCatalogueProjection('winkel-tripel'),
     recommended: true
   },
   {
     id: 'aitoff',
-    name: m.projection_name_aitoff(),
+    get name() {
+      return m.projection_name_aitoff();
+    },
     category: 'other',
-    description: m.projection_desc_aitoff(),
-    projection: () => d3geoProjection.geoAitoff()
+    get description() {
+      return m.projection_desc_aitoff();
+    },
+    projection: () => buildConfiguredCatalogueProjection('aitoff')
   },
   {
     id: 'mollweide',
-    name: m.projection_name_mollweide(),
+    get name() {
+      return m.projection_name_mollweide();
+    },
     category: 'other',
-    description: m.projection_desc_mollweide(),
-    projection: () => d3geoProjection.geoMollweide()
+    get description() {
+      return m.projection_desc_mollweide();
+    },
+    projection: () => buildConfiguredCatalogueProjection('mollweide')
   },
   {
     id: 'stereographic',
-    name: m.projection_name_stereographic(),
+    get name() {
+      return m.projection_name_stereographic();
+    },
     category: 'azimuthal',
-    description: m.projection_desc_stereographic(),
-    projection: () => d3geo.geoStereographic()
+    get description() {
+      return m.projection_desc_stereographic();
+    },
+    projection: () => buildConfiguredCatalogueProjection('stereographic')
   },
   {
     id: 'azimuthal-equal-area',
-    name: m.projection_name_azimuthal_equal_area(),
+    get name() {
+      return m.projection_name_azimuthal_equal_area();
+    },
     category: 'azimuthal',
-    description: m.projection_desc_azimuthal_equal_area(),
-    projection: () => d3geo.geoAzimuthalEqualArea()
+    get description() {
+      return m.projection_desc_azimuthal_equal_area();
+    },
+    projection: () => buildConfiguredCatalogueProjection('azimuthal-equal-area')
   },
   {
     id: 'gall-peters',
-    name: m.projection_name_gall_peters(),
+    get name() {
+      return m.projection_name_gall_peters();
+    },
     category: 'cylindrical',
-    description: m.projection_desc_gall_peters(),
-    projection: () =>
-      (d3geoProjection as D3GeoProjectionModule).geoCylindricalEqualArea!()
+    get description() {
+      return m.projection_desc_gall_peters();
+    },
+    projection: () => buildConfiguredCatalogueProjection('gall-peters')
   },
   {
     id: 'equal-earth',
-    name: m.projection_name_equal_earth(),
+    get name() {
+      return m.projection_name_equal_earth();
+    },
     category: 'other',
-    description: m.projection_desc_equal_earth(),
-    projection: () => d3geo.geoEqualEarth()
+    get description() {
+      return m.projection_desc_equal_earth();
+    },
+    projection: () => buildConfiguredCatalogueProjection('equal-earth')
   },
   {
     id: 'bonne',
-    name: m.projection_name_bonne(),
+    get name() {
+      return m.projection_name_bonne();
+    },
     category: 'conic',
-    description: m.projection_desc_bonne(),
-    projection: () => (d3geoProjection as D3GeoProjectionModule).geoBonne!()
+    get description() {
+      return m.projection_desc_bonne();
+    },
+    projection: () => buildConfiguredCatalogueProjection('bonne')
   },
   {
     id: 'armadillo',
-    name: m.projection_name_armadillo(),
+    get name() {
+      return m.projection_name_armadillo();
+    },
     category: 'other',
-    description: m.projection_desc_armadillo(),
-    projection: () => (d3geoProjection as D3GeoProjectionModule).geoArmadillo!()
+    get description() {
+      return m.projection_desc_armadillo();
+    },
+    projection: () => buildConfiguredCatalogueProjection('armadillo')
   },
   {
     id: 'atlantis',
-    name: m.projection_name_atlantis(),
+    get name() {
+      return m.projection_name_atlantis();
+    },
     category: 'other',
-    description: m.projection_desc_atlantis(),
-    projection: () => d3geoProjection.geoMollweide().rotate([30, -45, 0])
+    get description() {
+      return m.projection_desc_atlantis();
+    },
+    projection: () => buildConfiguredCatalogueProjection('atlantis')
   },
   {
     id: 'bertin-1953',
-    name: m.projection_name_bertin_1953(),
+    get name() {
+      return m.projection_name_bertin_1953();
+    },
     category: 'other',
-    description: m.projection_desc_bertin_1953(),
-    projection: () =>
-      (d3geoProjection as D3GeoProjectionModule).geoBertin1953!()
+    get description() {
+      return m.projection_desc_bertin_1953();
+    },
+    projection: () => buildConfiguredCatalogueProjection('bertin-1953')
   },
   {
     id: 'interrupted-mollweide',
-    name: m.projection_name_interrupted_mollweide(),
+    get name() {
+      return m.projection_name_interrupted_mollweide();
+    },
     category: 'other',
-    description: m.projection_desc_interrupted_mollweide(),
+    get description() {
+      return m.projection_desc_interrupted_mollweide();
+    },
     projection: () =>
-      (d3geoProjection as D3GeoProjectionModule).geoInterruptedMollweide!()
+      buildConfiguredCatalogueProjection('interrupted-mollweide')
   }
 ];
 
@@ -181,17 +315,6 @@ export function fitProjectionToBbox(
   );
 
   return projection;
-}
-
-export function getProjectedBboxForBbox(
-  projection: GeoProjection,
-  bbox: [number, number, number, number]
-): [number, number, number, number] {
-  const fitTarget = createProjectionFitTarget(bbox);
-  const path = d3geo.geoPath(projection);
-  const [[minX, minY], [maxX, maxY]] = path.bounds(fitTarget);
-
-  return [minX, minY, maxX, maxY];
 }
 
 export function isGlobalBbox(bbox: [number, number, number, number]): boolean {

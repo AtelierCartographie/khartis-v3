@@ -4,6 +4,7 @@ import {
   DataSourceType,
   FileType
 } from '$lib/features/commons/types/create-project.types';
+import { ColumnType } from '$lib/features/data-pipeline';
 
 const mocks = vi.hoisted(() => ({
   registerMock: vi.fn(),
@@ -19,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   clearFiltersMock: vi.fn(),
   bumpDatasetsVersionMock: vi.fn(),
   setEnrichDataStateMock: vi.fn(),
+  enrichmentDatasetId: undefined as string | undefined,
   renameFileMock: vi.fn(),
   clearColumnTransformationsMock: vi.fn(),
   disableFacetsMock: vi.fn(),
@@ -33,7 +35,7 @@ const mocks = vi.hoisted(() => ({
     | undefined
 }));
 
-vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
+vi.mock('$lib/features/project-management/core', () => ({
   persistenceRegistry: {
     register: mocks.registerMock,
     notifyChange: mocks.notifyChangeMock
@@ -79,6 +81,13 @@ vi.mock('$lib/features/commons/stores/project.store.svelte', () => ({
 }));
 
 vi.mock('$lib/features/commons/stores/data-tab.store.svelte', () => ({
+  dataTabState: {
+    enrichData: {
+      get enrichmentDatasetId() {
+        return mocks.enrichmentDatasetId;
+      }
+    }
+  },
   dataTabActions: {
     setEnrichDataState: mocks.setEnrichDataStateMock,
     reset: mocks.dataTabResetMock
@@ -127,6 +136,21 @@ function makeDataset(id: string, sourceFileId = `source-${id}`) {
   };
 }
 
+function makeColumn(name: string) {
+  return {
+    name,
+    type: ColumnType.TEXT,
+    values: [],
+    stats: {
+      name,
+      type: ColumnType.TEXT,
+      count: 0,
+      nulls: 0,
+      uniques: 0
+    }
+  };
+}
+
 function makeUploadedFile(
   id: string,
   name = `${id}.geojson`,
@@ -150,6 +174,7 @@ describe('datasetsStore persisted view state', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.currentProject = undefined;
+    mocks.enrichmentDatasetId = undefined;
     mocks.registerExistingTableMock.mockResolvedValue(null);
     mocks.clearColumnTransformationsMock.mockResolvedValue(undefined);
     mocks.getFacetsBaseVisualizationIdMock.mockReturnValue(null);
@@ -206,6 +231,22 @@ describe('datasetsStore persisted view state', () => {
     );
   });
 
+  it('syncs map visibility for a selected source file with one persistence notification', () => {
+    datasetsStore.addProcessedDataset(makeDataset('dataset-a', 'source-a'));
+    datasetsStore.addProcessedDataset(makeDataset('dataset-b', 'source-b'));
+    mocks.notifyChangeMock.mockClear();
+
+    datasetsStore.syncMapVisibilityWithSourceFile('source-b');
+
+    expect(datasetsStore.isDatasetEnabled('dataset-a')).toBe(false);
+    expect(datasetsStore.isDatasetEnabled('dataset-b')).toBe(true);
+    expect(mocks.notifyChangeMock).toHaveBeenCalledTimes(1);
+    expect(mocks.notifyChangeMock).toHaveBeenCalledWith(
+      'datasetsView',
+      'immediate'
+    );
+  });
+
   it('keeps the dataset enabled when the same source file is restored with a new dataset id', async () => {
     mocks.processUploadedFileMock
       .mockResolvedValueOnce(makeDataset('dataset-1', 'source-a'))
@@ -246,6 +287,24 @@ describe('datasetsStore persisted view state', () => {
     expect(mocks.dataTabResetMock).not.toHaveBeenCalled();
   });
 
+  it('selects a different source without resetting data tab implicitly', () => {
+    const state = {
+      datasets: [
+        makeDataset('dataset-1', 'source-1'),
+        makeDataset('dataset-2', 'source-2')
+      ],
+      selectedDatasetId: 'dataset-1',
+      enabledDatasetIds: new Set(),
+      isProcessing: false,
+      hiddenColumns: new Map()
+    } as unknown as DatasetsState;
+
+    selectDatasetState(state, 'dataset-2');
+
+    expect(state.selectedDatasetId).toBe('dataset-2');
+    expect(mocks.dataTabResetMock).not.toHaveBeenCalled();
+  });
+
   it('does not replace a dataset when the joined basemap is unchanged', () => {
     const dataset = {
       ...makeDataset('dataset-1'),
@@ -261,6 +320,23 @@ describe('datasetsStore persisted view state', () => {
     updateDatasetJoinBasemapState(state, 'dataset-1', 'world-countries');
 
     expect(state.datasets[0]).toBe(dataset);
+  });
+
+  it('preserves hidden column state when a column is renamed', () => {
+    datasetsStore.addProcessedDataset({
+      ...makeDataset('dataset-1', 'source-a'),
+      columns: [makeColumn('old_name'), makeColumn('visible_name')]
+    });
+    datasetsStore.hideColumn('dataset-1', 'old_name');
+
+    datasetsStore.renameDatasetColumn('dataset-1', 'old_name', 'new_name');
+
+    expect(datasetsStore.isColumnHidden('dataset-1', 'old_name')).toBe(false);
+    expect(datasetsStore.isColumnHidden('dataset-1', 'new_name')).toBe(true);
+    expect(datasetsStore.getHiddenColumns('dataset-1')).toEqual(['new_name']);
+    expect(datasetsStore.getVisibleColumns('dataset-1')).toEqual([
+      'visible_name'
+    ]);
   });
 
   it('replays the pipeline from asset refs instead of exposing a stale preprocessed table', async () => {
@@ -468,6 +544,36 @@ describe('datasetsStore persisted view state', () => {
       datasetsStore.renameDataset('dataset-1', 'Persisted name')
     ).rejects.toThrow('rename failed');
     expect(datasetsStore.datasets[0]?.name).toBe('Dataset dataset-1');
+  });
+
+  it('keeps enrichment config when deleting an unrelated dataset', async () => {
+    datasetsStore.addProcessedDataset(makeDataset('dataset-1', 'source-a'));
+    datasetsStore.addProcessedDataset(makeDataset('dataset-2', 'source-b'));
+    mocks.enrichmentDatasetId = 'dataset-2';
+
+    const success = await datasetsStore.deleteDataset('dataset-1');
+
+    expect(success).toBe(true);
+    expect(mocks.dropTableMock).toHaveBeenCalledWith('table_dataset-1');
+    expect(mocks.setEnrichDataStateMock).not.toHaveBeenCalled();
+    expect(datasetsStore.datasets.map((dataset) => dataset.id)).toEqual([
+      'dataset-2'
+    ]);
+  });
+
+  it('clears enrichment config when deleting the enrichment dataset', async () => {
+    datasetsStore.addProcessedDataset(makeDataset('dataset-1', 'source-a'));
+    mocks.enrichmentDatasetId = 'dataset-1';
+
+    const success = await datasetsStore.deleteDataset('dataset-1');
+
+    expect(success).toBe(true);
+    expect(mocks.setEnrichDataStateMock).toHaveBeenCalledWith({
+      enrichmentDatasetId: undefined,
+      enrichmentColumn: undefined,
+      targetColumn: undefined,
+      isEnrichmentActive: false
+    });
   });
 
   it('removes linked visualizations when resetting a dataset', async () => {

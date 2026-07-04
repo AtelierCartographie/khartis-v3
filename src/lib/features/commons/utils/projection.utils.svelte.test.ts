@@ -68,18 +68,34 @@ describe('fitProjectionToBbox', () => {
   });
 
   it('fits conic projections to Europe without a degenerate projected extent', async () => {
-    const { fitProjectionToBbox, getProjectedBboxForBbox } =
-      await import('./projection.utils');
+    const { fitProjectionToBbox } = await import('./projection.utils');
     const projection = d3Geo.geoConicConformal();
     const europeBbox: [number, number, number, number] = [
       -24.6, 34.8, 45.8, 71.2
     ];
 
     fitProjectionToBbox(projection, europeBbox, 800, 600, 40);
-    const projectedBbox = getProjectedBboxForBbox(projection, europeBbox);
+    const [west, south, east, north] = europeBbox;
+    const projectedBbox = d3Geo.geoPath(projection).bounds({
+      type: 'Feature',
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [west, south],
+            [east, south],
+            [east, north],
+            [west, north],
+            [west, south]
+          ]
+        ]
+      },
+      properties: {}
+    });
+    const [[minX, minY], [maxX, maxY]] = projectedBbox;
 
-    expect(projectedBbox.every(Number.isFinite)).toBe(true);
-    expect(projectedBbox[2] - projectedBbox[0]).toBeGreaterThan(600);
-    expect(projectedBbox[3] - projectedBbox[1]).toBeGreaterThan(250);
+    expect([minX, minY, maxX, maxY].every(Number.isFinite)).toBe(true);
+    expect(maxX - minX).toBeGreaterThan(600);
+    expect(maxY - minY).toBeGreaterThan(250);
   });
 });

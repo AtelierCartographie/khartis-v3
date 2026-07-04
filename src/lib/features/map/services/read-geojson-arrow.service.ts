@@ -3,6 +3,10 @@ import {
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import {
+  DataValidationError,
+  DuckDBError
+} from '$lib/features/commons/pipeline.errors';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { Duck, GEO_CONSTANTS } from '$lib/features/duckdb';
 import {
@@ -25,10 +29,19 @@ import {
   GeometryEncoding
 } from '../constants';
 import { GEOJSON_TYPE } from '$lib/features/commons/constants';
+import { readGeoParquetMetadataFromDuck } from './geo-parquet-metadata.service';
 
 const GEO_METADATA_VERSION = '1.0.0';
 const DEFAULT_CRS_NAME = GEO_CONSTANTS.WGS84_CRS;
 const WORLD_BOUNDS: [number, number, number, number] = [-180, -90, 180, 90];
+const REPROJECTED_GEOMETRY_BUFFER_PREFIX = '__khartis_reprojected_geometry';
+const CRS_NAME_TO_EPSG: ReadonlyArray<[RegExp, string]> = [
+  [/Lambert[\s-]*93/i, 'EPSG:2154'],
+  [/Lambert[\s-]*II/i, 'EPSG:27572'],
+  [/ETRS89.*LAEA/i, 'EPSG:3035'],
+  [/UTM.*zone\s*31/i, 'EPSG:32631'],
+  [/UTM.*zone\s*32/i, 'EPSG:32632']
+];
 
 let parquetWasmReady: Promise<typeof ParquetWasm> | null = null;
 
@@ -314,43 +327,28 @@ interface ParquetGeoInfo {
 async function readParquetGeoInfo(
   escapedFileId: string
 ): Promise<ParquetGeoInfo> {
-  try {
-    const result = (await Duck.query(
-      `SELECT value FROM parquet_kv_metadata('${escapedFileId}') WHERE key = 'geo'`,
-      { format: 'array', useProxy: false }
-    )) as Array<{ value: string }>;
+  const geo = await readGeoParquetMetadataFromDuck(Duck, escapedFileId);
+  if (geo) {
+    const primaryCol = geo.primary_column ?? INTERNAL_COLUMN.GEOM;
+    const colMeta = geo.columns?.[primaryCol];
+    const encoding = colMeta?.encoding;
+    const crs = colMeta?.crs;
 
-    if (result.length > 0 && result[0].value) {
-      const rawValue =
-        (result[0].value as unknown) instanceof Uint8Array
-          ? new TextDecoder().decode(result[0].value as unknown as Uint8Array)
-          : result[0].value;
-      const geo = JSON.parse(rawValue);
-      const primaryCol: string = geo.primary_column ?? INTERNAL_COLUMN.GEOM;
-      const colMeta = geo.columns?.[primaryCol];
-      const encoding: string | undefined = colMeta?.encoding;
-      const crs = colMeta?.crs;
-
-      const isProjectedCRS = crs?.type === 'ProjectedCRS';
-      let sourceCrs: string | undefined;
-      if (isProjectedCRS) {
-        if (crs?.id?.authority && crs?.id?.code) {
-          sourceCrs = `${crs.id.authority}:${crs.id.code}`;
-        }
-
-        if (!sourceCrs && crs?.name) {
-          if (/Lambert[\s-]*93/i.test(crs.name)) sourceCrs = 'EPSG:2154';
-          else if (/Lambert[\s-]*II/i.test(crs.name)) sourceCrs = 'EPSG:27572';
-          else if (/ETRS89.*LAEA/i.test(crs.name)) sourceCrs = 'EPSG:3035';
-          else if (/UTM.*zone\s*31/i.test(crs.name)) sourceCrs = 'EPSG:32631';
-          else if (/UTM.*zone\s*32/i.test(crs.name)) sourceCrs = 'EPSG:32632';
-        }
+    const isProjectedCRS = crs?.type === 'ProjectedCRS';
+    let sourceCrs: string | undefined;
+    if (isProjectedCRS) {
+      if (crs?.id?.authority && crs?.id?.code) {
+        sourceCrs = `${crs.id.authority}:${crs.id.code}`;
       }
 
-      return { encoding, sourceCrs, isProjectedCRS, primaryColumn: primaryCol };
+      if (!sourceCrs && crs?.name) {
+        sourceCrs = CRS_NAME_TO_EPSG.find(([pattern]) =>
+          pattern.test(crs.name ?? '')
+        )?.[1];
+      }
     }
-  } catch (error) {
-    logger.error('Failed to read GeoParquet metadata', LogCategory.MAP, error);
+
+    return { encoding, sourceCrs, isProjectedCRS, primaryColumn: primaryCol };
   }
   return {
     encoding: undefined,
@@ -365,8 +363,8 @@ export async function readGeoParquetViaDuckDB(
   tableName: string,
   bbox?: [number, number, number, number]
 ): Promise<ArrowTable> {
-  if (!Duck) {
-    throw new Error('DuckDB not initialized');
+  if (!Duck.db) {
+    throw new DuckDBError('DuckDB not initialized');
   }
 
   const sanitizedName = tableName
@@ -483,8 +481,18 @@ export async function readGeoParquetDirect(
       primaryColumn = geo.primary_column ?? INTERNAL_COLUMN.GEOMETRY;
       const colMeta = geo.columns?.[primaryColumn];
       encoding = colMeta?.encoding;
-    } catch {
-      // ignore parse errors — will detect from Arrow type
+    } catch (error) {
+      logger.warn(
+        'Failed to parse GeoParquet metadata; detecting geometry metadata from Arrow type',
+        LogCategory.MAP,
+        {
+          error,
+          flow: 'geo_parquet_direct_read',
+          extra: {
+            primaryColumn
+          }
+        }
+      );
     }
   }
 
@@ -516,8 +524,19 @@ export async function readGeoParquetDirect(
           geo.primary_column = INTERNAL_COLUMN.GEOMETRY;
         }
         newSchemaMetadata.set(GeoArrowMetadataKey.GEO, JSON.stringify(geo));
-      } catch {
-        // ignore
+      } catch (error) {
+        logger.warn(
+          'Failed to rewrite GeoParquet metadata for renamed geometry column',
+          LogCategory.MAP,
+          {
+            error,
+            flow: 'geo_parquet_direct_read',
+            extra: {
+              primaryColumn,
+              targetColumn: INTERNAL_COLUMN.GEOMETRY
+            }
+          }
+        );
       }
     }
 
@@ -550,13 +569,19 @@ async function reprojectParquetWithProj4(
   );
   const rawTable = tableFromIPC(rawResult as Uint8Array);
   const geomVector = rawTable.getChild(geomCol);
-  if (!geomVector) throw new Error(`Geometry column '${geomCol}' not found`);
+  if (!geomVector) {
+    throw new DataValidationError(
+      `Geometry column '${geomCol}' not found`,
+      'geometryColumn',
+      { geomCol }
+    );
+  }
 
-  const geojsonStrings: string[] = [];
+  const geojsonStrings: Array<string | null> = [];
   for (let i = 0; i < rawTable.numRows; i++) {
     const gjStr = geomVector.get(i) as string;
     if (!gjStr) {
-      geojsonStrings.push('null');
+      geojsonStrings.push(null);
       continue;
     }
     const geojson = JSON.parse(gjStr);
@@ -564,8 +589,15 @@ async function reprojectParquetWithProj4(
     geojsonStrings.push(JSON.stringify(geojson));
   }
 
-  const tempTable = `__reproj_${sanitizedName}_${Date.now()}`;
+  const uniqueSuffix = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const tempTable = `__reproj_${sanitizedName}_${uniqueSuffix}`;
+  const geometryTable = `${tempTable}_geometry`;
+  const geometryBufferName = `${REPROJECTED_GEOMETRY_BUFFER_PREFIX}_${sanitizedName}_${uniqueSuffix}.json`;
+  const rowIdColumn = `__khartis_reprojected_rowid_${uniqueSuffix}`;
   const escapedTempTable = escapeIdentifier(tempTable);
+  const escapedGeometryTable = escapeIdentifier(geometryTable);
+  const escapedGeometryBufferName = escapeSqlString(geometryBufferName);
+  const escapedRowIdColumn = escapeIdentifier(rowIdColumn);
 
   const nonGeomCols = rawTable.schema.fields
     .filter((f) => f.name !== geomCol)
@@ -576,38 +608,92 @@ async function reprojectParquetWithProj4(
       ? `SELECT ${nonGeomCols.map((c) => `"${escapeIdentifier(c)}"`).join(', ')} FROM read_parquet('${escapedFileId}')`
       : `SELECT 1 as __dummy FROM read_parquet('${escapedFileId}')`;
 
-  await Duck.query(
-    `CREATE TEMP TABLE "${escapedTempTable}" AS ${nonGeomExclude}`,
-    { format: 'arrow-ipc' }
-  );
-
-  await Duck.query(
-    `ALTER TABLE "${escapedTempTable}" ADD COLUMN "${escapedGeomCol}" VARCHAR`,
-    { format: 'arrow-ipc' }
-  );
-
-  const BATCH_SIZE = 500;
-  for (let i = 0; i < geojsonStrings.length; i += BATCH_SIZE) {
-    const cases = [];
-    for (let j = i; j < Math.min(i + BATCH_SIZE, geojsonStrings.length); j++) {
-      cases.push(`WHEN ${j} THEN '${escapeSqlString(geojsonStrings[j])}'`);
-    }
-    await Duck.query(
-      `UPDATE "${escapedTempTable}" SET "${escapedGeomCol}" = CASE rowid ${cases.join(' ')} END WHERE rowid >= ${i} AND rowid < ${Math.min(i + BATCH_SIZE, geojsonStrings.length)}`,
-      { format: 'arrow-ipc' }
-    );
+  const db = Duck.db;
+  if (!db) {
+    throw new DuckDBError('DuckDB not initialized');
   }
 
-  const finalResult = await Duck.query(`SELECT * FROM "${escapedTempTable}"`, {
-    format: 'arrow-ipc'
-  });
-  await Duck.query(`DROP TABLE IF EXISTS "${escapedTempTable}"`, {
-    format: 'arrow-ipc'
-  });
+  try {
+    await Duck.query(
+      `CREATE TEMP TABLE "${escapedTempTable}" AS ${nonGeomExclude}`,
+      { format: 'arrow-ipc' }
+    );
 
-  let table = tableFromIPC(finalResult as Uint8Array);
-  table = addGeoJsonMetadata(table, bbox);
-  return table;
+    if (geojsonStrings.length === 0) {
+      await Duck.query(
+        `CREATE TEMP TABLE "${escapedGeometryTable}" ("${escapedRowIdColumn}" BIGINT, "${escapedGeomCol}" VARCHAR)`,
+        { format: 'arrow-ipc' }
+      );
+    } else {
+      const rows = geojsonStrings.map((geometry, index) => ({
+        [rowIdColumn]: index,
+        [geomCol]: geometry
+      }));
+      await db.registerFileBuffer(
+        geometryBufferName,
+        new TextEncoder().encode(JSON.stringify(rows))
+      );
+      Duck.registered_files.add(geometryBufferName);
+
+      await Duck.query(
+        `CREATE TEMP TABLE "${escapedGeometryTable}" AS
+         SELECT
+           CAST("${escapedRowIdColumn}" AS BIGINT) AS "${escapedRowIdColumn}",
+           CAST("${escapedGeomCol}" AS VARCHAR) AS "${escapedGeomCol}"
+         FROM read_json_auto('${escapedGeometryBufferName}')`,
+        { format: 'arrow-ipc' }
+      );
+    }
+
+    const baseProjection =
+      nonGeomCols.length > 0
+        ? `base.* EXCLUDE ("${escapedRowIdColumn}")`
+        : `geom."${escapedGeomCol}" AS "${escapedGeomCol}"`;
+
+    const finalResult = await Duck.query(
+      `SELECT ${baseProjection}
+       ${nonGeomCols.length > 0 ? `, geom."${escapedGeomCol}" AS "${escapedGeomCol}"` : ''}
+       FROM (
+         SELECT rowid AS "${escapedRowIdColumn}", * FROM "${escapedTempTable}"
+       ) base
+       LEFT JOIN "${escapedGeometryTable}" geom USING ("${escapedRowIdColumn}")
+       ORDER BY base."${escapedRowIdColumn}"`,
+      { format: 'arrow-ipc' }
+    );
+
+    let table = tableFromIPC(finalResult as Uint8Array);
+    table = addGeoJsonMetadata(table, bbox);
+    return table;
+  } finally {
+    try {
+      await Duck.query(`DROP TABLE IF EXISTS "${escapedGeometryTable}"`, {
+        format: 'arrow-ipc'
+      });
+      await Duck.query(`DROP TABLE IF EXISTS "${escapedTempTable}"`, {
+        format: 'arrow-ipc'
+      });
+    } catch (error) {
+      logger.warn(
+        'Failed to clean up temporary GeoParquet reprojection tables',
+        LogCategory.MAP,
+        error
+      );
+    }
+
+    if (Duck.registered_files.has(geometryBufferName)) {
+      try {
+        await db.dropFile(geometryBufferName);
+      } catch (error) {
+        logger.warn(
+          'Failed to release temporary GeoParquet reprojection buffer',
+          LogCategory.MAP,
+          error
+        );
+      } finally {
+        Duck.registered_files.delete(geometryBufferName);
+      }
+    }
+  }
 }
 
 function reprojectGeoJSONCoords(coords: unknown, sourceCrs: string): void {

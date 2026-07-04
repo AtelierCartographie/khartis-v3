@@ -1,17 +1,12 @@
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import type { SerializedUploadedFile } from '$lib/types/serialization.types';
 
-export interface FileSerializationOptions {
-  preserveBinary?: boolean;
-}
-
 function shouldPersistParsedData(file: UploadedFile): boolean {
   return Array.isArray(file.parsedData);
 }
 
 export function serializeUploadedFile(
-  file: UploadedFile,
-  _options?: FileSerializationOptions
+  file: UploadedFile
 ): SerializedUploadedFile {
   const serialized = {
     id: file.id,

@@ -13,11 +13,13 @@
   import SimpleCheckbox from '$lib/features/commons/components/simple-checkbox.svelte';
   import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
   import { getStyleConfig } from '$lib/features/map/constants/carte-facile-layer-groups';
-  import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
-  import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
-  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
-  import { projectionStore as mapRenderProjectionStore } from '$lib/features/map/stores/projection.store.svelte';
+  import {
+    basemapService,
+    mapProjectionStore,
+    osmBasemapStore,
+    projectionStore as mapRenderProjectionStore
+  } from '$lib/features/map';
   import {
     resolveProjectionAvailabilityContext,
     supportsProjectionSuggestions
@@ -459,7 +461,6 @@
               title={getSuggestionTitle(suggestion)}
               subtitle=""
               tag={getSuggestionTag(suggestion)}
-              ratio="1:1"
               previewLabel={m.projection_preview_label()}
               paths={getThumbnailPaths(suggestion, thumbnailGeometry)}
               selected={isSuggestionSelected(suggestion)}
@@ -495,7 +496,6 @@
               title={getSuggestionTitle(suggestion)}
               subtitle=""
               tag={getSuggestionTag(suggestion)}
-              ratio="16:9"
               previewLabel={m.projection_preview_label()}
               paths={getThumbnailPaths(suggestion, thumbnailGeometry)}
               selected={isSuggestionSelected(suggestion)}
@@ -520,7 +520,6 @@
                   title={getSuggestionTitle(suggestion)}
                   subtitle=""
                   tag={getSuggestionTag(suggestion)}
-                  ratio="16:9"
                   previewLabel={m.projection_preview_label()}
                   paths={getThumbnailPaths(suggestion, thumbnailGeometry)}
                   selected={isSuggestionSelected(suggestion)}

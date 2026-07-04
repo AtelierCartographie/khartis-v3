@@ -2,7 +2,6 @@ import {
   FileType,
   type UploadedFile
 } from '$lib/features/commons/types/create-project.types';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import type {
   FileProcessor,
   ProcessContext,
@@ -37,32 +36,21 @@ export const geoparquetProcessor: FileProcessor = {
       type: 'application/octet-stream'
     });
 
-    await ctx.Duck.register_files([parquetFile]);
-
-    const fileWithId = parquetFile as File & { id?: string };
-    const fileId =
-      fileWithId.id || `${parquetFile.lastModified}-${parquetFile.name}`;
-    const escapedFileId = escapeSqlString(fileId);
-
-    await ctx.Duck.query(`
-      CREATE OR REPLACE TABLE "${ctx.tableName}" AS
-      SELECT * FROM read_parquet('${escapedFileId}')
-    `);
-
-    const safeSeqName = ctx.tableName.replace(/[^a-zA-Z0-9_]/g, '_');
-    await ctx.Duck.query(`
-      CREATE OR REPLACE SEQUENCE "id_${safeSeqName}" START 1;
-      ALTER TABLE "${ctx.tableName}" ADD COLUMN __id INTEGER DEFAULT nextval('id_${safeSeqName}');
-    `);
+    const resultTableName = await ctx.Duck.read_tabular(parquetFile, {
+      tablename: ctx.tableName,
+      format: 'parquet'
+    });
+    const actualTableName =
+      typeof resultTableName === 'string' ? resultTableName : ctx.tableName;
 
     const [columns, rowCount] = await Promise.all([
-      ctx.Duck.analyse(ctx.tableName),
-      ctx.callbacks.getRowCount(ctx.tableName)
+      ctx.Duck.analyse(actualTableName),
+      ctx.callbacks.getRowCount(actualTableName)
     ]);
 
     const dataset: ProcessorDataset = {
       id: file.datasetId ?? file.id,
-      tableName: ctx.tableName,
+      tableName: actualTableName,
       sourceFileId: file.id,
       name: file.name,
       columns,

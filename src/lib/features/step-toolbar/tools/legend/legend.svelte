@@ -11,7 +11,7 @@
   import * as m from '$lib/paraglide/messages';
   import { TableOfContents, TextFont } from 'carbon-icons-svelte';
   import { Select, SelectItem, TextInput } from 'carbon-components-svelte';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import {
     AVAILABLE_FONTS,
     clampFontSize,
@@ -33,6 +33,10 @@
   };
 
   type LegendItemTextField = 'title' | 'subtitle' | 'note';
+  type LegendSyncInputs = readonly [
+    locale: string,
+    visualizationVersion: number
+  ];
 
   const legendState = $derived(getLegendState());
   // Only expose the legends that are actually drawn on the map. In a collection
@@ -94,10 +98,16 @@
     hslToHex(textColor.hue, textColor.saturation, textColor.lightness)
   );
 
-  $effect(() => {
-    void getLocale();
-    void visualizationStore.version;
+  function syncLegendWithCurrentInputs(_inputs: LegendSyncInputs): void {
     legendActions.syncWithVisualizations();
+  }
+
+  $effect(() => {
+    const syncInputs: LegendSyncInputs = [
+      getLocale(),
+      visualizationStore.version
+    ];
+    untrack(() => syncLegendWithCurrentInputs(syncInputs));
   });
 
   function updateItemField(
@@ -243,7 +253,7 @@
         { icon: TableOfContents, label: m.legend_content(), iconSize: 16 },
         { icon: TextFont, label: m.legend_style(), iconSize: 16 }
       ]}
-      onChange={(index) =>
+      onchange={(index) =>
         handleTabChange(index === 0 ? LegendTab.CONTENT : LegendTab.STYLE)}
     />
   </div>

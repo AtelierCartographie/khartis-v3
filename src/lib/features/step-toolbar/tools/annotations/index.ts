@@ -2,6 +2,7 @@ export {
   annotationsActions,
   getAnnotationsState
 } from './annotations.store.svelte';
+export { getKnownPageElementDefaultContents } from './annotations-placeholders.utils';
 export type {
   AnnotationsState,
   PageElementRole,

@@ -1,9 +1,9 @@
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import { resolvePersistedJoinState } from '$lib/features/commons/utils/persisted-join-state.utils';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
-import { Duck } from '$lib/features/duckdb';
-import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
 import type { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 import { basemapCatalogService } from '$lib/features/map/services';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
@@ -23,13 +23,9 @@ import { persistenceRegistry } from '../core/persistence-registry';
 import { dataTabState } from '$lib/features/commons/stores/data-tab.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { deepCloneForStorage } from '$lib/features/commons/utils/clone-for-storage.utils';
+import * as m from '$lib/paraglide/messages';
 
-export type { FileSerializationOptions } from '../core/file-serializer';
 export { serializeUploadedFile, deserializeUploadedFile };
-
-interface SerializeOptions {
-  preserveBinary?: boolean;
-}
 
 function toSafeString(value: unknown): string {
   return typeof value === 'string' ? value : '';
@@ -87,11 +83,10 @@ async function ensureDuckDbReady(operation: string): Promise<boolean> {
 }
 
 export async function serialize(
-  project: KhartisProject,
-  options?: SerializeOptions
+  project: KhartisProject
 ): Promise<SerializedProject> {
   const serializedData = project.data
-    ? await serializeProjectData(project.data, options)
+    ? await serializeProjectData(project.data)
     : undefined;
 
   return {
@@ -247,8 +242,7 @@ function mapSerializedFormatToRegistry(
 }
 
 export async function serializeProjectData(
-  data: unknown,
-  options?: SerializeOptions
+  data: unknown
 ): Promise<SerializedProjectData | undefined> {
   if (!data) return undefined;
   if (typeof data !== 'object' || data === null) return undefined;
@@ -269,9 +263,7 @@ export async function serializeProjectData(
         : undefined;
 
     serialized.sourceFiles = dataObj.sourceFiles.map((file: UploadedFile) => {
-      const serializedFile = serializeUploadedFile(file, {
-        preserveBinary: options?.preserveBinary
-      });
+      const serializedFile = serializeUploadedFile(file);
 
       const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(file.id);
       Object.assign(
@@ -327,6 +319,10 @@ export async function serializeProjectData(
         'Failed to serialize custom basemap attributes',
         LogCategory.PROJECT,
         error
+      );
+      showWarning(
+        m.custom_basemap_export_warning_title(),
+        m.custom_basemap_export_warning_message()
       );
     }
   }
@@ -413,6 +409,10 @@ export async function deserializeProjectData(
         LogCategory.PROJECT,
         error
       );
+      showWarning(
+        m.custom_basemap_import_warning_title(),
+        m.custom_basemap_import_warning_message()
+      );
     }
   }
 
@@ -428,6 +428,6 @@ export async function deserializeProjectData(
 export async function prepareForIndexedDB(
   project: KhartisProject
 ): Promise<SerializedProject> {
-  const serialized = await serialize(project, { preserveBinary: true });
+  const serialized = await serialize(project);
   return deepCloneForStorage(serialized) as SerializedProject;
 }

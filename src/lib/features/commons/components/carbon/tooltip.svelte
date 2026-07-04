@@ -4,7 +4,8 @@
   import { tick } from 'svelte';
   import * as m from '$lib/paraglide/messages';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
-  import { appendToBody } from '$lib/features/commons/utils/append-to-body';
+  import { clickOutside } from '$lib/features/commons/utils/click-outside';
+  import { portal } from '$lib/features/commons/utils/portal';
   import {
     resolveCarbonTooltipPosition,
     type CarbonTooltipAlignment,
@@ -110,6 +111,13 @@
     hoverTimeout = setTimeout(hide, 150);
   }
 
+  function handleTooltipOutsideClick(event: CustomEvent) {
+    const target = event.detail?.originalEvent?.target as Node | undefined;
+    if (target && triggerElement?.contains(target)) return;
+    pinned = false;
+    open = false;
+  }
+
   $effect(() => {
     if (!open) {
       return;
@@ -143,20 +151,6 @@
       return;
     }
 
-    function handleClick(event: MouseEvent) {
-      const target = event.target as Node;
-
-      if (
-        triggerElement &&
-        !triggerElement.contains(target) &&
-        tooltipElement &&
-        !tooltipElement.contains(target)
-      ) {
-        pinned = false;
-        open = false;
-      }
-    }
-
     function handleKeydown(event: KeyboardEvent) {
       if (event.key === KEY.ESCAPE) {
         pinned = false;
@@ -165,15 +159,9 @@
       }
     }
 
-    const timer = setTimeout(() => {
-      document.addEventListener(EVENT.CLICK, handleClick);
-    }, 0);
-
     document.addEventListener(EVENT.KEYDOWN, handleKeydown);
 
     return () => {
-      clearTimeout(timer);
-      document.removeEventListener(EVENT.CLICK, handleClick);
       document.removeEventListener(EVENT.KEYDOWN, handleKeydown);
     };
   });
@@ -184,6 +172,7 @@
   class="khartis-carbon-rich-tooltip-trigger"
   bind:this={triggerElement}
   aria-label={triggerText || iconDescription}
+  aria-expanded={open}
   onclick={toggle}
   onmouseenter={handleMouseEnter}
   onmouseleave={handleMouseLeave}
@@ -197,7 +186,12 @@
 </button>
 
 {#if open}
-  <div use:appendToBody class="khartis-carbon-rich-tooltip-portal">
+  <div
+    use:portal
+    use:clickOutside={{ enabled: open }}
+    onoutsideclick={handleTooltipOutsideClick}
+    class="khartis-carbon-rich-tooltip-portal"
+  >
     <div
       bind:this={tooltipElement}
       class="khartis-carbon-rich-tooltip khartis-carbon-rich-tooltip--{direction}"

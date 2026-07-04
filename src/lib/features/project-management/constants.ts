@@ -11,13 +11,5 @@ export const PROJECT_CONST = {
   ASSETS: {
     CHUNK_SIZE: 8 * 1024 * 1024
   },
-  LIMITS: {
-    MAX_PROJECTS: 50,
-    MAX_PROJECT_SIZE: 100 * 1024 * 1024,
-    HISTORY_LIMIT: 50
-  },
-  TIMINGS: {
-    AUTO_SAVE_DELAY: 750
-  },
-  APP_VERSION: '3.9.0'
+  SCHEMA_VERSION: '3.9.0'
 } as const;

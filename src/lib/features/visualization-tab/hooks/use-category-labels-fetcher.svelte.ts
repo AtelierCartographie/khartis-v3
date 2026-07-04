@@ -5,7 +5,7 @@ import {
   type ResolveCategoryLabelsOptions
 } from './use-category-labels.svelte';
 
-import { m } from '$lib/paraglide/messages.js';
+import { m } from '$lib/paraglide/messages';
 
 export const CATEGORY_LABEL_FETCH_ERROR = {
   FILL: m.error_category_labels_fill(),

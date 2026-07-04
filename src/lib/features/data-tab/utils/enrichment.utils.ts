@@ -8,7 +8,7 @@ import {
   INTERNAL_COLUMN
 } from '$lib/features/commons/constants/data.constants';
 import type { DatasetResult } from '$lib/features/data-pipeline';
-import * as m from '$lib/paraglide/messages.js';
+import * as m from '$lib/paraglide/messages';
 
 export interface EnrichDataFieldItem {
   id: number;

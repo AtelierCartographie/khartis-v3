@@ -16,11 +16,11 @@ import {
 } from './render-engine.utils';
 import type { BBox } from '../types';
 import type { ProjectionPresets } from '../types/basemap.types';
+import { isCompositeProjectionPresetCompatibleWithBbox } from './composite-projection-compatibility.utils';
 import { getCompositeProjectionPresetId } from './user-projection.utils';
 
 export type GlobeProjectionDisableReason =
-  | 'france-zone'
-  | 'custom-reference-basemap';
+  'france-zone' | 'custom-reference-basemap';
 
 export interface ProjectionAvailabilityContext {
   engine: MapRenderEngine;
@@ -325,26 +325,9 @@ function isCompositeCompatibleWithContext(
     return false;
   }
 
-  const projectionBbox = context.projectionBbox;
-  if (!projectionBbox || !context.projectionPresets) {
-    return true;
-  }
-
-  const preset = context.projectionPresets[presetId];
-  if (!preset?.entries?.length) {
-    return false;
-  }
-
-  return preset.entries.some((entry) =>
-    bboxesIntersect(projectionBbox, [
-      entry.bounds[0][0],
-      entry.bounds[0][1],
-      entry.bounds[1][0],
-      entry.bounds[1][1]
-    ])
+  return isCompositeProjectionPresetCompatibleWithBbox(
+    presetId,
+    context.projectionBbox,
+    context.projectionPresets
   );
-}
-
-function bboxesIntersect(a: BBox, b: BBox): boolean {
-  return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
 }

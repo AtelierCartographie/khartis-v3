@@ -3,6 +3,7 @@ import { tableFromArrays, tableToIPC } from 'apache-arrow';
 import { describe, expect, it, vi } from 'vitest';
 import { executeQueryStreaming } from '$lib/features/duckdb/core/query';
 import type { DuckDBStreamingBindings } from '$lib/features/duckdb/types';
+import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 
 function toIpcBuffer(table: ReturnType<typeof tableFromArrays>): Uint8Array {
   const ipc = tableToIPC(table);
@@ -20,6 +21,52 @@ function createConnection(bindings: DuckDBStreamingBindings) {
 }
 
 describe('executeQueryStreaming', () => {
+  it('throws a DuckDBError when the worker detaches before the header arrives', async () => {
+    const bindings: DuckDBStreamingBindings = {
+      runQuery: vi.fn().mockResolvedValue(new Uint8Array()),
+      startPendingQuery: vi.fn().mockResolvedValueOnce(null),
+      pollPendingQuery: vi.fn(),
+      fetchQueryResults: vi.fn(),
+      cancelPendingQuery: vi.fn().mockResolvedValue(false),
+      isDetached: vi.fn().mockReturnValue(true)
+    };
+
+    const request = executeQueryStreaming(
+      createConnection(bindings),
+      'SELECT * FROM dataset'
+    );
+
+    await expect(request).rejects.toMatchObject({
+      name: 'DuckDBError',
+      code: 'DUCKDB_ERROR',
+      query: 'SELECT * FROM dataset',
+      details: {
+        query: 'SELECT * FROM dataset'
+      }
+    });
+    await expect(request).rejects.toBeInstanceOf(DuckDBError);
+  });
+
+  it('throws a DuckDBError when the worker detaches while fetching results', async () => {
+    const streamedBuffer = toIpcBuffer(
+      tableFromArrays({
+        value: [1]
+      })
+    );
+    const bindings: DuckDBStreamingBindings = {
+      runQuery: vi.fn().mockResolvedValue(new Uint8Array()),
+      startPendingQuery: vi.fn().mockResolvedValueOnce(streamedBuffer),
+      pollPendingQuery: vi.fn(),
+      fetchQueryResults: vi.fn().mockResolvedValueOnce(null),
+      cancelPendingQuery: vi.fn().mockResolvedValue(false),
+      isDetached: vi.fn().mockReturnValue(true)
+    };
+
+    await expect(
+      executeQueryStreaming(createConnection(bindings), 'SELECT * FROM dataset')
+    ).rejects.toBeInstanceOf(DuckDBError);
+  });
+
   it('waits for pending headers and result batches before ending the stream', async () => {
     const streamedBuffer = toIpcBuffer(
       tableFromArrays({

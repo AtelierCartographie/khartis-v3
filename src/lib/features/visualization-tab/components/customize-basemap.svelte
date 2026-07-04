@@ -94,14 +94,10 @@
       case BasemapLayerType.GEOGRAPHIC_LINES:
         return 'equateur';
       case BasemapLayerType.POLYGON:
-        // For custom basemaps the polygon is the main territory geometry,
-        // expose the full Terre fill+stroke controls. Catalog basemaps use
-        // POLYGON for hydrography/relief, mapped to Mers.
+        // Custom polygons are territory geometry; catalog polygons map to Mers.
         return isCustom ? 'terre' : 'mers';
       case BasemapLayerType.LINE:
-        // Custom line basemaps use the Frontières controls (line color +
-        // dotted + thickness) since the imported geometry is a network of
-        // segments, closer to boundaries than to rivers.
+        // Custom lines use Frontieres controls because imported segments are boundary-like.
         return isCustom ? 'frontieres' : 'rivieres';
       case BasemapLayerType.SPHERE:
         return 'sphere';
@@ -133,19 +129,13 @@
   }
 
   function isSection3RenderableType(type: BasemapLayerType): boolean {
-    // Centroids feed the Symboles / Textes primitives, not the basemap personalization.
-    // Geographic lines (equator, tropics, polar circles, Greenwich) are merged into the
-    // Graticules section through its "Remarquable" sub-toggle.
+    // Centroids feed primitives; geographic lines are merged into Graticules.
     if (type === BasemapLayerType.CENTROID) return false;
     if (type === BasemapLayerType.GEOGRAPHIC_LINES) return false;
     return true;
   }
 
-  // The projection sphere is the outline of a global d3 projection. Composite
-  // projections (e.g. EUROPE_DOM_TOM / FRANCE_DOM_TOM) and already-projected
-  // ("identity") basemaps have no single sphere, so `parseSphere` yields nothing
-  // and the toggle is a visual no-op. Only expose the control for `simple`
-  // projections where it actually renders.
+  // The sphere toggle renders only for simple projections with a single outline.
   const supportsProjectionSphere = $derived(
     currentMetadata?.proj_to?.type === 'simple'
   );

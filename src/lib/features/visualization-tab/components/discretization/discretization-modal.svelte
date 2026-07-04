@@ -2,6 +2,10 @@
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import { portal } from '$lib/features/commons/utils/portal';
+  import {
+    MAIN_TOOLBAR_ID,
+    resolveToolbarPanelWidthFromClassName
+  } from '$lib/features/commons/utils/toolbar-width.utils';
   import { Close } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import DiscretizationPanel from './discretization-panel.svelte';
@@ -20,7 +24,7 @@
     resolveComputedClassCount,
     resolveHeadTailClassCountMax,
     resolveRequestedClassCount
-  } from './discretization.utils';
+  } from '$lib/features/commons/utils/discretization.utils';
   import {
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
@@ -30,15 +34,6 @@
     resolveClassificationBreakColors,
     type ClassificationBreaksComputation
   } from '../../hooks/use-classification-breaks.svelte';
-
-  type PanelMethod =
-    | 'kmeans'
-    | 'quantile'
-    | 'equal-interval'
-    | 'manual'
-    | 'q6'
-    | 'nested-means'
-    | 'head-tail';
 
   interface ClassBreak {
     min: number;
@@ -92,47 +87,20 @@
     `${visualization?.id ?? ''}:${role}:${activeValueColumn ?? ''}`
   );
 
-  let _isCalculating = $state(false);
+  let isCalculating = $state(false);
   let breaksRequestId = 0;
   let lastLocalClassification = $state<
     Partial<ClassificationConfig> | undefined
   >(undefined);
   let lastLocalContextKey = $state('');
 
-  function storeMethodToPanelMethod(method: ClassificationMethod): PanelMethod {
-    const mapping: Record<ClassificationMethod, PanelMethod> = {
-      [ClassificationMethod.KMEANS]: 'kmeans',
-      [ClassificationMethod.QUANTILES]: 'quantile',
-      [ClassificationMethod.EQUAL_INTERVAL]: 'equal-interval',
-      [ClassificationMethod.MANUAL]: 'manual',
-      [ClassificationMethod.Q6]: 'q6',
-      [ClassificationMethod.NESTED_MEANS]: 'nested-means',
-      [ClassificationMethod.HEAD_TAIL]: 'head-tail'
-    };
-    return mapping[method] ?? 'kmeans';
-  }
-
-  function panelMethodToStoreMethod(method: PanelMethod): ClassificationMethod {
-    const mapping: Record<PanelMethod, ClassificationMethod> = {
-      kmeans: ClassificationMethod.KMEANS,
-      quantile: ClassificationMethod.QUANTILES,
-      'equal-interval': ClassificationMethod.EQUAL_INTERVAL,
-      manual: ClassificationMethod.MANUAL,
-      q6: ClassificationMethod.Q6,
-      'nested-means': ClassificationMethod.NESTED_MEANS,
-      'head-tail': ClassificationMethod.HEAD_TAIL
-    };
-    return mapping[method] ?? ClassificationMethod.KMEANS;
-  }
-
-  let currentMethod = $state<PanelMethod>('kmeans');
+  let currentMethod = $state<ClassificationMethod>(ClassificationMethod.KMEANS);
   let currentNumClasses = $state(5);
   let currentBreaks = $state<ClassBreak[]>([]);
   let currentBreakpoint = $state<number | null>(null);
   let currentBreakpointLowerClassCount = $state<number | null>(null);
   let headTailClassCountMax = $state(DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX);
   let panelRenderKey = $state(0);
-  const MAIN_TOOLBAR_ID = 'khartis-main-toolbar';
   let panelRight = $state(readPanelRight());
   let wasOpen = $state(false);
   const contextualSurfaceId = createExclusiveContextualSurfaceId(
@@ -140,15 +108,7 @@
   );
 
   function getFallbackPanelRight(toolbarClassName = ''): string {
-    if (toolbarClassName.includes('collapsed')) {
-      return '50px';
-    }
-
-    if (toolbarClassName.includes('full')) {
-      return 'clamp(400px, 50vw, 800px)';
-    }
-
-    return '434px';
+    return resolveToolbarPanelWidthFromClassName(toolbarClassName);
   }
 
   function readPanelRight(): string {
@@ -181,7 +141,7 @@
       classification?.numClasses ?? classification?.classes ?? 5;
     const actualClassCount = classification?.counts?.length;
 
-    currentMethod = storeMethodToPanelMethod(method);
+    currentMethod = method;
     currentNumClasses = resolveComputedClassCount(
       method,
       storedNumClasses,
@@ -272,8 +232,7 @@
   }
 
   function getLocalClassificationBase():
-    | Partial<ClassificationConfig>
-    | undefined {
+    Partial<ClassificationConfig> | undefined {
     return lastLocalContextKey === activeContextKey
       ? (lastLocalClassification ?? activeClassification)
       : activeClassification;
@@ -309,7 +268,7 @@
     }
 
     return {
-      method: panelMethodToStoreMethod(currentMethod),
+      method: currentMethod,
       classes: actualClassCount,
       numClasses: actualClassCount,
       breaks: breakValues,
@@ -392,8 +351,7 @@
     const classificationForSync =
       lastLocalContextKey === activeContextKey
         ? ((lastLocalClassification ?? activeClassification) as
-            | ClassificationConfig
-            | undefined)
+            ClassificationConfig | undefined)
         : activeClassification;
 
     syncStateFromVisualization(classificationForSync);
@@ -476,9 +434,9 @@
     }
 
     const myRequestId = ++breaksRequestId;
-    _isCalculating = true;
+    isCalculating = true;
     try {
-      const storeMethod = panelMethodToStoreMethod(currentMethod);
+      const storeMethod = normalizeClassificationMethod(currentMethod);
       const computation = await computeClassificationBreaks({
         datasetSourceFileId: dataset.sourceFileId,
         valueColumn: activeValueColumn,
@@ -498,13 +456,13 @@
       applyBreaksResult(computation);
       return Boolean(computation);
     } finally {
-      _isCalculating = false;
+      isCalculating = false;
     }
   }
 
   function persistSelectionDraft(
     options?: {
-      method?: PanelMethod;
+      method?: ClassificationMethod;
       numClasses?: number;
       breakpointValue?: number | null;
       breakpointLowerClassCount?: number | null;
@@ -512,7 +470,7 @@
     emit = true
   ) {
     const method = options?.method ?? currentMethod;
-    const storeMethod = panelMethodToStoreMethod(method);
+    const storeMethod = normalizeClassificationMethod(method);
     const requestedClassCount = resolveRequestedClassCount(
       storeMethod,
       options?.numClasses ?? currentNumClasses
@@ -558,11 +516,11 @@
     }
   }
 
-  function handleMethodChange(method: PanelMethod) {
+  function handleMethodChange(method: ClassificationMethod) {
     currentMethod = method;
     currentNumClasses = resolveRequestedClassCount(
-      panelMethodToStoreMethod(method),
-      method === 'head-tail'
+      normalizeClassificationMethod(method),
+      method === ClassificationMethod.HEAD_TAIL
         ? DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX
         : currentNumClasses
     );
@@ -570,7 +528,7 @@
       currentNumClasses,
       currentBreakpointLowerClassCount
     );
-    if (method !== 'head-tail') {
+    if (method !== ClassificationMethod.HEAD_TAIL) {
       headTailClassCountMax = DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
     }
     persistSelectionDraft(
@@ -585,7 +543,7 @@
 
   function handleClassesChange(num: number) {
     currentNumClasses = resolveRequestedClassCount(
-      panelMethodToStoreMethod(currentMethod),
+      normalizeClassificationMethod(currentMethod),
       num
     );
     currentBreakpointLowerClassCount = resolveBreakpointLowerClassCount(
@@ -705,7 +663,7 @@
         on:click={handleClose}
       />
     </header>
-    <div class="panel-body" aria-busy={_isCalculating}>
+    <div class="panel-body" aria-busy={isCalculating}>
       {#key panelRenderKey}
         <DiscretizationPanel
           bind:method={currentMethod}
@@ -717,7 +675,7 @@
           divergingPreviewColors={divergingPreview}
           sizePreview={role === 'size' ? sizePreview : undefined}
           binFillStrategy={binFillStrategy}
-          classCountMax={currentMethod === 'head-tail'
+          classCountMax={currentMethod === ClassificationMethod.HEAD_TAIL
             ? headTailClassCountMax
             : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX}
           onmethodchange={handleMethodChange}

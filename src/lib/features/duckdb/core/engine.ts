@@ -1,5 +1,6 @@
 import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
 import * as m from '$lib/paraglide/messages';
 import type { DuckDBBundles } from '@duckdb/duckdb-wasm';
@@ -147,6 +148,10 @@ async function loadSpatialExtension(): Promise<void> {
     logger.error('Failed to preload spatial extension', LogCategory.DUCKDB, {
       error
     });
+    showWarning(
+      m.duckdb_spatial_warning_title(),
+      m.duckdb_spatial_warning_message()
+    );
   }
 }
 

@@ -66,7 +66,16 @@ describe('remote-processor', () => {
   it('rejects .shp URL with a standalone shapefile error', async () => {
     await expect(
       processRemoteFile('https://example.com/roads.shp')
-    ).rejects.toThrow(m.pipeline_error_shp_standalone());
+    ).rejects.toMatchObject({
+      name: 'ParseError',
+      code: 'PARSE_ERROR',
+      fileType: 'shapefile',
+      message: m.pipeline_error_shp_standalone(),
+      details: {
+        fileName: 'roads.shp',
+        url: 'https://example.com/roads.shp'
+      }
+    });
   });
 
   it('calls Duck.read_link for a CSV URL', async () => {
@@ -119,9 +128,19 @@ describe('remote-processor', () => {
     );
     await expect(
       processRemoteZipFile('https://example.com/missing.zip')
-    ).rejects.toThrow(
-      m.pipeline_error_fetch_failed({ status: '404', statusText: 'Not Found' })
-    );
+    ).rejects.toMatchObject({
+      name: 'PipelineError',
+      code: 'REMOTE_FILE_FETCH_FAILED',
+      message: m.pipeline_error_fetch_failed({
+        status: '404',
+        statusText: 'Not Found'
+      }),
+      details: {
+        status: 404,
+        statusText: 'Not Found',
+        url: 'https://example.com/missing.zip'
+      }
+    });
     vi.unstubAllGlobals();
   });
 });

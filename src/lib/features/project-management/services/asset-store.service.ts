@@ -2,8 +2,12 @@ import type {
   AssetRef,
   UploadedFile
 } from '$lib/features/commons/types/create-project.types';
+import {
+  DataValidationError,
+  PipelineError
+} from '$lib/features/commons/pipeline.errors';
 import { combineUint8Arrays } from '$lib/features/commons/utils/array.utils';
-import { m } from '$lib/paraglide/messages.js';
+import { m } from '$lib/paraglide/messages';
 
 import { PROJECT_CONST } from '../constants';
 import { getProjectDatabase } from './database-access.service';
@@ -34,6 +38,9 @@ const { ASSET_STORE_NAME, ASSET_CHUNK_STORE_NAME, ASSET_REF_STORE_NAME } =
   PROJECT_CONST.DB;
 
 const { CHUNK_SIZE } = PROJECT_CONST.ASSETS;
+
+const PROJECT_ASSET_STORAGE_INSUFFICIENT_CODE =
+  'PROJECT_ASSET_STORAGE_INSUFFICIENT';
 
 function createProjectAssetRefId(projectId: string, assetId: string): string {
   return `${projectId}:${assetId}`;
@@ -132,7 +139,14 @@ export async function persistAssetBlob(
   if (!alreadyExists) {
     const hasHeadroom = await estimateStorageHeadroom(blob.size);
     if (!hasHeadroom) {
-      throw new Error(m.error_insufficient_storage());
+      throw new PipelineError(
+        m.error_insufficient_storage(),
+        PROJECT_ASSET_STORAGE_INSUFFICIENT_CODE,
+        {
+          assetId: ref.assetId,
+          requiredBytes: blob.size
+        }
+      );
     }
 
     await writeAssetChunks(db, ref.assetId, blob);
@@ -160,10 +174,7 @@ export async function persistAssetContent(
   content: string | ArrayBuffer,
   params: Omit<AssetRef, 'assetId'>
 ): Promise<AssetRef> {
-  const blob =
-    typeof content === 'string'
-      ? new Blob([content], { type: params.mimeType })
-      : new Blob([content], { type: params.mimeType });
+  const blob = new Blob([content], { type: params.mimeType });
 
   const ref: AssetRef = {
     ...params,
@@ -330,7 +341,11 @@ export async function readAssetBytes(assetId: string): Promise<Uint8Array> {
   const metadata = await loadAssetMetadata(assetId);
 
   if (!metadata) {
-    throw new Error(m.error_missing_asset_metadata({ assetId }));
+    throw new DataValidationError(
+      m.error_missing_asset_metadata({ assetId }),
+      'assetId',
+      { assetId }
+    );
   }
 
   const chunks = await new Promise<StoredAssetChunk[]>((resolve, reject) => {
@@ -350,12 +365,18 @@ export async function readAssetBytes(assetId: string): Promise<Uint8Array> {
   });
 
   if (chunks.length !== metadata.chunkCount) {
-    throw new Error(
+    throw new DataValidationError(
       m.error_corrupted_asset({
         assetId,
         expectedChunks: String(metadata.chunkCount),
         actualChunks: String(chunks.length)
-      })
+      }),
+      'chunks',
+      {
+        assetId,
+        expectedChunks: metadata.chunkCount,
+        actualChunks: chunks.length
+      }
     );
   }
 

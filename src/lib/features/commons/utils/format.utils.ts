@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages';
 import { getLocale } from '$lib/paraglide/runtime.js';
 
 const LOCALE_MAP: Record<string, string> = {
@@ -8,8 +9,6 @@ const LOCALE_MAP: Record<string, string> = {
 export function resolveLocale(): string {
   return LOCALE_MAP[getLocale()] ?? 'en-US';
 }
-
-import { m } from '$lib/paraglide/messages.js';
 
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return m.file_size_zero();
@@ -24,7 +23,15 @@ export function formatFileSize(bytes: number): string {
   const k = 1024;
   const i = Math.floor(Math.log(bytes) / Math.log(k));
 
-  return `${(bytes / Math.pow(k, i)).toFixed(2)} ${units[i]}`;
+  const formattedSize = (bytes / Math.pow(k, i)).toLocaleString(
+    resolveLocale(),
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }
+  );
+
+  return `${formattedSize} ${units[i]}`;
 }
 
 export function formatDate(date: Date | string, locale?: string): string {

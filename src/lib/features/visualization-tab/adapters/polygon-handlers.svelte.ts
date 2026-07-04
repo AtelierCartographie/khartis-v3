@@ -1,14 +1,15 @@
 import {
   PrimitiveFilterType,
   type ClassificationConfig,
-  type MissingDataConfig,
   type PolygonPrimitiveConfig,
+  type PrimitiveFilter,
   type VisualizationConfig,
   type VisualizationModes,
   getPolygonPrimitive
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import type { DensityConfig } from '$lib/features/commons/constants/visualization.constants';
 import { pickOwnedKeys, pickRenamedKeys } from './pick-owned.utils';
+import { createPrimitiveAdapter } from './primitive-adapter.factory';
 
 export interface PolygonHandlersDeps {
   getSelectedVisualization: () => VisualizationConfig | undefined;
@@ -17,8 +18,8 @@ export interface PolygonHandlersDeps {
     afterUpdate?: (next: VisualizationConfig) => void
   ) => void;
   buildNextPrimitiveFilters: (
-    updates: Partial<Record<PrimitiveFilterType, boolean>>
-  ) => PrimitiveFilterType[];
+    updates: Partial<Record<PrimitiveFilter, boolean>>
+  ) => PrimitiveFilter[];
   updatePrimitiveClassificationState: (
     primitive: PrimitiveFilterType,
     updates: Partial<ClassificationConfig>
@@ -54,27 +55,12 @@ export interface PolygonHandlersDeps {
 }
 
 export function createPolygonHandlers(deps: PolygonHandlersDeps) {
-  function handlePolygonChange(updates: Partial<PolygonPrimitiveConfig>): void {
-    const viz = deps.getSelectedVisualization();
-    const polygon = getPolygonPrimitive(viz);
-    if (!polygon) return;
-
-    const enabledHasUpdate = Object.prototype.hasOwnProperty.call(
-      updates,
-      'enabled'
-    );
-
-    deps.updateSelectedVisualization({
-      polygon: { ...polygon, ...updates },
-      ...(enabledHasUpdate
-        ? {
-            primitiveFilters: deps.buildNextPrimitiveFilters({
-              [PrimitiveFilterType.POLYGON]: updates.enabled ?? polygon.enabled
-            })
-          }
-        : {})
-    });
-  }
+  const polygonAdapter = createPrimitiveAdapter<PolygonPrimitiveConfig>(deps, {
+    primitive: PrimitiveFilterType.POLYGON,
+    getConfig: getPolygonPrimitive,
+    buildUpdate: (polygon) => ({ polygon })
+  });
+  const handlePolygonChange = polygonAdapter.handleChange;
 
   function handlePolygonStyleChange(
     updates: Partial<VisualizationConfig['style']>
@@ -135,31 +121,12 @@ export function createPolygonHandlers(deps: PolygonHandlersDeps) {
     );
   }
 
-  function handlePolygonMissingDataChange(
-    updates: Partial<MissingDataConfig>
-  ): void {
-    const polygon = getPolygonPrimitive(deps.getSelectedVisualization());
-    if (!polygon?.missingData) return;
+  const handlePolygonMissingDataChange = polygonAdapter.handleMissingDataChange;
 
-    handlePolygonChange({
-      missingData: { ...polygon.missingData, ...updates }
-    });
-  }
+  const handlePolygonClassificationChange =
+    polygonAdapter.handleClassificationChange;
 
-  function handlePolygonClassificationChange(
-    updates: Partial<ClassificationConfig>
-  ): void {
-    deps.updatePrimitiveClassificationState(
-      PrimitiveFilterType.POLYGON,
-      updates
-    );
-  }
-
-  function handlePolygonMappingChange(
-    updates: Partial<VisualizationConfig['mapping']>
-  ): void {
-    deps.applyPrimitiveMappingUpdate(PrimitiveFilterType.POLYGON, updates);
-  }
+  const handlePolygonMappingChange = polygonAdapter.handleMappingChange;
 
   function handlePolygonStrokeMappingChange(
     updates: Partial<VisualizationConfig['mapping']>
@@ -170,9 +137,7 @@ export function createPolygonHandlers(deps: PolygonHandlersDeps) {
     );
   }
 
-  function handlePolygonPaletteInvert(): void {
-    deps.invertPrimitivePalette(PrimitiveFilterType.POLYGON);
-  }
+  const handlePolygonPaletteInvert = polygonAdapter.handlePaletteInvert;
 
   function handlePolygonStrokePaletteInvert(): void {
     deps.invertPrimitiveStrokePalette(PrimitiveFilterType.POLYGON);

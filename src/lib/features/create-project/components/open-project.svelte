@@ -5,7 +5,7 @@
   import { horizontalWheelScroll } from '$lib/features/commons/utils/horizontal-wheel-scroll';
   import type { SavedProjectMetadata } from '$lib/features/project-management';
   import { m } from '$lib/paraglide/messages';
-  import { appendToBody } from '$lib/features/commons/utils/append-to-body';
+  import { portal } from '$lib/features/commons/utils/portal';
   import {
     FileUploaderDropContainer,
     InlineNotification,
@@ -14,7 +14,7 @@
     OverflowMenuItem,
     SkeletonPlaceholder
   } from 'carbon-components-svelte';
-  import { Calendar, Link } from 'carbon-icons-svelte';
+  import { Calendar } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
   import { useProjectNavigation } from '../hooks/use-project-navigation.svelte';
   import { CreateProjectValidationService } from '../services/validation.service';
@@ -31,7 +31,7 @@
   const { onClose }: Props = $props();
 
   const { navigateAfterAction } = useProjectNavigation({
-    getOnClose: () => onClose
+    onClose: () => onClose?.()
   });
 
   const KHARTIS_FILE_EXTENSIONS = ['.kh', '.khartis'];
@@ -288,16 +288,10 @@
         on:change={handleFileImport}
       />
     </div>
-
-    <div class="flex items-center gap-3 text-grey">
-      <span>{m.open_project_learn_more_data()}</span>
-
-      <Link size={24} />
-    </div>
   </div>
 
   {#if showDeleteConfirm}
-    <div use:appendToBody>
+    <div use:portal>
       <Modal
         danger
         bind:open={showDeleteConfirm}
@@ -324,11 +318,6 @@
 
   .project-card-skeleton {
     min-width: 180px;
-  }
-
-  .card-rail {
-    scrollbar-width: thin;
-    scrollbar-color: var(--cds-border-strong) var(--cds-layer-02);
   }
 
   .card-rail::-webkit-scrollbar {

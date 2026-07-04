@@ -1,5 +1,9 @@
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import { PERSISTED_BASEMAP_TYPE } from '$lib/features/data-tab/services/persisted-basemap.service';
+import {
+  isOSMBasemap,
+  isOSMBasemapFileId
+} from '$lib/features/map/services/osm-tile.service';
 
 interface PersistedBasemapLike {
   id: string;
@@ -24,7 +28,7 @@ function isProjectOSMBasemapData(value: unknown): value is BasemapMetadata {
     typeof value === 'object' &&
     'file' in value &&
     typeof value.file === 'string' &&
-    value.file.startsWith('osm_') &&
+    isOSMBasemapFileId(value.file) &&
     'source' in value &&
     typeof value.source === 'string' &&
     'date' in value &&
@@ -51,15 +55,23 @@ export function syncProjectOSMBasemap(
     return;
   }
 
-  if (osmState.activeOSMBasemap) {
-    osmState.clear();
+  const existingBasemap = basemapLookup.getBasemapById(basemap.id);
+  const projectBasemap = isProjectOSMBasemapData(basemap.data)
+    ? basemap.data
+    : existingBasemap;
+
+  if (isProjectOSMBasemapData(basemap.data) && !existingBasemap) {
+    basemapLookup.addCustomBasemap(basemap.data);
   }
 
-  if (basemapLookup.getBasemapById(basemap.id)) {
+  if (projectBasemap && isOSMBasemap(projectBasemap)) {
+    if (osmState.activeOSMBasemap?.file !== projectBasemap.file) {
+      osmState.setOSMBasemap(projectBasemap);
+    }
     return;
   }
 
-  if (isProjectOSMBasemapData(basemap.data)) {
-    basemapLookup.addCustomBasemap(basemap.data);
+  if (osmState.activeOSMBasemap) {
+    osmState.clear();
   }
 }

@@ -4,6 +4,7 @@
   import NotificationContainer from '$lib/features/commons/components/notification-container.svelte';
   import ConsentBanner from '$lib/features/commons/components/consent-banner.svelte';
   import PwaServiceWorker from '$lib/features/commons/components/pwa-service-worker.svelte';
+  import WorkspaceViewport from '$lib/features/commons/components/workspace-viewport.svelte';
   import {
     globalActions,
     globalState,
@@ -20,13 +21,13 @@
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import * as m from '$lib/paraglide/messages';
   import { EVENT } from '$lib/features/commons/constants/dom.constants';
-  import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
+  import { persistenceRegistry } from '$lib/features/project-management/core';
   import { factoryResetPwa } from '$lib/features/commons/utils/pwa-reset';
 
   import '$lib/features/commons/stores/locale.store.svelte';
   import { setLocale, locales, cookieName } from '$lib/paraglide/runtime.js';
   import Header from '$lib/features/header/header.svelte';
-  import MainToolbar from '$lib/features/main-toolbar/main-toolbar.svelte';
+  import { MainToolbar, MobileToolbar } from '$lib/features/main-toolbar';
   import MobileOpenPanelButton from '$lib/features/map/components/mobile-open-panel-button.svelte';
   import MapTooltipOverlay from '$lib/features/map/components/map-tooltip-overlay.svelte';
   import ZoomToolbar from '$lib/features/map/components/zoom-toolbar.svelte';
@@ -41,21 +42,14 @@
     isColorBlindnessActive
   } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import { zoomModeStore } from '$lib/features/commons/stores/zoom-mode.store.svelte';
-  import {
-    DEFAULT_WORKSPACE_VIEWPORT_BOUNDS,
-    WORKSPACE_FIT_EVENT,
-    clampWorkspacePanOffset,
-    isWorkspacePanTarget,
-    resolveWorkspaceViewportBounds,
-    type WorkspaceViewportBounds
-  } from '$lib/features/commons/utils/workspace-viewport.utils';
   import StepToolbar from '$lib/features/step-toolbar/step-toolbar.svelte';
-  import { Theme } from 'carbon-components-svelte';
+  import { Modal, Theme } from 'carbon-components-svelte';
   import GlobalLoadingIndicator from '$lib/features/commons/components/global-loading-indicator.svelte';
-  import { onMount, tick, untrack } from 'svelte';
+  import { onMount, untrack } from 'svelte';
+  import { replaceState } from '$app/navigation';
+  import { page } from '$app/state';
   import ColorBlindnessNotification from '$lib/features/step-toolbar/tools/color-blindness/color-blindness-notification.svelte';
   import CreateProject from '$lib/features/create-project/create-project.svelte';
-  import MobileToolbar from '$lib/features/main-toolbar/mobile-toolbar.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { dataOrchestratorService } from '$lib/features/commons/services/data-orchestrator.service.svelte';
@@ -71,15 +65,26 @@
 
   initializeStores();
 
+  type PendingKhImport = {
+    khProjectUrl: string;
+    startDataServices: () => Promise<void>;
+  };
+
   let { children } = $props();
   let isLoading = $state(true);
+  let pendingKhImport = $state<PendingKhImport | null>(null);
   let previousStep = $state<ToolbarStep | null>(null);
   let stylingElementsInitializedForProject = $state<string | null>(null);
-  const ENABLE_BEFOREUNLOAD_CONFIRMATION = false;
 
   const handleResize = () => {
     globalActions.setMobileView(window.innerWidth < MOBILE_BREAKPOINT);
   };
+
+  function removeKhUrlParameter(): void {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('kh');
+    replaceState(`${url.pathname}${url.search}${url.hash}`, page.state);
+  }
 
   $effect(() => {
     if (typeof document !== 'undefined') {
@@ -90,22 +95,11 @@
     }
   });
 
-  // Loads a Khartis project (.kh) from a remote URL passed as the `?kh=` query
-  // parameter (e.g. .../khartis?kh=https://host/project.kh). The file is fetched
-  // directly by the browser (privacy: no user data leaves the device) and
-  // replayed through the regular project import. A dirty current project is
-  // protected by a confirmation prompt before being replaced.
-  async function loadProjectFromKhUrl(
+  // `?kh=` imports a remote .kh through the regular browser import path.
+  async function importProjectFromKhUrl(
     khProjectUrl: string,
     startDataServices: () => Promise<void>
   ): Promise<void> {
-    if (
-      projectStore.isDirty &&
-      !window.confirm(m.project_import_url_confirm_discard())
-    ) {
-      return;
-    }
-
     try {
       await startDataServices();
       const response = await fetch(khProjectUrl);
@@ -117,6 +111,7 @@
         khProjectUrl.split('/').pop()?.split('?')[0] || 'project.kh';
       const file = new File([blob], fileName, { type: 'application/zip' });
       await projectStore.importProject(file);
+      removeKhUrlParameter();
     } catch (error) {
       logger.error('Failed to import project from kh URL', LogCategory.SYSTEM, {
         khProjectUrl,
@@ -130,6 +125,33 @@
         globalState.isCreateProjectModalOpen = true;
       }
     }
+  }
+
+  async function loadProjectFromKhUrl(
+    khProjectUrl: string,
+    startDataServices: () => Promise<void>
+  ): Promise<void> {
+    if (projectStore.isDirty) {
+      pendingKhImport = { khProjectUrl, startDataServices };
+      return;
+    }
+
+    await importProjectFromKhUrl(khProjectUrl, startDataServices);
+  }
+
+  function cancelPendingKhImport(): void {
+    pendingKhImport = null;
+  }
+
+  async function confirmPendingKhImport(): Promise<void> {
+    const pending = pendingKhImport;
+    if (!pending) return;
+
+    pendingKhImport = null;
+    await importProjectFromKhUrl(
+      pending.khProjectUrl,
+      pending.startDataServices
+    );
   }
 
   onMount(() => {
@@ -148,16 +170,6 @@
 
     handleResize();
     window.addEventListener(EVENT.RESIZE, handleResize);
-
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (projectStore.isDirty) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    if (ENABLE_BEFOREUNLOAD_CONFIRMATION) {
-      window.addEventListener(EVENT.BEFOREUNLOAD, handleBeforeUnload);
-    }
 
     const handleRescueShortcut = (event: KeyboardEvent) => {
       const isModifier = event.metaKey || event.ctrlKey;
@@ -183,25 +195,6 @@
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('pagehide', handleLifecycleFlush);
     window.addEventListener(EVENT.BEFOREUNLOAD, handleLifecycleFlush);
-
-    pageResizeObserver = new ResizeObserver(() => {
-      updateWorkspaceViewportState();
-    });
-    workspaceResizeObserver = new ResizeObserver(() => {
-      updateWorkspaceViewportState();
-    });
-    pageMutationObserver = new MutationObserver(() => {
-      refreshObservedPageElement(pageResizeObserver);
-    });
-    stepToolbarResizeObserver = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) return;
-      stepToolbarWidth = Math.round(entry.contentRect.width);
-    });
-
-    window.addEventListener(EVENT.KEYDOWN, handleGlobalKeyDown);
-    window.addEventListener(EVENT.KEYUP, handleGlobalKeyUp);
-    window.addEventListener(WORKSPACE_FIT_EVENT, handleWorkspaceFitEvent);
 
     const initializeDataServices = async () => {
       await duckDBOrchestrator.initialize();
@@ -239,6 +232,10 @@
             LogCategory.SYSTEM,
             error
           );
+          showError(
+            m.error_data_services_init_title(),
+            m.error_data_services_init_message()
+          );
           globalState.isCreateProjectModalOpen = true;
         });
       } catch (error) {
@@ -254,6 +251,7 @@
 
     initApp();
 
+    // Carbon ComboBox renders a listbox wrapper; remap it so ARIA owns options only.
     const fixComboboxAria = (root: Element | Document = document) => {
       (root as Element)
         .querySelectorAll?.('.bx--combo-box[role="listbox"]')
@@ -273,12 +271,6 @@
 
     return () => {
       window.removeEventListener(EVENT.RESIZE, handleResize);
-      window.removeEventListener(EVENT.KEYDOWN, handleGlobalKeyDown);
-      window.removeEventListener(EVENT.KEYUP, handleGlobalKeyUp);
-      window.removeEventListener(WORKSPACE_FIT_EVENT, handleWorkspaceFitEvent);
-      if (ENABLE_BEFOREUNLOAD_CONFIRMATION) {
-        window.removeEventListener(EVENT.BEFOREUNLOAD, handleBeforeUnload);
-      }
       window.removeEventListener(EVENT.KEYDOWN, handleRescueShortcut, {
         capture: true
       });
@@ -286,78 +278,6 @@
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handleLifecycleFlush);
       window.removeEventListener(EVENT.BEFOREUNLOAD, handleLifecycleFlush);
-      workspaceResizeObserver?.disconnect();
-      pageResizeObserver?.disconnect();
-      pageMutationObserver?.disconnect();
-      stepToolbarResizeObserver?.disconnect();
-      workspaceResizeObserver = null;
-      pageResizeObserver = null;
-      pageMutationObserver = null;
-      stepToolbarResizeObserver = null;
-    };
-  });
-
-  // #khartis-step-toolbar renders only in desktop view, once loading is done.
-  // React to those conditions instead of polling with requestAnimationFrame,
-  // which would otherwise spin forever in mobile view (the toolbar never renders).
-  $effect(() => {
-    const shouldObserve = !isLoading && !globalState.isMobileView;
-    if (!shouldObserve || !stepToolbarResizeObserver) {
-      stepToolbarWidth = 0;
-      return;
-    }
-    const observer = stepToolbarResizeObserver;
-    let cancelled = false;
-    void tick().then(() => {
-      if (cancelled) return;
-      const el = document.getElementById('khartis-step-toolbar');
-      if (!el) return;
-      observer.observe(el);
-      stepToolbarWidth = Math.round(el.getBoundingClientRect().width);
-    });
-    return () => {
-      cancelled = true;
-      observer.disconnect();
-    };
-  });
-
-  $effect(() => {
-    void globalState.zoom.pageZoomScale;
-    void zoomModeStore.mode;
-
-    requestAnimationFrame(() => {
-      updateWorkspaceViewportState();
-    });
-  });
-
-  $effect(() => {
-    const workspaceViewport = workspaceViewportElement;
-
-    if (
-      !workspaceViewport ||
-      !pageResizeObserver ||
-      !workspaceResizeObserver ||
-      !pageMutationObserver
-    ) {
-      return;
-    }
-
-    workspaceResizeObserver.disconnect();
-    pageMutationObserver.disconnect();
-    workspaceResizeObserver.observe(workspaceViewport);
-    pageMutationObserver.observe(workspaceViewport, {
-      childList: true,
-      subtree: true
-    });
-    refreshObservedPageElement(pageResizeObserver);
-
-    return () => {
-      workspaceResizeObserver?.disconnect();
-      pageMutationObserver?.disconnect();
-      if (observedPageElement && pageResizeObserver) {
-        pageResizeObserver.unobserve(observedPageElement);
-      }
-      observedPageElement = null;
     };
   });
 
@@ -378,8 +298,6 @@
       !globalState.selectedTool &&
       !mobileColorBlindnessNotificationDismissed
   );
-  const isPageMode = $derived(zoomModeStore.isPageMode);
-
   function handleDeactivateColorBlindness() {
     colorBlindnessActions.reset();
   }
@@ -389,197 +307,6 @@
       mobileColorBlindnessNotificationDismissed = false;
     }
   });
-
-  const LEFT_BUTTON = 0;
-  const MIDDLE_BUTTON = 1;
-  let workspaceViewportElement = $state<HTMLElement | null>(null);
-  let stepToolbarWidth = $state(0);
-  let stepToolbarResizeObserver: ResizeObserver | null = null;
-  let observedPageElement: HTMLElement | null = null;
-
-  const pagePan = $derived(globalState.zoom.pagePanOffset);
-  const workspaceCenteringOffsetX = $derived(stepToolbarWidth / 2);
-  const workspaceCameraStyle = $derived(
-    `transform: translate(${pagePan.x + workspaceCenteringOffsetX}px, ${pagePan.y}px);`
-  );
-  let workspaceViewportBounds = $state<WorkspaceViewportBounds>(
-    DEFAULT_WORKSPACE_VIEWPORT_BOUNDS
-  );
-  let isWorkspacePanDraggable = $state(false);
-  let hasWorkspaceOverflow = $state(false);
-  let isSpacePanArmed = $state(false);
-  let workspaceDragState = $state<{ lastX: number; lastY: number } | null>(
-    null
-  );
-  let pageResizeObserver: ResizeObserver | null = null;
-  let workspaceResizeObserver: ResizeObserver | null = null;
-  let pageMutationObserver: MutationObserver | null = null;
-
-  function getPageContainerElement(): HTMLElement | null {
-    const pageElement =
-      workspaceViewportElement?.querySelector('.page-container');
-    return pageElement instanceof HTMLElement ? pageElement : null;
-  }
-
-  function updateWorkspaceViewportState(): void {
-    const pageElement = getPageContainerElement();
-    const viewportElement = workspaceViewportElement;
-
-    if (!pageElement || !viewportElement) {
-      workspaceViewportBounds = DEFAULT_WORKSPACE_VIEWPORT_BOUNDS;
-      isWorkspacePanDraggable = false;
-      return;
-    }
-
-    const nextBounds = resolveWorkspaceViewportBounds({
-      viewportWidth: viewportElement.clientWidth,
-      viewportHeight: viewportElement.clientHeight,
-      pageWidth: pageElement.offsetWidth,
-      pageHeight: pageElement.offsetHeight,
-      pageZoomScale: 1
-    });
-
-    workspaceViewportBounds = nextBounds;
-    isWorkspacePanDraggable = isPageMode;
-    hasWorkspaceOverflow = nextBounds.hasOverflow;
-
-    const clampedOffset = clampWorkspacePanOffset(pagePan, nextBounds);
-    if (clampedOffset.x !== pagePan.x || clampedOffset.y !== pagePan.y) {
-      globalActions.setPagePanOffset(clampedOffset);
-    }
-  }
-
-  function fitPageToWorkspace(): void {
-    globalActions.setPageZoom(100);
-    globalActions.resetPagePan();
-  }
-
-  function refreshObservedPageElement(
-    pageResizeObserver: ResizeObserver | null = null
-  ): void {
-    const nextPageElement = getPageContainerElement();
-
-    if (nextPageElement === observedPageElement) {
-      updateWorkspaceViewportState();
-      return;
-    }
-
-    if (observedPageElement && pageResizeObserver) {
-      pageResizeObserver.unobserve(observedPageElement);
-    }
-
-    observedPageElement = nextPageElement;
-
-    if (observedPageElement && pageResizeObserver) {
-      pageResizeObserver.observe(observedPageElement);
-    }
-
-    updateWorkspaceViewportState();
-  }
-
-  function shouldStartWorkspacePan(event: PointerEvent): boolean {
-    const isTouchPointer = event.pointerType === 'touch';
-    const isMiddleClick = event.button === MIDDLE_BUTTON;
-    const isLeftClick = event.button === LEFT_BUTTON;
-
-    if (!isWorkspacePanTarget(event.target)) {
-      return false;
-    }
-
-    if (isPageMode && isWorkspacePanDraggable) {
-      if (!isTouchPointer && !isLeftClick && !isMiddleClick) {
-        return false;
-      }
-      return true;
-    }
-
-    if (!isPageMode) {
-      if (isMiddleClick) return true;
-      if (isLeftClick && isSpacePanArmed) return true;
-    }
-
-    return false;
-  }
-
-  function handleMainContentPointerDown(event: PointerEvent): void {
-    if (!shouldStartWorkspacePan(event)) {
-      return;
-    }
-
-    event.preventDefault();
-    workspaceDragState = { lastX: event.clientX, lastY: event.clientY };
-    window.addEventListener(EVENT.POINTERMOVE, handleWorkspacePanMove);
-    window.addEventListener(EVENT.POINTERUP, handleWorkspacePanUp);
-  }
-
-  function handleWorkspacePanMove(event: PointerEvent): void {
-    if (!workspaceDragState) return;
-
-    const dx = event.clientX - workspaceDragState.lastX;
-    const dy = event.clientY - workspaceDragState.lastY;
-
-    workspaceDragState = { lastX: event.clientX, lastY: event.clientY };
-    globalActions.setPagePanOffset(
-      clampWorkspacePanOffset(
-        {
-          x: pagePan.x + dx,
-          y: pagePan.y + dy
-        },
-        workspaceViewportBounds
-      )
-    );
-  }
-
-  function handleWorkspacePanUp(): void {
-    workspaceDragState = null;
-    window.removeEventListener(EVENT.POINTERMOVE, handleWorkspacePanMove);
-    window.removeEventListener(EVENT.POINTERUP, handleWorkspacePanUp);
-  }
-
-  function isTypingTarget(target: EventTarget | null): boolean {
-    const element = target instanceof Element ? target : null;
-    if (!element) return false;
-    return Boolean(
-      element.closest(
-        'input, textarea, select, [contenteditable="true"], [role="textbox"], [role="combobox"]'
-      )
-    );
-  }
-
-  function handleWorkspaceFitEvent(): void {
-    fitPageToWorkspace();
-  }
-
-  function handleGlobalKeyDown(event: KeyboardEvent): void {
-    if (isTypingTarget(event.target)) return;
-
-    if (event.code === 'Space' && !event.repeat) {
-      event.preventDefault();
-      isSpacePanArmed = true;
-      return;
-    }
-
-    const isCmdOrCtrl = event.metaKey || event.ctrlKey;
-    if (!isCmdOrCtrl) return;
-
-    if (event.key === '0') {
-      event.preventDefault();
-      fitPageToWorkspace();
-      return;
-    }
-
-    if (event.key === '1') {
-      event.preventDefault();
-      globalActions.setPageZoom(100);
-      globalActions.resetPagePan();
-    }
-  }
-
-  function handleGlobalKeyUp(event: KeyboardEvent): void {
-    if (event.code === 'Space') {
-      isSpacePanArmed = false;
-    }
-  }
 
   $effect(() => {
     const currentStep = globalState.selectedStep;
@@ -596,8 +323,7 @@
       previousStep === ToolbarStep.Styling &&
       currentStep !== ToolbarStep.Styling;
 
-    // Only switch zoom mode on actual step transitions, not on initial render.
-    // On page refresh, the user's zoom mode preference should be preserved.
+    // Initial render preserves the user's zoom mode preference.
     if (previousStep !== null) {
       if (enteringStylingStep) {
         zoomModeStore.setPageMode();
@@ -607,8 +333,7 @@
     }
 
     if (shouldInitStylingElements) {
-      // untrack: these calls read+write s.items; tracking them would cause
-      // a write-triggers-read loop. currentStep/projectId are the right triggers.
+      // Avoid a read/write loop; currentStep/projectId are the intended triggers.
       untrack(() => {
         const hasPageElements = getAnnotationsState().items.some(
           (item) => item.role != null
@@ -645,33 +370,29 @@
       <CreateProject open onClose={handleCloseModal} />
     {/if}
 
+    <Modal
+      open={pendingKhImport !== null}
+      modalHeading={m.project_import_url_confirm_title()}
+      primaryButtonText={m.project_import_url_confirm_replace()}
+      secondaryButtonText={m.cancel()}
+      danger
+      size="xs"
+      on:click:button--primary={confirmPendingKhImport}
+      on:click:button--secondary={cancelPendingKhImport}
+      on:close={cancelPendingKhImport}
+      on:submit={confirmPendingKhImport}
+    >
+      <p class="kh-import-confirm-body">
+        {m.project_import_url_confirm_discard()}
+      </p>
+    </Modal>
+
     {#if !globalState.isMobileView}
       <StepToolbar />
     {/if}
 
     {#key projectRuntime.runtimeKey}
-      <article
-        class="main-content"
-        class:workspace-panning={workspaceDragState !== null}
-        class:workspace-overflow-draggable={isWorkspacePanDraggable}
-        class:workspace-has-overflow={hasWorkspaceOverflow}
-        class:workspace-space-armed={isSpacePanArmed && !isPageMode}
-        onpointerdown={handleMainContentPointerDown}
-      >
-        <div
-          bind:this={workspaceViewportElement}
-          class="workspace-viewport"
-          class:has-overflow={hasWorkspaceOverflow}
-        >
-          <div class="workspace-camera" style={workspaceCameraStyle}>
-            <div class="page-scale-layer">
-              <div class="page-content-wrapper">
-                {@render children()}
-              </div>
-            </div>
-          </div>
-        </div>
-
+      {#snippet workspaceOverlays()}
         <ZoomToolbar />
 
         <MobileOpenPanelButton />
@@ -686,7 +407,11 @@
             />
           </div>
         {/if}
-      </article>
+      {/snippet}
+
+      <WorkspaceViewport overlays={workspaceOverlays}>
+        {@render children()}
+      </WorkspaceViewport>
 
       {#if globalState.isMobileView}
         <MobileToolbar />
@@ -713,119 +438,8 @@
     background-color: var(--cds-ui-01);
   }
 
-  .main-content {
-    position: relative;
-    flex: 1;
-    min-width: 0;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: visible;
-  }
-
-  .mobile-view .main-content {
-    justify-content: center;
-  }
-
-  .workspace-viewport {
-    position: relative;
-    flex: 1;
-    min-width: 0;
-    height: 100%;
-    overflow: hidden;
-  }
-
-  .workspace-viewport.has-overflow::before,
-  .workspace-viewport.has-overflow::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 48px;
-    pointer-events: none;
-    z-index: 1;
-    opacity: 0.85;
-  }
-
-  .workspace-viewport.has-overflow::before {
-    left: 0;
-    background: linear-gradient(
-      to right,
-      var(--cds-ui-01) 0%,
-      rgba(244, 244, 244, 0) 100%
-    );
-  }
-
-  .workspace-viewport.has-overflow::after {
-    right: 0;
-    background: linear-gradient(
-      to left,
-      var(--cds-ui-01) 0%,
-      rgba(244, 244, 244, 0) 100%
-    );
-  }
-
-  .workspace-camera,
-  .page-scale-layer,
-  .page-content-wrapper {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: visible;
-  }
-
-  .workspace-camera {
-    will-change: transform;
-  }
-
-  .page-content-wrapper {
-    min-width: 0;
-    padding: var(--cds-spacing-03) var(--cds-spacing-05);
-  }
-
-  @media (max-width: 1023px) {
-    .page-content-wrapper {
-      padding: var(--cds-spacing-02) var(--cds-spacing-03);
-    }
-  }
-
-  .workspace-panning .workspace-camera {
-    transition: none;
-  }
-
-  .workspace-panning {
-    cursor: grabbing;
-  }
-
-  .main-content.workspace-overflow-draggable :global(.main-map-container),
-  .main-content.workspace-overflow-draggable :global(.map-stage),
-  .main-content.workspace-overflow-draggable :global(.map-canvas),
-  .main-content.workspace-overflow-draggable :global(.map-canvas canvas),
-  .main-content.workspace-overflow-draggable :global(.page-grid),
-  .main-content.workspace-overflow-draggable :global(.page-container) {
-    cursor: grab;
-    touch-action: none;
-  }
-
-  .main-content.workspace-space-armed :global(.main-map-container),
-  .main-content.workspace-space-armed :global(.map-stage),
-  .main-content.workspace-space-armed :global(.map-canvas),
-  .main-content.workspace-space-armed :global(.map-canvas canvas),
-  .main-content.workspace-space-armed :global(.page-grid),
-  .main-content.workspace-space-armed :global(.page-container) {
-    cursor: grab;
-  }
-
-  .workspace-panning :global(.main-map-container),
-  .workspace-panning :global(.map-stage),
-  .workspace-panning :global(.map-canvas),
-  .workspace-panning :global(.map-canvas canvas),
-  .workspace-panning :global(.page-grid),
-  .workspace-panning :global(.page-container) {
-    cursor: grabbing;
+  .kh-import-confirm-body {
+    margin: 0;
   }
 
   .colorblind-notification {

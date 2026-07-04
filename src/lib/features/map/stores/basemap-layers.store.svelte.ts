@@ -1,5 +1,5 @@
 import { deepClone } from '$lib/features/commons/utils/clone.utils';
-import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
+import { persistenceRegistry } from '$lib/features/project-management/core';
 import {
   BasemapDottedPattern,
   BasemapGraticuleMode,
@@ -155,10 +155,10 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
     id: 'terre',
     visible: true,
-    fillColor: '#f2f2f2',
+    fillColor: '#a8a8a8',
     fillShadow: false,
     fillOpacity: 100,
-    strokeColor: '#a8a8a8',
+    strokeColor: '#8d8d8d',
     strokeDotted: false,
     strokeDottedPattern: BasemapDottedPattern.DOTS,
     strokeThickness: 0.5,
@@ -412,8 +412,7 @@ function normalizeSerializedLayers(
 
   // Migrate projects saved with the legacy MERS default (#c8c8c8) to the current default
   const mersLayer = result.find((l) => l.id === 'mers') as
-    | MersLayerConfig
-    | undefined;
+    MersLayerConfig | undefined;
   const mersDefault = DEFAULT_LAYERS.find(
     (l) => l.id === 'mers'
   ) as MersLayerConfig;
@@ -444,8 +443,7 @@ function createBasemapLayersStore() {
     id: T
   ): Extract<BasemapLayerConfig, { id: T }> | undefined {
     return state.layers.find((layer) => layer.id === id) as
-      | Extract<BasemapLayerConfig, { id: T }>
-      | undefined;
+      Extract<BasemapLayerConfig, { id: T }> | undefined;
   }
 
   function setLayerVisibility(id: BasemapLayerId, visible: boolean): void {

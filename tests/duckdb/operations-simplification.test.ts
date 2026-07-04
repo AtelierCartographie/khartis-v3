@@ -3,6 +3,8 @@ import {
   calculateToleranceFromRate,
   simplifyGeometryTable
 } from '$lib/features/duckdb/operations/simplification';
+import { DataValidationError } from '$lib/features/commons/pipeline.errors';
+import * as m from '$lib/paraglide/messages';
 
 describe('calculateToleranceFromRate', () => {
   it('converts 0% to 0.0 (no simplification)', () => {
@@ -35,6 +37,36 @@ describe('calculateToleranceFromRate', () => {
 });
 
 describe('simplifyGeometryTable', () => {
+  it('throws a DataValidationError for invalid tolerance values', async () => {
+    const Duck = {
+      query: vi.fn(async (sql: string) => {
+        if (sql.includes('SUM(ST_NPoints')) {
+          return [{ total_vertices: 100 }];
+        }
+
+        return [];
+      }),
+      invalidateTableCache: vi.fn()
+    };
+
+    const request = simplifyGeometryTable(
+      Duck as unknown as Parameters<typeof simplifyGeometryTable>[0],
+      'source_table',
+      -1
+    );
+
+    await expect(request).rejects.toMatchObject({
+      name: 'DataValidationError',
+      code: 'DATA_VALIDATION_ERROR',
+      field: 'tolerance',
+      details: {
+        field: 'tolerance',
+        tolerance: -1
+      }
+    });
+    await expect(request).rejects.toBeInstanceOf(DataValidationError);
+  });
+
   it('throws without falling back to topology-breaking ST_Simplify when the macro fails', async () => {
     const queries: string[] = [];
     const Duck = {
@@ -50,7 +82,8 @@ describe('simplifyGeometryTable', () => {
         }
 
         return [];
-      })
+      }),
+      invalidateTableCache: vi.fn()
     };
 
     await expect(
@@ -59,8 +92,51 @@ describe('simplifyGeometryTable', () => {
         'source_table',
         0.5
       )
-    ).rejects.toThrow('Topology-preserving simplification failed');
+    ).rejects.toThrow(m.error_simplification_topology_failed());
 
     expect(queries.some((sql) => sql.includes('ST_Simplify'))).toBe(false);
+  });
+
+  it('escapes quoted identifiers and string macro arguments', async () => {
+    const queries: string[] = [];
+    const Duck = {
+      query: vi.fn(async (sql: string) => {
+        queries.push(sql);
+
+        if (sql.includes('SUM(ST_NPoints')) {
+          return [{ total_vertices: 100 }];
+        }
+
+        return [];
+      }),
+      invalidateTableCache: vi.fn()
+    };
+
+    await simplifyGeometryTable(
+      Duck as unknown as Parameters<typeof simplifyGeometryTable>[0],
+      'source"table',
+      0.5,
+      {
+        geometryColumn: `geom' "col"`,
+        inputTableName: `O'Brien "source"`,
+        targetTableName: `target' "table"`
+      }
+    );
+
+    expect(queries[0]).toContain(`FROM "O'Brien ""source"""`);
+    expect(queries[0]).toContain(`ST_NPoints("geom' ""col""")`);
+    expect(queries[1]).toContain(`CREATE OR REPLACE TABLE "target' ""table"""`);
+    expect(queries[1]).toContain(
+      `simplify_and_clean('O''Brien "source"', 'geom'' "col"', 0.5)`
+    );
+    expect(queries[2]).toContain(`FROM "target' ""table"""`);
+    expect(queries[3]).toContain(
+      `CREATE OR REPLACE TABLE "source""table__innerlines"`
+    );
+    expect(queries[3]).toContain(`extract_innerlines('target'' "table"')`);
+    expect(Duck.invalidateTableCache).toHaveBeenCalledWith(`target' "table"`);
+    expect(Duck.invalidateTableCache).toHaveBeenCalledWith(
+      'source"table__innerlines'
+    );
   });
 });

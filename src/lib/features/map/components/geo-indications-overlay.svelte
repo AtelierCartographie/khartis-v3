@@ -21,8 +21,9 @@
     clampFontSize,
     resolveFontFamilyStack
   } from '$lib/features/step-toolbar/fonts.constants';
-  import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
+  import { KEY } from '$lib/features/commons/constants/dom.constants';
   import {
+    PAGE_GRID_SIZE_PX,
     getDragBounds,
     snapPointWithinBounds
   } from '$lib/features/commons/utils/page-grid.utils';
@@ -60,7 +61,11 @@
     getElementCenteringDelta,
     getFocusViewportElement
   } from '../utils/focus-viewport.utils';
-  import { setStylingToolPopoverDragging } from '../utils/tool-popover-drag-visibility.utils';
+  import {
+    areDraggablePageItemPointsEqual,
+    createDraggablePageItemController
+  } from '../utils/use-draggable-page-item';
+  import { getKeyboardMoveDelta } from '../utils/keyboard-position.utils';
   import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
   import { getLegendState } from '$lib/features/step-toolbar/tools/legend';
   import * as m from '$lib/paraglide/messages';
@@ -84,9 +89,7 @@
   const SCALE_SEGMENT_COUNT = 4;
   const SCALE_BAR_THICKNESS = 8;
   const SCALE_SVG_BOTTOM_PADDING = 2;
-  // Average glyph advance as a fraction of the font size — used to estimate the
-  // label width without a DOM measurement (the layout is fully derived). Biased
-  // slightly high so a large label is never clipped horizontally.
+  // Slightly high glyph-width estimate avoids clipping fully derived scale labels.
   const SCALE_CHAR_WIDTH_RATIO = 0.62;
   const SCALE_SEGMENTS = Array.from(
     { length: SCALE_SEGMENT_COUNT },
@@ -96,9 +99,7 @@
     '/basemaps/geometry/monde-countries-2024-low.parquet';
   const INSET_MAP_PADDING = 4;
   const INSET_MAP_WORLD_SPAN_EPSILON = 359.5;
-  const INSET_ZOOM_BASE = 0.6;
-  const INSET_ZOOM_FACTOR = 1.2;
-  const INSET_ZOOM_DEFAULT = 50;
+  const INSET_ZOOM_SCALE = 1.2;
   const INSET_EXTENT_POINT_RADIUS = 4;
   const INSET_EXTENT_MIN_SIZE = 8;
   const INSET_POINT_BOUNDS_EPSILON = 0.000001;
@@ -108,6 +109,8 @@
   const INSET_LAND_STROKE_MAX = 0.8;
   const ORIENTATION_MIN_SIZE_PX = 14;
   const ORIENTATION_MAX_SIZE_PX = 84;
+  const GEO_INDICATION_DRAG_THRESHOLD_PX = 3;
+  const GEO_INDICATION_CLICK_SUPPRESSION_MS = 120;
 
   type WorldFeatureCollection = FeatureCollection<
     Polygon | MultiPolygon,
@@ -397,9 +400,7 @@
   }
 
   function getInsetZoomScale(): number {
-    const zoom = INSET_ZOOM_DEFAULT;
-    const normalized = clamp(zoom / 100, 0, 1);
-    return INSET_ZOOM_BASE + normalized * INSET_ZOOM_FACTOR;
+    return INSET_ZOOM_SCALE;
   }
 
   function createInsetProjection(
@@ -480,16 +481,13 @@
       geoIndicationsState.scale.distance,
       0
     );
-    // Re-suggest whenever the value was auto-tuned (initial, or every time
-    // projection/zoom/center moves) until the user manually overrides it.
+    // Keep auto-tuned distances synced until the user overrides the value.
     if (currentDistance <= 0 || geoIndicationsState.scale.autoTuned) {
       const suggested = getSuggestedScaleDistance(
         geoIndicationsState.scale.units,
         getCurrentScaleDistanceContext()
       );
-      // Wait for a valid measurement before persisting an initial value —
-      // otherwise the transitional state right after a basemap load would
-      // bake a bogus value into the project state.
+      // Persist only valid measurements; basemap-load transitions can be bogus.
       if (suggested === null) {
         return;
       }
@@ -549,9 +547,7 @@
     Math.max(2, Math.round(scaleRenderedWidth / SCALE_SEGMENT_COUNT))
   );
   const scaleBarWidth = $derived(scaleSegmentWidth * SCALE_SEGMENT_COUNT);
-  // The viewport widens to the wider of the bar and the (estimated) label so a
-  // large label overflows neither the bar line nor the SVG; the bar stays
-  // centered within it.
+  // Widen the SVG to the larger of the bar and estimated label width.
   const scaleLabelWidth = $derived(
     Math.ceil(scaleLabel.length * scaleFontSize * SCALE_CHAR_WIDTH_RATIO)
   );
@@ -562,9 +558,7 @@
   );
   const scaleLabelX = $derived(scaleSvgWidth / 2);
 
-  // Vertical layout follows the font size so a larger label is never clipped by
-  // a fixed-height viewport: label baseline near the top, bar/line below it,
-  // SVG height bounded by the bar bottom.
+  // Vertical layout follows font size so large labels stay inside the SVG.
   const scaleLabelBaselineY = $derived(scaleFontSize);
   const scaleLabelGap = $derived(Math.max(4, Math.round(scaleFontSize * 0.35)));
   const scaleBarTopY = $derived(scaleLabelBaselineY + scaleLabelGap);
@@ -581,9 +575,7 @@
     );
   });
 
-  // Rotation that makes the north indicator point to geographic north at the
-  // center of the current framing, recomputed on map move/zoom/resize and on
-  // projection change — same reactivity contract as the scale bar.
+  // North orientation follows the current framing and projection like the scale bar.
   const orientationAngle = $derived.by(() => {
     const _revision = mapViewRevision;
     const _zoomLevel = mapInstanceStore.zoomLevel;
@@ -643,12 +635,7 @@
     orientationEnabled: geoIndicationsState.orientation.enabled,
     orientationDragged: geoIndicationsState.orientation.dragPosition !== null
   }));
-  // Drag positions are stored in logical page coordinates (the pointer handler
-  // divides screen deltas by the page scale). The overlay itself is rendered at
-  // screen scale with no CSS transform, so the position must be multiplied back
-  // by the page scale here — otherwise the element tracks the cursor at 1/scale
-  // speed. (Unlike the legend, the figures are not transform-scaled: the scale
-  // bar is calibrated in screen pixels and scaling it would falsify it.)
+  // Drag positions are logical page coordinates; figures are not CSS-scaled.
   const scaleStyle = $derived.by(() => {
     if (geoIndicationsState.scale.dragPosition) {
       const scale = getPageScale();
@@ -786,8 +773,11 @@
   let orientationElement = $state<HTMLDivElement | null>(null);
   let insetMapElement = $state<HTMLDivElement | null>(null);
   let currentDrag = $state<DragTarget | null>(null);
-  let dragOffsetX = 0;
-  let dragOffsetY = 0;
+  let dragStartClientX = 0;
+  let dragStartClientY = 0;
+  let currentDragMoved = false;
+  let suppressedClickGeoTarget: DragTarget | null = null;
+  let suppressedClickTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let centeredGeoTarget = $state<DragTarget | null>(null);
   let previousScaleEnabled = $state<boolean | null>(null);
   let previousOrientationEnabled = $state<boolean | null>(null);
@@ -801,11 +791,12 @@
     return Math.max(globalState.zoom.pageZoomScale, 0.1);
   }
 
-  function arePointsEqual(
-    left: { x: number; y: number } | null,
-    right: { x: number; y: number } | null
-  ): boolean {
-    return left?.x === right?.x && left?.y === right?.y;
+  function getKeyboardMoveStep(): number {
+    return formatState.gridEnabled ? PAGE_GRID_SIZE_PX : 1;
+  }
+
+  function getKeyboardFastMoveStep(): number {
+    return formatState.gridEnabled ? PAGE_GRID_SIZE_PX * 5 : 10;
   }
 
   function getOverlaySize(): { width: number; height: number } | null {
@@ -813,8 +804,7 @@
       return null;
     }
 
-    // offsetWidth/Height are screen pixels; convert to logical page units so
-    // the drag bounds match the logical drag position.
+    // Convert screen-pixel dimensions to logical page units for drag bounds.
     const scale = getPageScale();
     return {
       width: overlayElement.offsetWidth / scale,
@@ -836,6 +826,29 @@
     }
 
     return insetMapElement;
+  }
+
+  function getKeyboardDragPosition(
+    target: DragTarget
+  ): { x: number; y: number } | null {
+    const dragPosition = getDragPosition(target);
+    if (dragPosition) {
+      return dragPosition;
+    }
+
+    const dragElement = getDragElement(target);
+    if (!overlayElement || !dragElement) {
+      return null;
+    }
+
+    const scale = getPageScale();
+    const overlayRect = overlayElement.getBoundingClientRect();
+    const elementRect = dragElement.getBoundingClientRect();
+
+    return {
+      x: (elementRect.left - overlayRect.left) / scale,
+      y: (elementRect.top - overlayRect.top) / scale
+    };
   }
 
   function centerGeoTargetInViewport(target: DragTarget): void {
@@ -898,9 +911,7 @@
       return position;
     }
 
-    // The element is rendered at screen scale (no CSS transform), so its
-    // offset size is in screen pixels — convert to logical page units to match
-    // the logical position and overlay bounds.
+    // Convert screen-size elements to logical page units for drag bounds.
     const scale = getPageScale();
     return snapPointWithinBounds(
       position,
@@ -931,7 +942,7 @@
       snapEnabled
     );
 
-    if (!arePointsEqual(normalizedPosition, dragPosition)) {
+    if (!areDraggablePageItemPointsEqual(normalizedPosition, dragPosition)) {
       setDragPosition(target, normalizedPosition);
     }
   }
@@ -987,30 +998,77 @@
     );
   });
 
-  function stopDragging(): void {
-    currentDrag = null;
-    setStylingToolPopoverDragging(false);
-    window.removeEventListener(EVENT.POINTERMOVE, handlePointerMove);
-    window.removeEventListener(EVENT.POINTERUP, handlePointerUp);
+  function clearSuppressedGeoIndicationsClick(): void {
+    if (suppressedClickTimeoutId) {
+      clearTimeout(suppressedClickTimeoutId);
+      suppressedClickTimeoutId = null;
+    }
+
+    suppressedClickGeoTarget = null;
   }
 
-  function handlePointerUp(): void {
-    stopDragging();
+  function suppressNextGeoIndicationsClick(target: DragTarget): void {
+    clearSuppressedGeoIndicationsClick();
+    suppressedClickGeoTarget = target;
+    suppressedClickTimeoutId = setTimeout(() => {
+      suppressedClickTimeoutId = null;
+      suppressedClickGeoTarget = null;
+    }, GEO_INDICATION_CLICK_SUPPRESSION_MS);
   }
 
-  function handlePointerMove(event: PointerEvent): void {
-    if (!currentDrag || !overlayElement) {
+  function suppressCurrentGeoIndicationsClickAfterDrag(): void {
+    const completedDrag = currentDrag;
+    const shouldSuppressClick = currentDragMoved;
+
+    if (completedDrag && shouldSuppressClick) {
+      suppressNextGeoIndicationsClick(completedDrag);
+    }
+  }
+
+  function trackGeoIndicationsDragMove(event: PointerEvent): void {
+    if (!currentDrag) {
       return;
     }
 
-    const scale = getPageScale();
-    const rect = overlayElement.getBoundingClientRect();
-    const position = normalizeDragPosition(currentDrag, {
-      x: (event.clientX - rect.left) / scale - dragOffsetX,
-      y: (event.clientY - rect.top) / scale - dragOffsetY
-    });
+    const pointerDistance = Math.hypot(
+      event.clientX - dragStartClientX,
+      event.clientY - dragStartClientY
+    );
 
-    setDragPosition(currentDrag, position);
+    if (
+      !currentDragMoved &&
+      pointerDistance >= GEO_INDICATION_DRAG_THRESHOLD_PX
+    ) {
+      currentDragMoved = true;
+    }
+  }
+
+  const geoIndicationsDragController = createDraggablePageItemController({
+    getOverlayElement: () => overlayElement,
+    getPageScale,
+    getCurrentPosition: () =>
+      currentDrag ? getDragPosition(currentDrag) : null,
+    normalizePosition: (position) =>
+      currentDrag ? normalizeDragPosition(currentDrag, position) : position,
+    setPosition: (position) => {
+      if (currentDrag) {
+        setDragPosition(currentDrag, position);
+      }
+    },
+    onDraggingChange: (active) => {
+      if (active) {
+        return;
+      }
+
+      currentDrag = null;
+      currentDragMoved = false;
+    },
+    onPointerMove: trackGeoIndicationsDragMove,
+    onPointerUp: suppressCurrentGeoIndicationsClickAfterDrag
+  });
+
+  function stopDragging(): void {
+    geoIndicationsDragController.stop();
   }
 
   function startDrag(
@@ -1025,31 +1083,20 @@
     event.preventDefault();
     event.stopPropagation();
 
-    const scale = getPageScale();
-    const overlayRect = overlayElement.getBoundingClientRect();
-    const elementRect = element.getBoundingClientRect();
-
-    const currentX = (elementRect.left - overlayRect.left) / scale;
-    const currentY = (elementRect.top - overlayRect.top) / scale;
-    const dragPos = normalizeDragPosition(
-      target,
-      getDragPosition(target) ?? {
-        x: currentX,
-        y: currentY
-      }
-    );
-
-    if (!arePointsEqual(dragPos, getDragPosition(target))) {
-      setDragPosition(target, dragPos);
-    }
-
-    dragOffsetX = (event.clientX - overlayRect.left) / scale - dragPos.x;
-    dragOffsetY = (event.clientY - overlayRect.top) / scale - dragPos.y;
+    dragStartClientX = event.clientX;
+    dragStartClientY = event.clientY;
+    currentDragMoved = false;
     currentDrag = target;
-    setStylingToolPopoverDragging(true);
 
-    window.addEventListener(EVENT.POINTERMOVE, handlePointerMove);
-    window.addEventListener(EVENT.POINTERUP, handlePointerUp);
+    const started = geoIndicationsDragController.start({
+      event,
+      itemElement: element
+    });
+
+    if (!started) {
+      currentDrag = null;
+      currentDragMoved = false;
+    }
   }
 
   function handleGeoIndicationsActivate(
@@ -1092,6 +1139,13 @@
     event: MouseEvent,
     target: DragTarget
   ): void {
+    if (suppressedClickGeoTarget === target) {
+      event.preventDefault();
+      event.stopPropagation();
+      clearSuppressedGeoIndicationsClick();
+      return;
+    }
+
     handleGeoIndicationsActivate(event);
     centeredGeoTarget = target;
 
@@ -1113,10 +1167,44 @@
     resetCenteredGeoTargetPan();
   }
 
+  function moveGeoIndicationWithKeyboard(
+    event: KeyboardEvent,
+    target: DragTarget
+  ): boolean {
+    const delta = getKeyboardMoveDelta(
+      event,
+      getKeyboardMoveStep(),
+      getKeyboardFastMoveStep()
+    );
+    if (!delta) {
+      return false;
+    }
+
+    const currentPosition = getKeyboardDragPosition(target);
+    if (!currentPosition) {
+      return false;
+    }
+
+    event.preventDefault();
+    handleGeoIndicationsActivate(event);
+    setDragPosition(
+      target,
+      normalizeDragPosition(target, {
+        x: currentPosition.x + delta.x,
+        y: currentPosition.y + delta.y
+      })
+    );
+    return true;
+  }
+
   function handleGeoIndicationsKeyDown(
     event: KeyboardEvent,
     target: DragTarget
   ): void {
+    if (moveGeoIndicationWithKeyboard(event, target)) {
+      return;
+    }
+
     if (event.key !== KEY.ENTER && event.key !== KEY.SPACE) {
       return;
     }
@@ -1219,6 +1307,7 @@
   onDestroy(() => {
     worldFeaturesLoadGeneration += 1;
     centeredGeoTarget = null;
+    clearSuppressedGeoIndicationsClick();
     stopDragging();
   });
 </script>
@@ -1239,7 +1328,7 @@
       style={scaleStyle}
       role="button"
       tabindex="0"
-      aria-label={m.tool_geo_indications()}
+      aria-label={m.geo_scale_bar_aria()}
       onclick={(event: MouseEvent) => handleGeoIndicationsClick(event, 'scale')}
       onblur={() => handleGeoIndicationsBlur('scale')}
       onkeydown={(event: KeyboardEvent) =>
@@ -1307,7 +1396,7 @@
       style={orientationStyle}
       role="button"
       tabindex="0"
-      aria-label={m.tool_geo_indications()}
+      aria-label={m.geo_north_indicator_aria()}
       onclick={(event: MouseEvent) =>
         handleGeoIndicationsClick(event, 'orientation')}
       onblur={() => handleGeoIndicationsBlur('orientation')}
@@ -1392,7 +1481,7 @@
       style={insetPanelStyle}
       role="button"
       tabindex="0"
-      aria-label={m.tool_geo_indications()}
+      aria-label={m.geo_inset_map()}
       onclick={(event: MouseEvent) => handleGeoIndicationsClick(event, 'inset')}
       onblur={() => handleGeoIndicationsBlur('inset')}
       onkeydown={(event: KeyboardEvent) =>
@@ -1411,10 +1500,18 @@
         >
           <defs>
             <clipPath id={insetClipId}>
-              <path d={insetRenderState.spherePath}></path>
+              <path
+                d={insetRenderState.spherePath}
+                fill="none"
+                style="fill: none;"
+              ></path>
             </clipPath>
           </defs>
-          <path d={insetRenderState.spherePath} fill={insetSeaColor}></path>
+          <path
+            d={insetRenderState.spherePath}
+            fill={insetSeaColor}
+            style={`fill: ${insetSeaColor};`}
+          ></path>
           <g clip-path={`url(#${insetClipId})`}>
             {#each insetRenderState.landPaths as landPath, index (index)}
               <path
@@ -1423,6 +1520,9 @@
                 fill={insetContinentColor}
                 stroke={insetContinentColor}
                 stroke-width={insetRenderState.landStrokeWidth}
+                opacity="0.95"
+                vector-effect="non-scaling-stroke"
+                style={`fill: ${insetContinentColor}; stroke: ${insetContinentColor};`}
               ></path>
             {/each}
             {#if insetRenderState.graticulePath}
@@ -1430,10 +1530,22 @@
                 class="inset-graticule-path"
                 d={insetRenderState.graticulePath}
                 fill="none"
+                stroke="rgba(0, 0, 0, 0.3)"
+                stroke-width="0.5"
+                vector-effect="non-scaling-stroke"
+                style="fill: none; stroke: rgba(0, 0, 0, 0.3); stroke-width: 0.5; vector-effect: non-scaling-stroke;"
               ></path>
             {/if}
           </g>
-          <path class="inset-outline" d={insetRenderState.spherePath}></path>
+          <path
+            class="inset-outline"
+            d={insetRenderState.spherePath}
+            fill="none"
+            stroke="rgba(0, 0, 0, 0.3)"
+            stroke-width="1"
+            vector-effect="non-scaling-stroke"
+            style="fill: none; stroke: rgba(0, 0, 0, 0.3); stroke-width: 1; vector-effect: non-scaling-stroke;"
+          ></path>
           {#if insetRenderState.viewportPath}
             <path
               class="inset-extent-path"
@@ -1441,6 +1553,10 @@
               fill="none"
               stroke={insetWindowColor}
               stroke-width={insetRenderState.windowStrokeWidth}
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              vector-effect="non-scaling-stroke"
+              style={`fill: none; stroke: ${insetWindowColor};`}
             ></path>
           {:else if insetRenderState.viewportPoint}
             <circle
@@ -1451,6 +1567,10 @@
               fill={insetWindowColor}
               stroke={insetWindowColor}
               stroke-width={insetRenderState.windowStrokeWidth}
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              vector-effect="non-scaling-stroke"
+              style={`fill: ${insetWindowColor}; stroke: ${insetWindowColor};`}
             ></circle>
           {/if}
         </svg>

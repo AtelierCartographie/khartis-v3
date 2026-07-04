@@ -1,4 +1,6 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
+import * as m from '$lib/paraglide/messages';
 
 import { Duck } from '$lib/features/duckdb';
 import { basemapService } from '../services/basemap.service.svelte';
@@ -425,5 +427,9 @@ export async function centerMapOnTableRow({
       flow: 'center_on_table_row',
       extra: { tableName, rowId, sourceFileId, joinedBasemap }
     });
+    showWarning(
+      m.center_table_row_warning_title(),
+      m.center_table_row_warning_message()
+    );
   }
 }

@@ -157,11 +157,11 @@ describe('DiscretizationModal', () => {
     expect(select).not.toBeNull();
 
     await fireEvent.change(select!, {
-      target: { value: 'quantile' }
+      target: { value: ClassificationMethod.QUANTILES }
     });
 
     expect(onchange).not.toHaveBeenCalled();
-    expect(select?.value).toBe('quantile');
+    expect(select?.value).toBe(ClassificationMethod.QUANTILES);
   });
 
   it('keeps the local method choice when the parent props have not caught up yet', async () => {
@@ -191,7 +191,7 @@ describe('DiscretizationModal', () => {
     expect(select).not.toBeNull();
 
     await fireEvent.change(select!, {
-      target: { value: 'quantile' }
+      target: { value: ClassificationMethod.QUANTILES }
     });
 
     await rerender({
@@ -212,13 +212,13 @@ describe('DiscretizationModal', () => {
     ) as HTMLSelectElement | null;
 
     expect(reopenedSelect).not.toBeNull();
-    expect(reopenedSelect?.value).toBe('quantile');
+    expect(reopenedSelect?.value).toBe(ClassificationMethod.QUANTILES);
   });
 
   it('propagates the selected method change from the panel to the parent callback', async () => {
     const onmethodchange = vi.fn();
     const { container } = render(DiscretizationPanel, {
-      method: 'kmeans',
+      method: ClassificationMethod.KMEANS,
       numClasses: 5,
       breaks: [
         { min: 0, max: 10, count: 1, color: '#111111' },
@@ -237,15 +237,17 @@ describe('DiscretizationModal', () => {
     expect(select).not.toBeNull();
 
     await fireEvent.change(select!, {
-      target: { value: 'equal-interval' }
+      target: { value: ClassificationMethod.EQUAL_INTERVAL }
     });
 
-    expect(onmethodchange).toHaveBeenCalledWith('equal-interval');
-    expect(select?.value).toBe('equal-interval');
+    expect(onmethodchange).toHaveBeenCalledWith(
+      ClassificationMethod.EQUAL_INTERVAL
+    );
+    expect(select?.value).toBe(ClassificationMethod.EQUAL_INTERVAL);
   });
 
   it('keeps rendering when an unknown panel method value reaches the description', () => {
-    const unknownMethod = 'quantiles' as never;
+    const unknownMethod = 'quantile' as never;
     const { container } = render(DiscretizationPanel, {
       method: unknownMethod,
       breaks: [
@@ -263,7 +265,7 @@ describe('DiscretizationModal', () => {
   it('should update both adjacent bounds when editing a shared break value in manual mode', async () => {
     const onbreakschange = vi.fn();
     const { container } = render(DiscretizationPanel, {
-      method: 'manual',
+      method: ClassificationMethod.MANUAL,
       numClasses: 3,
       breaks: [
         { min: 0, max: 10, count: 1, color: '#111111' },

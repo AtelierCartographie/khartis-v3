@@ -4,6 +4,15 @@ export interface FieldSelectionItem {
   type?: string;
 }
 
+export interface FieldSelection {
+  selectedFieldId: number;
+  selectedFieldName: string | undefined;
+}
+
+export interface FieldSelectionWithHandler extends FieldSelection {
+  handleSelect: (fieldId: number) => void;
+}
+
 export const NONE_FIELD_ID = -1;
 
 export type FieldSelectionKind = 'numeric' | 'textual' | 'any';
@@ -17,11 +26,7 @@ function matchesFieldSelectionKind(
   }
 
   if (kind === 'numeric') {
-    // Two type vocabularies coexist in the app: the column pipeline emits
-    // 'number' (fromDuckDBType), while the deep-validator / badge layer uses
-    // 'numeric'. The variable badge already treats both as numeric, so the
-    // select must too — otherwise a numeric column tagged 'numeric' shows a
-    // numeric badge yet silently disappears from "Couleur selon".
+    // Column metadata may use `number` or `numeric`; both must stay selectable.
     return item.type === 'number' || item.type === 'numeric';
   }
 
@@ -105,13 +110,22 @@ export type MappingColumnKey =
   | 'secondaryLabelColumn'
   | 'colorColumn';
 
+export type MappingColumnKeyResolver =
+  MappingColumnKey | (() => MappingColumnKey);
+
 export interface UseFieldSelectionHandlerOptions {
   getDataFields: () => FieldSelectionItem[];
-  columnKey: MappingColumnKey;
+  columnKey: MappingColumnKeyResolver;
   onMappingChange?: (
     updates: Partial<Record<MappingColumnKey, string | undefined>>
   ) => void;
   onBeforeChange?: (next: string | undefined) => void;
+}
+
+function resolveMappingColumnKey(
+  columnKey: MappingColumnKeyResolver
+): MappingColumnKey {
+  return typeof columnKey === 'function' ? columnKey() : columnKey;
 }
 
 export function useFieldSelectionHandler(
@@ -123,7 +137,7 @@ export function useFieldSelectionHandler(
     selection.set(fieldId);
     const next = resolveFieldName(opts.getDataFields(), fieldId);
     opts.onBeforeChange?.(next);
-    opts.onMappingChange?.({ [opts.columnKey]: next });
+    opts.onMappingChange?.({ [resolveMappingColumnKey(opts.columnKey)]: next });
   }
 
   return Object.assign(selection, { handleSelect });

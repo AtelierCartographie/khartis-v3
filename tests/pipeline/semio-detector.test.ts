@@ -47,6 +47,37 @@ describe('detectSemioType — STRING columns', () => {
     expect(result.semioType).toBe('QL');
   });
 
+  it('detects LABEL for a name-keyword column with distinct values', () => {
+    const result = detectSemioType(
+      analysis('nom_commune', STRING, {
+        count: 200,
+        uniques: 195
+      }) as never
+    );
+    expect(result.semioType).toBe('label');
+    expect(result.semioScore).toBeGreaterThanOrEqual(0.6);
+  });
+
+  it('detects LABEL for keyword-less near-unique text values over geoid', () => {
+    const result = detectSemioType(
+      analysis('entity', STRING, {
+        count: 100,
+        uniques: 95
+      }) as never
+    );
+    expect(result.semioType).toBe('label');
+  });
+
+  it('keeps id-keyword columns as GEOID, not label', () => {
+    const result = detectSemioType(
+      analysis('code_insee', STRING, {
+        count: 100,
+        uniques: 100
+      }) as never
+    );
+    expect(result.semioType).toBe('geoid');
+  });
+
   it('QL score increases when both shareUniques and uniqueCount are low', () => {
     const high = detectSemioType(
       analysis('cat', STRING, { count: 100, uniques: 5 }) as never
@@ -55,6 +86,41 @@ describe('detectSemioType — STRING columns', () => {
       analysis('cat', STRING, { count: 100, uniques: 30 }) as never
     );
     expect(high.semioScore).toBeGreaterThan(low.semioScore);
+  });
+});
+
+describe('detectSemioType — ordinal text categories', () => {
+  it('detects QLO for ordered text categories (faible/moyen/élevé)', () => {
+    const result = detectSemioType(
+      analysis('risque', STRING, {
+        count: 300,
+        uniques: 3,
+        categories: ['Faible', 'Moyen', 'Élevé']
+      }) as never
+    );
+    expect(result.semioType).toBe('QLO');
+  });
+
+  it('detects QLO for numeric-prefixed category labels', () => {
+    const result = detectSemioType(
+      analysis('classe', STRING, {
+        count: 300,
+        uniques: 4,
+        categories: ['1 - Très faible', '2 - Faible', '3 - Moyen', '4 - Élevé']
+      }) as never
+    );
+    expect(result.semioType).toBe('QLO');
+  });
+
+  it('keeps unordered text categories as QL', () => {
+    const result = detectSemioType(
+      analysis('occupation_sol', STRING, {
+        count: 300,
+        uniques: 3,
+        categories: ['Forêt', 'Prairie', 'Urbain']
+      }) as never
+    );
+    expect(result.semioType).toBe('QL');
   });
 });
 
@@ -87,6 +153,51 @@ describe('detectSemioType — NUMERIC columns', () => {
       }) as never
     );
     expect(result.semioType).toBe('geolon');
+  });
+
+  it('vetoes GEOLAT when a lat-keyword column is out of coordinate range', () => {
+    const result = detectSemioType(
+      analysis('lat', NUMERIC, {
+        uniques: 100,
+        min: 100,
+        max: 2000,
+        share_integers: 0,
+        share_floats: 1.0,
+        share_rank_interval: 0,
+        extent_magnitude: 1
+      }) as never
+    );
+    expect(result.semioType).not.toBe('geolat');
+  });
+
+  it('detects GEOLAT for a y column with plausible coordinate values', () => {
+    const result = detectSemioType(
+      analysis('y', NUMERIC, {
+        uniques: 100,
+        min: -48.5,
+        max: 48.2,
+        share_integers: 0,
+        share_floats: 1.0,
+        share_rank_interval: 0,
+        extent_magnitude: 1
+      }) as never
+    );
+    expect(result.semioType).toBe('geolat');
+  });
+
+  it('does not read projected x coordinates (Lambert) as longitude', () => {
+    const result = detectSemioType(
+      analysis('x', NUMERIC, {
+        uniques: 100,
+        min: 610000,
+        max: 720000,
+        share_integers: 0,
+        share_floats: 1.0,
+        share_rank_interval: 0,
+        extent_magnitude: 1
+      }) as never
+    );
+    expect(result.semioType).not.toBe('geolon');
   });
 
   it('detects QTA for integer column with large extent', () => {
@@ -164,7 +275,7 @@ describe('detectSemioType — NUMERIC columns', () => {
       }) as never
     );
     expect(result.semioType).toBe('geoid');
-    expect(result.semioScore).toBeGreaterThanOrEqual(4);
+    expect(result.semioScore).toBeGreaterThanOrEqual(0.6);
   });
 
   it('detects GEOID for denormalized string code column (code_departement)', () => {
@@ -176,7 +287,7 @@ describe('detectSemioType — NUMERIC columns', () => {
       }) as never
     );
     expect(result.semioType).toBe('geoid');
-    expect(result.semioScore).toBeGreaterThanOrEqual(4);
+    expect(result.semioScore).toBeGreaterThanOrEqual(0.6);
   });
 
   it('does NOT classify as GEOID when id-keyword column has only 1 unique value', () => {
@@ -188,6 +299,138 @@ describe('detectSemioType — NUMERIC columns', () => {
       }) as never
     );
     expect(result.semioScore).toBe(0);
+  });
+
+  it('detects QLO for a year column (keyword + plausible range)', () => {
+    const result = detectSemioType(
+      analysis('Année', NUMERIC, {
+        uniques: 30,
+        min: 1990,
+        max: 2020,
+        share_integers: 1.0,
+        share_floats: 0,
+        share_rank_interval: 0.4,
+        extent_magnitude: 0
+      }) as never
+    );
+    expect(result.semioType).toBe('QLO');
+  });
+
+  it('detects QLO for a year column with BigInt min/max from DuckDB', () => {
+    const result = detectSemioType(
+      analysis('year', NUMERIC, {
+        uniques: 30,
+        min: 1990n,
+        max: 2020n,
+        share_integers: 1.0,
+        share_floats: 0,
+        share_rank_interval: 0.4,
+        extent_magnitude: 0
+      }) as never
+    );
+    expect(result.semioType).toBe('QLO');
+  });
+
+  it('does NOT treat a year-keyword column outside the plausible range as QLO', () => {
+    const result = detectSemioType(
+      analysis('annees_experience', NUMERIC, {
+        uniques: 40,
+        min: 0,
+        max: 45,
+        share_integers: 1.0,
+        share_floats: 0,
+        share_rank_interval: 0.05,
+        extent_magnitude: 1
+      }) as never
+    );
+    expect(result.semioType).not.toBe('QLO');
+  });
+
+  it('detects QTR for accented ratio keyword (densité) without explicit taux/rate', () => {
+    const result = detectSemioType(
+      analysis('densité', NUMERIC, {
+        uniques: 90,
+        min: 2,
+        max: 900,
+        share_integers: 0.1,
+        share_floats: 0.9,
+        share_rank_interval: 0,
+        extent_magnitude: 2
+      }) as never
+    );
+    expect(result.semioType).toBe('QTR');
+  });
+
+  it('QTA score is boosted by stock keywords vs anonymous integer column', () => {
+    const stats = {
+      uniques: 100,
+      min: 1000,
+      max: 1000000,
+      share_integers: 1.0,
+      share_floats: 0,
+      share_rank_interval: 0.05,
+      extent_magnitude: 3
+    };
+    const withKeyword = detectSemioType(
+      analysis('total_naissances', NUMERIC, stats) as never
+    );
+    const withoutKeyword = detectSemioType(
+      analysis('valeur', NUMERIC, stats) as never
+    );
+    expect(withKeyword.semioType).toBe('QTA');
+    expect(withKeyword.semioScore).toBeGreaterThan(withoutKeyword.semioScore);
+  });
+
+  it('detects QTA for a heavily skewed decimal stock without any keyword', () => {
+    const result = detectSemioType(
+      analysis('pib_2022', NUMERIC, {
+        uniques: 100,
+        min: 0.4,
+        max: 25000,
+        share_integers: 0.05,
+        share_floats: 0.95,
+        share_rank_interval: 0,
+        extent_magnitude: 5,
+        skewness: 4.2
+      }) as never
+    );
+    expect(result.semioType).toBe('QTA');
+  });
+
+  it('detects QTR for a bounded symmetric float column without any keyword', () => {
+    const result = detectSemioType(
+      analysis('valeur', NUMERIC, {
+        uniques: 100,
+        min: 3,
+        max: 97,
+        share_integers: 0.05,
+        share_floats: 0.95,
+        share_rank_interval: 0,
+        extent_magnitude: 2,
+        skewness: 0.2
+      }) as never
+    );
+    expect(result.semioType).toBe('QTR');
+  });
+
+  it('normalizes scores to [0, 1] and exposes the runner-up type', () => {
+    const result = detectSemioType(
+      analysis('taux_pauvrete', NUMERIC, {
+        uniques: 100,
+        min: 0,
+        max: 1,
+        share_integers: 0,
+        share_floats: 0.95,
+        share_rank_interval: 0.3,
+        extent_magnitude: 1
+      }) as never
+    );
+    expect(result.semioType).toBe('QTR');
+    expect(result.semioScore).toBeGreaterThan(0);
+    expect(result.semioScore).toBeLessThanOrEqual(1);
+    expect(result.runnerUp).toBeDefined();
+    expect(result.runnerUp?.semioType).not.toBe('QTR');
+    expect(result.runnerUp?.semioScore).toBeLessThanOrEqual(result.semioScore);
   });
 
   it('QTR score is boosted by ratio keywords vs plain float column', () => {

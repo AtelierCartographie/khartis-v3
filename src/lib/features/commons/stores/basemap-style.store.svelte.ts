@@ -2,7 +2,7 @@ import type maplibregl from 'maplibre-gl';
 import {
   SavePriority,
   persistenceRegistry
-} from '$lib/features/project-management/core/persistence-registry';
+} from '$lib/features/project-management/core';
 import {
   BasemapStyle,
   DEFAULT_BASEMAP_STYLE,

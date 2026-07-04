@@ -1,8 +1,11 @@
-import { SearchSource } from '$lib/features/main-toolbar/main-toolbar.constants';
 import {
   SavePriority,
   persistenceRegistry
-} from '$lib/features/project-management/core/persistence-registry';
+} from '$lib/features/project-management/core';
+
+export enum SearchSource {
+  ALL = 'all'
+}
 
 export enum DataToolType {
   None = 'none',
