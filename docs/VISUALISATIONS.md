@@ -86,7 +86,7 @@ Corrections saisies dans le tableau → `applyJoinCorrections(datasetId, geoColu
 
 ### Suggestion automatique
 
-`vizSuggester.suggestVisualizations(dataset)` retourne jusqu'à 3 suggestions classées par score. L'algorithme est décrit dans [CARTOGRAPHIE.md — Suggestion de visualisation](CARTOGRAPHIE.md). Fichier : `suggestion.service.ts`.
+`vizSuggester.suggestVisualizations(dataset)` retourne jusqu'à 3 suggestions classées par score. L'algorithme est décrit en détail dans [SUGGESTION_VISUALISATION.md](SUGGESTION_VISUALISATION.md). Fichier : `suggestion.service.ts`.
 
 Sélectionner une suggestion (`suggestion-selection.ts`) applique un preset complet : type, modes, primitives, style, mapping initial, classification par défaut.
 

@@ -67,6 +67,48 @@ interface ColumnStats {
   max: number;
 }
 
+const ADAPTIVE_HEAD_TAIL_SKEWNESS = 3;
+const ADAPTIVE_QUANTILES_SKEWNESS = 1.5;
+const ADAPTIVE_MIN_CLASSES = 2;
+const ADAPTIVE_ROWS_PER_CLASS = 3;
+
+export interface ClassificationDefaultsInput {
+  method: ClassificationMethod;
+  classes: number;
+  skewness?: number;
+  rowCount?: number;
+}
+
+export function suggestClassificationDefaults(
+  input: ClassificationDefaultsInput
+): { method: ClassificationMethod; classes: number } {
+  let method = input.method;
+  if (
+    input.method !== ClassificationMethod.MANUAL &&
+    input.skewness !== undefined &&
+    Number.isFinite(input.skewness)
+  ) {
+    if (input.skewness >= ADAPTIVE_HEAD_TAIL_SKEWNESS) {
+      method = ClassificationMethod.HEAD_TAIL;
+    } else if (Math.abs(input.skewness) >= ADAPTIVE_QUANTILES_SKEWNESS) {
+      method = ClassificationMethod.QUANTILES;
+    }
+  }
+
+  let classes = input.classes;
+  if (input.rowCount !== undefined && input.rowCount > 0) {
+    classes = Math.min(
+      classes,
+      Math.max(
+        ADAPTIVE_MIN_CLASSES,
+        Math.floor(input.rowCount / ADAPTIVE_ROWS_PER_CLASS)
+      )
+    );
+  }
+
+  return { method, classes };
+}
+
 export type ClassificationMacro =
   'kmeans' | 'quantile' | 'equi_width' | 'nested_means' | 'q6' | 'headtail2';
 

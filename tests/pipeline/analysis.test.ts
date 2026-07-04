@@ -71,6 +71,20 @@ describe('enrichColumns', () => {
     const result = enrichColumns([col()]);
     expect(result[0].values).toEqual([]);
   });
+
+  it('coerces BigInt min/max from DuckDB BIGINT columns to numbers', () => {
+    const result = enrichColumns([
+      col({ type_simple: 'integer', min: 1990n, max: 2020n })
+    ]);
+    const stats = result[0].stats;
+    expect(stats.min).toBe(1990);
+    expect(stats.max).toBe(2020);
+  });
+
+  it('carries skewness as a number when present', () => {
+    const result = enrichColumns([col({ skewness: '3.4' })]);
+    expect(result[0].stats.skewness).toBe(3.4);
+  });
 });
 
 describe('buildStatisticsSnapshot', () => {

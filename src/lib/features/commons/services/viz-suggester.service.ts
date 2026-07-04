@@ -5,9 +5,8 @@ import {
 
 import {
   detectSemioType,
-  ID_COLUMN_KEYWORDS,
-  MAX_SEMIO_SCORE,
   SEMIO_TYPES,
+  toStatNumber,
   type SemioType
 } from '$lib/features/commons/utils/semio-detector.utils';
 import type { ColumnAnalysis } from '$lib/features/data-pipeline';
@@ -82,6 +81,13 @@ const VIZ_CRITERIA: readonly VizSuggestion[] = [
     geometries: ['polygon']
   },
   {
+    id: 'choropleth_labeled',
+    label: m.viz_suggestion_choropleth_labeled(),
+    nbColumns: 2,
+    semioTypes: ['QTR', 'label'],
+    geometries: ['polygon']
+  },
+  {
     id: 'symbols_uniques_colorful_QTR',
     get label() {
       return m.viz_suggestion_symbols_unique_colorful_qtr();
@@ -115,6 +121,13 @@ const VIZ_CRITERIA: readonly VizSuggestion[] = [
     },
     nbColumns: 1,
     semioTypes: ['QTA'],
+    geometries: ['point', 'polygon']
+  },
+  {
+    id: 'symbols_proportional_labeled',
+    label: m.viz_suggestion_symbols_proportional_labeled(),
+    nbColumns: 2,
+    semioTypes: ['QTA', 'label'],
     geometries: ['point', 'polygon']
   },
   {
@@ -288,28 +301,24 @@ const NUMERIC_COLUMN_TYPES = [
   COLUMN_TYPE.BIGINT
 ] as const;
 
-const STRING_LIKE_COLUMN_TYPES = [
-  COLUMN_TYPE.STRING,
-  COLUMN_TYPE.TEXT,
-  COLUMN_TYPE.BOOLEAN
-] as const;
-const LABEL_COLUMN_KEYWORDS = [
-  'name',
-  'nom',
-  'label',
-  'title',
-  'libelle',
-  'libellé',
-  'address',
-  'adresse',
-  'city',
-  'commune',
-  'quartier',
-  'site',
-  'station',
-  'stop'
-] as const;
 const MAX_TEXT_POINT_FEATURES = 150;
+const MAX_CATEGORY_COLOR_CLASSES = 8;
+const MAX_CATEGORY_SHAPE_CLASSES = 5;
+const MAX_CATEGORY_SHARE_UNIQUES = 0.5;
+const MIN_THEMATIC_SEMIO_SCORE = 0.3;
+const COMFORT_CATEGORY_COLOR_CLASSES = 6;
+const COMFORT_CATEGORY_SHAPE_CLASSES = 4;
+const CROWDED_CATEGORY_PENALTY = 0.85;
+const FLAT_PROPORTIONAL_RATIO = 2;
+const FLAT_PROPORTIONAL_PENALTY = 0.6;
+const TEXT_SUGGESTION_SCORE_FACTOR = 0.7;
+const LABELED_SCORE_FACTOR = 0.9;
+const LABELED_PROPORTIONAL_VIZ_ID = 'symbols_proportional_labeled';
+const LABELED_CHOROPLETH_VIZ_ID = 'choropleth_labeled';
+const SHAPE_CATEGORY_VIZ_IDS = new Set([
+  'symbols_differents',
+  'symbols_differents_QLO'
+]);
 
 export function simplifyGeometryType(
   geomType: GeometryType
@@ -391,16 +400,18 @@ function getColumnSemioType(column: ColumnAnalysis): EnrichedColumn {
     count: getTotalCount(column),
     uniques: getUniqueCount(column),
     nulls: getNullCount(column),
-    min: typeof column.stats?.min === 'number' ? column.stats.min : undefined,
-    max: typeof column.stats?.max === 'number' ? column.stats.max : undefined,
+    min: toStatNumber(column.stats?.min),
+    max: toStatNumber(column.stats?.max),
     share_integers: column.stats?.share_integers,
     share_floats: column.stats?.share_floats,
     share_rank_interval: column.stats?.share_rank_interval,
-    extent_magnitude: column.stats?.extent_magnitude
+    extent_magnitude: column.stats?.extent_magnitude,
+    skewness: column.stats?.skewness,
+    categories: column.stats?.categories
   };
 
   const { semioType, semioScore } = geoSemioType
-    ? { semioType: geoSemioType, semioScore: MAX_SEMIO_SCORE }
+    ? { semioType: geoSemioType, semioScore: 1 }
     : detectSemioType(analysisLike);
 
   return {
@@ -413,11 +424,47 @@ function getColumnSemioType(column: ColumnAnalysis): EnrichedColumn {
   };
 }
 
-function computeSuggestionScore(columns: EnrichedColumn[]): number {
+function computeSuggestionScore(
+  columns: EnrichedColumn[],
+  legibilityFactor = 1
+): number {
   if (columns.length === 0) return 0;
   const totalScore = columns.reduce((sum, col) => sum + col.score, 0);
   const avgScore = totalScore / columns.length;
-  return Math.round((avgScore / MAX_SEMIO_SCORE) * 100);
+  return Math.round(Math.min(avgScore, 1) * legibilityFactor * 100);
+}
+
+function computeLegibilityFactor(
+  viz: VizSuggestion,
+  columns: EnrichedColumn[]
+): number {
+  let factor = 1;
+
+  for (const column of columns) {
+    if (isCategoricalColumn(column)) {
+      const comfortLimit = SHAPE_CATEGORY_VIZ_IDS.has(viz.id)
+        ? COMFORT_CATEGORY_SHAPE_CLASSES
+        : COMFORT_CATEGORY_COLOR_CLASSES;
+      if (getUniqueCount(column) > comfortLimit) {
+        factor *= CROWDED_CATEGORY_PENALTY;
+      }
+    }
+
+    if (column.semioType === SEMIO_TYPES.QTA) {
+      const min = toStatNumber(column.stats?.min);
+      const max = toStatNumber(column.stats?.max);
+      if (
+        min !== undefined &&
+        max !== undefined &&
+        min > 0 &&
+        max / min < FLAT_PROPORTIONAL_RATIO
+      ) {
+        factor *= FLAT_PROPORTIONAL_PENALTY;
+      }
+    }
+  }
+
+  return factor;
 }
 
 function getShareUniques(column: EnrichedColumn): number {
@@ -426,55 +473,80 @@ function getShareUniques(column: EnrichedColumn): number {
   return getUniqueCount(column) / totalCount;
 }
 
-function isStringLikeColumn(column: EnrichedColumn): boolean {
-  return (
-    STRING_LIKE_COLUMN_TYPES.includes(
-      column.type.toLowerCase() as (typeof STRING_LIKE_COLUMN_TYPES)[number]
-    ) || column.type.toLowerCase() === COLUMN_TYPE.DATE
-  );
+function findLabelCandidate(
+  columns: EnrichedColumn[]
+): EnrichedColumn | undefined {
+  return columns
+    .filter((column) => column.semioType === SEMIO_TYPES.LABEL)
+    .sort((a, b) => b.score - a.score)[0];
 }
 
-function getNameTokens(columnName: string): string[] {
-  return columnName
-    .toLowerCase()
-    .split(/[^a-zA-Z0-9%]/)
-    .filter(Boolean);
+function findBestThematicColumn(
+  columns: EnrichedColumn[],
+  semioType: SemioType
+): EnrichedColumn | undefined {
+  return columns
+    .filter((column) => column.semioType === semioType)
+    .filter((column) => column.score >= MIN_THEMATIC_SEMIO_SCORE)
+    .sort((a, b) => b.score - a.score)[0];
 }
 
-function hasNamedKeyword(
-  columnName: string,
-  keywords: readonly string[]
-): boolean {
-  const tokens = getNameTokens(columnName);
-  return (
-    tokens.some((token) => keywords.includes(token)) ||
-    keywords.some((keyword) => columnName.toLowerCase().includes(keyword))
-  );
+function buildLabeledSuggestion(
+  vizId: string,
+  thematic: EnrichedColumn,
+  labelCandidate: EnrichedColumn
+): VizSuggestion | undefined {
+  const criteria = VIZ_CRITERIA.find((entry) => entry.id === vizId);
+  if (!criteria) return undefined;
+
+  return {
+    ...criteria,
+    columns: [thematic.name, labelCandidate.name],
+    score: computeSuggestionScore(
+      [thematic],
+      computeLegibilityFactor(criteria, [thematic]) * LABELED_SCORE_FACTOR
+    )
+  };
 }
 
-function isLabelCandidate(column: EnrichedColumn): boolean {
-  if (!isStringLikeColumn(column)) return false;
+function generateLabeledSuggestions(
+  columns: EnrichedColumn[],
+  geometryType: SimplifiedGeometryType
+): VizSuggestion[] {
+  if (geometryType === SIMPLIFIED_GEOMETRY_TYPE.LINE) {
+    return [];
+  }
 
-  const uniqueCount = getUniqueCount(column);
-  if (uniqueCount <= 1) return false;
+  const labelCandidate = findLabelCandidate(columns);
+  if (!labelCandidate) {
+    return [];
+  }
 
-  const shareUniques = getShareUniques(column);
-  const hasLabelKeyword = hasNamedKeyword(column.name, LABEL_COLUMN_KEYWORDS);
-  const hasIdKeyword = hasNamedKeyword(column.name, ID_COLUMN_KEYWORDS);
+  const results: VizSuggestion[] = [];
 
-  if (hasIdKeyword && !hasLabelKeyword) return false;
+  const bestAbsolute = findBestThematicColumn(columns, SEMIO_TYPES.QTA);
+  if (bestAbsolute) {
+    const suggestion = buildLabeledSuggestion(
+      LABELED_PROPORTIONAL_VIZ_ID,
+      bestAbsolute,
+      labelCandidate
+    );
+    if (suggestion) results.push(suggestion);
+  }
 
-  return hasLabelKeyword || shareUniques >= 0.4 || uniqueCount >= 20;
-}
+  if (geometryType === SIMPLIFIED_GEOMETRY_TYPE.POLYGON) {
+    const bestRatio = findBestThematicColumn(columns, SEMIO_TYPES.QTR);
+    if (bestRatio) {
+      const suggestion = buildLabeledSuggestion(
+        LABELED_CHOROPLETH_VIZ_ID,
+        bestRatio,
+        labelCandidate
+      );
+      if (suggestion) results.push(suggestion);
+    }
+  }
 
-function scoreLabelCandidate(column: EnrichedColumn): number {
-  const hasLabelKeyword = hasNamedKeyword(column.name, LABEL_COLUMN_KEYWORDS);
-
-  return (
-    (hasLabelKeyword ? 2 : 0) +
-    Math.min(getShareUniques(column), 1) +
-    Math.min(getUniqueCount(column) / 50, 1)
-  );
+  return results;
 }
 
 function generateTextSuggestions(
@@ -496,9 +568,7 @@ function generateTextSuggestions(
     return [];
   }
 
-  const labelCandidate = columns
-    .filter((column) => isLabelCandidate(column))
-    .sort((a, b) => scoreLabelCandidate(b) - scoreLabelCandidate(a))[0];
+  const labelCandidate = findLabelCandidate(columns);
 
   if (!labelCandidate) {
     return [];
@@ -507,11 +577,12 @@ function generateTextSuggestions(
   const thematicCandidates = columns.filter((column) => {
     if (column.name === labelCandidate.name) return false;
     if (column.semioType === SEMIO_TYPES.GEOID) return false;
+    if (column.score < MIN_THEMATIC_SEMIO_SCORE) return false;
     if (
       column.semioType === SEMIO_TYPES.QL ||
       column.semioType === SEMIO_TYPES.QLO
     ) {
-      return getUniqueCount(column) <= 12;
+      return getUniqueCount(column) <= MAX_CATEGORY_COLOR_CLASSES;
     }
     return (
       column.semioType === SEMIO_TYPES.QTR ||
@@ -527,9 +598,6 @@ function generateTextSuggestions(
   const bestRatio = thematicCandidates.find(
     (column) => column.semioType === SEMIO_TYPES.QTR
   );
-  const bestAbsolute = thematicCandidates.find(
-    (column) => column.semioType === SEMIO_TYPES.QTA
-  );
 
   const results: VizSuggestion[] = [];
 
@@ -539,7 +607,11 @@ function generateTextSuggestions(
       results.push({
         ...viz,
         columns: [labelCandidate.name, bestQualitative.name],
-        score: computeSuggestionScore([labelCandidate, bestQualitative])
+        score: computeSuggestionScore(
+          [bestQualitative],
+          computeLegibilityFactor(viz, [labelCandidate, bestQualitative]) *
+            TEXT_SUGGESTION_SCORE_FACTOR
+        )
       });
     }
   }
@@ -550,23 +622,39 @@ function generateTextSuggestions(
       results.push({
         ...viz,
         columns: [labelCandidate.name, bestRatio.name],
-        score: computeSuggestionScore([labelCandidate, bestRatio])
-      });
-    }
-  }
-
-  if (bestAbsolute) {
-    const viz = VIZ_CRITERIA.find((entry) => entry.id === 'texts_proportional');
-    if (viz) {
-      results.push({
-        ...viz,
-        columns: [labelCandidate.name, bestAbsolute.name],
-        score: computeSuggestionScore([labelCandidate, bestAbsolute])
+        score: computeSuggestionScore(
+          [bestRatio],
+          computeLegibilityFactor(viz, [labelCandidate, bestRatio]) *
+            TEXT_SUGGESTION_SCORE_FACTOR
+        )
       });
     }
   }
 
   return results;
+}
+
+function isCategoricalColumn(column: EnrichedColumn): boolean {
+  return (
+    column.semioType === SEMIO_TYPES.QL || column.semioType === SEMIO_TYPES.QLO
+  );
+}
+
+function fitsCategoricalLegibility(
+  viz: VizSuggestion,
+  columns: EnrichedColumn[]
+): boolean {
+  const maxCategories = SHAPE_CATEGORY_VIZ_IDS.has(viz.id)
+    ? MAX_CATEGORY_SHAPE_CLASSES
+    : MAX_CATEGORY_COLOR_CLASSES;
+
+  return columns
+    .filter(isCategoricalColumn)
+    .every(
+      (column) =>
+        getUniqueCount(column) <= maxCategories &&
+        getShareUniques(column) <= MAX_CATEGORY_SHARE_UNIQUES
+    );
 }
 
 function searchVizByType(
@@ -580,11 +668,15 @@ function searchVizByType(
         viz.geometries.includes(geometryType) &&
         viz.nbColumns === nbColumns &&
         !viz.id.startsWith('texts_') &&
-        viz.semioTypes.includes(dataset.semioType)
+        viz.semioTypes.includes(dataset.semioType) &&
+        fitsCategoricalLegibility(viz, [dataset])
     ).map((viz) => ({
       ...viz,
       columns: [dataset.name],
-      score: computeSuggestionScore([dataset])
+      score: computeSuggestionScore(
+        [dataset],
+        computeLegibilityFactor(viz, [dataset])
+      )
     })) as VizSuggestion[];
   }
 
@@ -594,16 +686,22 @@ function searchVizByType(
         viz.geometries.includes(geometryType) &&
         viz.nbColumns === nbColumns &&
         !viz.id.startsWith('texts_') &&
+        viz.id !== LABELED_PROPORTIONAL_VIZ_ID &&
+        viz.id !== LABELED_CHOROPLETH_VIZ_ID &&
         ((viz.semioTypes[0] === dataset[0].semioType &&
           viz.semioTypes[1] === dataset[1].semioType) ||
           (viz.semioTypes[1] === dataset[0].semioType &&
-            viz.semioTypes[0] === dataset[1].semioType))
+            viz.semioTypes[0] === dataset[1].semioType)) &&
+        fitsCategoricalLegibility(viz, dataset)
     ).map((viz) => ({
       ...viz,
       columns: orderSuggestionColumns(dataset, viz.semioTypes).map(
         (column) => column.name
       ),
-      score: computeSuggestionScore(dataset)
+      score: computeSuggestionScore(
+        dataset,
+        computeLegibilityFactor(viz, dataset)
+      )
     })) as VizSuggestion[];
   }
 
@@ -800,15 +898,22 @@ function suggestVisualizations(
       return aNulls - bNulls;
     });
 
-  const rankedColumns = enrichedColumns
+  const thematicColumns = enrichedColumns
     .filter((col) => col.semioType !== SEMIO_TYPES.GEOID)
     .filter((col) => col.semioType !== SEMIO_TYPES.GEOLAT)
     .filter((col) => col.semioType !== SEMIO_TYPES.GEOLON)
     .filter((col) => getUniqueCount(col) > 1);
 
+  const rankedColumns = thematicColumns
+    .filter((col) => col.semioType !== SEMIO_TYPES.LABEL)
+    .filter((col) => col.score >= MIN_THEMATIC_SEMIO_SCORE);
+
+  const textEligibleColumns = thematicColumns;
+
   const suggestions = [
     ...generateSuggestions(rankedColumns, simplifiedGeomType),
-    ...generateTextSuggestions(rankedColumns, simplifiedGeomType)
+    ...generateLabeledSuggestions(textEligibleColumns, simplifiedGeomType),
+    ...generateTextSuggestions(textEligibleColumns, simplifiedGeomType)
   ];
 
   return dedupeSuggestionsByImplementation(

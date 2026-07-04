@@ -53,8 +53,10 @@ import {
   calculateBreakCounts,
   calculateDivergingBreaks,
   calculateBreaks,
-  generateColorsForBreaks
+  generateColorsForBreaks,
+  suggestClassificationDefaults
 } from '$lib/features/commons/services/classification.service';
+import { ClassificationMethod } from '$lib/features/commons/stores/visualization.store.svelte';
 import { logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
@@ -694,5 +696,73 @@ describe('calculateBreaks — Flechette edge cases', () => {
     });
 
     expect(result?.breaks).toEqual([20, 40, 60, 80]);
+  });
+});
+
+describe('suggestClassificationDefaults', () => {
+  it('keeps the base method and class count for balanced distributions', () => {
+    const result = suggestClassificationDefaults({
+      method: ClassificationMethod.KMEANS,
+      classes: 4,
+      skewness: 0.4,
+      rowCount: 300
+    });
+    expect(result).toEqual({ method: ClassificationMethod.KMEANS, classes: 4 });
+  });
+
+  it('switches to head/tail for heavy right-tailed distributions', () => {
+    const result = suggestClassificationDefaults({
+      method: ClassificationMethod.KMEANS,
+      classes: 4,
+      skewness: 4.5,
+      rowCount: 300
+    });
+    expect(result.method).toBe(ClassificationMethod.HEAD_TAIL);
+  });
+
+  it('switches to quantiles for moderately skewed distributions (both signs)', () => {
+    expect(
+      suggestClassificationDefaults({
+        method: ClassificationMethod.KMEANS,
+        classes: 4,
+        skewness: 2,
+        rowCount: 300
+      }).method
+    ).toBe(ClassificationMethod.QUANTILES);
+    expect(
+      suggestClassificationDefaults({
+        method: ClassificationMethod.KMEANS,
+        classes: 4,
+        skewness: -2,
+        rowCount: 300
+      }).method
+    ).toBe(ClassificationMethod.QUANTILES);
+  });
+
+  it('caps the class count to a third of the entity count', () => {
+    const result = suggestClassificationDefaults({
+      method: ClassificationMethod.KMEANS,
+      classes: 4,
+      rowCount: 10
+    });
+    expect(result.classes).toBe(3);
+  });
+
+  it('never drops below two classes and never touches manual classifications', () => {
+    expect(
+      suggestClassificationDefaults({
+        method: ClassificationMethod.KMEANS,
+        classes: 4,
+        rowCount: 4
+      }).classes
+    ).toBe(2);
+    expect(
+      suggestClassificationDefaults({
+        method: ClassificationMethod.MANUAL,
+        classes: 5,
+        skewness: 5,
+        rowCount: 300
+      }).method
+    ).toBe(ClassificationMethod.MANUAL);
   });
 });
