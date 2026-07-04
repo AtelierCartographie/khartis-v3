@@ -2240,8 +2240,6 @@ interface PendingTextElement {
 
 function buildTextElementMarkup(
   element: PendingTextElement,
-  fontFamily: string,
-  fontWeight: string,
   hoistSize: boolean,
   hoistAnchor: boolean,
   hoistFill: boolean
@@ -2251,9 +2249,7 @@ function buildTextElementMarkup(
     element.strokeColor
       ? `${colorAttributes('stroke', element.strokeColor)} stroke-width="${roundSvgValue(element.strokeWidth)}" stroke-linejoin="round"`
       : 'stroke="none"',
-    `font-family="${escapeXml(fontFamily)}"`,
     hoistSize ? '' : `font-size="${roundSvgValue(element.size)}"`,
-    `font-weight="${escapeXml(fontWeight)}"`,
     hoistAnchor ? '' : `text-anchor="${escapeXml(element.anchor)}"`
   ]
     .filter(Boolean)
@@ -2435,14 +2431,7 @@ function serializeTextLayer(
     findCommonValue(textElements.map((el) => svgColorKey(el.fillColor))) !==
       null;
   const textParts = textElements.map((element) =>
-    buildTextElementMarkup(
-      element,
-      fontFamily,
-      fontWeight,
-      hoistSize,
-      hoistAnchor,
-      hoistFill
-    )
+    buildTextElementMarkup(element, hoistSize, hoistAnchor, hoistFill)
   );
   const groupAttributes = [
     `font-family="${escapeXml(fontFamily)}"`,

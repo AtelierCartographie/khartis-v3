@@ -1834,6 +1834,8 @@ describe('map export DOM mutations', () => {
     const textElements = markup.match(/<text[^>]*>/g) ?? [];
     expect(textElements).toHaveLength(2);
     textElements.forEach((textElement) => {
+      expect(textElement).not.toContain('font-family');
+      expect(textElement).not.toContain('font-weight');
       expect(textElement).not.toContain('font-size');
       expect(textElement).not.toContain('text-anchor');
       expect(textElement).not.toContain('fill=');
