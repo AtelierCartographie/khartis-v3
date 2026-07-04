@@ -52,14 +52,14 @@
     "description_fr": "Territoire général (fond polygone)",
     "description_en": "General territory (polygon fill)",
     "layer_type": "solid-polygon",
-    "fillColor": [220, 220, 220, 255],
+    "fillColor": [168, 168, 168, 255],
     "stroked": false
   },
   "nuts-land": {
     "description_fr": "Territoire NUTS (fond polygone pour le contour des zones NUTS)",
     "description_en": "NUTS territory (polygon fill for NUTS zones outline)",
     "layer_type": "solid-polygon",
-    "fillColor": [232, 232, 232, 255],
+    "fillColor": [168, 168, 168, 255],
     "stroked": false
   },
   "graticule": {
