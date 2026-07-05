@@ -1328,6 +1328,7 @@ export function restoreVisualizationFromSuggestion(vizId: string): boolean {
         (dataset && isVisualizationBlank(restoredVisualization, dataset)
           ? { mode: 'manual-blank' as const }
           : { mode: 'custom' as const })),
+      suggestionKey: appliedSuggestionState.suggestionKey,
       appliedSuggestionState: deepClone(appliedSuggestionState)
     };
   }

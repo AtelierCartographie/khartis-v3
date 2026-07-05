@@ -6,7 +6,8 @@ import {
   parseSuggestionSignature,
   resolveDisplayedSuggestionKey,
   resolveSuggestionCardAction,
-  shouldAutoApplySuggestion
+  shouldAutoApplySuggestion,
+  shouldIncludePersistedSuggestion
 } from './suggestion-selection.utils';
 
 function createSuggestion(
@@ -81,6 +82,57 @@ describe('getSuggestionSignature', () => {
         getSuggestionSignature(suggestion)
       )
     ).toEqual([suggestion]);
+  });
+});
+
+describe('shouldIncludePersistedSuggestion', () => {
+  it('keeps auto and manual suggestion cards when they are backed by origin', () => {
+    expect(
+      shouldIncludePersistedSuggestion({
+        hasPersistedSuggestionKey: true,
+        originMode: 'auto-suggestion'
+      })
+    ).toBe(true);
+    expect(
+      shouldIncludePersistedSuggestion({
+        hasPersistedSuggestionKey: true,
+        originMode: 'manual-suggestion'
+      })
+    ).toBe(true);
+  });
+
+  it('keeps a cleared suggestion card only when remembered state can reapply it', () => {
+    expect(
+      shouldIncludePersistedSuggestion({
+        hasAppliedSuggestionState: true,
+        hasPersistedSuggestionKey: true,
+        originMode: 'manual-blank'
+      })
+    ).toBe(true);
+    expect(
+      shouldIncludePersistedSuggestion({
+        hasAppliedSuggestionState: false,
+        hasPersistedSuggestionKey: true,
+        originMode: 'manual-blank'
+      })
+    ).toBe(false);
+  });
+
+  it('does not keep custom or missing persisted suggestion cards', () => {
+    expect(
+      shouldIncludePersistedSuggestion({
+        hasAppliedSuggestionState: true,
+        hasPersistedSuggestionKey: true,
+        originMode: 'custom'
+      })
+    ).toBe(false);
+    expect(
+      shouldIncludePersistedSuggestion({
+        hasAppliedSuggestionState: true,
+        hasPersistedSuggestionKey: false,
+        originMode: 'manual-suggestion'
+      })
+    ).toBe(false);
   });
 });
 
