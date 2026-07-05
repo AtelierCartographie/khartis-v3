@@ -7,6 +7,7 @@
     BASEMAP_LAYER_CONFIG,
     BasemapDottedPattern
   } from '$lib/features/commons/constants/visualization.constants';
+  import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
   import { createLayerConfigValueHandler } from './layer-config-handlers.utils';
 
   interface Props {
@@ -35,7 +36,7 @@
     thicknessLabel = m.basemap_config_thickness(),
     thicknessMax = BASEMAP_LAYER_CONFIG.thickness.max,
     thicknessStep = BASEMAP_LAYER_CONFIG.thickness.step,
-    color = '#0072c3',
+    color = NEUTRAL_CARTOGRAPHY_COLORS.waterLine,
     dotted = false,
     dottedPattern = BasemapDottedPattern.DOTS,
     thickness = 1,
