@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { VizSuggestion } from '$lib/features/commons/services/viz-suggester.service';
 import {
   getSuggestionSignature,
+  includePersistedSuggestion,
+  parseSuggestionSignature,
   resolveDisplayedSuggestionKey,
   resolveSuggestionCardAction,
   shouldAutoApplySuggestion
@@ -30,6 +32,55 @@ describe('getSuggestionSignature', () => {
     expect(getSuggestionSignature(population)).not.toBe(
       getSuggestionSignature(density)
     );
+  });
+
+  it('round-trips persisted suggestion signatures', () => {
+    const suggestion = createSuggestion();
+    const parsed = parseSuggestionSignature(getSuggestionSignature(suggestion));
+
+    expect(parsed).toMatchObject({
+      id: suggestion.id,
+      label: suggestion.id,
+      nbColumns: suggestion.nbColumns,
+      columns: suggestion.columns,
+      geometries: suggestion.geometries,
+      semioTypes: suggestion.semioTypes
+    });
+  });
+
+  it('prepends a persisted suggestion when the generated list no longer contains it', () => {
+    const persistedSuggestion = createSuggestion();
+    const generatedSuggestion = createSuggestion({
+      id: 'symbols_proportional',
+      nbColumns: 1,
+      columns: ['population'],
+      geometries: ['polygon'],
+      semioTypes: ['QTA']
+    });
+
+    const suggestions = includePersistedSuggestion(
+      [generatedSuggestion],
+      getSuggestionSignature(persistedSuggestion),
+      'polygon'
+    );
+
+    expect(suggestions).toHaveLength(2);
+    expect(suggestions[0]).toMatchObject({
+      id: 'choropleth',
+      columns: ['population'],
+      dataGeometry: 'polygon'
+    });
+  });
+
+  it('does not duplicate an already generated persisted suggestion', () => {
+    const suggestion = createSuggestion();
+
+    expect(
+      includePersistedSuggestion(
+        [suggestion],
+        getSuggestionSignature(suggestion)
+      )
+    ).toEqual([suggestion]);
   });
 });
 

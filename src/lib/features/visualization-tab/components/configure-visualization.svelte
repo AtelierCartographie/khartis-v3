@@ -220,7 +220,11 @@
       getCurrentLabels: () =>
         getPrimitiveStrokeClassification(selectedViz, primitive)?.labels,
       applyLabels: (labels) =>
-        updatePrimitiveStrokeClassificationState(primitive, { labels }),
+        updatePrimitiveStrokeClassificationState(
+          primitive,
+          { labels },
+          { preserveOrigin: true }
+        ),
       useUntrack,
       errorMessage: CATEGORY_LABEL_FETCH_ERROR.STROKE
     });
@@ -260,7 +264,8 @@
 
   function updatePrimitiveStrokeClassificationState(
     primitive: StrokeClassifiablePrimitive,
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options: { preserveOrigin?: boolean } = {}
   ): void {
     if (!selectedViz?.id) {
       return;
@@ -269,7 +274,8 @@
     visualizationStore.updatePrimitiveStrokeClassification(
       selectedViz.id,
       primitive,
-      updates
+      updates,
+      options
     );
     syncFacetsFromSelectedVisualization();
   }

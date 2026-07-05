@@ -27,7 +27,8 @@ import {
   applySuggestionToVisualization,
   buildSuggestionOrigin,
   mapSuggestionToType,
-  rememberAppliedSuggestionState
+  rememberAppliedSuggestionState,
+  resolveBlankVisualizationPreset
 } from '$lib/features/visualization-tab/services/suggestion.service';
 import { getSuggestionSignature } from '$lib/features/visualization-tab/utils/suggestion-selection.utils';
 
@@ -195,6 +196,23 @@ function preserveOrigin(
   return {
     ...updates,
     origin: visualization.origin
+  };
+}
+
+function buildExampleRestoreBaseline(
+  visualization: VisualizationConfig,
+  dataset: DatasetResult
+): VisualizationConfig {
+  return {
+    ...visualization,
+    ...resolveBlankVisualizationPreset(dataset),
+    id: visualization.id,
+    name: visualization.name,
+    datasetId: visualization.datasetId,
+    enabled: visualization.enabled,
+    origin: { mode: 'manual-blank' },
+    primitiveOrder: undefined,
+    dataFilters: undefined
   };
 }
 
@@ -410,16 +428,17 @@ export function applyExampleVisualizationPresets(
       );
     const suggestionKey = getSuggestionSignature(suggestion);
 
+    const restoreBaseline = buildExampleRestoreBaseline(
+      targetVisualization,
+      dataset
+    );
+
     // Examples are pre-configured suggestions, not user-diverged visualizations.
-    // Tagging them `custom` made `resolveDisplayedSuggestionKey` return
-    // undefined (custom => unchecked), so the suggestion card radio never
-    // reflected the applied suggestion — and the first click on that card
-    // resolved to `clear` (origin.suggestionKey === card key), toggling the
-    // suggestion OFF instead of showing it selected. Tagging the applied
-    // suggestion as `manual-suggestion` lets the persisted key drive the radio,
-    // so it reads as selected and the click semantics (re-click = deselect) work.
+    // The suggestion stays selected on load, but re-clicking it must restore the
+    // neutral gray baseline instead of the typed visualization preset created as
+    // an implementation detail.
     applySuggestionToVisualization(targetVisualization.id, suggestion, {
-      origin: buildSuggestionOrigin(targetVisualization, {
+      origin: buildSuggestionOrigin(restoreBaseline, {
         mode: 'manual-suggestion',
         suggestionKey
       })
