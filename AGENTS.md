@@ -61,3 +61,7 @@ This project is indexed by GitNexus as **khartis-v3** (18161 symbols, 33827 rela
 - Run heavyweight validations sequentially. Do not run `pnpm check`, `pnpm lint`, Vitest, browser tools, or dev servers in parallel.
 - Prefer the narrowest relevant check for mechanical code-quality-plan items.
 - Before and during Chrome/browser validation, monitor memory-heavy processes. If a browser, dev server, Vitest, ESLint, or TypeScript process starts runaway memory/CPU behavior, stop it before continuing.
+
+## Cartography Styling
+
+- Use `NEUTRAL_CARTOGRAPHY_COLORS` / `NEUTRAL_CARTOGRAPHY_RGBA_COLORS` from `src/lib/features/commons/constants/colors.constants.ts` for neutral map, basemap, and blank-visualization defaults instead of hardcoded grayscale literals.

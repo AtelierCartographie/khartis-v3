@@ -472,8 +472,12 @@ describe('suggestion.service', () => {
     expect(updatedVisualization?.mapping.valueColumn).toBeUndefined();
     expect(updatedVisualization?.classification).toBeUndefined();
     expect(updatedVisualization?.style.fillOpacity).toBe(0.8);
-    expect(updatedVisualization?.style.strokeColor).toBe(DEFAULT_COLORS.gray);
-    expect(updatedVisualization?.style.lineColor).toBe(DEFAULT_COLORS.gray);
+    expect(updatedVisualization?.style.strokeColor).toBe(
+      DEFAULT_COLORS.neutralStroke
+    );
+    expect(updatedVisualization?.style.lineColor).toBe(
+      DEFAULT_COLORS.neutralStroke
+    );
     expect(updatedVisualization?.missingData?.show).toBe(false);
     expect(updatedVisualization?.style.labelHalo).toBe(false);
     expect(updatedVisualization?.style.textCollisionDetection).toBe(false);
@@ -501,8 +505,12 @@ describe('suggestion.service', () => {
     expect(updatedVisualization?.style.symbolFillColor).toBe(
       DEFAULT_COLORS.gray
     );
-    expect(updatedVisualization?.style.strokeColor).toBe(DEFAULT_COLORS.gray);
-    expect(updatedVisualization?.style.lineColor).toBe(DEFAULT_COLORS.gray);
+    expect(updatedVisualization?.style.strokeColor).toBe(
+      DEFAULT_COLORS.neutralStroke
+    );
+    expect(updatedVisualization?.style.lineColor).toBe(
+      DEFAULT_COLORS.neutralStroke
+    );
     expect(updatedVisualization?.missingData?.show).toBe(false);
     expect(isVisualizationBlank(updatedVisualization!, dataset)).toBe(true);
   });

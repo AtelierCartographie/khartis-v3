@@ -445,7 +445,7 @@ function buildSupportPolygonConfig(
     fillColor: DEFAULT_COLORS.gray,
     fillOpacity: polygon?.fillOpacity ?? 1,
     strokeMode: StrokeMode.NONE,
-    strokeColor: DEFAULT_COLORS.gray,
+    strokeColor: DEFAULT_COLORS.neutralStroke,
     strokeWidth: polygon?.strokeWidth ?? 1,
     strokeOpacity: 1,
     strokeDashed: polygon?.strokeDashed ?? false
@@ -1057,7 +1057,7 @@ export function resolveBlankVisualizationPreset(
   };
   const style = {
     ...preset.style,
-    lineColor: DEFAULT_COLORS.gray,
+    lineColor: DEFAULT_COLORS.neutralStroke,
     textFontFamily: CARTOGRAPHIC_FONT_FAMILY,
     textHalo: false,
     textCollisionDetection: false,
@@ -1072,14 +1072,14 @@ export function resolveBlankVisualizationPreset(
 
   if (blankType === VisualizationType.CHOROPLETH) {
     modes.fill = FillMode.NONE;
-    style.strokeColor = DEFAULT_COLORS.gray;
+    style.strokeColor = DEFAULT_COLORS.neutralStroke;
   }
 
   if (blankType === VisualizationType.PROPORTIONAL) {
     modes.symbol = SymbolMode.UNIQUE;
     modes.proportionalType = ProportionalType.SINGLE;
     style.symbolFillColor = DEFAULT_COLORS.gray;
-    style.strokeColor = DEFAULT_COLORS.gray;
+    style.strokeColor = DEFAULT_COLORS.neutralStroke;
   }
 
   const blankMissingData = preset.missingData
@@ -1099,7 +1099,7 @@ export function resolveBlankVisualizationPreset(
           blankType === VisualizationType.CHOROPLETH
             ? FillMode.NONE
             : preset.polygon.fillMode,
-        strokeColor: DEFAULT_COLORS.gray,
+        strokeColor: DEFAULT_COLORS.neutralStroke,
         missingData: blankMissingData
       }
     : undefined;
@@ -1120,7 +1120,7 @@ export function resolveBlankVisualizationPreset(
           blankType === VisualizationType.PROPORTIONAL
             ? DEFAULT_COLORS.gray
             : preset.symbol.fillColor,
-        strokeColor: DEFAULT_COLORS.gray,
+        strokeColor: DEFAULT_COLORS.neutralStroke,
         missingData: blankMissingData
       }
     : undefined;
@@ -1129,7 +1129,7 @@ export function resolveBlankVisualizationPreset(
     ? {
         ...preset.line,
         enabled: false,
-        color: DEFAULT_COLORS.gray,
+        color: DEFAULT_COLORS.neutralStroke,
         missingData: blankMissingData
       }
     : undefined;

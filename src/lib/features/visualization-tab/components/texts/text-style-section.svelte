@@ -2,6 +2,7 @@
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import { Dropdown } from 'carbon-components-svelte';
   import { hexToHsl } from '$lib/features/commons/utils/color-utils';
+  import { DEFAULT_COLORS } from '$lib/features/commons/constants/visualization.constants';
   import {
     AVAILABLE_FONTS,
     clampFontSize,
@@ -75,8 +76,12 @@
       text: String(fontSize)
     }))
   );
-  const textColorHsl = $derived(hexToHsl(section?.color ?? '#8d8d8d'));
-  const haloColorHsl = $derived(hexToHsl(section?.haloColor ?? '#ffffff'));
+  const fallbackTextColor = DEFAULT_COLORS.gray;
+  const fallbackHaloColor = DEFAULT_COLORS.halo;
+  const textColorHsl = $derived(hexToHsl(section?.color ?? fallbackTextColor));
+  const haloColorHsl = $derived(
+    hexToHsl(section?.haloColor ?? fallbackHaloColor)
+  );
 
   function handleFontFamilySelect(event: DropdownSelectEvent) {
     if (!section) return;
@@ -188,12 +193,12 @@
     <div
       class="quick-format-color-picker"
       class:quick-format-color-picker--disabled={!enabled}
-      style={`--quick-format-accent: ${section?.color ?? '#8d8d8d'};`}
+      style={`--quick-format-accent: ${section?.color ?? fallbackTextColor};`}
     >
       <ColorPicker
         exclusive
         disabled={!enabled}
-        hex={section?.color ?? '#8d8d8d'}
+        hex={section?.color ?? fallbackTextColor}
         hue={textColorHsl.hue}
         saturation={textColorHsl.saturation}
         lightness={textColorHsl.lightness}
@@ -210,12 +215,12 @@
       class="quick-format-color-picker quick-format-color-picker--halo"
       class:quick-format-color-picker--active={Boolean(section?.halo)}
       class:quick-format-color-picker--disabled={!section?.onHaloColorChange}
-      style={`--quick-format-accent: ${section?.haloColor ?? '#ffffff'};`}
+      style={`--quick-format-accent: ${section?.haloColor ?? fallbackHaloColor};`}
     >
       <ColorPicker
         exclusive
         disabled={!section?.onHaloColorChange}
-        hex={section?.haloColor ?? '#ffffff'}
+        hex={section?.haloColor ?? fallbackHaloColor}
         hue={haloColorHsl.hue}
         saturation={haloColorHsl.saturation}
         lightness={haloColorHsl.lightness}

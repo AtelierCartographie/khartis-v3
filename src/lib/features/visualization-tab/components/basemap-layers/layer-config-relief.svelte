@@ -7,6 +7,7 @@
     BASEMAP_LAYER_CONFIG,
     BasemapRepresentation
   } from '$lib/features/commons/constants/visualization.constants';
+  import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
   import {
     createLayerConfigSelectedIdHandler,
     createLayerConfigValueHandler
@@ -43,7 +44,7 @@
 
   let {
     representation = BasemapRepresentation.SHADING,
-    color = '#e0e0e0',
+    color = NEUTRAL_CARTOGRAPHY_COLORS.relief,
     opacity = 100,
     onchange
   }: Props = $props();
