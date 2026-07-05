@@ -116,6 +116,7 @@
       {
         displayedSuggestionKey: appliedSuggestionKey,
         originSuggestionKey: targetViz.origin?.suggestionKey,
+        originMode: getVisualizationOriginMode(targetViz),
         hasRestoreState: Boolean(targetViz.origin?.restoreState),
         isTargetActive: visualizationStore.activeVisualizations.some(
           (visualization) => visualization.id === targetViz.id

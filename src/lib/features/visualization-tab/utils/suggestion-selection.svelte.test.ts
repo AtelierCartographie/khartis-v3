@@ -160,7 +160,7 @@ describe('resolveSuggestionCardAction', () => {
     ).toBe('apply');
   });
 
-  it('clears in one click when a custom visualization still has a suggestion restore state', () => {
+  it('clears in one click when the visualization is still suggestion-managed', () => {
     const suggestion = createSuggestion();
 
     expect(
@@ -168,11 +168,28 @@ describe('resolveSuggestionCardAction', () => {
         {
           displayedSuggestionKey: undefined,
           originSuggestionKey: getSuggestionSignature(suggestion),
+          originMode: 'manual-suggestion',
           hasRestoreState: true
         },
         suggestion
       )
     ).toBe('clear');
+  });
+
+  it('re-applies when a manual edit diverged the visualization into custom mode', () => {
+    const suggestion = createSuggestion();
+
+    expect(
+      resolveSuggestionCardAction(
+        {
+          displayedSuggestionKey: undefined,
+          originSuggestionKey: getSuggestionSignature(suggestion),
+          originMode: 'custom',
+          hasRestoreState: true
+        },
+        suggestion
+      )
+    ).toBe('apply');
   });
 
   it('re-applies instead of clearing when the target visualization is inactive', () => {

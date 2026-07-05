@@ -23,6 +23,7 @@ interface ResolveDisplayedSuggestionKeyOptions {
 interface ResolveSuggestionCardActionOptions {
   displayedSuggestionKey?: string;
   originSuggestionKey?: string;
+  originMode?: VisualizationOriginMode;
   hasRestoreState?: boolean;
   isTargetActive?: boolean;
 }
@@ -149,6 +150,9 @@ export function resolveSuggestionCardAction(
   if (
     typeof currentSuggestion !== 'string' &&
     currentSuggestion?.hasRestoreState &&
+    (currentSuggestion.originMode === undefined ||
+      currentSuggestion.originMode === 'auto-suggestion' ||
+      currentSuggestion.originMode === 'manual-suggestion') &&
     currentSuggestion.originSuggestionKey === nextSuggestionKey
   ) {
     return 'clear';
