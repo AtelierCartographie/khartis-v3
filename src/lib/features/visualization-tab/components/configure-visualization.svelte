@@ -446,7 +446,11 @@
       dataset,
       column,
       getCurrentLabels: () => symbolFillTarget?.classification?.labels,
-      applyLabels: (labels) => handleSymbolFillClassificationChange({ labels }),
+      applyLabels: (labels) =>
+        handleSymbolFillClassificationChange(
+          { labels },
+          { preserveOrigin: true }
+        ),
       useUntrack: true,
       errorMessage: CATEGORY_LABEL_FETCH_ERROR.SYMBOL_FILL
     });
@@ -536,7 +540,10 @@
       column,
       getCurrentLabels: () => textBackgroundTarget?.classification?.labels,
       applyLabels: (labels) =>
-        handleTextBackgroundClassificationChange({ labels }),
+        handleTextBackgroundClassificationChange(
+          { labels },
+          { preserveOrigin: true }
+        ),
       useUntrack: true,
       errorMessage: CATEGORY_LABEL_FETCH_ERROR.TEXT_BACKGROUND
     });
@@ -555,7 +562,10 @@
       getCurrentLabels: () =>
         textBackgroundStrokeTarget?.classification?.labels,
       applyLabels: (labels) =>
-        handleTextBackgroundStrokeClassificationChange({ labels }),
+        handleTextBackgroundStrokeClassificationChange(
+          { labels },
+          { preserveOrigin: true }
+        ),
       useUntrack: true,
       errorMessage: CATEGORY_LABEL_FETCH_ERROR.TEXT_BACKGROUND_STROKE
     });

@@ -146,6 +146,44 @@ describe('use-classification-color-sync', () => {
     );
   });
 
+  it('applies derived symbol fill colors with preserved origin', () => {
+    const applySymbolFillUpdate = vi.fn();
+    syncPrimitiveColors(
+      emptyDeps({
+        getSymbolFillTarget: () => ({
+          classification: { method: 'quantile' as never } as never,
+          usesBreaks: true,
+          usesCategories: false,
+          valueColumn: 'population'
+        }),
+        applySymbolFillUpdate
+      })
+    );
+    expect(applySymbolFillUpdate).toHaveBeenCalledWith(
+      { colors: ['#111', '#222'] },
+      { preserveOrigin: true }
+    );
+  });
+
+  it('applies derived text background colors with preserved origin', () => {
+    const applyTextBackgroundUpdate = vi.fn();
+    syncPrimitiveColors(
+      emptyDeps({
+        getTextBackgroundTarget: () => ({
+          classification: { method: 'quantile' as never } as never,
+          usesBreaks: true,
+          usesCategories: false,
+          valueColumn: 'population'
+        }),
+        applyTextBackgroundUpdate
+      })
+    );
+    expect(applyTextBackgroundUpdate).toHaveBeenCalledWith(
+      { colors: ['#111', '#222'] },
+      { preserveOrigin: true }
+    );
+  });
+
   it('returns early when no selected visualization id', () => {
     const updateClass = vi.fn();
     syncPrimitiveColors(
@@ -187,6 +225,25 @@ describe('use-classification-color-sync', () => {
       {
         colors: ['#111', '#222']
       },
+      { preserveOrigin: true }
+    );
+  });
+
+  it('applies derived text background stroke colors with preserved origin', () => {
+    const applyTextBackgroundStrokeUpdate = vi.fn();
+    syncStrokeColors(
+      emptyDeps({
+        getTextBackgroundStrokeTarget: () => ({
+          classification: { method: 'quantile' as never } as never,
+          usesBreaks: true,
+          usesCategories: false,
+          valueColumn: 'population'
+        }),
+        applyTextBackgroundStrokeUpdate
+      })
+    );
+    expect(applyTextBackgroundStrokeUpdate).toHaveBeenCalledWith(
+      { colors: ['#111', '#222'] },
       { preserveOrigin: true }
     );
   });

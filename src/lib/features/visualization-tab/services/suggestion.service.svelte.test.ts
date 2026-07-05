@@ -82,6 +82,10 @@ import {
   resolveDatasetGeometryType,
   restoreVisualizationFromSuggestion
 } from './suggestion.service';
+import { applyExampleVisualizationPresets } from '$lib/features/create-project/services/example-visualization-preset.service';
+import { ExampleCategory } from '$lib/features/commons/constants/ui.constants';
+import { resolveDisplayedSuggestionKey } from '../utils/suggestion-selection.utils';
+import type { DatasetResult } from '$lib/features/data-pipeline';
 
 type SuggestionTestDataset = Parameters<
   typeof isVisualizationMatchingSuggestion
@@ -286,6 +290,59 @@ describe('suggestion.service', () => {
     const dataset = createPointDataset();
     mocks.datasets = [dataset];
     mocks.selectedDatasetId = dataset.id;
+  });
+
+  it('keeps example choropleth presets selected after declared overrides', () => {
+    const dataset = {
+      ...createPolygonDataset(),
+      columns: [
+        { name: 'geometry', type: 'geometry', stats: {}, values: [] },
+        { name: 'name', type: 'string', stats: {}, values: [] },
+        { name: 'population_2023', type: 'number', stats: {}, values: [] }
+      ]
+    } as unknown as DatasetResult;
+    mocks.datasets = [dataset];
+    mocks.selectedDatasetId = dataset.id;
+
+    applyExampleVisualizationPresets(
+      {
+        id: 'world-population',
+        title: 'Population Europe 2023',
+        subtitle: '',
+        description: '',
+        category: ExampleCategory.POLYGONS,
+        visualizations: [
+          {
+            type: 'choropleth',
+            variable: 'Population 2023',
+            classification: 'quantile',
+            classes: 5,
+            palette: 'Blues'
+          }
+        ]
+      },
+      dataset
+    );
+
+    const [visualization] = visualizationStore.visualizations;
+    expect(visualization).toBeDefined();
+    expect(visualization.origin?.mode).toBe('manual-suggestion');
+    expect(visualization.origin?.suggestionKey).toBe(
+      'choropleth::1::population_2023::polygon::QTR'
+    );
+    expect(visualization.origin?.restoreState?.origin.mode).toBe(
+      'manual-blank'
+    );
+    expect(visualization.origin?.appliedSuggestionState?.suggestionKey).toBe(
+      visualization.origin?.suggestionKey
+    );
+    expect(
+      resolveDisplayedSuggestionKey({
+        persistedSuggestionKey: visualization.origin?.suggestionKey,
+        matchedSuggestionKey: undefined,
+        originMode: visualization.origin?.mode
+      })
+    ).toBe(visualization.origin?.suggestionKey);
   });
 
   it('recognizes a qualitative point suggestion right after it is applied', () => {

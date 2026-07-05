@@ -150,6 +150,18 @@ describe('createSymbolHandlers', () => {
     });
   });
 
+  it('handleSymbolFillClassificationChange forwards preserve-origin updates', () => {
+    const bag = makeBag();
+    bag.handlers.handleSymbolFillClassificationChange(
+      { labels: ['A'] } as never,
+      { preserveOrigin: true }
+    );
+    expect(bag.updateSymbolFillClassificationState).toHaveBeenCalledWith(
+      { labels: ['A'] },
+      { preserveOrigin: true }
+    );
+  });
+
   it('handleSymbolChange recomputes primitiveFilters from the point enabled override', () => {
     const bag = makeBag();
     bag.handlers.handleSymbolChange({ enabled: false } as never);
@@ -166,6 +178,19 @@ describe('createSymbolHandlers', () => {
     expect(bag.updatePrimitiveStrokeClassificationState).toHaveBeenCalledWith(
       'point',
       { colors: ['#abc'] }
+    );
+  });
+
+  it('handleSymbolStrokeClassificationChange forwards preserve-origin updates', () => {
+    const bag = makeBag();
+    bag.handlers.handleSymbolStrokeClassificationChange(
+      { colors: ['#abc'] } as never,
+      { preserveOrigin: true }
+    );
+    expect(bag.updatePrimitiveStrokeClassificationState).toHaveBeenCalledWith(
+      'point',
+      { colors: ['#abc'] },
+      { preserveOrigin: true }
     );
   });
 });

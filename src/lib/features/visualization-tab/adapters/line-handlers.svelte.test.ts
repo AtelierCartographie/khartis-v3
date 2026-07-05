@@ -133,6 +133,18 @@ describe('createLineHandlers', () => {
     });
   });
 
+  it('handleLineThicknessClassificationChange forwards preserve-origin updates', () => {
+    const bag = makeBag();
+    bag.handlers.handleLineThicknessClassificationChange(
+      { breaks: [1, 2] } as never,
+      { preserveOrigin: true }
+    );
+    expect(bag.updateLineThicknessClassificationState).toHaveBeenCalledWith(
+      { breaks: [1, 2] },
+      { preserveOrigin: true }
+    );
+  });
+
   it('handleLineChange recomputes primitiveFilters from the line enabled override', () => {
     const bag = makeBag();
     bag.handlers.handleLineChange({ enabled: false } as never);
