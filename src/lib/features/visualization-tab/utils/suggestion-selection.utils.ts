@@ -27,6 +27,12 @@ interface ResolveSuggestionCardActionOptions {
   isTargetActive?: boolean;
 }
 
+interface IncludePersistedSuggestionOptions {
+  hasAppliedSuggestionState?: boolean;
+  hasPersistedSuggestionKey?: boolean;
+  originMode?: VisualizationOriginMode;
+}
+
 export function getSuggestionSignature(
   suggestion: SuggestionSignatureSource
 ): string {
@@ -101,6 +107,22 @@ export function includePersistedSuggestion(
   }
 
   return [{ ...persistedSuggestion, dataGeometry }, ...suggestions];
+}
+
+export function shouldIncludePersistedSuggestion({
+  hasAppliedSuggestionState = false,
+  hasPersistedSuggestionKey = false,
+  originMode
+}: IncludePersistedSuggestionOptions): boolean {
+  if (!hasPersistedSuggestionKey) {
+    return false;
+  }
+
+  if (originMode === 'auto-suggestion' || originMode === 'manual-suggestion') {
+    return true;
+  }
+
+  return originMode === 'manual-blank' && hasAppliedSuggestionState;
 }
 
 export function resolveSuggestionCardAction(

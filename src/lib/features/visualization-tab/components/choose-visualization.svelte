@@ -30,7 +30,8 @@
     includePersistedSuggestion,
     resolveDisplayedSuggestionKey,
     resolveSuggestionCardAction,
-    shouldAutoApplySuggestion
+    shouldAutoApplySuggestion,
+    shouldIncludePersistedSuggestion
   } from '../utils/suggestion-selection.utils';
   import { UI_CONSTANTS } from '$lib/features/commons/constants/visualization.constants';
   import {
@@ -219,16 +220,21 @@
   );
 
   const displayedSuggestions = $derived.by(() => {
+    const origin = targetVisualization?.origin;
+
     if (
-      targetVisualizationOriginMode !== 'auto-suggestion' &&
-      targetVisualizationOriginMode !== 'manual-suggestion'
+      !shouldIncludePersistedSuggestion({
+        hasAppliedSuggestionState: Boolean(origin?.appliedSuggestionState),
+        hasPersistedSuggestionKey: Boolean(origin?.suggestionKey),
+        originMode: targetVisualizationOriginMode
+      })
     ) {
       return suggestions;
     }
 
     return includePersistedSuggestion(
       suggestions,
-      targetVisualization?.origin?.suggestionKey,
+      origin?.suggestionKey,
       suggestions[0]?.dataGeometry
     );
   });

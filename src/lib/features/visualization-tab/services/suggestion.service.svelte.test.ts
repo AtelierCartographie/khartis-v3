@@ -929,7 +929,7 @@ describe('suggestion.service', () => {
     const restoredVisualization = visualizationStore.visualizations.find(
       (item) => item.id === visualization.id
     )!;
-    expect(restoredVisualization.origin?.suggestionKey).toBeUndefined();
+    expect(restoredVisualization.origin?.suggestionKey).toBe(suggestionKey);
     expect(restoredVisualization.origin?.appliedSuggestionState).toBeDefined();
 
     applySuggestionToVisualization(visualization.id, suggestion, {
