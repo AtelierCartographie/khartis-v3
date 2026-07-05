@@ -27,6 +27,7 @@
   } from '../services/suggestion.service';
   import {
     getSuggestionSignature,
+    includePersistedSuggestion,
     resolveDisplayedSuggestionKey,
     resolveSuggestionCardAction,
     shouldAutoApplySuggestion
@@ -80,9 +81,6 @@
     return computeVisualizationSuggestions(selectedDataset);
   });
 
-  const visibleSuggestions = $derived(suggestions.slice(0, visibleCount));
-  const hasMoreSuggestions = $derived(visibleCount < suggestions.length);
-
   function getColumnBadgeType(columnName: string): VariableBadgeType {
     return resolveColumnBadgeType(datasetColumns, columnName);
   }
@@ -90,7 +88,7 @@
   function handleShowMore() {
     visibleCount = Math.min(
       visibleCount + UI_CONSTANTS.SUGGESTIONS_PER_PAGE,
-      suggestions.length
+      displayedSuggestions.length
     );
   }
 
@@ -216,6 +214,32 @@
       : undefined;
   });
 
+  const targetVisualizationOriginMode = $derived(
+    getVisualizationOriginMode(targetVisualization)
+  );
+
+  const displayedSuggestions = $derived.by(() => {
+    if (
+      targetVisualizationOriginMode !== 'auto-suggestion' &&
+      targetVisualizationOriginMode !== 'manual-suggestion'
+    ) {
+      return suggestions;
+    }
+
+    return includePersistedSuggestion(
+      suggestions,
+      targetVisualization?.origin?.suggestionKey,
+      suggestions[0]?.dataGeometry
+    );
+  });
+
+  const visibleSuggestions = $derived(
+    displayedSuggestions.slice(0, visibleCount)
+  );
+  const hasMoreSuggestions = $derived(
+    visibleCount < displayedSuggestions.length
+  );
+
   const persistedSuggestionKey = $derived.by(() => {
     const targetViz = targetVisualization;
 
@@ -233,7 +257,7 @@
     }
 
     const originSuggestionKey = targetViz.origin.suggestionKey;
-    const suggestionStillExists = suggestions.some(
+    const suggestionStillExists = displayedSuggestions.some(
       (suggestion) => getSuggestionSignature(suggestion) === originSuggestionKey
     );
 
@@ -249,10 +273,6 @@
         ? getVisualizationOriginMode(targetVisualization)
         : undefined
     })
-  );
-
-  const targetVisualizationOriginMode = $derived(
-    getVisualizationOriginMode(targetVisualization)
   );
 
   const autoSuggestionContextKey = $derived.by(() => {
@@ -334,7 +354,7 @@
       return;
     }
 
-    const suggestionStillExists = suggestions.some(
+    const suggestionStillExists = displayedSuggestions.some(
       (suggestion) =>
         getSuggestionSignature(suggestion) === selectedSuggestionKey
     );
