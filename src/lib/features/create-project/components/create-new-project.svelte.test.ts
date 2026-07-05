@@ -182,6 +182,37 @@ describe('CreateNewProject', () => {
     expect(mocks.loadOnlineFileMock).toHaveBeenCalledTimes(1);
   });
 
+  it('rejects project archives from the data import URL field', async () => {
+    render(CreateNewProject, {
+      props: {
+        isModal: true
+      }
+    });
+
+    const urlInput = screen.getByLabelText(
+      /lien vers un fichier stocké en ligne/i
+    );
+    const loadButton = screen.getByRole('button', { name: /charger/i });
+
+    await fireEvent.input(urlInput, {
+      target: {
+        value: 'http://localhost:5176/tests-datasets/projects/test-project.kh'
+      }
+    });
+
+    expect(loadButton).toBeEnabled();
+
+    await fireEvent.click(loadButton);
+
+    expect(mocks.setOnlineFileUrlMock).not.toHaveBeenCalled();
+    expect(mocks.loadOnlineFileMock).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText(
+        /doivent être ouverts depuis l'onglet « Ouvrir un projet ou une sauvegarde »/i
+      )
+    ).toBeInTheDocument();
+  });
+
   it('clears local URL and pasted data state when resetToken changes', async () => {
     const { rerender } = render(CreateNewProject, {
       props: {

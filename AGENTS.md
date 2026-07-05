@@ -60,6 +60,7 @@ This project is indexed by GitNexus as **khartis-v3** (18161 symbols, 33827 rela
 - Follow the code-quality plan's validation mode, including Chrome/browser validation when the plan marks an item for browser proof.
 - Run heavyweight validations sequentially. Do not run `pnpm check`, `pnpm lint`, Vitest, browser tools, or dev servers in parallel.
 - Prefer the narrowest relevant check for mechanical code-quality-plan items.
+- For `visualization-tab` behavior checks, cover multiple bundled examples and representative `static/tests-datasets` formats instead of relying on a single project fixture.
 - Before and during Chrome/browser validation, monitor memory-heavy processes. If a browser, dev server, Vitest, ESLint, or TypeScript process starts runaway memory/CPU behavior, stop it before continuing.
 
 ## Cartography Styling
