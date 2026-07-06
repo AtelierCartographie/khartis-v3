@@ -64,6 +64,9 @@
     "@eslint/compat": "^2.1.0",
     "@eslint/js": "^10.0.1",
     "@inlang/cli": "^3.1.14",
+    "@jcode.labs/ragmir": "^2.5.0",
+    "@jcode.labs/ragmir-chat": "2.5.0",
+    "@jcode.labs/ragmir-tts": "2.5.0",
     "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.69.0",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
@@ -103,8 +106,7 @@
     "workbox-precaching": "^7.4.1",
     "workbox-routing": "^7.4.1",
     "workbox-strategies": "^7.4.1",
-    "workbox-window": "^7.4.1",
-    "@jcode.labs/ragmir": "^2.3.0"
+    "workbox-window": "^7.4.1"
   },
   "dependencies": {
     "@ateliercartographie/motif.js": "^0.1.5",
