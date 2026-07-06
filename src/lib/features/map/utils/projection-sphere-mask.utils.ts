@@ -11,15 +11,16 @@ import type { Matrix4 } from '@math.gl/core';
 import type { DeckDataRow } from '../types';
 import { createCompatibleSolidPolygonLayerProps } from './solid-polygon-layer-props.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { NEUTRAL_CARTOGRAPHY_RGBA_COLORS } from '$lib/features/commons/constants/colors.constants';
 
 export const PROJECTION_SPHERE_MASK_LAYER_ID = 'projection-sphere-mask';
 export const PROJECTION_SPHERE_OUTLINE_LAYER_ID = 'projection-sphere-outline';
 
 const DEFAULT_SPHERE_FILL_COLOR: [number, number, number, number] = [
-  255, 255, 255, 255
+  ...NEUTRAL_CARTOGRAPHY_RGBA_COLORS.sphereFill
 ];
 const DEFAULT_SPHERE_OUTLINE_COLOR: [number, number, number, number] = [
-  90, 90, 90, 200
+  ...NEUTRAL_CARTOGRAPHY_RGBA_COLORS.sphereOutline
 ];
 const DEFAULT_SPHERE_OUTLINE_WIDTH = 1;
 

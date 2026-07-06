@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => {
   };
 
   return {
+    buildProjectionFromSuggestionMock: vi.fn(),
     notifyChangeMock: vi.fn(),
     suggestionResult,
     suggestProjectionsForBboxMock: vi.fn(() => suggestionResult),
@@ -46,7 +47,7 @@ vi.mock('./projection-suggest.service', () => ({
   suggestProjectionsForBbox: mocks.suggestProjectionsForBboxMock,
   suggestProjectionsForFeatureBounds:
     mocks.suggestProjectionsForFeatureBoundsMock,
-  buildProjectionFromSuggestion: vi.fn()
+  buildProjectionFromSuggestion: mocks.buildProjectionFromSuggestionMock
 }));
 
 vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
@@ -126,6 +127,7 @@ import {
   getProjectionState,
   projectionActions
 } from './projection.store.svelte';
+import type { ProjectionSuggestion } from './projection-suggest.service';
 
 describe('projectionActions', () => {
   beforeEach(() => {
@@ -150,5 +152,33 @@ describe('projectionActions', () => {
       'projection',
       'debounced'
     );
+  });
+
+  it('clears the active suggestion id when projection settings diverge manually', () => {
+    const suggestion: ProjectionSuggestion = {
+      id: 'equalearth',
+      name: 'Equal Earth',
+      type: 'generic',
+      proj4String: null,
+      d3Config: { projection: 'geoEqualEarth' },
+      bbox: [-180, -90, 180, 90]
+    };
+
+    mocks.buildProjectionFromSuggestionMock.mockReturnValue({ source: 'd3' });
+
+    projectionActions.applySuggestion(suggestion);
+
+    expect(getProjectionState().activeSuggestionId).toBe('equalearth');
+    expect(getProjectionState().suggestionD3Config).toEqual({
+      projection: 'geoEqualEarth'
+    });
+
+    projectionActions.setRotation(10);
+
+    expect(getProjectionState().activeSuggestionId).toBeUndefined();
+    expect(getProjectionState().suggestionD3Config).toEqual({
+      projection: 'geoEqualEarth'
+    });
+    expect(getProjectionState().rotation).toBe(10);
   });
 });

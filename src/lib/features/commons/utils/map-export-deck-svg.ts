@@ -11,6 +11,7 @@ import {
   ShapeType,
   SYMBOL_SDF_EXTENT
 } from '$lib/features/commons/constants/visualization.constants';
+import { NEUTRAL_CARTOGRAPHY_RGBA_COLORS } from '$lib/features/commons/constants/colors.constants';
 import { LogCategory, logger } from './logger';
 import {
   clamp,
@@ -54,6 +55,15 @@ const SPIKE_BAR_WIDTH_RATIO = 1.5;
 const TEXT_AVERAGE_CHAR_WIDTH_RATIO = 0.58;
 const TEXT_LINE_HEIGHT_RATIO = 1.2;
 const DEFAULT_TEXT_SIZE_PX = 12;
+const SVG_DEFAULT_FILL_COLOR: [number, number, number, number] = [
+  ...NEUTRAL_CARTOGRAPHY_RGBA_COLORS.svgDefaultFill
+];
+const SVG_DEFAULT_STROKE_COLOR: [number, number, number, number] = [
+  ...NEUTRAL_CARTOGRAPHY_RGBA_COLORS.svgDefaultStroke
+];
+const SVG_TRANSPARENT_COLOR: [number, number, number, number] = [
+  ...NEUTRAL_CARTOGRAPHY_RGBA_COLORS.transparent
+];
 
 const svgPatternDefsCache = new Map<string, SvgPatternDefinition>();
 
@@ -721,23 +731,23 @@ function serializePointLayer(
           fillAttribute
             ? normalizeSvgColor(
                 readBinaryTuple(fillAttribute, index),
-                [0, 0, 0, 255]
+                SVG_DEFAULT_FILL_COLOR
               )
-            : normalizeSvgColor(props.getFillColor, [0, 0, 0, 255]),
+            : normalizeSvgColor(props.getFillColor, SVG_DEFAULT_FILL_COLOR),
           layerOpacity
         )
-      : normalizeSvgColor([0, 0, 0, 0], [0, 0, 0, 0]);
+      : normalizeSvgColor(SVG_TRANSPARENT_COLOR, SVG_TRANSPARENT_COLOR);
     const strokeColor = stroked
       ? applyLayerOpacity(
           strokeAttribute
             ? normalizeSvgColor(
                 readBinaryTuple(strokeAttribute, index),
-                [0, 0, 0, 255]
+                SVG_DEFAULT_STROKE_COLOR
               )
-            : normalizeSvgColor(props.getLineColor, [0, 0, 0, 255]),
+            : normalizeSvgColor(props.getLineColor, SVG_DEFAULT_STROKE_COLOR),
           layerOpacity
         )
-      : normalizeSvgColor([0, 0, 0, 0], [0, 0, 0, 0]);
+      : normalizeSvgColor(SVG_TRANSPARENT_COLOR, SVG_TRANSPARENT_COLOR);
     const strokeWidth = stroked
       ? Math.max(
           0,
@@ -825,11 +835,11 @@ function serializePathLayer(
       colorAttribute
         ? normalizeSvgColor(
             readBinaryTuple(colorAttribute, index),
-            [0, 0, 0, 255]
+            SVG_DEFAULT_STROKE_COLOR
           )
         : normalizeSvgColor(
             props.getColor ?? props.getLineColor,
-            [0, 0, 0, 255]
+            SVG_DEFAULT_STROKE_COLOR
           ),
       layerOpacity
     );
@@ -903,9 +913,9 @@ function serializePolygonLayer(
       fillAttribute
         ? normalizeSvgColor(
             readBinaryTuple(fillAttribute, index),
-            [141, 141, 141, 255]
+            SVG_DEFAULT_FILL_COLOR
           )
-        : normalizeSvgColor(props.getFillColor, [141, 141, 141, 255]),
+        : normalizeSvgColor(props.getFillColor, SVG_DEFAULT_FILL_COLOR),
       layerOpacity
     );
     if (fillColor.opacity <= 0) continue;
@@ -1015,7 +1025,7 @@ function serializeGeoJsonGeometry(
   const fillColor = applyLayerOpacity(
     normalizeSvgColor(
       resolveAccessorValue(props.getFillColor, feature, featureIndex),
-      [141, 141, 141, 255]
+      SVG_DEFAULT_FILL_COLOR
     ),
     layerOpacity
   );
@@ -1023,7 +1033,7 @@ function serializeGeoJsonGeometry(
   const lineColor = applyLayerOpacity(
     normalizeSvgColor(
       resolveAccessorValue(props.getLineColor, feature, featureIndex),
-      [0, 0, 0, 255]
+      SVG_DEFAULT_STROKE_COLOR
     ),
     layerOpacity
   );
@@ -1252,7 +1262,7 @@ function serializeTextLayer(
     const color = applyLayerOpacity(
       normalizeSvgColor(
         resolveAccessorValue(props.getColor, datum, index),
-        [0, 0, 0, 255]
+        SVG_DEFAULT_STROKE_COLOR
       ),
       layerOpacity
     );
@@ -1274,16 +1284,16 @@ function serializeTextLayer(
           resolveAccessorValue(props.getBackgroundColor, datum, index),
           [255, 255, 255, 0]
         )
-      : normalizeSvgColor([0, 0, 0, 0], [0, 0, 0, 0]);
+      : normalizeSvgColor(SVG_TRANSPARENT_COLOR, SVG_TRANSPARENT_COLOR);
     const borderWidth = backgroundEnabled
       ? resolveAccessorNumber(props.getBorderWidth, datum, index, 0)
       : 0;
     const borderColor = backgroundEnabled
       ? normalizeSvgColor(
           resolveAccessorValue(props.getBorderColor, datum, index),
-          [0, 0, 0, 0]
+          SVG_TRANSPARENT_COLOR
         )
-      : normalizeSvgColor([0, 0, 0, 0], [0, 0, 0, 0]);
+      : normalizeSvgColor(SVG_TRANSPARENT_COLOR, SVG_TRANSPARENT_COLOR);
 
     if (
       backgroundColor.opacity > 0 ||

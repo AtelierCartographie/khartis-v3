@@ -1,5 +1,6 @@
 import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
 import {
+  NEUTRAL_CARTOGRAPHY_COLORS,
   DEFAULT_VISUALIZATION_COLOR,
   DEFAULT_VISUALIZATION_NEUTRAL_COLOR,
   DEFAULT_VISUALIZATION_SECONDARY_COLOR
@@ -245,12 +246,13 @@ export const DEFAULT_COLORS = {
   secondary: DEFAULT_VISUALIZATION_SECONDARY_COLOR,
   stroke: '#1e3a5f',
   line: '#1e3a5f',
-  text: '#000000',
-  halo: '#ffffff',
-  missingData: '#c6c6c6',
-  white: '#ffffff',
-  black: '#000000',
-  gray: DEFAULT_VISUALIZATION_NEUTRAL_COLOR
+  text: NEUTRAL_CARTOGRAPHY_COLORS.black,
+  halo: NEUTRAL_CARTOGRAPHY_COLORS.white,
+  missingData: NEUTRAL_CARTOGRAPHY_COLORS.missingData,
+  white: NEUTRAL_CARTOGRAPHY_COLORS.white,
+  black: NEUTRAL_CARTOGRAPHY_COLORS.black,
+  gray: DEFAULT_VISUALIZATION_NEUTRAL_COLOR,
+  neutralStroke: NEUTRAL_CARTOGRAPHY_COLORS.dataStroke
 } as const;
 
 export enum BasemapRemarquables {

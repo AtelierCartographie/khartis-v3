@@ -270,6 +270,29 @@ describe('createTextHandlers', () => {
     expect(bag.ensureTextBackgroundStrokeAutoColumns).toHaveBeenCalled();
   });
 
+  it('handleTextBackgroundClassificationChange forwards preserve-origin updates', () => {
+    const bag = makeBag();
+    bag.handlers.handleTextBackgroundClassificationChange(
+      { labels: ['A'] } as never,
+      { preserveOrigin: true }
+    );
+    expect(bag.updateTextBackgroundClassificationState).toHaveBeenCalledWith(
+      { labels: ['A'] },
+      { preserveOrigin: true }
+    );
+  });
+
+  it('handleTextBackgroundStrokeClassificationChange forwards preserve-origin updates', () => {
+    const bag = makeBag();
+    bag.handlers.handleTextBackgroundStrokeClassificationChange(
+      { colors: ['#123'] } as never,
+      { preserveOrigin: true }
+    );
+    expect(
+      bag.updateTextBackgroundStrokeClassificationState
+    ).toHaveBeenCalledWith({ colors: ['#123'] }, { preserveOrigin: true });
+  });
+
   it('handleTextSecondaryLabelsChange merges into secondaryLabels', () => {
     const bag = makeBag();
     bag.handlers.handleTextSecondaryLabelsChange({ enabled: true } as never);

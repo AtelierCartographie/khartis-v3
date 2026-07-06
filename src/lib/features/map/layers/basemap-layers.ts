@@ -59,6 +59,7 @@ import {
   BasemapRepresentation,
   BasemapCitySymbol
 } from '$lib/features/commons/constants/visualization.constants';
+import { NEUTRAL_CARTOGRAPHY_RGB_COLORS } from '$lib/features/commons/constants/colors.constants';
 import {
   CARTOGRAPHIC_FONT_FAMILY,
   resolveFontFamilyStack
@@ -108,7 +109,9 @@ const SOLID_DASH_ARRAY: [number, number] = [1, 0];
 const BASEMAP_DEFAULT_THICKNESS_PX = 0.5;
 const BASEMAP_TERRE_STROKE_THICKNESS_MAX_PX = 0.5;
 const BASEMAP_TERRE_STROKE_OPACITY_MAX = 0.4;
-const BASEMAP_TERRE_SHADOW_COLOR: RGBColor = [80, 80, 80];
+const BASEMAP_TERRE_SHADOW_COLOR: RGBColor = [
+  ...NEUTRAL_CARTOGRAPHY_RGB_COLORS.shadow
+];
 const BASEMAP_TERRE_SHADOW_OPACITY = 0.65;
 const BASEMAP_TERRE_SHADOW_WIDTH_PX = 5;
 const BASEMAP_TERRE_SHADOW_MIN_WIDTH_PX = 3;
@@ -121,7 +124,9 @@ const BASEMAP_RELIEF_DEFAULT_LINE_OPACITY_RATIO = 0.45;
 const BASEMAP_RELIEF_CONTOUR_LINE_WIDTH_PX = 0.8;
 const BASEMAP_RELIEF_ELEVATION_LINE_WIDTH_PX = 0.5;
 const BASEMAP_RELIEF_DEFAULT_LINE_WIDTH_PX = 0.35;
-const BASEMAP_CITY_STROKE_COLOR: RGBColor = [0, 0, 0];
+const BASEMAP_CITY_STROKE_COLOR: RGBColor = [
+  ...NEUTRAL_CARTOGRAPHY_RGB_COLORS.cityStroke
+];
 const BASEMAP_CITY_STROKE_OPACITY_RATIO = 0.5;
 const basemapGeoJsonCache = new WeakMap<
   ArrowTable,

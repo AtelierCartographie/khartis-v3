@@ -12,6 +12,8 @@ import { resolveSymbolModeTransition } from '../hooks/use-symbol-mode-state.svel
 import { pickOwnedKeys, pickRenamedKeys } from './pick-owned.utils';
 import { createPrimitiveAdapter } from './primitive-adapter.factory';
 
+type ClassificationUpdateOptions = { preserveOrigin?: boolean };
+
 export interface SymbolHandlersDeps {
   getSelectedVisualization: () => VisualizationConfig | undefined;
   updateSelectedVisualization: (
@@ -27,10 +29,12 @@ export interface SymbolHandlersDeps {
   ) => void;
   updatePrimitiveStrokeClassificationState: (
     primitive: PrimitiveFilterType.POINT | PrimitiveFilterType.POLYGON,
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: ClassificationUpdateOptions
   ) => void;
   updateSymbolFillClassificationState: (
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: ClassificationUpdateOptions
   ) => void;
   applyPrimitiveMappingUpdate: (
     primitive: PrimitiveFilterType,
@@ -196,18 +200,32 @@ export function createSymbolHandlers(deps: SymbolHandlersDeps) {
     symbolAdapter.handleClassificationChange;
 
   function handleSymbolFillClassificationChange(
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: ClassificationUpdateOptions
   ): void {
-    deps.updateSymbolFillClassificationState(updates);
+    if (options) {
+      deps.updateSymbolFillClassificationState(updates, options);
+    } else {
+      deps.updateSymbolFillClassificationState(updates);
+    }
   }
 
   function handleSymbolStrokeClassificationChange(
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: ClassificationUpdateOptions
   ): void {
-    deps.updatePrimitiveStrokeClassificationState(
-      PrimitiveFilterType.POINT,
-      updates
-    );
+    if (options) {
+      deps.updatePrimitiveStrokeClassificationState(
+        PrimitiveFilterType.POINT,
+        updates,
+        options
+      );
+    } else {
+      deps.updatePrimitiveStrokeClassificationState(
+        PrimitiveFilterType.POINT,
+        updates
+      );
+    }
   }
 
   const handleSymbolMappingChange = symbolAdapter.handleMappingChange;

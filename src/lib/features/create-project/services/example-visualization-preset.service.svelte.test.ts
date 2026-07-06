@@ -68,7 +68,16 @@ vi.mock('$lib/features/visualization-tab/services/suggestion.service', () => ({
   applySuggestionToVisualization: vi.fn(),
   buildSuggestionOrigin: vi.fn((_visualization, origin) => origin),
   mapSuggestionToType: vi.fn(() => 'choropleth'),
-  rememberAppliedSuggestionState: vi.fn()
+  rememberAppliedSuggestionState: vi.fn(),
+  resolveBlankVisualizationPreset: vi.fn(() => ({
+    type: 'choropleth',
+    modes: { fill: 'none' },
+    primitiveFilters: ['polygon'],
+    style: { strokeColor: '#8d8d8d' },
+    mapping: { geometryColumn: 'geometry' },
+    classification: undefined,
+    missingData: { show: false }
+  }))
 }));
 
 vi.mock(
@@ -88,7 +97,8 @@ import type { VisualizationConfig } from '$lib/features/commons/stores/visualiza
 import {
   applySuggestionToVisualization,
   buildSuggestionOrigin,
-  rememberAppliedSuggestionState
+  rememberAppliedSuggestionState,
+  resolveBlankVisualizationPreset
 } from '$lib/features/visualization-tab/services/suggestion.service';
 
 function buildDataset(columns: Array<{ name: string; type: ColumnType }>) {
@@ -216,8 +226,15 @@ describe('example visualization presets', () => {
       dataset
     );
 
+    expect(resolveBlankVisualizationPreset).toHaveBeenCalledWith(dataset);
     expect(buildSuggestionOrigin).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'viz-1' }),
+      expect.objectContaining({
+        id: 'viz-1',
+        origin: { mode: 'manual-blank' },
+        modes: { fill: 'none' },
+        mapping: { geometryColumn: 'geometry' },
+        classification: undefined
+      }),
       expect.objectContaining({
         mode: 'manual-suggestion',
         suggestionKey: 'choropleth'

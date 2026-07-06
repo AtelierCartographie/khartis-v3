@@ -126,7 +126,8 @@ interface PrimitivePanelControllerOptions {
   ) => void;
   updatePrimitiveStrokeClassification: (
     primitive: StrokeClassifiablePrimitive,
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: ClassificationUpdateOptions
   ) => void;
   updateTextPrimitive: (updates: Partial<TextPrimitiveConfig>) => void;
   updateVisualization: (
@@ -206,6 +207,15 @@ export function usePrimitivePanelController({
     options?: VisualizationWriteOptions
   ): VisualizationConfig | undefined {
     return options?.visualization ?? getVisualization();
+  }
+
+  function buildOriginPatch(
+    visualization: VisualizationConfig,
+    options?: VisualizationWriteOptions
+  ): Partial<VisualizationConfig> {
+    return options?.preserveOrigin && visualization.origin
+      ? { origin: visualization.origin }
+      : {};
   }
 
   function resolveClassificationPaletteType(
@@ -415,12 +425,17 @@ export function usePrimitivePanelController({
     options?: VisualizationWriteOptions
   ): void {
     const visualization = resolveWriteVisualization(options);
+    if (!visualization) {
+      return;
+    }
+
     const symbol = getSymbolPrimitive(visualization);
     if (!symbol) {
       return;
     }
 
     updateVisualization({
+      ...buildOriginPatch(visualization, options),
       symbol: {
         ...symbol,
         fillClassification: mergeClassificationConfig(
@@ -463,6 +478,7 @@ export function usePrimitivePanelController({
 
     updateVisualization(
       {
+        ...buildOriginPatch(visualization, options),
         symbol: {
           ...symbol,
           ...(hasOwnKey(updates, 'valueColumn')
@@ -662,12 +678,17 @@ export function usePrimitivePanelController({
     options?: VisualizationWriteOptions
   ): void {
     const visualization = resolveWriteVisualization(options);
+    if (!visualization) {
+      return;
+    }
+
     const text = getTextPrimitive(visualization);
     if (!text) {
       return;
     }
 
     updateVisualization({
+      ...buildOriginPatch(visualization, options),
       text: {
         ...text,
         background: {
@@ -863,7 +884,8 @@ export function usePrimitivePanelController({
   ): void {
     ensureClassificationDefaults(visualization, {
       getClassification: getLineThicknessClassification,
-      update: updateLineThicknessClassification,
+      update: (updates) =>
+        updateLineThicknessClassification(updates, { preserveOrigin: true }),
       usesBreaks: usesLineThicknessBreakClassification
     });
   }
@@ -918,7 +940,7 @@ export function usePrimitivePanelController({
         applyPrimitiveMappingUpdate(
           primitive,
           { valueColumn: column },
-          { visualization: currentVisualization }
+          { visualization: currentVisualization, preserveOrigin: true }
         ),
       usesCategories: (currentVisualization) =>
         usesCategoricalClassification(currentVisualization, primitive),
@@ -932,7 +954,7 @@ export function usePrimitivePanelController({
         applyPrimitiveMappingUpdate(
           primitive,
           { categoryColumn: column },
-          { visualization: currentVisualization }
+          { visualization: currentVisualization, preserveOrigin: true }
         )
     });
 
@@ -1003,7 +1025,9 @@ export function usePrimitivePanelController({
       getClassification: (currentVisualization) =>
         getPrimitiveStrokeClassification(currentVisualization, primitive),
       update: (updates) =>
-        updatePrimitiveStrokeClassification(primitive, updates),
+        updatePrimitiveStrokeClassification(primitive, updates, {
+          preserveOrigin: true
+        }),
       usesBreaks: (currentVisualization) =>
         usesStrokeBreakClassification(currentVisualization, primitive),
       usesCategories: (currentVisualization) =>
@@ -1038,7 +1062,7 @@ export function usePrimitivePanelController({
         applyPrimitiveStrokeMappingUpdate(
           primitive,
           { valueColumn: column },
-          { visualization: currentVisualization }
+          { visualization: currentVisualization, preserveOrigin: true }
         ),
       usesCategories: (currentVisualization) =>
         usesStrokeCategoricalClassification(currentVisualization, primitive),
@@ -1056,7 +1080,7 @@ export function usePrimitivePanelController({
         applyPrimitiveStrokeMappingUpdate(
           primitive,
           { categoryColumn: column },
-          { visualization: currentVisualization }
+          { visualization: currentVisualization, preserveOrigin: true }
         )
     });
   }
@@ -1067,7 +1091,10 @@ export function usePrimitivePanelController({
     ensureClassificationDefaults(visualization, {
       getClassification: getSymbolFillClassification,
       update: (updates) =>
-        updateSymbolFillClassificationState(updates, { visualization }),
+        updateSymbolFillClassificationState(updates, {
+          visualization,
+          preserveOrigin: true
+        }),
       usesBreaks: usesSymbolFillBreakClassification,
       usesCategories: usesSymbolFillCategoricalClassification
     });
@@ -1093,7 +1120,7 @@ export function usePrimitivePanelController({
       applyValueColumn: (column, currentVisualization) =>
         applySymbolFillMappingUpdate(
           { valueColumn: column },
-          { visualization: currentVisualization }
+          { visualization: currentVisualization, preserveOrigin: true }
         ),
       usesCategories: usesSymbolFillCategoricalClassification,
       getCategoryColumn: getSymbolFillCategoryColumn,
@@ -1105,7 +1132,7 @@ export function usePrimitivePanelController({
       applyCategoryColumn: (column, currentVisualization) =>
         applySymbolFillMappingUpdate(
           { categoryColumn: column },
-          { visualization: currentVisualization }
+          { visualization: currentVisualization, preserveOrigin: true }
         )
     });
   }
@@ -1117,7 +1144,10 @@ export function usePrimitivePanelController({
       getClassification: (currentVisualization) =>
         getTextBackgroundConfig(currentVisualization)?.classification,
       update: (updates) =>
-        updateTextBackgroundClassificationState(updates, { visualization }),
+        updateTextBackgroundClassificationState(updates, {
+          visualization,
+          preserveOrigin: true
+        }),
       usesBreaks: usesTextBackgroundBreakClassification,
       usesCategories: usesTextBackgroundCategoricalClassification
     });
@@ -1131,7 +1161,8 @@ export function usePrimitivePanelController({
         getTextBackgroundConfig(currentVisualization)?.strokeClassification,
       update: (updates) =>
         updateTextBackgroundStrokeClassificationState(updates, {
-          visualization
+          visualization,
+          preserveOrigin: true
         }),
       usesBreaks: usesTextBackgroundStrokeBreakClassification,
       usesCategories: usesTextBackgroundStrokeCategoricalClassification
@@ -1164,7 +1195,7 @@ export function usePrimitivePanelController({
       applyValueColumn: (column, currentVisualization) =>
         applyTextBackgroundMappingUpdate(
           { valueColumn: column },
-          { visualization: currentVisualization }
+          { visualization: currentVisualization, preserveOrigin: true }
         ),
       usesCategories: usesTextBackgroundCategoricalClassification,
       getCategoryColumn: (currentVisualization) =>
@@ -1180,7 +1211,7 @@ export function usePrimitivePanelController({
       applyCategoryColumn: (column, currentVisualization) =>
         applyTextBackgroundMappingUpdate(
           { categoryColumn: column },
-          { visualization: currentVisualization }
+          { visualization: currentVisualization, preserveOrigin: true }
         )
     });
   }
@@ -1213,7 +1244,7 @@ export function usePrimitivePanelController({
       applyValueColumn: (column, currentVisualization) =>
         applyTextBackgroundStrokeMappingUpdate(
           { valueColumn: column },
-          { visualization: currentVisualization }
+          { visualization: currentVisualization, preserveOrigin: true }
         ),
       usesCategories: usesTextBackgroundStrokeCategoricalClassification,
       getCategoryColumn: (currentVisualization) =>
@@ -1234,7 +1265,7 @@ export function usePrimitivePanelController({
       applyCategoryColumn: (column, currentVisualization) =>
         applyTextBackgroundStrokeMappingUpdate(
           { categoryColumn: column },
-          { visualization: currentVisualization }
+          { visualization: currentVisualization, preserveOrigin: true }
         )
     });
   }
@@ -1685,6 +1716,7 @@ export function usePrimitivePanelController({
     if (!visualization) {
       return;
     }
+    const originPatch = buildOriginPatch(visualization, options);
 
     switch (primitive) {
       case PrimitiveFilterType.POLYGON: {
@@ -1711,6 +1743,7 @@ export function usePrimitivePanelController({
 
         updateVisualization(
           {
+            ...originPatch,
             polygon: {
               ...polygon,
               ...(hasOwnKey(updates, 'valueColumn')
@@ -1759,6 +1792,7 @@ export function usePrimitivePanelController({
 
         updateVisualization(
           {
+            ...originPatch,
             symbol: {
               ...symbol,
               ...(hasOwnKey(updates, 'valueColumn')
