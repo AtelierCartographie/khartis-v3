@@ -14,6 +14,8 @@ const REPO = 'AtelierCartographie/khartis-v3';
 const RELEASE_WORKFLOW = 'release.yml';
 const LOCAL_ENV_FILES = ['.env', '.env.deploy.local'];
 const DEFAULT_PORT = 22;
+const PUBLIC_URL_CHECK_TIMEOUT_MS = 15_000;
+const SFTP_CLOSE_TIMEOUT_MS = 5_000;
 const STAGING_TAG_PATTERN =
   /^v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-staging\.(?<staging>\d+)$/;
 
@@ -150,6 +152,7 @@ async function main() {
     const config = await readSftpConfig();
     await uploadBuild(config, uploadBuildDir, remoteDir, target.remoteDirLeaf);
     await verifyPublicUrl(process.env[target.publicUrlEnv]);
+    log('Deployment complete.');
   } finally {
     await run('git', ['worktree', 'remove', '--force', worktree], {
       cwd: process.cwd(),
@@ -553,12 +556,20 @@ async function uploadBuild(config, buildDir, remoteDir, expectedRemoteDirLeaf) {
     'upload'
   );
   const manifest = await collectUploadManifest(buildDir);
-  const progress = createUploadProgress(manifest);
+  const uploadProgress = createUploadProgress(manifest);
+
+  await cleanupStaleRemoteSiblings(
+    config,
+    safeRemoteDir,
+    expectedRemoteDirLeaf
+  );
+
   const client = new SftpClient('khartis-local-deploy');
   let swapped = false;
   let preserveTempDir = false;
+  let tempRemoteDirCreated = false;
 
-  client.on('upload', (info) => progress.onFileUploaded(info.source));
+  client.on('upload', (info) => uploadProgress.onFileUploaded(info.source));
 
   try {
     log('Connecting to SFTP...');
@@ -568,18 +579,14 @@ async function uploadBuild(config, buildDir, remoteDir, expectedRemoteDirLeaf) {
       throw new Error('Remote target exists but is not a directory.');
     }
 
-    await removeStaleRemoteSiblings(
-      client,
-      safeRemoteDir,
-      expectedRemoteDirLeaf
-    );
     await client.mkdir(tempRemoteDir, true);
+    tempRemoteDirCreated = true;
 
     log(
       `Uploading ${manifest.totalFiles} files (${formatBytes(manifest.totalBytes)}) to a temporary remote ${expectedRemoteDirLeaf} directory...`
     );
     await client.uploadDir(buildDir, tempRemoteDir, { useFastput: false });
-    progress.finish();
+    uploadProgress.finish();
     log('Upload complete.');
 
     log(`Swapping remote ${expectedRemoteDirLeaf} directory...`);
@@ -609,21 +616,26 @@ async function uploadBuild(config, buildDir, remoteDir, expectedRemoteDirLeaf) {
     log(`Remote ${expectedRemoteDirLeaf} directory swapped.`);
 
     if (previousRemoteDir) {
-      log('Removing the previous remote version...');
-      await client
-        .rmdir(previousRemoteDir, true)
-        .catch(() =>
-          warn(
-            `Could not remove the previous remote version: ${previousRemoteDir}. Remove it manually.`
-          )
-        );
+      await removeRemoteDirRecursive(
+        client,
+        previousRemoteDir,
+        'Removing the previous remote version'
+      ).catch(() =>
+        warn(
+          `Could not remove the previous remote version: ${previousRemoteDir}. Remove it manually.`
+        )
+      );
     }
   } finally {
-    progress.finish();
-    if (!swapped && !preserveTempDir) {
-      await client.rmdir(tempRemoteDir, true).catch(() => undefined);
+    uploadProgress.finish();
+    if (tempRemoteDirCreated && !swapped && !preserveTempDir) {
+      await removeRemoteDirRecursive(
+        client,
+        tempRemoteDir,
+        'Removing incomplete temporary remote upload'
+      ).catch(() => undefined);
     }
-    await client.end().catch(() => undefined);
+    await closeSftpClient(client, 'deployment').catch(() => undefined);
   }
 }
 
@@ -646,68 +658,117 @@ async function collectUploadManifest(buildDir) {
   return { fileSizes, totalFiles: fileSizes.size, totalBytes };
 }
 
+function createUploadProgress({ fileSizes, totalFiles, totalBytes }) {
+  const progress = createTaskProgress({
+    label: 'Uploading files',
+    totalItems: totalFiles,
+    totalBytes,
+    itemName: 'files'
+  });
+
+  return {
+    onFileUploaded(source) {
+      progress.increment({ items: 1, bytes: fileSizes.get(source) ?? 0 });
+    },
+    finish: progress.finish
+  };
+}
+
+function createRemoteRemovalProgress(label, { totalEntries }) {
+  const progress = createTaskProgress({
+    label,
+    totalItems: totalEntries,
+    itemName: 'entries'
+  });
+
+  return {
+    onEntryRemoved() {
+      progress.increment();
+    },
+    finish: progress.finish
+  };
+}
+
 const PROGRESS_BAR_WIDTH = 24;
 const PROGRESS_RENDER_INTERVAL_MS = 200;
 
-function createUploadProgress({ fileSizes, totalFiles, totalBytes }) {
-  const startedAt = Date.now();
+function createTaskProgress({ label, totalItems, totalBytes = 0, itemName }) {
   const interactive = process.stdout.isTTY === true;
-  let uploadedFiles = 0;
-  let uploadedBytes = 0;
+  const startedAt = Date.now();
+  let completedItems = 0;
+  let completedBytes = 0;
   let lastRenderAt = 0;
   let lastLoggedDecile = 0;
   let finished = false;
 
   const statusLine = () => {
-    const ratio =
-      totalBytes > 0
-        ? uploadedBytes / totalBytes
-        : totalFiles > 0
-          ? uploadedFiles / totalFiles
-          : 1;
+    const itemRatio = totalItems > 0 ? completedItems / totalItems : 1;
+    const hasByteProgress = totalBytes > 0 && completedBytes > 0;
+    const isComplete = totalItems > 0 && completedItems >= totalItems;
+    const rawRatio = isComplete
+      ? 1
+      : hasByteProgress
+        ? completedBytes / totalBytes
+        : itemRatio;
+    const ratio = Math.max(0, Math.min(rawRatio, 1));
     const percent = Math.floor(ratio * 100);
     const filled = Math.round(ratio * PROGRESS_BAR_WIDTH);
     const bar = '█'.repeat(filled) + '░'.repeat(PROGRESS_BAR_WIDTH - filled);
-    const remainingFiles = totalFiles - uploadedFiles;
+    const remainingItems = Math.max(totalItems - completedItems, 0);
     const elapsedMs = Date.now() - startedAt;
+    const completedUnits = isComplete
+      ? 1
+      : hasByteProgress
+        ? completedBytes
+        : completedItems;
+    const totalUnits = isComplete
+      ? 1
+      : hasByteProgress
+        ? totalBytes
+        : totalItems;
     const eta =
-      uploadedBytes > 0 && elapsedMs > 0
+      completedUnits > 0 && elapsedMs > 0
         ? formatDuration(
-            ((totalBytes - uploadedBytes) / uploadedBytes) * elapsedMs
+            ((totalUnits - completedUnits) / completedUnits) * elapsedMs
           )
         : '--';
-    return `[${bar}] ${percent}% | ${remainingFiles}/${totalFiles} files left | ETA ${eta}`;
+    return `${label} [${bar}] ${percent}% | ${remainingItems}/${totalItems} ${itemName} left | ETA ${eta}`;
+  };
+
+  const render = () => {
+    if (totalItems === 0) return;
+
+    if (interactive) {
+      const now = Date.now();
+      if (
+        now - lastRenderAt < PROGRESS_RENDER_INTERVAL_MS &&
+        completedItems < totalItems
+      ) {
+        return;
+      }
+      lastRenderAt = now;
+      process.stdout.write(`\r\u001B[2K[deploy-local] ${statusLine()}`);
+      return;
+    }
+
+    const decile =
+      totalItems > 0 ? Math.floor((completedItems / totalItems) * 10) : 10;
+    if (decile > lastLoggedDecile) {
+      lastLoggedDecile = decile;
+      log(statusLine());
+    }
   };
 
   return {
-    onFileUploaded(source) {
-      uploadedFiles += 1;
-      uploadedBytes += fileSizes.get(source) ?? 0;
-
-      if (interactive) {
-        const now = Date.now();
-        if (
-          now - lastRenderAt < PROGRESS_RENDER_INTERVAL_MS &&
-          uploadedFiles < totalFiles
-        ) {
-          return;
-        }
-        lastRenderAt = now;
-        process.stdout.write(`\r\u001B[2K[deploy-local] ${statusLine()}`);
-        return;
-      }
-
-      const decile =
-        totalFiles > 0 ? Math.floor((uploadedFiles / totalFiles) * 10) : 10;
-      if (decile > lastLoggedDecile) {
-        lastLoggedDecile = decile;
-        log(statusLine());
-      }
+    increment({ items = 1, bytes = 0 } = {}) {
+      completedItems = Math.min(completedItems + items, totalItems);
+      completedBytes = Math.min(completedBytes + bytes, totalBytes);
+      render();
     },
     finish() {
       if (finished) return;
       finished = true;
-      if (interactive && uploadedFiles > 0) {
+      if (interactive && completedItems > 0) {
         process.stdout.write(`\r\u001B[2K[deploy-local] ${statusLine()}\n`);
       }
     }
@@ -736,6 +797,18 @@ function formatBytes(bytes) {
   return `${value.toFixed(1)} ${units[unitIndex]}`;
 }
 
+async function cleanupStaleRemoteSiblings(config, safeRemoteDir, expectedLeaf) {
+  const client = new SftpClient('khartis-local-cleanup');
+  try {
+    await client.connect(config);
+    await removeStaleRemoteSiblings(client, safeRemoteDir, expectedLeaf);
+  } catch (error) {
+    warn(`Stale remote cleanup skipped: ${error.message}`);
+  } finally {
+    await closeSftpClient(client, 'stale cleanup').catch(() => undefined);
+  }
+}
+
 async function removeStaleRemoteSiblings(client, safeRemoteDir, expectedLeaf) {
   const parent = path.posix.dirname(safeRemoteDir);
   const stalePrefixes = [`${expectedLeaf}.upload-`, `${expectedLeaf}.old-`];
@@ -746,12 +819,58 @@ async function removeStaleRemoteSiblings(client, safeRemoteDir, expectedLeaf) {
     if (!stalePrefixes.some((prefix) => entry.name.startsWith(prefix))) {
       continue;
     }
-    log(`Removing stale remote directory ${entry.name}...`);
-    await client
-      .rmdir(`${parent}/${entry.name}`, true)
-      .catch(() =>
-        warn(`Could not remove stale remote directory: ${parent}/${entry.name}`)
-      );
+    await removeRemoteDirRecursive(
+      client,
+      `${parent}/${entry.name}`,
+      `Removing stale remote directory ${entry.name}`
+    ).catch(() =>
+      warn(`Could not remove stale remote directory: ${parent}/${entry.name}`)
+    );
+  }
+}
+
+async function collectRemoteRemovalManifest(client, dir) {
+  const entries = [];
+
+  async function visit(currentDir) {
+    const children = await client.list(currentDir);
+    for (const entry of children) {
+      const child = `${currentDir}/${entry.name}`;
+      if (entry.type === 'd') {
+        await visit(child);
+        entries.push({ path: child, type: 'd' });
+      } else {
+        entries.push({ path: child, type: entry.type });
+      }
+    }
+  }
+
+  await visit(dir);
+  entries.push({ path: dir, type: 'd' });
+
+  return { entries, totalEntries: entries.length };
+}
+
+async function removeRemoteDirRecursive(
+  client,
+  dir,
+  label = `Removing remote directory ${dir}`
+) {
+  log(`${label}: scanning remote contents...`);
+  const manifest = await collectRemoteRemovalManifest(client, dir);
+  const progress = createRemoteRemovalProgress(label, manifest);
+
+  try {
+    for (const entry of manifest.entries) {
+      if (entry.type === 'd') {
+        await client.rmdir(entry.path, false);
+      } else {
+        await client.delete(entry.path, true);
+      }
+      progress.onEntryRemoved();
+    }
+  } finally {
+    progress.finish();
   }
 }
 
@@ -807,15 +926,59 @@ function normalizeRemotePath(remotePath) {
 async function verifyPublicUrl(url) {
   if (!url) return;
 
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    PUBLIC_URL_CHECK_TIMEOUT_MS
+  );
+  timeout.unref?.();
+
   try {
-    const response = await fetch(url, { method: 'HEAD', redirect: 'follow' });
+    log(`Checking public URL: ${url}`);
+    const response = await fetch(url, {
+      method: 'HEAD',
+      redirect: 'follow',
+      signal: controller.signal
+    });
     if (response.ok) {
       log(`Public URL check: ${response.status} ${url}`);
       return;
     }
     warn(`Public URL check returned ${response.status}: ${url}`);
   } catch (error) {
+    if (error.name === 'AbortError') {
+      warn(
+        `Public URL check timed out after ${formatDuration(PUBLIC_URL_CHECK_TIMEOUT_MS)}: ${url}`
+      );
+      return;
+    }
     warn(`Public URL check failed: ${error.message}`);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function closeSftpClient(client, label) {
+  let timeout;
+  const timeoutError = new Error('SFTP close timed out');
+  const timeoutPromise = new Promise((_, reject) => {
+    timeout = setTimeout(() => reject(timeoutError), SFTP_CLOSE_TIMEOUT_MS);
+    timeout.unref?.();
+  });
+
+  try {
+    await Promise.race([client.end(), timeoutPromise]);
+  } catch (error) {
+    if (error === timeoutError) {
+      client.client?.destroy?.();
+      warn(
+        `${label} SFTP close timed out after ${formatDuration(SFTP_CLOSE_TIMEOUT_MS)}; forced socket shutdown.`
+      );
+      return;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
