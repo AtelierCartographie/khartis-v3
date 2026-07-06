@@ -23,8 +23,15 @@ interface ResolveDisplayedSuggestionKeyOptions {
 interface ResolveSuggestionCardActionOptions {
   displayedSuggestionKey?: string;
   originSuggestionKey?: string;
+  originMode?: VisualizationOriginMode;
   hasRestoreState?: boolean;
   isTargetActive?: boolean;
+}
+
+interface IncludePersistedSuggestionOptions {
+  hasAppliedSuggestionState?: boolean;
+  hasPersistedSuggestionKey?: boolean;
+  originMode?: VisualizationOriginMode;
 }
 
 export function getSuggestionSignature(
@@ -37,6 +44,86 @@ export function getSuggestionSignature(
     suggestion.geometries.join('|'),
     suggestion.semioTypes.join('|')
   ].join('::');
+}
+
+export function parseSuggestionSignature(
+  signature: string | undefined
+): VizSuggestion | undefined {
+  if (!signature) {
+    return undefined;
+  }
+
+  const [id, nbColumnsText, columnsText, geometriesText, semioTypesText] =
+    signature.split('::');
+
+  if (
+    !id ||
+    nbColumnsText === undefined ||
+    columnsText === undefined ||
+    geometriesText === undefined ||
+    semioTypesText === undefined
+  ) {
+    return undefined;
+  }
+
+  const nbColumns = Number(nbColumnsText);
+  if (!Number.isFinite(nbColumns)) {
+    return undefined;
+  }
+
+  return {
+    id,
+    label: id,
+    nbColumns,
+    columns: columnsText ? columnsText.split('|') : [],
+    geometries: geometriesText
+      ? (geometriesText.split('|') as VizSuggestion['geometries'])
+      : [],
+    semioTypes: semioTypesText
+      ? (semioTypesText.split('|') as VizSuggestion['semioTypes'])
+      : []
+  };
+}
+
+export function includePersistedSuggestion(
+  suggestions: VizSuggestion[],
+  suggestionKey: string | undefined,
+  dataGeometry?: VizSuggestion['dataGeometry']
+): VizSuggestion[] {
+  if (!suggestionKey) {
+    return suggestions;
+  }
+
+  if (
+    suggestions.some(
+      (suggestion) => getSuggestionSignature(suggestion) === suggestionKey
+    )
+  ) {
+    return suggestions;
+  }
+
+  const persistedSuggestion = parseSuggestionSignature(suggestionKey);
+  if (!persistedSuggestion) {
+    return suggestions;
+  }
+
+  return [{ ...persistedSuggestion, dataGeometry }, ...suggestions];
+}
+
+export function shouldIncludePersistedSuggestion({
+  hasAppliedSuggestionState = false,
+  hasPersistedSuggestionKey = false,
+  originMode
+}: IncludePersistedSuggestionOptions): boolean {
+  if (!hasPersistedSuggestionKey) {
+    return false;
+  }
+
+  if (originMode === 'auto-suggestion' || originMode === 'manual-suggestion') {
+    return true;
+  }
+
+  return originMode === 'manual-blank' && hasAppliedSuggestionState;
 }
 
 export function resolveSuggestionCardAction(
@@ -63,6 +150,9 @@ export function resolveSuggestionCardAction(
   if (
     typeof currentSuggestion !== 'string' &&
     currentSuggestion?.hasRestoreState &&
+    (currentSuggestion.originMode === undefined ||
+      currentSuggestion.originMode === 'auto-suggestion' ||
+      currentSuggestion.originMode === 'manual-suggestion') &&
     currentSuggestion.originSuggestionKey === nextSuggestionKey
   ) {
     return 'clear';

@@ -432,6 +432,55 @@ describe('visualizationStore suggestion origin tracking', () => {
     ]);
   });
 
+  it('keeps suggestion origin for preserved primitive stroke classification updates', () => {
+    datasetsStore.addProcessedDataset({
+      ...buildDataset(),
+      geometry: {
+        type: 'Polygon',
+        columnName: 'geom',
+        bounds: [0, 0, 1, 1],
+        centroid: [0.5, 0.5],
+        featureCount: 1
+      }
+    });
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      'dataset-1'
+    );
+
+    visualizationStore.updateVisualization(visualization.id, {
+      origin: {
+        mode: 'manual-suggestion',
+        suggestionKey: 'choropleth::1::name::polygon::QTR'
+      },
+      polygon: {
+        ...visualization.polygon!,
+        strokeMode: StrokeMode.CLASSES
+      }
+    });
+
+    visualizationStore.updatePrimitiveStrokeClassification(
+      visualization.id,
+      PrimitiveFilterType.POLYGON,
+      {
+        colors: ['#1192e8', '#78a9cf', '#c8ddf0'],
+        labels: ['A', 'B', 'C']
+      },
+      { preserveOrigin: true }
+    );
+
+    const updatedVisualization = visualizationStore.selectedVisualization;
+
+    expect(updatedVisualization?.origin).toEqual({
+      mode: 'manual-suggestion',
+      suggestionKey: 'choropleth::1::name::polygon::QTR'
+    });
+    expect(updatedVisualization?.polygon?.strokeClassification?.labels).toEqual(
+      ['A', 'B', 'C']
+    );
+  });
+
   it('switches to custom for semantic classification changes', () => {
     datasetsStore.addProcessedDataset(buildDataset());
 

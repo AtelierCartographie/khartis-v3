@@ -1610,6 +1610,7 @@
   "validation_url_protocol_restricted": "Only HTTP and HTTPS protocols are allowed",
   "validation_url_domain_blocked": "Unauthorized domain",
   "validation_url_no_filetype": "Unable to determine the file type from the URL",
+  "validation_project_archive_use_open_project": ".kh and .khartis files must be opened from the “Open a project or a backup” tab",
   "validation_url_insecure_http": "Use of insecure HTTP",
   "validation_geojson_no_type": "Invalid GeoJSON: 'type' property missing",
   "validation_geojson_fc_no_features": "Invalid GeoJSON: FeatureCollection without 'features'",

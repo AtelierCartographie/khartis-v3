@@ -166,7 +166,7 @@ describe('legend store responsive defaults', () => {
     expect(getLegendState().items).toEqual([
       expect.objectContaining({
         id: 'legend-viz-viz-poly-only',
-        subtitle: 'population / status',
+        subtitle: 'population',
         subtitleMode: 'auto'
       })
     ]);

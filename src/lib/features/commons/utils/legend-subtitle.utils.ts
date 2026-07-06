@@ -37,19 +37,25 @@ export function getVisualizationLegendSubtitleParts(
   }
 
   if (polygonEnabled && !symbolEnabled && !lineEnabled && !textEnabled) {
-    return visualization.polygon?.fillMode === 'categories'
-      ? [
-          visualization.polygon?.categoryColumn ??
-            visualization.mapping.categoryColumn,
-          visualization.polygon?.valueColumn ??
-            visualization.mapping.valueColumn
-        ]
-      : [
-          visualization.polygon?.valueColumn ??
-            visualization.mapping.valueColumn,
-          visualization.polygon?.categoryColumn ??
-            visualization.mapping.categoryColumn
-        ];
+    const polygonFillMode = visualization.polygon?.fillMode;
+    const polygonValueColumn =
+      visualization.polygon?.valueColumn ?? visualization.mapping.valueColumn;
+    const polygonCategoryColumn =
+      visualization.polygon?.categoryColumn ??
+      visualization.mapping.categoryColumn;
+
+    if (polygonFillMode === FillMode.CATEGORIES) {
+      return [polygonCategoryColumn, polygonValueColumn];
+    }
+
+    if (
+      polygonFillMode === FillMode.CLASSES ||
+      polygonFillMode === FillMode.DENSITY
+    ) {
+      return [polygonValueColumn];
+    }
+
+    return [polygonValueColumn, polygonCategoryColumn];
   }
 
   if (lineEnabled && !symbolEnabled && !polygonEnabled && !textEnabled) {

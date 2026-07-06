@@ -197,4 +197,52 @@ describe('useClassificationBreaksOrchestrator', () => {
       { preserveOrigin: true }
     );
   });
+
+  it('applyUpdate of computeLineThicknessBreaks preserves suggestion origin', () => {
+    const bag = makeBag();
+    bag.orchestrator.computeLineThicknessBreaks();
+    const applyUpdate = bag.classificationBreaks.compute.mock.calls[0][0]
+      .applyUpdate as (u: object) => void;
+    applyUpdate({ breaks: [1, 2] });
+    expect(bag.applyLineThicknessClassification).toHaveBeenCalledWith(
+      { breaks: [1, 2] },
+      { preserveOrigin: true }
+    );
+  });
+
+  it('applyUpdate of computeSymbolFillBreaks preserves suggestion origin', () => {
+    const bag = makeBag();
+    bag.orchestrator.computeSymbolFillBreaks();
+    const applyUpdate = bag.classificationBreaks.compute.mock.calls[0][0]
+      .applyUpdate as (u: object) => void;
+    applyUpdate({ breaks: [1, 2] });
+    expect(bag.applySymbolFillClassification).toHaveBeenCalledWith(
+      { breaks: [1, 2] },
+      { preserveOrigin: true }
+    );
+  });
+
+  it('applyUpdate of computeTextBackgroundBreaks preserves suggestion origin', () => {
+    const bag = makeBag();
+    bag.orchestrator.computeTextBackgroundBreaks();
+    const applyUpdate = bag.classificationBreaks.compute.mock.calls[0][0]
+      .applyUpdate as (u: object) => void;
+    applyUpdate({ breaks: [1, 2] });
+    expect(bag.applyTextBackgroundClassification).toHaveBeenCalledWith(
+      { breaks: [1, 2] },
+      { preserveOrigin: true }
+    );
+  });
+
+  it('applyUpdate of computeTextBackgroundStrokeBreaks preserves suggestion origin', () => {
+    const bag = makeBag();
+    bag.orchestrator.computeTextBackgroundStrokeBreaks();
+    const applyUpdate = bag.classificationBreaks.compute.mock.calls[0][0]
+      .applyUpdate as (u: object) => void;
+    applyUpdate({ breaks: [1, 2] });
+    expect(bag.applyTextBackgroundStrokeClassification).toHaveBeenCalledWith(
+      { breaks: [1, 2] },
+      { preserveOrigin: true }
+    );
+  });
 });

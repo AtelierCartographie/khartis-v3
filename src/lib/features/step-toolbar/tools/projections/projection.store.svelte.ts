@@ -232,6 +232,7 @@ const { actions, getState } = createToolStore<
           s.customCode = projTo.proj4;
         }
       }
+      s.activeSuggestionId = undefined;
       s.overrideActive = true;
       s.overrideSource = 'manual';
     };

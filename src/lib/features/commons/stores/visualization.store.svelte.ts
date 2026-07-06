@@ -158,7 +158,8 @@ export interface VisualizationStore {
   updatePrimitiveStrokeClassification: (
     id: string,
     primitive: PrimitiveFilter,
-    classification: Partial<ClassificationConfig>
+    classification: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
   ) => void;
   updateVisualization: (
     id: string,
@@ -608,7 +609,8 @@ function createVisualizationStore(): VisualizationStore {
   function updatePrimitiveStrokeClassification(
     id: string,
     primitive: PrimitiveFilter,
-    classification: Partial<ClassificationConfig>
+    classification: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
   ): void {
     applyVisualizationUpdate(id, (visualization) => {
       const primitiveConfig = getPrimitive(
@@ -638,6 +640,9 @@ function createVisualizationStore(): VisualizationStore {
       };
 
       return {
+        ...(options?.preserveOrigin
+          ? { origin: deepClone(visualization.origin) }
+          : {}),
         [primitiveKind]: nextPrimitive
       } as Partial<VisualizationConfig>;
     });

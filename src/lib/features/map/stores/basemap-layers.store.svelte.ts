@@ -9,6 +9,7 @@ import {
   BasemapCitySymbol,
   BASEMAP_LAYER_CONFIG
 } from '$lib/features/commons/constants/visualization.constants';
+import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
 import {
   BASEMAP_LAYER_ID,
   getBasemapRenderGroup,
@@ -131,7 +132,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
     id: 'lacs',
     visible: false,
-    color: '#a6c8ff',
+    color: NEUTRAL_CARTOGRAPHY_COLORS.waterLine,
     thickness: 0,
     opacity: 100
   },
@@ -139,7 +140,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     id: 'rivieres',
     visible: false,
     renderBelowThematic: true,
-    color: '#a6c8ff',
+    color: NEUTRAL_CARTOGRAPHY_COLORS.waterLine,
     dotted: false,
     dottedPattern: BasemapDottedPattern.DOTS,
     thickness: 1,
@@ -149,16 +150,16 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     id: 'relief',
     visible: false,
     representation: BasemapRepresentation.SHADING,
-    color: '#e0e0e0',
+    color: NEUTRAL_CARTOGRAPHY_COLORS.relief,
     opacity: 100
   },
   {
     id: 'terre',
     visible: true,
-    fillColor: '#a8a8a8',
+    fillColor: NEUTRAL_CARTOGRAPHY_COLORS.land,
     fillShadow: false,
     fillOpacity: 100,
-    strokeColor: '#8d8d8d',
+    strokeColor: NEUTRAL_CARTOGRAPHY_COLORS.boundaryMedium,
     strokeDotted: false,
     strokeDottedPattern: BasemapDottedPattern.DOTS,
     strokeThickness: 0.5,
@@ -167,7 +168,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
     id: 'mers',
     visible: true,
-    color: '#b8b8b8',
+    color: NEUTRAL_CARTOGRAPHY_COLORS.sea,
     opacity: 100
   },
   {
@@ -177,18 +178,18 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     category: BasemapCityCategory.CAPITALS,
     count: 50,
     symbol: BasemapCitySymbol.POINT,
-    color: '#525252',
+    color: NEUTRAL_CARTOGRAPHY_COLORS.city,
     size: 8,
     opacity: 100,
     labelFontFamily: 'Cabin',
     labelSize: 12,
-    labelColor: '#161616'
+    labelColor: NEUTRAL_CARTOGRAPHY_COLORS.cityLabel
   },
   {
     id: 'sphere',
     visible: true,
     renderBelowThematic: true,
-    color: '#5a5a5a',
+    color: NEUTRAL_CARTOGRAPHY_COLORS.sphereOutline,
     thickness: 1,
     opacity: 100
   },
@@ -196,7 +197,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     id: 'frontieres',
     visible: true,
     renderBelowThematic: true,
-    color: '#8d8d8d',
+    color: NEUTRAL_CARTOGRAPHY_COLORS.boundaryMedium,
     dotted: false,
     dottedPattern: BasemapDottedPattern.DOTS,
     thickness: 0.5,
@@ -206,7 +207,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     id: 'equateur',
     visible: false,
     renderBelowThematic: true,
-    color: '#8d8d8d',
+    color: NEUTRAL_CARTOGRAPHY_COLORS.geographicLine,
     dotted: false,
     dottedPattern: BasemapDottedPattern.DOTS,
     thickness: 1,
@@ -218,7 +219,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     renderBelowThematic: true,
     mode: BasemapGraticuleMode.REMARKABLE,
     spacingDegrees: 10,
-    color: '#8d8d8d',
+    color: NEUTRAL_CARTOGRAPHY_COLORS.graticule,
     dotted: true,
     dottedPattern: BasemapDottedPattern.DOTS,
     thickness: 1,

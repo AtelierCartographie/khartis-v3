@@ -6,6 +6,7 @@ import type { ProjectionLike } from 'geoarrow-deck-stream';
 import type { FeatureCollection, LineString, Point, Polygon } from 'geojson';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
+import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
 import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
 import {
   BasemapCityCategory,
@@ -355,6 +356,31 @@ beforeEach(() => {
 });
 
 describe('basemap projection fallbacks', () => {
+  it('uses contrast-safe neutral defaults for generated basemap layers', () => {
+    expect(basemapLayersStore.getLayer(BASEMAP_LAYER_ID.TERRE)).toMatchObject({
+      fillColor: NEUTRAL_CARTOGRAPHY_COLORS.land,
+      strokeColor: NEUTRAL_CARTOGRAPHY_COLORS.boundaryMedium
+    });
+    expect(basemapLayersStore.getLayer(BASEMAP_LAYER_ID.MERS)).toMatchObject({
+      color: NEUTRAL_CARTOGRAPHY_COLORS.sea
+    });
+    expect(
+      basemapLayersStore.getLayer(BASEMAP_LAYER_ID.FRONTIERES)
+    ).toMatchObject({
+      color: NEUTRAL_CARTOGRAPHY_COLORS.boundaryMedium
+    });
+    expect(
+      basemapLayersStore.getLayer(BASEMAP_LAYER_ID.MERIDIENS)
+    ).toMatchObject({
+      color: NEUTRAL_CARTOGRAPHY_COLORS.graticule
+    });
+    expect(
+      basemapLayersStore.getLayer(BASEMAP_LAYER_ID.EQUATEUR)
+    ).toMatchObject({
+      color: NEUTRAL_CARTOGRAPHY_COLORS.geographicLine
+    });
+  });
+
   it('keeps basemap frontieres thickness in a cartographic pixel range', () => {
     expect(
       basemapLayersStore.getLayer(BASEMAP_LAYER_ID.FRONTIERES)?.thickness
@@ -371,7 +397,7 @@ describe('basemap projection fallbacks', () => {
       {
         id: 'frontieres',
         visible: true,
-        color: '#8d8d8d',
+        color: NEUTRAL_CARTOGRAPHY_COLORS.boundaryMedium,
         dotted: false,
         dottedPattern: BasemapDottedPattern.DOTS,
         thickness: 0,

@@ -166,8 +166,14 @@ importers:
         specifier: ^3.1.14
         version: 3.1.14
       '@jcode.labs/ragmir':
-        specifier: ^2.3.0
-        version: 2.3.0(apache-arrow@21.1.0)
+        specifier: ^2.5.0
+        version: 2.5.0(apache-arrow@21.1.0)
+      '@jcode.labs/ragmir-chat':
+        specifier: 2.5.0
+        version: 2.5.0
+      '@jcode.labs/ragmir-tts':
+        specifier: 2.5.0
+        version: 2.5.0
       '@sveltejs/adapter-static':
         specifier: ^3.0.10
         version: 3.0.10(@sveltejs/kit@2.69.0(@sveltejs/vite-plugin-svelte@7.1.2(svelte@5.56.4(@typescript-eslint/types@8.62.1))(vite@8.1.2(@types/node@26.1.0)(jiti@2.7.0)(sass-embedded@1.100.0)(sass@1.100.0)(terser@5.48.0)(yaml@2.9.0)))(svelte@5.56.4(@typescript-eslint/types@8.62.1))(typescript@6.0.3)(vite@8.1.2(@types/node@26.1.0)(jiti@2.7.0)(sass-embedded@1.100.0)(sass@1.100.0)(terser@5.48.0)(yaml@2.9.0)))
@@ -1457,13 +1463,18 @@ packages:
     resolution: {integrity: sha512-AokJm4tuBHillT+FpMtxQ60n8ObyXBatq7jD2/JA9dxbDDokKQm8KMht5ibGzLVU9IJDIKK4TPKgMHEYMn3lMg==}
     engines: {node: '>=18'}
 
-  '@jcode.labs/ragmir-tts@2.3.0':
-    resolution: {integrity: sha512-tQyJgiCpfvAvNALuYnse643EhPosX+miVHbawBxxTdYYdskKgkTeTLxt95dSKxX1DzMH7CtTaeFgzpjl/zJH6g==}
+  '@jcode.labs/ragmir-chat@2.5.0':
+    resolution: {integrity: sha512-5/fUsWDBcUnjvBL4BmGHMdbw6oyxat1nL+WbBI3NmirlsW8LvDr9CQe121LDW+pWfID/IlAeFhNxRZLxTRAZQQ==}
     engines: {node: '>=20'}
     hasBin: true
 
-  '@jcode.labs/ragmir@2.3.0':
-    resolution: {integrity: sha512-gX9hSZeOtDNaDEjIXd5pW/9h3MOgfAJNVvA9KnmUUFdZDqY2gtM7rupLpgI81DWDhoUwfXQpYYK+ZY+giaYWLQ==}
+  '@jcode.labs/ragmir-tts@2.5.0':
+    resolution: {integrity: sha512-2ZMrt+QedTh9XbstwtyD8SNH/Uuv+wq/lm3SC7hnI7qC5GoUuqHPq6dSSTiAntsOBRoKCeCjgWaHrJGmPzVYHw==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  '@jcode.labs/ragmir@2.5.0':
+    resolution: {integrity: sha512-52Znpclys6fMa5uwA++nWhgb5K2g6YAH0tSZ76mr+7OzQOVcFGzFjNFZmFyVN45b1LId8Ari+Eeao5mh2myOoA==}
     engines: {node: '>=20'}
     hasBin: true
 
@@ -7743,14 +7754,19 @@ snapshots:
 
   '@isaacs/cliui@9.0.0': {}
 
-  '@jcode.labs/ragmir-tts@2.3.0':
+  '@jcode.labs/ragmir-chat@2.5.0':
     dependencies:
       '@huggingface/transformers': 4.2.0
 
-  '@jcode.labs/ragmir@2.3.0(apache-arrow@21.1.0)':
+  '@jcode.labs/ragmir-tts@2.5.0':
     dependencies:
       '@huggingface/transformers': 4.2.0
-      '@jcode.labs/ragmir-tts': 2.3.0
+
+  '@jcode.labs/ragmir@2.5.0(apache-arrow@21.1.0)':
+    dependencies:
+      '@huggingface/transformers': 4.2.0
+      '@jcode.labs/ragmir-chat': 2.5.0
+      '@jcode.labs/ragmir-tts': 2.5.0
       '@lancedb/lancedb': 0.30.0(apache-arrow@21.1.0)
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
       commander: 14.0.3
