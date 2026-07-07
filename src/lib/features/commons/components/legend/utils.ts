@@ -68,22 +68,6 @@ export function escapeSvgAttribute(value: string): string {
   return escapeSvgText(value).replace(/"/g, '&quot;');
 }
 
-export function sanitizeDataImageUrl(
-  value: string | null | undefined
-): string | null {
-  if (!value) {
-    return null;
-  }
-
-  if (
-    /^data:image\/(?:png|webp|jpeg|svg\+xml);base64,[a-z0-9+/=]+$/i.test(value)
-  ) {
-    return escapeSvgAttribute(value);
-  }
-
-  return null;
-}
-
 export function createLegendSvg(svg: LegendSvgDefinition): LegendSvgDefinition;
 export function createLegendSvg(
   markup: string,

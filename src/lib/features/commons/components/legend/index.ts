@@ -16,6 +16,7 @@ export {
   type KhartisDoubleSymbolsLegendStep,
   type KhartisLegendSwatchItem,
   type KhartisLegendSwatchType,
+  type LegendPatternFill,
   type KhartisLineWidthLegendOptions,
   type KhartisLineWidthLegendStep,
   type KhartisSwatchLegendOptions

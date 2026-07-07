@@ -10,3 +10,5 @@ export interface PatternParams {
   size?: number;
   scale?: number;
 }
+
+export const PATTERN_OVERLAY_OPACITY = 0.6;

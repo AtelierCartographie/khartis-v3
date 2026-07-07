@@ -1,24 +1,75 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { PALETTE_TYPE, type PaletteType } from './palette.constants';
+  import { PATTERN_OVERLAY_OPACITY } from '$lib/features/commons/constants/pattern.constants';
+  import { getPatternOverlayColorHex } from '$lib/features/map/layers/pattern-texture';
+  import {
+    PALETTE_TYPE,
+    buildPatternSvgBackground,
+    resolveEffectivePatternId,
+    type PaletteType,
+    type PatternId,
+    type PatternParams
+  } from './palette.constants';
   import PaletteSwatchRow from './palette-swatch-row.svelte';
 
   interface Props {
     currentColors: string[];
     newColors: string[];
     paletteType?: PaletteType;
+    currentPatternId?: PatternId;
+    currentPatternParams?: PatternParams;
+    newPatternId?: PatternId;
+    newPatternParams?: PatternParams;
   }
 
   let {
     currentColors,
     newColors,
-    paletteType = PALETTE_TYPE.SEQUENTIAL
+    paletteType = PALETTE_TYPE.SEQUENTIAL,
+    currentPatternId,
+    currentPatternParams,
+    newPatternId,
+    newPatternParams
   }: Props = $props();
 
   const isQualitative = $derived(paletteType === PALETTE_TYPE.QUALITATIVE);
 
   const currentPrimary = $derived(currentColors[0] ?? '#f287ac');
   const newPrimary = $derived(newColors[0] ?? currentPrimary);
+
+  function patternedBackground(
+    color: string,
+    patternId: PatternId,
+    params?: PatternParams
+  ): string {
+    const overlay = buildPatternSvgBackground(
+      resolveEffectivePatternId(patternId, params),
+      getPatternOverlayColorHex(color),
+      'transparent',
+      params,
+      PATTERN_OVERLAY_OPACITY
+    );
+    return `${overlay}, ${color}`;
+  }
+
+  function swatchStyle(
+    color: string,
+    patternId?: PatternId,
+    params?: PatternParams
+  ): string {
+    return patternId
+      ? `background: ${patternedBackground(color, patternId, params)}`
+      : `background-color: ${color}`;
+  }
+
+  function rowBackgrounds(
+    colors: string[],
+    patternId?: PatternId,
+    params?: PatternParams
+  ): string[] | undefined {
+    if (!patternId) return undefined;
+    return colors.map((color) => patternedBackground(color, patternId, params));
+  }
 </script>
 
 <div class="palette-comparison" class:side-by-side={isQualitative}>
@@ -27,21 +78,40 @@
       <span class="comparison-label">{m.palette_current()}</span>
       <div
         class="solid-swatch"
-        style="background-color: {currentPrimary}"
+        style={swatchStyle(
+          currentPrimary,
+          currentPatternId,
+          currentPatternParams
+        )}
       ></div>
     </div>
     <div class="comparison-column">
       <span class="comparison-label">{m.palette_new()}</span>
-      <div class="solid-swatch" style="background-color: {newPrimary}"></div>
+      <div
+        class="solid-swatch"
+        style={swatchStyle(newPrimary, newPatternId, newPatternParams)}
+      ></div>
     </div>
   {:else}
     <div class="comparison-box">
       <span class="comparison-label">{m.palette_current()}</span>
-      <PaletteSwatchRow colors={currentColors} height="16px" />
+      <PaletteSwatchRow
+        colors={currentColors}
+        backgrounds={rowBackgrounds(
+          currentColors,
+          currentPatternId,
+          currentPatternParams
+        )}
+        height="16px"
+      />
     </div>
     <div class="comparison-box">
       <span class="comparison-label">{m.palette_new()}</span>
-      <PaletteSwatchRow colors={newColors} height="16px" />
+      <PaletteSwatchRow
+        colors={newColors}
+        backgrounds={rowBackgrounds(newColors, newPatternId, newPatternParams)}
+        height="16px"
+      />
     </div>
   {/if}
 </div>

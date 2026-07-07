@@ -13,6 +13,7 @@
     label?: string;
     color: string;
     patternId?: string;
+    patternParams?: PatternParams;
     exclusive?: boolean;
     allowPattern?: boolean;
     onchange?: (hex: string) => void;
@@ -26,6 +27,7 @@
     label,
     color,
     patternId,
+    patternParams,
     exclusive = false,
     allowPattern = true,
     onchange,
@@ -111,6 +113,8 @@
   numClasses={1}
   exclusive={exclusive}
   allowPattern={allowPattern}
+  currentPatternId={patternId}
+  currentPatternParams={patternParams}
   onclose={handlePopoverClose}
   onvalidate={handlePopoverValidate}
 />

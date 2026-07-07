@@ -21,12 +21,14 @@
     type DivergingPaletteSplit,
     type PaletteType,
     type Palette,
+    type PatternId,
     type PatternParams,
     type QualitativePreset,
     DEFAULT_QUALITATIVE_PRESET,
     generatePaletteColors,
     generateCategoricalColorsFromSeed,
-    findPaletteById
+    findPaletteById,
+    getPatternPalettes
   } from './palette.constants';
 
   interface Props {
@@ -41,6 +43,8 @@
     divergingSplit?: DivergingPaletteSplit;
     exclusive?: boolean;
     allowPattern?: boolean;
+    currentPatternId?: string;
+    currentPatternParams?: PatternParams;
     onclose?: () => void;
     onvalidate?: (
       palette: Palette | undefined,
@@ -62,9 +66,15 @@
     divergingSplit,
     exclusive = true,
     allowPattern = true,
+    currentPatternId,
+    currentPatternParams,
     onclose,
     onvalidate
   }: Props = $props();
+
+  function toValidPatternId(value: string | undefined): PatternId | undefined {
+    return getPatternPalettes().find((p) => p.patternId === value)?.patternId;
+  }
 
   let popoverRef = $state<HTMLDivElement>();
   let popoverRight = $state(resolveToolbarWidth(globalState.toolbarState));
@@ -106,7 +116,7 @@
     draftInverted = currentInverted;
     draftType = paletteType;
     draftColorBlindFilter = colorBlindFilter;
-    draftPatternParams = undefined;
+    draftPatternParams = currentPatternParams;
     draftQualitativePreset =
       findPaletteById(selectedPaletteId)?.qualitativePreset ??
       DEFAULT_QUALITATIVE_PRESET;
@@ -302,6 +312,7 @@
           colorBlindFilter={draftColorBlindFilter}
           allowPattern={allowPattern}
           inverted={draftInverted}
+          patternParams={draftPatternParams}
           onColorsChange={handleCustomColorsChange}
           onPatternSelect={handlePatternSelect}
           onInvertToggle={handleInvertToggle}
@@ -315,6 +326,10 @@
             currentColors={currentColors}
             newColors={draftColors}
             paletteType={draftType}
+            currentPatternId={toValidPatternId(currentPatternId)}
+            currentPatternParams={currentPatternParams}
+            newPatternId={findPaletteById(draftPaletteId)?.patternId}
+            newPatternParams={draftPatternParams}
           />
         </div>
         <footer class="popover-footer">

@@ -18,8 +18,8 @@ import {
 } from '$lib/features/commons/constants/pattern.constants';
 import { hexToHsl, webglToHex } from '$lib/features/commons/utils/color-utils';
 import {
-  PATTERN_TYPE_MAP,
-  resolveMotifFillPercent
+  resolveMotifOptions,
+  type PatternName
 } from '$lib/features/map/layers/pattern-texture';
 import {
   DEFAULT_QUALITATIVE_PRESET,
@@ -490,7 +490,14 @@ export function generatePaletteColors(
       return Array.from({ length: count }, (_, i) => base[i % base.length]);
     }
     case PALETTE_TYPE.PATTERN:
-      return palette.colors;
+      // Pattern palettes carry [accent, base] grays; expand them into a
+      // light-to-dark ramp so the classification keeps its class count.
+      return generateSequentialFromColors(
+        palette.colors[1] ?? '#f4f4f4',
+        palette.colors[0] ?? '#3d3d3d',
+        count,
+        contrast
+      );
     default:
       return palette.colors.slice(0, count);
   }
@@ -526,34 +533,55 @@ export function generateSequentialFromColors(
   );
 }
 
+const PATTERN_BACKGROUND_SVG_WIDTH = 320;
+const PATTERN_BACKGROUND_SVG_HEIGHT = 40;
+
+/**
+ * Builds a CSS background rendering a motif with its true rotation and design
+ * tile size (canvas tiles are devicePixelRatio-scaled and unrotated, so they
+ * cannot be used directly). The SVG spans the widest swatch in the popover so
+ * rotated patterns never hit a visible repeat seam.
+ */
+export function buildPatternSvgBackground(
+  patternId: PatternId,
+  patternColor: string,
+  backgroundColor: string,
+  params?: PatternParams,
+  opacity = 1
+): string {
+  const pattern = motif({
+    ...resolveMotifOptions(patternId as PatternName, params),
+    fill: patternColor,
+    background: backgroundColor
+  });
+  const fillOpacity = opacity < 1 ? ` opacity="${opacity}"` : '';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${PATTERN_BACKGROUND_SVG_WIDTH}" height="${PATTERN_BACKGROUND_SVG_HEIGHT}">${pattern.defs.outerHTML}<rect width="100%" height="100%" fill="${pattern.url}"${fillOpacity}/></svg>`;
+
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+
+export function resolveEffectivePatternId(
+  patternId: PatternId | undefined,
+  params?: PatternParams
+): PatternId {
+  if (params?.angle === 0) return 'horizontal';
+  if (params?.angle === 45) return 'diagonal';
+  if (params?.angle === 315) return 'diagonal-reverse';
+  return patternId ?? 'diagonal';
+}
+
 export function buildPatternBackground(
   palette: Palette,
   params?: PatternParams
 ): string {
   const accent = palette.colors[0] ?? '#3d3d3d';
   const base = palette.colors[1] ?? '#f4f4f4';
-  const sizePx = params?.size ?? 4;
-  const scalePx = params?.scale ?? 8;
+  const effectivePatternId = resolveEffectivePatternId(
+    palette.patternId,
+    params
+  );
 
-  let effectivePatternId: PatternId = palette.patternId ?? 'diagonal';
-  if (params?.angle !== undefined) {
-    if (params.angle === 0) effectivePatternId = 'horizontal';
-    else if (params.angle === 45) effectivePatternId = 'diagonal';
-    else if (params.angle === 315) effectivePatternId = 'diagonal-reverse';
-  }
-
-  const motifConfig = PATTERN_TYPE_MAP[effectivePatternId];
-  const tile = motif({
-    type: motifConfig.type,
-    angle: motifConfig.angle,
-    fill: accent,
-    background: base,
-    size: resolveMotifFillPercent(sizePx, scalePx),
-    scale: scalePx / 10,
-    patchSize: true
-  }).tile();
-
-  return `url(${tile.toDataURL()})`;
+  return buildPatternSvgBackground(effectivePatternId, accent, base, params);
 }
 
 export function generateIntensityShades(seedColor: string): string[] {

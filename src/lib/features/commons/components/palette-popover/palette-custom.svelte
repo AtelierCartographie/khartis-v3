@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import * as m from '$lib/paraglide/messages';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import ContentSwitcher from './content-switcher.svelte';
@@ -26,6 +27,7 @@
     colorBlindFilter?: boolean;
     inverted?: boolean;
     allowPattern?: boolean;
+    patternParams?: PatternParams;
     onColorsChange?: (colors: string[]) => void;
     onPatternSelect?: (palette: Palette, params: PatternParams) => void;
     onInvertToggle?: (value: boolean) => void;
@@ -38,6 +40,7 @@
     colorBlindFilter = false,
     inverted = false,
     allowPattern = true,
+    patternParams,
     onColorsChange,
     onPatternSelect,
     onInvertToggle
@@ -72,7 +75,16 @@
     if (selectedPaletteId?.startsWith('pattern-')) {
       const match = patternPalettes.find((p) => p.id === selectedPaletteId);
       if (match) {
-        selectedPatternId = match.id;
+        untrack(() => {
+          selectedPatternId = match.id;
+          motifEnabled = true;
+          if (patternParams?.size !== undefined) {
+            patternSize = patternParams.size;
+          }
+          if (patternParams?.scale !== undefined) {
+            patternScale = patternParams.scale;
+          }
+        });
       }
     }
   });

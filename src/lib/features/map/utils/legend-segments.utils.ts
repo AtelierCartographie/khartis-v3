@@ -1,5 +1,11 @@
 import { motif } from '@ateliercartographie/motif.js';
-import { PATTERN_TYPE_MAP } from '../layers/pattern-texture';
+import {
+  getPatternOverlayColorHex,
+  isValidPatternId,
+  resolveMotifOptions,
+  stripSvgDefsWrapper
+} from '../layers/pattern-texture';
+import { resolveMissingDataPatternId } from '../layers/polygon-pattern-layer.utils';
 import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import {
@@ -18,7 +24,6 @@ import {
   type ClassificationConfig,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
-import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
 import {
   CATEGORY_SHAPE_CYCLE,
@@ -52,6 +57,7 @@ import {
   type KhartisLegendSwatchItem,
   type KhartisLegendSwatchType,
   type KhartisLineWidthLegendStep,
+  type LegendPatternFill,
   type LegendSvgDefinition,
   type SymbolType
 } from '$lib/features/commons/components/legend';
@@ -70,50 +76,34 @@ import {
 } from './legend.utils';
 import type { LegendItem } from '$lib/features/step-toolbar/tools/legend';
 
-const patternTileCache: Record<string, string> = {};
+const legendPatternFillCache: Record<string, LegendPatternFill> = {};
 
-function getPatternTileUrl(
+function getLegendPatternFill(
   patternId: string,
-  patternColor = '#000000',
-  backgroundColor = '#ffffff',
+  patternColor: string,
   patternParams?: PatternParams
-): string | null {
+): LegendPatternFill | null {
+  if (!isValidPatternId(patternId)) return null;
   const cacheKey = JSON.stringify({
     patternId,
     patternColor,
-    backgroundColor,
     angle: patternParams?.angle,
     size: patternParams?.size,
     scale: patternParams?.scale
   });
-  if (cacheKey in patternTileCache) return patternTileCache[cacheKey];
-  const config = PATTERN_TYPE_MAP[patternId as keyof typeof PATTERN_TYPE_MAP];
-  if (!config) return null;
-  const scale = Math.max(4, patternParams?.scale ?? 8);
-  const size = Math.max(1, patternParams?.size ?? 4);
-  const tile = motif({
-    type: config.type,
-    angle: patternParams?.angle ?? config.angle,
-    fill: patternColor,
-    background: backgroundColor,
-    size: Math.round((size / scale) * 100),
-    scale: scale / 10,
-    patchSize: true
-  }).tile();
-  const url = tile.toDataURL();
-  patternTileCache[cacheKey] = url;
-  return url;
-}
+  const cached = legendPatternFillCache[cacheKey];
+  if (cached) return cached;
 
-function getPatternOverlayColor(fillColor: string | undefined): string {
-  if (!fillColor?.startsWith('#') || fillColor.length !== 7) {
-    return '#000000';
-  }
-
-  const [r, g, b] = hexToRgb(fillColor);
-  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-
-  return luminance < 0.45 ? '#ffffff' : '#000000';
+  const pattern = motif({
+    ...resolveMotifOptions(patternId, patternParams),
+    fill: patternColor
+  });
+  const fill: LegendPatternFill = {
+    defs: stripSvgDefsWrapper(pattern.defs.outerHTML),
+    fillUrl: pattern.url
+  };
+  legendPatternFillCache[cacheKey] = fill;
+  return fill;
 }
 
 type LegendTextStyle = {
@@ -1441,7 +1431,7 @@ function getCategoricalMissingDataFooterOptions(
   const item = getMissingDataLegendItem(viz, missingDataPrimitive);
   const footerType = getSwatchType(
     primitive,
-    primitive === 'area' && Boolean(item.patternUrl)
+    primitive === 'area' && Boolean(item.patternFill)
   );
 
   return {
@@ -1478,12 +1468,11 @@ function getMissingDataLegendItem(
     fill: color,
     stroke: 'rgba(0, 0, 0, 0.15)',
     strokeWidth: 1,
-    patternUrl: missingData?.pattern
-      ? getPatternTileUrl(
-          'cross',
-          getPatternOverlayColor(color),
-          color,
-          undefined
+    patternFill: missingData?.pattern
+      ? getLegendPatternFill(
+          resolveMissingDataPatternId(missingData),
+          getPatternOverlayColorHex(color),
+          missingData?.patternParams
         )
       : null
   };
@@ -1513,11 +1502,10 @@ function getPatternLegendItem(
     fill: color,
     stroke: 'rgba(0, 0, 0, 0.15)',
     strokeWidth: 1,
-    patternUrl: classification.patternId
-      ? getPatternTileUrl(
+    patternFill: classification.patternId
+      ? getLegendPatternFill(
           classification.patternId,
-          getPatternOverlayColor(color),
-          color,
+          getPatternOverlayColorHex(color),
           classification.patternParams
         )
       : null
