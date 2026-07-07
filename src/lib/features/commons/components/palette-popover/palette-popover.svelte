@@ -16,6 +16,8 @@
   import PaletteSuggestions from './palette-suggestions.svelte';
   import PaletteCustom from './palette-custom.svelte';
   import PaletteComparison from './palette-comparison.svelte';
+  import type { ContrastMode } from '@ateliercartographie/ok-palette';
+  import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import {
     PALETTE_TYPE,
     type DivergingPaletteSplit,
@@ -45,12 +47,14 @@
     allowPattern?: boolean;
     currentPatternId?: string;
     currentPatternParams?: PatternParams;
+    currentPatternPaletteConfig?: PatternPaletteConfig;
     onclose?: () => void;
     onvalidate?: (
       palette: Palette | undefined,
       colors: string[],
       inverted: boolean,
-      patternParams?: PatternParams
+      patternParams?: PatternParams,
+      patternPaletteConfig?: PatternPaletteConfig
     ) => void;
   }
 
@@ -68,6 +72,7 @@
     allowPattern = true,
     currentPatternId,
     currentPatternParams,
+    currentPatternPaletteConfig,
     onclose,
     onvalidate
   }: Props = $props();
@@ -85,6 +90,10 @@
   let draftType = $state<PaletteType>(PALETTE_TYPE.SEQUENTIAL);
   let draftColorBlindFilter = $state(false);
   let draftPatternParams = $state<PatternParams | undefined>(undefined);
+  let draftPatternPaletteConfig = $state<PatternPaletteConfig | undefined>(
+    undefined
+  );
+  let draftPatternContrast = $state<ContrastMode | undefined>(undefined);
   let draftQualitativePreset = $state<QualitativePreset>(
     DEFAULT_QUALITATIVE_PRESET
   );
@@ -117,6 +126,8 @@
     draftType = paletteType;
     draftColorBlindFilter = colorBlindFilter;
     draftPatternParams = currentPatternParams;
+    draftPatternPaletteConfig = currentPatternPaletteConfig;
+    draftPatternContrast = undefined;
     draftQualitativePreset =
       findPaletteById(selectedPaletteId)?.qualitativePreset ??
       DEFAULT_QUALITATIVE_PRESET;
@@ -133,7 +144,13 @@
 
   function handleValidate() {
     const palette = findPaletteById(draftPaletteId);
-    onvalidate?.(palette, draftColors, draftInverted, draftPatternParams);
+    onvalidate?.(
+      palette,
+      draftColors,
+      draftInverted,
+      draftPatternParams,
+      draftPatternPaletteConfig
+    );
     open = false;
   }
 
@@ -151,6 +168,7 @@
     draftPaletteId = palette.id;
     draftInverted = false;
     draftPatternParams = undefined;
+    draftPatternPaletteConfig = undefined;
     draftQualitativePreset =
       palette.qualitativePreset ?? draftQualitativePreset;
     draftColors = generatePaletteColors(
@@ -170,12 +188,22 @@
     draftPaletteId = '__custom__';
     draftInverted = false;
     draftPatternParams = undefined;
+    draftPatternPaletteConfig = undefined;
     draftColors = colors;
   }
 
   function handlePatternSelect(palette: Palette, params: PatternParams) {
     draftPaletteId = palette.id;
     draftPatternParams = params;
+    draftPatternPaletteConfig = undefined;
+  }
+
+  function handlePatternPaletteChange(
+    config: PatternPaletteConfig,
+    contrast: ContrastMode | undefined
+  ) {
+    draftPatternPaletteConfig = config;
+    draftPatternContrast = contrast;
   }
 
   function handleQualitativePresetChange(preset: QualitativePreset) {
@@ -313,8 +341,10 @@
           allowPattern={allowPattern}
           inverted={draftInverted}
           patternParams={draftPatternParams}
+          patternPaletteConfig={draftPatternPaletteConfig}
           onColorsChange={handleCustomColorsChange}
           onPatternSelect={handlePatternSelect}
+          onPatternPaletteChange={handlePatternPaletteChange}
           onInvertToggle={handleInvertToggle}
         />
       </div>
@@ -330,6 +360,9 @@
             currentPatternParams={currentPatternParams}
             newPatternId={findPaletteById(draftPaletteId)?.patternId}
             newPatternParams={draftPatternParams}
+            currentPatternPaletteConfig={currentPatternPaletteConfig}
+            newPatternPaletteConfig={draftPatternPaletteConfig}
+            patternPaletteContrast={draftPatternContrast}
           />
         </div>
         <footer class="popover-footer">

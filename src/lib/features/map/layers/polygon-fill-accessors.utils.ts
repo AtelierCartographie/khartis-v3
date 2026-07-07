@@ -113,40 +113,6 @@ export function overlayColorForFill(
     : POLYGON_PATTERN_FILL_COLOR;
 }
 
-export function createPatternOverlayColorAccessor(
-  ctx: LayerContext,
-  geometryTable: ArrowTable,
-  baseFillAccessor:
-    ((row: Record<string, unknown>) => [number, number, number, number]) | null,
-  fallbackFillColor: RGBColor
-): (featureId: number) => [number, number, number, number] {
-  const fallbackOverlay = overlayColorForFill([
-    fallbackFillColor[0],
-    fallbackFillColor[1],
-    fallbackFillColor[2],
-    255
-  ]);
-  const rowToColor = (row: Record<string, unknown>) =>
-    baseFillAccessor
-      ? overlayColorForFill(baseFillAccessor(row))
-      : fallbackOverlay;
-
-  if (hasSplitRenderingContext(ctx)) {
-    return createSplitAwareNullableRowAccessor(
-      ctx,
-      geometryTable,
-      (row) => (row ? rowToColor(row) : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR),
-      geometryTable
-    );
-  }
-
-  if (!baseFillAccessor) {
-    return () => fallbackOverlay;
-  }
-
-  return (featureId) => rowToColor(readTableRow(geometryTable, featureId));
-}
-
 export function createMissingPolygonPatternColorAccessor(
   ctx: LayerContext,
   geometryTable: ArrowTable,
@@ -204,27 +170,18 @@ export function createSplitUniqueBinaryColorAccessor(
 }
 
 export function createGeoJsonPatternOverlayColorAccessor(
-  baseFillAccessor:
-    | ((feature: {
-        properties?: Record<string, unknown>;
-      }) => [number, number, number, number])
-    | null,
-  fallbackFillColor: RGBColor
+  fillColor: RGBColor
 ): (feature: {
   properties?: Record<string, unknown>;
 }) => [number, number, number, number] {
-  const fallbackOverlay = overlayColorForFill([
-    fallbackFillColor[0],
-    fallbackFillColor[1],
-    fallbackFillColor[2],
+  const overlay = overlayColorForFill([
+    fillColor[0],
+    fillColor[1],
+    fillColor[2],
     255
   ]);
 
-  if (!baseFillAccessor) {
-    return () => fallbackOverlay;
-  }
-
-  return (feature) => overlayColorForFill(baseFillAccessor(feature));
+  return () => overlay;
 }
 
 export function createSplitUniqueGeoJsonColorAccessor(
@@ -239,6 +196,80 @@ export function createSplitUniqueGeoJsonColorAccessor(
   return createSplitGeoJsonNullableFeatureAccessor(ctx, geometryTable, (row) =>
     row ? [color[0], color[1], color[2], 255] : [0, 0, 0, 0]
   );
+}
+
+export function createClassPatternColorAccessor(
+  classIndexAccessor: (row: Record<string, unknown>) => number | null,
+  targetIndex: number,
+  fillRgb: RGBColor
+): (row: Record<string, unknown>) => [number, number, number, number] {
+  const color: [number, number, number, number] = [
+    fillRgb[0],
+    fillRgb[1],
+    fillRgb[2],
+    255
+  ];
+  return (row) =>
+    classIndexAccessor(row) === targetIndex
+      ? color
+      : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR;
+}
+
+export function createPatternBackgroundFillAccessor(
+  classIndexAccessor: (row: Record<string, unknown>) => number | null,
+  baseFillAccessor: (
+    row: Record<string, unknown>
+  ) => [number, number, number, number]
+): (row: Record<string, unknown>) => [number, number, number, number] {
+  const white: [number, number, number, number] = [255, 255, 255, 255];
+  return (row) => {
+    const baseColor = baseFillAccessor(row);
+    if (classIndexAccessor(row) !== null) {
+      return [white[0], white[1], white[2], baseColor[3] ?? 255];
+    }
+    return baseColor;
+  };
+}
+
+export function createGeoJsonClassPatternColorAccessor(
+  classIndexAccessor: (feature: {
+    properties?: Record<string, unknown> | null;
+  }) => number | null,
+  targetIndex: number,
+  fillRgb: RGBColor
+): (feature: {
+  properties?: Record<string, unknown>;
+}) => [number, number, number, number] {
+  const color: [number, number, number, number] = [
+    fillRgb[0],
+    fillRgb[1],
+    fillRgb[2],
+    255
+  ];
+  return (feature) =>
+    classIndexAccessor(feature) === targetIndex
+      ? color
+      : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR;
+}
+
+export function createGeoJsonPatternBackgroundFillAccessor(
+  classIndexAccessor: (feature: {
+    properties?: Record<string, unknown> | null;
+  }) => number | null,
+  baseFillAccessor: (feature: {
+    properties?: Record<string, unknown>;
+  }) => [number, number, number, number]
+): (feature: {
+  properties?: Record<string, unknown>;
+}) => [number, number, number, number] {
+  const white: [number, number, number, number] = [255, 255, 255, 255];
+  return (feature) => {
+    const baseColor = baseFillAccessor(feature);
+    if (classIndexAccessor(feature) !== null) {
+      return [white[0], white[1], white[2], baseColor[3] ?? 255];
+    }
+    return baseColor;
+  };
 }
 
 export function filterSplitMatchedPolygonFeatures(

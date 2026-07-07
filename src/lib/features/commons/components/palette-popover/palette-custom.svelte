@@ -5,11 +5,13 @@
   import ContentSwitcher from './content-switcher.svelte';
   import SingleColorPreview from './single-color-preview.svelte';
   import PatternPicker from './pattern-picker.svelte';
+  import PatternPalettePicker from './pattern-palette-picker.svelte';
   import {
     ColorSelector,
     ToggleWithLabel
   } from '$lib/features/commons/components/viz-controls';
   import type { ContrastMode } from '@ateliercartographie/ok-palette';
+  import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import {
     PALETTE_TYPE,
     type Palette,
@@ -28,8 +30,13 @@
     inverted?: boolean;
     allowPattern?: boolean;
     patternParams?: PatternParams;
+    patternPaletteConfig?: PatternPaletteConfig;
     onColorsChange?: (colors: string[]) => void;
     onPatternSelect?: (palette: Palette, params: PatternParams) => void;
+    onPatternPaletteChange?: (
+      config: PatternPaletteConfig,
+      contrast: ContrastMode | undefined
+    ) => void;
     onInvertToggle?: (value: boolean) => void;
   }
 
@@ -41,10 +48,19 @@
     inverted = false,
     allowPattern = true,
     patternParams,
+    patternPaletteConfig,
     onColorsChange,
     onPatternSelect,
+    onPatternPaletteChange,
     onInvertToggle
   }: Props = $props();
+
+  const DEFAULT_PATTERN_PALETTE_CONFIG: PatternPaletteConfig = {
+    shape: 'line',
+    angle: 45,
+    scale: 3,
+    color: '#000000'
+  };
 
   let activeTab = $state(0);
   let singleColor = $state('#08519c');
@@ -56,6 +72,9 @@
   let selectedPatternId = $state<string | null>(null);
   let patternSize = $state(4);
   let patternScale = $state(8);
+  let draftPatternPaletteConfig = $state<PatternPaletteConfig>(
+    DEFAULT_PATTERN_PALETTE_CONFIG
+  );
 
   const isQualitative = $derived(paletteType === PALETTE_TYPE.QUALITATIVE);
 
@@ -86,6 +105,15 @@
           }
         });
       }
+    }
+  });
+
+  $effect(() => {
+    const next = patternPaletteConfig;
+    if (next) {
+      untrack(() => {
+        draftPatternPaletteConfig = next;
+      });
     }
   });
 
@@ -128,6 +156,8 @@
           resolvedContrast
         )
       );
+    } else if (index === 2) {
+      onPatternPaletteChange?.(draftPatternPaletteConfig, resolvedContrast);
     }
   }
 
@@ -151,7 +181,14 @@
         resolvedContrast
       );
       onColorsChange?.(colors);
+    } else if (activeTab === 2) {
+      onPatternPaletteChange?.(draftPatternPaletteConfig, resolvedContrast);
     }
+  }
+
+  function handlePatternPaletteChange(config: PatternPaletteConfig) {
+    draftPatternPaletteConfig = config;
+    onPatternPaletteChange?.(config, resolvedContrast);
   }
 
   function handleSingleColorChange(color: string) {
@@ -275,29 +312,26 @@
           />
         </div>
       {:else if activeTab === 2}
-        <PatternPicker
-          patternId={selectedPalette?.patternId}
-          patternParams={currentPatternParams}
-          onChange={handlePatternChange}
+        <PatternPalettePicker
+          config={draftPatternPaletteConfig}
+          onchange={handlePatternPaletteChange}
         />
       {/if}
     </div>
 
-    {#if activeTab !== 2}
-      <div class="contrast-section">
-        <span class="field-label">{m.contrast_label()}</span>
-        <SimpleRadioGroup
-          name="palette-contrast"
-          items={[
-            { value: 'low', labelText: m.contrast_low() },
-            { value: 'normal', labelText: m.contrast_normal() },
-            { value: 'high', labelText: m.contrast_high() }
-          ]}
-          selected={contrastMode}
-          onchange={(value) => handleContrastChange(value)}
-        />
-      </div>
-    {/if}
+    <div class="contrast-section">
+      <span class="field-label">{m.contrast_label()}</span>
+      <SimpleRadioGroup
+        name="palette-contrast"
+        items={[
+          { value: 'low', labelText: m.contrast_low() },
+          { value: 'normal', labelText: m.contrast_normal() },
+          { value: 'high', labelText: m.contrast_high() }
+        ]}
+        selected={contrastMode}
+        onchange={(value) => handleContrastChange(value)}
+      />
+    </div>
 
     <ToggleWithLabel
       label={m.invert_palette_tooltip()}

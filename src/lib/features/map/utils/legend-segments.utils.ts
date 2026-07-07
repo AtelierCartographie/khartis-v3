@@ -1,12 +1,17 @@
 import { motif } from '@ateliercartographie/motif.js';
+import type { PatternType as MotifPatternType } from '@ateliercartographie/motif.js';
 import {
   getPatternOverlayColorHex,
   isValidPatternId,
   resolveMotifOptions,
   stripSvgDefsWrapper
 } from '../layers/pattern-texture';
-import { resolveMissingDataPatternId } from '../layers/polygon-pattern-layer.utils';
+import {
+  resolveClassPatternPalette,
+  resolveMissingDataPatternId
+} from '../layers/polygon-pattern-layer.utils';
 import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';
+import type { ClassPattern } from '$lib/features/commons/services/pattern-palette.service';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import {
   getLinePrimitive,
@@ -104,6 +109,34 @@ function getLegendPatternFill(
   };
   legendPatternFillCache[cacheKey] = fill;
   return fill;
+}
+
+function getClassPatternLegendFill(pattern: ClassPattern): LegendPatternFill {
+  const cacheKey = JSON.stringify(pattern);
+  const cached = legendPatternFillCache[cacheKey];
+  if (cached) return cached;
+
+  const result = motif({
+    type: pattern.type as MotifPatternType,
+    angle: pattern.angle,
+    scale: pattern.scale,
+    size: pattern.size,
+    fill: pattern.fill,
+    background: 'transparent',
+    patchSize: true
+  });
+  const fill: LegendPatternFill = {
+    defs: stripSvgDefsWrapper(result.defs.outerHTML),
+    fillUrl: result.url
+  };
+  legendPatternFillCache[cacheKey] = fill;
+  return fill;
+}
+
+export function getClassPatternLegendFills(
+  patterns: ClassPattern[]
+): LegendPatternFill[] {
+  return patterns.map(getClassPatternLegendFill);
 }
 
 type LegendTextStyle = {
@@ -673,8 +706,22 @@ function getClassedColorLegendDraft(
     return null;
   }
 
-  if (primitive === 'area' && !classification.patternId) {
-    return getQuantitativeColorLegendDraft(viz, classification);
+  if (primitive === 'area') {
+    const classPatternPalette = resolveClassPatternPalette(
+      classification,
+      FillMode.CLASSES
+    );
+    if (classPatternPalette) {
+      return getQuantitativeColorLegendDraft(
+        viz,
+        classification,
+        getClassPatternLegendFills(classPatternPalette)
+      );
+    }
+
+    if (!classification.patternId) {
+      return getQuantitativeColorLegendDraft(viz, classification);
+    }
   }
 
   const items = getClassedColorLegendItems(viz, classification, primitive);
@@ -872,7 +919,8 @@ function getTextSizeLegendDraft(
 
 function getQuantitativeColorLegendDraft(
   viz: VisualizationConfig,
-  classification: ClassificationConfig
+  classification: ClassificationConfig,
+  classPatternFills?: (LegendPatternFill | null)[]
 ): LegendSegmentDraft | null {
   const thresholds = buildQuantiColorThresholds({
     breaks: classification.breaks,
@@ -899,12 +947,15 @@ function getQuantitativeColorLegendDraft(
 
   return {
     key: 'quantitative-color',
-    className: 'legend-svg--quantitative',
+    className: classPatternFills
+      ? 'legend-svg--patterns'
+      : 'legend-svg--quantitative',
     consumesMissingData: isLegendMissingDataShown(viz, 'area'),
     create: (options, context) =>
       toLegendSvg(
         draw_quanti_color_legend(thresholds, classification.colors ?? [], {
           ...options,
+          classPatternFills,
           nodata: context.includeMissingDataFooter
             ? isLegendMissingDataShown(viz, 'area')
             : false,
@@ -931,28 +982,64 @@ function getCategoricalLegendDraft(
     return null;
   }
 
-  if (primitive === 'area' && classification.patternId) {
-    const items = entries.map((entry) =>
-      getPatternLegendItem(entry.label, entry.color, classification)
+  if (primitive === 'area') {
+    const classPatternPalette = resolveClassPatternPalette(
+      classification,
+      FillMode.CATEGORIES
     );
+    if (classPatternPalette) {
+      const patternFills = getClassPatternLegendFills(classPatternPalette);
+      const items: KhartisLegendSwatchItem[] = entries.map((entry) => ({
+        label: entry.label,
+        fill: '#ffffff',
+        stroke: 'rgba(0, 0, 0, 0.15)',
+        strokeWidth: 1,
+        patternFill: patternFills[entry.originalIndex] ?? null,
+        patternOpacity: 1
+      }));
 
-    return {
-      key: 'categorical-patterns',
-      className: 'legend-svg--patterns',
-      consumesMissingData: isLegendMissingDataShown(viz, primitive),
-      create: (options, context) =>
-        toLegendSvg(
-          draw_khartis_swatch_legend(items, {
-            ...options,
-            type: 'pattern',
-            ...getMissingDataFooterOptions(
-              viz,
-              context.includeMissingDataFooter,
-              primitive
-            )
-          })
-        )
-    };
+      return {
+        key: 'categorical-patterns',
+        className: 'legend-svg--patterns',
+        consumesMissingData: isLegendMissingDataShown(viz, primitive),
+        create: (options, context) =>
+          toLegendSvg(
+            draw_khartis_swatch_legend(items, {
+              ...options,
+              type: 'pattern',
+              ...getMissingDataFooterOptions(
+                viz,
+                context.includeMissingDataFooter,
+                primitive
+              )
+            })
+          )
+      };
+    }
+
+    if (classification.patternId) {
+      const items = entries.map((entry) =>
+        getPatternLegendItem(entry.label, entry.color, classification)
+      );
+
+      return {
+        key: 'categorical-patterns',
+        className: 'legend-svg--patterns',
+        consumesMissingData: isLegendMissingDataShown(viz, primitive),
+        create: (options, context) =>
+          toLegendSvg(
+            draw_khartis_swatch_legend(items, {
+              ...options,
+              type: 'pattern',
+              ...getMissingDataFooterOptions(
+                viz,
+                context.includeMissingDataFooter,
+                primitive
+              )
+            })
+          )
+      };
+    }
   }
 
   const { type, categories } = getCategoricalLegendItems(
@@ -1299,10 +1386,6 @@ function getClassedColorLegendItems(
         symbol: getShapePath(symbol?.shape ?? ShapeType.CIRCLE),
         size: 8
       };
-    }
-
-    if (classification.patternId) {
-      return getPatternLegendItem(label, color, classification);
     }
 
     return {

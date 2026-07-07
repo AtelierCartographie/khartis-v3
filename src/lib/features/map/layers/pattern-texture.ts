@@ -4,6 +4,7 @@ import type {
   PatternOptions
 } from '@ateliercartographie/motif.js';
 import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';
+import type { ClassPattern } from '$lib/features/commons/services/pattern-palette.service';
 
 const PATTERN_NAMES = [
   'diagonal',
@@ -237,4 +238,38 @@ export function isValidPatternId(
 ): patternId is PatternName {
   if (!patternId) return false;
   return (PATTERN_NAMES as readonly string[]).includes(patternId);
+}
+
+export function getPatternPaletteAtlas(patterns: ClassPattern[]): {
+  atlas: HTMLCanvasElement;
+  mapping: Record<
+    string,
+    { x: number; y: number; width: number; height: number }
+  >;
+} {
+  const cacheKey = JSON.stringify(patterns);
+  const cachedResult = getCachedCustomPatternAtlas(cacheKey);
+  if (cachedResult) {
+    return { atlas: cachedResult.canvas, mapping: cachedResult.mapping };
+  }
+
+  const result = motifAtlas(
+    Object.fromEntries(
+      patterns.map((pattern, index) => [
+        `c${index}`,
+        {
+          type: pattern.type as PatternOptions['type'],
+          angle: pattern.angle,
+          scale: pattern.scale,
+          size: pattern.size,
+          fill: '#000000',
+          background: 'transparent',
+          patchSize: true
+        }
+      ])
+    )
+  );
+  cacheCustomPatternAtlas(cacheKey, result);
+
+  return { atlas: result.canvas, mapping: result.mapping };
 }

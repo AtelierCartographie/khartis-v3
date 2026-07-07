@@ -14,8 +14,10 @@ import type {
 import { motif } from '@ateliercartographie/motif.js';
 import {
   PatternType,
-  type PatternParams
+  type PatternParams,
+  type PatternShape
 } from '$lib/features/commons/constants/pattern.constants';
+import type { ClassPattern } from '$lib/features/commons/services/pattern-palette.service';
 import { hexToHsl, webglToHex } from '$lib/features/commons/utils/color-utils';
 import {
   resolveMotifOptions,
@@ -582,6 +584,38 @@ export function buildPatternBackground(
   );
 
   return buildPatternSvgBackground(effectivePatternId, accent, base, params);
+}
+
+export function buildClassPatternSvgBackground(
+  pattern: ClassPattern,
+  background = '#ffffff',
+  opacity = 1
+): string {
+  const rendered = motif({
+    type: pattern.type as PatternShape,
+    angle: pattern.angle,
+    scale: pattern.scale,
+    size: pattern.size,
+    fill: pattern.fill,
+    background: 'transparent'
+  });
+  const fillOpacity = opacity < 1 ? ` opacity="${opacity}"` : '';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${PATTERN_BACKGROUND_SVG_WIDTH}" height="${PATTERN_BACKGROUND_SVG_HEIGHT}">${rendered.defs.outerHTML}<rect width="100%" height="100%" fill="${background}"/><rect width="100%" height="100%" fill="${rendered.url}"${fillOpacity}/></svg>`;
+
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+
+export function buildShapeSwatchBackground(shape: PatternShape): string {
+  const rendered = motif({
+    type: shape,
+    angle: 45,
+    scale: 3,
+    fill: '#161616',
+    background: 'transparent'
+  });
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32">${rendered.defs.outerHTML}<rect width="100%" height="100%" fill="${rendered.url}"/></svg>`;
+
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
 export function generateIntensityShades(seedColor: string): string[] {

@@ -1,10 +1,14 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
+  import type { ContrastMode } from '@ateliercartographie/ok-palette';
   import { PATTERN_OVERLAY_OPACITY } from '$lib/features/commons/constants/pattern.constants';
+  import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import { getPatternOverlayColorHex } from '$lib/features/map/layers/pattern-texture';
+  import { resolveClassPatterns } from '$lib/features/commons/services/pattern-palette.service';
   import {
     PALETTE_TYPE,
     buildPatternSvgBackground,
+    buildClassPatternSvgBackground,
     resolveEffectivePatternId,
     type PaletteType,
     type PatternId,
@@ -20,6 +24,9 @@
     currentPatternParams?: PatternParams;
     newPatternId?: PatternId;
     newPatternParams?: PatternParams;
+    currentPatternPaletteConfig?: PatternPaletteConfig;
+    newPatternPaletteConfig?: PatternPaletteConfig;
+    patternPaletteContrast?: ContrastMode;
   }
 
   let {
@@ -29,7 +36,10 @@
     currentPatternId,
     currentPatternParams,
     newPatternId,
-    newPatternParams
+    newPatternParams,
+    currentPatternPaletteConfig,
+    newPatternPaletteConfig,
+    patternPaletteContrast
   }: Props = $props();
 
   const isQualitative = $derived(paletteType === PALETTE_TYPE.QUALITATIVE);
@@ -70,6 +80,21 @@
     if (!patternId) return undefined;
     return colors.map((color) => patternedBackground(color, patternId, params));
   }
+
+  function classPatternBackgrounds(
+    count: number,
+    config: PatternPaletteConfig
+  ): string[] {
+    const patterns = resolveClassPatterns(
+      count,
+      config,
+      'sequential',
+      patternPaletteContrast
+    );
+    return patterns.map((pattern) =>
+      buildClassPatternSvgBackground(pattern, '#ffffff')
+    );
+  }
 </script>
 
 <div class="palette-comparison" class:side-by-side={isQualitative}>
@@ -97,11 +122,16 @@
       <span class="comparison-label">{m.palette_current()}</span>
       <PaletteSwatchRow
         colors={currentColors}
-        backgrounds={rowBackgrounds(
-          currentColors,
-          currentPatternId,
-          currentPatternParams
-        )}
+        backgrounds={currentPatternPaletteConfig
+          ? classPatternBackgrounds(
+              currentColors.length,
+              currentPatternPaletteConfig
+            )
+          : rowBackgrounds(
+              currentColors,
+              currentPatternId,
+              currentPatternParams
+            )}
         height="16px"
       />
     </div>
@@ -109,7 +139,9 @@
       <span class="comparison-label">{m.palette_new()}</span>
       <PaletteSwatchRow
         colors={newColors}
-        backgrounds={rowBackgrounds(newColors, newPatternId, newPatternParams)}
+        backgrounds={newPatternPaletteConfig
+          ? classPatternBackgrounds(newColors.length, newPatternPaletteConfig)
+          : rowBackgrounds(newColors, newPatternId, newPatternParams)}
         height="16px"
       />
     </div>

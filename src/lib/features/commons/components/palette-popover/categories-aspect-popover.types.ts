@@ -30,6 +30,8 @@ export interface CategoriesCommonAspect {
   pattern: boolean;
   patternId?: string;
   patternParams?: PatternParams;
+  patternColor?: string;
+  patternColorize?: boolean;
   strokeUnique?: boolean;
   shape?: ShapeType;
   color?: string;
@@ -49,6 +51,8 @@ export const DEFAULT_COMMON_ASPECT: CategoriesCommonAspect = {
   pattern: false,
   patternId: 'diagonal',
   patternParams: { size: 4, scale: 8 },
+  patternColor: '#000000',
+  patternColorize: false,
   shape: ShapeType.CIRCLE,
   color: '#f287ac',
   thickness: 1,

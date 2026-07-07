@@ -12,15 +12,25 @@ import {
   type PatternParams
 } from '$lib/features/commons/constants/pattern.constants';
 import {
+  patternPaletteFromLegacy,
+  resolveClassPatterns,
+  type ClassPattern
+} from '$lib/features/commons/services/pattern-palette.service';
+import { FillMode } from '$lib/features/commons/constants/visualization.constants';
+import {
   getPrimitiveClassification,
   PrimitiveFilterType
 } from '$lib/features/commons/stores/visualization.store.svelte';
-import type { getPolygonPrimitive } from '$lib/features/commons/stores/visualization.store.svelte';
+import type {
+  ClassificationConfig,
+  getPolygonPrimitive
+} from '$lib/features/commons/stores/visualization.store.svelte';
 
 import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
 import type { DeckDataRow, LayerContext } from '../types';
 import {
   getPatternAtlasForPattern,
+  getPatternPaletteAtlas,
   isValidPatternId,
   resolvePatternTilePx,
   PATTERN_TYPE_MAP,
@@ -43,6 +53,8 @@ export const THEMATIC_OVERLAY_PARAMETERS = {
 
 const DEFAULT_MISSING_DATA_PATTERN_ID: PatternName = 'diagonal';
 
+export const MAX_CATEGORICAL_PATTERN_COUNT = 24;
+
 let fillStyleExtensionInstance: RotatableFillStyleExtension | null = null;
 
 function getFillStyleExtension(): RotatableFillStyleExtension {
@@ -54,7 +66,14 @@ function getFillStyleExtension(): RotatableFillStyleExtension {
   return fillStyleExtensionInstance;
 }
 
-type PolygonPatternProps = {
+export interface KhartisMotifOptions {
+  type: string;
+  angle: number;
+  scale: number;
+  size: number;
+}
+
+export type PolygonPatternProps = {
   extensions: RotatableFillStyleExtension[];
   fillPatternAtlas: HTMLCanvasElement;
   fillPatternMapping: Record<
@@ -69,6 +88,7 @@ type PolygonPatternProps = {
   khartisPatternSize: number;
   khartisPatternScale: number;
   khartisPatternAngle: number;
+  khartisMotifOptions?: KhartisMotifOptions;
 };
 
 function createPatternProps(
@@ -105,6 +125,81 @@ function createPatternProps(
     khartisPatternScale: patternScaleValue,
     khartisPatternAngle: patternRotation
   };
+}
+
+export function createClassPatternProps(
+  patterns: ClassPattern[],
+  classIndex: number
+): PolygonPatternProps {
+  const { atlas, mapping } = getPatternPaletteAtlas(patterns);
+  const pattern = patterns[classIndex]!;
+  const patternKey = `c${classIndex}`;
+  const patternScale = pattern.scale * 10;
+
+  return {
+    extensions: [getFillStyleExtension()],
+    fillPatternAtlas: atlas,
+    fillPatternMapping: mapping,
+    fillPatternMask: true,
+    getFillPattern: () => patternKey,
+    getFillPatternScale: patternScale,
+    getFillPatternRotation: pattern.angle,
+    khartisPatternId: patternKey,
+    khartisPatternSize: pattern.size,
+    khartisPatternScale: patternScale,
+    khartisPatternAngle: pattern.angle,
+    khartisMotifOptions: {
+      type: pattern.type,
+      angle: pattern.angle,
+      scale: pattern.scale,
+      size: pattern.size
+    }
+  };
+}
+
+export function resolveClassPatternPalette(
+  classification: ClassificationConfig | undefined,
+  fillMode: FillMode
+): ClassPattern[] | null {
+  const pattern =
+    classification?.pattern ??
+    (classification?.patternId
+      ? patternPaletteFromLegacy(
+          classification.patternId,
+          classification.patternParams
+        )
+      : undefined);
+  if (!pattern) {
+    return null;
+  }
+
+  if (fillMode === FillMode.CLASSES) {
+    const count = classification?.colors?.length ?? 0;
+    if (count === 0) return null;
+    return resolveClassPatterns(
+      count,
+      pattern,
+      'sequential',
+      undefined,
+      classification?.inverted ?? false
+    );
+  }
+
+  if (fillMode === FillMode.CATEGORIES) {
+    const count = classification?.labels?.length ?? 0;
+    // Beyond ~24 categories no motif set stays perceptually distinct, and the
+    // shared atlas canvas would exceed browser canvas size limits.
+    if (count === 0 || count > MAX_CATEGORICAL_PATTERN_COUNT) return null;
+    return resolveClassPatterns(
+      count,
+      pattern,
+      'categorical',
+      undefined,
+      classification?.inverted ?? false
+    );
+  }
+
+  return null;
 }
 
 export function buildPatternProps(
@@ -164,7 +259,8 @@ export function createPolygonPatternOverlayLayer(
   idSuffix = `pattern-${polygonPatternId ?? 'none'}`,
   getOverlayFillColor?: (feature: {
     properties?: Record<string, unknown>;
-  }) => [number, number, number, number]
+  }) => [number, number, number, number],
+  opacity: number = PATTERN_OVERLAY_OPACITY
 ): GeoJsonLayer {
   const { modelMatrix, beforeId } = ctx;
 
@@ -173,7 +269,7 @@ export function createPolygonPatternOverlayLayer(
     data: patternGeojson,
     getFillColor: getOverlayFillColor ?? [0, 0, 0, 255],
     stroked: false,
-    opacity: PATTERN_OVERLAY_OPACITY,
+    opacity,
     pickable: false,
     extensions: patternProps.extensions,
     fillPatternAtlas: patternProps.fillPatternAtlas,
@@ -186,7 +282,8 @@ export function createPolygonPatternOverlayLayer(
       khartisPatternId: patternProps.khartisPatternId,
       khartisPatternSize: patternProps.khartisPatternSize,
       khartisPatternScale: patternProps.khartisPatternScale,
-      khartisPatternAngle: patternProps.khartisPatternAngle
+      khartisPatternAngle: patternProps.khartisPatternAngle,
+      khartisMotifOptions: patternProps.khartisMotifOptions
     } as Record<string, unknown>),
     ...(modelMatrix && { modelMatrix }),
     ...(beforeId && { beforeId }),
@@ -222,7 +319,8 @@ export function createBinaryPolygonPatternOverlayLayer(
   patternProps: PolygonPatternProps,
   ctx: Pick<LayerContext, 'modelMatrix' | 'beforeId'>,
   getFillColor: (featureId: number) => [number, number, number, number],
-  idSuffix = `pattern-${polygonPatternId ?? 'none'}`
+  idSuffix = `pattern-${polygonPatternId ?? 'none'}`,
+  opacity: number = PATTERN_OVERLAY_OPACITY
 ): Layer<DeckDataRow> | null {
   const fillColorAttribute = createVisiblePolygonFillColorAttribute(
     polyData,
@@ -244,7 +342,7 @@ export function createBinaryPolygonPatternOverlayLayer(
     id: `${layerId}-${idSuffix}`,
     ...(solidProps as unknown as Record<string, unknown>),
     getFillColor: POLYGON_PATTERN_FILL_COLOR,
-    opacity: PATTERN_OVERLAY_OPACITY,
+    opacity,
     pickable: false,
     parameters: THEMATIC_OVERLAY_PARAMETERS,
     extensions: patternProps.extensions,
@@ -258,7 +356,8 @@ export function createBinaryPolygonPatternOverlayLayer(
       khartisPatternId: patternProps.khartisPatternId,
       khartisPatternSize: patternProps.khartisPatternSize,
       khartisPatternScale: patternProps.khartisPatternScale,
-      khartisPatternAngle: patternProps.khartisPatternAngle
+      khartisPatternAngle: patternProps.khartisPatternAngle,
+      khartisMotifOptions: patternProps.khartisMotifOptions
     } as Record<string, unknown>),
     ...(modelMatrix && { modelMatrix }),
     ...(beforeId && { beforeId }),
