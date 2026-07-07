@@ -18,14 +18,17 @@ PRD deployment.
 5. Builds the tagged version in a temporary detached worktree.
 6. Copies the generated `build/` directory to a local temporary upload snapshot.
 7. Connects to SFTP only after the checks pass.
-8. Removes stale temporary directories left by previous interrupted deployments.
+8. Removes stale temporary directories left by previous interrupted deployments,
+   showing progress while remote entries are deleted.
 9. Uploads the snapshot to a temporary remote sibling directory, showing a live
    progress bar with the percentage, the number of files left, and an ETA.
 10. Swaps the temporary directory into place with two quick renames, so the
     site is unavailable only for a fraction of a second.
-11. Removes the previous remote version after the swap. If the swap fails, the
-    script restores the previous version instead.
-12. Optionally checks the public PPRD URL.
+11. Removes the previous remote version after the swap, showing progress while
+    remote entries are deleted. If the swap fails, the script restores the
+    previous version instead.
+12. Optionally checks the public PPRD URL with a timeout, then prints
+    `Deployment complete.`.
 
 `pnpm deploy:pprd:dry-run` performs the same tag, CI, install, and build checks,
 but skips SFTP entirely.
