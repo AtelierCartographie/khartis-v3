@@ -45,6 +45,34 @@ describe('pattern texture atlas cache', () => {
     expect(motifAtlasMock).toHaveBeenCalledTimes(1);
   });
 
+  it('reuses the palette atlas for identical class patterns and keys tiles c0..cN', async () => {
+    const { getPatternPaletteAtlas } = await importPatternTexture();
+    const patterns = [
+      { type: 'line', angle: 45, scale: 3, size: 4, fill: '#000000' },
+      { type: 'line', angle: 45, scale: 3, size: 9, fill: '#000000' },
+      { type: 'line', angle: 45, scale: 3, size: 14, fill: '#000000' }
+    ];
+
+    const first = getPatternPaletteAtlas(patterns);
+    const second = getPatternPaletteAtlas([...patterns]);
+
+    expect(Object.keys(first.mapping)).toEqual(['c0', 'c1', 'c2']);
+    expect(second.atlas).toBe(first.atlas);
+    expect(second.mapping).toBe(first.mapping);
+    expect(motifAtlasMock).toHaveBeenCalledTimes(1);
+    expect(motifAtlasMock).toHaveBeenCalledWith({
+      c0: expect.objectContaining({
+        type: 'line',
+        size: 4,
+        fill: '#000000',
+        background: 'transparent',
+        patchSize: true
+      }),
+      c1: expect.objectContaining({ size: 9 }),
+      c2: expect.objectContaining({ size: 14 })
+    });
+  });
+
   it('evicts the least recently used custom atlas after the cache limit', async () => {
     const { CUSTOM_PATTERN_ATLAS_CACHE_LIMIT, getPatternAtlasForPattern } =
       await importPatternTexture();

@@ -16,6 +16,7 @@ import type {
 } from '$lib/features/commons/constants/visualization.constants';
 import type {
   PatternParams,
+  PatternPaletteConfig,
   PatternType
 } from '../constants/pattern.constants';
 
@@ -72,6 +73,7 @@ export interface ClassificationConfig {
   breakpointLowerClassCount?: number;
   patternId?: string;
   patternParams?: PatternParams;
+  pattern?: PatternPaletteConfig;
   categoryShapes?: ShapeType[];
   categorySizes?: number[];
   categoryStrokeColors?: string[];

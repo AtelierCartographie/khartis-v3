@@ -24,6 +24,7 @@ export interface CategoryItem {
   symbol?: string | null;
   size?: number;
   patternFill?: LegendPatternFill | null;
+  patternOpacity?: number;
 }
 
 export interface CategoricalLegendOptions extends CommonLegendTextOptions {
@@ -216,7 +217,8 @@ export function draw_categorical_legend(
       d.strokeWidth,
       d.symbol,
       d.size,
-      d.patternFill
+      d.patternFill,
+      d.patternOpacity
     )
   );
   const labels = categories.map((d) =>
@@ -245,7 +247,8 @@ export function draw_categorical_legend(
       item.strokeWidth,
       item.symbol,
       item.size,
-      item.patternFill
+      item.patternFill,
+      item.patternOpacity
     )
   );
   const footerLabels = footerItems.map((item, index) =>
@@ -387,7 +390,8 @@ function create_shape(
   strokeWidth?: number,
   symbol?: string | null,
   size?: number,
-  patternFill?: LegendPatternFill | null
+  patternFill?: LegendPatternFill | null,
+  patternOpacity?: number
 ): string {
   const safeFill = escapeSvgAttribute(fill ?? 'none');
   const safeStroke = escapeSvgAttribute(stroke ?? 'none');
@@ -412,7 +416,7 @@ function create_shape(
         return baseRect;
       }
 
-      return `<defs>${patternFill.defs}</defs>${baseRect}<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeSvgAttribute(patternFill.fillUrl)}" opacity="${PATTERN_OVERLAY_OPACITY}" stroke="none" />`;
+      return `<defs>${patternFill.defs}</defs>${baseRect}<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeSvgAttribute(patternFill.fillUrl)}" opacity="${patternOpacity ?? PATTERN_OVERLAY_OPACITY}" stroke="none" />`;
     }
   }
 }

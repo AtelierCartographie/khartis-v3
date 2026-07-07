@@ -31,6 +31,7 @@ export interface KhartisLegendSwatchItem {
   symbol?: string | null;
   size?: number;
   patternFill?: LegendPatternFill | null;
+  patternOpacity?: number;
   dashed?: boolean;
 }
 
@@ -470,7 +471,7 @@ function draw_pattern_box(
 
   return {
     defs: item.patternFill.defs,
-    markup: `${baseRect}<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${escapeSvgAttribute(item.patternFill.fillUrl)}" opacity="${PATTERN_OVERLAY_OPACITY}" stroke="none" />`
+    markup: `${baseRect}<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${escapeSvgAttribute(item.patternFill.fillUrl)}" opacity="${item.patternOpacity ?? PATTERN_OVERLAY_OPACITY}" stroke="none" />`
   };
 }
 

@@ -1,5 +1,6 @@
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import { motif } from '@ateliercartographie/motif.js';
+import type { PatternType as MotifPatternType } from '@ateliercartographie/motif.js';
 import {
   isValidPatternId,
   resolveMotifOptions,
@@ -7,6 +8,7 @@ import {
   PATTERN_TYPE_MAP,
   type PatternName
 } from '$lib/features/map/layers/pattern-texture';
+import type { KhartisMotifOptions } from '$lib/features/map/layers/polygon-pattern-layer.utils';
 import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';
 import {
   SHAPE_ORDINAL,
@@ -320,12 +322,52 @@ function generateSvgPatternDefinition(
   };
 }
 
+function generateSvgMotifDefinition(
+  motifOptions: KhartisMotifOptions,
+  fillColor: string
+): SvgPatternDefinition {
+  const tile = motif({
+    type: motifOptions.type as MotifPatternType,
+    angle: motifOptions.angle,
+    scale: motifOptions.scale,
+    size: motifOptions.size,
+    fill: fillColor,
+    background: 'transparent'
+  });
+
+  return {
+    defsHtml: stripSvgDefsWrapper(tile.defs.outerHTML),
+    patternUrl: tile.url
+  };
+}
+
 function resolveSvgPatternReference(
   props: Record<string, unknown>,
   datum: unknown,
   index: number,
   fillColor: SvgColor
 ): SvgPatternDefinition | null {
+  const patternFillColor = `rgb(${fillColor.red}, ${fillColor.green}, ${fillColor.blue})`;
+  const khartisMotifOptions = props.khartisMotifOptions as
+    KhartisMotifOptions | undefined;
+  if (khartisMotifOptions) {
+    const motifCacheKey = JSON.stringify({
+      khartisMotifOptions,
+      fillColor: patternFillColor
+    });
+    const cachedMotif = svgPatternDefsCache.get(motifCacheKey);
+    if (cachedMotif) {
+      return cachedMotif;
+    }
+
+    const generatedMotif = generateSvgMotifDefinition(
+      khartisMotifOptions,
+      patternFillColor
+    );
+    svgPatternDefsCache.set(motifCacheKey, generatedMotif);
+    return generatedMotif;
+  }
+
   const rawPatternId =
     props.khartisPatternId ??
     resolveAccessorValue(props.getFillPattern, datum, index);
@@ -360,7 +402,6 @@ function resolveSvgPatternReference(
       fallbackAngle ?? 0
     )
   );
-  const patternFillColor = `rgb(${fillColor.red}, ${fillColor.green}, ${fillColor.blue})`;
   const cacheKey = buildSvgPatternCacheKey(
     patternId,
     {

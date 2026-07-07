@@ -18,6 +18,7 @@
     PatternParams
   } from './palette.constants';
   import { PALETTE_TYPE, normalizePaletteId } from './palette.constants';
+  import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 
   interface Props {
@@ -166,7 +167,8 @@
       paletteId: palette.id,
       inverted: false,
       patternId: palette.patternId ?? undefined,
-      patternParams: undefined
+      patternParams: undefined,
+      pattern: undefined
     });
     dropdownOpen = false;
   }
@@ -201,13 +203,25 @@
     return next.map((category) => category.color);
   }
 
-  function resolveValidatedCategoryPatternId(
+  function resolveValidatedCategoryPattern(
+    commonAspect: CategoriesCommonAspect
+  ): PatternPaletteConfig | undefined {
+    if (categoriesVariant !== 'polygons' || !commonAspect.pattern) {
+      return undefined;
+    }
+
+    return {
+      shape: 'line',
+      color: commonAspect.patternColor ?? '#000000',
+      colorize: commonAspect.patternColorize ?? false
+    };
+  }
+
+  // Symbol motifs stay on the legacy shader model (patternId → SYMBOL_PATTERN_TYPE).
+  function resolveValidatedSymbolPatternId(
     commonAspect: CategoriesCommonAspect
   ): string | undefined {
-    const supportsPattern =
-      categoriesVariant === 'polygons' ||
-      categoriesVariant.startsWith('symbols');
-    if (!supportsPattern || !commonAspect.pattern) {
+    if (!categoriesVariant.startsWith('symbols') || !commonAspect.pattern) {
       return undefined;
     }
 
@@ -239,7 +253,8 @@
       resolvedColors.every((color, index) => color === colors[index])
         ? (selectedPaletteId ?? '__custom__')
         : '__custom__';
-    const patternId = resolveValidatedCategoryPatternId(commonAspect);
+    const pattern = resolveValidatedCategoryPattern(commonAspect);
+    const symbolPatternId = resolveValidatedSymbolPatternId(commonAspect);
 
     onClassificationChange?.({
       colors: resolvedColors,
@@ -270,8 +285,9 @@
         : undefined,
       paletteId,
       inverted: false,
-      patternId,
-      patternParams: patternId ? commonAspect.patternParams : undefined
+      patternId: symbolPatternId,
+      patternParams: symbolPatternId ? commonAspect.patternParams : undefined,
+      pattern
     });
     onCategoriesCommonAspectChange?.(commonAspect, normalizedCategories);
     categoriesPopoverOpen = false;
@@ -285,7 +301,8 @@
     palette: Palette | undefined,
     newColors: string[],
     nextInverted: boolean,
-    patternParams?: PatternParams
+    patternParams?: PatternParams,
+    patternPaletteConfig?: PatternPaletteConfig
   ) {
     if (palette) {
       onselect?.(palette);
@@ -294,8 +311,9 @@
       colors: newColors,
       inverted: nextInverted,
       paletteId: palette?.id ?? '__custom__',
-      patternId: palette?.patternId ?? undefined,
-      patternParams: palette?.patternId ? patternParams : undefined
+      patternId: undefined,
+      patternParams: undefined,
+      pattern: patternPaletteConfig
     };
     onClassificationChange?.(changes);
     popoverOpen = false;
@@ -367,6 +385,7 @@
   divergingSplit={divergingSplit}
   currentPatternId={classification?.patternId}
   currentPatternParams={classification?.patternParams}
+  currentPatternPaletteConfig={classification?.pattern}
   onclose={handlePopoverClose}
   onvalidate={handlePopoverValidate}
 />

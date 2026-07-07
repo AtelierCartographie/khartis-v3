@@ -23,7 +23,11 @@
     readCarbonStringValue,
     type CarbonValueEvent
   } from '$lib/features/commons/utils/carbon-events.utils';
-  import { SliderWithInput } from '$lib/features/commons/components/viz-controls';
+  import {
+    ColorSelector,
+    SliderWithInput,
+    ToggleWithLabel
+  } from '$lib/features/commons/components/viz-controls';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { resolveToolbarWidth } from '$lib/features/commons/utils/toolbar-width.utils';
   import PaletteSuggestions from './palette-suggestions.svelte';
@@ -201,7 +205,15 @@
     draftCommonAspect = { ...draftCommonAspect, [key]: value };
   }
 
-  function handlePatternChange(patternId: string, params: PatternParams) {
+  function handlePatternColorChange(color: string) {
+    draftCommonAspect = { ...draftCommonAspect, patternColor: color };
+  }
+
+  function handlePatternColorizeChange(colorize: boolean) {
+    draftCommonAspect = { ...draftCommonAspect, patternColorize: colorize };
+  }
+
+  function handleLegacyPatternChange(patternId: string, params: PatternParams) {
     draftCommonAspect = {
       ...draftCommonAspect,
       patternId,
@@ -696,11 +708,13 @@
                   </div>
                 </div>
                 {#if draftCommonAspect.pattern}
-                  <PatternPicker
-                    patternId={draftCommonAspect.patternId}
-                    patternParams={draftCommonAspect.patternParams}
-                    onChange={handlePatternChange}
-                  />
+                  <div class="common-field--full">
+                    <PatternPicker
+                      patternId={draftCommonAspect.patternId}
+                      patternParams={draftCommonAspect.patternParams}
+                      onChange={handleLegacyPatternChange}
+                    />
+                  </div>
                 {/if}
               </div>
             {:else if primitiveKind === 'polygons'}
@@ -722,10 +736,15 @@
                 </div>
                 {#if draftCommonAspect.pattern}
                   <div class="common-grid-row common-grid-row--full">
-                    <PatternPicker
-                      patternId={draftCommonAspect.patternId}
-                      patternParams={draftCommonAspect.patternParams}
-                      onChange={handlePatternChange}
+                    <ColorSelector
+                      label={m.color()}
+                      value={draftCommonAspect.patternColor ?? '#000000'}
+                      onchange={handlePatternColorChange}
+                    />
+                    <ToggleWithLabel
+                      label={m.pattern_colorize()}
+                      toggled={draftCommonAspect.patternColorize ?? false}
+                      ontoggle={handlePatternColorizeChange}
                     />
                   </div>
                 {/if}

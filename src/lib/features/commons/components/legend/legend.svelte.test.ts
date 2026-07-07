@@ -231,6 +231,31 @@ describe('common legend generators', () => {
     expect(withNoData.width).toBeGreaterThan(base.width);
   });
 
+  it('draws quantitative class boxes as white background plus motif fill when classPatternFills is set', () => {
+    const svg = createLegendSvg(
+      draw_quanti_color_legend([0, 10, 20], ['#f7fbff', '#2171b5'], {
+        classPatternFills: [
+          {
+            defs: '<pattern id="motif-0"><rect /></pattern>',
+            fillUrl: 'url(#motif-0)'
+          },
+          {
+            defs: '<pattern id="motif-1"><rect /></pattern>',
+            fillUrl: 'url(#motif-1)'
+          }
+        ]
+      })
+    );
+
+    expect(svg.markup).toContain('<pattern id="motif-0">');
+    expect(svg.markup).toContain('<pattern id="motif-1">');
+    expect(svg.markup).toContain('fill="#ffffff"');
+    expect(svg.markup).toContain('fill="url(#motif-0)" opacity="1"');
+    expect(svg.markup).toContain('fill="url(#motif-1)" opacity="1"');
+    expect(svg.markup).not.toContain('fill="#f7fbff"');
+    expect(svg.markup).not.toContain('fill="#2171b5"');
+  });
+
   it('widens quantitative legends when the missing-data label is long', () => {
     const base = createLegendSvg(
       draw_quanti_color_legend([0, 10, 20], ['#f7fbff', '#2171b5'])

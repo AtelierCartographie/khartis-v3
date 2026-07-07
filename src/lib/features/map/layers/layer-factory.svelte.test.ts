@@ -48,6 +48,7 @@ const {
   createPolygonFillColorAttributeMock,
   createScatterplotLayerPropsMock,
   getPatternAtlasForPatternMock,
+  getPatternPaletteAtlasMock,
   parsePathsMock,
   parsePathsWithProjectionMock,
   parsePointDataMock,
@@ -81,6 +82,7 @@ const {
     createPolygonFillColorAttributeMock: vi.fn(),
     createScatterplotLayerPropsMock: vi.fn(),
     getPatternAtlasForPatternMock: vi.fn(),
+    getPatternPaletteAtlasMock: vi.fn(),
     parsePathsMock: vi.fn(),
     parsePathsWithProjectionMock: vi.fn(),
     parsePointDataMock: vi.fn(),
@@ -151,7 +153,8 @@ vi.mock('./pattern-texture', async () => {
 
   return {
     ...actual,
-    getPatternAtlasForPattern: getPatternAtlasForPatternMock
+    getPatternAtlasForPattern: getPatternAtlasForPatternMock,
+    getPatternPaletteAtlas: getPatternPaletteAtlasMock
   };
 });
 
@@ -562,6 +565,17 @@ beforeEach(() => {
       dots: { x: 8, y: 0, width: 8, height: 8 }
     }
   });
+  getPatternPaletteAtlasMock.mockImplementation(
+    (patterns: { type: string }[]) => ({
+      atlas: {} as HTMLCanvasElement,
+      mapping: Object.fromEntries(
+        patterns.map((_, index) => [
+          `c${index}`,
+          { x: index * 8, y: 0, width: 8, height: 8 }
+        ])
+      )
+    })
+  );
   projectGeoJSONMock.mockImplementation((geojson) => geojson);
   parseSolidPolygonsMock.mockReturnValue({
     featureIds: new Uint32Array([0])
@@ -2356,6 +2370,65 @@ describe('createPolygonLayers', () => {
     expect(patternLayer?.props.updateTriggers).toMatchObject({
       getFillPatternScale: [16],
       getFillPatternRotation: [315]
+    });
+  });
+
+  it('renders one pattern overlay layer per class with increasing sizes when classification.pattern is set', () => {
+    const visualization = createVisualization(FillMode.CLASSES);
+    visualization.mapping = { valueColumn: 'metric' };
+    visualization.polygon = {
+      ...visualization.polygon!,
+      valueColumn: 'metric',
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 4,
+        numClasses: 4,
+        breaks: [10, 20, 30],
+        colors: ['#eeeeee', '#cccccc', '#999999', '#333333'],
+        pattern: { shape: 'line' }
+      }
+    };
+
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [5, 15, 25, 35].map((metric, index) => ({
+        ...createPolygonFeature(`feature-${index}`, 2024),
+        properties: { id: `feature-${index}`, metric }
+      }))
+    } satisfies FeatureCollection<Polygon>);
+
+    const layers = createPolygonLayers(
+      createTableWithRows(
+        [5, 15, 25, 35].map((metric, index) => ({
+          id: `feature-${index}`,
+          metric
+        })),
+        ['id', 'metric']
+      ),
+      createGeometryInfo(),
+      createContext(visualization)
+    );
+
+    const classPatternLayers = layers.filter((layer) =>
+      String(layer.props.id).includes('-pattern-c')
+    );
+
+    expect(classPatternLayers).toHaveLength(4);
+    const propsPerClass = classPatternLayers.map(
+      (layer) => layer.props as Record<string, unknown>
+    );
+    propsPerClass.forEach((props, index) => {
+      expect((props.getFillPattern as () => string)()).toBe(`c${index}`);
+    });
+    const sizes = propsPerClass.map(
+      (props) => props.khartisPatternSize as number
+    );
+    for (let i = 1; i < sizes.length; i += 1) {
+      expect(sizes[i]!).toBeGreaterThan(sizes[i - 1]!);
+    }
+    propsPerClass.forEach((props) => {
+      expect(props.getFillPatternScale).toBe(30);
+      expect(props.opacity).toBe(1);
     });
   });
 

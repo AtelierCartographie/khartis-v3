@@ -11,6 +11,7 @@ import { toCanvas as htmlToImageCanvas } from 'html-to-image';
 import type { Deck, View } from '@deck.gl/core';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { motif } from '@ateliercartographie/motif.js';
+import type { PatternType as MotifPatternType } from '@ateliercartographie/motif.js';
 import {
   isValidPatternId,
   resolveMotifOptions,
@@ -18,6 +19,7 @@ import {
   PATTERN_TYPE_MAP,
   type PatternName
 } from '$lib/features/map/layers/pattern-texture';
+import type { KhartisMotifOptions } from '$lib/features/map/layers/polygon-pattern-layer.utils';
 import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';
 import {
   SLIDER_LIMITS,
@@ -1048,12 +1050,52 @@ function generateSvgPatternDefinition(
   };
 }
 
+function generateSvgMotifDefinition(
+  motifOptions: KhartisMotifOptions,
+  fillColor: string
+): SvgPatternDefinition {
+  const tile = motif({
+    type: motifOptions.type as MotifPatternType,
+    angle: motifOptions.angle,
+    scale: motifOptions.scale,
+    size: motifOptions.size,
+    fill: fillColor,
+    background: 'transparent'
+  });
+
+  return {
+    defsHtml: stripSvgDefsWrapper(tile.defs.outerHTML),
+    patternUrl: tile.url
+  };
+}
+
 function resolveSvgPatternReference(
   props: Record<string, unknown>,
   datum: unknown,
   index: number,
   fillColor: SvgColor
 ): SvgPatternDefinition | null {
+  const patternFillColor = `rgb(${fillColor.red}, ${fillColor.green}, ${fillColor.blue})`;
+  const khartisMotifOptions = props.khartisMotifOptions as
+    KhartisMotifOptions | undefined;
+  if (khartisMotifOptions) {
+    const cacheKey = JSON.stringify({
+      khartisMotifOptions,
+      fillColor: patternFillColor
+    });
+    const cachedMotif = svgPatternDefsCache.get(cacheKey);
+    if (cachedMotif) {
+      return cachedMotif;
+    }
+
+    const generatedMotif = generateSvgMotifDefinition(
+      khartisMotifOptions,
+      patternFillColor
+    );
+    svgPatternDefsCache.set(cacheKey, generatedMotif);
+    return generatedMotif;
+  }
+
   const rawPatternId =
     props.khartisPatternId ??
     resolveAccessorValue(props.getFillPattern, datum, index);
@@ -1080,7 +1122,6 @@ function resolveSvgPatternReference(
       fallbackAngle ?? 0
     )
   );
-  const patternFillColor = `rgb(${fillColor.red}, ${fillColor.green}, ${fillColor.blue})`;
   const cacheKey = buildSvgPatternCacheKey(
     patternId,
     {
