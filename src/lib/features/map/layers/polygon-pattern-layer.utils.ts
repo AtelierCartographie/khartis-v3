@@ -7,7 +7,10 @@ import {
 } from 'geoarrow-deck-stream';
 
 import { mapPatternTypeToPatternId } from '$lib/features/commons/components/palette-popover/palette.constants';
-import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';
+import {
+  PATTERN_OVERLAY_OPACITY,
+  type PatternParams
+} from '$lib/features/commons/constants/pattern.constants';
 import {
   getPrimitiveClassification,
   PrimitiveFilterType
@@ -19,6 +22,7 @@ import type { DeckDataRow, LayerContext } from '../types';
 import {
   getPatternAtlasForPattern,
   isValidPatternId,
+  resolvePatternTilePx,
   PATTERN_TYPE_MAP,
   type PatternName
 } from './pattern-texture';
@@ -80,14 +84,11 @@ function createPatternProps(
   }
   const patternScaleValue = Math.max(1, patternParams?.scale ?? 8);
   const patternSizeValue = Math.max(1, patternParams?.size ?? 4);
-  // The atlas tile already bakes the user's size + scale (motif.js), exactly
-  // like the CSS preview (buildPatternBackground). The shader consumes
-  // getFillPatternScale as "tile size in screen pixels", so render the tile at
-  // its native atlas size for a 1:1 match with the popover preview. Deriving it
-  // from a slider here re-applied scale a second time and blew tiles up to
-  // 40-200 px.
-  const patternFrame = mapping[patternId];
-  const patternScale = Math.max(1, patternFrame?.width ?? 16);
+  // The shader consumes getFillPatternScale as "tile size in screen pixels".
+  // Atlas frames are devicePixelRatio-scaled canvas pixels, so use the design
+  // tile size instead — it keeps the motif identical across screen densities
+  // and matches the CSS previews, the legend, and the SVG export.
+  const patternScale = resolvePatternTilePx(patternParams);
   const patternRotation =
     patternParams?.angle ?? PATTERN_TYPE_MAP[patternId]?.angle ?? 0;
 
@@ -125,15 +126,17 @@ export function buildPatternProps(
 }
 
 export function resolveMissingDataPatternId(
-  polygonConfig: ReturnType<typeof getPolygonPrimitive> | undefined
+  missingData:
+    | NonNullable<ReturnType<typeof getPolygonPrimitive>>['missingData']
+    | undefined
 ): PatternName {
-  const patternId = polygonConfig?.missingData?.patternId;
+  const patternId = missingData?.patternId;
   if (isValidPatternId(patternId)) {
     return patternId;
   }
   // Legacy fallback: older projects only stored a coarse PatternType.
   return mapPatternTypeToPatternId(
-    polygonConfig?.missingData?.patternType,
+    missingData?.patternType,
     DEFAULT_MISSING_DATA_PATTERN_ID
   );
 }
@@ -147,7 +150,7 @@ export function buildMissingDataPatternProps(
   }
 
   return createPatternProps(
-    resolveMissingDataPatternId(polygonConfig),
+    resolveMissingDataPatternId(polygonConfig.missingData),
     polygonConfig.missingData.patternParams
   );
 }
@@ -158,16 +161,19 @@ export function createPolygonPatternOverlayLayer(
   patternGeojson: FeatureCollection,
   patternProps: PolygonPatternProps,
   ctx: Pick<LayerContext, 'modelMatrix' | 'beforeId'>,
-  idSuffix = `pattern-${polygonPatternId ?? 'none'}`
+  idSuffix = `pattern-${polygonPatternId ?? 'none'}`,
+  getOverlayFillColor?: (feature: {
+    properties?: Record<string, unknown>;
+  }) => [number, number, number, number]
 ): GeoJsonLayer {
   const { modelMatrix, beforeId } = ctx;
 
   return new GeoJsonLayer({
     id: `${layerId}-${idSuffix}`,
     data: patternGeojson,
-    getFillColor: [0, 0, 0, 255],
+    getFillColor: getOverlayFillColor ?? [0, 0, 0, 255],
     stroked: false,
-    opacity: 0.6,
+    opacity: PATTERN_OVERLAY_OPACITY,
     pickable: false,
     extensions: patternProps.extensions,
     fillPatternAtlas: patternProps.fillPatternAtlas,
@@ -238,7 +244,7 @@ export function createBinaryPolygonPatternOverlayLayer(
     id: `${layerId}-${idSuffix}`,
     ...(solidProps as unknown as Record<string, unknown>),
     getFillColor: POLYGON_PATTERN_FILL_COLOR,
-    opacity: 0.6,
+    opacity: PATTERN_OVERLAY_OPACITY,
     pickable: false,
     parameters: THEMATIC_OVERLAY_PARAMETERS,
     extensions: patternProps.extensions,

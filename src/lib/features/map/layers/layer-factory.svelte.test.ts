@@ -151,12 +151,6 @@ vi.mock('./pattern-texture', async () => {
 
   return {
     ...actual,
-    getPatternAtlas: vi.fn(() => ({
-      atlas: {} as HTMLCanvasElement,
-      mapping: {
-        diagonal: { x: 0, y: 0, width: 8, height: 8 }
-      }
-    })),
     getPatternAtlasForPattern: getPatternAtlasForPatternMock
   };
 });
@@ -2354,13 +2348,13 @@ describe('createPolygonLayers', () => {
       scale: 16
     });
     // size/scale are baked into the atlas tile (asserted above). The shader
-    // renders the tile at its native atlas size, so getFillPatternScale is the
-    // mapping frame width (8 in the mock) — matching the popover preview rather
-    // than re-deriving a separate screen-pixel formula.
-    expect(patternLayerProps?.getFillPatternScale).toBe(8);
+    // consumes getFillPatternScale as the tile size in CSS pixels; the design
+    // tile edge equals the user's scale slider value, independent of the
+    // devicePixelRatio-scaled atlas frame.
+    expect(patternLayerProps?.getFillPatternScale).toBe(16);
     expect(patternLayerProps?.getFillPatternRotation).toBe(315);
     expect(patternLayer?.props.updateTriggers).toMatchObject({
-      getFillPatternScale: [8],
+      getFillPatternScale: [16],
       getFillPatternRotation: [315]
     });
   });

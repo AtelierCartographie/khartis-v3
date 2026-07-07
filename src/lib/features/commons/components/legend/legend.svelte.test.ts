@@ -11,12 +11,7 @@ import {
   draw_symbols_legend,
   round_thresholds
 } from '.';
-import {
-  renderLegendHeader,
-  renderLegendNote,
-  sanitizeDataImageUrl,
-  wrapLegendText
-} from './utils';
+import { renderLegendHeader, renderLegendNote, wrapLegendText } from './utils';
 
 const measureCanvas = {
   getContext: () => ({
@@ -80,22 +75,6 @@ describe('common legend generators', () => {
     expect(note.markup).toContain('&lt;unsafe&gt;');
     expect(note.height).toBeGreaterThan(0);
     expect(emptyHeader).toEqual({ markup: '', height: 0 });
-  });
-
-  it('sanitizes data image URLs for legend patterns', () => {
-    expect(sanitizeDataImageUrl('data:image/png;base64,aGVsbG8=')).toBe(
-      'data:image/png;base64,aGVsbG8='
-    );
-    expect(sanitizeDataImageUrl('data:image/webp;base64,aGVsbG8=')).toBe(
-      'data:image/webp;base64,aGVsbG8='
-    );
-    expect(sanitizeDataImageUrl('data:image/svg+xml;base64,PHN2Zz4=')).toBe(
-      'data:image/svg+xml;base64,PHN2Zz4='
-    );
-    expect(sanitizeDataImageUrl('javascript:alert(1)')).toBeNull();
-    expect(
-      sanitizeDataImageUrl('data:text/html;base64,PHNjcmlwdD4=')
-    ).toBeNull();
   });
 
   it('draws a quantitative color legend from precomputed thresholds', () => {
@@ -563,7 +542,10 @@ describe('common legend generators', () => {
             label: '<img>',
             fill: '#fff" /><script>',
             symbol: 'M0,0" /><script>',
-            patternUrl: 'javascript:alert(1)'
+            patternFill: {
+              defs: '<pattern id="safe"><rect /></pattern>',
+              fillUrl: 'url(#safe)" /><script>'
+            }
           }
         ],
         {
@@ -576,39 +558,26 @@ describe('common legend generators', () => {
     expect(svg.markup).toContain('&lt;img&gt;');
     expect(svg.markup).toContain('&lt;script&gt;');
     expect(svg.markup).not.toContain('<script>');
-    expect(svg.markup).not.toContain('javascript:alert');
   });
 
-  it('keeps Khartis pattern ids unique across simultaneous legends', () => {
-    const firstSvg = draw_khartis_swatch_legend(
+  it('draws pattern swatches as a colored box overlaid by the motif fill', () => {
+    const svg = draw_khartis_swatch_legend(
       [
         {
           label: 'A',
-          fill: '#ffffff',
-          patternUrl: 'data:image/png;base64,AA=='
-        }
-      ],
-      { type: 'pattern' }
-    );
-    const secondSvg = draw_khartis_swatch_legend(
-      [
-        {
-          label: 'B',
-          fill: '#ffffff',
-          patternUrl: 'data:image/png;base64,AA=='
+          fill: '#2171b5',
+          patternFill: {
+            defs: '<pattern id="motif-a"><rect /></pattern>',
+            fillUrl: 'url(#motif-a)'
+          }
         }
       ],
       { type: 'pattern' }
     );
 
-    const firstId = firstSvg.markup.match(/<pattern id="([^"]+)"/)?.[1];
-    const secondId = secondSvg.markup.match(/<pattern id="([^"]+)"/)?.[1];
-
-    expect(firstId).toBeTruthy();
-    expect(secondId).toBeTruthy();
-    expect(firstId).not.toBe(secondId);
-    expect(firstSvg.markup).toContain(`fill="url(#${firstId})"`);
-    expect(secondSvg.markup).toContain(`fill="url(#${secondId})"`);
+    expect(svg.markup).toContain('<pattern id="motif-a">');
+    expect(svg.markup).toContain('fill="#2171b5"');
+    expect(svg.markup).toContain('fill="url(#motif-a)" opacity="0.6"');
   });
 
   it('centralizes raw SVG markup rendering in LegendSvg', () => {

@@ -247,6 +247,9 @@
       patternId={categoriesVariant === 'polygons'
         ? visualization?.classification?.patternId
         : undefined}
+      patternParams={categoriesVariant === 'polygons'
+        ? visualization?.classification?.patternParams
+        : undefined}
       onchange={onFillColorChange}
       onpatternchange={(patternId, patternParams) => {
         if (categoriesVariant === 'polygons') {

@@ -1,4 +1,6 @@
 import Textbox from '@borgar/textbox';
+import { PATTERN_OVERLAY_OPACITY } from '$lib/features/commons/constants/pattern.constants';
+import type { LegendPatternFill } from './khartis-extensions';
 import {
   createLegendCanvasRect,
   createLegendFont,
@@ -7,7 +9,6 @@ import {
   renderLegendHeader,
   renderLegendNote,
   resolveLegendFontFamily,
-  sanitizeDataImageUrl,
   type CommonLegendTextOptions,
   type LegendSvgDefinition
 } from './utils';
@@ -22,7 +23,7 @@ export interface CategoryItem {
   strokeWidth?: number;
   symbol?: string | null;
   size?: number;
-  patternUrl?: string | null;
+  patternFill?: LegendPatternFill | null;
 }
 
 export interface CategoricalLegendOptions extends CommonLegendTextOptions {
@@ -215,7 +216,7 @@ export function draw_categorical_legend(
       d.strokeWidth,
       d.symbol,
       d.size,
-      d.patternUrl
+      d.patternFill
     )
   );
   const labels = categories.map((d) =>
@@ -244,8 +245,7 @@ export function draw_categorical_legend(
       item.strokeWidth,
       item.symbol,
       item.size,
-      item.patternUrl,
-      `categorical-legend-footer-pattern-${index}`
+      item.patternFill
     )
   );
   const footerLabels = footerItems.map((item, index) =>
@@ -387,8 +387,7 @@ function create_shape(
   strokeWidth?: number,
   symbol?: string | null,
   size?: number,
-  patternUrl?: string | null,
-  patternId?: string
+  patternFill?: LegendPatternFill | null
 ): string {
   const safeFill = escapeSvgAttribute(fill ?? 'none');
   const safeStroke = escapeSvgAttribute(stroke ?? 'none');
@@ -408,13 +407,12 @@ function create_shape(
       return `<path d="${escapeSvgAttribute(symbol ?? '')}" transform="translate(${cx},${cy})${scale}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" />`;
     }
     case 'pattern': {
-      const id = patternId;
-      const url = sanitizeDataImageUrl(patternUrl);
-      if (!url) {
-        return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" />`;
+      const baseRect = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" />`;
+      if (!patternFill) {
+        return baseRect;
       }
 
-      return `<defs><pattern id="${id}" patternUnits="userSpaceOnUse" width="${width}" height="${height}"><rect width="${width}" height="${height}" fill="${safeFill}" /><image href="${url}" width="${width}" height="${height}" preserveAspectRatio="none" /></pattern></defs><rect x="${x}" y="${y}" width="${width}" height="${height}" fill="url(#${id})" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" />`;
+      return `<defs>${patternFill.defs}</defs>${baseRect}<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeSvgAttribute(patternFill.fillUrl)}" opacity="${PATTERN_OVERLAY_OPACITY}" stroke="none" />`;
     }
   }
 }

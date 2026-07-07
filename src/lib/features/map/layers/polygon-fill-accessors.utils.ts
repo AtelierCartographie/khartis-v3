@@ -5,6 +5,7 @@ import { FillMode } from '$lib/features/commons/constants/visualization.constant
 
 import type { LayerContext, RGBColor } from '../types';
 import { isMissingThematicValue } from './layer-highlight.utils';
+import { getPatternOverlayColorRgb } from './pattern-texture';
 import {
   POLYGON_PATTERN_FILL_COLOR,
   TRANSPARENT_POLYGON_PATTERN_FILL_COLOR
@@ -101,21 +102,49 @@ function readTableRow(
   return row && typeof row === 'object' ? row : {};
 }
 
-export function createSplitMatchedPolygonPatternColorAccessor(
+export function overlayColorForFill(
+  fill: readonly [number, number, number, number]
+): [number, number, number, number] {
+  if ((fill[3] ?? 0) <= 0) {
+    return TRANSPARENT_POLYGON_PATTERN_FILL_COLOR;
+  }
+  return getPatternOverlayColorRgb([fill[0], fill[1], fill[2]]) === '#ffffff'
+    ? [255, 255, 255, 255]
+    : POLYGON_PATTERN_FILL_COLOR;
+}
+
+export function createPatternOverlayColorAccessor(
   ctx: LayerContext,
-  geometryTable: ArrowTable
+  geometryTable: ArrowTable,
+  baseFillAccessor:
+    ((row: Record<string, unknown>) => [number, number, number, number]) | null,
+  fallbackFillColor: RGBColor
 ): (featureId: number) => [number, number, number, number] {
-  if (!hasSplitRenderingContext(ctx)) {
-    return () => POLYGON_PATTERN_FILL_COLOR;
+  const fallbackOverlay = overlayColorForFill([
+    fallbackFillColor[0],
+    fallbackFillColor[1],
+    fallbackFillColor[2],
+    255
+  ]);
+  const rowToColor = (row: Record<string, unknown>) =>
+    baseFillAccessor
+      ? overlayColorForFill(baseFillAccessor(row))
+      : fallbackOverlay;
+
+  if (hasSplitRenderingContext(ctx)) {
+    return createSplitAwareNullableRowAccessor(
+      ctx,
+      geometryTable,
+      (row) => (row ? rowToColor(row) : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR),
+      geometryTable
+    );
   }
 
-  return createSplitAwareNullableRowAccessor(
-    ctx,
-    geometryTable,
-    (row) =>
-      row ? POLYGON_PATTERN_FILL_COLOR : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR,
-    geometryTable
-  );
+  if (!baseFillAccessor) {
+    return () => fallbackOverlay;
+  }
+
+  return (featureId) => rowToColor(readTableRow(geometryTable, featureId));
 }
 
 export function createMissingPolygonPatternColorAccessor(
@@ -124,8 +153,15 @@ export function createMissingPolygonPatternColorAccessor(
   fillMode: FillMode,
   valueColumn: string | undefined,
   categoryColumn: string | undefined,
-  categoryColorMap: Map<string, RGBColor> | null
+  categoryColorMap: Map<string, RGBColor> | null,
+  missingFillColor: RGBColor
 ): (featureId: number) => [number, number, number, number] {
+  const overlay = overlayColorForFill([
+    missingFillColor[0],
+    missingFillColor[1],
+    missingFillColor[2],
+    255
+  ]);
   const rowToColor = (row: Record<string, unknown>) =>
     isMissingPolygonFillDatum(
       row,
@@ -134,7 +170,7 @@ export function createMissingPolygonPatternColorAccessor(
       categoryColumn,
       categoryColorMap
     )
-      ? POLYGON_PATTERN_FILL_COLOR
+      ? overlay
       : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR;
 
   if (hasSplitRenderingContext(ctx)) {
@@ -165,6 +201,30 @@ export function createSplitUniqueBinaryColorAccessor(
     (row) => (row ? [color[0], color[1], color[2], 255] : [0, 0, 0, 0]),
     geometryTable
   );
+}
+
+export function createGeoJsonPatternOverlayColorAccessor(
+  baseFillAccessor:
+    | ((feature: {
+        properties?: Record<string, unknown>;
+      }) => [number, number, number, number])
+    | null,
+  fallbackFillColor: RGBColor
+): (feature: {
+  properties?: Record<string, unknown>;
+}) => [number, number, number, number] {
+  const fallbackOverlay = overlayColorForFill([
+    fallbackFillColor[0],
+    fallbackFillColor[1],
+    fallbackFillColor[2],
+    255
+  ]);
+
+  if (!baseFillAccessor) {
+    return () => fallbackOverlay;
+  }
+
+  return (feature) => overlayColorForFill(baseFillAccessor(feature));
 }
 
 export function createSplitUniqueGeoJsonColorAccessor(

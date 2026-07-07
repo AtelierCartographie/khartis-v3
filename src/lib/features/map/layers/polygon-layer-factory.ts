@@ -89,8 +89,9 @@ import {
   resolveMissingDataPatternId
 } from './polygon-pattern-layer.utils';
 import {
+  createGeoJsonPatternOverlayColorAccessor,
   createMissingPolygonPatternColorAccessor,
-  createSplitMatchedPolygonPatternColorAccessor,
+  createPatternOverlayColorAccessor,
   createSplitUniqueBinaryColorAccessor,
   createSplitUniqueGeoJsonColorAccessor,
   filterMissingPolygonPatternFeatures,
@@ -540,14 +541,19 @@ export function createPolygonLayerStack(
           polyData,
           patternProps,
           ctx,
-          createSplitMatchedPolygonPatternColorAccessor(ctx, jsTable)
+          createPatternOverlayColorAccessor(
+            ctx,
+            jsTable,
+            baseFillAccessor,
+            polygonFillColor
+          )
         );
       }
       let missingDataPatternLayer: Layer<DeckDataRow> | null = null;
       if (missingDataPatternProps) {
         missingDataPatternLayer = createBinaryPolygonPatternOverlayLayer(
           layerId,
-          resolveMissingDataPatternId(polygonConfig),
+          resolveMissingDataPatternId(polygonConfig?.missingData),
           polyData,
           missingDataPatternProps,
           ctx,
@@ -557,7 +563,8 @@ export function createPolygonLayerStack(
             polygonFillMode,
             polygonValueColumn,
             polygonCategoryColumn,
-            effectiveCategoryColorMap
+            effectiveCategoryColorMap,
+            polygonMissingColor
           ),
           'missing-data-pattern'
         );
@@ -884,7 +891,12 @@ export function createPolygonLayerStack(
           polygonClassification?.patternId,
           patternGeojsonData,
           patternProps,
-          ctx
+          ctx,
+          undefined,
+          createGeoJsonPatternOverlayColorAccessor(
+            baseGeoJsonFillColor,
+            polygonFillColor
+          )
         )
       : null;
   const missingDataPatternGeojson =
@@ -907,11 +919,12 @@ export function createPolygonLayerStack(
     missingDataPatternGeojson.features.length > 0
       ? createPolygonPatternOverlayLayer(
           layerId,
-          resolveMissingDataPatternId(polygonConfig),
+          resolveMissingDataPatternId(polygonConfig?.missingData),
           missingDataPatternGeojson,
           missingDataPatternProps,
           ctx,
-          'missing-data-pattern'
+          'missing-data-pattern',
+          createGeoJsonPatternOverlayColorAccessor(null, polygonMissingColor)
         )
       : null;
 

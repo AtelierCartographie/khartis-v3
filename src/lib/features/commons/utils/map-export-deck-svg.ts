@@ -1,11 +1,13 @@
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import { motif } from '@ateliercartographie/motif.js';
-import type { PatternOptions } from '@ateliercartographie/motif.js';
 import {
   isValidPatternId,
+  resolveMotifOptions,
+  stripSvgDefsWrapper,
   PATTERN_TYPE_MAP,
   type PatternName
 } from '$lib/features/map/layers/pattern-texture';
+import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';
 import {
   SHAPE_ORDINAL,
   ShapeType,
@@ -42,12 +44,8 @@ interface SvgPatternDefinition {
   patternUrl: string;
 }
 
-const SVG_PATTERN_FILL_COLOR = '#000000';
-const SVG_PATTERN_MOTIF_SIZE_FACTOR = 100;
-const SVG_PATTERN_MOTIF_SCALE_DIVISOR = 10;
 const SVG_PATTERN_DEFAULT_SIZE = 4;
-const SVG_PATTERN_DEFAULT_ACCESSOR_SCALE = 200;
-const SVG_PATTERN_ACCESSOR_SCALE_DIVISOR = 25;
+const SVG_PATTERN_DEFAULT_SCALE = 8;
 const SVG_PATTERN_MIN_SIZE = 1;
 const SVG_PATTERN_MIN_SCALE = 1;
 const DEFAULT_SYMBOL_BAR_WIDTH = 6;
@@ -290,43 +288,34 @@ function resolveAccessorNumber(
   return toFiniteNumber(resolveAccessorValue(accessor, datum, index), fallback);
 }
 
-function stripDefsWrapper(defsHtml: string): string {
-  return defsHtml.replace(/^\s*<defs[^>]*>/i, '').replace(/<\/defs>\s*$/i, '');
-}
-
 function buildSvgPatternCacheKey(
   patternId: PatternName,
-  params: { angle?: number; size: number; scale: number }
+  params: { angle?: number; size: number; scale: number },
+  fillColor: string
 ): string {
   return JSON.stringify({
     patternId,
     angle: params.angle,
     size: params.size,
-    scale: params.scale
+    scale: params.scale,
+    fillColor
   });
 }
 
 function generateSvgPatternDefinition(
   patternId: PatternName,
-  params: { angle?: number; size: number; scale: number }
+  params: { angle?: number; size: number; scale: number },
+  fillColor: string
 ): SvgPatternDefinition | null {
-  const config = PATTERN_TYPE_MAP[patternId];
-  if (!config) return null;
+  if (!PATTERN_TYPE_MAP[patternId]) return null;
 
   const tile = motif({
-    type: config.type as PatternOptions['type'],
-    angle: params.angle ?? config.angle,
-    fill: SVG_PATTERN_FILL_COLOR,
-    background: 'transparent',
-    size: Math.round(
-      (params.size / params.scale) * SVG_PATTERN_MOTIF_SIZE_FACTOR
-    ),
-    scale: params.scale / SVG_PATTERN_MOTIF_SCALE_DIVISOR,
-    patchSize: true
+    ...resolveMotifOptions(patternId, params as PatternParams),
+    fill: fillColor
   });
 
   return {
-    defsHtml: stripDefsWrapper(tile.defs.outerHTML),
+    defsHtml: stripSvgDefsWrapper(tile.defs.outerHTML),
     patternUrl: tile.url
   };
 }
@@ -334,7 +323,8 @@ function generateSvgPatternDefinition(
 function resolveSvgPatternReference(
   props: Record<string, unknown>,
   datum: unknown,
-  index: number
+  index: number,
+  fillColor: SvgColor
 ): SvgPatternDefinition | null {
   const rawPatternId =
     props.khartisPatternId ??
@@ -357,8 +347,8 @@ function resolveSvgPatternReference(
         props.getFillPatternScale,
         datum,
         index,
-        SVG_PATTERN_DEFAULT_ACCESSOR_SCALE
-      ) / SVG_PATTERN_ACCESSOR_SCALE_DIVISOR
+        SVG_PATTERN_DEFAULT_SCALE
+      )
     )
   );
   const angle = toFiniteNumber(
@@ -370,21 +360,30 @@ function resolveSvgPatternReference(
       fallbackAngle ?? 0
     )
   );
-  const cacheKey = buildSvgPatternCacheKey(patternId, {
-    angle,
-    size,
-    scale
-  });
+  const patternFillColor = `rgb(${fillColor.red}, ${fillColor.green}, ${fillColor.blue})`;
+  const cacheKey = buildSvgPatternCacheKey(
+    patternId,
+    {
+      angle,
+      size,
+      scale
+    },
+    patternFillColor
+  );
   const cached = svgPatternDefsCache.get(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const generated = generateSvgPatternDefinition(patternId, {
-    angle,
-    size,
-    scale
-  });
+  const generated = generateSvgPatternDefinition(
+    patternId,
+    {
+      angle,
+      size,
+      scale
+    },
+    patternFillColor
+  );
   if (!generated) {
     return null;
   }
@@ -920,10 +919,12 @@ function serializePolygonLayer(
     );
     if (fillColor.opacity <= 0) continue;
 
+    const pattern = resolveSvgPatternReference(props, null, index, fillColor);
+
     parts.push(`
       <path
         d="${path}"
-        ${colorAttributes('fill', fillColor)}
+        ${fillAttributes(fillColor, pattern)}
         stroke="none"
         fill-rule="evenodd"
       />
@@ -1029,7 +1030,12 @@ function serializeGeoJsonGeometry(
     ),
     layerOpacity
   );
-  const pattern = resolveSvgPatternReference(props, feature, featureIndex);
+  const pattern = resolveSvgPatternReference(
+    props,
+    feature,
+    featureIndex,
+    fillColor
+  );
   const lineColor = applyLayerOpacity(
     normalizeSvgColor(
       resolveAccessorValue(props.getLineColor, feature, featureIndex),

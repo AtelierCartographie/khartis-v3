@@ -58,37 +58,47 @@
     return undefined;
   });
 
-  const currentParams = $derived<PatternParams>({
-    angle: currentAngle,
-    size,
-    scale
-  });
+  const listPreviewParams = $derived<PatternParams>({ size, scale });
 
-  const livePreviewBg = $derived(
-    buildPatternBackground(selectedPalette, currentParams)
-  );
+  function isLinePaletteId(id: string | undefined): boolean {
+    return LINE_PATTERN_IDS.includes(id as LinePatternId);
+  }
+
+  function paramsFor(palette: Palette): PatternParams {
+    // The angle identifies line patterns only; it must not leak onto shapes.
+    if (!isLinePaletteId(palette.patternId)) {
+      return { size, scale };
+    }
+
+    if (palette.patternId === 'horizontal') return { angle: 0, size, scale };
+    if (palette.patternId === 'diagonal') return { angle: 45, size, scale };
+    if (palette.patternId === 'diagonal-reverse') {
+      return { angle: 315, size, scale };
+    }
+    return { size, scale };
+  }
 
   function emit(palette: Palette, params: PatternParams) {
     if (palette.patternId) onChange(palette.patternId, params);
   }
 
   function handlePatternClick(palette: Palette) {
-    emit(palette, { ...currentParams });
+    emit(palette, paramsFor(palette));
   }
 
   function handleAngleSelect(option: (typeof ANGLE_OPTIONS)[number]) {
     const target = patternPalettes.find(
       (p) => p.patternId === option.patternId
     );
-    if (target) emit(target, { ...currentParams, angle: option.angle });
+    if (target) emit(target, { angle: option.angle, size, scale });
   }
 
   function handleSizeChange(value: number) {
-    emit(selectedPalette, { ...currentParams, size: value });
+    emit(selectedPalette, { ...paramsFor(selectedPalette), size: value });
   }
 
   function handleScaleChange(value: number) {
-    emit(selectedPalette, { ...currentParams, scale: value });
+    emit(selectedPalette, { ...paramsFor(selectedPalette), scale: value });
   }
 </script>
 
@@ -105,7 +115,10 @@
       >
         <div
           class="pattern-preview"
-          style="background: {buildPatternBackground(palette)}"
+          style="background: {buildPatternBackground(
+            palette,
+            listPreviewParams
+          )}"
         ></div>
         <span class="pattern-name">{getPaletteDisplayName(palette)}</span>
       </button>
@@ -147,14 +160,6 @@
       value={scale}
       onchange={handleScaleChange}
     />
-
-    <div class="live-preview">
-      <span class="param-label">{m.pattern_preview()}</span>
-      <div
-        class="live-preview-swatch"
-        style="background: {livePreviewBg}"
-      ></div>
-    </div>
   </div>
 </div>
 
@@ -199,10 +204,6 @@
     height: 18px;
     border: 1px solid var(--khartis-palette-swatch-border-color);
     flex-shrink: 0;
-    background-size:
-      auto,
-      8px 8px,
-      auto;
   }
 
   .pattern-name {
@@ -258,21 +259,5 @@
       color: #ffffff;
       border-color: #0072c3;
     }
-  }
-
-  .live-preview {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .live-preview-swatch {
-    flex: 1;
-    height: 18px;
-    border: 1px solid var(--khartis-palette-swatch-border-color);
-    background-size:
-      auto,
-      8px 8px,
-      auto;
   }
 </style>

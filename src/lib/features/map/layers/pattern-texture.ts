@@ -103,26 +103,12 @@ const PATTERN_CONFIGS: Record<PatternName, PatternOptions> = {
   }
 };
 
-let cachedResult: AtlasResult | null = null;
 const customAtlasCache = new Map<string, AtlasResult>();
 
 export const CUSTOM_PATTERN_ATLAS_CACHE_LIMIT = 32;
 
-export function getPatternAtlas(): {
-  atlas: HTMLCanvasElement;
-  mapping: Record<
-    string,
-    { x: number; y: number; width: number; height: number }
-  >;
-} {
-  if (cachedResult) {
-    return { atlas: cachedResult.canvas, mapping: cachedResult.mapping };
-  }
-
-  cachedResult = motifAtlas(PATTERN_CONFIGS);
-
-  return { atlas: cachedResult.canvas, mapping: cachedResult.mapping };
-}
+export const PATTERN_DEFAULT_SIZE = 4;
+export const PATTERN_DEFAULT_SCALE = 8;
 
 function getCachedCustomPatternAtlas(cacheKey: string): AtlasResult | null {
   const cached = customAtlasCache.get(cacheKey);
@@ -157,27 +143,61 @@ function cacheCustomPatternAtlas(cacheKey: string, result: AtlasResult): void {
  * produces a negative shape area, i.e. a degenerate / invisible tile. Clamp to
  * an always-visible 1–99% range so every slider combination renders a motif.
  */
-export function resolveMotifFillPercent(size: number, scale: number): number {
+function resolveMotifFillPercent(size: number, scale: number): number {
   const safeSize = Math.max(1, size);
   const safeScale = Math.max(1, scale);
   return Math.min(99, Math.max(1, Math.round((safeSize / safeScale) * 100)));
 }
 
-function createParameterizedPatternOptions(
+/**
+ * motif.js builds tiles of 10 design px × its `scale` option; Khartis maps the
+ * user's Échelle slider to `scale / 10`, so the design tile edge equals the
+ * slider value. The atlas canvas itself is devicePixelRatio-scaled — never
+ * feed atlas frame widths to the shader, which expects CSS pixels.
+ */
+export function resolvePatternTilePx(params?: PatternParams): number {
+  return Math.max(1, params?.scale ?? PATTERN_DEFAULT_SCALE);
+}
+
+export function resolveMotifOptions(
   patternId: PatternName,
-  params: PatternParams
+  params?: PatternParams
 ): PatternOptions {
   const config = PATTERN_CONFIGS[patternId];
-  const scale = Math.max(1, params.scale ?? 8);
-  const size = Math.max(1, params.size ?? 4);
+  const scale = Math.max(1, params?.scale ?? PATTERN_DEFAULT_SCALE);
+  const size = Math.max(1, params?.size ?? PATTERN_DEFAULT_SIZE);
 
   return {
     ...config,
-    angle: params.angle ?? config.angle,
+    angle: params?.angle ?? config.angle,
     size: resolveMotifFillPercent(size, scale),
     scale: scale / 10,
     background: 'transparent'
   };
+}
+
+export function stripSvgDefsWrapper(defsHtml: string): string {
+  return defsHtml.replace(/^\s*<defs[^>]*>/i, '').replace(/<\/defs>\s*$/i, '');
+}
+
+export function getPatternOverlayColorHex(
+  fillColor: string | undefined
+): string {
+  if (!fillColor?.startsWith('#') || fillColor.length !== 7) {
+    return '#000000';
+  }
+
+  const r = parseInt(fillColor.slice(1, 3), 16);
+  const g = parseInt(fillColor.slice(3, 5), 16);
+  const b = parseInt(fillColor.slice(5, 7), 16);
+  return getPatternOverlayColorRgb([r, g, b]);
+}
+
+export function getPatternOverlayColorRgb(
+  rgb: readonly [number, number, number]
+): string {
+  const luminance = (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255;
+  return luminance < 0.45 ? '#ffffff' : '#000000';
 }
 
 export function getPatternAtlasForPattern(
@@ -190,15 +210,11 @@ export function getPatternAtlasForPattern(
     { x: number; y: number; width: number; height: number }
   >;
 } {
-  if (!params) {
-    return getPatternAtlas();
-  }
-
   const cacheKey = JSON.stringify({
     patternId,
-    angle: params.angle,
-    size: params.size,
-    scale: params.scale
+    angle: params?.angle,
+    size: params?.size,
+    scale: params?.scale
   });
   const cachedCustomResult = getCachedCustomPatternAtlas(cacheKey);
   if (cachedCustomResult) {
@@ -209,7 +225,7 @@ export function getPatternAtlasForPattern(
   }
 
   const result = motifAtlas({
-    [patternId]: createParameterizedPatternOptions(patternId, params)
+    [patternId]: resolveMotifOptions(patternId, params)
   });
   cacheCustomPatternAtlas(cacheKey, result);
 

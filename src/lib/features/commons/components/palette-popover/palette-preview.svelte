@@ -365,6 +365,8 @@
   bind:colorBlindFilter={colorBlindFilter}
   numClasses={resolvedClassCount}
   divergingSplit={divergingSplit}
+  currentPatternId={classification?.patternId}
+  currentPatternParams={classification?.patternParams}
   onclose={handlePopoverClose}
   onvalidate={handlePopoverValidate}
 />
