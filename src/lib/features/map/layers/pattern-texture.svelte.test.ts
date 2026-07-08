@@ -48,9 +48,30 @@ describe('pattern texture atlas cache', () => {
   it('reuses the palette atlas for identical class patterns and keys tiles c0..cN', async () => {
     const { getPatternPaletteAtlas } = await importPatternTexture();
     const patterns = [
-      { type: 'line', angle: 45, scale: 3, size: 4, fill: '#000000' },
-      { type: 'line', angle: 45, scale: 3, size: 9, fill: '#000000' },
-      { type: 'line', angle: 45, scale: 3, size: 14, fill: '#000000' }
+      {
+        type: 'line',
+        angle: 45,
+        scale: 3,
+        size: 4,
+        fill: '#000000',
+        patchSize: false
+      },
+      {
+        type: 'line',
+        angle: 45,
+        scale: 3,
+        size: 9,
+        fill: '#000000',
+        patchSize: false
+      },
+      {
+        type: 'line',
+        angle: 45,
+        scale: 3,
+        size: 14,
+        fill: '#000000',
+        patchSize: false
+      }
     ];
 
     const first = getPatternPaletteAtlas(patterns);
@@ -66,7 +87,7 @@ describe('pattern texture atlas cache', () => {
         size: 4,
         fill: '#000000',
         background: 'transparent',
-        patchSize: true
+        patchSize: false
       }),
       c1: expect.objectContaining({ size: 9 }),
       c2: expect.objectContaining({ size: 14 })

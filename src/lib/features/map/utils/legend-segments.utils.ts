@@ -123,7 +123,7 @@ function getClassPatternLegendFill(pattern: ClassPattern): LegendPatternFill {
     size: pattern.size,
     fill: pattern.fill,
     background: 'transparent',
-    patchSize: true
+    patchSize: pattern.patchSize
   });
   const fill: LegendPatternFill = {
     defs: stripSvgDefsWrapper(result.defs.outerHTML),

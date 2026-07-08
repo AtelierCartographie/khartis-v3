@@ -12,11 +12,7 @@
     CategoryDraft
   } from './categories-aspect-popover.types';
   import { DEFAULT_COMMON_ASPECT } from './categories-aspect-popover.types';
-  import type {
-    Palette,
-    PaletteType,
-    PatternParams
-  } from './palette.constants';
+  import type { Palette, PaletteType } from './palette.constants';
   import { PALETTE_TYPE, normalizePaletteId } from './palette.constants';
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
@@ -221,6 +217,7 @@
       shape: 'line',
       color: commonAspect.patternColor ?? '#000000',
       colorize: commonAspect.patternColorize ?? false,
+      scale: commonAspect.patternScale ?? 1,
       categoryShapes: hasCategoryShape ? categoryShapes : undefined
     };
   }
@@ -312,7 +309,6 @@
     palette: Palette | undefined,
     newColors: string[],
     nextInverted: boolean,
-    patternParams?: PatternParams,
     patternPaletteConfig?: PatternPaletteConfig
   ) {
     if (palette) {

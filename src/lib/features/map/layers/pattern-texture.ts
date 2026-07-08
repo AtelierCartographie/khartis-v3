@@ -264,7 +264,7 @@ export function getPatternPaletteAtlas(patterns: ClassPattern[]): {
           size: pattern.size,
           fill: '#000000',
           background: 'transparent',
-          patchSize: true
+          patchSize: pattern.patchSize
         }
       ])
     )

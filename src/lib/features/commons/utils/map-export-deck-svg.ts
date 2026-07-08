@@ -332,7 +332,8 @@ function generateSvgMotifDefinition(
     scale: motifOptions.scale,
     size: motifOptions.size,
     fill: fillColor,
-    background: 'transparent'
+    background: 'transparent',
+    patchSize: motifOptions.patchSize
   });
 
   return {

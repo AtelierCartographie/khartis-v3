@@ -198,6 +198,64 @@ export function createSplitUniqueGeoJsonColorAccessor(
   );
 }
 
+export function createUniqueClassPatternIndexAccessor(
+  ctx: LayerContext
+): (row: Record<string, unknown>) => number | null {
+  if (!hasSplitRenderingContext(ctx)) {
+    return () => 0;
+  }
+
+  return (row) => (Object.keys(row).length > 0 ? 0 : null);
+}
+
+export function createGeoJsonUniqueClassPatternIndexAccessor(
+  ctx: LayerContext,
+  geometryTable: ArrowTable
+): (feature: { properties?: Record<string, unknown> | null }) => number | null {
+  const splitAccessor = createSplitGeoJsonNullableFeatureAccessor(
+    ctx,
+    geometryTable,
+    (row) => (row ? 0 : null)
+  );
+
+  return (feature) =>
+    splitAccessor
+      ? splitAccessor(feature as { properties?: Record<string, unknown> })
+      : 0;
+}
+
+export function createUniquePatternBaseFillAccessor(
+  ctx: LayerContext
+): (row: Record<string, unknown>) => [number, number, number, number] {
+  if (!hasSplitRenderingContext(ctx)) {
+    return () => [255, 255, 255, 255];
+  }
+
+  return (row) =>
+    Object.keys(row).length > 0
+      ? [255, 255, 255, 255]
+      : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR;
+}
+
+export function createGeoJsonUniquePatternBaseFillAccessor(
+  ctx: LayerContext,
+  geometryTable: ArrowTable
+): (feature: {
+  properties?: Record<string, unknown> | null;
+}) => [number, number, number, number] {
+  const splitAccessor = createSplitGeoJsonNullableFeatureAccessor(
+    ctx,
+    geometryTable,
+    (row): [number, number, number, number] =>
+      row ? [255, 255, 255, 255] : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR
+  );
+
+  return (feature) =>
+    splitAccessor
+      ? splitAccessor(feature as { properties?: Record<string, unknown> })
+      : [255, 255, 255, 255];
+}
+
 export function createClassPatternColorAccessor(
   classIndexAccessor: (row: Record<string, unknown>) => number | null,
   targetIndex: number,

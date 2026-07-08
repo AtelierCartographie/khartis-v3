@@ -597,7 +597,8 @@ export function buildClassPatternSvgBackground(
     scale: pattern.scale,
     size: pattern.size,
     fill: pattern.fill,
-    background: 'transparent'
+    background: 'transparent',
+    patchSize: pattern.patchSize
   });
   const fillOpacity = opacity < 1 ? ` opacity="${opacity}"` : '';
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${PATTERN_BACKGROUND_SVG_WIDTH}" height="${PATTERN_BACKGROUND_SVG_HEIGHT}">${rendered.defs.outerHTML}<rect width="100%" height="100%" fill="${background}"/><rect width="100%" height="100%" fill="${rendered.url}"${fillOpacity}/></svg>`;
@@ -605,13 +606,21 @@ export function buildClassPatternSvgBackground(
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
-export function buildShapeSwatchBackground(shape: PatternShape): string {
+export function buildShapeSwatchBackground(
+  shape: PatternShape,
+  color = '#161616'
+): string {
+  if (shape === 'line') {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><line x1="4" y1="16" x2="16" y2="4" stroke="${color}" stroke-width="3" stroke-linecap="round"/></svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  }
+
   const rendered = motif({
     type: shape,
-    angle: shape === 'line' ? 45 : 0,
+    angle: 0,
     scale: 2,
     size: 30,
-    fill: '#161616',
+    fill: color,
     background: 'transparent'
   });
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">${rendered.defs.outerHTML}<rect width="100%" height="100%" fill="${rendered.url}"/></svg>`;
