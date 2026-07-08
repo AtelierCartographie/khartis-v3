@@ -248,18 +248,44 @@ export function resolveMissingDataPatternId(
   );
 }
 
+export function resolveMissingDataClassPattern(
+  missingData:
+    | NonNullable<ReturnType<typeof getPolygonPrimitive>>['missingData']
+    | undefined
+): ClassPattern | null {
+  if (!missingData?.pattern) {
+    return null;
+  }
+
+  const config =
+    missingData.patternConfig ??
+    patternPaletteFromLegacy(
+      resolveMissingDataPatternId(missingData),
+      missingData.patternParams
+    );
+  if (!config) {
+    return null;
+  }
+
+  return (
+    resolveClassPatterns(1, config, 'sequential', config.contrast)[0] ?? null
+  );
+}
+
 export function buildMissingDataPatternProps(
   polygonConfig: ReturnType<typeof getPolygonPrimitive> | undefined,
   showMissingPolygons: boolean
 ): PolygonPatternProps | null {
-  if (!showMissingPolygons || !polygonConfig?.missingData?.pattern) {
+  if (!showMissingPolygons) {
     return null;
   }
 
-  return createPatternProps(
-    resolveMissingDataPatternId(polygonConfig.missingData),
-    polygonConfig.missingData.patternParams
-  );
+  const pattern = resolveMissingDataClassPattern(polygonConfig?.missingData);
+  if (!pattern) {
+    return null;
+  }
+
+  return createClassPatternProps([pattern], 0);
 }
 
 export function createPolygonPatternOverlayLayer(

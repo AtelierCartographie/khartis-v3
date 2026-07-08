@@ -92,6 +92,7 @@ import {
   createClassPatternProps,
   createPolygonPatternOverlayLayer,
   resolveClassPatternPalette,
+  resolveMissingDataClassPattern,
   resolveMissingDataPatternId
 } from './polygon-pattern-layer.utils';
 import {
@@ -224,6 +225,12 @@ export function createPolygonLayerStack(
     polygonConfig,
     showMissingPolygons
   );
+  const missingDataResolvedPattern = resolveMissingDataClassPattern(
+    polygonConfig?.missingData
+  );
+  const missingDataPatternFillRgb = missingDataResolvedPattern
+    ? hexToRgb(missingDataResolvedPattern.fill)
+    : polygonMissingColor;
   const densityRequested =
     polygonFillMode === FillMode.DENSITY && Boolean(viz?.density);
   const densityTable = ctx.densityTable;
@@ -651,9 +658,10 @@ export function createPolygonLayerStack(
             polygonValueColumn,
             polygonCategoryColumn,
             effectiveCategoryColorMap,
-            polygonMissingColor
+            missingDataPatternFillRgb
           ),
-          'missing-data-pattern'
+          'missing-data-pattern',
+          1
         );
       }
 
@@ -1093,7 +1101,8 @@ export function createPolygonLayerStack(
           missingDataPatternProps,
           ctx,
           'missing-data-pattern',
-          createGeoJsonPatternOverlayColorAccessor(polygonMissingColor)
+          createGeoJsonPatternOverlayColorAccessor(missingDataPatternFillRgb),
+          1
         )
       : null;
 

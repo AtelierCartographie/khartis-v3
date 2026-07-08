@@ -8,7 +8,7 @@ import {
 } from '../layers/pattern-texture';
 import {
   resolveClassPatternPalette,
-  resolveMissingDataPatternId
+  resolveMissingDataClassPattern
 } from '../layers/polygon-pattern-layer.utils';
 import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';
 import type { ClassPattern } from '$lib/features/commons/services/pattern-palette.service';
@@ -989,11 +989,9 @@ function getCategoricalLegendDraft(
     );
     if (classPatternPalette) {
       const patternFills = getClassPatternLegendFills(classPatternPalette);
-      const items: KhartisLegendSwatchItem[] = entries.map((entry) => ({
+      const categories: CategoryItem[] = entries.map((entry) => ({
         label: entry.label,
         fill: '#ffffff',
-        stroke: 'rgba(0, 0, 0, 0.15)',
-        strokeWidth: 1,
         patternFill: patternFills[entry.originalIndex] ?? null,
         patternOpacity: 1
       }));
@@ -1004,13 +1002,13 @@ function getCategoricalLegendDraft(
         consumesMissingData: isLegendMissingDataShown(viz, primitive),
         create: (options, context) =>
           toLegendSvg(
-            draw_khartis_swatch_legend(items, {
+            draw_categorical_legend(categories, {
               ...options,
               type: 'pattern',
-              ...getMissingDataFooterOptions(
+              ...getCategoricalMissingDataFooterOptions(
                 viz,
-                context.includeMissingDataFooter,
-                primitive
+                primitive,
+                context.includeMissingDataFooter
               )
             })
           )
@@ -1546,18 +1544,17 @@ function getMissingDataLegendItem(
     };
   }
 
+  const missingDataPattern = resolveMissingDataClassPattern(missingData);
+
   return {
     label: m.missing_data_text(),
     fill: color,
     stroke: 'rgba(0, 0, 0, 0.15)',
     strokeWidth: 1,
-    patternFill: missingData?.pattern
-      ? getLegendPatternFill(
-          resolveMissingDataPatternId(missingData),
-          getPatternOverlayColorHex(color),
-          missingData?.patternParams
-        )
-      : null
+    patternFill: missingDataPattern
+      ? getClassPatternLegendFill(missingDataPattern)
+      : null,
+    patternOpacity: 1
   };
 }
 

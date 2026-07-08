@@ -45,7 +45,7 @@
   const DEFAULT_PATTERN_PALETTE_CONFIG: PatternPaletteConfig = {
     shape: 'line',
     angle: 45,
-    scale: 1,
+    scale: 0.7,
     color: '#000000'
   };
 
