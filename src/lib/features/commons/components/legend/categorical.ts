@@ -408,7 +408,14 @@ function create_shape(
     case 'symbol': {
       const [cx, cy] = [x + width / 2, y + height / 2];
       const scale = size && size > 0 ? ` scale(${size / height})` : '';
-      return `<path d="${escapeSvgAttribute(symbol ?? '')}" transform="translate(${cx},${cy})${scale}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" />`;
+      const transform = `translate(${cx},${cy})${scale}`;
+      const path = escapeSvgAttribute(symbol ?? '');
+
+      if (!patternFill) {
+        return `<path d="${path}" transform="${transform}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" />`;
+      }
+
+      return `<defs>${patternFill.defs}</defs><path d="${path}" transform="${transform}" fill="#ffffff" stroke="none" /><path d="${path}" transform="${transform}" fill="${escapeSvgAttribute(patternFill.fillUrl)}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" opacity="${patternOpacity ?? 1}" />`;
     }
     case 'pattern': {
       const baseRect = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" />`;

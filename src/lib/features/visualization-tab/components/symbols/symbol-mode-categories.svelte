@@ -51,6 +51,7 @@
     parseOpacityToSlider
   } from '../../utils/coerce.utils';
   import { resetCategoryVisualClassification } from '../shared/classification-reset.utils';
+  import { resolveClassificationPatternConfig } from '$lib/features/commons/services/pattern-palette.service';
   import {
     buildSymbolShapeDropdownItems,
     getSymbolShapeTypes
@@ -236,12 +237,12 @@
       1,
       visualization?.symbol?.strokeWidth ?? DEFAULT_COMMON_ASPECT.strokeSize
     ),
-    pattern: Boolean(symbolClassification?.patternId),
-    patternId:
-      symbolClassification?.patternId ?? DEFAULT_COMMON_ASPECT.patternId,
-    patternParams:
-      symbolClassification?.patternParams ??
-      DEFAULT_COMMON_ASPECT.patternParams,
+    pattern: Boolean(
+      symbolClassification?.pattern ?? symbolClassification?.patternId
+    ),
+    patternConfig:
+      resolveClassificationPatternConfig(symbolClassification) ??
+      DEFAULT_COMMON_ASPECT.patternConfig,
     shape: visualization?.symbol?.shape ?? DEFAULT_COMMON_ASPECT.shape,
     color: currentPalette[0] ?? DEFAULT_COMMON_ASPECT.color
   });

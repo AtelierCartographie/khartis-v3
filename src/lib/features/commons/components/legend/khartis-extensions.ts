@@ -220,7 +220,8 @@ export function draw_khartis_double_symbols_legend(
       );
 
       return {
-        markup: `<g class="double-symbol-pair" data-position-mode="${escapeSvgAttribute(mode)}">${first}${second}</g>`,
+        markup: `<g class="double-symbol-pair" data-position-mode="${escapeSvgAttribute(mode)}">${first.markup}${second.markup}</g>`,
+        defs: [first.defs, second.defs].filter(Boolean).join(''),
         labelY: cy
       };
     }
@@ -420,9 +421,7 @@ function draw_swatch_shape(
   }
 
   if (type === 'symbol') {
-    return {
-      markup: draw_symbol(item, x + size / 2, rowTop + rowHeight / 2, size)
-    };
+    return draw_symbol(item, x + size / 2, rowTop + rowHeight / 2, size);
   }
 
   if (type === 'pattern') {
@@ -449,9 +448,24 @@ function draw_symbol(
   cx: number,
   cy: number,
   size: number
-): string {
+): { markup: string; defs?: string } {
   const scale = Math.max(0.1, (item.size ?? size) / 16);
-  return `<path d="${escapeSvgAttribute(item.symbol ?? '')}" transform="translate(${cx},${cy}) scale(${scale})" fill="${escapeSvgAttribute(item.fill ?? 'none')}" stroke="${escapeSvgAttribute(item.stroke ?? 'rgba(0, 0, 0, 0.25)')}" stroke-width="${item.strokeWidth ?? 0.75}" opacity="${normalizeOpacity(item.opacity)}" />`;
+  const transform = `translate(${cx},${cy}) scale(${scale})`;
+  const path = escapeSvgAttribute(item.symbol ?? '');
+  const stroke = escapeSvgAttribute(item.stroke ?? 'rgba(0, 0, 0, 0.25)');
+  const strokeWidth = item.strokeWidth ?? 0.75;
+  const opacity = normalizeOpacity(item.opacity);
+
+  if (!item.patternFill) {
+    return {
+      markup: `<path d="${path}" transform="${transform}" fill="${escapeSvgAttribute(item.fill ?? 'none')}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" />`
+    };
+  }
+
+  return {
+    defs: item.patternFill.defs,
+    markup: `<path d="${path}" transform="${transform}" fill="#ffffff" stroke="none" opacity="${opacity}" /><path d="${path}" transform="${transform}" fill="${escapeSvgAttribute(item.patternFill.fillUrl)}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" />`
+  };
 }
 
 function draw_pattern_box(

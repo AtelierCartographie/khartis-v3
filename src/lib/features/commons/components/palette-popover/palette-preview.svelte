@@ -204,33 +204,27 @@
     next: CategoryDraft[],
     commonAspect: CategoriesCommonAspect
   ): PatternPaletteConfig | undefined {
-    if (categoriesVariant !== 'polygons' || !commonAspect.pattern) {
+    if (!commonAspect.pattern || !commonAspect.patternConfig) {
       return undefined;
     }
 
-    const categoryShapes = next.map((category) => category.patternShape);
-    const hasCategoryShape = categoryShapes.some(
-      (shape) => shape !== undefined
-    );
+    if (categoriesVariant === 'polygons') {
+      const categoryShapes = next.map((category) => category.patternShape);
+      const hasCategoryShape = categoryShapes.some(
+        (shape) => shape !== undefined
+      );
 
-    return {
-      shape: 'line',
-      color: commonAspect.patternColor ?? '#000000',
-      colorize: commonAspect.patternColorize ?? false,
-      scale: commonAspect.patternScale ?? 1,
-      categoryShapes: hasCategoryShape ? categoryShapes : undefined
-    };
-  }
-
-  // Symbol motifs stay on the legacy shader model (patternId → SYMBOL_PATTERN_TYPE).
-  function resolveValidatedSymbolPatternId(
-    commonAspect: CategoriesCommonAspect
-  ): string | undefined {
-    if (!categoriesVariant.startsWith('symbols') || !commonAspect.pattern) {
-      return undefined;
+      return {
+        ...commonAspect.patternConfig,
+        categoryShapes: hasCategoryShape ? categoryShapes : undefined
+      };
     }
 
-    return commonAspect.patternId ?? 'diagonal';
+    if (categoriesVariant.startsWith('symbols')) {
+      return commonAspect.patternConfig;
+    }
+
+    return undefined;
   }
 
   function handleCategoriesValidate(
@@ -262,7 +256,6 @@
       normalizedCategories,
       commonAspect
     );
-    const symbolPatternId = resolveValidatedSymbolPatternId(commonAspect);
 
     onClassificationChange?.({
       colors: resolvedColors,
@@ -293,8 +286,8 @@
         : undefined,
       paletteId,
       inverted: false,
-      patternId: symbolPatternId,
-      patternParams: symbolPatternId ? commonAspect.patternParams : undefined,
+      patternId: undefined,
+      patternParams: undefined,
       pattern
     });
     onCategoriesCommonAspectChange?.(commonAspect, normalizedCategories);

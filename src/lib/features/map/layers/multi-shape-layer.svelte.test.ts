@@ -54,7 +54,13 @@ describe('MultiShapeLayer — class contract', () => {
       type: 'boolean',
       value: false
     });
-    expect(props.patternType).toMatchObject({ type: 'number', value: 1 });
+    expect(props.patternAtlas).toMatchObject({ type: 'image', value: null });
+    expect(props.patternScale).toMatchObject({ type: 'number', value: 1 });
+    expect(props.patternAngle).toMatchObject({ type: 'number', value: 0 });
+    expect(props.patternColorize).toMatchObject({
+      type: 'boolean',
+      value: false
+    });
   });
 });
 

@@ -100,6 +100,39 @@ const LEGACY_SHAPE_BY_PATTERN_ID: Record<
   plus: { shape: 'plus' }
 };
 
+export function resolveClassificationPatternConfig(
+  classification?: {
+    pattern?: PatternPaletteConfig;
+    patternId?: string;
+    patternParams?: LegacyPatternParams;
+  } | null
+): PatternPaletteConfig | undefined {
+  return (
+    classification?.pattern ??
+    (classification?.patternId
+      ? patternPaletteFromLegacy(
+          classification.patternId,
+          classification.patternParams
+        )
+      : undefined)
+  );
+}
+
+export function resolveSingleClassPattern(
+  config: PatternPaletteConfig | undefined
+): ClassPattern | null {
+  if (!config) {
+    return null;
+  }
+  const [pattern] = resolveClassPatterns(
+    1,
+    config,
+    'sequential',
+    config.contrast
+  );
+  return pattern ?? null;
+}
+
 export function patternPaletteFromLegacy(
   patternId: string,
   params?: LegacyPatternParams

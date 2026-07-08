@@ -1561,6 +1561,11 @@ function serializePointLayer(
   const layerId = getLayerId(layer, 0);
   const dedupeId = createSvgIdDeduper();
   const parts: string[] = [];
+  const khartisMotifOptions = props.khartisMotifOptions as
+    KhartisMotifOptions | undefined;
+  const khartisPatternColorize = props.khartisPatternColorize === true;
+  const khartisPatternColor = props.khartisPatternColor as
+    [number, number, number] | undefined;
 
   for (let index = 0; index < length; index++) {
     const position = readBinaryTuple(positionAttribute, index);
@@ -1626,13 +1631,26 @@ function serializePointLayer(
       ? `id="${escapeXml(dedupeId(sanitizeLocalizedSvgId(featureName)))}" data-name="${escapeXml(featureName)}"`
       : '';
 
+    const patternFillColor: SvgColor =
+      !khartisPatternColorize && khartisPatternColor
+        ? {
+            red: khartisPatternColor[0],
+            green: khartisPatternColor[1],
+            blue: khartisPatternColor[2],
+            opacity: fillColor.opacity
+          }
+        : fillColor;
+    const pattern = khartisMotifOptions
+      ? resolveSvgPatternReference(props, null, index, patternFillColor)
+      : null;
+
     parts.push(
       serializePointShape(
         shape,
         projected[0],
         projected[1],
         radius,
-        colorAttributes('fill', fillColor),
+        fillAttributes(fillColor, pattern),
         colorAttributes('stroke', strokeColor),
         strokeWidth,
         barWidth,
