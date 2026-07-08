@@ -20,12 +20,19 @@
     SliderWithInput,
     ToggleWithLabel
   } from '$lib/features/commons/components/viz-controls';
-  import PatternPicker from '$lib/features/commons/components/palette-popover/pattern-picker.svelte';
-  import type { PatternParams } from '$lib/features/commons/components/palette-popover/palette.constants';
+  import PatternPalettePicker from '$lib/features/commons/components/palette-popover/pattern-palette-picker.svelte';
+  import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import {
     buildDashedPatternItems,
     coerceDashedPattern
   } from './dashed-pattern.utils';
+
+  const DEFAULT_PATTERN_CONFIG: PatternPaletteConfig = {
+    shape: 'line',
+    angle: 45,
+    scale: 0.7,
+    color: '#000000'
+  };
 
   interface Props {
     show: boolean;
@@ -43,8 +50,7 @@
     dashed?: boolean;
     dashedPattern?: BasemapDottedPattern;
     pattern?: boolean;
-    patternId?: string;
-    patternParams?: PatternParams;
+    patternConfig?: PatternPaletteConfig;
     onshowchange?: (show: boolean) => void;
     oncolorchange?: (color: string) => void;
     onshapechange?: (shape: MissingDataShape) => void;
@@ -52,7 +58,7 @@
     ondashedchange?: (dashed: boolean) => void;
     ondashedpatternchange?: (pattern: BasemapDottedPattern) => void;
     onpatternchange?: (pattern: boolean) => void;
-    onpatternstylechange?: (patternId: string, params: PatternParams) => void;
+    onpatternstylechange?: (config: PatternPaletteConfig) => void;
   }
 
   let {
@@ -71,8 +77,7 @@
     dashed = false,
     dashedPattern = BasemapDottedPattern.DOTS,
     pattern = false,
-    patternId = 'diagonal',
-    patternParams = { size: 4, scale: 8 },
+    patternConfig = DEFAULT_PATTERN_CONFIG,
     onshowchange,
     oncolorchange,
     onshapechange,
@@ -112,8 +117,8 @@
     onpatternchange?.(value);
   }
 
-  function handlePatternStyleChange(id: string, params: PatternParams) {
-    onpatternstylechange?.(id, params);
+  function handlePatternStyleChange(config: PatternPaletteConfig) {
+    onpatternstylechange?.(config);
   }
 </script>
 
@@ -194,10 +199,9 @@
         {#if pattern}
           <Row>
             <Column>
-              <PatternPicker
-                patternId={patternId}
-                patternParams={patternParams}
-                onChange={handlePatternStyleChange}
+              <PatternPalettePicker
+                config={patternConfig}
+                onchange={handlePatternStyleChange}
               />
             </Column>
           </Row>

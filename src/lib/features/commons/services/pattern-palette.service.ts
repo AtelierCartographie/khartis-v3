@@ -24,7 +24,7 @@ export interface ClassPattern {
 const CATEGORICAL_SCALE_RANGE: [number, number] = [1, 2.5];
 const DEFAULT_PATTERN_COLOR = '#000000';
 const DEFAULT_SEQUENTIAL_ANGLE = 45;
-const DEFAULT_SEQUENTIAL_SCALE = 1;
+const DEFAULT_SEQUENTIAL_SCALE = 0.7;
 
 function toHexFill(fill: string): string {
   return fill.startsWith('#')

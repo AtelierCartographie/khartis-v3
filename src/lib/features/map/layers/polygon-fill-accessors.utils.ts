@@ -5,11 +5,7 @@ import { FillMode } from '$lib/features/commons/constants/visualization.constant
 
 import type { LayerContext, RGBColor } from '../types';
 import { isMissingThematicValue } from './layer-highlight.utils';
-import { getPatternOverlayColorRgb } from './pattern-texture';
-import {
-  POLYGON_PATTERN_FILL_COLOR,
-  TRANSPARENT_POLYGON_PATTERN_FILL_COLOR
-} from './polygon-pattern-layer.utils';
+import { TRANSPARENT_POLYGON_PATTERN_FILL_COLOR } from './polygon-pattern-layer.utils';
 import {
   createSplitAwareNullableRowAccessor,
   createSplitAwareRowAccessor,
@@ -102,17 +98,6 @@ function readTableRow(
   return row && typeof row === 'object' ? row : {};
 }
 
-export function overlayColorForFill(
-  fill: readonly [number, number, number, number]
-): [number, number, number, number] {
-  if ((fill[3] ?? 0) <= 0) {
-    return TRANSPARENT_POLYGON_PATTERN_FILL_COLOR;
-  }
-  return getPatternOverlayColorRgb([fill[0], fill[1], fill[2]]) === '#ffffff'
-    ? [255, 255, 255, 255]
-    : POLYGON_PATTERN_FILL_COLOR;
-}
-
 export function createMissingPolygonPatternColorAccessor(
   ctx: LayerContext,
   geometryTable: ArrowTable,
@@ -120,14 +105,14 @@ export function createMissingPolygonPatternColorAccessor(
   valueColumn: string | undefined,
   categoryColumn: string | undefined,
   categoryColorMap: Map<string, RGBColor> | null,
-  missingFillColor: RGBColor
+  patternFillRgb: RGBColor
 ): (featureId: number) => [number, number, number, number] {
-  const overlay = overlayColorForFill([
-    missingFillColor[0],
-    missingFillColor[1],
-    missingFillColor[2],
+  const overlay: [number, number, number, number] = [
+    patternFillRgb[0],
+    patternFillRgb[1],
+    patternFillRgb[2],
     255
-  ]);
+  ];
   const rowToColor = (row: Record<string, unknown>) =>
     isMissingPolygonFillDatum(
       row,
@@ -170,16 +155,16 @@ export function createSplitUniqueBinaryColorAccessor(
 }
 
 export function createGeoJsonPatternOverlayColorAccessor(
-  fillColor: RGBColor
+  patternFillRgb: RGBColor
 ): (feature: {
   properties?: Record<string, unknown>;
 }) => [number, number, number, number] {
-  const overlay = overlayColorForFill([
-    fillColor[0],
-    fillColor[1],
-    fillColor[2],
+  const overlay: [number, number, number, number] = [
+    patternFillRgb[0],
+    patternFillRgb[1],
+    patternFillRgb[2],
     255
-  ]);
+  ];
 
   return () => overlay;
 }

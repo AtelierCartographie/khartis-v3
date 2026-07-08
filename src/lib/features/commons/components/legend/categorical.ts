@@ -28,7 +28,7 @@ export interface CategoryItem {
 }
 
 export interface CategoricalLegendOptions extends CommonLegendTextOptions {
-  type?: CategoricalShapeType;
+  type?: CategoricalFooterShapeType;
   footerItems?: CategoryItem[];
   footerType?: CategoricalFooterShapeType;
 }

@@ -18,7 +18,7 @@
   let { config, onchange }: Props = $props();
 
   const DEFAULT_ANGLE = 45;
-  const DEFAULT_SCALE = 1;
+  const DEFAULT_SCALE = 0.7;
   const DEFAULT_COLOR = '#000000';
 
   const ANGLE_OPTIONS = [0, 45, 90, 135] as const;

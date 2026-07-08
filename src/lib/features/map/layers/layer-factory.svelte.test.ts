@@ -2427,7 +2427,7 @@ describe('createPolygonLayers', () => {
       expect(sizes[i]!).toBeGreaterThan(sizes[i - 1]!);
     }
     propsPerClass.forEach((props) => {
-      expect(props.getFillPatternScale).toBe(10);
+      expect(props.getFillPatternScale).toBe(7);
       expect(props.opacity).toBe(1);
     });
   });

@@ -88,13 +88,15 @@ export interface MissingDataConfig {
   color: string;
   opacity?: number;
   pattern?: boolean;
+  patternConfig?: PatternPaletteConfig;
+  /**
+   * Legacy: older projects stored patternId/patternParams, or an even
+   * coarser PatternType. New code writes patternConfig; these are read as
+   * fallbacks so older saved projects still render their missing-data
+   * pattern.
+   */
   patternId?: string;
   patternParams?: PatternParams;
-  /**
-   * Legacy: older projects stored a coarse PatternType. New code writes
-   * patternId + patternParams; this is read as a fallback so older saved
-   * projects still render their missing-data pattern.
-   */
   patternType?: PatternType;
   dashed?: boolean;
   dashedPattern?: BasemapDottedPattern;
