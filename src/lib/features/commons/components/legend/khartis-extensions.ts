@@ -456,15 +456,8 @@ function draw_symbol(
   const strokeWidth = item.strokeWidth ?? 0.75;
   const opacity = normalizeOpacity(item.opacity);
 
-  if (!item.patternFill) {
-    return {
-      markup: `<path d="${path}" transform="${transform}" fill="${escapeSvgAttribute(item.fill ?? 'none')}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" />`
-    };
-  }
-
   return {
-    defs: item.patternFill.defs,
-    markup: `<path d="${path}" transform="${transform}" fill="#ffffff" stroke="none" opacity="${opacity}" /><path d="${path}" transform="${transform}" fill="${escapeSvgAttribute(item.patternFill.fillUrl)}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" />`
+    markup: `<path d="${path}" transform="${transform}" fill="${escapeSvgAttribute(item.fill ?? 'none')}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" />`
   };
 }
 

@@ -39,7 +39,7 @@ describe('MultiShapeLayer — class contract', () => {
     expect(typeof MultiShapeLayer.defaultProps).toBe('object');
   });
 
-  it('declares getShape, barWidth, offsetX, offsetY, halfMask, shapeScale, dash and pattern defaults', () => {
+  it('declares getShape, barWidth, offsetX, offsetY, halfMask, shapeScale and dash defaults, with no pattern support', () => {
     const props = MultiShapeLayer.defaultProps as Record<string, unknown>;
     expect(props.getShape).toMatchObject({ type: 'accessor', value: 0 });
     expect(props.barWidth).toMatchObject({ type: 'number', value: 6 });
@@ -50,17 +50,11 @@ describe('MultiShapeLayer — class contract', () => {
     expect(props.dashed).toMatchObject({ type: 'boolean', value: false });
     expect(props.dashLength).toMatchObject({ type: 'number', value: 3 });
     expect(props.gapLength).toMatchObject({ type: 'number', value: 2 });
-    expect(props.patternEnabled).toMatchObject({
-      type: 'boolean',
-      value: false
-    });
-    expect(props.patternAtlas).toMatchObject({ type: 'image', value: null });
-    expect(props.patternScale).toMatchObject({ type: 'number', value: 1 });
-    expect(props.patternAngle).toMatchObject({ type: 'number', value: 0 });
-    expect(props.patternColorize).toMatchObject({
-      type: 'boolean',
-      value: false
-    });
+    expect(props.patternEnabled).toBeUndefined();
+    expect(props.patternAtlas).toBeUndefined();
+    expect(props.patternScale).toBeUndefined();
+    expect(props.patternAngle).toBeUndefined();
+    expect(props.patternColorize).toBeUndefined();
   });
 });
 

@@ -1429,7 +1429,7 @@ describe('createPolygonLayers', () => {
     expect(radii![0]).toBeCloseTo(20, 5);
   });
 
-  it('passes common category patterns to split representative point symbols', () => {
+  it('does not apply category patterns to split representative point symbols', () => {
     arrowTableToGeoJSONMock.mockReturnValue({
       type: 'FeatureCollection',
       features: [createPolygonFeature('keep', 2024)]
@@ -1500,8 +1500,12 @@ describe('createPolygonLayers', () => {
     ) as MultiShapeLayer | undefined;
 
     expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
-    expect(pointLayer?.props.patternEnabled).toBe(true);
-    expect(pointLayer?.props.patternAtlas).toBeDefined();
+    expect(
+      (pointLayer?.props as Record<string, unknown>).patternEnabled
+    ).toBeUndefined();
+    expect(
+      (pointLayer?.props as Record<string, unknown>).patternAtlas
+    ).toBeUndefined();
   });
 
   it('hides disabled split representative symbol categories across fill, stroke and radius attributes', () => {
@@ -2793,7 +2797,7 @@ describe('createPointLayers', () => {
     expect(Array.from(fillColorAttribute.value)).toEqual([0, 0, 0, 0]);
   });
 
-  it('uses MultiShapeLayer for categorical point patterns even with circle symbols', () => {
+  it('uses MultiShapeLayer for categorical circle symbols without applying any pattern', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 1,
       featureIds: new Uint32Array([0])
@@ -2830,12 +2834,13 @@ describe('createPointLayers', () => {
     const pointLayer = layers[0] as MultiShapeLayer;
 
     expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
-    expect(pointLayer.props.patternEnabled).toBe(true);
-    expect(pointLayer.props.patternAtlas).toBeDefined();
-    expect(String(pointLayer.props.id)).toContain('-pattern-');
+    expect(
+      (pointLayer.props as Record<string, unknown>).patternEnabled
+    ).toBeUndefined();
+    expect(String(pointLayer.props.id)).not.toContain('-pattern-');
   });
 
-  it('keeps categorical circle symbols on a stable MultiShapeLayer with the motif off so toggling the motif never switches layer class', () => {
+  it('keeps categorical circle symbols on a stable MultiShapeLayer regardless of classification pattern fields', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 1,
       featureIds: new Uint32Array([0])
@@ -2870,7 +2875,9 @@ describe('createPointLayers', () => {
 
     const pointLayer = layers[0] as MultiShapeLayer;
     expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
-    expect(pointLayer.props.patternEnabled).toBe(false);
+    expect(
+      (pointLayer.props as Record<string, unknown>).patternEnabled
+    ).toBeUndefined();
     expect(String(pointLayer.props.id)).not.toContain('-pattern-');
   });
 
@@ -3314,7 +3321,7 @@ describe('createPointLayers', () => {
     expect(layers[1].props.radiusScale).toBe(2);
   });
 
-  it('resolves the fill-classification pattern when the symbol fill mode is categories (REV-SYM-2)', () => {
+  it('never applies a fill-classification pattern to symbols even in categories fill mode (REV-SYM-2)', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 1,
       featureIds: new Uint32Array([0])
@@ -3352,7 +3359,9 @@ describe('createPointLayers', () => {
 
     const pointLayer = layers[0] as MultiShapeLayer;
     expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
-    expect(pointLayer.props.patternEnabled).toBe(true);
+    expect(
+      (pointLayer.props as Record<string, unknown>).patternEnabled
+    ).toBeUndefined();
   });
 
   it('renders every selectable missing-data representation shape on native points (REV-SYM-6)', () => {

@@ -220,10 +220,6 @@
       };
     }
 
-    if (categoriesVariant.startsWith('symbols')) {
-      return commonAspect.patternConfig;
-    }
-
     return undefined;
   }
 
@@ -383,6 +379,7 @@
   bind:colorBlindFilter={colorBlindFilter}
   numClasses={resolvedClassCount}
   divergingSplit={divergingSplit}
+  allowPattern={categoriesVariant === 'polygons'}
   currentPatternId={classification?.patternId}
   currentPatternParams={classification?.patternParams}
   currentPatternPaletteConfig={classification?.pattern}

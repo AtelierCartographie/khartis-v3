@@ -411,11 +411,7 @@ function create_shape(
       const transform = `translate(${cx},${cy})${scale}`;
       const path = escapeSvgAttribute(symbol ?? '');
 
-      if (!patternFill) {
-        return `<path d="${path}" transform="${transform}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" />`;
-      }
-
-      return `<defs>${patternFill.defs}</defs><path d="${path}" transform="${transform}" fill="#ffffff" stroke="none" /><path d="${path}" transform="${transform}" fill="${escapeSvgAttribute(patternFill.fillUrl)}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" opacity="${patternOpacity ?? 1}" />`;
+      return `<path d="${path}" transform="${transform}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" />`;
     }
     case 'pattern': {
       const baseRect = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${safeFill}" stroke="${safeStroke}" stroke-width="${safeStrokeWidth}" />`;

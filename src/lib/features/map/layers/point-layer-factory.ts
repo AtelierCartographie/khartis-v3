@@ -11,7 +11,6 @@ import {
   SymbolMode,
   StrokeMode
 } from '$lib/features/commons/constants/visualization.constants';
-import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   getEnabledPrimitiveFilters,
   getPolygonPrimitive,
@@ -26,11 +25,6 @@ import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import * as m from '$lib/paraglide/messages';
-import {
-  resolveClassificationPatternConfig,
-  resolveSingleClassPattern
-} from '$lib/features/commons/services/pattern-palette.service';
-import { getPatternPaletteAtlas } from './pattern-texture';
 
 import { ArrowExtension, DeckLayerId, GeometryType } from '../constants';
 import type {
@@ -206,12 +200,6 @@ function createDoubleProportionalPointLayers(
     viz.classification;
   const pointFillClassification =
     getSymbolFillClassification(viz) ?? viz.classification;
-  const symbolPattern =
-    pointConfig.mode === SymbolMode.CATEGORIES
-      ? resolveSymbolPattern(pointClassification)
-      : pointConfig.fillMode === FillMode.CATEGORIES
-        ? resolveSymbolPattern(pointFillClassification)
-        : null;
   const useFillChoropleth = Boolean(
     pointConfig.fillMode === FillMode.CLASSES &&
     pointFillValueColumn &&
@@ -564,7 +552,6 @@ function createDoubleProportionalPointLayers(
       dotLength: pointStrokeDashSpec.shader.dot,
       dotGap: pointStrokeDashSpec.shader.dotGap,
       barWidth: pointBarWidth,
-      ...symbolPatternLayerProps(symbolPattern),
       opacity: 1,
       radiusScale: layoutProps.radiusScale * pageDisplayScale,
       radiusUnits: 'pixels',
@@ -748,12 +735,6 @@ export function createRepresentativePointSymbolLayers(
     viz.classification;
   const pointFillClassification =
     getSymbolFillClassification(viz) ?? viz.classification;
-  const symbolPattern =
-    pointConfig.mode === SymbolMode.CATEGORIES
-      ? resolveSymbolPattern(pointClassification)
-      : pointConfig.fillMode === FillMode.CATEGORIES
-        ? resolveSymbolPattern(pointFillClassification)
-        : null;
   const pointColorCategoryColumn =
     pointConfig.mode === SymbolMode.CATEGORIES
       ? pointCategoryColumn
@@ -1110,7 +1091,6 @@ export function createRepresentativePointSymbolLayers(
       dotLength: pointStrokeDashSpec.shader.dot,
       dotGap: pointStrokeDashSpec.shader.dotGap,
       barWidth: pointBarWidth,
-      ...symbolPatternLayerProps(symbolPattern),
       opacity: 1,
       radiusScale: pageDisplayScale,
       radiusUnits: 'pixels',
@@ -1193,79 +1173,6 @@ export function createRepresentativePointSymbolLayers(
   ];
 }
 
-interface SymbolPatternRenderProps {
-  patternAtlas: HTMLCanvasElement;
-  patternFrame: [number, number, number, number];
-  patternScale: number;
-  patternAngle: number;
-  patternColor: [number, number, number];
-  patternColorize: boolean;
-  khartisMotifOptions: {
-    type: string;
-    angle: number;
-    scale: number;
-    size: number;
-    patchSize: boolean;
-  };
-  khartisPatternColor: [number, number, number];
-  khartisPatternColorize: boolean;
-}
-
-function resolveSymbolPattern(
-  classification: ClassificationConfig | undefined
-): SymbolPatternRenderProps | null {
-  const config = resolveClassificationPatternConfig(classification);
-  const pattern = resolveSingleClassPattern(config);
-  if (!config || !pattern) {
-    return null;
-  }
-  const { atlas, mapping } = getPatternPaletteAtlas([pattern]);
-  const frame = mapping['c0'];
-  if (!frame) {
-    return null;
-  }
-  const patternColor = hexToRgb(pattern.fill);
-  const colorize = config.colorize ?? false;
-
-  return {
-    patternAtlas: atlas,
-    patternFrame: [frame.x, frame.y, frame.width, frame.height],
-    patternScale: pattern.scale * 10,
-    patternAngle: pattern.angle,
-    patternColor,
-    patternColorize: colorize,
-    khartisMotifOptions: {
-      type: pattern.type,
-      angle: pattern.angle,
-      scale: pattern.scale,
-      size: pattern.size,
-      patchSize: pattern.patchSize
-    },
-    khartisPatternColor: patternColor,
-    khartisPatternColorize: colorize
-  };
-}
-
-function symbolPatternLayerProps(
-  pattern: SymbolPatternRenderProps | null
-): Record<string, unknown> {
-  if (!pattern) {
-    return { patternEnabled: false };
-  }
-  return {
-    patternEnabled: true,
-    patternAtlas: pattern.patternAtlas,
-    patternFrame: pattern.patternFrame,
-    patternScale: pattern.patternScale,
-    patternAngle: pattern.patternAngle,
-    patternColor: pattern.patternColor,
-    patternColorize: pattern.patternColorize,
-    khartisMotifOptions: pattern.khartisMotifOptions,
-    khartisPatternColor: pattern.khartisPatternColor,
-    khartisPatternColorize: pattern.khartisPatternColorize
-  };
-}
-
 export type { LayerContext };
 
 export function createPointLayerStack(
@@ -1333,12 +1240,6 @@ export function createPointLayerStack(
     ? getSymbolFillClassification(viz)
     : undefined;
   const pointFillValueColumn = viz ? getSymbolFillValueColumn(viz) : undefined;
-  const symbolPattern =
-    pointConfig?.mode === SymbolMode.CATEGORIES
-      ? resolveSymbolPattern(pointClassification)
-      : pointConfig?.fillMode === FillMode.CATEGORIES
-        ? resolveSymbolPattern(pointFillClassification ?? pointClassification)
-        : null;
   const useProportionalSymbols = viz && shouldApplyProportionalSymbols(viz);
   const useClassedSymbols =
     pointConfig?.mode === SymbolMode.CLASSES &&
@@ -2026,9 +1927,7 @@ export function createPointLayerStack(
   }
 
   const baseLayerProps = {
-    id: symbolPattern
-      ? `${layerId}-pattern-${symbolPattern.khartisMotifOptions.type}`
-      : layerId,
+    id: layerId,
     ...(scatterProps as unknown as Record<string, unknown>),
     stroked: showPointStroke,
     filled: !hideSymbolFill,
@@ -2129,8 +2028,7 @@ export function createPointLayerStack(
       gapLength: pointStrokeDashSpec.shader.gap,
       dotLength: pointStrokeDashSpec.shader.dot,
       dotGap: pointStrokeDashSpec.shader.dotGap,
-      barWidth: pointBarWidth,
-      ...symbolPatternLayerProps(symbolPattern)
+      barWidth: pointBarWidth
     })
   ];
 }

@@ -73,6 +73,7 @@
     <SingleColorPreview
       label={m.basemap_config_color()}
       color={color}
+      allowPattern={false}
       onchange={handleColorChange}
     />
   {/if}
