@@ -1,5 +1,8 @@
 import { ShapeType } from '$lib/features/commons/constants/visualization.constants';
-import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';
+import type {
+  PatternParams,
+  PatternShape
+} from '$lib/features/commons/constants/pattern.constants';
 
 export type CategoriesAspectVariant =
   | 'symbols-unique'
@@ -19,6 +22,7 @@ export interface CategoryDraft {
   customSize?: number;
   strokeColor?: string;
   customStrokeWidth?: number;
+  patternShape?: PatternShape;
 }
 
 export interface CategoriesCommonAspect {

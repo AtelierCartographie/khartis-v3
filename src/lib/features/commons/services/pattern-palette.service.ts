@@ -20,10 +20,10 @@ export interface ClassPattern {
   fill: string;
 }
 
-const CATEGORICAL_SCALE_RANGE: [number, number] = [2, 5];
+const CATEGORICAL_SCALE_RANGE: [number, number] = [1, 2.5];
 const DEFAULT_PATTERN_COLOR = '#000000';
 const DEFAULT_SEQUENTIAL_ANGLE = 45;
-const DEFAULT_SEQUENTIAL_SCALE = 3;
+const DEFAULT_SEQUENTIAL_SCALE = 1;
 
 function toHexFill(fill: string): string {
   return fill.startsWith('#')
@@ -63,7 +63,17 @@ export function resolveClassPatterns(
     fill: toHexFill(pattern.fill)
   }));
 
-  return inverted ? resolved.reverse() : resolved;
+  const reordered = inverted ? resolved.reverse() : resolved;
+
+  if (mode === 'categorical' && cfg.categoryShapes) {
+    return reordered.map((pattern, i) =>
+      cfg.categoryShapes?.[i]
+        ? { ...pattern, type: cfg.categoryShapes[i] }
+        : pattern
+    );
+  }
+
+  return reordered;
 }
 
 const LEGACY_SHAPE_BY_PATTERN_ID: Record<
@@ -95,7 +105,7 @@ export function patternPaletteFromLegacy(
     shape: legacyShape.shape,
     angle: params?.angle ?? legacyShape.angle ?? DEFAULT_SEQUENTIAL_ANGLE,
     scale: params?.scale
-      ? Math.max(1, Math.round(params.scale / 10))
+      ? Math.max(0.1, params.scale / 10)
       : DEFAULT_SEQUENTIAL_SCALE
   };
 }

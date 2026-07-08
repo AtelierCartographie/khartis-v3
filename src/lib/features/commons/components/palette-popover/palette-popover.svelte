@@ -363,6 +363,8 @@
             currentPatternPaletteConfig={currentPatternPaletteConfig}
             newPatternPaletteConfig={draftPatternPaletteConfig}
             patternPaletteContrast={draftPatternContrast}
+            currentInverted={currentInverted}
+            newInverted={draftInverted}
           />
         </div>
         <footer class="popover-footer">
