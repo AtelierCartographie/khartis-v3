@@ -608,12 +608,13 @@ export function buildClassPatternSvgBackground(
 export function buildShapeSwatchBackground(shape: PatternShape): string {
   const rendered = motif({
     type: shape,
-    angle: 45,
-    scale: 3,
+    angle: shape === 'line' ? 45 : 0,
+    scale: 2,
+    size: 30,
     fill: '#161616',
     background: 'transparent'
   });
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32">${rendered.defs.outerHTML}<rect width="100%" height="100%" fill="${rendered.url}"/></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">${rendered.defs.outerHTML}<rect width="100%" height="100%" fill="${rendered.url}"/></svg>`;
 
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }

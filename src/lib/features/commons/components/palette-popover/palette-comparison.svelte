@@ -27,6 +27,8 @@
     currentPatternPaletteConfig?: PatternPaletteConfig;
     newPatternPaletteConfig?: PatternPaletteConfig;
     patternPaletteContrast?: ContrastMode;
+    currentInverted?: boolean;
+    newInverted?: boolean;
   }
 
   let {
@@ -39,7 +41,9 @@
     newPatternParams,
     currentPatternPaletteConfig,
     newPatternPaletteConfig,
-    patternPaletteContrast
+    patternPaletteContrast,
+    currentInverted = false,
+    newInverted = false
   }: Props = $props();
 
   const isQualitative = $derived(paletteType === PALETTE_TYPE.QUALITATIVE);
@@ -83,13 +87,15 @@
 
   function classPatternBackgrounds(
     count: number,
-    config: PatternPaletteConfig
+    config: PatternPaletteConfig,
+    inverted: boolean
   ): string[] {
     const patterns = resolveClassPatterns(
       count,
       config,
       'sequential',
-      patternPaletteContrast
+      patternPaletteContrast,
+      inverted
     );
     return patterns.map((pattern) =>
       buildClassPatternSvgBackground(pattern, '#ffffff')
@@ -125,7 +131,8 @@
         backgrounds={currentPatternPaletteConfig
           ? classPatternBackgrounds(
               currentColors.length,
-              currentPatternPaletteConfig
+              currentPatternPaletteConfig,
+              currentInverted
             )
           : rowBackgrounds(
               currentColors,
@@ -140,7 +147,11 @@
       <PaletteSwatchRow
         colors={newColors}
         backgrounds={newPatternPaletteConfig
-          ? classPatternBackgrounds(newColors.length, newPatternPaletteConfig)
+          ? classPatternBackgrounds(
+              newColors.length,
+              newPatternPaletteConfig,
+              newInverted
+            )
           : rowBackgrounds(newColors, newPatternId, newPatternParams)}
         height="16px"
       />

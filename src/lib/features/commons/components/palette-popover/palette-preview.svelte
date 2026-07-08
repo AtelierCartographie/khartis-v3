@@ -140,7 +140,8 @@
         enabled: !disabledLabels.includes(value),
         customSize: classification?.categorySizes?.[i],
         strokeColor: classification?.categoryStrokeColors?.[i],
-        customStrokeWidth: classification?.categoryStrokeWidths?.[i]
+        customStrokeWidth: classification?.categoryStrokeWidths?.[i],
+        patternShape: classification?.pattern?.categoryShapes?.[i]
       };
     })
   );
@@ -204,16 +205,23 @@
   }
 
   function resolveValidatedCategoryPattern(
+    next: CategoryDraft[],
     commonAspect: CategoriesCommonAspect
   ): PatternPaletteConfig | undefined {
     if (categoriesVariant !== 'polygons' || !commonAspect.pattern) {
       return undefined;
     }
 
+    const categoryShapes = next.map((category) => category.patternShape);
+    const hasCategoryShape = categoryShapes.some(
+      (shape) => shape !== undefined
+    );
+
     return {
       shape: 'line',
       color: commonAspect.patternColor ?? '#000000',
-      colorize: commonAspect.patternColorize ?? false
+      colorize: commonAspect.patternColorize ?? false,
+      categoryShapes: hasCategoryShape ? categoryShapes : undefined
     };
   }
 
@@ -253,7 +261,10 @@
       resolvedColors.every((color, index) => color === colors[index])
         ? (selectedPaletteId ?? '__custom__')
         : '__custom__';
-    const pattern = resolveValidatedCategoryPattern(commonAspect);
+    const pattern = resolveValidatedCategoryPattern(
+      normalizedCategories,
+      commonAspect
+    );
     const symbolPatternId = resolveValidatedSymbolPatternId(commonAspect);
 
     onClassificationChange?.({

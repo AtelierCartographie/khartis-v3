@@ -58,11 +58,12 @@
   const DEFAULT_PATTERN_PALETTE_CONFIG: PatternPaletteConfig = {
     shape: 'line',
     angle: 45,
-    scale: 3,
+    scale: 1,
     color: '#000000'
   };
 
   let activeTab = $state(0);
+  let activeTabInitialized = false;
   let singleColor = $state('#08519c');
   let startColor = $state('#f7fbff');
   let endColor = $state('#08519c');
@@ -113,6 +114,10 @@
     if (next) {
       untrack(() => {
         draftPatternPaletteConfig = next;
+        if (!activeTabInitialized) {
+          activeTab = 2;
+          activeTabInitialized = true;
+        }
       });
     }
   });
@@ -135,6 +140,7 @@
   );
 
   function handleTabChange(index: number) {
+    activeTabInitialized = true;
     if (index === 0 && activeTab === 1) {
       singleColor = endColor;
     } else if (index === 1 && activeTab === 0) {

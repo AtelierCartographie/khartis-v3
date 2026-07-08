@@ -32,4 +32,5 @@ export interface PatternPaletteConfig {
   scale?: number;
   color?: string;
   colorize?: boolean;
+  categoryShapes?: (PatternShape | undefined)[];
 }

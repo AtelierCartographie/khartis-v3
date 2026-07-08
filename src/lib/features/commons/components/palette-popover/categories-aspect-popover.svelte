@@ -33,13 +33,20 @@
   import PaletteSuggestions from './palette-suggestions.svelte';
   import SingleColorPreview from './single-color-preview.svelte';
   import PatternPicker from './pattern-picker.svelte';
+  import ShapeChipRow from './shape-chip-row.svelte';
   import {
     PALETTE_TYPE,
     type QualitativePreset,
     type PatternParams,
     DEFAULT_QUALITATIVE_PRESET,
-    generateCategoricalColorsFromSeed
+    generateCategoricalColorsFromSeed,
+    buildClassPatternSvgBackground
   } from './palette.constants';
+  import type { PatternShape } from '$lib/features/commons/constants/pattern.constants';
+  import {
+    resolveClassPatterns,
+    type ClassPattern
+  } from '$lib/features/commons/services/pattern-palette.service';
   import {
     DEFAULT_COMMON_ASPECT,
     type CategoriesAspectVariant,
@@ -119,6 +126,30 @@
   const showPerCategoryStrokeWidth = $derived(
     primitiveKind === 'symbols' &&
       (!draftCommonAspect.stroke || !(draftCommonAspect.strokeUnique ?? true))
+  );
+
+  // Mirrors MAX_CATEGORICAL_PATTERN_COUNT (map/layers/polygon-pattern-layer.utils.ts): keep both in sync.
+  const MAX_PATTERN_PREVIEW_CATEGORIES = 24;
+  const showCategoryPattern = $derived(
+    primitiveKind === 'polygons' && draftCommonAspect.pattern
+  );
+  const categoryPatterns = $derived<ClassPattern[] | null>(
+    showCategoryPattern &&
+      draftCategories.length > 0 &&
+      draftCategories.length <= MAX_PATTERN_PREVIEW_CATEGORIES
+      ? resolveClassPatterns(
+          draftCategories.length,
+          {
+            shape: 'line',
+            color: draftCommonAspect.patternColor,
+            colorize: draftCommonAspect.patternColorize,
+            categoryShapes: draftCategories.map(
+              (category) => category.patternShape
+            )
+          },
+          'categorical'
+        )
+      : null
   );
 
   const shapeChoices = $derived<Array<{ id: ShapeType; label: string }>>([
@@ -285,6 +316,12 @@
     );
   }
 
+  function handleCategoryPatternShape(id: string, shape: PatternShape) {
+    draftCategories = draftCategories.map((category) =>
+      category.id === id ? { ...category, patternShape: shape } : category
+    );
+  }
+
   function handleCategoryLabel(id: string, label: string) {
     draftCategories = draftCategories.map((category) =>
       category.id === id ? { ...category, label } : category
@@ -412,7 +449,12 @@
           ? resolveOrderedRankPreviewSize(index, visibleDraftCategories.length)
           : 14;
 
-    return `--marker-color: ${markerColor}; --marker-size: ${rankSize}px;`;
+    const pattern = categoryPatterns?.[index];
+    const patternStyle = pattern
+      ? ` background: ${buildClassPatternSvgBackground(pattern, '#ffffff')};`
+      : '';
+
+    return `--marker-color: ${markerColor}; --marker-size: ${rankSize}px;${patternStyle}`;
   }
 
   $effect(() => {
@@ -894,6 +936,18 @@
                               handleCategoryColor(category.id, hex)}
                           />
                         </div>
+
+                        {#if showCategoryPattern && categoryPatterns}
+                          <div class="field-stack">
+                            <span class="field-label">{m.pattern_shape()}</span>
+                            <ShapeChipRow
+                              value={categoryPatterns[index]?.type as
+                                PatternShape | undefined}
+                              onselect={(shape) =>
+                                handleCategoryPatternShape(category.id, shape)}
+                            />
+                          </div>
+                        {/if}
 
                         {#if primitiveKind === 'symbols' && !draftCommonAspect.sizeUnique}
                           <div class="field-stack">
