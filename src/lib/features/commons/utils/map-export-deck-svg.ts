@@ -749,11 +749,6 @@ function serializePointLayer(
   const lineWidthScale = getLayerNumber(props, 'lineWidthScale', 1);
   const barWidth = getLayerNumber(props, 'barWidth', 6);
   const parts: string[] = [];
-  const khartisMotifOptions = props.khartisMotifOptions as
-    KhartisMotifOptions | undefined;
-  const khartisPatternColorize = props.khartisPatternColorize === true;
-  const khartisPatternColor = props.khartisPatternColor as
-    [number, number, number] | undefined;
 
   for (let index = 0; index < length; index++) {
     const position = readBinaryTuple(positionAttribute, index);
@@ -812,26 +807,13 @@ function serializePointLayer(
 
     if (fillColor.opacity <= 0 && strokeColor.opacity <= 0) continue;
 
-    const patternFillColor: SvgColor =
-      !khartisPatternColorize && khartisPatternColor
-        ? {
-            red: khartisPatternColor[0],
-            green: khartisPatternColor[1],
-            blue: khartisPatternColor[2],
-            opacity: fillColor.opacity
-          }
-        : fillColor;
-    const pattern = khartisMotifOptions
-      ? resolveSvgPatternReference(props, null, index, patternFillColor)
-      : null;
-
     parts.push(
       serializePointShape(
         shape,
         projected[0],
         projected[1],
         radius,
-        fillAttributes(fillColor, pattern),
+        fillAttributes(fillColor, null),
         colorAttributes('stroke', strokeColor),
         strokeWidth,
         barWidth

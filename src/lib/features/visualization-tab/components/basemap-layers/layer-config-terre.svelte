@@ -80,6 +80,7 @@
         <SingleColorPreview
           label={m.basemap_config_color()}
           color={fillColor}
+          allowPattern={false}
           onchange={handleFillColorChange}
         />
 
@@ -110,6 +111,7 @@
         <SingleColorPreview
           label={m.basemap_config_color()}
           color={strokeColor}
+          allowPattern={false}
           onchange={handleStrokeColorChange}
         />
 

@@ -16,11 +16,10 @@
   } from '$lib/features/commons/constants/visualization.constants';
   import { coerceMissingDataShape } from '../../utils/coerce.utils';
   import {
-    ColorSelector,
     SliderWithInput,
     ToggleWithLabel
   } from '$lib/features/commons/components/viz-controls';
-  import PatternPalettePicker from '$lib/features/commons/components/palette-popover/pattern-palette-picker.svelte';
+  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import {
     buildDashedPatternItems,
@@ -112,13 +111,13 @@
     ondashedpatternchange?.(next);
   }
 
-  function handlePatternToggle(value: boolean) {
-    pattern = value;
-    onpatternchange?.(value);
-  }
-
-  function handlePatternStyleChange(config: PatternPaletteConfig) {
-    onpatternstylechange?.(config);
+  function handlePatternChange(config: PatternPaletteConfig | undefined) {
+    pattern = Boolean(config);
+    onpatternchange?.(Boolean(config));
+    if (config) {
+      patternConfig = config;
+      onpatternstylechange?.(config);
+    }
   }
 </script>
 
@@ -158,11 +157,14 @@
           </Column>
         {/if}
         <Column sm={2} md={4} lg={showShapeSelector ? 8 : 16}>
-          <ColorSelector
+          <SingleColorPreview
             exclusive
             label={m.color()}
-            value={color}
+            color={color}
+            allowPattern={showPatternToggle}
+            patternPaletteConfig={pattern ? patternConfig : undefined}
             onchange={oncolorchange}
+            onpatternchange={handlePatternChange}
           />
         </Column>
       </Row>
@@ -182,30 +184,6 @@
             </div>
           </Column>
         </Row>
-      {/if}
-
-      {#if showPatternToggle}
-        <Row>
-          <Column>
-            <div class="pattern-toggle">
-              <ToggleWithLabel
-                label={m.pattern()}
-                toggled={pattern}
-                ontoggle={handlePatternToggle}
-              />
-            </div>
-          </Column>
-        </Row>
-        {#if pattern}
-          <Row>
-            <Column>
-              <PatternPalettePicker
-                config={patternConfig}
-                onchange={handlePatternStyleChange}
-              />
-            </Column>
-          </Row>
-        {/if}
       {/if}
 
       {#if showDashedToggle}
@@ -250,8 +228,7 @@
     margin-top: var(--cds-spacing-03);
   }
 
-  .dashed-toggle,
-  .pattern-toggle {
+  .dashed-toggle {
     margin-top: var(--cds-spacing-03);
   }
 </style>

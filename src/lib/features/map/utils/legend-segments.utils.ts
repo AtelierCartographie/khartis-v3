@@ -11,11 +11,7 @@ import {
   resolveMissingDataClassPattern
 } from '../layers/polygon-pattern-layer.utils';
 import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';
-import {
-  resolveClassificationPatternConfig,
-  resolveSingleClassPattern,
-  type ClassPattern
-} from '$lib/features/commons/services/pattern-palette.service';
+import type { ClassPattern } from '$lib/features/commons/services/pattern-palette.service';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import {
   getLinePrimitive,
@@ -141,15 +137,6 @@ export function getClassPatternLegendFills(
   patterns: ClassPattern[]
 ): LegendPatternFill[] {
   return patterns.map(getClassPatternLegendFill);
-}
-
-function resolveSymbolLegendPatternFill(
-  classification: ClassificationConfig | undefined
-): LegendPatternFill | null {
-  const pattern = resolveSingleClassPattern(
-    resolveClassificationPatternConfig(classification)
-  );
-  return pattern ? getClassPatternLegendFill(pattern) : null;
 }
 
 type LegendTextStyle = {
@@ -1351,8 +1338,6 @@ function getCategoricalLegendItems(
     });
   } else if (primitive === 'point') {
     type = 'symbol';
-    const classification = getLegendCategoricalClassification(viz);
-    const patternFill = resolveSymbolLegendPatternFill(classification);
     categories.forEach((category, index) => {
       const shape = getLegendPointCategoryShape(
         viz,
@@ -1365,8 +1350,6 @@ function getCategoricalLegendItems(
         viz,
         entries[index].originalIndex
       );
-      category.patternFill = patternFill;
-      category.patternOpacity = 1;
     });
   }
 
@@ -1396,16 +1379,13 @@ function getClassedColorLegendItems(
 
     if (primitive === 'point') {
       const symbol = getSymbolPrimitive(viz);
-      const patternFill = resolveSymbolLegendPatternFill(classification);
       return {
         label,
         fill: color,
         stroke: 'rgba(0, 0, 0, 0.25)',
         strokeWidth: 0.75,
         symbol: getShapePath(symbol?.shape ?? ShapeType.CIRCLE),
-        size: 8,
-        patternFill,
-        patternOpacity: 1
+        size: 8
       };
     }
 
@@ -1557,18 +1537,13 @@ function getMissingDataLegendItem(
   const color = missingData?.color ?? '#d9d9d9';
 
   if (primitive === 'point') {
-    const classification =
-      getLegendCategoricalClassification(viz) ??
-      getLegendClassedColorClassification(viz);
     return {
       label: m.missing_data_text(),
       fill: color,
       stroke: 'rgba(0, 0, 0, 0.25)',
       strokeWidth: 0.75,
       symbol: getShapePath(resolveMissingDataPointShape(missingData?.shape)),
-      size: Math.max(6, Math.min(14, missingData?.size ?? 6)),
-      patternFill: resolveSymbolLegendPatternFill(classification),
-      patternOpacity: 1
+      size: Math.max(6, Math.min(14, missingData?.size ?? 6))
     };
   }
 

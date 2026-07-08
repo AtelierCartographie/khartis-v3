@@ -5,8 +5,6 @@ import {
   ShapeType,
   SYMBOL_SDF_EXTENT
 } from '$lib/features/commons/constants/visualization.constants';
-import type { TextureSource } from '@deck.gl/core';
-import type { Texture } from '@luma.gl/core';
 
 export const ShapeTypeOrdinal = {
   CIRCLE: SHAPE_ORDINAL[ShapeType.CIRCLE],
@@ -37,30 +35,12 @@ type MultiShapeModuleProps = {
   gapLength?: number;
   dotLength?: number;
   dotGap?: number;
-  patternEnabled?: number;
-  patternScale?: number;
-  patternAngle?: number;
-  patternColor?: [number, number, number];
-  patternColorize?: number;
-  patternFrame?: [number, number, number, number];
-  patternTexture?: Texture;
 };
 
 function getMultiShapeUniforms(
   opts?: MultiShapeModuleProps | Record<string, never>
 ): Record<string, unknown> {
-  if (!opts) {
-    return {};
-  }
-  const { patternTexture, ...scalars } = opts as MultiShapeModuleProps;
-  if (!patternTexture) {
-    return scalars;
-  }
-  return {
-    ...scalars,
-    multiShape_patternTexture: patternTexture,
-    patternTextureSize: [patternTexture.width, patternTexture.height]
-  };
+  return opts ?? {};
 }
 
 const multiShapeModule = {
@@ -77,16 +57,7 @@ const multiShapeModule = {
       float gapLength;
       float dotLength;
       float dotGap;
-      float patternEnabled;
-      float patternScale;
-      float patternAngle;
-      vec3 patternColor;
-      float patternColorize;
-      vec4 patternFrame;
-      vec2 patternTextureSize;
     } multiShape;
-
-    uniform sampler2D multiShape_patternTexture;
   `,
   getUniforms: getMultiShapeUniforms,
   uniformTypes: {
@@ -99,14 +70,7 @@ const multiShapeModule = {
     dashLength: 'f32',
     gapLength: 'f32',
     dotLength: 'f32',
-    dotGap: 'f32',
-    patternEnabled: 'f32',
-    patternScale: 'f32',
-    patternAngle: 'f32',
-    patternColor: 'vec3<f32>',
-    patternColorize: 'f32',
-    patternFrame: 'vec4<f32>',
-    patternTextureSize: 'vec2<f32>'
+    dotGap: 'f32'
   }
 } as const;
 
@@ -368,26 +332,6 @@ float getDashMask(vec2 uv, float strokePx, float midRadiusPx, float radialOffset
     return clamp(mask, 0.0, 1.0);
 }
 
-vec4 applyFillPattern(vec4 fillColor, vec2 scaledUv) {
-    if (multiShape.patternEnabled < 0.5 || fillColor.a <= 0.0) {
-        return fillColor;
-    }
-
-    vec2 pxPos = scaledUv * outerRadiusPixels;
-    float c = cos(radians(multiShape.patternAngle));
-    float s = sin(radians(multiShape.patternAngle));
-    vec2 rp = mat2(c, s, -s, c) * pxPos;
-    vec2 tileUV = fract(rp / max(multiShape.patternScale, 0.0001));
-    vec2 texUV = (multiShape.patternFrame.xy + multiShape.patternFrame.zw * tileUV) / multiShape.patternTextureSize;
-    float mask = texture(multiShape_patternTexture, texUV).a;
-
-    vec3 base = vec3(1.0);
-    vec3 motifColor = multiShape.patternColorize > 0.5
-        ? fillColor.rgb
-        : multiShape.patternColor / 255.0;
-    return vec4(mix(base, motifColor, mask), fillColor.a);
-}
-
 void main(void) {
     geometry.uv = unitPosition;
     vec2 uv = unitPosition - vec2(multiShape.offsetX, multiShape.offsetY);
@@ -412,10 +356,9 @@ void main(void) {
             ? smoothedge(innerEdge, distToCenter)
             : step(innerEdge, distToCenter);
         lineMask *= getDashMask(scaledUv, strokePx, midRadiusPx, distToCenter - midRadiusPx);
-        vec4 fillColor = applyFillPattern(vFillColor, scaledUv);
 
         if (scatterplot.filled > 0.5) {
-            fragColor = mix(fillColor, vLineColor, lineMask);
+            fragColor = mix(vFillColor, vLineColor, lineMask);
         } else {
             if (lineMask == 0.0) discard;
             fragColor = vec4(vLineColor.rgb, vLineColor.a * lineMask);
@@ -423,7 +366,7 @@ void main(void) {
     } else if (scatterplot.filled < 0.5) {
         discard;
     } else {
-        fragColor = applyFillPattern(vFillColor, scaledUv);
+        fragColor = vFillColor;
     }
 
     fragColor.a *= inShape;
@@ -445,13 +388,6 @@ export type MultiShapeLayerProps<DataT = unknown> = {
   gapLength?: number;
   dotLength?: number;
   dotGap?: number;
-  patternEnabled?: boolean;
-  patternAtlas?: string | TextureSource;
-  patternFrame?: [number, number, number, number];
-  patternScale?: number;
-  patternAngle?: number;
-  patternColor?: [number, number, number];
-  patternColorize?: boolean;
 };
 
 const defaultProps = {
@@ -466,19 +402,7 @@ const defaultProps = {
   dashLength: { type: 'number', value: 3 },
   gapLength: { type: 'number', value: 2 },
   dotLength: { type: 'number', value: 0 },
-  dotGap: { type: 'number', value: 0 },
-  patternEnabled: { type: 'boolean', value: false },
-  patternAtlas: {
-    type: 'image',
-    value: null,
-    async: true,
-    parameters: { lodMaxClamp: 0 }
-  },
-  patternFrame: { type: 'array', value: [0, 0, 0, 0] },
-  patternScale: { type: 'number', value: 1 },
-  patternAngle: { type: 'number', value: 0 },
-  patternColor: { type: 'array', value: [0, 0, 0] },
-  patternColorize: { type: 'boolean', value: false }
+  dotGap: { type: 'number', value: 0 }
 };
 
 interface MultiShapeLayerState {
@@ -487,7 +411,6 @@ interface MultiShapeLayerState {
       setProps: (props: Record<string, unknown>) => void;
     };
   };
-  emptyTexture?: Texture;
 }
 
 export class MultiShapeLayer<DataT = unknown> extends ScatterplotLayer<
@@ -510,24 +433,6 @@ export class MultiShapeLayer<DataT = unknown> extends ScatterplotLayer<
         }
       });
     }
-
-    this.setState({
-      emptyTexture: this.context.device.createTexture({
-        data: new Uint8Array(4),
-        width: 1,
-        height: 1
-      })
-    });
-  }
-
-  finalizeState(
-    context: Parameters<
-      ScatterplotLayer<DataT, MultiShapeLayerProps<DataT>>['finalizeState']
-    >[0]
-  ): void {
-    const state = this.state as unknown as MultiShapeLayerState;
-    state.emptyTexture?.delete();
-    super.finalizeState(context);
   }
 
   getShaders(): Record<string, unknown> {
@@ -557,14 +462,7 @@ export class MultiShapeLayer<DataT = unknown> extends ScatterplotLayer<
       dashLength,
       gapLength,
       dotLength,
-      dotGap,
-      patternEnabled,
-      patternAtlas,
-      patternFrame,
-      patternScale,
-      patternAngle,
-      patternColor,
-      patternColorize
+      dotGap
     } = this.props;
     const state = this.state as unknown as MultiShapeLayerState;
     const shaderInputs = state.model?.shaderInputs;
@@ -580,14 +478,7 @@ export class MultiShapeLayer<DataT = unknown> extends ScatterplotLayer<
           dashLength: dashLength ?? 3,
           gapLength: gapLength ?? 2,
           dotLength: dotLength ?? 0,
-          dotGap: dotGap ?? 0,
-          patternEnabled: patternEnabled ? 1 : 0,
-          patternScale: patternScale ?? 1,
-          patternAngle: patternAngle ?? 0,
-          patternColor: patternColor ?? [0, 0, 0],
-          patternColorize: patternColorize ? 1 : 0,
-          patternFrame: patternFrame ?? [0, 0, 0, 0],
-          patternTexture: (patternAtlas as Texture) ?? state.emptyTexture
+          dotGap: dotGap ?? 0
         }
       });
     }
