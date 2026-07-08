@@ -32,17 +32,19 @@
   import { resolveToolbarWidth } from '$lib/features/commons/utils/toolbar-width.utils';
   import PaletteSuggestions from './palette-suggestions.svelte';
   import SingleColorPreview from './single-color-preview.svelte';
-  import PatternPicker from './pattern-picker.svelte';
+  import PatternPalettePicker from './pattern-palette-picker.svelte';
   import ShapeChipRow from './shape-chip-row.svelte';
   import {
     PALETTE_TYPE,
     type QualitativePreset,
-    type PatternParams,
     DEFAULT_QUALITATIVE_PRESET,
     generateCategoricalColorsFromSeed,
     buildShapeSwatchBackground
   } from './palette.constants';
-  import type { PatternShape } from '$lib/features/commons/constants/pattern.constants';
+  import type {
+    PatternPaletteConfig,
+    PatternShape
+  } from '$lib/features/commons/constants/pattern.constants';
   import {
     resolveClassPatterns,
     type ClassPattern
@@ -133,6 +135,9 @@
   const showCategoryPattern = $derived(
     primitiveKind === 'polygons' && draftCommonAspect.pattern
   );
+  const resolvedPatternConfig = $derived<PatternPaletteConfig>(
+    draftCommonAspect.patternConfig ?? DEFAULT_COMMON_ASPECT.patternConfig!
+  );
   const categoryPatterns = $derived<ClassPattern[] | null>(
     showCategoryPattern &&
       draftCategories.length > 0 &&
@@ -140,10 +145,8 @@
       ? resolveClassPatterns(
           draftCategories.length,
           {
+            ...resolvedPatternConfig,
             shape: 'line',
-            color: draftCommonAspect.patternColor,
-            colorize: draftCommonAspect.patternColorize,
-            scale: draftCommonAspect.patternScale,
             categoryShapes: draftCategories.map(
               (category) => category.patternShape
             )
@@ -237,23 +240,14 @@
     draftCommonAspect = { ...draftCommonAspect, [key]: value };
   }
 
-  function handlePatternColorChange(color: string) {
-    draftCommonAspect = { ...draftCommonAspect, patternColor: color };
+  function handlePatternConfigChange(config: PatternPaletteConfig) {
+    draftCommonAspect = { ...draftCommonAspect, patternConfig: config };
   }
 
   function handlePatternColorizeChange(colorize: boolean) {
-    draftCommonAspect = { ...draftCommonAspect, patternColorize: colorize };
-  }
-
-  function handlePatternScaleChange(value: number) {
-    draftCommonAspect = { ...draftCommonAspect, patternScale: value / 10 };
-  }
-
-  function handleLegacyPatternChange(patternId: string, params: PatternParams) {
     draftCommonAspect = {
       ...draftCommonAspect,
-      patternId,
-      patternParams: params
+      patternConfig: { ...resolvedPatternConfig, colorize }
     };
   }
 
@@ -756,10 +750,16 @@
                 </div>
                 {#if draftCommonAspect.pattern}
                   <div class="common-field--full">
-                    <PatternPicker
-                      patternId={draftCommonAspect.patternId}
-                      patternParams={draftCommonAspect.patternParams}
-                      onChange={handleLegacyPatternChange}
+                    <PatternPalettePicker
+                      config={resolvedPatternConfig}
+                      onchange={handlePatternConfigChange}
+                    />
+                  </div>
+                  <div class="common-field--full">
+                    <ToggleWithLabel
+                      label={m.pattern_colorize()}
+                      toggled={resolvedPatternConfig.colorize ?? false}
+                      ontoggle={handlePatternColorizeChange}
                     />
                   </div>
                 {/if}
@@ -785,12 +785,16 @@
                   <div class="common-grid-row common-grid-row--full">
                     <ColorSelector
                       label={m.color()}
-                      value={draftCommonAspect.patternColor ?? '#000000'}
-                      onchange={handlePatternColorChange}
+                      value={resolvedPatternConfig.color ?? '#000000'}
+                      onchange={(color) =>
+                        handlePatternConfigChange({
+                          ...resolvedPatternConfig,
+                          color
+                        })}
                     />
                     <ToggleWithLabel
                       label={m.pattern_colorize()}
-                      toggled={draftCommonAspect.patternColorize ?? false}
+                      toggled={resolvedPatternConfig.colorize ?? false}
                       ontoggle={handlePatternColorizeChange}
                     />
                   </div>
@@ -801,9 +805,13 @@
                       max={30}
                       step={1}
                       value={Math.round(
-                        (draftCommonAspect.patternScale ?? 1) * 10
+                        (resolvedPatternConfig.scale ?? 1) * 10
                       )}
-                      onchange={handlePatternScaleChange}
+                      onchange={(value) =>
+                        handlePatternConfigChange({
+                          ...resolvedPatternConfig,
+                          scale: value / 10
+                        })}
                     />
                   </div>
                 {/if}

@@ -179,18 +179,10 @@
     pattern:
       categoriesVariant === 'polygons' &&
       Boolean(visualization?.classification?.pattern),
-    patternColor:
+    patternConfig:
       (categoriesVariant === 'polygons'
-        ? visualization?.classification?.pattern?.color
-        : undefined) ?? DEFAULT_COMMON_ASPECT.patternColor,
-    patternColorize:
-      (categoriesVariant === 'polygons'
-        ? visualization?.classification?.pattern?.colorize
-        : undefined) ?? DEFAULT_COMMON_ASPECT.patternColorize,
-    patternScale:
-      (categoriesVariant === 'polygons'
-        ? visualization?.classification?.pattern?.scale
-        : undefined) ?? DEFAULT_COMMON_ASPECT.patternScale
+        ? visualization?.classification?.pattern
+        : undefined) ?? DEFAULT_COMMON_ASPECT.patternConfig
   });
   const selectableValueFields = $derived(
     filterFieldsByKind(selectableDataFields, 'numeric', selectedValueFieldId)

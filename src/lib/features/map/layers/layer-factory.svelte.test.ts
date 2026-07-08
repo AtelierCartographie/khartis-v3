@@ -1501,7 +1501,7 @@ describe('createPolygonLayers', () => {
 
     expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
     expect(pointLayer?.props.patternEnabled).toBe(true);
-    expect(pointLayer?.props.patternType).toBe(1);
+    expect(pointLayer?.props.patternAtlas).toBeDefined();
   });
 
   it('hides disabled split representative symbol categories across fill, stroke and radius attributes', () => {
@@ -2831,7 +2831,7 @@ describe('createPointLayers', () => {
 
     expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
     expect(pointLayer.props.patternEnabled).toBe(true);
-    expect(pointLayer.props.patternType).toBe(3);
+    expect(pointLayer.props.patternAtlas).toBeDefined();
     expect(String(pointLayer.props.id)).toContain('-pattern-');
   });
 

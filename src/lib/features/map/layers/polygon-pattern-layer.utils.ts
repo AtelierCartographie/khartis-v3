@@ -13,6 +13,7 @@ import {
 } from '$lib/features/commons/constants/pattern.constants';
 import {
   patternPaletteFromLegacy,
+  resolveClassificationPatternConfig,
   resolveClassPatterns,
   type ClassPattern
 } from '$lib/features/commons/services/pattern-palette.service';
@@ -163,14 +164,7 @@ export function resolveClassPatternPalette(
   classification: ClassificationConfig | undefined,
   fillMode: FillMode
 ): ClassPattern[] | null {
-  const pattern =
-    classification?.pattern ??
-    (classification?.patternId
-      ? patternPaletteFromLegacy(
-          classification.patternId,
-          classification.patternParams
-        )
-      : undefined);
+  const pattern = resolveClassificationPatternConfig(classification);
   if (!pattern) {
     return null;
   }

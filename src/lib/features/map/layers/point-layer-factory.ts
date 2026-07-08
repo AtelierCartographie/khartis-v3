@@ -26,6 +26,11 @@ import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import * as m from '$lib/paraglide/messages';
+import {
+  resolveClassificationPatternConfig,
+  resolveSingleClassPattern
+} from '$lib/features/commons/services/pattern-palette.service';
+import { getPatternPaletteAtlas } from './pattern-texture';
 
 import { ArrowExtension, DeckLayerId, GeometryType } from '../constants';
 import type {
@@ -93,10 +98,7 @@ import {
   attachBinaryPickingMetadata,
   getRepresentativePointSource
 } from './layer-source.utils';
-import {
-  SYMBOL_PATTERN_TYPE,
-  resolvePageDisplayScale
-} from './layer-style.utils';
+import { resolvePageDisplayScale } from './layer-style.utils';
 import { THEMATIC_OVERLAY_PARAMETERS } from './polygon-pattern-layer.utils';
 import {
   createSplitAwareRowAccessor as ctxRowAccessor,
@@ -204,11 +206,11 @@ function createDoubleProportionalPointLayers(
     viz.classification;
   const pointFillClassification =
     getSymbolFillClassification(viz) ?? viz.classification;
-  const symbolPatternType =
+  const symbolPattern =
     pointConfig.mode === SymbolMode.CATEGORIES
-      ? resolveSymbolPatternType(pointClassification)
+      ? resolveSymbolPattern(pointClassification)
       : pointConfig.fillMode === FillMode.CATEGORIES
-        ? resolveSymbolPatternType(pointFillClassification)
+        ? resolveSymbolPattern(pointFillClassification)
         : null;
   const useFillChoropleth = Boolean(
     pointConfig.fillMode === FillMode.CLASSES &&
@@ -562,8 +564,7 @@ function createDoubleProportionalPointLayers(
       dotLength: pointStrokeDashSpec.shader.dot,
       dotGap: pointStrokeDashSpec.shader.dotGap,
       barWidth: pointBarWidth,
-      patternEnabled: symbolPatternType !== null,
-      patternType: symbolPatternType ?? SYMBOL_PATTERN_TYPE.DOTS,
+      ...symbolPatternLayerProps(symbolPattern),
       opacity: 1,
       radiusScale: layoutProps.radiusScale * pageDisplayScale,
       radiusUnits: 'pixels',
@@ -747,11 +748,11 @@ export function createRepresentativePointSymbolLayers(
     viz.classification;
   const pointFillClassification =
     getSymbolFillClassification(viz) ?? viz.classification;
-  const symbolPatternType =
+  const symbolPattern =
     pointConfig.mode === SymbolMode.CATEGORIES
-      ? resolveSymbolPatternType(pointClassification)
+      ? resolveSymbolPattern(pointClassification)
       : pointConfig.fillMode === FillMode.CATEGORIES
-        ? resolveSymbolPatternType(pointFillClassification)
+        ? resolveSymbolPattern(pointFillClassification)
         : null;
   const pointColorCategoryColumn =
     pointConfig.mode === SymbolMode.CATEGORIES
@@ -1109,8 +1110,7 @@ export function createRepresentativePointSymbolLayers(
       dotLength: pointStrokeDashSpec.shader.dot,
       dotGap: pointStrokeDashSpec.shader.dotGap,
       barWidth: pointBarWidth,
-      patternEnabled: symbolPatternType !== null,
-      patternType: symbolPatternType ?? SYMBOL_PATTERN_TYPE.DOTS,
+      ...symbolPatternLayerProps(symbolPattern),
       opacity: 1,
       radiusScale: pageDisplayScale,
       radiusUnits: 'pixels',
@@ -1186,35 +1186,84 @@ export function createRepresentativePointSymbolLayers(
           categoryShapeMode,
           useCategoryShape,
           pointCategoryColumn,
-          pointClassification?.labels,
-          symbolPatternType
+          pointClassification?.labels
         ]
       }
     })
   ];
 }
 
-function resolveSymbolPatternType(
+interface SymbolPatternRenderProps {
+  patternAtlas: HTMLCanvasElement;
+  patternFrame: [number, number, number, number];
+  patternScale: number;
+  patternAngle: number;
+  patternColor: [number, number, number];
+  patternColorize: boolean;
+  khartisMotifOptions: {
+    type: string;
+    angle: number;
+    scale: number;
+    size: number;
+    patchSize: boolean;
+  };
+  khartisPatternColor: [number, number, number];
+  khartisPatternColorize: boolean;
+}
+
+function resolveSymbolPattern(
   classification: ClassificationConfig | undefined
-): number | null {
-  switch (classification?.patternId) {
-    case 'dots':
-      return SYMBOL_PATTERN_TYPE.DOTS;
-    case 'cross':
-      return SYMBOL_PATTERN_TYPE.CROSSHATCH;
-    case 'horizontal':
-    case 'vertical':
-      return SYMBOL_PATTERN_TYPE.LINES;
-    case 'diagonal':
-    case 'diagonal-reverse':
-    case 'plus':
-    case 'square':
-    case 'diamond':
-    case 'triangle':
-      return SYMBOL_PATTERN_TYPE.DASHES;
-    default:
-      return null;
+): SymbolPatternRenderProps | null {
+  const config = resolveClassificationPatternConfig(classification);
+  const pattern = resolveSingleClassPattern(config);
+  if (!config || !pattern) {
+    return null;
   }
+  const { atlas, mapping } = getPatternPaletteAtlas([pattern]);
+  const frame = mapping['c0'];
+  if (!frame) {
+    return null;
+  }
+  const patternColor = hexToRgb(pattern.fill);
+  const colorize = config.colorize ?? false;
+
+  return {
+    patternAtlas: atlas,
+    patternFrame: [frame.x, frame.y, frame.width, frame.height],
+    patternScale: pattern.scale * 10,
+    patternAngle: pattern.angle,
+    patternColor,
+    patternColorize: colorize,
+    khartisMotifOptions: {
+      type: pattern.type,
+      angle: pattern.angle,
+      scale: pattern.scale,
+      size: pattern.size,
+      patchSize: pattern.patchSize
+    },
+    khartisPatternColor: patternColor,
+    khartisPatternColorize: colorize
+  };
+}
+
+function symbolPatternLayerProps(
+  pattern: SymbolPatternRenderProps | null
+): Record<string, unknown> {
+  if (!pattern) {
+    return { patternEnabled: false };
+  }
+  return {
+    patternEnabled: true,
+    patternAtlas: pattern.patternAtlas,
+    patternFrame: pattern.patternFrame,
+    patternScale: pattern.patternScale,
+    patternAngle: pattern.patternAngle,
+    patternColor: pattern.patternColor,
+    patternColorize: pattern.patternColorize,
+    khartisMotifOptions: pattern.khartisMotifOptions,
+    khartisPatternColor: pattern.khartisPatternColor,
+    khartisPatternColorize: pattern.khartisPatternColorize
+  };
 }
 
 export type { LayerContext };
@@ -1284,13 +1333,11 @@ export function createPointLayerStack(
     ? getSymbolFillClassification(viz)
     : undefined;
   const pointFillValueColumn = viz ? getSymbolFillValueColumn(viz) : undefined;
-  const symbolPatternType =
+  const symbolPattern =
     pointConfig?.mode === SymbolMode.CATEGORIES
-      ? resolveSymbolPatternType(pointClassification)
+      ? resolveSymbolPattern(pointClassification)
       : pointConfig?.fillMode === FillMode.CATEGORIES
-        ? resolveSymbolPatternType(
-            pointFillClassification ?? pointClassification
-          )
+        ? resolveSymbolPattern(pointFillClassification ?? pointClassification)
         : null;
   const useProportionalSymbols = viz && shouldApplyProportionalSymbols(viz);
   const useClassedSymbols =
@@ -1979,10 +2026,9 @@ export function createPointLayerStack(
   }
 
   const baseLayerProps = {
-    id:
-      symbolPatternType !== null
-        ? `${layerId}-pattern-${symbolPatternType}`
-        : layerId,
+    id: symbolPattern
+      ? `${layerId}-pattern-${symbolPattern.khartisMotifOptions.type}`
+      : layerId,
     ...(scatterProps as unknown as Record<string, unknown>),
     stroked: showPointStroke,
     filled: !hideSymbolFill,
@@ -2069,7 +2115,6 @@ export function createPointLayerStack(
         pointClassification?.labels,
         pointClassification?.categoryValues,
         pointClassification?.categoryShapes,
-        symbolPatternType,
         pointMissingColumn,
         showMissingPoints
       ]
@@ -2085,8 +2130,7 @@ export function createPointLayerStack(
       dotLength: pointStrokeDashSpec.shader.dot,
       dotGap: pointStrokeDashSpec.shader.dotGap,
       barWidth: pointBarWidth,
-      patternEnabled: symbolPatternType !== null,
-      patternType: symbolPatternType ?? SYMBOL_PATTERN_TYPE.DOTS
+      ...symbolPatternLayerProps(symbolPattern)
     })
   ];
 }
