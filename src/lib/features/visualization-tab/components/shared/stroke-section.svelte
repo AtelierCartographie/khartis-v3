@@ -363,6 +363,7 @@
   {#if strokeMode === StrokeMode.UNIQUE}
     <SingleColorPreview
       exclusive
+      allowPattern={false}
       label={m.color()}
       color={strokeColor}
       onchange={handleStrokeColorChange}

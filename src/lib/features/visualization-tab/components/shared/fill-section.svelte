@@ -233,6 +233,7 @@
   {:else}
     <SingleColorPreview
       exclusive
+      allowPattern={categoriesVariant === 'polygons'}
       label={m.color()}
       color={fillColor}
       patternPaletteConfig={categoriesVariant === 'polygons'
@@ -282,6 +283,7 @@
     showInvertButton={false}
     paletteType={resolvePaletteTypeForBreakpoint(visualization?.classification)}
     classification={visualization?.classification}
+    categoriesVariant={categoriesVariant}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />
