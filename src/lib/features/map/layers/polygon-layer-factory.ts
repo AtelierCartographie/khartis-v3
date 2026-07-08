@@ -99,10 +99,14 @@ import {
   createGeoJsonClassPatternColorAccessor,
   createGeoJsonPatternBackgroundFillAccessor,
   createGeoJsonPatternOverlayColorAccessor,
+  createGeoJsonUniqueClassPatternIndexAccessor,
+  createGeoJsonUniquePatternBaseFillAccessor,
   createMissingPolygonPatternColorAccessor,
   createPatternBackgroundFillAccessor,
   createSplitUniqueBinaryColorAccessor,
   createSplitUniqueGeoJsonColorAccessor,
+  createUniqueClassPatternIndexAccessor,
+  createUniquePatternBaseFillAccessor,
   filterMissingPolygonPatternFeatures,
   filterSplitMatchedPolygonFeatures
 } from './polygon-fill-accessors.utils';
@@ -317,7 +321,7 @@ export function createPolygonLayerStack(
             )
           : null;
       const splitUniqueFillAccessor =
-        polygonFillMode === FillMode.UNIQUE
+        polygonFillMode === FillMode.UNIQUE && !classPatternPalette
           ? createSplitUniqueBinaryColorAccessor(
               ctx,
               jsTable,
@@ -326,7 +330,15 @@ export function createPolygonLayerStack(
             )
           : null;
 
-      const baseFillAccessor = choroplethAccessor ?? categoricalAccessor;
+      const uniquePatternBaseFillAccessor =
+        classPatternPalette && polygonFillMode === FillMode.UNIQUE
+          ? createUniquePatternBaseFillAccessor(ctx)
+          : null;
+
+      const baseFillAccessor =
+        choroplethAccessor ??
+        categoricalAccessor ??
+        uniquePatternBaseFillAccessor;
 
       const classPatternClassIndexAccessor = classPatternPalette
         ? polygonFillMode === FillMode.CLASSES
@@ -335,11 +347,13 @@ export function createPolygonLayerStack(
               polygonClassification!.breaks!,
               classPatternPalette.length
             )
-          : createCategoryIndexAccessor(
-              polygonCategoryColumn!,
-              polygonClassification?.labels ?? [],
-              polygonClassification?.disabledLabels ?? []
-            )
+          : polygonFillMode === FillMode.CATEGORIES
+            ? createCategoryIndexAccessor(
+                polygonCategoryColumn!,
+                polygonClassification?.labels ?? [],
+                polygonClassification?.disabledLabels ?? []
+              )
+            : createUniqueClassPatternIndexAccessor(ctx)
         : null;
 
       const patternedFillAccessor =
@@ -790,7 +804,7 @@ export function createPolygonLayerStack(
               polygonClassification?.disabledLabels ?? []
             )
           )
-        : polygonFillMode === FillMode.UNIQUE
+        : polygonFillMode === FillMode.UNIQUE && !classPatternPalette
           ? createSplitUniqueGeoJsonColorAccessor(
               ctx,
               jsTable,
@@ -818,7 +832,9 @@ export function createPolygonLayerStack(
             showMissingPolygons,
             polygonClassification?.disabledLabels ?? []
           )
-        : null);
+        : classPatternPalette && polygonFillMode === FillMode.UNIQUE
+          ? createGeoJsonUniquePatternBaseFillAccessor(ctx, jsTable)
+          : null);
 
   const geoJsonClassPatternIndexAccessor = classPatternPalette
     ? polygonFillMode === FillMode.CLASSES
@@ -827,11 +843,13 @@ export function createPolygonLayerStack(
           polygonClassification!.breaks!,
           classPatternPalette.length
         )
-      : createGeoJsonCategoryIndexAccessor(
-          polygonCategoryColumn!,
-          polygonClassification?.labels ?? [],
-          polygonClassification?.disabledLabels ?? []
-        )
+      : polygonFillMode === FillMode.CATEGORIES
+        ? createGeoJsonCategoryIndexAccessor(
+            polygonCategoryColumn!,
+            polygonClassification?.labels ?? [],
+            polygonClassification?.disabledLabels ?? []
+          )
+        : createGeoJsonUniqueClassPatternIndexAccessor(ctx, jsTable)
     : null;
 
   const patternedGeoJsonFillColor =

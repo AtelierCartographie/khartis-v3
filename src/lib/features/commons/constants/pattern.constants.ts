@@ -1,3 +1,5 @@
+import type { ContrastMode } from '@ateliercartographie/ok-palette';
+
 export enum PatternType {
   DOTS = 'dots',
   LINES = 'lines',
@@ -33,4 +35,5 @@ export interface PatternPaletteConfig {
   color?: string;
   colorize?: boolean;
   categoryShapes?: (PatternShape | undefined)[];
+  contrast?: ContrastMode;
 }

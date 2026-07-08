@@ -2063,7 +2063,7 @@ describe('createPolygonLayers', () => {
     const patternData = patternLayer?.props.data as FeatureCollection<Polygon>;
 
     expect(getFillColor?.(createPolygonFeature('DEU', 2024))).toEqual([
-      255, 0, 0, 255
+      255, 255, 255, 255
     ]);
     expect(getFillColor?.(createPolygonFeature('ESP', 2024))).toEqual([
       0, 0, 0, 0
@@ -2427,7 +2427,7 @@ describe('createPolygonLayers', () => {
       expect(sizes[i]!).toBeGreaterThan(sizes[i - 1]!);
     }
     propsPerClass.forEach((props) => {
-      expect(props.getFillPatternScale).toBe(30);
+      expect(props.getFillPatternScale).toBe(10);
       expect(props.opacity).toBe(1);
     });
   });

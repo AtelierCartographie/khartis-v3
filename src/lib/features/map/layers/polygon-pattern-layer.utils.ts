@@ -71,6 +71,7 @@ export interface KhartisMotifOptions {
   angle: number;
   scale: number;
   size: number;
+  patchSize: boolean;
 }
 
 export type PolygonPatternProps = {
@@ -152,7 +153,8 @@ export function createClassPatternProps(
       type: pattern.type,
       angle: pattern.angle,
       scale: pattern.scale,
-      size: pattern.size
+      size: pattern.size,
+      patchSize: pattern.patchSize
     }
   };
 }
@@ -173,6 +175,16 @@ export function resolveClassPatternPalette(
     return null;
   }
 
+  if (fillMode === FillMode.UNIQUE) {
+    return resolveClassPatterns(
+      1,
+      pattern,
+      'sequential',
+      pattern.contrast,
+      false
+    );
+  }
+
   if (fillMode === FillMode.CLASSES) {
     const count = classification?.colors?.length ?? 0;
     if (count === 0) return null;
@@ -180,7 +192,7 @@ export function resolveClassPatternPalette(
       count,
       pattern,
       'sequential',
-      undefined,
+      pattern.contrast,
       classification?.inverted ?? false
     );
   }
@@ -194,7 +206,7 @@ export function resolveClassPatternPalette(
       count,
       pattern,
       'categorical',
-      undefined,
+      pattern.contrast,
       classification?.inverted ?? false
     );
   }

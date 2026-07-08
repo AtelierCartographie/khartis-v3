@@ -18,6 +18,7 @@ export interface ClassPattern {
   scale: number;
   size: number;
   fill: string;
+  patchSize: boolean;
 }
 
 const CATEGORICAL_SCALE_RANGE: [number, number] = [1, 2.5];
@@ -38,6 +39,7 @@ export function resolveClassPatterns(
   contrast?: ContrastMode,
   inverted = false
 ): ClassPattern[] {
+  const categoricalScale = cfg.scale ?? 1;
   const patterns =
     mode === 'sequential'
       ? sequentialPatterns(count, {
@@ -46,13 +48,18 @@ export function resolveClassPatterns(
           scale: cfg.scale ?? DEFAULT_SEQUENTIAL_SCALE,
           contrast,
           fill: cfg.color ?? DEFAULT_PATTERN_COLOR,
-          background: 'transparent'
+          background: 'transparent',
+          patchSize: false
         })
       : categoricalPatterns(count, {
-          scaleRange: CATEGORICAL_SCALE_RANGE,
+          scaleRange: [
+            CATEGORICAL_SCALE_RANGE[0] * categoricalScale,
+            CATEGORICAL_SCALE_RANGE[1] * categoricalScale
+          ],
           fill: cfg.color ?? DEFAULT_PATTERN_COLOR,
           background: 'transparent',
-          colorize: cfg.colorize ?? false
+          colorize: cfg.colorize ?? false,
+          patchSize: false
         });
 
   const resolved = patterns.map((pattern) => ({
@@ -60,7 +67,8 @@ export function resolveClassPatterns(
     angle: pattern.angle,
     scale: pattern.scale,
     size: pattern.size,
-    fill: toHexFill(pattern.fill)
+    fill: toHexFill(pattern.fill),
+    patchSize: pattern.patchSize
   }));
 
   const reordered = inverted ? resolved.reverse() : resolved;

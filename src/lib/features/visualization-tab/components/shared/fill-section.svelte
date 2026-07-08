@@ -191,7 +191,11 @@
     patternColorize:
       (categoriesVariant === 'polygons'
         ? visualization?.classification?.pattern?.colorize
-        : undefined) ?? DEFAULT_COMMON_ASPECT.patternColorize
+        : undefined) ?? DEFAULT_COMMON_ASPECT.patternColorize,
+    patternScale:
+      (categoriesVariant === 'polygons'
+        ? visualization?.classification?.pattern?.scale
+        : undefined) ?? DEFAULT_COMMON_ASPECT.patternScale
   });
   const selectableValueFields = $derived(
     filterFieldsByKind(selectableDataFields, 'numeric', selectedValueFieldId)
@@ -244,18 +248,16 @@
       exclusive
       label={m.color()}
       color={fillColor}
-      patternId={categoriesVariant === 'polygons'
-        ? visualization?.classification?.patternId
-        : undefined}
-      patternParams={categoriesVariant === 'polygons'
-        ? visualization?.classification?.patternParams
+      patternPaletteConfig={categoriesVariant === 'polygons'
+        ? visualization?.classification?.pattern
         : undefined}
       onchange={onFillColorChange}
-      onpatternchange={(patternId, patternParams) => {
+      onpatternchange={(config) => {
         if (categoriesVariant === 'polygons') {
           onClassificationChange({
-            patternId,
-            patternParams: patternId ? patternParams : undefined
+            pattern: config,
+            patternId: undefined,
+            patternParams: undefined
           });
         }
       }}
@@ -336,6 +338,7 @@
     categoriesCommonAspect={categoriesCommonAspect}
     showCategoriesCommonAspect={categoriesVariant === 'polygons'}
     categoryLabels={categoryLabels.labels}
+    classification={visualization?.classification}
     bind:categoriesPopoverOpen={categoriesPopoverOpen}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}

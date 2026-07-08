@@ -16,7 +16,6 @@
   import PaletteSuggestions from './palette-suggestions.svelte';
   import PaletteCustom from './palette-custom.svelte';
   import PaletteComparison from './palette-comparison.svelte';
-  import type { ContrastMode } from '@ateliercartographie/ok-palette';
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import {
     PALETTE_TYPE,
@@ -53,7 +52,6 @@
       palette: Palette | undefined,
       colors: string[],
       inverted: boolean,
-      patternParams?: PatternParams,
       patternPaletteConfig?: PatternPaletteConfig
     ) => void;
   }
@@ -89,11 +87,9 @@
   let draftInverted = $state(false);
   let draftType = $state<PaletteType>(PALETTE_TYPE.SEQUENTIAL);
   let draftColorBlindFilter = $state(false);
-  let draftPatternParams = $state<PatternParams | undefined>(undefined);
   let draftPatternPaletteConfig = $state<PatternPaletteConfig | undefined>(
     undefined
   );
-  let draftPatternContrast = $state<ContrastMode | undefined>(undefined);
   let draftQualitativePreset = $state<QualitativePreset>(
     DEFAULT_QUALITATIVE_PRESET
   );
@@ -125,9 +121,7 @@
     draftInverted = currentInverted;
     draftType = paletteType;
     draftColorBlindFilter = colorBlindFilter;
-    draftPatternParams = currentPatternParams;
     draftPatternPaletteConfig = currentPatternPaletteConfig;
-    draftPatternContrast = undefined;
     draftQualitativePreset =
       findPaletteById(selectedPaletteId)?.qualitativePreset ??
       DEFAULT_QUALITATIVE_PRESET;
@@ -148,7 +142,6 @@
       palette,
       draftColors,
       draftInverted,
-      draftPatternParams,
       draftPatternPaletteConfig
     );
     open = false;
@@ -167,7 +160,6 @@
   function handlePaletteSelect(palette: Palette) {
     draftPaletteId = palette.id;
     draftInverted = false;
-    draftPatternParams = undefined;
     draftPatternPaletteConfig = undefined;
     draftQualitativePreset =
       palette.qualitativePreset ?? draftQualitativePreset;
@@ -187,23 +179,12 @@
   function handleCustomColorsChange(colors: string[]) {
     draftPaletteId = '__custom__';
     draftInverted = false;
-    draftPatternParams = undefined;
     draftPatternPaletteConfig = undefined;
     draftColors = colors;
   }
 
-  function handlePatternSelect(palette: Palette, params: PatternParams) {
-    draftPaletteId = palette.id;
-    draftPatternParams = params;
-    draftPatternPaletteConfig = undefined;
-  }
-
-  function handlePatternPaletteChange(
-    config: PatternPaletteConfig,
-    contrast: ContrastMode | undefined
-  ) {
+  function handlePatternPaletteChange(config: PatternPaletteConfig) {
     draftPatternPaletteConfig = config;
-    draftPatternContrast = contrast;
   }
 
   function handleQualitativePresetChange(preset: QualitativePreset) {
@@ -229,7 +210,6 @@
   function handleQualitativeColorSelect(hex: string) {
     draftPaletteId = '__custom__';
     draftInverted = false;
-    draftPatternParams = undefined;
     if (numClasses <= 1) {
       draftColors = [hex];
     } else {
@@ -245,7 +225,6 @@
     if (colors.length === 0) return;
     draftPaletteId = '__custom__';
     draftInverted = false;
-    draftPatternParams = undefined;
     draftColors = Array.from(
       { length: Math.max(numClasses, 1) },
       (_, index) => colors[index % colors.length]
@@ -334,16 +313,13 @@
         />
 
         <PaletteCustom
-          selectedPaletteId={draftPaletteId}
           paletteType={draftType}
           numClasses={numClasses}
           colorBlindFilter={draftColorBlindFilter}
           allowPattern={allowPattern}
           inverted={draftInverted}
-          patternParams={draftPatternParams}
           patternPaletteConfig={draftPatternPaletteConfig}
           onColorsChange={handleCustomColorsChange}
-          onPatternSelect={handlePatternSelect}
           onPatternPaletteChange={handlePatternPaletteChange}
           onInvertToggle={handleInvertToggle}
         />
@@ -359,10 +335,8 @@
             currentPatternId={toValidPatternId(currentPatternId)}
             currentPatternParams={currentPatternParams}
             newPatternId={findPaletteById(draftPaletteId)?.patternId}
-            newPatternParams={draftPatternParams}
             currentPatternPaletteConfig={currentPatternPaletteConfig}
             newPatternPaletteConfig={draftPatternPaletteConfig}
-            patternPaletteContrast={draftPatternContrast}
             currentInverted={currentInverted}
             newInverted={draftInverted}
           />

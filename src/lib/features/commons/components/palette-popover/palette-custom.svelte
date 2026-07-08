@@ -4,7 +4,6 @@
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import ContentSwitcher from './content-switcher.svelte';
   import SingleColorPreview from './single-color-preview.svelte';
-  import PatternPicker from './pattern-picker.svelte';
   import PatternPalettePicker from './pattern-palette-picker.svelte';
   import {
     ColorSelector,
@@ -14,43 +13,31 @@
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import {
     PALETTE_TYPE,
-    type Palette,
     type PaletteType,
-    type PatternParams,
-    getPatternPalettes,
     generateSequentialFromColor,
     generateSequentialFromColors
   } from './palette.constants';
 
   interface Props {
-    selectedPaletteId?: string;
     paletteType?: PaletteType;
     numClasses: number;
     colorBlindFilter?: boolean;
     inverted?: boolean;
     allowPattern?: boolean;
-    patternParams?: PatternParams;
     patternPaletteConfig?: PatternPaletteConfig;
     onColorsChange?: (colors: string[]) => void;
-    onPatternSelect?: (palette: Palette, params: PatternParams) => void;
-    onPatternPaletteChange?: (
-      config: PatternPaletteConfig,
-      contrast: ContrastMode | undefined
-    ) => void;
+    onPatternPaletteChange?: (config: PatternPaletteConfig) => void;
     onInvertToggle?: (value: boolean) => void;
   }
 
   let {
-    selectedPaletteId,
     paletteType = PALETTE_TYPE.SEQUENTIAL,
     numClasses,
     colorBlindFilter = false,
     inverted = false,
     allowPattern = true,
-    patternParams,
     patternPaletteConfig,
     onColorsChange,
-    onPatternSelect,
     onPatternPaletteChange,
     onInvertToggle
   }: Props = $props();
@@ -70,9 +57,6 @@
   let contrastMode = $state<'low' | 'normal' | 'high'>('normal');
   let motifEnabled = $state(false);
 
-  let selectedPatternId = $state<string | null>(null);
-  let patternSize = $state(4);
-  let patternScale = $state(8);
   let draftPatternPaletteConfig = $state<PatternPaletteConfig>(
     DEFAULT_PATTERN_PALETTE_CONFIG
   );
@@ -89,46 +73,25 @@
       : [m.palette_custom_1_color(), m.palette_custom_2_colors()]
   );
 
-  const patternPalettes = $derived(getPatternPalettes());
-
-  $effect(() => {
-    if (selectedPaletteId?.startsWith('pattern-')) {
-      const match = patternPalettes.find((p) => p.id === selectedPaletteId);
-      if (match) {
-        untrack(() => {
-          selectedPatternId = match.id;
-          motifEnabled = true;
-          if (patternParams?.size !== undefined) {
-            patternSize = patternParams.size;
-          }
-          if (patternParams?.scale !== undefined) {
-            patternScale = patternParams.scale;
-          }
-        });
-      }
-    }
-  });
-
   $effect(() => {
     const next = patternPaletteConfig;
     if (next) {
       untrack(() => {
         draftPatternPaletteConfig = next;
         if (!activeTabInitialized) {
-          activeTab = 2;
           activeTabInitialized = true;
+          contrastMode =
+            next.contrast === 'low' || next.contrast === 'high'
+              ? next.contrast
+              : 'normal';
+          if (isQualitative) {
+            motifEnabled = true;
+          } else {
+            activeTab = 2;
+          }
         }
       });
     }
-  });
-
-  const selectedPalette = $derived(
-    patternPalettes.find((p) => p.id === selectedPatternId) ?? null
-  );
-
-  const currentPatternParams = $derived<PatternParams>({
-    size: patternSize,
-    scale: patternScale
   });
 
   const resolvedContrast = $derived<ContrastMode | undefined>(
@@ -163,7 +126,7 @@
         )
       );
     } else if (index === 2) {
-      onPatternPaletteChange?.(draftPatternPaletteConfig, resolvedContrast);
+      emitPatternPaletteChange(draftPatternPaletteConfig);
     }
   }
 
@@ -188,13 +151,17 @@
       );
       onColorsChange?.(colors);
     } else if (activeTab === 2) {
-      onPatternPaletteChange?.(draftPatternPaletteConfig, resolvedContrast);
+      emitPatternPaletteChange(draftPatternPaletteConfig);
     }
   }
 
+  function emitPatternPaletteChange(config: PatternPaletteConfig) {
+    draftPatternPaletteConfig = { ...config, contrast: resolvedContrast };
+    onPatternPaletteChange?.(draftPatternPaletteConfig);
+  }
+
   function handlePatternPaletteChange(config: PatternPaletteConfig) {
-    draftPatternPaletteConfig = config;
-    onPatternPaletteChange?.(config, resolvedContrast);
+    emitPatternPaletteChange(config);
   }
 
   function handleSingleColorChange(color: string) {
@@ -227,18 +194,6 @@
     onColorsChange?.(colors);
   }
 
-  function handlePatternChange(patternId: string, params: PatternParams) {
-    selectedPatternId = `pattern-${patternId}`;
-    patternSize = params.size ?? patternSize;
-    patternScale = params.scale ?? patternScale;
-    const palette = patternPalettes.find((p) => p.patternId === patternId);
-    if (palette) emitPatternSelect(palette, params);
-  }
-
-  function emitPatternSelect(palette: Palette, params: PatternParams) {
-    onPatternSelect?.(palette, params);
-  }
-
   function handleInvertToggle(value: boolean) {
     onInvertToggle?.(value);
   }
@@ -246,16 +201,11 @@
   function handleMotifToggle(value: boolean) {
     motifEnabled = value;
     if (!value) {
-      selectedPatternId = null;
       onColorsChange?.([singleColor]);
       return;
     }
 
-    const palette = selectedPalette ?? patternPalettes[0];
-    if (palette) {
-      selectedPatternId = palette.id;
-      emitPatternSelect(palette, currentPatternParams);
-    }
+    emitPatternPaletteChange(draftPatternPaletteConfig);
   }
 </script>
 
@@ -283,10 +233,9 @@
     {/if}
 
     {#if allowPattern && motifEnabled}
-      <PatternPicker
-        patternId={selectedPalette?.patternId}
-        patternParams={currentPatternParams}
-        onChange={handlePatternChange}
+      <PatternPalettePicker
+        config={draftPatternPaletteConfig}
+        onchange={handlePatternPaletteChange}
       />
     {/if}
   {:else}

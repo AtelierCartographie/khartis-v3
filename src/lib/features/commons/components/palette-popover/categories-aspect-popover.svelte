@@ -40,7 +40,7 @@
     type PatternParams,
     DEFAULT_QUALITATIVE_PRESET,
     generateCategoricalColorsFromSeed,
-    buildClassPatternSvgBackground
+    buildShapeSwatchBackground
   } from './palette.constants';
   import type { PatternShape } from '$lib/features/commons/constants/pattern.constants';
   import {
@@ -143,6 +143,7 @@
             shape: 'line',
             color: draftCommonAspect.patternColor,
             colorize: draftCommonAspect.patternColorize,
+            scale: draftCommonAspect.patternScale,
             categoryShapes: draftCategories.map(
               (category) => category.patternShape
             )
@@ -242,6 +243,10 @@
 
   function handlePatternColorizeChange(colorize: boolean) {
     draftCommonAspect = { ...draftCommonAspect, patternColorize: colorize };
+  }
+
+  function handlePatternScaleChange(value: number) {
+    draftCommonAspect = { ...draftCommonAspect, patternScale: value / 10 };
   }
 
   function handleLegacyPatternChange(patternId: string, params: PatternParams) {
@@ -451,7 +456,7 @@
 
     const pattern = categoryPatterns?.[index];
     const patternStyle = pattern
-      ? ` background: ${buildClassPatternSvgBackground(pattern, '#ffffff')};`
+      ? ` background: ${buildShapeSwatchBackground(pattern.type as PatternShape, pattern.fill)};`
       : '';
 
     return `--marker-color: ${markerColor}; --marker-size: ${rankSize}px;${patternStyle}`;
@@ -787,6 +792,18 @@
                       label={m.pattern_colorize()}
                       toggled={draftCommonAspect.patternColorize ?? false}
                       ontoggle={handlePatternColorizeChange}
+                    />
+                  </div>
+                  <div class="common-grid-row common-grid-row--full">
+                    <SliderWithInput
+                      label={m.pattern_scale()}
+                      min={1}
+                      max={30}
+                      step={1}
+                      value={Math.round(
+                        (draftCommonAspect.patternScale ?? 1) * 10
+                      )}
+                      onchange={handlePatternScaleChange}
                     />
                   </div>
                 {/if}

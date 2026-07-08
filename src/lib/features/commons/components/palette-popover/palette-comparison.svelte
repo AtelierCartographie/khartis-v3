@@ -1,6 +1,5 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import type { ContrastMode } from '@ateliercartographie/ok-palette';
   import { PATTERN_OVERLAY_OPACITY } from '$lib/features/commons/constants/pattern.constants';
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import { getPatternOverlayColorHex } from '$lib/features/map/layers/pattern-texture';
@@ -26,7 +25,6 @@
     newPatternParams?: PatternParams;
     currentPatternPaletteConfig?: PatternPaletteConfig;
     newPatternPaletteConfig?: PatternPaletteConfig;
-    patternPaletteContrast?: ContrastMode;
     currentInverted?: boolean;
     newInverted?: boolean;
   }
@@ -41,7 +39,6 @@
     newPatternParams,
     currentPatternPaletteConfig,
     newPatternPaletteConfig,
-    patternPaletteContrast,
     currentInverted = false,
     newInverted = false
   }: Props = $props();
@@ -76,6 +73,26 @@
       : `background-color: ${color}`;
   }
 
+  function qualitativeSwatchStyle(
+    color: string,
+    config?: PatternPaletteConfig,
+    patternId?: PatternId,
+    params?: PatternParams
+  ): string {
+    if (config) {
+      const [pattern] = resolveClassPatterns(
+        1,
+        config,
+        'sequential',
+        config.contrast,
+        false
+      );
+      return `background: ${buildClassPatternSvgBackground(pattern, '#ffffff')}`;
+    }
+
+    return swatchStyle(color, patternId, params);
+  }
+
   function rowBackgrounds(
     colors: string[],
     patternId?: PatternId,
@@ -94,7 +111,7 @@
       count,
       config,
       'sequential',
-      patternPaletteContrast,
+      config.contrast,
       inverted
     );
     return patterns.map((pattern) =>
@@ -109,8 +126,9 @@
       <span class="comparison-label">{m.palette_current()}</span>
       <div
         class="solid-swatch"
-        style={swatchStyle(
+        style={qualitativeSwatchStyle(
           currentPrimary,
+          currentPatternPaletteConfig,
           currentPatternId,
           currentPatternParams
         )}
@@ -120,7 +138,12 @@
       <span class="comparison-label">{m.palette_new()}</span>
       <div
         class="solid-swatch"
-        style={swatchStyle(newPrimary, newPatternId, newPatternParams)}
+        style={qualitativeSwatchStyle(
+          newPrimary,
+          newPatternPaletteConfig,
+          newPatternId,
+          newPatternParams
+        )}
       ></div>
     </div>
   {:else}
