@@ -44,6 +44,7 @@
   import { useSideNav } from './hooks/use-side-nav.svelte';
 
   const sideNav = useSideNav();
+  const FEEDBACK_FORM_URL = 'https://forms.gle/ktBmKEsJxhtx686f6';
   const appVersion = (import.meta.env.VITE_APP_VERSION || 'dev').replace(
     /^v/i,
     ''
@@ -502,7 +503,7 @@
               kind="ghost"
               icon={Launch}
               class="menu-bar-item"
-              href={`${khartisSiteBase}/retours`}
+              href={FEEDBACK_FORM_URL}
               target="_blank"
               rel="noopener noreferrer">{m.sidenav_feedback()}</Button
             >
