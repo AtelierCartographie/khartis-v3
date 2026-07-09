@@ -35,14 +35,19 @@ function createConsentStore() {
       const parsed: unknown = JSON.parse(stored);
       if (!isRecord(parsed)) return;
 
-      state.analytics = parsed.analytics === true;
-      state.consentDate =
-        typeof parsed.consentDate === 'string' ? parsed.consentDate : null;
-      state.consentVersion =
+      const consentVersion =
         typeof parsed.consentVersion === 'number' &&
         Number.isInteger(parsed.consentVersion)
           ? parsed.consentVersion
           : 0;
+      const hasCurrentConsent = consentVersion >= CURRENT_CONSENT_VERSION;
+
+      state.analytics = hasCurrentConsent && parsed.analytics === true;
+      state.consentDate =
+        hasCurrentConsent && typeof parsed.consentDate === 'string'
+          ? parsed.consentDate
+          : null;
+      state.consentVersion = hasCurrentConsent ? consentVersion : 0;
 
       if (state.analytics && state.consentVersion >= CURRENT_CONSENT_VERSION) {
         analyticsService.enable();
