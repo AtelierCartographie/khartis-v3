@@ -164,7 +164,7 @@ The full list — including feature architecture, basemaps, legends, PWA, the de
 - **Client-side only**: imported data never leaves the browser; the attack surface on a server is nil because there is no data server.
 - **Metadata-only persistence**: project JSON stores styling and references, not source files; raw imports live in IndexedDB asset chunks and are replayed into DuckDB on reopen.
 - **Input hardening**: file names, CSV cells, and user input are sanitized; user-authored SQL expressions pass through `validateExpression()`, which rejects subqueries, multi-statements, and dangerous calls. Quotas cap file sizes (150 MB text/geo, 200 MB binary) and project count.
-- **Consent-first analytics**: optional Google Analytics loads only after user consent, configured via `PUBLIC_GA_MEASUREMENT_ID`; it records anonymous usage events only, never data values, column names, or place names.
+- **Consent-first analytics**: Google Analytics 4 loads only after user consent, configured via the public `PUBLIC_GA_MEASUREMENT_ID` value. The official Sciences Po production URL uses the published Khartis measurement ID; other deployments must opt in explicitly. Analytics records anonymous, allow-listed usage events only, never project names, file names, data values, column names, or place names. See [analytics configuration](docs/ANALYTICS.md).
 - **Deployment**: the local PPRD helper is documented in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md); PRD deployment is intentionally unsupported by it. Dependencies are scanned via Dependabot.
 - To report a security vulnerability, see [SECURITY.md](SECURITY.md).
 

@@ -2,6 +2,7 @@
   import Tooltip from '$lib/features/commons/components/carbon/tooltip.svelte';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { analyticsService } from '$lib/features/commons/services/analytics.service';
   import { horizontalWheelScroll } from '$lib/features/commons/utils/horizontal-wheel-scroll';
   import type { SavedProjectMetadata } from '$lib/features/project-management';
   import { m } from '$lib/paraglide/messages';
@@ -78,6 +79,7 @@
       await projectStore.loadProject(projectId);
       await navigateAfterAction();
     } catch (err) {
+      analyticsService.trackFailure('project_open', err);
       logger.error('Failed to load project', LogCategory.PROJECT, err);
       error =
         err instanceof Error
@@ -108,8 +110,10 @@
 
     try {
       await projectStore.importProject(khFile);
+      analyticsService.trackProjectOpened('backup_file');
       await navigateAfterAction();
     } catch (err) {
+      analyticsService.trackFailure('project_import', err);
       logger.error('Failed to import project', LogCategory.PROJECT, err);
       error =
         err instanceof Error
