@@ -120,7 +120,8 @@ async function main() {
     VITE_APP_VERSION: tag,
     VITE_DEBUG: 'false',
     VITE_LOG_LEVEL: 'ERROR',
-    VITE_LOG_STACK: 'false'
+    VITE_LOG_STACK: 'false',
+    PUBLIC_GTM_CONTAINER_ID: process.env.PUBLIC_GTM_CONTAINER_ID ?? ''
   };
 
   if (!options.dryRun) {
