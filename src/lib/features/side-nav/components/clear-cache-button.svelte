@@ -58,10 +58,20 @@
     <p>{m.sidenav_clear_cache_confirm_body()}</p>
   </ModalBody>
   <div class="update-modal-footer">
-    <Button kind="secondary" disabled={isBusy} on:click={closeModal}>
+    <Button
+      class="khartis-dialog-close-action"
+      kind="secondary"
+      disabled={isBusy}
+      on:click={closeModal}
+    >
       {m.sidenav_clear_cache_confirm_secondary()}
     </Button>
-    <Button kind="primary" disabled={isBusy} on:click={handleConfirm}>
+    <Button
+      class="khartis-dialog-action"
+      kind="secondary"
+      disabled={isBusy}
+      on:click={handleConfirm}
+    >
       {#if isBusy}
         <span class="update-button-loading">
           <Loading small withOverlay={false} />
