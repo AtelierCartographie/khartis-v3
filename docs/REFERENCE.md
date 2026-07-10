@@ -301,7 +301,9 @@ Convention de clés : `snake_case` sémantique par feature. Sources : `messages/
 | `pnpm lint`                | prettier --check + eslint                                                 |
 | `pnpm format`              | prettier --write                                                          |
 | `pnpm deploy:pprd:dry-run` | Vérifie le tag PPRD, le gate CI et le build sans SFTP                     |
-| `pnpm deploy:pprd`         | Déploie la dernière release staging vers la PPRD via le helper SFTP local |
+| `pnpm deploy:pprd`         | Déploie la dernière prerelease pprd vers la PPRD via le helper SFTP local |
+| `pnpm deploy:prod:dry-run` | Vérifie le tag PROD, le gate CI et le build sans SFTP                     |
+| `pnpm deploy:prod`         | Déploie la dernière release stable vers la PROD (redemande le tag)        |
 | `pnpm test:unit`           | Tous les tests Vitest (client jsdom + server Node)                        |
 | `pnpm test:pipeline`       | Tests serveur pipeline + DuckDB                                           |
 | `pnpm test:duckdb`         | Tests d'intégration DuckDB uniquement                                     |
