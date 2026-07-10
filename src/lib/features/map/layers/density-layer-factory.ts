@@ -1,7 +1,7 @@
 import { ScatterplotLayer } from '@deck.gl/layers';
 import type { Layer } from '@deck.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import { createScatterplotLayerProps } from 'geoarrow-deck-stream';
+import { createScatterplotLayerProps } from '@ateliercartographie/geoarrow-deck-stream';
 import {
   parsePointData,
   parsePointDataWithProjection

@@ -6,7 +6,7 @@ import {
   type BinaryPathData,
   type BinaryPolygonData,
   type ProjectionLike
-} from 'geoarrow-deck-stream';
+} from '@ateliercartographie/geoarrow-deck-stream';
 import type { Matrix4 } from '@math.gl/core';
 import type { DeckDataRow } from '../types';
 import { createCompatibleSolidPolygonLayerProps } from './solid-polygon-layer-props.utils';

@@ -1,5 +1,5 @@
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { createScatterplotLayerProps } from 'geoarrow-deck-stream';
+import type { createScatterplotLayerProps } from '@ateliercartographie/geoarrow-deck-stream';
 
 export type ScatterBinaryData = {
   attributes: Record<string, unknown>;

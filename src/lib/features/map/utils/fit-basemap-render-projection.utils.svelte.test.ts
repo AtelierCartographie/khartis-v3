@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ProjectionLike } from 'geoarrow-deck-stream';
+import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 import type { BasemapMetadata } from '../types/basemap.types';
 
 const mocks = vi.hoisted(() => ({

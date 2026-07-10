@@ -107,7 +107,7 @@
     syncMapLibreInteractionMode,
     syncOrthographicInteractionMode
   } from '../utils/map-interaction-mode.utils';
-  import type { ProjectionLike } from 'geoarrow-deck-stream';
+  import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
   import AnnotationOverlay from './annotation-overlay.svelte';
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
   import LegendOverlay from './legend-overlay.svelte';

@@ -1,5 +1,5 @@
 import { Matrix4 } from '@math.gl/core';
-import type { ProjectionLike } from 'geoarrow-deck-stream';
+import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 import {
   get_bbox_from_geoparquet,
   get_model_matrix,

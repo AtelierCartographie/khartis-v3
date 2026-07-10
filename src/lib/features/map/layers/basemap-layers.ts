@@ -7,7 +7,7 @@ import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import {
   createPathLayerProps,
   type ProjectionLike
-} from 'geoarrow-deck-stream';
+} from '@ateliercartographie/geoarrow-deck-stream';
 import {
   parsePaths,
   parseSolidPolygons,

@@ -1,5 +1,5 @@
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { ProjectionLike } from 'geoarrow-deck-stream';
+import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 import type { LngLatBoundsLike, Map as MapLibreMap } from 'maplibre-gl';
 import { untrack } from 'svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';

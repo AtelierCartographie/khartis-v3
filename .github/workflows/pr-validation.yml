@@ -31,29 +31,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup SSH for private dependencies
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.GEOARROW_SSH_KEY }}" > ~/.ssh/geoarrow_key
-          echo "${{ secrets.PROJ_SSH_KEY }}" > ~/.ssh/proj_key
-          chmod 600 ~/.ssh/geoarrow_key ~/.ssh/proj_key
-          cat >> ~/.ssh/config << 'EOF'
-          Host github-geoarrow
-            HostName github.com
-            User git
-            IdentityFile ~/.ssh/geoarrow_key
-            IdentitiesOnly yes
-            StrictHostKeyChecking no
-          Host github-proj
-            HostName github.com
-            User git
-            IdentityFile ~/.ssh/proj_key
-            IdentitiesOnly yes
-            StrictHostKeyChecking no
-          EOF
-          git config --global url."git@github-geoarrow:AtelierCartographie/geoarrow-deck-stream".insteadOf "git@github.com:AtelierCartographie/geoarrow-deck-stream"
-          git config --global url."git@github-proj:AtelierCartographie/proj-suggest".insteadOf "git@github.com:AtelierCartographie/proj-suggest"
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 

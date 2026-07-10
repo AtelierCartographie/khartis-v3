@@ -8,7 +8,7 @@ import type {
   Polygon,
   Position
 } from 'geojson';
-import type { ProjectionLike } from 'geoarrow-deck-stream';
+import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 import {
   BASEMAP_LAYER_CONFIG,

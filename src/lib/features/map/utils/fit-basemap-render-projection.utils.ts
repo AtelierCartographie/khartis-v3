@@ -1,5 +1,5 @@
 import type { GeoProjection } from 'd3-geo';
-import type { ProjectionLike } from 'geoarrow-deck-stream';
+import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 import { fitProjectionToBbox } from '$lib/features/commons/utils/projection.utils';
 import type { BBox } from '../types';
 import type { BasemapMetadata } from '../types/basemap.types';
