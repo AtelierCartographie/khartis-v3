@@ -48,8 +48,8 @@ import {
   rowAccessor
 } from '../utils/geoarrow-stream-bridge.utils';
 import { resolveHoverHighlightProps } from '../utils/hover-highlight-props.utils';
-import { createScatterplotLayerProps } from 'geoarrow-deck-stream';
-import type { BinaryPointData } from 'geoarrow-deck-stream';
+import { createScatterplotLayerProps } from '@ateliercartographie/geoarrow-deck-stream';
+import type { BinaryPointData } from '@ateliercartographie/geoarrow-deck-stream';
 import {
   cloneScatterBinaryData,
   sortScatterBinaryDataByRadius

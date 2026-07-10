@@ -12,7 +12,7 @@ import {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  vi.doUnmock('geoarrow-deck-stream');
+  vi.doUnmock('@ateliercartographie/geoarrow-deck-stream');
   vi.doUnmock('./solid-polygon-layer-props.utils');
 });
 
@@ -129,10 +129,10 @@ describe('projection sphere mask utils', () => {
   it('logs and returns null when sphere parsing fails', async () => {
     vi.resetModules();
     const parseError = new Error('sphere parse failed');
-    vi.doMock('geoarrow-deck-stream', async () => {
+    vi.doMock('@ateliercartographie/geoarrow-deck-stream', async () => {
       const actual = await vi.importActual<
-        typeof import('geoarrow-deck-stream')
-      >('geoarrow-deck-stream');
+        typeof import('@ateliercartographie/geoarrow-deck-stream')
+      >('@ateliercartographie/geoarrow-deck-stream');
 
       return {
         ...actual,
@@ -195,10 +195,10 @@ describe('projection sphere mask utils', () => {
         throw maskError;
       })
     }));
-    vi.doMock('geoarrow-deck-stream', async () => {
+    vi.doMock('@ateliercartographie/geoarrow-deck-stream', async () => {
       const actual = await vi.importActual<
-        typeof import('geoarrow-deck-stream')
-      >('geoarrow-deck-stream');
+        typeof import('@ateliercartographie/geoarrow-deck-stream')
+      >('@ateliercartographie/geoarrow-deck-stream');
 
       return {
         ...actual,

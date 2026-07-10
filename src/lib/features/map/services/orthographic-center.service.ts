@@ -1,4 +1,4 @@
-import type { ProjectionLike } from 'geoarrow-deck-stream';
+import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import type { DatasetResult } from '$lib/features/data-pipeline';

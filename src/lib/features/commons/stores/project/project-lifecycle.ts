@@ -11,6 +11,7 @@ import {
 } from '$lib/features/project-management';
 import { m } from '$lib/paraglide/messages';
 import { dataOrchestratorService } from '../../services/data-orchestrator.service.svelte';
+import { analyticsService } from '../../services/analytics.service';
 import { DataValidationError } from '../../pipeline.errors';
 import { LogCategory, logger } from '../../utils/logger';
 import { showError } from '../../utils/notification.utils.svelte';
@@ -70,6 +71,7 @@ export async function createProject(
   await saveCurrentProject(container);
   await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
   await dataOrchestratorService.onProjectChanged();
+  analyticsService.trackProjectCreated(files);
 }
 
 export async function loadProject(
@@ -94,6 +96,7 @@ export async function loadProject(
 
     await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
     await dataOrchestratorService.onProjectChanged();
+    analyticsService.trackProjectOpened('local_storage');
   }
 }
 

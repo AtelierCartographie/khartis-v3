@@ -1,7 +1,7 @@
 import type { Layer } from '@deck.gl/core';
 import { GeoJsonLayer, PathLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import { createPathLayerProps } from 'geoarrow-deck-stream';
+import { createPathLayerProps } from '@ateliercartographie/geoarrow-deck-stream';
 
 import {
   DEFAULT_COLORS,

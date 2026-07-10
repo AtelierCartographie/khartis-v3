@@ -1,6 +1,7 @@
 import type { UseExportModalReturn } from '../types';
 export type { UseExportModalReturn } from '../types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { analyticsService } from '$lib/features/commons/services/analytics.service';
 import { getFormatState } from '$lib/features/step-toolbar/tools/format';
 import { m } from '$lib/paraglide/messages';
 import {
@@ -105,6 +106,23 @@ export function useExportModal(): UseExportModalReturn {
       }
 
       isOpen = false;
+      analyticsService.trackExportCompleted(
+        selectedTab === ExportTab.MAP
+          ? 'map'
+          : selectedTab === ExportTab.DATA
+            ? 'data'
+            : 'project',
+        selectedTab === ExportTab.MAP
+          ? mapFormat
+          : selectedTab === ExportTab.DATA
+            ? dataFormat
+            : 'kh',
+        selectedTab === ExportTab.MAP
+          ? mapFormat === MAP_FORMAT.SVG
+            ? 'vector'
+            : resolution
+          : undefined
+      );
     } catch (error) {
       handleExportError(error);
     } finally {
@@ -113,6 +131,7 @@ export function useExportModal(): UseExportModalReturn {
   }
 
   function handleExportError(error: unknown): void {
+    analyticsService.trackFailure('export', error);
     if (error instanceof ExportError) {
       showError(error.title, error.message);
     } else {

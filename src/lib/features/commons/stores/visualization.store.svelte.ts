@@ -14,6 +14,7 @@ import { DataValidationError } from '../pipeline.errors';
 import { generateUniqueNameWithCounter } from '../utils/naming.utils';
 import { sanitizeTextInput } from '../utils/sanitize.utils';
 import { datasetsStore } from './datasets.store.svelte';
+import { analyticsService } from '../services/analytics.service';
 import { findById, updateById } from '../utils/array-helpers';
 import * as m from '$lib/paraglide/messages';
 
@@ -333,6 +334,7 @@ function createVisualizationStore(): VisualizationStore {
     state.selectedVisualizationId = visualization.id;
     updateActiveVisualizationIds((ids) => ids.add(visualization.id));
     incrementVersion(state, SavePriority.IMMEDIATE);
+    analyticsService.trackVisualizationCreated(type);
 
     return visualization;
   }
