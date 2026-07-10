@@ -1,10 +1,10 @@
-# Analytics and Google Analytics 4
+# Analytics (Google Tag Manager)
 
 Khartis measures audience and feature adoption only after the user has accepted
-audience analytics. The application sends anonymous event names and a small,
-allow-listed set of categorical parameters to Google Analytics 4. It never sends
-project names, file names, data values, column names, place names, imported file
-contents, or error messages.
+audience analytics. The application pushes anonymous event names and a small,
+allow-listed set of categorical parameters to the Sciences Po Google Tag Manager
+container. It never sends project names, file names, data values, column names,
+place names, imported file contents, or error messages.
 
 **See also**: [README.md](README.md) | [GESTION_ETAT.md](GESTION_ETAT.md)
 
@@ -12,36 +12,39 @@ contents, or error messages.
 
 ## Application behavior
 
-Khartis uses a direct GA4 `gtag.js` integration. It does not load a Google Tag
-Manager container.
+Khartis loads the Sciences Po **Google Tag Manager** container and pushes
+anonymous, allow-listed events to `window.dataLayer`. GA4 (or any other tag) is
+configured **inside GTM by Sciences Po**, not by Khartis. The container ID comes
+only from `PUBLIC_GTM_CONTAINER_ID`; nothing is hard-coded in the repository.
 
 The consent store is the only application entry point that enables analytics.
-On a fresh refusal, the Google tag is not injected and no analytics event is
+On a fresh refusal, the container is not injected and no analytics event is
 queued. When consent is granted, the client applies Consent Mode with every
-storage category denied, disables automatic page views, then grants only
+storage category denied, loads the container, then grants only
 `analytics_storage`. On refusal or withdrawal it updates Consent Mode to denied,
 clears queued events, removes GA cookies visible to the current domain, and
-removes its global error listeners. If GA4 had already been loaded in the
-current page, the script can remain loaded until refresh, but Khartis no longer
-sends events and a fresh page load starts without the script.
+removes its global error listeners. If the container had already been loaded in
+the current page, it can remain loaded until refresh, but Khartis no longer
+pushes events and a fresh page load starts without the container.
 
 ## Implementation map
 
-| Responsibility                       | Source of truth                                                                               | Behavior                                                                                                                                                    |
-| ------------------------------------ | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Consent persistence and startup gate | `src/lib/features/commons/stores/consent.store.svelte.ts`                                     | Restores only the current consent version and calls `analyticsService.enable()` only when analytics was accepted.                                           |
-| User control                         | `src/lib/features/side-nav/components/data-privacy-modal.svelte`                              | Lets users accept or decline audience analytics again from the side navigation.                                                                             |
-| GA4 transport and minimization       | `src/lib/features/commons/services/analytics.service.ts`                                      | Loads `gtag.js` after consent, applies Consent Mode, sanitizes URL/referrer values, allow-lists events and parameters, and clears GA cookies on withdrawal. |
-| Project and data lifecycle           | `project-lifecycle.ts`, `open-project.svelte`, `project-name.svelte`, `add-data-modal.svelte` | Records only workflow outcomes and coarse file metadata.                                                                                                    |
-| Visualization and export adoption    | `visualization.store.svelte.ts`, `use-export-modal.svelte.ts`                                 | Records visualization type and export format or resolution from fixed value lists.                                                                          |
-| Error signals                        | `analytics.service.ts` and workflow error handlers                                            | Records source, error class, and fatality only. It never sends an error message, stack trace, project name, or user data.                                   |
+| Responsibility                       | Source of truth                                                                               | Behavior                                                                                                                                                                                    |
+| ------------------------------------ | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Consent persistence and startup gate | `src/lib/features/commons/stores/consent.store.svelte.ts`                                     | Restores only the current consent version and calls `analyticsService.enable()` only when analytics was accepted.                                                                           |
+| User control                         | `src/lib/features/side-nav/components/data-privacy-modal.svelte`                              | Lets users accept or decline audience analytics again from the side navigation.                                                                                                             |
+| GTM transport and minimization       | `src/lib/features/commons/services/analytics.service.ts`                                      | Loads the GTM container after consent, applies Consent Mode, sanitizes URL/referrer values, allow-lists events and parameters pushed to the dataLayer, and clears GA cookies on withdrawal. |
+| Project and data lifecycle           | `project-lifecycle.ts`, `open-project.svelte`, `project-name.svelte`, `add-data-modal.svelte` | Records only workflow outcomes and coarse file metadata.                                                                                                                                    |
+| Visualization and export adoption    | `visualization.store.svelte.ts`, `use-export-modal.svelte.ts`                                 | Records visualization type and export format or resolution from fixed value lists.                                                                                                          |
+| Error signals                        | `analytics.service.ts` and workflow error handlers                                            | Records source, error class, and fatality only. It never sends an error message, stack trace, project name, or user data.                                                                   |
 
 Every source above calls the service, never `gtag` directly. The service rejects
 event names and parameters outside its explicit allow lists. This keeps the
 event contract reviewable and prevents accidental collection when a workflow is
 changed later.
 
-The client sends these GA4 events after consent:
+The client pushes these events to `window.dataLayer` after consent (a GTM
+custom-event trigger can fire on each `event` value):
 
 | Event                      | Purpose                                              | Parameters                                                  |
 | -------------------------- | ---------------------------------------------------- | ----------------------------------------------------------- |
@@ -55,10 +58,11 @@ The client sends these GA4 events after consent:
 | `app_error`                | A tracked workflow failure or uncaught browser error | `error_source`, `error_type`, `fatal`                       |
 | `analytics_consent_accept` | Audience analytics accepted                          | None                                                        |
 
-`page_location` and `page_referrer` are limited to the origin and path. Query
-strings and URL fragments are never added by Khartis because they can contain
-shared-project information. Khartis sets an empty referrer explicitly when it
-has none, so GA4 does not fall back to the browser's unsanitized referrer.
+`page_location` and `page_referrer` are limited to the origin and path and are
+pushed as dataLayer variables. Query strings and URL fragments are never added
+by Khartis because they can contain shared-project information. Configure the
+GA4 tag in GTM to read `page_location` / `page_referrer` from these dataLayer
+variables rather than the raw browser URL.
 
 The GA4 data stream can also emit standard enhanced-measurement events, such as
 `scroll`, after consent. Review that setting in the GA4 property and disable any
@@ -72,26 +76,34 @@ service with diagnostic logs.
 
 ---
 
-## GA4 configuration
+## GTM configuration
 
-The official Sciences Po production URL uses the published Khartis GA4
-measurement ID. For another deployment, set `PUBLIC_GA_MEASUREMENT_ID` in its
-public build environment. A measurement ID is public configuration, not a
-credential. Never add an API secret or another credential to the application or
-repository.
+Khartis loads a Google Tag Manager container. Set `PUBLIC_GTM_CONTAINER_ID`
+(for example `GTM-XXXXXX`) in the public build environment; the deploy helper
+forwards it into the production build. A container ID is public configuration,
+not a credential. Never add an API secret or another credential to the
+application or repository, and never hard-code the ID in the source.
 
-GA4 receives the listed custom events directly. Register the parameters needed
-in reports as event-scoped custom dimensions. `file_count` is numeric, the other
-parameters are text or boolean. Do not register, collect, or derive arbitrary
-event values.
+Sciences Po owns and configures the container. To turn the pushed events into
+GA4 hits, configure inside the container:
 
-After a production deployment, use GA4 DebugView to verify each event is
-received exactly once after acceptance. Refuse analytics or withdraw it from the
-side navigation and confirm no further GA4 requests or events are emitted.
+- a **GA4 Configuration** tag with the destination GA4 measurement ID;
+- one **GA4 Event** tag per event (or a generic parameterised one), fired by a
+  **Custom Event** trigger matching each `event` name from the table above;
+- **Data Layer Variables** for each parameter (`source_type`, `file_type`,
+  `file_count`, `open_source`, `visualization_type`, `export_target`,
+  `export_format`, `export_resolution`, `error_source`, `error_type`, `fatal`,
+  `page_location`, `page_path`, `page_referrer`, `page_title`).
 
-`send_page_view` remains disabled in the client so that Khartis sends one manual
-page view with safe location and referrer values. Query strings and fragments
-are excluded before the event is queued.
+Privacy is a shared responsibility: the container must route these events to
+**GA4 only** (no advertising tags), keep `ad_storage` / `ad_user_data` /
+`ad_personalization` denied, and rely on Khartis's single consent gate (no
+second consent banner). See issue #235.
+
+After a production deployment, use GTM Preview and GA4 DebugView to verify each
+event fires exactly once after acceptance. Refuse analytics or withdraw it from
+the side navigation and confirm no further container requests or events are
+emitted.
 
 ## Legal release checklist
 
