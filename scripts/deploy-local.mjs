@@ -16,9 +16,10 @@ const LOCAL_ENV_FILES = ['.env', '.env.deploy.local'];
 const DEFAULT_PORT = 22;
 const PUBLIC_URL_CHECK_TIMEOUT_MS = 15_000;
 const SFTP_CLOSE_TIMEOUT_MS = 5_000;
-// Accept legacy -staging.N and current -pprd.N prereleases so existing tags stay deployable.
+// Accept legacy -staging.N and current -pprd.N prereleases; at an equal version the
+// current pprd channel wins over the legacy staging channel.
 const PPRD_TAG_PATTERN =
-  /^v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-(?:staging|pprd)\.(?<prerelease>\d+)$/;
+  /^v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-(?<channel>staging|pprd)\.(?<prerelease>\d+)$/;
 const PROD_TAG_PATTERN = /^v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$/;
 
 const TARGETS = {
@@ -28,6 +29,7 @@ const TARGETS = {
     remoteDirLeaf: 'pprd',
     remoteDirEnv: 'KHARTIS_SFTP_REMOTE_DIR_PPRD',
     publicUrlEnv: 'KHARTIS_PUBLIC_URL_PPRD',
+    gtmContainerEnv: 'KHARTIS_GTM_CONTAINER_ID_PPRD',
     uploadEnabled: true
   },
   prod: {
@@ -36,6 +38,7 @@ const TARGETS = {
     remoteDirLeaf: 'prod',
     remoteDirEnv: 'KHARTIS_SFTP_REMOTE_DIR_PROD',
     publicUrlEnv: 'KHARTIS_PUBLIC_URL_PROD',
+    gtmContainerEnv: 'KHARTIS_GTM_CONTAINER_ID_PROD',
     uploadEnabled: true,
     productionConfirmation: true
   }
@@ -61,9 +64,10 @@ Required local environment (shared):
   KHARTIS_SFTP_HOST_FINGERPRINT_SHA256
   KHARTIS_SFTP_USER
 
-Per-target base path and remote directory (the remote dir must end with html/<leaf>):
-  pprd: KHARTIS_BASE_PATH_PPRD, KHARTIS_SFTP_REMOTE_DIR_PPRD (ends with html/pprd)
-  prod: KHARTIS_BASE_PATH_PROD, KHARTIS_SFTP_REMOTE_DIR_PROD (ends with html/prod)
+Per-target base path, remote directory and GTM container (remote dir ends with html/<leaf>):
+  pprd: KHARTIS_BASE_PATH_PPRD, KHARTIS_SFTP_REMOTE_DIR_PPRD (html/pprd), KHARTIS_GTM_CONTAINER_ID_PPRD
+  prod: KHARTIS_BASE_PATH_PROD, KHARTIS_SFTP_REMOTE_DIR_PROD (html/prod), KHARTIS_GTM_CONTAINER_ID_PROD
+  Leave the GTM container id empty to ship a target without analytics (e.g. pprd).
 
 Authentication, choose one:
   KHARTIS_SFTP_PASSWORD
@@ -119,9 +123,10 @@ async function main() {
     BASE_PATH: basePath,
     VITE_APP_VERSION: tag,
     VITE_DEBUG: 'false',
+    VITE_DEBUG_AUTH: 'false',
     VITE_LOG_LEVEL: 'ERROR',
     VITE_LOG_STACK: 'false',
-    PUBLIC_GTM_CONTAINER_ID: process.env.PUBLIC_GTM_CONTAINER_ID ?? ''
+    PUBLIC_GTM_CONTAINER_ID: process.env[target.gtmContainerEnv]?.trim() ?? ''
   };
 
   if (!options.dryRun) {
@@ -305,6 +310,7 @@ function parseVersionedTag(tag, tagPattern) {
     major: Number(match.groups.major),
     minor: Number(match.groups.minor),
     patch: Number(match.groups.patch),
+    channelRank: match.groups.channel === 'pprd' ? 1 : 0,
     prerelease:
       match.groups.prerelease !== undefined
         ? Number(match.groups.prerelease)
@@ -317,6 +323,7 @@ function compareVersionedTagsDesc(left, right) {
     right.major - left.major ||
     right.minor - left.minor ||
     right.patch - left.patch ||
+    right.channelRank - left.channelRank ||
     right.prerelease - left.prerelease
   );
 }
@@ -1085,7 +1092,25 @@ function warn(message) {
   console.warn(`[deploy-local] WARNING: ${message}`);
 }
 
-main().catch((error) => {
-  console.error(`[deploy-local] ERROR: ${error.message}`);
-  process.exit(1);
-});
+function restoreTerminal() {
+  const input = process.stdin;
+  try {
+    if (input.isTTY && typeof input.setRawMode === 'function') {
+      input.setRawMode(false);
+    }
+    input.pause();
+  } catch {
+    // Best effort: leaving stdin as-is is preferable to masking the deploy result.
+  }
+}
+
+main()
+  .then(() => {
+    restoreTerminal();
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error(`[deploy-local] ERROR: ${error.message}`);
+    restoreTerminal();
+    process.exit(1);
+  });
