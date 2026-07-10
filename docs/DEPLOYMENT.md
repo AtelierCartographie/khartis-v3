@@ -54,7 +54,9 @@ pnpm deploy:pprd -- --tag vX.Y.Z-pprd.N
 `pnpm deploy:prod` deploys the latest stable `vX.Y.Z` release to PROD. It runs the
 same tag, CI, install, and build checks, requires a green `release.yml` run, and
 asks you to retype the tag before uploading. Use `pnpm deploy:prod:dry-run` to
-validate without SFTP. PROD uploads to the `html/prod` remote directory.
+validate without SFTP. PROD uploads to the `html/prod` remote directory. The GTM
+analytics container is per target (`KHARTIS_GTM_CONTAINER_ID_PROD`); pprd leaves
+`KHARTIS_GTM_CONTAINER_ID_PPRD` empty and ships without analytics.
 
 ## Required Local Environment
 
