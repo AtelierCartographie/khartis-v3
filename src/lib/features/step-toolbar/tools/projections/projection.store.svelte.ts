@@ -33,7 +33,7 @@ import {
   projectionStore as mapRenderProjectionStore
 } from '$lib/features/map';
 import type { ProjectionState } from '../../types/projections.types';
-import type { D3Usage } from 'proj-suggest';
+import type { D3Usage } from '@ateliercartographie/proj-suggest';
 
 const DEFAULT_PROJECTION = 'mercator';
 
@@ -232,6 +232,7 @@ const { actions, getState } = createToolStore<
           s.customCode = projTo.proj4;
         }
       }
+      s.activeSuggestionId = undefined;
       s.overrideActive = true;
       s.overrideSource = 'manual';
     };

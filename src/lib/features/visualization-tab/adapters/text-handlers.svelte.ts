@@ -22,6 +22,7 @@ import { createPrimitiveAdapter } from './primitive-adapter.factory';
 type TextBackgroundUpdater = (
   background: TextPrimitiveConfig['background']
 ) => Partial<TextPrimitiveConfig['background']>;
+type ClassificationUpdateOptions = { preserveOrigin?: boolean };
 
 const TEXT_STYLE_MIRROR_KEYS = [
   'textColor',
@@ -70,10 +71,12 @@ export interface TextHandlersDeps {
     updates: Partial<ClassificationConfig>
   ) => void;
   updateTextBackgroundClassificationState: (
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: ClassificationUpdateOptions
   ) => void;
   updateTextBackgroundStrokeClassificationState: (
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: ClassificationUpdateOptions
   ) => void;
   applyPrimitiveMappingUpdate: (
     primitive: PrimitiveFilterType,
@@ -287,15 +290,25 @@ export function createTextHandlers(deps: TextHandlersDeps) {
   }
 
   function handleTextBackgroundClassificationChange(
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: ClassificationUpdateOptions
   ): void {
-    deps.updateTextBackgroundClassificationState(updates);
+    if (options) {
+      deps.updateTextBackgroundClassificationState(updates, options);
+    } else {
+      deps.updateTextBackgroundClassificationState(updates);
+    }
   }
 
   function handleTextBackgroundStrokeClassificationChange(
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: ClassificationUpdateOptions
   ): void {
-    deps.updateTextBackgroundStrokeClassificationState(updates);
+    if (options) {
+      deps.updateTextBackgroundStrokeClassificationState(updates, options);
+    } else {
+      deps.updateTextBackgroundStrokeClassificationState(updates);
+    }
   }
 
   function handleTextBackgroundMappingChange(

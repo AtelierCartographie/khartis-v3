@@ -5,7 +5,7 @@
     "layer_type": "path",
     "width": 0.5,
     "widthUnits": "pixels",
-    "color": [150, 150, 150, 200]
+    "color": [143, 143, 143, 200]
   },
   "limit-level-1": {
     "description_fr": "Limites du niveau intermédiaire (départements, NUTS 2, etc.)",
@@ -13,7 +13,7 @@
     "layer_type": "path",
     "width": 1.0,
     "widthUnits": "pixels",
-    "color": [100, 100, 100, 220]
+    "color": [103, 103, 103, 220]
   },
   "limit-level-2": {
     "description_fr": "Limites du niveau large (régions, NUTS 1, États, etc.)",
@@ -21,7 +21,7 @@
     "layer_type": "path",
     "width": 1.5,
     "widthUnits": "pixels",
-    "color": [60, 60, 60, 255]
+    "color": [63, 63, 63, 255]
   },
   "limit-dashed": {
     "description_fr": "Limites tiretées (frontières contestées, lignes d'armistice ou de séparation)",
@@ -29,7 +29,7 @@
     "layer_type": "path",
     "width": 0.5,
     "widthUnits": "pixels",
-    "color": [150, 150, 150, 200],
+    "color": [143, 143, 143, 200],
     "dashArray": [4, 3]
   },
   "limit-country": {
@@ -38,7 +38,7 @@
     "layer_type": "path",
     "width": 2.0,
     "widthUnits": "pixels",
-    "color": [40, 40, 40, 255]
+    "color": [47, 47, 47, 255]
   },
   "limit-context": {
     "description_fr": "Limites de contexte des territoires voisins qui débordent du cadrage (fonds départementaux/régionaux) — mutées pour ne pas concurrencer le territoire focal",
@@ -46,20 +46,20 @@
     "layer_type": "path",
     "width": 0.75,
     "widthUnits": "pixels",
-    "color": [165, 165, 165, 150]
+    "color": [170, 170, 170, 150]
   },
   "land": {
     "description_fr": "Territoire général (fond polygone)",
     "description_en": "General territory (polygon fill)",
     "layer_type": "solid-polygon",
-    "fillColor": [168, 168, 168, 255],
+    "fillColor": [214, 214, 214, 255],
     "stroked": false
   },
   "nuts-land": {
     "description_fr": "Territoire NUTS (fond polygone pour le contour des zones NUTS)",
     "description_en": "NUTS territory (polygon fill for NUTS zones outline)",
     "layer_type": "solid-polygon",
-    "fillColor": [168, 168, 168, 255],
+    "fillColor": [198, 198, 198, 255],
     "stroked": false
   },
   "graticule": {
@@ -68,7 +68,7 @@
     "layer_type": "path",
     "width": 0.5,
     "widthUnits": "pixels",
-    "color": [160, 190, 220, 90]
+    "color": [181, 181, 181, 100]
   },
   "geographic-lines": {
     "description_fr": "Lignes géographiques remarquables (équateur, tropiques, cercles polaires, méridien de Greenwich)",
@@ -76,6 +76,6 @@
     "layer_type": "path",
     "width": 1.0,
     "widthUnits": "pixels",
-    "color": [100, 150, 210, 160]
+    "color": [119, 119, 119, 170]
   }
 }

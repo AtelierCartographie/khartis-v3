@@ -1,16 +1,21 @@
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import { motif } from '@ateliercartographie/motif.js';
-import type { PatternOptions } from '@ateliercartographie/motif.js';
+import type { PatternType as MotifPatternType } from '@ateliercartographie/motif.js';
 import {
   isValidPatternId,
+  resolveMotifOptions,
+  stripSvgDefsWrapper,
   PATTERN_TYPE_MAP,
   type PatternName
 } from '$lib/features/map/layers/pattern-texture';
+import type { KhartisMotifOptions } from '$lib/features/map/layers/polygon-pattern-layer.utils';
+import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';
 import {
   SHAPE_ORDINAL,
   ShapeType,
   SYMBOL_SDF_EXTENT
 } from '$lib/features/commons/constants/visualization.constants';
+import { NEUTRAL_CARTOGRAPHY_RGBA_COLORS } from '$lib/features/commons/constants/colors.constants';
 import { LogCategory, logger } from './logger';
 import {
   clamp,
@@ -41,12 +46,8 @@ interface SvgPatternDefinition {
   patternUrl: string;
 }
 
-const SVG_PATTERN_FILL_COLOR = '#000000';
-const SVG_PATTERN_MOTIF_SIZE_FACTOR = 100;
-const SVG_PATTERN_MOTIF_SCALE_DIVISOR = 10;
 const SVG_PATTERN_DEFAULT_SIZE = 4;
-const SVG_PATTERN_DEFAULT_ACCESSOR_SCALE = 200;
-const SVG_PATTERN_ACCESSOR_SCALE_DIVISOR = 25;
+const SVG_PATTERN_DEFAULT_SCALE = 8;
 const SVG_PATTERN_MIN_SIZE = 1;
 const SVG_PATTERN_MIN_SCALE = 1;
 const DEFAULT_SYMBOL_BAR_WIDTH = 6;
@@ -54,6 +55,15 @@ const SPIKE_BAR_WIDTH_RATIO = 1.5;
 const TEXT_AVERAGE_CHAR_WIDTH_RATIO = 0.58;
 const TEXT_LINE_HEIGHT_RATIO = 1.2;
 const DEFAULT_TEXT_SIZE_PX = 12;
+const SVG_DEFAULT_FILL_COLOR: [number, number, number, number] = [
+  ...NEUTRAL_CARTOGRAPHY_RGBA_COLORS.svgDefaultFill
+];
+const SVG_DEFAULT_STROKE_COLOR: [number, number, number, number] = [
+  ...NEUTRAL_CARTOGRAPHY_RGBA_COLORS.svgDefaultStroke
+];
+const SVG_TRANSPARENT_COLOR: [number, number, number, number] = [
+  ...NEUTRAL_CARTOGRAPHY_RGBA_COLORS.transparent
+];
 
 const svgPatternDefsCache = new Map<string, SvgPatternDefinition>();
 
@@ -280,43 +290,54 @@ function resolveAccessorNumber(
   return toFiniteNumber(resolveAccessorValue(accessor, datum, index), fallback);
 }
 
-function stripDefsWrapper(defsHtml: string): string {
-  return defsHtml.replace(/^\s*<defs[^>]*>/i, '').replace(/<\/defs>\s*$/i, '');
-}
-
 function buildSvgPatternCacheKey(
   patternId: PatternName,
-  params: { angle?: number; size: number; scale: number }
+  params: { angle?: number; size: number; scale: number },
+  fillColor: string
 ): string {
   return JSON.stringify({
     patternId,
     angle: params.angle,
     size: params.size,
-    scale: params.scale
+    scale: params.scale,
+    fillColor
   });
 }
 
 function generateSvgPatternDefinition(
   patternId: PatternName,
-  params: { angle?: number; size: number; scale: number }
+  params: { angle?: number; size: number; scale: number },
+  fillColor: string
 ): SvgPatternDefinition | null {
-  const config = PATTERN_TYPE_MAP[patternId];
-  if (!config) return null;
+  if (!PATTERN_TYPE_MAP[patternId]) return null;
 
   const tile = motif({
-    type: config.type as PatternOptions['type'],
-    angle: params.angle ?? config.angle,
-    fill: SVG_PATTERN_FILL_COLOR,
-    background: 'transparent',
-    size: Math.round(
-      (params.size / params.scale) * SVG_PATTERN_MOTIF_SIZE_FACTOR
-    ),
-    scale: params.scale / SVG_PATTERN_MOTIF_SCALE_DIVISOR,
-    patchSize: true
+    ...resolveMotifOptions(patternId, params as PatternParams),
+    fill: fillColor
   });
 
   return {
-    defsHtml: stripDefsWrapper(tile.defs.outerHTML),
+    defsHtml: stripSvgDefsWrapper(tile.defs.outerHTML),
+    patternUrl: tile.url
+  };
+}
+
+function generateSvgMotifDefinition(
+  motifOptions: KhartisMotifOptions,
+  fillColor: string
+): SvgPatternDefinition {
+  const tile = motif({
+    type: motifOptions.type as MotifPatternType,
+    angle: motifOptions.angle,
+    scale: motifOptions.scale,
+    size: motifOptions.size,
+    fill: fillColor,
+    background: 'transparent',
+    patchSize: motifOptions.patchSize
+  });
+
+  return {
+    defsHtml: stripSvgDefsWrapper(tile.defs.outerHTML),
     patternUrl: tile.url
   };
 }
@@ -324,8 +345,30 @@ function generateSvgPatternDefinition(
 function resolveSvgPatternReference(
   props: Record<string, unknown>,
   datum: unknown,
-  index: number
+  index: number,
+  fillColor: SvgColor
 ): SvgPatternDefinition | null {
+  const patternFillColor = `rgb(${fillColor.red}, ${fillColor.green}, ${fillColor.blue})`;
+  const khartisMotifOptions = props.khartisMotifOptions as
+    KhartisMotifOptions | undefined;
+  if (khartisMotifOptions) {
+    const motifCacheKey = JSON.stringify({
+      khartisMotifOptions,
+      fillColor: patternFillColor
+    });
+    const cachedMotif = svgPatternDefsCache.get(motifCacheKey);
+    if (cachedMotif) {
+      return cachedMotif;
+    }
+
+    const generatedMotif = generateSvgMotifDefinition(
+      khartisMotifOptions,
+      patternFillColor
+    );
+    svgPatternDefsCache.set(motifCacheKey, generatedMotif);
+    return generatedMotif;
+  }
+
   const rawPatternId =
     props.khartisPatternId ??
     resolveAccessorValue(props.getFillPattern, datum, index);
@@ -347,8 +390,8 @@ function resolveSvgPatternReference(
         props.getFillPatternScale,
         datum,
         index,
-        SVG_PATTERN_DEFAULT_ACCESSOR_SCALE
-      ) / SVG_PATTERN_ACCESSOR_SCALE_DIVISOR
+        SVG_PATTERN_DEFAULT_SCALE
+      )
     )
   );
   const angle = toFiniteNumber(
@@ -360,21 +403,29 @@ function resolveSvgPatternReference(
       fallbackAngle ?? 0
     )
   );
-  const cacheKey = buildSvgPatternCacheKey(patternId, {
-    angle,
-    size,
-    scale
-  });
+  const cacheKey = buildSvgPatternCacheKey(
+    patternId,
+    {
+      angle,
+      size,
+      scale
+    },
+    patternFillColor
+  );
   const cached = svgPatternDefsCache.get(cacheKey);
   if (cached) {
     return cached;
   }
 
-  const generated = generateSvgPatternDefinition(patternId, {
-    angle,
-    size,
-    scale
-  });
+  const generated = generateSvgPatternDefinition(
+    patternId,
+    {
+      angle,
+      size,
+      scale
+    },
+    patternFillColor
+  );
   if (!generated) {
     return null;
   }
@@ -721,23 +772,23 @@ function serializePointLayer(
           fillAttribute
             ? normalizeSvgColor(
                 readBinaryTuple(fillAttribute, index),
-                [0, 0, 0, 255]
+                SVG_DEFAULT_FILL_COLOR
               )
-            : normalizeSvgColor(props.getFillColor, [0, 0, 0, 255]),
+            : normalizeSvgColor(props.getFillColor, SVG_DEFAULT_FILL_COLOR),
           layerOpacity
         )
-      : normalizeSvgColor([0, 0, 0, 0], [0, 0, 0, 0]);
+      : normalizeSvgColor(SVG_TRANSPARENT_COLOR, SVG_TRANSPARENT_COLOR);
     const strokeColor = stroked
       ? applyLayerOpacity(
           strokeAttribute
             ? normalizeSvgColor(
                 readBinaryTuple(strokeAttribute, index),
-                [0, 0, 0, 255]
+                SVG_DEFAULT_STROKE_COLOR
               )
-            : normalizeSvgColor(props.getLineColor, [0, 0, 0, 255]),
+            : normalizeSvgColor(props.getLineColor, SVG_DEFAULT_STROKE_COLOR),
           layerOpacity
         )
-      : normalizeSvgColor([0, 0, 0, 0], [0, 0, 0, 0]);
+      : normalizeSvgColor(SVG_TRANSPARENT_COLOR, SVG_TRANSPARENT_COLOR);
     const strokeWidth = stroked
       ? Math.max(
           0,
@@ -762,7 +813,7 @@ function serializePointLayer(
         projected[0],
         projected[1],
         radius,
-        colorAttributes('fill', fillColor),
+        fillAttributes(fillColor, null),
         colorAttributes('stroke', strokeColor),
         strokeWidth,
         barWidth
@@ -825,11 +876,11 @@ function serializePathLayer(
       colorAttribute
         ? normalizeSvgColor(
             readBinaryTuple(colorAttribute, index),
-            [0, 0, 0, 255]
+            SVG_DEFAULT_STROKE_COLOR
           )
         : normalizeSvgColor(
             props.getColor ?? props.getLineColor,
-            [0, 0, 0, 255]
+            SVG_DEFAULT_STROKE_COLOR
           ),
       layerOpacity
     );
@@ -903,17 +954,19 @@ function serializePolygonLayer(
       fillAttribute
         ? normalizeSvgColor(
             readBinaryTuple(fillAttribute, index),
-            [141, 141, 141, 255]
+            SVG_DEFAULT_FILL_COLOR
           )
-        : normalizeSvgColor(props.getFillColor, [141, 141, 141, 255]),
+        : normalizeSvgColor(props.getFillColor, SVG_DEFAULT_FILL_COLOR),
       layerOpacity
     );
     if (fillColor.opacity <= 0) continue;
 
+    const pattern = resolveSvgPatternReference(props, null, index, fillColor);
+
     parts.push(`
       <path
         d="${path}"
-        ${colorAttributes('fill', fillColor)}
+        ${fillAttributes(fillColor, pattern)}
         stroke="none"
         fill-rule="evenodd"
       />
@@ -1015,15 +1068,20 @@ function serializeGeoJsonGeometry(
   const fillColor = applyLayerOpacity(
     normalizeSvgColor(
       resolveAccessorValue(props.getFillColor, feature, featureIndex),
-      [141, 141, 141, 255]
+      SVG_DEFAULT_FILL_COLOR
     ),
     layerOpacity
   );
-  const pattern = resolveSvgPatternReference(props, feature, featureIndex);
+  const pattern = resolveSvgPatternReference(
+    props,
+    feature,
+    featureIndex,
+    fillColor
+  );
   const lineColor = applyLayerOpacity(
     normalizeSvgColor(
       resolveAccessorValue(props.getLineColor, feature, featureIndex),
-      [0, 0, 0, 255]
+      SVG_DEFAULT_STROKE_COLOR
     ),
     layerOpacity
   );
@@ -1252,7 +1310,7 @@ function serializeTextLayer(
     const color = applyLayerOpacity(
       normalizeSvgColor(
         resolveAccessorValue(props.getColor, datum, index),
-        [0, 0, 0, 255]
+        SVG_DEFAULT_STROKE_COLOR
       ),
       layerOpacity
     );
@@ -1274,16 +1332,16 @@ function serializeTextLayer(
           resolveAccessorValue(props.getBackgroundColor, datum, index),
           [255, 255, 255, 0]
         )
-      : normalizeSvgColor([0, 0, 0, 0], [0, 0, 0, 0]);
+      : normalizeSvgColor(SVG_TRANSPARENT_COLOR, SVG_TRANSPARENT_COLOR);
     const borderWidth = backgroundEnabled
       ? resolveAccessorNumber(props.getBorderWidth, datum, index, 0)
       : 0;
     const borderColor = backgroundEnabled
       ? normalizeSvgColor(
           resolveAccessorValue(props.getBorderColor, datum, index),
-          [0, 0, 0, 0]
+          SVG_TRANSPARENT_COLOR
         )
-      : normalizeSvgColor([0, 0, 0, 0], [0, 0, 0, 0]);
+      : normalizeSvgColor(SVG_TRANSPARENT_COLOR, SVG_TRANSPARENT_COLOR);
 
     if (
       backgroundColor.opacity > 0 ||

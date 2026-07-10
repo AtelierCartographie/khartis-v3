@@ -2,7 +2,7 @@ import * as m from '$lib/paraglide/messages';
 import type { GeoProjection } from 'd3-geo';
 import { GEOJSON_TYPE } from '$lib/features/commons/constants/geojson.constants';
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
-import type { D3Usage } from 'proj-suggest';
+import type { D3Usage } from '@ateliercartographie/proj-suggest';
 import { buildD3ProjectionFromConfig } from './d3-projection-config.utils';
 
 const CATALOGUE_PROJECTION_D3_CONFIGS: Record<string, D3Usage> = {

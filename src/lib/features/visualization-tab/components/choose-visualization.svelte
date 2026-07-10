@@ -27,9 +27,11 @@
   } from '../services/suggestion.service';
   import {
     getSuggestionSignature,
+    includePersistedSuggestion,
     resolveDisplayedSuggestionKey,
     resolveSuggestionCardAction,
-    shouldAutoApplySuggestion
+    shouldAutoApplySuggestion,
+    shouldIncludePersistedSuggestion
   } from '../utils/suggestion-selection.utils';
   import { UI_CONSTANTS } from '$lib/features/commons/constants/visualization.constants';
   import {
@@ -80,9 +82,6 @@
     return computeVisualizationSuggestions(selectedDataset);
   });
 
-  const visibleSuggestions = $derived(suggestions.slice(0, visibleCount));
-  const hasMoreSuggestions = $derived(visibleCount < suggestions.length);
-
   function getColumnBadgeType(columnName: string): VariableBadgeType {
     return resolveColumnBadgeType(datasetColumns, columnName);
   }
@@ -90,7 +89,7 @@
   function handleShowMore() {
     visibleCount = Math.min(
       visibleCount + UI_CONSTANTS.SUGGESTIONS_PER_PAGE,
-      suggestions.length
+      displayedSuggestions.length
     );
   }
 
@@ -117,6 +116,7 @@
       {
         displayedSuggestionKey: appliedSuggestionKey,
         originSuggestionKey: targetViz.origin?.suggestionKey,
+        originMode: getVisualizationOriginMode(targetViz),
         hasRestoreState: Boolean(targetViz.origin?.restoreState),
         isTargetActive: visualizationStore.activeVisualizations.some(
           (visualization) => visualization.id === targetViz.id
@@ -216,6 +216,37 @@
       : undefined;
   });
 
+  const targetVisualizationOriginMode = $derived(
+    getVisualizationOriginMode(targetVisualization)
+  );
+
+  const displayedSuggestions = $derived.by(() => {
+    const origin = targetVisualization?.origin;
+
+    if (
+      !shouldIncludePersistedSuggestion({
+        hasAppliedSuggestionState: Boolean(origin?.appliedSuggestionState),
+        hasPersistedSuggestionKey: Boolean(origin?.suggestionKey),
+        originMode: targetVisualizationOriginMode
+      })
+    ) {
+      return suggestions;
+    }
+
+    return includePersistedSuggestion(
+      suggestions,
+      origin?.suggestionKey,
+      suggestions[0]?.dataGeometry
+    );
+  });
+
+  const visibleSuggestions = $derived(
+    displayedSuggestions.slice(0, visibleCount)
+  );
+  const hasMoreSuggestions = $derived(
+    visibleCount < displayedSuggestions.length
+  );
+
   const persistedSuggestionKey = $derived.by(() => {
     const targetViz = targetVisualization;
 
@@ -233,7 +264,7 @@
     }
 
     const originSuggestionKey = targetViz.origin.suggestionKey;
-    const suggestionStillExists = suggestions.some(
+    const suggestionStillExists = displayedSuggestions.some(
       (suggestion) => getSuggestionSignature(suggestion) === originSuggestionKey
     );
 
@@ -249,10 +280,6 @@
         ? getVisualizationOriginMode(targetVisualization)
         : undefined
     })
-  );
-
-  const targetVisualizationOriginMode = $derived(
-    getVisualizationOriginMode(targetVisualization)
   );
 
   const autoSuggestionContextKey = $derived.by(() => {
@@ -334,7 +361,7 @@
       return;
     }
 
-    const suggestionStillExists = suggestions.some(
+    const suggestionStillExists = displayedSuggestions.some(
       (suggestion) =>
         getSuggestionSignature(suggestion) === selectedSuggestionKey
     );

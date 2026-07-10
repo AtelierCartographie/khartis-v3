@@ -4,7 +4,7 @@ import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import {
   createPathLayerProps,
   createPolygonFillColorAttribute
-} from 'geoarrow-deck-stream';
+} from '@ateliercartographie/geoarrow-deck-stream';
 
 import {
   DEFAULT_COLORS,
@@ -39,9 +39,13 @@ import { resolveHoverHighlightProps } from '../utils/hover-highlight-props.utils
 import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
 import {
   createCategoricalColorAccessor,
+  createCategoryIndexAccessor,
   createChoroplethColorAccessor,
+  createClassIndexAccessor,
   createGeoJsonCategoricalColorAccessor,
+  createGeoJsonCategoryIndexAccessor,
   createGeoJsonChoroplethColorAccessor,
+  createGeoJsonClassIndexAccessor,
   resolveMissingDataRenderProps,
   withGeoJsonRowHighlight,
   withGeoJsonRowHighlightAccessor,
@@ -85,14 +89,25 @@ import {
   buildMissingDataPatternProps,
   buildPatternProps,
   createBinaryPolygonPatternOverlayLayer,
+  createClassPatternProps,
   createPolygonPatternOverlayLayer,
+  resolveClassPatternPalette,
+  resolveMissingDataClassPattern,
   resolveMissingDataPatternId
 } from './polygon-pattern-layer.utils';
 import {
+  createClassPatternColorAccessor,
+  createGeoJsonClassPatternColorAccessor,
+  createGeoJsonPatternBackgroundFillAccessor,
+  createGeoJsonPatternOverlayColorAccessor,
+  createGeoJsonUniqueClassPatternIndexAccessor,
+  createGeoJsonUniquePatternBaseFillAccessor,
   createMissingPolygonPatternColorAccessor,
-  createSplitMatchedPolygonPatternColorAccessor,
+  createPatternBackgroundFillAccessor,
   createSplitUniqueBinaryColorAccessor,
   createSplitUniqueGeoJsonColorAccessor,
+  createUniqueClassPatternIndexAccessor,
+  createUniquePatternBaseFillAccessor,
   filterMissingPolygonPatternFeatures,
   filterSplitMatchedPolygonFeatures
 } from './polygon-fill-accessors.utils';
@@ -197,6 +212,10 @@ export function createPolygonLayerStack(
   const layerId = createThematicLayerId(DeckLayerId.POLYGON_LAYER, ctx);
   const projectedGeoJsonLayerId = `${layerId}-projected-geojson`;
   const patternProps = buildPatternProps(ctx);
+  const classPatternPalette = resolveClassPatternPalette(
+    polygonClassification,
+    polygonFillMode
+  );
   const { color: polygonMissingColor, show: showMissingPolygons } =
     resolveMissingDataRenderProps(
       polygonConfig,
@@ -206,6 +225,12 @@ export function createPolygonLayerStack(
     polygonConfig,
     showMissingPolygons
   );
+  const missingDataResolvedPattern = resolveMissingDataClassPattern(
+    polygonConfig?.missingData
+  );
+  const missingDataPatternFillRgb = missingDataResolvedPattern
+    ? hexToRgb(missingDataResolvedPattern.fill)
+    : polygonMissingColor;
   const densityRequested =
     polygonFillMode === FillMode.DENSITY && Boolean(viz?.density);
   const densityTable = ctx.densityTable;
@@ -303,7 +328,7 @@ export function createPolygonLayerStack(
             )
           : null;
       const splitUniqueFillAccessor =
-        polygonFillMode === FillMode.UNIQUE
+        polygonFillMode === FillMode.UNIQUE && !classPatternPalette
           ? createSplitUniqueBinaryColorAccessor(
               ctx,
               jsTable,
@@ -312,13 +337,47 @@ export function createPolygonLayerStack(
             )
           : null;
 
-      const baseFillAccessor = choroplethAccessor ?? categoricalAccessor;
+      const uniquePatternBaseFillAccessor =
+        classPatternPalette && polygonFillMode === FillMode.UNIQUE
+          ? createUniquePatternBaseFillAccessor(ctx)
+          : null;
+
+      const baseFillAccessor =
+        choroplethAccessor ??
+        categoricalAccessor ??
+        uniquePatternBaseFillAccessor;
+
+      const classPatternClassIndexAccessor = classPatternPalette
+        ? polygonFillMode === FillMode.CLASSES
+          ? createClassIndexAccessor(
+              polygonValueColumn!,
+              polygonClassification!.breaks!,
+              classPatternPalette.length
+            )
+          : polygonFillMode === FillMode.CATEGORIES
+            ? createCategoryIndexAccessor(
+                polygonCategoryColumn!,
+                polygonClassification?.labels ?? [],
+                polygonClassification?.disabledLabels ?? []
+              )
+            : createUniqueClassPatternIndexAccessor(ctx)
+        : null;
+
+      const patternedFillAccessor =
+        classPatternPalette &&
+        classPatternClassIndexAccessor &&
+        baseFillAccessor
+          ? createPatternBackgroundFillAccessor(
+              classPatternClassIndexAccessor,
+              baseFillAccessor
+            )
+          : baseFillAccessor;
 
       const fillColorFn =
         hasPolyHighlights && polyHighlightedRowIds
-          ? baseFillAccessor
+          ? patternedFillAccessor
             ? withRowHighlightAccessor(
-                baseFillAccessor,
+                patternedFillAccessor,
                 polygonFillOpacity,
                 HIGHLIGHT_DIMMING_FACTOR,
                 polyHighlightedRowIds
@@ -329,7 +388,7 @@ export function createPolygonLayerStack(
                 HIGHLIGHT_DIMMING_FACTOR,
                 polyHighlightedRowIds
               )
-          : baseFillAccessor;
+          : patternedFillAccessor;
 
       const fillColorBinaryAttr = splitUniqueFillAccessor
         ? createPolygonFillColorAttribute(polyData, splitUniqueFillAccessor)
@@ -442,16 +501,21 @@ export function createPolygonLayerStack(
         solidBinaryData.attributes.getFillColor = fillColorBinaryAttr;
       }
 
+      const singleMotifFillColor: [number, number, number, number] =
+        patternProps && !classPatternPalette
+          ? [255, 255, 255, 255]
+          : [
+              polygonFillColor[0],
+              polygonFillColor[1],
+              polygonFillColor[2],
+              255
+            ];
+
       const fillLayer = new SolidPolygonLayer({
         id: layerId,
         ...(solidProps as unknown as Record<string, unknown>),
         ...(!fillColorBinaryAttr && {
-          getFillColor: [
-            polygonFillColor[0],
-            polygonFillColor[1],
-            polygonFillColor[2],
-            255
-          ] as [number, number, number, number]
+          getFillColor: singleMotifFillColor
         }),
         opacity: hasPolyHighlights ? 1 : polygonFillOpacity,
         pickable: true,
@@ -475,6 +539,8 @@ export function createPolygonLayerStack(
             polygonConfig?.missingData?.color ?? DEFAULT_COLORS.missingData,
             showMissingPolygons,
             polygonFillColor,
+            classPatternPalette,
+            Boolean(patternProps),
             hlVersion
           ]
         }
@@ -533,21 +599,55 @@ export function createPolygonLayerStack(
       }
 
       let patternLayer: Layer<DeckDataRow> | null = null;
-      if (patternProps) {
+      if (patternProps && !classPatternPalette) {
         patternLayer = createBinaryPolygonPatternOverlayLayer(
           layerId,
           polygonClassification?.patternId,
           polyData,
           patternProps,
           ctx,
-          createSplitMatchedPolygonPatternColorAccessor(ctx, jsTable)
+          createSplitUniqueBinaryColorAccessor(
+            ctx,
+            jsTable,
+            jsTable,
+            polygonFillColor
+          ) ?? (() => [...polygonFillColor, 255]),
+          undefined,
+          polygonFillOpacity
         );
+      }
+      const classPatternLayers: Layer<DeckDataRow>[] = [];
+      if (classPatternPalette && classPatternClassIndexAccessor) {
+        classPatternPalette.forEach((pattern, index) => {
+          const classPatternProps = createClassPatternProps(
+            classPatternPalette,
+            index
+          );
+          const classFillAccessor = createClassPatternColorAccessor(
+            classPatternClassIndexAccessor,
+            index,
+            hexToRgb(pattern.fill)
+          );
+          const classLayer = createBinaryPolygonPatternOverlayLayer(
+            layerId,
+            `c${index}`,
+            polyData,
+            classPatternProps,
+            ctx,
+            ctxRowAccessor(ctx, jsTable, classFillAccessor),
+            `pattern-c${index}`,
+            polygonFillOpacity
+          );
+          if (classLayer) {
+            classPatternLayers.push(classLayer);
+          }
+        });
       }
       let missingDataPatternLayer: Layer<DeckDataRow> | null = null;
       if (missingDataPatternProps) {
         missingDataPatternLayer = createBinaryPolygonPatternOverlayLayer(
           layerId,
-          resolveMissingDataPatternId(polygonConfig),
+          resolveMissingDataPatternId(polygonConfig?.missingData),
           polyData,
           missingDataPatternProps,
           ctx,
@@ -557,9 +657,11 @@ export function createPolygonLayerStack(
             polygonFillMode,
             polygonValueColumn,
             polygonCategoryColumn,
-            effectiveCategoryColorMap
+            effectiveCategoryColorMap,
+            missingDataPatternFillRgb
           ),
-          'missing-data-pattern'
+          'missing-data-pattern',
+          1
         );
       }
 
@@ -590,6 +692,12 @@ export function createPolygonLayerStack(
                   layer: patternLayer
                 }
               ]
+            : []),
+          ...(showFill
+            ? classPatternLayers.map((layer) => ({
+                primitive: PrimitiveFilterType.POLYGON as PrimitiveFilter,
+                layer
+              }))
             : []),
           ...(showFill && missingDataPatternLayer
             ? [
@@ -704,7 +812,7 @@ export function createPolygonLayerStack(
               polygonClassification?.disabledLabels ?? []
             )
           )
-        : polygonFillMode === FillMode.UNIQUE
+        : polygonFillMode === FillMode.UNIQUE && !classPatternPalette
           ? createSplitUniqueGeoJsonColorAccessor(
               ctx,
               jsTable,
@@ -732,13 +840,41 @@ export function createPolygonLayerStack(
             showMissingPolygons,
             polygonClassification?.disabledLabels ?? []
           )
-        : null);
+        : classPatternPalette && polygonFillMode === FillMode.UNIQUE
+          ? createGeoJsonUniquePatternBaseFillAccessor(ctx, jsTable)
+          : null);
+
+  const geoJsonClassPatternIndexAccessor = classPatternPalette
+    ? polygonFillMode === FillMode.CLASSES
+      ? createGeoJsonClassIndexAccessor(
+          polygonValueColumn!,
+          polygonClassification!.breaks!,
+          classPatternPalette.length
+        )
+      : polygonFillMode === FillMode.CATEGORIES
+        ? createGeoJsonCategoryIndexAccessor(
+            polygonCategoryColumn!,
+            polygonClassification?.labels ?? [],
+            polygonClassification?.disabledLabels ?? []
+          )
+        : createGeoJsonUniqueClassPatternIndexAccessor(ctx, jsTable)
+    : null;
+
+  const patternedGeoJsonFillColor =
+    classPatternPalette &&
+    geoJsonClassPatternIndexAccessor &&
+    baseGeoJsonFillColor
+      ? createGeoJsonPatternBackgroundFillAccessor(
+          geoJsonClassPatternIndexAccessor,
+          baseGeoJsonFillColor
+        )
+      : baseGeoJsonFillColor;
 
   const geoJsonFillColor =
     hasPolyHighlights && polyHighlightedRowIds
-      ? baseGeoJsonFillColor
+      ? patternedGeoJsonFillColor
         ? withGeoJsonRowHighlightAccessor(
-            baseGeoJsonFillColor,
+            patternedGeoJsonFillColor,
             polygonFillOpacity,
             HIGHLIGHT_DIMMING_FACTOR,
             polyHighlightedRowIds
@@ -749,13 +885,15 @@ export function createPolygonLayerStack(
             HIGHLIGHT_DIMMING_FACTOR,
             polyHighlightedRowIds
           )
-      : (baseGeoJsonFillColor ??
-        ([
-          polygonFillColor[0],
-          polygonFillColor[1],
-          polygonFillColor[2],
-          255
-        ] as [number, number, number, number]));
+      : (patternedGeoJsonFillColor ??
+        (patternProps && !classPatternPalette
+          ? ([255, 255, 255, 255] as [number, number, number, number])
+          : ([
+              polygonFillColor[0],
+              polygonFillColor[1],
+              polygonFillColor[2],
+              255
+            ] as [number, number, number, number])));
   const polygonStrokeColors = polygonConfig?.strokeClassification?.colors;
   const polygonStrokeBreaks =
     polygonConfig?.strokeClassification?.breaks ??
@@ -871,11 +1009,15 @@ export function createPolygonLayerStack(
     : ([0, 0, 0, 0] as [number, number, number, number]);
 
   const patternGeojsonData =
-    patternProps && showGeoJsonFill && geojsonData.features.length > 0
+    patternProps &&
+    !classPatternPalette &&
+    showGeoJsonFill &&
+    geojsonData.features.length > 0
       ? filterSplitMatchedPolygonFeatures(geojsonData, ctx, jsTable)
       : null;
   const patternLayer =
     patternProps &&
+    !classPatternPalette &&
     showGeoJsonFill &&
     patternGeojsonData &&
     patternGeojsonData.features.length > 0
@@ -884,9 +1026,56 @@ export function createPolygonLayerStack(
           polygonClassification?.patternId,
           patternGeojsonData,
           patternProps,
-          ctx
+          ctx,
+          undefined,
+          createSplitUniqueGeoJsonColorAccessor(
+            ctx,
+            jsTable,
+            polygonFillColor
+          ) ??
+            (() =>
+              [
+                polygonFillColor[0],
+                polygonFillColor[1],
+                polygonFillColor[2],
+                255
+              ] as [number, number, number, number]),
+          polygonFillOpacity
         )
       : null;
+  const classPatternGeoJsonLayers: Layer<DeckDataRow>[] =
+    classPatternPalette && geoJsonClassPatternIndexAccessor && showGeoJsonFill
+      ? classPatternPalette
+          .map((pattern, index) => {
+            const classPatternProps = createClassPatternProps(
+              classPatternPalette,
+              index
+            );
+            const classGeojsonData = filterSplitMatchedPolygonFeatures(
+              geojsonData,
+              ctx,
+              jsTable
+            );
+            if (classGeojsonData.features.length === 0) {
+              return null;
+            }
+            return createPolygonPatternOverlayLayer(
+              layerId,
+              `c${index}`,
+              classGeojsonData,
+              classPatternProps,
+              ctx,
+              `pattern-c${index}`,
+              createGeoJsonClassPatternColorAccessor(
+                geoJsonClassPatternIndexAccessor,
+                index,
+                hexToRgb(pattern.fill)
+              ),
+              polygonFillOpacity
+            );
+          })
+          .filter((layer): layer is GeoJsonLayer => layer !== null)
+      : [];
   const missingDataPatternGeojson =
     missingDataPatternProps &&
     showGeoJsonFill &&
@@ -907,16 +1096,21 @@ export function createPolygonLayerStack(
     missingDataPatternGeojson.features.length > 0
       ? createPolygonPatternOverlayLayer(
           layerId,
-          resolveMissingDataPatternId(polygonConfig),
+          resolveMissingDataPatternId(polygonConfig?.missingData),
           missingDataPatternGeojson,
           missingDataPatternProps,
           ctx,
-          'missing-data-pattern'
+          'missing-data-pattern',
+          createGeoJsonPatternOverlayColorAccessor(missingDataPatternFillRgb),
+          1
         )
       : null;
 
   const shouldSplitGeoJsonLayers = Boolean(
-    (patternLayer || missingDataPatternLayer) && showGeoJsonStroke
+    (patternLayer ||
+      missingDataPatternLayer ||
+      classPatternGeoJsonLayers.length > 0) &&
+    showGeoJsonStroke
   );
 
   let geoJsonLayers: Layer<DeckDataRow>[] = [];
@@ -956,6 +1150,7 @@ export function createPolygonLayerStack(
         dataComparator: (newData, oldData) => newData === oldData
       }),
       ...(patternLayer ? [patternLayer] : []),
+      ...classPatternGeoJsonLayers,
       ...(missingDataPatternLayer ? [missingDataPatternLayer] : []),
       ...(showGeoJsonStroke
         ? [
@@ -1062,6 +1257,7 @@ export function createPolygonLayerStack(
         dataComparator: (newData, oldData) => newData === oldData
       }),
       ...(patternLayer ? [patternLayer] : []),
+      ...classPatternGeoJsonLayers,
       ...(missingDataPatternLayer ? [missingDataPatternLayer] : [])
     ];
   }

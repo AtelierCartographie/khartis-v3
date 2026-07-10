@@ -7,6 +7,7 @@ export function resetVisualClassification(): Partial<ClassificationConfig> {
     inverted: false,
     patternId: undefined,
     patternParams: undefined,
+    pattern: undefined,
     labels: undefined
   };
 }

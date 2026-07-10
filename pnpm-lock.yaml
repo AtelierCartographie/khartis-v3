@@ -23,12 +23,18 @@ importers:
 
   .:
     dependencies:
+      '@ateliercartographie/geoarrow-deck-stream':
+        specifier: ^1.1.3
+        version: 1.1.3(@deck.gl/core@9.3.5)(@deck.gl/layers@9.3.5(@deck.gl/core@9.3.5)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.5)(@luma.gl/engine@9.3.5(@luma.gl/core@9.3.5)(@luma.gl/shadertools@9.3.5(@luma.gl/core@9.3.5))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.1.0))(apache-arrow@21.1.0)
       '@ateliercartographie/motif.js':
         specifier: ^0.1.5
         version: 0.1.5
       '@ateliercartographie/ok-palette':
         specifier: ^0.1.4
         version: 0.1.4
+      '@ateliercartographie/proj-suggest':
+        specifier: ^0.0.1
+        version: 0.0.1
       '@borgar/textbox':
         specifier: ^2.0.0
         version: 2.0.0
@@ -116,9 +122,6 @@ importers:
       fflate:
         specifier: ^0.8.3
         version: 0.8.3
-      geoarrow-deck-stream:
-        specifier: github:AtelierCartographie/geoarrow-deck-stream#v1.1.3
-        version: git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#9187ddf4eeb7af2174b46e7aeabfbbfd08c8d0bd(@deck.gl/core@9.3.5)(@deck.gl/layers@9.3.5(@deck.gl/core@9.3.5)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.5)(@luma.gl/engine@9.3.5(@luma.gl/core@9.3.5)(@luma.gl/shadertools@9.3.5(@luma.gl/core@9.3.5))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.1.0))(apache-arrow@21.1.0)
       html-to-image:
         specifier: ^1.11.13
         version: 1.11.13
@@ -131,9 +134,6 @@ importers:
       parquet-wasm:
         specifier: ^0.7.2
         version: 0.7.2
-      proj-suggest:
-        specifier: github:AtelierCartographie/proj-suggest
-        version: git+https://git@github.com:AtelierCartographie/proj-suggest.git#445c428cc0b1f7ac70410e76dadf30d6cdde689e
       proj4:
         specifier: ^2.20.9
         version: 2.20.9
@@ -166,8 +166,14 @@ importers:
         specifier: ^3.1.14
         version: 3.1.14
       '@jcode.labs/ragmir':
-        specifier: ^2.3.0
-        version: 2.3.0(apache-arrow@21.1.0)
+        specifier: ^2.5.0
+        version: 2.5.0(apache-arrow@21.1.0)
+      '@jcode.labs/ragmir-chat':
+        specifier: 2.5.0
+        version: 2.5.0
+      '@jcode.labs/ragmir-tts':
+        specifier: 2.5.0
+        version: 2.5.0
       '@sveltejs/adapter-static':
         specifier: ^3.0.10
         version: 3.0.10(@sveltejs/kit@2.69.0(@sveltejs/vite-plugin-svelte@7.1.2(svelte@5.56.4(@typescript-eslint/types@8.62.1))(vite@8.1.2(@types/node@26.1.0)(jiti@2.7.0)(sass-embedded@1.100.0)(sass@1.100.0)(terser@5.48.0)(yaml@2.9.0)))(svelte@5.56.4(@typescript-eslint/types@8.62.1))(typescript@6.0.3)(vite@8.1.2(@types/node@26.1.0)(jiti@2.7.0)(sass-embedded@1.100.0)(sass@1.100.0)(terser@5.48.0)(yaml@2.9.0)))
@@ -327,11 +333,23 @@ packages:
   '@asamuzakjp/nwsapi@2.3.9':
     resolution: {integrity: sha512-n8GuYSrI9bF7FFZ/SjhwevlHc8xaVlb/7HmHelnc/PZXBD2ZR49NnN9sMMuDdEGPeeRQ5d0hqlSlEpgCX3Wl0Q==}
 
+  '@ateliercartographie/geoarrow-deck-stream@1.1.3':
+    resolution: {integrity: sha512-1woBDq78l8TY8cqAIC1YGmkClW8QzznyMTcawjppAETeKeFJHIW9Mv3BbtskffhfMQyvexkxyI3JGT1R0cKdZA==}
+    peerDependencies:
+      '@deck.gl/core': '>=9.0.0'
+      '@deck.gl/layers': '>=9.0.0'
+      '@geoarrow/geoarrow-js': '>=0.3.0'
+      apache-arrow: '>=21.0.0'
+
   '@ateliercartographie/motif.js@0.1.5':
     resolution: {integrity: sha512-of4obGxpTyw1YGd/ExO0iGV7HixL1AO7WTvLwOI0kZ5nCsYTYs43sMugpZzA+3jIk9lWGBxLWayxsg0MJOGfIA==}
 
   '@ateliercartographie/ok-palette@0.1.4':
     resolution: {integrity: sha512-HSLgx0l1zAIKXkHdAM9/jujZZXe85FFHdspMwWD1GZY7W55zRR5zKxMblTf2ToXchtSMtegG1Fanqw645Zpr4w==}
+
+  '@ateliercartographie/proj-suggest@0.0.1':
+    resolution: {integrity: sha512-BkspNPBaEzUE48aU3q2EbL9EKLcBvp/wIQlR6vrTcyUuY3XIckzLhF5N6yiqIhc9mMPcdOqYnojJKJjsmALmFQ==}
+    engines: {node: '>=18'}
 
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
@@ -1457,13 +1475,18 @@ packages:
     resolution: {integrity: sha512-AokJm4tuBHillT+FpMtxQ60n8ObyXBatq7jD2/JA9dxbDDokKQm8KMht5ibGzLVU9IJDIKK4TPKgMHEYMn3lMg==}
     engines: {node: '>=18'}
 
-  '@jcode.labs/ragmir-tts@2.3.0':
-    resolution: {integrity: sha512-tQyJgiCpfvAvNALuYnse643EhPosX+miVHbawBxxTdYYdskKgkTeTLxt95dSKxX1DzMH7CtTaeFgzpjl/zJH6g==}
+  '@jcode.labs/ragmir-chat@2.5.0':
+    resolution: {integrity: sha512-5/fUsWDBcUnjvBL4BmGHMdbw6oyxat1nL+WbBI3NmirlsW8LvDr9CQe121LDW+pWfID/IlAeFhNxRZLxTRAZQQ==}
     engines: {node: '>=20'}
     hasBin: true
 
-  '@jcode.labs/ragmir@2.3.0':
-    resolution: {integrity: sha512-gX9hSZeOtDNaDEjIXd5pW/9h3MOgfAJNVvA9KnmUUFdZDqY2gtM7rupLpgI81DWDhoUwfXQpYYK+ZY+giaYWLQ==}
+  '@jcode.labs/ragmir-tts@2.5.0':
+    resolution: {integrity: sha512-2ZMrt+QedTh9XbstwtyD8SNH/Uuv+wq/lm3SC7hnI7qC5GoUuqHPq6dSSTiAntsOBRoKCeCjgWaHrJGmPzVYHw==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  '@jcode.labs/ragmir@2.5.0':
+    resolution: {integrity: sha512-52Znpclys6fMa5uwA++nWhgb5K2g6YAH0tSZ76mr+7OzQOVcFGzFjNFZmFyVN45b1LId8Ari+Eeao5mh2myOoA==}
     engines: {node: '>=20'}
     hasBin: true
 
@@ -3112,9 +3135,9 @@ packages:
     resolution: {integrity: sha512-D76uU73ulSXrD1UXF4KE2TMxVVwhsnCgfAyTg9k8P6KGZjlXKrOLe4dJQKI3Bxi5wjesZoFXJWElNWBjPZMbhg==}
     engines: {node: '>=6.6.0'}
 
-  cookie@1.1.1:
-    resolution: {integrity: sha512-ei8Aos7ja0weRpFzJnEA9UHJ/7XQmqglbRwnf2ATjcB9Wq874VKH9kfjjirM6UhU2/E5fFYadylyhFldcqSidQ==}
-    engines: {node: '>=18'}
+  cookie@0.7.2:
+    resolution: {integrity: sha512-yki5XnKuf750l50uGTllt6kKILY4nQ1eNIQatoXEByZ5dWgnKqbnqmTrBE5B4N7lrMJKQ2ytWMiTO2o0v6Ew/w==}
+    engines: {node: '>= 0.6'}
 
   core-js-compat@3.49.0:
     resolution: {integrity: sha512-VQXt1jr9cBz03b331DFDCCP90b3fanciLkgiOoy8SBHy06gNf+vQ1A3WFLqG7I8TipYIKeYK9wxd0tUrvHcOZA==}
@@ -3736,15 +3759,6 @@ packages:
   gensync@1.0.0-beta.2:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
     engines: {node: '>=6.9.0'}
-
-  geoarrow-deck-stream@git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#9187ddf4eeb7af2174b46e7aeabfbbfd08c8d0bd:
-    resolution: {commit: 9187ddf4eeb7af2174b46e7aeabfbbfd08c8d0bd, repo: git@github.com:AtelierCartographie/geoarrow-deck-stream.git, type: git}
-    version: 1.1.3
-    peerDependencies:
-      '@deck.gl/core': '>=9.0.0'
-      '@deck.gl/layers': '>=9.0.0'
-      '@geoarrow/geoarrow-js': '>=0.3.0'
-      apache-arrow: '>=21.0.0'
 
   get-caller-file@2.0.5:
     resolution: {integrity: sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg==}
@@ -5076,10 +5090,6 @@ packages:
 
   process-nextick-args@2.0.1:
     resolution: {integrity: sha512-3ouUOpQhtgrbOa17J7+uxOTpITYWaGP7/AhoR3+A+/1e9skrzelGi/dXzEYyvbxubEF6Wn2ypscTKiKJFFn1ag==}
-
-  proj-suggest@git+https://git@github.com:AtelierCartographie/proj-suggest.git#445c428cc0b1f7ac70410e76dadf30d6cdde689e:
-    resolution: {commit: 445c428cc0b1f7ac70410e76dadf30d6cdde689e, repo: git@github.com:AtelierCartographie/proj-suggest.git, type: git}
-    version: 0.0.1
 
   proj4@2.20.9:
     resolution: {integrity: sha512-GLBGqXaTcdWnppre3o1sMmy4DcMGSGq/ng+9k2MTNddarRK6SveINqlqYzi3xEXuy06ljY1TTrC6H9C4f360IQ==}
@@ -6479,11 +6489,22 @@ snapshots:
 
   '@asamuzakjp/nwsapi@2.3.9': {}
 
+  '@ateliercartographie/geoarrow-deck-stream@1.1.3(@deck.gl/core@9.3.5)(@deck.gl/layers@9.3.5(@deck.gl/core@9.3.5)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.5)(@luma.gl/engine@9.3.5(@luma.gl/core@9.3.5)(@luma.gl/shadertools@9.3.5(@luma.gl/core@9.3.5))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.1.0))(apache-arrow@21.1.0)':
+    dependencies:
+      '@deck.gl/core': 9.3.5
+      '@deck.gl/layers': 9.3.5(@deck.gl/core@9.3.5)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.5)(@luma.gl/engine@9.3.5(@luma.gl/core@9.3.5)(@luma.gl/shadertools@9.3.5(@luma.gl/core@9.3.5)))
+      '@geoarrow/geoarrow-js': 0.3.3(apache-arrow@21.1.0)
+      apache-arrow: 21.1.0
+      d3-geo: 3.1.1
+      earcut: 3.2.2
+
   '@ateliercartographie/motif.js@0.1.5':
     dependencies:
       d3-path: 3.1.0
 
   '@ateliercartographie/ok-palette@0.1.4': {}
+
+  '@ateliercartographie/proj-suggest@0.0.1': {}
 
   '@babel/code-frame@7.29.7':
     dependencies:
@@ -7743,14 +7764,19 @@ snapshots:
 
   '@isaacs/cliui@9.0.0': {}
 
-  '@jcode.labs/ragmir-tts@2.3.0':
+  '@jcode.labs/ragmir-chat@2.5.0':
     dependencies:
       '@huggingface/transformers': 4.2.0
 
-  '@jcode.labs/ragmir@2.3.0(apache-arrow@21.1.0)':
+  '@jcode.labs/ragmir-tts@2.5.0':
     dependencies:
       '@huggingface/transformers': 4.2.0
-      '@jcode.labs/ragmir-tts': 2.3.0
+
+  '@jcode.labs/ragmir@2.5.0(apache-arrow@21.1.0)':
+    dependencies:
+      '@huggingface/transformers': 4.2.0
+      '@jcode.labs/ragmir-chat': 2.5.0
+      '@jcode.labs/ragmir-tts': 2.5.0
       '@lancedb/lancedb': 0.30.0(apache-arrow@21.1.0)
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
       commander: 14.0.3
@@ -8602,7 +8628,7 @@ snapshots:
       '@sveltejs/vite-plugin-svelte': 7.1.2(svelte@5.56.4(@typescript-eslint/types@8.62.1))(vite@8.1.2(@types/node@26.1.0)(jiti@2.7.0)(sass-embedded@1.100.0)(sass@1.100.0)(terser@5.48.0)(yaml@2.9.0))
       '@types/cookie': 0.6.0
       acorn: 8.17.0
-      cookie: 1.1.1
+      cookie: 0.7.2
       devalue: 5.8.1
       esm-env: 1.2.2
       kleur: 4.1.5
@@ -9349,7 +9375,7 @@ snapshots:
 
   cookie-signature@1.2.2: {}
 
-  cookie@1.1.1: {}
+  cookie@0.7.2: {}
 
   core-js-compat@3.49.0:
     dependencies:
@@ -9871,7 +9897,7 @@ snapshots:
       body-parser: 2.3.0
       content-disposition: 1.1.0
       content-type: 1.0.5
-      cookie: 1.1.1
+      cookie: 0.7.2
       cookie-signature: 1.2.2
       debug: 4.4.3
       depd: 2.0.0
@@ -10048,15 +10074,6 @@ snapshots:
   generator-function@2.0.1: {}
 
   gensync@1.0.0-beta.2: {}
-
-  geoarrow-deck-stream@git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#9187ddf4eeb7af2174b46e7aeabfbbfd08c8d0bd(@deck.gl/core@9.3.5)(@deck.gl/layers@9.3.5(@deck.gl/core@9.3.5)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.5)(@luma.gl/engine@9.3.5(@luma.gl/core@9.3.5)(@luma.gl/shadertools@9.3.5(@luma.gl/core@9.3.5))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.1.0))(apache-arrow@21.1.0):
-    dependencies:
-      '@deck.gl/core': 9.3.5
-      '@deck.gl/layers': 9.3.5(@deck.gl/core@9.3.5)(@loaders.gl/core@4.4.3)(@luma.gl/core@9.3.5)(@luma.gl/engine@9.3.5(@luma.gl/core@9.3.5)(@luma.gl/shadertools@9.3.5(@luma.gl/core@9.3.5)))
-      '@geoarrow/geoarrow-js': 0.3.3(apache-arrow@21.1.0)
-      apache-arrow: 21.1.0
-      d3-geo: 3.1.1
-      earcut: 3.2.2
 
   get-caller-file@2.0.5: {}
 
@@ -11272,8 +11289,6 @@ snapshots:
       parse-ms: 4.0.0
 
   process-nextick-args@2.0.1: {}
-
-  proj-suggest@git+https://git@github.com:AtelierCartographie/proj-suggest.git#445c428cc0b1f7ac70410e76dadf30d6cdde689e: {}
 
   proj4@2.20.9:
     dependencies:

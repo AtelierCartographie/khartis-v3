@@ -32,6 +32,7 @@
     projectionActions
   } from './projection.store.svelte';
   import type { ProjectionSuggestion } from './projection-suggest.service';
+  import { isProjectionSuggestionOrientationDefault } from './projection-suggestion-selection.utils';
   import { getCatalogueProjectionIdForSuggestion } from './projection-suggestion-catalogue.utils';
   import { getThumbnailPaths } from './projection-thumbnail';
   import {
@@ -237,6 +238,12 @@
     // light up several cards at once.
     if (projectionState.activeSuggestionId) {
       return projectionState.activeSuggestionId === suggestion.id;
+    }
+
+    if (
+      !isProjectionSuggestionOrientationDefault(projectionState, suggestion)
+    ) {
+      return false;
     }
 
     if (isStoredSuggestionConfigSelected(suggestion)) {

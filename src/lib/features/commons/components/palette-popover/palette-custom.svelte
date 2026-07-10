@@ -1,58 +1,65 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import * as m from '$lib/paraglide/messages';
   import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import ContentSwitcher from './content-switcher.svelte';
   import SingleColorPreview from './single-color-preview.svelte';
-  import PatternPicker from './pattern-picker.svelte';
+  import PatternPalettePicker from './pattern-palette-picker.svelte';
   import {
     ColorSelector,
     ToggleWithLabel
   } from '$lib/features/commons/components/viz-controls';
   import type { ContrastMode } from '@ateliercartographie/ok-palette';
+  import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import {
     PALETTE_TYPE,
-    type Palette,
     type PaletteType,
-    type PatternParams,
-    getPatternPalettes,
     generateSequentialFromColor,
     generateSequentialFromColors
   } from './palette.constants';
 
   interface Props {
-    selectedPaletteId?: string;
     paletteType?: PaletteType;
     numClasses: number;
     colorBlindFilter?: boolean;
     inverted?: boolean;
     allowPattern?: boolean;
+    patternPaletteConfig?: PatternPaletteConfig;
     onColorsChange?: (colors: string[]) => void;
-    onPatternSelect?: (palette: Palette, params: PatternParams) => void;
+    onPatternPaletteChange?: (config: PatternPaletteConfig) => void;
     onInvertToggle?: (value: boolean) => void;
   }
 
   let {
-    selectedPaletteId,
     paletteType = PALETTE_TYPE.SEQUENTIAL,
     numClasses,
     colorBlindFilter = false,
     inverted = false,
     allowPattern = true,
+    patternPaletteConfig,
     onColorsChange,
-    onPatternSelect,
+    onPatternPaletteChange,
     onInvertToggle
   }: Props = $props();
 
+  const DEFAULT_PATTERN_PALETTE_CONFIG: PatternPaletteConfig = {
+    shape: 'line',
+    angle: 45,
+    scale: 0.7,
+    color: '#000000'
+  };
+
   let activeTab = $state(0);
+  let activeTabInitialized = false;
   let singleColor = $state('#08519c');
   let startColor = $state('#f7fbff');
   let endColor = $state('#08519c');
   let contrastMode = $state<'low' | 'normal' | 'high'>('normal');
   let motifEnabled = $state(false);
 
-  let selectedPatternId = $state<string | null>(null);
-  let patternSize = $state(4);
-  let patternScale = $state(8);
+  let draftPatternPaletteConfig = $state<PatternPaletteConfig>(
+    DEFAULT_PATTERN_PALETTE_CONFIG
+  );
 
   const isQualitative = $derived(paletteType === PALETTE_TYPE.QUALITATIVE);
 
@@ -66,24 +73,25 @@
       : [m.palette_custom_1_color(), m.palette_custom_2_colors()]
   );
 
-  const patternPalettes = $derived(getPatternPalettes());
-
   $effect(() => {
-    if (selectedPaletteId?.startsWith('pattern-')) {
-      const match = patternPalettes.find((p) => p.id === selectedPaletteId);
-      if (match) {
-        selectedPatternId = match.id;
-      }
+    const next = patternPaletteConfig;
+    if (next) {
+      untrack(() => {
+        draftPatternPaletteConfig = next;
+        if (!activeTabInitialized) {
+          activeTabInitialized = true;
+          contrastMode =
+            next.contrast === 'low' || next.contrast === 'high'
+              ? next.contrast
+              : 'normal';
+          if (isQualitative) {
+            motifEnabled = true;
+          } else {
+            activeTab = 2;
+          }
+        }
+      });
     }
-  });
-
-  const selectedPalette = $derived(
-    patternPalettes.find((p) => p.id === selectedPatternId) ?? null
-  );
-
-  const currentPatternParams = $derived<PatternParams>({
-    size: patternSize,
-    scale: patternScale
   });
 
   const resolvedContrast = $derived<ContrastMode | undefined>(
@@ -95,6 +103,7 @@
   );
 
   function handleTabChange(index: number) {
+    activeTabInitialized = true;
     if (index === 0 && activeTab === 1) {
       singleColor = endColor;
     } else if (index === 1 && activeTab === 0) {
@@ -116,6 +125,8 @@
           resolvedContrast
         )
       );
+    } else if (index === 2) {
+      emitPatternPaletteChange(draftPatternPaletteConfig);
     }
   }
 
@@ -139,7 +150,18 @@
         resolvedContrast
       );
       onColorsChange?.(colors);
+    } else if (activeTab === 2) {
+      emitPatternPaletteChange(draftPatternPaletteConfig);
     }
+  }
+
+  function emitPatternPaletteChange(config: PatternPaletteConfig) {
+    draftPatternPaletteConfig = { ...config, contrast: resolvedContrast };
+    onPatternPaletteChange?.(draftPatternPaletteConfig);
+  }
+
+  function handlePatternPaletteChange(config: PatternPaletteConfig) {
+    emitPatternPaletteChange(config);
   }
 
   function handleSingleColorChange(color: string) {
@@ -172,18 +194,6 @@
     onColorsChange?.(colors);
   }
 
-  function handlePatternChange(patternId: string, params: PatternParams) {
-    selectedPatternId = `pattern-${patternId}`;
-    patternSize = params.size ?? patternSize;
-    patternScale = params.scale ?? patternScale;
-    const palette = patternPalettes.find((p) => p.patternId === patternId);
-    if (palette) emitPatternSelect(palette, params);
-  }
-
-  function emitPatternSelect(palette: Palette, params: PatternParams) {
-    onPatternSelect?.(palette, params);
-  }
-
   function handleInvertToggle(value: boolean) {
     onInvertToggle?.(value);
   }
@@ -191,16 +201,11 @@
   function handleMotifToggle(value: boolean) {
     motifEnabled = value;
     if (!value) {
-      selectedPatternId = null;
       onColorsChange?.([singleColor]);
       return;
     }
 
-    const palette = selectedPalette ?? patternPalettes[0];
-    if (palette) {
-      selectedPatternId = palette.id;
-      emitPatternSelect(palette, currentPatternParams);
-    }
+    emitPatternPaletteChange(draftPatternPaletteConfig);
   }
 </script>
 
@@ -228,10 +233,9 @@
     {/if}
 
     {#if allowPattern && motifEnabled}
-      <PatternPicker
-        patternId={selectedPalette?.patternId}
-        patternParams={currentPatternParams}
-        onChange={handlePatternChange}
+      <PatternPalettePicker
+        config={draftPatternPaletteConfig}
+        onchange={handlePatternPaletteChange}
       />
     {/if}
   {:else}
@@ -263,29 +267,26 @@
           />
         </div>
       {:else if activeTab === 2}
-        <PatternPicker
-          patternId={selectedPalette?.patternId}
-          patternParams={currentPatternParams}
-          onChange={handlePatternChange}
+        <PatternPalettePicker
+          config={draftPatternPaletteConfig}
+          onchange={handlePatternPaletteChange}
         />
       {/if}
     </div>
 
-    {#if activeTab !== 2}
-      <div class="contrast-section">
-        <span class="field-label">{m.contrast_label()}</span>
-        <SimpleRadioGroup
-          name="palette-contrast"
-          items={[
-            { value: 'low', labelText: m.contrast_low() },
-            { value: 'normal', labelText: m.contrast_normal() },
-            { value: 'high', labelText: m.contrast_high() }
-          ]}
-          selected={contrastMode}
-          onchange={(value) => handleContrastChange(value)}
-        />
-      </div>
-    {/if}
+    <div class="contrast-section">
+      <span class="field-label">{m.contrast_label()}</span>
+      <SimpleRadioGroup
+        name="palette-contrast"
+        items={[
+          { value: 'low', labelText: m.contrast_low() },
+          { value: 'normal', labelText: m.contrast_normal() },
+          { value: 'high', labelText: m.contrast_high() }
+        ]}
+        selected={contrastMode}
+        onchange={(value) => handleContrastChange(value)}
+      />
+    </div>
 
     <ToggleWithLabel
       label={m.invert_palette_tooltip()}

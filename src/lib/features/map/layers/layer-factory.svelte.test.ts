@@ -48,6 +48,7 @@ const {
   createPolygonFillColorAttributeMock,
   createScatterplotLayerPropsMock,
   getPatternAtlasForPatternMock,
+  getPatternPaletteAtlasMock,
   parsePathsMock,
   parsePathsWithProjectionMock,
   parsePointDataMock,
@@ -81,6 +82,7 @@ const {
     createPolygonFillColorAttributeMock: vi.fn(),
     createScatterplotLayerPropsMock: vi.fn(),
     getPatternAtlasForPatternMock: vi.fn(),
+    getPatternPaletteAtlasMock: vi.fn(),
     parsePathsMock: vi.fn(),
     parsePathsWithProjectionMock: vi.fn(),
     parsePointDataMock: vi.fn(),
@@ -95,10 +97,10 @@ const {
   };
 });
 
-vi.mock('geoarrow-deck-stream', async () => {
-  const actual = await vi.importActual<typeof import('geoarrow-deck-stream')>(
-    'geoarrow-deck-stream'
-  );
+vi.mock('@ateliercartographie/geoarrow-deck-stream', async () => {
+  const actual = await vi.importActual<
+    typeof import('@ateliercartographie/geoarrow-deck-stream')
+  >('@ateliercartographie/geoarrow-deck-stream');
 
   return {
     ...actual,
@@ -151,13 +153,8 @@ vi.mock('./pattern-texture', async () => {
 
   return {
     ...actual,
-    getPatternAtlas: vi.fn(() => ({
-      atlas: {} as HTMLCanvasElement,
-      mapping: {
-        diagonal: { x: 0, y: 0, width: 8, height: 8 }
-      }
-    })),
-    getPatternAtlasForPattern: getPatternAtlasForPatternMock
+    getPatternAtlasForPattern: getPatternAtlasForPatternMock,
+    getPatternPaletteAtlas: getPatternPaletteAtlasMock
   };
 });
 
@@ -568,6 +565,17 @@ beforeEach(() => {
       dots: { x: 8, y: 0, width: 8, height: 8 }
     }
   });
+  getPatternPaletteAtlasMock.mockImplementation(
+    (patterns: { type: string }[]) => ({
+      atlas: {} as HTMLCanvasElement,
+      mapping: Object.fromEntries(
+        patterns.map((_, index) => [
+          `c${index}`,
+          { x: index * 8, y: 0, width: 8, height: 8 }
+        ])
+      )
+    })
+  );
   projectGeoJSONMock.mockImplementation((geojson) => geojson);
   parseSolidPolygonsMock.mockReturnValue({
     featureIds: new Uint32Array([0])
@@ -1421,7 +1429,7 @@ describe('createPolygonLayers', () => {
     expect(radii![0]).toBeCloseTo(20, 5);
   });
 
-  it('passes common category patterns to split representative point symbols', () => {
+  it('does not apply category patterns to split representative point symbols', () => {
     arrowTableToGeoJSONMock.mockReturnValue({
       type: 'FeatureCollection',
       features: [createPolygonFeature('keep', 2024)]
@@ -1492,8 +1500,12 @@ describe('createPolygonLayers', () => {
     ) as MultiShapeLayer | undefined;
 
     expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
-    expect(pointLayer?.props.patternEnabled).toBe(true);
-    expect(pointLayer?.props.patternType).toBe(1);
+    expect(
+      (pointLayer?.props as Record<string, unknown>).patternEnabled
+    ).toBeUndefined();
+    expect(
+      (pointLayer?.props as Record<string, unknown>).patternAtlas
+    ).toBeUndefined();
   });
 
   it('hides disabled split representative symbol categories across fill, stroke and radius attributes', () => {
@@ -2055,7 +2067,7 @@ describe('createPolygonLayers', () => {
     const patternData = patternLayer?.props.data as FeatureCollection<Polygon>;
 
     expect(getFillColor?.(createPolygonFeature('DEU', 2024))).toEqual([
-      255, 0, 0, 255
+      255, 255, 255, 255
     ]);
     expect(getFillColor?.(createPolygonFeature('ESP', 2024))).toEqual([
       0, 0, 0, 0
@@ -2354,14 +2366,73 @@ describe('createPolygonLayers', () => {
       scale: 16
     });
     // size/scale are baked into the atlas tile (asserted above). The shader
-    // renders the tile at its native atlas size, so getFillPatternScale is the
-    // mapping frame width (8 in the mock) — matching the popover preview rather
-    // than re-deriving a separate screen-pixel formula.
-    expect(patternLayerProps?.getFillPatternScale).toBe(8);
+    // consumes getFillPatternScale as the tile size in CSS pixels; the design
+    // tile edge equals the user's scale slider value, independent of the
+    // devicePixelRatio-scaled atlas frame.
+    expect(patternLayerProps?.getFillPatternScale).toBe(16);
     expect(patternLayerProps?.getFillPatternRotation).toBe(315);
     expect(patternLayer?.props.updateTriggers).toMatchObject({
-      getFillPatternScale: [8],
+      getFillPatternScale: [16],
       getFillPatternRotation: [315]
+    });
+  });
+
+  it('renders one pattern overlay layer per class with increasing sizes when classification.pattern is set', () => {
+    const visualization = createVisualization(FillMode.CLASSES);
+    visualization.mapping = { valueColumn: 'metric' };
+    visualization.polygon = {
+      ...visualization.polygon!,
+      valueColumn: 'metric',
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 4,
+        numClasses: 4,
+        breaks: [10, 20, 30],
+        colors: ['#eeeeee', '#cccccc', '#999999', '#333333'],
+        pattern: { shape: 'line' }
+      }
+    };
+
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [5, 15, 25, 35].map((metric, index) => ({
+        ...createPolygonFeature(`feature-${index}`, 2024),
+        properties: { id: `feature-${index}`, metric }
+      }))
+    } satisfies FeatureCollection<Polygon>);
+
+    const layers = createPolygonLayers(
+      createTableWithRows(
+        [5, 15, 25, 35].map((metric, index) => ({
+          id: `feature-${index}`,
+          metric
+        })),
+        ['id', 'metric']
+      ),
+      createGeometryInfo(),
+      createContext(visualization)
+    );
+
+    const classPatternLayers = layers.filter((layer) =>
+      String(layer.props.id).includes('-pattern-c')
+    );
+
+    expect(classPatternLayers).toHaveLength(4);
+    const propsPerClass = classPatternLayers.map(
+      (layer) => layer.props as Record<string, unknown>
+    );
+    propsPerClass.forEach((props, index) => {
+      expect((props.getFillPattern as () => string)()).toBe(`c${index}`);
+    });
+    const sizes = propsPerClass.map(
+      (props) => props.khartisPatternSize as number
+    );
+    for (let i = 1; i < sizes.length; i += 1) {
+      expect(sizes[i]!).toBeGreaterThan(sizes[i - 1]!);
+    }
+    propsPerClass.forEach((props) => {
+      expect(props.getFillPatternScale).toBe(7);
+      expect(props.opacity).toBe(1);
     });
   });
 
@@ -2726,7 +2797,7 @@ describe('createPointLayers', () => {
     expect(Array.from(fillColorAttribute.value)).toEqual([0, 0, 0, 0]);
   });
 
-  it('uses MultiShapeLayer for categorical point patterns even with circle symbols', () => {
+  it('uses MultiShapeLayer for categorical circle symbols without applying any pattern', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 1,
       featureIds: new Uint32Array([0])
@@ -2763,12 +2834,13 @@ describe('createPointLayers', () => {
     const pointLayer = layers[0] as MultiShapeLayer;
 
     expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
-    expect(pointLayer.props.patternEnabled).toBe(true);
-    expect(pointLayer.props.patternType).toBe(3);
-    expect(String(pointLayer.props.id)).toContain('-pattern-');
+    expect(
+      (pointLayer.props as Record<string, unknown>).patternEnabled
+    ).toBeUndefined();
+    expect(String(pointLayer.props.id)).not.toContain('-pattern-');
   });
 
-  it('keeps categorical circle symbols on a stable MultiShapeLayer with the motif off so toggling the motif never switches layer class', () => {
+  it('keeps categorical circle symbols on a stable MultiShapeLayer regardless of classification pattern fields', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 1,
       featureIds: new Uint32Array([0])
@@ -2803,7 +2875,9 @@ describe('createPointLayers', () => {
 
     const pointLayer = layers[0] as MultiShapeLayer;
     expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
-    expect(pointLayer.props.patternEnabled).toBe(false);
+    expect(
+      (pointLayer.props as Record<string, unknown>).patternEnabled
+    ).toBeUndefined();
     expect(String(pointLayer.props.id)).not.toContain('-pattern-');
   });
 
@@ -3247,7 +3321,7 @@ describe('createPointLayers', () => {
     expect(layers[1].props.radiusScale).toBe(2);
   });
 
-  it('resolves the fill-classification pattern when the symbol fill mode is categories (REV-SYM-2)', () => {
+  it('never applies a fill-classification pattern to symbols even in categories fill mode (REV-SYM-2)', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 1,
       featureIds: new Uint32Array([0])
@@ -3285,7 +3359,9 @@ describe('createPointLayers', () => {
 
     const pointLayer = layers[0] as MultiShapeLayer;
     expect(pointLayer).toBeInstanceOf(MultiShapeLayer);
-    expect(pointLayer.props.patternEnabled).toBe(true);
+    expect(
+      (pointLayer.props as Record<string, unknown>).patternEnabled
+    ).toBeUndefined();
   });
 
   it('renders every selectable missing-data representation shape on native points (REV-SYM-6)', () => {

@@ -1,6 +1,6 @@
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
-import type { ProjectionLike } from 'geoarrow-deck-stream';
+import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 
 import { arrowTableToGeoJSON } from '../io';
 import { projectGeoJSON } from '../utils/geoarrow-stream-bridge.utils';

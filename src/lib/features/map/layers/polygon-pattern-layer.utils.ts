@@ -4,21 +4,36 @@ import type { FeatureCollection } from 'geojson';
 import {
   createPolygonFillColorAttribute,
   type BinaryPolygonData
-} from 'geoarrow-deck-stream';
+} from '@ateliercartographie/geoarrow-deck-stream';
 
 import { mapPatternTypeToPatternId } from '$lib/features/commons/components/palette-popover/palette.constants';
-import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';
+import {
+  PATTERN_OVERLAY_OPACITY,
+  type PatternParams
+} from '$lib/features/commons/constants/pattern.constants';
+import {
+  patternPaletteFromLegacy,
+  resolveClassificationPatternConfig,
+  resolveClassPatterns,
+  type ClassPattern
+} from '$lib/features/commons/services/pattern-palette.service';
+import { FillMode } from '$lib/features/commons/constants/visualization.constants';
 import {
   getPrimitiveClassification,
   PrimitiveFilterType
 } from '$lib/features/commons/stores/visualization.store.svelte';
-import type { getPolygonPrimitive } from '$lib/features/commons/stores/visualization.store.svelte';
+import type {
+  ClassificationConfig,
+  getPolygonPrimitive
+} from '$lib/features/commons/stores/visualization.store.svelte';
 
 import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
 import type { DeckDataRow, LayerContext } from '../types';
 import {
   getPatternAtlasForPattern,
+  getPatternPaletteAtlas,
   isValidPatternId,
+  resolvePatternTilePx,
   PATTERN_TYPE_MAP,
   type PatternName
 } from './pattern-texture';
@@ -39,6 +54,8 @@ export const THEMATIC_OVERLAY_PARAMETERS = {
 
 const DEFAULT_MISSING_DATA_PATTERN_ID: PatternName = 'diagonal';
 
+export const MAX_CATEGORICAL_PATTERN_COUNT = 24;
+
 let fillStyleExtensionInstance: RotatableFillStyleExtension | null = null;
 
 function getFillStyleExtension(): RotatableFillStyleExtension {
@@ -50,7 +67,15 @@ function getFillStyleExtension(): RotatableFillStyleExtension {
   return fillStyleExtensionInstance;
 }
 
-type PolygonPatternProps = {
+export interface KhartisMotifOptions {
+  type: string;
+  angle: number;
+  scale: number;
+  size: number;
+  patchSize: boolean;
+}
+
+export type PolygonPatternProps = {
   extensions: RotatableFillStyleExtension[];
   fillPatternAtlas: HTMLCanvasElement;
   fillPatternMapping: Record<
@@ -65,6 +90,7 @@ type PolygonPatternProps = {
   khartisPatternSize: number;
   khartisPatternScale: number;
   khartisPatternAngle: number;
+  khartisMotifOptions?: KhartisMotifOptions;
 };
 
 function createPatternProps(
@@ -80,14 +106,11 @@ function createPatternProps(
   }
   const patternScaleValue = Math.max(1, patternParams?.scale ?? 8);
   const patternSizeValue = Math.max(1, patternParams?.size ?? 4);
-  // The atlas tile already bakes the user's size + scale (motif.js), exactly
-  // like the CSS preview (buildPatternBackground). The shader consumes
-  // getFillPatternScale as "tile size in screen pixels", so render the tile at
-  // its native atlas size for a 1:1 match with the popover preview. Deriving it
-  // from a slider here re-applied scale a second time and blew tiles up to
-  // 40-200 px.
-  const patternFrame = mapping[patternId];
-  const patternScale = Math.max(1, patternFrame?.width ?? 16);
+  // The shader consumes getFillPatternScale as "tile size in screen pixels".
+  // Atlas frames are devicePixelRatio-scaled canvas pixels, so use the design
+  // tile size instead — it keeps the motif identical across screen densities
+  // and matches the CSS previews, the legend, and the SVG export.
+  const patternScale = resolvePatternTilePx(patternParams);
   const patternRotation =
     patternParams?.angle ?? PATTERN_TYPE_MAP[patternId]?.angle ?? 0;
 
@@ -104,6 +127,85 @@ function createPatternProps(
     khartisPatternScale: patternScaleValue,
     khartisPatternAngle: patternRotation
   };
+}
+
+export function createClassPatternProps(
+  patterns: ClassPattern[],
+  classIndex: number
+): PolygonPatternProps {
+  const { atlas, mapping } = getPatternPaletteAtlas(patterns);
+  const pattern = patterns[classIndex]!;
+  const patternKey = `c${classIndex}`;
+  const patternScale = pattern.scale * 10;
+
+  return {
+    extensions: [getFillStyleExtension()],
+    fillPatternAtlas: atlas,
+    fillPatternMapping: mapping,
+    fillPatternMask: true,
+    getFillPattern: () => patternKey,
+    getFillPatternScale: patternScale,
+    getFillPatternRotation: pattern.angle,
+    khartisPatternId: patternKey,
+    khartisPatternSize: pattern.size,
+    khartisPatternScale: patternScale,
+    khartisPatternAngle: pattern.angle,
+    khartisMotifOptions: {
+      type: pattern.type,
+      angle: pattern.angle,
+      scale: pattern.scale,
+      size: pattern.size,
+      patchSize: pattern.patchSize
+    }
+  };
+}
+
+export function resolveClassPatternPalette(
+  classification: ClassificationConfig | undefined,
+  fillMode: FillMode
+): ClassPattern[] | null {
+  const pattern = resolveClassificationPatternConfig(classification);
+  if (!pattern) {
+    return null;
+  }
+
+  if (fillMode === FillMode.UNIQUE) {
+    return resolveClassPatterns(
+      1,
+      pattern,
+      'sequential',
+      pattern.contrast,
+      false
+    );
+  }
+
+  if (fillMode === FillMode.CLASSES) {
+    const count = classification?.colors?.length ?? 0;
+    if (count === 0) return null;
+    return resolveClassPatterns(
+      count,
+      pattern,
+      'sequential',
+      pattern.contrast,
+      classification?.inverted ?? false
+    );
+  }
+
+  if (fillMode === FillMode.CATEGORIES) {
+    const count = classification?.labels?.length ?? 0;
+    // Beyond ~24 categories no motif set stays perceptually distinct, and the
+    // shared atlas canvas would exceed browser canvas size limits.
+    if (count === 0 || count > MAX_CATEGORICAL_PATTERN_COUNT) return null;
+    return resolveClassPatterns(
+      count,
+      pattern,
+      'categorical',
+      pattern.contrast,
+      classification?.inverted ?? false
+    );
+  }
+
+  return null;
 }
 
 export function buildPatternProps(
@@ -125,16 +227,42 @@ export function buildPatternProps(
 }
 
 export function resolveMissingDataPatternId(
-  polygonConfig: ReturnType<typeof getPolygonPrimitive> | undefined
+  missingData:
+    | NonNullable<ReturnType<typeof getPolygonPrimitive>>['missingData']
+    | undefined
 ): PatternName {
-  const patternId = polygonConfig?.missingData?.patternId;
+  const patternId = missingData?.patternId;
   if (isValidPatternId(patternId)) {
     return patternId;
   }
   // Legacy fallback: older projects only stored a coarse PatternType.
   return mapPatternTypeToPatternId(
-    polygonConfig?.missingData?.patternType,
+    missingData?.patternType,
     DEFAULT_MISSING_DATA_PATTERN_ID
+  );
+}
+
+export function resolveMissingDataClassPattern(
+  missingData:
+    | NonNullable<ReturnType<typeof getPolygonPrimitive>>['missingData']
+    | undefined
+): ClassPattern | null {
+  if (!missingData?.pattern) {
+    return null;
+  }
+
+  const config =
+    missingData.patternConfig ??
+    patternPaletteFromLegacy(
+      resolveMissingDataPatternId(missingData),
+      missingData.patternParams
+    );
+  if (!config) {
+    return null;
+  }
+
+  return (
+    resolveClassPatterns(1, config, 'sequential', config.contrast)[0] ?? null
   );
 }
 
@@ -142,14 +270,16 @@ export function buildMissingDataPatternProps(
   polygonConfig: ReturnType<typeof getPolygonPrimitive> | undefined,
   showMissingPolygons: boolean
 ): PolygonPatternProps | null {
-  if (!showMissingPolygons || !polygonConfig?.missingData?.pattern) {
+  if (!showMissingPolygons) {
     return null;
   }
 
-  return createPatternProps(
-    resolveMissingDataPatternId(polygonConfig),
-    polygonConfig.missingData.patternParams
-  );
+  const pattern = resolveMissingDataClassPattern(polygonConfig?.missingData);
+  if (!pattern) {
+    return null;
+  }
+
+  return createClassPatternProps([pattern], 0);
 }
 
 export function createPolygonPatternOverlayLayer(
@@ -158,16 +288,20 @@ export function createPolygonPatternOverlayLayer(
   patternGeojson: FeatureCollection,
   patternProps: PolygonPatternProps,
   ctx: Pick<LayerContext, 'modelMatrix' | 'beforeId'>,
-  idSuffix = `pattern-${polygonPatternId ?? 'none'}`
+  idSuffix = `pattern-${polygonPatternId ?? 'none'}`,
+  getOverlayFillColor?: (feature: {
+    properties?: Record<string, unknown>;
+  }) => [number, number, number, number],
+  opacity: number = PATTERN_OVERLAY_OPACITY
 ): GeoJsonLayer {
   const { modelMatrix, beforeId } = ctx;
 
   return new GeoJsonLayer({
     id: `${layerId}-${idSuffix}`,
     data: patternGeojson,
-    getFillColor: [0, 0, 0, 255],
+    getFillColor: getOverlayFillColor ?? [0, 0, 0, 255],
     stroked: false,
-    opacity: 0.6,
+    opacity,
     pickable: false,
     extensions: patternProps.extensions,
     fillPatternAtlas: patternProps.fillPatternAtlas,
@@ -180,7 +314,8 @@ export function createPolygonPatternOverlayLayer(
       khartisPatternId: patternProps.khartisPatternId,
       khartisPatternSize: patternProps.khartisPatternSize,
       khartisPatternScale: patternProps.khartisPatternScale,
-      khartisPatternAngle: patternProps.khartisPatternAngle
+      khartisPatternAngle: patternProps.khartisPatternAngle,
+      khartisMotifOptions: patternProps.khartisMotifOptions
     } as Record<string, unknown>),
     ...(modelMatrix && { modelMatrix }),
     ...(beforeId && { beforeId }),
@@ -216,7 +351,8 @@ export function createBinaryPolygonPatternOverlayLayer(
   patternProps: PolygonPatternProps,
   ctx: Pick<LayerContext, 'modelMatrix' | 'beforeId'>,
   getFillColor: (featureId: number) => [number, number, number, number],
-  idSuffix = `pattern-${polygonPatternId ?? 'none'}`
+  idSuffix = `pattern-${polygonPatternId ?? 'none'}`,
+  opacity: number = PATTERN_OVERLAY_OPACITY
 ): Layer<DeckDataRow> | null {
   const fillColorAttribute = createVisiblePolygonFillColorAttribute(
     polyData,
@@ -238,7 +374,7 @@ export function createBinaryPolygonPatternOverlayLayer(
     id: `${layerId}-${idSuffix}`,
     ...(solidProps as unknown as Record<string, unknown>),
     getFillColor: POLYGON_PATTERN_FILL_COLOR,
-    opacity: 0.6,
+    opacity,
     pickable: false,
     parameters: THEMATIC_OVERLAY_PARAMETERS,
     extensions: patternProps.extensions,
@@ -252,7 +388,8 @@ export function createBinaryPolygonPatternOverlayLayer(
       khartisPatternId: patternProps.khartisPatternId,
       khartisPatternSize: patternProps.khartisPatternSize,
       khartisPatternScale: patternProps.khartisPatternScale,
-      khartisPatternAngle: patternProps.khartisPatternAngle
+      khartisPatternAngle: patternProps.khartisPatternAngle,
+      khartisMotifOptions: patternProps.khartisMotifOptions
     } as Record<string, unknown>),
     ...(modelMatrix && { modelMatrix }),
     ...(beforeId && { beforeId }),

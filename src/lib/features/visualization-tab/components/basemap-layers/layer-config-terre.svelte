@@ -7,6 +7,7 @@
     BASEMAP_LAYER_CONFIG,
     BasemapDottedPattern
   } from '$lib/features/commons/constants/visualization.constants';
+  import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
 
   interface Props {
     showFillSection?: boolean;
@@ -25,10 +26,10 @@
   let {
     showFillSection = true,
     showStrokeSection = true,
-    fillColor = '#ffffff',
+    fillColor = NEUTRAL_CARTOGRAPHY_COLORS.land,
     fillShadow = false,
     fillOpacity = 100,
-    strokeColor = '#a8a8a8',
+    strokeColor = NEUTRAL_CARTOGRAPHY_COLORS.boundaryMedium,
     strokeDotted = false,
     strokeDottedPattern = BasemapDottedPattern.DOTS,
     strokeThickness = 0.5,
@@ -79,6 +80,7 @@
         <SingleColorPreview
           label={m.basemap_config_color()}
           color={fillColor}
+          allowPattern={false}
           onchange={handleFillColorChange}
         />
 
@@ -109,6 +111,7 @@
         <SingleColorPreview
           label={m.basemap_config_color()}
           color={strokeColor}
+          allowPattern={false}
           onchange={handleStrokeColorChange}
         />
 

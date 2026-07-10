@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 
 const {
@@ -319,22 +320,22 @@ function resetBasemapLayerMocks(): void {
     {
       id: 'terre',
       visible: true,
-      fillColor: '#ffffff',
+      fillColor: NEUTRAL_CARTOGRAPHY_COLORS.land,
       fillOpacity: 100,
-      strokeColor: '#a8a8a8',
+      strokeColor: NEUTRAL_CARTOGRAPHY_COLORS.boundaryMedium,
       strokeOpacity: 100
     },
     {
       id: 'mers',
       visible: true,
-      color: '#d0e2ff',
+      color: NEUTRAL_CARTOGRAPHY_COLORS.sea,
       opacity: 100
     },
     {
       id: 'equateur',
       visible: true,
       renderBelowThematic: true,
-      color: '#8d8d8d',
+      color: NEUTRAL_CARTOGRAPHY_COLORS.geographicLine,
       dotted: false,
       thickness: 1,
       opacity: 100
@@ -343,7 +344,7 @@ function resetBasemapLayerMocks(): void {
       id: 'sphere',
       visible: true,
       renderBelowThematic: true,
-      color: '#8d8d8d',
+      color: NEUTRAL_CARTOGRAPHY_COLORS.sphereOutline,
       thickness: 1,
       opacity: 100
     },
@@ -351,7 +352,7 @@ function resetBasemapLayerMocks(): void {
       id: 'frontieres',
       visible: true,
       renderBelowThematic: true,
-      color: '#525252',
+      color: NEUTRAL_CARTOGRAPHY_COLORS.boundaryMedium,
       dotted: false,
       dottedPattern: BasemapDottedPattern.DOTS,
       thickness: 1,
@@ -361,7 +362,7 @@ function resetBasemapLayerMocks(): void {
       id: 'meridiens',
       visible: true,
       renderBelowThematic: true,
-      color: '#e0e0e0',
+      color: NEUTRAL_CARTOGRAPHY_COLORS.graticule,
       dotted: true,
       dottedPattern: BasemapDottedPattern.DOTS,
       thickness: 1,
@@ -452,8 +453,12 @@ describe('layers row colors', () => {
 
     layersActions.syncWithVisualizations();
 
-    expect(findById('basemap::world-land.parquet')?.color).toBe('#a8a8a8');
-    expect(findById('basemap::mers')?.color).toBe('#d0e2ff');
+    expect(findById('basemap::world-land.parquet')?.color).toBe(
+      NEUTRAL_CARTOGRAPHY_COLORS.boundaryMedium
+    );
+    expect(findById('basemap::mers')?.color).toBe(
+      NEUTRAL_CARTOGRAPHY_COLORS.sea
+    );
   });
 });
 

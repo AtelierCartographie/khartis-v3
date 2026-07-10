@@ -16,16 +16,22 @@
   } from '$lib/features/commons/constants/visualization.constants';
   import { coerceMissingDataShape } from '../../utils/coerce.utils';
   import {
-    ColorSelector,
     SliderWithInput,
     ToggleWithLabel
   } from '$lib/features/commons/components/viz-controls';
-  import PatternPicker from '$lib/features/commons/components/palette-popover/pattern-picker.svelte';
-  import type { PatternParams } from '$lib/features/commons/components/palette-popover/palette.constants';
+  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
+  import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import {
     buildDashedPatternItems,
     coerceDashedPattern
   } from './dashed-pattern.utils';
+
+  const DEFAULT_PATTERN_CONFIG: PatternPaletteConfig = {
+    shape: 'line',
+    angle: 45,
+    scale: 0.7,
+    color: '#000000'
+  };
 
   interface Props {
     show: boolean;
@@ -43,8 +49,7 @@
     dashed?: boolean;
     dashedPattern?: BasemapDottedPattern;
     pattern?: boolean;
-    patternId?: string;
-    patternParams?: PatternParams;
+    patternConfig?: PatternPaletteConfig;
     onshowchange?: (show: boolean) => void;
     oncolorchange?: (color: string) => void;
     onshapechange?: (shape: MissingDataShape) => void;
@@ -52,7 +57,7 @@
     ondashedchange?: (dashed: boolean) => void;
     ondashedpatternchange?: (pattern: BasemapDottedPattern) => void;
     onpatternchange?: (pattern: boolean) => void;
-    onpatternstylechange?: (patternId: string, params: PatternParams) => void;
+    onpatternstylechange?: (config: PatternPaletteConfig) => void;
   }
 
   let {
@@ -71,8 +76,7 @@
     dashed = false,
     dashedPattern = BasemapDottedPattern.DOTS,
     pattern = false,
-    patternId = 'diagonal',
-    patternParams = { size: 4, scale: 8 },
+    patternConfig = DEFAULT_PATTERN_CONFIG,
     onshowchange,
     oncolorchange,
     onshapechange,
@@ -107,13 +111,13 @@
     ondashedpatternchange?.(next);
   }
 
-  function handlePatternToggle(value: boolean) {
-    pattern = value;
-    onpatternchange?.(value);
-  }
-
-  function handlePatternStyleChange(id: string, params: PatternParams) {
-    onpatternstylechange?.(id, params);
+  function handlePatternChange(config: PatternPaletteConfig | undefined) {
+    pattern = Boolean(config);
+    onpatternchange?.(Boolean(config));
+    if (config) {
+      patternConfig = config;
+      onpatternstylechange?.(config);
+    }
   }
 </script>
 
@@ -153,11 +157,14 @@
           </Column>
         {/if}
         <Column sm={2} md={4} lg={showShapeSelector ? 8 : 16}>
-          <ColorSelector
+          <SingleColorPreview
             exclusive
             label={m.color()}
-            value={color}
+            color={color}
+            allowPattern={showPatternToggle}
+            patternPaletteConfig={pattern ? patternConfig : undefined}
             onchange={oncolorchange}
+            onpatternchange={handlePatternChange}
           />
         </Column>
       </Row>
@@ -177,31 +184,6 @@
             </div>
           </Column>
         </Row>
-      {/if}
-
-      {#if showPatternToggle}
-        <Row>
-          <Column>
-            <div class="pattern-toggle">
-              <ToggleWithLabel
-                label={m.pattern()}
-                toggled={pattern}
-                ontoggle={handlePatternToggle}
-              />
-            </div>
-          </Column>
-        </Row>
-        {#if pattern}
-          <Row>
-            <Column>
-              <PatternPicker
-                patternId={patternId}
-                patternParams={patternParams}
-                onChange={handlePatternStyleChange}
-              />
-            </Column>
-          </Row>
-        {/if}
       {/if}
 
       {#if showDashedToggle}
@@ -246,8 +228,7 @@
     margin-top: var(--cds-spacing-03);
   }
 
-  .dashed-toggle,
-  .pattern-toggle {
+  .dashed-toggle {
     margin-top: var(--cds-spacing-03);
   }
 </style>

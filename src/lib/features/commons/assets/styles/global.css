@@ -76,6 +76,12 @@
   --cds-selected-ui-hover: var(--cds-hover-selected-ui);
   --cds-hover-tertiary: #1a1a1a;
   --cds-button-primary: #3c3838;
+  --khartis-dialog-action-button: #6f6f6f;
+  --khartis-dialog-action-button-hover: #606060;
+  --khartis-dialog-action-button-active: #525252;
+  --khartis-dialog-close-button: var(--cds-support-error, #da1e28);
+  --khartis-dialog-close-button-hover: #ba1b23;
+  --khartis-dialog-close-button-active: #750e13;
 
   /* Khartis additions - Suggestions theming */
   --khartis-additions-text-primary-suggestions: #003a6d;
@@ -170,6 +176,12 @@
   --cds-selected-ui-hover: var(--cds-hover-selected-ui);
   --cds-hover-tertiary: #e5e5e5;
   --cds-button-primary: white;
+  --khartis-dialog-action-button: #6f6f6f;
+  --khartis-dialog-action-button-hover: #606060;
+  --khartis-dialog-action-button-active: #525252;
+  --khartis-dialog-close-button: var(--cds-support-error, #ff8389);
+  --khartis-dialog-close-button-hover: #ffb3b8;
+  --khartis-dialog-close-button-active: #ffd7d9;
 
   /* Khartis additions - Suggestions theming (dark theme) */
   --khartis-additions-text-primary-suggestions: #82cfff;
@@ -347,6 +359,70 @@ label {
 .bx--slider-container .bx--slider-text-input {
   width: var(--slider-input-width);
   flex-shrink: 0;
+}
+
+.bx--modal-footer
+  .bx--btn:not(.bx--btn--danger):not(.bx--btn--secondary):not(
+    .khartis-dialog-close-action
+  ),
+.khartis-dialog-action {
+  background-color: var(--khartis-dialog-action-button);
+  border-color: var(--khartis-dialog-action-button);
+  color: var(--cds-text-on-color, #ffffff);
+}
+
+.bx--modal-footer
+  .bx--btn:not(.bx--btn--danger):not(.bx--btn--secondary):not(
+    .khartis-dialog-close-action
+  ):hover:not(:disabled),
+.khartis-dialog-action:hover:not(:disabled) {
+  background-color: var(--khartis-dialog-action-button-hover);
+  border-color: var(--khartis-dialog-action-button-hover);
+}
+
+.bx--modal-footer
+  .bx--btn:not(.bx--btn--danger):not(.bx--btn--secondary):not(
+    .khartis-dialog-close-action
+  ):active:not(:disabled),
+.khartis-dialog-action:active:not(:disabled) {
+  background-color: var(--khartis-dialog-action-button-active);
+  border-color: var(--khartis-dialog-action-button-active);
+}
+
+.bx--modal-footer .bx--btn--secondary,
+.khartis-dialog-close-action {
+  background-color: var(--khartis-dialog-close-button);
+  border-color: var(--khartis-dialog-close-button);
+  color: var(--cds-text-on-color, #ffffff);
+}
+
+.bx--modal-footer .bx--btn--secondary:hover:not(:disabled),
+.khartis-dialog-close-action:hover:not(:disabled) {
+  background-color: var(--khartis-dialog-close-button-hover);
+  border-color: var(--khartis-dialog-close-button-hover);
+}
+
+.bx--modal-footer .bx--btn--secondary:active:not(:disabled),
+.khartis-dialog-close-action:active:not(:disabled) {
+  background-color: var(--khartis-dialog-close-button-active);
+  border-color: var(--khartis-dialog-close-button-active);
+}
+
+/* In danger modals the primary action is already red; keep the cancel button
+   neutral so both footer buttons don't read as destructive. */
+.bx--modal--danger .bx--modal-footer .bx--btn--secondary {
+  background-color: var(--khartis-dialog-action-button);
+  border-color: var(--khartis-dialog-action-button);
+}
+
+.bx--modal--danger .bx--modal-footer .bx--btn--secondary:hover:not(:disabled) {
+  background-color: var(--khartis-dialog-action-button-hover);
+  border-color: var(--khartis-dialog-action-button-hover);
+}
+
+.bx--modal--danger .bx--modal-footer .bx--btn--secondary:active:not(:disabled) {
+  background-color: var(--khartis-dialog-action-button-active);
+  border-color: var(--khartis-dialog-action-button-active);
 }
 
 /* Fullscreen Carbon modals on mobile — reproduces Carbon vanilla behavior

@@ -58,6 +58,20 @@ describe('consentStore', () => {
     expect(mocks.analyticsDisableMock).toHaveBeenCalledOnce();
   });
 
+  it('should update analytics consent when the user changes a previous choice', async () => {
+    const { consentStore } = await loadConsentStore();
+
+    consentStore.acceptAll();
+    consentStore.declineAll();
+
+    const stored = JSON.parse(localStorage.getItem('khartis_consent') ?? '{}');
+    expect(consentStore.hasConsented).toBe(true);
+    expect(consentStore.analyticsAllowed).toBe(false);
+    expect(stored.analytics).toBe(false);
+    expect(mocks.analyticsEnableMock).toHaveBeenCalledOnce();
+    expect(mocks.analyticsDisableMock).toHaveBeenCalledOnce();
+  });
+
   it('restores analytics when a valid stored consent allows it', async () => {
     localStorage.setItem(
       'khartis_consent',
@@ -103,7 +117,7 @@ describe('consentStore', () => {
     const { consentStore } = await loadConsentStore();
 
     expect(consentStore.hasConsented).toBe(false);
-    expect(consentStore.analyticsAllowed).toBe(true);
+    expect(consentStore.analyticsAllowed).toBe(false);
     expect(mocks.analyticsEnableMock).not.toHaveBeenCalled();
   });
 });
