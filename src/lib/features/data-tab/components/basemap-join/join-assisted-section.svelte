@@ -118,9 +118,16 @@
     return set;
   });
 
-  const availableBasemapValues = $derived(
-    basemapValues.filter((value) => !joinedBasemapValueSet.has(value))
-  );
+  const availableBasemapValues = $derived.by(() => {
+    const seen = new SvelteSet<string>();
+    const values: string[] = [];
+    for (const value of basemapValues) {
+      if (joinedBasemapValueSet.has(value) || seen.has(value)) continue;
+      seen.add(value);
+      values.push(value);
+    }
+    return values;
+  });
 
   const basemapComboBoxItems = $derived<ComboBoxItem[]>(
     availableBasemapValues.map((value) => buildBasemapComboBoxItem(value))
@@ -154,11 +161,15 @@
         if (alias.value) ownVariants.add(alias.value);
       }
     }
-    return basemapValues
-      .filter(
-        (value) => ownVariants.has(value) || !joinedBasemapValueSet.has(value)
-      )
-      .map((value) => buildBasemapComboBoxItem(value));
+    const seen = new SvelteSet<string>();
+    const items: ComboBoxItem[] = [];
+    for (const value of basemapValues) {
+      if (seen.has(value)) continue;
+      if (!ownVariants.has(value) && joinedBasemapValueSet.has(value)) continue;
+      seen.add(value);
+      items.push(buildBasemapComboBoxItem(value));
+    }
+    return items;
   }
 
   function resolveDisplayedBasemapValue(value: string): string {
@@ -321,23 +332,26 @@
     announce(m.join_announce_validated({ entity }));
   }
 
-  function buildToVerifyOptions(suggestions: string[]): string[] {
-    const merged: string[] = [];
+  function buildToVerifyItems(suggestions: string[]): ComboBoxItem[] {
+    const suggestedValues = new SvelteSet<string>();
+    const suggestedItems: ComboBoxItem[] = [];
     for (const suggestion of suggestions) {
       const displayedSuggestion = resolveDisplayedBasemapValue(suggestion);
       if (
         !joinedBasemapValueSet.has(displayedSuggestion) &&
-        !merged.includes(displayedSuggestion)
+        !suggestedValues.has(displayedSuggestion)
       ) {
-        merged.push(displayedSuggestion);
+        suggestedValues.add(displayedSuggestion);
+        suggestedItems.push(buildBasemapComboBoxItem(displayedSuggestion));
       }
     }
-    for (const value of availableBasemapValues) {
-      if (!merged.includes(value)) {
-        merged.push(value);
-      }
+    if (suggestedItems.length === 0) {
+      return basemapComboBoxItems;
     }
-    return merged;
+    return [
+      ...suggestedItems,
+      ...basemapComboBoxItems.filter((item) => !suggestedValues.has(item.id))
+    ];
   }
 
   interface RowTooltip {
@@ -738,35 +752,41 @@
                     </div>
                     <div class="table-cell cell-select">
                       {#if visibleToVerifyRows.has(rowKey)}
-                        {@const toVerifyOptions = buildToVerifyOptions(
+                        {@const toVerifyItems = buildToVerifyItems(
                           row.basemapOptions
                         )}
-                        <Select
-                          id={`join-${i}`}
-                          labelText={m.join_select_label_to_verify({
-                            entity: row.dataValue
-                          })}
-                          hideLabel
-                          bind:selected={
-                            () =>
-                              getToVerifySelectedMapping(
-                                rowKey,
-                                row.selectedMapping
-                              ),
-                            (value) =>
+                        {#key basemapComboBoxItems}
+                          <ComboBox
+                            id={`join-${i}`}
+                            items={toVerifyItems}
+                            selectedId={selectedMapping}
+                            labelText={m.join_select_label_to_verify({
+                              entity: row.dataValue
+                            })}
+                            hideLabel
+                            size="sm"
+                            shouldFilterItem={(item, value) =>
+                              value === selectedMapping ||
+                              shouldFilterBasemapItem(item, value)}
+                            on:select={(e) =>
                               handleToVerifyMappingChange(
                                 rowKey,
                                 i,
                                 row.selectedMapping,
-                                value
-                              )
-                          }
-                          size="sm"
-                        >
-                          {#each toVerifyOptions as opt (opt)}
-                            <SelectItem value={opt} text={opt} />
-                          {/each}
-                        </Select>
+                                (
+                                  e.detail.selectedItem as
+                                    ComboBoxItem | undefined
+                                )?.id
+                              )}
+                            on:clear={() =>
+                              handleToVerifyMappingChange(
+                                rowKey,
+                                i,
+                                row.selectedMapping,
+                                undefined
+                              )}
+                          />
+                        {/key}
                       {:else}
                         <div class="select-placeholder" aria-hidden="true">
                           {row.selectedMapping ?? ''}
