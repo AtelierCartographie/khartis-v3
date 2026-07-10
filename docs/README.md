@@ -80,8 +80,8 @@ Le fichier `.env.example` sert uniquement au helper de déploiement local PPRD. 
 | [REFERENCE.md](REFERENCE.md)                               | Types TypeScript, hiérarchie d'erreurs, logger, raccourcis clavier            |
 | [PWA.md](PWA.md)                                           | Progressive Web App, stratégies de cache Workbox, mises à jour                |
 | [GLOSSAIRE.md](GLOSSAIRE.md)                               | Termes cartographiques et techniques du point de vue du développeur           |
-| [DEPLOYMENT.md](DEPLOYMENT.md)                             | Déploiement local PPRD, variables locales, garde-fous SFTP                    |
-| [ANALYTICS.md](ANALYTICS.md)                               | Consentement, évènements GA4 anonymes et configuration directe                |
+| [DEPLOYMENT.md](DEPLOYMENT.md)                             | Déploiement local PPRD et PROD, variables locales, garde-fous SFTP            |
+| [ANALYTICS.md](ANALYTICS.md)                               | Consentement, container Google Tag Manager, évènements anonymes               |
 
 ---
 
