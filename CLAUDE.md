@@ -15,15 +15,19 @@ pnpm build             # NODE_ENV=production vite build → build/
 pnpm check             # compiles Paraglide, svelte-kit sync, then svelte-check (typecheck)
 pnpm lint              # prettier --check . && eslint .
 pnpm format            # prettier --write .
-pnpm deploy:pprd:dry-run # validate latest staging release, CI gate, and build without SFTP
-pnpm deploy:pprd       # deploy latest staging release to PPRD through the local SFTP helper
+pnpm deploy:pprd:dry-run # validate latest pprd prerelease, CI gate, and build without SFTP
+pnpm deploy:pprd       # deploy latest pprd prerelease to PPRD through the local SFTP helper
+pnpm deploy:prod:dry-run # validate latest stable release, CI gate, and build without SFTP
+pnpm deploy:prod       # deploy latest stable release to prod (asks you to retype the tag)
 ```
 
 The app can run locally without a `.env` file. The committed `.env.example` is
-only for the local PPRD deployment helper and must contain placeholders only.
+only for the local PPRD/PRD deployment helper and must contain placeholders only.
 Real SFTP hosts, users, remote paths, fingerprints, passwords, private keys,
 VPN details, and GitLab credentials must stay in ignored local env files or the
-user's shell. PRD deployment is intentionally unsupported by the local helper.
+user's shell. `deploy:prod` targets production: it deploys the latest stable
+`v*.*.*` tag, requires a green release run, and asks you to retype the tag to
+confirm. Keep its target under `KHARTIS_*_PROD` env vars, never committed.
 
 ### Tests
 
