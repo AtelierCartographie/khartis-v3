@@ -68,7 +68,7 @@ import {
 import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
 import { layerOrderStore } from '$lib/features/step-toolbar/tools/layers/layer-order.store.svelte';
 import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
-import type { ProjectionLike } from 'geoarrow-deck-stream';
+import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 import type { BasemapMetadata } from '../types/basemap.types';
 import {
   shouldReprojectDatasetForActiveProjection,

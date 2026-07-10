@@ -5,7 +5,7 @@ import type { ProjectionPresets } from '../types/basemap.types';
 import { buildCompositeProjectionFromPresetId } from './geoarrow-stream-bridge.utils';
 import { proj4d3 } from './proj4d3.utils';
 import { type GeoProjection } from 'd3-geo';
-import type { ProjectionLike } from 'geoarrow-deck-stream';
+import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 import {
   buildProjectionFromCatalogueId,
   fitProjectionToBbox,

@@ -7,9 +7,9 @@
     DEFAULT_SEQUENTIAL_PREVIEW,
     DEFAULT_QUALITATIVE_PREVIEW,
     PALETTE_TYPE,
-    resolvePaletteTypeForBreakpoint,
-    type PatternParams
+    resolvePaletteTypeForBreakpoint
   } from '$lib/features/commons/components/palette-popover/palette.constants';
+  import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import * as m from '$lib/paraglide/messages';
   import type {
     ClassificationConfig,
@@ -55,8 +55,7 @@
     showMissingData?: boolean;
     missingDataColor?: string;
     missingDataPattern?: boolean;
-    missingDataPatternId?: string;
-    missingDataPatternParams?: PatternParams;
+    missingDataPatternConfig?: PatternPaletteConfig;
     showOpacitySlider?: boolean;
     showOpacityBounds?: boolean;
     showMissingDataSection?: boolean;
@@ -89,10 +88,7 @@
     onMissingDataShowChange?: (show: boolean) => void;
     onMissingDataColorChange?: (color: string) => void;
     onMissingDataPatternChange?: (pattern: boolean) => void;
-    onMissingDataPatternStyleChange?: (
-      patternId: string,
-      params: PatternParams
-    ) => void;
+    onMissingDataPatternStyleChange?: (config: PatternPaletteConfig) => void;
     onInvertPalette?: () => void;
   }
 
@@ -113,8 +109,7 @@
     showMissingData = true,
     missingDataColor = DEFAULT_COLORS.missingData,
     missingDataPattern = false,
-    missingDataPatternId = 'diagonal',
-    missingDataPatternParams = { size: 4, scale: 8 },
+    missingDataPatternConfig,
     showOpacitySlider = true,
     showOpacityBounds = false,
     showMissingDataSection = true,
@@ -183,15 +178,11 @@
     ...DEFAULT_COMMON_ASPECT,
     pattern:
       categoriesVariant === 'polygons' &&
-      Boolean(visualization?.classification?.patternId),
-    patternId:
+      Boolean(visualization?.classification?.pattern),
+    patternConfig:
       (categoriesVariant === 'polygons'
-        ? visualization?.classification?.patternId
-        : undefined) ?? DEFAULT_COMMON_ASPECT.patternId,
-    patternParams:
-      (categoriesVariant === 'polygons'
-        ? visualization?.classification?.patternParams
-        : undefined) ?? DEFAULT_COMMON_ASPECT.patternParams
+        ? visualization?.classification?.pattern
+        : undefined) ?? DEFAULT_COMMON_ASPECT.patternConfig
   });
   const selectableValueFields = $derived(
     filterFieldsByKind(selectableDataFields, 'numeric', selectedValueFieldId)
@@ -242,17 +233,19 @@
   {:else}
     <SingleColorPreview
       exclusive
+      allowPattern={categoriesVariant === 'polygons'}
       label={m.color()}
       color={fillColor}
-      patternId={categoriesVariant === 'polygons'
-        ? visualization?.classification?.patternId
+      patternPaletteConfig={categoriesVariant === 'polygons'
+        ? visualization?.classification?.pattern
         : undefined}
       onchange={onFillColorChange}
-      onpatternchange={(patternId, patternParams) => {
+      onpatternchange={(config) => {
         if (categoriesVariant === 'polygons') {
           onClassificationChange({
-            patternId,
-            patternParams: patternId ? patternParams : undefined
+            pattern: config,
+            patternId: undefined,
+            patternParams: undefined
           });
         }
       }}
@@ -290,6 +283,7 @@
     showInvertButton={false}
     paletteType={resolvePaletteTypeForBreakpoint(visualization?.classification)}
     classification={visualization?.classification}
+    categoriesVariant={categoriesVariant}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />
@@ -333,6 +327,7 @@
     categoriesCommonAspect={categoriesCommonAspect}
     showCategoriesCommonAspect={categoriesVariant === 'polygons'}
     categoryLabels={categoryLabels.labels}
+    classification={visualization?.classification}
     bind:categoriesPopoverOpen={categoriesPopoverOpen}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
@@ -360,8 +355,7 @@
     showSizeSlider={false}
     showPatternToggle={categoriesVariant === 'polygons'}
     pattern={missingDataPattern}
-    patternId={missingDataPatternId}
-    patternParams={missingDataPatternParams}
+    patternConfig={missingDataPatternConfig}
     onshowchange={onMissingDataShowChange ?? (() => {})}
     oncolorchange={onMissingDataColorChange ?? (() => {})}
     onpatternchange={onMissingDataPatternChange ?? (() => {})}

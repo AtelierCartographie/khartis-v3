@@ -1,5 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatasetResult } from '$lib/features/data-pipeline/types';
+
+const mocks = vi.hoisted(() => ({
+  trackVisualizationCreated: vi.fn()
+}));
 
 const mockedDatasetsState: { datasets: DatasetResult[] } = {
   datasets: []
@@ -16,6 +20,13 @@ vi.mock('./datasets.store.svelte', () => ({
     clear() {
       mockedDatasetsState.datasets = [];
     }
+  }
+}));
+
+vi.mock('$lib/features/commons/services/analytics.service', () => ({
+  analyticsService: {
+    trackVisualizationCreated: (...args: unknown[]) =>
+      mocks.trackVisualizationCreated(...args)
   }
 }));
 
@@ -163,10 +174,27 @@ function buildLegacyLabelVisualization(
 }
 
 describe('visualizationStore legacy label normalization', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   afterEach(() => {
     visualizationStore.clear();
     datasetsStore.clear();
     persistenceRegistry.markClean();
+  });
+
+  it('should track the visualization type when creating a visualization', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+
+    visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      'dataset-1'
+    );
+
+    expect(mocks.trackVisualizationCreated).toHaveBeenCalledWith(
+      VisualizationType.CHOROPLETH
+    );
   });
 
   it('migrates legacy label styling into texts and hides the legacy label layer', () => {
@@ -430,6 +458,55 @@ describe('visualizationStore suggestion origin tracking', () => {
       'B',
       'C'
     ]);
+  });
+
+  it('keeps suggestion origin for preserved primitive stroke classification updates', () => {
+    datasetsStore.addProcessedDataset({
+      ...buildDataset(),
+      geometry: {
+        type: 'Polygon',
+        columnName: 'geom',
+        bounds: [0, 0, 1, 1],
+        centroid: [0.5, 0.5],
+        featureCount: 1
+      }
+    });
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      'dataset-1'
+    );
+
+    visualizationStore.updateVisualization(visualization.id, {
+      origin: {
+        mode: 'manual-suggestion',
+        suggestionKey: 'choropleth::1::name::polygon::QTR'
+      },
+      polygon: {
+        ...visualization.polygon!,
+        strokeMode: StrokeMode.CLASSES
+      }
+    });
+
+    visualizationStore.updatePrimitiveStrokeClassification(
+      visualization.id,
+      PrimitiveFilterType.POLYGON,
+      {
+        colors: ['#1192e8', '#78a9cf', '#c8ddf0'],
+        labels: ['A', 'B', 'C']
+      },
+      { preserveOrigin: true }
+    );
+
+    const updatedVisualization = visualizationStore.selectedVisualization;
+
+    expect(updatedVisualization?.origin).toEqual({
+      mode: 'manual-suggestion',
+      suggestionKey: 'choropleth::1::name::polygon::QTR'
+    });
+    expect(updatedVisualization?.polygon?.strokeClassification?.labels).toEqual(
+      ['A', 'B', 'C']
+    );
   });
 
   it('switches to custom for semantic classification changes', () => {

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages';
+  import { consentStore } from '$lib/features/commons/stores/consent.store.svelte';
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import {
     Button,
     ComposedModal,
@@ -8,10 +10,6 @@
     ModalHeader
   } from 'carbon-components-svelte';
   import { Information } from 'carbon-icons-svelte';
-
-  const DPO_EMAIL = 'dpo@sciencespo.fr';
-  const CONTACT_EMAIL = 'carto@sciencespo.fr';
-  const GITHUB_URL = 'https://github.com/AtelierCartographie/khartis-v3/';
 
   let isOpen = $state(false);
 
@@ -22,6 +20,14 @@
   function closeModal() {
     isOpen = false;
   }
+
+  function handleAnalyticsConsentToggle(checked: boolean) {
+    if (checked) {
+      consentStore.acceptAll();
+    } else {
+      consentStore.declineAll();
+    }
+  }
 </script>
 
 <Button
@@ -29,151 +35,68 @@
   kind="ghost"
   icon={Information}
   class="menu-bar-item"
-  data-testid="sidenav-data-privacy"
+  data-testid="sidenav-cookie-consent"
   on:click={openModal}
 >
-  {m.sidenav_data_privacy()}
+  {m.sidenav_cookie_consent()}
 </Button>
 
 <ComposedModal bind:open={isOpen} size="sm" on:close={closeModal}>
-  <ModalHeader title={m.sidenav_data_privacy()} />
-  <ModalBody class="data-privacy-body">
-    <p class="data-privacy-intro">{m.data_privacy_modal_intro()}</p>
-
-    <section>
-      <h3>{m.data_privacy_modal_privacy_heading()}</h3>
-      <ul class="data-privacy-list">
-        <li>
-          <strong>{m.data_privacy_modal_privacy_local_label()} :</strong>
-          {m.data_privacy_modal_privacy_local()}
-        </li>
-        <li>
-          <strong>{m.data_privacy_modal_privacy_analytics_label()} :</strong>
-          {m.data_privacy_modal_privacy_analytics()}
-        </li>
-        <li>
-          <strong>{m.data_privacy_modal_privacy_remote_label()} :</strong>
-          {m.data_privacy_modal_privacy_remote()}
-        </li>
-        <li>
-          <strong>{m.data_privacy_modal_privacy_dpo_label()} :</strong>
-          {m.data_privacy_modal_privacy_dpo()}
-          <a href={`mailto:${DPO_EMAIL}`}>{DPO_EMAIL}</a>.
-        </li>
-      </ul>
-    </section>
-
-    <section>
-      <h3>{m.data_privacy_modal_legal_heading()}</h3>
-      <ul class="data-privacy-list">
-        <li>
-          <strong>{m.data_privacy_modal_legal_publisher_label()} :</strong>
-          {m.data_privacy_modal_legal_publisher_value()}
-        </li>
-        <li>
-          <strong>{m.data_privacy_modal_legal_address_label()} :</strong>
-          {m.data_privacy_modal_legal_address_value()}
-        </li>
-        <li>
-          <strong>{m.data_privacy_modal_legal_phone_label()} :</strong>
-          {m.data_privacy_modal_legal_phone_value()}
-        </li>
-        <li>
-          <strong>{m.data_privacy_modal_legal_director_label()} :</strong>
-          {m.data_privacy_modal_legal_director_value()}
-        </li>
-        <li>
-          <strong>{m.data_privacy_modal_legal_host_label()} :</strong>
-          {m.data_privacy_modal_legal_host_value()}
-        </li>
-        <li>
-          <strong>{m.data_privacy_modal_legal_contact_label()} :</strong>
-          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
-        </li>
-      </ul>
-    </section>
-
-    <section>
-      <h3>{m.data_privacy_modal_team_heading()}</h3>
-      <ul class="data-privacy-list">
-        <li>
-          <strong>{m.data_privacy_modal_team_design_label()} :</strong>
-          {m.data_privacy_modal_team_design_value()}
-        </li>
-        <li>
-          <strong>{m.data_privacy_modal_team_uiux_label()} :</strong>
-          {m.data_privacy_modal_team_uiux_value()}
-        </li>
-        <li>
-          <strong>{m.data_privacy_modal_team_dev_label()} :</strong>
-          {m.data_privacy_modal_team_dev_value()}
-        </li>
-        <li>
-          <strong>{m.data_privacy_modal_team_oss_label()} :</strong>
-          {m.data_privacy_modal_team_oss_value()}
-        </li>
-      </ul>
-    </section>
-
-    <section>
-      <h3>{m.data_privacy_modal_license_heading()}</h3>
-      <ul class="data-privacy-list">
-        <li>
-          <strong>{m.data_privacy_modal_license_software_label()} :</strong>
-          {m.data_privacy_modal_license_software_text()}
-          <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer"
-            >{m.data_privacy_modal_license_software_link()}</a
-          >.
-        </li>
-        <li>
-          <strong>{m.data_privacy_modal_license_data_label()} :</strong>
-          {m.data_privacy_modal_license_data_value()}
-        </li>
-      </ul>
+  <ModalHeader title={m.cookie_settings_modal_title()} />
+  <ModalBody class="cookie-settings-body">
+    <section class="cookie-settings-section">
+      <h3>{m.cookie_settings_modal_analytics_label()}</h3>
+      <p class="cookie-settings-copy">
+        {m.cookie_settings_modal_description()}
+      </p>
+      <div class="analytics-consent-control">
+        <Switch
+          size="sm"
+          labelText={m.cookie_settings_modal_analytics_label()}
+          hideLabel
+          labelA={m.cookie_settings_modal_consent_declined()}
+          labelB={m.cookie_settings_modal_consent_allowed()}
+          showStateLabel
+          toggled={consentStore.analyticsAllowed}
+          onchange={handleAnalyticsConsentToggle}
+        />
+      </div>
     </section>
   </ModalBody>
   <ModalFooter
-    secondaryButtonText={m.data_privacy_modal_close()}
+    secondaryButtonText={m.cookie_settings_modal_close()}
+    secondaryClass="khartis-dialog-close-action"
     on:click:button--secondary={closeModal}
   />
 </ComposedModal>
 
 <style>
-  :global(.data-privacy-body) {
+  :global(.cookie-settings-body) {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-06);
+    gap: var(--cds-spacing-05);
   }
 
-  :global(.data-privacy-body section) {
+  .cookie-settings-section {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-03);
   }
 
-  :global(.data-privacy-body h3) {
+  .cookie-settings-section h3 {
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--cds-text-01);
   }
 
-  .data-privacy-intro {
+  .cookie-settings-copy {
     margin: 0;
     color: var(--cds-text-02);
     line-height: 1.5;
   }
 
-  .data-privacy-list {
+  .analytics-consent-control {
     display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-    margin: 0;
-    padding-left: 1.25rem;
-    color: var(--cds-text-02);
-    line-height: 1.5;
-  }
-
-  .data-privacy-list strong {
-    color: var(--cds-text-01);
+    margin-top: var(--cds-spacing-03);
   }
 </style>

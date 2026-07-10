@@ -2,8 +2,8 @@ import type { Layer } from '@deck.gl/core';
 import { GeoJsonLayer, PathLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
-import { createPathLayerProps } from 'geoarrow-deck-stream';
-import type { BinaryPathData } from 'geoarrow-deck-stream';
+import { createPathLayerProps } from '@ateliercartographie/geoarrow-deck-stream';
+import type { BinaryPathData } from '@ateliercartographie/geoarrow-deck-stream';
 
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';

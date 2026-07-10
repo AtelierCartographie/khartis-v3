@@ -14,6 +14,7 @@
     BASEMAP_LAYER_CONFIG,
     BasemapCitySymbol
   } from '$lib/features/commons/constants/visualization.constants';
+  import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
   import {
     createLayerConfigSelectedIdHandler,
     createLayerConfigValueHandler
@@ -73,12 +74,12 @@
   let {
     count = DEFAULT_CITY_COUNT,
     symbol = BasemapCitySymbol.POINT,
-    color = '#525252',
+    color = NEUTRAL_CARTOGRAPHY_COLORS.city,
     size = 8,
     opacity = 100,
     labelFontFamily = CARTOGRAPHIC_FONT_FAMILY,
     labelSize = DEFAULT_LABEL_SIZE,
-    labelColor = '#161616',
+    labelColor = NEUTRAL_CARTOGRAPHY_COLORS.cityLabel,
     onchange
   }: Props = $props();
 
@@ -148,6 +149,7 @@
   <SingleColorPreview
     label={m.basemap_config_color()}
     color={color}
+    allowPattern={false}
     onchange={handleColorChange}
   />
 
@@ -203,6 +205,7 @@
   <SingleColorPreview
     label={m.basemap_config_color()}
     color={labelColor}
+    allowPattern={false}
     onchange={handleLabelColorChange}
   />
 </div>

@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { VizSuggestion } from '$lib/features/commons/services/viz-suggester.service';
 import {
   getSuggestionSignature,
+  includePersistedSuggestion,
+  parseSuggestionSignature,
   resolveDisplayedSuggestionKey,
   resolveSuggestionCardAction,
-  shouldAutoApplySuggestion
+  shouldAutoApplySuggestion,
+  shouldIncludePersistedSuggestion
 } from './suggestion-selection.utils';
 
 function createSuggestion(
@@ -30,6 +33,106 @@ describe('getSuggestionSignature', () => {
     expect(getSuggestionSignature(population)).not.toBe(
       getSuggestionSignature(density)
     );
+  });
+
+  it('round-trips persisted suggestion signatures', () => {
+    const suggestion = createSuggestion();
+    const parsed = parseSuggestionSignature(getSuggestionSignature(suggestion));
+
+    expect(parsed).toMatchObject({
+      id: suggestion.id,
+      label: suggestion.id,
+      nbColumns: suggestion.nbColumns,
+      columns: suggestion.columns,
+      geometries: suggestion.geometries,
+      semioTypes: suggestion.semioTypes
+    });
+  });
+
+  it('prepends a persisted suggestion when the generated list no longer contains it', () => {
+    const persistedSuggestion = createSuggestion();
+    const generatedSuggestion = createSuggestion({
+      id: 'symbols_proportional',
+      nbColumns: 1,
+      columns: ['population'],
+      geometries: ['polygon'],
+      semioTypes: ['QTA']
+    });
+
+    const suggestions = includePersistedSuggestion(
+      [generatedSuggestion],
+      getSuggestionSignature(persistedSuggestion),
+      'polygon'
+    );
+
+    expect(suggestions).toHaveLength(2);
+    expect(suggestions[0]).toMatchObject({
+      id: 'choropleth',
+      columns: ['population'],
+      dataGeometry: 'polygon'
+    });
+  });
+
+  it('does not duplicate an already generated persisted suggestion', () => {
+    const suggestion = createSuggestion();
+
+    expect(
+      includePersistedSuggestion(
+        [suggestion],
+        getSuggestionSignature(suggestion)
+      )
+    ).toEqual([suggestion]);
+  });
+});
+
+describe('shouldIncludePersistedSuggestion', () => {
+  it('keeps auto and manual suggestion cards when they are backed by origin', () => {
+    expect(
+      shouldIncludePersistedSuggestion({
+        hasPersistedSuggestionKey: true,
+        originMode: 'auto-suggestion'
+      })
+    ).toBe(true);
+    expect(
+      shouldIncludePersistedSuggestion({
+        hasPersistedSuggestionKey: true,
+        originMode: 'manual-suggestion'
+      })
+    ).toBe(true);
+  });
+
+  it('keeps a cleared suggestion card only when remembered state can reapply it', () => {
+    expect(
+      shouldIncludePersistedSuggestion({
+        hasAppliedSuggestionState: true,
+        hasPersistedSuggestionKey: true,
+        originMode: 'manual-blank'
+      })
+    ).toBe(true);
+    expect(
+      shouldIncludePersistedSuggestion({
+        hasAppliedSuggestionState: false,
+        hasPersistedSuggestionKey: true,
+        originMode: 'manual-blank'
+      })
+    ).toBe(false);
+  });
+
+  it('does not keep custom or missing persisted suggestion cards', () => {
+    expect(
+      shouldIncludePersistedSuggestion({
+        hasAppliedSuggestionState: true,
+        hasPersistedSuggestionKey: true,
+        originMode: 'custom'
+      })
+    ).toBe(false);
+    expect(
+      shouldIncludePersistedSuggestion({
+        hasAppliedSuggestionState: true,
+        hasPersistedSuggestionKey: false,
+        originMode: 'manual-suggestion'
+      })
+    ).toBe(false);
   });
 });
 
@@ -57,7 +160,7 @@ describe('resolveSuggestionCardAction', () => {
     ).toBe('apply');
   });
 
-  it('clears in one click when a custom visualization still has a suggestion restore state', () => {
+  it('clears in one click when the visualization is still suggestion-managed', () => {
     const suggestion = createSuggestion();
 
     expect(
@@ -65,11 +168,28 @@ describe('resolveSuggestionCardAction', () => {
         {
           displayedSuggestionKey: undefined,
           originSuggestionKey: getSuggestionSignature(suggestion),
+          originMode: 'manual-suggestion',
           hasRestoreState: true
         },
         suggestion
       )
     ).toBe('clear');
+  });
+
+  it('re-applies when a manual edit diverged the visualization into custom mode', () => {
+    const suggestion = createSuggestion();
+
+    expect(
+      resolveSuggestionCardAction(
+        {
+          displayedSuggestionKey: undefined,
+          originSuggestionKey: getSuggestionSignature(suggestion),
+          originMode: 'custom',
+          hasRestoreState: true
+        },
+        suggestion
+      )
+    ).toBe('apply');
   });
 
   it('re-applies instead of clearing when the target visualization is inactive', () => {

@@ -23,19 +23,32 @@
     readCarbonStringValue,
     type CarbonValueEvent
   } from '$lib/features/commons/utils/carbon-events.utils';
-  import { SliderWithInput } from '$lib/features/commons/components/viz-controls';
+  import {
+    ColorSelector,
+    SliderWithInput,
+    ToggleWithLabel
+  } from '$lib/features/commons/components/viz-controls';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { resolveToolbarWidth } from '$lib/features/commons/utils/toolbar-width.utils';
   import PaletteSuggestions from './palette-suggestions.svelte';
   import SingleColorPreview from './single-color-preview.svelte';
-  import PatternPicker from './pattern-picker.svelte';
+  import PatternPalettePicker from './pattern-palette-picker.svelte';
+  import ShapeChipRow from './shape-chip-row.svelte';
   import {
     PALETTE_TYPE,
     type QualitativePreset,
-    type PatternParams,
     DEFAULT_QUALITATIVE_PRESET,
-    generateCategoricalColorsFromSeed
+    generateCategoricalColorsFromSeed,
+    buildShapeSwatchBackground
   } from './palette.constants';
+  import type {
+    PatternPaletteConfig,
+    PatternShape
+  } from '$lib/features/commons/constants/pattern.constants';
+  import {
+    resolveClassPatterns,
+    type ClassPattern
+  } from '$lib/features/commons/services/pattern-palette.service';
   import {
     DEFAULT_COMMON_ASPECT,
     type CategoriesAspectVariant,
@@ -115,6 +128,32 @@
   const showPerCategoryStrokeWidth = $derived(
     primitiveKind === 'symbols' &&
       (!draftCommonAspect.stroke || !(draftCommonAspect.strokeUnique ?? true))
+  );
+
+  // Mirrors MAX_CATEGORICAL_PATTERN_COUNT (map/layers/polygon-pattern-layer.utils.ts): keep both in sync.
+  const MAX_PATTERN_PREVIEW_CATEGORIES = 24;
+  const showCategoryPattern = $derived(
+    primitiveKind === 'polygons' && draftCommonAspect.pattern
+  );
+  const resolvedPatternConfig = $derived<PatternPaletteConfig>(
+    draftCommonAspect.patternConfig ?? DEFAULT_COMMON_ASPECT.patternConfig!
+  );
+  const categoryPatterns = $derived<ClassPattern[] | null>(
+    showCategoryPattern &&
+      draftCategories.length > 0 &&
+      draftCategories.length <= MAX_PATTERN_PREVIEW_CATEGORIES
+      ? resolveClassPatterns(
+          draftCategories.length,
+          {
+            ...resolvedPatternConfig,
+            shape: 'line',
+            categoryShapes: draftCategories.map(
+              (category) => category.patternShape
+            )
+          },
+          'categorical'
+        )
+      : null
   );
 
   const shapeChoices = $derived<Array<{ id: ShapeType; label: string }>>([
@@ -201,11 +240,14 @@
     draftCommonAspect = { ...draftCommonAspect, [key]: value };
   }
 
-  function handlePatternChange(patternId: string, params: PatternParams) {
+  function handlePatternConfigChange(config: PatternPaletteConfig) {
+    draftCommonAspect = { ...draftCommonAspect, patternConfig: config };
+  }
+
+  function handlePatternColorizeChange(colorize: boolean) {
     draftCommonAspect = {
       ...draftCommonAspect,
-      patternId,
-      patternParams: params
+      patternConfig: { ...resolvedPatternConfig, colorize }
     };
   }
 
@@ -270,6 +312,12 @@
       category.id === id
         ? { ...category, shape: shape as CategoryDraft['shape'] }
         : category
+    );
+  }
+
+  function handleCategoryPatternShape(id: string, shape: PatternShape) {
+    draftCategories = draftCategories.map((category) =>
+      category.id === id ? { ...category, patternShape: shape } : category
     );
   }
 
@@ -400,7 +448,12 @@
           ? resolveOrderedRankPreviewSize(index, visibleDraftCategories.length)
           : 14;
 
-    return `--marker-color: ${markerColor}; --marker-size: ${rankSize}px;`;
+    const pattern = categoryPatterns?.[index];
+    const patternStyle = pattern
+      ? ` background: ${buildShapeSwatchBackground(pattern.type as PatternShape, pattern.fill)};`
+      : '';
+
+    return `--marker-color: ${markerColor}; --marker-size: ${rankSize}px;${patternStyle}`;
   }
 
   $effect(() => {
@@ -696,11 +749,19 @@
                   </div>
                 </div>
                 {#if draftCommonAspect.pattern}
-                  <PatternPicker
-                    patternId={draftCommonAspect.patternId}
-                    patternParams={draftCommonAspect.patternParams}
-                    onChange={handlePatternChange}
-                  />
+                  <div class="common-field--full">
+                    <PatternPalettePicker
+                      config={resolvedPatternConfig}
+                      onchange={handlePatternConfigChange}
+                    />
+                  </div>
+                  <div class="common-field--full">
+                    <ToggleWithLabel
+                      label={m.pattern_colorize()}
+                      toggled={resolvedPatternConfig.colorize ?? false}
+                      ontoggle={handlePatternColorizeChange}
+                    />
+                  </div>
                 {/if}
               </div>
             {:else if primitiveKind === 'polygons'}
@@ -722,10 +783,35 @@
                 </div>
                 {#if draftCommonAspect.pattern}
                   <div class="common-grid-row common-grid-row--full">
-                    <PatternPicker
-                      patternId={draftCommonAspect.patternId}
-                      patternParams={draftCommonAspect.patternParams}
-                      onChange={handlePatternChange}
+                    <ColorSelector
+                      label={m.color()}
+                      value={resolvedPatternConfig.color ?? '#000000'}
+                      onchange={(color) =>
+                        handlePatternConfigChange({
+                          ...resolvedPatternConfig,
+                          color
+                        })}
+                    />
+                    <ToggleWithLabel
+                      label={m.pattern_colorize()}
+                      toggled={resolvedPatternConfig.colorize ?? false}
+                      ontoggle={handlePatternColorizeChange}
+                    />
+                  </div>
+                  <div class="common-grid-row common-grid-row--full">
+                    <SliderWithInput
+                      label={m.pattern_scale()}
+                      min={1}
+                      max={30}
+                      step={1}
+                      value={Math.round(
+                        (resolvedPatternConfig.scale ?? 1) * 10
+                      )}
+                      onchange={(value) =>
+                        handlePatternConfigChange({
+                          ...resolvedPatternConfig,
+                          scale: value / 10
+                        })}
                     />
                   </div>
                 {/if}
@@ -876,6 +962,18 @@
                           />
                         </div>
 
+                        {#if showCategoryPattern && categoryPatterns}
+                          <div class="field-stack">
+                            <span class="field-label">{m.pattern_shape()}</span>
+                            <ShapeChipRow
+                              value={categoryPatterns[index]?.type as
+                                PatternShape | undefined}
+                              onselect={(shape) =>
+                                handleCategoryPatternShape(category.id, shape)}
+                            />
+                          </div>
+                        {/if}
+
                         {#if primitiveKind === 'symbols' && !draftCommonAspect.sizeUnique}
                           <div class="field-stack">
                             <span class="field-label"
@@ -946,11 +1044,17 @@
       <div class="popover-footer-wrap">
         <div class="popover-divider"></div>
         <footer class="popover-footer">
-          <Button kind="tertiary" size="small" on:click={handleCancel}>
+          <Button
+            class="khartis-dialog-close-action"
+            kind="secondary"
+            size="small"
+            on:click={handleCancel}
+          >
             {m.button_cancel()}
           </Button>
           <Button
-            kind="primary"
+            class="khartis-dialog-action"
+            kind="secondary"
             size="small"
             icon={ArrowRight}
             on:click={handleValidate}

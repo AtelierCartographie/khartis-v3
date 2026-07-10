@@ -94,12 +94,20 @@ vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   }
 }));
 
+const motifMockState = vi.hoisted(() => ({ counter: 0 }));
 vi.mock('@ateliercartographie/motif.js', () => ({
-  motif: () => ({
-    tile: () => ({
-      toDataURL: () => 'data:image/png;base64,AAAA'
-    })
-  }),
+  motif: () => {
+    const id = `mock-motif-${++motifMockState.counter}`;
+    return {
+      defs: {
+        outerHTML: `<defs><pattern id="${id}"></pattern></defs>`
+      },
+      url: `url(#${id})`,
+      tile: () => ({
+        toDataURL: () => 'data:image/png;base64,AAAA'
+      })
+    };
+  },
   motifAtlas: () => ({
     canvas: {},
     mapping: {}

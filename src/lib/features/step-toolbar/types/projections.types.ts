@@ -1,6 +1,6 @@
 import { ViewMode } from '$lib/features/commons/constants/ui.constants';
 import type { ProjectionSuggestion } from '../tools/projections/projection-suggest.service';
-import type { D3Usage } from 'proj-suggest';
+import type { D3Usage } from '@ateliercartographie/proj-suggest';
 
 export interface ProjectionState {
   selected: string;

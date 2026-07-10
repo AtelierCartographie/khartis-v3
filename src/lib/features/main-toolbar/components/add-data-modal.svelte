@@ -6,6 +6,7 @@
   import { globalActions } from '$lib/features/commons/stores/global.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { DataSourceType } from '$lib/features/commons/types/create-project.types';
+  import { analyticsService } from '$lib/features/commons/services/analytics.service';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import CreateNewProject from '$lib/features/create-project/components/create-new-project.svelte';
   import {
@@ -61,11 +62,13 @@
     }
 
     if (projectStore.currentProject) {
+      const filesToImport = [...validFiles];
+
       try {
         isImporting = true;
 
-        await projectStore.addFilesToProject(validFiles);
-        const firstFile = validFiles[0];
+        await projectStore.addFilesToProject(filesToImport);
+        const firstFile = filesToImport[0];
         if (firstFile?.id) {
           dataTabStore.reset();
           dataToolsStore.reset();
@@ -74,8 +77,10 @@
           });
         }
 
+        analyticsService.trackDataImportCompleted(filesToImport);
         closeModal(true);
       } catch (error) {
+        analyticsService.trackFailure('data_import', error);
         logger.error('Failed to add files to project', LogCategory.FILE, error);
         importError = true;
       } finally {

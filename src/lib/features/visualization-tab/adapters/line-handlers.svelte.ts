@@ -11,6 +11,8 @@ import { resolveLineModeTransition } from '../hooks/use-line-mode-state.svelte';
 import { pickOwnedKeys, pickRenamedKeys } from './pick-owned.utils';
 import { createPrimitiveAdapter } from './primitive-adapter.factory';
 
+type ClassificationUpdateOptions = { preserveOrigin?: boolean };
+
 export interface LineHandlersDeps {
   getSelectedVisualization: () => VisualizationConfig | undefined;
   updateSelectedVisualization: (
@@ -25,7 +27,8 @@ export interface LineHandlersDeps {
     updates: Partial<ClassificationConfig>
   ) => void;
   updateLineThicknessClassificationState: (
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: ClassificationUpdateOptions
   ) => void;
   applyPrimitiveMappingUpdate: (
     primitive: PrimitiveFilterType,
@@ -123,9 +126,14 @@ export function createLineHandlers(deps: LineHandlersDeps) {
   const handleLineClassificationChange = lineAdapter.handleClassificationChange;
 
   function handleLineThicknessClassificationChange(
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options?: ClassificationUpdateOptions
   ): void {
-    deps.updateLineThicknessClassificationState(updates);
+    if (options) {
+      deps.updateLineThicknessClassificationState(updates, options);
+    } else {
+      deps.updateLineThicknessClassificationState(updates);
+    }
   }
 
   const handleLineMappingChange = lineAdapter.handleMappingChange;

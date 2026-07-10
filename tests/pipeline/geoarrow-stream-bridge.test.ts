@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { geoOrthographic } from 'd3-geo';
 import type { GeoStream } from 'd3-geo';
-import type { ProjectionLike } from 'geoarrow-deck-stream';
+import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 import type { FeatureCollection, Point, Polygon } from 'geojson';
 import {
   computeProjectedBboxForProjection,

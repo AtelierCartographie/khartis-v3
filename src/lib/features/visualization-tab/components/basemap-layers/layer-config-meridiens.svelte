@@ -11,6 +11,7 @@
     BasemapGraticuleMode,
     BasemapDottedPattern
   } from '$lib/features/commons/constants/visualization.constants';
+  import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
   import { createLayerConfigValueHandler } from './layer-config-handlers.utils';
 
   interface Props {
@@ -30,7 +31,7 @@
   let {
     mode = BasemapGraticuleMode.REMARKABLE,
     spacingDegrees = 10,
-    color = '#e0e0e0',
+    color = NEUTRAL_CARTOGRAPHY_COLORS.graticule,
     dotted = true,
     dottedPattern = BasemapDottedPattern.DOTS,
     allowRemarkable = true,
@@ -125,6 +126,7 @@
   <SingleColorPreview
     label={m.basemap_config_color()}
     color={color}
+    allowPattern={false}
     onchange={handleColorChange}
   />
 

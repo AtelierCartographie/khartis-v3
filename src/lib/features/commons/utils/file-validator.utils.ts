@@ -29,6 +29,7 @@ const SHAPEFILE_GROUP_EXTENSIONS = [
 const SHAPEFILE_GROUP_EXTENSION_SET = new Set<string>(
   SHAPEFILE_GROUP_EXTENSIONS
 );
+const KHARTIS_PROJECT_ARCHIVE_EXTENSIONS = ['kh', 'khartis'];
 
 export interface FileValidationConfig {
   maxFileSize: number;
@@ -604,6 +605,10 @@ export const FileValidator = {
 
       const pathname = parsed.pathname;
       const extension = pathname.split('.').pop()?.toLowerCase();
+
+      if (extension && KHARTIS_PROJECT_ARCHIVE_EXTENSIONS.includes(extension)) {
+        result.errors.push(m.validation_project_archive_use_open_project());
+      }
 
       if (extension && config.allowedExtensions.includes(extension)) {
         result.fileType = FileValidator.detectFileType({

@@ -56,7 +56,7 @@
       dataset.id
     );
     applyBlankVisualizationPreset(visualization.id, dataset, {
-      mode: 'auto-suggestion'
+      mode: 'manual-blank'
     });
   });
 

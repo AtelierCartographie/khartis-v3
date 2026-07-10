@@ -81,6 +81,7 @@ Le fichier `.env.example` sert uniquement au helper de déploiement local PPRD. 
 | [PWA.md](PWA.md)                                           | Progressive Web App, stratégies de cache Workbox, mises à jour                |
 | [GLOSSAIRE.md](GLOSSAIRE.md)                               | Termes cartographiques et techniques du point de vue du développeur           |
 | [DEPLOYMENT.md](DEPLOYMENT.md)                             | Déploiement local PPRD, variables locales, garde-fous SFTP                    |
+| [ANALYTICS.md](ANALYTICS.md)                               | Consentement, évènements GA4 anonymes et configuration directe                |
 
 ---
 

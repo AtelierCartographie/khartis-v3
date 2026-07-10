@@ -1,6 +1,17 @@
 import { motif } from '@ateliercartographie/motif.js';
-import { PATTERN_TYPE_MAP } from '../layers/pattern-texture';
+import type { PatternType as MotifPatternType } from '@ateliercartographie/motif.js';
+import {
+  getPatternOverlayColorHex,
+  isValidPatternId,
+  resolveMotifOptions,
+  stripSvgDefsWrapper
+} from '../layers/pattern-texture';
+import {
+  resolveClassPatternPalette,
+  resolveMissingDataClassPattern
+} from '../layers/polygon-pattern-layer.utils';
 import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';
+import type { ClassPattern } from '$lib/features/commons/services/pattern-palette.service';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import {
   getLinePrimitive,
@@ -18,7 +29,6 @@ import {
   type ClassificationConfig,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
-import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
 import {
   CATEGORY_SHAPE_CYCLE,
@@ -52,6 +62,7 @@ import {
   type KhartisLegendSwatchItem,
   type KhartisLegendSwatchType,
   type KhartisLineWidthLegendStep,
+  type LegendPatternFill,
   type LegendSvgDefinition,
   type SymbolType
 } from '$lib/features/commons/components/legend';
@@ -70,50 +81,62 @@ import {
 } from './legend.utils';
 import type { LegendItem } from '$lib/features/step-toolbar/tools/legend';
 
-const patternTileCache: Record<string, string> = {};
+const legendPatternFillCache: Record<string, LegendPatternFill> = {};
 
-function getPatternTileUrl(
+function getLegendPatternFill(
   patternId: string,
-  patternColor = '#000000',
-  backgroundColor = '#ffffff',
+  patternColor: string,
   patternParams?: PatternParams
-): string | null {
+): LegendPatternFill | null {
+  if (!isValidPatternId(patternId)) return null;
   const cacheKey = JSON.stringify({
     patternId,
     patternColor,
-    backgroundColor,
     angle: patternParams?.angle,
     size: patternParams?.size,
     scale: patternParams?.scale
   });
-  if (cacheKey in patternTileCache) return patternTileCache[cacheKey];
-  const config = PATTERN_TYPE_MAP[patternId as keyof typeof PATTERN_TYPE_MAP];
-  if (!config) return null;
-  const scale = Math.max(4, patternParams?.scale ?? 8);
-  const size = Math.max(1, patternParams?.size ?? 4);
-  const tile = motif({
-    type: config.type,
-    angle: patternParams?.angle ?? config.angle,
-    fill: patternColor,
-    background: backgroundColor,
-    size: Math.round((size / scale) * 100),
-    scale: scale / 10,
-    patchSize: true
-  }).tile();
-  const url = tile.toDataURL();
-  patternTileCache[cacheKey] = url;
-  return url;
+  const cached = legendPatternFillCache[cacheKey];
+  if (cached) return cached;
+
+  const pattern = motif({
+    ...resolveMotifOptions(patternId, patternParams),
+    fill: patternColor
+  });
+  const fill: LegendPatternFill = {
+    defs: stripSvgDefsWrapper(pattern.defs.outerHTML),
+    fillUrl: pattern.url
+  };
+  legendPatternFillCache[cacheKey] = fill;
+  return fill;
 }
 
-function getPatternOverlayColor(fillColor: string | undefined): string {
-  if (!fillColor?.startsWith('#') || fillColor.length !== 7) {
-    return '#000000';
-  }
+function getClassPatternLegendFill(pattern: ClassPattern): LegendPatternFill {
+  const cacheKey = JSON.stringify(pattern);
+  const cached = legendPatternFillCache[cacheKey];
+  if (cached) return cached;
 
-  const [r, g, b] = hexToRgb(fillColor);
-  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  const result = motif({
+    type: pattern.type as MotifPatternType,
+    angle: pattern.angle,
+    scale: pattern.scale,
+    size: pattern.size,
+    fill: pattern.fill,
+    background: 'transparent',
+    patchSize: pattern.patchSize
+  });
+  const fill: LegendPatternFill = {
+    defs: stripSvgDefsWrapper(result.defs.outerHTML),
+    fillUrl: result.url
+  };
+  legendPatternFillCache[cacheKey] = fill;
+  return fill;
+}
 
-  return luminance < 0.45 ? '#ffffff' : '#000000';
+export function getClassPatternLegendFills(
+  patterns: ClassPattern[]
+): LegendPatternFill[] {
+  return patterns.map(getClassPatternLegendFill);
 }
 
 type LegendTextStyle = {
@@ -683,8 +706,22 @@ function getClassedColorLegendDraft(
     return null;
   }
 
-  if (primitive === 'area' && !classification.patternId) {
-    return getQuantitativeColorLegendDraft(viz, classification);
+  if (primitive === 'area') {
+    const classPatternPalette = resolveClassPatternPalette(
+      classification,
+      FillMode.CLASSES
+    );
+    if (classPatternPalette) {
+      return getQuantitativeColorLegendDraft(
+        viz,
+        classification,
+        getClassPatternLegendFills(classPatternPalette)
+      );
+    }
+
+    if (!classification.patternId) {
+      return getQuantitativeColorLegendDraft(viz, classification);
+    }
   }
 
   const items = getClassedColorLegendItems(viz, classification, primitive);
@@ -692,7 +729,10 @@ function getClassedColorLegendDraft(
     return null;
   }
 
-  const type = getSwatchType(primitive, Boolean(classification.patternId));
+  const type = getSwatchType(
+    primitive,
+    primitive === 'area' && Boolean(classification.patternId)
+  );
   return {
     key: 'classed-color',
     className:
@@ -882,7 +922,8 @@ function getTextSizeLegendDraft(
 
 function getQuantitativeColorLegendDraft(
   viz: VisualizationConfig,
-  classification: ClassificationConfig
+  classification: ClassificationConfig,
+  classPatternFills?: (LegendPatternFill | null)[]
 ): LegendSegmentDraft | null {
   const thresholds = buildQuantiColorThresholds({
     breaks: classification.breaks,
@@ -909,12 +950,15 @@ function getQuantitativeColorLegendDraft(
 
   return {
     key: 'quantitative-color',
-    className: 'legend-svg--quantitative',
+    className: classPatternFills
+      ? 'legend-svg--patterns'
+      : 'legend-svg--quantitative',
     consumesMissingData: isLegendMissingDataShown(viz, 'area'),
     create: (options, context) =>
       toLegendSvg(
         draw_quanti_color_legend(thresholds, classification.colors ?? [], {
           ...options,
+          classPatternFills,
           nodata: context.includeMissingDataFooter
             ? isLegendMissingDataShown(viz, 'area')
             : false,
@@ -941,28 +985,62 @@ function getCategoricalLegendDraft(
     return null;
   }
 
-  if (primitive === 'area' && classification.patternId) {
-    const items = entries.map((entry) =>
-      getPatternLegendItem(entry.label, entry.color, classification)
+  if (primitive === 'area') {
+    const classPatternPalette = resolveClassPatternPalette(
+      classification,
+      FillMode.CATEGORIES
     );
+    if (classPatternPalette) {
+      const patternFills = getClassPatternLegendFills(classPatternPalette);
+      const categories: CategoryItem[] = entries.map((entry) => ({
+        label: entry.label,
+        fill: '#ffffff',
+        patternFill: patternFills[entry.originalIndex] ?? null,
+        patternOpacity: 1
+      }));
 
-    return {
-      key: 'categorical-patterns',
-      className: 'legend-svg--patterns',
-      consumesMissingData: isLegendMissingDataShown(viz, primitive),
-      create: (options, context) =>
-        toLegendSvg(
-          draw_khartis_swatch_legend(items, {
-            ...options,
-            type: 'pattern',
-            ...getMissingDataFooterOptions(
-              viz,
-              context.includeMissingDataFooter,
-              primitive
-            )
-          })
-        )
-    };
+      return {
+        key: 'categorical-patterns',
+        className: 'legend-svg--patterns',
+        consumesMissingData: isLegendMissingDataShown(viz, primitive),
+        create: (options, context) =>
+          toLegendSvg(
+            draw_categorical_legend(categories, {
+              ...options,
+              type: 'pattern',
+              ...getCategoricalMissingDataFooterOptions(
+                viz,
+                primitive,
+                context.includeMissingDataFooter
+              )
+            })
+          )
+      };
+    }
+
+    if (classification.patternId) {
+      const items = entries.map((entry) =>
+        getPatternLegendItem(entry.label, entry.color, classification)
+      );
+
+      return {
+        key: 'categorical-patterns',
+        className: 'legend-svg--patterns',
+        consumesMissingData: isLegendMissingDataShown(viz, primitive),
+        create: (options, context) =>
+          toLegendSvg(
+            draw_khartis_swatch_legend(items, {
+              ...options,
+              type: 'pattern',
+              ...getMissingDataFooterOptions(
+                viz,
+                context.includeMissingDataFooter,
+                primitive
+              )
+            })
+          )
+      };
+    }
   }
 
   const { type, categories } = getCategoricalLegendItems(
@@ -1311,10 +1389,6 @@ function getClassedColorLegendItems(
       };
     }
 
-    if (classification.patternId) {
-      return getPatternLegendItem(label, color, classification);
-    }
-
     return {
       label,
       fill: color,
@@ -1441,7 +1515,7 @@ function getCategoricalMissingDataFooterOptions(
   const item = getMissingDataLegendItem(viz, missingDataPrimitive);
   const footerType = getSwatchType(
     primitive,
-    primitive === 'area' && Boolean(item.patternUrl)
+    primitive === 'area' && Boolean(item.patternFill)
   );
 
   return {
@@ -1473,19 +1547,17 @@ function getMissingDataLegendItem(
     };
   }
 
+  const missingDataPattern = resolveMissingDataClassPattern(missingData);
+
   return {
     label: m.missing_data_text(),
     fill: color,
     stroke: 'rgba(0, 0, 0, 0.15)',
     strokeWidth: 1,
-    patternUrl: missingData?.pattern
-      ? getPatternTileUrl(
-          'cross',
-          getPatternOverlayColor(color),
-          color,
-          undefined
-        )
-      : null
+    patternFill: missingDataPattern
+      ? getClassPatternLegendFill(missingDataPattern)
+      : null,
+    patternOpacity: 1
   };
 }
 
@@ -1513,11 +1585,10 @@ function getPatternLegendItem(
     fill: color,
     stroke: 'rgba(0, 0, 0, 0.15)',
     strokeWidth: 1,
-    patternUrl: classification.patternId
-      ? getPatternTileUrl(
+    patternFill: classification.patternId
+      ? getLegendPatternFill(
           classification.patternId,
-          getPatternOverlayColor(color),
-          color,
+          getPatternOverlayColorHex(color),
           classification.patternParams
         )
       : null
