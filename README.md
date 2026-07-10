@@ -120,25 +120,27 @@ pnpm dev
 pnpm build && pnpm preview
 ```
 
-The app runs locally without a `.env` file. The committed `.env.example` is only for the local PPRD deployment helper and must contain placeholders, never real infrastructure values.
+The app runs locally without a `.env` file. The committed `.env.example` is only for the local PPRD/PRD deployment helper and must contain placeholders, never real infrastructure values.
 
 > **Cross-origin isolation**: DuckDB WASM needs the `COOP`/`COEP` headers, which the dev and preview servers already send. A plain static file server without them will make DuckDB fail to initialize — that is an environment issue, not an app bug.
 
 ## Commands
 
-| Command                    | Description                                                   |
-| -------------------------- | ------------------------------------------------------------- |
-| `pnpm dev`                 | Development server on :5176 (HMR)                             |
-| `pnpm build`               | Production build → `build/`                                   |
-| `pnpm check`               | Compile Paraglide, `svelte-kit sync`, then `svelte-check`     |
-| `pnpm lint`                | Prettier check + ESLint                                       |
-| `pnpm format`              | Auto-format with Prettier                                     |
-| `pnpm test:unit`           | Client tests (jsdom): components, stores, utils               |
-| `pnpm test:pipeline`       | Server tests (node): data pipeline, DuckDB-backed             |
-| `pnpm test:duckdb`         | Server tests (node): DuckDB integration                       |
-| `pnpm test:all`            | Full suite (unit + pipeline + duckdb)                         |
-| `pnpm deploy:pprd:dry-run` | Validate the latest staging tag, CI gate, and build (no SFTP) |
-| `pnpm deploy:pprd`         | Deploy the latest staging tag via the local SFTP helper       |
+| Command                    | Description                                                       |
+| -------------------------- | ----------------------------------------------------------------- |
+| `pnpm dev`                 | Development server on :5176 (HMR)                                 |
+| `pnpm build`               | Production build → `build/`                                       |
+| `pnpm check`               | Compile Paraglide, `svelte-kit sync`, then `svelte-check`         |
+| `pnpm lint`                | Prettier check + ESLint                                           |
+| `pnpm format`              | Auto-format with Prettier                                         |
+| `pnpm test:unit`           | Client tests (jsdom): components, stores, utils                   |
+| `pnpm test:pipeline`       | Server tests (node): data pipeline, DuckDB-backed                 |
+| `pnpm test:duckdb`         | Server tests (node): DuckDB integration                           |
+| `pnpm test:all`            | Full suite (unit + pipeline + duckdb)                             |
+| `pnpm deploy:pprd:dry-run` | Validate the latest pprd prerelease, CI gate, and build (no SFTP) |
+| `pnpm deploy:pprd`         | Deploy the latest pprd prerelease via the local SFTP helper       |
+| `pnpm deploy:prod:dry-run` | Validate the latest stable release, CI gate, and build (no SFTP)  |
+| `pnpm deploy:prod`         | Deploy the latest stable release to PROD (retype the tag)         |
 
 > `pnpm test:*` scripts run `vitest run` (single pass). Use `pnpm exec vitest --project client` for watch mode during development. The `client` project mocks DuckDB WASM and runs locally; the `server` project runs in CI.
 
@@ -164,8 +166,8 @@ The full list — including feature architecture, basemaps, legends, PWA, the de
 - **Client-side only**: imported data never leaves the browser; the attack surface on a server is nil because there is no data server.
 - **Metadata-only persistence**: project JSON stores styling and references, not source files; raw imports live in IndexedDB asset chunks and are replayed into DuckDB on reopen.
 - **Input hardening**: file names, CSV cells, and user input are sanitized; user-authored SQL expressions pass through `validateExpression()`, which rejects subqueries, multi-statements, and dangerous calls. Quotas cap file sizes (150 MB text/geo, 200 MB binary) and project count.
-- **Consent-first analytics**: Google Analytics 4 loads only after user consent, configured via the public `PUBLIC_GA_MEASUREMENT_ID` value. The official Sciences Po production URL uses the published Khartis measurement ID; other deployments must opt in explicitly. Analytics records anonymous, allow-listed usage events only, never project names, file names, data values, column names, or place names. See [analytics configuration](docs/ANALYTICS.md).
-- **Deployment**: the local PPRD helper is documented in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md); PRD deployment is intentionally unsupported by it. Dependencies are scanned via Dependabot.
+- **Consent-first analytics**: Khartis loads the Sciences Po Google Tag Manager container only after user consent, using the container ID from the public `PUBLIC_GTM_CONTAINER_ID` value (no analytics identifier is hard-coded in the repository). Analytics records anonymous, allow-listed usage events only, never project names, file names, data values, column names, or place names. See [analytics configuration](docs/ANALYTICS.md).
+- **Deployment**: the local PPRD and PROD helpers are documented in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md); PROD requires retyping the release tag to confirm. Dependencies are scanned via Dependabot.
 - To report a security vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## Browser compatibility

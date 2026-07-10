@@ -28,15 +28,14 @@ interface PendingAnalyticsEvent {
   params: GtagParams;
 }
 
-type GtagArgs =
-  | ['config', string, GtagParams?]
-  | ['event', AnalyticsEventName, GtagParams?]
-  | ['js', Date]
-  | ['set', 'page_location' | 'page_referrer', string]
-  | ['consent', 'default' | 'update', Record<string, ConsentValue>];
+type ConsentArgs = [
+  'consent',
+  'default' | 'update',
+  Record<string, ConsentValue>
+];
 
-type DataLayerEntry = IArguments;
-type GtagFunction = (...args: GtagArgs) => void;
+type DataLayerEntry = IArguments | Record<string, unknown>;
+type GtagFunction = (...args: ConsentArgs) => void;
 
 declare global {
   interface Window {
@@ -45,10 +44,7 @@ declare global {
   }
 }
 
-const GOOGLE_ANALYTICS_SCRIPT_ID = 'khartis-google-analytics';
-const SCIENCES_PO_GA_MEASUREMENT_ID = 'G-QRN3HTM8ZX';
-const SCIENCES_PO_HOSTNAME = 'www.sciencespo.fr';
-const SCIENCES_PO_PRODUCTION_PATH = '/cartographie/khartisnewprod';
+const GOOGLE_TAG_MANAGER_SCRIPT_ID = 'khartis-google-tag-manager';
 const GOOGLE_ANALYTICS_COOKIE_NAMES = new Set(['_ga', '_gid', '_gat']);
 const GOOGLE_ANALYTICS_COOKIE_PREFIXES = ['_ga_', '_gat_', '_gcl_'];
 const MAX_TRACKED_FILE_COUNT = 10;
@@ -140,22 +136,8 @@ const ANALYTICS_EVENT_PARAMETERS = {
   [ANALYTICS_EVENT.VISUALIZATION_CREATED]: ['visualization_type']
 } as const satisfies Record<AnalyticsEventName, readonly string[]>;
 
-function isOfficialKhartisProductionUrl(): boolean {
-  if (!browser) return false;
-
-  return (
-    window.location.hostname === SCIENCES_PO_HOSTNAME &&
-    window.location.pathname.startsWith(SCIENCES_PO_PRODUCTION_PATH)
-  );
-}
-
-function getMeasurementId(): string {
-  const configuredMeasurementId = env.PUBLIC_GA_MEASUREMENT_ID?.trim();
-  if (configuredMeasurementId) {
-    return configuredMeasurementId;
-  }
-
-  return isOfficialKhartisProductionUrl() ? SCIENCES_PO_GA_MEASUREMENT_ID : '';
+function getGtmContainerId(): string {
+  return env.PUBLIC_GTM_CONTAINER_ID?.trim() ?? '';
 }
 
 function getDataLayer(): DataLayerEntry[] {
@@ -163,8 +145,8 @@ function getDataLayer(): DataLayerEntry[] {
   return window.dataLayer;
 }
 
-function gtag(..._args: GtagArgs): void {
-  // gtag.js recognizes commands from the arguments object.
+function gtag(..._args: ConsentArgs): void {
+  // Google Tag Manager reads consent commands from the arguments object.
   // eslint-disable-next-line prefer-rest-params
   getDataLayer().push(arguments);
 }
@@ -275,22 +257,24 @@ function clearGoogleAnalyticsCookies(): void {
 }
 
 function createAnalyticsService() {
-  let googleAnalyticsInitialized = false;
-  let googleAnalyticsReady = false;
+  let tagManagerInitialized = false;
+  let tagManagerReady = false;
   let enabled = false;
   let globalErrorTrackingInstalled = false;
   let pendingAnalyticsEvents: PendingAnalyticsEvent[] = [];
 
-  function hasMeasurementId(): boolean {
-    return getMeasurementId().length > 0;
+  function hasContainerId(): boolean {
+    return getGtmContainerId().length > 0;
   }
 
   function hasConfiguredProvider(): boolean {
-    return hasMeasurementId();
+    return hasContainerId();
   }
 
-  function loadScript(measurementId: string, onLoad: () => void): void {
-    const existingElement = document.getElementById(GOOGLE_ANALYTICS_SCRIPT_ID);
+  function loadScript(containerId: string, onLoad: () => void): void {
+    const existingElement = document.getElementById(
+      GOOGLE_TAG_MANAGER_SCRIPT_ID
+    );
     if (existingElement instanceof HTMLScriptElement) {
       const existingScript = existingElement;
       if (existingScript.dataset.loaded === 'true') {
@@ -302,9 +286,9 @@ function createAnalyticsService() {
     }
 
     const script = document.createElement('script');
-    script.id = GOOGLE_ANALYTICS_SCRIPT_ID;
+    script.id = GOOGLE_TAG_MANAGER_SCRIPT_ID;
     script.async = true;
-    script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;
+    script.src = `https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(containerId)}`;
     script.onload = () => {
       script.dataset.loaded = 'true';
       onLoad();
@@ -312,35 +296,32 @@ function createAnalyticsService() {
     document.head.appendChild(script);
   }
 
-  function initializeGoogleAnalytics(): boolean {
-    if (!browser || !hasMeasurementId()) {
+  function initializeTagManager(): boolean {
+    if (!browser || !hasContainerId()) {
       return false;
     }
 
-    if (googleAnalyticsInitialized) {
+    if (tagManagerInitialized) {
       return true;
     }
 
-    const measurementId = getMeasurementId();
+    const containerId = getGtmContainerId();
     window.gtag = gtag;
     gtag('consent', 'default', getConsentState('denied'));
-    gtag('set', 'page_location', getSafePageLocation());
-    gtag('set', 'page_referrer', getSafePageReferrer());
-    loadScript(measurementId, () => {
-      googleAnalyticsReady = true;
+    getDataLayer().push({
+      page_location: getSafePageLocation(),
+      page_referrer: getSafePageReferrer()
+    });
+    getDataLayer().push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
+    loadScript(containerId, () => {
+      tagManagerReady = true;
       if (enabled) {
         trackInitialEvents();
       }
     });
-    gtag('js', new Date());
-    gtag('config', measurementId, {
-      page_location: getSafePageLocation(),
-      page_referrer: getSafePageReferrer(),
-      send_page_view: false
-    });
     window.gtag('consent', 'update', getConsentState('granted'));
 
-    googleAnalyticsInitialized = true;
+    tagManagerInitialized = true;
     return true;
   }
 
@@ -370,7 +351,7 @@ function createAnalyticsService() {
   }
 
   function sendEvent(eventName: AnalyticsEventName, params: GtagParams): void {
-    window.gtag?.('event', eventName, params);
+    getDataLayer().push({ event: eventName, ...params });
   }
 
   function flushPendingEvents(): void {
@@ -383,7 +364,7 @@ function createAnalyticsService() {
   }
 
   function trackInitialEvents(): void {
-    if (!enabled || !googleAnalyticsReady) {
+    if (!enabled || !tagManagerReady) {
       return;
     }
 
@@ -397,7 +378,7 @@ function createAnalyticsService() {
       return;
     }
 
-    if (hasMeasurementId()) {
+    if (hasContainerId()) {
       trackEvent('page_view', getPageViewProperties());
     }
   }
@@ -495,7 +476,7 @@ function createAnalyticsService() {
     }
 
     enabled = true;
-    if (initializeGoogleAnalytics()) {
+    if (initializeTagManager()) {
       installGlobalErrorTracking();
       trackInitialEvents();
     }
@@ -523,9 +504,9 @@ function createAnalyticsService() {
       return;
     }
 
-    if (hasMeasurementId()) {
+    if (hasContainerId()) {
       const allowedParams = getAllowedEventParameters(eventName, params);
-      if (!googleAnalyticsReady) {
+      if (!tagManagerReady) {
         pendingAnalyticsEvents.push({ eventName, params: allowedParams });
         return;
       }
