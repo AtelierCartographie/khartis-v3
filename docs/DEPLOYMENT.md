@@ -1,10 +1,11 @@
-# Local PPRD Deployment
+# Local PPRD and PROD Deployment
 
 This repository is open source. Keep all institution-specific values, usernames,
 passwords, hostnames, remote paths, and host fingerprints out of committed files.
 
-The local deployment helper is intentionally limited to PPRD. It does not support
-PRD deployment.
+The `staging` branch is the PPRD environment: its semantic prereleases are tagged
+`vX.Y.Z-pprd.N` (older `vX.Y.Z-staging.N` tags are still accepted). Stable releases
+tagged `vX.Y.Z` are the PROD environment. The helper supports both PPRD and PROD.
 
 ## What The Script Does
 
@@ -12,8 +13,8 @@ PRD deployment.
 
 1. Loads local environment values from `.env` and `.env.deploy.local`.
 2. Fetches Git tags from `origin`.
-3. Selects the latest semantic staging tag matching `vX.Y.Z-staging.N`, ordered
-   by `X.Y.Z` and then `N`.
+3. Selects the latest semantic pprd prerelease matching `vX.Y.Z-pprd.N` (or the
+   legacy `vX.Y.Z-staging.N`), ordered by `X.Y.Z` and then `N`.
 4. Verifies that `release.yml` completed successfully for that tag commit.
 5. Builds the tagged version in a temporary detached worktree.
 6. Copies the generated `build/` directory to a local temporary upload snapshot.
@@ -40,15 +41,20 @@ pnpm deploy:pprd:dry-run
 pnpm deploy:pprd
 ```
 
-By default the latest staging tag is deployed. To deploy an older staging
-release, for example to roll back, pass its tag explicitly:
+By default the latest pprd prerelease is deployed. To deploy an older release,
+for example to roll back, pass its tag explicitly:
 
 ```bash
-pnpm deploy:pprd:dry-run -- --tag vX.Y.Z-staging.N
-pnpm deploy:pprd -- --tag vX.Y.Z-staging.N
+pnpm deploy:pprd:dry-run -- --tag vX.Y.Z-pprd.N
+pnpm deploy:pprd -- --tag vX.Y.Z-pprd.N
 ```
 
-PRD is intentionally unsupported by these commands.
+## PROD
+
+`pnpm deploy:prod` deploys the latest stable `vX.Y.Z` release to PROD. It runs the
+same tag, CI, install, and build checks, requires a green `release.yml` run, and
+asks you to retype the tag before uploading. Use `pnpm deploy:prod:dry-run` to
+validate without SFTP. PROD uploads to the `html/prod` remote directory.
 
 ## Required Local Environment
 
