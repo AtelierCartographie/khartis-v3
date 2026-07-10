@@ -2,6 +2,7 @@ import type { Color } from '@deck.gl/core';
 import type { DeckDataRow, RGBColor } from '../types';
 import {
   getClassedSizeForValue,
+  getClassIndexForValue,
   getColorForValue,
   getAbsoluteDomainMax,
   getProportionalSymbolSizeForValue,
@@ -147,6 +148,72 @@ export function createClassedSizeAccessor(
       maxSize,
       classCountHint
     );
+  };
+}
+
+export function createClassIndexAccessor(
+  valueColumn: string,
+  breaks: number[],
+  classCount: number
+) {
+  return (object: DeckDataRow): number | null => {
+    const rawValue = object[valueColumn];
+    if (rawValue === null || rawValue === undefined) return null;
+    const numericValue =
+      typeof rawValue === 'number' ? rawValue : Number(rawValue);
+    if (!Number.isFinite(numericValue)) return null;
+    return getClassIndexForValue(numericValue, breaks, classCount);
+  };
+}
+
+export function createCategoryIndexAccessor(
+  categoryColumn: string,
+  labels: string[],
+  disabledLabels: string[] = []
+) {
+  const disabled = new Set(disabledLabels.map(String));
+  return (object: DeckDataRow): number | null => {
+    const category = object[categoryColumn];
+    if (category === null || category === undefined) return null;
+    const categoryKey = String(category);
+    if (disabled.has(categoryKey)) return null;
+    const index = labels.findIndex((label) => String(label) === categoryKey);
+    return index === -1 ? null : index;
+  };
+}
+
+export function createGeoJsonClassIndexAccessor(
+  valueColumn: string,
+  breaks: number[],
+  classCount: number
+) {
+  return (feature: {
+    properties?: Record<string, unknown> | null;
+  }): number | null => {
+    const rawValue = feature.properties?.[valueColumn];
+    if (rawValue === null || rawValue === undefined) return null;
+    const numericValue =
+      typeof rawValue === 'number' ? rawValue : Number(rawValue);
+    if (!Number.isFinite(numericValue)) return null;
+    return getClassIndexForValue(numericValue, breaks, classCount);
+  };
+}
+
+export function createGeoJsonCategoryIndexAccessor(
+  categoryColumn: string,
+  labels: string[],
+  disabledLabels: string[] = []
+) {
+  const disabled = new Set(disabledLabels.map(String));
+  return (feature: {
+    properties?: Record<string, unknown> | null;
+  }): number | null => {
+    const category = feature.properties?.[categoryColumn];
+    if (category === null || category === undefined) return null;
+    const categoryKey = String(category);
+    if (disabled.has(categoryKey)) return null;
+    const index = labels.findIndex((label) => String(label) === categoryKey);
+    return index === -1 ? null : index;
   };
 }
 

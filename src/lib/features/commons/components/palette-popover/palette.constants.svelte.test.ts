@@ -36,6 +36,10 @@ vi.mock('@ateliercartographie/ok-palette', async () => {
 
 vi.mock('@ateliercartographie/motif.js', () => ({
   motif: (config: { type: string; angle?: number }) => ({
+    defs: {
+      outerHTML: `<defs><pattern id="mock-${config.type}-${config.angle ?? 0}"></pattern></defs>`
+    },
+    url: `url(#mock-${config.type}-${config.angle ?? 0})`,
     tile: () => ({
       toDataURL: () =>
         `data:image/png;base64,MOCK_${config.type}_${config.angle ?? 0}`
@@ -249,10 +253,11 @@ describe('palette.constants — generatePaletteColors', () => {
     }
   });
 
-  it('should return raw palette colors for PATTERN type', () => {
+  it('should expand PATTERN palettes into a ramp matching the class count', () => {
     const p = getPatternPalettes()[0];
     const result = generatePaletteColors(p, 3);
-    expect(result).toEqual(p.colors);
+    expect(result).toHaveLength(3);
+    result.forEach((c) => expect(c).toMatch(HEX_REGEX));
   });
 
   it('should accept a contrast parameter and still return N hex colors', () => {
@@ -533,10 +538,10 @@ describe('palette.constants — generateCategoricalColorsFromSeed', () => {
 });
 
 describe('palette.constants — buildPatternBackground', () => {
-  it('should return a data-URL background for a pattern palette', () => {
+  it('should return an SVG data-URL background for a pattern palette', () => {
     const p = getPatternPalettes().find((x) => x.patternId === 'diagonal')!;
     const bg = buildPatternBackground(p);
-    expect(bg).toMatch(/^url\(data:/);
+    expect(bg).toMatch(/^url\("data:image\/svg\+xml,/);
   });
 
   it('should honor the angle override by mapping to the corresponding patternId', () => {
@@ -551,8 +556,8 @@ describe('palette.constants — buildPatternBackground', () => {
       size: 4,
       scale: 8
     });
-    expect(bgHorizontal).toMatch(/^url\(data:/);
-    expect(bgDiagonal).toMatch(/^url\(data:/);
+    expect(bgHorizontal).toMatch(/^url\("data:image\/svg\+xml,/);
+    expect(bgDiagonal).toMatch(/^url\("data:image\/svg\+xml,/);
     expect(bgHorizontal).not.toBe(bgDiagonal);
   });
 });

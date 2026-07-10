@@ -4,13 +4,6 @@ import { BasemapDottedPattern } from '$lib/features/commons/constants/visualizat
 
 import type { LayerContext, RGBColor } from '../types';
 
-export const SYMBOL_PATTERN_TYPE = {
-  DOTS: 1,
-  LINES: 2,
-  CROSSHATCH: 3,
-  DASHES: 4
-} as const;
-
 export const DASH_EXTENSION = new PathStyleExtension({ dash: true });
 
 const DEFAULT_DASH_ARRAY: [number, number] = [3, 2];

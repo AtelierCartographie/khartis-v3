@@ -1,4 +1,5 @@
 import Textbox from '@borgar/textbox';
+import { PATTERN_OVERLAY_OPACITY } from '$lib/features/commons/constants/pattern.constants';
 import {
   createLegendCanvasRect,
   createLegendFont,
@@ -7,7 +8,6 @@ import {
   renderLegendHeader,
   renderLegendNote,
   resolveLegendFontFamily,
-  sanitizeDataImageUrl,
   wrapLegendText,
   type CommonLegendTextOptions,
   type LegendSvgDefinition
@@ -17,6 +17,11 @@ export type KhartisLegendSwatchType = 'box' | 'line' | 'symbol' | 'pattern';
 export type KhartisDoubleSymbolPosition =
   'overlay' | 'juxtaposition' | 'division';
 
+export interface LegendPatternFill {
+  defs: string;
+  fillUrl: string;
+}
+
 export interface KhartisLegendSwatchItem {
   label: string;
   fill?: string;
@@ -25,7 +30,8 @@ export interface KhartisLegendSwatchItem {
   opacity?: number;
   symbol?: string | null;
   size?: number;
-  patternUrl?: string | null;
+  patternFill?: LegendPatternFill | null;
+  patternOpacity?: number;
   dashed?: boolean;
 }
 
@@ -78,8 +84,7 @@ type RowShapeFactory<T> = (
   rowTop: number,
   size: number,
   index: number,
-  rowHeight: number,
-  patternIdPrefix: string
+  rowHeight: number
 ) => { markup: string; defs?: string; labelY?: number };
 
 interface RowLegendOptions<T> extends CommonLegendTextOptions {
@@ -92,8 +97,6 @@ interface RowLegendOptions<T> extends CommonLegendTextOptions {
   footerItems?: KhartisLegendSwatchItem[];
   footerType?: KhartisLegendSwatchType;
 }
-
-let khartisLegendPatternInstanceCounter = 0;
 
 export function draw_khartis_swatch_legend(
   items: KhartisLegendSwatchItem[],
@@ -112,17 +115,8 @@ export function draw_khartis_swatch_legend(
     ),
     footerItems: options.footerItems,
     footerType: options.footerType,
-    drawShape: (item, x, rowTop, size, index, rowHeight, patternIdPrefix) =>
-      draw_swatch_shape(
-        item,
-        type,
-        x,
-        rowTop,
-        size,
-        index,
-        rowHeight,
-        patternIdPrefix
-      )
+    drawShape: (item, x, rowTop, size, _index, rowHeight) =>
+      draw_swatch_shape(item, type, x, rowTop, size, rowHeight)
   });
 }
 
@@ -226,7 +220,8 @@ export function draw_khartis_double_symbols_legend(
       );
 
       return {
-        markup: `<g class="double-symbol-pair" data-position-mode="${escapeSvgAttribute(mode)}">${first}${second}</g>`,
+        markup: `<g class="double-symbol-pair" data-position-mode="${escapeSvgAttribute(mode)}">${first.markup}${second.markup}</g>`,
+        defs: [first.defs, second.defs].filter(Boolean).join(''),
         labelY: cy
       };
     }
@@ -265,7 +260,6 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
   const shapeSize = Math.round(fontSize * 1.25);
   const footerType = options.footerType ?? 'box';
   const footerItems = options.footerItems ?? [];
-  const patternIdPrefix = `khartis-legend-pattern-${++khartisLegendPatternInstanceCounter}`;
   const shapeWidth = Math.max(
     options.shapeWidth ?? shapeSize,
     footerItems.length > 0 ? getSwatchShapeWidth(footerType, shapeSize) : 0
@@ -316,8 +310,7 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
       rowTop,
       shapeSize,
       index,
-      rowBodyHeight,
-      patternIdPrefix
+      rowBodyHeight
     );
     const labelY = shape.labelY ?? rowTop + rowBodyHeight / 2;
     const label = render_label(
@@ -356,9 +349,7 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
       x,
       rowTop,
       shapeSize,
-      options.items.length + index,
-      footerBodyHeight,
-      patternIdPrefix
+      footerBodyHeight
     );
     const label = render_label(
       footerLabelLines[index] ?? [],
@@ -421,9 +412,7 @@ function draw_swatch_shape(
   x: number,
   rowTop: number,
   size: number,
-  index: number,
-  rowHeight: number,
-  patternIdPrefix: string
+  rowHeight: number
 ): { markup: string; defs?: string } {
   const y = rowTop + (rowHeight - size) / 2;
 
@@ -432,13 +421,11 @@ function draw_swatch_shape(
   }
 
   if (type === 'symbol') {
-    return {
-      markup: draw_symbol(item, x + size / 2, rowTop + rowHeight / 2, size)
-    };
+    return draw_symbol(item, x + size / 2, rowTop + rowHeight / 2, size);
   }
 
   if (type === 'pattern') {
-    return draw_pattern_box(item, x, y, size, index, patternIdPrefix);
+    return draw_pattern_box(item, x, y, size);
   }
 
   return {
@@ -461,32 +448,37 @@ function draw_symbol(
   cx: number,
   cy: number,
   size: number
-): string {
+): { markup: string; defs?: string } {
   const scale = Math.max(0.1, (item.size ?? size) / 16);
-  return `<path d="${escapeSvgAttribute(item.symbol ?? '')}" transform="translate(${cx},${cy}) scale(${scale})" fill="${escapeSvgAttribute(item.fill ?? 'none')}" stroke="${escapeSvgAttribute(item.stroke ?? 'rgba(0, 0, 0, 0.25)')}" stroke-width="${item.strokeWidth ?? 0.75}" opacity="${normalizeOpacity(item.opacity)}" />`;
+  const transform = `translate(${cx},${cy}) scale(${scale})`;
+  const path = escapeSvgAttribute(item.symbol ?? '');
+  const stroke = escapeSvgAttribute(item.stroke ?? 'rgba(0, 0, 0, 0.25)');
+  const strokeWidth = item.strokeWidth ?? 0.75;
+  const opacity = normalizeOpacity(item.opacity);
+
+  return {
+    markup: `<path d="${path}" transform="${transform}" fill="${escapeSvgAttribute(item.fill ?? 'none')}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" />`
+  };
 }
 
 function draw_pattern_box(
   item: KhartisLegendSwatchItem,
   x: number,
   y: number,
-  size: number,
-  index: number,
-  patternIdPrefix: string
+  size: number
 ): { markup: string; defs?: string } {
-  const id = `${patternIdPrefix}-${index}`;
   const fill = escapeSvgAttribute(item.fill ?? '#ffffff');
-  const url = sanitizeDataImageUrl(item.patternUrl);
+  const stroke = escapeSvgAttribute(item.stroke ?? 'rgba(0, 0, 0, 0.15)');
+  const strokeWidth = item.strokeWidth ?? 1;
+  const baseRect = `<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" />`;
 
-  if (!url) {
-    return {
-      markup: `<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${fill}" stroke="${escapeSvgAttribute(item.stroke ?? 'rgba(0, 0, 0, 0.15)')}" stroke-width="${item.strokeWidth ?? 1}" />`
-    };
+  if (!item.patternFill) {
+    return { markup: baseRect };
   }
 
   return {
-    defs: `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${size}" height="${size}"><rect width="${size}" height="${size}" fill="${fill}" /><image href="${url}" width="${size}" height="${size}" preserveAspectRatio="none" /></pattern>`,
-    markup: `<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="url(#${id})" stroke="${escapeSvgAttribute(item.stroke ?? 'rgba(0, 0, 0, 0.15)')}" stroke-width="${item.strokeWidth ?? 1}" />`
+    defs: item.patternFill.defs,
+    markup: `${baseRect}<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${escapeSvgAttribute(item.patternFill.fillUrl)}" opacity="${item.patternOpacity ?? PATTERN_OVERLAY_OPACITY}" stroke="none" />`
   };
 }
 

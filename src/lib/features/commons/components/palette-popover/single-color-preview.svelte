@@ -3,29 +3,23 @@
   import * as m from '$lib/paraglide/messages';
   import SingleColorDropdown from './single-color-dropdown.svelte';
   import PalettePopover from './palette-popover.svelte';
-  import {
-    PALETTE_TYPE,
-    type Palette,
-    type PatternParams
-  } from './palette.constants';
+  import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
+  import { PALETTE_TYPE, type Palette } from './palette.constants';
 
   interface Props {
     label?: string;
     color: string;
-    patternId?: string;
+    patternPaletteConfig?: PatternPaletteConfig;
     exclusive?: boolean;
     allowPattern?: boolean;
     onchange?: (hex: string) => void;
-    onpatternchange?: (
-      patternId: string | undefined,
-      patternParams: PatternParams | undefined
-    ) => void;
+    onpatternchange?: (config: PatternPaletteConfig | undefined) => void;
   }
 
   let {
     label,
     color,
-    patternId,
+    patternPaletteConfig,
     exclusive = false,
     allowPattern = true,
     onchange,
@@ -55,15 +49,14 @@
   }
 
   function handlePopoverValidate(
-    palette: Palette | undefined,
+    _palette: Palette | undefined,
     newColors: string[],
     _nextInverted: boolean,
-    patternParams?: PatternParams
+    nextPatternPaletteConfig?: PatternPaletteConfig
   ) {
     const hex = newColors[0];
     if (hex) onchange?.(hex);
-    const nextPatternId = palette?.patternId;
-    onpatternchange?.(nextPatternId, nextPatternId ? patternParams : undefined);
+    onpatternchange?.(nextPatternPaletteConfig);
     popoverOpen = false;
   }
 
@@ -105,12 +98,13 @@
   triggerElement={triggerRef}
   currentColors={[color]}
   currentInverted={false}
-  selectedPaletteId={patternId ? `pattern-${patternId}` : '__custom__'}
+  selectedPaletteId="__custom__"
   paletteType={PALETTE_TYPE.QUALITATIVE}
   colorBlindFilter={false}
   numClasses={1}
   exclusive={exclusive}
   allowPattern={allowPattern}
+  currentPatternPaletteConfig={patternPaletteConfig}
   onclose={handlePopoverClose}
   onvalidate={handlePopoverValidate}
 />

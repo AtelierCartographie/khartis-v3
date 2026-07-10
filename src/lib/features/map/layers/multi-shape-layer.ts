@@ -24,6 +24,25 @@ export type ShapeTypeOrdinal =
 export const LINEAR_SHAPE_ORDINALS: readonly ShapeTypeOrdinal[] =
   LINEAR_SHAPES.map((shape) => SHAPE_ORDINAL[shape]);
 
+type MultiShapeModuleProps = {
+  barWidth?: number;
+  offsetX?: number;
+  offsetY?: number;
+  halfMask?: number;
+  shapeScale?: number;
+  dashed?: number;
+  dashLength?: number;
+  gapLength?: number;
+  dotLength?: number;
+  dotGap?: number;
+};
+
+function getMultiShapeUniforms(
+  opts?: MultiShapeModuleProps | Record<string, never>
+): Record<string, unknown> {
+  return opts ?? {};
+}
+
 const multiShapeModule = {
   name: 'multiShape',
   fs: `
@@ -38,10 +57,9 @@ const multiShapeModule = {
       float gapLength;
       float dotLength;
       float dotGap;
-      float patternEnabled;
-      float patternType;
     } multiShape;
   `,
+  getUniforms: getMultiShapeUniforms,
   uniformTypes: {
     barWidth: 'f32',
     offsetX: 'f32',
@@ -52,11 +70,9 @@ const multiShapeModule = {
     dashLength: 'f32',
     gapLength: 'f32',
     dotLength: 'f32',
-    dotGap: 'f32',
-    patternEnabled: 'f32',
-    patternType: 'f32'
+    dotGap: 'f32'
   }
-};
+} as const;
 
 const LINEAR_SHAPE_GLSL_CONDITION = LINEAR_SHAPE_ORDINALS.map(
   (ordinal) => `shapeOrdinal == ${ordinal}`
@@ -316,51 +332,6 @@ float getDashMask(vec2 uv, float strokePx, float midRadiusPx, float radialOffset
     return clamp(mask, 0.0, 1.0);
 }
 
-float stripeMask(float coord, float spacing, float width) {
-    float phase = abs(fract(coord / spacing) - 0.5);
-    return 1.0 - step(width, phase);
-}
-
-float getFillPatternMask(vec2 uv) {
-    if (multiShape.patternEnabled < 0.5) {
-        return 0.0;
-    }
-
-    vec2 p = uv;
-    float spacing = 0.28;
-    float patternType = floor(multiShape.patternType + 0.5);
-
-    if (patternType < 1.5) {
-        vec2 cell = fract(p / spacing) - 0.5;
-        return 1.0 - step(0.32, length(cell));
-    }
-
-    if (patternType < 2.5) {
-        return stripeMask(p.x + p.y, spacing, 0.25);
-    }
-
-    if (patternType < 3.5) {
-        return clamp(
-            stripeMask(p.x + p.y, spacing, 0.18) +
-            stripeMask(p.x - p.y, spacing, 0.18),
-            0.0,
-            1.0
-        );
-    }
-
-    return stripeMask(p.y, spacing, 0.20) * stripeMask(p.x, spacing * 1.6, 0.34);
-}
-
-vec4 applyFillPattern(vec4 fillColor, vec2 uv) {
-    float mask = getFillPatternMask(uv);
-    if (mask <= 0.0 || fillColor.a <= 0.0) {
-        return fillColor;
-    }
-
-    vec3 patternRgb = mix(fillColor.rgb, vec3(0.0), 0.55);
-    return vec4(mix(fillColor.rgb, patternRgb, mask), fillColor.a);
-}
-
 void main(void) {
     geometry.uv = unitPosition;
     vec2 uv = unitPosition - vec2(multiShape.offsetX, multiShape.offsetY);
@@ -385,10 +356,9 @@ void main(void) {
             ? smoothedge(innerEdge, distToCenter)
             : step(innerEdge, distToCenter);
         lineMask *= getDashMask(scaledUv, strokePx, midRadiusPx, distToCenter - midRadiusPx);
-        vec4 fillColor = applyFillPattern(vFillColor, scaledUv);
 
         if (scatterplot.filled > 0.5) {
-            fragColor = mix(fillColor, vLineColor, lineMask);
+            fragColor = mix(vFillColor, vLineColor, lineMask);
         } else {
             if (lineMask == 0.0) discard;
             fragColor = vec4(vLineColor.rgb, vLineColor.a * lineMask);
@@ -396,7 +366,7 @@ void main(void) {
     } else if (scatterplot.filled < 0.5) {
         discard;
     } else {
-        fragColor = applyFillPattern(vFillColor, scaledUv);
+        fragColor = vFillColor;
     }
 
     fragColor.a *= inShape;
@@ -418,8 +388,6 @@ export type MultiShapeLayerProps<DataT = unknown> = {
   gapLength?: number;
   dotLength?: number;
   dotGap?: number;
-  patternEnabled?: boolean;
-  patternType?: number;
 };
 
 const defaultProps = {
@@ -434,9 +402,7 @@ const defaultProps = {
   dashLength: { type: 'number', value: 3 },
   gapLength: { type: 'number', value: 2 },
   dotLength: { type: 'number', value: 0 },
-  dotGap: { type: 'number', value: 0 },
-  patternEnabled: { type: 'boolean', value: false },
-  patternType: { type: 'number', value: 1 }
+  dotGap: { type: 'number', value: 0 }
 };
 
 interface MultiShapeLayerState {
@@ -459,13 +425,14 @@ export class MultiShapeLayer<DataT = unknown> extends ScatterplotLayer<
     super.initializeState();
 
     const attributeManager = this.getAttributeManager();
-    if (!attributeManager) return;
-    attributeManager.addInstanced({
-      instanceShapes: {
-        size: 1,
-        accessor: 'getShape'
-      }
-    });
+    if (attributeManager) {
+      attributeManager.addInstanced({
+        instanceShapes: {
+          size: 1,
+          accessor: 'getShape'
+        }
+      });
+    }
   }
 
   getShaders(): Record<string, unknown> {
@@ -495,9 +462,7 @@ export class MultiShapeLayer<DataT = unknown> extends ScatterplotLayer<
       dashLength,
       gapLength,
       dotLength,
-      dotGap,
-      patternEnabled,
-      patternType
+      dotGap
     } = this.props;
     const state = this.state as unknown as MultiShapeLayerState;
     const shaderInputs = state.model?.shaderInputs;
@@ -513,9 +478,7 @@ export class MultiShapeLayer<DataT = unknown> extends ScatterplotLayer<
           dashLength: dashLength ?? 3,
           gapLength: gapLength ?? 2,
           dotLength: dotLength ?? 0,
-          dotGap: dotGap ?? 0,
-          patternEnabled: patternEnabled ? 1 : 0,
-          patternType: patternType ?? 1
+          dotGap: dotGap ?? 0
         }
       });
     }

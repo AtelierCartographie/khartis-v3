@@ -12,12 +12,9 @@
     CategoryDraft
   } from './categories-aspect-popover.types';
   import { DEFAULT_COMMON_ASPECT } from './categories-aspect-popover.types';
-  import type {
-    Palette,
-    PaletteType,
-    PatternParams
-  } from './palette.constants';
+  import type { Palette, PaletteType } from './palette.constants';
   import { PALETTE_TYPE, normalizePaletteId } from './palette.constants';
+  import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 
   interface Props {
@@ -139,7 +136,8 @@
         enabled: !disabledLabels.includes(value),
         customSize: classification?.categorySizes?.[i],
         strokeColor: classification?.categoryStrokeColors?.[i],
-        customStrokeWidth: classification?.categoryStrokeWidths?.[i]
+        customStrokeWidth: classification?.categoryStrokeWidths?.[i],
+        patternShape: classification?.pattern?.categoryShapes?.[i]
       };
     })
   );
@@ -166,7 +164,8 @@
       paletteId: palette.id,
       inverted: false,
       patternId: palette.patternId ?? undefined,
-      patternParams: undefined
+      patternParams: undefined,
+      pattern: undefined
     });
     dropdownOpen = false;
   }
@@ -201,17 +200,27 @@
     return next.map((category) => category.color);
   }
 
-  function resolveValidatedCategoryPatternId(
+  function resolveValidatedCategoryPattern(
+    next: CategoryDraft[],
     commonAspect: CategoriesCommonAspect
-  ): string | undefined {
-    const supportsPattern =
-      categoriesVariant === 'polygons' ||
-      categoriesVariant.startsWith('symbols');
-    if (!supportsPattern || !commonAspect.pattern) {
+  ): PatternPaletteConfig | undefined {
+    if (!commonAspect.pattern || !commonAspect.patternConfig) {
       return undefined;
     }
 
-    return commonAspect.patternId ?? 'diagonal';
+    if (categoriesVariant === 'polygons') {
+      const categoryShapes = next.map((category) => category.patternShape);
+      const hasCategoryShape = categoryShapes.some(
+        (shape) => shape !== undefined
+      );
+
+      return {
+        ...commonAspect.patternConfig,
+        categoryShapes: hasCategoryShape ? categoryShapes : undefined
+      };
+    }
+
+    return undefined;
   }
 
   function handleCategoriesValidate(
@@ -239,7 +248,10 @@
       resolvedColors.every((color, index) => color === colors[index])
         ? (selectedPaletteId ?? '__custom__')
         : '__custom__';
-    const patternId = resolveValidatedCategoryPatternId(commonAspect);
+    const pattern = resolveValidatedCategoryPattern(
+      normalizedCategories,
+      commonAspect
+    );
 
     onClassificationChange?.({
       colors: resolvedColors,
@@ -270,8 +282,9 @@
         : undefined,
       paletteId,
       inverted: false,
-      patternId,
-      patternParams: patternId ? commonAspect.patternParams : undefined
+      patternId: undefined,
+      patternParams: undefined,
+      pattern
     });
     onCategoriesCommonAspectChange?.(commonAspect, normalizedCategories);
     categoriesPopoverOpen = false;
@@ -285,7 +298,7 @@
     palette: Palette | undefined,
     newColors: string[],
     nextInverted: boolean,
-    patternParams?: PatternParams
+    patternPaletteConfig?: PatternPaletteConfig
   ) {
     if (palette) {
       onselect?.(palette);
@@ -294,8 +307,9 @@
       colors: newColors,
       inverted: nextInverted,
       paletteId: palette?.id ?? '__custom__',
-      patternId: palette?.patternId ?? undefined,
-      patternParams: palette?.patternId ? patternParams : undefined
+      patternId: undefined,
+      patternParams: undefined,
+      pattern: patternPaletteConfig
     };
     onClassificationChange?.(changes);
     popoverOpen = false;
@@ -365,6 +379,10 @@
   bind:colorBlindFilter={colorBlindFilter}
   numClasses={resolvedClassCount}
   divergingSplit={divergingSplit}
+  allowPattern={categoriesVariant === 'polygons'}
+  currentPatternId={classification?.patternId}
+  currentPatternParams={classification?.patternParams}
+  currentPatternPaletteConfig={classification?.pattern}
   onclose={handlePopoverClose}
   onvalidate={handlePopoverValidate}
 />

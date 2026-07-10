@@ -37,9 +37,9 @@ Generate class colors through `generateColorsForBreaks()` in `classification.ser
 
 Use `color-utils.ts` (`hslToHex`, `hexToHsl`, `createColorValue`) for the HSL↔hex round-trip; ranges are H 0–359, S/L 0–100. Keep hue/saturation/lightness and the hex value in sync through `ColorValue`.
 
-## Patterns (`@ateliercartographie/motif.js`)
+## Patterns (`@ateliercartographie/motif.js` + ok-palette)
 
-Fills can be patterns instead of flat color. Allowed angles are **0 / 45 / 315°**; map UI pattern names through `PATTERN_TYPE_MAP`, build the GPU atlas once (`pattern-texture.ts`), and reuse `motif(...).tile().toDataURL()` for CSS previews. Categorical/sequential pattern sets come from ok-palette and are color-blind safe by construction.
+Pattern palettes **replace** the flat fill (white background + per-class motif), they don't overlay it. Class pattern sets come from ok-palette (`sequentialPatterns` / `categoricalPatterns`) via `resolveClassPatterns()` in `pattern-palette.service.ts` — never hand-roll size/angle ramps. `PatternPaletteConfig.scale` is in **native motif units** (design tile = scale × 10 CSS px; the UI slider shows ×10). Categorical pattern palettes are capped at `MAX_CATEGORICAL_PATTERN_COUNT` (24). Never feed devicePixelRatio-scaled atlas frame widths to the deck.gl shader, and never build previews from `motif().tile()` (canvas tiles are DPR-scaled and unrotated) — use the SVG-defs helpers (`buildPatternSvgBackground`, `buildClassPatternSvgBackground`, legend `patternFill`). The legacy single-motif model (`patternId`/`patternParams`, angles 0/45/315 via `PATTERN_TYPE_MAP`) remains only for unique fills, symbols, and missing data.
 
 ## Carbon inputs (Svelte 5 traps)
 

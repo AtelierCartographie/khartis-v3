@@ -1,5 +1,8 @@
 import { ShapeType } from '$lib/features/commons/constants/visualization.constants';
-import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';
+import type {
+  PatternPaletteConfig,
+  PatternShape
+} from '$lib/features/commons/constants/pattern.constants';
 
 export type CategoriesAspectVariant =
   | 'symbols-unique'
@@ -19,6 +22,7 @@ export interface CategoryDraft {
   customSize?: number;
   strokeColor?: string;
   customStrokeWidth?: number;
+  patternShape?: PatternShape;
 }
 
 export interface CategoriesCommonAspect {
@@ -28,8 +32,7 @@ export interface CategoriesCommonAspect {
   autoColor: boolean;
   strokeSize: number;
   pattern: boolean;
-  patternId?: string;
-  patternParams?: PatternParams;
+  patternConfig?: PatternPaletteConfig;
   strokeUnique?: boolean;
   shape?: ShapeType;
   color?: string;
@@ -47,8 +50,7 @@ export const DEFAULT_COMMON_ASPECT: CategoriesCommonAspect = {
   strokeUnique: true,
   strokeSize: 1,
   pattern: false,
-  patternId: 'diagonal',
-  patternParams: { size: 4, scale: 8 },
+  patternConfig: { shape: 'line', color: '#000000', colorize: false, scale: 1 },
   shape: ShapeType.CIRCLE,
   color: '#f287ac',
   thickness: 1,
