@@ -20,6 +20,7 @@
   import { useProjectNavigation } from '../hooks/use-project-navigation.svelte';
   import { CreateProjectValidationService } from '../services/validation.service';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import { analyticsService } from '$lib/features/commons/services/analytics.service';
   import { projectsStore } from '$lib/features/commons/stores/projects.store.svelte';
   import {
     readCarbonStringValue,
@@ -134,6 +135,7 @@
       await navigateAfterAction();
     } catch (error) {
       const duration = performance.now() - startTime;
+      analyticsService.trackFailure('project_create', error);
       logger.error('Failed to create project', LogCategory.PROJECT, {
         duration: `${duration.toFixed(2)}ms`,
         error

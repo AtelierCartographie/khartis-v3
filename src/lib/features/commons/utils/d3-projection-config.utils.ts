@@ -10,7 +10,7 @@ import {
   geoInterruptedMollweideHemispheres,
   geoPolyhedralWaterman
 } from 'd3-geo-polygon';
-import type { D3Usage } from 'proj-suggest';
+import type { D3Usage } from '@ateliercartographie/proj-suggest';
 
 type GeoProjectionFactory = () => GeoProjection;
 type D3GeoProjectionModule = Record<string, unknown>;

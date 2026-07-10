@@ -78,7 +78,7 @@
     extractGeometryInfo
   } from '$lib/features/map/io';
   import { resolveOrthographicInteractionController } from '$lib/features/map/utils/map-interaction-mode.utils';
-  import type { ProjectionLike } from 'geoarrow-deck-stream';
+  import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
   import {
     buildFacetRenderDescriptors,
     FACET_TITLE_HEIGHT

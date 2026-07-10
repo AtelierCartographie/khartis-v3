@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ProjectionLike } from 'geoarrow-deck-stream';
+import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 import { resolveProjectionForRender } from '$lib/features/map/utils/projection-priority.utils';
 
 const catalogProjection = { id: 'catalog' } as unknown as ProjectionLike;

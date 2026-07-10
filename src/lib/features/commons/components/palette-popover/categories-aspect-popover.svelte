@@ -1044,11 +1044,17 @@
       <div class="popover-footer-wrap">
         <div class="popover-divider"></div>
         <footer class="popover-footer">
-          <Button kind="tertiary" size="small" on:click={handleCancel}>
+          <Button
+            class="khartis-dialog-close-action"
+            kind="secondary"
+            size="small"
+            on:click={handleCancel}
+          >
             {m.button_cancel()}
           </Button>
           <Button
-            kind="primary"
+            class="khartis-dialog-action"
+            kind="secondary"
             size="small"
             icon={ArrowRight}
             on:click={handleValidate}

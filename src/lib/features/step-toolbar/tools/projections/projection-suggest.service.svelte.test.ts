@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BBox } from 'proj-suggest';
+import type { BBox } from '@ateliercartographie/proj-suggest';
 import {
   suggestProjectionsForBbox,
   suggestProjectionsForFeatureBounds

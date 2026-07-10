@@ -4,7 +4,7 @@ import type { FeatureCollection } from 'geojson';
 import {
   createPolygonFillColorAttribute,
   type BinaryPolygonData
-} from 'geoarrow-deck-stream';
+} from '@ateliercartographie/geoarrow-deck-stream';
 
 import { mapPatternTypeToPatternId } from '$lib/features/commons/components/palette-popover/palette.constants';
 import {

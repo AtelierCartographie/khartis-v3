@@ -6,7 +6,7 @@ import {
   type MatchedCountry,
   type ProjectionSuggestions,
   type ResolvedProjection
-} from 'proj-suggest';
+} from '@ateliercartographie/proj-suggest';
 import type { GeoProjection } from 'd3-geo';
 import { proj4d3 } from '$lib/features/map/utils/proj4d3.utils';
 import { buildD3ProjectionFromConfig } from '$lib/features/commons/utils/d3-projection-config.utils';

@@ -1,7 +1,7 @@
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import type { LngLatBoundsLike } from 'maplibre-gl';
-import type { ProjectionLike } from 'geoarrow-deck-stream';
+import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 import type { BBox } from '../types';
 import type {
   BasemapMetadata,

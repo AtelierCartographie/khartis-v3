@@ -1,4 +1,4 @@
-import type { ProjectionLike } from 'geoarrow-deck-stream';
+import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import { projectionStore } from '../stores/projection.store.svelte';
 import type { AnnotationDataAnchor } from '$lib/features/step-toolbar/tools/annotations';

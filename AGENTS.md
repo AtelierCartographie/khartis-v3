@@ -66,3 +66,8 @@ This project is indexed by GitNexus as **khartis-v3** (18161 symbols, 33827 rela
 ## Cartography Styling
 
 - Use `NEUTRAL_CARTOGRAPHY_COLORS` / `NEUTRAL_CARTOGRAPHY_RGBA_COLORS` from `src/lib/features/commons/constants/colors.constants.ts` for neutral map, basemap, and blank-visualization defaults instead of hardcoded grayscale literals.
+
+## Carbon Dialog Styling
+
+- In Carbon dialogs, textual close, cancel, and destructive action buttons must use the danger red treatment. Close icons keep their normal Carbon appearance. Other non-destructive action buttons must use `#6F6F6F`.
+- Exception: in danger modals (`.bx--modal--danger`, i.e. dialogs whose primary action is already red), the cancel/secondary button stays neutral (`#6F6F6F`) so both footer buttons don't read as destructive.
