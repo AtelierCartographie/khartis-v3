@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { D3Usage } from 'proj-suggest';
+import type { D3Usage } from '@ateliercartographie/proj-suggest';
 
 import { buildD3ProjectionFromConfig } from '$lib/features/commons/utils/d3-projection-config.utils';
 

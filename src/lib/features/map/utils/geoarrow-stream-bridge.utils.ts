@@ -11,7 +11,7 @@ import {
   parsePolygonsToSolid,
   parsePoints,
   buildCompositeProjection
-} from 'geoarrow-deck-stream';
+} from '@ateliercartographie/geoarrow-deck-stream';
 import type {
   BinaryPathData,
   BinaryPolygonData,
@@ -19,7 +19,7 @@ import type {
   DeckBinaryAttribute,
   ParserOptions,
   ProjectionLike
-} from 'geoarrow-deck-stream';
+} from '@ateliercartographie/geoarrow-deck-stream';
 import { type GeoProjection, type GeoStream } from 'd3-geo';
 
 import * as _d3GeoProjection from 'd3-geo-projection';

@@ -4,7 +4,7 @@ import type {
   BinaryPathData,
   BinaryPointData,
   BinaryPolygonData
-} from 'geoarrow-deck-stream';
+} from '@ateliercartographie/geoarrow-deck-stream';
 import type { FeatureCollection, Geometry } from 'geojson';
 import type { LngLatBoundsLike } from 'maplibre-gl';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';

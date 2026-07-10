@@ -95,10 +95,10 @@ const {
   };
 });
 
-vi.mock('geoarrow-deck-stream', async () => {
-  const actual = await vi.importActual<typeof import('geoarrow-deck-stream')>(
-    'geoarrow-deck-stream'
-  );
+vi.mock('@ateliercartographie/geoarrow-deck-stream', async () => {
+  const actual = await vi.importActual<
+    typeof import('@ateliercartographie/geoarrow-deck-stream')
+  >('@ateliercartographie/geoarrow-deck-stream');
 
   return {
     ...actual,

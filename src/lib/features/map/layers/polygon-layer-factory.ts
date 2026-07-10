@@ -4,7 +4,7 @@ import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import {
   createPathLayerProps,
   createPolygonFillColorAttribute
-} from 'geoarrow-deck-stream';
+} from '@ateliercartographie/geoarrow-deck-stream';
 
 import {
   DEFAULT_COLORS,

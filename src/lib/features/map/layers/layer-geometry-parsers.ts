@@ -1,5 +1,5 @@
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { ProjectionLike } from 'geoarrow-deck-stream';
+import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 
 import {
   parsePaths,

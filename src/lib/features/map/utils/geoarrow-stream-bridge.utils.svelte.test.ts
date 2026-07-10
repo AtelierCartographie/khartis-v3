@@ -6,7 +6,7 @@ import type {
   BinaryPathData,
   BinaryPointData,
   ProjectionLike
-} from 'geoarrow-deck-stream';
+} from '@ateliercartographie/geoarrow-deck-stream';
 import type {
   BasemapMetadata,
   ProjectionPresets

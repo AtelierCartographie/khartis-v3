@@ -1,4 +1,4 @@
-import type { ProjectionLike } from 'geoarrow-deck-stream';
+import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 
 export function resolveProjectionForRender(
   defaultProjection: ProjectionLike | undefined,
