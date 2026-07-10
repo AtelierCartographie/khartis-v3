@@ -35,6 +35,10 @@ Object.defineProperty(window, 'matchMedia', {
   }))
 });
 
+vi.mock('$env/dynamic/public', () => ({
+  env: {}
+}));
+
 vi.mock('$lib/features/duckdb', () => ({
   duckDBOrchestrator: {
     initialize: vi.fn().mockResolvedValue(undefined),
