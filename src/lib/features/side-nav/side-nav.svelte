@@ -41,6 +41,7 @@
   import Switch from '../commons/components/switch.svelte';
   import ClearCacheButton from './components/clear-cache-button.svelte';
   import DataPrivacyModal from './components/data-privacy-modal.svelte';
+  import LegalNoticeModal from './components/legal-notice-modal.svelte';
   import { useSideNav } from './hooks/use-side-nav.svelte';
 
   const sideNav = useSideNav();
@@ -531,6 +532,7 @@
               target="_blank"
               rel="noopener noreferrer">{m.sidenav_presentation_page()}</Button
             >
+            <LegalNoticeModal />
             <DataPrivacyModal />
             <Button
               size="small"
@@ -663,6 +665,7 @@
 
     <ModalFooter
       secondaryButtonText={m.sidenav_install_help_close()}
+      secondaryClass="khartis-dialog-close-action"
       on:click:button--secondary={closeInstallDialog}
     />
   </ComposedModal>
