@@ -54,6 +54,7 @@ describe('JoinAssistedSection', () => {
     vi.stubGlobal('IntersectionObserver', ImmediateIntersectionObserver);
     vi.stubGlobal('requestAnimationFrame', requestAnimationFrameMock);
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    Element.prototype.scrollIntoView = vi.fn();
   });
 
   afterEach(() => {
@@ -62,7 +63,7 @@ describe('JoinAssistedSection', () => {
     vi.restoreAllMocks();
   });
 
-  it('controls to-verify selects without DOM synchronization frames', async () => {
+  it('controls to-verify combo boxes without DOM synchronization frames', async () => {
     const onMappingChange = vi.fn();
 
     render(JoinAssistedSection, {
@@ -83,16 +84,18 @@ describe('JoinAssistedSection', () => {
       onMappingChange
     });
 
-    const select = await screen.findByRole('combobox', {
+    const combobox = await screen.findByRole('combobox', {
       name: m.join_select_label_to_verify({ entity: 'Frnce' })
     });
 
     await waitFor(() =>
-      expect((select as HTMLSelectElement).value).toBe('France')
+      expect((combobox as HTMLInputElement).value).toBe('France')
     );
     expect(requestAnimationFrameMock).not.toHaveBeenCalled();
 
-    await fireEvent.change(select, { target: { value: 'Belgique' } });
+    await fireEvent.click(combobox);
+    const option = await screen.findByRole('option', { name: 'Belgique' });
+    await fireEvent.click(option);
 
     await waitFor(() =>
       expect(onMappingChange).toHaveBeenCalledWith(0, 'Belgique')
