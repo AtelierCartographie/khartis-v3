@@ -34,10 +34,16 @@
   import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
   import { resetVisualClassification } from '../shared/classification-reset.utils';
   import { coerceString, parseOpacityToSlider } from '../../utils/coerce.utils';
-  import {
-    mapPatternTypeToPatternId,
-    type PatternParams
-  } from '$lib/features/commons/components/palette-popover/palette.constants';
+  import { mapPatternTypeToPatternId } from '$lib/features/commons/components/palette-popover/palette.constants';
+  import { patternPaletteFromLegacy } from '$lib/features/commons/services/pattern-palette.service';
+  import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
+
+  const DEFAULT_MISSING_DATA_PATTERN_CONFIG: PatternPaletteConfig = {
+    shape: 'line',
+    angle: 45,
+    scale: 0.7,
+    color: '#000000'
+  };
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -142,8 +148,9 @@
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
   let missingDataPattern = $state<boolean>(false);
-  let missingDataPatternId = $state<string>('diagonal');
-  let missingDataPatternParams = $state<PatternParams>({ size: 4, scale: 8 });
+  let missingDataPatternConfig = $state<PatternPaletteConfig>(
+    DEFAULT_MISSING_DATA_PATTERN_CONFIG
+  );
   const enabled = $derived.by(() => {
     const primitiveFilters =
       visualization?.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
@@ -169,16 +176,17 @@
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
       missingDataPattern = visualization.missingData.pattern ?? false;
-      missingDataPatternId =
-        visualization.missingData.patternId ??
-        mapPatternTypeToPatternId(
-          visualization.missingData.patternType,
-          'diagonal'
-        );
-      missingDataPatternParams = visualization.missingData.patternParams ?? {
-        size: 4,
-        scale: 8
-      };
+      missingDataPatternConfig =
+        visualization.missingData.patternConfig ??
+        patternPaletteFromLegacy(
+          visualization.missingData.patternId ??
+            mapPatternTypeToPatternId(
+              visualization.missingData.patternType,
+              'diagonal'
+            ),
+          visualization.missingData.patternParams
+        ) ??
+        DEFAULT_MISSING_DATA_PATTERN_CONFIG;
     }
   });
 
@@ -274,13 +282,9 @@
     onMissingDataChange?.({ pattern: value });
   }
 
-  function handleMissingDataPatternStyleChange(
-    patternId: string,
-    params: PatternParams
-  ) {
-    missingDataPatternId = patternId;
-    missingDataPatternParams = params;
-    onMissingDataChange?.({ patternId, patternParams: params });
+  function handleMissingDataPatternStyleChange(config: PatternPaletteConfig) {
+    missingDataPatternConfig = config;
+    onMissingDataChange?.({ patternConfig: config });
   }
 
   function handleOpenDiscretization() {
@@ -380,8 +384,7 @@
       showMissingData={showMissingData}
       missingDataColor={missingDataColor}
       missingDataPattern={missingDataPattern}
-      missingDataPatternId={missingDataPatternId}
-      missingDataPatternParams={missingDataPatternParams}
+      missingDataPatternConfig={missingDataPatternConfig}
       sectionTitle={m.fill()}
       selectableDataFields={selectableDataFields}
       getFacetsSelectedFieldIds={facetsSelection.getSelectedFieldIds}

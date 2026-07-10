@@ -23,6 +23,66 @@ import { hexToRgb } from '../../commons/utils/color-utils';
 
 const MISSING_CLASS_COLOR = '#808080';
 
+export function getClassIndexForValue(
+  value: number,
+  breaks: readonly number[] | undefined,
+  classCount: number
+): number | null {
+  if (!breaks?.length || classCount <= 0) {
+    return null;
+  }
+
+  if (classCount === breaks.length + 1) {
+    const firstBreak = breaks[0];
+    if (firstBreak === undefined) {
+      return 0;
+    }
+
+    if (value < firstBreak) {
+      return 0;
+    }
+
+    for (let i = 1; i < breaks.length; i++) {
+      const upperBreak = breaks[i];
+      if (upperBreak !== undefined && value < upperBreak) {
+        return i;
+      }
+    }
+
+    return classCount - 1;
+  }
+
+  if (breaks.length === classCount) {
+    for (let i = breaks.length - 1; i >= 0; i--) {
+      const lowerBreak = breaks[i];
+      if (lowerBreak !== undefined && value >= lowerBreak) {
+        return Math.min(i, classCount - 1);
+      }
+    }
+
+    return 0;
+  }
+
+  if (breaks.length < 2) {
+    return classCount - 1;
+  }
+
+  for (let i = 0; i < breaks.length - 1; i++) {
+    const lowerBreak = breaks[i];
+    const upperBreak = breaks[i + 1];
+    if (
+      lowerBreak !== undefined &&
+      upperBreak !== undefined &&
+      value >= lowerBreak &&
+      value < upperBreak
+    ) {
+      return Math.min(i, classCount - 1);
+    }
+  }
+
+  return classCount - 1;
+}
+
 export function getColorForValue(
   value: number,
   breaks: readonly number[] | undefined,
@@ -32,63 +92,12 @@ export function getColorForValue(
     return hexToRgb(MISSING_CLASS_COLOR);
   }
 
-  if (colors.length === breaks.length + 1) {
-    if (breaks.length === 0) {
-      return hexToRgb(colors[0] ?? MISSING_CLASS_COLOR);
-    }
-
-    const firstBreak = breaks[0];
-    if (firstBreak === undefined) {
-      return hexToRgb(colors[0] ?? MISSING_CLASS_COLOR);
-    }
-
-    if (value < firstBreak) {
-      return hexToRgb(colors[0] ?? MISSING_CLASS_COLOR);
-    }
-
-    for (let i = 1; i < breaks.length; i++) {
-      const upperBreak = breaks[i];
-      const color = colors[i];
-      if (upperBreak !== undefined && color && value < upperBreak) {
-        return hexToRgb(color);
-      }
-    }
-
-    return hexToRgb(colors[colors.length - 1] ?? MISSING_CLASS_COLOR);
+  const index = getClassIndexForValue(value, breaks, colors.length);
+  if (index === null) {
+    return hexToRgb(MISSING_CLASS_COLOR);
   }
 
-  if (breaks.length === colors.length) {
-    for (let i = breaks.length - 1; i >= 0; i--) {
-      const lowerBreak = breaks[i];
-      const color = colors[Math.min(i, colors.length - 1)];
-      if (lowerBreak !== undefined && color && value >= lowerBreak) {
-        return hexToRgb(color);
-      }
-    }
-
-    return hexToRgb(colors[0] ?? MISSING_CLASS_COLOR);
-  }
-
-  if (breaks.length < 2) {
-    return hexToRgb(colors[colors.length - 1] ?? MISSING_CLASS_COLOR);
-  }
-
-  for (let i = 0; i < breaks.length - 1; i++) {
-    const lowerBreak = breaks[i];
-    const upperBreak = breaks[i + 1];
-    const color = colors[Math.min(i, colors.length - 1)];
-    if (
-      lowerBreak !== undefined &&
-      upperBreak !== undefined &&
-      color &&
-      value >= lowerBreak &&
-      value < upperBreak
-    ) {
-      return hexToRgb(color);
-    }
-  }
-
-  return hexToRgb(colors[colors.length - 1] ?? MISSING_CLASS_COLOR);
+  return hexToRgb(colors[index] ?? MISSING_CLASS_COLOR);
 }
 
 export function getSizeForValue(

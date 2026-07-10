@@ -2,6 +2,7 @@ import { m } from '$lib/paraglide/messages';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
 import Textbox from '@borgar/textbox';
 import { bisectLeft, bisectRight } from 'd3-array';
+import type { LegendPatternFill } from './khartis-extensions';
 import {
   createLegendCanvasRect,
   createLegendFont,
@@ -22,6 +23,7 @@ export interface QuantiColorLegendOptions extends CommonLegendTextOptions {
   variable_width?: boolean;
   nodata?: boolean;
   nodataLabel?: string;
+  classPatternFills?: (LegendPatternFill | null)[];
 }
 
 export function draw_quanti_color_legend(
@@ -30,6 +32,7 @@ export function draw_quanti_color_legend(
   options: QuantiColorLegendOptions = {}
 ): LegendSvgDefinition {
   let { variable_width, title, subtitle, note, fontSize, nodata } = options;
+  const classPatternFills = options.classPatternFills;
   variable_width ??= false;
   title ??= null;
   subtitle ??= null;
@@ -140,20 +143,39 @@ export function draw_quanti_color_legend(
     nodata_section_height +
     actual_note_height +
     margin_top;
-  const boxes = index
-    .slice(0, -1)
-    .map((d, i) =>
-      box(x[i], actual_box_top, x[i + 1] - x[i], box_height, colors[d])
-    );
+  const boxes = index.slice(0, -1).map((d, i) => {
+    const patternFill = classPatternFills?.[d];
+    if (patternFill) {
+      return pattern_box(
+        x[i],
+        actual_box_top,
+        x[i + 1] - x[i],
+        box_height,
+        patternFill
+      );
+    }
+
+    return {
+      markup: box(x[i], actual_box_top, x[i + 1] - x[i], box_height, colors[d])
+    };
+  });
+  const boxesDefs = boxes
+    .map((entry) => entry.defs)
+    .filter((defs): defs is string => Boolean(defs))
+    .join('');
   const ticks = x
     .slice(1, -1)
     .map((d) => tick(d, actual_box_top, actual_tick_end));
   const labels = x.map((d, i) => label(d, actual_tick_end, thresholds[i]));
 
-  return create_svg_markup(boxes, ticks, labels);
+  return create_svg_markup(
+    boxes.map((entry) => entry.markup),
+    ticks,
+    labels
+  );
 
   function create_svg_markup(
-    boxes: string[],
+    boxesMarkup: string[],
     ticks: string[],
     labels: string[]
   ): LegendSvgDefinition {
@@ -172,8 +194,9 @@ export function draw_quanti_color_legend(
     return {
       markup: `<g class="quantitative_legend" font-family="${safeFontFamily}">
       ${createLegendCanvasRect(width, height)}
+      ${boxesDefs ? `<defs>${boxesDefs}</defs>` : ''}
       <g class="box" stroke="none">
-        ${boxes.join('')}
+        ${boxesMarkup.join('')}
       </g>
       <g class="ticks" stroke="black">
         ${ticks.join('')}
@@ -238,6 +261,22 @@ function box(
   fill: string
 ): string {
   return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeSvgAttribute(fill)}"/>`;
+}
+
+function pattern_box(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  patternFill: LegendPatternFill
+): { markup: string; defs?: string } {
+  const backgroundRect = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="#ffffff"/>`;
+  const patternRect = `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeSvgAttribute(patternFill.fillUrl)}" opacity="1"/>`;
+
+  return {
+    markup: `${backgroundRect}${patternRect}`,
+    defs: patternFill.defs
+  };
 }
 
 function tick(x: number, y1: number, y2: number): string {
