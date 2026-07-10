@@ -16,37 +16,54 @@ const LOCAL_ENV_FILES = ['.env', '.env.deploy.local'];
 const DEFAULT_PORT = 22;
 const PUBLIC_URL_CHECK_TIMEOUT_MS = 15_000;
 const SFTP_CLOSE_TIMEOUT_MS = 5_000;
-const STAGING_TAG_PATTERN =
-  /^v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-staging\.(?<staging>\d+)$/;
+// Accept legacy -staging.N and current -pprd.N prereleases so existing tags stay deployable.
+const PPRD_TAG_PATTERN =
+  /^v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-(?:staging|pprd)\.(?<prerelease>\d+)$/;
+const PROD_TAG_PATTERN = /^v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$/;
 
 const TARGETS = {
   pprd: {
-    tagPattern: STAGING_TAG_PATTERN,
+    tagPattern: PPRD_TAG_PATTERN,
     basePathEnv: 'KHARTIS_BASE_PATH_PPRD',
     remoteDirLeaf: 'pprd',
     remoteDirEnv: 'KHARTIS_SFTP_REMOTE_DIR_PPRD',
     publicUrlEnv: 'KHARTIS_PUBLIC_URL_PPRD',
     uploadEnabled: true
+  },
+  prod: {
+    tagPattern: PROD_TAG_PATTERN,
+    basePathEnv: 'KHARTIS_BASE_PATH_PROD',
+    remoteDirLeaf: 'prod',
+    remoteDirEnv: 'KHARTIS_SFTP_REMOTE_DIR_PROD',
+    publicUrlEnv: 'KHARTIS_PUBLIC_URL_PROD',
+    uploadEnabled: true,
+    productionConfirmation: true
   }
 };
 
 const TARGET_ALIASES = {
   pprd: 'pprd',
-  staging: 'pprd'
+  staging: 'pprd',
+  prod: 'prod',
+  production: 'prod'
 };
 
 const usage = `Usage:
   pnpm deploy:pprd
   pnpm deploy:pprd:dry-run
+  pnpm deploy:prod
+  pnpm deploy:prod:dry-run
   pnpm deploy:pprd -- --tag <tag>
-  pnpm deploy:pprd:dry-run -- --tag <tag>
+  pnpm deploy:prod -- --tag <tag>
 
-Required local environment:
+Required local environment (shared):
   KHARTIS_SFTP_HOST
   KHARTIS_SFTP_HOST_FINGERPRINT_SHA256
   KHARTIS_SFTP_USER
-  KHARTIS_BASE_PATH_PPRD
-  KHARTIS_SFTP_REMOTE_DIR_PPRD
+
+Per-target base path and remote directory (the remote dir must end with html/<leaf>):
+  pprd: KHARTIS_BASE_PATH_PPRD, KHARTIS_SFTP_REMOTE_DIR_PPRD (ends with html/pprd)
+  prod: KHARTIS_BASE_PATH_PROD, KHARTIS_SFTP_REMOTE_DIR_PROD (ends with html/prod)
 
 Authentication, choose one:
   KHARTIS_SFTP_PASSWORD
@@ -55,14 +72,14 @@ Authentication, choose one:
 Optional:
   KHARTIS_SFTP_PORT
   KHARTIS_SFTP_PASSPHRASE
-  KHARTIS_PUBLIC_URL_PPRD
+  KHARTIS_PUBLIC_URL_PPRD, KHARTIS_PUBLIC_URL_PROD
 
 Local env files:
   ${LOCAL_ENV_FILES.join(', ')} are supported.
+  pprd deploys the latest v*-pprd.* prerelease (legacy v*-staging.* accepted); prod deploys the latest stable v*.*.* tag.
   The build is uploaded to a temporary remote directory, then swapped into
   place with two quick renames; the previous version is removed afterwards.
-  Use --tag to deploy an older staging release than the latest tag.
-  PRD is intentionally not supported by this local deployment script.
+  Use --tag to deploy a specific release. prod asks you to type the tag to confirm.
   Do not commit real SFTP values. Keep secrets in ignored local env files or your shell.`;
 
 async function main() {
@@ -118,7 +135,8 @@ async function main() {
       targetName,
       tag,
       target.remoteDirLeaf,
-      options.dryRun
+      options.dryRun,
+      target.productionConfirmation === true
     );
   }
 
@@ -263,8 +281,8 @@ async function findLatestTag(tagPattern) {
     .map((tag) => tag.trim())
     .filter(Boolean)
     .filter((tag) => tagPattern.test(tag))
-    .map(parseVersionedStagingTag)
-    .sort(compareVersionedStagingTagsDesc);
+    .map((tag) => parseVersionedTag(tag, tagPattern))
+    .sort(compareVersionedTagsDesc);
 
   const [tag] = tags;
   if (!tag) {
@@ -275,10 +293,10 @@ async function findLatestTag(tagPattern) {
   return tag.name;
 }
 
-function parseVersionedStagingTag(tag) {
-  const match = STAGING_TAG_PATTERN.exec(tag);
+function parseVersionedTag(tag, tagPattern) {
+  const match = tagPattern.exec(tag);
   if (!match?.groups) {
-    throw new Error(`Tag "${tag}" does not match the staging tag pattern.`);
+    throw new Error(`Tag "${tag}" does not match the expected tag pattern.`);
   }
 
   return {
@@ -286,16 +304,19 @@ function parseVersionedStagingTag(tag) {
     major: Number(match.groups.major),
     minor: Number(match.groups.minor),
     patch: Number(match.groups.patch),
-    staging: Number(match.groups.staging)
+    prerelease:
+      match.groups.prerelease !== undefined
+        ? Number(match.groups.prerelease)
+        : 0
   };
 }
 
-function compareVersionedStagingTagsDesc(left, right) {
+function compareVersionedTagsDesc(left, right) {
   return (
     right.major - left.major ||
     right.minor - left.minor ||
     right.patch - left.patch ||
-    right.staging - left.staging
+    right.prerelease - left.prerelease
   );
 }
 
@@ -516,8 +537,28 @@ async function promptHidden(question) {
   });
 }
 
-async function confirmDeployment(target, tag, remoteDir, dryRun) {
+async function confirmDeployment(
+  target,
+  tag,
+  remoteDir,
+  dryRun,
+  requireTagEcho
+) {
   const action = dryRun ? 'dry run' : 'deployment';
+
+  if (!dryRun && requireTagEcho) {
+    const answer = await promptVisible(
+      `PRODUCTION ${action} of ${tag} to ${target} (remote target: ${remoteDir}).\n` +
+        `Type the tag "${tag}" exactly to confirm: `
+    );
+    if (answer !== tag) {
+      throw new Error(
+        'Deployment cancelled: tag confirmation did not match. Use --tag <tag> to pick another release.'
+      );
+    }
+    return;
+  }
+
   const answer = await promptVisible(
     `Confirm ${action} of ${tag} to ${target} (remote target: ${remoteDir})? [y/N] `
   );
