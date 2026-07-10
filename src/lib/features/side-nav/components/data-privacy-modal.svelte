@@ -1,6 +1,7 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages';
   import { consentStore } from '$lib/features/commons/stores/consent.store.svelte';
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import {
     Button,
     ComposedModal,
@@ -11,13 +12,6 @@
   import { Information } from 'carbon-icons-svelte';
 
   let isOpen = $state(false);
-  const analyticsConsentStatus = $derived(
-    !consentStore.hasConsented
-      ? m.cookie_settings_modal_consent_unset()
-      : consentStore.analyticsAllowed
-        ? m.cookie_settings_modal_consent_allowed()
-        : m.cookie_settings_modal_consent_declined()
-  );
 
   function openModal() {
     isOpen = true;
@@ -27,12 +21,12 @@
     isOpen = false;
   }
 
-  function acceptAnalyticsConsent() {
-    consentStore.acceptAll();
-  }
-
-  function declineAnalyticsConsent() {
-    consentStore.declineAll();
+  function handleAnalyticsConsentToggle(checked: boolean) {
+    if (checked) {
+      consentStore.acceptAll();
+    } else {
+      consentStore.declineAll();
+    }
   }
 </script>
 
@@ -55,31 +49,17 @@
       <p class="cookie-settings-copy">
         {m.cookie_settings_modal_description()}
       </p>
-      <div class="analytics-consent-controls">
-        <p class="analytics-consent-status">
-          <strong>{m.cookie_settings_modal_current_choice_label()} :</strong>
-          {analyticsConsentStatus}
-        </p>
-        <div class="analytics-consent-actions">
-          <Button
-            size="small"
-            kind="secondary"
-            disabled={consentStore.hasConsented &&
-              consentStore.analyticsAllowed}
-            on:click={acceptAnalyticsConsent}
-          >
-            {m.cookie_settings_modal_consent_accept()}
-          </Button>
-          <Button
-            size="small"
-            kind="secondary"
-            disabled={consentStore.hasConsented &&
-              !consentStore.analyticsAllowed}
-            on:click={declineAnalyticsConsent}
-          >
-            {m.cookie_settings_modal_consent_decline()}
-          </Button>
-        </div>
+      <div class="analytics-consent-control">
+        <Switch
+          size="sm"
+          labelText={m.cookie_settings_modal_analytics_label()}
+          hideLabel
+          labelA={m.cookie_settings_modal_consent_declined()}
+          labelB={m.cookie_settings_modal_consent_allowed()}
+          showStateLabel
+          toggled={consentStore.analyticsAllowed}
+          onchange={handleAnalyticsConsentToggle}
+        />
       </div>
     </section>
   </ModalBody>
@@ -115,20 +95,8 @@
     line-height: 1.5;
   }
 
-  .analytics-consent-controls {
+  .analytics-consent-control {
     display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
     margin-top: var(--cds-spacing-03);
-  }
-
-  .analytics-consent-status {
-    margin: 0;
-  }
-
-  .analytics-consent-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--cds-spacing-03);
   }
 </style>

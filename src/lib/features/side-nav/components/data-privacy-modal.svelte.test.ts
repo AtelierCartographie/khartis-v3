@@ -30,7 +30,7 @@ describe('DataPrivacyModal', () => {
     mocks.consentState.analyticsAllowed = false;
   });
 
-  it('should expose analytics consent actions from the main menu privacy entry', async () => {
+  it('should expose the analytics consent switch from the main menu cookie entry', async () => {
     const Component = (await import('./data-privacy-modal.svelte')).default;
     render(Component);
 
@@ -42,23 +42,40 @@ describe('DataPrivacyModal', () => {
 
     await fireEvent.click(screen.getByTestId('sidenav-cookie-consent'));
 
-    expect(screen.getByText('Aucun choix enregistré')).toBeTruthy();
     expect(screen.getByText('Cookies Google Analytics')).toBeTruthy();
+    expect(screen.getByRole('switch')).toBeTruthy();
+  });
 
-    await fireEvent.click(
-      screen.getByRole('button', {
-        name: "Autoriser la mesure d'audience"
-      })
-    );
-    await fireEvent.click(
-      screen.getByRole('button', {
-        name: "Refuser la mesure d'audience"
-      })
-    );
+  it('should accept analytics consent when the switch is turned on', async () => {
+    const Component = (await import('./data-privacy-modal.svelte')).default;
+    render(Component);
+
+    await fireEvent.click(screen.getByTestId('sidenav-cookie-consent'));
+    await fireEvent.change(screen.getByRole('switch'), {
+      target: { checked: true }
+    });
 
     await waitFor(() => {
       expect(mocks.acceptAllMock).toHaveBeenCalledOnce();
+    });
+    expect(mocks.declineAllMock).not.toHaveBeenCalled();
+  });
+
+  it('should decline analytics consent when the switch is turned off', async () => {
+    mocks.consentState.hasConsented = true;
+    mocks.consentState.analyticsAllowed = true;
+
+    const Component = (await import('./data-privacy-modal.svelte')).default;
+    render(Component);
+
+    await fireEvent.click(screen.getByTestId('sidenav-cookie-consent'));
+    await fireEvent.change(screen.getByRole('switch'), {
+      target: { checked: false }
+    });
+
+    await waitFor(() => {
       expect(mocks.declineAllMock).toHaveBeenCalledOnce();
     });
+    expect(mocks.acceptAllMock).not.toHaveBeenCalled();
   });
 });
