@@ -248,10 +248,11 @@ Les tests client jsdom ne tournent pas en CI car `jsdom` ne simule pas DuckDB WA
 
 ## Déploiement
 
-Khartis est un site statique. Le déploiement local versionné est limité à la
-PPRD et documenté dans [DEPLOYMENT.md](DEPLOYMENT.md). Il récupère les tags
-depuis GitHub, sélectionne la dernière release staging sémantique, vérifie que
-le workflow `release.yml` est vert pour le commit du tag, puis build dans un
+Khartis est un site statique. Le déploiement local versionné couvre la PPRD
+(branche `staging`, prereleases `vX.Y.Z-pprd.N`) et la PROD (releases stables
+`vX.Y.Z`), documenté dans [DEPLOYMENT.md](DEPLOYMENT.md). Il récupère les tags
+depuis GitHub, sélectionne la dernière release correspondante, vérifie que le
+workflow `release.yml` est vert pour le commit du tag, puis build dans un
 worktree temporaire avant toute connexion SFTP.
 
 ```bash
