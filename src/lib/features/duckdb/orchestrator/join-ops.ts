@@ -202,10 +202,24 @@ async function ensureSimilarityCached(
       unmatched_count AS (
         SELECT COUNT(*) AS count FROM unmatched
       ),
+      -- Fuzzy similarity is meaningless between code identifiers (INSEE, NUTS,
+      -- ISO3...): '85271' ≈ '85212' is pure noise. Treat the source column as
+      -- codes when every value casts to a number, or when all values share one
+      -- fixed short length (≥ 3 distinct values so tiny name sets don't trip it).
+      source_code_signals AS (
+        SELECT
+          COUNT(*) FILTER (WHERE TRY_CAST(normalized_name AS DOUBLE) IS NULL) = 0 AS all_numeric,
+          (COUNT(DISTINCT length(normalized_name)) = 1
+            AND MAX(length(normalized_name)) <= 8
+            AND COUNT(DISTINCT normalized_name) >= 3) AS fixed_length_codes
+        FROM candidates
+      ),
       bounded_unmatched AS (
         SELECT u.*
-        FROM unmatched u, unmatched_count c
+        FROM unmatched u, unmatched_count c, source_code_signals s
         WHERE c.count <= ${MAX_FUZZY_JOIN_CANDIDATES}
+          AND NOT s.all_numeric
+          AND NOT s.fixed_length_codes
       ),
       fuzzy_raw AS (
         SELECT

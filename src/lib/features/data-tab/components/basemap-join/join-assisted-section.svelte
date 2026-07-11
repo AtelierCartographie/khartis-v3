@@ -646,6 +646,7 @@
                           )}
                           {#key joinedValueSignature}
                             <ComboBox
+                              portalMenu
                               items={joinedRowOptions}
                               selectedId={row.basemapValue}
                               placeholder={row.basemapValue}
@@ -750,9 +751,6 @@
         </button>
         {#if toVerifyExpanded}
           <div class="category-body">
-            <div class="inline-banner inline-banner-warning">
-              {m.join_to_verify_explanation()}
-            </div>
             <div class="join-table join-table-warning">
               <div class="table-header">
                 <div class="table-header-left">
@@ -810,6 +808,7 @@
                         )}
                         {#key basemapComboBoxItems}
                           <ComboBox
+                            portalMenu
                             id={`join-${i}`}
                             items={toVerifyItems}
                             selectedId={selectedMapping}
@@ -941,6 +940,7 @@
                         {#if basemapComboBoxItems.length > 0 && onManualCorrection}
                           {#key basemapComboBoxItems}
                             <ComboBox
+                              portalMenu
                               items={basemapComboBoxItems}
                               placeholder={m.join_unrecognized_correction_placeholder()}
                               labelText={m.join_select_label_unrecognized({
@@ -1384,12 +1384,6 @@
   .inline-banner-info {
     background-color: #edf5ff;
     border-left-color: #0043ce;
-    color: #161616;
-  }
-
-  .inline-banner-warning {
-    background-color: #fcf4d6;
-    border-left-color: #f1c21b;
     color: #161616;
   }
 

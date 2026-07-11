@@ -109,7 +109,6 @@ describe('JoinAssistedSection', () => {
     );
     expect(requestAnimationFrameMock).not.toHaveBeenCalled();
 
-    expect(screen.getByText(m.join_to_verify_explanation())).toBeTruthy();
     expect(
       screen.getByLabelText(m.join_match_score_label({ score: 92 }))
     ).toBeTruthy();
