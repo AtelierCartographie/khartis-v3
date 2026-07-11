@@ -291,6 +291,38 @@ describe('exact_claimed_ids deduplication', () => {
     expect(frb!.matches).toEqual([]);
   });
 
+  it('matches reordered names via word-sorted comparison (Korea, North → North Korea)', async () => {
+    await run(
+      db,
+      `INSERT INTO basemap_attributes VALUES
+        ('KP', 'Corée du Nord', 'name_fren', 'coree du nord', '${TEST_BASEMAP}', 5),
+        ('KP', 'North Korea', 'name_engl', 'north korea', '${TEST_BASEMAP}', 5),
+        ('KR', 'Corée du Sud', 'name_fren', 'coree du sud', '${TEST_BASEMAP}', 5),
+        ('KR', 'Korea, Rep.', 'name_engl', 'korea rep', '${TEST_BASEMAP}', 5)`
+    );
+    await run(db, `CREATE OR REPLACE TABLE user_kp (geo VARCHAR)`);
+    await run(db, `INSERT INTO user_kp VALUES ('Korea, North'), ('Lyon')`);
+
+    const Duck = makeDuckClient(db);
+    const quality = await computeJoinStats(
+      makeDataset('user_kp'),
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck
+    );
+
+    // Prefix-weighted Jaro-Winkler alone prefers 'Korea, Rep.' (South Korea);
+    // the word-sorted comparison must rank 'North Korea' (KP) first instead.
+    const north = quality.entities.find((e) => e.dataValue === 'Korea, North');
+    expect(north!.status).toBe(JoinStatus.TO_VERIFY);
+    expect(north!.candidates![0]).toMatchObject({
+      id: 'KP',
+      name: 'North Korea'
+    });
+    expect(north!.candidates![0].score).toBeGreaterThan(0.95);
+    expect(north!.candidates![0].score).toBeLessThan(1);
+  });
+
   it('builds the similarity cache only once for concurrent synthesis requests', async () => {
     await run(db, `CREATE OR REPLACE TABLE user_data3 (geo VARCHAR)`);
     await run(
