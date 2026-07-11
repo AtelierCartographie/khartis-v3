@@ -238,6 +238,59 @@ describe('exact_claimed_ids deduplication', () => {
     expect(joined[0].label).toBe(candidates[0].name);
   });
 
+  it('disables fuzzy suggestions when the source column holds numeric codes', async () => {
+    await run(db, `CREATE OR REPLACE TABLE user_codes (geo VARCHAR)`);
+    await run(
+      db,
+      `INSERT INTO user_codes VALUES ('01234'), ('56789'), ('99999')`
+    );
+
+    const Duck = makeDuckClient(db);
+    const quality = await computeJoinStats(
+      makeDataset('user_codes'),
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck
+    );
+
+    const known = quality.entities.find((e) => e.dataValue === '01234');
+    expect(known!.status).toBe(JoinStatus.JOINED);
+
+    // '99999' is close to '56789'/'11111' in Jaro-Winkler terms, but fuzzy
+    // matching between codes is noise: it must stay unrecognized.
+    const unknown = quality.entities.find((e) => e.dataValue === '99999');
+    expect(unknown!.status).toBe(JoinStatus.UNRECOGNIZED);
+    expect(unknown!.matches).toEqual([]);
+  });
+
+  it('disables fuzzy suggestions for fixed-length alphanumeric codes (ISO3-like)', async () => {
+    await run(
+      db,
+      `INSERT INTO basemap_attributes VALUES
+        ('FR001', 'FRA', 'iso', 'fra', '${TEST_BASEMAP}', 5),
+        ('DE001', 'DEU', 'iso', 'deu', '${TEST_BASEMAP}', 5)`
+    );
+    await run(db, `CREATE OR REPLACE TABLE user_iso (geo VARCHAR)`);
+    await run(db, `INSERT INTO user_iso VALUES ('FRA'), ('DEU'), ('FRB')`);
+
+    const Duck = makeDuckClient(db);
+    const quality = await computeJoinStats(
+      makeDataset('user_iso'),
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck
+    );
+
+    expect(quality.entities.find((e) => e.dataValue === 'FRA')!.status).toBe(
+      JoinStatus.JOINED
+    );
+
+    // 'FRB' ≈ 'FRA' scores ~0.93 in Jaro-Winkler but is a distinct code
+    const frb = quality.entities.find((e) => e.dataValue === 'FRB');
+    expect(frb!.status).toBe(JoinStatus.UNRECOGNIZED);
+    expect(frb!.matches).toEqual([]);
+  });
+
   it('builds the similarity cache only once for concurrent synthesis requests', async () => {
     await run(db, `CREATE OR REPLACE TABLE user_data3 (geo VARCHAR)`);
     await run(
