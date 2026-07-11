@@ -221,17 +221,36 @@ async function ensureSimilarityCached(
           AND NOT s.all_numeric
           AND NOT s.fixed_length_codes
       ),
+      -- Jaro-Winkler is prefix-weighted, so 'korea north' scores closer to
+      -- 'korea rep' than to 'north korea'. Comparing word-sorted forms as well
+      -- recovers reordered names; the 0.99 factor keeps them below an exact
+      -- match so they stay in the to-verify bucket.
+      sorted_unmatched AS (
+        SELECT
+          u.*,
+          array_to_string(list_sort(string_split(u.normalized_name, ' ')), ' ') AS normalized_sorted
+        FROM bounded_unmatched u
+      ),
+      sorted_attributes AS (
+        SELECT
+          ba.*,
+          array_to_string(list_sort(string_split(ba.normalized, ' ')), ' ') AS normalized_sorted
+        FROM basemap_attributes ba
+      ),
       fuzzy_raw AS (
         SELECT
           u.original_name,
           u.source_dup_count,
-          jaro_winkler_similarity(u.normalized_name, ba.normalized, 0.85) AS match_score,
+          GREATEST(
+            jaro_winkler_similarity(u.normalized_name, ba.normalized, 0.85),
+            0.99 * jaro_winkler_similarity(u.normalized_sorted, ba.normalized_sorted, 0.85)
+          ) AS match_score,
           ba.id AS match_id,
           ba.raw AS match_raw,
           ba.variant AS match_variant,
           ba.basemap AS match_basemap,
           ba.basemap_count AS match_basemap_count
-        FROM bounded_unmatched u, basemap_attributes ba
+        FROM sorted_unmatched u, sorted_attributes ba
       ),
       fuzzy_matches AS (
         SELECT

@@ -40,7 +40,18 @@
     text: string;
     foldedText: string;
     searchAliases: Array<{ value: string; folded: string }>;
+    disabled?: boolean;
+    separator?: boolean;
   }
+
+  const SUGGESTIONS_SEPARATOR_ITEM: ComboBoxItem = {
+    id: '__join_suggestions_separator__',
+    text: '',
+    foldedText: '',
+    searchAliases: [],
+    disabled: true,
+    separator: true
+  };
 
   interface HighlightSegment {
     text: string;
@@ -183,6 +194,7 @@
 
   function shouldFilterBasemapItem(item: ComboBoxItem, value: string): boolean {
     const query = foldForSearch(value.trim());
+    if (item.separator) return !query;
     if (!query) return true;
     if (fuzzyMatch(item.foldedText, query, COMBO_FUZZY_OPTIONS).matched) {
       return true;
@@ -430,10 +442,13 @@
     if (suggestedItems.length === 0) {
       return basemapComboBoxItems;
     }
-    return [
-      ...suggestedItems,
-      ...basemapComboBoxItems.filter((item) => !suggestedValues.has(item.id))
-    ];
+    const remainingItems = basemapComboBoxItems.filter(
+      (item) => !suggestedValues.has(item.id)
+    );
+    if (remainingItems.length === 0) {
+      return suggestedItems;
+    }
+    return [...suggestedItems, SUGGESTIONS_SEPARATOR_ITEM, ...remainingItems];
   }
 
   interface RowTooltip {
@@ -649,23 +664,29 @@
   }
 </script>
 
-{#snippet comboItemContent(display: ComboItemDisplay)}
-  <span class="combo-item">
-    <span class="combo-item-text">
-      {#each display.textSegments as segment, i (i)}
-        {#if segment.match}<mark class="combo-item-match">{segment.text}</mark
-          >{:else}{segment.text}{/if}
-      {/each}
-    </span>
-    {#if display.aliasSegments}
-      <span class="combo-item-alias">
-        ≈&nbsp;{#each display.aliasSegments as segment, i (i)}
+{#snippet comboItemContent(comboItem: ComboBoxItem, query: string)}
+  {#if comboItem.separator}
+    <span class="combo-separator">{m.join_combobox_all_identifiers()}</span>
+  {:else}
+    {@const display = buildComboItemDisplay(comboItem, query)}
+    <span class="combo-item">
+      <span class="combo-item-text">
+        {#each display.textSegments as segment, i (i)}
           {#if segment.match}<mark class="combo-item-match">{segment.text}</mark
             >{:else}{segment.text}{/if}
         {/each}
       </span>
-    {/if}
-  </span>
+      {#if display.aliasSegments}
+        <span class="combo-item-alias">
+          ≈&nbsp;{#each display.aliasSegments as segment, i (i)}
+            {#if segment.match}<mark class="combo-item-match"
+                >{segment.text}</mark
+              >{:else}{segment.text}{/if}
+          {/each}
+        </span>
+      {/if}
+    </span>
+  {/if}
 {/snippet}
 
 <div class="join-assisted-section">
@@ -789,10 +810,8 @@
                               let:item
                             >
                               {@render comboItemContent(
-                                buildComboItemDisplay(
-                                  item as ComboBoxItem,
-                                  getActiveComboQuery(`joined-${row.dataValue}`)
-                                )
+                                item as ComboBoxItem,
+                                getActiveComboQuery(`joined-${row.dataValue}`)
                               )}
                             </ComboBox>
                           {/key}
@@ -966,10 +985,8 @@
                             let:item
                           >
                             {@render comboItemContent(
-                              buildComboItemDisplay(
-                                item as ComboBoxItem,
-                                getActiveComboQuery(rowKey)
-                              )
+                              item as ComboBoxItem,
+                              getActiveComboQuery(rowKey)
                             )}
                           </ComboBox>
                         {/key}
@@ -1099,10 +1116,8 @@
                               let:item
                             >
                               {@render comboItemContent(
-                                buildComboItemDisplay(
-                                  item as ComboBoxItem,
-                                  getActiveComboQuery(`unrecognized-${entity}`)
-                                )
+                                item as ComboBoxItem,
+                                getActiveComboQuery(`unrecognized-${entity}`)
                               )}
                             </ComboBox>
                           {/key}
@@ -1699,6 +1714,24 @@
     background: none;
     color: inherit;
     font-weight: 700;
+  }
+
+  .combo-separator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  .combo-separator::after {
+    content: '';
+    flex: 1;
+    border-top: 1px solid #d1d1d1;
   }
 
   :global([data-floating-portal] [id^='menu-join-'].bx--list-box__menu) {
