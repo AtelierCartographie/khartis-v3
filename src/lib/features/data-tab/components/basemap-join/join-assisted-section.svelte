@@ -6,7 +6,9 @@
     ComboBox,
     InlineNotification,
     Select,
-    SelectItem
+    SelectItem,
+    fuzzyMatch,
+    highlightSegments
   } from 'carbon-components-svelte';
   import {
     CheckmarkFilled,
@@ -36,7 +38,18 @@
   interface ComboBoxItem {
     id: string;
     text: string;
-    searchText: string;
+    foldedText: string;
+    searchAliases: Array<{ value: string; folded: string }>;
+  }
+
+  interface HighlightSegment {
+    text: string;
+    match: boolean;
+  }
+
+  interface ComboItemDisplay {
+    textSegments: HighlightSegment[];
+    aliasSegments: HighlightSegment[] | null;
   }
 
   interface JoinedEntityRow {
@@ -139,19 +152,84 @@
     Array.from(joinedBasemapValueSet).sort().join('')
   );
 
-  function buildBasemapComboBoxItem(value: string): ComboBoxItem {
-    const aliases = basemapAliasesByValue?.[value] ?? [];
-    const searchText = [value, ...aliases.map((alias) => alias.value)]
-      .filter(Boolean)
-      .join('\n')
-      .toLowerCase();
-    return { id: value, text: value, searchText };
+  function foldForSearch(value: string): string {
+    return value
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
   }
 
+  function buildBasemapComboBoxItem(value: string): ComboBoxItem {
+    const aliases = basemapAliasesByValue?.[value] ?? [];
+    const seenAliases = new SvelteSet<string>([value]);
+    const searchAliases: ComboBoxItem['searchAliases'] = [];
+    for (const alias of aliases) {
+      if (!alias.value || seenAliases.has(alias.value)) continue;
+      seenAliases.add(alias.value);
+      searchAliases.push({
+        value: alias.value,
+        folded: foldForSearch(alias.value)
+      });
+    }
+    return {
+      id: value,
+      text: value,
+      foldedText: foldForSearch(value),
+      searchAliases
+    };
+  }
+
+  const COMBO_FUZZY_OPTIONS = { threshold: 0.3 };
+
   function shouldFilterBasemapItem(item: ComboBoxItem, value: string): boolean {
-    const query = value.trim().toLowerCase();
+    const query = foldForSearch(value.trim());
     if (!query) return true;
-    return item.searchText.includes(query);
+    if (fuzzyMatch(item.foldedText, query, COMBO_FUZZY_OPTIONS).matched) {
+      return true;
+    }
+    return item.searchAliases.some(
+      (alias) => fuzzyMatch(alias.folded, query, COMBO_FUZZY_OPTIONS).matched
+    );
+  }
+
+  let activeComboQuery = $state<{ key: string; query: string } | null>(null);
+
+  function setActiveComboQuery(key: string, event: Event): void {
+    const target = event.target as HTMLInputElement | null;
+    activeComboQuery = { key, query: target?.value ?? '' };
+  }
+
+  function getActiveComboQuery(key: string): string {
+    return activeComboQuery?.key === key ? activeComboQuery.query.trim() : '';
+  }
+
+  function buildComboItemDisplay(
+    item: ComboBoxItem,
+    rawQuery: string
+  ): ComboItemDisplay {
+    const plainText: HighlightSegment[] = [{ text: item.text, match: false }];
+    const query = foldForSearch(rawQuery);
+    if (!query) return { textSegments: plainText, aliasSegments: null };
+
+    const textMatch = fuzzyMatch(item.foldedText, query, COMBO_FUZZY_OPTIONS);
+    if (textMatch.matched && textMatch.indices.length > 0) {
+      return {
+        textSegments: highlightSegments(item.text, textMatch.indices),
+        aliasSegments: null
+      };
+    }
+
+    for (const alias of item.searchAliases) {
+      const aliasMatch = fuzzyMatch(alias.folded, query, COMBO_FUZZY_OPTIONS);
+      if (aliasMatch.matched && aliasMatch.indices.length > 0) {
+        return {
+          textSegments: plainText,
+          aliasSegments: highlightSegments(alias.value, aliasMatch.indices)
+        };
+      }
+    }
+
+    return { textSegments: plainText, aliasSegments: null };
   }
 
   function buildJoinedRowOptions(currentBasemapValue: string): ComboBoxItem[] {
@@ -226,6 +304,7 @@
     fallback: string,
     value: string | number | undefined
   ): void {
+    activeComboQuery = null;
     const selectedValue = normalizeSelectedValue(value, fallback);
     toVerifySelectedMappings[rowKey] = selectedValue;
     onMappingChange?.(index, selectedValue);
@@ -319,6 +398,7 @@
     entity: string,
     item: ComboBoxItem | undefined
   ): void {
+    activeComboQuery = null;
     if (item) {
       pendingUnrecognizedSelections.set(entity, item.text);
     } else {
@@ -481,6 +561,12 @@
     }
   }
 
+  $effect(() => {
+    if (toVerifyExpanded && toVerifyCount > 0 && basemapValues.length === 0) {
+      onRequestBasemapValues?.();
+    }
+  });
+
   function toggleUnrecognized(): void {
     const nextExpanded = !unrecognizedExpanded;
     unrecognizedExpanded = nextExpanded;
@@ -563,6 +649,25 @@
   }
 </script>
 
+{#snippet comboItemContent(display: ComboItemDisplay)}
+  <span class="combo-item">
+    <span class="combo-item-text">
+      {#each display.textSegments as segment, i (i)}
+        {#if segment.match}<mark class="combo-item-match">{segment.text}</mark
+          >{:else}{segment.text}{/if}
+      {/each}
+    </span>
+    {#if display.aliasSegments}
+      <span class="combo-item-alias">
+        ≈&nbsp;{#each display.aliasSegments as segment, i (i)}
+          {#if segment.match}<mark class="combo-item-match">{segment.text}</mark
+            >{:else}{segment.text}{/if}
+        {/each}
+      </span>
+    {/if}
+  </span>
+{/snippet}
+
 <div class="join-assisted-section">
   <div
     class="visually-hidden"
@@ -629,7 +734,7 @@
                   </div>
                 </div>
                 <div class="join-table-scroll" bind:this={joinedScrollEl}>
-                  {#each joinedEntitiesList as row (row.dataValue)}
+                  {#each joinedEntitiesList as row, joinedIndex (row.dataValue)}
                     {@const joinedTooltip = buildRowTooltip(
                       row.basemapValue,
                       row.otherIdentifiers
@@ -647,6 +752,8 @@
                           {#key joinedValueSignature}
                             <ComboBox
                               portalMenu
+                              autoHighlight="first-match"
+                              id={`join-joined-${joinedIndex}`}
                               items={joinedRowOptions}
                               selectedId={row.basemapValue}
                               placeholder={row.basemapValue}
@@ -656,7 +763,13 @@
                               hideLabel
                               size="sm"
                               shouldFilterItem={shouldFilterBasemapItem}
+                              on:input={(e) =>
+                                setActiveComboQuery(
+                                  `joined-${row.dataValue}`,
+                                  e
+                                )}
                               on:select={(e) => {
+                                activeComboQuery = null;
                                 const item = e.detail.selectedItem as
                                   ComboBoxItem | undefined;
                                 const nextValue = item?.text;
@@ -673,7 +786,15 @@
                                   );
                                 }
                               }}
-                            />
+                              let:item
+                            >
+                              {@render comboItemContent(
+                                buildComboItemDisplay(
+                                  item as ComboBoxItem,
+                                  getActiveComboQuery(`joined-${row.dataValue}`)
+                                )
+                              )}
+                            </ComboBox>
                           {/key}
                         {:else}
                           <div class="select-placeholder" aria-hidden="true">
@@ -809,6 +930,7 @@
                         {#key basemapComboBoxItems}
                           <ComboBox
                             portalMenu
+                            autoHighlight="first-match"
                             id={`join-${i}`}
                             items={toVerifyItems}
                             selectedId={resolveDisplayedBasemapValue(
@@ -820,8 +942,10 @@
                             hideLabel
                             size="sm"
                             shouldFilterItem={(item, value) =>
-                              value === selectedMapping ||
+                              value ===
+                                resolveDisplayedBasemapValue(selectedMapping) ||
                               shouldFilterBasemapItem(item, value)}
+                            on:input={(e) => setActiveComboQuery(rowKey, e)}
                             on:select={(e) =>
                               handleToVerifyMappingChange(
                                 rowKey,
@@ -839,7 +963,15 @@
                                 row.selectedMapping,
                                 undefined
                               )}
-                          />
+                            let:item
+                          >
+                            {@render comboItemContent(
+                              buildComboItemDisplay(
+                                item as ComboBoxItem,
+                                getActiveComboQuery(rowKey)
+                              )
+                            )}
+                          </ComboBox>
                         {/key}
                       {:else}
                         <div class="select-placeholder" aria-hidden="true">
@@ -928,7 +1060,7 @@
                 </div>
               </div>
               <div class="join-table-scroll" bind:this={unrecognizedScrollEl}>
-                {#each unknowns as entity (entity)}
+                {#each unknowns as entity, unknownIndex (entity)}
                   {@const hasPendingSelection =
                     pendingUnrecognizedSelections.has(entity)}
                   {@const unrecognizedTooltip = buildRowTooltip(
@@ -943,6 +1075,8 @@
                           {#key basemapComboBoxItems}
                             <ComboBox
                               portalMenu
+                              autoHighlight="first-match"
+                              id={`join-unrecognized-${unknownIndex}`}
                               items={basemapComboBoxItems}
                               placeholder={m.join_unrecognized_correction_placeholder()}
                               labelText={m.join_select_label_unrecognized({
@@ -951,13 +1085,26 @@
                               hideLabel
                               size="sm"
                               shouldFilterItem={shouldFilterBasemapItem}
+                              on:input={(e) =>
+                                setActiveComboQuery(
+                                  `unrecognized-${entity}`,
+                                  e
+                                )}
                               on:select={(e) =>
                                 handleUnrecognizedSelect(
                                   entity,
                                   e.detail.selectedItem as
                                     ComboBoxItem | undefined
                                 )}
-                            />
+                              let:item
+                            >
+                              {@render comboItemContent(
+                                buildComboItemDisplay(
+                                  item as ComboBoxItem,
+                                  getActiveComboQuery(`unrecognized-${entity}`)
+                                )
+                              )}
+                            </ComboBox>
                           {/key}
                         {:else}
                           <Select
@@ -1525,6 +1672,39 @@
     letter-spacing: 0.02em;
     color: var(--cds-text-secondary, #525252);
     white-space: nowrap;
+  }
+
+  .combo-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .combo-item-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .combo-item-alias {
+    font-size: 0.75rem;
+    color: var(--cds-text-secondary, #525252);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .combo-item :global(mark.combo-item-match) {
+    background: none;
+    color: inherit;
+    font-weight: 700;
+  }
+
+  :global([data-floating-portal] [id^='menu-join-'].bx--list-box__menu) {
+    min-width: 100%;
+    width: max-content;
+    max-width: 26rem;
   }
 
   .cell-select {

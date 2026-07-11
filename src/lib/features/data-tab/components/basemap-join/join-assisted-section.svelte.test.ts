@@ -121,4 +121,34 @@ describe('JoinAssistedSection', () => {
       expect(onMappingChange).toHaveBeenCalledWith(0, 'Belgique')
     );
   });
+
+  it('filters options with accent-insensitive fuzzy matching', async () => {
+    render(JoinAssistedSection, {
+      joinRows: [
+        {
+          dataValue: 'Frnce',
+          selectedMapping: 'France',
+          basemapOptions: ['Belgique', 'France']
+        }
+      ],
+      duplicates: [],
+      unknowns: [],
+      joinedCount: 0,
+      toVerifyCount: 1,
+      linkedVariableName: 'Country',
+      basemapValues: ['France', 'Belgique'],
+      onFinalizeJoin: vi.fn(),
+      onMappingChange: vi.fn()
+    });
+
+    const combobox = await screen.findByRole('combobox', {
+      name: m.join_select_label_to_verify({ entity: 'Frnce' })
+    });
+
+    await fireEvent.click(combobox);
+    await fireEvent.input(combobox, { target: { value: 'bélgq' } });
+
+    await screen.findByRole('option', { name: /Belgique/ });
+    expect(screen.queryByRole('option', { name: /France/ })).toBeNull();
+  });
 });
