@@ -20,12 +20,15 @@ import { join_macros } from '$lib/features/duckdb/macros/join';
 import {
   computeJoinSynthesis,
   computeJoinStats,
+  finalizeJoin,
   invalidateSimilarityCache,
   type DuckDBClientForJoin
 } from '$lib/features/duckdb/orchestrator/join-ops';
 import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
+import { JOINED_BASEMAP_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import type { DuckDBDataset } from '$lib/features/duckdb/types';
+import { DuckDBSimplifiedType } from '$lib/features/duckdb/enums';
 import {
   createTestInstance,
   destroyTestInstance,
@@ -64,13 +67,16 @@ const FAKE_BASEMAP_METADATA: BasemapMetadata = {
   layers: []
 };
 
-function makeDataset(tableName: string): DuckDBDataset {
+function makeDataset(
+  tableName: string,
+  columns: DuckDBDataset['columns'] = []
+): DuckDBDataset {
   return {
     id: 'test-dataset',
     tableName,
     sourceFileId: 'test',
     name: 'test',
-    columns: [],
+    columns,
     rowCount: 0,
     metadata: { processedAt: new Date(), fileType: 'csv' as never }
   };
@@ -185,6 +191,51 @@ describe('exact_claimed_ids deduplication', () => {
     const code = quality.entities.find((e) => e.dataValue === '69123');
     expect(code).toBeDefined();
     expect(code!.status).toBe(JoinStatus.JOINED);
+  });
+
+  it('orders to-verify candidates by score and aligns the preselection with the finalized join', async () => {
+    await run(db, `CREATE OR REPLACE TABLE user_data4 (geo VARCHAR)`);
+    await run(db, `INSERT INTO user_data4 VALUES ('Saint-Colombe')`);
+
+    const Duck = makeDuckClient(db);
+    const dataset = makeDataset('user_data4', [
+      { name: 'geo', type_simple: DuckDBSimplifiedType.STRING }
+    ]);
+    const quality = await computeJoinStats(
+      dataset,
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck
+    );
+
+    const st = quality.entities.find((e) => e.dataValue === 'Saint-Colombe');
+    expect(st).toBeDefined();
+    expect(st!.status).toBe(JoinStatus.TO_VERIFY);
+
+    // Candidates carry score/type/variant and come back best-first
+    const candidates = st!.candidates!;
+    expect(candidates.length).toBeGreaterThan(1);
+    const scores = candidates.map((c) => c.score);
+    expect([...scores].sort((a, b) => b - a)).toEqual(scores);
+    expect(candidates[0]).toMatchObject({
+      id: 'SC_01',
+      name: 'Sainte-Colombe',
+      type: 'partial',
+      variant: 'nom'
+    });
+    expect(candidates[0].score).toBeGreaterThan(0.9);
+    expect(candidates[0].score).toBeLessThan(1);
+    expect(st!.matches![0]).toBe('Sainte-Colombe');
+
+    // The finalized join must apply exactly the candidate the UI preselects
+    await finalizeJoin(dataset, FAKE_BASEMAP_METADATA, 'geo', Duck);
+    const joined = (await Duck.query(
+      `SELECT "${JOINED_BASEMAP_COLUMN.ID}" AS id, "${JOINED_BASEMAP_COLUMN.LABEL}" AS label FROM user_data4`,
+      { format: 'array' }
+    )) as Array<{ id: string; label: string }>;
+    expect(joined).toHaveLength(1);
+    expect(joined[0].id).toBe(candidates[0].id);
+    expect(joined[0].label).toBe(candidates[0].name);
   });
 
   it('builds the similarity cache only once for concurrent synthesis requests', async () => {

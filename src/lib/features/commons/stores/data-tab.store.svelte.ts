@@ -538,7 +538,8 @@ export const dataTabActions = {
       .map((e) => ({
         dataValue: e.dataValue,
         basemapOptions: e.matches || [],
-        selectedMapping: e.matches && e.matches.length > 0 ? e.matches[0] : ''
+        selectedMapping: e.matches && e.matches.length > 0 ? e.matches[0] : '',
+        candidates: e.candidates
       }));
 
     dataTabInternalState.basemapJoin.joinedEntities =

@@ -29,6 +29,14 @@ export interface JoinedEntity {
   otherIdentifiers?: string[];
 }
 
+export interface JoinCandidate {
+  id: string;
+  name: string;
+  score: number;
+  type: 'exact' | 'partial';
+  variant: string | null;
+}
+
 export interface IgnoredEntity {
   dataValue: string;
   basemapValue?: string;
@@ -49,6 +57,7 @@ export interface BasemapJoinState {
     dataValue: string;
     basemapOptions: string[];
     selectedMapping: string;
+    candidates?: JoinCandidate[];
   }>;
   duplicateLines: Array<{ dataValue: string; lines: number[] }>;
 }
