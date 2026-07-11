@@ -811,7 +811,9 @@
                             portalMenu
                             id={`join-${i}`}
                             items={toVerifyItems}
-                            selectedId={selectedMapping}
+                            selectedId={resolveDisplayedBasemapValue(
+                              selectedMapping
+                            )}
                             labelText={m.join_select_label_to_verify({
                               entity: row.dataValue
                             })}
