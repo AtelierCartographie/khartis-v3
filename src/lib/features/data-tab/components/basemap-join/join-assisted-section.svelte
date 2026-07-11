@@ -1182,132 +1182,149 @@
         {/if}
       </div>
 
-      <div class="category-row category-row-duplicates">
-        <button
-          type="button"
-          class="category-row-header"
-          onclick={() => (duplicatesExpanded = !duplicatesExpanded)}
-          aria-expanded={duplicatesExpanded}
-        >
-          <span class="category-icon icon-warning-alt">
-            <WarningAltFilled size={20} />
-          </span>
-          <div class="category-count count-warning-alt">{duplicateCount}</div>
-          <span class="category-label label-warning-alt"
-            >{duplicateCount <= 1
-              ? m.join_entities_duplicate_one()
-              : m.join_entities_duplicate()}</span
+      {#if duplicateCount > 0}
+        <div class="category-row category-row-duplicates">
+          <button
+            type="button"
+            class="category-row-header"
+            onclick={() => (duplicatesExpanded = !duplicatesExpanded)}
+            aria-expanded={duplicatesExpanded}
           >
-          <span class="category-chevron">
-            {#if duplicatesExpanded}
-              <ChevronUp size={20} />
-            {:else}
-              <ChevronDown size={20} />
-            {/if}
-          </span>
-        </button>
-        {#if duplicatesExpanded}
-          <div class="category-body">
-            <div class="inline-banner inline-banner-error">
-              {m.join_duplicates_explanation()}
-            </div>
-            <div class="join-table join-table-error">
-              <div class="table-header">
-                <div class="table-header-left">
-                  <span class="table-header-label">{m.join_data_column()}</span>
-                  {#if linkedVariableName}
-                    <VariableBadge label={linkedVariableName} type="geo-ref" />
-                  {/if}
-                </div>
-                <div class="table-header-right">
-                  <span class="table-header-label">{m.join_lines_column()}</span
-                  >
-                </div>
+            <span class="category-icon icon-warning-alt">
+              <WarningAltFilled size={20} />
+            </span>
+            <div class="category-count count-warning-alt">{duplicateCount}</div>
+            <span class="category-label label-warning-alt"
+              >{duplicateCount <= 1
+                ? m.join_entities_duplicate_one()
+                : m.join_entities_duplicate()}</span
+            >
+            <span class="category-chevron">
+              {#if duplicatesExpanded}
+                <ChevronUp size={20} />
+              {:else}
+                <ChevronDown size={20} />
+              {/if}
+            </span>
+          </button>
+          {#if duplicatesExpanded}
+            <div class="category-body">
+              <div class="inline-banner inline-banner-error">
+                {m.join_duplicates_explanation()}
               </div>
-              {#each duplicates as entity (entity)}
-                <div class="table-row table-row-lines">
-                  <div class="table-cell cell-data">{entity}</div>
-                  <div class="table-cell cell-lines">
-                    {#if duplicateLinesByValue[entity]?.length}
-                      {duplicateLinesByValue[entity].join(', ')}
-                    {:else}
-                      &mdash;
-                    {/if}
-                  </div>
-                </div>
-              {/each}
-            </div>
-          </div>
-        {/if}
-      </div>
-
-      <div class="category-row category-row-ignored">
-        <button
-          type="button"
-          class="category-row-header"
-          onclick={() => (ignoredExpanded = !ignoredExpanded)}
-          aria-expanded={ignoredExpanded}
-        >
-          <span class="category-icon icon-ignored">
-            <Misuse size={20} />
-          </span>
-          <div class="category-count count-ignored">{ignoredCount}</div>
-          <span class="category-label label-ignored"
-            >{ignoredCount <= 1
-              ? m.join_entities_ignored_one()
-              : m.join_entities_ignored()}</span
-          >
-          <span class="category-chevron">
-            {#if ignoredExpanded}
-              <ChevronUp size={20} />
-            {:else}
-              <ChevronDown size={20} />
-            {/if}
-          </span>
-        </button>
-        {#if ignoredExpanded}
-          <div class="category-body">
-            <div class="inline-banner inline-banner-info">
-              {m.join_ignored_explanation()}
-            </div>
-            <div class="join-table join-table-info">
-              <div class="table-header">
-                <div class="table-header-left">
-                  <span class="table-header-label">{m.join_data_column()}</span>
-                  {#if linkedVariableName}
-                    <VariableBadge label={linkedVariableName} type="geo-ref" />
-                  {/if}
-                </div>
-                <div class="table-header-right">
-                  <span class="table-header-label">{m.join_line_column()}</span>
-                </div>
-              </div>
-              {#each ignoredEntities as entry (entry.dataValue)}
-                <div class="table-row table-row-lines">
-                  <div class="table-cell cell-data">{entry.dataValue}</div>
-                  <div class="table-cell cell-lines">
-                    {#if entry.lines.length}
-                      {entry.lines.join(', ')}
-                    {:else}
-                      &mdash;
-                    {/if}
-                  </div>
-                  <div class="row-actions row-actions-compact">
-                    <button
-                      type="button"
-                      class="row-action"
-                      aria-label={m.join_action_restore()}
-                      onclick={() => handleRestore(entry.dataValue)}
+              <div class="join-table join-table-error">
+                <div class="table-header">
+                  <div class="table-header-left">
+                    <span class="table-header-label"
+                      >{m.join_data_column()}</span
                     >
-                      <Renew size={20} />
-                    </button>
+                    {#if linkedVariableName}
+                      <VariableBadge
+                        label={linkedVariableName}
+                        type="geo-ref"
+                      />
+                    {/if}
+                  </div>
+                  <div class="table-header-right">
+                    <span class="table-header-label"
+                      >{m.join_lines_column()}</span
+                    >
                   </div>
                 </div>
-              {/each}
+                {#each duplicates as entity (entity)}
+                  <div class="table-row table-row-lines">
+                    <div class="table-cell cell-data">{entity}</div>
+                    <div class="table-cell cell-lines">
+                      {#if duplicateLinesByValue[entity]?.length}
+                        {duplicateLinesByValue[entity].join(', ')}
+                      {:else}
+                        &mdash;
+                      {/if}
+                    </div>
+                  </div>
+                {/each}
+              </div>
             </div>
-          </div>
-        {/if}
-      </div>
+          {/if}
+        </div>
+      {/if}
+
+      {#if ignoredCount > 0}
+        <div class="category-row category-row-ignored">
+          <button
+            type="button"
+            class="category-row-header"
+            onclick={() => (ignoredExpanded = !ignoredExpanded)}
+            aria-expanded={ignoredExpanded}
+          >
+            <span class="category-icon icon-ignored">
+              <Misuse size={20} />
+            </span>
+            <div class="category-count count-ignored">{ignoredCount}</div>
+            <span class="category-label label-ignored"
+              >{ignoredCount <= 1
+                ? m.join_entities_ignored_one()
+                : m.join_entities_ignored()}</span
+            >
+            <span class="category-chevron">
+              {#if ignoredExpanded}
+                <ChevronUp size={20} />
+              {:else}
+                <ChevronDown size={20} />
+              {/if}
+            </span>
+          </button>
+          {#if ignoredExpanded}
+            <div class="category-body">
+              <div class="inline-banner inline-banner-info">
+                {m.join_ignored_explanation()}
+              </div>
+              <div class="join-table join-table-info">
+                <div class="table-header">
+                  <div class="table-header-left">
+                    <span class="table-header-label"
+                      >{m.join_data_column()}</span
+                    >
+                    {#if linkedVariableName}
+                      <VariableBadge
+                        label={linkedVariableName}
+                        type="geo-ref"
+                      />
+                    {/if}
+                  </div>
+                  <div class="table-header-right">
+                    <span class="table-header-label"
+                      >{m.join_line_column()}</span
+                    >
+                  </div>
+                </div>
+                {#each ignoredEntities as entry (entry.dataValue)}
+                  <div class="table-row table-row-lines">
+                    <div class="table-cell cell-data">{entry.dataValue}</div>
+                    <div class="table-cell cell-lines">
+                      {#if entry.lines.length}
+                        {entry.lines.join(', ')}
+                      {:else}
+                        &mdash;
+                      {/if}
+                    </div>
+                    <div class="row-actions row-actions-compact">
+                      <button
+                        type="button"
+                        class="row-action"
+                        aria-label={m.join_action_restore()}
+                        onclick={() => handleRestore(entry.dataValue)}
+                      >
+                        <Renew size={20} />
+                      </button>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/if}
+        </div>
+      {/if}
     </div>
 
     <div class="join-status-zone">

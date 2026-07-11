@@ -323,6 +323,27 @@ describe('exact_claimed_ids deduplication', () => {
     expect(north!.candidates![0].score).toBeLessThan(1);
   });
 
+  it('excludes ignored values from the finalized join', async () => {
+    await run(db, `CREATE OR REPLACE TABLE user_ignore (geo VARCHAR)`);
+    await run(db, `INSERT INTO user_ignore VALUES ('Lyon'), ('69123')`);
+
+    const Duck = makeDuckClient(db);
+    const dataset = makeDataset('user_ignore', [
+      { name: 'geo', type_simple: DuckDBSimplifiedType.STRING }
+    ]);
+    await finalizeJoin(dataset, FAKE_BASEMAP_METADATA, 'geo', Duck, {
+      excludedValues: ['Lyon']
+    });
+
+    const rows = (await Duck.query(
+      `SELECT geo, "${JOINED_BASEMAP_COLUMN.ID}" AS id FROM user_ignore ORDER BY geo`,
+      { format: 'array' }
+    )) as Array<{ geo: string; id: string | null }>;
+
+    expect(rows.find((r) => r.geo === 'Lyon')!.id).toBeNull();
+    expect(rows.find((r) => r.geo === '69123')!.id).toBe('LY_01');
+  });
+
   it('builds the similarity cache only once for concurrent synthesis requests', async () => {
     await run(db, `CREATE OR REPLACE TABLE user_data3 (geo VARCHAR)`);
     await run(
