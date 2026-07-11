@@ -940,7 +940,8 @@ async function applyCachedJoinAssociation(
   geoColumn: string,
   basemapId: string,
   cacheTableName: string,
-  Duck: DuckDBClientForJoin
+  Duck: DuckDBClientForJoin,
+  excludedValues: string[] = []
 ): Promise<void> {
   const escapedDatasetTable = escapeIdentifier(datasetTableName);
   const escapedGeoColumn = escapeIdentifier(geoColumn);
@@ -950,6 +951,12 @@ async function applyCachedJoinAssociation(
     datasetTableName,
     Duck
   );
+  const excludedValuesClause =
+    excludedValues.length > 0
+      ? `AND original_name NOT IN (${excludedValues
+          .map((value) => `'${escapeSqlString(value)}'`)
+          .join(', ')})`
+      : '';
 
   await Duck.query(`
     CREATE OR REPLACE TABLE "${escapedDatasetTable}" AS
@@ -964,6 +971,7 @@ async function applyCachedJoinAssociation(
       WHERE match_basemap = '${escapedBasemapId}'
         AND match_id IS NOT NULL
         AND typo_match != 'toofar'
+        ${excludedValuesClause}
     ),
     -- IDs claimed by unambiguous exact matches (one candidate → one basemap id)
     exact_claimed_ids AS (
@@ -1000,11 +1008,16 @@ async function applyCachedJoinAssociation(
   `);
 }
 
+export interface FinalizeJoinOptions {
+  excludedValues?: string[];
+}
+
 export async function finalizeJoin(
   dataset: DuckDBDataset,
   basemap: BasemapMetadata,
   geoColumn: string,
-  Duck: DuckDBClientForJoin
+  Duck: DuckDBClientForJoin,
+  options: FinalizeJoinOptions = {}
 ): Promise<FinalizeJoinResult> {
   if (isOSMBasemap(basemap)) {
     return finalizeGPSJoin(dataset, basemap);
@@ -1043,7 +1056,8 @@ export async function finalizeJoin(
     geoColumn,
     basemapId,
     cacheTableName,
-    Duck
+    Duck,
+    options.excludedValues ?? []
   );
 
   return {
