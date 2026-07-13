@@ -21,6 +21,7 @@
   } from 'carbon-icons-svelte';
   import { InfoPopover } from '$lib/features/commons/components/viz-controls';
   import type { BasemapAlias } from '$lib/features/duckdb/orchestrator/join-ops';
+  import type { JoinCandidate } from '$lib/features/commons/types/data-tab.types';
   import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
   type IgnoreSource = 'joined' | 'to_verify' | 'unrecognized';
@@ -29,6 +30,7 @@
     dataValue: string;
     selectedMapping: string;
     basemapOptions: string[];
+    candidates?: JoinCandidate[];
   }
 
   interface ComboBoxItem {
@@ -401,6 +403,34 @@
     return { tags, text: '', disabled: false };
   }
 
+  function getSelectedCandidate(
+    row: JoinRow,
+    selectedMapping: string
+  ): JoinCandidate | undefined {
+    if (!selectedMapping) return undefined;
+    return row.candidates?.find(
+      (c) =>
+        c.name === selectedMapping ||
+        resolveDisplayedBasemapValue(c.name) === selectedMapping
+    );
+  }
+
+  function buildToVerifyTooltip(
+    selectedMapping: string,
+    candidate: JoinCandidate | undefined
+  ): RowTooltip {
+    const base = buildRowTooltip(selectedMapping);
+    if (!candidate) return base;
+    const text =
+      candidate.type === 'exact'
+        ? m.join_match_ambiguous_details()
+        : m.join_match_fuzzy_details({
+            matched: candidate.name,
+            score: Math.round(candidate.score * 100)
+          });
+    return { ...base, text, disabled: false };
+  }
+
   const duplicateLinesByValue = $derived<Record<string, number[]>>(
     Object.fromEntries(duplicateLines.map((d) => [d.dataValue, d.lines]))
   );
@@ -616,6 +646,7 @@
                           )}
                           {#key joinedValueSignature}
                             <ComboBox
+                              portalMenu
                               items={joinedRowOptions}
                               selectedId={row.basemapValue}
                               placeholder={row.basemapValue}
@@ -741,14 +772,34 @@
                     rowKey,
                     row.selectedMapping
                   )}
-                  {@const verifyTooltip = buildRowTooltip(selectedMapping)}
+                  {@const selectedCandidate = getSelectedCandidate(
+                    row,
+                    selectedMapping
+                  )}
+                  {@const matchScorePercent =
+                    selectedCandidate && selectedCandidate.score < 1
+                      ? Math.round(selectedCandidate.score * 100)
+                      : null}
+                  {@const verifyTooltip = buildToVerifyTooltip(
+                    selectedMapping,
+                    selectedCandidate
+                  )}
                   <div class="table-row" use:observeToVerifyRow={rowKey}>
                     <div class="table-cell cell-data">{row.dataValue}</div>
                     <div
                       class="table-cell cell-equals cell-equals-approx"
-                      aria-label={m.join_approximate_indicator()}
+                      aria-label={matchScorePercent !== null
+                        ? m.join_match_score_label({
+                            score: matchScorePercent
+                          })
+                        : m.join_approximate_indicator()}
                     >
-                      ≈
+                      <span class="approx-symbol" aria-hidden="true">≈</span>
+                      {#if matchScorePercent !== null}
+                        <span class="match-score" aria-hidden="true"
+                          >{matchScorePercent}&nbsp;%</span
+                        >
+                      {/if}
                     </div>
                     <div class="table-cell cell-select">
                       {#if visibleToVerifyRows.has(rowKey)}
@@ -757,9 +808,12 @@
                         )}
                         {#key basemapComboBoxItems}
                           <ComboBox
+                            portalMenu
                             id={`join-${i}`}
                             items={toVerifyItems}
-                            selectedId={selectedMapping}
+                            selectedId={resolveDisplayedBasemapValue(
+                              selectedMapping
+                            )}
                             labelText={m.join_select_label_to_verify({
                               entity: row.dataValue
                             })}
@@ -888,6 +942,7 @@
                         {#if basemapComboBoxItems.length > 0 && onManualCorrection}
                           {#key basemapComboBoxItems}
                             <ComboBox
+                              portalMenu
                               items={basemapComboBoxItems}
                               placeholder={m.join_unrecognized_correction_placeholder()}
                               labelText={m.join_select_label_unrecognized({
@@ -1457,6 +1512,19 @@
 
   .cell-equals-approx {
     color: #f1c21b;
+    flex-direction: column;
+    width: auto;
+    min-width: 24px;
+    gap: 1px;
+  }
+
+  .match-score {
+    font-size: 0.625rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    color: var(--cds-text-secondary, #525252);
+    white-space: nowrap;
   }
 
   .cell-select {
