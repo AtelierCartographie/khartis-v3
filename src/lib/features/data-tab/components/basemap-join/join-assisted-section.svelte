@@ -643,12 +643,15 @@
     source: IgnoreSource,
     basemapValue?: string
   ): void {
+    const nextIgnoredCount = ignoredCount + 1;
     onIgnoreEntity?.(dataValue, source, basemapValue);
     announce(
-      m.join_announce_ignored({
-        entity: dataValue,
-        count: ignoredCount + 1
-      })
+      nextIgnoredCount === 1
+        ? m.join_announce_ignored_one({ entity: dataValue })
+        : m.join_announce_ignored({
+            entity: dataValue,
+            count: nextIgnoredCount
+          })
     );
   }
 

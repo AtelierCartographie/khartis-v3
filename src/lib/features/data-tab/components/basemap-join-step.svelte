@@ -1069,7 +1069,14 @@
       return;
     }
 
-    if (joinedCount === 0) {
+    if (
+      joinedCount === 0 &&
+      !isCatalogJoinFinalizedForBasemap(
+        basemap.file,
+        linkedVariableName,
+        resolvedDatasetId
+      )
+    ) {
       return;
     }
 

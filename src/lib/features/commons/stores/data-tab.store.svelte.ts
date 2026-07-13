@@ -14,6 +14,7 @@ import type {
   BasemapJoinState,
   DataTabState,
   IgnoredEntity,
+  JoinCandidate,
   JoinedEntity,
   SerializedDataTabState
 } from '../types/data-tab.types';
@@ -214,6 +215,36 @@ function restoreIgnoredEntities(value: unknown): IgnoredEntity[] {
   });
 }
 
+function restoreJoinCandidates(value: unknown): JoinCandidate[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  return value.flatMap((item): JoinCandidate[] => {
+    if (
+      !isRecord(item) ||
+      typeof item.id !== 'string' ||
+      typeof item.name !== 'string' ||
+      typeof item.score !== 'number' ||
+      !Number.isFinite(item.score) ||
+      item.score < 0 ||
+      item.score > 1 ||
+      (item.type !== 'exact' && item.type !== 'partial') ||
+      (item.variant !== null && typeof item.variant !== 'string')
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        id: item.id,
+        name: item.name,
+        score: item.score,
+        type: item.type,
+        variant: item.variant
+      }
+    ];
+  });
+}
+
 function restoreJoinMappings(value: unknown): BasemapJoinState['joinMappings'] {
   if (!Array.isArray(value)) return [];
 
@@ -227,13 +258,15 @@ function restoreJoinMappings(value: unknown): BasemapJoinState['joinMappings'] {
       return [];
     }
 
-    return [
-      {
-        dataValue: item.dataValue,
-        basemapOptions: restoreStringArray(item.basemapOptions),
-        selectedMapping: item.selectedMapping
-      }
-    ];
+    const mapping: BasemapJoinState['joinMappings'][number] = {
+      dataValue: item.dataValue,
+      basemapOptions: restoreStringArray(item.basemapOptions),
+      selectedMapping: item.selectedMapping
+    };
+    const candidates = restoreJoinCandidates(item.candidates);
+    if (candidates) mapping.candidates = candidates;
+
+    return [mapping];
   });
 }
 
@@ -447,7 +480,14 @@ function serializeDataTabState(): SerializedDataTabState {
         (mapping) => ({
           dataValue: mapping.dataValue,
           basemapOptions: [...mapping.basemapOptions],
-          selectedMapping: mapping.selectedMapping
+          selectedMapping: mapping.selectedMapping,
+          ...(mapping.candidates
+            ? {
+                candidates: mapping.candidates.map((candidate) => ({
+                  ...candidate
+                }))
+              }
+            : {})
         })
       )
     },

@@ -291,6 +291,33 @@ describe('exact_claimed_ids deduplication', () => {
     expect(frb!.matches).toEqual([]);
   });
 
+  it('keeps fuzzy suggestions for distinct place names with the same length', async () => {
+    await run(
+      db,
+      `INSERT INTO basemap_attributes VALUES
+        ('PAR', 'Paris', 'nom', 'paris', '${TEST_BASEMAP}', 5),
+        ('LIL', 'Lille', 'nom', 'lille', '${TEST_BASEMAP}', 5),
+        ('DIJ', 'Dijon', 'nom', 'dijon', '${TEST_BASEMAP}', 5)`
+    );
+    await run(db, `CREATE OR REPLACE TABLE user_place_names (geo VARCHAR)`);
+    await run(
+      db,
+      `INSERT INTO user_place_names VALUES ('Parsi'), ('Lille'), ('Dijon')`
+    );
+
+    const Duck = makeDuckClient(db);
+    const quality = await computeJoinStats(
+      makeDataset('user_place_names'),
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck
+    );
+
+    const typo = quality.entities.find((e) => e.dataValue === 'Parsi');
+    expect(typo!.status).toBe(JoinStatus.TO_VERIFY);
+    expect(typo!.candidates![0].name).toBe('Paris');
+  });
+
   it('matches reordered names via word-sorted comparison (Korea, North → North Korea)', async () => {
     await run(
       db,
