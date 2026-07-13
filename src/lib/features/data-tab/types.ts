@@ -4,6 +4,8 @@ export interface GeocodeColumnItem {
   id: number;
   text: string;
   columnName: string;
+  isGeo?: boolean;
+  confidence?: number;
 }
 
 export interface GeocodeFieldProps {

@@ -208,14 +208,23 @@ async function ensureSimilarityCached(
       ),
       -- Fuzzy similarity is meaningless between code identifiers (INSEE, NUTS,
       -- ISO3...): '85271' ≈ '85212' is pure noise. Treat the source column as
-      -- codes when every value casts to a number, or when all values share one
-      -- fixed short length (≥ 3 distinct values so tiny name sets don't trip it).
+      -- codes when every value casts to a number, or when fixed-length values
+      -- are structurally code-like: each contains a digit, or all are uppercase
+      -- alphabetic codes of at most 3 characters (ISO2/ISO3). A shared length
+      -- alone is not enough because distinct place names can have equal lengths.
       source_code_signals AS (
         SELECT
           COUNT(*) FILTER (WHERE TRY_CAST(normalized_name AS DOUBLE) IS NULL) = 0 AS all_numeric,
           (COUNT(DISTINCT length(normalized_name)) = 1
             AND MAX(length(normalized_name)) <= 8
-            AND COUNT(DISTINCT normalized_name) >= 3) AS fixed_length_codes
+            AND COUNT(DISTINCT normalized_name) >= 3
+            AND (
+              COUNT(*) FILTER (WHERE regexp_matches(original_name, '[0-9]')) = COUNT(*)
+              OR (
+                MAX(length(normalized_name)) <= 3
+                AND COUNT(*) FILTER (WHERE original_name = upper(original_name)) = COUNT(*)
+              )
+            )) AS fixed_length_codes
         FROM candidates
       ),
       bounded_unmatched AS (
