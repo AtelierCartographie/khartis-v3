@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { PROJECT_CONST } from '../constants';
 
 const METADATA_KEY = 'khartis_projects_metadata';
 const CURRENT_KEY = 'khartis_current_project';
@@ -36,6 +37,7 @@ vi.mock('./serializer.service', () => ({
 }));
 
 vi.mock('../core/schema-migration', () => ({
+  assertCurrentProjectSchema: vi.fn(),
   migrateIfNeeded: vi.fn((value: unknown) => value)
 }));
 
@@ -276,7 +278,7 @@ describe('project persistence', () => {
     const project = {
       id: 'project-1',
       manifest: {
-        version: '3.0.0',
+        version: PROJECT_CONST.SCHEMA_VERSION,
         createdAt: new Date('2026-04-16T00:00:00.000Z'),
         updatedAt: new Date('2026-04-16T00:00:00.000Z'),
         name: 'Save Project',
@@ -289,8 +291,6 @@ describe('project persistence', () => {
     mocks.ensureUploadedFileAssets.mockResolvedValue(preparedFile);
 
     const { saveProject } = await import('./persistence.service');
-    const { PROJECT_CONST } = await import('../constants');
-
     await saveProject(project as never);
 
     const storedProject = mocks.prepareForIndexedDB.mock.calls[0]?.[0] as {
@@ -298,7 +298,7 @@ describe('project persistence', () => {
       data: { sourceFiles: unknown[] };
     };
 
-    expect(project.manifest.version).toBe('3.0.0');
+    expect(project.manifest.version).toBe(PROJECT_CONST.SCHEMA_VERSION);
     expect(project.data.sourceFiles[0]).toBe(sourceFile);
     expect(project.data.sourceFiles[0]).not.toHaveProperty('assetRef');
     expect(storedProject).not.toBe(project);
