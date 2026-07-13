@@ -833,6 +833,7 @@
   "join_match_score_label": "Correspondance approximative, similarité estimée à {score} %",
   "join_match_fuzzy_details": "Rapprochée de « {matched} », similarité {score} %.",
   "join_match_ambiguous_details": "Plusieurs entités du fond de carte partagent cet identifiant. Vérifiez que la bonne entité est sélectionnée.",
+  "join_combobox_all_identifiers": "Tous les identifiants",
   "join_lines_column": "Lignes",
   "join_line_column": "Ligne",
   "join_action_ignore": "Ignorer cette entité",

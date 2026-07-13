@@ -833,6 +833,7 @@
   "join_match_score_label": "Approximate match, estimated similarity {score}%",
   "join_match_fuzzy_details": "Matched with “{matched}”, {score}% similarity.",
   "join_match_ambiguous_details": "Several basemap entities share this identifier. Check that the right one is selected.",
+  "join_combobox_all_identifiers": "All identifiers",
   "join_lines_column": "Lines",
   "join_line_column": "Line",
   "join_action_ignore": "Ignore this entity",
