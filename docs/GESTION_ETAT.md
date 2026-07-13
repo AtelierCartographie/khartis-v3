@@ -110,7 +110,6 @@ Zoom page, pan, étape active (Données / Visualisations / Habillage), outil act
 | Store              | Rôle                                                          |
 | ------------------ | ------------------------------------------------------------- |
 | `projectsStore`    | Liste des projets + projet actif                              |
-| `consentStore`     | Consentement RGPD (getter `hasConsented`)                     |
 | `zoomModeStore`    | Mode zoom carte vs page (persisté dans `uiSettings.zoomMode`) |
 | `mapStyleStore`    | Fond de carte actif + couches visibles                        |
 | `annotationsStore` | Annotations SVG overlay                                       |

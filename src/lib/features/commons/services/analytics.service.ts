@@ -2,8 +2,6 @@ import { browser } from '$app/environment';
 import { env } from '$env/dynamic/public';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
-type ConsentValue = 'granted' | 'denied';
-
 type GtagParams = Record<string, string | number | boolean | undefined>;
 type AnalyticsEventName =
   (typeof ANALYTICS_EVENT)[keyof typeof ANALYTICS_EVENT];
@@ -28,25 +26,15 @@ interface PendingAnalyticsEvent {
   params: GtagParams;
 }
 
-type ConsentArgs = [
-  'consent',
-  'default' | 'update',
-  Record<string, ConsentValue>
-];
-
-type DataLayerEntry = IArguments | Record<string, unknown>;
-type GtagFunction = (...args: ConsentArgs) => void;
+type DataLayerEntry = Record<string, unknown>;
 
 declare global {
   interface Window {
     dataLayer?: DataLayerEntry[];
-    gtag?: GtagFunction;
   }
 }
 
 const GOOGLE_TAG_MANAGER_SCRIPT_ID = 'khartis-google-tag-manager';
-const GOOGLE_ANALYTICS_COOKIE_NAMES = new Set(['_ga', '_gid', '_gat']);
-const GOOGLE_ANALYTICS_COOKIE_PREFIXES = ['_ga_', '_gat_', '_gcl_'];
 const MAX_TRACKED_FILE_COUNT = 10;
 const TRACKED_DATA_SOURCE_TYPES = [
   'file_upload',
@@ -100,19 +88,16 @@ const TRACKED_ERROR_TYPES = [
 ] as const;
 
 export const ANALYTICS_EVENT = {
-  ANALYTICS_CONSENT_ACCEPT: 'analytics_consent_accept',
   APP_ERROR: 'app_error',
   APP_OPENED: 'app_opened',
   DATA_IMPORT_COMPLETED: 'data_import_completed',
   EXPORT_COMPLETED: 'export_completed',
-  PAGE_VIEW: 'page_view',
   PROJECT_CREATED: 'project_created',
   PROJECT_OPENED: 'project_opened',
   VISUALIZATION_CREATED: 'visualization_created'
 } as const;
 
 const ANALYTICS_EVENT_PARAMETERS = {
-  [ANALYTICS_EVENT.ANALYTICS_CONSENT_ACCEPT]: [],
   [ANALYTICS_EVENT.APP_ERROR]: ['error_source', 'error_type', 'fatal'],
   [ANALYTICS_EVENT.APP_OPENED]: [],
   [ANALYTICS_EVENT.DATA_IMPORT_COMPLETED]: [
@@ -124,12 +109,6 @@ const ANALYTICS_EVENT_PARAMETERS = {
     'export_target',
     'export_format',
     'export_resolution'
-  ],
-  [ANALYTICS_EVENT.PAGE_VIEW]: [
-    'page_location',
-    'page_path',
-    'page_referrer',
-    'page_title'
   ],
   [ANALYTICS_EVENT.PROJECT_CREATED]: ['source_type', 'file_type', 'file_count'],
   [ANALYTICS_EVENT.PROJECT_OPENED]: ['open_source'],
@@ -143,21 +122,6 @@ function getGtmContainerId(): string {
 function getDataLayer(): DataLayerEntry[] {
   window.dataLayer ??= [];
   return window.dataLayer;
-}
-
-function gtag(..._args: ConsentArgs): void {
-  // Google Tag Manager reads consent commands from the arguments object.
-  // eslint-disable-next-line prefer-rest-params
-  getDataLayer().push(arguments);
-}
-
-function getConsentState(analyticsStorage: ConsentValue) {
-  return {
-    ad_storage: 'denied',
-    ad_user_data: 'denied',
-    ad_personalization: 'denied',
-    analytics_storage: analyticsStorage
-  } satisfies Record<string, ConsentValue>;
 }
 
 function getAllowedTrackingValue(
@@ -214,52 +178,11 @@ function getSafePageReferrer(): string {
   return `${url.origin}${url.pathname}`;
 }
 
-function isGoogleAnalyticsCookieName(cookieName: string): boolean {
-  return (
-    GOOGLE_ANALYTICS_COOKIE_NAMES.has(cookieName) ||
-    GOOGLE_ANALYTICS_COOKIE_PREFIXES.some((prefix) =>
-      cookieName.startsWith(prefix)
-    )
-  );
-}
-
-function getCookieDeletionDomains(hostname: string): string[] {
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return [''];
-  }
-
-  const domains = new Set<string>(['']);
-  const parts = hostname.split('.').filter(Boolean);
-  for (let index = 0; index <= parts.length - 2; index += 1) {
-    const domain = parts.slice(index).join('.');
-    domains.add(domain);
-    domains.add(`.${domain}`);
-  }
-  return [...domains];
-}
-
-function deleteCookie(cookieName: string, domain: string): void {
-  const domainAttribute = domain ? `; Domain=${domain}` : '';
-  document.cookie = `${cookieName}=; Max-Age=0; Path=/; SameSite=Lax${domainAttribute}`;
-}
-
-function clearGoogleAnalyticsCookies(): void {
-  const cookieNames = document.cookie
-    .split(';')
-    .map((cookie) => cookie.trim().split('=')[0])
-    .filter(isGoogleAnalyticsCookieName);
-
-  for (const cookieName of cookieNames) {
-    for (const domain of getCookieDeletionDomains(window.location.hostname)) {
-      deleteCookie(cookieName, domain);
-    }
-  }
-}
-
 function createAnalyticsService() {
   let tagManagerInitialized = false;
   let tagManagerReady = false;
   let enabled = false;
+  let initialEventsTracked = false;
   let globalErrorTrackingInstalled = false;
   let pendingAnalyticsEvents: PendingAnalyticsEvent[] = [];
 
@@ -296,7 +219,7 @@ function createAnalyticsService() {
     document.head.appendChild(script);
   }
 
-  function initializeTagManager(): boolean {
+  function initialize(): boolean {
     if (!browser || !hasContainerId()) {
       return false;
     }
@@ -306,11 +229,11 @@ function createAnalyticsService() {
     }
 
     const containerId = getGtmContainerId();
-    window.gtag = gtag;
-    gtag('consent', 'default', getConsentState('denied'));
     getDataLayer().push({
       page_location: getSafePageLocation(),
-      page_referrer: getSafePageReferrer()
+      page_path: window.location.pathname,
+      page_referrer: getSafePageReferrer(),
+      page_title: document.title
     });
     getDataLayer().push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
     loadScript(containerId, () => {
@@ -319,19 +242,8 @@ function createAnalyticsService() {
         trackInitialEvents();
       }
     });
-    window.gtag('consent', 'update', getConsentState('granted'));
-
     tagManagerInitialized = true;
     return true;
-  }
-
-  function getPageViewProperties(): GtagParams {
-    return {
-      page_location: getSafePageLocation(),
-      page_path: window.location.pathname,
-      page_referrer: getSafePageReferrer(),
-      page_title: document.title
-    };
   }
 
   function getAllowedEventParameters(
@@ -364,23 +276,13 @@ function createAnalyticsService() {
   }
 
   function trackInitialEvents(): void {
-    if (!enabled || !tagManagerReady) {
+    if (!enabled || !tagManagerReady || initialEventsTracked) {
       return;
     }
 
-    trackPageView();
-    trackEvent(ANALYTICS_EVENT.APP_OPENED);
+    initialEventsTracked = true;
+    sendEvent(ANALYTICS_EVENT.APP_OPENED, {});
     flushPendingEvents();
-  }
-
-  function trackPageView(): void {
-    if (!browser || !enabled) {
-      return;
-    }
-
-    if (hasContainerId()) {
-      trackEvent('page_view', getPageViewProperties());
-    }
   }
 
   function trackProjectCreated(files: readonly AnalyticsTrackableFile[]): void {
@@ -476,7 +378,7 @@ function createAnalyticsService() {
     }
 
     enabled = true;
-    if (initializeTagManager()) {
+    if (initialize()) {
       installGlobalErrorTracking();
       trackInitialEvents();
     }
@@ -492,8 +394,6 @@ function createAnalyticsService() {
     }
 
     removeGlobalErrorTracking();
-    window.gtag?.('consent', 'update', getConsentState('denied'));
-    clearGoogleAnalyticsCookies();
   }
 
   function trackEvent(
@@ -516,9 +416,9 @@ function createAnalyticsService() {
   }
 
   return {
+    initialize,
     enable,
     disable,
-    trackPageView,
     trackEvent,
     trackProjectCreated,
     trackProjectOpened,

@@ -53,6 +53,7 @@ This project is indexed by GitNexus as **khartis-v3** (18161 symbols, 33827 rela
 
 - The versioned local deployment helper supports PPRD and PROD. Keep the PROD tag-echo confirmation, green release-workflow gate, host-key verification, atomic remote swap, strict public-route validation, and rollback behavior intact.
 - Treat each target's `KHARTIS_PUBLIC_URL_*` as the source of truth for its SvelteKit base path. A static build has one canonical public route; infrastructure aliases must redirect to it.
+- Cookiebot is the only analytics-consent owner. Khartis may observe `Cookiebot.consent.statistics` and open `Cookiebot.renew()`, but it must not persist a second consent state, emit Consent Mode commands, or manage analytics cookies. Load GTM independently and gate only Khartis custom events.
 - Never commit real SFTP hosts, usernames, remote paths, passwords, private keys, VPN details, or GitLab credentials. Keep them in ignored local env files or the user's shell.
 - Keep `docs/DEPLOYMENT.md` public-safe: document placeholders, commands, and guardrails, not institution-specific secrets or infrastructure values.
 
