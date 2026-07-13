@@ -50,6 +50,10 @@ function isGeometryColumnName(columnName: string): boolean {
 const SIMILARITY_CACHE_PREFIX = '__similarity_cache__';
 const MAX_FUZZY_JOIN_CANDIDATES = 1000;
 const MAX_EXACT_MATCHES_PER_CANDIDATE_BASEMAP = 50;
+// Calibrated on a labeled corpus of realistic typos vs distinct real places:
+// every true typo scores >= 0.93 while noise pairs (toulon/toulouse 0.89,
+// iran/irak 0.88, lyon/laon 0.85...) sit below 0.90. See PR #250.
+const FUZZY_SCORE_CUTOFF = 0.9;
 
 interface SimilarityCacheEntry {
   tableName: string;
@@ -133,7 +137,7 @@ async function ensureSimilarityCached(
     // Phase 1: exact match via equi-join on pre-normalized text (hash join, O(n+m)).
     //          Cap rows per source value and basemap so broad codes such as
     //          department ids cannot cache every commune sharing the same attribute.
-    // Phase 2: fuzzy Jaro-Winkler (score_cutoff=0.85) only on residual unmatched candidates
+    // Phase 2: fuzzy Jaro-Winkler (FUZZY_SCORE_CUTOFF) only on residual unmatched candidates
     //          — bounded because unmatched large code datasets would otherwise cross-join every
     //          source value with every basemap attribute on the browser main thread.
     // Normalization is pre-computed once in the candidates CTE (like the get_similarity macro)
@@ -242,8 +246,8 @@ async function ensureSimilarityCached(
           u.original_name,
           u.source_dup_count,
           GREATEST(
-            jaro_winkler_similarity(u.normalized_name, ba.normalized, 0.85),
-            0.99 * jaro_winkler_similarity(u.normalized_sorted, ba.normalized_sorted, 0.85)
+            jaro_winkler_similarity(u.normalized_name, ba.normalized, ${FUZZY_SCORE_CUTOFF}),
+            0.99 * jaro_winkler_similarity(u.normalized_sorted, ba.normalized_sorted, ${FUZZY_SCORE_CUTOFF})
           ) AS match_score,
           ba.id AS match_id,
           ba.raw AS match_raw,
