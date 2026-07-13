@@ -15,7 +15,10 @@ import {
   openDatabase as openProjectDatabase,
   saveMetadataStoreValue
 } from './database-access.service';
-import { migrateIfNeeded } from '../core/schema-migration';
+import {
+  assertCurrentProjectSchema,
+  migrateIfNeeded
+} from '../core/schema-migration';
 import { estimateProjectStorageSize } from '$lib/features/commons/utils/size-estimation.utils';
 import {
   safeJsonParse,
@@ -67,6 +70,8 @@ async function ensureDb(): Promise<IDBDatabase> {
 async function prepareProjectForStorage(
   project: KhartisProject
 ): Promise<KhartisProject> {
+  assertCurrentProjectSchema(project);
+
   const sourceFiles = project.data.sourceFiles.length
     ? await Promise.all(
         project.data.sourceFiles.map((file) => ensureUploadedFileAssets(file))

@@ -1846,6 +1846,7 @@
   "ellipsis_indicator": "…",
   "toolbar_tab_ellipsis": "...",
   "error_schema_migration_failed": "Schema migration {fromVersion} → {toVersion} failed",
+  "error_unsupported_project_schema": "Unsupported project schema version {version}. Supported projects start at {baselineVersion} and migrate to {currentVersion}.",
   "error_scroll_search_result": "Error scrolling to current search result",
   "error_kml_conversion_failed": "Failed to convert KML/KMZ to GeoJSON",
   "error_process_geo_file": "Failed to process geographic file via DuckDB orchestrator",

@@ -212,15 +212,16 @@ Le format `.kh` est une archive autoportante contenant :
 manifest.json        ← version, dates, nom du projet
 project.json         ← snapshot metadata-only
 assets/
-  <assetId>/         ← chunks du fichier source
-    chunk-0, chunk-1, …
+  <assetId>          ← fichier source compressé dans l'archive
 ```
+
+À l'import, chaque fichier source est découpé en chunks pour son stockage dans IndexedDB. Ce découpage est interne au navigateur et ne modifie pas la structure de l'archive.
 
 **Export** : `projectStore.exportProject()` → `Blob` → téléchargement navigateur.
 
-**Import** : `projectStore.importProject(file)` restaure dans l'ordre : assets IndexedDB → snapshot projet metadata-only → rejeu DuckDB des tables. Sans cet ordre, les références d'assets sont brisées.
+**Import** : `projectStore.importProject(file)` valide l'archive et le schéma, restaure les assets dans IndexedDB, désérialise le snapshot metadata-only, puis rejoue les tables DuckDB. La validation précède l'écriture des assets pour ne pas conserver de données orphelines quand un projet est incompatible.
 
-**Compatibilité** : le format cible est directement l'archive `.kh` multi-entrées. Pas de support legacy pre-release.
+**Compatibilité** : la baseline publique est l'archive `.kh` v2 avec le schéma projet `3.9.0`. Les formats de la phase de développement ne sont pas supportés. Toutes les futures versions publiques doivent conserver une chaîne de migration continue. Voir [PROJECT_FORMAT_COMPATIBILITY.md](PROJECT_FORMAT_COMPATIBILITY.md).
 
 ---
 

@@ -148,16 +148,17 @@ The app runs locally without a `.env` file. The committed `.env.example` is only
 
 The [`docs/`](docs/README.md) folder holds the developer documentation (in French). Start with the index, then dive into the focused documents:
 
-| Document                                        | Covers                                                            |
-| ----------------------------------------------- | ----------------------------------------------------------------- |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md)         | The four pillars, global data flow, technical layers              |
-| [PIPELINE_DONNEES.md](docs/PIPELINE_DONNEES.md) | File import: supported formats, detection, validation, processors |
-| [DUCKDB.md](docs/DUCKDB.md)                     | DuckDB WASM engine: the `Duck` façade, orchestrator, SQL macros   |
-| [MAP.md](docs/MAP.md)                           | Deck.gl / MapLibre rendering, WeakMap caches, projections, layers |
-| [CARTOGRAPHIE.md](docs/CARTOGRAPHIE.md)         | Cartographic concepts: semiology, discretization, color, CRS      |
-| [VISUALISATIONS.md](docs/VISUALISATIONS.md)     | The 3-step workflow, right-toolbar tools, layout, export          |
-| [GESTION_ETAT.md](docs/GESTION_ETAT.md)         | Svelte 5 stores, IndexedDB persistence, project snapshot          |
-| [DEPLOYMENT.md](docs/DEPLOYMENT.md)             | Local PPRD deployment, env vars, SFTP guard rails                 |
+| Document                                                                | Covers                                                            |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md)                                 | The four pillars, global data flow, technical layers              |
+| [PIPELINE_DONNEES.md](docs/PIPELINE_DONNEES.md)                         | File import: supported formats, detection, validation, processors |
+| [DUCKDB.md](docs/DUCKDB.md)                                             | DuckDB WASM engine: the `Duck` façade, orchestrator, SQL macros   |
+| [MAP.md](docs/MAP.md)                                                   | Deck.gl / MapLibre rendering, WeakMap caches, projections, layers |
+| [CARTOGRAPHIE.md](docs/CARTOGRAPHIE.md)                                 | Cartographic concepts: semiology, discretization, color, CRS      |
+| [VISUALISATIONS.md](docs/VISUALISATIONS.md)                             | The 3-step workflow, right-toolbar tools, layout, export          |
+| [GESTION_ETAT.md](docs/GESTION_ETAT.md)                                 | Svelte 5 stores, IndexedDB persistence, project snapshot          |
+| [PROJECT_FORMAT_COMPATIBILITY.md](docs/PROJECT_FORMAT_COMPATIBILITY.md) | Public `.kh` baseline and future migration rules                  |
+| [DEPLOYMENT.md](docs/DEPLOYMENT.md)                                     | Local PPRD deployment, env vars, SFTP guard rails                 |
 
 The full list — including feature architecture, basemaps, legends, PWA, the developer guide, and the glossary — is in [`docs/README.md`](docs/README.md).
 

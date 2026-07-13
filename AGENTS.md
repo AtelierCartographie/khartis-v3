@@ -57,6 +57,15 @@ This project is indexed by GitNexus as **khartis-v3** (18161 symbols, 33827 rela
 - Never commit real SFTP hosts, usernames, remote paths, passwords, private keys, VPN details, or GitLab credentials. Keep them in ignored local env files or the user's shell.
 - Keep `docs/DEPLOYMENT.md` public-safe: document placeholders, commands, and guardrails, not institution-specific secrets or infrastructure values.
 
+## Project and API Compatibility
+
+- Treat `.kh` archive v2 and project schema `3.9.0` as the first public compatibility baseline.
+- Never silently restamp an unknown, missing, old, or future project schema as current.
+- Every public schema bump must add a tested, continuous migration from the previous current version. Never remove a migration published after the `3.9.0` baseline.
+- Every archive-format bump must keep readers for all public versions listed in `PROJECT_CONST.ARCHIVE.SUPPORTED_VERSIONS`, including v2.
+- Preserve public API compatibility through additive changes or deprecation adapters. When a breaking change is unavoidable, introduce a versioned API and document migration before removing the old contract.
+- Follow `docs/PROJECT_FORMAT_COMPATIBILITY.md` whenever changing project persistence, archive import/export, or a public API.
+
 ## Local Validation Safety
 
 - Follow the code-quality plan's validation mode, including Chrome/browser validation when the plan marks an item for browser proof.

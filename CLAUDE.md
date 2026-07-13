@@ -29,6 +29,10 @@ user's shell. `deploy:prod` targets production: it deploys the latest stable
 `v*.*.*` tag, requires a green release run, and asks you to retype the tag to
 confirm. Keep its target under `KHARTIS_*_PROD` env vars, never committed.
 
+### Project and API compatibility
+
+Archive v2 and project schema `3.9.0` are the first public compatibility baseline. Never silently restamp an unsupported schema as current. Every future schema bump requires a tested, continuous migration from the previous current version, and published migrations after `3.9.0` must remain available. An archive-format bump must preserve readers for every public version in `PROJECT_CONST.ARCHIVE.SUPPORTED_VERSIONS`, including v2. Keep public APIs backward-compatible through additive changes or deprecation adapters; introduce a versioned API before an unavoidable break. See `docs/PROJECT_FORMAT_COMPATIBILITY.md`.
+
 ### Tests
 
 Two Vitest projects are defined in `vite.config.ts`:
