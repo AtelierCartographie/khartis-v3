@@ -28,32 +28,17 @@ function dataLayerEntries(): unknown[] {
   return window.dataLayer ?? [];
 }
 
-function isConsentCommand(entry: unknown): entry is ArrayLike<unknown> {
-  return (
-    typeof entry === 'object' &&
-    entry !== null &&
-    typeof (entry as ArrayLike<unknown>).length === 'number'
-  );
-}
-
-function consentCommands(): unknown[][] {
-  return dataLayerEntries()
-    .filter(isConsentCommand)
-    .map((entry) => Array.from(entry));
-}
-
 function dataLayerObjects(): Record<string, unknown>[] {
   return dataLayerEntries().filter(
     (entry): entry is Record<string, unknown> =>
-      typeof entry === 'object' &&
-      entry !== null &&
-      !isConsentCommand(entry) &&
-      'event' in entry
+      typeof entry === 'object' && entry !== null && !Array.isArray(entry)
   );
 }
 
 function trackedEvents(): Record<string, unknown>[] {
-  return dataLayerObjects().filter((entry) => entry.event !== 'gtm.js');
+  return dataLayerObjects().filter(
+    (entry) => 'event' in entry && entry.event !== 'gtm.js'
+  );
 }
 
 function finishTagManagerLoading(): void {
@@ -77,7 +62,6 @@ describe('analyticsService', () => {
     document.title = 'Khartis test';
     window.history.replaceState({}, '', '/workspace?shared=private');
     delete window.dataLayer;
-    delete window.gtag;
   });
 
   afterEach(() => {
@@ -86,10 +70,10 @@ describe('analyticsService', () => {
     }
   });
 
-  it('should load Google Tag Manager and track safe initial events when enabled', async () => {
+  it('should load Google Tag Manager before consent and track initial events once after consent', async () => {
     const { analyticsService } = await loadAnalyticsService();
 
-    expect(analyticsService.enable()).toBe(true);
+    expect(analyticsService.initialize()).toBe(true);
 
     const script = document.querySelector<HTMLScriptElement>(
       '#khartis-google-tag-manager'
@@ -97,45 +81,62 @@ describe('analyticsService', () => {
     expect(script?.src).toContain('https://www.googletagmanager.com/gtm.js');
     expect(script?.src).toContain('GTM-TEST12');
 
-    expect(consentCommands()).toEqual(
-      expect.arrayContaining([
-        [
-          'consent',
-          'default',
-          expect.objectContaining({ analytics_storage: 'denied' })
-        ],
-        [
-          'consent',
-          'update',
-          expect.objectContaining({ analytics_storage: 'granted' })
-        ]
-      ])
-    );
     expect(dataLayerObjects()).toEqual(
-      expect.arrayContaining([expect.objectContaining({ event: 'gtm.js' })])
-    );
-
-    finishTagManagerLoading();
-
-    expect(trackedEvents()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          event: 'page_view',
           page_location: `${window.location.origin}/workspace`,
           page_path: '/workspace',
           page_referrer: '',
           page_title: 'Khartis test'
         }),
-        expect.objectContaining({ event: 'app_opened' })
+        expect.objectContaining({ event: 'gtm.js' })
       ])
     );
-    expect(JSON.stringify(window.dataLayer)).not.toContain('shared=private');
 
-    const serialized = JSON.stringify(window.dataLayer);
-    expect(serialized.indexOf('"default"')).toBeLessThan(
-      serialized.indexOf('"update"')
+    finishTagManagerLoading();
+    expect(trackedEvents()).toEqual([]);
+
+    expect(analyticsService.enable()).toBe(true);
+    analyticsService.enable();
+
+    expect(trackedEvents()).toEqual([
+      expect.objectContaining({ event: 'app_opened' })
+    ]);
+    expect(
+      trackedEvents().filter((entry) => entry.event === 'app_opened')
+    ).toHaveLength(1);
+    expect(
+      dataLayerEntries().every(
+        (entry) => typeof entry === 'object' && entry !== null
+      )
+    ).toBe(true);
+    expect(JSON.stringify(window.dataLayer)).not.toContain('shared=private');
+  });
+
+  it('should queue consented events until Google Tag Manager is ready', async () => {
+    const { analyticsService } = await loadAnalyticsService();
+
+    analyticsService.initialize();
+    analyticsService.enable();
+    analyticsService.trackProjectCreated([
+      { sourceType: 'file_upload', fileType: 'csv' }
+    ]);
+
+    expect(trackedEvents()).toEqual([]);
+
+    finishTagManagerLoading();
+
+    expect(trackedEvents()).toEqual(
+      expect.arrayContaining([
+        { event: 'app_opened' },
+        {
+          event: 'project_created',
+          source_type: 'file_upload',
+          file_type: 'csv',
+          file_count: 1
+        }
+      ])
     );
-    expect(serialized.indexOf('"gtm.start"')).toBeGreaterThan(-1);
   });
 
   it('should not load analytics when no container is configured', async () => {
@@ -226,28 +227,21 @@ describe('analyticsService', () => {
     );
   });
 
-  it('should update consent to denied and clear Google Analytics cookies when disabled', async () => {
+  it('should leave consent state and cookie cleanup to Cookiebot when disabled', async () => {
     const { analyticsService } = await loadAnalyticsService();
 
     document.cookie = '_ga=analytics-cookie; Path=/';
-    document.cookie = '_gid=session-cookie; Path=/';
-    document.cookie = 'khartis_locale=fr; Path=/';
 
-    analyticsService.enable();
+    analyticsService.initialize();
     finishTagManagerLoading();
+    analyticsService.enable();
     analyticsService.disable();
 
-    expect(consentCommands()).toEqual(
-      expect.arrayContaining([
-        [
-          'consent',
-          'update',
-          expect.objectContaining({ analytics_storage: 'denied' })
-        ]
-      ])
-    );
-    expect(document.cookie).not.toContain('_ga=');
-    expect(document.cookie).not.toContain('_gid=');
-    expect(document.cookie).toContain('khartis_locale=fr');
+    expect(document.cookie).toContain('_ga=analytics-cookie');
+    expect(
+      dataLayerEntries().every(
+        (entry) => typeof entry === 'object' && entry !== null
+      )
+    ).toBe(true);
   });
 });

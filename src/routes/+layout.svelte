@@ -2,7 +2,7 @@
   import AppLoader from '$lib/features/commons/components/app-loader.svelte';
   import KeyboardShortcuts from '$lib/features/commons/components/keyboard-shortcuts.svelte';
   import NotificationContainer from '$lib/features/commons/components/notification-container.svelte';
-  import ConsentBanner from '$lib/features/commons/components/consent-banner.svelte';
+  import CookiebotConsent from '$lib/features/commons/components/cookiebot-consent.svelte';
   import PwaServiceWorker from '$lib/features/commons/components/pwa-service-worker.svelte';
   import WorkspaceViewport from '$lib/features/commons/components/workspace-viewport.svelte';
   import {
@@ -424,7 +424,7 @@
 
     <NotificationContainer />
     <PwaServiceWorker />
-    <ConsentBanner />
+    <CookiebotConsent />
   </main>
 {/if}
 

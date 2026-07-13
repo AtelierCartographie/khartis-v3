@@ -1,6 +1,10 @@
 import { unzipSync, zipSync } from 'fflate';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ParseError } from '$lib/features/commons/pipeline.errors';
+import {
+  ParseError,
+  PipelineError
+} from '$lib/features/commons/pipeline.errors';
+import { PROJECT_CONST } from '$lib/features/project-management/constants';
 
 const ensureUploadedFileAssets = vi.fn(async (file) => file);
 const readAssetBytes = vi.fn(async () => new Uint8Array([1, 2, 3, 4]));
@@ -49,7 +53,7 @@ function createProjectFixture() {
   return {
     id: 'project-1',
     manifest: {
-      version: '3.3.0',
+      version: PROJECT_CONST.SCHEMA_VERSION,
       createdAt: new Date('2026-04-16T00:00:00.000Z'),
       updatedAt: new Date('2026-04-16T00:00:00.000Z'),
       name: 'Archive Project',
@@ -105,7 +109,7 @@ describe('project archive format', () => {
       assets: Array<{ assetId: string; path: string }>;
     };
 
-    expect(manifest.archiveVersion).toBe(2);
+    expect(manifest.archiveVersion).toBe(PROJECT_CONST.ARCHIVE.CURRENT_VERSION);
     expect(manifest.assetCount).toBe(1);
     expect(manifest.assets[0]).toEqual(
       expect.objectContaining({
@@ -152,15 +156,15 @@ describe('project archive format', () => {
     expect(readAssetBytes).toHaveBeenCalledWith('asset-prepared');
   });
 
-  it('imports a .kh archive by restoring assets before saving the project', async () => {
+  it('imports a supported .kh archive after validating its project schema', async () => {
     const { importProject } =
       await import('$lib/features/project-management/io/importer');
 
     const archive = zipSync({
       'manifest.json': new TextEncoder().encode(
         JSON.stringify({
-          archiveVersion: 2,
-          appVersion: '3.3.0',
+          archiveVersion: PROJECT_CONST.ARCHIVE.CURRENT_VERSION,
+          appVersion: PROJECT_CONST.SCHEMA_VERSION,
           exportedAt: '2026-04-16T00:00:00.000Z',
           projectId: 'project-1',
           assetCount: 1,
@@ -180,7 +184,7 @@ describe('project archive format', () => {
         JSON.stringify({
           id: 'project-1',
           manifest: {
-            version: '3.3.0',
+            version: PROJECT_CONST.SCHEMA_VERSION,
             createdAt: '2026-04-16T00:00:00.000Z',
             updatedAt: '2026-04-16T00:00:00.000Z',
             name: 'Archive Project',
@@ -233,6 +237,104 @@ describe('project archive format', () => {
     expect(deserialize).toHaveBeenCalledTimes(1);
     expect(saveProject).toHaveBeenCalledTimes(1);
     expect(imported.id).toBe('project-1');
+  });
+
+  it('rejects an unsupported archive version before restoring assets', async () => {
+    const { importProject } =
+      await import('$lib/features/project-management/io/importer');
+
+    const archive = zipSync({
+      'manifest.json': new TextEncoder().encode(
+        JSON.stringify({
+          archiveVersion: 1,
+          appVersion: PROJECT_CONST.SCHEMA_VERSION,
+          exportedAt: '2026-04-16T00:00:00.000Z',
+          projectId: 'project-1',
+          assetCount: 0,
+          assets: []
+        })
+      ),
+      'project.json': new TextEncoder().encode(
+        JSON.stringify({
+          id: 'project-1',
+          manifest: {
+            version: PROJECT_CONST.SCHEMA_VERSION,
+            name: 'Unsupported archive'
+          }
+        })
+      )
+    });
+    const archiveBuffer = archive.buffer.slice(
+      archive.byteOffset,
+      archive.byteOffset + archive.byteLength
+    ) as ArrayBuffer;
+    const file = new File([archiveBuffer], 'unsupported.kh', {
+      type: 'application/octet-stream'
+    });
+
+    await expect(importProject(file)).rejects.toMatchObject({
+      code: 'PARSE_ERROR',
+      details: expect.objectContaining({ archiveVersion: 1 })
+    });
+    expect(migrateIfNeeded).not.toHaveBeenCalled();
+    expect(persistAssetBytes).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unsupported project schema before restoring assets', async () => {
+    const { importProject } =
+      await import('$lib/features/project-management/io/importer');
+    migrateIfNeeded.mockImplementationOnce(() => {
+      throw new PipelineError(
+        'Unsupported project schema',
+        'UNSUPPORTED_PROJECT_SCHEMA_VERSION'
+      );
+    });
+
+    const archive = zipSync({
+      'manifest.json': new TextEncoder().encode(
+        JSON.stringify({
+          archiveVersion: PROJECT_CONST.ARCHIVE.CURRENT_VERSION,
+          appVersion: PROJECT_CONST.SCHEMA_VERSION,
+          exportedAt: '2026-04-16T00:00:00.000Z',
+          projectId: 'project-1',
+          assetCount: 1,
+          assets: [
+            {
+              assetId: 'asset-1',
+              originalName: 'data.csv',
+              mimeType: 'text/csv',
+              size: 4,
+              kind: 'primary',
+              path: 'assets/asset-1'
+            }
+          ]
+        })
+      ),
+      'project.json': new TextEncoder().encode(
+        JSON.stringify({
+          id: 'project-1',
+          manifest: {
+            version: '3.8.0',
+            name: 'Pre-production project'
+          }
+        })
+      ),
+      'assets/asset-1': new Uint8Array([1, 2, 3, 4])
+    });
+    const archiveBuffer = archive.buffer.slice(
+      archive.byteOffset,
+      archive.byteOffset + archive.byteLength
+    ) as ArrayBuffer;
+    const file = new File([archiveBuffer], 'unsupported-schema.kh', {
+      type: 'application/octet-stream'
+    });
+
+    await expect(importProject(file)).rejects.toMatchObject({
+      code: 'UNSUPPORTED_PROJECT_SCHEMA_VERSION'
+    });
+    expect(persistAssetBytes).not.toHaveBeenCalled();
+    expect(deserialize).not.toHaveBeenCalled();
+    expect(saveProject).not.toHaveBeenCalled();
   });
 
   it('rejects invalid .kh archives with a typed parse error', async () => {

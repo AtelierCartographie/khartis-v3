@@ -148,16 +148,17 @@ The app runs locally without a `.env` file. The committed `.env.example` is only
 
 The [`docs/`](docs/README.md) folder holds the developer documentation (in French). Start with the index, then dive into the focused documents:
 
-| Document                                        | Covers                                                            |
-| ----------------------------------------------- | ----------------------------------------------------------------- |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md)         | The four pillars, global data flow, technical layers              |
-| [PIPELINE_DONNEES.md](docs/PIPELINE_DONNEES.md) | File import: supported formats, detection, validation, processors |
-| [DUCKDB.md](docs/DUCKDB.md)                     | DuckDB WASM engine: the `Duck` façade, orchestrator, SQL macros   |
-| [MAP.md](docs/MAP.md)                           | Deck.gl / MapLibre rendering, WeakMap caches, projections, layers |
-| [CARTOGRAPHIE.md](docs/CARTOGRAPHIE.md)         | Cartographic concepts: semiology, discretization, color, CRS      |
-| [VISUALISATIONS.md](docs/VISUALISATIONS.md)     | The 3-step workflow, right-toolbar tools, layout, export          |
-| [GESTION_ETAT.md](docs/GESTION_ETAT.md)         | Svelte 5 stores, IndexedDB persistence, project snapshot          |
-| [DEPLOYMENT.md](docs/DEPLOYMENT.md)             | Local PPRD deployment, env vars, SFTP guard rails                 |
+| Document                                                                | Covers                                                            |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md)                                 | The four pillars, global data flow, technical layers              |
+| [PIPELINE_DONNEES.md](docs/PIPELINE_DONNEES.md)                         | File import: supported formats, detection, validation, processors |
+| [DUCKDB.md](docs/DUCKDB.md)                                             | DuckDB WASM engine: the `Duck` façade, orchestrator, SQL macros   |
+| [MAP.md](docs/MAP.md)                                                   | Deck.gl / MapLibre rendering, WeakMap caches, projections, layers |
+| [CARTOGRAPHIE.md](docs/CARTOGRAPHIE.md)                                 | Cartographic concepts: semiology, discretization, color, CRS      |
+| [VISUALISATIONS.md](docs/VISUALISATIONS.md)                             | The 3-step workflow, right-toolbar tools, layout, export          |
+| [GESTION_ETAT.md](docs/GESTION_ETAT.md)                                 | Svelte 5 stores, IndexedDB persistence, project snapshot          |
+| [PROJECT_FORMAT_COMPATIBILITY.md](docs/PROJECT_FORMAT_COMPATIBILITY.md) | Public `.kh` baseline and future migration rules                  |
+| [DEPLOYMENT.md](docs/DEPLOYMENT.md)                                     | Local PPRD deployment, env vars, SFTP guard rails                 |
 
 The full list — including feature architecture, basemaps, legends, PWA, the developer guide, and the glossary — is in [`docs/README.md`](docs/README.md).
 
@@ -166,7 +167,7 @@ The full list — including feature architecture, basemaps, legends, PWA, the de
 - **Client-side only**: imported data never leaves the browser; the attack surface on a server is nil because there is no data server.
 - **Metadata-only persistence**: project JSON stores styling and references, not source files; raw imports live in IndexedDB asset chunks and are replayed into DuckDB on reopen.
 - **Input hardening**: file names, CSV cells, and user input are sanitized; user-authored SQL expressions pass through `validateExpression()`, which rejects subqueries, multi-statements, and dangerous calls. Quotas cap file sizes (150 MB text/geo, 200 MB binary) and project count.
-- **Consent-first analytics**: Khartis loads the Sciences Po Google Tag Manager container only after user consent, using the container ID from the public `PUBLIC_GTM_CONTAINER_ID` value (no analytics identifier is hard-coded in the repository). Analytics records anonymous, allow-listed usage events only, never project names, file names, data values, column names, or place names. See [analytics configuration](docs/ANALYTICS.md).
+- **Cookiebot-owned analytics consent**: Khartis loads the Sciences Po Google Tag Manager container at startup so Cookiebot can run, using the container ID from the public `PUBLIC_GTM_CONTAINER_ID` value (no analytics identifier is hard-coded in the repository). Khartis sends its anonymous, allow-listed usage events only when Cookiebot grants statistics consent, never project names, file names, data values, column names, or place names. See [analytics configuration](docs/ANALYTICS.md).
 - **Deployment**: the local PPRD and PROD helpers are documented in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md); PROD requires retyping the release tag to confirm. Dependencies are scanned via Dependabot.
 - To report a security vulnerability, see [SECURITY.md](SECURITY.md).
 

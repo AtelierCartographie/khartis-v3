@@ -1,5 +1,7 @@
 import * as d3geo from 'd3-geo';
-import { ScatterplotLayer } from '@deck.gl/layers';
+import { GeoJsonLayer, ScatterplotLayer } from '@deck.gl/layers';
+import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
+import type { FeatureCollection, Polygon } from 'geojson';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LogCategory } from '$lib/features/commons/utils/logger';
 import {
@@ -9,6 +11,32 @@ import {
   PROJECTION_SPHERE_MASK_LAYER_ID,
   PROJECTION_SPHERE_OUTLINE_LAYER_ID
 } from './projection-sphere-mask.utils';
+
+function createCompositeProjection(): ProjectionLike {
+  return {
+    stream: vi.fn(),
+    getSubProjections: () => [
+      {
+        id: 'mainland',
+        projection: d3geo.geoEquirectangular(),
+        bounds: [-10, 35, 40, 72],
+        screenExtent: [
+          [20, 20],
+          [780, 580]
+        ]
+      },
+      {
+        id: 'overseas',
+        projection: d3geo.geoEquirectangular(),
+        bounds: [50, -22, 56, -12],
+        screenExtent: [
+          [20, 500],
+          [140, 580]
+        ]
+      }
+    ]
+  } as unknown as ProjectionLike;
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -124,6 +152,38 @@ describe('projection sphere mask utils', () => {
     expect(layer?.id).toBe(PROJECTION_SPHERE_OUTLINE_LAYER_ID);
     expect(layer?.props.getColor).toEqual([40, 50, 60, 128]);
     expect(layer?.props.getWidth).toBe(2.5);
+  });
+
+  it('uses every composite frame for the mask layer', () => {
+    const layer = createProjectionSphereMaskLayer({
+      projection: createCompositeProjection(),
+      modelMatrix: null,
+      fillColor: [10, 20, 30, 200]
+    }) as GeoJsonLayer | null;
+    const data = layer?.props.data as FeatureCollection<Polygon> | undefined;
+
+    expect(layer).toBeInstanceOf(GeoJsonLayer);
+    expect(layer?.props.filled).toBe(true);
+    expect(layer?.props.stroked).toBe(false);
+    expect(layer?.props.getFillColor).toEqual([10, 20, 30, 200]);
+    expect(data?.features).toHaveLength(2);
+  });
+
+  it('uses every composite frame for the outline layer', () => {
+    const layer = createProjectionSphereOutlineLayer({
+      projection: createCompositeProjection(),
+      modelMatrix: null,
+      color: [40, 50, 60, 128],
+      width: 2.5
+    }) as GeoJsonLayer | null;
+    const data = layer?.props.data as FeatureCollection<Polygon> | undefined;
+
+    expect(layer).toBeInstanceOf(GeoJsonLayer);
+    expect(layer?.props.filled).toBe(false);
+    expect(layer?.props.stroked).toBe(true);
+    expect(layer?.props.getLineColor).toEqual([40, 50, 60, 128]);
+    expect(layer?.props.getLineWidth).toBe(2.5);
+    expect(data?.features).toHaveLength(2);
   });
 
   it('logs and returns null when sphere parsing fails', async () => {
