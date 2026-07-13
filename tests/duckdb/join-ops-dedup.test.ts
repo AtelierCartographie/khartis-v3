@@ -344,6 +344,42 @@ describe('exact_claimed_ids deduplication', () => {
     expect(rows.find((r) => r.geo === '69123')!.id).toBe('LY_01');
   });
 
+  it('keeps realistic typos as suggestions but drops distinct-place noise (cutoff 0.9)', async () => {
+    await run(
+      db,
+      `INSERT INTO basemap_attributes VALUES
+        ('TLS', 'Toulouse', 'nom', 'toulouse', '${TEST_BASEMAP}', 5),
+        ('IRN', 'Iran', 'nom', 'iran', '${TEST_BASEMAP}', 5),
+        ('FRA', 'France', 'nom', 'france', '${TEST_BASEMAP}', 5)`
+    );
+    await run(db, `CREATE OR REPLACE TABLE user_noise (geo VARCHAR)`);
+    await run(
+      db,
+      `INSERT INTO user_noise VALUES ('Frnace'), ('Toulon'), ('Irak')`
+    );
+
+    const Duck = makeDuckClient(db);
+    const quality = await computeJoinStats(
+      makeDataset('user_noise'),
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck
+    );
+
+    // Realistic typo (JW ~0.96): must keep its suggestion
+    const typo = quality.entities.find((e) => e.dataValue === 'Frnace');
+    expect(typo!.status).toBe(JoinStatus.TO_VERIFY);
+    expect(typo!.candidates![0].name).toBe('France');
+
+    // Distinct real places (toulon/toulouse 0.89, irak/iran 0.88): noise,
+    // must stay unrecognized instead of carrying a misleading suggestion
+    for (const noise of ['Toulon', 'Irak']) {
+      const entity = quality.entities.find((e) => e.dataValue === noise);
+      expect(entity!.status).toBe(JoinStatus.UNRECOGNIZED);
+      expect(entity!.matches).toEqual([]);
+    }
+  });
+
   it('builds the similarity cache only once for concurrent synthesis requests', async () => {
     await run(db, `CREATE OR REPLACE TABLE user_data3 (geo VARCHAR)`);
     await run(
