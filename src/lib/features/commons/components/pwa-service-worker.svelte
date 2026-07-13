@@ -1,7 +1,10 @@
 <script lang="ts">
   import { dev } from '$app/environment';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import { factoryResetPwa } from '$lib/features/commons/utils/pwa-reset';
+  import {
+    isPwaCacheForScope,
+    resolvePwaScopeUrl
+  } from '$lib/features/commons/utils/pwa-cache';
   import { onDestroy, onMount } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
   import {
@@ -10,11 +13,8 @@
   } from 'carbon-components-svelte';
   import * as m from '$lib/paraglide/messages';
 
-  const AUTO_RELOAD_GUARD_KEY = 'khartis:auto-reloaded-at';
-  const AUTO_RELOAD_GUARD_WINDOW_MS = 10 * 1000;
   const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
-  let preloadErrorHandler: ((event: Event) => void) | null = null;
   let updateCheckIntervalId: ReturnType<typeof setInterval> | null = null;
 
   const { needRefresh, updateServiceWorker } = useRegisterSW({
@@ -49,60 +49,12 @@
       await updateServiceWorker(true);
     } catch (error) {
       logger.error('Failed to apply SW update', LogCategory.SYSTEM, error);
-      window.location.reload();
+      updatePromptVisible = true;
     }
   }
 
   function dismissUpdate(): void {
     updatePromptVisible = false;
-  }
-
-  function recordAutoReload(): boolean {
-    try {
-      const last = Number(sessionStorage.getItem(AUTO_RELOAD_GUARD_KEY) ?? '0');
-      if (
-        Number.isFinite(last) &&
-        Date.now() - last < AUTO_RELOAD_GUARD_WINDOW_MS
-      ) {
-        return false;
-      }
-      sessionStorage.setItem(AUTO_RELOAD_GUARD_KEY, String(Date.now()));
-      return true;
-    } catch (error) {
-      logger.error(
-        'Failed to update auto-reload session guard',
-        LogCategory.SYSTEM,
-        error
-      );
-      return true;
-    }
-  }
-
-  async function recoverFromStaleAssets(): Promise<void> {
-    if (recordAutoReload()) {
-      window.location.reload();
-      return;
-    }
-    logger.error(
-      'Auto-reload loop detected, performing factory reset',
-      LogCategory.SYSTEM
-    );
-    await factoryResetPwa({ reload: true });
-  }
-
-  function attachStaleAssetRecovery(): void {
-    preloadErrorHandler = (event: Event) => {
-      event.preventDefault();
-      void recoverFromStaleAssets();
-    };
-    window.addEventListener('vite:preloadError', preloadErrorHandler);
-  }
-
-  function detachStaleAssetRecovery(): void {
-    if (preloadErrorHandler) {
-      window.removeEventListener('vite:preloadError', preloadErrorHandler);
-      preloadErrorHandler = null;
-    }
   }
 
   async function requestPersistentStorage(): Promise<void> {
@@ -140,7 +92,6 @@
       clearInterval(updateCheckIntervalId);
       updateCheckIntervalId = null;
     }
-    detachStaleAssetRecovery();
   });
 
   onMount(() => {
@@ -150,25 +101,35 @@
     }
 
     void requestPersistentStorage();
-    attachStaleAssetRecovery();
   });
 
   async function cleanupDevServiceWorker(): Promise<void> {
-    if (!dev || typeof navigator === 'undefined') {
+    if (
+      !dev ||
+      typeof navigator === 'undefined' ||
+      typeof document === 'undefined'
+    ) {
       return;
     }
 
     try {
+      const scopeUrl = resolvePwaScopeUrl(document.baseURI);
       if ('serviceWorker' in navigator) {
         const registrations = await navigator.serviceWorker.getRegistrations();
         await Promise.all(
-          registrations.map((registration) => registration.unregister())
+          registrations
+            .filter((registration) => registration.scope === scopeUrl)
+            .map((registration) => registration.unregister())
         );
       }
 
       if ('caches' in window) {
         const cacheKeys = await window.caches.keys();
-        await Promise.all(cacheKeys.map((cacheKey) => caches.delete(cacheKey)));
+        await Promise.all(
+          cacheKeys
+            .filter((cacheKey) => isPwaCacheForScope(cacheKey, scopeUrl))
+            .map((cacheKey) => caches.delete(cacheKey))
+        );
       }
     } catch (error) {
       logger.error('Dev SW cleanup failed', LogCategory.SYSTEM, error);
