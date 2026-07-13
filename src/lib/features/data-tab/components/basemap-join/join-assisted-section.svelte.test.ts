@@ -71,7 +71,23 @@ describe('JoinAssistedSection', () => {
         {
           dataValue: 'Frnce',
           selectedMapping: 'France',
-          basemapOptions: ['Belgique', 'France', 'France']
+          basemapOptions: ['Belgique', 'France', 'France'],
+          candidates: [
+            {
+              id: 'FR',
+              name: 'France',
+              score: 0.92,
+              type: 'partial' as const,
+              variant: 'nom'
+            },
+            {
+              id: 'BE',
+              name: 'Belgique',
+              score: 0.55,
+              type: 'partial' as const,
+              variant: 'nom'
+            }
+          ]
         }
       ],
       duplicates: [],
@@ -92,6 +108,10 @@ describe('JoinAssistedSection', () => {
       expect((combobox as HTMLInputElement).value).toBe('France')
     );
     expect(requestAnimationFrameMock).not.toHaveBeenCalled();
+
+    expect(
+      screen.getByLabelText(m.join_match_score_label({ score: 92 }))
+    ).toBeTruthy();
 
     await fireEvent.click(combobox);
     const option = await screen.findByRole('option', { name: 'Belgique' });

@@ -25,6 +25,7 @@ import { getLocale } from '$lib/paraglide/runtime';
 import type { Table } from 'apache-arrow/Arrow';
 import { addGeoArrowMetadata } from '$lib/features/map/services/read-geojson-arrow.service';
 import type { DuckDBDataset, FinalizeJoinResult } from '../types';
+import type { JoinCandidate } from '$lib/features/commons/types/data-tab.types';
 import { detectGPSColumns } from './gps-ops';
 
 export type { FinalizeJoinResult };
@@ -201,10 +202,24 @@ async function ensureSimilarityCached(
       unmatched_count AS (
         SELECT COUNT(*) AS count FROM unmatched
       ),
+      -- Fuzzy similarity is meaningless between code identifiers (INSEE, NUTS,
+      -- ISO3...): '85271' ≈ '85212' is pure noise. Treat the source column as
+      -- codes when every value casts to a number, or when all values share one
+      -- fixed short length (≥ 3 distinct values so tiny name sets don't trip it).
+      source_code_signals AS (
+        SELECT
+          COUNT(*) FILTER (WHERE TRY_CAST(normalized_name AS DOUBLE) IS NULL) = 0 AS all_numeric,
+          (COUNT(DISTINCT length(normalized_name)) = 1
+            AND MAX(length(normalized_name)) <= 8
+            AND COUNT(DISTINCT normalized_name) >= 3) AS fixed_length_codes
+        FROM candidates
+      ),
       bounded_unmatched AS (
         SELECT u.*
-        FROM unmatched u, unmatched_count c
+        FROM unmatched u, unmatched_count c, source_code_signals s
         WHERE c.count <= ${MAX_FUZZY_JOIN_CANDIDATES}
+          AND NOT s.all_numeric
+          AND NOT s.fixed_length_codes
       ),
       fuzzy_raw AS (
         SELECT
@@ -310,13 +325,38 @@ async function deriveJoinQualityFromCache(
       WHERE bm.typo_match != 'exact'
         AND bm.match_id NOT IN (SELECT match_id FROM exact_claimed_ids)
     ),
+    -- One candidate per matched raw value (best-scoring row wins), ordered like
+    -- ranked_join in applyCachedJoinAssociation so candidates[0] is the value
+    -- the finalized join will actually apply.
+    candidate_rows AS (
+      SELECT
+        original_name,
+        match_id,
+        match_raw,
+        match_variant,
+        match_score,
+        typo_match,
+        ROW_NUMBER() OVER (
+          PARTITION BY original_name, match_raw
+          ORDER BY match_score DESC, match_id, match_variant
+        ) AS raw_rank
+      FROM filtered_matches
+    ),
+    candidate_lists AS (
+      SELECT
+        original_name,
+        list(
+          {id: match_id, name: match_raw, score: match_score, type: typo_match, variant: match_variant}
+          ORDER BY match_score DESC, match_id, match_raw
+        ) as candidates
+      FROM candidate_rows
+      WHERE raw_rank = 1
+      GROUP BY original_name
+    ),
     best_matches AS (
       SELECT
         original_name,
-        list(DISTINCT {id: match_id, name: match_raw, score: match_score, type: typo_match}) as candidates,
         max(match_score) as best_score,
-        count(*) as match_count,
-        count(DISTINCT match_id) as distinct_id_count,
         count(DISTINCT CASE WHEN typo_match = 'exact' THEN match_id END) as distinct_exact_id_count
       FROM filtered_matches
       GROUP BY original_name
@@ -335,21 +375,39 @@ async function deriveJoinQualityFromCache(
         WHEN bm.best_score = 1 AND bm.distinct_exact_id_count > 1 THEN 'ambiguous'
         ELSE 'check'
       END as status,
-      bm.candidates,
+      cl.candidates,
       bm.best_score
     FROM all_candidates c
-    LEFT JOIN best_matches bm ON c.original_name = bm.original_name`,
+    LEFT JOIN best_matches bm ON c.original_name = bm.original_name
+    LEFT JOIN candidate_lists cl ON c.original_name = cl.original_name`,
     { format: 'array' }
   )) as Array<{
     original_name: string;
     source_dup_count: number;
     status: 'matched' | 'check' | 'ambiguous' | 'not_found' | 'duplicate';
-    candidates:
-      { id: string; name: string; score: number; type: string }[] | null;
+    candidates: RawJoinCandidate[] | null;
     best_score: number | null;
   }>;
 
   return buildJoinQualityFromRows(result);
+}
+
+interface RawJoinCandidate {
+  id: string;
+  name: string;
+  score: number;
+  type: 'exact' | 'partial';
+  variant: string | null;
+}
+
+function toJoinCandidate(raw: RawJoinCandidate): JoinCandidate {
+  return {
+    id: raw.id,
+    name: raw.name,
+    score: Number(raw.score),
+    type: raw.type,
+    variant: raw.variant ?? null
+  };
 }
 
 function buildJoinQualityFromRows(
@@ -357,30 +415,33 @@ function buildJoinQualityFromRows(
     original_name: string;
     source_dup_count: number;
     status: 'matched' | 'check' | 'ambiguous' | 'not_found' | 'duplicate';
-    candidates:
-      { id: string; name: string; score: number; type: string }[] | null;
+    candidates: RawJoinCandidate[] | null;
     best_score: number | null;
   }>
 ): JoinQuality {
-  const entities = rows.map((r) => ({
-    dataValue: r.original_name,
-    status:
-      r.status === 'duplicate'
-        ? JoinStatus.DUPLICATE
-        : r.status === 'ambiguous'
-          ? JoinStatus.TO_VERIFY
-          : r.status === 'check'
+  const entities = rows.map((r) => {
+    const candidates = (r.candidates ?? []).map(toJoinCandidate);
+    return {
+      dataValue: r.original_name,
+      status:
+        r.status === 'duplicate'
+          ? JoinStatus.DUPLICATE
+          : r.status === 'ambiguous'
             ? JoinStatus.TO_VERIFY
-            : r.status === 'not_found'
-              ? JoinStatus.UNRECOGNIZED
-              : JoinStatus.JOINED,
-    matches: [...new Set(r.candidates?.map((c) => c.name) || [])],
-    matchCount: r.candidates?.length || 0,
-    basemapValue:
-      r.status === 'matched' && r.candidates && r.candidates.length > 0
-        ? r.candidates[0].name
-        : undefined
-  }));
+            : r.status === 'check'
+              ? JoinStatus.TO_VERIFY
+              : r.status === 'not_found'
+                ? JoinStatus.UNRECOGNIZED
+                : JoinStatus.JOINED,
+      matches: candidates.map((c) => c.name),
+      matchCount: candidates.length,
+      candidates,
+      basemapValue:
+        r.status === 'matched' && candidates.length > 0
+          ? candidates[0].name
+          : undefined
+    };
+  });
 
   return {
     joinedCount: entities.filter((e) => e.status === JoinStatus.JOINED).length,
@@ -906,7 +967,7 @@ async function applyCachedJoinAssociation(
       FROM eligible_matches
       QUALIFY ROW_NUMBER() OVER (
         PARTITION BY geoname
-        ORDER BY score DESC, id
+        ORDER BY score DESC, id, label
       ) = 1
       )
     SELECT
