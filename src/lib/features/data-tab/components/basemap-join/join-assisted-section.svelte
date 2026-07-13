@@ -6,7 +6,9 @@
     ComboBox,
     InlineNotification,
     Select,
-    SelectItem
+    SelectItem,
+    fuzzyMatch,
+    highlightSegments
   } from 'carbon-components-svelte';
   import {
     CheckmarkFilled,
@@ -21,6 +23,7 @@
   } from 'carbon-icons-svelte';
   import { InfoPopover } from '$lib/features/commons/components/viz-controls';
   import type { BasemapAlias } from '$lib/features/duckdb/orchestrator/join-ops';
+  import type { JoinCandidate } from '$lib/features/commons/types/data-tab.types';
   import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
   type IgnoreSource = 'joined' | 'to_verify' | 'unrecognized';
@@ -29,12 +32,35 @@
     dataValue: string;
     selectedMapping: string;
     basemapOptions: string[];
+    candidates?: JoinCandidate[];
   }
 
   interface ComboBoxItem {
     id: string;
     text: string;
-    searchText: string;
+    foldedText: string;
+    searchAliases: Array<{ value: string; folded: string }>;
+    disabled?: boolean;
+    separator?: boolean;
+  }
+
+  const SUGGESTIONS_SEPARATOR_ITEM: ComboBoxItem = {
+    id: '__join_suggestions_separator__',
+    text: '',
+    foldedText: '',
+    searchAliases: [],
+    disabled: true,
+    separator: true
+  };
+
+  interface HighlightSegment {
+    text: string;
+    match: boolean;
+  }
+
+  interface ComboItemDisplay {
+    textSegments: HighlightSegment[];
+    aliasSegments: HighlightSegment[] | null;
   }
 
   interface JoinedEntityRow {
@@ -118,9 +144,16 @@
     return set;
   });
 
-  const availableBasemapValues = $derived(
-    basemapValues.filter((value) => !joinedBasemapValueSet.has(value))
-  );
+  const availableBasemapValues = $derived.by(() => {
+    const seen = new SvelteSet<string>();
+    const values: string[] = [];
+    for (const value of basemapValues) {
+      if (joinedBasemapValueSet.has(value) || seen.has(value)) continue;
+      seen.add(value);
+      values.push(value);
+    }
+    return values;
+  });
 
   const basemapComboBoxItems = $derived<ComboBoxItem[]>(
     availableBasemapValues.map((value) => buildBasemapComboBoxItem(value))
@@ -130,19 +163,85 @@
     Array.from(joinedBasemapValueSet).sort().join('')
   );
 
-  function buildBasemapComboBoxItem(value: string): ComboBoxItem {
-    const aliases = basemapAliasesByValue?.[value] ?? [];
-    const searchText = [value, ...aliases.map((alias) => alias.value)]
-      .filter(Boolean)
-      .join('\n')
-      .toLowerCase();
-    return { id: value, text: value, searchText };
+  function foldForSearch(value: string): string {
+    return value
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
   }
 
+  function buildBasemapComboBoxItem(value: string): ComboBoxItem {
+    const aliases = basemapAliasesByValue?.[value] ?? [];
+    const seenAliases = new SvelteSet<string>([value]);
+    const searchAliases: ComboBoxItem['searchAliases'] = [];
+    for (const alias of aliases) {
+      if (!alias.value || seenAliases.has(alias.value)) continue;
+      seenAliases.add(alias.value);
+      searchAliases.push({
+        value: alias.value,
+        folded: foldForSearch(alias.value)
+      });
+    }
+    return {
+      id: value,
+      text: value,
+      foldedText: foldForSearch(value),
+      searchAliases
+    };
+  }
+
+  const COMBO_FUZZY_OPTIONS = { threshold: 0.3 };
+
   function shouldFilterBasemapItem(item: ComboBoxItem, value: string): boolean {
-    const query = value.trim().toLowerCase();
+    const query = foldForSearch(value.trim());
+    if (item.separator) return !query;
     if (!query) return true;
-    return item.searchText.includes(query);
+    if (fuzzyMatch(item.foldedText, query, COMBO_FUZZY_OPTIONS).matched) {
+      return true;
+    }
+    return item.searchAliases.some(
+      (alias) => fuzzyMatch(alias.folded, query, COMBO_FUZZY_OPTIONS).matched
+    );
+  }
+
+  let activeComboQuery = $state<{ key: string; query: string } | null>(null);
+
+  function setActiveComboQuery(key: string, event: Event): void {
+    const target = event.target as HTMLInputElement | null;
+    activeComboQuery = { key, query: target?.value ?? '' };
+  }
+
+  function getActiveComboQuery(key: string): string {
+    return activeComboQuery?.key === key ? activeComboQuery.query.trim() : '';
+  }
+
+  function buildComboItemDisplay(
+    item: ComboBoxItem,
+    rawQuery: string
+  ): ComboItemDisplay {
+    const plainText: HighlightSegment[] = [{ text: item.text, match: false }];
+    const query = foldForSearch(rawQuery);
+    if (!query) return { textSegments: plainText, aliasSegments: null };
+
+    const textMatch = fuzzyMatch(item.foldedText, query, COMBO_FUZZY_OPTIONS);
+    if (textMatch.matched && textMatch.indices.length > 0) {
+      return {
+        textSegments: highlightSegments(item.text, textMatch.indices),
+        aliasSegments: null
+      };
+    }
+
+    for (const alias of item.searchAliases) {
+      const aliasMatch = fuzzyMatch(alias.folded, query, COMBO_FUZZY_OPTIONS);
+      if (aliasMatch.matched && aliasMatch.indices.length > 0) {
+        return {
+          textSegments: plainText,
+          aliasSegments: highlightSegments(alias.value, aliasMatch.indices)
+        };
+      }
+    }
+
+    return { textSegments: plainText, aliasSegments: null };
   }
 
   function buildJoinedRowOptions(currentBasemapValue: string): ComboBoxItem[] {
@@ -154,11 +253,15 @@
         if (alias.value) ownVariants.add(alias.value);
       }
     }
-    return basemapValues
-      .filter(
-        (value) => ownVariants.has(value) || !joinedBasemapValueSet.has(value)
-      )
-      .map((value) => buildBasemapComboBoxItem(value));
+    const seen = new SvelteSet<string>();
+    const items: ComboBoxItem[] = [];
+    for (const value of basemapValues) {
+      if (seen.has(value)) continue;
+      if (!ownVariants.has(value) && joinedBasemapValueSet.has(value)) continue;
+      seen.add(value);
+      items.push(buildBasemapComboBoxItem(value));
+    }
+    return items;
   }
 
   function resolveDisplayedBasemapValue(value: string): string {
@@ -213,6 +316,7 @@
     fallback: string,
     value: string | number | undefined
   ): void {
+    activeComboQuery = null;
     const selectedValue = normalizeSelectedValue(value, fallback);
     toVerifySelectedMappings[rowKey] = selectedValue;
     onMappingChange?.(index, selectedValue);
@@ -306,6 +410,7 @@
     entity: string,
     item: ComboBoxItem | undefined
   ): void {
+    activeComboQuery = null;
     if (item) {
       pendingUnrecognizedSelections.set(entity, item.text);
     } else {
@@ -321,23 +426,29 @@
     announce(m.join_announce_validated({ entity }));
   }
 
-  function buildToVerifyOptions(suggestions: string[]): string[] {
-    const merged: string[] = [];
+  function buildToVerifyItems(suggestions: string[]): ComboBoxItem[] {
+    const suggestedValues = new SvelteSet<string>();
+    const suggestedItems: ComboBoxItem[] = [];
     for (const suggestion of suggestions) {
       const displayedSuggestion = resolveDisplayedBasemapValue(suggestion);
       if (
         !joinedBasemapValueSet.has(displayedSuggestion) &&
-        !merged.includes(displayedSuggestion)
+        !suggestedValues.has(displayedSuggestion)
       ) {
-        merged.push(displayedSuggestion);
+        suggestedValues.add(displayedSuggestion);
+        suggestedItems.push(buildBasemapComboBoxItem(displayedSuggestion));
       }
     }
-    for (const value of availableBasemapValues) {
-      if (!merged.includes(value)) {
-        merged.push(value);
-      }
+    if (suggestedItems.length === 0) {
+      return basemapComboBoxItems;
     }
-    return merged;
+    const remainingItems = basemapComboBoxItems.filter(
+      (item) => !suggestedValues.has(item.id)
+    );
+    if (remainingItems.length === 0) {
+      return suggestedItems;
+    }
+    return [...suggestedItems, SUGGESTIONS_SEPARATOR_ITEM, ...remainingItems];
   }
 
   interface RowTooltip {
@@ -385,6 +496,34 @@
     }
 
     return { tags, text: '', disabled: false };
+  }
+
+  function getSelectedCandidate(
+    row: JoinRow,
+    selectedMapping: string
+  ): JoinCandidate | undefined {
+    if (!selectedMapping) return undefined;
+    return row.candidates?.find(
+      (c) =>
+        c.name === selectedMapping ||
+        resolveDisplayedBasemapValue(c.name) === selectedMapping
+    );
+  }
+
+  function buildToVerifyTooltip(
+    selectedMapping: string,
+    candidate: JoinCandidate | undefined
+  ): RowTooltip {
+    const base = buildRowTooltip(selectedMapping);
+    if (!candidate) return base;
+    const text =
+      candidate.type === 'exact'
+        ? m.join_match_ambiguous_details()
+        : m.join_match_fuzzy_details({
+            matched: candidate.name,
+            score: Math.round(candidate.score * 100)
+          });
+    return { ...base, text, disabled: false };
   }
 
   const duplicateLinesByValue = $derived<Record<string, number[]>>(
@@ -436,6 +575,12 @@
       onRequestBasemapValues?.();
     }
   }
+
+  $effect(() => {
+    if (toVerifyExpanded && toVerifyCount > 0 && basemapValues.length === 0) {
+      onRequestBasemapValues?.();
+    }
+  });
 
   function toggleUnrecognized(): void {
     const nextExpanded = !unrecognizedExpanded;
@@ -498,12 +643,15 @@
     source: IgnoreSource,
     basemapValue?: string
   ): void {
+    const nextIgnoredCount = ignoredCount + 1;
     onIgnoreEntity?.(dataValue, source, basemapValue);
     announce(
-      m.join_announce_ignored({
-        entity: dataValue,
-        count: ignoredCount + 1
-      })
+      nextIgnoredCount === 1
+        ? m.join_announce_ignored_one({ entity: dataValue })
+        : m.join_announce_ignored({
+            entity: dataValue,
+            count: nextIgnoredCount
+          })
     );
   }
 
@@ -518,6 +666,31 @@
     announce(m.join_announce_validated({ entity: dataValue }));
   }
 </script>
+
+{#snippet comboItemContent(comboItem: ComboBoxItem, query: string)}
+  {#if comboItem.separator}
+    <span class="combo-separator">{m.join_combobox_all_identifiers()}</span>
+  {:else}
+    {@const display = buildComboItemDisplay(comboItem, query)}
+    <span class="combo-item">
+      <span class="combo-item-text">
+        {#each display.textSegments as segment, i (i)}
+          {#if segment.match}<mark class="combo-item-match">{segment.text}</mark
+            >{:else}{segment.text}{/if}
+        {/each}
+      </span>
+      {#if display.aliasSegments}
+        <span class="combo-item-alias">
+          ≈&nbsp;{#each display.aliasSegments as segment, i (i)}
+            {#if segment.match}<mark class="combo-item-match"
+                >{segment.text}</mark
+              >{:else}{segment.text}{/if}
+          {/each}
+        </span>
+      {/if}
+    </span>
+  {/if}
+{/snippet}
 
 <div class="join-assisted-section">
   <div
@@ -585,7 +758,7 @@
                   </div>
                 </div>
                 <div class="join-table-scroll" bind:this={joinedScrollEl}>
-                  {#each joinedEntitiesList as row (row.dataValue)}
+                  {#each joinedEntitiesList as row, joinedIndex (row.dataValue)}
                     {@const joinedTooltip = buildRowTooltip(
                       row.basemapValue,
                       row.otherIdentifiers
@@ -602,6 +775,9 @@
                           )}
                           {#key joinedValueSignature}
                             <ComboBox
+                              portalMenu
+                              autoHighlight="first-match"
+                              id={`join-joined-${joinedIndex}`}
                               items={joinedRowOptions}
                               selectedId={row.basemapValue}
                               placeholder={row.basemapValue}
@@ -611,7 +787,13 @@
                               hideLabel
                               size="sm"
                               shouldFilterItem={shouldFilterBasemapItem}
+                              on:input={(e) =>
+                                setActiveComboQuery(
+                                  `joined-${row.dataValue}`,
+                                  e
+                                )}
                               on:select={(e) => {
+                                activeComboQuery = null;
                                 const item = e.detail.selectedItem as
                                   ComboBoxItem | undefined;
                                 const nextValue = item?.text;
@@ -628,7 +810,13 @@
                                   );
                                 }
                               }}
-                            />
+                              let:item
+                            >
+                              {@render comboItemContent(
+                                item as ComboBoxItem,
+                                getActiveComboQuery(`joined-${row.dataValue}`)
+                              )}
+                            </ComboBox>
                           {/key}
                         {:else}
                           <div class="select-placeholder" aria-hidden="true">
@@ -727,46 +915,84 @@
                     rowKey,
                     row.selectedMapping
                   )}
-                  {@const verifyTooltip = buildRowTooltip(selectedMapping)}
+                  {@const selectedCandidate = getSelectedCandidate(
+                    row,
+                    selectedMapping
+                  )}
+                  {@const matchScorePercent =
+                    selectedCandidate && selectedCandidate.score < 1
+                      ? Math.round(selectedCandidate.score * 100)
+                      : null}
+                  {@const verifyTooltip = buildToVerifyTooltip(
+                    selectedMapping,
+                    selectedCandidate
+                  )}
                   <div class="table-row" use:observeToVerifyRow={rowKey}>
                     <div class="table-cell cell-data">{row.dataValue}</div>
                     <div
                       class="table-cell cell-equals cell-equals-approx"
-                      aria-label={m.join_approximate_indicator()}
+                      aria-label={matchScorePercent !== null
+                        ? m.join_match_score_label({
+                            score: matchScorePercent
+                          })
+                        : m.join_approximate_indicator()}
                     >
-                      ≈
+                      <span class="approx-symbol" aria-hidden="true">≈</span>
+                      {#if matchScorePercent !== null}
+                        <span class="match-score" aria-hidden="true"
+                          >{matchScorePercent}&nbsp;%</span
+                        >
+                      {/if}
                     </div>
                     <div class="table-cell cell-select">
                       {#if visibleToVerifyRows.has(rowKey)}
-                        {@const toVerifyOptions = buildToVerifyOptions(
+                        {@const toVerifyItems = buildToVerifyItems(
                           row.basemapOptions
                         )}
-                        <Select
-                          id={`join-${i}`}
-                          labelText={m.join_select_label_to_verify({
-                            entity: row.dataValue
-                          })}
-                          hideLabel
-                          bind:selected={
-                            () =>
-                              getToVerifySelectedMapping(
-                                rowKey,
-                                row.selectedMapping
-                              ),
-                            (value) =>
+                        {#key basemapComboBoxItems}
+                          <ComboBox
+                            portalMenu
+                            autoHighlight="first-match"
+                            id={`join-${i}`}
+                            items={toVerifyItems}
+                            selectedId={resolveDisplayedBasemapValue(
+                              selectedMapping
+                            )}
+                            labelText={m.join_select_label_to_verify({
+                              entity: row.dataValue
+                            })}
+                            hideLabel
+                            size="sm"
+                            shouldFilterItem={(item, value) =>
+                              value ===
+                                resolveDisplayedBasemapValue(selectedMapping) ||
+                              shouldFilterBasemapItem(item, value)}
+                            on:input={(e) => setActiveComboQuery(rowKey, e)}
+                            on:select={(e) =>
                               handleToVerifyMappingChange(
                                 rowKey,
                                 i,
                                 row.selectedMapping,
-                                value
-                              )
-                          }
-                          size="sm"
-                        >
-                          {#each toVerifyOptions as opt (opt)}
-                            <SelectItem value={opt} text={opt} />
-                          {/each}
-                        </Select>
+                                (
+                                  e.detail.selectedItem as
+                                    ComboBoxItem | undefined
+                                )?.id
+                              )}
+                            on:clear={() =>
+                              handleToVerifyMappingChange(
+                                rowKey,
+                                i,
+                                row.selectedMapping,
+                                undefined
+                              )}
+                            let:item
+                          >
+                            {@render comboItemContent(
+                              item as ComboBoxItem,
+                              getActiveComboQuery(rowKey)
+                            )}
+                          </ComboBox>
+                        {/key}
                       {:else}
                         <div class="select-placeholder" aria-hidden="true">
                           {row.selectedMapping ?? ''}
@@ -854,7 +1080,7 @@
                 </div>
               </div>
               <div class="join-table-scroll" bind:this={unrecognizedScrollEl}>
-                {#each unknowns as entity (entity)}
+                {#each unknowns as entity, unknownIndex (entity)}
                   {@const hasPendingSelection =
                     pendingUnrecognizedSelections.has(entity)}
                   {@const unrecognizedTooltip = buildRowTooltip(
@@ -868,6 +1094,9 @@
                         {#if basemapComboBoxItems.length > 0 && onManualCorrection}
                           {#key basemapComboBoxItems}
                             <ComboBox
+                              portalMenu
+                              autoHighlight="first-match"
+                              id={`join-unrecognized-${unknownIndex}`}
                               items={basemapComboBoxItems}
                               placeholder={m.join_unrecognized_correction_placeholder()}
                               labelText={m.join_select_label_unrecognized({
@@ -876,13 +1105,24 @@
                               hideLabel
                               size="sm"
                               shouldFilterItem={shouldFilterBasemapItem}
+                              on:input={(e) =>
+                                setActiveComboQuery(
+                                  `unrecognized-${entity}`,
+                                  e
+                                )}
                               on:select={(e) =>
                                 handleUnrecognizedSelect(
                                   entity,
                                   e.detail.selectedItem as
                                     ComboBoxItem | undefined
                                 )}
-                            />
+                              let:item
+                            >
+                              {@render comboItemContent(
+                                item as ComboBoxItem,
+                                getActiveComboQuery(`unrecognized-${entity}`)
+                              )}
+                            </ComboBox>
                           {/key}
                         {:else}
                           <Select
@@ -945,132 +1185,149 @@
         {/if}
       </div>
 
-      <div class="category-row category-row-duplicates">
-        <button
-          type="button"
-          class="category-row-header"
-          onclick={() => (duplicatesExpanded = !duplicatesExpanded)}
-          aria-expanded={duplicatesExpanded}
-        >
-          <span class="category-icon icon-warning-alt">
-            <WarningAltFilled size={20} />
-          </span>
-          <div class="category-count count-warning-alt">{duplicateCount}</div>
-          <span class="category-label label-warning-alt"
-            >{duplicateCount <= 1
-              ? m.join_entities_duplicate_one()
-              : m.join_entities_duplicate()}</span
+      {#if duplicateCount > 0}
+        <div class="category-row category-row-duplicates">
+          <button
+            type="button"
+            class="category-row-header"
+            onclick={() => (duplicatesExpanded = !duplicatesExpanded)}
+            aria-expanded={duplicatesExpanded}
           >
-          <span class="category-chevron">
-            {#if duplicatesExpanded}
-              <ChevronUp size={20} />
-            {:else}
-              <ChevronDown size={20} />
-            {/if}
-          </span>
-        </button>
-        {#if duplicatesExpanded}
-          <div class="category-body">
-            <div class="inline-banner inline-banner-error">
-              {m.join_duplicates_explanation()}
-            </div>
-            <div class="join-table join-table-error">
-              <div class="table-header">
-                <div class="table-header-left">
-                  <span class="table-header-label">{m.join_data_column()}</span>
-                  {#if linkedVariableName}
-                    <VariableBadge label={linkedVariableName} type="geo-ref" />
-                  {/if}
-                </div>
-                <div class="table-header-right">
-                  <span class="table-header-label">{m.join_lines_column()}</span
-                  >
-                </div>
+            <span class="category-icon icon-warning-alt">
+              <WarningAltFilled size={20} />
+            </span>
+            <div class="category-count count-warning-alt">{duplicateCount}</div>
+            <span class="category-label label-warning-alt"
+              >{duplicateCount <= 1
+                ? m.join_entities_duplicate_one()
+                : m.join_entities_duplicate()}</span
+            >
+            <span class="category-chevron">
+              {#if duplicatesExpanded}
+                <ChevronUp size={20} />
+              {:else}
+                <ChevronDown size={20} />
+              {/if}
+            </span>
+          </button>
+          {#if duplicatesExpanded}
+            <div class="category-body">
+              <div class="inline-banner inline-banner-error">
+                {m.join_duplicates_explanation()}
               </div>
-              {#each duplicates as entity (entity)}
-                <div class="table-row table-row-lines">
-                  <div class="table-cell cell-data">{entity}</div>
-                  <div class="table-cell cell-lines">
-                    {#if duplicateLinesByValue[entity]?.length}
-                      {duplicateLinesByValue[entity].join(', ')}
-                    {:else}
-                      &mdash;
-                    {/if}
-                  </div>
-                </div>
-              {/each}
-            </div>
-          </div>
-        {/if}
-      </div>
-
-      <div class="category-row category-row-ignored">
-        <button
-          type="button"
-          class="category-row-header"
-          onclick={() => (ignoredExpanded = !ignoredExpanded)}
-          aria-expanded={ignoredExpanded}
-        >
-          <span class="category-icon icon-ignored">
-            <Misuse size={20} />
-          </span>
-          <div class="category-count count-ignored">{ignoredCount}</div>
-          <span class="category-label label-ignored"
-            >{ignoredCount <= 1
-              ? m.join_entities_ignored_one()
-              : m.join_entities_ignored()}</span
-          >
-          <span class="category-chevron">
-            {#if ignoredExpanded}
-              <ChevronUp size={20} />
-            {:else}
-              <ChevronDown size={20} />
-            {/if}
-          </span>
-        </button>
-        {#if ignoredExpanded}
-          <div class="category-body">
-            <div class="inline-banner inline-banner-info">
-              {m.join_ignored_explanation()}
-            </div>
-            <div class="join-table join-table-info">
-              <div class="table-header">
-                <div class="table-header-left">
-                  <span class="table-header-label">{m.join_data_column()}</span>
-                  {#if linkedVariableName}
-                    <VariableBadge label={linkedVariableName} type="geo-ref" />
-                  {/if}
-                </div>
-                <div class="table-header-right">
-                  <span class="table-header-label">{m.join_line_column()}</span>
-                </div>
-              </div>
-              {#each ignoredEntities as entry (entry.dataValue)}
-                <div class="table-row table-row-lines">
-                  <div class="table-cell cell-data">{entry.dataValue}</div>
-                  <div class="table-cell cell-lines">
-                    {#if entry.lines.length}
-                      {entry.lines.join(', ')}
-                    {:else}
-                      &mdash;
-                    {/if}
-                  </div>
-                  <div class="row-actions row-actions-compact">
-                    <button
-                      type="button"
-                      class="row-action"
-                      aria-label={m.join_action_restore()}
-                      onclick={() => handleRestore(entry.dataValue)}
+              <div class="join-table join-table-error">
+                <div class="table-header">
+                  <div class="table-header-left">
+                    <span class="table-header-label"
+                      >{m.join_data_column()}</span
                     >
-                      <Renew size={20} />
-                    </button>
+                    {#if linkedVariableName}
+                      <VariableBadge
+                        label={linkedVariableName}
+                        type="geo-ref"
+                      />
+                    {/if}
+                  </div>
+                  <div class="table-header-right">
+                    <span class="table-header-label"
+                      >{m.join_lines_column()}</span
+                    >
                   </div>
                 </div>
-              {/each}
+                {#each duplicates as entity (entity)}
+                  <div class="table-row table-row-lines">
+                    <div class="table-cell cell-data">{entity}</div>
+                    <div class="table-cell cell-lines">
+                      {#if duplicateLinesByValue[entity]?.length}
+                        {duplicateLinesByValue[entity].join(', ')}
+                      {:else}
+                        &mdash;
+                      {/if}
+                    </div>
+                  </div>
+                {/each}
+              </div>
             </div>
-          </div>
-        {/if}
-      </div>
+          {/if}
+        </div>
+      {/if}
+
+      {#if ignoredCount > 0}
+        <div class="category-row category-row-ignored">
+          <button
+            type="button"
+            class="category-row-header"
+            onclick={() => (ignoredExpanded = !ignoredExpanded)}
+            aria-expanded={ignoredExpanded}
+          >
+            <span class="category-icon icon-ignored">
+              <Misuse size={20} />
+            </span>
+            <div class="category-count count-ignored">{ignoredCount}</div>
+            <span class="category-label label-ignored"
+              >{ignoredCount <= 1
+                ? m.join_entities_ignored_one()
+                : m.join_entities_ignored()}</span
+            >
+            <span class="category-chevron">
+              {#if ignoredExpanded}
+                <ChevronUp size={20} />
+              {:else}
+                <ChevronDown size={20} />
+              {/if}
+            </span>
+          </button>
+          {#if ignoredExpanded}
+            <div class="category-body">
+              <div class="inline-banner inline-banner-info">
+                {m.join_ignored_explanation()}
+              </div>
+              <div class="join-table join-table-info">
+                <div class="table-header">
+                  <div class="table-header-left">
+                    <span class="table-header-label"
+                      >{m.join_data_column()}</span
+                    >
+                    {#if linkedVariableName}
+                      <VariableBadge
+                        label={linkedVariableName}
+                        type="geo-ref"
+                      />
+                    {/if}
+                  </div>
+                  <div class="table-header-right">
+                    <span class="table-header-label"
+                      >{m.join_line_column()}</span
+                    >
+                  </div>
+                </div>
+                {#each ignoredEntities as entry (entry.dataValue)}
+                  <div class="table-row table-row-lines">
+                    <div class="table-cell cell-data">{entry.dataValue}</div>
+                    <div class="table-cell cell-lines">
+                      {#if entry.lines.length}
+                        {entry.lines.join(', ')}
+                      {:else}
+                        &mdash;
+                      {/if}
+                    </div>
+                    <div class="row-actions row-actions-compact">
+                      <button
+                        type="button"
+                        class="row-action"
+                        aria-label={m.join_action_restore()}
+                        onclick={() => handleRestore(entry.dataValue)}
+                      >
+                        <Renew size={20} />
+                      </button>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/if}
+        </div>
+      {/if}
     </div>
 
     <div class="join-status-zone">
@@ -1437,6 +1694,70 @@
 
   .cell-equals-approx {
     color: #f1c21b;
+    flex-direction: column;
+    width: auto;
+    min-width: 24px;
+    gap: 1px;
+  }
+
+  .match-score {
+    font-size: 0.625rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    color: var(--cds-text-secondary, #525252);
+    white-space: nowrap;
+  }
+
+  .combo-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .combo-item-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .combo-item-alias {
+    font-size: 0.75rem;
+    color: var(--cds-text-secondary, #525252);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .combo-item :global(mark.combo-item-match) {
+    background: none;
+    color: inherit;
+    font-weight: 700;
+  }
+
+  .combo-separator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  .combo-separator::after {
+    content: '';
+    flex: 1;
+    border-top: 1px solid #d1d1d1;
+  }
+
+  :global([data-floating-portal] [id^='menu-join-'].bx--list-box__menu) {
+    min-width: 100%;
+    width: max-content;
+    max-width: 26rem;
   }
 
   .cell-select {

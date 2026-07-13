@@ -200,4 +200,4 @@ Personal or machine-local Claude settings stay out of Git (`.claude/settings.loc
 
 MIT — see [LICENSE](LICENSE).
 
-© Atelier de cartographie / Sciences Po, 2025
+© Atelier de cartographie / Sciences Po, 2026

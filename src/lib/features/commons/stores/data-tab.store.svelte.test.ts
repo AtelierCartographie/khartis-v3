@@ -125,6 +125,41 @@ describe('dataTab persistence', () => {
     expect(dataTabState.basemapJoin.entitiesToVerify).toBe(1);
   });
 
+  it('preserves candidate details when restoring persisted join mappings', () => {
+    dataTabActions.setBasemapJoinState({
+      joinMappings: [
+        {
+          dataValue: 'Frnace',
+          basemapOptions: ['France'],
+          selectedMapping: 'France',
+          candidates: [
+            {
+              id: 'FRA',
+              name: 'France',
+              score: 0.96,
+              type: 'partial',
+              variant: 'name_engl'
+            }
+          ]
+        }
+      ]
+    });
+
+    const serialized = dataTabPersistenceEntry?.serialize();
+    dataTabActions.reset();
+    dataTabPersistenceEntry?.deserialize(serialized);
+
+    expect(dataTabState.basemapJoin.joinMappings[0]?.candidates).toEqual([
+      {
+        id: 'FRA',
+        name: 'France',
+        score: 0.96,
+        type: 'partial',
+        variant: 'name_engl'
+      }
+    ]);
+  });
+
   it('keeps backward compatibility with legacy basemap selection payloads', () => {
     dataTabPersistenceEntry?.deserialize({
       basemapJoin: {

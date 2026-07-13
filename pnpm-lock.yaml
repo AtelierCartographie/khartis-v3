@@ -13,7 +13,7 @@ overrides:
 
 patchedDependencies:
   carbon-components-svelte:
-    hash: a93f8e99e6c1e2b61cb77eb579aeef9400338e5c0101f57fe5547caf21ecb220
+    hash: 9188fd63ae23bc73b76c997d2286d4b850eccc9701c7c82cad97c46270698e36
     path: patches/carbon-components-svelte.patch
   vite-plugin-pwa@1.3.0:
     hash: 80aac6addfd1e6b7c7587cb531e6abca9c90ff789c4cfa31b06086a1368eedeb
@@ -99,8 +99,8 @@ importers:
         specifier: ^21.1.0
         version: 21.1.0
       carbon-components-svelte:
-        specifier: ^0.109.0
-        version: 0.109.0(patch_hash=a93f8e99e6c1e2b61cb77eb579aeef9400338e5c0101f57fe5547caf21ecb220)
+        specifier: ^0.110.0
+        version: 0.110.0(patch_hash=9188fd63ae23bc73b76c997d2286d4b850eccc9701c7c82cad97c46270698e36)
       carbon-icons-svelte:
         specifier: ^13.12.0
         version: 13.12.0
@@ -2924,8 +2924,8 @@ packages:
   caniuse-lite@1.0.30001800:
     resolution: {integrity: sha512-MMHtuAz9Ys840zAY5F4k6fV5GaivZ9sPk+nz0mY+GYVzRBnYkN0mpqkSR92oWRQ19yQWo4HvBV/FnC16AJX8MA==}
 
-  carbon-components-svelte@0.109.0:
-    resolution: {integrity: sha512-cbLv0kw0LM78d4JsNERCtp+SekaiPh3sw5snvjHbdLKk5GLaEoqI2KjRHzvr9FW76I8yVTvTqukd5UFoBlkmrg==}
+  carbon-components-svelte@0.110.0:
+    resolution: {integrity: sha512-epaoP7U/u91dYP1wpqqwDvKBkbA99lTtHH35Jm8qRuek7rW0/9mjLhC4eSbO8teUWiHB3w2ru0Ne8vp7WsOGPw==}
 
   carbon-icons-svelte@13.12.0:
     resolution: {integrity: sha512-VK/gSvzCEe3tNEHS2xAcih/GBuygHuUenV+EY/44A3nyYjk+MCbgpY20uwID8/81gEUxIkl4rA/EMRWb/3qs0A==}
@@ -9167,7 +9167,7 @@ snapshots:
 
   caniuse-lite@1.0.30001800: {}
 
-  carbon-components-svelte@0.109.0(patch_hash=a93f8e99e6c1e2b61cb77eb579aeef9400338e5c0101f57fe5547caf21ecb220):
+  carbon-components-svelte@0.110.0(patch_hash=9188fd63ae23bc73b76c997d2286d4b850eccc9701c7c82cad97c46270698e36):
     dependencies:
       '@ibm/telemetry-js': 1.11.0
       flatpickr: 4.6.9

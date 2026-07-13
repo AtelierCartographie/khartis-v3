@@ -1,5 +1,6 @@
 <script lang="ts">
   import { GEOID_SCORE_THRESHOLD } from '$lib/features/commons/components/advanced-data-table/column-type-styles';
+  import { SvelteMap } from 'svelte/reactivity';
   import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
   import { GeoreferenceType } from '$lib/features/commons/constants/ui.constants';
   import {
@@ -99,6 +100,23 @@
   const availableColumnNames = $derived(
     new Set(dataFieldItems().map((item) => item.columnName))
   );
+
+  const linkedVariableItems = $derived(() => {
+    const geoidScores = new SvelteMap<string, number>();
+    for (const col of columnAnalysis) {
+      if (col.semioType === 'geoid') {
+        geoidScores.set(col.name, col.semioScore ?? 0);
+      }
+    }
+    const geoidScore = (item: { columnName: string }): number =>
+      geoidScores.get(item.columnName) ?? -1;
+    return [...dataFieldItems()].sort(
+      (a, b) =>
+        geoidScore(b) - geoidScore(a) ||
+        (b.confidence ?? 0) - (a.confidence ?? 0) ||
+        a.id - b.id
+    );
+  });
 
   const bestGeoidColumn = $derived(() => {
     const geoidColumns = columnAnalysis
@@ -554,7 +572,7 @@
       primary={{
         label: m.geo_linked_variable(),
         infoText: m.geo_linked_variable_info(),
-        items: dataFieldItems(),
+        items: linkedVariableItems(),
         selectedId: geoFieldId(),
         selectedColumnName:
           dataTabState.geolocation.linkedVariableName || undefined,

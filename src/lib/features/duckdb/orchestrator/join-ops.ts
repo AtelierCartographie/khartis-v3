@@ -25,6 +25,7 @@ import { getLocale } from '$lib/paraglide/runtime';
 import type { Table } from 'apache-arrow/Arrow';
 import { addGeoArrowMetadata } from '$lib/features/map/services/read-geojson-arrow.service';
 import type { DuckDBDataset, FinalizeJoinResult } from '../types';
+import type { JoinCandidate } from '$lib/features/commons/types/data-tab.types';
 import { detectGPSColumns } from './gps-ops';
 
 export type { FinalizeJoinResult };
@@ -49,6 +50,10 @@ function isGeometryColumnName(columnName: string): boolean {
 const SIMILARITY_CACHE_PREFIX = '__similarity_cache__';
 const MAX_FUZZY_JOIN_CANDIDATES = 1000;
 const MAX_EXACT_MATCHES_PER_CANDIDATE_BASEMAP = 50;
+// Calibrated on a labeled corpus of realistic typos vs distinct real places:
+// every true typo scores >= 0.93 while noise pairs (toulon/toulouse 0.89,
+// iran/irak 0.88, lyon/laon 0.85...) sit below 0.90. See PR #250.
+const FUZZY_SCORE_CUTOFF = 0.9;
 
 interface SimilarityCacheEntry {
   tableName: string;
@@ -132,7 +137,7 @@ async function ensureSimilarityCached(
     // Phase 1: exact match via equi-join on pre-normalized text (hash join, O(n+m)).
     //          Cap rows per source value and basemap so broad codes such as
     //          department ids cannot cache every commune sharing the same attribute.
-    // Phase 2: fuzzy Jaro-Winkler (score_cutoff=0.85) only on residual unmatched candidates
+    // Phase 2: fuzzy Jaro-Winkler (FUZZY_SCORE_CUTOFF) only on residual unmatched candidates
     //          — bounded because unmatched large code datasets would otherwise cross-join every
     //          source value with every basemap attribute on the browser main thread.
     // Normalization is pre-computed once in the candidates CTE (like the get_similarity macro)
@@ -201,22 +206,64 @@ async function ensureSimilarityCached(
       unmatched_count AS (
         SELECT COUNT(*) AS count FROM unmatched
       ),
+      -- Fuzzy similarity is meaningless between code identifiers (INSEE, NUTS,
+      -- ISO3...): '85271' ≈ '85212' is pure noise. Treat the source column as
+      -- codes when every value casts to a number, or when fixed-length values
+      -- are structurally code-like: each contains a digit, or all are uppercase
+      -- alphabetic codes of at most 3 characters (ISO2/ISO3). A shared length
+      -- alone is not enough because distinct place names can have equal lengths.
+      source_code_signals AS (
+        SELECT
+          COUNT(*) FILTER (WHERE TRY_CAST(normalized_name AS DOUBLE) IS NULL) = 0 AS all_numeric,
+          (COUNT(DISTINCT length(normalized_name)) = 1
+            AND MAX(length(normalized_name)) <= 8
+            AND COUNT(DISTINCT normalized_name) >= 3
+            AND (
+              COUNT(*) FILTER (WHERE regexp_matches(original_name, '[0-9]')) = COUNT(*)
+              OR (
+                MAX(length(normalized_name)) <= 3
+                AND COUNT(*) FILTER (WHERE original_name = upper(original_name)) = COUNT(*)
+              )
+            )) AS fixed_length_codes
+        FROM candidates
+      ),
       bounded_unmatched AS (
         SELECT u.*
-        FROM unmatched u, unmatched_count c
+        FROM unmatched u, unmatched_count c, source_code_signals s
         WHERE c.count <= ${MAX_FUZZY_JOIN_CANDIDATES}
+          AND NOT s.all_numeric
+          AND NOT s.fixed_length_codes
+      ),
+      -- Jaro-Winkler is prefix-weighted, so 'korea north' scores closer to
+      -- 'korea rep' than to 'north korea'. Comparing word-sorted forms as well
+      -- recovers reordered names; the 0.99 factor keeps them below an exact
+      -- match so they stay in the to-verify bucket.
+      sorted_unmatched AS (
+        SELECT
+          u.*,
+          array_to_string(list_sort(string_split(u.normalized_name, ' ')), ' ') AS normalized_sorted
+        FROM bounded_unmatched u
+      ),
+      sorted_attributes AS (
+        SELECT
+          ba.*,
+          array_to_string(list_sort(string_split(ba.normalized, ' ')), ' ') AS normalized_sorted
+        FROM basemap_attributes ba
       ),
       fuzzy_raw AS (
         SELECT
           u.original_name,
           u.source_dup_count,
-          jaro_winkler_similarity(u.normalized_name, ba.normalized, 0.85) AS match_score,
+          GREATEST(
+            jaro_winkler_similarity(u.normalized_name, ba.normalized, ${FUZZY_SCORE_CUTOFF}),
+            0.99 * jaro_winkler_similarity(u.normalized_sorted, ba.normalized_sorted, ${FUZZY_SCORE_CUTOFF})
+          ) AS match_score,
           ba.id AS match_id,
           ba.raw AS match_raw,
           ba.variant AS match_variant,
           ba.basemap AS match_basemap,
           ba.basemap_count AS match_basemap_count
-        FROM bounded_unmatched u, basemap_attributes ba
+        FROM sorted_unmatched u, sorted_attributes ba
       ),
       fuzzy_matches AS (
         SELECT
@@ -310,13 +357,38 @@ async function deriveJoinQualityFromCache(
       WHERE bm.typo_match != 'exact'
         AND bm.match_id NOT IN (SELECT match_id FROM exact_claimed_ids)
     ),
+    -- One candidate per matched raw value (best-scoring row wins), ordered like
+    -- ranked_join in applyCachedJoinAssociation so candidates[0] is the value
+    -- the finalized join will actually apply.
+    candidate_rows AS (
+      SELECT
+        original_name,
+        match_id,
+        match_raw,
+        match_variant,
+        match_score,
+        typo_match,
+        ROW_NUMBER() OVER (
+          PARTITION BY original_name, match_raw
+          ORDER BY match_score DESC, match_id, match_variant
+        ) AS raw_rank
+      FROM filtered_matches
+    ),
+    candidate_lists AS (
+      SELECT
+        original_name,
+        list(
+          {id: match_id, name: match_raw, score: match_score, type: typo_match, variant: match_variant}
+          ORDER BY match_score DESC, match_id, match_raw
+        ) as candidates
+      FROM candidate_rows
+      WHERE raw_rank = 1
+      GROUP BY original_name
+    ),
     best_matches AS (
       SELECT
         original_name,
-        list(DISTINCT {id: match_id, name: match_raw, score: match_score, type: typo_match}) as candidates,
         max(match_score) as best_score,
-        count(*) as match_count,
-        count(DISTINCT match_id) as distinct_id_count,
         count(DISTINCT CASE WHEN typo_match = 'exact' THEN match_id END) as distinct_exact_id_count
       FROM filtered_matches
       GROUP BY original_name
@@ -335,21 +407,39 @@ async function deriveJoinQualityFromCache(
         WHEN bm.best_score = 1 AND bm.distinct_exact_id_count > 1 THEN 'ambiguous'
         ELSE 'check'
       END as status,
-      bm.candidates,
+      cl.candidates,
       bm.best_score
     FROM all_candidates c
-    LEFT JOIN best_matches bm ON c.original_name = bm.original_name`,
+    LEFT JOIN best_matches bm ON c.original_name = bm.original_name
+    LEFT JOIN candidate_lists cl ON c.original_name = cl.original_name`,
     { format: 'array' }
   )) as Array<{
     original_name: string;
     source_dup_count: number;
     status: 'matched' | 'check' | 'ambiguous' | 'not_found' | 'duplicate';
-    candidates:
-      { id: string; name: string; score: number; type: string }[] | null;
+    candidates: RawJoinCandidate[] | null;
     best_score: number | null;
   }>;
 
   return buildJoinQualityFromRows(result);
+}
+
+interface RawJoinCandidate {
+  id: string;
+  name: string;
+  score: number;
+  type: 'exact' | 'partial';
+  variant: string | null;
+}
+
+function toJoinCandidate(raw: RawJoinCandidate): JoinCandidate {
+  return {
+    id: raw.id,
+    name: raw.name,
+    score: Number(raw.score),
+    type: raw.type,
+    variant: raw.variant ?? null
+  };
 }
 
 function buildJoinQualityFromRows(
@@ -357,30 +447,33 @@ function buildJoinQualityFromRows(
     original_name: string;
     source_dup_count: number;
     status: 'matched' | 'check' | 'ambiguous' | 'not_found' | 'duplicate';
-    candidates:
-      { id: string; name: string; score: number; type: string }[] | null;
+    candidates: RawJoinCandidate[] | null;
     best_score: number | null;
   }>
 ): JoinQuality {
-  const entities = rows.map((r) => ({
-    dataValue: r.original_name,
-    status:
-      r.status === 'duplicate'
-        ? JoinStatus.DUPLICATE
-        : r.status === 'ambiguous'
-          ? JoinStatus.TO_VERIFY
-          : r.status === 'check'
+  const entities = rows.map((r) => {
+    const candidates = (r.candidates ?? []).map(toJoinCandidate);
+    return {
+      dataValue: r.original_name,
+      status:
+        r.status === 'duplicate'
+          ? JoinStatus.DUPLICATE
+          : r.status === 'ambiguous'
             ? JoinStatus.TO_VERIFY
-            : r.status === 'not_found'
-              ? JoinStatus.UNRECOGNIZED
-              : JoinStatus.JOINED,
-    matches: [...new Set(r.candidates?.map((c) => c.name) || [])],
-    matchCount: r.candidates?.length || 0,
-    basemapValue:
-      r.status === 'matched' && r.candidates && r.candidates.length > 0
-        ? r.candidates[0].name
-        : undefined
-  }));
+            : r.status === 'check'
+              ? JoinStatus.TO_VERIFY
+              : r.status === 'not_found'
+                ? JoinStatus.UNRECOGNIZED
+                : JoinStatus.JOINED,
+      matches: candidates.map((c) => c.name),
+      matchCount: candidates.length,
+      candidates,
+      basemapValue:
+        r.status === 'matched' && candidates.length > 0
+          ? candidates[0].name
+          : undefined
+    };
+  });
 
   return {
     joinedCount: entities.filter((e) => e.status === JoinStatus.JOINED).length,
@@ -860,7 +953,8 @@ async function applyCachedJoinAssociation(
   geoColumn: string,
   basemapId: string,
   cacheTableName: string,
-  Duck: DuckDBClientForJoin
+  Duck: DuckDBClientForJoin,
+  excludedValues: string[] = []
 ): Promise<void> {
   const escapedDatasetTable = escapeIdentifier(datasetTableName);
   const escapedGeoColumn = escapeIdentifier(geoColumn);
@@ -870,6 +964,12 @@ async function applyCachedJoinAssociation(
     datasetTableName,
     Duck
   );
+  const excludedValuesClause =
+    excludedValues.length > 0
+      ? `AND original_name NOT IN (${excludedValues
+          .map((value) => `'${escapeSqlString(value)}'`)
+          .join(', ')})`
+      : '';
 
   await Duck.query(`
     CREATE OR REPLACE TABLE "${escapedDatasetTable}" AS
@@ -884,6 +984,7 @@ async function applyCachedJoinAssociation(
       WHERE match_basemap = '${escapedBasemapId}'
         AND match_id IS NOT NULL
         AND typo_match != 'toofar'
+        ${excludedValuesClause}
     ),
     -- IDs claimed by unambiguous exact matches (one candidate → one basemap id)
     exact_claimed_ids AS (
@@ -906,7 +1007,7 @@ async function applyCachedJoinAssociation(
       FROM eligible_matches
       QUALIFY ROW_NUMBER() OVER (
         PARTITION BY geoname
-        ORDER BY score DESC, id
+        ORDER BY score DESC, id, label
       ) = 1
       )
     SELECT
@@ -920,11 +1021,16 @@ async function applyCachedJoinAssociation(
   `);
 }
 
+export interface FinalizeJoinOptions {
+  excludedValues?: string[];
+}
+
 export async function finalizeJoin(
   dataset: DuckDBDataset,
   basemap: BasemapMetadata,
   geoColumn: string,
-  Duck: DuckDBClientForJoin
+  Duck: DuckDBClientForJoin,
+  options: FinalizeJoinOptions = {}
 ): Promise<FinalizeJoinResult> {
   if (isOSMBasemap(basemap)) {
     return finalizeGPSJoin(dataset, basemap);
@@ -963,7 +1069,8 @@ export async function finalizeJoin(
     geoColumn,
     basemapId,
     cacheTableName,
-    Duck
+    Duck,
+    options.excludedValues ?? []
   );
 
   return {
