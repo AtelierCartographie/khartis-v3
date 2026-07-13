@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import readline from 'node:readline';
+import { pathToFileURL } from 'node:url';
 import SftpClient from 'ssh2-sftp-client';
 
 const REPO = 'AtelierCartographie/khartis-v3';
@@ -16,6 +17,7 @@ const LOCAL_ENV_FILES = ['.env', '.env.deploy.local'];
 const DEFAULT_PORT = 22;
 const PUBLIC_URL_CHECK_TIMEOUT_MS = 15_000;
 const SFTP_CLOSE_TIMEOUT_MS = 5_000;
+const ALLOWED_PUBLIC_REDIRECT_STATUSES = new Set([301, 302, 307, 308]);
 // Accept legacy -staging.N and current -pprd.N prereleases; at an equal version the
 // current pprd channel wins over the legacy staging channel.
 const PPRD_TAG_PATTERN =
@@ -25,7 +27,6 @@ const PROD_TAG_PATTERN = /^v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$/;
 const TARGETS = {
   pprd: {
     tagPattern: PPRD_TAG_PATTERN,
-    basePathEnv: 'KHARTIS_BASE_PATH_PPRD',
     remoteDirLeaf: 'pprd',
     remoteDirEnv: 'KHARTIS_SFTP_REMOTE_DIR_PPRD',
     publicUrlEnv: 'KHARTIS_PUBLIC_URL_PPRD',
@@ -34,7 +35,6 @@ const TARGETS = {
   },
   prod: {
     tagPattern: PROD_TAG_PATTERN,
-    basePathEnv: 'KHARTIS_BASE_PATH_PROD',
     remoteDirLeaf: 'prod',
     remoteDirEnv: 'KHARTIS_SFTP_REMOTE_DIR_PROD',
     publicUrlEnv: 'KHARTIS_PUBLIC_URL_PROD',
@@ -64,9 +64,10 @@ Required local environment (shared):
   KHARTIS_SFTP_HOST_FINGERPRINT_SHA256
   KHARTIS_SFTP_USER
 
-Per-target base path, remote directory and GTM container (remote dir ends with html/<leaf>):
-  pprd: KHARTIS_BASE_PATH_PPRD, KHARTIS_SFTP_REMOTE_DIR_PPRD (html/pprd), KHARTIS_GTM_CONTAINER_ID_PPRD
-  prod: KHARTIS_BASE_PATH_PROD, KHARTIS_SFTP_REMOTE_DIR_PROD (html/prod), KHARTIS_GTM_CONTAINER_ID_PROD
+Per-target public URL, remote directory and GTM container (remote dir ends with html/<leaf>):
+  pprd: KHARTIS_PUBLIC_URL_PPRD, KHARTIS_SFTP_REMOTE_DIR_PPRD (html/pprd), KHARTIS_GTM_CONTAINER_ID_PPRD
+  prod: KHARTIS_PUBLIC_URL_PROD, KHARTIS_SFTP_REMOTE_DIR_PROD (html/prod), KHARTIS_GTM_CONTAINER_ID_PROD
+  BASE_PATH is derived from each public URL so the build and deployed route cannot diverge.
   Leave the GTM container id empty to ship a target without analytics (e.g. pprd).
 
 Authentication, choose one:
@@ -76,7 +77,6 @@ Authentication, choose one:
 Optional:
   KHARTIS_SFTP_PORT
   KHARTIS_SFTP_PASSPHRASE
-  KHARTIS_PUBLIC_URL_PPRD, KHARTIS_PUBLIC_URL_PROD
 
 Local env files:
   ${LOCAL_ENV_FILES.join(', ')} are supported.
@@ -118,9 +118,14 @@ async function main() {
   const remoteDir = options.dryRun
     ? process.env[target.remoteDirEnv]?.trim() || '<not required for dry run>'
     : readRequiredEnv(target.remoteDirEnv);
-  const basePath = readRequiredEnv(target.basePathEnv);
+  const deployment = resolveDeploymentPublicUrl(
+    readRequiredEnv(target.publicUrlEnv),
+    target.publicUrlEnv
+  );
+  log(`Public URL: ${deployment.publicUrl}`);
+  log(`Base path: ${deployment.basePath || '/'}`);
   const buildEnv = {
-    BASE_PATH: basePath,
+    BASE_PATH: deployment.basePath,
     VITE_APP_VERSION: tag,
     VITE_DEBUG: 'false',
     VITE_DEBUG_AUTH: 'false',
@@ -164,6 +169,7 @@ async function main() {
     if (!existsSync(buildDir)) {
       throw new Error(`Build directory was not created: ${buildDir}`);
     }
+    await assertBuildMatchesDeployment(buildDir, deployment);
 
     const uploadBuildDir = path.join(uploadSnapshotRoot, 'build');
     await cp(buildDir, uploadBuildDir, { recursive: true });
@@ -174,8 +180,13 @@ async function main() {
     }
 
     const config = await readSftpConfig();
-    await uploadBuild(config, uploadBuildDir, remoteDir, target.remoteDirLeaf);
-    await verifyPublicUrl(process.env[target.publicUrlEnv]);
+    await uploadBuild(
+      config,
+      uploadBuildDir,
+      remoteDir,
+      target.remoteDirLeaf,
+      deployment
+    );
     log('Deployment complete.');
   } finally {
     await run('git', ['worktree', 'remove', '--force', worktree], {
@@ -374,6 +385,98 @@ function readRequiredEnv(name) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
   return value;
+}
+
+function resolveDeploymentPublicUrl(value, envName = 'public URL') {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`${envName} must be a non-empty absolute HTTPS URL.`);
+  }
+
+  let publicUrl;
+  try {
+    publicUrl = new URL(value.trim());
+  } catch {
+    throw new Error(`${envName} must be a valid absolute HTTPS URL.`);
+  }
+
+  if (publicUrl.protocol !== 'https:') {
+    throw new Error(`${envName} must use HTTPS.`);
+  }
+  if (publicUrl.username || publicUrl.password) {
+    throw new Error(`${envName} must not contain credentials.`);
+  }
+  if (publicUrl.search || publicUrl.hash) {
+    throw new Error(`${envName} must not contain a query string or fragment.`);
+  }
+  if (/\/{2,}/.test(publicUrl.pathname)) {
+    throw new Error(`${envName} must not contain repeated path separators.`);
+  }
+
+  const basePath = publicUrl.pathname.replace(/\/+$/, '');
+  publicUrl.pathname = basePath ? `${basePath}/` : '/';
+
+  return {
+    basePath,
+    publicUrl: publicUrl.href
+  };
+}
+
+function expectedBaseHref(basePath) {
+  return basePath ? `${basePath}/` : '/';
+}
+
+function readSingleBaseHref(html, source) {
+  const matches = [
+    ...html.matchAll(/<base\b[^>]*\bhref=(["'])(.*?)\1[^>]*>/gi)
+  ];
+  if (matches.length !== 1) {
+    throw new Error(
+      `${source} must contain exactly one <base href>; found ${matches.length}.`
+    );
+  }
+  return matches[0][2];
+}
+
+function assertHtmlBaseHref(html, basePath, source) {
+  const expected = expectedBaseHref(basePath);
+  const actual = readSingleBaseHref(html, source);
+  if (actual !== expected) {
+    throw new Error(
+      `${source} has <base href="${actual}">; expected "${expected}".`
+    );
+  }
+}
+
+async function assertBuildMatchesDeployment(buildDir, deployment) {
+  const indexPath = path.join(buildDir, 'index.html');
+  const manifestPath = path.join(buildDir, 'manifest.webmanifest');
+  const indexHtml = await readFile(indexPath, 'utf8');
+  assertHtmlBaseHref(indexHtml, deployment.basePath, indexPath);
+
+  let manifest;
+  try {
+    manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  } catch (error) {
+    throw new Error(`Could not read a valid PWA manifest: ${manifestPath}`, {
+      cause: error
+    });
+  }
+
+  const scope = expectedBaseHref(deployment.basePath);
+  const expectedManifestValues = {
+    id: scope,
+    scope,
+    start_url: `${scope}?standalone=true`
+  };
+  for (const [key, expected] of Object.entries(expectedManifestValues)) {
+    if (manifest[key] !== expected) {
+      throw new Error(
+        `${manifestPath} has ${key}="${manifest[key] ?? ''}"; expected "${expected}".`
+      );
+    }
+  }
+
+  log(`Build route contract verified for ${deployment.publicUrl}`);
 }
 
 async function readSftpConfig() {
@@ -597,7 +700,13 @@ function promptVisible(question) {
   });
 }
 
-async function uploadBuild(config, buildDir, remoteDir, expectedRemoteDirLeaf) {
+async function uploadBuild(
+  config,
+  buildDir,
+  remoteDir,
+  expectedRemoteDirLeaf,
+  deployment
+) {
   const safeRemoteDir = assertSafeRemoteDir(remoteDir, expectedRemoteDirLeaf);
   const tempRemoteDir = createRemoteSiblingDir(
     safeRemoteDir,
@@ -664,6 +773,52 @@ async function uploadBuild(config, buildDir, remoteDir, expectedRemoteDirLeaf) {
     swapped = true;
     log(`Remote ${expectedRemoteDirLeaf} directory swapped.`);
 
+    try {
+      await verifyPublicUrl(deployment);
+    } catch (validationError) {
+      const validationMessage =
+        validationError instanceof Error
+          ? validationError.message
+          : String(validationError);
+      warn(
+        previousRemoteDir
+          ? 'Public route validation failed; restoring the previous version.'
+          : 'Public route validation failed; taking the first deployment offline.'
+      );
+      try {
+        await rollbackPublicValidationFailure(client, {
+          previousRemoteDir,
+          safeRemoteDir,
+          tempRemoteDir
+        });
+        swapped = false;
+        log(
+          previousRemoteDir
+            ? 'Previous remote version restored after validation failure.'
+            : 'Failed first deployment removed from the public target.'
+        );
+      } catch (rollbackError) {
+        preserveTempDir = true;
+        const rollbackMessage =
+          rollbackError instanceof Error
+            ? rollbackError.message
+            : String(rollbackError);
+        throw new Error(
+          previousRemoteDir
+            ? `Public route validation failed (${validationMessage}) and rollback failed (${rollbackMessage}). Previous version: ${previousRemoteDir}, failed upload: ${tempRemoteDir}. Restore one manually.`
+            : `Public route validation failed (${validationMessage}) and the failed first deployment could not be taken offline (${rollbackMessage}). Public target: ${safeRemoteDir}. Remove or replace it manually.`,
+          { cause: rollbackError }
+        );
+      }
+
+      throw new Error(
+        previousRemoteDir
+          ? `Public route validation failed and the previous version was restored: ${validationMessage}`
+          : `Public route validation failed and the first deployment was removed: ${validationMessage}`,
+        { cause: validationError }
+      );
+    }
+
     if (previousRemoteDir) {
       await removeRemoteDirRecursive(
         client,
@@ -685,6 +840,16 @@ async function uploadBuild(config, buildDir, remoteDir, expectedRemoteDirLeaf) {
       ).catch(() => undefined);
     }
     await closeSftpClient(client, 'deployment').catch(() => undefined);
+  }
+}
+
+async function rollbackPublicValidationFailure(
+  client,
+  { previousRemoteDir, safeRemoteDir, tempRemoteDir }
+) {
+  await client.rename(safeRemoteDir, tempRemoteDir);
+  if (previousRemoteDir) {
+    await client.rename(previousRemoteDir, safeRemoteDir);
   }
 }
 
@@ -972,39 +1137,226 @@ function normalizeRemotePath(remotePath) {
   return normalized;
 }
 
-async function verifyPublicUrl(url) {
-  if (!url) return;
-
+async function fetchPublicUrl(
+  url,
+  {
+    accept = 'text/html',
+    fetchImpl = fetch,
+    timeoutMs = PUBLIC_URL_CHECK_TIMEOUT_MS
+  } = {}
+) {
   const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    PUBLIC_URL_CHECK_TIMEOUT_MS
-  );
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   timeout.unref?.();
 
   try {
-    log(`Checking public URL: ${url}`);
-    const response = await fetch(url, {
-      method: 'HEAD',
-      redirect: 'follow',
+    return await fetchImpl(url, {
+      method: 'GET',
+      redirect: 'manual',
+      headers: { accept },
       signal: controller.signal
     });
-    if (response.ok) {
-      log(`Public URL check: ${response.status} ${url}`);
-      return;
-    }
-    warn(`Public URL check returned ${response.status}: ${url}`);
   } catch (error) {
-    if (error.name === 'AbortError') {
-      warn(
-        `Public URL check timed out after ${formatDuration(PUBLIC_URL_CHECK_TIMEOUT_MS)}: ${url}`
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(
+        `Public URL check timed out after ${formatDuration(timeoutMs)}: ${url}`,
+        { cause: error }
       );
-      return;
     }
-    warn(`Public URL check failed: ${error.message}`);
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Public URL check failed for ${url}: ${message}`, {
+      cause: error
+    });
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function assertPublicHtmlResponse(response, requestedUrl, basePath) {
+  if (!response.ok) {
+    throw new Error(
+      `Public URL check returned ${response.status}: ${requestedUrl}`
+    );
+  }
+  if (response.url !== requestedUrl) {
+    throw new Error(
+      `Public URL unexpectedly resolved to ${response.url || '<unknown>'}; expected ${requestedUrl}.`
+    );
+  }
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.toLowerCase().includes('text/html')) {
+    throw new Error(
+      `Public URL returned ${contentType || 'an unknown content type'}; expected text/html: ${requestedUrl}`
+    );
+  }
+  const html = await response.text();
+  assertHtmlBaseHref(html, basePath, requestedUrl);
+  return html;
+}
+
+function readTagAttribute(tag, name) {
+  const match = tag.match(new RegExp(`\\b${name}\\s*=\\s*(["'])(.*?)\\1`, 'i'));
+  return match?.[2] ?? null;
+}
+
+function findCriticalPublicAssets(html, deployment) {
+  const documentUrl = new URL(deployment.publicUrl);
+  const expectedPathPrefix = expectedBaseHref(deployment.basePath);
+  let moduleUrl = null;
+  let stylesheetUrl = null;
+
+  for (const tag of html.match(/<(?:script|link)\b[^>]*>/gi) ?? []) {
+    if (!moduleUrl && /^<script\b/i.test(tag)) {
+      const type = readTagAttribute(tag, 'type');
+      const src = readTagAttribute(tag, 'src');
+      if (type?.toLowerCase() === 'module' && src) {
+        const candidate = new URL(src, documentUrl);
+        if (
+          candidate.origin === documentUrl.origin &&
+          candidate.pathname.startsWith(expectedPathPrefix)
+        ) {
+          moduleUrl = candidate.href;
+        }
+      }
+    }
+
+    if ((!moduleUrl || !stylesheetUrl) && /^<link\b/i.test(tag)) {
+      const rel = readTagAttribute(tag, 'rel');
+      const href = readTagAttribute(tag, 'href');
+      const relValues = rel?.toLowerCase().split(/\s+/) ?? [];
+      if (!moduleUrl && relValues.includes('modulepreload') && href) {
+        const candidate = new URL(href, documentUrl);
+        if (
+          candidate.origin === documentUrl.origin &&
+          candidate.pathname.startsWith(expectedPathPrefix)
+        ) {
+          moduleUrl = candidate.href;
+        }
+      }
+      if (!stylesheetUrl && relValues.includes('stylesheet') && href) {
+        const candidate = new URL(href, documentUrl);
+        if (
+          candidate.origin === documentUrl.origin &&
+          candidate.pathname.startsWith(expectedPathPrefix)
+        ) {
+          stylesheetUrl = candidate.href;
+        }
+      }
+    }
+
+    if (moduleUrl && stylesheetUrl) break;
+  }
+
+  if (!moduleUrl || !stylesheetUrl) {
+    throw new Error(
+      `${deployment.publicUrl} must reference a same-origin JavaScript module and stylesheet under ${expectedPathPrefix}.`
+    );
+  }
+
+  return [
+    {
+      accept: 'text/javascript, application/javascript',
+      contentTypes: ['text/javascript', 'application/javascript'],
+      label: 'module script',
+      url: moduleUrl
+    },
+    {
+      accept: 'text/css',
+      contentTypes: ['text/css'],
+      label: 'stylesheet',
+      url: stylesheetUrl
+    }
+  ];
+}
+
+async function verifyCriticalPublicAssets(html, deployment, options) {
+  for (const asset of findCriticalPublicAssets(html, deployment)) {
+    const response = await fetchPublicUrl(asset.url, {
+      ...options,
+      accept: asset.accept
+    });
+    try {
+      if (!response.ok) {
+        throw new Error(
+          `Public ${asset.label} returned ${response.status}: ${asset.url}`
+        );
+      }
+      if (response.url !== asset.url) {
+        throw new Error(
+          `Public ${asset.label} unexpectedly resolved to ${response.url || '<unknown>'}; expected ${asset.url}.`
+        );
+      }
+      const contentType = response.headers.get('content-type')?.toLowerCase();
+      if (
+        !contentType ||
+        !asset.contentTypes.some((expected) => contentType.includes(expected))
+      ) {
+        throw new Error(
+          `Public ${asset.label} returned ${contentType || 'an unknown content type'}: ${asset.url}`
+        );
+      }
+      log(`Public asset check: ${response.status} ${asset.url}`);
+    } finally {
+      await response.body?.cancel?.();
+    }
+  }
+}
+
+async function verifyPublicUrl(deployment, options = {}) {
+  log(`Checking public URL: ${deployment.publicUrl}`);
+  const canonicalResponse = await fetchPublicUrl(deployment.publicUrl, options);
+  const canonicalHtml = await assertPublicHtmlResponse(
+    canonicalResponse,
+    deployment.publicUrl,
+    deployment.basePath
+  );
+  log(`Public URL check: ${canonicalResponse.status} ${deployment.publicUrl}`);
+  await verifyCriticalPublicAssets(canonicalHtml, deployment, options);
+
+  if (!deployment.basePath) return;
+
+  const slashlessUrl = new URL(deployment.publicUrl);
+  slashlessUrl.pathname = deployment.basePath;
+  const slashlessHref = slashlessUrl.href;
+  const slashlessResponse = await fetchPublicUrl(slashlessHref, options);
+
+  if (slashlessResponse.ok) {
+    await assertPublicHtmlResponse(
+      slashlessResponse,
+      slashlessHref,
+      deployment.basePath
+    );
+    log(
+      `Slashless public URL check: ${slashlessResponse.status} ${slashlessHref}`
+    );
+    return;
+  }
+
+  if (!ALLOWED_PUBLIC_REDIRECT_STATUSES.has(slashlessResponse.status)) {
+    throw new Error(
+      `Slashless public URL check returned ${slashlessResponse.status}: ${slashlessHref}`
+    );
+  }
+
+  const location = slashlessResponse.headers.get('location');
+  if (!location) {
+    throw new Error(
+      `Slashless public URL returned ${slashlessResponse.status} without a Location header: ${slashlessHref}`
+    );
+  }
+  const redirectUrl = new URL(location, slashlessHref);
+  if (
+    redirectUrl.protocol !== 'https:' ||
+    redirectUrl.href !== deployment.publicUrl
+  ) {
+    throw new Error(
+      `Slashless public URL redirects to ${redirectUrl.href}; expected ${deployment.publicUrl}.`
+    );
+  }
+
+  log(
+    `Slashless public URL check: ${slashlessResponse.status} ${slashlessHref} -> ${deployment.publicUrl}`
+  );
 }
 
 async function closeSftpClient(client, label) {
@@ -1104,13 +1456,27 @@ function restoreTerminal() {
   }
 }
 
-main()
-  .then(() => {
-    restoreTerminal();
-    process.exit(0);
-  })
-  .catch((error) => {
-    console.error(`[deploy-local] ERROR: ${error.message}`);
-    restoreTerminal();
-    process.exit(1);
-  });
+const isMainModule =
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+
+if (isMainModule) {
+  main()
+    .then(() => {
+      restoreTerminal();
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error(`[deploy-local] ERROR: ${error.message}`);
+      restoreTerminal();
+      process.exit(1);
+    });
+}
+
+export {
+  assertBuildMatchesDeployment,
+  assertHtmlBaseHref,
+  rollbackPublicValidationFailure,
+  resolveDeploymentPublicUrl,
+  verifyPublicUrl
+};

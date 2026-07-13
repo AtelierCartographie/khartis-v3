@@ -2,11 +2,10 @@
 /// <reference types="vite/client" />
 
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
-import { clientsClaim } from 'workbox-core';
+import { clientsClaim, setCacheNameDetails } from 'workbox-core';
 import type { WorkboxPlugin } from 'workbox-core/types';
 import { ExpirationPlugin } from 'workbox-expiration';
 import {
-  addPlugins,
   cleanupOutdatedCaches,
   matchPrecache,
   precacheAndRoute
@@ -25,6 +24,10 @@ import type {
   ClientToSwMessage,
   SwToClientMessage
 } from '$lib/types/sw-messages';
+import {
+  createPwaCachePrefix,
+  isPwaCacheForScope
+} from '$lib/features/commons/utils/pwa-cache';
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ revision: string | null; url: string }>;
@@ -34,15 +37,29 @@ const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 const NINETY_DAYS_SECONDS = 60 * 60 * 24 * 90;
 const THIRTY_DAYS_SECONDS = 60 * 60 * 24 * 30;
 
-const PRESETS_CACHE = 'presets';
-const GEOPF_TILES_CACHE = 'geopf-vector-tiles';
-const OPENMAPTILES_CACHE = 'openmaptiles';
-const FONTS_CACHE = 'fonts';
+const PWA_SCOPE_URL = self.registration.scope;
+const PWA_CACHE_PREFIX = createPwaCachePrefix(PWA_SCOPE_URL);
+const scopedCacheName = (name: string): string => `${PWA_CACHE_PREFIX}${name}`;
+
+setCacheNameDetails({ prefix: PWA_CACHE_PREFIX });
+
+const APP_SHELL_CACHE = scopedCacheName('app-shell');
+const DUCKDB_WASM_CORE_CACHE = scopedCacheName('duckdb-wasm-core');
+const DUCKDB_EXTENSIONS_CDN_CACHE = scopedCacheName('duckdb-extensions-cdn');
+const DUCKDB_EXTENSIONS_LOCAL_CACHE = scopedCacheName(
+  'duckdb-extensions-local'
+);
+const WORKERS_CACHE = scopedCacheName('workers');
+const IMAGES_CACHE = scopedCacheName('images');
+const PRESETS_CACHE = scopedCacheName('presets');
+const GEOPF_TILES_CACHE = scopedCacheName('geopf-vector-tiles');
+const OPENMAPTILES_CACHE = scopedCacheName('openmaptiles');
+const FONTS_CACHE = scopedCacheName('fonts');
 
 self.skipWaiting();
 clientsClaim();
 
-const RETRY_STATUS_CODES = new Set([403, 408, 425, 429, 500, 502, 503, 504]);
+const RETRY_STATUS_CODES = new Set([408, 425, 500, 502, 503, 504]);
 const MAX_TRANSIENT_RETRIES = 2;
 const BASE_RETRY_DELAY_MS = 500;
 const RETRY_JITTER_MS = 500;
@@ -75,12 +92,10 @@ const retryTransientErrorsPlugin: WorkboxPlugin = {
   }
 };
 
-addPlugins([retryTransientErrorsPlugin]);
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
-const APP_SHELL_CACHE = 'app-shell';
-const HASHED_RUNTIME_CACHES_TO_RESET = ['fonts', 'images'];
+const HASHED_RUNTIME_CACHES_TO_RESET = [FONTS_CACHE, IMAGES_CACHE];
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
@@ -144,7 +159,7 @@ setCatchHandler(async ({ request }) => {
 registerRoute(
   ({ url }) => /.*duckdb.*\.wasm$/.test(url.pathname),
   new CacheFirst({
-    cacheName: 'duckdb-wasm-core',
+    cacheName: DUCKDB_WASM_CORE_CACHE,
     matchOptions: { ignoreSearch: true },
     plugins: [
       retryTransientErrorsPlugin,
@@ -161,7 +176,7 @@ registerRoute(
 registerRoute(
   ({ url }) => url.origin === 'https://extensions.duckdb.org',
   new CacheFirst({
-    cacheName: 'duckdb-extensions-cdn',
+    cacheName: DUCKDB_EXTENSIONS_CDN_CACHE,
     plugins: [
       retryTransientErrorsPlugin,
       new CacheableResponsePlugin({ statuses: [0, 200] }),
@@ -179,7 +194,7 @@ registerRoute(
     url.pathname.includes('/duckdb-extensions/') &&
     url.pathname.endsWith('.wasm'),
   new CacheFirst({
-    cacheName: 'duckdb-extensions-local',
+    cacheName: DUCKDB_EXTENSIONS_LOCAL_CACHE,
     plugins: [
       retryTransientErrorsPlugin,
       new CacheableResponsePlugin({ statuses: [0, 200] }),
@@ -195,7 +210,7 @@ registerRoute(
 registerRoute(
   ({ url }) => url.pathname.endsWith('.worker.js'),
   new CacheFirst({
-    cacheName: 'workers',
+    cacheName: WORKERS_CACHE,
     plugins: [
       retryTransientErrorsPlugin,
       new CacheableResponsePlugin({ statuses: [0, 200] }),
@@ -211,7 +226,7 @@ registerRoute(
 registerRoute(
   ({ request }) => request.destination === 'image',
   new CacheFirst({
-    cacheName: 'images',
+    cacheName: IMAGES_CACHE,
     plugins: [
       retryTransientErrorsPlugin,
       new CacheableResponsePlugin({ statuses: [0, 200] }),
@@ -320,14 +335,16 @@ async function handleFactoryReset(): Promise<void> {
   try {
     const allCaches = await caches.keys();
     await Promise.all(
-      allCaches.map(async (name) => {
-        try {
-          const deleted = await caches.delete(name);
-          if (deleted) cleared.push(name);
-        } catch {
-          // Cache cleanup should not block reset completion.
-        }
-      })
+      allCaches
+        .filter((name) => isPwaCacheForScope(name, PWA_SCOPE_URL))
+        .map(async (name) => {
+          try {
+            const deleted = await caches.delete(name);
+            if (deleted) cleared.push(name);
+          } catch {
+            // Cache cleanup should not block reset completion.
+          }
+        })
     );
   } catch {
     // Reset can still notify clients even when cache enumeration fails.

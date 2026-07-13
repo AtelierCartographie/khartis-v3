@@ -1,7 +1,17 @@
 import { LogCategory, logger } from './logger';
+import {
+  createPwaCachePrefix,
+  isPwaCacheForScope,
+  resolvePwaScopeUrl
+} from './pwa-cache';
 
 const FACTORY_RESET_QUERY_PARAM = 'reset';
-const RESET_SKIP_RESTORE_STORAGE_KEY = 'kh:reset-skip-restore';
+const RESET_SKIP_RESTORE_STORAGE_KEY_SUFFIX = 'reset-skip-restore';
+
+function resetSkipRestoreStorageKey(): string {
+  const scopeUrl = resolvePwaScopeUrl(document.baseURI);
+  return `${createPwaCachePrefix(scopeUrl)}${RESET_SKIP_RESTORE_STORAGE_KEY_SUFFIX}`;
+}
 
 function postFactoryResetMessage(controller: ServiceWorker): void {
   try {
@@ -38,8 +48,9 @@ export function shouldSkipLastProjectRestore(): boolean {
     return true;
   }
   try {
-    if (window.sessionStorage.getItem(RESET_SKIP_RESTORE_STORAGE_KEY) === '1') {
-      window.sessionStorage.removeItem(RESET_SKIP_RESTORE_STORAGE_KEY);
+    const storageKey = resetSkipRestoreStorageKey();
+    if (window.sessionStorage.getItem(storageKey) === '1') {
+      window.sessionStorage.removeItem(storageKey);
       return true;
     }
   } catch (error) {
@@ -56,6 +67,10 @@ export async function factoryResetPwa(
   options: FactoryResetOptions = {}
 ): Promise<void> {
   const { reload = true } = options;
+  const scopeUrl =
+    typeof document !== 'undefined'
+      ? resolvePwaScopeUrl(document.baseURI)
+      : null;
 
   if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
     if (navigator.serviceWorker.controller) {
@@ -64,7 +79,11 @@ export async function factoryResetPwa(
 
     try {
       const registrations = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(registrations.map((reg) => reg.unregister()));
+      await Promise.all(
+        registrations
+          .filter((registration) => registration.scope === scopeUrl)
+          .map((registration) => registration.unregister())
+      );
     } catch (error) {
       logger.error(
         'Failed to unregister service workers during factory reset',
@@ -74,10 +93,14 @@ export async function factoryResetPwa(
     }
   }
 
-  if (typeof caches !== 'undefined') {
+  if (typeof caches !== 'undefined' && scopeUrl) {
     try {
       const names = await caches.keys();
-      await Promise.all(names.map((n) => caches.delete(n)));
+      await Promise.all(
+        names
+          .filter((name) => isPwaCacheForScope(name, scopeUrl))
+          .map((name) => caches.delete(name))
+      );
     } catch (error) {
       logger.error(
         'Failed to clear caches during factory reset',

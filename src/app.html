@@ -2,14 +2,24 @@
 
 <html lang="%paraglide.lang%">
   <head>
-    <script>
+    <script id="khartis-pwa-reset">
       (function () {
         try {
           var params = new URLSearchParams(window.location.search);
           if (!params.has('reset')) return;
+          var appBasePath = '%sveltekit.assets%';
+          var appScope = new URL(
+            (appBasePath || '') + '/',
+            window.location.origin
+          ).href;
+          var scopePath = new URL(appScope).pathname.replace(/\/+$/, '') || '/';
+          var cachePrefix = 'khartis:' + encodeURIComponent(scopePath) + ':';
           document.documentElement.style.background = '#ffffff';
           try {
-            window.sessionStorage.setItem('kh:reset-skip-restore', '1');
+            window.sessionStorage.setItem(
+              cachePrefix + 'reset-skip-restore',
+              '1'
+            );
           } catch (flagError) {
             console.error('Khartis reset flag persistence failed', flagError);
           }
@@ -19,9 +29,13 @@
                   .getRegistrations()
                   .then(function (regs) {
                     return Promise.all(
-                      regs.map(function (r) {
-                        return r.unregister();
-                      })
+                      regs
+                        .filter(function (r) {
+                          return r.scope === appScope;
+                        })
+                        .map(function (r) {
+                          return r.unregister();
+                        })
                     );
                   })
                   .catch(function (error) {
@@ -37,9 +51,13 @@
                   .keys()
                   .then(function (keys) {
                     return Promise.all(
-                      keys.map(function (k) {
-                        return caches.delete(k);
-                      })
+                      keys
+                        .filter(function (k) {
+                          return k.indexOf(cachePrefix) === 0;
+                        })
+                        .map(function (k) {
+                          return caches.delete(k);
+                        })
                     );
                   })
                   .catch(function (error) {
@@ -56,10 +74,16 @@
         }
       })();
     </script>
-    <script>
+    <script id="khartis-stale-asset-recovery">
       (function () {
-        var RELOAD_GUARD_KEY = 'khartis:auto-reloaded-at';
-        var RELOAD_GUARD_WINDOW_MS = 10 * 1000;
+        var recoveryScopePath =
+          ('%sveltekit.assets%' || '').replace(/\/+$/, '') || '/';
+        var recoveryKeyPrefix =
+          'khartis:' + encodeURIComponent(recoveryScopePath) + ':';
+        var RELOAD_GUARD_KEY = recoveryKeyPrefix + 'auto-reloaded-at';
+        var RESET_GUARD_KEY = recoveryKeyPrefix + 'auto-reset-at';
+        var RELOAD_GUARD_WINDOW_MS = 5 * 60 * 1000;
+        var recoveryScheduled = false;
         var STALE_ASSET_PATTERNS = [
           'Failed to fetch dynamically imported module',
           'Importing a module script failed',
@@ -81,6 +105,14 @@
           });
         }
 
+        function isRecentRecovery(timestamp, now) {
+          return (
+            Number.isFinite(timestamp) &&
+            timestamp > 0 &&
+            now - timestamp < RELOAD_GUARD_WINDOW_MS
+          );
+        }
+
         function resetWithCacheCleanup() {
           var url = new URL(window.location.href);
           url.searchParams.set('reset', '1');
@@ -88,41 +120,55 @@
         }
 
         function recoverFromStaleAsset() {
+          if (recoveryScheduled) return false;
           try {
+            var now = Date.now();
             var lastReload = Number(
               window.sessionStorage.getItem(RELOAD_GUARD_KEY) || '0'
             );
-            if (
-              Number.isFinite(lastReload) &&
-              Date.now() - lastReload < RELOAD_GUARD_WINDOW_MS
-            ) {
-              resetWithCacheCleanup();
-              return;
+            var lastReset = Number(
+              window.sessionStorage.getItem(RESET_GUARD_KEY) || '0'
+            );
+            if (isRecentRecovery(lastReset, now)) {
+              console.error(
+                'Khartis stale asset recovery stopped to prevent a reload loop'
+              );
+              return false;
             }
-            window.sessionStorage.setItem(RELOAD_GUARD_KEY, String(Date.now()));
+
+            recoveryScheduled = true;
+            if (isRecentRecovery(lastReload, now)) {
+              window.sessionStorage.setItem(RESET_GUARD_KEY, String(now));
+              resetWithCacheCleanup();
+              return true;
+            }
+
+            window.sessionStorage.setItem(RELOAD_GUARD_KEY, String(now));
             window.location.reload();
+            return true;
           } catch (error) {
-            resetWithCacheCleanup();
+            console.error(
+              'Khartis stale asset recovery guard failed; automatic reload disabled',
+              error
+            );
+            return false;
           }
         }
 
         window.addEventListener('vite:preloadError', function (event) {
-          event.preventDefault();
-          recoverFromStaleAsset();
+          if (recoverFromStaleAsset()) event.preventDefault();
         });
 
         window.addEventListener('unhandledrejection', function (event) {
           if (!isStaleAssetError(event.reason)) return;
-          event.preventDefault();
-          recoverFromStaleAsset();
+          if (recoverFromStaleAsset()) event.preventDefault();
         });
 
         window.addEventListener(
           'error',
           function (event) {
             if (!isStaleAssetError(event.error || event.message)) return;
-            event.preventDefault();
-            recoverFromStaleAsset();
+            if (recoverFromStaleAsset()) event.preventDefault();
           },
           true
         );
