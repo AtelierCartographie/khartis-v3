@@ -79,8 +79,10 @@ service with diagnostic logs.
 ## GTM configuration
 
 Khartis loads a Google Tag Manager container. Set `PUBLIC_GTM_CONTAINER_ID`
-(for example `GTM-XXXXXX`) in the public build environment; the deploy helper
-forwards it into the production build. A container ID is public configuration,
+(for example `GTM-XXXXXX`) in the public build environment. The local deploy
+helper sets it per target (`KHARTIS_GTM_CONTAINER_ID_PROD` for prod,
+`KHARTIS_GTM_CONTAINER_ID_PPRD` for pprd); leaving the pprd one empty ships
+pre-production without analytics so test traffic never reaches the prod property. A container ID is public configuration,
 not a credential. Never add an API secret or another credential to the
 application or repository, and never hard-code the ID in the source.
 

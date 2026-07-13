@@ -20,12 +20,15 @@ import { join_macros } from '$lib/features/duckdb/macros/join';
 import {
   computeJoinSynthesis,
   computeJoinStats,
+  finalizeJoin,
   invalidateSimilarityCache,
   type DuckDBClientForJoin
 } from '$lib/features/duckdb/orchestrator/join-ops';
 import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
+import { JOINED_BASEMAP_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import type { DuckDBDataset } from '$lib/features/duckdb/types';
+import { DuckDBSimplifiedType } from '$lib/features/duckdb/enums';
 import {
   createTestInstance,
   destroyTestInstance,
@@ -64,13 +67,16 @@ const FAKE_BASEMAP_METADATA: BasemapMetadata = {
   layers: []
 };
 
-function makeDataset(tableName: string): DuckDBDataset {
+function makeDataset(
+  tableName: string,
+  columns: DuckDBDataset['columns'] = []
+): DuckDBDataset {
   return {
     id: 'test-dataset',
     tableName,
     sourceFileId: 'test',
     name: 'test',
-    columns: [],
+    columns,
     rowCount: 0,
     metadata: { processedAt: new Date(), fileType: 'csv' as never }
   };
@@ -185,6 +191,220 @@ describe('exact_claimed_ids deduplication', () => {
     const code = quality.entities.find((e) => e.dataValue === '69123');
     expect(code).toBeDefined();
     expect(code!.status).toBe(JoinStatus.JOINED);
+  });
+
+  it('orders to-verify candidates by score and aligns the preselection with the finalized join', async () => {
+    await run(db, `CREATE OR REPLACE TABLE user_data4 (geo VARCHAR)`);
+    await run(db, `INSERT INTO user_data4 VALUES ('Saint-Colombe')`);
+
+    const Duck = makeDuckClient(db);
+    const dataset = makeDataset('user_data4', [
+      { name: 'geo', type_simple: DuckDBSimplifiedType.STRING }
+    ]);
+    const quality = await computeJoinStats(
+      dataset,
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck
+    );
+
+    const st = quality.entities.find((e) => e.dataValue === 'Saint-Colombe');
+    expect(st).toBeDefined();
+    expect(st!.status).toBe(JoinStatus.TO_VERIFY);
+
+    // Candidates carry score/type/variant and come back best-first
+    const candidates = st!.candidates!;
+    expect(candidates.length).toBeGreaterThan(1);
+    const scores = candidates.map((c) => c.score);
+    expect([...scores].sort((a, b) => b - a)).toEqual(scores);
+    expect(candidates[0]).toMatchObject({
+      id: 'SC_01',
+      name: 'Sainte-Colombe',
+      type: 'partial',
+      variant: 'nom'
+    });
+    expect(candidates[0].score).toBeGreaterThan(0.9);
+    expect(candidates[0].score).toBeLessThan(1);
+    expect(st!.matches![0]).toBe('Sainte-Colombe');
+
+    // The finalized join must apply exactly the candidate the UI preselects
+    await finalizeJoin(dataset, FAKE_BASEMAP_METADATA, 'geo', Duck);
+    const joined = (await Duck.query(
+      `SELECT "${JOINED_BASEMAP_COLUMN.ID}" AS id, "${JOINED_BASEMAP_COLUMN.LABEL}" AS label FROM user_data4`,
+      { format: 'array' }
+    )) as Array<{ id: string; label: string }>;
+    expect(joined).toHaveLength(1);
+    expect(joined[0].id).toBe(candidates[0].id);
+    expect(joined[0].label).toBe(candidates[0].name);
+  });
+
+  it('disables fuzzy suggestions when the source column holds numeric codes', async () => {
+    await run(db, `CREATE OR REPLACE TABLE user_codes (geo VARCHAR)`);
+    await run(
+      db,
+      `INSERT INTO user_codes VALUES ('01234'), ('56789'), ('99999')`
+    );
+
+    const Duck = makeDuckClient(db);
+    const quality = await computeJoinStats(
+      makeDataset('user_codes'),
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck
+    );
+
+    const known = quality.entities.find((e) => e.dataValue === '01234');
+    expect(known!.status).toBe(JoinStatus.JOINED);
+
+    // '99999' is close to '56789'/'11111' in Jaro-Winkler terms, but fuzzy
+    // matching between codes is noise: it must stay unrecognized.
+    const unknown = quality.entities.find((e) => e.dataValue === '99999');
+    expect(unknown!.status).toBe(JoinStatus.UNRECOGNIZED);
+    expect(unknown!.matches).toEqual([]);
+  });
+
+  it('disables fuzzy suggestions for fixed-length alphanumeric codes (ISO3-like)', async () => {
+    await run(
+      db,
+      `INSERT INTO basemap_attributes VALUES
+        ('FR001', 'FRA', 'iso', 'fra', '${TEST_BASEMAP}', 5),
+        ('DE001', 'DEU', 'iso', 'deu', '${TEST_BASEMAP}', 5)`
+    );
+    await run(db, `CREATE OR REPLACE TABLE user_iso (geo VARCHAR)`);
+    await run(db, `INSERT INTO user_iso VALUES ('FRA'), ('DEU'), ('FRB')`);
+
+    const Duck = makeDuckClient(db);
+    const quality = await computeJoinStats(
+      makeDataset('user_iso'),
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck
+    );
+
+    expect(quality.entities.find((e) => e.dataValue === 'FRA')!.status).toBe(
+      JoinStatus.JOINED
+    );
+
+    // 'FRB' ≈ 'FRA' scores ~0.93 in Jaro-Winkler but is a distinct code
+    const frb = quality.entities.find((e) => e.dataValue === 'FRB');
+    expect(frb!.status).toBe(JoinStatus.UNRECOGNIZED);
+    expect(frb!.matches).toEqual([]);
+  });
+
+  it('keeps fuzzy suggestions for distinct place names with the same length', async () => {
+    await run(
+      db,
+      `INSERT INTO basemap_attributes VALUES
+        ('PAR', 'Paris', 'nom', 'paris', '${TEST_BASEMAP}', 5),
+        ('LIL', 'Lille', 'nom', 'lille', '${TEST_BASEMAP}', 5),
+        ('DIJ', 'Dijon', 'nom', 'dijon', '${TEST_BASEMAP}', 5)`
+    );
+    await run(db, `CREATE OR REPLACE TABLE user_place_names (geo VARCHAR)`);
+    await run(
+      db,
+      `INSERT INTO user_place_names VALUES ('Parsi'), ('Lille'), ('Dijon')`
+    );
+
+    const Duck = makeDuckClient(db);
+    const quality = await computeJoinStats(
+      makeDataset('user_place_names'),
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck
+    );
+
+    const typo = quality.entities.find((e) => e.dataValue === 'Parsi');
+    expect(typo!.status).toBe(JoinStatus.TO_VERIFY);
+    expect(typo!.candidates![0].name).toBe('Paris');
+  });
+
+  it('matches reordered names via word-sorted comparison (Korea, North → North Korea)', async () => {
+    await run(
+      db,
+      `INSERT INTO basemap_attributes VALUES
+        ('KP', 'Corée du Nord', 'name_fren', 'coree du nord', '${TEST_BASEMAP}', 5),
+        ('KP', 'North Korea', 'name_engl', 'north korea', '${TEST_BASEMAP}', 5),
+        ('KR', 'Corée du Sud', 'name_fren', 'coree du sud', '${TEST_BASEMAP}', 5),
+        ('KR', 'Korea, Rep.', 'name_engl', 'korea rep', '${TEST_BASEMAP}', 5)`
+    );
+    await run(db, `CREATE OR REPLACE TABLE user_kp (geo VARCHAR)`);
+    await run(db, `INSERT INTO user_kp VALUES ('Korea, North'), ('Lyon')`);
+
+    const Duck = makeDuckClient(db);
+    const quality = await computeJoinStats(
+      makeDataset('user_kp'),
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck
+    );
+
+    // Prefix-weighted Jaro-Winkler alone prefers 'Korea, Rep.' (South Korea);
+    // the word-sorted comparison must rank 'North Korea' (KP) first instead.
+    const north = quality.entities.find((e) => e.dataValue === 'Korea, North');
+    expect(north!.status).toBe(JoinStatus.TO_VERIFY);
+    expect(north!.candidates![0]).toMatchObject({
+      id: 'KP',
+      name: 'North Korea'
+    });
+    expect(north!.candidates![0].score).toBeGreaterThan(0.95);
+    expect(north!.candidates![0].score).toBeLessThan(1);
+  });
+
+  it('excludes ignored values from the finalized join', async () => {
+    await run(db, `CREATE OR REPLACE TABLE user_ignore (geo VARCHAR)`);
+    await run(db, `INSERT INTO user_ignore VALUES ('Lyon'), ('69123')`);
+
+    const Duck = makeDuckClient(db);
+    const dataset = makeDataset('user_ignore', [
+      { name: 'geo', type_simple: DuckDBSimplifiedType.STRING }
+    ]);
+    await finalizeJoin(dataset, FAKE_BASEMAP_METADATA, 'geo', Duck, {
+      excludedValues: ['Lyon']
+    });
+
+    const rows = (await Duck.query(
+      `SELECT geo, "${JOINED_BASEMAP_COLUMN.ID}" AS id FROM user_ignore ORDER BY geo`,
+      { format: 'array' }
+    )) as Array<{ geo: string; id: string | null }>;
+
+    expect(rows.find((r) => r.geo === 'Lyon')!.id).toBeNull();
+    expect(rows.find((r) => r.geo === '69123')!.id).toBe('LY_01');
+  });
+
+  it('keeps realistic typos as suggestions but drops distinct-place noise (cutoff 0.9)', async () => {
+    await run(
+      db,
+      `INSERT INTO basemap_attributes VALUES
+        ('TLS', 'Toulouse', 'nom', 'toulouse', '${TEST_BASEMAP}', 5),
+        ('IRN', 'Iran', 'nom', 'iran', '${TEST_BASEMAP}', 5),
+        ('FRA', 'France', 'nom', 'france', '${TEST_BASEMAP}', 5)`
+    );
+    await run(db, `CREATE OR REPLACE TABLE user_noise (geo VARCHAR)`);
+    await run(
+      db,
+      `INSERT INTO user_noise VALUES ('Frnace'), ('Toulon'), ('Irak')`
+    );
+
+    const Duck = makeDuckClient(db);
+    const quality = await computeJoinStats(
+      makeDataset('user_noise'),
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck
+    );
+
+    // Realistic typo (JW ~0.96): must keep its suggestion
+    const typo = quality.entities.find((e) => e.dataValue === 'Frnace');
+    expect(typo!.status).toBe(JoinStatus.TO_VERIFY);
+    expect(typo!.candidates![0].name).toBe('France');
+
+    // Distinct real places (toulon/toulouse 0.89, irak/iran 0.88): noise,
+    // must stay unrecognized instead of carrying a misleading suggestion
+    for (const noise of ['Toulon', 'Irak']) {
+      const entity = quality.entities.find((e) => e.dataValue === noise);
+      expect(entity!.status).toBe(JoinStatus.UNRECOGNIZED);
+      expect(entity!.matches).toEqual([]);
+    }
   });
 
   it('builds the similarity cache only once for concurrent synthesis requests', async () => {

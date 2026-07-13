@@ -4,6 +4,8 @@ export interface GeocodeColumnItem {
   id: number;
   text: string;
   columnName: string;
+  isGeo?: boolean;
+  confidence?: number;
 }
 
 export interface GeocodeFieldProps {
@@ -18,6 +20,9 @@ export interface GeocodeFieldProps {
 }
 
 import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
+import type { JoinCandidate } from '$lib/features/commons/types/data-tab.types';
+
+export type { JoinCandidate };
 
 export interface JoinEntity {
   dataValue: string;
@@ -26,6 +31,7 @@ export interface JoinEntity {
   status: JoinStatus;
   matches?: string[];
   matchCount?: number;
+  candidates?: JoinCandidate[];
   basemapOptions?: string[];
   selectedMapping?: string;
 }

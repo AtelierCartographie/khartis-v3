@@ -76,6 +76,7 @@
     </span>
     <div class="combobox-with-badge">
       <ComboBox
+        portalMenu
         items={field.items}
         selectedId={field.selectedId}
         on:select={(e) => handleComboSelect(field, e.detail)}
