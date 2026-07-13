@@ -488,7 +488,8 @@
         await duckDBOrchestrator.finalizeJoin(
           resolvedDatasetId,
           basemap,
-          linkedVariableName
+          linkedVariableName,
+          { excludedValues: getIgnoredJoinValues() }
         );
         if (abortSignal.aborted) return false;
 
@@ -975,7 +976,8 @@
           await duckDBOrchestrator.finalizeJoin(
             resolvedDatasetId,
             basemap,
-            linkedVariableName
+            linkedVariableName,
+            { excludedValues: getIgnoredJoinValues() }
           );
           if (abortSignal.aborted) return;
 
@@ -1004,6 +1006,10 @@
     }
   }
 
+  function getIgnoredJoinValues(): string[] {
+    return dataTabState.basemapJoin.ignoredEntities.map((e) => e.dataValue);
+  }
+
   async function handleIgnoreEntity(
     dataValue: string,
     source: 'joined' | 'to_verify' | 'unrecognized',
@@ -1014,8 +1020,19 @@
     await handleFinalizeJoin();
   }
 
-  function handleRestoreEntity(dataValue: string): void {
+  async function handleRestoreEntity(dataValue: string): Promise<void> {
     dataTabActions.restoreEntity(dataValue);
+    await tick();
+    const basemap = allBasemapsForLookup.find(
+      (b) => b.file === basemapSelected
+    );
+    if (!basemap) return;
+    abortCurrentJoin();
+    currentJoinAbortController = new AbortController();
+    await computeAndAutoFinalizeJoin(
+      basemap,
+      currentJoinAbortController.signal
+    );
   }
 
   async function handleValidateEntity(
@@ -1061,7 +1078,8 @@
       await duckDBOrchestrator.finalizeJoin(
         resolvedDatasetId,
         basemap,
-        linkedVariableName
+        linkedVariableName,
+        { excludedValues: getIgnoredJoinValues() }
       );
       await persistJoinSnapshot(
         {
@@ -1437,7 +1455,8 @@
             await duckDBOrchestrator.finalizeJoin(
               resolvedDatasetId,
               basemap,
-              linkedVariableName
+              linkedVariableName,
+              { excludedValues: getIgnoredJoinValues() }
             );
             if (controller.signal.aborted) return;
             syncSelectedDatasetJoinedBasemap(basemap.file);
