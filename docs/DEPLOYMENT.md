@@ -25,11 +25,13 @@ tagged `vX.Y.Z` are the PROD environment. The helper supports both PPRD and PROD
    progress bar with the percentage, the number of files left, and an ETA.
 10. Swaps the temporary directory into place with two quick renames, so the
     site is unavailable only for a fraction of a second.
-11. Removes the previous remote version after the swap, showing progress while
-    remote entries are deleted. If the swap fails, the script restores the
-    previous version instead.
-12. Optionally checks the public PPRD URL with a timeout, then prints
-    `Deployment complete.`.
+11. Verifies the canonical public URL and its slashless variant with a timeout.
+    The served HTML must contain the same base path as the build, and one module
+    script plus one stylesheet must return the expected MIME types.
+12. Removes the previous remote version only after validation succeeds. If the
+    swap or public-route validation fails, the script restores the previous
+    version and stops without printing `Deployment complete.`. If no previous
+    version exists, a failed first deployment is taken back offline.
 
 `pnpm deploy:pprd:dry-run` performs the same tag, CI, install, and build checks,
 but skips SFTP entirely.
@@ -58,19 +60,33 @@ validate without SFTP. PROD uploads to the `html/prod` remote directory. The GTM
 analytics container is per target (`KHARTIS_GTM_CONTAINER_ID_PROD`); pprd leaves
 `KHARTIS_GTM_CONTAINER_ID_PPRD` empty and ships without analytics.
 
+Each target has one required public URL. The helper derives SvelteKit `BASE_PATH`
+from that URL, so PPRD and PROD can use different routes without maintaining a
+second path setting. Provide the canonical URL with or without its trailing
+slash; the helper normalizes it to the trailing-slash form.
+
 ## Required Local Environment
 
 Use `.env` or `.env.deploy.local`. Both files are ignored by Git. Keep real
 values local to the deployer's workstation.
 
 ```dotenv
-KHARTIS_BASE_PATH_PPRD=
 KHARTIS_PUBLIC_URL_PPRD=
+KHARTIS_PUBLIC_URL_PROD=
 KHARTIS_SFTP_HOST=
 KHARTIS_SFTP_HOST_FINGERPRINT_SHA256=
 KHARTIS_SFTP_USER=
 KHARTIS_SFTP_REMOTE_DIR_PPRD=
+KHARTIS_SFTP_REMOTE_DIR_PROD=
+KHARTIS_GTM_CONTAINER_ID_PPRD=
+KHARTIS_GTM_CONTAINER_ID_PROD=
 ```
+
+Public URLs must be absolute HTTPS URLs without credentials, query strings, or
+fragments. A static SvelteKit artifact has one base path. If several public
+aliases are required, configure the infrastructure to redirect them to the one
+canonical URL rather than serving the same artifact under several visible
+paths.
 
 Authentication is supplied at runtime. Prefer the masked password prompt:
 
@@ -106,12 +122,18 @@ multiple host keys, store the accepted fingerprints as a comma-separated list.
 
 - Real uploads require a successful `release.yml` run for the selected tag.
 - Real uploads require a valid SFTP host fingerprint.
-- The remote directory must end with `html/pprd`.
+- The PPRD remote directory must end with `html/pprd`; the PROD remote directory
+  must end with `html/prod`.
 - The script refuses broad or unsafe remote paths such as `/`, `.`, `..`, or
   paths containing backslashes or control characters.
-- The script refuses PRD targets.
 - The script uses `ssh2-sftp-client` with host-key verification enabled.
 - The dry-run command never opens an SFTP connection.
+- Every build is rejected if `index.html` or `manifest.webmanifest` does not
+  match the base path derived from the target public URL.
+- A real deployment is rolled back if the canonical URL returns a non-HTML or
+  non-2xx response, serves another base path, cannot serve a module script and
+  stylesheet with the expected MIME types, or if the slashless URL redirects to
+  HTTP or to another route.
 - Real uploads use a temporary remote directory first, then swap it into place
   with fast renames. The previous version is removed only after the swap; if
   the swap fails, the previous version is restored.
