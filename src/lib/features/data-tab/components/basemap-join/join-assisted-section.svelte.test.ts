@@ -151,4 +151,37 @@ describe('JoinAssistedSection', () => {
     await screen.findByRole('option', { name: /Belgique/ });
     expect(screen.queryByRole('option', { name: /France/ })).toBeNull();
   });
+
+  it('announces the singular ignored entity count', async () => {
+    const onIgnoreEntity = vi.fn();
+
+    render(JoinAssistedSection, {
+      joinRows: [
+        {
+          dataValue: 'Frnce',
+          selectedMapping: 'France',
+          basemapOptions: ['France']
+        }
+      ],
+      duplicates: [],
+      unknowns: [],
+      joinedCount: 0,
+      toVerifyCount: 1,
+      linkedVariableName: 'Country',
+      basemapValues: ['France'],
+      onFinalizeJoin: vi.fn(),
+      onIgnoreEntity
+    });
+
+    await fireEvent.click(
+      await screen.findByRole('button', { name: m.join_action_ignore() })
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe(
+        m.join_announce_ignored_one({ entity: 'Frnce' })
+      )
+    );
+    expect(onIgnoreEntity).toHaveBeenCalledWith('Frnce', 'to_verify', 'France');
+  });
 });
