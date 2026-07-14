@@ -1645,9 +1645,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       // on manual override alone left the default-projected basemap without
       // its sphere until the user re-picked a projection.
       const basemapProjectionType = currentMetadata?.proj_to?.type;
-      const hasDefaultBasemapProjection =
-        basemapProjectionType === 'simple' ||
+      const isCompositeBasemapProjection =
         basemapProjectionType === 'composite';
+      const hasDefaultBasemapProjection =
+        basemapProjectionType === 'simple' || isCompositeBasemapProjection;
       const sphereProjectionInput =
         isOrthographicMode &&
         (hasManualProjectionOverride || hasDefaultBasemapProjection)
@@ -1708,13 +1709,13 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             };
           })()
         : undefined;
-      // A catalog basemap's default projection is a flat ('simple') or
-      // composite window, whose "sphere" is just a bounding rectangle — drawing
-      // its outline put a weird dark frame around every basemap. Only outline
-      // the sphere when the user explicitly picks a projection (where a genuine
-      // globe boundary is meaningful); never on a basemap's default projection.
+      // A default simple projection stays unframed. A composite projection is
+      // different: its sphere represents the boundary of every sub-projection
+      // frame, so it must remain visible without a manual override (#195).
       const projectionSphereOutlineLayer =
-        sphereProjectionInput && sphereVisible && hasManualProjectionOverride
+        sphereProjectionInput &&
+        sphereVisible &&
+        (hasManualProjectionOverride || isCompositeBasemapProjection)
           ? createProjectionSphereOutlineLayer({
               projection: sphereProjectionInput,
               modelMatrix: matrixToApply,

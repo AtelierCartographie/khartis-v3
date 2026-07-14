@@ -16,7 +16,7 @@ interface ProjectArchiveAssetEntry extends AssetRef {
 }
 
 interface ProjectArchiveManifest {
-  archiveVersion: 2;
+  archiveVersion: number;
   appVersion: string;
   exportedAt: string;
   projectId: string;
@@ -81,7 +81,7 @@ async function createArchivePayload(project: KhartisProject): Promise<Blob> {
   );
 
   const manifest: ProjectArchiveManifest = {
-    archiveVersion: 2,
+    archiveVersion: PROJECT_CONST.ARCHIVE.CURRENT_VERSION,
     appVersion: PROJECT_CONST.SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
     projectId: project.id,

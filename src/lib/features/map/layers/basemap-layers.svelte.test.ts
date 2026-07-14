@@ -501,7 +501,7 @@ describe('basemap projection fallbacks', () => {
     expect(layer?.props.getFillColor).toEqual([0, 109, 255, 255]);
   });
 
-  it('falls back to composite screen extents when projected sphere parsing is empty', () => {
+  it('renders one ocean polygon per composite frame when projected sphere parsing is empty', () => {
     const mainlandBounds: BBox = [-10, 35, 40, 72];
     const emptyProjection = {
       stream: () => ({
@@ -553,7 +553,10 @@ describe('basemap projection fallbacks', () => {
     ) as GeoJsonLayer | null;
 
     const data = layer?.props.data as FeatureCollection<Polygon> | undefined;
-    const coordinates = data?.features[0]?.geometry.coordinates[0] ?? [];
+    const mainlandCoordinates =
+      data?.features[0]?.geometry.coordinates[0] ?? [];
+    const overseasCoordinates =
+      data?.features[1]?.geometry.coordinates[0] ?? [];
 
     expect(layer).toBeInstanceOf(GeoJsonLayer);
     expect(layer?.props.coordinateSystem).toBe(COORDINATE_SYSTEM.CARTESIAN);
@@ -561,17 +564,24 @@ describe('basemap projection fallbacks', () => {
       depthCompare: 'always',
       depthWriteEnabled: false
     });
-    expect(data?.features).toHaveLength(1);
-    expect(coordinates).toEqual([
+    expect(data?.features).toHaveLength(2);
+    expect(mainlandCoordinates).toEqual([
       [0, 0],
       [960, 0],
       [960, 600],
       [0, 600],
       [0, 0]
     ]);
+    expect(overseasCoordinates).toEqual([
+      [0, 500],
+      [96, 500],
+      [96, 600],
+      [0, 600],
+      [0, 500]
+    ]);
   });
 
-  it('uses the visible projected extent before composite sub-extents for projected mers fallback', () => {
+  it('clips composite ocean frames to the visible projected extent', () => {
     const mainlandBounds: BBox = [-10, 35, 40, 72];
     const emptyProjection = {
       stream: () => ({
@@ -608,8 +618,8 @@ describe('basemap projection fallbacks', () => {
         projection: emptyProjection,
         bbox: mainlandBounds,
         graticuleClipExtent: [
-          [-120, -80],
-          [1200, 760]
+          [100, 50],
+          [800, 550]
         ]
       }
     ) as GeoJsonLayer | null;
@@ -620,11 +630,11 @@ describe('basemap projection fallbacks', () => {
     expect(layer).toBeInstanceOf(GeoJsonLayer);
     expect(data?.features).toHaveLength(1);
     expect(coordinates).toEqual([
-      [-120, -80],
-      [1200, -80],
-      [1200, 760],
-      [-120, 760],
-      [-120, -80]
+      [100, 50],
+      [800, 50],
+      [800, 550],
+      [100, 550],
+      [100, 50]
     ]);
   });
 
@@ -673,6 +683,9 @@ describe('basemap projection fallbacks', () => {
     // favour of the full composite coverage so the insets are not clipped out.
     expect(layer).toBeInstanceOf(GeoJsonLayer);
     expect(layer).not.toBeInstanceOf(SolidPolygonLayer);
+    expect(
+      (layer?.props.data as FeatureCollection<Polygon>).features
+    ).toHaveLength(2);
   });
 
   it('does not fall back to a raw lon/lat ocean rectangle when projected sphere parsing is empty', () => {

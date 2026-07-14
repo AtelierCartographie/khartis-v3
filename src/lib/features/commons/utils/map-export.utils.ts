@@ -2044,18 +2044,33 @@ function serializeGeoJsonGeometry(
   }
 
   if (geometry.type === 'Polygon' && Array.isArray(geometry.coordinates)) {
+    const polygonFillColor =
+      props.filled === false
+        ? normalizeSvgColor(SVG_TRANSPARENT_COLOR, SVG_TRANSPARENT_COLOR)
+        : fillColor;
+    const polygonLineColor =
+      props.stroked === false
+        ? normalizeSvgColor(SVG_TRANSPARENT_COLOR, SVG_TRANSPARENT_COLOR)
+        : lineColor;
+    const polygonPattern = resolveSvgPatternReference(
+      props,
+      feature,
+      featureIndex,
+      polygonFillColor
+    );
     const path = geometry.coordinates
       .map((ring) => buildCoordinatePath(ring, layer, context, true))
       .filter(Boolean)
       .join(' ');
-    if (!path || fillColor.opacity <= 0) return '';
+    const hasFill = polygonFillColor.opacity > 0;
+    const hasStroke = polygonLineColor.opacity > 0 && lineWidth > 0;
+    if (!path || (!hasFill && !hasStroke)) return '';
 
-    const stroke =
-      lineColor.opacity > 0 && lineWidth > 0
-        ? `${colorAttributes('stroke', lineColor)} stroke-width="${roundSvgValue(lineWidth)}"`
-        : 'stroke="none"';
+    const stroke = hasStroke
+      ? `${colorAttributes('stroke', polygonLineColor)} stroke-width="${roundSvgValue(lineWidth)}"`
+      : 'stroke="none"';
 
-    return `<path d="${path}" ${fillAttributes(fillColor, pattern)} ${stroke} fill-rule="evenodd" />`;
+    return `<path d="${path}" ${fillAttributes(polygonFillColor, polygonPattern)} ${stroke} fill-rule="evenodd" />`;
   }
 
   if (geometry.type === 'MultiPolygon' && Array.isArray(geometry.coordinates)) {

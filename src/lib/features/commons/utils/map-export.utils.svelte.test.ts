@@ -1258,6 +1258,79 @@ describe('map export DOM mutations', () => {
     expect(markup).not.toContain('data-khartis-export-mode="raster-fallback"');
   });
 
+  it('preserves GeoJSON polygon fill and stroke modes in SVG exports', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="map-canvas">
+          <canvas></canvas>
+        </div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const canvas = document.querySelector('canvas');
+    if (!page || !canvas) {
+      throw new Error('Missing GeoJSON polygon export fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(canvas, { left: 0, top: 0, width: 400, height: 300 });
+    vi.spyOn(canvas, 'toDataURL').mockReturnValue('data:image/png;base64,AAAA');
+
+    const polygon = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [20, 20],
+                [60, 20],
+                [60, 50],
+                [20, 50],
+                [20, 20]
+              ]
+            ]
+          }
+        }
+      ]
+    };
+    const outlineLayer = createDeckLayer('GeoJsonLayer', 'polygon-outline', {
+      data: polygon,
+      filled: false,
+      stroked: true,
+      getLineColor: [255, 0, 0, 255],
+      getLineWidth: 2
+    });
+    const fillLayer = createDeckLayer('GeoJsonLayer', 'polygon-fill', {
+      data: polygon,
+      filled: true,
+      stroked: false,
+      getFillColor: [0, 0, 255, 255]
+    });
+    const deck = createDeckExportFixture([outlineLayer, fillLayer]);
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+    const outlineMarkup = markup.match(
+      /<g[^>]+data-khartis-layer-id="polygon-outline"[\s\S]*?<\/g>/
+    )?.[0];
+    const fillMarkup = markup.match(
+      /<g[^>]+data-khartis-layer-id="polygon-fill"[\s\S]*?<\/g>/
+    )?.[0];
+
+    expect(outlineMarkup).toContain('fill="none"');
+    expect(outlineMarkup).toContain('stroke="rgb(255, 0, 0)"');
+    expect(outlineMarkup).toContain('stroke-width="2"');
+    expect(fillMarkup).toContain('fill="rgb(0, 0, 255)"');
+    expect(fillMarkup).toContain('stroke="none"');
+  });
+
   it.each([
     ['Full HD', 1920, 1080, 2],
     ['2K QHD', 2560, 1440, 2560 / 960],

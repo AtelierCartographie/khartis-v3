@@ -127,6 +127,35 @@ function createScreenExtentPolygon(
   };
 }
 
+function intersectScreenExtents(
+  first: GraticuleClipExtent,
+  second: GraticuleClipExtent
+): GraticuleClipExtent | null {
+  const left = Math.max(
+    Math.min(first[0][0], first[1][0]),
+    Math.min(second[0][0], second[1][0])
+  );
+  const top = Math.max(
+    Math.min(first[0][1], first[1][1]),
+    Math.min(second[0][1], second[1][1])
+  );
+  const right = Math.min(
+    Math.max(first[0][0], first[1][0]),
+    Math.max(second[0][0], second[1][0])
+  );
+  const bottom = Math.min(
+    Math.max(first[0][1], first[1][1]),
+    Math.max(second[0][1], second[1][1])
+  );
+
+  return left < right && top < bottom
+    ? [
+        [left, top],
+        [right, bottom]
+      ]
+    : null;
+}
+
 export function createProjectedCompositeOceanData(
   projection: ProjectionLike,
   visibleProjectedExtent?: GraticuleClipExtent | null
@@ -138,34 +167,30 @@ export function createProjectedCompositeOceanData(
     return null;
   }
 
-  const extents = hasCompositeGraticuleSubProjections(projection)
+  const compositeExtents = hasCompositeGraticuleSubProjections(projection)
     ? projection
         .getSubProjections()
         .map((subProjection) => subProjection.screenExtent)
         .filter((extent): extent is GraticuleClipExtent => extent !== undefined)
     : [];
-  const compositeExtent =
-    extents.length > 0
-      ? ([
-          [
-            Math.min(...extents.map((extent) => extent[0][0])),
-            Math.min(...extents.map((extent) => extent[0][1]))
-          ],
-          [
-            Math.max(...extents.map((extent) => extent[1][0])),
-            Math.max(...extents.map((extent) => extent[1][1]))
-          ]
-        ] satisfies GraticuleClipExtent)
-      : null;
-  const LARGE_EXTENT: GraticuleClipExtent = [
-    [-99999, -99999],
-    [99999, 99999]
-  ];
-  const feature = createScreenExtentPolygon(
-    visibleProjectedExtent ?? compositeExtent ?? LARGE_EXTENT
-  );
-  return feature
-    ? { type: GEOJSON_TYPE.FEATURE_COLLECTION, features: [feature] }
+  const extents =
+    compositeExtents.length > 0
+      ? compositeExtents
+          .map((extent) =>
+            visibleProjectedExtent
+              ? intersectScreenExtents(extent, visibleProjectedExtent)
+              : extent
+          )
+          .filter((extent): extent is GraticuleClipExtent => extent !== null)
+      : visibleProjectedExtent
+        ? [visibleProjectedExtent]
+        : [];
+  const features = extents
+    .map(createScreenExtentPolygon)
+    .filter((feature): feature is Feature<Polygon> => feature !== null);
+
+  return features.length > 0
+    ? { type: GEOJSON_TYPE.FEATURE_COLLECTION, features }
     : null;
 }
 
