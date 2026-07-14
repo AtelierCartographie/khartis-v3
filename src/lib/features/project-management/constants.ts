@@ -11,5 +11,10 @@ export const PROJECT_CONST = {
   ASSETS: {
     CHUNK_SIZE: 8 * 1024 * 1024
   },
+  ARCHIVE: {
+    CURRENT_VERSION: 2,
+    SUPPORTED_VERSIONS: [2]
+  },
+  SCHEMA_BASELINE_VERSION: '3.9.0',
   SCHEMA_VERSION: '3.9.0'
 } as const;

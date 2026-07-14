@@ -1,5 +1,5 @@
 import { COORDINATE_SYSTEM, type Layer } from '@deck.gl/core';
-import { PathLayer, SolidPolygonLayer } from '@deck.gl/layers';
+import { GeoJsonLayer, PathLayer, SolidPolygonLayer } from '@deck.gl/layers';
 import {
   createPathLayerProps,
   parseSphere,
@@ -12,6 +12,10 @@ import type { DeckDataRow } from '../types';
 import { createCompatibleSolidPolygonLayerProps } from './solid-polygon-layer-props.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { NEUTRAL_CARTOGRAPHY_RGBA_COLORS } from '$lib/features/commons/constants/colors.constants';
+import {
+  createProjectedCompositeOceanData,
+  hasCompositeGraticuleSubProjections
+} from '../layers/basemap-graticule';
 
 export const PROJECTION_SPHERE_MASK_LAYER_ID = 'projection-sphere-mask';
 export const PROJECTION_SPHERE_OUTLINE_LAYER_ID = 'projection-sphere-outline';
@@ -117,6 +121,26 @@ export function createProjectionSphereMaskLayer({
     return null;
   }
 
+  if (hasCompositeGraticuleSubProjections(projection)) {
+    const frameData = createProjectedCompositeOceanData(projection);
+    if (!frameData) return null;
+
+    return new GeoJsonLayer({
+      id: PROJECTION_SPHERE_MASK_LAYER_ID,
+      data: frameData,
+      filled: true,
+      stroked: false,
+      coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+      getFillColor: fillColor,
+      pickable: false,
+      parameters: SPHERE_BACKGROUND_PARAMETERS,
+      updateTriggers: {
+        getFillColor: [fillColor[0], fillColor[1], fillColor[2], fillColor[3]]
+      },
+      ...(modelMatrix && { modelMatrix })
+    });
+  }
+
   const sphereData = getCachedSpherePolygon(projection);
   if (!sphereData) return null;
 
@@ -164,6 +188,28 @@ export function createProjectionSphereOutlineLayer({
 }: SphereOutlineOptions): Layer<DeckDataRow> | null {
   if (!isD3StreamProjection(projection)) {
     return null;
+  }
+
+  if (hasCompositeGraticuleSubProjections(projection)) {
+    const frameData = createProjectedCompositeOceanData(projection);
+    if (!frameData) return null;
+
+    return new GeoJsonLayer({
+      id: PROJECTION_SPHERE_OUTLINE_LAYER_ID,
+      data: frameData,
+      filled: false,
+      stroked: true,
+      coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+      getLineColor: color,
+      getLineWidth: width,
+      lineWidthUnits: 'pixels',
+      pickable: false,
+      updateTriggers: {
+        getLineColor: [color[0], color[1], color[2], color[3]],
+        getLineWidth: [width]
+      },
+      ...(modelMatrix && { modelMatrix })
+    });
   }
 
   const pathData = getCachedSpherePath(projection);

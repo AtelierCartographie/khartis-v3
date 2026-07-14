@@ -8,6 +8,7 @@ import { saveProject } from '../services/persistence.service';
 import { migrateIfNeeded } from '../core/schema-migration';
 import { deserialize } from '../services/serializer.service';
 import type { KhartisProject } from '../types';
+import { PROJECT_CONST } from '../constants';
 
 const KHARTIS_PROJECT_FILE_TYPE = 'khartis-project';
 
@@ -16,7 +17,7 @@ interface ProjectArchiveAssetEntry extends AssetRef {
 }
 
 interface ProjectArchiveManifest {
-  archiveVersion: 2;
+  archiveVersion: number;
   appVersion: string;
   exportedAt: string;
   projectId: string;
@@ -51,7 +52,10 @@ function assertArchiveManifest(
 
   const candidate = value as Record<string, unknown>;
   if (
-    candidate.archiveVersion !== 2 ||
+    typeof candidate.archiveVersion !== 'number' ||
+    !PROJECT_CONST.ARCHIVE.SUPPORTED_VERSIONS.some(
+      (version) => version === candidate.archiveVersion
+    ) ||
     !Array.isArray(candidate.assets) ||
     typeof candidate.projectId !== 'string'
   ) {
@@ -127,13 +131,13 @@ export async function importProject(file: File): Promise<KhartisProject> {
   const archiveManifest = decodeJson<unknown>(manifestPayload, 'manifest.json');
   assertArchiveManifest(archiveManifest);
 
-  await restoreArchiveAssets(archiveEntries, archiveManifest);
-
   const serializedProject = decodeJson<unknown>(projectPayload, 'project.json');
   assertSerializedProject(serializedProject);
 
   const migrated = migrateIfNeeded({ ...serializedProject });
   assertSerializedProject(migrated);
+
+  await restoreArchiveAssets(archiveEntries, archiveManifest);
 
   const project = await deserialize({
     ...migrated,
