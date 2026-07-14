@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { m } from '$lib/paraglide/messages';
@@ -14,7 +15,7 @@
 
 <div id="khartis-header">
   <CbsHeader
-    href="."
+    href={resolve('/')}
     persistentHamburgerMenu={true}
     bind:isSideNavOpen={globalState.isSideNavOpen}
   >

@@ -45,6 +45,31 @@ const dropWoffFallback = (): Plugin => ({
   }
 });
 
+// Carbon's `css/all.css` ships @font-face for IBM Plex (Sans/Mono/Serif) pointing at the
+// IBM CDN (1.www.s81c.com). Plex Sans is self-hosted via @fontsource (see fonts.css); Plex
+// Mono (used by the data-paste textarea) and Serif (unused) fall back to the system
+// monospace/serif stacks Carbon already declares. Dropping every CDN @font-face keeps the
+// app offline-capable (PWA), removes ~28 third-party requests at cold start, and stops
+// leaking the client IP to IBM — including while the user is pasting their own data.
+const dropCarbonCdnFonts = (): Plugin => ({
+  name: 'drop-carbon-cdn-fonts',
+  apply: 'build',
+  generateBundle(_options, bundle) {
+    const cdnFontFace = /@font-face\s*\{[^{}]*s81c\.com[^{}]*\}/g;
+    for (const [fileName, asset] of Object.entries(bundle)) {
+      if (asset.type !== 'asset' || !fileName.endsWith('.css')) continue;
+      const original =
+        typeof asset.source === 'string'
+          ? asset.source
+          : new TextDecoder().decode(asset.source as Uint8Array);
+      const next = original.replace(cdnFontFace, '');
+      if (next !== original) {
+        asset.source = next;
+      }
+    }
+  }
+});
+
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -137,6 +162,7 @@ export default defineConfig(({ mode }) => {
       }),
       crossOriginIsolationAssets(),
       dropWoffFallback(),
+      dropCarbonCdnFonts(),
       verifyServiceWorkerPrecache(basePath),
       VitePWA({
         strategies: 'injectManifest',

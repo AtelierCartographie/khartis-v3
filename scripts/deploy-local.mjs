@@ -172,7 +172,9 @@ async function main() {
     await assertBuildMatchesDeployment(buildDir, deployment);
 
     const uploadBuildDir = path.join(uploadSnapshotRoot, 'build');
+    const snapshotSpinner = startSpinner('Preparing upload snapshot');
     await cp(buildDir, uploadBuildDir, { recursive: true });
+    snapshotSpinner.done('Upload snapshot ready');
 
     if (options.dryRun) {
       log('Dry run: build succeeded, SFTP upload skipped.');
@@ -713,8 +715,11 @@ async function uploadBuild(
     expectedRemoteDirLeaf,
     'upload'
   );
+  const scanSpinner = startSpinner('Scanning build output');
   const manifest = await collectUploadManifest(buildDir);
-  const uploadProgress = createUploadProgress(manifest);
+  scanSpinner.done(
+    `Scanned ${manifest.totalFiles} files (${formatBytes(manifest.totalBytes)})`
+  );
 
   await cleanupStaleRemoteSiblings(
     config,
@@ -726,12 +731,12 @@ async function uploadBuild(
   let swapped = false;
   let preserveTempDir = false;
   let tempRemoteDirCreated = false;
-
-  client.on('upload', (info) => uploadProgress.onFileUploaded(info.source));
+  let uploadProgress = null;
 
   try {
-    log('Connecting to SFTP...');
+    const connectSpinner = startSpinner('Connecting to SFTP');
     await client.connect(config);
+    connectSpinner.done('Connected to SFTP');
     const remoteType = await client.exists(safeRemoteDir);
     if (remoteType && remoteType !== 'd') {
       throw new Error('Remote target exists but is not a directory.');
@@ -741,13 +746,16 @@ async function uploadBuild(
     tempRemoteDirCreated = true;
 
     log(
-      `Uploading ${manifest.totalFiles} files (${formatBytes(manifest.totalBytes)}) to a temporary remote ${expectedRemoteDirLeaf} directory...`
+      `Uploading ${manifest.totalFiles} files (${formatBytes(manifest.totalBytes)}) to a temporary remote ${expectedRemoteDirLeaf} directory…`
     );
+    uploadProgress = createUploadProgress(manifest);
+    client.on('upload', (info) => uploadProgress.onFileUploaded(info.source));
     await client.uploadDir(buildDir, tempRemoteDir, { useFastput: false });
     uploadProgress.finish();
-    log('Upload complete.');
 
-    log(`Swapping remote ${expectedRemoteDirLeaf} directory...`);
+    const swapSpinner = startSpinner(
+      `Swapping remote ${expectedRemoteDirLeaf} directory`
+    );
     const previousRemoteDir = remoteType
       ? createRemoteSiblingDir(safeRemoteDir, expectedRemoteDirLeaf, 'old')
       : null;
@@ -757,6 +765,7 @@ async function uploadBuild(
     try {
       await client.rename(tempRemoteDir, safeRemoteDir);
     } catch (error) {
+      swapSpinner.fail(`Remote ${expectedRemoteDirLeaf} swap failed`);
       if (previousRemoteDir) {
         try {
           await client.rename(previousRemoteDir, safeRemoteDir);
@@ -771,7 +780,7 @@ async function uploadBuild(
       throw error;
     }
     swapped = true;
-    log(`Remote ${expectedRemoteDirLeaf} directory swapped.`);
+    swapSpinner.done(`Remote ${expectedRemoteDirLeaf} directory swapped`);
 
     try {
       await verifyPublicUrl(deployment);
@@ -831,7 +840,7 @@ async function uploadBuild(
       );
     }
   } finally {
-    uploadProgress.finish();
+    uploadProgress?.finish();
     if (tempRemoteDirCreated && !swapped && !preserveTempDir) {
       await removeRemoteDirRecursive(
         client,
@@ -858,26 +867,34 @@ async function collectUploadManifest(buildDir) {
     recursive: true,
     withFileTypes: true
   });
+  const filePaths = entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => path.join(entry.parentPath, entry.name));
+
   const fileSizes = new Map();
   let totalBytes = 0;
+  const STAT_CONCURRENCY = 48;
 
-  for (const entry of entries) {
-    if (!entry.isFile()) continue;
-    const filePath = path.join(entry.parentPath, entry.name);
-    const { size } = await stat(filePath);
-    fileSizes.set(filePath, size);
-    totalBytes += size;
+  for (let index = 0; index < filePaths.length; index += STAT_CONCURRENCY) {
+    const batch = filePaths.slice(index, index + STAT_CONCURRENCY);
+    const sizes = await Promise.all(
+      batch.map((filePath) => stat(filePath).then((info) => info.size))
+    );
+    batch.forEach((filePath, offset) => {
+      fileSizes.set(filePath, sizes[offset]);
+      totalBytes += sizes[offset];
+    });
   }
 
   return { fileSizes, totalFiles: fileSizes.size, totalBytes };
 }
 
 function createUploadProgress({ fileSizes, totalFiles, totalBytes }) {
-  const progress = createTaskProgress({
+  const progress = startProgress({
     label: 'Uploading files',
-    totalItems: totalFiles,
+    total: totalFiles,
     totalBytes,
-    itemName: 'files'
+    unit: 'files'
   });
 
   return {
@@ -889,10 +906,10 @@ function createUploadProgress({ fileSizes, totalFiles, totalBytes }) {
 }
 
 function createRemoteRemovalProgress(label, { totalEntries }) {
-  const progress = createTaskProgress({
+  const progress = startProgress({
     label,
-    totalItems: totalEntries,
-    itemName: 'entries'
+    total: totalEntries,
+    unit: 'entries'
   });
 
   return {
@@ -903,88 +920,187 @@ function createRemoteRemovalProgress(label, { totalEntries }) {
   };
 }
 
-const PROGRESS_BAR_WIDTH = 24;
-const PROGRESS_RENDER_INTERVAL_MS = 200;
+// Terminal status line: at most one animated line (spinner or progress bar) is
+// active at a time. It is redrawn in place, truncated to the terminal width so
+// it can never wrap and leave stale fragments, and disabled on non-TTY output.
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+const SPINNER_INTERVAL_MS = 90;
+const PROGRESS_BAR_MAX_WIDTH = 20;
+const STATUS_PREFIX = '[deploy-local] ';
+const ESC = String.fromCharCode(27);
+const STATUS_CLEAR = String.fromCharCode(13) + ESC + '[2K';
 
-function createTaskProgress({ label, totalItems, totalBytes = 0, itemName }) {
-  const interactive = process.stdout.isTTY === true;
+let activeStatusLine = null;
+
+function statusColumns() {
+  const columns = process.stdout.columns;
+  return Number.isInteger(columns) && columns > 0 ? columns : 80;
+}
+
+function statusIsInteractive() {
+  return process.stdout.isTTY === true;
+}
+
+function statusColor(code, text) {
+  return statusIsInteractive() && !process.env.NO_COLOR
+    ? `${ESC}[${code}m${text}${ESC}[0m`
+    : text;
+}
+
+function truncateToWidth(text) {
+  const max = Math.max(0, statusColumns() - 1);
+  return text.length > max ? text.slice(0, max) : text;
+}
+
+function paintStatusLine() {
+  if (!statusIsInteractive() || !activeStatusLine) return;
+  const glyph = SPINNER_FRAMES[activeStatusLine.frame % SPINNER_FRAMES.length];
+  process.stdout.write(
+    STATUS_CLEAR + truncateToWidth(activeStatusLine.render(glyph))
+  );
+  activeStatusLine.painted = true;
+}
+
+function clearStatusLine() {
+  if (!statusIsInteractive() || !activeStatusLine?.painted) return;
+  process.stdout.write(STATUS_CLEAR);
+  activeStatusLine.painted = false;
+}
+
+function activateStatusLine(render) {
+  stopStatusLine();
+  const handle = {
+    render,
+    frame: 0,
+    painted: false,
+    stopped: false,
+    timer: null
+  };
+  activeStatusLine = handle;
+  if (statusIsInteractive()) {
+    paintStatusLine();
+    handle.timer = setInterval(() => {
+      handle.frame += 1;
+      paintStatusLine();
+    }, SPINNER_INTERVAL_MS);
+    handle.timer.unref?.();
+  }
+  return handle;
+}
+
+function finishStatusLine(handle, permanentMessage) {
+  if (activeStatusLine !== handle || handle.stopped) return;
+  handle.stopped = true;
+  if (handle.timer) clearInterval(handle.timer);
+  clearStatusLine();
+  activeStatusLine = null;
+  if (permanentMessage != null) {
+    console.log(STATUS_PREFIX + permanentMessage);
+  }
+}
+
+function stopStatusLine() {
+  if (activeStatusLine) finishStatusLine(activeStatusLine, null);
+}
+
+function startSpinner(label) {
   const startedAt = Date.now();
+  const handle = activateStatusLine(
+    (glyph) => `${glyph} ${label}… ${formatDuration(Date.now() - startedAt)}`
+  );
+  if (!statusIsInteractive()) console.log(STATUS_PREFIX + `${label}…`);
+  return {
+    setLabel(next) {
+      label = next;
+    },
+    done(message) {
+      const elapsed = formatDuration(Date.now() - startedAt);
+      finishStatusLine(
+        handle,
+        `${statusColor('32', '✓')} ${message ?? label} (${elapsed})`
+      );
+    },
+    fail(message) {
+      const elapsed = formatDuration(Date.now() - startedAt);
+      finishStatusLine(
+        handle,
+        `${statusColor('31', '✗')} ${message ?? label} (${elapsed})`
+      );
+    }
+  };
+}
+
+function startProgress({ label, total, unit, totalBytes = 0 }) {
+  const startedAt = Date.now();
+  let handle;
   let completedItems = 0;
   let completedBytes = 0;
-  let lastRenderAt = 0;
   let lastLoggedDecile = 0;
-  let finished = false;
 
-  const statusLine = () => {
-    const itemRatio = totalItems > 0 ? completedItems / totalItems : 1;
-    const hasByteProgress = totalBytes > 0 && completedBytes > 0;
-    const isComplete = totalItems > 0 && completedItems >= totalItems;
-    const rawRatio = isComplete
-      ? 1
-      : hasByteProgress
-        ? completedBytes / totalBytes
-        : itemRatio;
-    const ratio = Math.max(0, Math.min(rawRatio, 1));
-    const percent = Math.floor(ratio * 100);
-    const filled = Math.round(ratio * PROGRESS_BAR_WIDTH);
-    const bar = '█'.repeat(filled) + '░'.repeat(PROGRESS_BAR_WIDTH - filled);
-    const remainingItems = Math.max(totalItems - completedItems, 0);
-    const elapsedMs = Date.now() - startedAt;
-    const completedUnits = isComplete
-      ? 1
-      : hasByteProgress
-        ? completedBytes
-        : completedItems;
-    const totalUnits = isComplete
-      ? 1
-      : hasByteProgress
-        ? totalBytes
-        : totalItems;
-    const eta =
-      completedUnits > 0 && elapsedMs > 0
-        ? formatDuration(
-            ((totalUnits - completedUnits) / completedUnits) * elapsedMs
-          )
-        : '--';
-    return `${label} [${bar}] ${percent}% | ${remainingItems}/${totalItems} ${itemName} left | ETA ${eta}`;
+  const ratio = () => {
+    if (total > 0 && completedItems >= total) return 1;
+    if (totalBytes > 0 && completedBytes > 0) {
+      return Math.min(completedBytes / totalBytes, 1);
+    }
+    return total > 0 ? Math.min(completedItems / total, 1) : 0;
   };
 
-  const render = () => {
-    if (totalItems === 0) return;
+  const render = (glyph) => {
+    const value = ratio();
+    const width = Math.max(
+      6,
+      Math.min(PROGRESS_BAR_MAX_WIDTH, statusColumns() - 52)
+    );
+    const filled = Math.round(value * width);
+    const bar = '█'.repeat(filled) + '░'.repeat(width - filled);
+    const percent = String(Math.floor(value * 100)).padStart(3, ' ');
+    const remaining = Math.max(total - completedItems, 0);
+    const elapsedMs = Date.now() - startedAt;
+    const useBytes = totalBytes > 0 && completedBytes > 0;
+    const doneUnits =
+      value >= 1 ? 1 : useBytes ? completedBytes : completedItems;
+    const totalUnits = value >= 1 ? 1 : useBytes ? totalBytes : total;
+    const eta =
+      doneUnits > 0 && elapsedMs > 0
+        ? formatDuration(((totalUnits - doneUnits) / doneUnits) * elapsedMs)
+        : '--';
+    return `${glyph} ${label} ${bar} ${percent}% · ${remaining}/${total} ${unit} left · ETA ${eta}`;
+  };
 
-    if (interactive) {
-      const now = Date.now();
-      if (
-        now - lastRenderAt < PROGRESS_RENDER_INTERVAL_MS &&
-        completedItems < totalItems
-      ) {
-        return;
-      }
-      lastRenderAt = now;
-      process.stdout.write(`\r\u001B[2K[deploy-local] ${statusLine()}`);
-      return;
-    }
+  handle = activateStatusLine(render);
+  if (!statusIsInteractive() && total > 0) {
+    console.log(STATUS_PREFIX + `${label}: 0/${total} ${unit}…`);
+  }
 
-    const decile =
-      totalItems > 0 ? Math.floor((completedItems / totalItems) * 10) : 10;
+  const logDecileIfNeeded = () => {
+    if (statusIsInteractive() || total <= 0) return;
+    const decile = Math.floor((completedItems / total) * 10);
     if (decile > lastLoggedDecile) {
       lastLoggedDecile = decile;
-      log(statusLine());
+      console.log(
+        STATUS_PREFIX +
+          `${label}: ${completedItems}/${total} ${unit} (${Math.floor(ratio() * 100)}%)`
+      );
     }
   };
 
   return {
     increment({ items = 1, bytes = 0 } = {}) {
-      completedItems = Math.min(completedItems + items, totalItems);
-      completedBytes = Math.min(completedBytes + bytes, totalBytes);
-      render();
+      completedItems = Math.min(completedItems + items, total);
+      completedBytes =
+        totalBytes > 0
+          ? Math.min(completedBytes + bytes, totalBytes)
+          : completedBytes + bytes;
+      logDecileIfNeeded();
     },
     finish() {
-      if (finished) return;
-      finished = true;
-      if (interactive && completedItems > 0) {
-        process.stdout.write(`\r\u001B[2K[deploy-local] ${statusLine()}\n`);
-      }
+      const complete = total > 0 && completedItems >= total;
+      finishStatusLine(
+        handle,
+        complete
+          ? `${statusColor('32', '✓')} ${label} · ${total} ${unit} (${formatDuration(Date.now() - startedAt)})`
+          : null
+      );
     }
   };
 }
@@ -1013,10 +1129,13 @@ function formatBytes(bytes) {
 
 async function cleanupStaleRemoteSiblings(config, safeRemoteDir, expectedLeaf) {
   const client = new SftpClient('khartis-local-cleanup');
+  const spinner = startSpinner('Checking for stale remote uploads');
   try {
     await client.connect(config);
+    spinner.done('Stale remote uploads checked');
     await removeStaleRemoteSiblings(client, safeRemoteDir, expectedLeaf);
   } catch (error) {
+    spinner.fail('Stale remote cleanup skipped');
     warn(`Stale remote cleanup skipped: ${error.message}`);
   } finally {
     await closeSftpClient(client, 'stale cleanup').catch(() => undefined);
@@ -1070,8 +1189,9 @@ async function removeRemoteDirRecursive(
   dir,
   label = `Removing remote directory ${dir}`
 ) {
-  log(`${label}: scanning remote contents...`);
+  const scanSpinner = startSpinner(`${label}: scanning`);
   const manifest = await collectRemoteRemovalManifest(client, dir);
+  scanSpinner.done(`${label}: ${manifest.totalEntries} entries to remove`);
   const progress = createRemoteRemovalProgress(label, manifest);
 
   try {
@@ -1302,6 +1422,13 @@ async function verifyCriticalPublicAssets(html, deployment, options) {
   }
 }
 
+function hasActiveHsts(response) {
+  const header = response.headers.get('strict-transport-security');
+  if (!header) return false;
+  const maxAge = header.match(/max-age\s*=\s*(\d+)/i);
+  return maxAge ? Number(maxAge[1]) > 0 : false;
+}
+
 async function verifyPublicUrl(deployment, options = {}) {
   log(`Checking public URL: ${deployment.publicUrl}`);
   const canonicalResponse = await fetchPublicUrl(deployment.publicUrl, options);
@@ -1345,12 +1472,27 @@ async function verifyPublicUrl(deployment, options = {}) {
     );
   }
   const redirectUrl = new URL(location, slashlessHref);
-  if (
-    redirectUrl.protocol !== 'https:' ||
-    redirectUrl.href !== deployment.publicUrl
-  ) {
+  const canonicalUrl = new URL(deployment.publicUrl);
+  const redirectsToCanonicalResource =
+    redirectUrl.host === canonicalUrl.host &&
+    redirectUrl.pathname === canonicalUrl.pathname &&
+    redirectUrl.search === canonicalUrl.search;
+
+  if (!redirectsToCanonicalResource) {
     throw new Error(
       `Slashless public URL redirects to ${redirectUrl.href}; expected ${deployment.publicUrl}.`
+    );
+  }
+
+  if (redirectUrl.protocol !== 'https:') {
+    // Accept an http Location only when HSTS makes the client upgrade to https before any cleartext request.
+    if (redirectUrl.protocol !== 'http:' || !hasActiveHsts(slashlessResponse)) {
+      throw new Error(
+        `Slashless public URL redirects to ${redirectUrl.href}; expected ${deployment.publicUrl}.`
+      );
+    }
+    warn(
+      `Slashless public URL redirects to ${redirectUrl.href} (http scheme); accepted because HSTS upgrades it to https. Fix the server to emit an https Location (nginx: absolute_redirect off, or honor X-Forwarded-Proto).`
     );
   }
 
@@ -1437,14 +1579,19 @@ function output(command, args, options = {}) {
 }
 
 function log(message) {
-  console.log(`[deploy-local] ${message}`);
+  clearStatusLine();
+  console.log(STATUS_PREFIX + message);
+  paintStatusLine();
 }
 
 function warn(message) {
-  console.warn(`[deploy-local] WARNING: ${message}`);
+  clearStatusLine();
+  console.warn(`${STATUS_PREFIX}WARNING: ${message}`);
+  paintStatusLine();
 }
 
 function restoreTerminal() {
+  stopStatusLine();
   const input = process.stdin;
   try {
     if (input.isTTY && typeof input.setRawMode === 'function') {
@@ -1467,6 +1614,7 @@ if (isMainModule) {
       process.exit(0);
     })
     .catch((error) => {
+      stopStatusLine();
       console.error(`[deploy-local] ERROR: ${error.message}`);
       restoreTerminal();
       process.exit(1);
@@ -1478,5 +1626,8 @@ export {
   assertHtmlBaseHref,
   rollbackPublicValidationFailure,
   resolveDeploymentPublicUrl,
+  startProgress,
+  startSpinner,
+  truncateToWidth,
   verifyPublicUrl
 };

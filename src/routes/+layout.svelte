@@ -154,9 +154,15 @@
     );
   }
 
-  onMount(() => {
-    void fontAssetsStore.ensureLoaded();
+  // Preload cartographic fonts only once a project (map) exists — map rendering already
+  // gates on fontAssetsStore.ready, so this keeps the ~36 map woff2 off the cold-start path.
+  $effect(() => {
+    if (projectStore.currentProject) {
+      void fontAssetsStore.ensureLoaded();
+    }
+  });
 
+  onMount(() => {
     const hasCookie = document.cookie.includes(cookieName);
     if (!hasCookie && typeof navigator !== 'undefined') {
       const browserLang = navigator.language?.split('-')[0];
