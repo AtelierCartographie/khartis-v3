@@ -118,7 +118,6 @@ export function mapMethodToMacro(
   switch (method) {
     case ClassificationMethod.KMEANS:
     case 'jenks':
-    case 'standard_deviation':
       return 'kmeans';
     case ClassificationMethod.QUANTILES:
       return 'quantile';
@@ -403,6 +402,9 @@ export async function calculateBreaks(
 
     if (numClasses >= stats.distinctCount) {
       numClasses = Math.max(2, stats.distinctCount - 1);
+      if (method === ClassificationMethod.NESTED_MEANS) {
+        numClasses = 2 ** Math.floor(Math.log2(numClasses));
+      }
     }
 
     if (stats.min === stats.max) {

@@ -25,12 +25,6 @@ import {
 // ─── normalizeClassificationMethod ────────────────────────────────────────
 
 describe('normalizeClassificationMethod', () => {
-  it('normalizes legacy standard_deviation to kmeans', () => {
-    expect(normalizeClassificationMethod('standard_deviation' as never)).toBe(
-      'kmeans'
-    );
-  });
-
   it('normalizes legacy jenks to kmeans', () => {
     expect(normalizeClassificationMethod('jenks' as never)).toBe('kmeans');
   });
@@ -91,12 +85,6 @@ describe('resolveRequestedClassCount', () => {
     expect(resolveRequestedClassCount('kmeans' as never, 5)).toBe(5);
   });
 
-  it('keeps requested class count for legacy standard_deviation after normalization', () => {
-    expect(resolveRequestedClassCount('standard_deviation' as never, 5)).toBe(
-      5
-    );
-  });
-
   it('returns the request as-is for quantiles / equal_interval', () => {
     expect(resolveRequestedClassCount('quantiles' as never, 7)).toBe(7);
     expect(resolveRequestedClassCount('equal_interval' as never, 5)).toBe(5);
@@ -123,12 +111,6 @@ describe('resolveComputedClassCount', () => {
     expect(resolveComputedClassCount('head_tail' as never, 5, 1)).toBe(5);
     expect(resolveComputedClassCount('quantiles' as never, 7, NaN)).toBe(7);
     expect(resolveComputedClassCount('kmeans' as never, 4, 1)).toBe(4);
-  });
-
-  it('normalizes legacy standard_deviation before applying actual class count', () => {
-    expect(resolveComputedClassCount('standard_deviation' as never, 5, 4)).toBe(
-      4
-    );
   });
 });
 
