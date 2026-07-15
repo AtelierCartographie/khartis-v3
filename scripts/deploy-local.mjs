@@ -16,6 +16,14 @@ const RELEASE_WORKFLOW = 'release.yml';
 const LOCAL_ENV_FILES = ['.env', '.env.deploy.local'];
 const DEFAULT_PORT = 22;
 const PUBLIC_URL_CHECK_TIMEOUT_MS = 15_000;
+const PUBLIC_URL_VALIDATION_ATTEMPTS = 5;
+const PUBLIC_URL_VALIDATION_RETRY_DELAYS_MS = [5_000, 15_000, 30_000, 60_000];
+const SFTP_READY_TIMEOUT_MS = 20_000;
+const SFTP_KEEPALIVE_INTERVAL_MS = 10_000;
+const SFTP_KEEPALIVE_COUNT_MAX = 3;
+const REMOTE_SIBLING_KIND_UPLOAD = 'upload';
+const REMOTE_SIBLING_KIND_OLD = 'old';
+const STALE_SIBLING_MIN_AGE_MS = 60 * 60 * 1000;
 const SFTP_CLOSE_TIMEOUT_MS = 5_000;
 const ALLOWED_PUBLIC_REDIRECT_STATUSES = new Set([301, 302, 307, 308]);
 // Accept legacy -staging.N and current -pprd.N prereleases; at an equal version the
@@ -31,6 +39,7 @@ const TARGETS = {
     remoteDirEnv: 'KHARTIS_SFTP_REMOTE_DIR_PPRD',
     publicUrlEnv: 'KHARTIS_PUBLIC_URL_PPRD',
     gtmContainerEnv: 'KHARTIS_GTM_CONTAINER_ID_PPRD',
+    khartisEnv: 'preproduction',
     uploadEnabled: true
   },
   prod: {
@@ -39,6 +48,7 @@ const TARGETS = {
     remoteDirEnv: 'KHARTIS_SFTP_REMOTE_DIR_PROD',
     publicUrlEnv: 'KHARTIS_PUBLIC_URL_PROD',
     gtmContainerEnv: 'KHARTIS_GTM_CONTAINER_ID_PROD',
+    khartisEnv: 'production',
     uploadEnabled: true,
     productionConfirmation: true
   }
@@ -127,6 +137,7 @@ async function main() {
   const buildEnv = {
     BASE_PATH: deployment.basePath,
     VITE_APP_VERSION: tag,
+    VITE_KHARTIS_ENV: target.khartisEnv,
     VITE_DEBUG: 'false',
     VITE_DEBUG_AUTH: 'false',
     VITE_LOG_LEVEL: 'ERROR',
@@ -141,13 +152,18 @@ async function main() {
     readSftpHostFingerprints();
   }
 
-  if (!options.yes) {
+  const requiresProductionConfirmation =
+    target.productionConfirmation === true && !options.dryRun;
+  if (!options.yes || requiresProductionConfirmation) {
+    if (options.yes && requiresProductionConfirmation) {
+      warn('--yes never skips the production tag confirmation.');
+    }
     await confirmDeployment(
       targetName,
       tag,
       target.remoteDirLeaf,
       options.dryRun,
-      target.productionConfirmation === true
+      requiresProductionConfirmation
     );
   }
 
@@ -159,10 +175,13 @@ async function main() {
     await run('git', ['worktree', 'add', '--detach', worktree, tag], {
       cwd: process.cwd()
     });
-    await run('pnpm', ['install', '--frozen-lockfile'], { cwd: worktree });
+    await run('pnpm', ['install', '--frozen-lockfile'], {
+      cwd: worktree,
+      env: sanitizedChildEnv()
+    });
     await run('pnpm', ['build'], {
       cwd: worktree,
-      env: { ...process.env, ...buildEnv }
+      env: sanitizedChildEnv(buildEnv)
     });
 
     const buildDir = path.join(worktree, 'build');
@@ -277,7 +296,10 @@ function parseEnvContent(content) {
 
     const key = trimmed.slice(0, separator).trim();
     const rawValue = trimmed.slice(separator + 1).trim();
-    const value = rawValue.replace(/^["']|["']$/g, '');
+    const quoted = /^(["']).*\1$/.test(rawValue);
+    const value = quoted
+      ? rawValue.slice(1, -1)
+      : rawValue.replace(/\s+#.*$/, '').trim();
     if (key) {
       values[key] = value;
     }
@@ -493,15 +515,22 @@ async function readSftpConfig() {
     );
   }
 
+  const baseConnection = {
+    host,
+    username,
+    port,
+    readyTimeout: SFTP_READY_TIMEOUT_MS,
+    keepaliveInterval: SFTP_KEEPALIVE_INTERVAL_MS,
+    keepaliveCountMax: SFTP_KEEPALIVE_COUNT_MAX,
+    hostVerifier: createSftpHostVerifier(hostFingerprints)
+  };
+
   const privateKeyPath = process.env.KHARTIS_SFTP_PRIVATE_KEY_PATH?.trim();
   if (privateKeyPath) {
     return {
-      host,
-      username,
-      port,
+      ...baseConnection,
       privateKey: await readFile(privateKeyPath, 'utf8'),
-      passphrase: process.env.KHARTIS_SFTP_PASSPHRASE || undefined,
-      hostVerifier: createSftpHostVerifier(hostFingerprints)
+      passphrase: process.env.KHARTIS_SFTP_PASSPHRASE || undefined
     };
   }
 
@@ -514,13 +543,17 @@ async function readSftpConfig() {
     );
   }
 
-  return {
-    host,
-    username,
-    port,
-    password,
-    hostVerifier: createSftpHostVerifier(hostFingerprints)
-  };
+  return { ...baseConnection, password };
+}
+
+function sanitizedChildEnv(extra = {}) {
+  const env = { ...process.env, ...extra };
+  for (const key of Object.keys(env)) {
+    if (key.startsWith('KHARTIS_SFTP_')) {
+      delete env[key];
+    }
+  }
+  return env;
 }
 
 function readSftpHost() {
@@ -713,18 +746,12 @@ async function uploadBuild(
   const tempRemoteDir = createRemoteSiblingDir(
     safeRemoteDir,
     expectedRemoteDirLeaf,
-    'upload'
+    REMOTE_SIBLING_KIND_UPLOAD
   );
   const scanSpinner = startSpinner('Scanning build output');
   const manifest = await collectUploadManifest(buildDir);
   scanSpinner.done(
     `Scanned ${manifest.totalFiles} files (${formatBytes(manifest.totalBytes)})`
-  );
-
-  await cleanupStaleRemoteSiblings(
-    config,
-    safeRemoteDir,
-    expectedRemoteDirLeaf
   );
 
   const client = new SftpClient('khartis-local-deploy');
@@ -737,10 +764,16 @@ async function uploadBuild(
     const connectSpinner = startSpinner('Connecting to SFTP');
     await client.connect(config);
     connectSpinner.done('Connected to SFTP');
-    const remoteType = await client.exists(safeRemoteDir);
+    let remoteType = await client.exists(safeRemoteDir);
     if (remoteType && remoteType !== 'd') {
       throw new Error('Remote target exists but is not a directory.');
     }
+    remoteType = await prepareStaleRemoteState(
+      client,
+      safeRemoteDir,
+      expectedRemoteDirLeaf,
+      remoteType
+    );
 
     await client.mkdir(tempRemoteDir, true);
     tempRemoteDirCreated = true;
@@ -757,33 +790,39 @@ async function uploadBuild(
       `Swapping remote ${expectedRemoteDirLeaf} directory`
     );
     const previousRemoteDir = remoteType
-      ? createRemoteSiblingDir(safeRemoteDir, expectedRemoteDirLeaf, 'old')
+      ? createRemoteSiblingDir(
+          safeRemoteDir,
+          expectedRemoteDirLeaf,
+          REMOTE_SIBLING_KIND_OLD
+        )
       : null;
-    if (previousRemoteDir) {
-      await client.rename(safeRemoteDir, previousRemoteDir);
-    }
-    try {
-      await client.rename(tempRemoteDir, safeRemoteDir);
-    } catch (error) {
-      swapSpinner.fail(`Remote ${expectedRemoteDirLeaf} swap failed`);
+    await withCriticalRemoteSection('remote swap', async () => {
       if (previousRemoteDir) {
-        try {
-          await client.rename(previousRemoteDir, safeRemoteDir);
-          warn('Swap failed; the previous remote version was restored.');
-        } catch {
-          preserveTempDir = true;
-          warn(
-            `Swap failed and the previous version could not be restored. Previous version: ${previousRemoteDir}, new upload: ${tempRemoteDir}. Restore one of them manually.`
-          );
-        }
+        await client.rename(safeRemoteDir, previousRemoteDir);
       }
-      throw error;
-    }
+      try {
+        await client.rename(tempRemoteDir, safeRemoteDir);
+      } catch (error) {
+        swapSpinner.fail(`Remote ${expectedRemoteDirLeaf} swap failed`);
+        if (previousRemoteDir) {
+          try {
+            await client.rename(previousRemoteDir, safeRemoteDir);
+            warn('Swap failed; the previous remote version was restored.');
+          } catch {
+            preserveTempDir = true;
+            warn(
+              `Swap failed and the previous version could not be restored. Previous version: ${previousRemoteDir}, new upload: ${tempRemoteDir}. Restore one of them manually.`
+            );
+          }
+        }
+        throw error;
+      }
+    });
     swapped = true;
     swapSpinner.done(`Remote ${expectedRemoteDirLeaf} directory swapped`);
 
     try {
-      await verifyPublicUrl(deployment);
+      await verifyPublicUrlWithRetries(deployment);
     } catch (validationError) {
       const validationMessage =
         validationError instanceof Error
@@ -795,16 +834,19 @@ async function uploadBuild(
           : 'Public route validation failed; taking the first deployment offline.'
       );
       try {
-        await rollbackPublicValidationFailure(client, {
-          previousRemoteDir,
-          safeRemoteDir,
-          tempRemoteDir
-        });
+        await withCriticalRemoteSection('rollback', () =>
+          rollbackPublicValidationFailure(client, {
+            previousRemoteDir,
+            safeRemoteDir,
+            tempRemoteDir
+          })
+        );
         swapped = false;
+        preserveTempDir = true;
         log(
           previousRemoteDir
-            ? 'Previous remote version restored after validation failure.'
-            : 'Failed first deployment removed from the public target.'
+            ? `Previous remote version restored after validation failure. The failed upload is kept for inspection at ${tempRemoteDir}; the next deployment's stale cleanup removes it.`
+            : `Failed first deployment taken offline; kept for inspection at ${tempRemoteDir} (removed by the next deployment's stale cleanup).`
         );
       } catch (rollbackError) {
         preserveTempDir = true;
@@ -823,7 +865,7 @@ async function uploadBuild(
       throw new Error(
         previousRemoteDir
           ? `Public route validation failed and the previous version was restored: ${validationMessage}`
-          : `Public route validation failed and the first deployment was removed: ${validationMessage}`,
+          : `Public route validation failed and the first deployment was taken offline: ${validationMessage}`,
         { cause: validationError }
       );
     }
@@ -850,6 +892,40 @@ async function uploadBuild(
     }
     await closeSftpClient(client, 'deployment').catch(() => undefined);
   }
+}
+
+let criticalRemoteSection = null;
+let deferredSignal = null;
+
+function handleTerminationSignal(signal) {
+  if (criticalRemoteSection) {
+    deferredSignal = signal;
+    warn(
+      `${signal} received during ${criticalRemoteSection}; finishing this critical remote step before exiting.`
+    );
+    return;
+  }
+  warn(`${signal} received; aborting.`);
+  process.exit(130);
+}
+
+process.on('SIGINT', () => handleTerminationSignal('SIGINT'));
+process.on('SIGTERM', () => handleTerminationSignal('SIGTERM'));
+
+async function withCriticalRemoteSection(label, action) {
+  criticalRemoteSection = label;
+  let result;
+  try {
+    result = await action();
+  } finally {
+    criticalRemoteSection = null;
+  }
+  if (deferredSignal) {
+    const signal = deferredSignal;
+    deferredSignal = null;
+    throw new Error(`Interrupted by ${signal}; stopped after ${label}.`);
+  }
+  return result;
 }
 
 async function rollbackPublicValidationFailure(
@@ -1127,39 +1203,73 @@ function formatBytes(bytes) {
   return `${value.toFixed(1)} ${units[unitIndex]}`;
 }
 
-async function cleanupStaleRemoteSiblings(config, safeRemoteDir, expectedLeaf) {
-  const client = new SftpClient('khartis-local-cleanup');
-  const spinner = startSpinner('Checking for stale remote uploads');
-  try {
-    await client.connect(config);
-    spinner.done('Stale remote uploads checked');
-    await removeStaleRemoteSiblings(client, safeRemoteDir, expectedLeaf);
-  } catch (error) {
-    spinner.fail('Stale remote cleanup skipped');
-    warn(`Stale remote cleanup skipped: ${error.message}`);
-  } finally {
-    await closeSftpClient(client, 'stale cleanup').catch(() => undefined);
-  }
+function staleSiblingPattern(expectedLeaf, kind) {
+  const leaf = expectedLeaf.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^${leaf}\\.${kind}-\\d+-\\d+-[0-9a-f]{8}$`);
 }
 
-async function removeStaleRemoteSiblings(client, safeRemoteDir, expectedLeaf) {
+async function prepareStaleRemoteState(
+  client,
+  safeRemoteDir,
+  expectedLeaf,
+  remoteType
+) {
   const parent = path.posix.dirname(safeRemoteDir);
-  const stalePrefixes = [`${expectedLeaf}.upload-`, `${expectedLeaf}.old-`];
+  const uploadPattern = staleSiblingPattern(
+    expectedLeaf,
+    REMOTE_SIBLING_KIND_UPLOAD
+  );
+  const oldPattern = staleSiblingPattern(expectedLeaf, REMOTE_SIBLING_KIND_OLD);
   const entries = await client.list(parent).catch(() => []);
+  const siblings = entries.filter(
+    (entry) =>
+      entry.type === 'd' &&
+      (uploadPattern.test(entry.name) || oldPattern.test(entry.name))
+  );
+  let effectiveRemoteType = remoteType;
 
-  for (const entry of entries) {
-    if (entry.type !== 'd') continue;
-    if (!stalePrefixes.some((prefix) => entry.name.startsWith(prefix))) {
+  if (!remoteType) {
+    const backups = siblings
+      .filter((entry) => oldPattern.test(entry.name))
+      .sort((a, b) => (b.modifyTime ?? 0) - (a.modifyTime ?? 0));
+    const newestBackup = backups[0];
+    if (newestBackup) {
+      warn(
+        `Public target ${safeRemoteDir} is missing (previous run likely died mid-swap); restoring backup ${newestBackup.name} before deploying.`
+      );
+      await client.rename(`${parent}/${newestBackup.name}`, safeRemoteDir);
+      effectiveRemoteType = 'd';
+    }
+  }
+
+  for (const entry of siblings) {
+    const entryPath = `${parent}/${entry.name}`;
+    if (!effectiveRemoteType && oldPattern.test(entry.name)) {
+      warn(
+        `Keeping ${entryPath}: public target is missing and this backup may be the only remaining copy.`
+      );
       continue;
     }
+    if (
+      entry.modifyTime &&
+      Date.now() - entry.modifyTime < STALE_SIBLING_MIN_AGE_MS
+    ) {
+      warn(
+        `Keeping recent remote directory ${entryPath} (possible concurrent or interrupted run; cleaned once older than 1h).`
+      );
+      continue;
+    }
+    if (`${parent}/${entry.name}` === safeRemoteDir) continue;
     await removeRemoteDirRecursive(
       client,
-      `${parent}/${entry.name}`,
+      entryPath,
       `Removing stale remote directory ${entry.name}`
     ).catch(() =>
-      warn(`Could not remove stale remote directory: ${parent}/${entry.name}`)
+      warn(`Could not remove stale remote directory: ${entryPath}`)
     );
   }
+
+  return effectiveRemoteType;
 }
 
 async function collectRemoteRemovalManifest(client, dir) {
@@ -1273,7 +1383,7 @@ async function fetchPublicUrl(
     return await fetchImpl(url, {
       method: 'GET',
       redirect: 'manual',
-      headers: { accept },
+      headers: { accept, 'cache-control': 'no-cache', pragma: 'no-cache' },
       signal: controller.signal
     });
   } catch (error) {
@@ -1294,6 +1404,7 @@ async function fetchPublicUrl(
 
 async function assertPublicHtmlResponse(response, requestedUrl, basePath) {
   if (!response.ok) {
+    await response.body?.cancel?.();
     throw new Error(
       `Public URL check returned ${response.status}: ${requestedUrl}`
     );
@@ -1305,6 +1416,7 @@ async function assertPublicHtmlResponse(response, requestedUrl, basePath) {
   }
   const contentType = response.headers.get('content-type') ?? '';
   if (!contentType.toLowerCase().includes('text/html')) {
+    await response.body?.cancel?.();
     throw new Error(
       `Public URL returned ${contentType || 'an unknown content type'}; expected text/html: ${requestedUrl}`
     );
@@ -1427,6 +1539,29 @@ function hasActiveHsts(response) {
   if (!header) return false;
   const maxAge = header.match(/max-age\s*=\s*(\d+)/i);
   return maxAge ? Number(maxAge[1]) > 0 : false;
+}
+
+async function verifyPublicUrlWithRetries(deployment, options = {}) {
+  for (let attempt = 1; attempt <= PUBLIC_URL_VALIDATION_ATTEMPTS; attempt++) {
+    try {
+      await verifyPublicUrl(deployment, options);
+      return;
+    } catch (error) {
+      if (attempt === PUBLIC_URL_VALIDATION_ATTEMPTS) throw error;
+      const delayMs =
+        PUBLIC_URL_VALIDATION_RETRY_DELAYS_MS[
+          Math.min(
+            attempt - 1,
+            PUBLIC_URL_VALIDATION_RETRY_DELAYS_MS.length - 1
+          )
+        ];
+      const message = error instanceof Error ? error.message : String(error);
+      warn(
+        `Public route validation attempt ${attempt}/${PUBLIC_URL_VALIDATION_ATTEMPTS} failed (${message}); retrying in ${formatDuration(delayMs)} while the web tier syncs.`
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
 }
 
 async function verifyPublicUrl(deployment, options = {}) {
