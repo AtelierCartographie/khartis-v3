@@ -173,7 +173,10 @@ export function getClassedSizeForValue(
   maxSize: number,
   classCountHint?: number
 ): number {
-  if (!Number.isFinite(value) || breaks.length < 2) {
+  if (
+    !Number.isFinite(value) ||
+    (breaks.length < 2 && classCountHint !== breaks.length + 1)
+  ) {
     return minSize;
   }
 
@@ -347,7 +350,7 @@ export function shouldApplyChoropleth(
     !!valueColumn &&
     !!classification?.breaks &&
     !!classification?.colors &&
-    classification.breaks.length >= 2
+    classification.breaks.length >= 1
   );
 }
 

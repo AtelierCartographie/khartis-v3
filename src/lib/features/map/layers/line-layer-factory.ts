@@ -139,7 +139,7 @@ export function createLineLayerStack(
     lineConfig?.thicknessMode === ThicknessMode.CLASSES &&
     !!lineValueColumn &&
     !!lineThicknessClassification?.breaks &&
-    lineThicknessClassification.breaks.length >= 2;
+    lineThicknessClassification.breaks.length >= 1;
   const usesVariableLineWidth = useProportionalWidth || useClassedWidth;
   const { min: minValue, max: maxValue } = lineStatistics;
   const resolvedSizeScale = viz?.symbols?.sizeScale ?? ScaleType.LINEAR;

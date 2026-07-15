@@ -205,7 +205,7 @@ function createDoubleProportionalPointLayers(
     pointFillValueColumn &&
     pointFillClassification?.breaks &&
     pointFillClassification?.colors &&
-    pointFillClassification.breaks.length >= 2
+    pointFillClassification.breaks.length >= 1
   );
   const useFillCategorical = Boolean(
     pointConfig.fillMode === FillMode.CATEGORIES &&
@@ -748,7 +748,7 @@ export function createRepresentativePointSymbolLayers(
     pointConfig.mode === SymbolMode.CLASSES &&
     !!pointValueColumn &&
     !!pointClassification?.breaks &&
-    pointClassification.breaks.length >= 2;
+    pointClassification.breaks.length >= 1;
   const useCategoricalColor = shouldApplyCategorical(
     viz,
     PrimitiveFilterType.POINT
@@ -1245,7 +1245,7 @@ export function createPointLayerStack(
     pointConfig?.mode === SymbolMode.CLASSES &&
     !!pointValueColumn &&
     !!pointClassification?.breaks &&
-    pointClassification.breaks.length >= 2;
+    pointClassification.breaks.length >= 1;
   const usesVariablePointSize = useProportionalSymbols || useClassedSymbols;
   const useCategoricalColor =
     viz && shouldApplyCategorical(viz, PrimitiveFilterType.POINT);
