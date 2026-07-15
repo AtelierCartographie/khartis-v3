@@ -257,7 +257,6 @@ export function createDatasetFromPreprocessedFile(
   const columns: EnrichedColumn[] = Object.entries(statistics || {}).map(
     ([name, stats]) => ({
       name,
-      values: [],
       type: (stats.type as ColumnType) || ColumnType.TEXT,
       stats: {
         name,
@@ -346,7 +345,7 @@ export function createDatasetFromPreprocessedFile(
       rowCount: actualRowCount,
       warnings: file.deepAnalysis?.geoDetection?.warnings ?? []
     },
-    bounds: geometryInfo
+    bounds: geometryInfo?.bounds
       ? {
           minLon: geometryInfo.bounds[0],
           minLat: geometryInfo.bounds[1],

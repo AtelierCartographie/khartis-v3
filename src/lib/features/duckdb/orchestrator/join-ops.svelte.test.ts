@@ -30,10 +30,12 @@ vi.mock('$lib/paraglide/runtime', async (importOriginal) => {
 
 const {
   applyJoinCorrections,
+  computeJoinSynthesis,
   finalizeJoin,
   getJoinedArrowTable,
   getBasemapAttributeValues,
-  getBasemapAttributeAliasesByValue
+  getBasemapAttributeAliasesByValue,
+  invalidateSimilarityCache
 } = await import('./join-ops');
 
 function createBasemap(): BasemapMetadata {
@@ -236,6 +238,110 @@ describe('join-ops basemap aliases', () => {
       { value: 'Brazil', variant: 'name_engl' }
     ]);
     expect(queries.join('\n')).not.toContain('SUM(CASE WHEN variant');
+  });
+});
+
+function createSimilarityDuck() {
+  const existingCacheTables = new Set<string>();
+  const creates: string[] = [];
+  const drops: string[] = [];
+  const duck = {
+    query: vi.fn(async (sql: string) => {
+      const createMatch = sql.match(
+        /CREATE OR REPLACE TEMP TABLE "(__similarity_cache__[^"]+)"/
+      );
+      if (createMatch) {
+        existingCacheTables.add(createMatch[1]);
+        creates.push(createMatch[1]);
+        return [];
+      }
+      const dropMatch = sql.match(
+        /DROP TABLE IF EXISTS "(__similarity_cache__[^"]+)"/
+      );
+      if (dropMatch) {
+        existingCacheTables.delete(dropMatch[1]);
+        drops.push(dropMatch[1]);
+        return [];
+      }
+      if (sql.includes("table_name = 'basemap_attributes'")) {
+        return [{ table_name: 'basemap_attributes' }];
+      }
+      const existsMatch = sql.match(
+        /WHERE table_name = '(__similarity_cache__[^']+)'/
+      );
+      if (existsMatch) {
+        return existingCacheTables.has(existsMatch[1])
+          ? [{ table_name: existsMatch[1] }]
+          : [];
+      }
+      return [];
+    })
+  } satisfies DuckDBClientForJoin;
+  return { duck, creates, drops };
+}
+
+describe('join-ops similarity cache keying and eviction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    invalidateSimilarityCache();
+  });
+
+  it('reuses the cached entry for the same dataset and geo column', async () => {
+    const { duck, creates } = createSimilarityDuck();
+    const dataset = createDataset('table_a');
+
+    await computeJoinSynthesis(dataset, 'geo', duck);
+    await computeJoinSynthesis(dataset, 'geo', duck);
+
+    expect(creates).toHaveLength(1);
+  });
+
+  it('keeps one entry per geo column of the same dataset', async () => {
+    const { duck, creates, drops } = createSimilarityDuck();
+    const dataset = createDataset('table_a');
+
+    await computeJoinSynthesis(dataset, 'city', duck);
+    await computeJoinSynthesis(dataset, 'region', duck);
+    await computeJoinSynthesis(dataset, 'city', duck);
+    await computeJoinSynthesis(dataset, 'region', duck);
+
+    expect(creates).toHaveLength(2);
+    expect(new Set(creates).size).toBe(2);
+    expect(drops).toHaveLength(0);
+  });
+
+  it('evicts the least recently used entry beyond four and drops its table', async () => {
+    const { duck, creates, drops } = createSimilarityDuck();
+
+    for (const table of ['t1', 't2', 't3', 't4']) {
+      await computeJoinSynthesis(createDataset(table), 'geo', duck);
+    }
+    await computeJoinSynthesis(createDataset('t1'), 'geo', duck);
+    expect(drops).toHaveLength(0);
+
+    await computeJoinSynthesis(createDataset('t5'), 'geo', duck);
+
+    expect(drops).toEqual([creates[1]]);
+
+    await computeJoinSynthesis(createDataset('t2'), 'geo', duck);
+    expect(creates).toHaveLength(6);
+  });
+
+  it('drops only the invalidated dataset entries', async () => {
+    const { duck, creates, drops } = createSimilarityDuck();
+
+    await computeJoinSynthesis(createDataset('table_a'), 'geo', duck);
+    await computeJoinSynthesis(createDataset('table_b'), 'geo', duck);
+
+    invalidateSimilarityCache('table_a', duck);
+
+    expect(drops).toEqual([creates[0]]);
+
+    await computeJoinSynthesis(createDataset('table_b'), 'geo', duck);
+    expect(creates).toHaveLength(2);
+
+    await computeJoinSynthesis(createDataset('table_a'), 'geo', duck);
+    expect(creates).toHaveLength(3);
   });
 });
 

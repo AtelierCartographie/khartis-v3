@@ -49,7 +49,6 @@ const TRACKED_FILE_TYPES = [
   'shapefile',
   'geopackage',
   'geoparquet',
-  'arrow',
   'kml',
   'kmz',
   'gpx',

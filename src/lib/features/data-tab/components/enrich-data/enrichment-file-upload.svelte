@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
+  import { PIPELINE_CONST } from '$lib/features/data-pipeline';
   import * as m from '$lib/paraglide/messages';
   import {
     Button,

@@ -44,22 +44,30 @@ export interface IgnoredEntity {
   lines?: number[];
 }
 
+export interface JoinMapping {
+  dataValue: string;
+  basemapOptions: string[];
+  selectedMapping: string;
+  candidates?: JoinCandidate[];
+}
+
+export interface DuplicateLineReference {
+  dataValue: string;
+  lines: number[];
+}
+
 export interface BasemapJoinState {
   selectedBasemap: string;
   basemapSource: BasemapSource;
   joinedEntities: number;
   entitiesToVerify: number;
   duplicateEntities: string[];
+  duplicateTotal: number;
   unrecognizedEntities: string[];
-  joinedEntitiesList: JoinedEntity[];
+  unrecognizedTotal: number;
   ignoredEntities: IgnoredEntity[];
-  joinMappings: Array<{
-    dataValue: string;
-    basemapOptions: string[];
-    selectedMapping: string;
-    candidates?: JoinCandidate[];
-  }>;
-  duplicateLines: Array<{ dataValue: string; lines: number[] }>;
+  joinMappings: JoinMapping[];
+  duplicateLines: DuplicateLineReference[];
 }
 
 export interface EnrichDataState {
@@ -93,14 +101,15 @@ export interface DataTabState {
   };
 }
 
-export type SerializedBasemapJoinState = Omit<
-  BasemapJoinState,
-  | 'selectedBasemap'
-  | 'basemapSource'
-  | 'joinedEntities'
-  | 'entitiesToVerify'
-  | 'duplicateLines'
->;
+export interface SerializedBasemapJoinState {
+  joinedEntities: number;
+  duplicateEntities: string[];
+  duplicateTotal: number;
+  unrecognizedEntities: string[];
+  unrecognizedTotal: number;
+  ignoredEntities: IgnoredEntity[];
+  joinMappings: JoinMapping[];
+}
 
 export interface SerializedDataTabState extends Omit<
   DataTabState,

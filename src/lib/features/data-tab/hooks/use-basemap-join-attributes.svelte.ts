@@ -15,7 +15,6 @@ export interface UseBasemapJoinAttributesReturn {
   readonly loading: boolean;
   readonly aliasesByValue: Record<string, BasemapAlias[]>;
   clearValues: () => void;
-  fetchValues: (basemap: BasemapMetadata) => void;
   requestValues: () => void;
 }
 
@@ -146,7 +145,6 @@ export function useBasemapJoinAttributes({
       return aliasesByValue;
     },
     clearValues,
-    fetchValues,
     requestValues
   };
 }

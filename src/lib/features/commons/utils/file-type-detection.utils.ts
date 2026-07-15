@@ -67,10 +67,6 @@ export function detectFileType(file: Pick<File, 'name' | 'type'>): FileType {
     return FileType.GEOPARQUET;
   }
 
-  if (hasExtension(FILE_EXTENSIONS.ARROW) || hasMimePattern('arrow')) {
-    return FileType.ARROW;
-  }
-
   if (hasExtension(FILE_EXTENSIONS.KML) || hasMimePattern('kml')) {
     return FileType.KML;
   }

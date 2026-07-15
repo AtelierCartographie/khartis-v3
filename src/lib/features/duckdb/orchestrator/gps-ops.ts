@@ -4,6 +4,7 @@ import { resolveGPSCoordinateColumns } from '$lib/features/commons/utils/geo-det
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
 import type { Table } from 'apache-arrow/Arrow';
+import { registerTableMutationCallback } from '../cache/cache-manager';
 import type {
   AnalysisResult,
   DuckDBDataset,
@@ -27,14 +28,72 @@ export interface GPSValidationResult {
   warning?: string;
 }
 
-const inFlightGPSArrowLoads = new Map<
-  string,
-  Promise<{
-    table: Table;
-    latColumn: string;
-    lonColumn: string;
-  }>
->();
+interface GPSArrowTableResult {
+  table: Table;
+  latColumn: string;
+  lonColumn: string;
+}
+
+const GPS_ARROW_CACHE_MAX_ENTRIES = 4;
+const gpsArrowCache = new Map<string, GPSArrowTableResult>();
+const gpsArrowCacheTableIndex = new Map<string, Set<string>>();
+
+const inFlightGPSArrowLoads = new Map<string, Promise<GPSArrowTableResult>>();
+
+function buildGPSArrowCacheKey(
+  tableName: string,
+  lat: string,
+  lon: string
+): string {
+  return `${tableName}::${lat}::${lon}`;
+}
+
+function indexGPSArrowCacheEntry(tableName: string, key: string): void {
+  let bucket = gpsArrowCacheTableIndex.get(tableName);
+  if (!bucket) {
+    bucket = new Set();
+    gpsArrowCacheTableIndex.set(tableName, bucket);
+  }
+  bucket.add(key);
+}
+
+function evictOldestGPSArrowEntry(): void {
+  const oldestKey = gpsArrowCache.keys().next().value;
+  if (!oldestKey) return;
+  gpsArrowCache.delete(oldestKey);
+  for (const [tableName, bucket] of gpsArrowCacheTableIndex) {
+    if (bucket.delete(oldestKey) && bucket.size === 0) {
+      gpsArrowCacheTableIndex.delete(tableName);
+    }
+  }
+}
+
+function setGPSArrowCacheEntry(
+  tableName: string,
+  key: string,
+  result: GPSArrowTableResult
+): void {
+  if (gpsArrowCache.has(key)) {
+    gpsArrowCache.delete(key);
+  } else if (gpsArrowCache.size >= GPS_ARROW_CACHE_MAX_ENTRIES) {
+    evictOldestGPSArrowEntry();
+  }
+  gpsArrowCache.set(key, result);
+  indexGPSArrowCacheEntry(tableName, key);
+}
+
+function invalidateGPSArrowCacheForTable(tableName: string): void {
+  const bucket = gpsArrowCacheTableIndex.get(tableName);
+  if (!bucket) return;
+  for (const key of bucket) {
+    gpsArrowCache.delete(key);
+  }
+  gpsArrowCacheTableIndex.delete(tableName);
+}
+
+registerTableMutationCallback((table: string) => {
+  invalidateGPSArrowCacheForTable(table);
+});
 
 export async function validateGPSColumns(
   tableName: string,
@@ -186,11 +245,7 @@ export async function getGPSArrowTable(
   dataset: DuckDBDataset,
   Duck: DuckDBClientForGPS,
   getArrowTableDirect: (tableName: string) => Promise<Table>
-): Promise<{
-  table: Table;
-  latColumn: string;
-  lonColumn: string;
-}> {
+): Promise<GPSArrowTableResult> {
   if (!dataset.gpsMode || !dataset.gpsColumns) {
     throw new DataValidationError(
       m.gps_error_not_in_gps_mode({ id: dataset.id }),
@@ -200,7 +255,13 @@ export async function getGPSArrowTable(
   }
 
   const { lat, lon } = dataset.gpsColumns;
-  const requestKey = `${dataset.id}:${dataset.tableName}:${lat}:${lon}`;
+  const requestKey = buildGPSArrowCacheKey(dataset.tableName, lat, lon);
+  const cached = gpsArrowCache.get(requestKey);
+
+  if (cached) {
+    return cached;
+  }
+
   const existingRequest = inFlightGPSArrowLoads.get(requestKey);
 
   if (existingRequest) {
@@ -233,12 +294,14 @@ export async function getGPSArrowTable(
 
     try {
       const arrowTable = await getArrowTableDirect(gpsTable);
-
-      return {
+      const result: GPSArrowTableResult = {
         table: arrowTable,
         latColumn: lat,
         lonColumn: lon
       };
+
+      setGPSArrowCacheEntry(dataset.tableName, requestKey, result);
+      return result;
     } finally {
       await Duck.query(`DROP TABLE IF EXISTS "${gpsTable}"`);
     }

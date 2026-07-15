@@ -20,7 +20,7 @@ import type {
   ParserOptions,
   ProjectionLike
 } from '@ateliercartographie/geoarrow-deck-stream';
-import { type GeoProjection, type GeoStream } from 'd3-geo';
+import { geoArea, geoStream, type GeoProjection, type GeoStream } from 'd3-geo';
 
 import * as _d3GeoProjection from 'd3-geo-projection';
 
@@ -35,6 +35,11 @@ import type {
 } from '../types/basemap.types';
 import { proj4d3 } from './proj4d3.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import {
+  PERF_PHASE,
+  perfMark,
+  perfMeasure
+} from '$lib/features/commons/utils/perf-marks.utils';
 
 type BBoxTuple = [number, number, number, number];
 
@@ -889,6 +894,7 @@ export function parseSolidPolygonsWithProjection(
     return cached;
   }
 
+  perfMark(PERF_PHASE.GEOARROW_PARSE);
   const result = parsePolygonsToSolid(normalizeGeomColumnName(table), {
     projection,
     capacityMultiplier: 1.0,
@@ -900,6 +906,7 @@ export function parseSolidPolygonsWithProjection(
     projection,
     result
   );
+  perfMeasure(PERF_PHASE.GEOARROW_PARSE);
   return result;
 }
 
@@ -1131,7 +1138,279 @@ export function pointPositions(data: BinaryPointData): Float64Array {
   return result;
 }
 
+function signedRingArea(ring: GeoJSON.Position[]): number {
+  let area = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    area += (ring[i][0] - ring[j][0]) * (ring[i][1] + ring[j][1]);
+  }
+  return area / 2;
+}
+
+function ringContainsPoint(
+  ring: GeoJSON.Position[],
+  x: number,
+  y: number
+): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0];
+    const yi = ring[i][1];
+    const xj = ring[j][0];
+    const yj = ring[j][1];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+interface ClassifiedGeoJSONRing {
+  ring: GeoJSON.Position[];
+  area: number;
+}
+
+interface GeoJSONRingGroup {
+  exterior: ClassifiedGeoJSONRing;
+  holes: ClassifiedGeoJSONRing[];
+}
+
+// Same classification as the binary polygon sink: d3's clip stage emits
+// rejoined rings in arbitrary order, so exteriors are the rings whose winding
+// matches the bundle's net signed area, and each hole attaches to the
+// smallest exterior containing one of its sampled vertices.
+function groupBundleRings(rings: GeoJSON.Position[][]): GeoJSON.Position[][][] {
+  const classified: ClassifiedGeoJSONRing[] = rings.map((ring) => ({
+    ring,
+    area: signedRingArea(ring)
+  }));
+
+  let netArea = 0;
+  for (const entry of classified) {
+    netArea += entry.area;
+  }
+  const refSign = Math.sign(netArea);
+  if (refSign === 0) {
+    return [];
+  }
+
+  const groups: GeoJSONRingGroup[] = [];
+  const holes: ClassifiedGeoJSONRing[] = [];
+  for (const entry of classified) {
+    if (entry.area === 0) {
+      continue;
+    }
+    if (Math.sign(entry.area) === refSign) {
+      groups.push({ exterior: entry, holes: [] });
+    } else {
+      holes.push(entry);
+    }
+  }
+  if (groups.length === 0) {
+    return [];
+  }
+
+  for (const hole of holes) {
+    const count = hole.ring.length;
+    const samples = new Set([0, count >> 1, count >> 2]);
+    let assigned: GeoJSONRingGroup | null = null;
+    for (const sample of samples) {
+      const [x, y] = hole.ring[sample];
+      let best: GeoJSONRingGroup | null = null;
+      for (const group of groups) {
+        if (!ringContainsPoint(group.exterior.ring, x, y)) {
+          continue;
+        }
+        if (
+          !best ||
+          Math.abs(group.exterior.area) < Math.abs(best.exterior.area)
+        ) {
+          best = group;
+        }
+      }
+      if (best) {
+        assigned = best;
+        break;
+      }
+    }
+    assigned?.holes.push(hole);
+  }
+
+  return groups.map((group) => [
+    group.exterior.ring,
+    ...group.holes.map((hole) => hole.ring)
+  ]);
+}
+
+interface GeoJSONStreamCollector {
+  collector: GeoStream;
+  points: GeoJSON.Position[];
+  lines: GeoJSON.Position[][];
+  bundles: GeoJSON.Position[][][];
+}
+
+function createGeoJSONCollector(): GeoJSONStreamCollector {
+  const points: GeoJSON.Position[] = [];
+  const lines: GeoJSON.Position[][] = [];
+  const bundles: GeoJSON.Position[][][] = [];
+  let currentLine: GeoJSON.Position[] | null = null;
+  let currentBundle: GeoJSON.Position[][] | null = null;
+
+  const collector: GeoStream = {
+    point(x: number, y: number): void {
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        return;
+      }
+      if (currentLine) {
+        currentLine.push([x, y]);
+      } else {
+        points.push([x, y]);
+      }
+    },
+    lineStart(): void {
+      currentLine = [];
+    },
+    lineEnd(): void {
+      if (!currentLine) {
+        return;
+      }
+      if (currentBundle) {
+        // d3 emits polygon rings without the closing duplicate; GeoJSON
+        // requires closed rings.
+        if (currentLine.length >= 3) {
+          currentLine.push([...currentLine[0]]);
+          currentBundle.push(currentLine);
+        }
+      } else if (currentLine.length >= 2) {
+        lines.push(currentLine);
+      }
+      currentLine = null;
+    },
+    polygonStart(): void {
+      currentBundle = [];
+    },
+    polygonEnd(): void {
+      if (currentBundle && currentBundle.length > 0) {
+        bundles.push(currentBundle);
+      }
+      currentBundle = null;
+    },
+    sphere(): void {}
+  };
+
+  return { collector, points, lines, bundles };
+}
+
+// d3's spherical clipping reads ring winding: a ring whose spherical area
+// exceeds a hemisphere is "everything but the ring". Exteriors must stay
+// below 2π and holes above, or clipped output covers the whole map.
+function rewindRingForStream(
+  ring: GeoJSON.Position[],
+  isExterior: boolean
+): GeoJSON.Position[] {
+  const area = geoArea({ type: 'Polygon', coordinates: [ring] });
+  const isSmall = area <= 2 * Math.PI;
+  return isSmall === isExterior ? ring : [...ring].reverse();
+}
+
+function rewindGeometryForStream(geometry: GeoJSON.Geometry): GeoJSON.Geometry {
+  if (geometry.type === 'Polygon') {
+    return {
+      ...geometry,
+      coordinates: geometry.coordinates.map((ring, index) =>
+        rewindRingForStream(ring, index === 0)
+      )
+    };
+  }
+  if (geometry.type === 'MultiPolygon') {
+    return {
+      ...geometry,
+      coordinates: geometry.coordinates.map((polygon) =>
+        polygon.map((ring, index) => rewindRingForStream(ring, index === 0))
+      )
+    };
+  }
+  return geometry;
+}
+
+function projectGeometryViaStream(
+  geometry: GeoJSON.Geometry | null,
+  projection: ProjectionLike
+): GeoJSON.Geometry | null {
+  if (!geometry) {
+    return null;
+  }
+
+  if (geometry.type === 'GeometryCollection') {
+    const geometries = geometry.geometries
+      .map((child) => projectGeometryViaStream(child, projection))
+      .filter((child): child is GeoJSON.Geometry => child !== null);
+    return geometries.length > 0 ? { ...geometry, geometries } : null;
+  }
+
+  const { collector, points, lines, bundles } = createGeoJSONCollector();
+  const projectionStream = (projection as GeoProjection).stream(collector);
+  geoStream(rewindGeometryForStream(geometry), projectionStream);
+
+  switch (geometry.type) {
+    case 'Point':
+      return points.length > 0
+        ? { type: 'Point', coordinates: points[0] }
+        : null;
+
+    case 'MultiPoint':
+      return points.length > 0
+        ? { type: 'MultiPoint', coordinates: points }
+        : null;
+
+    case 'LineString':
+    case 'MultiLineString': {
+      if (lines.length === 0) {
+        return null;
+      }
+      return lines.length === 1
+        ? { type: 'LineString', coordinates: lines[0] }
+        : { type: 'MultiLineString', coordinates: lines };
+    }
+
+    case 'Polygon':
+    case 'MultiPolygon': {
+      const polygons: GeoJSON.Position[][][] = [];
+      for (const bundle of bundles) {
+        polygons.push(...groupBundleRings(bundle));
+      }
+      return polygons.length > 0
+        ? { type: 'MultiPolygon', coordinates: polygons }
+        : null;
+    }
+
+    default:
+      return null;
+  }
+}
+
 export function projectGeoJSON(
+  geojson: GeoJSON.FeatureCollection,
+  projection: ProjectionLike
+): GeoJSON.FeatureCollection {
+  // The d3 stream applies antimeridian/polar clipping and adaptive
+  // resampling; sampling point-by-point instead draws full-width bands for
+  // any geometry crossing the rotated antimeridian.
+  if (typeof (projection as Partial<GeoProjection>).stream !== 'function') {
+    return projectGeoJSONByPointSampling(geojson, projection);
+  }
+
+  return {
+    ...geojson,
+    features: geojson.features
+      .map((f) => {
+        const geometry = projectGeometryViaStream(f.geometry, projection);
+        return geometry ? ({ ...f, geometry } as GeoJSON.Feature) : null;
+      })
+      .filter((f): f is GeoJSON.Feature => f !== null)
+  };
+}
+
+function projectGeoJSONByPointSampling(
   geojson: GeoJSON.FeatureCollection,
   projection: ProjectionLike
 ): GeoJSON.FeatureCollection {

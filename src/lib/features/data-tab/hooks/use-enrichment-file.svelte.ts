@@ -99,7 +99,6 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
     return {
       name: column.name,
       type,
-      values: [],
       stats: {
         name: column.name,
         type,

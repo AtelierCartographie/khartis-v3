@@ -388,7 +388,7 @@ export function createTextOverlayLayers(
     pointConfig?.mode === SymbolMode.CLASSES &&
     !!pointValueColumn &&
     !!pointClassification?.breaks &&
-    pointClassification.breaks.length >= 2;
+    pointClassification.breaks.length >= 1;
   const useCategoricalPointColor = shouldApplyCategorical(
     viz,
     PrimitiveFilterType.POINT

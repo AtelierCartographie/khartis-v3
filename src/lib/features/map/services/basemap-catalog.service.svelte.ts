@@ -1,5 +1,5 @@
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
-import type { GeoColumnInfo } from '$lib/features/data-pipeline/types';
+import type { GeoColumnInfo } from '$lib/features/data-pipeline';
 import type { GPSBounds } from '$lib/features/duckdb';
 import { GEO_COLUMN_TYPE } from '../../commons/constants/data.constants';
 import { PipelineError } from '../../commons/pipeline.errors';

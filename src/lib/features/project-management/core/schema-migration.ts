@@ -12,11 +12,11 @@ export interface SchemaMigration {
   migrate: (data: Record<string, unknown>) => Record<string, unknown>;
 }
 
-export const schemaMigrations: readonly SchemaMigration[] = [];
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
+
+export const schemaMigrations: readonly SchemaMigration[] = [];
 
 function throwUnsupportedSchemaVersion(receivedVersion: unknown): never {
   const version =

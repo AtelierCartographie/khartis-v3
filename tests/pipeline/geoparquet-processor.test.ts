@@ -10,7 +10,10 @@ const { getArrayBufferMock } = vi.hoisted(() => ({
 
 vi.mock(
   '$lib/features/data-pipeline/processors/strategies/processor-utils',
-  () => ({
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('$lib/features/data-pipeline/processors/strategies/processor-utils')
+    >()),
     getArrayBuffer: getArrayBufferMock,
     getFileForDuckDB: vi.fn()
   })
@@ -64,11 +67,6 @@ describe('geoparquetProcessor', () => {
     expect(
       geoparquetProcessor.canHandle(
         file({ name: 'data.gpq', fileType: FileType.GEOPARQUET })
-      )
-    ).toBe(true);
-    expect(
-      geoparquetProcessor.canHandle(
-        file({ name: 'data.arrow', fileType: FileType.ARROW })
       )
     ).toBe(true);
     expect(

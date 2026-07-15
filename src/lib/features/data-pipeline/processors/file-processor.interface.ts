@@ -1,5 +1,4 @@
-import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
-import type { Table } from 'apache-arrow/Arrow';
+import type { AnalysisResult } from '$lib/features/duckdb';
 import type {
   FileType,
   UploadedFile
@@ -10,7 +9,7 @@ export interface DuckDBClient {
   analyse(
     tableName: string,
     options?: { force?: boolean }
-  ): Promise<AnalysisResultForProcessor[]>;
+  ): Promise<AnalysisResult[]>;
   register_files(
     files: File[],
     options?: { shapefile?: boolean }
@@ -25,25 +24,8 @@ export interface DuckDBClient {
   ): Promise<string | unknown>;
 }
 
-export interface AnalysisResultForProcessor {
-  name: string;
-  type_simple: string;
-  min?: number | bigint | Date;
-  max?: number | bigint | Date;
-  histogram?: unknown;
-  uniques?: number;
-  nulls?: number;
-  duplicates?: number;
-  count?: number;
-  [key: string]: unknown;
-}
-
 export interface ProcessorCallbacks {
   getRowCount: (tableName: string) => Promise<number>;
-  createArrowTableWithMetadata: (tableName: string) => Promise<{
-    arrowTableWithMetadata: Table;
-    geoArrowMetadata: GeoArrowMetadata | null;
-  }>;
 }
 
 export interface ProcessorDataset {
@@ -51,15 +33,13 @@ export interface ProcessorDataset {
   tableName: string;
   sourceFileId: string;
   name: string;
-  columns: AnalysisResultForProcessor[];
+  columns: AnalysisResult[];
   rowCount: number;
   metadata: {
     processedAt: Date;
     fileType: FileType;
   };
   geoDetection?: unknown;
-  arrowTableWithMetadata?: Table;
-  geoArrowMetadata?: GeoArrowMetadata;
 }
 
 export interface ProcessContext {
@@ -72,9 +52,4 @@ export interface FileProcessor {
   readonly supportedFileTypes: FileType[];
   canHandle(file: UploadedFile): boolean;
   process(ctx: ProcessContext, file: UploadedFile): Promise<ProcessorDataset>;
-}
-
-export interface FileProcessorRegistration {
-  processor: FileProcessor;
-  priority: number;
 }

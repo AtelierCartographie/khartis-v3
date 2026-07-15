@@ -96,6 +96,7 @@
 
   let currentMethod = $state<ClassificationMethod>(ClassificationMethod.KMEANS);
   let currentNumClasses = $state(5);
+  let mergedClassCount = $state<number | null>(null);
   let currentBreaks = $state<ClassBreak[]>([]);
   let currentBreakpoint = $state<number | null>(null);
   let currentBreakpointLowerClassCount = $state<number | null>(null);
@@ -156,6 +157,7 @@
       method === ClassificationMethod.HEAD_TAIL
         ? resolveHeadTailClassCountMax(actualClassCount ?? storedNumClasses)
         : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
+    mergedClassCount = null;
     lastLocalClassification = cloneClassification(classification);
     lastLocalContextKey = activeContextKey;
   }
@@ -299,6 +301,10 @@
 
     const { actualClassCount, colors, normalizedMethod, result } = computation;
 
+    mergedClassCount =
+      actualClassCount < computation.requestedClassCount
+        ? actualClassCount
+        : null;
     currentNumClasses = actualClassCount;
     currentBreakpointLowerClassCount = resolveBreakpointLowerClassCount(
       actualClassCount,
@@ -668,6 +674,7 @@
         <DiscretizationPanel
           bind:method={currentMethod}
           bind:numClasses={currentNumClasses}
+          mergedClassCount={mergedClassCount}
           bind:breaks={currentBreaks}
           bind:breakpointValue={currentBreakpoint}
           bind:breakpointLowerClassCount={currentBreakpointLowerClassCount}
@@ -697,7 +704,7 @@
     transform: translateY(-50%);
     width: 320px;
     min-height: 320px;
-    max-height: calc(100dvh - 120px);
+    max-height: min(80vh, calc(100dvh - 120px));
     z-index: var(--z-dropdown);
     background: var(--cds-background, #ffffff);
     display: flex;

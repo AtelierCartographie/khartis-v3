@@ -70,7 +70,7 @@ export async function createProject(
 
   await saveCurrentProject(container);
   await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
-  await dataOrchestratorService.onProjectChanged();
+  await dataOrchestratorService.onProjectChanged({ isProjectCreation: true });
   analyticsService.trackProjectCreated(files);
 }
 

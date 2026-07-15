@@ -38,20 +38,16 @@ describe('dataTab persistence', () => {
     dataTabActions.reset();
   });
 
-  it('does not persist project-owned basemap selection or derived join counters in ui settings', () => {
+  it('persists join counters and capped lists without project-owned basemap selection', () => {
     dataTabActions.setBasemapJoinState({
       selectedBasemap: 'osm-standard',
       basemapSource: BasemapSource.OSM,
       joinedEntities: 12,
       entitiesToVerify: 3,
       duplicateEntities: ['Paris'],
+      duplicateTotal: 1,
       unrecognizedEntities: ['Lyon'],
-      joinedEntitiesList: [
-        {
-          dataValue: 'Paris',
-          basemapValue: 'Paris'
-        }
-      ],
+      unrecognizedTotal: 1,
       joinMappings: [
         {
           dataValue: 'Marseille',
@@ -65,15 +61,12 @@ describe('dataTab persistence', () => {
       dataControl: expect.any(Object),
       geolocation: expect.any(Object),
       basemapJoin: {
+        joinedEntities: 12,
         duplicateEntities: ['Paris'],
+        duplicateTotal: 1,
         unrecognizedEntities: ['Lyon'],
+        unrecognizedTotal: 1,
         ignoredEntities: [],
-        joinedEntitiesList: [
-          {
-            dataValue: 'Paris',
-            basemapValue: 'Paris'
-          }
-        ],
         joinMappings: [
           {
             dataValue: 'Marseille',
@@ -90,27 +83,22 @@ describe('dataTab persistence', () => {
       basemapJoin: {
         selectedBasemap: expect.anything(),
         basemapSource: expect.anything(),
-        joinedEntities: expect.anything(),
-        entitiesToVerify: expect.anything()
+        entitiesToVerify: expect.anything(),
+        joinedEntitiesList: expect.anything(),
+        duplicateLines: expect.anything()
       }
     });
   });
 
-  it('recomputes derived join counters when restoring persisted basemap join lists', () => {
+  it('restores counters from the persisted shape and recomputes to-verify from mappings', () => {
     dataTabPersistenceEntry?.deserialize({
       basemapJoin: {
-        joinedEntities: 99,
+        joinedEntities: 30848,
+        duplicateEntities: ['Doublon'],
+        duplicateTotal: 1556,
+        unrecognizedEntities: ['Inconnue'],
+        unrecognizedTotal: 140,
         entitiesToVerify: 42,
-        joinedEntitiesList: [
-          {
-            dataValue: 'Paris',
-            basemapValue: 'Paris'
-          },
-          {
-            dataValue: 'Lyon',
-            basemapValue: 'Lyon'
-          }
-        ],
         joinMappings: [
           {
             dataValue: 'Marseille',
@@ -121,7 +109,9 @@ describe('dataTab persistence', () => {
       }
     });
 
-    expect(dataTabState.basemapJoin.joinedEntities).toBe(2);
+    expect(dataTabState.basemapJoin.joinedEntities).toBe(30848);
+    expect(dataTabState.basemapJoin.duplicateTotal).toBe(1556);
+    expect(dataTabState.basemapJoin.unrecognizedTotal).toBe(140);
     expect(dataTabState.basemapJoin.entitiesToVerify).toBe(1);
   });
 
@@ -173,8 +163,9 @@ describe('dataTab persistence', () => {
     expect(dataTabState.basemapJoin.joinedEntities).toBe(0);
     expect(dataTabState.basemapJoin.entitiesToVerify).toBe(0);
     expect(dataTabState.basemapJoin.duplicateEntities).toEqual([]);
+    expect(dataTabState.basemapJoin.duplicateTotal).toBe(0);
     expect(dataTabState.basemapJoin.unrecognizedEntities).toEqual([]);
-    expect(dataTabState.basemapJoin.joinedEntitiesList).toEqual([]);
+    expect(dataTabState.basemapJoin.unrecognizedTotal).toBe(0);
     expect(dataTabState.basemapJoin.ignoredEntities).toEqual([]);
     expect(dataTabState.basemapJoin.joinMappings).toEqual([]);
     expect(() => dataTabActions.clearJoinStats()).not.toThrow();
@@ -202,14 +193,6 @@ describe('dataTab persistence', () => {
       basemapJoin: {
         duplicateEntities: ['Paris', 12],
         unrecognizedEntities: 'Lyon',
-        joinedEntitiesList: [
-          {
-            dataValue: 'Paris',
-            basemapValue: 'Paris',
-            otherIdentifiers: ['Paris City', 75]
-          },
-          { dataValue: 'Lyon' }
-        ],
         ignoredEntities: [
           {
             dataValue: 'Marseille',
@@ -277,16 +260,11 @@ describe('dataTab persistence', () => {
       selectedBasemap: 'osm-standard',
       basemapSource: BasemapSource.CATALOG,
       duplicateEntities: ['Paris'],
+      duplicateTotal: 1,
       unrecognizedEntities: [],
-      joinedEntities: 1,
+      unrecognizedTotal: 0,
+      joinedEntities: 0,
       entitiesToVerify: 1,
-      joinedEntitiesList: [
-        {
-          dataValue: 'Paris',
-          basemapValue: 'Paris',
-          otherIdentifiers: ['Paris City']
-        }
-      ],
       ignoredEntities: [
         {
           dataValue: 'Marseille',
@@ -324,6 +302,58 @@ describe('dataTab persistence', () => {
     });
   });
 
+  it('keeps ignore/restore/promote counters aligned with the visible buckets', () => {
+    dataTabActions.setJoinStats({
+      joinedCount: 10,
+      toVerifyCount: 1,
+      duplicateCount: 0,
+      unrecognizedCount: 2,
+      totalEntities: 13,
+      joinMappings: [
+        {
+          dataValue: 'Frnace',
+          basemapOptions: ['France'],
+          selectedMapping: 'France',
+          candidates: [
+            {
+              id: 'FRA',
+              name: 'France',
+              score: 0.96,
+              type: 'partial',
+              variant: 'name_engl'
+            }
+          ]
+        }
+      ],
+      duplicateEntities: [],
+      unrecognizedEntities: ['Atlantis', 'Mordor'],
+      duplicateLines: []
+    });
+
+    dataTabActions.ignoreEntity({
+      dataValue: 'Paris',
+      basemapValue: 'Paris',
+      source: 'joined'
+    });
+    expect(dataTabState.basemapJoin.joinedEntities).toBe(9);
+
+    dataTabActions.ignoreEntity({
+      dataValue: 'Atlantis',
+      source: 'unrecognized'
+    });
+    expect(dataTabState.basemapJoin.unrecognizedTotal).toBe(1);
+    expect(dataTabState.basemapJoin.unrecognizedEntities).toEqual(['Mordor']);
+
+    dataTabActions.restoreEntity('Atlantis');
+    expect(dataTabState.basemapJoin.unrecognizedTotal).toBe(2);
+    expect(dataTabState.basemapJoin.unrecognizedEntities).toContain('Atlantis');
+
+    dataTabActions.promoteToJoined('Frnace');
+    expect(dataTabState.basemapJoin.joinedEntities).toBe(10);
+    expect(dataTabState.basemapJoin.entitiesToVerify).toBe(0);
+    expect(dataTabState.basemapJoin.joinMappings).toEqual([]);
+  });
+
   it('clears duplicate join line references when no other join stats remain', () => {
     dataTabActions.setBasemapJoinState({
       duplicateLines: [{ dataValue: 'Paris', lines: [2, 8] }]
@@ -333,6 +363,40 @@ describe('dataTab persistence', () => {
     dataTabActions.clearJoinStats();
 
     expect(dataTabState.basemapJoin.duplicateLines).toEqual([]);
+    expect(mocks.notifyChangeMock).toHaveBeenCalledWith('dataTab', 'debounced');
+  });
+
+  it('debounces auto-join setter saves but keeps manual corrections immediate', () => {
+    mocks.notifyChangeMock.mockClear();
+    dataTabActions.setBasemapJoinState({ selectedBasemap: 'b1' });
+    dataTabActions.selectBasemap('b2');
+    expect(mocks.notifyChangeMock).toHaveBeenCalledTimes(2);
+    expect(
+      mocks.notifyChangeMock.mock.calls.every(
+        ([, priority]) => priority === 'debounced'
+      )
+    ).toBe(true);
+
+    mocks.notifyChangeMock.mockClear();
+    dataTabActions.setBasemapJoinState({
+      joinMappings: [
+        {
+          dataValue: 'Nice',
+          basemapOptions: ['Nice', 'Nizza'],
+          selectedMapping: 'Nice'
+        }
+      ]
+    });
+    mocks.notifyChangeMock.mockClear();
+    dataTabActions.updateJoinMapping(0, 'Nizza');
+    expect(mocks.notifyChangeMock).toHaveBeenCalledWith('dataTab', 'immediate');
+
+    mocks.notifyChangeMock.mockClear();
+    dataTabActions.ignoreEntity({ dataValue: 'Nice', source: 'to_verify' });
+    expect(mocks.notifyChangeMock).toHaveBeenCalledWith('dataTab', 'immediate');
+
+    mocks.notifyChangeMock.mockClear();
+    dataTabActions.restoreEntity('Nice');
     expect(mocks.notifyChangeMock).toHaveBeenCalledWith('dataTab', 'immediate');
   });
 

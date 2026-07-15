@@ -1,7 +1,5 @@
 const LOCALHOST = 'localhost';
 const LOOPBACK = '127.0.0.1';
-const PREPROD_PATH = '/cartographie/khartisnewpprd';
-const PREPROD_URL_MARKER = 'khartisnewpprd';
 
 export enum Environment {
   DEVELOPMENT = 'development',
@@ -9,30 +7,28 @@ export enum Environment {
   PRODUCTION = 'production'
 }
 
-export const EnvironmentUtils = {
-  hasPreproductionUrlMarker(): boolean {
-    return (
-      typeof window !== 'undefined' &&
-      window.location.href.includes(PREPROD_URL_MARKER)
-    );
-  },
+function environmentFromBuildVariable(): Environment | null {
+  const value = import.meta.env.VITE_KHARTIS_ENV;
+  if (value === Environment.PRODUCTION || value === Environment.PREPRODUCTION) {
+    return value;
+  }
+  return null;
+}
 
+export const EnvironmentUtils = {
   getEnvironment(): Environment {
+    const buildEnvironment = environmentFromBuildVariable();
+    if (buildEnvironment) {
+      return buildEnvironment;
+    }
+
     if (typeof window === 'undefined') {
       return Environment.DEVELOPMENT;
     }
 
-    const { hostname, pathname } = window.location;
-
+    const { hostname } = window.location;
     if (hostname === LOCALHOST || hostname === LOOPBACK) {
       return Environment.DEVELOPMENT;
-    }
-
-    if (
-      pathname.startsWith(PREPROD_PATH) ||
-      EnvironmentUtils.hasPreproductionUrlMarker()
-    ) {
-      return Environment.PREPRODUCTION;
     }
 
     return Environment.PRODUCTION;

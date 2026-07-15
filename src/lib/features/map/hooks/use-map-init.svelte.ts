@@ -102,7 +102,7 @@ const DEFAULT_RENDER_PIXEL_RATIO = 1;
 const IS_DEV = import.meta.env.DEV;
 
 function isDeckDebugEnabled(): boolean {
-  return IS_DEV || EnvironmentUtils.hasPreproductionUrlMarker();
+  return IS_DEV || EnvironmentUtils.isPreproduction();
 }
 
 function getInitialRenderPixelRatio(): number {

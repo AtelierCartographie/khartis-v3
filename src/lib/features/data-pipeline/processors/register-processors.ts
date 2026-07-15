@@ -13,12 +13,12 @@ let registered = false;
 export function registerAllProcessors(): void {
   if (registered) return;
 
-  registerProcessor(csvProcessor, 10);
-  registerProcessor(geojsonProcessor, 10);
-  registerProcessor(shapefileProcessor, 10);
-  registerProcessor(geopackageProcessor, 10);
-  registerProcessor(geoparquetProcessor, 10);
-  registerProcessor(gpxProcessor, 10);
+  registerProcessor(csvProcessor);
+  registerProcessor(geojsonProcessor);
+  registerProcessor(shapefileProcessor);
+  registerProcessor(geopackageProcessor);
+  registerProcessor(geoparquetProcessor);
+  registerProcessor(gpxProcessor);
 
   registered = true;
 }

@@ -7,8 +7,9 @@ import {
 } from './core/engine';
 import { executeQuery, executeQueryStreaming } from './core/query';
 import { exportToCsv } from './io/exporters';
-import { registerFiles } from './io/file-registry';
-import { readGeofile, readLink, readTabular } from './io';
+import { dropRegisteredFile, registerFiles } from './io/file-registry';
+import { rowIdSequenceName } from './io/reader-utils';
+import { readGeofile, readJsonTabular, readTabular } from './io';
 import { analyse, describeColumns } from './operations/analysis';
 import { searchInTable } from './operations/search';
 import { describeTable, dropRows, getRowCount } from './operations/table-ops';
@@ -27,12 +28,25 @@ import type {
   DuckDBMetadata,
   QueryOptions,
   ReadGeofileOptions,
-  ReadLinkOptions,
   ReadTabularOptions,
   RegisterFilesOptions,
   SearchStats,
   TableMetadata
 } from './types';
+
+async function query(
+  sql: string,
+  options: QueryOptions & { format: 'array' }
+): Promise<unknown[]>;
+async function query(
+  sql: string,
+  options: QueryOptions & { format: 'arrow-ipc' }
+): Promise<Uint8Array | ArrayBuffer>;
+async function query(sql: string, options?: QueryOptions): Promise<unknown>;
+async function query(sql: string, options?: QueryOptions): Promise<unknown> {
+  const ctx = getContext();
+  return executeQuery(ctx.connection, sql, options);
+}
 
 /** Legacy DuckDB facade for engine setup, ingestion, querying, analysis, and metadata. */
 export const Duck = {
@@ -45,21 +59,18 @@ export const Duck = {
   },
 
   get loaded_files() {
-    return isInitialized() ? getContext().loaded_files : new Map();
+    return getContext().loaded_files;
   },
 
   get registered_files(): Set<string> {
-    return isInitialized() ? getContext().registered_files : new Set<string>();
+    return getContext().registered_files;
   },
 
   get table_metadata() {
-    return isInitialized() ? getContext().table_metadata : new Map();
+    return getContext().table_metadata;
   },
 
-  async query(sql: string, options?: QueryOptions): Promise<unknown> {
-    const ctx = getContext();
-    return executeQuery(ctx.connection, sql, options);
-  },
+  query,
 
   /** Execute a streaming query and return raw Arrow IPC bytes. */
   async queryStreaming(sql: string): Promise<Uint8Array> {
@@ -91,9 +102,12 @@ export const Duck = {
     return readGeofile(ctx, geofile, options);
   },
 
-  async read_link(url: string, options?: ReadLinkOptions): Promise<string> {
+  async read_json_tabular(
+    file: File,
+    options: { tablename: string }
+  ): Promise<string> {
     const ctx = getContext();
-    return readLink(ctx, url, options);
+    return readJsonTabular(ctx, file, options);
   },
 
   async describe_table(
@@ -137,7 +151,7 @@ export const Duck = {
   async searchInTable(
     table: string,
     searchQuery: string,
-    options?: { threshold?: number; column?: string }
+    options?: { threshold?: number; column?: string; signal?: AbortSignal }
   ): Promise<SearchStats> {
     const ctx = getContext();
     return searchInTable(ctx, table, searchQuery, options);
@@ -155,6 +169,10 @@ export const Duck = {
       ctx.connection,
       `DROP TABLE IF EXISTS "${escapeIdentifier(table)}"`
     );
+    await executeQuery(
+      ctx.connection,
+      `DROP SEQUENCE IF EXISTS "${rowIdSequenceName(table)}"`
+    );
     markTableMutated(ctx, table);
   },
 
@@ -169,11 +187,10 @@ export const Duck = {
 
     ctx.loaded_files.delete(tableName);
 
-    const registeredFile = Array.from(ctx.registered_files).find((id) =>
-      id.includes(tableName)
-    );
-    if (registeredFile) {
-      ctx.registered_files.delete(registeredFile);
+    const registeredFileId = ctx.table_files.get(tableName);
+    if (registeredFileId) {
+      ctx.table_files.delete(tableName);
+      void dropRegisteredFile(ctx.db, ctx.registered_files, registeredFileId);
     }
 
     ctx.table_metadata.delete(tableName);
