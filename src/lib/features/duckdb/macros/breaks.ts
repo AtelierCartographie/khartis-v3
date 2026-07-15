@@ -105,31 +105,6 @@ const nested_means_macro = `CREATE OR REPLACE MACRO nested_means(tabname, colnam
 );`;
 
 // By Éric Mauvière, https://observablehq.com/@ericmauviere/head-tail-breaks
-const headtail_macro = `CREATE OR REPLACE MACRO headtail(tabname, colname, nb := 10, threshold := ${FUZZY_SEARCH.HEAD_TAIL_THRESHOLD}) AS (
-              WITH RECURSIVE values AS (
-                    FROM query_table(tabname::VARCHAR)
-                    SELECT COLUMNS(c -> c = colname) AS value
-                    WHERE COLUMNS(c -> c = colname) IS NOT NULL
-              ), headtail(break, values_count) AS (
-                    -- Initialization with break = average, values_count = number of observations
-                    FROM values
-                    SELECT avg(value),   -- break
-                    count(*)              -- values_count
-
-                    UNION ALL
-
-                    -- next headtail refers to the last row of the growing table
-                    FROM values, headtail
-                    SELECT avg(value),    -- next break
-                    count(*) head_count    -- next values_count
-                    WHERE value > headtail.break
-                    GROUP BY ALL
-                    HAVING head_count > 1 AND head_count / headtail.values_count <= threshold
-            )
-            FROM headtail
-            SELECT list(break)[1:nb - 1] AS breaks
-        );`;
-
 const headtail2_macro = `CREATE OR REPLACE MACRO headtail2(tabname, colname, nb := 10, threshold := ${FUZZY_SEARCH.HEAD_TAIL_THRESHOLD}) AS (
               WITH RECURSIVE values AS (
                   FROM query_table(tabname::VARCHAR)
@@ -182,28 +157,6 @@ const kmeans_macro = `CREATE OR REPLACE MACRO kmeans(tabname, colname, nb := 5, 
 
   FROM (FROM clusters WHERE iter = maxiter ORDER BY x)
   SELECT list(x)
-);`;
-
-// Class membership for each value
-/**
- * SQL macro to classify a column value based on specified breaks.
- *
- * Creates a temporary table with distinct break values and assigns a class number
- * to each value in the column based on its position relative to the breaks.
- * If the column value is null, the result will also be null.
- *
- * @param colname - The name of the column to classify.
- * @param breaks - An array of break values to classify the column.
- */
-const add_class_macro = `CREATE OR REPLACE MACRO add_class(colname, breaks) AS (
-	WITH t1 AS (
-		SELECT unnest(list_distinct(breaks)) as break
-	), t2 AS (
-		FROM t1
-		SELECT COUNT(*) + 1 as class
-	  WHERE try_cast(break as double) <= try_cast("colname" as double)
-	) FROM t2
-	SELECT IF("colname" IS NULL, NULL, class)
 );`;
 
 // Rounds thresholds without betraying their relative positions in the series
@@ -293,15 +246,13 @@ const round_thresholds_macro = `CREATE OR REPLACE MACRO round_left(n) AS (
 
 /**
  * Combination of all macro functions for data classification:
- * quantile, q6, equi_width, nested_means, headtail, headtail2, kmeans, add_class, round_thresholds.
+ * quantile, q6, equi_width, nested_means, headtail2, kmeans, round_thresholds.
  */
 export const breaks =
   quantile_macro +
   q6_macro +
   equi_width_macro +
   nested_means_macro +
-  headtail_macro +
   headtail2_macro +
   kmeans_macro +
-  add_class_macro +
   round_thresholds_macro;

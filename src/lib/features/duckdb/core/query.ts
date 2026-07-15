@@ -52,6 +52,14 @@ export async function executeQuery(
     return buffer;
   }
 
+  return materializeIpcBuffer(buffer, format, useProxy);
+}
+
+function materializeIpcBuffer(
+  buffer: Uint8Array | ArrayBuffer,
+  format: QueryOptions['format'],
+  useProxy: boolean
+): unknown {
   const table = tableFromIPC(buffer, {
     useBigInt: true,
     useDate: true,
@@ -60,15 +68,44 @@ export async function executeQuery(
     useProxy
   });
 
-  if (format === DUCK_CONST.QUERY_FORMAT.ARROW_TABLE) {
-    return table;
-  }
-
   if (format === DUCK_CONST.QUERY_FORMAT.ARRAY) {
     return table.toArray();
   }
 
   return table;
+}
+
+export function isQueryAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
+function createQueryAbortError(): DOMException {
+  return new DOMException('DuckDB query aborted', 'AbortError');
+}
+
+/**
+ * Executes a query on the cancellable pending-query path: when the signal
+ * aborts mid-execution, the worker-side query is cancelled via
+ * cancelPendingQuery instead of running to completion.
+ */
+export async function executeCancellableQuery(
+  connection: AsyncDuckDBConnection,
+  query: string,
+  options: QueryOptions & { signal?: AbortSignal } = {}
+): Promise<unknown> {
+  const {
+    signal,
+    format = DUCK_CONST.QUERY_FORMAT.ARROW_TABLE,
+    useProxy = true
+  } = options;
+
+  const buffer = await executeQueryStreaming(connection, query, { signal });
+
+  if (format === DUCK_CONST.QUERY_FORMAT.ARROW_IPC) {
+    return buffer;
+  }
+
+  return materializeIpcBuffer(buffer, format, useProxy);
 }
 
 /**
@@ -83,19 +120,32 @@ export async function executeQuery(
  */
 export async function executeQueryStreaming(
   connection: AsyncDuckDBConnection,
-  query: string
+  query: string,
+  options: { signal?: AbortSignal } = {}
 ): Promise<Uint8Array> {
+  const { signal } = options;
   try {
+    if (signal?.aborted) {
+      throw createQueryAbortError();
+    }
+
     const chunks: Uint8Array[] = [];
     let totalLength = 0;
 
     await connection.useUnsafe(
       async (bindings: DuckDBStreamingBindings, conn: unknown) => {
+        const cancelIfAborted = async (): Promise<void> => {
+          if (!signal?.aborted) return;
+          await bindings.cancelPendingQuery(conn);
+          throw createQueryAbortError();
+        };
+
         let header = await bindings.startPendingQuery(conn, query, true);
         while (header === null) {
           if (bindings.isDetached?.()) {
             throw new DuckDBError(m.error_worker_detached_query(), query);
           }
+          await cancelIfAborted();
           header = await bindings.pollPendingQuery(conn);
         }
 
@@ -112,6 +162,7 @@ export async function executeQueryStreaming(
             if (bindings.isDetached?.()) {
               throw new DuckDBError(m.error_worker_detached_results(), query);
             }
+            await cancelIfAborted();
             result = await bindings.fetchQueryResults(conn);
           }
 
@@ -123,8 +174,12 @@ export async function executeQueryStreaming(
       }
     );
 
-    if (chunks.length === 1 && ipcBufferHasRows(chunks[0])) {
+    if (chunks.length === 1) {
       return chunks[0];
+    }
+
+    if (totalLength === 0) {
+      throw new Error('Streaming query returned an empty IPC stream');
     }
 
     // Concatenate IPC chunks into a single contiguous buffer
@@ -135,15 +190,11 @@ export async function executeQueryStreaming(
       offset += chunk.byteLength;
     }
 
-    if (chunks.length > 1 || ipcBufferHasRows(combined)) {
-      return combined;
-    }
-
-    const fallbackBuffer = (await executeQuery(connection, query, {
-      format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-    })) as Uint8Array | ArrayBuffer;
-    return toUint8Array(fallbackBuffer);
+    return combined;
   } catch (error) {
+    if (isQueryAbortError(error)) {
+      throw error;
+    }
     const message =
       error instanceof Error ? error.message : m.error_unknown_duckdb();
     const truncatedQuery =
@@ -153,23 +204,5 @@ export async function executeQueryStreaming(
       truncatedQuery,
       { originalError: error instanceof Error ? error.name : String(error) }
     );
-  }
-}
-
-function toUint8Array(buffer: Uint8Array | ArrayBuffer): Uint8Array {
-  return buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-}
-
-function ipcBufferHasRows(buffer: Uint8Array): boolean {
-  try {
-    const table = tableFromIPC(buffer, {
-      useBigInt: true,
-      useDate: true,
-      useDecimalInt: false,
-      useMap: true
-    });
-    return table.numRows > 0;
-  } catch {
-    return false;
   }
 }

@@ -21,11 +21,15 @@ import {
   computeJoinSynthesis,
   computeJoinStats,
   finalizeJoin,
+  getJoinedBasemapValues,
+  getJoinedEntitiesPage,
   invalidateSimilarityCache,
   type DuckDBClientForJoin
 } from '$lib/features/duckdb/orchestrator/join-ops';
-import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
-import { JOINED_BASEMAP_COLUMN } from '$lib/features/commons/constants/data.constants';
+import {
+  JOINED_BASEMAP_COLUMN,
+  MAX_JOIN_BUCKET_LIST_VALUES
+} from '$lib/features/commons/constants/data.constants';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import type { DuckDBDataset } from '$lib/features/duckdb/types';
 import { DuckDBSimplifiedType } from '$lib/features/duckdb/enums';
@@ -150,22 +154,31 @@ describe('exact_claimed_ids deduplication', () => {
     );
 
     // Lyon: unambiguous exact match → JOINED
-    const lyon = quality.entities.find((e) => e.dataValue === 'Lyon');
-    expect(lyon).toBeDefined();
-    expect(lyon!.status).toBe(JoinStatus.JOINED);
+    expect(quality.joinedCount).toBe(1);
+    const joinedPage = await getJoinedEntitiesPage(
+      dataset,
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck,
+      { offset: 0, limit: 10 }
+    );
+    expect(joinedPage.map((row) => row.dataValue)).toEqual(['Lyon']);
 
     // Sainte-Colombe: exact match but ambiguous (3 distinct ids) → TO_VERIFY
-    const ste = quality.entities.find((e) => e.dataValue === 'Sainte-Colombe');
+    const ste = quality.joinMappings.find(
+      (e) => e.dataValue === 'Sainte-Colombe'
+    );
     expect(ste).toBeDefined();
-    expect(ste!.status).toBe(JoinStatus.TO_VERIFY);
 
     // Saint-Colombe: must NOT be UNRECOGNIZED — it should still have fuzzy
     // candidates (the 3 Sainte-Colombe ids + potentially Saint-Colombe-sur-Rhône)
-    const st = quality.entities.find((e) => e.dataValue === 'Saint-Colombe');
+    expect(quality.unrecognizedEntities).not.toContain('Saint-Colombe');
+    const st = quality.joinMappings.find(
+      (e) => e.dataValue === 'Saint-Colombe'
+    );
     expect(st).toBeDefined();
-    expect(st!.status).not.toBe(JoinStatus.UNRECOGNIZED);
     // It should have match candidates
-    expect(st!.matches!.length).toBeGreaterThan(0);
+    expect(st!.basemapOptions.length).toBeGreaterThan(0);
   });
 
   it('still claims ids for unambiguous exact matches', async () => {
@@ -184,13 +197,17 @@ describe('exact_claimed_ids deduplication', () => {
     );
 
     // Both "Lyon" and "69123" map to LY_01 via exact match
-    const lyon = quality.entities.find((e) => e.dataValue === 'Lyon');
-    expect(lyon).toBeDefined();
-    expect(lyon!.status).toBe(JoinStatus.JOINED);
-
-    const code = quality.entities.find((e) => e.dataValue === '69123');
-    expect(code).toBeDefined();
-    expect(code!.status).toBe(JoinStatus.JOINED);
+    expect(quality.joinedCount).toBe(2);
+    expect(quality.toVerifyCount).toBe(0);
+    expect(quality.unrecognizedCount).toBe(0);
+    const joinedPage = await getJoinedEntitiesPage(
+      dataset,
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck,
+      { offset: 0, limit: 10 }
+    );
+    expect(joinedPage.map((row) => row.dataValue)).toEqual(['69123', 'Lyon']);
   });
 
   it('orders to-verify candidates by score and aligns the preselection with the finalized join', async () => {
@@ -208,9 +225,11 @@ describe('exact_claimed_ids deduplication', () => {
       Duck
     );
 
-    const st = quality.entities.find((e) => e.dataValue === 'Saint-Colombe');
+    const st = quality.joinMappings.find(
+      (e) => e.dataValue === 'Saint-Colombe'
+    );
     expect(st).toBeDefined();
-    expect(st!.status).toBe(JoinStatus.TO_VERIFY);
+    expect(quality.toVerifyCount).toBe(1);
 
     // Candidates carry score/type/variant and come back best-first
     const candidates = st!.candidates!;
@@ -225,7 +244,8 @@ describe('exact_claimed_ids deduplication', () => {
     });
     expect(candidates[0].score).toBeGreaterThan(0.9);
     expect(candidates[0].score).toBeLessThan(1);
-    expect(st!.matches![0]).toBe('Sainte-Colombe');
+    expect(st!.basemapOptions[0]).toBe('Sainte-Colombe');
+    expect(st!.selectedMapping).toBe('Sainte-Colombe');
 
     // The finalized join must apply exactly the candidate the UI preselects
     await finalizeJoin(dataset, FAKE_BASEMAP_METADATA, 'geo', Duck);
@@ -246,21 +266,29 @@ describe('exact_claimed_ids deduplication', () => {
     );
 
     const Duck = makeDuckClient(db);
+    const dataset = makeDataset('user_codes');
     const quality = await computeJoinStats(
-      makeDataset('user_codes'),
+      dataset,
       FAKE_BASEMAP_METADATA,
       'geo',
       Duck
     );
 
-    const known = quality.entities.find((e) => e.dataValue === '01234');
-    expect(known!.status).toBe(JoinStatus.JOINED);
+    const joinedPage = await getJoinedEntitiesPage(
+      dataset,
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck,
+      { offset: 0, limit: 10 }
+    );
+    expect(joinedPage.map((row) => row.dataValue)).toContain('01234');
 
     // '99999' is close to '56789'/'11111' in Jaro-Winkler terms, but fuzzy
     // matching between codes is noise: it must stay unrecognized.
-    const unknown = quality.entities.find((e) => e.dataValue === '99999');
-    expect(unknown!.status).toBe(JoinStatus.UNRECOGNIZED);
-    expect(unknown!.matches).toEqual([]);
+    expect(quality.unrecognizedEntities).toContain('99999');
+    expect(quality.joinMappings.some((e) => e.dataValue === '99999')).toBe(
+      false
+    );
   });
 
   it('disables fuzzy suggestions for fixed-length alphanumeric codes (ISO3-like)', async () => {
@@ -274,21 +302,26 @@ describe('exact_claimed_ids deduplication', () => {
     await run(db, `INSERT INTO user_iso VALUES ('FRA'), ('DEU'), ('FRB')`);
 
     const Duck = makeDuckClient(db);
+    const dataset = makeDataset('user_iso');
     const quality = await computeJoinStats(
-      makeDataset('user_iso'),
+      dataset,
       FAKE_BASEMAP_METADATA,
       'geo',
       Duck
     );
 
-    expect(quality.entities.find((e) => e.dataValue === 'FRA')!.status).toBe(
-      JoinStatus.JOINED
+    const joinedPage = await getJoinedEntitiesPage(
+      dataset,
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck,
+      { offset: 0, limit: 10 }
     );
+    expect(joinedPage.map((row) => row.dataValue)).toContain('FRA');
 
     // 'FRB' ≈ 'FRA' scores ~0.93 in Jaro-Winkler but is a distinct code
-    const frb = quality.entities.find((e) => e.dataValue === 'FRB');
-    expect(frb!.status).toBe(JoinStatus.UNRECOGNIZED);
-    expect(frb!.matches).toEqual([]);
+    expect(quality.unrecognizedEntities).toContain('FRB');
+    expect(quality.joinMappings.some((e) => e.dataValue === 'FRB')).toBe(false);
   });
 
   it('keeps fuzzy suggestions for distinct place names with the same length', async () => {
@@ -313,8 +346,8 @@ describe('exact_claimed_ids deduplication', () => {
       Duck
     );
 
-    const typo = quality.entities.find((e) => e.dataValue === 'Parsi');
-    expect(typo!.status).toBe(JoinStatus.TO_VERIFY);
+    const typo = quality.joinMappings.find((e) => e.dataValue === 'Parsi');
+    expect(typo).toBeDefined();
     expect(typo!.candidates![0].name).toBe('Paris');
   });
 
@@ -340,8 +373,10 @@ describe('exact_claimed_ids deduplication', () => {
 
     // Prefix-weighted Jaro-Winkler alone prefers 'Korea, Rep.' (South Korea);
     // the word-sorted comparison must rank 'North Korea' (KP) first instead.
-    const north = quality.entities.find((e) => e.dataValue === 'Korea, North');
-    expect(north!.status).toBe(JoinStatus.TO_VERIFY);
+    const north = quality.joinMappings.find(
+      (e) => e.dataValue === 'Korea, North'
+    );
+    expect(north).toBeDefined();
     expect(north!.candidates![0]).toMatchObject({
       id: 'KP',
       name: 'North Korea'
@@ -394,17 +429,54 @@ describe('exact_claimed_ids deduplication', () => {
     );
 
     // Realistic typo (JW ~0.96): must keep its suggestion
-    const typo = quality.entities.find((e) => e.dataValue === 'Frnace');
-    expect(typo!.status).toBe(JoinStatus.TO_VERIFY);
+    const typo = quality.joinMappings.find((e) => e.dataValue === 'Frnace');
+    expect(typo).toBeDefined();
     expect(typo!.candidates![0].name).toBe('France');
 
     // Distinct real places (toulon/toulouse 0.89, irak/iran 0.88): noise,
     // must stay unrecognized instead of carrying a misleading suggestion
     for (const noise of ['Toulon', 'Irak']) {
-      const entity = quality.entities.find((e) => e.dataValue === noise);
-      expect(entity!.status).toBe(JoinStatus.UNRECOGNIZED);
-      expect(entity!.matches).toEqual([]);
+      expect(quality.unrecognizedEntities).toContain(noise);
+      expect(quality.joinMappings.some((e) => e.dataValue === noise)).toBe(
+        false
+      );
     }
+  });
+
+  it('builds the similarity cache once across computeJoinStats then finalizeJoin', async () => {
+    await run(db, `CREATE OR REPLACE TABLE user_data5 (geo VARCHAR)`);
+    await run(db, `INSERT INTO user_data5 VALUES ('Lyon'), ('69123')`);
+
+    const baseDuck = makeDuckClient(db);
+    const querySpy = vi.fn(baseDuck.query);
+    const Duck: DuckDBClientForJoin = { query: querySpy };
+    const dataset = makeDataset('user_data5', [
+      { name: 'geo', type_simple: DuckDBSimplifiedType.STRING }
+    ]);
+
+    const quality = await computeJoinStats(
+      dataset,
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck
+    );
+    await finalizeJoin(dataset, FAKE_BASEMAP_METADATA, 'geo', Duck);
+
+    const cacheBuildCount = querySpy.mock.calls.filter(([sql]) => {
+      return (
+        typeof sql === 'string' &&
+        sql.includes('CREATE OR REPLACE TEMP TABLE') &&
+        sql.includes('__similarity_cache__')
+      );
+    }).length;
+    expect(cacheBuildCount).toBe(1);
+
+    const joined = (await Duck.query(
+      `SELECT geo, "${JOINED_BASEMAP_COLUMN.ID}" AS id FROM user_data5 ORDER BY geo`,
+      { format: 'array' }
+    )) as Array<{ geo: string; id: string | null }>;
+    expect(joined.every((row) => row.id === 'LY_01')).toBe(true);
+    expect(quality.joinedCount).toBe(2);
   });
 
   it('builds the similarity cache only once for concurrent synthesis requests', async () => {
@@ -440,5 +512,100 @@ describe('exact_claimed_ids deduplication', () => {
     }).length;
 
     expect(cacheBuildCount).toBe(1);
+  });
+
+  it('keeps exact SQL totals when the returned bucket lists are capped', async () => {
+    await run(db, `CREATE OR REPLACE TABLE user_caps (geo VARCHAR)`);
+    await run(
+      db,
+      `INSERT INTO user_caps
+       SELECT 'zz_' || lpad(i::VARCHAR, 4, '0') FROM generate_series(1, 510) t(i)`
+    );
+    await run(db, `INSERT INTO user_caps VALUES ('Lyon')`);
+
+    const Duck = makeDuckClient(db);
+    const quality = await computeJoinStats(
+      makeDataset('user_caps'),
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck
+    );
+
+    expect(quality.joinedCount).toBe(1);
+    expect(quality.unrecognizedCount).toBe(510);
+    expect(quality.unrecognizedEntities).toHaveLength(
+      MAX_JOIN_BUCKET_LIST_VALUES
+    );
+    expect(quality.totalEntities).toBe(511);
+  });
+
+  it('paginates the joined bucket in stable order and honors exclusions', async () => {
+    await run(db, `CREATE OR REPLACE TABLE user_page (geo VARCHAR)`);
+    await run(
+      db,
+      `INSERT INTO user_page VALUES ('Lyon'), ('69123'), ('01234'), ('56789'), ('11111')`
+    );
+
+    const Duck = makeDuckClient(db);
+    const dataset = makeDataset('user_page');
+    const quality = await computeJoinStats(
+      dataset,
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck
+    );
+    expect(quality.joinedCount).toBe(5);
+
+    const firstPage = await getJoinedEntitiesPage(
+      dataset,
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck,
+      { offset: 0, limit: 2 }
+    );
+    const secondPage = await getJoinedEntitiesPage(
+      dataset,
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck,
+      { offset: 2, limit: 2 }
+    );
+    expect(firstPage.map((row) => row.dataValue)).toEqual(['01234', '11111']);
+    expect(secondPage.map((row) => row.dataValue)).toEqual(['56789', '69123']);
+
+    const excluded = await computeJoinStats(
+      dataset,
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck,
+      { excludedValues: ['Lyon'] }
+    );
+    expect(excluded.joinedCount).toBe(4);
+    expect(excluded.totalEntities).toBe(4);
+
+    const excludedPage = await getJoinedEntitiesPage(
+      dataset,
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck,
+      { offset: 0, limit: 10, excludedValues: ['Lyon'] }
+    );
+    expect(excludedPage.map((row) => row.dataValue)).not.toContain('Lyon');
+
+    const joinedValues = await getJoinedBasemapValues(
+      dataset,
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck
+    );
+    expect(joinedValues).toContain('Lyon');
+    const joinedValuesExcluded = await getJoinedBasemapValues(
+      dataset,
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck,
+      { excludedValues: ['Lyon', '69123'] }
+    );
+    expect(joinedValuesExcluded).not.toContain('Lyon');
   });
 });

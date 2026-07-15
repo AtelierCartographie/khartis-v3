@@ -20,6 +20,7 @@ import {
   addGeoArrowMetadataFromDuckDB,
   fetchArrowTableWithGeometry
 } from './arrow-ops';
+import { findGeometryColumnByName } from '../utils/geometry-column.utils';
 
 const GEOMETRY_COLUMN = 'geometry';
 const DENSITY_CACHE_MAX_ENTRIES = 12;
@@ -39,20 +40,6 @@ async function getTableColumns(
      WHERE table_name = '${escapeSqlString(tableName)}'`,
     { format: 'array', useProxy: false }
   )) as GeometryColumnInfo[];
-}
-
-function findGeometryColumn(
-  columns: GeometryColumnInfo[]
-): GeometryColumnInfo | undefined {
-  return columns.find((c) => {
-    const name = c.column_name.toLowerCase();
-    return (
-      name === INTERNAL_COLUMN.GEOM ||
-      name === INTERNAL_COLUMN.GEOMETRY ||
-      name === INTERNAL_COLUMN.WKB_GEOMETRY ||
-      name === INTERNAL_COLUMN.THE_GEOM
-    );
-  });
 }
 
 function findJoinColumn(columns: GeometryColumnInfo[]): string | null {
@@ -231,7 +218,7 @@ export async function generateDotDensityFromJoin(
     );
   }
 
-  const geometryColumn = findGeometryColumn(geomCols);
+  const geometryColumn = findGeometryColumnByName(geomCols);
   if (!geometryColumn) {
     throw new DataValidationError(
       m.error_density_no_geometry({ geometryTableName }),
@@ -292,7 +279,7 @@ async function createGpsDensitySourceView(
   lonColumn: string
 ): Promise<void> {
   const geomCols = await getTableColumns(geometryTableName);
-  const geometryColumn = findGeometryColumn(geomCols);
+  const geometryColumn = findGeometryColumnByName(geomCols);
   if (!geometryColumn) {
     throw new DataValidationError(
       m.error_density_no_geometry({ geometryTableName }),
@@ -467,7 +454,7 @@ export async function generateDotDensityFromGeoTable(
   if (cached) return cached;
 
   const cols = await getTableColumns(tableName);
-  const geometryColumn = findGeometryColumn(cols);
+  const geometryColumn = findGeometryColumnByName(cols);
   if (!geometryColumn) {
     throw new DataValidationError(
       m.error_table_no_geometry_density({ tableName }),

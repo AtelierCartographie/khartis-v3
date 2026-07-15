@@ -35,10 +35,11 @@ export function extractFilename(url: string): string {
 export function getFileType(
   filename: string
 ): 'tabular' | 'geofile' | 'parquet' | 'arrow' {
-  if (DUCK_CONST.REGEX.ARROW.test(filename)) return DUCK_CONST.TYPE.ARROW;
-  if (DUCK_CONST.REGEX.TABULAR.test(filename)) return DUCK_CONST.TYPE.TABULAR;
-  if (DUCK_CONST.REGEX.GEO.test(filename)) return DUCK_CONST.TYPE.GEOFILE;
-  if (DUCK_CONST.REGEX.PARQUET.test(filename)) return DUCK_CONST.TYPE.PARQUET;
+  const basename = filename.split(/[?#]/, 1)[0];
+  if (DUCK_CONST.REGEX.ARROW.test(basename)) return DUCK_CONST.TYPE.ARROW;
+  if (DUCK_CONST.REGEX.TABULAR.test(basename)) return DUCK_CONST.TYPE.TABULAR;
+  if (DUCK_CONST.REGEX.GEO.test(basename)) return DUCK_CONST.TYPE.GEOFILE;
+  if (DUCK_CONST.REGEX.PARQUET.test(basename)) return DUCK_CONST.TYPE.PARQUET;
   return DUCK_CONST.TYPE.TABULAR;
 }
 

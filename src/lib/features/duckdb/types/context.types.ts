@@ -11,6 +11,7 @@ export interface DuckDBContext {
   connection: duckdb.AsyncDuckDBConnection;
   loaded_files: Map<string, string>;
   registered_files: Set<string>;
+  table_files: Map<string, string>;
   table_metadata: Map<string, TableMetadata>;
   describeCache: Map<string, DescribeResult>;
   rowCountCache: Map<string, number>;

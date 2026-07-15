@@ -84,6 +84,24 @@ describe('DuckDB engine initialization', () => {
     expect(warmupIndex).toBeLessThan(loadSpatialIndex);
   });
 
+  it('keeps DuckDB initialized when the spatial warmup query fails', async () => {
+    mocks.executeQuery.mockImplementation(async (_connection, query) => {
+      if (String(query).includes('duckdb_coordinate_systems()')) {
+        throw new Error('warmup unavailable');
+      }
+      return [];
+    });
+    const { initEngine, isInitialized } = await import('./engine');
+
+    await expect(initEngine()).resolves.toBeUndefined();
+
+    expect(isInitialized()).toBe(true);
+    const queries = mocks.executeQuery.mock.calls.map(([, query]) =>
+      String(query)
+    );
+    expect(queries.some((query) => query.includes('LOAD spatial'))).toBe(true);
+  });
+
   it('warns but keeps DuckDB initialized when spatial preload fails', async () => {
     mocks.executeQuery.mockImplementation(async (_connection, query) => {
       if (String(query).includes('LOAD spatial')) {

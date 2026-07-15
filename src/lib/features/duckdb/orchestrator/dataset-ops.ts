@@ -1,16 +1,13 @@
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
-import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
-import { generateTableName } from '$lib/features/data-pipeline';
 import {
+  generateTableName,
   getProcessor,
-  hasProcessor,
+  registerAllProcessors,
   type ProcessContext
-} from '$lib/features/data-pipeline/processors/processor-registry';
-import { registerAllProcessors } from '$lib/features/data-pipeline/processors/register-processors';
-import type { Table } from 'apache-arrow/Arrow';
+} from '$lib/features/data-pipeline';
 import { FileType, type AnalysisResult, type DuckDBDataset } from '../types';
 import * as datasetState from './dataset-state';
 import type { DuckDBClientForFileProcessing } from './file-processors';
@@ -34,10 +31,6 @@ export interface DuckDBClientForDataset {
 
 export interface DatasetCallbacks {
   getRowCount: (tableName: string) => Promise<number>;
-  createArrowTableWithMetadata: (tableName: string) => Promise<{
-    arrowTableWithMetadata: Table;
-    geoArrowMetadata: GeoArrowMetadata | null;
-  }>;
   prefetchArrowMetadata: (dataset: DuckDBDataset) => Promise<void> | undefined;
 }
 
@@ -148,11 +141,7 @@ export async function processFile(
   registerAllProcessors();
 
   try {
-    const tableName = generateTableName(file.name);
-
-    if (!hasProcessor(file)) {
-      return null;
-    }
+    const tableName = generateTableName(file.name, file.id);
 
     const processor = getProcessor(file);
     if (!processor) {
@@ -162,8 +151,7 @@ export async function processFile(
     const ctx: ProcessContext = {
       Duck,
       callbacks: {
-        getRowCount: callbacks.getRowCount,
-        createArrowTableWithMetadata: callbacks.createArrowTableWithMetadata
+        getRowCount: callbacks.getRowCount
       },
       tableName
     };
@@ -175,13 +163,11 @@ export async function processFile(
       tableName: processorResult.tableName,
       sourceFileId: processorResult.sourceFileId,
       name: processorResult.name,
-      columns: processorResult.columns as AnalysisResult[],
+      columns: processorResult.columns,
       rowCount: processorResult.rowCount,
       metadata: processorResult.metadata,
       geoDetection:
-        processorResult.geoDetection as DuckDBDataset['geoDetection'],
-      arrowTableWithMetadata: processorResult.arrowTableWithMetadata,
-      geoArrowMetadata: processorResult.geoArrowMetadata
+        processorResult.geoDetection as DuckDBDataset['geoDetection']
     };
 
     updateDatasets((datasets) => {
@@ -254,6 +240,7 @@ export async function dropTable(
       LogCategory.DUCKDB,
       error
     );
+    throw error;
   }
 }
 

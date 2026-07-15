@@ -1,7 +1,10 @@
 import { Table, tableToIPC, vectorFromArray, type Vector } from 'apache-arrow';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { DuckDBError } from '$lib/features/commons/pipeline.errors';
+import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
+import { markTableMutated } from '../cache/cache-manager';
+import { executeQuery } from '../core/query';
 import { getContext, isInitialized } from '../core/engine';
 
 export function convertTabularDataToArrow(
@@ -45,8 +48,16 @@ export async function insertArrowTableIntoDuckDB(
   const ipcBuffer =
     ipcStream instanceof Uint8Array ? ipcStream : new Uint8Array(ipcStream);
 
+  // Deterministic table names make name reuse the nominal replay case; the
+  // Arrow insert creates the table, so an existing one must be dropped first.
+  await executeQuery(
+    ctx.connection,
+    `DROP TABLE IF EXISTS "${escapeIdentifier(tableName)}"`
+  );
+
   await ctx.connection.insertArrowFromIPCStream(ipcBuffer, {
     name: tableName,
     schema: 'main'
   });
+  markTableMutated(ctx, tableName);
 }

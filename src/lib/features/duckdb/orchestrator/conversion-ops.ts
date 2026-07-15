@@ -67,8 +67,7 @@ export async function convertToProcessedDataset(
       unique: Boolean(col.unique),
       min: typeof col.min === 'bigint' ? Number(col.min) : col.min,
       max: typeof col.max === 'bigint' ? Number(col.max) : col.max,
-      uniqueValues: col.unique ? new Set() : undefined,
-      sampleValues: []
+      uniqueValues: col.unique ? new Set() : undefined
     })),
     rowCount: duckDataset.rowCount,
     data: data,
@@ -81,8 +80,7 @@ export async function convertToProcessedDataset(
         nullable: (Number(col.nulls) || 0) > 0,
         unique: Boolean(col.unique),
         min: typeof col.min === 'bigint' ? Number(col.min) : col.min,
-        max: typeof col.max === 'bigint' ? Number(col.max) : col.max,
-        sampleValues: []
+        max: typeof col.max === 'bigint' ? Number(col.max) : col.max
       })),
       geoColumns: mappedGeoColumns,
       hasGeoData: duckDataset.geoDetection?.hasGeoColumns ?? false,

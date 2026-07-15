@@ -39,9 +39,9 @@ export const DUCK_CONST = {
   },
   /** File extension patterns for type detection */
   REGEX: {
-    TABULAR: /\.(csv|tsv|text|txt)/i,
-    GEO: /\.(geojson|json|gpkg|kml|kmz|gpx)/i,
-    PARQUET: /\.(parquet|geoparquet|gpq)/i,
+    TABULAR: /\.(csv|tsv|text|txt)$/i,
+    GEO: /\.(geojson|json|gpkg|kml|kmz|gpx)$/i,
+    PARQUET: /\.(parquet|geoparquet|gpq)$/i,
     ARROW: /\.arrow$/i,
     COLUMN_VALIDATION_INTEGER: /^-?\d+$/,
     COLUMN_VALIDATION_DOUBLE: /^-?\d+(\.\d+)?$/,
@@ -71,30 +71,10 @@ export const EXTENSIONS = {
 } as const;
 
 /**
- * Table name patterns and suffixes.
- */
-export const TABLE_PATTERNS = {
-  /** Suffix for join result tables */
-  JOIN_RESULTS_SUFFIX: '_join_results',
-  /** Suffix for filtered tables */
-  FILTERED_SUFFIX: '_filtered',
-  /** Unified basemap attributes table name */
-  UNIFIED_BASEMAP_ATTRS: 'unified_basemap_attributes',
-  /** Custom basemap attributes table name */
-  CUSTOM_BASEMAP_ATTRS: 'custom_basemap_attributes'
-} as const;
-
-/**
  * DuckDB SQL function names.
  */
 export const SQL_FUNCTIONS = {
-  ST_READ: 'ST_Read',
   ST_READ_META: 'ST_Read_Meta',
-  ST_TRANSFORM: 'ST_Transform',
-  ST_GEOM_FROM_WKB: 'ST_GeomFromWKB',
-  ST_SIMPLIFY: 'ST_Simplify',
-  ST_SIMPLIFY_PRESERVE_TOPOLOGY: 'ST_SimplifyPreserveTopology',
-  NORMALIZE_TEXT: 'normalize_text',
   READ_CSV: 'read_csv',
   READ_CSV_AUTO: 'read_csv_auto',
   READ_PARQUET: 'read_parquet'

@@ -7,6 +7,7 @@ import {
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
+import { markTableMutated } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
 import { runInTransaction } from '../core/transaction';
@@ -222,6 +223,13 @@ export async function readTabular(
     }
 
     ctx.loaded_files.set(tablename, filename);
+    // Deterministic table names make CREATE OR REPLACE reuse an already
+    // analysed name: cached stats for it are now stale.
+    markTableMutated(ctx, tablename);
+    if (input instanceof File) {
+      // Table data is materialized; drop the handle so the worker releases the File (replay re-registers).
+      await dropRegisteredFile(ctx.db, ctx.registered_files, fileid);
+    }
     return tablename;
   } finally {
     if (cleanupFileId) {

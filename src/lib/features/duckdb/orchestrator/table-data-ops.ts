@@ -3,9 +3,21 @@ import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { GEOMETRY_COLUMN_TYPE } from '$lib/features/commons/constants';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { buildOrderClause } from '../utils/html-like-text.utils';
+import { registerTableMutationCallback } from '../cache/cache-manager';
 import type { AnalysisResult, ArrowTableLike, FilterStats } from '../types';
 import { buildFilterWhereClause } from './filter-ops';
 import { getFiltersMap } from './state.svelte';
+
+const filteredRowCountCache = new Map<string, number>();
+
+registerTableMutationCallback((table: string) => {
+  const prefix = `${table}::`;
+  for (const key of filteredRowCountCache.keys()) {
+    if (key.startsWith(prefix)) {
+      filteredRowCountCache.delete(key);
+    }
+  }
+});
 
 export interface DuckDBClientForTableData {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
@@ -126,12 +138,23 @@ export async function countRows(
   return Number(row?.count) || 0;
 }
 
-export async function getRowCount(
+export async function getFilteredRowCount(
   tableName: string,
   Duck: DuckDBClientForTableData
 ): Promise<number> {
+  const filters = getFiltersMap();
+  const whereClause = buildFilterWhereClause(filters.get(tableName));
+  const cacheKey = `${tableName}::${whereClause ?? ''}`;
+
+  const cached = filteredRowCountCache.get(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
+
   try {
-    return await countRows(tableName, Duck, true);
+    const count = await countRows(tableName, Duck, true);
+    filteredRowCountCache.set(cacheKey, count);
+    return count;
   } catch (error) {
     logger.error(
       'Failed to count DuckDB table rows',
