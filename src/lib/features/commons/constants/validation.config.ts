@@ -1,12 +1,5 @@
 import { FileType } from '../types/create-project.types';
 
-export type { ValidationResult } from '$lib/features/data-pipeline/types';
-
-export {
-  validationSuccess,
-  validationFailure
-} from '$lib/features/data-pipeline/types';
-
 interface StorageLimits {
   maxFileSize: number;
   warningFileSize: number;

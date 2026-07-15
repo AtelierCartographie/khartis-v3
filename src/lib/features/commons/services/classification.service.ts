@@ -173,6 +173,12 @@ async function queryColumnStats(
     return null;
   }
 
+  const rawMin = result.getChild?.('min_val')?.get(0);
+  const rawMax = result.getChild?.('max_val')?.get(0);
+  if (rawMin == null || rawMax == null) {
+    return null;
+  }
+
   const rowCount = Number(
     result.getChild?.('row_count')?.get(0) ??
       result.getChild?.('distinct_count')?.get(0) ??
@@ -181,8 +187,8 @@ async function queryColumnStats(
   const distinctCount = Number(
     result.getChild?.('distinct_count')?.get(0) ?? 0
   );
-  const min = Number(result.getChild?.('min_val')?.get(0));
-  const max = Number(result.getChild?.('max_val')?.get(0));
+  const min = Number(rawMin);
+  const max = Number(rawMax);
 
   if (
     !Number.isFinite(rowCount) ||

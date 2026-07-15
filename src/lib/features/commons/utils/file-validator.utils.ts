@@ -2,9 +2,9 @@ import {
   FILE_VALIDATION_INSPECTION,
   getMaxFileSizeForType,
   getWarningFileSizeForType,
-  STORAGE_LIMITS,
-  type ValidationResult
+  STORAGE_LIMITS
 } from '../constants/validation.config';
+import type { ValidationResult } from '../types/validation.types';
 import { FileType } from '../types/create-project.types';
 import { getFileExtension } from './file.utils';
 import {
@@ -16,7 +16,7 @@ import {
   GEOJSON_TYPE,
   SIMPLE_GEOMETRY_TYPES
 } from '$lib/features/commons/constants';
-import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
+import { FILE_ENCODING } from '../constants/file-types.constants';
 import * as m from '$lib/paraglide/messages';
 
 const REQUIRED_SHAPEFILE_EXTENSIONS = ['shp', 'shx', 'dbf'] as const;
@@ -389,9 +389,9 @@ export const FileValidator = {
       );
 
     if (hasBOM) {
-      result.metadata!.encoding = `${PIPELINE_CONST.ENCODING.DEFAULT} with BOM`;
+      result.metadata!.encoding = `${FILE_ENCODING.DEFAULT} with BOM`;
     } else {
-      result.metadata!.encoding = PIPELINE_CONST.ENCODING.DEFAULT;
+      result.metadata!.encoding = FILE_ENCODING.DEFAULT;
     }
   },
 
