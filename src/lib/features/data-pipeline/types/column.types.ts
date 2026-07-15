@@ -20,16 +20,9 @@ export interface ColumnStats {
   categories?: string[];
 }
 
-export interface RawColumn {
+export interface EnrichedColumn {
   name: string;
-  values: unknown[];
-}
-
-export interface InferredColumn extends RawColumn {
   type: ColumnType;
-}
-
-export interface EnrichedColumn extends InferredColumn {
   stats: ColumnStats;
 }
 
@@ -67,24 +60,4 @@ export interface ColumnInfo {
   min?: number | string | Date;
   max?: number | string | Date;
   mean?: number;
-  sampleValues?: unknown[];
-}
-
-export interface DuckAnalyticsColumn {
-  name: string;
-  type_simple?: string;
-  count?: number | string;
-  nulls?: number | string;
-  uniques?: number | string;
-  min?: unknown;
-  max?: unknown;
-  mean?: number | string;
-  median?: number | string;
-  stddev?: number | string;
-  share_integers?: number | string;
-  share_floats?: number | string;
-  share_rank_interval?: number | string;
-  extent_magnitude?: number | string;
-  skewness?: number | string;
-  histogram?: unknown;
 }

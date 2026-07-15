@@ -1,6 +1,32 @@
 import { ParseError } from '$lib/features/commons/pipeline.errors';
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
 import * as m from '$lib/paraglide/messages';
+import type {
+  ProcessContext,
+  ProcessorDataset
+} from '../file-processor.interface';
+
+export async function buildProcessorDataset(
+  ctx: ProcessContext,
+  file: UploadedFile,
+  actualTableName: string
+): Promise<ProcessorDataset> {
+  const [columns, rowCount] = await Promise.all([
+    ctx.Duck.analyse(actualTableName),
+    ctx.callbacks.getRowCount(actualTableName)
+  ]);
+
+  return {
+    id: file.datasetId ?? file.id,
+    tableName: actualTableName,
+    sourceFileId: file.id,
+    name: file.name,
+    columns,
+    rowCount,
+    metadata: { processedAt: new Date(), fileType: file.fileType },
+    geoDetection: file.deepAnalysis?.geoDetection
+  };
+}
 
 export function isTabularData(
   data: unknown

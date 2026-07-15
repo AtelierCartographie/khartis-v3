@@ -1,4 +1,3 @@
-import type { ValidationResult } from './types/import.types';
 import type { DatasetResult, ZipDatasetResult } from './types/dataset.types';
 
 export enum ColumnType {
@@ -79,17 +78,6 @@ export function computeCentroid(
   bounds: [number, number, number, number]
 ): [number, number] {
   return [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2];
-}
-
-export function validationSuccess(warnings: string[] = []): ValidationResult {
-  return { isValid: true, errors: [], warnings };
-}
-
-export function validationFailure(
-  errors: string[],
-  warnings: string[] = []
-): ValidationResult {
-  return { isValid: false, errors, warnings };
 }
 
 export function isZipDatasetResult(

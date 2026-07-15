@@ -1,4 +1,4 @@
-import type { EnrichedColumn, ColumnInfo, RawColumn } from './column.types';
+import type { EnrichedColumn, ColumnInfo } from './column.types';
 import type {
   GeometryInfo,
   AnalysisResult,
@@ -7,14 +7,6 @@ import type {
 import type { DatasetMetadata, FileFormat } from './import.types';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import type { GeometryTypeEnum } from '../types';
-
-export interface RawDataset {
-  headers: string[];
-  rows: unknown[][];
-  columns: RawColumn[];
-  geometry?: GeometryInfo;
-  metadata: Record<string, unknown>;
-}
 
 export interface DatasetResult {
   id: string;
@@ -26,11 +18,6 @@ export interface DatasetResult {
   geometry?: GeometryInfo;
   metadata: DatasetMetadata;
   data?: Record<string, unknown>[];
-  originalData?: {
-    columns: EnrichedColumn[];
-    data: Record<string, unknown>[];
-    rowCount: number;
-  };
   fileSize?: number;
   format?: FileFormat;
   analysis?: AnalysisResult;
@@ -65,11 +52,6 @@ export interface ProcessedDataset {
   fileSize: number;
   metadata: { processedAt: Date; transformations: string[] };
   geoDetection?: GeoDetectionResult;
-  originalData?: {
-    columns: ColumnInfo[];
-    data: Record<string, unknown>[];
-    rowCount: number;
-  };
 }
 
 export interface ZipDatasetResult {

@@ -5,12 +5,13 @@ import {
   type UploadedFile
 } from '$lib/features/commons/types/create-project.types';
 import * as m from '$lib/paraglide/messages';
+import { getFileExtensionWithDot } from '$lib/features/commons/utils/file.utils';
 import type {
   FileProcessor,
   ProcessContext,
   ProcessorDataset
 } from '../file-processor.interface';
-import { getFileForDuckDB } from './processor-utils';
+import { buildProcessorDataset, getFileForDuckDB } from './processor-utils';
 
 export const shapefileProcessor: FileProcessor = {
   supportedFileTypes: [FileType.SHAPEFILE],
@@ -33,11 +34,17 @@ export const shapefileProcessor: FileProcessor = {
         (f) => f.name.toLowerCase() !== shpFile.name.toLowerCase()
       ) ?? [];
 
-    const baseName = shpFile.name.replace(/\.shp$/i, '');
+    const lowerShpName = shpFile.name.toLowerCase();
+    const baseName = lowerShpName.endsWith('.shp')
+      ? lowerShpName.slice(0, -'.shp'.length)
+      : lowerShpName;
     const companionExtensions = new Set(
-      companionFiles.map((f) =>
-        f.name.toLowerCase().replace(baseName.toLowerCase(), '')
-      )
+      companionFiles
+        .filter((f) => {
+          const ext = getFileExtensionWithDot(f.name);
+          return f.name.toLowerCase() === `${baseName}${ext}`;
+        })
+        .map((f) => getFileExtensionWithDot(f.name))
     );
     const hasDbf = companionExtensions.has('.dbf');
     const hasShx = companionExtensions.has('.shx');
@@ -60,25 +67,6 @@ export const shapefileProcessor: FileProcessor = {
     const actualTableName =
       typeof resultTableName === 'string' ? resultTableName : ctx.tableName;
 
-    const [columns, rowCount] = await Promise.all([
-      ctx.Duck.analyse(actualTableName),
-      ctx.callbacks.getRowCount(actualTableName)
-    ]);
-
-    const dataset: ProcessorDataset = {
-      id: file.datasetId ?? file.id,
-      tableName: actualTableName,
-      sourceFileId: file.id,
-      name: file.name,
-      columns,
-      rowCount,
-      metadata: {
-        processedAt: new Date(),
-        fileType: file.fileType
-      },
-      geoDetection: file.deepAnalysis?.geoDetection
-    };
-
-    return dataset;
+    return buildProcessorDataset(ctx, file, actualTableName);
   }
 };

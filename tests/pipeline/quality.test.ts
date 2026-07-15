@@ -17,7 +17,6 @@ function col(
   return {
     name,
     type: ColumnType.TEXT,
-    values: [],
     stats: {
       name,
       type: ColumnType.TEXT,

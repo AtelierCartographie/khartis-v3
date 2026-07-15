@@ -15,7 +15,11 @@ import type {
   ProcessContext,
   ProcessorDataset
 } from '../file-processor.interface';
-import { convertToCSV, isTabularData } from './processor-utils';
+import {
+  buildProcessorDataset,
+  convertToCSV,
+  isTabularData
+} from './processor-utils';
 
 async function processWithArrow(
   ctx: ProcessContext,
@@ -27,30 +31,16 @@ async function processWithArrow(
       { addRowId: true }
     );
     await insertArrowTableIntoDuckDB(arrowTable, ctx.tableName);
-
-    const [columns, rowCount] = await Promise.all([
-      ctx.Duck.analyse(ctx.tableName),
-      ctx.callbacks.getRowCount(ctx.tableName)
-    ]);
-
-    return {
-      id: file.datasetId ?? file.id,
-      tableName: ctx.tableName,
-      sourceFileId: file.id,
-      name: file.name,
-      columns,
-      rowCount,
-      metadata: { processedAt: new Date(), fileType: file.fileType },
-      geoDetection: file.deepAnalysis?.geoDetection
-    };
   } catch (error) {
     logger.error(
-      'Failed to rebuild CSV processor dataset from context',
+      'Failed to insert CSV processor data as Arrow, falling back to CSV re-import',
       LogCategory.DATA,
       error
     );
     return null;
   }
+
+  return buildProcessorDataset(ctx, file, ctx.tableName);
 }
 
 async function processWithLegacy(
@@ -65,21 +55,7 @@ async function processWithLegacy(
     (await ctx.Duck.read_tabular(duckFile, { tablename: ctx.tableName })) ||
     ctx.tableName;
 
-  const [columns, rowCount] = await Promise.all([
-    ctx.Duck.analyse(actualTableName),
-    ctx.callbacks.getRowCount(actualTableName)
-  ]);
-
-  return {
-    id: file.datasetId ?? file.id,
-    tableName: actualTableName,
-    sourceFileId: file.id,
-    name: file.name,
-    columns,
-    rowCount,
-    metadata: { processedAt: new Date(), fileType: file.fileType },
-    geoDetection: file.deepAnalysis?.geoDetection
-  };
+  return buildProcessorDataset(ctx, file, actualTableName);
 }
 
 export const csvProcessor: FileProcessor = {

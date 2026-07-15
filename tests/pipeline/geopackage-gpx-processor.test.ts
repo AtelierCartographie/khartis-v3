@@ -1,4 +1,8 @@
+// @vitest-environment jsdom
+// The GPX processor relies on the native DOMParser (browser global).
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import {
   FileType,
   type UploadedFile
@@ -10,7 +14,10 @@ const { getFileForDuckDBMock } = vi.hoisted(() => ({
 
 vi.mock(
   '$lib/features/data-pipeline/processors/strategies/processor-utils',
-  () => ({
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('$lib/features/data-pipeline/processors/strategies/processor-utils')
+    >()),
     getFileForDuckDB: getFileForDuckDBMock,
     getArrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8))
   })
@@ -116,5 +123,45 @@ describe('gpxProcessor', () => {
       '&lt;b&gt;Station&lt;/b&gt;'
     );
     expect(geojson.features[0].properties.desc).toBe('AT&amp;T');
+  });
+
+  it('parses single-quoted attributes and CDATA sections from the fixture', async () => {
+    const fixturePath = path.resolve(
+      __dirname,
+      '../../static/tests-datasets/gpx/single-quoted-attributes.gpx'
+    );
+    const c = ctx('tbl_gpx_quotes');
+    const f = file('single-quoted-attributes.gpx', FileType.GPX);
+    f.content = await fs.readFile(fixturePath, 'utf8');
+
+    await gpxProcessor.process(c as never, f);
+
+    const registeredFile = c.Duck.register_files.mock.calls[0]?.[0]?.[0];
+    const geojson = JSON.parse(await registeredFile.text()) as {
+      features: Array<{
+        geometry: { coordinates: [number, number] };
+        properties: Record<string, unknown>;
+      }>;
+    };
+
+    expect(geojson.features).toHaveLength(3);
+    expect(geojson.features[0].geometry.coordinates).toEqual([2.3522, 48.8566]);
+    expect(geojson.features[0].properties.name).toBe('Paris <centre>');
+    expect(geojson.features[0].properties.desc).toBe(
+      'Capitale & plus grande ville'
+    );
+    expect(geojson.features[2].properties.gpx_point_type).toBe('trkpt');
+    expect(geojson.features[2].properties.ele).toBe('12');
+  });
+
+  it('rejects malformed XML with the GPX extraction error', async () => {
+    const c = ctx('tbl_gpx_bad');
+    const f = file('broken.gpx', FileType.GPX);
+    f.content = '<?xml version="1.0"?><gpx><wpt lat="1" lon="2"></gpx>';
+
+    await expect(gpxProcessor.process(c as never, f)).rejects.toMatchObject({
+      name: 'ParseError',
+      fileType: 'gpx'
+    });
   });
 });

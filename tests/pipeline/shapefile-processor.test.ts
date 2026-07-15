@@ -10,7 +10,10 @@ const { getFileForDuckDBMock } = vi.hoisted(() => ({
 
 vi.mock(
   '$lib/features/data-pipeline/processors/strategies/processor-utils',
-  () => ({
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('$lib/features/data-pipeline/processors/strategies/processor-utils')
+    >()),
     getFileForDuckDB: getFileForDuckDBMock
   })
 );

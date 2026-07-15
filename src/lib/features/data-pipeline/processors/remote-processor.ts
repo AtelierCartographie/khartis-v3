@@ -1,11 +1,6 @@
-import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
-import { isGeospatialFile } from '../constants';
-import { detectFileFormat, generateTableName } from '../core/format-detector';
-import { buildDatasetFromDuckTable } from '../operations/analysis';
-import { normalizeFormattedNumericColumns } from '../operations/tabular-numeric-normalization';
-import { applyTabularGeoDetection } from './tabular-geo-detection';
 import type { DatasetResult, ZipDatasetResult } from '../types';
+import { processFileInternal } from './file-processor';
 import { processZipFile } from './zip-processor';
 import { isZipArchiveName } from '../utils/zip-handler';
 import { MIME } from '$lib/features/commons/constants';
@@ -17,11 +12,36 @@ import {
 
 const REMOTE_FILE_FETCH_ERROR_CODE = 'REMOTE_FILE_FETCH_FAILED';
 
-export async function processRemoteFile(
+async function downloadRemoteFile(
   url: string,
-  options: { tableName?: string; decimalSeparator?: string } = {}
+  filename: string,
+  fallbackMimeType: string
+): Promise<File> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new PipelineError(
+      m.pipeline_error_fetch_failed({
+        status: String(response.status),
+        statusText: response.statusText
+      }),
+      REMOTE_FILE_FETCH_ERROR_CODE,
+      {
+        status: response.status,
+        statusText: response.statusText,
+        url
+      }
+    );
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  return new File([arrayBuffer], filename, {
+    type: response.headers.get('content-type') ?? fallbackMimeType
+  });
+}
+
+export async function processRemoteFile(
+  url: string
 ): Promise<DatasetResult | ZipDatasetResult> {
-  const { tableName: providedTableName, decimalSeparator } = options;
   let filename: string;
   try {
     filename =
@@ -45,25 +65,8 @@ export async function processRemoteFile(
     );
   }
 
-  const tableName = providedTableName ?? generateTableName(filename);
-  const format = detectFileFormat(filename);
-  await Duck.read_link(url, {
-    tablename: tableName,
-    decimal_separator: decimalSeparator
-  });
-
-  if (!isGeospatialFile(filename) && format === 'csv') {
-    await normalizeFormattedNumericColumns(tableName, Duck);
-  }
-
-  const dataset = await buildDatasetFromDuckTable({
-    file: { name: filename, size: 0, type: MIME.BINARY },
-    tableName,
-    isGeoFile: isGeospatialFile(filename),
-    format
-  });
-
-  await applyTabularGeoDetection(dataset);
+  const file = await downloadRemoteFile(url, filename, MIME.BINARY);
+  const dataset = await processFileInternal(file, { originalName: filename });
 
   dataset.sourceFileId = url;
   dataset.name = filename;
@@ -73,25 +76,8 @@ export async function processRemoteFile(
 export async function processRemoteZipFile(
   url: string
 ): Promise<DatasetResult | ZipDatasetResult> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new PipelineError(
-      m.pipeline_error_fetch_failed({
-        status: String(response.status),
-        statusText: response.statusText
-      }),
-      REMOTE_FILE_FETCH_ERROR_CODE,
-      {
-        status: response.status,
-        statusText: response.statusText,
-        url
-      }
-    );
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
   const filename = url.split('/').pop() || m.remote_zip_default_name();
-  const file = new File([arrayBuffer], filename, { type: MIME.ZIP });
+  const file = await downloadRemoteFile(url, filename, MIME.ZIP);
   const result = await processZipFile(file);
 
   if ('datasets' in result) {

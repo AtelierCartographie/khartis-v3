@@ -444,10 +444,23 @@ describe('shouldApplyChoropleth', () => {
     );
   });
 
-  it('returns false when breaks has fewer than 2 values', () => {
+  it('returns true when a 2-class classification has a single interior break', () => {
+    const twoClasses = {
+      ...base,
+      classification: {
+        ...base.classification,
+        breaks: [10],
+        colors: ['#f00', '#0f0'],
+        classes: 2
+      }
+    };
+    expect(shouldApplyChoropleth(twoClasses as never)).toBe(true);
+  });
+
+  it('returns false when breaks is empty', () => {
     const noBreaks = {
       ...base,
-      classification: { ...base.classification, breaks: [10] }
+      classification: { ...base.classification, breaks: [] }
     };
     expect(shouldApplyChoropleth(noBreaks as never)).toBe(false);
   });
