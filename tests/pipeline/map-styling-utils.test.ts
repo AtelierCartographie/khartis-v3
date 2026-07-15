@@ -179,7 +179,6 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
 import {
   getAbsoluteDomainMax,
   getColorForValue,
-  getSizeForValue,
   getProportionalSymbolSizeForValue,
   getClassedSizeForValue,
   getCategoricalColorMap,
@@ -241,54 +240,6 @@ describe('getColorForValue — n colors for n breaks (legacy lower-bounds path)'
 
   it('matches value to last lower-bound when at top', () => {
     expect(getColorForValue(25, breaks, colors)).toEqual([0, 0, 255]);
-  });
-});
-
-// ─── getSizeForValue ───────────────────────────────────────────────────────
-
-describe('getSizeForValue — LINEAR scale', () => {
-  it('returns minSize for value at min', () => {
-    expect(getSizeForValue(0, 0, 100, 5, 50)).toBe(5);
-  });
-
-  it('returns maxSize for value at max', () => {
-    expect(getSizeForValue(100, 0, 100, 5, 50)).toBe(50);
-  });
-
-  it('returns midpoint for value at mid-range', () => {
-    expect(getSizeForValue(50, 0, 100, 0, 100)).toBe(50);
-  });
-
-  it('clamps value below min to minSize', () => {
-    expect(getSizeForValue(-10, 0, 100, 5, 50)).toBe(5);
-  });
-
-  it('clamps value above max to maxSize', () => {
-    expect(getSizeForValue(150, 0, 100, 5, 50)).toBe(50);
-  });
-
-  it('returns midpoint when min === max', () => {
-    expect(getSizeForValue(5, 5, 5, 10, 20)).toBe(15);
-  });
-});
-
-describe('getSizeForValue — SQRT scale', () => {
-  it('returns minSize for value at min', () => {
-    expect(getSizeForValue(0, 0, 100, 0, 100, ScaleType.SQRT)).toBeCloseTo(0);
-  });
-
-  it('returns value larger than linear at mid-range (concave curve)', () => {
-    const linear = getSizeForValue(25, 0, 100, 0, 100, ScaleType.LINEAR);
-    const sqrt = getSizeForValue(25, 0, 100, 0, 100, ScaleType.SQRT);
-    expect(sqrt).toBeGreaterThan(linear);
-  });
-});
-
-describe('getSizeForValue — LOG scale', () => {
-  it('returns value between minSize and maxSize', () => {
-    const size = getSizeForValue(50, 0, 100, 0, 100, ScaleType.LOG);
-    expect(size).toBeGreaterThan(0);
-    expect(size).toBeLessThan(100);
   });
 });
 

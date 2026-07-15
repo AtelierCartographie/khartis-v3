@@ -18,10 +18,14 @@ vi.hoisted(() => {
 import {
   getClassedSizeForValue,
   getColorForValue,
+  getProportionalLineWidthForValue,
   shouldApplyChoropleth,
   shouldApplyCategorical
 } from './data-styling.utils';
-import { createClassedSizeAccessor } from '../layers/layer-helpers';
+import {
+  createClassedSizeAccessor,
+  createProportionalLineWidthAccessor
+} from '../layers/layer-helpers';
 import {
   ColorMode,
   FillMode,
@@ -252,5 +256,56 @@ describe('two-class classification (1 interior break)', () => {
     expect(
       getClassedSizeForValue(VALUE_ABOVE_BREAK, TWO_CLASS_BREAKS, 4, 20)
     ).toBe(4);
+  });
+});
+
+describe('strictly proportional line widths', () => {
+  const MAX_WIDTH = 8;
+  const DOMAIN_MAX = 200;
+
+  it('should keep a 1:2 width ratio when values are 100 and 200', () => {
+    const widthAt100 = getProportionalLineWidthForValue(
+      100,
+      DOMAIN_MAX,
+      MAX_WIDTH
+    );
+    const widthAt200 = getProportionalLineWidthForValue(
+      200,
+      DOMAIN_MAX,
+      MAX_WIDTH
+    );
+
+    expect(widthAt100).toBe(4);
+    expect(widthAt200).toBe(2 * widthAt100);
+  });
+
+  it('should render a zero value with a zero width instead of a legibility floor', () => {
+    expect(getProportionalLineWidthForValue(0, DOMAIN_MAX, MAX_WIDTH)).toBe(0);
+  });
+
+  it('should size negative values by their magnitude', () => {
+    expect(getProportionalLineWidthForValue(-100, DOMAIN_MAX, MAX_WIDTH)).toBe(
+      getProportionalLineWidthForValue(100, DOMAIN_MAX, MAX_WIDTH)
+    );
+  });
+
+  it('should give the maximum value the configured max width', () => {
+    expect(
+      getProportionalLineWidthForValue(DOMAIN_MAX, DOMAIN_MAX, MAX_WIDTH)
+    ).toBe(MAX_WIDTH);
+  });
+
+  it('should derive the accessor domain from the min/max magnitudes and drop missing values to zero', () => {
+    const accessor = createProportionalLineWidthAccessor(
+      'flow',
+      -DOMAIN_MAX,
+      100,
+      MAX_WIDTH
+    );
+
+    expect(accessor({ flow: -DOMAIN_MAX })).toBe(MAX_WIDTH);
+    expect(accessor({ flow: 100 })).toBe(MAX_WIDTH / 2);
+    expect(accessor({ flow: 0 })).toBe(0);
+    expect(accessor({ flow: undefined })).toBe(0);
   });
 });

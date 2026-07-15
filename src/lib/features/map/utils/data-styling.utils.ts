@@ -100,32 +100,6 @@ export function getColorForValue(
   return hexToRgb(colors[index] ?? MISSING_CLASS_COLOR);
 }
 
-export function getSizeForValue(
-  value: number,
-  min: number,
-  max: number,
-  minSize: number,
-  maxSize: number,
-  scale: ScaleType = ScaleType.LINEAR
-): number {
-  if (max === min) return (minSize + maxSize) / 2;
-
-  const normalized = Math.min(1, Math.max(0, (value - min) / (max - min)));
-
-  switch (scale) {
-    case ScaleType.SQRT:
-      return minSize + Math.sqrt(normalized) * (maxSize - minSize);
-
-    case ScaleType.LOG:
-      return (
-        minSize + (Math.log1p(normalized) / Math.log1p(1)) * (maxSize - minSize)
-      );
-
-    default:
-      return minSize + normalized * (maxSize - minSize);
-  }
-}
-
 export function getProportionalSymbolSizeForValue(
   value: number,
   max: number,
@@ -159,6 +133,19 @@ export function getProportionalSymbolSizeForValue(
     default:
       return Math.sqrt(normalized) * maxSize;
   }
+}
+
+export function getProportionalLineWidthForValue(
+  value: number,
+  max: number,
+  maxWidth: number
+): number {
+  return getProportionalSymbolSizeForValue(
+    value,
+    max,
+    maxWidth,
+    ScaleType.LINEAR
+  );
 }
 
 export function getAbsoluteDomainMax(min: number, max: number): number {
