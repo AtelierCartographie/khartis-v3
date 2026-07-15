@@ -241,7 +241,7 @@
     transform: translateY(-50%);
     width: 300px;
     min-height: 300px;
-    max-height: calc(100dvh - 120px);
+    max-height: min(80vh, calc(100dvh - 120px));
     overflow-y: auto;
     background: var(--cds-ui-02, #ffffff);
     border: 1px solid var(--cds-border-subtle, #e0e0e0);
