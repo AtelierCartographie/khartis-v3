@@ -20,11 +20,6 @@ export interface ReadGeofileOptions {
   layer?: string;
 }
 
-export interface ReadLinkOptions {
-  tablename?: string;
-  decimal_separator?: string;
-}
-
 export interface RegisterFilesOptions {
   shapefile?: boolean;
 }

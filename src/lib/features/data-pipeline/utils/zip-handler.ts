@@ -47,6 +47,17 @@ function getFileName(path: string): string {
   return path.split('/').pop() || path;
 }
 
+function getBaseNameWithoutExtension(name: string): string {
+  const ext = getFileExtensionWithDot(name);
+  return ext && name.toLowerCase().endsWith(ext)
+    ? name.slice(0, name.length - ext.length)
+    : name;
+}
+
+function isShapefileMemberExtension(ext: string): boolean {
+  return (SHAPEFILE_EXTENSIONS as readonly string[]).includes(ext);
+}
+
 export async function extractZip(file: File): Promise<ZipExtractionResult> {
   try {
     const buffer = await file.arrayBuffer();
@@ -120,13 +131,14 @@ function detectShapefileInArchive(files: ExtractedFile[]): {
   }
 
   if (shpFiles.length === 1) {
-    const baseName = shpFiles[0].name.replace(/\.shp$/i, '');
+    const baseName = getBaseNameWithoutExtension(shpFiles[0].name);
     const hasCompanions = files.some((f) => {
       const ext = getFileExtensionWithDot(f.name);
       return (
         ext !== '.shp' &&
-        (SHAPEFILE_EXTENSIONS as readonly string[]).includes(ext) &&
-        f.name.replace(ext, '').toLowerCase() === baseName.toLowerCase()
+        isShapefileMemberExtension(ext) &&
+        getBaseNameWithoutExtension(f.name).toLowerCase() ===
+          baseName.toLowerCase()
       );
     });
 
@@ -139,6 +151,26 @@ function detectShapefileInArchive(files: ExtractedFile[]): {
   }
 
   return { isShapefileArchive: false };
+}
+
+export interface ShapefileBundle {
+  baseName: string;
+  shp: ExtractedFile;
+  companions: ExtractedFile[];
+}
+
+export function getShapefileBundlesFromArchive(
+  files: ExtractedFile[]
+): ShapefileBundle[] {
+  return files
+    .filter((f) => getFileExtensionWithDot(f.name) === '.shp')
+    .map((shp) => {
+      const baseName = getBaseNameWithoutExtension(shp.name);
+      const companions = getShapefileFilesFromArchive(files, baseName).filter(
+        (f) => getFileExtensionWithDot(f.name) !== '.shp'
+      );
+      return { baseName, shp, companions };
+    });
 }
 
 export function createFileFromExtracted(
@@ -163,7 +195,6 @@ function getMimeTypeForExtension(ext: string): string {
     '.geojson': MIME.GEOJSON,
     '.parquet': MIME.BINARY,
     '.geoparquet': MIME.BINARY,
-    '.arrow': MIME.ARROW,
     '.shp': MIME.SHAPEFILE_SHP,
     '.shx': MIME.SHAPEFILE_SHX,
     '.dbf': MIME.SHAPEFILE_DBF,
@@ -184,10 +215,9 @@ export function getShapefileFilesFromArchive(
   const baseNameLower = baseName.toLowerCase();
   return files.filter((f) => {
     const ext = getFileExtensionWithDot(f.name);
-    const fileBaseName = f.name.replace(ext, '').toLowerCase();
     return (
-      (SHAPEFILE_EXTENSIONS as readonly string[]).includes(ext) &&
-      fileBaseName === baseNameLower
+      isShapefileMemberExtension(ext) &&
+      getBaseNameWithoutExtension(f.name).toLowerCase() === baseNameLower
     );
   });
 }
@@ -220,10 +250,9 @@ export function getNonShapefileFilesFromArchive(
 
   return supportedFiles.filter((f) => {
     const ext = getFileExtensionWithDot(f.name);
-    const fileBaseName = f.name.replace(ext, '').toLowerCase();
 
-    if (fileBaseName === baseNameLower) {
-      return !(SHAPEFILE_EXTENSIONS as readonly string[]).includes(ext);
+    if (getBaseNameWithoutExtension(f.name).toLowerCase() === baseNameLower) {
+      return !isShapefileMemberExtension(ext);
     }
     return true;
   });

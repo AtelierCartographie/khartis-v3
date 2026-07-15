@@ -5,8 +5,8 @@ import {
   getClassIndexForValue,
   getColorForValue,
   getAbsoluteDomainMax,
-  getProportionalSymbolSizeForValue,
-  getSizeForValue
+  getProportionalLineWidthForValue,
+  getProportionalSymbolSizeForValue
 } from '../utils/data-styling.utils';
 import { BasemapDottedPattern } from '$lib/features/commons/constants/visualization.constants';
 import { ScaleType } from '$lib/features/commons/stores/visualization.store.svelte';
@@ -78,29 +78,19 @@ export function createCategoricalColorAccessor(
   };
 }
 
-export function createProportionalSizeAccessor(
+export function createProportionalLineWidthAccessor(
   sizeColumn: string,
   minValue: number,
   maxValue: number,
-  minSize: number,
-  maxSize: number,
-  sizeScale: ScaleType
+  maxWidth: number
 ) {
+  const domainMax = getAbsoluteDomainMax(minValue, maxValue);
+
   return (object: DeckDataRow): number => {
     const rawValue = object[sizeColumn];
     const numericValue =
       typeof rawValue === 'number' ? rawValue : Number(rawValue);
-    if (!Number.isFinite(numericValue)) {
-      return minSize;
-    }
-    return getSizeForValue(
-      numericValue,
-      minValue,
-      maxValue,
-      minSize,
-      maxSize,
-      sizeScale
-    );
+    return getProportionalLineWidthForValue(numericValue, domainMax, maxWidth);
   };
 }
 
@@ -335,29 +325,19 @@ export function createGeoJsonCategoricalColorAccessor(
   };
 }
 
-export function createGeoJsonProportionalSizeAccessor(
+export function createGeoJsonProportionalLineWidthAccessor(
   sizeColumn: string,
   minValue: number,
   maxValue: number,
-  minSize: number,
-  maxSize: number,
-  sizeScale: ScaleType,
-  defaultSize = 5
+  maxWidth: number
 ) {
+  const domainMax = getAbsoluteDomainMax(minValue, maxValue);
+
   return (feature: { properties?: Record<string, unknown> | null }) => {
     const value = feature.properties?.[sizeColumn];
-    if (value === null || value === undefined) return defaultSize;
-    const numValue =
+    const numericValue =
       typeof value === 'number' ? value : parseFloat(String(value));
-    if (isNaN(numValue)) return defaultSize;
-    return getSizeForValue(
-      numValue,
-      minValue,
-      maxValue,
-      minSize,
-      maxSize,
-      sizeScale
-    );
+    return getProportionalLineWidthForValue(numericValue, domainMax, maxWidth);
   };
 }
 

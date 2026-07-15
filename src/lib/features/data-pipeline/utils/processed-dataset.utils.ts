@@ -17,12 +17,14 @@ type DatasetLike = DatasetResult | ProcessedDataset;
 
 const KNOWN_FORMATS = [
   'csv',
+  'json',
   'geojson',
   'shapefile',
   'geopackage',
   'geoparquet',
   'kml',
-  'kmz'
+  'kmz',
+  'gpx'
 ] as const satisfies ProcessedDataset['format'][];
 
 const COLUMN_TYPE_ALIASES = new Map<string, ColumnInfo['type']>([
@@ -69,8 +71,7 @@ function mapColumnType(
 
 function buildColumnInfo(column: EnrichedColumn): ColumnInfo {
   const stats = column.stats as ColumnStats | undefined;
-  const nullable =
-    (stats?.nulls ?? 0) > 0 || column.values.some((value) => value === null);
+  const nullable = (stats?.nulls ?? 0) > 0;
   const unique =
     stats?.uniques !== undefined &&
     stats?.count !== undefined &&
@@ -86,8 +87,7 @@ function buildColumnInfo(column: EnrichedColumn): ColumnInfo {
     max: stats?.max as number | string | Date | undefined,
     mean: isNumericType(stats?.type ?? ColumnType.TEXT)
       ? stats?.mean
-      : undefined,
-    sampleValues: column.values?.slice(0, 5)
+      : undefined
   };
 }
 
@@ -222,14 +222,7 @@ export function normalizeToProcessedDataset(
       processedAt: metadataProcessedAt,
       transformations: metadataTransformations
     },
-    geoDetection: dataset.geoDetection,
-    originalData: dataset.originalData
-      ? {
-          columns: dataset.originalData.columns.map(buildColumnInfo),
-          data: dataset.originalData.data,
-          rowCount: dataset.originalData.rowCount
-        }
-      : undefined
+    geoDetection: dataset.geoDetection
   };
 }
 

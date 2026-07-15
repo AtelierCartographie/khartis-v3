@@ -1,5 +1,6 @@
 import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import {
   escapeIdentifier,
   escapeSqlString
@@ -9,6 +10,7 @@ import * as m from '$lib/paraglide/messages';
 import type { Table as ArrowTable } from 'apache-arrow';
 import { convertGeoPackageToGeoJsonFile } from '$lib/features/map/utils/geopackage-browser-fallback.utils';
 import { normalizeProj4CrsCode } from '$lib/features/commons/utils/proj4-crs.utils';
+import { markTableMutated } from '../cache/cache-manager';
 import { DUCK_CONST, EXTENSIONS, SQL_FUNCTIONS } from '../constants';
 import { executeQuery } from '../core/query';
 import { isProjectionSupported } from './reprojection';
@@ -18,7 +20,11 @@ import type {
   FileWithId,
   ReadGeofileOptions
 } from '../types';
-import { generateUniqueTableName, registerFiles } from './file-registry';
+import {
+  dropRegisteredFile,
+  generateUniqueTableName,
+  registerFiles
+} from './file-registry';
 import { addRowId } from './reader-utils';
 
 interface GeofileMetadata {
@@ -298,7 +304,16 @@ async function detectGeofileMetadata(
       };
     }
     return defaultResult;
-  } catch {
+  } catch (error) {
+    logger.error(
+      'Failed to detect geofile metadata, assuming EPSG:4326',
+      LogCategory.DUCKDB,
+      { fileId, requestedLayer, error }
+    );
+    showWarning(
+      m.geofile_crs_not_detected_title(),
+      m.geofile_crs_not_detected_message()
+    );
     return defaultResult;
   }
 }
@@ -348,6 +363,7 @@ export async function readGeofile(
       layer: undefined
     });
 
+    await dropRegisteredFile(ctx.db, ctx.registered_files, geofileWithId.id);
     ctx.loaded_files.set(tablename, geofile.name);
     return tablename;
   }
@@ -412,6 +428,16 @@ export async function readGeofile(
     await addRowId(ctx.connection, finalTablename);
   }
 
+  if (shapefile) {
+    // Sibling handles must stay registered together; the exact id is dropped on dataset deletion.
+    ctx.table_files.set(finalTablename, geofileWithId.id);
+  } else {
+    await dropRegisteredFile(ctx.db, ctx.registered_files, geofileWithId.id);
+  }
+
   ctx.loaded_files.set(tablename, geofile.name);
+  // Deterministic table names make CREATE OR REPLACE reuse an already
+  // analysed name: cached stats for it are now stale.
+  markTableMutated(ctx, finalTablename);
   return tablename;
 }

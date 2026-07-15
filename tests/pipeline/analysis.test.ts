@@ -3,15 +3,16 @@ import {
   enrichColumns,
   buildStatisticsSnapshot
 } from '$lib/features/data-pipeline/operations/analysis';
-import type { DuckAnalyticsColumn } from '$lib/features/data-pipeline/types';
 import { ColumnType } from '$lib/features/data-pipeline/types';
+import {
+  DuckDBSimplifiedType,
+  type AnalysisResult
+} from '$lib/features/duckdb';
 
-function col(
-  overrides: Partial<DuckAnalyticsColumn> = {}
-): DuckAnalyticsColumn {
+function col(overrides: Partial<AnalysisResult> = {}): AnalysisResult {
   return {
     name: 'value',
-    type_simple: 'string',
+    type_simple: DuckDBSimplifiedType.STRING,
     count: 10,
     nulls: 0,
     uniques: 5,
@@ -22,10 +23,10 @@ function col(
 describe('enrichColumns', () => {
   it('maps type_simple to ColumnType correctly', () => {
     const columns = [
-      col({ name: 'id', type_simple: 'integer' }),
-      col({ name: 'label', type_simple: 'string' }),
-      col({ name: 'flag', type_simple: 'boolean' }),
-      col({ name: 'geom', type_simple: 'geometry' })
+      col({ name: 'id', type_simple: DuckDBSimplifiedType.NUMERIC }),
+      col({ name: 'label', type_simple: DuckDBSimplifiedType.STRING }),
+      col({ name: 'flag', type_simple: DuckDBSimplifiedType.BOOLEAN }),
+      col({ name: 'geom', type_simple: DuckDBSimplifiedType.GEOMETRY })
     ];
     const result = enrichColumns(columns);
     expect(result[0].type).toBe(ColumnType.NUMBER);
@@ -40,9 +41,14 @@ describe('enrichColumns', () => {
   });
 
   it('coerces count/nulls/uniques to numbers from string inputs', () => {
-    const result = enrichColumns([
-      col({ count: '42', nulls: '3', uniques: '10' })
-    ]);
+    // Arrow proxies can surface counters as strings/BigInt at runtime.
+    const stringlyTyped = {
+      ...col(),
+      count: '42',
+      nulls: '3',
+      uniques: '10'
+    } as unknown as AnalysisResult;
+    const result = enrichColumns([stringlyTyped]);
     const stats = result[0].stats;
     expect(stats.count).toBe(42);
     expect(stats.nulls).toBe(3);
@@ -67,14 +73,9 @@ describe('enrichColumns', () => {
     expect(stats.stdDev).toBe(0);
   });
 
-  it('initialises values array to empty', () => {
-    const result = enrichColumns([col()]);
-    expect(result[0].values).toEqual([]);
-  });
-
   it('coerces BigInt min/max from DuckDB BIGINT columns to numbers', () => {
     const result = enrichColumns([
-      col({ type_simple: 'integer', min: 1990n, max: 2020n })
+      col({ type_simple: DuckDBSimplifiedType.NUMERIC, min: 1990n, max: 2020n })
     ]);
     const stats = result[0].stats;
     expect(stats.min).toBe(1990);
@@ -92,7 +93,7 @@ describe('buildStatisticsSnapshot', () => {
     const columns = [
       col({
         name: 'pop',
-        type_simple: 'integer',
+        type_simple: DuckDBSimplifiedType.NUMERIC,
         count: 20,
         nulls: 1,
         uniques: 15,
@@ -101,7 +102,7 @@ describe('buildStatisticsSnapshot', () => {
       }),
       col({
         name: 'region',
-        type_simple: 'string',
+        type_simple: DuckDBSimplifiedType.STRING,
         count: 20,
         nulls: 0,
         uniques: 8

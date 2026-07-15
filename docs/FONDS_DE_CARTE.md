@@ -149,7 +149,7 @@ Les couches `centroid` sont le chemin nominal pour les primitives Textes et Symb
 Chaque fond du catalogue peut exister en 3 niveaux : `low`, `medium`, `high`. Comportements :
 
 - Khartis préfère `medium`, puis `high`, puis `low`.
-- Les fonds administratifs France (canton, commune, département, région) **incluent `medium` et `high` mais excluent `low`** : l'outil de simplification n'affiche que les niveaux réellement disponibles, ou un message si une seule variante existe.
+- Les fonds administratifs France (canton, commune, département, région) **n'existent qu'en `high`** dans `static/basemaps/geometry/` : l'outil de simplification n'affiche que les niveaux réellement disponibles, ou un message si une seule variante existe.
 - Les couches annexes (graticule, geographic-lines) peuvent partager le même fichier entre niveaux.
 
 ---

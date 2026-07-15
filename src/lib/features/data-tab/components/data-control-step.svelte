@@ -19,8 +19,10 @@
     showWarning
   } from '$lib/features/commons/utils/notification.utils.svelte';
   import { DataValidationError } from '$lib/features/commons/pipeline.errors';
-  import { normalizeFormattedNumericColumns } from '$lib/features/data-pipeline/operations/tabular-numeric-normalization';
-  import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
+  import {
+    normalizeFormattedNumericColumns,
+    normalizeToProcessedDataset
+  } from '$lib/features/data-pipeline';
   import { Duck } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';

@@ -14,7 +14,7 @@
 
 set -e
 
-EXTENSIONS=("spatial" "httpfs" "parquet")
+EXTENSIONS=("spatial" "httpfs" "parquet" "json")
 PLATFORMS=("wasm_eh" "wasm_mvp")
 BASE_URL="https://extensions.duckdb.org"
 OUTPUT_DIR="static/duckdb-extensions"

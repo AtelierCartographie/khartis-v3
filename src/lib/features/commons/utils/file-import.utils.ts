@@ -4,8 +4,10 @@ import {
   FileStatus,
   GEOJSON_TYPE
 } from '$lib/features/commons/constants';
-import { TABULAR_DELIMITERS } from '$lib/features/commons/constants/file-types.constants';
-import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
+import {
+  FILE_ENCODING,
+  TABULAR_DELIMITERS
+} from '$lib/features/commons/constants/file-types.constants';
 import { ParseError } from '../pipeline.errors';
 import {
   type FileValidation,
@@ -17,7 +19,7 @@ import { detectFileType } from './file-type-detection.utils';
 import { LogCategory, logger } from './logger';
 import { sanitizeDisplayName } from './string.utils';
 
-const UTF8_ENCODING = PIPELINE_CONST.ENCODING.DEFAULT;
+const UTF8_ENCODING = FILE_ENCODING.DEFAULT;
 const HTTP_PROTOCOL = 'http:';
 const HTTPS_PROTOCOL = 'https:';
 const DEFAULT_FILENAME = 'download';

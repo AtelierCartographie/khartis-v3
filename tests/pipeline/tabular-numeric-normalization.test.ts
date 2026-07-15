@@ -4,6 +4,7 @@ import { normalizeFormattedNumericColumns } from '$lib/features/data-pipeline/op
 import {
   createTestInstance,
   destroyTestInstance,
+  query,
   run,
   type TestDuckDB
 } from './duckdb-node-helper';
@@ -94,6 +95,83 @@ describe('normalizeFormattedNumericColumns', () => {
       wrapDuckDB(db)
     );
     expect(converted).not.toContain('value');
+  });
+
+  it('converts several eligible columns in one rewrite, preserving column order and __id', async () => {
+    await run(db, 'DROP TABLE IF EXISTS tbl_multi');
+    await run(
+      db,
+      `CREATE TABLE tbl_multi (
+        label VARCHAR, eu_amount VARCHAR, plain VARCHAR,
+        thousands VARCHAR, __id INTEGER
+      )`
+    );
+    await run(
+      db,
+      `INSERT INTO tbl_multi VALUES
+        ('a', '1.234,50', 'x', '1,234', 1),
+        ('b', '789,50', 'y', '5,678', 2)`
+    );
+    const duck = wrapDuckDB(db);
+    duck.invalidateTableCache = vi.fn();
+
+    const converted = await normalizeFormattedNumericColumns('tbl_multi', duck);
+
+    expect(converted).toEqual(['eu_amount', 'thousands']);
+    expect(duck.invalidateTableCache).toHaveBeenCalledTimes(1);
+    expect(duck.invalidateTableCache).toHaveBeenCalledWith('tbl_multi');
+
+    const columns = await query(
+      db,
+      `SELECT column_name, data_type FROM information_schema.columns
+       WHERE table_name='tbl_multi' ORDER BY ordinal_position`
+    );
+    expect(columns.map((column) => column.column_name)).toEqual([
+      'label',
+      'eu_amount',
+      'plain',
+      'thousands',
+      '__id'
+    ]);
+    expect(String(columns[1].data_type).toLowerCase()).toContain('double');
+    expect(String(columns[3].data_type).toLowerCase()).toMatch(
+      /bigint|hugeint|int/
+    );
+
+    const rows = await query(db, 'SELECT * FROM tbl_multi ORDER BY __id');
+    expect(rows.map((row) => row.label)).toEqual(['a', 'b']);
+    expect(rows.map((row) => Number(row.eu_amount))).toEqual([1234.5, 789.5]);
+    expect(rows.map((row) => row.plain)).toEqual(['x', 'y']);
+    expect(rows.map((row) => Number(row.thousands))).toEqual([1234, 5678]);
+    expect(rows.map((row) => Number(row.__id))).toEqual([1, 2]);
+  });
+
+  it('keeps the single ALTER path when only one column is eligible', async () => {
+    await run(db, 'DROP TABLE IF EXISTS tbl_single_among_many');
+    await run(
+      db,
+      `CREATE TABLE tbl_single_among_many (
+        label VARCHAR, eu_amount VARCHAR, __id INTEGER
+      )`
+    );
+    await run(
+      db,
+      `INSERT INTO tbl_single_among_many VALUES
+        ('a', '1.234,50', 1),
+        ('b', '789,50', 2)`
+    );
+    const duck = wrapDuckDB(db);
+    duck.invalidateTableCache = vi.fn();
+
+    const converted = await normalizeFormattedNumericColumns(
+      'tbl_single_among_many',
+      duck
+    );
+
+    expect(converted).toEqual(['eu_amount']);
+    expect(duck.invalidateTableCache).toHaveBeenCalledTimes(1);
+    const type = await getColumnType('tbl_single_among_many', 'eu_amount');
+    expect(type.toLowerCase()).toContain('double');
   });
 
   it('returns empty array when table has no string columns', async () => {

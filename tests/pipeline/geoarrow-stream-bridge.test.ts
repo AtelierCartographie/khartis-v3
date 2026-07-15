@@ -181,13 +181,17 @@ describe('computeProjectedBboxForProjection', () => {
           type: 'Feature',
           properties: { id: 'keep' },
           geometry: {
-            type: 'Polygon',
+            type: 'MultiPolygon',
+            // The stream path rewinds rings to d3's clockwise-exterior
+            // convention, so vertex order is reversed versus the source.
             coordinates: [
               [
-                [10, 20],
-                [12, 20],
-                [12, 22],
-                [10, 20]
+                [
+                  [10, 20],
+                  [12, 22],
+                  [12, 20],
+                  [10, 20]
+                ]
               ]
             ]
           }

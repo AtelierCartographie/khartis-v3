@@ -1,6 +1,6 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import type { DatasetResult } from '$lib/features/data-pipeline/types';
-import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
+import type { DatasetResult } from '$lib/features/data-pipeline';
+import { normalizeToProcessedDataset } from '$lib/features/data-pipeline';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { isMissingDuckTableError } from '$lib/features/duckdb/utils/duckdb-error.utils';
 import { BasemapStyle } from '$lib/features/map/constants';

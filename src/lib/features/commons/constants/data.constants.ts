@@ -15,6 +15,9 @@ export const JOINED_BASEMAP_COLUMN = {
   TYPO_MATCH: 'typo_match'
 } as const;
 
+// Shared cap between SQL join grading (A6) and the persisted project shape (C1).
+export const MAX_JOIN_BUCKET_LIST_VALUES = 500;
+
 export const JOINED_BASEMAP_COLUMNS = Object.values(
   JOINED_BASEMAP_COLUMN
 ) as readonly string[];

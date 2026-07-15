@@ -1,41 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as m from '$lib/paraglide/messages';
+import type { DatasetResult } from '$lib/features/data-pipeline/types';
 
-const { DuckMock, processZipFileMock } = vi.hoisted(() => ({
-  DuckMock: {
-    read_link: vi.fn().mockResolvedValue(undefined),
-    query: vi.fn().mockResolvedValue(undefined)
-  },
+const { processFileInternalMock, processZipFileMock } = vi.hoisted(() => ({
+  processFileInternalMock: vi.fn(),
   processZipFileMock: vi.fn()
 }));
 
-vi.mock('$lib/features/duckdb', () => ({
-  Duck: DuckMock
-}));
-
-vi.mock('$lib/features/data-pipeline/operations/analysis', () => ({
-  buildDatasetFromDuckTable: vi.fn().mockResolvedValue({
-    id: 'ds1',
-    tableName: 'tbl',
-    columns: [],
-    rowCount: 0,
-    geometry: null,
-    name: 'test',
-    sourceFileId: 'url',
-    format: 'csv',
-    metadata: { processedAt: new Date(), fileType: 'csv' }
-  })
-}));
-
-vi.mock(
-  '$lib/features/data-pipeline/operations/tabular-numeric-normalization',
-  () => ({
-    normalizeFormattedNumericColumns: vi.fn().mockResolvedValue(undefined)
-  })
-);
-
-vi.mock('$lib/features/data-pipeline/processors/tabular-geo-detection', () => ({
-  applyTabularGeoDetection: vi.fn().mockResolvedValue(undefined)
+vi.mock('$lib/features/data-pipeline/processors/file-processor', () => ({
+  processFileInternal: processFileInternalMock
 }));
 
 vi.mock('$lib/features/data-pipeline/processors/zip-processor', () => ({
@@ -47,20 +20,37 @@ import {
   processRemoteZipFile
 } from '$lib/features/data-pipeline/processors/remote-processor';
 
+function stubDataset(): DatasetResult {
+  return {
+    id: 'ds1',
+    tableName: 'tbl',
+    columns: [],
+    rowCount: 3,
+    name: 'test',
+    sourceFileId: 'local',
+    format: 'csv',
+    metadata: { processedAt: new Date(), fileType: 'csv', parserUsed: 'DuckDB' }
+  };
+}
+
 describe('remote-processor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    processFileInternalMock.mockResolvedValue(stubDataset());
     processZipFileMock.mockResolvedValue({
       id: 'zip-ds',
       tableName: 'zip_table',
       columns: [],
       rowCount: 0,
-      geometry: null,
       name: 'zip',
       sourceFileId: 'zip',
       format: 'kml',
       metadata: { processedAt: new Date(), fileType: 'kml' }
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('rejects .shp URL with a standalone shapefile error', async () => {
@@ -78,27 +68,59 @@ describe('remote-processor', () => {
     });
   });
 
-  it('calls Duck.read_link for a CSV URL', async () => {
-    await processRemoteFile('https://example.com/data.csv');
-    expect(DuckMock.read_link).toHaveBeenCalledWith(
-      'https://example.com/data.csv',
-      expect.objectContaining({ tablename: expect.any(String) })
-    );
-  });
-
-  it('passes decimal_separator to Duck.read_link when provided', async () => {
-    await processRemoteFile('https://example.com/data.csv', {
-      decimalSeparator: ','
-    });
-    expect(DuckMock.read_link).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ decimal_separator: ',' })
-    );
-  });
-
-  it('processes remote KMZ as an archive instead of a direct DuckDB link', async () => {
+  it('downloads a CSV URL and runs it through the local file pipeline', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
+      headers: new Headers({ 'content-type': 'text/csv' }),
+      arrayBuffer: vi
+        .fn()
+        .mockResolvedValue(new TextEncoder().encode('a\n1').buffer)
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await processRemoteFile('https://example.com/data.csv');
+
+    expect(fetchMock).toHaveBeenCalledWith('https://example.com/data.csv');
+    expect(processFileInternalMock).toHaveBeenCalledTimes(1);
+    const [downloadedFile, options] = processFileInternalMock.mock.calls[0];
+    expect(downloadedFile).toBeInstanceOf(File);
+    expect((downloadedFile as File).name).toBe('data.csv');
+    expect(options).toEqual({ originalName: 'data.csv' });
+    expect('datasets' in result).toBe(false);
+    if (!('datasets' in result)) {
+      expect(result.sourceFileId).toBe('https://example.com/data.csv');
+      expect(result.name).toBe('data.csv');
+    }
+  });
+
+  it('throws pipeline_error_fetch_failed when the CSV download fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found'
+      })
+    );
+
+    await expect(
+      processRemoteFile('https://example.com/missing.csv')
+    ).rejects.toMatchObject({
+      name: 'PipelineError',
+      code: 'REMOTE_FILE_FETCH_FAILED',
+      details: {
+        status: 404,
+        statusText: 'Not Found',
+        url: 'https://example.com/missing.csv'
+      }
+    });
+    expect(processFileInternalMock).not.toHaveBeenCalled();
+  });
+
+  it('processes remote KMZ as an archive instead of a direct file', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: new Headers(),
       arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8))
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -107,14 +129,12 @@ describe('remote-processor', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('https://example.com/places.kmz');
     expect(processZipFileMock).toHaveBeenCalledOnce();
-    expect(DuckMock.read_link).not.toHaveBeenCalled();
+    expect(processFileInternalMock).not.toHaveBeenCalled();
     expect('datasets' in result).toBe(false);
     if ('datasets' in result) {
       throw new Error('Expected a single KMZ dataset result');
     }
     expect(result.sourceFileId).toBe('https://example.com/places.kmz');
-
-    vi.unstubAllGlobals();
   });
 
   it('throws pipeline_error_fetch_failed when fetch returns 404', async () => {
@@ -141,6 +161,5 @@ describe('remote-processor', () => {
         url: 'https://example.com/missing.zip'
       }
     });
-    vi.unstubAllGlobals();
   });
 });

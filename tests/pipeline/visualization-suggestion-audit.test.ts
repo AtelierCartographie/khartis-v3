@@ -91,8 +91,7 @@ vi.mock('$lib/features/duckdb', () => ({
     TYPE: {
       TABULAR: 'tabular',
       GEOFILE: 'geofile',
-      PARQUET: 'parquet',
-      ARROW: 'arrow'
+      PARQUET: 'parquet'
     },
     REGEX: {}
   },

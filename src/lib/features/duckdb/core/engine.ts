@@ -23,6 +23,7 @@ let db: duckdb.AsyncDuckDB | null = null;
 let connection: duckdb.AsyncDuckDBConnection | null = null;
 const loaded_files: Map<string, string> = new Map();
 const registered_files: Set<string> = new Set();
+const table_files: Map<string, string> = new Map();
 const table_metadata: Map<string, TableMetadata> = new Map();
 const describeCache: Map<string, DescribeResult> = new Map();
 const rowCountCache: Map<string, number> = new Map();
@@ -49,6 +50,7 @@ export function getContext(): DuckDBContext {
     connection,
     loaded_files,
     registered_files,
+    table_files,
     table_metadata,
     describeCache,
     rowCountCache,
@@ -128,7 +130,6 @@ async function warmSpatialCoordinateSystems(): Promise<void> {
       LogCategory.DUCKDB,
       { error }
     );
-    throw error;
   }
 }
 

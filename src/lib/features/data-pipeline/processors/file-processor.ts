@@ -6,26 +6,23 @@ import {
 import { ParseError } from '$lib/features/commons/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
-import { createArrowTableWithMetadata } from '$lib/features/duckdb/orchestrator/arrow-ops';
 import {
   createCompanionFilesFromAssetRefs,
   createFileFromAssetRef
 } from '$lib/features/project-management/services/asset-store.service';
 import * as m from '$lib/paraglide/messages';
 import { isGeospatialFile } from '../constants';
+import { FileFormatEnum } from '../enums';
 import { detectFileFormat, generateTableName } from '../core/format-detector';
-import { extractGeoArrowMetadata } from '../io/geoarrow-metadata';
 import { buildDatasetFromDuckTable } from '../operations/analysis';
 import { normalizeFormattedNumericColumns } from '../operations/tabular-numeric-normalization';
-import { getProcessor } from './processor-registry';
-import { registerAllProcessors } from './register-processors';
+import { gpxProcessor } from './strategies';
 import { applyTabularGeoDetection } from './tabular-geo-detection';
 import type {
   CsvImportOptions,
   DatasetResult,
   FileFormat,
   FileInfo,
-  RawDataset,
   UploadedFilePayload
 } from '../types';
 import { detectCsvHeader } from '../utils/csv-header-detector';
@@ -38,10 +35,9 @@ import type { UploadedFile } from '$lib/features/commons/types/create-project.ty
 
 export interface ProcessFileOptions {
   originalName?: string;
-  rawDataset?: RawDataset;
   companionFiles?: File[];
+  sourceFileId?: string;
 }
-const RAW_FILE_PROCESSOR_TYPES = new Set<FileType>([FileType.GPX]);
 
 function createProcessorFilePayload(
   file: File,
@@ -63,38 +59,19 @@ function createProcessorFilePayload(
   return uploadedFile;
 }
 
-async function tryProcessWithRegisteredProcessor(
+async function processGpxFile(
   fileInfo: FileInfo,
   uploadedFile: UploadedFile,
   options: {
     tableName: string;
     format: FileFormat;
-    isGeoFile: boolean;
   }
-): Promise<DatasetResult | null> {
-  if (
-    !options.isGeoFile ||
-    !RAW_FILE_PROCESSOR_TYPES.has(uploadedFile.fileType)
-  ) {
-    return null;
-  }
-
-  registerAllProcessors();
-
-  const processor = getProcessor(uploadedFile);
-  if (!processor) {
-    return null;
-  }
-
-  const processorDataset = await processor.process(
+): Promise<DatasetResult> {
+  const processorDataset = await gpxProcessor.process(
     {
       Duck,
       callbacks: {
-        getRowCount: (tableName: string) => Duck.get_row_count(tableName),
-        createArrowTableWithMetadata: (tableName: string) =>
-          createArrowTableWithMetadata(tableName, Duck, (table) =>
-            extractGeoArrowMetadata(table)
-          )
+        getRowCount: (tableName: string) => Duck.get_row_count(tableName)
       },
       tableName: options.tableName
     },
@@ -104,7 +81,7 @@ async function tryProcessWithRegisteredProcessor(
   return buildDatasetFromDuckTable({
     file: fileInfo,
     tableName: processorDataset.tableName,
-    isGeoFile: options.isGeoFile,
+    isGeoFile: true,
     format: options.format
   });
 }
@@ -119,7 +96,7 @@ export async function processFileInternal(
     type: file.type
   };
 
-  const tableName = generateTableName(fileInfo.name);
+  const tableName = generateTableName(fileInfo.name, options.sourceFileId);
   const isGeoFile = isGeospatialFile(fileInfo.name);
   const isShapefile = fileInfo.name.toLowerCase().endsWith('.shp');
   const format = detectFileFormat(fileInfo.name);
@@ -144,32 +121,54 @@ export async function processFileInternal(
     options.companionFiles
   );
 
-  const processorDataset = await tryProcessWithRegisteredProcessor(
-    fileInfo,
-    uploadedFile,
-    {
-      tableName,
-      format,
-      isGeoFile
-    }
-  );
-
   let dataset: DatasetResult;
 
-  if (processorDataset) {
-    dataset = processorDataset;
-  } else if (isGeoFile) {
-    await registerFilesForDuckDB(file, isShapefile, options.companionFiles);
-    await Duck.read_geofile(file, {
-      tablename: tableName,
-      shapefile: isShapefile
-    });
-    dataset = await buildDatasetFromDuckTable({
-      file: fileInfo,
+  if (isGeoFile && gpxProcessor.canHandle(uploadedFile)) {
+    dataset = await processGpxFile(fileInfo, uploadedFile, {
       tableName,
-      isGeoFile,
       format
     });
+  } else if (isGeoFile) {
+    await registerFilesForDuckDB(file, isShapefile, options.companionFiles);
+    const isPlainJson = fileInfo.name.toLowerCase().endsWith('.json');
+    let geoReadError: unknown = null;
+    try {
+      await Duck.read_geofile(file, {
+        tablename: tableName,
+        shapefile: isShapefile
+      });
+    } catch (error) {
+      if (!isPlainJson) {
+        throw error;
+      }
+      geoReadError = error;
+    }
+    if (geoReadError === null) {
+      dataset = await buildDatasetFromDuckTable({
+        file: fileInfo,
+        tableName,
+        isGeoFile,
+        format
+      });
+    } else {
+      // A .json defaults to GeoJSON; plain JSON records fall back to a
+      // tabular read (team decision on P10).
+      try {
+        await Duck.read_json_tabular(file, { tablename: tableName });
+      } catch {
+        throw new ParseError(
+          m.pipeline_error_json_unreadable(),
+          FileType.GEOJSON,
+          { fileName: fileInfo.name, geoReadError: String(geoReadError) }
+        );
+      }
+      dataset = await buildDatasetFromDuckTable({
+        file: fileInfo,
+        tableName,
+        isGeoFile: false,
+        format: FileFormatEnum.JSON
+      });
+    }
   } else {
     await registerFilesForDuckDB(file, isShapefile, options.companionFiles);
     detectedCsvOptions = await readTabularFile(file, tableName, fileInfo.name);
@@ -183,13 +182,6 @@ export async function processFileInternal(
 
   if (detectedCsvOptions) {
     dataset.metadata.csvOptions = detectedCsvOptions;
-  }
-
-  if (options.rawDataset) {
-    dataset.originalData = buildOriginalData(
-      dataset.columns,
-      options.rawDataset
-    );
   }
 
   await applyTabularGeoDetection(dataset);
@@ -212,23 +204,6 @@ async function registerFilesForDuckDB(
   }
 }
 
-function buildOriginalData(
-  columns: DatasetResult['columns'],
-  rawDataset: RawDataset
-): DatasetResult['originalData'] {
-  return {
-    columns,
-    data: rawDataset.rows.map((row) => {
-      const record: Record<string, unknown> = {};
-      rawDataset.headers?.forEach((header, index) => {
-        record[header] = row[index];
-      });
-      return record;
-    }),
-    rowCount: rawDataset.rows.length
-  };
-}
-
 async function readTabularFile(
   file: File,
   tableName: string,
@@ -239,9 +214,8 @@ async function readTabularFile(
     lowerFileName.endsWith('.parquet') ||
     lowerFileName.endsWith('.geoparquet') ||
     lowerFileName.endsWith('.gpq');
-  const isArrow = lowerFileName.endsWith('.arrow');
 
-  if (isParquet || isArrow) {
+  if (isParquet) {
     await Duck.read_tabular(file, {
       tablename: tableName,
       format: 'parquet'

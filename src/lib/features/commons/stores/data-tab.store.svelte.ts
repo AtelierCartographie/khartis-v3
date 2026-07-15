@@ -1,21 +1,21 @@
 import {
   BasemapSource,
   GeoreferenceType,
-  JoinStatus,
   TableViewType
 } from '$lib/features/commons/constants/ui.constants';
+import { MAX_JOIN_BUCKET_LIST_VALUES } from '$lib/features/commons/constants/data.constants';
 import {
   SavePriority,
   persistenceRegistry
 } from '$lib/features/project-management/core';
-import { createReadonlyStateFacade } from '../utils/store.utils.svelte';
 import type { JoinQuality } from '$lib/features/map/types/basemap.types';
 import type {
   BasemapJoinState,
   DataTabState,
+  DuplicateLineReference,
   IgnoredEntity,
   JoinCandidate,
-  JoinedEntity,
+  JoinMapping,
   SerializedDataTabState
 } from '../types/data-tab.types';
 
@@ -41,8 +41,9 @@ const DEFAULT_STATE: DataTabState = {
     joinedEntities: 0,
     entitiesToVerify: 0,
     duplicateEntities: [],
+    duplicateTotal: 0,
     unrecognizedEntities: [],
-    joinedEntitiesList: [],
+    unrecognizedTotal: 0,
     ignoredEntities: [],
     joinMappings: [],
     duplicateLines: []
@@ -70,11 +71,81 @@ const DEFAULT_STATE: DataTabState = {
   }
 };
 
-const dataTabInternalState = $state<DataTabState>(
-  structuredClone(DEFAULT_STATE)
+interface BasemapJoinListsState {
+  duplicateEntities: string[];
+  unrecognizedEntities: string[];
+  ignoredEntities: IgnoredEntity[];
+  joinMappings: JoinMapping[];
+  duplicateLines: DuplicateLineReference[];
+}
+
+type BasemapJoinCoreState = Omit<BasemapJoinState, keyof BasemapJoinListsState>;
+
+interface DataTabCoreState extends Omit<DataTabState, 'basemapJoin'> {
+  basemapJoin: BasemapJoinCoreState;
+}
+
+function splitBasemapJoin(basemapJoin: BasemapJoinState): {
+  core: BasemapJoinCoreState;
+  lists: BasemapJoinListsState;
+} {
+  const {
+    duplicateEntities,
+    unrecognizedEntities,
+    ignoredEntities,
+    joinMappings,
+    duplicateLines,
+    ...core
+  } = basemapJoin;
+
+  return {
+    core,
+    lists: {
+      duplicateEntities,
+      unrecognizedEntities,
+      ignoredEntities,
+      joinMappings,
+      duplicateLines
+    }
+  };
+}
+
+const defaultSplit = splitBasemapJoin(
+  structuredClone(DEFAULT_STATE).basemapJoin
 );
 
-export const dataTabState = createReadonlyStateFacade(dataTabInternalState);
+const dataTabInternalState = $state<DataTabCoreState>({
+  ...structuredClone(DEFAULT_STATE),
+  basemapJoin: defaultSplit.core
+});
+
+// The join lists can hold hundreds of rows: raw state avoids one proxy per row.
+let basemapJoinLists = $state.raw<BasemapJoinListsState>(defaultSplit.lists);
+
+export const dataTabState: Readonly<DataTabState> = {
+  get dataControl() {
+    return dataTabInternalState.dataControl;
+  },
+  get geolocation() {
+    return dataTabInternalState.geolocation;
+  },
+  get basemapJoin(): BasemapJoinState {
+    return { ...dataTabInternalState.basemapJoin, ...basemapJoinLists };
+  },
+  get enrichData() {
+    return dataTabInternalState.enrichData;
+  },
+  get uiPanels() {
+    return dataTabInternalState.uiPanels;
+  },
+  get notifications() {
+    return dataTabInternalState.notifications;
+  }
+};
+
+function replaceJoinLists(updates: Partial<BasemapJoinListsState>): void {
+  basemapJoinLists = { ...basemapJoinLists, ...updates };
+}
 
 function notifyPersistence(
   priority: keyof typeof SavePriority = 'DEBOUNCED'
@@ -162,29 +233,12 @@ function restoreLinkedVariable(value: unknown): number | null | undefined {
   return undefined;
 }
 
-function restoreJoinedEntities(value: unknown): JoinedEntity[] {
-  if (!Array.isArray(value)) return [];
+function restoreCount(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+    return Math.trunc(value);
+  }
 
-  return value.flatMap((item): JoinedEntity[] => {
-    if (
-      !isRecord(item) ||
-      typeof item.dataValue !== 'string' ||
-      typeof item.basemapValue !== 'string'
-    ) {
-      return [];
-    }
-
-    const entity: JoinedEntity = {
-      dataValue: item.dataValue,
-      basemapValue: item.basemapValue
-    };
-
-    if (Array.isArray(item.otherIdentifiers)) {
-      entity.otherIdentifiers = restoreStringArray(item.otherIdentifiers);
-    }
-
-    return [entity];
-  });
+  return undefined;
 }
 
 function restoreIgnoredEntities(value: unknown): IgnoredEntity[] {
@@ -245,10 +299,10 @@ function restoreJoinCandidates(value: unknown): JoinCandidate[] | undefined {
   });
 }
 
-function restoreJoinMappings(value: unknown): BasemapJoinState['joinMappings'] {
+function restoreJoinMappings(value: unknown): JoinMapping[] {
   if (!Array.isArray(value)) return [];
 
-  return value.flatMap((item): BasemapJoinState['joinMappings'] => {
+  return value.flatMap((item): JoinMapping[] => {
     if (
       !isRecord(item) ||
       typeof item.dataValue !== 'string' ||
@@ -258,7 +312,7 @@ function restoreJoinMappings(value: unknown): BasemapJoinState['joinMappings'] {
       return [];
     }
 
-    const mapping: BasemapJoinState['joinMappings'][number] = {
+    const mapping: JoinMapping = {
       dataValue: item.dataValue,
       basemapOptions: restoreStringArray(item.basemapOptions),
       selectedMapping: item.selectedMapping
@@ -338,14 +392,18 @@ function restoreBasemapJoin(
 ): void {
   if (!isRecord(basemapJoin)) return;
 
-  nextState.basemapJoin.duplicateEntities = restoreStringArray(
-    basemapJoin.duplicateEntities
-  );
-  nextState.basemapJoin.unrecognizedEntities = restoreStringArray(
+  const duplicateEntities = restoreStringArray(basemapJoin.duplicateEntities);
+  const unrecognizedEntities = restoreStringArray(
     basemapJoin.unrecognizedEntities
   );
-  nextState.basemapJoin.joinedEntitiesList = restoreJoinedEntities(
-    basemapJoin.joinedEntitiesList
+
+  nextState.basemapJoin.duplicateEntities = duplicateEntities.slice(
+    0,
+    MAX_JOIN_BUCKET_LIST_VALUES
+  );
+  nextState.basemapJoin.unrecognizedEntities = unrecognizedEntities.slice(
+    0,
+    MAX_JOIN_BUCKET_LIST_VALUES
   );
   nextState.basemapJoin.ignoredEntities = restoreIgnoredEntities(
     basemapJoin.ignoredEntities
@@ -354,14 +412,21 @@ function restoreBasemapJoin(
     basemapJoin.joinMappings
   );
 
+  nextState.basemapJoin.joinedEntities =
+    restoreCount(basemapJoin.joinedEntities) ?? 0;
+  nextState.basemapJoin.duplicateTotal =
+    restoreCount(basemapJoin.duplicateTotal) ?? duplicateEntities.length;
+  nextState.basemapJoin.unrecognizedTotal =
+    restoreCount(basemapJoin.unrecognizedTotal) ?? unrecognizedEntities.length;
+  nextState.basemapJoin.entitiesToVerify =
+    nextState.basemapJoin.joinMappings.length;
+
   if (typeof basemapJoin.selectedBasemap === 'string') {
     nextState.basemapJoin.selectedBasemap = basemapJoin.selectedBasemap;
   }
   if (isBasemapSource(basemapJoin.basemapSource)) {
     nextState.basemapJoin.basemapSource = basemapJoin.basemapSource;
   }
-
-  nextState.basemapJoin = recomputeBasemapJoinCounters(nextState.basemapJoin);
 }
 
 function restoreEnrichData(enrichData: unknown, nextState: DataTabState): void {
@@ -433,14 +498,11 @@ function restoreNotifications(
   }
 }
 
-function recomputeBasemapJoinCounters(
-  basemapJoin: BasemapJoinState
-): BasemapJoinState {
-  return {
-    ...basemapJoin,
-    joinedEntities: basemapJoin.joinedEntitiesList.length,
-    entitiesToVerify: basemapJoin.joinMappings.length
-  };
+function applyDataTabState(nextState: DataTabState): void {
+  const { basemapJoin, ...rest } = nextState;
+  const { core, lists } = splitBasemapJoin(basemapJoin);
+  Object.assign(dataTabInternalState, { ...rest, basemapJoin: core });
+  basemapJoinLists = lists;
 }
 
 function restoreFromSerialized(data: unknown): void {
@@ -455,7 +517,7 @@ function restoreFromSerialized(data: unknown): void {
     restoreNotifications(data.notifications, nextState);
   }
 
-  Object.assign(dataTabInternalState, nextState);
+  applyDataTabState(nextState);
 }
 
 function serializeDataTabState(): SerializedDataTabState {
@@ -463,33 +525,26 @@ function serializeDataTabState(): SerializedDataTabState {
     dataControl: { ...dataTabInternalState.dataControl },
     geolocation: { ...dataTabInternalState.geolocation },
     basemapJoin: {
-      duplicateEntities: [
-        ...dataTabInternalState.basemapJoin.duplicateEntities
-      ],
-      unrecognizedEntities: [
-        ...dataTabInternalState.basemapJoin.unrecognizedEntities
-      ],
-      joinedEntitiesList:
-        dataTabInternalState.basemapJoin.joinedEntitiesList.map((entity) => ({
-          ...entity
-        })),
-      ignoredEntities: dataTabInternalState.basemapJoin.ignoredEntities.map(
-        (entity) => ({ ...entity })
-      ),
-      joinMappings: dataTabInternalState.basemapJoin.joinMappings.map(
-        (mapping) => ({
-          dataValue: mapping.dataValue,
-          basemapOptions: [...mapping.basemapOptions],
-          selectedMapping: mapping.selectedMapping,
-          ...(mapping.candidates
-            ? {
-                candidates: mapping.candidates.map((candidate) => ({
-                  ...candidate
-                }))
-              }
-            : {})
-        })
-      )
+      joinedEntities: dataTabInternalState.basemapJoin.joinedEntities,
+      duplicateEntities: [...basemapJoinLists.duplicateEntities],
+      duplicateTotal: dataTabInternalState.basemapJoin.duplicateTotal,
+      unrecognizedEntities: [...basemapJoinLists.unrecognizedEntities],
+      unrecognizedTotal: dataTabInternalState.basemapJoin.unrecognizedTotal,
+      ignoredEntities: basemapJoinLists.ignoredEntities.map((entity) => ({
+        ...entity
+      })),
+      joinMappings: basemapJoinLists.joinMappings.map((mapping) => ({
+        dataValue: mapping.dataValue,
+        basemapOptions: [...mapping.basemapOptions],
+        selectedMapping: mapping.selectedMapping,
+        ...(mapping.candidates
+          ? {
+              candidates: mapping.candidates.map((candidate) => ({
+                ...candidate
+              }))
+            }
+          : {})
+      }))
     },
     enrichData: { ...dataTabInternalState.enrichData },
     uiPanels: { ...dataTabInternalState.uiPanels },
@@ -501,184 +556,197 @@ function areJoinStatsEmpty(): boolean {
   return (
     dataTabInternalState.basemapJoin.joinedEntities === 0 &&
     dataTabInternalState.basemapJoin.entitiesToVerify === 0 &&
-    dataTabInternalState.basemapJoin.duplicateEntities.length === 0 &&
-    dataTabInternalState.basemapJoin.unrecognizedEntities.length === 0 &&
-    dataTabInternalState.basemapJoin.joinedEntitiesList.length === 0 &&
-    dataTabInternalState.basemapJoin.ignoredEntities.length === 0 &&
-    dataTabInternalState.basemapJoin.joinMappings.length === 0 &&
-    dataTabInternalState.basemapJoin.duplicateLines.length === 0
+    dataTabInternalState.basemapJoin.duplicateTotal === 0 &&
+    dataTabInternalState.basemapJoin.unrecognizedTotal === 0 &&
+    basemapJoinLists.duplicateEntities.length === 0 &&
+    basemapJoinLists.unrecognizedEntities.length === 0 &&
+    basemapJoinLists.ignoredEntities.length === 0 &&
+    basemapJoinLists.joinMappings.length === 0 &&
+    basemapJoinLists.duplicateLines.length === 0
   );
 }
 
 export const dataTabActions = {
   setDataControlState(updates: Partial<DataTabState['dataControl']>): void {
     Object.assign(dataTabInternalState.dataControl, updates);
-    notifyPersistence('IMMEDIATE');
+    notifyPersistence();
   },
 
   setGeolocationState(updates: Partial<DataTabState['geolocation']>): void {
     Object.assign(dataTabInternalState.geolocation, updates);
-    notifyPersistence('IMMEDIATE');
+    notifyPersistence();
   },
 
-  setBasemapJoinState(updates: Partial<DataTabState['basemapJoin']>): void {
-    Object.assign(dataTabInternalState.basemapJoin, updates);
-    notifyPersistence('IMMEDIATE');
+  setBasemapJoinState(updates: Partial<BasemapJoinState>): void {
+    const {
+      duplicateEntities,
+      unrecognizedEntities,
+      ignoredEntities,
+      joinMappings,
+      duplicateLines,
+      ...coreUpdates
+    } = updates;
+
+    Object.assign(dataTabInternalState.basemapJoin, coreUpdates);
+
+    const listUpdates: Partial<BasemapJoinListsState> = {};
+    if (duplicateEntities !== undefined) {
+      listUpdates.duplicateEntities = duplicateEntities;
+    }
+    if (unrecognizedEntities !== undefined) {
+      listUpdates.unrecognizedEntities = unrecognizedEntities;
+    }
+    if (ignoredEntities !== undefined) {
+      listUpdates.ignoredEntities = ignoredEntities;
+    }
+    if (joinMappings !== undefined) {
+      listUpdates.joinMappings = joinMappings;
+    }
+    if (duplicateLines !== undefined) {
+      listUpdates.duplicateLines = duplicateLines;
+    }
+    if (Object.keys(listUpdates).length > 0) {
+      replaceJoinLists(listUpdates);
+    }
+
+    notifyPersistence();
   },
 
   setEnrichDataState(updates: Partial<DataTabState['enrichData']>): void {
     Object.assign(dataTabInternalState.enrichData, updates);
-    notifyPersistence('IMMEDIATE');
+    notifyPersistence();
   },
 
   setUiPanelsState(updates: Partial<DataTabState['uiPanels']>): void {
     Object.assign(dataTabInternalState.uiPanels, updates);
-    notifyPersistence('IMMEDIATE');
+    notifyPersistence();
   },
 
   setJoinStats(stats: JoinQuality): void {
-    const ignoredKeys = new Set(
-      dataTabInternalState.basemapJoin.ignoredEntities.map((e) => e.dataValue)
-    );
+    dataTabInternalState.basemapJoin.joinedEntities = stats.joinedCount;
+    dataTabInternalState.basemapJoin.entitiesToVerify = stats.toVerifyCount;
+    dataTabInternalState.basemapJoin.duplicateTotal = stats.duplicateCount;
+    dataTabInternalState.basemapJoin.unrecognizedTotal =
+      stats.unrecognizedCount;
 
-    const entities = (stats.entities ?? []).filter(
-      (e) => !ignoredKeys.has(e.dataValue)
-    );
+    replaceJoinLists({
+      duplicateEntities: stats.duplicateEntities,
+      unrecognizedEntities: stats.unrecognizedEntities,
+      joinMappings: stats.joinMappings,
+      duplicateLines: stats.duplicateLines
+    });
 
-    dataTabInternalState.basemapJoin.joinedEntitiesList = entities
-      .filter((e) => e.status === JoinStatus.JOINED)
-      .map((e) => {
-        const basemapValue =
-          e.basemapValue ??
-          (e.matches && e.matches.length > 0 ? e.matches[0] : e.dataValue);
-        const otherIdentifiers =
-          e.matches?.filter(
-            (match) => match !== basemapValue && match !== e.dataValue
-          ) ?? [];
-        return {
-          dataValue: e.dataValue,
-          basemapValue,
-          otherIdentifiers
-        };
-      });
-
-    dataTabInternalState.basemapJoin.duplicateEntities = entities
-      .filter((e) => e.status === JoinStatus.DUPLICATE)
-      .map((e) => e.dataValue);
-
-    dataTabInternalState.basemapJoin.duplicateLines =
-      stats.duplicateLines ?? [];
-
-    dataTabInternalState.basemapJoin.unrecognizedEntities = entities
-      .filter((e) => e.status === JoinStatus.UNRECOGNIZED)
-      .map((e) => e.dataValue);
-
-    dataTabInternalState.basemapJoin.joinMappings = entities
-      .filter((e) => e.status === JoinStatus.TO_VERIFY)
-      .map((e) => ({
-        dataValue: e.dataValue,
-        basemapOptions: e.matches || [],
-        selectedMapping: e.matches && e.matches.length > 0 ? e.matches[0] : '',
-        candidates: e.candidates
-      }));
-
-    dataTabInternalState.basemapJoin.joinedEntities =
-      dataTabInternalState.basemapJoin.joinedEntitiesList.length;
-    dataTabInternalState.basemapJoin.entitiesToVerify =
-      dataTabInternalState.basemapJoin.joinMappings.length;
-
-    notifyPersistence('IMMEDIATE');
+    notifyPersistence();
   },
 
   updateJoinMapping(index: number, selectedMapping: string): void {
-    if (dataTabInternalState.basemapJoin.joinMappings[index]) {
-      dataTabInternalState.basemapJoin.joinMappings[index].selectedMapping =
-        selectedMapping;
-      notifyPersistence('IMMEDIATE');
-    }
+    const current = basemapJoinLists.joinMappings[index];
+    if (!current) return;
+
+    const joinMappings = basemapJoinLists.joinMappings.slice();
+    joinMappings[index] = { ...current, selectedMapping };
+    replaceJoinLists({ joinMappings });
+    notifyPersistence('IMMEDIATE');
   },
 
   ignoreEntity(entity: IgnoredEntity): void {
     if (
-      dataTabInternalState.basemapJoin.ignoredEntities.some(
+      basemapJoinLists.ignoredEntities.some(
         (existing) => existing.dataValue === entity.dataValue
       )
     ) {
       return;
     }
 
-    dataTabInternalState.basemapJoin.joinedEntitiesList =
-      dataTabInternalState.basemapJoin.joinedEntitiesList.filter(
-        (e) => e.dataValue !== entity.dataValue
+    const joinMappings = basemapJoinLists.joinMappings.filter(
+      (e) => e.dataValue !== entity.dataValue
+    );
+    const unrecognizedEntities = basemapJoinLists.unrecognizedEntities.filter(
+      (value) => value !== entity.dataValue
+    );
+    const removedFromUnrecognized =
+      unrecognizedEntities.length !==
+      basemapJoinLists.unrecognizedEntities.length;
+
+    replaceJoinLists({
+      joinMappings,
+      unrecognizedEntities,
+      ignoredEntities: [...basemapJoinLists.ignoredEntities, { ...entity }]
+    });
+
+    if (entity.source === 'joined') {
+      dataTabInternalState.basemapJoin.joinedEntities = Math.max(
+        0,
+        dataTabInternalState.basemapJoin.joinedEntities - 1
       );
-    dataTabInternalState.basemapJoin.joinMappings =
-      dataTabInternalState.basemapJoin.joinMappings.filter(
-        (e) => e.dataValue !== entity.dataValue
+    }
+    if (removedFromUnrecognized) {
+      dataTabInternalState.basemapJoin.unrecognizedTotal = Math.max(
+        0,
+        dataTabInternalState.basemapJoin.unrecognizedTotal - 1
       );
-    dataTabInternalState.basemapJoin.unrecognizedEntities =
-      dataTabInternalState.basemapJoin.unrecognizedEntities.filter(
-        (value) => value !== entity.dataValue
-      );
-    dataTabInternalState.basemapJoin.ignoredEntities = [
-      ...dataTabInternalState.basemapJoin.ignoredEntities,
-      { ...entity }
-    ];
-    dataTabInternalState.basemapJoin.joinedEntities =
-      dataTabInternalState.basemapJoin.joinedEntitiesList.length;
-    dataTabInternalState.basemapJoin.entitiesToVerify =
-      dataTabInternalState.basemapJoin.joinMappings.length;
+    }
+    dataTabInternalState.basemapJoin.entitiesToVerify = joinMappings.length;
 
     notifyPersistence('IMMEDIATE');
   },
 
   restoreEntity(dataValue: string): void {
-    const exists = dataTabInternalState.basemapJoin.ignoredEntities.some(
+    const exists = basemapJoinLists.ignoredEntities.some(
       (e) => e.dataValue === dataValue
     );
     if (!exists) return;
 
-    dataTabInternalState.basemapJoin.ignoredEntities =
-      dataTabInternalState.basemapJoin.ignoredEntities.filter(
-        (e) => e.dataValue !== dataValue
-      );
+    const ignoredEntities = basemapJoinLists.ignoredEntities.filter(
+      (e) => e.dataValue !== dataValue
+    );
+    const alreadyListed =
+      basemapJoinLists.unrecognizedEntities.includes(dataValue);
 
-    if (
-      !dataTabInternalState.basemapJoin.unrecognizedEntities.includes(dataValue)
-    ) {
-      dataTabInternalState.basemapJoin.unrecognizedEntities = [
-        ...dataTabInternalState.basemapJoin.unrecognizedEntities,
-        dataValue
-      ];
+    replaceJoinLists({
+      ignoredEntities,
+      ...(alreadyListed
+        ? {}
+        : {
+            unrecognizedEntities: [
+              ...basemapJoinLists.unrecognizedEntities,
+              dataValue
+            ]
+          })
+    });
+
+    if (!alreadyListed) {
+      dataTabInternalState.basemapJoin.unrecognizedTotal += 1;
     }
 
     notifyPersistence('IMMEDIATE');
   },
 
-  promoteToJoined(dataValue: string, basemapValue: string): void {
-    dataTabInternalState.basemapJoin.joinMappings =
-      dataTabInternalState.basemapJoin.joinMappings.filter(
-        (e) => e.dataValue !== dataValue
-      );
-    dataTabInternalState.basemapJoin.unrecognizedEntities =
-      dataTabInternalState.basemapJoin.unrecognizedEntities.filter(
-        (value) => value !== dataValue
-      );
+  promoteToJoined(dataValue: string): void {
+    const joinMappings = basemapJoinLists.joinMappings.filter(
+      (e) => e.dataValue !== dataValue
+    );
+    const removedFromToVerify =
+      joinMappings.length !== basemapJoinLists.joinMappings.length;
+    const unrecognizedEntities = basemapJoinLists.unrecognizedEntities.filter(
+      (value) => value !== dataValue
+    );
+    const removedFromUnrecognized =
+      unrecognizedEntities.length !==
+      basemapJoinLists.unrecognizedEntities.length;
 
-    if (
-      !dataTabInternalState.basemapJoin.joinedEntitiesList.some(
-        (e) => e.dataValue === dataValue
-      )
-    ) {
-      dataTabInternalState.basemapJoin.joinedEntitiesList = [
-        ...dataTabInternalState.basemapJoin.joinedEntitiesList,
-        { dataValue, basemapValue }
-      ];
+    replaceJoinLists({ joinMappings, unrecognizedEntities });
+
+    if (removedFromToVerify || removedFromUnrecognized) {
+      dataTabInternalState.basemapJoin.joinedEntities += 1;
     }
-
-    dataTabInternalState.basemapJoin.joinedEntities =
-      dataTabInternalState.basemapJoin.joinedEntitiesList.length;
-    dataTabInternalState.basemapJoin.entitiesToVerify =
-      dataTabInternalState.basemapJoin.joinMappings.length;
+    if (removedFromUnrecognized) {
+      dataTabInternalState.basemapJoin.unrecognizedTotal = Math.max(
+        0,
+        dataTabInternalState.basemapJoin.unrecognizedTotal - 1
+      );
+    }
+    dataTabInternalState.basemapJoin.entitiesToVerify = joinMappings.length;
 
     notifyPersistence('IMMEDIATE');
   },
@@ -707,12 +775,12 @@ export const dataTabActions = {
 
   selectBasemap(basemapId: string): void {
     dataTabInternalState.basemapJoin.selectedBasemap = basemapId;
-    notifyPersistence('IMMEDIATE');
+    notifyPersistence();
   },
 
   setBasemapSource(source: BasemapSource): void {
     dataTabInternalState.basemapJoin.basemapSource = source;
-    notifyPersistence('IMMEDIATE');
+    notifyPersistence();
   },
 
   clearJoinStats(): void {
@@ -722,13 +790,16 @@ export const dataTabActions = {
 
     dataTabInternalState.basemapJoin.joinedEntities = 0;
     dataTabInternalState.basemapJoin.entitiesToVerify = 0;
-    dataTabInternalState.basemapJoin.duplicateEntities = [];
-    dataTabInternalState.basemapJoin.unrecognizedEntities = [];
-    dataTabInternalState.basemapJoin.joinedEntitiesList = [];
-    dataTabInternalState.basemapJoin.ignoredEntities = [];
-    dataTabInternalState.basemapJoin.joinMappings = [];
-    dataTabInternalState.basemapJoin.duplicateLines = [];
-    notifyPersistence('IMMEDIATE');
+    dataTabInternalState.basemapJoin.duplicateTotal = 0;
+    dataTabInternalState.basemapJoin.unrecognizedTotal = 0;
+    replaceJoinLists({
+      duplicateEntities: [],
+      unrecognizedEntities: [],
+      ignoredEntities: [],
+      joinMappings: [],
+      duplicateLines: []
+    });
+    notifyPersistence();
   },
 
   reset(options: ResetDataTabOptions = {}): void {

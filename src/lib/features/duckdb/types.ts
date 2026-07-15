@@ -38,7 +38,6 @@ export type {
   AnalyseOptions,
   FileWithId,
   ReadGeofileOptions,
-  ReadLinkOptions,
   ReadTabularOptions,
   RegisterFilesOptions
 } from './types/io.types';

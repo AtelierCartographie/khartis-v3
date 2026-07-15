@@ -4,17 +4,10 @@ import {
   getMaxFileSizeForType,
   getWarningFileSizeForType
 } from '../constants/validation.config';
-import { estimateProjectStorageSize } from './size-estimation.utils';
 import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 import { detectFileType } from './file-import.utils';
 
-export type { ValidationResult } from '$lib/features/data-pipeline/types';
-export {
-  validationSuccess,
-  validationFailure
-} from '$lib/features/data-pipeline/types';
-
-import type { ValidationResult } from '$lib/features/data-pipeline/types';
+import type { ValidationResult } from '../types/validation.types';
 
 export const ProjectValidator = {
   validateFileSize(file: File): ValidationResult {
@@ -47,14 +40,12 @@ export const ProjectValidator = {
     return result;
   },
 
-  validateProjectSize(projectData: unknown): ValidationResult {
+  validateProjectSize(projectSize: number): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
       warnings: []
     };
-
-    const projectSize = estimateProjectStorageSize(projectData);
 
     if (projectSize > STORAGE_LIMITS.maxProjectSize) {
       result.isValid = false;

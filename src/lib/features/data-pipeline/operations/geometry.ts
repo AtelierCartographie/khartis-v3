@@ -1,6 +1,11 @@
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { Duck, GEO_CONSTANTS } from '$lib/features/duckdb';
+import {
+  Duck,
+  GEO_CONSTANTS,
+  isGeometryColumnType
+} from '$lib/features/duckdb';
+import * as m from '$lib/paraglide/messages';
 import type { GeometryInfo } from '../types';
 import { computeCentroid } from '../types';
 import {
@@ -8,17 +13,6 @@ import {
   GEOMETRY_COLUMN_TYPE,
   GEOMETRY_WKT_TYPES
 } from '$lib/features/commons/constants';
-
-/**
- * DuckDB >= 1.33 may return geometry column types like `GEOMETRY('EPSG:4326')`
- * instead of plain `GEOMETRY`. This helper matches both forms.
- */
-export function isGeometryColumnType(columnType: string): boolean {
-  return (
-    columnType === GEOMETRY_COLUMN_TYPE ||
-    columnType.startsWith(GEOMETRY_COLUMN_TYPE + '(')
-  );
-}
 
 const GEOMETRY_TYPE_TO_GEOJSON: Partial<Record<string, GeometryInfo['type']>> =
   {
@@ -64,12 +58,15 @@ export function extractGeometryColumnCrs(
   return normalizeCrsName(match?.[1]);
 }
 
+export interface GeometryInspection {
+  geometry?: GeometryInfo;
+  warnings: string[];
+}
+
 export async function extractGeometryInfo(
   tableName: string,
   knownColumns?: Array<{ name: string; type: string }>
-): Promise<GeometryInfo | undefined> {
-  if (!Duck) return undefined;
-
+): Promise<GeometryInspection> {
   try {
     let geometryColumn: { name: string; type: string } | undefined;
 
@@ -89,7 +86,7 @@ export async function extractGeometryInfo(
     }
 
     if (!geometryColumn) {
-      return undefined;
+      return { warnings: [] };
     }
 
     const escapedGeomCol = escapeIdentifier(geometryColumn.name);
@@ -113,7 +110,7 @@ export async function extractGeometryInfo(
 		`;
 
     const [result] = (await Duck.query(consolidatedQuery, {
-      format: 'array' as never
+      format: 'array'
     })) as Array<{
       geom_type: string | null;
       minX: number | null;
@@ -133,10 +130,11 @@ export async function extractGeometryInfo(
       extent.maxY === null
     ) {
       return {
-        type: normalizeGeometryType(geometryType),
-        columnName: geometryColumn.name,
-        bounds: [-180, -90, 180, 90],
-        centroid: [0, 0]
+        geometry: {
+          type: normalizeGeometryType(geometryType),
+          columnName: geometryColumn.name
+        },
+        warnings: [m.pipeline_warning_geometry_bounds_unavailable()]
       };
     }
 
@@ -148,12 +146,14 @@ export async function extractGeometryInfo(
     ];
 
     return {
-      type: normalizeGeometryType(geometryType),
-      columnName: geometryColumn.name,
-      bounds,
-      centroid: computeCentroid(bounds),
-      crs: geometryCrs ?? GEO_CONSTANTS.WGS84_CRS,
-      featureCount: undefined
+      geometry: {
+        type: normalizeGeometryType(geometryType),
+        columnName: geometryColumn.name,
+        bounds,
+        centroid: computeCentroid(bounds),
+        crs: geometryCrs ?? GEO_CONSTANTS.WGS84_CRS
+      },
+      warnings: []
     };
   } catch (error) {
     logger.error(
@@ -161,7 +161,7 @@ export async function extractGeometryInfo(
       LogCategory.DUCKDB,
       error
     );
-    return undefined;
+    return { warnings: [m.pipeline_warning_geometry_inspection_failed()] };
   }
 }
 

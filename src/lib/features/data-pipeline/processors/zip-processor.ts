@@ -8,9 +8,11 @@ import {
   extractZip,
   type ExtractedFile,
   getNonShapefileFilesFromArchive,
-  getShapefileFilesFromArchive,
-  getSupportedFilesFromArchive
+  getShapefileBundlesFromArchive,
+  getSupportedFilesFromArchive,
+  type ShapefileBundle
 } from '../utils/zip-handler';
+import { getFileExtensionWithDot } from '$lib/features/commons/utils/file.utils';
 import { processFileInternal } from './file-processor';
 
 export async function processZipFile(
@@ -25,36 +27,40 @@ export async function processZipFile(
   return processGenericZip(file, extraction);
 }
 
+async function processShapefileBundle(
+  zipFile: File,
+  bundle: ShapefileBundle
+): Promise<DatasetResult> {
+  const shpFile = createFileFromExtracted(bundle.shp);
+  const companionFiles = bundle.companions.map((f) =>
+    createFileFromExtracted(f)
+  );
+
+  const dataset = await processFileInternal(shpFile, {
+    originalName: `${bundle.baseName}.shp`,
+    companionFiles
+  });
+
+  dataset.sourceFileId = zipFile.name;
+  dataset.name = bundle.baseName;
+
+  return dataset;
+}
+
 async function processShapefileArchive(
   file: File,
   extraction: Awaited<ReturnType<typeof extractZip>>
 ): Promise<DatasetResult | ZipDatasetResult> {
-  const shapefileFiles = getShapefileFilesFromArchive(
-    extraction.files,
-    extraction.shapefileBaseName!
+  const bundle = getShapefileBundlesFromArchive(extraction.files).find(
+    (candidate) => candidate.baseName === extraction.shapefileBaseName
   );
-
-  const shpExtracted = shapefileFiles.find((f) =>
-    f.name.toLowerCase().endsWith('.shp')
-  );
-  if (!shpExtracted) {
+  if (!bundle) {
     throw new ParseError(m.pipeline_error_shp_not_found(), FileType.SHAPEFILE, {
       fileName: file.name
     });
   }
 
-  const shpFile = createFileFromExtracted(shpExtracted);
-  const companionFiles = shapefileFiles
-    .filter((f) => !f.name.toLowerCase().endsWith('.shp'))
-    .map((f) => createFileFromExtracted(f));
-
-  const dataset = await processFileInternal(shpFile, {
-    originalName: `${extraction.shapefileBaseName}.shp`,
-    companionFiles
-  });
-
-  dataset.sourceFileId = file.name;
-  dataset.name = extraction.shapefileBaseName!;
+  const dataset = await processShapefileBundle(file, bundle);
 
   const otherFiles = getNonShapefileFilesFromArchive(
     extraction.files,
@@ -115,19 +121,30 @@ async function processGenericZip(
   file: File,
   extraction: Awaited<ReturnType<typeof extractZip>>
 ): Promise<DatasetResult | ZipDatasetResult> {
-  const supportedFiles = getSupportedFilesFromArchive(extraction.files);
+  const shapefileBundles = getShapefileBundlesFromArchive(extraction.files);
+  const standaloneFiles = getSupportedFilesFromArchive(extraction.files).filter(
+    (extracted) => getFileExtensionWithDot(extracted.name) !== '.shp'
+  );
+  const totalUnits = shapefileBundles.length + standaloneFiles.length;
 
-  if (supportedFiles.length === 0) {
+  if (totalUnits === 0) {
     throw new ParseError(m.pipeline_error_no_supported_files(), FileType.ZIP, {
       fileName: file.name
     });
   }
 
-  if (supportedFiles.length === 1) {
-    return processSingleFileFromZip(file, supportedFiles[0]);
+  if (totalUnits === 1) {
+    return shapefileBundles.length === 1
+      ? processShapefileBundle(file, shapefileBundles[0])
+      : processSingleFileFromZip(file, standaloneFiles[0]);
   }
 
-  return processMultipleFilesFromZip(file, supportedFiles);
+  return processMultipleUnitsFromZip(
+    file,
+    shapefileBundles,
+    standaloneFiles,
+    totalUnits
+  );
 }
 
 async function processSingleFileFromZip(
@@ -146,14 +163,29 @@ async function processSingleFileFromZip(
   return dataset;
 }
 
-async function processMultipleFilesFromZip(
+async function processMultipleUnitsFromZip(
   zipFile: File,
-  supportedFiles: ExtractedFile[]
+  shapefileBundles: ShapefileBundle[],
+  standaloneFiles: ExtractedFile[],
+  totalUnits: number
 ): Promise<ZipDatasetResult> {
   const datasets: DatasetResult[] = [];
   const skippedFiles: string[] = [];
 
-  for (const extractedFileInfo of supportedFiles) {
+  for (const bundle of shapefileBundles) {
+    try {
+      datasets.push(await processShapefileBundle(zipFile, bundle));
+    } catch (error) {
+      logger.error(
+        'Failed to process shapefile bundle from ZIP archive',
+        LogCategory.DATA,
+        error
+      );
+      skippedFiles.push(bundle.shp.name);
+    }
+  }
+
+  for (const extractedFileInfo of standaloneFiles) {
     try {
       const extractedFile = createFileFromExtracted(extractedFileInfo);
       const dataset = await processFileInternal(extractedFile, {
@@ -183,7 +215,7 @@ async function processMultipleFilesFromZip(
   const result: ZipDatasetResult = {
     datasets,
     sourceZipName: zipFile.name,
-    totalFiles: supportedFiles.length,
+    totalFiles: totalUnits,
     processedFiles: datasets.length,
     skippedFiles
   };

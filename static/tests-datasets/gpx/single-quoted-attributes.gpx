@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<gpx xmlns='http://www.topografix.com/GPX/1/1' creator='Khartis tests' version='1.1'>
+  <wpt lat='48.8566' lon='2.3522'>
+    <name><![CDATA[Paris <centre>]]></name>
+    <desc>Capitale &amp; plus grande ville</desc>
+  </wpt>
+  <wpt lat='45.7640' lon='4.8357'>
+    <name>Lyon</name>
+  </wpt>
+  <trk>
+    <trkseg>
+      <trkpt lat='43.2965' lon='5.3698'>
+        <ele>12</ele>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>

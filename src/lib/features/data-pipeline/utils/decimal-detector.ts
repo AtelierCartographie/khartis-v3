@@ -15,6 +15,8 @@ interface DetectionOptions {
 }
 
 const EUROPEAN_DECIMAL_PATTERN = /^-?\d{1,3}(?:[ .]\d{3})*,\d+$/;
+// Mirrors SQL commaDecimal: exactly 3 comma decimals stay ambiguous with thousands grouping.
+const EUROPEAN_DECIMAL_NO_GROUPING_PATTERN = /^-?\d+,(?:\d{1,2}|\d{4,})$/;
 const STANDARD_DECIMAL_PATTERN = /^-?\d{1,3}(?:,?\d{3})*\.\d+$/;
 const EUROPEAN_THOUSANDS_DOT_PATTERN = /^-?\d{1,3}(?:\.\d{3})+,\d+$/;
 const EUROPEAN_THOUSANDS_SPACE_PATTERN = /^-?\d{1,3}(?: \d{3})+,\d+$/;
@@ -65,7 +67,10 @@ export async function detectDecimalSeparator(
       for (const value of values) {
         const trimmed = unquoteCsvValue(value.trim());
 
-        if (EUROPEAN_DECIMAL_PATTERN.test(trimmed)) {
+        if (
+          EUROPEAN_DECIMAL_PATTERN.test(trimmed) ||
+          EUROPEAN_DECIMAL_NO_GROUPING_PATTERN.test(trimmed)
+        ) {
           europeanMatches++;
           totalNumericValues++;
           if (EUROPEAN_THOUSANDS_DOT_PATTERN.test(trimmed)) {

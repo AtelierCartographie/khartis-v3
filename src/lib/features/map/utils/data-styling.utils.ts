@@ -100,32 +100,6 @@ export function getColorForValue(
   return hexToRgb(colors[index] ?? MISSING_CLASS_COLOR);
 }
 
-export function getSizeForValue(
-  value: number,
-  min: number,
-  max: number,
-  minSize: number,
-  maxSize: number,
-  scale: ScaleType = ScaleType.LINEAR
-): number {
-  if (max === min) return (minSize + maxSize) / 2;
-
-  const normalized = Math.min(1, Math.max(0, (value - min) / (max - min)));
-
-  switch (scale) {
-    case ScaleType.SQRT:
-      return minSize + Math.sqrt(normalized) * (maxSize - minSize);
-
-    case ScaleType.LOG:
-      return (
-        minSize + (Math.log1p(normalized) / Math.log1p(1)) * (maxSize - minSize)
-      );
-
-    default:
-      return minSize + normalized * (maxSize - minSize);
-  }
-}
-
 export function getProportionalSymbolSizeForValue(
   value: number,
   max: number,
@@ -161,6 +135,19 @@ export function getProportionalSymbolSizeForValue(
   }
 }
 
+export function getProportionalLineWidthForValue(
+  value: number,
+  max: number,
+  maxWidth: number
+): number {
+  return getProportionalSymbolSizeForValue(
+    value,
+    max,
+    maxWidth,
+    ScaleType.LINEAR
+  );
+}
+
 export function getAbsoluteDomainMax(min: number, max: number): number {
   const values = [min, max].filter(Number.isFinite).map(Math.abs);
   return values.length > 0 ? Math.max(...values) : Number.NaN;
@@ -173,7 +160,10 @@ export function getClassedSizeForValue(
   maxSize: number,
   classCountHint?: number
 ): number {
-  if (!Number.isFinite(value) || breaks.length < 2) {
+  if (
+    !Number.isFinite(value) ||
+    (breaks.length < 2 && classCountHint !== breaks.length + 1)
+  ) {
     return minSize;
   }
 
@@ -347,7 +337,7 @@ export function shouldApplyChoropleth(
     !!valueColumn &&
     !!classification?.breaks &&
     !!classification?.colors &&
-    classification.breaks.length >= 2
+    classification.breaks.length >= 1
   );
 }
 

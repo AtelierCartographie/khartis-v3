@@ -13,7 +13,7 @@ import { resolveGPSCoordinateColumns } from '$lib/features/commons/utils/geo-det
 import type {
   DatasetResult,
   ProcessedDataset
-} from '$lib/features/data-pipeline/types';
+} from '$lib/features/data-pipeline';
 import {
   COLUMN_TYPE_GEOMETRY,
   CANONICAL_ID_COLUMN,
@@ -38,7 +38,7 @@ import {
   exportMapToSvg,
   exportMapToJpg
 } from '$lib/features/commons/utils/map-export.utils';
-import { normalizeDatasets } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
+import { normalizeDatasets } from '$lib/features/data-pipeline';
 import {
   DataValidationError,
   DuckDBError

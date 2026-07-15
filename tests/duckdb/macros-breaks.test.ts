@@ -30,6 +30,17 @@ describe('quantile macro', () => {
     );
     expect(rows[0].breaks).toEqual([25, 50, 75]);
   });
+
+  it('returns tied breaks on zero-inflated data, merged downstream by sanitizeBreaks', async () => {
+    await run(db, 'CREATE OR REPLACE TABLE quantile_ties (v DOUBLE)');
+    await run(db, 'INSERT INTO quantile_ties SELECT 0 FROM range(10)');
+    await run(db, 'INSERT INTO quantile_ties VALUES (1),(2),(3),(4),(5)');
+    const rows = await query(
+      db,
+      "SELECT quantile('quantile_ties', 'v', 5) AS breaks"
+    );
+    expect(rows[0].breaks).toEqual([0, 0, 0, 2]);
+  });
 });
 
 describe('q6 macro', () => {
@@ -68,24 +79,91 @@ describe('equi_width macro', () => {
 });
 
 describe('kmeans macro', () => {
-  it('returns nb-1 cluster centers in ascending order', async () => {
+  beforeAll(async () => {
     await run(db, 'CREATE OR REPLACE TABLE kmeans_data (v INTEGER)');
     await run(
       db,
       'INSERT INTO kmeans_data VALUES (1),(2),(3),(10),(11),(12),(20),(21),(22)'
     );
-    // The macro initialises with LIMIT nb-1 seeds, so nb=4 yields 3 converged centers
+    await run(db, 'CREATE OR REPLACE TABLE kmeans_zero_inflated (v DOUBLE)');
+    await run(db, 'INSERT INTO kmeans_zero_inflated SELECT 0 FROM range(80)');
+    await run(db, 'INSERT INTO kmeans_zero_inflated VALUES (5),(6),(7),(100)');
+  });
+
+  it('returns nb-1 ascending inter-cluster midpoint breaks for nb classes', async () => {
     const rows = await query(
       db,
-      "SELECT kmeans('kmeans_data', 'v', 4) AS clusters"
+      "SELECT kmeans('kmeans_data', 'v', 4) AS breaks"
     );
-    const clusters = rows[0].clusters as number[];
-    expect(clusters).toHaveLength(3);
-    for (let i = 1; i < clusters.length; i++) {
-      expect(clusters[i]).toBeGreaterThan(clusters[i - 1]);
-    }
-    expect(clusters[0]).toBeLessThan(10);
-    expect(clusters[clusters.length - 1]).toBeGreaterThan(15);
+    expect(rows[0].breaks).toEqual([6.5, 11.5, 16]);
+  });
+
+  it('places breaks at inter-cluster midpoints, never inside a cluster', async () => {
+    await run(db, 'CREATE OR REPLACE TABLE kmeans_three_clusters (v INTEGER)');
+    await run(
+      db,
+      'INSERT INTO kmeans_three_clusters VALUES (1),(2),(3),(100),(101),(102),(1000),(1001),(1002)'
+    );
+    const rows = await query(
+      db,
+      "SELECT kmeans('kmeans_three_clusters', 'v', 3) AS breaks"
+    );
+    expect(rows[0].breaks).toEqual([51.5, 551]);
+  });
+
+  it('resolves exactly k clusters when the data has exactly k clusters', async () => {
+    await run(db, 'CREATE OR REPLACE TABLE kmeans_four_clusters (v INTEGER)');
+    await run(
+      db,
+      'INSERT INTO kmeans_four_clusters VALUES (1),(2),(10),(11),(20),(21),(30),(31)'
+    );
+    const rows = await query(
+      db,
+      "SELECT kmeans('kmeans_four_clusters', 'v', 4) AS breaks"
+    );
+    expect(rows[0].breaks).toEqual([6, 15.5, 25.5]);
+  });
+
+  it('returns identical breaks whatever the physical row order', async () => {
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE kmeans_order_asc AS
+         FROM kmeans_zero_inflated ORDER BY v ASC`
+    );
+    await run(
+      db,
+      `CREATE OR REPLACE TABLE kmeans_order_desc AS
+         FROM kmeans_zero_inflated ORDER BY v DESC`
+    );
+    const [fileOrder, asc, desc] = await Promise.all([
+      query(db, "SELECT kmeans('kmeans_zero_inflated', 'v', 5) AS breaks"),
+      query(db, "SELECT kmeans('kmeans_order_asc', 'v', 5) AS breaks"),
+      query(db, "SELECT kmeans('kmeans_order_desc', 'v', 5) AS breaks")
+    ]);
+    expect(fileOrder[0].breaks).toEqual([2.5, 5.5, 6.5, 53.5]);
+    expect(asc[0].breaks).toEqual(fileOrder[0].breaks);
+    expect(desc[0].breaks).toEqual(fileOrder[0].breaks);
+  });
+
+  it('returns distinct breaks on zero-inflated data instead of collapsing classes', async () => {
+    const rows = await query(
+      db,
+      "SELECT kmeans('kmeans_zero_inflated', 'v', 5) AS breaks"
+    );
+    const breaks = rows[0].breaks as number[];
+    expect(breaks).toHaveLength(4);
+    expect(new Set(breaks).size).toBe(breaks.length);
+  });
+
+  it('returns fewer but distinct breaks when the data holds fewer clusters than nb', async () => {
+    await run(db, 'CREATE OR REPLACE TABLE kmeans_two_values (v DOUBLE)');
+    await run(db, 'INSERT INTO kmeans_two_values SELECT 0 FROM range(80)');
+    await run(db, 'INSERT INTO kmeans_two_values SELECT 21.4 FROM range(20)');
+    const rows = await query(
+      db,
+      "SELECT kmeans('kmeans_two_values', 'v', 5) AS breaks"
+    );
+    expect(rows[0].breaks).toEqual([10.7]);
   });
 });
 
@@ -189,16 +267,13 @@ describe('macros vs reference implementations on real NUTS2 GDP data', () => {
     expect(rows[0].breaks).toEqual([26800, 45400, 64000, 82600, 101200]);
   });
 
-  it('kmeans(5) produces monotonically increasing breaks different from equal-interval', async () => {
+  it('kmeans(5) produces deterministic midpoint breaks different from equal-interval', async () => {
     const rows = await query(
       db,
       `SELECT kmeans('${TABLE}', 'gdp', 5) AS breaks`
     );
     const breaks = rows[0].breaks as number[];
-    expect(breaks).toHaveLength(4);
-    for (let i = 1; i < breaks.length; i++) {
-      expect(breaks[i]).toBeGreaterThan(breaks[i - 1]);
-    }
+    expect(breaks).toEqual([19900, 28650, 38000, 55050]);
     expect(breaks).not.toEqual([26800, 45400, 64000, 82600]);
     for (const b of breaks) {
       expect(b).toBeGreaterThan(8200);

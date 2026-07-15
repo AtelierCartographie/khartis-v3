@@ -11,32 +11,10 @@ import type {
   ProcessContext,
   ProcessorDataset
 } from '../file-processor.interface';
+import { buildProcessorDataset } from './processor-utils';
 
-const GPX_POINT_TAG_REGEX = /<(wpt|rtept|trkpt)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
-const XML_ATTRIBUTE_REGEX = /([A-Za-z_][\w:.-]*)="([^"]*)"/g;
-const XML_LEAF_TAG_REGEX =
-  /<([A-Za-z_][\w:.-]*)>([^<]*)<\/([A-Za-z_][\w:.-]*)>/g;
+const GPX_POINT_TAGS = new Set(['wpt', 'rtept', 'trkpt']);
 const GPX_FILE_EXTENSION_REGEX = /\.gpx$/i;
-
-function decodeXmlEntities(input: string): string {
-  return input
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) =>
-      String.fromCodePoint(Number.parseInt(hex, 16))
-    )
-    .replace(/&#([0-9]+);/g, (_, code: string) =>
-      String.fromCodePoint(Number.parseInt(code, 10))
-    )
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&quot;', '"')
-    .replaceAll('&apos;', "'")
-    .replaceAll('&amp;', '&');
-}
-
-function toPropertyKey(tagName: string): string {
-  const [, localName = tagName] = tagName.split(':');
-  return localName.trim();
-}
 
 function addProperty(
   properties: Record<string, string | string[]>,
@@ -61,50 +39,45 @@ function addProperty(
   }
 }
 
-function parseAttributes(attributeBlock: string): Map<string, string> {
-  const attributes = new Map<string, string>();
+function collectLeafProperties(
+  element: Element,
+  properties: Record<string, string | string[]>
+): void {
+  for (const child of Array.from(element.children)) {
+    if (child.children.length > 0) {
+      collectLeafProperties(child, properties);
+      continue;
+    }
 
-  for (const match of attributeBlock.matchAll(XML_ATTRIBUTE_REGEX)) {
-    const [, rawName = '', rawValue = ''] = match;
-    attributes.set(rawName.toLowerCase(), decodeXmlEntities(rawValue.trim()));
-  }
-
-  return attributes;
-}
-
-function extractLeafProperties(
-  xmlBlock: string
-): Record<string, string | string[]> {
-  const properties: Record<string, string | string[]> = {};
-
-  for (const match of xmlBlock.matchAll(XML_LEAF_TAG_REGEX)) {
-    const [, openTag = '', rawValue = '', closeTag = ''] = match;
-    if (openTag !== closeTag) continue;
-
-    const value = decodeXmlEntities(rawValue.trim());
+    const value = child.textContent?.trim() ?? '';
     if (!value) continue;
 
-    addProperty(properties, toPropertyKey(openTag), value);
+    addProperty(properties, child.localName, value);
   }
-
-  return properties;
 }
 
 function parseGpxToGeoJson(content: string): GeoJSONFeatureCollection {
+  const doc = new DOMParser().parseFromString(content, 'text/xml');
+  if (doc.getElementsByTagName('parsererror').length > 0) {
+    throw new ParseError(m.error_gpx_extraction_failed(), FileType.GPX);
+  }
+
   const features: GeoJSONFeatureCollection['features'] = [];
 
-  for (const match of content.matchAll(GPX_POINT_TAG_REGEX)) {
-    const [, pointType = '', attributeBlock = '', innerXml = ''] = match;
-    const attributes = parseAttributes(attributeBlock);
-    const lat = Number.parseFloat(attributes.get('lat') ?? '');
-    const lon = Number.parseFloat(attributes.get('lon') ?? '');
+  for (const element of Array.from(doc.getElementsByTagNameNS('*', '*'))) {
+    const pointTag = element.localName.toLowerCase();
+    if (!GPX_POINT_TAGS.has(pointTag)) continue;
+
+    const lat = Number.parseFloat(element.getAttribute('lat') ?? '');
+    const lon = Number.parseFloat(element.getAttribute('lon') ?? '');
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
       continue;
     }
 
-    const properties = extractLeafProperties(innerXml);
-    properties.gpx_point_type = pointType.toLowerCase();
+    const properties: Record<string, string | string[]> = {};
+    collectLeafProperties(element, properties);
+    properties.gpx_point_type = pointTag;
 
     features.push({
       type: 'Feature',
@@ -182,25 +155,6 @@ export const gpxProcessor: FileProcessor = {
     const actualTableName =
       typeof resultTableName === 'string' ? resultTableName : ctx.tableName;
 
-    const [columns, rowCount] = await Promise.all([
-      ctx.Duck.analyse(actualTableName),
-      ctx.callbacks.getRowCount(actualTableName)
-    ]);
-
-    const dataset: ProcessorDataset = {
-      id: file.datasetId ?? file.id,
-      tableName: actualTableName,
-      sourceFileId: file.id,
-      name: file.name,
-      columns,
-      rowCount,
-      metadata: {
-        processedAt: new Date(),
-        fileType: file.fileType
-      },
-      geoDetection: file.deepAnalysis?.geoDetection
-    };
-
-    return dataset;
+    return buildProcessorDataset(ctx, file, actualTableName);
   }
 };

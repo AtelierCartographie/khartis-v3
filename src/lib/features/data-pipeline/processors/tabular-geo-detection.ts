@@ -6,8 +6,10 @@ import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants'
 import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
 
 const GEO_DETECTION_SAMPLE_LIMIT = 200;
+// Upstream pipeline hint only; the reference GPS x/y detection is the semio
+// path (geolocation step -> resolveGPSCoordinateColumns on geolat/geolon).
 const GEO_NAME_HINT =
-  /lat|lon|lng|coord|geo|point|location|wkt|iso|code|country|region|dept|commune|province|state|city|name|admin|id/i;
+  /lat|lon|lng|coord|geo|point|location|wkt|iso|code|country|region|dept|commune|province|state|city|admin/i;
 
 const COORDINATE_GEO_TYPES = new Set<string>([
   GEO_COLUMN_TYPE.LATITUDE,

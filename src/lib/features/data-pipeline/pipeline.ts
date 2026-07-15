@@ -13,13 +13,13 @@ import {
 import type {
   DatasetResult,
   UploadedFilePayload,
-  ValidationResult,
   ZipDatasetResult
 } from './types';
 import { isZipFile } from './utils/zip-handler';
 import { MIME } from '$lib/features/commons/constants';
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
+import type { ValidationResult } from '$lib/features/commons/types/validation.types';
 
 export { createFileFromUpload };
 
@@ -30,6 +30,9 @@ function applyGeoDetection(
   geoDetection?: GeoDetectionResult
 ): void {
   if (!geoDetection) return;
+  // The DuckDB-table detection (applyTabularGeoDetection) wins; the sample-based
+  // deepAnalysis only fills in when the table detection produced nothing.
+  if (dataset.geoDetection) return;
   dataset.geoDetection = geoDetection;
   dataset.analysis = {
     columns: dataset.analysis?.columns ?? dataset.columns,
@@ -52,7 +55,10 @@ const Pipeline = {
     initialized = true;
   },
 
-  async processFile(file: File): Promise<DatasetResult | ZipDatasetResult> {
+  async processFile(
+    file: File,
+    options: { sourceFileId?: string } = {}
+  ): Promise<DatasetResult | ZipDatasetResult> {
     await this.initialize();
     const validation = await validateFile(file);
     if (!validation.isValid) {
@@ -63,7 +69,7 @@ const Pipeline = {
     if (isZipFile(file)) {
       return processZipFile(file);
     }
-    return processFileInternal(file);
+    return processFileInternal(file, { sourceFileId: options.sourceFileId });
   },
 
   async processUploadedFile(
@@ -80,7 +86,8 @@ const Pipeline = {
         (f: File) => f.name.toLowerCase() !== originalFile.name.toLowerCase()
       );
       result = await processFileInternal(originalFile, {
-        companionFiles
+        companionFiles,
+        sourceFileId: uploadedFile.id
       });
     } else {
       const fallback = await createFileFromUpload(uploadedFile);
@@ -90,7 +97,8 @@ const Pipeline = {
         const companionFiles =
           await createCompanionFilesFromUpload(uploadedFile);
         result = await processFileInternal(fallback, {
-          companionFiles
+          companionFiles,
+          sourceFileId: uploadedFile.id
         });
       }
     }
@@ -111,11 +119,10 @@ const Pipeline = {
   },
 
   async processRemoteFile(
-    url: string,
-    options: { tableName?: string; decimalSeparator?: string } = {}
+    url: string
   ): Promise<DatasetResult | ZipDatasetResult> {
     await this.initialize();
-    return processRemoteFile(url, options);
+    return processRemoteFile(url);
   },
 
   async processRemoteZipFile(
@@ -146,10 +153,6 @@ const Pipeline = {
   async processZipFile(file: File): Promise<DatasetResult | ZipDatasetResult> {
     await this.initialize();
     return processZipFile(file);
-  },
-
-  async destroy(): Promise<void> {
-    initialized = false;
   }
 };
 

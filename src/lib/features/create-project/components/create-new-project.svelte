@@ -31,8 +31,8 @@
   import { SvelteSet } from 'svelte/reactivity';
   import ProjectName from './project-name.svelte';
   import { CreateProjectValidationService } from '../services/validation.service';
-  import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
-  import type { ValidationResult } from '$lib/features/data-pipeline/types';
+  import { PIPELINE_CONST } from '$lib/features/data-pipeline';
+  import type { ValidationResult } from '$lib/features/commons/types/validation.types';
 
   interface Props {
     onClose?: () => void;
@@ -159,7 +159,6 @@
     [FileType.SHAPEFILE]: { label: 'Shapefile', color: 'purple' },
     [FileType.GEOPACKAGE]: { label: 'GeoPackage', color: 'purple' },
     [FileType.GEOPARQUET]: { label: 'GeoParquet', color: 'teal' },
-    [FileType.ARROW]: { label: 'Arrow', color: 'teal' },
     [FileType.KML]: { label: 'KML', color: 'magenta' },
     [FileType.KMZ]: { label: 'KMZ', color: 'magenta' },
     [FileType.GPX]: { label: 'GPX', color: 'magenta' },
