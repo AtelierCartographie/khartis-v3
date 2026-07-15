@@ -5,6 +5,7 @@
     Button,
     ComboBox,
     InlineNotification,
+    Pagination,
     Select,
     SelectItem,
     fuzzyMatch,
@@ -80,11 +81,18 @@
     unknowns: string[];
     joinedCount: number;
     toVerifyCount: number;
+    duplicateTotal?: number;
+    unrecognizedTotal?: number;
     linkedVariableName: string | undefined;
     basemapValues?: string[];
     loading?: boolean;
     joinFinalized?: boolean;
     joinedEntitiesList?: JoinedEntityRow[];
+    joinedPage?: number;
+    joinedPageSize?: number;
+    joinedBasemapValues?: string[];
+    onJoinedPageChange?: (page: number) => void;
+    onRequestJoinedEntities?: () => void;
     duplicateLines?: LineReference[];
     ignoredEntities?: LineReference[];
     basemapAliasesByValue?: Record<string, BasemapAlias[]>;
@@ -107,11 +115,18 @@
     unknowns,
     joinedCount,
     toVerifyCount,
+    duplicateTotal,
+    unrecognizedTotal,
     linkedVariableName,
     basemapValues = [],
     loading = false,
     joinFinalized = false,
     joinedEntitiesList = [],
+    joinedPage = 1,
+    joinedPageSize = 100,
+    joinedBasemapValues,
+    onJoinedPageChange,
+    onRequestJoinedEntities,
     duplicateLines = [],
     ignoredEntities = [],
     basemapAliasesByValue = {},
@@ -124,12 +139,20 @@
     onValidateEntity
   }: Props = $props();
 
+  // Plain Sets are deliberate here and below: these are wholesale-replaced
+  // derived values and per-call scratch, where SvelteSet would allocate one
+  // signal per key and cost seconds at 35k entries (PR #245 measurements).
+  // joinedBasemapValues (SQL-fed, paginated flow) wins over the row fallback
+  // because joinedEntitiesList then only holds the current page.
   const joinedBasemapValueSet = $derived.by(() => {
-    const set = new SvelteSet<string>();
-    for (const row of joinedEntitiesList) {
-      if (!row.basemapValue) continue;
-      set.add(row.basemapValue);
-      const aliases = basemapAliasesByValue?.[row.basemapValue];
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
+    const set = new Set<string>();
+    const sourceValues =
+      joinedBasemapValues ?? joinedEntitiesList.map((row) => row.basemapValue);
+    for (const value of sourceValues) {
+      if (!value) continue;
+      set.add(value);
+      const aliases = basemapAliasesByValue?.[value];
       if (!aliases) continue;
       for (const alias of aliases) {
         if (alias.value) set.add(alias.value);
@@ -138,14 +161,11 @@
     return set;
   });
 
-  const basemapValueSet = $derived.by(() => {
-    const set = new SvelteSet<string>();
-    for (const value of basemapValues) set.add(value);
-    return set;
-  });
+  const basemapValueSet = $derived.by(() => new Set<string>(basemapValues));
 
   const availableBasemapValues = $derived.by(() => {
-    const seen = new SvelteSet<string>();
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
+    const seen = new Set<string>();
     const values: string[] = [];
     for (const value of basemapValues) {
       if (joinedBasemapValueSet.has(value) || seen.has(value)) continue;
@@ -159,9 +179,42 @@
     availableBasemapValues.map((value) => buildBasemapComboBoxItem(value))
   );
 
-  const joinedValueSignature = $derived(
-    Array.from(joinedBasemapValueSet).sort().join('')
-  );
+  function haveSameValues(a: readonly string[], b: readonly string[]): boolean {
+    if (a === b) return true;
+    if (a.length !== b.length) return false;
+    for (let index = 0; index < a.length; index++) {
+      if (a[index] !== b[index]) return false;
+    }
+    return true;
+  }
+
+  function isSameSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+    if (a === b) return true;
+    if (a.size !== b.size) return false;
+    for (const value of a) {
+      if (!b.has(value)) return false;
+    }
+    return true;
+  }
+
+  let joinedOptionsVersion = 0;
+  let lastSignatureJoinedSet: ReadonlySet<string> = new Set();
+  let lastSignatureBasemapValues: readonly string[] = [];
+
+  // ComboBox resolves selectedId only on remount when items arrive late (see
+  // .claude/rules/svelte-carbon-ui.md): bump only on real option-set changes.
+  const joinedValueSignature = $derived.by(() => {
+    const joinedSet = joinedBasemapValueSet;
+    if (
+      !isSameSet(joinedSet, lastSignatureJoinedSet) ||
+      !haveSameValues(basemapValues, lastSignatureBasemapValues)
+    ) {
+      lastSignatureJoinedSet = joinedSet;
+      lastSignatureBasemapValues = basemapValues;
+      joinedOptionsVersion += 1;
+    }
+    return joinedOptionsVersion;
+  });
 
   function foldForSearch(value: string): string {
     return value
@@ -172,7 +225,8 @@
 
   function buildBasemapComboBoxItem(value: string): ComboBoxItem {
     const aliases = basemapAliasesByValue?.[value] ?? [];
-    const seenAliases = new SvelteSet<string>([value]);
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
+    const seenAliases = new Set<string>([value]);
     const searchAliases: ComboBoxItem['searchAliases'] = [];
     for (const alias of aliases) {
       if (!alias.value || seenAliases.has(alias.value)) continue;
@@ -245,7 +299,8 @@
   }
 
   function buildJoinedRowOptions(currentBasemapValue: string): ComboBoxItem[] {
-    const ownVariants = new SvelteSet<string>();
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
+    const ownVariants = new Set<string>();
     ownVariants.add(currentBasemapValue);
     const aliases = basemapAliasesByValue?.[currentBasemapValue];
     if (aliases) {
@@ -253,7 +308,8 @@
         if (alias.value) ownVariants.add(alias.value);
       }
     }
-    const seen = new SvelteSet<string>();
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
+    const seen = new Set<string>();
     const items: ComboBoxItem[] = [];
     for (const value of basemapValues) {
       if (seen.has(value)) continue;
@@ -273,9 +329,12 @@
     return displayedAlias?.value ?? value;
   }
 
-  const duplicateCount = $derived(duplicates.length);
-  const unrecognizedCount = $derived(unknowns.length);
+  const duplicateCount = $derived(duplicateTotal ?? duplicates.length);
+  const unrecognizedCount = $derived(unrecognizedTotal ?? unknowns.length);
   const ignoredCount = $derived(ignoredEntities.length);
+  const showJoinedPagination = $derived(
+    onJoinedPageChange !== undefined && joinedCount > joinedPageSize
+  );
 
   const deduplicatedJoinRows = $derived(
     joinRows.map((row) => {
@@ -427,7 +486,8 @@
   }
 
   function buildToVerifyItems(suggestions: string[]): ComboBoxItem[] {
-    const suggestedValues = new SvelteSet<string>();
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
+    const suggestedValues = new Set<string>();
     const suggestedItems: ComboBoxItem[] = [];
     for (const suggestion of suggestions) {
       const displayedSuggestion = resolveDisplayedBasemapValue(suggestion);
@@ -469,7 +529,8 @@
     if (!selectedBasemapValue) {
       return { tags: [], text: '', disabled: true };
     }
-    const seenValues = new SvelteSet<string>();
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
+    const seenValues = new Set<string>();
     const tags: string[] = [];
     const push = (value: string, variant: string | null) => {
       const trimmed = value?.trim();
@@ -579,6 +640,17 @@
   $effect(() => {
     if (toVerifyExpanded && toVerifyCount > 0 && basemapValues.length === 0) {
       onRequestBasemapValues?.();
+    }
+  });
+
+  // Option dedup needs the SQL-fed joined values as soon as any combo renders.
+  $effect(() => {
+    if (
+      (joinedExpanded || toVerifyExpanded || unrecognizedExpanded) &&
+      joinedCount > 0 &&
+      joinedEntitiesList.length === 0
+    ) {
+      onRequestJoinedEntities?.();
     }
   });
 
@@ -858,6 +930,27 @@
                     </div>
                   {/each}
                 </div>
+                {#if showJoinedPagination}
+                  <Pagination
+                    page={joinedPage}
+                    pageSize={joinedPageSize}
+                    pageSizes={[joinedPageSize]}
+                    totalItems={joinedCount}
+                    pageSizeInputDisabled
+                    size="sm"
+                    forwardText={m.join_pagination_next()}
+                    backwardText={m.join_pagination_previous()}
+                    itemRangeText={(min, max, total) =>
+                      m.join_pagination_item_range({ min, max, total })}
+                    pageRangeText={(_current, total) =>
+                      m.join_pagination_page_range({ total })}
+                    on:update={(event) => {
+                      if (event.detail.page !== joinedPage) {
+                        onJoinedPageChange?.(event.detail.page);
+                      }
+                    }}
+                  />
+                {/if}
               </div>
             {:else}
               <p class="category-body-text">

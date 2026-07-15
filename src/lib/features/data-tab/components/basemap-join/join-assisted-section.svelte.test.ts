@@ -152,6 +152,75 @@ describe('JoinAssistedSection', () => {
     expect(screen.queryByRole('option', { name: /France/ })).toBeNull();
   });
 
+  it('requests basemap values when the joined section opens without loaded values', async () => {
+    const onRequestBasemapValues = vi.fn();
+
+    render(JoinAssistedSection, {
+      joinRows: [],
+      duplicates: [],
+      unknowns: [],
+      joinedCount: 1,
+      toVerifyCount: 0,
+      linkedVariableName: 'Country',
+      joinedEntitiesList: [{ dataValue: 'Frnce', basemapValue: 'France' }],
+      onFinalizeJoin: vi.fn(),
+      onRequestBasemapValues
+    });
+
+    await fireEvent.click(
+      screen.getByRole('button', {
+        name: `1 ${m.join_entities_joined_one()}`
+      })
+    );
+
+    expect(onRequestBasemapValues).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps joined combo boxes mounted for identical option content and remounts on change', async () => {
+    const baseProps = {
+      joinRows: [],
+      duplicates: [],
+      unknowns: [],
+      joinedCount: 1,
+      toVerifyCount: 0,
+      linkedVariableName: 'Country',
+      basemapValues: ['France', 'Belgique'],
+      joinedEntitiesList: [{ dataValue: 'Frnce', basemapValue: 'France' }],
+      onFinalizeJoin: vi.fn()
+    };
+    const { rerender } = render(JoinAssistedSection, baseProps);
+
+    await fireEvent.click(
+      screen.getByRole('button', {
+        name: `1 ${m.join_entities_joined_one()}`
+      })
+    );
+
+    const comboboxName = m.join_select_label_joined({ entity: 'Frnce' });
+    const initialCombobox = await screen.findByRole('combobox', {
+      name: comboboxName
+    });
+
+    await rerender({
+      basemapValues: ['France', 'Belgique'],
+      joinedEntitiesList: [{ dataValue: 'Frnce', basemapValue: 'France' }]
+    });
+
+    expect(screen.getByRole('combobox', { name: comboboxName })).toBe(
+      initialCombobox
+    );
+
+    await rerender({
+      basemapValues: ['France', 'Belgique', 'Suisse']
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: comboboxName })).not.toBe(
+        initialCombobox
+      )
+    );
+  });
+
   it('announces the singular ignored entity count', async () => {
     const onIgnoreEntity = vi.fn();
 
