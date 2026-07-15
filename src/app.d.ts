@@ -5,6 +5,7 @@ declare global {
 
   interface ImportMetaEnv {
     readonly VITE_APP_VERSION?: string;
+    readonly VITE_KHARTIS_ENV?: string;
     readonly VITE_DEBUG?: string;
     readonly VITE_DEBUG_AUTH?: string;
     readonly VITE_LOG_CATEGORIES?: string;

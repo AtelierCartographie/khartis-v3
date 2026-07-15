@@ -15,10 +15,6 @@ export type {
   ProcessorDataset
 } from './file-processor.interface';
 
-export {
-  getProcessor,
-  hasProcessor,
-  registerProcessor
-} from './processor-registry';
+export { getProcessor, registerProcessor } from './processor-registry';
 
 export { registerAllProcessors } from './register-processors';

@@ -49,7 +49,7 @@ Le handler ZIP relance `processFileInternal()` pour chaque fichier extrait, en a
 
 ## Détection automatique CSV
 
-Le pipeline détecte quatre paramètres avant d'appeler `read_csv()`. Cette logique vit dans `csv-detector.ts` et s'appuie sur les 20 premières lignes du fichier (lues une seule fois via `readFileHead()`).
+Le pipeline détecte quatre paramètres avant d'appeler `read_csv()`. Cette logique vit dans `utils/decimal-detector.ts` (délimiteur, séparateur décimal) et `utils/csv-header-detector.ts` (en-tête), et s'appuie sur les 20 premières lignes du fichier (lues une seule fois via `readFileHead()`).
 
 **Séparateur de champ** : `detectFieldDelimiter()` compte les occurrences de `;`, `,`, `\t` et `|` sur la première ligne. Le plus fréquent est retenu.
 
@@ -171,7 +171,7 @@ Projections couvertes par le fallback : EPSG:2154 (Lambert-93), EPSG:27572 (Lamb
 await dataPipeline.processRemoteFile(url, { tableName: 'remote_data' });
 ```
 
-- `fetch()` → `arrayBuffer()` → `Duck.read_link()` avec nom de table généré.
+- `fetch()` → `File` → `processFileInternal()` : le fichier téléchargé suit le pipeline local complet (détection en-tête/délimiteur/décimales incluse).
 - Pour une URL ZIP : `processZipFile()` est appelé après téléchargement.
 - HTTP 404 → `Error` avec code `pipeline_error_fetch_failed`.
 - `.shp` standalone rejeté (Shapefile sans companions → `ParseError`).

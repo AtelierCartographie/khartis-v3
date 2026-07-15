@@ -2,11 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   activeVisualizations: [] as Array<Record<string, unknown>>,
+  addFile: vi.fn(),
   calculateBreaks: vi.fn(),
   createFileFromUpload: vi.fn(),
   currentProject: undefined as Record<string, unknown> | undefined,
   datasets: [] as Array<Record<string, unknown>>,
   deserializeAll: vi.fn(),
+  duckProcessFile: vi.fn(),
+  duckRegisterExistingTable: vi.fn(),
   loggerError: vi.fn(),
   showWarning: vi.fn(),
   updateClassification: vi.fn()
@@ -31,6 +34,11 @@ vi.mock('$lib/features/duckdb', () => ({
     beginBatch: vi.fn(),
     clear: vi.fn(async () => undefined),
     endBatch: vi.fn(),
+    getDataset: vi.fn(),
+    getDatasetBySourceFile: vi.fn(),
+    processFile: mocks.duckProcessFile,
+    registerExistingTable: mocks.duckRegisterExistingTable,
+    updateDatasetJoinInfo: vi.fn(),
     waitForInitialization: vi.fn(async () => undefined)
   }
 }));
@@ -81,19 +89,31 @@ vi.mock('../stores/data-tab.store.svelte', () => ({
   dataTabActions: {
     setGeolocationState: vi.fn(),
     setJoinStats: vi.fn()
+  },
+  dataTabState: {
+    basemapJoin: {
+      ignoredEntities: [] as Array<{ dataValue: string }>
+    },
+    geolocation: {
+      linkedVariableName: ''
+    }
   }
 }));
 
 vi.mock('../stores/datasets.store.svelte', () => ({
   datasetsStore: {
+    addFile: mocks.addFile,
     applyPersistedViewState: vi.fn(),
     clear: vi.fn(),
     get datasets() {
       return mocks.datasets;
     },
     getAllDatasets: vi.fn(() => mocks.datasets),
+    getDatasetBySourceFile: vi.fn(),
     removeDataset: vi.fn(),
-    updateDatasetRowCount: vi.fn()
+    updateDataset: vi.fn(),
+    updateDatasetRowCount: vi.fn(),
+    updateDatasetTableName: vi.fn()
   }
 }));
 
@@ -184,6 +204,8 @@ vi.mock('$lib/features/map/services/basemap-catalog.service.svelte', () => ({
 
 vi.mock('./import-rollback.service', () => ({
   importRollbackService: {
+    createSnapshot: vi.fn(),
+    rollback: vi.fn(),
     rollbackAll: vi.fn()
   }
 }));
@@ -353,5 +375,72 @@ describe('dataOrchestratorService restore fallbacks', () => {
     expect(mocks.deserializeAll).toHaveBeenCalledWith({
       basemapStyle: basemapStyleSettings
     });
+  });
+});
+
+describe('dataOrchestratorService creation fast-path', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mocks.activeVisualizations = [];
+    mocks.datasets = [];
+    mocks.createFileFromUpload.mockResolvedValue(new File([], 'data.csv'));
+    mocks.addFile.mockResolvedValue({
+      id: 'dataset-1',
+      sourceFileId: 'file-1',
+      tableName: 'data_file_1',
+      columns: [],
+      rowCount: 2,
+      metadata: {}
+    });
+    mocks.duckRegisterExistingTable.mockResolvedValue({
+      id: 'duck-1',
+      tableName: 'data_file_1',
+      sourceFileId: 'file-1'
+    });
+    mocks.currentProject = {
+      id: 'project-1',
+      manifest: {
+        name: 'Project'
+      },
+      data: {
+        sourceFiles: [
+          {
+            id: 'file-1',
+            name: 'data.csv',
+            fileType: 'csv',
+            status: 'complete',
+            content: 'a,b\n1,2',
+            duckdbTableName: 'data_file_1'
+          }
+        ]
+      }
+    };
+  });
+
+  it('should preserve fresh tables and reuse them without re-import when created', async () => {
+    const { dataOrchestratorService } = await loadService();
+    const { duckDBOrchestrator } = await import('$lib/features/duckdb');
+
+    await dataOrchestratorService.onProjectChanged({ isProjectCreation: true });
+
+    expect(duckDBOrchestrator.clear).toHaveBeenCalledWith({
+      preserveTableNames: ['data_file_1']
+    });
+    expect(mocks.duckRegisterExistingTable).toHaveBeenCalledWith(
+      'data_file_1',
+      'file-1',
+      'data.csv',
+      expect.objectContaining({ preferredDatasetId: 'dataset-1' })
+    );
+    expect(mocks.duckProcessFile).not.toHaveBeenCalled();
+  });
+
+  it('should keep the full clear when the project change is not a creation', async () => {
+    const { dataOrchestratorService } = await loadService();
+    const { duckDBOrchestrator } = await import('$lib/features/duckdb');
+
+    await dataOrchestratorService.onProjectChanged();
+
+    expect(duckDBOrchestrator.clear).toHaveBeenCalledWith(undefined);
   });
 });

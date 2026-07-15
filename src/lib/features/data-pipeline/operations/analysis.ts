@@ -1,7 +1,6 @@
-import { Duck } from '$lib/features/duckdb';
+import { Duck, type AnalysisResult } from '$lib/features/duckdb';
 import type {
   DatasetResult,
-  DuckAnalyticsColumn,
   EnrichedColumn,
   FileFormat,
   FileInfo,
@@ -12,7 +11,7 @@ import { extractGeometryInfo } from './geometry';
 import { computeQualityWarnings } from './quality';
 
 export interface DatasetTableSnapshot {
-  duckColumns: DuckAnalyticsColumn[];
+  duckColumns: AnalysisResult[];
   enrichedColumns: EnrichedColumn[];
   rowCount: number;
 }
@@ -43,12 +42,9 @@ export function extractCategories(histogram: unknown): string[] | undefined {
   }
 }
 
-export function enrichColumns(
-  columns: DuckAnalyticsColumn[]
-): EnrichedColumn[] {
+export function enrichColumns(columns: AnalysisResult[]): EnrichedColumn[] {
   return columns.map((column) => ({
     name: column.name,
-    values: [],
     type: fromDuckDBType(String(column.type_simple || 'text')),
     stats: {
       name: column.name,
@@ -82,7 +78,7 @@ export function enrichColumns(
 }
 
 export function buildStatisticsSnapshot(
-  columns: DuckAnalyticsColumn[]
+  columns: AnalysisResult[]
 ): Record<string, unknown> {
   return Object.fromEntries(
     columns.map((column) => [
@@ -113,7 +109,7 @@ export async function readDatasetTableSnapshot(
   options: { force?: boolean } = {}
 ): Promise<DatasetTableSnapshot> {
   const [duckColumns, rowCount] = await Promise.all([
-    Duck.analyse(tableName, options) as Promise<DuckAnalyticsColumn[]>,
+    Duck.analyse(tableName, options),
     Duck.get_row_count(tableName)
   ]);
 
@@ -132,7 +128,7 @@ export async function buildDatasetFromDuckTable(params: {
 }): Promise<DatasetResult> {
   const { file, tableName, isGeoFile, format } = params;
 
-  const [snapshot, geometryInfo] = await Promise.all([
+  const [snapshot, geometryInspection] = await Promise.all([
     readDatasetTableSnapshot(tableName),
     extractGeometryInfo(tableName)
   ]);
@@ -144,7 +140,7 @@ export async function buildDatasetFromDuckTable(params: {
     enrichedColumns,
     rowCount,
     isGeoFile,
-    geometryInfo,
+    geometryInfo: geometryInspection.geometry,
     format
   });
 
@@ -152,6 +148,7 @@ export async function buildDatasetFromDuckTable(params: {
   if (dataset.analysis) {
     dataset.analysis.warnings = [
       ...(dataset.analysis.warnings ?? []),
+      ...geometryInspection.warnings,
       ...qualityWarnings
     ];
   }

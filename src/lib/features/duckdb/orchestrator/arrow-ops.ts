@@ -4,12 +4,17 @@ import {
   hasGeometryType
 } from '$lib/features/commons/constants/geometry.constants';
 import {
-  isGeometryColumnType,
   normalizeCrsName,
   extractGeometryColumnCrs
-} from '$lib/features/data-pipeline/operations/geometry';
+} from '$lib/features/data-pipeline';
+import { isGeometryColumnType } from '../utils/geometry-column.utils';
 import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import {
+  PERF_PHASE,
+  perfMark,
+  perfMeasure
+} from '$lib/features/commons/utils/perf-marks.utils';
 import {
   escapeIdentifier,
   escapeSqlString
@@ -215,21 +220,24 @@ async function reprojectArrowTableWithProj4(
   )) as Uint8Array;
 
   const rawTable = tableFromIPC(rawResult);
+  // Column iteration keeps NULL slots null; toArray() zero-fills numeric NULLs.
   const columns = Object.fromEntries(
-    rawTable.schema.fields.map((field) => [field.name, [] as unknown[]])
-  );
-
-  for (let rowIndex = 0; rowIndex < rawTable.numRows; rowIndex++) {
-    for (const field of rawTable.schema.fields) {
+    rawTable.schema.fields.map((field) => {
       const vector = rawTable.getChild(field.name);
-      const value = vector?.get(rowIndex) ?? null;
-      columns[field.name].push(
+      const values: unknown[] = vector
+        ? Array.from(vector, (value): unknown => value ?? null)
+        : new Array<unknown>(rawTable.numRows).fill(null);
+
+      return [
+        field.name,
         field.name === geomColumn.column_name
-          ? reprojectGeoJsonValue(value, sourceCrs, targetCrs)
-          : value
-      );
-    }
-  }
+          ? values.map((value) =>
+              reprojectGeoJsonValue(value, sourceCrs, targetCrs)
+            )
+          : values
+      ];
+    })
+  );
 
   const reprojectedTable = tableFromArrays(columns);
   const targetGeoArrowCrs = buildGeoArrowCrs(targetCrs);
@@ -267,6 +275,7 @@ async function executeArrowIpcQuery(
   // table on the main connection is fully populated. Callers that read
   // dataset tables prone to mutation (joins, edits) must opt out of
   // streaming to avoid this race.
+  perfMark(PERF_PHASE.ARROW_TABLE);
   let ipcBuffer: Uint8Array;
 
   if (Duck.queryStreaming && !options?.skipStreaming) {
@@ -276,6 +285,7 @@ async function executeArrowIpcQuery(
       const firstBatchEmpty =
         streamTable.batches.length > 0 && streamTable.batches[0].numRows === 0;
       if (!firstBatchEmpty) {
+        perfMeasure(PERF_PHASE.ARROW_TABLE);
         return streamTable;
       }
     }
@@ -286,7 +296,9 @@ async function executeArrowIpcQuery(
   })) as ArrayBuffer | Uint8Array;
   ipcBuffer = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
 
-  return tableFromIPC(ipcBuffer);
+  const fallbackTable = tableFromIPC(ipcBuffer);
+  perfMeasure(PERF_PHASE.ARROW_TABLE);
+  return fallbackTable;
 }
 
 function getRepresentativePointExpression(

@@ -1,10 +1,13 @@
 <script lang="ts">
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+  import {
+    INTERNAL_COLUMN,
+    JOINED_BASEMAP_COLUMNS
+  } from '$lib/features/commons/constants/data.constants';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
-  import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
+  import { normalizeToProcessedDataset } from '$lib/features/data-pipeline';
 
-  import { Duck } from '$lib/features/duckdb';
+  import { Duck, type AnalysisResults } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { isMissingDuckTableError } from '$lib/features/duckdb/utils/duckdb-error.utils';
   import { BasemapStyle } from '$lib/features/map/constants';
@@ -38,6 +41,7 @@
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
   import { dataTabStore } from '../stores/data-tab.store.svelte';
   import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
+  import type { JoinedEntity } from '$lib/features/commons/types/data-tab.types';
   import { resolveSuggestedBasemapAutoSelectionTarget } from '../utils/basemap-auto-selection.utils';
   import {
     getDatasetIdentity,
@@ -54,6 +58,10 @@
   import { waitForDatasetAvailability } from '../utils/dataset-availability.utils';
   import { resolveDatasetIdForOrchestrator } from '../utils/dataset-resolution.utils';
   import { persistTabularSourceSnapshot } from '../services/tabular-source-snapshot.service';
+  import {
+    SavePriority,
+    persistenceRegistry
+  } from '$lib/features/project-management/core';
   import { useBasemapJoinAttributes } from '../hooks/use-basemap-join-attributes.svelte';
   import { tick, untrack } from 'svelte';
   import {
@@ -88,8 +96,9 @@
   const unknowns = $derived(dataTabState.basemapJoin.unrecognizedEntities);
   const joinedCount = $derived(dataTabState.basemapJoin.joinedEntities);
   const toVerifyCount = $derived(dataTabState.basemapJoin.entitiesToVerify);
-  const joinedEntitiesList = $derived(
-    dataTabState.basemapJoin.joinedEntitiesList
+  const duplicateTotal = $derived(dataTabState.basemapJoin.duplicateTotal);
+  const unrecognizedTotal = $derived(
+    dataTabState.basemapJoin.unrecognizedTotal
   );
   const ignoredEntities = $derived(
     dataTabState.basemapJoin.ignoredEntities.map((entity) => ({
@@ -97,6 +106,89 @@
       lines: entity.lines ?? []
     }))
   );
+
+  const JOINED_ENTITIES_PAGE_SIZE = 100;
+  let joinedPage = $state(1);
+  let joinedPageRows = $state.raw<JoinedEntity[]>([]);
+  let joinedBasemapValues = $state.raw<string[]>([]);
+  let joinedViewRequestId = 0;
+  let joinedViewLoading = false;
+
+  function resetJoinedEntitiesView(): void {
+    joinedViewRequestId += 1;
+    joinedViewLoading = false;
+    joinedPage = 1;
+    joinedPageRows = [];
+    joinedBasemapValues = [];
+  }
+
+  async function loadJoinedEntitiesView(page: number): Promise<void> {
+    const resolvedDatasetId = datasetIdForOrchestrator;
+    const linkedVariableName = dataTabState.geolocation.linkedVariableName;
+    const basemap = allBasemapsForLookup.find(
+      (b) => b.file === basemapSelected
+    );
+    if (!resolvedDatasetId || !linkedVariableName || !basemap) return;
+    if (isOSMBasemapId(basemap.file) || hasGPSCoordinates) return;
+    if (joinedViewLoading) return;
+
+    const requestId = ++joinedViewRequestId;
+    joinedViewLoading = true;
+    try {
+      const excludedValues = getIgnoredJoinValues();
+      const [rows, values] = await Promise.all([
+        duckDBOrchestrator.getJoinedEntitiesPage(
+          resolvedDatasetId,
+          basemap,
+          linkedVariableName,
+          {
+            offset: (page - 1) * JOINED_ENTITIES_PAGE_SIZE,
+            limit: JOINED_ENTITIES_PAGE_SIZE,
+            excludedValues
+          }
+        ),
+        duckDBOrchestrator.getJoinedBasemapValues(
+          resolvedDatasetId,
+          basemap,
+          linkedVariableName,
+          { excludedValues }
+        )
+      ]);
+      if (requestId !== joinedViewRequestId) return;
+      joinedPage = page;
+      joinedPageRows = rows;
+      joinedBasemapValues = values;
+    } catch (error) {
+      if (requestId !== joinedViewRequestId) return;
+      if (isDatasetNotFoundError(error, resolvedDatasetId)) return;
+      logger.error(
+        'Failed to load joined entities page',
+        LogCategory.MAP,
+        error
+      );
+    } finally {
+      if (requestId === joinedViewRequestId) {
+        joinedViewLoading = false;
+      }
+    }
+  }
+
+  function handleJoinedPageChange(page: number): void {
+    void loadJoinedEntitiesView(page);
+  }
+
+  function handleRequestJoinedEntities(): void {
+    if (joinedCount > 0 && joinedPageRows.length === 0) {
+      void loadJoinedEntitiesView(1);
+    }
+  }
+
+  $effect(() => {
+    void joinedCount;
+    void basemapSelected;
+    void dataTabState.geolocation.linkedVariableName;
+    resetJoinedEntitiesView();
+  });
 
   const allBasemaps = $derived(basemapCatalogService.catalogBasemaps);
   const allBasemapsForLookup = $derived(basemapCatalogService.basemaps);
@@ -144,7 +236,6 @@
   let currentJoinAbortController: AbortController | null = null;
   let previousJoinContext: string | null = null;
   let previousLinkedVariableName: string | null = null;
-  let previousFilterKey: string | null = null;
   let loadSuggestionsAbortController: AbortController | null = null;
   let hasDismissedSuggestedBasemap = $state(false);
   const hasGPSCoordinates = $derived.by(() => {
@@ -179,6 +270,11 @@
     getSelectedBasemapId: () => dataTabState.basemapJoin.selectedBasemap,
     getBasemaps: () => allBasemapsForLookup
   });
+
+  // Non-blocking prefetch: start the basemap_attributes load on step entry so
+  // the similarity-cache build awaits an already-warm table instead of the
+  // network. Errors surface later through the awaited join path.
+  void basemapService.ensureAttributesLoaded().catch(() => undefined);
 
   function hasAvailableBasemap(basemapId: string): boolean {
     if (!basemapId) return false;
@@ -260,22 +356,6 @@
 
   function isOSMBasemapId(basemapId: string): boolean {
     return basemapId.startsWith('osm_');
-  }
-
-  function getCurrentFilterKey(tableName: string | undefined): string {
-    if (!tableName) return '[]';
-
-    return JSON.stringify(
-      duckDBOrchestrator
-        .getFilters(tableName)
-        .map(({ column, operator, value, secondaryValue, limit }) => ({
-          column,
-          operator,
-          value,
-          secondaryValue,
-          limit
-        }))
-    );
   }
 
   function abortLoadSuggestions(): void {
@@ -372,9 +452,10 @@
     return (
       joinedCount > 0 ||
       toVerifyCount > 0 ||
+      duplicateTotal > 0 ||
+      unrecognizedTotal > 0 ||
       duplicates.length > 0 ||
       unknowns.length > 0 ||
-      joinedEntitiesList.length > 0 ||
       ignoredEntities.length > 0 ||
       joinRows.length > 0
     );
@@ -391,9 +472,20 @@
     await duckDBOrchestrator.finalizeJoin(resolvedDatasetId, basemap, '');
   }
 
+  async function capturePreFinalizeAnalysis(
+    sourceSnapshot: SourceSnapshot | null
+  ): Promise<AnalysisResults | undefined> {
+    if (!sourceSnapshot || !Duck) {
+      return undefined;
+    }
+
+    return Duck.analyse(sourceSnapshot.tableName);
+  }
+
   async function persistJoinSnapshot(
     joinState: PersistedJoinSnapshot = {},
-    sourceSnapshot = resolveSourceSnapshot()
+    sourceSnapshot = resolveSourceSnapshot(),
+    preFinalizeColumns?: AnalysisResults
   ) {
     if (!sourceSnapshot || !Duck) {
       return;
@@ -401,9 +493,10 @@
 
     const { sourceFileId, tableName } = sourceSnapshot;
 
-    const duckColumns = await Duck.analyse(tableName, {
-      force: true
-    });
+    const columns = preFinalizeColumns ?? (await Duck.analyse(tableName));
+    const duckColumns = columns.filter(
+      (column) => !JOINED_BASEMAP_COLUMNS.includes(column.name)
+    );
 
     await persistTabularSourceSnapshot({
       sourceFileId,
@@ -438,91 +531,103 @@
     }
 
     const loadingRequestId = beginJoinLoading();
+    let joinStateMutated = false;
     try {
-      const datasetReady = await waitForDatasetAvailability(resolvedDatasetId, {
-        abortSignal
-      });
+      return await persistenceRegistry.withPersistenceSuspended(async () => {
+        const datasetReady = await waitForDatasetAvailability(
+          resolvedDatasetId,
+          { abortSignal }
+        );
 
-      if (abortSignal.aborted) return false;
+        if (abortSignal.aborted) return false;
 
-      if (!datasetReady) {
-        return false;
-      }
+        if (!datasetReady) {
+          return false;
+        }
 
-      const stats = await duckDBOrchestrator.computeJoinStats(
-        resolvedDatasetId,
-        basemap,
-        linkedVariableName
-      );
-
-      if (abortSignal.aborted) {
-        return false;
-      }
-
-      dataTabActions.setJoinStats(stats);
-
-      if (stats.unrecognizedCount === 0 && stats.joinedCount === 0) {
-        basemapAttributes.clearValues();
-      }
-
-      if (stats.joinedCount === 0) {
-        dataTabStore.resetStepCompletion(stepIndex);
-        return false;
-      }
-
-      if (dataTabState.geolocation.linkedVariableName !== linkedVariableName) {
-        return false;
-      }
-
-      const currentDuckDataset =
-        duckDBOrchestrator.getDataset(resolvedDatasetId);
-      if (
-        currentDuckDataset?.joinedBasemap === basemap.file &&
-        currentDuckDataset.geoColumn &&
-        currentDuckDataset.geoColumn !== linkedVariableName
-      ) {
-        return false;
-      }
-
-      try {
-        await duckDBOrchestrator.finalizeJoin(
+        const stats = await duckDBOrchestrator.computeJoinStats(
           resolvedDatasetId,
           basemap,
           linkedVariableName,
           { excludedValues: getIgnoredJoinValues() }
         );
-        if (abortSignal.aborted) return false;
 
-        await persistJoinSnapshot(
-          {
-            joinedBasemap: basemap.file,
-            geoColumn: linkedVariableName,
-            gpsMode: false,
-            gpsColumns: undefined
-          },
-          sourceSnapshot
-        );
-        if (abortSignal.aborted) return false;
+        if (abortSignal.aborted) {
+          return false;
+        }
 
-        syncSelectedDatasetJoinedBasemap(basemap.file);
-        dataTabStore.markStepComplete(stepIndex);
-        return true;
-      } catch (finalizeError) {
+        joinStateMutated = true;
+        dataTabActions.setJoinStats(stats);
+        resetJoinedEntitiesView();
+
+        if (stats.unrecognizedCount === 0 && stats.joinedCount === 0) {
+          basemapAttributes.clearValues();
+        }
+
+        if (stats.joinedCount === 0) {
+          dataTabStore.resetStepCompletion(stepIndex);
+          return false;
+        }
+
         if (
-          abortSignal.aborted ||
-          isDatasetNotFoundError(finalizeError, resolvedDatasetId)
+          dataTabState.geolocation.linkedVariableName !== linkedVariableName
         ) {
           return false;
         }
 
-        logger.error(
-          'Failed to auto-finalize join',
-          LogCategory.MAP,
-          finalizeError
-        );
-        showError(m.join_error_title(), m.join_error_message());
-        return false;
-      }
+        const currentDuckDataset =
+          duckDBOrchestrator.getDataset(resolvedDatasetId);
+        if (
+          currentDuckDataset?.joinedBasemap === basemap.file &&
+          currentDuckDataset.geoColumn &&
+          currentDuckDataset.geoColumn !== linkedVariableName
+        ) {
+          return false;
+        }
+
+        try {
+          const preFinalizeColumns =
+            await capturePreFinalizeAnalysis(sourceSnapshot);
+          await duckDBOrchestrator.finalizeJoin(
+            resolvedDatasetId,
+            basemap,
+            linkedVariableName,
+            { excludedValues: getIgnoredJoinValues() }
+          );
+          if (abortSignal.aborted) return false;
+
+          await persistJoinSnapshot(
+            {
+              joinedBasemap: basemap.file,
+              geoColumn: linkedVariableName,
+              gpsMode: false,
+              gpsColumns: undefined
+            },
+            sourceSnapshot,
+            preFinalizeColumns
+          );
+          if (abortSignal.aborted) return false;
+
+          syncSelectedDatasetJoinedBasemap(basemap.file);
+          dataTabStore.markStepComplete(stepIndex);
+          return true;
+        } catch (finalizeError) {
+          if (
+            abortSignal.aborted ||
+            isDatasetNotFoundError(finalizeError, resolvedDatasetId)
+          ) {
+            return false;
+          }
+
+          logger.error(
+            'Failed to auto-finalize join',
+            LogCategory.MAP,
+            finalizeError
+          );
+          showError(m.join_error_title(), m.join_error_message());
+          return false;
+        }
+      });
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         return false;
@@ -539,6 +644,12 @@
       showError(m.join_error_title(), m.join_error_message());
       return false;
     } finally {
+      // Suspended notifications never mark dirty: without this notify the batch is never saved.
+      if (joinStateMutated) {
+        persistenceRegistry.notifyChange('dataTab', SavePriority.IMMEDIATE);
+      } else if (persistenceRegistry.isDirty) {
+        persistenceRegistry.notifyChange('dataTab', SavePriority.DEBOUNCED);
+      }
       endJoinLoading(loadingRequestId);
     }
   }
@@ -589,6 +700,14 @@
       basemapSource: BasemapSource.CATALOG
     });
 
+    // Non-blocking prefetch: fetch the basemap geometry while the join
+    // computes; the render path awaits the same deduplicated load later.
+    if (!isOSMBasemapId(basemap.file)) {
+      void basemapService
+        .getBasemapGeometryArrow(basemap.file)
+        .catch(() => undefined);
+    }
+
     const previousReferenceBasemapId = basemapStyleStore.referenceBasemapId;
     const isCached = basemapService.getCachedBasemap(basemap.file) !== null;
     if (isCached) {
@@ -600,12 +719,15 @@
 
     if (hasGPSMode && resolvedDatasetId) {
       try {
+        const preFinalizeColumns =
+          await capturePreFinalizeAnalysis(sourceSnapshot);
         await finalizeGPSJoinIfNeeded(basemap, resolvedDatasetId);
         if (abortSignal.aborted) return;
 
         await persistJoinSnapshot(
           resolveGPSJoinSnapshot(basemap.file, resolvedDatasetId),
-          sourceSnapshot
+          sourceSnapshot,
+          preFinalizeColumns
         );
         if (abortSignal.aborted) return;
 
@@ -757,12 +879,15 @@
       });
 
       if (hasGPSMode && resolvedDatasetId) {
+        const preFinalizeColumns =
+          await capturePreFinalizeAnalysis(sourceSnapshot);
         await finalizeGPSJoinIfNeeded(customBasemap, resolvedDatasetId);
         if (abortSignal.aborted) return;
 
         await persistJoinSnapshot(
           resolveGPSJoinSnapshot(customBasemap.file, resolvedDatasetId),
-          sourceSnapshot
+          sourceSnapshot,
+          preFinalizeColumns
         );
         if (abortSignal.aborted) return;
 
@@ -851,12 +976,15 @@
     }
 
     try {
+      const preFinalizeColumns =
+        await capturePreFinalizeAnalysis(sourceSnapshot);
       await finalizeGPSJoinIfNeeded(osmBasemap, resolvedDatasetId);
       if (abortSignal.aborted) return;
 
       await persistJoinSnapshot(
         resolveGPSJoinSnapshot(osmBasemap.file, resolvedDatasetId),
-        sourceSnapshot
+        sourceSnapshot,
+        preFinalizeColumns
       );
       if (abortSignal.aborted) return;
 
@@ -959,20 +1087,22 @@
         const stats = await duckDBOrchestrator.computeJoinStats(
           resolvedDatasetId,
           basemap,
-          linkedVariableName
+          linkedVariableName,
+          { excludedValues: getIgnoredJoinValues() }
         );
 
         if (abortSignal.aborted) return;
 
         dataTabActions.setJoinStats(stats);
+        resetJoinedEntitiesView();
 
-        if (stats.unrecognizedCount > 0 || stats.joinedCount > 0) {
-          basemapAttributes.fetchValues(basemap);
-        } else {
+        if (stats.unrecognizedCount === 0 && stats.joinedCount === 0) {
           basemapAttributes.clearValues();
         }
 
         if (stats.joinedCount > 0) {
+          const preFinalizeColumns =
+            await capturePreFinalizeAnalysis(sourceSnapshot);
           await duckDBOrchestrator.finalizeJoin(
             resolvedDatasetId,
             basemap,
@@ -989,7 +1119,8 @@
               gpsColumns: undefined,
               joinCorrections: persistedCorrections
             },
-            sourceSnapshot
+            sourceSnapshot,
+            preFinalizeColumns
           );
           if (abortSignal.aborted) return;
 
@@ -1040,7 +1171,7 @@
     basemapValue: string
   ): Promise<void> {
     if (!basemapValue) return;
-    dataTabActions.promoteToJoined(dataValue, basemapValue);
+    dataTabActions.promoteToJoined(dataValue);
     if (dataValue !== basemapValue) {
       await handleManualCorrection(dataValue, basemapValue);
       return;
@@ -1082,6 +1213,8 @@
 
     const loadingRequestId = beginJoinLoading();
     try {
+      const preFinalizeColumns =
+        await capturePreFinalizeAnalysis(sourceSnapshot);
       await duckDBOrchestrator.finalizeJoin(
         resolvedDatasetId,
         basemap,
@@ -1095,7 +1228,8 @@
           gpsMode: false,
           gpsColumns: undefined
         },
-        sourceSnapshot
+        sourceSnapshot,
+        preFinalizeColumns
       );
       syncSelectedDatasetJoinedBasemap(basemap.file);
 
@@ -1341,12 +1475,15 @@
 
             const loadingRequestId = beginJoinLoading();
             try {
+              const preFinalizeColumns =
+                await capturePreFinalizeAnalysis(sourceSnapshot);
               await finalizeGPSJoinIfNeeded(basemap, resolvedDatasetId);
               if (controller.signal.aborted) return;
 
               await persistJoinSnapshot(
                 resolveGPSJoinSnapshot(basemap.file, resolvedDatasetId),
-                sourceSnapshot
+                sourceSnapshot,
+                preFinalizeColumns
               );
               if (controller.signal.aborted) return;
 
@@ -1377,7 +1514,6 @@
           if (controller.signal.aborted || !datasetReady) return;
 
           const joinContext = `${resolvedDatasetId}::${basemap.file}`;
-          const filterKey = getCurrentFilterKey(selectedDataset?.tableName);
           if (
             isCatalogJoinFinalizedForBasemap(
               basemap.file,
@@ -1389,10 +1525,8 @@
             dataTabStore.markStepComplete(stepIndex);
             previousJoinContext = joinContext;
             previousLinkedVariableName = linkedVariableName;
-            previousFilterKey = filterKey;
 
             if (hasCurrentJoinStats()) {
-              basemapAttributes.requestValues();
               return;
             }
 
@@ -1401,13 +1535,12 @@
               const stats = await duckDBOrchestrator.computeJoinStats(
                 resolvedDatasetId,
                 basemap,
-                linkedVariableName
+                linkedVariableName,
+                { excludedValues: getIgnoredJoinValues() }
               );
               if (controller.signal.aborted) return;
               dataTabActions.setJoinStats(stats);
-              if (stats.unrecognizedCount > 0 || stats.joinedCount > 0) {
-                basemapAttributes.fetchValues(basemap);
-              }
+              resetJoinedEntitiesView();
               if (stats.joinedCount === 0) {
                 dataTabStore.resetStepCompletion(stepIndex);
               }
@@ -1443,16 +1576,14 @@
             const stats = await duckDBOrchestrator.computeJoinStats(
               resolvedDatasetId,
               basemap,
-              linkedVariableName
+              linkedVariableName,
+              { excludedValues: getIgnoredJoinValues() }
             );
             if (controller.signal.aborted) return;
             dataTabActions.setJoinStats(stats);
-            if (stats.unrecognizedCount > 0 || stats.joinedCount > 0) {
-              basemapAttributes.fetchValues(basemap);
-            }
+            resetJoinedEntitiesView();
             previousJoinContext = joinContext;
             previousLinkedVariableName = linkedVariableName;
-            previousFilterKey = filterKey;
 
             if (stats.joinedCount === 0) {
               dataTabStore.resetStepCompletion(stepIndex);
@@ -1547,12 +1678,10 @@
     const linkedVariableName = dataTabState.geolocation.linkedVariableName;
     const selectedBasemapId = basemapSelected;
     const resolvedDatasetId = datasetIdForOrchestrator;
-    const filterKey = getCurrentFilterKey(selectedDataset?.tableName);
 
     if (!selectedDataset || !selectedBasemapId || !resolvedDatasetId) {
       previousJoinContext = null;
       previousLinkedVariableName = null;
-      previousFilterKey = null;
       return;
     }
 
@@ -1560,7 +1689,6 @@
       dataTabActions.clearJoinStats();
       previousJoinContext = `${resolvedDatasetId}::${selectedBasemapId}`;
       previousLinkedVariableName = linkedVariableName || null;
-      previousFilterKey = filterKey;
       return;
     }
 
@@ -1568,28 +1696,18 @@
     if (previousJoinContext !== joinContext) {
       previousJoinContext = joinContext;
       previousLinkedVariableName = linkedVariableName || null;
-      previousFilterKey = filterKey;
       return;
     }
 
-    const filtersChanged = filterKey !== previousFilterKey;
     const linkedVariableChanged =
       linkedVariableName !== previousLinkedVariableName;
 
-    if (!linkedVariableName) {
+    if (!linkedVariableName || !linkedVariableChanged) {
       previousLinkedVariableName = linkedVariableName || null;
-      previousFilterKey = filterKey;
-      return;
-    }
-
-    if (!linkedVariableChanged && !filtersChanged) {
-      previousLinkedVariableName = linkedVariableName || null;
-      previousFilterKey = filterKey;
       return;
     }
 
     previousLinkedVariableName = linkedVariableName;
-    previousFilterKey = filterKey;
 
     const basemap = allBasemapsForLookup.find(
       (b) => b.file === selectedBasemapId
@@ -1597,7 +1715,6 @@
     if (!basemap) return;
 
     if (
-      !filtersChanged &&
       isCatalogJoinFinalizedForBasemap(
         selectedBasemapId,
         linkedVariableName,
@@ -1610,7 +1727,6 @@
 
     const existingDuckDataset = getCurrentDuckDataset(resolvedDatasetId);
     if (
-      !filtersChanged &&
       existingDuckDataset &&
       !existingDuckDataset.gpsMode &&
       existingDuckDataset.joinedBasemap === selectedBasemapId &&
@@ -1639,10 +1755,8 @@
     currentJoinAbortController = new AbortController();
     const abortSignal = currentJoinAbortController.signal;
 
-    if (linkedVariableChanged) {
-      dataTabActions.clearJoinStats();
-      dataTabStore.resetStepCompletion(basemapStepIndex);
-    }
+    dataTabActions.clearJoinStats();
+    dataTabStore.resetStepCompletion(basemapStepIndex);
 
     void computeAndAutoFinalizeJoin(basemap, abortSignal, linkedVariableName);
   });
@@ -1772,11 +1886,18 @@
     unknowns={unknowns}
     joinedCount={joinedCount}
     toVerifyCount={toVerifyCount}
+    duplicateTotal={duplicateTotal}
+    unrecognizedTotal={unrecognizedTotal}
     linkedVariableName={dataTabState.geolocation.linkedVariableName}
     basemapValues={basemapAttributes.values}
     loading={joinLoading}
     joinFinalized={dataTabStore.hasCompletedStep[basemapStepIndex]}
-    joinedEntitiesList={joinedEntitiesList}
+    joinedEntitiesList={joinedPageRows}
+    joinedPage={joinedPage}
+    joinedPageSize={JOINED_ENTITIES_PAGE_SIZE}
+    joinedBasemapValues={joinedBasemapValues}
+    onJoinedPageChange={handleJoinedPageChange}
+    onRequestJoinedEntities={handleRequestJoinedEntities}
     ignoredEntities={ignoredEntities}
     duplicateLines={dataTabState.basemapJoin.duplicateLines}
     basemapAliasesByValue={basemapAttributes.aliasesByValue}

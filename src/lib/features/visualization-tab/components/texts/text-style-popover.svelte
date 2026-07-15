@@ -224,7 +224,7 @@
   :global(.text-style-popover) {
     position: fixed;
     width: 320px;
-    max-height: calc(100vh - 32px);
+    max-height: min(80vh, calc(100dvh - 32px));
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-03, 8px);

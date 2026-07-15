@@ -232,6 +232,55 @@ describe('calculateBreaks', () => {
     expect(mockedDuckQuery.mock.calls[1]?.[0]).toContain('kmeans');
     expect(mockedDuckQuery.mock.calls[2]?.[0]).toContain('round_thresholds');
   });
+
+  it('clamps nested_means to the lower-or-equal power of two when classes reach the distinct count', async () => {
+    mockedGetDatasetBySourceFile.mockReturnValue({
+      tableName: 'vals_nested_clamp_test'
+    } as never);
+    mockedDuckQuery
+      .mockResolvedValueOnce(
+        makeTable({
+          row_count: 30,
+          distinct_count: 6,
+          min_val: 0,
+          max_val: 100
+        }) as never
+      )
+      .mockResolvedValueOnce(
+        makeTable({
+          breaks: [20, 45, 70]
+        }) as never
+      )
+      .mockResolvedValueOnce(
+        makeTable({
+          rounded: [20, 45, 70]
+        }) as never
+      )
+      .mockResolvedValueOnce(
+        makeTable({
+          cnt_0: 10,
+          cnt_1: 8,
+          cnt_2: 7,
+          cnt_3: 5
+        }) as never
+      );
+
+    const result = await calculateBreaks({
+      datasetId: 'source-nested-clamp',
+      columnName: 'value',
+      method: ClassificationMethod.NESTED_MEANS,
+      numClasses: 8
+    });
+
+    expect(result).toEqual({
+      breaks: [20, 45, 70],
+      counts: [10, 8, 7, 5],
+      min: 0,
+      max: 100
+    });
+    expect(mockedDuckQuery.mock.calls[1]?.[0]).toContain('nested_means');
+    expect(mockedDuckQuery.mock.calls[1]?.[0]).toContain(', 4)');
+  });
 });
 
 describe('calculateBreakCounts', () => {

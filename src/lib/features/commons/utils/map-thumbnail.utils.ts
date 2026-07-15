@@ -4,6 +4,7 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 const THUMBNAIL_MAX_WIDTH = 320;
 const THUMBNAIL_MAX_HEIGHT = 240;
 const THUMBNAIL_JPEG_QUALITY = 0.6;
+const THUMBNAIL_CAPTURE_INTERVAL_MS = 10_000;
 const MAP_CANVAS_SELECTOR = '.map-canvas canvas, .shared-facets-canvas canvas';
 
 export interface MapThumbnail {
@@ -60,6 +61,32 @@ function isBlankFrame(
   } catch {
     return false;
   }
+}
+
+let lastCaptureAt = Number.NEGATIVE_INFINITY;
+let forceNextCapture = false;
+
+/** Bypass the capture throttle on the next save (page close/blur). */
+export function forceNextMapThumbnailCapture(): void {
+  forceNextCapture = true;
+}
+
+/** Throttled GPU readback; a null return keeps the previous thumbnail in metadata. */
+export function captureMapThumbnailThrottled(): MapThumbnail | null {
+  const now = Date.now();
+  if (
+    !forceNextCapture &&
+    now - lastCaptureAt < THUMBNAIL_CAPTURE_INTERVAL_MS
+  ) {
+    return null;
+  }
+
+  const thumbnail = captureMapThumbnail();
+  if (thumbnail) {
+    lastCaptureAt = now;
+    forceNextCapture = false;
+  }
+  return thumbnail;
 }
 
 /** Capture a best-effort low-resolution map preview without forcing a redraw. */

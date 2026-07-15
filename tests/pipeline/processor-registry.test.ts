@@ -34,17 +34,16 @@ describe('processor-registry', () => {
     const mod =
       await import('$lib/features/data-pipeline/processors/processor-registry');
     expect(mod.getProcessor(uploaded('data.csv', FileType.CSV))).toBeNull();
-    expect(mod.hasProcessor(uploaded('data.csv', FileType.CSV))).toBe(false);
   });
 
-  it('returns the highest-priority matching processor', async () => {
+  it('returns the first matching processor in registration order', async () => {
     const mod =
       await import('$lib/features/data-pipeline/processors/processor-registry');
-    const low = processor(() => true);
-    const high = processor(() => true);
-    mod.registerProcessor(low, 1);
-    mod.registerProcessor(high, 10);
-    expect(mod.getProcessor(uploaded('data.csv', FileType.CSV))).toBe(high);
+    const first = processor(() => true);
+    const second = processor(() => true);
+    mod.registerProcessor(first);
+    mod.registerProcessor(second);
+    expect(mod.getProcessor(uploaded('data.csv', FileType.CSV))).toBe(first);
   });
 
   it('skips processors that cannot handle the file', async () => {
@@ -52,8 +51,8 @@ describe('processor-registry', () => {
       await import('$lib/features/data-pipeline/processors/processor-registry');
     const csv = processor((f) => f.fileType === FileType.CSV);
     const geo = processor((f) => f.fileType === FileType.GEOJSON);
-    mod.registerProcessor(csv, 5);
-    mod.registerProcessor(geo, 10);
+    mod.registerProcessor(csv);
+    mod.registerProcessor(geo);
     expect(mod.getProcessor(uploaded('data.csv', FileType.CSV))).toBe(csv);
     expect(mod.getProcessor(uploaded('geo.geojson', FileType.GEOJSON))).toBe(
       geo

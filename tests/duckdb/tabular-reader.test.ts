@@ -47,6 +47,7 @@ function createContext(): DuckDBContext {
     connection: {} as DuckDBContext['connection'],
     loaded_files: new Map(),
     registered_files: new Set(),
+    table_files: new Map(),
     table_metadata: new Map(),
     describeCache: new Map(),
     rowCountCache: new Map(),
@@ -95,6 +96,32 @@ describe('readTabular', () => {
     expect(importQuery).toContain("delim='|'");
     expect(importQuery).not.toContain('thousands=');
     expect(addRowIdMock).toHaveBeenCalledWith(ctx.connection, 'table"name');
+  });
+
+  it('drops the registered file handle once a File import succeeds', async () => {
+    const ctx = createContext();
+    const file = new File(['a,b\n1,2'], 'data.csv', { type: 'text/csv' });
+
+    await readTabular(ctx, file, { tablename: 'data_table' });
+
+    expect(dropRegisteredFileMock).toHaveBeenCalledTimes(1);
+    expect(dropRegisteredFileMock).toHaveBeenCalledWith(
+      ctx.db,
+      ctx.registered_files,
+      "registered:data.csv'suffix"
+    );
+  });
+
+  it('keeps the file handle registered when the import fails', async () => {
+    const ctx = createContext();
+    const file = new File(['a,b\n1,2'], 'data.csv', { type: 'text/csv' });
+    executeQueryMock.mockRejectedValue(new Error('import failed'));
+
+    await expect(
+      readTabular(ctx, file, { tablename: 'data_table', delimiter: ',' })
+    ).rejects.toThrow();
+
+    expect(dropRegisteredFileMock).not.toHaveBeenCalled();
   });
 
   it('rejects unsupported CSV delimiters before building SQL', async () => {

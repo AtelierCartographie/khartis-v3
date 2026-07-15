@@ -1,7 +1,6 @@
 export {
   getCategoricalColorMap,
   getColorForValue,
-  getSizeForValue,
   shouldApplyCategorical,
   shouldApplyChoropleth,
   shouldApplyProportionalSymbols

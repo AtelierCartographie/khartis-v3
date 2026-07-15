@@ -5,10 +5,12 @@ export function invalidateTableCache(ctx: DuckDBContext, table: string): void {
   ctx.rowCountCache.delete(table);
 }
 
-const tableMutationListeners = new Set<(table: string) => void>();
+const tableMutationListeners = new Set<
+  (table: string, ctx: DuckDBContext) => void
+>();
 
 export function registerTableMutationCallback(
-  callback: (table: string) => void
+  callback: (table: string, ctx: DuckDBContext) => void
 ): () => void {
   tableMutationListeners.add(callback);
   return () => tableMutationListeners.delete(callback);
@@ -17,7 +19,7 @@ export function registerTableMutationCallback(
 export function markTableMutated(ctx: DuckDBContext, table: string): void {
   invalidateTableCache(ctx, table);
   for (const listener of tableMutationListeners) {
-    listener(table);
+    listener(table, ctx);
   }
 }
 

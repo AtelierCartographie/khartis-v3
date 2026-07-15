@@ -10,6 +10,7 @@ import {
 
 const MIN_NON_EMPTY_VALUES = 2;
 const INTERNAL_COLUMNS: Set<string> = new Set([INTERNAL_COLUMN.ID]);
+const MIN_CONVERSIONS_FOR_TABLE_REWRITE = 2;
 
 interface DuckQueryClient {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
@@ -22,11 +23,9 @@ interface DescribeRow {
   type_simple?: string;
 }
 
-interface ColumnNormalizationStatsRow {
-  non_empty_count?: number | string;
-  convertible_count?: number | string;
-  formatted_count?: number | string;
-  decimal_like_count?: number | string;
+interface ColumnConversion {
+  name: string;
+  targetType: 'DOUBLE' | 'BIGINT';
 }
 
 function isStringColumn(column: DescribeRow): boolean {
@@ -43,6 +42,69 @@ function toCount(value: unknown): number {
   return Number(value ?? 0);
 }
 
+function buildRawValueExpr(columnName: string): string {
+  return `trim("${escapeIdentifier(columnName)}"::VARCHAR)`;
+}
+
+function buildConvertibilityCountersSql(
+  columnName: string,
+  index: number
+): string {
+  const rawValueExpr = buildRawValueExpr(columnName);
+  const normalizedNumericText = buildNormalizedNumericTextSql(rawValueExpr);
+  const decimalLikeCondition = buildDecimalLikeConditionSql(rawValueExpr);
+
+  return `
+    COUNT(*) FILTER (WHERE ${rawValueExpr} <> '') AS non_empty_${index},
+    COUNT(*) FILTER (
+      WHERE ${rawValueExpr} <> ''
+        AND TRY_CAST(${normalizedNumericText} AS DOUBLE) IS NOT NULL
+    ) AS convertible_${index},
+    COUNT(*) FILTER (
+      WHERE ${rawValueExpr} <> ''
+        AND regexp_matches(${rawValueExpr}, '[,. ]')
+    ) AS formatted_${index},
+    COUNT(*) FILTER (
+      WHERE ${rawValueExpr} <> ''
+        AND (${decimalLikeCondition})
+    ) AS decimal_like_${index}`;
+}
+
+function buildConversionCastSql(conversion: ColumnConversion): string {
+  const rawValueExpr = buildRawValueExpr(conversion.name);
+  const normalizedNumericText = buildNormalizedNumericTextSql(rawValueExpr);
+  return `TRY_CAST(${normalizedNumericText} AS ${conversion.targetType})`;
+}
+
+function selectEligibleConversions(
+  candidateColumns: string[],
+  stats: Record<string, unknown>
+): ColumnConversion[] {
+  const conversions: ColumnConversion[] = [];
+
+  candidateColumns.forEach((columnName, index) => {
+    const nonEmptyCount = toCount(stats[`non_empty_${index}`]);
+    const convertibleCount = toCount(stats[`convertible_${index}`]);
+    const formattedCount = toCount(stats[`formatted_${index}`]);
+    const decimalLikeCount = toCount(stats[`decimal_like_${index}`]);
+
+    if (
+      nonEmptyCount < MIN_NON_EMPTY_VALUES ||
+      formattedCount === 0 ||
+      convertibleCount !== nonEmptyCount
+    ) {
+      return;
+    }
+
+    conversions.push({
+      name: columnName,
+      targetType: decimalLikeCount > 0 ? 'DOUBLE' : 'BIGINT'
+    });
+  });
+
+  return conversions;
+}
+
 export async function normalizeFormattedNumericColumns(
   tableName: string,
   duck: DuckQueryClient
@@ -55,71 +117,65 @@ export async function normalizeFormattedNumericColumns(
     { format: 'array' }
   )) as DescribeRow[];
 
-  const candidateColumns = described
-    .filter(
-      (column) =>
-        column.name &&
-        !INTERNAL_COLUMNS.has(column.name) &&
-        isStringColumn(column)
-    )
-    .map((column) => column.name as string);
+  const candidateColumns: string[] = [];
+  for (const column of described) {
+    if (
+      column.name &&
+      !INTERNAL_COLUMNS.has(column.name) &&
+      isStringColumn(column)
+    ) {
+      candidateColumns.push(column.name);
+    }
+  }
 
   if (candidateColumns.length === 0) {
     return [];
   }
 
-  const convertedColumns: string[] = [];
+  const countersSelect = candidateColumns
+    .map((columnName, index) =>
+      buildConvertibilityCountersSql(columnName, index)
+    )
+    .join(',');
 
-  for (const columnName of candidateColumns) {
-    const escapedColumn = escapeIdentifier(columnName);
-    const rawValueExpr = `trim("${escapedColumn}"::VARCHAR)`;
-    const normalizedNumericText = buildNormalizedNumericTextSql(rawValueExpr);
-    const decimalLikeCondition = buildDecimalLikeConditionSql(rawValueExpr);
+  const statsResult = (await duck.query(
+    `SELECT ${countersSelect} FROM "${escapedTableIdentifier}"`,
+    { format: 'array' }
+  )) as Array<Record<string, unknown>>;
 
-    const statsResult = (await duck.query(
-      `SELECT
-        COUNT(*) FILTER (WHERE ${rawValueExpr} <> '') AS non_empty_count,
-        COUNT(*) FILTER (
-          WHERE ${rawValueExpr} <> ''
-            AND TRY_CAST(${normalizedNumericText} AS DOUBLE) IS NOT NULL
-        ) AS convertible_count,
-        COUNT(*) FILTER (
-          WHERE ${rawValueExpr} <> ''
-            AND regexp_matches(${rawValueExpr}, '[,. ]')
-        ) AS formatted_count,
-        COUNT(*) FILTER (
-          WHERE ${rawValueExpr} <> ''
-            AND (${decimalLikeCondition})
-        ) AS decimal_like_count
-      FROM "${escapedTableIdentifier}"`,
-      { format: 'array' }
-    )) as ColumnNormalizationStatsRow[];
+  const conversions = selectEligibleConversions(
+    candidateColumns,
+    statsResult[0] ?? {}
+  );
 
-    const stats = statsResult[0] ?? {};
-    const nonEmptyCount = toCount(stats.non_empty_count);
-    const convertibleCount = toCount(stats.convertible_count);
-    const formattedCount = toCount(stats.formatted_count);
-    const decimalLikeCount = toCount(stats.decimal_like_count);
+  if (conversions.length === 0) {
+    return [];
+  }
 
-    if (
-      nonEmptyCount < MIN_NON_EMPTY_VALUES ||
-      formattedCount === 0 ||
-      convertibleCount !== nonEmptyCount
-    ) {
-      continue;
-    }
+  if (conversions.length >= MIN_CONVERSIONS_FOR_TABLE_REWRITE) {
+    const replaceList = conversions
+      .map(
+        (conversion) =>
+          `${buildConversionCastSql(conversion)} AS "${escapeIdentifier(conversion.name)}"`
+      )
+      .join(', ');
 
-    const targetType = decimalLikeCount > 0 ? 'DOUBLE' : 'BIGINT';
+    await duck.query(
+      `CREATE OR REPLACE TABLE "${escapedTableIdentifier}" AS
+        SELECT * REPLACE (${replaceList})
+        FROM "${escapedTableIdentifier}"`
+    );
+  } else {
+    const [conversion] = conversions;
 
     await duck.query(
       `ALTER TABLE "${escapedTableIdentifier}"
-        ALTER COLUMN "${escapedColumn}" SET DATA TYPE ${targetType}
-        USING TRY_CAST(${normalizedNumericText} AS ${targetType})`
+        ALTER COLUMN "${escapeIdentifier(conversion.name)}" SET DATA TYPE ${conversion.targetType}
+        USING ${buildConversionCastSql(conversion)}`
     );
-    duck.invalidateTableCache?.(tableName);
-
-    convertedColumns.push(columnName);
   }
 
-  return convertedColumns;
+  duck.invalidateTableCache?.(tableName);
+
+  return conversions.map((conversion) => conversion.name);
 }

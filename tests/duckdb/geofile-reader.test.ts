@@ -4,11 +4,13 @@ import type { DuckDBContext } from '$lib/features/duckdb/types';
 const {
   executeQueryMock,
   registerFilesMock,
+  dropRegisteredFileMock,
   addRowIdMock,
   convertGeoPackageToGeoJsonFileMock
 } = vi.hoisted(() => ({
   executeQueryMock: vi.fn(),
   registerFilesMock: vi.fn(),
+  dropRegisteredFileMock: vi.fn(),
   addRowIdMock: vi.fn(),
   convertGeoPackageToGeoJsonFileMock: vi.fn()
 }));
@@ -31,6 +33,7 @@ vi.mock('$lib/features/duckdb/core/query', () => ({
 }));
 
 vi.mock('$lib/features/duckdb/io/file-registry', () => ({
+  dropRegisteredFile: dropRegisteredFileMock,
   generateUniqueTableName: vi.fn(() => 'generated_table'),
   registerFiles: registerFilesMock
 }));
@@ -51,6 +54,7 @@ function createContext(): DuckDBContext {
     connection: {} as DuckDBContext['connection'],
     loaded_files: new Map(),
     registered_files: new Set(),
+    table_files: new Map(),
     table_metadata: new Map(),
     describeCache: new Map(),
     rowCountCache: new Map(),
@@ -183,6 +187,64 @@ describe('readGeofile', () => {
         String(sql).includes('PRAGMA threads=1')
       )
     ).toBe(false);
+  });
+
+  it('drops the geofile handle once the table is materialized', async () => {
+    const ctx = createContext();
+    const geojsonFile = new File(['{}'], 'zones.geojson', {
+      type: 'application/geo+json'
+    });
+
+    executeQueryMock
+      .mockResolvedValueOnce([
+        {
+          layer_index: 1,
+          layer_name: 'zones',
+          feature_count: 2,
+          crs_code: 4326,
+          geom_name: 'geom',
+          geom_type: 'POLYGON'
+        }
+      ])
+      .mockResolvedValueOnce(new Uint8Array());
+
+    await readGeofile(ctx, geojsonFile, { tablename: 'zones_table' });
+
+    expect(dropRegisteredFileMock).toHaveBeenCalledTimes(1);
+    expect(dropRegisteredFileMock).toHaveBeenCalledWith(
+      ctx.db,
+      ctx.registered_files,
+      'registered:zones.geojson'
+    );
+    expect(ctx.table_files.has('zones_table')).toBe(false);
+  });
+
+  it('keeps shapefile handles registered and records the exact id for later cleanup', async () => {
+    const ctx = createContext();
+    const shpFile = new File(['shp'], 'roads.shp', {
+      type: 'application/octet-stream'
+    });
+
+    executeQueryMock
+      .mockResolvedValueOnce([
+        {
+          layer_index: 1,
+          layer_name: 'roads',
+          feature_count: 4,
+          crs_code: 4326,
+          geom_name: 'geom',
+          geom_type: 'LINESTRING'
+        }
+      ])
+      .mockResolvedValueOnce(new Uint8Array());
+
+    await readGeofile(ctx, shpFile, {
+      tablename: 'roads_table',
+      shapefile: true
+    });
+
+    expect(dropRegisteredFileMock).not.toHaveBeenCalled();
+    expect(ctx.table_files.get('roads_table')).toBe('registered:roads.shp');
   });
 
   it('preserves projected geofile coordinates at ingest and skips eager reprojection', async () => {

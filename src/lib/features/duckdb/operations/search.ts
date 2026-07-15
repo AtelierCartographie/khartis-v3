@@ -6,7 +6,11 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { registerTableMutationCallback } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
-import { executeQuery } from '../core/query';
+import {
+  executeCancellableQuery,
+  executeQuery,
+  isQueryAbortError
+} from '../core/query';
 import { buildStripHtmlTextSqlExpression } from '../utils/html-like-text.utils';
 import type { CellSearchResult, DuckDBContext, SearchStats } from '../types';
 
@@ -20,6 +24,7 @@ const CACHE_TTL_MS = 60000;
 const MAX_CACHE_SIZE = 50;
 
 let currentSearchId = 0;
+let activeSearchAbortController: AbortController | null = null;
 
 interface CacheEntry {
   results: SearchStats;
@@ -143,7 +148,11 @@ export async function searchInTable(
   ctx: DuckDBContext,
   table: string,
   searchQuery: string,
-  options: { threshold?: number; column?: string } = {}
+  options: {
+    threshold?: number;
+    column?: string;
+    signal?: AbortSignal;
+  } = {}
 ): Promise<SearchStats> {
   const { threshold = 0.85, column = null } = options;
   const emptyResult: SearchStats = {
@@ -167,6 +176,14 @@ export async function searchInTable(
   }
 
   const searchId = ++currentSearchId;
+  // A newer search supersedes the previous one: cancel its pending worker query.
+  activeSearchAbortController?.abort();
+  const abortController = new AbortController();
+  activeSearchAbortController = abortController;
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, abortController.signal])
+    : abortController.signal;
+
   const escapedQuery = escapeSqlString(trimmedQuery);
   const enableFuzzy = trimmedQuery.length >= MIN_QUERY_LENGTH_FOR_FUZZY;
   let isSampled = false;
@@ -250,9 +267,11 @@ export async function searchInTable(
       column
     );
 
-    const exactResults = (await executeQuery(ctx.connection, exactSQL, {
-      format: DUCK_CONST.QUERY_FORMAT.ARRAY
-    })) as Array<{
+    const exactResults = (await executeCancellableQuery(
+      ctx.connection,
+      exactSQL,
+      { format: DUCK_CONST.QUERY_FORMAT.ARRAY, signal }
+    )) as Array<{
       __id: number;
       column_name: string;
       column_value: string;
@@ -284,8 +303,9 @@ export async function searchInTable(
         column
       );
 
-      fuzzyResults = (await executeQuery(ctx.connection, fuzzySQL, {
-        format: DUCK_CONST.QUERY_FORMAT.ARRAY
+      fuzzyResults = (await executeCancellableQuery(ctx.connection, fuzzySQL, {
+        format: DUCK_CONST.QUERY_FORMAT.ARRAY,
+        signal
       })) as Array<{
         __id: number;
         column_name: string;
@@ -320,6 +340,9 @@ export async function searchInTable(
     setCache(cacheKey, result);
     return result;
   } catch (error) {
+    if (isQueryAbortError(error)) {
+      return emptyResult;
+    }
     logger.error('Search query failed', LogCategory.DUCKDB, {
       table,
       searchQuery,
@@ -327,6 +350,9 @@ export async function searchInTable(
     });
     throw error;
   } finally {
+    if (activeSearchAbortController === abortController) {
+      activeSearchAbortController = null;
+    }
     if (isSampled) {
       try {
         await executeQuery(

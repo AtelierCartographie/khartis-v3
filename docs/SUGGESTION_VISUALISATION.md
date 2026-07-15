@@ -71,7 +71,7 @@ Les lexiques (fr/en, accents normalisés) sont volontairement des **indices**, p
 
 ### Le scoring
 
-Chaque type reçoit un score additif à partir de ses signaux, puis les scores sont **normalisés par le maximum atteignable du type** — c'est ce qui rend les confiances comparables entre types dont les signaux n'ont pas la même richesse. Le type élu est celui du meilleur score normalisé ; le résultat expose aussi le **second meilleur** (`runnerUp`), ce qui permet de signaler une colonne ambiguë (« lisible comme stock ou comme ratio »).
+Chaque type reçoit un score additif à partir de ses signaux, puis les scores sont **normalisés par le maximum atteignable du type** — c'est ce qui rend les confiances comparables entre types dont les signaux n'ont pas la même richesse. Le type élu est celui du meilleur score normalisé ; le résultat expose aussi le **second meilleur** (`runnerUp`), un diagnostic interne exploité par les tests du corpus (aucune UI ne le consomme aujourd'hui).
 
 Signaux principaux par type :
 
@@ -165,7 +165,7 @@ Les suggestions sont triées par score, départagées par une préférence de fo
 - **Pas de choroplèthe de stocks**, même si l'utilisateur importe uniquement des valeurs absolues — la réponse est les symboles proportionnels.
 - **Pas de variables dérivées automatiques.** Calculer un ratio entre deux stocks à la place de l'utilisateur a été envisagé puis retiré : les suggestions offrent un panorama de départ, elles ne transforment pas les données — deviner le bon dénominateur est trop incertain, surtout face à un utilisateur averti qui sait ce qu'il veut calculer.
 - **Pas de combinaisons au-delà de deux variables** (pas de trivarié).
-- **Pas d'inférence du sens métier** : une colonne `1960` contenant des pourcentages n'est identifiable comme ratio que par sa distribution ; si les signaux sont contradictoires, le `runnerUp` matérialise le doute plutôt que de le cacher.
+- **Pas d'inférence du sens métier** : une colonne `1960` contenant des pourcentages n'est identifiable comme ratio que par sa distribution ; si les signaux sont contradictoires, le `runnerUp` conserve le second type en lice à des fins de diagnostic (tests du corpus), sans signalement dans l'interface.
 - **Pas de détection GPS complète** dans le typage sémio — c'est le rôle de la feature _geolocation_ (validation des plages, paires corrélées, inversions lat/lon).
 - **Aucune donnée ne quitte le navigateur** : le typage ne lit que des agrégats calculés localement par DuckDB WASM.
 

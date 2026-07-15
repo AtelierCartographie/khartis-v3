@@ -101,21 +101,16 @@ describe('executeQueryStreaming', () => {
     expect(bindings.runQuery).not.toHaveBeenCalled();
   });
 
-  it('falls back to a buffered query when streaming returns only the schema', async () => {
+  it('returns the schema-only stream without re-running the query when the result is empty', async () => {
     const emptyValues: number[] = [];
     const schemaOnlyBuffer = toIpcBuffer(
       tableFromArrays({
         value: emptyValues
       })
     );
-    const fallbackBuffer = toIpcBuffer(
-      tableFromArrays({
-        value: [1]
-      })
-    );
 
     const bindings: DuckDBStreamingBindings = {
-      runQuery: vi.fn().mockResolvedValue(fallbackBuffer),
+      runQuery: vi.fn(),
       startPendingQuery: vi.fn().mockResolvedValueOnce(schemaOnlyBuffer),
       pollPendingQuery: vi.fn(),
       fetchQueryResults: vi.fn().mockResolvedValueOnce(new Uint8Array()),
@@ -128,10 +123,54 @@ describe('executeQueryStreaming', () => {
       'SELECT * FROM dataset'
     );
 
-    expect([...result]).toEqual([...fallbackBuffer]);
-    expect(bindings.runQuery).toHaveBeenCalledWith(
-      'connection-id',
-      'SELECT * FROM dataset'
+    expect([...result]).toEqual([...schemaOnlyBuffer]);
+    expect(bindings.runQuery).not.toHaveBeenCalled();
+  });
+
+  it('cancels the pending query and throws an AbortError when the signal aborts during polling', async () => {
+    const abortController = new AbortController();
+    const bindings: DuckDBStreamingBindings = {
+      runQuery: vi.fn(),
+      startPendingQuery: vi.fn().mockResolvedValue(null),
+      pollPendingQuery: vi.fn().mockImplementation(async () => {
+        abortController.abort();
+        return null;
+      }),
+      fetchQueryResults: vi.fn(),
+      cancelPendingQuery: vi.fn().mockResolvedValue(true),
+      isDetached: vi.fn().mockReturnValue(false)
+    };
+
+    const request = executeQueryStreaming(
+      createConnection(bindings),
+      'SELECT * FROM dataset',
+      { signal: abortController.signal }
     );
+
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' });
+    expect(bindings.cancelPendingQuery).toHaveBeenCalledWith('connection-id');
+    expect(bindings.runQuery).not.toHaveBeenCalled();
+  });
+
+  it('throws an AbortError without starting the query when the signal is already aborted', async () => {
+    const abortController = new AbortController();
+    abortController.abort();
+
+    const bindings: DuckDBStreamingBindings = {
+      runQuery: vi.fn(),
+      startPendingQuery: vi.fn(),
+      pollPendingQuery: vi.fn(),
+      fetchQueryResults: vi.fn(),
+      cancelPendingQuery: vi.fn(),
+      isDetached: vi.fn().mockReturnValue(false)
+    };
+
+    await expect(
+      executeQueryStreaming(createConnection(bindings), 'SELECT 1', {
+        signal: abortController.signal
+      })
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(bindings.startPendingQuery).not.toHaveBeenCalled();
+    expect(bindings.cancelPendingQuery).not.toHaveBeenCalled();
   });
 });

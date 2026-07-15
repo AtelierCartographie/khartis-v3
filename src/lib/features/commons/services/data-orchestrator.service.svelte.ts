@@ -34,7 +34,7 @@ import {
   FileType,
   COLUMN_TRANSFORMATION_TYPES
 } from '../types/create-project.types';
-import { dataTabActions } from '../stores/data-tab.store.svelte';
+import { dataTabActions, dataTabState } from '../stores/data-tab.store.svelte';
 import { datasetsStore } from '../stores/datasets.store.svelte';
 import { globalActions, globalState } from '../stores/global.svelte';
 import { projectStore } from '../stores/project.store.svelte';
@@ -50,6 +50,7 @@ import {
   type VisualizationConfig
 } from '../stores/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
+import { PERF_PHASE, perfMark, perfMeasure } from '../utils/perf-marks.utils';
 import {
   notificationManager,
   showError,
@@ -87,6 +88,10 @@ import {
   resolveRequestedClassCount
 } from '$lib/features/commons/utils/discretization.utils';
 import * as m from '$lib/paraglide/messages';
+
+export interface ProjectChangeOptions {
+  isProjectCreation?: boolean;
+}
 
 function createDataOrchestratorService() {
   let geometryDatasetsVersion = $state(0);
@@ -255,6 +260,30 @@ function createDataOrchestratorService() {
     }
   }
 
+  const restoreFinalizedJoins = new Set<string>();
+
+  function joinRestoreKey(
+    sourceFileId: string,
+    joinedBasemap: string,
+    geoColumn: string
+  ): string {
+    return `${sourceFileId}::${joinedBasemap}::${geoColumn}`;
+  }
+
+  // The persisted ignoredEntities belong to the single join the dataTab store
+  // describes; applying them to another file's finalize would drop rows there.
+  function resolveRestoredJoinExcludedValues(sourceFileId: string): string[] {
+    const dataTabJoinOwner = resolveRestoredJoinFile(
+      projectStore.currentProject
+    );
+    if (dataTabJoinOwner?.id !== sourceFileId) {
+      return [];
+    }
+    return dataTabState.basemapJoin.ignoredEntities.map(
+      (entity) => entity.dataValue
+    );
+  }
+
   async function restoreJoinState(
     duckDatasetId: string,
     file: UploadedFile
@@ -295,7 +324,15 @@ function createDataOrchestratorService() {
       await duckDBOrchestrator.finalizeJoin(
         duckDatasetId,
         basemap,
-        restoredJoinState.geoColumn
+        restoredJoinState.geoColumn,
+        { excludedValues: resolveRestoredJoinExcludedValues(file.id) }
+      );
+      restoreFinalizedJoins.add(
+        joinRestoreKey(
+          file.id,
+          restoredJoinState.joinedBasemap,
+          restoredJoinState.geoColumn
+        )
       );
     } catch {
       return;
@@ -1235,10 +1272,14 @@ function createDataOrchestratorService() {
         return;
       }
 
+      const excludedValues = dataTabState.basemapJoin.ignoredEntities.map(
+        (entity) => entity.dataValue
+      );
       const stats = await duckDBOrchestrator.computeJoinStats(
         sourceFileId,
         basemap,
-        geoColumn
+        geoColumn,
+        { excludedValues }
       );
       if (!isCurrentProjectRuntime(restoreRun)) {
         return;
@@ -1251,9 +1292,24 @@ function createDataOrchestratorService() {
         return;
       }
 
-      await duckDBOrchestrator.finalizeJoin(sourceFileId, basemap, geoColumn);
-      if (!isCurrentProjectRuntime(restoreRun)) {
-        return;
+      // restoreJoinState already applied this exact join, with the same
+      // excluded values, during the current restore run; finalizing again
+      // would only rewrite the same table.
+      const alreadyFinalized = restoreFinalizedJoins.delete(
+        joinRestoreKey(sourceFileId, joinedBasemap, geoColumn)
+      );
+      if (!alreadyFinalized) {
+        await duckDBOrchestrator.finalizeJoin(
+          sourceFileId,
+          basemap,
+          geoColumn,
+          {
+            excludedValues
+          }
+        );
+        if (!isCurrentProjectRuntime(restoreRun)) {
+          return;
+        }
       }
 
       dataTabStore.markStepComplete(stepIndex);
@@ -1376,7 +1432,18 @@ function createDataOrchestratorService() {
     }
   }
 
-  async function restoreCurrentProjectState(): Promise<void> {
+  function collectCreationTableNames(
+    project: typeof projectStore.currentProject
+  ): string[] {
+    const sourceFiles = project?.data?.sourceFiles ?? [];
+    return sourceFiles.flatMap((file) =>
+      file.duckdbTableName ? [file.duckdbTableName] : []
+    );
+  }
+
+  async function restoreCurrentProjectState(
+    options: ProjectChangeOptions = {}
+  ): Promise<void> {
     const restoreRun = captureProjectRuntime();
     const restoreToken = activeGeoColumnRestoreToken;
     const currentProject = projectStore.currentProject;
@@ -1396,7 +1463,16 @@ function createDataOrchestratorService() {
       currentProject?.data as SerializedProjectData | undefined
     )?.layoutSettings?.projection;
 
+    // Creation fast-path: the create modal just imported these tables, so the
+    // clear keeps them and registerExistingTable reuses them without re-import.
+    // Reopen and project-switch paths keep the full clear.
+    const preservedCreationTableNames = options.isProjectCreation
+      ? collectCreationTableNames(currentProject)
+      : [];
+
     projectRestoreInProgress = true;
+    restoreFinalizedJoins.clear();
+    perfMark(PERF_PHASE.PROJECT_RESTORE);
 
     try {
       await persistenceRegistry.withPersistenceSuspended(async () => {
@@ -1406,7 +1482,11 @@ function createDataOrchestratorService() {
         processedFileIds.clear();
         processingFiles.clear();
 
-        await duckDBOrchestrator.clear();
+        await duckDBOrchestrator.clear(
+          preservedCreationTableNames.length > 0
+            ? { preserveTableNames: preservedCreationTableNames }
+            : undefined
+        );
 
         if (!isCurrentProjectRuntime(restoreRun)) {
           return;
@@ -1493,6 +1573,8 @@ function createDataOrchestratorService() {
         projectAlreadyRestored = true;
       }
     } finally {
+      restoreFinalizedJoins.clear();
+      perfMeasure(PERF_PHASE.PROJECT_RESTORE);
       if (isCurrentProjectRuntime(restoreRun)) {
         projectRestoreInProgress = false;
       }
@@ -1508,10 +1590,12 @@ function createDataOrchestratorService() {
     await restoreCurrentProjectState();
   }
 
-  async function onProjectChanged(): Promise<void> {
+  async function onProjectChanged(
+    options: ProjectChangeOptions = {}
+  ): Promise<void> {
     await duckDBOrchestrator.waitForInitialization();
     cancelPendingGeoColumnRestore();
-    await restoreCurrentProjectState();
+    await restoreCurrentProjectState(options);
   }
 
   return {

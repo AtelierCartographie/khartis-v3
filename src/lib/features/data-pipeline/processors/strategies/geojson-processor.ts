@@ -8,6 +8,7 @@ import type {
   ProcessContext,
   ProcessorDataset
 } from '../file-processor.interface';
+import { buildProcessorDataset } from './processor-utils';
 
 function createGeoFile(file: UploadedFile): File {
   const content = file.content ?? JSON.stringify(file.parsedData);
@@ -26,21 +27,7 @@ async function processWithSTRead(
   const actualTableName =
     typeof resultTableName === 'string' ? resultTableName : ctx.tableName;
 
-  const [columns, rowCount] = await Promise.all([
-    ctx.Duck.analyse(actualTableName),
-    ctx.callbacks.getRowCount(actualTableName)
-  ]);
-
-  return {
-    id: file.datasetId ?? file.id,
-    tableName: actualTableName,
-    sourceFileId: file.id,
-    name: file.name,
-    columns,
-    rowCount,
-    metadata: { processedAt: new Date(), fileType: file.fileType },
-    geoDetection: file.deepAnalysis?.geoDetection
-  };
+  return buildProcessorDataset(ctx, file, actualTableName);
 }
 
 export const geojsonProcessor: FileProcessor = {

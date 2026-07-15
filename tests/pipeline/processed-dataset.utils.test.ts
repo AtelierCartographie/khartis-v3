@@ -18,7 +18,6 @@ function makeDatasetResult(
       {
         name: 'id',
         type: ColumnType.NUMBER,
-        values: [],
         stats: {
           name: 'id',
           type: ColumnType.NUMBER,
@@ -30,7 +29,6 @@ function makeDatasetResult(
       {
         name: 'name',
         type: ColumnType.TEXT,
-        values: ['a', 'b', 'c'],
         stats: {
           name: 'name',
           type: ColumnType.TEXT,

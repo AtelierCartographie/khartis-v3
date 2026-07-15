@@ -1,4 +1,4 @@
-import proj4 from 'proj4';
+import proj4, { type Converter } from 'proj4';
 import * as m from '$lib/paraglide/messages';
 import { GEO_CONSTANTS } from '../constants';
 import {
@@ -25,26 +25,47 @@ interface ReprojectResult {
   error?: string;
 }
 
+interface ConverterCacheEntry {
+  converter: Converter | null;
+}
+
+const converterCache = new Map<string, ConverterCacheEntry>();
+
+function resolveConverter(fromCRS: string, toCRS: string): ConverterCacheEntry {
+  const cacheKey = `${fromCRS}::${toCRS}`;
+  const cached = converterCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  initializeProj4();
+  const fromNormalized = normalizeProj4CrsCode(fromCRS);
+  const toNormalized = normalizeProj4CrsCode(toCRS);
+  const entry: ConverterCacheEntry = isProjectionSupported(fromNormalized)
+    ? { converter: proj4(fromNormalized, toNormalized) }
+    : { converter: null };
+
+  converterCache.set(cacheKey, entry);
+  return entry;
+}
+
 export function reprojectPoint(
   x: number,
   y: number,
   fromCRS: string,
   toCRS: string = GEO_CONSTANTS.WGS84_CRS
 ): ReprojectResult {
-  initializeProj4();
-
   try {
-    const fromNormalized = normalizeProj4CrsCode(fromCRS);
-    const toNormalized = normalizeProj4CrsCode(toCRS);
+    const { converter } = resolveConverter(fromCRS, toCRS);
 
-    if (!isProjectionSupported(fromNormalized)) {
+    if (!converter) {
       return {
         success: false,
         error: m.error_unsupported_source_projection({ fromCRS })
       };
     }
 
-    const result = proj4(fromNormalized, toNormalized, [x, y]);
+    const result = converter.forward([x, y]);
 
     if (!result || !isFinite(result[0]) || !isFinite(result[1])) {
       return {

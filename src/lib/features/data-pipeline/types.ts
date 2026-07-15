@@ -15,9 +15,7 @@ export {
   GeoLocationType,
   GeometryTypeEnum,
   isNumericType,
-  isZipDatasetResult,
-  validationFailure,
-  validationSuccess
+  isZipDatasetResult
 } from './enums';
 
 // Column-related types
@@ -25,10 +23,7 @@ export type {
   ColumnAnalysis,
   ColumnInfo,
   ColumnStats,
-  DuckAnalyticsColumn,
-  EnrichedColumn,
-  InferredColumn,
-  RawColumn
+  EnrichedColumn
 } from './types/column.types';
 
 // Geometry-related types
@@ -43,7 +38,6 @@ export type {
 export type {
   DatasetResult,
   ProcessedDataset,
-  RawDataset,
   ZipDatasetResult
 } from './types/dataset.types';
 
@@ -53,6 +47,5 @@ export type {
   DatasetMetadata,
   FileFormat,
   FileInfo,
-  UploadedFilePayload,
-  ValidationResult
+  UploadedFilePayload
 } from './types/import.types';

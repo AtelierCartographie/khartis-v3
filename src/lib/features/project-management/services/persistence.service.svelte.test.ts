@@ -310,6 +310,37 @@ describe('project persistence', () => {
     ]);
   });
 
+  it('uses the caller-provided size for metadata instead of re-estimating the project', async () => {
+    const database = new FakeDatabase();
+    installFakeIndexedDb(database);
+
+    const project = {
+      id: 'project-size',
+      manifest: {
+        version: PROJECT_CONST.SCHEMA_VERSION,
+        createdAt: new Date('2026-04-16T00:00:00.000Z'),
+        updatedAt: new Date('2026-04-16T00:00:00.000Z'),
+        name: 'Sized Project',
+        format: 'kh' as const
+      },
+      data: {
+        sourceFiles: []
+      }
+    };
+
+    const { saveProject, listMetadata } = await import('./persistence.service');
+    const { estimateProjectStorageSize } =
+      await import('$lib/features/commons/utils/size-estimation.utils');
+
+    await saveProject(project as never, undefined, undefined, 4242);
+
+    const metadata = await listMetadata();
+    expect(metadata.find((entry) => entry.id === 'project-size')?.size).toBe(
+      4242
+    );
+    expect(vi.mocked(estimateProjectStorageSize)).not.toHaveBeenCalled();
+  });
+
   it('waits for legacy metadata migration before listing saved projects', async () => {
     const database = new FakeDatabase();
     installFakeIndexedDb(database);

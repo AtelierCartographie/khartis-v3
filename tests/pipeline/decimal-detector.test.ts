@@ -58,6 +58,28 @@ describe('decimal-detector', () => {
       expect(result.separator).toBe('.');
     });
 
+    it('should detect european when comma decimals carry no thousands grouping', async () => {
+      const file = asFile(
+        [
+          'id;city;rate',
+          '1;Paris;1234,56',
+          '2;Berlin;9876,5',
+          '3;Rome;1234,5678'
+        ].join('\n')
+      );
+      const result = await detectDecimalSeparator(file);
+      expect(result.separator).toBe(',');
+      expect(result.thousandsSeparator).toBeUndefined();
+    });
+
+    it('should stay standard when comma values have exactly 3 decimals (thousands-grouping ambiguity)', async () => {
+      const file = asFile(
+        ['id;city;value', '1;Paris;1234,567', '2;Berlin;9876,543'].join('\n')
+      );
+      const result = await detectDecimalSeparator(file);
+      expect(result.separator).toBe('.');
+    });
+
     it('stays standard when european values are below the 30% ratio', async () => {
       const rows: string[] = ['id,value'];
       for (let i = 0; i < 8; i++) rows.push(`${i},${i}.${i}0`);

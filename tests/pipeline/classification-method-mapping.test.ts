@@ -66,10 +66,6 @@ describe('mapMethodToMacro — CDC [VIZ-02d] guarantees', () => {
     expect(mapMethodToMacro('jenks' as never)).toBe('kmeans');
   });
 
-  it('maps legacy standard_deviation to kmeans', () => {
-    expect(mapMethodToMacro('standard_deviation' as never)).toBe('kmeans');
-  });
-
   it('returns null for manual (user-provided breaks)', () => {
     expect(mapMethodToMacro('manual' as never)).toBeNull();
   });

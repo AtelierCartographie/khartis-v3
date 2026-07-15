@@ -105,31 +105,6 @@ const nested_means_macro = `CREATE OR REPLACE MACRO nested_means(tabname, colnam
 );`;
 
 // By Éric Mauvière, https://observablehq.com/@ericmauviere/head-tail-breaks
-const headtail_macro = `CREATE OR REPLACE MACRO headtail(tabname, colname, nb := 10, threshold := ${FUZZY_SEARCH.HEAD_TAIL_THRESHOLD}) AS (
-              WITH RECURSIVE values AS (
-                    FROM query_table(tabname::VARCHAR)
-                    SELECT COLUMNS(c -> c = colname) AS value
-                    WHERE COLUMNS(c -> c = colname) IS NOT NULL
-              ), headtail(break, values_count) AS (
-                    -- Initialization with break = average, values_count = number of observations
-                    FROM values
-                    SELECT avg(value),   -- break
-                    count(*)              -- values_count
-
-                    UNION ALL
-
-                    -- next headtail refers to the last row of the growing table
-                    FROM values, headtail
-                    SELECT avg(value),    -- next break
-                    count(*) head_count    -- next values_count
-                    WHERE value > headtail.break
-                    GROUP BY ALL
-                    HAVING head_count > 1 AND head_count / headtail.values_count <= threshold
-            )
-            FROM headtail
-            SELECT list(break)[1:nb - 1] AS breaks
-        );`;
-
 const headtail2_macro = `CREATE OR REPLACE MACRO headtail2(tabname, colname, nb := 10, threshold := ${FUZZY_SEARCH.HEAD_TAIL_THRESHOLD}) AS (
               WITH RECURSIVE values AS (
                   FROM query_table(tabname::VARCHAR)
@@ -161,49 +136,80 @@ const headtail2_macro = `CREATE OR REPLACE MACRO headtail2(tabname, colname, nb 
               SELECT list(break)[1:nb - 1] AS breaks
         );`;
 
-// By Éric Mauvière,
-// for a visual explanation of the method: https://www.youtube.com/watch?v=5I3Ei69I40s
+/**
+ * SQL macro for natural-breaks classification via deterministic 1-D k-means.
+ *
+ * Runs Lloyd's algorithm on the distinct values weighted by their multiplicity:
+ * `nb` clusters seeded on distinct-value quantiles (independent of physical row
+ * order), each value assigned to a single nearest centroid (ties go to the
+ * lowest centroid), iterated until the centroids stop moving or `maxiter` is
+ * reached. Returns the nb-1 inter-cluster midpoints
+ * (max of lower cluster + min of upper cluster) / 2, which keeps every break in
+ * the empty interval between observed values so it composes with
+ * `round_thresholds` and the [a, b[ classing convention.
+ *
+ * @param tabname - The name of the table to query.
+ * @param colname - The name of the column to classify.
+ * @param nb - The number of classes (default is 5); clusters = nb exactly.
+ * @param maxiter - Iteration cap guarding convergence (default is 30).
+ */
 const kmeans_macro = `CREATE OR REPLACE MACRO kmeans(tabname, colname, nb := 5, maxiter := 30) AS (
   WITH RECURSIVE values AS (
     FROM query_table(tabname::VARCHAR)
-    SELECT ROW_NUMBER() OVER() id, COLUMNS(c -> c = colname) AS value
+    SELECT COLUMNS(c -> c = colname)::DOUBLE AS value, count(*) AS cnt
     WHERE COLUMNS(c -> c = colname) IS NOT NULL
-  ), clusters(iter, cid, x) AS (
-    (SELECT 0, id, value FROM values LIMIT nb-1) --USING SAMPLE 10% (bernoulli) --USING SAMPLE nb-1
-    UNION ALL
-    SELECT iter + 1, cid, avg(px) FROM (
-      SELECT iter, cid, p.value as px,
-      rank() OVER (PARTITION BY p.id ORDER BY (p.value-c.x)^2, c.x^2) r
-      FROM values p, clusters c
-    ) x
-    WHERE x.r = 1 and iter < maxiter
     GROUP BY ALL
+  ), seeds AS (
+    FROM values
+    SELECT list_sort(list_distinct(
+      quantile_disc(value, list_transform(range(0, nb), i -> (2*i + 1)::DOUBLE / (2*nb)))
+    )) AS centroids
+  ), iters(iter, centroids) AS (
+    FROM seeds SELECT 0, centroids
+    UNION ALL
+    (
+      WITH expanded AS (
+        FROM iters, values
+        SELECT iter, centroids, value, cnt, unnest(centroids) AS cx
+      ), nearest AS (
+        FROM expanded
+        SELECT iter, centroids, value, cnt, cx,
+          row_number() OVER (PARTITION BY value ORDER BY abs(value - cx), cx) AS r
+      ), updated AS (
+        FROM nearest
+        SELECT iter, centroids, sum(value * cnt) / sum(cnt) AS x
+        WHERE r = 1
+        GROUP BY iter, centroids, cx
+      )
+      FROM updated
+      SELECT iter + 1, list(x ORDER BY x) AS next_centroids
+      GROUP BY iter, centroids
+      HAVING iter < maxiter AND next_centroids <> centroids
+    )
+  ), final AS (
+    FROM iters
+    SELECT centroids
+    ORDER BY iter DESC
+    LIMIT 1
+  ), assigned AS (
+    FROM (
+      FROM final, values
+      SELECT value, unnest(centroids) AS cx
+    )
+    SELECT value, cx,
+      row_number() OVER (PARTITION BY value ORDER BY abs(value - cx), cx) AS r
+  ), bounds AS (
+    FROM assigned
+    SELECT cx, min(value) AS lo, max(value) AS hi
+    WHERE r = 1
+    GROUP BY cx
+  ), mids AS (
+    FROM bounds
+    SELECT (hi + lead(lo) OVER (ORDER BY cx)) / 2 AS brk
+    QUALIFY brk IS NOT NULL
   )
-
-  FROM (FROM clusters WHERE iter = maxiter ORDER BY x)
-  SELECT list(x)
-);`;
-
-// Class membership for each value
-/**
- * SQL macro to classify a column value based on specified breaks.
- *
- * Creates a temporary table with distinct break values and assigns a class number
- * to each value in the column based on its position relative to the breaks.
- * If the column value is null, the result will also be null.
- *
- * @param colname - The name of the column to classify.
- * @param breaks - An array of break values to classify the column.
- */
-const add_class_macro = `CREATE OR REPLACE MACRO add_class(colname, breaks) AS (
-	WITH t1 AS (
-		SELECT unnest(list_distinct(breaks)) as break
-	), t2 AS (
-		FROM t1
-		SELECT COUNT(*) + 1 as class
-	  WHERE try_cast(break as double) <= try_cast("colname" as double)
-	) FROM t2
-	SELECT IF("colname" IS NULL, NULL, class)
+  FROM mids
+  SELECT list(brk ORDER BY brk)
 );`;
 
 // Rounds thresholds without betraying their relative positions in the series
@@ -293,15 +299,13 @@ const round_thresholds_macro = `CREATE OR REPLACE MACRO round_left(n) AS (
 
 /**
  * Combination of all macro functions for data classification:
- * quantile, q6, equi_width, nested_means, headtail, headtail2, kmeans, add_class, round_thresholds.
+ * quantile, q6, equi_width, nested_means, headtail2, kmeans, round_thresholds.
  */
 export const breaks =
   quantile_macro +
   q6_macro +
   equi_width_macro +
   nested_means_macro +
-  headtail_macro +
   headtail2_macro +
   kmeans_macro +
-  add_class_macro +
   round_thresholds_macro;

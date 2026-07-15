@@ -3,15 +3,8 @@ import { FileType, type DuckDBDataset } from '../types';
 import type { DuckDBClientForDataset } from './dataset-ops';
 
 vi.mock('$lib/features/data-pipeline', () => ({
-  generateTableName: vi.fn()
-}));
-
-vi.mock('$lib/features/data-pipeline/processors/processor-registry', () => ({
+  generateTableName: vi.fn(),
   getProcessor: vi.fn(),
-  hasProcessor: vi.fn()
-}));
-
-vi.mock('$lib/features/data-pipeline/processors/register-processors', () => ({
   registerAllProcessors: vi.fn()
 }));
 
@@ -31,6 +24,16 @@ describe('dataset-ops', () => {
 
     expect(duck.dropTable).toHaveBeenCalledWith('imported"table');
     expect(query).not.toHaveBeenCalled();
+  });
+
+  it('rethrows when the Duck drop fails so callers do not assume the table is gone', async () => {
+    const dropError = new Error('drop failed');
+    const duck = {
+      query: vi.fn().mockResolvedValue([]),
+      dropTable: vi.fn().mockRejectedValue(dropError)
+    } as unknown as DuckDBClientForDataset;
+
+    await expect(dropTable('broken_table', duck)).rejects.toThrow(dropError);
   });
 
   it('does not bump the datasets version when join info is unchanged', () => {

@@ -1,7 +1,7 @@
 import { STORAGE_LIMITS } from '$lib/features/commons/constants/validation.config';
 import { extractUrlsFromInput } from '$lib/features/commons/utils/file-import.utils';
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
-import type { ValidationResult } from '$lib/features/data-pipeline/types';
+import type { ValidationResult } from '$lib/features/commons/types/validation.types';
 import * as m from '$lib/paraglide/messages';
 
 interface MultiFileValidationResult {

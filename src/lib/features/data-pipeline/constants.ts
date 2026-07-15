@@ -1,67 +1,20 @@
+import {
+  CSV_DELIMITERS,
+  FILE_ENCODING,
+  FILE_EXTENSION_GROUPS
+} from '$lib/features/commons/constants/file-types.constants';
+
 export const PIPELINE_CONST = {
-  EXTENSIONS: {
-    TABULAR: ['.csv', '.tsv', '.txt'] as const,
-    GEO: [
-      '.geojson',
-      '.json',
-      '.shp',
-      '.gpkg',
-      '.kml',
-      '.kmz',
-      '.gpx'
-    ] as const,
-    PARQUET: ['.parquet', '.geoparquet', '.gpq'] as const,
-    ZIP: ['.zip'] as const,
-    SHAPEFILE_REQUIRED: ['.shp', '.shx', '.dbf'] as const,
-    SHAPEFILE_OPTIONAL: [
-      '.prj',
-      '.cpg',
-      '.sbn',
-      '.sbx',
-      '.fbn',
-      '.fbx',
-      '.ain',
-      '.aih',
-      '.ixs',
-      '.mxs',
-      '.atx',
-      '.xml'
-    ] as const,
-    ALL: [
-      '.csv',
-      '.tsv',
-      '.txt',
-      '.parquet',
-      '.arrow',
-      '.geojson',
-      '.json',
-      '.shp',
-      '.gpkg',
-      '.kml',
-      '.kmz',
-      '.gpx',
-      '.geoparquet',
-      '.gpq',
-      '.zip'
-    ] as const
-  },
-  LIMITS: {
-    MAX_FILE_SIZE: 200 * 1024 * 1024,
-    WARNING_FILE_SIZE: 120 * 1024 * 1024,
-    SAMPLE_ROWS: 100,
-    TYPE_THRESHOLD: 0.8
-  },
+  EXTENSIONS: FILE_EXTENSION_GROUPS,
   QUALITY: {
     HIGH_NULL_RATIO_THRESHOLD: 0.5,
     LOW_CARDINALITY_THRESHOLD: 0.01
   },
   CSV: {
-    SUPPORTED_DELIMITERS: [';', ',', '\t', '|'] as const,
-    DEFAULT_DELIMITER: ','
+    SUPPORTED_DELIMITERS: CSV_DELIMITERS.SUPPORTED,
+    DEFAULT_DELIMITER: CSV_DELIMITERS.DEFAULT
   },
-  ENCODING: {
-    DEFAULT: 'UTF-8'
-  }
+  ENCODING: FILE_ENCODING
 } as const;
 
 export function isGeospatialFile(name: string): boolean {

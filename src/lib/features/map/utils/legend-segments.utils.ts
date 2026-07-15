@@ -1239,7 +1239,10 @@ function getLineWidthLegendDraft(
   const classCount = getClassificationClassCount(classification);
   const steps: KhartisLineWidthLegendStep[] = scale.steps.map((step) => ({
     label: getLegendStepLabel(step, breaks, classCount),
-    width: getLineLegendDisplayWidth(scale, step.size),
+    width:
+      scale.kind === 'proportional'
+        ? step.size
+        : getLineLegendDisplayWidth(scale, step.size),
     color: scale.color,
     opacity: scale.opacity,
     dashed: scale.dashed

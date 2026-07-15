@@ -71,7 +71,6 @@ function buildColumn(name: string, type: ColumnType): EnrichedColumn {
   return {
     name,
     type,
-    values: [],
     stats: {
       name,
       type,

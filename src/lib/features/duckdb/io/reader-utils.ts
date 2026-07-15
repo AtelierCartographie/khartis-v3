@@ -69,20 +69,24 @@ export async function restoreNormalizedColumnNames(
   }
 }
 
+export function rowIdSequenceName(table: string): string {
+  return `id_${table.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+}
+
 export async function addRowId(
   connection: AsyncDuckDBConnection,
   table: string
 ): Promise<void> {
-  const safeSeqName = table.replace(/[^a-zA-Z0-9_]/g, '_');
+  const sequenceName = rowIdSequenceName(table);
   const escapedTable = escapeIdentifier(table);
   await executeQuery(
     connection,
-    `CREATE OR REPLACE SEQUENCE "id_${safeSeqName}" START 1;`,
+    `CREATE OR REPLACE SEQUENCE "${sequenceName}" START 1;`,
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
   );
   await executeQuery(
     connection,
-    `ALTER TABLE "${escapedTable}" ADD COLUMN IF NOT EXISTS ${INTERNAL_COLUMN.ID} INTEGER DEFAULT nextval('id_${safeSeqName}');`,
+    `ALTER TABLE "${escapedTable}" ADD COLUMN IF NOT EXISTS ${INTERNAL_COLUMN.ID} INTEGER DEFAULT nextval('${sequenceName}');`,
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
   );
 }

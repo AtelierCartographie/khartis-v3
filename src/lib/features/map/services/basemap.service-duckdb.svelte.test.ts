@@ -132,6 +132,52 @@ describe('basemapService.ensureAttributesLoaded', () => {
     expect(createAttributesQuery).not.toContain('__group_id__');
     expect(createAttributesQuery).not.toContain('__real_id__');
   });
+
+  it('should load attributes once when awaited concurrently (in-flight dedup)', async () => {
+    const fetchSpy = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes('all-basemaps-metadata.json')) {
+        return new Response(
+          JSON.stringify([
+            {
+              file: 'monde-countries-2024-medium',
+              entity_count: 249,
+              layers: []
+            }
+          ])
+        );
+      }
+      if (
+        url.includes('projection-presets.json') ||
+        url.includes('style-presets.json')
+      ) {
+        return new Response(JSON.stringify({}));
+      }
+
+      return new Response(new Uint8Array([1, 2, 3, 4]));
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    vi.resetModules();
+    const { basemapService: freshService } =
+      await import('./basemap.service.svelte');
+
+    await Promise.all([
+      freshService.ensureAttributesLoaded(),
+      freshService.ensureAttributesLoaded()
+    ]);
+    await freshService.ensureAttributesLoaded();
+
+    const attributeFetches = fetchSpy.mock.calls.filter(([input]) =>
+      String(input).includes('all-basemaps-attributes.parquet')
+    );
+    expect(attributeFetches).toHaveLength(1);
+
+    const createAttributeQueries = mocks.queryMock.mock.calls.filter(([sql]) =>
+      String(sql).includes('CREATE OR REPLACE TABLE basemap_attributes AS')
+    );
+    expect(createAttributeQueries).toHaveLength(1);
+  });
 });
 
 describe('basemapService.loadGeometryIntoDuckDB', () => {

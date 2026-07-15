@@ -2,7 +2,7 @@ import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelt
 import {
   readDatasetTableSnapshot,
   type DatasetTableSnapshot
-} from '$lib/features/data-pipeline/operations/analysis';
+} from '$lib/features/data-pipeline';
 
 export async function refreshDatasetMetadata(
   datasetId: string,

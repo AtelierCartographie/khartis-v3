@@ -7,20 +7,18 @@ import type {
   ProcessContext,
   ProcessorDataset
 } from '../file-processor.interface';
-import { getArrayBuffer } from './processor-utils';
+import { buildProcessorDataset, getArrayBuffer } from './processor-utils';
 
 export const geoparquetProcessor: FileProcessor = {
-  supportedFileTypes: [FileType.GEOPARQUET, FileType.ARROW],
+  supportedFileTypes: [FileType.GEOPARQUET],
 
   canHandle(file: UploadedFile): boolean {
     const lowerName = file.name.toLowerCase();
     return (
       file.fileType === FileType.GEOPARQUET ||
-      file.fileType === FileType.ARROW ||
       lowerName.endsWith('.parquet') ||
       lowerName.endsWith('.geoparquet') ||
-      lowerName.endsWith('.gpq') ||
-      lowerName.endsWith('.arrow')
+      lowerName.endsWith('.gpq')
     );
   },
 
@@ -43,25 +41,6 @@ export const geoparquetProcessor: FileProcessor = {
     const actualTableName =
       typeof resultTableName === 'string' ? resultTableName : ctx.tableName;
 
-    const [columns, rowCount] = await Promise.all([
-      ctx.Duck.analyse(actualTableName),
-      ctx.callbacks.getRowCount(actualTableName)
-    ]);
-
-    const dataset: ProcessorDataset = {
-      id: file.datasetId ?? file.id,
-      tableName: actualTableName,
-      sourceFileId: file.id,
-      name: file.name,
-      columns,
-      rowCount,
-      metadata: {
-        processedAt: new Date(),
-        fileType: file.fileType
-      },
-      geoDetection: file.deepAnalysis?.geoDetection
-    };
-
-    return dataset;
+    return buildProcessorDataset(ctx, file, actualTableName);
   }
 };

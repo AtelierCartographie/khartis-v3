@@ -4,7 +4,6 @@ import {
 } from '$lib/features/commons/pipeline.errors';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
-import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
@@ -17,7 +16,7 @@ import {
   extractGeoArrowMetadata,
   type ProcessedDataset
 } from '$lib/features/data-pipeline';
-import { isGeometryColumnType } from '$lib/features/data-pipeline/operations/geometry';
+import { isGeometryColumnType } from '../utils/geometry-column.utils';
 import {
   SavePriority,
   persistenceRegistry
@@ -32,6 +31,7 @@ import type {
   BasemapMetadata,
   JoinQuality
 } from '$lib/features/map/types/basemap.types';
+import type { JoinedEntity } from '$lib/features/commons/types/data-tab.types';
 import type { Table } from 'apache-arrow/Arrow';
 import { Duck, initDuckDB } from '../duck';
 import {
@@ -54,7 +54,7 @@ import * as columnOps from './column-ops';
 import * as conversionOps from './conversion-ops';
 import * as datasetOps from './dataset-ops';
 import * as densityOps from './density-ops';
-import { buildFilterWhereClause, createFilterRecord } from './filter-ops';
+import { createFilterRecord } from './filter-ops';
 import * as gpsOps from './gps-ops';
 import * as joinOps from './join-ops';
 import * as state from './state.svelte';
@@ -180,7 +180,24 @@ async function prefetchArrowMetadata(dataset: DuckDBDataset): Promise<void> {
   return prefetchPromise;
 }
 
+const JOINED_ARROW_CACHE_MAX_ENTRIES = 4;
+// Insertion-ordered Map used as an LRU, mirroring densityCache (density-ops.ts).
 const joinedArrowCache: Map<string, Table> = new Map();
+
+function evictOldestJoinedArrowEntry(): void {
+  const oldestKey = joinedArrowCache.keys().next().value;
+  if (!oldestKey) return;
+  joinedArrowCache.delete(oldestKey);
+}
+
+function setJoinedArrowCacheEntry(key: string, table: Table): void {
+  if (joinedArrowCache.has(key)) {
+    joinedArrowCache.delete(key);
+  } else if (joinedArrowCache.size >= JOINED_ARROW_CACHE_MAX_ENTRIES) {
+    evictOldestJoinedArrowEntry();
+  }
+  joinedArrowCache.set(key, table);
+}
 
 function shouldIgnoreFinalizeJoinError(
   datasetId: string,
@@ -211,7 +228,10 @@ function invalidateJoinedArrowCacheForTable(tableName: string): void {
   }
 }
 
-function invalidateDatasetCache(tableName: string): void {
+function invalidateDatasetCache(
+  tableName: string,
+  options?: { preserveJoinSimilarity?: boolean }
+): void {
   const dataset = state.getDatasetByTable(tableName);
   if (dataset) {
     dataset.arrowTableWithMetadata = undefined;
@@ -223,25 +243,16 @@ function invalidateDatasetCache(tableName: string): void {
   invalidateJoinedArrowCacheForTable(tableName);
   // Row/value mutations change which entities exist, so the cached join
   // similarity (used to grade joined/unrecognized buckets) is now stale.
-  joinOps.invalidateSimilarityCache(tableName);
-}
-
-async function createArrowTableWithMetadata(tableName: string): Promise<{
-  arrowTableWithMetadata: Table;
-  geoArrowMetadata: GeoArrowMetadata | null;
-}> {
-  if (!Duck) {
-    throw new DuckDBError(m.error_duckdb_not_initialized());
+  // Join finalization is the exception: it only appends __basemap_* columns
+  // and leaves source values intact, so its similarity cache stays valid.
+  if (!options?.preserveJoinSimilarity) {
+    joinOps.invalidateSimilarityCache(tableName, Duck ?? undefined);
   }
-
-  return arrowOps.createArrowTableWithMetadata(tableName, Duck, (table) =>
-    extractGeoArrowMetadata(table)
-  );
 }
 
 async function getRowCountInternal(tableName: string): Promise<number> {
   if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
-  return tableDataOps.getRowCount(tableName, Duck);
+  return tableDataOps.getFilteredRowCount(tableName, Duck);
 }
 
 let pendingPersistedTableFilters: SerializedTableFiltersState | null = null;
@@ -364,7 +375,6 @@ export const duckDBOrchestrator = {
       Duck,
       {
         getRowCount: getRowCountInternal,
-        createArrowTableWithMetadata,
         prefetchArrowMetadata
       },
       options
@@ -380,7 +390,6 @@ export const duckDBOrchestrator = {
 
     return datasetOps.updateDatasetTableName(sourceFileId, newTableName, Duck, {
       getRowCount: getRowCountInternal,
-      createArrowTableWithMetadata,
       prefetchArrowMetadata
     });
   },
@@ -392,7 +401,6 @@ export const duckDBOrchestrator = {
     try {
       const dataset = await datasetOps.processFile(file, Duck, {
         getRowCount: getRowCountInternal,
-        createArrowTableWithMetadata,
         prefetchArrowMetadata
       });
 
@@ -429,7 +437,8 @@ export const duckDBOrchestrator = {
   async computeJoinStats(
     datasetId: string,
     basemap: BasemapMetadata,
-    geoColumn: string
+    geoColumn: string,
+    options?: joinOps.JoinGradingOptions
   ): Promise<JoinQuality> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
@@ -441,15 +450,58 @@ export const duckDBOrchestrator = {
       });
     }
 
-    const filterClause = buildFilterWhereClause(
-      state.getFiltersMap().get(dataset.tableName)
-    );
-    return joinOps.computeJoinStats(
+    // Join grading and finalization both operate on the full table: display
+    // filters never change the join, so both share one similarity cache key.
+    return joinOps.computeJoinStats(dataset, basemap, geoColumn, Duck, options);
+  },
+
+  async getJoinedEntitiesPage(
+    datasetId: string,
+    basemap: BasemapMetadata,
+    geoColumn: string,
+    options: joinOps.JoinedEntitiesPageOptions
+  ): Promise<JoinedEntity[]> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    const dataset = state.findDatasetByIdOrSourceFile(datasetId);
+    if (!dataset) {
+      throw new DataValidationError(m.error_dataset_not_found(), 'datasetId', {
+        datasetId
+      });
+    }
+
+    return joinOps.getJoinedEntitiesPage(
       dataset,
       basemap,
       geoColumn,
       Duck,
-      filterClause
+      options
+    );
+  },
+
+  async getJoinedBasemapValues(
+    datasetId: string,
+    basemap: BasemapMetadata,
+    geoColumn: string,
+    options?: joinOps.JoinGradingOptions
+  ): Promise<string[]> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    const dataset = state.findDatasetByIdOrSourceFile(datasetId);
+    if (!dataset) {
+      throw new DataValidationError(m.error_dataset_not_found(), 'datasetId', {
+        datasetId
+      });
+    }
+
+    return joinOps.getJoinedBasemapValues(
+      dataset,
+      basemap,
+      geoColumn,
+      Duck,
+      options
     );
   },
 
@@ -467,10 +519,7 @@ export const duckDBOrchestrator = {
       });
     }
 
-    const filterClause = buildFilterWhereClause(
-      state.getFiltersMap().get(dataset.tableName)
-    );
-    return joinOps.computeJoinSynthesis(dataset, geoColumn, Duck, filterClause);
+    return joinOps.computeJoinSynthesis(dataset, geoColumn, Duck);
   },
 
   async applyJoinCorrections(
@@ -549,7 +598,9 @@ export const duckDBOrchestrator = {
           datasetOps.updateDatasetJoinInfo(currentDataset.id, result, {
             bumpVersion: false
           });
-          invalidateDatasetCache(currentDataset.tableName);
+          invalidateDatasetCache(currentDataset.tableName, {
+            preserveJoinSimilarity: true
+          });
           state.bumpDatasetsVersion();
         } catch (error) {
           if (!isCurrentJoinRequest(targetDatasetId, requestId, generation)) {
@@ -725,7 +776,7 @@ export const duckDBOrchestrator = {
       (bid) => basemapService.loadGeometryIntoDuckDB(bid),
       (tn) => duckDBOrchestrator.getArrowTableDirect(tn)
     );
-    joinedArrowCache.set(cacheKey, fresh);
+    setJoinedArrowCacheEntry(cacheKey, fresh);
     return fresh;
   },
 
@@ -938,11 +989,11 @@ export const duckDBOrchestrator = {
     return tableDataOps.getTableData(tableName, Duck, options);
   },
 
-  async getRowCount(tableName: string): Promise<number> {
+  async getFilteredRowCount(tableName: string): Promise<number> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
-    return tableDataOps.getRowCount(tableName, Duck);
+    return tableDataOps.getFilteredRowCount(tableName, Duck);
   },
 
   async getRowPosition(
@@ -1287,10 +1338,17 @@ export const duckDBOrchestrator = {
     state.clearFiltersForTable(tableName);
   },
 
-  async clear(): Promise<void> {
+  async clear(options?: {
+    preserveTableNames?: readonly string[];
+  }): Promise<void> {
     resetJoinRequestState();
+    joinedArrowCache.clear();
+    const preservedTableNames = new Set(options?.preserveTableNames ?? []);
     const datasets = state.getAllDatasets();
     for (const dataset of datasets) {
+      if (preservedTableNames.has(dataset.tableName)) {
+        continue;
+      }
       await duckDBOrchestrator.dropTable(dataset.tableName);
     }
 

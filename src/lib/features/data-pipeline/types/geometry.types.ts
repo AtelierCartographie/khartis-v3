@@ -4,8 +4,8 @@ import type { EnrichedColumn, ColumnInfo } from './column.types';
 export interface GeometryInfo {
   type: string;
   columnName?: string;
-  bounds: [number, number, number, number];
-  centroid: [number, number];
+  bounds?: [number, number, number, number];
+  centroid?: [number, number];
   crs?: string;
   featureCount?: number;
 }
@@ -20,7 +20,7 @@ export interface GeoColumnInfo {
 
 export interface AnalysisResult {
   columns: EnrichedColumn[];
-  geoColumns: GeoColumnInfo[] | unknown[];
+  geoColumns: GeoColumnInfo[];
   hasGeoData: boolean;
   suggestedGeoColumn?: string;
   rowCount: number;
@@ -29,7 +29,7 @@ export interface AnalysisResult {
 
 export interface ProcessedDatasetAnalysisResult {
   columns: ColumnInfo[];
-  geoColumns: GeoColumnInfo[] | unknown[];
+  geoColumns: GeoColumnInfo[];
   hasGeoData: boolean;
   suggestedGeoColumn?: string;
   rowCount: number;

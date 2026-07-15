@@ -39,9 +39,3 @@ export interface UploadedFilePayload {
 }
 
 export type FileInfo = Pick<File, 'name' | 'size' | 'type'>;
-
-export interface ValidationResult {
-  isValid: boolean;
-  errors: string[];
-  warnings: string[];
-}

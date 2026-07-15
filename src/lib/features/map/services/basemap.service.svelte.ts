@@ -8,6 +8,11 @@ import {
   PipelineError
 } from '../../commons/pipeline.errors';
 import { LogCategory, logger } from '../../commons/utils/logger';
+import {
+  PERF_PHASE,
+  perfMark,
+  perfMeasure
+} from '../../commons/utils/perf-marks.utils';
 import { resolveStaticAssetUrl } from '../../commons/utils/static-asset-url';
 import {
   escapeIdentifier,
@@ -720,6 +725,7 @@ function createBasemapService() {
   let currentBasemap: LoadedBasemap | null = $state(null);
   let simplificationVersion = $state(0);
   let attributesLoaded = false;
+  let attributesLoadPromise: Promise<void> | null = null;
   let projectionPresetsData: ProjectionPresets | null = $state(null);
   let stylePresetsData: StylePresets | null = $state(null);
   const basemapCache = new Map<string, LoadedBasemap>();
@@ -740,6 +746,20 @@ function createBasemapService() {
   async function loadAttributesIntoDuckDB(): Promise<void> {
     if (!Duck.db || attributesLoaded) return;
 
+    // Memoize the in-flight load: attributesLoaded is only set at the end, so
+    // a prefetch racing the join-time await would otherwise fetch and CREATE
+    // TABLE basemap_attributes twice.
+    if (attributesLoadPromise) {
+      return attributesLoadPromise;
+    }
+
+    attributesLoadPromise = loadAttributesIntoDuckDBInternal().finally(() => {
+      attributesLoadPromise = null;
+    });
+    return attributesLoadPromise;
+  }
+
+  async function loadAttributesIntoDuckDBInternal(): Promise<void> {
     try {
       const response = await fetch(
         resolveStaticAssetUrl(BASEMAP_ATTRIBUTES_PATH)
@@ -873,6 +893,7 @@ function createBasemapService() {
     filename: string,
     bbox?: [number, number, number, number]
   ): Promise<ArrowTable> {
+    perfMark(PERF_PHASE.GEOMETRY_FETCH);
     const url = getGeometryParquetUrl(filename);
     const response = await fetch(url);
 
@@ -890,7 +911,9 @@ function createBasemapService() {
     }
 
     const arrayBuffer = await response.arrayBuffer();
-    return readGeoParquetDirect(arrayBuffer, bbox);
+    const parsedGeometryTable = await readGeoParquetDirect(arrayBuffer, bbox);
+    perfMeasure(PERF_PHASE.GEOMETRY_FETCH);
+    return parsedGeometryTable;
   }
 
   async function doesDuckTableExist(tableName: string): Promise<boolean> {

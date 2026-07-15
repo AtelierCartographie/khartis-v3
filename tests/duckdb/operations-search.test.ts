@@ -1,13 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LogCategory } from '$lib/features/commons/utils/logger';
 
-const { executeQueryMock, loggerErrorMock } = vi.hoisted(() => ({
-  executeQueryMock: vi.fn(),
-  loggerErrorMock: vi.fn()
-}));
+const { executeQueryMock, executeCancellableQueryMock, loggerErrorMock } =
+  vi.hoisted(() => ({
+    executeQueryMock: vi.fn(),
+    executeCancellableQueryMock: vi.fn(),
+    loggerErrorMock: vi.fn()
+  }));
 
 vi.mock('$lib/features/duckdb/core/query', () => ({
-  executeQuery: executeQueryMock
+  executeQuery: executeQueryMock,
+  executeCancellableQuery: executeCancellableQueryMock,
+  isQueryAbortError: (error: unknown) =>
+    error instanceof DOMException && error.name === 'AbortError'
 }));
 vi.mock('$lib/features/commons/utils/logger', async () => {
   const actual = await vi.importActual<
@@ -64,7 +69,8 @@ describe('searchInTable', () => {
           col_count: 1
         }
       ])
-      .mockResolvedValueOnce([{ column_name: 'Description' }])
+      .mockResolvedValueOnce([{ column_name: 'Description' }]);
+    executeCancellableQueryMock
       .mockResolvedValueOnce([
         {
           __id: 1,
@@ -86,7 +92,7 @@ describe('searchInTable', () => {
       }
     ]);
 
-    const exactSearchSql = executeQueryMock.mock.calls[2]?.[1];
+    const exactSearchSql = executeCancellableQueryMock.mock.calls[0]?.[1];
     expect(exactSearchSql).toContain(
       'strip_html_text("Description"::VARCHAR) AS column_value'
     );
@@ -101,6 +107,11 @@ describe('searchInTable', () => {
         { normalized_term: 'brnschweig', row_count: 1, col_count: 1 }
       ])
       .mockResolvedValueOnce([{ column_name: 'Name' }])
+      .mockResolvedValueOnce([
+        { normalized_term: 'brnschweig', row_count: 1, col_count: 1 }
+      ])
+      .mockResolvedValueOnce([{ column_name: 'Name' }]);
+    executeCancellableQueryMock
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         {
@@ -110,10 +121,6 @@ describe('searchInTable', () => {
           score: 0.91
         }
       ])
-      .mockResolvedValueOnce([
-        { normalized_term: 'brnschweig', row_count: 1, col_count: 1 }
-      ])
-      .mockResolvedValueOnce([{ column_name: 'Name' }])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         {
@@ -131,7 +138,68 @@ describe('searchInTable', () => {
       threshold: 0.5
     });
 
-    expect(executeQueryMock).toHaveBeenCalledTimes(8);
+    expect(executeQueryMock).toHaveBeenCalledTimes(4);
+    expect(executeCancellableQueryMock).toHaveBeenCalledTimes(4);
+  });
+
+  it('returns an empty result without logging when the search query is aborted', async () => {
+    executeQueryMock
+      .mockResolvedValueOnce([
+        { normalized_term: 'needle', row_count: 1, col_count: 1 }
+      ])
+      .mockResolvedValueOnce([{ column_name: 'Name' }]);
+    executeCancellableQueryMock.mockRejectedValueOnce(
+      new DOMException('DuckDB query aborted', 'AbortError')
+    );
+
+    const result = await searchInTable(ctx(), 'aborted_table', 'needle');
+
+    expect(result.totalCount).toBe(0);
+    expect(result.results).toHaveLength(0);
+    expect(loggerErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('aborts the previous in-flight search when a newer one starts', async () => {
+    const capturedSignals: AbortSignal[] = [];
+    executeQueryMock.mockImplementation(async (_connection, sql: string) =>
+      String(sql).includes('normalize_text')
+        ? [{ normalized_term: 'needle', row_count: 1, col_count: 1 }]
+        : [{ column_name: 'Name' }]
+    );
+    executeCancellableQueryMock.mockImplementation(
+      async (
+        _connection: unknown,
+        _sql: string,
+        options: { signal: AbortSignal }
+      ) => {
+        capturedSignals.push(options.signal);
+        if (capturedSignals.length === 1) {
+          return new Promise((_, reject) => {
+            options.signal.addEventListener('abort', () =>
+              reject(new DOMException('DuckDB query aborted', 'AbortError'))
+            );
+          });
+        }
+        return [];
+      }
+    );
+
+    const firstSearch = searchInTable(ctx(), 'race_table', 'first needle');
+    await vi.waitFor(() => {
+      expect(capturedSignals).toHaveLength(1);
+    });
+
+    const secondSearch = searchInTable(ctx(), 'race_table', 'second needle');
+
+    const [firstResult, secondResult] = await Promise.all([
+      firstSearch,
+      secondSearch
+    ]);
+
+    expect(capturedSignals[0].aborted).toBe(true);
+    expect(firstResult.totalCount).toBe(0);
+    expect(secondResult).toBeDefined();
+    expect(loggerErrorMock).not.toHaveBeenCalled();
   });
 
   it('logs and rethrows query failures instead of returning an empty result', async () => {

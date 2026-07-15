@@ -1,8 +1,23 @@
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
-import type { JoinEntity, JoinStats } from '$lib/features/data-tab/types';
+import type { JoinEntity } from '$lib/features/data-tab/types';
+import type {
+  DuplicateLineReference,
+  JoinMapping
+} from '$lib/features/commons/types/data-tab.types';
 
 export type { JoinEntity };
-export type JoinQuality = JoinStats;
+
+export interface JoinQuality {
+  joinedCount: number;
+  toVerifyCount: number;
+  duplicateCount: number;
+  unrecognizedCount: number;
+  totalEntities: number;
+  joinMappings: JoinMapping[];
+  duplicateEntities: string[];
+  unrecognizedEntities: string[];
+  duplicateLines: DuplicateLineReference[];
+}
 
 export type ProjectionType = 'composite' | 'simple' | 'identity';
 

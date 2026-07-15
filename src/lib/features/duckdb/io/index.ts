@@ -1,3 +1,3 @@
 export { readGeofile } from './geofile-reader';
-export { readLink } from './link-reader';
+export { readJsonTabular } from './json-reader';
 export { readTabular } from './tabular-reader';

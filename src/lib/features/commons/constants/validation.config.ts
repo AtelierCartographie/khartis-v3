@@ -1,12 +1,5 @@
 import { FileType } from '../types/create-project.types';
 
-export type { ValidationResult } from '$lib/features/data-pipeline/types';
-
-export {
-  validationSuccess,
-  validationFailure
-} from '$lib/features/data-pipeline/types';
-
 interface StorageLimits {
   maxFileSize: number;
   warningFileSize: number;
@@ -24,7 +17,6 @@ export const FILE_SIZE_LIMITS: Record<FileType, number> = {
   [FileType.SHAPEFILE]: 200 * 1024 * 1024,
   [FileType.GEOPACKAGE]: 200 * 1024 * 1024,
   [FileType.GEOPARQUET]: 200 * 1024 * 1024,
-  [FileType.ARROW]: 200 * 1024 * 1024,
   [FileType.KML]: 150 * 1024 * 1024,
   [FileType.KMZ]: 150 * 1024 * 1024,
   [FileType.GPX]: 150 * 1024 * 1024,

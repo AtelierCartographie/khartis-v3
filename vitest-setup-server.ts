@@ -47,22 +47,24 @@ vi.mock('$lib/features/duckdb', () => ({
     REGEX: {}
   },
   EXTENSIONS: { SPATIAL: 'spatial', HTTPFS: 'httpfs' },
-  TABLE_PATTERNS: {
-    JOIN_RESULTS_SUFFIX: '_join_results',
-    FILTERED_SUFFIX: '_filtered',
-    UNIFIED_BASEMAP_ATTRS: 'unified_basemap_attributes',
-    CUSTOM_BASEMAP_ATTRS: 'custom_basemap_attributes'
-  },
   SQL_FUNCTIONS: {
-    ST_READ: 'ST_Read',
     ST_READ_META: 'ST_Read_Meta',
-    ST_TRANSFORM: 'ST_Transform',
-    ST_GEOM_FROM_WKB: 'ST_GeomFromWKB',
-    ST_SIMPLIFY: 'ST_Simplify',
-    ST_SIMPLIFY_PRESERVE_TOPOLOGY: 'ST_SimplifyPreserveTopology',
-    NORMALIZE_TEXT: 'normalize_text',
     READ_CSV: 'read_csv',
     READ_CSV_AUTO: 'read_csv_auto',
     READ_PARQUET: 'read_parquet'
-  }
+  },
+  DuckDBSimplifiedType: {
+    NUMERIC: 'numeric',
+    BOOLEAN: 'boolean',
+    DATE: 'date',
+    STRING: 'string',
+    GEOMETRY: 'geometry',
+    OTHER: 'other'
+  },
+  isGeometryColumnType: (columnType: string) =>
+    columnType === 'GEOMETRY' || columnType.startsWith('GEOMETRY('),
+  isGeometryColumnName: (columnName: string) =>
+    ['geom', 'geometry', 'wkb_geometry', 'the_geom'].includes(
+      columnName.toLowerCase()
+    )
 }));

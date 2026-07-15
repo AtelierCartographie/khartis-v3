@@ -3,7 +3,7 @@ import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants'
 import { LogCategory } from '$lib/features/commons/utils/logger';
 import type { DataTableFilter } from '$lib/features/duckdb/types';
 import {
-  getRowCount,
+  getFilteredRowCount,
   getRowPosition,
   getTableData
 } from '$lib/features/duckdb/orchestrator/table-data-ops';
@@ -86,13 +86,13 @@ describe('getTableData', () => {
   });
 });
 
-describe('getRowCount', () => {
+describe('getFilteredRowCount', () => {
   it('logs and rethrows count failures instead of returning zero', async () => {
     const error = new Error('row count query failed');
     const duck = createDuck();
     duck.query.mockRejectedValue(error);
 
-    await expect(getRowCount('places', duck)).rejects.toBe(error);
+    await expect(getFilteredRowCount('places', duck)).rejects.toBe(error);
 
     expect(mocks.loggerError).toHaveBeenCalledWith(
       'Failed to count DuckDB table rows',
