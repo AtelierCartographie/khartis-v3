@@ -140,7 +140,7 @@
     "@fontsource/noto-sans-sc": "^5.2.9",
     "@fontsource/open-sans": "^5.2.7",
     "@inlang/paraglide-js": "^2.22.0",
-    "@luma.gl/core": "9.3.5",
+    "@luma.gl/core": "9.3.6",
     "@math.gl/core": "^4.1.0",
     "@sqlite.org/sqlite-wasm": "3.53.0-build1",
     "@uwdata/flechette": "^2.5.0",
