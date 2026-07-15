@@ -72,9 +72,6 @@ function detectFileTypeFromName(filename: string): FileType {
   if (matches(FILE_EXTENSIONS.GEOPARQUET)) {
     return FileType.GEOPARQUET;
   }
-  if (matches(FILE_EXTENSIONS.ARROW)) {
-    return FileType.ARROW;
-  }
   if (matches(FILE_EXTENSIONS.KML)) {
     return FileType.KML;
   }
@@ -102,7 +99,6 @@ function getMimeTypeFromFileType(fileType: FileType): string {
     case FileType.GEOPACKAGE:
       return MIME.GEOPACKAGE;
     case FileType.GEOPARQUET:
-    case FileType.ARROW:
       return MIME.BINARY;
     case FileType.KML:
       return MIME.KML;

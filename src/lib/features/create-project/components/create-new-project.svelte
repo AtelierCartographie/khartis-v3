@@ -159,7 +159,6 @@
     [FileType.SHAPEFILE]: { label: 'Shapefile', color: 'purple' },
     [FileType.GEOPACKAGE]: { label: 'GeoPackage', color: 'purple' },
     [FileType.GEOPARQUET]: { label: 'GeoParquet', color: 'teal' },
-    [FileType.ARROW]: { label: 'Arrow', color: 'teal' },
     [FileType.KML]: { label: 'KML', color: 'magenta' },
     [FileType.KMZ]: { label: 'KMZ', color: 'magenta' },
     [FileType.GPX]: { label: 'GPX', color: 'magenta' },

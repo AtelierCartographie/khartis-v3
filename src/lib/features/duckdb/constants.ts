@@ -34,15 +34,13 @@ export const DUCK_CONST = {
   TYPE: {
     TABULAR: 'tabular' as const,
     GEOFILE: 'geofile' as const,
-    PARQUET: 'parquet' as const,
-    ARROW: 'arrow' as const
+    PARQUET: 'parquet' as const
   },
   /** File extension patterns for type detection */
   REGEX: {
     TABULAR: /\.(csv|tsv|text|txt)$/i,
     GEO: /\.(geojson|json|gpkg|kml|kmz|gpx)$/i,
     PARQUET: /\.(parquet|geoparquet|gpq)$/i,
-    ARROW: /\.arrow$/i,
     COLUMN_VALIDATION_INTEGER: /^-?\d+$/,
     COLUMN_VALIDATION_DOUBLE: /^-?\d+(\.\d+)?$/,
     COLUMN_VALIDATION_BOOLEAN_NUMBER: /[0-1]/,
@@ -67,7 +65,8 @@ export const GEO_CONSTANTS = {
  */
 export const EXTENSIONS = {
   SPATIAL: 'spatial',
-  HTTPFS: 'httpfs'
+  HTTPFS: 'httpfs',
+  JSON: 'json'
 } as const;
 
 /**

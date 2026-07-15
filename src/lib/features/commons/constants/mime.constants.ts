@@ -14,7 +14,6 @@ export const MIME = {
   KML: 'application/vnd.google-earth.kml+xml',
   KMZ: 'application/vnd.google-earth.kmz',
   GPX: 'application/gpx+xml',
-  ARROW: 'application/vnd.apache.arrow.file',
   BINARY: 'application/octet-stream',
   ZIP: 'application/zip',
   XML: 'application/xml',

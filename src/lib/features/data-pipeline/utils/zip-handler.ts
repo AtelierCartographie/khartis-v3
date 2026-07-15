@@ -195,7 +195,6 @@ function getMimeTypeForExtension(ext: string): string {
     '.geojson': MIME.GEOJSON,
     '.parquet': MIME.BINARY,
     '.geoparquet': MIME.BINARY,
-    '.arrow': MIME.ARROW,
     '.shp': MIME.SHAPEFILE_SHP,
     '.shx': MIME.SHAPEFILE_SHX,
     '.dbf': MIME.SHAPEFILE_DBF,

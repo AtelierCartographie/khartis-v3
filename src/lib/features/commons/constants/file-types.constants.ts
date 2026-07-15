@@ -8,8 +8,7 @@ export const FILE_EXTENSIONS = {
   KMZ: ['kmz'] as const,
   GPX: ['gpx'] as const,
   ZIP: ['zip'] as const,
-  TSV: ['tsv'] as const,
-  ARROW: ['arrow'] as const
+  TSV: ['tsv'] as const
 } as const;
 
 export const MIME_TYPE_PATTERNS = {
@@ -46,7 +45,6 @@ export const FILE_EXTENSION_GROUPS = {
     '.tsv',
     '.txt',
     '.parquet',
-    '.arrow',
     '.geojson',
     '.json',
     '.shp',

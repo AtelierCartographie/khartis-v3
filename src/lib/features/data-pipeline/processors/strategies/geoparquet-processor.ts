@@ -10,17 +10,15 @@ import type {
 import { buildProcessorDataset, getArrayBuffer } from './processor-utils';
 
 export const geoparquetProcessor: FileProcessor = {
-  supportedFileTypes: [FileType.GEOPARQUET, FileType.ARROW],
+  supportedFileTypes: [FileType.GEOPARQUET],
 
   canHandle(file: UploadedFile): boolean {
     const lowerName = file.name.toLowerCase();
     return (
       file.fileType === FileType.GEOPARQUET ||
-      file.fileType === FileType.ARROW ||
       lowerName.endsWith('.parquet') ||
       lowerName.endsWith('.geoparquet') ||
-      lowerName.endsWith('.gpq') ||
-      lowerName.endsWith('.arrow')
+      lowerName.endsWith('.gpq')
     );
   },
 

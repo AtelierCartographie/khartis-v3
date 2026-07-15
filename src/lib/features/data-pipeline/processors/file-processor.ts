@@ -12,6 +12,7 @@ import {
 } from '$lib/features/project-management/services/asset-store.service';
 import * as m from '$lib/paraglide/messages';
 import { isGeospatialFile } from '../constants';
+import { FileFormatEnum } from '../enums';
 import { detectFileFormat, generateTableName } from '../core/format-detector';
 import { buildDatasetFromDuckTable } from '../operations/analysis';
 import { normalizeFormattedNumericColumns } from '../operations/tabular-numeric-normalization';
@@ -129,16 +130,45 @@ export async function processFileInternal(
     });
   } else if (isGeoFile) {
     await registerFilesForDuckDB(file, isShapefile, options.companionFiles);
-    await Duck.read_geofile(file, {
-      tablename: tableName,
-      shapefile: isShapefile
-    });
-    dataset = await buildDatasetFromDuckTable({
-      file: fileInfo,
-      tableName,
-      isGeoFile,
-      format
-    });
+    const isPlainJson = fileInfo.name.toLowerCase().endsWith('.json');
+    let geoReadError: unknown = null;
+    try {
+      await Duck.read_geofile(file, {
+        tablename: tableName,
+        shapefile: isShapefile
+      });
+    } catch (error) {
+      if (!isPlainJson) {
+        throw error;
+      }
+      geoReadError = error;
+    }
+    if (geoReadError === null) {
+      dataset = await buildDatasetFromDuckTable({
+        file: fileInfo,
+        tableName,
+        isGeoFile,
+        format
+      });
+    } else {
+      // A .json defaults to GeoJSON; plain JSON records fall back to a
+      // tabular read (team decision on P10).
+      try {
+        await Duck.read_json_tabular(file, { tablename: tableName });
+      } catch {
+        throw new ParseError(
+          m.pipeline_error_json_unreadable(),
+          FileType.GEOJSON,
+          { fileName: fileInfo.name, geoReadError: String(geoReadError) }
+        );
+      }
+      dataset = await buildDatasetFromDuckTable({
+        file: fileInfo,
+        tableName,
+        isGeoFile: false,
+        format: FileFormatEnum.JSON
+      });
+    }
   } else {
     await registerFilesForDuckDB(file, isShapefile, options.companionFiles);
     detectedCsvOptions = await readTabularFile(file, tableName, fileInfo.name);
@@ -184,9 +214,8 @@ async function readTabularFile(
     lowerFileName.endsWith('.parquet') ||
     lowerFileName.endsWith('.geoparquet') ||
     lowerFileName.endsWith('.gpq');
-  const isArrow = lowerFileName.endsWith('.arrow');
 
-  if (isParquet || isArrow) {
+  if (isParquet) {
     await Duck.read_tabular(file, {
       tablename: tableName,
       format: 'parquet'

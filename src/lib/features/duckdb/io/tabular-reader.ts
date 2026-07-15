@@ -56,7 +56,7 @@ function resolveCsvDelimiter(value: string | undefined): string | undefined {
  * @param options.thousands_separator - Optional thousands separator.
  * @param options.delimiter - Optional column delimiter.
  * @param options.header - Whether the first row is a header (default true).
- * @param options.format - The format of the input data: 'csv' (default), 'parquet', or 'arrow'.
+ * @param options.format - The format of the input data: 'csv' (default) or 'parquet'.
  * @returns The name of the created table.
  */
 export async function readTabular(
@@ -190,10 +190,7 @@ export async function readTabular(
             await restoreNormalizedColumnNames(ctx.connection, finalTablename);
           }
 
-          if (
-            format === DUCK_CONST.TYPE.PARQUET ||
-            format === DUCK_CONST.TYPE.ARROW
-          ) {
+          if (format === DUCK_CONST.TYPE.PARQUET) {
             const escapedFileIdBinary = escapeSqlString(fileid);
             await executeQuery(
               ctx.connection,

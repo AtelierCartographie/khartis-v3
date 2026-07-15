@@ -71,11 +71,6 @@ describe('geoparquetProcessor', () => {
     ).toBe(true);
     expect(
       geoparquetProcessor.canHandle(
-        file({ name: 'data.arrow', fileType: FileType.ARROW })
-      )
-    ).toBe(true);
-    expect(
-      geoparquetProcessor.canHandle(
         file({ name: 'data.csv', fileType: FileType.CSV })
       )
     ).toBe(false);
