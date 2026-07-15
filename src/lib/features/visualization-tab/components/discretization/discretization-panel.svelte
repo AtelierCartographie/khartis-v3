@@ -17,7 +17,7 @@
     Slider,
     TextInput
   } from 'carbon-components-svelte';
-  import { Launch } from 'carbon-icons-svelte';
+  import { Information, Launch } from 'carbon-icons-svelte';
   import DiscretizationHistogram from './discretization-histogram.svelte';
   import type { ShapeType } from '$lib/features/commons/constants/visualization.constants';
   import { ClassificationMethod } from '$lib/features/commons/stores/visualization.store.svelte';
@@ -43,6 +43,7 @@
   interface Props {
     method?: ClassificationMethod;
     numClasses?: number;
+    mergedClassCount?: number | null;
     classCountMax?: number;
     breaks?: ClassBreak[];
     breakpointValue?: number | null;
@@ -62,6 +63,7 @@
   let {
     method = $bindable<ClassificationMethod>(ClassificationMethod.KMEANS),
     numClasses = $bindable(DEFAULT_DISCRETIZATION_CLASS_COUNT),
+    mergedClassCount = null,
     classCountMax = DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
     breaks = $bindable<ClassBreak[]>([
       { min: 0, max: 20, count: 45, color: '#f7fbff' },
@@ -379,6 +381,14 @@
         />
       {/if}
     </div>
+    {#if mergedClassCount != null}
+      <div class="merged-classes-note" role="status">
+        <Information size={16} />
+        <span>
+          {m.discretization_merged_classes_note({ count: mergedClassCount })}
+        </span>
+      </div>
+    {/if}
   </div>
 
   {#if showBreakpointControls}
@@ -479,6 +489,23 @@
     letter-spacing: 0.32px;
     color: var(--cds-text-secondary, #525252);
     font-weight: 400;
+  }
+
+  .merged-classes-note {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
+    color: var(--cds-text-secondary, #525252);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    padding: var(--cds-spacing-02);
+    background: var(--cds-notification-info-background, #edf5ff);
+    border-radius: 4px;
+    margin-top: var(--cds-spacing-03);
+
+    :global(svg) {
+      flex-shrink: 0;
+    }
   }
 
   .breakpoint-row {

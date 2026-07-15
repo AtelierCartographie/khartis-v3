@@ -30,8 +30,8 @@ import {
 } from '$lib/features/commons/constants/visualization.constants';
 import {
   getAbsoluteDomainMax,
-  getProportionalSymbolSizeForValue,
-  getSizeForValue
+  getProportionalLineWidthForValue,
+  getProportionalSymbolSizeForValue
 } from './data-styling.utils';
 
 const LEGEND_MIN_SWATCH_OPACITY = 0.2;
@@ -216,65 +216,37 @@ function getStatisticsValue(
   return (statistics as Record<'min' | 'max', unknown>)[key];
 }
 
-function buildContinuousLegendSteps(
-  minValue: number,
+function buildProportionalLineLegendSteps(
   maxValue: number,
-  minSize: number,
-  maxSize: number,
-  scale: ScaleType
+  maxWidth: number
 ): LegendContinuousStep[] {
-  const minLegendSize = getSizeForValue(
-    minValue,
-    minValue,
-    maxValue,
-    minSize,
-    maxSize,
-    scale
-  );
-  const maxLegendSize = getSizeForValue(
-    maxValue,
-    minValue,
-    maxValue,
-    minSize,
-    maxSize,
-    scale
-  );
-
-  if (minValue === maxValue) {
+  if (maxValue <= 0) {
     return [
       {
         kind: 'continuous',
-        value: maxValue,
-        size: maxLegendSize
+        value: 0,
+        size: 0
       }
     ];
   }
 
-  const midValue = minValue + (maxValue - minValue) / 2;
-  const midLegendSize = getSizeForValue(
-    midValue,
-    minValue,
-    maxValue,
-    minSize,
-    maxSize,
-    scale
-  );
+  const midValue = maxValue / 2;
 
   return [
     {
       kind: 'continuous',
       value: maxValue,
-      size: maxLegendSize
+      size: getProportionalLineWidthForValue(maxValue, maxValue, maxWidth)
     },
     {
       kind: 'continuous',
       value: midValue,
-      size: midLegendSize
+      size: getProportionalLineWidthForValue(midValue, maxValue, maxWidth)
     },
     {
       kind: 'continuous',
-      value: minValue,
-      size: minLegendSize
+      value: 0,
+      size: getProportionalLineWidthForValue(0, maxValue, maxWidth)
     }
   ];
 }
@@ -613,14 +585,13 @@ export function getLineWidthLegendScale(
       return null;
     }
 
+    const proportionalDomainMax = getAbsoluteDomainMax(minValue, maxValue);
+
     return {
       kind: 'proportional',
-      steps: buildContinuousLegendSteps(
-        minValue,
-        maxValue,
-        1,
-        maxLineWidth,
-        ScaleType.LINEAR
+      steps: buildProportionalLineLegendSteps(
+        proportionalDomainMax,
+        maxLineWidth
       ),
       color: resolveStyleColor(line.color, DEFAULT_COLORS.line),
       opacity,

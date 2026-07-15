@@ -17,7 +17,7 @@ import {
   createFileFromExtracted,
   extractZip,
   getShapefileFilesFromArchive
-} from '$lib/features/data-pipeline/utils/zip-handler';
+} from '$lib/features/data-pipeline';
 import { convertGeoPackageToGeoJsonFile } from '../utils/geopackage-browser-fallback.utils';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import {

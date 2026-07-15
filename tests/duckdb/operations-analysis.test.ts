@@ -32,7 +32,8 @@ vi.mock('$lib/features/duckdb/operations/table-ops', () => ({
 }));
 vi.mock('$lib/features/duckdb/cache/cache-manager', () => ({
   getTableMetadata: vi.fn(() => ({})),
-  setTableMetadata: vi.fn()
+  setTableMetadata: vi.fn(),
+  registerTableMutationCallback: vi.fn()
 }));
 
 import { analyse } from '$lib/features/duckdb/operations/analysis';
@@ -155,6 +156,123 @@ describe('analyse', () => {
           statistic: 'histogram_numeric'
         }
       }
+    );
+  });
+
+  it('should issue one merged query per type family and map results per column', async () => {
+    executeQueryMock.mockImplementation(async (_connection, sql: string) => {
+      if (sql.includes('describe_full')) {
+        return [
+          { name: 'pop', type: 'INTEGER', type_simple: 'numeric' },
+          { name: 'rate', type: 'DOUBLE', type_simple: 'numeric' },
+          { name: 'day', type: 'DATE', type_simple: 'date' },
+          { name: 'cat', type: 'VARCHAR', type_simple: 'string' }
+        ];
+      }
+      if (sql.includes('first(alias(')) {
+        return arrowRow({
+          __c0_name: 'pop',
+          __c0_uniques: 9,
+          __c1_name: 'rate',
+          __c1_uniques: 8,
+          __c2_name: 'day',
+          __c2_uniques: 5,
+          __c3_name: 'cat',
+          __c3_uniques: 3
+        });
+      }
+      if (sql.includes('POSITIONAL JOIN')) {
+        return arrowRow({
+          __c0_min: 1,
+          __c0_max: 4,
+          __c0_share_rank_interval: 1,
+          __c1_min: -2,
+          __c1_max: 2,
+          __c1_share_rank_interval: 0
+        });
+      }
+      if (sql.includes('row_number() OVER ()')) {
+        return arrowRow({
+          __c0: [{ bin: 1, count: 2 }],
+          __c1: [{ bin: 0.5, count: 3 }],
+          __c2: [{ bin: '2020-01-01', count: 1 }],
+          __c3: [{ category: 'a', count: 2, percent: 0.4 }]
+        });
+      }
+      if (sql.includes('__c0_min')) {
+        return arrowRow({ __c0_min: 'D1', __c0_max: 'D2' });
+      }
+      return [];
+    });
+
+    const result = await analyse(ctx(), 'tbl');
+
+    const statisticQueries = executeQueryMock.mock.calls
+      .map((call) => String(call[1]))
+      .filter((sql) => !sql.startsWith('DROP TABLE IF EXISTS'));
+    expect(statisticQueries).toHaveLength(5);
+
+    expect(result.map((column) => column.name)).toEqual([
+      'pop',
+      'rate',
+      'day',
+      'cat'
+    ]);
+    expect(result[0]).toMatchObject({
+      uniques: 9,
+      min: 1,
+      max: 4,
+      share_rank_interval: 1
+    });
+    expect(result[1]).toMatchObject({
+      uniques: 8,
+      min: -2,
+      max: 2,
+      share_rank_interval: 0
+    });
+    expect(result[2]).toMatchObject({ uniques: 5, min: 'D1', max: 'D2' });
+    expect('share_rank_interval' in result[2]).toBe(false);
+    expect(result[3]).toMatchObject({ uniques: 3 });
+    expect('min' in result[3]).toBe(false);
+
+    const histogramRows = (value: unknown): unknown =>
+      value !== null &&
+      typeof value === 'object' &&
+      'toArray' in value &&
+      typeof value.toArray === 'function'
+        ? value.toArray()
+        : value;
+    expect(histogramRows(result[0].histogram)).toEqual([{ bin: 1, count: 2 }]);
+    expect(histogramRows(result[2].histogram)).toEqual([
+      { bin: '2020-01-01', count: 1 }
+    ]);
+    expect(histogramRows(result[3].histogram)).toEqual([
+      { category: 'a', count: 2, percent: 0.4 }
+    ]);
+
+    expect(loggerWarnMock).not.toHaveBeenCalled();
+  });
+
+  it('should reject when the categorical histogram fails in merged and per-column form', async () => {
+    const categoricalError = new Error('categorical histogram failed');
+    executeQueryMock.mockImplementation(async (_connection, sql: string) => {
+      if (sql.includes('describe_full')) {
+        return [{ name: 'label', type: 'VARCHAR', type_simple: 'string' }];
+      }
+      if (sql.includes('first(alias(')) {
+        return arrowRow({ __c0_uniques: 2 });
+      }
+      if (sql.includes('row_number() OVER ()')) {
+        throw new Error('merged histogram failed');
+      }
+      if (sql.includes('histogram_categorical')) {
+        throw categoricalError;
+      }
+      return [];
+    });
+
+    await expect(analyse(ctx(), 'tbl')).rejects.toThrow(
+      'categorical histogram failed'
     );
   });
 });

@@ -7,6 +7,7 @@ import {
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
+import { markTableMutated } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
 import { runInTransaction } from '../core/transaction';
@@ -55,7 +56,7 @@ function resolveCsvDelimiter(value: string | undefined): string | undefined {
  * @param options.thousands_separator - Optional thousands separator.
  * @param options.delimiter - Optional column delimiter.
  * @param options.header - Whether the first row is a header (default true).
- * @param options.format - The format of the input data: 'csv' (default), 'parquet', or 'arrow'.
+ * @param options.format - The format of the input data: 'csv' (default) or 'parquet'.
  * @returns The name of the created table.
  */
 export async function readTabular(
@@ -189,10 +190,7 @@ export async function readTabular(
             await restoreNormalizedColumnNames(ctx.connection, finalTablename);
           }
 
-          if (
-            format === DUCK_CONST.TYPE.PARQUET ||
-            format === DUCK_CONST.TYPE.ARROW
-          ) {
+          if (format === DUCK_CONST.TYPE.PARQUET) {
             const escapedFileIdBinary = escapeSqlString(fileid);
             await executeQuery(
               ctx.connection,
@@ -222,6 +220,13 @@ export async function readTabular(
     }
 
     ctx.loaded_files.set(tablename, filename);
+    // Deterministic table names make CREATE OR REPLACE reuse an already
+    // analysed name: cached stats for it are now stale.
+    markTableMutated(ctx, tablename);
+    if (input instanceof File) {
+      // Table data is materialized; drop the handle so the worker releases the File (replay re-registers).
+      await dropRegisteredFile(ctx.db, ctx.registered_files, fileid);
+    }
     return tablename;
   } finally {
     if (cleanupFileId) {

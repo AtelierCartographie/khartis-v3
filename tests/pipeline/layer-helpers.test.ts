@@ -7,7 +7,7 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
 import {
   withOpacity,
   createCategoricalColorAccessor,
-  createProportionalSizeAccessor,
+  createProportionalLineWidthAccessor,
   createProportionalSymbolSizeAccessor,
   createClassedSizeAccessor,
   createChoroplethColorAccessor,
@@ -83,32 +83,35 @@ describe('createCategoricalColorAccessor', () => {
   });
 });
 
-// ─── createProportionalSizeAccessor ───────────────────────────────────────
+// ─── createProportionalLineWidthAccessor ──────────────────────────────────
 
-describe('createProportionalSizeAccessor', () => {
-  const accessor = createProportionalSizeAccessor(
-    'pop',
-    0,
-    100,
-    5,
-    50,
-    ScaleType.LINEAR
-  );
+describe('createProportionalLineWidthAccessor', () => {
+  const accessor = createProportionalLineWidthAccessor('pop', 0, 100, 50);
 
-  it('returns proportional size for numeric value', () => {
-    expect(accessor({ pop: 50 } as never)).toBeCloseTo(27.5);
-  });
-
-  it('returns minSize for null value', () => {
-    expect(accessor({ pop: null } as never)).toBe(5);
-  });
-
-  it('returns minSize for non-finite string value', () => {
-    expect(accessor({ pop: 'abc' } as never)).toBe(5);
-  });
-
-  it('returns maxSize for value at max', () => {
+  it('scales the width linearly with the value so 50 vs 100 keeps a 1:2 ratio', () => {
+    expect(accessor({ pop: 50 } as never)).toBe(25);
     expect(accessor({ pop: 100 } as never)).toBe(50);
+  });
+
+  it('returns zero width for zero values instead of a legibility floor', () => {
+    expect(accessor({ pop: 0 } as never)).toBe(0);
+  });
+
+  it('uses the absolute value for negative flows', () => {
+    const crossingAccessor = createProportionalLineWidthAccessor(
+      'delta',
+      -100,
+      50,
+      50
+    );
+
+    expect(crossingAccessor({ delta: -50 } as never)).toBe(25);
+    expect(crossingAccessor({ delta: 50 } as never)).toBe(25);
+  });
+
+  it('returns zero for null or non-finite values', () => {
+    expect(accessor({ pop: null } as never)).toBe(0);
+    expect(accessor({ pop: 'abc' } as never)).toBe(0);
   });
 });
 

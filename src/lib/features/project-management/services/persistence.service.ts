@@ -94,7 +94,8 @@ async function prepareProjectForStorage(
 export async function saveProject(
   project: KhartisProject,
   thumbnail?: string,
-  exampleId?: string
+  exampleId?: string,
+  sizeBytes?: number
 ): Promise<void> {
   const database = await ensureDb();
   const projectForStorage = await prepareProjectForStorage(project);
@@ -115,7 +116,7 @@ export async function saveProject(
     projectForStorage.id,
     projectForStorage.data.sourceFiles
   );
-  await updateMetadata(projectForStorage, thumbnail, exampleId);
+  await updateMetadata(projectForStorage, thumbnail, exampleId, sizeBytes);
 }
 
 export async function loadProject(id: string): Promise<KhartisProject | null> {
@@ -227,7 +228,8 @@ export async function listMetadata(): Promise<SavedProjectMetadata[]> {
 async function updateMetadata(
   project: KhartisProject,
   thumbnail?: string,
-  exampleId?: string
+  exampleId?: string,
+  sizeBytes?: number
 ): Promise<void> {
   const metadata = await loadProjectMetadata();
   const index = metadata.findIndex((entry) => entry.id === project.id);
@@ -239,7 +241,7 @@ async function updateMetadata(
     description: project.manifest.description,
     createdAt: project.manifest.createdAt,
     updatedAt: project.manifest.updatedAt,
-    size: calculateProjectSize(project),
+    size: sizeBytes ?? calculateProjectSize(project),
     // Keep the last thumbnail when this save cannot capture one.
     thumbnail: thumbnail ?? previous?.thumbnail,
     // Keep exampleId once set.

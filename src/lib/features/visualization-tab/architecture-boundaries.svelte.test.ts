@@ -239,6 +239,23 @@ describe('visualization architecture boundaries', () => {
     }
   });
 
+  it('data-pipeline is only consumed through its barrel', () => {
+    const deepImport = /from ['"]\$lib\/features\/data-pipeline\/[^'"]+['"]/;
+
+    const files = [
+      ...sourceFiles(featuresRoot),
+      ...sourceFiles(routesRoot)
+    ].filter((filePath) => !filePath.includes('/data-pipeline/'));
+
+    for (const filePath of files) {
+      const source = readFileSync(filePath, 'utf8');
+      expect(
+        source,
+        `${filePath} must import data-pipeline via $lib/features/data-pipeline (barrel), not a deep path`
+      ).not.toMatch(deepImport);
+    }
+  });
+
   it('no feature imports from another feature deep subdirectory (step-toolbar/tools/<tool>/<internals>)', () => {
     const allFeatureFiles = sourceFiles(featuresRoot).filter(
       (filePath) => !filePath.includes('/node_modules/')

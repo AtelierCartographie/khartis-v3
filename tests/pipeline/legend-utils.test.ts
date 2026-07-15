@@ -90,12 +90,15 @@ import {
   FillMode,
   ShapeType,
   StrokeMode,
-  SymbolMode
+  SymbolMode,
+  ThicknessMode
 } from '$lib/features/commons/constants/visualization.constants';
 import {
+  getLineWidthLegendScale,
   getPointSizeLegendScale,
   type PointSizeLegendScale
 } from '$lib/features/map/utils/legend.utils';
+import { getProportionalLineWidthForValue } from '$lib/features/map/utils/data-styling.utils';
 
 function createProportionalSymbolViz(shape: ShapeType): VisualizationConfig {
   return {
@@ -186,6 +189,67 @@ describe('getPointSizeLegendScale', () => {
         max: 0
       }
     );
+
+    expect(scale?.steps).toEqual([
+      {
+        kind: 'continuous',
+        value: 0,
+        size: 0
+      }
+    ]);
+  });
+});
+
+function createProportionalLineViz(): VisualizationConfig {
+  return {
+    id: 'viz-line-legend',
+    name: 'Line legend',
+    type: VisualizationType.PROPORTIONAL,
+    datasetId: 'dataset-1',
+    enabled: true,
+    primitiveFilters: [PrimitiveFilterType.LINE],
+    line: {
+      enabled: true,
+      thicknessMode: ThicknessMode.PROPORTIONAL,
+      sizeColumn: 'flow',
+      color: '#3366cc',
+      width: 3,
+      maxWidth: 8,
+      opacity: 1,
+      dashed: false
+    },
+    mapping: {
+      sizeColumn: 'flow'
+    }
+  } as VisualizationConfig;
+}
+
+describe('getLineWidthLegendScale', () => {
+  it('shares the strictly proportional width function with the render path (WYSIWYG)', () => {
+    const scale = getLineWidthLegendScale(createProportionalLineViz(), {
+      min: -200,
+      max: 100
+    });
+
+    expect(scale?.kind).toBe('proportional');
+    expect(
+      scale?.steps.map((step) =>
+        step.kind === 'continuous' ? step.value : Number.NaN
+      )
+    ).toEqual([200, 100, 0]);
+    expect(scale?.steps.map((step) => step.size)).toEqual([
+      getProportionalLineWidthForValue(200, 200, 8),
+      getProportionalLineWidthForValue(100, 200, 8),
+      getProportionalLineWidthForValue(0, 200, 8)
+    ]);
+    expect(scale?.steps.map((step) => step.size)).toEqual([8, 4, 0]);
+  });
+
+  it('renders a zero-only proportional legend when the magnitude domain is not positive', () => {
+    const scale = getLineWidthLegendScale(createProportionalLineViz(), {
+      min: 0,
+      max: 0
+    });
 
     expect(scale?.steps).toEqual([
       {

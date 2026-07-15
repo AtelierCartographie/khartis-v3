@@ -167,7 +167,7 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
           return;
         }
 
-        const count = await duckDBOrchestrator.getRowCount(tableName);
+        const count = await duckDBOrchestrator.getFilteredRowCount(tableName);
         if (isRequestStale(requestId, columnsRequestId)) {
           return;
         }

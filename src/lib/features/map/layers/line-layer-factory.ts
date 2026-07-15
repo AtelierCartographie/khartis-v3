@@ -14,7 +14,6 @@ import {
   getPrimitiveClassification,
   type PrimitiveFilter,
   PrimitiveFilterType,
-  ScaleType,
   VisualizationType
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
@@ -40,8 +39,8 @@ import {
   createGeoJsonCategoricalColorAccessor,
   createGeoJsonChoroplethColorAccessor,
   createGeoJsonClassedSizeAccessor,
-  createGeoJsonProportionalSizeAccessor,
-  createProportionalSizeAccessor,
+  createGeoJsonProportionalLineWidthAccessor,
+  createProportionalLineWidthAccessor,
   resolveMissingDataRenderProps,
   withGeoJsonRowHighlight,
   withGeoJsonRowHighlightAccessor,
@@ -139,11 +138,11 @@ export function createLineLayerStack(
     lineConfig?.thicknessMode === ThicknessMode.CLASSES &&
     !!lineValueColumn &&
     !!lineThicknessClassification?.breaks &&
-    lineThicknessClassification.breaks.length >= 2;
+    lineThicknessClassification.breaks.length >= 1;
   const usesVariableLineWidth = useProportionalWidth || useClassedWidth;
   const { min: minValue, max: maxValue } = lineStatistics;
-  const resolvedSizeScale = viz?.symbols?.sizeScale ?? ScaleType.LINEAR;
   const maxLineWidth = lineConfig?.maxWidth ?? resolvedLineWidth;
+  const lineWidthFloorPixels = useProportionalWidth ? 0 : 1;
   const lineMissingData = lineConfig?.missingData;
   const lineHasMissingDataStyle =
     !!lineMissingData &&
@@ -301,13 +300,11 @@ export function createLineLayerStack(
               lineThicknessClassification?.colors?.length
           )
         : useProportionalWidth && viz
-          ? createProportionalSizeAccessor(
+          ? createProportionalLineWidthAccessor(
               lineSizeColumn!,
               minValue,
               maxValue,
-              1,
-              maxLineWidth,
-              resolvedSizeScale
+              maxLineWidth
             )
           : null;
     const widthFn =
@@ -349,7 +346,7 @@ export function createLineLayerStack(
       widthUnits: 'pixels',
       widthScale: pageDisplayScale,
       ...(!widthBinaryAttr && { getWidth: resolvedLineWidth }),
-      widthMinPixels: 1,
+      widthMinPixels: lineWidthFloorPixels,
       pickable: true,
       ...resolveHoverHighlightProps(),
       ...(modelMatrix && { modelMatrix }),
@@ -381,7 +378,6 @@ export function createLineLayerStack(
           maxValue,
           lineThicknessClassification?.breaks,
           maxLineWidth,
-          resolvedSizeScale,
           resolvedLineWidth,
           lineMissingWidth
         ]
@@ -541,14 +537,11 @@ export function createLineLayerStack(
           resolvedLineWidth
         )
       : useProportionalWidth && viz
-        ? createGeoJsonProportionalSizeAccessor(
+        ? createGeoJsonProportionalLineWidthAccessor(
             lineSizeColumn!,
             minValue,
             maxValue,
-            1,
-            maxLineWidth,
-            resolvedSizeScale,
-            resolvedLineWidth
+            maxLineWidth
           )
         : resolvedLineWidth;
   const geoJsonLineWidth =
@@ -578,7 +571,7 @@ export function createLineLayerStack(
     lineWidthUnits: 'pixels',
     lineWidthScale: pageDisplayScale,
     getLineWidth: geoJsonLineWidth,
-    lineWidthMinPixels: 1,
+    lineWidthMinPixels: lineWidthFloorPixels,
     pickable: true,
     ...resolveHoverHighlightProps(),
     ...(modelMatrix && { modelMatrix }),
@@ -614,7 +607,6 @@ export function createLineLayerStack(
         maxValue,
         lineThicknessClassification?.breaks,
         maxLineWidth,
-        resolvedSizeScale,
         resolvedLineWidth,
         lineMissingWidth
       ]

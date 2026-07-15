@@ -4,7 +4,6 @@ import { Duck } from '$lib/features/duckdb';
 
 type CategoryDatasetLike = {
   tableName?: string;
-  originalData?: { data?: Array<Record<string, unknown>> } | null;
   data?: Array<Record<string, unknown>> | null;
 };
 
@@ -55,7 +54,7 @@ export async function loadDistinctCategoryLabels(
     return [];
   }
 
-  const localRows = dataset.originalData?.data ?? dataset.data ?? [];
+  const localRows = dataset.data ?? [];
 
   if (!dataset.tableName) {
     return collectDistinctCategoryLabels(

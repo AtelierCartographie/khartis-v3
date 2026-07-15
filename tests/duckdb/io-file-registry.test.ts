@@ -40,10 +40,14 @@ describe('getFileType', () => {
     expect(getFileType('data.parquet')).toBe('parquet'));
   it('classifies .geoparquet as parquet', () =>
     expect(getFileType('data.geoparquet')).toBe('parquet'));
-  it('classifies .arrow as arrow', () =>
-    expect(getFileType('data.arrow')).toBe('arrow'));
+  it('falls back to tabular for the retired .arrow extension', () =>
+    expect(getFileType('data.arrow')).toBe('tabular'));
   it('falls back to tabular for unknown extensions', () =>
     expect(getFileType('data.unknown')).toBe('tabular'));
+  it('should classify by the last extension when several are chained', () =>
+    expect(getFileType('data.csv.gpkg')).toBe('geofile'));
+  it('should ignore a trailing query string when classifying', () =>
+    expect(getFileType('regions.gpkg?token=abc')).toBe('geofile'));
 });
 
 describe('generateUniqueTableName', () => {

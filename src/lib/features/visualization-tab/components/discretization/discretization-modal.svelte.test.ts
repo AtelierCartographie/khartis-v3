@@ -1,4 +1,4 @@
-import { fireEvent, render } from '@testing-library/svelte';
+import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/features/commons/services/classification.service', () => ({
@@ -26,9 +26,12 @@ vi.mock(
 );
 
 vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
-  datasetsStore: { datasets: [] }
+  datasetsStore: {
+    datasets: [{ id: 'dataset-1', sourceFileId: 'source-file-1' }]
+  }
 }));
 
+import { calculateBreaks } from '$lib/features/commons/services/classification.service';
 import DiscretizationModal from './discretization-modal.svelte';
 import DiscretizationPanel from './discretization-panel.svelte';
 import {
@@ -364,6 +367,54 @@ describe('DiscretizationModal', () => {
 
     expect(breakpointSlider).not.toBeNull();
     expect(breakpointSlider?.disabled).toBe(false);
+  });
+
+  it('should show an informative note when tied values merge classes below the requested count', async () => {
+    // Zero-inflated column: quantile bounds collapse, 5 requested -> 2 effective.
+    vi.mocked(calculateBreaks).mockResolvedValueOnce({
+      breaks: [1],
+      counts: [8, 2],
+      min: 0,
+      max: 10
+    });
+
+    const visualization = createVisualization();
+    render(DiscretizationModal, {
+      open: true,
+      visualization,
+      classification: visualization.classification,
+      valueColumn: 'zero_inflated_rate'
+    });
+
+    await waitFor(() => {
+      expect(
+        document.body.querySelector('.merged-classes-note')?.textContent
+      ).toContain(
+        'Bornes confondues en raison de valeurs répétées : 2 classes effectives'
+      );
+    });
+  });
+
+  it('should not show the merged-classes note when the computed classes match the request', async () => {
+    vi.mocked(calculateBreaks).mockResolvedValueOnce({
+      breaks: [2, 4, 6, 8],
+      counts: [2, 2, 2, 2, 2],
+      min: 0,
+      max: 10
+    });
+
+    const visualization = createVisualization();
+    render(DiscretizationModal, {
+      open: true,
+      visualization,
+      classification: visualization.classification,
+      valueColumn: 'well_distributed_rate'
+    });
+
+    await waitFor(() => {
+      expect(document.body.querySelector('#break-value-1')).not.toBeNull();
+    });
+    expect(document.body.querySelector('.merged-classes-note')).toBeNull();
   });
 
   it('can hide breakpoint controls for non-color discretizations', () => {

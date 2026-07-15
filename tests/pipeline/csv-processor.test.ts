@@ -23,7 +23,10 @@ vi.mock('$lib/features/duckdb/io/arrow-converter', () => ({
 
 vi.mock(
   '$lib/features/data-pipeline/processors/strategies/processor-utils',
-  () => ({
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('$lib/features/data-pipeline/processors/strategies/processor-utils')
+    >()),
     convertToCSV: convertToCSVMock,
     isTabularData: isTabularDataMock
   })

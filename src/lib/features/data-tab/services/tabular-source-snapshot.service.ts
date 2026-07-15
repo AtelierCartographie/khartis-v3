@@ -2,9 +2,8 @@ import type { UploadedFile } from '$lib/features/commons/types/create-project.ty
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { sanitizePreparedGeoJSON } from '$lib/features/commons/utils/persisted-geojson.utils';
-import { buildStatisticsSnapshot } from '$lib/features/data-pipeline/operations/analysis';
-import type { DuckAnalyticsColumn } from '$lib/features/data-pipeline/types';
-import { Duck } from '$lib/features/duckdb';
+import { buildStatisticsSnapshot } from '$lib/features/data-pipeline';
+import { Duck, type AnalysisResult } from '$lib/features/duckdb';
 import type { JsonValue } from '$lib/types/data';
 
 function toSnapshotValue(value: unknown): JsonValue {
@@ -155,7 +154,7 @@ function updateSourceFileSnapshot(
 export async function persistTabularSourceSnapshot(input: {
   sourceFileId: string;
   tableName: string;
-  duckColumns: DuckAnalyticsColumn[];
+  duckColumns: AnalysisResult[];
   geometryColumnName?: string | null;
   joinState?: JoinSnapshotUpdates;
 }): Promise<void> {

@@ -16,10 +16,18 @@ vi.hoisted(() => {
 });
 
 import {
+  getClassedSizeForValue,
+  getColorForValue,
+  getProportionalLineWidthForValue,
   shouldApplyChoropleth,
   shouldApplyCategorical
 } from './data-styling.utils';
 import {
+  createClassedSizeAccessor,
+  createProportionalLineWidthAccessor
+} from '../layers/layer-helpers';
+import {
+  ColorMode,
   FillMode,
   SymbolMode
 } from '$lib/features/commons/constants/visualization.constants';
@@ -27,6 +35,7 @@ import {
   PrimitiveFilterType,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
+import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 
 const QUALITATIVE_COLORS = [
   '#e41a1c',
@@ -104,5 +113,199 @@ describe('classes/categories exclusivity per primitive', () => {
 
     expect(shouldApplyChoropleth(viz, PrimitiveFilterType.POINT)).toBe(false);
     expect(shouldApplyCategorical(viz, PrimitiveFilterType.POINT)).toBe(true);
+  });
+});
+
+// 2 classes = 1 interior break: the store persists interior breaks only.
+const TWO_CLASS_BREAKS = [50];
+const TWO_CLASS_COLORS = ['#deebf7', '#3182bd'];
+const TWO_CLASS_COUNT = 2;
+const VALUE_BELOW_BREAK = 10;
+const VALUE_ABOVE_BREAK = 80;
+
+describe('two-class classification (1 interior break)', () => {
+  it('should apply choropleth on polygons when a 2-class classification has a single interior break', () => {
+    const viz = makeViz({
+      polygon: { enabled: true, fillMode: FillMode.CLASSES },
+      classification: {
+        breaks: TWO_CLASS_BREAKS,
+        colors: TWO_CLASS_COLORS,
+        numClasses: TWO_CLASS_COUNT
+      }
+    } as unknown as Partial<VisualizationConfig>);
+
+    expect(shouldApplyChoropleth(viz, PrimitiveFilterType.POLYGON)).toBe(true);
+  });
+
+  it('should apply choropleth on symbol fill when a 2-class classification has a single interior break', () => {
+    const viz = makeViz({
+      symbol: {
+        enabled: true,
+        mode: SymbolMode.UNIQUE,
+        fillMode: FillMode.CLASSES,
+        fillValueColumn: 'population_2023',
+        fillClassification: {
+          breaks: TWO_CLASS_BREAKS,
+          colors: TWO_CLASS_COLORS,
+          numClasses: TWO_CLASS_COUNT
+        }
+      }
+    } as unknown as Partial<VisualizationConfig>);
+
+    expect(shouldApplyChoropleth(viz, PrimitiveFilterType.POINT)).toBe(true);
+  });
+
+  it('should apply choropleth on lines and texts when a 2-class classification has a single interior break', () => {
+    const viz = makeViz({
+      line: {
+        enabled: true,
+        colorMode: ColorMode.CLASSES,
+        classification: {
+          breaks: TWO_CLASS_BREAKS,
+          colors: TWO_CLASS_COLORS,
+          numClasses: TWO_CLASS_COUNT
+        }
+      },
+      text: {
+        enabled: true,
+        colorMode: ColorMode.CLASSES,
+        classification: {
+          breaks: TWO_CLASS_BREAKS,
+          colors: TWO_CLASS_COLORS,
+          numClasses: TWO_CLASS_COUNT
+        }
+      }
+    } as unknown as Partial<VisualizationConfig>);
+
+    expect(shouldApplyChoropleth(viz, PrimitiveFilterType.LINE)).toBe(true);
+    expect(shouldApplyChoropleth(viz, PrimitiveFilterType.TEXT)).toBe(true);
+  });
+
+  it('should color the two classes distinctly when values fall on each side of the single break', () => {
+    expect(
+      getColorForValue(VALUE_BELOW_BREAK, TWO_CLASS_BREAKS, TWO_CLASS_COLORS)
+    ).toEqual(hexToRgb(TWO_CLASS_COLORS[0]));
+    expect(
+      getColorForValue(VALUE_ABOVE_BREAK, TWO_CLASS_BREAKS, TWO_CLASS_COLORS)
+    ).toEqual(hexToRgb(TWO_CLASS_COLORS[1]));
+  });
+
+  it('should size point symbols in two classes when the class count hint matches breaks.length + 1', () => {
+    const minPointRadius = 4;
+    const maxPointRadius = 20;
+    const pointRadiusAccessor = createClassedSizeAccessor(
+      'population_2023',
+      TWO_CLASS_BREAKS,
+      minPointRadius,
+      maxPointRadius,
+      TWO_CLASS_COUNT
+    );
+
+    expect(pointRadiusAccessor({ population_2023: VALUE_BELOW_BREAK })).toBe(
+      minPointRadius
+    );
+    expect(pointRadiusAccessor({ population_2023: VALUE_ABOVE_BREAK })).toBe(
+      maxPointRadius
+    );
+  });
+
+  it('should size line widths in two classes when the class count hint matches breaks.length + 1', () => {
+    const minLineWidth = 1;
+    const maxLineWidth = 8;
+    const lineWidthAccessor = createClassedSizeAccessor(
+      'population_2023',
+      TWO_CLASS_BREAKS,
+      minLineWidth,
+      maxLineWidth,
+      TWO_CLASS_COUNT
+    );
+
+    expect(lineWidthAccessor({ population_2023: VALUE_BELOW_BREAK })).toBe(
+      minLineWidth
+    );
+    expect(lineWidthAccessor({ population_2023: VALUE_ABOVE_BREAK })).toBe(
+      maxLineWidth
+    );
+  });
+
+  it('should size texts in two classes when the class count hint matches breaks.length + 1', () => {
+    const minTextSize = 12;
+    const maxTextSize = 24;
+
+    expect(
+      getClassedSizeForValue(
+        VALUE_BELOW_BREAK,
+        TWO_CLASS_BREAKS,
+        minTextSize,
+        maxTextSize,
+        TWO_CLASS_COUNT
+      )
+    ).toBe(minTextSize);
+    expect(
+      getClassedSizeForValue(
+        VALUE_ABOVE_BREAK,
+        TWO_CLASS_BREAKS,
+        minTextSize,
+        maxTextSize,
+        TWO_CLASS_COUNT
+      )
+    ).toBe(maxTextSize);
+  });
+
+  it('should keep returning the minimum size when a single break comes without a matching class count hint', () => {
+    expect(
+      getClassedSizeForValue(VALUE_ABOVE_BREAK, TWO_CLASS_BREAKS, 4, 20)
+    ).toBe(4);
+  });
+});
+
+describe('strictly proportional line widths', () => {
+  const MAX_WIDTH = 8;
+  const DOMAIN_MAX = 200;
+
+  it('should keep a 1:2 width ratio when values are 100 and 200', () => {
+    const widthAt100 = getProportionalLineWidthForValue(
+      100,
+      DOMAIN_MAX,
+      MAX_WIDTH
+    );
+    const widthAt200 = getProportionalLineWidthForValue(
+      200,
+      DOMAIN_MAX,
+      MAX_WIDTH
+    );
+
+    expect(widthAt100).toBe(4);
+    expect(widthAt200).toBe(2 * widthAt100);
+  });
+
+  it('should render a zero value with a zero width instead of a legibility floor', () => {
+    expect(getProportionalLineWidthForValue(0, DOMAIN_MAX, MAX_WIDTH)).toBe(0);
+  });
+
+  it('should size negative values by their magnitude', () => {
+    expect(getProportionalLineWidthForValue(-100, DOMAIN_MAX, MAX_WIDTH)).toBe(
+      getProportionalLineWidthForValue(100, DOMAIN_MAX, MAX_WIDTH)
+    );
+  });
+
+  it('should give the maximum value the configured max width', () => {
+    expect(
+      getProportionalLineWidthForValue(DOMAIN_MAX, DOMAIN_MAX, MAX_WIDTH)
+    ).toBe(MAX_WIDTH);
+  });
+
+  it('should derive the accessor domain from the min/max magnitudes and drop missing values to zero', () => {
+    const accessor = createProportionalLineWidthAccessor(
+      'flow',
+      -DOMAIN_MAX,
+      100,
+      MAX_WIDTH
+    );
+
+    expect(accessor({ flow: -DOMAIN_MAX })).toBe(MAX_WIDTH);
+    expect(accessor({ flow: 100 })).toBe(MAX_WIDTH / 2);
+    expect(accessor({ flow: 0 })).toBe(0);
+    expect(accessor({ flow: undefined })).toBe(0);
   });
 });

@@ -235,6 +235,17 @@ describe('resolveGPSCoordinateColumns', () => {
     expect(resolveGPSCoordinateColumns(columns)).toBeNull();
   });
 
+  it('resolves numeric x/y columns through the semio geolat/geolon path', () => {
+    const columns = [
+      { name: 'x', semioType: 'geolon' },
+      { name: 'y', semioType: 'geolat' },
+      { name: 'habitants' }
+    ];
+    const result = resolveGPSCoordinateColumns(columns);
+    expect(result?.lat).toBe('y');
+    expect(result?.lon).toBe('x');
+  });
+
   it('prefers geo_detection metadata over name heuristics', () => {
     const columns = [{ name: 'col_a' }, { name: 'col_b' }];
     const geoDetection = {

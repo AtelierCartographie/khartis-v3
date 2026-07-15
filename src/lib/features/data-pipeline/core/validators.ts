@@ -3,10 +3,13 @@ import {
   getWarningFileSizeForType
 } from '$lib/features/commons/constants/validation.config';
 import { detectFileType } from '$lib/features/commons/utils/file-import.utils';
+import type { ValidationResult } from '$lib/features/commons/types/validation.types';
+import {
+  validationFailure,
+  validationSuccess
+} from '$lib/features/commons/types/validation.types';
 import * as m from '$lib/paraglide/messages';
 import { PIPELINE_CONST } from '../constants';
-import type { ValidationResult } from '../types';
-import { validationFailure, validationSuccess } from '../types';
 
 export async function validateFile(file: File): Promise<ValidationResult> {
   const fileType = detectFileType(file);

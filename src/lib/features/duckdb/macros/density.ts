@@ -76,6 +76,10 @@ const get_density_levels_macro = `CREATE OR REPLACE MACRO get_density_levels(tab
   SELECT 'less', less FROM levels
 );`;
 
+// Caps rejection-sampling oversampling on sliver polygons (bbox >> area) so
+// generate_series cannot explode the WASM memory budget.
+const MAX_DYNAMIC_OVERSAMPLE = 64;
+
 const generate_dot_density_macro = `CREATE OR REPLACE MACRO generate_dot_density(tabname, geom_col, data_col, ratio) AS TABLE (
   WITH base_data AS (
     SELECT
@@ -102,9 +106,12 @@ const generate_dot_density_macro = `CREATE OR REPLACE MACRO generate_dot_density
   smart_oversampling AS (
     SELECT
       *,
-      GREATEST(
-        2,
-        CEIL(((xmax - xmin) * (ymax - ymin)) / poly_area) * 2
+      LEAST(
+        GREATEST(
+          2,
+          CEIL(((xmax - xmin) * (ymax - ymin)) / poly_area) * 2
+        ),
+        ${MAX_DYNAMIC_OVERSAMPLE}
       )::INTEGER AS dynamic_oversample
     FROM bounds
     WHERE target_count > 0

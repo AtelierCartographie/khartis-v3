@@ -16,6 +16,11 @@
   import { ToolbarState } from '$lib/features/commons/types/global';
   import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
   import {
+    PERF_PHASE,
+    perfMark,
+    perfMeasure
+  } from '$lib/features/commons/utils/perf-marks.utils';
+  import {
     Duck,
     validateGPSColumns,
     type AnalysisResult,
@@ -53,8 +58,9 @@
     columnAnalysisAbort = controller;
     const tableName = selectedDataset.tableName;
 
+    perfMark(PERF_PHASE.GEOLOCATION_STEP);
     try {
-      const result = await duckDBOrchestrator.getFullAnalysis(tableName, true);
+      const result = await duckDBOrchestrator.getFullAnalysis(tableName, false);
       if (controller.signal.aborted) return;
       columnAnalysis = result;
       columnAnalysisLoaded = true;
@@ -62,6 +68,8 @@
       if (controller.signal.aborted) return;
       columnAnalysis = [];
       columnAnalysisLoaded = false;
+    } finally {
+      perfMeasure(PERF_PHASE.GEOLOCATION_STEP);
     }
   }
 

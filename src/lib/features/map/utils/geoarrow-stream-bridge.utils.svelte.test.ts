@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Binary, makeTable, vectorFromArray } from 'apache-arrow';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import { geoIdentity } from 'd3-geo';
+import { geoEquirectangular, geoIdentity } from 'd3-geo';
 import type {
   BinaryPathData,
   BinaryPointData,
@@ -18,7 +18,8 @@ import {
   pathColorAttr,
   pathWidthAttr,
   pointColorAttr,
-  parsePointDataWithProjection
+  parsePointDataWithProjection,
+  projectGeoJSON
 } from './geoarrow-stream-bridge.utils';
 
 function createPathData(): BinaryPathData {
@@ -384,5 +385,133 @@ describe('geoarrow stream bridge path attributes', () => {
     expect(compositeProjectedBbox?.[3]).toBeGreaterThan(
       mainlandProjectedBbox?.[3] ?? 0
     );
+  });
+});
+
+describe('projectGeoJSON through a rotated projection', () => {
+  function boxRing(
+    lonMin: number,
+    lonMax: number,
+    latMin: number,
+    latMax: number,
+    step = 2
+  ): GeoJSON.Position[] {
+    const ring: GeoJSON.Position[] = [];
+    for (let lon = lonMin; lon < lonMax; lon += step) ring.push([lon, latMin]);
+    for (let lat = latMin; lat < latMax; lat += step) ring.push([lonMax, lat]);
+    for (let lon = lonMax; lon > lonMin; lon -= step) ring.push([lon, latMax]);
+    for (let lat = latMax; lat > latMin; lat -= step) ring.push([lonMin, lat]);
+    ring.push([lonMin, latMin]);
+    return ring;
+  }
+
+  function geometryWidth(geometry: GeoJSON.Geometry): number {
+    let min = Infinity;
+    let max = -Infinity;
+    const visit = (coords: unknown): void => {
+      if (Array.isArray(coords) && typeof coords[0] === 'number') {
+        const x = coords[0] as number;
+        if (x < min) min = x;
+        if (x > max) max = x;
+        return;
+      }
+      if (Array.isArray(coords)) for (const child of coords) visit(child);
+    };
+    visit((geometry as { coordinates: unknown }).coordinates);
+    return max - min;
+  }
+
+  it('should split a polygon crossing the rotated antimeridian instead of drawing a full-width band', () => {
+    const projection = geoEquirectangular()
+      .rotate([54, 0])
+      .translate([500, 250])
+      .scale(150) as unknown as ProjectionLike;
+    const collection: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { name: 'crossing' },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [boxRing(100, 160, 50, 70)]
+          }
+        }
+      ]
+    };
+
+    const projected = projectGeoJSON(collection, projection);
+
+    expect(projected.features).toHaveLength(1);
+    const geometry = projected.features[0].geometry;
+    expect(geometry.type).toBe('MultiPolygon');
+    const parts = (geometry as GeoJSON.MultiPolygon).coordinates;
+    expect(parts.length).toBeGreaterThanOrEqual(2);
+    const fullWidth = 2 * Math.PI * 150;
+    for (const part of parts) {
+      const width = geometryWidth({
+        type: 'Polygon',
+        coordinates: part
+      });
+      expect(width).toBeLessThan(fullWidth * 0.5);
+    }
+  });
+
+  it('should split a line crossing the rotated antimeridian into runs', () => {
+    const projection = geoEquirectangular()
+      .rotate([54, 0])
+      .translate([500, 250])
+      .scale(150) as unknown as ProjectionLike;
+    const collection: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'LineString',
+            coordinates: Array.from({ length: 61 }, (_, i) => [100 + i, 55])
+          }
+        }
+      ]
+    };
+
+    const projected = projectGeoJSON(collection, projection);
+
+    expect(projected.features).toHaveLength(1);
+    const geometry = projected.features[0].geometry;
+    expect(geometry.type).toBe('MultiLineString');
+    const fullWidth = 2 * Math.PI * 150;
+    for (const line of (geometry as GeoJSON.MultiLineString).coordinates) {
+      const width = geometryWidth({ type: 'LineString', coordinates: line });
+      expect(width).toBeLessThan(fullWidth * 0.5);
+    }
+  });
+
+  it('should keep a hole attached to its exterior after projection', () => {
+    const projection = geoEquirectangular()
+      .translate([500, 250])
+      .scale(150) as unknown as ProjectionLike;
+    const collection: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Polygon',
+            coordinates: [boxRing(10, 30, 10, 30), boxRing(18, 22, 18, 22)]
+          }
+        }
+      ]
+    };
+
+    const projected = projectGeoJSON(collection, projection);
+
+    const geometry = projected.features[0].geometry;
+    expect(geometry.type).toBe('MultiPolygon');
+    const parts = (geometry as GeoJSON.MultiPolygon).coordinates;
+    expect(parts).toHaveLength(1);
+    expect(parts[0]).toHaveLength(2);
   });
 });

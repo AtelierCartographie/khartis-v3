@@ -3,15 +3,20 @@ import type { FileFormat } from '../types';
 
 const { TABULAR, GEO, PARQUET } = PIPELINE_CONST.EXTENSIONS;
 
-export function generateTableName(filename: string, prefix?: string): string {
+export function generateTableName(
+  filename: string,
+  sourceFileId?: string
+): string {
   let name = filename.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_');
-  if (prefix) {
-    name = `${prefix}_${name}`;
-  } else if (!/^[a-zA-Z]/.test(name)) {
+  if (!/^[a-zA-Z]/.test(name)) {
     name = 't_' + name;
   }
-  const timestamp = Date.now().toString(36);
-  return `${name}_${timestamp}`;
+  // The per-source suffix must stay deterministic: replays and the creation
+  // fast-path re-derive the persisted duckdbTableName from the same id.
+  const suffix = sourceFileId
+    ? sourceFileId.replace(/[^a-zA-Z0-9]/g, '_')
+    : Date.now().toString(36);
+  return `${name}_${suffix}`;
 }
 
 function hasExtension(name: string, extensions: readonly string[]): boolean {
