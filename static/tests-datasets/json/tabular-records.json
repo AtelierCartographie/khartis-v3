@@ -1,0 +1,6 @@
+[
+  { "country": "France", "population": 68000000, "gdp": 2.78 },
+  { "country": "Germany", "population": 84000000, "gdp": 4.07 },
+  { "country": "Italy", "population": 59000000, "gdp": 2.01 },
+  { "country": "Spain", "population": 48000000, "gdp": 1.4 }
+]

@@ -9,7 +9,7 @@ import { executeQuery, executeQueryStreaming } from './core/query';
 import { exportToCsv } from './io/exporters';
 import { dropRegisteredFile, registerFiles } from './io/file-registry';
 import { rowIdSequenceName } from './io/reader-utils';
-import { readGeofile, readTabular } from './io';
+import { readGeofile, readJsonTabular, readTabular } from './io';
 import { analyse, describeColumns } from './operations/analysis';
 import { searchInTable } from './operations/search';
 import { describeTable, dropRows, getRowCount } from './operations/table-ops';
@@ -100,6 +100,14 @@ export const Duck = {
   ): Promise<DuckDBMetadata | string> {
     const ctx = getContext();
     return readGeofile(ctx, geofile, options);
+  },
+
+  async read_json_tabular(
+    file: File,
+    options: { tablename: string }
+  ): Promise<string> {
+    const ctx = getContext();
+    return readJsonTabular(ctx, file, options);
   },
 
   async describe_table(

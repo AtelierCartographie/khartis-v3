@@ -33,6 +33,7 @@ export enum GeoLocationType {
 
 export enum FileFormatEnum {
   CSV = 'csv',
+  JSON = 'json',
   GEOJSON = 'geojson',
   SHAPEFILE = 'shapefile',
   GEOPACKAGE = 'geopackage',

@@ -937,6 +937,7 @@
   "pipeline_error_geofile_multiple_layers": "This file contains multiple layers and cannot be imported as a data source. Please convert it to a single-layer format (e.g. GeoJSON or CSV).",
   "pipeline_error_file_unreadable": "The file could not be read. Check the format and try again.",
   "pipeline_error_generic": "The file could not be processed. Unsupported format.",
+  "pipeline_error_json_unreadable": "The .json file could not be read: neither valid GeoJSON nor a JSON array of records.",
   "pipeline_error_csv_read_failed": "CSV import failed: {detail}",
   "pipeline_warning_geometry_bounds_unavailable": "Geographic extent unavailable: all geometries are empty or null.",
   "pipeline_warning_geometry_inspection_failed": "The geometry column could not be inspected: the file is treated as tabular data.",

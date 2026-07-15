@@ -17,6 +17,7 @@ type DatasetLike = DatasetResult | ProcessedDataset;
 
 const KNOWN_FORMATS = [
   'csv',
+  'json',
   'geojson',
   'shapefile',
   'geopackage',
