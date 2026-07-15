@@ -27,11 +27,7 @@
     supportsWebGL2,
     type DeckInstance
   } from '$lib/features/map/hooks/use-map-init.svelte';
-  import {
-    calculateBoundsFromGeoArrow,
-    calculateBoundsFromGeoArrowRows,
-    calculateBoundsFromGeoJSON
-  } from '$lib/features/map/core';
+  import { calculateBoundsFromGeoJSON } from '$lib/features/map/core';
   import { DECK_DEVICE_TYPE } from '$lib/features/map/constants';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
@@ -65,18 +61,8 @@
   import {
     resolveOrthographicDatasetBounds,
     resolveOrthographicProjectionFitBbox,
-    resolveOrthographicReferenceTable,
     shouldUseBasemapReferenceInOrthographicView
   } from '$lib/features/map/utils/orthographic-reference.utils';
-  import {
-    buildSplitDatasetRowMapping,
-    getSplitMatchedGeometryRowIndices
-  } from '$lib/features/map/layers/split-rendering-accessors';
-  import { selectRowsByIndices } from '$lib/features/map/utils/arrow-filter.utils';
-  import {
-    arrowTableToGeoJSON,
-    extractGeometryInfo
-  } from '$lib/features/map/io';
   import { resolveOrthographicInteractionController } from '$lib/features/map/utils/map-interaction-mode.utils';
   import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
   import {
@@ -283,53 +269,14 @@
     );
   }
 
-  function getSplitDatasetBounds(datasetId: string | undefined) {
-    const split = datasetId ? splitData?.get(datasetId) : undefined;
-    if (!split) {
-      return null;
-    }
-
-    const rowMapping = buildSplitDatasetRowMapping(
-      split.geometry,
-      split.dataset,
-      split.featureIdColumn
-    );
-
-    const rowBounds = calculateBoundsFromGeoArrowRows(
-      split.geometry,
-      (rowIndex) => rowMapping[rowIndex] !== -1
-    );
-    if (rowBounds) {
-      return rowBounds;
-    }
-
-    const matchedRows = getSplitMatchedGeometryRowIndices(
-      split.geometry,
-      split.dataset,
-      split.featureIdColumn
-    );
-    if (matchedRows.length === 0) {
-      return null;
-    }
-
-    const filteredGeometry = selectRowsByIndices(split.geometry, matchedRows);
-    const geometryInfo = extractGeometryInfo(filteredGeometry);
-    const geojson = geometryInfo
-      ? arrowTableToGeoJSON(filteredGeometry, geometryInfo.geoColumn)
-      : null;
-
-    return geojson ? calculateBoundsFromGeoJSON(geojson) : null;
-  }
-
+  // Bounds never come from scanning geometry tables: imported datasets carry
+  // ST_Extent-derived bounds from the pipeline, and catalog basemaps carry a
+  // curated metadata bbox.
   function getRenderedDatasetBounds(datasetId: string | undefined) {
-    const splitBounds = getSplitDatasetBounds(datasetId);
-    if (splitBounds || (datasetId && splitData?.has(datasetId))) {
-      return toOrthographicBounds(splitBounds);
-    }
-
-    return firstTable
-      ? toOrthographicBounds(calculateBoundsFromGeoArrow(firstTable))
-      : null;
+    return resolveOrthographicDatasetBounds(
+      getRenderedDataset(datasetId),
+      null
+    );
   }
 
   function shouldPreferDatasetProjectionBbox(datasetBbox: BBox | null) {
@@ -340,30 +287,22 @@
   function resolveRenderedReferenceBounds(params: {
     datasetId: string | undefined;
     dataset: ReturnType<typeof getRenderedDataset>;
-    referenceTable: ArrowTable | null;
     shouldUseBasemapReference: boolean;
   }): [[number, number], [number, number]] | null {
-    const datasetBounds = getRenderedDatasetBounds(params.datasetId);
+    const datasetBounds = resolveOrthographicDatasetBounds(
+      params.dataset,
+      null
+    );
     const preferDatasetBbox = shouldPreferDatasetProjectionBbox(
       toBboxFromOrthographicBounds(datasetBounds)
     );
 
     if (params.shouldUseBasemapReference && !preferDatasetBbox) {
-      return params.referenceTable
-        ? toOrthographicBounds(
-            calculateBoundsFromGeoArrow(params.referenceTable)
-          )
-        : datasetBounds;
+      const basemapMeta = getProjectionMetadataForDataset(params.datasetId);
+      return toOrthographicBounds(basemapMeta?.bbox ?? null) ?? datasetBounds;
     }
 
-    const tableBounds =
-      params.referenceTable && !preferDatasetBbox
-        ? toOrthographicBounds(
-            calculateBoundsFromGeoArrow(params.referenceTable)
-          )
-        : datasetBounds;
-
-    return resolveOrthographicDatasetBounds(params.dataset, tableBounds);
+    return datasetBounds;
   }
 
   function getProjectionMetadataForDataset(datasetId: string | undefined) {
@@ -495,19 +434,13 @@
           basemapService.projectionPresets
         )
       : null;
-    const datasetTableBounds = getRenderedDatasetBounds(firstDatasetId);
-
     if (!firstDatasetId) {
       return mainlandBbox ?? currentBasemapMeta?.bbox ?? null;
     }
 
     const dataset = getRenderedDataset(firstDatasetId);
-    const resolvedDatasetBounds = resolveOrthographicDatasetBounds(
-      dataset,
-      datasetTableBounds
-    );
     const resolvedDatasetBbox = toBboxFromOrthographicBounds(
-      resolvedDatasetBounds
+      getRenderedDatasetBounds(firstDatasetId)
     );
     const duckDataset = getRenderedDuckDBDataset(firstDatasetId);
     const shouldUseBasemapReference =
@@ -538,17 +471,9 @@
           duckDataset,
           basemapStyleStore.referenceBasemapId
         );
-      const referenceTable = resolveOrthographicReferenceTable({
-        dataset,
-        duckDataset,
-        datasetTable: firstTable,
-        basemapTable: worldBaseTable,
-        referenceBasemapId: basemapStyleStore.referenceBasemapId
-      });
       const bounds = resolveRenderedReferenceBounds({
         datasetId: firstDatasetId,
         dataset,
-        referenceTable,
         shouldUseBasemapReference
       });
       const referenceState = resolveOrthographicReferenceState(

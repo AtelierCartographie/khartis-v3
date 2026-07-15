@@ -1,21 +1,11 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import type { DuckDBDataset } from '$lib/features/duckdb';
-import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { BBox } from '../types';
 
 type OrthographicDatasetRef =
   Pick<DatasetResult, 'geometry'> | null | undefined;
 type OrthographicDuckDatasetRef =
   Pick<DuckDBDataset, 'joinedBasemap'> | null | undefined;
-
-interface ResolveOrthographicReferenceTableOptions {
-  dataset: OrthographicDatasetRef;
-  duckDataset: OrthographicDuckDatasetRef;
-  datasetTable: ArrowTable;
-  basemapTable?: ArrowTable | null;
-
-  referenceBasemapId?: string | null;
-}
 
 interface ResolveOrthographicReferenceBboxOptions {
   datasetBounds: BBox | null;
@@ -52,26 +42,6 @@ export function shouldUseBasemapReferenceInOrthographicView(
 
   if (referenceBasemapId) return true;
   return false;
-}
-
-export function resolveOrthographicReferenceTable({
-  dataset,
-  duckDataset,
-  datasetTable,
-  basemapTable = null,
-  referenceBasemapId = null
-}: ResolveOrthographicReferenceTableOptions): ArrowTable | null {
-  if (
-    shouldUseBasemapReferenceInOrthographicView(
-      dataset,
-      duckDataset,
-      referenceBasemapId
-    )
-  ) {
-    return basemapTable ?? datasetTable;
-  }
-
-  return datasetTable;
 }
 
 export function resolveOrthographicReferenceBbox({
