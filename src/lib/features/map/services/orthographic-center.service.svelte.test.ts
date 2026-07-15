@@ -84,7 +84,8 @@ vi.mock('../utils/geoarrow-stream-bridge.utils', () => ({
   buildProjectionForBasemap: mocks.buildProjectionForBasemap,
   buildCompositeProjectionFromPresetId:
     mocks.buildCompositeProjectionFromPresetId,
-  getMainlandBboxForBasemap: vi.fn(() => null)
+  getMainlandBboxForBasemap: vi.fn(() => null),
+  registerProjectionSpec: vi.fn((projection: unknown) => projection)
 }));
 
 vi.mock('../utils/orthographic-reference.utils', () => ({
