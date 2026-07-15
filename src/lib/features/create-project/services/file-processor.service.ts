@@ -26,6 +26,11 @@ import { sanitizePreparedGeoJSON } from '$lib/features/commons/utils/persisted-g
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import {
+  PERF_PHASE,
+  perfMark,
+  perfMeasure
+} from '$lib/features/commons/utils/perf-marks.utils';
+import {
   dataPipeline,
   isZipDatasetResult,
   type DatasetResult
@@ -455,11 +460,15 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
   ): Promise<void> {
     if (!(await validateAsync(callbacks, uploadedFile, file))) return;
 
+    perfMark(PERF_PHASE.FILE_IMPORT);
+
     const originalContent = await readFileContent(file, (progress) => {
       callbacks.onProgress(uploadedFile.id, progress);
     });
 
-    const dataset = (await dataPipeline.processFile(file)) as DatasetResult;
+    const dataset = (await dataPipeline.processFile(file, {
+      sourceFileId: uploadedFile.id
+    })) as DatasetResult;
     const { tableName, columns, rowCount } = dataset;
     const headers = columns.map((col) => col.name);
 
@@ -469,6 +478,7 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
         FileStatus.ERROR,
         m.pipeline_error_header_only()
       );
+      perfMeasure(PERF_PHASE.FILE_IMPORT);
       return;
     }
 
@@ -490,6 +500,7 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
 
     await performDeepAnalysis(uploadedFile, sampleData, headers);
 
+    perfMeasure(PERF_PHASE.FILE_IMPORT);
     callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
     if (rowCount <= DUPLICATE_SCAN_ROW_LIMIT) {
       void computeDuplicatesAsync(uploadedFile.id, tableName, Duck);

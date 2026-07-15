@@ -22,9 +22,15 @@ import { dataTabState } from '../data-tab.store.svelte';
 import { datasetsStore } from '../datasets.store.svelte';
 import { downloadFile } from '../../utils/file-export.utils';
 import { LogCategory, logger } from '../../utils/logger';
-import { captureMapThumbnail } from '../../utils/map-thumbnail.utils';
+import { captureMapThumbnailThrottled } from '../../utils/map-thumbnail.utils';
 import { showError } from '../../utils/notification.utils.svelte';
+import {
+  PERF_PHASE,
+  perfMark,
+  perfMeasure
+} from '../../utils/perf-marks.utils';
 import { resolvePersistedJoinState } from '../../utils/persisted-join-state.utils';
+import { estimateProjectStorageSize } from '../../utils/size-estimation.utils';
 import { generateProjectFilename } from '../../utils/string.utils';
 import { ProjectValidator } from '../../utils/validation.utils';
 import type { UploadedFile } from '../../types/create-project.types';
@@ -117,6 +123,18 @@ function mergePersistedSourceFile(
   };
 }
 
+let mergedSourceFilesSignature: string | null = null;
+
+function computeSourceFilesSignature(
+  projectId: string,
+  files: UploadedFile[]
+): string {
+  return `${projectId}::${files
+    .map((file) => file.id)
+    .sort()
+    .join('|')}`;
+}
+
 async function mergePersistedSourceFiles(
   container: ProjectStateContainer
 ): Promise<void> {
@@ -124,6 +142,15 @@ async function mergePersistedSourceFiles(
   const currentFiles = currentProject?.data?.sourceFiles;
 
   if (!currentProject?.id || !currentFiles || currentFiles.length === 0) {
+    return;
+  }
+
+  // After the first merge the in-memory project supersets the persisted one, so re-reading IndexedDB per save is pure overhead.
+  const signature = computeSourceFilesSignature(
+    currentProject.id,
+    currentFiles
+  );
+  if (signature === mergedSourceFilesSignature) {
     return;
   }
 
@@ -136,6 +163,7 @@ async function mergePersistedSourceFiles(
     deserializeUploadedFile(file)
   );
   if (!persistedFiles?.length) {
+    mergedSourceFilesSignature = signature;
     return;
   }
 
@@ -146,6 +174,7 @@ async function mergePersistedSourceFiles(
   currentProject.data.sourceFiles = currentFiles.map((file) =>
     mergePersistedSourceFile(file, persistedById.get(file.id))
   );
+  mergedSourceFilesSignature = signature;
 }
 
 export async function saveCurrentProject(
@@ -156,13 +185,16 @@ export async function saveCurrentProject(
     return;
   }
 
+  perfMark(PERF_PHASE.PROJECT_SAVE);
+
   try {
     syncGeoInfoToSourceFiles(container);
     await mergePersistedSourceFiles(container);
 
-    const projectValidation = ProjectValidator.validateProjectSize(
+    const projectSize = estimateProjectStorageSize(
       container._state.currentProject
     );
+    const projectValidation = ProjectValidator.validateProjectSize(projectSize);
     if (!projectValidation.isValid) {
       throw new DataValidationError(
         projectValidation.errors.join(', '),
@@ -177,12 +209,13 @@ export async function saveCurrentProject(
     container._state.currentProject.manifest.updatedAt = new Date();
 
     const thumbnail =
-      captureMapThumbnail()?.dataUrl ?? options.fallbackThumbnail;
+      captureMapThumbnailThrottled()?.dataUrl ?? options.fallbackThumbnail;
 
     await projectRepository.save(
       container._state.currentProject,
       thumbnail,
-      options.exampleId
+      options.exampleId,
+      projectSize
     );
     persistenceRegistry.markClean();
     container._state.isDirty = false;
@@ -197,6 +230,8 @@ export async function saveCurrentProject(
     );
     showError(m.error_save_project_title(), message, error);
     throw error;
+  } finally {
+    perfMeasure(PERF_PHASE.PROJECT_SAVE);
   }
 }
 

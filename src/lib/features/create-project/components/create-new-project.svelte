@@ -31,8 +31,8 @@
   import { SvelteSet } from 'svelte/reactivity';
   import ProjectName from './project-name.svelte';
   import { CreateProjectValidationService } from '../services/validation.service';
-  import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
-  import type { ValidationResult } from '$lib/features/data-pipeline/types';
+  import { PIPELINE_CONST } from '$lib/features/data-pipeline';
+  import type { ValidationResult } from '$lib/features/commons/types/validation.types';
 
   interface Props {
     onClose?: () => void;

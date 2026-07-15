@@ -18,6 +18,7 @@
   import { projectRuntime } from '$lib/features/commons/stores/project/project-runtime.svelte';
   import { initializeStores } from '$lib/features/commons/stores/stores-init';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { forceNextMapThumbnailCapture } from '$lib/features/commons/utils/map-thumbnail.utils';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import * as m from '$lib/paraglide/messages';
   import { EVENT } from '$lib/features/commons/constants/dom.constants';
@@ -190,6 +191,7 @@
     });
 
     const handleLifecycleFlush = () => {
+      forceNextMapThumbnailCapture();
       void persistenceRegistry.flush();
     };
 
