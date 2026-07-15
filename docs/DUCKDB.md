@@ -82,7 +82,7 @@ q6(table, column)               -- 6 classes prédéfinies (5e, 27.5e, 50e, 72.5
 headtail2(table, column, n)     -- Head/tail breaks (distributions à longue queue)
 ```
 
-Ce sont des **MACROs** (pas des fonctions) pour que le nom de colonne soit substitué dynamiquement. Les tests vérifient explicitement qu'on n'utilise pas `FUNCTION`. Le résultat (`LIST<DOUBLE>`) est extrait via le helper `toIterableValues()` qui gère les cas `TypedArray`, `Array`, et tout itérable — ne jamais tester `Array.isArray()` seul sur ce résultat.
+Ce sont des **MACROs** pour que le nom de colonne soit substitué dynamiquement. DuckDB traite `CREATE FUNCTION` comme un synonyme de `CREATE MACRO` ; le dépôt n'en contient qu'une occurrence (`share_rank_interval` dans `macros/analyse.ts`), toutes les macros de classification ci-dessus sont déclarées `MACRO`. Le résultat (`LIST<DOUBLE>`) est extrait via le helper `toIterableValues()` qui gère les cas `TypedArray`, `Array`, et tout itérable — ne jamais tester `Array.isArray()` seul sur ce résultat.
 
 ### Macros de jointure (`join_macros`)
 
@@ -210,7 +210,7 @@ await duckDBOrchestrator.finalizeJoin(datasetId, basemap, geoColumn);
 
 `finalizeJoin` utilise le **cache de similarité**. `ensureSimilarityCached()` le construit si nécessaire, puis `applyCachedJoinAssociation()` applique l'association. `invalidateSimilarityCache()` est appelé après toute correction utilisateur.
 
-Le cache de similarité est une table DuckDB nommée avec le préfixe `__similarity_cache__` + l'identifiant du dataset. Elle est construite par `ensureSimilarityCached()` via un cross-join `dataset × basemap_attributes` filtré par `jaro_winkler_similarity(normalize_text_join(left), normalize_text_join(right), 0.85)`. La construction est coûteuse (O(N×M)) mais n'a lieu qu'une fois par dataset/fond ; les corrections utilisateur réutilisent cette table sans la recalculer.
+Le cache de similarité est une table DuckDB nommée `__similarity_cache__` + `<table>__<colonne géo>` (sanitisé + hash). `ensureSimilarityCached()` la construit en **deux phases** : une phase exacte (hash join `dataset × basemap_attributes` sur les noms normalisés, plafonnée par fond candidat), puis une phase floue Jaro-Winkler réservée aux candidats sans match exact. La phase floue score des valeurs **dédupliquées** (`SELECT DISTINCT normalized`) restreintes par **blocking** aux fonds rendus plausibles par un match exact (repli : tous les fonds), compare aussi une variante triée par mots (facteur 0,99), et passe `FUZZY_SCORE_CUTOFF = 0.9` en 3e argument de `jaro_winkler_similarity` (early-exit interne). Les entrées sont gérées en **LRU de 4** keyées `(table, colonne géo)` : l'éviction et `invalidateSimilarityCache()` droppent la table ; les corrections utilisateur invalident le cache, la finalisation de jointure le préserve.
 
 ### GPS
 
