@@ -120,7 +120,7 @@
     "workbox-window": "^7.4.1"
   },
   "dependencies": {
-    "@ateliercartographie/geoarrow-deck-stream": "^1.1.3",
+    "@ateliercartographie/geoarrow-deck-stream": "link:../geoarrow-deck-stream",
     "@ateliercartographie/motif.js": "^0.1.5",
     "@ateliercartographie/ok-palette": "^0.1.4",
     "@ateliercartographie/proj-suggest": "^0.0.1",

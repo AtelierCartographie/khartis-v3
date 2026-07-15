@@ -9,8 +9,7 @@ import {
   geoIdentity,
   parseGeometry,
   parsePolygonsToSolid,
-  parsePoints,
-  buildCompositeProjection
+  parsePoints
 } from '@ateliercartographie/geoarrow-deck-stream';
 import type {
   BinaryPathData,
@@ -20,20 +19,28 @@ import type {
   ParserOptions,
   ProjectionLike
 } from '@ateliercartographie/geoarrow-deck-stream';
+import type { ProjectionSpec } from '@ateliercartographie/geoarrow-deck-stream/worker';
 import { geoArea, geoStream, type GeoProjection, type GeoStream } from 'd3-geo';
 
-import * as _d3GeoProjection from 'd3-geo-projection';
-
-const { geoNaturalEarth2 } = _d3GeoProjection as unknown as {
-  geoNaturalEarth2: () => GeoProjection;
-};
 import type {
   BasemapMetadata,
   ProjectionPreset,
   ProjectionPresetEntry,
   ProjectionPresets
 } from '../types/basemap.types';
-import { proj4d3 } from './proj4d3.utils';
+import {
+  buildKhartisCompositeProjection,
+  resolveSimpleProjection,
+  KHARTIS_COMPOSITE_FACTORY,
+  KHARTIS_PROJ4_FACTORY,
+  type KhartisCompositeParams
+} from './khartis-projection-factories.utils';
+import {
+  bumpWorkerParseVersion,
+  getParseWorkerClient,
+  ipcBytesForTable,
+  trackWorkerParseVersion
+} from './worker-parse.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   PERF_PHASE,
@@ -43,39 +50,12 @@ import {
 
 type BBoxTuple = [number, number, number, number];
 
-const D3_GEO_PROJECTION_MAP: Record<string, () => GeoProjection> = {
-  natearth2: geoNaturalEarth2
-};
-
-function resolveSimpleProjection(proj4String: string): GeoProjection {
-  const match = proj4String.match(/\+proj=([^\s+]+)/);
-  if (match) {
-    const factory = D3_GEO_PROJECTION_MAP[match[1]];
-    if (factory) return factory();
-  }
-  return proj4d3(proj4String);
-}
-
 const EXPECTED_GEOM_COL = 'geometry';
 const normalizedTableCache = new WeakMap<ArrowTable, ArrowTable>();
 const projectedBboxCache = new WeakMap<
   BasemapMetadata,
   Map<string, BBoxTuple | null>
 >();
-
-type GeoBounds = [number, number, number, number];
-type CompositeSubProjection = {
-  id: string;
-  projection: ProjectionLike;
-  bounds: GeoBounds;
-  screenExtent: [[number, number], [number, number]];
-};
-
-type CompositeProjectionLike = ProjectionLike & {
-  getSubProjections: () => CompositeSubProjection[];
-  getInsetBorders?: () => unknown;
-  invert?: (coordinates: [number, number]) => [number, number] | null;
-};
 
 function createProjectionPointSampler(
   projection: ProjectionLike
@@ -231,252 +211,6 @@ function normalizeGeomColumnName(table: ArrowTable): ArrowTable {
   return result;
 }
 
-function isWithinBounds(lon: number, lat: number, bounds: GeoBounds): boolean {
-  return (
-    lon >= bounds[0] && lon <= bounds[2] && lat >= bounds[1] && lat <= bounds[3]
-  );
-}
-
-// Routing margin around each sub-projection's geographic bounds. The visible
-// cut must come from the sub-projection's rectangular screen clipExtent (the
-// cell frame), not from this geographic box: a lon/lat cut projects as curved
-// parallels / oblique meridians (the curved Maghreb edge and the diagonal cut
-// through Russia on the Europe composite). The margin pushes the geographic
-// cut far enough outside the cell that only the screen rectangle shows, while
-// still bounding how much far-away geometry is fed to proj4.
-const ROUTING_BOUNDS_MARGIN_RATIO = 0.5;
-
-function expandBoundsForRouting(bounds: GeoBounds): GeoBounds {
-  const lonMargin = (bounds[2] - bounds[0]) * ROUTING_BOUNDS_MARGIN_RATIO;
-  const latMargin = (bounds[3] - bounds[1]) * ROUTING_BOUNDS_MARGIN_RATIO;
-  return [
-    bounds[0] - lonMargin,
-    Math.max(-90, bounds[1] - latMargin),
-    bounds[2] + lonMargin,
-    Math.min(90, bounds[3] + latMargin)
-  ];
-}
-
-// Splits an open line string into contiguous in-bounds runs. Dropping
-// out-of-bounds points and keeping a single run would reconnect the surviving
-// points straight across the gap when a line exits and re-enters the box.
-function splitLineToBounds(
-  line: readonly [number, number][],
-  bounds: GeoBounds
-): [number, number][][] {
-  const runs: [number, number][][] = [];
-  let current: [number, number][] = [];
-  for (const point of line) {
-    if (isWithinBounds(point[0], point[1], bounds)) {
-      current.push(point);
-    } else if (current.length > 0) {
-      runs.push(current);
-      current = [];
-    }
-  }
-  if (current.length > 0) {
-    runs.push(current);
-  }
-  return runs;
-}
-
-// Sutherland-Hodgman clip of a polygon ring against an axis-aligned lon/lat
-// rectangle (bounds = [west, south, east, north]). Routing a composite ring to
-// a sub-projection by merely *dropping* out-of-bounds points reconnects the
-// surviving points straight across the gap, producing a degenerate fan/triangle
-// (the grey wedge that swallowed the sea and the UK on the NUTS basemap). Real
-// clipping inserts the boundary-intersection vertices so the ring follows the
-// rectangle edge instead of cutting across it.
-function clipRingToBounds(
-  ring: readonly [number, number][],
-  bounds: GeoBounds
-): [number, number][] {
-  if (ring.length < 3) {
-    return [];
-  }
-  const [west, south, east, north] = bounds;
-
-  type Edge = {
-    inside: (p: [number, number]) => boolean;
-    intersect: (a: [number, number], b: [number, number]) => [number, number];
-  };
-  const edges: Edge[] = [
-    {
-      inside: (p) => p[0] >= west,
-      intersect: (a, b) => {
-        const t = (west - a[0]) / (b[0] - a[0]);
-        return [west, a[1] + t * (b[1] - a[1])];
-      }
-    },
-    {
-      inside: (p) => p[0] <= east,
-      intersect: (a, b) => {
-        const t = (east - a[0]) / (b[0] - a[0]);
-        return [east, a[1] + t * (b[1] - a[1])];
-      }
-    },
-    {
-      inside: (p) => p[1] >= south,
-      intersect: (a, b) => {
-        const t = (south - a[1]) / (b[1] - a[1]);
-        return [a[0] + t * (b[0] - a[0]), south];
-      }
-    },
-    {
-      inside: (p) => p[1] <= north,
-      intersect: (a, b) => {
-        const t = (north - a[1]) / (b[1] - a[1]);
-        return [a[0] + t * (b[0] - a[0]), north];
-      }
-    }
-  ];
-
-  let output: [number, number][] = [...ring];
-  for (const edge of edges) {
-    if (output.length === 0) {
-      return [];
-    }
-    const input = output;
-    output = [];
-    for (let i = 0; i < input.length; i++) {
-      const current = input[i];
-      const previous = input[(i + input.length - 1) % input.length];
-      const currentInside = edge.inside(current);
-      const previousInside = edge.inside(previous);
-      if (currentInside) {
-        if (!previousInside) {
-          output.push(edge.intersect(previous, current));
-        }
-        output.push(current);
-      } else if (previousInside) {
-        output.push(edge.intersect(previous, current));
-      }
-    }
-  }
-  return output.filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
-}
-
-function hasCompositeSubProjections(
-  projection: ProjectionLike
-): projection is CompositeProjectionLike {
-  return (
-    typeof (projection as { getSubProjections?: unknown }).getSubProjections ===
-    'function'
-  );
-}
-
-function withGeographicBoundsRouting(
-  projection: CompositeProjectionLike
-): CompositeProjectionLike {
-  let cachedSink: GeoStream | null = null;
-  let cachedStream: GeoStream | null = null;
-
-  const routed = ((coordinates: [number, number]) =>
-    projection(coordinates)) as CompositeProjectionLike;
-
-  routed.stream = (sink: GeoStream): GeoStream => {
-    if (cachedSink === sink && cachedStream) {
-      return cachedStream;
-    }
-
-    const entries = projection.getSubProjections();
-    const streams = entries.map((entry) => entry.projection.stream(sink));
-    const routingBounds = entries.map((entry) =>
-      expandBoundsForRouting(entry.bounds)
-    );
-
-    // Collect the FULL ring, then route to each sub-projection whose expanded
-    // bounds it touches. The geographic clip (Sutherland-Hodgman for rings,
-    // run-splitting for lines) happens on the expanded box, so the visible cut
-    // is always the sub-projection's rectangular screen clipExtent — the cell
-    // frame — never a curved parallel or oblique meridian.
-    let ringBuffer: [number, number][] | null = null;
-    let inPolygon = false;
-
-    const emitRing = (index: number, points: [number, number][]): void => {
-      if (points.length < 2) return;
-      streams[index].lineStart();
-      for (const [lon, lat] of points) {
-        streams[index].point(lon, lat);
-      }
-      streams[index].lineEnd();
-    };
-
-    cachedStream = {
-      point(lon: number, lat: number): void {
-        if (ringBuffer) {
-          ringBuffer.push([lon, lat]);
-        } else {
-          for (let index = 0; index < entries.length; index++) {
-            if (isWithinBounds(lon, lat, routingBounds[index])) {
-              streams[index].point(lon, lat);
-            }
-          }
-        }
-      },
-      sphere(): void {
-        for (const stream of streams) {
-          stream.sphere?.();
-        }
-      },
-      lineStart(): void {
-        ringBuffer = [];
-      },
-      lineEnd(): void {
-        if (!ringBuffer) return;
-        const ring = ringBuffer;
-        ringBuffer = null;
-        for (let index = 0; index < streams.length; index++) {
-          const bounds = routingBounds[index];
-          // Only route the ring to a sub-projection it actually touches. A ring
-          // that merely *encloses* a distant inset's bounds (e.g. the mainland
-          // outline around a DOM-TOM box) has no vertex inside it; clipping such
-          // a ring would emit the bounds rectangle as a spurious filled box (the
-          // grey square that appeared next to Spain). Requiring a vertex inside
-          // keeps real coastlines while dropping the enclosing-only case.
-          if (!ring.some(([lon, lat]) => isWithinBounds(lon, lat, bounds))) {
-            continue;
-          }
-          if (inPolygon) {
-            emitRing(index, clipRingToBounds(ring, bounds));
-          } else {
-            for (const run of splitLineToBounds(ring, bounds)) {
-              emitRing(index, run);
-            }
-          }
-        }
-      },
-      polygonStart(): void {
-        inPolygon = true;
-        for (const stream of streams) {
-          stream.polygonStart();
-        }
-      },
-      polygonEnd(): void {
-        inPolygon = false;
-        for (const stream of streams) {
-          stream.polygonEnd();
-        }
-      }
-    };
-    cachedSink = sink;
-    return cachedStream;
-  };
-
-  routed.getSubProjections = () => projection.getSubProjections();
-
-  if (projection.getInsetBorders) {
-    routed.getInsetBorders = () => projection.getInsetBorders?.() ?? [];
-  }
-
-  if (projection.invert) {
-    routed.invert = (coordinates: [number, number]) =>
-      projection.invert?.(coordinates) ?? null;
-  }
-
-  return routed;
-}
-
 const IDENTITY_OPTIONS: ParserOptions = {
   projection: geoIdentity(),
   capacityMultiplier: 1.0,
@@ -545,9 +279,148 @@ function setCachedProjectedBinaryData<T>(
   }
 }
 
+const projectionSpecs = new WeakMap<ProjectionLike, ProjectionSpec>();
+
+export function registerProjectionSpec<T extends ProjectionLike>(
+  projection: T,
+  spec: ProjectionSpec
+): T {
+  projectionSpecs.set(projection, spec);
+  return projection;
+}
+
+export function getProjectionSpec(
+  projection: ProjectionLike
+): ProjectionSpec | null {
+  return projectionSpecs.get(projection) ?? null;
+}
+
+registerProjectionSpec(IDENTITY_OPTIONS.projection, {
+  projection: 'geoIdentity'
+});
+
+// Below this row count a synchronous parse costs a few milliseconds at most —
+// cheaper than the worker round trip and it avoids an empty frame while the
+// transferred buffers travel back.
+const WORKER_PARSE_MIN_ROWS = 2000;
+
+const EMPTY_PATH_DATA: BinaryPathData = {
+  length: 0,
+  positions: new Float32Array(0),
+  startIndices: new Uint32Array([0]),
+  featureIds: new Uint32Array(0),
+  size: 2
+};
+
+const EMPTY_POLYGON_DATA: BinaryPolygonData = {
+  length: 0,
+  positions: new Float32Array(0),
+  polygonIndices: new Uint32Array([0]),
+  holeIndices: new Uint32Array(0),
+  indices: new Uint32Array(0),
+  featureIds: new Uint32Array(0),
+  size: 2
+};
+
+const EMPTY_POINT_DATA: BinaryPointData = {
+  length: 0,
+  positions: new Float32Array(0),
+  featureIds: new Uint32Array(0),
+  size: 2
+};
+
+type WorkerParseMethod =
+  'parseGeometry' | 'parsePolygonsToSolid' | 'parsePoints';
+
+let workerKeyIdSeq = 0;
+const workerKeyIds = new WeakMap<object, number>();
+const workerPendingKeys = new Set<string>();
+const workerFailedKeys = new Set<string>();
+
+function workerKeyIdFor(reference: object): number {
+  let id = workerKeyIds.get(reference);
+  if (id === undefined) {
+    id = ++workerKeyIdSeq;
+    workerKeyIds.set(reference, id);
+  }
+  return id;
+}
+
+// Off-main-thread parse: on cache miss, posts the Arrow IPC bytes and the
+// projection's serializable spec to the parse worker, returns an empty
+// placeholder for this frame, and fills the projected cache when the worker
+// responds (the version bump re-runs the reactive layer computation, which
+// then hits the cache). Returns null when the worker path is unavailable —
+// no registered spec, no Worker support, or a previous failure for this
+// (table, projection) pair — and the caller must parse synchronously.
+function requestWorkerParse<T>(
+  method: WorkerParseMethod,
+  table: ArrowTable,
+  projection: ProjectionLike,
+  placeholder: T,
+  storeResult: (data: T) => void,
+  options: { rewind: boolean } = { rewind: true }
+): T | null {
+  if (table.numRows < WORKER_PARSE_MIN_ROWS) {
+    return null;
+  }
+  const spec = getProjectionSpec(projection);
+  if (!spec) {
+    return null;
+  }
+  const client = getParseWorkerClient();
+  if (!client) {
+    return null;
+  }
+
+  const key = `${method}:${workerKeyIdFor(table)}:${workerKeyIdFor(projection)}`;
+  if (workerFailedKeys.has(key)) {
+    return null;
+  }
+
+  trackWorkerParseVersion();
+
+  if (!workerPendingKeys.has(key)) {
+    workerPendingKeys.add(key);
+    const ipcBytes = ipcBytesForTable(normalizeGeomColumnName(table));
+    client[method](ipcBytes, spec, {
+      capacityMultiplier: 1.0,
+      rewind: options.rewind
+    })
+      .then((data) => {
+        storeResult(data as T);
+      })
+      .catch((error: unknown) => {
+        workerFailedKeys.add(key);
+        logger.error(
+          `Worker parse failed (${method}); falling back to main-thread parsing`,
+          LogCategory.MAP,
+          error
+        );
+      })
+      .finally(() => {
+        workerPendingKeys.delete(key);
+        bumpWorkerParseVersion();
+      });
+  }
+
+  return placeholder;
+}
+
 export function parsePaths(table: ArrowTable): BinaryPathData {
   let result = pathCache.get(table);
   if (!result) {
+    const viaWorker = requestWorkerParse(
+      'parseGeometry',
+      table,
+      IDENTITY_OPTIONS.projection,
+      EMPTY_PATH_DATA,
+      (data) => pathCache.set(table, data),
+      { rewind: false }
+    );
+    if (viaWorker) {
+      return viaWorker;
+    }
     result = parseGeometry(normalizeGeomColumnName(table), IDENTITY_OPTIONS);
     pathCache.set(table, result);
   }
@@ -557,6 +430,17 @@ export function parsePaths(table: ArrowTable): BinaryPathData {
 export function parseSolidPolygons(table: ArrowTable): BinaryPolygonData {
   let result = solidPolygonCache.get(table);
   if (!result) {
+    const viaWorker = requestWorkerParse(
+      'parsePolygonsToSolid',
+      table,
+      IDENTITY_OPTIONS.projection,
+      EMPTY_POLYGON_DATA,
+      (data) => solidPolygonCache.set(table, data),
+      { rewind: false }
+    );
+    if (viaWorker) {
+      return viaWorker;
+    }
     result = parsePolygonsToSolid(
       normalizeGeomColumnName(table),
       IDENTITY_OPTIONS
@@ -640,7 +524,28 @@ function parsePointsAllBatches(
 export function parsePointData(table: ArrowTable): BinaryPointData {
   let result = pointCache.get(table);
   if (!result) {
-    result = parsePointsAllBatches(table, IDENTITY_OPTIONS);
+    const normalized = normalizeGeomColumnName(table);
+    // The direct WKB point decode is a flat byte scan — cheaper than any
+    // worker round trip, so it stays synchronous.
+    if (normalized.batches.length > 0) {
+      const direct = decodeWkbPointsAllBatches(normalized);
+      if (direct) {
+        pointCache.set(table, direct);
+        return direct;
+      }
+    }
+    const viaWorker = requestWorkerParse(
+      'parsePoints',
+      table,
+      IDENTITY_OPTIONS.projection,
+      EMPTY_POINT_DATA,
+      (data) => pointCache.set(table, data),
+      { rewind: false }
+    );
+    if (viaWorker) {
+      return viaWorker;
+    }
+    result = parsePoints(normalized, IDENTITY_OPTIONS);
     pointCache.set(table, result);
   }
   return result;
@@ -655,12 +560,15 @@ export function buildProjectionForBasemap(
   const projTo = metadata.proj_to;
 
   if (!projTo || projTo.type === 'identity') {
-    return geoIdentity();
+    return registerProjectionSpec(geoIdentity(), { projection: 'geoIdentity' });
   }
 
   if (projTo.type === 'simple' && projTo.proj4) {
     try {
-      return resolveSimpleProjection(projTo.proj4);
+      return registerProjectionSpec(resolveSimpleProjection(projTo.proj4), {
+        projection: KHARTIS_PROJ4_FACTORY,
+        params: { proj4: projTo.proj4 }
+      });
     } catch (error) {
       logger.error(
         'Failed to resolve simple basemap projection',
@@ -782,12 +690,12 @@ export function buildCompositeProjectionFromPresetId(
       width,
       height
     );
-    const projection = buildCompositeProjection({
+    const compositeParams: KhartisCompositeParams = {
       width,
       height,
       entries: preset.entries.map((entry) => ({
         id: entry.id,
-        projection: resolveSimpleProjection(entry.proj4),
+        proj4: entry.proj4,
         bounds: [
           entry.bounds[0][0],
           entry.bounds[0][1],
@@ -797,11 +705,12 @@ export function buildCompositeProjectionFromPresetId(
         layout: transformLayout(entry.layout),
         scaleMultiplier: entry.scaleMultiplier
       }))
-    });
+    };
 
-    return hasCompositeSubProjections(projection)
-      ? withGeographicBoundsRouting(projection)
-      : projection;
+    return registerProjectionSpec(
+      buildKhartisCompositeProjection(compositeParams),
+      { projection: KHARTIS_COMPOSITE_FACTORY, params: compositeParams }
+    );
   } catch (error) {
     logger.error(
       'Failed to build composite basemap projection',
@@ -894,6 +803,23 @@ export function parseSolidPolygonsWithProjection(
     return cached;
   }
 
+  const viaWorker = requestWorkerParse(
+    'parsePolygonsToSolid',
+    table,
+    projection,
+    EMPTY_POLYGON_DATA,
+    (data) =>
+      setCachedProjectedBinaryData(
+        projSolidPolygonCache,
+        table,
+        projection,
+        data
+      )
+  );
+  if (viaWorker) {
+    return viaWorker;
+  }
+
   perfMark(PERF_PHASE.GEOARROW_PARSE);
   const result = parsePolygonsToSolid(normalizeGeomColumnName(table), {
     projection,
@@ -919,6 +845,18 @@ export function parsePathsWithProjection(
     return cached;
   }
 
+  const viaWorker = requestWorkerParse(
+    'parseGeometry',
+    table,
+    projection,
+    EMPTY_PATH_DATA,
+    (data) =>
+      setCachedProjectedBinaryData(projPathCache, table, projection, data)
+  );
+  if (viaWorker) {
+    return viaWorker;
+  }
+
   const result = parseGeometry(normalizeGeomColumnName(table), {
     projection,
     capacityMultiplier: 1.0,
@@ -939,6 +877,29 @@ export function parsePointDataWithProjection(
   );
   if (cached) {
     return cached;
+  }
+
+  // The direct WKB point decode + point sampler is a flat scan — cheaper
+  // than any worker round trip, so it stays synchronous.
+  const normalized = normalizeGeomColumnName(table);
+  if (normalized.batches.length > 0) {
+    const direct = decodeWkbPointsAllBatches(normalized, projection);
+    if (direct) {
+      setCachedProjectedBinaryData(projPointCache, table, projection, direct);
+      return direct;
+    }
+  }
+
+  const viaWorker = requestWorkerParse(
+    'parsePoints',
+    table,
+    projection,
+    EMPTY_POINT_DATA,
+    (data) =>
+      setCachedProjectedBinaryData(projPointCache, table, projection, data)
+  );
+  if (viaWorker) {
+    return viaWorker;
   }
 
   const result = parsePointsAllBatches(table, {
