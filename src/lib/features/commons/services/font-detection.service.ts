@@ -24,16 +24,6 @@ export async function detectFontsInDataset(
     }
   }
 
-  if (dataset.originalData?.data) {
-    for (const row of dataset.originalData.data.slice(0, SAMPLE_SIZE)) {
-      for (const value of Object.values(row)) {
-        if (typeof value === 'string') {
-          text += value;
-        }
-      }
-    }
-  }
-
   if (!text && dataset.tableName && dataset.rowCount > 0) {
     try {
       const textColumns = dataset.columns
