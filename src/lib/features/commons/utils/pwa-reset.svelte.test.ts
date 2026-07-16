@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPwaCachePrefix, resolvePwaScopeUrl } from './pwa-cache';
-import { factoryResetPwa, shouldSkipLastProjectRestore } from './pwa-reset';
+import {
+  buildLastProjectRestoreFallbackUrl,
+  clearLastProjectRestoreQuarantine,
+  factoryResetPwa,
+  isLastProjectRestoreQuarantined,
+  quarantineLastProjectRestore,
+  shouldSkipLastProjectRestore
+} from './pwa-reset';
 
 function resetFlag(baseUri = document.baseURI): string {
   return `${createPwaCachePrefix(resolvePwaScopeUrl(baseUri))}reset-skip-restore`;
@@ -44,6 +51,28 @@ describe('shouldSkipLastProjectRestore', () => {
     );
 
     expect(shouldSkipLastProjectRestore()).toBe(false);
+  });
+
+  it('should persist and remove a restore fallback URL when storage works', () => {
+    window.history.pushState(
+      {},
+      '',
+      '/cartographie/khartis/?restoreFallback=project-1#map'
+    );
+
+    expect(shouldSkipLastProjectRestore()).toBe(true);
+    expect(isLastProjectRestoreQuarantined('project-1')).toBe(true);
+    expect(window.location.search).toBe('');
+    expect(window.location.hash).toBe('#map');
+  });
+
+  it('should build a scoped restore fallback URL without changing other parameters', () => {
+    expect(
+      buildLastProjectRestoreFallbackUrl(
+        'https://example.org/cartographie/khartis/?kh=demo#map',
+        'project-1'
+      )
+    ).toBe('/cartographie/khartis/?kh=demo&restoreFallback=project-1#map');
   });
 });
 
@@ -105,5 +134,75 @@ describe('factoryResetPwa', () => {
     expect(unregisterOther).not.toHaveBeenCalled();
     expect(deleteCache).toHaveBeenCalledTimes(1);
     expect(deleteCache).toHaveBeenCalledWith(currentCache);
+  });
+});
+
+describe('last project restore quarantine', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+  });
+
+  afterEach(() => {
+    sessionStorage.clear();
+  });
+
+  it('should keep a failed project quarantined for the current tab session', () => {
+    quarantineLastProjectRestore('project-1');
+
+    expect(isLastProjectRestoreQuarantined('project-1')).toBe(true);
+    expect(isLastProjectRestoreQuarantined('project-2')).toBe(false);
+    expect(isLastProjectRestoreQuarantined('project-1')).toBe(true);
+  });
+
+  it('should clear the quarantine after a successful manual reopen', () => {
+    quarantineLastProjectRestore('project-1');
+
+    clearLastProjectRestoreQuarantine('project-1');
+
+    expect(isLastProjectRestoreQuarantined('project-1')).toBe(false);
+  });
+
+  it('should quarantine every automatic restore when the project id is unknown', () => {
+    quarantineLastProjectRestore();
+
+    expect(isLastProjectRestoreQuarantined()).toBe(true);
+    expect(isLastProjectRestoreQuarantined('project-1')).toBe(true);
+  });
+
+  it('should report when session storage cannot persist the quarantine', () => {
+    const originalSessionStorage = Object.getOwnPropertyDescriptor(
+      window,
+      'sessionStorage'
+    );
+    Object.defineProperty(window, 'sessionStorage', {
+      configurable: true,
+      value: {
+        getItem: () => null,
+        removeItem: () => {},
+        setItem: () => {
+          throw new DOMException('Storage disabled', 'SecurityError');
+        }
+      }
+    });
+
+    try {
+      expect(quarantineLastProjectRestore('project-1')).toBe(false);
+    } finally {
+      if (originalSessionStorage) {
+        Object.defineProperty(window, 'sessionStorage', originalSessionStorage);
+      }
+    }
+  });
+
+  it('should clear an older fallback URL after another project opens successfully', () => {
+    window.history.pushState(
+      {},
+      '',
+      '/cartographie/khartis/?restoreFallback=project-1'
+    );
+
+    clearLastProjectRestoreQuarantine('project-2');
+
+    expect(window.location.search).toBe('');
   });
 });

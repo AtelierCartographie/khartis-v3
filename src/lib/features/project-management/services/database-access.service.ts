@@ -4,6 +4,9 @@ import { m } from '$lib/paraglide/messages';
 import { PROJECT_CONST } from '../constants';
 import { ProjectStorageKey } from '../types';
 
+const OPEN_DATABASE_TIMEOUT_MS = 10_000;
+const LOCALFORAGE_MIGRATION_TIMEOUT_MS = 10_000;
+
 export function getProjectDatabase(): Promise<IDBDatabase> {
   return openDatabase();
 }
@@ -11,6 +14,27 @@ export function getProjectDatabase(): Promise<IDBDatabase> {
 let db: IDBDatabase | null = null;
 let localforageMigrated = false;
 let localforageMigrationPromise: Promise<void> | null = null;
+
+function withTimeout<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  errorFactory: () => Error
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(() => reject(errorFactory()), timeoutMs);
+
+    operation.then(
+      (value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      }
+    );
+  });
+}
 
 export async function openDatabase(): Promise<IDBDatabase> {
   if (db) return db;
@@ -20,10 +44,43 @@ export async function openDatabase(): Promise<IDBDatabase> {
       PROJECT_CONST.DB.NAME,
       PROJECT_CONST.DB.VERSION
     );
+    let settled = false;
 
-    request.onerror = () => reject(new Error(m.error_failed_open_indexeddb()));
+    const clearOpenTimeout = (timeoutId: ReturnType<typeof setTimeout>) => {
+      clearTimeout(timeoutId);
+    };
 
-    request.onsuccess = () => resolve(request.result);
+    const rejectOpen = (
+      error: Error,
+      timeoutId: ReturnType<typeof setTimeout>
+    ) => {
+      if (settled) return;
+      settled = true;
+      clearOpenTimeout(timeoutId);
+      reject(error);
+    };
+
+    const timeoutId = setTimeout(() => {
+      rejectOpen(new Error(m.error_failed_open_indexeddb()), timeoutId);
+    }, OPEN_DATABASE_TIMEOUT_MS);
+
+    request.onerror = () =>
+      rejectOpen(new Error(m.error_failed_open_indexeddb()), timeoutId);
+
+    request.onblocked = () =>
+      rejectOpen(new Error(m.error_failed_open_indexeddb()), timeoutId);
+
+    request.onsuccess = () => {
+      const openedDatabase = request.result;
+      if (settled) {
+        openedDatabase.close();
+        return;
+      }
+
+      settled = true;
+      clearOpenTimeout(timeoutId);
+      resolve(openedDatabase);
+    };
 
     request.onupgradeneeded = (event) => {
       const database = (event.target as IDBOpenDBRequest).result;
@@ -31,12 +88,23 @@ export async function openDatabase(): Promise<IDBDatabase> {
     };
   });
 
+  database.onversionchange = () => {
+    database.close();
+    if (db === database) {
+      db = null;
+    }
+  };
   db = database;
 
   if (!localforageMigrated) {
     localforageMigrated = true;
-    localforageMigrationPromise = migrateFromLocalforage(database)
+    localforageMigrationPromise = withTimeout(
+      migrateFromLocalforage(database),
+      LOCALFORAGE_MIGRATION_TIMEOUT_MS,
+      () => new Error('Legacy project metadata migration timed out')
+    )
       .catch((error) => {
+        localforageMigrated = false;
         logger.error(
           'Failed to migrate localforage project metadata',
           LogCategory.PERSISTENCE,

@@ -1,5 +1,7 @@
 export interface SkipWaitingMessage {
   type: 'SKIP_WAITING';
+  persistenceFlushed: true;
+  protocolVersion: 1;
 }
 
 export interface FactoryResetMessage {

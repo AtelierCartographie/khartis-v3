@@ -5,9 +5,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 interface RecoveryEvent {
   error?: unknown;
+  filename?: string;
   message?: unknown;
   preventDefault: ReturnType<typeof vi.fn>;
   reason?: unknown;
+  target?: {
+    href?: string;
+    src?: string;
+  };
 }
 
 type RecoveryListener = (event: RecoveryEvent) => void;
@@ -34,13 +39,15 @@ function createRecoveryHarness({
   lastReload,
   lastReset,
   now = 1_000_000,
-  storageThrows = false
+  storageThrows = false,
+  flushBeforeRecovery
 }: {
   basePath?: string;
   lastReload?: number;
   lastReset?: number;
   now?: number;
   storageThrows?: boolean;
+  flushBeforeRecovery?: () => Promise<boolean>;
 } = {}) {
   const listeners = new Map<string, RecoveryListener[]>();
   const storage = new Map<string, string>();
@@ -73,6 +80,7 @@ function createRecoveryHarness({
       reload,
       replace
     },
+    __khartisFlushBeforePwaRecovery: flushBeforeRecovery,
     sessionStorage: {
       getItem(key: string) {
         if (storageThrows) throw new Error('storage unavailable');
@@ -226,5 +234,78 @@ describe('stale asset recovery bootstrap', () => {
 
     expect(harness.reload).not.toHaveBeenCalled();
     expect(event.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    '/cartographie/khartis/_app/immutable/entry/start.abc123.js',
+    '/cartographie/khartis/assets/duckdb-browser.worker.js',
+    '/cartographie/khartis/assets/duckdb-eh.wasm'
+  ])(
+    'should recover when a critical bootstrap resource fails to load: %s',
+    (src) => {
+      const harness = createRecoveryHarness();
+
+      const event = harness.trigger('error', {
+        target: { src }
+      });
+
+      expect(harness.reload).toHaveBeenCalledTimes(1);
+      expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it('should recover when the browser rejects a module because of its MIME type', () => {
+    const harness = createRecoveryHarness();
+
+    const event = harness.trigger('error', {
+      message:
+        'Failed to load module script: Expected a JavaScript-or-Wasm module script but the server responded with a MIME type of text/html.'
+    });
+
+    expect(harness.reload).toHaveBeenCalledTimes(1);
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  it('should ignore failed resources outside the application bootstrap', () => {
+    const harness = createRecoveryHarness();
+
+    const event = harness.trigger('error', {
+      target: { src: 'https://example.org/unrelated-image.png' }
+    });
+
+    expect(harness.reload).not.toHaveBeenCalled();
+    expect(event.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('should flush the current project before reloading an interactive app', async () => {
+    const order: string[] = [];
+    const harness = createRecoveryHarness({
+      flushBeforeRecovery: async () => {
+        order.push('flush');
+        return true;
+      }
+    });
+    harness.reload.mockImplementation(() => {
+      order.push('reload');
+    });
+
+    const event = harness.trigger('vite:preloadError');
+    await vi.waitFor(() => expect(harness.reload).toHaveBeenCalledOnce());
+
+    expect(order).toEqual(['flush', 'reload']);
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+  });
+
+  it('should not reload when the current project save is not confirmed', async () => {
+    const harness = createRecoveryHarness({
+      flushBeforeRecovery: async () => false
+    });
+
+    const event = harness.trigger('vite:preloadError');
+    await vi.waitFor(() => expect(harness.consoleError).toHaveBeenCalledOnce());
+
+    expect(harness.reload).not.toHaveBeenCalled();
+    expect(harness.replace).not.toHaveBeenCalled();
+    expect(event.preventDefault).toHaveBeenCalledOnce();
   });
 });

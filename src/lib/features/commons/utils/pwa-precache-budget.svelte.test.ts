@@ -3,7 +3,8 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const swPath = resolve(process.cwd(), 'build/sw.js');
-const hasBuild = existsSync(swPath);
+const indexPath = resolve(process.cwd(), 'build/index.html');
+const hasBuild = existsSync(swPath) && existsSync(indexPath);
 
 const WOFF2_PRECACHE_LIMIT = 60;
 const JS_PRECACHE_LIMIT = 200;
@@ -14,8 +15,12 @@ function escapeRegExp(value: string): string {
 }
 
 function getExpectedNavigationFallbackUrl(): string {
-  const basePath = process.env.BASE_PATH?.replace(/\/+$/, '') ?? '';
-  return basePath ? `${basePath}/` : '/';
+  const indexHtml = readFileSync(indexPath, 'utf8');
+  const baseHref = indexHtml.match(/<base href="([^"]+)"/)?.[1];
+  if (!baseHref) {
+    throw new Error('Could not read the built base href.');
+  }
+  return baseHref;
 }
 
 describe.skipIf(!hasBuild)('PWA precache budget', () => {

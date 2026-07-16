@@ -2,7 +2,7 @@
 /// <reference types="vite/client" />
 
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
-import { clientsClaim, setCacheNameDetails } from 'workbox-core';
+import { setCacheNameDetails } from 'workbox-core';
 import type { WorkboxPlugin } from 'workbox-core/types';
 import { ExpirationPlugin } from 'workbox-expiration';
 import {
@@ -28,6 +28,8 @@ import {
   createPwaCachePrefix,
   isPwaCacheForScope
 } from '$lib/features/commons/utils/pwa-cache';
+import { retryTransientResponse } from '$lib/features/commons/utils/pwa-transient-retry';
+import { canonicalizeWorkboxPrecacheRequest } from '$lib/features/commons/utils/pwa-precache-request';
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ revision: string | null; url: string }>;
@@ -40,10 +42,18 @@ const THIRTY_DAYS_SECONDS = 60 * 60 * 24 * 30;
 const PWA_SCOPE_URL = self.registration.scope;
 const PWA_CACHE_PREFIX = createPwaCachePrefix(PWA_SCOPE_URL);
 const scopedCacheName = (name: string): string => `${PWA_CACHE_PREFIX}${name}`;
+const APP_VERSION_CACHE_KEY =
+  (import.meta.env.VITE_APP_VERSION ?? 'dev')
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, '_') || 'dev';
 
 setCacheNameDetails({ prefix: PWA_CACHE_PREFIX });
 
-const APP_SHELL_CACHE = scopedCacheName('app-shell');
+const APP_SHELL_CACHE_PREFIX = scopedCacheName('app-shell-');
+const LEGACY_APP_SHELL_CACHE = scopedCacheName('app-shell');
+const APP_SHELL_CACHE = `${APP_SHELL_CACHE_PREFIX}${APP_VERSION_CACHE_KEY}`;
+const PREVIOUS_IMMUTABLE_CACHE_PREFIX = scopedCacheName('previous-immutable-');
+const PREVIOUS_IMMUTABLE_CACHE = `${PREVIOUS_IMMUTABLE_CACHE_PREFIX}${APP_VERSION_CACHE_KEY}`;
 const DUCKDB_WASM_CORE_CACHE = scopedCacheName('duckdb-wasm-core');
 const DUCKDB_EXTENSIONS_CDN_CACHE = scopedCacheName('duckdb-extensions-cdn');
 const DUCKDB_EXTENSIONS_LOCAL_CACHE = scopedCacheName(
@@ -56,44 +66,66 @@ const GEOPF_TILES_CACHE = scopedCacheName('geopf-vector-tiles');
 const OPENMAPTILES_CACHE = scopedCacheName('openmaptiles');
 const FONTS_CACHE = scopedCacheName('fonts');
 
-self.skipWaiting();
-clientsClaim();
+function isImmutableShellAsset(request: Request): boolean {
+  try {
+    const pathname = new URL(request.url).pathname;
+    return (
+      pathname.includes('/_app/immutable/') &&
+      /\.(?:css|js|wasm)$/.test(pathname)
+    );
+  } catch {
+    return false;
+  }
+}
 
-const RETRY_STATUS_CODES = new Set([408, 425, 500, 502, 503, 504]);
-const MAX_TRANSIENT_RETRIES = 2;
-const BASE_RETRY_DELAY_MS = 500;
-const RETRY_JITTER_MS = 500;
-
-const retryTransientErrorsPlugin: WorkboxPlugin = {
-  fetchDidSucceed: async ({ request, response }) => {
-    if (!RETRY_STATUS_CODES.has(response.status)) {
-      return response;
+async function snapshotPreviousImmutableAssets(): Promise<void> {
+  try {
+    const cacheNames = await caches.keys();
+    const sourceCacheNames = cacheNames.filter(
+      (cacheName) =>
+        isPwaCacheForScope(cacheName, PWA_SCOPE_URL) &&
+        (cacheName.includes('precache') || cacheName === DUCKDB_WASM_CORE_CACHE)
+    );
+    if (sourceCacheNames.length === 0) {
+      return;
     }
-    let latest = response;
-    for (let attempt = 0; attempt < MAX_TRANSIENT_RETRIES; attempt += 1) {
-      const delayMs =
-        BASE_RETRY_DELAY_MS * Math.pow(2, attempt) +
-        Math.random() * RETRY_JITTER_MS;
-      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
-      try {
-        const retried = await fetch(request.clone());
-        if (retried.ok) {
-          return retried;
+
+    const targetCache = await caches.open(PREVIOUS_IMMUTABLE_CACHE);
+    for (const cacheName of sourceCacheNames) {
+      const sourceCache = await caches.open(cacheName);
+      const requests = await sourceCache.keys();
+      for (const request of requests) {
+        if (!isImmutableShellAsset(request)) {
+          continue;
         }
-        if (!RETRY_STATUS_CODES.has(retried.status)) {
-          return retried;
+
+        const response = await sourceCache.match(request);
+        if (response) {
+          await targetCache.put(
+            canonicalizeWorkboxPrecacheRequest(request),
+            response
+          );
         }
-        latest = retried;
-      } catch {
-        break;
       }
     }
-    return latest;
+  } catch {
+    // The N-1 snapshot is best-effort and must never block worker installation.
   }
+}
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(snapshotPreviousImmutableAssets());
+});
+
+const retryTransientErrorsPlugin: WorkboxPlugin = {
+  fetchDidSucceed: async ({ request, response }) =>
+    retryTransientResponse(request, response)
 };
 
-precacheAndRoute(self.__WB_MANIFEST);
-cleanupOutdatedCaches();
+const bypassHttpCachePlugin: WorkboxPlugin = {
+  requestWillFetch: async ({ request }) =>
+    new Request(request, { cache: 'no-store' })
+};
 
 const HASHED_RUNTIME_CACHES_TO_RESET = [FONTS_CACHE, IMAGES_CACHE];
 
@@ -101,8 +133,20 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       try {
+        const cacheNames = await caches.keys();
+        const obsoleteVersionedCaches = cacheNames.filter(
+          (name) =>
+            isPwaCacheForScope(name, PWA_SCOPE_URL) &&
+            name !== APP_SHELL_CACHE &&
+            name !== PREVIOUS_IMMUTABLE_CACHE &&
+            (name === LEGACY_APP_SHELL_CACHE ||
+              name.startsWith(APP_SHELL_CACHE_PREFIX) ||
+              name.startsWith(PREVIOUS_IMMUTABLE_CACHE_PREFIX))
+        );
         await Promise.allSettled(
-          HASHED_RUNTIME_CACHES_TO_RESET.map((name) => caches.delete(name))
+          [...HASHED_RUNTIME_CACHES_TO_RESET, ...obsoleteVersionedCaches].map(
+            (name) => caches.delete(name)
+          )
         );
       } catch {
         // Cache reset is best-effort; failure must not block activation.
@@ -130,8 +174,9 @@ registerRoute(
 
 const navigationHandler = new NetworkFirst({
   cacheName: APP_SHELL_CACHE,
-  networkTimeoutSeconds: 3,
+  networkTimeoutSeconds: 10,
   plugins: [
+    bypassHttpCachePlugin,
     retryTransientErrorsPlugin,
     new CacheableResponsePlugin({ statuses: [0, 200] }),
     new ExpirationPlugin({
@@ -147,6 +192,30 @@ registerRoute(
     denylist: [/^\/api\//, /\.[^/]+$/]
   })
 );
+
+registerRoute(
+  ({ request }) => isImmutableShellAsset(request),
+  async ({ request }) => {
+    const currentResponse = await matchPrecache(request);
+    if (currentResponse) {
+      return currentResponse;
+    }
+
+    const previousResponse = await caches.match(request, {
+      cacheName: PREVIOUS_IMMUTABLE_CACHE
+    });
+    if (previousResponse) {
+      return previousResponse;
+    }
+
+    return fetch(request);
+  }
+);
+
+// Register the navigation route before Workbox's precache route so the canonical
+// app URL remains network-first instead of being served cache-first forever.
+precacheAndRoute(self.__WB_MANIFEST);
+cleanupOutdatedCaches();
 
 setCatchHandler(async ({ request }) => {
   if (request.destination === 'document') {
@@ -320,8 +389,12 @@ self.addEventListener('message', (event) => {
   const message = event.data as ClientToSwMessage | undefined;
   if (!message || typeof message !== 'object') return;
 
-  if (message.type === 'SKIP_WAITING') {
-    void self.skipWaiting();
+  if (
+    message.type === 'SKIP_WAITING' &&
+    message.protocolVersion === 1 &&
+    message.persistenceFlushed === true
+  ) {
+    event.waitUntil(self.skipWaiting());
     return;
   }
 
