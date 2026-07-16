@@ -65,6 +65,7 @@
   import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
   import { buildProjectionRenderKey } from '$lib/features/step-toolbar/tools/projections';
   import { layerOrderStore } from '$lib/features/step-toolbar/tools/layers/layer-order.store.svelte';
+  import { trackWorkerParseVersion } from '../utils/worker-parse.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { getFiltersMap } from '$lib/features/duckdb/orchestrator/state.svelte';
   import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations';
@@ -1185,6 +1186,14 @@
   $effect(() => {
     void layerOrderStore.version;
     scheduleLayerUpdate('effect:layerOrder');
+  });
+
+  // Off-main-thread geometry parses fill their cache asynchronously; each
+  // completion bumps this version so the layer pass re-runs and picks up the
+  // parsed buffers.
+  $effect(() => {
+    void trackWorkerParseVersion();
+    scheduleLayerUpdate('effect:workerParse');
   });
 
   $effect(() => {

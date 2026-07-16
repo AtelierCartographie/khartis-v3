@@ -39,6 +39,7 @@
     mapProjectionStore,
     osmBasemapStore,
     projectionStore,
+    trackWorkerParseVersion,
     type BBox,
     type SplitRenderingTable
   } from '$lib/features/map';
@@ -751,6 +752,18 @@
         );
       }
     };
+  });
+
+  // Off-main-thread geometry parses fill their cache asynchronously; each
+  // completion bumps this version so the facet layer pass re-runs and picks
+  // up the parsed buffers.
+  $effect(() => {
+    void trackWorkerParseVersion();
+    if (isRendererLoaded) {
+      untrack(() =>
+        mapLayers.updateLayers(tables, geoJSONs, splitData, densityTables)
+      );
+    }
   });
 
   $effect(() => {
