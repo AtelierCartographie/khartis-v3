@@ -290,13 +290,13 @@ const CORPUS: CorpusEntry[] = [
     expectations: {
       'Code INSEE Commune': ['geoid'],
       'Nom Commune': ['label'],
-      'Code Région 2016': ['geoid'],
-      'Code Département': ['geoid'],
+      'Code Région 2016': ['QL'],
+      'Code Département': ['QL'],
       Année: ['QLO'],
       Naissances: ['QTA'],
       'Nom Département': ['label'],
       'Nom région': ['label', 'QL'],
-      'Code EPCI': ['geoid'],
+      'Code EPCI': ['QL'],
       EPCI: ['QL', 'label']
     }
   }

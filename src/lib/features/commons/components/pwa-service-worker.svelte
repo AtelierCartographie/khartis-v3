@@ -5,6 +5,7 @@
     isPwaCacheForScope,
     resolvePwaScopeUrl
   } from '$lib/features/commons/utils/pwa-cache';
+  import { pwaUpdateService } from '$lib/features/commons/services/pwa-update.service.svelte';
   import { onDestroy, onMount } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
   import {
@@ -16,45 +17,114 @@
   const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
   let updateCheckIntervalId: ReturnType<typeof setInterval> | null = null;
+  let observedServiceWorkerContainer: ServiceWorkerContainer | null = null;
 
-  const { needRefresh, updateServiceWorker } = useRegisterSW({
+  const handleControllerChange = () => {
+    pwaUpdateService.handleActivationSignal();
+  };
+
+  useRegisterSW({
     immediate: true,
+    onNeedReload() {
+      pwaUpdateService.handleActivationSignal();
+    },
+    onNeedRefresh() {
+      pwaUpdateService.markUpdateAvailable();
+    },
     onRegisterError(error) {
       logger.error('SW registration error', LogCategory.SYSTEM, error);
+      pwaUpdateService.reportRegistrationError(error);
     },
     onRegisteredSW(swUrl, registration) {
       if (!registration) return;
-      updateCheckIntervalId = setInterval(async () => {
-        if (registration.installing || !navigator.onLine) return;
-        try {
-          const response = await fetch(swUrl, {
-            cache: 'no-store',
-            headers: { 'cache-control': 'no-cache' }
-          });
-          if (response.status === 200) {
-            await registration.update();
-          }
-        } catch (error) {
-          logger.error('SW update check failed', LogCategory.SYSTEM, error);
-        }
-      }, UPDATE_CHECK_INTERVAL_MS);
+      void configureRegistration(swUrl, registration);
     }
   });
 
-  let updatePromptVisible = $derived($needRefresh);
+  const updatePromptVisible = $derived(
+    pwaUpdateService.notificationVisible &&
+      (pwaUpdateService.status === 'available' ||
+        pwaUpdateService.status === 'error')
+  );
+
+  const updateNotificationKind = $derived(
+    pwaUpdateService.status === 'error' ? 'error' : 'info'
+  );
+
+  const updateNotificationTitle = $derived.by(() => {
+    if (pwaUpdateService.status !== 'error') {
+      return m.pwa_update_available_title();
+    }
+
+    return pwaUpdateService.errorKind === 'save'
+      ? m.pwa_update_save_error_title()
+      : m.pwa_update_error_title();
+  });
+
+  const updateNotificationSubtitle = $derived.by(() => {
+    if (pwaUpdateService.status !== 'error') {
+      return m.pwa_update_available_subtitle();
+    }
+
+    switch (pwaUpdateService.errorKind) {
+      case 'save':
+        return m.pwa_update_save_error_subtitle();
+      case 'offline':
+        return m.pwa_update_offline_error_subtitle();
+      case 'unsupported':
+        return m.pwa_update_unsupported_error_subtitle();
+      case 'registration':
+        return m.pwa_update_registration_error_subtitle();
+      case 'activation':
+        return m.pwa_update_activation_error_subtitle();
+      default:
+        return m.pwa_update_check_error_subtitle();
+    }
+  });
+
+  const updateNotificationAction = $derived(
+    pwaUpdateService.status === 'available'
+      ? m.pwa_update_install_button()
+      : m.pwa_update_retry_button()
+  );
+
+  async function configureRegistration(
+    swUrl: string,
+    initialRegistration: ServiceWorkerRegistration
+  ): Promise<void> {
+    let registration = initialRegistration;
+
+    try {
+      registration = await navigator.serviceWorker.register(swUrl, {
+        scope: initialRegistration.scope,
+        updateViaCache: 'none'
+      });
+    } catch (error) {
+      logger.error(
+        'SW no-cache re-registration failed',
+        LogCategory.SYSTEM,
+        error
+      );
+    }
+
+    pwaUpdateService.setRegistration(registration);
+
+    if (updateCheckIntervalId !== null) {
+      clearInterval(updateCheckIntervalId);
+    }
+
+    updateCheckIntervalId = setInterval(() => {
+      if (registration.installing || !navigator.onLine) return;
+      void pwaUpdateService.checkForUpdate({ silent: true });
+    }, UPDATE_CHECK_INTERVAL_MS);
+  }
 
   async function applyUpdate(): Promise<void> {
-    updatePromptVisible = false;
-    try {
-      await updateServiceWorker(true);
-    } catch (error) {
-      logger.error('Failed to apply SW update', LogCategory.SYSTEM, error);
-      updatePromptVisible = true;
-    }
+    await pwaUpdateService.runPrimaryAction();
   }
 
   function dismissUpdate(): void {
-    updatePromptVisible = false;
+    pwaUpdateService.dismissNotification();
   }
 
   async function requestPersistentStorage(): Promise<void> {
@@ -92,12 +162,26 @@
       clearInterval(updateCheckIntervalId);
       updateCheckIntervalId = null;
     }
+    observedServiceWorkerContainer?.removeEventListener(
+      'controllerchange',
+      handleControllerChange
+    );
+    observedServiceWorkerContainer = null;
+    pwaUpdateService.disconnect();
   });
 
   onMount(() => {
     if (dev || typeof navigator === 'undefined') {
       void cleanupDevServiceWorker();
       return;
+    }
+
+    if ('serviceWorker' in navigator) {
+      observedServiceWorkerContainer = navigator.serviceWorker;
+      observedServiceWorkerContainer.addEventListener(
+        'controllerchange',
+        handleControllerChange
+      );
     }
 
     void requestPersistentStorage();
@@ -140,17 +224,17 @@
 {#if updatePromptVisible}
   <div class="pwa-update-toast">
     <ToastNotification
-      kind="info"
+      kind={updateNotificationKind}
       lowContrast
-      title={m.pwa_update_available_title()}
-      subtitle={m.pwa_update_available_subtitle()}
+      title={updateNotificationTitle}
+      subtitle={updateNotificationSubtitle}
       closeButtonDescription={m.pwa_update_close_aria()}
       statusIconDescription={m.pwa_update_status_icon_aria()}
       timeout={0}
       on:close={dismissUpdate}
     >
       <NotificationActionButton on:click={applyUpdate}>
-        {m.pwa_update_reload_button()}
+        {updateNotificationAction}
       </NotificationActionButton>
     </ToastNotification>
   </div>

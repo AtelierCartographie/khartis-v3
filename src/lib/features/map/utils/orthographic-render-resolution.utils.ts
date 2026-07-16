@@ -15,8 +15,14 @@ import {
 import { fitBasemapRenderProjection } from './fit-basemap-render-projection.utils';
 import { resolveOrthographicBasemapReferenceBboxes } from './orthographic-basemap-reference.utils';
 import { resolveProjectionForRender } from './projection-priority.utils';
-import { resolveOrthographicReferenceBbox } from './orthographic-reference.utils';
-import { shouldUseIdentityProjectionForDatasetCrs } from './dataset-crs.utils';
+import {
+  resolveOrthographicDatasetBounds,
+  resolveOrthographicReferenceBbox
+} from './orthographic-reference.utils';
+import {
+  shouldReprojectDatasetForActiveProjection,
+  shouldUseIdentityProjectionForDatasetCrs
+} from './dataset-crs.utils';
 
 export type OrthographicBounds = [[number, number], [number, number]];
 
@@ -117,6 +123,34 @@ export function toBboxFromOrthographicBounds(
   return bounds
     ? [bounds[0][0], bounds[0][1], bounds[1][0], bounds[1][1]]
     : null;
+}
+
+interface ResolveOrthographicRenderedDatasetBoundsOptions {
+  dataset: OrthographicDatasetRef;
+  renderedTable: ArrowTable | null | undefined;
+  hasManualProjectionOverride: boolean;
+}
+
+// When a manual projection is active on a non-WGS84 dataset, the rendered
+// table is reprojected to WGS84 — the persisted source-CRS bounds must never
+// feed the lon/lat projection fit, so measure the rendered table instead.
+export function resolveOrthographicRenderedDatasetBounds({
+  dataset,
+  renderedTable,
+  hasManualProjectionOverride
+}: ResolveOrthographicRenderedDatasetBoundsOptions): OrthographicBounds | null {
+  if (
+    shouldReprojectDatasetForActiveProjection(
+      dataset?.geometry?.crs,
+      hasManualProjectionOverride
+    )
+  ) {
+    return renderedTable
+      ? toOrthographicBounds(calculateBoundsFromGeoArrow(renderedTable))
+      : null;
+  }
+
+  return resolveOrthographicDatasetBounds(dataset ?? null, null);
 }
 
 export function resolveOrthographicRenderProjection({

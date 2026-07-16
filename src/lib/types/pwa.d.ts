@@ -3,6 +3,7 @@ declare module 'virtual:pwa-register/svelte' {
 
   export interface RegisterSWOptions {
     immediate?: boolean;
+    onNeedReload?: () => void;
     onRegistered?: (
       registration: ServiceWorkerRegistration | undefined
     ) => void;

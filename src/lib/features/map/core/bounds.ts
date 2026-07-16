@@ -1,25 +1,11 @@
 import { GEO_COLUMN_NAMES } from '$lib/features/commons/constants/data.constants';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type {
-  BinaryPathData,
-  BinaryPointData,
-  BinaryPolygonData
-} from '@ateliercartographie/geoarrow-deck-stream';
 import type { FeatureCollection, Geometry } from 'geojson';
 import type { LngLatBoundsLike } from 'maplibre-gl';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import {
-  ArrowExtension,
-  GeoArrowMetadataKey,
-  GeometryType
-} from '../constants';
+import { GeoArrowMetadataKey } from '../constants';
 import { parseGeoJsonGeometry } from '../io/geometry-parser';
 import { GEOJSON_TYPE } from '$lib/features/commons/constants';
-import {
-  parsePaths,
-  parsePointData,
-  parseSolidPolygons
-} from '../utils/geoarrow-stream-bridge.utils';
 
 const MIN_LAT = -90;
 const MAX_LAT = 90;
@@ -28,7 +14,6 @@ const MAX_LNG = 180;
 const DEGENERATE_BOUNDS_PADDING_DEGREES = 0.01;
 const BOUNDS_READ_WARNING_LIMIT = 3;
 const boundsReadWarnings = new Map<string, number>();
-type RowInclusionPredicate = (rowIndex: number) => boolean;
 type BoundsAccumulator = {
   minLng: number;
   minLat: number;
@@ -272,8 +257,7 @@ function finalizeBoundsAccumulator(
 
 function calculateBoundsFromGeometryData(
   jsTable: ArrowTable,
-  geoColumn: string,
-  includeRow?: RowInclusionPredicate
+  geoColumn: string
 ): LngLatBoundsLike | null {
   const geomVector = jsTable.getChild(geoColumn);
   if (!geomVector) {
@@ -281,16 +265,10 @@ function calculateBoundsFromGeometryData(
   }
 
   const bounds = createBoundsAccumulator();
-  const maxSamples = includeRow
-    ? jsTable.numRows
-    : Math.min(jsTable.numRows, 10000);
+  const maxSamples = Math.min(jsTable.numRows, 10000);
   const step = Math.max(1, Math.floor(jsTable.numRows / maxSamples));
 
   for (let i = 0; i < jsTable.numRows; i += step) {
-    if (includeRow && !includeRow(i)) {
-      continue;
-    }
-
     const geom = safeReadGeometryValue(geomVector, geoColumn, i);
 
     const parsed = parseGeoJsonGeometry(geom);
@@ -313,240 +291,6 @@ function calculateBoundsFromGeometryData(
   }
 
   return finalizeBoundsAccumulator(bounds);
-}
-
-function addBinaryPositionRangeToBounds(
-  accumulator: BoundsAccumulator,
-  positions: Float32Array,
-  startVertex: number,
-  endVertex: number
-): void {
-  const vertexCount = Math.floor(positions.length / 2);
-  const start = Math.max(0, Math.min(startVertex, vertexCount));
-  const end = Math.max(start, Math.min(endVertex, vertexCount));
-
-  for (let vertexIndex = start; vertexIndex < end; vertexIndex += 1) {
-    const positionIndex = vertexIndex * 2;
-    addCoordinateToBounds(
-      accumulator,
-      positions[positionIndex],
-      positions[positionIndex + 1]
-    );
-  }
-}
-
-function calculateBoundsFromBinaryPoints(
-  data: BinaryPointData,
-  includeRow: RowInclusionPredicate
-): LngLatBoundsLike | null {
-  const bounds = createBoundsAccumulator();
-  const pointCount = Math.min(
-    data.length,
-    data.featureIds.length,
-    Math.floor(data.positions.length / 2)
-  );
-
-  for (let pointIndex = 0; pointIndex < pointCount; pointIndex += 1) {
-    if (!includeRow(data.featureIds[pointIndex])) {
-      continue;
-    }
-
-    const positionIndex = pointIndex * 2;
-    addCoordinateToBounds(
-      bounds,
-      data.positions[positionIndex],
-      data.positions[positionIndex + 1]
-    );
-  }
-
-  return finalizeBoundsAccumulator(bounds);
-}
-
-function calculateBoundsFromBinaryPaths(
-  data: BinaryPathData,
-  includeRow: RowInclusionPredicate
-): LngLatBoundsLike | null {
-  const bounds = createBoundsAccumulator();
-  const pathCount = Math.min(
-    data.length,
-    data.featureIds.length,
-    Math.max(0, data.startIndices.length - 1)
-  );
-
-  for (let pathIndex = 0; pathIndex < pathCount; pathIndex += 1) {
-    if (!includeRow(data.featureIds[pathIndex])) {
-      continue;
-    }
-
-    addBinaryPositionRangeToBounds(
-      bounds,
-      data.positions,
-      data.startIndices[pathIndex],
-      data.startIndices[pathIndex + 1]
-    );
-  }
-
-  return finalizeBoundsAccumulator(bounds);
-}
-
-function calculateBoundsFromBinaryPolygons(
-  data: BinaryPolygonData,
-  includeRow: RowInclusionPredicate
-): LngLatBoundsLike | null {
-  const bounds = createBoundsAccumulator();
-  const polygonCount = Math.min(
-    data.length,
-    data.featureIds.length,
-    Math.max(0, data.polygonIndices.length - 1)
-  );
-
-  for (let polygonIndex = 0; polygonIndex < polygonCount; polygonIndex += 1) {
-    if (!includeRow(data.featureIds[polygonIndex])) {
-      continue;
-    }
-
-    addBinaryPositionRangeToBounds(
-      bounds,
-      data.positions,
-      data.polygonIndices[polygonIndex],
-      data.polygonIndices[polygonIndex + 1]
-    );
-  }
-
-  return finalizeBoundsAccumulator(bounds);
-}
-
-function isNativeGeoArrowExtension(extensionName: string | null): boolean {
-  return (
-    extensionName !== null &&
-    extensionName.startsWith('geoarrow.') &&
-    extensionName !== ArrowExtension.GEOARROW_WKB
-  );
-}
-
-function calculateBoundsFromNativeGeoArrowRows(
-  jsTable: ArrowTable,
-  geometryType: GeometryType | null,
-  includeRow: RowInclusionPredicate
-): LngLatBoundsLike | null {
-  try {
-    switch (geometryType) {
-      case GeometryType.POINT:
-      case GeometryType.MULTIPOINT:
-        return calculateBoundsFromBinaryPoints(
-          parsePointData(jsTable),
-          includeRow
-        );
-      case GeometryType.LINESTRING:
-      case GeometryType.MULTILINESTRING:
-        return calculateBoundsFromBinaryPaths(parsePaths(jsTable), includeRow);
-      case GeometryType.POLYGON:
-      case GeometryType.MULTIPOLYGON:
-        return calculateBoundsFromBinaryPolygons(
-          parseSolidPolygons(jsTable),
-          includeRow
-        );
-      default:
-        return null;
-    }
-  } catch (error) {
-    logger.error(
-      'Failed to calculate native GeoArrow row bounds',
-      LogCategory.MAP,
-      error
-    );
-    return null;
-  }
-}
-
-export function calculateBoundsFromGeoArrowRows(
-  jsTable: ArrowTable,
-  includeRow: RowInclusionPredicate
-): LngLatBoundsLike | null {
-  try {
-    if (jsTable.numRows === 0) {
-      return null;
-    }
-
-    const geoMetadata = jsTable.schema.metadata.get(GeoArrowMetadataKey.GEO);
-    let primaryColumn: string | null = null;
-    let primaryGeometryType: GeometryType | null = null;
-    let isNativePrimaryColumn = false;
-
-    if (geoMetadata) {
-      const jsonMeta = JSON.parse(geoMetadata);
-      primaryColumn = jsonMeta.primary_column ?? null;
-      const primaryColumnMeta = primaryColumn
-        ? jsonMeta.columns?.[primaryColumn]
-        : null;
-      const rawGeometryType = Array.isArray(primaryColumnMeta?.geometry_types)
-        ? primaryColumnMeta.geometry_types[0]
-        : null;
-      primaryGeometryType =
-        typeof rawGeometryType === 'string'
-          ? (rawGeometryType.toUpperCase() as GeometryType)
-          : null;
-      const primaryField = primaryColumn
-        ? jsTable.schema.fields.find((field) => field.name === primaryColumn)
-        : null;
-      const extensionName =
-        primaryField?.metadata
-          ?.get(GeoArrowMetadataKey.EXTENSION_NAME)
-          ?.toLowerCase() ?? null;
-      isNativePrimaryColumn = isNativeGeoArrowExtension(extensionName);
-    }
-
-    if (primaryColumn) {
-      const bounds = calculateBoundsFromGeometryData(
-        jsTable,
-        primaryColumn,
-        includeRow
-      );
-      if (bounds) {
-        return bounds;
-      }
-    }
-
-    const geoColumn = findGeoColumn(jsTable);
-    if (geoColumn && geoColumn !== primaryColumn) {
-      const bounds = calculateBoundsFromGeometryData(
-        jsTable,
-        geoColumn,
-        includeRow
-      );
-      if (bounds) {
-        return bounds;
-      }
-    }
-
-    for (const field of jsTable.schema.fields) {
-      if (field.name === primaryColumn || field.name === geoColumn) continue;
-      const bounds = calculateBoundsFromGeometryData(
-        jsTable,
-        field.name,
-        includeRow
-      );
-      if (bounds) {
-        return bounds;
-      }
-    }
-
-    if (isNativePrimaryColumn) {
-      const bounds = calculateBoundsFromNativeGeoArrowRows(
-        jsTable,
-        primaryGeometryType,
-        includeRow
-      );
-      if (bounds) {
-        return bounds;
-      }
-    }
-
-    return null;
-  } catch (error) {
-    logger.error('Failed to calculate GeoJSON bounds', LogCategory.MAP, error);
-    return null;
-  }
 }
 
 export function calculateBoundsFromGeoArrow(

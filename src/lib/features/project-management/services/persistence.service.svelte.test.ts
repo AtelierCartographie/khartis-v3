@@ -240,6 +240,46 @@ function createMetadataEntry(id: string, name: string) {
   };
 }
 
+function createSerializedProject(id: string, name: string) {
+  return {
+    id,
+    manifest: {
+      version: PROJECT_CONST.SCHEMA_VERSION,
+      createdAt: new Date('2026-07-16T00:00:00.000Z').toISOString(),
+      updatedAt: new Date('2026-07-16T00:00:00.000Z').toISOString(),
+      name,
+      format: 'kh'
+    },
+    data: {
+      sourceFiles: []
+    }
+  };
+}
+
+async function importPersistenceContext() {
+  const persistence = await import('./persistence.service');
+  const serializer = await import('./serializer.service');
+
+  vi.mocked(serializer.deserialize).mockImplementation(
+    async (project) =>
+      ({
+        ...project,
+        manifest: {
+          ...project.manifest,
+          createdAt: new Date(project.manifest.createdAt),
+          updatedAt: new Date(project.manifest.updatedAt),
+          format: 'kh'
+        },
+        data: {
+          sourceFiles: [],
+          ...project.data
+        }
+      }) as never
+  );
+
+  return persistence;
+}
+
 describe('project persistence', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -339,6 +379,59 @@ describe('project persistence', () => {
       4242
     );
     expect(vi.mocked(estimateProjectStorageSize)).not.toHaveBeenCalled();
+  });
+
+  it('rejects a stale project save from another tab without overwriting the first save', async () => {
+    const database = new FakeDatabase();
+    database.seedStore(PROJECT_CONST.DB.STORE_NAME, 'id', [
+      createSerializedProject('shared-project', 'Initial')
+    ]);
+    installFakeIndexedDb(database);
+
+    const firstTab = await importPersistenceContext();
+    const firstTabProject = await firstTab.loadProject('shared-project');
+    expect(firstTabProject).not.toBeNull();
+
+    vi.resetModules();
+
+    const secondTab = await importPersistenceContext();
+    const secondTabProject = await secondTab.loadProject('shared-project');
+    expect(secondTabProject).not.toBeNull();
+
+    if (!firstTabProject || !secondTabProject) {
+      throw new Error('Expected both tabs to load the shared project');
+    }
+
+    firstTabProject.manifest.name = 'Saved from first tab';
+    secondTabProject.manifest.name = 'Stale save from second tab';
+
+    await firstTab.saveProject(firstTabProject);
+
+    await expect(secondTab.saveProject(secondTabProject)).rejects.toMatchObject(
+      {
+        name: 'ProjectSaveConflictError',
+        code: 'PROJECT_SAVE_CONFLICT',
+        details: {
+          projectId: 'shared-project',
+          expectedRevision: 0,
+          actualRevision: 1
+        }
+      }
+    );
+
+    await expect(secondTab.saveProject(secondTabProject)).rejects.toMatchObject(
+      {
+        code: 'PROJECT_SAVE_CONFLICT',
+        details: {
+          expectedRevision: 0,
+          actualRevision: 1
+        }
+      }
+    );
+
+    const persistedProject =
+      await firstTab.loadSerializedProject('shared-project');
+    expect(persistedProject?.manifest.name).toBe('Saved from first tab');
   });
 
   it('waits for legacy metadata migration before listing saved projects', async () => {

@@ -73,6 +73,7 @@ interface GeoIdIndicators {
   shareUniques: number;
   shareNulls: number;
   idWords: boolean;
+  geoCodeWords: boolean;
   shareRankInterval: number;
   isNumeric: boolean;
 }
@@ -115,6 +116,7 @@ interface QLIndicators {
   uniqueCount: number;
   isNumeric: boolean;
   ordinalCategories: boolean;
+  idWords: boolean;
 }
 
 interface QLOIndicators {
@@ -138,8 +140,11 @@ function scoreGeoId(indicators: GeoIdIndicators): SemioScore {
   if (indicators.shareNulls <= 0.1) {
     score += indicators.isNumeric ? 0.5 : indicators.idWords ? 1.5 : 1;
   }
-  if (indicators.idWords) {
-    score += indicators.shareUniques >= 0.5 ? 4 : 3.5;
+  if (indicators.geoCodeWords) {
+    score += 4;
+  } else if (indicators.idWords) {
+    if (indicators.shareUniques >= 0.5) score += 4;
+    else if (indicators.shareUniques >= 0.2) score += 2;
   }
   if (indicators.isNumeric && indicators.shareRankInterval >= 0.8) score += 2;
   if (indicators.isNumeric && indicators.shareRankInterval >= 0.95)
@@ -207,6 +212,7 @@ function scoreQL(indicators: QLIndicators): SemioScore {
   let score = 0;
   if (indicators.shareUniques <= 0.2) score += indicators.isNumeric ? 1 : 2;
   if (indicators.uniqueCount <= 10) score += indicators.isNumeric ? 0.5 : 1;
+  if (indicators.idWords && indicators.shareUniques <= 0.2) score += 1.5;
   if (indicators.ordinalCategories) score -= 1.5;
   return { semioType: SEMIO_TYPES.QL, score: Math.max(score, 0) };
 }
@@ -295,6 +301,7 @@ function detectOrdinalCategories(categories: string[] | undefined): boolean {
   });
 }
 
+const GEO_CODE_KEYWORDS = ['iso', 'iso2', 'iso3'];
 const ID_KEYWORDS = [
   'id',
   'fid',
@@ -389,6 +396,7 @@ const LABEL_KEYWORDS = [
 
 interface NameKeywords {
   idWords: boolean;
+  geoCodeWords: boolean;
   latWords: boolean;
   lonWords: boolean;
   ratioWords: boolean;
@@ -413,6 +421,7 @@ function detectKeywordsFromName(columnName: string): NameKeywords {
     idWords:
       hasKeyword(ID_KEYWORDS) ||
       ID_KEYWORDS.some((keyword) => normalizedName === keyword),
+    geoCodeWords: hasKeyword(GEO_CODE_KEYWORDS),
     latWords: hasKeyword(LAT_KEYWORDS),
     lonWords: hasKeyword(LON_KEYWORDS),
     ratioWords:
@@ -502,7 +511,8 @@ export function detectSemioType(
           shareUniques,
           uniqueCount,
           isNumeric: true,
-          ordinalCategories
+          ordinalCategories,
+          idWords: keywords.idWords && !keywords.geoCodeWords
         }),
         scoreQLO({
           rankWords: keywords.rankWords,
@@ -515,6 +525,7 @@ export function detectSemioType(
           shareUniques,
           shareNulls,
           idWords: keywords.idWords,
+          geoCodeWords: keywords.geoCodeWords,
           shareRankInterval,
           isNumeric: true
         }),
@@ -546,7 +557,8 @@ export function detectSemioType(
           shareUniques,
           uniqueCount,
           isNumeric: false,
-          ordinalCategories
+          ordinalCategories,
+          idWords: keywords.idWords && !keywords.geoCodeWords
         }),
         scoreQLO({
           rankWords: keywords.rankWords,
@@ -559,6 +571,7 @@ export function detectSemioType(
           shareUniques,
           shareNulls,
           idWords: keywords.idWords,
+          geoCodeWords: keywords.geoCodeWords,
           shareRankInterval,
           isNumeric: false
         }),
