@@ -39,7 +39,8 @@ import {
   bumpWorkerParseVersion,
   getParseWorkerClient,
   ipcBytesForTable,
-  trackWorkerParseVersion
+  trackWorkerParseVersion,
+  withParseWorkerTimeout
 } from './worker-parse.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
@@ -383,10 +384,13 @@ function requestWorkerParse<T>(
   if (!workerPendingKeys.has(key)) {
     workerPendingKeys.add(key);
     const ipcBytes = ipcBytesForTable(normalizeGeomColumnName(table));
-    client[method](ipcBytes, spec, {
-      capacityMultiplier: 1.0,
-      rewind: options.rewind
-    })
+    withParseWorkerTimeout(
+      client[method](ipcBytes, spec, {
+        capacityMultiplier: 1.0,
+        rewind: options.rewind
+      }),
+      method
+    )
       .then((data) => {
         storeResult(data as T);
       })

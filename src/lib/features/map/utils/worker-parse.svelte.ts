@@ -9,6 +9,8 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 const state = $state({ version: 0 });
 
+export const WORKER_PARSE_TIMEOUT_MS = 30_000;
+
 export function trackWorkerParseVersion(): number {
   return state.version;
 }
@@ -18,7 +20,31 @@ export function bumpWorkerParseVersion(): void {
 }
 
 let client: ParseWorkerClient | null = null;
+let activeWorker: Worker | null = null;
 let workerUnavailable = false;
+
+export function disableParseWorker(error: unknown): void {
+  if (workerUnavailable) return;
+
+  workerUnavailable = true;
+  const currentClient = client;
+  const currentWorker = activeWorker;
+  client = null;
+  activeWorker = null;
+
+  if (currentClient) {
+    currentClient.terminate();
+  } else {
+    currentWorker?.terminate();
+  }
+
+  bumpWorkerParseVersion();
+  logger.error(
+    'GeoArrow parse worker disabled; falling back to main-thread parsing',
+    LogCategory.MAP,
+    error
+  );
+}
 
 export function getParseWorkerClient(): ParseWorkerClient | null {
   if (workerUnavailable) return null;
@@ -37,16 +63,40 @@ export function getParseWorkerClient(): ParseWorkerClient | null {
       new URL('../workers/geoarrow-parse.worker.ts', import.meta.url),
       { type: 'module' }
     );
+    activeWorker = worker;
+    worker.addEventListener('error', (event) => {
+      disableParseWorker(
+        event.error ??
+          new Error(event.message || 'GeoArrow parse worker crashed')
+      );
+    });
     client = createParseWorkerClient(worker as unknown as WorkerLike);
   } catch (error) {
-    workerUnavailable = true;
-    logger.error(
-      'GeoArrow parse worker unavailable; falling back to main-thread parsing',
-      LogCategory.MAP,
-      error
-    );
+    disableParseWorker(error);
   }
   return client;
+}
+
+export function withParseWorkerTimeout<T>(
+  request: Promise<T>,
+  method: string
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      const error = new Error(
+        `GeoArrow parse worker timed out after ${WORKER_PARSE_TIMEOUT_MS}ms (${method})`
+      );
+      reject(error);
+      disableParseWorker(error);
+    }, WORKER_PARSE_TIMEOUT_MS);
+  });
+
+  return Promise.race([request, timeout]).finally(() => {
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+  });
 }
 
 const ipcCache = new WeakMap<ArrowTable, Uint8Array>();
