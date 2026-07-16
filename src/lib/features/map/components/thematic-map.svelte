@@ -33,7 +33,6 @@
   } from '../hooks';
   import {
     calculateBoundsFromGeoArrow,
-    calculateBoundsFromGeoArrowRows,
     calculateBoundsFromGeoJSON
   } from '../core';
   import {
@@ -75,27 +74,20 @@
   } from '$lib/features/step-toolbar/tools/color-blindness';
   import { getColorBlindnessMatrix } from '$lib/features/step-toolbar/tools/color-blindness';
   import {
-    resolveOrthographicDatasetBounds,
     resolveOrthographicProjectionFitBbox,
-    resolveOrthographicReferenceTable,
     shouldUseBasemapReferenceInOrthographicView
   } from '../utils/orthographic-reference.utils';
-  import {
-    buildSplitDatasetRowMapping,
-    getSplitMatchedGeometryRowIndices
-  } from '../layers/split-rendering-accessors';
   import { getMainlandBboxForBasemap } from '../utils/geoarrow-stream-bridge.utils';
-  import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
   import { resolveActiveBasemapMetadata } from '../utils/basemap-metadata-resolution.utils';
   import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
   import {
     resolveOrthographicBasemapReferenceState as resolveSharedOrthographicBasemapReferenceState,
     resolveOrthographicReferenceState as resolveSharedOrthographicReferenceState,
     resolveOrthographicRenderProjection,
+    resolveOrthographicRenderedDatasetBounds,
     toBboxFromOrthographicBounds,
     toOrthographicBounds
   } from '../utils/orthographic-render-resolution.utils';
-  import { selectRowsByIndices } from '../utils/arrow-filter.utils';
   import {
     getBrowserMaxRenderBufferSizePx,
     resolveMapRenderPixelRatio
@@ -570,53 +562,23 @@
     );
   }
 
-  function getSplitDatasetBounds(datasetId: string | undefined) {
-    const split = datasetId ? splitData?.get(datasetId) : undefined;
-    if (!split) {
-      return null;
-    }
-
-    const rowMapping = buildSplitDatasetRowMapping(
-      split.geometry,
-      split.dataset,
-      split.featureIdColumn
+  function hasManualProjectionOverride(): boolean {
+    const projectionState = getProjectionState();
+    return (
+      projectionState.overrideActive === true &&
+      projectionState.overrideSource === 'manual'
     );
-
-    const rowBounds = calculateBoundsFromGeoArrowRows(
-      split.geometry,
-      (rowIndex) => rowMapping[rowIndex] !== -1
-    );
-    if (rowBounds) {
-      return rowBounds;
-    }
-
-    const matchedRows = getSplitMatchedGeometryRowIndices(
-      split.geometry,
-      split.dataset,
-      split.featureIdColumn
-    );
-    if (matchedRows.length === 0) {
-      return null;
-    }
-
-    const filteredGeometry = selectRowsByIndices(split.geometry, matchedRows);
-    const geometryInfo = extractGeometryInfo(filteredGeometry);
-    const geojson = geometryInfo
-      ? arrowTableToGeoJSON(filteredGeometry, geometryInfo.geoColumn)
-      : null;
-
-    return geojson ? calculateBoundsFromGeoJSON(geojson) : null;
   }
 
+  // Bounds come from import-time ST_Extent metadata (or the curated catalog
+  // bbox), except on the WGS84-reprojected render path where the rendered
+  // table is measured so the fit stays in lon/lat space.
   function getRenderedDatasetBounds(datasetId: string | undefined) {
-    const splitBounds = getSplitDatasetBounds(datasetId);
-    if (splitBounds || (datasetId && splitData?.has(datasetId))) {
-      return toOrthographicBounds(splitBounds);
-    }
-
-    return firstTable
-      ? toOrthographicBounds(calculateBoundsFromGeoArrow(firstTable))
-      : null;
+    return resolveOrthographicRenderedDatasetBounds({
+      dataset: getRenderedDataset(datasetId),
+      renderedTable: datasetId ? tables.get(datasetId) : null,
+      hasManualProjectionOverride: hasManualProjectionOverride()
+    });
   }
 
   function shouldPreferDatasetProjectionBbox(datasetBbox: BBox | null) {
@@ -626,8 +588,6 @@
 
   function resolveRenderedReferenceBounds(params: {
     datasetId: string | undefined;
-    dataset: ReturnType<typeof getRenderedDataset>;
-    referenceTable: ArrowTable | null;
     shouldUseBasemapReference: boolean;
   }): [[number, number], [number, number]] | null {
     const datasetBounds = getRenderedDatasetBounds(params.datasetId);
@@ -636,21 +596,11 @@
     );
 
     if (params.shouldUseBasemapReference && !preferDatasetBbox) {
-      return params.referenceTable
-        ? toOrthographicBounds(
-            calculateBoundsFromGeoArrow(params.referenceTable)
-          )
-        : datasetBounds;
+      const basemapMeta = getProjectionMetadataForDataset(params.datasetId);
+      return toOrthographicBounds(basemapMeta?.bbox ?? null) ?? datasetBounds;
     }
 
-    const tableBounds =
-      params.referenceTable && !preferDatasetBbox
-        ? toOrthographicBounds(
-            calculateBoundsFromGeoArrow(params.referenceTable)
-          )
-        : datasetBounds;
-
-    return resolveOrthographicDatasetBounds(params.dataset, tableBounds);
+    return datasetBounds;
   }
 
   function getProjectionMetadataForDataset(datasetId: string | undefined) {
@@ -698,19 +648,13 @@
           basemapService.projectionPresets
         )
       : null;
-    const datasetTableBounds = getRenderedDatasetBounds(firstDatasetId);
-
     if (!firstDatasetId) {
       return mainlandBbox ?? currentBasemapMeta?.bbox ?? null;
     }
 
     const dataset = getRenderedDataset(firstDatasetId);
-    const resolvedDatasetBounds = resolveOrthographicDatasetBounds(
-      dataset,
-      datasetTableBounds
-    );
     const resolvedDatasetBbox = toBboxFromOrthographicBounds(
-      resolvedDatasetBounds
+      getRenderedDatasetBounds(firstDatasetId)
     );
 
     const duckDataset = getRenderedDuckDBDataset(firstDatasetId);
@@ -819,8 +763,7 @@
   }
 
   function refreshOrthographicReferenceForFirstTable(
-    basemapMeta: ReturnType<typeof getProjectionMetadataForDataset>,
-    basemapTableOverride: ArrowTable | null = null
+    basemapMeta: ReturnType<typeof getProjectionMetadataForDataset>
   ): boolean {
     if (!firstTable) {
       return false;
@@ -835,17 +778,8 @@
         duckDataset,
         refBasemapId
       );
-    const referenceTable = resolveOrthographicReferenceTable({
-      dataset,
-      duckDataset,
-      datasetTable: firstTable,
-      basemapTable: basemapTableOverride ?? worldBaseTable,
-      referenceBasemapId: refBasemapId
-    });
     const bounds = resolveRenderedReferenceBounds({
       datasetId: firstDatasetId,
-      dataset,
-      referenceTable,
       shouldUseBasemapReference
     });
 
@@ -925,10 +859,6 @@
   } {
     const renderProjection =
       getOrthographicRenderProjection(basemapMeta, true) ?? null;
-    const projectionState = getProjectionState();
-    const hasManualProjectionOverride =
-      projectionState.overrideActive === true &&
-      projectionState.overrideSource === 'manual';
 
     return resolveSharedOrthographicReferenceState({
       dataset,
@@ -941,7 +871,7 @@
       preferDatasetBbox: shouldPreferDatasetProjectionBbox(
         toBboxFromOrthographicBounds(bounds)
       ),
-      hasManualProjectionOverride
+      hasManualProjectionOverride: hasManualProjectionOverride()
     });
   }
 
@@ -991,17 +921,8 @@
           duckDataset,
           refBasemapId
         );
-      const referenceTable = resolveOrthographicReferenceTable({
-        dataset,
-        duckDataset,
-        datasetTable: firstTable,
-        basemapTable: currentWorldBaseTable,
-        referenceBasemapId: refBasemapId
-      });
       const bounds = resolveRenderedReferenceBounds({
         datasetId: firstDatasetId,
-        dataset,
-        referenceTable,
         shouldUseBasemapReference
       });
 
@@ -1100,6 +1021,19 @@
     }
   }
 
+  // Catalog basemaps always carry a curated WGS84 bbox in their metadata; the
+  // geometry table is never scanned for it.
+  function getCatalogBasemapBounds():
+    [[number, number], [number, number]] | null {
+    const bbox = basemapService.currentMetadata?.bbox;
+    return bbox
+      ? [
+          [bbox[0], bbox[1]],
+          [bbox[2], bbox[3]]
+        ]
+      : null;
+  }
+
   function resolveUserDataBounds() {
     if (firstTable) {
       const bounds = calculateBoundsFromGeoArrow(firstTable);
@@ -1166,7 +1100,7 @@
     const currentWorldBaseTable = worldBaseTable;
 
     if (refBasemapId && currentWorldBaseTable) {
-      const bounds = calculateBoundsFromGeoArrow(currentWorldBaseTable);
+      const bounds = getCatalogBasemapBounds();
       if (bounds) {
         mapBounds.fitToBounds(bounds, { reason });
         return;
@@ -1182,7 +1116,7 @@
     }
 
     if (currentWorldBaseTable) {
-      const bounds = calculateBoundsFromGeoArrow(currentWorldBaseTable);
+      const bounds = getCatalogBasemapBounds();
       if (bounds) {
         mapBounds.fitToBounds(bounds, { reason });
       }
@@ -1599,7 +1533,7 @@
             })
           );
         } else if (refBasemapId && worldBaseTable) {
-          const bBounds = calculateBoundsFromGeoArrow(worldBaseTable);
+          const bBounds = getCatalogBasemapBounds();
           if (bBounds) {
             untrack(() =>
               mapBounds.fitToBounds(bBounds, {
@@ -1788,7 +1722,7 @@
                   reason: 'reset'
                 });
               } else {
-                const bounds = calculateBoundsFromGeoArrow(worldBaseTable);
+                const bounds = getCatalogBasemapBounds();
                 if (bounds) {
                   mapBounds.fitToBounds(bounds, {
                     animate: true,
