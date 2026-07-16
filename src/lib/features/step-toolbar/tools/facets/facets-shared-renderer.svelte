@@ -51,6 +51,7 @@
     resolveOrthographicBasemapReferenceState as resolveSharedOrthographicBasemapReferenceState,
     resolveOrthographicReferenceState as resolveSharedOrthographicReferenceState,
     resolveOrthographicRenderProjection,
+    resolveOrthographicRenderedDatasetBounds,
     toBboxFromOrthographicBounds,
     toOrthographicBounds
   } from '$lib/features/map/utils/orthographic-render-resolution.utils';
@@ -59,7 +60,6 @@
     resolveMapRenderPixelRatio
   } from '$lib/features/map/utils/render-pixel-ratio.utils';
   import {
-    resolveOrthographicDatasetBounds,
     resolveOrthographicProjectionFitBbox,
     shouldUseBasemapReferenceInOrthographicView
   } from '$lib/features/map/utils/orthographic-reference.utils';
@@ -269,14 +269,23 @@
     );
   }
 
-  // Bounds never come from scanning geometry tables: imported datasets carry
-  // ST_Extent-derived bounds from the pipeline, and catalog basemaps carry a
-  // curated metadata bbox.
-  function getRenderedDatasetBounds(datasetId: string | undefined) {
-    return resolveOrthographicDatasetBounds(
-      getRenderedDataset(datasetId),
-      null
+  function hasManualProjectionOverride(): boolean {
+    const projectionState = getProjectionState();
+    return (
+      projectionState.overrideActive === true &&
+      projectionState.overrideSource === 'manual'
     );
+  }
+
+  // Bounds come from import-time ST_Extent metadata (or the curated catalog
+  // bbox), except on the WGS84-reprojected render path where the rendered
+  // table is measured so the fit stays in lon/lat space.
+  function getRenderedDatasetBounds(datasetId: string | undefined) {
+    return resolveOrthographicRenderedDatasetBounds({
+      dataset: getRenderedDataset(datasetId),
+      renderedTable: datasetId ? tables.get(datasetId) : null,
+      hasManualProjectionOverride: hasManualProjectionOverride()
+    });
   }
 
   function shouldPreferDatasetProjectionBbox(datasetBbox: BBox | null) {
@@ -286,13 +295,9 @@
 
   function resolveRenderedReferenceBounds(params: {
     datasetId: string | undefined;
-    dataset: ReturnType<typeof getRenderedDataset>;
     shouldUseBasemapReference: boolean;
   }): [[number, number], [number, number]] | null {
-    const datasetBounds = resolveOrthographicDatasetBounds(
-      params.dataset,
-      null
-    );
+    const datasetBounds = getRenderedDatasetBounds(params.datasetId);
     const preferDatasetBbox = shouldPreferDatasetProjectionBbox(
       toBboxFromOrthographicBounds(datasetBounds)
     );
@@ -386,10 +391,6 @@
   } {
     const renderProjection =
       getOrthographicRenderProjection(basemapMeta, true) ?? null;
-    const projectionState = getProjectionState();
-    const hasManualProjectionOverride =
-      projectionState.overrideActive === true &&
-      projectionState.overrideSource === 'manual';
 
     return resolveSharedOrthographicReferenceState({
       dataset,
@@ -402,7 +403,7 @@
       preferDatasetBbox: shouldPreferDatasetProjectionBbox(
         toBboxFromOrthographicBounds(bounds)
       ),
-      hasManualProjectionOverride
+      hasManualProjectionOverride: hasManualProjectionOverride()
     });
   }
 
@@ -473,7 +474,6 @@
         );
       const bounds = resolveRenderedReferenceBounds({
         datasetId: firstDatasetId,
-        dataset,
         shouldUseBasemapReference
       });
       const referenceState = resolveOrthographicReferenceState(
