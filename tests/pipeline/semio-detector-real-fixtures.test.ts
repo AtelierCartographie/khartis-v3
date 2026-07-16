@@ -70,14 +70,14 @@ describe('[S01 Phase 2] semio-detector on real CSV fixtures', () => {
     expect(yearClass).toBe('QLO');
   });
 
-  it('CSV-02 naissances: Code INSEE Commune + Code Département → geoid, Naissances → QTA', async () => {
+  it('CSV-02 naissances: Code INSEE Commune → geoid, Code Département (duplicated) → QL, Naissances → QTA', async () => {
     const classes = await classifyCsv(
       'naissances-par-commune-departement-et-region-2018.csv',
       'csv02',
       ';'
     );
     expect(classes.get('Code INSEE Commune')).toBe('geoid');
-    expect(classes.get('Code Département')).toBe('geoid');
+    expect(classes.get('Code Département')).toBe('QL');
     expect(classes.get('Naissances')).toBe('QTA');
   });
 
