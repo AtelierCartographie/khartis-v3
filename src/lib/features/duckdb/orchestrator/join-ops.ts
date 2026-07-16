@@ -6,6 +6,7 @@ import {
   MAX_JOIN_BUCKET_LIST_VALUES
 } from '$lib/features/commons/constants/data.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { FUZZY_SEARCH } from '$lib/features/commons/constants/detection.constants';
 import {
   escapeIdentifier,
   escapeSqlString
@@ -57,10 +58,7 @@ const SIMILARITY_CACHE_PREFIX = '__similarity_cache__';
 const MAX_SIMILARITY_CACHE_ENTRIES = 4;
 const MAX_FUZZY_JOIN_CANDIDATES = 1000;
 const MAX_EXACT_MATCHES_PER_CANDIDATE_BASEMAP = 50;
-// Calibrated on a labeled corpus of realistic typos vs distinct real places:
-// every true typo scores >= 0.93 while noise pairs (toulon/toulouse 0.89,
-// iran/irak 0.88, lyon/laon 0.85...) sit below 0.90. See PR #250.
-const FUZZY_SCORE_CUTOFF = 0.9;
+const FUZZY_SCORE_CUTOFF = FUZZY_SEARCH.SCORE_CUTOFF;
 
 interface SimilarityCacheEntry {
   tableName: string;
