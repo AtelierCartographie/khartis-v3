@@ -243,16 +243,55 @@ export function recordTransformation(
 export function waitForDatasetBySourceFile(
   state: DatasetsState,
   internals: DatasetsInternals,
-  sourceFileId: string
+  sourceFileId: string,
+  timeoutMs = 30_000
 ): Promise<string> {
   const existing = state.datasets.find((d) => d.sourceFileId === sourceFileId);
   if (existing) {
     return Promise.resolve(existing.id);
   }
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const resolver = (datasetId: string) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeoutId);
+      resolve(datasetId);
+    };
+    const timeoutId = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      const pendingResolvers =
+        internals.pendingDatasetResolvers.get(sourceFileId);
+      if (pendingResolvers) {
+        const remainingResolvers = pendingResolvers.filter(
+          (pendingResolver) => pendingResolver !== resolver
+        );
+        if (remainingResolvers.length > 0) {
+          internals.pendingDatasetResolvers.set(
+            sourceFileId,
+            remainingResolvers
+          );
+        } else {
+          internals.pendingDatasetResolvers.delete(sourceFileId);
+        }
+      }
+      reject(
+        new Error(
+          `Dataset selection timed out for source file "${sourceFileId}"`
+        )
+      );
+    }, timeoutMs);
+
     const resolvers = internals.pendingDatasetResolvers.get(sourceFileId) ?? [];
-    resolvers.push(resolve);
+    resolvers.push(resolver);
     internals.pendingDatasetResolvers.set(sourceFileId, resolvers);
   });
 }

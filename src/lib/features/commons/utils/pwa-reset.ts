@@ -6,11 +6,20 @@ import {
 } from './pwa-cache';
 
 const FACTORY_RESET_QUERY_PARAM = 'reset';
+const FAILED_RESTORE_QUERY_PARAM = 'restoreFallback';
 const RESET_SKIP_RESTORE_STORAGE_KEY_SUFFIX = 'reset-skip-restore';
+const LAST_PROJECT_RESTORE_QUARANTINE_KEY_SUFFIX =
+  'last-project-restore-quarantine';
+const UNKNOWN_PROJECT_RESTORE_QUARANTINE = '*';
 
 function resetSkipRestoreStorageKey(): string {
   const scopeUrl = resolvePwaScopeUrl(document.baseURI);
   return `${createPwaCachePrefix(scopeUrl)}${RESET_SKIP_RESTORE_STORAGE_KEY_SUFFIX}`;
+}
+
+function lastProjectRestoreQuarantineStorageKey(): string {
+  const scopeUrl = resolvePwaScopeUrl(document.baseURI);
+  return `${createPwaCachePrefix(scopeUrl)}${LAST_PROJECT_RESTORE_QUARANTINE_KEY_SUFFIX}`;
 }
 
 function postFactoryResetMessage(controller: ServiceWorker): void {
@@ -41,10 +50,22 @@ export function shouldSkipLastProjectRestore(): boolean {
   if (typeof window === 'undefined') {
     return false;
   }
-  const urlHasReset = new URLSearchParams(window.location.search).has(
-    FACTORY_RESET_QUERY_PARAM
-  );
+  const params = new URLSearchParams(window.location.search);
+  const urlHasReset = params.has(FACTORY_RESET_QUERY_PARAM);
   if (urlHasReset) {
+    return true;
+  }
+
+  const failedRestoreProjectId = params.get(FAILED_RESTORE_QUERY_PARAM);
+  if (failedRestoreProjectId !== null) {
+    const quarantinePersisted = quarantineLastProjectRestore(
+      failedRestoreProjectId === UNKNOWN_PROJECT_RESTORE_QUARANTINE
+        ? undefined
+        : failedRestoreProjectId
+    );
+    if (quarantinePersisted) {
+      clearLastProjectRestoreFallbackUrl();
+    }
     return true;
   }
   try {
@@ -61,6 +82,101 @@ export function shouldSkipLastProjectRestore(): boolean {
     );
   }
   return false;
+}
+
+export function buildLastProjectRestoreFallbackUrl(
+  currentHref: string,
+  projectId?: string
+): string {
+  const url = new URL(currentHref);
+  url.searchParams.set(
+    FAILED_RESTORE_QUERY_PARAM,
+    projectId ?? UNKNOWN_PROJECT_RESTORE_QUARANTINE
+  );
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function clearLastProjectRestoreFallbackUrl(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+  url.searchParams.delete(FAILED_RESTORE_QUERY_PARAM);
+  window.history.replaceState(
+    window.history.state,
+    '',
+    `${url.pathname}${url.search}${url.hash}`
+  );
+}
+
+export function isLastProjectRestoreQuarantined(projectId?: string): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  try {
+    const quarantinedProjectId = window.sessionStorage.getItem(
+      lastProjectRestoreQuarantineStorageKey()
+    );
+    return (
+      quarantinedProjectId === UNKNOWN_PROJECT_RESTORE_QUARANTINE ||
+      (projectId !== undefined && quarantinedProjectId === projectId)
+    );
+  } catch (error) {
+    logger.error(
+      'Failed to read project restore quarantine',
+      LogCategory.SYSTEM,
+      error
+    );
+    return false;
+  }
+}
+
+export function quarantineLastProjectRestore(projectId?: string): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  try {
+    window.sessionStorage.setItem(
+      lastProjectRestoreQuarantineStorageKey(),
+      projectId ?? UNKNOWN_PROJECT_RESTORE_QUARANTINE
+    );
+    return true;
+  } catch (error) {
+    logger.error(
+      'Failed to persist project restore quarantine',
+      LogCategory.SYSTEM,
+      error
+    );
+    return false;
+  }
+}
+
+export function clearLastProjectRestoreQuarantine(projectId: string): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    const storageKey = lastProjectRestoreQuarantineStorageKey();
+    const quarantinedProjectId = window.sessionStorage.getItem(storageKey);
+    if (
+      quarantinedProjectId === UNKNOWN_PROJECT_RESTORE_QUARANTINE ||
+      quarantinedProjectId === projectId
+    ) {
+      window.sessionStorage.removeItem(storageKey);
+    }
+  } catch (error) {
+    logger.error(
+      'Failed to clear project restore quarantine',
+      LogCategory.SYSTEM,
+      error
+    );
+  }
+
+  clearLastProjectRestoreFallbackUrl();
 }
 
 export async function factoryResetPwa(

@@ -71,6 +71,8 @@
     startDataServices: () => Promise<void>;
   };
 
+  const PWA_RECOVERY_FLUSH_TIMEOUT_MS = 10_000;
+
   let { children } = $props();
   let isLoading = $state(true);
   let pendingKhImport = $state<PendingKhImport | null>(null);
@@ -195,6 +197,46 @@
       void persistenceRegistry.flush();
     };
 
+    const flushBeforePwaRecovery = async (): Promise<boolean> => {
+      forceNextMapThumbnailCapture();
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+      try {
+        await Promise.race([
+          persistenceRegistry.flush(),
+          new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(
+              () => reject(new Error('PWA recovery save timed out')),
+              PWA_RECOVERY_FLUSH_TIMEOUT_MS
+            );
+          })
+        ]);
+
+        if (persistenceRegistry.isDirty) {
+          throw new Error('Project persistence is still dirty');
+        }
+
+        return true;
+      } catch (error) {
+        logger.error(
+          'PWA recovery stopped because project persistence was not confirmed',
+          LogCategory.PERSISTENCE,
+          error
+        );
+        showError(
+          m.pwa_update_save_error_title(),
+          m.pwa_update_save_error_subtitle()
+        );
+        return false;
+      } finally {
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId);
+        }
+      }
+    };
+
+    window.__khartisFlushBeforePwaRecovery = flushBeforePwaRecovery;
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         handleLifecycleFlush();
@@ -286,6 +328,9 @@
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', handleLifecycleFlush);
       window.removeEventListener(EVENT.BEFOREUNLOAD, handleLifecycleFlush);
+      if (window.__khartisFlushBeforePwaRecovery === flushBeforePwaRecovery) {
+        delete window.__khartisFlushBeforePwaRecovery;
+      }
     };
   });
 
@@ -363,6 +408,7 @@
 </script>
 
 <Theme persist />
+<PwaServiceWorker />
 
 {#if isLoading}
   <AppLoader />
@@ -431,7 +477,6 @@
     {/key}
 
     <NotificationContainer />
-    <PwaServiceWorker />
     <CookiebotConsent />
   </main>
 {/if}

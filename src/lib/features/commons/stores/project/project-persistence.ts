@@ -185,6 +185,7 @@ export async function saveCurrentProject(
     return;
   }
 
+  const saveGeneration = persistenceRegistry.captureSaveGeneration();
   perfMark(PERF_PHASE.PROJECT_SAVE);
 
   try {
@@ -217,8 +218,8 @@ export async function saveCurrentProject(
       options.exampleId,
       projectSize
     );
-    persistenceRegistry.markClean();
-    container._state.isDirty = false;
+    persistenceRegistry.markClean(saveGeneration);
+    container._state.isDirty = persistenceRegistry.isDirty;
     container._state.lastSaved = new Date();
   } catch (error) {
     const message =

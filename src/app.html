@@ -86,10 +86,21 @@
         var RELOAD_GUARD_WINDOW_MS = 5 * 60 * 1000;
         var recoveryScheduled = false;
         var STALE_ASSET_PATTERNS = [
-          'Failed to fetch dynamically imported module',
-          'Importing a module script failed',
+          'failed to fetch dynamically imported module',
+          'importing a module script failed',
           'error loading dynamically imported module',
-          'Loading chunk'
+          'loading chunk',
+          'failed to load module script',
+          'expected a javascript-or-wasm module script',
+          'failed to load worker script',
+          'webassembly.compile',
+          'webassembly.instantiate',
+          'mime type'
+        ];
+        var CRITICAL_RESOURCE_PATTERNS = [
+          '/_app/immutable/',
+          '.worker.js',
+          '.wasm'
         ];
 
         function getMessage(reason) {
@@ -100,9 +111,21 @@
         }
 
         function isStaleAssetError(reason) {
-          var message = getMessage(reason);
+          var message = getMessage(reason).toLowerCase();
           return STALE_ASSET_PATTERNS.some(function (pattern) {
             return message.indexOf(pattern) !== -1;
+          });
+        }
+
+        function isCriticalResourceError(event) {
+          var target = event && event.target;
+          var resourceUrl =
+            (target && (target.src || target.href)) ||
+            (event && event.filename) ||
+            '';
+          var normalizedUrl = String(resourceUrl).toLowerCase();
+          return CRITICAL_RESOURCE_PATTERNS.some(function (pattern) {
+            return normalizedUrl.indexOf(pattern) !== -1;
           });
         }
 
@@ -118,6 +141,36 @@
           var url = new URL(window.location.href);
           url.searchParams.set('reset', '1');
           window.location.replace(url.pathname + url.search + url.hash);
+        }
+
+        function runRecoveryAfterConfirmedSave(recovery) {
+          var flushBeforeRecovery = window.__khartisFlushBeforePwaRecovery;
+          if (typeof flushBeforeRecovery !== 'function') {
+            recovery();
+            return;
+          }
+
+          Promise.resolve()
+            .then(function () {
+              return flushBeforeRecovery();
+            })
+            .then(function (saveConfirmed) {
+              if (!saveConfirmed) {
+                recoveryScheduled = false;
+                console.error(
+                  'Khartis stale asset recovery stopped because the project save was not confirmed'
+                );
+                return;
+              }
+              recovery();
+            })
+            .catch(function (error) {
+              recoveryScheduled = false;
+              console.error(
+                'Khartis stale asset recovery stopped because the project save failed',
+                error
+              );
+            });
         }
 
         function recoverFromStaleAsset() {
@@ -139,13 +192,17 @@
 
             recoveryScheduled = true;
             if (isRecentRecovery(lastReload, now)) {
-              window.sessionStorage.setItem(RESET_GUARD_KEY, String(now));
-              resetWithCacheCleanup();
+              runRecoveryAfterConfirmedSave(function () {
+                window.sessionStorage.setItem(RESET_GUARD_KEY, String(now));
+                resetWithCacheCleanup();
+              });
               return true;
             }
 
-            window.sessionStorage.setItem(RELOAD_GUARD_KEY, String(now));
-            window.location.reload();
+            runRecoveryAfterConfirmedSave(function () {
+              window.sessionStorage.setItem(RELOAD_GUARD_KEY, String(now));
+              window.location.reload();
+            });
             return true;
           } catch (error) {
             console.error(
@@ -168,7 +225,12 @@
         window.addEventListener(
           'error',
           function (event) {
-            if (!isStaleAssetError(event.error || event.message)) return;
+            if (
+              !isStaleAssetError(event.error || event.message) &&
+              !isCriticalResourceError(event)
+            ) {
+              return;
+            }
             if (recoverFromStaleAsset()) event.preventDefault();
           },
           true

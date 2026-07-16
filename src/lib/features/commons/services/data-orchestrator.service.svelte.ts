@@ -91,6 +91,19 @@ import * as m from '$lib/paraglide/messages';
 
 export interface ProjectChangeOptions {
   isProjectCreation?: boolean;
+  signal?: AbortSignal;
+}
+
+function throwIfProjectChangeAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) {
+    return;
+  }
+
+  if (signal.reason instanceof Error) {
+    throw signal.reason;
+  }
+
+  throw new Error('Project change aborted');
 }
 
 function createDataOrchestratorService() {
@@ -1349,9 +1362,6 @@ function createDataOrchestratorService() {
       return;
     }
 
-    globalActions.selectDataButton(restoredFile.id);
-    await datasetsStore.waitForDatasetBySourceFile(restoredFile.id);
-
     if (
       restoreToken !== activeGeoColumnRestoreToken ||
       projectStore.currentProject?.id !== currentProject.id ||
@@ -1363,6 +1373,13 @@ function createDataOrchestratorService() {
     const restoredDataset = datasetsStore.getDatasetBySourceFile(
       restoredFile.id
     );
+    if (!restoredDataset) {
+      throw new Error(
+        `Failed to restore dataset for source file ${restoredFile.id}`
+      );
+    }
+
+    globalActions.selectDataButton(restoredFile.id);
     const restoredDuckDataset = duckDBOrchestrator.getDatasetBySourceFile(
       restoredFile.id
     );
@@ -1444,6 +1461,8 @@ function createDataOrchestratorService() {
   async function restoreCurrentProjectState(
     options: ProjectChangeOptions = {}
   ): Promise<void> {
+    throwIfProjectChangeAborted(options.signal);
+
     const restoreRun = captureProjectRuntime();
     const restoreToken = activeGeoColumnRestoreToken;
     const currentProject = projectStore.currentProject;
@@ -1475,98 +1494,107 @@ function createDataOrchestratorService() {
     perfMark(PERF_PHASE.PROJECT_RESTORE);
 
     try {
-      await persistenceRegistry.withPersistenceSuspended(async () => {
-        visualizationStore.clear();
-        datasetsStore.clear();
-        layersActions.reset();
-        processedFileIds.clear();
-        processingFiles.clear();
+      await persistenceRegistry.withPersistenceSuspended(
+        async () => {
+          throwIfProjectChangeAborted(options.signal);
+          visualizationStore.clear();
+          datasetsStore.clear();
+          layersActions.reset();
+          processedFileIds.clear();
+          processingFiles.clear();
 
-        await duckDBOrchestrator.clear(
-          preservedCreationTableNames.length > 0
-            ? { preserveTableNames: preservedCreationTableNames }
-            : undefined
-        );
-
-        if (!isCurrentProjectRuntime(restoreRun)) {
-          return;
-        }
-
-        if (!currentProject) {
-          return;
-        }
-
-        if (currentProject?.data?.sourceFiles) {
-          await processProjectFiles(
-            currentProject.data.sourceFiles,
-            restoreRun
+          await duckDBOrchestrator.clear(
+            preservedCreationTableNames.length > 0
+              ? { preserveTableNames: preservedCreationTableNames }
+              : undefined
           );
-        }
+          throwIfProjectChangeAborted(options.signal);
 
-        if (!isCurrentProjectRuntime(restoreRun)) {
-          return;
-        }
+          if (!isCurrentProjectRuntime(restoreRun)) {
+            return;
+          }
 
-        if (vizSettings) {
-          visualizationStore.restoreFromSerialized(vizSettings);
-        }
+          if (!currentProject) {
+            return;
+          }
 
-        if (layoutSettings) {
-          persistenceRegistry.deserializeAll({
-            format: layoutSettings.format,
-            annotations: layoutSettings.annotations,
-            legend: layoutSettings.legend,
-            geoIndications: layoutSettings.geoIndications
-          });
-        }
+          if (currentProject?.data?.sourceFiles) {
+            await processProjectFiles(
+              currentProject.data.sourceFiles,
+              restoreRun
+            );
+          }
+          throwIfProjectChangeAborted(options.signal);
 
-        if (basemapSettings) {
-          persistenceRegistry.deserializeAll({
-            basemapStyle: {
-              style: basemapSettings.style,
-              lastSelectedTiledStyle: basemapSettings.lastSelectedTiledStyle,
-              referenceBasemapId: basemapSettings.referenceBasemapId,
-              showLabels: basemapSettings.showLabels,
-              groupVisibility: basemapSettings.groupVisibility
-            }
-          });
-        }
+          if (!isCurrentProjectRuntime(restoreRun)) {
+            return;
+          }
 
-        migrateOrphanedVizDatasetIds();
-        await recomputeMissingBreaks();
+          if (vizSettings) {
+            visualizationStore.restoreFromSerialized(vizSettings);
+          }
 
-        if (facetsSettings) {
-          persistenceRegistry.deserializeAll({ facets: facetsSettings });
-          await facetsStore.restoreGeneratedVisualizations();
-        }
+          if (layoutSettings) {
+            persistenceRegistry.deserializeAll({
+              format: layoutSettings.format,
+              annotations: layoutSettings.annotations,
+              legend: layoutSettings.legend,
+              geoIndications: layoutSettings.geoIndications
+            });
+          }
 
-        if (!isCurrentProjectRuntime(restoreRun)) {
-          return;
-        }
+          if (basemapSettings) {
+            persistenceRegistry.deserializeAll({
+              basemapStyle: {
+                style: basemapSettings.style,
+                lastSelectedTiledStyle: basemapSettings.lastSelectedTiledStyle,
+                referenceBasemapId: basemapSettings.referenceBasemapId,
+                showLabels: basemapSettings.showLabels,
+                groupVisibility: basemapSettings.groupVisibility
+              }
+            });
+          }
 
-        if (projectionSettings) {
-          projectionActions.setState(projectionSettings);
-        }
+          migrateOrphanedVizDatasetIds();
+          await recomputeMissingBreaks();
+          throwIfProjectChangeAborted(options.signal);
 
-        globalActions.ensureTabSelected();
-        datasetsStore.applyPersistedViewState();
-        duckDBOrchestrator.applyPersistedTableFilters();
+          if (facetsSettings) {
+            persistenceRegistry.deserializeAll({ facets: facetsSettings });
+            await facetsStore.restoreGeneratedVisualizations();
+            throwIfProjectChangeAborted(options.signal);
+          }
 
-        if (currentProject) {
-          await restorePersistedDataTabState(
-            currentProject,
-            restoreToken,
-            restoreRun
-          );
-        }
+          if (!isCurrentProjectRuntime(restoreRun)) {
+            return;
+          }
 
-        if (!isCurrentProjectRuntime(restoreRun)) {
-          return;
-        }
+          if (projectionSettings) {
+            projectionActions.setState(projectionSettings);
+          }
 
-        layersActions.syncWithVisualizations();
-        legendActions.syncWithVisualizations();
-      });
+          globalActions.ensureTabSelected();
+          datasetsStore.applyPersistedViewState();
+          duckDBOrchestrator.applyPersistedTableFilters();
+
+          if (currentProject) {
+            await restorePersistedDataTabState(
+              currentProject,
+              restoreToken,
+              restoreRun
+            );
+            throwIfProjectChangeAborted(options.signal);
+          }
+
+          if (!isCurrentProjectRuntime(restoreRun)) {
+            return;
+          }
+
+          layersActions.syncWithVisualizations();
+          legendActions.syncWithVisualizations();
+        },
+        { signal: options.signal }
+      );
 
       if (isCurrentProjectRuntime(restoreRun)) {
         persistenceRegistry.markClean();
@@ -1593,7 +1621,14 @@ function createDataOrchestratorService() {
   async function onProjectChanged(
     options: ProjectChangeOptions = {}
   ): Promise<void> {
+    throwIfProjectChangeAborted(options.signal);
+    const projectChangeRun = captureProjectRuntime();
     await duckDBOrchestrator.waitForInitialization();
+    throwIfProjectChangeAborted(options.signal);
+    if (!isCurrentProjectRuntime(projectChangeRun)) {
+      return;
+    }
+
     cancelPendingGeoColumnRestore();
     await restoreCurrentProjectState(options);
   }

@@ -17,6 +17,12 @@ import { LogCategory, logger } from '../../utils/logger';
 import { showError } from '../../utils/notification.utils.svelte';
 import { sanitizeProjectName } from '../../utils/sanitize.utils';
 import { ProjectValidator } from '../../utils/validation.utils';
+import {
+  buildLastProjectRestoreFallbackUrl,
+  clearLastProjectRestoreQuarantine,
+  isLastProjectRestoreQuarantined,
+  quarantineLastProjectRestore
+} from '../../utils/pwa-reset';
 import type { UploadedFile } from '../../types/create-project.types';
 import type { ProjectStateContainer } from './project-state.svelte';
 import { cleanFileForStorage } from './project-files';
@@ -26,6 +32,76 @@ import {
   beginProjectRuntime,
   resetProjectRuntimeState
 } from './project-runtime.svelte';
+
+const LAST_PROJECT_RESTORE_TIMEOUT_MS = 5 * 60_000;
+
+export interface LoadProjectOptions {
+  signal?: AbortSignal;
+}
+
+type ReplacePage = (url: string) => void;
+
+function replaceCurrentPage(url: string): void {
+  if (typeof window !== 'undefined') {
+    window.location.replace(url);
+  }
+}
+
+function throwIfProjectRestoreAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) {
+    return;
+  }
+
+  if (signal.reason instanceof Error) {
+    throw signal.reason;
+  }
+
+  throw new Error('Project restore aborted');
+}
+
+function waitForProjectRestore<T>(
+  operation: Promise<T>,
+  controller: AbortController,
+  timeoutMs: number
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timeoutId = setTimeout(() => {
+      if (settled) return;
+
+      settled = true;
+      const error = new Error('Project restore timed out');
+      controller.abort(error);
+      reject(error);
+    }, timeoutMs);
+
+    operation.then(
+      (value) => {
+        if (settled) return;
+
+        settled = true;
+        clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (error: unknown) => {
+        if (settled) return;
+
+        settled = true;
+        clearTimeout(timeoutId);
+        reject(error);
+      }
+    );
+  });
+}
+
+function resetFailedLastProjectRestore(container: ProjectStateContainer): void {
+  container._state.currentProject = undefined;
+  beginProjectRuntime(null);
+  resetProjectRuntimeState();
+  container._state.isDirty = false;
+  container._state.lastSaved = undefined;
+  resetHistory(container);
+}
 
 export async function createProject(
   container: ProjectStateContainer,
@@ -76,13 +152,18 @@ export async function createProject(
 
 export async function loadProject(
   container: ProjectStateContainer,
-  id: string
+  id: string,
+  options: LoadProjectOptions = {}
 ): Promise<void> {
+  throwIfProjectRestoreAborted(options.signal);
+
   if (container._state.currentProject && container._state.isDirty) {
     await saveCurrentProject(container);
+    throwIfProjectRestoreAborted(options.signal);
   }
 
   const project = await projectRepository.load(id);
+  throwIfProjectRestoreAborted(options.signal);
 
   if (project) {
     container._state.currentProject = project;
@@ -95,7 +176,12 @@ export async function loadProject(
     addToHistory(container, m.history_project_loaded(), project);
 
     await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
-    await dataOrchestratorService.onProjectChanged();
+    throwIfProjectRestoreAborted(options.signal);
+    await dataOrchestratorService.onProjectChanged({
+      signal: options.signal
+    });
+    throwIfProjectRestoreAborted(options.signal);
+    clearLastProjectRestoreQuarantine(project.id);
     analyticsService.trackProjectOpened('local_storage');
   }
 }
@@ -203,17 +289,39 @@ export async function clearProject(
 }
 
 export async function loadLastProject(
-  container: ProjectStateContainer
+  container: ProjectStateContainer,
+  timeoutMs = LAST_PROJECT_RESTORE_TIMEOUT_MS,
+  replacePage: ReplacePage = replaceCurrentPage
 ): Promise<void> {
-  const lastProjectId = await projectStorage.load<string>(
-    ProjectStorageKey.CURRENT
-  );
+  if (isLastProjectRestoreQuarantined()) {
+    return;
+  }
 
-  if (lastProjectId) {
-    try {
-      await loadProject(container, lastProjectId);
-    } catch (error) {
-      logger.error('Failed to load last project', LogCategory.PROJECT, error);
+  const controller = new AbortController();
+  let lastProjectId: string | undefined;
+  const restoreOperation = (async () => {
+    lastProjectId =
+      (await projectStorage.load<string>(ProjectStorageKey.CURRENT)) ??
+      undefined;
+    throwIfProjectRestoreAborted(controller.signal);
+
+    if (lastProjectId && !isLastProjectRestoreQuarantined(lastProjectId)) {
+      await loadProject(container, lastProjectId, {
+        signal: controller.signal
+      });
+    }
+  })();
+
+  try {
+    await waitForProjectRestore(restoreOperation, controller, timeoutMs);
+  } catch (error) {
+    resetFailedLastProjectRestore(container);
+    quarantineLastProjectRestore(lastProjectId);
+    logger.error('Failed to load last project', LogCategory.PROJECT, error);
+    if (typeof window !== 'undefined') {
+      replacePage(
+        buildLastProjectRestoreFallbackUrl(window.location.href, lastProjectId)
+      );
     }
   }
 }
