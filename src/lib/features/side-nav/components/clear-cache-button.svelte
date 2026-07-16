@@ -1,38 +1,41 @@
 <script lang="ts">
-  import { factoryResetPwa } from '$lib/features/commons/utils/pwa-reset';
-  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import { m } from '$lib/paraglide/messages';
   import {
-    Button,
-    ComposedModal,
-    Loading,
-    ModalBody,
-    ModalHeader
-  } from 'carbon-components-svelte';
+    pwaUpdateService,
+    type PwaUpdateStatus
+  } from '$lib/features/commons/services/pwa-update.service.svelte';
+  import { m } from '$lib/paraglide/messages';
+  import { Button, Loading } from 'carbon-components-svelte';
   import { Renew } from 'carbon-icons-svelte';
 
-  let isOpen = $state(false);
-  let isBusy = $state(false);
+  const isBusy = $derived(
+    pwaUpdateService.status === 'checking' ||
+      pwaUpdateService.status === 'saving' ||
+      pwaUpdateService.status === 'installing'
+  );
 
-  function openModal() {
-    isOpen = true;
-  }
+  const buttonLabel = $derived(resolveButtonLabel(pwaUpdateService.status));
 
-  function closeModal() {
-    if (isBusy) return;
-    isOpen = false;
-  }
-
-  async function handleConfirm() {
-    if (isBusy) return;
-    isBusy = true;
-    try {
-      await factoryResetPwa({ reload: true });
-    } catch (error) {
-      logger.error('PWA update reset failed', LogCategory.SYSTEM, error);
-      isBusy = false;
-      isOpen = false;
+  function resolveButtonLabel(status: PwaUpdateStatus): string {
+    switch (status) {
+      case 'checking':
+        return m.sidenav_update_checking();
+      case 'up-to-date':
+        return m.sidenav_update_up_to_date();
+      case 'available':
+        return m.sidenav_update_available();
+      case 'saving':
+        return m.sidenav_update_saving();
+      case 'installing':
+        return m.sidenav_update_installing();
+      case 'error':
+        return m.sidenav_update_retry();
+      default:
+        return m.sidenav_update_check();
     }
+  }
+
+  async function handleUpdate(): Promise<void> {
+    await pwaUpdateService.runPrimaryAction();
   }
 </script>
 
@@ -41,70 +44,22 @@
   kind="ghost"
   icon={Renew}
   class="menu-bar-item"
-  data-testid="sidenav-clear-cache-button"
-  on:click={openModal}
+  data-testid="sidenav-update-button"
+  disabled={isBusy}
+  aria-busy={isBusy}
+  on:click={handleUpdate}
 >
-  {m.sidenav_clear_cache_button()}
+  {#if isBusy}
+    <span class="update-button-loading">
+      <Loading small withOverlay={false} />
+      <span>{buttonLabel}</span>
+    </span>
+  {:else}
+    {buttonLabel}
+  {/if}
 </Button>
 
-<ComposedModal
-  bind:open={isOpen}
-  size="sm"
-  preventCloseOnClickOutside={isBusy}
-  on:close={closeModal}
->
-  <ModalHeader title={m.sidenav_clear_cache_confirm_title()} />
-  <ModalBody class="update-modal-body">
-    <p>{m.sidenav_clear_cache_confirm_body()}</p>
-  </ModalBody>
-  <div class="update-modal-footer">
-    <Button
-      class="khartis-dialog-close-action"
-      kind="secondary"
-      disabled={isBusy}
-      on:click={closeModal}
-    >
-      {m.sidenav_clear_cache_confirm_secondary()}
-    </Button>
-    <Button
-      class="khartis-dialog-action"
-      kind="secondary"
-      disabled={isBusy}
-      on:click={handleConfirm}
-    >
-      {#if isBusy}
-        <span class="update-button-loading">
-          <Loading small withOverlay={false} />
-          <span>{m.sidenav_clear_cache_in_progress()}</span>
-        </span>
-      {:else}
-        {m.sidenav_clear_cache_confirm_primary()}
-      {/if}
-    </Button>
-  </div>
-</ComposedModal>
-
 <style>
-  :global(.update-modal-body) {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-04);
-  }
-
-  :global(.update-modal-body p) {
-    margin: 0;
-    color: var(--cds-text-02);
-    line-height: 1.5;
-  }
-
-  .update-modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--cds-spacing-03);
-    padding: var(--cds-spacing-04) var(--cds-spacing-05);
-    border-top: 1px solid var(--cds-border-subtle);
-  }
-
   .update-button-loading {
     display: inline-flex;
     align-items: center;

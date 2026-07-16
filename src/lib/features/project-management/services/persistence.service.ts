@@ -1,4 +1,5 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { PipelineError } from '$lib/features/commons/pipeline.errors';
 import { m } from '$lib/paraglide/messages';
 import type { SerializedProject } from '$lib/types/serialization.types';
 import { PROJECT_CONST } from '../constants';
@@ -12,8 +13,7 @@ import {
 import { deserialize, prepareForIndexedDB } from './serializer.service';
 import {
   loadMetadataStoreValue,
-  openDatabase as openProjectDatabase,
-  saveMetadataStoreValue
+  openDatabase as openProjectDatabase
 } from './database-access.service';
 import {
   assertCurrentProjectSchema,
@@ -26,6 +26,34 @@ import {
 } from '$lib/features/commons/utils/clone.utils';
 
 export { openProjectDatabase as openDatabase };
+
+const PROJECT_SAVE_CONFLICT_ERROR_CODE = 'PROJECT_SAVE_CONFLICT';
+const STORAGE_REVISION_PROPERTY = '__khartisStorageRevision';
+
+interface RevisionedSerializedProject extends SerializedProject {
+  [STORAGE_REVISION_PROPERTY]?: number;
+}
+
+const loadedProjectRevisions = new Map<string, number>();
+
+class ProjectSaveConflictError extends PipelineError {
+  constructor(
+    projectId: string,
+    expectedRevision: number | undefined,
+    actualRevision: number | null
+  ) {
+    super(
+      m.error_project_save_conflict_message(),
+      PROJECT_SAVE_CONFLICT_ERROR_CODE,
+      {
+        projectId,
+        expectedRevision,
+        actualRevision
+      }
+    );
+    this.name = 'ProjectSaveConflictError';
+  }
+}
 
 function isSerializedProject(value: unknown): value is SerializedProject {
   if (!value || typeof value !== 'object') {
@@ -42,6 +70,73 @@ function isSerializedProject(value: unknown): value is SerializedProject {
   );
 }
 
+function readStorageRevision(
+  project: RevisionedSerializedProject
+): number | null {
+  const revision = project[STORAGE_REVISION_PROPERTY];
+  if (revision === undefined) {
+    return 0;
+  }
+
+  return Number.isSafeInteger(revision) && revision >= 0 ? revision : null;
+}
+
+function stripStorageRevision(
+  project: RevisionedSerializedProject
+): SerializedProject {
+  const {
+    [STORAGE_REVISION_PROPERTY]: _storageRevision,
+    ...serializedProject
+  } = project;
+  return serializedProject;
+}
+
+async function loadRevisionedSerializedProject(
+  id: string
+): Promise<RevisionedSerializedProject | null> {
+  const database = await ensureDb();
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(
+      [PROJECT_CONST.DB.STORE_NAME],
+      'readonly'
+    );
+    const store = transaction.objectStore(PROJECT_CONST.DB.STORE_NAME);
+    const request = store.get(id);
+
+    request.onsuccess = async () => {
+      if (!request.result) {
+        resolve(null);
+        return;
+      }
+
+      try {
+        const migrated = migrateIfNeeded(
+          request.result as Record<string, unknown>
+        );
+        resolve(
+          isSerializedProject(migrated)
+            ? (migrated as RevisionedSerializedProject)
+            : null
+        );
+      } catch (error) {
+        logger.error(
+          'Failed to prepare serialized project from persistence',
+          LogCategory.PERSISTENCE,
+          {
+            id,
+            error
+          }
+        );
+        resolve(null);
+      }
+    };
+
+    request.onerror = () =>
+      reject(new Error(m.error_failed_load_project_persistence()));
+  });
+}
+
 async function loadProjectMetadata(): Promise<SavedProjectMetadata[]> {
   const database = await ensureDb();
   const value = await loadMetadataStoreValue(
@@ -52,15 +147,46 @@ async function loadProjectMetadata(): Promise<SavedProjectMetadata[]> {
   return value ? (safeJsonParse<SavedProjectMetadata[]>(value) ?? []) : [];
 }
 
-async function saveProjectMetadata(
-  metadata: SavedProjectMetadata[]
+async function mutateProjectMetadata(
+  mutate: (metadata: SavedProjectMetadata[]) => SavedProjectMetadata[]
 ): Promise<void> {
   const database = await ensureDb();
-  await saveMetadataStoreValue(
-    database,
-    ProjectStorageKey.METADATA,
-    safeJsonStringify(metadata)
-  );
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(
+      [PROJECT_CONST.DB.METADATA_STORE_NAME],
+      'readwrite'
+    );
+    const store = transaction.objectStore(PROJECT_CONST.DB.METADATA_STORE_NAME);
+    const request = store.get(ProjectStorageKey.METADATA);
+
+    request.onsuccess = () => {
+      try {
+        const storedValue =
+          typeof request.result?.value === 'string'
+            ? request.result.value
+            : null;
+        const metadata = storedValue
+          ? (safeJsonParse<SavedProjectMetadata[]>(storedValue) ?? [])
+          : [];
+
+        store.put({
+          key: ProjectStorageKey.METADATA,
+          value: safeJsonStringify(mutate(metadata))
+        });
+      } catch (error) {
+        reject(
+          error instanceof Error
+            ? error
+            : new Error(m.error_failed_save_project())
+        );
+      }
+    };
+    request.onerror = () =>
+      reject(request.error || new Error(m.error_failed_save_project()));
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () =>
+      reject(transaction.error || new Error(m.error_failed_save_project()));
+  });
 }
 
 async function ensureDb(): Promise<IDBDatabase> {
@@ -100,16 +226,83 @@ export async function saveProject(
   const database = await ensureDb();
   const projectForStorage = await prepareProjectForStorage(project);
   const serialized = await prepareForIndexedDB(projectForStorage);
+  const hasExpectedRevision = loadedProjectRevisions.has(project.id);
+  const expectedRevision = loadedProjectRevisions.get(project.id);
+
   await new Promise<void>((resolve, reject) => {
     const transaction = database.transaction(
       [PROJECT_CONST.DB.STORE_NAME],
       'readwrite'
     );
     const store = transaction.objectStore(PROJECT_CONST.DB.STORE_NAME);
-    store.put(serialized);
-    transaction.oncomplete = () => resolve();
+    const request = store.get(project.id);
+    let nextRevision: number | null = null;
+    let rejected = false;
+
+    const rejectOnce = (error: Error) => {
+      if (rejected) {
+        return;
+      }
+
+      rejected = true;
+      reject(error);
+    };
+
+    request.onsuccess = () => {
+      try {
+        const persistedProject = request.result as
+          RevisionedSerializedProject | undefined;
+        const actualRevision = persistedProject
+          ? readStorageRevision(persistedProject)
+          : 0;
+        const canCreate = !persistedProject && !hasExpectedRevision;
+        const canUpdate =
+          Boolean(persistedProject) &&
+          hasExpectedRevision &&
+          actualRevision !== null &&
+          actualRevision === expectedRevision;
+
+        if (!canCreate && !canUpdate) {
+          rejectOnce(
+            new ProjectSaveConflictError(
+              project.id,
+              expectedRevision,
+              actualRevision
+            )
+          );
+          return;
+        }
+
+        if (actualRevision === null) {
+          return;
+        }
+
+        nextRevision = actualRevision + 1;
+        store.put({
+          ...serialized,
+          [STORAGE_REVISION_PROPERTY]: nextRevision
+        });
+      } catch (error) {
+        nextRevision = null;
+        rejectOnce(
+          error instanceof Error
+            ? error
+            : new Error(m.error_failed_save_project())
+        );
+      }
+    };
+    request.onerror = () =>
+      rejectOnce(request.error || new Error(m.error_failed_save_project()));
+    transaction.oncomplete = () => {
+      if (rejected || nextRevision === null) {
+        return;
+      }
+
+      loadedProjectRevisions.set(project.id, nextRevision);
+      resolve();
+    };
     transaction.onerror = () =>
-      reject(transaction.error || new Error(m.error_failed_save_project()));
+      rejectOnce(transaction.error || new Error(m.error_failed_save_project()));
   });
 
   await syncProjectAssetRefs(
@@ -120,13 +313,29 @@ export async function saveProject(
 }
 
 export async function loadProject(id: string): Promise<KhartisProject | null> {
-  const serializedProject = await loadSerializedProject(id);
+  const revisionedProject = await loadRevisionedSerializedProject(id);
+  if (!revisionedProject) {
+    return null;
+  }
+
+  const storageRevision = readStorageRevision(revisionedProject);
+  if (storageRevision === null) {
+    logger.error(
+      'Failed to load project with an invalid storage revision',
+      LogCategory.PERSISTENCE,
+      { id }
+    );
+    return null;
+  }
+
+  const serializedProject = stripStorageRevision(revisionedProject);
   if (!serializedProject) {
     return null;
   }
 
   try {
     const project = await deserialize(serializedProject);
+    loadedProjectRevisions.set(project.id, storageRevision);
     return project;
   } catch (error) {
     logger.error(
@@ -142,43 +351,8 @@ export async function loadProject(id: string): Promise<KhartisProject | null> {
 export async function loadSerializedProject(
   id: string
 ): Promise<SerializedProject | null> {
-  const database = await ensureDb();
-
-  return new Promise((resolve, reject) => {
-    const transaction = database.transaction(
-      [PROJECT_CONST.DB.STORE_NAME],
-      'readonly'
-    );
-    const store = transaction.objectStore(PROJECT_CONST.DB.STORE_NAME);
-    const request = store.get(id);
-
-    request.onsuccess = async () => {
-      if (!request.result) {
-        resolve(null);
-        return;
-      }
-
-      try {
-        const migrated = migrateIfNeeded(
-          request.result as Record<string, unknown>
-        );
-        resolve(isSerializedProject(migrated) ? migrated : null);
-      } catch (error) {
-        logger.error(
-          'Failed to prepare serialized project from persistence',
-          LogCategory.PERSISTENCE,
-          {
-            id,
-            error
-          }
-        );
-        resolve(null);
-      }
-    };
-
-    request.onerror = () =>
-      reject(new Error(m.error_failed_load_project_persistence()));
-  });
+  const project = await loadRevisionedSerializedProject(id);
+  return project ? stripStorageRevision(project) : null;
 }
 
 export const projectRepository = {
@@ -207,6 +381,7 @@ export async function removeProject(id: string): Promise<void> {
       );
   });
 
+  loadedProjectRevisions.delete(id);
   await removeProjectAssetRefs(id);
   await removeFromMetadata(id);
 }
@@ -231,36 +406,37 @@ async function updateMetadata(
   exampleId?: string,
   sizeBytes?: number
 ): Promise<void> {
-  const metadata = await loadProjectMetadata();
-  const index = metadata.findIndex((entry) => entry.id === project.id);
-  const previous = index >= 0 ? metadata[index] : undefined;
+  await mutateProjectMetadata((metadata) => {
+    const index = metadata.findIndex((entry) => entry.id === project.id);
+    const previous = index >= 0 ? metadata[index] : undefined;
 
-  const entry: SavedProjectMetadata = {
-    id: project.id,
-    name: project.manifest.name,
-    description: project.manifest.description,
-    createdAt: project.manifest.createdAt,
-    updatedAt: project.manifest.updatedAt,
-    size: sizeBytes ?? calculateProjectSize(project),
-    // Keep the last thumbnail when this save cannot capture one.
-    thumbnail: thumbnail ?? previous?.thumbnail,
-    // Keep exampleId once set.
-    exampleId: exampleId ?? previous?.exampleId
-  };
+    const entry: SavedProjectMetadata = {
+      id: project.id,
+      name: project.manifest.name,
+      description: project.manifest.description,
+      createdAt: project.manifest.createdAt,
+      updatedAt: project.manifest.updatedAt,
+      size: sizeBytes ?? calculateProjectSize(project),
+      // Keep the last thumbnail when this save cannot capture one.
+      thumbnail: thumbnail ?? previous?.thumbnail,
+      // Keep exampleId once set.
+      exampleId: exampleId ?? previous?.exampleId
+    };
 
-  if (index >= 0) {
-    metadata[index] = entry;
-  } else {
-    metadata.push(entry);
-  }
+    if (index >= 0) {
+      metadata[index] = entry;
+    } else {
+      metadata.push(entry);
+    }
 
-  await saveProjectMetadata(metadata);
+    return metadata;
+  });
 }
 
 async function removeFromMetadata(id: string): Promise<void> {
-  const metadata = await loadProjectMetadata();
-  const filtered = metadata.filter((entry) => entry.id !== id);
-  await saveProjectMetadata(filtered);
+  await mutateProjectMetadata((metadata) =>
+    metadata.filter((entry) => entry.id !== id)
+  );
 }
 
 function calculateProjectSize(project: KhartisProject): number {

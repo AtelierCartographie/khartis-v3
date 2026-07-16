@@ -8,8 +8,11 @@ const mocks = vi.hoisted(() => ({
   currentProject: undefined as Record<string, unknown> | undefined,
   datasets: [] as Array<Record<string, unknown>>,
   deserializeAll: vi.fn(),
+  duckClear: vi.fn(),
   duckProcessFile: vi.fn(),
   duckRegisterExistingTable: vi.fn(),
+  duckWaitForInitialization: vi.fn<() => Promise<void>>(),
+  isCurrentProjectRuntime: true,
   loggerError: vi.fn(),
   showWarning: vi.fn(),
   updateClassification: vi.fn()
@@ -32,14 +35,14 @@ vi.mock('$lib/features/duckdb', () => ({
   duckDBOrchestrator: {
     applyPersistedTableFilters: vi.fn(),
     beginBatch: vi.fn(),
-    clear: vi.fn(async () => undefined),
+    clear: mocks.duckClear,
     endBatch: vi.fn(),
     getDataset: vi.fn(),
     getDatasetBySourceFile: vi.fn(),
     processFile: mocks.duckProcessFile,
     registerExistingTable: mocks.duckRegisterExistingTable,
     updateDatasetJoinInfo: vi.fn(),
-    waitForInitialization: vi.fn(async () => undefined)
+    waitForInitialization: mocks.duckWaitForInitialization
   }
 }));
 
@@ -145,7 +148,7 @@ vi.mock('$lib/features/data-tab/stores/data-tab.store.svelte', () => ({
 
 vi.mock('../stores/project/project-runtime.svelte', () => ({
   captureProjectRuntime: vi.fn(() => ({ projectId: 'project-1' })),
-  isCurrentProjectRuntime: vi.fn(() => true)
+  isCurrentProjectRuntime: vi.fn(() => mocks.isCurrentProjectRuntime)
 }));
 
 vi.mock('../stores/visualization.store.svelte', () => ({
@@ -254,6 +257,9 @@ async function loadService() {
 describe('dataOrchestratorService restore fallbacks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.duckClear.mockResolvedValue(undefined);
+    mocks.duckWaitForInitialization.mockResolvedValue(undefined);
+    mocks.isCurrentProjectRuntime = true;
     mocks.createFileFromUpload.mockResolvedValue(new File([], 'restored.csv'));
     mocks.activeVisualizations = [];
     mocks.datasets = [
@@ -349,6 +355,54 @@ describe('dataOrchestratorService restore fallbacks', () => {
     );
   });
 
+  it('should fail promptly when a joined source file cannot restore its dataset', async () => {
+    mocks.currentProject = {
+      id: 'project-1',
+      manifest: {
+        name: 'Project'
+      },
+      data: {
+        sourceFiles: [
+          {
+            id: 'file-joined',
+            name: 'broken-joined.csv',
+            fileType: 'csv',
+            content: new ArrayBuffer(1),
+            geoColumn: 'country',
+            joinedBasemap: 'world-countries'
+          }
+        ]
+      }
+    };
+    mocks.createFileFromUpload.mockRejectedValueOnce(
+      new Error('decode failed')
+    );
+    const { dataOrchestratorService } = await loadService();
+
+    await expect(dataOrchestratorService.onProjectChanged()).rejects.toThrow(
+      'Failed to restore dataset for source file file-joined'
+    );
+  });
+
+  it('should ignore a stale project change after DuckDB becomes ready', async () => {
+    let finishDuckDbInitialization: (() => void) | undefined;
+    mocks.duckWaitForInitialization.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishDuckDbInitialization = resolve;
+        })
+    );
+    const { dataOrchestratorService } = await loadService();
+
+    const projectChange = dataOrchestratorService.onProjectChanged();
+    await Promise.resolve();
+    mocks.isCurrentProjectRuntime = false;
+    finishDuckDbInitialization?.();
+    await projectChange;
+
+    expect(mocks.duckClear).not.toHaveBeenCalled();
+  });
+
   it('restores saved basemap style settings during project restore', async () => {
     const basemapStyleSettings = {
       style: 'blank-white',
@@ -381,6 +435,9 @@ describe('dataOrchestratorService restore fallbacks', () => {
 describe('dataOrchestratorService creation fast-path', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
+    mocks.duckClear.mockResolvedValue(undefined);
+    mocks.duckWaitForInitialization.mockResolvedValue(undefined);
+    mocks.isCurrentProjectRuntime = true;
     mocks.activeVisualizations = [];
     mocks.datasets = [];
     mocks.createFileFromUpload.mockResolvedValue(new File([], 'data.csv'));

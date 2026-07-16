@@ -22,7 +22,7 @@ VitePWA({
   strategies: 'injectManifest',
   srcDir: 'src',
   filename: 'sw.ts',
-  registerType: 'autoUpdate',
+  registerType: 'prompt',
   injectRegister: false,
   devOptions: { enabled: true, type: 'module' },
   injectManifest: {
@@ -90,8 +90,9 @@ Les routes runtime sont déclarées dans `src/sw.ts` :
 - `openmaptiles` : tuiles `openmaptiles.geo.data.gouv.fr` en `StaleWhileRevalidate`.
 
 Les tuiles et ressources non listées ici relèvent du cache HTTP normal du
-navigateur ou du réseau. Les requêtes transitoires 403/408/425/429/5xx sont
-retentées brièvement par le plugin `retryTransientErrorsPlugin`.
+navigateur ou du réseau. Les réponses transitoires 408, 425, 500, 502, 503 et
+504 sont retentées brièvement par le plugin `retryTransientErrorsPlugin`. Les
+réponses 403 et 429 ne sont pas répétées automatiquement.
 
 ---
 
@@ -112,7 +113,10 @@ retentées brièvement par le plugin `retryTransientErrorsPlugin`.
 | `openmaptiles`            | Tuiles OpenMapTiles publiques      | 100         | 30 jours   | Variable       |
 | **Total**                 |                                    |             |            | **~75–130 Mo** |
 
-Installation initiale : ~4 Mo (app shell + WASM core dès le premier chargement DuckDB). Après utilisation complète : variable selon les fonds téléchargés.
+Installation initiale : quelques Mo pour l'app shell. Le premier usage de
+DuckDB ajoute actuellement environ 35,9 Mo sans compression HTTP, ou environ
+5,5 Mo lorsque le sidecar Brotli est correctement négocié. Après utilisation
+complète, la taille varie selon les fonds téléchargés.
 
 Ces tailles sont des estimations. Vérifier les valeurs réelles dans `vite.config.ts` avant de dimensionner un quota de stockage.
 
@@ -145,26 +149,86 @@ Génération des icônes : `pnpm generate-pwa-assets`.
 
 ## Cycle de mise à jour
 
-Le service worker utilise `registerType: 'autoUpdate'` et `self.skipWaiting()`.
-Le composant `pwa-service-worker.svelte` enregistre le service worker
-immédiatement, vérifie `sw.ts` toutes les heures avec `cache: 'no-store'`, et
-affiche une notification lorsque `vite-plugin-pwa` signale une mise à jour à
-appliquer.
+Le service worker utilise le mode `prompt`. Une nouvelle version s'installe,
+mais reste en attente tant que l'utilisateur n'a pas demandé son activation.
+La première release qui migre depuis l'ancien mode `autoUpdate` refuse les
+anciens messages `SKIP_WAITING`, qui ne prouvent pas qu'une sauvegarde a eu
+lieu. Elle reste donc en attente jusqu'à la fermeture des anciens onglets ou de
+l'ancienne PWA, puis s'active naturellement. À partir de cette release, le
+client envoie un message versionné uniquement après une sauvegarde confirmée et
+le bouton pilote normalement toutes les mises à jour suivantes.
 
-```typescript
-// +layout.svelte
-const { needRefresh, updateServiceWorker } = useRegisterSW({
-  onRegisteredSW(swUrl, registration) {
-    if (!registration) return;
-    setInterval(async () => {
-      const response = await fetch(swUrl, { cache: 'no-store' });
-      if (response.status === 200) await registration.update();
-    }, 3600000);
-  }
-});
-```
+Le composant `pwa-service-worker.svelte` est monté avant le loader de
+restauration. Il peut donc enregistrer le service worker et détecter une mise à
+jour même si la restauration du dernier projet est lente ou défaillante.
 
-Quand `needRefresh` est `true`, appeler `updateServiceWorker(true)` pour activer la nouvelle version et recharger la page. Les projets IndexedDB sont préservés.
+Le bouton latéral suit ce cycle :
+
+1. Vérifier `_app/version.json` et appeler `registration.update()` avec le cache
+   HTTP désactivé pour le script du worker.
+2. Signaler si Khartis est à jour ou si un worker attend son activation.
+3. Avant l'activation, terminer les écritures du projet en cours. Si la
+   sauvegarde reste en échec ou dépasse son délai, ne pas activer la mise à
+   jour. L'activation est également refusée hors ligne.
+4. Envoyer `SKIP_WAITING` uniquement au worker en attente.
+5. Recharger une seule fois après `controllerchange`, ou après confirmation de
+   l'état `activated` sur les navigateurs qui ne signalent pas ce changement de
+   la même façon.
+
+Chaque onglet qui reçoit une activation lancée ailleurs termine aussi sa propre
+sauvegarde avant de se recharger. Une activation reçue après un timeout relance
+la sauvegarde au lieu de réutiliser une confirmation ancienne. Si cette
+sauvegarde ne peut pas être confirmée, l'onglet reste ouvert et signale
+l'erreur. Si deux onglets ont modifié le même projet, une révision interne
+IndexedDB empêche le dernier onglet d'écraser silencieusement le premier. Le
+conflit bloque la mise à jour dans l'onglet obsolète jusqu'au rechargement du
+projet. Cette révision n'est pas exportée dans le fichier `.kh`.
+
+Le service worker conserve en plus une copie bornée des fichiers JS, CSS et WASM
+générés par la release précédente. Un onglet ancien peut donc encore charger un
+module ou le moteur DuckDB en différé hors ligne pendant la transition.
+L'artifact distant conserve aussi les assets de la release précédente pour les
+onglets connectés.
+
+Le cache HTML `app-shell` est versionné avec `VITE_APP_VERSION`. Le worker actif
+ne peut donc pas servir le HTML d'une release précédente avec les nouveaux
+modules.
+
+La recherche automatique est espacée et le bouton permet une recherche
+immédiate. Le flux normal ne désinscrit aucun autre service worker et ne
+supprime aucun cache extérieur au scope Khartis.
+
+Les projets et assets utilisateur sont stockés dans IndexedDB, séparément de
+Cache Storage. La procédure de mise à jour n'appelle jamais
+`indexedDB.deleteDatabase()` et ne supprime aucun des stores projet.
+
+Sur iOS, Safari et la web app ajoutée à l'écran d'accueil disposent de
+conteneurs de stockage distincts. Le bouton agit donc dans l'instance où il est
+utilisé.
+
+## Restauration bornée
+
+Le démarrage ne doit jamais laisser l'app shell derrière un loader permanent.
+Les ouvertures IndexedDB bloquées ont un délai terminal et la restauration du
+dernier projet est interrompue après cinq minutes. Si ce délai est dépassé ou si
+les données nécessaires à la restauration ne sont pas disponibles, Khartis
+place uniquement l'identifiant du projet en quarantaine dans `sessionStorage`,
+puis remplace la page. Cette vraie navigation arrête l'ancien contexte
+JavaScript et son worker DuckDB avant d'ouvrir l'interface comme une nouvelle
+session.
+
+Ce fallback ne supprime ni le projet, ni ses assets, ni le pointeur `CURRENT`
+dans IndexedDB. Il évite seulement de retenter le même projet pendant la session
+courante. L'utilisateur peut ensuite le rouvrir depuis la liste des projets, ce
+qui lève la quarantaine après une restauration réussie. Si `sessionStorage`
+n'est pas accessible, le paramètre `restoreFallback` reste dans l'URL. La page
+continue donc à ignorer cette restauration sans entrer dans une boucle de
+rechargement.
+
+Les récupérations automatiques après erreur de module, worker ou WASM appellent
+un hook de sauvegarde avec timeout avant toute navigation. Si la persistance du
+projet reste non confirmée, la récupération est annulée et les données en
+mémoire restent affichées.
 
 ---
 
@@ -198,15 +262,11 @@ Le service worker tente de précacher des fichiers inexistants (ex. après un ch
 
 1. Un nouveau build doit être déployé pour régénérer les assets précachés.
 2. Le service worker vérifie `sw.ts` environ toutes les heures.
-3. L'utilisateur peut cliquer sur **Mettre à jour** si une notification est affichée.
-4. En développement, désinscription forcée :
-
-```javascript
-navigator.serviceWorker
-  .getRegistrations()
-  .then((registrations) => registrations.forEach((sw) => sw.unregister()));
-location.reload();
-```
+3. L'utilisateur peut cliquer sur **Rechercher une mise à jour** dans le menu
+   latéral.
+4. Si une version est prête, cliquer sur **Mettre à jour et redémarrer**.
+5. Le raccourci de secours `Ctrl/Cmd + Alt + R` nettoie uniquement le service
+   worker et les caches du scope Khartis. Il ne touche pas à IndexedDB.
 
 ### Fichiers volumineux non cachés
 
@@ -225,4 +285,10 @@ Attention au quota de stockage IndexedDB sur mobile (souvent limité à 20–50 
 
 ### `BASE_PATH` et service worker
 
-Le service worker est enregistré sous le `BASE_PATH` utilisé au build. En local, l'application est généralement servie à la racine. Pour tester un préfixe de déploiement, lancer explicitement le build ou le serveur avec `BASE_PATH=/cartographie/example`. Après tout changement de `BASE_PATH`, vider le cache navigateur et désinscrire l'ancien service worker.
+Le service worker est enregistré sous le `BASE_PATH` utilisé au build. En local,
+l'application est généralement servie à la racine. Pour tester un préfixe de
+déploiement, lancer explicitement le build ou le serveur avec
+`BASE_PATH=/cartographie/example`. Après tout changement de `BASE_PATH`, utiliser
+la récupération ciblée de chaque ancien scope. Ne jamais supprimer tous les
+service workers ou tous les caches de l'origine `www.sciencespo.fr`, qui est
+partagée avec d'autres applications.

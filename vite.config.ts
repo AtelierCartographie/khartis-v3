@@ -173,7 +173,7 @@ export default defineConfig(({ mode }) => {
           'apple-touch-icon-180x180.png',
           'maskable-icon-512x512.png'
         ],
-        registerType: 'autoUpdate',
+        registerType: 'prompt',
         injectRegister: false,
         devOptions: {
           enabled: true,
