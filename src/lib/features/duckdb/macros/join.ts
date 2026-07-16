@@ -1,3 +1,5 @@
+import { FUZZY_SEARCH } from '$lib/features/commons/constants/detection.constants';
+
 /**
  * SQL macro that normalizes a text string by applying NFC normalization,
  * stripping accents, converting to lowercase, and trimming whitespace.
@@ -17,7 +19,8 @@ const normalize_text_join_macro = `CREATE OR REPLACE MACRO normalize_text_join(s
  * SQL macro that calculates the Jaro-Winkler similarity score between a candidate string
  * and a table of strings, categorizes the similarity into 'exact', 'partial', or 'toofar',
  * and returns all matches including 'toofar'.
- * Uses score_cutoff=0.85 for early pruning of low-similarity pairs.
+ * Uses FUZZY_SEARCH.SCORE_CUTOFF for early pruning of low-similarity pairs, aligned
+ * with the join grading cutoff in join-ops.ts.
  *
  * Callers are responsible for filtering out 'toofar' entries when needed.
  *
@@ -33,10 +36,10 @@ const get_similarity_macro = `CREATE OR REPLACE MACRO get_similarity(candidate, 
     -- Categorized into 3 types: exact, partial, toofar
     FROM t0, query_table(join_table)
     SELECT
-      jaro_winkler_similarity(search_term, "normalized", 0.85) as score,
+      jaro_winkler_similarity(search_term, "normalized", ${FUZZY_SEARCH.SCORE_CUTOFF}) as score,
       CASE
         WHEN score = 1 THEN 'exact'
-        WHEN score >= 0.85 THEN 'partial'
+        WHEN score >= ${FUZZY_SEARCH.SCORE_CUTOFF} THEN 'partial'
         ELSE 'toofar'
       END as typo_match,
       * EXCLUDE (search_term, normalized)
