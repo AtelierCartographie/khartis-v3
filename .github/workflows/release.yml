@@ -23,7 +23,7 @@ jobs:
   semantic-release:
     name: Semantic Release (${{ github.ref_name }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,8 +53,25 @@ jobs:
       - name: Compile Paraglide
         run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
 
-      - name: Run server tests (pipeline + duckdb)
-        run: pnpm run test:pipeline
+      - name: Run lint
+        run: pnpm lint
+
+      - name: Run type check
+        run: pnpm check
+
+      - name: Run unit tests
+        run: pnpm test:unit
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Run pipeline tests
+        run: pnpm test:pipeline
+
+      - name: Run DuckDB tests
+        run: pnpm test:duckdb
+
+      - name: Build application
+        run: pnpm build
 
       - name: Run semantic-release
         run: pnpm exec semantic-release

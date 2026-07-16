@@ -286,11 +286,15 @@ function createDatasetsStore() {
     return getDatasetBySourceFileFn(datasetsState, sourceFileId);
   }
 
-  function waitForDatasetBySourceFile(sourceFileId: string): Promise<string> {
+  function waitForDatasetBySourceFile(
+    sourceFileId: string,
+    timeoutMs?: number
+  ): Promise<string> {
     return waitForDatasetBySourceFileFn(
       datasetsState,
       datasetsInternals,
-      sourceFileId
+      sourceFileId,
+      timeoutMs
     );
   }
 

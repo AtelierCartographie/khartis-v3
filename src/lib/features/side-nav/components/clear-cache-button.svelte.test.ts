@@ -1,39 +1,42 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/svelte';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  factoryResetPwaMock: vi.fn().mockResolvedValue(undefined)
+  status: 'idle',
+  runPrimaryActionMock: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('$lib/features/commons/utils/pwa-reset', () => ({
-  factoryResetPwa: (...args: unknown[]) => mocks.factoryResetPwaMock(...args)
-}));
-
-vi.mock('$lib/features/commons/utils/logger', () => ({
-  LogCategory: { SYSTEM: 'SYSTEM' },
-  logger: {
-    error: vi.fn()
+vi.mock('$lib/features/commons/services/pwa-update.service.svelte', () => ({
+  pwaUpdateService: {
+    get status() {
+      return mocks.status;
+    },
+    runPrimaryAction: (...args: unknown[]) =>
+      mocks.runPrimaryActionMock(...args)
   }
 }));
 
 describe('ClearCacheButton', () => {
-  it('shows the update copy and runs the PWA factory reset on confirmation', async () => {
+  beforeEach(() => {
+    mocks.status = 'idle';
+  });
+
+  it('should check for an update when the sidebar action is clicked', async () => {
     const Component = (await import('./clear-cache-button.svelte')).default;
     render(Component);
 
-    await fireEvent.click(screen.getByTestId('sidenav-clear-cache-button'));
+    expect(screen.getByText('Rechercher une mise à jour')).toBeTruthy();
 
-    expect(screen.getByText('Actualiser Khartis ?')).toBeTruthy();
-    expect(
-      screen.getByText(
-        'Khartis va nettoyer son moteur puis recharger la page. Vos projets sauvegardés restent conservés et se rouvrent depuis le menu.'
-      )
-    ).toBeTruthy();
+    await fireEvent.click(screen.getByTestId('sidenav-update-button'));
 
-    await fireEvent.click(screen.getByText('Actualiser'));
+    expect(mocks.runPrimaryActionMock).toHaveBeenCalledOnce();
+  });
 
-    await waitFor(() => {
-      expect(mocks.factoryResetPwaMock).toHaveBeenCalledWith({ reload: true });
-    });
+  it('should expose the available update action', async () => {
+    mocks.status = 'available';
+    const Component = (await import('./clear-cache-button.svelte')).default;
+    render(Component);
+
+    expect(screen.getByText('Mettre à jour et redémarrer')).toBeTruthy();
   });
 });

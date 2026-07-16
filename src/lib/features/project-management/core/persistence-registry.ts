@@ -17,6 +17,10 @@ export interface PersistenceStatus {
   lastSaved?: Date;
 }
 
+export interface PersistenceSuspensionOptions {
+  signal?: AbortSignal;
+}
+
 export interface PersistenceEntry<T = unknown> {
   key: string;
   serialize: () => T;
@@ -36,6 +40,12 @@ class PersistenceRegistryImpl {
 
   private dirty = false;
 
+  private changeGeneration = 0;
+
+  private persistedGeneration = 0;
+
+  private activeSaveGeneration: number | null = null;
+
   private flushInFlight: Promise<void> | null = null;
 
   private flushQueued = false;
@@ -49,7 +59,7 @@ class PersistenceRegistryImpl {
 
   private lastSavedAt: Date | undefined;
 
-  private suppressedNotificationsDepth = 0;
+  private activeSuspensions = new Set<symbol>();
 
   get isDirty(): boolean {
     return this.dirty;
@@ -61,6 +71,10 @@ class PersistenceRegistryImpl {
 
   get currentSavePolicy(): PersistenceSavePolicy {
     return { ...this.savePolicy };
+  }
+
+  captureSaveGeneration(): number {
+    return this.changeGeneration;
   }
 
   setSaveCallback(cb: () => Promise<void>): void {
@@ -88,18 +102,57 @@ class PersistenceRegistryImpl {
   }
 
   async withPersistenceSuspended<T>(
-    operation: () => Promise<T> | T
+    operation: () => Promise<T> | T,
+    options: PersistenceSuspensionOptions = {}
   ): Promise<T> {
-    this.suppressedNotificationsDepth += 1;
+    const suspension = Symbol('persistence-suspension');
+    let released = false;
+    let handleAbort = () => {};
+
+    const release = () => {
+      if (released) {
+        return;
+      }
+
+      released = true;
+      this.activeSuspensions.delete(suspension);
+      options.signal?.removeEventListener('abort', handleAbort);
+    };
+
+    const abortPromise = options.signal
+      ? new Promise<never>((_, reject) => {
+          const rejectFromAbort = () => {
+            release();
+            reject(
+              options.signal?.reason instanceof Error
+                ? options.signal.reason
+                : new Error('Persistence suspension aborted')
+            );
+          };
+
+          handleAbort = rejectFromAbort;
+        })
+      : null;
+
+    this.activeSuspensions.add(suspension);
     this.cancelDebounce();
 
+    if (options.signal?.aborted) {
+      release();
+      throw options.signal.reason instanceof Error
+        ? options.signal.reason
+        : new Error('Persistence suspension aborted');
+    }
+
+    options.signal?.addEventListener('abort', handleAbort, { once: true });
+
     try {
-      return await operation();
+      const operationPromise = Promise.resolve(operation());
+      return await (abortPromise
+        ? Promise.race([operationPromise, abortPromise])
+        : operationPromise);
     } finally {
-      this.suppressedNotificationsDepth = Math.max(
-        0,
-        this.suppressedNotificationsDepth - 1
-      );
+      release();
     }
   }
 
@@ -113,13 +166,14 @@ class PersistenceRegistryImpl {
   }
 
   notifyChange(key: string, priority?: SavePriorityType): void {
-    if (this.suppressedNotificationsDepth > 0) {
+    if (this.activeSuspensions.size > 0) {
       return;
     }
 
     const resolvedPriority =
       priority ?? this.entries.get(key)?.priority ?? SavePriority.DEBOUNCED;
 
+    this.changeGeneration += 1;
     this.dirty = true;
     this.emitStatus();
 
@@ -187,7 +241,7 @@ class PersistenceRegistryImpl {
   flush(): Promise<void> {
     this.cancelDebounce();
 
-    if (this.suppressedNotificationsDepth > 0) {
+    if (this.activeSuspensions.size > 0) {
       return Promise.resolve();
     }
 
@@ -196,26 +250,31 @@ class PersistenceRegistryImpl {
       return this.flushInFlight;
     }
 
-    if (!this.dirty) {
+    if (!this.dirty || !this.saveCallback) {
       return Promise.resolve();
     }
 
-    if (!this.saveCallback) {
-      return Promise.resolve();
-    }
+    this.flushInFlight = this.drainFlushQueue().finally(() => {
+      this.flushInFlight = null;
+    });
 
-    this.dirty = false;
-    this.emitStatus();
+    return this.flushInFlight;
+  }
 
-    let flushFailed = false;
+  private async drainFlushQueue(): Promise<void> {
+    while (this.dirty && this.saveCallback) {
+      this.flushQueued = false;
+      const saveGeneration = this.changeGeneration;
+      this.dirty = false;
+      this.activeSaveGeneration = saveGeneration;
+      this.emitStatus();
 
-    this.flushInFlight = this.saveCallback()
-      .then(() => {
+      try {
+        await this.saveCallback();
+        this.markClean(saveGeneration);
         this.lastSavedAt = new Date();
         this.emitStatus();
-      })
-      .catch((error) => {
-        flushFailed = true;
+      } catch (error) {
         this.dirty = true;
         this.emitStatus();
         logger.error(
@@ -223,23 +282,29 @@ class PersistenceRegistryImpl {
           LogCategory.PERSISTENCE,
           error
         );
-      })
-      .finally(() => {
-        this.flushInFlight = null;
+        return;
+      } finally {
+        this.activeSaveGeneration = null;
+      }
 
-        if (!flushFailed && (this.flushQueued || this.dirty)) {
-          this.flushQueued = false;
-          void this.flush();
-        }
-      });
+      if (!this.flushQueued && !this.dirty) {
+        return;
+      }
+    }
 
-    return this.flushInFlight;
+    this.flushQueued = false;
   }
 
-  markClean(): void {
+  markClean(
+    savedGeneration = this.activeSaveGeneration ?? this.changeGeneration
+  ): void {
     this.cancelDebounce();
-    this.dirty = false;
-    this.flushQueued = false;
+    this.persistedGeneration = Math.max(
+      this.persistedGeneration,
+      Math.min(savedGeneration, this.changeGeneration)
+    );
+    this.dirty = this.changeGeneration > this.persistedGeneration;
+    this.flushQueued = this.flushQueued && this.dirty;
     this.emitStatus();
   }
 

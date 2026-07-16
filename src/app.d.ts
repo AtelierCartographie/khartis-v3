@@ -16,6 +16,10 @@ declare global {
   interface ImportMeta {
     readonly env: ImportMetaEnv;
   }
+
+  interface Window {
+    __khartisFlushBeforePwaRecovery?: () => Promise<boolean>;
+  }
 }
 
 declare module '@tmcw/togeojson' {

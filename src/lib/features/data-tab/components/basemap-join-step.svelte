@@ -1,9 +1,6 @@
 <script lang="ts">
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import {
-    INTERNAL_COLUMN,
-    JOINED_BASEMAP_COLUMNS
-  } from '$lib/features/commons/constants/data.constants';
+  import { JOINED_BASEMAP_COLUMNS } from '$lib/features/commons/constants/data.constants';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline';
 
@@ -1721,32 +1718,6 @@
         resolvedDatasetId
       )
     ) {
-      dataTabStore.markStepComplete(basemapStepIndex);
-      return;
-    }
-
-    const existingDuckDataset = getCurrentDuckDataset(resolvedDatasetId);
-    if (
-      existingDuckDataset &&
-      !existingDuckDataset.gpsMode &&
-      existingDuckDataset.joinedBasemap === selectedBasemapId &&
-      existingDuckDataset.geoColumn &&
-      existingDuckDataset.geoColumn !== linkedVariableName
-    ) {
-      const canonicalGeoColumn = existingDuckDataset.geoColumn;
-      const linkedVariable =
-        selectedDataset?.columns
-          ?.filter(
-            (col) =>
-              col.name !== INTERNAL_COLUMN.GEOMETRY &&
-              col.name !== INTERNAL_COLUMN.ID
-          )
-          .findIndex((col) => col.name === canonicalGeoColumn) ?? -1;
-      dataTabActions.setGeolocationState({
-        linkedVariable: linkedVariable >= 0 ? linkedVariable : null,
-        linkedVariableName: canonicalGeoColumn
-      });
-      previousLinkedVariableName = canonicalGeoColumn;
       dataTabStore.markStepComplete(basemapStepIndex);
       return;
     }

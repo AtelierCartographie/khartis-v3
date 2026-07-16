@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { join_macros } from '$lib/features/duckdb/macros/join';
+import { FUZZY_SEARCH } from '$lib/features/commons/constants/detection.constants';
 import {
   createTestInstance,
   destroyTestInstance,
@@ -19,7 +20,7 @@ beforeAll(async () => {
   );
   await run(
     db,
-    "INSERT INTO basemap_ref VALUES (1,'paris'),(2,'lyon'),(3,'marseille'),(4,'pari')"
+    "INSERT INTO basemap_ref VALUES (1,'paris'),(2,'lyon'),(3,'marseille'),(4,'pari'),(5,'toulouse')"
   );
 });
 
@@ -71,6 +72,24 @@ describe('get_similarity macro', () => {
       "FROM get_similarity('paris', 'basemap_ref') WHERE id = 3"
     );
     expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0].typo_match).toBe('toofar');
+  });
+
+  it('should prune a near miss when its raw score is below the shared cutoff', async () => {
+    const rawRows = await query(
+      db,
+      "SELECT jaro_winkler_similarity('toulon', 'toulouse') AS score"
+    );
+    const rawScore = rawRows[0].score as number;
+    expect(rawScore).toBeGreaterThan(0.85);
+    expect(rawScore).toBeLessThan(FUZZY_SEARCH.SCORE_CUTOFF);
+
+    const rows = await query(
+      db,
+      "FROM get_similarity('toulon', 'basemap_ref') WHERE id = 5"
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].score).toBe(0);
     expect(rows[0].typo_match).toBe('toofar');
   });
 });

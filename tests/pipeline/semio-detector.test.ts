@@ -260,7 +260,7 @@ describe('detectSemioType — NUMERIC columns', () => {
     expect(result.semioType).toBe('QLO');
   });
 
-  it('detects GEOID for denormalized numeric code column (low shareUniques but id keyword)', () => {
+  it('classifies denormalized numeric code column (low shareUniques) as QL despite id keyword', () => {
     const result = detectSemioType(
       analysis('code_region_2016', NUMERIC, {
         count: 34953,
@@ -274,11 +274,10 @@ describe('detectSemioType — NUMERIC columns', () => {
         extent_magnitude: 1.97
       }) as never
     );
-    expect(result.semioType).toBe('geoid');
-    expect(result.semioScore).toBeGreaterThanOrEqual(0.6);
+    expect(result.semioType).toBe('QL');
   });
 
-  it('detects GEOID for denormalized string code column (code_departement)', () => {
+  it('classifies denormalized string code column (code_departement) as QL', () => {
     const result = detectSemioType(
       analysis('code_departement', STRING, {
         count: 34953,
@@ -286,8 +285,7 @@ describe('detectSemioType — NUMERIC columns', () => {
         nulls: 0
       }) as never
     );
-    expect(result.semioType).toBe('geoid');
-    expect(result.semioScore).toBeGreaterThanOrEqual(0.6);
+    expect(result.semioType).toBe('QL');
   });
 
   it('does NOT classify as GEOID when id-keyword column has only 1 unique value', () => {

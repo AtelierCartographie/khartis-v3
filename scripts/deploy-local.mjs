@@ -3,7 +3,15 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { cp, mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
+import {
+  cp,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -23,9 +31,17 @@ const SFTP_KEEPALIVE_INTERVAL_MS = 10_000;
 const SFTP_KEEPALIVE_COUNT_MAX = 3;
 const REMOTE_SIBLING_KIND_UPLOAD = 'upload';
 const REMOTE_SIBLING_KIND_OLD = 'old';
+const REMOTE_DEPLOYMENT_LOCK_SUFFIX = 'deploy-lock';
 const STALE_SIBLING_MIN_AGE_MS = 60 * 60 * 1000;
 const SFTP_CLOSE_TIMEOUT_MS = 5_000;
-const ALLOWED_PUBLIC_REDIRECT_STATUSES = new Set([301, 302, 307, 308]);
+const HTTP_ROUTING_COOKIE_NAME_ENV = 'KHARTIS_HTTP_ROUTING_COOKIE_NAME';
+const HTTP_BACKEND_HEADER_NAME_ENV = 'KHARTIS_HTTP_BACKEND_HEADER_NAME';
+const RELEASE_ASSET_ROOT = '_app/immutable';
+const RELEASE_ASSET_MANIFEST_FILENAME = '.khartis-release-assets.json';
+const RELEASE_ASSET_MANIFEST_VERSION = 1;
+const LEGACY_ASSET_SCAN_MAX_FILES = 2_000;
+const LEGACY_ASSET_SCAN_MAX_BYTES = 512 * 1024 * 1024;
+const ALLOWED_PUBLIC_REDIRECT_STATUSES = new Set([301, 308]);
 // Accept legacy -staging.N and current -pprd.N prereleases; at an equal version the
 // current pprd channel wins over the legacy staging channel.
 const PPRD_TAG_PATTERN =
@@ -39,7 +55,9 @@ const TARGETS = {
     remoteDirEnv: 'KHARTIS_SFTP_REMOTE_DIR_PPRD',
     publicUrlEnv: 'KHARTIS_PUBLIC_URL_PPRD',
     gtmContainerEnv: 'KHARTIS_GTM_CONTAINER_ID_PPRD',
+    backendRoutingValuesEnv: 'KHARTIS_HTTP_ROUTING_BACKENDS_PPRD',
     khartisEnv: 'preproduction',
+    releaseBranch: 'staging',
     uploadEnabled: true
   },
   prod: {
@@ -48,7 +66,9 @@ const TARGETS = {
     remoteDirEnv: 'KHARTIS_SFTP_REMOTE_DIR_PROD',
     publicUrlEnv: 'KHARTIS_PUBLIC_URL_PROD',
     gtmContainerEnv: 'KHARTIS_GTM_CONTAINER_ID_PROD',
+    backendRoutingValuesEnv: 'KHARTIS_HTTP_ROUTING_BACKENDS_PROD',
     khartisEnv: 'production',
+    releaseBranch: 'main',
     uploadEnabled: true,
     productionConfirmation: true
   }
@@ -68,6 +88,10 @@ const usage = `Usage:
   pnpm deploy:prod:dry-run
   pnpm deploy:pprd -- --tag <tag>
   pnpm deploy:prod -- --tag <tag>
+  pnpm deploy:pprd -- --migrate-legacy-assets
+  pnpm deploy:prod -- --migrate-legacy-assets
+  pnpm deploy:pprd -- --recover-stale-lock
+  pnpm deploy:prod -- --recover-stale-lock
 
 Required local environment (shared):
   KHARTIS_SFTP_HOST
@@ -79,6 +103,15 @@ Per-target public URL, remote directory and GTM container (remote dir ends with 
   prod: KHARTIS_PUBLIC_URL_PROD, KHARTIS_SFTP_REMOTE_DIR_PROD (html/prod), KHARTIS_GTM_CONTAINER_ID_PROD
   BASE_PATH is derived from each public URL so the build and deployed route cannot diverge.
   Leave the GTM container id empty to ship a target without analytics (e.g. pprd).
+
+Public backend routing validation:
+  KHARTIS_HTTP_ROUTING_COOKIE_NAME
+  KHARTIS_HTTP_BACKEND_HEADER_NAME
+  KHARTIS_HTTP_ROUTING_BACKENDS_PPRD
+  KHARTIS_HTTP_ROUTING_BACKENDS_PROD
+  List every expected routing-cookie value, separated by commas. The public
+  contract is checked independently on each configured backend, whose response
+  must confirm the same value in the configured backend identity header.
 
 Authentication, choose one:
   KHARTIS_SFTP_PASSWORD
@@ -92,7 +125,11 @@ Local env files:
   ${LOCAL_ENV_FILES.join(', ')} are supported.
   pprd deploys the latest v*-pprd.* prerelease (legacy v*-staging.* accepted); prod deploys the latest stable v*.*.* tag.
   The build is uploaded to a temporary remote directory, then swapped into
-  place with two quick renames; the previous version is removed afterwards.
+  place with two quick renames. Missing immutable assets from the immediately
+  previous release are retained, then the previous directory is removed.
+  Use --migrate-legacy-assets only for the first deployment from a release
+  without a valid .khartis-release-assets.json manifest.
+  Use --recover-stale-lock only after confirming no other deployment is active.
   Use --tag to deploy a specific release. prod asks you to type the tag to confirm.
   Do not commit real SFTP values. Keep secrets in ignored local env files or your shell.`;
 
@@ -112,18 +149,21 @@ async function main() {
 
   await run('git', ['fetch', 'origin', '--tags'], { cwd: process.cwd() });
 
-  const tag = options.tag ?? (await findLatestTag(target.tagPattern));
+  const tag = options.tag ?? (await findLatestRemoteTag(target.tagPattern));
   assertTagMatchesTarget(tag, target.tagPattern, targetName);
-  const tagSha = await output('git', ['rev-list', '-n', '1', tag], {
+  const remoteTagSha = await resolveRemoteTagCommit(tag);
+  const localTagSha = await output('git', ['rev-list', '-n', '1', tag], {
     cwd: process.cwd()
   });
+  assertTagCommitMatchesRemote(tag, localTagSha, remoteTagSha);
+  const tagSha = remoteTagSha;
   const shortSha = tagSha.slice(0, 12);
 
   log(`Target: ${targetName}`);
   log(`Tag: ${tag}`);
   log(`Commit: ${shortSha}`);
 
-  await assertReleaseRunIsGreen(tagSha);
+  await assertReleaseRunIsGreen(tagSha, target.releaseBranch);
 
   const remoteDir = options.dryRun
     ? process.env[target.remoteDirEnv]?.trim() || '<not required for dry run>'
@@ -151,6 +191,9 @@ async function main() {
     readSftpUsername();
     readSftpHostFingerprints();
   }
+  const backendRouting = options.dryRun
+    ? null
+    : readBackendRouting(target.backendRoutingValuesEnv);
 
   const requiresProductionConfirmation =
     target.productionConfirmation === true && !options.dryRun;
@@ -172,7 +215,7 @@ async function main() {
     path.join(tmpdir(), 'khartis-upload-')
   );
   try {
-    await run('git', ['worktree', 'add', '--detach', worktree, tag], {
+    await run('git', ['worktree', 'add', '--detach', worktree, tagSha], {
       cwd: process.cwd()
     });
     await run('pnpm', ['install', '--frozen-lockfile'], {
@@ -193,7 +236,11 @@ async function main() {
     const uploadBuildDir = path.join(uploadSnapshotRoot, 'build');
     const snapshotSpinner = startSpinner('Preparing upload snapshot');
     await cp(buildDir, uploadBuildDir, { recursive: true });
-    snapshotSpinner.done('Upload snapshot ready');
+    const releaseAssetPaths = await writeReleaseAssetManifest(uploadBuildDir);
+    const wasmAssetPath = findCompressedWasmAssetPath(releaseAssetPaths);
+    snapshotSpinner.done(
+      `Upload snapshot ready (${releaseAssetPaths.length} immutable assets tracked)`
+    );
 
     if (options.dryRun) {
       log('Dry run: build succeeded, SFTP upload skipped.');
@@ -206,7 +253,17 @@ async function main() {
       uploadBuildDir,
       remoteDir,
       target.remoteDirLeaf,
-      deployment
+      deployment,
+      releaseAssetPaths,
+      {
+        allowLegacyAssetScan: options.migrateLegacyAssets,
+        backendRouting,
+        expectedVersion: tag,
+        recoverStaleLock: options.recoverStaleLock,
+        validateReleaseProvenance: () =>
+          assertRemoteReleaseStillValid(tag, tagSha, target.releaseBranch),
+        wasmAssetPath
+      }
     );
     log('Deployment complete.');
   } finally {
@@ -231,7 +288,9 @@ function parseArgs(args) {
     target: undefined,
     tag: undefined,
     yes: false,
-    dryRun: false
+    dryRun: false,
+    migrateLegacyAssets: false,
+    recoverStaleLock: false
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -249,6 +308,14 @@ function parseArgs(args) {
     }
     if (arg === '--dry-run') {
       options.dryRun = true;
+      continue;
+    }
+    if (arg === '--migrate-legacy-assets') {
+      options.migrateLegacyAssets = true;
+      continue;
+    }
+    if (arg === '--recover-stale-lock') {
+      options.recoverStaleLock = true;
       continue;
     }
     if (arg === '--tag') {
@@ -316,22 +383,140 @@ async function ensurePnpm() {
   await ensureCommand('pnpm', ['--version']);
 }
 
-async function findLatestTag(tagPattern) {
-  const tags = (await output('git', ['tag'], { cwd: process.cwd() }))
-    .split('\n')
-    .map((tag) => tag.trim())
-    .filter(Boolean)
+async function findLatestRemoteTag(tagPattern) {
+  const remoteTags = await output(
+    'git',
+    ['ls-remote', '--tags', '--refs', 'origin'],
+    { cwd: process.cwd() }
+  );
+  const tags = parseRemoteTagNames(remoteTags)
     .filter((tag) => tagPattern.test(tag))
     .map((tag) => parseVersionedTag(tag, tagPattern))
     .sort(compareVersionedTagsDesc);
 
   const [tag] = tags;
   if (!tag) {
-    throw new Error(
-      'No matching tag found. Run git fetch origin --tags first.'
-    );
+    throw new Error('No matching release tag exists on origin.');
   }
   return tag.name;
+}
+
+function parseRemoteTagNames(rawTags) {
+  return rawTags
+    .split('\n')
+    .map((line) => line.trim().split(/\s+/, 2))
+    .filter(
+      ([sha, ref]) =>
+        /^[0-9a-f]{40,64}$/i.test(sha ?? '') &&
+        ref?.startsWith('refs/tags/') &&
+        !ref.endsWith('^{}')
+    )
+    .map(([, ref]) => ref.slice('refs/tags/'.length));
+}
+
+async function resolveRemoteTagCommit(tag) {
+  const rawRefs = await output(
+    'git',
+    [
+      'ls-remote',
+      '--tags',
+      'origin',
+      `refs/tags/${tag}`,
+      `refs/tags/${tag}^{}`
+    ],
+    { cwd: process.cwd() }
+  );
+  const remoteTagSha = parseRemoteTagCommit(rawRefs, tag);
+  await output('git', ['cat-file', '-e', `${remoteTagSha}^{commit}`], {
+    cwd: process.cwd()
+  });
+  return remoteTagSha;
+}
+
+async function resolveRemoteBranchHead(branch) {
+  const rawRef = await output(
+    'git',
+    ['ls-remote', '--heads', 'origin', `refs/heads/${branch}`],
+    { cwd: process.cwd() }
+  );
+  return parseRemoteBranchHead(rawRef, branch);
+}
+
+function parseRemoteBranchHead(rawRef, branch) {
+  const branchRef = `refs/heads/${branch}`;
+  for (const line of rawRef.split('\n')) {
+    const [sha, ref] = line.trim().split(/\s+/, 2);
+    if (/^[0-9a-f]{40,64}$/i.test(sha ?? '') && ref === branchRef) {
+      return sha;
+    }
+  }
+  throw new Error(`Release branch "${branch}" does not exist on origin.`);
+}
+
+function parseRemoteTagCommit(rawRefs, tag) {
+  const tagRef = `refs/tags/${tag}`;
+  const peeledTagRef = `${tagRef}^{}`;
+  let directSha;
+  let peeledSha;
+
+  for (const line of rawRefs.split('\n')) {
+    const [sha, ref] = line.trim().split(/\s+/, 2);
+    if (!/^[0-9a-f]{40,64}$/i.test(sha ?? '')) continue;
+    if (ref === tagRef) directSha = sha;
+    if (ref === peeledTagRef) peeledSha = sha;
+  }
+
+  const commitSha = peeledSha ?? directSha;
+  if (!commitSha) {
+    throw new Error(`Release tag "${tag}" does not exist on origin.`);
+  }
+  return commitSha;
+}
+
+function assertTagCommitMatchesRemote(tag, localTagSha, remoteTagSha) {
+  if (localTagSha !== remoteTagSha) {
+    throw new Error(
+      `Local tag "${tag}" resolves to a different commit than origin. Refusing to deploy.`
+    );
+  }
+}
+
+function assertReleaseCommitBelongsToBranch(
+  tag,
+  releaseBranch,
+  ancestryExitCode
+) {
+  if (ancestryExitCode !== 0) {
+    throw new Error(
+      `Release tag "${tag}" no longer belongs to origin/${releaseBranch}. Refusing to deploy.`
+    );
+  }
+}
+
+async function assertRemoteReleaseStillValid(tag, tagSha, releaseBranch) {
+  await run('git', ['fetch', 'origin', `refs/heads/${releaseBranch}`], {
+    cwd: process.cwd(),
+    quiet: true
+  });
+  const [currentTagSha, currentBranchSha] = await Promise.all([
+    resolveRemoteTagCommit(tag),
+    resolveRemoteBranchHead(releaseBranch)
+  ]);
+  assertTagCommitMatchesRemote(tag, tagSha, currentTagSha);
+  await output('git', ['cat-file', '-e', `${currentBranchSha}^{commit}`], {
+    cwd: process.cwd()
+  });
+  const ancestryExitCode = await run(
+    'git',
+    ['merge-base', '--is-ancestor', tagSha, currentBranchSha],
+    {
+      allowFailure: true,
+      cwd: process.cwd(),
+      quiet: true
+    }
+  );
+  assertReleaseCommitBelongsToBranch(tag, releaseBranch, ancestryExitCode);
+  log('Release provenance revalidated after acquiring the deployment lock.');
 }
 
 function parseVersionedTag(tag, tagPattern) {
@@ -363,7 +548,7 @@ function compareVersionedTagsDesc(left, right) {
   );
 }
 
-async function assertReleaseRunIsGreen(tagSha) {
+async function assertReleaseRunIsGreen(tagSha, releaseBranch) {
   const json = await output(
     'gh',
     [
@@ -375,8 +560,10 @@ async function assertReleaseRunIsGreen(tagSha) {
       RELEASE_WORKFLOW,
       '--commit',
       tagSha,
+      '--branch',
+      releaseBranch,
       '--json',
-      'conclusion,status,url,displayTitle,updatedAt',
+      'conclusion,status,url,displayTitle,updatedAt,headBranch,headSha,event',
       '--limit',
       '5'
     ],
@@ -384,9 +571,7 @@ async function assertReleaseRunIsGreen(tagSha) {
   );
 
   const runs = JSON.parse(json);
-  const successfulRun = runs.find(
-    (run) => run.status === 'completed' && run.conclusion === 'success'
-  );
+  const successfulRun = findSuccessfulReleaseRun(runs, tagSha, releaseBranch);
 
   if (!successfulRun) {
     const inspected = runs
@@ -396,11 +581,22 @@ async function assertReleaseRunIsGreen(tagSha) {
       )
       .join('\n');
     throw new Error(
-      `No successful ${RELEASE_WORKFLOW} run found for this tag commit.\n${inspected}`
+      `No successful ${RELEASE_WORKFLOW} push run found for this tag commit on ${releaseBranch}.\n${inspected}`
     );
   }
 
   log(`GitHub Actions gate: success (${successfulRun.url})`);
+}
+
+function findSuccessfulReleaseRun(runs, tagSha, releaseBranch) {
+  return runs.find(
+    (run) =>
+      run.status === 'completed' &&
+      run.conclusion === 'success' &&
+      run.event === 'push' &&
+      run.headBranch === releaseBranch &&
+      run.headSha === tagSha
+  );
 }
 
 function readRequiredEnv(name) {
@@ -409,6 +605,47 @@ function readRequiredEnv(name) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
   return value;
+}
+
+function readBackendRouting(valuesEnvName) {
+  const cookieName = readRequiredEnv(HTTP_ROUTING_COOKIE_NAME_ENV);
+  if (!/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(cookieName)) {
+    throw new Error(
+      `${HTTP_ROUTING_COOKIE_NAME_ENV} must be a valid HTTP cookie name.`
+    );
+  }
+  const backendHeaderName = readRequiredEnv(HTTP_BACKEND_HEADER_NAME_ENV);
+  if (!/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(backendHeaderName)) {
+    throw new Error(
+      `${HTTP_BACKEND_HEADER_NAME_ENV} must be a valid HTTP header name.`
+    );
+  }
+
+  const backendValues = readRequiredEnv(valuesEnvName)
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (backendValues.length === 0) {
+    throw new Error(`${valuesEnvName} must list at least one backend.`);
+  }
+  if (
+    backendValues.some(
+      (value) => /[;,\r\n\0]/.test(value) || value.length > 256
+    )
+  ) {
+    throw new Error(
+      `${valuesEnvName} contains an invalid HTTP routing cookie value.`
+    );
+  }
+  if (new Set(backendValues).size !== backendValues.length) {
+    throw new Error(`${valuesEnvName} must not contain duplicate backends.`);
+  }
+
+  return {
+    backendHeaderName,
+    cookieName,
+    backendValues
+  };
 }
 
 function resolveDeploymentPublicUrl(value, envName = 'public URL') {
@@ -740,9 +977,22 @@ async function uploadBuild(
   buildDir,
   remoteDir,
   expectedRemoteDirLeaf,
-  deployment
+  deployment,
+  releaseAssetPaths,
+  {
+    allowLegacyAssetScan,
+    backendRouting,
+    expectedVersion,
+    recoverStaleLock,
+    validateReleaseProvenance,
+    wasmAssetPath
+  }
 ) {
   const safeRemoteDir = assertSafeRemoteDir(remoteDir, expectedRemoteDirLeaf);
+  const deploymentLockDir = createRemoteDeploymentLockDir(
+    safeRemoteDir,
+    expectedRemoteDirLeaf
+  );
   const tempRemoteDir = createRemoteSiblingDir(
     safeRemoteDir,
     expectedRemoteDirLeaf,
@@ -758,12 +1008,21 @@ async function uploadBuild(
   let swapped = false;
   let preserveTempDir = false;
   let tempRemoteDirCreated = false;
+  let deploymentLockAcquired = false;
   let uploadProgress = null;
 
   try {
     const connectSpinner = startSpinner('Connecting to SFTP');
     await client.connect(config);
     connectSpinner.done('Connected to SFTP');
+    terminationCoordinator.beginRemoteDeployment();
+    await acquireRemoteDeploymentLock(client, deploymentLockDir, {
+      recoverStaleLock
+    });
+    deploymentLockAcquired = true;
+    await validateReleaseProvenance();
+    throwIfTerminationRequested('before remote deployment preparation');
+
     let remoteType = await client.exists(safeRemoteDir);
     if (remoteType && remoteType !== 'd') {
       throw new Error('Remote target exists but is not a directory.');
@@ -774,6 +1033,7 @@ async function uploadBuild(
       expectedRemoteDirLeaf,
       remoteType
     );
+    throwIfTerminationRequested('before the remote upload');
 
     await client.mkdir(tempRemoteDir, true);
     tempRemoteDirCreated = true;
@@ -785,10 +1045,31 @@ async function uploadBuild(
     client.on('upload', (info) => uploadProgress.onFileUploaded(info.source));
     await client.uploadDir(buildDir, tempRemoteDir, { useFastput: false });
     uploadProgress.finish();
+    throwIfTerminationRequested('after the remote upload');
 
-    const swapSpinner = startSpinner(
-      `Swapping remote ${expectedRemoteDirLeaf} directory`
-    );
+    if (remoteType) {
+      const retentionSpinner = startSpinner(
+        'Retaining previous immutable assets'
+      );
+      try {
+        const retention = await retainPreviousReleaseAssets(client, {
+          currentAssetPaths: releaseAssetPaths,
+          previousRemoteDir: safeRemoteDir,
+          uploadRemoteDir: tempRemoteDir,
+          allowLegacyAssetScan
+        });
+        retentionSpinner.done(
+          retention.copiedFiles === 0
+            ? 'Previous immutable assets already present'
+            : `Retained ${retention.copiedFiles} previous immutable assets`
+        );
+      } catch (error) {
+        retentionSpinner.fail('Could not retain previous immutable assets');
+        throw error;
+      }
+    }
+    throwIfTerminationRequested('before the public swap');
+
     const previousRemoteDir = remoteType
       ? createRemoteSiblingDir(
           safeRemoteDir,
@@ -796,91 +1077,102 @@ async function uploadBuild(
           REMOTE_SIBLING_KIND_OLD
         )
       : null;
-    await withCriticalRemoteSection('remote swap', async () => {
-      if (previousRemoteDir) {
-        await client.rename(safeRemoteDir, previousRemoteDir);
-      }
-      try {
-        await client.rename(tempRemoteDir, safeRemoteDir);
-      } catch (error) {
-        swapSpinner.fail(`Remote ${expectedRemoteDirLeaf} swap failed`);
+
+    await withCriticalRemoteSection(
+      'remote publication and validation',
+      async () => {
+        const swapSpinner = startSpinner(
+          `Swapping remote ${expectedRemoteDirLeaf} directory`
+        );
         if (previousRemoteDir) {
+          await client.rename(safeRemoteDir, previousRemoteDir);
+        }
+        try {
+          await client.rename(tempRemoteDir, safeRemoteDir);
+        } catch (error) {
+          swapSpinner.fail(`Remote ${expectedRemoteDirLeaf} swap failed`);
+          if (previousRemoteDir) {
+            try {
+              await client.rename(previousRemoteDir, safeRemoteDir);
+              warn('Swap failed; the previous remote version was restored.');
+            } catch {
+              preserveTempDir = true;
+              warn(
+                `Swap failed and the previous version could not be restored. Previous version: ${previousRemoteDir}, new upload: ${tempRemoteDir}. Restore one of them manually.`
+              );
+            }
+          }
+          throw error;
+        }
+        swapped = true;
+        swapSpinner.done(`Remote ${expectedRemoteDirLeaf} directory swapped`);
+
+        try {
+          await verifyPublicUrlWithRetries(deployment, {
+            backendRouting,
+            expectedVersion,
+            wasmAssetPath
+          });
+        } catch (validationError) {
+          const validationMessage =
+            validationError instanceof Error
+              ? validationError.message
+              : String(validationError);
+          warn(
+            previousRemoteDir
+              ? 'Public route validation failed; restoring the previous version.'
+              : 'Public route validation failed; taking the first deployment offline.'
+          );
           try {
-            await client.rename(previousRemoteDir, safeRemoteDir);
-            warn('Swap failed; the previous remote version was restored.');
-          } catch {
+            await withCriticalRemoteSection('rollback', () =>
+              rollbackPublicValidationFailure(client, {
+                previousRemoteDir,
+                safeRemoteDir,
+                tempRemoteDir
+              })
+            );
+            swapped = false;
             preserveTempDir = true;
-            warn(
-              `Swap failed and the previous version could not be restored. Previous version: ${previousRemoteDir}, new upload: ${tempRemoteDir}. Restore one of them manually.`
+            log(
+              previousRemoteDir
+                ? `Previous remote version restored after validation failure. The failed upload is kept for inspection at ${tempRemoteDir}; the next deployment's stale cleanup removes it.`
+                : `Failed first deployment taken offline; kept for inspection at ${tempRemoteDir} (removed by the next deployment's stale cleanup).`
+            );
+          } catch (rollbackError) {
+            preserveTempDir = true;
+            const rollbackMessage =
+              rollbackError instanceof Error
+                ? rollbackError.message
+                : String(rollbackError);
+            throw new Error(
+              previousRemoteDir
+                ? `Public route validation failed (${validationMessage}) and rollback failed (${rollbackMessage}). Previous version: ${previousRemoteDir}, failed upload: ${tempRemoteDir}. Restore one manually.`
+                : `Public route validation failed (${validationMessage}) and the failed first deployment could not be taken offline (${rollbackMessage}). Public target: ${safeRemoteDir}. Remove or replace it manually.`,
+              { cause: rollbackError }
             );
           }
+
+          throw new Error(
+            previousRemoteDir
+              ? `Public route validation failed and the previous version was restored: ${validationMessage}`
+              : `Public route validation failed and the first deployment was taken offline: ${validationMessage}`,
+            { cause: validationError }
+          );
         }
-        throw error;
-      }
-    });
-    swapped = true;
-    swapSpinner.done(`Remote ${expectedRemoteDirLeaf} directory swapped`);
 
-    try {
-      await verifyPublicUrlWithRetries(deployment);
-    } catch (validationError) {
-      const validationMessage =
-        validationError instanceof Error
-          ? validationError.message
-          : String(validationError);
-      warn(
-        previousRemoteDir
-          ? 'Public route validation failed; restoring the previous version.'
-          : 'Public route validation failed; taking the first deployment offline.'
-      );
-      try {
-        await withCriticalRemoteSection('rollback', () =>
-          rollbackPublicValidationFailure(client, {
+        if (previousRemoteDir) {
+          await removeRemoteDirRecursive(
+            client,
             previousRemoteDir,
-            safeRemoteDir,
-            tempRemoteDir
-          })
-        );
-        swapped = false;
-        preserveTempDir = true;
-        log(
-          previousRemoteDir
-            ? `Previous remote version restored after validation failure. The failed upload is kept for inspection at ${tempRemoteDir}; the next deployment's stale cleanup removes it.`
-            : `Failed first deployment taken offline; kept for inspection at ${tempRemoteDir} (removed by the next deployment's stale cleanup).`
-        );
-      } catch (rollbackError) {
-        preserveTempDir = true;
-        const rollbackMessage =
-          rollbackError instanceof Error
-            ? rollbackError.message
-            : String(rollbackError);
-        throw new Error(
-          previousRemoteDir
-            ? `Public route validation failed (${validationMessage}) and rollback failed (${rollbackMessage}). Previous version: ${previousRemoteDir}, failed upload: ${tempRemoteDir}. Restore one manually.`
-            : `Public route validation failed (${validationMessage}) and the failed first deployment could not be taken offline (${rollbackMessage}). Public target: ${safeRemoteDir}. Remove or replace it manually.`,
-          { cause: rollbackError }
-        );
+            'Removing the previous remote version'
+          ).catch(() =>
+            warn(
+              `Could not remove the previous remote version: ${previousRemoteDir}. Remove it manually.`
+            )
+          );
+        }
       }
-
-      throw new Error(
-        previousRemoteDir
-          ? `Public route validation failed and the previous version was restored: ${validationMessage}`
-          : `Public route validation failed and the first deployment was taken offline: ${validationMessage}`,
-        { cause: validationError }
-      );
-    }
-
-    if (previousRemoteDir) {
-      await removeRemoteDirRecursive(
-        client,
-        previousRemoteDir,
-        'Removing the previous remote version'
-      ).catch(() =>
-        warn(
-          `Could not remove the previous remote version: ${previousRemoteDir}. Remove it manually.`
-        )
-      );
-    }
+    );
   } finally {
     uploadProgress?.finish();
     if (tempRemoteDirCreated && !swapped && !preserveTempDir) {
@@ -890,42 +1182,103 @@ async function uploadBuild(
         'Removing incomplete temporary remote upload'
       ).catch(() => undefined);
     }
+    if (deploymentLockAcquired) {
+      await releaseRemoteDeploymentLock(client, deploymentLockDir).catch(
+        (error) => {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          warn(
+            `Could not release deployment lock ${deploymentLockDir}: ${message}. Remove it manually after confirming no deployment is active.`
+          );
+        }
+      );
+    }
     await closeSftpClient(client, 'deployment').catch(() => undefined);
+    terminationCoordinator.endRemoteDeployment();
+  }
+
+  throwIfTerminationRequested('after public validation and remote cleanup');
+}
+
+class DeploymentInterruptedError extends Error {
+  constructor(signal, checkpoint) {
+    super(`Interrupted by ${signal} ${checkpoint}.`);
+    this.name = 'DeploymentInterruptedError';
+    this.exitCode = 130;
   }
 }
 
-let criticalRemoteSection = null;
-let deferredSignal = null;
+function createTerminationCoordinator({
+  exitProcess = (code) => process.exit(code),
+  warnMessage = warn
+} = {}) {
+  const criticalSections = [];
+  let deferredSignal = null;
+  let remoteDeploymentActive = false;
+
+  function beginRemoteDeployment() {
+    remoteDeploymentActive = true;
+  }
+
+  function endRemoteDeployment() {
+    remoteDeploymentActive = false;
+  }
+
+  function handleSignal(signal) {
+    const criticalRemoteSection = criticalSections.at(-1);
+    if (criticalRemoteSection || remoteDeploymentActive) {
+      deferredSignal ??= signal;
+      const activeStep = criticalRemoteSection ?? 'remote deployment';
+      warnMessage(
+        `${signal} received during ${activeStep}; stopping only after the public version is validated or safely restored.`
+      );
+      return;
+    }
+    warnMessage(`${signal} received; aborting.`);
+    exitProcess(130);
+  }
+
+  function checkpoint(checkpointLabel) {
+    if (!deferredSignal) return;
+
+    const signal = deferredSignal;
+    deferredSignal = null;
+    throw new DeploymentInterruptedError(signal, checkpointLabel);
+  }
+
+  async function runCritical(label, action) {
+    criticalSections.push(label);
+    try {
+      return await action();
+    } finally {
+      criticalSections.pop();
+    }
+  }
+
+  return {
+    beginRemoteDeployment,
+    checkpoint,
+    endRemoteDeployment,
+    handleSignal,
+    runCritical
+  };
+}
+
+const terminationCoordinator = createTerminationCoordinator();
 
 function handleTerminationSignal(signal) {
-  if (criticalRemoteSection) {
-    deferredSignal = signal;
-    warn(
-      `${signal} received during ${criticalRemoteSection}; finishing this critical remote step before exiting.`
-    );
-    return;
-  }
-  warn(`${signal} received; aborting.`);
-  process.exit(130);
+  terminationCoordinator.handleSignal(signal);
 }
 
 process.on('SIGINT', () => handleTerminationSignal('SIGINT'));
 process.on('SIGTERM', () => handleTerminationSignal('SIGTERM'));
 
+function throwIfTerminationRequested(checkpoint) {
+  terminationCoordinator.checkpoint(checkpoint);
+}
+
 async function withCriticalRemoteSection(label, action) {
-  criticalRemoteSection = label;
-  let result;
-  try {
-    result = await action();
-  } finally {
-    criticalRemoteSection = null;
-  }
-  if (deferredSignal) {
-    const signal = deferredSignal;
-    deferredSignal = null;
-    throw new Error(`Interrupted by ${signal}; stopped after ${label}.`);
-  }
-  return result;
+  return terminationCoordinator.runCritical(label, action);
 }
 
 async function rollbackPublicValidationFailure(
@@ -963,6 +1316,270 @@ async function collectUploadManifest(buildDir) {
   }
 
   return { fileSizes, totalFiles: fileSizes.size, totalBytes };
+}
+
+async function writeReleaseAssetManifest(buildDir) {
+  const assetRoot = path.join(
+    buildDir,
+    ...RELEASE_ASSET_ROOT.split(path.posix.sep)
+  );
+  const entries = await readdir(assetRoot, {
+    recursive: true,
+    withFileTypes: true
+  });
+  const assetPaths = entries
+    .filter((entry) => entry.isFile())
+    .map((entry) =>
+      path
+        .relative(buildDir, path.join(entry.parentPath, entry.name))
+        .split(path.sep)
+        .join(path.posix.sep)
+    )
+    .map((assetPath) => assertReleaseAssetPath(assetPath))
+    .sort();
+
+  if (assetPaths.length === 0) {
+    throw new Error(
+      `Build does not contain any immutable release assets under ${RELEASE_ASSET_ROOT}.`
+    );
+  }
+
+  // Track only this build so retained assets stay bounded to one previous release.
+  await writeFile(
+    path.join(buildDir, RELEASE_ASSET_MANIFEST_FILENAME),
+    `${JSON.stringify(
+      {
+        formatVersion: RELEASE_ASSET_MANIFEST_VERSION,
+        assets: assetPaths
+      },
+      null,
+      2
+    )}\n`,
+    'utf8'
+  );
+
+  return assetPaths;
+}
+
+function findCompressedWasmAssetPath(assetPaths) {
+  const releaseAssets = new Set(
+    assetPaths.map((assetPath) => assertReleaseAssetPath(assetPath))
+  );
+  const wasmAssetPath = [...releaseAssets]
+    .filter(
+      (assetPath) =>
+        assetPath.endsWith('.wasm') &&
+        (releaseAssets.has(`${assetPath}.br`) ||
+          releaseAssets.has(`${assetPath}.gz`))
+    )
+    .sort()[0];
+
+  if (!wasmAssetPath) {
+    throw new Error(
+      'Build does not contain a WASM asset with a Brotli or gzip sidecar.'
+    );
+  }
+
+  return wasmAssetPath;
+}
+
+function assertReleaseAssetPath(assetPath) {
+  if (
+    typeof assetPath !== 'string' ||
+    !assetPath.startsWith(`${RELEASE_ASSET_ROOT}/`) ||
+    assetPath !== path.posix.normalize(assetPath) ||
+    assetPath.includes('\\') ||
+    assetPath.includes('\0') ||
+    assetPath.endsWith('/')
+  ) {
+    throw new Error(`Unsafe immutable release asset path: ${assetPath}`);
+  }
+
+  return assetPath;
+}
+
+function parseReleaseAssetManifest(rawManifest, source) {
+  let manifest;
+  try {
+    manifest = JSON.parse(rawManifest);
+  } catch (error) {
+    throw new Error(`Could not parse release asset manifest: ${source}`, {
+      cause: error
+    });
+  }
+
+  if (
+    manifest?.formatVersion !== RELEASE_ASSET_MANIFEST_VERSION ||
+    !Array.isArray(manifest.assets)
+  ) {
+    throw new Error(`Unsupported release asset manifest: ${source}`);
+  }
+
+  return [
+    ...new Set(
+      manifest.assets.map((assetPath) => assertReleaseAssetPath(assetPath))
+    )
+  ].sort();
+}
+
+async function collectRemoteReleaseAssetPaths(client, remoteDir) {
+  const remoteAssetRoot = path.posix.join(remoteDir, RELEASE_ASSET_ROOT);
+  if ((await client.exists(remoteAssetRoot)) !== 'd') {
+    return [];
+  }
+
+  const assetPaths = [];
+  let totalBytes = 0;
+
+  async function visit(currentDir) {
+    const entries = await client.list(currentDir);
+    for (const entry of entries) {
+      if (
+        typeof entry.name !== 'string' ||
+        entry.name === '.' ||
+        entry.name === '..' ||
+        /[/\\\0]/.test(entry.name)
+      ) {
+        throw new Error(
+          `Unsafe remote immutable asset entry under ${currentDir}.`
+        );
+      }
+
+      const entryPath = path.posix.join(currentDir, entry.name);
+      if (entry.type === 'd') {
+        await visit(entryPath);
+        continue;
+      }
+      if (entry.type !== '-') {
+        continue;
+      }
+
+      const size = Number(entry.size);
+      if (!Number.isSafeInteger(size) || size < 0) {
+        throw new Error(
+          `Could not determine the size of legacy immutable asset: ${entryPath}`
+        );
+      }
+      if (assetPaths.length + 1 > LEGACY_ASSET_SCAN_MAX_FILES) {
+        throw new Error(
+          `Legacy immutable asset scan exceeds ${LEGACY_ASSET_SCAN_MAX_FILES} files.`
+        );
+      }
+      totalBytes += size;
+      if (totalBytes > LEGACY_ASSET_SCAN_MAX_BYTES) {
+        throw new Error(
+          `Legacy immutable asset scan exceeds ${formatBytes(LEGACY_ASSET_SCAN_MAX_BYTES)}.`
+        );
+      }
+
+      assetPaths.push(
+        assertReleaseAssetPath(path.posix.relative(remoteDir, entryPath))
+      );
+    }
+  }
+
+  await visit(remoteAssetRoot);
+  return [...new Set(assetPaths)].sort();
+}
+
+async function readPreviousReleaseAssetPaths(
+  client,
+  previousRemoteDir,
+  { allowLegacyAssetScan = false } = {}
+) {
+  const manifestPath = path.posix.join(
+    previousRemoteDir,
+    RELEASE_ASSET_MANIFEST_FILENAME
+  );
+  const manifestType = await client.exists(manifestPath);
+  let manifestError;
+
+  if (manifestType === '-') {
+    try {
+      const manifest = await client.get(manifestPath);
+      return parseReleaseAssetManifest(manifest.toString('utf8'), manifestPath);
+    } catch (error) {
+      manifestError = error;
+    }
+  } else {
+    manifestError = new Error(
+      manifestType
+        ? `Previous release asset manifest is not a file: ${manifestPath}`
+        : `Previous release asset manifest is missing: ${manifestPath}`
+    );
+  }
+
+  if (!allowLegacyAssetScan) {
+    const message =
+      manifestError instanceof Error
+        ? manifestError.message
+        : String(manifestError);
+    throw new Error(
+      `${message}. Refusing an automatic legacy scan. Re-run this deployment once with --migrate-legacy-assets after checking the remote release.`,
+      { cause: manifestError }
+    );
+  }
+
+  const message =
+    manifestError instanceof Error
+      ? manifestError.message
+      : String(manifestError);
+  warn(
+    `Explicit legacy asset migration enabled (${message}). Scanning at most ${LEGACY_ASSET_SCAN_MAX_FILES} files and ${formatBytes(LEGACY_ASSET_SCAN_MAX_BYTES)}.`
+  );
+  return collectRemoteReleaseAssetPaths(client, previousRemoteDir);
+}
+
+async function retainPreviousReleaseAssets(
+  client,
+  {
+    currentAssetPaths,
+    previousRemoteDir,
+    uploadRemoteDir,
+    allowLegacyAssetScan = false
+  }
+) {
+  const currentAssets = new Set(
+    currentAssetPaths.map((assetPath) => assertReleaseAssetPath(assetPath))
+  );
+  const previousAssets = await readPreviousReleaseAssetPaths(
+    client,
+    previousRemoteDir,
+    { allowLegacyAssetScan }
+  );
+  const missingAssets = previousAssets.filter(
+    (assetPath) => !currentAssets.has(assetPath)
+  );
+  const createdDirectories = new Set();
+  let copiedFiles = 0;
+
+  for (const assetPath of missingAssets) {
+    const sourcePath = path.posix.join(previousRemoteDir, assetPath);
+    const destinationPath = path.posix.join(uploadRemoteDir, assetPath);
+    const destinationType = await client.exists(destinationPath);
+    if (destinationType === '-') {
+      continue;
+    }
+    if (destinationType) {
+      throw new Error(
+        `Previous immutable asset destination is not a file: ${destinationPath}`
+      );
+    }
+
+    const destinationDir = path.posix.dirname(destinationPath);
+    if (!createdDirectories.has(destinationDir)) {
+      await client.mkdir(destinationDir, true);
+      createdDirectories.add(destinationDir);
+    }
+
+    await client.rcopy(sourcePath, destinationPath);
+    copiedFiles += 1;
+  }
+
+  return {
+    copiedFiles,
+    previousFiles: previousAssets.length
+  };
 }
 
 function createUploadProgress({ fileSizes, totalFiles, totalBytes }) {
@@ -1324,6 +1941,48 @@ function createRemoteSiblingDir(remoteDir, expectedLeaf, kind) {
   return `${parent}/${leaf}`;
 }
 
+function createRemoteDeploymentLockDir(remoteDir, expectedLeaf) {
+  const parent = path.posix.dirname(remoteDir);
+  return `${parent}/${expectedLeaf}.${REMOTE_DEPLOYMENT_LOCK_SUFFIX}`;
+}
+
+async function acquireRemoteDeploymentLock(
+  client,
+  lockDir,
+  { recoverStaleLock = false } = {}
+) {
+  const existingType = await client.exists(lockDir);
+  if (existingType) {
+    if (!recoverStaleLock) {
+      throw new Error(
+        `Deployment lock already exists: ${lockDir}. Another deployment may be active. Refusing to continue.`
+      );
+    }
+    if (existingType !== 'd') {
+      throw new Error(
+        `Deployment lock is not a directory: ${lockDir}. Inspect it manually.`
+      );
+    }
+    await client.rmdir(lockDir, false);
+    warn(
+      `Recovered deployment lock ${lockDir} after explicit operator confirmation.`
+    );
+  }
+
+  try {
+    await client.mkdir(lockDir, false);
+  } catch (error) {
+    throw new Error(
+      `Could not acquire deployment lock ${lockDir}. Another deployment may have started.`,
+      { cause: error }
+    );
+  }
+}
+
+async function releaseRemoteDeploymentLock(client, lockDir) {
+  await client.rmdir(lockDir, false);
+}
+
 function assertSafeRemoteDir(remoteDir, expectedLeaf) {
   const normalized = normalizeRemotePath(remoteDir);
   const parts = normalized.split('/').filter(Boolean);
@@ -1372,6 +2031,8 @@ async function fetchPublicUrl(
   {
     accept = 'text/html',
     fetchImpl = fetch,
+    headers = {},
+    method = 'GET',
     timeoutMs = PUBLIC_URL_CHECK_TIMEOUT_MS
   } = {}
 ) {
@@ -1381,9 +2042,14 @@ async function fetchPublicUrl(
 
   try {
     return await fetchImpl(url, {
-      method: 'GET',
+      method,
       redirect: 'manual',
-      headers: { accept, 'cache-control': 'no-cache', pragma: 'no-cache' },
+      headers: {
+        accept,
+        'cache-control': 'no-cache',
+        pragma: 'no-cache',
+        ...headers
+      },
       signal: controller.signal
     });
   } catch (error) {
@@ -1402,28 +2068,107 @@ async function fetchPublicUrl(
   }
 }
 
-async function assertPublicHtmlResponse(response, requestedUrl, basePath) {
-  if (!response.ok) {
-    await response.body?.cancel?.();
+function buildBackendValidationRoutes(backendRouting) {
+  if (!backendRouting) {
+    return [null];
+  }
+
+  const total = backendRouting.backendValues.length;
+  return backendRouting.backendValues.map((backendValue, index) => ({
+    backendHeaderName: backendRouting.backendHeaderName,
+    backendValue,
+    cookieName: backendRouting.cookieName,
+    index: index + 1,
+    total
+  }));
+}
+
+function withBackendValidationRoute(options, backendRoute) {
+  if (!backendRoute) {
+    return {
+      ...options,
+      backendRoute: null
+    };
+  }
+
+  return {
+    ...options,
+    backendRoute,
+    headers: {
+      ...(options.headers ?? {}),
+      cookie: `${backendRoute.cookieName}=${backendRoute.backendValue}`
+    }
+  };
+}
+
+function mergePublicRequestHeaders(options, headers) {
+  return {
+    ...(options.headers ?? {}),
+    ...headers
+  };
+}
+
+function assertExpectedBackendResponse(response, backendRoute, url) {
+  if (!backendRoute) return;
+
+  const observedBackend = response.headers
+    .get(backendRoute.backendHeaderName)
+    ?.trim();
+  if (observedBackend !== backendRoute.backendValue) {
     throw new Error(
-      `Public URL check returned ${response.status}: ${requestedUrl}`
+      `Public route did not confirm routing backend ${backendRoute.index}/${backendRoute.total} in ${backendRoute.backendHeaderName}: ${url}`
     );
   }
-  if (response.url !== requestedUrl) {
-    throw new Error(
-      `Public URL unexpectedly resolved to ${response.url || '<unknown>'}; expected ${requestedUrl}.`
-    );
+}
+
+function readCacheControlDirectives(response) {
+  return (response.headers.get('cache-control') ?? '')
+    .split(',')
+    .map((directive) => directive.trim().toLowerCase().split('=', 1)[0])
+    .filter(Boolean);
+}
+
+function assertResponseUsesNoStore(response, label, url) {
+  const directives = readCacheControlDirectives(response);
+  if (!directives.includes('no-store')) {
+    throw new Error(`${label} must use Cache-Control: no-store: ${url}`);
   }
-  const contentType = response.headers.get('content-type') ?? '';
-  if (!contentType.toLowerCase().includes('text/html')) {
-    await response.body?.cancel?.();
-    throw new Error(
-      `Public URL returned ${contentType || 'an unknown content type'}; expected text/html: ${requestedUrl}`
-    );
+}
+
+async function assertPublicHtmlResponse(
+  response,
+  requestedUrl,
+  basePath,
+  backendRoute
+) {
+  try {
+    if (!response.ok) {
+      throw new Error(
+        `Public URL check returned ${response.status}: ${requestedUrl}`
+      );
+    }
+    if (response.url !== requestedUrl) {
+      throw new Error(
+        `Public URL unexpectedly resolved to ${response.url || '<unknown>'}; expected ${requestedUrl}.`
+      );
+    }
+    const contentType = response.headers.get('content-type') ?? '';
+    if (!contentType.toLowerCase().includes('text/html')) {
+      throw new Error(
+        `Public URL returned ${contentType || 'an unknown content type'}; expected text/html: ${requestedUrl}`
+      );
+    }
+    assertResponseUsesNoStore(response, 'Public HTML', requestedUrl);
+    assertExpectedBackendResponse(response, backendRoute, requestedUrl);
+    const html = await response.text();
+    assertHtmlBaseHref(html, basePath, requestedUrl);
+    return html;
+  } catch (error) {
+    if (!response.bodyUsed) {
+      await response.body?.cancel?.();
+    }
+    throw error;
   }
-  const html = await response.text();
-  assertHtmlBaseHref(html, basePath, requestedUrl);
-  return html;
 }
 
 function readTagAttribute(tag, name) {
@@ -1527,6 +2272,7 @@ async function verifyCriticalPublicAssets(html, deployment, options) {
           `Public ${asset.label} returned ${contentType || 'an unknown content type'}: ${asset.url}`
         );
       }
+      assertExpectedBackendResponse(response, options.backendRoute, asset.url);
       log(`Public asset check: ${response.status} ${asset.url}`);
     } finally {
       await response.body?.cancel?.();
@@ -1534,46 +2280,254 @@ async function verifyCriticalPublicAssets(html, deployment, options) {
   }
 }
 
-function hasActiveHsts(response) {
-  const header = response.headers.get('strict-transport-security');
-  if (!header) return false;
-  const maxAge = header.match(/max-age\s*=\s*(\d+)/i);
-  return maxAge ? Number(maxAge[1]) > 0 : false;
+function assertPublicAssetResponse(
+  response,
+  { backendRoute, contentTypes, label, requireNoStore = false, url }
+) {
+  if (!response.ok) {
+    throw new Error(`Public ${label} returned ${response.status}: ${url}`);
+  }
+  if (response.url !== url) {
+    throw new Error(
+      `Public ${label} unexpectedly resolved to ${response.url || '<unknown>'}; expected ${url}.`
+    );
+  }
+  const contentType = response.headers.get('content-type')?.toLowerCase();
+  if (
+    !contentType ||
+    !contentTypes.some((expected) => contentType.includes(expected))
+  ) {
+    throw new Error(
+      `Public ${label} returned ${contentType || 'an unknown content type'}: ${url}`
+    );
+  }
+  if (requireNoStore) {
+    assertResponseUsesNoStore(response, `Public ${label}`, url);
+  }
+  assertExpectedBackendResponse(response, backendRoute, url);
+}
+
+function resolvePublicAssetUrl(deployment, assetPath) {
+  return new URL(assetPath, deployment.publicUrl).href;
+}
+
+async function verifyMutablePublicAssets(deployment, expectedVersion, options) {
+  const versionUrl = resolvePublicAssetUrl(deployment, '_app/version.json');
+  const versionResponse = await fetchPublicUrl(versionUrl, {
+    ...options,
+    accept: 'application/json'
+  });
+  try {
+    assertPublicAssetResponse(versionResponse, {
+      backendRoute: options.backendRoute,
+      contentTypes: ['application/json'],
+      label: 'version metadata',
+      requireNoStore: true,
+      url: versionUrl
+    });
+    let versionPayload;
+    try {
+      versionPayload = JSON.parse(await versionResponse.text());
+    } catch (error) {
+      throw new Error(
+        `Public version metadata is not valid JSON: ${versionUrl}`,
+        {
+          cause: error
+        }
+      );
+    }
+    if (versionPayload?.version !== expectedVersion) {
+      throw new Error(
+        `Public version metadata serves "${versionPayload?.version ?? ''}"; expected "${expectedVersion}": ${versionUrl}`
+      );
+    }
+  } finally {
+    if (!versionResponse.bodyUsed) {
+      await versionResponse.body?.cancel?.();
+    }
+  }
+  log(`Public version check: ${expectedVersion} ${versionUrl}`);
+
+  const mutableAssets = [
+    {
+      accept: 'text/javascript, application/javascript',
+      contentTypes: ['text/javascript', 'application/javascript'],
+      label: 'service worker',
+      path: 'sw.js'
+    },
+    {
+      accept: 'application/manifest+json',
+      contentTypes: ['application/manifest+json'],
+      label: 'web app manifest',
+      path: 'manifest.webmanifest'
+    }
+  ];
+
+  for (const asset of mutableAssets) {
+    const url = resolvePublicAssetUrl(deployment, asset.path);
+    const response = await fetchPublicUrl(url, {
+      ...options,
+      accept: asset.accept
+    });
+    try {
+      assertPublicAssetResponse(response, {
+        backendRoute: options.backendRoute,
+        contentTypes: asset.contentTypes,
+        label: asset.label,
+        requireNoStore: true,
+        url
+      });
+      log(`Public ${asset.label} check: ${response.status} ${url}`);
+    } finally {
+      await response.body?.cancel?.();
+    }
+  }
+}
+
+async function verifyMissingHashedAssetCachePolicy(
+  deployment,
+  expectedVersion,
+  options
+) {
+  const missingHash = createHash('sha256')
+    .update(expectedVersion)
+    .digest('hex')
+    .slice(0, 12);
+  const missingUrl = resolvePublicAssetUrl(
+    deployment,
+    `_app/immutable/chunks/__khartis-deploy-missing.${missingHash}.js`
+  );
+  const response = await fetchPublicUrl(missingUrl, {
+    ...options,
+    accept: 'text/javascript, application/javascript'
+  });
+  try {
+    if (response.status !== 404) {
+      throw new Error(
+        `Missing hashed asset check returned ${response.status}; expected 404: ${missingUrl}`
+      );
+    }
+    if (response.url !== missingUrl) {
+      throw new Error(
+        `Missing hashed asset unexpectedly resolved to ${response.url || '<unknown>'}; expected ${missingUrl}.`
+      );
+    }
+    const directives = readCacheControlDirectives(response);
+    if (!directives.includes('no-store') || directives.includes('immutable')) {
+      throw new Error(
+        `Missing hashed asset must use Cache-Control: no-store without immutable: ${missingUrl}`
+      );
+    }
+    assertExpectedBackendResponse(response, options.backendRoute, missingUrl);
+  } finally {
+    await response.body?.cancel?.();
+  }
+  log(`Missing hashed asset check: 404 ${missingUrl}`);
+}
+
+async function verifyCompressedWasmAsset(deployment, wasmAssetPath, options) {
+  const url = resolvePublicAssetUrl(deployment, wasmAssetPath);
+  const response = await fetchPublicUrl(url, {
+    ...options,
+    accept: 'application/wasm',
+    headers: mergePublicRequestHeaders(options, {
+      'accept-encoding': 'br, gzip'
+    }),
+    method: 'HEAD'
+  });
+  try {
+    assertPublicAssetResponse(response, {
+      backendRoute: options.backendRoute,
+      contentTypes: ['application/wasm'],
+      label: 'WASM asset',
+      url
+    });
+    const contentEncoding = (
+      response.headers.get('content-encoding') ?? ''
+    ).toLowerCase();
+    if (contentEncoding !== 'br' && contentEncoding !== 'gzip') {
+      throw new Error(
+        `Public WASM asset is not served with Brotli or gzip compression: ${url}`
+      );
+    }
+    const vary = (response.headers.get('vary') ?? '')
+      .split(',')
+      .map((value) => value.trim().toLowerCase());
+    if (!vary.includes('accept-encoding')) {
+      throw new Error(
+        `Public WASM asset must use Vary: Accept-Encoding: ${url}`
+      );
+    }
+  } finally {
+    await response.body?.cancel?.();
+  }
+  log(`Public WASM compression check: ${response.status} ${url}`);
 }
 
 async function verifyPublicUrlWithRetries(deployment, options = {}) {
-  for (let attempt = 1; attempt <= PUBLIC_URL_VALIDATION_ATTEMPTS; attempt++) {
-    try {
-      await verifyPublicUrl(deployment, options);
-      return;
-    } catch (error) {
-      if (attempt === PUBLIC_URL_VALIDATION_ATTEMPTS) throw error;
-      const delayMs =
-        PUBLIC_URL_VALIDATION_RETRY_DELAYS_MS[
-          Math.min(
-            attempt - 1,
-            PUBLIC_URL_VALIDATION_RETRY_DELAYS_MS.length - 1
-          )
-        ];
-      const message = error instanceof Error ? error.message : String(error);
-      warn(
-        `Public route validation attempt ${attempt}/${PUBLIC_URL_VALIDATION_ATTEMPTS} failed (${message}); retrying in ${formatDuration(delayMs)} while the web tier syncs.`
-      );
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+  const validationAttempts =
+    options.validationAttempts ?? PUBLIC_URL_VALIDATION_ATTEMPTS;
+  const retryDelaysMs =
+    options.retryDelaysMs ?? PUBLIC_URL_VALIDATION_RETRY_DELAYS_MS;
+  const backendRoutes = buildBackendValidationRoutes(options.backendRouting);
+
+  for (const backendRoute of backendRoutes) {
+    const routeOptions = withBackendValidationRoute(options, backendRoute);
+    for (let attempt = 1; attempt <= validationAttempts; attempt++) {
+      try {
+        await verifyPublicUrl(deployment, routeOptions);
+        break;
+      } catch (error) {
+        if (attempt === validationAttempts) throw error;
+        const delayMs =
+          retryDelaysMs[
+            Math.min(attempt - 1, Math.max(0, retryDelaysMs.length - 1))
+          ] ?? 0;
+        const message = error instanceof Error ? error.message : String(error);
+        const backendLabel = backendRoute
+          ? ` for backend ${backendRoute.index}/${backendRoute.total}`
+          : '';
+        warn(
+          `Public route validation attempt ${attempt}/${validationAttempts}${backendLabel} failed (${message}); retrying in ${formatDuration(delayMs)} while the web tier syncs.`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
     }
   }
 }
 
 async function verifyPublicUrl(deployment, options = {}) {
-  log(`Checking public URL: ${deployment.publicUrl}`);
+  const expectedVersion = options.expectedVersion?.trim();
+  if (!expectedVersion) {
+    throw new Error('Public URL verification requires an expected version.');
+  }
+  const wasmAssetPath = assertReleaseAssetPath(options.wasmAssetPath);
+  if (!wasmAssetPath.endsWith('.wasm')) {
+    throw new Error(
+      `Public URL verification requires an uncompressed WASM asset path: ${wasmAssetPath}`
+    );
+  }
+
+  const backendLabel = options.backendRoute
+    ? ` (backend ${options.backendRoute.index}/${options.backendRoute.total})`
+    : '';
+  log(`Checking public URL${backendLabel}: ${deployment.publicUrl}`);
   const canonicalResponse = await fetchPublicUrl(deployment.publicUrl, options);
   const canonicalHtml = await assertPublicHtmlResponse(
     canonicalResponse,
     deployment.publicUrl,
-    deployment.basePath
+    deployment.basePath,
+    options.backendRoute
   );
   log(`Public URL check: ${canonicalResponse.status} ${deployment.publicUrl}`);
   await verifyCriticalPublicAssets(canonicalHtml, deployment, options);
+  await verifyMutablePublicAssets(deployment, expectedVersion, options);
+  await verifyMissingHashedAssetCachePolicy(
+    deployment,
+    expectedVersion,
+    options
+  );
+  await verifyCompressedWasmAsset(deployment, wasmAssetPath, options);
 
   if (!deployment.basePath) return;
 
@@ -1582,58 +2536,38 @@ async function verifyPublicUrl(deployment, options = {}) {
   const slashlessHref = slashlessUrl.href;
   const slashlessResponse = await fetchPublicUrl(slashlessHref, options);
 
-  if (slashlessResponse.ok) {
-    await assertPublicHtmlResponse(
+  try {
+    assertExpectedBackendResponse(
       slashlessResponse,
-      slashlessHref,
-      deployment.basePath
+      options.backendRoute,
+      slashlessHref
     );
-    log(
-      `Slashless public URL check: ${slashlessResponse.status} ${slashlessHref}`
-    );
-    return;
-  }
+    if (!ALLOWED_PUBLIC_REDIRECT_STATUSES.has(slashlessResponse.status)) {
+      throw new Error(
+        `Slashless public URL check returned ${slashlessResponse.status}: ${slashlessHref}`
+      );
+    }
 
-  if (!ALLOWED_PUBLIC_REDIRECT_STATUSES.has(slashlessResponse.status)) {
-    throw new Error(
-      `Slashless public URL check returned ${slashlessResponse.status}: ${slashlessHref}`
-    );
-  }
+    const location = slashlessResponse.headers.get('location');
+    if (!location) {
+      throw new Error(
+        `Slashless public URL returned ${slashlessResponse.status} without a Location header: ${slashlessHref}`
+      );
+    }
+    const redirectUrl = new URL(location, slashlessHref);
 
-  const location = slashlessResponse.headers.get('location');
-  if (!location) {
-    throw new Error(
-      `Slashless public URL returned ${slashlessResponse.status} without a Location header: ${slashlessHref}`
-    );
-  }
-  const redirectUrl = new URL(location, slashlessHref);
-  const canonicalUrl = new URL(deployment.publicUrl);
-  const redirectsToCanonicalResource =
-    redirectUrl.host === canonicalUrl.host &&
-    redirectUrl.pathname === canonicalUrl.pathname &&
-    redirectUrl.search === canonicalUrl.search;
-
-  if (!redirectsToCanonicalResource) {
-    throw new Error(
-      `Slashless public URL redirects to ${redirectUrl.href}; expected ${deployment.publicUrl}.`
-    );
-  }
-
-  if (redirectUrl.protocol !== 'https:') {
-    // Accept an http Location only when HSTS makes the client upgrade to https before any cleartext request.
-    if (redirectUrl.protocol !== 'http:' || !hasActiveHsts(slashlessResponse)) {
+    if (redirectUrl.href !== deployment.publicUrl) {
       throw new Error(
         `Slashless public URL redirects to ${redirectUrl.href}; expected ${deployment.publicUrl}.`
       );
     }
-    warn(
-      `Slashless public URL redirects to ${redirectUrl.href} (http scheme); accepted because HSTS upgrades it to https. Fix the server to emit an https Location (nginx: absolute_redirect off, or honor X-Forwarded-Proto).`
-    );
-  }
 
-  log(
-    `Slashless public URL check: ${slashlessResponse.status} ${slashlessHref} -> ${deployment.publicUrl}`
-  );
+    log(
+      `Slashless public URL check: ${slashlessResponse.status} ${slashlessHref} -> ${deployment.publicUrl}`
+    );
+  } finally {
+    await slashlessResponse.body?.cancel?.();
+  }
 }
 
 async function closeSftpClient(client, label) {
@@ -1750,19 +2684,34 @@ if (isMainModule) {
     })
     .catch((error) => {
       stopStatusLine();
-      console.error(`[deploy-local] ERROR: ${error.message}`);
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[deploy-local] ERROR: ${message}`);
       restoreTerminal();
-      process.exit(1);
+      process.exit(error?.exitCode === 130 ? 130 : 1);
     });
 }
 
 export {
+  acquireRemoteDeploymentLock,
   assertBuildMatchesDeployment,
   assertHtmlBaseHref,
+  assertReleaseCommitBelongsToBranch,
+  assertTagCommitMatchesRemote,
+  buildBackendValidationRoutes,
+  createTerminationCoordinator,
+  findCompressedWasmAssetPath,
+  findSuccessfulReleaseRun,
+  parseRemoteBranchHead,
+  parseRemoteTagCommit,
+  parseRemoteTagNames,
+  releaseRemoteDeploymentLock,
+  retainPreviousReleaseAssets,
   rollbackPublicValidationFailure,
   resolveDeploymentPublicUrl,
   startProgress,
   startSpinner,
   truncateToWidth,
-  verifyPublicUrl
+  verifyPublicUrl,
+  verifyPublicUrlWithRetries,
+  writeReleaseAssetManifest
 };
