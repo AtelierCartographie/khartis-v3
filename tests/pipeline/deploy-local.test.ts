@@ -18,9 +18,10 @@ const {
   parseRemoteBranchHead,
   parseRemoteTagCommit,
   parseRemoteTagNames,
+  reportPublicInfrastructurePreflight,
+  reportPublicRouteValidation,
   releaseRemoteDeploymentLock,
   retainPreviousReleaseAssets,
-  rollbackPublicValidationFailure,
   resolveDeploymentPublicUrl,
   sanitizedChildEnv,
   verifyPublicInfrastructure,
@@ -357,6 +358,7 @@ describe('local deployment route contract', () => {
 
   afterEach(async () => {
     await rm(buildDir, { recursive: true, force: true });
+    vi.restoreAllMocks();
   });
 
   it('should derive distinct base paths when target URLs differ', () => {
@@ -636,6 +638,35 @@ describe('local deployment route contract', () => {
     await expect(
       verifyPublicInfrastructure(deployment, { fetchImpl })
     ).rejects.toThrow('returned 503');
+  });
+
+  it('should report private cache control without blocking a deployment', async () => {
+    const deployment = resolveDeploymentPublicUrl(
+      'https://example.org/cartographie/khartis/'
+    );
+    const warning = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+
+    await expect(
+      reportPublicInfrastructurePreflight(deployment, {
+        fetchImpl: async (url: string) => {
+          if (url.endsWith('/_app/start.js')) {
+            return createResponse(url, {
+              cacheControl: 'private',
+              contentType: 'application/javascript'
+            });
+          }
+          return createSuccessfulResponse(url);
+        }
+      })
+    ).resolves.toBeUndefined();
+
+    expect(warning).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'Public infrastructure preflight reported a mismatch'
+      )
+    );
   });
 
   it('should reject inconsistent first-deployment state across backends', async () => {
@@ -981,6 +1012,37 @@ describe('local deployment route contract', () => {
     await expect(
       verifyPublicUrl(deployment, verifyOptions(fetchImpl, { timeoutMs: 5 }))
     ).rejects.toThrow('timed out');
+  });
+
+  it('should report a post-swap mismatch without blocking a deployment', async () => {
+    const deployment = resolveDeploymentPublicUrl(
+      'https://example.org/cartographie/khartis/'
+    );
+    const warning = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+
+    await expect(
+      reportPublicRouteValidation(
+        deployment,
+        verifyOptions(
+          async (url: string) => {
+            if (url.endsWith('/_app/version.json')) {
+              return createResponse(url, {
+                body: JSON.stringify({ version: 'v1.13.9' }),
+                contentType: 'application/json'
+              });
+            }
+            return createSuccessfulResponse(url);
+          },
+          { validationAttempts: 1 }
+        )
+      )
+    ).resolves.toBeUndefined();
+
+    expect(warning).toHaveBeenCalledWith(
+      expect.stringContaining('Public route validation reported a mismatch')
+    );
   });
 
   it('should stop the preflight when a successful HTML response body times out', async () => {
@@ -1470,50 +1532,5 @@ describe('local deployment immutable asset retention', () => {
         uploadRemoteDir
       })
     ).rejects.toThrow('Legacy immutable asset scan exceeds 512.0 MB');
-  });
-});
-
-describe('local deployment public validation rollback', () => {
-  it('should remove a failed first deployment from the public target', async () => {
-    const rename = vi.fn().mockResolvedValue(undefined);
-
-    await rollbackPublicValidationFailure(
-      { rename },
-      {
-        previousRemoteDir: null,
-        safeRemoteDir: '/html/prod',
-        tempRemoteDir: '/html/.prod-upload-failed'
-      }
-    );
-
-    expect(rename).toHaveBeenCalledTimes(1);
-    expect(rename).toHaveBeenCalledWith(
-      '/html/prod',
-      '/html/.prod-upload-failed'
-    );
-  });
-
-  it('should restore the previous version after public validation fails', async () => {
-    const rename = vi.fn().mockResolvedValue(undefined);
-
-    await rollbackPublicValidationFailure(
-      { rename },
-      {
-        previousRemoteDir: '/html/.prod-old-stable',
-        safeRemoteDir: '/html/prod',
-        tempRemoteDir: '/html/.prod-upload-failed'
-      }
-    );
-
-    expect(rename).toHaveBeenNthCalledWith(
-      1,
-      '/html/prod',
-      '/html/.prod-upload-failed'
-    );
-    expect(rename).toHaveBeenNthCalledWith(
-      2,
-      '/html/.prod-old-stable',
-      '/html/prod'
-    );
   });
 });
