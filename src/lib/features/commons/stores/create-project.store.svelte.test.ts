@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ExampleCategory,
   FileStatus
@@ -137,6 +137,7 @@ import {
   createProjectActions,
   createProjectState
 } from './create-project.store.svelte';
+import { REMOTE_FILE_FETCH_TIMEOUT_MS } from '../utils/fetch-with-timeout';
 import { projectStore } from './project.store.svelte';
 
 function makeUploadedFile(
@@ -171,6 +172,11 @@ describe('createProjectActions.removeUploadedFile', () => {
       }
     ).currentProject = undefined;
     createProjectState.tryExample.selectedCategory = ExampleCategory.ALL;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it('recomputes global validation errors after a file is removed', () => {
@@ -298,5 +304,34 @@ describe('createProjectActions.removeUploadedFile', () => {
     expect(mocks.clearVisualizationsMock).toHaveBeenCalled();
     expect(mocks.clearDuckMock).toHaveBeenCalled();
     expect(mocks.clearSourceFilesMock).toHaveBeenCalled();
+  });
+
+  it('should reject when a successful remote file response body never completes', async () => {
+    vi.useFakeTimers();
+    const url = 'https://example.test/data.csv';
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(new ReadableStream({ start: () => undefined }), {
+          status: 200,
+          headers: { 'content-type': 'text/csv' }
+        })
+      )
+    );
+
+    const request = createProjectActions.downloadRemoteFile(url, 0);
+    const rejection = expect(request).rejects.toMatchObject({
+      name: 'PipelineError',
+      code: 'REMOTE_FILE_DOWNLOAD_TIMEOUT',
+      message: 'download-timeout',
+      details: {
+        timeoutMs: REMOTE_FILE_FETCH_TIMEOUT_MS,
+        url
+      }
+    });
+
+    await vi.advanceTimersByTimeAsync(REMOTE_FILE_FETCH_TIMEOUT_MS);
+    await rejection;
   });
 });

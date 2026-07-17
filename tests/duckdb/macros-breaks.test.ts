@@ -232,7 +232,7 @@ describe('macros vs reference implementations on real NUTS2 GDP data', () => {
       readFileSync(
         resolve(
           import.meta.dirname,
-          '../../static/tests-datasets/geojson/nuts2_data.geojson'
+          '../../tests-datasets/geojson/nuts2_data.geojson'
         ),
         'utf8'
       )

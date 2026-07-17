@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as m from '$lib/paraglide/messages';
 import type { DatasetResult } from '$lib/features/data-pipeline/types';
+import { REMOTE_FILE_FETCH_TIMEOUT_MS } from '$lib/features/commons/utils/fetch-with-timeout';
 
 const { processFileInternalMock, processZipFileMock } = vi.hoisted(() => ({
   processFileInternalMock: vi.fn(),
@@ -50,6 +51,7 @@ describe('remote-processor', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -80,7 +82,9 @@ describe('remote-processor', () => {
 
     const result = await processRemoteFile('https://example.com/data.csv');
 
-    expect(fetchMock).toHaveBeenCalledWith('https://example.com/data.csv');
+    expect(fetchMock).toHaveBeenCalledWith('https://example.com/data.csv', {
+      signal: expect.any(AbortSignal)
+    });
     expect(processFileInternalMock).toHaveBeenCalledTimes(1);
     const [downloadedFile, options] = processFileInternalMock.mock.calls[0];
     expect(downloadedFile).toBeInstanceOf(File);
@@ -127,7 +131,9 @@ describe('remote-processor', () => {
 
     const result = await processRemoteFile('https://example.com/places.kmz');
 
-    expect(fetchMock).toHaveBeenCalledWith('https://example.com/places.kmz');
+    expect(fetchMock).toHaveBeenCalledWith('https://example.com/places.kmz', {
+      signal: expect.any(AbortSignal)
+    });
     expect(processZipFileMock).toHaveBeenCalledOnce();
     expect(processFileInternalMock).not.toHaveBeenCalled();
     expect('datasets' in result).toBe(false);
@@ -161,5 +167,34 @@ describe('remote-processor', () => {
         url: 'https://example.com/missing.zip'
       }
     });
+  });
+
+  it('should reject when a successful remote response body never completes', async () => {
+    vi.useFakeTimers();
+    const url = 'https://example.com/pending.csv';
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(new ReadableStream({ start: () => undefined }), {
+          status: 200,
+          headers: { 'content-type': 'text/csv' }
+        })
+      )
+    );
+
+    const request = processRemoteFile(url);
+    const rejection = expect(request).rejects.toMatchObject({
+      name: 'PipelineError',
+      code: 'REMOTE_FILE_DOWNLOAD_TIMEOUT',
+      message: m.error_download_timeout(),
+      details: {
+        timeoutMs: REMOTE_FILE_FETCH_TIMEOUT_MS,
+        url
+      }
+    });
+
+    await vi.advanceTimersByTimeAsync(REMOTE_FILE_FETCH_TIMEOUT_MS);
+    await rejection;
   });
 });

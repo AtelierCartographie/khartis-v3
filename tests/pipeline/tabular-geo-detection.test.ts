@@ -43,10 +43,7 @@ vi.mock('$lib/features/data-pipeline/processors', () => ({
 import { applyTabularGeoDetection } from '$lib/features/data-pipeline/processors/tabular-geo-detection';
 import { dataPipeline } from '$lib/features/data-pipeline/pipeline';
 
-const FIXTURES_ROOT = path.resolve(
-  __dirname,
-  '../../static/tests-datasets/csv'
-);
+const FIXTURES_ROOT = path.resolve(__dirname, '../../tests-datasets/csv');
 
 let db: TestDuckDB;
 

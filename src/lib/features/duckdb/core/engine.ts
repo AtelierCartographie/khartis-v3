@@ -37,6 +37,8 @@ let threadsSupported = false;
 let bundleVariant: 'eh' | 'mvp' = 'eh';
 let initPromise: Promise<void> | null = null;
 
+export const DUCKDB_INSTANTIATION_TIMEOUT_MS = 180_000;
+
 export function isInitialized(): boolean {
   return db !== null && connection !== null;
 }
@@ -191,6 +193,36 @@ async function preloadExtensions(): Promise<void> {
   await loadSpatialExtension();
 }
 
+async function instantiateDuckDB(
+  database: duckdb.AsyncDuckDB,
+  bundle: duckdb.DuckDBBundle
+): Promise<void> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(
+      () =>
+        reject(
+          new DuckDBError(m.error_download_timeout(), undefined, {
+            phase: 'instantiate',
+            timeoutMs: DUCKDB_INSTANTIATION_TIMEOUT_MS
+          })
+        ),
+      DUCKDB_INSTANTIATION_TIMEOUT_MS
+    );
+  });
+
+  try {
+    await Promise.race([
+      database.instantiate(bundle.mainModule, bundle.pthreadWorker),
+      timeout
+    ]);
+  } finally {
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 export async function initEngine(): Promise<void> {
   if (db && connection) return;
   if (initPromise) {
@@ -200,6 +232,7 @@ export async function initEngine(): Promise<void> {
   const startTime = performance.now();
 
   initPromise = (async () => {
+    let worker: Worker | null = null;
     try {
       const manualBundles: DuckDBBundles = {
         mvp: { mainModule: duckdb_wasm, mainWorker: mvp_worker },
@@ -221,12 +254,12 @@ export async function initEngine(): Promise<void> {
       // the extension-compatible eh/mvp bundles.
       threadsSupported = false;
 
-      const worker = new Worker(bundle.mainWorker!);
+      worker = new Worker(bundle.mainWorker!);
 
       const duckdbLogger = new duckdb.ConsoleLogger();
       db = new duckdb.AsyncDuckDB(duckdbLogger, worker);
 
-      await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+      await instantiateDuckDB(db, bundle);
 
       await db.open({
         maximumThreads: 1,
@@ -241,8 +274,34 @@ export async function initEngine(): Promise<void> {
       await warmSpatialCoordinateSystems();
       await preloadExtensions();
     } catch (error) {
+      const failedConnection = connection;
+      const failedDb = db;
       db = null;
       connection = null;
+
+      if (failedConnection) {
+        try {
+          await failedConnection.close();
+        } catch (cleanupError) {
+          logger.error(
+            'Failed to close DuckDB connection after initialization error',
+            LogCategory.DUCKDB,
+            cleanupError
+          );
+        }
+      }
+      if (failedDb) {
+        try {
+          await failedDb.terminate();
+        } catch (cleanupError) {
+          logger.error(
+            'Failed to terminate DuckDB after initialization error',
+            LogCategory.DUCKDB,
+            cleanupError
+          );
+        }
+      }
+      worker?.terminate();
       initPromise = null;
       logger.error('Failed to initialize DuckDB', LogCategory.DUCKDB, {
         duration: `${(performance.now() - startTime).toFixed(2)}ms`,

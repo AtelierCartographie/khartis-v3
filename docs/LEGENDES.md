@@ -137,6 +137,6 @@ pnpm lint
 
 Fixtures utiles pour le smoke test navigateur :
 
-- `static/tests-datasets/geojson/nuts2_data.geojson` — choroplèthe avec 5 classes
-- `static/tests-datasets/geojson/tiny-geo-3features.geojson` — 3 polygones, cas minimal
-- `static/tests-datasets/geojson/visualization-toolbox-cases.geojson` — plusieurs types de viz
+- `tests-datasets/geojson/nuts2_data.geojson` — choroplèthe avec 5 classes
+- `tests-datasets/geojson/tiny-geo-3features.geojson` — 3 polygones, cas minimal
+- `tests-datasets/geojson/visualization-toolbox-cases.geojson` — plusieurs types de viz

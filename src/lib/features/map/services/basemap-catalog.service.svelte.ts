@@ -6,6 +6,12 @@ import { PipelineError } from '../../commons/pipeline.errors';
 import { LogCategory, logger } from '../../commons/utils/logger';
 import { resolveStaticAssetUrl } from '../../commons/utils/static-asset-url';
 import {
+  FetchTimeoutError,
+  fetchWithTimeout
+} from '../../commons/utils/fetch-with-timeout';
+import * as m from '$lib/paraglide/messages';
+import { BASEMAP_FETCH_TIMEOUT_MS } from '../constants/basemap-fetch.constants';
+import {
   CATALOG_SIMPLIFICATION_PRIORITY,
   getBasemapVariantFamily,
   getPreferredBasemapFile
@@ -490,28 +496,48 @@ function createBasemapCatalogService() {
       return;
     }
 
+    const url = resolveStaticAssetUrl(BASEMAP_METADATA_PATH);
+
     try {
-      const response = await fetch(
-        resolveStaticAssetUrl(BASEMAP_METADATA_PATH)
-      );
-
-      if (!response.ok) {
-        throw new PipelineError(
-          `Failed to fetch catalog: ${response.statusText}`,
-          BASEMAP_CATALOG_FETCH_ERROR_CODE,
-          {
-            status: response.status,
-            statusText: response.statusText
+      state.basemaps = await fetchWithTimeout(
+        url,
+        async (response) => {
+          if (!response.ok) {
+            throw new PipelineError(
+              `Failed to fetch catalog: ${response.statusText}`,
+              BASEMAP_CATALOG_FETCH_ERROR_CODE,
+              {
+                status: response.status,
+                statusText: response.statusText,
+                url: response.url || url
+              }
+            );
           }
-        );
-      }
 
-      state.basemaps = await response.json();
+          return response.json();
+        },
+        BASEMAP_FETCH_TIMEOUT_MS
+      );
       invalidateCatalogBasemapsCache();
       state.isLoaded = true;
     } catch (error) {
-      logger.error('Failed to load basemap catalog', LogCategory.MAP, error);
-      throw error;
+      const catalogError =
+        error instanceof FetchTimeoutError
+          ? new PipelineError(
+              m.error_download_timeout(),
+              BASEMAP_CATALOG_FETCH_ERROR_CODE,
+              {
+                url,
+                timeoutMs: error.timeoutMs
+              }
+            )
+          : error;
+      logger.error(
+        'Failed to load basemap catalog',
+        LogCategory.MAP,
+        catalogError
+      );
+      throw catalogError;
     }
   }
 

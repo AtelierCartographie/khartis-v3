@@ -15,6 +15,10 @@ import {
 } from '../../commons/utils/perf-marks.utils';
 import { resolveStaticAssetUrl } from '../../commons/utils/static-asset-url';
 import {
+  FetchTimeoutError,
+  fetchWithTimeout
+} from '../../commons/utils/fetch-with-timeout';
+import {
   escapeIdentifier,
   escapeSqlString
 } from '../../commons/utils/sanitize.utils';
@@ -36,6 +40,7 @@ import {
   getPreferredBasemapFile
 } from './basemap-variants.utils';
 import * as m from '$lib/paraglide/messages';
+import { BASEMAP_FETCH_TIMEOUT_MS } from '../constants/basemap-fetch.constants';
 
 const BASEMAP_ATTRIBUTES_PATH = '/basemaps/all-basemaps-attributes.parquet';
 const PROJECTION_PRESETS_PATH = '/basemaps/projection-presets.json';
@@ -66,6 +71,21 @@ type CatalogGeometryKind =
 
 function getGeometryParquetUrl(filename: string): string {
   return resolveStaticAssetUrl(`${GEOMETRY_BASE_PATH}/${filename}.parquet`);
+}
+
+function normalizeBasemapDownloadError(
+  error: unknown,
+  url: string,
+  code: string
+): unknown {
+  if (!(error instanceof FetchTimeoutError)) {
+    return error;
+  }
+
+  return new PipelineError(m.error_download_timeout(), code, {
+    url,
+    timeoutMs: error.timeoutMs
+  });
 }
 
 function getCatalogDuckDBFilename(basemapId: string): string {
@@ -760,24 +780,28 @@ function createBasemapService() {
   }
 
   async function loadAttributesIntoDuckDBInternal(): Promise<void> {
+    const url = resolveStaticAssetUrl(BASEMAP_ATTRIBUTES_PATH);
+
     try {
-      const response = await fetch(
-        resolveStaticAssetUrl(BASEMAP_ATTRIBUTES_PATH)
-      );
-
-      if (!response.ok) {
-        throw new PipelineError(
-          `Failed to fetch attributes: ${response.statusText}`,
-          BASEMAP_ATTRIBUTES_FETCH_ERROR_CODE,
-          {
-            status: response.status,
-            statusText: response.statusText,
-            url: response.url || resolveStaticAssetUrl(BASEMAP_ATTRIBUTES_PATH)
+      const arrayBuffer = await fetchWithTimeout(
+        url,
+        async (response) => {
+          if (!response.ok) {
+            throw new PipelineError(
+              `Failed to fetch attributes: ${response.statusText}`,
+              BASEMAP_ATTRIBUTES_FETCH_ERROR_CODE,
+              {
+                status: response.status,
+                statusText: response.statusText,
+                url: response.url || url
+              }
+            );
           }
-        );
-      }
 
-      const arrayBuffer = await response.arrayBuffer();
+          return response.arrayBuffer();
+        },
+        BASEMAP_FETCH_TIMEOUT_MS
+      );
       const blob = new Blob([arrayBuffer]);
       const attributesFile = new File(
         [blob],
@@ -837,32 +861,42 @@ function createBasemapService() {
 
       attributesLoaded = true;
     } catch (error) {
+      const attributesError = normalizeBasemapDownloadError(
+        error,
+        url,
+        BASEMAP_ATTRIBUTES_FETCH_ERROR_CODE
+      );
       logger.error(
         'Failed to load basemap attributes',
         LogCategory.MAP,
-        error,
+        attributesError,
         { feature: 'basemap', flow: 'load_basemap_attributes' }
       );
-      throw error;
+      throw attributesError;
     }
   }
 
   async function loadProjectionPresets(): Promise<void> {
     try {
       const url = resolveStaticAssetUrl(PROJECTION_PRESETS_PATH);
-      const response = await fetch(url);
-      if (!response.ok) {
-        logger.warn('Failed to load projection presets', LogCategory.MAP, {
-          flow: 'load_projection_presets',
-          extra: {
-            url,
-            status: response.status,
-            statusText: response.statusText
+      projectionPresetsData = await fetchWithTimeout(
+        url,
+        async (response) => {
+          if (!response.ok) {
+            logger.warn('Failed to load projection presets', LogCategory.MAP, {
+              flow: 'load_projection_presets',
+              extra: {
+                url,
+                status: response.status,
+                statusText: response.statusText
+              }
+            });
+            return null;
           }
-        });
-        return;
-      }
-      projectionPresetsData = await response.json();
+          return response.json();
+        },
+        BASEMAP_FETCH_TIMEOUT_MS
+      );
     } catch (error) {
       logger.error('Failed to load projection presets', LogCategory.MAP, error);
     }
@@ -871,19 +905,24 @@ function createBasemapService() {
   async function loadStylePresets(): Promise<void> {
     try {
       const url = resolveStaticAssetUrl(STYLE_PRESETS_PATH);
-      const response = await fetch(url);
-      if (!response.ok) {
-        logger.warn('Failed to load style presets', LogCategory.MAP, {
-          flow: 'load_style_presets',
-          extra: {
-            url,
-            status: response.status,
-            statusText: response.statusText
+      stylePresetsData = await fetchWithTimeout(
+        url,
+        async (response) => {
+          if (!response.ok) {
+            logger.warn('Failed to load style presets', LogCategory.MAP, {
+              flow: 'load_style_presets',
+              extra: {
+                url,
+                status: response.status,
+                statusText: response.statusText
+              }
+            });
+            return null;
           }
-        });
-        return;
-      }
-      stylePresetsData = await response.json();
+          return response.json();
+        },
+        BASEMAP_FETCH_TIMEOUT_MS
+      );
     } catch (error) {
       logger.error('Failed to load style presets', LogCategory.MAP, error);
     }
@@ -895,22 +934,37 @@ function createBasemapService() {
   ): Promise<ArrowTable> {
     perfMark(PERF_PHASE.GEOMETRY_FETCH);
     const url = getGeometryParquetUrl(filename);
-    const response = await fetch(url);
+    let arrayBuffer: ArrayBuffer;
 
-    if (!response.ok) {
-      throw new PipelineError(
-        `Failed to fetch geometry ${filename}: ${response.statusText}`,
-        BASEMAP_GEOMETRY_FETCH_ERROR_CODE,
-        {
-          filename,
-          status: response.status,
-          statusText: response.statusText,
-          url: response.url || url
-        }
+    try {
+      arrayBuffer = await fetchWithTimeout(
+        url,
+        async (response) => {
+          if (!response.ok) {
+            throw new PipelineError(
+              `Failed to fetch geometry ${filename}: ${response.statusText}`,
+              BASEMAP_GEOMETRY_FETCH_ERROR_CODE,
+              {
+                filename,
+                status: response.status,
+                statusText: response.statusText,
+                url: response.url || url
+              }
+            );
+          }
+
+          return response.arrayBuffer();
+        },
+        BASEMAP_FETCH_TIMEOUT_MS
+      );
+    } catch (error) {
+      throw normalizeBasemapDownloadError(
+        error,
+        url,
+        BASEMAP_GEOMETRY_FETCH_ERROR_CODE
       );
     }
 
-    const arrayBuffer = await response.arrayBuffer();
     const parsedGeometryTable = await readGeoParquetDirect(arrayBuffer, bbox);
     perfMeasure(PERF_PHASE.GEOMETRY_FETCH);
     return parsedGeometryTable;
@@ -1119,25 +1173,30 @@ function createBasemapService() {
       }
     }
 
+    const url = getGeometryParquetUrl(resolvedBasemapId);
+
     try {
-      const url = getGeometryParquetUrl(resolvedBasemapId);
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        throw new PipelineError(
-          `Failed to fetch geometry: ${response.statusText}`,
-          BASEMAP_GEOMETRY_FETCH_ERROR_CODE,
-          {
-            basemapId: normalizedBasemapId,
-            resolvedBasemapId,
-            status: response.status,
-            statusText: response.statusText,
-            url: response.url || url
+      const arrayBuffer = await fetchWithTimeout(
+        url,
+        async (response) => {
+          if (!response.ok) {
+            throw new PipelineError(
+              `Failed to fetch geometry: ${response.statusText}`,
+              BASEMAP_GEOMETRY_FETCH_ERROR_CODE,
+              {
+                basemapId: normalizedBasemapId,
+                resolvedBasemapId,
+                status: response.status,
+                statusText: response.statusText,
+                url: response.url || url
+              }
+            );
           }
-        );
-      }
 
-      const arrayBuffer = await response.arrayBuffer();
+          return response.arrayBuffer();
+        },
+        BASEMAP_FETCH_TIMEOUT_MS
+      );
       const escapedTableName = escapeIdentifier(tableName);
       const tempTableName = `tmp_${tableName}_${Date.now()}`;
       const escapedTempTableName = escapeIdentifier(tempTableName);
@@ -1204,16 +1263,21 @@ function createBasemapService() {
 
       return tableName;
     } catch (error) {
+      const geometryError = normalizeBasemapDownloadError(
+        error,
+        url,
+        BASEMAP_GEOMETRY_FETCH_ERROR_CODE
+      );
       logger.error(
         'Failed to load basemap geometry into DuckDB',
         LogCategory.MAP,
         {
           basemapId: normalizedBasemapId,
           resolvedBasemapId,
-          error
+          error: geometryError
         }
       );
-      throw error;
+      throw geometryError;
     }
   }
 
