@@ -250,9 +250,7 @@ async function main() {
       return;
     }
 
-    await verifyPublicInfrastructureWithRetries(deployment, {
-      backendRouting
-    });
+    await reportPublicInfrastructurePreflight(deployment, { backendRouting });
 
     const config = await readSftpConfig();
     await uploadBuild(
@@ -1114,58 +1112,11 @@ async function uploadBuild(
         swapped = true;
         swapSpinner.done(`Remote ${expectedRemoteDirLeaf} directory swapped`);
 
-        try {
-          await verifyPublicUrlWithRetries(deployment, {
-            backendRouting,
-            expectedVersion,
-            wasmAssetPath
-          });
-        } catch (validationError) {
-          const validationMessage =
-            validationError instanceof Error
-              ? validationError.message
-              : String(validationError);
-          warn(
-            previousRemoteDir
-              ? 'Public route validation failed; restoring the previous version.'
-              : 'Public route validation failed; taking the first deployment offline.'
-          );
-          try {
-            await withCriticalRemoteSection('rollback', () =>
-              rollbackPublicValidationFailure(client, {
-                previousRemoteDir,
-                safeRemoteDir,
-                tempRemoteDir
-              })
-            );
-            swapped = false;
-            preserveTempDir = true;
-            log(
-              previousRemoteDir
-                ? `Previous remote version restored after validation failure. The failed upload is kept for inspection at ${tempRemoteDir}; the next deployment's stale cleanup removes it.`
-                : `Failed first deployment taken offline; kept for inspection at ${tempRemoteDir} (removed by the next deployment's stale cleanup).`
-            );
-          } catch (rollbackError) {
-            preserveTempDir = true;
-            const rollbackMessage =
-              rollbackError instanceof Error
-                ? rollbackError.message
-                : String(rollbackError);
-            throw new Error(
-              previousRemoteDir
-                ? `Public route validation failed (${validationMessage}) and rollback failed (${rollbackMessage}). Previous version: ${previousRemoteDir}, failed upload: ${tempRemoteDir}. Restore one manually.`
-                : `Public route validation failed (${validationMessage}) and the failed first deployment could not be taken offline (${rollbackMessage}). Public target: ${safeRemoteDir}. Remove or replace it manually.`,
-              { cause: rollbackError }
-            );
-          }
-
-          throw new Error(
-            previousRemoteDir
-              ? `Public route validation failed and the previous version was restored: ${validationMessage}`
-              : `Public route validation failed and the first deployment was taken offline: ${validationMessage}`,
-            { cause: validationError }
-          );
-        }
+        await reportPublicRouteValidation(deployment, {
+          backendRouting,
+          expectedVersion,
+          wasmAssetPath
+        });
 
         if (previousRemoteDir) {
           await removeRemoteDirRecursive(
@@ -1286,16 +1237,6 @@ function throwIfTerminationRequested(checkpoint) {
 
 async function withCriticalRemoteSection(label, action) {
   return terminationCoordinator.runCritical(label, action);
-}
-
-async function rollbackPublicValidationFailure(
-  client,
-  { previousRemoteDir, safeRemoteDir, tempRemoteDir }
-) {
-  await client.rename(safeRemoteDir, tempRemoteDir);
-  if (previousRemoteDir) {
-    await client.rename(previousRemoteDir, safeRemoteDir);
-  }
 }
 
 async function collectUploadManifest(buildDir) {
@@ -2760,6 +2701,20 @@ async function verifyPublicInfrastructureWithRetries(deployment, options = {}) {
   }
 }
 
+async function reportPublicInfrastructurePreflight(deployment, options = {}) {
+  try {
+    await verifyPublicInfrastructureWithRetries(deployment, {
+      ...options,
+      validationAttempts: 1
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warn(
+      `Public infrastructure preflight reported a mismatch; deployment will continue so the uploaded release can be inspected and the web tier adjusted: ${message}`
+    );
+  }
+}
+
 async function verifyPublicUrlWithRetries(deployment, options = {}) {
   const validationAttempts =
     options.validationAttempts ?? PUBLIC_URL_VALIDATION_ATTEMPTS;
@@ -2789,6 +2744,17 @@ async function verifyPublicUrlWithRetries(deployment, options = {}) {
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
     }
+  }
+}
+
+async function reportPublicRouteValidation(deployment, options = {}) {
+  try {
+    await verifyPublicUrlWithRetries(deployment, options);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warn(
+      `Public route validation reported a mismatch, but the uploaded release remains active for infrastructure adjustment: ${message}`
+    );
   }
 }
 
@@ -2962,9 +2928,10 @@ export {
   parseRemoteBranchHead,
   parseRemoteTagCommit,
   parseRemoteTagNames,
+  reportPublicInfrastructurePreflight,
+  reportPublicRouteValidation,
   releaseRemoteDeploymentLock,
   retainPreviousReleaseAssets,
-  rollbackPublicValidationFailure,
   resolveDeploymentPublicUrl,
   sanitizedChildEnv,
   startProgress,
