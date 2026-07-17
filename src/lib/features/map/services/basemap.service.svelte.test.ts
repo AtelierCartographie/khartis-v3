@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { SimplificationLevel } from '$lib/features/commons/types/enums';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { FetchTimeoutError } from '$lib/features/commons/utils/fetch-with-timeout';
+import { BASEMAP_FETCH_TIMEOUT_MS } from '../constants/basemap-fetch.constants';
 import type { BasemapMetadata } from '../types/basemap.types';
 import {
   basemapService,
@@ -16,6 +18,7 @@ import {
 } from './basemap.service.svelte';
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -128,7 +131,8 @@ describe('basemapService.initialize', () => {
     );
   });
 
-  it('logs missing projection and style presets without blocking initialization', async () => {
+  it('should stop waiting when a preset body remains pending', async () => {
+    vi.useFakeTimers();
     vi.spyOn(globalThis, 'fetch').mockImplementation(
       async (input: string | URL | Request) => {
         const url = String(input);
@@ -140,24 +144,29 @@ describe('basemapService.initialize', () => {
           });
         }
 
+        if (url.includes('projection-presets.json')) {
+          return new Response(new ReadableStream({ start: () => undefined }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
         return new Response(null, { status: 404, statusText: 'Not Found' });
       }
     );
     const loggerWarn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const loggerError = vi.spyOn(logger, 'error').mockImplementation(() => {});
 
-    await expect(basemapService.initialize()).resolves.toBeUndefined();
+    const initialization = basemapService.initialize();
+    const resolution = expect(initialization).resolves.toBeUndefined();
 
-    expect(loggerWarn).toHaveBeenCalledWith(
+    await vi.advanceTimersByTimeAsync(BASEMAP_FETCH_TIMEOUT_MS);
+    await resolution;
+
+    expect(loggerError).toHaveBeenCalledWith(
       'Failed to load projection presets',
       LogCategory.MAP,
-      expect.objectContaining({
-        flow: 'load_projection_presets',
-        extra: expect.objectContaining({
-          url: expect.stringContaining('projection-presets.json'),
-          status: 404,
-          statusText: 'Not Found'
-        })
-      })
+      expect.any(FetchTimeoutError)
     );
     expect(loggerWarn).toHaveBeenCalledWith(
       'Failed to load style presets',

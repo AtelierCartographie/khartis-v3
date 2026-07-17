@@ -3,7 +3,7 @@ import { query, run, type TestDuckDB } from './duckdb-node-helper';
 
 export const CSV_FIXTURES_DIR = path.resolve(
   __dirname,
-  '../../static/tests-datasets/csv'
+  '../../tests-datasets/csv'
 );
 
 export const SIMPLE_TYPE = {

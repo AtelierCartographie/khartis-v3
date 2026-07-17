@@ -9,10 +9,7 @@ import {
   type TestDuckDB
 } from './duckdb-node-helper';
 
-const FIXTURES_ROOT = path.resolve(
-  __dirname,
-  '../../static/tests-datasets/csv'
-);
+const FIXTURES_ROOT = path.resolve(__dirname, '../../tests-datasets/csv');
 
 const malformed = (name: string): string => path.join(FIXTURES_ROOT, name);
 

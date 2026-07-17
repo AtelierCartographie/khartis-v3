@@ -35,6 +35,7 @@ interface RevisionedSerializedProject extends SerializedProject {
 }
 
 const loadedProjectRevisions = new Map<string, number>();
+const projectSaveQueues = new Map<string, Promise<void>>();
 
 class ProjectSaveConflictError extends PipelineError {
   constructor(
@@ -223,93 +224,116 @@ export async function saveProject(
   exampleId?: string,
   sizeBytes?: number
 ): Promise<void> {
-  const database = await ensureDb();
-  const projectForStorage = await prepareProjectForStorage(project);
-  const serialized = await prepareForIndexedDB(projectForStorage);
-  const hasExpectedRevision = loadedProjectRevisions.has(project.id);
-  const expectedRevision = loadedProjectRevisions.get(project.id);
-
-  await new Promise<void>((resolve, reject) => {
-    const transaction = database.transaction(
-      [PROJECT_CONST.DB.STORE_NAME],
-      'readwrite'
-    );
-    const store = transaction.objectStore(PROJECT_CONST.DB.STORE_NAME);
-    const request = store.get(project.id);
-    let nextRevision: number | null = null;
-    let rejected = false;
-
-    const rejectOnce = (error: Error) => {
-      if (rejected) {
-        return;
-      }
-
-      rejected = true;
-      reject(error);
-    };
-
-    request.onsuccess = () => {
-      try {
-        const persistedProject = request.result as
-          RevisionedSerializedProject | undefined;
-        const actualRevision = persistedProject
-          ? readStorageRevision(persistedProject)
-          : 0;
-        const canCreate = !persistedProject && !hasExpectedRevision;
-        const canUpdate =
-          Boolean(persistedProject) &&
-          hasExpectedRevision &&
-          actualRevision !== null &&
-          actualRevision === expectedRevision;
-
-        if (!canCreate && !canUpdate) {
-          rejectOnce(
-            new ProjectSaveConflictError(
-              project.id,
-              expectedRevision,
-              actualRevision
-            )
-          );
-          return;
-        }
-
-        if (actualRevision === null) {
-          return;
-        }
-
-        nextRevision = actualRevision + 1;
-        store.put({
-          ...serialized,
-          [STORAGE_REVISION_PROPERTY]: nextRevision
-        });
-      } catch (error) {
-        nextRevision = null;
-        rejectOnce(
-          error instanceof Error
-            ? error
-            : new Error(m.error_failed_save_project())
-        );
-      }
-    };
-    request.onerror = () =>
-      rejectOnce(request.error || new Error(m.error_failed_save_project()));
-    transaction.oncomplete = () => {
-      if (rejected || nextRevision === null) {
-        return;
-      }
-
-      loadedProjectRevisions.set(project.id, nextRevision);
-      resolve();
-    };
-    transaction.onerror = () =>
-      rejectOnce(transaction.error || new Error(m.error_failed_save_project()));
+  const previousSave = projectSaveQueues.get(project.id);
+  let releaseCurrentSave = () => {};
+  const currentSave = new Promise<void>((resolve) => {
+    releaseCurrentSave = resolve;
   });
+  const queuedSave = previousSave
+    ? previousSave.then(() => currentSave)
+    : currentSave;
+  projectSaveQueues.set(project.id, queuedSave);
 
-  await syncProjectAssetRefs(
-    projectForStorage.id,
-    projectForStorage.data.sourceFiles
-  );
-  await updateMetadata(projectForStorage, thumbnail, exampleId, sizeBytes);
+  if (previousSave) {
+    await previousSave;
+  }
+
+  try {
+    const database = await ensureDb();
+    const projectForStorage = await prepareProjectForStorage(project);
+    const serialized = await prepareForIndexedDB(projectForStorage);
+    const hasExpectedRevision = loadedProjectRevisions.has(project.id);
+    const expectedRevision = loadedProjectRevisions.get(project.id);
+
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(
+        [PROJECT_CONST.DB.STORE_NAME],
+        'readwrite'
+      );
+      const store = transaction.objectStore(PROJECT_CONST.DB.STORE_NAME);
+      const request = store.get(project.id);
+      let nextRevision: number | null = null;
+      let rejected = false;
+
+      const rejectOnce = (error: Error) => {
+        if (rejected) {
+          return;
+        }
+
+        rejected = true;
+        reject(error);
+      };
+
+      request.onsuccess = () => {
+        try {
+          const persistedProject = request.result as
+            RevisionedSerializedProject | undefined;
+          const actualRevision = persistedProject
+            ? readStorageRevision(persistedProject)
+            : 0;
+          const canCreate = !persistedProject && !hasExpectedRevision;
+          const canUpdate =
+            Boolean(persistedProject) &&
+            hasExpectedRevision &&
+            actualRevision !== null &&
+            actualRevision === expectedRevision;
+
+          if (!canCreate && !canUpdate) {
+            rejectOnce(
+              new ProjectSaveConflictError(
+                project.id,
+                expectedRevision,
+                actualRevision
+              )
+            );
+            return;
+          }
+
+          if (actualRevision === null) {
+            return;
+          }
+
+          nextRevision = actualRevision + 1;
+          store.put({
+            ...serialized,
+            [STORAGE_REVISION_PROPERTY]: nextRevision
+          });
+        } catch (error) {
+          nextRevision = null;
+          rejectOnce(
+            error instanceof Error
+              ? error
+              : new Error(m.error_failed_save_project())
+          );
+        }
+      };
+      request.onerror = () =>
+        rejectOnce(request.error || new Error(m.error_failed_save_project()));
+      transaction.oncomplete = () => {
+        if (rejected || nextRevision === null) {
+          return;
+        }
+
+        loadedProjectRevisions.set(project.id, nextRevision);
+        resolve();
+      };
+      transaction.onerror = () =>
+        rejectOnce(
+          transaction.error || new Error(m.error_failed_save_project())
+        );
+    });
+
+    await syncProjectAssetRefs(
+      projectForStorage.id,
+      projectForStorage.data.sourceFiles
+    );
+    await updateMetadata(projectForStorage, thumbnail, exampleId, sizeBytes);
+  } finally {
+    releaseCurrentSave();
+    if (projectSaveQueues.get(project.id) === queuedSave) {
+      projectSaveQueues.delete(project.id);
+    }
+  }
 }
 
 export async function loadProject(id: string): Promise<KhartisProject | null> {

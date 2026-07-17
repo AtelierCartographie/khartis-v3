@@ -29,6 +29,11 @@ import {
   isValidUrl
 } from '../utils/file-import.utils';
 import { formatFileSize } from '../utils/format.utils';
+import {
+  FetchTimeoutError,
+  REMOTE_FILE_FETCH_TIMEOUT_MS,
+  fetchWithTimeout
+} from '../utils/fetch-with-timeout';
 import { LogCategory, logger } from '../utils/logger';
 import { showError } from '../utils/notification.utils.svelte';
 import { createReadonlyStateFacade } from '../utils/store.utils.svelte';
@@ -43,7 +48,6 @@ import { datasetsStore } from './datasets.store.svelte';
 import { projectStore } from './project.store.svelte';
 import { visualizationStore } from './visualization.store.svelte';
 
-const FILE_FETCH_TIMEOUT_MS = 30_000;
 const REMOTE_FILE_OFFLINE_ERROR_CODE = 'REMOTE_FILE_OFFLINE';
 const REMOTE_FILE_FETCH_FAILED_ERROR_CODE = 'REMOTE_FILE_FETCH_FAILED';
 const REMOTE_FILE_DOWNLOAD_TIMEOUT_ERROR_CODE = 'REMOTE_FILE_DOWNLOAD_TIMEOUT';
@@ -656,91 +660,86 @@ export const createProjectActions = {
       );
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(
-      () => controller.abort(),
-      FILE_FETCH_TIMEOUT_MS
-    );
-
     try {
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new PipelineError(
-          m.error_http_fetch({
-            status: String(response.status),
-            statusText: response.statusText,
-            url
-          }),
-          REMOTE_FILE_FETCH_FAILED_ERROR_CODE,
-          {
-            status: response.status,
-            statusText: response.statusText,
-            url
+      return await fetchWithTimeout(
+        url,
+        async (response) => {
+          if (!response.ok) {
+            throw new PipelineError(
+              m.error_http_fetch({
+                status: String(response.status),
+                statusText: response.statusText,
+                url
+              }),
+              REMOTE_FILE_FETCH_FAILED_ERROR_CODE,
+              {
+                status: response.status,
+                statusText: response.statusText,
+                url
+              }
+            );
           }
-        );
-      }
 
-      const contentType = response.headers.get('content-type') || '';
-      const allowedTypes = [
-        'text/csv',
-        'text/plain',
-        'text/tab-separated-values',
-        'application/json',
-        'application/geo+json',
-        'application/vnd.geo+json',
-        'application/octet-stream',
-        'application/x-shapefile',
-        'application/geopackage+sqlite3',
-        'application/x-sqlite3',
-        'application/zip',
-        'application/x-zip-compressed',
-        'application/geoparquet',
-        'application/parquet',
-        'application/gpx+xml',
-        'application/vnd.google-earth.kml+xml',
-        'application/vnd.google-earth.kmz',
-        'text/xml',
-        'application/xml'
-      ];
+          const contentType = response.headers.get('content-type') || '';
+          const allowedTypes = [
+            'text/csv',
+            'text/plain',
+            'text/tab-separated-values',
+            'application/json',
+            'application/geo+json',
+            'application/vnd.geo+json',
+            'application/octet-stream',
+            'application/x-shapefile',
+            'application/geopackage+sqlite3',
+            'application/x-sqlite3',
+            'application/zip',
+            'application/x-zip-compressed',
+            'application/geoparquet',
+            'application/parquet',
+            'application/gpx+xml',
+            'application/vnd.google-earth.kml+xml',
+            'application/vnd.google-earth.kmz',
+            'text/xml',
+            'application/xml'
+          ];
 
-      const isAllowed =
-        allowedTypes.some((t) => contentType.includes(t)) ||
-        contentType.includes('octet-stream') ||
-        contentType === '';
-      if (!isAllowed) {
-        throw new DataValidationError(
-          m.error_invalid_content_type({ type: contentType }),
-          'contentType',
-          { contentType, url }
-        );
-      }
+          const isAllowed =
+            allowedTypes.some((t) => contentType.includes(t)) ||
+            contentType.includes('octet-stream') ||
+            contentType === '';
+          if (!isAllowed) {
+            throw new DataValidationError(
+              m.error_invalid_content_type({ type: contentType }),
+              'contentType',
+              { contentType, url }
+            );
+          }
 
-      const blob = await response.blob();
-      const headerFilename = getFilenameFromContentDisposition(
-        response.headers
+          const blob = await response.blob();
+          const headerFilename = getFilenameFromContentDisposition(
+            response.headers
+          );
+          const urlFilename = getFilenameFromUrl(url);
+          const safeName = ensureFilenameHasExtension(
+            headerFilename || urlFilename,
+            blob.type,
+            index
+          );
+
+          return new File([blob], safeName, {
+            type: blob.type || 'application/octet-stream'
+          });
+        },
+        REMOTE_FILE_FETCH_TIMEOUT_MS
       );
-      const urlFilename = getFilenameFromUrl(url);
-      const safeName = ensureFilenameHasExtension(
-        headerFilename || urlFilename,
-        blob.type,
-        index
-      );
-
-      return new File([blob], safeName, {
-        type: blob.type || 'application/octet-stream'
-      });
     } catch (error) {
-      clearTimeout(timeoutId);
-      if (error instanceof Error && error.name === 'AbortError') {
+      if (error instanceof FetchTimeoutError) {
         throw new PipelineError(
           m.error_download_timeout(),
           REMOTE_FILE_DOWNLOAD_TIMEOUT_ERROR_CODE,
           {
-            timeoutMs: FILE_FETCH_TIMEOUT_MS,
-            url,
-            originalError: error.message
+            timeoutMs: error.timeoutMs,
+            url
           }
         );
       }
