@@ -128,7 +128,7 @@ describe('gpxProcessor', () => {
   it('parses single-quoted attributes and CDATA sections from the fixture', async () => {
     const fixturePath = path.resolve(
       __dirname,
-      '../../static/tests-datasets/gpx/single-quoted-attributes.gpx'
+      '../../tests-datasets/gpx/single-quoted-attributes.gpx'
     );
     const c = ctx('tbl_gpx_quotes');
     const f = file('single-quoted-attributes.gpx', FileType.GPX);

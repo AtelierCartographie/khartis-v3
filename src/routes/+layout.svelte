@@ -24,6 +24,10 @@
   import { EVENT } from '$lib/features/commons/constants/dom.constants';
   import { persistenceRegistry } from '$lib/features/project-management/core';
   import { factoryResetPwa } from '$lib/features/commons/utils/pwa-reset';
+  import {
+    REMOTE_FILE_FETCH_TIMEOUT_MS,
+    fetchWithTimeout
+  } from '$lib/features/commons/utils/fetch-with-timeout';
 
   import '$lib/features/commons/stores/locale.store.svelte';
   import { setLocale, locales, cookieName } from '$lib/paraglide/runtime.js';
@@ -105,11 +109,16 @@
   ): Promise<void> {
     try {
       await startDataServices();
-      const response = await fetch(khProjectUrl);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const blob = await response.blob();
+      const blob = await fetchWithTimeout(
+        khProjectUrl,
+        async (response) => {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          return response.blob();
+        },
+        REMOTE_FILE_FETCH_TIMEOUT_MS
+      );
       const fileName =
         khProjectUrl.split('/').pop()?.split('?')[0] || 'project.kh';
       const file = new File([blob], fileName, { type: 'application/zip' });

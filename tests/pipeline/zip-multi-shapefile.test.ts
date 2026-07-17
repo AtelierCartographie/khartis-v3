@@ -20,7 +20,7 @@ import {
 
 const TWO_SHAPEFILES_FIXTURE = path.resolve(
   __dirname,
-  '../../static/tests-datasets/zip/two-shapefiles.zip'
+  '../../tests-datasets/zip/two-shapefiles.zip'
 );
 
 async function loadFixtureZip(): Promise<File> {

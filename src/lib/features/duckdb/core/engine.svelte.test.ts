@@ -1,17 +1,21 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as m from '$lib/paraglide/messages';
 
 const mocks = vi.hoisted(() => {
   const connection = {};
   const db = {
     connect: vi.fn(async () => connection),
     instantiate: vi.fn(async () => undefined),
-    open: vi.fn(async () => undefined)
+    open: vi.fn(async () => undefined),
+    terminate: vi.fn(async () => undefined)
   };
 
   return {
+    connection,
     db,
     executeQuery: vi.fn(async (_connection: unknown, _query: string) => []),
     showWarning: vi.fn(),
+    workerTerminate: vi.fn(),
     selectBundle: vi.fn(async () => ({
       eh: null,
       mainModule: 'duckdb-eh.wasm',
@@ -56,12 +60,26 @@ describe('DuckDB engine initialization', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    mocks.db.connect.mockResolvedValue(mocks.connection);
+    mocks.db.instantiate.mockResolvedValue(undefined);
+    mocks.db.open.mockResolvedValue(undefined);
+    mocks.db.terminate.mockResolvedValue(undefined);
+    mocks.executeQuery.mockResolvedValue([]);
     vi.stubGlobal(
       'Worker',
       class {
         constructor(readonly url: string) {}
+
+        terminate(): void {
+          mocks.workerTerminate();
+        }
       }
     );
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it('warms coordinate systems before loading spatial to avoid DuckDB WASM GeoParquet CRS crash', async () => {
@@ -115,5 +133,34 @@ describe('DuckDB engine initialization', () => {
 
     expect(getContext().extensionsLoaded.spatial).toBe(false);
     expect(mocks.showWarning).toHaveBeenCalledTimes(1);
+  });
+
+  it('should terminate a pending WASM instantiation and allow a retry after timeout', async () => {
+    vi.useFakeTimers();
+    mocks.db.instantiate.mockImplementationOnce(
+      () => new Promise<undefined>(() => undefined)
+    );
+    const { DUCKDB_INSTANTIATION_TIMEOUT_MS, initEngine, isInitialized } =
+      await import('./engine');
+
+    const initialization = initEngine();
+    const rejection = expect(initialization).rejects.toMatchObject({
+      name: 'DuckDBError',
+      message: m.error_download_timeout(),
+      details: {
+        phase: 'instantiate',
+        timeoutMs: DUCKDB_INSTANTIATION_TIMEOUT_MS
+      }
+    });
+
+    await vi.advanceTimersByTimeAsync(DUCKDB_INSTANTIATION_TIMEOUT_MS);
+    await rejection;
+
+    expect(mocks.db.terminate).toHaveBeenCalledOnce();
+    expect(mocks.workerTerminate).toHaveBeenCalledOnce();
+    expect(isInitialized()).toBe(false);
+
+    await expect(initEngine()).resolves.toBeUndefined();
+    expect(isInitialized()).toBe(true);
   });
 });

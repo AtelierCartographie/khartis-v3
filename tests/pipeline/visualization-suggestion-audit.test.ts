@@ -249,9 +249,7 @@ const DEFAULT_AUDIT_SOURCES = [
     'zip/multiple-csv.zip',
     'zip/shapefile-complete.zip',
     'zip/single-csv.zip'
-  ].map((relativePath) =>
-    join(REPO_ROOT, 'static/tests-datasets', relativePath)
-  )
+  ].map((relativePath) => join(REPO_ROOT, 'tests-datasets', relativePath))
 ];
 
 const DBF_HEADER_LENGTH_OFFSET = 8;
@@ -266,9 +264,7 @@ const FULL_AUDIT_SOURCES = [
     'gpkg/ADMIN-EXPRESS_4-0__GPKG_RGAF09UTM20_GLP_2025-12-05/ADE_4-0_GPKG_RGAF09UTM20_GLP-ED2025-12-05.gpkg',
     'shp/Marines-regionsEEZ_land_union_v3_202003/EEZ_Land_v3_202030.shp',
     'shp/mos_foncier_agrege_com/mos_foncier_agrege_com.shp'
-  ].map((relativePath) =>
-    join(REPO_ROOT, 'static/tests-datasets', relativePath)
-  )
+  ].map((relativePath) => join(REPO_ROOT, 'tests-datasets', relativePath))
 ];
 
 const LINE_CATEGORICAL_SUGGESTION_IDS = new Set([
@@ -1119,7 +1115,7 @@ describe('visualization suggestions audit', () => {
     const [entry] = await importAuditSource(
       resolve(
         REPO_ROOT,
-        'static/tests-datasets/geojson/lignes-du-reseau-star-de-rennes-metropole.geojson'
+        'tests-datasets/geojson/lignes-du-reseau-star-de-rennes-metropole.geojson'
       )
     );
 

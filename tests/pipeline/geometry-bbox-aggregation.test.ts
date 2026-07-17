@@ -5,7 +5,7 @@ import { DuckDBInstance, type DuckDBConnection } from '@duckdb/node-api';
 const REPO_ROOT = resolve(__dirname, '..', '..');
 const NUTS2_PATH = resolve(
   REPO_ROOT,
-  'static/tests-datasets/geojson/nuts2_data.geojson'
+  'tests-datasets/geojson/nuts2_data.geojson'
 );
 
 let dbInstance: Awaited<ReturnType<typeof DuckDBInstance.create>>;

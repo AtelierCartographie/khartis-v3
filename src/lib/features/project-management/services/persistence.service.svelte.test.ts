@@ -381,6 +381,64 @@ describe('project persistence', () => {
     expect(vi.mocked(estimateProjectStorageSize)).not.toHaveBeenCalled();
   });
 
+  it('should serialize saves when one browser context writes concurrently', async () => {
+    const database = new FakeDatabase();
+    installFakeIndexedDb(database);
+
+    const project = {
+      id: 'same-context-project',
+      manifest: {
+        version: PROJECT_CONST.SCHEMA_VERSION,
+        createdAt: new Date('2026-04-16T00:00:00.000Z'),
+        updatedAt: new Date('2026-04-16T00:00:00.000Z'),
+        name: 'Concurrent Project',
+        format: 'kh' as const
+      },
+      data: {
+        sourceFiles: []
+      }
+    };
+    let releaseFirstPreparation: () => void = () => undefined;
+    const firstPreparationGate = new Promise<void>((resolve) => {
+      releaseFirstPreparation = resolve;
+    });
+    let signalFirstPreparation: () => void = () => undefined;
+    const firstPreparationStarted = new Promise<void>((resolve) => {
+      signalFirstPreparation = resolve;
+    });
+    let activePreparations = 0;
+    let maximumConcurrentPreparations = 0;
+    let preparationCount = 0;
+    mocks.prepareForIndexedDB.mockImplementation(async (value) => {
+      preparationCount += 1;
+      activePreparations += 1;
+      maximumConcurrentPreparations = Math.max(
+        maximumConcurrentPreparations,
+        activePreparations
+      );
+      if (preparationCount === 1) {
+        signalFirstPreparation();
+        await firstPreparationGate;
+      }
+      activePreparations -= 1;
+      return value;
+    });
+
+    const { saveProject } = await import('./persistence.service');
+    const firstSave = saveProject(project as never);
+    await firstPreparationStarted;
+    const secondSave = saveProject(project as never);
+
+    await Promise.resolve();
+    expect(mocks.prepareForIndexedDB).toHaveBeenCalledTimes(1);
+
+    releaseFirstPreparation();
+    await Promise.all([firstSave, secondSave]);
+
+    expect(mocks.prepareForIndexedDB).toHaveBeenCalledTimes(2);
+    expect(maximumConcurrentPreparations).toBe(1);
+  });
+
   it('rejects a stale project save from another tab without overwriting the first save', async () => {
     const database = new FakeDatabase();
     database.seedStore(PROJECT_CONST.DB.STORE_NAME, 'id', [

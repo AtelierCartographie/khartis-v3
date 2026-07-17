@@ -12,12 +12,12 @@ Use this when validating a change or reproducing a bug in the running app. Khart
 Pick the data-loading path that matches what you're testing:
 
 1. **Paste CSV** into the paste-data input of the create-project modal — fastest for an ad-hoc case. Import, then test in the app.
-2. **Import by URL from localhost**, pointing at a file under `static/tests-datasets/` — e.g. `http://localhost:5176/tests-datasets/csv/<file>.csv` in the default dev setup. Reproducible, and exercises the real import pipeline for every supported format.
+2. **Import by URL from localhost**, pointing at a file under `tests-datasets/` at the repository root, for example `http://localhost:5176/tests-datasets/csv/<file>.csv` in the default dev setup. This URL is available with `pnpm dev`; deployed builds and `pnpm preview` deliberately exclude test fixtures. Reproducible, and exercises the real import pipeline for every supported format.
 3. **"Try with an example"** (the try-with-example entry) — a ready-made, pre-styled project when you need a full map fast.
 
 ## Choose the dataset that targets the bug
 
-Browse `static/tests-datasets/` and pick by concern:
+Browse `tests-datasets/` and pick by concern:
 
 - **Join by name/code** → `csv/naissances-par-commune-departement-et-region-2018.csv`, `csv/world-bank-rural-pop.csv`; fuzzy join → `csv/fuzzy-countries.csv`.
 - **Lat/lon plotting & GPS validation** → `csv/sites-seveso-idf.csv` and its `-swapped-gps` / `-invalid-gps` / `-custom-gps-columns` variants, `csv/tabular-gps-gcpnt-columns.csv`.
