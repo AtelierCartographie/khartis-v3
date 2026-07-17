@@ -109,7 +109,7 @@ describe('[S04] suggestProjectionsForBbox — Europe vs France disambiguation', 
   });
 
   it('returns no national for the full NUTS-2 bbox (includes French DOM-TOM)', () => {
-    // static/tests-datasets/geojson/nuts2_data.geojson actual bbox
+    // tests-datasets/geojson/nuts2_data.geojson actual bbox
     const result = suggestProjectionsForBbox([-63.09, -21.39, 55.84, 71.12]);
     expect(result).not.toBeNull();
     // Neither France nor EU national matches because the bbox is too broad

@@ -4,6 +4,10 @@ import {
   PipelineError
 } from '$lib/features/commons/pipeline.errors';
 import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
+import {
+  FetchTimeoutError,
+  fetchWithTimeout
+} from '$lib/features/commons/utils/fetch-with-timeout';
 import * as m from '$lib/paraglide/messages';
 import type { ExampleProject } from '../types/create-project.types';
 
@@ -212,23 +216,35 @@ export async function loadExampleData(
         { exampleId: example.id }
       );
     }
-    const response = await fetch(example.dataUrl);
+    return await fetchWithTimeout(example.dataUrl, async (response) => {
+      if (!response.ok) {
+        throw new PipelineError(
+          m.error_example_data_load_failed({ status: response.statusText }),
+          'EXAMPLE_DATA_LOAD_FAILED',
+          {
+            exampleId: example.id,
+            dataUrl: example.dataUrl,
+            status: response.status,
+            statusText: response.statusText
+          }
+        );
+      }
 
-    if (!response.ok) {
+      return response.text();
+    });
+  } catch (error) {
+    if (error instanceof FetchTimeoutError) {
       throw new PipelineError(
-        m.error_example_data_load_failed({ status: response.statusText }),
-        'EXAMPLE_DATA_LOAD_FAILED',
+        m.error_download_timeout(),
+        'EXAMPLE_DATA_DOWNLOAD_TIMEOUT',
         {
           exampleId: example.id,
           dataUrl: example.dataUrl,
-          status: response.status,
-          statusText: response.statusText
+          timeoutMs: error.timeoutMs
         }
       );
     }
 
-    return await response.text();
-  } catch (error) {
     throw new PipelineError(
       `${m.error_example_load_failed()}: ${String(error)}`,
       'EXAMPLE_LOAD_FAILED',

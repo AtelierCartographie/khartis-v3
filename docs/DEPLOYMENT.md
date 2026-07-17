@@ -21,31 +21,41 @@ tagged `vX.Y.Z` are the PROD environment. The helper supports both PPRD and PROD
 5. Builds the verified commit SHA, not the mutable tag name, in a temporary
    detached worktree.
 6. Copies the generated `build/` directory to a local temporary upload snapshot.
-7. Connects to SFTP only after the checks pass.
-8. Acquires an atomic target-specific remote deployment lock. A second
+7. Runs a read-only HTTP infrastructure preflight before reading SFTP
+   authentication material or opening a connection. When a release is already public, the
+   helper checks the canonical HTML, base path, mutable assets, cache policy,
+   critical JavaScript and CSS MIME and immutable public cache policies,
+   slashless redirect, and every configured backend. Only an explicit
+   non-cached 404 on the exact canonical URL is accepted as a first deployment.
+   This preflight does not require the
+   selected tag or its new WASM asset to be public yet.
+8. Connects to SFTP only after the checks pass.
+9. Acquires an atomic target-specific remote deployment lock. A second
    deployment stops before upload while this lock exists. After acquiring the
    lock, the helper rechecks that the remote tag still targets the built SHA and
    that this SHA still belongs to the target release branch.
-9. Removes stale temporary directories left by previous interrupted deployments,
-   showing progress while remote entries are deleted.
-10. Uploads the snapshot to a temporary remote sibling directory, showing a live
+10. Removes stale temporary directories left by previous interrupted deployments,
+    showing progress while remote entries are deleted.
+11. Uploads the snapshot to a temporary remote sibling directory, showing a live
     progress bar with the percentage, the number of files left, and an ETA.
-11. Copies into that snapshot the missing `_app/immutable` assets belonging to
+12. Copies into that snapshot the missing `_app/immutable` assets belonging to
     the immediately previous release, using its release asset manifest.
-12. Swaps the temporary directory into place with two quick renames, so the
+13. Swaps the temporary directory into place with two quick renames, so the
     site is unavailable only for a fraction of a second.
-13. Verifies the complete public contract independently on every configured
+14. Verifies the complete public contract independently on every configured
     load-balancer backend. A routing cookie pins each request and a public
     backend identity header must confirm which backend answered. The canonical
     HTML must use
     the build base path and `Cache-Control: no-store`; one module and stylesheet
-    must have valid MIME types; `_app/version.json` must serve the selected tag;
+    must have valid MIME types and `public`, positive `max-age`, `immutable`
+    caching without `private`, `no-store`, or `no-cache`; `_app/version.json` must serve the
+    selected tag;
     `sw.js` and `manifest.webmanifest` must have valid MIME and no-store
     headers; a missing hashed asset must return a non-immutable no-store 404;
     and a representative build-generated WASM URL must be served with Brotli or
     gzip plus `Vary: Accept-Encoding`. A non-root slashless URL must return a
     canonical 301 or 308 redirect.
-14. Removes the previous remote version only after every backend passes. If the
+15. Removes the previous remote version only after every backend passes. If the
     swap or public-route validation fails, the script restores the previous
     version and stops without printing `Deployment complete.`. If no previous
     version exists, a failed first deployment is taken back offline. SIGINT and
@@ -174,6 +184,10 @@ multiple host keys, store the accepted fingerprints as a comma-separated list.
   remote commit SHA, and a successful `release.yml` push run on the target
   release branch. Tag and branch provenance are revalidated after the remote
   lock is acquired and immediately before remote mutation starts.
+- Before reading SFTP credentials, real deployments run a read-only public
+  infrastructure preflight on every configured backend. Only an exact
+  `Cache-Control: no-store` canonical 404 is treated as a first deployment;
+  other HTTP failures stop the run before SFTP.
 - Real uploads require a valid SFTP host fingerprint.
 - The PPRD remote directory must end with `html/pprd`; the PROD remote directory
   must end with `html/prod`.
@@ -183,6 +197,9 @@ multiple host keys, store the accepted fingerprints as a comma-separated list.
 - The dry-run command never opens an SFTP connection.
 - Every build is rejected if `index.html` or `manifest.webmanifest` does not
   match the base path derived from the target public URL.
+- Critical hashed JavaScript and CSS assets must use `Cache-Control: public`
+  with a positive `max-age` and `immutable`, without contradictory `private` or
+  `no-store` directives.
 - A real deployment is rolled back if its HTML, selected version, service
   worker, manifest, cache headers, representative WASM compression, or hashed
   404 policy violate the public contract on any configured backend.

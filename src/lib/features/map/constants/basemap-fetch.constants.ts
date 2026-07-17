@@ -1,0 +1,1 @@
+export const BASEMAP_FETCH_TIMEOUT_MS = 120_000;

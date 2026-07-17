@@ -217,7 +217,7 @@ describe('[S02] rankBasemapsByGPSBbox — CSV-04 GPS Seveso IDF', () => {
 });
 
 describe('[S02] rankBasemapsByGPSBbox — GEO-01 NUTS2 Europe extent (nuts2_data.geojson)', () => {
-  // Real bbox computed from static/tests-datasets/geojson/nuts2_data.geojson,
+  // Real bbox computed from tests-datasets/geojson/nuts2_data.geojson,
   // which includes French DOM-TOM on its Eurostat extract.
   const nuts2Bounds: GPSBounds = {
     minLon: -63.09,

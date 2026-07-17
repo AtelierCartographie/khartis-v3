@@ -173,7 +173,7 @@ Les suggestions sont triées par score, départagées par une préférence de fo
 
 ## Mesurer et faire évoluer
 
-Le réglage des seuils n'est pas laissé à l'intuition : un **corpus étiqueté** de colonnes réelles (`tests/pipeline/semio-corpus.test.ts`, 116 étiquettes issues de 23 jeux de `static/tests-datasets/`, dont les jeux historiques Khartis v1 : décimales européennes, valeurs manquantes `...`/`:`, colonnes %, per capita, rangs, années) vérifie chaque classification attendue et imprime, en cas d'échec, la précision globale et la **matrice de confusion** attendu × détecté. Toute modification des poids doit garder le corpus vert — et tout cas réel mal classé a vocation à y entrer comme étiquette avant d'être corrigé.
+Le réglage des seuils n'est pas laissé à l'intuition : un **corpus étiqueté** de colonnes réelles (`tests/pipeline/semio-corpus.test.ts`, 116 étiquettes issues de 23 jeux de `tests-datasets/`, dont les jeux historiques Khartis v1 : décimales européennes, valeurs manquantes `...`/`:`, colonnes %, per capita, rangs, années) vérifie chaque classification attendue et imprime, en cas d'échec, la précision globale et la **matrice de confusion** attendu × détecté. Toute modification des poids doit garder le corpus vert — et tout cas réel mal classé a vocation à y entrer comme étiquette avant d'être corrigé.
 
 Pour étendre l'algorithme :
 

@@ -42,6 +42,9 @@ const RELEASE_ASSET_MANIFEST_VERSION = 1;
 const LEGACY_ASSET_SCAN_MAX_FILES = 2_000;
 const LEGACY_ASSET_SCAN_MAX_BYTES = 512 * 1024 * 1024;
 const ALLOWED_PUBLIC_REDIRECT_STATUSES = new Set([301, 308]);
+const PUBLIC_INFRASTRUCTURE_PRESENT = 'present';
+const PUBLIC_INFRASTRUCTURE_MISSING = 'missing';
+const PUBLIC_PREFLIGHT_MISSING_ASSET_SEED = 'infrastructure-preflight';
 // Accept legacy -staging.N and current -pprd.N prereleases; at an equal version the
 // current pprd channel wins over the legacy staging channel.
 const PPRD_TAG_PATTERN =
@@ -246,6 +249,10 @@ async function main() {
       log('Dry run: build succeeded, SFTP upload skipped.');
       return;
     }
+
+    await verifyPublicInfrastructureWithRetries(deployment, {
+      backendRouting
+    });
 
     const config = await readSftpConfig();
     await uploadBuild(
@@ -786,7 +793,7 @@ async function readSftpConfig() {
 function sanitizedChildEnv(extra = {}) {
   const env = { ...process.env, ...extra };
   for (const key of Object.keys(env)) {
-    if (key.startsWith('KHARTIS_SFTP_')) {
+    if (key.startsWith('KHARTIS_SFTP_') || key.startsWith('KHARTIS_HTTP_')) {
       delete env[key];
     }
   }
@@ -2026,6 +2033,109 @@ function normalizeRemotePath(remotePath) {
   return normalized;
 }
 
+const publicResponseLifecycles = new WeakMap();
+
+function createPublicUrlTimeoutError(url, timeoutMs, cause) {
+  const error = new Error(
+    `Public URL check timed out after ${formatDuration(timeoutMs)}: ${url}`,
+    { cause }
+  );
+  error.name = 'PublicUrlTimeoutError';
+  return error;
+}
+
+function createPublicResponseLifecycle(url, timeoutMs) {
+  const controller = new AbortController();
+  let resolveDeadline;
+  let rejectDeadline;
+  const deadlinePromise = new Promise((resolve, reject) => {
+    resolveDeadline = resolve;
+    rejectDeadline = reject;
+  });
+  deadlinePromise.catch(() => undefined);
+
+  const lifecycle = {
+    controller,
+    deadlinePromise,
+    deadlineSettled: false,
+    rejectDeadline,
+    resolveDeadline,
+    timeout: undefined,
+    timeoutError: null,
+    timeoutMs,
+    url
+  };
+  lifecycle.timeout = setTimeout(() => {
+    if (lifecycle.deadlineSettled) return;
+
+    const timeoutError = createPublicUrlTimeoutError(url, timeoutMs);
+    lifecycle.deadlineSettled = true;
+    lifecycle.timeoutError = timeoutError;
+    lifecycle.rejectDeadline(timeoutError);
+    lifecycle.controller.abort(timeoutError);
+  }, timeoutMs);
+  lifecycle.timeout.unref?.();
+  return lifecycle;
+}
+
+function releasePublicResponseLifecycle(lifecycle) {
+  clearTimeout(lifecycle.timeout);
+  if (lifecycle.deadlineSettled) return;
+
+  lifecycle.deadlineSettled = true;
+  lifecycle.resolveDeadline();
+}
+
+function releasePublicResponse(response) {
+  const lifecycle = publicResponseLifecycles.get(response);
+  if (!lifecycle) return;
+
+  releasePublicResponseLifecycle(lifecycle);
+  publicResponseLifecycles.delete(response);
+}
+
+async function cancelPublicResponse(response) {
+  const lifecycle = publicResponseLifecycles.get(response);
+  try {
+    if (!response.bodyUsed) {
+      const cancellationPromise = Promise.resolve(response.body?.cancel?.());
+      await (lifecycle
+        ? Promise.race([cancellationPromise, lifecycle.deadlinePromise])
+        : cancellationPromise);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.name === 'PublicUrlTimeoutError') {
+      throw error;
+    }
+    if (lifecycle?.timeoutError) {
+      throw lifecycle.timeoutError;
+    }
+    throw error;
+  } finally {
+    releasePublicResponse(response);
+  }
+}
+
+async function readPublicResponseText(response) {
+  const lifecycle = publicResponseLifecycles.get(response);
+  const bodyPromise = Promise.resolve().then(() => response.text());
+  try {
+    return await (lifecycle
+      ? Promise.race([bodyPromise, lifecycle.deadlinePromise])
+      : bodyPromise);
+  } catch (error) {
+    if (error instanceof Error && error.name === 'PublicUrlTimeoutError') {
+      throw error;
+    }
+    if (lifecycle?.timeoutError) {
+      throw lifecycle.timeoutError;
+    }
+    throw error;
+  } finally {
+    releasePublicResponse(response);
+  }
+}
+
 async function fetchPublicUrl(
   url,
   {
@@ -2036,35 +2146,43 @@ async function fetchPublicUrl(
     timeoutMs = PUBLIC_URL_CHECK_TIMEOUT_MS
   } = {}
 ) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  timeout.unref?.();
+  const lifecycle = createPublicResponseLifecycle(url, timeoutMs);
 
   try {
-    return await fetchImpl(url, {
-      method,
-      redirect: 'manual',
-      headers: {
-        accept,
-        'cache-control': 'no-cache',
-        pragma: 'no-cache',
-        ...headers
-      },
-      signal: controller.signal
-    });
+    const fetchPromise = Promise.resolve(
+      fetchImpl(url, {
+        method,
+        redirect: 'manual',
+        headers: {
+          accept,
+          'cache-control': 'no-cache',
+          pragma: 'no-cache',
+          ...headers
+        },
+        signal: lifecycle.controller.signal
+      })
+    );
+    const response = await Promise.race([
+      fetchPromise,
+      lifecycle.deadlinePromise
+    ]);
+    publicResponseLifecycles.set(response, lifecycle);
+    return response;
   } catch (error) {
+    releasePublicResponseLifecycle(lifecycle);
+    if (error instanceof Error && error.name === 'PublicUrlTimeoutError') {
+      throw error;
+    }
+    if (lifecycle.timeoutError) {
+      throw lifecycle.timeoutError;
+    }
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(
-        `Public URL check timed out after ${formatDuration(timeoutMs)}: ${url}`,
-        { cause: error }
-      );
+      throw createPublicUrlTimeoutError(url, timeoutMs, error);
     }
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Public URL check failed for ${url}: ${message}`, {
       cause: error
     });
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -2128,10 +2246,43 @@ function readCacheControlDirectives(response) {
     .filter(Boolean);
 }
 
+function readResponseMediaType(response) {
+  return (response.headers.get('content-type') ?? '')
+    .split(';', 1)[0]
+    .trim()
+    .toLowerCase();
+}
+
 function assertResponseUsesNoStore(response, label, url) {
   const directives = readCacheControlDirectives(response);
   if (!directives.includes('no-store')) {
     throw new Error(`${label} must use Cache-Control: no-store: ${url}`);
+  }
+}
+
+function assertResponseUsesImmutablePublicCache(response, label, url) {
+  const cacheControl = response.headers.get('cache-control') ?? '';
+  const directives = readCacheControlDirectives(response);
+  const maxAgeDirective = cacheControl
+    .split(',')
+    .map((directive) => directive.trim())
+    .find((directive) => /^max-age\s*=/i.test(directive));
+  const maxAgeMatch = maxAgeDirective?.match(/^max-age\s*=\s*(\d+)$/i);
+  const hasPositiveMaxAge = Boolean(maxAgeMatch && Number(maxAgeMatch[1]) > 0);
+  const hasForbiddenDirective =
+    directives.includes('private') ||
+    directives.includes('no-store') ||
+    directives.includes('no-cache');
+
+  if (
+    !directives.includes('public') ||
+    !directives.includes('immutable') ||
+    !hasPositiveMaxAge ||
+    hasForbiddenDirective
+  ) {
+    throw new Error(
+      `${label} must use Cache-Control with public, a positive max-age, and immutable, without private, no-store, or no-cache: ${url}`
+    );
   }
 }
 
@@ -2152,21 +2303,19 @@ async function assertPublicHtmlResponse(
         `Public URL unexpectedly resolved to ${response.url || '<unknown>'}; expected ${requestedUrl}.`
       );
     }
-    const contentType = response.headers.get('content-type') ?? '';
-    if (!contentType.toLowerCase().includes('text/html')) {
+    const contentType = readResponseMediaType(response);
+    if (contentType !== 'text/html') {
       throw new Error(
         `Public URL returned ${contentType || 'an unknown content type'}; expected text/html: ${requestedUrl}`
       );
     }
     assertResponseUsesNoStore(response, 'Public HTML', requestedUrl);
     assertExpectedBackendResponse(response, backendRoute, requestedUrl);
-    const html = await response.text();
+    const html = await readPublicResponseText(response);
     assertHtmlBaseHref(html, basePath, requestedUrl);
     return html;
   } catch (error) {
-    if (!response.bodyUsed) {
-      await response.body?.cancel?.();
-    }
+    await cancelPublicResponse(response);
     throw error;
   }
 }
@@ -2263,19 +2412,21 @@ async function verifyCriticalPublicAssets(html, deployment, options) {
           `Public ${asset.label} unexpectedly resolved to ${response.url || '<unknown>'}; expected ${asset.url}.`
         );
       }
-      const contentType = response.headers.get('content-type')?.toLowerCase();
-      if (
-        !contentType ||
-        !asset.contentTypes.some((expected) => contentType.includes(expected))
-      ) {
+      const contentType = readResponseMediaType(response);
+      if (!asset.contentTypes.includes(contentType)) {
         throw new Error(
           `Public ${asset.label} returned ${contentType || 'an unknown content type'}: ${asset.url}`
         );
       }
+      assertResponseUsesImmutablePublicCache(
+        response,
+        `Public ${asset.label}`,
+        asset.url
+      );
       assertExpectedBackendResponse(response, options.backendRoute, asset.url);
       log(`Public asset check: ${response.status} ${asset.url}`);
     } finally {
-      await response.body?.cancel?.();
+      await cancelPublicResponse(response);
     }
   }
 }
@@ -2292,11 +2443,8 @@ function assertPublicAssetResponse(
       `Public ${label} unexpectedly resolved to ${response.url || '<unknown>'}; expected ${url}.`
     );
   }
-  const contentType = response.headers.get('content-type')?.toLowerCase();
-  if (
-    !contentType ||
-    !contentTypes.some((expected) => contentType.includes(expected))
-  ) {
+  const contentType = readResponseMediaType(response);
+  if (!contentTypes.includes(contentType)) {
     throw new Error(
       `Public ${label} returned ${contentType || 'an unknown content type'}: ${url}`
     );
@@ -2327,8 +2475,13 @@ async function verifyMutablePublicAssets(deployment, expectedVersion, options) {
     });
     let versionPayload;
     try {
-      versionPayload = JSON.parse(await versionResponse.text());
+      versionPayload = JSON.parse(
+        await readPublicResponseText(versionResponse)
+      );
     } catch (error) {
+      if (error instanceof Error && error.name === 'PublicUrlTimeoutError') {
+        throw error;
+      }
       throw new Error(
         `Public version metadata is not valid JSON: ${versionUrl}`,
         {
@@ -2336,18 +2489,22 @@ async function verifyMutablePublicAssets(deployment, expectedVersion, options) {
         }
       );
     }
-    if (versionPayload?.version !== expectedVersion) {
+    const observedVersion =
+      typeof versionPayload?.version === 'string' ? versionPayload.version : '';
+    if (!observedVersion.trim()) {
       throw new Error(
-        `Public version metadata serves "${versionPayload?.version ?? ''}"; expected "${expectedVersion}": ${versionUrl}`
+        `Public version metadata does not contain a non-empty version: ${versionUrl}`
       );
     }
-  } finally {
-    if (!versionResponse.bodyUsed) {
-      await versionResponse.body?.cancel?.();
+    if (expectedVersion && observedVersion !== expectedVersion) {
+      throw new Error(
+        `Public version metadata serves "${observedVersion}"; expected "${expectedVersion}": ${versionUrl}`
+      );
     }
+    log(`Public version check: ${observedVersion} ${versionUrl}`);
+  } finally {
+    await cancelPublicResponse(versionResponse);
   }
-  log(`Public version check: ${expectedVersion} ${versionUrl}`);
-
   const mutableAssets = [
     {
       accept: 'text/javascript, application/javascript',
@@ -2379,7 +2536,7 @@ async function verifyMutablePublicAssets(deployment, expectedVersion, options) {
       });
       log(`Public ${asset.label} check: ${response.status} ${url}`);
     } finally {
-      await response.body?.cancel?.();
+      await cancelPublicResponse(response);
     }
   }
 }
@@ -2420,7 +2577,7 @@ async function verifyMissingHashedAssetCachePolicy(
     }
     assertExpectedBackendResponse(response, options.backendRoute, missingUrl);
   } finally {
-    await response.body?.cancel?.();
+    await cancelPublicResponse(response);
   }
   log(`Missing hashed asset check: 404 ${missingUrl}`);
 }
@@ -2442,6 +2599,7 @@ async function verifyCompressedWasmAsset(deployment, wasmAssetPath, options) {
       label: 'WASM asset',
       url
     });
+    assertResponseUsesImmutablePublicCache(response, 'Public WASM asset', url);
     const contentEncoding = (
       response.headers.get('content-encoding') ?? ''
     ).toLowerCase();
@@ -2459,9 +2617,147 @@ async function verifyCompressedWasmAsset(deployment, wasmAssetPath, options) {
       );
     }
   } finally {
-    await response.body?.cancel?.();
+    await cancelPublicResponse(response);
   }
   log(`Public WASM compression check: ${response.status} ${url}`);
+}
+
+async function verifySlashlessPublicUrl(deployment, options) {
+  if (!deployment.basePath) return;
+
+  const slashlessUrl = new URL(deployment.publicUrl);
+  slashlessUrl.pathname = deployment.basePath;
+  const slashlessHref = slashlessUrl.href;
+  const slashlessResponse = await fetchPublicUrl(slashlessHref, options);
+
+  try {
+    assertExpectedBackendResponse(
+      slashlessResponse,
+      options.backendRoute,
+      slashlessHref
+    );
+    if (!ALLOWED_PUBLIC_REDIRECT_STATUSES.has(slashlessResponse.status)) {
+      throw new Error(
+        `Slashless public URL check returned ${slashlessResponse.status}: ${slashlessHref}`
+      );
+    }
+
+    const location = slashlessResponse.headers.get('location');
+    if (!location) {
+      throw new Error(
+        `Slashless public URL returned ${slashlessResponse.status} without a Location header: ${slashlessHref}`
+      );
+    }
+    const redirectUrl = new URL(location, slashlessHref);
+
+    if (redirectUrl.href !== deployment.publicUrl) {
+      throw new Error(
+        `Slashless public URL redirects to ${redirectUrl.href}; expected ${deployment.publicUrl}.`
+      );
+    }
+
+    log(
+      `Slashless public URL check: ${slashlessResponse.status} ${slashlessHref} -> ${deployment.publicUrl}`
+    );
+  } finally {
+    await cancelPublicResponse(slashlessResponse);
+  }
+}
+
+async function verifyPublicInfrastructure(deployment, options = {}) {
+  const backendLabel = options.backendRoute
+    ? ` (backend ${options.backendRoute.index}/${options.backendRoute.total})`
+    : '';
+  log(
+    `Checking public infrastructure before SFTP${backendLabel}: ${deployment.publicUrl}`
+  );
+  const canonicalResponse = await fetchPublicUrl(deployment.publicUrl, options);
+
+  if (canonicalResponse.status === 404) {
+    try {
+      if (canonicalResponse.url !== deployment.publicUrl) {
+        throw new Error(
+          `Missing canonical public route unexpectedly resolved to ${canonicalResponse.url || '<unknown>'}; expected ${deployment.publicUrl}.`
+        );
+      }
+      assertResponseUsesNoStore(
+        canonicalResponse,
+        'Missing canonical public route',
+        deployment.publicUrl
+      );
+      assertExpectedBackendResponse(
+        canonicalResponse,
+        options.backendRoute,
+        deployment.publicUrl
+      );
+      log(
+        `Public infrastructure preflight: 404 ${deployment.publicUrl} (first deployment)`
+      );
+      return PUBLIC_INFRASTRUCTURE_MISSING;
+    } finally {
+      await cancelPublicResponse(canonicalResponse);
+    }
+  }
+
+  const canonicalHtml = await assertPublicHtmlResponse(
+    canonicalResponse,
+    deployment.publicUrl,
+    deployment.basePath,
+    options.backendRoute
+  );
+  log(
+    `Public infrastructure preflight: ${canonicalResponse.status} ${deployment.publicUrl}`
+  );
+  await verifyCriticalPublicAssets(canonicalHtml, deployment, options);
+  await verifyMutablePublicAssets(deployment, undefined, options);
+  await verifyMissingHashedAssetCachePolicy(
+    deployment,
+    PUBLIC_PREFLIGHT_MISSING_ASSET_SEED,
+    options
+  );
+  await verifySlashlessPublicUrl(deployment, options);
+  return PUBLIC_INFRASTRUCTURE_PRESENT;
+}
+
+async function verifyPublicInfrastructureWithRetries(deployment, options = {}) {
+  const validationAttempts =
+    options.validationAttempts ?? PUBLIC_URL_VALIDATION_ATTEMPTS;
+  const retryDelaysMs =
+    options.retryDelaysMs ?? PUBLIC_URL_VALIDATION_RETRY_DELAYS_MS;
+  const backendRoutes = buildBackendValidationRoutes(options.backendRouting);
+  const infrastructureStates = new Set();
+
+  for (const backendRoute of backendRoutes) {
+    const routeOptions = withBackendValidationRoute(options, backendRoute);
+    for (let attempt = 1; attempt <= validationAttempts; attempt++) {
+      try {
+        infrastructureStates.add(
+          await verifyPublicInfrastructure(deployment, routeOptions)
+        );
+        break;
+      } catch (error) {
+        if (attempt === validationAttempts) throw error;
+        const delayMs =
+          retryDelaysMs[
+            Math.min(attempt - 1, Math.max(0, retryDelaysMs.length - 1))
+          ] ?? 0;
+        const message = error instanceof Error ? error.message : String(error);
+        const backendLabel = backendRoute
+          ? ` for backend ${backendRoute.index}/${backendRoute.total}`
+          : '';
+        warn(
+          `Public infrastructure preflight attempt ${attempt}/${validationAttempts}${backendLabel} failed (${message}); retrying in ${formatDuration(delayMs)}.`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+
+  if (infrastructureStates.size > 1) {
+    throw new Error(
+      'Public infrastructure is inconsistent: some backends serve the canonical route while others return 404.'
+    );
+  }
 }
 
 async function verifyPublicUrlWithRetries(deployment, options = {}) {
@@ -2529,45 +2825,7 @@ async function verifyPublicUrl(deployment, options = {}) {
   );
   await verifyCompressedWasmAsset(deployment, wasmAssetPath, options);
 
-  if (!deployment.basePath) return;
-
-  const slashlessUrl = new URL(deployment.publicUrl);
-  slashlessUrl.pathname = deployment.basePath;
-  const slashlessHref = slashlessUrl.href;
-  const slashlessResponse = await fetchPublicUrl(slashlessHref, options);
-
-  try {
-    assertExpectedBackendResponse(
-      slashlessResponse,
-      options.backendRoute,
-      slashlessHref
-    );
-    if (!ALLOWED_PUBLIC_REDIRECT_STATUSES.has(slashlessResponse.status)) {
-      throw new Error(
-        `Slashless public URL check returned ${slashlessResponse.status}: ${slashlessHref}`
-      );
-    }
-
-    const location = slashlessResponse.headers.get('location');
-    if (!location) {
-      throw new Error(
-        `Slashless public URL returned ${slashlessResponse.status} without a Location header: ${slashlessHref}`
-      );
-    }
-    const redirectUrl = new URL(location, slashlessHref);
-
-    if (redirectUrl.href !== deployment.publicUrl) {
-      throw new Error(
-        `Slashless public URL redirects to ${redirectUrl.href}; expected ${deployment.publicUrl}.`
-      );
-    }
-
-    log(
-      `Slashless public URL check: ${slashlessResponse.status} ${slashlessHref} -> ${deployment.publicUrl}`
-    );
-  } finally {
-    await slashlessResponse.body?.cancel?.();
-  }
+  await verifySlashlessPublicUrl(deployment, options);
 }
 
 async function closeSftpClient(client, label) {
@@ -2708,9 +2966,12 @@ export {
   retainPreviousReleaseAssets,
   rollbackPublicValidationFailure,
   resolveDeploymentPublicUrl,
+  sanitizedChildEnv,
   startProgress,
   startSpinner,
   truncateToWidth,
+  verifyPublicInfrastructure,
+  verifyPublicInfrastructureWithRetries,
   verifyPublicUrl,
   verifyPublicUrlWithRetries,
   writeReleaseAssetManifest

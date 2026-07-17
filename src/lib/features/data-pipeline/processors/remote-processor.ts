@@ -9,34 +9,60 @@ import {
   ParseError,
   PipelineError
 } from '$lib/features/commons/pipeline.errors';
+import {
+  FetchTimeoutError,
+  REMOTE_FILE_FETCH_TIMEOUT_MS,
+  fetchWithTimeout
+} from '$lib/features/commons/utils/fetch-with-timeout';
 
 const REMOTE_FILE_FETCH_ERROR_CODE = 'REMOTE_FILE_FETCH_FAILED';
+const REMOTE_FILE_DOWNLOAD_TIMEOUT_ERROR_CODE = 'REMOTE_FILE_DOWNLOAD_TIMEOUT';
 
 async function downloadRemoteFile(
   url: string,
   filename: string,
   fallbackMimeType: string
 ): Promise<File> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new PipelineError(
-      m.pipeline_error_fetch_failed({
-        status: String(response.status),
-        statusText: response.statusText
-      }),
-      REMOTE_FILE_FETCH_ERROR_CODE,
-      {
-        status: response.status,
-        statusText: response.statusText,
-        url
-      }
-    );
-  }
+  try {
+    return await fetchWithTimeout(
+      url,
+      async (response) => {
+        if (!response.ok) {
+          throw new PipelineError(
+            m.pipeline_error_fetch_failed({
+              status: String(response.status),
+              statusText: response.statusText
+            }),
+            REMOTE_FILE_FETCH_ERROR_CODE,
+            {
+              status: response.status,
+              statusText: response.statusText,
+              url
+            }
+          );
+        }
 
-  const arrayBuffer = await response.arrayBuffer();
-  return new File([arrayBuffer], filename, {
-    type: response.headers.get('content-type') ?? fallbackMimeType
-  });
+        const arrayBuffer = await response.arrayBuffer();
+        return new File([arrayBuffer], filename, {
+          type: response.headers.get('content-type') ?? fallbackMimeType
+        });
+      },
+      REMOTE_FILE_FETCH_TIMEOUT_MS
+    );
+  } catch (error) {
+    if (error instanceof FetchTimeoutError) {
+      throw new PipelineError(
+        m.error_download_timeout(),
+        REMOTE_FILE_DOWNLOAD_TIMEOUT_ERROR_CODE,
+        {
+          timeoutMs: error.timeoutMs,
+          url
+        }
+      );
+    }
+
+    throw error;
+  }
 }
 
 export async function processRemoteFile(

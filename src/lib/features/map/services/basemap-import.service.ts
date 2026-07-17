@@ -31,6 +31,11 @@ import {
   ParseError,
   PipelineError
 } from '$lib/features/commons/pipeline.errors';
+import {
+  FetchTimeoutError,
+  fetchWithTimeout
+} from '$lib/features/commons/utils/fetch-with-timeout';
+import { BASEMAP_FETCH_TIMEOUT_MS } from '$lib/features/map/constants/basemap-fetch.constants';
 
 export interface BasemapImportResult {
   basemap: BasemapMetadata;
@@ -650,23 +655,43 @@ async function ensureFeatureIdColumn(
 }
 
 export async function loadBasemapFromUrl(url: string): Promise<File> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new PipelineError(
-      m.basemap_url_error_load({ status: response.status.toString() }),
-      BASEMAP_URL_LOAD_ERROR_CODE,
-      {
-        url,
-        status: response.status
-      }
-    );
-  }
+  try {
+    return await fetchWithTimeout(
+      url,
+      async (response) => {
+        if (!response.ok) {
+          throw new PipelineError(
+            m.basemap_url_error_load({ status: response.status.toString() }),
+            BASEMAP_URL_LOAD_ERROR_CODE,
+            {
+              url,
+              status: response.status
+            }
+          );
+        }
 
-  const blob = await response.blob();
-  const filename = url.split('/').pop() || 'basemap.geojson';
-  return new File([blob], filename, {
-    type: blob.type || 'application/geo+json'
-  });
+        const blob = await response.blob();
+        const filename = url.split('/').pop() || 'basemap.geojson';
+        return new File([blob], filename, {
+          type: blob.type || 'application/geo+json'
+        });
+      },
+      BASEMAP_FETCH_TIMEOUT_MS
+    );
+  } catch (error) {
+    if (error instanceof FetchTimeoutError) {
+      throw new PipelineError(
+        m.error_download_timeout(),
+        BASEMAP_URL_LOAD_ERROR_CODE,
+        {
+          url,
+          timeoutMs: error.timeoutMs
+        }
+      );
+    }
+
+    throw error;
+  }
 }
 
 export function createOSMBasemap(

@@ -22,6 +22,9 @@ const {
   retainPreviousReleaseAssets,
   rollbackPublicValidationFailure,
   resolveDeploymentPublicUrl,
+  sanitizedChildEnv,
+  verifyPublicInfrastructure,
+  verifyPublicInfrastructureWithRetries,
   verifyPublicUrl,
   verifyPublicUrlWithRetries,
   writeReleaseAssetManifest
@@ -113,6 +116,7 @@ function createSuccessfulResponse(
   }
   if (url.endsWith(`/${WASM_ASSET_PATH}`)) {
     return createResponse(url, {
+      cacheControl: 'public, max-age=31536000, immutable',
       contentEncoding: 'br',
       contentType: 'application/wasm',
       vary: 'Accept-Encoding'
@@ -121,16 +125,38 @@ function createSuccessfulResponse(
   if (url.endsWith('/_app/start.js')) {
     return createResponse(url, {
       body: 'export {};',
+      cacheControl: 'public, max-age=31536000, immutable',
       contentType: 'application/javascript'
     });
   }
   if (url.endsWith('/_app/app.css')) {
     return createResponse(url, {
       body: ':root {}',
+      cacheControl: 'public, max-age=31536000, immutable',
       contentType: 'text/css'
     });
   }
   return createResponse(url, { baseHref });
+}
+
+function createPendingBodyResponse(
+  response: FakeResponse,
+  signal: AbortSignal | null | undefined
+): FakeResponse {
+  response.text = () =>
+    new Promise<string>((_resolve, reject) => {
+      const rejectOnAbort = () => {
+        const error = new Error('aborted');
+        error.name = 'AbortError';
+        reject(error);
+      };
+      if (signal?.aborted) {
+        rejectOnAbort();
+        return;
+      }
+      signal?.addEventListener('abort', rejectOnAbort, { once: true });
+    });
+  return response;
 }
 
 function verifyOptions(
@@ -479,6 +505,174 @@ describe('local deployment route contract', () => {
     ).rejects.toThrow('scope="/wrong/"');
   });
 
+  it('should accept the current infrastructure without requiring the future tag or WASM asset', async () => {
+    const deployment = resolveDeploymentPublicUrl(
+      'https://example.org/cartographie/khartis/'
+    );
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url === 'https://example.org/cartographie/khartis') {
+        return createResponse(url, {
+          location: deployment.publicUrl,
+          status: 301
+        });
+      }
+      if (url.endsWith('/_app/version.json')) {
+        return createResponse(url, {
+          body: JSON.stringify({ version: 'v1.13.9' }),
+          contentType: 'application/json'
+        });
+      }
+      return createSuccessfulResponse(url);
+    });
+
+    await expect(
+      verifyPublicInfrastructure(deployment, { fetchImpl })
+    ).resolves.toBe('present');
+    expect(fetchImpl).toHaveBeenCalledTimes(8);
+    expect(fetchImpl).not.toHaveBeenCalledWith(
+      expect.stringContaining('.wasm'),
+      expect.anything()
+    );
+  });
+
+  it('should reject a private immutable critical asset during the infrastructure preflight', async () => {
+    const deployment = resolveDeploymentPublicUrl(
+      'https://example.org/cartographie/khartis/'
+    );
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith('/_app/start.js')) {
+        return createResponse(url, {
+          cacheControl: 'public, private, max-age=31536000, immutable',
+          contentType: 'application/javascript'
+        });
+      }
+      return createSuccessfulResponse(url);
+    });
+
+    await expect(
+      verifyPublicInfrastructure(deployment, { fetchImpl })
+    ).rejects.toThrow('without private, no-store, or no-cache');
+  });
+
+  it('should reject no-cache on an immutable critical asset', async () => {
+    const deployment = resolveDeploymentPublicUrl(
+      'https://example.org/cartographie/khartis/'
+    );
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith('/_app/start.js')) {
+        return createResponse(url, {
+          cacheControl: 'public, max-age=31536000, immutable, no-cache',
+          contentType: 'application/javascript'
+        });
+      }
+      return createSuccessfulResponse(url);
+    });
+
+    await expect(
+      verifyPublicInfrastructure(deployment, { fetchImpl })
+    ).rejects.toThrow('without private, no-store, or no-cache');
+  });
+
+  it('should reject a critical asset with an invalid MIME suffix', async () => {
+    const deployment = resolveDeploymentPublicUrl(
+      'https://example.org/cartographie/khartis/'
+    );
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith('/_app/app.css')) {
+        return createResponse(url, {
+          cacheControl: 'public, max-age=31536000, immutable',
+          contentType: 'text/css-invalid'
+        });
+      }
+      return createSuccessfulResponse(url);
+    });
+
+    await expect(
+      verifyPublicInfrastructure(deployment, { fetchImpl })
+    ).rejects.toThrow('text/css-invalid');
+  });
+
+  it('should reject a critical asset without max-age during post-swap validation', async () => {
+    const deployment = resolveDeploymentPublicUrl(
+      'https://example.org/cartographie/khartis/'
+    );
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith('/_app/app.css')) {
+        return createResponse(url, {
+          cacheControl: 'public, immutable',
+          contentType: 'text/css'
+        });
+      }
+      return createSuccessfulResponse(url);
+    });
+
+    await expect(
+      verifyPublicUrl(deployment, verifyOptions(fetchImpl))
+    ).rejects.toThrow('a positive max-age');
+  });
+
+  it('should allow an explicit canonical 404 for a first deployment', async () => {
+    const deployment = resolveDeploymentPublicUrl(
+      'https://example.org/cartographie/khartis/'
+    );
+    const fetchImpl = vi.fn(async (url: string) =>
+      createResponse(url, { status: 404 })
+    );
+
+    await expect(
+      verifyPublicInfrastructure(deployment, { fetchImpl })
+    ).resolves.toBe('missing');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('should reject a canonical failure other than 404 before SFTP', async () => {
+    const deployment = resolveDeploymentPublicUrl(
+      'https://example.org/cartographie/khartis/'
+    );
+    const fetchImpl = vi.fn(async (url: string) =>
+      createResponse(url, { status: 503 })
+    );
+
+    await expect(
+      verifyPublicInfrastructure(deployment, { fetchImpl })
+    ).rejects.toThrow('returned 503');
+  });
+
+  it('should reject inconsistent first-deployment state across backends', async () => {
+    const deployment = resolveDeploymentPublicUrl(
+      'https://example.org/cartographie/khartis/'
+    );
+    const fetchImpl = vi.fn(async (url: string, init: RequestInit) => {
+      const cookie = new Headers(init.headers).get('cookie');
+      const backendHeader = cookie?.slice('SERVERID='.length);
+      if (cookie === 'SERVERID=router-1' && url === deployment.publicUrl) {
+        return createResponse(url, { backendHeader, status: 404 });
+      }
+      if (url === 'https://example.org/cartographie/khartis') {
+        return createResponse(url, {
+          backendHeader,
+          location: deployment.publicUrl,
+          status: 301
+        });
+      }
+      const response = createSuccessfulResponse(url);
+      response.headers.set('x-khartis-backend', backendHeader ?? '');
+      return response;
+    });
+
+    await expect(
+      verifyPublicInfrastructureWithRetries(deployment, {
+        backendRouting: {
+          backendHeaderName: 'X-Khartis-Backend',
+          cookieName: 'SERVERID',
+          backendValues: ['router-1', 'router-2']
+        },
+        fetchImpl,
+        validationAttempts: 1
+      })
+    ).rejects.toThrow('some backends serve the canonical route');
+  });
+
   it.each([301, 308])(
     'should accept the slashless route when it returns a canonical %s redirect',
     async (status) => {
@@ -718,6 +912,7 @@ describe('local deployment route contract', () => {
     const fetchImpl = vi.fn(async (url: string) => {
       if (url.endsWith(`/${WASM_ASSET_PATH}`)) {
         return createResponse(url, {
+          cacheControl: 'public, max-age=31536000, immutable',
           contentType: 'application/wasm',
           vary: 'Accept-Encoding'
         });
@@ -729,6 +924,29 @@ describe('local deployment route contract', () => {
       verifyPublicUrl(deployment, verifyOptions(fetchImpl))
     ).rejects.toThrow(
       'Public WASM asset is not served with Brotli or gzip compression'
+    );
+  });
+
+  it('should reject a non-cacheable immutable WASM response', async () => {
+    const deployment = resolveDeploymentPublicUrl(
+      'https://example.org/cartographie/khartis/'
+    );
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith(`/${WASM_ASSET_PATH}`)) {
+        return createResponse(url, {
+          cacheControl: 'private, no-store',
+          contentEncoding: 'br',
+          contentType: 'application/wasm',
+          vary: 'Accept-Encoding'
+        });
+      }
+      return createSuccessfulResponse(url);
+    });
+
+    await expect(
+      verifyPublicUrl(deployment, verifyOptions(fetchImpl))
+    ).rejects.toThrow(
+      'Public WASM asset must use Cache-Control with public, a positive max-age, and immutable'
     );
   });
 
@@ -755,17 +973,48 @@ describe('local deployment route contract', () => {
     const deployment = resolveDeploymentPublicUrl(
       'https://example.org/cartographie/khartis/'
     );
-    const fetchImpl = (_url: string, init: RequestInit) =>
-      new Promise<FakeResponse>((_resolve, reject) => {
-        init.signal?.addEventListener('abort', () => {
-          const error = new Error('aborted');
-          error.name = 'AbortError';
-          reject(error);
-        });
+    const fetchImpl = () =>
+      new Promise<FakeResponse>(() => {
+        // Intentionally ignores AbortSignal to exercise the explicit deadline.
       });
 
     await expect(
       verifyPublicUrl(deployment, verifyOptions(fetchImpl, { timeoutMs: 5 }))
+    ).rejects.toThrow('timed out');
+  });
+
+  it('should stop the preflight when a successful HTML response body times out', async () => {
+    const deployment = resolveDeploymentPublicUrl(
+      'https://example.org/cartographie/khartis/'
+    );
+    const fetchImpl = vi.fn(async (url: string) => {
+      const response = createSuccessfulResponse(url);
+      response.text = () =>
+        new Promise<string>(() => {
+          // Intentionally ignores AbortSignal to exercise the explicit deadline.
+        });
+      return response;
+    });
+
+    await expect(
+      verifyPublicInfrastructure(deployment, { fetchImpl, timeoutMs: 5 })
+    ).rejects.toThrow('timed out');
+  });
+
+  it('should stop the preflight when a successful version response body times out', async () => {
+    const deployment = resolveDeploymentPublicUrl(
+      'https://example.org/cartographie/khartis/'
+    );
+    const fetchImpl = vi.fn(async (url: string, init: RequestInit) => {
+      const response = createSuccessfulResponse(url);
+      if (url.endsWith('/_app/version.json')) {
+        return createPendingBodyResponse(response, init.signal);
+      }
+      return response;
+    });
+
+    await expect(
+      verifyPublicInfrastructure(deployment, { fetchImpl, timeoutMs: 5 })
     ).rejects.toThrow('timed out');
   });
 
@@ -941,6 +1190,22 @@ describe('local deployment route contract', () => {
         })
       )
     ).rejects.toThrow('Public service worker must use Cache-Control: no-store');
+  });
+});
+
+describe('local deployment child environment', () => {
+  it('should remove deployment credentials and routing identifiers from child processes', () => {
+    const env = sanitizedChildEnv({
+      KHARTIS_HTTP_ROUTING_COOKIE_NAME: 'route',
+      KHARTIS_HTTP_ROUTING_BACKENDS_PPRD: 'backend-1',
+      KHARTIS_SFTP_USER: 'test-user',
+      PUBLIC_GTM_CONTAINER_ID: 'GTM-TEST'
+    });
+
+    expect(env.KHARTIS_HTTP_ROUTING_COOKIE_NAME).toBeUndefined();
+    expect(env.KHARTIS_HTTP_ROUTING_BACKENDS_PPRD).toBeUndefined();
+    expect(env.KHARTIS_SFTP_USER).toBeUndefined();
+    expect(env.PUBLIC_GTM_CONTAINER_ID).toBe('GTM-TEST');
   });
 });
 

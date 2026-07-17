@@ -30,7 +30,6 @@ VitePWA({
     globIgnores: [
       '**/node_modules/**/*',
       'basemaps/**',
-      'tests-datasets/**',
       'screenshots/**',
       'duckdb-extensions/**'
     ],
@@ -62,11 +61,14 @@ globPatterns: ['**/*.{js,css,html}', 'manifest.webmanifest'];
 globIgnores: [
   '**/node_modules/**/*',
   'basemaps/**',
-  'tests-datasets/**',
   'screenshots/**',
   'duckdb-extensions/**'
 ];
 ```
+
+Les fixtures de test vivent dans `tests-datasets/` à la racine du dépôt. Elles
+sont accessibles avec `pnpm dev`, mais ne sont ni copiées dans l'artefact de
+production ni incluses dans le précache.
 
 Le fallback de navigation (`/` ou `BASE_PATH/`) est ajouté explicitement au
 manifest de précache, puis vérifié en fin de build par `verifyServiceWorkerPrecache`.
