@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import '$lib/features/commons/stores/locale.store.svelte';
 import { setLocale } from '$lib/paraglide/runtime.js';
 import * as m from '$lib/paraglide/messages';
+import { BASEMAP_FETCH_TIMEOUT_MS } from '$lib/features/map/constants/basemap-fetch.constants';
 import {
   createOSMBasemap,
   loadBasemapFromUrl,
@@ -13,6 +14,7 @@ async function setTestLocale(locale: 'fr' | 'en'): Promise<void> {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -49,6 +51,34 @@ describe('loadBasemapFromUrl', () => {
         status: 404
       }
     });
+  });
+
+  it('should reject when a successful basemap response body never completes', async () => {
+    vi.useFakeTimers();
+    const url = 'https://example.test/pending.geojson';
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(new ReadableStream({ start: () => undefined }), {
+          status: 200
+        })
+      )
+    );
+
+    const request = loadBasemapFromUrl(url);
+    const rejection = expect(request).rejects.toMatchObject({
+      name: 'PipelineError',
+      code: 'BASEMAP_URL_LOAD_ERROR',
+      message: m.error_download_timeout(),
+      details: {
+        url,
+        timeoutMs: BASEMAP_FETCH_TIMEOUT_MS
+      }
+    });
+
+    await vi.advanceTimersByTimeAsync(BASEMAP_FETCH_TIMEOUT_MS);
+    await rejection;
   });
 });
 

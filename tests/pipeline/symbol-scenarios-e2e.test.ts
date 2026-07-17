@@ -8,7 +8,7 @@ import {
   type TestDuckDB
 } from './duckdb-node-helper';
 
-const FIXTURES_ROOT = resolve(process.cwd(), 'static/tests-datasets');
+const FIXTURES_ROOT = resolve(process.cwd(), 'tests-datasets');
 
 let db: TestDuckDB;
 

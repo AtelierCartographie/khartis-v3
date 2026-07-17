@@ -1,5 +1,11 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import {
+  createReadStream,
+  existsSync,
+  readFileSync,
+  realpathSync,
+  statSync
+} from 'node:fs';
+import { extname, resolve, sep } from 'node:path';
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { svelteTesting } from '@testing-library/svelte/vite';
@@ -15,6 +21,89 @@ const crossOriginIsolationAssets = (): Plugin => ({
       res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
       next();
+    });
+  }
+});
+
+const TEST_DATASET_CONTENT_TYPES: Record<string, string> = {
+  '.csv': 'text/csv; charset=utf-8',
+  '.geojson': 'application/geo+json',
+  '.gpx': 'application/gpx+xml',
+  '.json': 'application/json',
+  '.kml': 'application/vnd.google-earth.kml+xml',
+  '.kmz': 'application/vnd.google-earth.kmz',
+  '.txt': 'text/plain; charset=utf-8',
+  '.zip': 'application/zip'
+};
+
+const serveTestDatasets = (basePath: string): Plugin => ({
+  name: 'serve-test-datasets',
+  apply: 'serve',
+  configureServer(server) {
+    const normalizedBasePath = basePath
+      ? `/${basePath.replace(/^\/+|\/+$/g, '')}`
+      : '';
+    const routePrefixes = [
+      '/tests-datasets/',
+      ...(normalizedBasePath ? [`${normalizedBasePath}/tests-datasets/`] : [])
+    ];
+    const root = realpathSync(resolve(process.cwd(), 'tests-datasets'));
+
+    server.middlewares.use((request, response, next) => {
+      if (!request.url || !['GET', 'HEAD'].includes(request.method ?? '')) {
+        next();
+        return;
+      }
+
+      let pathname: string;
+      try {
+        pathname = decodeURIComponent(
+          new URL(request.url, 'http://localhost').pathname
+        );
+      } catch {
+        next();
+        return;
+      }
+      const routePrefix = routePrefixes.find((prefix) =>
+        pathname.startsWith(prefix)
+      );
+      if (!routePrefix) {
+        next();
+        return;
+      }
+
+      try {
+        const filePath = realpathSync(
+          resolve(root, pathname.slice(routePrefix.length))
+        );
+        if (
+          !filePath.startsWith(`${root}${sep}`) ||
+          !statSync(filePath).isFile()
+        ) {
+          next();
+          return;
+        }
+
+        const stats = statSync(filePath);
+        response.statusCode = 200;
+        response.setHeader('Cache-Control', 'no-store');
+        response.setHeader('Content-Length', stats.size);
+        response.setHeader(
+          'Content-Type',
+          TEST_DATASET_CONTENT_TYPES[extname(filePath).toLowerCase()] ??
+            'application/octet-stream'
+        );
+        if (request.method === 'HEAD') {
+          response.end();
+          return;
+        }
+
+        createReadStream(filePath)
+          .on('error', (error) => response.destroy(error))
+          .pipe(response);
+      } catch {
+        next();
+      }
     });
   }
 });
@@ -154,6 +243,7 @@ export default defineConfig(({ mode }) => {
           brotliSize: true,
           template: 'treemap'
         }),
+      serveTestDatasets(basePath),
       sveltekit(),
       paraglideVitePlugin({
         project: './project.inlang',
@@ -184,7 +274,6 @@ export default defineConfig(({ mode }) => {
           globIgnores: [
             '**/node_modules/**/*',
             'basemaps/**',
-            'tests-datasets/**',
             'screenshots/**',
             'duckdb-extensions/**'
           ],
