@@ -25,11 +25,11 @@ tagged `vX.Y.Z` are the PROD environment. The helper supports both PPRD and PROD
    authentication material or opening a connection. When a release is already public, the
    helper checks the canonical HTML, base path, mutable assets, cache policy,
    critical JavaScript and CSS MIME and immutable public cache policies,
-   slashless redirect, and every configured backend. Only an explicit
-   non-cached 404 on the exact canonical URL is accepted as a first deployment.
-   This preflight does not require the
-   selected tag or its new WASM asset to be public yet.
-8. Connects to SFTP only after the checks pass.
+   slashless redirect, and every configured backend. The result is reported as
+   an infrastructure warning and does not block the upload: the infrastructure
+   team must be able to inspect the release that needs adjustment. This preflight
+   does not require the selected tag or its new WASM asset to be public yet.
+8. Connects to SFTP after the local release and build checks succeed.
 9. Acquires an atomic target-specific remote deployment lock. A second
    deployment stops before upload while this lock exists. After acquiring the
    lock, the helper rechecks that the remote tag still targets the built SHA and
@@ -42,25 +42,22 @@ tagged `vX.Y.Z` are the PROD environment. The helper supports both PPRD and PROD
     the immediately previous release, using its release asset manifest.
 13. Swaps the temporary directory into place with two quick renames, so the
     site is unavailable only for a fraction of a second.
-14. Verifies the complete public contract independently on every configured
-    load-balancer backend. A routing cookie pins each request and a public
-    backend identity header must confirm which backend answered. The canonical
-    HTML must use
-    the build base path and `Cache-Control: no-store`; one module and stylesheet
-    must have valid MIME types and `public`, positive `max-age`, `immutable`
-    caching without `private`, `no-store`, or `no-cache`; `_app/version.json` must serve the
-    selected tag;
+14. Verifies and reports the complete public contract independently on every configured
+    load-balancer backend. A routing cookie pins each request and the backend
+    identity header is checked when it is exposed. The checks cover the canonical
+    HTML base path and `Cache-Control: no-store`; one module and stylesheet MIME
+    type and `public`, positive `max-age`, `immutable` caching without `private`,
+    `no-store`, or `no-cache`; `_app/version.json` and the selected tag;
     `sw.js` and `manifest.webmanifest` must have valid MIME and no-store
     headers; a missing hashed asset must return a non-immutable no-store 404;
     and a representative build-generated WASM URL must be served with Brotli or
     gzip plus `Vary: Accept-Encoding`. A non-root slashless URL must return a
     canonical 301 or 308 redirect.
-15. Removes the previous remote version only after every backend passes. If the
-    swap or public-route validation fails, the script restores the previous
-    version and stops without printing `Deployment complete.`. If no previous
-    version exists, a failed first deployment is taken back offline. SIGINT and
-    SIGTERM are deferred after remote mutation starts until the new release is
-    validated or the previous release is safely restored.
+15. Removes the previous remote version after a successful remote swap. A
+    public-route mismatch leaves the uploaded release active and is reported for
+    infrastructure adjustment. A remote swap failure still restores the previous
+    version. SIGINT and SIGTERM are deferred after remote mutation starts until
+    the swap and public validation attempt have completed.
 
 `pnpm deploy:pprd:dry-run` performs the same tag, CI, install, build, and local
 artifact checks, but skips SFTP and live public HTTP validation entirely.
@@ -144,9 +141,9 @@ paths.
 `KHARTIS_HTTP_ROUTING_BACKENDS_PPRD` and
 `KHARTIS_HTTP_ROUTING_BACKENDS_PROD` are comma-separated routing-cookie values.
 For each value, the helper sends
-`<KHARTIS_HTTP_ROUTING_COOKIE_NAME>=<backend>` and requires the same backend
-identifier in `KHARTIS_HTTP_BACKEND_HEADER_NAME`. Keep real backend identifiers
-in ignored local files.
+`<KHARTIS_HTTP_ROUTING_COOKIE_NAME>=<backend>` and reports whether the same
+backend identifier is returned in `KHARTIS_HTTP_BACKEND_HEADER_NAME`. Keep real
+backend identifiers in ignored local files.
 
 Authentication is supplied at runtime. Prefer the masked password prompt:
 
@@ -185,9 +182,9 @@ multiple host keys, store the accepted fingerprints as a comma-separated list.
   release branch. Tag and branch provenance are revalidated after the remote
   lock is acquired and immediately before remote mutation starts.
 - Before reading SFTP credentials, real deployments run a read-only public
-  infrastructure preflight on every configured backend. Only an exact
-  `Cache-Control: no-store` canonical 404 is treated as a first deployment;
-  other HTTP failures stop the run before SFTP.
+  infrastructure preflight on every configured backend. HTTP mismatches are
+  reported but do not stop a deployment whose release, build, SFTP, lock, and
+  remote-swap checks succeed.
 - Real uploads require a valid SFTP host fingerprint.
 - The PPRD remote directory must end with `html/pprd`; the PROD remote directory
   must end with `html/prod`.
@@ -200,15 +197,17 @@ multiple host keys, store the accepted fingerprints as a comma-separated list.
 - Critical hashed JavaScript and CSS assets must use `Cache-Control: public`
   with a positive `max-age` and `immutable`, without contradictory `private` or
   `no-store` directives.
-- A real deployment is rolled back if its HTML, selected version, service
-  worker, manifest, cache headers, representative WASM compression, or hashed
-  404 policy violate the public contract on any configured backend.
+- Public-route checks cover HTML, selected version, service worker, manifest,
+  cache headers, representative WASM compression, and hashed 404 policy on
+  every configured backend. A mismatch is reported for infrastructure follow-up
+  and leaves the uploaded release active.
 - Every real deployment acquires an atomic target-specific remote lock. An
   existing lock blocks the run unless the operator explicitly uses
   `--recover-stale-lock` after confirming no other deployment is active.
-- A non-root slashless public URL must return a 301 or 308 redirect to the exact
-  canonical HTTPS URL. Serving HTML directly, temporary redirects, HTTP
-  locations, and redirects to another route are rejected.
+- A non-root slashless public URL is checked for a 301 or 308 redirect to the
+  exact canonical HTTPS URL. Serving HTML directly, temporary redirects, HTTP
+  locations, and redirects to another route are reported for infrastructure
+  follow-up.
 - Real uploads use a temporary remote directory first, then swap it into place
   with fast renames. The previous version is removed only after the swap; if
   the swap fails, the previous version is restored.
@@ -222,8 +221,8 @@ multiple host keys, store the accepted fingerprints as a comma-separated list.
   generations.
 - A failure while retaining an old asset stops the deployment before the
   public swap.
-- Once the public swap begins, an interruption is honored only after public
-  validation succeeds or rollback restores a safe state.
+- Once the public swap begins, an interruption is honored only after the
+  remote swap and public validation attempt complete.
 
 ## Recommended Flow
 
