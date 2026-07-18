@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as m from '$lib/paraglide/messages';
 
 const mocks = vi.hoisted(() => {
-  const connection = {};
+  const connection = {
+    close: vi.fn(async () => undefined)
+  };
   const db = {
     connect: vi.fn(async () => connection),
     instantiate: vi.fn(async () => undefined),
@@ -64,6 +66,7 @@ describe('DuckDB engine initialization', () => {
     mocks.db.instantiate.mockResolvedValue(undefined);
     mocks.db.open.mockResolvedValue(undefined);
     mocks.db.terminate.mockResolvedValue(undefined);
+    mocks.connection.close.mockResolvedValue(undefined);
     mocks.executeQuery.mockResolvedValue([]);
     vi.stubGlobal(
       'Worker',
@@ -160,6 +163,60 @@ describe('DuckDB engine initialization', () => {
     expect(mocks.workerTerminate).toHaveBeenCalledOnce();
     expect(isInitialized()).toBe(false);
 
+    await expect(initEngine()).resolves.toBeUndefined();
+    expect(isInitialized()).toBe(true);
+  });
+
+  it('should terminate a pending runtime initialization and allow a retry after timeout', async () => {
+    vi.useFakeTimers();
+    let blockSpatialPreload = true;
+    let markSpatialPreloadStarted: (() => void) | undefined;
+    const spatialPreloadStarted = new Promise<void>((resolve) => {
+      markSpatialPreloadStarted = resolve;
+    });
+    mocks.executeQuery.mockImplementation(async (_connection, query) => {
+      if (blockSpatialPreload && String(query).includes('INSTALL spatial')) {
+        markSpatialPreloadStarted?.();
+        return new Promise<never>(() => undefined);
+      }
+      return [];
+    });
+    const {
+      DUCKDB_RUNTIME_INITIALIZATION_TIMEOUT_MS,
+      initEngine,
+      isInitialized
+    } = await import('./engine');
+
+    const initialization = initEngine();
+    await spatialPreloadStarted;
+    const concurrentInitialization = initEngine();
+    const rejection = expect(initialization).rejects.toMatchObject({
+      name: 'DuckDBError',
+      message: m.error_download_timeout(),
+      details: {
+        phase: 'runtime-initialization',
+        timeoutMs: DUCKDB_RUNTIME_INITIALIZATION_TIMEOUT_MS
+      }
+    });
+    const concurrentRejection = expect(
+      concurrentInitialization
+    ).rejects.toMatchObject({
+      name: 'DuckDBError',
+      details: {
+        phase: 'runtime-initialization',
+        timeoutMs: DUCKDB_RUNTIME_INITIALIZATION_TIMEOUT_MS
+      }
+    });
+
+    await vi.advanceTimersByTimeAsync(DUCKDB_RUNTIME_INITIALIZATION_TIMEOUT_MS);
+    await Promise.all([rejection, concurrentRejection]);
+
+    expect(mocks.connection.close).not.toHaveBeenCalled();
+    expect(mocks.db.terminate).toHaveBeenCalledOnce();
+    expect(mocks.workerTerminate).toHaveBeenCalledOnce();
+    expect(isInitialized()).toBe(false);
+
+    blockSpatialPreload = false;
     await expect(initEngine()).resolves.toBeUndefined();
     expect(isInitialized()).toBe(true);
   });

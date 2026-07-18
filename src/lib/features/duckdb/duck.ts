@@ -202,12 +202,11 @@ export const Duck = {
 let duckInitPromise: Promise<void> | null = null;
 
 export async function initDuckDB(): Promise<void> {
-  if (isInitialized()) return;
-
   if (duckInitPromise) {
     await duckInitPromise;
     return;
   }
+  if (isInitialized()) return;
 
   duckInitPromise = (async () => {
     try {
