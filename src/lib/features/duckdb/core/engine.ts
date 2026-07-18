@@ -38,6 +38,7 @@ let bundleVariant: 'eh' | 'mvp' = 'eh';
 let initPromise: Promise<void> | null = null;
 
 export const DUCKDB_INSTANTIATION_TIMEOUT_MS = 180_000;
+export const DUCKDB_RUNTIME_INITIALIZATION_TIMEOUT_MS = 180_000;
 
 export function isInitialized(): boolean {
   return db !== null && connection !== null;
@@ -223,12 +224,52 @@ async function instantiateDuckDB(
   }
 }
 
+async function initializeDuckDBRuntime(
+  database: duckdb.AsyncDuckDB
+): Promise<void> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const initialization = (async () => {
+    await database.open({
+      maximumThreads: 1,
+      filesystem: { allowFullHTTPReads: true, reliableHeadRequests: true },
+      query: { castBigIntToDouble: false }
+    });
+
+    connection = await database.connect();
+
+    await configureRuntimeSettings();
+    await configureLocalExtensionRepository();
+    await warmSpatialCoordinateSystems();
+    await preloadExtensions();
+  })();
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(
+      () =>
+        reject(
+          new DuckDBError(m.error_download_timeout(), undefined, {
+            phase: 'runtime-initialization',
+            timeoutMs: DUCKDB_RUNTIME_INITIALIZATION_TIMEOUT_MS
+          })
+        ),
+      DUCKDB_RUNTIME_INITIALIZATION_TIMEOUT_MS
+    );
+  });
+
+  try {
+    await Promise.race([initialization, timeout]);
+  } finally {
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 export async function initEngine(): Promise<void> {
-  if (db && connection) return;
   if (initPromise) {
     await initPromise;
     return;
   }
+  if (db && connection) return;
   const startTime = performance.now();
 
   initPromise = (async () => {
@@ -260,26 +301,23 @@ export async function initEngine(): Promise<void> {
       db = new duckdb.AsyncDuckDB(duckdbLogger, worker);
 
       await instantiateDuckDB(db, bundle);
-
-      await db.open({
-        maximumThreads: 1,
-        filesystem: { allowFullHTTPReads: true, reliableHeadRequests: true },
-        query: { castBigIntToDouble: false }
-      });
-
-      connection = await db.connect();
-
-      await configureRuntimeSettings();
-      await configureLocalExtensionRepository();
-      await warmSpatialCoordinateSystems();
-      await preloadExtensions();
+      await initializeDuckDBRuntime(db);
     } catch (error) {
       const failedConnection = connection;
       const failedDb = db;
       db = null;
       connection = null;
+      extensionsLoaded.spatial = false;
+      extensionsLoaded.httpfs = false;
+      extensionLoadPromises.spatial = null;
+      extensionLoadPromises.httpfs = null;
+      localExtensionRepositoryConfigured = false;
 
-      if (failedConnection) {
+      const runtimeInitializationTimedOut =
+        error instanceof DuckDBError &&
+        error.details?.phase === 'runtime-initialization';
+
+      if (failedConnection && !runtimeInitializationTimedOut) {
         try {
           await failedConnection.close();
         } catch (cleanupError) {
