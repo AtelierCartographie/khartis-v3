@@ -2758,6 +2758,32 @@ async function reportPublicRouteValidation(deployment, options = {}) {
   }
 }
 
+async function runPublicValidationChecks(checks) {
+  const failures = [];
+
+  for (const check of checks) {
+    try {
+      await check();
+    } catch (error) {
+      if (error instanceof Error && error.name === 'PublicUrlTimeoutError') {
+        throw error;
+      }
+      failures.push(error);
+    }
+  }
+
+  if (failures.length === 0) return;
+  if (failures.length === 1) throw failures[0];
+
+  const details = failures
+    .map((error) => (error instanceof Error ? error.message : String(error)))
+    .join('\n- ');
+  throw new AggregateError(
+    failures,
+    `Public route validation found ${failures.length} mismatches:\n- ${details}`
+  );
+}
+
 async function verifyPublicUrl(deployment, options = {}) {
   const expectedVersion = options.expectedVersion?.trim();
   if (!expectedVersion) {
@@ -2782,16 +2808,14 @@ async function verifyPublicUrl(deployment, options = {}) {
     options.backendRoute
   );
   log(`Public URL check: ${canonicalResponse.status} ${deployment.publicUrl}`);
-  await verifyCriticalPublicAssets(canonicalHtml, deployment, options);
-  await verifyMutablePublicAssets(deployment, expectedVersion, options);
-  await verifyMissingHashedAssetCachePolicy(
-    deployment,
-    expectedVersion,
-    options
-  );
-  await verifyCompressedWasmAsset(deployment, wasmAssetPath, options);
-
-  await verifySlashlessPublicUrl(deployment, options);
+  await runPublicValidationChecks([
+    () => verifyCriticalPublicAssets(canonicalHtml, deployment, options),
+    () => verifyMutablePublicAssets(deployment, expectedVersion, options),
+    () =>
+      verifyMissingHashedAssetCachePolicy(deployment, expectedVersion, options),
+    () => verifyCompressedWasmAsset(deployment, wasmAssetPath, options),
+    () => verifySlashlessPublicUrl(deployment, options)
+  ]);
 }
 
 async function closeSftpClient(client, label) {

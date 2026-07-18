@@ -52,7 +52,9 @@ tagged `vX.Y.Z` are the PROD environment. The helper supports both PPRD and PROD
     headers; a missing hashed asset must return a non-immutable no-store 404;
     and a representative build-generated WASM URL must be served with Brotli or
     gzip plus `Vary: Accept-Encoding`. A non-root slashless URL must return a
-    canonical 301 or 308 redirect.
+    canonical 301 or 308 redirect. Once the canonical HTML is valid, independently
+    testable mismatches are collected into one report so an asset cache error cannot
+    hide a separate WASM compression or redirect error.
 15. Removes the previous remote version after a successful remote swap. A
     public-route mismatch leaves the uploaded release active and is reported for
     infrastructure adjustment. A remote swap failure still restores the previous
