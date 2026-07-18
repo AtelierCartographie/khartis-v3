@@ -958,6 +958,37 @@ describe('local deployment route contract', () => {
     );
   });
 
+  it('should report every independent mismatch after canonical HTML succeeds', async () => {
+    const deployment = resolveDeploymentPublicUrl(
+      'https://example.org/cartographie/khartis/'
+    );
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith('/_app/start.js')) {
+        return createResponse(url, {
+          cacheControl: 'public, private, max-age=31536000, immutable',
+          contentType: 'application/javascript'
+        });
+      }
+      if (url.endsWith(`/${WASM_ASSET_PATH}`)) {
+        return createResponse(url, {
+          cacheControl: 'public, max-age=31536000, immutable',
+          contentType: 'application/wasm',
+          vary: 'Accept-Encoding'
+        });
+      }
+      if (url === 'https://example.org/cartographie/khartis') {
+        return createResponse(url);
+      }
+      return createSuccessfulResponse(url);
+    });
+
+    await expect(
+      verifyPublicUrl(deployment, verifyOptions(fetchImpl))
+    ).rejects.toThrow(
+      /Public route validation found 3 mismatches:[\s\S]*without private, no-store, or no-cache[\s\S]*not served with Brotli or gzip compression[\s\S]*Slashless public URL check returned 200/
+    );
+  });
+
   it('should reject a non-cacheable immutable WASM response', async () => {
     const deployment = resolveDeploymentPublicUrl(
       'https://example.org/cartographie/khartis/'
