@@ -3,15 +3,17 @@ import type { DuckDBContext } from './types';
 
 const mocks = vi.hoisted(() => ({
   getContext: vi.fn(),
+  initEngine: vi.fn(),
   isInitialized: vi.fn(),
-  dropRegisteredFile: vi.fn()
+  dropRegisteredFile: vi.fn(),
+  loadMacros: vi.fn()
 }));
 
 vi.mock('./core/engine', () => ({
   getContext: mocks.getContext,
-  initEngine: vi.fn(),
+  initEngine: mocks.initEngine,
   isInitialized: mocks.isInitialized,
-  loadMacros: vi.fn()
+  loadMacros: mocks.loadMacros
 }));
 
 vi.mock('./core/query', () => ({
@@ -42,7 +44,7 @@ vi.mock('./operations/search', () => ({
   searchInTable: vi.fn()
 }));
 
-const { Duck } = await import('./duck');
+const { Duck, initDuckDB } = await import('./duck');
 
 function createContext(): DuckDBContext {
   return {
@@ -101,5 +103,50 @@ describe('Duck.cleanupTableResources', () => {
 
     expect(mocks.dropRegisteredFile).not.toHaveBeenCalled();
     expect(ctx.registered_files.size).toBe(3);
+  });
+});
+
+describe('initDuckDB', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.isInitialized.mockReturnValue(false);
+  });
+
+  it('should share the active initialization when the engine becomes partially available', async () => {
+    let resolveEngine: (() => void) | undefined;
+    let resolveMacros: (() => void) | undefined;
+    mocks.initEngine.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveEngine = resolve;
+        })
+    );
+    mocks.loadMacros.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveMacros = resolve;
+        })
+    );
+
+    const initialization = initDuckDB();
+    mocks.isInitialized.mockReturnValue(true);
+    const concurrentInitialization = initDuckDB();
+    let concurrentSettled = false;
+    void concurrentInitialization.finally(() => {
+      concurrentSettled = true;
+    });
+
+    await Promise.resolve();
+    expect(concurrentSettled).toBe(false);
+
+    resolveEngine?.();
+    await vi.waitFor(() => expect(mocks.loadMacros).toHaveBeenCalledOnce());
+    expect(concurrentSettled).toBe(false);
+
+    resolveMacros?.();
+    await Promise.all([initialization, concurrentInitialization]);
+
+    expect(mocks.initEngine).toHaveBeenCalledOnce();
+    expect(mocks.loadMacros).toHaveBeenCalledOnce();
   });
 });
