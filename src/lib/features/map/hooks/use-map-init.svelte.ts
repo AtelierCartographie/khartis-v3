@@ -2,7 +2,9 @@ import { Deck, OrthographicView } from '@deck.gl/core';
 import type { DeckProps, View } from '@deck.gl/core';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { CanvasContext } from '@luma.gl/core';
-import maplibregl from 'maplibre-gl';
+import { Map as MapLibreMap, ScaleControl, setWorkerUrl } from 'maplibre-gl';
+import type { IControl, StyleSpecification } from 'maplibre-gl';
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { EnvironmentUtils } from '$lib/features/commons/utils/environment.utils';
 
@@ -41,6 +43,8 @@ import type {
   OrthographicMainViewState
 } from '../types';
 
+setWorkerUrl(maplibreWorkerUrl);
+
 interface OrthographicViewStateChangeParams {
   viewId: string;
   viewState: DeckOrthographicViewStateMap;
@@ -78,7 +82,7 @@ export interface UseMapInitReturn {
   switchToMapLibreMode: () => void;
   switchToOrthographicMode: () => void;
   setRenderPixelRatio: (pixelRatio: number) => void;
-  readonly map: maplibregl.Map | null;
+  readonly map: MapLibreMap | null;
   readonly deckOverlay: MapboxOverlay | null;
   readonly deckInstance: DeckInstance | null;
   readonly isMapLoaded: boolean;
@@ -248,7 +252,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
   } = props;
   patchLumaCanvasContextResizeGuard();
 
-  let map = $state<maplibregl.Map | null>(null);
+  let map = $state<MapLibreMap | null>(null);
   let deckOverlay = $state<MapboxOverlay | null>(null);
   let deckInstance = $state<DeckInstance | null>(null);
   let orthographicFallbackCanvas = $state<HTMLCanvasElement | null>(null);
@@ -491,7 +495,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     removeOrthographicFallbackCanvas();
     syncDeckDebugState(ViewMode.MAPLIBRE, true);
 
-    map = new maplibregl.Map({
+    map = new MapLibreMap({
       container,
       style,
       center: config.center,
@@ -526,9 +530,9 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
         _onMetrics: isDeckDebugEnabled() ? handleDeckMetrics : null
       } as DeckProps);
 
-      map.addControl(deckOverlay as maplibregl.IControl);
+      map.addControl(deckOverlay as IControl);
       map.addControl(
-        new maplibregl.ScaleControl({ maxWidth: 100, unit: 'metric' }),
+        new ScaleControl({ maxWidth: 100, unit: 'metric' }),
         'bottom-left'
       );
 
@@ -562,9 +566,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       if (!errorFallbackApplied && map) {
         errorFallbackApplied = true;
         map.setStyle(
-          getBasemapStyle(
-            BasemapStyle.BLANK_WHITE
-          ) as maplibregl.StyleSpecification
+          getBasemapStyle(BasemapStyle.BLANK_WHITE) as StyleSpecification
         );
       }
     });
@@ -628,9 +630,15 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
 
     if (overlayToClean) {
       try {
-        overlayToClean.setProps({ layers: [] });
-      } catch {
-        // Ignore — overlay may already be detached
+        // Finalize while MapLibre still owns a valid transform and canvas.
+        // Clearing props schedules a repaint that can outlive map.remove().
+        overlayToClean.finalize();
+      } catch (error) {
+        logger.error(
+          'Failed to finalize MapLibre Deck overlay',
+          LogCategory.MAP,
+          error
+        );
       }
     }
     if (mapToRemove) {
@@ -650,6 +658,9 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     removeOrthographicFallbackCanvas();
     mapInstanceStore.reset();
     if (isDeckDebugEnabled()) {
+      const debugWindow = window as unknown as Record<string, unknown>;
+      delete debugWindow.__maplibreMap;
+      delete debugWindow.__deck;
       deckDebugStore.clear();
     }
   }

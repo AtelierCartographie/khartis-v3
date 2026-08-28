@@ -170,6 +170,12 @@ const verifyServiceWorkerPrecache = (basePath: string): Plugin => ({
     order: 'post',
     handler() {
       const navigationFallbackUrl = basePath ? `${basePath}/` : '/';
+      const requiredPrecacheUrls = [
+        navigationFallbackUrl,
+        `${basePath}/basemaps/all-basemaps-metadata.json`,
+        `${basePath}/basemaps/projection-presets.json`,
+        `${basePath}/basemaps/style-presets.json`
+      ];
       const candidates = [
         resolve(process.cwd(), '.svelte-kit/output/client/sw.js'),
         resolve(process.cwd(), 'build/sw.js')
@@ -177,12 +183,15 @@ const verifyServiceWorkerPrecache = (basePath: string): Plugin => ({
       const swPath = candidates.find((path) => existsSync(path));
       if (!swPath) return;
       const content = readFileSync(swPath, 'utf8');
-      const hasNavigationFallbackInPrecache = new RegExp(
-        `["']?url["']?:["']${escapeRegExp(navigationFallbackUrl)}["']`
-      ).test(content);
-      if (!hasNavigationFallbackInPrecache) {
+      const missingPrecacheUrls = requiredPrecacheUrls.filter(
+        (url) =>
+          !new RegExp(`["']?url["']?:["']${escapeRegExp(url)}["']`).test(
+            content
+          )
+      );
+      if (missingPrecacheUrls.length > 0) {
         throw new Error(
-          `[verify-sw-precache] ${swPath} does not precache ${navigationFallbackUrl} — refusing to ship a broken Service Worker. Check VitePWA injectManifest.globPatterns and additionalManifestEntries.`
+          `[verify-sw-precache] ${swPath} does not precache ${missingPrecacheUrls.join(', ')}; refusing to ship a broken Service Worker. Check VitePWA injectManifest.globPatterns and additionalManifestEntries.`
         );
       }
     }
@@ -218,6 +227,7 @@ export default defineConfig(({ mode }) => {
     build: {
       target: 'esnext',
       chunkSizeWarningLimit: 3000,
+      reportCompressedSize: false,
       sourcemap: mode !== 'production',
       rolldownOptions: {
         checks: {
@@ -280,6 +290,18 @@ export default defineConfig(({ mode }) => {
           additionalManifestEntries: [
             {
               url: basePath ? `${basePath}/` : '/',
+              revision: `${Date.now()}`
+            },
+            {
+              url: `${basePath}/basemaps/all-basemaps-metadata.json`,
+              revision: `${Date.now()}`
+            },
+            {
+              url: `${basePath}/basemaps/projection-presets.json`,
+              revision: `${Date.now()}`
+            },
+            {
+              url: `${basePath}/basemaps/style-presets.json`,
               revision: `${Date.now()}`
             }
           ],

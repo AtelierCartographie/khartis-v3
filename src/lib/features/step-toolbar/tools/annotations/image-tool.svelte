@@ -65,9 +65,11 @@
   }
 
   function handleSizeChange(e: CustomEvent<number>) {
+    if ((effectiveStyle.size || 200) === e.detail) return;
     annotationsActions.applyStyle({ size: e.detail });
   }
   function handleOpacityChange(e: CustomEvent<number>) {
+    if (toOpacityPercent(effectiveStyle.opacity) === e.detail) return;
     annotationsActions.applyStyle({ opacity: e.detail });
   }
 
@@ -115,6 +117,7 @@
           step={1}
           stepMultiplier={5}
           on:input={handleSizeChange}
+          on:change={handleSizeChange}
           minLabel=""
           maxLabel=""
         />
@@ -133,6 +136,7 @@
           step={5}
           stepMultiplier={5}
           on:input={handleOpacityChange}
+          on:change={handleOpacityChange}
           minLabel=""
           maxLabel=""
         />

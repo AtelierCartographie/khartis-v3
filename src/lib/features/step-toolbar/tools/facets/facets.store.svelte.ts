@@ -10,6 +10,7 @@ import { showInfo } from '$lib/features/commons/utils/notification.utils.svelte'
 import * as m from '$lib/paraglide/messages';
 import { persistenceRegistry } from '$lib/features/project-management/core';
 import {
+  buildFacetSlotUpdates,
   buildFacetVisualizationUpdates,
   generateFacetVisualizations,
   resolveFacetPrimitiveFilter
@@ -22,10 +23,6 @@ import {
   type FacetSlotPath,
   type ScaleMode
 } from '$lib/features/commons/constants/facets.constants';
-import {
-  buildFacetVariablePatch,
-  getFacetSlotVariable
-} from '$lib/features/commons/utils/facet-visualization-updates';
 import {
   isAutoFacetDataColumn,
   isAutoFacetNumericColumn
@@ -126,14 +123,6 @@ function isFacetVariableCompatible(
   );
 }
 
-function applyFacetVariableToVisualization(
-  visualization: VisualizationConfig,
-  slotPath: FacetSlotPath,
-  variableName: string
-): Partial<VisualizationConfig> {
-  return buildFacetVariablePatch(visualization, slotPath, variableName);
-}
-
 function computeBestColumns(
   mapCount: number,
   maxCols: number = MAX_FACETS_COLUMNS
@@ -150,6 +139,8 @@ export interface FacetsLayout {
   gap: number;
 }
 
+export type FacetSlotAssignments = Partial<Record<FacetSlotPath, string>>;
+
 export interface FacetsState {
   enabled: boolean;
   baseVisualizationId: string | null;
@@ -158,6 +149,8 @@ export interface FacetsState {
   layout: FacetsLayout;
   scaleMode: ScaleMode;
   generatedVisualizationIds: string[];
+  /** Per-map column assignments that differ from the generated defaults. */
+  slotAssignments: FacetSlotAssignments[];
   /** Custom facet titles keyed by facet variable name (Habillage step). */
   facetTitles: Record<string, string>;
 }
@@ -173,8 +166,24 @@ const DEFAULT_STATE: FacetsState = {
   },
   scaleMode: SCALE_MODE.SHARED,
   generatedVisualizationIds: [],
+  slotAssignments: [],
   facetTitles: {}
 };
+
+function sanitizeFacetSlotAssignments(data: unknown): FacetSlotAssignments {
+  if (data == null || typeof data !== 'object' || Array.isArray(data)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(data).filter(
+      (entry): entry is [FacetSlotPath, string] =>
+        isFacetSlotPath(entry[0]) &&
+        typeof entry[1] === 'string' &&
+        entry[1].length > 0
+    )
+  );
+}
 
 function reorderItems<T>(items: T[], fromIndex: number, toIndex: number): T[] {
   const next = [...items];
@@ -225,6 +234,60 @@ function notifyCollectionConstraints(
 function createFacetsStore() {
   const state = $state<FacetsState>({ ...DEFAULT_STATE });
   let isRegenerating = false;
+
+  async function applySlotAssignments(
+    baseViz: VisualizationConfig,
+    visualization: VisualizationConfig,
+    mapIndex: number,
+    scaleMode: ScaleMode,
+    assignments: FacetSlotAssignments[] = state.slotAssignments
+  ): Promise<VisualizationConfig> {
+    let nextVisualization = visualization;
+
+    for (const [slotPath, variable] of Object.entries(
+      assignments[mapIndex] ?? {}
+    ) as [FacetSlotPath, string][]) {
+      if (!isFacetVariableCompatible(baseViz, variable, slotPath)) {
+        continue;
+      }
+
+      nextVisualization = {
+        ...nextVisualization,
+        ...(await buildFacetSlotUpdates({
+          baseViz,
+          visualization: nextVisualization,
+          variable,
+          scaleMode,
+          slotPath
+        }))
+      };
+    }
+
+    return nextVisualization;
+  }
+
+  async function applySlotAssignmentsToGeneratedVisualizations(
+    baseViz: VisualizationConfig,
+    visualizations: VisualizationConfig[],
+    scaleMode: ScaleMode,
+    assignments: FacetSlotAssignments[] = state.slotAssignments
+  ): Promise<VisualizationConfig[]> {
+    const nextVisualizations: VisualizationConfig[] = [];
+
+    for (const [index, visualization] of visualizations.entries()) {
+      nextVisualizations.push(
+        await applySlotAssignments(
+          baseViz,
+          visualization,
+          index,
+          scaleMode,
+          assignments
+        )
+      );
+    }
+
+    return nextVisualizations;
+  }
 
   function notifyPersistence(): void {
     persistenceRegistry.notifyChange('facets');
@@ -296,11 +359,23 @@ function createFacetsStore() {
           )
         : [...DEFAULT_STATE.generatedVisualizationIds];
 
-      nextState.scaleMode =
+      const restoredSlotAssignments = Array.isArray(restored.slotAssignments)
+        ? restored.slotAssignments
+        : [];
+      nextState.slotAssignments = nextState.variables.map((_, index) =>
+        sanitizeFacetSlotAssignments(restoredSlotAssignments[index])
+      );
+
+      const restoredScaleMode =
         restored.scaleMode === SCALE_MODE.SHARED ||
         restored.scaleMode === SCALE_MODE.INDEPENDENT
           ? (restored.scaleMode as ScaleMode)
           : DEFAULT_STATE.scaleMode;
+      nextState.scaleMode =
+        nextState.primarySlotPath &&
+        !facetSlotRequiresNumericVariable(nextState.primarySlotPath)
+          ? SCALE_MODE.INDEPENDENT
+          : restoredScaleMode;
 
       const restoredLayout =
         restored.layout != null && typeof restored.layout === 'object'
@@ -384,6 +459,9 @@ function createFacetsStore() {
     }
 
     const capped = compatible.slice(0, MAX_FACETS);
+    const nextScaleMode = facetSlotRequiresNumericVariable(primarySlotPath)
+      ? state.scaleMode
+      : SCALE_MODE.INDEPENDENT;
     const replacedPreviousCollection =
       state.enabled && state.generatedVisualizationIds.length > 0;
     const hiddenPrimitives = getHiddenPrimitivesForSlot(
@@ -395,7 +473,7 @@ function createFacetsStore() {
       const facetConfigs = await generateFacetVisualizations(
         baseViz,
         capped,
-        state.scaleMode,
+        nextScaleMode,
         primarySlotPath
       );
 
@@ -410,7 +488,9 @@ function createFacetsStore() {
       state.baseVisualizationId = baseVizId;
       state.primarySlotPath = primarySlotPath;
       state.variables = [...capped];
+      state.scaleMode = nextScaleMode;
       state.generatedVisualizationIds = facetConfigs.map((c) => c.id);
+      state.slotAssignments = capped.map(() => ({}));
       state.layout.columns = computeBestColumns(capped.length);
       notifyPersistence();
 
@@ -465,14 +545,25 @@ function createFacetsStore() {
     const staleGeneratedIds = state.generatedVisualizationIds.filter((id) =>
       existingVisualizationIds.has(id)
     );
+    const compatibleAssignments = compatible.map((variable) => {
+      const previousIndex = state.variables.indexOf(variable);
+      return previousIndex >= 0
+        ? { ...(state.slotAssignments[previousIndex] ?? {}) }
+        : {};
+    });
 
     isRegenerating = true;
     try {
-      const facetConfigs = await generateFacetVisualizations(
+      const facetConfigs = await applySlotAssignmentsToGeneratedVisualizations(
         baseViz,
-        compatible,
+        await generateFacetVisualizations(
+          baseViz,
+          compatible,
+          state.scaleMode,
+          state.primarySlotPath
+        ),
         state.scaleMode,
-        state.primarySlotPath
+        compatibleAssignments
       );
 
       if (staleGeneratedIds.length > 0) {
@@ -482,6 +573,7 @@ function createFacetsStore() {
 
       state.variables = [...compatible];
       state.generatedVisualizationIds = facetConfigs.map((config) => config.id);
+      state.slotAssignments = compatibleAssignments;
       notifyPersistence();
     } catch (error) {
       logger.error(
@@ -537,22 +629,28 @@ function createFacetsStore() {
 
     try {
       for (const [index, visualization] of generatedVisualizations.entries()) {
-        const variable =
-          getFacetSlotVariable(visualization, primarySlotPath) ??
-          state.variables[index];
+        const variable = state.variables[index];
         if (!variable) {
           continue;
         }
 
+        const primaryUpdates = await buildFacetVisualizationUpdates({
+          baseViz,
+          visualization: baseViz,
+          variable,
+          scaleMode: state.scaleMode,
+          primarySlotPath
+        });
+        const nextVisualization = await applySlotAssignments(
+          baseViz,
+          { ...visualization, ...primaryUpdates },
+          index,
+          state.scaleMode
+        );
+
         visualizationStore.updateVisualization(
           visualization.id,
-          await buildFacetVisualizationUpdates({
-            baseViz,
-            visualization: baseViz,
-            variable,
-            scaleMode: state.scaleMode,
-            primarySlotPath
-          })
+          nextVisualization
         );
       }
 
@@ -580,6 +678,7 @@ function createFacetsStore() {
     state.primarySlotPath = null;
     state.variables = [];
     state.generatedVisualizationIds = [];
+    state.slotAssignments = [];
     state.facetTitles = {};
     notifyPersistence();
   }
@@ -668,6 +767,9 @@ function createFacetsStore() {
     }
 
     const capped = compatible.slice(0, MAX_FACETS);
+    const nextScaleMode = facetSlotRequiresNumericVariable(primarySlotPath)
+      ? state.scaleMode
+      : SCALE_MODE.INDEPENDENT;
 
     if (
       state.primarySlotPath === primarySlotPath &&
@@ -679,12 +781,23 @@ function createFacetsStore() {
     isRegenerating = true;
     try {
       const previousName = capturePreviousGeneratedName();
+      const nextSlotAssignments = capped.map((variable) => {
+        const previousIndex = state.variables.indexOf(variable);
+        return previousIndex >= 0
+          ? { ...(state.slotAssignments[previousIndex] ?? {}) }
+          : {};
+      });
 
-      const newConfigs = await generateFacetVisualizations(
+      const newConfigs = await applySlotAssignmentsToGeneratedVisualizations(
         baseViz,
-        capped,
-        state.scaleMode,
-        primarySlotPath
+        await generateFacetVisualizations(
+          baseViz,
+          capped,
+          nextScaleMode,
+          primarySlotPath
+        ),
+        nextScaleMode,
+        nextSlotAssignments
       );
       visualizationStore.removeBulkVisualizations(
         state.generatedVisualizationIds
@@ -692,7 +805,9 @@ function createFacetsStore() {
       visualizationStore.createBulkVisualizations(newConfigs);
       state.primarySlotPath = primarySlotPath;
       state.variables = [...capped];
+      state.scaleMode = nextScaleMode;
       state.generatedVisualizationIds = newConfigs.map((config) => config.id);
+      state.slotAssignments = nextSlotAssignments;
       state.layout.columns = computeBestColumns(capped.length);
       restoreSelectionByName(newConfigs, previousName);
 
@@ -708,11 +823,11 @@ function createFacetsStore() {
     }
   }
 
-  function setVariableForSlot(
+  async function setVariableForSlot(
     mapIndex: number,
     slotPath: FacetSlotPath,
     variableName: string
-  ): boolean {
+  ): Promise<boolean> {
     if (!state.enabled) {
       return false;
     }
@@ -739,12 +854,34 @@ function createFacetsStore() {
       return false;
     }
 
-    visualizationStore.updateVisualization(
-      vizId,
-      applyFacetVariableToVisualization(viz, slotPath, variableName)
-    );
-    notifyPersistence();
-    return true;
+    try {
+      visualizationStore.updateVisualization(
+        vizId,
+        await buildFacetSlotUpdates({
+          baseViz: baseViz ?? viz,
+          visualization: viz,
+          variable: variableName,
+          scaleMode: state.scaleMode,
+          slotPath
+        })
+      );
+      const nextSlotAssignments = [...state.slotAssignments];
+      nextSlotAssignments[mapIndex] = {
+        ...(nextSlotAssignments[mapIndex] ?? {}),
+        [slotPath]: variableName
+      };
+      state.slotAssignments = nextSlotAssignments;
+      notifyPersistence();
+      return true;
+    } catch (error) {
+      logger.error('Failed to update facet slot variable', LogCategory.STORE, {
+        error,
+        mapIndex,
+        slotPath,
+        variableName
+      });
+      return false;
+    }
   }
 
   async function reorderVariables(
@@ -759,8 +896,14 @@ function createFacetsStore() {
       fromIndex,
       toIndex
     );
+    const nextSlotAssignments = reorderItems(
+      state.slotAssignments,
+      fromIndex,
+      toIndex
+    );
 
     state.variables = nextVariables;
+    state.slotAssignments = nextSlotAssignments;
 
     if (state.enabled && canReorderGeneratedFacets(nextGeneratedIds)) {
       applyGeneratedFacetOrder(nextGeneratedIds);
@@ -782,6 +925,16 @@ function createFacetsStore() {
 
   async function toggleScaleMode(): Promise<void> {
     if (isRegenerating) return;
+    if (
+      !state.primarySlotPath ||
+      !facetSlotRequiresNumericVariable(state.primarySlotPath)
+    ) {
+      if (state.scaleMode !== SCALE_MODE.INDEPENDENT) {
+        state.scaleMode = SCALE_MODE.INDEPENDENT;
+        notifyPersistence();
+      }
+      return;
+    }
 
     const newMode: ScaleMode =
       state.scaleMode === SCALE_MODE.SHARED
@@ -824,15 +977,23 @@ function createFacetsStore() {
                 continue;
               }
 
+              const primaryUpdates = await buildFacetVisualizationUpdates({
+                baseViz,
+                visualization,
+                variable,
+                scaleMode: newMode,
+                primarySlotPath
+              });
+              const nextVisualization = await applySlotAssignments(
+                baseViz,
+                { ...visualization, ...primaryUpdates },
+                index,
+                newMode
+              );
+
               visualizationStore.updateVisualization(
                 visualization.id,
-                await buildFacetVisualizationUpdates({
-                  baseViz,
-                  visualization,
-                  variable,
-                  scaleMode: newMode,
-                  primarySlotPath
-                })
+                nextVisualization
               );
             }
 
@@ -841,12 +1002,17 @@ function createFacetsStore() {
             );
           } else {
             const previousName = capturePreviousGeneratedName();
-            const newConfigs = await generateFacetVisualizations(
-              baseViz,
-              state.variables,
-              newMode,
-              primarySlotPath
-            );
+            const newConfigs =
+              await applySlotAssignmentsToGeneratedVisualizations(
+                baseViz,
+                await generateFacetVisualizations(
+                  baseViz,
+                  state.variables,
+                  newMode,
+                  primarySlotPath
+                ),
+                newMode
+              );
 
             visualizationStore.removeBulkVisualizations(
               state.generatedVisualizationIds
@@ -887,6 +1053,9 @@ function createFacetsStore() {
     get generatedVisualizationIds() {
       return state.generatedVisualizationIds;
     },
+    get slotAssignments() {
+      return state.slotAssignments;
+    },
     get facetTitles() {
       return state.facetTitles;
     },
@@ -922,6 +1091,9 @@ persistenceRegistry.register({
     layout: { ...facetsStore.layout },
     scaleMode: facetsStore.scaleMode,
     generatedVisualizationIds: [...facetsStore.generatedVisualizationIds],
+    slotAssignments: facetsStore.slotAssignments.map((assignments) => ({
+      ...assignments
+    })),
     facetTitles: { ...facetsStore.facetTitles }
   }),
   deserialize: (data: unknown) => facetsStore.restoreFromSerialized(data),

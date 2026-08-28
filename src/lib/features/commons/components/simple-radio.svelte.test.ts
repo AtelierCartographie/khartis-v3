@@ -40,4 +40,17 @@ describe('SimpleRadio', () => {
     expect(ancestorClick).toHaveBeenCalled();
     wrapper.remove();
   });
+
+  it('should render a non-interactive indicator when decorative', () => {
+    const { container, queryByRole } = render(SimpleRadio, {
+      checked: true,
+      labelText: 'selected card',
+      decorative: true
+    });
+
+    expect(queryByRole('radio')).not.toBeInTheDocument();
+    expect(
+      container.querySelector('.kh-radio-input.checked')
+    ).toBeInTheDocument();
+  });
 });

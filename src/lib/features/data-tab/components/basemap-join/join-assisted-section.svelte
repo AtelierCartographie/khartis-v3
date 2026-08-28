@@ -7,10 +7,12 @@
     InlineNotification,
     Pagination,
     Select,
-    SelectItem,
+    SelectItem
+  } from 'carbon-components-svelte';
+  import {
     fuzzyMatch,
     highlightSegments
-  } from 'carbon-components-svelte';
+  } from 'carbon-components-svelte/src/utils/fuzzyMatch.js';
   import {
     CheckmarkFilled,
     ChevronDown,

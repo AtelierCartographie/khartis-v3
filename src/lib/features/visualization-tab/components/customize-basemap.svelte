@@ -37,6 +37,10 @@
       hasOSMBasemap: osmBasemapStore.isActive
     })
   );
+  const isTiledBasemapActive = $derived(
+    osmBasemapStore.isActive ||
+      basemapStyleStore.selectedStyle !== BasemapStyle.BLANK_WHITE
+  );
 
   function getActiveReferenceBasemapMetadata(
     referenceBasemapId: string | null
@@ -272,8 +276,14 @@
       mapProjectionStore.setProjection(MAP_PROJECTION_TYPE.MERCATOR);
     }
 
-    if (osmBasemapStore.isActive) {
+    if (checked && osmBasemapStore.isDisabledByUser) {
       osmBasemapStore.clear();
+    } else if (osmBasemapStore.isActive) {
+      if (checked) {
+        osmBasemapStore.clear();
+      } else {
+        osmBasemapStore.disable();
+      }
     }
 
     if (nextStyle === basemapStyleStore.selectedStyle) {
@@ -338,7 +348,7 @@
         defaultOpen={isTiledBasemapEnabled}
         showToggle={true}
         toggleVariant="suggestions"
-        toggleChecked={isTiledBasemapEnabled}
+        toggleChecked={isTiledBasemapActive}
         onToggleChange={handleTiledBasemapToggle}
       >
         {#snippet icon()}

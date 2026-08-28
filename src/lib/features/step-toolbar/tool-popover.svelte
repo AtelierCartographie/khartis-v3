@@ -1,6 +1,9 @@
 <script lang="ts">
   import { globalState } from '$lib/features/commons/stores/global.svelte';
-  import type { ProjectionViewMode } from '$lib/features/commons/types/global';
+  import {
+    StylingTools,
+    type ProjectionViewMode
+  } from '$lib/features/commons/types/global';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { Popover } from 'carbon-components-svelte';
   import { DRAGGED_ELEMENT_ID } from 'svelte-dnd-action';
@@ -38,6 +41,11 @@
   } = $props();
 
   const widthCss = $derived(viewMode === 'grid' ? gridWidth : `${listWidth}px`);
+  const hideForMobileAnnotationCreation = $derived(
+    globalState.isMobileView &&
+      globalState.selectedTool === StylingTools.Annotations &&
+      getAnnotationsState().creationMode !== 'idle'
+  );
   const RECENT_DND_INTERACTION_ATTRIBUTE = 'data-khartis-recent-dnd-at';
   const RECENT_DND_INTERACTION_GRACE_MS = 500;
   let popoverRoot: HTMLDivElement | null = null;
@@ -185,6 +193,8 @@
 
 <div
   id={DOM_IDS.TOOL_POPOVER}
+  class:mobile-annotation-creation={hideForMobileAnnotationCreation}
+  inert={hideForMobileAnnotationCreation}
   bind:this={popoverRoot}
   use:clickOutside={{
     enabled: open,
@@ -205,9 +215,11 @@
     class={CSS_CLASSES.TOOL_POPOVER}
     style={`--tool-popover-width:${widthCss};--tool-popover-top-offset:${computedTopOffset}px;--popover-max-height:${POPOVER_DIMENSIONS.MAX_HEIGHT};--dropdown-max-height:${POPOVER_DIMENSIONS.DROPDOWN_MAX_HEIGHT};`}
   >
-    <div class={CSS_CLASSES.POPOVER_SCROLL}>
-      {@render (content as Snippet | undefined)?.()}
-    </div>
+    {#key globalState.selectedTool}
+      <div class={CSS_CLASSES.POPOVER_SCROLL}>
+        {@render (content as Snippet | undefined)?.()}
+      </div>
+    {/key}
   </Popover>
 </div>
 
@@ -243,6 +255,16 @@
   }
 
   @media (max-width: 1023px) {
+    :global(#khartis-tool-popover.mobile-annotation-creation) {
+      pointer-events: none;
+    }
+
+    :global(#khartis-tool-popover.mobile-annotation-creation .bx--popover) {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
     :global(#khartis-tool-popover .bx--popover) {
       position: fixed !important;
       inset: auto 0 0 0 !important;

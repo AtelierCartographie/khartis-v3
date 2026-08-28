@@ -57,4 +57,26 @@ describe('ToggleTabs', () => {
 
     expect(ondblclick).toHaveBeenCalledWith(1);
   });
+
+  it('should ignore clicks and double clicks when a tab is disabled', async () => {
+    const onchange = vi.fn();
+    const ondblclick = vi.fn();
+    const { getByRole } = render(ToggleTabs, {
+      activeIndex: 0,
+      items: [
+        { label: 'Basemap' },
+        { label: 'Geographic data', disabled: true }
+      ],
+      onchange,
+      ondblclick
+    });
+    const disabledTab = getByRole('button', { name: 'Geographic data' });
+
+    expect(disabledTab).toBeDisabled();
+    await fireEvent.click(disabledTab);
+    await fireEvent.dblClick(disabledTab);
+
+    expect(onchange).not.toHaveBeenCalled();
+    expect(ondblclick).not.toHaveBeenCalled();
+  });
 });

@@ -306,16 +306,16 @@
     }
   }
 
-  function applyExampleVisualizations(
+  async function applyExampleVisualizations(
     example: ExampleProject,
     file: UploadedFile
-  ): void {
+  ): Promise<void> {
     const dataset = datasetsStore.getDatasetBySourceFile(file.id);
     if (!dataset) {
       return;
     }
 
-    applyExampleVisualizationPresets(example, dataset);
+    await applyExampleVisualizationPresets(example, dataset);
   }
 
   function selectCategory(category: ExampleCategory) {
@@ -390,7 +390,7 @@
       if (!example.baseMapId) {
         await applyExampleGPSPreset(processedExampleFile);
       }
-      applyExampleVisualizations(example, processedExampleFile);
+      await applyExampleVisualizations(example, processedExampleFile);
       await applyExampleReferenceBasemap(example);
       await projectStore.saveCurrentProject({
         fallbackThumbnail: example.thumbnail,

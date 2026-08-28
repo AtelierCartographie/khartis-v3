@@ -177,6 +177,23 @@ function createGlobalStore() {
         }
       })
       .catch((error) => {
+        const restoredDataset =
+          datasetsStore.getDatasetBySourceFile(sourceFileId);
+        if (restoredDataset) {
+          if (selectedDataButtonState.id === sourceFileId) {
+            selectDatasetForSourceFile(
+              sourceFileId,
+              restoredDataset.id,
+              options
+            );
+          }
+          return;
+        }
+
+        if (selectedDataButtonState.id !== sourceFileId) {
+          return;
+        }
+
         logger.error(
           'Failed to wait for dataset selection',
           LogCategory.STORE,

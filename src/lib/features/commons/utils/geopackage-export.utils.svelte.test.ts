@@ -86,6 +86,57 @@ describe('GeoPackage export utils', () => {
     expect(geojson.features[0].properties.value).toBe(42);
   });
 
+  it('keeps safe DuckDB bigint properties as GeoPackage integers', async () => {
+    const blob = await exportGeoPackage(
+      [
+        {
+          properties: {
+            population: 12_300_000n,
+            oversized: BigInt(Number.MAX_SAFE_INTEGER) + 1n
+          },
+          wkb: createPointWkb(2.3522, 48.8566)
+        }
+      ],
+      {
+        layerName: 'bigint_properties',
+        sourceCrs: 'EPSG:4326'
+      }
+    );
+
+    const columns = await selectGeoPackageRows<{
+      name: string;
+      type: string;
+    }>(blob, `PRAGMA table_info('bigint_properties')`);
+    const row = await selectGeoPackageRows<{
+      population: number;
+      population_type: string;
+      oversized: string;
+      oversized_type: string;
+    }>(
+      blob,
+      `SELECT population,
+              typeof(population) AS population_type,
+              oversized,
+              typeof(oversized) AS oversized_type
+       FROM bigint_properties`
+    );
+
+    expect(columns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'population', type: 'INTEGER' }),
+        expect.objectContaining({ name: 'oversized', type: 'TEXT' })
+      ])
+    );
+    expect(row).toEqual([
+      {
+        population: 12_300_000,
+        population_type: 'integer',
+        oversized: '9007199254740992',
+        oversized_type: 'text'
+      }
+    ]);
+  });
+
   it('keeps user properties that collide with GeoPackage fid and geom columns', async () => {
     const blob = await exportGeoPackage(
       [

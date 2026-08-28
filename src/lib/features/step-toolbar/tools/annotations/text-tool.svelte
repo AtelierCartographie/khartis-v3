@@ -88,7 +88,13 @@
   }
 
   function handleOpacityChange(e: CustomEvent<number>) {
+    if (toOpacityPercent(effectiveStyle.opacity) === e.detail) return;
     annotationsActions.applyStyle({ opacity: e.detail });
+  }
+
+  function handleBackgroundOpacityChange(e: CustomEvent<number>) {
+    if (bgOpacity === e.detail) return;
+    annotationsActions.applyStyle({ backgroundOpacity: e.detail });
   }
 
   function toOpacityPercent(value: number | undefined): number {
@@ -349,6 +355,7 @@
           step={5}
           stepMultiplier={4}
           on:input={handleOpacityChange}
+          on:change={handleOpacityChange}
           minLabel=""
           maxLabel=""
         />
@@ -416,10 +423,8 @@
           min={0}
           max={100}
           step={5}
-          on:input={(e) =>
-            annotationsActions.applyStyle({
-              backgroundOpacity: (e as CustomEvent).detail
-            })}
+          on:input={handleBackgroundOpacityChange}
+          on:change={handleBackgroundOpacityChange}
           minLabel=""
           maxLabel=""
           fullWidth

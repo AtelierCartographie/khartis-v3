@@ -26,10 +26,10 @@ export function computeQualityWarnings(
   }
 
   for (const column of columns) {
-    const nullRatio =
-      column.stats?.count && column.stats.count > 0
-        ? column.stats.nulls / column.stats.count
-        : 0;
+    const nonNullCount = column.stats?.count ?? 0;
+    const nullCount = column.stats?.nulls ?? 0;
+    const totalCount = nonNullCount + nullCount;
+    const nullRatio = totalCount > 0 ? nullCount / totalCount : 0;
 
     if (nullRatio > HIGH_NULL_RATIO_THRESHOLD) {
       warnings.push(
@@ -40,8 +40,6 @@ export function computeQualityWarnings(
       );
     }
 
-    const nonNullCount =
-      (column.stats?.count ?? 0) - (column.stats?.nulls ?? 0);
     if (nonNullCount > 0) {
       const uniquenessRatio = (column.stats?.uniques ?? 0) / nonNullCount;
       if (uniquenessRatio < LOW_CARDINALITY_THRESHOLD) {

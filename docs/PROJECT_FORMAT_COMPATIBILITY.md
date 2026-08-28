@@ -1,64 +1,61 @@
 # Compatibilité du format projet
 
-Ce document définit le contrat de compatibilité des projets Khartis à partir de la première version publique.
+Ce document est le contrat de compatibilité des projets durables Khartis. Il couvre l'archive `.kh` et le schéma de `project.json`, qui évoluent indépendamment.
 
-## Baseline publique
+Voir aussi : [PERSISTANCE_ET_ARCHIVES.md](PERSISTANCE_ET_ARCHIVES.md).
 
-La première baseline supportée est :
+## Baseline publique actuelle
 
-- archive `.kh` version 2 ;
-- schéma projet version `3.9.0`.
+| Contrat                    | Valeur        | Source de vérité                                            |
+| -------------------------- | ------------- | ----------------------------------------------------------- |
+| Archive exportée           | v2            | `PROJECT_CONST.ARCHIVE.CURRENT_VERSION`                     |
+| Archives lues              | v2 uniquement | `PROJECT_CONST.ARCHIVE.SUPPORTED_VERSIONS`                  |
+| Schéma courant et baseline | `3.9.0`       | `PROJECT_CONST.SCHEMA_VERSION` et `SCHEMA_BASELINE_VERSION` |
 
-Les archives version 1 et les schémas `3.0.0` à `3.8.0` appartiennent à la phase de développement. Ils ne sont pas supportés par la version publique.
+Les archives v1 et les schémas antérieurs à `3.9.0` appartiennent à la phase de développement et ne sont pas des formats publics supportés. `schemaMigrations` est actuellement vide, ce qui est cohérent tant que la baseline et la version courante sont identiques.
 
-L'exporteur écrit toujours la version courante. L'importeur valide d'abord la version de l'archive et le schéma du projet, puis restaure les assets. Une version absente, ancienne sans migration ou plus récente que l'application est rejetée explicitement. Elle ne doit jamais être réétiquetée silencieusement comme courante.
+L'import vérifie l'archive et le schéma avant de restaurer les assets. Une version absente, ancienne sans migration, inconnue ou future est rejetée explicitement. Ne jamais restamper silencieusement une version inconnue comme version courante.
 
-## Deux niveaux de version
+## Quand incrémenter quoi
 
-Le format utilise deux versions indépendantes :
+| Changement                                                          | Action                                                                                           |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Structure ZIP, `manifest.json`, chemin ou représentation d'un asset | Incrémenter la version d'archive et conserver un lecteur pour chaque version publique supportée. |
+| Structure ou sémantique durable de `project.json`                   | Incrémenter le schéma et ajouter une migration continue.                                         |
+| Champ optionnel avec défaut sûr, sans changement de sémantique      | Peut rester dans le schéma courant après revue du comportement de reprise.                       |
+| API publique ou extension                                           | Préférer un ajout compatible ou un adaptateur déprécié ; versionner une rupture inévitable.      |
 
-| Version | Source de vérité                        | Quand l'incrémenter                                                                                   |
-| ------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Archive | `PROJECT_CONST.ARCHIVE.CURRENT_VERSION` | La structure du conteneur change, par exemple les entrées ZIP, le manifest ou le stockage des assets. |
-| Schéma  | `PROJECT_CONST.SCHEMA_VERSION`          | La structure ou la sémantique des données persistées dans `project.json` change.                      |
+Une archive contient actuellement `manifest.json`, `project.json` et `assets/<assetId>`. Le numéro d'archive ne remplace pas le numéro de schéma : les deux doivent être lus et testés séparément.
 
-`PROJECT_CONST.SCHEMA_BASELINE_VERSION` identifie la plus ancienne version publique garantie. `PROJECT_CONST.ARCHIVE.SUPPORTED_VERSIONS` liste les archives que l'importeur sait encore lire.
+## Faire évoluer le schéma
 
-## Faire évoluer le schéma projet
-
-Une modification additive avec un champ optionnel et un comportement par défaut sûr peut rester dans le schéma courant. Toute modification obligatoire, destructive ou sémantique doit :
+Pour une évolution obligatoire, destructive ou sémantique :
 
 1. incrémenter `SCHEMA_VERSION` ;
-2. ajouter une migration pure et déterministe dans `schemaMigrations` depuis la version courante précédente ;
-3. conserver toutes les migrations publiées depuis `SCHEMA_BASELINE_VERSION` ;
-4. ajouter un test du contenu transformé et un test de continuité de la chaîne ;
-5. vérifier l'import d'un projet de chaque version publique encore supportée.
+2. ajouter dans `schemaMigrations` une migration pure, déterministe, de la version précédente vers la nouvelle ;
+3. conserver la chaîne sans trou depuis `SCHEMA_BASELINE_VERSION` ;
+4. ne mettre à jour `manifest.version` qu'après succès de la transformation ;
+5. ajouter un test du contenu migré, de la continuité de chaîne et de l'échec sur version absente ou future ;
+6. vérifier la reprise réelle d'un projet public de chaque version encore supportée.
 
-Une migration ne modifie pas son entrée. La version du manifest n'est mise à jour qu'après la transformation réussie.
+Une migration doit transformer une copie sémantique du snapshot, sans dépendre d'une table DuckDB de session ni muter son entrée. Les tables DuckDB sont recréées à l'ouverture ; la migration doit donc préserver les informations nécessaires au replay des sources et de l'état métier.
 
 ## Faire évoluer l'archive
 
-Une nouvelle version d'archive est réservée à un changement du conteneur, pas à une simple évolution de `project.json`. Lors d'un changement :
+Pour une évolution du conteneur :
 
 1. incrémenter `ARCHIVE.CURRENT_VERSION` ;
-2. conserver la version 2 dans `ARCHIVE.SUPPORTED_VERSIONS` ;
-3. ajouter le lecteur ou l'adaptateur nécessaire pour les archives publiques précédentes ;
-4. tester l'import de chaque version supportée et l'export de la nouvelle version.
+2. conserver v2 et toute autre version publique dans `ARCHIVE.SUPPORTED_VERSIONS` ;
+3. ajouter le lecteur ou adaptateur correspondant dans l'importeur ;
+4. exporter la nouvelle version sans modifier les lecteurs anciens ;
+5. ajouter une fixture réelle pour chaque archive publique lue, plus les cas manifest, asset manquant et version incompatible.
 
-## APIs et services
-
-Une API ou un service public utilisé par des extensions, des scripts ou d'autres applications suit la même politique :
-
-- privilégier un ajout rétrocompatible ;
-- conserver temporairement un adaptateur et signaler la dépréciation si une signature change ;
-- introduire une API versionnée lorsqu'une rupture est inévitable ;
-- documenter la durée de support et la procédure de migration avant de retirer l'ancienne API.
+L'import actuel n'est pas atomique à l'échelle complète de l'archive. Une évolution de format ne doit donc pas promettre une restauration tout-ou-rien sans ajouter le mécanisme et les tests qui l'établissent.
 
 ## Checklist de revue
 
-- La modification touche-t-elle le conteneur `.kh`, `project.json` ou une API publique ?
-- Une version doit-elle être incrémentée ?
-- La chaîne de migration reste-t-elle continue depuis `3.9.0` ?
-- Toutes les versions publiques d'archive restent-elles lisibles ?
-- Les erreurs de versions absentes, anciennes et futures sont-elles explicites ?
-- Les tests couvrent-ils le dernier format exporté et chaque format encore supporté ?
+- Le changement touche-t-il le conteneur `.kh`, `project.json`, les assets ou seulement un état transitoire ?
+- La baseline publique, le lecteur et les migrations restent-ils continus ?
+- Le format inconnu est-il refusé sans restamp ni écriture partielle évitable ?
+- Les fixtures couvrent-elles chaque version publique et la reprise après import ?
+- Les limites connues, notamment la non-atomicité et les quotas navigateur, sont-elles toujours décrites honnêtement ?

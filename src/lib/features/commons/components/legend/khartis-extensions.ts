@@ -5,6 +5,7 @@ import {
   createLegendFont,
   escapeSvgAttribute,
   escapeSvgText,
+  measureLegendLongestToken,
   renderLegendHeader,
   renderLegendNote,
   resolveLegendFontFamily,
@@ -255,6 +256,16 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
   const noteSize = options.note ? Math.round(fontSize * 0.92) : 0;
   const lineHeight = fontSize * 1.2;
   const font = createLegendFont({ fontSize, lineHeight, fontFamily });
+  const titleFont = createLegendFont({
+    fontSize: titleSize,
+    fontFamily,
+    weight: 'bold'
+  });
+  const subtitleFont = createLegendFont({
+    fontSize: subtitleSize,
+    fontFamily
+  });
+  const noteFont = createLegendFont({ fontSize: noteSize, fontFamily });
   const margin = Math.max(10, Math.round(fontSize * 0.6));
   const gap = Math.max(8, Math.round(fontSize * 0.6));
   const shapeSize = Math.round(fontSize * 1.25);
@@ -277,7 +288,15 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
       .flat()
       .map((line) => Textbox.measureText(line, font))
   );
-  const bodyWidth = margin + shapeWidth + gap + measuredLabelWidth + margin;
+  const contentWidth = margin + shapeWidth + gap + measuredLabelWidth + margin;
+  const textWidth =
+    margin * 2 +
+    Math.max(
+      measureLegendLongestToken(options.title, titleFont),
+      measureLegendLongestToken(options.subtitle, subtitleFont),
+      measureLegendLongestToken(options.note, noteFont)
+    );
+  const bodyWidth = Math.max(contentWidth, textWidth);
   const maxTextWidth = bodyWidth - margin * 2;
   const header = renderLegendHeader({
     title: options.title,
@@ -287,7 +306,9 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
     maxWidth: maxTextWidth,
     titleSize,
     subtitleSize,
-    fontFamily
+    fontFamily,
+    titleFont,
+    subtitleFont
   });
   const maxLabelLineCount = Math.max(
     1,
@@ -374,7 +395,8 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
     y: bottom + (options.note ? section_gap : 0),
     maxWidth: maxTextWidth,
     noteSize,
-    fontFamily
+    fontFamily,
+    noteFont
   });
   const height = bottom + note.height + margin;
   const defs = rows

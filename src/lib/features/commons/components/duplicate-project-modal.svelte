@@ -38,7 +38,11 @@
       return;
     }
 
-    if (hasInitializedOpenState || projectsStore.projects.length === 0) {
+    if (
+      hasInitializedOpenState ||
+      projectsStore.isLoading ||
+      projectsStore.projects.length === 0
+    ) {
       return;
     }
 
