@@ -218,6 +218,7 @@ export default defineConfig(({ mode }) => {
     build: {
       target: 'esnext',
       chunkSizeWarningLimit: 3000,
+      reportCompressedSize: false,
       sourcemap: mode !== 'production',
       rolldownOptions: {
         checks: {
