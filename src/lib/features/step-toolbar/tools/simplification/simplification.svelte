@@ -140,7 +140,8 @@
     {
       icon: LicenseGlobal,
       label: geoDatasetLabel,
-      iconSize: 16
+      iconSize: 16,
+      disabled: !hasGeoDatasets
     }
   ]);
 

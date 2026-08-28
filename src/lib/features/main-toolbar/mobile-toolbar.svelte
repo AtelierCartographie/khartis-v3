@@ -51,7 +51,7 @@
     ConfigureVisualization,
     CustomizeBasemap
   } from '$lib/features/visualization-tab';
-  import type { Component } from 'svelte';
+  import { tick, type Component } from 'svelte';
 
   type MobileToolButtonConfig<TTool extends VisualizationTools | StylingTools> =
     {
@@ -104,6 +104,8 @@
   ];
 
   let activeVizSubTab = $state<VizSubTab>(VizSubTab.CHOOSE);
+  let mobileToolbarElement = $state<HTMLDivElement | null>(null);
+  let mobileBottomNavElement = $state<HTMLElement | null>(null);
 
   const vizSubTabs = $derived.by(() => [
     { id: VizSubTab.CHOOSE, label: m.mobile_viz_tab_choose() },
@@ -140,15 +142,27 @@
     return globalState.selectedStep === step;
   };
 
-  const handleClose = () => {
+  const handleClose = async () => {
+    const activeElement = document.activeElement;
+    if (
+      activeElement instanceof HTMLElement &&
+      mobileToolbarElement?.contains(activeElement)
+    ) {
+      activeElement.blur();
+    }
+
     globalActions.closeMobileToolbar();
+    await tick();
+    mobileBottomNavElement
+      ?.querySelector<HTMLElement>('.nav-tab[aria-pressed="true"]')
+      ?.focus({ preventScroll: true });
   };
 
   const handleOverlayKeydown = (event: KeyboardEvent) => {
     if (event.key !== KEY.ESCAPE || !globalState.isMobileToolbarOpen) return;
 
     event.stopPropagation();
-    handleClose();
+    void handleClose();
   };
 
   const handleToolSelect = (tool: VisualizationTools) => {
@@ -197,6 +211,7 @@
 
 {#if globalState.isMobileView}
   <div
+    bind:this={mobileToolbarElement}
     class={clsx('mobile-toolbar-overlay', {
       open: globalState.isMobileToolbarOpen,
       'with-tools-bar': showToolsBar
@@ -265,6 +280,7 @@
         {#each vizSubTabs as tab (tab.id)}
           <button
             type="button"
+            data-viz-sub-tab={tab.id}
             class={clsx('sub-tab', {
               selected: activeVizSubTab === tab.id
             })}
@@ -314,6 +330,7 @@
   {/if}
 
   <nav
+    bind:this={mobileBottomNavElement}
     class="mobile-bottom-nav app-shadow"
     aria-label={m.navigation_primary_aria()}
   >
