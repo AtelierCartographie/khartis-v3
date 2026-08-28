@@ -18,7 +18,10 @@
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import { FACET_SLOT, type FacetSlotPath } from './facets.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
-  import { globalActions } from '$lib/features/commons/stores/global.svelte';
+  import {
+    globalActions,
+    globalState
+  } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import {
     FillMode,
@@ -34,6 +37,7 @@
   const FACETS_HELP_URL =
     'https://www.sciencespo.fr/cartographie/khartis/docs/';
   const CONFIGURE_SECTION_ID = 'configure-visualization';
+  const MOBILE_CONFIGURE_TAB_SELECTOR = '[data-viz-sub-tab="configure"]';
   const FACETS_COLUMNS_MIN = 1;
   const FACETS_COLUMNS_MAX = 4;
 
@@ -280,11 +284,22 @@
   function handleConfigureVisualization() {
     globalActions.setSelectedTool(undefined);
     globalActions.setNavigationState(ToolbarStep.Visualizations);
+    if (globalState.isMobileView) {
+      globalActions.openMobileToolbar();
+    }
 
     setTimeout(() => {
-      document
-        .querySelector(`#${CONFIGURE_SECTION_ID}`)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (globalState.isMobileView) {
+        document
+          .querySelector<HTMLButtonElement>(MOBILE_CONFIGURE_TAB_SELECTOR)
+          ?.click();
+      }
+
+      requestAnimationFrame(() => {
+        document
+          .querySelector(`#${CONFIGURE_SECTION_ID}`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     }, 100);
   }
 

@@ -5,6 +5,7 @@
     icon?: Component;
     label: string;
     iconSize?: number;
+    disabled?: boolean;
   }
 
   interface Props {
@@ -32,7 +33,7 @@
   }: Props = $props();
 
   function handleClick(index: number): void {
-    if (index === activeIndex) {
+    if (index === activeIndex || items[index]?.disabled) {
       return;
     }
 
@@ -40,6 +41,10 @@
   }
 
   function handleDoubleClick(index: number): void {
+    if (items[index]?.disabled) {
+      return;
+    }
+
     ondblclick?.(index);
   }
 </script>
@@ -58,6 +63,7 @@
         : ''}"
       title={tabTitle?.(index, activeIndex === index)}
       aria-pressed={activeIndex === index}
+      disabled={item.disabled}
       onclick={() => handleClick(index)}
       ondblclick={() => handleDoubleClick(index)}
     >
@@ -138,6 +144,12 @@
 
   .toggle-tab:hover:not(.active) {
     background-color: var(--cds-layer-hover-01);
+  }
+
+  .toggle-tab:disabled {
+    cursor: not-allowed;
+    color: var(--cds-text-disabled);
+    background-color: transparent;
   }
 
   .visually-hidden {

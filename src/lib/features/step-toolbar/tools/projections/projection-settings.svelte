@@ -19,6 +19,8 @@
     projectionActions
   } from './projection.store.svelte';
 
+  const PROJECTION_ANGLE_STEP = 0.01;
+
   const projectionState = $derived(getProjectionState());
 
   const projectionContext = $derived(
@@ -97,7 +99,7 @@
           value={projectionState.longitude}
           min={-180}
           max={180}
-          step={1}
+          step={PROJECTION_ANGLE_STEP}
           showMinMax
           minLabel={deg(-180)}
           maxLabel={deg(180)}
@@ -112,7 +114,7 @@
           value={projectionState.latitude}
           min={-90}
           max={90}
-          step={1}
+          step={PROJECTION_ANGLE_STEP}
           showMinMax
           minLabel={deg(-90)}
           maxLabel={deg(90)}
@@ -127,7 +129,7 @@
           value={projectionState.rotation}
           min={-180}
           max={180}
-          step={1}
+          step={PROJECTION_ANGLE_STEP}
           showMinMax
           minLabel={deg(-180)}
           maxLabel={deg(180)}
