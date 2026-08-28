@@ -600,6 +600,8 @@
         return m.annotations_shape_circle();
       case SHAPE_TYPE.LINE:
         return m.annotations_shape_line();
+      case SHAPE_TYPE.TRIANGLE:
+        return m.triangle();
       case SHAPE_TYPE.RECTANGLE:
       default:
         return m.annotations_shape_rectangle();

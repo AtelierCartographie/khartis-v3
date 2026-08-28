@@ -2,6 +2,8 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { tick } from 'svelte';
 import '$lib/features/commons/stores/locale.store.svelte';
+import { SHAPE_TYPE } from '$lib/features/commons/constants';
+import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
 import * as m from '$lib/paraglide/messages';
 import { setLocale } from '$lib/paraglide/runtime.js';
 import ShapeTool from './shape-tool.svelte';
@@ -39,5 +41,31 @@ describe('shape tool', () => {
 
     expect(screen.getByText(m.annotations_shape_arrow())).toBeInTheDocument();
     expect(screen.queryByText(frArrowLabel)).not.toBeInTheDocument();
+  });
+
+  it('should update the selected shape type before starting another placement', async () => {
+    annotationsActions.addAnnotation(
+      AnnotationKind.SHAPE,
+      SHAPE_TYPE.RECTANGLE
+    );
+    const selected = getAnnotationsState().items.at(-1);
+    expect(selected).toBeDefined();
+    if (!selected) return;
+
+    annotationsActions.selectAnnotation(selected.id);
+    render(ShapeTool);
+
+    await fireEvent.change(screen.getByRole('combobox', { name: m.shape() }), {
+      target: { value: SHAPE_TYPE.TRIANGLE }
+    });
+    await fireEvent.click(
+      screen.getByRole('button', { name: m.annotations_add_shape() })
+    );
+
+    expect(
+      getAnnotationsState().items.find((item) => item.id === selected.id)
+        ?.content
+    ).toBe(SHAPE_TYPE.TRIANGLE);
+    expect(getAnnotationsState().pendingContent).toBe(SHAPE_TYPE.TRIANGLE);
   });
 });
