@@ -197,4 +197,27 @@ describe('globalState project persistence boundary', () => {
       mocks.datasetsStoreMock.syncMapVisibilityWithSourceFile
     ).toHaveBeenCalledWith('source-2');
   });
+
+  it('should recover selection when the dataset appears after a stale wait', async () => {
+    let rejectWait: (reason?: unknown) => void = () => {};
+    const pendingWait = new Promise<string>((_, reject) => {
+      rejectWait = reject;
+    });
+
+    mocks.datasetsStoreMock.getDatasetBySourceFile
+      .mockReturnValueOnce(undefined)
+      .mockReturnValue({ id: 'dataset-1', sourceFileId: 'source-1' });
+    mocks.datasetsStoreMock.waitForDatasetBySourceFile.mockReturnValue(
+      pendingWait
+    );
+
+    globalActions.selectDataButton('source-1');
+    rejectWait(new Error('stale dataset wait'));
+
+    await vi.waitFor(() => {
+      expect(mocks.datasetsStoreMock.selectDataset).toHaveBeenCalledWith(
+        'dataset-1'
+      );
+    });
+  });
 });

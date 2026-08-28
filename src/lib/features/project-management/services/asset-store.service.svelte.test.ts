@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AssetRef } from '$lib/features/commons/types/create-project.types';
+import {
+  DataSourceType,
+  FileType,
+  type AssetRef
+} from '$lib/features/commons/types/create-project.types';
+import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import {
   DataValidationError,
   PipelineError
@@ -13,8 +18,12 @@ vi.mock('./database-access.service', () => ({
   getProjectDatabase: mocks.getProjectDatabase
 }));
 
-const { persistAssetBlob, readAssetBytes } =
-  await import('./asset-store.service');
+const {
+  createFileFromAssetRef,
+  ensureUploadedFileAssets,
+  persistAssetBlob,
+  readAssetBytes
+} = await import('./asset-store.service');
 
 interface FakeStoredAssetMetadata {
   assetId: string;
@@ -40,7 +49,8 @@ type FakeStoreName = 'project_assets' | 'project_asset_chunks';
 class FakeAssetObjectStore {
   constructor(
     private readonly storeName: FakeStoreName,
-    private readonly database: FakeAssetDatabase
+    private readonly database: FakeAssetDatabase,
+    private readonly transaction: FakeAssetTransaction
   ) {}
 
   getKey(assetId: string): IDBRequest<IDBValidKey | undefined> {
@@ -62,7 +72,14 @@ class FakeAssetObjectStore {
     };
   }
 
-  put(_value: unknown): void {}
+  put(value: unknown): void {
+    if (this.storeName === 'project_assets') {
+      this.database.putMetadata(value as FakeStoredAssetMetadata);
+    } else {
+      this.database.putChunk(value as FakeStoredAssetChunk);
+    }
+    this.transaction.completeSoon();
+  }
 
   delete(_key: unknown): void {}
 }
@@ -74,10 +91,18 @@ class FakeAssetTransaction {
 
   error: Error | null = null;
 
+  private completionScheduled = false;
+
   constructor(private readonly database: FakeAssetDatabase) {}
 
   objectStore(name: string): FakeAssetObjectStore {
-    return new FakeAssetObjectStore(name as FakeStoreName, this.database);
+    return new FakeAssetObjectStore(name as FakeStoreName, this.database, this);
+  }
+
+  completeSoon(): void {
+    if (this.completionScheduled) return;
+    this.completionScheduled = true;
+    setTimeout(() => this.oncomplete?.(), 0);
   }
 }
 
@@ -100,6 +125,15 @@ class FakeAssetDatabase {
 
   getChunks(assetId: string): FakeStoredAssetChunk[] {
     return this.chunks.get(assetId) ?? [];
+  }
+
+  putMetadata(metadata: FakeStoredAssetMetadata): void {
+    this.metadata.set(metadata.assetId, metadata);
+  }
+
+  putChunk(chunk: FakeStoredAssetChunk): void {
+    const chunks = this.chunks.get(chunk.assetId) ?? [];
+    this.chunks.set(chunk.assetId, [...chunks, chunk]);
   }
 
   seedAsset(
@@ -260,5 +294,54 @@ describe('asset store errors', () => {
         actualChunks: 1
       })
     });
+  });
+
+  it('should persist an extracted archive layer as a GeoJSON asset', async () => {
+    const database = new FakeAssetDatabase();
+    mocks.getProjectDatabase.mockResolvedValue(
+      database as unknown as IDBDatabase
+    );
+    setStorageEstimate(100 * 1024 * 1024, 0);
+    const preparedGeoJSON = JSON.stringify({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [2.3, 48.8] },
+          properties: { name: 'Paris' }
+        }
+      ]
+    });
+
+    const preparedFile = await ensureUploadedFileAssets({
+      id: 'cities',
+      name: 'cities-points',
+      size: 256,
+      type: 'application/zip',
+      fileType: FileType.SHAPEFILE,
+      status: FileStatus.COMPLETE,
+      sourceType: DataSourceType.FILE_UPLOAD,
+      sourceArchive: 'two-shapefiles.zip',
+      preparedGeoJSON,
+      originalFile: new File([new Uint8Array([1, 2, 3])], 'archive.zip', {
+        type: 'application/zip'
+      })
+    });
+
+    expect(preparedFile.assetRef).toMatchObject({
+      originalName: 'cities-points.geojson',
+      mimeType: 'application/geo+json',
+      size: new Blob([preparedGeoJSON]).size,
+      kind: 'primary'
+    });
+
+    if (!preparedFile.assetRef) {
+      throw new Error('Expected the archive snapshot asset to be persisted');
+    }
+
+    const restoredFile = await createFileFromAssetRef(preparedFile.assetRef);
+    expect(restoredFile.name).toBe('cities-points.geojson');
+    expect(restoredFile.type).toBe('application/geo+json');
+    expect(await restoredFile.text()).toBe(preparedGeoJSON);
   });
 });

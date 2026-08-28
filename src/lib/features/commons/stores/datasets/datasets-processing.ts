@@ -26,6 +26,7 @@ import {
 import { fontAssetsStore } from '../font-assets.store.svelte';
 import { detectFontsInDataset } from '../../services/font-detection.service';
 import { VisualizationType } from '$lib/features/commons/constants/visualization.constants';
+import { replaceFileExtension } from '../../utils/file.utils';
 
 export interface VisualizationConfig {
   id: string;
@@ -214,7 +215,8 @@ function createRestorableGeoSnapshot(file: UploadedFile): UploadedFile | null {
     file.fileType === FileType.GEOPARQUET ||
     file.fileType === FileType.KML ||
     file.fileType === FileType.KMZ ||
-    file.fileType === FileType.GPX;
+    file.fileType === FileType.GPX ||
+    file.fileType === FileType.ZIP;
 
   if (!isGeoSnapshot) {
     return null;
@@ -222,7 +224,7 @@ function createRestorableGeoSnapshot(file: UploadedFile): UploadedFile | null {
 
   return {
     ...file,
-    name: file.name.replace(/\.[^.]+$/u, '.geojson'),
+    name: replaceFileExtension(file.name, '.geojson'),
     type: 'application/geo+json',
     fileType: FileType.GEOJSON,
     content: sanitizePreparedGeoJSON(file.preparedGeoJSON),

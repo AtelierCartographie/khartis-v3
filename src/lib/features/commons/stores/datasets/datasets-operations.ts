@@ -165,6 +165,13 @@ export async function resetDataset(
       geoColumn: preservedJoinState.geoColumn
     };
 
+    // The pipeline can rebuild the source under the same DuckDB table name.
+    // Invalidate analysis and join similarity caches before restoring the join,
+    // otherwise values removed by filters may remain absent after the reset.
+    await duckDBOrchestrator.invalidateAndReanalyse(
+      resetDatasetResult.tableName
+    );
+
     state.datasets = state.datasets.map((existingDataset) =>
       existingDataset.id === datasetId ? resetDatasetResult : existingDataset
     );

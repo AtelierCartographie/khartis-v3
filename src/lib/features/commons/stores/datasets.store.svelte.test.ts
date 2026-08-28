@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   processUploadedFileMock: vi.fn(),
   createFileFromUploadMock: vi.fn(),
   dropTableMock: vi.fn(),
+  invalidateAndReanalyseMock: vi.fn(),
   registerExistingTableMock: vi.fn(),
   clearFiltersMock: vi.fn(),
   bumpDatasetsVersionMock: vi.fn(),
@@ -64,6 +65,7 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
 vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
   duckDBOrchestrator: {
     dropTable: mocks.dropTableMock,
+    invalidateAndReanalyse: mocks.invalidateAndReanalyseMock,
     registerExistingTable: mocks.registerExistingTableMock,
     clearFilters: mocks.clearFiltersMock,
     bumpDatasetsVersion: mocks.bumpDatasetsVersionMock
@@ -609,6 +611,12 @@ describe('datasetsStore persisted view state', () => {
     const success = await datasetsStore.resetDataset('dataset-1');
 
     expect(success).toBe(true);
+    expect(mocks.invalidateAndReanalyseMock).toHaveBeenCalledWith(
+      'restored_table'
+    );
+    expect(
+      mocks.invalidateAndReanalyseMock.mock.invocationCallOrder[0]
+    ).toBeLessThan(mocks.registerExistingTableMock.mock.invocationCallOrder[0]);
     expect(getVisualizationsByDataset).toHaveBeenCalledWith('dataset-1');
     expect(removeVisualization).toHaveBeenCalledWith('viz-1');
     expect(removeVisualization).toHaveBeenCalledWith('viz-2');

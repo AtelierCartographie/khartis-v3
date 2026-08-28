@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Table } from 'apache-arrow/Arrow';
 import { markTableMutated } from '../cache/cache-manager';
 import { FileType, type DuckDBContext, type DuckDBDataset } from '../types';
-import { getGPSArrowTable, type DuckDBClientForGPS } from './gps-ops';
+import {
+  getGPSArrowTable,
+  validateGPSColumns,
+  type DuckDBClientForGPS
+} from './gps-ops';
 
 function makeGpsDataset(
   tableName: string,
@@ -86,5 +90,30 @@ describe('getGPSArrowTable cache', () => {
     );
 
     expect(loadArrowTable).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('validateGPSColumns', () => {
+  it('should describe both observed ranges when a magnitude inversion is detected', async () => {
+    const query = vi.fn().mockResolvedValue([
+      {
+        lat_min: 1.55,
+        lat_max: 3.175,
+        lat_median: 2.4,
+        lon_min: 48.182,
+        lon_max: 49.205,
+        lon_median: 48.7
+      }
+    ]);
+
+    const result = await validateGPSColumns('sites_seveso', 'lat', 'long', {
+      query
+    });
+
+    expect(result.possibleInversion).toBe(true);
+    expect(result.warning).toContain('1.55');
+    expect(result.warning).toContain('3.17');
+    expect(result.warning).toContain('48.18');
+    expect(result.warning).toContain('49.20');
   });
 });
