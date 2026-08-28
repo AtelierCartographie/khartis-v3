@@ -21,5 +21,6 @@ overrides:
   tar: '>=7.5.11'
 
 patchedDependencies:
+  '@deck.gl/mapbox@9.3.10': patches/@deck.gl__mapbox@9.3.10.patch
   carbon-components-svelte: patches/carbon-components-svelte.patch
   vite-plugin-pwa@1.3.0: patches/vite-plugin-pwa@1.3.0.patch

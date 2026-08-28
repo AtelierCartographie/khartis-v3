@@ -630,9 +630,15 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
 
     if (overlayToClean) {
       try {
-        overlayToClean.setProps({ layers: [] });
-      } catch {
-        // Ignore — overlay may already be detached
+        // Finalize while MapLibre still owns a valid transform and canvas.
+        // Clearing props schedules a repaint that can outlive map.remove().
+        overlayToClean.finalize();
+      } catch (error) {
+        logger.error(
+          'Failed to finalize MapLibre Deck overlay',
+          LogCategory.MAP,
+          error
+        );
       }
     }
     if (mapToRemove) {
@@ -652,6 +658,9 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     removeOrthographicFallbackCanvas();
     mapInstanceStore.reset();
     if (isDeckDebugEnabled()) {
+      const debugWindow = window as unknown as Record<string, unknown>;
+      delete debugWindow.__maplibreMap;
+      delete debugWindow.__deck;
       deckDebugStore.clear();
     }
   }

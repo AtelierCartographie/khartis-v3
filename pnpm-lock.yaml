@@ -16,8 +16,11 @@ overrides:
   tar: '>=7.5.11'
 
 patchedDependencies:
+  '@deck.gl/mapbox@9.3.10':
+    hash: 2410fb5323834d093bb98c2bc816984ffac5400d5d0fcd214ba66e752ab2e635
+    path: patches/@deck.gl__mapbox@9.3.10.patch
   carbon-components-svelte:
-    hash: 048a2620c8062e53d5106e15bfae9e4eba06d1c90394eee55ac17e2a96631b3e
+    hash: 5952064220abef6071af27680309af73e42c29bb3477c1c8ac985b4b6bc75df6
     path: patches/carbon-components-svelte.patch
   vite-plugin-pwa@1.3.0:
     hash: 80aac6addfd1e6b7c7587cb531e6abca9c90ff789c4cfa31b06086a1368eedeb
@@ -53,7 +56,7 @@ importers:
         version: 9.3.10(@deck.gl/core@9.3.10)(@loaders.gl/core@4.4.5)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))
       '@deck.gl/mapbox':
         specifier: ^9.3.10
-        version: 9.3.10(@deck.gl/core@9.3.10)(@luma.gl/core@9.3.6)(@math.gl/web-mercator@4.1.0)
+        version: 9.3.10(patch_hash=2410fb5323834d093bb98c2bc816984ffac5400d5d0fcd214ba66e752ab2e635)(@deck.gl/core@9.3.10)(@luma.gl/core@9.3.6)(@math.gl/web-mercator@4.1.0)
       '@duckdb/duckdb-wasm':
         specifier: 1.33.1-dev57.0
         version: 1.33.1-dev57.0
@@ -104,7 +107,7 @@ importers:
         version: 21.2.0
       carbon-components-svelte:
         specifier: ^0.111.1
-        version: 0.111.1(patch_hash=048a2620c8062e53d5106e15bfae9e4eba06d1c90394eee55ac17e2a96631b3e)
+        version: 0.111.1(patch_hash=5952064220abef6071af27680309af73e42c29bb3477c1c8ac985b4b6bc75df6)
       carbon-icons-svelte:
         specifier: ^13.15.0
         version: 13.15.0
@@ -7587,7 +7590,7 @@ snapshots:
       '@types/geojson': 7946.0.16
       earcut: 2.2.4
 
-  '@deck.gl/mapbox@9.3.10(@deck.gl/core@9.3.10)(@luma.gl/core@9.3.6)(@math.gl/web-mercator@4.1.0)':
+  '@deck.gl/mapbox@9.3.10(patch_hash=2410fb5323834d093bb98c2bc816984ffac5400d5d0fcd214ba66e752ab2e635)(@deck.gl/core@9.3.10)(@luma.gl/core@9.3.6)(@math.gl/web-mercator@4.1.0)':
     dependencies:
       '@deck.gl/core': 9.3.10
       '@luma.gl/core': 9.3.6
@@ -9411,7 +9414,7 @@ snapshots:
 
   caniuse-lite@1.0.30001810: {}
 
-  carbon-components-svelte@0.111.1(patch_hash=048a2620c8062e53d5106e15bfae9e4eba06d1c90394eee55ac17e2a96631b3e):
+  carbon-components-svelte@0.111.1(patch_hash=5952064220abef6071af27680309af73e42c29bb3477c1c8ac985b4b6bc75df6):
     dependencies:
       '@ibm/telemetry-js': 1.11.0
       flatpickr: 4.6.9
