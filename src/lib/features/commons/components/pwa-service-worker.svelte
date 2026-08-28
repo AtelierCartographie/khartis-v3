@@ -92,6 +92,11 @@
     swUrl: string,
     initialRegistration: ServiceWorkerRegistration
   ): Promise<void> {
+    if (dev) {
+      await cleanupDevServiceWorker();
+      return;
+    }
+
     let registration = initialRegistration;
 
     try {

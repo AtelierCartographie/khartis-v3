@@ -20,6 +20,7 @@ export type {
   DuckDBContext,
   DuckDBDataset,
   DuckDBMetadata,
+  FileWithId,
   FilterOperator,
   FilterStats,
   FinalizeJoinResult,

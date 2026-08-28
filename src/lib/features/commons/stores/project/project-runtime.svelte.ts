@@ -59,13 +59,15 @@ export function isCurrentProjectRuntime(
 export function resetProjectRuntimeState(
   options: ResetProjectRuntimeStateOptions = {}
 ): void {
-  if (options.resetPersistence ?? true) {
+  const resetPersistence = options.resetPersistence ?? true;
+
+  if (resetPersistence) {
     persistenceRegistry.resetAll();
+    globalActions.resetNavigationState();
+    dataTabStore.reset();
+    dataToolsStore.reset();
   }
   datasetsStore.clear();
   basemapService.reset();
   projectionStore.reset();
-  globalActions.resetNavigationState();
-  dataTabStore.reset();
-  dataToolsStore.reset();
 }

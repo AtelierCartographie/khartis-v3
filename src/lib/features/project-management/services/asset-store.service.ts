@@ -240,13 +240,35 @@ export async function ensureUploadedFileAssets(
   file: UploadedFile
 ): Promise<UploadedFile> {
   const preparedFile = { ...file };
+  const shouldPersistArchiveSnapshot = Boolean(
+    preparedFile.sourceArchive && preparedFile.preparedGeoJSON
+  );
+  const hasArchiveSnapshotAsset = Boolean(
+    preparedFile.assetRef?.mimeType === 'application/geo+json' &&
+    preparedFile.assetRef.originalName.endsWith('.geojson')
+  );
 
   const primaryAssetMissing =
     preparedFile.assetRef &&
     !(await assetExists(preparedFile.assetRef.assetId));
 
-  if (!preparedFile.assetRef || primaryAssetMissing) {
-    if (preparedFile.originalFile) {
+  if (
+    !preparedFile.assetRef ||
+    primaryAssetMissing ||
+    (shouldPersistArchiveSnapshot && !hasArchiveSnapshotAsset)
+  ) {
+    if (shouldPersistArchiveSnapshot && preparedFile.preparedGeoJSON) {
+      const snapshotBaseName = preparedFile.name.replace(/\.[^.]+$/u, '');
+      preparedFile.assetRef = await persistAssetContent(
+        preparedFile.preparedGeoJSON,
+        {
+          originalName: `${snapshotBaseName}.geojson`,
+          mimeType: 'application/geo+json',
+          size: preparedFile.preparedGeoJSON.length,
+          kind: 'primary'
+        }
+      );
+    } else if (preparedFile.originalFile) {
       preparedFile.assetRef = await createAssetRefFromFile(
         preparedFile.originalFile,
         'primary',

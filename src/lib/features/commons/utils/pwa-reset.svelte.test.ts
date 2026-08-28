@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPwaCachePrefix, resolvePwaScopeUrl } from './pwa-cache';
+
+vi.mock('$app/navigation', () => ({
+  replaceState: (url: string | URL, state: App.PageState) => {
+    window.history.replaceState(state, '', url);
+  }
+}));
+
 import {
   buildLastProjectRestoreFallbackUrl,
   clearLastProjectRestoreQuarantine,
@@ -8,6 +15,10 @@ import {
   quarantineLastProjectRestore,
   shouldSkipLastProjectRestore
 } from './pwa-reset';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 function resetFlag(baseUri = document.baseURI): string {
   return `${createPwaCachePrefix(resolvePwaScopeUrl(baseUri))}reset-skip-restore`;
@@ -54,11 +65,7 @@ describe('shouldSkipLastProjectRestore', () => {
   });
 
   it('should persist and remove a restore fallback URL when storage works', () => {
-    window.history.pushState(
-      {},
-      '',
-      '/cartographie/khartis/?restoreFallback=project-1#map'
-    );
+    window.history.pushState({}, '', '/?restoreFallback=project-1#map');
 
     expect(shouldSkipLastProjectRestore()).toBe(true);
     expect(isLastProjectRestoreQuarantined('project-1')).toBe(true);
@@ -155,11 +162,13 @@ describe('last project restore quarantine', () => {
   });
 
   it('should clear the quarantine after a successful manual reopen', () => {
+    const replaceState = vi.spyOn(window.history, 'replaceState');
     quarantineLastProjectRestore('project-1');
 
     clearLastProjectRestoreQuarantine('project-1');
 
     expect(isLastProjectRestoreQuarantined('project-1')).toBe(false);
+    expect(replaceState).not.toHaveBeenCalled();
   });
 
   it('should quarantine every automatic restore when the project id is unknown', () => {
@@ -195,11 +204,7 @@ describe('last project restore quarantine', () => {
   });
 
   it('should clear an older fallback URL after another project opens successfully', () => {
-    window.history.pushState(
-      {},
-      '',
-      '/cartographie/khartis/?restoreFallback=project-1'
-    );
+    window.history.pushState({}, '', '/?restoreFallback=project-1');
 
     clearLastProjectRestoreQuarantine('project-2');
 
