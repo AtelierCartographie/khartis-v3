@@ -49,6 +49,18 @@ interface ColumnInfo {
   x: number;
 }
 
+function measureLongestToken(value: string | null, font: string): number {
+  if (!value) return 0;
+
+  return Math.max(
+    0,
+    ...value
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((token) => Math.ceil(Textbox.measureText(token, font)))
+  );
+}
+
 export function draw_categorical_legend(
   raw_categories: CategoryItem[],
   options: CategoricalLegendOptions = {}
@@ -139,9 +151,17 @@ export function draw_categorical_legend(
   };
   const category_body_width =
     margin.left + last_column.x + last_column.width + margin.right;
-  const footer_lines = footerItems.map((item) =>
-    text_box.linebreak(item.label)
-  );
+  const footer_lines = footerItems.map((item) => {
+    const maxLineCount = Math.max(
+      2,
+      item.label.trim().split(/\s+/).filter(Boolean).length
+    );
+    return new Textbox({
+      font,
+      width: label_width,
+      height: line_height * maxLineCount
+    }).linebreak(item.label);
+  });
   const maxLabelLineCount = Math.max(
     1,
     ...categories.map((item) => item.nb_lines)
@@ -165,8 +185,6 @@ export function draw_categorical_legend(
     footerItems.length > 0
       ? margin.left + footerBox.w + gap + footer_label_width + margin.right
       : 0;
-  const body_width = Math.max(category_body_width, footer_body_width);
-  const max_text_width = body_width - margin.left - margin.right;
   const header_gap = 3;
   const title_font = createLegendFont({
     fontSize: titleSize,
@@ -184,6 +202,18 @@ export function draw_categorical_legend(
     fontFamily: resolvedFontFamily,
     lineHeight: noteSize * 1.2
   });
+  const body_width = Math.max(
+    category_body_width,
+    footer_body_width,
+    margin.left +
+      Math.max(
+        measureLongestToken(title, title_font),
+        measureLongestToken(subtitle, subtitle_font),
+        measureLongestToken(note, note_font)
+      ) +
+      margin.right
+  );
+  const max_text_width = body_width - margin.left - margin.right;
   const header = renderLegendHeader({
     title,
     subtitle,
@@ -437,7 +467,7 @@ function create_label(
     return `<text x="${x}" y="${centerY}">${escapeSvgText(text.lines[0] ?? '')}</text>`;
   }
 
-  return `<text>${text.lines
+  return `<text aria-label="${escapeSvgAttribute(text.label)}">${text.lines
     .map((d, i) => {
       const lineY = centerY + (i - (text.nb_lines - 1) / 2) * dy;
       return `<tspan x="${x}" y="${lineY}">${escapeSvgText(d)}</tspan>`;

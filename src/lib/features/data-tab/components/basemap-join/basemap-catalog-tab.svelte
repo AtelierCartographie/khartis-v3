@@ -218,6 +218,8 @@
           items={searchComboBoxItems}
           selectedId={searchSelectedId}
           value={searchQuery}
+          labelText={m.basemap_search_placeholder()}
+          hideLabel
           placeholder={m.basemap_search_placeholder()}
           shouldFilterItem={(item, value) => {
             if (!value) return true;

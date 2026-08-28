@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   removeBulkVisualizationsMock: vi.fn(),
   setVisualizationOrderMock: vi.fn(),
   generateFacetVisualizationsMock: vi.fn(),
+  buildFacetSlotUpdatesMock: vi.fn(),
   buildFacetVisualizationUpdatesMock: vi.fn(),
   resolveFacetPrimitiveFilterMock: vi.fn(() => 'polygon'),
   getEnabledPrimitiveFiltersMock: vi.fn(() => [] as string[]),
@@ -27,6 +28,7 @@ vi.mock('$lib/features/project-management/core', () => ({
 
 vi.mock('$lib/features/commons/services/facet-generator.service', () => ({
   generateFacetVisualizations: mocks.generateFacetVisualizationsMock,
+  buildFacetSlotUpdates: mocks.buildFacetSlotUpdatesMock,
   buildFacetVisualizationUpdates: mocks.buildFacetVisualizationUpdatesMock,
   resolveFacetPrimitiveFilter: mocks.resolveFacetPrimitiveFilterMock
 }));
@@ -71,6 +73,7 @@ describe('facetsStore', () => {
     vi.clearAllMocks();
     mocks.resolveFacetPrimitiveFilterMock.mockReturnValue('polygon');
     mocks.getEnabledPrimitiveFiltersMock.mockReturnValue([]);
+    mocks.buildFacetSlotUpdatesMock.mockResolvedValue({});
     mocks.buildFacetVisualizationUpdatesMock.mockImplementation(
       ({
         variable,
@@ -168,7 +171,8 @@ describe('facetsStore', () => {
       variables: ['a', 'b'],
       layout: { columns: 2, gap: 16 },
       scaleMode: SCALE_MODE.INDEPENDENT,
-      generatedVisualizationIds: ['facet-a', 'facet-b']
+      generatedVisualizationIds: ['facet-a', 'facet-b'],
+      slotAssignments: [{}, { [FACET_SLOT.TEXT_VALUE]: 'custom-b' }]
     });
 
     await facetsStore.syncGeneratedVisualizationsFromBase('base-viz');
@@ -188,17 +192,33 @@ describe('facetsStore', () => {
       {
         baseViz,
         visualization: baseViz,
-        variable: 'custom-b',
+        variable: 'b',
         scaleMode: SCALE_MODE.INDEPENDENT,
         primarySlotPath: FACET_SLOT.TEXT_VALUE
       }
     );
+    expect(mocks.buildFacetSlotUpdatesMock).toHaveBeenCalledWith({
+      baseViz,
+      visualization: {
+        id: 'facet-b',
+        name: 'b',
+        text: { valueColumn: 'custom-b' },
+        facet: { baseVisualizationId: 'base-viz' }
+      },
+      variable: 'custom-b',
+      scaleMode: SCALE_MODE.INDEPENDENT,
+      slotPath: FACET_SLOT.TEXT_VALUE
+    });
     expect(updateVisualizationMock).toHaveBeenNthCalledWith(1, 'facet-a', {
+      id: 'facet-a',
       name: 'a',
+      text: { valueColumn: 'a' },
       facet: { baseVisualizationId: 'base-viz' }
     });
     expect(updateVisualizationMock).toHaveBeenNthCalledWith(2, 'facet-b', {
-      name: 'custom-b',
+      id: 'facet-b',
+      name: 'b',
+      text: { valueColumn: 'custom-b' },
       facet: { baseVisualizationId: 'base-viz' }
     });
   });
@@ -394,7 +414,7 @@ describe('facetsStore', () => {
       expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
         mocks.visualizations[0],
         ['category', 'segment'],
-        SCALE_MODE.SHARED,
+        SCALE_MODE.INDEPENDENT,
         FACET_SLOT.SYMBOL_FILL_CATEGORY
       );
     });
@@ -541,8 +561,8 @@ describe('facetsStore', () => {
   });
 
   describe('setVariableForSlot', () => {
-    it('should return false when the collection is not enabled', () => {
-      const result = facetsStore.setVariableForSlot(
+    it('should return false when the collection is not enabled', async () => {
+      const result = await facetsStore.setVariableForSlot(
         0,
         FACET_SLOT.SYMBOL_SIZE,
         'x'
@@ -551,7 +571,7 @@ describe('facetsStore', () => {
       expect(updateVisualizationMock).not.toHaveBeenCalled();
     });
 
-    it('should update the facette at the given index for the given slot', () => {
+    it('should update the facette at the given index for the given slot', async () => {
       mocks.visualizations = [
         {
           id: 'base-viz',
@@ -589,8 +609,12 @@ describe('facetsStore', () => {
         scaleMode: SCALE_MODE.INDEPENDENT,
         generatedVisualizationIds: ['facet-a', 'facet-b']
       });
+      mocks.buildFacetSlotUpdatesMock.mockResolvedValue({
+        mapping: { sizeColumn: 'new-var' },
+        symbol: { sizeColumn: 'new-var' }
+      });
 
-      const result = facetsStore.setVariableForSlot(
+      const result = await facetsStore.setVariableForSlot(
         1,
         FACET_SLOT.SYMBOL_SIZE,
         'new-var'
@@ -601,9 +625,20 @@ describe('facetsStore', () => {
         mapping: { sizeColumn: 'new-var' },
         symbol: { sizeColumn: 'new-var' }
       });
+      expect(mocks.buildFacetSlotUpdatesMock).toHaveBeenCalledWith({
+        baseViz: mocks.visualizations[0],
+        visualization: mocks.visualizations[2],
+        variable: 'new-var',
+        scaleMode: SCALE_MODE.INDEPENDENT,
+        slotPath: FACET_SLOT.SYMBOL_SIZE
+      });
+      expect(facetsStore.slotAssignments).toEqual([
+        {},
+        { [FACET_SLOT.SYMBOL_SIZE]: 'new-var' }
+      ]);
     });
 
-    it('updates symbol stroke slots without touching symbol size slots', () => {
+    it('updates symbol stroke slots without touching symbol size slots', async () => {
       mocks.visualizations = [
         {
           id: 'base-viz',
@@ -638,8 +673,15 @@ describe('facetsStore', () => {
         scaleMode: SCALE_MODE.INDEPENDENT,
         generatedVisualizationIds: ['facet-a']
       });
+      mocks.buildFacetSlotUpdatesMock.mockResolvedValue({
+        mapping: { valueColumn: 'new-stroke', sizeColumn: 'size' },
+        symbol: {
+          sizeColumn: 'size',
+          strokeValueColumn: 'new-stroke'
+        }
+      });
 
-      const result = facetsStore.setVariableForSlot(
+      const result = await facetsStore.setVariableForSlot(
         0,
         FACET_SLOT.SYMBOL_STROKE_VALUE,
         'new-stroke'
@@ -655,7 +697,7 @@ describe('facetsStore', () => {
       });
     });
 
-    it('rejects incompatible text fields for numeric facet slots', () => {
+    it('rejects incompatible text fields for numeric facet slots', async () => {
       mocks.visualizations = [
         {
           id: 'base-viz',
@@ -686,7 +728,7 @@ describe('facetsStore', () => {
         generatedVisualizationIds: ['facet-a']
       });
 
-      const result = facetsStore.setVariableForSlot(
+      const result = await facetsStore.setVariableForSlot(
         0,
         FACET_SLOT.SYMBOL_SIZE,
         'label'
@@ -696,7 +738,7 @@ describe('facetsStore', () => {
       expect(updateVisualizationMock).not.toHaveBeenCalled();
     });
 
-    it('rejects incompatible text fields for camelCase numeric facet slots', () => {
+    it('rejects incompatible text fields for camelCase numeric facet slots', async () => {
       mocks.visualizations = [
         {
           id: 'base-viz',
@@ -731,7 +773,7 @@ describe('facetsStore', () => {
         generatedVisualizationIds: ['facet-a']
       });
 
-      const result = facetsStore.setVariableForSlot(
+      const result = await facetsStore.setVariableForSlot(
         0,
         FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE,
         'label'
@@ -741,7 +783,7 @@ describe('facetsStore', () => {
       expect(updateVisualizationMock).not.toHaveBeenCalled();
     });
 
-    it('rejects technical identifiers for numeric facet slots', () => {
+    it('rejects technical identifiers for numeric facet slots', async () => {
       mocks.visualizations = [
         {
           id: 'base-viz',
@@ -772,7 +814,7 @@ describe('facetsStore', () => {
         generatedVisualizationIds: ['facet-a']
       });
 
-      const result = facetsStore.setVariableForSlot(
+      const result = await facetsStore.setVariableForSlot(
         0,
         FACET_SLOT.POLYGON_VALUE,
         'OGC_FID'
@@ -782,7 +824,7 @@ describe('facetsStore', () => {
       expect(updateVisualizationMock).not.toHaveBeenCalled();
     });
 
-    it('should return false when the map index points to no facette', () => {
+    it('should return false when the map index points to no facette', async () => {
       facetsStore.restoreFromSerialized({
         enabled: true,
         baseVisualizationId: 'base-viz',
@@ -793,7 +835,7 @@ describe('facetsStore', () => {
         generatedVisualizationIds: ['facet-a']
       });
 
-      const result = facetsStore.setVariableForSlot(
+      const result = await facetsStore.setVariableForSlot(
         5,
         FACET_SLOT.SYMBOL_SIZE,
         'x'
@@ -945,6 +987,15 @@ describe('facetsStore', () => {
       expect(facetsStore.scaleMode).toBe(SCALE_MODE.SHARED);
     });
 
+    it('should force independent scales for categorical facets', () => {
+      facetsStore.restoreFromSerialized({
+        primarySlotPath: FACET_SLOT.POLYGON_CATEGORY,
+        scaleMode: SCALE_MODE.SHARED
+      });
+
+      expect(facetsStore.scaleMode).toBe(SCALE_MODE.INDEPENDENT);
+    });
+
     it('should filter out non-string entries from variables array', () => {
       facetsStore.restoreFromSerialized({
         variables: ['a', 42, null, 'b', undefined]
@@ -959,6 +1010,85 @@ describe('facetsStore', () => {
       });
 
       expect(facetsStore.layout.gap).toBe(16);
+    });
+
+    it('should restore only valid per-map slot assignments', () => {
+      facetsStore.restoreFromSerialized({
+        variables: ['a', 'b'],
+        slotAssignments: [
+          {
+            [FACET_SLOT.POLYGON_CATEGORY]: 'category',
+            invalid: 'ignored'
+          },
+          {
+            [FACET_SLOT.POLYGON_STROKE_CATEGORY]: 'stroke',
+            [FACET_SLOT.SYMBOL_SIZE]: 42
+          }
+        ]
+      });
+
+      expect(facetsStore.slotAssignments).toEqual([
+        { [FACET_SLOT.POLYGON_CATEGORY]: 'category' },
+        { [FACET_SLOT.POLYGON_STROKE_CATEGORY]: 'stroke' }
+      ]);
+    });
+
+    it('should reapply saved slot assignments when facets are regenerated', async () => {
+      mocks.visualizations = [
+        {
+          id: 'base-viz',
+          name: 'Base visualization',
+          datasetId: 'dataset-1'
+        }
+      ];
+      mocks.datasets = [
+        {
+          id: 'dataset-1',
+          columns: [
+            { name: 'a', type: 'text' },
+            { name: 'b', type: 'text' },
+            { name: 'stroke', type: 'text' }
+          ]
+        }
+      ];
+      mocks.generateFacetVisualizationsMock.mockResolvedValue([
+        { id: 'restored-a', name: 'a' },
+        { id: 'restored-b', name: 'b' }
+      ]);
+      mocks.buildFacetSlotUpdatesMock.mockResolvedValue({
+        polygon: { strokeCategoryColumn: 'stroke' }
+      });
+      facetsStore.restoreFromSerialized({
+        enabled: true,
+        baseVisualizationId: 'base-viz',
+        primarySlotPath: FACET_SLOT.POLYGON_CATEGORY,
+        variables: ['a', 'b'],
+        layout: { columns: 2, gap: 16 },
+        scaleMode: SCALE_MODE.INDEPENDENT,
+        generatedVisualizationIds: ['old-a', 'old-b'],
+        slotAssignments: [
+          {},
+          { [FACET_SLOT.POLYGON_STROKE_CATEGORY]: 'stroke' }
+        ]
+      });
+
+      await facetsStore.restoreGeneratedVisualizations();
+
+      expect(mocks.buildFacetSlotUpdatesMock).toHaveBeenCalledWith({
+        baseViz: mocks.visualizations[0],
+        visualization: { id: 'restored-b', name: 'b' },
+        variable: 'stroke',
+        scaleMode: SCALE_MODE.INDEPENDENT,
+        slotPath: FACET_SLOT.POLYGON_STROKE_CATEGORY
+      });
+      expect(mocks.createBulkVisualizationsMock).toHaveBeenCalledWith([
+        { id: 'restored-a', name: 'a' },
+        {
+          id: 'restored-b',
+          name: 'b',
+          polygon: { strokeCategoryColumn: 'stroke' }
+        }
+      ]);
     });
 
     it('regenerates missing facet visualizations after project restore', async () => {

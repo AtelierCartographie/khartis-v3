@@ -8,8 +8,9 @@ import type { VisualizationConfig } from '$lib/features/commons/stores/visualiza
 import { globalState } from '$lib/features/commons/stores/global.svelte';
 import { ToolbarStep } from '$lib/features/commons/types/global';
 import type { PickingInfo } from '@deck.gl/core';
-import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import { Type, type Table as ArrowTable } from 'apache-arrow/Arrow';
 import { MAP_TIMING } from '../constants/timing.constants';
+import { resolveGeoJsonSourceTable } from '../layers/geojson-source-table.registry';
 import type { TooltipEntry } from '../types';
 import { mapTooltipStore } from '../stores/map-tooltip.store.svelte';
 
@@ -62,7 +63,12 @@ function extractEntriesFromArrowTable(
         const val = column.get(rowIndex);
         entries.push({
           key: colName,
-          value: formatTooltipValue(val)
+          value:
+            (field.type.typeId === Type.Date ||
+              field.type.typeId === Type.Timestamp) &&
+            (typeof val === 'number' || typeof val === 'bigint')
+              ? formatTooltipValue(new Date(Number(val)))
+              : formatTooltipValue(val)
         });
       }
     }
@@ -87,6 +93,11 @@ function resolveSourceTable(info: PickingInfo): ArrowTable | null {
   }
 
   if (typeof layerData === 'object' && layerData !== null) {
+    const geoJsonSourceTable = resolveGeoJsonSourceTable(layerData);
+    if (geoJsonSourceTable) {
+      return geoJsonSourceTable;
+    }
+
     const sourceTable = Reflect.get(layerData, 'khartisSourceTable');
     if (isArrowTable(sourceTable)) {
       return sourceTable;
@@ -283,19 +294,17 @@ export function extractTooltipEntries(
   }
   let entries: TooltipEntry[] = [];
 
+  const sourceTable = resolveSourceTable(info);
   const isGeoJsonFeature =
     info.object &&
     typeof info.object === 'object' &&
     'properties' in (info.object as Record<string, unknown>);
 
-  if (isGeoJsonFeature) {
+  if (sourceTable) {
+    entries = extractEntriesFromArrowTable(sourceTable, rowIndex);
+  } else if (isGeoJsonFeature) {
     const feature = info.object as { properties?: Record<string, unknown> };
     entries = extractEntriesFromGeoJson(feature);
-  } else {
-    const sourceTable = resolveSourceTable(info);
-    if (sourceTable) {
-      entries = extractEntriesFromArrowTable(sourceTable, rowIndex);
-    }
   }
 
   if (entries.length === 0) return [];

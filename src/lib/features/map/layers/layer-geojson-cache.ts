@@ -4,6 +4,10 @@ import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 
 import { arrowTableToGeoJSON } from '../io';
 import { projectGeoJSON } from '../utils/geoarrow-stream-bridge.utils';
+import {
+  registerGeoJsonSourceTable,
+  resolveGeoJsonSourceTable
+} from './geojson-source-table.registry';
 
 const geoJsonConversionCache = new WeakMap<
   ArrowTable,
@@ -27,6 +31,9 @@ export function getCachedGeoJSON(
     geoJsonConversionCache.set(table, columnMap);
   }
   const result = arrowTableToGeoJSON(table, geoColumn);
+  if (result) {
+    registerGeoJsonSourceTable(result, table);
+  }
   columnMap.set(geoColumn, result);
   return result;
 }
@@ -48,6 +55,10 @@ export function getCachedProjectedGeoJSON<T extends Geometry>(
   }
 
   const projected = projectGeoJSON(geojson, projection) as FeatureCollection<T>;
+  const sourceTable = resolveGeoJsonSourceTable(geojson);
+  if (sourceTable) {
+    registerGeoJsonSourceTable(projected, sourceTable);
+  }
   if (!projectionCache) {
     projectionCache = new WeakMap<object, FeatureCollection>();
     projectedGeoJsonCache.set(geojson, projectionCache);

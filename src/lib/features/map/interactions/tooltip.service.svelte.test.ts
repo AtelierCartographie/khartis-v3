@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PickingInfo } from '@deck.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import { Type } from 'apache-arrow/Arrow';
 import type { TooltipEntry } from '../types';
 import { ToolbarStep } from '$lib/features/commons/types/global';
+import { formatDate } from '$lib/features/commons/utils/format.utils';
+import { registerGeoJsonSourceTable } from '../layers/geojson-source-table.registry';
 
 const { mockGlobalState, mockMapTooltipStore } = vi.hoisted(() => ({
   mockGlobalState: {
@@ -47,7 +50,10 @@ function createArrowTable(rows: Array<Record<string, unknown>>): ArrowTable {
   return {
     numRows: rows.length,
     schema: {
-      fields: fieldNames.map((name) => ({ name }))
+      fields: fieldNames.map((name) => ({
+        name,
+        type: { typeId: Type.Utf8 }
+      }))
     },
     getChild(name: string) {
       return {
@@ -134,6 +140,39 @@ describe('extractTooltipEntries', () => {
     );
 
     expect(keys(entries)).toEqual(['value', 'OGC_FID', 'id', 'name']);
+  });
+
+  it('uses typed Arrow values for a GeoJSON layer tooltip', () => {
+    const eventDate = new Date('2024-02-01T00:00:00.000Z');
+    const sourceTable = createArrowTable([{ event_date: eventDate }]);
+    Object.assign(sourceTable.schema.fields[0], {
+      type: { typeId: Type.Timestamp }
+    });
+    const geoJson = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: null,
+          properties: { event_date: eventDate.getTime() }
+        }
+      ]
+    };
+    registerGeoJsonSourceTable(geoJson, sourceTable);
+
+    const entries = extractTooltipEntries({
+      picked: true,
+      index: 0,
+      object: geoJson.features[0],
+      layer: {
+        id: 'line-layer-dataset-1',
+        props: { data: geoJson }
+      }
+    } as PickingInfo);
+
+    expect(entries).toEqual([
+      { key: 'event_date', value: formatDate(eventDate) }
+    ]);
   });
 });
 
