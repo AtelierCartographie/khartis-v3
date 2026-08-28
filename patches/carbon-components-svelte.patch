@@ -26,3 +26,14 @@ index abedf3f130586469ab463903bf16ad84176c31c0..17872eab321e00fe29f5a94eade6e0eb
        ctx?.syncNativeSelectValue?.();
      };
    });
+diff --git a/src/ComboBox/ComboBox.svelte b/src/ComboBox/ComboBox.svelte
+--- a/src/ComboBox/ComboBox.svelte
++++ b/src/ComboBox/ComboBox.svelte
+@@ -733,7 +733,6 @@
+   <ListBox
+     class={comboBoxListBoxClass}
+     id={comboId}
+-    aria-label={ariaLabel}
+     aria-disabled={readonly || undefined}
+     {disabled}
+     invalid={showInvalid}
