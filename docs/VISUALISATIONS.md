@@ -70,9 +70,9 @@ Deux modes détectés automatiquement puis sélectionnables manuellement :
 | Catégorie     | Score         | Couleur UI |
 | ------------- | ------------- | ---------- |
 | Jointes       | = 1.0 (exact) | Vert       |
-| À vérifier    | 0.85 – 0.99   | Jaune      |
+| À vérifier    | 0.90 – 0.99   | Jaune      |
 | Non uniques   | multiple      | Orange     |
-| Non reconnues | < 0.85        | Rouge      |
+| Non reconnues | < 0.90        | Rouge      |
 
 Corrections saisies dans le tableau → `applyJoinCorrections(datasetId, geoColumn, corrections)` → `invalidateSimilarityCache()`. La finalisation `finalizeJoin()` retourne `{ joinedBasemap, geoColumn, gpsMode, gpsColumns }`.
 
@@ -101,7 +101,7 @@ Sélectionner une suggestion (`suggestion-selection.ts`) applique un preset comp
 | Lignes    | `lines-config.svelte`    |               |
 | Textes    | `texts-config.svelte`    |               |
 
-**Règle dual-write** : chaque modification doit écrire à la fois sur la primitive (`symbol.classification`) et sur le miroir legacy (`symbolClassification`). Toujours utiliser `visualizationStore.updatePrimitiveClassification(id, primitive, updates)`. Ne jamais mutater directement. Voir `.claude/rules/viz-primitive-state.md`.
+**Règle dual-write** : chaque modification doit écrire à la fois sur la primitive (`symbol.classification`) et sur le miroir legacy (`symbolClassification`). Toujours utiliser `visualizationStore.updatePrimitiveClassification(id, primitive, updates)` dans `commons/stores/visualization.store.svelte.ts`. Ne jamais mutater directement.
 
 ### Discrétisation
 
@@ -141,7 +141,7 @@ Le drag-and-drop ne mélange pas ces groupes. Actions disponibles : affichage/ma
 
 **Dossier** : `step-toolbar/tools/projections/` + `visualization-tab/map-projection-selector.svelte`
 
-12 projections intégrées via d3-geo + d3-geo-projection. Suggestions algorithmiques par emprise des données (`map/utils/projection-availability.utils.ts`). Projections composites (France DOM-TOM, Europe DOM-TOM) définies dans `static/basemaps/projection-presets.json`.
+19 projections intégrées via d3-geo, d3-geo-projection et d3-geo-polygon. Suggestions algorithmiques par emprise des données (`map/utils/projection-availability.utils.ts`). Projections composites (France DOM-TOM, Europe DOM-TOM) définies dans `static/basemaps/projection-presets.json`.
 
 `proj4d3(proj4string)` (`map/utils/proj4d3.ts`) crée un objet `GeoProjection` compatible d3-geo à partir d'une chaîne PROJ.4 — bridge nécessaire car `geoarrow-deck-stream` attend une interface d3-geo.
 
@@ -151,11 +151,13 @@ Un choix explicite de projection prend le dessus sur la projection par défaut d
 
 **Fichier** : `step-toolbar/tools/simplification/`
 
-| Type de fond | Comportement                                                                |
-| ------------ | --------------------------------------------------------------------------- |
-| Catalogue    | 3 niveaux prédéfinis (low/medium/high GeoParquet)                           |
-| Importé      | Ratio utilisateur → `simplify_and_clean(table, geom, tolerance)` via DuckDB |
-| OSM          | Non disponible (tuiles vectorielles)                                        |
+| Type de fond                             | Comportement                                                                              |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Catalogue                                | 3 niveaux prédéfinis (low/medium/high GeoParquet)                                         |
+| Importé `POLYGON` / `MULTIPOLYGON`       | Ratio utilisateur vers `simplify_and_clean(table, geom, tolerance)` via DuckDB            |
+| Importé `LINESTRING` / `MULTILINESTRING` | Ratio utilisateur vers `simplify_and_clean_linestring(table, geom, tolerance)` via DuckDB |
+| Importé `POINT` / `MULTIPOINT`           | Non disponible                                                                            |
+| OSM                                      | Non disponible (tuiles vectorielles)                                                      |
 
 La simplification d'un fond importé crée une nouvelle Arrow table en DuckDB et rafraîchit tous les layers via `duckDBOrchestrator`.
 
@@ -163,15 +165,15 @@ La simplification d'un fond importé crée une nouvelle Arrow table en DuckDB et
 
 **Dossier** : `step-toolbar/tools/facets/` + `visualization-tab/facets-adapter.svelte.ts`
 
-Chaque facette est une `ThematicMap` complète (MapLibre + Deck.gl indépendants). Chaque facette = un contexte WebGL2. Les navigateurs limitent à 8–16 contextes simultanés ; Khartis applique une borne `MAX_FACETS = 16` (`step-toolbar/tools/facets/facets.store.svelte.ts`). Le viewport partagé est géré par `FacetSyncViewState`.
+Les facettes partagent une seule instance Deck.gl et un seul canvas WebGL2. Chaque cellule est un `OrthographicView` distinct, filtré par viewport et par couche, avec un état de vue synchronisé. Les fonds MapLibre/OSM ne sont pas rendus en collection. La borne `MAX_FACETS = 16` (`step-toolbar/tools/facets/facets.store.svelte.ts`) limite la charge de mise en page et de rendu, pas le nombre de contextes WebGL.
 
-Options : échelle commune ou indépendante par facette, nombre de colonnes, distribution. `use-facets-variable-selection.svelte.ts` gère la sélection des variables par facette.
+Options : échelle commune ou indépendante pour les variables numériques, échelle indépendante imposée pour les catégories, nombre de colonnes et distribution. Les affectations de variables à chaque emplacement de visualisation sont persistées. `use-facets-variable-selection.svelte.ts` gère cette sélection.
 
 ### Daltonisme
 
 **Dossier** : `step-toolbar/tools/color-blindness/`
 
-Filtre CSS sur le conteneur de la carte. 4 modes (`ColorBlindnessType`) : `PROTANOPIA`, `DEUTERANOPIA`, `TRITANOPIA`, `ACHROMATOPSIA`. **Simulation uniquement — n'affecte pas l'export.** Les palettes qualitatives proposent un filtre `Daltonisme` qui substitue les couleurs par `COLORBLIND_SAFE_INDICES` dans `palette.constants.ts`.
+Filtre CSS sur le conteneur de la carte. 8 modes (`ColorBlindnessType`) : `PROTANOPIA`, `DEUTERANOPIA`, `TRITANOPIA`, `PROTANOMALY`, `DEUTERANOMALY`, `TRITANOMALY`, `ACHROMATOPSIA` et `ACHROMATOMALY`. **Simulation uniquement, sans effet sur l'export.** Les palettes qualitatives proposent un filtre `Daltonisme` qui substitue les couleurs par `COLORBLIND_SAFE_INDICES` dans `palette.constants.ts`.
 
 ### Annotations
 
@@ -216,7 +218,7 @@ Affichage/masquage par légende, édition du titre, sous-titre, note. Style comm
 
 ### Format de page
 
-`layoutStore` gère le format actif (A4, A3, écran, personnalisé en pixels) et les marges. `layoutStore.updateLayout(patch)` crée un snapshot undo. Le changement de format recalcule l'échelle de rendu.
+`layoutStore` gère le format actif (A4, A3, écran, personnalisé en pixels) et les marges. `layoutStore.updateLayout(patch)` persiste ces réglages via le registre de persistance et déclenche la sauvegarde automatique. Le changement de format recalcule l'échelle de rendu. Ces mutations ne créent pas de snapshot dans l'historique limité de `projectStore`.
 
 ### Légendes
 

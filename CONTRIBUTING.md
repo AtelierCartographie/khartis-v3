@@ -162,7 +162,7 @@ BREAKING CHANGE: Legacy authentication method removed
 - **Feature‑based structure**: each feature in `src/lib/features/`; shared resources in `src/lib/features/commons/`
 - **Isolation**: features do not depend on each other; import only from commons or well‑defined APIs
 - **UI**: prefer Carbon components; avoid inline styles; use scoped CSS/utilities
-- **Carbon × Svelte 5 events**: `carbon-components-svelte` is distributed as Svelte 4 source and can dispatch phantom events on external prop updates. Use `on:input` on `<Slider>`, `on:change` (not `on:check`) on `<Checkbox>`, and a value guard on `<RadioButtonGroup on:change>`. Full rules in [`.claude/rules/carbon-svelte5.md`](.claude/rules/carbon-svelte5.md).
+- **Carbon × Svelte 5 events**: `carbon-components-svelte` is distributed as Svelte 4 source and can dispatch phantom events on external prop updates. Use `on:input` on `<Slider>`, `on:change` (not `on:check`) on `<Checkbox>`, and a value guard on `<RadioButtonGroup on:change>`. Full rules in [`.claude/rules/svelte-carbon-ui.md`](.claude/rules/svelte-carbon-ui.md).
 - **i18n**: all user‑facing text must go through Paraglide; no hardcoded strings
 - **Data/performance**: heavy tasks in Web Workers; be mindful of memory and large datasets
 

@@ -223,7 +223,7 @@ Deux projets Vitest coexistent dans `vite.config.ts` :
    - `<Slider>` → `on:input` uniquement (jamais `on:change`)
    - `<Checkbox>` → `on:change` uniquement (jamais `on:check`)
    - `<RadioButtonGroup on:change>` → early-return si la valeur n'a pas changé
-   - Règles complètes : `.claude/rules/carbon-svelte5.md`
+   - Règles complètes : `.claude/rules/svelte-carbon-ui.md`
 5. **Paraglide i18n** pour tout texte visible — `m.key()` depuis `$lib/paraglide/messages`. Mettre à jour FR et EN ensemble.
 6. **Logger** (`$lib/features/commons/utils/logger`) — jamais `console.log` en production.
 7. **DuckDB-first** — `Duck.read_csv()`, `ST_Read()`, `read_parquet()`. Pas de parsers JS pour les formats que DuckDB gère.

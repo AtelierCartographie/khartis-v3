@@ -188,18 +188,20 @@ Une **catégorie « Nationale »** dans l'outil Projection associe chaque pays/z
 
 La jointure associe les données tabulaires (colonne identifiant) aux géométries du fond de carte (attributs normalisés). Quatre catégories de résultat :
 
-| Statut           | Signification                        | Score Jaro-Winkler |
-| ---------------- | ------------------------------------ | ------------------ |
-| ✅ Jointes       | Correspondance exacte ou fuzzy haute | = 1.0              |
-| ⚠️ À vérifier    | Score partiel                        | 0.85 – 0.99        |
-| 🟠 Non uniques   | Plusieurs correspondances possibles  | —                  |
-| ❌ Non reconnues | Aucune correspondance                | < 0.85             |
+| Statut           | Signification                       | Score Jaro-Winkler |
+| ---------------- | ----------------------------------- | ------------------ |
+| ✅ Jointes       | Correspondance exacte               | = 1.0              |
+| ⚠️ À vérifier    | Score partiel                       | 0.90 – 0.99        |
+| 🟠 Non uniques   | Plusieurs correspondances possibles | —                  |
+| ❌ Non reconnues | Aucune correspondance               | < 0.90             |
 
 **Algorithme** :
 
-1. Construction du cache de similarité : cross-join source × attributs fond avec `jaro_winkler_similarity(normalize_text_join(), 0.85)`.
-2. `normalize_text_join()` normalise sans lowercase final (préserve la casse pour le matching).
-3. Catégories dérivées du cache : exact (=1), partial (0.85–0.99), no_match.
+1. Phase exacte : hash join entre les valeurs source dédupliquées et les attributs pré-normalisés du catalogue. Les correspondances exactes sont plafonnées par fond candidat.
+2. Phase floue : Jaro-Winkler uniquement pour les valeurs sans correspondance exacte, avec blocking sur les fonds plausibles, détection des colonnes de codes et plafond de candidats.
+3. `normalize_text_join()` applique NFC, suppression des accents, minuscules, trim, espaces normalisés et harmonisation de `st`/`ste`.
+4. Le score compare la valeur normalisée et une variante aux mots triés (facteur 0,99). `FUZZY_SCORE_CUTOFF = 0.9` sert à l'early-exit et à la catégorie partielle.
+5. Le cache temporaire est géré en LRU de 4 entrées par couple `(table, colonne géographique)`.
 
 `basemap_attributes.parquet` contient les attributs pré-normalisés (colonne `normalized`) pour éviter de re-normaliser à chaque requête. `invalidateSimilarityCache()` est appelé après toute correction utilisateur.
 
@@ -264,11 +266,15 @@ Stockées dans `annotations.store.svelte.ts`, incluses dans le snapshot projet e
 
 Filtre CSS sur le conteneur de la carte. **Simulation seulement — n'affecte pas l'export** :
 
-| Mode (`ColorBlindnessType`) | Déficience simulée        |
-| --------------------------- | ------------------------- |
-| `PROTANOPIA`                | Insensibilité au rouge    |
-| `DEUTERANOPIA`              | Insensibilité au vert     |
-| `TRITANOPIA`                | Insensibilité au bleu     |
-| `ACHROMATOPSIA`             | Vision en niveaux de gris |
+| Mode (`ColorBlindnessType`) | Déficience simulée                        |
+| --------------------------- | ----------------------------------------- |
+| `PROTANOPIA`                | Insensibilité au rouge                    |
+| `DEUTERANOPIA`              | Insensibilité au vert                     |
+| `TRITANOPIA`                | Insensibilité au bleu                     |
+| `PROTANOMALY`               | Sensibilité au rouge réduite              |
+| `DEUTERANOMALY`             | Sensibilité au vert réduite               |
+| `TRITANOMALY`               | Sensibilité au bleu réduite               |
+| `ACHROMATOPSIA`             | Vision en niveaux de gris                 |
+| `ACHROMATOMALY`             | Perception des couleurs fortement réduite |
 
 Les palettes qualitatives proposent un filtre `Daltonisme` qui substitue les couleurs par des alternatives sûres, calculées via `COLORBLIND_SAFE_INDICES` dans `palette.constants.ts`.

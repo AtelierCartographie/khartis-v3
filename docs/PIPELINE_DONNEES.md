@@ -14,7 +14,7 @@
 | GeoJSON              | `.geojson`, `.json`               | `ST_Read()`             | Détection CRS via `ST_Read_Meta()`                            |
 | Shapefile            | `.shp` (+ `.dbf`, `.shx`, `.prj`) | `ST_Read()`             | Bundle de fichiers requis ; import ZIP recommandé             |
 | GeoPackage           | `.gpkg`                           | `ST_Read()`             | Support multi-couches, sélection auto de la couche principale |
-| GeoParquet / Parquet | `.geoparquet`, `.parquet`, `.gpq` | `read_parquet()`        | Encodage GeoArrow natif depuis DuckDB 1.3                     |
+| GeoParquet / Parquet | `.geoparquet`, `.parquet`, `.gpq` | `read_parquet()`        | Métadonnées GeoParquet détectées, géométrie normalisée        |
 | GPX                  | `.gpx`                            | `ST_Read()` + parse XML | Seul format activé via processeur dédié                       |
 | KML / KMZ            | `.kml`, `.kmz`                    | `ST_Read()` (GDAL)      | Pas de processeur dédié — fallback géo direct                 |
 | ZIP                  | `.zip`                            | Détection interne       | Archive Shapefile ou bundle multi-datasets                    |
@@ -33,6 +33,7 @@ Upload fichier
                 ├─ Type dans RAW_FILE_PROCESSOR_TYPES (GPX) → processeur dédié
                 ├─ isGeospatialFile() → Duck.read_geofile() (ST_Read)
                 └─ sinon → readTabularFile() (read_csv / read_parquet)
+                    ├─ métadonnées `geo` présentes → normalizeGeoParquetTable()
                     └─ buildDatasetFromDuckTable()
                         └─ DatasetResult
 ```
@@ -40,8 +41,8 @@ Upload fichier
 Le routage de `processFileInternal()` suit trois branches :
 
 1. **Processeur enregistré** : activé uniquement pour les types listés dans `RAW_FILE_PROCESSOR_TYPES` (actuellement `GPX` uniquement). Pour tout autre type, retourne `null` et force le fallback.
-2. **Fallback géospatial** : tout fichier détecté par `isGeospatialFile()` (GeoJSON, Shapefile, GeoPackage, KML, KMZ, GeoParquet) passe par `Duck.read_geofile()`.
-3. **Fallback tabulaire** : CSV, TSV, Parquet/Arrow non-géo passent par `Duck.read_tabular()`.
+2. **Fallback géospatial** : tout fichier détecté par `isGeospatialFile()` (GeoJSON, Shapefile, GeoPackage, KML, KMZ) passe par `Duck.read_geofile()`.
+3. **Fallback tabulaire** : CSV, TSV, Arrow, Parquet et GeoParquet passent par `Duck.read_tabular()`. Après `read_parquet()`, la présence de métadonnées GeoParquet déclenche la normalisation spatiale. Un Parquet sans ces métadonnées reste tabulaire.
 
 Le handler ZIP relance `processFileInternal()` pour chaque fichier extrait, en appliquant le même routage.
 
@@ -96,7 +97,7 @@ Pour activer un processeur sur un nouveau format, ajouter son `FileType` dans `R
 
 **GeoPackage multi-couches** : la couche spatiale principale est sélectionnée automatiquement. L'heuristique préfère les polygones, puis les lignes, puis les points, et retient la couche la plus riche en entités dans chaque famille.
 
-**GeoParquet** : `read_parquet()` depuis DuckDB 1.3 supporte nativement l'encodage `geoarrow.wkb`. L'identifiant `__id` est ajouté via `CREATE SEQUENCE` après ingestion Arrow.
+**GeoParquet** : le pipeline lit les métadonnées `geo` avant de libérer le fichier DuckDB, puis transforme la colonne géométrique principale en type DuckDB `GEOMETRY`. Les encodages WKB et GeoArrow natifs `point`, `multipoint`, `linestring`, `multilinestring`, `polygon` et `multipolygon` sont pris en charge, avec coordonnées séparées ou intercalées. Un CRS déclaré autre que WGS84/CRS84 est reprojeté vers EPSG:4326. Un encodage non pris en charge produit une erreur de validation explicite plutôt qu'une carte vide ou grise. L'identifiant `__id` est ensuite ajouté via `CREATE SEQUENCE`.
 
 **GPX** : processeur dédié (`gpxProcessor`). Parse le XML pour extraire points et lignes, puis insère via `ST_Read()`.
 

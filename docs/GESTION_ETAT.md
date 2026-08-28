@@ -1,6 +1,6 @@
 # Gestion de l'état
 
-> Stores Svelte 5, persistance IndexedDB, snapshot projet et undo/redo.
+> Stores Svelte 5, persistance IndexedDB et historique limité des métadonnées projet.
 
 **Voir aussi** : [ARCHITECTURE.md](ARCHITECTURE.md) · [GUIDE_DEVELOPPEUR.md](GUIDE_DEVELOPPEUR.md) · [PIPELINE_DONNEES.md](PIPELINE_DONNEES.md)
 
@@ -64,7 +64,7 @@ export const featureStore = createFeatureStore();
 
 ### `projectStore`
 
-Cycle de vie des projets, gestion des fichiers, historique undo/redo.
+Cycle de vie des projets, gestion des fichiers et historique limité des métadonnées projet.
 
 ```typescript
 // Cycle de vie
@@ -77,8 +77,9 @@ await projectStore.deleteProject(id);
 await projectStore.addFilesToProject(files);
 await projectStore.removeFileFromProject(fileId);
 
-// Mutations (créent un snapshot undo)
+// Mutations qui créent un snapshot d'historique
 projectStore.updateProjectName(name);
+projectStore.updateProjectData({ basemap });
 
 // Historique
 projectStore.undo();
@@ -91,7 +92,7 @@ await projectStore.exportProject(name?);   // → Blob
 await projectStore.importProject(file);
 ```
 
-> Les mutations de visualisation et de mise en page passent par leurs stores respectifs (`visualizationStore.updateXxx()`, `layoutStore.updateXxx()`), pas par `projectStore` directement. `projectStore` ne se charge que du cycle de vie projet et du snapshot global.
+> Les mutations de visualisation et de mise en page passent par leurs stores respectifs (`visualizationStore.updateXxx()`, `layoutStore.updateXxx()`), puis sont sauvegardées par le registre de persistance. Elles ne créent pas de snapshot dans l'historique de `projectStore`.
 
 ### `datasetsStore`
 
@@ -184,15 +185,15 @@ Mutation → flag dirty → reset timer 750 ms → sérialisation metadata-only 
 
 ---
 
-## Undo / Redo
+## Historique Undo / Redo
 
 ### Ce qui crée un snapshot
 
-Création de projet, renommage, modification d'une visualisation, changement de layout.
+Création, chargement ou import d'un projet, renommage et appel explicite à `updateProjectData()` pour les métadonnées de source ou de fond de carte.
 
 ### Ce qui ne crée pas de snapshot
 
-Changements UI transitoires (toggle de panneau, sélection d'outil), saisie dans un input avant commit debounce, ajout ou suppression de fichier.
+Mutations de visualisation et de mise en page, transformations de tables DuckDB, changements UI transitoires, saisie dans un input avant commit debounce, ajout ou suppression de fichier.
 
 ### Paramètres de l'historique
 

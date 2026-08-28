@@ -78,7 +78,7 @@ Catalog basemaps take a second binary path that deliberately bypasses DuckDB (`G
 - **Visualization**: choropleth, proportional symbols, categorical, bivariate; classification by K-means/Jenks, quantiles, equal interval, Q6, nested means, head-tail, or manual breaks; palette editor with color-blindness-safe ramps.
 - **Map tools**: extensive projection catalog (d3-geo + d3-geo-projection + national projections via PROJ.4), topology-aware simplification, layer manager, geographic search.
 - **Layout (habillage)**: legends, scale bar, north arrow, inset maps, annotations, color-blindness simulation, small-multiple facets.
-- **Export**: map (JPG, SVG); data (CSV, GeoJSON); portable project archive (`.kh`); automatic save to IndexedDB.
+- **Export**: map (JPG, SVG); data (CSV, GeoJSON, GeoPackage); portable project archive (`.kh`); automatic save to IndexedDB.
 - **Accessibility and i18n**: keyboard navigation with visible focus, French/English interface (Paraglide, compile-time).
 
 ## Screenshots
@@ -94,7 +94,7 @@ Catalog basemaps take a second binary path that deliberately bypasses DuckDB (`G
 | App framework | SvelteKit 2 + Svelte 5 (Runes), TypeScript (strict, no `any`), Vite, `adapter-static`                                   |
 | UI            | Carbon Design System (Carbon Components Svelte)                                                                         |
 | Data engine   | DuckDB WASM + Spatial extension, in a Web Worker; Apache Arrow for columnar interchange                                 |
-| Rendering     | Deck.gl 9 + WebGL on binary GeoArrow buffers (`geoarrow-deck-stream`); MapLibre GL 5 for vector basemaps                |
+| Rendering     | Deck.gl 9 + WebGL on binary GeoArrow buffers (`geoarrow-deck-stream`); MapLibre GL 6 for vector basemaps                |
 | Projections   | d3-geo, d3-geo-projection, d3-geo-polygon; proj4 fallback for EPSG:2154 and national CRS; `parquet-wasm` for GeoParquet |
 | State & data  | Svelte 5 Runes stores; IndexedDB (metadata + 8 MB binary asset chunks); PWA via Workbox                                 |
 | i18n          | Inlang Paraglide (compile-time, FR/EN)                                                                                  |

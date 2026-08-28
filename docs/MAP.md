@@ -218,7 +218,7 @@ Dans `exportMapToSvg()`, les annotations `TEXT` sont reconstruites en `<text>` S
 
 ## Collections / Facettes
 
-Chaque facette est une **`ThematicMap` complète** (MapLibre + Deck.gl indépendants). Cela signifie un contexte WebGL2 par facette. Les navigateurs limitent le nombre de contextes WebGL2 simultanés à 8–16 ; Khartis applique une borne `MAX_FACETS = 16` (`step-toolbar/tools/facets/facets.store.svelte.ts`). La synchronisation du viewport entre facettes est gérée par `FacetSyncViewState`.
+Les facettes orthographiques partagent une seule instance Deck.gl et un seul canvas WebGL2. Chaque cellule utilise un `OrthographicView` distinct, un viewport et un filtre de couches dédiés. La synchronisation du viewport est assurée par l'état de vue partagé. Les fonds MapLibre/OSM ne sont pas rendus dans ce mode. La borne `MAX_FACETS = 16` (`step-toolbar/tools/facets/facets.store.svelte.ts`) limite le coût de mise en page et de rendu.
 
 ---
 
