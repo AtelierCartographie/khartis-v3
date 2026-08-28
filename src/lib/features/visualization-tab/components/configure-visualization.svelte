@@ -53,6 +53,7 @@
   import { usePrimitiveAdapters } from '../adapters/use-primitive-adapters.svelte';
   import { useVisualizationOrchestration } from '../hooks/use-visualization-orchestration.svelte';
   import { facetsStore, SCALE_MODE } from '../adapters/facets-adapter';
+  import { facetSlotRequiresNumericVariable } from '$lib/features/commons/constants/facets.constants';
   import Switch from '$lib/features/commons/components/switch.svelte';
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
@@ -61,6 +62,10 @@
     facetsStore.enabled && facetsStore.variables.length > 1
   );
   const isSharedScale = $derived(facetsStore.scaleMode === SCALE_MODE.SHARED);
+  const supportsSharedScale = $derived(
+    facetsStore.primarySlotPath != null &&
+      facetSlotRequiresNumericVariable(facetsStore.primarySlotPath)
+  );
 
   async function handleScaleModeChange(shared: boolean) {
     if (
@@ -637,7 +642,7 @@
     <p class="kh-help">
       {m.step2_description()}
     </p>
-    {#if isCollectionActive}
+    {#if isCollectionActive && supportsSharedScale}
       <div class="collection-scale-toggle">
         <Switch
           size="sm"

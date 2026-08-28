@@ -61,6 +61,8 @@
   });
 
   $effect(() => {
+    if (dataOrchestratorService.isProjectRestoreInProgress) return;
+
     const currentBasemap = resolveRelevantPersistedBasemap({
       selectedDataset: datasetsStore.selectedDataset,
       sourceFiles: projectStore.currentProject?.data?.sourceFiles,

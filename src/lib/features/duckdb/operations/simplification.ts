@@ -25,6 +25,43 @@ export interface SimplificationOptions {
   targetTableName?: string;
 }
 
+type SimplificationMacro =
+  'simplify_and_clean' | 'simplify_and_clean_linestring' | null;
+
+async function resolveSimplificationMacro(
+  Duck: DuckDBClientForArrow,
+  tableName: string,
+  geometryColumn: string
+): Promise<SimplificationMacro> {
+  const escapedGeom = escapeIdentifier(geometryColumn);
+  const escapedTable = escapeIdentifier(tableName);
+  const rows = (await Duck.query(
+    `SELECT DISTINCT ST_GeometryType("${escapedGeom}") AS geometry_type
+     FROM "${escapedTable}"
+     WHERE "${escapedGeom}" IS NOT NULL`,
+    { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+  )) as Array<{ geometry_type: string | null }>;
+  const geometryTypes = rows
+    .map((row) => row.geometry_type?.toUpperCase())
+    .filter((type): type is string => Boolean(type));
+
+  if (
+    geometryTypes.length > 0 &&
+    geometryTypes.every((type) => type.includes('LINESTRING'))
+  ) {
+    return 'simplify_and_clean_linestring';
+  }
+
+  if (
+    geometryTypes.length > 0 &&
+    geometryTypes.every((type) => type.includes('POLYGON'))
+  ) {
+    return 'simplify_and_clean';
+  }
+
+  return null;
+}
+
 async function countVertices(
   Duck: DuckDBClientForArrow,
   tableName: string,
@@ -73,7 +110,9 @@ export async function simplifyGeometryTable(
   }
 
   const escapedInputValue = escapeSqlString(inputTableName);
+  const escapedInput = escapeIdentifier(inputTableName);
   const escapedGeometryColumnValue = escapeSqlString(geometryColumn);
+  const escapedGeometryColumn = escapeIdentifier(geometryColumn);
   const targetTable = createView
     ? `vw_${sourceTable}_simplified`
     : `${sourceTable}_simplified`;
@@ -84,12 +123,27 @@ export async function simplifyGeometryTable(
   const createStatement = createView
     ? 'CREATE OR REPLACE VIEW'
     : 'CREATE OR REPLACE TABLE';
+  const simplificationMacro = await resolveSimplificationMacro(
+    Duck,
+    inputTableName,
+    geometryColumn
+  );
 
   try {
-    await Duck.query(`
-      ${createStatement} "${escapedTarget}" AS
-      FROM simplify_and_clean('${escapedInputValue}', '${escapedGeometryColumnValue}', ${tolerance})
-    `);
+    if (simplificationMacro) {
+      await Duck.query(`
+        ${createStatement} "${escapedTarget}" AS
+        FROM ${simplificationMacro}('${escapedInputValue}', '${escapedGeometryColumnValue}', ${tolerance})
+      `);
+    } else {
+      await Duck.query(`
+        ${createStatement} "${escapedTarget}" AS
+        SELECT
+          * EXCLUDE ("${escapedGeometryColumn}"),
+          "${escapedGeometryColumn}" AS geom
+        FROM "${escapedInput}"
+      `);
+    }
     Duck.invalidateTableCache?.(resolvedTargetTable);
   } catch (error) {
     logger.error(
@@ -112,21 +166,23 @@ export async function simplifyGeometryTable(
     'geom'
   );
 
-  // Recompute innerlines from the simplified geometry so borders stay in sync
-  const innerlinesTable = `${sourceTable}__innerlines`;
-  const escapedInnerlines = escapeIdentifier(innerlinesTable);
-  try {
-    await Duck.query(`
-      CREATE OR REPLACE TABLE "${escapedInnerlines}" AS
-      FROM extract_innerlines('${escapedTargetValue}')
-    `);
-    Duck.invalidateTableCache?.(innerlinesTable);
-  } catch (error) {
-    logger.error(
-      'Failed to rebuild simplified geometry innerlines',
-      LogCategory.DUCKDB,
-      error
-    );
+  if (simplificationMacro === 'simplify_and_clean') {
+    // Recompute innerlines from polygon coverage so borders stay in sync.
+    const innerlinesTable = `${sourceTable}__innerlines`;
+    const escapedInnerlines = escapeIdentifier(innerlinesTable);
+    try {
+      await Duck.query(`
+        CREATE OR REPLACE TABLE "${escapedInnerlines}" AS
+        FROM extract_innerlines('${escapedTargetValue}')
+      `);
+      Duck.invalidateTableCache?.(innerlinesTable);
+    } catch (error) {
+      logger.error(
+        'Failed to rebuild simplified geometry innerlines',
+        LogCategory.DUCKDB,
+        error
+      );
+    }
   }
 
   const reductionPercentage =

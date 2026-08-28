@@ -3,13 +3,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   calculateBreaks: vi.fn(),
-  getUniqueValues: vi.fn()
+  getUniqueValues: vi.fn(),
+  loadDistinctCategoryLabels: vi.fn()
 }));
 
 vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   datasetsStore: {
+    datasets: [{ id: 'table1', tableName: 'table1' }],
     getUniqueValues: mocks.getUniqueValues
   }
+}));
+
+vi.mock('$lib/features/commons/utils/category-labels.utils', () => ({
+  loadDistinctCategoryLabels: mocks.loadDistinctCategoryLabels
 }));
 
 vi.mock('./classification.service', () => ({
@@ -22,6 +28,7 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
 }));
 
 import {
+  buildFacetSlotUpdates,
   buildFacetVisualizationUpdates,
   generateFacetVisualizations
 } from './facet-generator.service';
@@ -56,6 +63,7 @@ function makeBaseViz(overrides = {}) {
 describe('generateFacetVisualizations', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.loadDistinctCategoryLabels.mockResolvedValue([]);
     mocks.calculateBreaks.mockResolvedValue({
       breaks: [20, 30, 40],
       counts: [1, 1, 1, 1],
@@ -252,7 +260,8 @@ describe('generateFacetVisualizations', () => {
   });
 
   it('should seed labels for targeted categorical facets', async () => {
-    mocks.getUniqueValues.mockReturnValue(['A', 'B', 'C']);
+    mocks.getUniqueValues.mockReturnValue(['preview-only']);
+    mocks.loadDistinctCategoryLabels.mockResolvedValue(['A', 'B', 'C']);
     const base = makeBaseViz({
       mapping: { categoryColumn: 'region' },
       classification: {
@@ -260,7 +269,8 @@ describe('generateFacetVisualizations', () => {
         numClasses: 3,
         classes: 3,
         colors: ['#111', '#222', '#333'],
-        labels: ['old']
+        labels: ['old'],
+        categoryValues: ['old']
       },
       symbol: {
         categoryColumn: 'region',
@@ -269,7 +279,8 @@ describe('generateFacetVisualizations', () => {
           numClasses: 3,
           classes: 3,
           colors: ['#111', '#222', '#333'],
-          labels: ['old']
+          labels: ['old'],
+          categoryValues: ['old']
         }
       }
     });
@@ -283,6 +294,15 @@ describe('generateFacetVisualizations', () => {
     expect(result[0].mapping.categoryColumn).toBe('country');
     expect(result[0].symbol?.categoryColumn).toBe('country');
     expect(result[0].symbol?.classification?.labels).toEqual(['A', 'B', 'C']);
+    expect(result[0].symbol?.classification?.categoryValues).toEqual([
+      'A',
+      'B',
+      'C'
+    ]);
+    expect(mocks.loadDistinctCategoryLabels).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'table1', tableName: 'table1' }),
+      'country'
+    );
   });
 
   it('should reuse base classification in shared mode', async () => {
@@ -370,6 +390,53 @@ describe('generateFacetVisualizations', () => {
     });
     expect(update.polygon?.valueColumn).toBe('gdp');
     expect(update.classification?.breaks).toEqual([20, 30, 40]);
+  });
+
+  it('rebuilds the targeted categorical slot domain without changing the fill domain', async () => {
+    mocks.loadDistinctCategoryLabels.mockResolvedValue(['AT11', 'AT12']);
+    const fillClassification = {
+      method: 'equal_interval',
+      colors: ['#111', '#222'],
+      labels: ['EU27', 'EFTA'],
+      categoryValues: ['EU27', 'EFTA']
+    };
+    const strokeClassification = {
+      method: 'equal_interval',
+      colors: ['#333', '#444'],
+      labels: ['EU27', 'EFTA'],
+      categoryValues: ['EU27', 'EFTA']
+    };
+    const base = makeBaseViz({
+      mapping: { categoryColumn: 'zone' },
+      classification: fillClassification,
+      polygon: {
+        categoryColumn: 'zone',
+        classification: fillClassification,
+        strokeCategoryColumn: 'zone',
+        strokeClassification
+      }
+    });
+
+    const update = await buildFacetSlotUpdates({
+      baseViz: base as never,
+      visualization: base as never,
+      variable: 'NUTS_ID',
+      scaleMode: SCALE_MODE.INDEPENDENT,
+      slotPath: FACET_SLOT.POLYGON_STROKE_CATEGORY
+    });
+
+    expect(update.classification).toEqual(fillClassification);
+    expect(update.polygon?.categoryColumn).toBe('zone');
+    expect(update.polygon?.classification).toEqual(fillClassification);
+    expect(update.polygon?.strokeCategoryColumn).toBe('NUTS_ID');
+    expect(update.polygon?.strokeClassification?.labels).toEqual([
+      'AT11',
+      'AT12'
+    ]);
+    expect(update.polygon?.strokeClassification?.categoryValues).toEqual([
+      'AT11',
+      'AT12'
+    ]);
   });
 
   it('can sync non-faceted primitive changes from the base visualization', async () => {

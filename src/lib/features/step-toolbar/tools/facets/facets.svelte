@@ -274,7 +274,7 @@
     slotPath: FacetSlot['path'],
     variable: string
   ) {
-    facetsStore.setVariableForSlot(safeMapIndex, slotPath, variable);
+    void facetsStore.setVariableForSlot(safeMapIndex, slotPath, variable);
   }
 
   function handleConfigureVisualization() {

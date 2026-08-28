@@ -108,6 +108,28 @@ describe('common legend generators', () => {
     expect(svg.markup).not.toContain('A <script>');
   });
 
+  it('widens categorical legends to contain unbroken header text', () => {
+    const svg = createLegendSvg(
+      draw_categorical_legend(
+        [
+          { label: 'private', fill: '#b08c7a' },
+          { label: 'public', fill: '#9f8a6a' }
+        ],
+        {
+          title: 'Visualisation',
+          subtitle: 'place_name / category',
+          fontSize: 10
+        }
+      )
+    );
+
+    const horizontalMargins = 20;
+    expect(svg.width).toBeGreaterThanOrEqual(
+      Textbox.measureText('Visualisation', 'bold 12px Open Sans') +
+        horizontalMargins
+    );
+  });
+
   it('keeps categorical missing data compact in the same SVG', () => {
     const svg = createLegendSvg(
       draw_categorical_legend(

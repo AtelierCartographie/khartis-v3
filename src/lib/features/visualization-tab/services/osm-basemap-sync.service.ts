@@ -18,6 +18,7 @@ interface BasemapLookup {
 
 interface OSMBasemapState {
   activeOSMBasemap: BasemapMetadata | null;
+  isDisabledByUser: boolean;
   setOSMBasemap: (basemap: BasemapMetadata | null) => void;
   clear: () => void;
 }
@@ -49,7 +50,7 @@ export function syncProjectOSMBasemap(
   osmState: OSMBasemapState
 ): void {
   if (basemap?.type !== PERSISTED_BASEMAP_TYPE.OSM) {
-    if (osmState.activeOSMBasemap) {
+    if (osmState.activeOSMBasemap || osmState.isDisabledByUser) {
       osmState.clear();
     }
     return;
@@ -62,6 +63,10 @@ export function syncProjectOSMBasemap(
 
   if (isProjectOSMBasemapData(basemap.data) && !existingBasemap) {
     basemapLookup.addCustomBasemap(basemap.data);
+  }
+
+  if (osmState.isDisabledByUser) {
+    return;
   }
 
   if (projectBasemap && isOSMBasemap(projectBasemap)) {

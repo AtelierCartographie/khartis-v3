@@ -175,6 +175,14 @@
     return Number.isFinite(targetValue) ? targetValue : fallback;
   }
 
+  function handleRateChange(event: Event): void {
+    const nextRate = readSliderInputValue(event, simplState.rate);
+    if (nextRate === simplState.rate) return;
+
+    store.setRate(nextRate);
+    scheduleSimplificationApply('rate-change', 250);
+  }
+
   function clearApplyTimeout(): void {
     if (!applyTimeoutId) return;
     clearTimeout(applyTimeoutId);
@@ -288,10 +296,8 @@
             max={100}
             step={1}
             value={simplState.rate}
-            on:input={(e) => {
-              store.setRate(readSliderInputValue(e, simplState.rate));
-              scheduleSimplificationApply('rate-change', 250);
-            }}
+            on:input={handleRateChange}
+            on:change={handleRateChange}
             labelText={m.simplification_rate_label()}
             hideLabel
             minLabel="0"
@@ -352,10 +358,8 @@
           max={100}
           step={1}
           value={simplState.rate}
-          on:input={(e) => {
-            store.setRate(readSliderInputValue(e, simplState.rate));
-            scheduleSimplificationApply('rate-change', 250);
-          }}
+          on:input={handleRateChange}
+          on:change={handleRateChange}
           labelText={m.simplification_rate_label()}
           hideLabel
           minLabel="0"
