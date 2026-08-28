@@ -115,12 +115,32 @@ export function createLegendCanvasRect(width: number, height: number): string {
   return `<rect width="${width}" height="${height}" fill="transparent" pointer-events="none" />`;
 }
 
+export function measureLegendLongestToken(
+  value: string | null | undefined,
+  font: string
+): number {
+  if (!value) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    ...value
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((token) => Math.ceil(Textbox.measureText(token, font)))
+  );
+}
+
 export function wrapLegendText(
   text: string,
   font: string,
   maxWidth: number
 ): string[] {
-  const words = text.split(/\s+/).filter(Boolean);
+  const words = text
+    .split(/\s+/)
+    .filter(Boolean)
+    .flatMap((word) => splitLegendWord(word, font, maxWidth));
   const lines: string[] = [];
   let currentLine = words[0] ?? '';
 
@@ -139,6 +159,39 @@ export function wrapLegendText(
   }
 
   return lines;
+}
+
+function splitLegendWord(
+  word: string,
+  font: string,
+  maxWidth: number
+): string[] {
+  if (
+    maxWidth <= 0 ||
+    !Number.isFinite(maxWidth) ||
+    Textbox.measureText(word, font) <= maxWidth
+  ) {
+    return [word];
+  }
+
+  const fragments: string[] = [];
+  let fragment = '';
+
+  for (const character of word) {
+    const candidate = `${fragment}${character}`;
+    if (fragment && Textbox.measureText(candidate, font) > maxWidth) {
+      fragments.push(fragment);
+      fragment = character;
+    } else {
+      fragment = candidate;
+    }
+  }
+
+  if (fragment) {
+    fragments.push(fragment);
+  }
+
+  return fragments;
 }
 
 export function renderLegendHeader({

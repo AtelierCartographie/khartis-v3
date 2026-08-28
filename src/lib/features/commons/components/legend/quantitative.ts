@@ -10,6 +10,7 @@ import {
   escapeSvgText,
   linearScale,
   magnitude,
+  measureLegendLongestToken,
   renderLegendHeader,
   renderLegendNote,
   resolveLegendFontFamily,
@@ -94,8 +95,6 @@ export function draw_quanti_color_legend(
       label_safety_padding +
       margin
     : 0;
-  const body_width = Math.max(scale_body_width, nodata_body_width);
-  const max_text_width = body_width - margin_left - margin;
   const title_font = createLegendFont({
     fontSize: titleSize,
     fontFamily: resolvedFontFamily,
@@ -109,6 +108,18 @@ export function draw_quanti_color_legend(
     fontSize: noteSize,
     fontFamily: resolvedFontFamily
   });
+  const body_width = Math.max(
+    scale_body_width,
+    nodata_body_width,
+    margin_left +
+      Math.max(
+        measureLegendLongestToken(title, title_font),
+        measureLegendLongestToken(subtitle, subtitle_font),
+        measureLegendLongestToken(note, note_font)
+      ) +
+      margin
+  );
+  const max_text_width = body_width - margin_left - margin;
   const header = renderLegendHeader({
     title,
     subtitle,

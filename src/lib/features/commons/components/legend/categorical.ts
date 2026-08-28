@@ -6,6 +6,7 @@ import {
   createLegendFont,
   escapeSvgAttribute,
   escapeSvgText,
+  measureLegendLongestToken,
   renderLegendHeader,
   renderLegendNote,
   resolveLegendFontFamily,
@@ -47,18 +48,6 @@ interface ColumnInfo {
   index: number;
   width: number;
   x: number;
-}
-
-function measureLongestToken(value: string | null, font: string): number {
-  if (!value) return 0;
-
-  return Math.max(
-    0,
-    ...value
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((token) => Math.ceil(Textbox.measureText(token, font)))
-  );
 }
 
 export function draw_categorical_legend(
@@ -207,9 +196,9 @@ export function draw_categorical_legend(
     footer_body_width,
     margin.left +
       Math.max(
-        measureLongestToken(title, title_font),
-        measureLongestToken(subtitle, subtitle_font),
-        measureLongestToken(note, note_font)
+        measureLegendLongestToken(title, title_font),
+        measureLegendLongestToken(subtitle, subtitle_font),
+        measureLegendLongestToken(note, note_font)
       ) +
       margin.right
   );
