@@ -1,4 +1,4 @@
-import type maplibregl from 'maplibre-gl';
+import type { StyleSpecification } from 'maplibre-gl';
 import {
   SavePriority,
   persistenceRegistry
@@ -173,7 +173,7 @@ function createBasemapStyleStore() {
     get selectedStyle(): BasemapStyle {
       return state.selectedStyle;
     },
-    get selectedStyleUrl(): string | maplibregl.StyleSpecification {
+    get selectedStyleUrl(): string | StyleSpecification {
       return getBasemapStyle(state.selectedStyle);
     },
     get requiresMapLibre(): boolean {

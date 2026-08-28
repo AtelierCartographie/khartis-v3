@@ -1,3 +1,6 @@
+packages:
+  - tools/ragmir
+
 onlyBuiltDependencies:
   - '@ateliercartographie/geoarrow-deck-stream'
   - '@ateliercartographie/proj-suggest'
@@ -7,6 +10,10 @@ onlyBuiltDependencies:
   - sharp
 
 overrides:
+  '@huggingface/transformers>sharp': 0.35.4
+  '@vite-pwa/assets-generator>sharp': 0.35.4
+  'onnxruntime-node>adm-zip': 0.6.0
+  'sharp-ico>sharp': 0.35.4
   cookie: '>=0.7.0 <2'
   fast-xml-parser: '>=4.5.4'
   rollup: 4.60.0
