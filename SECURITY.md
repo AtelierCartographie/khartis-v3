@@ -34,4 +34,6 @@ We aim to acknowledge reports within **5 business days** and resolve confirmed v
 
 ## Data Privacy
 
-Imported data never leaves the browser. See the [privacy section in the README](README.md#privacy-security-and-data) for details.
+Imported data never leaves the browser. The relevant technical boundaries are
+described in the [architecture documentation](docs/ARCHITECTURE.md) and in the
+[analytics documentation](docs/ANALYTICS.md).

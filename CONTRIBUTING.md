@@ -1,338 +1,77 @@
-# Contributing to Khartis v3
+# Contributing to Khartis
 
-Thank you for your interest in improving Khartis v3. This guide explains how to set up your environment, propose changes, and meet our quality bar.
+Khartis is a browser-only thematic-mapping application. Contributions should
+preserve the data, rendering, persistence, accessibility, and cartographic
+contracts described in the [developer documentation](docs/README.md).
 
-## 1) Quick start
+## Before coding
 
-### Prerequisites
+1. Read the document for the area you will change.
+2. Inspect the current working tree and preserve unrelated edits.
+3. Follow the feature boundary instead of reaching into another feature’s
+   internals.
+4. Keep imported user data in the browser. Do not add a server upload or send
+   data-derived information to a third party.
 
-- Node.js ≥ 22
-- pnpm 10 (via Corepack)
-- Git and a modern browser (Chrome, Firefox, Safari, Edge)
+## Local setup
 
-### Setup
-
-```bash
-# Clone and setup
+```sh
 corepack enable pnpm
-git clone https://github.com/AtelierCartographie/khartis-v3.git
-cd khartis-v3
-pnpm install         # Install deps
-
-# Start development
-pnpm dev             # → http://localhost:5176
+pnpm install
+pnpm dev
 ```
 
-**Development URLs:**
-
-- Dev server: http://localhost:5176
-- Preview build: http://localhost:4173 (`pnpm preview`)
-
-## 2) Branching & pull requests
-
-### Branch naming
-
-Use descriptive prefixes for your branches:
-
-- `feat/` - New features (e.g., `feat/legend-drag-drop`, `feat/color-blindness-simulation`)
-- `fix/` - Bug fixes (e.g., `fix/projection-rotation-bug`, `fix/csv-import-encoding`)
-- `docs/` - Documentation updates (e.g., `docs/api-reference`, `docs/setup-guide`)
-- `refactor/` - Code refactoring (e.g., `refactor/store-architecture`, `refactor/css-utilities`)
-- `perf/` - Performance improvements (e.g., `perf/duckdb-queries`, `perf/deck-gl-rendering`)
-- `test/` - Test additions/improvements (e.g., `test/pipeline-coverage`, `test/unit-stores`)
-- `chore/` - Maintenance tasks (e.g., `chore/update-dependencies`, `chore/ci-improvements`)
-
-### Pull requests
-
-- **Target branch**: open PRs against `staging`
-- **Title**: Conventional Commits format: `type(scope): description`
-- **Description**: include:
-  - What changes were made and why
-  - Screenshots for UI changes
-  - Testing instructions
-  - Breaking changes (if any)
-- **Reviews**: at least one approving review
-- **Merge**: Squash and merge with a conventional commit message
-
-## 3) Commit guidelines (Conventional Commits)
-
-We use [Conventional Commits](https://www.conventionalcommits.org/) for consistent commit history and automated versioning.
-
-### Format
-
-```
-<type>[optional scope]: <description>
-
-[optional body]
-
-[optional footer(s)]
-```
-
-### Types
-
-- `feat` - New feature
-- `fix` - Bug fix
-- `docs` - Documentation changes
-- `style` - Code style (formatting, missing semicolons, etc.)
-- `refactor` - Code refactoring (no new features or bug fixes)
-- `perf` - Performance improvements
-- `test` - Adding or updating tests
-- `build` - Build system changes
-- `ci` - CI configuration changes
-- `chore` - Other changes (dependencies, tools, etc.)
-- `revert` - Reverts a previous commit
-
-### Scopes (Optional)
-
-Use when changes affect specific areas:
-
-- `legend`, `projections`, `layers`, `format`, `annotations`
-- `store`, `ui`, `db`, `i18n`, `css`
-- `deps`, `config`, `docs`
-
-### Examples
-
-```bash
-feat(legend): add drag & drop reordering
-fix(format): correct A4 landscape margins
-docs: update setup instructions in README
-perf(db): optimize DuckDB query performance
-refactor(store): migrate to Svelte 5 runes pattern
-test(pipeline): add projection tool test coverage
-```
-
-### Breaking changes
-
-For breaking changes, add `!` after type or include `BREAKING CHANGE:` in footer:
-
-```bash
-feat!: remove deprecated legacy API
-feat(api): add new authentication method
-
-BREAKING CHANGE: Legacy authentication method removed
-```
-
-## 4) Pre‑PR checklist
-
-### Code quality
-
-- [ ] `pnpm lint` passes
-- [ ] `pnpm format` applied
-- [ ] `pnpm check` passes (TypeScript + Svelte)
-- [ ] `pnpm build` succeeds (no blocking warnings)
-- [ ] No console errors/warnings in browser
-
-### Testing
-
-- [ ] Relevant `pnpm test:*` scripts pass
-- [ ] `pnpm test:unit` passes when client, store, or utility code changed
-- [ ] New features include tests; bug fixes include regression tests
-- [ ] Manual validation on dev build
-- [ ] Cross‑browser spot‑check (Chrome, Firefox, Safari)
-
-### Internationalization
-
-- [ ] No hardcoded user‑facing text; keys added/updated in Paraglide messages
-- [ ] `pnpm machine-translate` run for new keys (then review)
-
-### Documentation
-
-- [ ] README/docs updated for new behavior or setup changes
-- [ ] Comments for non‑obvious logic; JSDoc for public APIs
-- [ ] Screenshots for UI changes when useful
-
-### Accessibility & UX
-
-- [ ] Keyboard navigation and focus management verified
-- [ ] Contrast meets WCAG guidance (where applicable)
-- [ ] Responsive layout works at common breakpoints
-
-### Security & privacy
-
-- [ ] No secrets/tokens/credentials committed
-- [ ] No sensitive user data logged
-- [ ] Dependencies justified and pinned; avoid risky additions
-
-## 5) Code style & architecture
-
-### Core Principles
-
-- **TypeScript strict**: keep types accurate; no implicit `any`
-- **Svelte 5 (Runes)**: use `$state` and `$derived` patterns; avoid legacy stores
-- **Feature‑based structure**: each feature in `src/lib/features/`; shared resources in `src/lib/features/commons/`
-- **Isolation**: features do not depend on each other; import only from commons or well‑defined APIs
-- **UI**: prefer Carbon components; avoid inline styles; use scoped CSS/utilities
-- **Carbon × Svelte 5 events**: `carbon-components-svelte` is distributed as Svelte 4 source and can dispatch phantom events on external prop updates. Use `on:input` on `<Slider>`, `on:change` (not `on:check`) on `<Checkbox>`, and a value guard on `<RadioButtonGroup on:change>`. Full rules in [`.claude/rules/svelte-carbon-ui.md`](.claude/rules/svelte-carbon-ui.md).
-- **i18n**: all user‑facing text must go through Paraglide; no hardcoded strings
-- **Data/performance**: heavy tasks in Web Workers; be mindful of memory and large datasets
-
-### Store Pattern (Svelte 5 Runes)
-
-```typescript
-export function createFeatureStore() {
-  const state = $state({ data: null });
-
-  return {
-    get data() {
-      return state.data;
-    },
-    setData(data) {
-      state.data = data;
-    }
-  };
-}
-```
-
-### Data Pipeline Architecture
-
-- **DuckDB-first**: Use DuckDB native functions for all data operations
-- **No external parsers**: Use `Duck.read_csv()` instead of PapaParse, `ST_Read()` for geo files
-- **Pipeline pattern**: Use `dataPipeline.processFile()` for all file imports
-
-### Web Workers Usage
-
-Workers are available for:
-
-- Type inference
-- DuckDB batch queries
-- Geometry processing
-- **Note**: CSV/GeoJSON parsing has been migrated to DuckDB native functions
-
-### Performance Guidelines
-
-- Use `TABLESAMPLE` for large dataset previews
-- Implement query result caching with table version tracking
-- Limit concurrent file imports (max 2 via ProcessingSemaphore)
-- Use debounced operations for frequent updates
-
-## 6) Error Handling
-
-### Error Classes
-
-Use the hierarchical error system defined in `src/lib/features/commons/pipeline.errors.ts`:
-
-- `PipelineError` (base class — `code`, `details`)
-  - `DataValidationError` — invalid data (adds `field`)
-  - `ParseError` — file parsing failures (adds `fileType`)
-  - `DuckDBError` — query errors (adds `query`)
-  - `NonFatalError` — toast-worthy but no rollback
-    - `DuplicateFileError` — duplicate file import (adds `fileName`)
-
-### Error Patterns
-
-```typescript
-import {
-  DataValidationError,
-  isPipelineError
-} from '$lib/features/commons/pipeline.errors';
-
-try {
-  await operation();
-} catch (error) {
-  if (error instanceof DataValidationError) {
-    // Handle validation error
-  } else {
-    logger.error('Unexpected error', error);
-  }
-}
-```
-
-### Error Guidelines
-
-- Always provide actionable error messages
-- Use `isPipelineError()` / `isFatalError()` guards for error classification
-- Show warnings for non-critical issues (use `NonFatalError`)
-
-## 7) Testing
-
-### Test types
-
-- **Unit Tests (client)**: Vitest with jsdom — Svelte components, stores, hooks
-- **Pipeline Tests (server)**: Vitest node — data pipeline, services, format processors
-- **DuckDB Tests (server)**: Vitest node with `@duckdb/node-api` — SQL macros, operations
-- **Manual Testing**: Cross-browser compatibility, accessibility, UX workflows
-
-### Running tests
-
-```bash
-pnpm test:unit     # Client tests (Vitest, jsdom)
-pnpm test:all      # Full suite (unit + pipeline + DuckDB)
-pnpm test:pipeline # Pipeline integration tests only
-pnpm test:duckdb   # DuckDB server-side tests only
-pnpm build         # Ensure production build works
-```
-
-### Writing tests
-
-- **Unit Tests**: Test store logic, utility functions, component behavior
-- **Pipeline Tests**: Test data processing, format detection, transformations
-- **Coverage**: Add tests for new features and bug fixes
-- **Accessibility**: Include keyboard navigation and screen reader coverage where relevant
-
-### Test requirements
-
-- New features **must** include tests
-- Bug fixes **should** include regression tests
-- Test both success and error scenarios
-
-## 8) Internationalization
-
-- Use Paraglide‑JS for strings; add keys to messages
-- Run `pnpm machine-translate` to generate missing translations and review
-- Prefer descriptive hierarchical keys (e.g., `legend.title`, `format.page.size`)
-
-## 9) Accessibility & responsiveness
-
-- Ensure keyboard access to controls; Enter/Esc confirm/cancel
-- Maintain visible focus and logical tab order
-- Validate contrast and touch targets; verify responsive behavior
-
-## 10) Security & privacy
-
-- Khartis runs client‑side; do not add server dependencies without discussion
-- Do not commit secrets or tokens; use environment variables securely in local only
-- Keep dependencies up‑to‑date and avoid untrusted sources
-
-## 11) Useful scripts
-
-- `dev`: start the dev server
-- `build`: build for production
-- `preview`: preview the production build
-- `check` / `check:watch`: Svelte type checks
-- `lint` / `format`: linting and formatting
-- `test:unit` / `test:pipeline` / `test:duckdb` / `test:all`: run tests
-- `deploy:pprd:dry-run`: validate the latest staging release, CI gate, and build without SFTP
-- `deploy:pprd`: deploy the latest staging release to PPRD through the guarded local SFTP helper
-- `generate-pwa-assets`: build PWA icons
-- `machine-translate`: generate/update i18n translations
-
-## 12) Getting help
-
-- **Documentation**: See `/docs` folder for comprehensive guides:
-  - `README.md` - Documentation overview
-  - `GLOSSAIRE.md` - Cartographic and technical glossary
-  - `GUIDE_DEVELOPPEUR.md` - Developer quick start and common tasks
-  - `ARCHITECTURE.md` - System design and principles
-  - `PIPELINE_DONNEES.md` - Data ingestion and processing architecture
-  - `DUCKDB.md` - DuckDB WASM engine, orchestrator, SQL macros
-  - `CARTOGRAPHIE.md` - Thematic cartography (semiotics, classification, palettes)
-  - `VISUALISATIONS.md` - User-facing visualization tools and steps
-  - `MAP.md` - Deck.gl / MapLibre rendering pipeline
-  - `FONDS_DE_CARTE.md` - Basemap preparation and catalog
-  - `GESTION_ETAT.md` - State management patterns
-  - `REFERENCE.md` - Types, errors, keyboard shortcuts
-  - `PWA.md` - Progressive Web App, service worker cache, and update flow
-  - `DEPLOYMENT.md` - Public-safe PPRD deployment helper and guardrails
-- **Issues**: Search existing ones or open a new issue
-- **Discussions**: Use GitHub Discussions for ideas and Q&A
-- **Maintainers**: See contributors in package.json
-
-## 13) Code of Conduct
-
-This project follows our Code of Conduct (CODE_OF_CONDUCT.md). Please review it before contributing.
-
----
-
-**Thank you for helping improve Khartis v3! 🗺️**
-
-_Together, we're building an amazing open-source thematic mapping tool for everyone._
+Node 22 and pnpm are required. `pnpm install` fetches the DuckDB WASM
+extensions; use `pnpm download:extensions` to retry a failed download.
+
+## Non-negotiable engineering contracts
+
+- Parse supported data formats through DuckDB WASM. Do not add a hand-written
+  JavaScript parser when DuckDB already supports the format.
+- Keep rendering geometry on the binary Arrow/GeoArrow path. GeoJSON is a
+  fallback or export format, not the normal path to Deck.gl.
+- Escape all user-derived SQL identifiers and values with the existing helpers.
+- Invalidate the relevant DuckDB caches after every table mutation.
+- Treat project compatibility as public API: archive v2 and schema 3.9.0 have
+  explicit migration rules in
+  [PROJECT_FORMAT_COMPATIBILITY.md](docs/PROJECT_FORMAT_COMPATIBILITY.md).
+- Add UI text through Paraglide in French and English, and preserve keyboard
+  navigation, visible focus, and semantic controls.
+
+## Validate the change
+
+Run the narrowest relevant command first, then widen it when the change spans
+boundaries.
+
+| Change                                                 | Required starting point                         |
+| ------------------------------------------------------ | ----------------------------------------------- |
+| Svelte component, store, or utility                    | `pnpm test:unit`                                |
+| Import, persistence, project archive, or data pipeline | `pnpm test:pipeline`                            |
+| SQL, DuckDB macro, reader, join, or classification     | `pnpm test:duckdb`                              |
+| Type or Svelte boundary                                | `pnpm check`                                    |
+| Formatting and linting                                 | `pnpm lint`                                     |
+| User-visible rendering, PWA, or browser lifecycle      | focused browser scenario on a development build |
+
+The pull-request workflow runs all three test suites, `pnpm lint`, `pnpm check`,
+and `pnpm build`. A passing mock-based client test is not proof of a working
+DuckDB Worker, WebGL rendering, or IndexedDB restore.
+
+For render work, exercise more than one bundled basemap and representative
+fixtures. For persistence work, prove a real save, reload, and archive
+round-trip. For project-format changes, add or update migrations and fixtures
+before changing the public version.
+
+## Submit a reviewable change
+
+- Keep the diff focused and update the appropriate developer document when a
+  contract, command, architectural boundary, or troubleshooting path changes.
+- Use Conventional Commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`,
+  `chore:`).
+- Do not commit environment files, credentials, private keys, data exports, or
+  source datasets.
+- Describe the observable behavior, validation performed, and remaining manual
+  browser or deployment evidence in the pull request.
+- Preserve individual reviewed commits. Maintainers integrate accepted pull
+  requests with a regular merge commit, not a squash merge.
+
+Security issues should follow [SECURITY.md](SECURITY.md), not a public issue.
