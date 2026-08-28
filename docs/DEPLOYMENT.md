@@ -1,259 +1,107 @@
-# Local PPRD and PROD Deployment
+# Déploiement local versionné
 
-This repository is open source. Keep all institution-specific values, usernames,
-passwords, hostnames, remote paths, and host fingerprints out of committed files.
+> Réservé aux mainteneurs habilités. Ce document décrit le mécanisme et ses
+> garde-fous, jamais les hôtes, chemins distants, identifiants ou secrets.
 
-The `staging` branch is the PPRD environment: its semantic prereleases are tagged
-`vX.Y.Z-pprd.N` (older `vX.Y.Z-staging.N` tags are still accepted). Stable releases
-tagged `vX.Y.Z` are the PROD environment. The helper supports both PPRD and PROD.
+Khartis est livré comme site statique. Le script local déploie uniquement une
+release déjà produite par GitHub Actions : une prérelease PPRD depuis
+`staging`, ou une release stable PROD depuis `main`.
 
-## What The Script Does
+## Commandes
 
-`pnpm deploy:pprd`:
-
-1. Loads local environment values from `.env` and `.env.deploy.local`.
-2. Fetches Git tags and reads the release-tag list directly from `origin`.
-3. Selects the latest semantic pprd prerelease matching `vX.Y.Z-pprd.N` (or the
-   legacy `vX.Y.Z-staging.N`), ordered by `X.Y.Z` and then `N`.
-4. Verifies that the local tag and remote tag resolve to the same commit, then
-   verifies that `release.yml` completed successfully for that exact commit on
-   `staging` for PPRD or `main` for PROD.
-5. Builds the verified commit SHA, not the mutable tag name, in a temporary
-   detached worktree.
-6. Copies the generated `build/` directory to a local temporary upload snapshot.
-7. Runs a read-only HTTP infrastructure preflight before reading SFTP
-   authentication material or opening a connection. When a release is already public, the
-   helper checks the canonical HTML, base path, mutable assets, cache policy,
-   critical JavaScript and CSS MIME and immutable public cache policies,
-   slashless redirect, and every configured backend. The result is reported as
-   an infrastructure warning and does not block the upload: the infrastructure
-   team must be able to inspect the release that needs adjustment. This preflight
-   does not require the selected tag or its new WASM asset to be public yet.
-8. Connects to SFTP after the local release and build checks succeed.
-9. Acquires an atomic target-specific remote deployment lock. A second
-   deployment stops before upload while this lock exists. After acquiring the
-   lock, the helper rechecks that the remote tag still targets the built SHA and
-   that this SHA still belongs to the target release branch.
-10. Removes stale temporary directories left by previous interrupted deployments,
-    showing progress while remote entries are deleted.
-11. Uploads the snapshot to a temporary remote sibling directory, showing a live
-    progress bar with the percentage, the number of files left, and an ETA.
-12. Copies into that snapshot the missing `_app/immutable` assets belonging to
-    the immediately previous release, using its release asset manifest.
-13. Swaps the temporary directory into place with two quick renames, so the
-    site is unavailable only for a fraction of a second.
-14. Verifies and reports the complete public contract independently on every configured
-    load-balancer backend. A routing cookie pins each request and the backend
-    identity header is checked when it is exposed. The checks cover the canonical
-    HTML base path and `Cache-Control: no-store`; one module and stylesheet MIME
-    type and `public`, positive `max-age`, `immutable` caching without `private`,
-    `no-store`, or `no-cache`; `_app/version.json` and the selected tag;
-    `sw.js` and `manifest.webmanifest` must have valid MIME and no-store
-    headers; a missing hashed asset must return a non-immutable no-store 404;
-    and a representative build-generated WASM URL must be served with Brotli or
-    gzip plus `Vary: Accept-Encoding`. A non-root slashless URL must return a
-    canonical 301 or 308 redirect. Once the canonical HTML is valid, independently
-    testable mismatches are collected into one report so an asset cache error cannot
-    hide a separate WASM compression or redirect error.
-15. Removes the previous remote version after a successful remote swap. A
-    public-route mismatch leaves the uploaded release active and is reported for
-    infrastructure adjustment. A remote swap failure still restores the previous
-    version. SIGINT and SIGTERM are deferred after remote mutation starts until
-    the swap and public validation attempt have completed.
-
-`pnpm deploy:pprd:dry-run` performs the same tag, CI, install, build, and local
-artifact checks, but skips SFTP and live public HTTP validation entirely.
-
-## Commands
-
-```bash
+```sh
 pnpm deploy:pprd:dry-run
 pnpm deploy:pprd
+pnpm deploy:prod:dry-run
+pnpm deploy:prod
 ```
 
-By default the latest pprd prerelease is deployed. To deploy an older release,
-for example to roll back, pass its tag explicitly:
+Les alias de cible `staging` et `production` sont acceptés par le script, mais
+la documentation utilise `pprd` et `prod` afin de distinguer clairement les
+environnements.
 
-```bash
-pnpm deploy:pprd:dry-run -- --tag vX.Y.Z-pprd.N
-pnpm deploy:pprd -- --tag vX.Y.Z-pprd.N
+Un `dry-run` vérifie la release, la CI et le build sans connexion SFTP. Il a
+toujours besoin de l’URL publique cible car celle-ci détermine le `BASE_PATH`
+du build.
+
+## Prérequis locaux
+
+- Node 22 et pnpm, avec les dépendances du dépôt disponibles;
+- `git` et GitHub CLI `gh`, connecté au compte autorisé à lire les releases et
+  workflows;
+- le dépôt contenant le tag à déployer;
+- un fichier local ignoré (`.env` ou `.env.deploy.local`) ou des variables de
+  session, jamais une valeur versionnée.
+
+Vérifier l’accès GitHub avant une fenêtre de déploiement :
+
+```sh
+gh auth status
 ```
 
-If the currently deployed release predates
-`.khartis-release-assets.json`, run exactly one compatibility deployment:
+Le script attend les variables partagées de connexion SFTP, l’empreinte du
+serveur et, pour chaque cible, l’URL publique, le répertoire distant et,
+éventuellement, l’identifiant GTM. Les noms exacts sont affichés par l’aide du
+script et figurent dans `.env.example`; les valeurs réelles restent locales.
 
-```bash
-pnpm deploy:pprd -- --migrate-legacy-assets
-```
+## Ce que le script prouve avant un transfert
 
-The option explicitly scans only the previous release's `_app/immutable`
-directory, capped at 2,000 files and 512 MB. The uploaded release then carries
-its own manifest, so subsequent deployments must run without this option.
+1. Il récupère les tags distants et sélectionne le dernier tag du canal, ou le
+   tag passé avec `--tag`.
+2. Il vérifie que le tag local et le tag distant désignent le même commit.
+3. Il exige un workflow `release.yml` vert pour le commit et la branche de
+   release attendue.
+4. Il dérive le `BASE_PATH` de l’URL publique cible afin que les assets et le
+   service worker soient construits sur la route réellement exposée.
+5. Il construit dans une copie temporaire avec `pnpm install --frozen-lockfile`.
 
-If a previous process stopped without releasing its target lock, first confirm
-that no deployment is active, then recover it explicitly:
+La PPRD attend un tag `vX.Y.Z-pprd.N` (les anciens tags `-staging.N` restent
+acceptés). La PROD attend un tag stable `vX.Y.Z`.
 
-```bash
-pnpm deploy:pprd -- --recover-stale-lock
-```
+## Garde-fous de transfert et de publication
 
-The helper never removes an existing deployment lock automatically.
+Hors `dry-run`, le script vérifie l’empreinte de l’hôte SFTP, dépose le build
+dans un répertoire temporaire, puis effectue un basculement atomique par
+renommage. Il conserve les assets immuables requis par la release précédente
+avant de supprimer l’ancienne arborescence.
 
-## PROD
+Après le basculement, il valide la route publique canonique et, si elle est
+configurée, chaque backend de routage. Une redirection permanente vers la
+route canonique est autorisée, mais une variante de chemin qui sert un autre
+build ne l’est pas.
 
-`pnpm deploy:prod` deploys the latest stable `vX.Y.Z` release to PROD. It runs the
-same tag, CI, install, and build checks, requires a green `release.yml` run, and
-asks you to retype the tag before uploading. Use `pnpm deploy:prod:dry-run` to
-validate without SFTP. PROD uploads to the `html/prod` remote directory. The GTM
-analytics container is per target (`KHARTIS_GTM_CONTAINER_ID_PROD`); pprd leaves
-`KHARTIS_GTM_CONTAINER_ID_PPRD` empty and ships without analytics.
+La PROD demande la ressaisie du tag, y compris lorsque `--yes` est fourni.
+Cette confirmation ne doit pas être contournée.
 
-Each target has one required public URL. The helper derives SvelteKit `BASE_PATH`
-from that URL, so PPRD and PROD can use different routes without maintaining a
-second path setting. Provide the canonical URL with or without its trailing
-slash; the helper normalizes it to the trailing-slash form.
+## Flux recommandé
 
-## Required Local Environment
+1. Lancer le `dry-run` de la cible.
+2. Résoudre toute divergence de tag, CI ou build avant la fenêtre.
+3. Vérifier la configuration locale et les variables sans les afficher dans un
+   ticket ou un terminal partagé.
+4. Lancer la commande de déploiement et répondre à la confirmation PROD le cas
+   échéant.
+5. Lire le résultat complet du script, puis ouvrir la route publique canonique
+   et vérifier le chargement, la navigation sous le bon `BASE_PATH` et les
+   assets immuables.
 
-Use `.env` or `.env.deploy.local`. Both files are ignored by Git. Keep real
-values local to the deployer's workstation.
+## Cas exceptionnels
 
-```dotenv
-KHARTIS_PUBLIC_URL_PPRD=
-KHARTIS_PUBLIC_URL_PROD=
-KHARTIS_SFTP_HOST=
-KHARTIS_SFTP_HOST_FINGERPRINT_SHA256=
-KHARTIS_SFTP_USER=
-KHARTIS_SFTP_REMOTE_DIR_PPRD=
-KHARTIS_SFTP_REMOTE_DIR_PROD=
-KHARTIS_GTM_CONTAINER_ID_PPRD=
-KHARTIS_GTM_CONTAINER_ID_PROD=
-KHARTIS_HTTP_ROUTING_COOKIE_NAME=
-KHARTIS_HTTP_BACKEND_HEADER_NAME=
-KHARTIS_HTTP_ROUTING_BACKENDS_PPRD=
-KHARTIS_HTTP_ROUTING_BACKENDS_PROD=
-```
+`--migrate-legacy-assets` est prévu uniquement pour la première migration
+d’une release antérieure au manifeste d’assets actuel. `--recover-stale-lock`
+ne s’emploie qu’après avoir vérifié qu’aucun autre déploiement n’est actif.
+Ce ne sont pas des options de dépannage courant.
 
-Public URLs must be absolute HTTPS URLs without credentials, query strings, or
-fragments. A static SvelteKit artifact has one base path. If several public
-aliases are required, configure the infrastructure to redirect them to the one
-canonical URL rather than serving the same artifact under several visible
-paths.
+Le script n’est pas un outil de rollback manuel. En cas d’échec après transfert
+ou d’état distant inattendu, conserver les sorties, arrêter les tentatives et
+suivre la procédure d’exploitation convenue avec les mainteneurs.
 
-`KHARTIS_HTTP_ROUTING_BACKENDS_PPRD` and
-`KHARTIS_HTTP_ROUTING_BACKENDS_PROD` are comma-separated routing-cookie values.
-For each value, the helper sends
-`<KHARTIS_HTTP_ROUTING_COOKIE_NAME>=<backend>` and reports whether the same
-backend identifier is returned in `KHARTIS_HTTP_BACKEND_HEADER_NAME`. Keep real
-backend identifiers in ignored local files.
+## Invariants à préserver lors d’une modification
 
-Authentication is supplied at runtime. Prefer the masked password prompt:
-
-```dotenv
-KHARTIS_SFTP_PASSWORD=
-```
-
-If key authentication is available locally, use:
-
-```dotenv
-KHARTIS_SFTP_PRIVATE_KEY_PATH=
-KHARTIS_SFTP_PASSPHRASE=
-```
-
-Do not commit any populated authentication value.
-
-## Host Fingerprint
-
-`KHARTIS_SFTP_HOST_FINGERPRINT_SHA256` is mandatory for real uploads. It prevents
-the script from accepting an unexpected SFTP server key.
-
-The safest source is the official infrastructure team. If you inspect the key
-from your workstation, use it only to compare against a trusted value:
-
-```bash
-ssh-keyscan -p 22 "$KHARTIS_SFTP_HOST" 2>/dev/null | ssh-keygen -lf - -E sha256
-```
-
-Store only the `SHA256:...` fingerprint value locally. If the server exposes
-multiple host keys, store the accepted fingerprints as a comma-separated list.
-
-## Safety Rules
-
-- Real uploads require a release tag present on `origin`, the same local and
-  remote commit SHA, and a successful `release.yml` push run on the target
-  release branch. Tag and branch provenance are revalidated after the remote
-  lock is acquired and immediately before remote mutation starts.
-- Before reading SFTP credentials, real deployments run a read-only public
-  infrastructure preflight on every configured backend. HTTP mismatches are
-  reported but do not stop a deployment whose release, build, SFTP, lock, and
-  remote-swap checks succeed.
-- Real uploads require a valid SFTP host fingerprint.
-- The PPRD remote directory must end with `html/pprd`; the PROD remote directory
-  must end with `html/prod`.
-- The script refuses broad or unsafe remote paths such as `/`, `.`, `..`, or
-  paths containing backslashes or control characters.
-- The script uses `ssh2-sftp-client` with host-key verification enabled.
-- The dry-run command never opens an SFTP connection.
-- Every build is rejected if `index.html` or `manifest.webmanifest` does not
-  match the base path derived from the target public URL.
-- Critical hashed JavaScript and CSS assets must use `Cache-Control: public`
-  with a positive `max-age` and `immutable`, without contradictory `private` or
-  `no-store` directives.
-- Public-route checks cover HTML, selected version, service worker, manifest,
-  cache headers, representative WASM compression, and hashed 404 policy on
-  every configured backend. A mismatch is reported for infrastructure follow-up
-  and leaves the uploaded release active.
-- Every real deployment acquires an atomic target-specific remote lock. An
-  existing lock blocks the run unless the operator explicitly uses
-  `--recover-stale-lock` after confirming no other deployment is active.
-- A non-root slashless public URL is checked for a 301 or 308 redirect to the
-  exact canonical HTTPS URL. Serving HTML directly, temporary redirects, HTTP
-  locations, and redirects to another route are reported for infrastructure
-  follow-up.
-- Real uploads use a temporary remote directory first, then swap it into place
-  with fast renames. The previous version is removed only after the swap; if
-  the swap fails, the previous version is restored.
-- The upload snapshot keeps the immutable assets listed by the previous
-  release's `.khartis-release-assets.json`. The manifest contains only the
-  assets built by that release, which limits retention to one previous
-  generation.
-- A missing or corrupt previous manifest stops the deployment by default. The
-  one-time `--migrate-legacy-assets` option enables a bounded legacy scan;
-  without that explicit option the script never falls back to rescanning remote
-  generations.
-- A failure while retaining an old asset stops the deployment before the
-  public swap.
-- Once the public swap begins, an interruption is honored only after the
-  remote swap and public validation attempt complete.
-
-## Recommended Flow
-
-1. Connect to the required institutional VPN.
-2. Fill local `.env` or `.env.deploy.local` with PPRD values.
-3. Run:
-
-   ```bash
-   pnpm deploy:pprd:dry-run
-   ```
-
-4. If the dry-run succeeds, run:
-
-   ```bash
-   pnpm deploy:pprd
-   ```
-
-   Add `-- --migrate-legacy-assets` only if this is the documented one-time
-   transition from a release without a valid asset manifest.
-
-5. Check the tag shown by the confirmation prompt, then answer `y`. If the tag
-   is not the one you want, answer `n` and re-run with `--tag`.
-6. Enter the SFTP password when prompted.
-
-## Deployment Window
-
-The remote swap replaces the whole PPRD directory in two quick renames, so the
-site is unavailable only for a fraction of a second. The new artifact also
-contains the missing hashed assets from the immediately previous release.
-Visitors with an already open session can therefore finish loading their old
-lazy chunks during the update transition. A low-traffic window remains
-recommended for the first deployment using this retention mechanism.
+- ne pas supprimer la confirmation de tag PROD;
+- ne pas court-circuiter la CI de release, la vérification d’empreinte ni la
+  validation publique;
+- ne pas introduire de chemin, hôte ou identifiant réel dans le dépôt;
+- conserver le lien entre `KHARTIS_PUBLIC_URL_*`, `BASE_PATH` et la route
+  effectivement publiée;
+- tester au minimum les deux `dry-run` après une modification du script.
