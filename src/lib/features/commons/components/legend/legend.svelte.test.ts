@@ -6,6 +6,7 @@ import {
   createLegendSvg,
   draw_categorical_legend,
   draw_khartis_double_symbols_legend,
+  draw_khartis_line_width_legend,
   draw_khartis_swatch_legend,
   draw_quanti_color_legend,
   draw_symbols_legend,
@@ -34,6 +35,20 @@ describe('common legend generators', () => {
       'Alpha beta',
       'gamma'
     ]);
+  });
+
+  it('wraps an unbroken legend label within the measured width', () => {
+    const lines = wrapLegendText(
+      'population_identifier_with_no_spaces',
+      '12px Inter',
+      70
+    );
+
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.join('')).toBe('population_identifier_with_no_spaces');
+    expect(
+      lines.every((line) => Textbox.measureText(line, '12px Inter') <= 70)
+    ).toBe(true);
   });
 
   it('renders shared header and note blocks with escaped wrapped text', () => {
@@ -91,6 +106,22 @@ describe('common legend generators', () => {
     expect(svg.markup).toContain('quantitative_legend');
     expect(svg.markup).toContain('Sans données');
     expect(svg.markup).toContain('#2171b5');
+  });
+
+  it('widens quantitative legends to contain unbroken header text', () => {
+    const svg = createLegendSvg(
+      draw_quanti_color_legend([0, 1], ['#2171b5'], {
+        title: 'Évolution du PIB',
+        subtitle: 'gdp_per_capita / growth_rate',
+        fontSize: 10
+      })
+    );
+
+    const horizontalMargins = 20;
+    expect(svg.width).toBeGreaterThanOrEqual(
+      Textbox.measureText('gdp_per_capita', '10px Open Sans') +
+        horizontalMargins
+    );
   });
 
   it('draws categorical legends and escapes labels before raw SVG rendering', () => {
@@ -251,6 +282,43 @@ describe('common legend generators', () => {
 
     expect(withNoData.markup).toContain('Absence de données');
     expect(withNoData.width).toBeGreaterThan(base.width);
+  });
+
+  it('widens proportional symbol legends to contain unbroken header text', () => {
+    const svg = createLegendSvg(
+      draw_symbols_legend([10, 100, 1_000], {
+        title: 'Population',
+        subtitle: 'population_identifier_with_no_spaces',
+        fontSize: 10
+      })
+    );
+
+    const horizontalMargins = 20;
+    expect(svg.width).toBeGreaterThanOrEqual(
+      Textbox.measureText(
+        'population_identifier_with_no_spaces',
+        '10px Open Sans'
+      ) + horizontalMargins
+    );
+  });
+
+  it('widens line-width legends to contain unbroken header text', () => {
+    const svg = createLegendSvg(
+      draw_khartis_line_width_legend(
+        [{ label: '100', width: 4, color: '#4585f5' }],
+        {
+          title: 'Flux de transports',
+          subtitle: 'transport_flow_identifier',
+          fontSize: 10
+        }
+      )
+    );
+
+    const horizontalMargins = 20;
+    expect(svg.width).toBeGreaterThanOrEqual(
+      Textbox.measureText('transport_flow_identifier', '10px Open Sans') +
+        horizontalMargins
+    );
   });
 
   it('draws quantitative class boxes as white background plus motif fill when classPatternFills is set', () => {
