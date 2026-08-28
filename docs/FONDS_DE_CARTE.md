@@ -193,7 +193,7 @@ static/basemaps/
     └── geometry/*.parquet            ← GeoParquet par couche
 ```
 
-`all-basemaps-metadata.json` est chargé au démarrage et popule le catalogue UI. Le catalogue actuel compte **29 entrées** (un fond = une famille géographique avec ses variantes de simplification). `all-basemaps-attributes.parquet` n'est **pas** chargé au démarrage — il est enregistré dans DuckDB par `basemapService.ensureAttributesLoaded()` uniquement quand l'utilisateur déclenche une jointure.
+`all-basemaps-metadata.json` est chargé au démarrage et popule le catalogue UI. Le catalogue versionné contient actuellement **207 variantes de fichiers**, regroupées en **183 familles affichées** par `getCatalogBasemapsForDisplay()` afin de ne présenter qu'un niveau de simplification préféré par famille. `all-basemaps-attributes.parquet` n'est **pas** chargé au démarrage : il est enregistré dans DuckDB par `basemapService.ensureAttributesLoaded()` uniquement quand l'utilisateur déclenche une jointure.
 
 ---
 

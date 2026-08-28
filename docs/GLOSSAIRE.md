@@ -135,7 +135,7 @@ Primitives réactives de Svelte 5 : `$state` (état local), `$derived` (valeur c
 ## S
 
 **SavePriority**
-Enum de priorité de persistance : `DEBOUNCED` (5 s de délai, défaut) vs `IMMEDIATE` (bypass immédiat). Utilisé pour `persistenceRegistry.save(priority)`. Les opérations critiques (ajout de fichier, création de projet, export explicite) utilisent `IMMEDIATE`.
+Enum de priorité de persistance : `DEBOUNCED` (750 ms de délai par défaut) vs `IMMEDIATE` (bypass immédiat). Utilisé par `persistenceRegistry.notifyChange(key, priority)`. Les opérations critiques utilisent `IMMEDIATE`.
 
 **SemioType**
 Type sémiotique d'une colonne, calculé par `semio-detector.utils.ts`. 7 valeurs : `QTA` (quantitatif absolu), `QTR` (quantitatif ratio), `QL` (qualitatif), `QLO` (qualitatif ordonné), `geoid`, `geolat`, `geolon`. Guide les suggestions de visualisation et le choix de palette.

@@ -26,9 +26,9 @@ Le fichier `.env.example` sert uniquement au helper de déploiement local PPRD. 
 | TypeScript                          | 6.x       | Typage strict — jamais `any`                                        |
 | DuckDB WASM                         | 1.x       | Moteur SQL analytique en mémoire, chargé dans un Web Worker         |
 | Deck.gl                             | 9.x       | Rendu cartographique GPU, couches thématiques sur buffers GeoArrow  |
-| MapLibre GL                         | 5.x       | Rendu des fonds de carte en tuiles vectorielles (OSM)               |
+| MapLibre GL                         | 6.x       | Rendu des fonds de carte en tuiles vectorielles (OSM)               |
 | Apache Arrow + geoarrow-deck-stream | —         | Passerelle binaire DuckDB → Deck.gl pour un rendu haute performance |
-| Carbon Components Svelte            | 0.109.x   | Composants UI (IBM Design System) — Svelte 4 source                 |
+| Carbon Components Svelte            | 0.111.x   | Composants UI (IBM Design System), source Svelte 4                  |
 | d3-geo + d3-geo-projection          | —         | Projections intégrées (Robinson, Natural Earth, Mercator…)          |
 | proj4                               | —         | Fallback reprojection pour EPSG:2154 et variantes françaises        |
 | parquet-wasm                        | —         | Lecture GeoParquet côté client sans DuckDB                          |
@@ -74,7 +74,7 @@ Le fichier `.env.example` sert uniquement au helper de déploiement local PPRD. 
 | [CARTOGRAPHIE.md](CARTOGRAPHIE.md)                                 | Concepts cartographiques : sémiotique, discrétisation, couleurs, projections  |
 | [VISUALISATIONS.md](VISUALISATIONS.md)                             | Workflow 3 étapes, outils de la barre droite, habillage, export               |
 | [SUGGESTION_VISUALISATION.md](SUGGESTION_VISUALISATION.md)         | Algorithme de suggestion : typage sémiologique des colonnes, patterns, scores |
-| [GESTION_ETAT.md](GESTION_ETAT.md)                                 | Stores Svelte 5, persistance IndexedDB, snapshot projet, undo/redo            |
+| [GESTION_ETAT.md](GESTION_ETAT.md)                                 | Stores Svelte 5, persistance IndexedDB et historique projet limité            |
 | [PROJECT_FORMAT_COMPATIBILITY.md](PROJECT_FORMAT_COMPATIBILITY.md) | Baseline publique `.kh`, migrations de schéma et compatibilité future         |
 | [FONDS_DE_CARTE.md](FONDS_DE_CARTE.md)                             | Format GeoParquet, préparation et catalogue des fonds inclus                  |
 | [LEGENDES.md](LEGENDES.md)                                         | Système de légendes SVG, familles, extensions Khartis, sécurité               |
