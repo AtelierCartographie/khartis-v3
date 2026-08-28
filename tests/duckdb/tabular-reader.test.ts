@@ -6,13 +6,17 @@ const {
   registerFilesMock,
   dropRegisteredFileMock,
   addRowIdMock,
-  restoreNormalizedColumnNamesMock
+  restoreNormalizedColumnNamesMock,
+  runInTransactionMock
 } = vi.hoisted(() => ({
   executeQueryMock: vi.fn(),
   registerFilesMock: vi.fn(),
   dropRegisteredFileMock: vi.fn(),
   addRowIdMock: vi.fn(),
-  restoreNormalizedColumnNamesMock: vi.fn()
+  restoreNormalizedColumnNamesMock: vi.fn(),
+  runInTransactionMock: vi.fn(
+    async (_connection: unknown, callback: () => Promise<void>) => callback()
+  )
 }));
 
 vi.mock('$lib/features/duckdb/core/query', () => ({
@@ -20,10 +24,7 @@ vi.mock('$lib/features/duckdb/core/query', () => ({
 }));
 
 vi.mock('$lib/features/duckdb/core/transaction', () => ({
-  runInTransaction: async (
-    _connection: unknown,
-    callback: () => Promise<void>
-  ) => callback()
+  runInTransaction: runInTransactionMock
 }));
 
 vi.mock('$lib/features/duckdb/io/file-registry', () => ({
@@ -122,6 +123,36 @@ describe('readTabular', () => {
     ).rejects.toThrow();
 
     expect(dropRegisteredFileMock).not.toHaveBeenCalled();
+  });
+
+  it('suppresses rollback logging only for a recoverable CSV import attempt', async () => {
+    const ctx = createContext();
+    const file = new File(['a,b\n1,mixed'], 'data.csv', { type: 'text/csv' });
+    let importAttempts = 0;
+
+    executeQueryMock.mockImplementation(async (_connection, sql: string) => {
+      if (sql.includes('read_csv') && importAttempts++ === 0) {
+        throw new Error('sniffing failed');
+      }
+      return sql.includes('COUNT(*)') ? [{ cnt: 1 }] : undefined;
+    });
+
+    await readTabular(ctx, file, { tablename: 'data_table' });
+
+    expect(runInTransactionMock).toHaveBeenNthCalledWith(
+      1,
+      ctx.connection,
+      expect.any(Function),
+      'read_tabular',
+      { logRollback: false }
+    );
+    expect(runInTransactionMock).toHaveBeenNthCalledWith(
+      2,
+      ctx.connection,
+      expect.any(Function),
+      'read_tabular',
+      { logRollback: true }
+    );
   });
 
   it('rejects unsupported CSV delimiters before building SQL', async () => {

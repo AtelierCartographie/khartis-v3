@@ -1,11 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  computeClassificationBreaksMock: vi.fn(),
   notifyChangeMock: vi.fn(),
   updateLegendItemMock: vi.fn(),
   datasets: [] as Array<unknown>,
   selectedDatasetId: undefined as string | undefined
 }));
+
+vi.mock(
+  '$lib/features/visualization-tab/hooks/use-classification-breaks.svelte',
+  () => ({
+    computeClassificationBreaks: mocks.computeClassificationBreaksMock
+  })
+);
 
 vi.mock('$lib/features/project-management/core', () => ({
   SavePriority: {
@@ -285,6 +293,16 @@ function createSuggestionById(
 describe('suggestion.service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.computeClassificationBreaksMock.mockResolvedValue({
+      normalizedMethod: ClassificationMethod.QUANTILES,
+      requestedClassCount: 5,
+      actualClassCount: 5,
+      result: {
+        breaks: [10, 20, 30, 40, 50],
+        counts: [2, 2, 2, 2, 2]
+      },
+      colors: ['#e4e6e7', '#b1c4d9', '#7fa3ca', '#4f81bb', '#1b5eaa']
+    });
     visualizationStore.clear();
 
     const dataset = createPointDataset();
@@ -292,7 +310,7 @@ describe('suggestion.service', () => {
     mocks.selectedDatasetId = dataset.id;
   });
 
-  it('keeps example choropleth presets selected after declared overrides', () => {
+  it('keeps example choropleth presets selected after declared overrides', async () => {
     const dataset = {
       ...createPolygonDataset(),
       columns: [
@@ -304,7 +322,7 @@ describe('suggestion.service', () => {
     mocks.datasets = [dataset];
     mocks.selectedDatasetId = dataset.id;
 
-    applyExampleVisualizationPresets(
+    await applyExampleVisualizationPresets(
       {
         id: 'world-population',
         title: 'Population Europe 2023',
@@ -336,6 +354,16 @@ describe('suggestion.service', () => {
     expect(visualization.origin?.appliedSuggestionState?.suggestionKey).toBe(
       visualization.origin?.suggestionKey
     );
+    expect(visualization.polygon?.classification?.breaks).toEqual([
+      10, 20, 30, 40, 50
+    ]);
+    expect(visualization.polygon?.classification?.colors).toEqual([
+      '#e4e6e7',
+      '#b1c4d9',
+      '#7fa3ca',
+      '#4f81bb',
+      '#1b5eaa'
+    ]);
     expect(
       resolveDisplayedSuggestionKey({
         persistedSuggestionKey: visualization.origin?.suggestionKey,

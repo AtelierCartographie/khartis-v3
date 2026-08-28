@@ -56,7 +56,7 @@ CI (`.github/workflows/pr-validation.yml`) on PRs to `staging`/`main`: lint + ty
 
 ## Architecture
 
-Deep docs live in `docs/` (French) — `ARCHITECTURE.md`, `ARCHITECTURE_FEATURES.md`, `GESTION_ETAT.md` (state), `DUCKDB.md`, `MAP.md`, `PIPELINE_DONNEES.md`, `VISUALISATIONS.md`, `REFERENCE.md`, and `DEPLOYMENT.md`. Consult them before non-trivial work.
+Deep docs live in `docs/` (French) — `ARCHITECTURE.md`, `IMPORT_DUCKDB.md`, `RENDU_CARTOGRAPHIQUE.md`, `FONDS_PROJECTIONS.md`, `PERSISTANCE_ET_ARCHIVES.md`, `PERFORMANCE_ET_WORKERS.md`, `CONTRIBUER_ET_TESTER.md`, and `DEPLOYMENT.md`. Consult them before non-trivial work.
 
 **Four pillars:**
 
@@ -73,10 +73,10 @@ Deep docs live in `docs/` (French) — `ARCHITECTURE.md`, `ARCHITECTURE_FEATURES
 
 **Two geometry pipelines** (keep both on binary paths — a JS GeoJSON conversion on the render path kills perf and invalidates WeakMap caches):
 
-- Catalog basemaps: `GeoParquet → parquet-wasm → Arrow → geoarrow-deck-stream → Deck.gl` (bypasses DuckDB, deliberately).
+- Catalog basemaps: `GeoParquet → parquet-wasm → Arrow → geoarrow-deck-stream → Deck.gl` for direct rendering; they can be materialized in DuckDB for a join, analysis, or density operation.
 - User data: `file → DuckDB → Arrow IPC → geoarrow-deck-stream → Deck.gl`.
 
-**State layers** (see `GESTION_ETAT.md`): local `$state` (ephemeral UI) → feature store (`*.store.svelte.ts` factory) → global singleton stores (`projectStore`, `datasetsStore`, `visualizationStore` in `commons/stores/`) → DuckDB tables → IndexedDB. Persistence is **metadata-only**: project JSON never contains source files; raw files live in IndexedDB asset chunks (`project_asset_chunks`, 8 MB) and are replayed into DuckDB on reopen.
+**State layers** (see `PERSISTANCE_ET_ARCHIVES.md`): local `$state` (ephemeral UI) → feature store (`*.store.svelte.ts` factory) → global singleton stores (`projectStore`, `datasetsStore`, `visualizationStore` in `commons/stores/`) → DuckDB tables → IndexedDB. DuckDB tables and GPU buffers are ephemeral; source bytes live in IndexedDB asset chunks (`project_asset_chunks`, 8 MB) and are replayed into DuckDB on reopen. The snapshot also preserves the project configuration and selected derived metadata needed for restoration.
 
 **Key entry points:**
 

@@ -188,7 +188,9 @@ export async function validateGPSColumns(
         latColumn: latCol,
         lonColumn: lonCol,
         latMin: stats.lat_min.toFixed(2),
-        latMax: stats.lat_max.toFixed(2)
+        latMax: stats.lat_max.toFixed(2),
+        lonMin: stats.lon_min.toFixed(2),
+        lonMax: stats.lon_max.toFixed(2)
       });
     } else if (!latInRange) {
       warning = m.gps_warning_lat_out_of_range({

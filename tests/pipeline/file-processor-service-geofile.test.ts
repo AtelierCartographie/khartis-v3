@@ -160,4 +160,73 @@ describe('createFileProcessorService geofile imports', () => {
     ).toBe(true);
     expect(statuses).toContain(FileStatus.COMPLETE);
   });
+
+  it('should preserve geometry when processing a KMZ archive', async () => {
+    const updates: Array<Partial<UploadedFile>> = [];
+    const uploadedFile = {
+      ...makeUploadedFile(FileType.KMZ),
+      name: 'places.kmz',
+      type: 'application/vnd.google-earth.kmz'
+    };
+    const sourceFile = new File([new Uint8Array([1, 2, 3])], 'places.kmz', {
+      type: 'application/vnd.google-earth.kmz'
+    });
+
+    mocks.processUploadedFile.mockResolvedValueOnce({
+      id: 'dataset-kmz',
+      sourceFileId: 'places.kmz',
+      name: 'doc.kml',
+      tableName: 'places_kmz_table',
+      rowCount: 1,
+      columns: [
+        {
+          name: 'name',
+          type: 'text',
+          stats: { count: 1, nulls: 0, uniques: 1 }
+        },
+        {
+          name: 'geom',
+          type: 'geometry',
+          stats: { count: 1, nulls: 0, uniques: 1 }
+        }
+      ],
+      geometry: {
+        type: 'Point',
+        columnName: 'geom',
+        bounds: [2.3, 48.8, 2.3, 48.8],
+        centroid: [2.3, 48.8],
+        featureCount: 1
+      },
+      metadata: {
+        processedAt: new Date(),
+        fileType: FileType.KML
+      }
+    });
+    mocks.duckQuery.mockReset();
+    mocks.duckQuery
+      .mockResolvedValueOnce([{ name: 'Station', geom: 'POINT (2.3 48.8)' }])
+      .mockResolvedValueOnce([
+        {
+          name: 'Station',
+          __khartis_geometry_json: '{"type":"Point","coordinates":[2.3,48.8]}'
+        }
+      ]);
+
+    const service = createFileProcessorService({
+      onProgress: vi.fn(),
+      onStatusChange: vi.fn(),
+      onDataUpdate: (_fileId, data) => {
+        updates.push(data);
+      }
+    });
+
+    await service.processFile(uploadedFile, sourceFile);
+
+    const preparedGeoJSON = updates.find((update) => update.preparedGeoJSON)
+      ?.preparedGeoJSON as string;
+    expect(JSON.parse(preparedGeoJSON).features[0]).toMatchObject({
+      geometry: { type: 'Point', coordinates: [2.3, 48.8] },
+      properties: { name: 'Station' }
+    });
+  });
 });

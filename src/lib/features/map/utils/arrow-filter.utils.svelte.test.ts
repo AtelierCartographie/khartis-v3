@@ -131,4 +131,55 @@ describe('arrow-filter utils', () => {
     expect(result.numRows).toBe(1);
     expect(result.getChild('name')?.toArray()).toEqual(['Bob']);
   });
+
+  it('compares date-only filters by calendar day', () => {
+    const september = new Date('2018-09-03T02:00:00.000Z');
+    const october = new Date('2022-10-24T02:00:00.000Z');
+    const table = new Table({
+      createdAt: vectorFromArray([september, october])
+    });
+
+    const equalsFilter = [
+      {
+        id: 'created-at-equals',
+        column: 'createdAt',
+        operator: 'equals',
+        value: '2018-09-03'
+      }
+    ] as VizDataFilter[];
+    const notEqualsFilter = [
+      {
+        id: 'created-at-not-equals',
+        column: 'createdAt',
+        operator: 'not_equals',
+        value: '2018-09-03'
+      }
+    ] as VizDataFilter[];
+    const lessThanOrEqualFilter = [
+      {
+        id: 'created-at-lte',
+        column: 'createdAt',
+        operator: 'lte',
+        value: '2018-09-03'
+      }
+    ] as VizDataFilter[];
+    const betweenFilter = [
+      {
+        id: 'created-at-between',
+        column: 'createdAt',
+        operator: 'between',
+        value: '2018-09-03',
+        secondaryValue: '2022-10-24'
+      }
+    ] as VizDataFilter[];
+
+    expect(filterArrowTableByDataFilters(table, equalsFilter).numRows).toBe(1);
+    expect(filterArrowTableByDataFilters(table, notEqualsFilter).numRows).toBe(
+      1
+    );
+    expect(
+      filterArrowTableByDataFilters(table, lessThanOrEqualFilter).numRows
+    ).toBe(1);
+    expect(filterArrowTableByDataFilters(table, betweenFilter).numRows).toBe(2);
+  });
 });

@@ -61,11 +61,12 @@ describe('computeQualityWarnings', () => {
 
   it(`warns when null ratio > ${HIGH_NULL_RATIO_THRESHOLD}`, () => {
     const nullRatio = HIGH_NULL_RATIO_THRESHOLD + 0.1;
-    const count = 10;
-    const nulls = Math.ceil(count * nullRatio);
+    const totalCount = 10;
+    const nulls = Math.ceil(totalCount * nullRatio);
+    const count = totalCount - nulls;
     const warnings = computeQualityWarnings(
       [col('col_a', { count, nulls, uniques: 2 })],
-      100
+      totalCount
     );
     expect(warnings.some((w) => w.includes('col_a'))).toBe(true);
   });

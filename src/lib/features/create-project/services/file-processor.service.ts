@@ -542,6 +542,44 @@ function createGeoPackageProcessor(
 }
 
 function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
+  function resolveArchiveDatasetFileType(dataset: DatasetResult): FileType {
+    const detectedFileType = detectFileTypeFromName(dataset.name);
+    if (detectedFileType !== FileType.UNKNOWN) {
+      return detectedFileType;
+    }
+
+    return (
+      Object.values(FileType).find(
+        (fileType) => fileType === dataset.metadata.fileType
+      ) ?? FileType.UNKNOWN
+    );
+  }
+
+  async function buildArchivePreparedGeoJSON(
+    duck: typeof Duck,
+    dataset: DatasetResult,
+    headers: string[]
+  ): Promise<string | undefined> {
+    if (!dataset.geometry) {
+      return undefined;
+    }
+
+    const geometryColumnName =
+      dataset.geometry.columnName ?? INTERNAL_COLUMN.GEOM;
+    return buildPreparedGeoJSONFromDuckTable(
+      duck,
+      dataset.tableName,
+      geometryColumnName,
+      headers.filter(
+        (header) =>
+          header !== geometryColumnName &&
+          !EXCLUDED_COLUMNS.includes(
+            header as (typeof EXCLUDED_COLUMNS)[number]
+          )
+      )
+    );
+  }
+
   async function processSingleDataset(
     uploadedFile: UploadedFile,
     dataset: DatasetResult & {
@@ -590,6 +628,11 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     )) as Array<Record<string, unknown>>;
 
     const tabularData = convertRowsToTabular(sampleData);
+    const preparedGeoJSON = await buildArchivePreparedGeoJSON(
+      duck,
+      dataset,
+      headers
+    );
 
     callbacks.onProgress(uploadedFile.id, 80);
 
@@ -597,7 +640,8 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       parsedData: tabularData,
       statistics,
       content: fileContent,
-      duckdbTableName: tableName
+      duckdbTableName: tableName,
+      ...(preparedGeoJSON ? { preparedGeoJSON } : {})
     });
 
     const dataMatrix = createDataMatrix(sampleData, headers);
@@ -633,7 +677,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       const headers = columns.map((col) => col.name);
       const progressBase = (i / totalDatasets) * 100;
 
-      const detectedFileType = detectFileTypeFromName(name);
+      const detectedFileType = resolveArchiveDatasetFileType(dataset);
       const detectedMimeType = getMimeTypeFromFileType(detectedFileType);
 
       const statistics = buildColumnStatistics(
@@ -654,6 +698,11 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       }
 
       const tabularData = convertRowsToTabular(previewData);
+      const preparedGeoJSON = await buildArchivePreparedGeoJSON(
+        duck,
+        dataset,
+        headers
+      );
       const sampleForAnalysis = previewData;
       const dataMatrix = createDataMatrix(sampleForAnalysis, headers);
 
@@ -687,7 +736,8 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
           content: undefined,
           deepAnalysis,
           sourceArchive: result.sourceZipName,
-          duckdbTableName: tableName
+          duckdbTableName: tableName,
+          ...(preparedGeoJSON ? { preparedGeoJSON } : {})
         });
         callbacks.onProgress(uploadedFile.id, progressBase + 50);
         callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
@@ -704,7 +754,8 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
           statistics,
           deepAnalysis,
           sourceArchive: result.sourceZipName,
-          duckdbTableName: tableName
+          duckdbTableName: tableName,
+          ...(preparedGeoJSON ? { preparedGeoJSON } : {})
         };
         callbacks.onAdditionalFile(additionalFile);
       }

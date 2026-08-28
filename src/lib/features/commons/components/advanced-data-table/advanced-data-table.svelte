@@ -683,6 +683,8 @@
             return;
           }
 
+          tableData.validateSortColumn(sort.sortColumn, sort.clearSort);
+
           await filters.refreshFiltersState();
           if (
             isTableReloadStale(

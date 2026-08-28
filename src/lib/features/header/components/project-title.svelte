@@ -137,8 +137,12 @@
 
   @media (max-width: 639px) {
     .project-title {
-      width: 136px;
-      max-width: calc(100vw - 152px);
+      left: calc(3rem + var(--cds-spacing-05) + 58px + var(--cds-spacing-04));
+      right: 6rem;
+      width: auto;
+      max-width: none;
+      min-width: 0;
+      transform: none;
     }
 
     #khartis-project-title :global(input) {

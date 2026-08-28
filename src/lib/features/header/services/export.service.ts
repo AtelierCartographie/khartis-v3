@@ -43,6 +43,7 @@ import {
   DataValidationError,
   DuckDBError
 } from '$lib/features/commons/pipeline.errors';
+import { shouldUseGpsGeometryExport } from './export-source-selection';
 
 export class ExportError extends Error {
   title: string;
@@ -798,18 +799,27 @@ async function buildGeoPackageExportSource(
 ): Promise<GeoPackageExportSource | null> {
   const geomColumn = resolveDatasetGeometryColumn(dataset);
   const joinedGeometrySource = resolveJoinedGeometryExportSource(dataset);
-
-  if (joinedGeometrySource && !geomColumn) {
-    return buildJoinedGeoPackageExportSource(dataset, joinedGeometrySource);
-  }
+  const gpsColumns = resolveDatasetGpsColumns(dataset);
+  const duckDataset = resolveDuckDataset(dataset);
 
   if (geomColumn) {
     return buildDirectGeoPackageExportSource(dataset, geomColumn);
   }
 
-  const gpsColumns = resolveDatasetGpsColumns(dataset);
-  if (gpsColumns) {
+  if (
+    gpsColumns &&
+    shouldUseGpsGeometryExport({
+      hasGeometryColumn: false,
+      hasJoinedGeometry: Boolean(joinedGeometrySource),
+      hasGpsColumns: true,
+      gpsMode: duckDataset?.gpsMode
+    })
+  ) {
     return buildGpsGeoPackageExportSource(dataset, gpsColumns);
+  }
+
+  if (joinedGeometrySource) {
+    return buildJoinedGeoPackageExportSource(dataset, joinedGeometrySource);
   }
 
   return null;
@@ -895,6 +905,33 @@ async function fetchDatasetsWithGeometry(
     const geomColumn = resolveDatasetGeometryColumn(dataset);
     const joinedGeometrySource = resolveJoinedGeometryExportSource(dataset);
     const gpsColumns = resolveDatasetGpsColumns(dataset);
+    const duckDataset = resolveDuckDataset(dataset);
+    const shouldExportGps = shouldUseGpsGeometryExport({
+      hasGeometryColumn: Boolean(geomColumn),
+      hasJoinedGeometry: Boolean(joinedGeometrySource),
+      hasGpsColumns: Boolean(gpsColumns),
+      gpsMode: duckDataset?.gpsMode
+    });
+
+    if (shouldExportGps && dataset.duckdbTableName && gpsColumns) {
+      try {
+        results.push(await fetchGpsDatasetWithGeometry(dataset, gpsColumns));
+      } catch (error) {
+        logger.error(
+          'Failed to fetch GPS geometry for export',
+          LogCategory.EXPORT,
+          {
+            datasetId: dataset.id,
+            tableName: dataset.duckdbTableName,
+            error: error instanceof Error ? error.message : String(error)
+          },
+          { feature: 'export', flow: 'fetch_gps_geometry' }
+        );
+        results.push(dataset);
+      }
+      continue;
+    }
+
     if (joinedGeometrySource && !geomColumn) {
       try {
         const joinedDataset = await fetchJoinedDatasetWithGeometry(
@@ -913,25 +950,6 @@ async function fetchDatasetsWithGeometry(
             error: error instanceof Error ? error.message : String(error)
           },
           { feature: 'export', flow: 'fetch_joined_geometry' }
-        );
-        results.push(dataset);
-      }
-      continue;
-    }
-
-    if (!geomColumn && dataset.duckdbTableName && gpsColumns) {
-      try {
-        results.push(await fetchGpsDatasetWithGeometry(dataset, gpsColumns));
-      } catch (error) {
-        logger.error(
-          'Failed to fetch GPS geometry for export',
-          LogCategory.EXPORT,
-          {
-            datasetId: dataset.id,
-            tableName: dataset.duckdbTableName,
-            error: error instanceof Error ? error.message : String(error)
-          },
-          { feature: 'export', flow: 'fetch_gps_geometry' }
         );
         results.push(dataset);
       }

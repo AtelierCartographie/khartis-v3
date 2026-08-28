@@ -8,7 +8,7 @@ paths:
 
 # State & persistence
 
-State flows local `$state` → feature store (`*.store.svelte.ts`) → global singletons (`projectStore`, `datasetsStore`, `visualizationStore`) → DuckDB tables → IndexedDB. Persistence is **metadata-only**, and a saved project must survive reload and round-trip. See `docs/GESTION_ETAT.md`. (Store encapsulation basics — public getters + explicit mutation methods, never mutate `$state` from outside — are in `CLAUDE.md`; this file is the persistence contract.)
+State flows local `$state` → feature store (`*.store.svelte.ts`) → global singletons (`projectStore`, `datasetsStore`, `visualizationStore`) → DuckDB tables → IndexedDB. DuckDB tables and GPU buffers are ephemeral; source bytes are stored as IndexedDB assets while the snapshot retains project configuration and derived metadata needed for restoration. A saved project must survive reload and round-trip. See `docs/PERSISTANCE_ET_ARCHIVES.md`. (Store encapsulation basics — public getters + explicit mutation methods, never mutate `$state` from outside — are in `CLAUDE.md`; this file is the persistence contract.)
 
 ## Never persist what DuckDB can recompute
 

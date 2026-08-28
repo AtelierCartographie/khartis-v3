@@ -548,6 +548,10 @@
             }
           );
         }
+
+        await syncDatasetMetadataFromDuck({ force: true });
+        duckDBOrchestrator.bumpDatasetsVersion();
+        refreshTable();
       } else {
         showError(m.replace_no_match_title(), m.replace_no_match_message());
       }

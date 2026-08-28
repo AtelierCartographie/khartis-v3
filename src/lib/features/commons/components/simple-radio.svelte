@@ -10,6 +10,7 @@
     value?: string;
     ariaHidden?: boolean;
     tabIndex?: number;
+    decorative?: boolean;
     onchange?: (checked: boolean) => void;
   }
 
@@ -24,6 +25,7 @@
     value,
     ariaHidden,
     tabIndex,
+    decorative = false,
     onchange
   }: Props = $props();
 
@@ -34,30 +36,46 @@
   }
 </script>
 
-<label
-  class="kh-radio-native"
-  class:disabled={disabled}
-  class:sm={size === 'sm'}
-  class:variant-suggestions={variant === 'suggestions'}
->
-  <input
-    type="radio"
-    class="kh-radio-input"
-    checked={checked}
-    disabled={disabled}
-    name={name}
-    value={value}
-    aria-checked={checked}
-    aria-label={hideLabel ? labelText : undefined}
-    aria-hidden={ariaHidden}
-    tabindex={tabIndex}
-    onchange={handleChange}
-  />
+{#if decorative}
+  <span
+    class="kh-radio-native decorative"
+    class:disabled={disabled}
+    class:sm={size === 'sm'}
+    class:variant-suggestions={variant === 'suggestions'}
+    aria-hidden="true"
+  >
+    <span
+      class="kh-radio-input"
+      class:checked={checked}
+      class:disabled={disabled}
+    ></span>
+  </span>
+{:else}
+  <label
+    class="kh-radio-native"
+    class:disabled={disabled}
+    class:sm={size === 'sm'}
+    class:variant-suggestions={variant === 'suggestions'}
+  >
+    <input
+      type="radio"
+      class="kh-radio-input"
+      checked={checked}
+      disabled={disabled}
+      name={name}
+      value={value}
+      aria-checked={checked}
+      aria-label={hideLabel ? labelText : undefined}
+      aria-hidden={ariaHidden}
+      tabindex={tabIndex}
+      onchange={handleChange}
+    />
 
-  {#if !hideLabel && labelText}
-    <span class="kh-radio-label">{labelText}</span>
-  {/if}
-</label>
+    {#if !hideLabel && labelText}
+      <span class="kh-radio-label">{labelText}</span>
+    {/if}
+  </label>
+{/if}
 
 <style lang="scss">
   .kh-radio-native {
@@ -109,6 +127,10 @@
     cursor: not-allowed;
   }
 
+  .kh-radio-native.decorative {
+    pointer-events: none;
+  }
+
   .kh-radio-input {
     appearance: none;
     position: relative;
@@ -138,18 +160,21 @@
     transition: transform 0.12s ease;
   }
 
-  .kh-radio-input:hover:not(:disabled) {
+  .kh-radio-input:hover:not(:disabled):not(.disabled) {
     border-color: var(--_kh-radio-border-hover);
   }
 
+  .kh-radio-input.checked,
   .kh-radio-input:checked {
     border-color: var(--_kh-radio-border-checked);
   }
 
+  .kh-radio-input.checked::after,
   .kh-radio-input:checked::after {
     transform: translate(-50%, -50%) scale(1);
   }
 
+  .kh-radio-input.disabled,
   .kh-radio-input:disabled {
     opacity: var(--_kh-radio-disabled-opacity);
     cursor: not-allowed;

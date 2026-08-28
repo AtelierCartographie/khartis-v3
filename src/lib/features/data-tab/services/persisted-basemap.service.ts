@@ -197,7 +197,9 @@ export async function restorePersistedBasemapSelection(
   }
   if (savedBasemap.type === PERSISTED_BASEMAP_TYPE.OSM) {
     basemapStyleStore.setReferenceBasemap(null);
-    activateReferenceTiledStyle();
+    if (!osmBasemapStore.isDisabledByUser) {
+      activateReferenceTiledStyle();
+    }
   } else {
     const referenceBasemapId = options.referenceBasemapId?.trim();
     basemapStyleStore.setReferenceBasemap(
@@ -222,7 +224,18 @@ export async function restorePersistedBasemapSelection(
       return;
     }
 
+    if (osmBasemapStore.isDisabledByUser) {
+      return;
+    }
+
     osmBasemapStore.setOSMBasemap(basemapData);
+    return;
+  }
+
+  if (
+    savedBasemap.type === PERSISTED_BASEMAP_TYPE.OSM &&
+    osmBasemapStore.isDisabledByUser
+  ) {
     return;
   }
 

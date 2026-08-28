@@ -58,6 +58,7 @@ import {
 } from '../utils/notification.utils.svelte';
 import { sanitizePreparedGeoJSON } from '../utils/persisted-geojson.utils';
 import { resolvePersistedJoinState } from '../utils/persisted-join-state.utils';
+import { replaceFileExtension } from '../utils/file.utils';
 import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
 import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { importRollbackService } from './import-rollback.service';
@@ -184,7 +185,7 @@ function createDataOrchestratorService() {
   }
 
   function createGeoJsonSnapshotForDuckDB(file: UploadedFile): UploadedFile {
-    const normalizedName = file.name.replace(/\.[^.]+$/u, '.geojson');
+    const normalizedName = replaceFileExtension(file.name, '.geojson');
     const preparedGeoJSON = sanitizePreparedGeoJSON(file.preparedGeoJSON);
 
     return {

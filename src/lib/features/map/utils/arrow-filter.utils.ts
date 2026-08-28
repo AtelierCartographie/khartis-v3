@@ -15,6 +15,9 @@ const tableFilterCache = new WeakMap<ArrowTable, Map<string, ArrowTable>>();
 
 const warnedUnsupportedArrowOperators = new Set<string>();
 
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+const ISO_DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
 interface ArrowRowFilter {
   id: string;
   column: string;
@@ -145,6 +148,17 @@ function toComparableNumber(value: unknown): number | null {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
+function toDateOnlyDay(value: unknown): number | null {
+  if (typeof value === 'string' && !ISO_DATE_ONLY_PATTERN.test(value.trim())) {
+    return null;
+  }
+
+  const timestamp = toComparableNumber(value);
+  return timestamp === null
+    ? null
+    : Math.floor(timestamp / MILLISECONDS_PER_DAY);
+}
+
 function isFilterIncomplete(filter: VizDataFilter): boolean {
   const op = filter.operator;
   if (op === 'empty' || op === 'not_empty') return false;
@@ -201,11 +215,28 @@ function matchesOperator(
       .toLowerCase()
       .includes(String(filterValue ?? '').toLowerCase());
   }
-  if (operator === 'equals') {
-    return String(cellValue) === (filterValue ?? '');
-  }
-  if (operator === 'not_equals') {
-    return String(cellValue) !== (filterValue ?? '');
+  if (operator === 'equals' || operator === 'not_equals') {
+    const cellIsNumericOrDate =
+      typeof cellValue === 'number' || cellValue instanceof Date;
+    const filterDay = toDateOnlyDay(filterValue);
+    const comparableCell =
+      cellIsNumericOrDate && filterDay !== null
+        ? toDateOnlyDay(cellValue)
+        : cellIsNumericOrDate
+          ? toComparableNumber(cellValue)
+          : null;
+    const comparableFilter =
+      cellIsNumericOrDate && filterDay !== null
+        ? filterDay
+        : cellIsNumericOrDate
+          ? toComparableNumber(filterValue)
+          : null;
+    const matches =
+      comparableCell !== null && comparableFilter !== null
+        ? comparableCell === comparableFilter
+        : String(cellValue) === (filterValue ?? '');
+
+    return operator === 'equals' ? matches : !matches;
   }
 
   const numCell = toComparableNumber(cellValue);
@@ -215,14 +246,27 @@ function matchesOperator(
     return false;
   }
 
+  const cellDay = toDateOnlyDay(cellValue);
+  const filterDay = toDateOnlyDay(filterValue);
+
   switch (operator) {
     case 'gte':
+      if (cellDay !== null && filterDay !== null) {
+        return cellDay >= filterDay;
+      }
       return numCell >= numFilter;
     case 'lte':
+      if (cellDay !== null && filterDay !== null) {
+        return cellDay <= filterDay;
+      }
       return numCell <= numFilter;
     case 'between': {
       const numSecondary = toComparableNumber(secondaryValue);
       if (numSecondary === null) return false;
+      const secondaryDay = toDateOnlyDay(secondaryValue);
+      if (cellDay !== null && filterDay !== null && secondaryDay !== null) {
+        return cellDay >= filterDay && cellDay <= secondaryDay;
+      }
       return numCell >= numFilter && numCell <= numSecondary;
     }
     default:

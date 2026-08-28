@@ -1,177 +1,141 @@
-# Architecture
+# Architecture de Khartis
 
-> Vue d'ensemble du système Khartis v3 : principes, couches techniques et flux de données.
+> Vue de référence pour les développeurs. Les détails d’un domaine vivent dans
+> les documents liés, pas ici.
 
-**Voir aussi** : [ARCHITECTURE_FEATURES.md](ARCHITECTURE_FEATURES.md) · [GUIDE_DEVELOPPEUR.md](GUIDE_DEVELOPPEUR.md) · [PIPELINE_DONNEES.md](PIPELINE_DONNEES.md) · [DUCKDB.md](DUCKDB.md) · [MAP.md](MAP.md) · [GESTION_ETAT.md](GESTION_ETAT.md)
+Khartis est une application SvelteKit statique et entièrement cliente. Elle
+importe, analyse, joint, projette et dessine les données dans le navigateur.
+Il n’existe pas de serveur applicatif recevant les jeux de données de l’utilisateur.
 
----
+## Les invariants qui guident le code
 
-## Les 4 piliers
+1. **DuckDB WASM est le moteur de données.** Les formats pris en charge sont lus
+   par DuckDB et son extension `spatial`, sauf les exceptions explicitement
+   justifiées par le pipeline.
+2. **La géométrie reste binaire jusqu’au GPU.** Le chemin normal est
+   `DuckDB → Arrow/GeoArrow → geoarrow-deck-stream → Deck.gl`. GeoJSON est un
+   format de secours ou d’export, jamais une étape normale de rendu.
+3. **Les données durables ne sont pas les tables DuckDB.** Les sources et le
+   snapshot de projet sont conservés localement; les tables, caches et buffers
+   sont reconstruits à l’ouverture.
+4. **Une suggestion est révisable.** Les suggestions de fond, de projection,
+   de visualisation ou de palette sont classées, jamais imposées.
+5. **Les frontières de confidentialité sont explicites.** Les événements
+   d’usage sont autorisés seulement après consentement Cookiebot et ne portent
+   pas les données, noms de fichiers, colonnes ni lieux de l’utilisateur.
 
-| Pilier                   | Description                                                                                                                                                                                 |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Client-only**          | Tout le traitement s'exécute dans le navigateur (DuckDB WASM + mémoire + IndexedDB). Aucun envoi de données à un serveur. Fonctionne hors-ligne après le premier chargement.                |
-| **Feature-based layout** | Chaque feature dans `src/lib/features/` possède ses propres stores, composants et types. Les features ne se couplent pas directement : elles passent par `commons/` ou des APIs explicites. |
-| **DuckDB-first**         | Tout traitement de données (import, jointure, classification, reprojection, agrégation, recherche) passe par DuckDB WASM. Pas de parsers JavaScript pour les formats que DuckDB gère.       |
-| **GPU-first**            | Les couches thématiques sont rendues par Deck.gl via des buffers GeoArrow binaires uploadés directement en VRAM. GeoJSON n'est utilisé qu'en fallback ou pour l'export.                     |
+## Carte du dépôt
 
----
+| Zone                           | Responsabilité                                                    | Points d’entrée utiles                                |
+| ------------------------------ | ----------------------------------------------------------------- | ----------------------------------------------------- |
+| `src/routes/`                  | démarrage de l’application et shell SvelteKit                     | `+layout.svelte`                                      |
+| `features/data-pipeline/`      | validation et orientation des fichiers importés                   | `pipeline.ts`, `processors/`                          |
+| `features/duckdb/`             | moteur WASM, SQL, Arrow, tables, jointures et analyses            | `duck.ts`, `orchestrator/`                            |
+| `features/map/`                | données d’affichage, Deck.gl, MapLibre, projection et interaction | `components/thematic-map.svelte`, `hooks/`, `layers/` |
+| `features/visualization-tab/`  | configuration des primitives, classifications et suggestions      | `visualization.svelte`, `hooks/`                      |
+| `features/project-management/` | IndexedDB, archives `.kh`, compatibilité et autosave              | `services/`, `io/`, `core/`                           |
+| `features/step-toolbar/`       | outils de carte et habillage                                      | `tools/`                                              |
+| `features/commons/`            | stores partagés, erreurs, types, sécurité et services transverses | `stores/`, `services/`, `utils/`                      |
 
-## Flux global
+Les features gardent une API publique à leur racine. Un autre domaine importe
+le barrel de la feature, pas ses modules internes.
 
-```
-Fichier utilisateur
-    └─ validateFile()              ← vérification extension + taille
-        └─ DuckDB (read_csv / ST_Read / read_parquet)
-            └─ buildDatasetFromDuckTable()
-                └─ DatasetResult (Arrow table en mémoire)
-                    └─ geoarrow-deck-stream  ← parsing binaire
-                        └─ BinaryPolygonData / BinaryPathData / BinaryPointData
-                            ├─ Mode orthographique  → Deck.gl standalone (OrthographicView)
-                            └─ Mode MapLibre        → MapboxOverlay (WebMercator / Globe)
-                                └─ SVG overlay      ← annotations, légende, habillage
-                                    └─ Export (PNG / SVG / CSV / GeoJSON / .kh)
-```
+## Démarrage applicatif
 
-Deux modes de rendu coexistent selon le fond de carte actif :
+`+layout.svelte` attend d’abord l’initialisation du projet local, puis démarre
+les services de données dans cet ordre :
 
-- **Orthographique** : Deck.gl en mode `OrthographicView`, projections d3-geo appliquées par `geoarrow-deck-stream`. Les couches du catalogue (GeoParquet) sont parsées avec reprojection.
-- **MapLibre interleaved** : `MapboxOverlay({ interleaved: true })`, fond OSM en tuiles vectorielles, projections Web Mercator ou Globe gérées par MapLibre.
-
----
-
-## Couches techniques
-
-| Couche              | Rôle                                           | Durée de vie         | Implémentation                                                                                       |
-| ------------------- | ---------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------- |
-| **Composant local** | État UI éphémère (inputs, modales)             | Montage du composant | `$state` dans le `.svelte`                                                                           |
-| **Store feature**   | Modèle de domaine d'une feature                | Session navigateur   | `$state` dans `.store.svelte.ts`                                                                     |
-| **Store global**    | Coordination entre features                    | Session navigateur   | Singleton exporté (`projectStore`, etc.)                                                             |
-| **DuckDB WASM**     | Tables SQL en mémoire, calculs, jointures      | Session navigateur   | Accès via `Duck` ou `duckDBOrchestrator`                                                             |
-| **IndexedDB**       | Projets, métadonnées et assets binaires source | Persistant           | Object stores `projects`, `metadata`, `project_assets`, `project_asset_chunks`, `project_asset_refs` |
-
-Le flux de persistence : `mutation d'état → store → persistenceRegistry → sérialisation metadata-only → IndexedDB`. Les fichiers source ne sont **pas** sérialisés dans le JSON projet ; ils vivent dans `project_asset_chunks` (chunks 8 Mo) et sont rejoués dans DuckDB à la réouverture.
-
----
-
-## Structure du projet
-
-```
-src/
-├── routes/
-│   ├── +layout.svelte       # Init DuckDB, ARIA Carbon, zoom/pan global
-│   └── +page.svelte         # Chargement lazy de la carte
-└── lib/
-    ├── features/            # 12 features indépendantes (voir ci-dessous)
-    ├── paraglide/           # Messages i18n générés (FR/EN) — ne pas éditer
-    └── types/               # Types TypeScript partagés cross-features
+```text
+projectStore.waitForInit()
+  └─ duckDBOrchestrator.initialize()
+       └─ DuckDB WASM, Worker, extension spatial et macros SQL
+  └─ basemapService.initialize()
+  └─ dataOrchestratorService.initialize()
 ```
 
-### Les 12 features
+Cet ordre importe : le rétablissement d’un projet peut avoir besoin du moteur,
+des fonds et des sources locales. Une initialisation échouée ouvre le parcours
+de création au lieu de laisser l’interface dans un état partiellement prêt.
 
-| Feature               | Rôle                                                                          |
-| --------------------- | ----------------------------------------------------------------------------- |
-| `commons/`            | Stores globaux, services partagés, composants Carbon, erreurs, utilitaires    |
-| `create-project/`     | Modale de création : import fichier, exemples, ouverture projet               |
-| `data-pipeline/`      | Import fichiers : détection format, validation, processeurs, DuckDB           |
-| `data-tab/`           | Onglet « Données » du panneau gauche : import, jointure, enrichissement       |
-| `duckdb/`             | Moteur DuckDB WASM : singleton `Duck`, orchestrateur, macros SQL              |
-| `header/`             | Barre de navigation supérieure (export, sauvegarde projet)                    |
-| `main-toolbar/`       | Coquille du panneau gauche : orchestre `data-tab/` et `visualization-tab/`    |
-| `map/`                | Carte Deck.gl + MapLibre : hooks, layer factories, projections, tooltip       |
-| `project-management/` | Format `.kh`, sérialisation, asset store IndexedDB, import/export             |
-| `side-nav/`           | Menu latéral (langue, liste des projets récents)                              |
-| `step-toolbar/`       | Panneau droit : 10 outils (search, layers, projections, legend, annotations…) |
-| `visualization-tab/`  | Onglet « Visualisations » : suggestions, primitives, fond de carte            |
+## Les trois flux à connaître
 
-Chaque feature expose son API publique via `index.ts`. Les imports inter-features doivent passer par ce barrel ; les imports profonds dans les internes d'une autre feature sont interdits (vérifié par `architecture-boundaries.svelte.test.ts`).
+### 1. Données utilisateur vers la carte
 
-> Pour comprendre **pourquoi** chaque feature est organisée comme elle l'est et savoir comment structurer une nouvelle feature, voir [ARCHITECTURE_FEATURES.md](ARCHITECTURE_FEATURES.md).
-
----
-
-## Points d'entrée principaux
-
-| Besoin                           | Symbole                                               | Fichier                                                       |
-| -------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------- |
-| Traitement de fichiers           | `dataPipeline.processFile()`                          | `src/lib/features/data-pipeline/index.ts`                     |
-| Requêtes SQL (bas niveau)        | `Duck.query()`                                        | `src/lib/features/duckdb/duck.ts`                             |
-| Opérations données (haut niveau) | `duckDBOrchestrator`                                  | `src/lib/features/duckdb/orchestrator/`                       |
-| Stores globaux                   | `projectStore`, `datasetsStore`, `visualizationStore` | `src/lib/features/commons/stores/`                            |
-| Rendu carte                      | `useMapLayers`, `useMapInit`, `useMapBasemap`         | `src/lib/features/map/hooks/`                                 |
-| Classification                   | `calculateBreaks()`, `generateColorsForBreaks()`      | `src/lib/features/commons/services/classification.service.ts` |
-| Suggestion de visualisation      | `vizSuggester.suggestVisualizations()`                | `src/lib/features/commons/services/viz-suggester.service.ts`  |
-| Messages i18n                    | `import * as m from '$lib/paraglide/messages'`        | `messages/fr.json`, `messages/en.json`                        |
-
----
-
-## Pipeline de géométrie
-
-Les fonds de carte et les données utilisateur suivent des chemins distincts :
-
-**Fonds du catalogue (GeoParquet)** :
-
-```
-GeoParquet fichier → parquet-wasm → Arrow table → geoarrow-deck-stream → Deck.gl
+```mermaid
+flowchart LR
+  A[Fichier, URL ou texte] --> B[Validation et data pipeline]
+  B --> C[DuckDB WASM + spatial]
+  C --> D[Table DuckDB et métadonnées]
+  D --> E[Arrow avec métadonnées GeoArrow]
+  E --> F[Deck.gl / WebGL]
 ```
 
-Ce chemin ne passe jamais par DuckDB — c'est délibéré pour la performance.
+Les opérations métier telles que recherche, filtre, jointure, classification,
+densité et simplification se font dans DuckDB. La page
+[Import et DuckDB](IMPORT_DUCKDB.md) est la référence pour ce flux.
 
-**Données utilisateur (tous formats)** :
+### 2. Fonds de catalogue vers la carte
 
-```
-Fichier → DuckDB (read_csv / ST_Read / read_parquet) → Arrow IPC → geoarrow-deck-stream → Deck.gl
-```
-
-**Règle** : rester sur des chemins binaires pour le rendu. Dès qu'une conversion GeoJSON JavaScript intervient sur le chemin de rendu, la performance chute et les WeakMap caches sont invalidés.
-
----
-
-## Gestion des erreurs
-
-Khartis applique une stratégie d'erreur cohérente à travers tout le pipeline :
-
-- **Échouer vite** sur les entrées invalides : validation stricte de l'extension, de la taille et de la structure du fichier avant d'engager DuckDB.
-- **Dégradation gracieuse** sur les erreurs de calcul : projection fallback équirectangulaire si une projection est indisponible ; retry CSV avec `ignore_errors=true` si zéro ligne est retournée.
-- **Ne jamais bloquer l'interface** pour les tâches longues : toutes les opérations DuckDB sont asynchrones, le feedback de progression est envoyé par callback.
-- **Messages utilisateur** : toutes les erreurs remontées à l'UI passent par le système de notifications (`showError` / `showWarning`), localisées via Paraglide.
-
-La hiérarchie d'erreurs (`PipelineError` → `DataValidationError` | `ParseError` | `DuckDBError` | `NonFatalError`) est définie dans `src/lib/features/commons/pipeline.errors.ts`.
-
----
-
-## Internationalisation
-
-Paraglide JS 2 extrait les messages au moment du build (pas de runtime i18n). Les clés sont définies dans `messages/fr.json` et `messages/en.json`, puis compilées en fonctions TypeScript typées dans `src/lib/paraglide/`.
-
-```typescript
-import * as m from '$lib/paraglide/messages';
-
-// Usage dans un composant
-m.pipeline_warning_no_data_rows(); // clé sans paramètre
-m.create_project_processing_file({ name }); // clé avec paramètre
+```mermaid
+flowchart LR
+  A[GeoParquet du catalogue] --> B[parquet-wasm]
+  B --> C[Arrow / GeoArrow]
+  C --> D[Deck.gl]
+  A -. jointure, analyse ou densité .-> E[DuckDB]
 ```
 
-Conventions : `snake_case` sémantique par domaine (`tool_legend_title`, `pipeline_error_file_too_large`). Ne jamais éditer les fichiers générés dans `src/lib/paraglide/`. Toujours mettre à jour FR et EN ensemble.
+Le rendu initial d’un fond catalogue évite DuckDB afin de charger vite une
+géométrie préparée. Ce même fond peut être matérialisé dans DuckDB lorsqu’une
+jointure, une analyse ou une densité l’exige. Voir
+[Fonds et projections](FONDS_PROJECTIONS.md).
 
----
+### 3. Projet durable et reprise
 
-## Accessibilité et sécurité
+```mermaid
+flowchart LR
+  A[État métier] --> B[Snapshot JSON et références]
+  B --> C[IndexedDB]
+  D[Fichiers source] --> E[Assets fragmentés]
+  E --> C
+  C --> F[Ouverture ou archive .kh]
+  F --> G[Recréation séquentielle des tables DuckDB]
+```
 
-**Accessibilité** : navigation clavier complète avec indicateurs de focus visibles (Carbon Design System). Les contrôles icône-seule exposent un label accessible. Les palettes de couleurs respectent les contrastes WCAG. Les statistiques et légendes disposent de descriptions textuelles pour les lecteurs d'écran.
+Le snapshot ne stocke pas de mémoire DuckDB ni de buffers GPU. L’ouverture
+rejoue les sources et les transformations nécessaires. Les limites et le
+contrat d’archive sont décrits dans
+[Persistance et archives](PERSISTANCE_ET_ARCHIVES.md).
 
-**Sécurité** : surface d'attaque serveur nulle — toutes les données restent dans le navigateur. Les noms de fichiers, cellules CSV et saisies utilisateur sont assainis avant toute opération. Les expressions SQL calculées par l'utilisateur passent par `validateExpression()` qui rejette les sous-requêtes, les multi-statements et les appels de fonction dangereux. Quotas : 150 Mo (formats texte/geo), 200 Mo (formats binaires), 50 projets maximum.
+## Deux moteurs de rendu derrière une même carte
 
----
+`resolveMapRenderEngine()` choisit l’un des modes suivants :
 
-## Performances cibles
+| Moteur                 | Quand l’utiliser                         | Responsabilité                                           |
+| ---------------------- | ---------------------------------------- | -------------------------------------------------------- |
+| Deck.gl orthographique | carte thématique et projection d3        | vue `OrthographicView`, interaction et couches binaires  |
+| MapLibre intercalé     | fond ou projection qui l’exige, dont OSM | carte tuilée avec `MapboxOverlay({ interleaved: true })` |
 
-| Métrique                | Objectif |
-| ----------------------- | -------- |
-| FCP                     | < 0,6 s  |
-| LCP                     | < 1,0 s  |
-| TTI                     | < 1,0 s  |
-| Rendu interactif        | ~60 fps  |
-| Import fichier standard | < 3 s    |
+Le moteur est recréé lors d’un changement de mode. Les contextes WebGL doivent
+être libérés par les helpers de `use-map-init.svelte.ts`, pas par une instance
+créée localement dans une feature. Le détail de ce cycle est dans
+[Rendu cartographique](RENDU_CARTOGRAPHIQUE.md).
 
-Les leviers principaux : parsing natif DuckDB (évite les JS parsers), buffers GeoArrow binaires (upload GPU direct), caches WeakMap sur les Arrow tables filtrées (pas de recalcul si les données n'ont pas changé), LOD dynamique sur les fonds complexifiés.
+## Où modifier quoi
+
+| Besoin                             | Commencer par                                      | Vérification minimale                                                   |
+| ---------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------- |
+| Ajouter ou modifier un format      | `data-pipeline/processors/` et lecteurs DuckDB     | tests pipeline et DuckDB ciblés                                         |
+| Modifier un calcul de données      | `duckdb/orchestrator/` ou `operations/`            | tests DuckDB réels et invalidation des caches                           |
+| Ajouter une primitive ou un style  | `visualization-tab/` puis `map/layers/`            | test de factory, rendu navigateur et persistance                        |
+| Modifier un fond ou une projection | `map/services/`, `step-toolbar/tools/projections/` | plusieurs fonds et jeux de données représentatifs                       |
+| Ajouter un état durable            | store de feature puis `persistenceRegistry`        | recharge, archive et migration si nécessaire                            |
+| Modifier un contrat `.kh`          | `project-management/`                              | [compatibilité](PROJECT_FORMAT_COMPATIBILITY.md) et tests de round-trip |
+
+## Lire ensuite
+
+- [Import et DuckDB](IMPORT_DUCKDB.md)
+- [Rendu cartographique](RENDU_CARTOGRAPHIQUE.md)
+- [Fonds et projections](FONDS_PROJECTIONS.md)
+- [Persistance et archives](PERSISTANCE_ET_ARCHIVES.md)
+- [Performance et workers](PERFORMANCE_ET_WORKERS.md)
+- [Contribuer et tester](CONTRIBUER_ET_TESTER.md)

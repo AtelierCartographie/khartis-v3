@@ -6,6 +6,7 @@ import {
   DrawingType
 } from '$lib/features/commons/constants/ui.constants';
 import { SHAPE_TYPE } from '$lib/features/commons/constants';
+import * as m from '$lib/paraglide/messages';
 import {
   PAGE_PRESETS,
   PageModel
@@ -430,6 +431,15 @@ describe('annotation overlay drawing interactions', () => {
         'non-scaling-stroke'
       );
     }
+  });
+
+  it('should expose the triangle annotation with its actual shape label', () => {
+    annotationsActions.addAnnotation(AnnotationKind.SHAPE, SHAPE_TYPE.TRIANGLE);
+
+    const { container } = render(AnnotationOverlay);
+    const triangle = container.querySelector('.annotation-item');
+
+    expect(triangle).toHaveAttribute('aria-label', m.triangle());
   });
 
   it('keeps zone drawings active when the pointer is released away from the starting point', async () => {

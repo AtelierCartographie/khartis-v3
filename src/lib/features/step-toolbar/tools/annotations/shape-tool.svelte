@@ -139,6 +139,11 @@
     const value = (e.currentTarget as HTMLSelectElement).value;
     if (SHAPE_TYPES.includes(value as ShapeTypeValue)) {
       selectedShape = value as ShapeTypeValue;
+      if (selectedShapeAnnotation) {
+        annotationsActions.updateAnnotation(selectedShapeAnnotation.id, {
+          content: selectedShape
+        });
+      }
       if (isShapePlacementActive) {
         annotationsActions.beginPlacement(AnnotationKind.SHAPE, selectedShape);
       }
@@ -150,11 +155,18 @@
   }
 
   function handleThicknessChange(e: CustomEvent<number>) {
+    if (effectiveStyle.strokeWidth === e.detail) return;
     annotationsActions.applyStyle({ strokeWidth: e.detail });
   }
 
   function handleRotationChange(e: CustomEvent<number>) {
+    if ((effectiveStyle.rotation ?? 0) === e.detail) return;
     annotationsActions.applyStyle({ rotation: e.detail });
+  }
+
+  function handleOpacityChange(e: CustomEvent<number>) {
+    if (toOpacityPercent(effectiveStyle.opacity) === e.detail) return;
+    annotationsActions.applyStyle({ opacity: e.detail });
   }
 
   function toggleDashed(on: boolean) {
@@ -211,6 +223,7 @@
           step={1}
           stepMultiplier={1}
           on:input={handleThicknessChange}
+          on:change={handleThicknessChange}
           minLabel=""
           maxLabel=""
         />
@@ -230,6 +243,7 @@
             step={1}
             stepMultiplier={15}
             on:input={handleRotationChange}
+            on:change={handleRotationChange}
             minLabel=""
             maxLabel=""
           />
@@ -332,7 +346,8 @@
           max={100}
           step={5}
           stepMultiplier={5}
-          on:input={(e) => annotationsActions.applyStyle({ opacity: e.detail })}
+          on:input={handleOpacityChange}
+          on:change={handleOpacityChange}
           minLabel=""
           maxLabel=""
         />
