@@ -205,9 +205,11 @@
     class={CSS_CLASSES.TOOL_POPOVER}
     style={`--tool-popover-width:${widthCss};--tool-popover-top-offset:${computedTopOffset}px;--popover-max-height:${POPOVER_DIMENSIONS.MAX_HEIGHT};--dropdown-max-height:${POPOVER_DIMENSIONS.DROPDOWN_MAX_HEIGHT};`}
   >
-    <div class={CSS_CLASSES.POPOVER_SCROLL}>
-      {@render (content as Snippet | undefined)?.()}
-    </div>
+    {#key globalState.selectedTool}
+      <div class={CSS_CLASSES.POPOVER_SCROLL}>
+        {@render (content as Snippet | undefined)?.()}
+      </div>
+    {/key}
   </Popover>
 </div>
 

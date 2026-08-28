@@ -127,11 +127,18 @@
   }
 
   function handleThicknessChange(e: CustomEvent<number>) {
+    if (effectiveStyle.strokeWidth === e.detail) return;
     annotationsActions.applyStyle({ strokeWidth: e.detail });
   }
 
   function handleSmoothnessChange(e: CustomEvent<number>) {
+    if ((effectiveStyle.smoothness ?? 0) === e.detail) return;
     annotationsActions.applyStyle({ smoothness: e.detail });
+  }
+
+  function handleOpacityChange(e: CustomEvent<number>) {
+    if (toOpacityPercent(effectiveStyle.opacity) === e.detail) return;
+    annotationsActions.applyStyle({ opacity: e.detail });
   }
 
   const activeDrawingType = $derived(
@@ -215,6 +222,7 @@
           step={1}
           stepMultiplier={1}
           on:input={handleThicknessChange}
+          on:change={handleThicknessChange}
           minLabel=""
           maxLabel=""
         />
@@ -233,6 +241,7 @@
           step={1}
           stepMultiplier={5}
           on:input={handleSmoothnessChange}
+          on:change={handleSmoothnessChange}
           minLabel=""
           maxLabel=""
         />
@@ -341,7 +350,8 @@
           max={100}
           step={5}
           stepMultiplier={5}
-          on:input={(e) => annotationsActions.applyStyle({ opacity: e.detail })}
+          on:input={handleOpacityChange}
+          on:change={handleOpacityChange}
           minLabel=""
           maxLabel=""
         />

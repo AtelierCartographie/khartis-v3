@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
     setNavigationState: vi.fn(),
     setSelectedTool: vi.fn(),
     setToolbarState: vi.fn(),
+    closeMobileToolbar: vi.fn(),
     resetPagePan: vi.fn(),
     zoomInPage: vi.fn(),
     zoomOutPage: vi.fn(),
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   },
   globalState: {
     isCreateProjectModalOpen: false,
+    isMobileToolbarOpen: false,
     toolbarState: 'full',
     selectedStep: 'data',
     selectedTool: undefined as string | undefined,
@@ -68,6 +70,7 @@ describe('KeyboardShortcuts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.globalState.isCreateProjectModalOpen = false;
+    mocks.globalState.isMobileToolbarOpen = false;
     mocks.globalState.toolbarState = 'full';
     mocks.globalState.selectedStep = 'data';
     mocks.globalState.selectedTool = undefined;
@@ -99,5 +102,83 @@ describe('KeyboardShortcuts', () => {
     expect(mocks.globalActions.setNavigationState).toHaveBeenCalledWith(
       'visualizations'
     );
+  });
+
+  it('closes the side navigation before collapsing the workspace', async () => {
+    render(KeyboardShortcuts);
+    mocks.globalState.isSideNavOpen = true;
+
+    await fireEvent.keyDown(document.body, {
+      key: 'Escape',
+      code: 'Escape'
+    });
+
+    expect(mocks.globalState.isSideNavOpen).toBe(false);
+    expect(mocks.globalActions.setToolbarState).not.toHaveBeenCalled();
+  });
+
+  it('closes the side navigation when a focused control consumes Escape', async () => {
+    render(KeyboardShortcuts);
+    mocks.globalState.isSideNavOpen = true;
+    const input = document.createElement('input');
+    input.addEventListener('keydown', (event) => event.stopPropagation());
+    document.body.append(input);
+    input.focus();
+
+    await fireEvent.keyDown(input, {
+      key: 'Escape',
+      code: 'Escape'
+    });
+
+    expect(mocks.globalState.isSideNavOpen).toBe(false);
+    expect(mocks.globalActions.setToolbarState).not.toHaveBeenCalled();
+    input.remove();
+  });
+
+  it('closes the mobile toolbar before collapsing the workspace', async () => {
+    render(KeyboardShortcuts);
+    mocks.globalState.isMobileToolbarOpen = true;
+    mocks.globalActions.closeMobileToolbar.mockImplementation(() => {
+      mocks.globalState.isMobileToolbarOpen = false;
+    });
+
+    await fireEvent.keyDown(document.body, {
+      key: 'Escape',
+      code: 'Escape'
+    });
+
+    expect(mocks.globalActions.closeMobileToolbar).toHaveBeenCalledOnce();
+    expect(mocks.globalState.isMobileToolbarOpen).toBe(false);
+    expect(mocks.globalActions.setToolbarState).not.toHaveBeenCalled();
+  });
+
+  it('closes the selected styling tool before collapsing the workspace', async () => {
+    render(KeyboardShortcuts);
+    mocks.globalState.selectedTool = 'format';
+
+    await fireEvent.keyDown(document.body, {
+      key: 'Escape',
+      code: 'Escape'
+    });
+
+    expect(mocks.globalActions.setSelectedTool).toHaveBeenCalledWith(undefined);
+    expect(mocks.globalActions.resetPagePan).toHaveBeenCalledOnce();
+    expect(mocks.globalActions.setToolbarState).not.toHaveBeenCalled();
+  });
+
+  it('leaves the workspace unchanged while a modal handles Escape', async () => {
+    render(KeyboardShortcuts);
+    const modal = document.createElement('div');
+    modal.className = 'bx--modal is-visible';
+    document.body.append(modal);
+
+    await fireEvent.keyDown(document.body, {
+      key: 'Escape',
+      code: 'Escape'
+    });
+
+    expect(mocks.globalActions.setToolbarState).not.toHaveBeenCalled();
+    expect(mocks.globalActions.closeMobileToolbar).not.toHaveBeenCalled();
+    modal.remove();
   });
 });

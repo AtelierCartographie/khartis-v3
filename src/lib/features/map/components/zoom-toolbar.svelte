@@ -323,7 +323,11 @@
 </script>
 
 <div class="zoom-toolbar-shell">
-  <nav id="khartis-zoom-toolbar" class="zoom-toolbar app-shadow">
+  <nav
+    id="khartis-zoom-toolbar"
+    class="zoom-toolbar app-shadow"
+    aria-label={m.zoom_value_input_label()}
+  >
     <ToggleTabs
       items={zoomItems}
       activeIndex={activeTabIndex}
@@ -429,6 +433,7 @@
 
 <style>
   .zoom-toolbar-shell {
+    --khartis-step-toolbar-width: 102px;
     position: fixed;
     bottom: 24px;
     left: 24px;
@@ -523,7 +528,7 @@
 
   .zoom-debug-metric--good {
     --zoom-debug-metric-background: var(--cds-support-success, #24a148);
-    --zoom-debug-metric-color: var(--cds-text-on-color, #ffffff);
+    --zoom-debug-metric-color: var(--cds-text-inverse, #ffffff);
   }
 
   .zoom-debug-metric--warn {
@@ -720,6 +725,14 @@
     outline: none;
   }
 
+  @media (min-width: 1024px) and (max-height: 720px) {
+    .zoom-toolbar-shell {
+      left: calc(
+        var(--khartis-step-toolbar-width) + var(--cds-spacing-05, 16px)
+      );
+    }
+  }
+
   @media (max-width: 1023px) {
     .zoom-toolbar-shell {
       top: calc(var(--cds-header-height) + var(--cds-spacing-03));
@@ -758,7 +771,7 @@
       position: fixed;
       top: calc(var(--cds-header-height) + var(--cds-spacing-03));
       left: auto;
-      right: var(--cds-spacing-03);
+      right: calc(32px + var(--cds-spacing-05));
       width: auto;
       min-width: 0;
       height: 56px;
