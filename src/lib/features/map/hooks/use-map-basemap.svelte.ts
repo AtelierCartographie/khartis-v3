@@ -1,4 +1,6 @@
 import type {
+  DataDrivenPropertyValueSpecification,
+  ExpressionSpecification,
   LayerSpecification,
   Map as MapLibreMap,
   StyleSpecification,
@@ -47,7 +49,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
   const OPENMAPTILES_SOURCE_ID = 'openmaptiles';
 
   type BasemapLabelLocale = 'fr' | 'en';
-  type TextFieldExpression = string | unknown[];
+  type TextFieldExpression = DataDrivenPropertyValueSpecification<string>;
 
   function getStyleKey(style: string | StyleSpecification): string {
     if (typeof style === 'string') {
@@ -95,7 +97,9 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     );
   }
 
-  function buildLocalizedNameExpression(locale: BasemapLabelLocale): unknown[] {
+  function buildLocalizedNameExpression(
+    locale: BasemapLabelLocale
+  ): ExpressionSpecification {
     return [
       'coalesce',
       ['get', `name:${locale}`],

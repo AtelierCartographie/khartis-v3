@@ -261,7 +261,9 @@ function inferSqliteColumnType(values: unknown[]): string {
 
   if (
     presentValues.every(
-      (value) => typeof value === 'number' && Number.isInteger(value)
+      (value) =>
+        (typeof value === 'number' && Number.isInteger(value)) ||
+        (typeof value === 'bigint' && Number.isSafeInteger(Number(value)))
     )
   ) {
     return 'INTEGER';

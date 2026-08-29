@@ -5,7 +5,10 @@
     createProjectActions,
     createProjectState
   } from '$lib/features/commons/stores/create-project.store.svelte';
-  import { FileType } from '$lib/features/commons/types/create-project.types';
+  import {
+    FileType,
+    type UploadedFile
+  } from '$lib/features/commons/types/create-project.types';
   import { debounce } from '$lib/features/commons/utils/debounce.utils';
   import { formatFileSize } from '$lib/features/commons/utils/file-import.utils';
   import { SUPPORTED_FILE_TYPES } from '$lib/features/commons/utils/file-validator.utils';
@@ -203,8 +206,16 @@
       : null
   );
 
-  const getFileTypeTag = (fileType: FileType) =>
-    FILE_TYPE_TAGS[fileType] ?? FILE_TYPE_TAGS[FileType.UNKNOWN];
+  const getFileTypeTag = (file: Pick<UploadedFile, 'fileType' | 'name'>) => {
+    if (
+      file.fileType === FileType.GEOPARQUET &&
+      getFileExtension(file.name) === '.parquet'
+    ) {
+      return { label: 'Parquet', color: 'teal' as const };
+    }
+
+    return FILE_TYPE_TAGS[file.fileType] ?? FILE_TYPE_TAGS[FileType.UNKNOWN];
+  };
 
   function getFileExtension(fileName: string): string {
     const extensionStart = fileName.lastIndexOf('.');
@@ -470,7 +481,7 @@
               </Button>
             </div>
           {:else if file.status === FileStatus.INCOMPLETE}
-            {@const fileTag = getFileTypeTag(file.fileType)}
+            {@const fileTag = getFileTypeTag(file)}
             <div data-testid="file-incomplete">
               <Tile class="file-incomplete-tile">
                 <div class="file-header">
@@ -510,7 +521,7 @@
               </Tile>
             </div>
           {:else if file.status === FileStatus.COMPLETE}
-            {@const fileTag = getFileTypeTag(file.fileType)}
+            {@const fileTag = getFileTypeTag(file)}
             {@const rowCount = file.deepAnalysis?.rowCount ?? 0}
             {@const columnCount = file.deepAnalysis?.columnCount ?? 0}
             <div data-testid="file-complete">

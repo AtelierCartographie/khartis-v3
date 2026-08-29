@@ -5,7 +5,9 @@ import { bigIntReplacer } from './clone.utils';
 import { escapeIdentifier, escapeSqlString } from './sanitize.utils';
 import { generateFilename } from './string.utils';
 import { MIME, GEOJSON_TYPE } from '../constants';
+import { JOINED_BASEMAP_COLUMNS } from '../constants/data.constants';
 import { isDatasetGeometryColumn } from './geometry-column.utils';
+import { isGeometryColumnType } from '$lib/features/duckdb/utils/geometry-column.utils';
 import {
   DataValidationError,
   DuckDBError
@@ -86,7 +88,7 @@ export async function exportDatasetToCsv(
     }
 
     const viewName = `export_view_${Date.now()}`;
-    const nonGeomColumnNames = getExportableColumnNames(dataset);
+    const nonGeomColumnNames = await getDuckDbExportableColumnNames(dataset);
     if (nonGeomColumnNames.length === 0) {
       throw new DataValidationError(m.error_no_valid_data_export(), 'columns', {
         datasetId: dataset.id,
@@ -144,6 +146,34 @@ function getExportableColumnNames(dataset: ProcessedDataset): string[] {
     .map((col) => col.name);
 }
 
+async function getDuckDbExportableColumnNames(
+  dataset: ProcessedDataset
+): Promise<string[]> {
+  if (!dataset.duckdbTableName || !Duck) {
+    return getExportableColumnNames(dataset);
+  }
+
+  const tableInfo = await Duck.describe_table(dataset.duckdbTableName);
+  const datasetColumns = new Map(
+    dataset.columns.map((column) => [column.name, column])
+  );
+  const joinedBasemapColumns = new Set<string>(JOINED_BASEMAP_COLUMNS);
+
+  return tableInfo.name.filter((columnName, index) => {
+    if (joinedBasemapColumns.has(columnName)) {
+      return false;
+    }
+
+    const columnType = String(tableInfo.type[index] ?? '').toUpperCase();
+    if (isGeometryColumnType(columnType)) {
+      return false;
+    }
+
+    const datasetColumn = datasetColumns.get(columnName);
+    return !datasetColumn || !isDatasetGeometryColumn(dataset, datasetColumn);
+  });
+}
+
 function resolveSourceDatasetColumnName(columnNames: string[]): string {
   const usedNames = new Set(columnNames.map((name) => name.toLowerCase()));
   if (!usedNames.has(SOURCE_DATASET_COLUMN)) {
@@ -162,9 +192,9 @@ function resolveSourceDatasetColumnName(columnNames: string[]): string {
 function buildAlignedUnionSelect(
   dataset: ProcessedDataset,
   allHeaders: string[],
-  sourceDatasetColumn: string
+  sourceDatasetColumn: string,
+  exportableColumns: ReadonlySet<string>
 ): string {
-  const exportableColumns = new Set(getExportableColumnNames(dataset));
   const selectColumns = allHeaders.map((columnName) => {
     const escapedColumnName = escapeIdentifier(columnName);
     return exportableColumns.has(columnName)
@@ -252,15 +282,19 @@ export async function exportProcessedDatasets(
       const unionViewName = `export_union_${Date.now()}`;
 
       try {
+        const exportableColumnsByDataset = await Promise.all(
+          datasets.map(getDuckDbExportableColumnNames)
+        );
         const allHeaders = Array.from(
-          new Set(datasets.flatMap(getExportableColumnNames))
+          new Set(exportableColumnsByDataset.flat())
         );
         const sourceDatasetColumn = resolveSourceDatasetColumnName(allHeaders);
-        const unionParts = datasets.map((dataset) => {
+        const unionParts = datasets.map((dataset, index) => {
           return buildAlignedUnionSelect(
             dataset,
             allHeaders,
-            sourceDatasetColumn
+            sourceDatasetColumn,
+            new Set(exportableColumnsByDataset[index])
           );
         });
 

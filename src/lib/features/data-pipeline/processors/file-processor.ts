@@ -32,6 +32,10 @@ import {
 } from '../utils/decimal-detector';
 import { MIME } from '$lib/features/commons/constants';
 import type { UploadedFile } from '$lib/features/commons/types/create-project.types';
+import type { FileWithId } from '$lib/features/duckdb';
+import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import { readGeoParquetMetadataFromDuck } from '$lib/features/map/services/geo-parquet-metadata.service';
+import { normalizeGeoParquetTable } from '../operations/geoparquet';
 
 export interface ProcessFileOptions {
   originalName?: string;
@@ -171,7 +175,14 @@ export async function processFileInternal(
     }
   } else {
     await registerFilesForDuckDB(file, isShapefile, options.companionFiles);
+    const geoParquetMetadata = await readUploadedGeoParquetMetadata(
+      fileInfo,
+      file
+    );
     detectedCsvOptions = await readTabularFile(file, tableName, fileInfo.name);
+    if (geoParquetMetadata) {
+      await normalizeGeoParquetTable(tableName, geoParquetMetadata, Duck);
+    }
     dataset = await buildDatasetFromDuckTable({
       file: fileInfo,
       tableName,
@@ -187,6 +198,28 @@ export async function processFileInternal(
   await applyTabularGeoDetection(dataset);
 
   return dataset;
+}
+
+async function readUploadedGeoParquetMetadata(fileInfo: FileInfo, file: File) {
+  const lowerFileName = fileInfo.name.toLowerCase();
+  const isParquet =
+    lowerFileName.endsWith('.parquet') ||
+    lowerFileName.endsWith('.geoparquet') ||
+    lowerFileName.endsWith('.gpq');
+  if (!isParquet) {
+    return null;
+  }
+
+  const fileId = (file as FileWithId).id;
+  if (!fileId) {
+    return null;
+  }
+
+  return readGeoParquetMetadataFromDuck(
+    Duck,
+    escapeSqlString(fileId),
+    'Failed to read uploaded GeoParquet metadata'
+  );
 }
 
 async function registerFilesForDuckDB(

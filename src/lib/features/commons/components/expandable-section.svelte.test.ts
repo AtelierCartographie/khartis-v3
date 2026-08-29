@@ -71,4 +71,22 @@ describe('ExpandableSection', () => {
     expect((actions as HTMLElement).inert).toBe(true);
     expect(actions).toHaveClass('disabled');
   });
+
+  it('renders end actions outside the expandable button', () => {
+    const icon = createRawSnippet(() => ({
+      render: () => '<button type="button">Filter</button>'
+    }));
+
+    render(ExpandableSection, {
+      title: 'Symbols',
+      actionsEnd: true,
+      icon
+    });
+
+    const expandButton = screen.getByRole('button', { name: 'Symbols' });
+    const filterButton = screen.getByRole('button', { name: 'Filter' });
+
+    expect(expandButton).not.toContainElement(filterButton);
+    expect(expandButton.parentElement).toContainElement(filterButton);
+  });
 });

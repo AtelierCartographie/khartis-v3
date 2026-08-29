@@ -34,10 +34,15 @@ function createTransactionMutex() {
 
 const transactionMutex = createTransactionMutex();
 
+interface TransactionOptions {
+  logRollback?: boolean;
+}
+
 export async function runInTransaction(
   connection: AsyncDuckDBConnection | null,
   callback: () => Promise<void>,
-  context = 'transaction'
+  context = 'transaction',
+  options: TransactionOptions = {}
 ): Promise<void> {
   if (!connection) {
     throw new DuckDBError(m.error_connection_not_established());
@@ -53,11 +58,13 @@ export async function runInTransaction(
       await connection.query('COMMIT;');
     } catch (error) {
       await connection.query('ROLLBACK;');
-      logger.error('DuckDB transaction rolled back', LogCategory.DUCKDB, {
-        context,
-        durationMs: (performance.now() - start).toFixed(2),
-        error
-      });
+      if (options.logRollback !== false) {
+        logger.error('DuckDB transaction rolled back', LogCategory.DUCKDB, {
+          context,
+          durationMs: (performance.now() - start).toFixed(2),
+          error
+        });
+      }
       throw error;
     }
   } finally {

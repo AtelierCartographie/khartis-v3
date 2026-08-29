@@ -15,7 +15,8 @@ const mocks = vi.hoisted(() => ({
   getBasemapByIdMock: vi.fn(),
   registerCustomBasemapMetadataMock: vi.fn(),
   setOSMBasemapMock: vi.fn(),
-  clearOsmMock: vi.fn()
+  clearOsmMock: vi.fn(),
+  osmDisabledState: { value: false }
 }));
 
 vi.mock('$lib/features/commons/stores/data-tab.store.svelte', () => ({
@@ -53,6 +54,9 @@ vi.mock('$lib/features/map/services/basemap.service.svelte', () => ({
 
 vi.mock('$lib/features/map/stores/osm-basemap.store.svelte', () => ({
   osmBasemapStore: {
+    get isDisabledByUser() {
+      return mocks.osmDisabledState.value;
+    },
     setOSMBasemap: (value: unknown) => mocks.setOSMBasemapMock(value),
     clear: () => mocks.clearOsmMock()
   }
@@ -71,6 +75,7 @@ describe('restorePersistedBasemapSelection', () => {
     mocks.dataTabStateMock.basemapJoin.selectedBasemap = '';
     mocks.dataTabStateMock.basemapJoin.basemapSource = 'catalog';
     mocks.getBasemapByIdMock.mockReturnValue(undefined);
+    mocks.osmDisabledState.value = false;
   });
 
   it('restores an OSM basemap with the correct source and style state', async () => {
@@ -103,6 +108,33 @@ describe('restorePersistedBasemapSelection', () => {
     );
     expect(mocks.addCustomBasemapMock).toHaveBeenCalledTimes(1);
     expect(mocks.setOSMBasemapMock).toHaveBeenCalledWith(basemap.data);
+    expect(mocks.clearOsmMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps a persisted OSM basemap hidden when its display was disabled', async () => {
+    mocks.osmDisabledState.value = true;
+    const basemap = {
+      id: 'osm_standard_hidden',
+      type: 'osm' as const,
+      data: {
+        file: 'osm_standard_hidden',
+        title_fr: 'OSM',
+        title_en: 'OSM',
+        source: 'osm',
+        date: '2026-08-28',
+        proj_source: 'EPSG:3857',
+        bbox: [0, 0, 1, 1],
+        layers: []
+      }
+    };
+
+    await restorePersistedBasemapSelection(basemap);
+
+    expect(mocks.setReferenceBasemapMock).toHaveBeenCalledWith(null);
+    expect(mocks.addCustomBasemapMock).toHaveBeenCalledWith(basemap.data);
+    expect(mocks.setStyleMock).not.toHaveBeenCalled();
+    expect(mocks.requestViewportResetMock).not.toHaveBeenCalled();
+    expect(mocks.setOSMBasemapMock).not.toHaveBeenCalled();
     expect(mocks.clearOsmMock).not.toHaveBeenCalled();
   });
 

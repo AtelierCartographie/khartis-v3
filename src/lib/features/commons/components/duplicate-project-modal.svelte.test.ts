@@ -50,6 +50,33 @@ describe('DuplicateProjectModal', () => {
     mocks.listMetadataMock.mockResolvedValue([]);
   });
 
+  it('selects the current project after refreshing stale metadata', async () => {
+    const staleProject = createMetadata('project-1', 'Stale project');
+    const currentProject = createMetadata('project-2', 'Current project');
+
+    mocks.currentProject = { id: staleProject.id };
+    mocks.listMetadataMock.mockResolvedValue([staleProject]);
+    await projectsStore.refresh();
+
+    mocks.currentProject = { id: currentProject.id };
+    mocks.listMetadataMock.mockResolvedValue([currentProject, staleProject]);
+
+    render(DuplicateProjectModal, {
+      open: true,
+      onClose: vi.fn(),
+      onConfirm: vi.fn()
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('radio', { name: currentProject.name })
+      ).toBeChecked();
+    });
+    expect(
+      screen.getByLabelText(m.duplicate_project_modal_new_name())
+    ).toHaveValue(`${currentProject.name}${m.copy_suffix()}`);
+  });
+
   it('keeps the typed duplicate name when projects refresh while open', async () => {
     const sourceProject = createMetadata('project-1', 'Source project');
     mocks.currentProject = { id: sourceProject.id };

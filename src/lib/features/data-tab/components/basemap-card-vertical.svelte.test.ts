@@ -72,4 +72,28 @@ describe('BasemapCardVertical', () => {
     expect(screen.getByText('Reference background')).toBeInTheDocument();
     expect(screen.getByText('OpenStreetMap contributors')).toBeInTheDocument();
   });
+
+  it('should expose only the card control when the radio is decorative', () => {
+    const { queryByRole, getByRole } = render(BasemapCardVertical, {
+      basemap: createBasemap()
+    });
+
+    expect(
+      getByRole('button', { name: 'Monde · Planisphere' })
+    ).toBeInTheDocument();
+    expect(queryByRole('radio')).not.toBeInTheDocument();
+  });
+
+  it('should name the match score progress bar', () => {
+    render(BasemapCardVertical, {
+      basemap: createBasemap(),
+      matchScore: 83
+    });
+
+    expect(
+      screen.getByRole('progressbar', {
+        name: 'Correspondance avec les données · Monde'
+      })
+    ).toHaveAttribute('aria-valuenow', '83');
+  });
 });

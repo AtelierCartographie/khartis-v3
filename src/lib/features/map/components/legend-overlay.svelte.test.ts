@@ -424,6 +424,39 @@ describe('legend overlay visibility', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('limits high-cardinality legends and reports hidden categories', () => {
+    const viz = buildPointCategoriesViz();
+    const labels = Array.from(
+      { length: 30 },
+      (_, index) => `Category ${index + 1}`
+    );
+    if (viz.symbol?.classification) {
+      viz.symbol.classification = {
+        ...viz.symbol.classification,
+        labels,
+        categoryValues: labels,
+        disabledLabels: [],
+        colors: labels.map(
+          (_, index) => `#${(index + 1).toString(16).padStart(6, '0')}`
+        )
+      };
+    }
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [viz];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    render(LegendOverlay);
+
+    expect(screen.getByText('Category 24')).toBeInTheDocument();
+    expect(screen.queryByText('Category 25')).not.toBeInTheDocument();
+    expect(
+      screen.getByLabelText(
+        '+ 6 autres catégories (couleurs/formes générées automatiquement)'
+      )
+    ).toBeInTheDocument();
+  });
+
   it('renders categorical missing data as a compact footer', () => {
     const viz = buildPointCategoriesViz();
     viz.missingData = {
@@ -488,6 +521,29 @@ describe('legend overlay visibility', () => {
     expect(screen.getByText('610 – 980')).toBeInTheDocument();
     expect(screen.getByText('980 – 1 200')).toBeInTheDocument();
     expect(screen.getByText('≥ 1 200')).toBeInTheDocument();
+  });
+
+  it('keeps narrow decimal class labels distinct', () => {
+    const viz = buildPointClassedFillViz();
+    if (viz.symbol?.fillClassification) {
+      viz.symbol.fillClassification = {
+        ...viz.symbol.fillClassification,
+        classes: 5,
+        breaks: [0.184, 0.208, 0.232, 0.256]
+      };
+    }
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [viz];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    render(LegendOverlay);
+
+    expect(screen.getByText('< 0,18')).toBeInTheDocument();
+    expect(screen.getByText('0,18 – 0,21')).toBeInTheDocument();
+    expect(screen.getByText('0,21 – 0,23')).toBeInTheDocument();
+    expect(screen.getByText('0,23 – 0,26')).toBeInTheDocument();
+    expect(screen.getByText('≥ 0,26')).toBeInTheDocument();
   });
 
   it('renders classed choropleth colors with the integrated quantitative SVG legend', () => {

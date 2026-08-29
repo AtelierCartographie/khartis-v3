@@ -429,6 +429,8 @@
   <KeyboardShortcuts />
 
   <main class:mobile-view={globalState.isMobileView}>
+    <h1 class="visually-hidden">{m.app_name()}</h1>
+
     {#if globalState.isCreateProjectModalOpen}
       <CreateProject open onClose={handleCloseModal} />
     {/if}
@@ -498,6 +500,18 @@
     height: calc(100dvh - var(--cds-header-height));
     overflow: visible;
     background-color: var(--cds-ui-01);
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   .kh-import-confirm-body {

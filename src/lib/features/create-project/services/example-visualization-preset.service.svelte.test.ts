@@ -20,6 +20,24 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
     LINE: 'line',
     POLYGON: 'polygon'
   },
+  getPrimitiveClassification: vi.fn(
+    (visualization) =>
+      visualization?.polygon?.classification ?? visualization?.classification
+  ),
+  getPrimitiveValueColumn: vi.fn(
+    (visualization) =>
+      visualization?.polygon?.valueColumn ?? visualization?.mapping?.valueColumn
+  ),
+  getSymbolFillClassification: vi.fn(
+    (visualization) =>
+      visualization?.symbol?.fillClassification ?? visualization?.classification
+  ),
+  getSymbolFillValueColumn: vi.fn(
+    (visualization) =>
+      visualization?.symbol?.fillValueColumn ??
+      visualization?.mapping?.colorColumn ??
+      visualization?.mapping?.valueColumn
+  ),
   getVisualizationOriginMode: vi.fn(
     (visualization) => visualization?.origin?.mode ?? 'legacy'
   ),
@@ -51,6 +69,7 @@ vi.mock('$lib/features/duckdb', () => ({
 
 vi.mock('$lib/features/commons/constants/visualization.constants', () => ({
   FillMode: {
+    CLASSES: 'classes',
     UNIQUE: 'unique'
   },
   ShapeType: {
@@ -63,6 +82,13 @@ vi.mock('$lib/features/commons/constants/visualization.constants', () => ({
     PROPORTIONAL: 'proportional'
   }
 }));
+
+vi.mock(
+  '$lib/features/visualization-tab/hooks/use-classification-breaks.svelte',
+  () => ({
+    computeClassificationBreaks: vi.fn(async () => null)
+  })
+);
 
 vi.mock('$lib/features/visualization-tab/services/suggestion.service', () => ({
   applySuggestionToVisualization: vi.fn(),
@@ -204,12 +230,12 @@ describe('example visualization presets', () => {
     }
   );
 
-  it('keeps declared example presets from being auto-overwritten by generic suggestions', () => {
+  it('keeps declared example presets from being auto-overwritten by generic suggestions', async () => {
     const dataset = buildDataset([
       { name: 'population_2023', type: ColumnType.NUMBER }
     ]);
 
-    applyExampleVisualizationPresets(
+    await applyExampleVisualizationPresets(
       {
         id: 'world-population',
         title: 'Population Europe 2023',

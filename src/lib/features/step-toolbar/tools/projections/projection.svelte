@@ -32,6 +32,7 @@
   const DEFAULT_PROJECTION = 'mercator';
 
   function handleProjectionCodeReset() {
+    crsError = false;
     projectionActions.setCustomCode(null);
     projectionActions.setSelected(DEFAULT_PROJECTION);
   }

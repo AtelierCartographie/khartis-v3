@@ -487,6 +487,10 @@ export function useMapDisplayData(
         removeDatasetFromDisplay(datasetId);
       }
     } catch (error) {
+      if (isStaleLoad(generation) || !isDatasetExpectedForDisplay(datasetId)) {
+        return;
+      }
+
       logger.error('Failed to load joined basemap', LogCategory.MAP, error);
       joinedBasemapDisplayKeys.delete(datasetId);
       removeDatasetFromDisplay(dataset.id);

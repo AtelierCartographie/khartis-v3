@@ -280,6 +280,16 @@ describe('simplification tool — imported basemap', () => {
 describe('simplification tool — geo datasets', () => {
   beforeEach(resetMocks);
 
+  it('should disable the Geo source when no geographic dataset is available', () => {
+    render(SimplificationTool);
+
+    expect(
+      screen.getByRole('button', {
+        name: m.simplification_source_geodata()
+      })
+    ).toBeDisabled();
+  });
+
   it('should reset the Geo source rate against the targeted dataset when switching tabs', async () => {
     mocks.geoDatasets = [
       {

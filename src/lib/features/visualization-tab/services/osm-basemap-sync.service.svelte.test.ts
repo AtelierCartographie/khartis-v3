@@ -28,6 +28,7 @@ describe('syncProjectOSMBasemap', () => {
     };
     const osmState = {
       activeOSMBasemap: null,
+      isDisabledByUser: false,
       setOSMBasemap: vi.fn(),
       clear: vi.fn()
     };
@@ -55,6 +56,7 @@ describe('syncProjectOSMBasemap', () => {
     };
     const osmState = {
       activeOSMBasemap: null,
+      isDisabledByUser: false,
       setOSMBasemap: vi.fn(),
       clear: vi.fn()
     };
@@ -82,6 +84,7 @@ describe('syncProjectOSMBasemap', () => {
     };
     const osmState = {
       activeOSMBasemap: createOSMBasemap('osm_standard_789'),
+      isDisabledByUser: false,
       setOSMBasemap: vi.fn(),
       clear: vi.fn()
     };
@@ -108,6 +111,7 @@ describe('syncProjectOSMBasemap', () => {
     };
     const osmState = {
       activeOSMBasemap: createOSMBasemap('osm_standard_789'),
+      isDisabledByUser: false,
       setOSMBasemap: vi.fn(),
       clear: vi.fn()
     };
@@ -124,5 +128,57 @@ describe('syncProjectOSMBasemap', () => {
     expect(osmState.clear).toHaveBeenCalledOnce();
     expect(osmState.setOSMBasemap).not.toHaveBeenCalled();
     expect(basemapLookup.addCustomBasemap).not.toHaveBeenCalled();
+  });
+
+  it('does not reactivate a project OSM basemap after the user disables it', () => {
+    const osmBasemap = createOSMBasemap('osm_standard_disabled');
+    const basemapLookup = {
+      getBasemapById: vi.fn(() => osmBasemap),
+      addCustomBasemap: vi.fn()
+    };
+    const osmState = {
+      activeOSMBasemap: null,
+      isDisabledByUser: true,
+      setOSMBasemap: vi.fn(),
+      clear: vi.fn()
+    };
+
+    syncProjectOSMBasemap(
+      {
+        type: 'osm',
+        id: osmBasemap.file,
+        data: undefined
+      },
+      basemapLookup,
+      osmState
+    );
+
+    expect(osmState.setOSMBasemap).not.toHaveBeenCalled();
+    expect(osmState.clear).not.toHaveBeenCalled();
+  });
+
+  it('clears user-disabled state when the project switches away from OSM', () => {
+    const basemapLookup = {
+      getBasemapById: vi.fn(),
+      addCustomBasemap: vi.fn()
+    };
+    const osmState = {
+      activeOSMBasemap: null,
+      isDisabledByUser: true,
+      setOSMBasemap: vi.fn(),
+      clear: vi.fn()
+    };
+
+    syncProjectOSMBasemap(
+      {
+        type: 'catalog',
+        id: 'france-region-2025-high'
+      },
+      basemapLookup,
+      osmState
+    );
+
+    expect(osmState.clear).toHaveBeenCalledOnce();
+    expect(osmState.setOSMBasemap).not.toHaveBeenCalled();
   });
 });

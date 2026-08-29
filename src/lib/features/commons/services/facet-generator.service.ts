@@ -25,6 +25,7 @@ import {
   type Palette
 } from '$lib/features/commons/components/palette-popover/palette.constants';
 import { DataValidationError } from '../pipeline.errors';
+import { loadDistinctCategoryLabels } from '$lib/features/commons/utils/category-labels.utils';
 
 function resolveFacetClassification(
   visualization: VisualizationConfig,
@@ -102,13 +103,20 @@ function resolveQualitativePalette(
   };
 }
 
-function buildCategoricalFacetClassification(
+async function buildCategoricalFacetClassification(
   baseViz: VisualizationConfig,
   variable: string,
   baseClassification: NonNullable<VisualizationConfig['classification']>
-): VisualizationConfig['classification'] {
-  const labels = datasetsStore
-    .getUniqueValues(baseViz.datasetId, variable)
+): Promise<VisualizationConfig['classification']> {
+  const dataset = datasetsStore.datasets.find(
+    (candidate) => candidate.id === baseViz.datasetId
+  );
+  const queriedLabels = await loadDistinctCategoryLabels(dataset, variable);
+  const labels = (
+    queriedLabels.length > 0
+      ? queriedLabels
+      : datasetsStore.getUniqueValues(baseViz.datasetId, variable)
+  )
     .map((value) => (value == null ? null : String(value)))
     .filter((value): value is string => Boolean(value));
 
@@ -121,6 +129,12 @@ function buildCategoricalFacetClassification(
   return {
     ...baseClassification,
     labels: labels.length > 0 ? labels : (baseClassification.labels ?? []),
+    categoryValues:
+      labels.length > 0
+        ? labels
+        : (baseClassification.categoryValues ??
+          baseClassification.labels ??
+          []),
     colors
   };
 }
@@ -261,7 +275,7 @@ async function buildFacetClassification(
   }
 
   if (isFacetCategorySlot(slotPath)) {
-    return buildCategoricalFacetClassification(
+    return await buildCategoricalFacetClassification(
       baseViz,
       variable,
       baseClassification
@@ -342,6 +356,47 @@ export function resolveFacetPrimitiveFilter(
     : PrimitiveFilterType.POLYGON;
 }
 
+export async function buildFacetSlotUpdates({
+  baseViz,
+  visualization,
+  variable,
+  scaleMode,
+  slotPath
+}: {
+  baseViz: VisualizationConfig;
+  visualization: VisualizationConfig;
+  variable: string;
+  scaleMode: ScaleMode;
+  slotPath: FacetSlotPath;
+}): Promise<Partial<VisualizationConfig>> {
+  const nextVisualization = deepClone(visualization);
+
+  applyFacetVariablePatch(nextVisualization, slotPath, variable);
+  const classification = await buildFacetClassification(
+    baseViz,
+    variable,
+    scaleMode,
+    slotPath
+  );
+  applyFacetClassificationToVisualization(
+    nextVisualization,
+    slotPath,
+    classification
+  );
+
+  return {
+    mapping: nextVisualization.mapping,
+    classification: nextVisualization.classification,
+    symbolClassification: nextVisualization.symbolClassification,
+    lineClassification: nextVisualization.lineClassification,
+    textClassification: nextVisualization.textClassification,
+    symbol: nextVisualization.symbol,
+    polygon: nextVisualization.polygon,
+    line: nextVisualization.line,
+    text: nextVisualization.text
+  };
+}
+
 export async function buildFacetVisualizationUpdates({
   baseViz,
   visualization,
@@ -355,32 +410,17 @@ export async function buildFacetVisualizationUpdates({
   scaleMode: ScaleMode;
   primarySlotPath: FacetSlotPath;
 }): Promise<Partial<VisualizationConfig>> {
-  const nextVisualization = deepClone(visualization);
-
-  applyFacetVariablePatch(nextVisualization, primarySlotPath, variable);
-  const classification = await buildFacetClassification(
+  const slotUpdates = await buildFacetSlotUpdates({
     baseViz,
+    visualization,
     variable,
     scaleMode,
-    primarySlotPath
-  );
-  applyFacetClassificationToVisualization(
-    nextVisualization,
-    primarySlotPath,
-    classification
-  );
+    slotPath: primarySlotPath
+  });
 
   return {
+    ...slotUpdates,
     name: variable,
-    mapping: nextVisualization.mapping,
-    classification: nextVisualization.classification,
-    symbolClassification: nextVisualization.symbolClassification,
-    lineClassification: nextVisualization.lineClassification,
-    textClassification: nextVisualization.textClassification,
-    symbol: nextVisualization.symbol,
-    polygon: nextVisualization.polygon,
-    line: nextVisualization.line,
-    text: nextVisualization.text,
     primitiveFilters: [resolveFacetPrimitiveFilter(primarySlotPath)],
     facet: {
       baseVisualizationId: baseViz.id

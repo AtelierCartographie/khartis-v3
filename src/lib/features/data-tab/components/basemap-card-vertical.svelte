@@ -113,6 +113,7 @@
         labelText={title}
         hideLabel
         variant={isSuggestion ? 'suggestions' : 'default'}
+        decorative
       />
     </div>
 
@@ -156,6 +157,7 @@
       <div
         class="progress-bar"
         role="progressbar"
+        aria-label={`${m.basemap_match_score()}${m.aria_label_separator()}${title}`}
         aria-valuenow={matchPercentage}
         aria-valuemin={0}
         aria-valuemax={100}
