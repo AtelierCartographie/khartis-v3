@@ -88,8 +88,9 @@
       width: 58px;
     }
 
-    .khartis-logo {
-      width: 54px;
+    .khartis-logo-group,
+    #khartis-logo :global(.full-height) {
+      display: none;
     }
   }
 

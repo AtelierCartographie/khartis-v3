@@ -136,19 +136,6 @@
         {/if}
       </div>
 
-      {#if icon && actionsEnd}
-        <span
-          class="section-custom-icon section-actions-end"
-          class:disabled={disabled}
-          inert={disabled}
-          onclick={(e: MouseEvent) => e.stopPropagation()}
-          onkeydown={(e: KeyboardEvent) => e.stopPropagation()}
-          role="presentation"
-        >
-          {@render icon()}
-        </span>
-      {/if}
-
       <span
         class="section-chevron"
         class:toggle-off={showToggle && !toggleChecked}
@@ -161,6 +148,17 @@
         {/if}
       </span>
     </button>
+
+    {#if icon && actionsEnd}
+      <span
+        class="section-custom-icon section-actions-end"
+        class:disabled={disabled}
+        inert={disabled}
+        role="presentation"
+      >
+        {@render icon()}
+      </span>
+    {/if}
   </div>
 
   {#if expanded && !disabled}
@@ -270,6 +268,7 @@
     align-self: center;
     flex-shrink: 0;
     margin-left: 0;
+    margin-right: 16px;
   }
 
   .section-custom-icon.disabled {

@@ -167,6 +167,51 @@ describe('file export utils', () => {
     expect(text).not.toContain('geometry_wkt');
   });
 
+  it('keeps similarly named properties when a canonical geometry column exists', async () => {
+    const dataset = createGeometryDataset({
+      type: 'MultiLineString',
+      coordinates: [
+        [
+          [0, 0],
+          [1, 1]
+        ]
+      ]
+    });
+    dataset.columns.splice(1, 0, {
+      name: 'geo_point_2d',
+      type: 'string',
+      nullable: true,
+      unique: false
+    });
+    dataset.data[0].geo_point_2d = 'source property';
+    dataset.analysis.geoColumns = [
+      {
+        index: dataset.columns.findIndex((column) => column.name === 'geom'),
+        columnName: 'geom',
+        type: 'unknown',
+        confidence: 1
+      }
+    ];
+
+    const csvText = await (
+      await exportProcessedDatasets([dataset], 'csv')
+    ).text();
+    const geojson = JSON.parse(
+      await (await exportProcessedDatasets([dataset], 'geojson')).text()
+    ) as {
+      features: Array<{
+        geometry: { type: string };
+        properties: Record<string, unknown>;
+      }>;
+    };
+
+    expect(csvText).toContain('geo_point_2d');
+    expect(csvText).not.toContain(',geom,');
+    expect(geojson.features[0].geometry.type).toBe('MultiLineString');
+    expect(geojson.features[0].properties.geo_point_2d).toBe('source property');
+    expect(geojson.features[0].properties).not.toHaveProperty('geom');
+  });
+
   it('fails csv exports with a clear error when no tabular column remains', async () => {
     const dataset = createGeometryDataset({
       type: 'Point',

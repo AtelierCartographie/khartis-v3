@@ -82,6 +82,7 @@ import {
 import type { LegendItem } from '$lib/features/step-toolbar/tools/legend';
 
 const legendPatternFillCache: Record<string, LegendPatternFill> = {};
+const MAX_VISIBLE_LEGEND_CATEGORIES = 24;
 
 function getLegendPatternFill(
   patternId: string,
@@ -150,6 +151,18 @@ type LegendCategoricalEntry = {
   color: string;
   originalIndex: number;
 };
+
+type LimitedLegendItems<T> = {
+  items: T[];
+  hiddenCount: number;
+};
+
+function limitLegendItems<T>(items: T[]): LimitedLegendItems<T> {
+  return {
+    items: items.slice(0, MAX_VISIBLE_LEGEND_CATEGORIES),
+    hiddenCount: Math.max(0, items.length - MAX_VISIBLE_LEGEND_CATEGORIES)
+  };
+}
 
 type LegendSegmentDraft = {
   key: string;
@@ -238,11 +251,11 @@ function getLegendClassedColorClassification(
 
 function getLegendCategoricalEntries(
   viz: VisualizationConfig | undefined
-): LegendCategoricalEntry[] {
+): LimitedLegendItems<LegendCategoricalEntry> {
   const classification = getLegendCategoricalClassification(viz);
   const colors = classification?.colors ?? [];
   if (colors.length === 0) {
-    return [];
+    return { items: [], hiddenCount: 0 };
   }
 
   const labels = classification?.labels ?? [];
@@ -250,19 +263,22 @@ function getLegendCategoricalEntries(
     (classification?.disabledLabels ?? []).map((label) => String(label))
   );
 
-  return colors
-    .map((color, index) => {
-      const label =
-        labels[index] ?? m.palette_category_default_label({ index: index + 1 });
+  return limitLegendItems(
+    colors
+      .map((color, index) => {
+        const label =
+          labels[index] ??
+          m.palette_category_default_label({ index: index + 1 });
 
-      return {
-        key: `${label}-${index}`,
-        label,
-        color,
-        originalIndex: index
-      };
-    })
-    .filter((entry) => !disabled.has(entry.label));
+        return {
+          key: `${label}-${index}`,
+          label,
+          color,
+          originalIndex: index
+        };
+      })
+      .filter((entry) => !disabled.has(entry.label))
+  );
 }
 
 function getLegendPointCategoryShape(
@@ -504,6 +520,26 @@ function formatBreakValue(value: number): string {
   return formatValue(value, { maxFractionDigits: 1 });
 }
 
+const MAX_LEGEND_BREAK_FRACTION_DIGITS = 6;
+
+function getBreakFractionDigits(breaks: number[]): number {
+  for (
+    let fractionDigits = 1;
+    fractionDigits <= MAX_LEGEND_BREAK_FRACTION_DIGITS;
+    fractionDigits += 1
+  ) {
+    const labels = breaks.map((value) =>
+      formatValue(value, { maxFractionDigits: fractionDigits })
+    );
+
+    if (new Set(labels).size === breaks.length) {
+      return fractionDigits;
+    }
+  }
+
+  return MAX_LEGEND_BREAK_FRACTION_DIGITS;
+}
+
 function getColorScaleLabel(
   breaks: number[],
   colorCount: number,
@@ -513,11 +549,15 @@ function getColorScaleLabel(
     return '';
   }
 
+  const fractionDigits = getBreakFractionDigits(breaks);
+  const formatScaleBreak = (value: number) =>
+    formatValue(value, { maxFractionDigits: fractionDigits });
+
   if (colorCount === breaks.length + 1) {
     const firstBreak = breaks[0];
     if (index === 0) {
       return firstBreak !== undefined
-        ? `< ${formatBreakValue(firstBreak)}`
+        ? `< ${formatScaleBreak(firstBreak)}`
         : '';
     }
 
@@ -525,12 +565,12 @@ function getColorScaleLabel(
       const lowerBreak = breaks[index - 1];
       const upperBreak = breaks[index];
       return lowerBreak !== undefined && upperBreak !== undefined
-        ? `${formatBreakValue(lowerBreak)} – ${formatBreakValue(upperBreak)}`
+        ? `${formatScaleBreak(lowerBreak)} – ${formatScaleBreak(upperBreak)}`
         : '';
     }
 
     const lastBreak = breaks[breaks.length - 1];
-    return lastBreak !== undefined ? `≥ ${formatBreakValue(lastBreak)}` : '';
+    return lastBreak !== undefined ? `≥ ${formatScaleBreak(lastBreak)}` : '';
   }
 
   if (colorCount === breaks.length) {
@@ -538,17 +578,17 @@ function getColorScaleLabel(
       const lowerBreak = breaks[index];
       const upperBreak = breaks[index + 1];
       return lowerBreak !== undefined && upperBreak !== undefined
-        ? `${formatBreakValue(lowerBreak)} – ${formatBreakValue(upperBreak)}`
+        ? `${formatScaleBreak(lowerBreak)} – ${formatScaleBreak(upperBreak)}`
         : '';
     }
 
     const lastBreak = breaks[breaks.length - 1];
-    return lastBreak !== undefined ? `≥ ${formatBreakValue(lastBreak)}` : '';
+    return lastBreak !== undefined ? `≥ ${formatScaleBreak(lastBreak)}` : '';
   }
 
   const fallbackBreak =
     index < breaks.length ? breaks[index] : breaks[breaks.length - 1];
-  return fallbackBreak !== undefined ? formatBreakValue(fallbackBreak) : '';
+  return fallbackBreak !== undefined ? formatScaleBreak(fallbackBreak) : '';
 }
 
 function getEffectiveClassedColors(
@@ -776,7 +816,7 @@ function getTextColorLegendDraft(
     const disabled = new Set(
       (classification.disabledLabels ?? []).map((label) => String(label))
     );
-    const categories: CategoryItem[] = (classification.colors ?? [])
+    const allCategories: CategoryItem[] = (classification.colors ?? [])
       .map((color, index) => {
         const label =
           classification.labels?.[index] ??
@@ -793,6 +833,7 @@ function getTextColorLegendDraft(
         };
       })
       .filter((entry) => !disabled.has(entry.label));
+    const { items: categories, hiddenCount } = limitLegendItems(allCategories);
 
     if (categories.length === 0) {
       return null;
@@ -809,7 +850,8 @@ function getTextColorLegendDraft(
             type: 'symbol',
             ...getTextCategoricalMissingDataFooterOptions(
               text,
-              context.includeMissingDataFooter
+              context.includeMissingDataFooter,
+              hiddenCount
             )
           })
         )
@@ -979,7 +1021,7 @@ function getCategoricalLegendDraft(
 
   const primitive = resolveLegendColorSwatchPrimitive(viz);
   const classification = getLegendCategoricalClassification(viz);
-  const entries = getLegendCategoricalEntries(viz);
+  const { items: entries, hiddenCount } = getLegendCategoricalEntries(viz);
 
   if (!classification || entries.length === 0) {
     return null;
@@ -1011,7 +1053,8 @@ function getCategoricalLegendDraft(
               ...getCategoricalMissingDataFooterOptions(
                 viz,
                 primitive,
-                context.includeMissingDataFooter
+                context.includeMissingDataFooter,
+                hiddenCount
               )
             })
           )
@@ -1032,10 +1075,11 @@ function getCategoricalLegendDraft(
             draw_khartis_swatch_legend(items, {
               ...options,
               type: 'pattern',
-              ...getMissingDataFooterOptions(
+              ...getCategoricalSwatchFooterOptions(
                 viz,
                 context.includeMissingDataFooter,
-                primitive
+                primitive,
+                hiddenCount
               )
             })
           )
@@ -1061,7 +1105,8 @@ function getCategoricalLegendDraft(
           ...getCategoricalMissingDataFooterOptions(
             viz,
             primitive,
-            context.includeMissingDataFooter
+            context.includeMissingDataFooter,
+            hiddenCount
           )
         })
       )
@@ -1468,6 +1513,43 @@ function getMissingDataFooterOptions(
   };
 }
 
+function getHiddenCategoriesLegendItem(hiddenCount: number): CategoryItem {
+  return {
+    label: m.categories_hidden_count({ count: hiddenCount }),
+    fill: 'none',
+    stroke: 'none',
+    strokeWidth: 0
+  };
+}
+
+function getCategoricalSwatchFooterOptions(
+  viz: VisualizationConfig,
+  includeMissingData: boolean,
+  primitive: LegendSwatchPrimitive,
+  hiddenCount: number
+): {
+  footerItems?: KhartisLegendSwatchItem[];
+  footerType?: KhartisLegendSwatchType;
+} {
+  const missingDataOptions = getMissingDataFooterOptions(
+    viz,
+    includeMissingData,
+    primitive
+  );
+  const footerItems: KhartisLegendSwatchItem[] = [
+    ...(hiddenCount > 0 ? [getHiddenCategoriesLegendItem(hiddenCount)] : []),
+    ...(missingDataOptions.footerItems ?? [])
+  ];
+
+  return footerItems.length > 0
+    ? {
+        footerItems,
+        footerType:
+          missingDataOptions.footerType ?? getSwatchType(primitive, false)
+      }
+    : {};
+}
+
 function getTextMissingDataFooterOptions(
   text: NonNullable<ReturnType<typeof getTextPrimitive>>,
   includeFooter = true
@@ -1487,42 +1569,57 @@ function getTextMissingDataFooterOptions(
 
 function getTextCategoricalMissingDataFooterOptions(
   text: NonNullable<ReturnType<typeof getTextPrimitive>>,
-  includeFooter = true
+  includeFooter = true,
+  hiddenCount = 0
 ): {
   footerItems?: CategoryItem[];
   footerType?: CategoricalFooterShapeType;
 } {
-  if (!includeFooter || !text.missingData?.show) {
-    return {};
-  }
+  const footerItems: CategoryItem[] = [
+    ...(hiddenCount > 0 ? [getHiddenCategoriesLegendItem(hiddenCount)] : []),
+    ...(includeFooter && text.missingData?.show
+      ? [getTextMissingDataLegendItem(text)]
+      : [])
+  ];
 
-  return {
-    footerItems: [getTextMissingDataLegendItem(text)],
-    footerType: 'symbol'
-  };
+  return footerItems.length > 0
+    ? {
+        footerItems,
+        footerType: 'symbol'
+      }
+    : {};
 }
 
 function getCategoricalMissingDataFooterOptions(
   viz: VisualizationConfig,
   primitive: LegendSwatchPrimitive,
-  includeFooter = true
+  includeFooter = true,
+  hiddenCount = 0
 ): {
   footerItems?: CategoryItem[];
   footerType?: CategoricalFooterShapeType;
 } {
   const missingDataPrimitive = resolveMissingDataLegendPrimitive(viz);
-  if (!includeFooter || !isLegendMissingDataShown(viz, missingDataPrimitive)) {
+  const includeMissingData =
+    includeFooter && isLegendMissingDataShown(viz, missingDataPrimitive);
+  const item = includeMissingData
+    ? getMissingDataLegendItem(viz, missingDataPrimitive)
+    : null;
+  const footerItems: CategoryItem[] = [
+    ...(hiddenCount > 0 ? [getHiddenCategoriesLegendItem(hiddenCount)] : []),
+    ...(item ? [item] : [])
+  ];
+  if (footerItems.length === 0) {
     return {};
   }
 
-  const item = getMissingDataLegendItem(viz, missingDataPrimitive);
   const footerType = getSwatchType(
     primitive,
-    primitive === 'area' && Boolean(item.patternFill)
+    primitive === 'area' && Boolean(item?.patternFill)
   );
 
   return {
-    footerItems: [item],
+    footerItems,
     footerType:
       footerType === 'pattern' || footerType === 'line'
         ? footerType

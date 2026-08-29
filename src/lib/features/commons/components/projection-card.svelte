@@ -124,8 +124,7 @@
           disabled={disabled}
           labelText={title}
           hideLabel
-          ariaHidden
-          tabIndex={-1}
+          decorative
         />
       </div>
     </div>

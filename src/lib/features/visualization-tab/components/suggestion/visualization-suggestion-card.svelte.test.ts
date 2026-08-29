@@ -90,6 +90,23 @@ describe('VisualizationSuggestionCard', () => {
       badges: ['pop']
     },
     {
+      name: 'Symboles · proportionnels + libellés',
+      suggestion: {
+        id: 'symbols_proportional_labeled',
+        nbColumns: 2,
+        semioTypes: ['QTA', 'label'],
+        geometries: ['point', 'polygon'],
+        columns: ['pop', 'city'],
+        dataGeometry: 'polygon'
+      },
+      primitive: m.viz_suggestion_primitive_symbols(),
+      types: [
+        m.viz_suggestion_mode_proportional(),
+        m.viz_suggestion_mode_labels()
+      ],
+      badges: ['pop', 'city']
+    },
+    {
       name: 'Symboles · proportionnels + fond en catégories (polygon data)',
       suggestion: {
         id: 'symbols_proportional_colorful_QL',

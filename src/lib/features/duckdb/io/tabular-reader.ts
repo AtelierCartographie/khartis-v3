@@ -201,7 +201,10 @@ export async function readTabular(
 
           await addRowId(ctx.connection, finalTablename);
         },
-        'read_tabular'
+        'read_tabular',
+        {
+          logRollback: recoveryMode || !shouldRetryWithIgnoreErrors
+        }
       );
     };
 

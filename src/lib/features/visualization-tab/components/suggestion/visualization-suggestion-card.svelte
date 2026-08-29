@@ -39,7 +39,8 @@
       QTA: m.viz_suggestion_mode_proportional,
       QTR: m.viz_suggestion_mode_classes,
       QL: m.viz_suggestion_mode_categories,
-      QLO: m.viz_suggestion_mode_categories
+      QLO: m.viz_suggestion_mode_categories,
+      label: m.viz_suggestion_mode_labels
     };
 
     return labels[semioType]?.() ?? semioType;
@@ -64,7 +65,10 @@
     if (semioType === 'QTR') {
       return m.viz_suggestion_mode_fond_classes();
     }
-    return m.viz_suggestion_mode_fond_categories();
+    if (semioType === 'QL' || semioType === 'QLO') {
+      return m.viz_suggestion_mode_fond_categories();
+    }
+    return getModeLabel(semioType);
   }
 
   interface DisplayRow {
@@ -173,6 +177,7 @@
           labelText={suggestion.label}
           hideLabel
           variant="suggestions"
+          decorative
         />
       </div>
     </div>

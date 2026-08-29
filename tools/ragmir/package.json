@@ -1,0 +1,12 @@
+{
+  "name": "@khartis/ragmir-tooling",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "devDependencies": {
+    "@jcode.labs/ragmir": "^4.2.2",
+    "@jcode.labs/ragmir-chat": "4.2.2",
+    "@jcode.labs/ragmir-tts": "4.2.2",
+    "apache-arrow": "18.1.0"
+  }
+}

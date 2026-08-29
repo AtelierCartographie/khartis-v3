@@ -12,6 +12,7 @@ import {
   filter_candidates_by_distances,
   linearScale,
   magnitude,
+  measureLegendLongestToken,
   renderLegendHeader,
   renderLegendNote,
   resolveLegendFontFamily,
@@ -141,13 +142,6 @@ export function draw_symbols_legend(
   const nodata_body_width = nodata
     ? nodata_label_x + nodata_label_width + margin
     : 0;
-  const width = Math.max(
-    main_body_width,
-    nodata_body_width,
-    sign_legend_body_width
-  );
-  const label_anchor_x = width - margin;
-  const max_text_width = width - margin * 2;
   const title_font = createLegendFont({
     fontSize: titleSize,
     fontFamily: resolvedFontFamily,
@@ -161,6 +155,21 @@ export function draw_symbols_legend(
     fontSize: noteSize,
     fontFamily: resolvedFontFamily
   });
+  const text_body_width =
+    margin * 2 +
+    Math.max(
+      measureLegendLongestToken(title, title_font),
+      measureLegendLongestToken(subtitle, subtitle_font),
+      measureLegendLongestToken(note, note_font)
+    );
+  const width = Math.max(
+    main_body_width,
+    nodata_body_width,
+    sign_legend_body_width,
+    text_body_width
+  );
+  const label_anchor_x = width - margin;
+  const max_text_width = width - margin * 2;
   const header = renderLegendHeader({
     title,
     subtitle,

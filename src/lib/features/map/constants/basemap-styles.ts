@@ -1,4 +1,4 @@
-import type maplibregl from 'maplibre-gl';
+import type { StyleSpecification } from 'maplibre-gl';
 import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
 import { MapLibreLayerType } from './map.constants';
 
@@ -14,7 +14,7 @@ export enum BasemapStyle {
 
 export const DEFAULT_TILED_BASEMAP_STYLE = BasemapStyle.MONDE_COULEURS;
 
-type BasemapStyleResult = string | maplibregl.StyleSpecification;
+type BasemapStyleResult = string | StyleSpecification;
 export type BasemapZone = 'france' | 'monde';
 export type BasemapViewportBounds = [[number, number], [number, number]];
 
@@ -25,7 +25,7 @@ export interface BasemapViewportPreset {
   bounds: BasemapViewportBounds;
 }
 
-const BLANK_WHITE_STYLE: maplibregl.StyleSpecification = {
+const BLANK_WHITE_STYLE: StyleSpecification = {
   version: 8,
   name: BasemapStyle.BLANK_WHITE,
   sources: {},

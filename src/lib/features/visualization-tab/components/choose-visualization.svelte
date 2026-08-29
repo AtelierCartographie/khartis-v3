@@ -109,8 +109,14 @@
 
   function handleSelectSuggestion(suggestion: VizSuggestion) {
     const dataset = selectedDataset;
-    const targetViz = getCurrentTargetVisualization();
-    if (!dataset || !targetViz) return;
+    if (!dataset) return;
+
+    const targetViz =
+      getCurrentTargetVisualization() ??
+      visualizationStore.createVisualization(
+        resolveBlankVisualizationType(dataset),
+        dataset.id
+      );
 
     const action = resolveSuggestionCardAction(
       {

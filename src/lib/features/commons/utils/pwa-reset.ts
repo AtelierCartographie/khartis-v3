@@ -1,3 +1,5 @@
+import { replaceState } from '$app/navigation';
+import { resolve } from '$app/paths';
 import { LogCategory, logger } from './logger';
 import {
   createPwaCachePrefix,
@@ -102,12 +104,21 @@ function clearLastProjectRestoreFallbackUrl(): void {
   }
 
   const url = new URL(window.location.href);
+  if (!url.searchParams.has(FAILED_RESTORE_QUERY_PARAM)) {
+    return;
+  }
+
   url.searchParams.delete(FAILED_RESTORE_QUERY_PARAM);
-  window.history.replaceState(
-    window.history.state,
-    '',
-    `${url.pathname}${url.search}${url.hash}`
-  );
+  if (url.search) {
+    replaceState(
+      resolve(`/?${url.searchParams.toString()}${url.hash}`),
+      window.history.state
+    );
+  } else if (url.hash) {
+    replaceState(resolve(`/#${url.hash.slice(1)}`), window.history.state);
+  } else {
+    replaceState(resolve('/'), window.history.state);
+  }
 }
 
 export function isLastProjectRestoreQuarantined(projectId?: string): boolean {

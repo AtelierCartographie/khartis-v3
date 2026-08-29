@@ -98,6 +98,25 @@
         return true;
       }
 
+      if (document.querySelector('.bx--modal.is-visible')) {
+        return false;
+      }
+
+      if (globalState.isSideNavOpen) {
+        globalState.isSideNavOpen = false;
+        return true;
+      }
+
+      if (globalState.isMobileToolbarOpen) {
+        globalActions.closeMobileToolbar();
+        return true;
+      }
+
+      if (globalState.selectedTool) {
+        clearSelectedTool();
+        return true;
+      }
+
       if (globalState.toolbarState === ToolbarState.Full) {
         globalActions.setToolbarState(ToolbarState.Collapsed);
         return true;
@@ -377,14 +396,18 @@
       }
     }
 
-    document.addEventListener(EVENT.KEYDOWN, handleKeyDown);
+    document.addEventListener(EVENT.KEYDOWN, handleKeyDown, {
+      capture: true
+    });
     document.addEventListener(EVENT.WHEEL, handleWheel, {
       passive: false,
       capture: true
     });
 
     return () => {
-      document.removeEventListener(EVENT.KEYDOWN, handleKeyDown);
+      document.removeEventListener(EVENT.KEYDOWN, handleKeyDown, {
+        capture: true
+      });
       document.removeEventListener(EVENT.WHEEL, handleWheel, { capture: true });
     };
   });

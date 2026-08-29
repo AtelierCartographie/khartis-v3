@@ -14,6 +14,11 @@ import type {
 import {
   ClassificationMethod,
   type ClassificationConfig,
+  getPrimitiveClassification,
+  getPrimitiveValueColumn,
+  getSymbolFillClassification,
+  getSymbolFillValueColumn,
+  PrimitiveFilterType,
   type VisualizationConfig,
   visualizationStore
 } from '$lib/features/commons/stores/visualization.store.svelte';
@@ -31,6 +36,7 @@ import {
   resolveBlankVisualizationPreset
 } from '$lib/features/visualization-tab/services/suggestion.service';
 import { getSuggestionSignature } from '$lib/features/visualization-tab/utils/suggestion-selection.utils';
+import { computeClassificationBreaks } from '$lib/features/visualization-tab/hooks/use-classification-breaks.svelte';
 
 type ExampleSuggestionId =
   | 'choropleth'
@@ -400,10 +406,112 @@ function applyDeclaredOverrides(
   }
 }
 
-export function applyExampleVisualizationPresets(
+function buildComputedClassification(
+  classification: ClassificationConfig,
+  computation: NonNullable<
+    Awaited<ReturnType<typeof computeClassificationBreaks>>
+  >
+): ClassificationConfig {
+  const computed: ClassificationConfig = {
+    ...classification,
+    method: computation.normalizedMethod,
+    classes: computation.actualClassCount,
+    numClasses: computation.actualClassCount,
+    breaks: computation.result.breaks,
+    counts: computation.result.counts,
+    colors: computation.colors
+  };
+
+  if (computation.breakpointLowerClassCount != null) {
+    computed.breakpointLowerClassCount = computation.breakpointLowerClassCount;
+  }
+
+  if (computation.autoBreakpointApplied) {
+    computed.breakpointValue = computation.breakpointValue ?? null;
+  } else if (computation.autoBreakpointCleared) {
+    computed.breakpointValue = null;
+  }
+
+  return computed;
+}
+
+async function computeExampleClassification(
+  visualizationId: string,
+  preset: ExampleVisualizationPreset,
+  dataset: DatasetResult
+): Promise<void> {
+  const visualization = visualizationStore.visualizations.find(
+    (item) => item.id === visualizationId
+  );
+  if (!visualization) {
+    return;
+  }
+
+  const target =
+    preset.type === 'choropleth'
+      ? {
+          classification: getPrimitiveClassification(
+            visualization,
+            PrimitiveFilterType.POLYGON
+          ),
+          valueColumn: getPrimitiveValueColumn(
+            visualization,
+            PrimitiveFilterType.POLYGON
+          )
+        }
+      : preset.type === 'bivariate'
+        ? {
+            classification: getSymbolFillClassification(visualization),
+            valueColumn: getSymbolFillValueColumn(visualization)
+          }
+        : null;
+
+  if (!target?.classification || !target.valueColumn) {
+    return;
+  }
+
+  const computation = await computeClassificationBreaks({
+    datasetSourceFileId: dataset.sourceFileId,
+    valueColumn: target.valueColumn,
+    classification: target.classification
+  });
+  if (!computation) {
+    return;
+  }
+
+  const classification = buildComputedClassification(
+    target.classification,
+    computation
+  );
+
+  visualizationStore.updateVisualization(
+    visualization.id,
+    preserveOrigin(visualization, {
+      classification,
+      ...(preset.type === 'choropleth' && visualization.polygon
+        ? {
+            polygon: {
+              ...visualization.polygon,
+              classification
+            }
+          }
+        : {}),
+      ...(preset.type === 'bivariate' && visualization.symbol
+        ? {
+            symbol: {
+              ...visualization.symbol,
+              fillClassification: classification
+            }
+          }
+        : {})
+    })
+  );
+}
+
+export async function applyExampleVisualizationPresets(
   example: ExampleProject,
   dataset: DatasetResult
-): void {
+): Promise<void> {
   const presets = example.visualizations ?? [];
   if (presets.length === 0) {
     return;
@@ -413,10 +521,10 @@ export function applyExampleVisualizationPresets(
     dataset.id
   );
 
-  presets.forEach((preset, index) => {
+  for (const [index, preset] of presets.entries()) {
     const suggestion = buildExampleVisualizationSuggestion(preset, dataset);
     if (!suggestion) {
-      return;
+      continue;
     }
 
     const targetVisualization =
@@ -444,6 +552,7 @@ export function applyExampleVisualizationPresets(
       })
     });
     applyDeclaredOverrides(targetVisualization.id, preset);
+    await computeExampleClassification(targetVisualization.id, preset, dataset);
     rememberAppliedSuggestionState(targetVisualization.id, suggestionKey);
-  });
+  }
 }

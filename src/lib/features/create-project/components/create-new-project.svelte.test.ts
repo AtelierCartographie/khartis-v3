@@ -310,4 +310,34 @@ describe('CreateNewProject', () => {
     expect(screen.getByText('.prj')).toBeInTheDocument();
     expect(screen.getByText('.cpg ✓')).toBeInTheDocument();
   });
+
+  it('should distinguish Parquet and GeoParquet tags when extensions differ', () => {
+    mocks.createProjectState.newProject.uploadedFiles = [
+      {
+        id: 'file-1',
+        name: 'table.parquet',
+        size: 12,
+        fileType: 'geoparquet',
+        status: 'complete',
+        sourceType: 'file_upload'
+      },
+      {
+        id: 'file-2',
+        name: 'geometry.geoparquet',
+        size: 12,
+        fileType: 'geoparquet',
+        status: 'complete',
+        sourceType: 'file_upload'
+      }
+    ];
+
+    render(CreateNewProject, {
+      props: {
+        isModal: true
+      }
+    });
+
+    expect(screen.getByText('Parquet')).toBeInTheDocument();
+    expect(screen.getByText('GeoParquet')).toBeInTheDocument();
+  });
 });

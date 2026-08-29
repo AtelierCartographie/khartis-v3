@@ -65,10 +65,13 @@
     wasOpen = open;
   });
 
-  function handleClose() {
-    if (canDismiss) {
-      onClose?.();
+  function handleClose(event?: CustomEvent): void {
+    if (!canDismiss) {
+      event?.preventDefault();
+      return;
     }
+
+    onClose?.();
   }
 
   function selectTile(index: number) {
