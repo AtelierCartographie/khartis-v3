@@ -58,10 +58,12 @@ function createTestService(
     isPersistenceDirty?: () => boolean;
     isOnline?: () => boolean;
     reload?: () => void;
+    clearRuntime?: () => Promise<void>;
     updateCheckTimeoutMs?: number;
     workerInstallTimeoutMs?: number;
     persistenceFlushTimeoutMs?: number;
     workerActivationTimeoutMs?: number;
+    runtimeRefreshTimeoutMs?: number;
   } = {}
 ) {
   const container = options.container ?? new FakeServiceWorkerContainer();
@@ -72,10 +74,12 @@ function createTestService(
     getServiceWorkerContainer: () => toContainer(container),
     isOnline: options.isOnline ?? (() => true),
     reload: options.reload ?? (() => {}),
+    clearRuntime: options.clearRuntime ?? (async () => {}),
     updateCheckTimeoutMs: options.updateCheckTimeoutMs ?? 25,
     workerInstallTimeoutMs: options.workerInstallTimeoutMs ?? 25,
     persistenceFlushTimeoutMs: options.persistenceFlushTimeoutMs ?? 25,
-    workerActivationTimeoutMs: options.workerActivationTimeoutMs ?? 500
+    workerActivationTimeoutMs: options.workerActivationTimeoutMs ?? 500,
+    runtimeRefreshTimeoutMs: options.runtimeRefreshTimeoutMs ?? 25
   });
 }
 
@@ -372,6 +376,116 @@ describe('pwaUpdateService', () => {
     expect(worker.messages).toEqual([]);
     expect(service.status).toBe('error');
     expect(service.errorKind).toBe('save');
+  });
+
+  it('should refresh the runtime and reload when the full flow finds no update', async () => {
+    const registration = new FakeServiceWorkerRegistration();
+    const clearRuntime = vi.fn(async () => {});
+    const reload = vi.fn();
+    const service = createTestService({ clearRuntime, reload });
+    service.setRegistration(toRegistration(registration));
+
+    await service.runFullUpdateFlow();
+
+    expect(clearRuntime).toHaveBeenCalledOnce();
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('should refresh the runtime and reload when no registration is available', async () => {
+    const clearRuntime = vi.fn(async () => {});
+    const reload = vi.fn();
+    const service = createTestService({ clearRuntime, reload });
+
+    await service.runFullUpdateFlow();
+
+    expect(clearRuntime).toHaveBeenCalledOnce();
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('should refresh the runtime and reload when the update check times out', async () => {
+    const registration = new FakeServiceWorkerRegistration();
+    registration.updateHandler = () => new Promise(() => {});
+    const clearRuntime = vi.fn(async () => {});
+    const reload = vi.fn();
+    const service = createTestService({ clearRuntime, reload });
+    service.setRegistration(toRegistration(registration));
+
+    await service.runFullUpdateFlow();
+
+    expect(clearRuntime).toHaveBeenCalledOnce();
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('should still reload when the runtime refresh itself fails', async () => {
+    const registration = new FakeServiceWorkerRegistration();
+    const clearRuntime = vi.fn(async () => {
+      throw new Error('cache clear failed');
+    });
+    const reload = vi.fn();
+    const service = createTestService({ clearRuntime, reload });
+    service.setRegistration(toRegistration(registration));
+
+    await service.runFullUpdateFlow();
+
+    expect(clearRuntime).toHaveBeenCalledOnce();
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('should not refresh the runtime while the browser is offline', async () => {
+    const registration = new FakeServiceWorkerRegistration();
+    const clearRuntime = vi.fn(async () => {});
+    const reload = vi.fn();
+    const service = createTestService({
+      clearRuntime,
+      reload,
+      isOnline: () => false
+    });
+    service.setRegistration(toRegistration(registration));
+
+    await service.runFullUpdateFlow();
+
+    expect(clearRuntime).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+    expect(service.status).toBe('error');
+    expect(service.errorKind).toBe('offline');
+  });
+
+  it('should not refresh the runtime when the project cannot be saved', async () => {
+    const registration = new FakeServiceWorkerRegistration();
+    const clearRuntime = vi.fn(async () => {});
+    const reload = vi.fn();
+    const service = createTestService({
+      clearRuntime,
+      reload,
+      isPersistenceDirty: () => true
+    });
+    service.setRegistration(toRegistration(registration));
+
+    await service.runFullUpdateFlow();
+
+    expect(clearRuntime).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+    expect(service.status).toBe('error');
+    expect(service.errorKind).toBe('save');
+  });
+
+  it('should install the waiting update without refreshing the runtime', async () => {
+    const worker = new FakeServiceWorker();
+    const registration = new FakeServiceWorkerRegistration();
+    registration.waiting = toServiceWorker(worker);
+    const clearRuntime = vi.fn(async () => {});
+    const reload = vi.fn();
+    const service = createTestService({ clearRuntime, reload });
+    service.setRegistration(toRegistration(registration));
+
+    const flowPromise = service.runFullUpdateFlow();
+    await vi.waitFor(() => expect(worker.messages.length).toBe(1));
+    worker.setState('activated');
+    await flowPromise;
+
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
+    expect(clearRuntime).not.toHaveBeenCalled();
+    expect(worker.messages[0]).toMatchObject({ type: 'SKIP_WAITING' });
   });
 
   it('should leave the checking state when registration update times out', async () => {
