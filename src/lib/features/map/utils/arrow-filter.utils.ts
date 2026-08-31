@@ -13,6 +13,8 @@ const dataFilterCache = new WeakMap<ArrowTable, Map<string, ArrowTable>>();
 
 const tableFilterCache = new WeakMap<ArrowTable, Map<string, ArrowTable>>();
 
+const FILTER_RESULT_CACHE_LIMIT_PER_TABLE = 16;
+
 const warnedUnsupportedArrowOperators = new Set<string>();
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -322,7 +324,16 @@ function getCachedFilterResult(
   cache: WeakMap<ArrowTable, Map<string, ArrowTable>>,
   cacheKey: string
 ): ArrowTable | null {
-  return cache.get(table)?.get(cacheKey) ?? null;
+  const perTableCache = cache.get(table);
+  const cached = perTableCache?.get(cacheKey);
+  if (!cached || !perTableCache) {
+    return null;
+  }
+
+  // Touch for LRU: move this key to the most-recently-used end.
+  perTableCache.delete(cacheKey);
+  perTableCache.set(cacheKey, cached);
+  return cached;
 }
 
 function cacheFilterResult(
@@ -332,10 +343,23 @@ function cacheFilterResult(
   result: ArrowTable
 ): void {
   const existing = cache.get(table);
-  if (existing) {
-    existing.set(cacheKey, result);
-  } else {
-    cache.set(table, new Map([[cacheKey, result]]));
+  const perTableCache = existing ?? new Map<string, ArrowTable>();
+  if (!existing) {
+    cache.set(table, perTableCache);
+  }
+
+  perTableCache.delete(cacheKey);
+  perTableCache.set(cacheKey, result);
+
+  // Every distinct filter-value combination (e.g. each keystroke/slider tick)
+  // would otherwise retain its own filtered table for as long as the source
+  // table lives — evict the least-recently-used entry once the cap is hit.
+  while (perTableCache.size > FILTER_RESULT_CACHE_LIMIT_PER_TABLE) {
+    const oldestKey = perTableCache.keys().next().value;
+    if (oldestKey === undefined) {
+      break;
+    }
+    perTableCache.delete(oldestKey);
   }
 }
 
