@@ -55,6 +55,7 @@ function restoreFromSerialized(data: unknown): void {
   state.calculatorFormula = restored?.calculatorFormula ?? '';
   state.calculatorTestResult = null;
   state.calculatorError = null;
+  state.hasActiveFilters = restored?.hasActiveFilters ?? false;
 }
 
 function openTool(tool: DataToolType) {

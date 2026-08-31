@@ -47,6 +47,18 @@ service worker n'est autorisée qu'après un message de protocole confirmant que
 la persistance a été enregistrée de façon sûre. Cette séquence protège un
 projet dont les écritures IndexedDB seraient encore en cours.
 
+Le bouton « Rechercher une mise à jour » de la barre latérale exécute la
+séquence complète en un clic : vérification, installation d'une version en
+attente le cas échéant, sinon actualisation garantie du runtime
+(désinscription des service workers du scope, suppression des caches du scope,
+rechargement sans paramètre `reset`, donc sans perte du projet ouvert ni des
+données IndexedDB). Un client bloqué par une mise à jour cassée est débloqué
+par ce même bouton. Deux échecs restent volontairement bloquants : hors ligne,
+et sauvegarde du projet non confirmée — aucun rechargement n'a lieu dans ces
+deux cas. Le raccourci de secours et `?reset=1` conservent le
+« factory reset » complet, qui saute en plus la restauration du dernier
+projet.
+
 Lorsqu'une modification touche la mise à jour :
 
 1. conserver l'invite de mise à jour et le protocole de confirmation ;

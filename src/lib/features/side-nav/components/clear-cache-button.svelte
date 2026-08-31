@@ -10,7 +10,8 @@
   const isBusy = $derived(
     pwaUpdateService.status === 'checking' ||
       pwaUpdateService.status === 'saving' ||
-      pwaUpdateService.status === 'installing'
+      pwaUpdateService.status === 'installing' ||
+      pwaUpdateService.status === 'refreshing'
   );
 
   const buttonLabel = $derived(resolveButtonLabel(pwaUpdateService.status));
@@ -27,6 +28,8 @@
         return m.sidenav_update_saving();
       case 'installing':
         return m.sidenav_update_installing();
+      case 'refreshing':
+        return m.sidenav_update_refreshing();
       case 'error':
         return m.sidenav_update_retry();
       default:
@@ -35,7 +38,7 @@
   }
 
   async function handleUpdate(): Promise<void> {
-    await pwaUpdateService.runPrimaryAction();
+    await pwaUpdateService.runFullUpdateFlow();
   }
 </script>
 
