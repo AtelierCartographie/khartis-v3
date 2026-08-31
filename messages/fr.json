@@ -1907,6 +1907,7 @@
   "sidenav_update_available": "Mettre à jour et redémarrer",
   "sidenav_update_saving": "Sauvegarde du projet…",
   "sidenav_update_installing": "Installation de la mise à jour…",
+  "sidenav_update_refreshing": "Actualisation de l'application…",
   "sidenav_update_retry": "Réessayer la mise à jour",
   "error_offline_url_import": "Vous êtes hors ligne. Importez un fichier local ou reconnectez-vous pour télécharger depuis une URL.",
   "pwa_update_available_title": "Mise à jour disponible",

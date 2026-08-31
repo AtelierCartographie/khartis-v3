@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   status: 'idle',
-  runPrimaryActionMock: vi.fn().mockResolvedValue(undefined)
+  runFullUpdateFlowMock: vi.fn().mockResolvedValue(undefined)
 }));
 
 vi.mock('$lib/features/commons/services/pwa-update.service.svelte', () => ({
@@ -11,8 +11,8 @@ vi.mock('$lib/features/commons/services/pwa-update.service.svelte', () => ({
     get status() {
       return mocks.status;
     },
-    runPrimaryAction: (...args: unknown[]) =>
-      mocks.runPrimaryActionMock(...args)
+    runFullUpdateFlow: (...args: unknown[]) =>
+      mocks.runFullUpdateFlowMock(...args)
   }
 }));
 
@@ -29,7 +29,7 @@ describe('ClearCacheButton', () => {
 
     await fireEvent.click(screen.getByTestId('sidenav-update-button'));
 
-    expect(mocks.runPrimaryActionMock).toHaveBeenCalledOnce();
+    expect(mocks.runFullUpdateFlowMock).toHaveBeenCalledOnce();
   });
 
   it('should expose the available update action', async () => {
@@ -38,5 +38,17 @@ describe('ClearCacheButton', () => {
     render(Component);
 
     expect(screen.getByText('Mettre à jour et redémarrer')).toBeTruthy();
+  });
+
+  it('should show the refreshing state while the runtime is cleared', async () => {
+    mocks.status = 'refreshing';
+    const Component = (await import('./clear-cache-button.svelte')).default;
+    render(Component);
+
+    expect(screen.getByText("Actualisation de l'application…")).toBeTruthy();
+    const button = screen
+      .getByTestId('sidenav-update-button')
+      .closest('button');
+    expect(button?.disabled).toBe(true);
   });
 });

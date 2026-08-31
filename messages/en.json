@@ -1907,6 +1907,7 @@
   "sidenav_update_available": "Update and restart",
   "sidenav_update_saving": "Saving the project…",
   "sidenav_update_installing": "Installing the update…",
+  "sidenav_update_refreshing": "Refreshing the app…",
   "sidenav_update_retry": "Retry the update",
   "error_offline_url_import": "You are offline. Import a local file or reconnect to download from a URL.",
   "pwa_update_available_title": "Update available",
