@@ -14,8 +14,11 @@
     annotationsActions,
     getAnnotationsState
   } from './annotations.store.svelte';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import {
+    isAnnotationImageFileSizeAllowed,
     isSupportedAnnotationImageFile,
+    MAX_ANNOTATION_IMAGE_SIZE_BYTES,
     SUPPORTED_ANNOTATION_IMAGE_EXTENSIONS
   } from './image-file-validation';
 
@@ -54,11 +57,27 @@
         return;
       }
 
+      if (!isAnnotationImageFileSizeAllowed(file)) {
+        imageImportError = m.annotations_image_too_large({
+          limit: String(
+            Math.round(MAX_ANNOTATION_IMAGE_SIZE_BYTES / (1024 * 1024))
+          )
+        });
+        return;
+      }
+
       imageImportError = null;
       const reader = new FileReader();
       reader.onload = (ev) => {
         const dataUrl = ev.target?.result as string;
         annotationsActions.beginPlacement(AnnotationKind.IMAGE, dataUrl);
+      };
+      reader.onerror = () => {
+        logger.error('Failed to read annotation image file', LogCategory.UI, {
+          fileName: file.name,
+          error: reader.error
+        });
+        imageImportError = m.annotations_image_read_failed();
       };
       reader.readAsDataURL(file);
     }
