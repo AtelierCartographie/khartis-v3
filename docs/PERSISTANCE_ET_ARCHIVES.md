@@ -87,13 +87,13 @@ assets/<assetId>
 
 Lors d'un export, les sources sans asset sont préparées sur une copie du projet afin de ne pas muter le projet en mémoire. Cette préparation peut écrire les assets manquants dans IndexedDB. Les entrées JSON sont configurées avec compression ; les assets sont ajoutés au niveau 0. L'export `.kh` n'appelle pas `saveCurrentProject()` : il ne doit pas être décrit comme un flush explicite de l'IndexedDB.
 
-Lors d'un import, Khartis valide d'abord la structure, la version d'archive et le schéma de `project.json`. Les assets sont ensuite restaurés, le projet est désérialisé puis sauvegardé localement. Les versions incompatibles sont rejetées avant la restauration des assets.
+Lors d'un import, Khartis valide d'abord la structure, la version d'archive, la cohérence du manifest (`assetCount`, entrées d'assets typées avec un `path` dérivé de l'`assetId`) et le schéma de `project.json`. Les assets sont ensuite restaurés, le projet est désérialisé puis sauvegardé localement. Les versions incompatibles sont rejetées avant la restauration des assets. Si l'identifiant du projet archivé existe déjà localement, l'import crée un nouveau projet sous un identifiant frais au lieu d'écraser l'existant ou d'échouer en conflit de sauvegarde.
 
 ### Limites vérifiées de l'import
 
-L'import ne constitue pas une transaction globale : si une erreur survient après la persistance de certains assets, le code ne fait pas de rollback explicite de tous les assets déjà écrits. Les références et le nettoyage d'orphelins participent au cycle de vie normal, sans garantir la récupération de chaque interruption.
+L'import ne constitue pas une transaction globale. En cas d'échec après la restauration des assets, le code retire en best-effort la ligne projet partielle et les assets devenus orphelins (les assets encore référencés par un autre projet sont conservés), puis recharge le projet précédemment ouvert pour que l'état des stores ne soit pas pollué par l'import échoué. Ce nettoyage ne garantit pas la récupération de chaque interruption, notamment une fermeture d'onglet en plein milieu.
 
-Le lecteur charge l'archive entière et appelle `unzipSync()`. Il ne vérifie pas actuellement de plafond propre à `.kh` sur le nombre d'entrées, la taille décompressée, la cohérence entre `assetCount` et `assets`, le hash, le MIME ou la taille déclarée d'un payload. Ne pas présenter le format comme une archive intègre, atomique ou durcie contre toutes les archives malveillantes.
+Le lecteur charge l'archive entière puis appelle `unzipSync()` avec un filtre : seules les entrées attendues (`manifest.json`, `project.json`, `assets/*`) sont décompressées, avec un plafond sur le nombre d'entrées et sur les tailles décompressées déclarées, dérivé des limites de stockage applicatives ; la taille du fichier archive est bornée avant lecture. Les tailles utilisées par le filtre restent celles déclarées par le ZIP. Aucun hash ni vérification du contenu réel d'un payload (MIME, octets) n'est effectué : ne pas présenter le format comme une archive intègre, atomique ou durcie contre toutes les archives malveillantes.
 
 ## Fonds personnalisés : faits et lacune à vérifier
 
@@ -124,4 +124,4 @@ Les principaux tests sont :
 - `tests/pipeline/persistence-registry.test.ts` ;
 - `src/lib/features/commons/stores/project/project-lifecycle.svelte.test.ts`.
 
-Les tests actuels couvrent les versions incompatibles, les chunks, les conflits de sauvegarde, les erreurs de quota et les principaux parcours de restauration. Ils ne démontrent pas encore la résistance à une archive très volumineuse ou malveillante, le rollback après échec tardif, l'intégrité cryptographique des assets ni la persistance de géométrie d'un fond personnalisé.
+Les tests actuels couvrent les versions incompatibles, les chunks, les conflits de sauvegarde, les erreurs de quota, les principaux parcours de restauration, les plafonds d'import `.kh` (taille d'archive, nombre d'entrées), la validation du manifest, l'import sous identifiant frais en cas de collision et le nettoyage best-effort après un échec de sauvegarde de l'import. Ils ne démontrent pas encore l'intégrité cryptographique des assets ni la persistance de géométrie d'un fond personnalisé.
