@@ -262,6 +262,37 @@ export async function exportProject(
   }
 }
 
+async function restoreProjectAfterFailedImport(
+  container: ProjectStateContainer,
+  previousProjectId?: string
+): Promise<void> {
+  try {
+    const previousProject = previousProjectId
+      ? await projectRepository.load(previousProjectId)
+      : null;
+
+    if (previousProject) {
+      container._state.currentProject = previousProject;
+      beginProjectRuntime(previousProject.id);
+      resetProjectRuntimeState({ resetPersistence: false });
+    } else {
+      container._state.currentProject = undefined;
+      beginProjectRuntime(null);
+      resetProjectRuntimeState();
+    }
+
+    container._state.isDirty = false;
+    resetHistory(container);
+    await dataOrchestratorService.onProjectChanged();
+  } catch (recoveryError) {
+    logger.error(
+      'Failed to restore the previous project after a failed import',
+      LogCategory.PROJECT,
+      { previousProjectId, recoveryError }
+    );
+  }
+}
+
 export async function importProject(
   container: ProjectStateContainer,
   file: File
@@ -270,8 +301,12 @@ export async function importProject(
     await saveCurrentProject(container);
   }
 
+  const previousProjectId = container._state.currentProject?.id;
+
   try {
-    const project = await projectFiles.importProject(file);
+    const project = await persistenceRegistry.withPersistenceSuspended(() =>
+      projectFiles.importProject(file)
+    );
 
     container._state.currentProject = project;
     beginProjectRuntime(project.id);
@@ -285,6 +320,7 @@ export async function importProject(
     await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
     await dataOrchestratorService.onProjectChanged();
   } catch (error) {
+    await restoreProjectAfterFailedImport(container, previousProjectId);
     const message =
       error instanceof Error ? error.message : m.error_import_project_title();
     showError(m.error_import_project_title(), message, error);
