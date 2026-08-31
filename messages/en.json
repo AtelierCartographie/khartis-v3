@@ -874,6 +874,7 @@
   "data_tool_filters_icon": "Filters",
   "data_tool_calculator_icon": "Calculator",
   "data_tool_reset_icon": "Reset",
+  "data_tool_restore_hidden_columns": "Restore hidden variables",
   "data_tool_expand_label": "Expand",
   "data_tool_expand_icon": "Expand table",
   "data_tool_collapse_label": "Collapse",

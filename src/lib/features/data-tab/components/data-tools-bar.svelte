@@ -1,5 +1,5 @@
 <script lang="ts">
-  import IconButton from '$lib/features/commons/components/icon-button-native.svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import {
     Search,
     Filter,
@@ -72,16 +72,18 @@
       size="small"
       icon={ChartHistogram}
       iconDescription={m.data_toggle_summary_plots()}
+      tooltipPosition="bottom"
       class={showSummaryPlots ? 'active' : ''}
-      onclick={() => onToggleSummaryPlots?.()}
+      on:click={() => onToggleSummaryPlots?.()}
     />
     <IconButton
       kind="ghost"
       size="small"
       icon={Search}
       iconDescription={m.data_tool_search_icon()}
+      tooltipPosition="bottom"
       class={isSearchActive ? 'active' : ''}
-      onclick={() => dataToolsStore.toggleTool(DataToolType.Search)}
+      on:click={() => dataToolsStore.toggleTool(DataToolType.Search)}
     />
     <div class="filter-button-wrapper">
       <IconButton
@@ -89,8 +91,9 @@
         size="small"
         icon={Filter}
         iconDescription={m.data_tool_filters_icon()}
+        tooltipPosition="bottom"
         class={isFiltersActive ? 'active' : ''}
-        onclick={() => dataToolsStore.toggleTool(DataToolType.Filters)}
+        on:click={() => dataToolsStore.toggleTool(DataToolType.Filters)}
       />
       {#if hasActiveFilters}
         <span class="filter-active-dot" aria-hidden="true"></span>
@@ -101,17 +104,19 @@
       size="small"
       icon={Calculator}
       iconDescription={m.data_tool_calculator_icon()}
+      tooltipPosition="bottom"
       class={isCalculatorActive ? 'active' : ''}
-      onclick={() => dataToolsStore.toggleTool(DataToolType.Calculator)}
+      on:click={() => dataToolsStore.toggleTool(DataToolType.Calculator)}
     />
     <IconButton
       kind="ghost"
       size="small"
       icon={TrashCan}
       iconDescription={m.data_tool_trash()}
+      tooltipPosition="bottom"
       disabled={effectiveDeleteDisabled}
       class={deleteActive ? 'active' : ''}
-      onclick={() => onDelete?.()}
+      on:click={() => onDelete?.()}
     />
     {#if hasSelection}
       <span class="selection-count">
@@ -123,8 +128,9 @@
         kind="ghost"
         size="small"
         icon={View}
-        iconDescription={m.column_show()}
-        onclick={() => onShowHiddenColumns?.()}
+        iconDescription={m.data_tool_restore_hidden_columns()}
+        tooltipPosition="bottom"
+        on:click={() => onShowHiddenColumns?.()}
       />
     {/if}
     {#if showCsvOptions}
@@ -133,7 +139,8 @@
         size="small"
         icon={Settings}
         iconDescription={m.csv_options_button()}
-        onclick={() => onCsvOptions?.()}
+        tooltipPosition="bottom"
+        on:click={() => onCsvOptions?.()}
       />
     {/if}
     <IconButton
@@ -141,8 +148,9 @@
       size="small"
       icon={Reset}
       iconDescription={m.data_tool_reset_icon()}
+      tooltipPosition="bottom"
       disabled={resetDisabled}
-      onclick={() => onReset?.()}
+      on:click={() => onReset?.()}
     />
   </div>
   <div class="tools-right">
