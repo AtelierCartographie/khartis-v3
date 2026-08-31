@@ -827,6 +827,12 @@
               ) ?? loaded;
             worldBaseTable = resolvedBasemap.geometryTable;
           }
+        } catch (error) {
+          logger.error(
+            'Failed to load the facets reference basemap',
+            LogCategory.MAP,
+            { referenceBasemapId: refId, error }
+          );
         } finally {
           if (requestId === referenceBasemapRequestId) {
             isLoadingReferenceBasemap = false;

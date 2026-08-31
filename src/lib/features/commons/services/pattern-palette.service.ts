@@ -118,21 +118,6 @@ export function resolveClassificationPatternConfig(
   );
 }
 
-export function resolveSingleClassPattern(
-  config: PatternPaletteConfig | undefined
-): ClassPattern | null {
-  if (!config) {
-    return null;
-  }
-  const [pattern] = resolveClassPatterns(
-    1,
-    config,
-    'sequential',
-    config.contrast
-  );
-  return pattern ?? null;
-}
-
 export function patternPaletteFromLegacy(
   patternId: string,
   params?: LegacyPatternParams

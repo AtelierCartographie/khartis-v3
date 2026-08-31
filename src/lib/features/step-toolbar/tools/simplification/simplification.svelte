@@ -207,10 +207,6 @@
       return;
     }
 
-    if (simplState.isProcessing) {
-      return;
-    }
-
     try {
       const result = await store.applySimplification({
         datasetId: resolvedGeoDatasetId

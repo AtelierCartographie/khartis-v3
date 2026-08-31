@@ -280,7 +280,7 @@ async function updateFileFromDuckDBDataset(
   const statistics = buildColumnStatistics(columns as ColumnInfo[], rowCount);
 
   const sampleData = (await duck.query(
-    `SELECT * FROM "${tableName}" LIMIT 100`,
+    `SELECT * FROM "${escapeIdentifier(tableName)}" LIMIT 100`,
     { format: 'array' }
   )) as Array<Record<string, unknown>>;
 
@@ -394,7 +394,7 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
   ): Promise<void> {
     try {
       const duplicateResult = (await duck.query(
-        `SELECT (SELECT COUNT(*) FROM "${tableName}") - (SELECT COUNT(*) FROM (SELECT DISTINCT * FROM "${tableName}")) as duplicate_count`,
+        `SELECT (SELECT COUNT(*) FROM "${escapeIdentifier(tableName)}") - (SELECT COUNT(*) FROM (SELECT DISTINCT * FROM "${escapeIdentifier(tableName)}")) as duplicate_count`,
         { format: 'array' }
       )) as Array<{ duplicate_count: bigint | number }>;
       const duplicateCount = Number(duplicateResult[0]?.duplicate_count ?? 0);
@@ -481,7 +481,7 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     const statistics = buildColumnStatistics(columns as ColumnInfo[], rowCount);
 
     const sampleData = (await Duck.query(
-      `SELECT * FROM "${tableName}" LIMIT 100`,
+      `SELECT * FROM "${escapeIdentifier(tableName)}" LIMIT 100`,
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
 
@@ -623,7 +623,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     const statistics = buildColumnStatistics(columns as ColumnInfo[], rowCount);
 
     const sampleData = (await duck.query(
-      `SELECT * FROM "${tableName}" LIMIT 100`,
+      `SELECT * FROM "${escapeIdentifier(tableName)}" LIMIT 100`,
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
 
@@ -688,7 +688,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       let previewData: Array<Record<string, unknown>> = [];
       try {
         previewData = (await duck.query(
-          `SELECT * FROM "${tableName}" LIMIT 100`,
+          `SELECT * FROM "${escapeIdentifier(tableName)}" LIMIT 100`,
           {
             format: 'array'
           }
