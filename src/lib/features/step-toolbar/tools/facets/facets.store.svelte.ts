@@ -772,8 +772,9 @@ function createFacetsStore() {
       : SCALE_MODE.INDEPENDENT;
 
     if (
-      state.primarySlotPath === primarySlotPath &&
-      arraysEqual(state.variables, capped)
+      isRegenerating ||
+      (state.primarySlotPath === primarySlotPath &&
+        arraysEqual(state.variables, capped))
     ) {
       return;
     }

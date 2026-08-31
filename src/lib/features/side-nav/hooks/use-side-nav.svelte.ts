@@ -59,8 +59,13 @@ export function useSideNav(): UseSideNavReturn {
 
   async function handleSaveProject() {
     if (!projectStore.currentProject) return;
-    await projectStore.saveCurrentProject();
-    closeSideNav();
+    try {
+      await projectStore.saveCurrentProject();
+    } catch {
+      return;
+    } finally {
+      closeSideNav();
+    }
   }
 
   async function handleDuplicateConfirm(
