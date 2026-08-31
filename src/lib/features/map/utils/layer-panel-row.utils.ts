@@ -137,34 +137,6 @@ export function resolveMetadataLayerKey(
 }
 
 /**
- * The panel row id a metadata layer's deck layers belong to. Mirrors the
- * grouping in `buildVectorBasemapSubLayers`: per-key types group by their aux
- * key, everything else by its mapped basemap layer id.
- */
-export function resolveMetadataPanelRowId(
-  layer: Pick<BasemapLayer, 'file' | 'type'>,
-  metadata: Pick<BasemapMetadata, 'file' | 'isCustom' | 'layers'>
-): string | null {
-  const isCustom = Boolean(metadata.isCustom);
-  const isCustomLine =
-    isCustom &&
-    getCustomBaseLayerType(metadata as BasemapMetadata) ===
-      BasemapLayerType.LINE;
-  const key = resolveMetadataLayerKey(layer, metadata.file);
-
-  if (isPerKeyAuxLayerType(layer.type)) {
-    return buildBasemapSubLayerId(key);
-  }
-
-  const layerId = mapMetadataLayerTypeToBasemapLayerId(
-    layer.type,
-    isCustom,
-    isCustomLine
-  );
-  return buildBasemapSubLayerId(layerId ?? key);
-}
-
-/**
  * A row in the flat layer order. Both the layer panel (`layers.store`) and the
  * GPU render mapping (`use-map-layers`) describe their rows with this shape so
  * the default stacking and merge below produce a consistent order from either

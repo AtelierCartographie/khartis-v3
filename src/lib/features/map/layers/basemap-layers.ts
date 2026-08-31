@@ -1529,9 +1529,8 @@ export interface MetadataLayerEntry {
   style: string | null;
   type: BasemapLayerType;
   file: string;
-  // Panel row id this metadata layer's deck layers belong to (computed by the
-  // caller via `resolveMetadataPanelRowId`); lets the render map a per-key
-  // LIMIT/LAND layer back to its individual panel row.
+  // Panel row id this metadata layer's deck layers belong to; lets the render
+  // map a per-key LIMIT/LAND layer back to its individual panel row.
   panelRowId?: string;
   // Per-layer style override (keyed by basemap file + layer file in the aux
   // store). Lets two land layers sharing the legacy `terre` config — e.g. the
