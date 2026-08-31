@@ -703,6 +703,12 @@
   let ariaLiveMessage = $state('');
   let ariaLiveResetTimer: ReturnType<typeof setTimeout> | undefined;
 
+  $effect(() => {
+    return () => {
+      if (ariaLiveResetTimer) clearTimeout(ariaLiveResetTimer);
+    };
+  });
+
   function announce(message: string): void {
     if (!message) return;
     ariaLiveMessage = '';

@@ -35,6 +35,17 @@ interface CacheEntry {
 }
 
 const pathCache = new Map<string, CacheEntry>();
+const PATH_CACHE_MAX_ENTRIES = 64;
+
+function evictOldestPathCacheEntries(): void {
+  while (pathCache.size > PATH_CACHE_MAX_ENTRIES) {
+    const oldestKey = pathCache.keys().next().value;
+    if (oldestKey === undefined) {
+      return;
+    }
+    pathCache.delete(oldestKey);
+  }
+}
 
 export function getThumbnailPaths(
   suggestion: ProjectionSuggestion,
@@ -45,6 +56,7 @@ export function getThumbnailPaths(
   if (!entry) {
     entry = {};
     pathCache.set(signature, entry);
+    evictOldestPathCacheEntries();
   }
 
   const needsBase = !entry.base;

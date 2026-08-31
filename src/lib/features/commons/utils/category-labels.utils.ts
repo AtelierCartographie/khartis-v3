@@ -12,7 +12,7 @@ type CategoryClassificationLike = Partial<
 >;
 
 export function collectDistinctCategoryLabels(values: unknown[]): string[] {
-  const labels: string[] = [];
+  const labels = new Set<string>();
 
   for (const value of values) {
     if (value === null || value === undefined) {
@@ -20,14 +20,12 @@ export function collectDistinctCategoryLabels(values: unknown[]): string[] {
     }
 
     const label = String(value).trim();
-    if (!label || labels.includes(label)) {
-      continue;
+    if (label) {
+      labels.add(label);
     }
-
-    labels.push(label);
   }
 
-  return labels;
+  return [...labels];
 }
 
 export function resolveCategoryPreviewCount(

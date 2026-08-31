@@ -184,6 +184,7 @@ function createAnalyticsService() {
   let initialEventsTracked = false;
   let globalErrorTrackingInstalled = false;
   let pendingAnalyticsEvents: PendingAnalyticsEvent[] = [];
+  const MAX_PENDING_ANALYTICS_EVENTS = 100;
 
   function hasContainerId(): boolean {
     return getGtmContainerId().length > 0;
@@ -214,6 +215,10 @@ function createAnalyticsService() {
     script.onload = () => {
       script.dataset.loaded = 'true';
       onLoad();
+    };
+    script.onerror = () => {
+      script.remove();
+      pendingAnalyticsEvents = [];
     };
     document.head.appendChild(script);
   }
@@ -406,7 +411,9 @@ function createAnalyticsService() {
     if (hasContainerId()) {
       const allowedParams = getAllowedEventParameters(eventName, params);
       if (!tagManagerReady) {
-        pendingAnalyticsEvents.push({ eventName, params: allowedParams });
+        if (pendingAnalyticsEvents.length < MAX_PENDING_ANALYTICS_EVENTS) {
+          pendingAnalyticsEvents.push({ eventName, params: allowedParams });
+        }
         return;
       }
 

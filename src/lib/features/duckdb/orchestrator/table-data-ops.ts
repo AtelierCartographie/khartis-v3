@@ -63,7 +63,9 @@ async function buildSelectClauseWithoutGeometry(
     const tableInfo = await Duck.describe_table(tableName);
     const geomCols = tableInfo.name.flatMap((name, index) => {
       const type = String(tableInfo.type[index] ?? '').toUpperCase();
-      return type.startsWith(GEOMETRY_COLUMN_TYPE) ? [`"${name}"`] : [];
+      return type.startsWith(GEOMETRY_COLUMN_TYPE)
+        ? [`"${escapeIdentifier(name)}"`]
+        : [];
     });
 
     if (geomCols.length > 0) {

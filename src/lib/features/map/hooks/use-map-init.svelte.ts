@@ -1,7 +1,7 @@
 import { Deck, OrthographicView } from '@deck.gl/core';
 import type { DeckProps, View } from '@deck.gl/core';
 import { MapboxOverlay } from '@deck.gl/mapbox';
-import { CanvasContext } from '@luma.gl/core';
+import { CanvasContext, type Device } from '@luma.gl/core';
 import { Map as MapLibreMap, ScaleControl, setWorkerUrl } from 'maplibre-gl';
 import type { IControl, StyleSpecification } from 'maplibre-gl';
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
@@ -255,6 +255,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
   let map = $state<MapLibreMap | null>(null);
   let deckOverlay = $state<MapboxOverlay | null>(null);
   let deckInstance = $state<DeckInstance | null>(null);
+  let deckDevice: Device | null = null;
   let orthographicFallbackCanvas = $state<HTMLCanvasElement | null>(null);
   let isMapLoaded = $state(false);
   let renderPixelRatio = $state(getInitialRenderPixelRatio());
@@ -443,6 +444,9 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
           height: '100%',
           controller: { scrollZoom: false, doubleClickZoom: false },
           layers: [],
+          onDeviceInitialized: (device) => {
+            deckDevice = device;
+          },
           onHover: hoverHandler,
           onClick: clickHandler,
           onViewStateChange: handleViewStateChange as DeckProps<
@@ -650,6 +654,29 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       } catch (error) {
         logger.error(
           'Failed to finalize Deck instance',
+          LogCategory.MAP,
+          error
+        );
+      }
+    }
+    const deviceToDestroy = deckDevice;
+    deckDevice = null;
+    if (deviceToDestroy) {
+      // Deck.finalize() and Device.destroy() both skip CanvasContext.destroy(), leaking every Deck via luma's devicePixelRatio matchMedia listener.
+      try {
+        deviceToDestroy.getDefaultCanvasContext().destroy();
+      } catch (error) {
+        logger.error(
+          'Failed to destroy Deck canvas context',
+          LogCategory.MAP,
+          error
+        );
+      }
+      try {
+        deviceToDestroy.destroy();
+      } catch (error) {
+        logger.error(
+          'Failed to destroy Deck GPU device',
           LogCategory.MAP,
           error
         );

@@ -1,10 +1,12 @@
 import { persistenceRegistry } from '$lib/features/project-management/core';
 import { LogCategory, logger } from '../utils/logger';
+import { clearPwaRuntime } from '../utils/pwa-reset';
 
 const UPDATE_CHECK_TIMEOUT_MS = 15_000;
 const WORKER_INSTALL_TIMEOUT_MS = 30_000;
 const PERSISTENCE_FLUSH_TIMEOUT_MS = 10_000;
 const WORKER_ACTIVATION_TIMEOUT_MS = 20_000;
+const RUNTIME_REFRESH_TIMEOUT_MS = 15_000;
 
 export type PwaUpdateStatus =
   | 'idle'
@@ -13,6 +15,7 @@ export type PwaUpdateStatus =
   | 'available'
   | 'saving'
   | 'installing'
+  | 'refreshing'
   | 'error';
 
 export type PwaUpdateErrorKind =
@@ -24,10 +27,12 @@ export interface PwaUpdateServiceDependencies {
   getServiceWorkerContainer: () => ServiceWorkerContainer | null;
   isOnline: () => boolean;
   reload: () => void;
+  clearRuntime: () => Promise<void>;
   updateCheckTimeoutMs: number;
   workerInstallTimeoutMs: number;
   persistenceFlushTimeoutMs: number;
   workerActivationTimeoutMs: number;
+  runtimeRefreshTimeoutMs: number;
 }
 
 export interface CheckForUpdateOptions {
@@ -143,10 +148,12 @@ export function createPwaUpdateService(
     isOnline: () =>
       typeof navigator === 'undefined' || navigator.onLine !== false,
     reload: reloadWindow,
+    clearRuntime: clearPwaRuntime,
     updateCheckTimeoutMs: UPDATE_CHECK_TIMEOUT_MS,
     workerInstallTimeoutMs: WORKER_INSTALL_TIMEOUT_MS,
     persistenceFlushTimeoutMs: PERSISTENCE_FLUSH_TIMEOUT_MS,
     workerActivationTimeoutMs: WORKER_ACTIVATION_TIMEOUT_MS,
+    runtimeRefreshTimeoutMs: RUNTIME_REFRESH_TIMEOUT_MS,
     ...dependencyOverrides
   };
 
@@ -158,6 +165,7 @@ export function createPwaUpdateService(
   let waitingWorker: ServiceWorker | null = null;
   let checkPromise: Promise<void> | null = null;
   let installPromise: Promise<void> | null = null;
+  let fullUpdatePromise: Promise<void> | null = null;
   let activationRequested = false;
   let lateActivationReloadAllowed = false;
   let reloadRequested = false;
@@ -193,6 +201,7 @@ export function createPwaUpdateService(
     waitingWorker = null;
     checkPromise = null;
     installPromise = null;
+    fullUpdatePromise = null;
     activationRequested = false;
     lateActivationReloadAllowed = false;
     resolveActivation = null;
@@ -318,7 +327,11 @@ export function createPwaUpdateService(
   }
 
   function checkForUpdate(options: CheckForUpdateOptions = {}): Promise<void> {
-    if (status === 'saving' || status === 'installing') {
+    if (
+      status === 'saving' ||
+      status === 'installing' ||
+      status === 'refreshing'
+    ) {
       return Promise.resolve();
     }
 
@@ -343,8 +356,7 @@ export function createPwaUpdateService(
     dependencies.reload();
   }
 
-  async function persistBeforeExternalReload(): Promise<void> {
-    externalActivationPending = true;
+  async function flushPersistenceForReload(): Promise<boolean> {
     notificationVisible = false;
     status = 'saving';
     errorKind = null;
@@ -359,8 +371,18 @@ export function createPwaUpdateService(
       if (dependencies.isPersistenceDirty()) {
         throw new Error('Project persistence is still dirty');
       }
+
+      return true;
     } catch (error) {
       setError('save', error);
+      return false;
+    }
+  }
+
+  async function persistBeforeExternalReload(): Promise<void> {
+    externalActivationPending = true;
+
+    if (!(await flushPersistenceForReload())) {
       return;
     }
 
@@ -534,22 +556,7 @@ export function createPwaUpdateService(
       return;
     }
 
-    notificationVisible = false;
-    status = 'saving';
-    errorKind = null;
-
-    try {
-      await withTimeout(
-        dependencies.flushPersistence(),
-        dependencies.persistenceFlushTimeoutMs,
-        'Project persistence flush'
-      );
-
-      if (dependencies.isPersistenceDirty()) {
-        throw new Error('Project persistence is still dirty');
-      }
-    } catch (error) {
-      setError('save', error);
+    if (!(await flushPersistenceForReload())) {
       return;
     }
 
@@ -577,6 +584,76 @@ export function createPwaUpdateService(
     });
 
     return installPromise;
+  }
+
+  async function performRuntimeRefresh(): Promise<void> {
+    if (!dependencies.isOnline()) {
+      setError('offline');
+      return;
+    }
+
+    if (!(await flushPersistenceForReload())) {
+      return;
+    }
+
+    status = 'refreshing';
+    errorKind = null;
+    notificationVisible = false;
+
+    try {
+      await withTimeout(
+        dependencies.clearRuntime(),
+        dependencies.runtimeRefreshTimeoutMs,
+        'PWA runtime refresh'
+      );
+    } catch (error) {
+      logger.error(
+        'PWA runtime refresh failed, reloading anyway',
+        LogCategory.SYSTEM,
+        error
+      );
+    }
+
+    reloadOnce();
+  }
+
+  async function performFullUpdateFlow(): Promise<void> {
+    await checkForUpdate();
+
+    if (resolveWaitingWorker()) {
+      await installUpdate();
+
+      if (status === 'error' && errorKind === 'activation') {
+        await performRuntimeRefresh();
+      }
+
+      return;
+    }
+
+    if (
+      status === 'error' &&
+      (errorKind === 'offline' || errorKind === 'save')
+    ) {
+      return;
+    }
+
+    await performRuntimeRefresh();
+  }
+
+  function runFullUpdateFlow(): Promise<void> {
+    if (fullUpdatePromise) {
+      return fullUpdatePromise;
+    }
+
+    if (status === 'saving' || status === 'installing' || reloadRequested) {
+      return Promise.resolve();
+    }
+
+    fullUpdatePromise = performFullUpdateFlow().finally(() => {
+      fullUpdatePromise = null;
+    });
+
+    return fullUpdatePromise;
   }
 
   function runPrimaryAction(): Promise<void> {
@@ -613,6 +690,7 @@ export function createPwaUpdateService(
     checkForUpdate,
     installUpdate,
     runPrimaryAction,
+    runFullUpdateFlow,
     handleActivationSignal
   };
 }

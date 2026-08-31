@@ -1,22 +1,16 @@
 import * as m from '$lib/paraglide/messages';
-import {
-  FILE_EXTENSIONS,
-  FileStatus,
-  GEOJSON_TYPE
-} from '$lib/features/commons/constants';
+import { FILE_EXTENSIONS, FileStatus } from '$lib/features/commons/constants';
 import {
   FILE_ENCODING,
   TABULAR_DELIMITERS
 } from '$lib/features/commons/constants/file-types.constants';
 import { ParseError } from '../pipeline.errors';
 import {
-  type FileValidation,
   type UploadedFile,
   DataSourceType,
   FileType
 } from '../types/create-project.types';
 import { detectFileType } from './file-type-detection.utils';
-import { LogCategory, logger } from './logger';
 import { sanitizeDisplayName } from './string.utils';
 
 const UTF8_ENCODING = FILE_ENCODING.DEFAULT;
@@ -122,74 +116,6 @@ export function createUploadedFile(
     sourceType,
     relatedFiles,
     uploadProgress: 0
-  };
-}
-
-export function validateGeospatialFile(
-  content: ArrayBuffer | string
-): FileValidation {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-
-  try {
-    if (typeof content === 'string') {
-      const geojson = JSON.parse(content);
-
-      if (!geojson.type) {
-        errors.push(m.validation_geojson_no_type());
-      }
-
-      if (
-        geojson.type === GEOJSON_TYPE.FEATURE_COLLECTION &&
-        !geojson.features
-      ) {
-        errors.push(m.validation_geojson_fc_no_features());
-      }
-
-      if (geojson.features && geojson.features.length === 0) {
-        warnings.push(m.validation_geojson_empty_features());
-      }
-
-      if (geojson.features) {
-        const invalidFeatures = (
-          geojson.features as Array<{
-            geometry?: unknown;
-            properties?: unknown;
-          }>
-        ).filter((feature) => !feature.geometry || !feature.properties);
-        if (invalidFeatures.length > 0) {
-          warnings.push(
-            m.validation_geojson_invalid_features({
-              count: String(invalidFeatures.length)
-            })
-          );
-        }
-      }
-    }
-  } catch (error) {
-    logger.error(
-      'Failed to validate GeoJSON structure',
-      LogCategory.FILE,
-      error,
-      {
-        feature: 'data',
-        flow: 'validate_geospatial_file',
-        extra: {
-          contentType: typeof content,
-          contentLength:
-            typeof content === 'string'
-              ? content.length
-              : (content as ArrayBuffer).byteLength
-        }
-      }
-    );
-    errors.push(m.validation_json_bad_structure());
-  }
-
-  return {
-    isValid: errors.length === 0,
-    errors,
-    warnings
   };
 }
 
