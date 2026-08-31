@@ -266,7 +266,7 @@
 
       if (isShortcutCode(event.code, SHORTCUT_CODE.saveProject)) {
         event.preventDefault();
-        handleSaveProject();
+        void handleSaveProject();
         clearProjectShortcutPrefix();
         return true;
       }
