@@ -5,6 +5,7 @@ import {
   type GeoDetectionResult
 } from './geo-detector.utils';
 import { isConfiguredNullValue } from './null-values.utils';
+import { resolveLocale } from './format.utils';
 
 export interface ColumnStatistics {
   name: string;
@@ -475,15 +476,17 @@ export const DeepDataValidator = {
     if (rowCount > PERFORMANCE_THRESHOLDS.maxRows) {
       warnings.push(
         m.data_quality_perf_row_limit_exceeded({
-          maxRows: PERFORMANCE_THRESHOLDS.maxRows.toLocaleString(),
-          rowCount: rowCount.toLocaleString()
+          maxRows:
+            PERFORMANCE_THRESHOLDS.maxRows.toLocaleString(resolveLocale()),
+          rowCount: rowCount.toLocaleString(resolveLocale())
         })
       );
     } else if (rowCount > PERFORMANCE_THRESHOLDS.warningRows) {
       warnings.push(
         m.data_quality_perf_large_dataset({
-          rowCount: rowCount.toLocaleString(),
-          warningRows: PERFORMANCE_THRESHOLDS.warningRows.toLocaleString()
+          rowCount: rowCount.toLocaleString(resolveLocale()),
+          warningRows:
+            PERFORMANCE_THRESHOLDS.warningRows.toLocaleString(resolveLocale())
         })
       );
     }
