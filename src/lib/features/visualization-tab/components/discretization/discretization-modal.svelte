@@ -14,7 +14,10 @@
     type ClassificationConfig,
     type VisualizationConfig
   } from '$lib/features/commons/stores/visualization.store.svelte';
-  import type { ShapeType } from '$lib/features/commons/constants/visualization.constants';
+  import {
+    SLIDER_DEBOUNCE_MS,
+    type ShapeType
+  } from '$lib/features/commons/constants/visualization.constants';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { tick, untrack } from 'svelte';
   import {
@@ -89,6 +92,7 @@
 
   let isCalculating = $state(false);
   let breaksRequestId = 0;
+  let computeBreaksDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   let lastLocalClassification = $state<
     Partial<ClassificationConfig> | undefined
   >(undefined);
@@ -466,6 +470,28 @@
     }
   }
 
+  // Coalesces rapid class-count / breakpoint text-input edits into a single
+  // DuckDB recompute, matching the position slider's debounce (scheduleBreakpointPosition).
+  function scheduleComputeBreaks(): Promise<boolean> {
+    if (computeBreaksDebounceTimer !== null) {
+      clearTimeout(computeBreaksDebounceTimer);
+    }
+
+    return new Promise<boolean>((resolve, reject) => {
+      computeBreaksDebounceTimer = setTimeout(() => {
+        computeBreaksDebounceTimer = null;
+        computeBreaks().then(resolve, reject);
+      }, SLIDER_DEBOUNCE_MS.CLASSIFICATION);
+    });
+  }
+
+  $effect(() => () => {
+    if (computeBreaksDebounceTimer !== null) {
+      clearTimeout(computeBreaksDebounceTimer);
+      computeBreaksDebounceTimer = null;
+    }
+  });
+
   function persistSelectionDraft(
     options?: {
       method?: ClassificationMethod;
@@ -557,7 +583,7 @@
       currentBreakpointLowerClassCount
     );
     persistSelectionDraft({ numClasses: currentNumClasses }, false);
-    void computeBreaks();
+    void scheduleComputeBreaks();
   }
 
   function handleBreakpointChange(value: number | null) {
@@ -569,7 +595,7 @@
             currentBreakpointLowerClassCount
           )
         : null;
-    void computeBreaks().then((computed) => {
+    void scheduleComputeBreaks().then((computed) => {
       if (computed) {
         return;
       }
