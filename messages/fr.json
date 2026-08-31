@@ -874,6 +874,7 @@
   "data_tool_filters_icon": "Filtres",
   "data_tool_calculator_icon": "Calculatrice",
   "data_tool_reset_icon": "Réinitialiser",
+  "data_tool_restore_hidden_columns": "Rétablir les variables masquées",
   "data_tool_expand_label": "Agrandir",
   "data_tool_expand_icon": "Agrandir le tableau",
   "data_tool_collapse_label": "Réduire",
