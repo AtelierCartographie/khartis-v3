@@ -161,10 +161,6 @@ function createBasemapAuxLayersStore() {
   };
 }
 
-export type BasemapAuxLayersStore = ReturnType<
-  typeof createBasemapAuxLayersStore
->;
-
 export const basemapAuxLayersStore = createBasemapAuxLayersStore();
 
 persistenceRegistry.register<SerializedAuxLayers>({
