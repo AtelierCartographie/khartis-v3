@@ -3,7 +3,12 @@ import {
   SHAPEFILE_EXTENSIONS
 } from '$lib/features/commons/constants/ui.constants';
 import * as m from '$lib/paraglide/messages';
-import { unzip, type Unzipped, type FlateError } from 'fflate';
+import {
+  unzip,
+  type Unzipped,
+  type FlateError,
+  type UnzipFileInfo
+} from 'fflate';
 import { MIME } from '$lib/features/commons/constants';
 import { PIPELINE_CONST } from '../constants';
 import { getFileExtensionWithDot } from '$lib/features/commons/utils/file.utils';
@@ -61,9 +66,31 @@ function isShapefileMemberExtension(ext: string): boolean {
 export async function extractZip(file: File): Promise<ZipExtractionResult> {
   try {
     const buffer = await file.arrayBuffer();
+
+    const MAX_DECOMPRESSED_SIZE = 500 * 1024 * 1024;
+    const maxDecompressedSizeMb = MAX_DECOMPRESSED_SIZE / (1024 * 1024);
+    let declaredSize = 0;
+    let sizeExceeded = false;
+
     const unzipped = await new Promise<Unzipped>((resolve, reject) => {
       unzip(
         new Uint8Array(buffer),
+        {
+          // Enforce the cap on declared sizes before inflating anything, so a zip bomb cannot exhaust memory during unzip().
+          filter: (entry: UnzipFileInfo) => {
+            if (sizeExceeded || shouldIgnoreFile(entry.name)) {
+              return false;
+            }
+
+            declaredSize += entry.originalSize;
+            if (declaredSize > MAX_DECOMPRESSED_SIZE) {
+              sizeExceeded = true;
+              return false;
+            }
+
+            return true;
+          }
+        },
         (err: FlateError | null, data: Unzipped) => {
           if (err) reject(err);
           else resolve(data);
@@ -71,27 +98,24 @@ export async function extractZip(file: File): Promise<ZipExtractionResult> {
       );
     });
 
-    const MAX_DECOMPRESSED_SIZE = 500 * 1024 * 1024;
-    const maxDecompressedSizeMb = MAX_DECOMPRESSED_SIZE / (1024 * 1024);
-    let totalSize = 0;
+    if (sizeExceeded) {
+      throw new ParseError(
+        m.error_zip_size_exceeded({
+          limit: maxDecompressedSizeMb
+        }),
+        FileType.ZIP,
+        {
+          fileName: file.name,
+          limitMb: maxDecompressedSizeMb,
+          totalSize: declaredSize
+        }
+      );
+    }
+
     const files: ExtractedFile[] = [];
 
     for (const [path, content] of Object.entries(unzipped)) {
       if (shouldIgnoreFile(path)) continue;
-      totalSize += content.byteLength;
-      if (totalSize > MAX_DECOMPRESSED_SIZE) {
-        throw new ParseError(
-          m.error_zip_size_exceeded({
-            limit: maxDecompressedSizeMb
-          }),
-          FileType.ZIP,
-          {
-            fileName: file.name,
-            limitMb: maxDecompressedSizeMb,
-            totalSize
-          }
-        );
-      }
       files.push({ name: getFileName(path), path, content });
     }
 

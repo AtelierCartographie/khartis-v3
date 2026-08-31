@@ -159,37 +159,6 @@ async function loadSpatialExtension(): Promise<void> {
   }
 }
 
-async function loadHTTPFSExtension(): Promise<void> {
-  if (!connection || extensionsLoaded.httpfs) return;
-
-  try {
-    await executeQuery(
-      connection,
-      `INSTALL ${EXTENSIONS.HTTPFS}; LOAD ${EXTENSIONS.HTTPFS};`,
-      {
-        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-      }
-    );
-    extensionsLoaded.httpfs = true;
-  } catch (error) {
-    logger.error('Failed to preload HTTPFS extension', LogCategory.DUCKDB, {
-      error
-    });
-  }
-}
-
-export async function ensureHTTPFSLoaded(): Promise<void> {
-  if (extensionsLoaded.httpfs) return;
-  if (extensionLoadPromises.httpfs) {
-    await extensionLoadPromises.httpfs;
-    return;
-  }
-  extensionLoadPromises.httpfs = loadHTTPFSExtension().finally(() => {
-    extensionLoadPromises.httpfs = null;
-  });
-  await extensionLoadPromises.httpfs;
-}
-
 async function preloadExtensions(): Promise<void> {
   await loadSpatialExtension();
 }

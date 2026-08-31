@@ -1,4 +1,3 @@
-import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import {
@@ -418,10 +417,6 @@ export async function readGeofile(
     } else {
       throw error;
     }
-  }
-
-  if (!tablename) {
-    throw new DuckDBError(m.error_unable_determine_table());
   }
 
   if (!usedGeoPackageBrowserFallback) {

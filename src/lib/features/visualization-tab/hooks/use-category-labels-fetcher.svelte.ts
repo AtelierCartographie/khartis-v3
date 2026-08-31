@@ -6,17 +6,27 @@ import {
 } from './use-category-labels.svelte';
 
 import { m } from '$lib/paraglide/messages';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 export const CATEGORY_LABEL_FETCH_ERROR = {
-  FILL: m.error_category_labels_fill(),
-  STROKE: m.error_category_labels_stroke(),
-  SYMBOL_FILL: m.error_category_labels_symbol_fill(),
-  TEXT_BACKGROUND: m.error_category_labels_text_background(),
-  TEXT_BACKGROUND_STROKE: m.error_category_labels_text_background_stroke()
+  get FILL() {
+    return m.error_category_labels_fill();
+  },
+  get STROKE() {
+    return m.error_category_labels_stroke();
+  },
+  get SYMBOL_FILL() {
+    return m.error_category_labels_symbol_fill();
+  },
+  get TEXT_BACKGROUND() {
+    return m.error_category_labels_text_background();
+  },
+  get TEXT_BACKGROUND_STROKE() {
+    return m.error_category_labels_text_background_stroke();
+  }
 } as const;
 
-export type CategoryLabelFetchError =
-  (typeof CATEGORY_LABEL_FETCH_ERROR)[keyof typeof CATEGORY_LABEL_FETCH_ERROR];
+export type CategoryLabelFetchError = string;
 
 export type CategoryLabelsDataset = ResolveCategoryLabelsOptions['dataset'];
 
@@ -61,10 +71,16 @@ export async function fetchClassificationLabels(
     }
 
     options.applyLabels(labels);
-  } catch {
+  } catch (error) {
     if (options.signal?.aborted) {
       return;
     }
+
+    logger.error(options.errorMessage, LogCategory.DATA, {
+      column: options.column,
+      datasetId: options.dataset?.id,
+      error
+    });
   }
 }
 

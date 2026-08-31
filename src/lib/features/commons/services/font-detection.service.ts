@@ -27,9 +27,7 @@ export async function detectFontsInDataset(
   if (!text && dataset.tableName && dataset.rowCount > 0) {
     try {
       const textColumns = dataset.columns
-        .filter(
-          (c) => c.type === ColumnType.TEXT || c.type === ColumnType.GEOMETRY
-        )
+        .filter((c) => c.type === ColumnType.TEXT)
         .map((c) => `"${escapeIdentifier(c.name)}"`)
         .join(', ');
 

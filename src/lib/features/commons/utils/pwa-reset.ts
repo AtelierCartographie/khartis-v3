@@ -190,20 +190,13 @@ export function clearLastProjectRestoreQuarantine(projectId: string): void {
   clearLastProjectRestoreFallbackUrl();
 }
 
-export async function factoryResetPwa(
-  options: FactoryResetOptions = {}
-): Promise<void> {
-  const { reload = true } = options;
+export async function clearPwaRuntime(): Promise<void> {
   const scopeUrl =
     typeof document !== 'undefined'
       ? resolvePwaScopeUrl(document.baseURI)
       : null;
 
   if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-    if (navigator.serviceWorker.controller) {
-      postFactoryResetMessage(navigator.serviceWorker.controller);
-    }
-
     try {
       const registrations = await navigator.serviceWorker.getRegistrations();
       await Promise.all(
@@ -213,7 +206,7 @@ export async function factoryResetPwa(
       );
     } catch (error) {
       logger.error(
-        'Failed to unregister service workers during factory reset',
+        'Failed to unregister service workers during PWA runtime clear',
         LogCategory.SYSTEM,
         error
       );
@@ -230,12 +223,28 @@ export async function factoryResetPwa(
       );
     } catch (error) {
       logger.error(
-        'Failed to clear caches during factory reset',
+        'Failed to clear caches during PWA runtime clear',
         LogCategory.SYSTEM,
         error
       );
     }
   }
+}
+
+export async function factoryResetPwa(
+  options: FactoryResetOptions = {}
+): Promise<void> {
+  const { reload = true } = options;
+
+  if (
+    typeof navigator !== 'undefined' &&
+    'serviceWorker' in navigator &&
+    navigator.serviceWorker.controller
+  ) {
+    postFactoryResetMessage(navigator.serviceWorker.controller);
+  }
+
+  await clearPwaRuntime();
 
   if (reload && typeof window !== 'undefined') {
     window.location.replace(buildPwaResetUrl(window.location.href));
