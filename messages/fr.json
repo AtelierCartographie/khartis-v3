@@ -1791,6 +1791,7 @@
   "error_missing_archived_asset": "Asset archivé manquant : {originalName}",
   "error_invalid_project_payload": "Payload d'archive de projet invalide",
   "error_invalid_kh_archive_structure": "Structure d'archive .kh invalide",
+  "error_project_archive_too_large": "Archive .kh trop volumineuse ou invalide (limite : {limit} Mo)",
   "calculated_column_created": "Colonne calculée créée : {name}",
   "file_type_tabular": "Données tabulaires (CSV, TSV)",
   "file_type_geojson": "GeoJSON",
