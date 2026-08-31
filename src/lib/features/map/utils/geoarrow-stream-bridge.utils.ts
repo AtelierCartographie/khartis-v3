@@ -337,6 +337,22 @@ let workerKeyIdSeq = 0;
 const workerKeyIds = new WeakMap<object, number>();
 const workerPendingKeys = new Set<string>();
 const workerFailedKeys = new Set<string>();
+const WORKER_FAILED_KEYS_LIMIT = 256;
+
+function rememberWorkerFailedKey(key: string): void {
+  workerFailedKeys.add(key);
+
+  // workerKeyIdFor hands out ids from a WeakMap keyed by the (garbage-
+  // collectible) table/projection objects, so this string key has no way to
+  // know when its source objects are gone — cap it instead of growing forever.
+  while (workerFailedKeys.size > WORKER_FAILED_KEYS_LIMIT) {
+    const oldestKey = workerFailedKeys.values().next().value;
+    if (oldestKey === undefined) {
+      break;
+    }
+    workerFailedKeys.delete(oldestKey);
+  }
+}
 
 function workerKeyIdFor(reference: object): number {
   let id = workerKeyIds.get(reference);
@@ -395,7 +411,7 @@ function requestWorkerParse<T>(
         storeResult(data as T);
       })
       .catch((error: unknown) => {
-        workerFailedKeys.add(key);
+        rememberWorkerFailedKey(key);
         logger.error(
           `Worker parse failed (${method}); falling back to main-thread parsing`,
           LogCategory.MAP,
@@ -1053,46 +1069,6 @@ export function splitRowAccessor<T>(
     const row = datasetByFeatureId.get(key) ?? null;
     return accessor(row);
   };
-}
-
-export function columnAccessor<T>(
-  table: ArrowTable,
-  columnName: string,
-  transform: (value: unknown) => T
-): (featureId: number) => T {
-  const vector = table.getChild(columnName);
-  if (!vector) return () => transform(undefined);
-  return (featureId: number): T => transform(vector.get(featureId));
-}
-
-export function filterValueAttr(
-  data: { readonly length: number; readonly featureIds: Uint32Array },
-  table: ArrowTable,
-  columnName: string
-): DeckBinaryAttribute {
-  const n = data.length;
-  const values = new Float32Array(n);
-  const vector = table.getChild(columnName);
-  if (!vector) return { value: values, size: 1 };
-
-  const rowCache = new Map<number, number>();
-  for (let i = 0; i < n; i++) {
-    const fid = data.featureIds[i];
-    let val = rowCache.get(fid);
-    if (val === undefined) {
-      const raw = vector.get(fid);
-      val =
-        typeof raw === 'number'
-          ? raw
-          : typeof raw === 'bigint'
-            ? Number(raw)
-            : parseFloat(String(raw));
-      if (!Number.isFinite(val)) val = NaN;
-      rowCache.set(fid, val);
-    }
-    values[i] = val;
-  }
-  return { value: values, size: 1 };
 }
 
 export function pointPositions(data: BinaryPointData): Float64Array {

@@ -6,6 +6,8 @@ export const SUPPORTED_ANNOTATION_IMAGE_EXTENSIONS = [
 
 const SUPPORTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png']);
 
+export const MAX_ANNOTATION_IMAGE_SIZE_BYTES = 8 * 1024 * 1024;
+
 export function isSupportedAnnotationImageFile(
   file: Pick<File, 'name' | 'type'>
 ): boolean {
@@ -18,4 +20,10 @@ export function isSupportedAnnotationImageFile(
   return SUPPORTED_ANNOTATION_IMAGE_EXTENSIONS.some((extension) =>
     name.endsWith(extension)
   );
+}
+
+export function isAnnotationImageFileSizeAllowed(
+  file: Pick<File, 'size'>
+): boolean {
+  return file.size <= MAX_ANNOTATION_IMAGE_SIZE_BYTES;
 }

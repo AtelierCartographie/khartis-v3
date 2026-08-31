@@ -107,16 +107,6 @@ export function isGlobeProjectionAvailable(
   return !isGlobeProjectionDisabled(zone, referenceBasemapId);
 }
 
-export function resolveProjectionForBasemapZone(
-  projection: MapProjectionTypeValue,
-  zone: BasemapZone | null,
-  referenceBasemapId?: string | null
-): MapProjectionTypeValue {
-  return isGlobeProjectionDisabled(zone, referenceBasemapId)
-    ? MAP_PROJECTION_TYPE.MERCATOR
-    : projection;
-}
-
 export function resolveProjectionAvailabilityContext(
   input: ProjectionAvailabilityInput
 ): ProjectionAvailabilityContext {
