@@ -4,7 +4,6 @@ import type { FeatureCollection, Geometry } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   ArrowExtension,
-  COMPATIBLE_GEOMETRY_TYPES,
   GeoArrowMetadataKey,
   GEO_EXTENSION_TO_TYPE,
   GeometryType,
@@ -490,15 +489,6 @@ export function arrowTableToGeoJSON(
     );
     return null;
   }
-}
-
-export function areGeometryTypesCompatible(
-  metadataType: string,
-  extensionType: string
-): boolean {
-  if (metadataType === extensionType) return true;
-  const compatible = COMPATIBLE_GEOMETRY_TYPES[metadataType as GeometryType];
-  return compatible?.includes(extensionType as GeometryType) ?? false;
 }
 
 export function extractGeometryInfo(table: ArrowTable): GeometryInfo | null {

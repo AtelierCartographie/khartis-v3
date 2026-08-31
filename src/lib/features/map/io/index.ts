@@ -1,5 +1,4 @@
 export {
-  areGeometryTypesCompatible,
   arrowTableToGeoJSON,
   extractGeometryInfo,
   isGeoJsonGeometry,
