@@ -3,6 +3,7 @@ export * from './annotation.constants';
 export * from './colors.constants';
 export * from './data.constants';
 export * from './detection.constants';
+export * from './doc-links.constants';
 export * from './dom.constants';
 export * from './file-types.constants';
 export * from './geojson.constants';

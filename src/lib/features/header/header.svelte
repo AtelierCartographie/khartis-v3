@@ -3,6 +3,7 @@
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { m } from '$lib/paraglide/messages';
+  import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
   import {
     Header as CbsHeader,
     HeaderUtilities
@@ -34,7 +35,7 @@
         iconDescription={m.help_tooltip()}
         kind="tertiary"
         icon={Help}
-        href="https://www.sciencespo.fr/cartographie/khartis/docs/"
+        href={DOC_LINK.HELP_AND_RESOURCES}
         target="_blank"
         rel="noopener noreferrer"
       >

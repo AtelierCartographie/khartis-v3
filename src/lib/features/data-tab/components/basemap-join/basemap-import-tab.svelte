@@ -2,6 +2,7 @@
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
+  import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
   import { InlineNotification, TextInput } from 'carbon-components-svelte';
   import { CloudUpload, Launch } from 'carbon-icons-svelte';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
@@ -141,7 +142,7 @@
       kind="ghost"
       icon={Launch}
       iconDescription={m.learn_more()}
-      href="https://www.sciencespo.fr/cartographie/khartis/docs"
+      href={DOC_LINK.IMPORT_BASEMAP}
       target="_blank"
       size="small"
     >

@@ -7,6 +7,7 @@
     getSideNavShortcutLabels
   } from '$lib/features/commons/utils/keyboard-shortcuts.utils';
   import { m } from '$lib/paraglide/messages';
+  import { FEEDBACK_FORM_URL } from '$lib/features/commons/constants/doc-links.constants';
   import {
     Accordion,
     AccordionItem,
@@ -45,7 +46,6 @@
   import { useSideNav } from './hooks/use-side-nav.svelte';
 
   const sideNav = useSideNav();
-  const FEEDBACK_FORM_URL = 'https://forms.gle/ktBmKEsJxhtx686f6';
   const appVersion = (import.meta.env.VITE_APP_VERSION || 'dev').replace(
     /^v/i,
     ''
