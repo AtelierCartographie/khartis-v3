@@ -72,12 +72,29 @@ describe('zip-handler', () => {
     expect(result.isShapefileArchive).toBe(false);
   });
 
-  it('throws when decompressed size exceeds 500 MB limit', async () => {
+  it('throws when the declared decompressed size exceeds the 500 MB limit before inflating', async () => {
     const { extractZip } = await loadHandler(() => ({
       unzip: (
         _data: unknown,
+        opts: {
+          filter: (entry: {
+            name: string;
+            originalSize: number;
+            size: number;
+            compression: number;
+          }) => boolean;
+        },
         cb: (err: Error | null, out: Record<string, unknown>) => void
-      ) => cb(null, { 'big.csv': { byteLength: 501 * 1024 * 1024 } })
+      ) => {
+        const accepted = opts.filter({
+          name: 'big.csv',
+          originalSize: 501 * 1024 * 1024,
+          size: 1024,
+          compression: 8
+        });
+        expect(accepted).toBe(false);
+        cb(null, {});
+      }
     }));
     const zip = new File([new Uint8Array([1])], 'huge.zip', {
       type: 'application/zip'
@@ -99,6 +116,7 @@ describe('zip-handler', () => {
     const { extractZip } = await loadHandler(() => ({
       unzip: (
         _data: unknown,
+        _opts: unknown,
         cb: (err: Error | null, out: Record<string, unknown>) => void
       ) => cb(new Error('corrupt zip'), {})
     }));
