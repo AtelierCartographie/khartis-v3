@@ -1175,6 +1175,8 @@
   "annotations_import_image": "Import an image",
   "annotations_import_image_description": "After import, move the preview on the page then click to place the image.",
   "annotations_image_unsupported_format": "Unsupported image format. Use a JPG or PNG file.",
+  "annotations_image_too_large": "Image too large (limit: {limit} MB).",
+  "annotations_image_read_failed": "Failed to read the image.",
   "annotations_fill_color": "Fill color",
   "annotations_delete_image": "Delete image",
   "text_label": "Text",

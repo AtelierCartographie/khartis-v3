@@ -74,6 +74,7 @@
   <Search
     value={searchState.searchValue}
     on:input={handleSearchInput}
+    on:clear={searchActions.clearSearch}
     placeholder={m.search_placeholder()}
     size="lg"
   />
