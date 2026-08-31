@@ -1,6 +1,5 @@
 export { default as BasemapCardVertical } from './basemap-card-vertical.svelte';
 export { default as BasemapImportDropzone } from './basemap-import-dropzone.svelte';
-export { default as BasemapSuggestionModal } from './basemap-suggestion-modal.svelte';
 export { default as CalculatorPanel } from './calculator-panel.svelte';
 export { default as CsvOptionsModal } from './csv-options-modal.svelte';
 export { default as DataToolPanel } from './data-tool-panel.svelte';

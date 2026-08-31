@@ -3,6 +3,7 @@
   import { SvelteMap } from 'svelte/reactivity';
   import type { VariableBadgeType } from '$lib/features/commons/types/variable-badge.types';
   import { GeoreferenceType } from '$lib/features/commons/constants/ui.constants';
+  import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
   import {
     GEO_COLUMN_TYPE,
     INTERNAL_COLUMN
@@ -275,9 +276,6 @@
 
     return undefined;
   });
-
-  const GEO_LEARN_MORE_URL =
-    'https://www.sciencespo.fr/cartographie/khartis/docs/importer-des-donnees/';
 
   const isCoordinatesMode = $derived(
     dataTabState.geolocation.geoReference === GeoreferenceType.COORDINATES
@@ -654,7 +652,7 @@
       />
     {/if}
 
-    <Link href={GEO_LEARN_MORE_URL} target="_blank">
+    <Link href={DOC_LINK.GEOLOCATE_DATA} target="_blank">
       {m.geo_learn_more_geocoding()}
       <Launch size={16} />
     </Link>
