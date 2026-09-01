@@ -1,3 +1,4 @@
+import { getDefaultMissingData } from '$lib/features/commons/stores/visualization-presets';
 import {
   type ClassificationConfig,
   type MissingDataConfig,
@@ -60,10 +61,13 @@ export function createPrimitiveAdapter<
 
   function handleMissingDataChange(updates: Partial<MissingDataConfig>): void {
     const config = options.getConfig(deps.getSelectedVisualization());
-    if (!config?.missingData) return;
 
     handleChange({
-      missingData: { ...config.missingData, ...updates }
+      missingData: {
+        ...getDefaultMissingData(),
+        ...config?.missingData,
+        ...updates
+      }
     } as Partial<Config>);
   }
 
