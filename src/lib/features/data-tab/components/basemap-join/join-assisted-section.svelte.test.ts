@@ -109,9 +109,8 @@ describe('JoinAssistedSection', () => {
     );
     expect(requestAnimationFrameMock).not.toHaveBeenCalled();
 
-    expect(
-      screen.getByLabelText(m.join_match_score_label({ score: 92 }))
-    ).toBeTruthy();
+    expect(screen.getByLabelText(m.join_approximate_indicator())).toBeTruthy();
+    expect(screen.queryByText(/92/)).toBeNull();
 
     await fireEvent.click(combobox);
     const option = await screen.findByRole('option', { name: 'Belgique' });
