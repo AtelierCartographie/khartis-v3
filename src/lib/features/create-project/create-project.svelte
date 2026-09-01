@@ -5,9 +5,13 @@
   } from '$lib/features/commons/stores/create-project.store.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { m } from '$lib/paraglide/messages';
-  import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
+  import {
+    DOC_LINK,
+    FEEDBACK_FORM_URL
+  } from '$lib/features/commons/constants/doc-links.constants';
   import {
     ComposedModal,
+    Link,
     ModalBody,
     ModalHeader
   } from 'carbon-components-svelte';
@@ -15,7 +19,8 @@
     Categories,
     CopyFile,
     FetchUpload,
-    Information
+    Information,
+    Launch
   } from 'carbon-icons-svelte';
   import CreateNewProject from './components/create-new-project.svelte';
   import OpenProject from './components/open-project.svelte';
@@ -130,6 +135,12 @@
           <Information size={16} />
         </a>
       </div>
+      <p class="beta-notice">
+        {m.create_project_beta_notice()}
+        <Link href={FEEDBACK_FORM_URL} target="_blank" size="sm" icon={Launch}>
+          {m.create_project_beta_report()}
+        </Link>
+      </p>
     </ModalHeader>
 
     <ModalBody class="fixed-modal-body">
@@ -226,6 +237,14 @@
     gap: var(--cds-spacing-03);
   }
 
+  .beta-notice {
+    margin: var(--cds-spacing-03) 0 0 0;
+    color: var(--cds-text-helper, #6f6f6f);
+    font-size: 0.875rem;
+    line-height: 1.125rem;
+    letter-spacing: 0.16px;
+  }
+
   .info-icon-link {
     flex-shrink: 0;
     color: var(--cds-icon-secondary);
@@ -247,7 +266,8 @@
     }
 
     #khartis-create-project :global(.fixed-modal-body) {
-      height: calc(85vh - 120px);
+      height: auto;
+      min-height: 0;
       overflow: hidden;
       padding: var(--cds-spacing-05);
     }

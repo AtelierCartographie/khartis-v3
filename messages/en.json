@@ -522,6 +522,8 @@
   "create_project_load": "Load",
   "create_project_file_imported": "File imported",
   "create_project_welcome_info": "Learn more about Khartis",
+  "create_project_beta_notice": "Beta version — you may run into glitches and some features will still change. Remember to download your projects as .kh files to keep them.",
+  "create_project_beta_report": "Report a problem",
   "open_project_select_backup": "Select an automatic backup…",
   "open_project_backup_description": "Projects are automatically saved on the web browser and listed here.",
   "open_project_backup_warning": "Warning, these backups will disappear in case of change of hardware, browser or cleaning of it (cache deletion).",

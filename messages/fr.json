@@ -522,6 +522,8 @@
   "create_project_load": "Charger",
   "create_project_file_imported": "Fichier importé",
   "create_project_welcome_info": "En savoir plus sur Khartis",
+  "create_project_beta_notice": "Version bêta — des dysfonctionnements sont possibles et certaines fonctionnalités vont encore évoluer. Pensez à télécharger vos projets au format .kh pour les conserver.",
+  "create_project_beta_report": "Signaler un problème",
   "open_project_select_backup": "Sélectionner une sauvegarde automatique…",
   "open_project_backup_description": "Les projets sont automatiquement sauvegardés sur le navigateur web et répertoriés ici.",
   "open_project_backup_warning": "Attention, ces sauvegardes disparaîtront en cas de changement de matériel, de navigateur ou de nettoyage de celui-ci (suppression du cache).",
