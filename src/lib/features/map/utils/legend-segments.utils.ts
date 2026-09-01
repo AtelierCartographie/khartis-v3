@@ -80,10 +80,7 @@ import {
   type PointSizeLegendScale
 } from './legend.utils';
 import type { LegendItem } from '$lib/features/step-toolbar/tools/legend';
-import {
-  getPrimitiveLegendSubtitle,
-  type LegendSubtitlePrimitive
-} from '$lib/features/commons/utils/legend-subtitle.utils';
+import type { LegendSubtitlePrimitive } from '$lib/features/commons/utils/legend-subtitle.utils';
 
 const legendPatternFillCache: Record<string, LegendPatternFill> = {};
 
@@ -630,11 +627,9 @@ function getSymbolLegendType(shape: ShapeType): SymbolType | null {
   }
 }
 
-export function getLegendSegments(
-  item: LegendItem,
-  viz: VisualizationConfig | undefined,
-  legendTextStyle: LegendTextStyle
-): LegendSegment[] {
+function getLegendSegmentDrafts(
+  viz: VisualizationConfig | undefined
+): LegendSegmentDraft[] {
   const drafts = [
     getDensityLegendDraft(viz),
     getClassedColorLegendDraft(viz),
@@ -657,6 +652,18 @@ export function getLegendSegments(
     }
   }
 
+  return drafts;
+}
+
+export function getLegendSegments(
+  item: LegendItem,
+  viz: VisualizationConfig | undefined,
+  legendTextStyle: LegendTextStyle
+): LegendSegment[] {
+  const drafts = getLegendSegmentDrafts(viz).filter(
+    (draft) => !item.primitive || draft.primitive === item.primitive
+  );
+
   const lastMissingDataDraftIndex = drafts.findLastIndex(
     (draft) => draft.consumesMissingData
   );
@@ -664,14 +671,7 @@ export function getLegendSegments(
   return drafts
     .map((draft, index) => {
       const svg = draft.create(
-        getLegendTextOptions(
-          item,
-          draft,
-          index,
-          drafts.length,
-          legendTextStyle,
-          viz
-        ),
+        getLegendTextOptions(item, index, drafts.length, legendTextStyle),
         {
           includeMissingDataFooter: index === lastMissingDataDraftIndex
         }
@@ -688,32 +688,17 @@ export function getLegendSegments(
     .filter((segment): segment is LegendSegment => segment !== null);
 }
 
-// Each primitive draws its own legend, so every segment keeps the title and
-// carries the subtitle of the variable driving it: merging them under a single
-// header left the reader unable to tell which variable a block described.
 function getLegendTextOptions(
   item: LegendItem,
-  draft: LegendSegmentDraft,
   index: number,
   count: number,
-  legendTextStyle: LegendTextStyle,
-  viz: VisualizationConfig | undefined
+  legendTextStyle: LegendTextStyle
 ): CommonLegendTextOptions {
-  const derivedSubtitle = viz
-    ? getPrimitiveLegendSubtitle(viz, draft.primitive)
-    : '';
-  const subtitle =
-    item.subtitleMode === 'custom'
-      ? index === 0
-        ? item.subtitle
-        : null
-      : derivedSubtitle || null;
-
   return {
     fontFamily: legendTextStyle.fontFamily,
     fontSize: legendTextStyle.fontSize,
-    title: item.title,
-    subtitle,
+    title: index === 0 ? item.title : null,
+    subtitle: index === 0 ? item.subtitle : null,
     note: index === count - 1 ? item.note : null
   };
 }

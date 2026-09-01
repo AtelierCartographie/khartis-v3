@@ -28,6 +28,7 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
 }));
 
 import { getLegendState, legendActions } from './legend.store.svelte';
+import { getVisualizationLegendSubtitle } from '$lib/features/commons/utils/legend-subtitle.utils';
 import { LEGEND_DEFAULTS } from './legend.constants';
 
 function createVisualization(
@@ -81,14 +82,18 @@ describe('legend store responsive defaults', () => {
     expect(getLegendState().style.fontSize).toBe(20);
   });
 
-  it('creates and updates linked legend items from visualizations', () => {
+  it('creates one legend item per enabled primitive', () => {
     mockVisualizationStore.visualizations = [
       createVisualization({
         id: 'viz-pop',
         name: 'Population',
         mapping: {
           categoryColumn: 'category'
-        }
+        },
+        polygon: {
+          enabled: true
+        } as never,
+        modes: {}
       })
     ];
 
@@ -96,41 +101,36 @@ describe('legend store responsive defaults', () => {
 
     expect(getLegendState().items).toEqual([
       expect.objectContaining({
-        id: 'legend-viz-viz-pop',
-        name: 'Population',
+        id: 'legend-viz-viz-pop--area',
+        primitive: 'area',
         title: 'Population',
         titleMode: 'auto',
         subtitle: 'category',
         subtitleMode: 'auto',
         variableId: 'viz-pop',
-        visible: true
+        visible: true,
+        dragPosition: null
       })
     ]);
   });
 
   it('joins multiple mapped columns in cartographic legend order', () => {
-    mockVisualizationStore.visualizations = [
-      createVisualization({
-        id: 'viz-bi',
-        modes: {},
-        mapping: {
-          sizeColumn: 'area',
-          valueColumn: 'population',
-          categoryColumn: 'status',
-          colorColumn: 'palette'
-        }
-      })
-    ];
-
-    legendActions.syncWithVisualizations();
-
-    expect(getLegendState().items).toEqual([
-      expect.objectContaining({
-        id: 'legend-viz-viz-bi',
-        subtitle: 'area / population / status / palette',
-        subtitleMode: 'auto'
-      })
-    ]);
+    // The merged subtitle is the fallback for legends saved before primitives
+    // were split, so it keeps its own coverage.
+    expect(
+      getVisualizationLegendSubtitle(
+        createVisualization({
+          id: 'viz-bi',
+          modes: {},
+          mapping: {
+            sizeColumn: 'area',
+            valueColumn: 'population',
+            categoryColumn: 'status',
+            colorColumn: 'palette'
+          }
+        })
+      )
+    ).toBe('area / population / status / palette');
   });
 
   it('ignores disabled symbol columns when only polygon fill remains active', () => {
@@ -162,7 +162,8 @@ describe('legend store responsive defaults', () => {
 
     expect(getLegendState().items).toEqual([
       expect.objectContaining({
-        id: 'legend-viz-viz-poly-only',
+        id: 'legend-viz-viz-poly-only--area',
+        primitive: 'area',
         subtitle: 'population',
         subtitleMode: 'auto'
       })
@@ -204,7 +205,8 @@ describe('legend store responsive defaults', () => {
 
     expect(getLegendState().items).toEqual([
       expect.objectContaining({
-        id: 'legend-viz-viz-point-fill',
+        id: 'legend-viz-viz-point-fill--point',
+        primitive: 'point',
         subtitle: 'capacity',
         subtitleMode: 'auto'
       })
@@ -239,7 +241,8 @@ describe('legend store responsive defaults', () => {
 
     expect(getLegendState().items).toEqual([
       expect.objectContaining({
-        id: 'legend-viz-viz-line-only',
+        id: 'legend-viz-viz-line-only--line',
+        primitive: 'line',
         subtitle: 'line_type / traffic',
         subtitleMode: 'auto'
       })
@@ -250,6 +253,9 @@ describe('legend store responsive defaults', () => {
     mockVisualizationStore.visualizations = [
       createVisualization({
         id: 'viz-pop',
+        polygon: {
+          enabled: true
+        } as never,
         name: 'Population',
         mapping: {
           categoryColumn: 'category'
@@ -258,7 +264,7 @@ describe('legend store responsive defaults', () => {
     ];
 
     legendActions.syncWithVisualizations();
-    legendActions.updateLegendItem('legend-viz-viz-pop', {
+    legendActions.updateLegendItem('legend-viz-viz-pop--area', {
       title: 'Titre custom',
       titleMode: 'custom',
       subtitle: 'Sous-titre custom',
@@ -268,6 +274,9 @@ describe('legend store responsive defaults', () => {
     mockVisualizationStore.visualizations = [
       createVisualization({
         id: 'viz-pop',
+        polygon: {
+          enabled: true
+        } as never,
         name: 'Population renommée',
         mapping: {
           categoryColumn: 'segment'
@@ -279,7 +288,7 @@ describe('legend store responsive defaults', () => {
 
     expect(getLegendState().items).toEqual([
       expect.objectContaining({
-        name: 'Population renommée',
+        name: 'Population renommée — Polygones',
         title: 'Titre custom',
         titleMode: 'custom',
         subtitle: 'Sous-titre custom',
@@ -303,6 +312,9 @@ describe('legend store responsive defaults', () => {
     mockVisualizationStore.visualizations = [
       createVisualization({
         id: 'viz-pop',
+        polygon: {
+          enabled: true
+        } as never,
         name: 'Population'
       })
     ];
@@ -310,7 +322,7 @@ describe('legend store responsive defaults', () => {
     legendActions.syncWithVisualizations();
 
     expect(getLegendState().items.map((item) => item.id)).toEqual([
-      'legend-viz-viz-pop',
+      'legend-viz-viz-pop--area',
       customItem.id
     ]);
   });

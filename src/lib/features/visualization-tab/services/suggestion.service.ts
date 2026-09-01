@@ -58,7 +58,10 @@ import {
   CARTOGRAPHIC_FONT_FAMILY,
   normalizeFontFamily
 } from '$lib/features/step-toolbar/fonts.constants';
-import { getVisualizationLegendSubtitle } from '$lib/features/commons/utils/legend-subtitle.utils';
+import {
+  getPrimitiveLegendSubtitle,
+  getVisualizationLegendSubtitle
+} from '$lib/features/commons/utils/legend-subtitle.utils';
 
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
@@ -1508,28 +1511,31 @@ export function isVisualizationBlank(
 
 function syncLegendSubtitleAfterSuggestion(
   vizId: string,
-  previousAutoSubtitle: string,
   visualization: VisualizationConfig
 ): void {
-  const legendItem = getLegendState().items.find(
-    (item) => item.variableId === vizId
-  );
-  if (!legendItem) {
-    return;
+  // One legend item per primitive, so each gets the subtitle of the variable
+  // driving it; a subtitle the user typed is left alone.
+  for (const legendItem of getLegendState().items) {
+    if (
+      legendItem.variableId !== vizId ||
+      legendItem.subtitleMode === 'custom'
+    ) {
+      continue;
+    }
+
+    const nextAutoSubtitle = legendItem.primitive
+      ? getPrimitiveLegendSubtitle(visualization, legendItem.primitive)
+      : getVisualizationLegendSubtitle(visualization);
+
+    if (legendItem.subtitle === nextAutoSubtitle) {
+      continue;
+    }
+
+    legendActions.updateLegendItem(legendItem.id, {
+      subtitle: nextAutoSubtitle,
+      subtitleMode: 'auto'
+    });
   }
-
-  const nextAutoSubtitle = getVisualizationLegendSubtitle(visualization);
-  const usesAutomaticSubtitle =
-    !legendItem.subtitle || legendItem.subtitle === previousAutoSubtitle;
-
-  if (!usesAutomaticSubtitle || legendItem.subtitle === nextAutoSubtitle) {
-    return;
-  }
-
-  legendActions.updateLegendItem(legendItem.id, {
-    subtitle: nextAutoSubtitle,
-    subtitleMode: 'auto'
-  });
 }
 
 function buildSuggestionUpdate(
@@ -1761,9 +1767,6 @@ export function applySuggestionToVisualization(
   const currentVisualization = visualizationStore.visualizations.find(
     (item) => item.id === vizId
   );
-  const previousAutoSubtitle = currentVisualization
-    ? getVisualizationLegendSubtitle(currentVisualization)
-    : '';
   if (!currentVisualization) {
     return null;
   }
@@ -1844,11 +1847,7 @@ export function applySuggestionToVisualization(
     (item) => item.id === vizId
   );
   if (updatedVisualization) {
-    syncLegendSubtitleAfterSuggestion(
-      vizId,
-      previousAutoSubtitle,
-      updatedVisualization
-    );
+    syncLegendSubtitleAfterSuggestion(vizId, updatedVisualization);
   }
 
   return behavior.visualizationType;

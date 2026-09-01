@@ -105,6 +105,32 @@ function getTextLegendSubtitleParts(
 
 export type LegendSubtitlePrimitive = 'point' | 'area' | 'line' | 'text';
 
+// Background to foreground, so the legend frames stack the way the map does.
+const LEGEND_PRIMITIVE_ORDER: LegendSubtitlePrimitive[] = [
+  'area',
+  'line',
+  'point',
+  'text'
+];
+
+/**
+ * The primitives that own a legend for this visualization. Derived from the
+ * configuration alone: whether a primitive actually draws something is decided
+ * by the render layer, which skips empty frames.
+ */
+export function getEnabledLegendPrimitives(
+  visualization: VisualizationConfig
+): LegendSubtitlePrimitive[] {
+  const enabled: Record<LegendSubtitlePrimitive, boolean> = {
+    area: Boolean(visualization.polygon?.enabled),
+    line: Boolean(visualization.line?.enabled),
+    point: Boolean(visualization.symbol?.enabled),
+    text: Boolean(visualization.text?.enabled)
+  };
+
+  return LEGEND_PRIMITIVE_ORDER.filter((primitive) => enabled[primitive]);
+}
+
 export function getPrimitiveLegendSubtitle(
   visualization: VisualizationConfig,
   primitive: LegendSubtitlePrimitive
