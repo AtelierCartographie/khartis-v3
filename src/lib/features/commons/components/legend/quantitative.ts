@@ -16,7 +16,6 @@ import {
   resolveLegendFontFamily,
   round,
   scaleLegendMetric,
-  selectLegendLabelIndices,
   round_extreme,
   type CommonLegendTextOptions,
   type LegendSvgDefinition
@@ -57,9 +56,6 @@ export function draw_quanti_color_legend(
   );
   const label_gap = scaleLegendMetric(10, fontSize);
   const label_safety_padding = scaleLegendMetric(7, fontSize);
-  const fits_next = (i: number, positions: number[]) =>
-    labels_length[i] / 2 + labels_length[i + 1] / 2 + label_gap <
-    positions[i + 1] - positions[i];
   const margin = scaleLegendMetric(10, fontSize);
   const margin_top = margin;
   const margin_left = margin + labels_length[0] / 2;
@@ -67,30 +63,44 @@ export function draw_quanti_color_legend(
   const box_height = scaleLegendMetric(15, fontSize);
   const tick_gap = scaleLegendMetric(5, fontSize);
   const header_gap = scaleLegendMetric(3, fontSize);
+  const label_row_step = Math.round(fontSize * 1.2);
   const min_box_width = scaleLegendMetric(11, fontSize);
   const max_boxes_width = scaleLegendMetric(264, fontSize);
   const max_box_width = Math.max(
     min_box_width,
     Math.floor(max_boxes_width / nb_boxes)
   );
-  let box_width = Math.min(scaleLegendMetric(40, fontSize), max_box_width);
-  let boxes_width: number;
-  const test_indices = index.slice(0, -1);
 
-  do {
-    boxes_width = box_width * nb_boxes;
+  const labels_fit = (positions: number[], stride: number): boolean =>
+    positions.every(
+      (_position, i) =>
+        i + stride >= positions.length ||
+        labels_length[i] / 2 + labels_length[i + stride] / 2 + label_gap <=
+          positions[i + stride] - positions[i]
+    );
+  const positions_for = (width: number): number[] => {
     const x_scale = linearScale(
       [x_domain[0], x_domain[nb_boxes]],
-      [margin_left, boxes_width + margin_left]
+      [margin_left, width * nb_boxes + margin_left]
     );
-    x = x_domain.map(x_scale);
-    box_width++;
-  } while (
-    box_width <= max_box_width &&
-    test_indices.every((d) => fits_next(d, x)) === false
-  );
+    return x_domain.map(x_scale);
+  };
 
-  const label_indices = selectLegendLabelIndices(x, labels_length, label_gap);
+  // Every discretization threshold has to stay labelled, so widen the strip
+  // while a single row overlaps, then let the labels alternate over two rows —
+  // and only widen past the cap when even staggered labels would collide.
+  let box_width = Math.min(scaleLegendMetric(40, fontSize), max_box_width);
+  x = positions_for(box_width);
+  while (box_width < max_box_width && !labels_fit(x, 1)) {
+    box_width += 1;
+    x = positions_for(box_width);
+  }
+  while (!labels_fit(x, 2)) {
+    box_width += 1;
+    x = positions_for(box_width);
+  }
+  const label_rows = labels_fit(x, 1) ? 1 : 2;
+  const boxes_width = box_width * nb_boxes;
 
   const scale_body_width = margin_left + boxes_width + margin_right;
   const section_gap = scaleLegendMetric(10, fontSize);
@@ -145,7 +155,8 @@ export function draw_quanti_color_legend(
   });
   const actual_box_top = margin_top + header.height + tick_gap;
   const actual_tick_end = actual_box_top + box_height + tick_gap;
-  const actual_labels_bottom = actual_tick_end + tick_gap + fontSize;
+  const actual_labels_bottom =
+    actual_tick_end + tick_gap + fontSize + (label_rows - 1) * label_row_step;
   const nodata_section_height = nodata
     ? section_gap + nodata_box_h + tick_gap
     : 0;
@@ -186,11 +197,15 @@ export function draw_quanti_color_legend(
     .map((entry) => entry.defs)
     .filter((defs): defs is string => Boolean(defs))
     .join('');
+  const label_row_offset = (i: number): number =>
+    label_rows > 1 && i % 2 === 1 ? label_row_step : 0;
   const ticks = x
     .slice(1, -1)
-    .map((d) => tick(d, actual_box_top, actual_tick_end));
-  const labels = label_indices.map((i) =>
-    label(x[i], actual_tick_end, thresholds[i])
+    .map((d, i) =>
+      tick(d, actual_box_top, actual_tick_end + label_row_offset(i + 1))
+    );
+  const labels = x.map((d, i) =>
+    label(d, actual_tick_end + label_row_offset(i), thresholds[i])
   );
 
   return create_svg_markup(

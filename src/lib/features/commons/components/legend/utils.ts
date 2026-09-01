@@ -105,35 +105,6 @@ export function scaleLegendMetric(
   );
 }
 
-// With many classes the boxes strip is capped, so threshold labels can no
-// longer all fit: keep the extremes and thin the intermediate ones instead of
-// letting the legend grow to accommodate every label.
-export function selectLegendLabelIndices(
-  positions: number[],
-  labelWidths: number[],
-  gap: number
-): number[] {
-  const last = positions.length - 1;
-  if (last <= 0) {
-    return positions.map((_position, index) => index);
-  }
-
-  const fits = (left: number, right: number): boolean =>
-    labelWidths[left] / 2 + labelWidths[right] / 2 + gap <=
-    positions[right] - positions[left];
-
-  const kept = [0];
-  for (let index = 1; index < last; index += 1) {
-    const previous = kept[kept.length - 1];
-    if (fits(previous, index) && fits(index, last)) {
-      kept.push(index);
-    }
-  }
-  kept.push(last);
-
-  return kept;
-}
-
 export function resolveLegendFontFamily(fontFamily?: string): string {
   return resolveFontFamilyStack(fontFamily);
 }

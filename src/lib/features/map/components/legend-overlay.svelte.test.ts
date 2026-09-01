@@ -436,7 +436,7 @@ describe('legend overlay visibility', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('limits high-cardinality legends and reports hidden categories', () => {
+  it('renders every category of a high-cardinality legend', () => {
     const viz = buildPointCategoriesViz();
     const labels = Array.from(
       { length: 30 },
@@ -460,13 +460,9 @@ describe('legend overlay visibility', () => {
 
     render(LegendOverlay);
 
-    expect(screen.getByText('Category 24')).toBeInTheDocument();
-    expect(screen.queryByText('Category 25')).not.toBeInTheDocument();
-    expect(
-      screen.getByLabelText(
-        '+ 6 autres catégories (couleurs/formes générées automatiquement)'
-      )
-    ).toBeInTheDocument();
+    for (const label of labels) {
+      expect(countLegendLabels(label)).toBe(1);
+    }
   });
 
   it('renders categorical missing data as a compact footer', () => {
