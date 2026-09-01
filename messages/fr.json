@@ -459,6 +459,7 @@
   "legend_title": "Titre",
   "legend_subtitle": "Sous-titre",
   "legend_note": "Note",
+  "legend_frame_label": "Légende : {name}",
   "legend_no_subtitle": "Aucun sous-titre",
   "legend_no_note": "Aucune note",
   "legend_common_settings": "Ces paramètres sont communs à toutes les légendes pour un rendu global plus harmonieux.",

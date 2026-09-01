@@ -20,7 +20,7 @@ export interface LegendItem {
    * first primitive of their visualization.
    */
   primitive?: LegendSubtitlePrimitive;
-  /** Per-legend page position; null means it follows `LegendState.position`. */
+  /** Page position of this legend's own frame, resolved from the anchor stack. */
   dragPosition?: LegendDragPosition | null;
 }
 
@@ -51,6 +51,7 @@ export interface LegendDragPosition {
 export interface LegendState {
   items: LegendItem[];
   position: LegendPosition;
+  /** Legacy whole-legend position; now only anchors the frame stack of projects saved before the split. */
   dragPosition: LegendDragPosition | null;
   visible: boolean;
   style: LegendStyle;

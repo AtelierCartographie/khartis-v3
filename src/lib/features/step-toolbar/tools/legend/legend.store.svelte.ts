@@ -21,7 +21,6 @@ import {
 } from '$lib/features/commons/utils/legend-subtitle.utils';
 import { LEGEND_DEFAULTS, LEGEND_ID_PREFIXES } from './legend.constants';
 import type {
-  LegendDragPosition,
   LegendItem,
   LegendState,
   LegendStyle
@@ -62,7 +61,6 @@ type LegendActions = {
   updateLegendItem: (id: string, updates: Partial<LegendItem>) => void;
   toggleLegendVisibility: () => void;
   setVisibility: (visible: boolean) => void;
-  setDragPosition: (pos: LegendDragPosition | null) => void;
   setActiveTab: (tab: LegendTab) => void;
   updateStyle: (updates: Partial<LegendStyle>) => void;
   updateBackground: (
@@ -260,9 +258,6 @@ const { actions, getState } = createToolStore<LegendState, LegendActions>(
     },
     setVisibility: (visible: boolean) => {
       s.visible = visible;
-    },
-    setDragPosition: (pos: LegendDragPosition | null) => {
-      s.dragPosition = pos;
     },
     setActiveTab: (tab: LegendTab) => {
       s.activeTab = tab;

@@ -250,6 +250,18 @@ function setupLegendOccludedViewport(): {
 // A wrapped legend label is split across tspans and carries the full string on
 // aria-label instead, so match either form: jsdom has no canvas metrics and
 // breaks lines differently from the browser.
+function getFirstLegendItem() {
+  const item = getLegendState().items[0];
+  if (!item) {
+    throw new Error('No legend item registered');
+  }
+  return item;
+}
+
+function getFirstLegendFramePosition() {
+  return getFirstLegendItem().dragPosition ?? null;
+}
+
 function countLegendLabels(label: string): number {
   return Array.from(document.querySelectorAll('svg text')).filter(
     (node) =>
@@ -781,6 +793,88 @@ describe('legend overlay visibility', () => {
     ).toBeGreaterThanOrEqual(2);
   });
 
+  it('gives each primitive of a visualization its own legend frame', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildPolygonAndSymbolViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    expect(container.querySelectorAll('.legend-container')).toHaveLength(2);
+  });
+
+  it('stacks primitive legend frames down from the anchor corner', async () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildPolygonAndSymbolViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+    const overlay = container.querySelector('.legend-overlay');
+    const frames = container.querySelectorAll('.legend-container');
+
+    if (
+      !(overlay instanceof HTMLDivElement) ||
+      !(frames[0] instanceof HTMLDivElement) ||
+      !(frames[1] instanceof HTMLDivElement)
+    ) {
+      throw new Error('Legend frames were not rendered');
+    }
+
+    bindElementBox(overlay, { left: 0, top: 0, width: 300, height: 200 });
+    bindElementBox(frames[0], { left: 0, top: 0, width: 50, height: 40 });
+    bindElementBox(frames[1], { left: 0, top: 0, width: 60, height: 30 });
+
+    formatActions.setSize(300, 200);
+
+    await waitFor(() => {
+      expect(frames[0].getAttribute('style')).toContain('left: 238px');
+      expect(frames[0].getAttribute('style')).toContain('top: 12px');
+      expect(frames[1].getAttribute('style')).toContain('left: 228px');
+    });
+
+    const secondTop = Number(
+      /top: ([\d.]+)px/.exec(frames[1].getAttribute('style') ?? '')?.[1]
+    );
+    expect(secondTop).toBeGreaterThanOrEqual(60);
+    // The default stack stays out of the saved project until the user drags.
+    expect(getLegendState().items.every((item) => !item.dragPosition)).toBe(
+      true
+    );
+  });
+
+  it('moves one primitive legend frame without moving the others', async () => {
+    globalState.selectedTool = StylingTools.Legend;
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildPolygonAndSymbolViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+    const overlay = container.querySelector('.legend-overlay');
+    const frames = container.querySelectorAll('.legend-container');
+
+    if (
+      !(overlay instanceof HTMLDivElement) ||
+      !(frames[0] instanceof HTMLDivElement) ||
+      !(frames[1] instanceof HTMLDivElement)
+    ) {
+      throw new Error('Legend frames were not rendered');
+    }
+
+    bindElementBox(overlay, { left: 0, top: 0, width: 300, height: 200 });
+    bindElementBox(frames[0], { left: 14, top: 10, width: 50, height: 40 });
+    bindElementBox(frames[1], { left: 14, top: 60, width: 50, height: 40 });
+
+    await fireEvent.pointerDown(frames[1], { clientX: 18, clientY: 68 });
+    await fireEvent.pointerMove(window, { clientX: 41, clientY: 93 });
+
+    const [first, second] = getLegendState().items;
+    expect(first.dragPosition ?? null).toBeNull();
+    expect(second.dragPosition).toEqual({ x: 36, y: 84 });
+  });
+
   it('snaps legend dragging to the shared page grid when enabled', async () => {
     globalState.selectedTool = StylingTools.Legend;
 
@@ -818,7 +912,7 @@ describe('legend overlay visibility', () => {
       clientY: 43
     });
 
-    expect(getLegendState().dragPosition).toEqual({ x: 36, y: 36 });
+    expect(getFirstLegendFramePosition()).toEqual({ x: 36, y: 36 });
 
     await fireEvent.pointerUp(window);
 
@@ -860,7 +954,7 @@ describe('legend overlay visibility', () => {
       clientY: 43
     });
 
-    expect(getLegendState().dragPosition).toEqual({ x: 37, y: 35 });
+    expect(getFirstLegendFramePosition()).toEqual({ x: 37, y: 35 });
   });
 
   it('moves the focused legend with arrow keys', async () => {
@@ -885,7 +979,7 @@ describe('legend overlay visibility', () => {
 
     await fireEvent.keyDown(legend, { key: 'ArrowRight' });
 
-    expect(getLegendState().dragPosition).toEqual({ x: 15, y: 10 });
+    expect(getFirstLegendFramePosition()).toEqual({ x: 15, y: 10 });
     expect(globalState.selectedTool).toBe(StylingTools.Legend);
   });
 
@@ -919,7 +1013,7 @@ describe('legend overlay visibility', () => {
       clientY: 21.5
     });
 
-    expect(getLegendState().dragPosition).toEqual({ x: 36, y: 36 });
+    expect(getFirstLegendFramePosition()).toEqual({ x: 36, y: 36 });
   });
 
   it('reclamps a dragged legend after the page size shrinks', async () => {
@@ -943,14 +1037,16 @@ describe('legend overlay visibility', () => {
     bindElementBox(overlay, overlayBox);
     bindElementBox(legend, legendBox);
 
-    legendActions.setDragPosition({ x: 240, y: 144 });
+    legendActions.updateLegendItem(getFirstLegendItem().id, {
+      dragPosition: { x: 240, y: 144 }
+    });
 
     overlayBox.width = 180;
     overlayBox.height = 120;
     formatActions.setSize(180, 120);
 
     await waitFor(() => {
-      expect(getLegendState().dragPosition).toEqual({ x: 120, y: 72 });
+      expect(getFirstLegendFramePosition()).toEqual({ x: 120, y: 72 });
     });
   });
 
@@ -1204,6 +1300,17 @@ function buildUniquePointViz(): VisualizationConfig {
     mapping: {
       geometryColumn: 'geom'
     }
+  } as VisualizationConfig;
+}
+
+function buildPolygonAndSymbolViz(): VisualizationConfig {
+  return {
+    ...buildClassedPolygonViz(),
+    id: 'viz-poly-point',
+    name: 'Population',
+    primitiveFilters: ['polygon', 'point'],
+    primitiveOrder: ['polygon', 'point'],
+    symbol: buildUniquePointViz().symbol
   } as VisualizationConfig;
 }
 

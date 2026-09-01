@@ -459,6 +459,7 @@
   "legend_title": "Title",
   "legend_subtitle": "Subtitle",
   "legend_note": "Note",
+  "legend_frame_label": "Legend: {name}",
   "legend_no_subtitle": "No subtitle",
   "legend_no_note": "No note",
   "legend_common_settings": "These settings are common to all legends for a more harmonious overall rendering.",
