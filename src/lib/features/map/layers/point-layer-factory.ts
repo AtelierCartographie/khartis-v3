@@ -44,8 +44,7 @@ import {
 } from '../utils/data-styling.utils';
 import {
   pointColorAttr,
-  pointRadiusAttr,
-  rowAccessor
+  pointRadiusAttr
 } from '../utils/geoarrow-stream-bridge.utils';
 import { resolveHoverHighlightProps } from '../utils/hover-highlight-props.utils';
 import { createScatterplotLayerProps } from '@ateliercartographie/geoarrow-deck-stream';
@@ -117,10 +116,9 @@ function createDoubleProportionalPointLayers(
   ctx: LayerContext,
   layerId: string
 ): Layer<DeckDataRow>[] {
-  // Outside the split (joined-basemap) path the binary `featureIds` index into
-  // the representative-point table, so per-row attributes must be read from it
-  // — keeping symbols aligned with their polygon when a POINT filter subsets
-  // the points. The split path keeps reading the matched geometry table.
+  // Picking metadata and the shape attribute index by binary `featureIds`, so
+  // they read the table those ids belong to: the matched geometry table on the
+  // split (joined-basemap) path, the representative points otherwise.
   const attributeTable = hasSplitRenderingContext(ctx)
     ? jsTable
     : symbolRowTable;
@@ -417,8 +415,9 @@ function createDoubleProportionalPointLayers(
       );
     };
 
-  const primaryFillByFeatureId = rowAccessor(
-    attributeTable,
+  const primaryFillByFeatureId = ctxRowAccessor(
+    ctx,
+    symbolRowTable,
     createFillAccessor(
       pointSizeColumn,
       fillColor,
@@ -426,8 +425,9 @@ function createDoubleProportionalPointLayers(
       breakValueA
     )
   );
-  const secondaryFillByFeatureId = rowAccessor(
-    attributeTable,
+  const secondaryFillByFeatureId = ctxRowAccessor(
+    ctx,
+    symbolRowTable,
     createFillAccessor(
       pointValueColumn,
       secondaryFillColor,
@@ -435,20 +435,24 @@ function createDoubleProportionalPointLayers(
       breakValueB
     )
   );
-  const primaryLineByFeatureId = rowAccessor(
-    attributeTable,
+  const primaryLineByFeatureId = ctxRowAccessor(
+    ctx,
+    symbolRowTable,
     createLineAccessor(pointSizeColumn)
   );
-  const secondaryLineByFeatureId = rowAccessor(
-    attributeTable,
+  const secondaryLineByFeatureId = ctxRowAccessor(
+    ctx,
+    symbolRowTable,
     createLineAccessor(pointValueColumn)
   );
-  const primaryRadiusByFeatureId = rowAccessor(
-    attributeTable,
+  const primaryRadiusByFeatureId = ctxRowAccessor(
+    ctx,
+    symbolRowTable,
     createRadiusAccessor(pointSizeColumn, primaryRadiusAccessor)
   );
-  const secondaryRadiusByFeatureId = rowAccessor(
-    attributeTable,
+  const secondaryRadiusByFeatureId = ctxRowAccessor(
+    ctx,
+    symbolRowTable,
     createRadiusAccessor(pointValueColumn, secondaryRadiusAccessor)
   );
 
