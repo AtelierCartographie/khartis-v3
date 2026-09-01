@@ -1175,6 +1175,54 @@ function getPointSizeLegendDraft(
   }
 
   if (scale.secondary) {
+    // A shared scale means one graduated column reads for both variables, so
+    // reuse the symbol legend and name each colour underneath it — the same
+    // shape the cross-zero legend already uses for + and -.
+    const symbolPrimitive = getSymbolPrimitive(viz);
+    const primaryColumn = symbolPrimitive?.sizeColumn ?? viz.mapping.sizeColumn;
+    const secondaryColumn = scale.secondary.valueColumn;
+    if (scale.commonScale !== false && type) {
+      const sharedValues = [
+        ...getNumericColumnValues(viz, primaryColumn),
+        ...getNumericColumnValues(viz, secondaryColumn)
+      ];
+      if (sharedValues.length > 0 && primaryColumn && secondaryColumn) {
+        const maxSize = symbolPrimitive?.maxSize ?? 18;
+        const barWidth =
+          symbolPrimitive?.barWidth ?? DEFAULT_LINEAR_SYMBOL_BAR_WIDTH;
+        return {
+          key: 'double-point-size',
+          primitive: 'point',
+          className: 'legend-svg--double-symbols',
+          consumesMissingData: isLegendMissingDataShown(viz, 'point'),
+          create: (options, context) =>
+            toLegendSvg(
+              draw_symbols_legend(sharedValues, {
+                ...options,
+                type,
+                size: maxSize,
+                fill: scale.fillColor,
+                stroke: scale.strokeColor,
+                bar_width: barWidth,
+                colorSwatches: [
+                  { color: scale.fillColor, label: primaryColumn },
+                  {
+                    color: scale.secondary?.fillColor ?? scale.fillColor,
+                    label: secondaryColumn
+                  }
+                ],
+                nodata: context.includeMissingDataFooter
+                  ? isLegendMissingDataShown(viz, 'point')
+                  : false,
+                nodataLabel: context.includeMissingDataFooter
+                  ? m.missing_data_text()
+                  : undefined
+              })
+            )
+        };
+      }
+    }
+
     const steps = getDoubleSymbolLegendSteps(viz, scale);
     if (steps.length === 0) {
       return null;
