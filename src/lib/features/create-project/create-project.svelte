@@ -5,6 +5,7 @@
   } from '$lib/features/commons/stores/create-project.store.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { m } from '$lib/paraglide/messages';
+  import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
   import {
     ComposedModal,
     ModalBody,
@@ -119,7 +120,7 @@
           {m.create_project_welcome_description()}
         </span>
         <a
-          href="https://www.sciencespo.fr/cartographie/khartis/"
+          href={DOC_LINK.KHARTIS_HOME}
           target="_blank"
           rel="noopener noreferrer"
           class="info-icon-link"

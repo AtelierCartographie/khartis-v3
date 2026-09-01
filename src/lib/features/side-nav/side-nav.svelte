@@ -7,7 +7,10 @@
     getSideNavShortcutLabels
   } from '$lib/features/commons/utils/keyboard-shortcuts.utils';
   import { m } from '$lib/paraglide/messages';
-  import { FEEDBACK_FORM_URL } from '$lib/features/commons/constants/doc-links.constants';
+  import {
+    DOC_LINK,
+    FEEDBACK_FORM_URL
+  } from '$lib/features/commons/constants/doc-links.constants';
   import {
     Accordion,
     AccordionItem,
@@ -226,10 +229,6 @@
 
   const isDarkTheme = $derived(
     currentTheme === 'g80' || currentTheme === 'g90' || currentTheme === 'g100'
-  );
-
-  const khartisSiteBase = $derived(
-    `https://www.sciencespo.fr/cartographie/${sideNav.currentLocale === 'en' ? 'en' : 'fr'}/outils/khartis`
   );
 
   function handleThemeToggle(checked: boolean) {
@@ -476,7 +475,7 @@
               kind="ghost"
               icon={Launch}
               class="menu-bar-item"
-              href={`${khartisSiteBase}/prise-en-main`}
+              href={DOC_LINK.GETTING_STARTED}
               target="_blank"
               rel="noopener noreferrer">{m.sidenav_getting_started()}</Button
             >
@@ -485,7 +484,7 @@
               kind="ghost"
               icon={Launch}
               class="menu-bar-item"
-              href={`${khartisSiteBase}/mode-emploi`}
+              href={DOC_LINK.USER_GUIDE}
               target="_blank"
               rel="noopener noreferrer">{m.sidenav_user_guide()}</Button
             >
@@ -528,7 +527,7 @@
               kind="ghost"
               icon={Launch}
               class="menu-bar-item"
-              href={khartisSiteBase}
+              href={DOC_LINK.KHARTIS_HOME}
               target="_blank"
               rel="noopener noreferrer">{m.sidenav_presentation_page()}</Button
             >
@@ -548,7 +547,7 @@
               kind="ghost"
               icon={Launch}
               class="menu-bar-item"
-              href={`${khartisSiteBase}/old`}
+              href={DOC_LINK.LEGACY_V2}
               target="_blank"
               rel="noopener noreferrer">{m.sidenav_khartis_v2()}</Button
             >
