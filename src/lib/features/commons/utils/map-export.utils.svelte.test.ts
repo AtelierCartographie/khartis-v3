@@ -1848,6 +1848,40 @@ describe('map export DOM mutations', () => {
     expect(markup).toContain('Second note');
   });
 
+  it('exports one named layer per legend frame', async () => {
+    document.body.innerHTML = `
+      <div class="page-container">
+        <div class="legend-container">
+          <svg width="40" height="20" viewBox="0 0 40 20"></svg>
+        </div>
+        <div class="legend-container">
+          <svg width="60" height="30" viewBox="0 0 60 30"></svg>
+        </div>
+      </div>
+    `;
+
+    const page = document.querySelector('.page-container');
+    const frames = document.querySelectorAll('.legend-container');
+    const svgs = document.querySelectorAll('.legend-container svg');
+    if (!page || frames.length !== 2 || svgs.length !== 2) {
+      throw new Error('Missing legend fixture nodes');
+    }
+
+    bindElementBox(page, { left: 0, top: 0, width: 400, height: 300 });
+    bindElementBox(frames[0], { left: 20, top: 30, width: 40, height: 20 });
+    bindElementBox(svgs[0], { left: 20, top: 30, width: 40, height: 20 });
+    bindElementBox(frames[1], { left: 200, top: 150, width: 60, height: 30 });
+    bindElementBox(svgs[1], { left: 200, top: 150, width: 60, height: 30 });
+
+    const blob = await exportMapToSvg({ width: 400, height: 300 });
+    const markup = await blob.text();
+
+    expect(markup).toContain('id="khartis-legend-segment-1"');
+    expect(markup).toContain('id="khartis-legend-segment-2"');
+    expect(markup).toContain('transform="translate(20, 30)"');
+    expect(markup).toContain('transform="translate(200, 150)"');
+  });
+
   it('converts nested SVG legend segments into scaled <g transform> groups', async () => {
     document.body.innerHTML = `
       <div class="page-container">
