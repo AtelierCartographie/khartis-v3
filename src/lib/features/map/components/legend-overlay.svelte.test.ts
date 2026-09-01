@@ -386,7 +386,7 @@ describe('legend overlay visibility', () => {
     expect(screen.getByText('Population')).toBeInTheDocument();
   });
 
-  it('compacts double proportional symbols when the map uses overlay mode', () => {
+  it('names both variables under a shared-scale double symbol legend', () => {
     mockVisualizationStore.version = 1;
     mockVisualizationStore.visualizations = [buildDoubleProportionalViz()];
     legendActions.reset();
@@ -394,24 +394,20 @@ describe('legend overlay visibility', () => {
 
     const { container } = render(LegendOverlay);
 
-    const pair = container.querySelector(
-      '.double-symbol-pair[data-position-mode="overlay"]'
-    );
+    const doubleLegend = container.querySelector('.legend-svg--double-symbols');
+    expect(doubleLegend).toBeInTheDocument();
 
-    expect(pair).toBeInTheDocument();
-    expect(
-      container.querySelector('.legend-svg--double-symbols')
-    ).toBeInTheDocument();
-    expect(pair?.querySelectorAll('path')).toHaveLength(2);
-    expect(screen.getByText('15 907 951')).toBeInTheDocument();
-    expect(
-      container.querySelector('.khartis_double_symbol_legend .subtitle')
-        ?.textContent
-    ).toContain('population /');
-    expect(
-      container.querySelector('.khartis_double_symbol_legend .subtitle')
-        ?.textContent
-    ).toContain('secondary-population');
+    // One graduated column for the shared scale, then a colour box per
+    // variable so the reader can tell A from B.
+    expect(doubleLegend?.querySelector('.symbols')).toBeInTheDocument();
+    const swatches = doubleLegend?.querySelectorAll('.sign_legend rect') ?? [];
+    expect(swatches).toHaveLength(2);
+    expect(swatches[0]?.getAttribute('fill')).toBe('#4585f5');
+    expect(swatches[1]?.getAttribute('fill')).toBe('#ff812a');
+    const swatchLabels = Array.from(
+      doubleLegend?.querySelectorAll('.sign_legend text') ?? []
+    ).map((node) => node.textContent);
+    expect(swatchLabels).toEqual(['population', 'secondary-population']);
   });
 
   it('renders point categories in the legend and hides disabled categories', () => {

@@ -29,6 +29,11 @@ export type SymbolType = 'circle' | 'square' | 'bar' | 'spike' | 'text';
 // Mirror the map's square SDF ratio so legend squares match rendered symbols.
 const SQUARE_SIDE_RATIO = 0.6 / SYMBOL_SDF_EXTENT;
 
+export interface LegendColorSwatch {
+  color: string;
+  label: string;
+}
+
 export interface SymbolsLegendOptions extends CommonLegendTextOptions {
   type?: SymbolType;
   size?: number;
@@ -37,6 +42,12 @@ export interface SymbolsLegendOptions extends CommonLegendTextOptions {
   stroke?: string;
   plus_color?: string;
   less_color?: string;
+  /**
+   * Colour boxes drawn under the graduated symbols. Cross-zero data supplies
+   * the +/- pair; double proportional symbols on a shared scale supply one box
+   * per variable, which is what tells the reader which colour is which.
+   */
+  colorSwatches?: LegendColorSwatch[];
   nodata?: boolean;
   nodataLabel?: string;
 }
@@ -111,18 +122,28 @@ export function draw_symbols_legend(
   const font = createLegendFont({ fontSize, fontFamily: resolvedFontFamily });
   const sign_box_dim = Math.round(fontSize * 1.25);
   const sign_row_inner_gap = scaleLegendMetric(4, fontSize);
-  const sign_label_max_width = cross_zero
+  const color_swatches: LegendColorSwatch[] =
+    options.colorSwatches ??
+    (cross_zero
+      ? [
+          { color: plus_color, label: '+' },
+          { color: less_color, label: '−' }
+        ]
+      : []);
+  const has_color_swatches = color_swatches.length > 0;
+  const sign_label_max_width = has_color_swatches
     ? Math.max(
-        Textbox.measureText('+', font),
-        Textbox.measureText('−', font),
-        Textbox.measureText('-', font)
+        ...color_swatches.map((swatch) =>
+          Textbox.measureText(swatch.label, font)
+        )
       ) + label_safety_padding
     : 0;
-  const sign_legend_body_width = cross_zero
+  const sign_legend_body_width = has_color_swatches
     ? margin + sign_box_dim + label_gap + sign_label_max_width + margin
     : 0;
-  const sign_legend_section_height = cross_zero
-    ? sign_box_dim * 2 + sign_row_inner_gap
+  const sign_legend_section_height = has_color_swatches
+    ? color_swatches.length * sign_box_dim +
+      (color_swatches.length - 1) * sign_row_inner_gap
     : 0;
   const max_symbol_width =
     type !== 'bar' && type !== 'spike'
@@ -190,10 +211,10 @@ export function draw_symbols_legend(
   const bottom_min_alone = bottom_symbols + 10;
   const symbols_bottom = is_min_alone ? bottom_min_alone : bottom_symbols;
   const section_gap = scaleLegendMetric(10, fontSize);
-  const sign_legend_y = cross_zero
+  const sign_legend_y = has_color_swatches
     ? symbols_bottom + section_gap
     : symbols_bottom;
-  const sign_legend_bottom = cross_zero
+  const sign_legend_bottom = has_color_swatches
     ? sign_legend_y + sign_legend_section_height
     : symbols_bottom;
   const nodata_section_height = nodata ? section_gap + fontSize : 0;
@@ -268,18 +289,19 @@ export function draw_symbols_legend(
     }
 
     let sign_legend_markup = '';
-    if (cross_zero) {
+    if (has_color_swatches) {
       const sign_box_x = margin;
       const sign_label_x = sign_box_x + sign_box_dim + label_gap;
-      const plus_y = sign_legend_y;
-      const less_y = sign_legend_y + sign_box_dim + sign_row_inner_gap;
-      const safePlus = escapeSvgAttribute(plus_color);
-      const safeLess = escapeSvgAttribute(less_color);
+      const rows = color_swatches
+        .map((swatch, index) => {
+          const row_y =
+            sign_legend_y + index * (sign_box_dim + sign_row_inner_gap);
+          return `<rect x="${sign_box_x}" y="${row_y}" width="${sign_box_dim}" height="${sign_box_dim}" fill="${escapeSvgAttribute(swatch.color)}" />
+        <text x="${sign_label_x}" y="${row_y + sign_box_dim / 2}" text-anchor="start" dominant-baseline="middle">${escapeSvgText(swatch.label)}</text>`;
+        })
+        .join('');
       sign_legend_markup = `<g class="sign_legend" font-size="${fontSize}">
-        <rect x="${sign_box_x}" y="${plus_y}" width="${sign_box_dim}" height="${sign_box_dim}" fill="${safePlus}" />
-        <text x="${sign_label_x}" y="${plus_y + sign_box_dim / 2}" text-anchor="start" dominant-baseline="middle">+</text>
-        <rect x="${sign_box_x}" y="${less_y}" width="${sign_box_dim}" height="${sign_box_dim}" fill="${safeLess}" />
-        <text x="${sign_label_x}" y="${less_y + sign_box_dim / 2}" text-anchor="start" dominant-baseline="middle">−</text>
+        ${rows}
       </g>`;
     }
 
