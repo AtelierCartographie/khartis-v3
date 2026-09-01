@@ -51,6 +51,7 @@ import { createScatterplotLayerProps } from '@ateliercartographie/geoarrow-deck-
 import type { BinaryPointData } from '@ateliercartographie/geoarrow-deck-stream';
 import {
   cloneScatterBinaryData,
+  duplicateScatterBinaryGeometry,
   sortScatterBinaryDataByRadius
 } from './binary-scatter-data';
 import { createDotDensityLayers } from './density-layer-factory';
@@ -500,45 +501,13 @@ function createDoubleProportionalPointLayers(
     };
   };
 
-  const createScatterLayer = (
+  const buildMultiShapeLayer = (
     suffix: string,
-    fillByFeatureId: (featureId: number) => [number, number, number, number],
-    lineByFeatureId: (featureId: number) => [number, number, number, number],
-    radiusByFeatureId: (featureId: number) => number,
+    scatterProps: ReturnType<typeof createScatterplotLayerProps>,
+    layoutProps: ReturnType<typeof offsetForRole>,
     pickable: boolean,
-    triggerColumn: string,
-    role: 'primary' | 'secondary'
+    triggerColumn: string
   ) => {
-    const layoutProps = offsetForRole(role);
-    const scatterProps = createScatterplotLayerProps(pointData);
-    const scatterBinaryData = cloneScatterBinaryData(scatterProps);
-    attachBinaryPickingMetadata(
-      scatterBinaryData,
-      attributeTable,
-      pointData,
-      ctx
-    );
-    scatterBinaryData.attributes.getFillColor = pointColorAttr(
-      pointData,
-      fillByFeatureId
-    );
-    scatterBinaryData.attributes.getLineColor = pointColorAttr(
-      pointData,
-      lineByFeatureId
-    );
-    scatterBinaryData.attributes.getRadius = pointRadiusAttr(
-      pointData,
-      radiusByFeatureId
-    );
-    scatterBinaryData.attributes.getShape = buildShapeAttribute(
-      scatterBinaryData.featureIds,
-      attributeTable,
-      triggerColumn,
-      shapeOrdinal,
-      missingShapeOrdinal
-    );
-    sortScatterBinaryDataByRadius(scatterBinaryData);
-
     return new MultiShapeLayer({
       id: `${layerId}-${suffix}`,
       ...(scatterProps as unknown as Record<string, unknown>),
@@ -624,6 +593,132 @@ function createDoubleProportionalPointLayers(
       }
     }) as ThematicLayer;
   };
+
+  const createScatterLayer = (
+    suffix: string,
+    fillByFeatureId: (featureId: number) => [number, number, number, number],
+    lineByFeatureId: (featureId: number) => [number, number, number, number],
+    radiusByFeatureId: (featureId: number) => number,
+    pickable: boolean,
+    triggerColumn: string,
+    role: 'primary' | 'secondary'
+  ) => {
+    const scatterProps = createScatterplotLayerProps(pointData);
+    const scatterBinaryData = cloneScatterBinaryData(scatterProps);
+    attachBinaryPickingMetadata(
+      scatterBinaryData,
+      attributeTable,
+      pointData,
+      ctx
+    );
+    scatterBinaryData.attributes.getFillColor = pointColorAttr(
+      pointData,
+      fillByFeatureId
+    );
+    scatterBinaryData.attributes.getLineColor = pointColorAttr(
+      pointData,
+      lineByFeatureId
+    );
+    scatterBinaryData.attributes.getRadius = pointRadiusAttr(
+      pointData,
+      radiusByFeatureId
+    );
+    scatterBinaryData.attributes.getShape = buildShapeAttribute(
+      scatterBinaryData.featureIds,
+      attributeTable,
+      triggerColumn,
+      shapeOrdinal,
+      missingShapeOrdinal
+    );
+    sortScatterBinaryDataByRadius(scatterBinaryData);
+
+    return buildMultiShapeLayer(
+      suffix,
+      scatterProps,
+      offsetForRole(role),
+      pickable,
+      triggerColumn
+    );
+  };
+
+  const createOverlayLayer = (): ThematicLayer | null => {
+    const scatterProps = createScatterplotLayerProps(pointData);
+    const scatterBinaryData = cloneScatterBinaryData(scatterProps);
+    attachBinaryPickingMetadata(
+      scatterBinaryData,
+      attributeTable,
+      pointData,
+      ctx
+    );
+
+    const pairStride = duplicateScatterBinaryGeometry(scatterBinaryData);
+    const featureIds = scatterBinaryData.featureIds;
+    if (pairStride === null || !featureIds) {
+      return null;
+    }
+
+    const total = featureIds.length;
+    const fills = new Uint8Array(total * 4);
+    const lines = new Uint8Array(total * 4);
+    const radii = new Float32Array(total);
+    const shapes = new Float32Array(total);
+    const primaryMissing = attributeTable.getChild(pointSizeColumn);
+    const secondaryMissing = attributeTable.getChild(pointValueColumn);
+
+    for (let index = 0; index < total; index += 1) {
+      const featureId = featureIds[index];
+      const isPrimary = index < pairStride;
+      const fill = isPrimary
+        ? primaryFillByFeatureId(featureId)
+        : secondaryFillByFeatureId(featureId);
+      const line = isPrimary
+        ? primaryLineByFeatureId(featureId)
+        : secondaryLineByFeatureId(featureId);
+      const missingVector = isPrimary ? primaryMissing : secondaryMissing;
+      const offset = index * 4;
+
+      for (let channel = 0; channel < 4; channel += 1) {
+        fills[offset + channel] = fill[channel];
+        lines[offset + channel] = line[channel];
+      }
+      radii[index] = isPrimary
+        ? primaryRadiusByFeatureId(featureId)
+        : secondaryRadiusByFeatureId(featureId);
+      shapes[index] =
+        missingVector && isMissingThematicValue(missingVector.get(featureId))
+          ? missingShapeOrdinal
+          : shapeOrdinal;
+    }
+
+    scatterBinaryData.attributes.getFillColor = {
+      value: fills,
+      size: 4,
+      normalized: true
+    };
+    scatterBinaryData.attributes.getLineColor = {
+      value: lines,
+      size: 4,
+      normalized: true
+    };
+    scatterBinaryData.attributes.getRadius = { value: radii, size: 1 };
+    scatterBinaryData.attributes.getShape = { value: shapes, size: 1 };
+    sortScatterBinaryDataByRadius(scatterBinaryData);
+
+    return buildMultiShapeLayer(
+      'double-overlay',
+      scatterProps,
+      offsetForRole('primary'),
+      true,
+      `${pointSizeColumn}|${pointValueColumn}`
+    );
+  };
+
+  if (positionMode === 'overlay') {
+    const overlayLayer = createOverlayLayer();
+    if (overlayLayer) {
+      return [overlayLayer];
+    }
+  }
 
   return [
     createScatterLayer(
