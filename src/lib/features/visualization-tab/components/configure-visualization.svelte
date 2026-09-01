@@ -787,5 +787,10 @@
     display: flex;
     flex-direction: column;
     border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
+
+    :global(.section-title) {
+      font-size: 1rem;
+      line-height: 1.375rem;
+    }
   }
 </style>
