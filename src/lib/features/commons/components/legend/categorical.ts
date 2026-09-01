@@ -10,6 +10,7 @@ import {
   renderLegendHeader,
   renderLegendNote,
   resolveLegendFontFamily,
+  scaleLegendMetric,
   type CommonLegendTextOptions,
   type LegendSvgDefinition
 } from './utils';
@@ -73,7 +74,7 @@ export function draw_categorical_legend(
     lineHeight: line_height,
     fontFamily: resolvedFontFamily
   });
-  const marginValue = Math.max(10, Math.round(fontSize * 0.6));
+  const marginValue = scaleLegendMetric(10, fontSize);
   const margin = {
     top: marginValue,
     right: marginValue,
@@ -86,8 +87,8 @@ export function draw_categorical_legend(
     h: box_dim,
     w: footerType === 'line' ? box_dim * 1.5 : box_dim
   };
-  const gap = Math.max(8, Math.round(fontSize * 0.6));
-  const gutter = Math.max(16, Math.round(fontSize * 1.2));
+  const gap = scaleLegendMetric(8, fontSize);
+  const gutter = scaleLegendMetric(16, fontSize);
   let label_width = Math.round(fontSize * 15);
   const items_nb = raw_categories.length;
   const column_nb = items_nb <= 4 ? 1 : items_nb <= 8 ? 2 : 3;
@@ -174,7 +175,7 @@ export function draw_categorical_legend(
     footerItems.length > 0
       ? margin.left + footerBox.w + gap + footer_label_width + margin.right
       : 0;
-  const header_gap = 3;
+  const header_gap = scaleLegendMetric(3, fontSize);
   const title_font = createLegendFont({
     fontSize: titleSize,
     fontFamily: resolvedFontFamily,
@@ -249,7 +250,7 @@ export function draw_categorical_legend(
         (Math.max(...categories.map((item) => item.y_index)) + 1) * row_step -
         gap
       : y_start;
-  const section_gap = Math.max(10, Math.round(fontSize * 0.6));
+  const section_gap = scaleLegendMetric(10, fontSize);
   const footer_start =
     footerItems.length > 0
       ? categories_bottom + section_gap

@@ -117,6 +117,7 @@ vi.mock('@ateliercartographie/motif.js', () => ({
 import { legendActions } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
 import { getLegendState } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
 import LegendOverlay from './legend-overlay.svelte';
+import { LEGEND_DEFAULTS } from '$lib/features/step-toolbar/tools/legend/legend.constants';
 
 const measureCanvas = {
   getContext: () => ({
@@ -246,6 +247,17 @@ function setupLegendOccludedViewport(): {
   return { legend, popover, toolbar, viewport };
 }
 
+// A wrapped legend label is split across tspans and carries the full string on
+// aria-label instead, so match either form: jsdom has no canvas metrics and
+// breaks lines differently from the browser.
+function countLegendLabels(label: string): number {
+  return Array.from(document.querySelectorAll('svg text')).filter(
+    (node) =>
+      (node.getAttribute('aria-label') ?? node.textContent ?? '').trim() ===
+      label
+  ).length;
+}
+
 describe('legend overlay visibility', () => {
   beforeAll(() => {
     Textbox.setMeasureCanvas(measureCanvas);
@@ -303,7 +315,7 @@ describe('legend overlay visibility', () => {
     const style = legend?.getAttribute('style');
 
     expect(style).toContain('--legend-page-scale: 0.5');
-    expect(style).toContain('font-size: 10px');
+    expect(style).toContain(`font-size: ${LEGEND_DEFAULTS.FONT_SIZE}px`);
     expect(style).toContain('transform: scale(0.5)');
     expect(style).toContain('transform-origin: top right');
   });
@@ -478,7 +490,7 @@ describe('legend overlay visibility', () => {
     expect(
       container.querySelector('.legend-svg--missing-data')
     ).not.toBeInTheDocument();
-    expect(screen.getByText('Absence de données')).toBeInTheDocument();
+    expect(countLegendLabels('Absence de données')).toBe(1);
   });
 
   it('renders unique point symbols with the selected shape and configured size', () => {
@@ -501,7 +513,7 @@ describe('legend overlay visibility', () => {
     expect(triangle).toBeInTheDocument();
     expect(triangle?.getAttribute('transform')).toContain('scale(1.5)');
     expect(screen.getByText('Symboles')).toBeInTheDocument();
-    expect(screen.getByText('Absence de données')).toBeInTheDocument();
+    expect(countLegendLabels('Absence de données')).toBe(1);
   });
 
   it('renders point classed fill legends with the active fill value column and class count', () => {
@@ -700,7 +712,7 @@ describe('legend overlay visibility', () => {
     const { container } = render(LegendOverlay);
 
     expect(container.querySelector('.legend-svg--symbols')).toBeInTheDocument();
-    expect(screen.queryByText('Absence de données')).not.toBeInTheDocument();
+    expect(countLegendLabels('Absence de données')).toBe(0);
   });
 
   it('renders text categorical legends through the common SVG system', () => {
@@ -740,7 +752,7 @@ describe('legend overlay visibility', () => {
 
     render(LegendOverlay);
 
-    expect(screen.getAllByText('Absence de données')).toHaveLength(1);
+    expect(countLegendLabels('Absence de données')).toBe(1);
   });
 
   it('renders proportional text size legends through the original symbol legend generator', () => {
@@ -755,7 +767,7 @@ describe('legend overlay visibility', () => {
       container.querySelector('.legend-svg--text-size')
     ).toBeInTheDocument();
     expect(container.querySelector('.symbol_legend')).toBeInTheDocument();
-    expect(screen.getByText('Absence de données')).toBeInTheDocument();
+    expect(countLegendLabels('Absence de données')).toBe(1);
   });
 
   it('renders bivariate text legends as compact color and size blocks', () => {

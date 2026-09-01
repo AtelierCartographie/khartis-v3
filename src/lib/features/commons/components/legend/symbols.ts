@@ -17,6 +17,7 @@ import {
   renderLegendNote,
   resolveLegendFontFamily,
   round_extreme,
+  scaleLegendMetric,
   sqrtScale,
   type CommonLegendTextOptions,
   type LegendSvgDefinition,
@@ -103,13 +104,13 @@ export function draw_symbols_legend(
   const x_max = type !== 'bar' && type !== 'spike' ? values[0] : bar_width;
   const y_max = values[0];
   const is_min_alone = values[values.length - 1] <= 1.5;
-  const margin = Math.max(10, Math.round(fontSize * 0.6));
+  const margin = scaleLegendMetric(10, fontSize);
   const header_gap = 3;
-  const label_gap = 10;
-  const label_safety_padding = Math.max(6, Math.round(fontSize * 0.6));
+  const label_gap = scaleLegendMetric(10, fontSize);
+  const label_safety_padding = scaleLegendMetric(7, fontSize);
   const font = createLegendFont({ fontSize, fontFamily: resolvedFontFamily });
   const sign_box_dim = Math.round(fontSize * 1.25);
-  const sign_row_inner_gap = Math.max(4, Math.round(fontSize * 0.3));
+  const sign_row_inner_gap = scaleLegendMetric(4, fontSize);
   const sign_label_max_width = cross_zero
     ? Math.max(
         Textbox.measureText('+', font),
@@ -131,7 +132,7 @@ export function draw_symbols_legend(
     .map((d) => d * label_sign)
     .map((d) => Textbox.measureText(formatValue(d), font));
   const max_label_width = Math.max(...label_widths) + label_safety_padding;
-  const nodata_dash_width = 10;
+  const nodata_dash_width = scaleLegendMetric(10, fontSize);
   const nodata_label = options.nodataLabel ?? m.legend_no_data_label();
   const nodata_dash_x = type === 'circle' ? y_max + margin : margin;
   const nodata_label_x = nodata_dash_x + nodata_dash_width + 15;
@@ -183,12 +184,12 @@ export function draw_symbols_legend(
     titleFont: title_font,
     subtitleFont: subtitle_font
   });
-  const title_margin_bottom = Math.max(15, fontSize);
+  const title_margin_bottom = scaleLegendMetric(15, fontSize);
   const bottom_symbols =
     margin + header.height + title_margin_bottom + y_max * 2;
   const bottom_min_alone = bottom_symbols + 10;
   const symbols_bottom = is_min_alone ? bottom_min_alone : bottom_symbols;
-  const section_gap = Math.max(10, Math.round(fontSize * 0.6));
+  const section_gap = scaleLegendMetric(10, fontSize);
   const sign_legend_y = cross_zero
     ? symbols_bottom + section_gap
     : symbols_bottom;
