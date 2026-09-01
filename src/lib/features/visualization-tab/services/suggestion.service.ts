@@ -1180,6 +1180,32 @@ export function applyBlankVisualizationPreset(
   });
 }
 
+function withPrimitivesDisabled(
+  preset: VisualizationPreset
+): VisualizationPreset {
+  return {
+    ...preset,
+    primitiveFilters: [],
+    polygon: preset.polygon ? { ...preset.polygon, enabled: false } : undefined,
+    symbol: preset.symbol ? { ...preset.symbol, enabled: false } : undefined,
+    line: preset.line ? { ...preset.line, enabled: false } : undefined,
+    text: preset.text ? { ...preset.text, enabled: false } : undefined
+  };
+}
+
+export function applyEmptyVisualizationPreset(
+  vizId: string,
+  dataset: Parameters<typeof resolveBlankVisualizationPreset>[0],
+  origin?: VisualizationOrigin
+): void {
+  visualizationStore.updateVisualization(vizId, {
+    ...withPrimitivesDisabled(resolveBlankVisualizationPreset(dataset)),
+    origin,
+    primitiveOrder: undefined,
+    dataFilters: undefined
+  });
+}
+
 function createVisualizationRestoreSnapshot(
   visualization: VisualizationConfig
 ): VisualizationRestoreSnapshot {
