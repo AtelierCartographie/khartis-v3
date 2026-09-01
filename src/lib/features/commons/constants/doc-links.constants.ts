@@ -12,7 +12,7 @@ export const DOC_LINK = {
   CONTROL_DATA: `${USER_GUIDE_URL}#contrôler-les-données`,
   GEOLOCATE_DATA: `${USER_GUIDE_URL}#géolocaliser-les-données`,
   IMPORT_BASEMAP: `${USER_GUIDE_URL}#importer-un-fond-de-carte`,
-  REFERENCE_BASEMAP: `${USER_GUIDE_URL}#fond-de-référence`,
+  REFERENCE_BASEMAP: `${USER_GUIDE_URL}#fond-de-référence-ign--osm`,
   DISCRETIZATION: `${USER_GUIDE_URL}#discrétisation`,
   MAP_COLLECTIONS: `${USER_GUIDE_URL}#créer-une-collection-de-cartes`,
   PRIMITIVE_FILTERS: USER_GUIDE_URL
