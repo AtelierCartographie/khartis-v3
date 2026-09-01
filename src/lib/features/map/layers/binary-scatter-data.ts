@@ -123,6 +123,48 @@ export function sortScatterBinaryDataByRadius(
   }
 }
 
+// Overlay-mode double symbols must interleave both variables in a single draw
+// order, which deck can only do inside one layer: duplicate the geometry so
+// each feature carries an A point and a B point, and return the pair stride.
+export function duplicateScatterBinaryGeometry(
+  data: ScatterBinaryData
+): number | null {
+  const featureIds = data.featureIds;
+  const position = data.attributes.getPosition as
+    { value?: unknown; size?: unknown } | undefined;
+  const positions = position?.value;
+  const itemSize = typeof position?.size === 'number' ? position.size : 0;
+
+  if (
+    !featureIds ||
+    !position ||
+    itemSize <= 0 ||
+    !isNumericArray(positions) ||
+    positions.length !== featureIds.length * itemSize
+  ) {
+    return null;
+  }
+
+  const count = featureIds.length;
+  const nextFeatureIds = new Uint32Array(count * 2);
+  nextFeatureIds.set(featureIds, 0);
+  nextFeatureIds.set(featureIds, count);
+
+  const stride = count * itemSize;
+  const nextPositions = createNumericArrayClone(positions, stride * 2);
+  for (let index = 0; index < stride; index += 1) {
+    const value = positions[index] ?? 0;
+    nextPositions[index] = value;
+    nextPositions[stride + index] = value;
+  }
+
+  data.featureIds = nextFeatureIds;
+  data.attributes.getPosition = { ...position, value: nextPositions };
+  data.length = count * 2;
+
+  return count;
+}
+
 export function cloneScatterBinaryData(
   scatterProps: ReturnType<typeof createScatterplotLayerProps>
 ): ScatterBinaryData {
