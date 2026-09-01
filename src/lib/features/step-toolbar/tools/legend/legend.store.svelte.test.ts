@@ -28,6 +28,7 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
 }));
 
 import { getLegendState, legendActions } from './legend.store.svelte';
+import { LEGEND_DEFAULTS } from './legend.constants';
 
 function createVisualization(
   overrides: Partial<VisualizationConfig> = {}
@@ -56,28 +57,24 @@ describe('legend store responsive defaults', () => {
     mockVisualizationStore.visualizations = [];
   });
 
-  it('adapts pristine legend font size to the current page profile', () => {
+  it('keeps the default legend font size whatever the page profile', () => {
     formatActions.setModel(PageModel.A3_LANDSCAPE);
 
     legendActions.syncWithVisualizations();
 
-    expect(getLegendState().style.fontSize).toBe(11);
-  });
+    expect(getLegendState().style.fontSize).toBe(LEGEND_DEFAULTS.FONT_SIZE);
 
-  it('uses the actual custom page size instead of the previous preset profile', () => {
-    formatActions.setModel(PageModel.SCREEN_LANDSCAPE);
     formatActions.setMode(FormatMode.CUSTOM);
     formatActions.setSize(680, 680);
 
     legendActions.syncWithVisualizations();
 
-    expect(getLegendState().style.fontSize).toBe(10);
+    expect(getLegendState().style.fontSize).toBe(LEGEND_DEFAULTS.FONT_SIZE);
   });
 
-  it('does not overwrite a customized legend font size after the tool was opened', () => {
+  it('does not overwrite a customized legend font size', () => {
     formatActions.setModel(PageModel.SCREEN_LANDSCAPE);
     legendActions.updateStyle({ fontSize: 20 });
-    legendActions.markAsOpened();
 
     legendActions.syncWithVisualizations();
 

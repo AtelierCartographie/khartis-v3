@@ -7,17 +7,12 @@ import {
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
-import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
 import {
   clampFontSize,
   CARTOGRAPHIC_FONT_FAMILY,
   normalizeFontFamily
 } from '$lib/features/step-toolbar/fonts.constants';
 import { getVisualizationLegendSubtitle } from '$lib/features/commons/utils/legend-subtitle.utils';
-import {
-  getFormatLayoutSizingContext,
-  getFormatState
-} from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import { LEGEND_DEFAULTS, LEGEND_ID_PREFIXES } from './legend.constants';
 import type {
   LegendDragPosition,
@@ -256,14 +251,6 @@ const { actions, getState } = createToolStore<LegendState, LegendActions>(
 
       if (!areLegendItemsEqual(s.items, syncedItems)) {
         s.items = syncedItems;
-      }
-
-      if (!s.hasBeenOpened) {
-        const fmt = getFormatState();
-        const tokens = resolveLayoutSizingTokens(
-          getFormatLayoutSizingContext(fmt)
-        );
-        s.style.fontSize = tokens.legend.fontSize;
       }
     }
   }),

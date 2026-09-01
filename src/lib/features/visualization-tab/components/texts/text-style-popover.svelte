@@ -7,7 +7,7 @@
   import { portal } from '$lib/features/commons/utils/portal';
   import { resolveToolbarWidth } from '$lib/features/commons/utils/toolbar-width.utils';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
-  import { MIN_FONT_SIZE } from '$lib/features/step-toolbar/fonts.constants';
+  import { DEFAULT_FONT_SIZE } from '$lib/features/step-toolbar/fonts.constants';
   import * as m from '$lib/paraglide/messages';
   import { Close } from 'carbon-icons-svelte';
   import TextStyleSection, {
@@ -36,7 +36,7 @@
     onclose
   }: Props = $props();
 
-  const DEFAULT_SECONDARY_FONT_SIZE = MIN_FONT_SIZE;
+  const DEFAULT_SECONDARY_FONT_SIZE = DEFAULT_FONT_SIZE;
   const DEFAULT_POPOVER_WIDTH = 320;
   const VIEWPORT_GUTTER = 16;
   const TRIGGER_GAP = 12;

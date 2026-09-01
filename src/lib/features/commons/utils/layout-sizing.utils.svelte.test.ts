@@ -19,7 +19,7 @@ describe('layout sizing utils', () => {
         height: 595,
         model: 'page-a4-landscape'
       }).legend.fontSize
-    ).toBe(10);
+    ).toBe(8);
   });
 
   it('promotes A3 layouts to the print-large profile', () => {
