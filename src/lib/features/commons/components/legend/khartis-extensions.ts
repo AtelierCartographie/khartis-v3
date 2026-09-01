@@ -338,7 +338,8 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
       labelLines[index] ?? [],
       labelX,
       labelY,
-      lineHeight
+      lineHeight,
+      options.getLabel(item)
     );
 
     return {
@@ -376,7 +377,8 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
       footerLabelLines[index] ?? [],
       labelX,
       labelY,
-      lineHeight
+      lineHeight,
+      item.label
     );
 
     return {
@@ -508,13 +510,16 @@ function render_label(
   lines: string[],
   x: number,
   y: number,
-  lineHeight: number
+  lineHeight: number,
+  label?: string
 ): string {
   if (lines.length <= 1) {
     return `<text x="${x}" y="${y}">${escapeSvgText(lines[0] ?? '')}</text>`;
   }
 
-  return `<text>${lines
+  const accessibleName = label ?? lines.join(' ');
+
+  return `<text aria-label="${escapeSvgAttribute(accessibleName)}">${lines
     .map((line, index) => {
       const lineY = y + (index - (lines.length - 1) / 2) * lineHeight;
       return `<tspan x="${x}" y="${lineY}">${escapeSvgText(line)}</tspan>`;

@@ -1,5 +1,6 @@
 import { render } from '@testing-library/svelte';
 import Textbox from '@borgar/textbox';
+import { scaleLegendMetric } from './utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   LegendSvg,
@@ -117,7 +118,7 @@ describe('common legend generators', () => {
       })
     );
 
-    const horizontalMargins = 20;
+    const horizontalMargins = scaleLegendMetric(10, 10) * 2;
     expect(svg.width).toBeGreaterThanOrEqual(
       Textbox.measureText('gdp_per_capita', '10px Open Sans') +
         horizontalMargins
@@ -154,7 +155,7 @@ describe('common legend generators', () => {
       )
     );
 
-    const horizontalMargins = 20;
+    const horizontalMargins = scaleLegendMetric(10, 10) * 2;
     expect(svg.width).toBeGreaterThanOrEqual(
       Textbox.measureText('Visualisation', 'bold 12px Open Sans') +
         horizontalMargins
@@ -293,7 +294,7 @@ describe('common legend generators', () => {
       })
     );
 
-    const horizontalMargins = 20;
+    const horizontalMargins = scaleLegendMetric(10, 10) * 2;
     expect(svg.width).toBeGreaterThanOrEqual(
       Textbox.measureText(
         'population_identifier_with_no_spaces',
@@ -314,7 +315,7 @@ describe('common legend generators', () => {
       )
     );
 
-    const horizontalMargins = 20;
+    const horizontalMargins = scaleLegendMetric(10, 10) * 2;
     expect(svg.width).toBeGreaterThanOrEqual(
       Textbox.measureText('transport_flow_identifier', '10px Open Sans') +
         horizontalMargins
