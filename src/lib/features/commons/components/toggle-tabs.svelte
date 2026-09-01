@@ -142,7 +142,7 @@
     color: var(--cds-text-secondary);
   }
 
-  .toggle-tab:hover:not(.active) {
+  .toggle-tab:hover:not(.active):not(:disabled) {
     background-color: var(--cds-layer-hover-01);
   }
 
