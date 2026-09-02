@@ -18,6 +18,7 @@ import {
 import { DEFAULT_CLASSIFICATION_CLASS_COUNT } from '$lib/features/commons/constants/visualization.constants';
 import { applyFacetVariablePatch } from '$lib/features/commons/utils/facet-visualization-updates';
 import { calculateBreaks } from './classification.service';
+import { resolveRowScopeClause } from './row-scope.service';
 import {
   findPaletteById,
   generatePaletteColors,
@@ -290,7 +291,15 @@ async function buildFacetClassification(
     return { ...baseClassification };
   }
 
-  if (!baseViz.datasetId) {
+  // calculateBreaks resolves its dataset by source file, which is a different
+  // id from the one a visualization carries as soon as a project has been
+  // saved and reopened.
+  const datasetSourceFileId = baseViz.datasetId
+    ? datasetsStore.datasets.find(
+        (candidate) => candidate.id === baseViz.datasetId
+      )?.sourceFileId
+    : undefined;
+  if (!datasetSourceFileId) {
     return { ...baseClassification };
   }
 
@@ -299,9 +308,14 @@ async function buildFacetClassification(
     baseClassification.classes ??
     DEFAULT_CLASSIFICATION_CLASS_COUNT;
   const result = await calculateBreaks({
-    datasetId: baseViz.datasetId,
+    datasetId: datasetSourceFileId,
     columnName: variable,
     method: baseClassification.method,
+    rowScopeClause: resolveRowScopeClause({
+      datasetId: datasetSourceFileId,
+      vizFilters: baseViz.dataFilters,
+      primitive: resolveFacetPrimitiveFilter(slotPath)
+    }),
     numClasses: classes
   });
 
