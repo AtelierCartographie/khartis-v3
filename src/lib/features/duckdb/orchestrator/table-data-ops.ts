@@ -262,6 +262,27 @@ export async function getRowStats(
   return { total, filtered: total };
 }
 
+export async function getRowIdsInScope(
+  tableName: string,
+  clause: string,
+  Duck: DuckDBClientForTableData
+): Promise<Set<number>> {
+  const escapedTable = escapeIdentifier(tableName);
+  const query = `SELECT ${INTERNAL_COLUMN.ID} FROM "${escapedTable}" WHERE COALESCE(${clause}, FALSE)`;
+  const result = (await Duck.query(query)) as ArrowTableLike;
+  const rowIds = new Set<number>();
+
+  for (let index = 0; index < result.numRows; index += 1) {
+    const row = result.get(index) as Record<string, unknown>;
+    const rowId = normalizeRowId(row[INTERNAL_COLUMN.ID]);
+    if (rowId !== null) {
+      rowIds.add(rowId);
+    }
+  }
+
+  return rowIds;
+}
+
 export async function getExcludedRowIds(
   tableName: string,
   Duck: DuckDBClientForTableData
