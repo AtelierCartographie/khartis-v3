@@ -5,11 +5,7 @@ import type { Map as MapLibreMap } from 'maplibre-gl';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import {
-  Duck,
-  duckDBOrchestrator,
-  type DataTableFilter
-} from '$lib/features/duckdb';
+import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
@@ -49,10 +45,10 @@ import type {
 import type { DeckInstance } from './use-map-init.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import {
-  filterArrowTableByDataFilters,
-  filterArrowTableByTableFilters,
-  selectRowsByIndices
+  selectRowsByIndices,
+  selectRowsInScope
 } from '../utils/arrow-filter.utils';
+import { rowScopeStore } from '../stores/row-scope.store.svelte';
 import { get_bbox_center, get_max_scale } from '../core/projscreen';
 import { getSplitMatchedGeometryRowIndices } from '../layers/split-rendering-accessors';
 import {
@@ -155,7 +151,6 @@ export interface UseMapLayersProps {
   getModelMatrix?: () => Matrix4 | null | undefined;
   getPageDisplayScale?: () => number;
   getShouldRenderDatasetFallbacks?: () => boolean;
-  getTableFilters?: (datasetId: string) => DataTableFilter[] | undefined;
   onBasemapLayersLoaded?: () => void;
   onRepresentativePointTablesLoaded?: () => void;
 }
@@ -194,7 +189,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     getModelMatrix,
     getPageDisplayScale,
     getShouldRenderDatasetFallbacks,
-    getTableFilters,
     onBasemapLayersLoaded,
     onRepresentativePointTablesLoaded
   } = props;
@@ -838,58 +832,37 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     return filteredTable;
   }
 
-  function filterSplitGeometryTableByDatasetRows(
+  function scopeSplitGeometryTable(
     geometryTable: ArrowTable,
     split: SplitRenderingTable,
-    dataFilters: VisualizationConfig['dataFilters'],
-    primitiveType: PrimitiveFilter | undefined,
-    tableFilters: DataTableFilter[] | undefined
+    scopedRowIds: Set<number> | null
   ): ArrowTable {
     const matchedGeometryTable = getMatchedSplitTable(geometryTable, split);
-    const dataFilteredDataset = filterArrowTableByDataFilters(
-      split.dataset,
-      dataFilters,
-      primitiveType
-    );
-    const tableFilteredDataset = filterArrowTableByTableFilters(
-      dataFilteredDataset,
-      tableFilters
-    );
+    const scopedDataset = selectRowsInScope(split.dataset, scopedRowIds);
 
-    if (tableFilteredDataset === split.dataset) {
+    if (scopedDataset === split.dataset) {
       return matchedGeometryTable;
     }
 
     return getFilteredMatchedSplitTable(
       matchedGeometryTable,
-      tableFilteredDataset,
+      scopedDataset,
       split.featureIdColumn
     );
   }
 
-  function filterRepresentativePointTableByPrimitive(
+  function scopeRepresentativePointTable(
     representativePointBaseTable: ArrowTable,
     split: SplitRenderingTable | undefined,
-    dataFilters: VisualizationConfig['dataFilters'],
-    primitiveType: PrimitiveFilter,
-    tableFilters: DataTableFilter[] | undefined
+    scopedRowIds: Set<number> | null
   ): ArrowTable {
     return split
-      ? filterSplitGeometryTableByDatasetRows(
+      ? scopeSplitGeometryTable(
           representativePointBaseTable,
           split,
-          dataFilters,
-          primitiveType,
-          tableFilters
+          scopedRowIds
         )
-      : filterArrowTableByTableFilters(
-          filterArrowTableByDataFilters(
-            representativePointBaseTable,
-            dataFilters,
-            primitiveType
-          ),
-          tableFilters
-        );
+      : selectRowsInScope(representativePointBaseTable, scopedRowIds);
   }
 
   function getRequestedMetadataLayerTypes(): BasemapLayerType[] {
@@ -1348,48 +1321,29 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             const tablePrimitiveType = geoInfo?.type
               ? GEOMETRY_TO_PRIMITIVE[geoInfo.type as GeometryType]
               : undefined;
-            const tableFilters = getTableFilters?.(datasetId);
+            const scopedRowIds = rowScopeStore.getScopedRowIds(
+              viz.id,
+              tablePrimitiveType
+            );
             const filteredTable = split
-              ? filterSplitGeometryTableByDatasetRows(
-                  table,
-                  split,
-                  viz.dataFilters,
-                  tablePrimitiveType,
-                  tableFilters
-                )
-              : filterArrowTableByTableFilters(
-                  filterArrowTableByDataFilters(
-                    table,
-                    viz.dataFilters,
-                    tablePrimitiveType
-                  ),
-                  tableFilters
-                );
+              ? scopeSplitGeometryTable(table, split, scopedRowIds)
+              : selectRowsInScope(table, scopedRowIds);
             if (filteredTable !== table && filteredTable.numRows === 0) {
               hasEmptyFilteredVisualization = true;
             }
             // Raw point datasets have no representative-point table, so the
             // text layer renders from the main table; give it its own
-            // TEXT-filtered copy so Texts filters apply and Symbols filters
+            // TEXT-scoped copy so Texts filters apply and Symbols filters
             // don't leak onto the labels.
+            const textScopedRowIds = rowScopeStore.getScopedRowIds(
+              viz.id,
+              PrimitiveFilterType.TEXT
+            );
             ctx.textPointTable =
               geoInfo?.type === GeometryType.POINT
                 ? split
-                  ? filterSplitGeometryTableByDatasetRows(
-                      table,
-                      split,
-                      viz.dataFilters,
-                      PrimitiveFilterType.TEXT,
-                      tableFilters
-                    )
-                  : filterArrowTableByTableFilters(
-                      filterArrowTableByDataFilters(
-                        table,
-                        viz.dataFilters,
-                        PrimitiveFilterType.TEXT
-                      ),
-                      tableFilters
-                    )
+                  ? scopeSplitGeometryTable(table, split, textScopedRowIds)
+                  : selectRowsInScope(table, textScopedRowIds)
                 : undefined;
             const joinedBasemapId = split
               ? getDatasetJoinedBasemap(datasetId)
@@ -1409,20 +1363,19 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
             if (representativePointBaseTable) {
               const filteredRepresentativePointTable =
-                filterRepresentativePointTableByPrimitive(
+                scopeRepresentativePointTable(
                   representativePointBaseTable,
                   split,
-                  viz.dataFilters,
-                  PrimitiveFilterType.POINT,
-                  tableFilters
+                  rowScopeStore.getScopedRowIds(
+                    viz.id,
+                    PrimitiveFilterType.POINT
+                  )
                 );
               const filteredTextRepresentativePointTable =
-                filterRepresentativePointTableByPrimitive(
+                scopeRepresentativePointTable(
                   representativePointBaseTable,
                   split,
-                  viz.dataFilters,
-                  PrimitiveFilterType.TEXT,
-                  tableFilters
+                  textScopedRowIds
                 );
               ctx.representativePointTable = filteredRepresentativePointTable;
               ctx.representativePointGeometryInfo =

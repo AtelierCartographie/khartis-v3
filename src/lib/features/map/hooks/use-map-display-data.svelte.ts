@@ -7,6 +7,7 @@ import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.st
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { globalState } from '$lib/features/commons/stores/global.svelte';
 import {
+  ALL_PRIMITIVE_FILTERS,
   getPolygonPrimitive,
   visualizationStore,
   type VisualizationConfig
@@ -21,6 +22,10 @@ import { SvelteMap } from 'svelte/reactivity';
 import { basemapService } from '../services/basemap.service.svelte';
 import { densityLoadingStore } from '../stores/density-loading.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
+import {
+  rowScopeStore,
+  type RowScopeTarget
+} from '../stores/row-scope.store.svelte';
 import type { SplitRenderingTable } from '../types';
 import { resolveBestSplitFeatureIdColumn } from '../layers/split-rendering-accessors';
 import {
@@ -106,6 +111,28 @@ export function useMapDisplayData(
       .filter((value): value is string => value !== null)
       .join('|')
   );
+  const rowScopeTargets = $derived.by(() =>
+    visualizationStore.activeVisualizations.flatMap((viz) => {
+      const sourceFileId = datasetsStore.datasets.find(
+        (dataset) => dataset.id === viz.datasetId
+      )?.sourceFileId;
+      if (!sourceFileId) {
+        return [];
+      }
+
+      // The undefined primitive is the scope a geometry with no resolved
+      // primitive type renders under: every filter of the visualization.
+      return [...ALL_PRIMITIVE_FILTERS, undefined].map(
+        (primitive): RowScopeTarget => ({
+          visualizationId: viz.id,
+          datasetId: sourceFileId,
+          vizFilters: viz.dataFilters,
+          primitive
+        })
+      );
+    })
+  );
+
   // Reload signature for the orthographic reproject opt-in: changes only when a
   // non-WGS84 dataset is displayed AND the user toggles a manual projection, so
   // the dataset's render table is re-fetched (reprojected to WGS84) or restored.
@@ -796,6 +823,13 @@ export function useMapDisplayData(
         loadGPSData(dataset.id, duckDBDataset.id, thisGeneration);
       }
     }
+  });
+
+  $effect(() => {
+    void duckDBDatasetsVersion;
+    const targets = rowScopeTargets;
+
+    void rowScopeStore.sync(targets);
   });
 
   $effect(() => {
