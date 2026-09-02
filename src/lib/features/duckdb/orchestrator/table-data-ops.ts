@@ -262,6 +262,58 @@ export async function getRowStats(
   return { total, filtered: total };
 }
 
+export interface ColumnDomain {
+  min: number;
+  max: number;
+}
+
+export async function getColumnDomainsInScope(
+  tableName: string,
+  clause: string | null,
+  columns: string[],
+  Duck: DuckDBClientForTableData
+): Promise<Map<string, ColumnDomain>> {
+  const domains = new Map<string, ColumnDomain>();
+  if (columns.length === 0) {
+    return domains;
+  }
+
+  const escapedTable = escapeIdentifier(tableName);
+  const projections = columns
+    .map((column, index) => {
+      const numericRef = `TRY_CAST("${escapeIdentifier(column)}" AS DOUBLE)`;
+      return `MIN(${numericRef}) AS min_${index}, MAX(${numericRef}) AS max_${index}`;
+    })
+    .join(', ');
+  const where = clause ? ` WHERE COALESCE(${clause}, FALSE)` : '';
+
+  const result = (await Duck.query(
+    `SELECT ${projections} FROM "${escapedTable}"${where}`
+  )) as ArrowTableLike;
+  if (result.numRows === 0) {
+    return domains;
+  }
+
+  const row = result.get(0) as Record<string, unknown>;
+  columns.forEach((column, index) => {
+    // A non-numeric column and an empty scope both aggregate to NULL, and
+    // Number(null) is a finite 0 — coercing first would invent a 0..0 domain.
+    const rawMin = row[`min_${index}`];
+    const rawMax = row[`max_${index}`];
+    if (rawMin === null || rawMax === null) {
+      return;
+    }
+
+    const min = Number(rawMin);
+    const max = Number(rawMax);
+    if (Number.isFinite(min) && Number.isFinite(max)) {
+      domains.set(column, { min, max });
+    }
+  });
+
+  return domains;
+}
+
 export async function getRowIdsInScope(
   tableName: string,
   clause: string,

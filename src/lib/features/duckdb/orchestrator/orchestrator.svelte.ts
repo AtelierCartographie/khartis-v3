@@ -1028,6 +1028,22 @@ export const duckDBOrchestrator = {
     return tableDataOps.getRowIdsInScope(tableName, clause, Duck);
   },
 
+  async getColumnDomainsInScope(
+    tableName: string,
+    clause: string | null,
+    columns: string[]
+  ): Promise<Map<string, tableDataOps.ColumnDomain>> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return tableDataOps.getColumnDomainsInScope(
+      tableName,
+      clause,
+      columns,
+      Duck
+    );
+  },
+
   async getFullAnalysis(
     tableName: string,
     force = false

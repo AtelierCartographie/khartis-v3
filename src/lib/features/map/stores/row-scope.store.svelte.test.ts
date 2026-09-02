@@ -3,12 +3,14 @@ import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.
 
 const mocks = vi.hoisted(() => ({
   getRowIdsInScope: vi.fn(),
+  getColumnDomainsInScope: vi.fn(),
   resolveRowScope: vi.fn()
 }));
 
 vi.mock('$lib/features/duckdb', () => ({
   duckDBOrchestrator: {
-    getRowIdsInScope: mocks.getRowIdsInScope
+    getRowIdsInScope: mocks.getRowIdsInScope,
+    getColumnDomainsInScope: mocks.getColumnDomainsInScope
   }
 }));
 
@@ -18,11 +20,15 @@ vi.mock('$lib/features/commons/services/row-scope.service', () => ({
 
 const { rowScopeStore } = await import('./row-scope.store.svelte');
 
-function target(primitive: PrimitiveFilterType | undefined) {
+function target(
+  primitive: PrimitiveFilterType | undefined,
+  numericColumns: string[] = []
+) {
   return {
     visualizationId: 'viz-1',
     datasetId: 'source-1',
-    primitive
+    primitive,
+    numericColumns
   };
 }
 
@@ -36,8 +42,10 @@ describe('rowScopeStore', () => {
   beforeEach(() => {
     rowScopeStore.clear();
     mocks.getRowIdsInScope.mockReset();
+    mocks.getColumnDomainsInScope.mockReset();
     mocks.resolveRowScope.mockReset();
     mocks.getRowIdsInScope.mockResolvedValue(new Set([1, 2]));
+    mocks.getColumnDomainsInScope.mockResolvedValue(new Map());
   });
 
   it('leaves every row in scope when no filter resolves', async () => {
@@ -46,7 +54,9 @@ describe('rowScopeStore', () => {
       clause: null
     });
 
-    await rowScopeStore.sync(EVERY_PRIMITIVE.map(target));
+    await rowScopeStore.sync(
+      EVERY_PRIMITIVE.map((primitive) => target(primitive))
+    );
 
     expect(mocks.getRowIdsInScope).not.toHaveBeenCalled();
     expect(
@@ -60,7 +70,9 @@ describe('rowScopeStore', () => {
       clause: '"pop" >= 1000'
     });
 
-    await rowScopeStore.sync(EVERY_PRIMITIVE.map(target));
+    await rowScopeStore.sync(
+      EVERY_PRIMITIVE.map((primitive) => target(primitive))
+    );
 
     expect(mocks.getRowIdsInScope).toHaveBeenCalledTimes(1);
     expect(mocks.getRowIdsInScope).toHaveBeenCalledWith(
@@ -85,7 +97,9 @@ describe('rowScopeStore', () => {
       })
     );
 
-    await rowScopeStore.sync(EVERY_PRIMITIVE.map(target));
+    await rowScopeStore.sync(
+      EVERY_PRIMITIVE.map((primitive) => target(primitive))
+    );
 
     expect(mocks.getRowIdsInScope).toHaveBeenCalledTimes(2);
   });
@@ -114,6 +128,46 @@ describe('rowScopeStore', () => {
     expect(
       rowScopeStore.getScopedRowIds('viz-1', PrimitiveFilterType.POLYGON)
     ).toEqual(new Set([2]));
+  });
+
+  it('carries the domain of the columns the primitive drives', async () => {
+    mocks.resolveRowScope.mockReturnValue({
+      tableName: 'communes',
+      clause: '"pop" >= 1000'
+    });
+    mocks.getColumnDomainsInScope.mockResolvedValue(
+      new Map([['pop', { min: 1000, max: 9000 }]])
+    );
+
+    await rowScopeStore.sync([target(PrimitiveFilterType.POINT, ['pop'])]);
+
+    expect(mocks.getColumnDomainsInScope).toHaveBeenCalledWith(
+      'communes',
+      '"pop" >= 1000',
+      ['pop']
+    );
+    expect(
+      rowScopeStore.getScopedDomain('viz-1', PrimitiveFilterType.POINT, 'pop')
+    ).toEqual({ min: 1000, max: 9000 });
+    expect(
+      rowScopeStore.getScopedDomain('viz-1', PrimitiveFilterType.POINT, 'other')
+    ).toBeNull();
+  });
+
+  it('re-queries when the same clause starts driving another column', async () => {
+    mocks.resolveRowScope.mockReturnValue({
+      tableName: 'communes',
+      clause: '"pop" >= 1000'
+    });
+    await rowScopeStore.sync([target(PrimitiveFilterType.POINT, ['pop'])]);
+
+    await rowScopeStore.sync([target(PrimitiveFilterType.POINT, ['density'])]);
+
+    expect(mocks.getColumnDomainsInScope).toHaveBeenLastCalledWith(
+      'communes',
+      '"pop" >= 1000',
+      ['density']
+    );
   });
 
   it('drops the scope of a visualization that is gone', async () => {
