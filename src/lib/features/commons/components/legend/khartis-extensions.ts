@@ -9,14 +9,13 @@ import {
   renderLegendHeader,
   renderLegendNote,
   resolveLegendFontFamily,
+  splitLegendOverflow,
   wrapLegendText,
   type CommonLegendTextOptions,
   type LegendSvgDefinition
 } from './utils';
 
 export type KhartisLegendSwatchType = 'box' | 'line' | 'symbol' | 'pattern';
-export type KhartisDoubleSymbolPosition =
-  'overlay' | 'juxtaposition' | 'division';
 
 export interface LegendPatternFill {
   defs: string;
@@ -59,22 +58,6 @@ export interface KhartisDensityLegendOptions extends CommonLegendTextOptions {
   ratioLabel: string;
   dotSize: number;
   fill: string;
-  footerItems?: KhartisLegendSwatchItem[];
-  footerType?: KhartisLegendSwatchType;
-}
-
-export interface KhartisDoubleSymbolsLegendStep {
-  label: string;
-  size: number;
-  symbol: string;
-  fill: string;
-  secondaryFill: string;
-  stroke?: string;
-  opacity?: number;
-  positionMode?: KhartisDoubleSymbolPosition;
-}
-
-export interface KhartisDoubleSymbolsLegendOptions extends CommonLegendTextOptions {
   footerItems?: KhartisLegendSwatchItem[];
   footerType?: KhartisLegendSwatchType;
 }
@@ -167,87 +150,6 @@ export function draw_khartis_density_legend(
   });
 }
 
-export function draw_khartis_double_symbols_legend(
-  steps: KhartisDoubleSymbolsLegendStep[],
-  options: KhartisDoubleSymbolsLegendOptions = {}
-): LegendSvgDefinition {
-  const shapeWidth = getDoubleSymbolShapeWidth(steps);
-
-  return draw_row_legend({
-    ...options,
-    className: 'khartis_double_symbol_legend',
-    items: steps,
-    getLabel: (step) => step.label,
-    shapeWidth,
-    minRowHeight: Math.max(
-      18,
-      ...steps.map((step) => getDoubleSymbolRadius(step.size) * 2)
-    ),
-    footerItems: options.footerItems,
-    footerType: options.footerType,
-    drawShape: (step, x, rowTop, _size, _index, rowHeight) => {
-      const radius = getDoubleSymbolRadius(step.size);
-      const mode = step.positionMode ?? 'overlay';
-      const pairWidth = getDoubleSymbolPairWidth(step);
-      const left = x + (shapeWidth - pairWidth) / 2;
-      const baselinePadding = 1;
-      const cy = rowTop + rowHeight - radius - baselinePadding;
-      const firstX = left + radius;
-      const secondX =
-        mode === 'juxtaposition' ? left + radius * 2 + 8 : left + radius * 2;
-      const first = draw_symbol(
-        {
-          symbol: step.symbol,
-          fill: step.fill,
-          stroke: step.stroke,
-          opacity: step.opacity,
-          size: radius
-        },
-        firstX,
-        cy,
-        radius * 2
-      );
-      const second = draw_symbol(
-        {
-          symbol: step.symbol,
-          fill: step.secondaryFill,
-          stroke: step.stroke,
-          opacity: step.opacity,
-          size: radius
-        },
-        secondX,
-        cy,
-        radius * 2
-      );
-
-      return {
-        markup: `<g class="double-symbol-pair" data-position-mode="${escapeSvgAttribute(mode)}">${first.markup}${second.markup}</g>`,
-        defs: [first.defs, second.defs].filter(Boolean).join(''),
-        labelY: cy
-      };
-    }
-  });
-}
-
-function getDoubleSymbolRadius(size: number): number {
-  return Math.max(4, Math.min(12, size));
-}
-
-function getDoubleSymbolPairWidth(
-  step: KhartisDoubleSymbolsLegendStep
-): number {
-  const radius = getDoubleSymbolRadius(step.size);
-  const mode = step.positionMode ?? 'overlay';
-
-  return mode === 'juxtaposition' ? radius * 3 + 8 : radius * 3;
-}
-
-function getDoubleSymbolShapeWidth(
-  steps: KhartisDoubleSymbolsLegendStep[]
-): number {
-  return Math.max(38, ...steps.map((step) => getDoubleSymbolPairWidth(step)));
-}
-
 function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
   const fontSize = options.fontSize ?? 12;
   const fontFamily = resolveLegendFontFamily(options.fontFamily);
@@ -270,13 +172,19 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
   const gap = Math.max(8, Math.round(fontSize * 0.6));
   const shapeSize = Math.round(fontSize * 1.25);
   const footerType = options.footerType ?? 'box';
-  const footerItems = options.footerItems ?? [];
+  const { items, overflowLabel } = splitLegendOverflow(options.items);
+  const footerItems: KhartisLegendSwatchItem[] = [
+    ...(overflowLabel
+      ? [{ label: overflowLabel, fill: 'none', stroke: 'none', strokeWidth: 0 }]
+      : []),
+    ...(options.footerItems ?? [])
+  ];
   const shapeWidth = Math.max(
     options.shapeWidth ?? shapeSize,
     footerItems.length > 0 ? getSwatchShapeWidth(footerType, shapeSize) : 0
   );
   const labelWidth = Math.round(fontSize * 15);
-  const labelLines = options.items.map((item) =>
+  const labelLines = items.map((item) =>
     wrapLegendText(options.getLabel(item), font, labelWidth).slice(0, 2)
   );
   const footerLabelLines = footerItems.map((item) =>
@@ -321,7 +229,7 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
   );
   const rowStep = rowBodyHeight + gap;
   const startY = margin + header.height + gap;
-  const rows = options.items.map((item, index) => {
+  const rows = items.map((item, index) => {
     const x = margin;
     const rowTop = startY + index * rowStep;
     const labelX = x + shapeWidth + gap;
@@ -348,9 +256,7 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
     };
   });
   const mainBottom =
-    options.items.length > 0
-      ? startY + options.items.length * rowStep - gap
-      : startY;
+    items.length > 0 ? startY + items.length * rowStep - gap : startY;
   const maxFooterLineCount = Math.max(
     1,
     ...footerLabelLines.map((lines) => lines.length)

@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages';
 import {
   clampFontSize,
   resolveFontFamilyStack
@@ -55,6 +56,31 @@ export interface RenderLegendNoteOptions {
   noteSize: number;
   fontFamily?: string;
   noteFont?: string;
+}
+
+/**
+ * A categorical legend must mirror the map, so nothing is dropped at the
+ * cardinalities cartography actually uses: world countries (~200) and French
+ * départements (101) both stay complete. Past that the palette repeats, the
+ * rows outgrow any page, and the markup stops being worth rendering, so the
+ * remainder collapses into a single counted row.
+ */
+export const MAX_LEGEND_CATEGORIES = 200;
+
+export function splitLegendOverflow<T>(items: T[]): {
+  items: T[];
+  overflowLabel: string | null;
+} {
+  if (items.length <= MAX_LEGEND_CATEGORIES) {
+    return { items, overflowLabel: null };
+  }
+
+  return {
+    items: items.slice(0, MAX_LEGEND_CATEGORIES),
+    overflowLabel: m.categories_hidden_count({
+      count: items.length - MAX_LEGEND_CATEGORIES
+    })
+  };
 }
 
 export function escapeSvgText(value: string): string {
