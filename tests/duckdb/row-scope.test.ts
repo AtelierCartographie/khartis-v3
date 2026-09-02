@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   buildFilterClause,
   buildFilterWhereClause,
@@ -10,8 +10,13 @@ import { search_macros } from '$lib/features/duckdb/macros/search';
 import {
   getColumnDomainsInScope,
   getRowIdsInScope,
+  getScopedRowStats,
   type DuckDBClientForTableData
 } from '$lib/features/duckdb/orchestrator/table-data-ops';
+import {
+  clearFiltersForTable,
+  setFilters
+} from '$lib/features/duckdb/orchestrator/state.svelte';
 import type {
   DataTableFilter,
   DataTableFilterInput
@@ -262,5 +267,55 @@ describe('getColumnDomainsInScope', () => {
     await expect(
       getColumnDomainsInScope(TABLE, null, [], duckClient())
     ).resolves.toEqual(new Map());
+  });
+});
+
+describe('getScopedRowStats', () => {
+  const corsica: DataTableFilterInput = {
+    column: 'region',
+    columnType: 'varchar',
+    operator: FilterOperatorEnum.EQUALS,
+    value: 'Corse'
+  };
+  const overFortyThousand = buildFilterClause(TABLE, [
+    { column: 'pop', operator: FilterOperatorEnum.GTE, value: '40000' }
+  ]) as string;
+
+  afterEach(() => {
+    clearFiltersForTable(TABLE);
+  });
+
+  it('counts the whole table when nothing is filtered', async () => {
+    await expect(getScopedRowStats(TABLE, null, duckClient())).resolves.toEqual(
+      {
+        total: 6,
+        filtered: 6
+      }
+    );
+  });
+
+  it('measures a primitive filter against the whole table when no table filter is active', async () => {
+    await expect(
+      getScopedRowStats(TABLE, overFortyThousand, duckClient())
+    ).resolves.toEqual({ total: 6, filtered: 4 });
+  });
+
+  it('takes the table filter as the denominator a primitive works against', async () => {
+    setFilters(TABLE, tableFilters(corsica));
+
+    await expect(
+      getScopedRowStats(TABLE, scopeClause([corsica], []), duckClient())
+    ).resolves.toEqual({ total: 3, filtered: 3 });
+
+    await expect(
+      getScopedRowStats(
+        TABLE,
+        combineFilterClauses([
+          buildFilterWhereClause(tableFilters(corsica)),
+          overFortyThousand
+        ]),
+        duckClient()
+      )
+    ).resolves.toEqual({ total: 3, filtered: 2 });
   });
 });

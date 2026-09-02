@@ -1018,6 +1018,16 @@ export const duckDBOrchestrator = {
     return tableDataOps.getRowStats(tableName, Duck);
   },
 
+  async getScopedRowStats(
+    tableName: string,
+    scopeClause: string | null
+  ): Promise<FilterStats> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return tableDataOps.getScopedRowStats(tableName, scopeClause, Duck);
+  },
+
   async getRowIdsInScope(
     tableName: string,
     clause: string
