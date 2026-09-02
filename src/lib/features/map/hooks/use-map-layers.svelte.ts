@@ -851,6 +851,18 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     );
   }
 
+  // Removing an area or a line leaves a hole in the reference geometry, so
+  // those keep every feature and let the missing-data styling speak instead.
+  // Symbols and labels have nothing to preserve underneath and stay dropped.
+  function keepsEveryFeatureUnderFilter(
+    primitive: PrimitiveFilter | undefined
+  ): boolean {
+    return (
+      primitive === PrimitiveFilterType.POLYGON ||
+      primitive === PrimitiveFilterType.LINE
+    );
+  }
+
   function scopeRepresentativePointTable(
     representativePointBaseTable: ArrowTable,
     split: SplitRenderingTable | undefined,
@@ -1325,11 +1337,27 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               viz.id,
               tablePrimitiveType
             );
-            const filteredTable = split
-              ? scopeSplitGeometryTable(table, split, scopedRowIds)
-              : selectRowsInScope(table, scopedRowIds);
+            const keepsEveryFeature =
+              keepsEveryFeatureUnderFilter(tablePrimitiveType);
+            const filteredTable = keepsEveryFeature
+              ? split
+                ? getMatchedSplitTable(table, split)
+                : table
+              : split
+                ? scopeSplitGeometryTable(table, split, scopedRowIds)
+                : selectRowsInScope(table, scopedRowIds);
             if (filteredTable !== table && filteredTable.numRows === 0) {
               hasEmptyFilteredVisualization = true;
+            }
+            if (keepsEveryFeature && scopedRowIds) {
+              if (split) {
+                ctx.scopedSplitDatasetTable = selectRowsInScope(
+                  split.dataset,
+                  scopedRowIds
+                );
+              } else {
+                ctx.scopedRowIds = scopedRowIds;
+              }
             }
             // Raw point datasets have no representative-point table, so the
             // text layer renders from the main table; give it its own

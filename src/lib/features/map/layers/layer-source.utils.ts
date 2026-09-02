@@ -27,13 +27,16 @@ export function attachBinaryPickingMetadata(
       sourceTable,
       ctx.splitFeatureIdColumn
     );
+    // The tooltip has to agree with what is drawn: an area kept only to hold
+    // the basemap together reads as missing, so it must not report a value.
+    const attributeTable = ctx.scopedSplitDatasetTable ?? ctx.splitDatasetTable;
 
-    target.khartisSourceTable = ctx.splitDatasetTable;
-    target.khartisSplitDatasetTable = ctx.splitDatasetTable;
+    target.khartisSourceTable = attributeTable;
+    target.khartisSplitDatasetTable = attributeTable;
     if (featureIdColumn) {
       target.khartisSplitDatasetRowByGeomRow = buildSplitDatasetRowMapping(
         sourceTable,
-        ctx.splitDatasetTable,
+        attributeTable,
         featureIdColumn
       );
     }

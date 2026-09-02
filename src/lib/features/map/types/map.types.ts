@@ -129,6 +129,14 @@ export interface LayerContext {
   splitDatasetTable?: ArrowTable;
 
   splitFeatureIdColumn?: string;
+
+  // Areas and lines keep every feature so a filter never punches a hole in the
+  // basemap; these carry the rows still in scope, and a feature left out of
+  // them reads as missing data. Labels deliberately stay on the unscoped
+  // splitDatasetTable: their own geometry is already scoped for texts.
+  scopedSplitDatasetTable?: ArrowTable;
+
+  scopedRowIds?: Set<number>;
 }
 
 export type BBox = [number, number, number, number];
