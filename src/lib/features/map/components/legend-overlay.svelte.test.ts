@@ -117,6 +117,8 @@ vi.mock('@ateliercartographie/motif.js', () => ({
 import { legendActions } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
 import { getLegendState } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
 import LegendOverlay from './legend-overlay.svelte';
+import { MAX_LEGEND_CATEGORIES } from '$lib/features/commons/components/legend';
+import { m } from '$lib/paraglide/messages';
 import { LEGEND_DEFAULTS } from '$lib/features/step-toolbar/tools/legend/legend.constants';
 
 const measureCanvas = {
@@ -422,6 +424,47 @@ describe('legend overlay visibility', () => {
     expect(swatchLabels).toEqual(['population', 'secondary-population']);
   });
 
+  it('draws a single proportional symbol legend as bare outlines', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildSingleProportionalViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    // Only the size carries meaning here, so the fill would just add noise.
+    const symbols = container.querySelector('.legend-svg--symbols .symbols');
+    expect(symbols?.getAttribute('fill')).toBe('none');
+    expect(symbols?.getAttribute('stroke')).toBe('currentColor');
+  });
+
+  it('stacks one named symbol legend per variable on own-scale double symbols', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [
+      buildOwnScaleDoubleProportionalViz()
+    ];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    const legends = container.querySelectorAll('.legend-svg--symbols');
+    expect(legends).toHaveLength(2);
+
+    // Own scales cannot share a graduated column, so colour is what tells the
+    // two variables apart and each legend names its own.
+    expect(legends[0].querySelector('.symbols')?.getAttribute('fill')).toBe(
+      '#4585f5'
+    );
+    expect(legends[1].querySelector('.symbols')?.getAttribute('fill')).toBe(
+      '#ff812a'
+    );
+    const subtitles = Array.from(
+      container.querySelectorAll('.legend-svg--symbols .subtitle text')
+    ).map((node) => node.textContent);
+    expect(subtitles).toEqual(['population', 'secondary-population']);
+  });
+
   it('renders point categories in the legend and hides disabled categories', () => {
     mockVisualizationStore.version = 1;
     mockVisualizationStore.visualizations = [buildPointCategoriesViz()];
@@ -471,6 +514,35 @@ describe('legend overlay visibility', () => {
     for (const label of labels) {
       expect(countLegendLabels(label)).toBe(1);
     }
+  });
+
+  it('collapses the tail of an absurd category count into a counted row', () => {
+    const viz = buildPointCategoriesViz();
+    const labels = Array.from(
+      { length: MAX_LEGEND_CATEGORIES + 12 },
+      (_, index) => `Category ${index + 1}`
+    );
+    if (viz.symbol?.classification) {
+      viz.symbol.classification = {
+        ...viz.symbol.classification,
+        labels,
+        categoryValues: labels,
+        disabledLabels: [],
+        colors: labels.map(
+          (_, index) => `#${(index + 1).toString(16).padStart(6, '0')}`
+        )
+      };
+    }
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [viz];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    render(LegendOverlay);
+
+    expect(countLegendLabels(`Category ${MAX_LEGEND_CATEGORIES}`)).toBe(1);
+    expect(countLegendLabels(`Category ${MAX_LEGEND_CATEGORIES + 1}`)).toBe(0);
+    expect(countLegendLabels(m.categories_hidden_count({ count: 12 }))).toBe(1);
   });
 
   it('renders categorical missing data as a compact footer', () => {
@@ -1131,6 +1203,41 @@ function buildDoubleProportionalViz(): VisualizationConfig {
       minSize: 4,
       maxSize: 24,
       sizeScale: 'linear'
+    }
+  } as VisualizationConfig;
+}
+
+function buildSingleProportionalViz(): VisualizationConfig {
+  const base = buildDoubleProportionalViz();
+
+  return {
+    ...base,
+    id: 'viz-prop-single',
+    modes: {
+      symbol: SymbolMode.PROPORTIONAL,
+      proportionalType: ProportionalType.SINGLE
+    },
+    symbol: {
+      ...base.symbol,
+      proportionalType: ProportionalType.SINGLE,
+      valueColumn: undefined
+    },
+    mapping: {
+      sizeColumn: 'population',
+      geometryColumn: 'geom'
+    }
+  } as VisualizationConfig;
+}
+
+function buildOwnScaleDoubleProportionalViz(): VisualizationConfig {
+  const base = buildDoubleProportionalViz();
+
+  return {
+    ...base,
+    id: 'viz-prop-own-scale',
+    symbol: {
+      ...base.symbol,
+      commonScale: false
     }
   } as VisualizationConfig;
 }

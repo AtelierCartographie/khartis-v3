@@ -49,7 +49,6 @@ import {
   createLegendSvg,
   draw_categorical_legend,
   draw_khartis_density_legend,
-  draw_khartis_double_symbols_legend,
   draw_khartis_line_width_legend,
   draw_khartis_swatch_legend,
   draw_quanti_color_legend,
@@ -58,7 +57,6 @@ import {
   type CategoricalShapeType,
   type CategoryItem,
   type CommonLegendTextOptions,
-  type KhartisDoubleSymbolsLegendStep,
   type KhartisLegendSwatchItem,
   type KhartisLegendSwatchType,
   type KhartisLineWidthLegendStep,
@@ -152,6 +150,10 @@ type LegendCategoricalEntry = {
   originalIndex: number;
 };
 
+type LegendSegmentContext = {
+  includeMissingDataFooter: boolean;
+};
+
 type LegendSegmentDraft = {
   key: string;
   className: string;
@@ -159,7 +161,7 @@ type LegendSegmentDraft = {
   consumesMissingData?: boolean;
   create: (
     options: CommonLegendTextOptions,
-    context: { includeMissingDataFooter: boolean }
+    context: LegendSegmentContext
   ) => LegendSvgDefinition | null;
 };
 
@@ -637,7 +639,7 @@ function getLegendSegmentDrafts(
     getTextColorLegendDraft(viz),
     getTextSizeLegendDraft(viz),
     getUniquePointSymbolLegendDraft(viz),
-    getPointSizeLegendDraft(viz),
+    ...getPointSizeLegendDrafts(viz),
     getLineWidthLegendDraft(viz)
   ].filter((draft): draft is LegendSegmentDraft => draft !== null);
 
@@ -1113,69 +1115,76 @@ function getCategoricalLegendDraft(
   };
 }
 
-function getPointSizeLegendDraft(
+function getPointSizeLegendDrafts(
   viz: VisualizationConfig | undefined
-): LegendSegmentDraft | null {
+): LegendSegmentDraft[] {
   const scale = getPointSizeLegendScale(
     viz,
     getColumnStatistics(viz, viz?.mapping.sizeColumn)
   );
 
   if (!viz || !scale) {
-    return null;
+    return [];
   }
 
   const type = getSymbolLegendType(scale.shape);
+  const symbol = getSymbolPrimitive(viz);
+  const maxSize = symbol?.maxSize ?? 18;
+  const barWidth = symbol?.barWidth ?? DEFAULT_LINEAR_SYMBOL_BAR_WIDTH;
 
   if (scale.kind === 'proportional' && !scale.secondary && type) {
     const values = getNumericColumnValues(viz, viz.mapping.sizeColumn);
     if (values.length > 0) {
-      const symbol = getSymbolPrimitive(viz);
-      const maxSize = symbol?.maxSize ?? 18;
-      const barWidth = symbol?.barWidth ?? DEFAULT_LINEAR_SYMBOL_BAR_WIDTH;
-      return {
-        key: 'point-size',
-        primitive: 'point',
-        className: 'legend-svg--symbols',
-        consumesMissingData: isLegendMissingDataShown(viz, 'point'),
-        create: (options, context) =>
-          toLegendSvg(
-            draw_symbols_legend(values, {
-              ...options,
-              type,
-              size: maxSize,
-              fill: scale.fillColor,
-              stroke: scale.strokeColor,
-              bar_width: barWidth,
-              nodata: context.includeMissingDataFooter
-                ? isLegendMissingDataShown(viz, 'point')
-                : false,
-              nodataLabel: context.includeMissingDataFooter
-                ? m.missing_data_text()
-                : undefined
-            })
-          )
-      };
+      return [
+        {
+          key: 'point-size',
+          primitive: 'point',
+          className: 'legend-svg--symbols',
+          consumesMissingData: isLegendMissingDataShown(viz, 'point'),
+          create: (options, context) =>
+            toLegendSvg(
+              // A single graduated column carries its meaning in the size
+              // alone, so the symbols stay unfilled outlines.
+              draw_symbols_legend(values, {
+                ...options,
+                type,
+                size: maxSize,
+                bar_width: barWidth,
+                nodata: context.includeMissingDataFooter
+                  ? isLegendMissingDataShown(viz, 'point')
+                  : false,
+                nodataLabel: context.includeMissingDataFooter
+                  ? m.missing_data_text()
+                  : undefined
+              })
+            )
+        }
+      ];
     }
   }
 
-  if (scale.secondary) {
+  if (scale.secondary && type) {
+    const primaryColumn = symbol?.sizeColumn ?? viz.mapping.sizeColumn;
+    const secondaryColumn = scale.secondary.valueColumn;
+
+    if (!primaryColumn || !secondaryColumn) {
+      return [];
+    }
+
     // A shared scale means one graduated column reads for both variables, so
     // reuse the symbol legend and name each colour underneath it — the same
     // shape the cross-zero legend already uses for + and -.
-    const symbolPrimitive = getSymbolPrimitive(viz);
-    const primaryColumn = symbolPrimitive?.sizeColumn ?? viz.mapping.sizeColumn;
-    const secondaryColumn = scale.secondary.valueColumn;
-    if (scale.commonScale !== false && type) {
+    if (scale.commonScale !== false) {
       const sharedValues = [
         ...getNumericColumnValues(viz, primaryColumn),
         ...getNumericColumnValues(viz, secondaryColumn)
       ];
-      if (sharedValues.length > 0 && primaryColumn && secondaryColumn) {
-        const maxSize = symbolPrimitive?.maxSize ?? 18;
-        const barWidth =
-          symbolPrimitive?.barWidth ?? DEFAULT_LINEAR_SYMBOL_BAR_WIDTH;
-        return {
+      if (sharedValues.length === 0) {
+        return [];
+      }
+
+      return [
+        {
           key: 'double-point-size',
           primitive: 'point',
           className: 'legend-svg--double-symbols',
@@ -1204,24 +1213,77 @@ function getPointSizeLegendDraft(
                   : undefined
               })
             )
-        };
+        }
+      ];
+    }
+
+    // Own scales cannot share a graduated column: each variable gets a
+    // complete symbol legend of its own, named and coloured after its column.
+    return [
+      {
+        column: primaryColumn,
+        color: scale.fillColor,
+        key: 'double-point-size-primary'
+      },
+      {
+        column: secondaryColumn,
+        color: scale.secondary.fillColor,
+        key: 'double-point-size-secondary'
       }
-    }
+    ]
+      .map((variable): LegendSegmentDraft | null => {
+        const values = getNumericColumnValues(viz, variable.column);
+        if (values.length === 0) {
+          return null;
+        }
 
-    const steps = getDoubleSymbolLegendSteps(viz, scale);
-    if (steps.length === 0) {
-      return null;
-    }
+        return {
+          key: variable.key,
+          primitive: 'point',
+          className: 'legend-svg--symbols',
+          consumesMissingData: isLegendMissingDataShown(viz, 'point'),
+          create: (
+            options: CommonLegendTextOptions,
+            context: LegendSegmentContext
+          ) =>
+            toLegendSvg(
+              draw_symbols_legend(values, {
+                ...options,
+                subtitle: variable.column,
+                type,
+                size: maxSize,
+                fill: variable.color,
+                stroke: scale.strokeColor,
+                bar_width: barWidth,
+                nodata: context.includeMissingDataFooter
+                  ? isLegendMissingDataShown(viz, 'point')
+                  : false,
+                nodataLabel: context.includeMissingDataFooter
+                  ? m.missing_data_text()
+                  : undefined
+              })
+            )
+        };
+      })
+      .filter((draft): draft is LegendSegmentDraft => draft !== null);
+  }
 
-    return {
-      key: 'double-point-size',
+  const items = getPointSizeLegendItems(viz, scale);
+  if (items.length === 0) {
+    return [];
+  }
+
+  return [
+    {
+      key: 'point-size-classes',
       primitive: 'point',
-      className: 'legend-svg--double-symbols',
+      className: 'legend-svg--symbols',
       consumesMissingData: isLegendMissingDataShown(viz, 'point'),
       create: (options, context) =>
         toLegendSvg(
-          draw_khartis_double_symbols_legend(steps, {
+          draw_khartis_swatch_legend(items, {
             ...options,
+            type: 'symbol',
             ...getMissingDataFooterOptions(
               viz,
               context.includeMissingDataFooter,
@@ -1229,32 +1291,8 @@ function getPointSizeLegendDraft(
             )
           })
         )
-    };
-  }
-
-  const items = getPointSizeLegendItems(viz, scale);
-  if (items.length === 0) {
-    return null;
-  }
-
-  return {
-    key: 'point-size-classes',
-    primitive: 'point',
-    className: 'legend-svg--symbols',
-    consumesMissingData: isLegendMissingDataShown(viz, 'point'),
-    create: (options, context) =>
-      toLegendSvg(
-        draw_khartis_swatch_legend(items, {
-          ...options,
-          type: 'symbol',
-          ...getMissingDataFooterOptions(
-            viz,
-            context.includeMissingDataFooter,
-            'point'
-          )
-        })
-      )
-  };
+    }
+  ];
 }
 
 function getUniquePointSymbolLegendDraft(
@@ -1520,33 +1558,6 @@ function getPointSizeLegendItems(
     opacity: scale.fillOpacity,
     symbol: getShapePath(scale.shape),
     size: getPointLegendDisplaySize(scale, step.size)
-  }));
-}
-
-function getDoubleSymbolLegendSteps(
-  viz: VisualizationConfig,
-  scale: PointSizeLegendScale
-): KhartisDoubleSymbolsLegendStep[] {
-  if (!scale.secondary) {
-    return [];
-  }
-
-  const classification = getPrimitiveClassification(
-    viz,
-    PrimitiveFilterType.POINT
-  );
-  const breaks = classification?.breaks ?? viz.classification?.breaks;
-  const classCount = getClassificationClassCount(classification);
-
-  return scale.steps.map((step) => ({
-    label: getLegendStepLabel(step, breaks, classCount),
-    size: getPointLegendDisplaySize(scale, step.size),
-    symbol: getShapePath(scale.shape),
-    fill: scale.fillColor,
-    secondaryFill: scale.secondary?.fillColor ?? scale.fillColor,
-    stroke: scale.strokeColor,
-    opacity: scale.fillOpacity,
-    positionMode: scale.positionMode
   }));
 }
 

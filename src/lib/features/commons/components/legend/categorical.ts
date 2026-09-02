@@ -11,6 +11,7 @@ import {
   renderLegendNote,
   resolveLegendFontFamily,
   scaleLegendMetric,
+  splitLegendOverflow,
   type CommonLegendTextOptions,
   type LegendSvgDefinition
 } from './utils';
@@ -52,9 +53,11 @@ interface ColumnInfo {
 }
 
 export function draw_categorical_legend(
-  raw_categories: CategoryItem[],
+  all_categories: CategoryItem[],
   options: CategoricalLegendOptions = {}
 ): LegendSvgDefinition {
+  const { items: raw_categories, overflowLabel } =
+    splitLegendOverflow(all_categories);
   let { type, title, subtitle, note, fontSize } = options;
   type ??= 'box';
   title ??= null;
@@ -63,7 +66,12 @@ export function draw_categorical_legend(
   fontSize ??= 12;
   const resolvedFontFamily = resolveLegendFontFamily(options.fontFamily);
 
-  const footerItems = options.footerItems ?? [];
+  const footerItems: CategoryItem[] = [
+    ...(overflowLabel
+      ? [{ label: overflowLabel, fill: 'none', stroke: 'none', strokeWidth: 0 }]
+      : []),
+    ...(options.footerItems ?? [])
+  ];
   const footerType = options.footerType ?? type;
   const titleSize = title ? Math.round(fontSize * 1.16) : 0;
   const subtitleSize = subtitle ? fontSize : 0;
