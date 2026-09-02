@@ -8,6 +8,7 @@ import type {
 import type { DataTableFilter } from '$lib/features/duckdb/types';
 import { FilterOperatorEnum } from '$lib/features/duckdb/types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { selectVizFiltersForPrimitive } from '$lib/features/commons/utils/viz-filter.utils';
 
 const dataFilterCache = new WeakMap<ArrowTable, Map<string, ArrowTable>>();
 
@@ -159,22 +160,6 @@ function toDateOnlyDay(value: unknown): number | null {
   return timestamp === null
     ? null
     : Math.floor(timestamp / MILLISECONDS_PER_DAY);
-}
-
-function isFilterIncomplete(filter: VizDataFilter): boolean {
-  const op = filter.operator;
-  if (op === 'empty' || op === 'not_empty') return false;
-  if (op === 'top_asc' || op === 'top_desc') {
-    const limit = filter.limit ?? Number(filter.value);
-    return !Number.isFinite(limit) || limit <= 0;
-  }
-  const trimmed = String(filter.value ?? '').trim();
-  if (trimmed === '') return true;
-  if (op === 'between') {
-    const trimmedSecondary = String(filter.secondaryValue ?? '').trim();
-    if (trimmedSecondary === '') return true;
-  }
-  return false;
 }
 
 function warnUnsupportedArrowFilterOperator(operator: FilterOperator): void {
@@ -463,15 +448,10 @@ export function filterArrowTableByDataFilters(
   filters: VizDataFilter[] | undefined,
   primitiveType?: PrimitiveFilter
 ): ArrowTable {
-  if (!filters?.length) return table;
-
-  const applicableFilters = (
+  const applicableFilters = selectVizFiltersForPrimitive(
+    filters,
     primitiveType
-      ? filters.filter(
-          (f) => !f.primitiveType || f.primitiveType === primitiveType
-        )
-      : filters
-  ).filter((f) => !isFilterIncomplete(f));
+  );
   if (!applicableFilters.length) return table;
 
   return filterRows(

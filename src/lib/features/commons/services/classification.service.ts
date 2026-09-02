@@ -31,12 +31,14 @@ export interface ClassificationOptions {
   method: ClassificationMethod;
   numClasses: number;
   valueFilter?: ClassificationValueFilter;
+  rowScopeClause?: string | null;
 }
 
 export interface BreakCountOptions {
   datasetId: string;
   columnName: string;
   breaks: number[];
+  rowScopeClause?: string | null;
 }
 
 export interface ClassificationValueFilter {
@@ -51,6 +53,7 @@ export interface DivergingClassificationOptions {
   breakpointValue: number;
   lowerClassCount: number;
   upperClassCount: number;
+  rowScopeClause?: string | null;
 }
 
 interface QueryContext {
@@ -312,17 +315,25 @@ function getValueFilterKey(
 
 async function prepareClassificationContext(
   context: QueryContext,
-  filter: ClassificationValueFilter | undefined
+  filter: ClassificationValueFilter | undefined,
+  rowScopeClause: string | null | undefined
 ): Promise<{ context: QueryContext; cleanup: () => Promise<void> }> {
-  if (!filter) {
-    return {
-      context,
-      cleanup: async () => {}
-    };
+  const conditions: string[] = [];
+
+  if (rowScopeClause) {
+    conditions.push(rowScopeClause);
   }
 
-  const filterValue = Number(filter.value);
-  if (!Number.isFinite(filterValue)) {
+  if (filter) {
+    const filterValue = Number(filter.value);
+    if (Number.isFinite(filterValue)) {
+      conditions.push(
+        `"${context.escapedColumn}" ${filter.operator} ${filterValue}`
+      );
+    }
+  }
+
+  if (conditions.length === 0) {
     return {
       context,
       cleanup: async () => {}
@@ -338,7 +349,7 @@ async function prepareClassificationContext(
     SELECT "${context.escapedColumn}" AS "${context.escapedColumn}"
     FROM "${context.escapedTable}"
     WHERE "${context.escapedColumn}" IS NOT NULL
-      AND "${context.escapedColumn}" ${filter.operator} ${filterValue}
+      AND ${conditions.join(' AND ')}
   `);
 
   return {
@@ -370,7 +381,7 @@ export async function calculateBreaks(
   }
   breaksCacheVersion = currentVersion;
 
-  const cacheKey = `${context.tableName}:${columnName}:${method}:${numClasses}:${getValueFilterKey(options.valueFilter)}`;
+  const cacheKey = `${context.tableName}:${columnName}:${method}:${numClasses}:${getValueFilterKey(options.valueFilter)}:${options.rowScopeClause ?? 'all'}`;
   const cached = breaksCache.get(cacheKey);
   if (cached) {
     return cached;
@@ -378,7 +389,8 @@ export async function calculateBreaks(
 
   const prepared = await prepareClassificationContext(
     context,
-    options.valueFilter
+    options.valueFilter,
+    options.rowScopeClause
   );
 
   try {
@@ -511,6 +523,7 @@ export async function calculateDivergingBreaks(
     columnName: options.columnName,
     method: options.method,
     numClasses: lowerClassCount,
+    rowScopeClause: options.rowScopeClause,
     valueFilter: {
       operator: '<',
       value: options.breakpointValue
@@ -526,6 +539,7 @@ export async function calculateDivergingBreaks(
     columnName: options.columnName,
     method: options.method,
     numClasses: upperClassCount,
+    rowScopeClause: options.rowScopeClause,
     valueFilter: {
       operator: '>=',
       value: options.breakpointValue
@@ -590,14 +604,20 @@ export async function calculateBreakCounts(
     return null;
   }
 
+  const prepared = await prepareClassificationContext(
+    context,
+    undefined,
+    options.rowScopeClause
+  );
+
   try {
-    const stats = await queryColumnStats(context);
+    const stats = await queryColumnStats(prepared.context);
     if (!stats || stats.distinctCount <= 1) {
       return null;
     }
 
     const breaks = sanitizeBreaks(options.breaks, stats.min, stats.max);
-    const counts = await queryBreakCounts(context, [
+    const counts = await queryBreakCounts(prepared.context, [
       stats.min,
       ...breaks,
       stats.max
@@ -615,13 +635,15 @@ export async function calculateBreakCounts(
       LogCategory.DATA,
       {
         datasetId: options.datasetId,
-        tableName: context.tableName,
+        tableName: prepared.context.tableName,
         columnName: options.columnName,
         error
       },
       { feature: 'visualization', flow: 'classification_manual_counts' }
     );
     return null;
+  } finally {
+    await prepared.cleanup();
   }
 }
 

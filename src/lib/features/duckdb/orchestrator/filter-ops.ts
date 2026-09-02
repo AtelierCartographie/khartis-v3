@@ -235,6 +235,25 @@ export function createFilterRecord(
   };
 }
 
+export function buildFilterClause(
+  tableName: string,
+  inputs: DataTableFilterInput[]
+): string | null {
+  if (inputs.length === 0) {
+    return null;
+  }
+
+  return inputs.map((input) => buildFilterSQL(tableName, input)).join(' AND ');
+}
+
+export function combineFilterClauses(
+  clauses: (string | null)[]
+): string | null {
+  const present = clauses.filter((clause): clause is string => Boolean(clause));
+
+  return present.length > 0 ? present.join(' AND ') : null;
+}
+
 export function buildFilterWhereClause(
   filters: DataTableFilter[] | undefined
 ): string | null {
