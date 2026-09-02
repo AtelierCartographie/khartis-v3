@@ -7,6 +7,11 @@ import {
 } from '$lib/features/duckdb/orchestrator/filter-ops';
 import { FilterOperatorEnum } from '$lib/features/duckdb/types';
 import { search_macros } from '$lib/features/duckdb/macros/search';
+import {
+  getColumnDomainsInScope,
+  getRowIdsInScope,
+  type DuckDBClientForTableData
+} from '$lib/features/duckdb/orchestrator/table-data-ops';
 import type {
   DataTableFilter,
   DataTableFilterInput
@@ -37,6 +42,15 @@ function scopeClause(
     buildFilterWhereClause(tableFilters(...level1)),
     buildFilterClause(TABLE, level2)
   ]);
+}
+
+function duckClient(): DuckDBClientForTableData {
+  return {
+    query: async (sql: string) => {
+      const rows = await query(db, sql);
+      return { numRows: rows.length, get: (index: number) => rows[index] };
+    }
+  } as unknown as DuckDBClientForTableData;
 }
 
 async function namesInScope(clause: string | null): Promise<string[]> {
@@ -168,5 +182,85 @@ describe('row scope against DuckDB', () => {
 
     expect([Number(whole.lo), Number(whole.hi)]).toEqual([7451, 236234]);
     expect([Number(inScope.lo), Number(inScope.hi)]).toEqual([7451, 71361]);
+  });
+});
+
+describe('getRowIdsInScope', () => {
+  it('returns the internal ids the clause keeps', async () => {
+    const clause = scopeClause(
+      [
+        {
+          column: 'region',
+          columnType: 'varchar',
+          operator: FilterOperatorEnum.EQUALS,
+          value: 'Corse'
+        }
+      ],
+      []
+    );
+
+    await expect(
+      getRowIdsInScope(TABLE, clause as string, duckClient())
+    ).resolves.toEqual(new Set([1, 2, 3]));
+  });
+
+  it('excludes rows whose predicate is NULL rather than keeping them', async () => {
+    await expect(
+      getRowIdsInScope(TABLE, 'NULL', duckClient())
+    ).resolves.toEqual(new Set());
+  });
+});
+
+describe('getColumnDomainsInScope', () => {
+  it('narrows the domain to the rows in scope', async () => {
+    const clause = scopeClause(
+      [
+        {
+          column: 'region',
+          columnType: 'varchar',
+          operator: FilterOperatorEnum.EQUALS,
+          value: 'Hauts-de-France'
+        }
+      ],
+      []
+    );
+
+    const domains = await getColumnDomainsInScope(
+      TABLE,
+      clause,
+      ['pop'],
+      duckClient()
+    );
+
+    expect(domains.get('pop')).toEqual({ min: 32501, max: 236234 });
+  });
+
+  it('covers the whole table when no clause is active', async () => {
+    const domains = await getColumnDomainsInScope(
+      TABLE,
+      null,
+      ['pop'],
+      duckClient()
+    );
+
+    expect(domains.get('pop')).toEqual({ min: 7451, max: 236234 });
+  });
+
+  it('leaves a non-numeric column without a domain', async () => {
+    const domains = await getColumnDomainsInScope(
+      TABLE,
+      null,
+      ['name', 'pop'],
+      duckClient()
+    );
+
+    expect(domains.has('name')).toBe(false);
+    expect(domains.has('pop')).toBe(true);
+  });
+
+  it('asks nothing when no column is driven', async () => {
+    await expect(
+      getColumnDomainsInScope(TABLE, null, [], duckClient())
+    ).resolves.toEqual(new Map());
   });
 });

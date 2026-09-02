@@ -41,6 +41,14 @@ import {
 import { formatActions } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import { DRAGGING_STYLING_TARGET_BODY_CLASS } from '../utils/tool-popover-drag-visibility.utils';
 
+const mockRowScopeStore = vi.hoisted(() => ({
+  getScopedDomain: vi.fn((): { min: number; max: number } | null => null)
+}));
+
+vi.mock('../stores/row-scope.store.svelte', () => ({
+  rowScopeStore: mockRowScopeStore
+}));
+
 const { mockVisualizationStore, mockDatasetsStore } = vi.hoisted(() => ({
   mockVisualizationStore: {
     version: 0,
@@ -283,6 +291,7 @@ describe('legend overlay visibility', () => {
     document.getElementById('khartis-tool-popover')?.remove();
     mockVisualizationStore.version = 0;
     mockVisualizationStore.visualizations = [];
+    mockRowScopeStore.getScopedDomain.mockReturnValue(null);
     legendActions.reset();
     formatActions.reset();
     globalActions.resetNavigationState();
@@ -876,6 +885,27 @@ describe('legend overlay visibility', () => {
     const { container } = render(LegendOverlay);
 
     expect(container.querySelectorAll('.legend-container')).toHaveLength(2);
+  });
+
+  it('bounds a classified legend by the filtered scope, not the whole column', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildClassedPolygonViz()];
+    mockRowScopeStore.getScopedDomain.mockReturnValue({
+      min: 1_200_000,
+      max: 9_000_000
+    });
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+    const digits = [...container.querySelectorAll('.legend-svg text')]
+      .map((node) => (node.textContent ?? '').replace(/\D/g, ''))
+      .filter(Boolean);
+
+    expect(digits).toContain('1200000');
+    expect(digits).toContain('9000000');
+    expect(digits).not.toContain('30359');
+    expect(digits).not.toContain('15907951');
   });
 
   it('stacks primitive legend frames down from the anchor corner', async () => {

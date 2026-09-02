@@ -9,7 +9,10 @@ import { globalState } from '$lib/features/commons/stores/global.svelte';
 import {
   ALL_PRIMITIVE_FILTERS,
   getPolygonPrimitive,
+  getPrimitiveSizeColumn,
+  getPrimitiveValueColumn,
   visualizationStore,
+  type PrimitiveFilter,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -111,6 +114,21 @@ export function useMapDisplayData(
       .filter((value): value is string => value !== null)
       .join('|')
   );
+
+  function collectPrimitiveNumericColumns(
+    viz: VisualizationConfig,
+    primitive: PrimitiveFilter | undefined
+  ): string[] {
+    const primitives = primitive ? [primitive] : ALL_PRIMITIVE_FILTERS;
+
+    return primitives.flatMap((current) =>
+      [
+        getPrimitiveValueColumn(viz, current),
+        getPrimitiveSizeColumn(viz, current)
+      ].filter((column): column is string => Boolean(column))
+    );
+  }
+
   const rowScopeTargets = $derived.by(() =>
     visualizationStore.activeVisualizations.flatMap((viz) => {
       const sourceFileId = datasetsStore.datasets.find(
@@ -127,7 +145,8 @@ export function useMapDisplayData(
           visualizationId: viz.id,
           datasetId: sourceFileId,
           vizFilters: viz.dataFilters,
-          primitive
+          primitive,
+          numericColumns: collectPrimitiveNumericColumns(viz, primitive)
         })
       );
     })
