@@ -313,3 +313,87 @@ describe('split rendering accessors', () => {
     ).toBeUndefined();
   });
 });
+
+describe('scoped rendering accessors', () => {
+  const geometry = createTableWithRows(
+    [{ [CANONICAL_ID_COLUMN]: 'FR' }, { [CANONICAL_ID_COLUMN]: 'PL' }],
+    [CANONICAL_ID_COLUMN]
+  );
+  const dataset = createTableWithRows(
+    [
+      { [JOINED_BASEMAP_COLUMN.ID]: 'FR', population: 67_935_660 },
+      { [JOINED_BASEMAP_COLUMN.ID]: 'PL', population: 38_307_726 }
+    ],
+    [JOINED_BASEMAP_COLUMN.ID, 'population']
+  );
+
+  it('reads a joined feature left out of the scope as having no value', () => {
+    const scopedDataset = createTableWithRows(
+      [{ [JOINED_BASEMAP_COLUMN.ID]: 'FR', population: 67_935_660 }],
+      [JOINED_BASEMAP_COLUMN.ID, 'population']
+    );
+    const ctx = {
+      ...createSplitContext(dataset),
+      scopedSplitDatasetTable: scopedDataset
+    } as LayerContext;
+
+    const readPopulation = createSplitAwareRowAccessor(
+      ctx,
+      geometry,
+      (row) => row.population
+    );
+
+    expect(readPopulation(0)).toBe(67_935_660);
+    expect(readPopulation(1)).toBeUndefined();
+  });
+
+  it('keeps labels on the unscoped dataset so an area filter cannot reach them', () => {
+    const ctx = createSplitContext(dataset);
+
+    const readPopulation = createSplitAwareRowAccessor(
+      ctx,
+      geometry,
+      (row) => row.population
+    );
+
+    expect(readPopulation(1)).toBe(38_307_726);
+  });
+
+  it('reads an unjoined row left out of the scope as null', () => {
+    const table = createTableWithRows(
+      [
+        { [INTERNAL_COLUMN.ID]: 1, population: 67_935_660 },
+        { [INTERNAL_COLUMN.ID]: 2, population: 38_307_726 }
+      ],
+      [INTERNAL_COLUMN.ID, 'population']
+    );
+    const ctx = { scopedRowIds: new Set([1]) } as LayerContext;
+
+    const readPopulation = createSplitAwareNullableRowAccessor(
+      ctx,
+      table,
+      (row) => row?.population ?? null
+    );
+
+    expect(readPopulation(0)).toBe(67_935_660);
+    expect(readPopulation(1)).toBeNull();
+  });
+
+  it('reads every unjoined row when no scope is active', () => {
+    const table = createTableWithRows(
+      [
+        { [INTERNAL_COLUMN.ID]: 1, population: 67_935_660 },
+        { [INTERNAL_COLUMN.ID]: 2, population: 38_307_726 }
+      ],
+      [INTERNAL_COLUMN.ID, 'population']
+    );
+
+    const readPopulation = createSplitAwareNullableRowAccessor(
+      {} as LayerContext,
+      table,
+      (row) => row?.population ?? null
+    );
+
+    expect(readPopulation(1)).toBe(38_307_726);
+  });
+});
