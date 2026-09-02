@@ -4,14 +4,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   calculateBreaks: vi.fn(),
   getUniqueValues: vi.fn(),
-  loadDistinctCategoryLabels: vi.fn()
+  loadDistinctCategoryLabels: vi.fn(),
+  resolveRowScopeClause: vi.fn(() => null as string | null)
 }));
 
+// A visualization carries the store id, which stops matching the source file
+// id as soon as a project has been saved and reopened.
 vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   datasetsStore: {
-    datasets: [{ id: 'table1', tableName: 'table1' }],
+    datasets: [{ id: 'table1', tableName: 'table1', sourceFileId: 'source1' }],
     getUniqueValues: mocks.getUniqueValues
   }
+}));
+
+vi.mock('./row-scope.service', () => ({
+  resolveRowScopeClause: mocks.resolveRowScopeClause
 }));
 
 vi.mock('$lib/features/commons/utils/category-labels.utils', () => ({
@@ -63,6 +70,7 @@ function makeBaseViz(overrides = {}) {
 describe('generateFacetVisualizations', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.resolveRowScopeClause.mockReturnValue(null);
     mocks.loadDistinctCategoryLabels.mockResolvedValue([]);
     mocks.calculateBreaks.mockResolvedValue({
       breaks: [20, 30, 40],
@@ -327,13 +335,35 @@ describe('generateFacetVisualizations', () => {
     );
 
     expect(mocks.calculateBreaks).toHaveBeenCalledWith({
-      datasetId: 'table1',
+      datasetId: 'source1',
       columnName: 'gdp',
       method: 'equal_interval',
+      rowScopeClause: null,
       numClasses: 4
     });
     expect(result[0].classification?.breaks).toEqual([20, 30, 40]);
     expect(result[0].classification?.counts).toEqual([1, 1, 1, 1]);
+  });
+
+  it('recomputes independent facet breaks over the filtered rows', async () => {
+    mocks.resolveRowScopeClause.mockReturnValue('"pop" >= 1000');
+
+    await generateFacetVisualizations(
+      makeBaseViz() as never,
+      ['gdp'],
+      SCALE_MODE.INDEPENDENT,
+      FACET_SLOT.POLYGON_VALUE
+    );
+
+    expect(mocks.resolveRowScopeClause).toHaveBeenCalledWith(
+      expect.objectContaining({
+        datasetId: 'source1',
+        primitive: PrimitiveFilterType.POLYGON
+      })
+    );
+    expect(mocks.calculateBreaks).toHaveBeenCalledWith(
+      expect.objectContaining({ rowScopeClause: '"pop" >= 1000' })
+    );
   });
 
   it('should recalculate line thickness breaks in independent mode', async () => {
