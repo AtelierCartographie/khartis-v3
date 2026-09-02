@@ -78,7 +78,8 @@ import {
 } from './layer-style.utils';
 import {
   createSplitAwareRowAccessor as ctxRowAccessor,
-  createSplitGeoJsonFeatureAccessor
+  createSplitGeoJsonFeatureAccessor,
+  withPrimitiveScope
 } from './split-rendering-accessors';
 import {
   buildCategoryColorMapFromLabels,
@@ -250,7 +251,10 @@ export function createPolygonLayerStack(
       densityTable && densityGeometryInfo
         ? createPointLayers(densityTable, densityGeometryInfo, ctx)
         : [];
-    const pointLayers = createRepresentativePointSymbolLayers(jsTable, ctx);
+    const pointLayers = createRepresentativePointSymbolLayers(
+      jsTable,
+      withPrimitiveScope(ctx, PrimitiveFilterType.POINT)
+    );
     const layers = orderPrimitiveLayers(
       [
         ...(polygonPrimitiveAllowed
@@ -665,7 +669,10 @@ export function createPolygonLayerStack(
         );
       }
 
-      const pointLayers = createRepresentativePointSymbolLayers(jsTable, ctx);
+      const pointLayers = createRepresentativePointSymbolLayers(
+        jsTable,
+        withPrimitiveScope(ctx, PrimitiveFilterType.POINT)
+      );
       const showFill =
         polygonPrimitiveAllowed &&
         polygonFillMode !== FillMode.NONE &&
@@ -1262,7 +1269,10 @@ export function createPolygonLayerStack(
     ];
   }
 
-  const pointLayers = createRepresentativePointSymbolLayers(jsTable, ctx);
+  const pointLayers = createRepresentativePointSymbolLayers(
+    jsTable,
+    withPrimitiveScope(ctx, PrimitiveFilterType.POINT)
+  );
   const layers = orderPrimitiveLayers(
     [
       ...geoJsonLayers.map((layer) => ({

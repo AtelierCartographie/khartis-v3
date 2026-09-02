@@ -5,6 +5,7 @@ import { extractGeometryInfo } from '../io';
 import type { GeometryInfo, LayerContext } from '../types';
 import {
   buildSplitDatasetRowMapping,
+  resolveScopedAttributeTable,
   resolveSplitMappingFeatureIdColumn
 } from './split-rendering-accessors';
 
@@ -27,9 +28,11 @@ export function attachBinaryPickingMetadata(
       sourceTable,
       ctx.splitFeatureIdColumn
     );
-    // The tooltip has to agree with what is drawn: an area kept only to hold
-    // the basemap together reads as missing, so it must not report a value.
-    const attributeTable = ctx.scopedSplitDatasetTable ?? ctx.splitDatasetTable;
+    // The tooltip has to agree with what is drawn: a feature kept only to hold
+    // the reference geometry together reads as missing, so it must not report
+    // a value.
+    const attributeTable =
+      resolveScopedAttributeTable(ctx) ?? ctx.splitDatasetTable;
 
     target.khartisSourceTable = attributeTable;
     target.khartisSplitDatasetTable = attributeTable;

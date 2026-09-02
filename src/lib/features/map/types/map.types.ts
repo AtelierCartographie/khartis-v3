@@ -130,13 +130,16 @@ export interface LayerContext {
 
   splitFeatureIdColumn?: string;
 
-  // Areas and lines keep every feature so a filter never punches a hole in the
-  // basemap; these carry the rows still in scope, and a feature left out of
-  // them reads as missing data. Labels deliberately stay on the unscoped
-  // splitDatasetTable: their own geometry is already scoped for texts.
-  scopedSplitDatasetTable?: ArrowTable;
+  // Every primitive keeps its geometry under a filter so the missing-data
+  // styling stays available to the user; these carry the rows each primitive
+  // still has data for, and a feature left out of them reads as missing.
+  // One visualization can filter its primitives differently, so a context is
+  // narrowed to the primitive being drawn before its accessors are built.
+  scopedDatasetTableByPrimitive?: Partial<Record<PrimitiveFilter, ArrowTable>>;
 
-  scopedRowIds?: Set<number>;
+  scopedRowIdsByPrimitive?: Partial<Record<PrimitiveFilter, Set<number>>>;
+
+  scopedPrimitive?: PrimitiveFilter;
 }
 
 export type BBox = [number, number, number, number];

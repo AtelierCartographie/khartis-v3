@@ -29,6 +29,7 @@ import { extractGeometryInfo } from '../io';
 import { buildProjectionForBasemap } from '../utils/geoarrow-stream-bridge.utils';
 import { DeckLayerId, GeometryType } from '../constants';
 import {
+  ALL_PRIMITIVE_FILTERS,
   PrimitiveFilterType,
   getSymbolPrimitive,
   getLinePrimitive,
@@ -358,10 +359,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   const representativePointLoadFailures = new WeakSet<ArrowTable>();
   const representativePointNotifyOnReady = new WeakSet<ArrowTable>();
   const matchedSplitTableCache = new WeakMap<
-    ArrowTable,
-    WeakMap<ArrowTable, Map<string, ArrowTable>>
-  >();
-  const matchedSplitFilteredTableCache = new WeakMap<
     ArrowTable,
     WeakMap<ArrowTable, Map<string, ArrowTable>>
   >();
@@ -797,84 +794,50 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     return getMatchedSplitTable(split.geometry, split);
   }
 
-  function getFilteredMatchedSplitTable(
-    matchedGeometryTable: ArrowTable,
-    filteredDataset: ArrowTable,
-    featureIdColumn: string
-  ): ArrowTable {
-    let datasetCache = matchedSplitFilteredTableCache.get(matchedGeometryTable);
-    if (!datasetCache) {
-      datasetCache = new WeakMap();
-      matchedSplitFilteredTableCache.set(matchedGeometryTable, datasetCache);
-    }
+  // Every primitive keeps its geometry: a filtered entity has to stay
+  // addressable so the user can still show, hide or restyle it as missing
+  // data. Only the attributes each primitive reads are narrowed.
+  function applyPrimitiveScopes(
+    ctx: LayerContext,
+    visualizationId: string,
+    split: SplitRenderingTable | undefined
+  ): void {
+    const datasetTables: Partial<Record<PrimitiveFilter, ArrowTable>> = {};
+    const rowIds: Partial<Record<PrimitiveFilter, Set<number>>> = {};
 
-    let columnCache = datasetCache.get(filteredDataset);
-    if (!columnCache) {
-      columnCache = new Map();
-      datasetCache.set(filteredDataset, columnCache);
-    }
+    for (const primitive of ALL_PRIMITIVE_FILTERS) {
+      const scopedRowIds = rowScopeStore.getScopedRowIds(
+        visualizationId,
+        primitive
+      );
+      if (!scopedRowIds) {
+        continue;
+      }
 
-    const cached = columnCache.get(featureIdColumn);
-    if (cached) {
-      return cached;
-    }
-
-    const matchingRows = getSplitMatchedGeometryRowIndices(
-      matchedGeometryTable,
-      filteredDataset,
-      featureIdColumn
-    );
-    const filteredTable =
-      matchingRows.length === matchedGeometryTable.numRows
-        ? matchedGeometryTable
-        : selectRowsByIndices(matchedGeometryTable, matchingRows);
-    columnCache.set(featureIdColumn, filteredTable);
-    return filteredTable;
-  }
-
-  function scopeSplitGeometryTable(
-    geometryTable: ArrowTable,
-    split: SplitRenderingTable,
-    scopedRowIds: Set<number> | null
-  ): ArrowTable {
-    const matchedGeometryTable = getMatchedSplitTable(geometryTable, split);
-    const scopedDataset = selectRowsInScope(split.dataset, scopedRowIds);
-
-    if (scopedDataset === split.dataset) {
-      return matchedGeometryTable;
-    }
-
-    return getFilteredMatchedSplitTable(
-      matchedGeometryTable,
-      scopedDataset,
-      split.featureIdColumn
-    );
-  }
-
-  // Removing an area or a line leaves a hole in the reference geometry, so
-  // those keep every feature and let the missing-data styling speak instead.
-  // Symbols and labels have nothing to preserve underneath and stay dropped.
-  function keepsEveryFeatureUnderFilter(
-    primitive: PrimitiveFilter | undefined
-  ): boolean {
-    return (
-      primitive === PrimitiveFilterType.POLYGON ||
-      primitive === PrimitiveFilterType.LINE
-    );
-  }
-
-  function scopeRepresentativePointTable(
-    representativePointBaseTable: ArrowTable,
-    split: SplitRenderingTable | undefined,
-    scopedRowIds: Set<number> | null
-  ): ArrowTable {
-    return split
-      ? scopeSplitGeometryTable(
-          representativePointBaseTable,
-          split,
+      rowIds[primitive] = scopedRowIds;
+      if (split) {
+        datasetTables[primitive] = selectRowsInScope(
+          split.dataset,
           scopedRowIds
-        )
-      : selectRowsInScope(representativePointBaseTable, scopedRowIds);
+        );
+      }
+    }
+
+    ctx.scopedRowIdsByPrimitive = rowIds;
+    ctx.scopedDatasetTableByPrimitive = datasetTables;
+  }
+
+  function isEveryPrimitiveOutOfScope(
+    ctx: LayerContext,
+    tablePrimitiveType: PrimitiveFilter | undefined
+  ): boolean {
+    const primitives = tablePrimitiveType
+      ? [tablePrimitiveType, PrimitiveFilterType.TEXT]
+      : ALL_PRIMITIVE_FILTERS;
+
+    return primitives.every(
+      (primitive) => ctx.scopedRowIdsByPrimitive?.[primitive]?.size === 0
+    );
   }
 
   function getRequestedMetadataLayerTypes(): BasemapLayerType[] {
@@ -1333,46 +1296,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             const tablePrimitiveType = geoInfo?.type
               ? GEOMETRY_TO_PRIMITIVE[geoInfo.type as GeometryType]
               : undefined;
-            const scopedRowIds = rowScopeStore.getScopedRowIds(
-              viz.id,
-              tablePrimitiveType
-            );
-            const keepsEveryFeature =
-              keepsEveryFeatureUnderFilter(tablePrimitiveType);
-            const filteredTable = keepsEveryFeature
-              ? split
-                ? getMatchedSplitTable(table, split)
-                : table
-              : split
-                ? scopeSplitGeometryTable(table, split, scopedRowIds)
-                : selectRowsInScope(table, scopedRowIds);
-            if (filteredTable !== table && filteredTable.numRows === 0) {
+            const filteredTable = split
+              ? getMatchedSplitTable(table, split)
+              : table;
+            applyPrimitiveScopes(ctx, viz.id, split);
+            if (isEveryPrimitiveOutOfScope(ctx, tablePrimitiveType)) {
               hasEmptyFilteredVisualization = true;
             }
-            if (keepsEveryFeature && scopedRowIds) {
-              if (split) {
-                ctx.scopedSplitDatasetTable = selectRowsInScope(
-                  split.dataset,
-                  scopedRowIds
-                );
-              } else {
-                ctx.scopedRowIds = scopedRowIds;
-              }
-            }
-            // Raw point datasets have no representative-point table, so the
-            // text layer renders from the main table; give it its own
-            // TEXT-scoped copy so Texts filters apply and Symbols filters
-            // don't leak onto the labels.
-            const textScopedRowIds = rowScopeStore.getScopedRowIds(
-              viz.id,
-              PrimitiveFilterType.TEXT
-            );
             ctx.textPointTable =
-              geoInfo?.type === GeometryType.POINT
-                ? split
-                  ? scopeSplitGeometryTable(table, split, textScopedRowIds)
-                  : selectRowsInScope(table, textScopedRowIds)
-                : undefined;
+              geoInfo?.type === GeometryType.POINT ? filteredTable : undefined;
             const joinedBasemapId = split
               ? getDatasetJoinedBasemap(datasetId)
               : null;
@@ -1390,32 +1322,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
                 : rawRepresentativePointBaseTable;
 
             if (representativePointBaseTable) {
-              const filteredRepresentativePointTable =
-                scopeRepresentativePointTable(
-                  representativePointBaseTable,
-                  split,
-                  rowScopeStore.getScopedRowIds(
-                    viz.id,
-                    PrimitiveFilterType.POINT
-                  )
-                );
-              const filteredTextRepresentativePointTable =
-                scopeRepresentativePointTable(
-                  representativePointBaseTable,
-                  split,
-                  textScopedRowIds
-                );
-              ctx.representativePointTable = filteredRepresentativePointTable;
-              ctx.representativePointGeometryInfo =
+              const representativeGeometryInfo =
                 getCachedRepresentativeGeometryInfo(
-                  filteredRepresentativePointTable
+                  representativePointBaseTable
                 ) ?? undefined;
-              ctx.textRepresentativePointTable =
-                filteredTextRepresentativePointTable;
+              ctx.representativePointTable = representativePointBaseTable;
+              ctx.representativePointGeometryInfo = representativeGeometryInfo;
+              ctx.textRepresentativePointTable = representativePointBaseTable;
               ctx.textRepresentativePointGeometryInfo =
-                getCachedRepresentativeGeometryInfo(
-                  filteredTextRepresentativePointTable
-                ) ?? undefined;
+                representativeGeometryInfo;
             } else {
               ctx.representativePointTable = undefined;
               ctx.representativePointGeometryInfo = undefined;
