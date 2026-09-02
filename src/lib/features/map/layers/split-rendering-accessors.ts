@@ -4,6 +4,7 @@ import {
   INTERNAL_COLUMN,
   JOINED_BASEMAP_COLUMN
 } from '$lib/features/commons/constants/data.constants';
+import type { PrimitiveFilter } from '$lib/features/commons/stores/visualization.store.svelte';
 import type { LayerContext } from '../types';
 import {
   rowAccessor,
@@ -24,10 +25,27 @@ export function hasSplitRenderingContext(
   return Boolean(ctx.splitDatasetTable && ctx.splitFeatureIdColumn);
 }
 
-function resolveAttributeTable(
-  ctx: LayerContext & { splitDatasetTable: ArrowTable }
-): ArrowTable {
-  return ctx.scopedSplitDatasetTable ?? ctx.splitDatasetTable;
+export function withPrimitiveScope(
+  ctx: LayerContext,
+  primitive: PrimitiveFilter
+): LayerContext {
+  return { ...ctx, scopedPrimitive: primitive };
+}
+
+export function resolveScopedAttributeTable(
+  ctx: LayerContext
+): ArrowTable | undefined {
+  const scoped = ctx.scopedPrimitive
+    ? ctx.scopedDatasetTableByPrimitive?.[ctx.scopedPrimitive]
+    : undefined;
+
+  return scoped ?? ctx.splitDatasetTable;
+}
+
+function resolveScopedRowIds(ctx: LayerContext): Set<number> | undefined {
+  return ctx.scopedPrimitive
+    ? ctx.scopedRowIdsByPrimitive?.[ctx.scopedPrimitive]
+    : undefined;
 }
 
 function createScopedRowAccessor<T>(
@@ -35,7 +53,7 @@ function createScopedRowAccessor<T>(
   sourceTable: ArrowTable,
   accessor: (row: Record<string, unknown> | null) => T
 ): (featureId: number) => T {
-  const scopedRowIds = ctx.scopedRowIds;
+  const scopedRowIds = resolveScopedRowIds(ctx);
   if (!scopedRowIds) {
     return rowAccessor(sourceTable, (row) => accessor(row));
   }
@@ -111,7 +129,7 @@ export function createSplitAwareRowAccessor<T>(
 
   return splitRowAccessor(
     geometryTable,
-    resolveAttributeTable(ctx),
+    resolveScopedAttributeTable(ctx) ?? ctx.splitDatasetTable,
     featureIdColumn,
     JOINED_BASEMAP_COLUMN.ID,
     (row) => accessor((row ?? {}) as Record<string, unknown>)
@@ -139,7 +157,7 @@ export function createSplitAwareNullableRowAccessor<T>(
 
   return splitRowAccessor(
     geometryTable,
-    resolveAttributeTable(ctx),
+    resolveScopedAttributeTable(ctx) ?? ctx.splitDatasetTable,
     featureIdColumn,
     JOINED_BASEMAP_COLUMN.ID,
     accessor
@@ -164,7 +182,7 @@ export function createSplitGeoJsonFeatureAccessor<T>(
   }
 
   const datasetByFeatureId = buildSplitDatasetRowLookup(
-    resolveAttributeTable(ctx),
+    resolveScopedAttributeTable(ctx) ?? ctx.splitDatasetTable,
     JOINED_BASEMAP_COLUMN.ID
   );
   if (!datasetByFeatureId) {
@@ -199,7 +217,7 @@ export function createSplitGeoJsonNullableFeatureAccessor<T>(
   }
 
   const datasetByFeatureId = buildSplitDatasetRowLookup(
-    resolveAttributeTable(ctx),
+    resolveScopedAttributeTable(ctx) ?? ctx.splitDatasetTable,
     JOINED_BASEMAP_COLUMN.ID
   );
   if (!datasetByFeatureId) {

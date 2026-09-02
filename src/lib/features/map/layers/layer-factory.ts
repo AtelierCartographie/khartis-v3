@@ -14,6 +14,7 @@ import type { DeckDataRow, GeometryInfo, LayerContext } from '../types';
 import { orderLayersByPrimitive } from './primitive-layer-order';
 import { createGeoJsonLayerStack } from './geojson-layer-factory';
 import { createThematicLayerId } from './layer-id.utils';
+import { withPrimitiveScope } from './split-rendering-accessors';
 import { createLineLayerStack } from './line-layer-factory';
 import { createPolygonLayerStack } from './polygon-layer-factory';
 import {
@@ -128,17 +129,29 @@ export function createDeckLayers(
   switch (resolvedGeometryType) {
     case GeometryType.POINT:
     case GeometryType.MULTIPOINT:
-      thematicLayers = createPointLayers(jsTable, geometryInfo, ctx);
+      thematicLayers = createPointLayers(
+        jsTable,
+        geometryInfo,
+        withPrimitiveScope(ctx, PrimitiveFilterType.POINT)
+      );
       break;
 
     case GeometryType.LINESTRING:
     case GeometryType.MULTILINESTRING:
-      thematicLayers = createLineLayers(jsTable, geometryInfo, ctx);
+      thematicLayers = createLineLayers(
+        jsTable,
+        geometryInfo,
+        withPrimitiveScope(ctx, PrimitiveFilterType.LINE)
+      );
       break;
 
     case GeometryType.POLYGON:
     case GeometryType.MULTIPOLYGON:
-      thematicLayers = createPolygonLayers(jsTable, geometryInfo, ctx);
+      thematicLayers = createPolygonLayers(
+        jsTable,
+        geometryInfo,
+        withPrimitiveScope(ctx, PrimitiveFilterType.POLYGON)
+      );
       break;
 
     default:
@@ -150,6 +163,10 @@ export function createDeckLayers(
     );
   }
 
-  const textLayers = createTextOverlayLayers(jsTable, geometryInfo, ctx);
+  const textLayers = createTextOverlayLayers(
+    jsTable,
+    geometryInfo,
+    withPrimitiveScope(ctx, PrimitiveFilterType.TEXT)
+  );
   return orderLayersByPrimitive(thematicLayers, textLayers, ctx.primitiveOrder);
 }

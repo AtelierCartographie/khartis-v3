@@ -5,6 +5,7 @@ import {
   INTERNAL_COLUMN,
   JOINED_BASEMAP_COLUMN
 } from '$lib/features/commons/constants/data.constants';
+import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
 import type { LayerContext } from '../types';
 import {
   buildSplitDatasetRowMapping,
@@ -14,7 +15,8 @@ import {
   createSplitGeoJsonNullableFeatureAccessor,
   getSplitMatchedGeometryRowIndices,
   resolveBestSplitFeatureIdColumn,
-  resolveSplitMappingFeatureIdColumn
+  resolveSplitMappingFeatureIdColumn,
+  withPrimitiveScope
 } from './split-rendering-accessors';
 
 function createTableWithRows(
@@ -332,10 +334,15 @@ describe('scoped rendering accessors', () => {
       [{ [JOINED_BASEMAP_COLUMN.ID]: 'FR', population: 67_935_660 }],
       [JOINED_BASEMAP_COLUMN.ID, 'population']
     );
-    const ctx = {
-      ...createSplitContext(dataset),
-      scopedSplitDatasetTable: scopedDataset
-    } as LayerContext;
+    const ctx = withPrimitiveScope(
+      {
+        ...createSplitContext(dataset),
+        scopedDatasetTableByPrimitive: {
+          [PrimitiveFilterType.POLYGON]: scopedDataset
+        }
+      } as LayerContext,
+      PrimitiveFilterType.POLYGON
+    );
 
     const readPopulation = createSplitAwareRowAccessor(
       ctx,
@@ -347,7 +354,7 @@ describe('scoped rendering accessors', () => {
     expect(readPopulation(1)).toBeUndefined();
   });
 
-  it('keeps labels on the unscoped dataset so an area filter cannot reach them', () => {
+  it('reads the whole dataset when no primitive scope is in force', () => {
     const ctx = createSplitContext(dataset);
 
     const readPopulation = createSplitAwareRowAccessor(
@@ -367,7 +374,14 @@ describe('scoped rendering accessors', () => {
       ],
       [INTERNAL_COLUMN.ID, 'population']
     );
-    const ctx = { scopedRowIds: new Set([1]) } as LayerContext;
+    const ctx = withPrimitiveScope(
+      {
+        scopedRowIdsByPrimitive: {
+          [PrimitiveFilterType.POINT]: new Set([1])
+        }
+      } as LayerContext,
+      PrimitiveFilterType.POINT
+    );
 
     const readPopulation = createSplitAwareNullableRowAccessor(
       ctx,
