@@ -79,7 +79,8 @@
   const classificationBreaks = useClassificationBreaksController({
     resolveDatasetSourceFileId: (datasetId) =>
       datasetsStore.datasets.find((dataset) => dataset.id === datasetId)
-        ?.sourceFileId
+        ?.sourceFileId,
+    getVisualization: () => selectedViz
   });
 
   const datasetAnalysis = useDatasetAnalysis({
