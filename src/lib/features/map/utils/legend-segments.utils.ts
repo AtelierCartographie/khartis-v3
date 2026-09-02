@@ -1172,8 +1172,8 @@ function getPointSizeLegendDrafts(
     }
 
     // A shared scale means one graduated column reads for both variables, so
-    // reuse the symbol legend and name each colour underneath it — the same
-    // shape the cross-zero legend already uses for + and -.
+    // the column stays neutral and the colour boxes underneath carry the
+    // variables — the same shape the cross-zero legend uses for + and -.
     if (scale.commonScale !== false) {
       const sharedValues = [
         ...getNumericColumnValues(viz, primaryColumn),
@@ -1195,8 +1195,6 @@ function getPointSizeLegendDrafts(
                 ...options,
                 type,
                 size: maxSize,
-                fill: scale.fillColor,
-                stroke: scale.strokeColor,
                 bar_width: barWidth,
                 colorSwatches: [
                   { color: scale.fillColor, label: primaryColumn },

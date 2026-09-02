@@ -161,6 +161,32 @@ describe('common legend generators', () => {
     );
   });
 
+  it('gains columns instead of rows past the compact category count', () => {
+    const countColumns = (items_nb: number): number => {
+      const svg = draw_categorical_legend(
+        Array.from({ length: items_nb }, (_, index) => ({
+          label: `Catégorie ${index + 1}`,
+          fill: '#4585f5'
+        })),
+        { fontSize: 8 }
+      );
+
+      return new Set(
+        [
+          ...svg.markup.matchAll(/<rect x="([\d.]+)" y="[\d.]+" width="10"/g)
+        ].map((match) => match[1])
+      ).size;
+    };
+
+    expect(countColumns(4)).toBe(1);
+    expect(countColumns(8)).toBe(2);
+    expect(countColumns(30)).toBe(3);
+    // Three columns would push these past thirty rows and off the page.
+    expect(countColumns(91)).toBe(4);
+    expect(countColumns(121)).toBe(5);
+    expect(countColumns(200)).toBe(5);
+  });
+
   it('keeps categorical missing data compact in the same SVG', () => {
     const svg = createLegendSvg(
       draw_categorical_legend(

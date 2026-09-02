@@ -411,9 +411,11 @@ describe('legend overlay visibility', () => {
     const doubleLegend = container.querySelector('.legend-svg--double-symbols');
     expect(doubleLegend).toBeInTheDocument();
 
-    // One graduated column for the shared scale, then a colour box per
+    // One neutral graduated column for the shared scale, then a colour box per
     // variable so the reader can tell A from B.
-    expect(doubleLegend?.querySelector('.symbols')).toBeInTheDocument();
+    const symbols = doubleLegend?.querySelector('.symbols');
+    expect(symbols?.getAttribute('fill')).toBe('none');
+    expect(symbols?.getAttribute('stroke')).toBe('currentColor');
     const swatches = doubleLegend?.querySelectorAll('.sign_legend rect') ?? [];
     expect(swatches).toHaveLength(2);
     expect(swatches[0]?.getAttribute('fill')).toBe('#4585f5');
