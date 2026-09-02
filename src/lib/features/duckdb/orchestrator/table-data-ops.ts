@@ -314,6 +314,38 @@ export async function getColumnDomainsInScope(
   return domains;
 }
 
+function buildScopedCountExpression(clause: string | null): string {
+  return clause
+    ? `COUNT(*) FILTER (WHERE COALESCE(${clause}, FALSE))`
+    : 'COUNT(*)';
+}
+
+export async function getScopedRowStats(
+  tableName: string,
+  scopeClause: string | null,
+  Duck: DuckDBClientForTableData
+): Promise<FilterStats> {
+  // The denominator a primitive filter works against is what the table filter
+  // already let through, not the whole table.
+  const tableClause = buildFilterWhereClause(getFiltersMap().get(tableName));
+  const escapedTable = escapeIdentifier(tableName);
+  const result = (await Duck.query(
+    `SELECT ${buildScopedCountExpression(tableClause)} AS total,
+            ${buildScopedCountExpression(scopeClause ?? tableClause)} AS filtered
+     FROM "${escapedTable}"`
+  )) as ArrowTableLike;
+
+  if (result.numRows === 0) {
+    return { total: 0, filtered: 0 };
+  }
+
+  const row = result.get(0) as Record<string, unknown>;
+  return {
+    total: Number(row?.total) || 0,
+    filtered: Number(row?.filtered) || 0
+  };
+}
+
 export async function getRowIdsInScope(
   tableName: string,
   clause: string,
