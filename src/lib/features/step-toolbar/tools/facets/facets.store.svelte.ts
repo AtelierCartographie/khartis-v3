@@ -32,6 +32,15 @@ export { FACET_SLOT, SCALE_MODE };
 export type { FacetSlotPath, ScaleMode };
 
 export const MAX_FACETS_COLUMNS = 4;
+
+export const FACETS_FRAME_THICKNESS = {
+  min: 0.25,
+  max: 3,
+  step: 0.25
+} as const;
+
+const DEFAULT_FACETS_FRAME_COLOR = '#c6c6c6';
+
 export const MAX_FACETS = 16;
 
 function getCompatibleDatasetVariables(
@@ -137,6 +146,9 @@ function computeBestColumns(
 export interface FacetsLayout {
   columns: number;
   gap: number;
+  frameVisible: boolean;
+  frameColor: string;
+  frameThickness: number;
 }
 
 export type FacetSlotAssignments = Partial<Record<FacetSlotPath, string>>;
@@ -162,7 +174,10 @@ const DEFAULT_STATE: FacetsState = {
   variables: [],
   layout: {
     columns: 3,
-    gap: 16
+    gap: 16,
+    frameVisible: true,
+    frameColor: DEFAULT_FACETS_FRAME_COLOR,
+    frameThickness: 1
   },
   scaleMode: SCALE_MODE.SHARED,
   generatedVisualizationIds: [],
@@ -182,6 +197,17 @@ function sanitizeFacetSlotAssignments(data: unknown): FacetSlotAssignments {
         typeof entry[1] === 'string' &&
         entry[1].length > 0
     )
+  );
+}
+
+function clampFrameThickness(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_STATE.layout.frameThickness;
+  }
+  return Math.min(
+    FACETS_FRAME_THICKNESS.max,
+    Math.max(FACETS_FRAME_THICKNESS.min, parsed)
   );
 }
 
@@ -395,7 +421,17 @@ function createFacetsStore() {
         gap:
           typeof restoredLayout?.gap === 'number' && restoredLayout.gap >= 0
             ? restoredLayout.gap
-            : DEFAULT_STATE.layout.gap
+            : DEFAULT_STATE.layout.gap,
+        frameVisible:
+          typeof restoredLayout?.frameVisible === 'boolean'
+            ? restoredLayout.frameVisible
+            : DEFAULT_STATE.layout.frameVisible,
+        frameColor:
+          typeof restoredLayout?.frameColor === 'string' &&
+          restoredLayout.frameColor.length > 0
+            ? restoredLayout.frameColor
+            : DEFAULT_STATE.layout.frameColor,
+        frameThickness: clampFrameThickness(restoredLayout?.frameThickness)
       };
 
       nextState.facetTitles =
@@ -924,6 +960,21 @@ function createFacetsStore() {
     notifyPersistence();
   }
 
+  function setFrameVisible(visible: boolean): void {
+    state.layout.frameVisible = visible;
+    notifyPersistence();
+  }
+
+  function setFrameColor(color: string): void {
+    state.layout.frameColor = color;
+    notifyPersistence();
+  }
+
+  function setFrameThickness(thickness: number): void {
+    state.layout.frameThickness = clampFrameThickness(thickness);
+    notifyPersistence();
+  }
+
   async function toggleScaleMode(): Promise<void> {
     if (isRegenerating) return;
     if (
@@ -1071,6 +1122,9 @@ function createFacetsStore() {
     reorderVariables,
     setColumns,
     setGap,
+    setFrameVisible,
+    setFrameColor,
+    setFrameThickness,
     toggleScaleMode,
     getFacetTitle,
     setFacetTitle,

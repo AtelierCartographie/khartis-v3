@@ -14,7 +14,6 @@
   import { selectTool } from './tool-list.utils.svelte';
   import ToolsListContainer from './tools-list-container.svelte';
   import { STORAGE_KEYS, CSS_CLASSES } from '../step-toolbar.constants';
-  import { facetsStore } from '../tools/facets';
 
   let hasOpenedProjectionTool = $state(
     typeof window !== 'undefined' &&
@@ -28,7 +27,7 @@
   );
 
   const showProjectionBadge = $derived(!hasOpenedProjectionTool);
-  const showFacetsBadge = $derived(!hasOpenedFacetsTool || facetsStore.enabled);
+  const showFacetsBadge = $derived(!hasOpenedFacetsTool);
 
   function handleProjectionClick() {
     hasOpenedProjectionTool = true;
