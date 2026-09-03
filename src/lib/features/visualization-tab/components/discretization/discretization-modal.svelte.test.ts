@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/features/commons/services/classification.service', () => ({
@@ -349,24 +349,38 @@ describe('DiscretizationModal', () => {
     expect(onbreakpointchange).toHaveBeenLastCalledWith(200000);
   });
 
-  it('keeps the breakpoint slider enabled when class breaks exist and no break value has been selected yet', () => {
-    const { container } = render(DiscretizationPanel, {
+  it('disables the breakpoint position slider until a break value is set', () => {
+    const breaks = [
+      { min: 14, max: 7600, count: 4, color: '#f7fbff' },
+      { min: 7600, max: 30000, count: 8, color: '#c6dbef' },
+      { min: 30000, max: 80000, count: 3, color: '#6baed6' },
+      { min: 80000, max: 200000, count: 2, color: '#2171b5' },
+      { min: 200000, max: 227119, count: 1, color: '#08519c' }
+    ];
+
+    const withoutBreakpoint = render(DiscretizationPanel, {
       breakpointValue: null,
-      breaks: [
-        { min: 14, max: 7600, count: 4, color: '#f7fbff' },
-        { min: 7600, max: 30000, count: 8, color: '#c6dbef' },
-        { min: 30000, max: 80000, count: 3, color: '#6baed6' },
-        { min: 80000, max: 200000, count: 2, color: '#2171b5' },
-        { min: 200000, max: 227119, count: 1, color: '#08519c' }
-      ]
+      breaks
     });
 
-    const breakpointSlider = container.querySelector(
-      '.breakpoint-slider-host input'
-    ) as HTMLInputElement | null;
+    expect(
+      withoutBreakpoint.container.querySelector<HTMLInputElement>(
+        '.breakpoint-slider-host input'
+      )?.disabled
+    ).toBe(true);
 
-    expect(breakpointSlider).not.toBeNull();
-    expect(breakpointSlider?.disabled).toBe(false);
+    cleanup();
+
+    const withBreakpoint = render(DiscretizationPanel, {
+      breakpointValue: 30000,
+      breaks
+    });
+
+    expect(
+      withBreakpoint.container.querySelector<HTMLInputElement>(
+        '.breakpoint-slider-host input'
+      )?.disabled
+    ).toBe(false);
   });
 
   it('should show an informative note when tied values merge classes below the requested count', async () => {

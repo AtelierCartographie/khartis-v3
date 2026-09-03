@@ -1490,6 +1490,7 @@
   "discretization_desc_head_tail": "Classes based on the mean, adapted to long-tailed distributions. The number of classes is self-determined; requesting more classes than the algorithm finds will use the maximum available.",
   "discretization_num_classes": "Number of classes",
   "discretization_breakpoint_value": "Break value",
+  "discretization_breakpoint_info": "Enter a pivot value (for instance 0 to separate positive balances from negative ones) and Khartis automatically applies a diverging colour palette to highlight the opposition around that point.",
   "discretization_values": "values",
   "discretization_error_min_greater_max": "Class {classNumber}: the minimum is greater than the maximum",
   "discretization_error_overlapping": "Class {classNumber}: overlap with the previous class",

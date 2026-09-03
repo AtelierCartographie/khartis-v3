@@ -1490,6 +1490,7 @@
   "discretization_desc_head_tail": "Classes basées sur la moyenne, adaptées aux distributions à longue queue. Le nombre de classes est auto-déterminé ; demander plus de classes que l'algorithme n'en trouve utilisera le maximum disponible.",
   "discretization_num_classes": "Nombre de classes",
   "discretization_breakpoint_value": "Valeur de rupture",
+  "discretization_breakpoint_info": "Précisez une valeur charnière (ex: le chiffre 0 pour séparer les soldes positifs des négatifs), Khartis appliquera automatiquement une palette de couleurs divergente pour souligner l'opposition autour de ce point.",
   "discretization_values": "valeurs",
   "discretization_error_min_greater_max": "Classe {classNumber} : le minimum est supérieur au maximum",
   "discretization_error_overlapping": "Classe {classNumber} : chevauchement avec la classe précédente",

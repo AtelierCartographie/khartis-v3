@@ -20,6 +20,7 @@
   } from 'carbon-components-svelte';
   import { Information, Launch } from 'carbon-icons-svelte';
   import DiscretizationHistogram from './discretization-histogram.svelte';
+  import { InfoPopover } from '../shared';
   import type { ShapeType } from '$lib/features/commons/constants/visualization.constants';
   import { ClassificationMethod } from '$lib/features/commons/stores/visualization.store.svelte';
 
@@ -135,9 +136,7 @@
       breakpointValue > dataMin &&
       breakpointValue < dataMax
   );
-  const canUseBreakpointPosition = $derived(
-    isBreakpointValueValid || breaks.length > 1
-  );
+  const canUseBreakpointPosition = $derived(isBreakpointValueValid);
   const breakpointSliderValue = $derived(
     resolveBreakpointLowerClassCount(numClasses, breakpointLowerClassCount)
   );
@@ -396,7 +395,10 @@
     <div class="section breakpoint-section">
       <div class="breakpoint-row">
         <div class="breakpoint-input-col">
-          <p class="input-label">{m.discretization_breakpoint_value()}</p>
+          <p class="input-label">
+            {m.discretization_breakpoint_value()}
+            <InfoPopover text={m.discretization_breakpoint_info()} />
+          </p>
           <TextInput
             id="breakpoint-value"
             size="sm"
@@ -485,6 +487,9 @@
   }
 
   .input-label {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
     font-size: 0.75rem;
     line-height: 1rem;
     letter-spacing: 0.32px;
