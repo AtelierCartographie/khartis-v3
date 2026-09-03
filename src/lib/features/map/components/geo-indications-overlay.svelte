@@ -54,7 +54,8 @@
     FeatureCollection,
     GeoJsonProperties,
     MultiPolygon,
-    Polygon
+    Polygon,
+    Position
   } from 'geojson';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import {
@@ -139,6 +140,7 @@
     windowStrokeWidth: number;
   };
 
+  const SPHERE_HALF_AREA_STERADIANS = 2 * Math.PI;
   const WORLD_SPHERE: GeoPermissibleObjects = { type: 'Sphere' };
   const INSET_GRATICULE = d3geo.geoGraticule().step([20, 20])();
   const EMPTY_GEOJSON_PROPERTIES: GeoJsonProperties = {};
@@ -258,7 +260,60 @@
       return null;
     }
 
-    return payload as WorldFeatureCollection;
+    const collection = payload as WorldFeatureCollection;
+    return {
+      ...collection,
+      features: collection.features.map(rewindFeatureForSphericalClip)
+    };
+  }
+
+  /**
+   * d3-geo's spherical clip reads a counterclockwise exterior ring — the
+   * GeoJSON RFC 7946 winding of the catalog basemaps — as the complement of the
+   * polygon, so each country would paint the whole visible hemisphere.
+   */
+  function rewindFeatureForSphericalClip(
+    feature: WorldFeatureCollection['features'][number]
+  ): WorldFeatureCollection['features'][number] {
+    const { geometry } = feature;
+    if (!geometry) {
+      return feature;
+    }
+
+    if (geometry.type === GEOJSON_TYPE.POLYGON) {
+      const rewound = rewindPolygonRings(geometry.coordinates);
+      return rewound === geometry.coordinates
+        ? feature
+        : { ...feature, geometry: { ...geometry, coordinates: rewound } };
+    }
+
+    if (geometry.type === GEOJSON_TYPE.MULTI_POLYGON) {
+      let didRewind = false;
+      const coordinates = geometry.coordinates.map((rings) => {
+        const rewound = rewindPolygonRings(rings);
+        if (rewound !== rings) {
+          didRewind = true;
+        }
+        return rewound;
+      });
+
+      return didRewind
+        ? { ...feature, geometry: { ...geometry, coordinates } }
+        : feature;
+    }
+
+    return feature;
+  }
+
+  function rewindPolygonRings(rings: Position[][]): Position[][] {
+    const area = d3geo.geoArea({
+      type: GEOJSON_TYPE.POLYGON,
+      coordinates: rings
+    });
+
+    return area > SPHERE_HALF_AREA_STERADIANS
+      ? rings.map((ring) => [...ring].reverse())
+      : rings;
   }
 
   function normalizeLongitude(longitude: number): number {
