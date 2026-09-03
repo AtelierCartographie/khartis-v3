@@ -12,9 +12,8 @@
     geoIndicationsState
   } from './geo-indications.store.svelte';
   import {
-    getInsetMapGeographicBounds,
     INSET_MAP_SIZE_LIMITS,
-    isInsetMapAvailableForBounds,
+    isInsetMapAvailableForViewport,
     type ColorPickerValidateEvent
   } from './geo-indications.utils';
 
@@ -48,15 +47,10 @@
     void projectionStore.isProjectedCoordinates;
     void projectionStore.renderProjection;
 
-    const bounds = getInsetMapGeographicBounds(
-      mapInstanceStore.getMapBounds(),
-      {
-        isProjectedCoordinates: projectionStore.isProjectedCoordinates,
-        projection: projectionStore.renderProjection
-      }
-    );
-
-    return isInsetMapAvailableForBounds(bounds);
+    return isInsetMapAvailableForViewport(mapInstanceStore.getMapBounds(), {
+      isProjectedCoordinates: projectionStore.isProjectedCoordinates,
+      projection: projectionStore.renderProjection
+    });
   });
 </script>
 

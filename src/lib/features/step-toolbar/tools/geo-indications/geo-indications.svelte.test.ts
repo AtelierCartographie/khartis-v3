@@ -259,9 +259,10 @@ describe('geo-indications tool', () => {
       [-30000, 0, 30000, 60000],
       undefined,
       true,
-      {
-        invert: ([x, y]: [number, number]) => [x / 1000, y / 1000]
-      } as never
+      Object.assign(
+        ([lon, lat]: [number, number]) => [lon * 1000, lat * 1000],
+        { invert: ([x, y]: [number, number]) => [x / 1000, y / 1000] }
+      ) as never
     );
 
     render(GeoIndications);

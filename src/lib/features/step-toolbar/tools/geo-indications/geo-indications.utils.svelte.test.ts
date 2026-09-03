@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { geoOrthographic } from 'd3-geo';
 import { DistanceUnit } from '$lib/features/commons/constants/ui.constants';
 import {
   getInsetMapBoundsAreaFraction,
@@ -6,7 +7,8 @@ import {
   getScaleDistanceLimit,
   getScaleMetersPerPixel,
   getSuggestedScaleDistance,
-  isInsetMapAvailableForBounds
+  getVisibleSphereFraction,
+  isInsetMapAvailableForViewport
 } from './geo-indications.utils';
 
 describe('geo indications scale utilities', () => {
@@ -217,7 +219,7 @@ describe('inset map availability', () => {
     // 250° x 120° centred on the equator: 60% of the sphere, which an
     // orthographic projection cannot outline.
     expect(
-      isInsetMapAvailableForBounds({
+      isInsetMapAvailableForViewport({
         north: 60,
         south: -60,
         east: 125,
@@ -226,7 +228,7 @@ describe('inset map availability', () => {
     ).toBe(false);
 
     expect(
-      isInsetMapAvailableForBounds({
+      isInsetMapAvailableForViewport({
         north: 30,
         south: -30,
         east: 60,
@@ -237,6 +239,78 @@ describe('inset map availability', () => {
 
   it('stays available while bounds are unknown', () => {
     expect(getInsetMapBoundsAreaFraction(null)).toBeNull();
-    expect(isInsetMapAvailableForBounds(null)).toBe(true);
+    expect(isInsetMapAvailableForViewport(null)).toBe(true);
+  });
+});
+
+describe('visible sphere fraction on a projected viewport', () => {
+  const ORTHOGRAPHIC_SCALE = 200;
+  const ORTHOGRAPHIC_CENTER = 400;
+
+  function orthographic() {
+    return geoOrthographic()
+      .scale(ORTHOGRAPHIC_SCALE)
+      .translate([ORTHOGRAPHIC_CENTER, ORTHOGRAPHIC_CENTER]);
+  }
+
+  function viewport(halfSize: number) {
+    return {
+      west: ORTHOGRAPHIC_CENTER - halfSize,
+      east: ORTHOGRAPHIC_CENTER + halfSize,
+      south: ORTHOGRAPHIC_CENTER - halfSize,
+      north: ORTHOGRAPHIC_CENTER + halfSize
+    };
+  }
+
+  it('measures a globe seen whole as exactly one hemisphere', () => {
+    // The far side projects onto the near side; counting it would report a
+    // full sphere and let the inset through on a world framing.
+    expect(
+      getVisibleSphereFraction(viewport(600), {
+        isProjectedCoordinates: true,
+        projection: orthographic()
+      })
+    ).toBeCloseTo(0.5, 2);
+  });
+
+  it('refuses the inset on a framing wider than the projected world', () => {
+    expect(
+      isInsetMapAvailableForViewport(viewport(600), {
+        isProjectedCoordinates: true,
+        projection: orthographic()
+      })
+    ).toBe(false);
+  });
+
+  it('shrinks monotonically as the viewport closes in', () => {
+    const projection = orthographic();
+    // 200 is the projection radius: anything wider still shows the full
+    // hemisphere, so the shrinking sizes have to actually clip the disc.
+    const fractions = [600, 150, 100, 50].map(
+      (halfSize) =>
+        getVisibleSphereFraction(viewport(halfSize), {
+          isProjectedCoordinates: true,
+          projection
+        }) as number
+    );
+
+    for (let index = 1; index < fractions.length; index += 1) {
+      expect(fractions[index]).toBeLessThan(fractions[index - 1]);
+    }
+    expect(
+      isInsetMapAvailableForViewport(viewport(50), {
+        isProjectedCoordinates: true,
+        projection
+      })
+    ).toBe(true);
+  });
+
+  it('falls back to the lon/lat extent when coordinates are not projected', () => {
+    expect(
+      getVisibleSphereFraction(
+        { north: 90, south: -90, east: 90, west: -90 },
+        { isProjectedCoordinates: false, projection: orthographic() }
+      )
+    ).toBeCloseTo(0.5, 6);
   });
 });

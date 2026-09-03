@@ -37,6 +37,9 @@ export const SCALE_TARGET_WIDTH_PX = 80;
 export const SCALE_MAX_WIDTH_PX = 120;
 export const INSET_MAP_MAX_AREA_FRACTION = 0.5;
 const INSET_PROJECTED_BOUNDS_EDGE_SEGMENTS = 16;
+const SPHERE_SAMPLE_COUNT = 1500;
+const GOLDEN_ANGLE_RADIANS = Math.PI * (3 - Math.sqrt(5));
+const ROUND_TRIP_TOLERANCE_RADIANS = 1e-4;
 
 export type ScaleDistanceMapLike = {
   getCenter: () => { lng: number; lat: number };
@@ -45,6 +48,12 @@ export type ScaleDistanceMapLike = {
 
 type ScaleDistanceProjectionLike = {
   invert: (point: [number, number]) => [number, number] | null | undefined;
+};
+
+type PlanarProjectionLike = ((
+  point: [number, number]
+) => [number, number] | null | undefined) & {
+  invert?: (point: [number, number]) => [number, number] | null | undefined;
 };
 
 export type ScaleDistanceContext = {
@@ -122,10 +131,63 @@ export function getInsetMapBoundsAreaFraction(
   return (toRadians(longitudeSpan) * latitudeExtent) / (4 * Math.PI);
 }
 
-export function isInsetMapAvailableForBounds(
-  bounds: InsetMapBounds | null | undefined
+/**
+ * Fraction of the sphere the viewport actually shows.
+ *
+ * Inverting the viewport corners is unusable here: outside a projection's
+ * domain `invert` returns clamped nonsense rather than nothing, so a framing
+ * that contains the whole world measures as a small window. Counting
+ * equal-area globe samples that project inside the viewport only needs the
+ * forward projection, which every projection has.
+ */
+export function getVisibleSphereFraction(
+  bounds: InsetMapBounds | null | undefined,
+  context: InsetMapBoundsProjectionContext = {}
+): number | null {
+  if (!bounds) {
+    return null;
+  }
+
+  const projection = context.projection;
+  if (!context.isProjectedCoordinates || !isPlanarProjection(projection)) {
+    return getInsetMapBoundsAreaFraction(bounds);
+  }
+
+  const west = Math.min(bounds.west, bounds.east);
+  const east = Math.max(bounds.west, bounds.east);
+  const south = Math.min(bounds.south, bounds.north);
+  const north = Math.max(bounds.south, bounds.north);
+  const invert =
+    typeof projection.invert === 'function' ? projection.invert : null;
+
+  let visibleCount = 0;
+  for (const sample of getSphereSamples()) {
+    const projected = projection(sample);
+    if (!isFinitePoint(projected)) continue;
+    if (projected[0] < west || projected[0] > east) continue;
+    if (projected[1] < south || projected[1] > north) continue;
+
+    // On a globe the far side projects onto the near side; only the round trip
+    // tells a visible sample from the back-facing one hiding behind it.
+    if (invert) {
+      const roundTrip = invert(projected);
+      if (!isFinitePoint(roundTrip)) continue;
+      if (geoDistance(sample, roundTrip) > ROUND_TRIP_TOLERANCE_RADIANS) {
+        continue;
+      }
+    }
+
+    visibleCount += 1;
+  }
+
+  return visibleCount / SPHERE_SAMPLE_COUNT;
+}
+
+export function isInsetMapAvailableForViewport(
+  bounds: InsetMapBounds | null | undefined,
+  context: InsetMapBoundsProjectionContext = {}
 ): boolean {
-  const areaFraction = getInsetMapBoundsAreaFraction(bounds);
+  const areaFraction = getVisibleSphereFraction(bounds, context);
   return areaFraction === null || areaFraction < INSET_MAP_MAX_AREA_FRACTION;
 }
 
@@ -274,17 +336,40 @@ function toNiceDistanceAtMost(value: number): number {
   return step * magnitude;
 }
 
-function isValidLongitudeLatitudePair(
-  candidate: unknown
-): candidate is [number, number] {
+function isFinitePoint(candidate: unknown): candidate is [number, number] {
   return (
     Array.isArray(candidate) &&
     candidate.length >= 2 &&
-    typeof candidate[0] === 'number' &&
     Number.isFinite(candidate[0]) &&
-    typeof candidate[1] === 'number' &&
     Number.isFinite(candidate[1])
   );
+}
+
+function isValidLongitudeLatitudePair(
+  candidate: unknown
+): candidate is [number, number] {
+  return isFinitePoint(candidate);
+}
+
+function isPlanarProjection(
+  candidate: unknown
+): candidate is PlanarProjectionLike {
+  return typeof candidate === 'function';
+}
+
+let sphereSamples: [number, number][] | null = null;
+
+/** Fibonacci lattice: every sample stands for the same spherical area. */
+function getSphereSamples(): [number, number][] {
+  sphereSamples ??= Array.from({ length: SPHERE_SAMPLE_COUNT }, (_, index) => {
+    const z = 1 - (2 * index + 1) / SPHERE_SAMPLE_COUNT;
+    return [
+      normalizeLongitude((GOLDEN_ANGLE_RADIANS * index * 180) / Math.PI),
+      (Math.asin(z) * 180) / Math.PI
+    ] as [number, number];
+  });
+
+  return sphereSamples;
 }
 
 function hasProjectionInvert(
