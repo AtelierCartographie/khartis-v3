@@ -36,9 +36,9 @@
   import { getCatalogueProjectionIdForSuggestion } from './projection-suggestion-catalogue.utils';
   import { getThumbnailPaths } from './projection-thumbnail';
   import {
-    getThumbnailGeometrySync,
-    loadThumbnailGeometry
-  } from '$lib/features/commons/utils/projection-thumbnail-geometry';
+    getWorldLandGeometrySync,
+    loadWorldLandGeometry
+  } from '$lib/features/commons/utils/world-land-geometry';
 
   type ProjectionShapeFilterId = Exclude<ProjectionFilterId, 'all'>;
 
@@ -68,14 +68,14 @@
     });
   }
 
-  let thumbnailGeometry = $state(getThumbnailGeometrySync());
+  let thumbnailGeometry = $state(getWorldLandGeometrySync());
 
   $effect(() => {
     if (thumbnailGeometry) {
       return;
     }
     let cancelled = false;
-    void loadThumbnailGeometry().then((geometry) => {
+    void loadWorldLandGeometry().then((geometry) => {
       if (!cancelled) {
         thumbnailGeometry = geometry;
       }
