@@ -42,7 +42,7 @@
     getSuggestedScaleDistance,
     getInsetMapGeographicBounds,
     INSET_MAP_SIZE_LIMITS,
-    isInsetMapAvailableForBounds,
+    isInsetMapAvailableForViewport,
     SCALE_MAX_WIDTH_PX,
     toDistanceMeters
   } from '$lib/features/step-toolbar/tools/geo-indications';
@@ -67,13 +67,10 @@
     createDraggablePageItemController
   } from '../utils/use-draggable-page-item';
   import { getKeyboardMoveDelta } from '../utils/keyboard-position.utils';
-  import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
   import { getLegendState } from '$lib/features/step-toolbar/tools/legend';
   import * as m from '$lib/paraglide/messages';
   import { GEOJSON_TYPE } from '$lib/features/commons/constants';
-  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { readGeoParquetViaDuckDB } from '../services/read-geojson-arrow.service';
-  import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
+  import { loadWorldLandGeometry } from '$lib/features/commons/utils/world-land-geometry';
   import {
     getDefaultInsetStyle,
     getDefaultOrientationStyle,
@@ -96,8 +93,6 @@
     { length: SCALE_SEGMENT_COUNT },
     (_, index) => index
   );
-  const INSET_MAP_DATA_PATH =
-    '/basemaps/geometry/monde-countries-2024-low.parquet';
   const INSET_MAP_PADDING = 4;
   const INSET_MAP_WORLD_SPAN_EPSILON = 359.5;
   const INSET_ZOOM_SCALE = 1.2;
@@ -154,24 +149,9 @@
 
   async function loadWorldFeatures(generation: number): Promise<void> {
     try {
-      await duckDBOrchestrator.waitForInitialization();
-      const response = await fetch(resolveStaticAssetUrl(INSET_MAP_DATA_PATH));
-      if (!response.ok) {
-        return;
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      const arrowTable = await readGeoParquetViaDuckDB(
-        arrayBuffer,
-        'inset_world_countries'
-      );
-      const geoInfo = extractGeometryInfo(arrowTable);
-      if (!geoInfo) {
-        return;
-      }
-      const geojson = arrowTableToGeoJSON(arrowTable, geoInfo.geoColumn);
-      if (generation === worldFeaturesLoadGeneration && geojson) {
-        worldFeatures = toWorldFeatureCollection(geojson);
+      const geometry = await loadWorldLandGeometry();
+      if (generation === worldFeaturesLoadGeneration && geometry) {
+        worldFeatures = toWorldFeatureCollection(geometry.land);
       }
     } catch (error) {
       if (generation === worldFeaturesLoadGeneration) {
@@ -800,7 +780,10 @@
     void _deckViewState;
     void _zoomLevel;
 
-    return isInsetMapAvailableForBounds(getCurrentMapBounds());
+    return isInsetMapAvailableForViewport(mapInstanceStore.getMapBounds(), {
+      isProjectedCoordinates: projectionStore.isProjectedCoordinates,
+      projection: projectionStore.renderProjection
+    });
   });
 
   $effect(() => {
