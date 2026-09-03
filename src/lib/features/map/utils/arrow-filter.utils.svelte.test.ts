@@ -1,185 +1,92 @@
 import { Table, vectorFromArray } from 'apache-arrow';
 import { describe, expect, it } from 'vitest';
-import type { VizDataFilter } from '$lib/features/commons/stores/visualization.store.svelte';
-import type { DataTableFilter } from '$lib/features/duckdb';
-import {
-  filterArrowTableByDataFilters,
-  filterArrowTableByTableFilters
-} from './arrow-filter.utils';
+import { selectRowsByIndices, selectRowsInScope } from './arrow-filter.utils';
 
-describe('arrow-filter utils', () => {
-  it('does not reuse cached data-filter results when user values contain cache separators', () => {
-    const table = new Table({
-      age: vectorFromArray([30, 40]),
-      name: vectorFromArray(['Alice', 'Bob'])
-    });
+function createTable(rowIds: number[], names: string[]): Table {
+  return new Table({
+    __id: vectorFromArray(rowIds),
+    name: vectorFromArray(names)
+  });
+}
 
-    const collisionLikeFilter = [
-      {
-        id: 'collision-like',
-        column: 'age',
-        operator: 'gte',
-        value: '30:::|name:contains:alice'
-      }
-    ] as VizDataFilter[];
+function readNames(table: Table): string[] {
+  const column = table.getChild('name');
+  return Array.from({ length: table.numRows }, (_, index) =>
+    String(column?.get(index))
+  );
+}
 
-    const validFilters = [
-      { id: 'age-filter', column: 'age', operator: 'gte', value: '30' },
-      {
-        id: 'name-filter',
-        column: 'name',
-        operator: 'contains',
-        value: 'alice'
-      }
-    ] as VizDataFilter[];
+describe('selectRowsInScope', () => {
+  it('returns the table itself when nothing is filtered', () => {
+    const table = createTable([1, 2, 3], ['Ajaccio', 'Bastia', 'Corte']);
 
-    expect(
-      filterArrowTableByDataFilters(table, collisionLikeFilter).numRows
-    ).toBe(0);
-    expect(filterArrowTableByDataFilters(table, validFilters).numRows).toBe(1);
+    expect(selectRowsInScope(table, null)).toBe(table);
   });
 
-  it('does not match rows for unsupported data-filter operators', () => {
-    const table = new Table({
-      age: vectorFromArray([30, 40])
-    });
-
-    const filters = [
-      {
-        id: 'unsupported',
-        column: 'age',
-        operator: 'unsupported_operator',
-        value: '30'
-      }
-    ] as unknown as VizDataFilter[];
-
-    expect(filterArrowTableByDataFilters(table, filters).numRows).toBe(0);
-  });
-
-  it('keeps data-filter top operators on the shared row path', () => {
-    const table = new Table({
-      city: vectorFromArray(['Paris', 'Lyon', 'Marseille']),
-      population: vectorFromArray([2_100_000, 520_000, 870_000])
-    });
-
-    const filters = [
-      {
-        id: 'top-population',
-        column: 'population',
-        operator: 'top_desc',
-        value: '',
-        limit: 2
-      }
-    ] as VizDataFilter[];
-
-    const result = filterArrowTableByDataFilters(table, filters);
-
-    expect(result.numRows).toBe(2);
-    expect(result.getChild('city')?.toArray()).toEqual(['Paris', 'Marseille']);
-  });
-
-  it('keeps top operators working with formatted numeric strings', () => {
-    const table = new Table({
-      city: vectorFromArray(['Paris', 'Lyon', 'Marseille']),
-      population: vectorFromArray(['9\u202f904\u202f000', '1,500', '900'])
-    });
-
-    const filters = [
-      {
-        id: 'top-formatted-population',
-        column: 'population',
-        operator: 'top_desc',
-        value: '',
-        limit: 2
-      }
-    ] as VizDataFilter[];
-
-    const result = filterArrowTableByDataFilters(table, filters);
-
-    expect(result.numRows).toBe(2);
-    expect(result.getChild('city')?.toArray()).toEqual(['Paris', 'Lyon']);
-  });
-
-  it('applies table filters through the shared row path', () => {
-    const table = new Table({
-      age: vectorFromArray([30, 40, 50]),
-      name: vectorFromArray(['Alice', 'Bob', 'Charlie'])
-    });
-
-    const filters = [
-      {
-        id: 'age-between',
-        label: 'age',
-        column: 'age',
-        operator: 'between',
-        value: 35,
-        secondaryValue: 45,
-        sql: ''
-      },
-      {
-        id: 'name-contains',
-        label: 'name',
-        column: 'name',
-        operator: 'contains',
-        value: 'bo',
-        sql: ''
-      }
-    ] satisfies DataTableFilter[];
-
-    const result = filterArrowTableByTableFilters(table, filters);
-
-    expect(result.numRows).toBe(1);
-    expect(result.getChild('name')?.toArray()).toEqual(['Bob']);
-  });
-
-  it('compares date-only filters by calendar day', () => {
-    const september = new Date('2018-09-03T02:00:00.000Z');
-    const october = new Date('2022-10-24T02:00:00.000Z');
-    const table = new Table({
-      createdAt: vectorFromArray([september, october])
-    });
-
-    const equalsFilter = [
-      {
-        id: 'created-at-equals',
-        column: 'createdAt',
-        operator: 'equals',
-        value: '2018-09-03'
-      }
-    ] as VizDataFilter[];
-    const notEqualsFilter = [
-      {
-        id: 'created-at-not-equals',
-        column: 'createdAt',
-        operator: 'not_equals',
-        value: '2018-09-03'
-      }
-    ] as VizDataFilter[];
-    const lessThanOrEqualFilter = [
-      {
-        id: 'created-at-lte',
-        column: 'createdAt',
-        operator: 'lte',
-        value: '2018-09-03'
-      }
-    ] as VizDataFilter[];
-    const betweenFilter = [
-      {
-        id: 'created-at-between',
-        column: 'createdAt',
-        operator: 'between',
-        value: '2018-09-03',
-        secondaryValue: '2022-10-24'
-      }
-    ] as VizDataFilter[];
-
-    expect(filterArrowTableByDataFilters(table, equalsFilter).numRows).toBe(1);
-    expect(filterArrowTableByDataFilters(table, notEqualsFilter).numRows).toBe(
-      1
+  it('keeps only the rows DuckDB reported as in scope, in table order', () => {
+    const table = createTable(
+      [10, 11, 12, 13],
+      ['Ajaccio', 'Bastia', 'Corte', 'Lille']
     );
-    expect(
-      filterArrowTableByDataFilters(table, lessThanOrEqualFilter).numRows
-    ).toBe(1);
-    expect(filterArrowTableByDataFilters(table, betweenFilter).numRows).toBe(2);
+
+    const scoped = selectRowsInScope(table, new Set([13, 10]));
+
+    expect(readNames(scoped)).toEqual(['Ajaccio', 'Lille']);
+  });
+
+  it('reuses the source table when every row is in scope', () => {
+    const table = createTable([1, 2], ['Ajaccio', 'Bastia']);
+
+    expect(selectRowsInScope(table, new Set([1, 2]))).toBe(table);
+  });
+
+  it('empties the table when the scope excludes everything', () => {
+    const table = createTable([1, 2], ['Ajaccio', 'Bastia']);
+
+    expect(selectRowsInScope(table, new Set([99])).numRows).toBe(0);
+  });
+
+  it('caches per row-id set so a new scope is not served a stale slice', () => {
+    const table = createTable([1, 2, 3], ['Ajaccio', 'Bastia', 'Corte']);
+    const first = new Set([1]);
+
+    expect(selectRowsInScope(table, first)).toBe(
+      selectRowsInScope(table, first)
+    );
+    expect(readNames(selectRowsInScope(table, new Set([3])))).toEqual([
+      'Corte'
+    ]);
+  });
+
+  it('shows every row when the table carries no internal row id', () => {
+    const table = new Table({ name: vectorFromArray(['Ajaccio']) });
+
+    expect(selectRowsInScope(table, new Set([1]))).toBe(table);
+  });
+});
+
+describe('selectRowsByIndices', () => {
+  it('merges adjacent indices into a single slice', () => {
+    const table = createTable(
+      [1, 2, 3, 4],
+      ['Ajaccio', 'Bastia', 'Corte', 'Lille']
+    );
+
+    expect(readNames(selectRowsByIndices(table, [1, 2]))).toEqual([
+      'Bastia',
+      'Corte'
+    ]);
+  });
+
+  it('keeps disjoint indices', () => {
+    const table = createTable(
+      [1, 2, 3, 4],
+      ['Ajaccio', 'Bastia', 'Corte', 'Lille']
+    );
+
+    expect(readNames(selectRowsByIndices(table, [0, 3]))).toEqual([
+      'Ajaccio',
+      'Lille'
+    ]);
   });
 });

@@ -44,6 +44,7 @@
   import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
   import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
+  import { rowScopeStore } from '../stores/row-scope.store.svelte';
   import { projectionStore } from '../stores/projection.store.svelte';
   import { mapProjectionStore } from '../stores/map-projection.store.svelte';
   import { mapLoadingStore } from '../stores/map-loading.store.svelte';
@@ -67,7 +68,6 @@
   import { layerOrderStore } from '$lib/features/step-toolbar/tools/layers/layer-order.store.svelte';
   import { trackWorkerParseVersion } from '../utils/worker-parse.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { getFiltersMap } from '$lib/features/duckdb/orchestrator/state.svelte';
   import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations';
   import {
     getColorBlindnessState,
@@ -538,16 +538,6 @@
     }
   });
 
-  function getTableFiltersForDataset(datasetId: string) {
-    const dataset = datasetsStore.datasets.find((d) => d.id === datasetId);
-    if (!dataset?.sourceFileId) return undefined;
-    const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
-      dataset.sourceFileId
-    );
-    if (!duckDBDataset?.tableName) return undefined;
-    return getFiltersMap().get(duckDBDataset.tableName);
-  }
-
   function getRenderedDataset(datasetId: string | undefined) {
     if (!datasetId) return null;
     return (
@@ -694,7 +684,6 @@
     getPageDisplayScale: () => pageDisplayScale,
     getShouldRenderDatasetFallbacks: () =>
       globalState.selectedStep === ToolbarStep.Data,
-    getTableFilters: getTableFiltersForDataset,
     onBasemapLayersLoaded: () =>
       scheduleLayerUpdate('useMapLayers:basemapLayersLoaded'),
     onRepresentativePointTablesLoaded: () =>
@@ -1856,35 +1845,6 @@
     });
   });
 
-  const filtersVersion = $derived(
-    Array.from(getFiltersMap().entries())
-      .map(([k, v]) => `${k}:${v.length}:${v.map((f) => f.id).join(',')}`)
-      .join('|')
-  );
-  const visualizationDataFiltersVersion = $derived.by(() => {
-    void visualizationStore.version;
-
-    return visibleVisualizations
-      .map((visualization) => {
-        const filters = visualization.dataFilters ?? [];
-        const filterKey = filters
-          .map((filter) =>
-            [
-              filter.id,
-              filter.primitiveType ?? '',
-              filter.column,
-              filter.operator,
-              filter.value ?? '',
-              filter.secondaryValue ?? '',
-              filter.limit ?? ''
-            ].join(':')
-          )
-          .join(',');
-
-        return `${visualization.id}:${filterKey}`;
-      })
-      .join('|');
-  });
   const projectionRenderTrigger = $derived.by(() => {
     const projectionState = getProjectionState();
 
@@ -1900,8 +1860,7 @@
     highlightVersion: mapHighlightStore.version,
     dataVersion,
     dataSize: `${tables.size}-${geoJSONs.size}`,
-    filtersVersion,
-    visualizationDataFiltersVersion,
+    rowScopeVersion: rowScopeStore.version,
     projectionVersion: projectionRenderTrigger,
     selectedStep: globalState.selectedStep,
     isMapExporting: globalState.isMapExporting

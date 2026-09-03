@@ -129,6 +129,17 @@ export interface LayerContext {
   splitDatasetTable?: ArrowTable;
 
   splitFeatureIdColumn?: string;
+
+  // Every primitive keeps its geometry under a filter so the missing-data
+  // styling stays available to the user; these carry the rows each primitive
+  // still has data for, and a feature left out of them reads as missing.
+  // One visualization can filter its primitives differently, so a context is
+  // narrowed to the primitive being drawn before its accessors are built.
+  scopedDatasetTableByPrimitive?: Partial<Record<PrimitiveFilter, ArrowTable>>;
+
+  scopedRowIdsByPrimitive?: Partial<Record<PrimitiveFilter, Set<number>>>;
+
+  scopedPrimitive?: PrimitiveFilter;
 }
 
 export type BBox = [number, number, number, number];

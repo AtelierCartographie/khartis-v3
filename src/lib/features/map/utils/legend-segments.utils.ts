@@ -27,9 +27,11 @@ import {
   getTextPrimitive,
   PrimitiveFilterType,
   type ClassificationConfig,
+  type PrimitiveFilter,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
+import { rowScopeStore } from '../stores/row-scope.store.svelte';
 import {
   CATEGORY_SHAPE_CYCLE,
   CategoryShapeMode,
@@ -447,8 +449,18 @@ function getStatisticsNumber(
 
 function getNumericColumnValues(
   viz: VisualizationConfig | undefined,
-  columnName: string | undefined
+  columnName: string | undefined,
+  primitive: PrimitiveFilter
 ): number[] {
+  // Every symbol drawer reads the extent of these values, so the resolved
+  // scope can stand in for the rows it no longer draws.
+  const scopedDomain = viz
+    ? rowScopeStore.getScopedDomain(viz.id, primitive, columnName)
+    : null;
+  if (scopedDomain) {
+    return buildSampleValues(scopedDomain.min, scopedDomain.max);
+  }
+
   const statistics = getColumnStatistics(viz, columnName);
 
   if (!viz?.datasetId || !columnName) {
@@ -464,6 +476,14 @@ function getNumericColumnValues(
   return values.length > 0 ? values : fallbackValues;
 }
 
+function buildSampleValues(minValue: number, maxValue: number): number[] {
+  if (minValue === maxValue) {
+    return [maxValue];
+  }
+
+  return [minValue, minValue + (maxValue - minValue) / 2, maxValue];
+}
+
 function getStatisticsSampleValues(statistics: unknown): number[] {
   const minValue = getStatisticsNumber(statistics, 'min');
   const maxValue = getStatisticsNumber(statistics, 'max');
@@ -472,11 +492,7 @@ function getStatisticsSampleValues(statistics: unknown): number[] {
     return [];
   }
 
-  if (minValue === maxValue) {
-    return [maxValue];
-  }
-
-  return [minValue, minValue + (maxValue - minValue) / 2, maxValue];
+  return buildSampleValues(minValue, maxValue);
 }
 
 function getColumnStatistics(
@@ -917,7 +933,11 @@ function getTextSizeLegendDraft(
     return null;
   }
 
-  const values = getNumericColumnValues(viz, text.valueColumn);
+  const values = getNumericColumnValues(
+    viz,
+    text.valueColumn,
+    PrimitiveFilterType.TEXT
+  );
   if (values.length === 0) {
     return null;
   }
@@ -968,23 +988,18 @@ function getQuantitativeColorLegendDraft(
   classification: ClassificationConfig,
   classPatternFills?: (LegendPatternFill | null)[]
 ): LegendSegmentDraft | null {
+  const valueColumn = getPrimitiveValueColumn(viz, PrimitiveFilterType.POLYGON);
+  const scopedDomain = rowScopeStore.getScopedDomain(
+    viz.id,
+    PrimitiveFilterType.POLYGON,
+    valueColumn
+  );
+  const statistics = getColumnStatistics(viz, valueColumn);
   const thresholds = buildQuantiColorThresholds({
     breaks: classification.breaks,
     colors: classification.colors,
-    min: getStatisticsNumber(
-      getColumnStatistics(
-        viz,
-        getPrimitiveValueColumn(viz, PrimitiveFilterType.POLYGON)
-      ),
-      'min'
-    ),
-    max: getStatisticsNumber(
-      getColumnStatistics(
-        viz,
-        getPrimitiveValueColumn(viz, PrimitiveFilterType.POLYGON)
-      ),
-      'max'
-    )
+    min: scopedDomain?.min ?? getStatisticsNumber(statistics, 'min'),
+    max: scopedDomain?.max ?? getStatisticsNumber(statistics, 'max')
   });
 
   if (!thresholds) {
@@ -1133,7 +1148,11 @@ function getPointSizeLegendDrafts(
   const barWidth = symbol?.barWidth ?? DEFAULT_LINEAR_SYMBOL_BAR_WIDTH;
 
   if (scale.kind === 'proportional' && !scale.secondary && type) {
-    const values = getNumericColumnValues(viz, viz.mapping.sizeColumn);
+    const values = getNumericColumnValues(
+      viz,
+      viz.mapping.sizeColumn,
+      PrimitiveFilterType.POINT
+    );
     if (values.length > 0) {
       return [
         {
@@ -1176,8 +1195,16 @@ function getPointSizeLegendDrafts(
     // variables — the same shape the cross-zero legend uses for + and -.
     if (scale.commonScale !== false) {
       const sharedValues = [
-        ...getNumericColumnValues(viz, primaryColumn),
-        ...getNumericColumnValues(viz, secondaryColumn)
+        ...getNumericColumnValues(
+          viz,
+          primaryColumn,
+          PrimitiveFilterType.POINT
+        ),
+        ...getNumericColumnValues(
+          viz,
+          secondaryColumn,
+          PrimitiveFilterType.POINT
+        )
       ];
       if (sharedValues.length === 0) {
         return [];
@@ -1230,7 +1257,11 @@ function getPointSizeLegendDrafts(
       }
     ]
       .map((variable): LegendSegmentDraft | null => {
-        const values = getNumericColumnValues(viz, variable.column);
+        const values = getNumericColumnValues(
+          viz,
+          variable.column,
+          PrimitiveFilterType.POINT
+        );
         if (values.length === 0) {
           return null;
         }

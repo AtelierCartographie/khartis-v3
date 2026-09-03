@@ -13,6 +13,7 @@
     VisualizationModes,
     VizDataFilter
   } from '$lib/features/commons/stores/visualization.store.svelte';
+  import type { FilterStats } from '$lib/features/duckdb';
   import * as m from '$lib/paraglide/messages';
   import {
     DEFAULT_COLORS,
@@ -74,6 +75,7 @@
     onBackgroundInvertPalette?: () => void;
     onBackgroundStrokeInvertPalette?: () => void;
     filters?: VizDataFilter[];
+    filterStats?: FilterStats;
     onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
     onUpdateFilter?: (
       filterId: string,
@@ -104,6 +106,7 @@
     onBackgroundInvertPalette,
     onBackgroundStrokeInvertPalette,
     filters = [],
+    filterStats,
     onAddFilter,
     onUpdateFilter,
     onRemoveFilter,
@@ -564,6 +567,7 @@
       title={m.texts_title()}
       dataFields={dataFields}
       filters={filters}
+      stats={filterStats}
       onAddFilter={onAddFilter ?? (() => {})}
       onUpdateFilter={onUpdateFilter}
       onRemoveFilter={onRemoveFilter ?? (() => {})}

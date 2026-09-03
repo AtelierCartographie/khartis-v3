@@ -7,13 +7,16 @@ import {
   detectDivergingBreakpoint,
   generateColorsForBreaks
 } from '$lib/features/commons/services/classification.service';
+import { resolveRowScopeClause } from '$lib/features/commons/services/row-scope.service';
 import type {
   ClassificationConfig,
-  PrimitiveFilter
+  PrimitiveFilter,
+  VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   ClassificationMethod,
-  DEFAULT_CATEGORICAL_COLORS
+  DEFAULT_CATEGORICAL_COLORS,
+  PrimitiveFilterType
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { DEFAULT_DISCRETIZATION_CLASS_COUNT } from '$lib/features/commons/constants/visualization.constants';
 import {
@@ -49,14 +52,30 @@ export type ClassificationBreakTrigger =
 export const TEXT_BACKGROUND_SCOPE_TARGET = 'text-background' as const;
 export const SYMBOL_FILL_SCOPE_TARGET = 'symbol-fill' as const;
 
+export type ClassificationScopeTarget =
+  | PrimitiveFilter
+  | typeof TEXT_BACKGROUND_SCOPE_TARGET
+  | typeof SYMBOL_FILL_SCOPE_TARGET;
+
 export function buildClassificationScopeKey(
   role: 'fill' | 'stroke' | 'size',
-  target:
-    | PrimitiveFilter
-    | typeof TEXT_BACKGROUND_SCOPE_TARGET
-    | typeof SYMBOL_FILL_SCOPE_TARGET
+  target: ClassificationScopeTarget
 ): string {
   return `${role}:${target}`;
+}
+
+export function resolveScopeTargetPrimitive(
+  target: ClassificationScopeTarget
+): PrimitiveFilter {
+  if (target === SYMBOL_FILL_SCOPE_TARGET) {
+    return PrimitiveFilterType.POINT;
+  }
+
+  if (target === TEXT_BACKGROUND_SCOPE_TARGET) {
+    return PrimitiveFilterType.TEXT;
+  }
+
+  return target;
 }
 
 interface ClassificationColorParamsTarget {
@@ -115,6 +134,7 @@ export interface ClassificationBreaksComputation {
 interface ComputeClassificationBreaksOptions {
   datasetSourceFileId: string;
   valueColumn: string;
+  rowScopeClause?: string | null;
   classification?: ClassificationConfig;
   method?: ClassificationMethod;
   numClasses?: number;
@@ -133,10 +153,12 @@ interface ClassificationBreaksControllerOptions {
   maxRetries?: number;
   retryDelayMs?: number;
   resolveDatasetSourceFileId: (datasetId: string) => string | undefined;
+  getVisualization: () => VisualizationConfig | undefined;
 }
 
 interface ComputeClassificationBreaksTargetOptions {
   scopeKey: string;
+  primitive: PrimitiveFilter;
   datasetId?: string;
   valueColumn?: string;
   classification?: ClassificationConfig;
@@ -372,6 +394,7 @@ export async function computeClassificationBreaks(
       ? await computeManualBreaks({
           datasetSourceFileId: options.datasetSourceFileId,
           valueColumn: options.valueColumn,
+          rowScopeClause: options.rowScopeClause,
           requestedClassCount,
           breakValues: options.breakValues ?? classification?.breaks ?? []
         })
@@ -380,6 +403,7 @@ export async function computeClassificationBreaks(
             datasetId: options.datasetSourceFileId,
             columnName: options.valueColumn,
             method: storeMethod,
+            rowScopeClause: options.rowScopeClause,
             breakpointValue: breakpointValue as number,
             lowerClassCount: breakpointLowerClassCount,
             upperClassCount: breakpointUpperClassCount
@@ -388,6 +412,7 @@ export async function computeClassificationBreaks(
             datasetId: options.datasetSourceFileId,
             columnName: options.valueColumn,
             method: storeMethod,
+            rowScopeClause: options.rowScopeClause,
             numClasses: requestedClassCount
           });
 
@@ -400,6 +425,7 @@ export async function computeClassificationBreaks(
       datasetId: options.datasetSourceFileId,
       columnName: options.valueColumn,
       method: storeMethod,
+      rowScopeClause: options.rowScopeClause,
       numClasses: requestedClassCount
     });
   }
@@ -436,11 +462,13 @@ export async function computeClassificationBreaks(
 async function computeManualBreaks({
   datasetSourceFileId,
   valueColumn,
+  rowScopeClause,
   requestedClassCount,
   breakValues
 }: {
   datasetSourceFileId: string;
   valueColumn: string;
+  rowScopeClause: string | null | undefined;
   requestedClassCount: number;
   breakValues: number[];
 }): Promise<BreaksResult> {
@@ -450,6 +478,7 @@ async function computeManualBreaks({
     return await calculateBreakCounts({
       datasetId: datasetSourceFileId,
       columnName: valueColumn,
+      rowScopeClause,
       breaks: breakValues
     });
   }
@@ -458,6 +487,7 @@ async function computeManualBreaks({
     datasetId: datasetSourceFileId,
     columnName: valueColumn,
     method: ClassificationMethod.EQUAL_INTERVAL,
+    rowScopeClause,
     numClasses: requestedClassCount
   });
 }
@@ -465,7 +495,8 @@ async function computeManualBreaks({
 export function useClassificationBreaksController({
   maxRetries = 3,
   retryDelayMs = 200,
-  resolveDatasetSourceFileId
+  resolveDatasetSourceFileId,
+  getVisualization
 }: ClassificationBreaksControllerOptions) {
   const inFlightKeys = new Map<string, string>();
   const lastCompletedKeys = new Map<string, string>();
@@ -559,7 +590,18 @@ export function useClassificationBreaksController({
         classification?.classes ??
         DEFAULT_DISCRETIZATION_CLASS_COUNT
     );
-    const breaksKey = `${options.scopeKey}:${options.datasetId}:${options.valueColumn}:${normalizedMethod}:${requestedClassCount}`;
+    const datasetSourceFileId = resolveDatasetSourceFileId(options.datasetId);
+    if (!datasetSourceFileId) {
+      clearRetry(options.scopeKey);
+      return;
+    }
+
+    const rowScopeClause = resolveRowScopeClause({
+      datasetId: datasetSourceFileId,
+      vizFilters: getVisualization()?.dataFilters,
+      primitive: options.primitive
+    });
+    const breaksKey = `${options.scopeKey}:${options.datasetId}:${options.valueColumn}:${normalizedMethod}:${requestedClassCount}:${rowScopeClause ?? 'all'}`;
     const hasExistingBreaks = Boolean(classification?.breaks?.length);
 
     if (inFlightKeys.get(options.scopeKey) === breaksKey) {
@@ -574,12 +616,6 @@ export function useClassificationBreaksController({
       return;
     }
 
-    const datasetSourceFileId = resolveDatasetSourceFileId(options.datasetId);
-    if (!datasetSourceFileId) {
-      clearRetry(options.scopeKey);
-      return;
-    }
-
     inFlightKeys.set(options.scopeKey, breaksKey);
     const requestId = (requestCounters.get(options.scopeKey) ?? 0) + 1;
     requestCounters.set(options.scopeKey, requestId);
@@ -588,6 +624,7 @@ export function useClassificationBreaksController({
       const computation = await computeClassificationBreaks({
         datasetSourceFileId,
         valueColumn: options.valueColumn,
+        rowScopeClause,
         classification,
         method,
         numClasses: classification?.numClasses
