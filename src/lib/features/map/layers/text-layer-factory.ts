@@ -54,6 +54,7 @@ import {
 import { normalizeOpacity, resolvePageDisplayScale } from './layer-style.utils';
 import {
   buildSplitDatasetRowMapping,
+  resolveScopedAttributeTable,
   resolveSplitMappingFeatureIdColumn
 } from './split-rendering-accessors';
 import {
@@ -151,21 +152,24 @@ export function createTextOverlayLayers(
           geometryInfo
         }
       : null);
+  // A label whose row the Texts filter excludes must read as missing, not fall
+  // back to the whole dataset.
+  const scopedTextTable = resolveScopedAttributeTable(ctx);
   const textAttributeTable =
-    ctx.splitDatasetTable ??
+    scopedTextTable ??
     (representativePointSource ? jsTable : (textPointSource?.table ?? jsTable));
   const textFeatureIdColumn =
-    ctx.splitDatasetTable && textPointSource
+    scopedTextTable && textPointSource
       ? resolveSplitMappingFeatureIdColumn(
           textPointSource.table,
           ctx.splitFeatureIdColumn
         )
       : undefined;
   const textAttributeRowByGeometryRow =
-    ctx.splitDatasetTable && textFeatureIdColumn && textPointSource
+    scopedTextTable && textFeatureIdColumn && textPointSource
       ? buildSplitDatasetRowMapping(
           textPointSource.table,
-          ctx.splitDatasetTable,
+          scopedTextTable,
           textFeatureIdColumn
         )
       : undefined;

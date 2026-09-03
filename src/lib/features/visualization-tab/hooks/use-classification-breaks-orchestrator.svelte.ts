@@ -7,9 +7,11 @@ import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.
 import {
   buildClassificationScopeKey,
   CLASSIFICATION_BREAKS_TRIGGER,
+  resolveScopeTargetPrimitive,
   SYMBOL_FILL_SCOPE_TARGET,
   TEXT_BACKGROUND_SCOPE_TARGET,
   type ClassificationBreakTrigger,
+  type ClassificationScopeTarget,
   useClassificationBreaksController
 } from './use-classification-breaks.svelte';
 import type {
@@ -82,18 +84,21 @@ export function useClassificationBreaksOrchestrator(
   opts: ClassificationBreaksOrchestratorOptions
 ) {
   function computeBreaksIfNumeric(
-    scopeKey: string,
+    role: 'fill' | 'stroke' | 'size',
+    target: ClassificationScopeTarget,
     valueColumn: string | undefined,
     classification: ClassificationConfig | undefined,
     applyUpdate: (updates: Partial<ClassificationConfig>) => void,
     trigger: ClassificationBreakTrigger
   ): void {
+    const scopeKey = buildClassificationScopeKey(role, target);
     if (!opts.isNumericDataField(valueColumn)) {
       opts.classificationBreaks.clearRetry(scopeKey);
       return;
     }
     void opts.classificationBreaks.compute({
       scopeKey,
+      primitive: resolveScopeTargetPrimitive(target),
       datasetId: opts.getDatasetId(),
       valueColumn,
       classification,
@@ -108,7 +113,8 @@ export function useClassificationBreaksOrchestrator(
   ): void {
     const viz = opts.getSelectedVisualization();
     computeBreaksIfNumeric(
-      buildClassificationScopeKey('fill', primitive),
+      'fill',
+      primitive,
       opts.getPrimitiveValueColumn(viz, primitive),
       opts.getPrimitiveClassification(viz, primitive),
       (updates) =>
@@ -126,7 +132,8 @@ export function useClassificationBreaksOrchestrator(
   ): void {
     const target = opts.getLineThicknessTarget();
     computeBreaksIfNumeric(
-      buildClassificationScopeKey('size', PrimitiveFilterType.LINE),
+      'size',
+      PrimitiveFilterType.LINE,
       target?.valueColumn,
       target?.classification,
       (updates) =>
@@ -141,7 +148,8 @@ export function useClassificationBreaksOrchestrator(
   ): void {
     const viz = opts.getSelectedVisualization();
     computeBreaksIfNumeric(
-      buildClassificationScopeKey('stroke', primitive),
+      'stroke',
+      primitive,
       opts.getPrimitiveStrokeValueColumn(viz, primitive),
       opts.getPrimitiveStrokeClassification(viz, primitive),
       (updates) =>
@@ -159,7 +167,8 @@ export function useClassificationBreaksOrchestrator(
   ): void {
     const target = opts.getSymbolFillTarget();
     computeBreaksIfNumeric(
-      buildClassificationScopeKey('fill', SYMBOL_FILL_SCOPE_TARGET),
+      'fill',
+      SYMBOL_FILL_SCOPE_TARGET,
       target?.valueColumn,
       target?.classification,
       (updates) => opts.applySymbolFillClassification(updates, PRESERVE_ORIGIN),
@@ -172,7 +181,8 @@ export function useClassificationBreaksOrchestrator(
   ): void {
     const target = opts.getTextBackgroundTarget();
     computeBreaksIfNumeric(
-      buildClassificationScopeKey('fill', TEXT_BACKGROUND_SCOPE_TARGET),
+      'fill',
+      TEXT_BACKGROUND_SCOPE_TARGET,
       target?.valueColumn,
       target?.classification,
       (updates) =>
@@ -186,7 +196,8 @@ export function useClassificationBreaksOrchestrator(
   ): void {
     const target = opts.getTextBackgroundStrokeTarget();
     computeBreaksIfNumeric(
-      buildClassificationScopeKey('stroke', TEXT_BACKGROUND_SCOPE_TARGET),
+      'stroke',
+      TEXT_BACKGROUND_SCOPE_TARGET,
       target?.valueColumn,
       target?.classification,
       (updates) =>

@@ -23,6 +23,7 @@
   import DiscretizationModal from '../discretization/discretization-modal.svelte';
   import { SectionHeading, VizFilterButton, VizFilterPanel } from '../shared';
   import type { VizDataFilter } from '$lib/features/commons/stores/visualization.store.svelte';
+  import type { FilterStats } from '$lib/features/duckdb';
   import {
     SymbolModeUnique,
     SymbolModeProportional,
@@ -62,6 +63,7 @@
     ) => void;
     onToggleVisibility?: (checked: boolean) => void;
     filters?: VizDataFilter[];
+    filterStats?: FilterStats;
     onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
     onUpdateFilter?: (
       filterId: string,
@@ -92,6 +94,7 @@
     onStrokeMappingChange,
     onToggleVisibility,
     filters = [],
+    filterStats,
     onAddFilter,
     onUpdateFilter,
     onRemoveFilter,
@@ -348,6 +351,7 @@
     title={m.symbols_title()}
     dataFields={dataFields}
     filters={filters}
+    stats={filterStats}
     onAddFilter={onAddFilter ?? (() => {})}
     onUpdateFilter={onUpdateFilter}
     onRemoveFilter={onRemoveFilter ?? (() => {})}

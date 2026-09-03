@@ -11,6 +11,7 @@ import {
   getSymbolPrimitive,
   PrimitiveFilterType,
   visualizationStore,
+  type PrimitiveFilter,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
@@ -20,6 +21,7 @@ import {
 } from '$lib/features/commons/constants/visualization.constants';
 import { HIGHLIGHT_FILL_COLOR } from '../layers';
 import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
+import { rowScopeStore } from '../stores/row-scope.store.svelte';
 import { getCategoricalColorMap, shouldApplyCategorical } from '../styling';
 import type { LayerContext, RGBColor } from '../types';
 
@@ -96,13 +98,25 @@ function getColorsForViz(viz: VisualizationConfig | null): {
 
 function getColumnStatisticsForViz(
   viz: VisualizationConfig,
-  columnName: string | undefined
+  columnName: string | undefined,
+  primitive: PrimitiveFilter
 ): {
   min: number;
   max: number;
 } {
   if (!columnName || !viz.datasetId) {
     return { min: 0, max: 100 };
+  }
+
+  // A filtered map must scale against the values it still draws, so the
+  // resolved scope wins over the whole column when one is active.
+  const scopedDomain = rowScopeStore.getScopedDomain(
+    viz.id,
+    primitive,
+    columnName
+  );
+  if (scopedDomain) {
+    return scopedDomain;
   }
 
   const stats = datasetsStore.getColumnStatistics(viz.datasetId, columnName);
@@ -118,17 +132,19 @@ function getColumnStatisticsForViz(
 
 function getStatisticsForViz(
   viz: VisualizationConfig,
-  columnName: string | undefined
+  columnName: string | undefined,
+  primitive: PrimitiveFilter
 ): {
   min: number;
   max: number;
 } {
-  return getColumnStatisticsForViz(viz, columnName);
+  return getColumnStatisticsForViz(viz, columnName, primitive);
 }
 
 function getSecondaryStatisticsForViz(
   viz: VisualizationConfig,
-  columnName: string | undefined
+  columnName: string | undefined,
+  primitive: PrimitiveFilter
 ):
   | {
       min: number;
@@ -139,7 +155,7 @@ function getSecondaryStatisticsForViz(
     return undefined;
   }
 
-  return getColumnStatisticsForViz(viz, columnName);
+  return getColumnStatisticsForViz(viz, columnName, primitive);
 }
 
 function getCategoryColorMapForViz(
@@ -212,19 +228,26 @@ export function useMapState(options?: UseMapStateOptions): UseMapStateReturn {
     const pointConfig = getSymbolPrimitive(viz);
     const pointStatistics = getStatisticsForViz(
       viz,
-      getPrimitiveSizeColumn(viz, PrimitiveFilterType.POINT)
+      getPrimitiveSizeColumn(viz, PrimitiveFilterType.POINT),
+      PrimitiveFilterType.POINT
     );
     const pointSecondaryStatistics =
       pointConfig?.proportionalType === ProportionalType.DOUBLE
-        ? getSecondaryStatisticsForViz(viz, pointConfig.valueColumn)
+        ? getSecondaryStatisticsForViz(
+            viz,
+            pointConfig.valueColumn,
+            PrimitiveFilterType.POINT
+          )
         : undefined;
     const lineStatistics = getStatisticsForViz(
       viz,
-      getPrimitiveSizeColumn(viz, PrimitiveFilterType.LINE)
+      getPrimitiveSizeColumn(viz, PrimitiveFilterType.LINE),
+      PrimitiveFilterType.LINE
     );
     const textStatistics = getStatisticsForViz(
       viz,
-      getPrimitiveValueColumn(viz, PrimitiveFilterType.TEXT)
+      getPrimitiveValueColumn(viz, PrimitiveFilterType.TEXT),
+      PrimitiveFilterType.TEXT
     );
     const pointCategoryColorMap = getCategoryColorMapForViz(
       viz,

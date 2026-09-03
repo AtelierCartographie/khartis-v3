@@ -69,6 +69,7 @@ import {
   computeDivergingSplit,
   generateColorsForBreaks
 } from './classification.service';
+import { resolveRowScopeClause } from './row-scope.service';
 import {
   DEFAULT_CLASSIFICATION_CLASS_COUNT,
   FillMode
@@ -1060,6 +1061,10 @@ function createDataOrchestratorService() {
           ? requestedClassCount - breakpointLowerClassCount
           : undefined;
 
+      const rowScopeClause = resolveRowScopeClause({
+        datasetId: dataset.sourceFileId
+      });
+
       try {
         const result =
           breakpointValue != null &&
@@ -1071,6 +1076,7 @@ function createDataOrchestratorService() {
                 datasetId: dataset.sourceFileId,
                 columnName: viz.mapping.valueColumn!,
                 method: normalizedMethod,
+                rowScopeClause,
                 breakpointValue,
                 lowerClassCount: breakpointLowerClassCount,
                 upperClassCount: breakpointUpperClassCount
@@ -1079,6 +1085,7 @@ function createDataOrchestratorService() {
                 datasetId: dataset.sourceFileId,
                 columnName: viz.mapping.valueColumn!,
                 method: normalizedMethod,
+                rowScopeClause,
                 numClasses: requestedClassCount
               });
 

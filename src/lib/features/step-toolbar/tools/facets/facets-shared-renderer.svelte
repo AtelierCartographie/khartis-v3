@@ -15,7 +15,6 @@
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { getFiltersMap } from '$lib/features/duckdb/orchestrator/state.svelte';
   import {
     createClickHandler,
     createHoverHandler
@@ -539,24 +538,6 @@
     }
   }
 
-  function getTableFiltersForDataset(datasetId: string) {
-    const dataset = datasetsStore.datasets.find(
-      (item) => item.id === datasetId
-    );
-    if (!dataset?.sourceFileId) {
-      return undefined;
-    }
-
-    const duckDataset = duckDBOrchestrator.getDatasetBySourceFile(
-      dataset.sourceFileId
-    );
-    if (!duckDataset?.tableName) {
-      return undefined;
-    }
-
-    return getFiltersMap().get(duckDataset.tableName);
-  }
-
   const mapLayers = useMapLayers({
     getDeckOverlay: () => null,
     getDeckInstance: () => deckInstance,
@@ -572,7 +553,6 @@
       getProjectionMetadataForDataset(datasetId),
     getProjectionFitBbox: () => getProjectionFitBbox(),
     getShouldRenderDatasetFallbacks: () => false,
-    getTableFilters: getTableFiltersForDataset,
     onBasemapLayersLoaded: () =>
       mapLayers.updateLayers(tables, geoJSONs, splitData, densityTables),
     onRepresentativePointTablesLoaded: () =>

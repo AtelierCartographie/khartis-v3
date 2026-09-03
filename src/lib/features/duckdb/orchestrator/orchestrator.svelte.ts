@@ -1018,6 +1018,42 @@ export const duckDBOrchestrator = {
     return tableDataOps.getRowStats(tableName, Duck);
   },
 
+  async getScopedRowStats(
+    tableName: string,
+    scopeClause: string | null
+  ): Promise<FilterStats> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return tableDataOps.getScopedRowStats(tableName, scopeClause, Duck);
+  },
+
+  async getRowIdsInScope(
+    tableName: string,
+    clause: string
+  ): Promise<Set<number>> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return tableDataOps.getRowIdsInScope(tableName, clause, Duck);
+  },
+
+  async getColumnDomainsInScope(
+    tableName: string,
+    clause: string | null,
+    columns: string[]
+  ): Promise<Map<string, tableDataOps.ColumnDomain>> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return tableDataOps.getColumnDomainsInScope(
+      tableName,
+      clause,
+      columns,
+      Duck
+    );
+  },
+
   async getFullAnalysis(
     tableName: string,
     force = false
