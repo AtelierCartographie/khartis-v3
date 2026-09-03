@@ -26,7 +26,6 @@
   const CONFIGURE_SECTION_ID = 'configure-visualization';
   const MOBILE_CONFIGURE_TAB_SELECTOR = '[data-viz-sub-tab="configure"]';
   const FACETS_COLUMNS_MIN = 1;
-  const FACETS_COLUMNS_MAX = 4;
   const FLIP_DURATION_MS = 200;
 
   interface OrderedVariable {
@@ -38,7 +37,10 @@
   const variables = $derived(facetsStore.variables);
   const facetVisualizations = $derived(facetsStore.facetVisualizations);
 
-  const columnsValue = $derived(layout.columns);
+  const columnsMax = $derived(
+    Math.max(FACETS_COLUMNS_MIN, facetVisualizations.length)
+  );
+  const columnsValue = $derived(Math.min(layout.columns, columnsMax));
 
   const baseVisualization = $derived.by(() => {
     const baseId = facetsStore.baseVisualizationId;
@@ -109,11 +111,7 @@
   }
 
   function handleColumnsChange(value: number) {
-    const clamped = Math.max(
-      FACETS_COLUMNS_MIN,
-      Math.min(FACETS_COLUMNS_MAX, value)
-    );
-    facetsStore.setColumns(clamped);
+    facetsStore.setColumns(value);
   }
 
   const isActive = $derived(enabled && facetVisualizations.length > 0);
@@ -135,7 +133,7 @@
         label={m.facets_columns_label()}
         value={columnsValue}
         min={FACETS_COLUMNS_MIN}
-        max={FACETS_COLUMNS_MAX}
+        max={columnsMax}
         step={1}
         showMinMax
         onchange={handleColumnsChange}

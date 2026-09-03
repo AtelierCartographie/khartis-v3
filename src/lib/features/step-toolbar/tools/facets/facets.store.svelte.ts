@@ -30,7 +30,7 @@ import {
 export { FACET_SLOT, SCALE_MODE };
 export type { FacetSlotPath, ScaleMode };
 
-export const MAX_FACETS_COLUMNS = 4;
+const DEFAULT_MAX_FACETS_COLUMNS = 4;
 
 export const FACETS_FRAME_THICKNESS = {
   min: 0.25,
@@ -122,7 +122,7 @@ function normalizeFacetVariablesForEnable(
 
 function computeBestColumns(
   mapCount: number,
-  maxCols: number = MAX_FACETS_COLUMNS
+  maxCols: number = DEFAULT_MAX_FACETS_COLUMNS
 ): number {
   if (mapCount <= 1) return 1;
   if (mapCount === 2) return 2;
@@ -167,6 +167,15 @@ const DEFAULT_STATE: FacetsState = {
   generatedVisualizationIds: [],
   facetTitles: {}
 };
+
+function clampColumns(value: unknown, facetCount: number): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  const max = Math.max(1, facetCount);
+  if (!Number.isFinite(parsed)) {
+    return Math.min(DEFAULT_STATE.layout.columns, max);
+  }
+  return Math.min(max, Math.max(1, Math.floor(parsed)));
+}
 
 function clampFrameThickness(value: unknown): number {
   const parsed = typeof value === 'number' ? value : Number(value);
@@ -316,14 +325,9 @@ function createFacetsStore() {
           : null;
 
       nextState.layout = {
-        columns: Math.max(
-          1,
-          Math.min(
-            MAX_FACETS_COLUMNS,
-            typeof restoredLayout?.columns === 'number'
-              ? restoredLayout.columns
-              : DEFAULT_STATE.layout.columns
-          )
+        columns: clampColumns(
+          restoredLayout?.columns,
+          nextState.variables.length
         ),
         gap:
           typeof restoredLayout?.gap === 'number' && restoredLayout.gap >= 0
@@ -755,7 +759,7 @@ function createFacetsStore() {
   }
 
   function setColumns(columns: number): void {
-    state.layout.columns = columns;
+    state.layout.columns = clampColumns(columns, state.variables.length);
     notifyPersistence();
   }
 
