@@ -320,6 +320,7 @@ function createTerreConfig() {
     fillColor: '#ffffff',
     fillShadow: false,
     fillOpacity: 100,
+    strokeVisible: true,
     strokeColor: '#333333',
     strokeDotted: false,
     strokeDottedPattern: BasemapDottedPattern.DOTS,
