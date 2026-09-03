@@ -334,6 +334,7 @@
       onchange={handleZoomModeChange}
       ondblclick={handleTabDoubleClick}
       tabTitle={tabTitle}
+      tooltipPosition="top"
       className="zoom-mode-tabs"
       activeClass="active"
       fullWidthClass="full-width"
