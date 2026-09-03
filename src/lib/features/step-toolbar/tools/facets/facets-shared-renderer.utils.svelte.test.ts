@@ -5,12 +5,23 @@ import {
   buildFacetRenderDescriptors,
   buildFacetsGridMetrics
 } from './facets-shared-renderer.utils';
+import type { FacetsLayout } from './facets.store.svelte';
+
+function createLayout(columns: number): FacetsLayout {
+  return {
+    columns,
+    gap: 16,
+    frameVisible: true,
+    frameColor: '#c6c6c6',
+    frameThickness: 1
+  };
+}
 
 describe('facets shared renderer utils', () => {
   it('builds centered grid metrics for the available viewport', () => {
     const metrics = buildFacetsGridMetrics({
       mapCount: 4,
-      layout: { columns: 2, gap: 16 },
+      layout: createLayout(2),
       containerWidth: 800,
       containerHeight: 600,
       pageAspectRatio: 0.75
@@ -31,7 +42,7 @@ describe('facets shared renderer utils', () => {
         { id: 'facet-b', name: 'GDP' },
         { id: 'facet-c', name: 'Density' }
       ] as never,
-      layout: { columns: 2, gap: 16 },
+      layout: createLayout(2),
       containerWidth: 900,
       containerHeight: 700,
       pageAspectRatio: 0.75,
@@ -57,7 +68,7 @@ describe('facets shared renderer utils', () => {
     const containerWidth = 987;
     const metrics = buildFacetsGridMetrics({
       mapCount: 2,
-      layout: { columns: 2, gap: 16 },
+      layout: createLayout(2),
       containerWidth,
       containerHeight: 700,
       pageAspectRatio: 0.75
@@ -72,7 +83,7 @@ describe('facets shared renderer utils', () => {
         { id: 'a', name: 'A' },
         { id: 'b', name: 'B' }
       ] as never,
-      layout: { columns: 2, gap: 16 },
+      layout: createLayout(2),
       containerWidth,
       containerHeight: 700,
       pageAspectRatio: 0.75,
@@ -98,7 +109,7 @@ describe('facets shared renderer utils', () => {
           polygon: { valueColumn: 'superficie_km2' }
         }
       ] as never,
-      layout: { columns: 1, gap: 16 },
+      layout: createLayout(1),
       containerWidth: 600,
       containerHeight: 400,
       pageAspectRatio: 0.75,
