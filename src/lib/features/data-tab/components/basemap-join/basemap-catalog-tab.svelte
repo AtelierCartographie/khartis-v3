@@ -168,9 +168,12 @@
       title={m.section_suggestions()}
       open={suggestionsPanelOpen}
       onToggle={onSuggestionsToggle}
+      titleClass="suggestions-title"
     >
       {#snippet icon()}
-        <MagicWand size={16} />
+        <span class="suggestions-title-icon">
+          <MagicWand size={16} />
+        </span>
       {/snippet}
       {#if suggestedBasemaps.length > 0}
         <p class="section-subtitle">
@@ -305,10 +308,16 @@
     flex-direction: column;
   }
 
+  .suggestions-title-icon {
+    color: var(--khartis-additions-interactive-suggestions, #0072c3);
+    display: flex;
+    align-items: center;
+  }
+
   .section-subtitle {
     margin: 0 0 var(--cds-spacing-03) 0;
     font-size: 0.8125rem;
-    color: var(--cds-link-01);
+    color: var(--khartis-additions-text-helper-suggestions, #0072c3);
     line-height: 1.25rem;
   }
 
