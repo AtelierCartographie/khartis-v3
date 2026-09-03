@@ -109,12 +109,13 @@ Per-target public URL, remote directory and GTM container (remote dir ends with 
 
 Public backend routing validation:
   KHARTIS_HTTP_ROUTING_COOKIE_NAME
-  KHARTIS_HTTP_BACKEND_HEADER_NAME
   KHARTIS_HTTP_ROUTING_BACKENDS_PPRD
   KHARTIS_HTTP_ROUTING_BACKENDS_PROD
+  KHARTIS_HTTP_BACKEND_HEADER_NAME (optional)
   List every expected routing-cookie value, separated by commas. The public
-  contract is checked independently on each configured backend, whose response
-  must confirm the same value in the configured backend identity header.
+  contract is checked independently on each configured backend. When a backend
+  identity header is configured, each response must confirm the same value in
+  that header; leave it empty when the infrastructure exposes no such header.
 
 Authentication, choose one:
   KHARTIS_SFTP_PASSWORD
@@ -619,8 +620,12 @@ function readBackendRouting(valuesEnvName) {
       `${HTTP_ROUTING_COOKIE_NAME_ENV} must be a valid HTTP cookie name.`
     );
   }
-  const backendHeaderName = readRequiredEnv(HTTP_BACKEND_HEADER_NAME_ENV);
-  if (!/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(backendHeaderName)) {
+  const backendHeaderName =
+    process.env[HTTP_BACKEND_HEADER_NAME_ENV]?.trim() ?? '';
+  if (
+    backendHeaderName &&
+    !/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(backendHeaderName)
+  ) {
     throw new Error(
       `${HTTP_BACKEND_HEADER_NAME_ENV} must be a valid HTTP header name.`
     );
@@ -647,7 +652,7 @@ function readBackendRouting(valuesEnvName) {
   }
 
   return {
-    backendHeaderName,
+    backendHeaderName: backendHeaderName || null,
     cookieName,
     backendValues
   };
@@ -2168,7 +2173,7 @@ function mergePublicRequestHeaders(options, headers) {
 }
 
 function assertExpectedBackendResponse(response, backendRoute, url) {
-  if (!backendRoute) return;
+  if (!backendRoute?.backendHeaderName) return;
 
   const observedBackend = response.headers
     .get(backendRoute.backendHeaderName)
