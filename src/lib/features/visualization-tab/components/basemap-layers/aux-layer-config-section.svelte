@@ -162,6 +162,7 @@
         base?.fillColor,
       fillShadow: pickBoolean(override.fillShadow, base?.fillShadow),
       fillOpacity: pickNumber(override.fillOpacity, base?.fillOpacity),
+      strokeVisible: pickBoolean(override.strokeVisible, base?.strokeVisible),
       strokeColor: pickString(override.strokeColor, base?.strokeColor),
       strokeDotted: pickBoolean(override.strokeDotted, base?.strokeDotted),
       strokeDottedPattern:
@@ -283,6 +284,7 @@
       fillColor={terreView?.fillColor}
       fillShadow={terreView?.fillShadow}
       fillOpacity={terreView?.fillOpacity}
+      strokeVisible={terreView?.strokeVisible}
       strokeColor={terreView?.strokeColor}
       strokeDotted={terreView?.strokeDotted}
       strokeDottedPattern={terreView?.strokeDottedPattern}

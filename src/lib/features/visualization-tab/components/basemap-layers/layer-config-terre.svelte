@@ -15,6 +15,7 @@
     fillColor?: string;
     fillShadow?: boolean;
     fillOpacity?: number;
+    strokeVisible?: boolean;
     strokeColor?: string;
     strokeDotted?: boolean;
     strokeDottedPattern?: BasemapDottedPattern;
@@ -29,6 +30,7 @@
     fillColor = NEUTRAL_CARTOGRAPHY_COLORS.land,
     fillShadow = false,
     fillOpacity = 100,
+    strokeVisible = true,
     strokeColor = NEUTRAL_CARTOGRAPHY_COLORS.boundaryMedium,
     strokeDotted = false,
     strokeDottedPattern = BasemapDottedPattern.DOTS,
@@ -47,6 +49,10 @@
 
   function handleFillOpacityChange(value: number) {
     onchange?.({ fillOpacity: value });
+  }
+
+  function handleStrokeVisibleToggle(value: boolean) {
+    onchange?.({ strokeVisible: value });
   }
 
   function handleStrokeColorChange(value: string) {
@@ -108,6 +114,12 @@
         <SectionHeading title={m.basemap_config_stroke()} />
       </legend>
       <div class="section-content">
+        <ToggleWithLabel
+          label={m.basemap_config_stroke_visible()}
+          toggled={strokeVisible}
+          ontoggle={handleStrokeVisibleToggle}
+        />
+
         <SingleColorPreview
           label={m.basemap_config_color()}
           color={strokeColor}

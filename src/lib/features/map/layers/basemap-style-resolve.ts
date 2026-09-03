@@ -59,6 +59,7 @@ export function resolveLandConfig(
     fillColor: pickString(override.fillColor, presetFillColor),
     fillOpacity: pickNumber(override.fillOpacity, config.fillOpacity),
     fillShadow: pickBoolean(override.fillShadow, config.fillShadow),
+    strokeVisible: pickBoolean(override.strokeVisible, config.strokeVisible),
     strokeColor: pickString(override.strokeColor, config.strokeColor),
     strokeOpacity: pickNumber(override.strokeOpacity, config.strokeOpacity),
     strokeThickness: pickNumber(
