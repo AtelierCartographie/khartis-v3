@@ -12,6 +12,7 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { projectHtmlLikeText } from '$lib/features/commons/utils/html-like-text.utils';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import { toCanonicalNumericTerm } from '$lib/features/commons/utils/search-term.utils';
 import {
   createReadonlyStateFacade,
   createToolStore
@@ -107,7 +108,7 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function buildSearchMatcher(
+function buildSingleTermMatcher(
   query: string,
   options: Pick<SearchState, 'caseSensitive' | 'wholeWord'>
 ): (value: unknown) => boolean {
@@ -128,6 +129,30 @@ function buildSearchMatcher(
     String(value ?? '')
       .toLowerCase()
       .includes(loweredQuery);
+}
+
+/**
+ * Numeric cells come back in their stored form, so a locale-formatted term
+ * ("1 234,5") also has to be matched against its canonical form ("1234.5").
+ */
+function buildSearchMatcher(
+  query: string,
+  options: Pick<SearchState, 'caseSensitive' | 'wholeWord'>
+): (value: unknown) => boolean {
+  const matchesQuery = buildSingleTermMatcher(query, options);
+  const canonicalNumericQuery = toCanonicalNumericTerm(query);
+
+  if (!canonicalNumericQuery || canonicalNumericQuery === query) {
+    return matchesQuery;
+  }
+
+  const matchesCanonicalNumericQuery = buildSingleTermMatcher(
+    canonicalNumericQuery,
+    options
+  );
+
+  return (value: unknown) =>
+    matchesQuery(value) || matchesCanonicalNumericQuery(value);
 }
 
 const TOOLTIP_EXCLUDED_COLUMNS = new Set<string>([

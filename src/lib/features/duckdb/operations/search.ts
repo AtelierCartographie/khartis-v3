@@ -3,6 +3,7 @@ import {
   escapeIdentifier
 } from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { toCanonicalNumericTerm } from '$lib/features/commons/utils/search-term.utils';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { registerTableMutationCallback } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
@@ -22,6 +23,9 @@ const MAX_EXACT_RESULTS = 200;
 const MAX_FUZZY_RESULTS = 50;
 const CACHE_TTL_MS = 60000;
 const MAX_CACHE_SIZE = 50;
+const TEXT_COLUMN_TYPES = new Set(['VARCHAR', 'TEXT', 'STRING']);
+const NUMERIC_COLUMN_TYPE_PATTERN =
+  /^(U?(TINY|SMALL|BIG|HUGE)?INT(EGER)?|FLOAT|REAL|DOUBLE|DECIMAL|NUMERIC)\b/i;
 
 let currentSearchId = 0;
 let activeSearchAbortController: AbortController | null = null;
@@ -75,22 +79,32 @@ function normalizeRowId(value: number | bigint): number {
   return typeof value === 'bigint' ? Number(value) : value;
 }
 
+function filterSearchableColumns(
+  columns: string[],
+  filterColumn: string | null
+): string[] {
+  return filterColumn ? columns.filter((c) => c === filterColumn) : columns;
+}
+
 function buildExactSearchSQL(
   tableName: string,
   textColumns: string[],
+  numericColumns: string[],
   escapedTerm: string,
+  escapedNumericTerm: string | null,
   maxResults: number,
   filterColumn: string | null
 ): string {
-  const columnsToSearch = filterColumn
-    ? textColumns.filter((c) => c === filterColumn)
-    : textColumns;
+  const textToSearch = filterSearchableColumns(textColumns, filterColumn);
+  const numericToSearch = escapedNumericTerm
+    ? filterSearchableColumns(numericColumns, filterColumn)
+    : [];
 
-  if (columnsToSearch.length === 0) {
+  if (textToSearch.length === 0 && numericToSearch.length === 0) {
     return `SELECT NULL::INTEGER AS __id, NULL::VARCHAR AS column_name, NULL::VARCHAR AS column_value, NULL::DOUBLE AS score WHERE false`;
   }
 
-  const unionParts = columnsToSearch.map((col) => {
+  const textParts = textToSearch.map((col) => {
     const escapedCol = escapeIdentifier(col);
     const textValueExpr = buildStripHtmlTextSqlExpression(`"${escapedCol}"`);
     return `SELECT __id, '${escapeSqlString(col)}' AS column_name, column_value,
@@ -103,7 +117,19 @@ function buildExactSearchSQL(
     WHERE norm_value = '${escapedTerm}' OR contains(norm_value, '${escapedTerm}')`;
   });
 
-  return `${unionParts.join('\nUNION ALL\n')}
+  const numericParts = numericToSearch.map((col) => {
+    const escapedCol = escapeIdentifier(col);
+    return `SELECT __id, '${escapeSqlString(col)}' AS column_name, column_value,
+      CASE WHEN column_value = '${escapedNumericTerm}' THEN 1.0 ELSE 0.99 END AS score
+    FROM (
+      SELECT __id, CAST("${escapedCol}" AS VARCHAR) AS column_value
+      FROM "${escapeIdentifier(tableName)}"
+      WHERE "${escapedCol}" IS NOT NULL
+    ) sub
+    WHERE contains(column_value, '${escapedNumericTerm}')`;
+  });
+
+  return `${[...textParts, ...numericParts].join('\nUNION ALL\n')}
   ORDER BY score DESC, __id ASC
   LIMIT ${maxResults}`;
 }
@@ -116,9 +142,7 @@ function buildFuzzySearchSQL(
   maxResults: number,
   filterColumn: string | null
 ): string {
-  const columnsToSearch = filterColumn
-    ? textColumns.filter((c) => c === filterColumn)
-    : textColumns;
+  const columnsToSearch = filterSearchableColumns(textColumns, filterColumn);
 
   if (columnsToSearch.length === 0) {
     return `SELECT NULL::INTEGER AS __id, NULL::VARCHAR AS column_name, NULL::VARCHAR AS column_value, NULL::DOUBLE AS score WHERE false`;
@@ -185,11 +209,12 @@ export async function searchInTable(
     : abortController.signal;
 
   const escapedQuery = escapeSqlString(trimmedQuery);
+  const numericTerm = toCanonicalNumericTerm(trimmedQuery);
   const enableFuzzy = trimmedQuery.length >= MIN_QUERY_LENGTH_FOR_FUZZY;
   let isSampled = false;
 
   try {
-    const [metaResult, textColResult] = await Promise.all([
+    const [metaResult, columnsResult] = await Promise.all([
       executeQuery(
         ctx.connection,
         `SELECT
@@ -206,12 +231,11 @@ export async function searchInTable(
       >,
       executeQuery(
         ctx.connection,
-        `SELECT column_name FROM duckdb_columns()
+        `SELECT column_name, data_type FROM duckdb_columns()
          WHERE table_name = '${escapeSqlString(table)}'
-           AND column_name != '${INTERNAL_COLUMN.ID}'
-           AND data_type IN ('VARCHAR', 'TEXT', 'STRING')`,
+           AND column_name != '${INTERNAL_COLUMN.ID}'`,
         { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
-      ) as Promise<Array<{ column_name: string }>>
+      ) as Promise<Array<{ column_name: string; data_type: string }>>
     ]);
 
     if (searchId !== currentSearchId) return emptyResult;
@@ -223,9 +247,20 @@ export async function searchInTable(
     const colCount = Number(metaResult[0]?.col_count ?? 0);
     const estimatedCells = rowCount * colCount;
 
-    const textColumns = textColResult.map((r) => r.column_name);
+    const searchableColumns = columnsResult.map((r) => ({
+      name: r.column_name,
+      type: (r.data_type ?? '').toUpperCase()
+    }));
+    const textColumns = searchableColumns
+      .filter((c) => TEXT_COLUMN_TYPES.has(c.type))
+      .map((c) => c.name);
+    const numericColumns = numericTerm
+      ? searchableColumns
+          .filter((c) => NUMERIC_COLUMN_TYPE_PATTERN.test(c.type))
+          .map((c) => c.name)
+      : [];
 
-    if (textColumns.length === 0) {
+    if (textColumns.length === 0 && numericColumns.length === 0) {
       return emptyResult;
     }
 
@@ -242,11 +277,13 @@ export async function searchInTable(
         Math.min(100, Math.floor((MAX_ROWS_FOR_SEARCH / rowCount) * 100))
       );
 
-      // Select only __id + text columns for search sample — excludes geometry
-      // WKB binaries (can be several MB per row) that are never used for text search.
+      // Select only __id + searchable columns for the sample — excludes geometry
+      // WKB binaries (can be several MB per row) that are never searched.
       const sampleColumns = [
         `"${INTERNAL_COLUMN.ID}"`,
-        ...textColumns.map((c) => `"${escapeIdentifier(c)}"`)
+        ...[...textColumns, ...numericColumns].map(
+          (c) => `"${escapeIdentifier(c)}"`
+        )
       ].join(', ');
       await executeQuery(
         ctx.connection,
@@ -262,7 +299,9 @@ export async function searchInTable(
     const exactSQL = buildExactSearchSQL(
       searchTable,
       textColumns,
+      numericColumns,
       normalizedTerm,
+      numericTerm ? escapeSqlString(numericTerm) : null,
       MAX_EXACT_RESULTS,
       column
     );

@@ -69,7 +69,9 @@ describe('searchInTable', () => {
           col_count: 1
         }
       ])
-      .mockResolvedValueOnce([{ column_name: 'Description' }]);
+      .mockResolvedValueOnce([
+        { column_name: 'Description', data_type: 'VARCHAR' }
+      ]);
     executeCancellableQueryMock
       .mockResolvedValueOnce([
         {
@@ -101,16 +103,94 @@ describe('searchInTable', () => {
     );
   });
 
+  it('searches numeric columns with the canonical form of a locale-formatted term', async () => {
+    executeQueryMock
+      .mockResolvedValueOnce([
+        { normalized_term: '89 358', row_count: 1, col_count: 2 }
+      ])
+      .mockResolvedValueOnce([
+        { column_name: 'country_name', data_type: 'VARCHAR' },
+        { column_name: '1960', data_type: 'DOUBLE' },
+        { column_name: 'imported_at', data_type: 'TIMESTAMP' }
+      ]);
+    executeCancellableQueryMock
+      .mockResolvedValueOnce([
+        {
+          __id: 152,
+          column_name: '1960',
+          column_value: '89.358',
+          score: 0.99
+        }
+      ])
+      .mockResolvedValueOnce([]);
+
+    const result = await searchInTable(ctx(), 'rural_pop', '89,358');
+
+    expect(result.results).toEqual([
+      { rowId: 152, columnName: '1960', value: '89.358', score: 0.99 }
+    ]);
+
+    const exactSearchSql = String(
+      executeCancellableQueryMock.mock.calls[0]?.[1]
+    );
+    expect(exactSearchSql).toContain(`CAST("1960" AS VARCHAR) AS column_value`);
+    expect(exactSearchSql).toContain(`contains(column_value, '89.358')`);
+    expect(exactSearchSql).not.toContain('"imported_at"');
+  });
+
+  it('leaves numeric columns out when the term is not numeric', async () => {
+    executeQueryMock
+      .mockResolvedValueOnce([
+        { normalized_term: 'braunschweig', row_count: 1, col_count: 2 }
+      ])
+      .mockResolvedValueOnce([
+        { column_name: 'country_name', data_type: 'VARCHAR' },
+        { column_name: '1960', data_type: 'DOUBLE' }
+      ]);
+    executeCancellableQueryMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    await searchInTable(ctx(), 'rural_pop', 'Braunschweig');
+
+    const exactSearchSql = String(
+      executeCancellableQueryMock.mock.calls[0]?.[1]
+    );
+    expect(exactSearchSql).not.toContain('CAST("1960" AS VARCHAR)');
+  });
+
+  it('never runs the fuzzy pass over numeric columns', async () => {
+    executeQueryMock
+      .mockResolvedValueOnce([
+        { normalized_term: '1234', row_count: 1, col_count: 2 }
+      ])
+      .mockResolvedValueOnce([
+        { column_name: 'country_name', data_type: 'VARCHAR' },
+        { column_name: '1960', data_type: 'DOUBLE' }
+      ]);
+    executeCancellableQueryMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    await searchInTable(ctx(), 'rural_pop', '1234');
+
+    const fuzzySearchSql = String(
+      executeCancellableQueryMock.mock.calls[1]?.[1]
+    );
+    expect(fuzzySearchSql).toContain('jaro_winkler_similarity');
+    expect(fuzzySearchSql).not.toContain('"1960"');
+  });
+
   it('keeps fuzzy-search cache entries separate by threshold', async () => {
     executeQueryMock
       .mockResolvedValueOnce([
         { normalized_term: 'brnschweig', row_count: 1, col_count: 1 }
       ])
-      .mockResolvedValueOnce([{ column_name: 'Name' }])
+      .mockResolvedValueOnce([{ column_name: 'Name', data_type: 'VARCHAR' }])
       .mockResolvedValueOnce([
         { normalized_term: 'brnschweig', row_count: 1, col_count: 1 }
       ])
-      .mockResolvedValueOnce([{ column_name: 'Name' }]);
+      .mockResolvedValueOnce([{ column_name: 'Name', data_type: 'VARCHAR' }]);
     executeCancellableQueryMock
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
@@ -147,7 +227,7 @@ describe('searchInTable', () => {
       .mockResolvedValueOnce([
         { normalized_term: 'needle', row_count: 1, col_count: 1 }
       ])
-      .mockResolvedValueOnce([{ column_name: 'Name' }]);
+      .mockResolvedValueOnce([{ column_name: 'Name', data_type: 'VARCHAR' }]);
     executeCancellableQueryMock.mockRejectedValueOnce(
       new DOMException('DuckDB query aborted', 'AbortError')
     );
@@ -164,7 +244,7 @@ describe('searchInTable', () => {
     executeQueryMock.mockImplementation(async (_connection, sql: string) =>
       String(sql).includes('normalize_text')
         ? [{ normalized_term: 'needle', row_count: 1, col_count: 1 }]
-        : [{ column_name: 'Name' }]
+        : [{ column_name: 'Name', data_type: 'VARCHAR' }]
     );
     executeCancellableQueryMock.mockImplementation(
       async (
