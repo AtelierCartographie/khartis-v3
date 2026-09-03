@@ -8,7 +8,10 @@ import {
   projectHtmlLikeText
 } from '../../../utils/html-like-text.utils';
 import { LogCategory, logger } from '../../../utils/logger';
-import { EXCLUDED_COLUMNS } from '../../../constants/data.constants';
+import {
+  EXCLUDED_COLUMNS,
+  JOINED_BASEMAP_COLUMNS
+} from '../../../constants/data.constants';
 import type { ColumnInfo, SortOrder, TableRow } from '../types';
 import {
   isMissingRequestedTableError,
@@ -16,6 +19,11 @@ import {
   resolveHookValue,
   type HookValue
 } from './table-hook.utils';
+
+const TABLE_HIDDEN_COLUMN_NAMES = new Set<string>([
+  ...EXCLUDED_COLUMNS,
+  ...JOINED_BASEMAP_COLUMNS
+]);
 
 export interface UseTableDataProps {
   tableName?: HookValue<string | undefined>;
@@ -145,8 +153,7 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
         }
 
         const filteredAnalysis = analysis.filter(
-          (a: AnalysisResult) =>
-            !(EXCLUDED_COLUMNS as readonly string[]).includes(a.name)
+          (a: AnalysisResult) => !TABLE_HIDDEN_COLUMN_NAMES.has(a.name)
         );
 
         columns = filteredAnalysis.map((a: AnalysisResult) => ({
@@ -174,7 +181,7 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
         numRows = count;
       } else if (dataset) {
         columns = dataset.columns.filter(
-          (c) => !(EXCLUDED_COLUMNS as readonly string[]).includes(c.name)
+          (c) => !TABLE_HIDDEN_COLUMN_NAMES.has(c.name)
         );
 
         numRows = dataset.data.length;

@@ -8,6 +8,7 @@ import { projectsStore } from '$lib/features/commons/stores/projects.store.svelt
 import { getLocale, setLocale, type Locale } from '$lib/paraglide/runtime.js';
 import * as m from '$lib/paraglide/messages';
 import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations';
+import { useExportModal } from '$lib/features/header';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
@@ -59,12 +60,11 @@ export function useSideNav(): UseSideNavReturn {
 
   async function handleSaveProject() {
     if (!projectStore.currentProject) return;
+    closeSideNav();
     try {
       await projectStore.saveCurrentProject();
-    } catch {
-      return;
     } finally {
-      closeSideNav();
+      useExportModal().open();
     }
   }
 

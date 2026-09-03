@@ -44,14 +44,14 @@ import {
 } from '../utils/data-styling.utils';
 import {
   pointColorAttr,
-  pointRadiusAttr,
-  rowAccessor
+  pointRadiusAttr
 } from '../utils/geoarrow-stream-bridge.utils';
 import { resolveHoverHighlightProps } from '../utils/hover-highlight-props.utils';
 import { createScatterplotLayerProps } from '@ateliercartographie/geoarrow-deck-stream';
 import type { BinaryPointData } from '@ateliercartographie/geoarrow-deck-stream';
 import {
   cloneScatterBinaryData,
+  duplicateScatterBinaryGeometry,
   sortScatterBinaryDataByRadius
 } from './binary-scatter-data';
 import { createDotDensityLayers } from './density-layer-factory';
@@ -117,10 +117,9 @@ function createDoubleProportionalPointLayers(
   ctx: LayerContext,
   layerId: string
 ): Layer<DeckDataRow>[] {
-  // Outside the split (joined-basemap) path the binary `featureIds` index into
-  // the representative-point table, so per-row attributes must be read from it
-  // — keeping symbols aligned with their polygon when a POINT filter subsets
-  // the points. The split path keeps reading the matched geometry table.
+  // Picking metadata and the shape attribute index by binary `featureIds`, so
+  // they read the table those ids belong to: the matched geometry table on the
+  // split (joined-basemap) path, the representative points otherwise.
   const attributeTable = hasSplitRenderingContext(ctx)
     ? jsTable
     : symbolRowTable;
@@ -417,8 +416,9 @@ function createDoubleProportionalPointLayers(
       );
     };
 
-  const primaryFillByFeatureId = rowAccessor(
-    attributeTable,
+  const primaryFillByFeatureId = ctxRowAccessor(
+    ctx,
+    symbolRowTable,
     createFillAccessor(
       pointSizeColumn,
       fillColor,
@@ -426,8 +426,9 @@ function createDoubleProportionalPointLayers(
       breakValueA
     )
   );
-  const secondaryFillByFeatureId = rowAccessor(
-    attributeTable,
+  const secondaryFillByFeatureId = ctxRowAccessor(
+    ctx,
+    symbolRowTable,
     createFillAccessor(
       pointValueColumn,
       secondaryFillColor,
@@ -435,20 +436,24 @@ function createDoubleProportionalPointLayers(
       breakValueB
     )
   );
-  const primaryLineByFeatureId = rowAccessor(
-    attributeTable,
+  const primaryLineByFeatureId = ctxRowAccessor(
+    ctx,
+    symbolRowTable,
     createLineAccessor(pointSizeColumn)
   );
-  const secondaryLineByFeatureId = rowAccessor(
-    attributeTable,
+  const secondaryLineByFeatureId = ctxRowAccessor(
+    ctx,
+    symbolRowTable,
     createLineAccessor(pointValueColumn)
   );
-  const primaryRadiusByFeatureId = rowAccessor(
-    attributeTable,
+  const primaryRadiusByFeatureId = ctxRowAccessor(
+    ctx,
+    symbolRowTable,
     createRadiusAccessor(pointSizeColumn, primaryRadiusAccessor)
   );
-  const secondaryRadiusByFeatureId = rowAccessor(
-    attributeTable,
+  const secondaryRadiusByFeatureId = ctxRowAccessor(
+    ctx,
+    symbolRowTable,
     createRadiusAccessor(pointValueColumn, secondaryRadiusAccessor)
   );
 
@@ -496,45 +501,13 @@ function createDoubleProportionalPointLayers(
     };
   };
 
-  const createScatterLayer = (
+  const buildMultiShapeLayer = (
     suffix: string,
-    fillByFeatureId: (featureId: number) => [number, number, number, number],
-    lineByFeatureId: (featureId: number) => [number, number, number, number],
-    radiusByFeatureId: (featureId: number) => number,
+    scatterProps: ReturnType<typeof createScatterplotLayerProps>,
+    layoutProps: ReturnType<typeof offsetForRole>,
     pickable: boolean,
-    triggerColumn: string,
-    role: 'primary' | 'secondary'
+    triggerColumn: string
   ) => {
-    const layoutProps = offsetForRole(role);
-    const scatterProps = createScatterplotLayerProps(pointData);
-    const scatterBinaryData = cloneScatterBinaryData(scatterProps);
-    attachBinaryPickingMetadata(
-      scatterBinaryData,
-      attributeTable,
-      pointData,
-      ctx
-    );
-    scatterBinaryData.attributes.getFillColor = pointColorAttr(
-      pointData,
-      fillByFeatureId
-    );
-    scatterBinaryData.attributes.getLineColor = pointColorAttr(
-      pointData,
-      lineByFeatureId
-    );
-    scatterBinaryData.attributes.getRadius = pointRadiusAttr(
-      pointData,
-      radiusByFeatureId
-    );
-    scatterBinaryData.attributes.getShape = buildShapeAttribute(
-      scatterBinaryData.featureIds,
-      attributeTable,
-      triggerColumn,
-      shapeOrdinal,
-      missingShapeOrdinal
-    );
-    sortScatterBinaryDataByRadius(scatterBinaryData);
-
     return new MultiShapeLayer({
       id: `${layerId}-${suffix}`,
       ...(scatterProps as unknown as Record<string, unknown>),
@@ -620,6 +593,132 @@ function createDoubleProportionalPointLayers(
       }
     }) as ThematicLayer;
   };
+
+  const createScatterLayer = (
+    suffix: string,
+    fillByFeatureId: (featureId: number) => [number, number, number, number],
+    lineByFeatureId: (featureId: number) => [number, number, number, number],
+    radiusByFeatureId: (featureId: number) => number,
+    pickable: boolean,
+    triggerColumn: string,
+    role: 'primary' | 'secondary'
+  ) => {
+    const scatterProps = createScatterplotLayerProps(pointData);
+    const scatterBinaryData = cloneScatterBinaryData(scatterProps);
+    attachBinaryPickingMetadata(
+      scatterBinaryData,
+      attributeTable,
+      pointData,
+      ctx
+    );
+    scatterBinaryData.attributes.getFillColor = pointColorAttr(
+      pointData,
+      fillByFeatureId
+    );
+    scatterBinaryData.attributes.getLineColor = pointColorAttr(
+      pointData,
+      lineByFeatureId
+    );
+    scatterBinaryData.attributes.getRadius = pointRadiusAttr(
+      pointData,
+      radiusByFeatureId
+    );
+    scatterBinaryData.attributes.getShape = buildShapeAttribute(
+      scatterBinaryData.featureIds,
+      attributeTable,
+      triggerColumn,
+      shapeOrdinal,
+      missingShapeOrdinal
+    );
+    sortScatterBinaryDataByRadius(scatterBinaryData);
+
+    return buildMultiShapeLayer(
+      suffix,
+      scatterProps,
+      offsetForRole(role),
+      pickable,
+      triggerColumn
+    );
+  };
+
+  const createOverlayLayer = (): ThematicLayer | null => {
+    const scatterProps = createScatterplotLayerProps(pointData);
+    const scatterBinaryData = cloneScatterBinaryData(scatterProps);
+    attachBinaryPickingMetadata(
+      scatterBinaryData,
+      attributeTable,
+      pointData,
+      ctx
+    );
+
+    const pairStride = duplicateScatterBinaryGeometry(scatterBinaryData);
+    const featureIds = scatterBinaryData.featureIds;
+    if (pairStride === null || !featureIds) {
+      return null;
+    }
+
+    const total = featureIds.length;
+    const fills = new Uint8Array(total * 4);
+    const lines = new Uint8Array(total * 4);
+    const radii = new Float32Array(total);
+    const shapes = new Float32Array(total);
+    const primaryMissing = attributeTable.getChild(pointSizeColumn);
+    const secondaryMissing = attributeTable.getChild(pointValueColumn);
+
+    for (let index = 0; index < total; index += 1) {
+      const featureId = featureIds[index];
+      const isPrimary = index < pairStride;
+      const fill = isPrimary
+        ? primaryFillByFeatureId(featureId)
+        : secondaryFillByFeatureId(featureId);
+      const line = isPrimary
+        ? primaryLineByFeatureId(featureId)
+        : secondaryLineByFeatureId(featureId);
+      const missingVector = isPrimary ? primaryMissing : secondaryMissing;
+      const offset = index * 4;
+
+      for (let channel = 0; channel < 4; channel += 1) {
+        fills[offset + channel] = fill[channel];
+        lines[offset + channel] = line[channel];
+      }
+      radii[index] = isPrimary
+        ? primaryRadiusByFeatureId(featureId)
+        : secondaryRadiusByFeatureId(featureId);
+      shapes[index] =
+        missingVector && isMissingThematicValue(missingVector.get(featureId))
+          ? missingShapeOrdinal
+          : shapeOrdinal;
+    }
+
+    scatterBinaryData.attributes.getFillColor = {
+      value: fills,
+      size: 4,
+      normalized: true
+    };
+    scatterBinaryData.attributes.getLineColor = {
+      value: lines,
+      size: 4,
+      normalized: true
+    };
+    scatterBinaryData.attributes.getRadius = { value: radii, size: 1 };
+    scatterBinaryData.attributes.getShape = { value: shapes, size: 1 };
+    sortScatterBinaryDataByRadius(scatterBinaryData);
+
+    return buildMultiShapeLayer(
+      'double-overlay',
+      scatterProps,
+      offsetForRole('primary'),
+      true,
+      `${pointSizeColumn}|${pointValueColumn}`
+    );
+  };
+
+  if (positionMode === 'overlay') {
+    const overlayLayer = createOverlayLayer();
+    if (overlayLayer) {
+      return [overlayLayer];
+    }
+  }
 
   return [
     createScatterLayer(

@@ -4,6 +4,7 @@
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
+  import { FEEDBACK_FORM_URL } from '$lib/features/commons/constants/doc-links.constants';
   import {
     Button,
     ComboBox,
@@ -34,7 +35,6 @@
     allBasemaps: BasemapMetadata[];
     basemapSelected: string;
     onSelectBasemap: (basemap: BasemapMetadata) => void;
-    onSuggestBasemap?: () => void;
     suggestionsOpen?: boolean;
     catalogOpen?: boolean;
     onSuggestionsToggle?: (expanded: boolean) => void;
@@ -46,7 +46,6 @@
     allBasemaps,
     basemapSelected,
     onSelectBasemap,
-    onSuggestBasemap,
     suggestionsOpen,
     catalogOpen,
     onSuggestionsToggle,
@@ -284,18 +283,18 @@
           </div>
         </div>
       {/if}
-      {#if onSuggestBasemap}
-        <div class="suggest-action">
-          <Button
-            kind="ghost"
-            size="small"
-            icon={Add}
-            on:click={onSuggestBasemap}
-          >
-            {m.basemap_suggest_button()}
-          </Button>
-        </div>
-      {/if}
+      <div class="suggest-action">
+        <Button
+          kind="ghost"
+          size="small"
+          icon={Add}
+          href={FEEDBACK_FORM_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {m.basemap_suggest_button()}
+        </Button>
+      </div>
     </ExpandableSection>
   </div>
 </div>

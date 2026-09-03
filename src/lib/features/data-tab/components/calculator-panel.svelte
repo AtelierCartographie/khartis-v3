@@ -25,6 +25,7 @@
     COLUMN_TYPE_GEOMETRY
   } from '$lib/features/commons/constants/data.constants';
   import * as m from '$lib/paraglide/messages';
+  import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
   import { refreshDatasetMetadata } from '../services/dataset-metadata.service';
   import AutocompleteTextarea, {
     type Suggestion
@@ -422,12 +423,7 @@
       </div>
     </div>
 
-    <Link
-      href="https://duckdb.org/docs/sql/expressions/overview"
-      target="_blank"
-      icon={Launch}
-      size="sm"
-    >
+    <Link href={DOC_LINK.CONTROL_DATA} target="_blank" icon={Launch} size="sm">
       {m.calc_help_link()}
     </Link>
 

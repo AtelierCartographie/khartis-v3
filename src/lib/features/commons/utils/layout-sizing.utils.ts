@@ -63,7 +63,7 @@ const TOKENS_BY_PROFILE = {
       fitPaddingPx: 40
     },
     legend: {
-      fontSize: 10,
+      fontSize: 8,
       maxWidth: 200,
       paddingInline: 16,
       paddingBlock: 12,
@@ -104,7 +104,7 @@ const TOKENS_BY_PROFILE = {
       fitPaddingPx: 56
     },
     legend: {
-      fontSize: 11,
+      fontSize: 8,
       maxWidth: 260,
       paddingInline: 18,
       paddingBlock: 14,
@@ -145,7 +145,7 @@ const TOKENS_BY_PROFILE = {
       fitPaddingPx: 72
     },
     legend: {
-      fontSize: 12,
+      fontSize: 8,
       maxWidth: 320,
       paddingInline: 20,
       paddingBlock: 16,

@@ -232,8 +232,11 @@
   }
 
   function getItemHeaderTitle(item: LegendItem): string {
-    const title = item.title.trim();
-    return title || item.name;
+    if (item.primitive) {
+      return item.name;
+    }
+
+    return item.title.trim() || item.name;
   }
 
   onMount(() => {
@@ -275,7 +278,7 @@
               <TextInput
                 labelText={m.legend_title()}
                 size="xl"
-                placeholder={item.name}
+                placeholder={m.legend_title()}
                 id={`${item.id}-title`}
                 value={item.title}
                 on:input={(e: CustomEvent<string | number | null>) =>

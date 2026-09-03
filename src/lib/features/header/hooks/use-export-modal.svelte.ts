@@ -29,7 +29,7 @@ function getDefaultFileName(): string {
   return m.export_default_filename();
 }
 
-export function useExportModal(): UseExportModalReturn {
+function createExportModal(): UseExportModalReturn {
   let isOpen = $state(false);
   let isExporting = $state(false);
   let selectedTab = $state<ExportTabType>(ExportTab.PROJECT);
@@ -174,4 +174,11 @@ export function useExportModal(): UseExportModalReturn {
     setResolution,
     executeExport
   };
+}
+
+let sharedExportModal: UseExportModalReturn | null = null;
+
+export function useExportModal(): UseExportModalReturn {
+  sharedExportModal ??= createExportModal();
+  return sharedExportModal;
 }

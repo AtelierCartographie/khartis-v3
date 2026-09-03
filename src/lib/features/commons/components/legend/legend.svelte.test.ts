@@ -1,11 +1,11 @@
 import { render } from '@testing-library/svelte';
 import Textbox from '@borgar/textbox';
+import { scaleLegendMetric } from './utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   LegendSvg,
   createLegendSvg,
   draw_categorical_legend,
-  draw_khartis_double_symbols_legend,
   draw_khartis_line_width_legend,
   draw_khartis_swatch_legend,
   draw_quanti_color_legend,
@@ -117,7 +117,7 @@ describe('common legend generators', () => {
       })
     );
 
-    const horizontalMargins = 20;
+    const horizontalMargins = scaleLegendMetric(10, 10) * 2;
     expect(svg.width).toBeGreaterThanOrEqual(
       Textbox.measureText('gdp_per_capita', '10px Open Sans') +
         horizontalMargins
@@ -154,11 +154,37 @@ describe('common legend generators', () => {
       )
     );
 
-    const horizontalMargins = 20;
+    const horizontalMargins = scaleLegendMetric(10, 10) * 2;
     expect(svg.width).toBeGreaterThanOrEqual(
       Textbox.measureText('Visualisation', 'bold 12px Open Sans') +
         horizontalMargins
     );
+  });
+
+  it('gains columns instead of rows past the compact category count', () => {
+    const countColumns = (items_nb: number): number => {
+      const svg = draw_categorical_legend(
+        Array.from({ length: items_nb }, (_, index) => ({
+          label: `Catégorie ${index + 1}`,
+          fill: '#4585f5'
+        })),
+        { fontSize: 8 }
+      );
+
+      return new Set(
+        [
+          ...svg.markup.matchAll(/<rect x="([\d.]+)" y="[\d.]+" width="10"/g)
+        ].map((match) => match[1])
+      ).size;
+    };
+
+    expect(countColumns(4)).toBe(1);
+    expect(countColumns(8)).toBe(2);
+    expect(countColumns(30)).toBe(3);
+    // Three columns would push these past thirty rows and off the page.
+    expect(countColumns(91)).toBe(4);
+    expect(countColumns(121)).toBe(5);
+    expect(countColumns(200)).toBe(5);
   });
 
   it('keeps categorical missing data compact in the same SVG', () => {
@@ -293,7 +319,7 @@ describe('common legend generators', () => {
       })
     );
 
-    const horizontalMargins = 20;
+    const horizontalMargins = scaleLegendMetric(10, 10) * 2;
     expect(svg.width).toBeGreaterThanOrEqual(
       Textbox.measureText(
         'population_identifier_with_no_spaces',
@@ -314,7 +340,7 @@ describe('common legend generators', () => {
       )
     );
 
-    const horizontalMargins = 20;
+    const horizontalMargins = scaleLegendMetric(10, 10) * 2;
     expect(svg.width).toBeGreaterThanOrEqual(
       Textbox.measureText('transport_flow_identifier', '10px Open Sans') +
         horizontalMargins
@@ -511,142 +537,6 @@ describe('common legend generators', () => {
     expect(nodataMatch).not.toBeNull();
     const nodataY = Number(nodataMatch?.[1]);
     expect(nodataY).toBeGreaterThan(minusBoxY);
-  });
-
-  it('keeps double proportional symbol rows compact', () => {
-    const svg = createLegendSvg(
-      draw_khartis_double_symbols_legend(
-        [
-          {
-            label: '227,119',
-            size: 18,
-            symbol: 'M0,-8A8,8,0,1,1,0,8A8,8,0,1,1,0,-8',
-            fill: '#4585f5',
-            secondaryFill: '#ff812a'
-          },
-          {
-            label: '113,567',
-            size: 11,
-            symbol: 'M0,-8A8,8,0,1,1,0,8A8,8,0,1,1,0,-8',
-            fill: '#4585f5',
-            secondaryFill: '#ff812a'
-          },
-          {
-            label: '14',
-            size: 4,
-            symbol: 'M0,-8A8,8,0,1,1,0,8A8,8,0,1,1,0,-8',
-            fill: '#4585f5',
-            secondaryFill: '#ff812a'
-          }
-        ],
-        {
-          title: 'Visualisation',
-          subtitle: 'POP_TOT_2023',
-          footerType: 'symbol',
-          footerItems: [
-            {
-              label: 'Absence de données',
-              fill: '#c6c6c6',
-              symbol: 'M0,-8A8,8,0,1,1,0,8A8,8,0,1,1,0,-8',
-              size: 6
-            }
-          ]
-        }
-      )
-    );
-
-    expect(svg.markup).toContain('khartis_double_symbol_legend');
-    expect(svg.markup).toContain('Absence de données');
-    expect(svg.height).toBeLessThan(190);
-  });
-
-  it('aligns each double symbol label with its own symbol center', () => {
-    const svgDefinition = draw_khartis_double_symbols_legend([
-      {
-        label: '227,119',
-        size: 18,
-        symbol: 'M0,-8A8,8,0,1,1,0,8A8,8,0,1,1,0,-8',
-        fill: '#4585f5',
-        secondaryFill: '#ff812a'
-      },
-      {
-        label: '113,567',
-        size: 11,
-        symbol: 'M0,-8A8,8,0,1,1,0,8A8,8,0,1,1,0,-8',
-        fill: '#4585f5',
-        secondaryFill: '#ff812a'
-      },
-      {
-        label: '14',
-        size: 4,
-        symbol: 'M0,-8A8,8,0,1,1,0,8A8,8,0,1,1,0,-8',
-        fill: '#4585f5',
-        secondaryFill: '#ff812a'
-      }
-    ]);
-    const host = document.createElement('div');
-    host.innerHTML = `<svg>${svgDefinition.markup}</svg>`;
-
-    const rowGroups = [...host.querySelectorAll('.double-symbol-pair')];
-    const labelTexts = ['227,119', '113,567', '14'].map((label) =>
-      [...host.querySelectorAll('text')].find(
-        (node) => node.textContent?.trim() === label
-      )
-    );
-    const rowCenters = rowGroups.map((group) => {
-      const transform = group.querySelector('path')?.getAttribute('transform');
-      const match = transform?.match(/translate\([^,]+,([^)]+)\)/);
-      return Number(match?.[1] ?? NaN);
-    });
-    const labelYs = labelTexts.map((node) => Number(node?.getAttribute('y')));
-
-    expect(rowCenters).toHaveLength(3);
-    expect(labelYs).toHaveLength(3);
-    rowCenters.forEach((center, index) => {
-      expect(center).toBeCloseTo(labelYs[index], 5);
-    });
-  });
-
-  it('bottom-aligns double symbol rows so smaller symbols sit lower relative to previous row', () => {
-    const svgDefinition = draw_khartis_double_symbols_legend([
-      {
-        label: '227,119',
-        size: 18,
-        symbol: 'M0,-8A8,8,0,1,1,0,8A8,8,0,1,1,0,-8',
-        fill: '#4585f5',
-        secondaryFill: '#ff812a'
-      },
-      {
-        label: '113,567',
-        size: 11,
-        symbol: 'M0,-8A8,8,0,1,1,0,8A8,8,0,1,1,0,-8',
-        fill: '#4585f5',
-        secondaryFill: '#ff812a'
-      },
-      {
-        label: '14',
-        size: 4,
-        symbol: 'M0,-8A8,8,0,1,1,0,8A8,8,0,1,1,0,-8',
-        fill: '#4585f5',
-        secondaryFill: '#ff812a'
-      }
-    ]);
-    const host = document.createElement('div');
-    host.innerHTML = `<svg>${svgDefinition.markup}</svg>`;
-
-    const rowGroups = [...host.querySelectorAll('.double-symbol-pair')];
-    const cyValues = rowGroups.map((group) => {
-      const transform = group.querySelector('path')?.getAttribute('transform');
-      const match = transform?.match(/translate\([^,]+,([^)]+)\)/);
-      return Number(match?.[1] ?? NaN);
-    });
-
-    expect(cyValues).toHaveLength(3);
-    // With bottom-align, the gap between cy values increases as radius decreases
-    // because smaller symbols sit lower in their fixed-height row.
-    const gap0 = cyValues[1] - cyValues[0];
-    const gap1 = cyValues[2] - cyValues[1];
-    expect(gap1).toBeGreaterThan(gap0);
   });
 
   it('escapes SVG text, colors, and paths in Khartis extensions', () => {

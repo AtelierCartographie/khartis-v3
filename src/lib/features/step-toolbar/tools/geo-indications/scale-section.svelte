@@ -29,7 +29,7 @@
     CARTOGRAPHIC_FONT_FAMILY,
     clampFontSize,
     FONT_SIZE_OPTIONS,
-    MIN_FONT_SIZE,
+    DEFAULT_FONT_SIZE,
     normalizeFontFamily
   } from '$lib/features/step-toolbar/fonts.constants';
   import {
@@ -48,14 +48,17 @@
   const store = geoIndicationsActions;
   const geoState = $derived(geoIndicationsState);
   let localScaleFontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
-  let localScaleFontSize = $state<number>(MIN_FONT_SIZE);
+  let localScaleFontSize = $state<number>(DEFAULT_FONT_SIZE);
   let mapViewRevision = $state(0);
 
   $effect(() => {
     localScaleFontFamily =
       normalizeFontFamily(geoState.scale.fontFamily) ??
       CARTOGRAPHIC_FONT_FAMILY;
-    localScaleFontSize = clampFontSize(geoState.scale.fontSize, MIN_FONT_SIZE);
+    localScaleFontSize = clampFontSize(
+      geoState.scale.fontSize,
+      DEFAULT_FONT_SIZE
+    );
   });
 
   $effect(() => {

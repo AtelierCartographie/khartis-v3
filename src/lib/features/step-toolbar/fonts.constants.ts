@@ -10,12 +10,15 @@ export const AVAILABLE_FONTS = [
 export type AvailableFont = (typeof AVAILABLE_FONTS)[number];
 export const DEFAULT_FONT_FAMILY: AvailableFont = 'Cabin';
 export const CARTOGRAPHIC_FONT_FAMILY: AvailableFont = 'Open Sans';
-export const FONT_SIZES = [8, 10, 12, 14, 16, 18, 20, 24, 32, 48, 64] as const;
+export const FONT_SIZES = [
+  6, 8, 10, 12, 14, 16, 18, 20, 24, 32, 48, 64
+] as const;
 export type FontSize = (typeof FONT_SIZES)[number];
 export const FONT_SIZE_OPTIONS = FONT_SIZES.map((size) => String(size));
 
 export const MIN_FONT_SIZE: FontSize = FONT_SIZES[0];
 export const MAX_FONT_SIZE: FontSize = FONT_SIZES[FONT_SIZES.length - 1];
+export const DEFAULT_FONT_SIZE: FontSize = 8;
 
 const FONT_FAMILY_STACKS: Record<AvailableFont, string> = {
   Cabin: '"Cabin", sans-serif',
@@ -92,7 +95,7 @@ function resolveFontFaceFamily(fontFamily?: string | null): string {
 
 export function clampFontSize(
   value: number | string | undefined,
-  fallback: number = MIN_FONT_SIZE
+  fallback: number = DEFAULT_FONT_SIZE
 ): number {
   const numericValue =
     typeof value === 'number'

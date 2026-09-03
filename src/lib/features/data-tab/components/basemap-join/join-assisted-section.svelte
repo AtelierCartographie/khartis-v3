@@ -582,10 +582,7 @@
     const text =
       candidate.type === 'exact'
         ? m.join_match_ambiguous_details()
-        : m.join_match_fuzzy_details({
-            matched: candidate.name,
-            score: Math.round(candidate.score * 100)
-          });
+        : m.join_match_fuzzy_details({ matched: candidate.name });
     return { ...base, text, disabled: false };
   }
 
@@ -1020,10 +1017,6 @@
                     row,
                     selectedMapping
                   )}
-                  {@const matchScorePercent =
-                    selectedCandidate && selectedCandidate.score < 1
-                      ? Math.round(selectedCandidate.score * 100)
-                      : null}
                   {@const verifyTooltip = buildToVerifyTooltip(
                     selectedMapping,
                     selectedCandidate
@@ -1032,18 +1025,9 @@
                     <div class="table-cell cell-data">{row.dataValue}</div>
                     <div
                       class="table-cell cell-equals cell-equals-approx"
-                      aria-label={matchScorePercent !== null
-                        ? m.join_match_score_label({
-                            score: matchScorePercent
-                          })
-                        : m.join_approximate_indicator()}
+                      aria-label={m.join_approximate_indicator()}
                     >
                       <span class="approx-symbol" aria-hidden="true">≈</span>
-                      {#if matchScorePercent !== null}
-                        <span class="match-score" aria-hidden="true"
-                          >{matchScorePercent}&nbsp;%</span
-                        >
-                      {/if}
                     </div>
                     <div class="table-cell cell-select">
                       {#if visibleToVerifyRows.has(rowKey)}
@@ -1799,15 +1783,6 @@
     width: auto;
     min-width: 24px;
     gap: 1px;
-  }
-
-  .match-score {
-    font-size: 0.625rem;
-    font-weight: 600;
-    line-height: 1;
-    letter-spacing: 0.02em;
-    color: var(--cds-text-secondary, #525252);
-    white-space: nowrap;
   }
 
   .combo-item {
