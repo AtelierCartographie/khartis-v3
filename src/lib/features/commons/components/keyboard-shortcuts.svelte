@@ -5,6 +5,7 @@
   import { zoomModeStore } from '../stores/zoom-mode.store.svelte';
   import { createProjectActions } from '../stores/create-project.store.svelte';
   import { projectStore } from '../stores/project.store.svelte';
+  import { useExportModal } from '$lib/features/header';
   import {
     StylingTools,
     ToolbarState,
@@ -202,7 +203,11 @@
 
     async function handleSaveProject(): Promise<void> {
       if (!projectStore.currentProject) return;
-      await projectStore.saveCurrentProject();
+      try {
+        await projectStore.saveCurrentProject();
+      } finally {
+        useExportModal().open();
+      }
     }
 
     function handleDuplicateProject(): void {

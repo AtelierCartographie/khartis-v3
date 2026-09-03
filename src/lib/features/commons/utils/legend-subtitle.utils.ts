@@ -37,25 +37,7 @@ export function getVisualizationLegendSubtitleParts(
   }
 
   if (polygonEnabled && !symbolEnabled && !lineEnabled && !textEnabled) {
-    const polygonFillMode = visualization.polygon?.fillMode;
-    const polygonValueColumn =
-      visualization.polygon?.valueColumn ?? visualization.mapping.valueColumn;
-    const polygonCategoryColumn =
-      visualization.polygon?.categoryColumn ??
-      visualization.mapping.categoryColumn;
-
-    if (polygonFillMode === FillMode.CATEGORIES) {
-      return [polygonCategoryColumn, polygonValueColumn];
-    }
-
-    if (
-      polygonFillMode === FillMode.CLASSES ||
-      polygonFillMode === FillMode.DENSITY
-    ) {
-      return [polygonValueColumn];
-    }
-
-    return [polygonValueColumn, polygonCategoryColumn];
+    return getPolygonLegendSubtitleParts(visualization);
   }
 
   if (lineEnabled && !symbolEnabled && !polygonEnabled && !textEnabled) {
@@ -63,17 +45,7 @@ export function getVisualizationLegendSubtitleParts(
   }
 
   if (textEnabled && !symbolEnabled && !polygonEnabled && !lineEnabled) {
-    return visualization.text?.colorMode === 'categories'
-      ? [
-          visualization.text?.categoryColumn,
-          visualization.text?.valueColumn,
-          visualization.text?.labelColumn
-        ]
-      : [
-          visualization.text?.valueColumn,
-          visualization.text?.categoryColumn,
-          visualization.text?.labelColumn
-        ];
+    return getTextLegendSubtitleParts(visualization);
   }
 
   return visualization.modes?.fill === 'categories'
@@ -89,6 +61,94 @@ export function getVisualizationLegendSubtitleParts(
         visualization.mapping.categoryColumn,
         visualization.mapping.colorColumn
       ];
+}
+
+function getPolygonLegendSubtitleParts(
+  visualization: VisualizationConfig
+): Array<string | undefined> {
+  const polygonFillMode = visualization.polygon?.fillMode;
+  const polygonValueColumn =
+    visualization.polygon?.valueColumn ?? visualization.mapping.valueColumn;
+  const polygonCategoryColumn =
+    visualization.polygon?.categoryColumn ??
+    visualization.mapping.categoryColumn;
+
+  if (polygonFillMode === FillMode.CATEGORIES) {
+    return [polygonCategoryColumn, polygonValueColumn];
+  }
+
+  if (
+    polygonFillMode === FillMode.CLASSES ||
+    polygonFillMode === FillMode.DENSITY
+  ) {
+    return [polygonValueColumn];
+  }
+
+  return [polygonValueColumn, polygonCategoryColumn];
+}
+
+function getTextLegendSubtitleParts(
+  visualization: VisualizationConfig
+): Array<string | undefined> {
+  return visualization.text?.colorMode === 'categories'
+    ? [
+        visualization.text?.categoryColumn,
+        visualization.text?.valueColumn,
+        visualization.text?.labelColumn
+      ]
+    : [
+        visualization.text?.valueColumn,
+        visualization.text?.categoryColumn,
+        visualization.text?.labelColumn
+      ];
+}
+
+export type LegendSubtitlePrimitive = 'point' | 'area' | 'line' | 'text';
+
+// Background to foreground, so the legend frames stack the way the map does.
+const LEGEND_PRIMITIVE_ORDER: LegendSubtitlePrimitive[] = [
+  'area',
+  'line',
+  'point',
+  'text'
+];
+
+/**
+ * The primitives that own a legend for this visualization. Derived from the
+ * configuration alone: whether a primitive actually draws something is decided
+ * by the render layer, which skips empty frames.
+ */
+export function getEnabledLegendPrimitives(
+  visualization: VisualizationConfig
+): LegendSubtitlePrimitive[] {
+  const enabled: Record<LegendSubtitlePrimitive, boolean> = {
+    area: Boolean(visualization.polygon?.enabled),
+    line: Boolean(visualization.line?.enabled),
+    point: Boolean(visualization.symbol?.enabled),
+    text: Boolean(visualization.text?.enabled)
+  };
+
+  return LEGEND_PRIMITIVE_ORDER.filter((primitive) => enabled[primitive]);
+}
+
+export function getPrimitiveLegendSubtitle(
+  visualization: VisualizationConfig,
+  primitive: LegendSubtitlePrimitive
+): string {
+  switch (primitive) {
+    case 'point':
+      return joinLegendSubtitleParts(
+        getPointLegendSubtitleParts(visualization)
+      );
+    case 'area':
+      return joinLegendSubtitleParts(
+        getPolygonLegendSubtitleParts(visualization)
+      );
+    case 'line':
+      return joinLegendSubtitleParts(getLineLegendSubtitleParts(visualization));
+    case 'text':
+      return joinLegendSubtitleParts(getTextLegendSubtitleParts(visualization));
+  }
 }
 
 export function getVisualizationLegendSubtitle(

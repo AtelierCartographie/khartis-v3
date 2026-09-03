@@ -171,20 +171,18 @@
       DEFAULT_COLORS.fill;
     fillMode =
       polygonConfig?.fillMode ?? visualization?.modes?.fill ?? FillMode.UNIQUE;
-    if (visualization?.missingData) {
-      showMissingData = visualization.missingData.show ?? true;
-      missingDataColor =
-        visualization.missingData.color ?? DEFAULT_COLORS.missingData;
-      missingDataPattern = visualization.missingData.pattern ?? false;
+    const missingData =
+      polygonConfig?.missingData ?? visualization?.missingData;
+    if (missingData) {
+      showMissingData = missingData.show ?? true;
+      missingDataColor = missingData.color ?? DEFAULT_COLORS.missingData;
+      missingDataPattern = missingData.pattern ?? false;
       missingDataPatternConfig =
-        visualization.missingData.patternConfig ??
+        missingData.patternConfig ??
         patternPaletteFromLegacy(
-          visualization.missingData.patternId ??
-            mapPatternTypeToPatternId(
-              visualization.missingData.patternType,
-              'diagonal'
-            ),
-          visualization.missingData.patternParams
+          missingData.patternId ??
+            mapPatternTypeToPatternId(missingData.patternType, 'diagonal'),
+          missingData.patternParams
         ) ??
         DEFAULT_MISSING_DATA_PATTERN_CONFIG;
     }

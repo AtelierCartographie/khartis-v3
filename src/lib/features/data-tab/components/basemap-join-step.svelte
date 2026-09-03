@@ -33,7 +33,6 @@
   import BasemapImportTab from './basemap-join/basemap-import-tab.svelte';
   import BasemapPanelContent from './basemap-join/basemap-panel-content.svelte';
   import JoinAssistedSection from './basemap-join/join-assisted-section.svelte';
-  import BasemapSuggestionModal from './basemap-suggestion-modal.svelte';
   import OSMBasemapSelector from './osm-basemap-selector.svelte';
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
   import { dataTabStore } from '../stores/data-tab.store.svelte';
@@ -224,7 +223,6 @@
   let importUploading = $state(false);
   let importError = $state<string | null>(null);
   let importedBasemap = $state<BasemapMetadata | null>(null);
-  let showSuggestionModal = $state(false);
   let joinLoading = $state(false);
   let joinLoadingRequestId = 0;
   let suggestionsDatasetIdentity = $state<string | null>(null);
@@ -1825,7 +1823,6 @@
     allBasemaps={allBasemaps}
     basemapSelected={basemapSelected}
     onSelectBasemap={handleSelectBasemap}
-    onSuggestBasemap={() => (showSuggestionModal = true)}
   />
 {/snippet}
 
@@ -1899,11 +1896,6 @@
     />
   </div>
 </section>
-
-<BasemapSuggestionModal
-  bind:open={showSuggestionModal}
-  onClose={() => (showSuggestionModal = false)}
-/>
 
 <style>
   #basemap-join-step {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
+  import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import {
     SLIDER_DEBOUNCE_MS,
@@ -458,7 +459,7 @@
     <p class="method-description">{getMethodDescription(method)}</p>
     <a
       class="learn-more"
-      href="https://pro.arcgis.com/en/pro-app/latest/help/mapping/layer-properties/data-classification-methods.htm"
+      href={DOC_LINK.DISCRETIZATION}
       target="_blank"
       rel="noopener noreferrer"
     >

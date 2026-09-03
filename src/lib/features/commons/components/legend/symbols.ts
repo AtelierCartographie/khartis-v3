@@ -17,6 +17,7 @@ import {
   renderLegendNote,
   resolveLegendFontFamily,
   round_extreme,
+  scaleLegendMetric,
   sqrtScale,
   type CommonLegendTextOptions,
   type LegendSvgDefinition,
@@ -28,6 +29,11 @@ export type SymbolType = 'circle' | 'square' | 'bar' | 'spike' | 'text';
 // Mirror the map's square SDF ratio so legend squares match rendered symbols.
 const SQUARE_SIDE_RATIO = 0.6 / SYMBOL_SDF_EXTENT;
 
+export interface LegendColorSwatch {
+  color: string;
+  label: string;
+}
+
 export interface SymbolsLegendOptions extends CommonLegendTextOptions {
   type?: SymbolType;
   size?: number;
@@ -36,6 +42,12 @@ export interface SymbolsLegendOptions extends CommonLegendTextOptions {
   stroke?: string;
   plus_color?: string;
   less_color?: string;
+  /**
+   * Colour boxes drawn under the graduated symbols. Cross-zero data supplies
+   * the +/- pair; double proportional symbols on a shared scale supply one box
+   * per variable, which is what tells the reader which colour is which.
+   */
+  colorSwatches?: LegendColorSwatch[];
   nodata?: boolean;
   nodataLabel?: string;
 }
@@ -103,25 +115,35 @@ export function draw_symbols_legend(
   const x_max = type !== 'bar' && type !== 'spike' ? values[0] : bar_width;
   const y_max = values[0];
   const is_min_alone = values[values.length - 1] <= 1.5;
-  const margin = Math.max(10, Math.round(fontSize * 0.6));
+  const margin = scaleLegendMetric(10, fontSize);
   const header_gap = 3;
-  const label_gap = 10;
-  const label_safety_padding = Math.max(6, Math.round(fontSize * 0.6));
+  const label_gap = scaleLegendMetric(10, fontSize);
+  const label_safety_padding = scaleLegendMetric(7, fontSize);
   const font = createLegendFont({ fontSize, fontFamily: resolvedFontFamily });
   const sign_box_dim = Math.round(fontSize * 1.25);
-  const sign_row_inner_gap = Math.max(4, Math.round(fontSize * 0.3));
-  const sign_label_max_width = cross_zero
+  const sign_row_inner_gap = scaleLegendMetric(4, fontSize);
+  const color_swatches: LegendColorSwatch[] =
+    options.colorSwatches ??
+    (cross_zero
+      ? [
+          { color: plus_color, label: '+' },
+          { color: less_color, label: '−' }
+        ]
+      : []);
+  const has_color_swatches = color_swatches.length > 0;
+  const sign_label_max_width = has_color_swatches
     ? Math.max(
-        Textbox.measureText('+', font),
-        Textbox.measureText('−', font),
-        Textbox.measureText('-', font)
+        ...color_swatches.map((swatch) =>
+          Textbox.measureText(swatch.label, font)
+        )
       ) + label_safety_padding
     : 0;
-  const sign_legend_body_width = cross_zero
+  const sign_legend_body_width = has_color_swatches
     ? margin + sign_box_dim + label_gap + sign_label_max_width + margin
     : 0;
-  const sign_legend_section_height = cross_zero
-    ? sign_box_dim * 2 + sign_row_inner_gap
+  const sign_legend_section_height = has_color_swatches
+    ? color_swatches.length * sign_box_dim +
+      (color_swatches.length - 1) * sign_row_inner_gap
     : 0;
   const max_symbol_width =
     type !== 'bar' && type !== 'spike'
@@ -131,7 +153,7 @@ export function draw_symbols_legend(
     .map((d) => d * label_sign)
     .map((d) => Textbox.measureText(formatValue(d), font));
   const max_label_width = Math.max(...label_widths) + label_safety_padding;
-  const nodata_dash_width = 10;
+  const nodata_dash_width = scaleLegendMetric(10, fontSize);
   const nodata_label = options.nodataLabel ?? m.legend_no_data_label();
   const nodata_dash_x = type === 'circle' ? y_max + margin : margin;
   const nodata_label_x = nodata_dash_x + nodata_dash_width + 15;
@@ -183,16 +205,16 @@ export function draw_symbols_legend(
     titleFont: title_font,
     subtitleFont: subtitle_font
   });
-  const title_margin_bottom = Math.max(15, fontSize);
+  const title_margin_bottom = scaleLegendMetric(15, fontSize);
   const bottom_symbols =
     margin + header.height + title_margin_bottom + y_max * 2;
   const bottom_min_alone = bottom_symbols + 10;
   const symbols_bottom = is_min_alone ? bottom_min_alone : bottom_symbols;
-  const section_gap = Math.max(10, Math.round(fontSize * 0.6));
-  const sign_legend_y = cross_zero
+  const section_gap = scaleLegendMetric(10, fontSize);
+  const sign_legend_y = has_color_swatches
     ? symbols_bottom + section_gap
     : symbols_bottom;
-  const sign_legend_bottom = cross_zero
+  const sign_legend_bottom = has_color_swatches
     ? sign_legend_y + sign_legend_section_height
     : symbols_bottom;
   const nodata_section_height = nodata ? section_gap + fontSize : 0;
@@ -267,18 +289,19 @@ export function draw_symbols_legend(
     }
 
     let sign_legend_markup = '';
-    if (cross_zero) {
+    if (has_color_swatches) {
       const sign_box_x = margin;
       const sign_label_x = sign_box_x + sign_box_dim + label_gap;
-      const plus_y = sign_legend_y;
-      const less_y = sign_legend_y + sign_box_dim + sign_row_inner_gap;
-      const safePlus = escapeSvgAttribute(plus_color);
-      const safeLess = escapeSvgAttribute(less_color);
+      const rows = color_swatches
+        .map((swatch, index) => {
+          const row_y =
+            sign_legend_y + index * (sign_box_dim + sign_row_inner_gap);
+          return `<rect x="${sign_box_x}" y="${row_y}" width="${sign_box_dim}" height="${sign_box_dim}" fill="${escapeSvgAttribute(swatch.color)}" />
+        <text x="${sign_label_x}" y="${row_y + sign_box_dim / 2}" text-anchor="start" dominant-baseline="middle">${escapeSvgText(swatch.label)}</text>`;
+        })
+        .join('');
       sign_legend_markup = `<g class="sign_legend" font-size="${fontSize}">
-        <rect x="${sign_box_x}" y="${plus_y}" width="${sign_box_dim}" height="${sign_box_dim}" fill="${safePlus}" />
-        <text x="${sign_label_x}" y="${plus_y + sign_box_dim / 2}" text-anchor="start" dominant-baseline="middle">+</text>
-        <rect x="${sign_box_x}" y="${less_y}" width="${sign_box_dim}" height="${sign_box_dim}" fill="${safeLess}" />
-        <text x="${sign_label_x}" y="${less_y + sign_box_dim / 2}" text-anchor="start" dominant-baseline="middle">−</text>
+        ${rows}
       </g>`;
     }
 

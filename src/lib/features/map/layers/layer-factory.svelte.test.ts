@@ -3211,7 +3211,7 @@ describe('createPointLayers', () => {
     expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
   });
 
-  it('sorts each double proportional symbol layer by its own descending radius while preserving feature ids', () => {
+  it('merges overlaid double proportional symbols into one descending radius order', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 3,
       featureIds: new Uint32Array([0, 1, 2])
@@ -3258,23 +3258,24 @@ describe('createPointLayers', () => {
       }
     );
 
-    const primaryData = layers[0].props.data as {
-      featureIds?: Uint32Array;
-      attributes?: { getRadius?: { value?: Float32Array } };
-    };
-    const secondaryData = layers[1].props.data as {
+    // Overlay stacks the two variables in one layer so a small symbol is never
+    // buried under a large one: A radii are 20/40/0 and B radii 40/20/0, which
+    // have to interleave instead of sorting per variable.
+    expect(layers).toHaveLength(1);
+
+    const overlayData = layers[0].props.data as {
+      length?: number;
       featureIds?: Uint32Array;
       attributes?: { getRadius?: { value?: Float32Array } };
     };
 
-    expect(Array.from(primaryData.featureIds ?? [])).toEqual([1, 0, 2]);
-    expect(Array.from(primaryData.attributes?.getRadius?.value ?? [])).toEqual([
-      40, 20, 0
+    expect(overlayData.length).toBe(6);
+    expect(Array.from(overlayData.featureIds ?? [])).toEqual([
+      1, 0, 0, 1, 2, 2
     ]);
-    expect(Array.from(secondaryData.featureIds ?? [])).toEqual([0, 1, 2]);
-    expect(
-      Array.from(secondaryData.attributes?.getRadius?.value ?? [])
-    ).toEqual([40, 20, 0]);
+    expect(Array.from(overlayData.attributes?.getRadius?.value ?? [])).toEqual([
+      40, 40, 20, 20, 0, 0
+    ]);
   });
 
   it('separates double proportional symbols in juxtaposition without overlap', () => {

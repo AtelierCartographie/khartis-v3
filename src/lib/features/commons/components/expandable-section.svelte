@@ -241,8 +241,8 @@
 
   .section-title {
     font-weight: 600;
-    font-size: 0.875rem;
-    line-height: 1.125rem;
+    font-size: 1rem;
+    line-height: 1.375rem;
     letter-spacing: 0.16px;
     color: var(--cds-text-primary);
     display: flex;

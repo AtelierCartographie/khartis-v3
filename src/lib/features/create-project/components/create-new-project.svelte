@@ -17,11 +17,13 @@
     type CarbonValueEvent
   } from '$lib/features/commons/utils/carbon-events.utils';
   import { m } from '$lib/paraglide/messages';
+  import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
   import {
     FileUploaderDropContainer,
     FileUploaderItem,
     InlineLoading,
     InlineNotification,
+    Link,
     Loading,
     ProgressBar,
     Tag,
@@ -29,7 +31,12 @@
     TextInput,
     Tile
   } from 'carbon-components-svelte';
-  import { CloudDownload, DocumentBlank, TrashCan } from 'carbon-icons-svelte';
+  import {
+    CloudDownload,
+    DocumentBlank,
+    Launch,
+    TrashCan
+  } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { SvelteSet } from 'svelte/reactivity';
   import ProjectName from './project-name.svelte';
@@ -303,42 +310,48 @@
   </div>
 
   <div class="grid grid-cols-1 gap-7">
-    <div class="url-input-row">
-      <TextInput
-        value={onlineUrlValue}
-        labelText={m.create_project_online_file_link()}
-        placeholder={m.url_placeholder_example()}
-        disabled={createProjectState.newProject.isLoading}
-        on:input={handleOnlineUrlInput}
-        invalid={!!(urlValidation && !urlValidation.isValid)}
-        invalidText={urlValidation?.errors[0] || ''}
-        warn={!!(urlValidation && urlValidation.warnings.length > 0)}
-        warnText={urlValidation?.warnings[0] || ''}
-      />
+    <div class="url-import-block">
+      <div class="url-input-row">
+        <TextInput
+          value={onlineUrlValue}
+          labelText={m.create_project_online_file_link()}
+          placeholder={m.url_placeholder_example()}
+          disabled={createProjectState.newProject.isLoading}
+          on:input={handleOnlineUrlInput}
+          invalid={!!(urlValidation && !urlValidation.isValid)}
+          invalidText={urlValidation?.errors[0] || ''}
+          warn={!!(urlValidation && urlValidation.warnings.length > 0)}
+          warnText={urlValidation?.warnings[0] || ''}
+        />
 
-      <div class:button-loading={createProjectState.newProject.isLoading}>
-        <Button
-          size="field"
-          icon={createProjectState.newProject.isLoading
-            ? undefined
-            : CloudDownload}
-          disabled={!onlineUrlValue.trim() ||
-            (urlValidation && !urlValidation.isValid) ||
-            createProjectState.newProject.isLoading}
-          onclick={handleLoadOnlineFile}
-        >
-          <div class="button-with-loader">
-            {#if createProjectState.newProject.isLoading}
-              <Loading small withOverlay={false} />
-            {/if}
-            <span>
-              {createProjectState.newProject.isLoading
-                ? m.create_project_loading_status()
-                : m.create_project_load()}
-            </span>
-          </div>
-        </Button>
+        <div class:button-loading={createProjectState.newProject.isLoading}>
+          <Button
+            size="field"
+            icon={createProjectState.newProject.isLoading
+              ? undefined
+              : CloudDownload}
+            disabled={!onlineUrlValue.trim() ||
+              (urlValidation && !urlValidation.isValid) ||
+              createProjectState.newProject.isLoading}
+            onclick={handleLoadOnlineFile}
+          >
+            <div class="button-with-loader">
+              {#if createProjectState.newProject.isLoading}
+                <Loading small withOverlay={false} />
+              {/if}
+              <span>
+                {createProjectState.newProject.isLoading
+                  ? m.create_project_loading_status()
+                  : m.create_project_load()}
+              </span>
+            </div>
+          </Button>
+        </div>
       </div>
+
+      <Link href={DOC_LINK.IMPORT_DATA} target="_blank" size="sm" icon={Launch}>
+        {m.basemap_import_learn_more()}
+      </Link>
     </div>
 
     {#if createProjectState.newProject.error}
@@ -827,10 +840,18 @@
     }
   }
 
+  .url-import-block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+    align-items: flex-start;
+  }
+
   .url-input-row {
     display: flex;
     align-items: flex-end;
     gap: var(--cds-spacing-03);
+    width: 100%;
   }
 
   @media (max-width: 672px) {

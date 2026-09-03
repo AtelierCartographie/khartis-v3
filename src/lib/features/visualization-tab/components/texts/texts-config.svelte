@@ -241,12 +241,12 @@
         visualization.style.labelHaloColor ?? DEFAULT_COLORS.halo;
     }
 
-    if (visualization?.missingData) {
-      showMissingData = visualization.missingData.show ?? true;
-      missingDataColor =
-        visualization.missingData.color ?? DEFAULT_COLORS.missingData;
-      missingDataLabel =
-        visualization.missingData.label ?? m.missing_data_text();
+    const missingData =
+      visualization?.text?.missingData ?? visualization?.missingData;
+    if (missingData) {
+      showMissingData = missingData.show ?? true;
+      missingDataColor = missingData.color ?? DEFAULT_COLORS.missingData;
+      missingDataLabel = missingData.label ?? m.missing_data_text();
     }
   });
 

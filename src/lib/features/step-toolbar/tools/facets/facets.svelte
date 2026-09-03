@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
+  import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
   import { Button, Link } from 'carbon-components-svelte';
   import {
     CharacterWholeNumber,
@@ -34,8 +35,6 @@
   import { getFacetSlotVariable } from '$lib/features/commons/utils/facet-visualization-updates';
   import SliderWithInput from '$lib/features/commons/components/viz-controls/visualization-slider-with-input.svelte';
 
-  const FACETS_HELP_URL =
-    'https://www.sciencespo.fr/cartographie/khartis/docs/';
   const CONFIGURE_SECTION_ID = 'configure-visualization';
   const MOBILE_CONFIGURE_TAB_SELECTOR = '[data-viz-sub-tab="configure"]';
   const FACETS_COLUMNS_MIN = 1;
@@ -420,14 +419,24 @@
       {/each}
     </section>
 
-    <Link href={FACETS_HELP_URL} target="_blank" size="sm" icon={Launch}>
+    <Link
+      href={DOC_LINK.MAP_COLLECTIONS}
+      target="_blank"
+      size="sm"
+      icon={Launch}
+    >
       {m.facets_learn_more()}
     </Link>
   {:else}
     <p class="helper-text">{m.facets_collection_description()}</p>
     <p class="helper-text">{m.facets_create_instruction()}</p>
 
-    <Link href={FACETS_HELP_URL} target="_blank" size="sm" icon={Launch}>
+    <Link
+      href={DOC_LINK.MAP_COLLECTIONS}
+      target="_blank"
+      size="sm"
+      icon={Launch}
+    >
       {m.facets_learn_more()}
     </Link>
 
