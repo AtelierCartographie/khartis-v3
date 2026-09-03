@@ -621,9 +621,25 @@ describe('facetsStore', () => {
   });
 
   describe('setColumns', () => {
-    it('should update layout columns', () => {
-      facetsStore.setColumns(4);
-      expect(facetsStore.layout.columns).toBe(4);
+    it('keeps the column count between one and the facet count', () => {
+      facetsStore.restoreFromSerialized({
+        enabled: true,
+        baseVisualizationId: 'base-viz',
+        primarySlotPath: FACET_SLOT.POLYGON_VALUE,
+        variables: ['a', 'b', 'c'],
+        layout: { columns: 2, gap: 16 },
+        scaleMode: SCALE_MODE.INDEPENDENT,
+        generatedVisualizationIds: ['facet-a', 'facet-b', 'facet-c']
+      });
+
+      facetsStore.setColumns(3);
+      expect(facetsStore.layout.columns).toBe(3);
+
+      facetsStore.setColumns(9);
+      expect(facetsStore.layout.columns).toBe(3);
+
+      facetsStore.setColumns(0);
+      expect(facetsStore.layout.columns).toBe(1);
     });
 
     it('should notify persistence', () => {
@@ -669,12 +685,13 @@ describe('facetsStore', () => {
       expect(facetsStore.layout.columns).toBe(1);
     });
 
-    it('should clamp columns to max', () => {
+    it('should clamp columns to the restored facet count', () => {
       facetsStore.restoreFromSerialized({
+        variables: ['a', 'b'],
         layout: { columns: 999, gap: 16 }
       });
 
-      expect(facetsStore.layout.columns).toBe(4);
+      expect(facetsStore.layout.columns).toBe(2);
     });
 
     it('should reject invalid scaleMode and use default', () => {
