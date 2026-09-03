@@ -78,6 +78,10 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+function toRadians(degrees: number): number {
+  return (degrees * Math.PI) / 180;
+}
+
 function toFiniteNumber(value: unknown, fallback: number): number {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
@@ -86,6 +90,11 @@ function toFiniteNumber(value: unknown, fallback: number): number {
   return fallback;
 }
 
+/**
+ * Fraction of the sphere covered by the extent. An orthographic projection can
+ * never outline more than a hemisphere, so this has to be the true spherical
+ * area — a lat/lon rectangle ratio lets extents well past 0.5 through.
+ */
 export function getInsetMapBoundsAreaFraction(
   bounds: InsetMapBounds | null | undefined
 ): number | null {
@@ -95,13 +104,22 @@ export function getInsetMapBoundsAreaFraction(
 
   const north = clamp(toFiniteNumber(bounds.north, 90), -90, 90);
   const south = clamp(toFiniteNumber(bounds.south, -90), -90, 90);
-  const rawLongitudeSpan = Math.abs(
-    toFiniteNumber(bounds.east, 180) - toFiniteNumber(bounds.west, -180)
-  );
-  const longitudeSpan = clamp(rawLongitudeSpan, 0, 360);
-  const latitudeSpan = clamp(north - south, 0, 180);
+  if (north <= south) {
+    return 0;
+  }
 
-  return (longitudeSpan * latitudeSpan) / (360 * 180);
+  const rawLongitudeSpan =
+    toFiniteNumber(bounds.east, 180) - toFiniteNumber(bounds.west, -180);
+  const longitudeSpan = clamp(
+    rawLongitudeSpan <= 0 ? rawLongitudeSpan + 360 : rawLongitudeSpan,
+    0,
+    360
+  );
+
+  const latitudeExtent =
+    Math.sin(toRadians(north)) - Math.sin(toRadians(south));
+
+  return (toRadians(longitudeSpan) * latitudeExtent) / (4 * Math.PI);
 }
 
 export function isInsetMapAvailableForBounds(

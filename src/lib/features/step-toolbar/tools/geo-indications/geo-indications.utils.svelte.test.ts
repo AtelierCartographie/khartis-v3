@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { DistanceUnit } from '$lib/features/commons/constants/ui.constants';
 import {
+  getInsetMapBoundsAreaFraction,
   getInsetMapGeographicBounds,
   getScaleDistanceLimit,
   getScaleMetersPerPixel,
-  getSuggestedScaleDistance
+  getSuggestedScaleDistance,
+  isInsetMapAvailableForBounds
 } from './geo-indications.utils';
 
 describe('geo indications scale utilities', () => {
@@ -158,5 +160,83 @@ describe('geo indications scale utilities', () => {
       east: 30,
       west: -30
     });
+  });
+});
+
+describe('inset map availability', () => {
+  it('measures the extent as a spherical area fraction', () => {
+    expect(
+      getInsetMapBoundsAreaFraction({
+        north: 90,
+        south: -90,
+        east: 180,
+        west: -180
+      })
+    ).toBeCloseTo(1, 6);
+
+    expect(
+      getInsetMapBoundsAreaFraction({
+        north: 90,
+        south: -90,
+        east: 90,
+        west: -90
+      })
+    ).toBeCloseTo(0.5, 6);
+
+    // A polar band spans every longitude but only a sliver of the sphere.
+    expect(
+      getInsetMapBoundsAreaFraction({
+        north: 90,
+        south: 50,
+        east: 180,
+        west: -180
+      })
+    ).toBeCloseTo(0.117, 3);
+  });
+
+  it('spans the antimeridian instead of measuring the complement', () => {
+    expect(
+      getInsetMapBoundsAreaFraction({
+        north: 10,
+        south: -10,
+        east: -170,
+        west: 170
+      })
+    ).toBeCloseTo(
+      getInsetMapBoundsAreaFraction({
+        north: 10,
+        south: -10,
+        east: 20,
+        west: 0
+      }) as number,
+      6
+    );
+  });
+
+  it('rejects an extent larger than a hemisphere', () => {
+    // 250° x 120° centred on the equator: 60% of the sphere, which an
+    // orthographic projection cannot outline.
+    expect(
+      isInsetMapAvailableForBounds({
+        north: 60,
+        south: -60,
+        east: 125,
+        west: -125
+      })
+    ).toBe(false);
+
+    expect(
+      isInsetMapAvailableForBounds({
+        north: 30,
+        south: -30,
+        east: 60,
+        west: -60
+      })
+    ).toBe(true);
+  });
+
+  it('stays available while bounds are unknown', () => {
+    expect(getInsetMapBoundsAreaFraction(null)).toBeNull();
+    expect(isInsetMapAvailableForBounds(null)).toBe(true);
   });
 });
