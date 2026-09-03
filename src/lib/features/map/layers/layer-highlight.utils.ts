@@ -126,12 +126,13 @@ export function isPolygonGeometryType(
   );
 }
 
-export function hasAnyFeatureId(
+export function hasAnyHighlightedFeature(
   featureIds: Uint32Array,
-  candidateFeatureIds: Set<number>
+  resolveRowId: (featureId: number) => number,
+  highlightedRowIds: Set<number>
 ): boolean {
   for (let index = 0; index < featureIds.length; index += 1) {
-    if (candidateFeatureIds.has(featureIds[index])) {
+    if (highlightedRowIds.has(resolveRowId(featureIds[index]))) {
       return true;
     }
   }
