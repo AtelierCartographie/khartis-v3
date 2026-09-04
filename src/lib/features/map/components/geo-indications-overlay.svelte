@@ -40,6 +40,7 @@
     getNorthBearingAtCenter,
     getScaleMetersPerPixel,
     getSuggestedScaleDistance,
+    getInsetMapFrameOutline,
     getInsetMapGeographicBounds,
     INSET_MAP_SIZE_LIMITS,
     isInsetMapAvailableForViewport,
@@ -53,6 +54,7 @@
     Feature,
     FeatureCollection,
     GeoJsonProperties,
+    LineString,
     MultiPolygon,
     Polygon,
     Position
@@ -98,6 +100,7 @@
   const INSET_ZOOM_SCALE = 1.2;
   const INSET_EXTENT_POINT_RADIUS = 4;
   const INSET_EXTENT_MIN_SIZE = 8;
+  const INSET_OUTLINE_MIN_POINTS = 4;
   const INSET_POINT_BOUNDS_EPSILON = 0.000001;
   const INSET_WINDOW_STROKE_MIN = 1.2;
   const INSET_WINDOW_STROKE_MAX = 3;
@@ -113,7 +116,7 @@
     GeoJsonProperties
   >;
   type InsetViewportFeature = Feature<
-    Polygon | MultiPolygon,
+    Polygon | MultiPolygon | LineString,
     GeoJsonProperties
   >;
   type MapBounds = {
@@ -301,12 +304,26 @@
     return normalized === -180 && longitude > 0 ? 180 : normalized;
   }
 
-  function getCurrentMapBounds(): MapBounds | null {
-    const mapBounds = mapInstanceStore.getMapBounds();
-    const bounds = getInsetMapGeographicBounds(mapBounds, {
+  function getMapFramingContext() {
+    return {
       isProjectedCoordinates: projectionStore.isProjectedCoordinates,
       projection: projectionStore.renderProjection
-    });
+    };
+  }
+
+  function getCurrentFrameOutline(): Position[] | null {
+    return getInsetMapFrameOutline(
+      mapInstanceStore.getMapBounds(),
+      getMapFramingContext()
+    );
+  }
+
+  function getCurrentMapBounds(): MapBounds | null {
+    const mapBounds = mapInstanceStore.getMapBounds();
+    const bounds = getInsetMapGeographicBounds(
+      mapBounds,
+      getMapFramingContext()
+    );
     if (!bounds) {
       return null;
     }
@@ -354,7 +371,21 @@
     };
   }
 
-  function buildViewportFeature(bounds: MapBounds): InsetViewportFeature {
+  function buildViewportFeature(
+    bounds: MapBounds,
+    outline: Position[] | null
+  ): InsetViewportFeature {
+    if (outline && outline.length >= INSET_OUTLINE_MIN_POINTS) {
+      return {
+        type: GEOJSON_TYPE.FEATURE,
+        properties: EMPTY_GEOJSON_PROPERTIES,
+        geometry: {
+          type: GEOJSON_TYPE.LINE_STRING,
+          coordinates: [...outline, outline[0]]
+        }
+      };
+    }
+
     if (bounds.east >= bounds.west) {
       return {
         type: GEOJSON_TYPE.FEATURE,
@@ -726,7 +757,9 @@
       .map((feature) => path(feature))
       .filter((candidate): candidate is string => Boolean(candidate));
 
-    const viewportFeature = mapBounds ? buildViewportFeature(mapBounds) : null;
+    const viewportFeature = mapBounds
+      ? buildViewportFeature(mapBounds, getCurrentFrameOutline())
+      : null;
     const viewportProjectedBounds = viewportFeature
       ? path.bounds(viewportFeature)
       : null;
