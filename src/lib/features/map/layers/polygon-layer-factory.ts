@@ -734,6 +734,7 @@ export function createPolygonLayerStack(
 
       const selectionOverlay = createHighlightedBinaryPolygonOverlay(
         layerId,
+        jsTable,
         outlineData,
         polyHighlightedRowIds,
         hlVersion,

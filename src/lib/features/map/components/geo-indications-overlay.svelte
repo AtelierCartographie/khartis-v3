@@ -40,9 +40,10 @@
     getNorthBearingAtCenter,
     getScaleMetersPerPixel,
     getSuggestedScaleDistance,
+    getInsetMapFrameOutline,
     getInsetMapGeographicBounds,
     INSET_MAP_SIZE_LIMITS,
-    isInsetMapAvailableForBounds,
+    isInsetMapAvailableForViewport,
     SCALE_MAX_WIDTH_PX,
     toDistanceMeters
   } from '$lib/features/step-toolbar/tools/geo-indications';
@@ -53,8 +54,10 @@
     Feature,
     FeatureCollection,
     GeoJsonProperties,
+    LineString,
     MultiPolygon,
-    Polygon
+    Polygon,
+    Position
   } from 'geojson';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import {
@@ -66,13 +69,10 @@
     createDraggablePageItemController
   } from '../utils/use-draggable-page-item';
   import { getKeyboardMoveDelta } from '../utils/keyboard-position.utils';
-  import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
   import { getLegendState } from '$lib/features/step-toolbar/tools/legend';
   import * as m from '$lib/paraglide/messages';
   import { GEOJSON_TYPE } from '$lib/features/commons/constants';
-  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { readGeoParquetViaDuckDB } from '../services/read-geojson-arrow.service';
-  import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
+  import { loadWorldLandGeometry } from '$lib/features/commons/utils/world-land-geometry';
   import {
     getDefaultInsetStyle,
     getDefaultOrientationStyle,
@@ -95,13 +95,12 @@
     { length: SCALE_SEGMENT_COUNT },
     (_, index) => index
   );
-  const INSET_MAP_DATA_PATH =
-    '/basemaps/geometry/monde-countries-2024-low.parquet';
   const INSET_MAP_PADDING = 4;
   const INSET_MAP_WORLD_SPAN_EPSILON = 359.5;
   const INSET_ZOOM_SCALE = 1.2;
   const INSET_EXTENT_POINT_RADIUS = 4;
   const INSET_EXTENT_MIN_SIZE = 8;
+  const INSET_OUTLINE_MIN_POINTS = 4;
   const INSET_POINT_BOUNDS_EPSILON = 0.000001;
   const INSET_WINDOW_STROKE_MIN = 1.2;
   const INSET_WINDOW_STROKE_MAX = 3;
@@ -117,7 +116,7 @@
     GeoJsonProperties
   >;
   type InsetViewportFeature = Feature<
-    Polygon | MultiPolygon,
+    Polygon | MultiPolygon | LineString,
     GeoJsonProperties
   >;
   type MapBounds = {
@@ -139,6 +138,7 @@
     windowStrokeWidth: number;
   };
 
+  const SPHERE_HALF_AREA_STERADIANS = 2 * Math.PI;
   const WORLD_SPHERE: GeoPermissibleObjects = { type: 'Sphere' };
   const INSET_GRATICULE = d3geo.geoGraticule().step([20, 20])();
   const EMPTY_GEOJSON_PROPERTIES: GeoJsonProperties = {};
@@ -152,24 +152,9 @@
 
   async function loadWorldFeatures(generation: number): Promise<void> {
     try {
-      await duckDBOrchestrator.waitForInitialization();
-      const response = await fetch(resolveStaticAssetUrl(INSET_MAP_DATA_PATH));
-      if (!response.ok) {
-        return;
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      const arrowTable = await readGeoParquetViaDuckDB(
-        arrayBuffer,
-        'inset_world_countries'
-      );
-      const geoInfo = extractGeometryInfo(arrowTable);
-      if (!geoInfo) {
-        return;
-      }
-      const geojson = arrowTableToGeoJSON(arrowTable, geoInfo.geoColumn);
-      if (generation === worldFeaturesLoadGeneration && geojson) {
-        worldFeatures = toWorldFeatureCollection(geojson);
+      const geometry = await loadWorldLandGeometry();
+      if (generation === worldFeaturesLoadGeneration && geometry) {
+        worldFeatures = toWorldFeatureCollection(geometry.land);
       }
     } catch (error) {
       if (generation === worldFeaturesLoadGeneration) {
@@ -258,7 +243,60 @@
       return null;
     }
 
-    return payload as WorldFeatureCollection;
+    const collection = payload as WorldFeatureCollection;
+    return {
+      ...collection,
+      features: collection.features.map(rewindFeatureForSphericalClip)
+    };
+  }
+
+  /**
+   * d3-geo's spherical clip reads a counterclockwise exterior ring — the
+   * GeoJSON RFC 7946 winding of the catalog basemaps — as the complement of the
+   * polygon, so each country would paint the whole visible hemisphere.
+   */
+  function rewindFeatureForSphericalClip(
+    feature: WorldFeatureCollection['features'][number]
+  ): WorldFeatureCollection['features'][number] {
+    const { geometry } = feature;
+    if (!geometry) {
+      return feature;
+    }
+
+    if (geometry.type === GEOJSON_TYPE.POLYGON) {
+      const rewound = rewindPolygonRings(geometry.coordinates);
+      return rewound === geometry.coordinates
+        ? feature
+        : { ...feature, geometry: { ...geometry, coordinates: rewound } };
+    }
+
+    if (geometry.type === GEOJSON_TYPE.MULTI_POLYGON) {
+      let didRewind = false;
+      const coordinates = geometry.coordinates.map((rings) => {
+        const rewound = rewindPolygonRings(rings);
+        if (rewound !== rings) {
+          didRewind = true;
+        }
+        return rewound;
+      });
+
+      return didRewind
+        ? { ...feature, geometry: { ...geometry, coordinates } }
+        : feature;
+    }
+
+    return feature;
+  }
+
+  function rewindPolygonRings(rings: Position[][]): Position[][] {
+    const area = d3geo.geoArea({
+      type: GEOJSON_TYPE.POLYGON,
+      coordinates: rings
+    });
+
+    return area > SPHERE_HALF_AREA_STERADIANS
+      ? rings.map((ring) => [...ring].reverse())
+      : rings;
   }
 
   function normalizeLongitude(longitude: number): number {
@@ -266,12 +304,26 @@
     return normalized === -180 && longitude > 0 ? 180 : normalized;
   }
 
-  function getCurrentMapBounds(): MapBounds | null {
-    const mapBounds = mapInstanceStore.getMapBounds();
-    const bounds = getInsetMapGeographicBounds(mapBounds, {
+  function getMapFramingContext() {
+    return {
       isProjectedCoordinates: projectionStore.isProjectedCoordinates,
       projection: projectionStore.renderProjection
-    });
+    };
+  }
+
+  function getCurrentFrameOutline(): Position[] | null {
+    return getInsetMapFrameOutline(
+      mapInstanceStore.getMapBounds(),
+      getMapFramingContext()
+    );
+  }
+
+  function getCurrentMapBounds(): MapBounds | null {
+    const mapBounds = mapInstanceStore.getMapBounds();
+    const bounds = getInsetMapGeographicBounds(
+      mapBounds,
+      getMapFramingContext()
+    );
     if (!bounds) {
       return null;
     }
@@ -319,7 +371,21 @@
     };
   }
 
-  function buildViewportFeature(bounds: MapBounds): InsetViewportFeature {
+  function buildViewportFeature(
+    bounds: MapBounds,
+    outline: Position[] | null
+  ): InsetViewportFeature {
+    if (outline && outline.length >= INSET_OUTLINE_MIN_POINTS) {
+      return {
+        type: GEOJSON_TYPE.FEATURE,
+        properties: EMPTY_GEOJSON_PROPERTIES,
+        geometry: {
+          type: GEOJSON_TYPE.LINE_STRING,
+          coordinates: [...outline, outline[0]]
+        }
+      };
+    }
+
     if (bounds.east >= bounds.west) {
       return {
         type: GEOJSON_TYPE.FEATURE,
@@ -691,7 +757,9 @@
       .map((feature) => path(feature))
       .filter((candidate): candidate is string => Boolean(candidate));
 
-    const viewportFeature = mapBounds ? buildViewportFeature(mapBounds) : null;
+    const viewportFeature = mapBounds
+      ? buildViewportFeature(mapBounds, getCurrentFrameOutline())
+      : null;
     const viewportProjectedBounds = viewportFeature
       ? path.bounds(viewportFeature)
       : null;
@@ -701,12 +769,14 @@
     const viewportHeight = viewportProjectedBounds
       ? viewportProjectedBounds[1][1] - viewportProjectedBounds[0][1]
       : 0;
+    // Only a framing too small in both directions is unreadable as an
+    // outline; a flat or narrow one still says where the map looks.
     const shouldRenderViewportPoint =
       !!mapBounds &&
       (!Number.isFinite(viewportWidth) ||
         !Number.isFinite(viewportHeight) ||
-        viewportWidth < INSET_EXTENT_MIN_SIZE ||
-        viewportHeight < INSET_EXTENT_MIN_SIZE);
+        (viewportWidth < INSET_EXTENT_MIN_SIZE &&
+          viewportHeight < INSET_EXTENT_MIN_SIZE));
     const viewportPath =
       viewportFeature && !shouldRenderViewportPoint
         ? path(viewportFeature)
@@ -745,7 +815,10 @@
     void _deckViewState;
     void _zoomLevel;
 
-    return isInsetMapAvailableForBounds(getCurrentMapBounds());
+    return isInsetMapAvailableForViewport(mapInstanceStore.getMapBounds(), {
+      isProjectedCoordinates: projectionStore.isProjectedCoordinates,
+      projection: projectionStore.renderProjection
+    });
   });
 
   $effect(() => {
