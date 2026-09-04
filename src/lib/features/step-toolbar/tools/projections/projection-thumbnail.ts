@@ -10,7 +10,7 @@ import {
   fitProjectionToBbox,
   isGlobalBbox
 } from '$lib/features/commons/utils/projection.utils';
-import type { ThumbnailGeometry } from '$lib/features/commons/utils/projection-thumbnail-geometry';
+import type { WorldLandGeometry } from '$lib/features/commons/utils/world-land-geometry';
 import { proj4d3 } from '$lib/features/map/utils/proj4d3.utils';
 import {
   isUsableProjection,
@@ -49,7 +49,7 @@ function evictOldestPathCacheEntries(): void {
 
 export function getThumbnailPaths(
   suggestion: ProjectionSuggestion,
-  geometry: ThumbnailGeometry | null
+  geometry: WorldLandGeometry | null
 ): ThumbnailPaths {
   const signature = getSignature(suggestion);
   let entry = pathCache.get(signature);

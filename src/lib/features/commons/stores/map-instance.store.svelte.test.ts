@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
     referenceBbox: null as [number, number, number, number] | null,
     canvasSize: { width: 800, height: 600 },
     fitPaddingPx: 0,
+    renderScale: 1,
     isProjectedCoordinates: false
   }
 }));
@@ -114,6 +115,7 @@ describe('mapInstanceStore map zoom bounds', () => {
     mocks.projectionStoreMock.referenceBbox = null;
     mocks.projectionStoreMock.canvasSize = { width: 800, height: 600 };
     mocks.projectionStoreMock.fitPaddingPx = 0;
+    mocks.projectionStoreMock.renderScale = 1;
     mocks.projectionStoreMock.isProjectedCoordinates = false;
     mocks.getBboxCenterMock.mockReturnValue([0, 0]);
     mocks.getMaxScaleMock.mockReturnValue(1);
@@ -121,6 +123,7 @@ describe('mapInstanceStore map zoom bounds', () => {
       referenceBbox: mocks.projectionStoreMock.referenceBbox,
       canvasSize: mocks.projectionStoreMock.canvasSize,
       fitPaddingPx: mocks.projectionStoreMock.fitPaddingPx,
+      renderScale: mocks.projectionStoreMock.renderScale,
       isProjectedCoordinates: mocks.projectionStoreMock.isProjectedCoordinates
     }));
     mapInstanceStore.reset();
@@ -232,6 +235,31 @@ describe('mapInstanceStore map zoom bounds', () => {
       east: 110,
       west: -90
     });
+  });
+
+  it('keeps visible bounds independent of the page zoom', () => {
+    const { deck } = createDeckMock();
+
+    mocks.projectionStoreMock.referenceBbox = [-200, -100, 200, 100];
+    mocks.projectionStoreMock.canvasSize = { width: 800, height: 600 };
+    mocks.getBboxCenterMock.mockReturnValue([0, 0]);
+    mocks.getMaxScaleMock.mockReturnValue(2);
+
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+
+    // Zooming the page doubles the render scale, and the Deck target follows
+    // it because the view state lives in scaled device pixels. The framing has
+    // not moved, so the visible extent must come back identical.
+    mocks.projectionStoreMock.renderScale = 1;
+    mapInstanceStore.updateDeckViewState({ target: [20, -10, 0], zoom: 1 });
+    const atPageZoom100 = mapInstanceStore.getDeckMapBounds();
+
+    mocks.projectionStoreMock.renderScale = 2;
+    mapInstanceStore.updateDeckViewState({ target: [40, -20, 0], zoom: 1 });
+    const atPageZoom200 = mapInstanceStore.getDeckMapBounds();
+
+    expect(atPageZoom200).toEqual(atPageZoom100);
   });
 
   it('keeps orthographic auto-fit at neutral zoom after MapLibre base zoom changes', () => {

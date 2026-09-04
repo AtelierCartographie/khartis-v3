@@ -14,10 +14,11 @@ import {
 } from '../utils/geoarrow-stream-bridge.utils';
 import type { DeckDataRow, LayerContext } from '../types';
 import {
-  hasAnyFeatureId,
+  hasAnyHighlightedFeature,
   isPolygonGeometryType,
   resolveGeoJsonFeatureRowId
 } from './layer-highlight.utils';
+import { createSplitAwareRowAccessor } from './split-rendering-accessors';
 import {
   getCachedGeoJSON,
   getCachedProjectedGeoJSON
@@ -102,31 +103,53 @@ export function createHighlightedPolygonOverlay(
 
 export function createHighlightedBinaryPolygonOverlay(
   layerId: string,
+  jsTable: ArrowTable,
   outlineData: BinaryPathData,
   highlightedRowIds: Set<number> | undefined,
   highlightVersion: number,
-  ctx: Pick<LayerContext, 'modelMatrix' | 'beforeId'>
+  ctx: LayerContext
 ): Layer<DeckDataRow> | null {
   if (
     !highlightedRowIds ||
     highlightedRowIds.size === 0 ||
-    outlineData.length === 0 ||
-    !hasAnyFeatureId(outlineData.featureIds, highlightedRowIds)
+    outlineData.length === 0
   ) {
     return null;
   }
+
+  // Binary featureIds index the geometry table; highlights carry dataset row ids.
+  const resolveRowId = createSplitAwareRowAccessor(ctx, jsTable, (row) =>
+    Number(row[INTERNAL_COLUMN.ID])
+  );
+
+  if (
+    !hasAnyHighlightedFeature(
+      outlineData.featureIds,
+      resolveRowId,
+      highlightedRowIds
+    )
+  ) {
+    return null;
+  }
+
+  const isHighlighted = (featureId: number) =>
+    highlightedRowIds.has(resolveRowId(featureId));
 
   const strokePathProps = createPathLayerProps(outlineData);
   const strokeBinaryData = strokePathProps.data as {
     attributes: Record<string, unknown>;
   };
-  strokeBinaryData.attributes.getColor = pathColorAttr(outlineData, (rowId) =>
-    highlightedRowIds.has(rowId)
-      ? SELECTED_POLYGON_STROKE_COLOR
-      : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR
+  strokeBinaryData.attributes.getColor = pathColorAttr(
+    outlineData,
+    (featureId) =>
+      isHighlighted(featureId)
+        ? SELECTED_POLYGON_STROKE_COLOR
+        : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR
   );
-  strokeBinaryData.attributes.getWidth = pathWidthAttr(outlineData, (rowId) =>
-    highlightedRowIds.has(rowId) ? SELECTED_POLYGON_STROKE_WIDTH : 0
+  strokeBinaryData.attributes.getWidth = pathWidthAttr(
+    outlineData,
+    (featureId) =>
+      isHighlighted(featureId) ? SELECTED_POLYGON_STROKE_WIDTH : 0
   );
 
   return new PathLayer({

@@ -278,9 +278,15 @@ function createMapInstanceStore() {
     const zoomScale = Math.pow(2, state.deckViewState.zoom);
     if (!Number.isFinite(zoomScale) || zoomScale <= 0) return null;
 
+    // The deck view state is expressed in scaled device pixels while
+    // `canvasSize` stays in logical page units, so the page zoom would
+    // otherwise shrink or widen a framing that has not moved.
+    const renderScale = ctx.renderScale ?? 1;
+    if (!Number.isFinite(renderScale) || renderScale <= 0) return null;
+
     const target = normalizeTarget(state.deckViewState.target);
-    const halfWidth = ctx.canvasSize.width / zoomScale / 2;
-    const halfHeight = ctx.canvasSize.height / zoomScale / 2;
+    const halfWidth = (ctx.canvasSize.width * renderScale) / zoomScale / 2;
+    const halfHeight = (ctx.canvasSize.height * renderScale) / zoomScale / 2;
     const corners = [
       worldToData([target[0] - halfWidth, target[1] - halfHeight, 0]),
       worldToData([target[0] + halfWidth, target[1] - halfHeight, 0]),

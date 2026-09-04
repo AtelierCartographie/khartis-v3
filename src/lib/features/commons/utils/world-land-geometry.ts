@@ -4,38 +4,38 @@ import type { FeatureCollection } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
 
-const THUMBNAIL_GEOMETRY_PATH = '/basemaps/geometry/world-110m-land-line.json';
+const WORLD_LAND_GEOMETRY_PATH = '/basemaps/geometry/world-110m-land-line.json';
 
-export interface ThumbnailGeometry {
+export interface WorldLandGeometry {
   land: FeatureCollection;
   borders: FeatureCollection;
 }
 
-let cache: ThumbnailGeometry | null = null;
-let inflight: Promise<ThumbnailGeometry | null> | null = null;
+let cache: WorldLandGeometry | null = null;
+let inflight: Promise<WorldLandGeometry | null> | null = null;
 
-export function getThumbnailGeometrySync(): ThumbnailGeometry | null {
+export function getWorldLandGeometrySync(): WorldLandGeometry | null {
   return cache;
 }
 
-export function loadThumbnailGeometry(): Promise<ThumbnailGeometry | null> {
+export function loadWorldLandGeometry(): Promise<WorldLandGeometry | null> {
   if (cache) {
     return Promise.resolve(cache);
   }
-  inflight ??= fetchThumbnailGeometry().finally(() => {
+  inflight ??= fetchWorldLandGeometry().finally(() => {
     inflight = null;
   });
   return inflight;
 }
 
-async function fetchThumbnailGeometry(): Promise<ThumbnailGeometry | null> {
+async function fetchWorldLandGeometry(): Promise<WorldLandGeometry | null> {
   try {
     const response = await fetch(
-      resolveStaticAssetUrl(THUMBNAIL_GEOMETRY_PATH)
+      resolveStaticAssetUrl(WORLD_LAND_GEOMETRY_PATH)
     );
     if (!response.ok) {
       logger.error(
-        `Projection thumbnail geometry fetch failed (${response.status})`,
+        `World land geometry fetch failed (${response.status})`,
         LogCategory.MAP
       );
       return null;
@@ -46,7 +46,7 @@ async function fetchThumbnailGeometry(): Promise<ThumbnailGeometry | null> {
     const rawLines = topology.objects.line;
     if (!rawLand || !rawLines) {
       logger.error(
-        'Projection thumbnail topology is missing land/line objects',
+        'World land topology is missing land/line objects',
         LogCategory.MAP
       );
       return null;
@@ -58,11 +58,7 @@ async function fetchThumbnailGeometry(): Promise<ThumbnailGeometry | null> {
     };
     return cache;
   } catch (error) {
-    logger.error(
-      'Failed to load projection thumbnail geometry',
-      LogCategory.MAP,
-      error
-    );
+    logger.error('Failed to load world land geometry', LogCategory.MAP, error);
     return null;
   }
 }

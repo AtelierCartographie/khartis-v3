@@ -2205,7 +2205,7 @@ describe('createPolygonLayers', () => {
     expect(loggerWarn).not.toHaveBeenCalled();
   });
 
-  it('renders binary polygon selection overlays without GeoJSON conversion', () => {
+  it('resolves binary selection overlay features through their row id, not their index', () => {
     parseSolidPolygonsMock.mockReturnValue({
       featureIds: new Uint32Array([0, 1])
     });
@@ -2251,8 +2251,10 @@ describe('createPolygonLayers', () => {
       classification: undefined
     };
 
+    // Row ids are 1-based, so highlighting id 2 must light the feature at
+    // index 1 — matching featureIds against row ids picks the wrong entity.
     const layers = createPolygonLayers(
-      createTableWithRows([{}, {}], []),
+      createTableWithRows([{ __id: 1 }, { __id: 2 }], ['__id']),
       {
         ...createGeometryInfo(),
         encoding: 'geoarrow.polygon',
@@ -2262,7 +2264,7 @@ describe('createPolygonLayers', () => {
       {
         ...createContext(visualization),
         customProjection: undefined,
-        highlightedRowIds: new Set([1])
+        highlightedRowIds: new Set([2])
       }
     );
 
