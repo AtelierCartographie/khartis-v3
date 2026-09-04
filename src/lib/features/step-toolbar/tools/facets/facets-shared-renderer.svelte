@@ -919,6 +919,9 @@
             class="facet-map-frame"
             style:width="{descriptor.frame.width}px"
             style:height="{descriptor.frame.height}px"
+            style:border={layout.frameVisible
+              ? `${layout.frameThickness}px solid ${layout.frameColor}`
+              : 'none'}
           >
             {#if showAnchoredLegends}
               <LegendOverlay
@@ -985,7 +988,6 @@
   .facet-map-frame {
     position: relative;
     box-sizing: border-box;
-    border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
   }
 
   .facet-title-input {

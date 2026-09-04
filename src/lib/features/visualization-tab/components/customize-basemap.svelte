@@ -319,11 +319,12 @@
 <section id="customize-basemap">
   <MainToolBarHeader title={m.step3_title()} icon={PaintBrush} showDivider />
 
-  {#if !isTiledBasemapEnabled && !currentMetadata}
-    <div class="content-area">
+  <div class="content-area">
+    <p class="kh-help">{m.step3_helper()}</p>
+    {#if !isTiledBasemapEnabled && !currentMetadata}
       <p class="kh-help">{m.step3_description()}</p>
-    </div>
-  {/if}
+    {/if}
+  </div>
 
   <div
     class="layers-list"
@@ -368,6 +369,9 @@
   }
 
   .content-area {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
     padding: 16px 16px 8px 16px;
   }
 

@@ -99,7 +99,6 @@
   let deleteModalOpen = $state(false);
   let deleteFilteredModalOpen = $state(false);
   let filteredRowsToDelete = $state(0);
-  let warningsNotificationDismissed = $state(false);
   let variableTypesNotificationDismissed = $state(false);
   let isModalOpen = $state(false);
   let isDeleteMode = $state(false);
@@ -109,7 +108,6 @@
     void selectedDataset?.id;
     selectedRowIds = [];
     isDeleteMode = false;
-    warningsNotificationDismissed = false;
     variableTypesNotificationDismissed = false;
   });
 
@@ -154,12 +152,6 @@
       ) || null
     );
   });
-
-  const hasNullableColumns = $derived(
-    processedDataset
-      ? processedDataset.columns.some((col) => col.nullable === true)
-      : false
-  );
 
   let forceRefreshKey = $state(0);
 
@@ -891,14 +883,13 @@
     />
   {/if}
 
-  {#if hasNullableColumns && !warningsNotificationDismissed}
+  {#if isDeleteMode}
     <InlineNotification
-      title={m.data_control_nullable_title()}
-      subtitle={m.data_control_nullable_subtitle()}
-      kind="warning"
+      title={m.data_control_delete_mode_title()}
+      subtitle={m.data_control_delete_mode_subtitle()}
+      kind="info"
       lowContrast
-      hideCloseButton={false}
-      on:close={() => (warningsNotificationDismissed = true)}
+      hideCloseButton
     />
   {/if}
 

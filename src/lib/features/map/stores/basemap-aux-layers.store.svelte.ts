@@ -148,6 +148,7 @@ function createBasemapAuxLayersStore() {
   return {
     isVisible,
     setVisible,
+    reset,
     getStyle,
     updateStyle,
     clearStyle,
@@ -168,10 +169,5 @@ persistenceRegistry.register<SerializedAuxLayers>({
   priority: SavePriority.DEBOUNCED,
   serialize: () => basemapAuxLayersStore.serialize(),
   deserialize: (data) => basemapAuxLayersStore.deserialize(data),
-  reset: () => {
-    // Intentionally a no-op: state lifecycle is fully driven by deserialize.
-    // The registry resetAll() runs after deserialize during project load,
-    // so doing a hard reset here would wipe the value we just restored.
-    // A fresh project triggers deserialize(undefined) which clears state.
-  }
+  reset: () => basemapAuxLayersStore.reset()
 });
