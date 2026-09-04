@@ -252,6 +252,51 @@ function getMinimalLongitudeBounds(
   };
 }
 
+function intersectRange(
+  from: number,
+  to: number,
+  low: number,
+  high: number
+): [number, number] | null {
+  const start = Math.max(Math.min(from, to), Math.min(low, high));
+  const end = Math.min(Math.max(from, to), Math.max(low, high));
+  if (end < start) {
+    return null;
+  }
+
+  return from <= to ? [start, end] : [end, start];
+}
+
+/**
+ * A composite projection draws only inside its sub-projections' screen
+ * extents and `invert` answers nothing outside them, so a viewport wider than
+ * the cell inverts to no point at all. What the reader frames is the viewport
+ * cut down to the mainland cell — the anchor the scale bar already uses.
+ */
+function clipBoundsToProjectionFrame(
+  bounds: InsetMapBounds,
+  projection: unknown
+): InsetMapBounds | null {
+  const screenExtent = getCompositeMainland(projection)?.screenExtent;
+  if (!isScreenExtent(screenExtent)) {
+    return bounds;
+  }
+
+  const [[minX, minY], [maxX, maxY]] = screenExtent;
+  const horizontal = intersectRange(bounds.west, bounds.east, minX, maxX);
+  const vertical = intersectRange(bounds.north, bounds.south, minY, maxY);
+  if (!horizontal || !vertical) {
+    return null;
+  }
+
+  return {
+    west: horizontal[0],
+    east: horizontal[1],
+    north: vertical[0],
+    south: vertical[1]
+  };
+}
+
 export function getInsetMapGeographicBounds(
   bounds: InsetMapBounds | null | undefined,
   context: InsetMapBoundsProjectionContext = {}
@@ -265,7 +310,12 @@ export function getInsetMapGeographicBounds(
     return bounds;
   }
 
-  const geographicPoints = sampleProjectedBoundsEdge(bounds)
+  const framedBounds = clipBoundsToProjectionFrame(bounds, projection);
+  if (!framedBounds) {
+    return null;
+  }
+
+  const geographicPoints = sampleProjectedBoundsEdge(framedBounds)
     .map((point) => projection.invert(point))
     .filter(isValidLongitudeLatitudePair);
 
@@ -355,6 +405,17 @@ function isPlanarProjection(
   candidate: unknown
 ): candidate is PlanarProjectionLike {
   return typeof candidate === 'function';
+}
+
+function isScreenExtent(
+  candidate: unknown
+): candidate is CompositeScreenExtent {
+  return (
+    Array.isArray(candidate) &&
+    candidate.length === 2 &&
+    isFinitePoint(candidate[0]) &&
+    isFinitePoint(candidate[1])
+  );
 }
 
 let sphereSamples: [number, number][] | null = null;
@@ -542,10 +603,15 @@ function getBoundsMetersPerPixelAtCenter(
   );
 }
 
+type CompositeScreenExtent = [[number, number], [number, number]];
+
 type CompositeSubProjectionLike = {
   id: string;
   bounds: [number, number, number, number];
+  screenExtent?: CompositeScreenExtent;
 };
+
+const MAINLAND_SUB_PROJECTION_ID = 'mainland';
 
 function getCompositeSubProjections(
   projection: unknown
@@ -567,18 +633,30 @@ function getCompositeSubProjections(
 // anchor on the mainland: forward-project two points 1° apart at the mainland
 // center to get meters-per-d3-pixel there, then scale by the (uniform)
 // d3-pixel-per-screen-pixel ratio.
+function getCompositeMainland(
+  projection: unknown
+): CompositeSubProjectionLike | null {
+  const entries = getCompositeSubProjections(projection);
+  if (!entries) {
+    return null;
+  }
+
+  return (
+    entries.find((entry) => entry.id === MAINLAND_SUB_PROJECTION_ID) ??
+    entries[0]
+  );
+}
+
 function getCompositeMainlandMetersPerPixel(
   projection: unknown,
   screenToDataScale: number
 ): number | null {
-  const entries = getCompositeSubProjections(projection);
-  if (!entries || typeof projection !== 'function') {
+  const mainland = getCompositeMainland(projection);
+  if (!mainland || typeof projection !== 'function') {
     return null;
   }
 
-  const mainland =
-    entries.find((entry) => entry.id === 'mainland') ?? entries[0];
-  const bounds = mainland?.bounds;
+  const bounds = mainland.bounds;
   if (!Array.isArray(bounds) || bounds.length < 4) {
     return null;
   }

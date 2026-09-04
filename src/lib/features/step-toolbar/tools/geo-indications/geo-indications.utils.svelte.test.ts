@@ -11,6 +11,48 @@ import {
   isInsetMapAvailableForViewport
 } from './geo-indications.utils';
 
+// A composite projection draws only inside each sub-projection's screen
+// extent: `invert` answers null everywhere else, exactly like the France and
+// Europe DOM-TOM presets.
+function createCompositeProjection() {
+  const MAINLAND_EXTENT: [[number, number], [number, number]] = [
+    [-50, 410],
+    [100, 515]
+  ];
+
+  const isInside = (
+    [x, y]: [number, number],
+    [[minX, minY], [maxX, maxY]]: [[number, number], [number, number]]
+  ) => x >= minX && x <= maxX && y >= minY && y <= maxY;
+
+  const composite = ((coordinates: [number, number]) => {
+    const projected: [number, number] = [
+      coordinates[0] * 10,
+      coordinates[1] * 10
+    ];
+    return isInside(projected, MAINLAND_EXTENT) ? projected : null;
+  }) as ((coordinates: [number, number]) => [number, number] | null) & {
+    invert: (point: [number, number]) => [number, number] | null;
+    getSubProjections: () => Array<{
+      id: string;
+      bounds: [number, number, number, number];
+      screenExtent: [[number, number], [number, number]];
+    }>;
+  };
+
+  composite.invert = (point) =>
+    isInside(point, MAINLAND_EXTENT) ? [point[0] / 10, point[1] / 10] : null;
+  composite.getSubProjections = () => [
+    {
+      id: 'mainland',
+      bounds: [-5, 41, 10, 51.5],
+      screenExtent: MAINLAND_EXTENT
+    }
+  ];
+
+  return composite;
+}
+
 describe('geo indications scale utilities', () => {
   it('uses the 1/2/4/5/10 nice-distance sequence for projected coordinates', () => {
     const context = {
@@ -162,6 +204,52 @@ describe('geo indications scale utilities', () => {
       east: 30,
       west: -30
     });
+  });
+
+  it('frames a composite basemap on its mainland cell, not on the whole viewport', () => {
+    // The page is wider than the cell the composite draws in, so every point
+    // of the viewport rectangle sits outside every screen extent and inverts
+    // to nothing. The framing has to come from the cell the reader sees.
+    const bounds = getInsetMapGeographicBounds(
+      { north: 900, south: -400, east: 800, west: -700 },
+      {
+        isProjectedCoordinates: true,
+        projection: createCompositeProjection()
+      }
+    );
+
+    expect(bounds).not.toBeNull();
+    expect(bounds?.west).toBeCloseTo(-5, 6);
+    expect(bounds?.east).toBeCloseTo(10, 6);
+    expect(bounds?.south).toBeCloseTo(41, 6);
+    expect(bounds?.north).toBeCloseTo(51.5, 6);
+  });
+
+  it('keeps the viewport framing when it is narrower than the mainland cell', () => {
+    const bounds = getInsetMapGeographicBounds(
+      { north: 500, south: 430, east: 60, west: -20 },
+      {
+        isProjectedCoordinates: true,
+        projection: createCompositeProjection()
+      }
+    );
+
+    expect(bounds?.west).toBeCloseTo(-2, 6);
+    expect(bounds?.east).toBeCloseTo(6, 6);
+    expect(bounds?.south).toBeCloseTo(43, 6);
+    expect(bounds?.north).toBeCloseTo(50, 6);
+  });
+
+  it('reports no framing when the viewport left the mainland cell', () => {
+    expect(
+      getInsetMapGeographicBounds(
+        { north: 900, south: 700, east: 800, west: 400 },
+        {
+          isProjectedCoordinates: true,
+          projection: createCompositeProjection()
+        }
+      )
+    ).toBeNull();
   });
 });
 
