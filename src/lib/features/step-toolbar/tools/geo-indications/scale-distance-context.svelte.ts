@@ -3,6 +3,16 @@ import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.stor
 import { osmBasemapStore, projectionStore } from '$lib/features/map';
 import type { ScaleDistanceContext } from './geo-indications.utils';
 
+function renderedCanvasSize(): { width: number; height: number } {
+  const { canvasSize, renderScale } = projectionStore;
+  const scale =
+    Number.isFinite(renderScale) && renderScale > 0 ? renderScale : 1;
+  return {
+    width: canvasSize.width * scale,
+    height: canvasSize.height * scale
+  };
+}
+
 export function getCurrentScaleDistanceContext(): ScaleDistanceContext {
   const usesTiledBasemap =
     basemapStyleStore.requiresMapLibre || osmBasemapStore.isActive;
@@ -19,7 +29,10 @@ export function getCurrentScaleDistanceContext(): ScaleDistanceContext {
       : mapInstanceStore.currentZoom,
     centerLatitude: center?.lat ?? null,
     bounds: useDeckContext ? deckBounds : mapInstanceStore.getMapBounds(),
-    canvasSize: projectionStore.canvasSize,
+    // The bar is drawn unscaled, so its ground distance is measured per
+    // rendered pixel — the page zoom does change how much ground one pixel
+    // covers, unlike the framing the bounds describe.
+    canvasSize: renderedCanvasSize(),
     isProjectedCoordinates: projectionStore.isProjectedCoordinates,
     projection: projectionStore.renderProjection
   };
