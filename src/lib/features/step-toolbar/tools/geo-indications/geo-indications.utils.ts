@@ -196,25 +196,27 @@ function normalizeLongitude(longitude: number): number {
   return normalized === -180 && longitude > 0 ? 180 : normalized;
 }
 
-function sampleProjectedBoundsEdge(bounds: InsetMapBounds): [number, number][] {
-  const points: [number, number][] = [];
-  for (let step = 0; step <= INSET_PROJECTED_BOUNDS_EDGE_SEGMENTS; step++) {
-    const ratio = step / INSET_PROJECTED_BOUNDS_EDGE_SEGMENTS;
-    const x = bounds.west + (bounds.east - bounds.west) * ratio;
-    const y = bounds.north + (bounds.south - bounds.north) * ratio;
+/** Open ring, walked corner to corner, so the samples stay traceable. */
+function sampleProjectedBoundsRing(bounds: InsetMapBounds): [number, number][] {
+  const corners: [number, number][] = [
+    [bounds.west, bounds.north],
+    [bounds.east, bounds.north],
+    [bounds.east, bounds.south],
+    [bounds.west, bounds.south]
+  ];
 
-    points.push([x, bounds.north]);
-    points.push([bounds.east, y]);
-    points.push([
-      bounds.east - (bounds.east - bounds.west) * ratio,
-      bounds.south
-    ]);
-    points.push([
-      bounds.west,
-      bounds.south - (bounds.south - bounds.north) * ratio
-    ]);
+  const ring: [number, number][] = [];
+  for (let corner = 0; corner < corners.length; corner++) {
+    const [fromX, fromY] = corners[corner];
+    const [toX, toY] = corners[(corner + 1) % corners.length];
+
+    for (let step = 0; step < INSET_PROJECTED_BOUNDS_EDGE_SEGMENTS; step++) {
+      const ratio = step / INSET_PROJECTED_BOUNDS_EDGE_SEGMENTS;
+      ring.push([fromX + (toX - fromX) * ratio, fromY + (toY - fromY) * ratio]);
+    }
   }
-  return points;
+
+  return ring;
 }
 
 function getMinimalLongitudeBounds(
@@ -297,6 +299,54 @@ function clipBoundsToProjectionFrame(
   };
 }
 
+type ProjectedFrame = {
+  geographicRing: [number, number][];
+  isComplete: boolean;
+};
+
+function invertProjectedFrame(
+  bounds: InsetMapBounds,
+  projection: ScaleDistanceProjectionLike
+): ProjectedFrame | null {
+  const framedBounds = clipBoundsToProjectionFrame(bounds, projection);
+  if (!framedBounds) {
+    return null;
+  }
+
+  const samples = sampleProjectedBoundsRing(framedBounds);
+  const geographicRing = samples
+    .map((point) => projection.invert(point))
+    .filter(isValidLongitudeLatitudePair);
+
+  return {
+    geographicRing,
+    isComplete: geographicRing.length === samples.length
+  };
+}
+
+/**
+ * The frame the map draws, as a lon/lat ring. A projected frame is a curved
+ * quadrilateral on the sphere, so a lat/lon rectangle always overstates it.
+ * Returns nothing unless the whole ring inverts: half a ring would close
+ * itself across the gap and outline a shape the map never framed.
+ */
+export function getInsetMapFrameOutline(
+  bounds: InsetMapBounds | null | undefined,
+  context: InsetMapBoundsProjectionContext = {}
+): [number, number][] | null {
+  if (!bounds) {
+    return null;
+  }
+
+  const projection = context.projection;
+  if (!context.isProjectedCoordinates || !hasProjectionInvert(projection)) {
+    return null;
+  }
+
+  const frame = invertProjectedFrame(bounds, projection);
+  return frame?.isComplete ? frame.geographicRing : null;
+}
+
 export function getInsetMapGeographicBounds(
   bounds: InsetMapBounds | null | undefined,
   context: InsetMapBoundsProjectionContext = {}
@@ -310,14 +360,8 @@ export function getInsetMapGeographicBounds(
     return bounds;
   }
 
-  const framedBounds = clipBoundsToProjectionFrame(bounds, projection);
-  if (!framedBounds) {
-    return null;
-  }
-
-  const geographicPoints = sampleProjectedBoundsEdge(framedBounds)
-    .map((point) => projection.invert(point))
-    .filter(isValidLongitudeLatitudePair);
+  const geographicPoints =
+    invertProjectedFrame(bounds, projection)?.geographicRing ?? [];
 
   if (geographicPoints.length === 0) {
     return null;

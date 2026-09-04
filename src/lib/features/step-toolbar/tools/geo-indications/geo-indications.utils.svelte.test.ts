@@ -3,6 +3,7 @@ import { geoOrthographic } from 'd3-geo';
 import { DistanceUnit } from '$lib/features/commons/constants/ui.constants';
 import {
   getInsetMapBoundsAreaFraction,
+  getInsetMapFrameOutline,
   getInsetMapGeographicBounds,
   getScaleDistanceLimit,
   getScaleMetersPerPixel,
@@ -238,6 +239,75 @@ describe('geo indications scale utilities', () => {
     expect(bounds?.east).toBeCloseTo(6, 6);
     expect(bounds?.south).toBeCloseTo(43, 6);
     expect(bounds?.north).toBeCloseTo(50, 6);
+  });
+
+  it('outlines the frame as a traceable ring instead of a lat/lon box', () => {
+    const outline = getInsetMapFrameOutline(
+      { north: 900, south: -400, east: 800, west: -700 },
+      {
+        isProjectedCoordinates: true,
+        projection: createCompositeProjection()
+      }
+    );
+
+    expect(outline).not.toBeNull();
+    const ring = outline as [number, number][];
+    expect(ring).toHaveLength(64);
+
+    // Walked corner to corner: consecutive samples never jump across the
+    // frame, which is what lets the inset stroke the ring as a path.
+    const longestStep = ring.reduce((longest, point, index) => {
+      const next = ring[(index + 1) % ring.length];
+      return Math.max(
+        longest,
+        Math.hypot(next[0] - point[0], next[1] - point[1])
+      );
+    }, 0);
+    expect(longestStep).toBeLessThan(1);
+
+    const corners = [
+      [-5, 51.5],
+      [10, 51.5],
+      [10, 41],
+      [-5, 41]
+    ];
+    for (const [longitude, latitude] of corners) {
+      expect(
+        ring.some(
+          ([sampleLongitude, sampleLatitude]) =>
+            Math.abs(sampleLongitude - longitude) < 1e-6 &&
+            Math.abs(sampleLatitude - latitude) < 1e-6
+        )
+      ).toBe(true);
+    }
+  });
+
+  it('refuses to outline a frame it can only invert in part', () => {
+    // A world projection letterboxed in its viewport: the top and bottom
+    // edges fall outside the projected world and invert to nothing.
+    const projection = Object.assign(
+      ([longitude, latitude]: [number, number]): [number, number] => [
+        longitude,
+        latitude
+      ],
+      {
+        invert: ([x, y]: [number, number]): [number, number] | null =>
+          Math.abs(y) > 90 ? null : [x, y]
+      }
+    );
+
+    expect(
+      getInsetMapFrameOutline(
+        { north: 140, south: -140, east: 180, west: -180 },
+        { isProjectedCoordinates: true, projection }
+      )
+    ).toBeNull();
+  });
+
+  it('leaves the framing to the bounds when no projection inverts it', () => {
+    expect(
+      getInsetMapFrameOutline({ north: 60, south: 0, east: 30, west: -30 })
+    ).toBeNull();
   });
 
   it('reports no framing when the viewport left the mainland cell', () => {
