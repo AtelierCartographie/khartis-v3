@@ -736,12 +736,14 @@
     const viewportHeight = viewportProjectedBounds
       ? viewportProjectedBounds[1][1] - viewportProjectedBounds[0][1]
       : 0;
+    // Only a framing too small in both directions is unreadable as an
+    // outline; a flat or narrow one still says where the map looks.
     const shouldRenderViewportPoint =
       !!mapBounds &&
       (!Number.isFinite(viewportWidth) ||
         !Number.isFinite(viewportHeight) ||
-        viewportWidth < INSET_EXTENT_MIN_SIZE ||
-        viewportHeight < INSET_EXTENT_MIN_SIZE);
+        (viewportWidth < INSET_EXTENT_MIN_SIZE &&
+          viewportHeight < INSET_EXTENT_MIN_SIZE));
     const viewportPath =
       viewportFeature && !shouldRenderViewportPoint
         ? path(viewportFeature)
