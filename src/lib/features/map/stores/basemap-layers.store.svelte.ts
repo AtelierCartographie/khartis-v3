@@ -31,6 +31,7 @@ export interface TerreLayerConfig extends BasemapLayerBase {
   fillColor: string;
   fillShadow: boolean;
   fillOpacity: number;
+  strokeVisible: boolean;
   strokeColor: string;
   strokeDotted: boolean;
   strokeDottedPattern: BasemapDottedPattern;
@@ -159,6 +160,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     fillColor: NEUTRAL_CARTOGRAPHY_COLORS.land,
     fillShadow: false,
     fillOpacity: 100,
+    strokeVisible: true,
     strokeColor: NEUTRAL_CARTOGRAPHY_COLORS.boundaryMedium,
     strokeDotted: false,
     strokeDottedPattern: BasemapDottedPattern.DOTS,

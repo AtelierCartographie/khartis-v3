@@ -558,13 +558,6 @@
     align-items: center;
   }
 
-  :global(.suggestions-title) {
-    color: var(
-      --khartis-additions-text-primary-suggestions,
-      #003a6d
-    ) !important;
-  }
-
   .suggestions-help {
     color: var(--khartis-additions-text-helper-suggestions, #0072c3);
     margin: 0 0 var(--cds-spacing-05) 0;

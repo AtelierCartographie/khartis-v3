@@ -357,7 +357,9 @@ export function createTerreLayers(
     BASEMAP_TERRE_STROKE_OPACITY_MAX
   );
   const shouldRenderStroke =
-    effectiveStrokeThickness > 0 && !options?.suppressStroke;
+    config.strokeVisible &&
+    effectiveStrokeThickness > 0 &&
+    !options?.suppressStroke;
 
   const layerId = buildLayerId(DeckLayerId.BASEMAP_TERRE, ctx.projectionSuffix);
   const baseProps = getBaseLayerProps(ctx);

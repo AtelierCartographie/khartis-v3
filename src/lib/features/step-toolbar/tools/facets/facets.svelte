@@ -4,254 +4,48 @@
   import { Button, Link } from 'carbon-components-svelte';
   import {
     CharacterWholeNumber,
+    Draggable,
     Launch,
     SettingsAdjust
   } from 'carbon-icons-svelte';
-  import { facetsStore } from './facets.store.svelte';
-  import {
-    getLinePrimitive,
-    getPolygonPrimitive,
-    getSymbolPrimitive,
-    getTextPrimitive,
-    visualizationStore,
-    PrimitiveFilterType,
-    type VisualizationConfig
-  } from '$lib/features/commons/stores/visualization.store.svelte';
-  import { FACET_SLOT, type FacetSlotPath } from './facets.store.svelte';
+  import { dragHandle, dragHandleZone } from 'svelte-dnd-action';
+  import { untrack } from 'svelte';
+  import { facetsStore, FACETS_FRAME_THICKNESS } from './facets.store.svelte';
+  import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {
     globalActions,
     globalState
   } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
-  import {
-    FillMode,
-    SymbolMode,
-    ColorMode,
-    StrokeMode,
-    ThicknessMode
-  } from '$lib/features/commons/constants/visualization.constants';
   import { isAutoFacetNumericColumn } from '$lib/features/commons/utils/visualization-columns.utils';
-  import { getFacetSlotVariable } from '$lib/features/commons/utils/facet-visualization-updates';
   import SliderWithInput from '$lib/features/commons/components/viz-controls/visualization-slider-with-input.svelte';
+  import ToggleWithLabel from '$lib/features/commons/components/viz-controls/toggle-with-label.svelte';
+  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
 
   const CONFIGURE_SECTION_ID = 'configure-visualization';
   const MOBILE_CONFIGURE_TAB_SELECTOR = '[data-viz-sub-tab="configure"]';
   const FACETS_COLUMNS_MIN = 1;
-  const FACETS_COLUMNS_MAX = 4;
+  const FLIP_DURATION_MS = 200;
+
+  interface OrderedVariable {
+    id: string;
+  }
 
   const enabled = $derived(facetsStore.enabled);
   const layout = $derived(facetsStore.layout);
   const variables = $derived(facetsStore.variables);
   const facetVisualizations = $derived(facetsStore.facetVisualizations);
 
-  let selectedMapIndex = $state(0);
-
-  const safeMapIndex = $derived(
-    Math.min(selectedMapIndex, Math.max(0, facetVisualizations.length - 1))
+  const columnsMax = $derived(
+    Math.max(FACETS_COLUMNS_MIN, facetVisualizations.length)
   );
-
-  const mapCount = $derived(facetVisualizations.length);
-  const columnsValue = $derived(layout.columns);
-  const mapRows = $derived.by(() => {
-    const rows: number[][] = [];
-    const cols = Math.max(1, layout.columns);
-    for (let i = 1; i <= mapCount; i += cols) {
-      const row: number[] = [];
-      for (let j = 0; j < cols && i + j <= mapCount; j += 1) {
-        row.push(i + j);
-      }
-      rows.push(row);
-    }
-    return rows;
-  });
+  const columnsValue = $derived(Math.min(layout.columns, columnsMax));
 
   const baseVisualization = $derived.by(() => {
     const baseId = facetsStore.baseVisualizationId;
     if (!baseId) return undefined;
     return visualizationStore.visualizations.find((v) => v.id === baseId);
-  });
-
-  interface FacetSlot {
-    path: FacetSlotPath;
-    label: string;
-  }
-
-  interface FacetSection {
-    id: string;
-    title: string;
-    slots: FacetSlot[];
-  }
-
-  function pushSlot(slots: FacetSlot[], path: FacetSlotPath, label: string) {
-    if (!slots.some((slot) => slot.path === path)) {
-      slots.push({ path, label });
-    }
-  }
-
-  function resolveSymbolSlots(viz: VisualizationConfig): FacetSlot[] {
-    const slots: FacetSlot[] = [];
-    const symbol = getSymbolPrimitive(viz);
-    const symbolMode = symbol?.mode ?? SymbolMode.UNIQUE;
-
-    if (symbolMode === SymbolMode.PROPORTIONAL) {
-      pushSlot(slots, FACET_SLOT.SYMBOL_SIZE, m.facets_slot_size_shape());
-    } else if (symbolMode === SymbolMode.CLASSES) {
-      pushSlot(slots, FACET_SLOT.SYMBOL_VALUE, m.facets_slot_size_shape());
-    } else if (symbolMode === SymbolMode.CATEGORIES) {
-      pushSlot(slots, FACET_SLOT.SYMBOL_CATEGORY, m.facets_slot_size_shape());
-    }
-
-    const fillMode = symbol?.fillMode;
-    if (fillMode === FillMode.CLASSES) {
-      pushSlot(slots, FACET_SLOT.SYMBOL_FILL_VALUE, m.facets_slot_fill());
-    } else if (fillMode === FillMode.CATEGORIES) {
-      pushSlot(slots, FACET_SLOT.SYMBOL_FILL_CATEGORY, m.facets_slot_fill());
-    }
-
-    const strokeMode = symbol?.strokeMode;
-    if (strokeMode === StrokeMode.CLASSES) {
-      pushSlot(slots, FACET_SLOT.SYMBOL_STROKE_VALUE, m.facets_slot_stroke());
-    } else if (strokeMode === StrokeMode.CATEGORIES) {
-      pushSlot(
-        slots,
-        FACET_SLOT.SYMBOL_STROKE_CATEGORY,
-        m.facets_slot_stroke()
-      );
-    }
-
-    return slots;
-  }
-
-  function resolvePolygonSlots(viz: VisualizationConfig): FacetSlot[] {
-    const slots: FacetSlot[] = [];
-    const polygon = getPolygonPrimitive(viz);
-    if (polygon?.fillMode === FillMode.CLASSES) {
-      pushSlot(slots, FACET_SLOT.POLYGON_VALUE, m.facets_slot_fill());
-    } else if (polygon?.fillMode === FillMode.CATEGORIES) {
-      pushSlot(slots, FACET_SLOT.POLYGON_CATEGORY, m.facets_slot_fill());
-    }
-    if (polygon?.strokeMode === StrokeMode.CLASSES) {
-      pushSlot(slots, FACET_SLOT.POLYGON_STROKE_VALUE, m.facets_slot_stroke());
-    } else if (polygon?.strokeMode === StrokeMode.CATEGORIES) {
-      pushSlot(
-        slots,
-        FACET_SLOT.POLYGON_STROKE_CATEGORY,
-        m.facets_slot_stroke()
-      );
-    }
-    return slots;
-  }
-
-  function resolveLineSlots(viz: VisualizationConfig): FacetSlot[] {
-    const slots: FacetSlot[] = [];
-    const line = getLinePrimitive(viz);
-    if (line?.thicknessMode === ThicknessMode.PROPORTIONAL) {
-      pushSlot(slots, FACET_SLOT.LINE_SIZE, m.facets_slot_size_shape());
-    } else if (line?.thicknessMode === ThicknessMode.CLASSES) {
-      pushSlot(
-        slots,
-        FACET_SLOT.LINE_THICKNESS_VALUE,
-        m.facets_slot_size_shape()
-      );
-    }
-
-    if (line?.colorMode === ColorMode.CLASSES) {
-      pushSlot(slots, FACET_SLOT.LINE_VALUE, m.facets_slot_color());
-    } else if (line?.colorMode === ColorMode.CATEGORIES) {
-      pushSlot(slots, FACET_SLOT.LINE_CATEGORY, m.facets_slot_color());
-    }
-    return slots;
-  }
-
-  function resolveTextSlots(viz: VisualizationConfig): FacetSlot[] {
-    const slots: FacetSlot[] = [];
-    const background = getTextPrimitive(viz)?.background;
-
-    if (background?.fillMode === FillMode.CLASSES) {
-      pushSlot(slots, FACET_SLOT.TEXT_BACKGROUND_VALUE, m.facets_slot_fill());
-    } else if (background?.fillMode === FillMode.CATEGORIES) {
-      pushSlot(
-        slots,
-        FACET_SLOT.TEXT_BACKGROUND_CATEGORY,
-        m.facets_slot_fill()
-      );
-    }
-
-    if (background?.strokeMode === StrokeMode.CLASSES) {
-      pushSlot(
-        slots,
-        FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE,
-        m.facets_slot_stroke()
-      );
-    } else if (background?.strokeMode === StrokeMode.CATEGORIES) {
-      pushSlot(
-        slots,
-        FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY,
-        m.facets_slot_stroke()
-      );
-    }
-
-    return slots;
-  }
-
-  const sections = $derived.by((): FacetSection[] => {
-    const viz = baseVisualization;
-    if (!viz) return [];
-
-    const result: FacetSection[] = [];
-    const primitives = viz.primitiveFilters ?? [
-      PrimitiveFilterType.POINT,
-      PrimitiveFilterType.POLYGON,
-      PrimitiveFilterType.LINE,
-      PrimitiveFilterType.TEXT
-    ];
-
-    if (primitives.includes(PrimitiveFilterType.POINT)) {
-      const slots = resolveSymbolSlots(viz);
-      if (slots.length > 0) {
-        result.push({
-          id: 'symbols',
-          title: m.facets_section_symbols(),
-          slots
-        });
-      }
-    }
-
-    if (primitives.includes(PrimitiveFilterType.POLYGON)) {
-      const slots = resolvePolygonSlots(viz);
-      if (slots.length > 0) {
-        result.push({
-          id: 'polygons',
-          title: m.facets_section_polygons(),
-          slots
-        });
-      }
-    }
-
-    if (primitives.includes(PrimitiveFilterType.LINE)) {
-      const slots = resolveLineSlots(viz);
-      if (slots.length > 0) {
-        result.push({
-          id: 'lines',
-          title: m.facets_section_lines(),
-          slots
-        });
-      }
-    }
-
-    if (primitives.includes(PrimitiveFilterType.TEXT)) {
-      const slots = resolveTextSlots(viz);
-      if (slots.length > 0) {
-        result.push({
-          id: 'texts',
-          title: m.texts_title(),
-          slots
-        });
-      }
-    }
-
-    return result;
   });
 
   const numericDataFields = $derived.by(() => {
@@ -264,20 +58,34 @@
       .map((col) => col.name);
   });
 
-  function getSlotVariable(
-    mapIndex: number,
-    slotPath: FacetSlot['path']
-  ): string | undefined {
-    const viz = facetVisualizations[mapIndex];
-    if (!viz) return undefined;
-    return getFacetSlotVariable(viz, slotPath);
+  let orderedVariables = $state<OrderedVariable[]>([]);
+  let dragging = $state(false);
+
+  $effect(() => {
+    const nextVariables = variables;
+    if (!untrack(() => dragging)) {
+      orderedVariables = nextVariables.map((variable) => ({ id: variable }));
+    }
+  });
+
+  function handleOrderConsider(event: Event) {
+    dragging = true;
+    orderedVariables = (event as CustomEvent).detail.items;
   }
 
-  function handleSlotVariableChange(
-    slotPath: FacetSlot['path'],
-    variable: string
-  ) {
-    void facetsStore.setVariableForSlot(safeMapIndex, slotPath, variable);
+  function handleOrderFinalize(event: Event) {
+    const { items, info } = (event as CustomEvent).detail;
+    orderedVariables = items;
+    dragging = false;
+
+    const fromIndex = variables.indexOf(info.id);
+    const toIndex = (items as OrderedVariable[]).findIndex(
+      (item) => item.id === info.id
+    );
+
+    if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
+      void facetsStore.reorderVariables(fromIndex, toIndex);
+    }
   }
 
   function handleConfigureVisualization() {
@@ -303,11 +111,7 @@
   }
 
   function handleColumnsChange(value: number) {
-    const clamped = Math.max(
-      FACETS_COLUMNS_MIN,
-      Math.min(FACETS_COLUMNS_MAX, value)
-    );
-    facetsStore.setColumns(clamped);
+    facetsStore.setColumns(value);
   }
 
   const isActive = $derived(enabled && facetVisualizations.length > 0);
@@ -329,10 +133,29 @@
         label={m.facets_columns_label()}
         value={columnsValue}
         min={FACETS_COLUMNS_MIN}
-        max={FACETS_COLUMNS_MAX}
+        max={columnsMax}
         step={1}
         showMinMax
         onchange={handleColumnsChange}
+      />
+      <ToggleWithLabel
+        label={m.facets_frame_visible_label()}
+        toggled={layout.frameVisible}
+        ontoggle={(value) => facetsStore.setFrameVisible(value)}
+      />
+      <SingleColorPreview
+        label={m.color()}
+        color={layout.frameColor}
+        allowPattern={false}
+        onchange={(hex) => facetsStore.setFrameColor(hex)}
+      />
+      <SliderWithInput
+        label={m.thickness()}
+        value={layout.frameThickness}
+        min={FACETS_FRAME_THICKNESS.min}
+        max={FACETS_FRAME_THICKNESS.max}
+        step={FACETS_FRAME_THICKNESS.step}
+        onchange={(value) => facetsStore.setFrameThickness(value)}
       />
     </section>
 
@@ -343,80 +166,41 @@
       </header>
       <p class="helper-text">{m.facets_distribution_helper()}</p>
 
-      {#if mapCount > 0}
-        <div class="maps-picker">
-          <span class="field-label">{m.facets_maps_label()}</span>
-          <div
-            class="maps-grid"
-            role="group"
-            aria-label={m.facets_maps_label()}
-          >
-            {#each mapRows as row, rowIdx (rowIdx)}
-              <div class="maps-row">
-                {#each row as pos (pos)}
-                  <button
-                    type="button"
-                    class="map-btn"
-                    class:selected={safeMapIndex === pos - 1}
-                    onclick={() => (selectedMapIndex = pos - 1)}
-                    aria-pressed={safeMapIndex === pos - 1}
-                  >
-                    {pos}
-                  </button>
-                {/each}
-              </div>
-            {/each}
-          </div>
-        </div>
-      {/if}
-
-      {#each sections as section (section.id)}
-        <div class="subsection">
-          <h2 class="subsection-title">{section.title}</h2>
-          {#each section.slots as slot, slotIdx (section.id + slot.path + slotIdx)}
-            <div class="slot-card">
-              <header class="slot-heading">
-                <span class="slot-title">{slot.label}</span>
-                <span class="slot-divider" aria-hidden="true"></span>
-              </header>
-              <div class="slot-body">
-                <span class="field-label">{m.facets_variables_label()}</span>
-                <ul
-                  class="variable-list"
-                  role="radiogroup"
-                  aria-label={slot.label}
-                >
-                  {#each variables as variable (section.id + '-' + slot.path + '-' + variable)}
-                    {@const isNumeric = numericDataFields.includes(variable)}
-                    <li class="variable-item">
-                      <label class="variable-label">
-                        <input
-                          type="radio"
-                          name={`facet-slot-${section.id}-${slot.path}`}
-                          class="variable-radio"
-                          value={variable}
-                          checked={getSlotVariable(safeMapIndex, slot.path) ===
-                            variable}
-                          onchange={() =>
-                            handleSlotVariableChange(slot.path, variable)}
-                        />
-                        <span class="variable-tag">
-                          <span class="variable-tag-text">{variable}</span>
-                          {#if isNumeric}
-                            <span class="variable-tag-icon">
-                              <CharacterWholeNumber size={16} />
-                            </span>
-                          {/if}
-                        </span>
-                      </label>
-                    </li>
-                  {/each}
-                </ul>
-              </div>
+      <div
+        class="order-list"
+        role="list"
+        aria-label={m.facets_distribution_section()}
+        use:dragHandleZone={{
+          items: orderedVariables,
+          flipDurationMs: FLIP_DURATION_MS,
+          type: 'facet-variables',
+          dropTargetStyle: {},
+          useCursorForDetection: true
+        }}
+        onconsider={handleOrderConsider}
+        onfinalize={handleOrderFinalize}
+      >
+        {#each orderedVariables as variable, index (variable.id)}
+          <div class="order-row" role="listitem">
+            <div
+              class="drag-handle"
+              use:dragHandle
+              aria-label={`${m.facets_reorder()} ${variable.id}`}
+            >
+              <Draggable size={16} />
             </div>
-          {/each}
-        </div>
-      {/each}
+            <span class="order-position">{index + 1}</span>
+            <span class="variable-tag">
+              <span class="variable-tag-text">{variable.id}</span>
+              {#if numericDataFields.includes(variable.id)}
+                <span class="variable-tag-icon">
+                  <CharacterWholeNumber size={16} />
+                </span>
+              {/if}
+            </span>
+          </div>
+        {/each}
+      </div>
     </section>
 
     <Link
@@ -499,146 +283,48 @@
     margin: 0;
   }
 
-  .field-label {
-    display: block;
-    font-size: 0.75rem;
-    color: var(--cds-text-secondary, #525252);
-    line-height: 1rem;
-    letter-spacing: 0.32px;
-    font-weight: 400;
-  }
-
-  .maps-picker {
+  .order-list {
     display: flex;
     flex-direction: column;
+    gap: 2px;
+    outline: none;
+  }
+
+  .order-list :global([aria-grabbed='true']) {
+    opacity: 0.4;
+  }
+
+  .order-row {
+    display: flex;
+    align-items: center;
     gap: var(--cds-spacing-03, 8px);
-  }
-
-  .maps-grid {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02, 4px);
-  }
-
-  .maps-row {
-    display: flex;
-    border: 1px solid var(--cds-border-inverse, #cac5c4);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-
-  .map-btn {
-    flex: 1;
-    min-width: 0;
-    padding: 7px 16px;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    font-size: 0.875rem;
-    color: var(--cds-text-secondary, #525252);
-    line-height: 18px;
-    letter-spacing: 0.16px;
-    text-align: left;
-    font-family: inherit;
-  }
-
-  .map-btn + .map-btn {
-    border-left: 1px solid var(--cds-border-inverse, #cac5c4);
-  }
-
-  .map-btn.selected {
-    background-color: var(--cds-layer-selected-inverse, #cac5c4);
-    color: var(--cds-text-inverse, #ffffff);
-  }
-
-  .map-btn:focus-visible {
-    outline: 2px solid var(--cds-focus, #0f62fe);
-    outline-offset: -2px;
-  }
-
-  .subsection {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03, 8px);
-    padding: var(--cds-spacing-04, 12px);
+    min-height: 40px;
+    padding: 0 var(--cds-spacing-03, 8px);
     background-color: var(--cds-layer-01, #f4f4f4);
-    border-radius: 4px;
+    border: 1px solid var(--cds-border-tile-01, #c6c6c6);
+    cursor: grab;
   }
 
-  .subsection-title {
+  .order-row:hover {
+    background-color: var(--cds-layer-hover, #e8e8e8);
+  }
+
+  .drag-handle {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    color: var(--cds-icon-secondary, #525252);
+  }
+
+  .order-position {
+    flex-shrink: 0;
+    min-width: 1rem;
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--cds-text-primary, #161616);
     line-height: 18px;
     letter-spacing: 0.16px;
-    margin: 0;
-  }
-
-  .slot-card {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03, 8px);
-    padding: var(--cds-spacing-03, 8px) var(--cds-spacing-05, 16px)
-      var(--cds-spacing-05, 16px);
-    background-color: var(--cds-layer-01, #f4f4f4);
-  }
-
-  .slot-heading {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-03, 8px);
-    height: 24px;
-  }
-
-  .slot-title {
-    font-size: 0.75rem;
-    font-weight: 400;
-    color: var(--cds-text-primary, #161616);
-    line-height: 1rem;
-    letter-spacing: 0.32px;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
-  .slot-divider {
-    flex: 1;
-    height: 1px;
-    background-color: var(--cds-border-subtle-01, #c6c6c6);
-  }
-
-  .slot-body {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03, 8px);
-  }
-
-  .variable-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03, 8px);
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
-
-  .variable-item {
-    margin: 0;
-  }
-
-  .variable-label {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-03, 8px);
-    cursor: pointer;
-  }
-
-  .variable-radio {
-    width: 20px;
-    height: 20px;
-    accent-color: var(--cds-icon-primary, #161616);
-    flex-shrink: 0;
-    cursor: pointer;
-    margin: 0;
+    text-align: center;
   }
 
   .variable-tag {

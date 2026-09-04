@@ -1,8 +1,4 @@
-export {
-  MAX_FACETS_COLUMNS,
-  MAX_FACETS,
-  facetsStore
-} from './facets.store.svelte';
+export { MAX_FACETS, facetsStore } from './facets.store.svelte';
 export { disableFacets, getFacetsBaseVisualizationId } from './facets-access';
 export {
   FACET_SLOT,

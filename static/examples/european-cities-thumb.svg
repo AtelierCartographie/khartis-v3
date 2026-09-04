@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" role="img" aria-label="European cities proportional symbols thumbnail">
-  <rect width="320" height="180" fill="#ffffff"/>
-  <path d="M82 40 126 28 181 39 236 54 254 93 219 132 159 144 102 122 63 83Z" fill="#e8f2ff" stroke="#a6c8ff" stroke-width="2"/>
-  <path d="M121 32 114 124M176 39 164 143M75 78 247 84M103 116 222 128" stroke="#d0e2ff" stroke-width="1.5"/>
-  <circle cx="146" cy="74" r="22" fill="#e6142d" fill-opacity="0.82" stroke="#ffffff" stroke-width="3"/>
-  <circle cx="205" cy="91" r="15" fill="#e6142d" fill-opacity="0.82" stroke="#ffffff" stroke-width="3"/>
-  <circle cx="114" cy="103" r="10" fill="#e6142d" fill-opacity="0.82" stroke="#ffffff" stroke-width="3"/>
-</svg>
