@@ -1563,13 +1563,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             };
           })()
         : undefined;
-      // A default simple projection stays unframed. A composite projection is
-      // different: its sphere represents the boundary of every sub-projection
-      // frame, so it must remain visible without a manual override (#195).
+      // The outline of the ocean shape, driven by the Mers/Océans contour
+      // toggle alone: a basemap on its own default projection used to stay
+      // unframed whatever that toggle said.
       const projectionSphereOutlineLayer =
-        sphereProjectionInput &&
-        sphereVisible &&
-        (hasManualProjectionOverride || isCompositeBasemapProjection)
+        sphereProjectionInput && sphereVisible
           ? createProjectionSphereOutlineLayer({
               projection: sphereProjectionInput,
               modelMatrix: matrixToApply,

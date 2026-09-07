@@ -16,6 +16,7 @@ import {
   createToolStore
 } from '$lib/features/commons/utils/store.utils.svelte';
 import {
+  BasemapGraticuleMode,
   FillMode,
   SymbolMode
 } from '$lib/features/commons/constants/visualization.constants';
@@ -67,7 +68,8 @@ import {
   isBasemapLayersToolRenderableType,
   isPerKeyAuxLayerType,
   mapMetadataLayerTypeToBasemapLayerId,
-  mergeLayerOrder
+  mergeLayerOrder,
+  resolveBasemapConfigRowId
 } from '$lib/features/map/utils/layer-panel-row.utils';
 import { layerOrderStore } from './layer-order.store.svelte';
 
@@ -348,8 +350,8 @@ function getBasemapLayerName(layerId: BasemapLayerId): string {
       return m.basemap_layer_rivieres();
     case BASEMAP_LAYER_ID.RELIEF:
       return m.basemap_layer_relief();
+    // Both graticule modes present as the one Graticules row.
     case BASEMAP_LAYER_ID.EQUATEUR:
-      return m.basemap_layer_equateur();
     case BASEMAP_LAYER_ID.MERIDIENS:
       return m.basemap_layer_meridiens();
     case BASEMAP_LAYER_ID.FRONTIERES:
@@ -464,11 +466,19 @@ interface BasemapDisplayEntry {
   synthetic: boolean;
 }
 
+// The graticule modes are two render layers but a single row: only one of them
+// is ever visible, and the basemap customisation drives both from one section.
+function resolveActiveGraticuleLayerId(): BasemapLayerId {
+  return basemapLayersStore.getLayer(BASEMAP_LAYER_ID.MERIDIENS)?.mode ===
+    BasemapGraticuleMode.EQUATOR
+    ? BASEMAP_LAYER_ID.EQUATEUR
+    : BASEMAP_LAYER_ID.MERIDIENS;
+}
+
 function buildSyntheticBasemapEntries(
   basemapFile: string | null
 ): BasemapDisplayEntry[] {
   const synthetics: { layerId: BasemapLayerId; key?: string }[] = [
-    { layerId: BASEMAP_LAYER_ID.EQUATEUR },
     { layerId: BASEMAP_LAYER_ID.MERIDIENS },
     { layerId: BASEMAP_LAYER_ID.MERS, key: SYNTHETIC_AUX_LAYER_KEY.MERS },
     { layerId: BASEMAP_LAYER_ID.SPHERE, key: SYNTHETIC_AUX_LAYER_KEY.SPHERE }
@@ -477,6 +487,11 @@ function buildSyntheticBasemapEntries(
   return synthetics.flatMap(({ layerId, key }): BasemapDisplayEntry[] => {
     const config = basemapLayersStore.getLayer(layerId);
     if (!config) return [];
+    // The graticule row reads the mode that is actually drawing.
+    const visibilityConfig =
+      layerId === BASEMAP_LAYER_ID.MERIDIENS
+        ? basemapLayersStore.getLayer(resolveActiveGraticuleLayerId())
+        : config;
     const auxVisible =
       basemapFile && key
         ? basemapAuxLayersStore.isVisible(basemapFile, key, true)
@@ -487,7 +502,7 @@ function buildSyntheticBasemapEntries(
         file: basemapFile ?? undefined,
         key: basemapFile ? key : undefined,
         name: getBasemapLayerName(layerId),
-        visible: config.visible && auxVisible,
+        visible: (visibilityConfig?.visible ?? false) && auxVisible,
         color: getBasemapLayerColor(config),
         opacity: getBasemapLayerOpacity(config),
         renderGroup: `geographic-${getBasemapRenderGroup(layerId)}`,
@@ -629,17 +644,25 @@ function buildVectorBasemapSubLayers(): Layer[] {
     const isPerKeyGroup = orderedEntries.every((entry) =>
       isPerKeyAuxLayerType(entry.type)
     );
+    // The graticule row's visibility follows the mode that is drawing, not the
+    // meridians config the row takes its style from.
+    const visibilityConfig =
+      layerId === BASEMAP_LAYER_ID.MERIDIENS
+        ? basemapLayersStore.getLayer(resolveActiveGraticuleLayerId())
+        : config;
     const visible =
-      config && !isPerKeyGroup
-        ? config.visible && visibleEntries
+      visibilityConfig && !isPerKeyGroup
+        ? visibilityConfig.visible && visibleEntries
         : visibleEntries;
 
     rows.push({
       displayOrder: getBasemapDisplayOrder(layerId),
       layer: {
-        id: buildBasemapSubLayerId(
-          isPerKeyGroup ? groupKey : (layerId ?? groupKey)
-        ),
+        id: isPerKeyGroup
+          ? buildBasemapSubLayerId(groupKey)
+          : layerId
+            ? resolveBasemapConfigRowId(layerId)
+            : buildBasemapSubLayerId(groupKey),
         isSubLayer: true,
         kind: 'basemap-aux',
         type: 'geographic',
@@ -855,10 +878,22 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
           }
 
           if (layer.basemapLayerId && !layer.basemapAuxPerKey) {
-            basemapLayersStore.setLayerVisibility(
-              layer.basemapLayerId as BasemapLayerId,
-              !layer.visible
-            );
+            if (layer.basemapLayerId === BASEMAP_LAYER_ID.MERIDIENS) {
+              // One row, two mutually exclusive graticule layers.
+              const active = resolveActiveGraticuleLayerId();
+              basemapLayersStore.setLayerVisibility(active, !layer.visible);
+              basemapLayersStore.setLayerVisibility(
+                active === BASEMAP_LAYER_ID.MERIDIENS
+                  ? BASEMAP_LAYER_ID.EQUATEUR
+                  : BASEMAP_LAYER_ID.MERIDIENS,
+                false
+              );
+            } else {
+              basemapLayersStore.setLayerVisibility(
+                layer.basemapLayerId as BasemapLayerId,
+                !layer.visible
+              );
+            }
           }
         } else if (layer.kind === 'viz-primitive') {
           if (layer.parentId && layer.primitive) {

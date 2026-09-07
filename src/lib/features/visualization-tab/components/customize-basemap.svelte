@@ -28,6 +28,7 @@
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
   import { resolveActiveBasemapMetadata } from '$lib/features/map/utils/basemap-metadata-resolution.utils';
   import { getBasemapPanelRank } from '$lib/features/map/utils/layer-panel-row.utils';
+  import { isGlobalBbox } from '$lib/features/commons/utils/projection.utils';
   import { getBasemapAuxLayerDefaultVisibility } from '$lib/features/map/utils/basemap-aux-layer-visibility.utils';
   import type { BasemapLayer } from '$lib/features/map/types/basemap.types';
   import type { BasemapLayerId } from '$lib/features/map/stores/basemap-layers.store.svelte';
@@ -218,6 +219,10 @@
   const supportsRemarkableGraticule = $derived(
     availableMetadataLayerTypes.has(BasemapLayerType.GEOGRAPHIC_LINES)
   );
+  // The equator graticule mode is only meaningful on a whole-world extent.
+  const supportsEquatorGraticule = $derived(
+    currentMetadata?.bbox ? isGlobalBbox(currentMetadata.bbox) : false
+  );
 
   function getLayerVisibility(layerId: BasemapLayerId): boolean {
     return (
@@ -330,6 +335,7 @@
           instanceIndex={entry.instanceIndex}
           defaultVisible={entry.defaultVisible}
           allowRemarkable={supportsRemarkableGraticule}
+          allowEquator={supportsEquatorGraticule}
         />
       {/each}
     {/if}

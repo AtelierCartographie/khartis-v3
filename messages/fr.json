@@ -1411,7 +1411,7 @@
   "basemap_layer_meridiens": "Graticules",
   "basemap_layer_frontieres": "Frontières/Limites",
   "basemap_layer_villes": "Villes",
-  "basemap_layer_sphere": "Sphère de projection",
+  "basemap_layer_sphere": "Contour Mers/Océans",
   "basemap_config_fill": "Fond",
   "basemap_config_stroke": "Contour",
   "basemap_config_stroke_visible": "Afficher le contour",

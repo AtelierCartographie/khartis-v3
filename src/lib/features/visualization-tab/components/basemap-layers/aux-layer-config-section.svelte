@@ -32,6 +32,7 @@
     instanceIndex?: number;
     defaultVisible?: boolean;
     allowRemarkable?: boolean;
+    allowEquator?: boolean;
   }
 
   let {
@@ -40,7 +41,8 @@
     sharedLegacyId,
     instanceIndex = 0,
     defaultVisible = true,
-    allowRemarkable = true
+    allowRemarkable = true,
+    allowEquator = false
   }: Props = $props();
 
   const locale = $derived(getLocale());
@@ -208,8 +210,15 @@
 
   // The graticule mode picks which of the two render layers carries the section:
   // the equator line is its own layer, the meridians/parallels another.
-  const graticuleMode = $derived(
+  const storedGraticuleMode = $derived(
     getConfig('meridiens')?.mode ?? BasemapGraticuleMode.REMARKABLE
+  );
+  const graticuleMode = $derived(
+    (storedGraticuleMode === BasemapGraticuleMode.REMARKABLE &&
+      !allowRemarkable) ||
+      (storedGraticuleMode === BasemapGraticuleMode.EQUATOR && !allowEquator)
+      ? BasemapGraticuleMode.REGULAR
+      : storedGraticuleMode
   );
   const graticuleLayerId = $derived<BasemapLayerId>(
     graticuleMode === BasemapGraticuleMode.EQUATOR ? 'equateur' : 'meridiens'
@@ -263,33 +272,16 @@
     id: T,
     updates: Partial<Extract<BasemapLayerConfig, { id: T }>>
   ): void {
+    const requestedMode = (updates as Record<string, unknown>).mode;
+    const isUnavailableMode =
+      (requestedMode === BasemapGraticuleMode.REMARKABLE && !allowRemarkable) ||
+      (requestedMode === BasemapGraticuleMode.EQUATOR && !allowEquator);
     const normalizedUpdates =
-      id === 'meridiens' &&
-      !allowRemarkable &&
-      (updates as Record<string, unknown>).mode ===
-        BasemapGraticuleMode.REMARKABLE
+      id === 'meridiens' && isUnavailableMode
         ? { ...updates, mode: BasemapGraticuleMode.REGULAR }
         : updates;
     basemapLayersStore.updateLayer(id, normalizedUpdates);
     if (id === 'meridiens') {
-      const sharedKeys = [
-        'color',
-        'dotted',
-        'dottedPattern',
-        'thickness',
-        'opacity'
-      ] as const;
-      const equateurUpdates: Record<string, unknown> = {};
-      for (const key of sharedKeys) {
-        if (key in normalizedUpdates) {
-          equateurUpdates[key] = (normalizedUpdates as Record<string, unknown>)[
-            key
-          ];
-        }
-      }
-      if (Object.keys(equateurUpdates).length > 0) {
-        basemapLayersStore.updateLayer('equateur', equateurUpdates);
-      }
       const nextMode = (normalizedUpdates as Record<string, unknown>).mode;
       if (nextMode !== undefined) {
         const isVisible = basemapAuxLayersStore.isVisible(
@@ -366,6 +358,7 @@
       dotted={getConfig('meridiens')?.dotted}
       dottedPattern={getConfig('meridiens')?.dottedPattern}
       allowRemarkable={allowRemarkable}
+      allowEquator={allowEquator}
       thickness={getConfig('meridiens')?.thickness}
       opacity={getConfig('meridiens')?.opacity}
       onchange={(updates) => handleLayerChange('meridiens', updates)}
