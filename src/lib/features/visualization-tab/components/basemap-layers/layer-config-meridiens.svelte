@@ -21,6 +21,7 @@
     dotted?: boolean;
     dottedPattern?: BasemapDottedPattern;
     allowRemarkable?: boolean;
+    allowEquator?: boolean;
     disableDotted?: boolean;
     dottedDisabledReason?: string;
     thickness?: number;
@@ -35,6 +36,7 @@
     dotted = true,
     dottedPattern = BasemapDottedPattern.DOTS,
     allowRemarkable = true,
+    allowEquator = false,
     disableDotted = false,
     dottedDisabledReason,
     thickness = 1,
@@ -59,15 +61,20 @@
       icon: Wikis,
       label: m.basemap_config_graticule_regular()
     },
-    {
-      mode: BasemapGraticuleMode.EQUATOR,
-      icon: CenterCircle,
-      label: m.basemap_config_graticule_equator()
-    }
+    // The equator only reads as a graticule on a whole-world extent.
+    ...(allowEquator
+      ? [
+          {
+            mode: BasemapGraticuleMode.EQUATOR,
+            icon: CenterCircle,
+            label: m.basemap_config_graticule_equator()
+          }
+        ]
+      : [])
   ]);
 
   const effectiveMode = $derived(
-    allowRemarkable || mode !== BasemapGraticuleMode.REMARKABLE
+    modeTabs.some((tab) => tab.mode === mode)
       ? mode
       : BasemapGraticuleMode.REGULAR
   );

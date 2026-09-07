@@ -42,6 +42,17 @@ export function buildTiledBasemapLayerId(layerId: string): string {
   return `${TILED_BASEMAP_LAYER_SEPARATOR}${layerId}`;
 }
 
+/**
+ * The panel row a basemap config belongs to. The equator is a mode of the
+ * graticule, not a layer of its own, so both configs — only one of which is
+ * ever visible — share the single Graticules row.
+ */
+export function resolveBasemapConfigRowId(layerId: BasemapLayerId): string {
+  return buildBasemapSubLayerId(
+    layerId === BASEMAP_LAYER_ID.EQUATEUR ? BASEMAP_LAYER_ID.MERIDIENS : layerId
+  );
+}
+
 export const TILED_BASEMAP_LABELS_GROUP_ID = 'labels';
 
 export const TILED_BASEMAP_LABELS_ROW_ID = buildBasemapSubLayerId(

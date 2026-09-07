@@ -37,7 +37,7 @@ import {
   DEFAULT_PROJECTION_SUFFIX
 } from '../constants';
 import { GEOJSON_TYPE } from '$lib/features/commons/constants';
-import { buildBasemapSubLayerId } from '$lib/features/map/utils/layer-panel-row.utils';
+import { resolveBasemapConfigRowId } from '$lib/features/map/utils/layer-panel-row.utils';
 import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
 import {
   basemapLayersStore,
@@ -108,8 +108,6 @@ const DASH_EXTENSION = new PathStyleExtension({
 });
 const SOLID_DASH_ARRAY: [number, number] = [1, 0];
 const BASEMAP_DEFAULT_THICKNESS_PX = 0.5;
-const BASEMAP_TERRE_STROKE_THICKNESS_MAX_PX = 0.5;
-const BASEMAP_TERRE_STROKE_OPACITY_MAX = 0.4;
 const BASEMAP_TERRE_SHADOW_COLOR: RGBColor = [
   ...NEUTRAL_CARTOGRAPHY_RGB_COLORS.shadow
 ];
@@ -332,10 +330,7 @@ function createDashedGeoJsonLineSubLayerProps(
 export function createTerreLayers(
   worldBaseTable: ArrowTable,
   config: TerreLayerConfig,
-  ctx: BasemapLayerContext,
-  options?: {
-    suppressStroke?: boolean;
-  }
+  ctx: BasemapLayerContext
 ): Layer<DeckDataRow>[] {
   if (!config.visible) return [];
 
@@ -349,18 +344,10 @@ export function createTerreLayers(
   const fillOpacity = config.fillOpacity / 100;
   const strokeOpacity = config.strokeOpacity / 100;
 
-  const effectiveStrokeThickness = Math.min(
-    config.strokeThickness,
-    BASEMAP_TERRE_STROKE_THICKNESS_MAX_PX
-  );
-  const effectiveStrokeOpacity = Math.min(
-    strokeOpacity,
-    BASEMAP_TERRE_STROKE_OPACITY_MAX
-  );
+  const effectiveStrokeThickness = config.strokeThickness;
+  const effectiveStrokeOpacity = strokeOpacity;
   const shouldRenderStroke =
-    config.strokeVisible &&
-    effectiveStrokeThickness > 0 &&
-    !options?.suppressStroke;
+    config.strokeVisible && effectiveStrokeThickness > 0;
 
   const layerId = buildLayerId(DeckLayerId.BASEMAP_TERRE, ctx.projectionSuffix);
   const baseProps = getBaseLayerProps(ctx);
@@ -432,7 +419,7 @@ export function createTerreLayers(
           widthUnits: 'pixels',
           getWidth: effectiveStrokeThickness,
           widthMinPixels: 0,
-          widthMaxPixels: BASEMAP_TERRE_STROKE_THICKNESS_MAX_PX,
+          widthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
           extensions: config.strokeDotted ? [DASH_EXTENSION] : [],
           getDashArray: dashArray,
           ...baseProps,
@@ -491,7 +478,7 @@ export function createTerreLayers(
           lineWidthUnits: 'pixels',
           getLineWidth: shouldRenderStroke ? effectiveStrokeThickness : 0,
           lineWidthMinPixels: 0,
-          lineWidthMaxPixels: BASEMAP_TERRE_STROKE_THICKNESS_MAX_PX,
+          lineWidthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
           extensions:
             shouldRenderStroke && config.strokeDotted ? [DASH_EXTENSION] : [],
           getDashArray: shouldRenderStroke ? dashArray : [0, 0],
@@ -1547,7 +1534,6 @@ function createLandLayers(
   config: TerreLayerConfig,
   ctx: BasemapLayerContext,
   stylePresets: StylePresets | null | undefined,
-  options?: { suppressStroke?: boolean },
   rowIds?: Map<string, string>
 ): Layer<DeckDataRow>[] {
   const layers: Layer<DeckDataRow>[] = [];
@@ -1562,12 +1548,7 @@ function createLandLayers(
       projectionSuffix: `${ctx.projectionSuffix || DEFAULT_PROJECTION_SUFFIX}-land-${i}`
     };
 
-    const created = createTerreLayers(
-      entry.table,
-      landConfig,
-      landCtx,
-      options
-    );
+    const created = createTerreLayers(entry.table, landConfig, landCtx);
     if (rowIds && entry.panelRowId) {
       for (const layer of created)
         rowIds.set(String(layer.id), entry.panelRowId);
@@ -1771,6 +1752,23 @@ export interface BasemapLayerGroups {
   rowOrder: BasemapRowOrderEntry[];
 }
 
+// Shared line settings of the graticule config, applied to whichever graticule
+// mode is drawing.
+function resolveGraticuleLineStyle():
+  | Pick<
+      MeridiensLayerConfig,
+      'color' | 'dotted' | 'dottedPattern' | 'thickness' | 'opacity'
+    >
+  | undefined {
+  const meridiens = basemapLayersStore.layers.find(
+    (layer): layer is MeridiensLayerConfig =>
+      layer.id === BASEMAP_LAYER_ID.MERIDIENS
+  );
+  if (!meridiens) return undefined;
+  const { color, dotted, dottedPattern, thickness, opacity } = meridiens;
+  return { color, dotted, dottedPattern, thickness, opacity };
+}
+
 export function createBasemapLayers(
   worldBaseTable: ArrowTable | null,
   ctx: BasemapLayerContext,
@@ -1803,9 +1801,6 @@ export function createBasemapLayers(
   const hasMetadataLimits =
     availableMetadataLayerTypes.has(BasemapLayerType.LIMIT) ||
     limitEntries.length > 0;
-  const isFrontieresVisible = basemapLayersStore.layers.some(
-    (layer) => layer.id === BASEMAP_LAYER_ID.FRONTIERES && layer.visible
-  );
   const isEquateurVisible = basemapLayersStore.layers.some(
     (layer) => layer.id === BASEMAP_LAYER_ID.EQUATEUR && layer.visible
   );
@@ -1821,7 +1816,7 @@ export function createBasemapLayers(
             ? foregroundBelowGroups
             : foregroundAboveGroups;
       const groupStart = targetGroups.length;
-      const configRowId = buildBasemapSubLayerId(config.id);
+      const configRowId = resolveBasemapConfigRowId(config.id);
 
       switch (config.id) {
         case BASEMAP_LAYER_ID.MERS: {
@@ -1832,9 +1827,6 @@ export function createBasemapLayers(
 
         case BASEMAP_LAYER_ID.TERRE: {
           const terreConfig = config as TerreLayerConfig;
-          const terreOptions = {
-            suppressStroke: hasMetadataLimits && isFrontieresVisible
-          };
 
           if (landEntries.length > 0) {
             const landLayers = createLandLayers(
@@ -1842,7 +1834,6 @@ export function createBasemapLayers(
               terreConfig,
               ctx,
               additionalData?.stylePresets,
-              terreOptions,
               rowIdByLayerId
             );
             if (landLayers.length > 0) {
@@ -1852,8 +1843,7 @@ export function createBasemapLayers(
             const terreLayers = createTerreLayers(
               worldBaseTable,
               terreConfig,
-              ctx,
-              terreOptions
+              ctx
             );
             if (terreLayers.length > 0) {
               targetGroups.push(terreLayers);
@@ -1926,7 +1916,15 @@ export function createBasemapLayers(
         }
 
         case BASEMAP_LAYER_ID.EQUATEUR: {
-          const layer = createEquateurLayer(config as EquateurLayerConfig, ctx);
+          // The equator is a graticule mode, so it draws with the graticule's
+          // own style rather than a second set of line settings.
+          const layer = createEquateurLayer(
+            {
+              ...(config as EquateurLayerConfig),
+              ...resolveGraticuleLineStyle()
+            },
+            ctx
+          );
           if (layer) targetGroups.push([layer]);
           break;
         }

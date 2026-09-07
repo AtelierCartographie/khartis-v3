@@ -2519,65 +2519,21 @@ describe('basemap projection fallbacks', () => {
     ).toBe(false);
   });
 
-  it('suppresses terre GeoJSON fallback stroke when metadata limits are present and frontieres is visible', () => {
-    const worldBaseTable = { id: 'world-base' } as unknown as ArrowTable;
-    const metadataTable = { id: 'limit-suppress' } as unknown as ArrowTable;
-    const worldGeoJSON = createPolygonGeoJSON('raw-world-land');
-    const limitGeoJSON = createLineGeoJSON('raw-meta-limit');
-    const ctx = createProjectionContext();
-
-    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
-    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.TERRE, true);
-    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.FRONTIERES, true);
-
-    extractGeometryInfoMock.mockImplementation((table: ArrowTable) => {
-      if (table === worldBaseTable) return createPolygonGeometryInfo();
-      if (table === metadataTable) return createLineGeometryInfo();
-      return null;
-    });
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) => {
-      if (table === worldBaseTable) return worldGeoJSON;
-      if (table === metadataTable) return limitGeoJSON;
-      return null;
-    });
-
-    const layers = createBasemapLayers(worldBaseTable, ctx, {
-      metadataLayers: [
-        {
-          table: metadataTable,
-          style: null,
-          type: BasemapLayerType.LIMIT,
-          file: 'limits.geojson'
-        } satisfies MetadataLayerEntry
-      ],
-      availableMetadataLayerTypes: [BasemapLayerType.LIMIT],
-      stylePresets: null
-    });
-
-    const terreLayer = layers.background.find(
-      (layer) =>
-        layer instanceof GeoJsonLayer &&
-        String(layer.props.id) === 'basemap-terre-basemap-default'
-    ) as GeoJsonLayer | undefined;
-
-    expect(terreLayer).toBeDefined();
-    expect(terreLayer?.props.stroked).toBe(false);
-    expect(terreLayer?.props.getLineWidth).toBe(0);
-    expect(terreLayer?.props.getLineColor).toEqual([0, 0, 0, 0]);
-  });
-
-  it('restores Terre stroke when frontieres are toggled OFF with metadata LIMIT active', () => {
+  it("keeps the Terre stroke under the layer's own toggle while metadata limits are visible", () => {
     const worldBaseTable = {
-      id: 'world-base-restore'
+      id: 'world-base-stroke'
     } as unknown as ArrowTable;
-    const metadataTable = { id: 'limit-restore' } as unknown as ArrowTable;
-    const worldGeoJSON = createPolygonGeoJSON('raw-world-land-restore');
-    const limitGeoJSON = createLineGeoJSON('raw-meta-limit-restore');
+    const metadataTable = { id: 'limit-stroke' } as unknown as ArrowTable;
+    const worldGeoJSON = createPolygonGeoJSON('raw-world-land-stroke');
+    const limitGeoJSON = createLineGeoJSON('raw-meta-limit-stroke');
     const ctx = createProjectionContext();
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.TERRE, true);
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.FRONTIERES, true);
+    basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.TERRE, {
+      strokeVisible: true
+    });
 
     extractGeometryInfoMock.mockImplementation((table: ArrowTable) => {
       if (table === worldBaseTable) return createPolygonGeometryInfo();
@@ -2590,52 +2546,40 @@ describe('basemap projection fallbacks', () => {
       return null;
     });
 
-    const layersOn = createBasemapLayers(worldBaseTable, ctx, {
-      metadataLayers: [
-        {
-          table: metadataTable,
-          style: null,
-          type: BasemapLayerType.LIMIT,
-          file: 'limits.geojson'
-        } satisfies MetadataLayerEntry
-      ],
-      availableMetadataLayerTypes: [BasemapLayerType.LIMIT],
-      stylePresets: null
+    const buildTerreLayer = () => {
+      const layers = createBasemapLayers(worldBaseTable, ctx, {
+        metadataLayers: [
+          {
+            table: metadataTable,
+            style: null,
+            type: BasemapLayerType.LIMIT,
+            file: 'limits.geojson'
+          } satisfies MetadataLayerEntry
+        ],
+        availableMetadataLayerTypes: [BasemapLayerType.LIMIT],
+        stylePresets: null
+      });
+      return layers.background.find(
+        (layer) =>
+          layer instanceof GeoJsonLayer &&
+          String(layer.props.id) === 'basemap-terre-basemap-default'
+      ) as GeoJsonLayer | undefined;
+    };
+
+    // Visible limits used to suppress it, which left the section's contour
+    // toggle inert.
+    const withStroke = buildTerreLayer();
+    expect(withStroke?.props.stroked).toBe(true);
+    expect(withStroke?.props.getLineWidth).toBeGreaterThan(0);
+    expect(withStroke?.props.getLineColor).not.toEqual([0, 0, 0, 0]);
+
+    basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.TERRE, {
+      strokeVisible: false
     });
 
-    const terreLayerOn = layersOn.background.find(
-      (layer) =>
-        layer instanceof GeoJsonLayer &&
-        String(layer.props.id) === 'basemap-terre-basemap-default'
-    ) as GeoJsonLayer | undefined;
-
-    expect(terreLayerOn?.props.stroked).toBe(false);
-
-    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.FRONTIERES, false);
-
-    const layersOff = createBasemapLayers(worldBaseTable, ctx, {
-      metadataLayers: [
-        {
-          table: metadataTable,
-          style: null,
-          type: BasemapLayerType.LIMIT,
-          file: 'limits.geojson'
-        } satisfies MetadataLayerEntry
-      ],
-      availableMetadataLayerTypes: [BasemapLayerType.LIMIT],
-      stylePresets: null
-    });
-
-    const terreLayerOff = layersOff.background.find(
-      (layer) =>
-        layer instanceof GeoJsonLayer &&
-        String(layer.props.id) === 'basemap-terre-basemap-default'
-    ) as GeoJsonLayer | undefined;
-
-    expect(terreLayerOff).toBeDefined();
-    expect(terreLayerOff?.props.stroked).toBe(true);
-    expect(terreLayerOff?.props.getLineWidth).toBeGreaterThan(0);
-    expect(terreLayerOff?.props.getLineColor).not.toEqual([0, 0, 0, 0]);
+    const withoutStroke = buildTerreLayer();
+    expect(withoutStroke?.props.stroked).toBe(false);
+    expect(withoutStroke?.props.getLineWidth).toBe(0);
   });
 
   it('connects metadata limit frontieres thickness and dotted styling to Deck.gl layers', () => {
