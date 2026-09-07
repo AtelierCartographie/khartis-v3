@@ -30,6 +30,7 @@ import {
   VisualizationType
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { suggestClassificationDefaults } from '$lib/features/commons/services/classification.service';
+import { ORDERED_CATEGORY_PALETTE_ID } from '$lib/features/commons/components/palette-popover/palette.constants';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
 import {
@@ -151,7 +152,7 @@ const SUGGESTION_VISUALIZATION_TYPES = {
 
 type SuggestionBehaviorId = keyof typeof SUGGESTION_VISUALIZATION_TYPES;
 type SuggestionBehaviorFamily = 'symbol' | 'polygon' | 'line' | 'text';
-type SuggestionClassificationKind = 'category' | 'class';
+type SuggestionClassificationKind = 'category' | 'ordered-category' | 'class';
 type SuggestionColumnSource =
   | 'primaryNumeric'
   | 'secondaryNumeric'
@@ -269,28 +270,28 @@ const SUGGESTION_BEHAVIOR_DEFINITIONS = {
   polygons_colorful_QLO: {
     family: 'polygon',
     fillMode: FillMode.CATEGORIES,
-    classification: 'category',
+    classification: 'ordered-category',
     categoryColumn: 'primaryText'
   },
   symbols_differents_QLO: {
     family: 'symbol',
     symbolMode: SymbolMode.CATEGORIES,
     fillMode: FillMode.CATEGORIES,
-    classification: 'category',
+    classification: 'ordered-category',
     categoryColumn: 'primaryText'
   },
   symbols_uniques_colorful_QLO: {
     family: 'symbol',
     symbolMode: SymbolMode.UNIQUE,
     fillMode: FillMode.CATEGORIES,
-    classification: 'category',
+    classification: 'ordered-category',
     categoryColumn: 'primaryText'
   },
   lines_colorful_QLO: {
     family: 'line',
     colorMode: ColorMode.CATEGORIES,
     thicknessMode: ThicknessMode.UNIQUE,
-    classification: 'category',
+    classification: 'ordered-category',
     categoryColumn: 'primaryText'
   },
   symbols_proportional_colorful_QL: {
@@ -639,6 +640,18 @@ function getSuggestionClassification(
 ): VisualizationConfig['classification'] {
   if (classification === 'category') {
     return categoricalPreset.classification;
+  }
+
+  // Une variable qualitative ORDONNÉE reste une classification par catégories,
+  // mais ses couleurs sont échantillonnées sur une rampe séquentielle : sans cela
+  // « qualitatif ordonné » produit exactement la même carte que « qualitatif ».
+  if (classification === 'ordered-category') {
+    return categoricalPreset.classification
+      ? {
+          ...categoricalPreset.classification,
+          paletteId: ORDERED_CATEGORY_PALETTE_ID
+        }
+      : undefined;
   }
 
   if (classification === 'class') {

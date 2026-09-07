@@ -64,6 +64,12 @@ export const DEFAULT_SEQUENTIAL_PREVIEW = [
 
 export const DEFAULT_QUALITATIVE_PREVIEW = [...VIF_MIXTE_COLORS.slice(0, 4)];
 
+// Catégories ordonnées (QLO) : l'ordre se dit avec la valeur, pas avec la teinte,
+// donc une rampe séquentielle échantillonnée sur le nombre de catégories. Teinte
+// distincte du défaut choroplèthe (« blues ») pour que les deux traitements
+// restent lisibles l'un à côté de l'autre.
+export const ORDERED_CATEGORY_PALETTE_ID = 'purples';
+
 export const PALETTE_TYPE = {
   SEQUENTIAL: 'sequential',
   DIVERGING: 'diverging',
