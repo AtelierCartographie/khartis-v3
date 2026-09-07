@@ -43,6 +43,7 @@ import {
   basemapLayersStore,
   BASEMAP_LAYER_ID,
   getBasemapRenderGroup,
+  type BasemapRenderGroup,
   type TerreLayerConfig,
   type MersLayerConfig,
   type ReliefLayerConfig,
@@ -1747,6 +1748,12 @@ export interface BasemapAdditionalData {
   stylePresets?: StylePresets | null;
 }
 
+export interface BasemapRowOrderEntry {
+  id: string;
+  renderGroup: BasemapRenderGroup;
+  belowThematic: boolean;
+}
+
 export interface BasemapLayerGroups {
   background: Layer<DeckDataRow>[];
 
@@ -1757,6 +1764,11 @@ export interface BasemapLayerGroups {
   // Maps each produced deck layer id to the panel row it belongs to, so the
   // render can order the whole pool by the flat layer order.
   rowIdByLayerId: Map<string, string>;
+
+  // Panel rows in panel order (top→bottom), the same sequence the layer panel
+  // derives from the basemap config store. The layer arrays above are emitted
+  // back→front and flattened, so they cannot be read as a row order.
+  rowOrder: BasemapRowOrderEntry[];
 }
 
 export function createBasemapLayers(
@@ -1771,6 +1783,7 @@ export function createBasemapLayers(
   // (LAND/LIMIT) get their precise per-file row from the entry's `panelRowId`
   // via the creators, which set it before this fallback runs.
   const rowIdByLayerId = new Map<string, string>();
+  const rowOrder: BasemapRowOrderEntry[] = [];
 
   const metaLayers = additionalData?.metadataLayers ?? [];
   const availableMetadataLayerTypes = new Set(
@@ -1974,13 +1987,27 @@ export function createBasemapLayers(
       // Default each layer this config produced to its `basemap::<configId>`
       // row. Per-key metadata layers already recorded a more specific row via
       // the creators above, so `has` guards against overwriting them.
+      const configRowIds: string[] = [];
       for (let g = groupStart; g < targetGroups.length; g += 1) {
         for (const layer of targetGroups[g]) {
           const id = String(layer.id);
           if (!rowIdByLayerId.has(id)) {
             rowIdByLayerId.set(id, configRowId);
           }
+          const rowId = rowIdByLayerId.get(id) as string;
+          if (!configRowIds.includes(rowId)) {
+            configRowIds.push(rowId);
+          }
         }
+      }
+      const renderGroup = getBasemapRenderGroup(config.id);
+      for (const id of configRowIds.length > 0 ? configRowIds : [configRowId]) {
+        rowOrder.push({
+          id,
+          renderGroup,
+          belowThematic:
+            renderGroup === 'foreground' && Boolean(config.renderBelowThematic)
+        });
       }
     } catch (error) {
       logger.error(
@@ -1998,6 +2025,7 @@ export function createBasemapLayers(
     background: [...backgroundGroups].reverse().flat(),
     foreground: [...foregroundBelowThematic, ...foregroundAboveThematic],
     foregroundBelowThematic,
-    rowIdByLayerId
+    rowIdByLayerId,
+    rowOrder
   };
 }
