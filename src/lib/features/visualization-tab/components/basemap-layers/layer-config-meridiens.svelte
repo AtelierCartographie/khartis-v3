@@ -3,7 +3,7 @@
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
-  import { Star, Wikis } from 'carbon-icons-svelte';
+  import { CenterCircle, Star, Wikis } from 'carbon-icons-svelte';
   import { SliderWithInput } from '../shared';
   import DottedToggle from './dotted-toggle.svelte';
   import {
@@ -21,6 +21,7 @@
     dotted?: boolean;
     dottedPattern?: BasemapDottedPattern;
     allowRemarkable?: boolean;
+    allowEquator?: boolean;
     disableDotted?: boolean;
     dottedDisabledReason?: string;
     thickness?: number;
@@ -35,6 +36,7 @@
     dotted = true,
     dottedPattern = BasemapDottedPattern.DOTS,
     allowRemarkable = true,
+    allowEquator = false,
     disableDotted = false,
     dottedDisabledReason,
     thickness = 1,
@@ -42,8 +44,46 @@
     onchange
   }: Props = $props();
 
+  // Remarkable lines come from the basemap's own geographic-lines layer, so the
+  // tab only exists when the basemap ships one.
+  const modeTabs = $derived([
+    ...(allowRemarkable
+      ? [
+          {
+            mode: BasemapGraticuleMode.REMARKABLE,
+            icon: Star,
+            label: m.basemap_config_graticule_remarkable()
+          }
+        ]
+      : []),
+    {
+      mode: BasemapGraticuleMode.REGULAR,
+      icon: Wikis,
+      label: m.basemap_config_graticule_regular()
+    },
+    // The equator only reads as a graticule on a whole-world extent.
+    ...(allowEquator
+      ? [
+          {
+            mode: BasemapGraticuleMode.EQUATOR,
+            icon: CenterCircle,
+            label: m.basemap_config_graticule_equator()
+          }
+        ]
+      : [])
+  ]);
+
   const effectiveMode = $derived(
-    allowRemarkable ? mode : BasemapGraticuleMode.REGULAR
+    modeTabs.some((tab) => tab.mode === mode)
+      ? mode
+      : BasemapGraticuleMode.REGULAR
+  );
+
+  const activeModeIndex = $derived(
+    Math.max(
+      0,
+      modeTabs.findIndex((tab) => tab.mode === effectiveMode)
+    )
   );
 
   function handleModeChange(nextMode: BasemapGraticuleMode) {
@@ -81,29 +121,15 @@
 </script>
 
 <div class="layer-config-content">
-  {#if allowRemarkable}
-    <ToggleTabs
-      activeIndex={mode === BasemapGraticuleMode.REGULAR ? 1 : 0}
-      items={[
-        {
-          icon: Star,
-          label: m.basemap_config_graticule_remarkable(),
-          iconSize: 16
-        },
-        {
-          icon: Wikis,
-          label: m.basemap_config_graticule_regular(),
-          iconSize: 16
-        }
-      ]}
-      onchange={(index) =>
-        handleModeChange(
-          index === 1
-            ? BasemapGraticuleMode.REGULAR
-            : BasemapGraticuleMode.REMARKABLE
-        )}
-    />
-  {/if}
+  <ToggleTabs
+    activeIndex={activeModeIndex}
+    items={modeTabs.map((tab) => ({
+      icon: tab.icon,
+      label: tab.label,
+      iconSize: 16
+    }))}
+    onchange={(index) => handleModeChange(modeTabs[index].mode)}
+  />
 
   {#if effectiveMode === BasemapGraticuleMode.REGULAR}
     <div class="control-group">

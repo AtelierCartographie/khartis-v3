@@ -489,8 +489,13 @@ function decodeWkbPointsAllBatches(
 
   for (let b = 0; b < geomVector.data.length; b++) {
     const data = geomVector.data[b];
-    const offsets = data.valueOffsets as Int32Array;
-    const values = data.values as Uint8Array;
+    const offsets = data.valueOffsets as Int32Array | undefined;
+    const values = data.values as Uint8Array | undefined;
+    // Only a binary column carries byte offsets. A native GeoArrow point
+    // (Struct<x, y>) has none, so hand it to the GeoArrow parser instead of
+    // indexing undefined — that threw and took the whole visualization's
+    // layer stack with it.
+    if (!offsets || !values) return null;
     const batchLen = data.length;
 
     for (let i = 0; i < batchLen; i++) {

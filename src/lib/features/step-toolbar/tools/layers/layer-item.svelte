@@ -1,7 +1,6 @@
 <script lang="ts">
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { OverflowMenu, OverflowMenuItem } from 'carbon-components-svelte';
   import { dragHandle } from 'svelte-dnd-action';
   import {
     Draggable,
@@ -15,13 +14,6 @@
     layer: Layer;
     onToggleVisibility: (layerId: string) => void;
     onOpenSettings: (layerId: string) => void;
-    canMoveUp?: boolean;
-    canMoveDown?: boolean;
-    onMoveUp?: () => void;
-    onMoveDown?: () => void;
-    onRenameLayer?: (visualizationId: string) => void;
-    onDuplicateLayer?: (visualizationId: string) => void;
-    onDeleteLayer?: (visualizationId: string) => void;
     showDragHandle?: boolean;
   }
 
@@ -29,18 +21,10 @@
     layer,
     onToggleVisibility,
     onOpenSettings,
-    canMoveUp = false,
-    canMoveDown = false,
-    onMoveUp,
-    onMoveDown,
-    onRenameLayer,
-    onDuplicateLayer,
-    onDeleteLayer,
     showDragHandle = true
   }: Props = $props();
 
   const isVizPrimitive = $derived(layer.kind === 'viz-primitive');
-  const visualizationId = $derived(layer.parentId);
   // Primitive rows use split title/subtitle fields; basemap rows fall back to `name`.
   const title = $derived(layer.primitiveLabel ?? layer.name);
   const accentColor = $derived(layer.accentColor ?? layer.color);
@@ -92,33 +76,6 @@
       iconDescription={m.layers_settings()}
       onclick={() => onOpenSettings(layer.id)}
     />
-    {#if isVizPrimitive && visualizationId}
-      <OverflowMenu size="sm" flipped iconDescription={m.layers_more_options()}>
-        <OverflowMenuItem
-          text={m.layers_rename()}
-          on:click={() => onRenameLayer?.(visualizationId)}
-        />
-        <OverflowMenuItem
-          text={m.layers_duplicate()}
-          on:click={() => onDuplicateLayer?.(visualizationId)}
-        />
-        <OverflowMenuItem
-          text={m.layers_move_up()}
-          disabled={!canMoveUp}
-          on:click={() => onMoveUp?.()}
-        />
-        <OverflowMenuItem
-          text={m.layers_move_down()}
-          disabled={!canMoveDown}
-          on:click={() => onMoveDown?.()}
-        />
-        <OverflowMenuItem
-          danger
-          text={m.layers_delete()}
-          on:click={() => onDeleteLayer?.(visualizationId)}
-        />
-      </OverflowMenu>
-    {/if}
   </div>
 </div>
 

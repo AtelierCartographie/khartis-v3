@@ -1,5 +1,6 @@
 import {
   BASEMAP_LAYER_ID,
+  getBasemapRenderGroup,
   type BasemapLayerId
 } from '$lib/features/map/stores/basemap-layers.store.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
@@ -39,6 +40,48 @@ export function buildBasemapSubLayerId(basemapLayerKey: string): string {
 
 export function buildTiledBasemapLayerId(layerId: string): string {
   return `${TILED_BASEMAP_LAYER_SEPARATOR}${layerId}`;
+}
+
+/**
+ * The panel row a basemap config belongs to. The equator is a mode of the
+ * graticule, not a layer of its own, so both configs — only one of which is
+ * ever visible — share the single Graticules row.
+ */
+export function resolveBasemapConfigRowId(layerId: BasemapLayerId): string {
+  return buildBasemapSubLayerId(
+    layerId === BASEMAP_LAYER_ID.EQUATEUR ? BASEMAP_LAYER_ID.MERIDIENS : layerId
+  );
+}
+
+export const TILED_BASEMAP_LABELS_GROUP_ID = 'labels';
+
+export const TILED_BASEMAP_LABELS_ROW_ID = buildBasemapSubLayerId(
+  buildTiledBasemapLayerId(TILED_BASEMAP_LABELS_GROUP_ID)
+);
+
+/**
+ * In interleaved mode every deck layer enters the MapLibre style at a single
+ * point, so the whole thematic stack is either behind or in front of the tiled
+ * labels. This reads that one bit off the flat layer order: labels above the
+ * first thematic row means the deck layers go under them. An order that has
+ * never seen the labels row (no drag yet) keeps the default — labels on top.
+ */
+export function shouldRenderDeckBelowTiledLabels(
+  panelOrderTopToBottom: readonly string[]
+): boolean {
+  const labelsIndex = panelOrderTopToBottom.indexOf(
+    TILED_BASEMAP_LABELS_ROW_ID
+  );
+  if (labelsIndex === -1) {
+    return true;
+  }
+
+  const basemapRowPrefix = `${GLOBAL_BASEMAP_LAYER_PREFIX}${VISUALIZATION_SUBLAYER_SEPARATOR}`;
+  const firstThematicIndex = panelOrderTopToBottom.findIndex(
+    (id) => !id.startsWith(basemapRowPrefix)
+  );
+
+  return firstThematicIndex === -1 || labelsIndex < firstThematicIndex;
 }
 
 /**
@@ -134,6 +177,39 @@ export function resolveMetadataLayerKey(
   metadataFile: string
 ): string {
   return layer.file ?? `${metadataFile}:${layer.type}`;
+}
+
+/**
+ * Where a basemap layer sits in the panel, top→bottom: the foreground above the
+ * thematic layers first, then the foreground below it, then the background;
+ * within a band, the order of the basemap config store. Same placement rule
+ * `computeDefaultLayerOrder` applies, exposed so the basemap customisation
+ * sections can be listed in the order the map draws them.
+ */
+export function getBasemapPanelRank(
+  layerId: BasemapLayerId | undefined,
+  configs: readonly {
+    id: BasemapLayerId;
+    renderBelowThematic?: boolean;
+  }[]
+): number {
+  if (!layerId) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  const index = configs.findIndex((config) => config.id === layerId);
+  if (index === -1) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  const band =
+    getBasemapRenderGroup(layerId) === 'background'
+      ? 2
+      : configs[index].renderBelowThematic
+        ? 1
+        : 0;
+
+  return band * configs.length + index;
 }
 
 /**

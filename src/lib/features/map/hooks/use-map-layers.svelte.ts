@@ -23,6 +23,7 @@ import {
   createBasemapLayers,
   createDeckLayers,
   createGeoJsonLayers,
+  type BasemapRowOrderEntry,
   type MetadataLayerEntry
 } from '../layers';
 import { extractGeometryInfo } from '../io';
@@ -57,9 +58,12 @@ import {
   getVisualizationRenderOrder
 } from '../utils/layer-order.utils';
 import {
+  buildBasemapSubLayerId,
   buildVisualizationSubLayerId,
   classifyThematicLayerPrimitive,
+  isPerKeyAuxLayerType,
   mergeLayerOrder,
+  shouldRenderDeckBelowTiledLabels,
   type LayerOrderRow
 } from '../utils/layer-panel-row.utils';
 import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
@@ -302,6 +306,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
   let lastAppliedLayers: Layer<DeckDataRow>[] = [];
 
+  // Interleaved mode inserts the whole deck stack at one point in the MapLibre
+  // style, so the tiled labels row's position in the flat layer order decides
+  // whether the thematic layers go under the labels or over the entire style.
+  function resolveTiledBasemapBeforeId(map: MapLibreMap): string | undefined {
+    return shouldRenderDeckBelowTiledLabels(layerOrderStore.order)
+      ? findFirstSymbolLayerId(map)
+      : undefined;
+  }
+
   function syncInterleavedLayerOrder(): boolean {
     const deckOverlay = getDeckOverlay();
     const map = getMap();
@@ -310,11 +323,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       return false;
     }
 
-    const beforeId = findFirstSymbolLayerId(map);
-    if (!beforeId) {
-      return false;
-    }
-
+    const beforeId = resolveTiledBasemapBeforeId(map);
     const orderedLayers = applyBeforeIdToLayers(lastAppliedLayers, beforeId);
     const applied = setLayers(orderedLayers);
 
@@ -971,7 +980,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       // not publish render projections outside projectionStore.setReferenceBbox.
 
       const beforeId =
-        map && deckOverlay ? findFirstSymbolLayerId(map) : undefined;
+        map && deckOverlay ? resolveTiledBasemapBeforeId(map) : undefined;
 
       const layers: Layer<DeckDataRow>[] = [];
       let hasEmptyFilteredVisualization = false;
@@ -1040,6 +1049,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       // Deck layer id → panel row id for the basemap pool (computed by
       // `createBasemapLayers`); the thematic half is filled in the viz loop.
       let basemapRowIdByLayerId = new Map<string, string>();
+      // Basemap panel rows in panel order (top→bottom), published by
+      // `createBasemapLayers`.
+      let basemapPanelRowOrder: BasemapRowOrderEntry[] = [];
 
       if (shouldKeepOrthographicBasemapLayers) {
         try {
@@ -1134,6 +1146,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
                 style: layer.style ?? null,
                 type: layer.type,
                 file: layer.file ?? currentMetadata.file,
+                panelRowId: isPerKeyAuxLayerType(layer.type)
+                  ? buildBasemapSubLayerId(layerKey)
+                  : undefined,
                 styleOverride: basemapAuxLayersStore.getStyle(
                   currentMetadata.file,
                   layerKey
@@ -1183,6 +1198,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             (layer) => !foregroundBelowSet.has(layer)
           );
           basemapRowIdByLayerId = basemapGroups.rowIdByLayerId;
+          basemapPanelRowOrder = basemapGroups.rowOrder;
         } catch (error) {
           logger.error(
             'Basemap layer creation failed; rendering thematic layers only',
@@ -1477,64 +1493,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         }
       }
 
-      // Basemap order-rows from the three render buckets: each row's group +
-      // below-thematic flag feeds the canonical default slot (via
-      // `computeDefaultLayerOrder` inside `mergeLayerOrder`) for rows the
-      // persisted order has never seen, while a user drag overrides it. Mirrors
-      // the panel's basemap rows so both sides project onto the same order.
-      const basemapOrderRows = new Map<string, LayerOrderRow>();
-      const addBasemapOrderRows = (
-        bucket: readonly Layer<DeckDataRow>[],
-        group: 'foreground' | 'background',
-        belowThematic: boolean
-      ): void => {
-        for (const layer of bucket) {
-          const rowId = basemapRowIdByLayerId.get(String(layer.id));
-          if (!rowId || basemapOrderRows.has(rowId)) continue;
-          basemapOrderRows.set(rowId, {
-            id: rowId,
-            kind: 'basemap-aux',
-            basemapRenderGroup: group,
-            basemapRenderBelowThematic: belowThematic
-          });
-        }
-      };
-      addBasemapOrderRows(
-        [...basemapBackgroundLayers].reverse(),
-        'background',
-        false
-      );
-      addBasemapOrderRows(
-        basemapForegroundBelowThematicLayers,
-        'foreground',
-        true
-      );
-      addBasemapOrderRows(basemapForegroundLayers, 'foreground', false);
-
-      // The flat panel order is the single source of truth: project the live
-      // rows onto the persisted drag order (manual drags win, new rows slot in
-      // at their default position, stale ids drop out), then draw the reverse —
-      // top of the panel = front of the map. Any row can sit above or below any
-      // other; there is no bucket clamp.
-      const panelLayerOrder = mergeLayerOrder(
-        [...thematicOrderRows.values(), ...basemapOrderRows.values()],
-        layerOrderStore.order,
-        activeVisualizations.map((viz) => viz.id)
-      );
-      const rowIdForLayer = (layer: Layer): string | null =>
-        thematicRowIdByLayerId.get(String(layer.id)) ??
-        basemapRowIdByLayerId.get(String(layer.id)) ??
-        null;
-      const orderedLayers = applyPanelRenderOrder(
-        [
-          ...basemapBackgroundLayers,
-          ...basemapForegroundBelowThematicLayers,
-          ...basemapForegroundLayers,
-          ...layers
-        ],
-        panelLayerOrder,
-        rowIdForLayer
-      );
       // The projected-sphere ocean mask should appear for any non-identity
       // projection driving the render — both manual overrides and a basemap's
       // own default projection (e.g. Equal Earth on the World map). Gating it
@@ -1605,23 +1563,79 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             };
           })()
         : undefined;
-      // A default simple projection stays unframed. A composite projection is
-      // different: its sphere represents the boundary of every sub-projection
-      // frame, so it must remain visible without a manual override (#195).
+      // The outline of the ocean shape, driven by the Mers/Océans contour
+      // toggle alone: a basemap on its own default projection used to stay
+      // unframed whatever that toggle said.
       const projectionSphereOutlineLayer =
-        sphereProjectionInput &&
-        sphereVisible &&
-        (hasManualProjectionOverride || isCompositeBasemapProjection)
+        sphereProjectionInput && sphereVisible
           ? createProjectionSphereOutlineLayer({
               projection: sphereProjectionInput,
               modelMatrix: matrixToApply,
               ...(sphereOutlineOptions ?? {})
             })
           : null;
+
+      // The sphere outline is the `sphere` panel row's only deck layer, so it
+      // joins the foreground pool instead of being pinned in front of
+      // everything — a symbol overlapping it now reads above the outline.
+      if (projectionSphereOutlineLayer) {
+        const sphereRowId = buildBasemapSubLayerId(BASEMAP_LAYER_ID.SPHERE);
+        basemapRowIdByLayerId.set(
+          String(projectionSphereOutlineLayer.id),
+          sphereRowId
+        );
+        if (sphereConfig?.renderBelowThematic ?? true) {
+          basemapForegroundBelowThematicLayers.push(
+            projectionSphereOutlineLayer
+          );
+        } else {
+          basemapForegroundLayers.push(projectionSphereOutlineLayer);
+        }
+      }
+
+      // Basemap order-rows in panel order: each row's group + below-thematic
+      // flag feeds the canonical default slot (via `computeDefaultLayerOrder`
+      // inside `mergeLayerOrder`) for rows the persisted order has never seen,
+      // while a user drag overrides it. Mirrors the panel's basemap rows so
+      // both sides project onto the same order.
+      const basemapOrderRows = new Map<string, LayerOrderRow>();
+      for (const entry of basemapPanelRowOrder) {
+        if (basemapOrderRows.has(entry.id)) continue;
+        basemapOrderRows.set(entry.id, {
+          id: entry.id,
+          kind: 'basemap-aux',
+          basemapRenderGroup: entry.renderGroup,
+          basemapRenderBelowThematic: entry.belowThematic
+        });
+      }
+
+      // The flat panel order is the single source of truth: project the live
+      // rows onto the persisted drag order (manual drags win, new rows slot in
+      // at their default position, stale ids drop out), then draw the reverse —
+      // top of the panel = front of the map. Any row can sit above or below any
+      // other; there is no bucket clamp.
+      const panelLayerOrder = mergeLayerOrder(
+        [...thematicOrderRows.values(), ...basemapOrderRows.values()],
+        layerOrderStore.order,
+        activeVisualizations.map((viz) => viz.id)
+      );
+      const rowIdForLayer = (layer: Layer): string | null =>
+        thematicRowIdByLayerId.get(String(layer.id)) ??
+        basemapRowIdByLayerId.get(String(layer.id)) ??
+        null;
+      const orderedLayers = applyPanelRenderOrder(
+        [
+          ...basemapBackgroundLayers,
+          ...basemapForegroundBelowThematicLayers,
+          ...basemapForegroundLayers,
+          ...layers
+        ],
+        panelLayerOrder,
+        rowIdForLayer
+      );
       const maskedOrderedLayers = applyProjectionSphereMask(
         orderedLayers,
-        projectionSphereMaskLayer,
-        projectionSphereOutlineLayer
+        projectionSphereMaskLayer
       );
       layers.length = 0;
       layers.push(...maskedOrderedLayers);

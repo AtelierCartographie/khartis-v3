@@ -600,45 +600,6 @@ describe('layers store flattened model', () => {
     expect(mockVisualizationStore.setVisualizationOrder).not.toHaveBeenCalled();
   });
 
-  it('renames a visualization addressed by id through the dedicated immediate path', () => {
-    const visualization = createVisualization();
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-
-    layersActions.syncWithVisualizations();
-    layersActions.updateLayer('viz-1', { name: 'Renamed layer' });
-
-    expect(mockVisualizationStore.renameVisualization).toHaveBeenCalledWith(
-      'viz-1',
-      'Renamed layer'
-    );
-    expect(mockVisualizationStore.updateVisualization).not.toHaveBeenCalled();
-  });
-
-  it('removes a visualization addressed by id', () => {
-    const visualization = createVisualization();
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-
-    layersActions.syncWithVisualizations();
-    layersActions.removeLayer('viz-1');
-
-    expect(mockVisualizationStore.removeVisualization).toHaveBeenCalledWith(
-      'viz-1'
-    );
-  });
-
-  it('does not remove a visualization when the id is unknown', () => {
-    const visualization = createVisualization();
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-
-    layersActions.syncWithVisualizations();
-    layersActions.removeLayer('viz-1::point');
-
-    expect(mockVisualizationStore.removeVisualization).not.toHaveBeenCalled();
-  });
-
   it('persists a cross-visualization drag as a flat z-order without reordering the visualizations (tabs stay put)', () => {
     const viz1 = createVisualization({ id: 'viz-1', name: 'Viz 1' });
     const viz2 = createVisualization({ id: 'viz-2', name: 'Viz 2' });
@@ -653,30 +614,6 @@ describe('layers store flattened model', () => {
     // Z-order is decoupled from the visualization (tab) order: dragging a layer
     // never reorders the visualization list anymore.
     expect(mockVisualizationStore.setVisualizationOrder).not.toHaveBeenCalled();
-  });
-
-  it('duplicates a visualization addressed by id and returns one of its primitive rows', () => {
-    const visualization = createVisualization();
-    const duplicated = createVisualization({
-      id: 'viz-2',
-      name: 'Visualization (1)'
-    });
-
-    mockVisualizationStore.visualizations = [visualization];
-    mockVisualizationStore.activeVisualizations = [visualization];
-    mockVisualizationStore.duplicateVisualization.mockImplementation(() => {
-      mockVisualizationStore.visualizations = [visualization, duplicated];
-      return duplicated;
-    });
-
-    layersActions.syncWithVisualizations();
-    const result = layersActions.duplicateLayer('viz-1');
-
-    expect(mockVisualizationStore.duplicateVisualization).toHaveBeenCalledWith(
-      'viz-1'
-    );
-    expect(result).not.toBeNull();
-    expect(result?.parentId).toBe('viz-2');
   });
 
   it('toggles a whole visualization by id when no row matches', () => {
@@ -888,7 +825,7 @@ describe('layers store flattened model', () => {
           id: 'basemap::meridiens',
           basemapLayerId: 'meridiens',
           basemapLayerKey: 'world-graticule.parquet',
-          name: 'Méridiens/Parallèles'
+          name: 'Graticules'
         })
       ])
     );

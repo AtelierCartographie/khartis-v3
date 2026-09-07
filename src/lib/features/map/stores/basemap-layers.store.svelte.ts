@@ -312,7 +312,8 @@ function clampGraticuleSpacing(value: unknown): number {
 function isBasemapGraticuleMode(value: unknown): value is BasemapGraticuleMode {
   return (
     value === BasemapGraticuleMode.REMARKABLE ||
-    value === BasemapGraticuleMode.REGULAR
+    value === BasemapGraticuleMode.REGULAR ||
+    value === BasemapGraticuleMode.EQUATOR
   );
 }
 
