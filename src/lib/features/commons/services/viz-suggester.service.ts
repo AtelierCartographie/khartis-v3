@@ -315,7 +315,8 @@ const TEXT_SUGGESTION_SCORE_FACTOR = 0.7;
 const LABELED_SCORE_FACTOR = 0.9;
 const LABELED_PROPORTIONAL_VIZ_ID = 'symbols_proportional_labeled';
 const LABELED_CHOROPLETH_VIZ_ID = 'choropleth_labeled';
-const SHAPE_CATEGORY_VIZ_IDS = new Set([
+
+export const SHAPE_CATEGORY_VIZ_IDS = new Set([
   'symbols_differents',
   'symbols_differents_QLO'
 ]);

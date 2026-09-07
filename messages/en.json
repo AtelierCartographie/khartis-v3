@@ -1626,7 +1626,6 @@
   "warning_duplicate_rows_message": "{count} duplicate rows found",
   "copy_suffix": " (copy)",
   "copy_suffix_numbered": " (copy {count})",
-  "viz_preview_label": "Visualization preview",
   "column_null_label": "nulls",
   "contrast_label": "Contrast",
   "contrast_low": "Low",
