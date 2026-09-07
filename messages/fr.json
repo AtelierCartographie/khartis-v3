@@ -1626,7 +1626,6 @@
   "warning_duplicate_rows_message": "{count} lignes en double trouvées",
   "copy_suffix": " (copie)",
   "copy_suffix_numbered": " (copie {count})",
-  "viz_preview_label": "Aperçu de la visualisation",
   "column_null_label": "nuls",
   "contrast_label": "Contraste",
   "contrast_low": "Faible",

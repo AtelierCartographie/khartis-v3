@@ -158,12 +158,7 @@
   onkeydown={handleKeyDown}
 >
   <div class="preview-panel">
-    <VisualizationSuggestionPreview
-      suggestionId={suggestion.id}
-      label={m.viz_preview_label()}
-      semioTypes={suggestion.semioTypes}
-      geometries={suggestion.geometries}
-    />
+    <VisualizationSuggestionPreview suggestion={suggestion} />
   </div>
 
   <div class="content-panel">
@@ -321,15 +316,7 @@
     justify-content: center;
     padding: 1px;
     box-sizing: border-box;
-    background: #ffffff;
-    --tile-preview-background: var(
-      --khartis-additions-layer-02-suggestions,
-      #ffffff
-    );
-    --tile-preview-color: var(
-      --khartis-additions-interactive-suggestions,
-      #0072c3
-    );
+    background: var(--khartis-additions-layer-02-suggestions, #ffffff);
   }
 
   .content-panel {
