@@ -160,11 +160,11 @@
   }
 
   .histogram-threshold-row {
-    min-height: 28px;
+    min-height: 24px;
   }
 
   .histogram-interval-row {
-    min-height: 20px;
+    min-height: 16px;
   }
 
   .histogram-label {
@@ -190,6 +190,8 @@
   }
 
   .histogram-input-wrapper :global(.bx--text-input) {
+    height: 24px;
+    min-height: 24px;
     background-color: transparent;
     border-bottom: 1px solid var(--cds-border-subtle, #e0e0e0);
     text-align: right;
@@ -222,8 +224,8 @@
   .break-preview {
     width: var(--preview-size);
     height: var(--preview-size);
-    max-width: 28px;
-    max-height: 28px;
+    max-width: 24px;
+    max-height: 24px;
     min-width: 4px;
     min-height: 4px;
     flex-shrink: 0;
@@ -251,14 +253,14 @@
   }
 
   .break-preview-spacer {
-    width: 28px;
+    width: 24px;
     height: 1px;
     flex-shrink: 0;
   }
 
   .histogram-bar-wrapper {
     width: 92px;
-    height: 18px;
+    height: 14px;
     flex-shrink: 0;
     display: flex;
     align-items: center;
