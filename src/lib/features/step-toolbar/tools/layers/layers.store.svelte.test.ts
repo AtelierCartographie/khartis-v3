@@ -825,7 +825,7 @@ describe('layers store flattened model', () => {
           id: 'basemap::meridiens',
           basemapLayerId: 'meridiens',
           basemapLayerKey: 'world-graticule.parquet',
-          name: 'Méridiens/Parallèles'
+          name: 'Graticules'
         })
       ])
     );

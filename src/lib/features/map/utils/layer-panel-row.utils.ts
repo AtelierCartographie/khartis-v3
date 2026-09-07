@@ -1,5 +1,6 @@
 import {
   BASEMAP_LAYER_ID,
+  getBasemapRenderGroup,
   type BasemapLayerId
 } from '$lib/features/map/stores/basemap-layers.store.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
@@ -165,6 +166,39 @@ export function resolveMetadataLayerKey(
   metadataFile: string
 ): string {
   return layer.file ?? `${metadataFile}:${layer.type}`;
+}
+
+/**
+ * Where a basemap layer sits in the panel, top→bottom: the foreground above the
+ * thematic layers first, then the foreground below it, then the background;
+ * within a band, the order of the basemap config store. Same placement rule
+ * `computeDefaultLayerOrder` applies, exposed so the basemap customisation
+ * sections can be listed in the order the map draws them.
+ */
+export function getBasemapPanelRank(
+  layerId: BasemapLayerId | undefined,
+  configs: readonly {
+    id: BasemapLayerId;
+    renderBelowThematic?: boolean;
+  }[]
+): number {
+  if (!layerId) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  const index = configs.findIndex((config) => config.id === layerId);
+  if (index === -1) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  const band =
+    getBasemapRenderGroup(layerId) === 'background'
+      ? 2
+      : configs[index].renderBelowThematic
+        ? 1
+        : 0;
+
+  return band * configs.length + index;
 }
 
 /**

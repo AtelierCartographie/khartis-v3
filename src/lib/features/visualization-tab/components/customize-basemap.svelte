@@ -27,6 +27,7 @@
   import { resolveTiledStyleFromToggle } from '../services/tiled-basemap-selection.service';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
   import { resolveActiveBasemapMetadata } from '$lib/features/map/utils/basemap-metadata-resolution.utils';
+  import { getBasemapPanelRank } from '$lib/features/map/utils/layer-panel-row.utils';
   import { getBasemapAuxLayerDefaultVisibility } from '$lib/features/map/utils/basemap-aux-layer-visibility.utils';
   import type { BasemapLayer } from '$lib/features/map/types/basemap.types';
   import type { BasemapLayerId } from '$lib/features/map/stores/basemap-layers.store.svelte';
@@ -95,8 +96,6 @@
         return isCustom ? null : 'villes';
       case BasemapLayerType.GRATICULE:
         return 'meridiens';
-      case BasemapLayerType.GEOGRAPHIC_LINES:
-        return 'equateur';
       case BasemapLayerType.POLYGON:
         // Custom polygons are territory geometry; catalog polygons map to Mers.
         return isCustom ? 'terre' : 'mers';
@@ -110,13 +109,6 @@
     }
   }
 
-  const sphereSyntheticLayer: BasemapLayer = {
-    title_fr: m.basemap_layer_sphere({}, { locale: 'fr' }),
-    title_en: m.basemap_layer_sphere({}, { locale: 'en' }),
-    type: BasemapLayerType.SPHERE,
-    file: SYNTHETIC_AUX_LAYER_KEY.SPHERE,
-    style: null
-  };
   const oceanSyntheticLayer: BasemapLayer = {
     title_fr: m.basemap_layer_mers({}, { locale: 'fr' }),
     title_en: m.basemap_layer_mers({}, { locale: 'en' }),
@@ -139,11 +131,6 @@
     return true;
   }
 
-  // The sphere toggle renders only for simple projections with a single outline.
-  const supportsProjectionSphere = $derived(
-    currentMetadata?.proj_to?.type === 'simple'
-  );
-
   const layerEntries = $derived.by<LayerEntry[]>(() => {
     const metadata = currentMetadata;
     if (!metadata) return [];
@@ -154,20 +141,9 @@
         sharedLegacyId: 'mers',
         instanceIndex: 0,
         defaultVisible: true
-      },
-      ...(supportsProjectionSphere
-        ? [
-            {
-              layer: sphereSyntheticLayer,
-              sharedLegacyId: 'sphere' as BasemapLayerId,
-              instanceIndex: 0,
-              defaultVisible: true
-            }
-          ]
-        : [])
+      }
     ];
     typeCounters.set(BasemapLayerType.POLYGON, 1);
-    typeCounters.set(BasemapLayerType.SPHERE, 1);
     for (const layer of metadata.layers) {
       if (!isSection3RenderableType(layer.type)) continue;
       const count = typeCounters.get(layer.type) ?? 0;
@@ -186,7 +162,22 @@
         )
       });
     }
-    return entries;
+
+    // Listed the way the map stacks them, so Mers/Océans closes the list.
+    return entries
+      .map((entry, index) => ({ entry, index }))
+      .sort(
+        (a, b) =>
+          getBasemapPanelRank(
+            a.entry.sharedLegacyId ?? undefined,
+            basemapLayersStore.layers
+          ) -
+            getBasemapPanelRank(
+              b.entry.sharedLegacyId ?? undefined,
+              basemapLayersStore.layers
+            ) || a.index - b.index
+      )
+      .map(({ entry }) => entry);
   });
 
   const availableMetadataLayerTypes = $derived.by(
