@@ -2142,6 +2142,11 @@
   }
 
   :global(.maplibregl-ctrl-attrib) {
-    display: none;
+    font-size: 0.625rem;
+    line-height: 1rem;
+  }
+
+  :global(.maplibregl-ctrl-attrib.maplibregl-compact) {
+    background: var(--cds-layer-01, #ffffff);
   }
 </style>
