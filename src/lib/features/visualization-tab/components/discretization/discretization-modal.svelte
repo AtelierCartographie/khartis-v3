@@ -726,8 +726,9 @@
   .discretization-floating-panel {
     position: fixed;
     right: 0;
-    top: 50%;
-    transform: translateY(-50%);
+    /* Anchored, not centred: the panel grows downward when a class is added,
+       so the class-count stepper stays under the cursor across clicks. */
+    top: 10vh;
     width: 320px;
     min-height: 320px;
     max-height: min(80vh, calc(100dvh - 120px));
@@ -750,7 +751,6 @@
         60px + env(safe-area-inset-bottom, 0px) + var(--cds-spacing-03) + 48px +
           var(--cds-spacing-03)
       );
-      transform: none;
       width: 100vw;
       max-height: calc(
         100dvh - var(--cds-header-height, 48px) -
