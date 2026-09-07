@@ -41,6 +41,37 @@ export function buildTiledBasemapLayerId(layerId: string): string {
   return `${TILED_BASEMAP_LAYER_SEPARATOR}${layerId}`;
 }
 
+export const TILED_BASEMAP_LABELS_GROUP_ID = 'labels';
+
+export const TILED_BASEMAP_LABELS_ROW_ID = buildBasemapSubLayerId(
+  buildTiledBasemapLayerId(TILED_BASEMAP_LABELS_GROUP_ID)
+);
+
+/**
+ * In interleaved mode every deck layer enters the MapLibre style at a single
+ * point, so the whole thematic stack is either behind or in front of the tiled
+ * labels. This reads that one bit off the flat layer order: labels above the
+ * first thematic row means the deck layers go under them. An order that has
+ * never seen the labels row (no drag yet) keeps the default — labels on top.
+ */
+export function shouldRenderDeckBelowTiledLabels(
+  panelOrderTopToBottom: readonly string[]
+): boolean {
+  const labelsIndex = panelOrderTopToBottom.indexOf(
+    TILED_BASEMAP_LABELS_ROW_ID
+  );
+  if (labelsIndex === -1) {
+    return true;
+  }
+
+  const basemapRowPrefix = `${GLOBAL_BASEMAP_LAYER_PREFIX}${VISUALIZATION_SUBLAYER_SEPARATOR}`;
+  const firstThematicIndex = panelOrderTopToBottom.findIndex(
+    (id) => !id.startsWith(basemapRowPrefix)
+  );
+
+  return firstThematicIndex === -1 || labelsIndex < firstThematicIndex;
+}
+
 /**
  * The panel primitive a thematic deck layer belongs to, derived from its id
  * prefix (`createLayerId`). Both text overlays — `text-layer` and `label-layer`
