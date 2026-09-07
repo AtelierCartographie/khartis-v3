@@ -21,7 +21,9 @@ function isMissingPolygonFillDatum(
   categoryColumn: string | undefined,
   categoryColorMap: Map<string, RGBColor> | null
 ): boolean {
-  if (fillMode === FillMode.CLASSES) {
+  // Density shares the classified reading: a row with no usable numeric value
+  // draws no dot, which would otherwise be indistinguishable from a zero.
+  if (fillMode === FillMode.CLASSES || fillMode === FillMode.DENSITY) {
     if (!valueColumn) {
       return false;
     }
