@@ -123,12 +123,9 @@ const TILED_LAYER_ITEMS: Array<{
 ];
 
 type LayersActions = {
-  updateLayer: (id: string, updates: Partial<Layer>) => void;
-  removeLayer: (id: string) => void;
   toggleLayerVisibility: (id: string) => void;
   /** Flat reorder persists absolute panel order without mutating render stores. */
   reorderLayers: (fromIndex: number, toIndex: number) => void;
-  duplicateLayer: (id: string) => Layer | null;
   syncWithVisualizations: () => void;
 };
 
@@ -823,42 +820,6 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
       s.layers.find((layer) => layer.id === id);
 
     return {
-      updateLayer: (id: string, updates: Partial<Layer>) => {
-        const layer = findLayer(id);
-        if (!layer) {
-          // Row menu rename targets the visualization id.
-          const visualization = visualizationStore.visualizations.find(
-            (v) => v.id === id
-          );
-          if (!visualization) return;
-          if (updates.name !== undefined) {
-            visualizationStore.renameVisualization(id, updates.name);
-          }
-          syncFromSources();
-          return;
-        }
-
-        if (layer.kind === 'viz-primitive' && layer.parentId) {
-          if (updates.name !== undefined) {
-            visualizationStore.renameVisualization(
-              layer.parentId,
-              updates.name
-            );
-          }
-        }
-
-        syncFromSources();
-      },
-      removeLayer: (id: string) => {
-        // Row menu removal targets the whole visualization id.
-        const visualization = visualizationStore.visualizations.find(
-          (v) => v.id === id
-        );
-        if (!visualization) return;
-
-        visualizationStore.removeVisualization(id);
-        syncFromSources();
-      },
       toggleLayerVisibility: (id: string) => {
         const layer = findLayer(id);
         if (!layer) {
@@ -919,25 +880,6 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
         }
         layerOrderStore.setOrder(nextIds);
         syncFromSources();
-      },
-      duplicateLayer: (id: string): Layer | null => {
-        const visualization = visualizationStore.visualizations.find(
-          (v) => v.id === id
-        );
-        if (!visualization) {
-          return null;
-        }
-
-        const duplicated = visualizationStore.duplicateVisualization(id);
-        syncFromSources();
-
-        if (!duplicated) {
-          return null;
-        }
-
-        return (
-          s.layers.find((entry) => entry.parentId === duplicated.id) ?? null
-        );
       },
       syncWithVisualizations: () => {
         syncFromSources();

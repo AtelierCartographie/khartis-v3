@@ -83,7 +83,7 @@ describe('layers list', () => {
     expect(onOpenSettings).toHaveBeenCalledWith('viz-1::point');
   });
 
-  it('exposes the row context menu only for primitive·viz rows', () => {
+  it('renders no row context menu (visualization actions live in the tabs)', () => {
     render(LayersList, {
       layers: [vizPrimitive, basemapLayer],
       onToggleVisibility: vi.fn(),
@@ -91,28 +91,6 @@ describe('layers list', () => {
       onReorder: vi.fn()
     });
 
-    // One overflow menu (the primitive row), none for the basemap row.
-    const menus = screen.getAllByRole('button', { name: 'menu' });
-    expect(menus).toHaveLength(1);
-  });
-
-  it('targets the parent visualization id from the row context menu actions', async () => {
-    const onDeleteLayer = vi.fn();
-    render(LayersList, {
-      layers: [vizPrimitive],
-      onToggleVisibility: vi.fn(),
-      onOpenSettings: vi.fn(),
-      onReorder: vi.fn(),
-      onDeleteLayer
-    });
-
-    const menus = screen.getAllByRole('button', { name: 'menu' });
-    await fireEvent.click(menus[0]);
-    const deleteItem = screen.getByRole('menuitem', {
-      name: m.layers_delete()
-    });
-    await fireEvent.click(deleteItem);
-
-    expect(onDeleteLayer).toHaveBeenCalledWith('viz-1');
+    expect(screen.queryAllByRole('button', { name: 'menu' })).toHaveLength(0);
   });
 });
