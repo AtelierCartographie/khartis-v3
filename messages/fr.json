@@ -1538,7 +1538,6 @@
   "palette_color_option": "Couleur {color}",
   "error_geometry_conversion_title": "Erreur de conversion de la géométrie",
   "error_geometry_conversion_message": "Impossible de convertir la géométrie pour l'affichage. La carte peut apparaître vide.",
-  "map_collection": "Collection de cartes",
   "viz_suggestion_primitive_symbols": "Symboles",
   "viz_suggestion_primitive_polygons": "Polygones",
   "viz_suggestion_primitive_lines": "Lignes",
