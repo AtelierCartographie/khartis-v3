@@ -714,10 +714,13 @@ export function createPolygonLayerStack(
                 }
               ]
             : []),
+          // The outline belongs to the POLYGON primitive: tagging it LINE sent
+          // it to `Number.MAX_SAFE_INTEGER` on polygon datasets, whose
+          // `primitiveOrder` never contains LINE, which drew it under the fill.
           ...(showStroke
             ? [
                 {
-                  primitive: PrimitiveFilterType.LINE as PrimitiveFilter,
+                  primitive: PrimitiveFilterType.POLYGON as PrimitiveFilter,
                   layer: strokeLayer
                 }
               ]
