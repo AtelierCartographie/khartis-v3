@@ -63,6 +63,7 @@ import {
   classifyThematicLayerPrimitive,
   isPerKeyAuxLayerType,
   mergeLayerOrder,
+  shouldRenderDeckBelowTiledLabels,
   type LayerOrderRow
 } from '../utils/layer-panel-row.utils';
 import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
@@ -305,6 +306,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
   let lastAppliedLayers: Layer<DeckDataRow>[] = [];
 
+  // Interleaved mode inserts the whole deck stack at one point in the MapLibre
+  // style, so the tiled labels row's position in the flat layer order decides
+  // whether the thematic layers go under the labels or over the entire style.
+  function resolveTiledBasemapBeforeId(map: MapLibreMap): string | undefined {
+    return shouldRenderDeckBelowTiledLabels(layerOrderStore.order)
+      ? findFirstSymbolLayerId(map)
+      : undefined;
+  }
+
   function syncInterleavedLayerOrder(): boolean {
     const deckOverlay = getDeckOverlay();
     const map = getMap();
@@ -313,11 +323,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       return false;
     }
 
-    const beforeId = findFirstSymbolLayerId(map);
-    if (!beforeId) {
-      return false;
-    }
-
+    const beforeId = resolveTiledBasemapBeforeId(map);
     const orderedLayers = applyBeforeIdToLayers(lastAppliedLayers, beforeId);
     const applied = setLayers(orderedLayers);
 
@@ -974,7 +980,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       // not publish render projections outside projectionStore.setReferenceBbox.
 
       const beforeId =
-        map && deckOverlay ? findFirstSymbolLayerId(map) : undefined;
+        map && deckOverlay ? resolveTiledBasemapBeforeId(map) : undefined;
 
       const layers: Layer<DeckDataRow>[] = [];
       let hasEmptyFilteredVisualization = false;

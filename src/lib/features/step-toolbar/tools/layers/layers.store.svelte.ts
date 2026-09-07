@@ -63,6 +63,7 @@ import {
   buildTiledBasemapLayerId,
   buildVisualizationSubLayerId,
   getCustomBaseLayerType,
+  TILED_BASEMAP_LABELS_GROUP_ID,
   isBasemapLayersToolRenderableType,
   isPerKeyAuxLayerType,
   mapMetadataLayerTypeToBasemapLayerId,
@@ -93,17 +94,26 @@ const BASEMAP_LAYER_DISPLAY_ORDER: BasemapLayerId[] = [
   BASEMAP_LAYER_ID.SPHERE
 ];
 
+// Panel order, top→bottom. Tiled labels are the one group MapLibre draws over
+// the deck overlay, so they belong in the foreground; every other group sits
+// behind the thematic layers.
 const TILED_LAYER_ITEMS: Array<{
   id: string;
   groupIds: LayerGroupId[];
   defaultVisible: boolean;
+  renderGroup?: 'foreground' | 'background';
 }> = [
+  {
+    id: TILED_BASEMAP_LABELS_GROUP_ID,
+    groupIds: ['labels'],
+    defaultVisible: true,
+    renderGroup: 'foreground'
+  },
   { id: 'hydro', groupIds: ['hydro'], defaultVisible: true },
   { id: 'landcover', groupIds: ['landcover'], defaultVisible: true },
   { id: 'buildings', groupIds: ['buildings'], defaultVisible: true },
   { id: 'streets', groupIds: ['streets'], defaultVisible: true },
   { id: 'boundaries', groupIds: ['boundaries'], defaultVisible: true },
-  { id: 'labels', groupIds: ['labels'], defaultVisible: true },
   {
     id: 'admin-boundaries',
     groupIds: ['admin_boundaries'],
@@ -713,7 +723,7 @@ function buildTiledBasemapSubLayers(): Layer[] {
     isSubLayer: true,
     kind: 'basemap-aux',
     type: 'geographic',
-    basemapRenderGroup: 'background',
+    basemapRenderGroup: item.renderGroup ?? 'background',
     tiledLayerGroupIds: item.groupIds,
     tiledLayerDefaultVisible: item.defaultVisible,
     name: getTiledLayerName(item.id),
