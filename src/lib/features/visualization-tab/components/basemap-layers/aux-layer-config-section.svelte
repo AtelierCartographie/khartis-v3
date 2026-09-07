@@ -7,6 +7,7 @@
   import LayerConfigRelief from './layer-config-relief.svelte';
   import LayerConfigMeridiens from './layer-config-meridiens.svelte';
   import LayerConfigVilles from './layer-config-villes.svelte';
+  import LayerConfigMers from './layer-config-mers.svelte';
   import {
     basemapLayersStore,
     type BasemapLayerConfig,
@@ -19,6 +20,7 @@
     type BasemapDottedPattern
   } from '$lib/features/commons/constants/visualization.constants';
   import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
+  import { SYNTHETIC_AUX_LAYER_KEY } from '$lib/features/commons/constants/basemap.constants';
   import { webglToHex } from '$lib/features/commons/utils/color-utils';
   import { dashArrayToDottedPattern } from '$lib/features/map/layers/layer-helpers';
   import type { BasemapLayer } from '$lib/features/map/types/basemap.types';
@@ -50,7 +52,11 @@
       : (layer.title_fr ?? layer.type);
   }
 
-  const title = $derived(pickTitle());
+  // The graticule spacing is a control in this very section, so the basemap's
+  // own title ("Graticules (10°)") would contradict it.
+  const title = $derived(
+    sharedLegacyId === 'meridiens' ? m.basemap_layer_meridiens() : pickTitle()
+  );
   const renderKey = $derived(layer.file ?? `${basemapFile}:${layer.type}`);
 
   const isPrimaryInstance = $derived(instanceIndex === 0);
@@ -69,8 +75,9 @@
 
   function isVisible(): boolean {
     if (isPrimaryInstance && legacyId && !isPerKeyLayer) {
+      const configId = legacyId === 'meridiens' ? graticuleLayerId : legacyId;
       return (
-        (getConfig(legacyId)?.visible ?? true) &&
+        (getConfig(configId)?.visible ?? true) &&
         basemapAuxLayersStore.isVisible(basemapFile, renderKey, defaultVisible)
       );
     }
@@ -199,9 +206,26 @@
     basemapAuxLayersStore.updateStyle(basemapFile, renderKey, updates);
   }
 
-  function syncGraticuleCompanions(checked: boolean): void {
-    basemapLayersStore.setLayerVisibility('meridiens', checked);
-    basemapLayersStore.setLayerVisibility('equateur', false);
+  // The graticule mode picks which of the two render layers carries the section:
+  // the equator line is its own layer, the meridians/parallels another.
+  const graticuleMode = $derived(
+    getConfig('meridiens')?.mode ?? BasemapGraticuleMode.REMARKABLE
+  );
+  const graticuleLayerId = $derived<BasemapLayerId>(
+    graticuleMode === BasemapGraticuleMode.EQUATOR ? 'equateur' : 'meridiens'
+  );
+
+  function syncGraticuleCompanions(
+    checked: boolean,
+    mode: BasemapGraticuleMode = graticuleMode
+  ): void {
+    const active: BasemapLayerId =
+      mode === BasemapGraticuleMode.EQUATOR ? 'equateur' : 'meridiens';
+    basemapLayersStore.setLayerVisibility(active, checked);
+    basemapLayersStore.setLayerVisibility(
+      active === 'meridiens' ? 'equateur' : 'meridiens',
+      false
+    );
   }
 
   function handleToggle(checked: boolean): void {
@@ -211,6 +235,28 @@
       basemapLayersStore.setLayerVisibility(legacyId, checked);
     }
     basemapAuxLayersStore.setVisible(basemapFile, renderKey, checked);
+  }
+
+  const sphereConfig = $derived(getConfig('sphere'));
+  const sphereOutlineVisible = $derived.by(() => {
+    void basemapAuxLayersStore.version;
+    return (
+      (sphereConfig?.visible ?? true) &&
+      basemapAuxLayersStore.isVisible(
+        basemapFile,
+        SYNTHETIC_AUX_LAYER_KEY.SPHERE,
+        true
+      )
+    );
+  });
+
+  function handleSphereOutlineVisibility(visible: boolean): void {
+    basemapLayersStore.setLayerVisibility('sphere', visible);
+    basemapAuxLayersStore.setVisible(
+      basemapFile,
+      SYNTHETIC_AUX_LAYER_KEY.SPHERE,
+      visible
+    );
   }
 
   function handleLayerChange<T extends BasemapLayerId>(
@@ -244,13 +290,14 @@
       if (Object.keys(equateurUpdates).length > 0) {
         basemapLayersStore.updateLayer('equateur', equateurUpdates);
       }
-      if ('mode' in normalizedUpdates) {
+      const nextMode = (normalizedUpdates as Record<string, unknown>).mode;
+      if (nextMode !== undefined) {
         const isVisible = basemapAuxLayersStore.isVisible(
           basemapFile,
           renderKey,
           true
         );
-        syncGraticuleCompanions(isVisible);
+        syncGraticuleCompanions(isVisible, nextMode as BasemapGraticuleMode);
       }
     }
   }
@@ -348,13 +395,16 @@
       onchange={(updates) => handleLayerChange('villes', updates)}
     />
   {:else if legacyId === 'mers'}
-    <LayerConfigSimple
-      showColor={true}
-      showDotted={false}
-      showThickness={false}
+    <LayerConfigMers
       color={getConfig('mers')?.color}
       opacity={getConfig('mers')?.opacity}
+      outlineVisible={sphereOutlineVisible}
+      outlineColor={sphereConfig?.color}
+      outlineThickness={sphereConfig?.thickness}
+      outlineOpacity={sphereConfig?.opacity}
       onchange={(updates) => handleLayerChange('mers', updates)}
+      onoutlinechange={(updates) => handleLayerChange('sphere', updates)}
+      onoutlinevisibilitychange={handleSphereOutlineVisibility}
     />
   {:else if legacyId === 'lacs'}
     <LayerConfigSimple
@@ -373,16 +423,6 @@
       color={getConfig('relief')?.color}
       opacity={getConfig('relief')?.opacity}
       onchange={(updates) => handleLayerChange('relief', updates)}
-    />
-  {:else if legacyId === 'sphere'}
-    <LayerConfigSimple
-      showColor={true}
-      showDotted={false}
-      showThickness={true}
-      color={getConfig('sphere')?.color}
-      thickness={getConfig('sphere')?.thickness}
-      opacity={getConfig('sphere')?.opacity}
-      onchange={(updates) => handleLayerChange('sphere', updates)}
     />
   {/if}
 </ExpandableSection>
