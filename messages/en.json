@@ -1538,7 +1538,6 @@
   "palette_color_option": "Color {color}",
   "error_geometry_conversion_title": "Geometric conversion error",
   "error_geometry_conversion_message": "Unable to convert the geometry for display. The map may appear empty.",
-  "map_collection": "Map collection",
   "viz_suggestion_primitive_symbols": "Symbols",
   "viz_suggestion_primitive_polygons": "Polygons",
   "viz_suggestion_primitive_lines": "Lines",
