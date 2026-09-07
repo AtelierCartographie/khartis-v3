@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { Binary, makeTable, vectorFromArray } from 'apache-arrow';
+import {
+  Binary,
+  Field,
+  makeData,
+  makeTable,
+  RecordBatch,
+  Schema,
+  Struct,
+  Table,
+  vectorFromArray
+} from 'apache-arrow';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import { geoEquirectangular, geoIdentity } from 'd3-geo';
 import type {
@@ -125,6 +135,42 @@ describe('geoarrow stream bridge path attributes', () => {
       14, 6, 2, 10
     ]);
     expect(Array.from(data.featureIds.slice(0, data.length))).toEqual([0, 1]);
+  });
+
+  it('falls back to the GeoArrow parser for a separated point column instead of throwing', () => {
+    // Europe NUTS centroids ship GeoParquet `encoding: "point"`, which lands as
+    // Struct<x, y> — no byte offsets for the WKB fast path to read.
+    const points = vectorFromArray([
+      { x: 2, y: 3 },
+      { x: -4, y: 5 }
+    ]);
+    const schema = new Schema([
+      new Field(
+        'geometry',
+        points.type,
+        false,
+        new Map([['ARROW:extension:name', 'geoarrow.point']])
+      )
+    ]);
+    const table = new Table(
+      schema,
+      new RecordBatch(
+        schema,
+        makeData({
+          type: new Struct(schema.fields),
+          children: [points.data[0]],
+          length: points.length
+        })
+      )
+    ) as unknown as ArrowTable;
+    const projection = geoIdentity().scale(2).translate([10, 0]);
+
+    const data = parsePointDataWithProjection(table, projection);
+
+    expect(data.length).toBe(2);
+    expect(Array.from(data.positions.slice(0, data.length * 2))).toEqual([
+      14, 6, 2, 10
+    ]);
   });
 
   it('bounds projected point cache entries per table with LRU eviction', () => {
