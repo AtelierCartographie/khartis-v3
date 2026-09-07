@@ -46,6 +46,7 @@
     "dev": "vite dev --port 5176",
     "build": "NODE_ENV=production vite build",
     "download:extensions": "bash scripts/download-duckdb-extensions.sh",
+    "thumbnails:basemap-styles": "node scripts/generate-basemap-style-thumbnails.mjs",
     "deploy:pprd": "bash scripts/deploy-local.sh pprd",
     "deploy:pprd:dry-run": "bash scripts/deploy-local.sh pprd --dry-run --yes",
     "deploy:prod": "bash scripts/deploy-local.sh prod",
