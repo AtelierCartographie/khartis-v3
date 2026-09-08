@@ -56,7 +56,9 @@ export function getBasemapAttributesId(basemap: BasemapMetadata): string {
 }
 
 const SIMILARITY_CACHE_PREFIX = '__similarity_cache__';
+const GRADED_CACHE_PREFIX = '__join_graded__';
 const MAX_SIMILARITY_CACHE_ENTRIES = 4;
+const MAX_GRADED_CACHE_ENTRIES = 4;
 const MAX_EXACT_MATCHES_PER_CANDIDATE_BASEMAP = 50;
 const FUZZY_SCORE_CUTOFF = FUZZY_SEARCH.SCORE_CUTOFF;
 
@@ -99,18 +101,51 @@ function getSimilarityCacheTableName(
   return `${SIMILARITY_CACHE_PREFIX}${sanitized}_${hash}`;
 }
 
-function dropSimilarityCacheTable(
-  cacheTableName: string,
-  duck?: DuckDBClientForJoin
-): void {
+function dropTempTable(tableName: string, duck?: DuckDBClientForJoin): void {
   if (!duck) return;
   // The facade throws synchronously before init; temp tables die with the engine.
   try {
     void duck
-      .query(`DROP TABLE IF EXISTS "${escapeIdentifier(cacheTableName)}"`)
+      .query(`DROP TABLE IF EXISTS "${escapeIdentifier(tableName)}"`)
       .catch(() => undefined);
   } catch {
     return;
+  }
+}
+
+/**
+ * Graded rows keyed by the similarity cache table that produced them, so a
+ * dropped or rebuilt cache takes its derived gradings with it. Insertion-ordered
+ * as an LRU, like similarityCacheEntries.
+ */
+const gradedCacheEntries = new Map<string, string>();
+const pendingGradedBuilds = new Map<string, Promise<string>>();
+
+function getGradedCacheKey(
+  cacheTableName: string,
+  basemapId: string,
+  excludedValues: string[]
+): string {
+  const exclusions = JSON.stringify([...excludedValues].sort());
+  return `${cacheTableName}::${basemapId}::${hashSimilarityCacheKey(exclusions)}`;
+}
+
+function getGradedCacheTableName(basemapId: string, gradedKey: string): string {
+  // Named after the basemap only: embedding the cache table name would make
+  // every graded table read as a similarity cache table.
+  const sanitized = basemapId.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 80);
+  return `${GRADED_CACHE_PREFIX}${sanitized}_${hashSimilarityCacheKey(gradedKey)}`;
+}
+
+function invalidateGradedCache(
+  cacheTableName?: string,
+  duck?: DuckDBClientForJoin
+): void {
+  const prefix = cacheTableName ? `${cacheTableName}::` : '';
+  for (const [key, tableName] of gradedCacheEntries) {
+    if (prefix && !key.startsWith(prefix)) continue;
+    gradedCacheEntries.delete(key);
+    dropTempTable(tableName, duck);
   }
 }
 
@@ -122,7 +157,8 @@ export function invalidateSimilarityCache(
   for (const [key, entry] of similarityCacheEntries) {
     if (datasetTableName && entry.tableName !== datasetTableName) continue;
     similarityCacheEntries.delete(key);
-    dropSimilarityCacheTable(entry.cacheTableName, duck);
+    invalidateGradedCache(entry.cacheTableName, duck);
+    dropTempTable(entry.cacheTableName, duck);
   }
 }
 
@@ -152,6 +188,8 @@ async function ensureSimilarityCached(
       return cachedEntry.cacheTableName;
     }
     similarityCacheEntries.delete(buildKey);
+    // The rebuilt cache holds different rows under the same name.
+    invalidateGradedCache(cachedEntry.cacheTableName, Duck);
   }
 
   const pendingBuild = pendingSimilarityCacheBuilds.get(buildKey);
@@ -352,6 +390,7 @@ async function ensureSimilarityCached(
       if (oldest.done) break;
       const [oldestKey, oldestEntry] = oldest.value;
       similarityCacheEntries.delete(oldestKey);
+      invalidateGradedCache(oldestEntry.cacheTableName, Duck);
       await Duck.query(
         `DROP TABLE IF EXISTS "${escapeIdentifier(oldestEntry.cacheTableName)}"`
       ).catch(() => undefined);
@@ -476,6 +515,84 @@ function buildJoinGradingCtes(
     )`;
 }
 
+/**
+ * Materialize the graded rows once per (cache, basemap, exclusions). Counts,
+ * bucket lists, the joined page and the joined value list all consume the same
+ * chain, so re-inlining it per query re-ran the whole window/aggregate stack —
+ * six times per basemap selection, byte-identical each time.
+ */
+async function ensureGradedMaterialized(
+  cacheTableName: string,
+  basemapId: string,
+  Duck: DuckDBClientForJoin,
+  excludedValues: string[]
+): Promise<string> {
+  const gradedKey = getGradedCacheKey(
+    cacheTableName,
+    basemapId,
+    excludedValues
+  );
+  const gradedTableName = getGradedCacheTableName(basemapId, gradedKey);
+
+  if (gradedCacheEntries.has(gradedKey)) {
+    gradedCacheEntries.delete(gradedKey);
+    gradedCacheEntries.set(gradedKey, gradedTableName);
+    return gradedTableName;
+  }
+
+  const pendingBuild = pendingGradedBuilds.get(gradedKey);
+  if (pendingBuild) {
+    return pendingBuild;
+  }
+
+  const buildPromise = (async () => {
+    perfMark(PERF_PHASE.JOIN_GRADING);
+    const gradingCtes = buildJoinGradingCtes(
+      cacheTableName,
+      basemapId,
+      excludedValues
+    );
+
+    await Duck.query(`
+      CREATE OR REPLACE TEMP TABLE "${escapeIdentifier(gradedTableName)}" AS
+      ${gradingCtes}
+      SELECT
+        g.original_name,
+        g.source_dup_count,
+        g.status,
+        cl.candidates
+      FROM graded g
+      LEFT JOIN candidate_lists cl ON g.original_name = cl.original_name
+    `);
+
+    gradedCacheEntries.set(gradedKey, gradedTableName);
+
+    while (gradedCacheEntries.size > MAX_GRADED_CACHE_ENTRIES) {
+      const oldest = gradedCacheEntries.entries().next();
+      if (oldest.done) break;
+      const [oldestKey, oldestTable] = oldest.value;
+      if (oldestKey === gradedKey) break;
+      gradedCacheEntries.delete(oldestKey);
+      await Duck.query(
+        `DROP TABLE IF EXISTS "${escapeIdentifier(oldestTable)}"`
+      ).catch(() => undefined);
+    }
+
+    perfMeasure(PERF_PHASE.JOIN_GRADING);
+    return gradedTableName;
+  })();
+
+  pendingGradedBuilds.set(gradedKey, buildPromise);
+
+  try {
+    return await buildPromise;
+  } finally {
+    if (pendingGradedBuilds.get(gradedKey) === buildPromise) {
+      pendingGradedBuilds.delete(gradedKey);
+    }
+  }
+}
+
 /** Derive one basemap's join quality from cached similarity rows, aggregated in SQL. */
 async function deriveJoinQualityFromCache(
   cacheTableName: string,
@@ -483,17 +600,18 @@ async function deriveJoinQualityFromCache(
   Duck: DuckDBClientForJoin,
   excludedValues: string[]
 ): Promise<JoinQuality> {
-  perfMark(PERF_PHASE.JOIN_GRADING);
-  const gradingCtes = buildJoinGradingCtes(
-    cacheTableName,
-    basemapId,
-    excludedValues
+  const gradedTable = escapeIdentifier(
+    await ensureGradedMaterialized(
+      cacheTableName,
+      basemapId,
+      Duck,
+      excludedValues
+    )
   );
 
   const countRows = (await Duck.query(
-    `${gradingCtes}
-    SELECT status, COUNT(*) AS cnt
-    FROM graded
+    `SELECT status, COUNT(*) AS cnt
+    FROM "${gradedTable}"
     GROUP BY status`,
     { format: 'array' }
   )) as Array<{ status: JoinBucketStatus; cnt: number }>;
@@ -510,20 +628,18 @@ async function deriveJoinQualityFromCache(
   }
 
   const listRows = (await Duck.query(
-    `${gradingCtes}
-    SELECT status, original_name, candidates
+    `SELECT status, original_name, candidates
     FROM (
       SELECT
-        g.status,
-        g.original_name,
-        cl.candidates,
+        status,
+        original_name,
+        candidates,
         ROW_NUMBER() OVER (
-          PARTITION BY g.status
-          ORDER BY g.original_name
+          PARTITION BY status
+          ORDER BY original_name
         ) AS bucket_rank
-      FROM graded g
-      LEFT JOIN candidate_lists cl ON g.original_name = cl.original_name
-      WHERE g.status IN ('check', 'ambiguous', 'duplicate', 'not_found')
+      FROM "${gradedTable}"
+      WHERE status IN ('check', 'ambiguous', 'duplicate', 'not_found')
     )
     WHERE status IN ('check', 'ambiguous')
        OR bucket_rank <= ${MAX_JOIN_BUCKET_LIST_VALUES}
@@ -575,7 +691,6 @@ async function deriveJoinQualityFromCache(
     duplicateLines: []
   };
 
-  perfMeasure(PERF_PHASE.JOIN_GRADING);
   return quality;
 }
 
@@ -617,19 +732,20 @@ export async function getJoinedEntitiesPage(
   const basemapId = getBasemapAttributesId(basemap);
   await ensureBasemapHasAttributes(basemapId, Duck);
   const cacheTableName = await ensureSimilarityCached(dataset, geoColumn, Duck);
-  const gradingCtes = buildJoinGradingCtes(
-    cacheTableName,
-    basemapId,
-    options.excludedValues ?? []
+  const gradedTable = escapeIdentifier(
+    await ensureGradedMaterialized(
+      cacheTableName,
+      basemapId,
+      Duck,
+      options.excludedValues ?? []
+    )
   );
 
   const rows = (await Duck.query(
-    `${gradingCtes}
-    SELECT g.original_name, cl.candidates
-    FROM graded g
-    LEFT JOIN candidate_lists cl ON g.original_name = cl.original_name
-    WHERE g.status = 'matched'
-    ORDER BY g.original_name
+    `SELECT original_name, candidates
+    FROM "${gradedTable}"
+    WHERE status = 'matched'
+    ORDER BY original_name
     LIMIT ${Math.max(0, Math.trunc(options.limit))}
     OFFSET ${Math.max(0, Math.trunc(options.offset))}`,
     { format: 'array' }
@@ -664,18 +780,20 @@ export async function getJoinedBasemapValues(
   const basemapId = getBasemapAttributesId(basemap);
   await ensureBasemapHasAttributes(basemapId, Duck);
   const cacheTableName = await ensureSimilarityCached(dataset, geoColumn, Duck);
-  const gradingCtes = buildJoinGradingCtes(
-    cacheTableName,
-    basemapId,
-    options.excludedValues ?? []
+  const gradedTable = escapeIdentifier(
+    await ensureGradedMaterialized(
+      cacheTableName,
+      basemapId,
+      Duck,
+      options.excludedValues ?? []
+    )
   );
 
   const rows = (await Duck.query(
-    `${gradingCtes}
-    SELECT DISTINCT (cl.candidates[1]).name AS value
-    FROM graded g
-    JOIN candidate_lists cl ON g.original_name = cl.original_name
-    WHERE g.status = 'matched'`,
+    `SELECT DISTINCT (candidates[1]).name AS value
+    FROM "${gradedTable}"
+    WHERE status = 'matched'
+      AND candidates IS NOT NULL`,
     { format: 'array' }
   )) as Array<{ value: string | null }>;
 
