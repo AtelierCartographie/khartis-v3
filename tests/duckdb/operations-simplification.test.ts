@@ -140,6 +140,9 @@ describe('simplifyGeometryTable', () => {
     const innerlinesQuery = queries.find((sql) =>
       sql.includes('extract_innerlines')
     );
+    const outerlinesQuery = queries.find((sql) =>
+      sql.includes('extract_outerlines')
+    );
 
     expect(vertexCountQuery).toContain(`FROM "O'Brien ""source"""`);
     expect(vertexCountQuery).toContain(`ST_NPoints("geom' ""col""")`);
@@ -153,9 +156,16 @@ describe('simplifyGeometryTable', () => {
       `CREATE OR REPLACE TABLE "source""table__innerlines"`
     );
     expect(innerlinesQuery).toContain(`extract_innerlines('target'' "table"')`);
+    expect(outerlinesQuery).toContain(
+      `CREATE OR REPLACE TABLE "source""table__outerlines"`
+    );
+    expect(outerlinesQuery).toContain(`extract_outerlines('target'' "table"')`);
     expect(Duck.invalidateTableCache).toHaveBeenCalledWith(`target' "table"`);
     expect(Duck.invalidateTableCache).toHaveBeenCalledWith(
       'source"table__innerlines'
+    );
+    expect(Duck.invalidateTableCache).toHaveBeenCalledWith(
+      'source"table__outerlines'
     );
   });
 

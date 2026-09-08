@@ -1,3 +1,4 @@
+import { DERIVED_GEOMETRY_TABLE_SUFFIX } from '$lib/features/commons/constants/basemap.constants';
 import {
   escapeIdentifier,
   escapeSqlString
@@ -167,21 +168,32 @@ export async function simplifyGeometryTable(
   );
 
   if (simplificationMacro === 'simplify_and_clean') {
-    // Recompute innerlines from polygon coverage so borders stay in sync.
-    const innerlinesTable = `${sourceTable}__innerlines`;
-    const escapedInnerlines = escapeIdentifier(innerlinesTable);
-    try {
-      await Duck.query(`
-        CREATE OR REPLACE TABLE "${escapedInnerlines}" AS
-        FROM extract_innerlines('${escapedTargetValue}')
-      `);
-      Duck.invalidateTableCache?.(innerlinesTable);
-    } catch (error) {
-      logger.error(
-        'Failed to rebuild simplified geometry innerlines',
-        LogCategory.DUCKDB,
-        error
-      );
+    // Recompute the derived borders from polygon coverage so they stay in sync.
+    const derivedBoundaries = [
+      {
+        table: `${sourceTable}${DERIVED_GEOMETRY_TABLE_SUFFIX.INNERLINES}`,
+        macro: 'extract_innerlines'
+      },
+      {
+        table: `${sourceTable}${DERIVED_GEOMETRY_TABLE_SUFFIX.OUTERLINES}`,
+        macro: 'extract_outerlines'
+      }
+    ] as const;
+
+    for (const { table, macro } of derivedBoundaries) {
+      try {
+        await Duck.query(`
+          CREATE OR REPLACE TABLE "${escapeIdentifier(table)}" AS
+          FROM ${macro}('${escapedTargetValue}')
+        `);
+        Duck.invalidateTableCache?.(table);
+      } catch (error) {
+        logger.error(
+          `Failed to rebuild simplified geometry borders via ${macro}`,
+          LogCategory.DUCKDB,
+          error
+        );
+      }
     }
   }
 

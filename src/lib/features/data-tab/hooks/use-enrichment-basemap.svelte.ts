@@ -9,6 +9,10 @@ import {
   rankBasemapsByJoinSynthesis
 } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+import {
+  activateDatasetGeometryBasemap,
+  isDatasetGeometryBasemap
+} from '$lib/features/map/services/dataset-geometry-basemap.service';
 import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
 import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
 import type {
@@ -130,10 +134,13 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
   );
 
   const basemaps = $derived(basemapCatalogService.catalogBasemaps);
+  // A dataset's own derived geometry occupies the reference slot by default; it
+  // must not count as a user selection or the preferred basemap never returns.
   const hasActiveSelection = $derived(
     selectedBasemapId !== undefined ||
       osmBasemapStore.isActive ||
-      basemapStyleStore.referenceBasemapId !== null
+      (basemapStyleStore.referenceBasemapId !== null &&
+        !isDatasetGeometryBasemap(basemapStyleStore.referenceBasemapId))
   );
 
   function setPreviewHold(
@@ -163,6 +170,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     });
     basemapStyleStore.setReferenceBasemap(null);
     projectStore.updateProjectData({ basemap: undefined });
+    void activateDatasetGeometryBasemap();
   }
 
   function rememberPreferredBasemap(

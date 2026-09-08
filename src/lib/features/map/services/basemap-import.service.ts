@@ -20,6 +20,7 @@ import {
 } from '$lib/features/data-pipeline';
 import { convertGeoPackageToGeoJsonFile } from '../utils/geopackage-browser-fallback.utils';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
+import { DERIVED_GEOMETRY_TABLE_SUFFIX } from '$lib/features/commons/constants/basemap.constants';
 import {
   escapeIdentifier,
   escapeSqlString
@@ -51,7 +52,6 @@ export interface BasemapBounds {
 }
 
 const RAW_TABLE_SUFFIX = '__raw';
-const INNERLINES_TABLE_SUFFIX = '__innerlines';
 const CENTROIDS_TABLE_SUFFIX = '__centroids';
 const BASEMAP_URL_LOAD_ERROR_CODE = 'BASEMAP_URL_LOAD_ERROR';
 const SHAPEFILE_FILE_TYPE = 'shapefile';
@@ -61,7 +61,11 @@ export function getBasemapRawTableName(tableName: string): string {
 }
 
 export function getBasemapInnerlinesTableName(tableName: string): string {
-  return `${tableName}${INNERLINES_TABLE_SUFFIX}`;
+  return `${tableName}${DERIVED_GEOMETRY_TABLE_SUFFIX.INNERLINES}`;
+}
+
+export function getBasemapOuterlinesTableName(tableName: string): string {
+  return `${tableName}${DERIVED_GEOMETRY_TABLE_SUFFIX.OUTERLINES}`;
 }
 
 export function getBasemapCentroidsTableName(tableName: string): string {
@@ -349,14 +353,25 @@ function buildBasemapLayers(
 ): BasemapLayer[] {
   const layers: BasemapLayer[] = [
     {
-      title_fr: tableName,
-      title_en: tableName,
+      title_fr: isPolygonBasemapLayerType(layerType)
+        ? m.layer_title_territory({}, { locale: 'fr' })
+        : tableName,
+      title_en: isPolygonBasemapLayerType(layerType)
+        ? m.layer_title_territory({}, { locale: 'en' })
+        : tableName,
       type: layerType,
       style: null
     }
   ];
 
   if (isPolygonBasemapLayerType(layerType)) {
+    layers.push({
+      title_fr: m.layer_title_outer_limits({}, { locale: 'fr' }),
+      title_en: m.layer_title_outer_limits({}, { locale: 'en' }),
+      type: BasemapLayerType.LIMIT,
+      file: getBasemapOuterlinesTableName(tableName),
+      style: 'limit-level-2'
+    });
     layers.push({
       title_fr: m.layer_title_limits({}, { locale: 'fr' }),
       title_en: m.layer_title_limits({}, { locale: 'en' }),
@@ -381,7 +396,7 @@ function buildBasemapLayers(
   return layers;
 }
 
-async function createArrowTableFromDuckTable(
+export async function createArrowTableFromDuckTable(
   duck: typeof Duck,
   tableName: string
 ): Promise<ArrowTable> {
@@ -464,7 +479,7 @@ function buildNormalizedGeometrySelect(
   return `SELECT * EXCLUDE ("${escapedGeometryColumn}"), ${geometryExpression} AS "${escapedDefaultGeom}" FROM "${escapedSourceTable}"`;
 }
 
-async function createEmptyInnerlinesTable(
+async function createEmptyLineTable(
   duck: typeof Duck,
   tableName: string
 ): Promise<void> {
@@ -475,18 +490,18 @@ async function createEmptyInnerlinesTable(
   `);
 }
 
-async function rebuildPolygonDerivedTables(
+async function rebuildBoundaryTable(
   duck: typeof Duck,
-  tableName: string
+  sourceTableName: string,
+  targetTableName: string,
+  macroName: 'extract_innerlines' | 'extract_outerlines'
 ): Promise<void> {
-  const innerlinesTableName = getBasemapInnerlinesTableName(tableName);
-
   try {
     await duck.query(`
-      CREATE OR REPLACE TABLE "${escapeIdentifier(innerlinesTableName)}" AS
+      CREATE OR REPLACE TABLE "${escapeIdentifier(targetTableName)}" AS
       WITH extracted AS (
         SELECT ST_CollectionExtract(geom, 2) AS geom
-        FROM extract_innerlines('${escapeSqlString(tableName)}')
+        FROM ${macroName}('${escapeSqlString(sourceTableName)}')
         WHERE geom IS NOT NULL
       )
       SELECT geom
@@ -496,12 +511,30 @@ async function rebuildPolygonDerivedTables(
     `);
   } catch (error) {
     logger.error(
-      'Failed to extract imported basemap innerlines',
+      `Failed to extract imported basemap boundaries via ${macroName}`,
       LogCategory.MAP,
       error
     );
-    await createEmptyInnerlinesTable(duck, innerlinesTableName);
+    await createEmptyLineTable(duck, targetTableName);
   }
+}
+
+async function rebuildPolygonDerivedTables(
+  duck: typeof Duck,
+  tableName: string
+): Promise<void> {
+  await rebuildBoundaryTable(
+    duck,
+    tableName,
+    getBasemapInnerlinesTableName(tableName),
+    'extract_innerlines'
+  );
+  await rebuildBoundaryTable(
+    duck,
+    tableName,
+    getBasemapOuterlinesTableName(tableName),
+    'extract_outerlines'
+  );
 
   await prepareRepresentativePointTable(
     duck,
@@ -652,6 +685,54 @@ async function ensureFeatureIdColumn(
       *
     FROM "${escapedTable}"
   `);
+}
+
+export interface DatasetGeometryBasemapOptions {
+  title: string;
+  geometryColumn?: string;
+}
+
+/**
+ * Derives the helper layers of an already-materialized geometry table and wraps
+ * them in basemap metadata. Unlike the import flow it never rewrites the source
+ * table, so a dataset keeps its own row ids and table name.
+ */
+export async function createBasemapFromGeometryTable(
+  duck: typeof Duck,
+  tableName: string,
+  options: DatasetGeometryBasemapOptions
+): Promise<BasemapImportResult> {
+  const geometryColumn = options.geometryColumn ?? INTERNAL_COLUMN.GEOM;
+  const layerType = await queryGeometryType(duck, tableName, geometryColumn);
+
+  await refreshImportedBasemapHelperTables(duck, tableName, layerType);
+
+  const bounds = await queryBasemapBounds(duck, tableName, geometryColumn);
+  if (!bounds) {
+    throw new DataValidationError(
+      m.basemap_import_modal_error_invalid_geometry(),
+      geometryColumn,
+      { tableName }
+    );
+  }
+
+  const basemap: BasemapMetadata = {
+    file: tableName,
+    title_fr: options.title,
+    title_en: options.title,
+    source: m.basemap_custom_source(),
+    date: new Date().getFullYear().toString(),
+    bbox: [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY],
+    proj_source: GEO_CONSTANTS.WGS84_CRS,
+    proj_to: { type: 'identity' },
+    layers: buildBasemapLayers(tableName, layerType),
+    isCustom: true,
+    isDatasetGeometry: true
+  };
+
+  const geometryTable = await createArrowTableFromDuckTable(duck, tableName);
+
+  return { basemap, tableName, geometryTable };
 }
 
 export async function loadBasemapFromUrl(url: string): Promise<File> {
