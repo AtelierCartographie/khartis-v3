@@ -254,6 +254,31 @@ describe('extract_innerlines macro', () => {
   });
 });
 
+describe('noded_coverage macro', () => {
+  it('leaves the coverage untouched at the default factor', async () => {
+    const rows = await query(
+      db,
+      `FROM noded_coverage('noisy_polygon')
+       SELECT ST_AsText(geom) AS wkt`
+    );
+    expect(rows).toHaveLength(1);
+    // 10.00001 and 0.0000001 survive: nothing is snapped without a factor.
+    expect(String(rows[0].wkt)).toContain('10.00001');
+  });
+
+  it('snaps near-duplicate vertices onto the grid when given a factor', async () => {
+    const rows = await query(
+      db,
+      `FROM noded_coverage('noisy_polygon', noding_factor := 0.0001)
+       SELECT ST_AsText(geom) AS wkt, ST_Area(geom) AS area`
+    );
+    expect(rows).toHaveLength(1);
+    expect(String(rows[0].wkt)).not.toContain('10.00001');
+    // The 10x10 square keeps its area: the grid moves vertices, not shapes.
+    expect(Number(rows[0].area)).toBeCloseTo(100, 3);
+  });
+});
+
 describe('extract_land macro', () => {
   it('should dissolve a polygon coverage into a single territory', async () => {
     const rows = await query(
@@ -274,6 +299,16 @@ describe('extract_land macro', () => {
        SELECT ST_IsEmpty(geom) AS is_empty`
     );
     expect(rows[0].is_empty).toBe(false);
+  });
+
+  it('should still dissolve the coverage when it is re-noded first', async () => {
+    const rows = await query(
+      db,
+      `FROM extract_land('adjacent_polygons', noding_factor := 0.000001)
+       SELECT ST_Area(geom) AS area, ST_NumGeometries(geom) AS parts`
+    );
+    expect(Number(rows[0].area)).toBeCloseTo(200, 6);
+    expect(Number(rows[0].parts)).toBe(1);
   });
 });
 

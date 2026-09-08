@@ -1,19 +1,20 @@
 /**
  * DuckDB macros for topology-aware geometry simplification.
  *
- * Ten macros:
+ * Eleven macros:
  * 1. `snap_topology_normalized` – aligns vertices on a dynamic grid to clean
  *    micro gaps/overlaps before simplification.
  * 2. `simplify_topology_normalized` – coverage-based simplification preserving topology,
  *    with a normalized factor (0.0 = original, 1.0 = max simplification).
  * 3. `prune_triangles` – removes small triangle artefacts produced by aggressive simplification.
- * 4. `extract_innerlines` – derives shared internal borders from polygon coverage.
- * 5. `extract_land` – dissolves a polygon coverage into its territory outline.
- * 6. `extract_outerlines` – derives the outer contour of the whole polygon coverage.
- * 7. `simplify_and_clean` – convenience wrapper that chains snapping, simplification and cleanup.
- * 8. `snap_linestring_normalized` – aligns line vertices on a dynamic grid.
- * 9. `simplify_linestring_normalized` – simplifies line strings with a normalized factor.
- * 10. `simplify_and_clean_linestring` – convenience wrapper for line snapping + simplification.
+ * 4. `noded_coverage` – re-nodes a polygon coverage GEOS cannot overlay as is.
+ * 5. `extract_innerlines` – derives shared internal borders from polygon coverage.
+ * 6. `extract_land` – dissolves a polygon coverage into its territory outline.
+ * 7. `extract_outerlines` – derives the outer contour of the whole polygon coverage.
+ * 8. `simplify_and_clean` – convenience wrapper that chains snapping, simplification and cleanup.
+ * 9. `snap_linestring_normalized` – aligns line vertices on a dynamic grid.
+ * 10. `simplify_linestring_normalized` – simplifies line strings with a normalized factor.
+ * 11. `simplify_and_clean_linestring` – convenience wrapper for line snapping + simplification.
  *
  * @see https://github.com/AtelierCartographie/khartis-v3/issues/53
  */
@@ -112,18 +113,47 @@ const prune_triangles_macro = `CREATE OR REPLACE MACRO prune_triangles(input_tab
     ORDER BY _gid
 );`;
 
+// GEOS refuses to overlay a coverage whose neighbours share a segment traversed
+// both ways: ST_Union_Agg throws \`TopologyException: found non-noded
+// intersection\` and ST_MakeValid does not repair it. Snapping the vertices onto
+// a grid re-nodes them. A grid expressed as a fraction of the average perimeter
+// works in degrees as well as in metres.
+const noded_coverage_macro = `CREATE OR REPLACE MACRO noded_coverage(
+    input_table,
+    noding_factor := 0.0
+) AS TABLE (
+    WITH
+    coverage AS (
+        FROM query_table(input_table)
+        SELECT geom
+        WHERE geom IS NOT NULL
+    ),
+    calc_grid AS (
+        FROM coverage
+        SELECT NULLIF(COALESCE(AVG(ST_Perimeter(geom)), 0.0) * noding_factor, 0.0) AS noding_grid_size
+    )
+    FROM coverage c, calc_grid g
+    SELECT COALESCE(ST_ReducePrecision(c.geom, g.noding_grid_size), c.geom) AS geom
+);`;
+
 // Shared borders are every polygon edge that is not on the outline of the
 // dissolved coverage. Deriving them by difference costs two dissolves, where
 // pairwise ST_Intersection costs O(n^2) overlays: 3s versus 300s on 35k communes.
-const extract_innerlines_macro = `CREATE OR REPLACE MACRO extract_innerlines(input_table) AS TABLE (
+const extract_innerlines_macro = `CREATE OR REPLACE MACRO extract_innerlines(
+    input_table,
+    noding_factor := 0.0
+) AS TABLE (
     WITH
     source_data AS (
         FROM query_table(input_table)
         SELECT ST_CollectionExtract(ST_MakeValid(geom), 3) AS geom
         WHERE geom IS NOT NULL
     ),
+    noded AS (
+        FROM noded_coverage(source_data, noding_factor := noding_factor)
+    ),
     parts AS (
-        FROM source_data SELECT geom WHERE NOT ST_IsEmpty(geom)
+        FROM noded SELECT geom WHERE NOT ST_IsEmpty(geom)
     ),
     borders AS (
         SELECT
@@ -138,28 +168,40 @@ const extract_innerlines_macro = `CREATE OR REPLACE MACRO extract_innerlines(inp
     WHERE all_borders IS NOT NULL AND NOT ST_IsEmpty(all_borders)
 );`;
 
-const extract_land_macro = `CREATE OR REPLACE MACRO extract_land(input_table) AS TABLE (
-    WITH
-    source_data AS (
-        FROM query_table(input_table)
-        SELECT ST_CollectionExtract(ST_MakeValid(geom), 3) AS geom
-        WHERE geom IS NOT NULL
-    )
-    FROM source_data
-    SELECT ST_Union_Agg(geom) AS geom
-    WHERE NOT ST_IsEmpty(geom)
-);`;
-
-const extract_outerlines_macro = `CREATE OR REPLACE MACRO extract_outerlines(input_table) AS TABLE (
+const extract_land_macro = `CREATE OR REPLACE MACRO extract_land(
+    input_table,
+    noding_factor := 0.0
+) AS TABLE (
     WITH
     source_data AS (
         FROM query_table(input_table)
         SELECT ST_CollectionExtract(ST_MakeValid(geom), 3) AS geom
         WHERE geom IS NOT NULL
     ),
+    noded AS (
+        FROM noded_coverage(source_data, noding_factor := noding_factor)
+    )
+    FROM noded
+    SELECT ST_Union_Agg(geom) AS geom
+    WHERE NOT ST_IsEmpty(geom)
+);`;
+
+const extract_outerlines_macro = `CREATE OR REPLACE MACRO extract_outerlines(
+    input_table,
+    noding_factor := 0.0
+) AS TABLE (
+    WITH
+    source_data AS (
+        FROM query_table(input_table)
+        SELECT ST_CollectionExtract(ST_MakeValid(geom), 3) AS geom
+        WHERE geom IS NOT NULL
+    ),
+    noded AS (
+        FROM noded_coverage(source_data, noding_factor := noding_factor)
+    ),
     dissolved AS (
         SELECT ST_Union_Agg(geom) AS geom
-        FROM source_data
+        FROM noded
         WHERE NOT ST_IsEmpty(geom)
     )
     FROM dissolved
@@ -265,6 +307,7 @@ export const simplification_macros =
   snap_topology_normalized_macro +
   simplify_topology_normalized_macro +
   prune_triangles_macro +
+  noded_coverage_macro +
   extract_innerlines_macro +
   extract_land_macro +
   extract_outerlines_macro +

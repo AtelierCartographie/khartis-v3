@@ -156,18 +156,22 @@ describe('simplifyGeometryTable', () => {
     expect(innerlinesQuery).toContain(
       `CREATE OR REPLACE TABLE "target' ""table""__innerlines"`
     );
-    expect(innerlinesQuery).toContain(`extract_innerlines('target'' "table"')`);
+    expect(innerlinesQuery).toContain(
+      `extract_innerlines('target'' "table"', noding_factor := 0)`
+    );
     expect(outerlinesQuery).toContain(
       `CREATE OR REPLACE TABLE "target' ""table""__outerlines"`
     );
     // The outer contour reuses the dissolved land table, not the source rows.
     expect(outerlinesQuery).toContain(
-      `extract_outerlines('target'' "table"__land')`
+      `extract_outerlines('target'' "table"__land', noding_factor := 0)`
     );
     expect(landQuery).toContain(
       `CREATE OR REPLACE TABLE "target' ""table""__land"`
     );
-    expect(landQuery).toContain(`extract_land('target'' "table"')`);
+    expect(landQuery).toContain(
+      `extract_land('target'' "table"', noding_factor := 0)`
+    );
     expect(Duck.invalidateTableCache).toHaveBeenCalledWith(`target' "table"`);
     expect(Duck.invalidateTableCache).toHaveBeenCalledWith(
       `target' "table"__land`
