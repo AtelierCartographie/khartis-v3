@@ -12,7 +12,7 @@ import {
 interface DatasetGeometrySource {
   name: string;
   tableName: string;
-  geometry?: { columnName?: string } | null;
+  geometry?: { columnName?: string; crs?: string } | null;
   joinedBasemap?: string | null;
 }
 
@@ -55,7 +55,8 @@ export async function ensureDatasetGeometryBasemap(
       (
         await createBasemapFromGeometryTable(Duck, dataset.tableName, {
           title: dataset.name,
-          geometryColumn: dataset.geometry.columnName ?? undefined
+          geometryColumn: dataset.geometry.columnName ?? undefined,
+          crs: dataset.geometry.crs ?? undefined
         })
       ).basemap;
 

@@ -1404,6 +1404,7 @@
   "primitive_unavailable_reason": "Cette primitive n'est pas compatible avec la géométrie des données ou le type de visualisation sélectionné.",
   "basemap_layer_terre": "Terre",
   "basemap_layer_mers": "Mers/Océans",
+  "basemap_layer_background": "Arrière-plan",
   "basemap_layer_lacs": "Lacs",
   "basemap_layer_rivieres": "Rivières",
   "basemap_layer_relief": "Relief",

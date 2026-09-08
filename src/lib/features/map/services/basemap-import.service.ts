@@ -15,12 +15,12 @@ import * as m from '$lib/paraglide/messages';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import {
   createFileFromExtracted,
+  extractGeometryColumnCrs,
   extractZip,
   getShapefileFilesFromArchive
 } from '$lib/features/data-pipeline';
 import { convertGeoPackageToGeoJsonFile } from '../utils/geopackage-browser-fallback.utils';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
-import { basemapAuxLayersStore } from '../stores/basemap-aux-layers.store.svelte';
 import {
   getDerivedInnerlinesTableName as getBasemapInnerlinesTableName,
   getDerivedLandTableName as getBasemapLandTableName,
@@ -242,11 +242,7 @@ async function processGeofileBasemapImport(
   await generateCustomBasemapAttributes(tableName, customBasemap.file);
   const geometryTable = await createArrowTableFromDuckTable(duck, tableName);
 
-  return {
-    basemap: finalizeCustomBasemapMetadata(customBasemap),
-    tableName,
-    geometryTable
-  };
+  return { basemap: customBasemap, tableName, geometryTable };
 }
 
 async function processParquetBasemapImport(
@@ -316,11 +312,7 @@ async function processParquetBasemapImport(
   await generateCustomBasemapAttributes(tableName, customBasemap.file);
   const geometryTable = await createArrowTableFromDuckTable(duck, tableName);
 
-  return {
-    basemap: finalizeCustomBasemapMetadata(customBasemap),
-    tableName,
-    geometryTable
-  };
+  return { basemap: customBasemap, tableName, geometryTable };
 }
 
 function extractGeometryTypeFromMeta(
@@ -357,33 +349,6 @@ function shouldCreateCentroidLayer(layerType: BasemapLayerType): boolean {
     isLineBasemapLayerType(layerType) ||
     isPointBasemapLayerType(layerType)
   );
-}
-
-// The dissolved territory carries the outline through its own limit layers, so
-// its polygon stroke would double them up. Seeded once, still user-overridable.
-function seedDerivedLayerStyleDefaults(basemap: BasemapMetadata): void {
-  const landLayer = basemap.layers.find(
-    (layer) => layer.type === BasemapLayerType.LAND && layer.file
-  );
-  if (!landLayer?.file) {
-    return;
-  }
-
-  const existing = basemapAuxLayersStore.getStyle(basemap.file, landLayer.file);
-  if (existing?.strokeVisible !== undefined) {
-    return;
-  }
-
-  basemapAuxLayersStore.updateStyle(basemap.file, landLayer.file, {
-    strokeVisible: false
-  });
-}
-
-function finalizeCustomBasemapMetadata(
-  basemap: BasemapMetadata
-): BasemapMetadata {
-  seedDerivedLayerStyleDefaults(basemap);
-  return basemap;
 }
 
 function buildCentroidLayer(tableName: string): BasemapLayer {
@@ -710,6 +675,19 @@ async function ensureFeatureIdColumn(
 export interface DatasetGeometryBasemapOptions {
   title: string;
   geometryColumn?: string;
+  crs?: string;
+}
+
+async function readGeometryColumnCrs(
+  duck: typeof Duck,
+  tableName: string,
+  geometryColumn: string
+): Promise<string | undefined> {
+  const description = await duck.describe_table(tableName);
+  const index = description.name.indexOf(geometryColumn);
+  return index === -1
+    ? undefined
+    : extractGeometryColumnCrs(description.type[index]);
 }
 
 /**
@@ -736,6 +714,13 @@ export async function createBasemapFromGeometryTable(
     );
   }
 
+  // Bounds and CRS must describe the same space, or the basemap projection is
+  // fitted to the source units while the dataset is drawn in another.
+  const sourceCrs =
+    options.crs ??
+    (await readGeometryColumnCrs(duck, tableName, geometryColumn)) ??
+    GEO_CONSTANTS.WGS84_CRS;
+
   const basemap: BasemapMetadata = {
     file: tableName,
     title_fr: options.title,
@@ -743,7 +728,7 @@ export async function createBasemapFromGeometryTable(
     source: m.basemap_custom_source(),
     date: new Date().getFullYear().toString(),
     bbox: [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY],
-    proj_source: GEO_CONSTANTS.WGS84_CRS,
+    proj_source: sourceCrs,
     proj_to: { type: 'identity' },
     layers: buildBasemapLayers(tableName, layerType, {
       omitPrimaryLayer: true
@@ -754,11 +739,7 @@ export async function createBasemapFromGeometryTable(
 
   const geometryTable = await createArrowTableFromDuckTable(duck, tableName);
 
-  return {
-    basemap: finalizeCustomBasemapMetadata(basemap),
-    tableName,
-    geometryTable
-  };
+  return { basemap, tableName, geometryTable };
 }
 
 export async function loadBasemapFromUrl(url: string): Promise<File> {
