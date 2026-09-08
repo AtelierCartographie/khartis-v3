@@ -338,12 +338,15 @@ function getVisualizationPrimitiveOpacity(
   }
 }
 
-function getBasemapLayerName(layerId: BasemapLayerId): string {
+function getBasemapLayerName(
+  layerId: BasemapLayerId,
+  isCustom = false
+): string {
   switch (layerId) {
     case BASEMAP_LAYER_ID.TERRE:
       return m.basemap_layer_terre();
     case BASEMAP_LAYER_ID.MERS:
-      return m.basemap_layer_mers();
+      return isCustom ? m.basemap_layer_background() : m.basemap_layer_mers();
     case BASEMAP_LAYER_ID.LACS:
       return m.basemap_layer_lacs();
     case BASEMAP_LAYER_ID.RIVIERES:
@@ -475,13 +478,23 @@ function resolveActiveGraticuleLayerId(): BasemapLayerId {
     : BASEMAP_LAYER_ID.MERIDIENS;
 }
 
+// An imported geometry has no projection sphere to outline, so it gets no
+// sphere row.
 function buildSyntheticBasemapEntries(
-  basemapFile: string | null
+  basemapFile: string | null,
+  isCustom: boolean
 ): BasemapDisplayEntry[] {
   const synthetics: { layerId: BasemapLayerId; key?: string }[] = [
     { layerId: BASEMAP_LAYER_ID.MERIDIENS },
     { layerId: BASEMAP_LAYER_ID.MERS, key: SYNTHETIC_AUX_LAYER_KEY.MERS },
-    { layerId: BASEMAP_LAYER_ID.SPHERE, key: SYNTHETIC_AUX_LAYER_KEY.SPHERE }
+    ...(isCustom
+      ? []
+      : [
+          {
+            layerId: BASEMAP_LAYER_ID.SPHERE,
+            key: SYNTHETIC_AUX_LAYER_KEY.SPHERE
+          }
+        ])
   ];
 
   return synthetics.flatMap(({ layerId, key }): BasemapDisplayEntry[] => {
@@ -501,7 +514,7 @@ function buildSyntheticBasemapEntries(
         layerId,
         file: basemapFile ?? undefined,
         key: basemapFile ? key : undefined,
-        name: getBasemapLayerName(layerId),
+        name: getBasemapLayerName(layerId, isCustom),
         visible: (visibilityConfig?.visible ?? false) && auxVisible,
         color: getBasemapLayerColor(config),
         opacity: getBasemapLayerOpacity(config),
@@ -519,11 +532,12 @@ function buildBasemapDisplayEntries(): BasemapDisplayEntry[] {
     return [];
   }
 
+  const isCustom = Boolean(metadata.isCustom);
   const entries: BasemapDisplayEntry[] = buildSyntheticBasemapEntries(
-    metadata.file
+    metadata.file,
+    isCustom
   );
 
-  const isCustom = Boolean(metadata.isCustom);
   const isCustomLine =
     isCustom && getCustomBaseLayerType(metadata) === BasemapLayerType.LINE;
   const typeCounters = new Map<BasemapLayerType, number>();
@@ -616,6 +630,7 @@ function getBasemapDisplayOrder(layerId: BasemapLayerId | undefined): number {
 }
 
 function buildVectorBasemapSubLayers(): Layer[] {
+  const isCustom = Boolean(getActiveReferenceBasemapMetadata()?.isCustom);
   const entries = buildBasemapDisplayEntries();
   const grouped = new Map<string, BasemapDisplayEntry[]>();
 
@@ -680,7 +695,7 @@ function buildVectorBasemapSubLayers(): Layer[] {
         name: isPerKeyAuxLayerType(firstEntry.type)
           ? firstEntry.name
           : layerId
-            ? getBasemapLayerName(layerId)
+            ? getBasemapLayerName(layerId, isCustom)
             : firstEntry.name,
         visible,
         color: config ? getBasemapLayerColor(config) : firstEntry.color,
