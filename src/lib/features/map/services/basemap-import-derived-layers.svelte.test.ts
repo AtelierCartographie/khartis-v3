@@ -4,6 +4,10 @@ import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 const mocks = vi.hoisted(() => ({
   queryMock: vi.fn(),
   analyseMock: vi.fn(async () => [{ name: 'nom', type_simple: 'string' }]),
+  describeTableMock: vi.fn(async () => ({
+    name: ['nom', 'geom'],
+    type: ['VARCHAR', "GEOMETRY('EPSG:2154')"]
+  })),
   createGeometryTableMock: vi.fn(async () => ({ numRows: 2 })),
   generateAttributesMock: vi.fn(async () => undefined)
 }));
@@ -12,6 +16,7 @@ vi.mock('$lib/features/duckdb', () => ({
   Duck: {
     query: mocks.queryMock,
     analyse: mocks.analyseMock,
+    describe_table: mocks.describeTableMock,
     invalidateTableCache: vi.fn()
   },
   GEO_CONSTANTS: {
@@ -93,6 +98,8 @@ describe('createBasemapFromGeometryTable', () => {
     ]);
     expect(basemap.isDatasetGeometry).toBe(true);
     expect(basemap.bbox).toEqual([-5, 41, 9, 51]);
+    // Bounds come from the source table, so the CRS must describe that space.
+    expect(basemap.proj_source).toBe('EPSG:2154');
   });
 
   it('should derive the boundary tables through the simplification macros', async () => {

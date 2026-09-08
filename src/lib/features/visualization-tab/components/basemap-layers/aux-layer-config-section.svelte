@@ -22,6 +22,7 @@
   import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
   import { SYNTHETIC_AUX_LAYER_KEY } from '$lib/features/commons/constants/basemap.constants';
   import { webglToHex } from '$lib/features/commons/utils/color-utils';
+  import { resolvePresetLandStroked } from '$lib/features/map/layers/basemap-style-resolve';
   import { dashArrayToDottedPattern } from '$lib/features/map/layers/layer-helpers';
   import type { BasemapLayer } from '$lib/features/map/types/basemap.types';
 
@@ -33,6 +34,7 @@
     defaultVisible?: boolean;
     allowRemarkable?: boolean;
     allowEquator?: boolean;
+    allowSphereOutline?: boolean;
   }
 
   let {
@@ -42,7 +44,8 @@
     instanceIndex = 0,
     defaultVisible = true,
     allowRemarkable = true,
-    allowEquator = false
+    allowEquator = false,
+    allowSphereOutline = true
   }: Props = $props();
 
   const locale = $derived(getLocale());
@@ -120,6 +123,10 @@
     return webglToHex([r, g, b, a ?? 255]);
   }
 
+  function getPresetLandStroked(): boolean | undefined {
+    return resolvePresetLandStroked(layer.style, basemapService.stylePresets);
+  }
+
   function getPresetPathStyle(): {
     color?: string;
     width?: number;
@@ -171,7 +178,10 @@
         base?.fillColor,
       fillShadow: pickBoolean(override.fillShadow, base?.fillShadow),
       fillOpacity: pickNumber(override.fillOpacity, base?.fillOpacity),
-      strokeVisible: pickBoolean(override.strokeVisible, base?.strokeVisible),
+      strokeVisible: pickBoolean(
+        override.strokeVisible,
+        getPresetLandStroked() ?? base?.strokeVisible
+      ),
       strokeColor: pickString(override.strokeColor, base?.strokeColor),
       strokeDotted: pickBoolean(override.strokeDotted, base?.strokeDotted),
       strokeDottedPattern:
@@ -391,6 +401,7 @@
     <LayerConfigMers
       color={getConfig('mers')?.color}
       opacity={getConfig('mers')?.opacity}
+      showOutline={allowSphereOutline}
       outlineVisible={sphereOutlineVisible}
       outlineColor={sphereConfig?.color}
       outlineThickness={sphereConfig?.thickness}

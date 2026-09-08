@@ -9,6 +9,7 @@
     color?: string;
     opacity?: number;
     outlineVisible?: boolean;
+    showOutline?: boolean;
     outlineColor?: string;
     outlineThickness?: number;
     outlineOpacity?: number;
@@ -21,6 +22,7 @@
     color = NEUTRAL_CARTOGRAPHY_COLORS.sea,
     opacity = 100,
     outlineVisible = true,
+    showOutline = true,
     outlineColor = NEUTRAL_CARTOGRAPHY_COLORS.sphereOutline,
     outlineThickness = 1,
     outlineOpacity = 100,
@@ -54,51 +56,53 @@
     </div>
   </fieldset>
 
-  <fieldset class="config-section">
-    <legend class="config-legend">
-      <SectionHeading title={m.basemap_config_stroke()} />
-    </legend>
-    <div class="section-content">
-      <ToggleWithLabel
-        label={m.basemap_config_stroke_visible()}
-        toggled={outlineVisible}
-        ontoggle={(value) => onoutlinevisibilitychange?.(value)}
-      />
-
-      {#if outlineVisible}
-        <SingleColorPreview
-          label={m.basemap_config_color()}
-          color={outlineColor}
-          allowPattern={false}
-          onchange={(value) => onoutlinechange?.({ color: value })}
+  {#if showOutline}
+    <fieldset class="config-section">
+      <legend class="config-legend">
+        <SectionHeading title={m.basemap_config_stroke()} />
+      </legend>
+      <div class="section-content">
+        <ToggleWithLabel
+          label={m.basemap_config_stroke_visible()}
+          toggled={outlineVisible}
+          ontoggle={(value) => onoutlinevisibilitychange?.(value)}
         />
 
-        <SliderWithInput
-          label={m.basemap_config_thickness()}
-          min={BASEMAP_LAYER_CONFIG.thickness.min}
-          max={BASEMAP_LAYER_CONFIG.thickness.max}
-          step={BASEMAP_LAYER_CONFIG.thickness.step}
-          value={outlineThickness}
-          showMinMax
-          inputWidth="64px"
-          showSteppers={false}
-          onchange={(value) => onoutlinechange?.({ thickness: value })}
-        />
+        {#if outlineVisible}
+          <SingleColorPreview
+            label={m.basemap_config_color()}
+            color={outlineColor}
+            allowPattern={false}
+            onchange={(value) => onoutlinechange?.({ color: value })}
+          />
 
-        <SliderWithInput
-          label={m.basemap_config_opacity()}
-          min={BASEMAP_LAYER_CONFIG.opacity.min}
-          max={BASEMAP_LAYER_CONFIG.opacity.max}
-          step={BASEMAP_LAYER_CONFIG.opacity.step}
-          value={outlineOpacity}
-          showMinMax
-          inputWidth="64px"
-          showSteppers={false}
-          onchange={(value) => onoutlinechange?.({ opacity: value })}
-        />
-      {/if}
-    </div>
-  </fieldset>
+          <SliderWithInput
+            label={m.basemap_config_thickness()}
+            min={BASEMAP_LAYER_CONFIG.thickness.min}
+            max={BASEMAP_LAYER_CONFIG.thickness.max}
+            step={BASEMAP_LAYER_CONFIG.thickness.step}
+            value={outlineThickness}
+            showMinMax
+            inputWidth="64px"
+            showSteppers={false}
+            onchange={(value) => onoutlinechange?.({ thickness: value })}
+          />
+
+          <SliderWithInput
+            label={m.basemap_config_opacity()}
+            min={BASEMAP_LAYER_CONFIG.opacity.min}
+            max={BASEMAP_LAYER_CONFIG.opacity.max}
+            step={BASEMAP_LAYER_CONFIG.opacity.step}
+            value={outlineOpacity}
+            showMinMax
+            inputWidth="64px"
+            showSteppers={false}
+            onchange={(value) => onoutlinechange?.({ opacity: value })}
+          />
+        {/if}
+      </div>
+    </fieldset>
+  {/if}
 </div>
 
 <style lang="scss">

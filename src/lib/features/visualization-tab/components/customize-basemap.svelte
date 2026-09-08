@@ -110,13 +110,19 @@
     }
   }
 
-  const oceanSyntheticLayer: BasemapLayer = {
-    title_fr: m.basemap_layer_mers({}, { locale: 'fr' }),
-    title_en: m.basemap_layer_mers({}, { locale: 'en' }),
+  // A user-imported geometry has no sea context, and its extent contour would
+  // deform on reprojection, so the layer is a plain background there.
+  const oceanSyntheticLayer = $derived<BasemapLayer>({
+    title_fr: isCustomBasemap
+      ? m.basemap_layer_background({}, { locale: 'fr' })
+      : m.basemap_layer_mers({}, { locale: 'fr' }),
+    title_en: isCustomBasemap
+      ? m.basemap_layer_background({}, { locale: 'en' })
+      : m.basemap_layer_mers({}, { locale: 'en' }),
     type: BasemapLayerType.POLYGON,
     file: SYNTHETIC_AUX_LAYER_KEY.MERS,
     style: null
-  };
+  });
 
   interface LayerEntry {
     layer: BasemapLayer;
@@ -336,6 +342,7 @@
           defaultVisible={entry.defaultVisible}
           allowRemarkable={supportsRemarkableGraticule}
           allowEquator={supportsEquatorGraticule}
+          allowSphereOutline={!isCustomBasemap}
         />
       {/each}
     {/if}
