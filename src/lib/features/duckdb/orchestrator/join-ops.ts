@@ -3,6 +3,7 @@ import {
   INTERNAL_COLUMN,
   JOINED_BASEMAP_COLUMN,
   JOINED_BASEMAP_COLUMNS,
+  MAX_FUZZY_JOIN_CANDIDATES,
   MAX_JOIN_BUCKET_LIST_VALUES
 } from '$lib/features/commons/constants/data.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -56,7 +57,6 @@ export function getBasemapAttributesId(basemap: BasemapMetadata): string {
 
 const SIMILARITY_CACHE_PREFIX = '__similarity_cache__';
 const MAX_SIMILARITY_CACHE_ENTRIES = 4;
-const MAX_FUZZY_JOIN_CANDIDATES = 1000;
 const MAX_EXACT_MATCHES_PER_CANDIDATE_BASEMAP = 50;
 const FUZZY_SCORE_CUTOFF = FUZZY_SEARCH.SCORE_CUTOFF;
 
@@ -173,8 +173,8 @@ async function ensureSimilarityCached(
     // Phase 2: fuzzy Jaro-Winkler (FUZZY_SCORE_CUTOFF) only on residual unmatched candidates
     //          — bounded because unmatched large code datasets would otherwise cross-join every
     //          source value with every basemap attribute on the browser main thread.
-    // Normalization is pre-computed once in the candidates CTE (like the get_similarity macro)
-    // to avoid redundant computation inside the join/cross-join.
+    // Normalization is pre-computed once in the candidates CTE to avoid
+    // redundant computation inside the join/cross-join.
     await Duck.query(`
       CREATE OR REPLACE TEMP TABLE "${escapedCacheTable}" AS
       WITH source_raw AS (
