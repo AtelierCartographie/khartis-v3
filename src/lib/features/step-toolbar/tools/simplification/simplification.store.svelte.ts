@@ -29,6 +29,10 @@ import {
   refreshImportedBasemapHelperTables
 } from '$lib/features/map/services/basemap-import.service';
 import {
+  ensureDatasetGeometryBasemap,
+  forgetDatasetGeometryBasemap
+} from '$lib/features/map/services/dataset-geometry-basemap.service';
+import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
@@ -257,6 +261,14 @@ const { actions, getState } = createToolStore<
         }
       });
 
+      // The derived territory/limits layers describe the previous geometry, so
+      // rebuild them against the simplified table before the map reads them.
+      forgetDatasetGeometryBasemap(datasetSimplifiedTableName);
+      await ensureDatasetGeometryBasemap({
+        ...dataset,
+        tableName: datasetSimplifiedTableName
+      });
+
       return {
         type: SimplificationTarget.GEODATA,
         rate: s.rate,
@@ -291,9 +303,14 @@ const { actions, getState } = createToolStore<
           };
         }
 
-        const isCustom =
-          basemapService.currentBasemap?.metadata.isCustom === true;
-        return isCustom ? simplifyCustomBasemap() : simplifyBasemapVariant();
+        const metadata = basemapService.currentBasemap?.metadata;
+        if (metadata?.isDatasetGeometry) {
+          return simplifyGeoDataset(options?.datasetId);
+        }
+
+        return metadata?.isCustom
+          ? simplifyCustomBasemap()
+          : simplifyBasemapVariant();
       } else {
         return simplifyGeoDataset(options?.datasetId);
       }

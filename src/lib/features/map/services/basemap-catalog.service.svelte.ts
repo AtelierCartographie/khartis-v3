@@ -94,6 +94,11 @@ export function getCatalogBasemapsForDisplay(
   const byBaseName = new Map<string, BasemapMetadata>();
 
   for (const basemap of basemaps) {
+    // A dataset's own derived geometry is not a basemap one can pick or join to.
+    if (basemap.isDatasetGeometry) {
+      continue;
+    }
+
     if (basemap.isCustom) {
       byBaseName.set(basemap.file, basemap);
       continue;

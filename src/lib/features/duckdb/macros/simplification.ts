@@ -1,17 +1,18 @@
 /**
  * DuckDB macros for topology-aware geometry simplification.
  *
- * Eight macros:
+ * Nine macros:
  * 1. `snap_topology_normalized` – aligns vertices on a dynamic grid to clean
  *    micro gaps/overlaps before simplification.
  * 2. `simplify_topology_normalized` – coverage-based simplification preserving topology,
  *    with a normalized factor (0.0 = original, 1.0 = max simplification).
  * 3. `prune_triangles` – removes small triangle artefacts produced by aggressive simplification.
  * 4. `extract_innerlines` – derives shared internal borders from polygon coverage.
- * 5. `simplify_and_clean` – convenience wrapper that chains snapping, simplification and cleanup.
- * 6. `snap_linestring_normalized` – aligns line vertices on a dynamic grid.
- * 7. `simplify_linestring_normalized` – simplifies line strings with a normalized factor.
- * 8. `simplify_and_clean_linestring` – convenience wrapper for line snapping + simplification.
+ * 5. `extract_outerlines` – derives the outer contour of the whole polygon coverage.
+ * 6. `simplify_and_clean` – convenience wrapper that chains snapping, simplification and cleanup.
+ * 7. `snap_linestring_normalized` – aligns line vertices on a dynamic grid.
+ * 8. `simplify_linestring_normalized` – simplifies line strings with a normalized factor.
+ * 9. `simplify_and_clean_linestring` – convenience wrapper for line snapping + simplification.
  *
  * @see https://github.com/AtelierCartographie/khartis-v3/issues/53
  */
@@ -137,6 +138,23 @@ const extract_innerlines_macro = `CREATE OR REPLACE MACRO extract_innerlines(inp
     WHERE NOT ST_IsEmpty(geom)
 );`;
 
+const extract_outerlines_macro = `CREATE OR REPLACE MACRO extract_outerlines(input_table) AS TABLE (
+    WITH
+    source_data AS (
+        FROM query_table(input_table)
+        SELECT ST_CollectionExtract(ST_MakeValid(geom), 3) AS geom
+        WHERE geom IS NOT NULL
+    ),
+    dissolved AS (
+        SELECT ST_Union_Agg(geom) AS geom
+        FROM source_data
+        WHERE NOT ST_IsEmpty(geom)
+    )
+    FROM dissolved
+    SELECT ST_LineMerge(ST_CollectionExtract(ST_Boundary(geom), 2)) AS geom
+    WHERE geom IS NOT NULL AND NOT ST_IsEmpty(geom)
+);`;
+
 const simplify_and_clean_macro = `CREATE OR REPLACE MACRO simplify_and_clean(
     input_table,
     geom_col,
@@ -236,6 +254,7 @@ export const simplification_macros =
   simplify_topology_normalized_macro +
   prune_triangles_macro +
   extract_innerlines_macro +
+  extract_outerlines_macro +
   simplify_and_clean_macro +
   snap_linestring_normalized_macro +
   simplify_linestring_normalized_macro +

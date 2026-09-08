@@ -11,6 +11,13 @@ export const BASEMAP_LAYER_ID = {
   SPHERE: 'sphere'
 } as const;
 
+// Derived geometry tables hang off the source table name; both the map import
+// service and the DuckDB simplification op have to agree on these suffixes.
+export const DERIVED_GEOMETRY_TABLE_SUFFIX = {
+  INNERLINES: '__innerlines',
+  OUTERLINES: '__outerlines'
+} as const;
+
 export const SYNTHETIC_AUX_LAYER_KEY = {
   MERS: 'synthetic:mers',
   SPHERE: 'synthetic:sphere'

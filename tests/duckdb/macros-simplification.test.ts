@@ -224,6 +224,51 @@ describe('extract_innerlines macro', () => {
   });
 });
 
+describe('extract_outerlines macro', () => {
+  it('should derive the outer contour of a polygon coverage without the shared edge', async () => {
+    const rows = await query(
+      db,
+      `FROM extract_outerlines('adjacent_polygons')
+       SELECT ST_AsText(geom) AS wkt, ST_Length(geom) AS length`
+    );
+    expect(rows).toHaveLength(1);
+    expect(String(rows[0].wkt)).toMatch(/LINESTRING|MULTILINESTRING/);
+    // Perimeter of the 20x10 dissolved rectangle; the x=10 inner edge is excluded.
+    expect(Number(rows[0].length)).toBeCloseTo(60, 6);
+  });
+
+  it('should not throw on an OGC-invalid polygon and still derive the contour', async () => {
+    const rows = await query(
+      db,
+      `FROM extract_outerlines('invalid_coverage')
+       SELECT ST_IsEmpty(geom) AS is_empty, ST_AsText(geom) AS wkt`
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].is_empty).toBe(false);
+    expect(String(rows[0].wkt)).toMatch(/LINESTRING|MULTILINESTRING/);
+  });
+
+  it('should expose the hole contour when the coverage encloses one', async () => {
+    await run(
+      db,
+      'CREATE OR REPLACE TABLE holed_coverage (_gid INTEGER, geom GEOMETRY)'
+    );
+    await run(
+      db,
+      `INSERT INTO holed_coverage VALUES
+        (1, ST_GeomFromText('POLYGON((0 0, 30 0, 30 30, 0 30, 0 0), (10 10, 20 10, 20 20, 10 20, 10 10))'))`
+    );
+
+    const rows = await query(
+      db,
+      `FROM extract_outerlines('holed_coverage')
+       SELECT ST_NumGeometries(geom) AS parts, ST_Length(geom) AS length`
+    );
+    expect(Number(rows[0].parts)).toBe(2);
+    expect(Number(rows[0].length)).toBeCloseTo(120 + 40, 6);
+  });
+});
+
 describe('simplify_and_clean macro (polygon wrapper)', () => {
   it('should preserve the row count of the source polygon coverage', async () => {
     const rows = await query(

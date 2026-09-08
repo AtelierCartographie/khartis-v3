@@ -61,6 +61,10 @@ import { resolvePersistedJoinState } from '../utils/persisted-join-state.utils';
 import { replaceFileExtension } from '../utils/file.utils';
 import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
 import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
+import {
+  ensureDatasetGeometryBasemap,
+  forgetDatasetGeometryBasemap
+} from '$lib/features/map/services/dataset-geometry-basemap.service';
 import { importRollbackService } from './import-rollback.service';
 import {
   applyPaletteInversion,
@@ -515,6 +519,11 @@ function createDataOrchestratorService() {
       await processFileInDuckDB(file, dataset);
       processedFileIds.add(file.id);
 
+      // processFileInDuckDB can retarget the dataset table, so re-read it.
+      await ensureDatasetGeometryBasemap(
+        datasetsStore.getDatasetBySourceFile(file.id) ?? dataset
+      );
+
       if (
         options?.suggestProjection !== false &&
         (dataset.geometry || dataset.geoDetection)
@@ -561,6 +570,7 @@ function createDataOrchestratorService() {
         visualizationStore.removeVisualization(viz.id);
       });
 
+      forgetDatasetGeometryBasemap(dataset.tableName);
       datasetsStore.removeDataset(dataset.id);
       layersActions.syncWithVisualizations();
 
