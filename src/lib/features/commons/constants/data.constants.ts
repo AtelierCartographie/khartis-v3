@@ -18,6 +18,13 @@ export const JOINED_BASEMAP_COLUMN = {
 // Shared cap between SQL join grading (A6) and the persisted project shape (C1).
 export const MAX_JOIN_BUCKET_LIST_VALUES = 500;
 
+// Shared cap on the fuzzy phase of both join paths: the basemap join and the
+// enrichment join score every unmatched candidate against every target value,
+// so an uncapped residual cross-joins the whole source column.
+export const MAX_FUZZY_JOIN_CANDIDATES = 1000;
+
+export const MAX_FUZZY_MATCHES_PER_VALUE = 5;
+
 export const JOINED_BASEMAP_COLUMNS = Object.values(
   JOINED_BASEMAP_COLUMN
 ) as readonly string[];
