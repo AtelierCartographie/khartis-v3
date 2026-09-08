@@ -79,7 +79,10 @@ vi.mock('$lib/features/duckdb/operations/simplification', () => ({
 
 vi.mock('$lib/features/map/services/basemap-import.service', () => ({
   getBasemapRawTableName: (name: string) => `${name}__raw`,
-  refreshImportedBasemapHelperTables: mocks.refreshImportedBasemapHelperTables
+  refreshImportedBasemapHelperTables: mocks.refreshImportedBasemapHelperTables,
+  resolveCustomBasemapLayerType: (metadata: {
+    layers: Array<{ type: string }>;
+  }) => metadata.layers[0]?.type
 }));
 
 vi.mock('$lib/features/map/services/basemap.service.svelte', () => ({

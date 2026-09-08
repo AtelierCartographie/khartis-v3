@@ -74,6 +74,24 @@ describe('GeoParquet geometry normalization', () => {
     );
   });
 
+  it('should leave WKB geometry untouched when DuckDB already decoded it', async () => {
+    const Duck = createDuck("GEOMETRY('EPSG:2154')");
+
+    await expect(
+      normalizeGeoParquetTable(
+        'native_geoparquet',
+        createMetadata('WKB', {
+          type: 'ProjectedCRS',
+          id: { authority: 'EPSG', code: 2154 }
+        }),
+        Duck
+      )
+    ).resolves.toBe(false);
+
+    expect(Duck.query).not.toHaveBeenCalled();
+    expect(Duck.invalidateTableCache).not.toHaveBeenCalled();
+  });
+
   it('should leave plain Parquet tables unchanged when GeoParquet metadata is absent', async () => {
     const Duck = createDuck('VARCHAR');
 

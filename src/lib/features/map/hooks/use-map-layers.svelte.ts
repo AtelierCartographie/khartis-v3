@@ -1043,6 +1043,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const shouldKeepOrthographicBasemapLayers =
         shouldShowBasemapLayers || shouldShowGeneratedBasemapLayers;
 
+      let hasPendingBasemapLayerSource = false;
       let basemapBackgroundLayers: Layer<DeckDataRow>[] = [];
       let basemapForegroundLayers: Layer<DeckDataRow>[] = [];
       let basemapForegroundBelowThematicLayers: Layer<DeckDataRow>[] = [];
@@ -1140,7 +1141,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
                 : currentMetadata.isCustom
                   ? null
                   : worldBaseTable;
-              if (!table) continue;
+              if (!table) {
+                hasPendingBasemapLayerSource = true;
+                continue;
+              }
               metadataLayers.push({
                 table,
                 style: layer.style ?? null,
@@ -1645,13 +1649,16 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       );
       const hasExpectedDatasetFallbacks =
         shouldRenderDatasetFallbacks && (tables.size > 0 || geoJSONs.size > 0);
-      const hasVisibleBasemapConfig =
-        shouldKeepOrthographicBasemapLayers &&
-        basemapLayersStore.visibleLayers.length > 0;
+      // The layer store always holds its ten rows, so "one of them is visible"
+      // says nothing about a basemap that draws none of them: it kept the
+      // previous stack on screen after the user hid every row. What justifies
+      // holding it is a visible layer whose table has not loaded yet.
+      const hasPendingBasemapLayers =
+        shouldKeepOrthographicBasemapLayers && hasPendingBasemapLayerSource;
       const hasExpectedVisibleLayers =
         hasExpectedActiveViz ||
         hasExpectedDatasetFallbacks ||
-        hasVisibleBasemapConfig;
+        hasPendingBasemapLayers;
       const previousLayersToPreserve = getPreservablePreviousLayers(
         shouldKeepOrthographicBasemapLayers
       );

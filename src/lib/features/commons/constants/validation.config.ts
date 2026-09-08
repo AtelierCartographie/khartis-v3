@@ -34,6 +34,13 @@ export const STORAGE_LIMITS: StorageLimits = {
   maxFileCount: 20
 };
 
+// Byte size says nothing about row count once a format is compressed: a 13 MB
+// Parquet holds what a 374 MB CSV would, so volume is gated on rows too.
+export const IMPORT_ROW_LIMITS = {
+  WARNING: 250_000,
+  MAX: 1_000_000
+} as const;
+
 export const FILE_VALIDATION_INSPECTION = {
   CSV_LARGE_WARNING_SIZE_BYTES: 10 * 1024 * 1024,
   GEOJSON_LARGE_WARNING_SIZE_BYTES: 20 * 1024 * 1024,

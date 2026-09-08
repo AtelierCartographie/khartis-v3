@@ -212,6 +212,36 @@ describe('extract_innerlines macro', () => {
     expect(String(rows[0].wkt)).toMatch(/LINESTRING|MULTILINESTRING/);
   });
 
+  it('should keep only the shared edge, not the outline of the coverage', async () => {
+    const rows = await query(
+      db,
+      `FROM extract_innerlines('adjacent_polygons')
+       SELECT ST_Length(geom) AS length`
+    );
+    // The x=10 edge is 10 long; the 20x10 outline would add 60.
+    expect(Number(rows[0].length)).toBeCloseTo(10, 6);
+  });
+
+  it('should return nothing for a coverage whose polygons do not touch', async () => {
+    await run(
+      db,
+      'CREATE OR REPLACE TABLE disjoint_polygons (_gid INTEGER, geom GEOMETRY)'
+    );
+    await run(
+      db,
+      `INSERT INTO disjoint_polygons VALUES
+        (1, ST_GeomFromText('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))')),
+        (2, ST_GeomFromText('POLYGON((30 0, 40 0, 40 10, 30 10, 30 0))'))`
+    );
+
+    const rows = await query(
+      db,
+      `FROM extract_innerlines('disjoint_polygons')
+       SELECT ST_IsEmpty(geom) AS is_empty`
+    );
+    expect(rows[0].is_empty).toBe(true);
+  });
+
   it('should not throw on an OGC-invalid polygon and still derive inner borders', async () => {
     const rows = await query(
       db,
@@ -221,6 +251,109 @@ describe('extract_innerlines macro', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].is_empty).toBe(false);
     expect(String(rows[0].wkt)).toMatch(/LINESTRING|MULTILINESTRING/);
+  });
+});
+
+describe('noded_coverage macro', () => {
+  it('leaves the coverage untouched at the default factor', async () => {
+    const rows = await query(
+      db,
+      `FROM noded_coverage('noisy_polygon')
+       SELECT ST_AsText(geom) AS wkt`
+    );
+    expect(rows).toHaveLength(1);
+    // 10.00001 and 0.0000001 survive: nothing is snapped without a factor.
+    expect(String(rows[0].wkt)).toContain('10.00001');
+  });
+
+  it('snaps near-duplicate vertices onto the grid when given a factor', async () => {
+    const rows = await query(
+      db,
+      `FROM noded_coverage('noisy_polygon', noding_factor := 0.0001)
+       SELECT ST_AsText(geom) AS wkt, ST_Area(geom) AS area`
+    );
+    expect(rows).toHaveLength(1);
+    expect(String(rows[0].wkt)).not.toContain('10.00001');
+    // The 10x10 square keeps its area: the grid moves vertices, not shapes.
+    expect(Number(rows[0].area)).toBeCloseTo(100, 3);
+  });
+});
+
+describe('extract_land macro', () => {
+  it('should dissolve a polygon coverage into a single territory', async () => {
+    const rows = await query(
+      db,
+      `FROM extract_land('adjacent_polygons')
+       SELECT ST_Area(geom) AS area, ST_NumGeometries(geom) AS parts`
+    );
+    expect(rows).toHaveLength(1);
+    // The two 10x10 squares merge instead of staying side by side.
+    expect(Number(rows[0].area)).toBeCloseTo(200, 6);
+    expect(Number(rows[0].parts)).toBe(1);
+  });
+
+  it('should not throw on an OGC-invalid polygon', async () => {
+    const rows = await query(
+      db,
+      `FROM extract_land('invalid_coverage')
+       SELECT ST_IsEmpty(geom) AS is_empty`
+    );
+    expect(rows[0].is_empty).toBe(false);
+  });
+
+  it('should still dissolve the coverage when it is re-noded first', async () => {
+    const rows = await query(
+      db,
+      `FROM extract_land('adjacent_polygons', noding_factor := 0.000001)
+       SELECT ST_Area(geom) AS area, ST_NumGeometries(geom) AS parts`
+    );
+    expect(Number(rows[0].area)).toBeCloseTo(200, 6);
+    expect(Number(rows[0].parts)).toBe(1);
+  });
+});
+
+describe('extract_outerlines macro', () => {
+  it('should derive the outer contour of a polygon coverage without the shared edge', async () => {
+    const rows = await query(
+      db,
+      `FROM extract_outerlines('adjacent_polygons')
+       SELECT ST_AsText(geom) AS wkt, ST_Length(geom) AS length`
+    );
+    expect(rows).toHaveLength(1);
+    expect(String(rows[0].wkt)).toMatch(/LINESTRING|MULTILINESTRING/);
+    // Perimeter of the 20x10 dissolved rectangle; the x=10 inner edge is excluded.
+    expect(Number(rows[0].length)).toBeCloseTo(60, 6);
+  });
+
+  it('should not throw on an OGC-invalid polygon and still derive the contour', async () => {
+    const rows = await query(
+      db,
+      `FROM extract_outerlines('invalid_coverage')
+       SELECT ST_IsEmpty(geom) AS is_empty, ST_AsText(geom) AS wkt`
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].is_empty).toBe(false);
+    expect(String(rows[0].wkt)).toMatch(/LINESTRING|MULTILINESTRING/);
+  });
+
+  it('should expose the hole contour when the coverage encloses one', async () => {
+    await run(
+      db,
+      'CREATE OR REPLACE TABLE holed_coverage (_gid INTEGER, geom GEOMETRY)'
+    );
+    await run(
+      db,
+      `INSERT INTO holed_coverage VALUES
+        (1, ST_GeomFromText('POLYGON((0 0, 30 0, 30 30, 0 30, 0 0), (10 10, 20 10, 20 20, 10 20, 10 10))'))`
+    );
+
+    const rows = await query(
+      db,
+      `FROM extract_outerlines('holed_coverage')
+       SELECT ST_NumGeometries(geom) AS parts, ST_Length(geom) AS length`
+    );
+    expect(Number(rows[0].parts)).toBe(2);
+    expect(Number(rows[0].length)).toBeCloseTo(120 + 40, 6);
   });
 });
 

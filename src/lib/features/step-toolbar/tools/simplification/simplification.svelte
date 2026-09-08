@@ -43,8 +43,11 @@
       hasOSMBasemap: osmBasemapStore.isActive
     })
   );
+  // A dataset's own geometry sits in the reference slot but is simplified
+  // through the geo-dataset path, never as an imported basemap.
   const isImportedBasemap = $derived(
-    basemapService.currentBasemap?.metadata.isCustom === true
+    basemapService.currentBasemap?.metadata.isCustom === true &&
+      basemapService.currentBasemap?.metadata.isDatasetGeometry !== true
   );
   const availableBasemapLevels = $derived.by(() => {
     const metadata = basemapService.currentMetadata;

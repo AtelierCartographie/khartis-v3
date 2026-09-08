@@ -48,6 +48,14 @@
     "widthUnits": "pixels",
     "color": [170, 170, 170, 150]
   },
+  "limit-outer": {
+    "description_fr": "Contour extérieur dérivé d'une géométrie importée (emprise du fond)",
+    "description_en": "Outer contour derived from imported geometry (basemap extent)",
+    "layer_type": "path",
+    "width": 0.5,
+    "widthUnits": "pixels",
+    "color": [63, 63, 63, 255]
+  },
   "land": {
     "description_fr": "Territoire général (fond polygone)",
     "description_en": "General territory (polygon fill)",
