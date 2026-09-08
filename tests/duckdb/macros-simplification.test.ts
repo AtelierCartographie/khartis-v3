@@ -212,6 +212,36 @@ describe('extract_innerlines macro', () => {
     expect(String(rows[0].wkt)).toMatch(/LINESTRING|MULTILINESTRING/);
   });
 
+  it('should keep only the shared edge, not the outline of the coverage', async () => {
+    const rows = await query(
+      db,
+      `FROM extract_innerlines('adjacent_polygons')
+       SELECT ST_Length(geom) AS length`
+    );
+    // The x=10 edge is 10 long; the 20x10 outline would add 60.
+    expect(Number(rows[0].length)).toBeCloseTo(10, 6);
+  });
+
+  it('should return nothing for a coverage whose polygons do not touch', async () => {
+    await run(
+      db,
+      'CREATE OR REPLACE TABLE disjoint_polygons (_gid INTEGER, geom GEOMETRY)'
+    );
+    await run(
+      db,
+      `INSERT INTO disjoint_polygons VALUES
+        (1, ST_GeomFromText('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))')),
+        (2, ST_GeomFromText('POLYGON((30 0, 40 0, 40 10, 30 10, 30 0))'))`
+    );
+
+    const rows = await query(
+      db,
+      `FROM extract_innerlines('disjoint_polygons')
+       SELECT ST_IsEmpty(geom) AS is_empty`
+    );
+    expect(rows[0].is_empty).toBe(true);
+  });
+
   it('should not throw on an OGC-invalid polygon and still derive inner borders', async () => {
     const rows = await query(
       db,
@@ -221,6 +251,29 @@ describe('extract_innerlines macro', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].is_empty).toBe(false);
     expect(String(rows[0].wkt)).toMatch(/LINESTRING|MULTILINESTRING/);
+  });
+});
+
+describe('extract_land macro', () => {
+  it('should dissolve a polygon coverage into a single territory', async () => {
+    const rows = await query(
+      db,
+      `FROM extract_land('adjacent_polygons')
+       SELECT ST_Area(geom) AS area, ST_NumGeometries(geom) AS parts`
+    );
+    expect(rows).toHaveLength(1);
+    // The two 10x10 squares merge instead of staying side by side.
+    expect(Number(rows[0].area)).toBeCloseTo(200, 6);
+    expect(Number(rows[0].parts)).toBe(1);
+  });
+
+  it('should not throw on an OGC-invalid polygon', async () => {
+    const rows = await query(
+      db,
+      `FROM extract_land('invalid_coverage')
+       SELECT ST_IsEmpty(geom) AS is_empty`
+    );
+    expect(rows[0].is_empty).toBe(false);
   });
 });
 

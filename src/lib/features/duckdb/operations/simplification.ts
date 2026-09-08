@@ -1,4 +1,4 @@
-import { DERIVED_GEOMETRY_TABLE_SUFFIX } from '$lib/features/commons/constants/basemap.constants';
+import { rebuildDerivedGeometryTables } from './derived-geometry';
 import {
   escapeIdentifier,
   escapeSqlString
@@ -119,7 +119,6 @@ export async function simplifyGeometryTable(
     : `${sourceTable}_simplified`;
   const resolvedTargetTable = options.targetTableName ?? targetTable;
   const escapedTarget = escapeIdentifier(resolvedTargetTable);
-  const escapedTargetValue = escapeSqlString(resolvedTargetTable);
 
   const createStatement = createView
     ? 'CREATE OR REPLACE VIEW'
@@ -168,33 +167,8 @@ export async function simplifyGeometryTable(
   );
 
   if (simplificationMacro === 'simplify_and_clean') {
-    // Recompute the derived borders from polygon coverage so they stay in sync.
-    const derivedBoundaries = [
-      {
-        table: `${sourceTable}${DERIVED_GEOMETRY_TABLE_SUFFIX.INNERLINES}`,
-        macro: 'extract_innerlines'
-      },
-      {
-        table: `${sourceTable}${DERIVED_GEOMETRY_TABLE_SUFFIX.OUTERLINES}`,
-        macro: 'extract_outerlines'
-      }
-    ] as const;
-
-    for (const { table, macro } of derivedBoundaries) {
-      try {
-        await Duck.query(`
-          CREATE OR REPLACE TABLE "${escapeIdentifier(table)}" AS
-          FROM ${macro}('${escapedTargetValue}')
-        `);
-        Duck.invalidateTableCache?.(table);
-      } catch (error) {
-        logger.error(
-          `Failed to rebuild simplified geometry borders via ${macro}`,
-          LogCategory.DUCKDB,
-          error
-        );
-      }
-    }
+    // The derived territory and borders describe the previous geometry.
+    await rebuildDerivedGeometryTables(Duck, resolvedTargetTable);
   }
 
   const reductionPercentage =

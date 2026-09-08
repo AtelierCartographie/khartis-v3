@@ -63,7 +63,8 @@ import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
 import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import {
   ensureDatasetGeometryBasemap,
-  forgetDatasetGeometryBasemap
+  forgetDatasetGeometryBasemap,
+  resetDatasetGeometryBasemaps
 } from '$lib/features/map/services/dataset-geometry-basemap.service';
 import { importRollbackService } from './import-rollback.service';
 import {
@@ -1648,6 +1649,7 @@ function createDataOrchestratorService() {
     }
 
     cancelPendingGeoColumnRestore();
+    resetDatasetGeometryBasemaps();
     await restoreCurrentProjectState(options);
   }
 

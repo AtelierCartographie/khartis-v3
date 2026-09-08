@@ -21,6 +21,13 @@ vi.mock('./basemap-import.service', () => ({
   createArrowTableFromDuckTable: mocks.createArrowTableFromDuckTable
 }));
 
+vi.mock('../stores/basemap-aux-layers.store.svelte', () => ({
+  basemapAuxLayersStore: {
+    getStyle: vi.fn(),
+    updateStyle: vi.fn()
+  }
+}));
+
 vi.mock('./basemap-catalog.service.svelte', () => ({
   basemapCatalogService: {
     addCustomBasemap: mocks.addCustomBasemap,
@@ -45,8 +52,8 @@ vi.mock('$lib/features/commons/stores/basemap-style.store.svelte', () => ({
 
 const {
   ensureDatasetGeometryBasemap,
-  forgetDatasetGeometryBasemap,
-  activateDatasetGeometryBasemap
+  activateDatasetGeometryBasemap,
+  resetDatasetGeometryBasemaps
 } = await import('./dataset-geometry-basemap.service');
 
 function createMetadata(file: string): BasemapMetadata {
@@ -85,8 +92,7 @@ beforeEach(() => {
       geometryTable: { numRows: 3 }
     })
   );
-  forgetDatasetGeometryBasemap(geoDataset.tableName);
-  forgetDatasetGeometryBasemap('regions_geojson__simplified');
+  resetDatasetGeometryBasemaps();
 });
 
 describe('dataset geometry basemap', () => {
@@ -156,6 +162,15 @@ describe('dataset geometry basemap', () => {
     await ensureDatasetGeometryBasemap(geoDataset);
 
     expect(mocks.createBasemapFromGeometryTable).toHaveBeenCalledOnce();
+  });
+
+  it('should forget everything a new project would key over', async () => {
+    await ensureDatasetGeometryBasemap(geoDataset);
+    resetDatasetGeometryBasemaps();
+    mocks.setReferenceBasemap.mockClear();
+
+    await expect(activateDatasetGeometryBasemap()).resolves.toBe(false);
+    expect(mocks.setReferenceBasemap).not.toHaveBeenCalled();
   });
 
   it('should put the derived basemap back when the reference slot is freed', async () => {

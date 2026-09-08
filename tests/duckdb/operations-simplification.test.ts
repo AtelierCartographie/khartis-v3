@@ -143,6 +143,7 @@ describe('simplifyGeometryTable', () => {
     const outerlinesQuery = queries.find((sql) =>
       sql.includes('extract_outerlines')
     );
+    const landQuery = queries.find((sql) => sql.includes('extract_land('));
 
     expect(vertexCountQuery).toContain(`FROM "O'Brien ""source"""`);
     expect(vertexCountQuery).toContain(`ST_NPoints("geom' ""col""")`);
@@ -153,19 +154,29 @@ describe('simplifyGeometryTable', () => {
       `simplify_and_clean('O''Brien "source"', 'geom'' "col"', 0.5)`
     );
     expect(innerlinesQuery).toContain(
-      `CREATE OR REPLACE TABLE "source""table__innerlines"`
+      `CREATE OR REPLACE TABLE "target' ""table""__innerlines"`
     );
     expect(innerlinesQuery).toContain(`extract_innerlines('target'' "table"')`);
     expect(outerlinesQuery).toContain(
-      `CREATE OR REPLACE TABLE "source""table__outerlines"`
+      `CREATE OR REPLACE TABLE "target' ""table""__outerlines"`
     );
-    expect(outerlinesQuery).toContain(`extract_outerlines('target'' "table"')`);
+    // The outer contour reuses the dissolved land table, not the source rows.
+    expect(outerlinesQuery).toContain(
+      `extract_outerlines('target'' "table"__land')`
+    );
+    expect(landQuery).toContain(
+      `CREATE OR REPLACE TABLE "target' ""table""__land"`
+    );
+    expect(landQuery).toContain(`extract_land('target'' "table"')`);
     expect(Duck.invalidateTableCache).toHaveBeenCalledWith(`target' "table"`);
     expect(Duck.invalidateTableCache).toHaveBeenCalledWith(
-      'source"table__innerlines'
+      `target' "table"__land`
     );
     expect(Duck.invalidateTableCache).toHaveBeenCalledWith(
-      'source"table__outerlines'
+      `target' "table"__innerlines`
+    );
+    expect(Duck.invalidateTableCache).toHaveBeenCalledWith(
+      `target' "table"__outerlines`
     );
   });
 
