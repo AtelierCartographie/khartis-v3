@@ -1,4 +1,5 @@
 import { DataValidationError } from '$lib/features/commons/pipeline.errors';
+import { isGeometryColumnType } from '$lib/features/duckdb';
 import {
   escapeIdentifier,
   escapeSqlString
@@ -159,9 +160,14 @@ export async function normalizeGeoParquetTable(
     );
   }
 
+  const columnType = tableDescription.type[columnIndex];
+  if (isGeometryColumnType(columnType)) {
+    return false;
+  }
+
   const geometryExpression = buildGeometryExpression(
     primaryColumn,
-    tableDescription.type[columnIndex],
+    columnType,
     columnMetadata
   );
   if (!geometryExpression) {
