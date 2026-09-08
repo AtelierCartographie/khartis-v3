@@ -1,18 +1,19 @@
 /**
  * DuckDB macros for topology-aware geometry simplification.
  *
- * Nine macros:
+ * Ten macros:
  * 1. `snap_topology_normalized` – aligns vertices on a dynamic grid to clean
  *    micro gaps/overlaps before simplification.
  * 2. `simplify_topology_normalized` – coverage-based simplification preserving topology,
  *    with a normalized factor (0.0 = original, 1.0 = max simplification).
  * 3. `prune_triangles` – removes small triangle artefacts produced by aggressive simplification.
  * 4. `extract_innerlines` – derives shared internal borders from polygon coverage.
- * 5. `extract_outerlines` – derives the outer contour of the whole polygon coverage.
- * 6. `simplify_and_clean` – convenience wrapper that chains snapping, simplification and cleanup.
- * 7. `snap_linestring_normalized` – aligns line vertices on a dynamic grid.
- * 8. `simplify_linestring_normalized` – simplifies line strings with a normalized factor.
- * 9. `simplify_and_clean_linestring` – convenience wrapper for line snapping + simplification.
+ * 5. `extract_land` – dissolves a polygon coverage into its territory outline.
+ * 6. `extract_outerlines` – derives the outer contour of the whole polygon coverage.
+ * 7. `simplify_and_clean` – convenience wrapper that chains snapping, simplification and cleanup.
+ * 8. `snap_linestring_normalized` – aligns line vertices on a dynamic grid.
+ * 9. `simplify_linestring_normalized` – simplifies line strings with a normalized factor.
+ * 10. `simplify_and_clean_linestring` – convenience wrapper for line snapping + simplification.
  *
  * @see https://github.com/AtelierCartographie/khartis-v3/issues/53
  */
@@ -111,30 +112,41 @@ const prune_triangles_macro = `CREATE OR REPLACE MACRO prune_triangles(input_tab
     ORDER BY _gid
 );`;
 
+// Shared borders are every polygon edge that is not on the outline of the
+// dissolved coverage. Deriving them by difference costs two dissolves, where
+// pairwise ST_Intersection costs O(n^2) overlays: 3s versus 300s on 35k communes.
 const extract_innerlines_macro = `CREATE OR REPLACE MACRO extract_innerlines(input_table) AS TABLE (
     WITH
     source_data AS (
         FROM query_table(input_table)
-        SELECT row_number() OVER () as _gid, ST_CollectionExtract(ST_MakeValid(geom), 3) AS geom
+        SELECT ST_CollectionExtract(ST_MakeValid(geom), 3) AS geom
         WHERE geom IS NOT NULL
     ),
-    touching_pairs AS (
-        SELECT
-            a._gid AS left_gid,
-            b._gid AS right_gid,
-            ST_Intersection(a.geom, b.geom) AS raw_intersection
-        FROM source_data a
-        JOIN source_data b
-          ON a._gid < b._gid
-         AND ST_Intersects(a.geom, b.geom)
+    parts AS (
+        FROM source_data SELECT geom WHERE NOT ST_IsEmpty(geom)
     ),
-    extracted_lines AS (
+    borders AS (
         SELECT
-            ST_CollectionExtract(raw_intersection, 2) AS geom
-        FROM touching_pairs
+            ST_Union_Agg(ST_Boundary(geom)) AS all_borders,
+            ST_Boundary(ST_Union_Agg(geom)) AS outline
+        FROM parts
     )
-    FROM extracted_lines
-    SELECT ST_LineMerge(ST_Collect(list(geom))) AS geom
+    FROM borders
+    SELECT ST_LineMerge(
+        ST_CollectionExtract(ST_Difference(all_borders, outline), 2)
+    ) AS geom
+    WHERE all_borders IS NOT NULL AND NOT ST_IsEmpty(all_borders)
+);`;
+
+const extract_land_macro = `CREATE OR REPLACE MACRO extract_land(input_table) AS TABLE (
+    WITH
+    source_data AS (
+        FROM query_table(input_table)
+        SELECT ST_CollectionExtract(ST_MakeValid(geom), 3) AS geom
+        WHERE geom IS NOT NULL
+    )
+    FROM source_data
+    SELECT ST_Union_Agg(geom) AS geom
     WHERE NOT ST_IsEmpty(geom)
 );`;
 
@@ -254,6 +266,7 @@ export const simplification_macros =
   simplify_topology_normalized_macro +
   prune_triangles_macro +
   extract_innerlines_macro +
+  extract_land_macro +
   extract_outerlines_macro +
   simplify_and_clean_macro +
   snap_linestring_normalized_macro +

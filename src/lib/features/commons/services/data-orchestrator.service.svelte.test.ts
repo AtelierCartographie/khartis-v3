@@ -208,7 +208,8 @@ vi.mock('$lib/features/map/services/basemap-catalog.service.svelte', () => ({
 
 vi.mock('$lib/features/map/services/dataset-geometry-basemap.service', () => ({
   ensureDatasetGeometryBasemap: vi.fn(async () => undefined),
-  forgetDatasetGeometryBasemap: vi.fn()
+  forgetDatasetGeometryBasemap: vi.fn(),
+  resetDatasetGeometryBasemaps: vi.fn()
 }));
 
 vi.mock('./import-rollback.service', () => ({

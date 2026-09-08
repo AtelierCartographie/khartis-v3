@@ -26,7 +26,8 @@ import {
 } from '$lib/features/duckdb/operations/simplification';
 import {
   getBasemapRawTableName,
-  refreshImportedBasemapHelperTables
+  refreshImportedBasemapHelperTables,
+  resolveCustomBasemapLayerType
 } from '$lib/features/map/services/basemap-import.service';
 import {
   ensureDatasetGeometryBasemap,
@@ -96,9 +97,7 @@ const { actions, getState } = createToolStore<
         }
       );
 
-      const primaryLayerType =
-        metadata.layers.find((layer) => !layer.file)?.type ??
-        metadata.layers[0]?.type;
+      const primaryLayerType = resolveCustomBasemapLayerType(metadata);
 
       if (primaryLayerType) {
         await refreshImportedBasemapHelperTables(

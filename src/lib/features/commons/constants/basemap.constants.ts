@@ -14,6 +14,7 @@ export const BASEMAP_LAYER_ID = {
 // Derived geometry tables hang off the source table name; both the map import
 // service and the DuckDB simplification op have to agree on these suffixes.
 export const DERIVED_GEOMETRY_TABLE_SUFFIX = {
+  LAND: '__land',
   INNERLINES: '__innerlines',
   OUTERLINES: '__outerlines'
 } as const;

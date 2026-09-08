@@ -31,6 +31,11 @@ export function forgetDatasetGeometryBasemap(tableName: string): void {
   derivedBasemaps.delete(tableName);
 }
 
+// Derived basemaps are keyed by DuckDB table name, which a new project reuses.
+export function resetDatasetGeometryBasemaps(): void {
+  derivedBasemaps.clear();
+}
+
 /**
  * Derives the helper layers of a dataset that carries its own geometry and
  * exposes them the way an imported basemap does, so the customize-basemap step
@@ -75,7 +80,9 @@ export async function ensureDatasetGeometryBasemap(
 export async function activateDatasetGeometryBasemap(
   tableName?: string
 ): Promise<boolean> {
-  const targetTable = tableName ?? [...derivedBasemaps.keys()].at(-1);
+  const targetTable =
+    tableName ??
+    (derivedBasemaps.size === 1 ? [...derivedBasemaps.keys()][0] : undefined);
   if (!targetTable) {
     return false;
   }

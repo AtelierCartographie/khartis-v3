@@ -32,6 +32,7 @@ const { Duck } = await import('$lib/features/duckdb');
 const {
   createBasemapFromGeometryTable,
   getBasemapInnerlinesTableName,
+  getBasemapLandTableName,
   getBasemapOuterlinesTableName,
   getBasemapCentroidsTableName
 } = await import('./basemap-import.service');
@@ -67,21 +68,21 @@ describe('createBasemapFromGeometryTable', () => {
     ).toEqual([
       {
         title: 'Territoire',
-        type: BasemapLayerType.POLYGON,
-        file: undefined,
-        style: null
+        type: BasemapLayerType.LAND,
+        file: getBasemapLandTableName('regions_geojson'),
+        style: 'land'
       },
       {
         title: 'Limite extérieure',
         type: BasemapLayerType.LIMIT,
         file: getBasemapOuterlinesTableName('regions_geojson'),
-        style: 'limit-level-2'
+        style: 'limit-outer'
       },
       {
         title: 'Limites',
         type: BasemapLayerType.LIMIT,
         file: getBasemapInnerlinesTableName('regions_geojson'),
-        style: null
+        style: 'limit-level-0'
       },
       {
         title: 'Centroïdes',
@@ -114,6 +115,12 @@ describe('createBasemapFromGeometryTable', () => {
         (sql) =>
           sql.includes('extract_outerlines') &&
           sql.includes('regions_geojson__outerlines')
+      )
+    ).toBe(true);
+    expect(
+      statements.some(
+        (sql) =>
+          sql.includes('extract_land(') && sql.includes('regions_geojson__land')
       )
     ).toBe(true);
   });

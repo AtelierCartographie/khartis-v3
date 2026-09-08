@@ -20,7 +20,19 @@ import {
 } from '$lib/features/data-pipeline';
 import { convertGeoPackageToGeoJsonFile } from '../utils/geopackage-browser-fallback.utils';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
-import { DERIVED_GEOMETRY_TABLE_SUFFIX } from '$lib/features/commons/constants/basemap.constants';
+import { basemapAuxLayersStore } from '../stores/basemap-aux-layers.store.svelte';
+import {
+  getDerivedInnerlinesTableName as getBasemapInnerlinesTableName,
+  getDerivedLandTableName as getBasemapLandTableName,
+  getDerivedOuterlinesTableName as getBasemapOuterlinesTableName,
+  rebuildDerivedGeometryTables
+} from '$lib/features/duckdb/operations/derived-geometry';
+
+export {
+  getBasemapInnerlinesTableName,
+  getBasemapLandTableName,
+  getBasemapOuterlinesTableName
+};
 import {
   escapeIdentifier,
   escapeSqlString
@@ -58,14 +70,6 @@ const SHAPEFILE_FILE_TYPE = 'shapefile';
 
 export function getBasemapRawTableName(tableName: string): string {
   return `${tableName}${RAW_TABLE_SUFFIX}`;
-}
-
-export function getBasemapInnerlinesTableName(tableName: string): string {
-  return `${tableName}${DERIVED_GEOMETRY_TABLE_SUFFIX.INNERLINES}`;
-}
-
-export function getBasemapOuterlinesTableName(tableName: string): string {
-  return `${tableName}${DERIVED_GEOMETRY_TABLE_SUFFIX.OUTERLINES}`;
 }
 
 export function getBasemapCentroidsTableName(tableName: string): string {
@@ -238,7 +242,11 @@ async function processGeofileBasemapImport(
   await generateCustomBasemapAttributes(tableName, customBasemap.file);
   const geometryTable = await createArrowTableFromDuckTable(duck, tableName);
 
-  return { basemap: customBasemap, tableName, geometryTable };
+  return {
+    basemap: finalizeCustomBasemapMetadata(customBasemap),
+    tableName,
+    geometryTable
+  };
 }
 
 async function processParquetBasemapImport(
@@ -308,7 +316,11 @@ async function processParquetBasemapImport(
   await generateCustomBasemapAttributes(tableName, customBasemap.file);
   const geometryTable = await createArrowTableFromDuckTable(duck, tableName);
 
-  return { basemap: customBasemap, tableName, geometryTable };
+  return {
+    basemap: finalizeCustomBasemapMetadata(customBasemap),
+    tableName,
+    geometryTable
+  };
 }
 
 function extractGeometryTypeFromMeta(
@@ -347,53 +359,112 @@ function shouldCreateCentroidLayer(layerType: BasemapLayerType): boolean {
   );
 }
 
-function buildBasemapLayers(
-  tableName: string,
-  layerType: BasemapLayerType
-): BasemapLayer[] {
-  const layers: BasemapLayer[] = [
-    {
-      title_fr: isPolygonBasemapLayerType(layerType)
-        ? m.layer_title_territory({}, { locale: 'fr' })
-        : tableName,
-      title_en: isPolygonBasemapLayerType(layerType)
-        ? m.layer_title_territory({}, { locale: 'en' })
-        : tableName,
-      type: layerType,
-      style: null
-    }
-  ];
-
-  if (isPolygonBasemapLayerType(layerType)) {
-    layers.push({
-      title_fr: m.layer_title_outer_limits({}, { locale: 'fr' }),
-      title_en: m.layer_title_outer_limits({}, { locale: 'en' }),
-      type: BasemapLayerType.LIMIT,
-      file: getBasemapOuterlinesTableName(tableName),
-      style: 'limit-level-2'
-    });
-    layers.push({
-      title_fr: m.layer_title_limits({}, { locale: 'fr' }),
-      title_en: m.layer_title_limits({}, { locale: 'en' }),
-      type: BasemapLayerType.LIMIT,
-      file: getBasemapInnerlinesTableName(tableName),
-      style: null
-    });
+// The dissolved territory carries the outline through its own limit layers, so
+// its polygon stroke would double them up. Seeded once, still user-overridable.
+function seedDerivedLayerStyleDefaults(basemap: BasemapMetadata): void {
+  const landLayer = basemap.layers.find(
+    (layer) => layer.type === BasemapLayerType.LAND && layer.file
+  );
+  if (!landLayer?.file) {
+    return;
   }
 
-  if (!shouldCreateCentroidLayer(layerType)) {
-    return layers;
+  const existing = basemapAuxLayersStore.getStyle(basemap.file, landLayer.file);
+  if (existing?.strokeVisible !== undefined) {
+    return;
   }
 
-  layers.push({
+  basemapAuxLayersStore.updateStyle(basemap.file, landLayer.file, {
+    strokeVisible: false
+  });
+}
+
+function finalizeCustomBasemapMetadata(
+  basemap: BasemapMetadata
+): BasemapMetadata {
+  seedDerivedLayerStyleDefaults(basemap);
+  return basemap;
+}
+
+function buildCentroidLayer(tableName: string): BasemapLayer {
+  return {
     title_fr: m.layer_title_centroids({}, { locale: 'fr' }),
     title_en: m.layer_title_centroids({}, { locale: 'en' }),
     type: BasemapLayerType.CENTROID,
     file: getBasemapCentroidsTableName(tableName),
     style: null
-  });
+  };
+}
+
+// A polygon coverage is described the way the catalog describes one: a dissolved
+// territory plus its outer and inner limits, each in its own table. No layer
+// points at the source table, so the attributed geometry is drawn once, by the
+// visualization that owns it.
+function buildBasemapLayers(
+  tableName: string,
+  layerType: BasemapLayerType,
+  options: { omitPrimaryLayer?: boolean } = {}
+): BasemapLayer[] {
+  if (isPolygonBasemapLayerType(layerType)) {
+    return [
+      {
+        title_fr: m.layer_title_territory({}, { locale: 'fr' }),
+        title_en: m.layer_title_territory({}, { locale: 'en' }),
+        type: BasemapLayerType.LAND,
+        file: getBasemapLandTableName(tableName),
+        style: 'land'
+      },
+      {
+        title_fr: m.layer_title_outer_limits({}, { locale: 'fr' }),
+        title_en: m.layer_title_outer_limits({}, { locale: 'en' }),
+        type: BasemapLayerType.LIMIT,
+        file: getBasemapOuterlinesTableName(tableName),
+        style: 'limit-outer'
+      },
+      {
+        title_fr: m.layer_title_limits({}, { locale: 'fr' }),
+        title_en: m.layer_title_limits({}, { locale: 'en' }),
+        type: BasemapLayerType.LIMIT,
+        file: getBasemapInnerlinesTableName(tableName),
+        style: 'limit-level-0'
+      },
+      buildCentroidLayer(tableName)
+    ];
+  }
+
+  // A dataset already draws its own points and lines through its
+  // visualization; repeating them as a basemap layer only adds a row nobody
+  // can style.
+  const layers: BasemapLayer[] = options.omitPrimaryLayer
+    ? []
+    : [
+        {
+          title_fr: tableName,
+          title_en: tableName,
+          type: layerType,
+          style: null
+        }
+      ];
+
+  if (shouldCreateCentroidLayer(layerType)) {
+    layers.push(buildCentroidLayer(tableName));
+  }
 
   return layers;
+}
+
+export function resolveCustomBasemapLayerType(
+  metadata: BasemapMetadata
+): BasemapLayerType | undefined {
+  const types = new Set(metadata.layers.map((layer) => layer.type));
+  if (types.has(BasemapLayerType.LAND) || types.has(BasemapLayerType.LIMIT)) {
+    return BasemapLayerType.POLYGON;
+  }
+  return metadata.layers.find(
+    (layer) =>
+      layer.type === BasemapLayerType.LINE ||
+      layer.type === BasemapLayerType.POINT
+  )?.type;
 }
 
 export async function createArrowTableFromDuckTable(
@@ -479,62 +550,11 @@ function buildNormalizedGeometrySelect(
   return `SELECT * EXCLUDE ("${escapedGeometryColumn}"), ${geometryExpression} AS "${escapedDefaultGeom}" FROM "${escapedSourceTable}"`;
 }
 
-async function createEmptyLineTable(
-  duck: typeof Duck,
-  tableName: string
-): Promise<void> {
-  await duck.query(`
-    CREATE OR REPLACE TABLE "${escapeIdentifier(tableName)}" AS
-    SELECT NULL::GEOMETRY AS "${escapeIdentifier(INTERNAL_COLUMN.GEOM)}"
-    WHERE FALSE
-  `);
-}
-
-async function rebuildBoundaryTable(
-  duck: typeof Duck,
-  sourceTableName: string,
-  targetTableName: string,
-  macroName: 'extract_innerlines' | 'extract_outerlines'
-): Promise<void> {
-  try {
-    await duck.query(`
-      CREATE OR REPLACE TABLE "${escapeIdentifier(targetTableName)}" AS
-      WITH extracted AS (
-        SELECT ST_CollectionExtract(geom, 2) AS geom
-        FROM ${macroName}('${escapeSqlString(sourceTableName)}')
-        WHERE geom IS NOT NULL
-      )
-      SELECT geom
-      FROM extracted
-      WHERE NOT ST_IsEmpty(geom)
-        AND CAST(ST_GeometryType(geom) AS VARCHAR) IN ('LINESTRING', 'MULTILINESTRING')
-    `);
-  } catch (error) {
-    logger.error(
-      `Failed to extract imported basemap boundaries via ${macroName}`,
-      LogCategory.MAP,
-      error
-    );
-    await createEmptyLineTable(duck, targetTableName);
-  }
-}
-
 async function rebuildPolygonDerivedTables(
   duck: typeof Duck,
   tableName: string
 ): Promise<void> {
-  await rebuildBoundaryTable(
-    duck,
-    tableName,
-    getBasemapInnerlinesTableName(tableName),
-    'extract_innerlines'
-  );
-  await rebuildBoundaryTable(
-    duck,
-    tableName,
-    getBasemapOuterlinesTableName(tableName),
-    'extract_outerlines'
-  );
+  await rebuildDerivedGeometryTables(duck, tableName);
 
   await prepareRepresentativePointTable(
     duck,
@@ -725,14 +745,20 @@ export async function createBasemapFromGeometryTable(
     bbox: [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY],
     proj_source: GEO_CONSTANTS.WGS84_CRS,
     proj_to: { type: 'identity' },
-    layers: buildBasemapLayers(tableName, layerType),
+    layers: buildBasemapLayers(tableName, layerType, {
+      omitPrimaryLayer: true
+    }),
     isCustom: true,
     isDatasetGeometry: true
   };
 
   const geometryTable = await createArrowTableFromDuckTable(duck, tableName);
 
-  return { basemap, tableName, geometryTable };
+  return {
+    basemap: finalizeCustomBasemapMetadata(basemap),
+    tableName,
+    geometryTable
+  };
 }
 
 export async function loadBasemapFromUrl(url: string): Promise<File> {
