@@ -333,15 +333,23 @@ async function ensureSimilarityCached(
              OR ba.basemap IN (SELECT basemap FROM candidate_basemaps)
         )
       ),
+      -- When both forms are already word-sorted the second term is exactly
+      -- 0.99 x the first, so GREATEST can only return the first: skipping it
+      -- is lossless, and the catalog is ~79% already sorted.
       fuzzy_scored AS (
         SELECT
           u.original_name,
           u.source_dup_count,
           da.normalized,
-          GREATEST(
-            jaro_winkler_similarity(u.normalized_name, da.normalized, ${FUZZY_SCORE_CUTOFF}),
-            0.99 * jaro_winkler_similarity(u.normalized_sorted, da.normalized_sorted, ${FUZZY_SCORE_CUTOFF})
-          ) AS match_score
+          CASE
+            WHEN u.normalized_sorted = u.normalized_name
+              AND da.normalized_sorted = da.normalized
+            THEN jaro_winkler_similarity(u.normalized_name, da.normalized, ${FUZZY_SCORE_CUTOFF})
+            ELSE GREATEST(
+              jaro_winkler_similarity(u.normalized_name, da.normalized, ${FUZZY_SCORE_CUTOFF}),
+              0.99 * jaro_winkler_similarity(u.normalized_sorted, da.normalized_sorted, ${FUZZY_SCORE_CUTOFF})
+            )
+          END AS match_score
         FROM sorted_unmatched u, distinct_attributes da
       ),
       fuzzy_matches AS (
