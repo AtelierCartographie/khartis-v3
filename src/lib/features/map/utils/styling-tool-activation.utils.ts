@@ -2,11 +2,18 @@ import {
   globalActions,
   globalState
 } from '$lib/features/commons/stores/global.svelte';
-import { StylingTools, ToolbarStep } from '$lib/features/commons/types/global';
+import {
+  StylingTools,
+  ToolbarStep,
+  VisualizationTools
+} from '$lib/features/commons/types/global';
 
-export function activateStylingToolFromMap(tool: StylingTools): void {
-  if (globalState.selectedStep !== ToolbarStep.Styling) {
-    globalActions.setNavigationState(ToolbarStep.Styling);
+function activateToolFromMap(
+  step: ToolbarStep,
+  tool: StylingTools | VisualizationTools
+): void {
+  if (globalState.selectedStep !== step) {
+    globalActions.setNavigationState(step);
   }
 
   if (globalState.isMobileView) {
@@ -14,4 +21,14 @@ export function activateStylingToolFromMap(tool: StylingTools): void {
   }
 
   globalActions.setSelectedTool(tool);
+}
+
+export function activateStylingToolFromMap(tool: StylingTools): void {
+  activateToolFromMap(ToolbarStep.Styling, tool);
+}
+
+export function activateVisualizationToolFromMap(
+  tool: VisualizationTools
+): void {
+  activateToolFromMap(ToolbarStep.Visualizations, tool);
 }
