@@ -59,6 +59,20 @@ function makeDuckClient(testDb: TestDuckDB): DuckDBClientForJoin {
 
 const TEST_BASEMAP = 'test-communes';
 
+/**
+ * Count statements that create a temp table with this prefix. Matching the bare
+ * prefix anywhere in the SQL also catches queries that only read the table.
+ */
+function countTempTableBuilds(
+  querySpy: { mock: { calls: unknown[][] } },
+  tablePrefix: string
+): number {
+  const pattern = new RegExp(`CREATE OR REPLACE TEMP TABLE\\s+"${tablePrefix}`);
+  return querySpy.mock.calls.filter(
+    ([sql]) => typeof sql === 'string' && pattern.test(sql)
+  ).length;
+}
+
 const FAKE_BASEMAP_METADATA: BasemapMetadata = {
   file: `${TEST_BASEMAP}.parquet`,
   title_fr: 'Test',
@@ -462,13 +476,10 @@ describe('exact_claimed_ids deduplication', () => {
     );
     await finalizeJoin(dataset, FAKE_BASEMAP_METADATA, 'geo', Duck);
 
-    const cacheBuildCount = querySpy.mock.calls.filter(([sql]) => {
-      return (
-        typeof sql === 'string' &&
-        sql.includes('CREATE OR REPLACE TEMP TABLE') &&
-        sql.includes('__similarity_cache__')
-      );
-    }).length;
+    const cacheBuildCount = countTempTableBuilds(
+      querySpy,
+      '__similarity_cache__'
+    );
     expect(cacheBuildCount).toBe(1);
 
     const joined = (await Duck.query(
@@ -477,6 +488,104 @@ describe('exact_claimed_ids deduplication', () => {
     )) as Array<{ geo: string; id: string | null }>;
     expect(joined.every((row) => row.id === 'LY_01')).toBe(true);
     expect(quality.joinedCount).toBe(2);
+  });
+
+  it('grades once and reuses it across stats, page and joined values', async () => {
+    await run(db, `CREATE OR REPLACE TABLE user_graded (geo VARCHAR)`);
+    await run(db, `INSERT INTO user_graded VALUES ('Lyon'), ('Saint-Colombe')`);
+
+    const querySpy = vi.fn(makeDuckClient(db).query);
+    const Duck: DuckDBClientForJoin = { query: querySpy };
+    const dataset = makeDataset('user_graded');
+
+    await computeJoinStats(dataset, FAKE_BASEMAP_METADATA, 'geo', Duck);
+    await getJoinedEntitiesPage(dataset, FAKE_BASEMAP_METADATA, 'geo', Duck, {
+      offset: 0,
+      limit: 10
+    });
+    await getJoinedBasemapValues(dataset, FAKE_BASEMAP_METADATA, 'geo', Duck);
+
+    expect(countTempTableBuilds(querySpy, '__join_graded__')).toBe(1);
+  });
+
+  it('grades once for a concurrent page and joined-values pair', async () => {
+    await run(db, `CREATE OR REPLACE TABLE user_graded2 (geo VARCHAR)`);
+    await run(db, `INSERT INTO user_graded2 VALUES ('Lyon')`);
+
+    const querySpy = vi.fn(makeDuckClient(db).query);
+    const Duck: DuckDBClientForJoin = { query: querySpy };
+    const dataset = makeDataset('user_graded2');
+
+    const [page, values] = await Promise.all([
+      getJoinedEntitiesPage(dataset, FAKE_BASEMAP_METADATA, 'geo', Duck, {
+        offset: 0,
+        limit: 10
+      }),
+      getJoinedBasemapValues(dataset, FAKE_BASEMAP_METADATA, 'geo', Duck)
+    ]);
+
+    expect(page.map((row) => row.dataValue)).toEqual(['Lyon']);
+    expect(values).toEqual(['Lyon']);
+    expect(countTempTableBuilds(querySpy, '__join_graded__')).toBe(1);
+  });
+
+  it('regrades a different exclusion set instead of reusing the cached one', async () => {
+    await run(db, `CREATE OR REPLACE TABLE user_graded3 (geo VARCHAR)`);
+    await run(db, `INSERT INTO user_graded3 VALUES ('Lyon'), ('69123')`);
+
+    const querySpy = vi.fn(makeDuckClient(db).query);
+    const Duck: DuckDBClientForJoin = { query: querySpy };
+    const dataset = makeDataset('user_graded3');
+
+    const all = await computeJoinStats(
+      dataset,
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck
+    );
+    const withExclusion = await computeJoinStats(
+      dataset,
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck,
+      { excludedValues: ['Lyon'] }
+    );
+
+    expect(all.joinedCount).toBe(2);
+    expect(withExclusion.joinedCount).toBe(1);
+    expect(countTempTableBuilds(querySpy, '__join_graded__')).toBe(2);
+  });
+
+  it('regrades after the similarity cache is invalidated', async () => {
+    await run(db, `CREATE OR REPLACE TABLE user_graded4 (geo VARCHAR)`);
+    await run(db, `INSERT INTO user_graded4 VALUES ('Lyon')`);
+
+    const querySpy = vi.fn(makeDuckClient(db).query);
+    const Duck: DuckDBClientForJoin = { query: querySpy };
+    const dataset = makeDataset('user_graded4');
+
+    const before = await computeJoinStats(
+      dataset,
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck
+    );
+    expect(before.joinedCount).toBe(1);
+
+    // A corrected source value must not be graded from stale rows.
+    await run(db, `UPDATE user_graded4 SET geo = 'Sainte-Colombe'`);
+    invalidateSimilarityCache('user_graded4', Duck);
+
+    const after = await computeJoinStats(
+      dataset,
+      FAKE_BASEMAP_METADATA,
+      'geo',
+      Duck
+    );
+
+    expect(after.joinedCount).toBe(0);
+    expect(after.toVerifyCount).toBe(1);
+    expect(countTempTableBuilds(querySpy, '__join_graded__')).toBe(2);
   });
 
   it('builds the similarity cache only once for concurrent synthesis requests', async () => {
@@ -503,13 +612,10 @@ describe('exact_claimed_ids deduplication', () => {
     expect(second).toEqual(first);
     expect(third).toEqual(first);
 
-    const cacheBuildCount = querySpy.mock.calls.filter(([sql]) => {
-      return (
-        typeof sql === 'string' &&
-        sql.includes('CREATE OR REPLACE TEMP TABLE') &&
-        sql.includes('__similarity_cache__')
-      );
-    }).length;
+    const cacheBuildCount = countTempTableBuilds(
+      querySpy,
+      '__similarity_cache__'
+    );
 
     expect(cacheBuildCount).toBe(1);
   });

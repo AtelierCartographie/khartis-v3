@@ -3,6 +3,10 @@ import {
   INTERNAL_COLUMN,
   JOINED_BASEMAP_COLUMN,
   JOINED_BASEMAP_COLUMNS,
+  FUZZY_PAIRS_PER_MS,
+  FUZZY_PASS_OVERHEAD_MS,
+  MAX_FUZZY_AUTO_PAIRS,
+  MAX_FUZZY_RANKING_SAMPLE,
   MAX_JOIN_BUCKET_LIST_VALUES
 } from '$lib/features/commons/constants/data.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -45,6 +49,35 @@ export interface DuckDBClientForJoin {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
 }
 
+/**
+ * 'auto' scores the unmatched residual only while it fits in
+ * MAX_FUZZY_AUTO_PAIRS; 'full' ignores the budget and is what the user-triggered
+ * pass runs.
+ */
+export type FuzzyPassMode = 'auto' | 'full';
+
+export interface JoinFuzzyPassEstimate {
+  /** Distinct unmatched candidates the fuzzy phase would have to score. */
+  candidates: number;
+  /** Distinct target names each candidate is scored against. */
+  targetNames: number;
+  estimatedMs: number;
+  /** false when the automatic pass was skipped, so suggestions are missing. */
+  withinBudget: boolean;
+  /** true once the user-triggered full pass has run for this column. */
+  fullPassRequested: boolean;
+}
+
+export function estimateFuzzyPassMs(
+  candidates: number,
+  targetNames: number
+): number {
+  if (candidates <= 0 || targetNames <= 0) return 0;
+  return Math.round(
+    FUZZY_PASS_OVERHEAD_MS + (candidates * targetNames) / FUZZY_PAIRS_PER_MS
+  );
+}
+
 interface InformationSchemaColumn {
   column_name: string;
   data_type: string;
@@ -55,8 +88,9 @@ export function getBasemapAttributesId(basemap: BasemapMetadata): string {
 }
 
 const SIMILARITY_CACHE_PREFIX = '__similarity_cache__';
+const GRADED_CACHE_PREFIX = '__join_graded__';
 const MAX_SIMILARITY_CACHE_ENTRIES = 4;
-const MAX_FUZZY_JOIN_CANDIDATES = 1000;
+const MAX_GRADED_CACHE_ENTRIES = 4;
 const MAX_EXACT_MATCHES_PER_CANDIDATE_BASEMAP = 50;
 const FUZZY_SCORE_CUTOFF = FUZZY_SEARCH.SCORE_CUTOFF;
 
@@ -64,11 +98,23 @@ interface SimilarityCacheEntry {
   tableName: string;
   geoColumn: string;
   cacheTableName: string;
+  fuzzyMode: FuzzyPassMode;
 }
 
 // Insertion-ordered Map used as an LRU: reads re-insert, oldest entry evicts.
 const similarityCacheEntries = new Map<string, SimilarityCacheEntry>();
-const pendingSimilarityCacheBuilds = new Map<string, Promise<string>>();
+const pendingSimilarityCacheBuilds = new Map<
+  string,
+  { fuzzyMode: FuzzyPassMode; promise: Promise<string> }
+>();
+
+/**
+ * Columns whose owner asked for the unbounded fuzzy pass. Sticky on purpose:
+ * every later rebuild of that cache — including after a correction drops it —
+ * must keep honouring the request, otherwise the suggestions the user waited
+ * for would silently vanish on the next stats refresh.
+ */
+const fullFuzzyPassRequests = new Set<string>();
 
 function getSimilarityCacheBuildKey(
   datasetTable: string,
@@ -99,18 +145,51 @@ function getSimilarityCacheTableName(
   return `${SIMILARITY_CACHE_PREFIX}${sanitized}_${hash}`;
 }
 
-function dropSimilarityCacheTable(
-  cacheTableName: string,
-  duck?: DuckDBClientForJoin
-): void {
+function dropTempTable(tableName: string, duck?: DuckDBClientForJoin): void {
   if (!duck) return;
   // The facade throws synchronously before init; temp tables die with the engine.
   try {
     void duck
-      .query(`DROP TABLE IF EXISTS "${escapeIdentifier(cacheTableName)}"`)
+      .query(`DROP TABLE IF EXISTS "${escapeIdentifier(tableName)}"`)
       .catch(() => undefined);
   } catch {
     return;
+  }
+}
+
+/**
+ * Graded rows keyed by the similarity cache table that produced them, so a
+ * dropped or rebuilt cache takes its derived gradings with it. Insertion-ordered
+ * as an LRU, like similarityCacheEntries.
+ */
+const gradedCacheEntries = new Map<string, string>();
+const pendingGradedBuilds = new Map<string, Promise<string>>();
+
+function getGradedCacheKey(
+  cacheTableName: string,
+  basemapId: string,
+  excludedValues: string[]
+): string {
+  const exclusions = JSON.stringify([...excludedValues].sort());
+  return `${cacheTableName}::${basemapId}::${hashSimilarityCacheKey(exclusions)}`;
+}
+
+function getGradedCacheTableName(basemapId: string, gradedKey: string): string {
+  // Named after the basemap only: embedding the cache table name would make
+  // every graded table read as a similarity cache table.
+  const sanitized = basemapId.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 80);
+  return `${GRADED_CACHE_PREFIX}${sanitized}_${hashSimilarityCacheKey(gradedKey)}`;
+}
+
+function invalidateGradedCache(
+  cacheTableName?: string,
+  duck?: DuckDBClientForJoin
+): void {
+  const prefix = cacheTableName ? `${cacheTableName}::` : '';
+  for (const [key, tableName] of gradedCacheEntries) {
+    if (prefix && !key.startsWith(prefix)) continue;
+    gradedCacheEntries.delete(key);
+    dropTempTable(tableName, duck);
   }
 }
 
@@ -122,8 +201,50 @@ export function invalidateSimilarityCache(
   for (const [key, entry] of similarityCacheEntries) {
     if (datasetTableName && entry.tableName !== datasetTableName) continue;
     similarityCacheEntries.delete(key);
-    dropSimilarityCacheTable(entry.cacheTableName, duck);
+    invalidateGradedCache(entry.cacheTableName, duck);
+    dropTempTable(entry.cacheTableName, duck);
   }
+}
+
+/**
+ * Jaro-Winkler score for one candidate/target pair.
+ *
+ * The prefix weighting makes 'korea north' score closer to 'korea rep' than to
+ * 'north korea', so word-sorted forms are compared too; the 0.99 factor keeps a
+ * reordered hit below an exact match so it stays in the to-verify bucket.
+ * When both forms are already word-sorted the second term is exactly 0.99 x the
+ * first, so GREATEST can only return the first and skipping it is lossless.
+ */
+function buildFuzzyScoreExpression(
+  sourceAlias: string,
+  targetAlias: string
+): string {
+  const direct = `jaro_winkler_similarity(${sourceAlias}.normalized_name, ${targetAlias}.normalized, ${FUZZY_SCORE_CUTOFF})`;
+  const reordered = `jaro_winkler_similarity(${sourceAlias}.normalized_sorted, ${targetAlias}.normalized_sorted, ${FUZZY_SCORE_CUTOFF})`;
+  return `CASE
+    WHEN ${sourceAlias}.normalized_sorted = ${sourceAlias}.normalized_name
+      AND ${targetAlias}.normalized_sorted = ${targetAlias}.normalized
+    THEN ${direct}
+    ELSE GREATEST(${direct}, 0.99 * ${reordered})
+  END`;
+}
+
+/**
+ * Distinct catalog names to score against, restricted to the basemaps an exact
+ * match already made plausible; with no exact match anywhere, every basemap.
+ * Scoring distinct normalized values and re-expanding to attribute rows is
+ * lossless and ~4x smaller.
+ */
+function buildTargetNamesCte(candidateBasemapsCte: string): string {
+  return `SELECT
+      normalized,
+      array_to_string(list_sort(string_split(normalized, ' ')), ' ') AS normalized_sorted
+    FROM (
+      SELECT DISTINCT ba.normalized
+      FROM basemap_attributes ba
+      WHERE NOT EXISTS (SELECT 1 FROM ${candidateBasemapsCte})
+         OR ba.basemap IN (SELECT basemap FROM ${candidateBasemapsCte})
+    )`;
 }
 
 /** Build or reuse the cross-basemap similarity temp table. */
@@ -137,26 +258,39 @@ async function ensureSimilarityCached(
     geoColumn
   );
   const buildKey = getSimilarityCacheBuildKey(dataset.tableName, geoColumn);
+  const fuzzyMode: FuzzyPassMode = fullFuzzyPassRequests.has(buildKey)
+    ? 'full'
+    : 'auto';
 
   const cachedEntry = similarityCacheEntries.get(buildKey);
   if (cachedEntry) {
+    // A cache built under the budget holds no suggestions for a residual the
+    // user has since asked to score, so a mode change is a miss, not a hit.
+    const reusable = cachedEntry.fuzzyMode === fuzzyMode;
     // Rebuild if DuckDB dropped the temp table externally.
-    const check = (await Duck.query(
-      `SELECT table_name FROM information_schema.tables WHERE table_name = '${escapeSqlString(cachedEntry.cacheTableName)}'`,
-      { format: 'array' }
-    )) as Array<{ table_name: string }>;
+    const check = reusable
+      ? ((await Duck.query(
+          `SELECT table_name FROM information_schema.tables WHERE table_name = '${escapeSqlString(cachedEntry.cacheTableName)}'`,
+          { format: 'array' }
+        )) as Array<{ table_name: string }>)
+      : [];
 
-    if (check && check.length > 0) {
+    if (check.length > 0) {
       similarityCacheEntries.delete(buildKey);
       similarityCacheEntries.set(buildKey, cachedEntry);
       return cachedEntry.cacheTableName;
     }
     similarityCacheEntries.delete(buildKey);
+    // The rebuilt cache holds different rows under the same name.
+    invalidateGradedCache(cachedEntry.cacheTableName, Duck);
   }
 
   const pendingBuild = pendingSimilarityCacheBuilds.get(buildKey);
   if (pendingBuild) {
-    return pendingBuild;
+    if (pendingBuild.fuzzyMode === fuzzyMode) return pendingBuild.promise;
+    // Both modes write the same table name, so let the in-flight one land
+    // before overwriting it rather than racing it.
+    await pendingBuild.promise.catch(() => undefined);
   }
 
   const buildPromise = (async () => {
@@ -173,8 +307,8 @@ async function ensureSimilarityCached(
     // Phase 2: fuzzy Jaro-Winkler (FUZZY_SCORE_CUTOFF) only on residual unmatched candidates
     //          — bounded because unmatched large code datasets would otherwise cross-join every
     //          source value with every basemap attribute on the browser main thread.
-    // Normalization is pre-computed once in the candidates CTE (like the get_similarity macro)
-    // to avoid redundant computation inside the join/cross-join.
+    // Normalization is pre-computed once in the candidates CTE to avoid
+    // redundant computation inside the join/cross-join.
     await Duck.query(`
       CREATE OR REPLACE TEMP TABLE "${escapedCacheTable}" AS
       WITH source_raw AS (
@@ -260,50 +394,35 @@ async function ensureSimilarityCached(
             )) AS fixed_length_codes
         FROM candidates
       ),
+      candidate_basemaps AS (
+        SELECT DISTINCT match_basemap AS basemap FROM exact_matches
+      ),
+      distinct_attributes AS (
+        ${buildTargetNamesCte('candidate_basemaps')}
+      ),
+      -- The budget is on candidates x target names, not candidates: scoring is
+      -- a cross join, so a fixed candidate cap would make this step slower as
+      -- the catalog grows. Still all-or-nothing by design — a partial residual
+      -- would hand suggestions to an arbitrary subset of the values.
       bounded_unmatched AS (
         SELECT u.*
         FROM unmatched u, unmatched_count c, source_code_signals s
-        WHERE c.count <= ${MAX_FUZZY_JOIN_CANDIDATES}
+        WHERE (${fuzzyMode === 'full' ? 'TRUE' : `c.count * (SELECT COUNT(*) FROM distinct_attributes) <= ${MAX_FUZZY_AUTO_PAIRS}`})
           AND NOT s.all_numeric
           AND NOT s.fixed_length_codes
       ),
-      -- Jaro-Winkler is prefix-weighted, so 'korea north' scores closer to
-      -- 'korea rep' than to 'north korea'. Comparing word-sorted forms as well
-      -- recovers reordered names; the 0.99 factor keeps them below an exact
-      -- match so they stay in the to-verify bucket.
       sorted_unmatched AS (
         SELECT
           u.*,
           array_to_string(list_sort(string_split(u.normalized_name, ' ')), ' ') AS normalized_sorted
         FROM bounded_unmatched u
       ),
-      -- Blocking: fuzzy-score only basemaps made plausible by an exact match in
-      -- this build; when no exact match exists, fall back to every basemap.
-      candidate_basemaps AS (
-        SELECT DISTINCT match_basemap AS basemap FROM exact_matches
-      ),
-      -- Jaro-Winkler depends only on the strings: scoring distinct normalized
-      -- values then re-expanding to attribute rows is lossless and ~4x smaller.
-      distinct_attributes AS (
-        SELECT
-          normalized,
-          array_to_string(list_sort(string_split(normalized, ' ')), ' ') AS normalized_sorted
-        FROM (
-          SELECT DISTINCT ba.normalized
-          FROM basemap_attributes ba
-          WHERE NOT EXISTS (SELECT 1 FROM candidate_basemaps)
-             OR ba.basemap IN (SELECT basemap FROM candidate_basemaps)
-        )
-      ),
       fuzzy_scored AS (
         SELECT
           u.original_name,
           u.source_dup_count,
           da.normalized,
-          GREATEST(
-            jaro_winkler_similarity(u.normalized_name, da.normalized, ${FUZZY_SCORE_CUTOFF}),
-            0.99 * jaro_winkler_similarity(u.normalized_sorted, da.normalized_sorted, ${FUZZY_SCORE_CUTOFF})
-          ) AS match_score
+          ${buildFuzzyScoreExpression('u', 'da')} AS match_score
         FROM sorted_unmatched u, distinct_attributes da
       ),
       fuzzy_matches AS (
@@ -344,7 +463,8 @@ async function ensureSimilarityCached(
     similarityCacheEntries.set(buildKey, {
       tableName: dataset.tableName,
       geoColumn,
-      cacheTableName
+      cacheTableName,
+      fuzzyMode
     });
 
     while (similarityCacheEntries.size > MAX_SIMILARITY_CACHE_ENTRIES) {
@@ -352,6 +472,7 @@ async function ensureSimilarityCached(
       if (oldest.done) break;
       const [oldestKey, oldestEntry] = oldest.value;
       similarityCacheEntries.delete(oldestKey);
+      invalidateGradedCache(oldestEntry.cacheTableName, Duck);
       await Duck.query(
         `DROP TABLE IF EXISTS "${escapeIdentifier(oldestEntry.cacheTableName)}"`
       ).catch(() => undefined);
@@ -361,14 +482,103 @@ async function ensureSimilarityCached(
     return cacheTableName;
   })();
 
-  pendingSimilarityCacheBuilds.set(buildKey, buildPromise);
+  pendingSimilarityCacheBuilds.set(buildKey, {
+    fuzzyMode,
+    promise: buildPromise
+  });
 
   try {
     return await buildPromise;
   } finally {
-    if (pendingSimilarityCacheBuilds.get(buildKey) === buildPromise) {
+    if (pendingSimilarityCacheBuilds.get(buildKey)?.promise === buildPromise) {
       pendingSimilarityCacheBuilds.delete(buildKey);
     }
+  }
+}
+
+/**
+ * What the fuzzy phase did, or would have to do, for this column. Reads the
+ * similarity cache and the catalog only — it never scores anything, so it is
+ * cheap enough to call on every stats refresh.
+ */
+async function fetchFuzzyPassEstimate(
+  dataset: DuckDBDataset,
+  geoColumn: string,
+  cacheTableName: string,
+  Duck: DuckDBClientForJoin
+): Promise<JoinFuzzyPassEstimate> {
+  const buildKey = getSimilarityCacheBuildKey(dataset.tableName, geoColumn);
+  const escapedCache = escapeIdentifier(cacheTableName);
+
+  const rows = (await Duck.query(
+    `WITH candidate_basemaps AS (
+       SELECT DISTINCT match_basemap AS basemap
+       FROM "${escapedCache}"
+       WHERE typo_match = 'exact'
+     ),
+     unmatched AS (
+       SELECT original_name
+       FROM "${escapedCache}"
+       GROUP BY original_name
+       HAVING COUNT(match_id) = 0
+     )
+     SELECT
+       (SELECT COUNT(*) FROM unmatched) AS candidates,
+       (SELECT COUNT(DISTINCT ba.normalized)
+        FROM basemap_attributes ba
+        WHERE NOT EXISTS (SELECT 1 FROM candidate_basemaps)
+           OR ba.basemap IN (SELECT basemap FROM candidate_basemaps)
+       ) AS target_names`,
+    { format: 'array' }
+  )) as Array<{ candidates: number; target_names: number }>;
+
+  const candidates = Number(rows[0]?.candidates ?? 0);
+  const targetNames = Number(rows[0]?.target_names ?? 0);
+  const fullPassRequested = fullFuzzyPassRequests.has(buildKey);
+
+  return {
+    candidates,
+    targetNames,
+    estimatedMs: estimateFuzzyPassMs(candidates, targetNames),
+    withinBudget:
+      fullPassRequested || candidates * targetNames <= MAX_FUZZY_AUTO_PAIRS,
+    fullPassRequested
+  };
+}
+
+export async function estimateJoinFuzzyPass(
+  dataset: DuckDBDataset,
+  geoColumn: string,
+  Duck: DuckDBClientForJoin
+): Promise<JoinFuzzyPassEstimate> {
+  const cacheTableName = await ensureSimilarityCached(dataset, geoColumn, Duck);
+  return fetchFuzzyPassEstimate(dataset, geoColumn, cacheTableName, Duck);
+}
+
+/**
+ * Score the residual the automatic pass left out, on explicit user request.
+ * Sticky for the column: later rebuilds keep the full scope.
+ *
+ * Not interruptible. DuckDB WASM runs single-threaded, and the worker does not
+ * yield inside the cross join, so `cancelPendingQuery` only rejects once the
+ * statement has finished anyway: measured 10 091 ms for an abort requested at
+ * 400 ms into a 10 266 ms pass. Cancelling would just discard work already
+ * paid for, so the pass runs to completion and keeps its result.
+ */
+export async function runFullFuzzyPass(
+  dataset: DuckDBDataset,
+  geoColumn: string,
+  Duck: DuckDBClientForJoin
+): Promise<void> {
+  const buildKey = getSimilarityCacheBuildKey(dataset.tableName, geoColumn);
+  fullFuzzyPassRequests.add(buildKey);
+  try {
+    await ensureSimilarityCached(dataset, geoColumn, Duck);
+  } catch (error) {
+    // A failed pass leaves no suggestions, so the request must not stick or
+    // every later refresh would silently pay for the unbounded scope.
+    fullFuzzyPassRequests.delete(buildKey);
+    throw error;
   }
 }
 
@@ -476,6 +686,84 @@ function buildJoinGradingCtes(
     )`;
 }
 
+/**
+ * Materialize the graded rows once per (cache, basemap, exclusions). Counts,
+ * bucket lists, the joined page and the joined value list all consume the same
+ * chain, so re-inlining it per query re-ran the whole window/aggregate stack —
+ * six times per basemap selection, byte-identical each time.
+ */
+async function ensureGradedMaterialized(
+  cacheTableName: string,
+  basemapId: string,
+  Duck: DuckDBClientForJoin,
+  excludedValues: string[]
+): Promise<string> {
+  const gradedKey = getGradedCacheKey(
+    cacheTableName,
+    basemapId,
+    excludedValues
+  );
+  const gradedTableName = getGradedCacheTableName(basemapId, gradedKey);
+
+  if (gradedCacheEntries.has(gradedKey)) {
+    gradedCacheEntries.delete(gradedKey);
+    gradedCacheEntries.set(gradedKey, gradedTableName);
+    return gradedTableName;
+  }
+
+  const pendingBuild = pendingGradedBuilds.get(gradedKey);
+  if (pendingBuild) {
+    return pendingBuild;
+  }
+
+  const buildPromise = (async () => {
+    perfMark(PERF_PHASE.JOIN_GRADING);
+    const gradingCtes = buildJoinGradingCtes(
+      cacheTableName,
+      basemapId,
+      excludedValues
+    );
+
+    await Duck.query(`
+      CREATE OR REPLACE TEMP TABLE "${escapeIdentifier(gradedTableName)}" AS
+      ${gradingCtes}
+      SELECT
+        g.original_name,
+        g.source_dup_count,
+        g.status,
+        cl.candidates
+      FROM graded g
+      LEFT JOIN candidate_lists cl ON g.original_name = cl.original_name
+    `);
+
+    gradedCacheEntries.set(gradedKey, gradedTableName);
+
+    while (gradedCacheEntries.size > MAX_GRADED_CACHE_ENTRIES) {
+      const oldest = gradedCacheEntries.entries().next();
+      if (oldest.done) break;
+      const [oldestKey, oldestTable] = oldest.value;
+      if (oldestKey === gradedKey) break;
+      gradedCacheEntries.delete(oldestKey);
+      await Duck.query(
+        `DROP TABLE IF EXISTS "${escapeIdentifier(oldestTable)}"`
+      ).catch(() => undefined);
+    }
+
+    perfMeasure(PERF_PHASE.JOIN_GRADING);
+    return gradedTableName;
+  })();
+
+  pendingGradedBuilds.set(gradedKey, buildPromise);
+
+  try {
+    return await buildPromise;
+  } finally {
+    if (pendingGradedBuilds.get(gradedKey) === buildPromise) {
+      pendingGradedBuilds.delete(gradedKey);
+    }
+  }
+}
+
 /** Derive one basemap's join quality from cached similarity rows, aggregated in SQL. */
 async function deriveJoinQualityFromCache(
   cacheTableName: string,
@@ -483,17 +771,18 @@ async function deriveJoinQualityFromCache(
   Duck: DuckDBClientForJoin,
   excludedValues: string[]
 ): Promise<JoinQuality> {
-  perfMark(PERF_PHASE.JOIN_GRADING);
-  const gradingCtes = buildJoinGradingCtes(
-    cacheTableName,
-    basemapId,
-    excludedValues
+  const gradedTable = escapeIdentifier(
+    await ensureGradedMaterialized(
+      cacheTableName,
+      basemapId,
+      Duck,
+      excludedValues
+    )
   );
 
   const countRows = (await Duck.query(
-    `${gradingCtes}
-    SELECT status, COUNT(*) AS cnt
-    FROM graded
+    `SELECT status, COUNT(*) AS cnt
+    FROM "${gradedTable}"
     GROUP BY status`,
     { format: 'array' }
   )) as Array<{ status: JoinBucketStatus; cnt: number }>;
@@ -510,20 +799,18 @@ async function deriveJoinQualityFromCache(
   }
 
   const listRows = (await Duck.query(
-    `${gradingCtes}
-    SELECT status, original_name, candidates
+    `SELECT status, original_name, candidates
     FROM (
       SELECT
-        g.status,
-        g.original_name,
-        cl.candidates,
+        status,
+        original_name,
+        candidates,
         ROW_NUMBER() OVER (
-          PARTITION BY g.status
-          ORDER BY g.original_name
+          PARTITION BY status
+          ORDER BY original_name
         ) AS bucket_rank
-      FROM graded g
-      LEFT JOIN candidate_lists cl ON g.original_name = cl.original_name
-      WHERE g.status IN ('check', 'ambiguous', 'duplicate', 'not_found')
+      FROM "${gradedTable}"
+      WHERE status IN ('check', 'ambiguous', 'duplicate', 'not_found')
     )
     WHERE status IN ('check', 'ambiguous')
        OR bucket_rank <= ${MAX_JOIN_BUCKET_LIST_VALUES}
@@ -575,7 +862,6 @@ async function deriveJoinQualityFromCache(
     duplicateLines: []
   };
 
-  perfMeasure(PERF_PHASE.JOIN_GRADING);
   return quality;
 }
 
@@ -617,19 +903,20 @@ export async function getJoinedEntitiesPage(
   const basemapId = getBasemapAttributesId(basemap);
   await ensureBasemapHasAttributes(basemapId, Duck);
   const cacheTableName = await ensureSimilarityCached(dataset, geoColumn, Duck);
-  const gradingCtes = buildJoinGradingCtes(
-    cacheTableName,
-    basemapId,
-    options.excludedValues ?? []
+  const gradedTable = escapeIdentifier(
+    await ensureGradedMaterialized(
+      cacheTableName,
+      basemapId,
+      Duck,
+      options.excludedValues ?? []
+    )
   );
 
   const rows = (await Duck.query(
-    `${gradingCtes}
-    SELECT g.original_name, cl.candidates
-    FROM graded g
-    LEFT JOIN candidate_lists cl ON g.original_name = cl.original_name
-    WHERE g.status = 'matched'
-    ORDER BY g.original_name
+    `SELECT original_name, candidates
+    FROM "${gradedTable}"
+    WHERE status = 'matched'
+    ORDER BY original_name
     LIMIT ${Math.max(0, Math.trunc(options.limit))}
     OFFSET ${Math.max(0, Math.trunc(options.offset))}`,
     { format: 'array' }
@@ -664,18 +951,20 @@ export async function getJoinedBasemapValues(
   const basemapId = getBasemapAttributesId(basemap);
   await ensureBasemapHasAttributes(basemapId, Duck);
   const cacheTableName = await ensureSimilarityCached(dataset, geoColumn, Duck);
-  const gradingCtes = buildJoinGradingCtes(
-    cacheTableName,
-    basemapId,
-    options.excludedValues ?? []
+  const gradedTable = escapeIdentifier(
+    await ensureGradedMaterialized(
+      cacheTableName,
+      basemapId,
+      Duck,
+      options.excludedValues ?? []
+    )
   );
 
   const rows = (await Duck.query(
-    `${gradingCtes}
-    SELECT DISTINCT (cl.candidates[1]).name AS value
-    FROM graded g
-    JOIN candidate_lists cl ON g.original_name = cl.original_name
-    WHERE g.status = 'matched'`,
+    `SELECT DISTINCT (candidates[1]).name AS value
+    FROM "${gradedTable}"
+    WHERE status = 'matched'
+      AND candidates IS NOT NULL`,
     { format: 'array' }
   )) as Array<{ value: string | null }>;
 
@@ -685,8 +974,101 @@ export async function getJoinedBasemapValues(
 /** Per-basemap similarity scores; candidate share and basemap share use different scales. */
 export interface JoinSynthesisResult {
   basemap: string;
-  shareBasemap: number;
+  /** null when the catalog metadata carries no entity count for the basemap. */
+  shareBasemap: number | null;
   shareCandidate: number;
+}
+
+interface BasemapMatchCountRow {
+  basemap: string;
+  basemap_count: number | null;
+  matched_candidates: number;
+}
+
+interface SampledBasemapRanking {
+  rows: BasemapMatchCountRow[];
+  sampleSize: number;
+}
+
+interface BasemapMatchTally {
+  basemapCount: number | null;
+  matchedCandidates: number;
+}
+
+/**
+ * Rank basemaps on a bounded sample of the residual the budget left unscored.
+ *
+ * Ranking is an aggregate, so it does not need every candidate: measured on
+ * 1 000 commune typos, a 300-candidate sample keeps the top two basemaps
+ * identical and only permutes near-tied regional subsets. Without this the
+ * over-budget case ranks nothing at all whenever no value matches exactly,
+ * which is exactly when naming the right basemap matters most.
+ */
+async function fetchSampledBasemapRanking(
+  escapedCache: string,
+  Duck: DuckDBClientForJoin
+): Promise<SampledBasemapRanking> {
+  const sampleSizes = (await Duck.query(
+    `WITH unmatched AS (
+       SELECT original_name
+       FROM "${escapedCache}"
+       GROUP BY original_name
+       HAVING COUNT(match_id) = 0
+     )
+     SELECT LEAST(COUNT(*), ${MAX_FUZZY_RANKING_SAMPLE}) AS sample_size
+     FROM unmatched`,
+    { format: 'array' }
+  )) as Array<{ sample_size: number }>;
+
+  const rows = (await Duck.query(
+    `WITH candidate_basemaps AS (
+      SELECT DISTINCT match_basemap AS basemap
+      FROM "${escapedCache}"
+      WHERE typo_match = 'exact'
+    ),
+    unmatched AS (
+      SELECT original_name
+      FROM "${escapedCache}"
+      GROUP BY original_name
+      HAVING COUNT(match_id) = 0
+    ),
+    sampled AS (
+      SELECT
+        original_name,
+        normalize_text_join(original_name) AS normalized_name,
+        array_to_string(
+          list_sort(string_split(normalize_text_join(original_name), ' ')), ' '
+        ) AS normalized_sorted
+      FROM unmatched
+      ORDER BY original_name
+      LIMIT ${MAX_FUZZY_RANKING_SAMPLE}
+    ),
+    distinct_attributes AS (
+      ${buildTargetNamesCte('candidate_basemaps')}
+    ),
+    scored AS (
+      SELECT
+        u.original_name,
+        da.normalized,
+        ${buildFuzzyScoreExpression('u', 'da')} AS match_score
+      FROM sampled u, distinct_attributes da
+    ),
+    matched AS (
+      SELECT DISTINCT s.original_name, ba.basemap, ba.basemap_count
+      FROM scored s
+      JOIN basemap_attributes ba ON ba.normalized = s.normalized
+      WHERE s.match_score > 0
+    )
+    SELECT
+      basemap,
+      MAX(basemap_count) AS basemap_count,
+      COUNT(DISTINCT original_name) AS matched_candidates
+    FROM matched
+    GROUP BY basemap`,
+    { format: 'array' }
+  )) as BasemapMatchCountRow[];
+
+  return { rows, sampleSize: Number(sampleSizes[0]?.sample_size ?? 0) };
 }
 
 /** Compute per-basemap synthesis metrics from cached similarity rows. */
@@ -699,6 +1081,16 @@ export async function computeJoinSynthesis(
 
   const escapedCache = escapeIdentifier(cacheTableName);
 
+  // The total lives in its own statement: when nothing matches at all the
+  // grouped query returns no rows, and a scalar carried on those rows would
+  // come back as a zero denominator.
+  const totals = (await Duck.query(
+    `SELECT COUNT(DISTINCT original_name) AS total_candidates
+     FROM "${escapedCache}"`,
+    { format: 'array' }
+  )) as Array<{ total_candidates: number }>;
+  const totalCandidates = Number(totals[0]?.total_candidates ?? 0);
+
   const rows = (await Duck.query(
     `WITH matched AS (
       SELECT DISTINCT
@@ -707,30 +1099,68 @@ export async function computeJoinSynthesis(
         match_basemap_count
       FROM "${escapedCache}"
       WHERE match_id IS NOT NULL
-    ),
-    total_candidates AS (
-      SELECT COUNT(DISTINCT original_name) as cnt
-      FROM "${escapedCache}"
     )
     SELECT
-      match_basemap as basemap,
-      COUNT(DISTINCT original_name)::DOUBLE / MAX(match_basemap_count) as share_basemap,
-      COUNT(DISTINCT original_name)::DOUBLE / (SELECT cnt FROM total_candidates) as share_candidate
+      match_basemap AS basemap,
+      MAX(match_basemap_count) AS basemap_count,
+      COUNT(DISTINCT original_name) AS matched_candidates
     FROM matched
-    GROUP BY match_basemap
-    ORDER BY share_basemap DESC`,
+    GROUP BY match_basemap`,
     { format: 'array' }
-  )) as Array<{
-    basemap: string;
-    share_basemap: number;
-    share_candidate: number;
-  }>;
+  )) as BasemapMatchCountRow[];
+  const tallies = new Map<string, BasemapMatchTally>();
+  for (const row of rows ?? []) {
+    tallies.set(row.basemap, {
+      basemapCount:
+        row.basemap_count === null ? null : Number(row.basemap_count),
+      matchedCandidates: Number(row.matched_candidates)
+    });
+  }
 
-  return (rows || []).map((r) => ({
-    basemap: r.basemap,
-    shareBasemap: r.share_basemap,
-    shareCandidate: r.share_candidate * 100
-  }));
+  const estimate = await fetchFuzzyPassEstimate(
+    dataset,
+    geoColumn,
+    cacheTableName,
+    Duck
+  );
+
+  if (!estimate.withinBudget && estimate.candidates > 0) {
+    const sampled = await fetchSampledBasemapRanking(escapedCache, Duck);
+    // Scale the sample back up to the residual it stands for, so a basemap
+    // reached only through fuzzy matches is not under-reported next to one
+    // reached through exact matches on every candidate.
+    const scale =
+      sampled.sampleSize > 0 ? estimate.candidates / sampled.sampleSize : 0;
+    for (const row of sampled.rows) {
+      const scaled = Number(row.matched_candidates) * scale;
+      const existing = tallies.get(row.basemap);
+      if (existing) {
+        // Exact-matched and unmatched candidates are disjoint sets, so the
+        // counts add without double counting.
+        existing.matchedCandidates += scaled;
+        continue;
+      }
+      tallies.set(row.basemap, {
+        basemapCount:
+          row.basemap_count === null ? null : Number(row.basemap_count),
+        matchedCandidates: scaled
+      });
+    }
+  }
+
+  return [...tallies.entries()]
+    .map(([basemap, tally]) => ({
+      basemap,
+      shareBasemap:
+        tally.basemapCount === null || tally.basemapCount === 0
+          ? null
+          : tally.matchedCandidates / tally.basemapCount,
+      shareCandidate:
+        totalCandidates > 0
+          ? (tally.matchedCandidates / totalCandidates) * 100
+          : 0
+    }))
+    .sort((left, right) => right.shareCandidate - left.shareCandidate);
 }
 
 async function ensureBasemapAttributesLoaded(
