@@ -14,6 +14,7 @@ import {
   createSplitGeoJsonFeatureAccessor,
   createSplitGeoJsonNullableFeatureAccessor,
   getSplitMatchedGeometryRowIndices,
+  hasJoinedBasemapKey,
   resolveBestSplitFeatureIdColumn,
   resolveSplitMappingFeatureIdColumn,
   withPrimitiveScope
@@ -44,6 +45,23 @@ function createSplitContext(dataset: ArrowTable): LayerContext {
 }
 
 describe('split rendering accessors', () => {
+  it('reports the join key only once the dataset carries basemap_id', () => {
+    expect(
+      hasJoinedBasemapKey(
+        createTableWithRows(
+          [{ [JOINED_BASEMAP_COLUMN.ID]: 'FR' }],
+          [JOINED_BASEMAP_COLUMN.ID]
+        )
+      )
+    ).toBe(true);
+
+    expect(
+      hasJoinedBasemapKey(
+        createTableWithRows([{ lat: 48.85, long: 2.35 }], ['lat', 'long'])
+      )
+    ).toBe(false);
+  });
+
   it('resolves the geometry feature id column with the canonical fallback order', () => {
     expect(
       resolveSplitMappingFeatureIdColumn(

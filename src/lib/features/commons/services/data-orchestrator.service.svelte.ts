@@ -354,7 +354,19 @@ function createDataOrchestratorService() {
           restoredJoinState.geoColumn
         )
       );
-    } catch {
+    } catch (error) {
+      // Without the join key the map can only draw the basemap, so a swallowed
+      // failure here has to stay visible in the logs.
+      logger.warn(
+        'Failed to rebuild the persisted basemap join',
+        LogCategory.DATA,
+        {
+          fileId: file.id,
+          basemap: restoredJoinState.joinedBasemap,
+          geoColumn: restoredJoinState.geoColumn,
+          error
+        }
+      );
       return;
     }
   }

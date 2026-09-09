@@ -30,7 +30,10 @@ import {
   type RowScopeTarget
 } from '../stores/row-scope.store.svelte';
 import type { SplitRenderingTable } from '../types';
-import { resolveBestSplitFeatureIdColumn } from '../layers/split-rendering-accessors';
+import {
+  hasJoinedBasemapKey,
+  resolveBestSplitFeatureIdColumn
+} from '../layers/split-rendering-accessors';
 import {
   isWgs84LikeCrs,
   shouldReprojectDatasetForActiveProjection
@@ -510,6 +513,20 @@ export function useMapDisplayData(
             featureIdColumn
           });
           joinedBasemapDisplayKeys.set(datasetId, displayKey);
+          return;
+        }
+
+        // The joined view keys on basemap_id. A dataset plotted from its
+        // coordinates never has that column, and neither does one whose join
+        // is still being finalized: querying it would fail, drop the dataset
+        // from the display and have the reconcile effect retry forever.
+        if (!hasJoinedBasemapKey(datasetArrow)) {
+          logger.warn(
+            'Skipped the joined basemap view: the dataset carries no join key',
+            LogCategory.MAP,
+            { datasetId, joinedBasemap, tableName }
+          );
+          joinedBasemapDisplayKeys.delete(datasetId);
           return;
         }
       }
