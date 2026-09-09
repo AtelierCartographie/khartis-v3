@@ -42,7 +42,9 @@ export function resolveScopedAttributeTable(
   return scoped ?? ctx.splitDatasetTable;
 }
 
-function resolveScopedRowIds(ctx: LayerContext): Set<number> | undefined {
+export function resolveScopedRowIds(
+  ctx: LayerContext
+): Set<number> | undefined {
   return ctx.scopedPrimitive
     ? ctx.scopedRowIdsByPrimitive?.[ctx.scopedPrimitive]
     : undefined;
@@ -286,6 +288,17 @@ function countSplitDatasetRowMatches(
     }
   }
   return count;
+}
+
+/**
+ * A dataset table only carries `basemap_id` once a textual join has been
+ * finalized; without it there is nothing to join a basemap geometry on.
+ */
+export function hasJoinedBasemapKey(
+  dataset: ArrowTable,
+  basemapIdColumn: string = JOINED_BASEMAP_COLUMN.ID
+): boolean {
+  return Boolean(dataset.getChild(basemapIdColumn));
 }
 
 export function resolveBestSplitFeatureIdColumn(

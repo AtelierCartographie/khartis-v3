@@ -448,6 +448,8 @@
   "facets_notice_replaced": "La collection précédente a été remplacée.",
   "facets_notice_hidden": "Les autres figurés de la visualisation ont été masqués pour ne conserver que celui de la collection.",
   "facets_facet_title_label": "Titre de la carte « {variable} »",
+  "facets_titles_section": "Titres",
+  "facets_titles_helper": "Renommer le titre affiché au-dessus de chaque carte de la collection.",
   "facets_tiled_basemap_unsupported": "Les fonds de carte tuilés (OpenStreetMap, styles vectoriels) ne s'affichent pas dans une collection de cartes.",
   "layers_description": "Modifier l'ordre d'affichage des visualisations et des calques liés en maintenant un clic sur l'objet et en le glissant au rang souhaité.",
   "layers_hide": "Masquer",

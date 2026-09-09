@@ -16,6 +16,7 @@ import {
   getBasemapVariantFamily,
   getPreferredBasemapFile
 } from './basemap-variants.utils';
+import { isOSMBasemap } from './osm-tile.service';
 import type {
   BasemapMetadata,
   BasemapSuggestion
@@ -94,8 +95,9 @@ export function getCatalogBasemapsForDisplay(
   const byBaseName = new Map<string, BasemapMetadata>();
 
   for (const basemap of basemaps) {
-    // A dataset's own derived geometry is not a basemap one can pick or join to.
-    if (basemap.isDatasetGeometry) {
+    // A dataset's own derived geometry is not a basemap one can pick or join to,
+    // and the reference basemap is activated from the Visualizations step.
+    if (basemap.isDatasetGeometry || isOSMBasemap(basemap)) {
       continue;
     }
 
@@ -120,6 +122,33 @@ export function getCatalogBasemapsForDisplay(
   }
 
   return Array.from(byBaseName.values());
+}
+
+export function sortCatalogBasemapsForDisplay(
+  basemaps: BasemapMetadata[],
+  locale: string
+): BasemapMetadata[] {
+  const collator = new Intl.Collator(locale, {
+    sensitivity: 'base',
+    numeric: true
+  });
+  const getTitle = (basemap: BasemapMetadata): string =>
+    locale === 'fr' ? basemap.title_fr : basemap.title_en;
+  const getSubtitle = (basemap: BasemapMetadata): string =>
+    (locale === 'fr' ? basemap.subtitle_fr : basemap.subtitle_en) ?? '';
+
+  return [...basemaps].sort((first, second) => {
+    const firstYear = getBasemapYearValue(first);
+    const secondYear = getBasemapYearValue(second);
+    if (firstYear !== secondYear) {
+      return secondYear - firstYear;
+    }
+
+    const titleOrder = collator.compare(getTitle(first), getTitle(second));
+    return titleOrder !== 0
+      ? titleOrder
+      : collator.compare(getSubtitle(first), getSubtitle(second));
+  });
 }
 
 function getCatalogBasemapById(

@@ -170,7 +170,8 @@ import {
   createPointLayers,
   createPolygonLayers,
   resolveEffectiveCategoryColorMap,
-  resolveSplitMappingFeatureIdColumn
+  resolveSplitMappingFeatureIdColumn,
+  type TextLayerDatum
 } from './layer-factory';
 import { MultiShapeLayer } from './multi-shape-layer';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
@@ -693,6 +694,49 @@ describe('resolveEffectiveCategoryColorMap', () => {
 });
 
 describe('createTextOverlayLayers', () => {
+  it('keeps only the rows the Texts filter scopes on a raw point dataset', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 3,
+      featureIds: new Uint32Array([0, 1, 2]),
+      positions: new Float32Array([0, 0, 10, 10, 20, 20])
+    });
+
+    const visualization = createTextVisualization();
+    const layers = createDeckLayers(
+      createTableWithRows(
+        [
+          { __id: 1, name: 'Kept' },
+          { __id: 2, name: 'Filtered out' },
+          { __id: 3, name: 'Also kept' }
+        ],
+        ['__id', 'name']
+      ),
+      {
+        ...createContext(visualization),
+        geometryInfo: {
+          ...createPointGeometryInfo(),
+          type: 'POINT' as GeometryInfo['type']
+        },
+        scopedPrimitive: PrimitiveFilterType.TEXT,
+        scopedRowIdsByPrimitive: {
+          [PrimitiveFilterType.TEXT]: new Set([1, 3])
+        }
+      }
+    );
+
+    const textLayer = layers.find(
+      (layer) =>
+        layer instanceof TextLayer &&
+        String(layer.props.id).includes('text-layer')
+    ) as TextLayer | undefined;
+    const data = textLayer?.props.data as TextLayerDatum[] | undefined;
+
+    expect(data?.map((datum) => datum.primaryText)).toEqual([
+      'Kept',
+      'Also kept'
+    ]);
+  });
+
   it('wraps text labels and places labels to the right when symbols are rendered', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 2,
