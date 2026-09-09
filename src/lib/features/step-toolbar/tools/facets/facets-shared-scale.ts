@@ -121,6 +121,64 @@ function toSharedScaleStats(
   }
 }
 
+export interface SharedFacetScaleColumn {
+  visualizationId: string;
+  datasetId: string;
+  columnName: string;
+}
+
+/**
+ * The facet columns a shared scale merges. Empty unless `columnName` is the
+ * very column the shared slot varies across at least two facets, so callers
+ * can fall back to their own single-column domain.
+ */
+export function resolveSharedFacetScaleColumns({
+  visualizations,
+  scaleMode,
+  primarySlotPath,
+  visualizationId,
+  columnName
+}: {
+  visualizations: VisualizationConfig[];
+  scaleMode: ScaleMode;
+  primarySlotPath: FacetSlotPath | null;
+  visualizationId: string;
+  columnName: string;
+}): SharedFacetScaleColumn[] {
+  if (scaleMode !== SCALE_MODE.SHARED || !primarySlotPath) {
+    return [];
+  }
+
+  if (!resolveSharedScaleTarget(primarySlotPath)) {
+    return [];
+  }
+
+  const source = visualizations.find(
+    (visualization) => visualization.id === visualizationId
+  );
+  if (
+    !source ||
+    resolveSharedScaleColumn(source, primarySlotPath) !== columnName
+  ) {
+    return [];
+  }
+
+  const columns = visualizations.flatMap((visualization) => {
+    const column = resolveSharedScaleColumn(visualization, primarySlotPath);
+    return visualization.datasetId && column
+      ? [
+          {
+            visualizationId: visualization.id,
+            datasetId: visualization.datasetId,
+            columnName: column
+          }
+        ]
+      : [];
+  });
+
+  return columns.length > 1 ? columns : [];
+}
+
 export function resolveSharedFacetScaleStats({
   visualizations,
   scaleMode,

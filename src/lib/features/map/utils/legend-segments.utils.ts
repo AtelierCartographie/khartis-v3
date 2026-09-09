@@ -80,6 +80,11 @@ import {
   type PointSizeLegendScale
 } from './legend.utils';
 import type { LegendItem } from '$lib/features/step-toolbar/tools/legend';
+import {
+  facetsStore,
+  resolveSharedFacetScaleColumns,
+  type SharedFacetScaleColumn
+} from '$lib/features/step-toolbar/tools/facets';
 import type { LegendSubtitlePrimitive } from '$lib/features/commons/utils/legend-subtitle.utils';
 
 const legendPatternFillCache: Record<string, LegendPatternFill> = {};
@@ -447,33 +452,62 @@ function getStatisticsNumber(
   );
 }
 
-function getNumericColumnValues(
-  viz: VisualizationConfig | undefined,
+function collectNumericColumnValues(
+  visualizationId: string | undefined,
+  datasetId: string | undefined,
   columnName: string | undefined,
   primitive: PrimitiveFilter
 ): number[] {
   // Every symbol drawer reads the extent of these values, so the resolved
   // scope can stand in for the rows it no longer draws.
-  const scopedDomain = viz
-    ? rowScopeStore.getScopedDomain(viz.id, primitive, columnName)
+  const scopedDomain = visualizationId
+    ? rowScopeStore.getScopedDomain(visualizationId, primitive, columnName)
     : null;
   if (scopedDomain) {
     return buildSampleValues(scopedDomain.min, scopedDomain.max);
   }
 
-  const statistics = getColumnStatistics(viz, columnName);
+  const statistics =
+    datasetId && columnName
+      ? datasetsStore.getColumnStatistics(datasetId, columnName)
+      : null;
 
-  if (!viz?.datasetId || !columnName) {
+  if (!datasetId || !columnName) {
     return getStatisticsSampleValues(statistics);
   }
 
   const fallbackValues = getStatisticsSampleValues(statistics);
   const values = datasetsStore
-    .getColumnValues(viz.datasetId, columnName)
+    .getColumnValues(datasetId, columnName)
     .map(toFiniteLegendNumber)
     .filter((value): value is number => value !== null);
 
   return values.length > 0 ? values : fallbackValues;
+}
+
+function getNumericColumnValues(
+  viz: VisualizationConfig | undefined,
+  columnName: string | undefined,
+  primitive: PrimitiveFilter
+): number[] {
+  const sharedFacetColumns = getSharedFacetScaleColumns(viz, columnName);
+  if (sharedFacetColumns.length > 0) {
+    return sharedFacetColumns.flatMap((column) =>
+      collectNumericColumnValues(
+        column.visualizationId,
+        column.datasetId,
+        column.columnName,
+        primitive
+      )
+    );
+  }
+
+  return collectNumericColumnValues(
+    viz?.id,
+    viz?.datasetId,
+    columnName,
+    primitive
+  );
 }
 
 function buildSampleValues(minValue: number, maxValue: number): number[] {
@@ -495,6 +529,25 @@ function getStatisticsSampleValues(statistics: unknown): number[] {
   return buildSampleValues(minValue, maxValue);
 }
 
+// A collection on a shared scale draws every facet against the merged domain
+// of its variables, so the legend has to read that same domain.
+function getSharedFacetScaleColumns(
+  viz: VisualizationConfig | undefined,
+  columnName: string | undefined
+): SharedFacetScaleColumn[] {
+  if (!viz || !columnName || !facetsStore.enabled) {
+    return [];
+  }
+
+  return resolveSharedFacetScaleColumns({
+    visualizations: facetsStore.facetVisualizations,
+    scaleMode: facetsStore.scaleMode,
+    primarySlotPath: facetsStore.primarySlotPath,
+    visualizationId: viz.id,
+    columnName
+  });
+}
+
 function getColumnStatistics(
   viz: VisualizationConfig | undefined,
   columnName: string | undefined
@@ -503,7 +556,36 @@ function getColumnStatistics(
     return null;
   }
 
+  const sharedFacetColumns = getSharedFacetScaleColumns(viz, columnName);
+  if (sharedFacetColumns.length > 0) {
+    return combineColumnStatistics(sharedFacetColumns);
+  }
+
   return datasetsStore.getColumnStatistics(viz.datasetId, columnName);
+}
+
+function combineColumnStatistics(
+  columns: SharedFacetScaleColumn[]
+): { min: number; max: number } | null {
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+
+  for (const column of columns) {
+    const statistics = datasetsStore.getColumnStatistics(
+      column.datasetId,
+      column.columnName
+    );
+    const columnMin = getStatisticsNumber(statistics, 'min');
+    const columnMax = getStatisticsNumber(statistics, 'max');
+    if (columnMin === null || columnMax === null) {
+      continue;
+    }
+
+    min = Math.min(min, columnMin);
+    max = Math.max(max, columnMax);
+  }
+
+  return Number.isFinite(min) && Number.isFinite(max) ? { min, max } : null;
 }
 
 function getLegendStepLabel(

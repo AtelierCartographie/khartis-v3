@@ -448,6 +448,8 @@
   "facets_notice_replaced": "The previous collection was replaced.",
   "facets_notice_hidden": "The visualization's other marks were hidden to keep only the collection's mark.",
   "facets_facet_title_label": "Title for map \"{variable}\"",
+  "facets_titles_section": "Titles",
+  "facets_titles_helper": "Rename the title shown above each map of the collection.",
   "facets_tiled_basemap_unsupported": "Tiled basemaps (OpenStreetMap, vector styles) are not displayed in a map collection.",
   "layers_description": "Modify the display order of visualizations and linked layers by holding a click on the object and dragging it to the desired rank.",
   "layers_hide": "Hide",
