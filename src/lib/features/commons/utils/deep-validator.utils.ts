@@ -5,7 +5,6 @@ import {
   type GeoDetectionResult
 } from './geo-detector.utils';
 import { isConfiguredNullValue } from './null-values.utils';
-import { resolveLocale } from './format.utils';
 
 export interface ColumnStatistics {
   name: string;
@@ -42,12 +41,9 @@ export interface DataAnalysisResult {
 }
 
 const PERFORMANCE_THRESHOLDS = {
-  maxRows: 10_000,
-  warningRows: 5_000,
   maxColumns: 100,
   warningColumns: 50,
-  maxCellLength: 2_000,
-  maxFileSize: 50 * 1024 * 1024
+  maxCellLength: 2_000
 } as const;
 
 const TYPE_DETECTION_SAMPLES = 100;
@@ -107,11 +103,7 @@ export const DeepDataValidator = {
       previewRows
     );
 
-    const performanceWarnings = DeepDataValidator.checkPerformance(
-      rowCount,
-      columnCount,
-      previewRows
-    );
+    const performanceWarnings = DeepDataValidator.checkPerformance(columnCount);
 
     const suggestions = DeepDataValidator.generateSuggestions(
       columns,
@@ -466,30 +458,8 @@ export const DeepDataValidator = {
     return issues;
   },
 
-  checkPerformance(
-    rowCount: number,
-    columnCount: number,
-    _data: unknown[][]
-  ): string[] {
+  checkPerformance(columnCount: number): string[] {
     const warnings: string[] = [];
-
-    if (rowCount > PERFORMANCE_THRESHOLDS.maxRows) {
-      warnings.push(
-        m.data_quality_perf_row_limit_exceeded({
-          maxRows:
-            PERFORMANCE_THRESHOLDS.maxRows.toLocaleString(resolveLocale()),
-          rowCount: rowCount.toLocaleString(resolveLocale())
-        })
-      );
-    } else if (rowCount > PERFORMANCE_THRESHOLDS.warningRows) {
-      warnings.push(
-        m.data_quality_perf_large_dataset({
-          rowCount: rowCount.toLocaleString(resolveLocale()),
-          warningRows:
-            PERFORMANCE_THRESHOLDS.warningRows.toLocaleString(resolveLocale())
-        })
-      );
-    }
 
     if (columnCount > PERFORMANCE_THRESHOLDS.maxColumns) {
       warnings.push(
@@ -503,16 +473,6 @@ export const DeepDataValidator = {
         m.data_quality_perf_many_columns({
           columnCount: String(columnCount),
           warningColumns: String(PERFORMANCE_THRESHOLDS.warningColumns)
-        })
-      );
-    }
-
-    const estimatedSize = rowCount * columnCount * 50;
-    const maxFileSizeMB = PERFORMANCE_THRESHOLDS.maxFileSize / (1024 * 1024);
-    if (estimatedSize > PERFORMANCE_THRESHOLDS.maxFileSize) {
-      warnings.push(
-        m.data_quality_perf_file_size_exceeded({
-          maxFileSizeMB: String(maxFileSizeMB)
         })
       );
     }

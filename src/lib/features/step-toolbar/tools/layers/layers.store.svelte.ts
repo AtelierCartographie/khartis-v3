@@ -16,6 +16,7 @@ import {
   createToolStore
 } from '$lib/features/commons/utils/store.utils.svelte';
 import {
+  BasemapGraticuleMode,
   FillMode,
   SymbolMode
 } from '$lib/features/commons/constants/visualization.constants';
@@ -63,10 +64,12 @@ import {
   buildTiledBasemapLayerId,
   buildVisualizationSubLayerId,
   getCustomBaseLayerType,
+  TILED_BASEMAP_LABELS_GROUP_ID,
   isBasemapLayersToolRenderableType,
   isPerKeyAuxLayerType,
   mapMetadataLayerTypeToBasemapLayerId,
-  mergeLayerOrder
+  mergeLayerOrder,
+  resolveBasemapConfigRowId
 } from '$lib/features/map/utils/layer-panel-row.utils';
 import { layerOrderStore } from './layer-order.store.svelte';
 
@@ -93,17 +96,26 @@ const BASEMAP_LAYER_DISPLAY_ORDER: BasemapLayerId[] = [
   BASEMAP_LAYER_ID.SPHERE
 ];
 
+// Panel order, top→bottom. Tiled labels are the one group MapLibre draws over
+// the deck overlay, so they belong in the foreground; every other group sits
+// behind the thematic layers.
 const TILED_LAYER_ITEMS: Array<{
   id: string;
   groupIds: LayerGroupId[];
   defaultVisible: boolean;
+  renderGroup?: 'foreground' | 'background';
 }> = [
+  {
+    id: TILED_BASEMAP_LABELS_GROUP_ID,
+    groupIds: ['labels'],
+    defaultVisible: true,
+    renderGroup: 'foreground'
+  },
   { id: 'hydro', groupIds: ['hydro'], defaultVisible: true },
   { id: 'landcover', groupIds: ['landcover'], defaultVisible: true },
   { id: 'buildings', groupIds: ['buildings'], defaultVisible: true },
   { id: 'streets', groupIds: ['streets'], defaultVisible: true },
   { id: 'boundaries', groupIds: ['boundaries'], defaultVisible: true },
-  { id: 'labels', groupIds: ['labels'], defaultVisible: true },
   {
     id: 'admin-boundaries',
     groupIds: ['admin_boundaries'],
@@ -113,12 +125,9 @@ const TILED_LAYER_ITEMS: Array<{
 ];
 
 type LayersActions = {
-  updateLayer: (id: string, updates: Partial<Layer>) => void;
-  removeLayer: (id: string) => void;
   toggleLayerVisibility: (id: string) => void;
   /** Flat reorder persists absolute panel order without mutating render stores. */
   reorderLayers: (fromIndex: number, toIndex: number) => void;
-  duplicateLayer: (id: string) => Layer | null;
   syncWithVisualizations: () => void;
 };
 
@@ -329,20 +338,23 @@ function getVisualizationPrimitiveOpacity(
   }
 }
 
-function getBasemapLayerName(layerId: BasemapLayerId): string {
+function getBasemapLayerName(
+  layerId: BasemapLayerId,
+  isCustom = false
+): string {
   switch (layerId) {
     case BASEMAP_LAYER_ID.TERRE:
       return m.basemap_layer_terre();
     case BASEMAP_LAYER_ID.MERS:
-      return m.basemap_layer_mers();
+      return isCustom ? m.basemap_layer_background() : m.basemap_layer_mers();
     case BASEMAP_LAYER_ID.LACS:
       return m.basemap_layer_lacs();
     case BASEMAP_LAYER_ID.RIVIERES:
       return m.basemap_layer_rivieres();
     case BASEMAP_LAYER_ID.RELIEF:
       return m.basemap_layer_relief();
+    // Both graticule modes present as the one Graticules row.
     case BASEMAP_LAYER_ID.EQUATEUR:
-      return m.basemap_layer_equateur();
     case BASEMAP_LAYER_ID.MERIDIENS:
       return m.basemap_layer_meridiens();
     case BASEMAP_LAYER_ID.FRONTIERES:
@@ -457,19 +469,42 @@ interface BasemapDisplayEntry {
   synthetic: boolean;
 }
 
+// The graticule modes are two render layers but a single row: only one of them
+// is ever visible, and the basemap customisation drives both from one section.
+function resolveActiveGraticuleLayerId(): BasemapLayerId {
+  return basemapLayersStore.getLayer(BASEMAP_LAYER_ID.MERIDIENS)?.mode ===
+    BasemapGraticuleMode.EQUATOR
+    ? BASEMAP_LAYER_ID.EQUATEUR
+    : BASEMAP_LAYER_ID.MERIDIENS;
+}
+
+// An imported geometry has no projection sphere to outline, so it gets no
+// sphere row.
 function buildSyntheticBasemapEntries(
-  basemapFile: string | null
+  basemapFile: string | null,
+  isCustom: boolean
 ): BasemapDisplayEntry[] {
   const synthetics: { layerId: BasemapLayerId; key?: string }[] = [
-    { layerId: BASEMAP_LAYER_ID.EQUATEUR },
     { layerId: BASEMAP_LAYER_ID.MERIDIENS },
     { layerId: BASEMAP_LAYER_ID.MERS, key: SYNTHETIC_AUX_LAYER_KEY.MERS },
-    { layerId: BASEMAP_LAYER_ID.SPHERE, key: SYNTHETIC_AUX_LAYER_KEY.SPHERE }
+    ...(isCustom
+      ? []
+      : [
+          {
+            layerId: BASEMAP_LAYER_ID.SPHERE,
+            key: SYNTHETIC_AUX_LAYER_KEY.SPHERE
+          }
+        ])
   ];
 
   return synthetics.flatMap(({ layerId, key }): BasemapDisplayEntry[] => {
     const config = basemapLayersStore.getLayer(layerId);
     if (!config) return [];
+    // The graticule row reads the mode that is actually drawing.
+    const visibilityConfig =
+      layerId === BASEMAP_LAYER_ID.MERIDIENS
+        ? basemapLayersStore.getLayer(resolveActiveGraticuleLayerId())
+        : config;
     const auxVisible =
       basemapFile && key
         ? basemapAuxLayersStore.isVisible(basemapFile, key, true)
@@ -479,8 +514,8 @@ function buildSyntheticBasemapEntries(
         layerId,
         file: basemapFile ?? undefined,
         key: basemapFile ? key : undefined,
-        name: getBasemapLayerName(layerId),
-        visible: config.visible && auxVisible,
+        name: getBasemapLayerName(layerId, isCustom),
+        visible: (visibilityConfig?.visible ?? false) && auxVisible,
         color: getBasemapLayerColor(config),
         opacity: getBasemapLayerOpacity(config),
         renderGroup: `geographic-${getBasemapRenderGroup(layerId)}`,
@@ -497,11 +532,12 @@ function buildBasemapDisplayEntries(): BasemapDisplayEntry[] {
     return [];
   }
 
+  const isCustom = Boolean(metadata.isCustom);
   const entries: BasemapDisplayEntry[] = buildSyntheticBasemapEntries(
-    metadata.file
+    metadata.file,
+    isCustom
   );
 
-  const isCustom = Boolean(metadata.isCustom);
   const isCustomLine =
     isCustom && getCustomBaseLayerType(metadata) === BasemapLayerType.LINE;
   const typeCounters = new Map<BasemapLayerType, number>();
@@ -594,6 +630,7 @@ function getBasemapDisplayOrder(layerId: BasemapLayerId | undefined): number {
 }
 
 function buildVectorBasemapSubLayers(): Layer[] {
+  const isCustom = Boolean(getActiveReferenceBasemapMetadata()?.isCustom);
   const entries = buildBasemapDisplayEntries();
   const grouped = new Map<string, BasemapDisplayEntry[]>();
 
@@ -622,17 +659,25 @@ function buildVectorBasemapSubLayers(): Layer[] {
     const isPerKeyGroup = orderedEntries.every((entry) =>
       isPerKeyAuxLayerType(entry.type)
     );
+    // The graticule row's visibility follows the mode that is drawing, not the
+    // meridians config the row takes its style from.
+    const visibilityConfig =
+      layerId === BASEMAP_LAYER_ID.MERIDIENS
+        ? basemapLayersStore.getLayer(resolveActiveGraticuleLayerId())
+        : config;
     const visible =
-      config && !isPerKeyGroup
-        ? config.visible && visibleEntries
+      visibilityConfig && !isPerKeyGroup
+        ? visibilityConfig.visible && visibleEntries
         : visibleEntries;
 
     rows.push({
       displayOrder: getBasemapDisplayOrder(layerId),
       layer: {
-        id: buildBasemapSubLayerId(
-          isPerKeyGroup ? groupKey : (layerId ?? groupKey)
-        ),
+        id: isPerKeyGroup
+          ? buildBasemapSubLayerId(groupKey)
+          : layerId
+            ? resolveBasemapConfigRowId(layerId)
+            : buildBasemapSubLayerId(groupKey),
         isSubLayer: true,
         kind: 'basemap-aux',
         type: 'geographic',
@@ -650,7 +695,7 @@ function buildVectorBasemapSubLayers(): Layer[] {
         name: isPerKeyAuxLayerType(firstEntry.type)
           ? firstEntry.name
           : layerId
-            ? getBasemapLayerName(layerId)
+            ? getBasemapLayerName(layerId, isCustom)
             : firstEntry.name,
         visible,
         color: config ? getBasemapLayerColor(config) : firstEntry.color,
@@ -713,7 +758,7 @@ function buildTiledBasemapSubLayers(): Layer[] {
     isSubLayer: true,
     kind: 'basemap-aux',
     type: 'geographic',
-    basemapRenderGroup: 'background',
+    basemapRenderGroup: item.renderGroup ?? 'background',
     tiledLayerGroupIds: item.groupIds,
     tiledLayerDefaultVisible: item.defaultVisible,
     name: getTiledLayerName(item.id),
@@ -813,42 +858,6 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
       s.layers.find((layer) => layer.id === id);
 
     return {
-      updateLayer: (id: string, updates: Partial<Layer>) => {
-        const layer = findLayer(id);
-        if (!layer) {
-          // Row menu rename targets the visualization id.
-          const visualization = visualizationStore.visualizations.find(
-            (v) => v.id === id
-          );
-          if (!visualization) return;
-          if (updates.name !== undefined) {
-            visualizationStore.renameVisualization(id, updates.name);
-          }
-          syncFromSources();
-          return;
-        }
-
-        if (layer.kind === 'viz-primitive' && layer.parentId) {
-          if (updates.name !== undefined) {
-            visualizationStore.renameVisualization(
-              layer.parentId,
-              updates.name
-            );
-          }
-        }
-
-        syncFromSources();
-      },
-      removeLayer: (id: string) => {
-        // Row menu removal targets the whole visualization id.
-        const visualization = visualizationStore.visualizations.find(
-          (v) => v.id === id
-        );
-        if (!visualization) return;
-
-        visualizationStore.removeVisualization(id);
-        syncFromSources();
-      },
       toggleLayerVisibility: (id: string) => {
         const layer = findLayer(id);
         if (!layer) {
@@ -884,10 +893,22 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
           }
 
           if (layer.basemapLayerId && !layer.basemapAuxPerKey) {
-            basemapLayersStore.setLayerVisibility(
-              layer.basemapLayerId as BasemapLayerId,
-              !layer.visible
-            );
+            if (layer.basemapLayerId === BASEMAP_LAYER_ID.MERIDIENS) {
+              // One row, two mutually exclusive graticule layers.
+              const active = resolveActiveGraticuleLayerId();
+              basemapLayersStore.setLayerVisibility(active, !layer.visible);
+              basemapLayersStore.setLayerVisibility(
+                active === BASEMAP_LAYER_ID.MERIDIENS
+                  ? BASEMAP_LAYER_ID.EQUATEUR
+                  : BASEMAP_LAYER_ID.MERIDIENS,
+                false
+              );
+            } else {
+              basemapLayersStore.setLayerVisibility(
+                layer.basemapLayerId as BasemapLayerId,
+                !layer.visible
+              );
+            }
           }
         } else if (layer.kind === 'viz-primitive') {
           if (layer.parentId && layer.primitive) {
@@ -909,25 +930,6 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
         }
         layerOrderStore.setOrder(nextIds);
         syncFromSources();
-      },
-      duplicateLayer: (id: string): Layer | null => {
-        const visualization = visualizationStore.visualizations.find(
-          (v) => v.id === id
-        );
-        if (!visualization) {
-          return null;
-        }
-
-        const duplicated = visualizationStore.duplicateVisualization(id);
-        syncFromSources();
-
-        if (!duplicated) {
-          return null;
-        }
-
-        return (
-          s.layers.find((entry) => entry.parentId === duplicated.id) ?? null
-        );
       },
       syncWithVisualizations: () => {
         syncFromSources();

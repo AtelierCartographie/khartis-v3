@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/features/duckdb', () => ({
   DuckDBSimplifiedType: {
@@ -17,6 +17,7 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
 }));
 
 import { vizSuggester } from '$lib/features/commons/services/viz-suggester.service';
+import { overwriteGetLocale } from '$lib/paraglide/runtime.js';
 import type { ColumnAnalysis } from '$lib/features/data-pipeline/types';
 
 function col(
@@ -63,6 +64,28 @@ const boundedPopulationCol = col({
     share_floats: 0,
     share_rank_interval: 0,
     extent_magnitude: 1
+  }
+});
+
+const labelCol = col({
+  name: 'commune',
+  type: 'string',
+  stats: { totalCount: 100, uniqueCount: 98, nullCount: 0 }
+});
+
+const qtrCol = col({
+  name: 'density',
+  type: 'number',
+  stats: {
+    totalCount: 100,
+    uniqueCount: 90,
+    nullCount: 0,
+    share_floats: 1,
+    share_integers: 0,
+    share_rank_interval: 0,
+    extent_magnitude: 2,
+    min: 1.5,
+    max: 320.4
   }
 });
 
@@ -556,5 +579,31 @@ describe('suggestVisualizations — ranking by confidence', () => {
       expect(s.score).toBeGreaterThanOrEqual(0);
       expect(s.score).toBeLessThanOrEqual(100);
     }
+  });
+});
+
+describe('suggestVisualizations — labels', () => {
+  const labelsInLocale = (locale: 'fr' | 'en') => {
+    overwriteGetLocale(() => locale);
+    return new Map(
+      vizSuggester
+        .suggestVisualizations([labelCol, qtrCol, qtaCol], 'Polygon', {
+          maxSuggestions: 40
+        })
+        .map((s) => [s.id, s.label])
+    );
+  };
+
+  afterEach(() => overwriteGetLocale(() => 'fr'));
+
+  it('reads every label in the locale active when the suggestion is built', () => {
+    const french = labelsInLocale('fr');
+    const english = labelsInLocale('en');
+    expect(french.size).toBeGreaterThan(0);
+
+    const frozen = [...french]
+      .filter(([id, label]) => english.get(id) === label)
+      .map(([id]) => id);
+    expect(frozen).toEqual([]);
   });
 });

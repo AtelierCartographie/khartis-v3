@@ -82,7 +82,9 @@ const VIZ_CRITERIA: readonly VizSuggestion[] = [
   },
   {
     id: 'choropleth_labeled',
-    label: m.viz_suggestion_choropleth_labeled(),
+    get label() {
+      return m.viz_suggestion_choropleth_labeled();
+    },
     nbColumns: 2,
     semioTypes: ['QTR', 'label'],
     geometries: ['polygon']
@@ -125,7 +127,9 @@ const VIZ_CRITERIA: readonly VizSuggestion[] = [
   },
   {
     id: 'symbols_proportional_labeled',
-    label: m.viz_suggestion_symbols_proportional_labeled(),
+    get label() {
+      return m.viz_suggestion_symbols_proportional_labeled();
+    },
     nbColumns: 2,
     semioTypes: ['QTA', 'label'],
     geometries: ['point', 'polygon']
@@ -315,7 +319,8 @@ const TEXT_SUGGESTION_SCORE_FACTOR = 0.7;
 const LABELED_SCORE_FACTOR = 0.9;
 const LABELED_PROPORTIONAL_VIZ_ID = 'symbols_proportional_labeled';
 const LABELED_CHOROPLETH_VIZ_ID = 'choropleth_labeled';
-const SHAPE_CATEGORY_VIZ_IDS = new Set([
+
+export const SHAPE_CATEGORY_VIZ_IDS = new Set([
   'symbols_differents',
   'symbols_differents_QLO'
 ]);

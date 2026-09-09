@@ -25,7 +25,6 @@
   }: Props = $props();
 
   const displayRows = $derived(buildDisplayRows(suggestion));
-  const showCollection = $derived(suggestion.nbColumns > 2);
   const primitiveLabel = $derived(getPrimitiveLabel(suggestion));
   const cardClasses = $derived(
     clsx('viz-suggestion-card', {
@@ -158,12 +157,7 @@
   onkeydown={handleKeyDown}
 >
   <div class="preview-panel">
-    <VisualizationSuggestionPreview
-      suggestionId={suggestion.id}
-      label={m.viz_preview_label()}
-      semioTypes={suggestion.semioTypes}
-      geometries={suggestion.geometries}
-    />
+    <VisualizationSuggestionPreview suggestion={suggestion} />
   </div>
 
   <div class="content-panel">
@@ -213,47 +207,6 @@
         </div>
       {/each}
     </div>
-
-    {#if showCollection}
-      <div class="collection-row">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <rect
-            x="1"
-            y="1"
-            width="6"
-            height="6"
-            stroke="currentColor"
-            stroke-width="1"
-          />
-          <rect
-            x="9"
-            y="1"
-            width="6"
-            height="6"
-            stroke="currentColor"
-            stroke-width="1"
-          />
-          <rect
-            x="1"
-            y="9"
-            width="6"
-            height="6"
-            stroke="currentColor"
-            stroke-width="1"
-          />
-          <rect
-            x="9"
-            y="9"
-            width="6"
-            height="6"
-            stroke="currentColor"
-            stroke-width="1"
-          />
-        </svg>
-
-        <span>{m.map_collection()}</span>
-      </div>
-    {/if}
   </div>
 </div>
 
@@ -321,15 +274,7 @@
     justify-content: center;
     padding: 1px;
     box-sizing: border-box;
-    background: #ffffff;
-    --tile-preview-background: var(
-      --khartis-additions-layer-02-suggestions,
-      #ffffff
-    );
-    --tile-preview-color: var(
-      --khartis-additions-interactive-suggestions,
-      #0072c3
-    );
+    background: var(--khartis-additions-layer-02-suggestions, #ffffff);
   }
 
   .content-panel {
@@ -405,17 +350,5 @@
 
   .variable-row :global(.variable-badge) {
     min-width: 0;
-  }
-
-  .collection-row {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-    margin-top: auto;
-    padding-top: var(--cds-spacing-02);
-    color: var(--khartis-additions-text-helper-suggestions, #0072c3);
-    font-size: 0.75rem;
-    line-height: 1rem;
-    letter-spacing: 0.32px;
   }
 </style>

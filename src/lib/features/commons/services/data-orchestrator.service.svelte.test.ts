@@ -50,6 +50,7 @@ vi.mock('$lib/features/project-management/core', () => ({
   persistenceRegistry: {
     deserializeAll: mocks.deserializeAll,
     markClean: vi.fn(),
+    register: vi.fn(),
     withPersistenceSuspended: vi.fn(async (callback: () => Promise<void>) =>
       callback()
     )
@@ -203,6 +204,12 @@ vi.mock('$lib/features/map/services/basemap-catalog.service.svelte', () => ({
     getBasemapById: vi.fn(),
     loadCatalog: vi.fn(async () => undefined)
   }
+}));
+
+vi.mock('$lib/features/map/services/dataset-geometry-basemap.service', () => ({
+  ensureDatasetGeometryBasemap: vi.fn(async () => undefined),
+  forgetDatasetGeometryBasemap: vi.fn(),
+  resetDatasetGeometryBasemaps: vi.fn()
 }));
 
 vi.mock('./import-rollback.service', () => ({

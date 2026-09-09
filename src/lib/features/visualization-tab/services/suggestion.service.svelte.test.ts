@@ -90,6 +90,7 @@ import {
   resolveDatasetGeometryType,
   restoreVisualizationFromSuggestion
 } from './suggestion.service';
+import { ORDERED_CATEGORY_PALETTE_ID } from '$lib/features/commons/components/palette-popover/palette.constants';
 import { applyExampleVisualizationPresets } from '$lib/features/create-project/services/example-visualization-preset.service';
 import { ExampleCategory } from '$lib/features/commons/constants/ui.constants';
 import { resolveDisplayedSuggestionKey } from '../utils/suggestion-selection.utils';
@@ -407,6 +408,39 @@ describe('suggestion.service', () => {
     expect(mocks.notifyChangeMock).toHaveBeenCalledWith(
       'visualization',
       'immediate'
+    );
+  });
+
+  it('gives an ordered qualitative suggestion an ordered palette, unlike its nominal twin', () => {
+    const dataset = createPointDataset();
+
+    const applied = (id: string) => {
+      const visualization = visualizationStore.createVisualization(
+        VisualizationType.PROPORTIONAL,
+        dataset.id
+      );
+      applySuggestionToVisualization(visualization.id, {
+        id,
+        label: id,
+        nbColumns: 1,
+        semioTypes: [id.endsWith('QLO') ? 'QLO' : 'QL'],
+        geometries: ['point'],
+        columns: ['category'],
+        score: 46
+      });
+      return visualizationStore.visualizations.find(
+        (item) => item.id === visualization.id
+      );
+    };
+
+    const nominal = applied('symbols_uniques_colorful_QL');
+    const ordered = applied('symbols_uniques_colorful_QLO');
+
+    expect(ordered?.symbol?.fillClassification?.paletteId).toBe(
+      ORDERED_CATEGORY_PALETTE_ID
+    );
+    expect(nominal?.symbol?.fillClassification?.paletteId).not.toBe(
+      ORDERED_CATEGORY_PALETTE_ID
     );
   });
 

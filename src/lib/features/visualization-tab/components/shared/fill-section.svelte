@@ -347,7 +347,7 @@
   />
 {/if}
 
-{#if showMissingDataSection && (fillMode === FillMode.CLASSES || fillMode === FillMode.CATEGORIES)}
+{#if showMissingDataSection && (fillMode === FillMode.CLASSES || fillMode === FillMode.CATEGORIES || fillMode === FillMode.DENSITY)}
   <MissingDataSection
     bind:show={missingDataShow}
     color={missingDataColor}

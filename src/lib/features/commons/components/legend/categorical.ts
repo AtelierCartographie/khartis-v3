@@ -10,6 +10,8 @@ import {
   renderLegendHeader,
   renderLegendNote,
   resolveLegendFontFamily,
+  scaleLegendMetric,
+  splitLegendOverflow,
   type CommonLegendTextOptions,
   type LegendSvgDefinition
 } from './utils';
@@ -51,9 +53,11 @@ interface ColumnInfo {
 }
 
 export function draw_categorical_legend(
-  raw_categories: CategoryItem[],
+  all_categories: CategoryItem[],
   options: CategoricalLegendOptions = {}
 ): LegendSvgDefinition {
+  const { items: raw_categories, overflowLabel } =
+    splitLegendOverflow(all_categories);
   let { type, title, subtitle, note, fontSize } = options;
   type ??= 'box';
   title ??= null;
@@ -62,7 +66,12 @@ export function draw_categorical_legend(
   fontSize ??= 12;
   const resolvedFontFamily = resolveLegendFontFamily(options.fontFamily);
 
-  const footerItems = options.footerItems ?? [];
+  const footerItems: CategoryItem[] = [
+    ...(overflowLabel
+      ? [{ label: overflowLabel, fill: 'none', stroke: 'none', strokeWidth: 0 }]
+      : []),
+    ...(options.footerItems ?? [])
+  ];
   const footerType = options.footerType ?? type;
   const titleSize = title ? Math.round(fontSize * 1.16) : 0;
   const subtitleSize = subtitle ? fontSize : 0;
@@ -73,7 +82,7 @@ export function draw_categorical_legend(
     lineHeight: line_height,
     fontFamily: resolvedFontFamily
   });
-  const marginValue = Math.max(10, Math.round(fontSize * 0.6));
+  const marginValue = scaleLegendMetric(10, fontSize);
   const margin = {
     top: marginValue,
     right: marginValue,
@@ -86,11 +95,12 @@ export function draw_categorical_legend(
     h: box_dim,
     w: footerType === 'line' ? box_dim * 1.5 : box_dim
   };
-  const gap = Math.max(8, Math.round(fontSize * 0.6));
-  const gutter = Math.max(16, Math.round(fontSize * 1.2));
+  const gap = scaleLegendMetric(8, fontSize);
+  const gutter = scaleLegendMetric(16, fontSize);
   let label_width = Math.round(fontSize * 15);
   const items_nb = raw_categories.length;
-  const column_nb = items_nb <= 4 ? 1 : items_nb <= 8 ? 2 : 3;
+  const column_nb = resolve_column_count(items_nb);
+  const column_row_counts = split_rows_across_columns(items_nb, column_nb);
 
   label_width = adjust_label_width(raw_categories, label_width);
 
@@ -174,7 +184,7 @@ export function draw_categorical_legend(
     footerItems.length > 0
       ? margin.left + footerBox.w + gap + footer_label_width + margin.right
       : 0;
-  const header_gap = 3;
+  const header_gap = scaleLegendMetric(3, fontSize);
   const title_font = createLegendFont({
     fontSize: titleSize,
     fontFamily: resolvedFontFamily,
@@ -249,7 +259,7 @@ export function draw_categorical_legend(
         (Math.max(...categories.map((item) => item.y_index)) + 1) * row_step -
         gap
       : y_start;
-  const section_gap = Math.max(10, Math.round(fontSize * 0.6));
+  const section_gap = scaleLegendMetric(10, fontSize);
   const footer_start =
     footerItems.length > 0
       ? categories_bottom + section_gap
@@ -345,32 +355,18 @@ export function draw_categorical_legend(
   }
 
   function get_xy_index(i: number): { x_index: number; y_index: number } {
-    let x_index: number;
-    let y_index: number;
-    switch (column_nb) {
-      case 1:
-        x_index = 0;
-        y_index = i;
-        break;
-      case 2: {
-        const nb_items_col = Math.round(items_nb / 2);
-        x_index = i < nb_items_col ? 0 : 1;
-        y_index = i % nb_items_col;
-        break;
+    let first_row_of_column = 0;
+
+    for (let column = 0; column < column_row_counts.length; column++) {
+      const next_column_first_row =
+        first_row_of_column + column_row_counts[column];
+      if (i < next_column_first_row) {
+        return { x_index: column, y_index: i - first_row_of_column };
       }
-      case 3: {
-        const c1 = Math.ceil(items_nb / 3);
-        const c2 = Math.ceil((items_nb - c1) / 2);
-        const c1c2 = c1 + c2;
-        x_index = i < c1 ? 0 : i < c1c2 ? 1 : 2;
-        y_index = i < c1 ? i : i < c1c2 ? i - c1 : i - c1c2;
-        break;
-      }
-      default:
-        x_index = 0;
-        y_index = i;
+      first_row_of_column = next_column_first_row;
     }
-    return { x_index, y_index };
+
+    return { x_index: 0, y_index: i };
   }
 
   function create_svg_markup(
@@ -396,6 +392,45 @@ export function draw_categorical_legend(
       height
     };
   }
+}
+
+/**
+ * Three columns keep a normal legend compact. Past that, a large category set
+ * gains columns instead of rows: the semiology is already lost at those
+ * cardinalities, but the legend stays on the page and shows the reader that
+ * their choice was honoured.
+ */
+const MAX_COMPACT_COLUMNS = 3;
+const MAX_COLUMNS = 5;
+const MAX_COLUMN_ROWS = 30;
+
+function resolve_column_count(items_nb: number): number {
+  if (items_nb <= 4) return 1;
+  if (items_nb <= 8) return 2;
+
+  for (let columns = MAX_COMPACT_COLUMNS; columns < MAX_COLUMNS; columns++) {
+    if (Math.ceil(items_nb / columns) <= MAX_COLUMN_ROWS) {
+      return columns;
+    }
+  }
+
+  return MAX_COLUMNS;
+}
+
+function split_rows_across_columns(
+  items_nb: number,
+  column_nb: number
+): number[] {
+  const rows: number[] = [];
+  let remaining = items_nb;
+
+  for (let columns_left = column_nb; columns_left > 0; columns_left--) {
+    const column_rows = Math.ceil(remaining / columns_left);
+    rows.push(column_rows);
+    remaining -= column_rows;
+  }
+
+  return rows;
 }
 
 function create_shape(

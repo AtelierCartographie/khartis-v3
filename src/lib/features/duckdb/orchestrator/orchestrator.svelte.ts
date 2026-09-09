@@ -522,6 +522,37 @@ export const duckDBOrchestrator = {
     return joinOps.computeJoinSynthesis(dataset, geoColumn, Duck);
   },
 
+  async estimateJoinFuzzyPass(
+    datasetId: string,
+    geoColumn: string
+  ): Promise<joinOps.JoinFuzzyPassEstimate> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    const dataset = state.findDatasetByIdOrSourceFile(datasetId);
+    if (!dataset) {
+      throw new DataValidationError(m.error_dataset_not_found(), 'datasetId', {
+        datasetId
+      });
+    }
+
+    return joinOps.estimateJoinFuzzyPass(dataset, geoColumn, Duck);
+  },
+
+  async runFullFuzzyPass(datasetId: string, geoColumn: string): Promise<void> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    const dataset = state.findDatasetByIdOrSourceFile(datasetId);
+    if (!dataset) {
+      throw new DataValidationError(m.error_dataset_not_found(), 'datasetId', {
+        datasetId
+      });
+    }
+
+    return joinOps.runFullFuzzyPass(dataset, geoColumn, Duck);
+  },
+
   async applyJoinCorrections(
     datasetId: string,
     geoColumn: string,
@@ -1016,6 +1047,42 @@ export const duckDBOrchestrator = {
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     return tableDataOps.getRowStats(tableName, Duck);
+  },
+
+  async getScopedRowStats(
+    tableName: string,
+    scopeClause: string | null
+  ): Promise<FilterStats> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return tableDataOps.getScopedRowStats(tableName, scopeClause, Duck);
+  },
+
+  async getRowIdsInScope(
+    tableName: string,
+    clause: string
+  ): Promise<Set<number>> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return tableDataOps.getRowIdsInScope(tableName, clause, Duck);
+  },
+
+  async getColumnDomainsInScope(
+    tableName: string,
+    clause: string | null,
+    columns: string[]
+  ): Promise<Map<string, tableDataOps.ColumnDomain>> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return tableDataOps.getColumnDomainsInScope(
+      tableName,
+      clause,
+      columns,
+      Duck
+    );
   },
 
   async getFullAnalysis(

@@ -30,6 +30,7 @@ import {
   VisualizationType
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { suggestClassificationDefaults } from '$lib/features/commons/services/classification.service';
+import { ORDERED_CATEGORY_PALETTE_ID } from '$lib/features/commons/components/palette-popover/palette.constants';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
 import {
@@ -58,7 +59,10 @@ import {
   CARTOGRAPHIC_FONT_FAMILY,
   normalizeFontFamily
 } from '$lib/features/step-toolbar/fonts.constants';
-import { getVisualizationLegendSubtitle } from '$lib/features/commons/utils/legend-subtitle.utils';
+import {
+  getPrimitiveLegendSubtitle,
+  getVisualizationLegendSubtitle
+} from '$lib/features/commons/utils/legend-subtitle.utils';
 
 import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
@@ -148,7 +152,7 @@ const SUGGESTION_VISUALIZATION_TYPES = {
 
 type SuggestionBehaviorId = keyof typeof SUGGESTION_VISUALIZATION_TYPES;
 type SuggestionBehaviorFamily = 'symbol' | 'polygon' | 'line' | 'text';
-type SuggestionClassificationKind = 'category' | 'class';
+type SuggestionClassificationKind = 'category' | 'ordered-category' | 'class';
 type SuggestionColumnSource =
   | 'primaryNumeric'
   | 'secondaryNumeric'
@@ -266,28 +270,28 @@ const SUGGESTION_BEHAVIOR_DEFINITIONS = {
   polygons_colorful_QLO: {
     family: 'polygon',
     fillMode: FillMode.CATEGORIES,
-    classification: 'category',
+    classification: 'ordered-category',
     categoryColumn: 'primaryText'
   },
   symbols_differents_QLO: {
     family: 'symbol',
     symbolMode: SymbolMode.CATEGORIES,
     fillMode: FillMode.CATEGORIES,
-    classification: 'category',
+    classification: 'ordered-category',
     categoryColumn: 'primaryText'
   },
   symbols_uniques_colorful_QLO: {
     family: 'symbol',
     symbolMode: SymbolMode.UNIQUE,
     fillMode: FillMode.CATEGORIES,
-    classification: 'category',
+    classification: 'ordered-category',
     categoryColumn: 'primaryText'
   },
   lines_colorful_QLO: {
     family: 'line',
     colorMode: ColorMode.CATEGORIES,
     thicknessMode: ThicknessMode.UNIQUE,
-    classification: 'category',
+    classification: 'ordered-category',
     categoryColumn: 'primaryText'
   },
   symbols_proportional_colorful_QL: {
@@ -636,6 +640,18 @@ function getSuggestionClassification(
 ): VisualizationConfig['classification'] {
   if (classification === 'category') {
     return categoricalPreset.classification;
+  }
+
+  // Une variable qualitative ORDONNÉE reste une classification par catégories,
+  // mais ses couleurs sont échantillonnées sur une rampe séquentielle : sans cela
+  // « qualitatif ordonné » produit exactement la même carte que « qualitatif ».
+  if (classification === 'ordered-category') {
+    return categoricalPreset.classification
+      ? {
+          ...categoricalPreset.classification,
+          paletteId: ORDERED_CATEGORY_PALETTE_ID
+        }
+      : undefined;
   }
 
   if (classification === 'class') {
@@ -1180,6 +1196,32 @@ export function applyBlankVisualizationPreset(
   });
 }
 
+function withPrimitivesDisabled(
+  preset: VisualizationPreset
+): VisualizationPreset {
+  return {
+    ...preset,
+    primitiveFilters: [],
+    polygon: preset.polygon ? { ...preset.polygon, enabled: false } : undefined,
+    symbol: preset.symbol ? { ...preset.symbol, enabled: false } : undefined,
+    line: preset.line ? { ...preset.line, enabled: false } : undefined,
+    text: preset.text ? { ...preset.text, enabled: false } : undefined
+  };
+}
+
+export function applyEmptyVisualizationPreset(
+  vizId: string,
+  dataset: Parameters<typeof resolveBlankVisualizationPreset>[0],
+  origin?: VisualizationOrigin
+): void {
+  visualizationStore.updateVisualization(vizId, {
+    ...withPrimitivesDisabled(resolveBlankVisualizationPreset(dataset)),
+    origin,
+    primitiveOrder: undefined,
+    dataFilters: undefined
+  });
+}
+
 function createVisualizationRestoreSnapshot(
   visualization: VisualizationConfig
 ): VisualizationRestoreSnapshot {
@@ -1482,28 +1524,31 @@ export function isVisualizationBlank(
 
 function syncLegendSubtitleAfterSuggestion(
   vizId: string,
-  previousAutoSubtitle: string,
   visualization: VisualizationConfig
 ): void {
-  const legendItem = getLegendState().items.find(
-    (item) => item.variableId === vizId
-  );
-  if (!legendItem) {
-    return;
+  // One legend item per primitive, so each gets the subtitle of the variable
+  // driving it; a subtitle the user typed is left alone.
+  for (const legendItem of getLegendState().items) {
+    if (
+      legendItem.variableId !== vizId ||
+      legendItem.subtitleMode === 'custom'
+    ) {
+      continue;
+    }
+
+    const nextAutoSubtitle = legendItem.primitive
+      ? getPrimitiveLegendSubtitle(visualization, legendItem.primitive)
+      : getVisualizationLegendSubtitle(visualization);
+
+    if (legendItem.subtitle === nextAutoSubtitle) {
+      continue;
+    }
+
+    legendActions.updateLegendItem(legendItem.id, {
+      subtitle: nextAutoSubtitle,
+      subtitleMode: 'auto'
+    });
   }
-
-  const nextAutoSubtitle = getVisualizationLegendSubtitle(visualization);
-  const usesAutomaticSubtitle =
-    !legendItem.subtitle || legendItem.subtitle === previousAutoSubtitle;
-
-  if (!usesAutomaticSubtitle || legendItem.subtitle === nextAutoSubtitle) {
-    return;
-  }
-
-  legendActions.updateLegendItem(legendItem.id, {
-    subtitle: nextAutoSubtitle,
-    subtitleMode: 'auto'
-  });
 }
 
 function buildSuggestionUpdate(
@@ -1735,9 +1780,6 @@ export function applySuggestionToVisualization(
   const currentVisualization = visualizationStore.visualizations.find(
     (item) => item.id === vizId
   );
-  const previousAutoSubtitle = currentVisualization
-    ? getVisualizationLegendSubtitle(currentVisualization)
-    : '';
   if (!currentVisualization) {
     return null;
   }
@@ -1818,11 +1860,7 @@ export function applySuggestionToVisualization(
     (item) => item.id === vizId
   );
   if (updatedVisualization) {
-    syncLegendSubtitleAfterSuggestion(
-      vizId,
-      previousAutoSubtitle,
-      updatedVisualization
-    );
+    syncLegendSubtitleAfterSuggestion(vizId, updatedVisualization);
   }
 
   return behavior.visualizationType;

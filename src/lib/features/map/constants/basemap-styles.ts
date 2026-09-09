@@ -85,6 +85,24 @@ const BASEMAP_VIEWPORT_PRESETS: Record<
   [BasemapStyle.MONDE_SATELLITE]: WORLD_VIEWPORT_PRESET
 };
 
+// Crédits exigés par les fournisseurs de tuiles, repris tels que les styles
+// Carte Facile les déclarent sur leurs sources : les vignettes et l'habillage ne
+// doivent pas inventer une mention que le style ne porte pas. Un test vérifie que
+// cette table reste alignée sur static/basemaps/styles/*.json.
+const BASEMAP_STYLE_ATTRIBUTIONS: Record<BasemapStyle, string> = {
+  [BasemapStyle.BLANK_WHITE]: '',
+  [BasemapStyle.FRANCE_COULEURS]: '© IGN',
+  [BasemapStyle.FRANCE_NIVEAUX_DE_GRIS]: '© IGN',
+  [BasemapStyle.FRANCE_SATELLITE]: '© IGN',
+  [BasemapStyle.MONDE_COULEURS]: '© OpenStreetMap, © Etalab',
+  [BasemapStyle.MONDE_NIVEAUX_DE_GRIS]: '© OpenStreetMap, © Etalab',
+  [BasemapStyle.MONDE_SATELLITE]: '© OpenStreetMap, © Etalab, © IGN'
+};
+
+export function getBasemapStyleAttribution(style: BasemapStyle): string {
+  return BASEMAP_STYLE_ATTRIBUTIONS[style] ?? '';
+}
+
 export function getBasemapStyle(style: BasemapStyle): BasemapStyleResult {
   if (style === BasemapStyle.BLANK_WHITE) {
     return BLANK_WHITE_STYLE;

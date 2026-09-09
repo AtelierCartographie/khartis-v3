@@ -18,6 +18,7 @@
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
   import {
     applyBlankVisualizationPreset,
+    applyEmptyVisualizationPreset,
     applySuggestionToVisualization,
     buildSuggestionOrigin,
     isVisualizationMatchingSuggestion,
@@ -166,7 +167,7 @@
 
     const targetViz = getCurrentTargetVisualization();
     if (targetViz) {
-      applyBlankVisualizationPreset(targetViz.id, dataset, {
+      applyEmptyVisualizationPreset(targetViz.id, dataset, {
         mode: 'manual-blank'
       });
     } else {
@@ -174,13 +175,13 @@
         resolveBlankVisualizationType(dataset),
         dataset.id
       );
-      applyBlankVisualizationPreset(visualization.id, dataset, {
+      applyEmptyVisualizationPreset(visualization.id, dataset, {
         mode: 'manual-blank'
       });
     }
 
     selectedSuggestionKey = undefined;
-    suggestionsExpanded = suggestions.length > 0 || suggestionsExpanded;
+    suggestionsExpanded = false;
     onCreateVisualization?.();
   }
 
@@ -555,13 +556,6 @@
     color: var(--khartis-additions-interactive-suggestions, #0072c3);
     display: flex;
     align-items: center;
-  }
-
-  :global(.suggestions-title) {
-    color: var(
-      --khartis-additions-text-primary-suggestions,
-      #003a6d
-    ) !important;
   }
 
   .suggestions-help {

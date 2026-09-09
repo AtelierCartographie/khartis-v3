@@ -3,6 +3,8 @@ import {
   classifyThematicLayerPrimitive,
   computeDefaultLayerOrder,
   mergeLayerOrder,
+  shouldRenderDeckBelowTiledLabels,
+  TILED_BASEMAP_LABELS_ROW_ID,
   type LayerOrderRow
 } from './layer-panel-row.utils';
 import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
@@ -139,5 +141,32 @@ describe('classifyThematicLayerPrimitive', () => {
   it('returns null for ids that carry no primitive (GeoJSON fallback, basemap)', () => {
     expect(classifyThematicLayerPrimitive('geojson-layer-viz1')).toBeNull();
     expect(classifyThematicLayerPrimitive('basemap-terre')).toBeNull();
+  });
+});
+
+describe('shouldRenderDeckBelowTiledLabels', () => {
+  it('keeps the labels on top while the order has never seen that row', () => {
+    expect(shouldRenderDeckBelowTiledLabels([])).toBe(true);
+    expect(shouldRenderDeckBelowTiledLabels(['v::polygon'])).toBe(true);
+  });
+
+  it('draws the deck stack under the labels when they sit above the viz rows', () => {
+    expect(
+      shouldRenderDeckBelowTiledLabels([
+        TILED_BASEMAP_LABELS_ROW_ID,
+        'v::point',
+        'basemap::tiled-basemap::streets'
+      ])
+    ).toBe(true);
+  });
+
+  it('draws the deck stack over the whole style once the labels are dragged below a viz row', () => {
+    expect(
+      shouldRenderDeckBelowTiledLabels([
+        'v::point',
+        TILED_BASEMAP_LABELS_ROW_ID,
+        'basemap::tiled-basemap::streets'
+      ])
+    ).toBe(false);
   });
 });

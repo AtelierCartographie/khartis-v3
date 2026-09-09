@@ -25,7 +25,8 @@ import {
 import {
   getGPSBboxMatchMetrics,
   shouldPreferTextBasemapRefinementForGPS,
-  getCatalogBasemapsForDisplay
+  getCatalogBasemapsForDisplay,
+  sortCatalogBasemapsForDisplay
 } from '$lib/features/map/services/basemap-catalog.service.svelte';
 
 // ─── get_bbox_from_geoparquet ──────────────────────────────────────────────
@@ -250,5 +251,77 @@ describe('getCatalogBasemapsForDisplay', () => {
     expect(getCatalogBasemapsForDisplay(basemaps)).toEqual([
       expect.objectContaining({ file: 'world-countries-2024-medium' })
     ]);
+  });
+
+  it('excludes the reference basemap, which is activated outside the catalog', () => {
+    const basemaps = [
+      makeBasemap('world-countries-2024-medium', {
+        simplification_level: 'medium'
+      }),
+      makeBasemap('osm_openstreetmap_1712000000000', { isCustom: true })
+    ];
+
+    expect(getCatalogBasemapsForDisplay(basemaps)).toEqual([
+      expect.objectContaining({ file: 'world-countries-2024-medium' })
+    ]);
+  });
+});
+
+// ─── sortCatalogBasemapsForDisplay ────────────────────────────────────────
+
+describe('sortCatalogBasemapsForDisplay', () => {
+  const makeBasemap = (
+    file: string,
+    date: string,
+    titleFr: string,
+    subtitleFr = ''
+  ) =>
+    ({
+      file,
+      source: 'test',
+      date,
+      proj_source: 'wgs84',
+      title_fr: titleFr,
+      title_en: titleFr,
+      subtitle_fr: subtitleFr,
+      subtitle_en: subtitleFr,
+      layers: [],
+      bbox: [0, 0, 1, 1] as [number, number, number, number]
+    }) as never;
+
+  it('orders by descending year, then alphabetically inside a year', () => {
+    const basemaps = [
+      makeBasemap('b', '2024', 'Belgique'),
+      makeBasemap('a', '2025', 'Zimbabwe'),
+      makeBasemap('c', '2025', 'Élsass'),
+      makeBasemap('d', '2024', 'Algérie')
+    ];
+
+    expect(
+      sortCatalogBasemapsForDisplay(basemaps, 'fr').map((b) => b.file)
+    ).toEqual(['c', 'a', 'd', 'b']);
+  });
+
+  it('falls back to the subtitle when several basemaps share a title', () => {
+    const basemaps = [
+      makeBasemap('nuts2', '2021', 'Europe', 'par régions NUTS 2'),
+      makeBasemap('nuts3', '2021', 'Europe', 'par régions NUTS 3'),
+      makeBasemap('nuts1', '2021', 'Europe', 'par régions NUTS 1')
+    ];
+
+    expect(
+      sortCatalogBasemapsForDisplay(basemaps, 'fr').map((b) => b.file)
+    ).toEqual(['nuts1', 'nuts2', 'nuts3']);
+  });
+
+  it('keeps basemaps without a parsable year last', () => {
+    const basemaps = [
+      makeBasemap('undated', 'n/a', 'Monde'),
+      makeBasemap('dated', '2020', 'Monde')
+    ];
+
+    expect(
+      sortCatalogBasemapsForDisplay(basemaps, 'fr').map((b) => b.file)
+    ).toEqual(['dated', 'undated']);
   });
 });

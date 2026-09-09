@@ -96,6 +96,9 @@ export interface BasemapMetadata {
   entity_count?: number;
   layers: BasemapLayer[];
   isCustom?: boolean;
+  // Built from a dataset's own geometry rather than picked as a reference
+  // basemap: it must not be persisted or offered in the basemap catalog.
+  isDatasetGeometry?: boolean;
 }
 
 export interface BasemapSuggestion extends BasemapMetadata {

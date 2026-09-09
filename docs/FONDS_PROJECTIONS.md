@@ -91,6 +91,12 @@ Lors d'une jointure, vérifier :
 3. le CRS de la géométrie de sortie ;
 4. le contrat de rendu attendu : table directe ou rendu split.
 
+### Ce que coûte un fond de plus au catalogue
+
+La phase fuzzy de la jointure est linéaire en **noms distincts** du catalogue, pas en nombre de fonds : les valeurs normalisées sont dédupliquées avant d'être comparées. Ajouter une résolution, un millésime ou un découpage régional d'un territoire déjà couvert n'ajoute donc **aucun** nom distinct et ne coûte rien à la jointure. Seul un nouveau territoire apporte des noms nouveaux, et d'autant plus qu'il descend fin : un niveau communal en apporte à peu près son propre effectif.
+
+L'ordre de grandeur à retenir : le seuil du budget fuzzy se resserre proportionnellement aux noms distincts, donc une croissance du catalogue concentrée sur des niveaux communaux de nouveaux pays réduit d'autant le nombre de valeurs qui reçoivent des suggestions automatiquement. Voir la phase fuzzy dans `IMPORT_DUCKDB.md`.
+
 Le rendu split conserve la géométrie de fond et les attributs du jeu de données
 dans des tables Arrow distinctes, liées par featureId. Il réduit les copies de
 géométrie tout en conservant le picking et les infobulles sur la ligne métier.

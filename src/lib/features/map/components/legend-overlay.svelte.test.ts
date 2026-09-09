@@ -41,6 +41,14 @@ import {
 import { formatActions } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import { DRAGGING_STYLING_TARGET_BODY_CLASS } from '../utils/tool-popover-drag-visibility.utils';
 
+const mockRowScopeStore = vi.hoisted(() => ({
+  getScopedDomain: vi.fn((): { min: number; max: number } | null => null)
+}));
+
+vi.mock('../stores/row-scope.store.svelte', () => ({
+  rowScopeStore: mockRowScopeStore
+}));
+
 const { mockVisualizationStore, mockDatasetsStore } = vi.hoisted(() => ({
   mockVisualizationStore: {
     version: 0,
@@ -117,6 +125,9 @@ vi.mock('@ateliercartographie/motif.js', () => ({
 import { legendActions } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
 import { getLegendState } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
 import LegendOverlay from './legend-overlay.svelte';
+import { MAX_LEGEND_CATEGORIES } from '$lib/features/commons/components/legend';
+import { m } from '$lib/paraglide/messages';
+import { LEGEND_DEFAULTS } from '$lib/features/step-toolbar/tools/legend/legend.constants';
 
 const measureCanvas = {
   getContext: () => ({
@@ -246,6 +257,29 @@ function setupLegendOccludedViewport(): {
   return { legend, popover, toolbar, viewport };
 }
 
+// A wrapped legend label is split across tspans and carries the full string on
+// aria-label instead, so match either form: jsdom has no canvas metrics and
+// breaks lines differently from the browser.
+function getFirstLegendItem() {
+  const item = getLegendState().items[0];
+  if (!item) {
+    throw new Error('No legend item registered');
+  }
+  return item;
+}
+
+function getFirstLegendFramePosition() {
+  return getFirstLegendItem().dragPosition ?? null;
+}
+
+function countLegendLabels(label: string): number {
+  return Array.from(document.querySelectorAll('svg text')).filter(
+    (node) =>
+      (node.getAttribute('aria-label') ?? node.textContent ?? '').trim() ===
+      label
+  ).length;
+}
+
 describe('legend overlay visibility', () => {
   beforeAll(() => {
     Textbox.setMeasureCanvas(measureCanvas);
@@ -257,6 +291,7 @@ describe('legend overlay visibility', () => {
     document.getElementById('khartis-tool-popover')?.remove();
     mockVisualizationStore.version = 0;
     mockVisualizationStore.visualizations = [];
+    mockRowScopeStore.getScopedDomain.mockReturnValue(null);
     legendActions.reset();
     formatActions.reset();
     globalActions.resetNavigationState();
@@ -303,7 +338,7 @@ describe('legend overlay visibility', () => {
     const style = legend?.getAttribute('style');
 
     expect(style).toContain('--legend-page-scale: 0.5');
-    expect(style).toContain('font-size: 10px');
+    expect(style).toContain(`font-size: ${LEGEND_DEFAULTS.FONT_SIZE}px`);
     expect(style).toContain('transform: scale(0.5)');
     expect(style).toContain('transform-origin: top right');
   });
@@ -374,7 +409,7 @@ describe('legend overlay visibility', () => {
     expect(screen.getByText('Population')).toBeInTheDocument();
   });
 
-  it('compacts double proportional symbols when the map uses overlay mode', () => {
+  it('names both variables under a shared-scale double symbol legend', () => {
     mockVisualizationStore.version = 1;
     mockVisualizationStore.visualizations = [buildDoubleProportionalViz()];
     legendActions.reset();
@@ -382,24 +417,63 @@ describe('legend overlay visibility', () => {
 
     const { container } = render(LegendOverlay);
 
-    const pair = container.querySelector(
-      '.double-symbol-pair[data-position-mode="overlay"]'
-    );
+    const doubleLegend = container.querySelector('.legend-svg--double-symbols');
+    expect(doubleLegend).toBeInTheDocument();
 
-    expect(pair).toBeInTheDocument();
-    expect(
-      container.querySelector('.legend-svg--double-symbols')
-    ).toBeInTheDocument();
-    expect(pair?.querySelectorAll('path')).toHaveLength(2);
-    expect(screen.getByText('15 907 951')).toBeInTheDocument();
-    expect(
-      container.querySelector('.khartis_double_symbol_legend .subtitle')
-        ?.textContent
-    ).toContain('population /');
-    expect(
-      container.querySelector('.khartis_double_symbol_legend .subtitle')
-        ?.textContent
-    ).toContain('secondary-population');
+    // One neutral graduated column for the shared scale, then a colour box per
+    // variable so the reader can tell A from B.
+    const symbols = doubleLegend?.querySelector('.symbols');
+    expect(symbols?.getAttribute('fill')).toBe('none');
+    expect(symbols?.getAttribute('stroke')).toBe('currentColor');
+    const swatches = doubleLegend?.querySelectorAll('.sign_legend rect') ?? [];
+    expect(swatches).toHaveLength(2);
+    expect(swatches[0]?.getAttribute('fill')).toBe('#4585f5');
+    expect(swatches[1]?.getAttribute('fill')).toBe('#ff812a');
+    const swatchLabels = Array.from(
+      doubleLegend?.querySelectorAll('.sign_legend text') ?? []
+    ).map((node) => node.textContent);
+    expect(swatchLabels).toEqual(['population', 'secondary-population']);
+  });
+
+  it('draws a single proportional symbol legend as bare outlines', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildSingleProportionalViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    // Only the size carries meaning here, so the fill would just add noise.
+    const symbols = container.querySelector('.legend-svg--symbols .symbols');
+    expect(symbols?.getAttribute('fill')).toBe('none');
+    expect(symbols?.getAttribute('stroke')).toBe('currentColor');
+  });
+
+  it('stacks one named symbol legend per variable on own-scale double symbols', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [
+      buildOwnScaleDoubleProportionalViz()
+    ];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    const legends = container.querySelectorAll('.legend-svg--symbols');
+    expect(legends).toHaveLength(2);
+
+    // Own scales cannot share a graduated column, so colour is what tells the
+    // two variables apart and each legend names its own.
+    expect(legends[0].querySelector('.symbols')?.getAttribute('fill')).toBe(
+      '#4585f5'
+    );
+    expect(legends[1].querySelector('.symbols')?.getAttribute('fill')).toBe(
+      '#ff812a'
+    );
+    const subtitles = Array.from(
+      container.querySelectorAll('.legend-svg--symbols .subtitle text')
+    ).map((node) => node.textContent);
+    expect(subtitles).toEqual(['population', 'secondary-population']);
   });
 
   it('renders point categories in the legend and hides disabled categories', () => {
@@ -424,7 +498,7 @@ describe('legend overlay visibility', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('limits high-cardinality legends and reports hidden categories', () => {
+  it('renders every category of a high-cardinality legend', () => {
     const viz = buildPointCategoriesViz();
     const labels = Array.from(
       { length: 30 },
@@ -448,13 +522,38 @@ describe('legend overlay visibility', () => {
 
     render(LegendOverlay);
 
-    expect(screen.getByText('Category 24')).toBeInTheDocument();
-    expect(screen.queryByText('Category 25')).not.toBeInTheDocument();
-    expect(
-      screen.getByLabelText(
-        '+ 6 autres catégories (couleurs/formes générées automatiquement)'
-      )
-    ).toBeInTheDocument();
+    for (const label of labels) {
+      expect(countLegendLabels(label)).toBe(1);
+    }
+  });
+
+  it('collapses the tail of an absurd category count into a counted row', () => {
+    const viz = buildPointCategoriesViz();
+    const labels = Array.from(
+      { length: MAX_LEGEND_CATEGORIES + 12 },
+      (_, index) => `Category ${index + 1}`
+    );
+    if (viz.symbol?.classification) {
+      viz.symbol.classification = {
+        ...viz.symbol.classification,
+        labels,
+        categoryValues: labels,
+        disabledLabels: [],
+        colors: labels.map(
+          (_, index) => `#${(index + 1).toString(16).padStart(6, '0')}`
+        )
+      };
+    }
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [viz];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    render(LegendOverlay);
+
+    expect(countLegendLabels(`Category ${MAX_LEGEND_CATEGORIES}`)).toBe(1);
+    expect(countLegendLabels(`Category ${MAX_LEGEND_CATEGORIES + 1}`)).toBe(0);
+    expect(countLegendLabels(m.categories_hidden_count({ count: 12 }))).toBe(1);
   });
 
   it('renders categorical missing data as a compact footer', () => {
@@ -478,7 +577,7 @@ describe('legend overlay visibility', () => {
     expect(
       container.querySelector('.legend-svg--missing-data')
     ).not.toBeInTheDocument();
-    expect(screen.getByText('Absence de données')).toBeInTheDocument();
+    expect(countLegendLabels('Absence de données')).toBe(1);
   });
 
   it('renders unique point symbols with the selected shape and configured size', () => {
@@ -501,7 +600,7 @@ describe('legend overlay visibility', () => {
     expect(triangle).toBeInTheDocument();
     expect(triangle?.getAttribute('transform')).toContain('scale(1.5)');
     expect(screen.getByText('Symboles')).toBeInTheDocument();
-    expect(screen.getByText('Absence de données')).toBeInTheDocument();
+    expect(countLegendLabels('Absence de données')).toBe(1);
   });
 
   it('renders point classed fill legends with the active fill value column and class count', () => {
@@ -700,7 +799,7 @@ describe('legend overlay visibility', () => {
     const { container } = render(LegendOverlay);
 
     expect(container.querySelector('.legend-svg--symbols')).toBeInTheDocument();
-    expect(screen.queryByText('Absence de données')).not.toBeInTheDocument();
+    expect(countLegendLabels('Absence de données')).toBe(0);
   });
 
   it('renders text categorical legends through the common SVG system', () => {
@@ -740,7 +839,7 @@ describe('legend overlay visibility', () => {
 
     render(LegendOverlay);
 
-    expect(screen.getAllByText('Absence de données')).toHaveLength(1);
+    expect(countLegendLabels('Absence de données')).toBe(1);
   });
 
   it('renders proportional text size legends through the original symbol legend generator', () => {
@@ -755,7 +854,7 @@ describe('legend overlay visibility', () => {
       container.querySelector('.legend-svg--text-size')
     ).toBeInTheDocument();
     expect(container.querySelector('.symbol_legend')).toBeInTheDocument();
-    expect(screen.getByText('Absence de données')).toBeInTheDocument();
+    expect(countLegendLabels('Absence de données')).toBe(1);
   });
 
   it('renders bivariate text legends as compact color and size blocks', () => {
@@ -775,6 +874,109 @@ describe('legend overlay visibility', () => {
     expect(
       container.querySelectorAll('.legend-svg').length
     ).toBeGreaterThanOrEqual(2);
+  });
+
+  it('gives each primitive of a visualization its own legend frame', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildPolygonAndSymbolViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    expect(container.querySelectorAll('.legend-container')).toHaveLength(2);
+  });
+
+  it('bounds a classified legend by the filtered scope, not the whole column', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildClassedPolygonViz()];
+    mockRowScopeStore.getScopedDomain.mockReturnValue({
+      min: 1_200_000,
+      max: 9_000_000
+    });
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+    const digits = [...container.querySelectorAll('.legend-svg text')]
+      .map((node) => (node.textContent ?? '').replace(/\D/g, ''))
+      .filter(Boolean);
+
+    expect(digits).toContain('1200000');
+    expect(digits).toContain('9000000');
+    expect(digits).not.toContain('30359');
+    expect(digits).not.toContain('15907951');
+  });
+
+  it('stacks primitive legend frames down from the anchor corner', async () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildPolygonAndSymbolViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+    const overlay = container.querySelector('.legend-overlay');
+    const frames = container.querySelectorAll('.legend-container');
+
+    if (
+      !(overlay instanceof HTMLDivElement) ||
+      !(frames[0] instanceof HTMLDivElement) ||
+      !(frames[1] instanceof HTMLDivElement)
+    ) {
+      throw new Error('Legend frames were not rendered');
+    }
+
+    bindElementBox(overlay, { left: 0, top: 0, width: 300, height: 200 });
+    bindElementBox(frames[0], { left: 0, top: 0, width: 50, height: 40 });
+    bindElementBox(frames[1], { left: 0, top: 0, width: 60, height: 30 });
+
+    formatActions.setSize(300, 200);
+
+    await waitFor(() => {
+      expect(frames[0].getAttribute('style')).toContain('left: 238px');
+      expect(frames[0].getAttribute('style')).toContain('top: 12px');
+      expect(frames[1].getAttribute('style')).toContain('left: 228px');
+    });
+
+    const secondTop = Number(
+      /top: ([\d.]+)px/.exec(frames[1].getAttribute('style') ?? '')?.[1]
+    );
+    expect(secondTop).toBeGreaterThanOrEqual(60);
+    // The default stack stays out of the saved project until the user drags.
+    expect(getLegendState().items.every((item) => !item.dragPosition)).toBe(
+      true
+    );
+  });
+
+  it('moves one primitive legend frame without moving the others', async () => {
+    globalState.selectedTool = StylingTools.Legend;
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildPolygonAndSymbolViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+    const overlay = container.querySelector('.legend-overlay');
+    const frames = container.querySelectorAll('.legend-container');
+
+    if (
+      !(overlay instanceof HTMLDivElement) ||
+      !(frames[0] instanceof HTMLDivElement) ||
+      !(frames[1] instanceof HTMLDivElement)
+    ) {
+      throw new Error('Legend frames were not rendered');
+    }
+
+    bindElementBox(overlay, { left: 0, top: 0, width: 300, height: 200 });
+    bindElementBox(frames[0], { left: 14, top: 10, width: 50, height: 40 });
+    bindElementBox(frames[1], { left: 14, top: 60, width: 50, height: 40 });
+
+    await fireEvent.pointerDown(frames[1], { clientX: 18, clientY: 68 });
+    await fireEvent.pointerMove(window, { clientX: 41, clientY: 93 });
+
+    const [first, second] = getLegendState().items;
+    expect(first.dragPosition ?? null).toBeNull();
+    expect(second.dragPosition).toEqual({ x: 36, y: 84 });
   });
 
   it('snaps legend dragging to the shared page grid when enabled', async () => {
@@ -814,7 +1016,7 @@ describe('legend overlay visibility', () => {
       clientY: 43
     });
 
-    expect(getLegendState().dragPosition).toEqual({ x: 36, y: 36 });
+    expect(getFirstLegendFramePosition()).toEqual({ x: 36, y: 36 });
 
     await fireEvent.pointerUp(window);
 
@@ -856,7 +1058,7 @@ describe('legend overlay visibility', () => {
       clientY: 43
     });
 
-    expect(getLegendState().dragPosition).toEqual({ x: 37, y: 35 });
+    expect(getFirstLegendFramePosition()).toEqual({ x: 37, y: 35 });
   });
 
   it('moves the focused legend with arrow keys', async () => {
@@ -881,7 +1083,7 @@ describe('legend overlay visibility', () => {
 
     await fireEvent.keyDown(legend, { key: 'ArrowRight' });
 
-    expect(getLegendState().dragPosition).toEqual({ x: 15, y: 10 });
+    expect(getFirstLegendFramePosition()).toEqual({ x: 15, y: 10 });
     expect(globalState.selectedTool).toBe(StylingTools.Legend);
   });
 
@@ -915,7 +1117,7 @@ describe('legend overlay visibility', () => {
       clientY: 21.5
     });
 
-    expect(getLegendState().dragPosition).toEqual({ x: 36, y: 36 });
+    expect(getFirstLegendFramePosition()).toEqual({ x: 36, y: 36 });
   });
 
   it('reclamps a dragged legend after the page size shrinks', async () => {
@@ -939,14 +1141,16 @@ describe('legend overlay visibility', () => {
     bindElementBox(overlay, overlayBox);
     bindElementBox(legend, legendBox);
 
-    legendActions.setDragPosition({ x: 240, y: 144 });
+    legendActions.updateLegendItem(getFirstLegendItem().id, {
+      dragPosition: { x: 240, y: 144 }
+    });
 
     overlayBox.width = 180;
     overlayBox.height = 120;
     formatActions.setSize(180, 120);
 
     await waitFor(() => {
-      expect(getLegendState().dragPosition).toEqual({ x: 120, y: 72 });
+      expect(getFirstLegendFramePosition()).toEqual({ x: 120, y: 72 });
     });
   });
 
@@ -1031,6 +1235,41 @@ function buildDoubleProportionalViz(): VisualizationConfig {
       minSize: 4,
       maxSize: 24,
       sizeScale: 'linear'
+    }
+  } as VisualizationConfig;
+}
+
+function buildSingleProportionalViz(): VisualizationConfig {
+  const base = buildDoubleProportionalViz();
+
+  return {
+    ...base,
+    id: 'viz-prop-single',
+    modes: {
+      symbol: SymbolMode.PROPORTIONAL,
+      proportionalType: ProportionalType.SINGLE
+    },
+    symbol: {
+      ...base.symbol,
+      proportionalType: ProportionalType.SINGLE,
+      valueColumn: undefined
+    },
+    mapping: {
+      sizeColumn: 'population',
+      geometryColumn: 'geom'
+    }
+  } as VisualizationConfig;
+}
+
+function buildOwnScaleDoubleProportionalViz(): VisualizationConfig {
+  const base = buildDoubleProportionalViz();
+
+  return {
+    ...base,
+    id: 'viz-prop-own-scale',
+    symbol: {
+      ...base.symbol,
+      commonScale: false
     }
   } as VisualizationConfig;
 }
@@ -1200,6 +1439,17 @@ function buildUniquePointViz(): VisualizationConfig {
     mapping: {
       geometryColumn: 'geom'
     }
+  } as VisualizationConfig;
+}
+
+function buildPolygonAndSymbolViz(): VisualizationConfig {
+  return {
+    ...buildClassedPolygonViz(),
+    id: 'viz-poly-point',
+    name: 'Population',
+    primitiveFilters: ['polygon', 'point'],
+    primitiveOrder: ['polygon', 'point'],
+    symbol: buildUniquePointViz().symbol
   } as VisualizationConfig;
 }
 

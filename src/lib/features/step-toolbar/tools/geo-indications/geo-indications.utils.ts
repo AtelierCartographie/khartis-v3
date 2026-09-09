@@ -37,6 +37,9 @@ export const SCALE_TARGET_WIDTH_PX = 80;
 export const SCALE_MAX_WIDTH_PX = 120;
 export const INSET_MAP_MAX_AREA_FRACTION = 0.5;
 const INSET_PROJECTED_BOUNDS_EDGE_SEGMENTS = 16;
+const SPHERE_SAMPLE_COUNT = 1500;
+const GOLDEN_ANGLE_RADIANS = Math.PI * (3 - Math.sqrt(5));
+const ROUND_TRIP_TOLERANCE_RADIANS = 1e-4;
 
 export type ScaleDistanceMapLike = {
   getCenter: () => { lng: number; lat: number };
@@ -45,6 +48,12 @@ export type ScaleDistanceMapLike = {
 
 type ScaleDistanceProjectionLike = {
   invert: (point: [number, number]) => [number, number] | null | undefined;
+};
+
+type PlanarProjectionLike = ((
+  point: [number, number]
+) => [number, number] | null | undefined) & {
+  invert?: (point: [number, number]) => [number, number] | null | undefined;
 };
 
 export type ScaleDistanceContext = {
@@ -78,6 +87,10 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+function toRadians(degrees: number): number {
+  return (degrees * Math.PI) / 180;
+}
+
 function toFiniteNumber(value: unknown, fallback: number): number {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
@@ -86,6 +99,11 @@ function toFiniteNumber(value: unknown, fallback: number): number {
   return fallback;
 }
 
+/**
+ * Fraction of the sphere covered by the extent. An orthographic projection can
+ * never outline more than a hemisphere, so this has to be the true spherical
+ * area — a lat/lon rectangle ratio lets extents well past 0.5 through.
+ */
 export function getInsetMapBoundsAreaFraction(
   bounds: InsetMapBounds | null | undefined
 ): number | null {
@@ -95,19 +113,81 @@ export function getInsetMapBoundsAreaFraction(
 
   const north = clamp(toFiniteNumber(bounds.north, 90), -90, 90);
   const south = clamp(toFiniteNumber(bounds.south, -90), -90, 90);
-  const rawLongitudeSpan = Math.abs(
-    toFiniteNumber(bounds.east, 180) - toFiniteNumber(bounds.west, -180)
-  );
-  const longitudeSpan = clamp(rawLongitudeSpan, 0, 360);
-  const latitudeSpan = clamp(north - south, 0, 180);
+  if (north <= south) {
+    return 0;
+  }
 
-  return (longitudeSpan * latitudeSpan) / (360 * 180);
+  const rawLongitudeSpan =
+    toFiniteNumber(bounds.east, 180) - toFiniteNumber(bounds.west, -180);
+  const longitudeSpan = clamp(
+    rawLongitudeSpan <= 0 ? rawLongitudeSpan + 360 : rawLongitudeSpan,
+    0,
+    360
+  );
+
+  const latitudeExtent =
+    Math.sin(toRadians(north)) - Math.sin(toRadians(south));
+
+  return (toRadians(longitudeSpan) * latitudeExtent) / (4 * Math.PI);
 }
 
-export function isInsetMapAvailableForBounds(
-  bounds: InsetMapBounds | null | undefined
+/**
+ * Fraction of the sphere the viewport actually shows.
+ *
+ * Inverting the viewport corners is unusable here: outside a projection's
+ * domain `invert` returns clamped nonsense rather than nothing, so a framing
+ * that contains the whole world measures as a small window. Counting
+ * equal-area globe samples that project inside the viewport only needs the
+ * forward projection, which every projection has.
+ */
+export function getVisibleSphereFraction(
+  bounds: InsetMapBounds | null | undefined,
+  context: InsetMapBoundsProjectionContext = {}
+): number | null {
+  if (!bounds) {
+    return null;
+  }
+
+  const projection = context.projection;
+  if (!context.isProjectedCoordinates || !isPlanarProjection(projection)) {
+    return getInsetMapBoundsAreaFraction(bounds);
+  }
+
+  const west = Math.min(bounds.west, bounds.east);
+  const east = Math.max(bounds.west, bounds.east);
+  const south = Math.min(bounds.south, bounds.north);
+  const north = Math.max(bounds.south, bounds.north);
+  const invert =
+    typeof projection.invert === 'function' ? projection.invert : null;
+
+  let visibleCount = 0;
+  for (const sample of getSphereSamples()) {
+    const projected = projection(sample);
+    if (!isFinitePoint(projected)) continue;
+    if (projected[0] < west || projected[0] > east) continue;
+    if (projected[1] < south || projected[1] > north) continue;
+
+    // On a globe the far side projects onto the near side; only the round trip
+    // tells a visible sample from the back-facing one hiding behind it.
+    if (invert) {
+      const roundTrip = invert(projected);
+      if (!isFinitePoint(roundTrip)) continue;
+      if (geoDistance(sample, roundTrip) > ROUND_TRIP_TOLERANCE_RADIANS) {
+        continue;
+      }
+    }
+
+    visibleCount += 1;
+  }
+
+  return visibleCount / SPHERE_SAMPLE_COUNT;
+}
+
+export function isInsetMapAvailableForViewport(
+  bounds: InsetMapBounds | null | undefined,
+  context: InsetMapBoundsProjectionContext = {}
 ): boolean {
-  const areaFraction = getInsetMapBoundsAreaFraction(bounds);
+  const areaFraction = getVisibleSphereFraction(bounds, context);
   return areaFraction === null || areaFraction < INSET_MAP_MAX_AREA_FRACTION;
 }
 
@@ -116,25 +196,27 @@ function normalizeLongitude(longitude: number): number {
   return normalized === -180 && longitude > 0 ? 180 : normalized;
 }
 
-function sampleProjectedBoundsEdge(bounds: InsetMapBounds): [number, number][] {
-  const points: [number, number][] = [];
-  for (let step = 0; step <= INSET_PROJECTED_BOUNDS_EDGE_SEGMENTS; step++) {
-    const ratio = step / INSET_PROJECTED_BOUNDS_EDGE_SEGMENTS;
-    const x = bounds.west + (bounds.east - bounds.west) * ratio;
-    const y = bounds.north + (bounds.south - bounds.north) * ratio;
+/** Open ring, walked corner to corner, so the samples stay traceable. */
+function sampleProjectedBoundsRing(bounds: InsetMapBounds): [number, number][] {
+  const corners: [number, number][] = [
+    [bounds.west, bounds.north],
+    [bounds.east, bounds.north],
+    [bounds.east, bounds.south],
+    [bounds.west, bounds.south]
+  ];
 
-    points.push([x, bounds.north]);
-    points.push([bounds.east, y]);
-    points.push([
-      bounds.east - (bounds.east - bounds.west) * ratio,
-      bounds.south
-    ]);
-    points.push([
-      bounds.west,
-      bounds.south - (bounds.south - bounds.north) * ratio
-    ]);
+  const ring: [number, number][] = [];
+  for (let corner = 0; corner < corners.length; corner++) {
+    const [fromX, fromY] = corners[corner];
+    const [toX, toY] = corners[(corner + 1) % corners.length];
+
+    for (let step = 0; step < INSET_PROJECTED_BOUNDS_EDGE_SEGMENTS; step++) {
+      const ratio = step / INSET_PROJECTED_BOUNDS_EDGE_SEGMENTS;
+      ring.push([fromX + (toX - fromX) * ratio, fromY + (toY - fromY) * ratio]);
+    }
   }
-  return points;
+
+  return ring;
 }
 
 function getMinimalLongitudeBounds(
@@ -172,6 +254,99 @@ function getMinimalLongitudeBounds(
   };
 }
 
+function intersectRange(
+  from: number,
+  to: number,
+  low: number,
+  high: number
+): [number, number] | null {
+  const start = Math.max(Math.min(from, to), Math.min(low, high));
+  const end = Math.min(Math.max(from, to), Math.max(low, high));
+  if (end < start) {
+    return null;
+  }
+
+  return from <= to ? [start, end] : [end, start];
+}
+
+/**
+ * A composite projection draws only inside its sub-projections' screen
+ * extents and `invert` answers nothing outside them, so a viewport wider than
+ * the cell inverts to no point at all. What the reader frames is the viewport
+ * cut down to the mainland cell — the anchor the scale bar already uses.
+ */
+function clipBoundsToProjectionFrame(
+  bounds: InsetMapBounds,
+  projection: unknown
+): InsetMapBounds | null {
+  const screenExtent = getCompositeMainland(projection)?.screenExtent;
+  if (!isScreenExtent(screenExtent)) {
+    return bounds;
+  }
+
+  const [[minX, minY], [maxX, maxY]] = screenExtent;
+  const horizontal = intersectRange(bounds.west, bounds.east, minX, maxX);
+  const vertical = intersectRange(bounds.north, bounds.south, minY, maxY);
+  if (!horizontal || !vertical) {
+    return null;
+  }
+
+  return {
+    west: horizontal[0],
+    east: horizontal[1],
+    north: vertical[0],
+    south: vertical[1]
+  };
+}
+
+type ProjectedFrame = {
+  geographicRing: [number, number][];
+  isComplete: boolean;
+};
+
+function invertProjectedFrame(
+  bounds: InsetMapBounds,
+  projection: ScaleDistanceProjectionLike
+): ProjectedFrame | null {
+  const framedBounds = clipBoundsToProjectionFrame(bounds, projection);
+  if (!framedBounds) {
+    return null;
+  }
+
+  const samples = sampleProjectedBoundsRing(framedBounds);
+  const geographicRing = samples
+    .map((point) => projection.invert(point))
+    .filter(isValidLongitudeLatitudePair);
+
+  return {
+    geographicRing,
+    isComplete: geographicRing.length === samples.length
+  };
+}
+
+/**
+ * The frame the map draws, as a lon/lat ring. A projected frame is a curved
+ * quadrilateral on the sphere, so a lat/lon rectangle always overstates it.
+ * Returns nothing unless the whole ring inverts: half a ring would close
+ * itself across the gap and outline a shape the map never framed.
+ */
+export function getInsetMapFrameOutline(
+  bounds: InsetMapBounds | null | undefined,
+  context: InsetMapBoundsProjectionContext = {}
+): [number, number][] | null {
+  if (!bounds) {
+    return null;
+  }
+
+  const projection = context.projection;
+  if (!context.isProjectedCoordinates || !hasProjectionInvert(projection)) {
+    return null;
+  }
+
+  const frame = invertProjectedFrame(bounds, projection);
+  return frame?.isComplete ? frame.geographicRing : null;
+}
+
 export function getInsetMapGeographicBounds(
   bounds: InsetMapBounds | null | undefined,
   context: InsetMapBoundsProjectionContext = {}
@@ -185,9 +360,8 @@ export function getInsetMapGeographicBounds(
     return bounds;
   }
 
-  const geographicPoints = sampleProjectedBoundsEdge(bounds)
-    .map((point) => projection.invert(point))
-    .filter(isValidLongitudeLatitudePair);
+  const geographicPoints =
+    invertProjectedFrame(bounds, projection)?.geographicRing ?? [];
 
   if (geographicPoints.length === 0) {
     return null;
@@ -256,17 +430,51 @@ function toNiceDistanceAtMost(value: number): number {
   return step * magnitude;
 }
 
-function isValidLongitudeLatitudePair(
-  candidate: unknown
-): candidate is [number, number] {
+function isFinitePoint(candidate: unknown): candidate is [number, number] {
   return (
     Array.isArray(candidate) &&
     candidate.length >= 2 &&
-    typeof candidate[0] === 'number' &&
     Number.isFinite(candidate[0]) &&
-    typeof candidate[1] === 'number' &&
     Number.isFinite(candidate[1])
   );
+}
+
+function isValidLongitudeLatitudePair(
+  candidate: unknown
+): candidate is [number, number] {
+  return isFinitePoint(candidate);
+}
+
+function isPlanarProjection(
+  candidate: unknown
+): candidate is PlanarProjectionLike {
+  return typeof candidate === 'function';
+}
+
+function isScreenExtent(
+  candidate: unknown
+): candidate is CompositeScreenExtent {
+  return (
+    Array.isArray(candidate) &&
+    candidate.length === 2 &&
+    isFinitePoint(candidate[0]) &&
+    isFinitePoint(candidate[1])
+  );
+}
+
+let sphereSamples: [number, number][] | null = null;
+
+/** Fibonacci lattice: every sample stands for the same spherical area. */
+function getSphereSamples(): [number, number][] {
+  sphereSamples ??= Array.from({ length: SPHERE_SAMPLE_COUNT }, (_, index) => {
+    const z = 1 - (2 * index + 1) / SPHERE_SAMPLE_COUNT;
+    return [
+      normalizeLongitude((GOLDEN_ANGLE_RADIANS * index * 180) / Math.PI),
+      (Math.asin(z) * 180) / Math.PI
+    ] as [number, number];
+  });
+
+  return sphereSamples;
 }
 
 function hasProjectionInvert(
@@ -439,10 +647,15 @@ function getBoundsMetersPerPixelAtCenter(
   );
 }
 
+type CompositeScreenExtent = [[number, number], [number, number]];
+
 type CompositeSubProjectionLike = {
   id: string;
   bounds: [number, number, number, number];
+  screenExtent?: CompositeScreenExtent;
 };
+
+const MAINLAND_SUB_PROJECTION_ID = 'mainland';
 
 function getCompositeSubProjections(
   projection: unknown
@@ -464,18 +677,30 @@ function getCompositeSubProjections(
 // anchor on the mainland: forward-project two points 1° apart at the mainland
 // center to get meters-per-d3-pixel there, then scale by the (uniform)
 // d3-pixel-per-screen-pixel ratio.
+function getCompositeMainland(
+  projection: unknown
+): CompositeSubProjectionLike | null {
+  const entries = getCompositeSubProjections(projection);
+  if (!entries) {
+    return null;
+  }
+
+  return (
+    entries.find((entry) => entry.id === MAINLAND_SUB_PROJECTION_ID) ??
+    entries[0]
+  );
+}
+
 function getCompositeMainlandMetersPerPixel(
   projection: unknown,
   screenToDataScale: number
 ): number | null {
-  const entries = getCompositeSubProjections(projection);
-  if (!entries || typeof projection !== 'function') {
+  const mainland = getCompositeMainland(projection);
+  if (!mainland || typeof projection !== 'function') {
     return null;
   }
 
-  const mainland =
-    entries.find((entry) => entry.id === 'mainland') ?? entries[0];
-  const bounds = mainland?.bounds;
+  const bounds = mainland.bounds;
   if (!Array.isArray(bounds) || bounds.length < 4) {
     return null;
   }

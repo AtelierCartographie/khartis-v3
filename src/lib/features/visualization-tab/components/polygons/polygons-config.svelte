@@ -21,6 +21,7 @@
   import FillSection from '../shared/fill-section.svelte';
   import { StrokeSection, VizFilterButton, VizFilterPanel } from '../shared';
   import type { VizDataFilter } from '$lib/features/commons/stores/visualization.store.svelte';
+  import type { FilterStats } from '$lib/features/duckdb';
   import DiscretizationModal from '../discretization/discretization-modal.svelte';
   import type { ClassificationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
   import { resolveDiscretizationLabel } from '../discretization/discretization.utils';
@@ -67,6 +68,7 @@
     onStrokeInvertPalette?: () => void;
     onToggleVisibility?: (checked: boolean) => void;
     filters?: VizDataFilter[];
+    filterStats?: FilterStats;
     onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
     onUpdateFilter?: (
       filterId: string,
@@ -92,6 +94,7 @@
     onStrokeInvertPalette,
     onToggleVisibility,
     filters = [],
+    filterStats,
     onAddFilter,
     onUpdateFilter,
     onRemoveFilter,
@@ -171,20 +174,18 @@
       DEFAULT_COLORS.fill;
     fillMode =
       polygonConfig?.fillMode ?? visualization?.modes?.fill ?? FillMode.UNIQUE;
-    if (visualization?.missingData) {
-      showMissingData = visualization.missingData.show ?? true;
-      missingDataColor =
-        visualization.missingData.color ?? DEFAULT_COLORS.missingData;
-      missingDataPattern = visualization.missingData.pattern ?? false;
+    const missingData =
+      polygonConfig?.missingData ?? visualization?.missingData;
+    if (missingData) {
+      showMissingData = missingData.show ?? true;
+      missingDataColor = missingData.color ?? DEFAULT_COLORS.missingData;
+      missingDataPattern = missingData.pattern ?? false;
       missingDataPatternConfig =
-        visualization.missingData.patternConfig ??
+        missingData.patternConfig ??
         patternPaletteFromLegacy(
-          visualization.missingData.patternId ??
-            mapPatternTypeToPatternId(
-              visualization.missingData.patternType,
-              'diagonal'
-            ),
-          visualization.missingData.patternParams
+          missingData.patternId ??
+            mapPatternTypeToPatternId(missingData.patternType, 'diagonal'),
+          missingData.patternParams
         ) ??
         DEFAULT_MISSING_DATA_PATTERN_CONFIG;
     }
@@ -447,6 +448,7 @@
     title={m.polygons_title()}
     dataFields={dataFields}
     filters={filters}
+    stats={filterStats}
     onAddFilter={onAddFilter ?? (() => {})}
     onUpdateFilter={onUpdateFilter}
     onRemoveFilter={onRemoveFilter ?? (() => {})}

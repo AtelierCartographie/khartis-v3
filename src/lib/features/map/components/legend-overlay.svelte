@@ -21,8 +21,11 @@
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import {
     PAGE_GRID_SIZE_PX,
+    clampPointToBounds,
     getDragBounds,
-    snapPointWithinBounds
+    snapPointWithinBounds,
+    type PageGridPoint,
+    type PageGridSize
   } from '$lib/features/commons/utils/page-grid.utils';
   import {
     getElementCenteringDelta,
@@ -38,6 +41,7 @@
     legendActions,
     selectRenderedLegendItems
   } from '$lib/features/step-toolbar/tools/legend';
+  import type { LegendItem } from '$lib/features/step-toolbar/types/legend.types';
   import {
     getFormatLayoutSizingContext,
     getFormatState
@@ -61,6 +65,14 @@
     inline?: boolean;
     sizeScale?: number;
   } = $props();
+
+  const LEGEND_ANCHOR_MARGIN_PX = 12;
+
+  interface FrameMeasure {
+    item: LegendItem;
+    width: number;
+    height: number;
+  }
 
   const legendState = $derived(getLegendState());
   const formatState = $derived(getFormatState());
@@ -112,6 +124,9 @@
   const layoutTokens = $derived.by(() =>
     resolveLayoutSizingTokens(getFormatLayoutSizingContext(formatState))
   );
+  const stackGap = $derived(
+    Math.max(8, Math.round(layoutTokens.legend.fontSize * 0.7))
+  );
 
   function getPositionClass(position: LegendPosition): string {
     switch (position) {
@@ -130,77 +145,18 @@
     }
   }
 
-  const positionClass = $derived.by(() => {
-    if (inline || legendState.dragPosition) {
+  function getFramePosition(item: LegendItem): PageGridPoint | null {
+    if (inline) {
+      return null;
+    }
+    return item.dragPosition ?? autoPositions[item.id] ?? null;
+  }
+
+  function getFrameAnchorClass(item: LegendItem): string {
+    if (getFramePosition(item)) {
       return '';
     }
     return getPositionClass(legendState.position);
-  });
-
-  const containerStyle = $derived.by(() => {
-    const scale =
-      getPageScale() * (inline ? Math.max(0, Math.min(1, sizeScale)) : 1);
-    const hasBackground = legendState.style.background.enabled;
-    const shellPaddingInline = hasBackground
-      ? Math.max(4, Math.round(layoutTokens.legend.paddingInline * 0.35))
-      : 0;
-    const shellPaddingBlock = hasBackground
-      ? Math.max(3, Math.round(layoutTokens.legend.paddingBlock * 0.35))
-      : 0;
-    const transform =
-      !inline &&
-      !legendState.dragPosition &&
-      legendState.position === LegendPosition.BOTTOM_CENTER
-        ? `translateX(-50%) scale(${scale})`
-        : `scale(${scale})`;
-    const legendFontSize = clampFontSize(
-      legendState.style.fontSize,
-      layoutTokens.legend.fontSize
-    );
-    const styles: string[] = [
-      `--legend-page-scale: ${scale}`,
-      `--legend-padding-inline: ${shellPaddingInline}px`,
-      `--legend-padding-block: ${shellPaddingBlock}px`,
-      `--legend-item-gap: ${Math.max(8, Math.round(layoutTokens.legend.fontSize * 0.7))}px`,
-      `font-family: ${resolveFontFamilyStack(legendState.style.fontFamily)}`,
-      `font-size: ${legendFontSize}px`,
-      `color: ${textHex}`,
-      'border-radius: 0px',
-      `transform: ${transform}`,
-      `transform-origin: ${inline ? 'bottom right' : getLegendTransformOrigin(legendState.position, Boolean(legendState.dragPosition))}`
-    ];
-
-    if (hasBackground) {
-      styles.push(`background-color: ${bgHsl}`);
-      styles.push('box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15)');
-    } else {
-      styles.push('background-color: transparent');
-      styles.push('box-shadow: none');
-    }
-
-    if (!inline && legendState.dragPosition) {
-      styles.push(`left: ${legendState.dragPosition.x * scale}px`);
-      styles.push(`top: ${legendState.dragPosition.y * scale}px`);
-    }
-
-    return styles.join('; ');
-  });
-
-  let overlayElement = $state<HTMLDivElement | null>(null);
-  let legendElement = $state<HTMLDivElement | null>(null);
-  let isDragging = $state(false);
-  let isLegendCentered = $state(false);
-
-  function getPageScale(): number {
-    return pageScale;
-  }
-
-  function getKeyboardMoveStep(): number {
-    return formatState.gridEnabled ? PAGE_GRID_SIZE_PX : 1;
-  }
-
-  function getKeyboardFastMoveStep(): number {
-    return formatState.gridEnabled ? PAGE_GRID_SIZE_PX * 5 : 10;
   }
 
   function getLegendTransformOrigin(
@@ -226,7 +182,75 @@
     }
   }
 
-  function getOverlaySize(): { width: number; height: number } | null {
+  function getFrameStyle(item: LegendItem): string {
+    const scale =
+      getPageScale() * (inline ? Math.max(0, Math.min(1, sizeScale)) : 1);
+    const hasBackground = legendState.style.background.enabled;
+    const shellPaddingInline = hasBackground
+      ? Math.max(4, Math.round(layoutTokens.legend.paddingInline * 0.35))
+      : 0;
+    const shellPaddingBlock = hasBackground
+      ? Math.max(3, Math.round(layoutTokens.legend.paddingBlock * 0.35))
+      : 0;
+    const position = getFramePosition(item);
+    const transform =
+      !inline &&
+      !position &&
+      legendState.position === LegendPosition.BOTTOM_CENTER
+        ? `translateX(-50%) scale(${scale})`
+        : `scale(${scale})`;
+    const legendFontSize = clampFontSize(
+      legendState.style.fontSize,
+      layoutTokens.legend.fontSize
+    );
+    const styles: string[] = [
+      `--legend-page-scale: ${scale}`,
+      `--legend-padding-inline: ${shellPaddingInline}px`,
+      `--legend-padding-block: ${shellPaddingBlock}px`,
+      `--legend-item-gap: ${stackGap}px`,
+      `font-family: ${resolveFontFamilyStack(legendState.style.fontFamily)}`,
+      `font-size: ${legendFontSize}px`,
+      `color: ${textHex}`,
+      'border-radius: 0px',
+      `transform: ${transform}`,
+      `transform-origin: ${inline ? 'bottom right' : getLegendTransformOrigin(legendState.position, Boolean(position))}`
+    ];
+
+    if (hasBackground) {
+      styles.push(`background-color: ${bgHsl}`);
+      styles.push('box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15)');
+    } else {
+      styles.push('background-color: transparent');
+      styles.push('box-shadow: none');
+    }
+
+    if (position) {
+      styles.push(`left: ${position.x * scale}px`);
+      styles.push(`top: ${position.y * scale}px`);
+    }
+
+    return styles.join('; ');
+  }
+
+  let overlayElement = $state<HTMLDivElement | null>(null);
+  let frameElements = $state<Record<string, HTMLDivElement | null>>({});
+  let autoPositions = $state<Record<string, PageGridPoint>>({});
+  let draggingItemId = $state<string | null>(null);
+  let centeredItemId = $state<string | null>(null);
+
+  function getPageScale(): number {
+    return pageScale;
+  }
+
+  function getKeyboardMoveStep(): number {
+    return formatState.gridEnabled ? PAGE_GRID_SIZE_PX : 1;
+  }
+
+  function getKeyboardFastMoveStep(): number {
+    return formatState.gridEnabled ? PAGE_GRID_SIZE_PX * 5 : 10;
+  }
+
+  function getOverlaySize(): PageGridSize | null {
     if (!overlayElement) {
       return null;
     }
@@ -237,52 +261,171 @@
     };
   }
 
-  function getLegendSize(): { width: number; height: number } | null {
-    if (!legendElement) {
+  function getFrameSize(itemId: string): PageGridSize | null {
+    const element = frameElements[itemId];
+    if (!element) {
       return null;
     }
 
     return {
-      width: legendElement.offsetWidth,
-      height: legendElement.offsetHeight
+      width: element.offsetWidth,
+      height: element.offsetHeight
     };
   }
 
-  function getLegendKeyboardPosition(): { x: number; y: number } | null {
-    if (legendState.dragPosition) {
-      return legendState.dragPosition;
-    }
-
-    if (!overlayElement || !legendElement) {
+  function getMeasuredFramePosition(itemId: string): PageGridPoint | null {
+    const element = frameElements[itemId];
+    if (!overlayElement || !element) {
       return null;
     }
 
     const scale = getPageScale();
     const overlayRect = overlayElement.getBoundingClientRect();
-    const legendRect = legendElement.getBoundingClientRect();
+    const frameRect = element.getBoundingClientRect();
 
     return {
-      x: (legendRect.left - overlayRect.left) / scale,
-      y: (legendRect.top - overlayRect.top) / scale
+      x: (frameRect.left - overlayRect.left) / scale,
+      y: (frameRect.top - overlayRect.top) / scale
     };
   }
 
-  function normalizeLegendDragPosition(
-    position: { x: number; y: number },
+  function normalizeFramePosition(
+    itemId: string,
+    position: PageGridPoint,
     snapEnabled = formatState.gridEnabled
-  ): { x: number; y: number } {
+  ): PageGridPoint {
     const overlaySize = getOverlaySize();
-    const legendSize = getLegendSize();
+    const frameSize = getFrameSize(itemId);
 
-    if (!overlaySize || !legendSize) {
+    if (!overlaySize || !frameSize) {
       return position;
     }
 
     return snapPointWithinBounds(
       position,
-      getDragBounds(overlaySize, legendSize),
+      getDragBounds(overlaySize, frameSize),
       snapEnabled
     );
+  }
+
+  function measureFrames(items: LegendItem[]): FrameMeasure[] | null {
+    const measures: FrameMeasure[] = [];
+
+    for (const item of items) {
+      const size = getFrameSize(item.id);
+      if (!size || size.width <= 0 || size.height <= 0) {
+        return null;
+      }
+      measures.push({ item, width: size.width, height: size.height });
+    }
+
+    return measures;
+  }
+
+  function getAnchoredFrameX(frameWidth: number, overlayWidth: number): number {
+    switch (legendState.position) {
+      case LegendPosition.TOP_LEFT:
+      case LegendPosition.BOTTOM_LEFT:
+        return LEGEND_ANCHOR_MARGIN_PX;
+      case LegendPosition.BOTTOM_CENTER:
+        return (overlayWidth - frameWidth) / 2;
+      default:
+        return overlayWidth - frameWidth - LEGEND_ANCHOR_MARGIN_PX;
+    }
+  }
+
+  function stacksFromBottom(): boolean {
+    return (
+      legendState.position === LegendPosition.BOTTOM_LEFT ||
+      legendState.position === LegendPosition.BOTTOM_RIGHT ||
+      legendState.position === LegendPosition.BOTTOM_CENTER
+    );
+  }
+
+  function getStackedFramePositions(
+    measures: FrameMeasure[],
+    overlaySize: PageGridSize
+  ): Record<string, PageGridPoint> {
+    const totalHeight =
+      measures.reduce((sum, measure) => sum + measure.height, 0) +
+      stackGap * Math.max(0, measures.length - 1);
+    // A legend saved before frames were split positioned the whole stack, so
+    // its origin still anchors the frames it used to contain.
+    const legacyOrigin = legendState.dragPosition;
+    const positions: Record<string, PageGridPoint> = {};
+    let y = legacyOrigin
+      ? legacyOrigin.y
+      : stacksFromBottom()
+        ? overlaySize.height - LEGEND_ANCHOR_MARGIN_PX - totalHeight
+        : LEGEND_ANCHOR_MARGIN_PX;
+
+    for (const measure of measures) {
+      positions[measure.item.id] = clampPointToBounds(
+        {
+          x: legacyOrigin
+            ? legacyOrigin.x
+            : getAnchoredFrameX(measure.width, overlaySize.width),
+          y
+        },
+        getDragBounds(overlaySize, {
+          width: measure.width,
+          height: measure.height
+        })
+      );
+      y += measure.height + stackGap;
+    }
+
+    return positions;
+  }
+
+  function areFramePositionsEqual(
+    left: Record<string, PageGridPoint>,
+    right: Record<string, PageGridPoint>
+  ): boolean {
+    const keys = Object.keys(left);
+    return (
+      keys.length === Object.keys(right).length &&
+      keys.every((key) =>
+        areDraggablePageItemPointsEqual(left[key], right[key] ?? null)
+      )
+    );
+  }
+
+  function resolveAutoPositions(): void {
+    const overlaySize = getOverlaySize();
+    if (!overlaySize || overlaySize.width <= 0 || overlaySize.height <= 0) {
+      return;
+    }
+
+    const measures = measureFrames(
+      visibleItems.filter((item) => !item.dragPosition)
+    );
+    if (!measures) {
+      return;
+    }
+
+    const stacked = getStackedFramePositions(measures, overlaySize);
+    if (!untrack(() => areFramePositionsEqual(stacked, autoPositions))) {
+      autoPositions = stacked;
+    }
+  }
+
+  function reclampDraggedFrames(snapEnabled: boolean): void {
+    for (const item of visibleItems) {
+      if (!item.dragPosition) {
+        continue;
+      }
+
+      const normalized = normalizeFramePosition(
+        item.id,
+        item.dragPosition,
+        snapEnabled
+      );
+
+      if (!areDraggablePageItemPointsEqual(normalized, item.dragPosition)) {
+        legendActions.updateLegendItem(item.id, { dragPosition: normalized });
+      }
+    }
   }
 
   $effect(() => {
@@ -293,74 +436,117 @@
     void formatState.margins.bottom;
     void formatState.margins.left;
     void legendState.items;
+    void legendState.position;
+    void visualizationStore.version;
+    void getLocale();
     void legendState.style.fontFamily;
     void legendState.style.fontSize;
     void legendState.style.background.enabled;
 
-    if (isDragging || !legendState.dragPosition) {
+    if (inline) {
       return;
     }
 
-    const normalizedPosition = normalizeLegendDragPosition(
-      legendState.dragPosition,
-      untrack(() => formatState.gridEnabled)
-    );
+    resolveAutoPositions();
 
-    if (
-      !areDraggablePageItemPointsEqual(
-        normalizedPosition,
-        legendState.dragPosition
-      )
-    ) {
-      legendActions.setDragPosition(normalizedPosition);
+    if (draggingItemId) {
+      return;
     }
+
+    reclampDraggedFrames(untrack(() => formatState.gridEnabled));
+  });
+
+  // Legend content keeps growing with fonts, breaks, and categories after the
+  // stores settle, so the default stack has to follow the rendered boxes.
+  $effect(() => {
+    if (inline || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const observed = [
+      overlayElement,
+      ...visibleItems.map((item) => frameElements[item.id])
+    ].filter((element): element is HTMLDivElement => Boolean(element));
+
+    if (observed.length === 0) {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => resolveAutoPositions());
+    for (const element of observed) {
+      observer.observe(element);
+    }
+
+    return () => observer.disconnect();
   });
 
   const legendDragController = createDraggablePageItemController({
     getOverlayElement: () => overlayElement,
     getPageScale,
-    getCurrentPosition: () => legendState.dragPosition,
-    normalizePosition: normalizeLegendDragPosition,
-    setPosition: (position) => legendActions.setDragPosition(position),
+    getCurrentPosition: () => {
+      const item = draggingItemId ? findItem(draggingItemId) : undefined;
+      return item ? getFramePosition(item) : null;
+    },
+    normalizePosition: (position) =>
+      draggingItemId
+        ? normalizeFramePosition(draggingItemId, position)
+        : position,
+    setPosition: (position) => {
+      if (draggingItemId) {
+        legendActions.updateLegendItem(draggingItemId, {
+          dragPosition: position
+        });
+      }
+    },
     onDraggingChange: (active) => {
-      isDragging = active;
+      if (!active) {
+        draggingItemId = null;
+      }
     }
   });
+
+  function findItem(itemId: string): LegendItem | undefined {
+    return legendState.items.find((item) => item.id === itemId);
+  }
 
   function stopDragging(): void {
     legendDragController.stop();
   }
 
-  function handleLegendPointerDown(event: PointerEvent): void {
+  function handleFramePointerDown(event: PointerEvent, item: LegendItem): void {
     if (!isLegendActive) {
       return;
     }
 
-    if (!overlayElement || !legendElement) {
+    const element = frameElements[item.id];
+    if (!overlayElement || !element) {
       return;
     }
 
     event.preventDefault();
     event.stopPropagation();
 
-    legendDragController.start({
-      event,
-      itemElement: legendElement
-    });
+    draggingItemId = item.id;
+
+    if (!legendDragController.start({ event, itemElement: element })) {
+      draggingItemId = null;
+    }
   }
 
-  function handleLegendClick(event: MouseEvent | KeyboardEvent): void {
+  function handleFrameClick(event: MouseEvent | KeyboardEvent): void {
     event.stopPropagation();
     legendActions.markAsOpened();
     activateStylingToolFromMap(StylingTools.Legend);
   }
 
-  function centerLegendInViewport(target: EventTarget | null): void {
-    const targetElement =
-      target instanceof HTMLElement ? target : legendElement;
+  function centerFrameInViewport(target: EventTarget | null): void {
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
     const delta = getElementCenteringDelta(
       getFocusViewportElement(overlayElement),
-      targetElement
+      target
     );
 
     if (!delta) {
@@ -374,18 +560,18 @@
     globalActions.panPageBy(delta.x, delta.y);
   }
 
-  function resetLegendCentering(): void {
-    if (!isLegendCentered) {
+  function resetFrameCentering(): void {
+    if (!centeredItemId) {
       return;
     }
 
-    isLegendCentered = false;
+    centeredItemId = null;
     globalActions.resetPagePan();
   }
 
-  function handleLegendFocusClick(event: MouseEvent): void {
-    handleLegendClick(event);
-    isLegendCentered = true;
+  function handleFrameFocusClick(event: MouseEvent, item: LegendItem): void {
+    handleFrameClick(event);
+    centeredItemId = item.id;
 
     const currentTarget = event.currentTarget;
     if (currentTarget instanceof HTMLElement) {
@@ -393,15 +579,18 @@
     }
 
     void tick().then(() => {
-      centerLegendInViewport(currentTarget);
+      centerFrameInViewport(currentTarget);
     });
   }
 
-  function handleLegendBlur(): void {
-    resetLegendCentering();
+  function handleFrameBlur(): void {
+    resetFrameCentering();
   }
 
-  function moveLegendWithKeyboard(event: KeyboardEvent): boolean {
+  function moveFrameWithKeyboard(
+    event: KeyboardEvent,
+    item: LegendItem
+  ): boolean {
     const delta = getKeyboardMoveDelta(
       event,
       getKeyboardMoveStep(),
@@ -411,24 +600,25 @@
       return false;
     }
 
-    const currentPosition = getLegendKeyboardPosition();
+    const currentPosition =
+      getFramePosition(item) ?? getMeasuredFramePosition(item.id);
     if (!currentPosition) {
       return false;
     }
 
     event.preventDefault();
-    handleLegendClick(event);
-    legendActions.setDragPosition(
-      normalizeLegendDragPosition({
+    handleFrameClick(event);
+    legendActions.updateLegendItem(item.id, {
+      dragPosition: normalizeFramePosition(item.id, {
         x: currentPosition.x + delta.x,
         y: currentPosition.y + delta.y
       })
-    );
+    });
     return true;
   }
 
-  function handleLegendKeyDown(event: KeyboardEvent): void {
-    if (moveLegendWithKeyboard(event)) {
+  function handleFrameKeyDown(event: KeyboardEvent, item: LegendItem): void {
+    if (moveFrameWithKeyboard(event, item)) {
       return;
     }
 
@@ -437,30 +627,30 @@
     }
 
     event.preventDefault();
-    handleLegendClick(event);
-    isLegendCentered = true;
+    handleFrameClick(event);
+    centeredItemId = item.id;
     void tick().then(() => {
-      centerLegendInViewport(event.currentTarget);
+      centerFrameInViewport(event.currentTarget);
     });
   }
 
   $effect(() => {
-    if (!isLegendCentered) {
+    if (!centeredItemId) {
       return;
     }
 
     if (hidden || !legendState.visible || visibleItems.length === 0) {
-      resetLegendCentering();
+      resetFrameCentering();
       return;
     }
 
     if (!isLegendActive) {
-      resetLegendCentering();
+      resetFrameCentering();
     }
   });
 
   onDestroy(() => {
-    isLegendCentered = false;
+    centeredItemId = null;
     stopDragging();
   });
 </script>
@@ -472,28 +662,25 @@
     class:inline={inline}
     bind:this={overlayElement}
   >
-    <div
-      bind:this={legendElement}
-      class="legend-container {positionClass}"
-      class:draggable={isLegendActive}
-      class:dragging={isDragging}
-      data-workspace-pan-ignore="true"
-      style={containerStyle}
-      role="button"
-      tabindex="0"
-      aria-label={m.tool_legend()}
-      ondblclick={handleLegendFocusClick}
-      onblur={handleLegendBlur}
-      onkeydown={handleLegendKeyDown}
-      onpointerdown={handleLegendPointerDown}
-    >
-      {#each visibleItems as item (item.id)}
-        {@const viz = vizByItemId.get(item.id)}
-        {@const legendSegments = getLegendSegments(
-          item,
-          viz,
-          legendState.style
-        )}
+    {#each visibleItems as item (item.id)}
+      {@const viz = vizByItemId.get(item.id)}
+      {@const legendSegments = getLegendSegments(item, viz, legendState.style)}
+      <div
+        bind:this={frameElements[item.id]}
+        class="legend-container {getFrameAnchorClass(item)}"
+        class:draggable={isLegendActive}
+        class:dragging={draggingItemId === item.id}
+        data-workspace-pan-ignore="true"
+        style={getFrameStyle(item)}
+        role="button"
+        tabindex="0"
+        aria-label={m.legend_frame_label({ name: item.title || item.name })}
+        ondblclick={(event: MouseEvent) => handleFrameFocusClick(event, item)}
+        onblur={handleFrameBlur}
+        onkeydown={(event: KeyboardEvent) => handleFrameKeyDown(event, item)}
+        onpointerdown={(event: PointerEvent) =>
+          handleFramePointerDown(event, item)}
+      >
         <div class="legend-item">
           {#if legendSegments.length > 0}
             {#each legendSegments as segment (segment.key)}
@@ -517,8 +704,8 @@
             {/if}
           {/if}
         </div>
-      {/each}
-    </div>
+      </div>
+    {/each}
   </div>
 {/if}
 
@@ -547,12 +734,16 @@
   .legend-overlay.inline {
     position: absolute;
     inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: flex-end;
+    gap: 4px;
+    padding: 6px;
   }
 
   .legend-overlay.inline .legend-container {
-    position: absolute;
-    right: 6px;
-    bottom: 6px;
+    position: relative;
     cursor: default;
     pointer-events: none;
   }
@@ -570,6 +761,9 @@
     padding: var(--legend-padding-block) var(--legend-padding-inline);
     border-radius: 0;
     box-shadow: none;
+    /* Positioning a frame by `left` alone would let the page edge re-wrap it
+       narrower than the width its placement was measured on. */
+    width: max-content;
     max-width: 90%;
     overflow-wrap: anywhere;
     pointer-events: auto;
@@ -619,13 +813,6 @@
 
   .legend-item {
     min-width: 0;
-    padding-bottom: var(--legend-item-gap);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  }
-
-  .legend-item:last-child {
-    padding-bottom: 0;
-    border-bottom: none;
   }
 
   .legend-title {

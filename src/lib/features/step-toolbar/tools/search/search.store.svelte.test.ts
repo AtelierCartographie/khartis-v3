@@ -170,21 +170,17 @@ describe('search store tooltip integration', () => {
     );
   });
 
-  it('delegates centering to the row-centering helper when navigating to a result', async () => {
+  it('leaves the map view untouched when navigating to a result', async () => {
     const { searchActions } = await import('./search.store.svelte');
 
     searchActions.clearSearch();
 
     searchActions.setSearchValue('Braunschweig');
     await searchActions.performSearch();
+    searchActions.goToNextResult();
 
-    expect(mocks.centerMapOnTableRow).toHaveBeenCalledWith({
-      tableName: 'nuts2_table',
-      rowId: 55,
-      sourceFileId: 'source-1',
-      joinedBasemap: undefined,
-      gpsColumns: undefined
-    });
+    expect(mocks.setHighlightedRows).toHaveBeenCalledWith([55]);
+    expect(mocks.centerMapOnTableRow).not.toHaveBeenCalled();
   });
 
   it('projects HTML-like values to plain text in results and pinned tooltips', async () => {
@@ -236,7 +232,7 @@ describe('search store tooltip integration', () => {
     );
   });
 
-  it('passes joined basemap metadata through to the centering helper for joined CSV data', async () => {
+  it('leaves the map view untouched for joined CSV data too', async () => {
     mocks.getDatasetBySourceFile.mockReturnValue({
       tableName: 'nuts2_table',
       joinedBasemap: 'europe-nuts2'
@@ -249,13 +245,7 @@ describe('search store tooltip integration', () => {
     searchActions.setSearchValue('Braunschweig');
     await searchActions.performSearch();
 
-    expect(mocks.centerMapOnTableRow).toHaveBeenCalledWith({
-      tableName: 'nuts2_table',
-      rowId: 55,
-      sourceFileId: 'source-1',
-      joinedBasemap: 'europe-nuts2',
-      gpsColumns: undefined
-    });
+    expect(mocks.centerMapOnTableRow).not.toHaveBeenCalled();
   });
 
   it('excludes joined basemap columns (basemap_id, basemap_label, typo_match) from results', async () => {

@@ -27,6 +27,8 @@
   import { resolveTiledStyleFromToggle } from '../services/tiled-basemap-selection.service';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
   import { resolveActiveBasemapMetadata } from '$lib/features/map/utils/basemap-metadata-resolution.utils';
+  import { getBasemapPanelRank } from '$lib/features/map/utils/layer-panel-row.utils';
+  import { isGlobalBbox } from '$lib/features/commons/utils/projection.utils';
   import { getBasemapAuxLayerDefaultVisibility } from '$lib/features/map/utils/basemap-aux-layer-visibility.utils';
   import type { BasemapLayer } from '$lib/features/map/types/basemap.types';
   import type { BasemapLayerId } from '$lib/features/map/stores/basemap-layers.store.svelte';
@@ -95,8 +97,6 @@
         return isCustom ? null : 'villes';
       case BasemapLayerType.GRATICULE:
         return 'meridiens';
-      case BasemapLayerType.GEOGRAPHIC_LINES:
-        return 'equateur';
       case BasemapLayerType.POLYGON:
         // Custom polygons are territory geometry; catalog polygons map to Mers.
         return isCustom ? 'terre' : 'mers';
@@ -110,20 +110,19 @@
     }
   }
 
-  const sphereSyntheticLayer: BasemapLayer = {
-    title_fr: m.basemap_layer_sphere({}, { locale: 'fr' }),
-    title_en: m.basemap_layer_sphere({}, { locale: 'en' }),
-    type: BasemapLayerType.SPHERE,
-    file: SYNTHETIC_AUX_LAYER_KEY.SPHERE,
-    style: null
-  };
-  const oceanSyntheticLayer: BasemapLayer = {
-    title_fr: m.basemap_layer_mers({}, { locale: 'fr' }),
-    title_en: m.basemap_layer_mers({}, { locale: 'en' }),
+  // A user-imported geometry has no sea context, and its extent contour would
+  // deform on reprojection, so the layer is a plain background there.
+  const oceanSyntheticLayer = $derived<BasemapLayer>({
+    title_fr: isCustomBasemap
+      ? m.basemap_layer_background({}, { locale: 'fr' })
+      : m.basemap_layer_mers({}, { locale: 'fr' }),
+    title_en: isCustomBasemap
+      ? m.basemap_layer_background({}, { locale: 'en' })
+      : m.basemap_layer_mers({}, { locale: 'en' }),
     type: BasemapLayerType.POLYGON,
     file: SYNTHETIC_AUX_LAYER_KEY.MERS,
     style: null
-  };
+  });
 
   interface LayerEntry {
     layer: BasemapLayer;
@@ -139,11 +138,6 @@
     return true;
   }
 
-  // The sphere toggle renders only for simple projections with a single outline.
-  const supportsProjectionSphere = $derived(
-    currentMetadata?.proj_to?.type === 'simple'
-  );
-
   const layerEntries = $derived.by<LayerEntry[]>(() => {
     const metadata = currentMetadata;
     if (!metadata) return [];
@@ -154,20 +148,9 @@
         sharedLegacyId: 'mers',
         instanceIndex: 0,
         defaultVisible: true
-      },
-      ...(supportsProjectionSphere
-        ? [
-            {
-              layer: sphereSyntheticLayer,
-              sharedLegacyId: 'sphere' as BasemapLayerId,
-              instanceIndex: 0,
-              defaultVisible: true
-            }
-          ]
-        : [])
+      }
     ];
     typeCounters.set(BasemapLayerType.POLYGON, 1);
-    typeCounters.set(BasemapLayerType.SPHERE, 1);
     for (const layer of metadata.layers) {
       if (!isSection3RenderableType(layer.type)) continue;
       const count = typeCounters.get(layer.type) ?? 0;
@@ -186,7 +169,22 @@
         )
       });
     }
-    return entries;
+
+    // Listed the way the map stacks them, so Mers/Océans closes the list.
+    return entries
+      .map((entry, index) => ({ entry, index }))
+      .sort(
+        (a, b) =>
+          getBasemapPanelRank(
+            a.entry.sharedLegacyId ?? undefined,
+            basemapLayersStore.layers
+          ) -
+            getBasemapPanelRank(
+              b.entry.sharedLegacyId ?? undefined,
+              basemapLayersStore.layers
+            ) || a.index - b.index
+      )
+      .map(({ entry }) => entry);
   });
 
   const availableMetadataLayerTypes = $derived.by(
@@ -226,6 +224,10 @@
   );
   const supportsRemarkableGraticule = $derived(
     availableMetadataLayerTypes.has(BasemapLayerType.GEOGRAPHIC_LINES)
+  );
+  // The equator graticule mode is only meaningful on a whole-world extent.
+  const supportsEquatorGraticule = $derived(
+    currentMetadata?.bbox ? isGlobalBbox(currentMetadata.bbox) : false
   );
 
   function getLayerVisibility(layerId: BasemapLayerId): boolean {
@@ -319,11 +321,12 @@
 <section id="customize-basemap">
   <MainToolBarHeader title={m.step3_title()} icon={PaintBrush} showDivider />
 
-  {#if !isTiledBasemapEnabled && !currentMetadata}
-    <div class="content-area">
+  <div class="content-area">
+    <p class="kh-help">{m.step3_helper()}</p>
+    {#if !isTiledBasemapEnabled && !currentMetadata}
       <p class="kh-help">{m.step3_description()}</p>
-    </div>
-  {/if}
+    {/if}
+  </div>
 
   <div
     class="layers-list"
@@ -338,6 +341,8 @@
           instanceIndex={entry.instanceIndex}
           defaultVisible={entry.defaultVisible}
           allowRemarkable={supportsRemarkableGraticule}
+          allowEquator={supportsEquatorGraticule}
+          allowSphereOutline={!isCustomBasemap}
         />
       {/each}
     {/if}
@@ -368,6 +373,9 @@
   }
 
   .content-area {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
     padding: 16px 16px 8px 16px;
   }
 

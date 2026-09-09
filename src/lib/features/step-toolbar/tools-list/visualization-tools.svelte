@@ -14,6 +14,7 @@
   import { selectTool } from './tool-list.utils.svelte';
   import ToolsListContainer from './tools-list-container.svelte';
   import { STORAGE_KEYS, CSS_CLASSES } from '../step-toolbar.constants';
+  import { untrack } from 'svelte';
   import { facetsStore } from '../tools/facets';
 
   let hasOpenedProjectionTool = $state(
@@ -21,14 +22,23 @@
       localStorage.getItem(STORAGE_KEYS.PROJECTION_TOOL_OPENED) ===
         STORAGE_KEYS.STORAGE_VALUE_OPENED
   );
-  let hasOpenedFacetsTool = $state(
+  let facetsBadgeSeen = $state(
     typeof window !== 'undefined' &&
       localStorage.getItem(STORAGE_KEYS.FACETS_TOOL_OPENED) ===
         STORAGE_KEYS.STORAGE_VALUE_OPENED
   );
+  let collectionWasEnabled = $state(facetsStore.enabled);
+
+  $effect(() => {
+    const isEnabled = facetsStore.enabled;
+    if (isEnabled && !untrack(() => collectionWasEnabled)) {
+      facetsBadgeSeen = false;
+    }
+    collectionWasEnabled = isEnabled;
+  });
 
   const showProjectionBadge = $derived(!hasOpenedProjectionTool);
-  const showFacetsBadge = $derived(!hasOpenedFacetsTool || facetsStore.enabled);
+  const showFacetsBadge = $derived(!facetsBadgeSeen);
 
   function handleProjectionClick() {
     hasOpenedProjectionTool = true;
@@ -42,7 +52,7 @@
   }
 
   function handleFacetsClick() {
-    hasOpenedFacetsTool = true;
+    facetsBadgeSeen = true;
     if (typeof window !== 'undefined') {
       localStorage.setItem(
         STORAGE_KEYS.FACETS_TOOL_OPENED,

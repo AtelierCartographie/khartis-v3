@@ -12,6 +12,7 @@
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { useDatasetAnalysis } from '../hooks/use-dataset-analysis.svelte';
   import { useDataFilters } from '../hooks/use-data-filters.svelte';
+  import { usePrimitiveFilterStats } from '../hooks/use-primitive-filter-stats.svelte';
   import { usePrimitiveVisibility } from '../hooks/use-primitive-visibility.svelte';
   import { SettingsAdjust } from 'carbon-icons-svelte';
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
@@ -79,7 +80,8 @@
   const classificationBreaks = useClassificationBreaksController({
     resolveDatasetSourceFileId: (datasetId) =>
       datasetsStore.datasets.find((dataset) => dataset.id === datasetId)
-        ?.sourceFileId
+        ?.sourceFileId,
+    getVisualization: () => selectedViz
   });
 
   const datasetAnalysis = useDatasetAnalysis({
@@ -391,6 +393,13 @@
     getSelectedVisualization: () => selectedViz
   });
 
+  const primitiveFilterStats = usePrimitiveFilterStats({
+    getSelectedVisualization: () => selectedViz,
+    resolveDatasetSourceFileId: (datasetId) =>
+      datasetsStore.datasets.find((dataset) => dataset.id === datasetId)
+        ?.sourceFileId
+  });
+
   const filtersByPrimitive = $derived.by(() => {
     const filters = selectedViz?.dataFilters ?? [];
     return {
@@ -661,6 +670,9 @@
       fillVisualization={symbolFillVisualization}
       disabled={!showsSymbolsConfig}
       filters={filtersByPrimitive[PrimitiveFilterType.POINT]}
+      filterStats={primitiveFilterStats.getStatsForPrimitive(
+        PrimitiveFilterType.POINT
+      )}
       onStyleChange={handleSymbolStyleChange}
       onModesChange={handleSymbolModesChange}
       onSymbolsChange={handleSymbolsChange}
@@ -691,6 +703,9 @@
       visualization={polygonVisualization}
       disabled={!showsPolygonsConfig}
       filters={filtersByPrimitive[PrimitiveFilterType.POLYGON]}
+      filterStats={primitiveFilterStats.getStatsForPrimitive(
+        PrimitiveFilterType.POLYGON
+      )}
       onStyleChange={handlePolygonStyleChange}
       onModesChange={handlePolygonModesChange}
       onDensityChange={handlePolygonDensityChange}
@@ -735,6 +750,9 @@
       backgroundVisualization={textBackgroundVisualization}
       disabled={!hasGeometry}
       filters={filtersByPrimitive[PrimitiveFilterType.TEXT]}
+      filterStats={primitiveFilterStats.getStatsForPrimitive(
+        PrimitiveFilterType.TEXT
+      )}
       onStyleChange={handleTextStyleChange}
       onModesChange={handleTextModesChange}
       onMissingDataChange={handleTextMissingDataChange}

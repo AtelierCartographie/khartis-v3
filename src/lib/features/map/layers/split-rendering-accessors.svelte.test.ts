@@ -5,6 +5,7 @@ import {
   INTERNAL_COLUMN,
   JOINED_BASEMAP_COLUMN
 } from '$lib/features/commons/constants/data.constants';
+import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
 import type { LayerContext } from '../types';
 import {
   buildSplitDatasetRowMapping,
@@ -13,8 +14,10 @@ import {
   createSplitGeoJsonFeatureAccessor,
   createSplitGeoJsonNullableFeatureAccessor,
   getSplitMatchedGeometryRowIndices,
+  hasJoinedBasemapKey,
   resolveBestSplitFeatureIdColumn,
-  resolveSplitMappingFeatureIdColumn
+  resolveSplitMappingFeatureIdColumn,
+  withPrimitiveScope
 } from './split-rendering-accessors';
 
 function createTableWithRows(
@@ -42,6 +45,23 @@ function createSplitContext(dataset: ArrowTable): LayerContext {
 }
 
 describe('split rendering accessors', () => {
+  it('reports the join key only once the dataset carries basemap_id', () => {
+    expect(
+      hasJoinedBasemapKey(
+        createTableWithRows(
+          [{ [JOINED_BASEMAP_COLUMN.ID]: 'FR' }],
+          [JOINED_BASEMAP_COLUMN.ID]
+        )
+      )
+    ).toBe(true);
+
+    expect(
+      hasJoinedBasemapKey(
+        createTableWithRows([{ lat: 48.85, long: 2.35 }], ['lat', 'long'])
+      )
+    ).toBe(false);
+  });
+
   it('resolves the geometry feature id column with the canonical fallback order', () => {
     expect(
       resolveSplitMappingFeatureIdColumn(
@@ -311,5 +331,101 @@ describe('split rendering accessors', () => {
         INTERNAL_COLUMN.FEATURE_ID
       )
     ).toBeUndefined();
+  });
+});
+
+describe('scoped rendering accessors', () => {
+  const geometry = createTableWithRows(
+    [{ [CANONICAL_ID_COLUMN]: 'FR' }, { [CANONICAL_ID_COLUMN]: 'PL' }],
+    [CANONICAL_ID_COLUMN]
+  );
+  const dataset = createTableWithRows(
+    [
+      { [JOINED_BASEMAP_COLUMN.ID]: 'FR', population: 67_935_660 },
+      { [JOINED_BASEMAP_COLUMN.ID]: 'PL', population: 38_307_726 }
+    ],
+    [JOINED_BASEMAP_COLUMN.ID, 'population']
+  );
+
+  it('reads a joined feature left out of the scope as having no value', () => {
+    const scopedDataset = createTableWithRows(
+      [{ [JOINED_BASEMAP_COLUMN.ID]: 'FR', population: 67_935_660 }],
+      [JOINED_BASEMAP_COLUMN.ID, 'population']
+    );
+    const ctx = withPrimitiveScope(
+      {
+        ...createSplitContext(dataset),
+        scopedDatasetTableByPrimitive: {
+          [PrimitiveFilterType.POLYGON]: scopedDataset
+        }
+      } as LayerContext,
+      PrimitiveFilterType.POLYGON
+    );
+
+    const readPopulation = createSplitAwareRowAccessor(
+      ctx,
+      geometry,
+      (row) => row.population
+    );
+
+    expect(readPopulation(0)).toBe(67_935_660);
+    expect(readPopulation(1)).toBeUndefined();
+  });
+
+  it('reads the whole dataset when no primitive scope is in force', () => {
+    const ctx = createSplitContext(dataset);
+
+    const readPopulation = createSplitAwareRowAccessor(
+      ctx,
+      geometry,
+      (row) => row.population
+    );
+
+    expect(readPopulation(1)).toBe(38_307_726);
+  });
+
+  it('reads an unjoined row left out of the scope as null', () => {
+    const table = createTableWithRows(
+      [
+        { [INTERNAL_COLUMN.ID]: 1, population: 67_935_660 },
+        { [INTERNAL_COLUMN.ID]: 2, population: 38_307_726 }
+      ],
+      [INTERNAL_COLUMN.ID, 'population']
+    );
+    const ctx = withPrimitiveScope(
+      {
+        scopedRowIdsByPrimitive: {
+          [PrimitiveFilterType.POINT]: new Set([1])
+        }
+      } as LayerContext,
+      PrimitiveFilterType.POINT
+    );
+
+    const readPopulation = createSplitAwareNullableRowAccessor(
+      ctx,
+      table,
+      (row) => row?.population ?? null
+    );
+
+    expect(readPopulation(0)).toBe(67_935_660);
+    expect(readPopulation(1)).toBeNull();
+  });
+
+  it('reads every unjoined row when no scope is active', () => {
+    const table = createTableWithRows(
+      [
+        { [INTERNAL_COLUMN.ID]: 1, population: 67_935_660 },
+        { [INTERNAL_COLUMN.ID]: 2, population: 38_307_726 }
+      ],
+      [INTERNAL_COLUMN.ID, 'population']
+    );
+
+    const readPopulation = createSplitAwareNullableRowAccessor(
+      {} as LayerContext,
+      table,
+      (row) => row?.population ?? null
+    );
+
+    expect(readPopulation(1)).toBe(38_307_726);
   });
 });

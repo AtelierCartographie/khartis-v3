@@ -54,6 +54,9 @@ import {
 import { normalizeOpacity, resolvePageDisplayScale } from './layer-style.utils';
 import {
   buildSplitDatasetRowMapping,
+  hasSplitRenderingContext,
+  resolveScopedAttributeTable,
+  resolveScopedRowIds,
   resolveSplitMappingFeatureIdColumn
 } from './split-rendering-accessors';
 import {
@@ -70,6 +73,7 @@ import {
   collectTextLayerGlyphs,
   createTextLayerData,
   createTextLayerDataFromBinary,
+  keepTextDataInRowScope,
   resolveAccessorValue,
   resolveMissingTextLabel,
   resolveTextAnchor,
@@ -139,33 +143,31 @@ export function createTextOverlayLayers(
   let textLayerData: TextLayerDatum[] | null = null;
   let secondaryLabelLayerData: TextLayerDatum[] | null = null;
   const representativePointSource = getTextRepresentativePointSource(ctx);
-  // Raw point datasets render labels from the main table; `textPointTable` is
-  // its TEXT-filtered counterpart (built in use-map-layers) so Texts filters
-  // apply to labels while Symbols filters stay on the circles. Attributes are
-  // read from the SAME table to keep row indices aligned with the geometry.
+  // Attributes are read from the SAME table as the geometry so row indices
+  // stay aligned.
   const textPointSource =
     representativePointSource ??
     (geometryInfo.type === GeometryType.POINT
-      ? {
-          table: ctx.textPointTable ?? jsTable,
-          geometryInfo
-        }
+      ? { table: jsTable, geometryInfo }
       : null);
+  // A label whose row the Texts filter excludes must read as missing, not fall
+  // back to the whole dataset.
+  const scopedTextTable = resolveScopedAttributeTable(ctx);
   const textAttributeTable =
-    ctx.splitDatasetTable ??
+    scopedTextTable ??
     (representativePointSource ? jsTable : (textPointSource?.table ?? jsTable));
   const textFeatureIdColumn =
-    ctx.splitDatasetTable && textPointSource
+    scopedTextTable && textPointSource
       ? resolveSplitMappingFeatureIdColumn(
           textPointSource.table,
           ctx.splitFeatureIdColumn
         )
       : undefined;
   const textAttributeRowByGeometryRow =
-    ctx.splitDatasetTable && textFeatureIdColumn && textPointSource
+    scopedTextTable && textFeatureIdColumn && textPointSource
       ? buildSplitDatasetRowMapping(
           textPointSource.table,
-          ctx.splitDatasetTable,
+          scopedTextTable,
           textFeatureIdColumn
         )
       : undefined;
@@ -238,6 +240,26 @@ export function createTextOverlayLayers(
       secondaryLabelLayerData = createTextLayerData(
         geojsonData,
         secondaryLabelColumn
+      );
+    }
+  }
+
+  // Split rendering already narrows the attribute table to the Texts scope;
+  // a dataset drawn from its own geometry has to drop the rows itself.
+  const scopedTextRowIds = hasSplitRenderingContext(ctx)
+    ? undefined
+    : resolveScopedRowIds(ctx);
+  if (scopedTextRowIds) {
+    textLayerData = keepTextDataInRowScope(
+      textLayerData,
+      textAttributeTable,
+      scopedTextRowIds
+    );
+    if (secondaryLabelLayerData) {
+      secondaryLabelLayerData = keepTextDataInRowScope(
+        secondaryLabelLayerData,
+        textAttributeTable,
+        scopedTextRowIds
       );
     }
   }

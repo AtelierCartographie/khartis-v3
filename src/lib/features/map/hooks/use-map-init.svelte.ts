@@ -2,7 +2,12 @@ import { Deck, OrthographicView } from '@deck.gl/core';
 import type { DeckProps, View } from '@deck.gl/core';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { CanvasContext, type Device } from '@luma.gl/core';
-import { Map as MapLibreMap, ScaleControl, setWorkerUrl } from 'maplibre-gl';
+import {
+  AttributionControl,
+  Map as MapLibreMap,
+  ScaleControl,
+  setWorkerUrl
+} from 'maplibre-gl';
 import type { IControl, StyleSpecification } from 'maplibre-gl';
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
@@ -517,7 +522,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       pixelRatio: renderPixelRatio,
       maxCanvasSize: [maxRenderBufferSizePx, maxRenderBufferSizePx],
       canvasContextAttributes: { preserveDrawingBuffer: true },
-      cancelPendingTileRequestsWhileZooming: true
+      cancelPendingTileRequestsWhileZooming: true,
+      attributionControl: false
     });
 
     map.on('load', () => {
@@ -539,6 +545,10 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
         new ScaleControl({ maxWidth: 100, unit: 'metric' }),
         'bottom-left'
       );
+      // Le crédit des fournisseurs de tuiles est obligatoire dès qu'une tuile est
+      // affichée. À droite il recouvrirait les mentions de l'habillage : on
+      // l'empile au-dessus de l'échelle, dans le coin que l'habillage laisse libre.
+      map.addControl(new AttributionControl({ compact: true }), 'bottom-left');
 
       map.setProjection({ type: mapProjectionStore.projection });
 

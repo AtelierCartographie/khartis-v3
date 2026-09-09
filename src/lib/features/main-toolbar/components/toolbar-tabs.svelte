@@ -269,7 +269,12 @@
       const newFullName = fileInfo.extension
         ? `${editedName.trim()}.${fileInfo.extension.toLowerCase()}`
         : editedName.trim();
-      await projectStore.renameFile(editingTabId, newFullName);
+      const tabDatasets = getDatasetsForTab(editingTabId);
+      if (tabDatasets.length === 1) {
+        await datasetsStore.renameDataset(tabDatasets[0].id, newFullName);
+      } else {
+        await projectStore.renameFile(editingTabId, newFullName);
+      }
     }
     editingTabId = null;
     editedName = '';

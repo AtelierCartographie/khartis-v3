@@ -248,12 +248,7 @@ export function createProjectionSphereOutlineLayer({
 
 export function applyProjectionSphereMask(
   layers: Layer<DeckDataRow>[],
-  maskLayer: Layer<DeckDataRow> | null,
-  outlineLayer?: Layer<DeckDataRow> | null
+  maskLayer: Layer<DeckDataRow> | null
 ): Layer<DeckDataRow>[] {
-  const ordered: Layer<DeckDataRow>[] = [];
-  if (maskLayer) ordered.push(maskLayer);
-  ordered.push(...layers);
-  if (outlineLayer) ordered.push(outlineLayer);
-  return ordered;
+  return maskLayer ? [maskLayer, ...layers] : [...layers];
 }

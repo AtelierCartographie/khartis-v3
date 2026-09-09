@@ -1,9 +1,7 @@
-export {
-  MAX_FACETS_COLUMNS,
-  MAX_FACETS,
-  facetsStore
-} from './facets.store.svelte';
+export { MAX_FACETS, facetsStore } from './facets.store.svelte';
 export { disableFacets, getFacetsBaseVisualizationId } from './facets-access';
+export { resolveSharedFacetScaleColumns } from './facets-shared-scale';
+export type { SharedFacetScaleColumn } from './facets-shared-scale';
 export {
   FACET_SLOT,
   SCALE_MODE

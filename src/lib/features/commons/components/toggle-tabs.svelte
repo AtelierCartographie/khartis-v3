@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { Component } from 'svelte';
+  import TooltipBubble from './carbon/tooltip-bubble.svelte';
+  import type { CarbonTooltipDirection } from '$lib/features/commons/utils/carbon-tooltip-position';
 
   interface ToggleItem {
     icon?: Component;
@@ -18,6 +20,7 @@
     fullWidthClass?: string;
     hideInactiveLabel?: boolean;
     tabTitle?: (index: number, isActive: boolean) => string | undefined;
+    tooltipPosition?: CarbonTooltipDirection;
   }
 
   let {
@@ -29,8 +32,33 @@
     activeClass = 'active',
     fullWidthClass = 'full-width',
     hideInactiveLabel = true,
-    tabTitle
+    tabTitle,
+    tooltipPosition = 'bottom'
   }: Props = $props();
+
+  let tabElements = $state<Array<HTMLButtonElement | null>>([]);
+  let hoveredIndex = $state<number | null>(null);
+
+  const tooltipTrigger = $derived(
+    hoveredIndex === null ? null : (tabElements[hoveredIndex] ?? null)
+  );
+  const tooltipText = $derived(
+    hoveredIndex === null
+      ? ''
+      : (tabTitle?.(hoveredIndex, activeIndex === hoveredIndex) ??
+          items[hoveredIndex]?.label ??
+          '')
+  );
+
+  function showTooltip(index: number): void {
+    hoveredIndex = index;
+  }
+
+  function hideTooltip(index: number): void {
+    if (hoveredIndex === index) {
+      hoveredIndex = null;
+    }
+  }
 
   function handleClick(index: number): void {
     if (index === activeIndex || items[index]?.disabled) {
@@ -53,6 +81,7 @@
   {#each items as item, index (index)}
     <button
       type="button"
+      bind:this={tabElements[index]}
       class="toggle-tab {activeIndex === index
         ? activeClass
         : ''} {activeIndex === index ? fullWidthClass : ''} {index === 0 &&
@@ -61,11 +90,14 @@
         : ''} {index === items.length - 1 && activeIndex === index
         ? 'expand-left'
         : ''}"
-      title={tabTitle?.(index, activeIndex === index)}
       aria-pressed={activeIndex === index}
       disabled={item.disabled}
       onclick={() => handleClick(index)}
       ondblclick={() => handleDoubleClick(index)}
+      onmouseenter={() => showTooltip(index)}
+      onmouseleave={() => hideTooltip(index)}
+      onfocus={() => showTooltip(index)}
+      onblur={() => hideTooltip(index)}
     >
       {#if item.icon}
         {@const Icon = item.icon}
@@ -77,6 +109,14 @@
     </button>
   {/each}
 </div>
+
+{#if tooltipTrigger && tooltipText}
+  <TooltipBubble
+    text={tooltipText}
+    trigger={tooltipTrigger}
+    direction={tooltipPosition}
+  />
+{/if}
 
 <style>
   .toggle-tabs {
@@ -142,7 +182,7 @@
     color: var(--cds-text-secondary);
   }
 
-  .toggle-tab:hover:not(.active) {
+  .toggle-tab:hover:not(.active):not(:disabled) {
     background-color: var(--cds-layer-hover-01);
   }
 

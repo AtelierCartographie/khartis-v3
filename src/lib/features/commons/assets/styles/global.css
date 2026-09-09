@@ -260,6 +260,10 @@ label {
   cursor: pointer;
 }
 
+.suggestions-title {
+  color: var(--khartis-additions-text-primary-suggestions, #003a6d) !important;
+}
+
 .form-label {
   font-size: var(--cds-label-01-font-size, 0.75rem);
   font-weight: 400;

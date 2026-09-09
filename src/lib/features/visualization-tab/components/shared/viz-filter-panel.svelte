@@ -10,6 +10,7 @@
   } from '$lib/features/commons/utils/toolbar-width.utils';
   import type { VizDataFilter } from '$lib/features/commons/stores/visualization.store.svelte';
   import * as m from '$lib/paraglide/messages';
+  import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
   import { Add, Close, Launch } from 'carbon-icons-svelte';
   import { untrack } from 'svelte';
   import FilterCard from './filter-card.svelte';
@@ -212,7 +213,7 @@
 
     <a
       class="learn-more-link"
-      href="https://www.sciencespo.fr/cartographie/khartis/docs/FAQ/"
+      href={DOC_LINK.PRIMITIVE_FILTERS}
       target="_blank"
       rel="noopener noreferrer"
     >

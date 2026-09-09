@@ -78,7 +78,8 @@ import {
 } from './layer-style.utils';
 import {
   createSplitAwareRowAccessor as ctxRowAccessor,
-  createSplitGeoJsonFeatureAccessor
+  createSplitGeoJsonFeatureAccessor,
+  withPrimitiveScope
 } from './split-rendering-accessors';
 import {
   buildCategoryColorMapFromLabels,
@@ -245,14 +246,103 @@ export function createPolygonLayerStack(
   const polygonPrimitiveAllowed =
     !ctx.viz || primitiveFilters.includes(PrimitiveFilterType.POLYGON);
 
+  function createDensityMissingDataLayers(): Layer<DeckDataRow>[] {
+    const densityValueColumn = viz?.density?.valueColumn;
+    if (
+      !showMissingPolygons ||
+      !densityValueColumn ||
+      (!isNativeGeoArrow && !isWkbEncoded && !isGeoJsonEncoded)
+    ) {
+      return [];
+    }
+
+    const missingColorFor = (
+      fillRgb: RGBColor
+    ): ((featureId: number) => [number, number, number, number]) =>
+      createMissingPolygonPatternColorAccessor(
+        ctx,
+        jsTable,
+        FillMode.DENSITY,
+        densityValueColumn,
+        undefined,
+        null,
+        fillRgb
+      );
+
+    try {
+      const polyData = resolvePolygonParser(ctx.customProjection)(jsTable);
+      const solidProps = createCompatibleSolidPolygonLayerProps(polyData);
+      const solidBinaryData = solidProps.data as {
+        attributes: Record<string, unknown>;
+      };
+      solidBinaryData.attributes.getFillColor = createPolygonFillColorAttribute(
+        polyData,
+        missingColorFor(polygonMissingColor)
+      );
+
+      const fillLayer = new SolidPolygonLayer({
+        id: `${layerId}-density-missing`,
+        ...(solidProps as unknown as Record<string, unknown>),
+        pickable: false,
+        parameters: {
+          depthCompare: 'always' as const,
+          stencilCompare: 'always' as const
+        },
+        ...(modelMatrix && { modelMatrix }),
+        ...(beforeId && { beforeId }),
+        updateTriggers: {
+          getFillColor: [
+            densityValueColumn,
+            polygonMissingColor,
+            showMissingPolygons
+          ]
+        }
+      }) as Layer<DeckDataRow>;
+
+      const patternLayer = missingDataPatternProps
+        ? createBinaryPolygonPatternOverlayLayer(
+            layerId,
+            resolveMissingDataPatternId(polygonConfig?.missingData),
+            polyData,
+            missingDataPatternProps,
+            ctx,
+            missingColorFor(missingDataPatternFillRgb),
+            'density-missing-data-pattern',
+            1
+          )
+        : null;
+
+      return patternLayer ? [fillLayer, patternLayer] : [fillLayer];
+    } catch (error) {
+      logger.warn(
+        'Failed to create density missing-data polygons',
+        LogCategory.MAP,
+        error
+      );
+      return [];
+    }
+  }
+
   if (densityRequested) {
     const densityLayers =
       densityTable && densityGeometryInfo
         ? createPointLayers(densityTable, densityGeometryInfo, ctx)
         : [];
-    const pointLayers = createRepresentativePointSymbolLayers(jsTable, ctx);
+    const pointLayers = createRepresentativePointSymbolLayers(
+      jsTable,
+      withPrimitiveScope(ctx, PrimitiveFilterType.POINT)
+    );
+    const missingDataLayers = polygonPrimitiveAllowed
+      ? createDensityMissingDataLayers()
+      : [];
     const layers = orderPrimitiveLayers(
       [
+        // Under the dots: a row with no value produces none, which otherwise
+        // reads as a zero.
+        ...missingDataLayers.map((layer) => ({
+          primitive: PrimitiveFilterType.POLYGON as PrimitiveFilter,
+          layer
+        })),
         ...(polygonPrimitiveAllowed
           ? densityLayers.map((layer) => ({
               primitive: PrimitiveFilterType.POLYGON as PrimitiveFilter,
@@ -665,7 +755,10 @@ export function createPolygonLayerStack(
         );
       }
 
-      const pointLayers = createRepresentativePointSymbolLayers(jsTable, ctx);
+      const pointLayers = createRepresentativePointSymbolLayers(
+        jsTable,
+        withPrimitiveScope(ctx, PrimitiveFilterType.POINT)
+      );
       const showFill =
         polygonPrimitiveAllowed &&
         polygonFillMode !== FillMode.NONE &&
@@ -707,10 +800,13 @@ export function createPolygonLayerStack(
                 }
               ]
             : []),
+          // The outline belongs to the POLYGON primitive: tagging it LINE sent
+          // it to `Number.MAX_SAFE_INTEGER` on polygon datasets, whose
+          // `primitiveOrder` never contains LINE, which drew it under the fill.
           ...(showStroke
             ? [
                 {
-                  primitive: PrimitiveFilterType.LINE as PrimitiveFilter,
+                  primitive: PrimitiveFilterType.POLYGON as PrimitiveFilter,
                   layer: strokeLayer
                 }
               ]
@@ -727,6 +823,7 @@ export function createPolygonLayerStack(
 
       const selectionOverlay = createHighlightedBinaryPolygonOverlay(
         layerId,
+        jsTable,
         outlineData,
         polyHighlightedRowIds,
         hlVersion,
@@ -1262,7 +1359,10 @@ export function createPolygonLayerStack(
     ];
   }
 
-  const pointLayers = createRepresentativePointSymbolLayers(jsTable, ctx);
+  const pointLayers = createRepresentativePointSymbolLayers(
+    jsTable,
+    withPrimitiveScope(ctx, PrimitiveFilterType.POINT)
+  );
   const layers = orderPrimitiveLayers(
     [
       ...geoJsonLayers.map((layer) => ({

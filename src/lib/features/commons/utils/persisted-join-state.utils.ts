@@ -106,6 +106,18 @@ export function resolvePersistedJoinState(
     nextState.gpsMode = true;
   }
 
+  // A catalog or imported basemap is only a backdrop for a dataset plotted
+  // from its coordinates: with no textual join column there is no join key to
+  // rebuild, so such a dataset has to stay in GPS mode.
+  if (
+    !nextState.gpsMode &&
+    !nextState.geoColumn &&
+    nextState.joinedBasemap &&
+    datasetGpsColumns
+  ) {
+    nextState.gpsMode = true;
+  }
+
   if (nextState.gpsMode) {
     nextState.gpsColumns = resolvedGpsColumns;
     nextState.geoColumn = undefined;

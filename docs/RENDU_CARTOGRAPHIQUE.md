@@ -154,6 +154,13 @@ facettes appartiennent à l’habillage : ils sont persistés et exportés, mais
 changent ni la géométrie ni le moteur de rendu. Les facettes partagent une
 instance Deck et plusieurs vues, elles ne créent pas une carte WebGL par case.
 
+En échelle commune, une collection dessine chaque facette contre le domaine
+fusionné de ses variables (`facets-shared-scale.ts`) : la légende doit lire ce
+même domaine, sinon les cercles proportionnels de la légende ne correspondent
+plus à ceux de la carte. Le titre d’une facette s’édite comme les autres
+éléments de page : un clic sur le titre ouvre le panneau qui le porte, ici
+l’outil Collection de cartes.
+
 ### Suggestions, légendes et habillage sûr
 
 La détection sémantique (`semio-detector.utils.ts`) qualifie les variables avant

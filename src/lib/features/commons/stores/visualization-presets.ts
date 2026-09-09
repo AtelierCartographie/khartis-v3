@@ -321,7 +321,7 @@ export function resolveVisualizationPreset(
   return buildVisualizationPreset(type, dataset);
 }
 
-function getDefaultMissingData(): MissingDataConfig {
+export function getDefaultMissingData(): MissingDataConfig {
   return {
     show: true,
     shape: MissingDataShape.CIRCLE,

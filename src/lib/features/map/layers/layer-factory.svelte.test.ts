@@ -170,7 +170,8 @@ import {
   createPointLayers,
   createPolygonLayers,
   resolveEffectiveCategoryColorMap,
-  resolveSplitMappingFeatureIdColumn
+  resolveSplitMappingFeatureIdColumn,
+  type TextLayerDatum
 } from './layer-factory';
 import { MultiShapeLayer } from './multi-shape-layer';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
@@ -693,6 +694,49 @@ describe('resolveEffectiveCategoryColorMap', () => {
 });
 
 describe('createTextOverlayLayers', () => {
+  it('keeps only the rows the Texts filter scopes on a raw point dataset', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 3,
+      featureIds: new Uint32Array([0, 1, 2]),
+      positions: new Float32Array([0, 0, 10, 10, 20, 20])
+    });
+
+    const visualization = createTextVisualization();
+    const layers = createDeckLayers(
+      createTableWithRows(
+        [
+          { __id: 1, name: 'Kept' },
+          { __id: 2, name: 'Filtered out' },
+          { __id: 3, name: 'Also kept' }
+        ],
+        ['__id', 'name']
+      ),
+      {
+        ...createContext(visualization),
+        geometryInfo: {
+          ...createPointGeometryInfo(),
+          type: 'POINT' as GeometryInfo['type']
+        },
+        scopedPrimitive: PrimitiveFilterType.TEXT,
+        scopedRowIdsByPrimitive: {
+          [PrimitiveFilterType.TEXT]: new Set([1, 3])
+        }
+      }
+    );
+
+    const textLayer = layers.find(
+      (layer) =>
+        layer instanceof TextLayer &&
+        String(layer.props.id).includes('text-layer')
+    ) as TextLayer | undefined;
+    const data = textLayer?.props.data as TextLayerDatum[] | undefined;
+
+    expect(data?.map((datum) => datum.primaryText)).toEqual([
+      'Kept',
+      'Also kept'
+    ]);
+  });
+
   it('wraps text labels and places labels to the right when symbols are rendered', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 2,
@@ -2205,7 +2249,7 @@ describe('createPolygonLayers', () => {
     expect(loggerWarn).not.toHaveBeenCalled();
   });
 
-  it('renders binary polygon selection overlays without GeoJSON conversion', () => {
+  it('resolves binary selection overlay features through their row id, not their index', () => {
     parseSolidPolygonsMock.mockReturnValue({
       featureIds: new Uint32Array([0, 1])
     });
@@ -2251,8 +2295,10 @@ describe('createPolygonLayers', () => {
       classification: undefined
     };
 
+    // Row ids are 1-based, so highlighting id 2 must light the feature at
+    // index 1 — matching featureIds against row ids picks the wrong entity.
     const layers = createPolygonLayers(
-      createTableWithRows([{}, {}], []),
+      createTableWithRows([{ __id: 1 }, { __id: 2 }], ['__id']),
       {
         ...createGeometryInfo(),
         encoding: 'geoarrow.polygon',
@@ -2262,7 +2308,7 @@ describe('createPolygonLayers', () => {
       {
         ...createContext(visualization),
         customProjection: undefined,
-        highlightedRowIds: new Set([1])
+        highlightedRowIds: new Set([2])
       }
     );
 
@@ -3211,7 +3257,7 @@ describe('createPointLayers', () => {
     expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
   });
 
-  it('sorts each double proportional symbol layer by its own descending radius while preserving feature ids', () => {
+  it('merges overlaid double proportional symbols into one descending radius order', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 3,
       featureIds: new Uint32Array([0, 1, 2])
@@ -3258,23 +3304,24 @@ describe('createPointLayers', () => {
       }
     );
 
-    const primaryData = layers[0].props.data as {
-      featureIds?: Uint32Array;
-      attributes?: { getRadius?: { value?: Float32Array } };
-    };
-    const secondaryData = layers[1].props.data as {
+    // Overlay stacks the two variables in one layer so a small symbol is never
+    // buried under a large one: A radii are 20/40/0 and B radii 40/20/0, which
+    // have to interleave instead of sorting per variable.
+    expect(layers).toHaveLength(1);
+
+    const overlayData = layers[0].props.data as {
+      length?: number;
       featureIds?: Uint32Array;
       attributes?: { getRadius?: { value?: Float32Array } };
     };
 
-    expect(Array.from(primaryData.featureIds ?? [])).toEqual([1, 0, 2]);
-    expect(Array.from(primaryData.attributes?.getRadius?.value ?? [])).toEqual([
-      40, 20, 0
+    expect(overlayData.length).toBe(6);
+    expect(Array.from(overlayData.featureIds ?? [])).toEqual([
+      1, 0, 0, 1, 2, 2
     ]);
-    expect(Array.from(secondaryData.featureIds ?? [])).toEqual([0, 1, 2]);
-    expect(
-      Array.from(secondaryData.attributes?.getRadius?.value ?? [])
-    ).toEqual([40, 20, 0]);
+    expect(Array.from(overlayData.attributes?.getRadius?.value ?? [])).toEqual([
+      40, 40, 20, 20, 0, 0
+    ]);
   });
 
   it('separates double proportional symbols in juxtaposition without overlap', () => {

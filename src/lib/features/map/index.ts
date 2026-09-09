@@ -30,5 +30,6 @@ export { basemapCatalogService } from './services/basemap-catalog.service.svelte
 
 export {
   BasemapStyle,
-  DEFAULT_TILED_BASEMAP_STYLE
+  DEFAULT_TILED_BASEMAP_STYLE,
+  getBasemapStyleAttribution
 } from './constants/basemap-styles';

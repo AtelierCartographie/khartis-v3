@@ -61,6 +61,11 @@ import { resolvePersistedJoinState } from '../utils/persisted-join-state.utils';
 import { replaceFileExtension } from '../utils/file.utils';
 import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
 import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
+import {
+  ensureDatasetGeometryBasemap,
+  forgetDatasetGeometryBasemap,
+  resetDatasetGeometryBasemaps
+} from '$lib/features/map/services/dataset-geometry-basemap.service';
 import { importRollbackService } from './import-rollback.service';
 import {
   applyPaletteInversion,
@@ -69,6 +74,7 @@ import {
   computeDivergingSplit,
   generateColorsForBreaks
 } from './classification.service';
+import { resolveRowScopeClause } from './row-scope.service';
 import {
   DEFAULT_CLASSIFICATION_CLASS_COUNT,
   FillMode
@@ -348,7 +354,19 @@ function createDataOrchestratorService() {
           restoredJoinState.geoColumn
         )
       );
-    } catch {
+    } catch (error) {
+      // Without the join key the map can only draw the basemap, so a swallowed
+      // failure here has to stay visible in the logs.
+      logger.warn(
+        'Failed to rebuild the persisted basemap join',
+        LogCategory.DATA,
+        {
+          fileId: file.id,
+          basemap: restoredJoinState.joinedBasemap,
+          geoColumn: restoredJoinState.geoColumn,
+          error
+        }
+      );
       return;
     }
   }
@@ -514,6 +532,11 @@ function createDataOrchestratorService() {
       await processFileInDuckDB(file, dataset);
       processedFileIds.add(file.id);
 
+      // processFileInDuckDB can retarget the dataset table, so re-read it.
+      await ensureDatasetGeometryBasemap(
+        datasetsStore.getDatasetBySourceFile(file.id) ?? dataset
+      );
+
       if (
         options?.suggestProjection !== false &&
         (dataset.geometry || dataset.geoDetection)
@@ -560,6 +583,7 @@ function createDataOrchestratorService() {
         visualizationStore.removeVisualization(viz.id);
       });
 
+      forgetDatasetGeometryBasemap(dataset.tableName);
       datasetsStore.removeDataset(dataset.id);
       layersActions.syncWithVisualizations();
 
@@ -1060,6 +1084,10 @@ function createDataOrchestratorService() {
           ? requestedClassCount - breakpointLowerClassCount
           : undefined;
 
+      const rowScopeClause = resolveRowScopeClause({
+        datasetId: dataset.sourceFileId
+      });
+
       try {
         const result =
           breakpointValue != null &&
@@ -1071,6 +1099,7 @@ function createDataOrchestratorService() {
                 datasetId: dataset.sourceFileId,
                 columnName: viz.mapping.valueColumn!,
                 method: normalizedMethod,
+                rowScopeClause,
                 breakpointValue,
                 lowerClassCount: breakpointLowerClassCount,
                 upperClassCount: breakpointUpperClassCount
@@ -1079,6 +1108,7 @@ function createDataOrchestratorService() {
                 datasetId: dataset.sourceFileId,
                 columnName: viz.mapping.valueColumn!,
                 method: normalizedMethod,
+                rowScopeClause,
                 numClasses: requestedClassCount
               });
 
@@ -1631,6 +1661,7 @@ function createDataOrchestratorService() {
     }
 
     cancelPendingGeoColumnRestore();
+    resetDatasetGeometryBasemaps();
     await restoreCurrentProjectState(options);
   }
 

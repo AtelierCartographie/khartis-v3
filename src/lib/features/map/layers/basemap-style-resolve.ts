@@ -36,6 +36,15 @@ function resolveLandFillColorHex(
 // Merges a per-layer style override on top of the style-preset default, on top
 // of the shared land config. This lets each land layer of a multi-land basemap
 // keep its own colour, opacity and stroke.
+export function resolvePresetLandStroked(
+  style: string | null | undefined,
+  stylePresets: StylePresets | null | undefined
+): boolean | undefined {
+  if (!style || !stylePresets) return undefined;
+  const preset = stylePresets[style];
+  return preset?.layer_type === 'solid-polygon' ? preset.stroked : undefined;
+}
+
 export function resolveLandConfig(
   entry: MetadataStyleEntry,
   config: TerreLayerConfig,
@@ -46,6 +55,7 @@ export function resolveLandConfig(
     stylePresets,
     config.fillColor
   );
+  const presetStroked = resolvePresetLandStroked(entry.style, stylePresets);
   const override = entry.styleOverride ?? {};
   const pickString = (value: unknown, fallback: string): string =>
     typeof value === 'string' && value.length > 0 ? value : fallback;
@@ -59,6 +69,10 @@ export function resolveLandConfig(
     fillColor: pickString(override.fillColor, presetFillColor),
     fillOpacity: pickNumber(override.fillOpacity, config.fillOpacity),
     fillShadow: pickBoolean(override.fillShadow, config.fillShadow),
+    strokeVisible: pickBoolean(
+      override.strokeVisible,
+      presetStroked ?? config.strokeVisible
+    ),
     strokeColor: pickString(override.strokeColor, config.strokeColor),
     strokeOpacity: pickNumber(override.strokeOpacity, config.strokeOpacity),
     strokeThickness: pickNumber(

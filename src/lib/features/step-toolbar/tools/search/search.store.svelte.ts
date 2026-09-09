@@ -12,6 +12,7 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { projectHtmlLikeText } from '$lib/features/commons/utils/html-like-text.utils';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import { toCanonicalNumericTerm } from '$lib/features/commons/utils/search-term.utils';
 import {
   createReadonlyStateFacade,
   createToolStore
@@ -23,7 +24,6 @@ import {
   mapTooltipStore,
   type TooltipEntry
 } from '$lib/features/map';
-import { centerMapOnTableRow } from '$lib/features/map/services/center-on-table-row.service';
 import type { SearchState } from '../../types/search.types';
 
 const MIN_SEARCH_LENGTH = 2;
@@ -75,12 +75,6 @@ function resolveSearchDataset(): DatasetResult | undefined {
 type SearchContext = {
   dataset: DatasetResult;
   tableName: string;
-  sourceFileId?: string;
-  joinedBasemap?: string;
-  gpsColumns?: {
-    lat: string;
-    lon: string;
-  };
 };
 
 function getSearchContext(): SearchContext | null {
@@ -99,10 +93,7 @@ function getSearchContext(): SearchContext | null {
 
   return {
     dataset,
-    tableName: duckDataset.tableName,
-    sourceFileId: dataset.sourceFileId,
-    joinedBasemap: duckDataset.joinedBasemap,
-    gpsColumns: duckDataset.gpsColumns
+    tableName: duckDataset.tableName
   };
 }
 
@@ -117,7 +108,7 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function buildSearchMatcher(
+function buildSingleTermMatcher(
   query: string,
   options: Pick<SearchState, 'caseSensitive' | 'wholeWord'>
 ): (value: unknown) => boolean {
@@ -138,6 +129,30 @@ function buildSearchMatcher(
     String(value ?? '')
       .toLowerCase()
       .includes(loweredQuery);
+}
+
+/**
+ * Numeric cells come back in their stored form, so a locale-formatted term
+ * ("1 234,5") also has to be matched against its canonical form ("1234.5").
+ */
+function buildSearchMatcher(
+  query: string,
+  options: Pick<SearchState, 'caseSensitive' | 'wholeWord'>
+): (value: unknown) => boolean {
+  const matchesQuery = buildSingleTermMatcher(query, options);
+  const canonicalNumericQuery = toCanonicalNumericTerm(query);
+
+  if (!canonicalNumericQuery || canonicalNumericQuery === query) {
+    return matchesQuery;
+  }
+
+  const matchesCanonicalNumericQuery = buildSingleTermMatcher(
+    canonicalNumericQuery,
+    options
+  );
+
+  return (value: unknown) =>
+    matchesQuery(value) || matchesCanonicalNumericQuery(value);
 }
 
 const TOOLTIP_EXCLUDED_COLUMNS = new Set<string>([
@@ -179,19 +194,6 @@ async function showTooltipForResult(
   } catch {
     // Tooltip failure must not block result navigation.
   }
-}
-
-async function centerMapOnRow(
-  rowId: number,
-  searchContext: SearchContext
-): Promise<void> {
-  await centerMapOnTableRow({
-    tableName: searchContext.tableName,
-    rowId,
-    sourceFileId: searchContext.sourceFileId,
-    joinedBasemap: searchContext.joinedBasemap,
-    gpsColumns: searchContext.gpsColumns
-  });
 }
 
 function clearMapHighlights(): void {
@@ -324,7 +326,6 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
       const focused = s.results[index];
       if (searchContext && focused) {
         void showTooltipForResult(focused.rowId, searchContext);
-        void centerMapOnRow(focused.rowId, searchContext);
       }
     };
 
