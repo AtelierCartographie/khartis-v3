@@ -5,7 +5,12 @@
   import { onMount, untrack } from 'svelte';
   import * as m from '$lib/paraglide/messages';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
-  import { ToolbarStep } from '$lib/features/commons/types/global';
+  import {
+    ToolbarStep,
+    VisualizationTools
+  } from '$lib/features/commons/types/global';
+  import { activateVisualizationToolFromMap } from '$lib/features/map/utils/styling-tool-activation.utils';
+  import { KEY } from '$lib/features/commons/constants/dom.constants';
   import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
   import { zoomModeStore } from '$lib/features/commons/stores/zoom-mode.store.svelte';
@@ -15,7 +20,6 @@
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { getFiltersMap } from '$lib/features/duckdb/orchestrator/state.svelte';
   import {
     createClickHandler,
     createHoverHandler
@@ -140,6 +144,10 @@
   const isStylingMode = $derived(
     globalState.selectedStep === ToolbarStep.Styling
   );
+  const isTitleEditable = $derived(
+    !globalState.isMapExporting &&
+      (globalState.selectedStep === ToolbarStep.Visualizations || isStylingMode)
+  );
   // Independent-scale facets use per-cell legends; shared scale uses the global legend.
   const showAnchoredLegends = $derived(
     (globalState.selectedStep === ToolbarStep.Visualizations ||
@@ -151,25 +159,23 @@
     return facetsStore.getFacetTitle(variable) ?? variable;
   }
 
-  function handleFacetTitleChange(variable: string, value: string): void {
-    facetsStore.setFacetTitle(variable, value);
+  // Same contract as the Habillage page elements: clicking a title opens the
+  // panel that owns it instead of editing in place.
+  function handleFacetTitleClick(variable: string): void {
+    facetsStore.editFacetTitle(variable);
+    activateVisualizationToolFromMap(VisualizationTools.Facets);
   }
 
   function handleFacetTitleKeydown(
     variable: string,
-    event: KeyboardEvent & { currentTarget: HTMLSpanElement }
+    event: KeyboardEvent
   ): void {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      event.currentTarget.blur();
+    if (event.key !== KEY.ENTER && event.key !== KEY.SPACE) {
       return;
     }
 
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      event.currentTarget.textContent = resolveFacetTitle(variable);
-      event.currentTarget.blur();
-    }
+    event.preventDefault();
+    handleFacetTitleClick(variable);
   }
 
   // Facets use orthographic Deck.gl only; warn once when a tiled basemap cannot render.
@@ -539,24 +545,6 @@
     }
   }
 
-  function getTableFiltersForDataset(datasetId: string) {
-    const dataset = datasetsStore.datasets.find(
-      (item) => item.id === datasetId
-    );
-    if (!dataset?.sourceFileId) {
-      return undefined;
-    }
-
-    const duckDataset = duckDBOrchestrator.getDatasetBySourceFile(
-      dataset.sourceFileId
-    );
-    if (!duckDataset?.tableName) {
-      return undefined;
-    }
-
-    return getFiltersMap().get(duckDataset.tableName);
-  }
-
   const mapLayers = useMapLayers({
     getDeckOverlay: () => null,
     getDeckInstance: () => deckInstance,
@@ -572,7 +560,6 @@
       getProjectionMetadataForDataset(datasetId),
     getProjectionFitBbox: () => getProjectionFitBbox(),
     getShouldRenderDatasetFallbacks: () => false,
-    getTableFilters: getTableFiltersForDataset,
     onBasemapLayersLoaded: () =>
       mapLayers.updateLayers(tables, geoJSONs, splitData, densityTables),
     onRepresentativePointTablesLoaded: () =>
@@ -910,25 +897,17 @@
           style:width="{descriptor.frame.width}px"
         >
           <h4 class="facet-title" style:height="{FACET_TITLE_HEIGHT}px">
-            {#if isStylingMode}
+            {#if isTitleEditable}
               <span
-                class="facet-title-input"
-                contenteditable="plaintext-only"
-                role="textbox"
+                class="facet-title-button"
+                role="button"
                 tabindex="0"
                 aria-label={m.facets_facet_title_label({
                   variable: descriptor.title
                 })}
-                onblur={(
-                  event: FocusEvent & { currentTarget: HTMLSpanElement }
-                ) =>
-                  handleFacetTitleChange(
-                    descriptor.title,
-                    event.currentTarget.textContent ?? ''
-                  )}
-                onkeydown={(
-                  event: KeyboardEvent & { currentTarget: HTMLSpanElement }
-                ) => handleFacetTitleKeydown(descriptor.title, event)}
+                onclick={() => handleFacetTitleClick(descriptor.title)}
+                onkeydown={(event: KeyboardEvent) =>
+                  handleFacetTitleKeydown(descriptor.title, event)}
                 >{resolveFacetTitle(descriptor.title)}</span
               >
             {:else}
@@ -939,6 +918,9 @@
             class="facet-map-frame"
             style:width="{descriptor.frame.width}px"
             style:height="{descriptor.frame.height}px"
+            style:border={layout.frameVisible
+              ? `${layout.frameThickness}px solid ${layout.frameColor}`
+              : 'none'}
           >
             {#if showAnchoredLegends}
               <LegendOverlay
@@ -1005,10 +987,9 @@
   .facet-map-frame {
     position: relative;
     box-sizing: border-box;
-    border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
   }
 
-  .facet-title-input {
+  .facet-title-button {
     display: inline-block;
     max-width: 100%;
     border: none;
@@ -1019,17 +1000,17 @@
     padding: 1px 6px;
     border-radius: 2px;
     pointer-events: auto;
-    outline: none;
+    cursor: pointer;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .facet-title-input:hover {
+  .facet-title-button:hover {
     background: var(--cds-field-hover-01, rgba(141, 141, 141, 0.12));
   }
 
-  .facet-title-input:focus {
+  .facet-title-button:focus-visible {
     outline: 2px solid var(--cds-focus, #0f62fe);
     outline-offset: -2px;
     background: var(--cds-field-01, #f4f4f4);

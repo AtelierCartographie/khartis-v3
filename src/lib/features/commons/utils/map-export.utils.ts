@@ -3272,16 +3272,11 @@ function buildTopLevelLayer(
 }
 
 function buildLegendLayer(
+  legendContainer: HTMLElement,
   pageContainer: HTMLElement,
-  dedupeId: SvgIdDeduper
+  dedupeId: SvgIdDeduper,
+  nextSegmentIndex: () => number
 ): string {
-  const legendContainer = pageContainer.querySelector(
-    '.legend-container'
-  ) as HTMLElement | null;
-  if (!legendContainer) {
-    return '';
-  }
-
   const legendRect = getRelativeRect(legendContainer, pageContainer);
   if (legendRect.width <= 0 || legendRect.height <= 0) {
     return '';
@@ -3310,7 +3305,7 @@ function buildLegendLayer(
   }
 
   const legendSvgs = legendContainer.querySelectorAll<SVGSVGElement>('svg');
-  legendSvgs.forEach((svg, index) => {
+  legendSvgs.forEach((svg) => {
     const svgRect = getRelativeRect(svg, legendContainer);
     parts.push(
       injectRootAttribute(
@@ -3320,7 +3315,7 @@ function buildLegendLayer(
           width: svgRect.width,
           height: svgRect.height
         }),
-        `id="khartis-legend-segment-${index + 1}"`
+        `id="khartis-legend-segment-${nextSegmentIndex()}"`
       )
     );
   });
@@ -3354,6 +3349,27 @@ function buildLegendLayer(
     dedupeId,
     `transform="translate(${roundSvgValue(legendRect.x)}, ${roundSvgValue(legendRect.y)})"`
   );
+}
+
+function buildLegendLayers(
+  pageContainer: HTMLElement,
+  dedupeId: SvgIdDeduper
+): string {
+  const legendContainers =
+    pageContainer.querySelectorAll<HTMLElement>('.legend-container');
+  let segmentIndex = 0;
+  const nextSegmentIndex = (): number => ++segmentIndex;
+
+  return Array.from(legendContainers)
+    .map((legendContainer) =>
+      buildLegendLayer(
+        legendContainer,
+        pageContainer,
+        dedupeId,
+        nextSegmentIndex
+      )
+    )
+    .join('');
 }
 
 interface GeoIndicationKind {
@@ -3699,7 +3715,7 @@ function buildStructuredSvgMarkup(
       structuredOptions,
       geometry
     ),
-    buildLegendLayer(pageContainer, dedupeId),
+    buildLegendLayers(pageContainer, dedupeId),
     ...buildGeoIndicationsLayers(pageContainer, dedupeId),
     buildAnnotationLayer(pageContainer, dedupeId)
   ].filter(Boolean);

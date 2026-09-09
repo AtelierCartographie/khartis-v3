@@ -4,6 +4,7 @@
   import {
     Button,
     ComboBox,
+    InlineLoading,
     InlineNotification,
     Pagination,
     Select,
@@ -26,6 +27,7 @@
   } from 'carbon-icons-svelte';
   import { InfoPopover } from '$lib/features/commons/components/viz-controls';
   import type { BasemapAlias } from '$lib/features/duckdb/orchestrator/join-ops';
+  import type { JoinFuzzyPassEstimate } from '$lib/features/duckdb';
   import type { JoinCandidate } from '$lib/features/commons/types/data-tab.types';
   import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
@@ -85,6 +87,9 @@
     toVerifyCount: number;
     duplicateTotal?: number;
     unrecognizedTotal?: number;
+    fuzzyPassEstimate?: JoinFuzzyPassEstimate | null;
+    fuzzyPassRunning?: boolean;
+    onRunFullFuzzyPass?: () => void;
     linkedVariableName: string | undefined;
     basemapValues?: string[];
     loading?: boolean;
@@ -119,6 +124,9 @@
     toVerifyCount,
     duplicateTotal,
     unrecognizedTotal,
+    fuzzyPassEstimate = null,
+    fuzzyPassRunning = false,
+    onRunFullFuzzyPass,
     linkedVariableName,
     basemapValues = [],
     loading = false,
@@ -333,6 +341,16 @@
 
   const duplicateCount = $derived(duplicateTotal ?? duplicates.length);
   const unrecognizedCount = $derived(unrecognizedTotal ?? unknowns.length);
+
+  const showFuzzyPassOffer = $derived(
+    fuzzyPassEstimate !== null &&
+      !fuzzyPassEstimate.withinBudget &&
+      fuzzyPassEstimate.candidates > 0 &&
+      onRunFullFuzzyPass !== undefined
+  );
+  const fuzzyPassSeconds = $derived(
+    Math.max(1, Math.round((fuzzyPassEstimate?.estimatedMs ?? 0) / 1000))
+  );
   const ignoredCount = $derived(ignoredEntities.length);
   const showJoinedPagination = $derived(
     onJoinedPageChange !== undefined && joinedCount > joinedPageSize
@@ -582,10 +600,7 @@
     const text =
       candidate.type === 'exact'
         ? m.join_match_ambiguous_details()
-        : m.join_match_fuzzy_details({
-            matched: candidate.name,
-            score: Math.round(candidate.score * 100)
-          });
+        : m.join_match_fuzzy_details({ matched: candidate.name });
     return { ...base, text, disabled: false };
   }
 
@@ -1020,10 +1035,6 @@
                     row,
                     selectedMapping
                   )}
-                  {@const matchScorePercent =
-                    selectedCandidate && selectedCandidate.score < 1
-                      ? Math.round(selectedCandidate.score * 100)
-                      : null}
                   {@const verifyTooltip = buildToVerifyTooltip(
                     selectedMapping,
                     selectedCandidate
@@ -1032,18 +1043,9 @@
                     <div class="table-cell cell-data">{row.dataValue}</div>
                     <div
                       class="table-cell cell-equals cell-equals-approx"
-                      aria-label={matchScorePercent !== null
-                        ? m.join_match_score_label({
-                            score: matchScorePercent
-                          })
-                        : m.join_approximate_indicator()}
+                      aria-label={m.join_approximate_indicator()}
                     >
                       <span class="approx-symbol" aria-hidden="true">≈</span>
-                      {#if matchScorePercent !== null}
-                        <span class="match-score" aria-hidden="true"
-                          >{matchScorePercent}&nbsp;%</span
-                        >
-                      {/if}
                     </div>
                     <div class="table-cell cell-select">
                       {#if visibleToVerifyRows.has(rowKey)}
@@ -1164,6 +1166,34 @@
             {/if}
           </span>
         </button>
+        {#if showFuzzyPassOffer}
+          <div class="fuzzy-pass-offer">
+            <InlineNotification
+              kind="info"
+              lowContrast
+              hideCloseButton
+              title={m.join_fuzzy_pass_title()}
+              subtitle={m.join_fuzzy_pass_subtitle({
+                count: fuzzyPassEstimate?.candidates ?? 0,
+                seconds: fuzzyPassSeconds
+              })}
+            />
+            <div class="fuzzy-pass-actions">
+              {#if fuzzyPassRunning}
+                <InlineLoading description={m.join_fuzzy_pass_running()} />
+              {:else}
+                <Button
+                  kind="tertiary"
+                  size="small"
+                  icon={MagicWand}
+                  on:click={() => onRunFullFuzzyPass?.()}
+                >
+                  {m.join_fuzzy_pass_action()}
+                </Button>
+              {/if}
+            </div>
+          </div>
+        {/if}
         {#if unrecognizedExpanded && unrecognizedCount > 0}
           <div class="category-body">
             <div class="join-table join-table-error">
@@ -1465,6 +1495,18 @@
 </div>
 
 <style>
+  .fuzzy-pass-offer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0 1rem 0.75rem;
+  }
+
+  .fuzzy-pass-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+
   .join-assisted-section {
     display: flex;
     flex-direction: column;
@@ -1799,15 +1841,6 @@
     width: auto;
     min-width: 24px;
     gap: 1px;
-  }
-
-  .match-score {
-    font-size: 0.625rem;
-    font-weight: 600;
-    line-height: 1;
-    letter-spacing: 0.02em;
-    color: var(--cds-text-secondary, #525252);
-    white-space: nowrap;
   }
 
   .combo-item {

@@ -36,6 +36,11 @@ import type { FileWithId } from '$lib/features/duckdb';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { readGeoParquetMetadataFromDuck } from '$lib/features/map/services/geo-parquet-metadata.service';
 import { normalizeGeoParquetTable } from '../operations/geoparquet';
+import {
+  assertImportRowCountWithinLimit,
+  readParquetRowCount,
+  warnOnLargeImport
+} from '../operations/import-volume';
 
 export interface ProcessFileOptions {
   originalName?: string;
@@ -175,6 +180,7 @@ export async function processFileInternal(
     }
   } else {
     await registerFilesForDuckDB(file, isShapefile, options.companionFiles);
+    await assertParquetVolumeBeforeRead(fileInfo, file);
     const geoParquetMetadata = await readUploadedGeoParquetMetadata(
       fileInfo,
       file
@@ -191,6 +197,9 @@ export async function processFileInternal(
     });
   }
 
+  assertImportRowCountWithinLimit(dataset.rowCount, fileInfo.name);
+  warnOnLargeImport(dataset.rowCount);
+
   if (detectedCsvOptions) {
     dataset.metadata.csvOptions = detectedCsvOptions;
   }
@@ -200,13 +209,38 @@ export async function processFileInternal(
   return dataset;
 }
 
-async function readUploadedGeoParquetMetadata(fileInfo: FileInfo, file: File) {
-  const lowerFileName = fileInfo.name.toLowerCase();
-  const isParquet =
+function isParquetFileName(fileName: string): boolean {
+  const lowerFileName = fileName.toLowerCase();
+  return (
     lowerFileName.endsWith('.parquet') ||
     lowerFileName.endsWith('.geoparquet') ||
-    lowerFileName.endsWith('.gpq');
-  if (!isParquet) {
+    lowerFileName.endsWith('.gpq')
+  );
+}
+
+// Parquet compresses hard, so the footer row count is the only volume signal
+// available before the whole file is materialized into WASM memory.
+async function assertParquetVolumeBeforeRead(
+  fileInfo: FileInfo,
+  file: File
+): Promise<void> {
+  if (!isParquetFileName(fileInfo.name)) {
+    return;
+  }
+
+  const fileId = (file as FileWithId).id;
+  if (!fileId) {
+    return;
+  }
+
+  const rowCount = await readParquetRowCount(Duck, fileId);
+  if (rowCount !== null) {
+    assertImportRowCountWithinLimit(rowCount, fileInfo.name);
+  }
+}
+
+async function readUploadedGeoParquetMetadata(fileInfo: FileInfo, file: File) {
+  if (!isParquetFileName(fileInfo.name)) {
     return null;
   }
 
@@ -242,13 +276,7 @@ async function readTabularFile(
   tableName: string,
   fileName: string
 ): Promise<CsvImportOptions | undefined> {
-  const lowerFileName = fileName.toLowerCase();
-  const isParquet =
-    lowerFileName.endsWith('.parquet') ||
-    lowerFileName.endsWith('.geoparquet') ||
-    lowerFileName.endsWith('.gpq');
-
-  if (isParquet) {
+  if (isParquetFileName(fileName)) {
     await Duck.read_tabular(file, {
       tablename: tableName,
       format: 'parquet'

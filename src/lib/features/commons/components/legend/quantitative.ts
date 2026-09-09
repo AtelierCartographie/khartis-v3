@@ -15,6 +15,7 @@ import {
   renderLegendNote,
   resolveLegendFontFamily,
   round,
+  scaleLegendMetric,
   round_extreme,
   type CommonLegendTextOptions,
   type LegendSvgDefinition
@@ -53,37 +54,42 @@ export function draw_quanti_color_legend(
   const labels_length = thresholds.map((d) =>
     Textbox.measureText(formatValue(d), font)
   );
-  const label_gap = 10;
-  const label_safety_padding = Math.max(6, Math.round(fontSize * 0.6));
-  const overlap_test = (i: number, positions: number[]) =>
-    labels_length[i] / 2 + labels_length[i + 1] / 2 + label_gap <
-    positions[i + 1] - positions[i];
-  const margin = Math.max(10, Math.round(fontSize * 0.6));
+  const label_gap = scaleLegendMetric(10, fontSize);
+  const label_safety_padding = scaleLegendMetric(7, fontSize);
+  const margin = scaleLegendMetric(10, fontSize);
   const margin_top = margin;
   const margin_left = margin + labels_length[0] / 2;
   const margin_right = margin + labels_length[nb_boxes] / 2;
-  let box_width = 40;
-  const max_box_width = 200;
-  let boxes_width: number;
-  const box_height = 15;
-  const test_indices = index.slice(0, -1);
-  const header_gap = 3;
-
-  do {
-    boxes_width = box_width * nb_boxes;
+  const box_height = scaleLegendMetric(15, fontSize);
+  const tick_gap = scaleLegendMetric(5, fontSize);
+  const header_gap = scaleLegendMetric(3, fontSize);
+  const labels_fit = (positions: number[]): boolean =>
+    positions.every(
+      (_position, i) =>
+        i + 1 >= positions.length ||
+        labels_length[i] / 2 + labels_length[i + 1] / 2 + label_gap <=
+          positions[i + 1] - positions[i]
+    );
+  const positions_for = (width: number): number[] => {
     const x_scale = linearScale(
       [x_domain[0], x_domain[nb_boxes]],
-      [margin_left, boxes_width + margin_left]
+      [margin_left, width * nb_boxes + margin_left]
     );
-    x = x_domain.map(x_scale);
-    box_width++;
-  } while (
-    box_width < max_box_width &&
-    test_indices.every((d) => overlap_test(d, x)) === false
-  );
+    return x_domain.map(x_scale);
+  };
+
+  // Every discretization threshold stays labelled on a single row, so the class
+  // boxes widen until no two labels collide.
+  let box_width = scaleLegendMetric(40, fontSize);
+  x = positions_for(box_width);
+  while (!labels_fit(x)) {
+    box_width += 1;
+    x = positions_for(box_width);
+  }
+  const boxes_width = box_width * nb_boxes;
 
   const scale_body_width = margin_left + boxes_width + margin_right;
-  const section_gap = Math.max(10, Math.round(fontSize * 0.6));
+  const section_gap = scaleLegendMetric(10, fontSize);
   const nodata_box_h = box_height;
   const nodata_box_w = Math.round(fontSize * 2);
   const nodata_label = options.nodataLabel ?? m.legend_no_data_label();
@@ -133,10 +139,12 @@ export function draw_quanti_color_legend(
     titleFont: title_font,
     subtitleFont: subtitle_font
   });
-  const actual_box_top = margin_top + header.height + 5;
-  const actual_tick_end = actual_box_top + box_height + 5;
-  const actual_labels_bottom = actual_tick_end + 5 + fontSize;
-  const nodata_section_height = nodata ? section_gap + nodata_box_h + 5 : 0;
+  const actual_box_top = margin_top + header.height + tick_gap;
+  const actual_tick_end = actual_box_top + box_height + tick_gap;
+  const actual_labels_bottom = actual_tick_end + tick_gap + fontSize;
+  const nodata_section_height = nodata
+    ? section_gap + nodata_box_h + tick_gap
+    : 0;
   const noteBlock = renderLegendNote({
     note,
     x: margin_left,
@@ -213,7 +221,7 @@ export function draw_quanti_color_legend(
         ${ticks.join('')}
       </g>
       <g class="labels" text-anchor="middle" dominant-baseline="hanging" font-size="${fontSize}"
-         font-variant="tabular-nums" transform="translate(0,5)">
+         font-variant="tabular-nums" transform="translate(0,${tick_gap})">
         ${labels.join('')}
       </g>
       ${header.markup}

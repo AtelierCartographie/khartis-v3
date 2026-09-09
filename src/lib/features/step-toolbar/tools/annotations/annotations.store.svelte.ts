@@ -22,7 +22,8 @@ import {
   getFormatLayoutSizingContext,
   getFormatState
 } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
-import { basemapService } from '$lib/features/map';
+import { basemapService, getBasemapStyleAttribution } from '$lib/features/map';
+import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { m } from '$lib/paraglide/messages';
 import { getLocale } from '$lib/paraglide/runtime.js';
 import type {
@@ -375,6 +376,17 @@ function normalizeDrawingPoints(points: DrawingPoint[]): DrawingPoint[] {
   }
 
   return normalized;
+}
+
+// Le fond tuilé impose son propre crédit : sans lui, une carte exportée sur des
+// tuiles IGN ou OpenStreetMap ne mentionne aucune de ses sources.
+function resolveBasemapSourceText(): string {
+  const joinedSource = basemapService.currentBasemap?.metadata?.source || '';
+  const tiledCredit = getBasemapStyleAttribution(
+    basemapStyleStore.selectedStyle
+  );
+
+  return [joinedSource, tiledCredit].filter(Boolean).join(' — ');
 }
 
 const { actions, getState } = createToolStore<
@@ -752,8 +764,7 @@ const { actions, getState } = createToolStore<
       const withPlaceholders = options?.withPlaceholders ?? false;
       const visible = options?.visible ?? true;
       const layout = resolvePageLayout();
-      const basemapSource =
-        basemapService.currentBasemap?.metadata?.source || '';
+      const basemapSource = resolveBasemapSourceText();
 
       const hasPageElements = s.items.some((item) =>
         isPageElementRole(item.role)
@@ -882,8 +893,7 @@ const { actions, getState } = createToolStore<
       s.items = [...s.items, ...newAnnotations];
     },
     refreshPageElementPlaceholders: () => {
-      const basemapSource =
-        basemapService.currentBasemap?.metadata?.source || '';
+      const basemapSource = resolveBasemapSourceText();
       const locale = getLocale();
 
       s.items = s.items.map((item) => {

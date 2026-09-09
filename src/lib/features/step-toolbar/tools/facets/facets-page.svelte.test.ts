@@ -57,7 +57,13 @@ const baseProps = {
   visualizations: [],
   tables: new Map(),
   geoJSONs: new Map(),
-  layout: { columns: 2, gap: 16 } satisfies FacetsLayout,
+  layout: {
+    columns: 2,
+    gap: 16,
+    frameVisible: true,
+    frameColor: '#c6c6c6',
+    frameThickness: 1
+  } satisfies FacetsLayout,
   width: 600,
   height: 400
 };

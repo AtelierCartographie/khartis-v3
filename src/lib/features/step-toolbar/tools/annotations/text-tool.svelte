@@ -11,7 +11,7 @@
     AVAILABLE_FONTS,
     CARTOGRAPHIC_FONT_FAMILY,
     FONT_SIZE_OPTIONS,
-    MIN_FONT_SIZE,
+    DEFAULT_FONT_SIZE,
     clampFontSize,
     normalizeFontFamily
   } from '$lib/features/step-toolbar/fonts.constants';
@@ -133,11 +133,11 @@
   const bgOpacity = $derived(effectiveStyle.backgroundOpacity ?? 100);
 
   let localFont = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
-  let localFontSize = $state<number>(MIN_FONT_SIZE);
+  let localFontSize = $state<number>(DEFAULT_FONT_SIZE);
 
   $effect(() => {
     localFont = effectiveFont;
-    localFontSize = clampFontSize(effectiveFontSize, MIN_FONT_SIZE);
+    localFontSize = clampFontSize(effectiveFontSize, DEFAULT_FONT_SIZE);
   });
 </script>
 

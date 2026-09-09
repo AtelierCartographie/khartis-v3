@@ -8,6 +8,8 @@ import {
 } from '$lib/features/commons/constants/ui.constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
 import { formatActions } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
+import { BasemapStyle } from '$lib/features/map';
 import { setLocale } from '$lib/paraglide/runtime.js';
 import {
   annotationsActions,
@@ -19,6 +21,25 @@ describe('annotations store', () => {
     await Promise.resolve(setLocale('fr', { reload: false }));
     formatActions.reset();
     annotationsActions.reset();
+  });
+
+  it('credits the tiled basemap provider on the page element the export renders', () => {
+    basemapStyleStore.setStyle(BasemapStyle.MONDE_COULEURS);
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const credited = getAnnotationsState().items.find(
+      (item) => item.role === ANNOTATION_ROLE.BASEMAP_SOURCE
+    );
+    expect(credited?.content).toContain('OpenStreetMap');
+
+    basemapStyleStore.setStyle(BasemapStyle.BLANK_WHITE);
+    annotationsActions.reset();
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const blank = getAnnotationsState().items.find(
+      (item) => item.role === ANNOTATION_ROLE.BASEMAP_SOURCE
+    );
+    expect(blank?.content).not.toContain('OpenStreetMap');
   });
 
   it('preserves manually moved page elements when the layout is redistributed', () => {

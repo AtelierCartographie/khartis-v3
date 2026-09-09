@@ -4,6 +4,7 @@ import {
   INTERNAL_COLUMN,
   JOINED_BASEMAP_COLUMN
 } from '$lib/features/commons/constants/data.constants';
+import type { PrimitiveFilter } from '$lib/features/commons/stores/visualization.store.svelte';
 import type { LayerContext } from '../types';
 import {
   rowAccessor,
@@ -22,6 +23,62 @@ export function hasSplitRenderingContext(
   splitFeatureIdColumn: string;
 } {
   return Boolean(ctx.splitDatasetTable && ctx.splitFeatureIdColumn);
+}
+
+export function withPrimitiveScope(
+  ctx: LayerContext,
+  primitive: PrimitiveFilter
+): LayerContext {
+  return { ...ctx, scopedPrimitive: primitive };
+}
+
+export function resolveScopedAttributeTable(
+  ctx: LayerContext
+): ArrowTable | undefined {
+  const scoped = ctx.scopedPrimitive
+    ? ctx.scopedDatasetTableByPrimitive?.[ctx.scopedPrimitive]
+    : undefined;
+
+  return scoped ?? ctx.splitDatasetTable;
+}
+
+export function resolveScopedRowIds(
+  ctx: LayerContext
+): Set<number> | undefined {
+  return ctx.scopedPrimitive
+    ? ctx.scopedRowIdsByPrimitive?.[ctx.scopedPrimitive]
+    : undefined;
+}
+
+function createScopedRowAccessor<T>(
+  ctx: LayerContext,
+  sourceTable: ArrowTable,
+  accessor: (row: Record<string, unknown> | null) => T
+): (featureId: number) => T {
+  const scopedRowIds = resolveScopedRowIds(ctx);
+  if (!scopedRowIds) {
+    return rowAccessor(sourceTable, (row) => accessor(row));
+  }
+
+  const rowIdVector = sourceTable.getChild(INTERNAL_COLUMN.ID);
+  if (!rowIdVector) {
+    return rowAccessor(sourceTable, (row) => accessor(row));
+  }
+
+  return (featureId: number): T => {
+    const rowId = rowIdVector.get(featureId);
+    if (
+      rowId === null ||
+      rowId === undefined ||
+      !scopedRowIds.has(Number(rowId))
+    ) {
+      return accessor(null);
+    }
+
+    return accessor(
+      sourceTable.get(featureId) as unknown as Record<string, unknown>
+    );
+  };
 }
 
 export function resolveSplitMappingFeatureIdColumn(
@@ -58,7 +115,9 @@ export function createSplitAwareRowAccessor<T>(
   geometryTable = sourceTable
 ): (featureId: number) => T {
   if (!hasSplitRenderingContext(ctx)) {
-    return rowAccessor(sourceTable, accessor);
+    return createScopedRowAccessor(ctx, sourceTable, (row) =>
+      accessor((row ?? {}) as Record<string, unknown>)
+    );
   }
 
   const featureIdColumn = resolveSplitMappingFeatureIdColumn(
@@ -72,7 +131,7 @@ export function createSplitAwareRowAccessor<T>(
 
   return splitRowAccessor(
     geometryTable,
-    ctx.splitDatasetTable,
+    resolveScopedAttributeTable(ctx) ?? ctx.splitDatasetTable,
     featureIdColumn,
     JOINED_BASEMAP_COLUMN.ID,
     (row) => accessor((row ?? {}) as Record<string, unknown>)
@@ -86,7 +145,7 @@ export function createSplitAwareNullableRowAccessor<T>(
   geometryTable = sourceTable
 ): (featureId: number) => T {
   if (!hasSplitRenderingContext(ctx)) {
-    return rowAccessor(sourceTable, accessor);
+    return createScopedRowAccessor(ctx, sourceTable, accessor);
   }
 
   const featureIdColumn = resolveSplitMappingFeatureIdColumn(
@@ -100,7 +159,7 @@ export function createSplitAwareNullableRowAccessor<T>(
 
   return splitRowAccessor(
     geometryTable,
-    ctx.splitDatasetTable,
+    resolveScopedAttributeTable(ctx) ?? ctx.splitDatasetTable,
     featureIdColumn,
     JOINED_BASEMAP_COLUMN.ID,
     accessor
@@ -125,7 +184,7 @@ export function createSplitGeoJsonFeatureAccessor<T>(
   }
 
   const datasetByFeatureId = buildSplitDatasetRowLookup(
-    ctx.splitDatasetTable,
+    resolveScopedAttributeTable(ctx) ?? ctx.splitDatasetTable,
     JOINED_BASEMAP_COLUMN.ID
   );
   if (!datasetByFeatureId) {
@@ -160,7 +219,7 @@ export function createSplitGeoJsonNullableFeatureAccessor<T>(
   }
 
   const datasetByFeatureId = buildSplitDatasetRowLookup(
-    ctx.splitDatasetTable,
+    resolveScopedAttributeTable(ctx) ?? ctx.splitDatasetTable,
     JOINED_BASEMAP_COLUMN.ID
   );
   if (!datasetByFeatureId) {
@@ -229,6 +288,17 @@ function countSplitDatasetRowMatches(
     }
   }
   return count;
+}
+
+/**
+ * A dataset table only carries `basemap_id` once a textual join has been
+ * finalized; without it there is nothing to join a basemap geometry on.
+ */
+export function hasJoinedBasemapKey(
+  dataset: ArrowTable,
+  basemapIdColumn: string = JOINED_BASEMAP_COLUMN.ID
+): boolean {
+  return Boolean(dataset.getChild(basemapIdColumn));
 }
 
 export function resolveBestSplitFeatureIdColumn(

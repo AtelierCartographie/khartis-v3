@@ -11,7 +11,9 @@ const storeMocks = vi.hoisted(() => ({
     HEAD_TAIL: 'head_tail'
   } as const,
   PrimitiveFilterType: {
-    POLYGON: 'polygon'
+    POINT: 'point',
+    POLYGON: 'polygon',
+    TEXT: 'text'
   } as const
 }));
 
@@ -31,6 +33,10 @@ const serviceMocks = vi.hoisted(() => ({
   )
 }));
 
+const rowScopeMocks = vi.hoisted(() => ({
+  resolveRowScopeClause: vi.fn(() => null as string | null)
+}));
+
 const paletteMocks = vi.hoisted(() => ({
   DEFAULT_QUALITATIVE_PRESET: 'qualitative-default',
   findPaletteById: vi.fn(),
@@ -44,6 +50,10 @@ const paletteMocks = vi.hoisted(() => ({
 
 vi.mock('$lib/features/commons/services/classification.service', () => ({
   ...serviceMocks
+}));
+
+vi.mock('$lib/features/commons/services/row-scope.service', () => ({
+  ...rowScopeMocks
 }));
 
 vi.mock(
@@ -85,6 +95,9 @@ import {
   buildClassificationColorParamsKey,
   buildClassificationScopeKey,
   computeClassificationBreaks,
+  resolveScopeTargetPrimitive,
+  SYMBOL_FILL_SCOPE_TARGET,
+  TEXT_BACKGROUND_SCOPE_TARGET,
   resolveClassificationColors,
   resolveClassificationBreakColors,
   useClassificationBreaksController
@@ -102,6 +115,20 @@ describe('use-classification-breaks', () => {
     paletteMocks.findPaletteById.mockReset();
     paletteMocks.generateCategoricalColorsFromSeed.mockClear();
     paletteMocks.generatePaletteColors.mockClear();
+    rowScopeMocks.resolveRowScopeClause.mockReset();
+    rowScopeMocks.resolveRowScopeClause.mockReturnValue(null);
+  });
+
+  it('maps every classification scope target back to its primitive', () => {
+    expect(resolveScopeTargetPrimitive(SYMBOL_FILL_SCOPE_TARGET)).toBe(
+      PrimitiveFilterType.POINT
+    );
+    expect(resolveScopeTargetPrimitive(TEXT_BACKGROUND_SCOPE_TARGET)).toBe(
+      PrimitiveFilterType.TEXT
+    );
+    expect(resolveScopeTargetPrimitive(PrimitiveFilterType.POLYGON)).toBe(
+      PrimitiveFilterType.POLYGON
+    );
   });
 
   it('centralizes scope keys and trigger labels for break orchestration', () => {
@@ -403,7 +430,8 @@ describe('use-classification-breaks', () => {
     const applyUpdate = vi.fn();
     const controller = useClassificationBreaksController({
       retryDelayMs: 10,
-      resolveDatasetSourceFileId: () => 'dataset-source'
+      resolveDatasetSourceFileId: () => 'dataset-source',
+      getVisualization: () => undefined
     });
 
     serviceMocks.calculateBreaks
@@ -417,6 +445,7 @@ describe('use-classification-breaks', () => {
 
     await controller.compute({
       scopeKey: 'fill:polygon',
+      primitive: PrimitiveFilterType.POLYGON,
       datasetId: 'dataset-1',
       valueColumn: 'population',
       classification: {
@@ -441,5 +470,57 @@ describe('use-classification-breaks', () => {
 
     controller.destroy();
     vi.useRealTimers();
+  });
+
+  it('recomputes breaks over the filtered rows when a filter changes', async () => {
+    const applyUpdate = vi.fn();
+    const controller = useClassificationBreaksController({
+      resolveDatasetSourceFileId: () => 'dataset-source',
+      getVisualization: () => undefined
+    });
+    const classification = {
+      method: ClassificationMethod.KMEANS,
+      numClasses: 3,
+      classes: 3,
+      breaks: [30, 60]
+    } as ClassificationConfig;
+
+    serviceMocks.calculateBreaks.mockResolvedValue({
+      min: 0,
+      max: 90,
+      breaks: [30, 60],
+      counts: [1, 1, 1]
+    });
+
+    rowScopeMocks.resolveRowScopeClause.mockReturnValue('"pop" >= 1000');
+    await controller.compute({
+      scopeKey: 'fill:polygon',
+      primitive: PrimitiveFilterType.POLYGON,
+      datasetId: 'dataset-1',
+      valueColumn: 'population',
+      classification,
+      applyUpdate
+    });
+
+    expect(serviceMocks.calculateBreaks).toHaveBeenLastCalledWith(
+      expect.objectContaining({ rowScopeClause: '"pop" >= 1000' })
+    );
+
+    rowScopeMocks.resolveRowScopeClause.mockReturnValue('"pop" >= 2000');
+    await controller.compute({
+      scopeKey: 'fill:polygon',
+      primitive: PrimitiveFilterType.POLYGON,
+      datasetId: 'dataset-1',
+      valueColumn: 'population',
+      classification,
+      applyUpdate
+    });
+
+    expect(serviceMocks.calculateBreaks).toHaveBeenCalledTimes(2);
+    expect(serviceMocks.calculateBreaks).toHaveBeenLastCalledWith(
+      expect.objectContaining({ rowScopeClause: '"pop" >= 2000' })
+    );
+
+    controller.destroy();
   });
 });

@@ -8,12 +8,9 @@ export {
 } from './categorical';
 export {
   draw_khartis_density_legend,
-  draw_khartis_double_symbols_legend,
   draw_khartis_line_width_legend,
   draw_khartis_swatch_legend,
   type KhartisDensityLegendOptions,
-  type KhartisDoubleSymbolsLegendOptions,
-  type KhartisDoubleSymbolsLegendStep,
   type KhartisLegendSwatchItem,
   type KhartisLegendSwatchType,
   type LegendPatternFill,
@@ -33,6 +30,7 @@ export {
 } from './symbols';
 export {
   createLegendSvg,
+  MAX_LEGEND_CATEGORIES,
   type CommonLegendTextOptions,
   type LegendSvgDefinition
 } from './utils';

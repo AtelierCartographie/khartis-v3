@@ -1,3 +1,4 @@
+import { rebuildDerivedGeometryTables } from './derived-geometry';
 import {
   escapeIdentifier,
   escapeSqlString
@@ -118,7 +119,6 @@ export async function simplifyGeometryTable(
     : `${sourceTable}_simplified`;
   const resolvedTargetTable = options.targetTableName ?? targetTable;
   const escapedTarget = escapeIdentifier(resolvedTargetTable);
-  const escapedTargetValue = escapeSqlString(resolvedTargetTable);
 
   const createStatement = createView
     ? 'CREATE OR REPLACE VIEW'
@@ -167,22 +167,8 @@ export async function simplifyGeometryTable(
   );
 
   if (simplificationMacro === 'simplify_and_clean') {
-    // Recompute innerlines from polygon coverage so borders stay in sync.
-    const innerlinesTable = `${sourceTable}__innerlines`;
-    const escapedInnerlines = escapeIdentifier(innerlinesTable);
-    try {
-      await Duck.query(`
-        CREATE OR REPLACE TABLE "${escapedInnerlines}" AS
-        FROM extract_innerlines('${escapedTargetValue}')
-      `);
-      Duck.invalidateTableCache?.(innerlinesTable);
-    } catch (error) {
-      logger.error(
-        'Failed to rebuild simplified geometry innerlines',
-        LogCategory.DUCKDB,
-        error
-      );
-    }
+    // The derived territory and borders describe the previous geometry.
+    await rebuildDerivedGeometryTables(Duck, resolvedTargetTable);
   }
 
   const reductionPercentage =

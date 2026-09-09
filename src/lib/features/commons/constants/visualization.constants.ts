@@ -264,7 +264,8 @@ export enum BasemapRemarquables {
 
 export enum BasemapGraticuleMode {
   REMARKABLE = 'remarkable',
-  REGULAR = 'regular'
+  REGULAR = 'regular',
+  EQUATOR = 'equator'
 }
 
 export enum BasemapRepresentation {

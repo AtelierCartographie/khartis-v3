@@ -7,7 +7,7 @@
     AVAILABLE_FONTS,
     clampFontSize,
     CARTOGRAPHIC_FONT_FAMILY,
-    MIN_FONT_SIZE,
+    DEFAULT_FONT_SIZE,
     normalizeFontFamily,
     resolveFontSizeOptions
   } from '$lib/features/step-toolbar/fonts.constants';
@@ -56,7 +56,7 @@
     fallbackSize?: number;
   }
 
-  let { title, section, fallbackSize = MIN_FONT_SIZE }: Props = $props();
+  let { title, section, fallbackSize = DEFAULT_FONT_SIZE }: Props = $props();
 
   const enabled = $derived(Boolean(section));
   const align = $derived<TextAlignment>(section?.align ?? 'center');
@@ -97,7 +97,7 @@
     if (!section) return;
     const value = Number(event.detail.selectedId);
     if (!Number.isFinite(value)) return;
-    section.onSizeChange(clampFontSize(value, MIN_FONT_SIZE));
+    section.onSizeChange(clampFontSize(value, DEFAULT_FONT_SIZE));
   }
 
   function enableHaloColorPicker() {

@@ -5,11 +5,7 @@ import type { Map as MapLibreMap } from 'maplibre-gl';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import {
-  Duck,
-  duckDBOrchestrator,
-  type DataTableFilter
-} from '$lib/features/duckdb';
+import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
@@ -27,12 +23,14 @@ import {
   createBasemapLayers,
   createDeckLayers,
   createGeoJsonLayers,
+  type BasemapRowOrderEntry,
   type MetadataLayerEntry
 } from '../layers';
 import { extractGeometryInfo } from '../io';
 import { buildProjectionForBasemap } from '../utils/geoarrow-stream-bridge.utils';
 import { DeckLayerId, GeometryType } from '../constants';
 import {
+  ALL_PRIMITIVE_FILTERS,
   PrimitiveFilterType,
   getSymbolPrimitive,
   getLinePrimitive,
@@ -49,10 +47,10 @@ import type {
 import type { DeckInstance } from './use-map-init.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import {
-  filterArrowTableByDataFilters,
-  filterArrowTableByTableFilters,
-  selectRowsByIndices
+  selectRowsByIndices,
+  selectRowsInScope
 } from '../utils/arrow-filter.utils';
+import { rowScopeStore } from '../stores/row-scope.store.svelte';
 import { get_bbox_center, get_max_scale } from '../core/projscreen';
 import { getSplitMatchedGeometryRowIndices } from '../layers/split-rendering-accessors';
 import {
@@ -60,9 +58,12 @@ import {
   getVisualizationRenderOrder
 } from '../utils/layer-order.utils';
 import {
+  buildBasemapSubLayerId,
   buildVisualizationSubLayerId,
   classifyThematicLayerPrimitive,
+  isPerKeyAuxLayerType,
   mergeLayerOrder,
+  shouldRenderDeckBelowTiledLabels,
   type LayerOrderRow
 } from '../utils/layer-panel-row.utils';
 import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
@@ -155,7 +156,6 @@ export interface UseMapLayersProps {
   getModelMatrix?: () => Matrix4 | null | undefined;
   getPageDisplayScale?: () => number;
   getShouldRenderDatasetFallbacks?: () => boolean;
-  getTableFilters?: (datasetId: string) => DataTableFilter[] | undefined;
   onBasemapLayersLoaded?: () => void;
   onRepresentativePointTablesLoaded?: () => void;
 }
@@ -194,7 +194,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     getModelMatrix,
     getPageDisplayScale,
     getShouldRenderDatasetFallbacks,
-    getTableFilters,
     onBasemapLayersLoaded,
     onRepresentativePointTablesLoaded
   } = props;
@@ -307,6 +306,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
   let lastAppliedLayers: Layer<DeckDataRow>[] = [];
 
+  // Interleaved mode inserts the whole deck stack at one point in the MapLibre
+  // style, so the tiled labels row's position in the flat layer order decides
+  // whether the thematic layers go under the labels or over the entire style.
+  function resolveTiledBasemapBeforeId(map: MapLibreMap): string | undefined {
+    return shouldRenderDeckBelowTiledLabels(layerOrderStore.order)
+      ? findFirstSymbolLayerId(map)
+      : undefined;
+  }
+
   function syncInterleavedLayerOrder(): boolean {
     const deckOverlay = getDeckOverlay();
     const map = getMap();
@@ -315,11 +323,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       return false;
     }
 
-    const beforeId = findFirstSymbolLayerId(map);
-    if (!beforeId) {
-      return false;
-    }
-
+    const beforeId = resolveTiledBasemapBeforeId(map);
     const orderedLayers = applyBeforeIdToLayers(lastAppliedLayers, beforeId);
     const applied = setLayers(orderedLayers);
 
@@ -364,10 +368,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   const representativePointLoadFailures = new WeakSet<ArrowTable>();
   const representativePointNotifyOnReady = new WeakSet<ArrowTable>();
   const matchedSplitTableCache = new WeakMap<
-    ArrowTable,
-    WeakMap<ArrowTable, Map<string, ArrowTable>>
-  >();
-  const matchedSplitFilteredTableCache = new WeakMap<
     ArrowTable,
     WeakMap<ArrowTable, Map<string, ArrowTable>>
   >();
@@ -803,93 +803,50 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     return getMatchedSplitTable(split.geometry, split);
   }
 
-  function getFilteredMatchedSplitTable(
-    matchedGeometryTable: ArrowTable,
-    filteredDataset: ArrowTable,
-    featureIdColumn: string
-  ): ArrowTable {
-    let datasetCache = matchedSplitFilteredTableCache.get(matchedGeometryTable);
-    if (!datasetCache) {
-      datasetCache = new WeakMap();
-      matchedSplitFilteredTableCache.set(matchedGeometryTable, datasetCache);
-    }
+  // Every primitive keeps its geometry: a filtered entity has to stay
+  // addressable so the user can still show, hide or restyle it as missing
+  // data. Only the attributes each primitive reads are narrowed.
+  function applyPrimitiveScopes(
+    ctx: LayerContext,
+    visualizationId: string,
+    split: SplitRenderingTable | undefined
+  ): void {
+    const datasetTables: Partial<Record<PrimitiveFilter, ArrowTable>> = {};
+    const rowIds: Partial<Record<PrimitiveFilter, Set<number>>> = {};
 
-    let columnCache = datasetCache.get(filteredDataset);
-    if (!columnCache) {
-      columnCache = new Map();
-      datasetCache.set(filteredDataset, columnCache);
-    }
+    for (const primitive of ALL_PRIMITIVE_FILTERS) {
+      const scopedRowIds = rowScopeStore.getScopedRowIds(
+        visualizationId,
+        primitive
+      );
+      if (!scopedRowIds) {
+        continue;
+      }
 
-    const cached = columnCache.get(featureIdColumn);
-    if (cached) {
-      return cached;
-    }
-
-    const matchingRows = getSplitMatchedGeometryRowIndices(
-      matchedGeometryTable,
-      filteredDataset,
-      featureIdColumn
-    );
-    const filteredTable =
-      matchingRows.length === matchedGeometryTable.numRows
-        ? matchedGeometryTable
-        : selectRowsByIndices(matchedGeometryTable, matchingRows);
-    columnCache.set(featureIdColumn, filteredTable);
-    return filteredTable;
-  }
-
-  function filterSplitGeometryTableByDatasetRows(
-    geometryTable: ArrowTable,
-    split: SplitRenderingTable,
-    dataFilters: VisualizationConfig['dataFilters'],
-    primitiveType: PrimitiveFilter | undefined,
-    tableFilters: DataTableFilter[] | undefined
-  ): ArrowTable {
-    const matchedGeometryTable = getMatchedSplitTable(geometryTable, split);
-    const dataFilteredDataset = filterArrowTableByDataFilters(
-      split.dataset,
-      dataFilters,
-      primitiveType
-    );
-    const tableFilteredDataset = filterArrowTableByTableFilters(
-      dataFilteredDataset,
-      tableFilters
-    );
-
-    if (tableFilteredDataset === split.dataset) {
-      return matchedGeometryTable;
-    }
-
-    return getFilteredMatchedSplitTable(
-      matchedGeometryTable,
-      tableFilteredDataset,
-      split.featureIdColumn
-    );
-  }
-
-  function filterRepresentativePointTableByPrimitive(
-    representativePointBaseTable: ArrowTable,
-    split: SplitRenderingTable | undefined,
-    dataFilters: VisualizationConfig['dataFilters'],
-    primitiveType: PrimitiveFilter,
-    tableFilters: DataTableFilter[] | undefined
-  ): ArrowTable {
-    return split
-      ? filterSplitGeometryTableByDatasetRows(
-          representativePointBaseTable,
-          split,
-          dataFilters,
-          primitiveType,
-          tableFilters
-        )
-      : filterArrowTableByTableFilters(
-          filterArrowTableByDataFilters(
-            representativePointBaseTable,
-            dataFilters,
-            primitiveType
-          ),
-          tableFilters
+      rowIds[primitive] = scopedRowIds;
+      if (split) {
+        datasetTables[primitive] = selectRowsInScope(
+          split.dataset,
+          scopedRowIds
         );
+      }
+    }
+
+    ctx.scopedRowIdsByPrimitive = rowIds;
+    ctx.scopedDatasetTableByPrimitive = datasetTables;
+  }
+
+  function isEveryPrimitiveOutOfScope(
+    ctx: LayerContext,
+    tablePrimitiveType: PrimitiveFilter | undefined
+  ): boolean {
+    const primitives = tablePrimitiveType
+      ? [tablePrimitiveType, PrimitiveFilterType.TEXT]
+      : ALL_PRIMITIVE_FILTERS;
+
+    return primitives.every(
+      (primitive) => ctx.scopedRowIdsByPrimitive?.[primitive]?.size === 0
+    );
   }
 
   function getRequestedMetadataLayerTypes(): BasemapLayerType[] {
@@ -1023,7 +980,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       // not publish render projections outside projectionStore.setReferenceBbox.
 
       const beforeId =
-        map && deckOverlay ? findFirstSymbolLayerId(map) : undefined;
+        map && deckOverlay ? resolveTiledBasemapBeforeId(map) : undefined;
 
       const layers: Layer<DeckDataRow>[] = [];
       let hasEmptyFilteredVisualization = false;
@@ -1086,12 +1043,16 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const shouldKeepOrthographicBasemapLayers =
         shouldShowBasemapLayers || shouldShowGeneratedBasemapLayers;
 
+      let hasPendingBasemapLayerSource = false;
       let basemapBackgroundLayers: Layer<DeckDataRow>[] = [];
       let basemapForegroundLayers: Layer<DeckDataRow>[] = [];
       let basemapForegroundBelowThematicLayers: Layer<DeckDataRow>[] = [];
       // Deck layer id → panel row id for the basemap pool (computed by
       // `createBasemapLayers`); the thematic half is filled in the viz loop.
       let basemapRowIdByLayerId = new Map<string, string>();
+      // Basemap panel rows in panel order (top→bottom), published by
+      // `createBasemapLayers`.
+      let basemapPanelRowOrder: BasemapRowOrderEntry[] = [];
 
       if (shouldKeepOrthographicBasemapLayers) {
         try {
@@ -1180,12 +1141,18 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
                 : currentMetadata.isCustom
                   ? null
                   : worldBaseTable;
-              if (!table) continue;
+              if (!table) {
+                hasPendingBasemapLayerSource = true;
+                continue;
+              }
               metadataLayers.push({
                 table,
                 style: layer.style ?? null,
                 type: layer.type,
                 file: layer.file ?? currentMetadata.file,
+                panelRowId: isPerKeyAuxLayerType(layer.type)
+                  ? buildBasemapSubLayerId(layerKey)
+                  : undefined,
                 styleOverride: basemapAuxLayersStore.getStyle(
                   currentMetadata.file,
                   layerKey
@@ -1235,6 +1202,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             (layer) => !foregroundBelowSet.has(layer)
           );
           basemapRowIdByLayerId = basemapGroups.rowIdByLayerId;
+          basemapPanelRowOrder = basemapGroups.rowOrder;
         } catch (error) {
           logger.error(
             'Basemap layer creation failed; rendering thematic layers only',
@@ -1348,49 +1316,13 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             const tablePrimitiveType = geoInfo?.type
               ? GEOMETRY_TO_PRIMITIVE[geoInfo.type as GeometryType]
               : undefined;
-            const tableFilters = getTableFilters?.(datasetId);
             const filteredTable = split
-              ? filterSplitGeometryTableByDatasetRows(
-                  table,
-                  split,
-                  viz.dataFilters,
-                  tablePrimitiveType,
-                  tableFilters
-                )
-              : filterArrowTableByTableFilters(
-                  filterArrowTableByDataFilters(
-                    table,
-                    viz.dataFilters,
-                    tablePrimitiveType
-                  ),
-                  tableFilters
-                );
-            if (filteredTable !== table && filteredTable.numRows === 0) {
+              ? getMatchedSplitTable(table, split)
+              : table;
+            applyPrimitiveScopes(ctx, viz.id, split);
+            if (isEveryPrimitiveOutOfScope(ctx, tablePrimitiveType)) {
               hasEmptyFilteredVisualization = true;
             }
-            // Raw point datasets have no representative-point table, so the
-            // text layer renders from the main table; give it its own
-            // TEXT-filtered copy so Texts filters apply and Symbols filters
-            // don't leak onto the labels.
-            ctx.textPointTable =
-              geoInfo?.type === GeometryType.POINT
-                ? split
-                  ? filterSplitGeometryTableByDatasetRows(
-                      table,
-                      split,
-                      viz.dataFilters,
-                      PrimitiveFilterType.TEXT,
-                      tableFilters
-                    )
-                  : filterArrowTableByTableFilters(
-                      filterArrowTableByDataFilters(
-                        table,
-                        viz.dataFilters,
-                        PrimitiveFilterType.TEXT
-                      ),
-                      tableFilters
-                    )
-                : undefined;
             const joinedBasemapId = split
               ? getDatasetJoinedBasemap(datasetId)
               : null;
@@ -1408,33 +1340,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
                 : rawRepresentativePointBaseTable;
 
             if (representativePointBaseTable) {
-              const filteredRepresentativePointTable =
-                filterRepresentativePointTableByPrimitive(
-                  representativePointBaseTable,
-                  split,
-                  viz.dataFilters,
-                  PrimitiveFilterType.POINT,
-                  tableFilters
-                );
-              const filteredTextRepresentativePointTable =
-                filterRepresentativePointTableByPrimitive(
-                  representativePointBaseTable,
-                  split,
-                  viz.dataFilters,
-                  PrimitiveFilterType.TEXT,
-                  tableFilters
-                );
-              ctx.representativePointTable = filteredRepresentativePointTable;
-              ctx.representativePointGeometryInfo =
+              const representativeGeometryInfo =
                 getCachedRepresentativeGeometryInfo(
-                  filteredRepresentativePointTable
+                  representativePointBaseTable
                 ) ?? undefined;
-              ctx.textRepresentativePointTable =
-                filteredTextRepresentativePointTable;
+              ctx.representativePointTable = representativePointBaseTable;
+              ctx.representativePointGeometryInfo = representativeGeometryInfo;
+              ctx.textRepresentativePointTable = representativePointBaseTable;
               ctx.textRepresentativePointGeometryInfo =
-                getCachedRepresentativeGeometryInfo(
-                  filteredTextRepresentativePointTable
-                ) ?? undefined;
+                representativeGeometryInfo;
             } else {
               ctx.representativePointTable = undefined;
               ctx.representativePointGeometryInfo = undefined;
@@ -1581,64 +1495,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         }
       }
 
-      // Basemap order-rows from the three render buckets: each row's group +
-      // below-thematic flag feeds the canonical default slot (via
-      // `computeDefaultLayerOrder` inside `mergeLayerOrder`) for rows the
-      // persisted order has never seen, while a user drag overrides it. Mirrors
-      // the panel's basemap rows so both sides project onto the same order.
-      const basemapOrderRows = new Map<string, LayerOrderRow>();
-      const addBasemapOrderRows = (
-        bucket: readonly Layer<DeckDataRow>[],
-        group: 'foreground' | 'background',
-        belowThematic: boolean
-      ): void => {
-        for (const layer of bucket) {
-          const rowId = basemapRowIdByLayerId.get(String(layer.id));
-          if (!rowId || basemapOrderRows.has(rowId)) continue;
-          basemapOrderRows.set(rowId, {
-            id: rowId,
-            kind: 'basemap-aux',
-            basemapRenderGroup: group,
-            basemapRenderBelowThematic: belowThematic
-          });
-        }
-      };
-      addBasemapOrderRows(
-        [...basemapBackgroundLayers].reverse(),
-        'background',
-        false
-      );
-      addBasemapOrderRows(
-        basemapForegroundBelowThematicLayers,
-        'foreground',
-        true
-      );
-      addBasemapOrderRows(basemapForegroundLayers, 'foreground', false);
-
-      // The flat panel order is the single source of truth: project the live
-      // rows onto the persisted drag order (manual drags win, new rows slot in
-      // at their default position, stale ids drop out), then draw the reverse —
-      // top of the panel = front of the map. Any row can sit above or below any
-      // other; there is no bucket clamp.
-      const panelLayerOrder = mergeLayerOrder(
-        [...thematicOrderRows.values(), ...basemapOrderRows.values()],
-        layerOrderStore.order,
-        activeVisualizations.map((viz) => viz.id)
-      );
-      const rowIdForLayer = (layer: Layer): string | null =>
-        thematicRowIdByLayerId.get(String(layer.id)) ??
-        basemapRowIdByLayerId.get(String(layer.id)) ??
-        null;
-      const orderedLayers = applyPanelRenderOrder(
-        [
-          ...basemapBackgroundLayers,
-          ...basemapForegroundBelowThematicLayers,
-          ...basemapForegroundLayers,
-          ...layers
-        ],
-        panelLayerOrder,
-        rowIdForLayer
-      );
       // The projected-sphere ocean mask should appear for any non-identity
       // projection driving the render — both manual overrides and a basemap's
       // own default projection (e.g. Equal Earth on the World map). Gating it
@@ -1709,23 +1565,79 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             };
           })()
         : undefined;
-      // A default simple projection stays unframed. A composite projection is
-      // different: its sphere represents the boundary of every sub-projection
-      // frame, so it must remain visible without a manual override (#195).
+      // The outline of the ocean shape, driven by the Mers/Océans contour
+      // toggle alone: a basemap on its own default projection used to stay
+      // unframed whatever that toggle said.
       const projectionSphereOutlineLayer =
-        sphereProjectionInput &&
-        sphereVisible &&
-        (hasManualProjectionOverride || isCompositeBasemapProjection)
+        sphereProjectionInput && sphereVisible
           ? createProjectionSphereOutlineLayer({
               projection: sphereProjectionInput,
               modelMatrix: matrixToApply,
               ...(sphereOutlineOptions ?? {})
             })
           : null;
+
+      // The sphere outline is the `sphere` panel row's only deck layer, so it
+      // joins the foreground pool instead of being pinned in front of
+      // everything — a symbol overlapping it now reads above the outline.
+      if (projectionSphereOutlineLayer) {
+        const sphereRowId = buildBasemapSubLayerId(BASEMAP_LAYER_ID.SPHERE);
+        basemapRowIdByLayerId.set(
+          String(projectionSphereOutlineLayer.id),
+          sphereRowId
+        );
+        if (sphereConfig?.renderBelowThematic ?? true) {
+          basemapForegroundBelowThematicLayers.push(
+            projectionSphereOutlineLayer
+          );
+        } else {
+          basemapForegroundLayers.push(projectionSphereOutlineLayer);
+        }
+      }
+
+      // Basemap order-rows in panel order: each row's group + below-thematic
+      // flag feeds the canonical default slot (via `computeDefaultLayerOrder`
+      // inside `mergeLayerOrder`) for rows the persisted order has never seen,
+      // while a user drag overrides it. Mirrors the panel's basemap rows so
+      // both sides project onto the same order.
+      const basemapOrderRows = new Map<string, LayerOrderRow>();
+      for (const entry of basemapPanelRowOrder) {
+        if (basemapOrderRows.has(entry.id)) continue;
+        basemapOrderRows.set(entry.id, {
+          id: entry.id,
+          kind: 'basemap-aux',
+          basemapRenderGroup: entry.renderGroup,
+          basemapRenderBelowThematic: entry.belowThematic
+        });
+      }
+
+      // The flat panel order is the single source of truth: project the live
+      // rows onto the persisted drag order (manual drags win, new rows slot in
+      // at their default position, stale ids drop out), then draw the reverse —
+      // top of the panel = front of the map. Any row can sit above or below any
+      // other; there is no bucket clamp.
+      const panelLayerOrder = mergeLayerOrder(
+        [...thematicOrderRows.values(), ...basemapOrderRows.values()],
+        layerOrderStore.order,
+        activeVisualizations.map((viz) => viz.id)
+      );
+      const rowIdForLayer = (layer: Layer): string | null =>
+        thematicRowIdByLayerId.get(String(layer.id)) ??
+        basemapRowIdByLayerId.get(String(layer.id)) ??
+        null;
+      const orderedLayers = applyPanelRenderOrder(
+        [
+          ...basemapBackgroundLayers,
+          ...basemapForegroundBelowThematicLayers,
+          ...basemapForegroundLayers,
+          ...layers
+        ],
+        panelLayerOrder,
+        rowIdForLayer
+      );
       const maskedOrderedLayers = applyProjectionSphereMask(
         orderedLayers,
-        projectionSphereMaskLayer,
-        projectionSphereOutlineLayer
+        projectionSphereMaskLayer
       );
       layers.length = 0;
       layers.push(...maskedOrderedLayers);
@@ -1735,13 +1647,16 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       );
       const hasExpectedDatasetFallbacks =
         shouldRenderDatasetFallbacks && (tables.size > 0 || geoJSONs.size > 0);
-      const hasVisibleBasemapConfig =
-        shouldKeepOrthographicBasemapLayers &&
-        basemapLayersStore.visibleLayers.length > 0;
+      // The layer store always holds its ten rows, so "one of them is visible"
+      // says nothing about a basemap that draws none of them: it kept the
+      // previous stack on screen after the user hid every row. What justifies
+      // holding it is a visible layer whose table has not loaded yet.
+      const hasPendingBasemapLayers =
+        shouldKeepOrthographicBasemapLayers && hasPendingBasemapLayerSource;
       const hasExpectedVisibleLayers =
         hasExpectedActiveViz ||
         hasExpectedDatasetFallbacks ||
-        hasVisibleBasemapConfig;
+        hasPendingBasemapLayers;
       const previousLayersToPreserve = getPreservablePreviousLayers(
         shouldKeepOrthographicBasemapLayers
       );

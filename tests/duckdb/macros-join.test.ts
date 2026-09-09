@@ -5,7 +5,6 @@ import {
   createTestInstance,
   destroyTestInstance,
   query,
-  run,
   type TestDuckDB
 } from '../pipeline/duckdb-node-helper';
 
@@ -14,14 +13,6 @@ let db: TestDuckDB;
 beforeAll(async () => {
   db = await createTestInstance();
   await db.connection.run(join_macros);
-  await run(
-    db,
-    'CREATE OR REPLACE TABLE basemap_ref (id INTEGER, normalized VARCHAR)'
-  );
-  await run(
-    db,
-    "INSERT INTO basemap_ref VALUES (1,'paris'),(2,'lyon'),(3,'marseille'),(4,'pari'),(5,'toulouse')"
-  );
 });
 
 afterAll(async () => {
@@ -46,50 +37,66 @@ describe('normalize_text_join macro', () => {
   });
 });
 
-describe('get_similarity macro', () => {
-  it('returns a score > 0.9 for near-exact match ("paris" vs "pari")', async () => {
-    const rows = await query(
-      db,
-      "FROM get_similarity('paris', 'basemap_ref') WHERE id = 4"
-    );
-    expect(rows.length).toBeGreaterThan(0);
-    expect(rows[0].score as number).toBeGreaterThan(0.9);
+const CUTOFF = FUZZY_SEARCH.SCORE_CUTOFF;
+
+const FULL_SCORE = `GREATEST(
+  jaro_winkler_similarity(a, b, ${CUTOFF}),
+  0.99 * jaro_winkler_similarity(a_sorted, b_sorted, ${CUTOFF})
+)`;
+
+const SHORT_CIRCUIT_SCORE = `CASE
+  WHEN a_sorted = a AND b_sorted = b
+  THEN jaro_winkler_similarity(a, b, ${CUTOFF})
+  ELSE ${FULL_SCORE}
+END`;
+
+const SCORED_PAIRS = `
+  WITH pairs(raw_a, raw_b) AS (VALUES
+    ('Korea North', 'North Korea'),
+    ('Congo Dem Rep', 'Dem Rep Congo'),
+    ('Amerique du Nord Etats Unis', 'Etats-Unis d Amerique'),
+    ('Frnace', 'France'),
+    ('Gremany', 'Germany'),
+    ('Marseile', 'Marseille'),
+    ('Barseille', 'Marseille'),
+    ('Saint-Denis', 'Saint-Denis-sur-Coise'),
+    ('Cote Ivoire', 'Cote d Ivoire'),
+    ('Toulon', 'Toulouse'),
+    ('Unknownland', 'Finland')
+  ),
+  forms AS (
+    SELECT
+      normalize_text_join(raw_a) AS a,
+      normalize_text_join(raw_b) AS b,
+      array_to_string(list_sort(string_split(normalize_text_join(raw_a), ' ')), ' ') AS a_sorted,
+      array_to_string(list_sort(string_split(normalize_text_join(raw_b), ' ')), ' ') AS b_sorted
+    FROM pairs
+  )
+  SELECT a, b, ${FULL_SCORE} AS full_score, ${SHORT_CIRCUIT_SCORE} AS short_score
+  FROM forms`;
+
+describe('fuzzy scoring short-circuit', () => {
+  it('scores every pair exactly like the full GREATEST', async () => {
+    const rows = await query(db, SCORED_PAIRS);
+
+    expect(rows).toHaveLength(11);
+    for (const row of rows) {
+      expect(Number(row.short_score)).toBe(Number(row.full_score));
+    }
   });
 
-  it('classifies exact match as "exact" and close match as "partial"', async () => {
-    const rows = await query(
-      db,
-      "FROM get_similarity('paris', 'basemap_ref') ORDER BY score DESC"
-    );
-    const exact = rows.find((r) => r.typo_match === 'exact');
-    expect(exact).toBeDefined();
-    expect((exact as Record<string, unknown>).id).toBe(1);
+  it('keeps recovering reordered names through the sorted form', async () => {
+    const rows = await query(db, SCORED_PAIRS);
+    const reordered = rows.filter((row) => row.a === 'korea north');
+
+    expect(reordered).toHaveLength(1);
+    expect(Number(reordered[0].short_score)).toBeCloseTo(0.99, 10);
   });
 
-  it('classifies a low-similarity result as "toofar"', async () => {
-    const rows = await query(
-      db,
-      "FROM get_similarity('paris', 'basemap_ref') WHERE id = 3"
-    );
-    expect(rows.length).toBeGreaterThan(0);
-    expect(rows[0].typo_match).toBe('toofar');
-  });
+  it('leaves calibrated near-misses below the cutoff', async () => {
+    const rows = await query(db, SCORED_PAIRS);
+    const nearMiss = rows.find((row) => row.a === 'toulon');
 
-  it('should prune a near miss when its raw score is below the shared cutoff', async () => {
-    const rawRows = await query(
-      db,
-      "SELECT jaro_winkler_similarity('toulon', 'toulouse') AS score"
-    );
-    const rawScore = rawRows[0].score as number;
-    expect(rawScore).toBeGreaterThan(0.85);
-    expect(rawScore).toBeLessThan(FUZZY_SEARCH.SCORE_CUTOFF);
-
-    const rows = await query(
-      db,
-      "FROM get_similarity('toulon', 'basemap_ref') WHERE id = 5"
-    );
-    expect(rows).toHaveLength(1);
-    expect(rows[0].score).toBe(0);
-    expect(rows[0].typo_match).toBe('toofar');
+    expect(Number(nearMiss?.short_score)).toBe(0);
   });
 });

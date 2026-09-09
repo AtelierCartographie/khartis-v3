@@ -27,9 +27,11 @@ import {
   getTextPrimitive,
   PrimitiveFilterType,
   type ClassificationConfig,
+  type PrimitiveFilter,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
+import { rowScopeStore } from '../stores/row-scope.store.svelte';
 import {
   CATEGORY_SHAPE_CYCLE,
   CategoryShapeMode,
@@ -49,7 +51,6 @@ import {
   createLegendSvg,
   draw_categorical_legend,
   draw_khartis_density_legend,
-  draw_khartis_double_symbols_legend,
   draw_khartis_line_width_legend,
   draw_khartis_swatch_legend,
   draw_quanti_color_legend,
@@ -58,7 +59,6 @@ import {
   type CategoricalShapeType,
   type CategoryItem,
   type CommonLegendTextOptions,
-  type KhartisDoubleSymbolsLegendStep,
   type KhartisLegendSwatchItem,
   type KhartisLegendSwatchType,
   type KhartisLineWidthLegendStep,
@@ -80,9 +80,14 @@ import {
   type PointSizeLegendScale
 } from './legend.utils';
 import type { LegendItem } from '$lib/features/step-toolbar/tools/legend';
+import {
+  facetsStore,
+  resolveSharedFacetScaleColumns,
+  type SharedFacetScaleColumn
+} from '$lib/features/step-toolbar/tools/facets';
+import type { LegendSubtitlePrimitive } from '$lib/features/commons/utils/legend-subtitle.utils';
 
 const legendPatternFillCache: Record<string, LegendPatternFill> = {};
-const MAX_VISIBLE_LEGEND_CATEGORIES = 24;
 
 function getLegendPatternFill(
   patternId: string,
@@ -152,25 +157,18 @@ type LegendCategoricalEntry = {
   originalIndex: number;
 };
 
-type LimitedLegendItems<T> = {
-  items: T[];
-  hiddenCount: number;
+type LegendSegmentContext = {
+  includeMissingDataFooter: boolean;
 };
-
-function limitLegendItems<T>(items: T[]): LimitedLegendItems<T> {
-  return {
-    items: items.slice(0, MAX_VISIBLE_LEGEND_CATEGORIES),
-    hiddenCount: Math.max(0, items.length - MAX_VISIBLE_LEGEND_CATEGORIES)
-  };
-}
 
 type LegendSegmentDraft = {
   key: string;
   className: string;
+  primitive: LegendSubtitlePrimitive;
   consumesMissingData?: boolean;
   create: (
     options: CommonLegendTextOptions,
-    context: { includeMissingDataFooter: boolean }
+    context: LegendSegmentContext
   ) => LegendSvgDefinition | null;
 };
 
@@ -251,11 +249,11 @@ function getLegendClassedColorClassification(
 
 function getLegendCategoricalEntries(
   viz: VisualizationConfig | undefined
-): LimitedLegendItems<LegendCategoricalEntry> {
+): LegendCategoricalEntry[] {
   const classification = getLegendCategoricalClassification(viz);
   const colors = classification?.colors ?? [];
   if (colors.length === 0) {
-    return { items: [], hiddenCount: 0 };
+    return [];
   }
 
   const labels = classification?.labels ?? [];
@@ -263,22 +261,19 @@ function getLegendCategoricalEntries(
     (classification?.disabledLabels ?? []).map((label) => String(label))
   );
 
-  return limitLegendItems(
-    colors
-      .map((color, index) => {
-        const label =
-          labels[index] ??
-          m.palette_category_default_label({ index: index + 1 });
+  return colors
+    .map((color, index) => {
+      const label =
+        labels[index] ?? m.palette_category_default_label({ index: index + 1 });
 
-        return {
-          key: `${label}-${index}`,
-          label,
-          color,
-          originalIndex: index
-        };
-      })
-      .filter((entry) => !disabled.has(entry.label))
-  );
+      return {
+        key: `${label}-${index}`,
+        label,
+        color,
+        originalIndex: index
+      };
+    })
+    .filter((entry) => !disabled.has(entry.label));
 }
 
 function getLegendPointCategoryShape(
@@ -457,23 +452,70 @@ function getStatisticsNumber(
   );
 }
 
-function getNumericColumnValues(
-  viz: VisualizationConfig | undefined,
-  columnName: string | undefined
+function collectNumericColumnValues(
+  visualizationId: string | undefined,
+  datasetId: string | undefined,
+  columnName: string | undefined,
+  primitive: PrimitiveFilter
 ): number[] {
-  const statistics = getColumnStatistics(viz, columnName);
+  // Every symbol drawer reads the extent of these values, so the resolved
+  // scope can stand in for the rows it no longer draws.
+  const scopedDomain = visualizationId
+    ? rowScopeStore.getScopedDomain(visualizationId, primitive, columnName)
+    : null;
+  if (scopedDomain) {
+    return buildSampleValues(scopedDomain.min, scopedDomain.max);
+  }
 
-  if (!viz?.datasetId || !columnName) {
+  const statistics =
+    datasetId && columnName
+      ? datasetsStore.getColumnStatistics(datasetId, columnName)
+      : null;
+
+  if (!datasetId || !columnName) {
     return getStatisticsSampleValues(statistics);
   }
 
   const fallbackValues = getStatisticsSampleValues(statistics);
   const values = datasetsStore
-    .getColumnValues(viz.datasetId, columnName)
+    .getColumnValues(datasetId, columnName)
     .map(toFiniteLegendNumber)
     .filter((value): value is number => value !== null);
 
   return values.length > 0 ? values : fallbackValues;
+}
+
+function getNumericColumnValues(
+  viz: VisualizationConfig | undefined,
+  columnName: string | undefined,
+  primitive: PrimitiveFilter
+): number[] {
+  const sharedFacetColumns = getSharedFacetScaleColumns(viz, columnName);
+  if (sharedFacetColumns.length > 0) {
+    return sharedFacetColumns.flatMap((column) =>
+      collectNumericColumnValues(
+        column.visualizationId,
+        column.datasetId,
+        column.columnName,
+        primitive
+      )
+    );
+  }
+
+  return collectNumericColumnValues(
+    viz?.id,
+    viz?.datasetId,
+    columnName,
+    primitive
+  );
+}
+
+function buildSampleValues(minValue: number, maxValue: number): number[] {
+  if (minValue === maxValue) {
+    return [maxValue];
+  }
+
+  return [minValue, minValue + (maxValue - minValue) / 2, maxValue];
 }
 
 function getStatisticsSampleValues(statistics: unknown): number[] {
@@ -484,11 +526,26 @@ function getStatisticsSampleValues(statistics: unknown): number[] {
     return [];
   }
 
-  if (minValue === maxValue) {
-    return [maxValue];
+  return buildSampleValues(minValue, maxValue);
+}
+
+// A collection on a shared scale draws every facet against the merged domain
+// of its variables, so the legend has to read that same domain.
+function getSharedFacetScaleColumns(
+  viz: VisualizationConfig | undefined,
+  columnName: string | undefined
+): SharedFacetScaleColumn[] {
+  if (!viz || !columnName || !facetsStore.enabled) {
+    return [];
   }
 
-  return [minValue, minValue + (maxValue - minValue) / 2, maxValue];
+  return resolveSharedFacetScaleColumns({
+    visualizations: facetsStore.facetVisualizations,
+    scaleMode: facetsStore.scaleMode,
+    primarySlotPath: facetsStore.primarySlotPath,
+    visualizationId: viz.id,
+    columnName
+  });
 }
 
 function getColumnStatistics(
@@ -499,7 +556,36 @@ function getColumnStatistics(
     return null;
   }
 
+  const sharedFacetColumns = getSharedFacetScaleColumns(viz, columnName);
+  if (sharedFacetColumns.length > 0) {
+    return combineColumnStatistics(sharedFacetColumns);
+  }
+
   return datasetsStore.getColumnStatistics(viz.datasetId, columnName);
+}
+
+function combineColumnStatistics(
+  columns: SharedFacetScaleColumn[]
+): { min: number; max: number } | null {
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+
+  for (const column of columns) {
+    const statistics = datasetsStore.getColumnStatistics(
+      column.datasetId,
+      column.columnName
+    );
+    const columnMin = getStatisticsNumber(statistics, 'min');
+    const columnMax = getStatisticsNumber(statistics, 'max');
+    if (columnMin === null || columnMax === null) {
+      continue;
+    }
+
+    min = Math.min(min, columnMin);
+    max = Math.max(max, columnMax);
+  }
+
+  return Number.isFinite(min) && Number.isFinite(max) ? { min, max } : null;
 }
 
 function getLegendStepLabel(
@@ -641,11 +727,9 @@ function getSymbolLegendType(shape: ShapeType): SymbolType | null {
   }
 }
 
-export function getLegendSegments(
-  item: LegendItem,
-  viz: VisualizationConfig | undefined,
-  legendTextStyle: LegendTextStyle
-): LegendSegment[] {
+function getLegendSegmentDrafts(
+  viz: VisualizationConfig | undefined
+): LegendSegmentDraft[] {
   const drafts = [
     getDensityLegendDraft(viz),
     getClassedColorLegendDraft(viz),
@@ -653,7 +737,7 @@ export function getLegendSegments(
     getTextColorLegendDraft(viz),
     getTextSizeLegendDraft(viz),
     getUniquePointSymbolLegendDraft(viz),
-    getPointSizeLegendDraft(viz),
+    ...getPointSizeLegendDrafts(viz),
     getLineWidthLegendDraft(viz)
   ].filter((draft): draft is LegendSegmentDraft => draft !== null);
 
@@ -667,6 +751,18 @@ export function getLegendSegments(
       drafts.push(missingDataDraft);
     }
   }
+
+  return drafts;
+}
+
+export function getLegendSegments(
+  item: LegendItem,
+  viz: VisualizationConfig | undefined,
+  legendTextStyle: LegendTextStyle
+): LegendSegment[] {
+  const drafts = getLegendSegmentDrafts(viz).filter(
+    (draft) => !item.primitive || draft.primitive === item.primitive
+  );
 
   const lastMissingDataDraftIndex = drafts.findLastIndex(
     (draft) => draft.consumesMissingData
@@ -775,6 +871,7 @@ function getClassedColorLegendDraft(
   );
   return {
     key: 'classed-color',
+    primitive,
     className:
       type === 'pattern' ? 'legend-svg--patterns' : 'legend-svg--categorical',
     consumesMissingData: isLegendMissingDataShown(viz, primitive),
@@ -833,7 +930,7 @@ function getTextColorLegendDraft(
         };
       })
       .filter((entry) => !disabled.has(entry.label));
-    const { items: categories, hiddenCount } = limitLegendItems(allCategories);
+    const categories = allCategories;
 
     if (categories.length === 0) {
       return null;
@@ -841,6 +938,7 @@ function getTextColorLegendDraft(
 
     return {
       key: 'text-categorical-color',
+      primitive: 'text',
       className: 'legend-svg--text-color',
       consumesMissingData: Boolean(missingData?.show),
       create: (options, context) =>
@@ -850,8 +948,7 @@ function getTextColorLegendDraft(
             type: 'symbol',
             ...getTextCategoricalMissingDataFooterOptions(
               text,
-              context.includeMissingDataFooter,
-              hiddenCount
+              context.includeMissingDataFooter
             )
           })
         )
@@ -883,6 +980,7 @@ function getTextColorLegendDraft(
 
     return {
       key: 'text-classed-color',
+      primitive: 'text',
       className: 'legend-svg--text-color',
       consumesMissingData: Boolean(missingData?.show),
       create: (options, context) =>
@@ -917,7 +1015,11 @@ function getTextSizeLegendDraft(
     return null;
   }
 
-  const values = getNumericColumnValues(viz, text.valueColumn);
+  const values = getNumericColumnValues(
+    viz,
+    text.valueColumn,
+    PrimitiveFilterType.TEXT
+  );
   if (values.length === 0) {
     return null;
   }
@@ -941,6 +1043,7 @@ function getTextSizeLegendDraft(
 
   return {
     key: 'text-size',
+    primitive: 'text',
     className: 'legend-svg--text-size',
     consumesMissingData: Boolean(text.missingData?.show),
     create: (options, context) =>
@@ -967,23 +1070,18 @@ function getQuantitativeColorLegendDraft(
   classification: ClassificationConfig,
   classPatternFills?: (LegendPatternFill | null)[]
 ): LegendSegmentDraft | null {
+  const valueColumn = getPrimitiveValueColumn(viz, PrimitiveFilterType.POLYGON);
+  const scopedDomain = rowScopeStore.getScopedDomain(
+    viz.id,
+    PrimitiveFilterType.POLYGON,
+    valueColumn
+  );
+  const statistics = getColumnStatistics(viz, valueColumn);
   const thresholds = buildQuantiColorThresholds({
     breaks: classification.breaks,
     colors: classification.colors,
-    min: getStatisticsNumber(
-      getColumnStatistics(
-        viz,
-        getPrimitiveValueColumn(viz, PrimitiveFilterType.POLYGON)
-      ),
-      'min'
-    ),
-    max: getStatisticsNumber(
-      getColumnStatistics(
-        viz,
-        getPrimitiveValueColumn(viz, PrimitiveFilterType.POLYGON)
-      ),
-      'max'
-    )
+    min: scopedDomain?.min ?? getStatisticsNumber(statistics, 'min'),
+    max: scopedDomain?.max ?? getStatisticsNumber(statistics, 'max')
   });
 
   if (!thresholds) {
@@ -992,6 +1090,7 @@ function getQuantitativeColorLegendDraft(
 
   return {
     key: 'quantitative-color',
+    primitive: 'area',
     className: classPatternFills
       ? 'legend-svg--patterns'
       : 'legend-svg--quantitative',
@@ -1021,7 +1120,7 @@ function getCategoricalLegendDraft(
 
   const primitive = resolveLegendColorSwatchPrimitive(viz);
   const classification = getLegendCategoricalClassification(viz);
-  const { items: entries, hiddenCount } = getLegendCategoricalEntries(viz);
+  const entries = getLegendCategoricalEntries(viz);
 
   if (!classification || entries.length === 0) {
     return null;
@@ -1043,6 +1142,7 @@ function getCategoricalLegendDraft(
 
       return {
         key: 'categorical-patterns',
+        primitive,
         className: 'legend-svg--patterns',
         consumesMissingData: isLegendMissingDataShown(viz, primitive),
         create: (options, context) =>
@@ -1053,8 +1153,7 @@ function getCategoricalLegendDraft(
               ...getCategoricalMissingDataFooterOptions(
                 viz,
                 primitive,
-                context.includeMissingDataFooter,
-                hiddenCount
+                context.includeMissingDataFooter
               )
             })
           )
@@ -1068,6 +1167,7 @@ function getCategoricalLegendDraft(
 
       return {
         key: 'categorical-patterns',
+        primitive,
         className: 'legend-svg--patterns',
         consumesMissingData: isLegendMissingDataShown(viz, primitive),
         create: (options, context) =>
@@ -1078,8 +1178,7 @@ function getCategoricalLegendDraft(
               ...getCategoricalSwatchFooterOptions(
                 viz,
                 context.includeMissingDataFooter,
-                primitive,
-                hiddenCount
+                primitive
               )
             })
           )
@@ -1095,6 +1194,7 @@ function getCategoricalLegendDraft(
 
   return {
     key: 'categorical-color',
+    primitive,
     className: 'legend-svg--categorical',
     consumesMissingData: isLegendMissingDataShown(viz, primitive),
     create: (options, context) =>
@@ -1105,73 +1205,196 @@ function getCategoricalLegendDraft(
           ...getCategoricalMissingDataFooterOptions(
             viz,
             primitive,
-            context.includeMissingDataFooter,
-            hiddenCount
+            context.includeMissingDataFooter
           )
         })
       )
   };
 }
 
-function getPointSizeLegendDraft(
+function getPointSizeLegendDrafts(
   viz: VisualizationConfig | undefined
-): LegendSegmentDraft | null {
+): LegendSegmentDraft[] {
   const scale = getPointSizeLegendScale(
     viz,
     getColumnStatistics(viz, viz?.mapping.sizeColumn)
   );
 
   if (!viz || !scale) {
-    return null;
+    return [];
   }
 
   const type = getSymbolLegendType(scale.shape);
+  const symbol = getSymbolPrimitive(viz);
+  const maxSize = symbol?.maxSize ?? 18;
+  const barWidth = symbol?.barWidth ?? DEFAULT_LINEAR_SYMBOL_BAR_WIDTH;
 
   if (scale.kind === 'proportional' && !scale.secondary && type) {
-    const values = getNumericColumnValues(viz, viz.mapping.sizeColumn);
+    const values = getNumericColumnValues(
+      viz,
+      viz.mapping.sizeColumn,
+      PrimitiveFilterType.POINT
+    );
     if (values.length > 0) {
-      const symbol = getSymbolPrimitive(viz);
-      const maxSize = symbol?.maxSize ?? 18;
-      const barWidth = symbol?.barWidth ?? DEFAULT_LINEAR_SYMBOL_BAR_WIDTH;
-      return {
-        key: 'point-size',
-        className: 'legend-svg--symbols',
-        consumesMissingData: isLegendMissingDataShown(viz, 'point'),
-        create: (options, context) =>
-          toLegendSvg(
-            draw_symbols_legend(values, {
-              ...options,
-              type,
-              size: maxSize,
-              fill: scale.fillColor,
-              stroke: scale.strokeColor,
-              bar_width: barWidth,
-              nodata: context.includeMissingDataFooter
-                ? isLegendMissingDataShown(viz, 'point')
-                : false,
-              nodataLabel: context.includeMissingDataFooter
-                ? m.missing_data_text()
-                : undefined
-            })
-          )
-      };
+      return [
+        {
+          key: 'point-size',
+          primitive: 'point',
+          className: 'legend-svg--symbols',
+          consumesMissingData: isLegendMissingDataShown(viz, 'point'),
+          create: (options, context) =>
+            toLegendSvg(
+              // A single graduated column carries its meaning in the size
+              // alone, so the symbols stay unfilled outlines.
+              draw_symbols_legend(values, {
+                ...options,
+                type,
+                size: maxSize,
+                bar_width: barWidth,
+                nodata: context.includeMissingDataFooter
+                  ? isLegendMissingDataShown(viz, 'point')
+                  : false,
+                nodataLabel: context.includeMissingDataFooter
+                  ? m.missing_data_text()
+                  : undefined
+              })
+            )
+        }
+      ];
     }
   }
 
-  if (scale.secondary) {
-    const steps = getDoubleSymbolLegendSteps(viz, scale);
-    if (steps.length === 0) {
-      return null;
+  if (scale.secondary && type) {
+    const primaryColumn = symbol?.sizeColumn ?? viz.mapping.sizeColumn;
+    const secondaryColumn = scale.secondary.valueColumn;
+
+    if (!primaryColumn || !secondaryColumn) {
+      return [];
     }
 
-    return {
-      key: 'double-point-size',
-      className: 'legend-svg--double-symbols',
+    // A shared scale means one graduated column reads for both variables, so
+    // the column stays neutral and the colour boxes underneath carry the
+    // variables — the same shape the cross-zero legend uses for + and -.
+    if (scale.commonScale !== false) {
+      const sharedValues = [
+        ...getNumericColumnValues(
+          viz,
+          primaryColumn,
+          PrimitiveFilterType.POINT
+        ),
+        ...getNumericColumnValues(
+          viz,
+          secondaryColumn,
+          PrimitiveFilterType.POINT
+        )
+      ];
+      if (sharedValues.length === 0) {
+        return [];
+      }
+
+      return [
+        {
+          key: 'double-point-size',
+          primitive: 'point',
+          className: 'legend-svg--double-symbols',
+          consumesMissingData: isLegendMissingDataShown(viz, 'point'),
+          create: (options, context) =>
+            toLegendSvg(
+              draw_symbols_legend(sharedValues, {
+                ...options,
+                type,
+                size: maxSize,
+                bar_width: barWidth,
+                colorSwatches: [
+                  { color: scale.fillColor, label: primaryColumn },
+                  {
+                    color: scale.secondary?.fillColor ?? scale.fillColor,
+                    label: secondaryColumn
+                  }
+                ],
+                nodata: context.includeMissingDataFooter
+                  ? isLegendMissingDataShown(viz, 'point')
+                  : false,
+                nodataLabel: context.includeMissingDataFooter
+                  ? m.missing_data_text()
+                  : undefined
+              })
+            )
+        }
+      ];
+    }
+
+    // Own scales cannot share a graduated column: each variable gets a
+    // complete symbol legend of its own, named and coloured after its column.
+    return [
+      {
+        column: primaryColumn,
+        color: scale.fillColor,
+        key: 'double-point-size-primary'
+      },
+      {
+        column: secondaryColumn,
+        color: scale.secondary.fillColor,
+        key: 'double-point-size-secondary'
+      }
+    ]
+      .map((variable): LegendSegmentDraft | null => {
+        const values = getNumericColumnValues(
+          viz,
+          variable.column,
+          PrimitiveFilterType.POINT
+        );
+        if (values.length === 0) {
+          return null;
+        }
+
+        return {
+          key: variable.key,
+          primitive: 'point',
+          className: 'legend-svg--symbols',
+          consumesMissingData: isLegendMissingDataShown(viz, 'point'),
+          create: (
+            options: CommonLegendTextOptions,
+            context: LegendSegmentContext
+          ) =>
+            toLegendSvg(
+              draw_symbols_legend(values, {
+                ...options,
+                subtitle: variable.column,
+                type,
+                size: maxSize,
+                fill: variable.color,
+                stroke: scale.strokeColor,
+                bar_width: barWidth,
+                nodata: context.includeMissingDataFooter
+                  ? isLegendMissingDataShown(viz, 'point')
+                  : false,
+                nodataLabel: context.includeMissingDataFooter
+                  ? m.missing_data_text()
+                  : undefined
+              })
+            )
+        };
+      })
+      .filter((draft): draft is LegendSegmentDraft => draft !== null);
+  }
+
+  const items = getPointSizeLegendItems(viz, scale);
+  if (items.length === 0) {
+    return [];
+  }
+
+  return [
+    {
+      key: 'point-size-classes',
+      primitive: 'point',
+      className: 'legend-svg--symbols',
       consumesMissingData: isLegendMissingDataShown(viz, 'point'),
       create: (options, context) =>
         toLegendSvg(
-          draw_khartis_double_symbols_legend(steps, {
+          draw_khartis_swatch_legend(items, {
             ...options,
+            type: 'symbol',
             ...getMissingDataFooterOptions(
               viz,
               context.includeMissingDataFooter,
@@ -1179,31 +1402,8 @@ function getPointSizeLegendDraft(
             )
           })
         )
-    };
-  }
-
-  const items = getPointSizeLegendItems(viz, scale);
-  if (items.length === 0) {
-    return null;
-  }
-
-  return {
-    key: 'point-size-classes',
-    className: 'legend-svg--symbols',
-    consumesMissingData: isLegendMissingDataShown(viz, 'point'),
-    create: (options, context) =>
-      toLegendSvg(
-        draw_khartis_swatch_legend(items, {
-          ...options,
-          type: 'symbol',
-          ...getMissingDataFooterOptions(
-            viz,
-            context.includeMissingDataFooter,
-            'point'
-          )
-        })
-      )
-  };
+    }
+  ];
 }
 
 function getUniquePointSymbolLegendDraft(
@@ -1249,6 +1449,7 @@ function getUniquePointSymbolLegendDraft(
 
   return {
     key: 'unique-point-symbol',
+    primitive: 'point',
     className: 'legend-svg--symbols',
     consumesMissingData: isLegendMissingDataShown(viz, 'point'),
     create: (options, context) =>
@@ -1295,6 +1496,7 @@ function getLineWidthLegendDraft(
 
   return {
     key: 'line-width',
+    primitive: 'line',
     className: 'legend-svg--line-width',
     consumesMissingData: isLegendMissingDataShown(viz, 'line'),
     create: (options, context) =>
@@ -1322,6 +1524,7 @@ function getDensityLegendDraft(
 
   return {
     key: 'density',
+    primitive: 'area',
     className: 'legend-svg--density',
     consumesMissingData: isLegendMissingDataShown(viz, 'area'),
     create: (options, context) =>
@@ -1354,6 +1557,7 @@ function getMissingDataLegendDraft(
 
   return {
     key: 'missing-data',
+    primitive,
     className: 'legend-svg--missing-data',
     create: (options, _context) =>
       toLegendSvg(
@@ -1468,33 +1672,6 @@ function getPointSizeLegendItems(
   }));
 }
 
-function getDoubleSymbolLegendSteps(
-  viz: VisualizationConfig,
-  scale: PointSizeLegendScale
-): KhartisDoubleSymbolsLegendStep[] {
-  if (!scale.secondary) {
-    return [];
-  }
-
-  const classification = getPrimitiveClassification(
-    viz,
-    PrimitiveFilterType.POINT
-  );
-  const breaks = classification?.breaks ?? viz.classification?.breaks;
-  const classCount = getClassificationClassCount(classification);
-
-  return scale.steps.map((step) => ({
-    label: getLegendStepLabel(step, breaks, classCount),
-    size: getPointLegendDisplaySize(scale, step.size),
-    symbol: getShapePath(scale.shape),
-    fill: scale.fillColor,
-    secondaryFill: scale.secondary?.fillColor ?? scale.fillColor,
-    stroke: scale.strokeColor,
-    opacity: scale.fillOpacity,
-    positionMode: scale.positionMode
-  }));
-}
-
 function getMissingDataFooterOptions(
   viz: VisualizationConfig,
   includeFooter = true,
@@ -1513,20 +1690,10 @@ function getMissingDataFooterOptions(
   };
 }
 
-function getHiddenCategoriesLegendItem(hiddenCount: number): CategoryItem {
-  return {
-    label: m.categories_hidden_count({ count: hiddenCount }),
-    fill: 'none',
-    stroke: 'none',
-    strokeWidth: 0
-  };
-}
-
 function getCategoricalSwatchFooterOptions(
   viz: VisualizationConfig,
   includeMissingData: boolean,
-  primitive: LegendSwatchPrimitive,
-  hiddenCount: number
+  primitive: LegendSwatchPrimitive
 ): {
   footerItems?: KhartisLegendSwatchItem[];
   footerType?: KhartisLegendSwatchType;
@@ -1536,10 +1703,8 @@ function getCategoricalSwatchFooterOptions(
     includeMissingData,
     primitive
   );
-  const footerItems: KhartisLegendSwatchItem[] = [
-    ...(hiddenCount > 0 ? [getHiddenCategoriesLegendItem(hiddenCount)] : []),
-    ...(missingDataOptions.footerItems ?? [])
-  ];
+  const footerItems: KhartisLegendSwatchItem[] =
+    missingDataOptions.footerItems ?? [];
 
   return footerItems.length > 0
     ? {
@@ -1569,18 +1734,15 @@ function getTextMissingDataFooterOptions(
 
 function getTextCategoricalMissingDataFooterOptions(
   text: NonNullable<ReturnType<typeof getTextPrimitive>>,
-  includeFooter = true,
-  hiddenCount = 0
+  includeFooter = true
 ): {
   footerItems?: CategoryItem[];
   footerType?: CategoricalFooterShapeType;
 } {
-  const footerItems: CategoryItem[] = [
-    ...(hiddenCount > 0 ? [getHiddenCategoriesLegendItem(hiddenCount)] : []),
-    ...(includeFooter && text.missingData?.show
+  const footerItems: CategoryItem[] =
+    includeFooter && text.missingData?.show
       ? [getTextMissingDataLegendItem(text)]
-      : [])
-  ];
+      : [];
 
   return footerItems.length > 0
     ? {
@@ -1593,8 +1755,7 @@ function getTextCategoricalMissingDataFooterOptions(
 function getCategoricalMissingDataFooterOptions(
   viz: VisualizationConfig,
   primitive: LegendSwatchPrimitive,
-  includeFooter = true,
-  hiddenCount = 0
+  includeFooter = true
 ): {
   footerItems?: CategoryItem[];
   footerType?: CategoricalFooterShapeType;
@@ -1605,10 +1766,7 @@ function getCategoricalMissingDataFooterOptions(
   const item = includeMissingData
     ? getMissingDataLegendItem(viz, missingDataPrimitive)
     : null;
-  const footerItems: CategoryItem[] = [
-    ...(hiddenCount > 0 ? [getHiddenCategoriesLegendItem(hiddenCount)] : []),
-    ...(item ? [item] : [])
-  ];
+  const footerItems: CategoryItem[] = item ? [item] : [];
   if (footerItems.length === 0) {
     return {};
   }

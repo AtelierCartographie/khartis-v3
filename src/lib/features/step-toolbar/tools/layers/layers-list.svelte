@@ -9,10 +9,6 @@
     onToggleVisibility: (layerId: string) => void;
     onOpenSettings: (layerId: string) => void;
     onReorder: (fromIndex: number, toIndex: number) => void;
-    onMoveLayer?: (layerId: string, direction: -1 | 1) => void;
-    onRenameLayer?: (visualizationId: string) => void;
-    onDuplicateLayer?: (visualizationId: string) => void;
-    onDeleteLayer?: (visualizationId: string) => void;
     reorderable?: boolean;
   }
 
@@ -21,10 +17,6 @@
     onToggleVisibility,
     onOpenSettings,
     onReorder,
-    onMoveLayer,
-    onRenameLayer,
-    onDuplicateLayer,
-    onDeleteLayer,
     reorderable = true
   }: Props = $props();
 
@@ -84,18 +76,11 @@
   onconsider={handleConsider}
   onfinalize={handleFinalize}
 >
-  {#each items as layer, index (layer.id)}
+  {#each items as layer (layer.id)}
     <LayerItem
       layer={layer}
       onToggleVisibility={onToggleVisibility}
       onOpenSettings={onOpenSettings}
-      canMoveUp={index > 0}
-      canMoveDown={index < items.length - 1}
-      onMoveUp={() => onMoveLayer?.(layer.id, -1)}
-      onMoveDown={() => onMoveLayer?.(layer.id, 1)}
-      onRenameLayer={onRenameLayer}
-      onDuplicateLayer={onDuplicateLayer}
-      onDeleteLayer={onDeleteLayer}
       showDragHandle={reorderable && !layer.tiledLayerGroupIds}
     />
   {/each}

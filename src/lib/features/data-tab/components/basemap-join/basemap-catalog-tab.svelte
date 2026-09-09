@@ -2,8 +2,10 @@
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
+  import { sortCatalogBasemapsForDisplay } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
+  import { FEEDBACK_FORM_URL } from '$lib/features/commons/constants/doc-links.constants';
   import {
     Button,
     ComboBox,
@@ -34,7 +36,6 @@
     allBasemaps: BasemapMetadata[];
     basemapSelected: string;
     onSelectBasemap: (basemap: BasemapMetadata) => void;
-    onSuggestBasemap?: () => void;
     suggestionsOpen?: boolean;
     catalogOpen?: boolean;
     onSuggestionsToggle?: (expanded: boolean) => void;
@@ -46,7 +47,6 @@
     allBasemaps,
     basemapSelected,
     onSelectBasemap,
-    onSuggestBasemap,
     suggestionsOpen,
     catalogOpen,
     onSuggestionsToggle,
@@ -64,8 +64,12 @@
     return Array.from(years).sort((a, b) => b.localeCompare(a));
   });
 
+  const sortedBasemaps = $derived(
+    sortCatalogBasemapsForDisplay(allBasemaps, getLocale())
+  );
+
   const filteredBasemaps = $derived.by(() => {
-    let results: BasemapMetadata[] = [...allBasemaps];
+    let results: BasemapMetadata[] = [...sortedBasemaps];
 
     const trimmedQuery = searchQuery.trim();
     if (trimmedQuery) {
@@ -98,7 +102,7 @@
       return filteredBasemaps.filter((b) => !suggestionIds.has(b.file));
     }
 
-    return allBasemaps.filter((b) => !suggestionIds.has(b.file));
+    return sortedBasemaps.filter((b) => !suggestionIds.has(b.file));
   });
 
   const yearCounts = $derived.by(() => {
@@ -118,7 +122,7 @@
 
   const searchComboBoxItems = $derived.by((): SearchComboBoxItem[] => {
     const lang = getLocale();
-    return allBasemaps.map((b, index) => {
+    return sortedBasemaps.map((b, index) => {
       const title = lang === 'fr' ? b.title_fr : b.title_en;
       const subtitle = lang === 'fr' ? b.subtitle_fr : b.subtitle_en;
       return {
@@ -169,9 +173,12 @@
       title={m.section_suggestions()}
       open={suggestionsPanelOpen}
       onToggle={onSuggestionsToggle}
+      titleClass="suggestions-title"
     >
       {#snippet icon()}
-        <MagicWand size={16} />
+        <span class="suggestions-title-icon">
+          <MagicWand size={16} />
+        </span>
       {/snippet}
       {#if suggestedBasemaps.length > 0}
         <p class="section-subtitle">
@@ -284,18 +291,18 @@
           </div>
         </div>
       {/if}
-      {#if onSuggestBasemap}
-        <div class="suggest-action">
-          <Button
-            kind="ghost"
-            size="small"
-            icon={Add}
-            on:click={onSuggestBasemap}
-          >
-            {m.basemap_suggest_button()}
-          </Button>
-        </div>
-      {/if}
+      <div class="suggest-action">
+        <Button
+          kind="ghost"
+          size="small"
+          icon={Add}
+          href={FEEDBACK_FORM_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {m.basemap_suggest_button()}
+        </Button>
+      </div>
     </ExpandableSection>
   </div>
 </div>
@@ -306,10 +313,16 @@
     flex-direction: column;
   }
 
+  .suggestions-title-icon {
+    color: var(--khartis-additions-interactive-suggestions, #0072c3);
+    display: flex;
+    align-items: center;
+  }
+
   .section-subtitle {
     margin: 0 0 var(--cds-spacing-03) 0;
     font-size: 0.8125rem;
-    color: var(--cds-link-01);
+    color: var(--khartis-additions-text-helper-suggestions, #0072c3);
     line-height: 1.25rem;
   }
 

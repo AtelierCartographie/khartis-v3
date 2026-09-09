@@ -21,35 +21,34 @@ const {
   mockFetch,
   mockWaitForInitialization,
   mockInitDuckDb,
-  mockReadGeoParquetViaDuckDB,
-  mockExtractGeometryInfo,
-  mockArrowTableToGeoJSON
+  mockLoadWorldLandGeometry
 } = vi.hoisted(() => ({
   mockFetch: vi.fn(async () => ({ ok: false }) as Response),
   mockWaitForInitialization: vi.fn(async () => undefined),
   mockInitDuckDb: vi.fn(async () => undefined),
-  mockReadGeoParquetViaDuckDB: vi.fn(async () => ({})),
-  mockExtractGeometryInfo: vi.fn(() => ({ geoColumn: 'geometry' })),
-  mockArrowTableToGeoJSON: vi.fn(() => ({
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'Polygon',
-          coordinates: [
-            [
-              [-10, 0],
-              [10, 0],
-              [10, 10],
-              [-10, 10],
-              [-10, 0]
+  mockLoadWorldLandGeometry: vi.fn(async () => ({
+    borders: { type: 'FeatureCollection', features: [] },
+    land: {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [-10, 0],
+                [10, 0],
+                [10, 10],
+                [-10, 10],
+                [-10, 0]
+              ]
             ]
-          ]
+          }
         }
-      }
-    ]
+      ]
+    }
   }))
 }));
 
@@ -70,13 +69,8 @@ vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
   }
 }));
 
-vi.mock('../services/read-geojson-arrow.service', () => ({
-  readGeoParquetViaDuckDB: mockReadGeoParquetViaDuckDB
-}));
-
-vi.mock('../io', () => ({
-  arrowTableToGeoJSON: mockArrowTableToGeoJSON,
-  extractGeometryInfo: mockExtractGeometryInfo
+vi.mock('$lib/features/commons/utils/world-land-geometry', () => ({
+  loadWorldLandGeometry: mockLoadWorldLandGeometry
 }));
 
 vi.hoisted(() => {
@@ -219,9 +213,7 @@ describe('geo indications overlay dragging', () => {
     mockFetch.mockClear();
     mockWaitForInitialization.mockClear();
     formatActions.reset();
-    mockReadGeoParquetViaDuckDB.mockClear();
-    mockExtractGeometryInfo.mockClear();
-    mockArrowTableToGeoJSON.mockClear();
+    mockLoadWorldLandGeometry.mockClear();
     formatActions.setSize(300, 200);
     formatActions.setMargins({
       top: 0,
@@ -537,10 +529,6 @@ describe('geo indications overlay dragging', () => {
   });
 
   it('keeps inset land and sea paint inline for image export serialization', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      arrayBuffer: async () => new ArrayBuffer(0)
-    } as Response);
     mapInstanceStore.setMapInstance(
       createBoundsMap({
         north: 60,
@@ -573,6 +561,10 @@ describe('geo indications overlay dragging', () => {
 
   it('converts projected map bounds before rendering the inset extent', async () => {
     const invert = vi.fn(([x, y]: [number, number]) => [x / 1000, y / 1000]);
+    const projection = Object.assign(
+      ([lon, lat]: [number, number]) => [lon * 1000, lat * 1000],
+      { invert }
+    );
     mapInstanceStore.setMapInstance(
       createBoundsMap({
         north: 60000,
@@ -585,9 +577,7 @@ describe('geo indications overlay dragging', () => {
       [-30000, 0, 30000, 60000],
       undefined,
       true,
-      {
-        invert
-      } as never
+      projection as never
     );
     geoIndicationsActions.toggleInsetMap();
 

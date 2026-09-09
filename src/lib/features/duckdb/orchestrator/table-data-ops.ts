@@ -262,6 +262,111 @@ export async function getRowStats(
   return { total, filtered: total };
 }
 
+export interface ColumnDomain {
+  min: number;
+  max: number;
+}
+
+export async function getColumnDomainsInScope(
+  tableName: string,
+  clause: string | null,
+  columns: string[],
+  Duck: DuckDBClientForTableData
+): Promise<Map<string, ColumnDomain>> {
+  const domains = new Map<string, ColumnDomain>();
+  if (columns.length === 0) {
+    return domains;
+  }
+
+  const escapedTable = escapeIdentifier(tableName);
+  const projections = columns
+    .map((column, index) => {
+      const numericRef = `TRY_CAST("${escapeIdentifier(column)}" AS DOUBLE)`;
+      return `MIN(${numericRef}) AS min_${index}, MAX(${numericRef}) AS max_${index}`;
+    })
+    .join(', ');
+  const where = clause ? ` WHERE COALESCE(${clause}, FALSE)` : '';
+
+  const result = (await Duck.query(
+    `SELECT ${projections} FROM "${escapedTable}"${where}`
+  )) as ArrowTableLike;
+  if (result.numRows === 0) {
+    return domains;
+  }
+
+  const row = result.get(0) as Record<string, unknown>;
+  columns.forEach((column, index) => {
+    // A non-numeric column and an empty scope both aggregate to NULL, and
+    // Number(null) is a finite 0 — coercing first would invent a 0..0 domain.
+    const rawMin = row[`min_${index}`];
+    const rawMax = row[`max_${index}`];
+    if (rawMin === null || rawMax === null) {
+      return;
+    }
+
+    const min = Number(rawMin);
+    const max = Number(rawMax);
+    if (Number.isFinite(min) && Number.isFinite(max)) {
+      domains.set(column, { min, max });
+    }
+  });
+
+  return domains;
+}
+
+function buildScopedCountExpression(clause: string | null): string {
+  return clause
+    ? `COUNT(*) FILTER (WHERE COALESCE(${clause}, FALSE))`
+    : 'COUNT(*)';
+}
+
+export async function getScopedRowStats(
+  tableName: string,
+  scopeClause: string | null,
+  Duck: DuckDBClientForTableData
+): Promise<FilterStats> {
+  // The denominator a primitive filter works against is what the table filter
+  // already let through, not the whole table.
+  const tableClause = buildFilterWhereClause(getFiltersMap().get(tableName));
+  const escapedTable = escapeIdentifier(tableName);
+  const result = (await Duck.query(
+    `SELECT ${buildScopedCountExpression(tableClause)} AS total,
+            ${buildScopedCountExpression(scopeClause ?? tableClause)} AS filtered
+     FROM "${escapedTable}"`
+  )) as ArrowTableLike;
+
+  if (result.numRows === 0) {
+    return { total: 0, filtered: 0 };
+  }
+
+  const row = result.get(0) as Record<string, unknown>;
+  return {
+    total: Number(row?.total) || 0,
+    filtered: Number(row?.filtered) || 0
+  };
+}
+
+export async function getRowIdsInScope(
+  tableName: string,
+  clause: string,
+  Duck: DuckDBClientForTableData
+): Promise<Set<number>> {
+  const escapedTable = escapeIdentifier(tableName);
+  const query = `SELECT ${INTERNAL_COLUMN.ID} FROM "${escapedTable}" WHERE COALESCE(${clause}, FALSE)`;
+  const result = (await Duck.query(query)) as ArrowTableLike;
+  const rowIds = new Set<number>();
+
+  for (let index = 0; index < result.numRows; index += 1) {
+    const row = result.get(index) as Record<string, unknown>;
+    const rowId = normalizeRowId(row[INTERNAL_COLUMN.ID]);
+    if (rowId !== null) {
+      rowIds.add(rowId);
+    }
+  }
+
+  return rowIds;
+}
+
 export async function getExcludedRowIds(
   tableName: string,
   Duck: DuckDBClientForTableData

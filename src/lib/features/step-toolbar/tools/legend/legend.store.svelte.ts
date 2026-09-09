@@ -7,20 +7,20 @@ import {
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
-import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
+import * as m from '$lib/paraglide/messages';
 import {
   clampFontSize,
   CARTOGRAPHIC_FONT_FAMILY,
   normalizeFontFamily
 } from '$lib/features/step-toolbar/fonts.constants';
-import { getVisualizationLegendSubtitle } from '$lib/features/commons/utils/legend-subtitle.utils';
 import {
-  getFormatLayoutSizingContext,
-  getFormatState
-} from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+  getEnabledLegendPrimitives,
+  getPrimitiveLegendSubtitle,
+  getVisualizationLegendSubtitle,
+  type LegendSubtitlePrimitive
+} from '$lib/features/commons/utils/legend-subtitle.utils';
 import { LEGEND_DEFAULTS, LEGEND_ID_PREFIXES } from './legend.constants';
 import type {
-  LegendDragPosition,
   LegendItem,
   LegendState,
   LegendStyle
@@ -61,7 +61,6 @@ type LegendActions = {
   updateLegendItem: (id: string, updates: Partial<LegendItem>) => void;
   toggleLegendVisibility: () => void;
   setVisibility: (visible: boolean) => void;
-  setDragPosition: (pos: LegendDragPosition | null) => void;
   setActiveTab: (tab: LegendTab) => void;
   updateStyle: (updates: Partial<LegendStyle>) => void;
   updateBackground: (
@@ -71,23 +70,52 @@ type LegendActions = {
   syncWithVisualizations: () => void;
 };
 
-function getLegendSubtitle(visualization: VisualizationConfig): string {
-  return getVisualizationLegendSubtitle(visualization);
+const PRIMITIVE_LABELS: Record<LegendSubtitlePrimitive, () => string> = {
+  point: () => m.symbols_title(),
+  area: () => m.polygons_title(),
+  line: () => m.lines_title(),
+  text: () => m.texts_title()
+};
+
+function getLegendSubtitle(
+  visualization: VisualizationConfig,
+  primitive?: LegendSubtitlePrimitive
+): string {
+  return primitive
+    ? getPrimitiveLegendSubtitle(visualization, primitive)
+    : getVisualizationLegendSubtitle(visualization);
+}
+
+function getLegendItemName(
+  visualization: VisualizationConfig,
+  primitive: LegendSubtitlePrimitive
+): string {
+  return `${visualization.name} — ${PRIMITIVE_LABELS[primitive]()}`;
+}
+
+function getLegendItemId(
+  visualization: VisualizationConfig,
+  primitive: LegendSubtitlePrimitive
+): string {
+  return `${LEGEND_ID_PREFIXES.VIZ}${visualization.id}--${primitive}`;
 }
 
 function createLegendItemFromVisualization(
-  visualization: VisualizationConfig
+  visualization: VisualizationConfig,
+  primitive: LegendSubtitlePrimitive
 ): LegendItem {
   return {
-    id: `${LEGEND_ID_PREFIXES.VIZ}${visualization.id}`,
-    name: visualization.name,
+    id: getLegendItemId(visualization, primitive),
+    name: getLegendItemName(visualization, primitive),
     visible: true,
     title: visualization.name,
     titleMode: 'auto',
-    subtitle: getLegendSubtitle(visualization),
+    subtitle: getLegendSubtitle(visualization, primitive),
     subtitleMode: 'auto',
     note: '',
-    variableId: visualization.id
+    variableId: visualization.id,
+    primitive,
+    dragPosition: null
   };
 }
 
@@ -124,32 +152,50 @@ function syncLegendItemsWithVisualizations(
 ): LegendItem[] {
   const usedItemIds = new Set<string>();
 
-  const linkedItems = visualizations.map((visualization) => {
-    const existing =
-      currentItems.find((item) => item.variableId === visualization.id) ??
-      currentItems.find(
-        (item) => !item.variableId && item.name === visualization.name
-      );
+  const linkedItems = visualizations.flatMap((visualization) => {
+    const primitives = getEnabledLegendPrimitives(visualization);
 
-    if (!existing) {
-      return createLegendItemFromVisualization(visualization);
-    }
+    return primitives.map((primitive, index) => {
+      const existing =
+        currentItems.find(
+          (item) =>
+            item.variableId === visualization.id && item.primitive === primitive
+        ) ??
+        // A legend saved before primitives were split covers the whole
+        // visualization, so its text and position carry over to the first one.
+        (index === 0
+          ? currentItems.find(
+              (item) =>
+                !item.primitive &&
+                (item.variableId === visualization.id ||
+                  (!item.variableId && item.name === visualization.name))
+            )
+          : undefined);
 
-    usedItemIds.add(existing.id);
+      if (!existing) {
+        return createLegendItemFromVisualization(visualization, primitive);
+      }
 
-    const defaultSubtitle = getLegendSubtitle(visualization);
-    const titleMode = resolveTitleMode(existing);
-    const subtitleMode = resolveSubtitleMode(existing, visualization);
+      usedItemIds.add(existing.id);
 
-    return {
-      ...existing,
-      name: visualization.name,
-      title: titleMode === 'auto' ? visualization.name : existing.title,
-      titleMode,
-      subtitle: subtitleMode === 'auto' ? defaultSubtitle : existing.subtitle,
-      subtitleMode,
-      variableId: visualization.id
-    };
+      const name = getLegendItemName(visualization, primitive);
+      const defaultSubtitle = getLegendSubtitle(visualization, primitive);
+      const titleMode = resolveTitleMode(existing);
+      const subtitleMode = resolveSubtitleMode(existing, visualization);
+
+      return {
+        ...existing,
+        id: getLegendItemId(visualization, primitive),
+        name,
+        title: titleMode === 'auto' ? visualization.name : existing.title,
+        titleMode,
+        subtitle: subtitleMode === 'auto' ? defaultSubtitle : existing.subtitle,
+        subtitleMode,
+        variableId: visualization.id,
+        primitive,
+        dragPosition: existing.dragPosition ?? null
+      };
+    });
   });
 
   const customItems = currentItems.filter(
@@ -176,7 +222,10 @@ function areLegendItemsEqual(a: LegendItem[], b: LegendItem[]): boolean {
       current.subtitle !== next.subtitle ||
       current.subtitleMode !== next.subtitleMode ||
       current.note !== next.note ||
-      current.variableId !== next.variableId
+      current.variableId !== next.variableId ||
+      current.primitive !== next.primitive ||
+      current.dragPosition?.x !== next.dragPosition?.x ||
+      current.dragPosition?.y !== next.dragPosition?.y
     ) {
       return false;
     }
@@ -209,9 +258,6 @@ const { actions, getState } = createToolStore<LegendState, LegendActions>(
     },
     setVisibility: (visible: boolean) => {
       s.visible = visible;
-    },
-    setDragPosition: (pos: LegendDragPosition | null) => {
-      s.dragPosition = pos;
     },
     setActiveTab: (tab: LegendTab) => {
       s.activeTab = tab;
@@ -256,14 +302,6 @@ const { actions, getState } = createToolStore<LegendState, LegendActions>(
 
       if (!areLegendItemsEqual(s.items, syncedItems)) {
         s.items = syncedItems;
-      }
-
-      if (!s.hasBeenOpened) {
-        const fmt = getFormatState();
-        const tokens = resolveLayoutSizingTokens(
-          getFormatLayoutSizingContext(fmt)
-        );
-        s.style.fontSize = tokens.legend.fontSize;
       }
     }
   }),

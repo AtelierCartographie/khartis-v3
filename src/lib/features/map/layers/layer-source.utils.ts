@@ -5,6 +5,7 @@ import { extractGeometryInfo } from '../io';
 import type { GeometryInfo, LayerContext } from '../types';
 import {
   buildSplitDatasetRowMapping,
+  resolveScopedAttributeTable,
   resolveSplitMappingFeatureIdColumn
 } from './split-rendering-accessors';
 
@@ -27,13 +28,18 @@ export function attachBinaryPickingMetadata(
       sourceTable,
       ctx.splitFeatureIdColumn
     );
+    // The tooltip has to agree with what is drawn: a feature kept only to hold
+    // the reference geometry together reads as missing, so it must not report
+    // a value.
+    const attributeTable =
+      resolveScopedAttributeTable(ctx) ?? ctx.splitDatasetTable;
 
-    target.khartisSourceTable = ctx.splitDatasetTable;
-    target.khartisSplitDatasetTable = ctx.splitDatasetTable;
+    target.khartisSourceTable = attributeTable;
+    target.khartisSplitDatasetTable = attributeTable;
     if (featureIdColumn) {
       target.khartisSplitDatasetRowByGeomRow = buildSplitDatasetRowMapping(
         sourceTable,
-        ctx.splitDatasetTable,
+        attributeTable,
         featureIdColumn
       );
     }

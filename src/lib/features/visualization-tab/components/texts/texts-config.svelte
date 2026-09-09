@@ -13,6 +13,7 @@
     VisualizationModes,
     VizDataFilter
   } from '$lib/features/commons/stores/visualization.store.svelte';
+  import type { FilterStats } from '$lib/features/duckdb';
   import * as m from '$lib/paraglide/messages';
   import {
     DEFAULT_COLORS,
@@ -74,6 +75,7 @@
     onBackgroundInvertPalette?: () => void;
     onBackgroundStrokeInvertPalette?: () => void;
     filters?: VizDataFilter[];
+    filterStats?: FilterStats;
     onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
     onUpdateFilter?: (
       filterId: string,
@@ -104,6 +106,7 @@
     onBackgroundInvertPalette,
     onBackgroundStrokeInvertPalette,
     filters = [],
+    filterStats,
     onAddFilter,
     onUpdateFilter,
     onRemoveFilter,
@@ -241,12 +244,12 @@
         visualization.style.labelHaloColor ?? DEFAULT_COLORS.halo;
     }
 
-    if (visualization?.missingData) {
-      showMissingData = visualization.missingData.show ?? true;
-      missingDataColor =
-        visualization.missingData.color ?? DEFAULT_COLORS.missingData;
-      missingDataLabel =
-        visualization.missingData.label ?? m.missing_data_text();
+    const missingData =
+      visualization?.text?.missingData ?? visualization?.missingData;
+    if (missingData) {
+      showMissingData = missingData.show ?? true;
+      missingDataColor = missingData.color ?? DEFAULT_COLORS.missingData;
+      missingDataLabel = missingData.label ?? m.missing_data_text();
     }
   });
 
@@ -564,6 +567,7 @@
       title={m.texts_title()}
       dataFields={dataFields}
       filters={filters}
+      stats={filterStats}
       onAddFilter={onAddFilter ?? (() => {})}
       onUpdateFilter={onUpdateFilter}
       onRemoveFilter={onRemoveFilter ?? (() => {})}

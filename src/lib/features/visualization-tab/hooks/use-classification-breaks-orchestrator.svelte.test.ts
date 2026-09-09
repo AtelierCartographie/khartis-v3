@@ -18,6 +18,9 @@ vi.mock('./use-classification-breaks.svelte', () => ({
   buildClassificationScopeKey: vi.fn(
     (role, primitive) => `${role}:${String(primitive)}`
   ),
+  resolveScopeTargetPrimitive: vi.fn(
+    (target) => `primitive-of:${String(target)}`
+  ),
   SYMBOL_FILL_SCOPE_TARGET: 'symbol-fill',
   TEXT_BACKGROUND_SCOPE_TARGET: 'text-bg'
 }));
@@ -121,6 +124,7 @@ describe('useClassificationBreaksOrchestrator', () => {
     expect(bag.classificationBreaks.compute).toHaveBeenCalledWith(
       expect.objectContaining({
         scopeKey: 'fill:polygon',
+        primitive: 'primitive-of:polygon',
         datasetId: 'ds-1',
         valueColumn: 'pop',
         trigger: 'unknown'
@@ -143,6 +147,7 @@ describe('useClassificationBreaksOrchestrator', () => {
     expect(bag.classificationBreaks.compute).toHaveBeenCalledWith(
       expect.objectContaining({
         scopeKey: 'size:line',
+        primitive: 'primitive-of:line',
         valueColumn: 'line_thick'
       })
     );
@@ -154,6 +159,7 @@ describe('useClassificationBreaksOrchestrator', () => {
     expect(bag.classificationBreaks.compute).toHaveBeenCalledWith(
       expect.objectContaining({
         scopeKey: 'stroke:point',
+        primitive: 'primitive-of:point',
         valueColumn: 'stroke_val'
       })
     );
@@ -165,7 +171,10 @@ describe('useClassificationBreaksOrchestrator', () => {
       'classification-params-changed' as never
     );
     expect(bag.classificationBreaks.compute).toHaveBeenCalledWith(
-      expect.objectContaining({ scopeKey: 'fill:symbol-fill' })
+      expect.objectContaining({
+        scopeKey: 'fill:symbol-fill',
+        primitive: 'primitive-of:symbol-fill'
+      })
     );
   });
 
@@ -173,7 +182,10 @@ describe('useClassificationBreaksOrchestrator', () => {
     const bag = makeBag();
     bag.orchestrator.computeTextBackgroundBreaks();
     expect(bag.classificationBreaks.compute).toHaveBeenCalledWith(
-      expect.objectContaining({ scopeKey: 'fill:text-bg' })
+      expect.objectContaining({
+        scopeKey: 'fill:text-bg',
+        primitive: 'primitive-of:text-bg'
+      })
     );
   });
 
@@ -181,7 +193,10 @@ describe('useClassificationBreaksOrchestrator', () => {
     const bag = makeBag();
     bag.orchestrator.computeTextBackgroundStrokeBreaks();
     expect(bag.classificationBreaks.compute).toHaveBeenCalledWith(
-      expect.objectContaining({ scopeKey: 'stroke:text-bg' })
+      expect.objectContaining({
+        scopeKey: 'stroke:text-bg',
+        primitive: 'primitive-of:text-bg'
+      })
     );
   });
 

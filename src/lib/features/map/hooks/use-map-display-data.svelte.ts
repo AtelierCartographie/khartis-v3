@@ -7,8 +7,12 @@ import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.st
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { globalState } from '$lib/features/commons/stores/global.svelte';
 import {
+  ALL_PRIMITIVE_FILTERS,
   getPolygonPrimitive,
+  getPrimitiveSizeColumn,
+  getPrimitiveValueColumn,
   visualizationStore,
+  type PrimitiveFilter,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -21,8 +25,15 @@ import { SvelteMap } from 'svelte/reactivity';
 import { basemapService } from '../services/basemap.service.svelte';
 import { densityLoadingStore } from '../stores/density-loading.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
+import {
+  rowScopeStore,
+  type RowScopeTarget
+} from '../stores/row-scope.store.svelte';
 import type { SplitRenderingTable } from '../types';
-import { resolveBestSplitFeatureIdColumn } from '../layers/split-rendering-accessors';
+import {
+  hasJoinedBasemapKey,
+  resolveBestSplitFeatureIdColumn
+} from '../layers/split-rendering-accessors';
 import {
   isWgs84LikeCrs,
   shouldReprojectDatasetForActiveProjection
@@ -106,6 +117,44 @@ export function useMapDisplayData(
       .filter((value): value is string => value !== null)
       .join('|')
   );
+
+  function collectPrimitiveNumericColumns(
+    viz: VisualizationConfig,
+    primitive: PrimitiveFilter | undefined
+  ): string[] {
+    const primitives = primitive ? [primitive] : ALL_PRIMITIVE_FILTERS;
+
+    return primitives.flatMap((current) =>
+      [
+        getPrimitiveValueColumn(viz, current),
+        getPrimitiveSizeColumn(viz, current)
+      ].filter((column): column is string => Boolean(column))
+    );
+  }
+
+  const rowScopeTargets = $derived.by(() =>
+    visualizationStore.activeVisualizations.flatMap((viz) => {
+      const sourceFileId = datasetsStore.datasets.find(
+        (dataset) => dataset.id === viz.datasetId
+      )?.sourceFileId;
+      if (!sourceFileId) {
+        return [];
+      }
+
+      // The undefined primitive is the scope a geometry with no resolved
+      // primitive type renders under: every filter of the visualization.
+      return [...ALL_PRIMITIVE_FILTERS, undefined].map(
+        (primitive): RowScopeTarget => ({
+          visualizationId: viz.id,
+          datasetId: sourceFileId,
+          vizFilters: viz.dataFilters,
+          primitive,
+          numericColumns: collectPrimitiveNumericColumns(viz, primitive)
+        })
+      );
+    })
+  );
+
   // Reload signature for the orthographic reproject opt-in: changes only when a
   // non-WGS84 dataset is displayed AND the user toggles a manual projection, so
   // the dataset's render table is re-fetched (reprojected to WGS84) or restored.
@@ -466,6 +515,20 @@ export function useMapDisplayData(
           joinedBasemapDisplayKeys.set(datasetId, displayKey);
           return;
         }
+
+        // The joined view keys on basemap_id. A dataset plotted from its
+        // coordinates never has that column, and neither does one whose join
+        // is still being finalized: querying it would fail, drop the dataset
+        // from the display and have the reconcile effect retry forever.
+        if (!hasJoinedBasemapKey(datasetArrow)) {
+          logger.warn(
+            'Skipped the joined basemap view: the dataset carries no join key',
+            LogCategory.MAP,
+            { datasetId, joinedBasemap, tableName }
+          );
+          joinedBasemapDisplayKeys.delete(datasetId);
+          return;
+        }
       }
 
       const joinedTable = await duckDBOrchestrator.getJoinedArrowTable(
@@ -796,6 +859,13 @@ export function useMapDisplayData(
         loadGPSData(dataset.id, duckDBDataset.id, thisGeneration);
       }
     }
+  });
+
+  $effect(() => {
+    void duckDBDatasetsVersion;
+    const targets = rowScopeTargets;
+
+    void rowScopeStore.sync(targets);
   });
 
   $effect(() => {

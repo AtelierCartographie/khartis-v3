@@ -202,8 +202,14 @@
 
   .search-options {
     display: flex;
+    align-items: center;
     gap: var(--cds-spacing-05);
     flex-wrap: wrap;
+
+    /* Carbon staggers stacked checkboxes with first/last-of-type margins. */
+    :global(.bx--form-item.bx--checkbox-wrapper) {
+      margin: 0;
+    }
   }
 
   .results-navigation {

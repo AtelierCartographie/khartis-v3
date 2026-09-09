@@ -2,7 +2,10 @@
   import * as m from '$lib/paraglide/messages';
   import { InlineLoading, Link } from 'carbon-components-svelte';
   import { Earth, Launch, MapBoundary } from 'carbon-icons-svelte';
-  import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
+  import {
+    DOC_LINK,
+    MAP_PROJECTION_TYPE
+  } from '$lib/features/commons/constants';
   import SimpleCheckbox from '$lib/features/commons/components/simple-checkbox.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { BasemapCardVertical } from '$lib/features/data-tab/components';
@@ -43,9 +46,6 @@
     groupIds: LayerGroupId[];
     defaultVisible: boolean;
   }
-
-  const REFERENCE_BASEMAP_HELP_URL =
-    'https://www.sciencespo.fr/cartographie/khartis/docs';
 
   const REFERENCE_LAYER_ITEMS: ReferenceLayerItem[] = [
     { id: 'hydro', groupIds: ['hydro'], defaultVisible: true },
@@ -309,7 +309,7 @@
 
   <div class="reference-link">
     <Link
-      href={REFERENCE_BASEMAP_HELP_URL}
+      href={DOC_LINK.REFERENCE_BASEMAP}
       target="_blank"
       size="sm"
       icon={Launch}
