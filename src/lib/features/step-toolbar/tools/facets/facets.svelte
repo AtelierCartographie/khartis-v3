@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
-  import { Button, Link } from 'carbon-components-svelte';
+  import { Button, Link, TextInput } from 'carbon-components-svelte';
   import {
     CharacterWholeNumber,
     Draggable,
@@ -9,7 +9,12 @@
     SettingsAdjust
   } from 'carbon-icons-svelte';
   import { dragHandle, dragHandleZone } from 'svelte-dnd-action';
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
+  import {
+    readCarbonStringValue,
+    type CarbonValueEvent
+  } from '$lib/features/commons/utils/carbon-events.utils';
+  import { sanitizeTextInput } from '$lib/features/commons/utils/sanitize.utils';
   import { facetsStore, FACETS_FRAME_THICKNESS } from './facets.store.svelte';
   import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
@@ -24,6 +29,7 @@
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
 
   const CONFIGURE_SECTION_ID = 'configure-visualization';
+  const FACET_TITLE_INPUT_ID_PREFIX = 'facet-title-';
   const MOBILE_CONFIGURE_TAB_SELECTOR = '[data-viz-sub-tab="configure"]';
   const FACETS_COLUMNS_MIN = 1;
   const FLIP_DURATION_MS = 200;
@@ -114,6 +120,32 @@
     facetsStore.setColumns(value);
   }
 
+  function resolveFacetTitle(variable: string): string {
+    return facetsStore.getFacetTitle(variable) ?? variable;
+  }
+
+  function handleFacetTitleInput(variable: string, event: CarbonValueEvent) {
+    facetsStore.setFacetTitle(
+      variable,
+      sanitizeTextInput(readCarbonStringValue(event), { trim: false })
+    );
+  }
+
+  // A title clicked on the page hands the panel the field to focus.
+  $effect(() => {
+    const variable = facetsStore.editedTitleVariable;
+    if (!variable) {
+      return;
+    }
+
+    void tick().then(() => {
+      document
+        .getElementById(`${FACET_TITLE_INPUT_ID_PREFIX}${variable}`)
+        ?.focus();
+      facetsStore.editFacetTitle(null);
+    });
+  });
+
   const isActive = $derived(enabled && facetVisualizations.length > 0);
 </script>
 
@@ -201,6 +233,25 @@
           </div>
         {/each}
       </div>
+    </section>
+
+    <section class="section">
+      <header class="section-heading">
+        <span class="section-title">{m.facets_titles_section()}</span>
+        <span class="section-divider" aria-hidden="true"></span>
+      </header>
+      <p class="helper-text">{m.facets_titles_helper()}</p>
+
+      {#each variables as variable (variable)}
+        <TextInput
+          id={`${FACET_TITLE_INPUT_ID_PREFIX}${variable}`}
+          labelText={m.facets_facet_title_label({ variable })}
+          placeholder={variable}
+          value={resolveFacetTitle(variable)}
+          on:input={(event: CarbonValueEvent) =>
+            handleFacetTitleInput(variable, event)}
+        />
+      {/each}
     </section>
 
     <Link

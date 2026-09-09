@@ -236,6 +236,9 @@ function notifyCollectionConstraints(
 
 function createFacetsStore() {
   const state = $state<FacetsState>({ ...DEFAULT_STATE });
+  // Transient: which facet title the toolbar panel should focus, set when the
+  // user clicks a title on the page.
+  let editedTitleVariable = $state<string | null>(null);
   let isRegenerating = false;
 
   function notifyPersistence(): void {
@@ -617,6 +620,10 @@ function createFacetsStore() {
     return state.facetTitles[variable];
   }
 
+  function editFacetTitle(variable: string | null): void {
+    editedTitleVariable = variable;
+  }
+
   function setFacetTitle(variable: string, title: string): void {
     if (!variable) {
       return;
@@ -634,11 +641,13 @@ function createFacetsStore() {
       return;
     }
 
-    if (state.facetTitles[variable] === trimmed) {
+    if (state.facetTitles[variable] === title) {
       return;
     }
 
-    state.facetTitles = { ...state.facetTitles, [variable]: trimmed };
+    // Stored as typed: trimming here would fight the panel input, which reads
+    // the stored title back while the user is still typing.
+    state.facetTitles = { ...state.facetTitles, [variable]: title };
     notifyPersistence();
   }
 
@@ -904,6 +913,9 @@ function createFacetsStore() {
     get facetTitles() {
       return state.facetTitles;
     },
+    get editedTitleVariable(): string | null {
+      return editedTitleVariable;
+    },
     get facetVisualizations(): VisualizationConfig[] {
       return getFacetVisualizations();
     },
@@ -920,6 +932,7 @@ function createFacetsStore() {
     toggleScaleMode,
     getFacetTitle,
     setFacetTitle,
+    editFacetTitle,
     syncGeneratedVisualizationsFromBase,
     restoreFromSerialized,
     restoreGeneratedVisualizations
