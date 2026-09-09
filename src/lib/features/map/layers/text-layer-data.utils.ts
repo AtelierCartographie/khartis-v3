@@ -2,6 +2,7 @@ import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
 import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { SLIDER_LIMITS } from '$lib/features/commons/constants/visualization.constants';
 
 import { GeometryType } from '../constants';
@@ -15,6 +16,24 @@ export interface TextLayerDatum {
   secondaryText: string | null;
   isMissingData: boolean;
   rowIndex: number;
+}
+
+export function keepTextDataInRowScope(
+  data: TextLayerDatum[],
+  attributeTable: ArrowTable,
+  scopedRowIds: Set<number>
+): TextLayerDatum[] {
+  const rowIdVector = attributeTable.getChild(INTERNAL_COLUMN.ID);
+  if (!rowIdVector) {
+    return data;
+  }
+
+  return data.filter((datum) => {
+    const rowId = rowIdVector.get(datum.rowIndex);
+    return (
+      rowId !== null && rowId !== undefined && scopedRowIds.has(Number(rowId))
+    );
+  });
 }
 
 export function resolveTextAnchor(

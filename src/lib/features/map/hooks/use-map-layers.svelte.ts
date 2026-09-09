@@ -1323,8 +1323,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             if (isEveryPrimitiveOutOfScope(ctx, tablePrimitiveType)) {
               hasEmptyFilteredVisualization = true;
             }
-            ctx.textPointTable =
-              geoInfo?.type === GeometryType.POINT ? filteredTable : undefined;
             const joinedBasemapId = split
               ? getDatasetJoinedBasemap(datasetId)
               : null;

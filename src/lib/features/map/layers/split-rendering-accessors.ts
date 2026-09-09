@@ -42,7 +42,9 @@ export function resolveScopedAttributeTable(
   return scoped ?? ctx.splitDatasetTable;
 }
 
-function resolveScopedRowIds(ctx: LayerContext): Set<number> | undefined {
+export function resolveScopedRowIds(
+  ctx: LayerContext
+): Set<number> | undefined {
   return ctx.scopedPrimitive
     ? ctx.scopedRowIdsByPrimitive?.[ctx.scopedPrimitive]
     : undefined;
