@@ -252,4 +252,71 @@ describe('JoinAssistedSection', () => {
     );
     expect(onIgnoreEntity).toHaveBeenCalledWith('Frnce', 'to_verify', 'France');
   });
+
+  const OVER_BUDGET_PROPS = {
+    joinRows: [],
+    duplicates: [],
+    unknowns: ['Marseile', 'Parris'],
+    joinedCount: 0,
+    toVerifyCount: 0,
+    unrecognizedTotal: 1200,
+    linkedVariableName: 'commune',
+    basemapValues: ['Marseille'],
+    onFinalizeJoin: vi.fn()
+  };
+
+  const OVER_BUDGET_ESTIMATE = {
+    candidates: 1200,
+    targetNames: 83669,
+    estimatedMs: 3437,
+    withinBudget: false,
+    fullPassRequested: false
+  };
+
+  it('offers the full fuzzy pass with its estimated duration past the budget', async () => {
+    const onRunFullFuzzyPass = vi.fn();
+
+    render(JoinAssistedSection, {
+      ...OVER_BUDGET_PROPS,
+      fuzzyPassEstimate: OVER_BUDGET_ESTIMATE,
+      onRunFullFuzzyPass
+    });
+
+    expect(screen.getByText(m.join_fuzzy_pass_title())).toBeTruthy();
+    expect(
+      screen.getByText(m.join_fuzzy_pass_subtitle({ count: 1200, seconds: 3 }))
+    ).toBeTruthy();
+
+    await fireEvent.click(
+      await screen.findByRole('button', { name: m.join_fuzzy_pass_action() })
+    );
+
+    expect(onRunFullFuzzyPass).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays out of the way while the pass fits in the budget', () => {
+    render(JoinAssistedSection, {
+      ...OVER_BUDGET_PROPS,
+      fuzzyPassEstimate: { ...OVER_BUDGET_ESTIMATE, withinBudget: true },
+      onRunFullFuzzyPass: vi.fn()
+    });
+
+    expect(screen.queryByText(m.join_fuzzy_pass_title())).toBeNull();
+  });
+
+  it('replaces the call to action with a non-interruptible running state', () => {
+    render(JoinAssistedSection, {
+      ...OVER_BUDGET_PROPS,
+      fuzzyPassEstimate: OVER_BUDGET_ESTIMATE,
+      fuzzyPassRunning: true,
+      onRunFullFuzzyPass: vi.fn()
+    });
+
+    // Nothing may offer to cancel: single-threaded WASM cannot interrupt the
+    // cross join, so a cancel control would be a promise the engine breaks.
+    expect(
+      screen.queryByRole('button', { name: m.join_fuzzy_pass_action() })
+    ).toBeNull();
+    expect(screen.getByText(m.join_fuzzy_pass_running())).toBeTruthy();
+  });
 });
