@@ -2,6 +2,7 @@
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
+  import { sortCatalogBasemapsForDisplay } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
   import { FEEDBACK_FORM_URL } from '$lib/features/commons/constants/doc-links.constants';
@@ -63,8 +64,12 @@
     return Array.from(years).sort((a, b) => b.localeCompare(a));
   });
 
+  const sortedBasemaps = $derived(
+    sortCatalogBasemapsForDisplay(allBasemaps, getLocale())
+  );
+
   const filteredBasemaps = $derived.by(() => {
-    let results: BasemapMetadata[] = [...allBasemaps];
+    let results: BasemapMetadata[] = [...sortedBasemaps];
 
     const trimmedQuery = searchQuery.trim();
     if (trimmedQuery) {
@@ -97,7 +102,7 @@
       return filteredBasemaps.filter((b) => !suggestionIds.has(b.file));
     }
 
-    return allBasemaps.filter((b) => !suggestionIds.has(b.file));
+    return sortedBasemaps.filter((b) => !suggestionIds.has(b.file));
   });
 
   const yearCounts = $derived.by(() => {
@@ -117,7 +122,7 @@
 
   const searchComboBoxItems = $derived.by((): SearchComboBoxItem[] => {
     const lang = getLocale();
-    return allBasemaps.map((b, index) => {
+    return sortedBasemaps.map((b, index) => {
       const title = lang === 'fr' ? b.title_fr : b.title_en;
       const subtitle = lang === 'fr' ? b.subtitle_fr : b.subtitle_en;
       return {
