@@ -1,5 +1,5 @@
 import {
-  MAX_FUZZY_JOIN_CANDIDATES,
+  MAX_FUZZY_AUTO_PAIRS,
   MAX_FUZZY_MATCHES_PER_VALUE
 } from '$lib/features/commons/constants/data.constants';
 import { FUZZY_SEARCH } from '$lib/features/commons/constants/detection.constants';
@@ -185,7 +185,8 @@ async function dropTempTable(escapedTableName: string): Promise<void> {
 /**
  * Score the unmatched residual against the target values in one cross join.
  * Distinct normalized target values are scored once then re-expanded to their
- * raw values, and the residual is capped: scoring every unmatched value of a
+ * raw values, and the residual is budgeted in candidate x target pairs — the
+ * same bound as the basemap join — because scoring every unmatched value of a
  * large column against every target value is quadratic in the import size.
  */
 async function fetchFuzzyMatches(
@@ -201,13 +202,14 @@ async function fetchFuzzyMatches(
      unmatched_count AS (
        SELECT COUNT(*) AS count FROM unmatched
      ),
+     distinct_targets AS (
+       SELECT DISTINCT normalized FROM "${escapedTargetCacheTable}"
+     ),
      bounded_unmatched AS (
        SELECT u.*
        FROM unmatched u, unmatched_count c
-       WHERE c.count <= ${MAX_FUZZY_JOIN_CANDIDATES}
-     ),
-     distinct_targets AS (
-       SELECT DISTINCT normalized FROM "${escapedTargetCacheTable}"
+       WHERE c.count * (SELECT COUNT(*) FROM distinct_targets)
+             <= ${MAX_FUZZY_AUTO_PAIRS}
      ),
      scored AS (
        SELECT

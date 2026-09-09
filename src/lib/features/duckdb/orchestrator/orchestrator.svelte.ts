@@ -522,6 +522,37 @@ export const duckDBOrchestrator = {
     return joinOps.computeJoinSynthesis(dataset, geoColumn, Duck);
   },
 
+  async estimateJoinFuzzyPass(
+    datasetId: string,
+    geoColumn: string
+  ): Promise<joinOps.JoinFuzzyPassEstimate> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    const dataset = state.findDatasetByIdOrSourceFile(datasetId);
+    if (!dataset) {
+      throw new DataValidationError(m.error_dataset_not_found(), 'datasetId', {
+        datasetId
+      });
+    }
+
+    return joinOps.estimateJoinFuzzyPass(dataset, geoColumn, Duck);
+  },
+
+  async runFullFuzzyPass(datasetId: string, geoColumn: string): Promise<void> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    const dataset = state.findDatasetByIdOrSourceFile(datasetId);
+    if (!dataset) {
+      throw new DataValidationError(m.error_dataset_not_found(), 'datasetId', {
+        datasetId
+      });
+    }
+
+    return joinOps.runFullFuzzyPass(dataset, geoColumn, Duck);
+  },
+
   async applyJoinCorrections(
     datasetId: string,
     geoColumn: string,

@@ -4,6 +4,7 @@
   import {
     Button,
     ComboBox,
+    InlineLoading,
     InlineNotification,
     Pagination,
     Select,
@@ -26,6 +27,7 @@
   } from 'carbon-icons-svelte';
   import { InfoPopover } from '$lib/features/commons/components/viz-controls';
   import type { BasemapAlias } from '$lib/features/duckdb/orchestrator/join-ops';
+  import type { JoinFuzzyPassEstimate } from '$lib/features/duckdb';
   import type { JoinCandidate } from '$lib/features/commons/types/data-tab.types';
   import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
@@ -85,6 +87,9 @@
     toVerifyCount: number;
     duplicateTotal?: number;
     unrecognizedTotal?: number;
+    fuzzyPassEstimate?: JoinFuzzyPassEstimate | null;
+    fuzzyPassRunning?: boolean;
+    onRunFullFuzzyPass?: () => void;
     linkedVariableName: string | undefined;
     basemapValues?: string[];
     loading?: boolean;
@@ -119,6 +124,9 @@
     toVerifyCount,
     duplicateTotal,
     unrecognizedTotal,
+    fuzzyPassEstimate = null,
+    fuzzyPassRunning = false,
+    onRunFullFuzzyPass,
     linkedVariableName,
     basemapValues = [],
     loading = false,
@@ -333,6 +341,16 @@
 
   const duplicateCount = $derived(duplicateTotal ?? duplicates.length);
   const unrecognizedCount = $derived(unrecognizedTotal ?? unknowns.length);
+
+  const showFuzzyPassOffer = $derived(
+    fuzzyPassEstimate !== null &&
+      !fuzzyPassEstimate.withinBudget &&
+      fuzzyPassEstimate.candidates > 0 &&
+      onRunFullFuzzyPass !== undefined
+  );
+  const fuzzyPassSeconds = $derived(
+    Math.max(1, Math.round((fuzzyPassEstimate?.estimatedMs ?? 0) / 1000))
+  );
   const ignoredCount = $derived(ignoredEntities.length);
   const showJoinedPagination = $derived(
     onJoinedPageChange !== undefined && joinedCount > joinedPageSize
@@ -1148,6 +1166,34 @@
             {/if}
           </span>
         </button>
+        {#if showFuzzyPassOffer}
+          <div class="fuzzy-pass-offer">
+            <InlineNotification
+              kind="info"
+              lowContrast
+              hideCloseButton
+              title={m.join_fuzzy_pass_title()}
+              subtitle={m.join_fuzzy_pass_subtitle({
+                count: fuzzyPassEstimate?.candidates ?? 0,
+                seconds: fuzzyPassSeconds
+              })}
+            />
+            <div class="fuzzy-pass-actions">
+              {#if fuzzyPassRunning}
+                <InlineLoading description={m.join_fuzzy_pass_running()} />
+              {:else}
+                <Button
+                  kind="tertiary"
+                  size="small"
+                  icon={MagicWand}
+                  on:click={() => onRunFullFuzzyPass?.()}
+                >
+                  {m.join_fuzzy_pass_action()}
+                </Button>
+              {/if}
+            </div>
+          </div>
+        {/if}
         {#if unrecognizedExpanded && unrecognizedCount > 0}
           <div class="category-body">
             <div class="join-table join-table-error">
@@ -1449,6 +1495,18 @@
 </div>
 
 <style>
+  .fuzzy-pass-offer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0 1rem 0.75rem;
+  }
+
+  .fuzzy-pass-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+
   .join-assisted-section {
     display: flex;
     flex-direction: column;

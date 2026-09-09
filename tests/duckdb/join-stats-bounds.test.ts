@@ -3,6 +3,10 @@
  * value. Without a bound that residual is a cross join over the whole imported
  * column: measured at 28 s for 50 000 unmatched values against a 32 639-row
  * target, growing linearly (~400 s at 700 000).
+ *
+ * The bound is a budget on the product, so only the over-budget side can be
+ * asserted cheaply: staying under the budget means actually performing up to
+ * MAX_FUZZY_AUTO_PAIRS comparisons, which is seconds of work by design.
  */
 import {
   afterAll,
@@ -14,7 +18,7 @@ import {
   vi
 } from 'vitest';
 import { join_macros } from '$lib/features/duckdb/macros/join';
-import { MAX_FUZZY_JOIN_CANDIDATES } from '$lib/features/commons/constants/data.constants';
+import { MAX_FUZZY_AUTO_PAIRS } from '$lib/features/commons/constants/data.constants';
 import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
 import {
   createTestInstance,
@@ -62,6 +66,19 @@ async function seedSource(values: string[]): Promise<void> {
   if (values.length === 0) return;
   const rows = values.map((value) => `('${value}')`).join(', ');
   await run(db, `INSERT INTO src_table VALUES ${rows}`);
+}
+
+async function seedGenerated(
+  table: string,
+  column: string,
+  prefix: string,
+  count: number
+): Promise<void> {
+  await run(db, `CREATE OR REPLACE TABLE ${table} (${column} VARCHAR)`);
+  await run(
+    db,
+    `INSERT INTO ${table} SELECT '${prefix}' || i FROM range(${count}) t(i)`
+  );
 }
 
 beforeAll(async () => {
@@ -132,30 +149,32 @@ describe('enrichment join bounds', () => {
     expect(inlined).toEqual([]);
   });
 
-  it('drops the fuzzy phase past the candidate cap instead of cross-joining', async () => {
-    await seedTarget(['Paris', 'Lyon']);
-    const oversized = Array.from(
-      { length: MAX_FUZZY_JOIN_CANDIDATES + 1 },
-      (_, index) => `Inconnue-${index}`
-    );
-    await seedSource(oversized);
+  it('drops the fuzzy phase past the pair budget instead of cross-joining', async () => {
+    const targets = 6000;
+    const candidates = Math.floor(MAX_FUZZY_AUTO_PAIRS / targets) + 1;
+    await seedGenerated('target_table', 'name', 'Cible-', targets);
+    await seedGenerated('src_table', 'city', 'Inconnue-', candidates);
 
     const stats = await computeDatasetJoinStats(OPTIONS);
 
-    expect(stats.unrecognizedCount).toBe(MAX_FUZZY_JOIN_CANDIDATES + 1);
+    expect(candidates * targets).toBeGreaterThan(MAX_FUZZY_AUTO_PAIRS);
+    expect(stats.unrecognizedCount).toBe(candidates);
     expect(stats.toVerifyCount).toBe(0);
   });
 
-  it('still suggests at the candidate cap', async () => {
-    await seedTarget(['Marseille']);
-    const atCap = Array.from(
-      { length: MAX_FUZZY_JOIN_CANDIDATES - 1 },
-      (_, index) => `Inconnue-${index}`
-    );
-    await seedSource([...atCap, 'Marseile']);
+  it('scales the candidate allowance with the target size', async () => {
+    // Same candidate count, a target small enough to stay inside the budget:
+    // a fixed candidate cap would have refused both, the budget refuses only
+    // the one whose product is too large.
+    const targets = 2;
+    const candidates = Math.floor(MAX_FUZZY_AUTO_PAIRS / 6000) + 1;
+    await seedTarget(['Marseille', 'Bordeaux']);
+    await seedGenerated('src_table', 'city', 'Inconnue-', candidates - 1);
+    await run(db, `INSERT INTO src_table VALUES ('Marseile')`);
 
     const stats = await computeDatasetJoinStats(OPTIONS);
 
+    expect(candidates * targets).toBeLessThanOrEqual(MAX_FUZZY_AUTO_PAIRS);
     expect(stats.toVerifyCount).toBe(1);
     expect(
       stats.entities.find((e) => e.dataValue === 'Marseile')?.matches
