@@ -18,6 +18,33 @@ export const JOINED_BASEMAP_COLUMN = {
 // Shared cap between SQL join grading (A6) and the persisted project shape (C1).
 export const MAX_JOIN_BUCKET_LIST_VALUES = 500;
 
+// Shared budget on the fuzzy phase of both join paths, counted in
+// candidate x target-name pairs rather than candidates: both paths score every
+// unmatched candidate against every target value, so the cost is the product.
+// Budgeting the product keeps the step at a constant duration as the basemap
+// catalog grows, instead of letting a fixed candidate cap drift.
+// 90M pairs is ~3 s at the rate below, and ~1 076 candidates against today's
+// 83 669 distinct catalog names.
+export const MAX_FUZZY_AUTO_PAIRS = 90_000_000;
+
+// Measured in DuckDB WASM v1.5.4 (threads = 1) on the slowest corpus
+// (commune names, ~13 characters); short names run ~40% faster.
+// This covers the scoring only, not the surrounding cache build, whose cost
+// grows with the number of matches found: measured 3 850 ms against a 3 437 ms
+// estimate when every candidate ended up with a suggestion. The estimate is an
+// order of magnitude for the user, not a bound.
+export const FUZZY_PAIRS_PER_MS = 30_000;
+
+// Fixed cost of the fuzzy statement itself, independent of the pair count.
+export const FUZZY_PASS_OVERHEAD_MS = 90;
+
+// Candidates scored to rank basemaps when the full pass is over budget.
+// Measured: at 300 the top two basemaps are unchanged, only near-tied regional
+// subsets permute, and it costs ~0.9 s against the whole catalog.
+export const MAX_FUZZY_RANKING_SAMPLE = 300;
+
+export const MAX_FUZZY_MATCHES_PER_VALUE = 5;
+
 export const JOINED_BASEMAP_COLUMNS = Object.values(
   JOINED_BASEMAP_COLUMN
 ) as readonly string[];

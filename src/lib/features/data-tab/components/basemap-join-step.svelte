@@ -4,7 +4,11 @@
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline';
 
-  import { Duck, type AnalysisResults } from '$lib/features/duckdb';
+  import {
+    Duck,
+    type AnalysisResults,
+    type JoinFuzzyPassEstimate
+  } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { isMissingDuckTableError } from '$lib/features/duckdb/utils/duckdb-error.utils';
   import { BasemapStyle } from '$lib/features/map/constants';
@@ -102,6 +106,79 @@
       lines: entity.lines ?? []
     }))
   );
+
+  let fuzzyPassEstimate = $state.raw<JoinFuzzyPassEstimate | null>(null);
+  let fuzzyPassRunning = $state(false);
+  let fuzzyPassController: AbortController | null = null;
+
+  async function refreshFuzzyPassEstimate(
+    datasetId: string,
+    geoColumn: string
+  ): Promise<void> {
+    try {
+      fuzzyPassEstimate = await duckDBOrchestrator.estimateJoinFuzzyPass(
+        datasetId,
+        geoColumn
+      );
+    } catch (error) {
+      // The estimate only drives an optional call to action: a failure must
+      // never take the join step down with it.
+      fuzzyPassEstimate = null;
+      logger.warn('Failed to estimate the fuzzy join pass', LogCategory.DATA, {
+        error
+      });
+    }
+  }
+
+  /**
+   * The pass itself cannot be interrupted (single-threaded WASM never yields
+   * inside the cross join), so the controller only decides whether a result
+   * that arrived after the user moved on still gets applied.
+   */
+  async function handleRunFullFuzzyPass(): Promise<void> {
+    const resolvedDatasetId = datasetIdForOrchestrator;
+    const linkedVariableName = dataTabState.geolocation.linkedVariableName;
+    const basemap = allBasemapsForLookup.find(
+      (candidate) => candidate.file === basemapSelected
+    );
+    if (!resolvedDatasetId || !linkedVariableName || !basemap) return;
+
+    fuzzyPassController?.abort();
+    const controller = new AbortController();
+    fuzzyPassController = controller;
+    fuzzyPassRunning = true;
+    try {
+      await duckDBOrchestrator.runFullFuzzyPass(
+        resolvedDatasetId,
+        linkedVariableName
+      );
+      if (controller.signal.aborted) return;
+
+      const stats = await duckDBOrchestrator.computeJoinStats(
+        resolvedDatasetId,
+        basemap,
+        linkedVariableName,
+        { excludedValues: getIgnoredJoinValues() }
+      );
+      if (controller.signal.aborted) return;
+      dataTabActions.setJoinStats(stats);
+      void refreshFuzzyPassEstimate(resolvedDatasetId, linkedVariableName);
+      resetJoinedEntitiesView();
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      logger.error(
+        'Failed to run the full fuzzy join pass',
+        LogCategory.DATA,
+        error
+      );
+      showError(m.join_fuzzy_pass_error());
+    } finally {
+      if (fuzzyPassController === controller) {
+        fuzzyPassController = null;
+        fuzzyPassRunning = false;
+      }
+    }
+  }
 
   const JOINED_ENTITIES_PAGE_SIZE = 100;
   let joinedPage = $state(1);
@@ -553,6 +630,7 @@
 
         joinStateMutated = true;
         dataTabActions.setJoinStats(stats);
+        void refreshFuzzyPassEstimate(resolvedDatasetId, linkedVariableName);
         resetJoinedEntitiesView();
 
         if (stats.unrecognizedCount === 0 && stats.joinedCount === 0) {
@@ -1089,6 +1167,7 @@
         if (abortSignal.aborted) return;
 
         dataTabActions.setJoinStats(stats);
+        void refreshFuzzyPassEstimate(resolvedDatasetId, linkedVariableName);
         resetJoinedEntitiesView();
 
         if (stats.unrecognizedCount === 0 && stats.joinedCount === 0) {
@@ -1535,6 +1614,10 @@
               );
               if (controller.signal.aborted) return;
               dataTabActions.setJoinStats(stats);
+              void refreshFuzzyPassEstimate(
+                resolvedDatasetId,
+                linkedVariableName
+              );
               resetJoinedEntitiesView();
               if (stats.joinedCount === 0) {
                 dataTabStore.resetStepCompletion(stepIndex);
@@ -1576,6 +1659,10 @@
             );
             if (controller.signal.aborted) return;
             dataTabActions.setJoinStats(stats);
+            void refreshFuzzyPassEstimate(
+              resolvedDatasetId,
+              linkedVariableName
+            );
             resetJoinedEntitiesView();
             previousJoinContext = joinContext;
             previousLinkedVariableName = linkedVariableName;
@@ -1856,6 +1943,9 @@
     toVerifyCount={toVerifyCount}
     duplicateTotal={duplicateTotal}
     unrecognizedTotal={unrecognizedTotal}
+    fuzzyPassEstimate={fuzzyPassEstimate}
+    fuzzyPassRunning={fuzzyPassRunning}
+    onRunFullFuzzyPass={handleRunFullFuzzyPass}
     linkedVariableName={dataTabState.geolocation.linkedVariableName}
     basemapValues={basemapAttributes.values}
     loading={joinLoading}

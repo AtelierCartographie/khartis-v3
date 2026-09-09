@@ -46,7 +46,7 @@ interface GPSBboxMatchMetrics {
 interface JoinSynthesisLike {
   basemap: string;
   shareCandidate: number;
-  shareBasemap?: number;
+  shareBasemap?: number | null;
 }
 
 function getCatalogVariantRank(

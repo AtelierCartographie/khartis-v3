@@ -139,14 +139,15 @@ describe('duckDBOrchestrator similarity cache lifecycle', () => {
     });
   });
 
+  // Only statements that create the cache table count: matching the bare
+  // prefix anywhere also matches queries that merely read it, such as the
+  // graded materialization built on top of it.
   function countSimilarityCacheBuilds(): number {
-    return mocks.query.mock.calls.filter(([sql]) => {
-      return (
+    return mocks.query.mock.calls.filter(
+      ([sql]) =>
         typeof sql === 'string' &&
-        sql.includes('CREATE OR REPLACE TEMP TABLE') &&
-        sql.includes('__similarity_cache__')
-      );
-    }).length;
+        /CREATE OR REPLACE TEMP TABLE\s+"__similarity_cache__/.test(sql)
+    ).length;
   }
 
   it('preserves the similarity cache across finalizeJoin but rebuilds after corrections', async () => {

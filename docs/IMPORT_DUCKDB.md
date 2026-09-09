@@ -95,6 +95,17 @@ Le streaming Arrow n'est pas universel : après une DDL qui modifie le schéma, 
 
 Les résultats Arrow joints sont gardés dans un LRU de quatre entrées. Les mutations et les corrections de jointure doivent invalider la table jointe, le cache de similarité et les caches Arrow dépendants.
 
+Le grading de la jointure est matérialisé dans des tables dérivées, une par couple (cache de similarité, fond, valeurs exclues), elles aussi en LRU de quatre entrées. Ces tables sont **clés sur le cache de similarité qui les a produites** : évincer, invalider ou reconstruire ce cache doit faire tomber les gradings dérivés, sinon les compteurs de buckets et les pages d'entités continuent de lire des lignes périmées. Les appels concurrents partagent un build en cours plutôt que d'en lancer plusieurs.
+
+## Phase fuzzy de la jointure
+
+La phase fuzzy compare chaque valeur source sans correspondance exacte à chaque nom cible, en Jaro-Winkler. Le coût est donc le **produit** des deux, et il est borné par un budget en paires (`MAX_FUZZY_AUTO_PAIRS`) et non par un plafond de candidats : un plafond fixe rendrait l'étape plus lente à mesure que le catalogue grandit, alors que le budget garde une durée constante et resserre le seuil tout seul. Le débit mesuré en WASM sert à estimer la durée (`FUZZY_PAIRS_PER_MS`, calibré sur le corpus le plus lent). Cette estimation ne couvre que le scoring : le reste de la construction du cache croît avec le nombre de correspondances trouvées, mesuré à 3 850 ms pour une estimation de 3 437 ms quand toutes les valeurs finissent par recevoir une suggestion. C'est un ordre de grandeur affiché à l'utilisateur, pas une borne.
+
+Le budget est volontairement tout-ou-rien pour les suggestions par valeur : n'en scorer qu'une partie donnerait des propositions à un sous-ensemble arbitraire des valeurs. Deux conséquences à connaître :
+
+- le **classement des fonds** ne subit pas ce tout-ou-rien : il est calculé sur un échantillon borné du résidu (`MAX_FUZZY_RANKING_SAMPLE`), donc Khartis continue de nommer le bon fond même quand aucune valeur n'est écrite correctement ;
+- au-delà du budget, les suggestions par valeur sont proposées **à la demande** de l'utilisateur, avec l'estimation de durée. Cette passe **n'est pas interruptible** : DuckDB WASM est mono-thread et le worker ne rend pas la main pendant le cross join, donc `cancelPendingQuery` ne rejette qu'une fois le calcul terminé (mesuré : abandon demandé à 400 ms, rejet à 10 091 ms pour une passe de 10 266 ms). Ne pas exposer de bouton d'annulation sur ce chemin ; la passe va au bout et conserve son résultat.
+
 ## Ajouter ou faire évoluer un format
 
 Avant d'ajouter un format :

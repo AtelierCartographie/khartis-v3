@@ -7,6 +7,7 @@ export {
   combineFilterClauses
 } from './orchestrator/filter-ops';
 export type { GPSValidationResult } from './orchestrator/gps-ops';
+export type { JoinFuzzyPassEstimate } from './orchestrator/join-ops';
 export { DuckDBSimplifiedType, RefineOperation } from './types';
 export { GEO_CONSTANTS } from './constants';
 export {
