@@ -3,7 +3,10 @@ import {
   FACET_SLOT,
   SCALE_MODE
 } from '$lib/features/commons/constants/facets.constants';
-import { resolveSharedFacetScaleStats } from './facets-shared-scale';
+import {
+  resolveSharedFacetScaleColumns,
+  resolveSharedFacetScaleStats
+} from './facets-shared-scale';
 
 function makeVisualization(overrides = {}) {
   return {
@@ -140,5 +143,82 @@ describe('resolveSharedFacetScaleStats', () => {
     });
 
     expect(result).toBeNull();
+  });
+});
+
+describe('resolveSharedFacetScaleColumns', () => {
+  const facetVisualizations = [
+    makeVisualization({
+      id: 'facet-a',
+      symbol: { sizeColumn: 'population' }
+    }) as never,
+    makeVisualization({
+      id: 'facet-b',
+      symbol: { sizeColumn: 'area' }
+    }) as never
+  ];
+
+  it('lists every facet column merged by a shared symbol size scale', () => {
+    expect(
+      resolveSharedFacetScaleColumns({
+        visualizations: facetVisualizations,
+        scaleMode: SCALE_MODE.SHARED,
+        primarySlotPath: FACET_SLOT.SYMBOL_SIZE,
+        visualizationId: 'facet-a',
+        columnName: 'population'
+      })
+    ).toEqual([
+      {
+        visualizationId: 'facet-a',
+        datasetId: 'dataset',
+        columnName: 'population'
+      },
+      { visualizationId: 'facet-b', datasetId: 'dataset', columnName: 'area' }
+    ]);
+  });
+
+  it('ignores a column the shared slot does not vary', () => {
+    expect(
+      resolveSharedFacetScaleColumns({
+        visualizations: facetVisualizations,
+        scaleMode: SCALE_MODE.SHARED,
+        primarySlotPath: FACET_SLOT.SYMBOL_SIZE,
+        visualizationId: 'facet-a',
+        columnName: 'density'
+      })
+    ).toEqual([]);
+  });
+
+  it('merges nothing when each facet keeps its own scale', () => {
+    expect(
+      resolveSharedFacetScaleColumns({
+        visualizations: facetVisualizations,
+        scaleMode: SCALE_MODE.INDEPENDENT,
+        primarySlotPath: FACET_SLOT.SYMBOL_SIZE,
+        visualizationId: 'facet-a',
+        columnName: 'population'
+      })
+    ).toEqual([]);
+  });
+
+  it('merges nothing for a classified color slot, which shares its breaks', () => {
+    expect(
+      resolveSharedFacetScaleColumns({
+        visualizations: [
+          makeVisualization({
+            id: 'facet-a',
+            polygon: { valueColumn: 'population' }
+          }) as never,
+          makeVisualization({
+            id: 'facet-b',
+            polygon: { valueColumn: 'area' }
+          }) as never
+        ],
+        scaleMode: SCALE_MODE.SHARED,
+        primarySlotPath: FACET_SLOT.POLYGON_VALUE,
+        visualizationId: 'facet-a',
+        columnName: 'population'
+      })
+    ).toEqual([]);
   });
 });
