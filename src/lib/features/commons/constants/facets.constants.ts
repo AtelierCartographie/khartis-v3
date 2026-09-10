@@ -22,11 +22,7 @@ export const FACET_SLOT = {
   LINE_SIZE: 'line.sizeColumn',
   LINE_THICKNESS_VALUE: 'line.thicknessValueColumn',
   TEXT_VALUE: 'text.valueColumn',
-  TEXT_CATEGORY: 'text.categoryColumn',
-  TEXT_BACKGROUND_VALUE: 'text.background.valueColumn',
-  TEXT_BACKGROUND_CATEGORY: 'text.background.categoryColumn',
-  TEXT_BACKGROUND_STROKE_VALUE: 'text.background.strokeValueColumn',
-  TEXT_BACKGROUND_STROKE_CATEGORY: 'text.background.strokeCategoryColumn'
+  TEXT_CATEGORY: 'text.categoryColumn'
 } as const;
 
 export type FacetSlotPath = (typeof FACET_SLOT)[keyof typeof FACET_SLOT];
@@ -41,9 +37,7 @@ export type FacetClassificationTarget =
   | 'polygon-stroke'
   | 'line-color'
   | 'line-thickness'
-  | 'text'
-  | 'text-background-fill'
-  | 'text-background-stroke';
+  | 'text';
 
 export interface FacetSlotDefinition {
   path: FacetSlotPath;
@@ -171,34 +165,6 @@ export const FACET_SLOT_DEFINITIONS = {
     mappingKey: 'categoryColumn',
     variableKind: 'textual',
     classificationTarget: 'text',
-    recomputeIndependentBreaks: false
-  },
-  [FACET_SLOT.TEXT_BACKGROUND_VALUE]: {
-    path: FACET_SLOT.TEXT_BACKGROUND_VALUE,
-    mappingKey: 'valueColumn',
-    variableKind: 'numeric',
-    classificationTarget: 'text-background-fill',
-    recomputeIndependentBreaks: true
-  },
-  [FACET_SLOT.TEXT_BACKGROUND_CATEGORY]: {
-    path: FACET_SLOT.TEXT_BACKGROUND_CATEGORY,
-    mappingKey: 'categoryColumn',
-    variableKind: 'textual',
-    classificationTarget: 'text-background-fill',
-    recomputeIndependentBreaks: false
-  },
-  [FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE]: {
-    path: FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE,
-    mappingKey: 'valueColumn',
-    variableKind: 'numeric',
-    classificationTarget: 'text-background-stroke',
-    recomputeIndependentBreaks: true
-  },
-  [FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY]: {
-    path: FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY,
-    mappingKey: 'categoryColumn',
-    variableKind: 'textual',
-    classificationTarget: 'text-background-stroke',
     recomputeIndependentBreaks: false
   }
 } satisfies Record<FacetSlotPath, FacetSlotDefinition>;

@@ -1477,17 +1477,6 @@ function mergeTextPrimitiveConfig(
         dxpMasking: false
       }),
       ...(updates?.secondaryLabels ?? {})
-    },
-    background: {
-      ...(base?.background ?? {
-        fillMode: FillMode.NONE,
-        fillOpacity: VISUALIZATION_DEFAULTS.fillOpacity / 100,
-        strokeMode: StrokeMode.NONE,
-        strokeWidth: VISUALIZATION_DEFAULTS.strokeWidth,
-        strokeOpacity: 1,
-        strokeDashed: false
-      }),
-      ...(updates?.background ?? {})
     }
   } as TextPrimitiveConfig;
 }

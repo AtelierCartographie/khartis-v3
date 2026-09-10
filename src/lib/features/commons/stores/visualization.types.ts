@@ -258,24 +258,6 @@ export interface TextSecondaryLabelsConfig {
   dxpMasking: boolean;
 }
 
-export interface TextBackgroundConfig {
-  fillMode: FillMode;
-  fillColor?: string | string[];
-  fillOpacity: number;
-  strokeMode: StrokeMode;
-  strokeColor?: string | string[];
-  strokeWidth: number;
-  strokeOpacity: number;
-  strokeDashed: boolean;
-  strokeDashedPattern?: BasemapDottedPattern;
-  strokeValueColumn?: string;
-  strokeCategoryColumn?: string;
-  valueColumn?: string;
-  categoryColumn?: string;
-  classification?: ClassificationConfig;
-  strokeClassification?: ClassificationConfig;
-}
-
 export interface TextPrimitiveConfig {
   enabled: boolean;
   labelColumn?: string;
@@ -298,7 +280,6 @@ export interface TextPrimitiveConfig {
   classification?: ClassificationConfig;
   missingData?: MissingDataConfig;
   secondaryLabels: TextSecondaryLabelsConfig;
-  background: TextBackgroundConfig;
   colorModeStates?: Partial<Record<ColorMode, TextColorModeState>>;
   sizeModeStates?: Partial<Record<SizeMode, TextSizeModeState>>;
 }

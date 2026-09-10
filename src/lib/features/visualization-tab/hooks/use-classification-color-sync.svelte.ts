@@ -8,8 +8,7 @@ import {
   areClassificationColorsEqual,
   buildClassificationColorParamsKey,
   resolveClassificationColors,
-  SYMBOL_FILL_SCOPE_TARGET,
-  TEXT_BACKGROUND_SCOPE_TARGET
+  SYMBOL_FILL_SCOPE_TARGET
 } from './use-classification-breaks.svelte';
 import type {
   ClassificationTarget,
@@ -38,8 +37,6 @@ export interface UseClassificationColorSyncDeps {
   getPrimitiveTargets: () => ClassificationTarget[];
   getStrokeTargets: () => StrokeClassificationTarget[];
   getSymbolFillTarget: () => ScopeTarget | null;
-  getTextBackgroundTarget: () => ScopeTarget | null;
-  getTextBackgroundStrokeTarget: () => ScopeTarget | null;
   updatePrimitiveClassificationState: (
     primitive: ClassifiablePrimitive,
     updates: Partial<ClassificationConfig>,
@@ -54,14 +51,6 @@ export interface UseClassificationColorSyncDeps {
     updates: Partial<ClassificationConfig>,
     options?: { preserveOrigin?: boolean }
   ) => void;
-  applyTextBackgroundUpdate: (
-    updates: Partial<ClassificationConfig>,
-    options?: { preserveOrigin?: boolean }
-  ) => void;
-  applyTextBackgroundStrokeUpdate: (
-    updates: Partial<ClassificationConfig>,
-    options?: { preserveOrigin?: boolean }
-  ) => void;
 }
 
 // Palette colour syncing is derived output, not a custom user edit.
@@ -69,8 +58,7 @@ const PRESERVE_ORIGIN = { preserveOrigin: true } as const;
 
 export function buildPrimitiveColorParamsKey(
   primitiveTargets: ClassificationTarget[],
-  symbolFillTarget: ScopeTarget | null,
-  textBackgroundTarget: ScopeTarget | null
+  symbolFillTarget: ScopeTarget | null
 ): string {
   const cbEnabled = isColorBlindnessActive(getColorBlindnessState());
   return [
@@ -81,27 +69,18 @@ export function buildPrimitiveColorParamsKey(
     buildClassificationColorParamsKey(
       SYMBOL_FILL_SCOPE_TARGET,
       symbolFillTarget
-    ),
-    buildClassificationColorParamsKey(
-      TEXT_BACKGROUND_SCOPE_TARGET,
-      textBackgroundTarget
     )
   ].join('|');
 }
 
 export function buildStrokeColorParamsKey(
-  strokeTargets: StrokeClassificationTarget[],
-  textBackgroundStrokeTarget: ScopeTarget | null
+  strokeTargets: StrokeClassificationTarget[]
 ): string {
   const cbEnabled = isColorBlindnessActive(getColorBlindnessState());
   return [
     String(cbEnabled),
     ...strokeTargets.map((target) =>
       buildClassificationColorParamsKey(String(target.primitive), target)
-    ),
-    buildClassificationColorParamsKey(
-      `${TEXT_BACKGROUND_SCOPE_TARGET}-stroke`,
-      textBackgroundStrokeTarget
     )
   ].join('|');
 }
@@ -155,15 +134,6 @@ export function syncPrimitiveColors(
         (updates) => deps.applySymbolFillUpdate(updates, PRESERVE_ORIGIN)
       );
     }
-
-    const textBg = deps.getTextBackgroundTarget();
-    if (textBg) {
-      syncClassificationColors(
-        textBg.classification,
-        textBg.usesCategories,
-        (updates) => deps.applyTextBackgroundUpdate(updates, PRESERVE_ORIGIN)
-      );
-    }
   });
 }
 
@@ -187,16 +157,6 @@ export function syncStrokeColors(deps: UseClassificationColorSyncDeps): void {
             updates,
             PRESERVE_ORIGIN
           )
-      );
-    }
-
-    const textBgStroke = deps.getTextBackgroundStrokeTarget();
-    if (textBgStroke) {
-      syncClassificationColors(
-        textBgStroke.classification,
-        textBgStroke.usesCategories,
-        (updates) =>
-          deps.applyTextBackgroundStrokeUpdate(updates, PRESERVE_ORIGIN)
       );
     }
   });

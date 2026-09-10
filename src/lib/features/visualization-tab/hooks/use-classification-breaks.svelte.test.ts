@@ -97,7 +97,6 @@ import {
   computeClassificationBreaks,
   resolveScopeTargetPrimitive,
   SYMBOL_FILL_SCOPE_TARGET,
-  TEXT_BACKGROUND_SCOPE_TARGET,
   resolveClassificationColors,
   resolveClassificationBreakColors,
   useClassificationBreaksController
@@ -122,9 +121,6 @@ describe('use-classification-breaks', () => {
   it('maps every classification scope target back to its primitive', () => {
     expect(resolveScopeTargetPrimitive(SYMBOL_FILL_SCOPE_TARGET)).toBe(
       PrimitiveFilterType.POINT
-    );
-    expect(resolveScopeTargetPrimitive(TEXT_BACKGROUND_SCOPE_TARGET)).toBe(
-      PrimitiveFilterType.TEXT
     );
     expect(resolveScopeTargetPrimitive(PrimitiveFilterType.POLYGON)).toBe(
       PrimitiveFilterType.POLYGON
