@@ -19,11 +19,6 @@ import {
 import { pickOwnedKeys, pickRenamedKeys } from './pick-owned.utils';
 import { createPrimitiveAdapter } from './primitive-adapter.factory';
 
-type TextBackgroundUpdater = (
-  background: TextPrimitiveConfig['background']
-) => Partial<TextPrimitiveConfig['background']>;
-type ClassificationUpdateOptions = { preserveOrigin?: boolean };
-
 const TEXT_STYLE_MIRROR_KEYS = [
   'textColor',
   'textOpacity',
@@ -70,44 +65,17 @@ export interface TextHandlersDeps {
     primitive: PrimitiveFilterType,
     updates: Partial<ClassificationConfig>
   ) => void;
-  updateTextBackgroundClassificationState: (
-    updates: Partial<ClassificationConfig>,
-    options?: ClassificationUpdateOptions
-  ) => void;
-  updateTextBackgroundStrokeClassificationState: (
-    updates: Partial<ClassificationConfig>,
-    options?: ClassificationUpdateOptions
-  ) => void;
   applyPrimitiveMappingUpdate: (
     primitive: PrimitiveFilterType,
     updates: Partial<VisualizationConfig['mapping']>
   ) => void;
-  applyTextBackgroundMappingUpdate: (
-    updates: Partial<VisualizationConfig['mapping']>
-  ) => void;
-  applyTextBackgroundStrokeMappingUpdate: (
-    updates: Partial<VisualizationConfig['mapping']>
-  ) => void;
   invertPrimitivePalette: (primitive: PrimitiveFilterType) => void;
-  invertTextBackgroundPalette: () => void;
-  invertTextBackgroundStrokePalette: () => void;
-  updateTextBackground: (updater: TextBackgroundUpdater) => void;
   ensurePrimitiveClassificationDefaults: (
     primitive: PrimitiveFilterType,
     visualization: VisualizationConfig
   ) => void;
   ensureAutoColumns: (
     primitive: PrimitiveFilterType,
-    visualization: VisualizationConfig
-  ) => void;
-  ensureTextBackgroundClassificationDefaults: (
-    visualization: VisualizationConfig
-  ) => void;
-  ensureTextBackgroundAutoColumns: (visualization: VisualizationConfig) => void;
-  ensureTextBackgroundStrokeClassificationDefaults: (
-    visualization: VisualizationConfig
-  ) => void;
-  ensureTextBackgroundStrokeAutoColumns: (
     visualization: VisualizationConfig
   ) => void;
 }
@@ -232,105 +200,6 @@ export function createTextHandlers(deps: TextHandlersDeps) {
 
   const handleTextPaletteInvert = textAdapter.handlePaletteInvert;
 
-  function handleTextBackgroundStyleChange(
-    updates: Partial<VisualizationConfig['style']>
-  ): void {
-    deps.updateTextBackground((background) => {
-      const passthrough = pickOwnedKeys(updates, [
-        'fillColor',
-        'strokeColor'
-      ] as const);
-      const withFallback = pickOwnedKeys(
-        updates,
-        [
-          'fillOpacity',
-          'strokeWidth',
-          'strokeOpacity',
-          'strokeDashed',
-          'strokeDashedPattern'
-        ] as const,
-        background
-      );
-      return { ...passthrough, ...withFallback };
-    });
-  }
-
-  function handleTextBackgroundModesChange(
-    updates: Partial<VisualizationModes>
-  ): void {
-    const text = getTextPrimitive(deps.getSelectedVisualization());
-    if (!text) return;
-
-    const renamed = pickRenamedKeys<
-      VisualizationModes,
-      TextPrimitiveConfig['background']
-    >(
-      updates,
-      [
-        { from: 'fill', to: 'fillMode' },
-        { from: 'stroke', to: 'strokeMode' }
-      ],
-      text.background
-    );
-
-    deps.updateSelectedVisualization(
-      {
-        text: {
-          ...text,
-          background: { ...text.background, ...renamed }
-        }
-      },
-      (next) => {
-        deps.ensureTextBackgroundClassificationDefaults(next);
-        deps.ensureTextBackgroundAutoColumns(next);
-        deps.ensureTextBackgroundStrokeClassificationDefaults(next);
-        deps.ensureTextBackgroundStrokeAutoColumns(next);
-      }
-    );
-  }
-
-  function handleTextBackgroundClassificationChange(
-    updates: Partial<ClassificationConfig>,
-    options?: ClassificationUpdateOptions
-  ): void {
-    if (options) {
-      deps.updateTextBackgroundClassificationState(updates, options);
-    } else {
-      deps.updateTextBackgroundClassificationState(updates);
-    }
-  }
-
-  function handleTextBackgroundStrokeClassificationChange(
-    updates: Partial<ClassificationConfig>,
-    options?: ClassificationUpdateOptions
-  ): void {
-    if (options) {
-      deps.updateTextBackgroundStrokeClassificationState(updates, options);
-    } else {
-      deps.updateTextBackgroundStrokeClassificationState(updates);
-    }
-  }
-
-  function handleTextBackgroundMappingChange(
-    updates: Partial<VisualizationConfig['mapping']>
-  ): void {
-    deps.applyTextBackgroundMappingUpdate(updates);
-  }
-
-  function handleTextBackgroundStrokeMappingChange(
-    updates: Partial<VisualizationConfig['mapping']>
-  ): void {
-    deps.applyTextBackgroundStrokeMappingUpdate(updates);
-  }
-
-  function handleTextBackgroundPaletteInvert(): void {
-    deps.invertTextBackgroundPalette();
-  }
-
-  function handleTextBackgroundStrokePaletteInvert(): void {
-    deps.invertTextBackgroundStrokePalette();
-  }
-
   return {
     handleTextChange,
     handleTextStyleChange,
@@ -339,14 +208,6 @@ export function createTextHandlers(deps: TextHandlersDeps) {
     handleTextClassificationChange,
     handleTextMappingChange,
     handleTextSecondaryLabelsChange,
-    handleTextPaletteInvert,
-    handleTextBackgroundStyleChange,
-    handleTextBackgroundModesChange,
-    handleTextBackgroundClassificationChange,
-    handleTextBackgroundStrokeClassificationChange,
-    handleTextBackgroundMappingChange,
-    handleTextBackgroundStrokeMappingChange,
-    handleTextBackgroundPaletteInvert,
-    handleTextBackgroundStrokePaletteInvert
+    handleTextPaletteInvert
   };
 }

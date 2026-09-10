@@ -1869,8 +1869,6 @@
   "error_category_labels_fill": "Failed to fetch category labels",
   "error_category_labels_stroke": "Failed to fetch stroke category labels",
   "error_category_labels_symbol_fill": "Failed to fetch symbol fill category labels",
-  "error_category_labels_text_background": "Failed to fetch text background category labels",
-  "error_category_labels_text_background_stroke": "Failed to fetch text background stroke category labels",
   "pipeline_pasted_data_filename": "pasted-data",
   "remote_zip_default_name": "remote.zip",
   "separator_comma_space": ", ",

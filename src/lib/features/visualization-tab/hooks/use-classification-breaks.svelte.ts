@@ -49,13 +49,10 @@ export const CLASSIFICATION_BREAKS_TRIGGER = {
 export type ClassificationBreakTrigger =
   (typeof CLASSIFICATION_BREAKS_TRIGGER)[keyof typeof CLASSIFICATION_BREAKS_TRIGGER];
 
-export const TEXT_BACKGROUND_SCOPE_TARGET = 'text-background' as const;
 export const SYMBOL_FILL_SCOPE_TARGET = 'symbol-fill' as const;
 
 export type ClassificationScopeTarget =
-  | PrimitiveFilter
-  | typeof TEXT_BACKGROUND_SCOPE_TARGET
-  | typeof SYMBOL_FILL_SCOPE_TARGET;
+  PrimitiveFilter | typeof SYMBOL_FILL_SCOPE_TARGET;
 
 export function buildClassificationScopeKey(
   role: 'fill' | 'stroke' | 'size',
@@ -69,10 +66,6 @@ export function resolveScopeTargetPrimitive(
 ): PrimitiveFilter {
   if (target === SYMBOL_FILL_SCOPE_TARGET) {
     return PrimitiveFilterType.POINT;
-  }
-
-  if (target === TEXT_BACKGROUND_SCOPE_TARGET) {
-    return PrimitiveFilterType.TEXT;
   }
 
   return target;

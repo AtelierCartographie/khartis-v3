@@ -1,7 +1,7 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import { VizFilterButton, VizFilterPanel } from '../shared';
-  import TextBackgroundSection from './text-background-section.svelte';
+  import TextAppearanceSection from './text-appearance-section.svelte';
   import TextLabelSection from './text-label-section.svelte';
   import TextMissingDataSection from './text-missing-data-section.svelte';
   import TextSizeSection from './text-size-section.svelte';
@@ -42,7 +42,6 @@
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
     visualization?: VisualizationConfig;
-    backgroundVisualization?: VisualizationConfig;
     disabled?: boolean;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
@@ -56,24 +55,6 @@
     onSecondaryLabelsChange?: (
       updates: Partial<TextSecondaryLabelsConfig>
     ) => void;
-    onBackgroundStyleChange?: (
-      updates: Partial<VisualizationConfig['style']>
-    ) => void;
-    onBackgroundModesChange?: (updates: Partial<VisualizationModes>) => void;
-    onBackgroundClassificationChange?: (
-      updates: Partial<ClassificationConfig>
-    ) => void;
-    onBackgroundStrokeClassificationChange?: (
-      updates: Partial<ClassificationConfig>
-    ) => void;
-    onBackgroundStrokeMappingChange?: (
-      updates: Partial<VisualizationConfig['mapping']>
-    ) => void;
-    onBackgroundMappingChange?: (
-      updates: Partial<VisualizationConfig['mapping']>
-    ) => void;
-    onBackgroundInvertPalette?: () => void;
-    onBackgroundStrokeInvertPalette?: () => void;
     filters?: VizDataFilter[];
     filterStats?: FilterStats;
     onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
@@ -88,7 +69,6 @@
   let {
     dataFields = [],
     visualization,
-    backgroundVisualization,
     disabled = false,
     onStyleChange,
     onMissingDataChange,
@@ -97,14 +77,6 @@
     onToggleVisibility,
     onModesChange,
     onSecondaryLabelsChange,
-    onBackgroundStyleChange,
-    onBackgroundModesChange,
-    onBackgroundClassificationChange,
-    onBackgroundStrokeClassificationChange,
-    onBackgroundStrokeMappingChange,
-    onBackgroundMappingChange,
-    onBackgroundInvertPalette,
-    onBackgroundStrokeInvertPalette,
     filters = [],
     filterStats,
     onAddFilter,
@@ -537,9 +509,7 @@
         onOpenDiscretization={openTextSizeDiscretization}
       />
 
-      <TextBackgroundSection
-        visualization={backgroundVisualization}
-        dataFields={dataFields}
+      <TextAppearanceSection
         color={textColor}
         opacity={textOpacity}
         halo={halo}
@@ -550,14 +520,6 @@
         onHaloToggle={primaryTextStyleHandlers.onHaloChange}
         onHaloColorChange={primaryTextStyleHandlers.onHaloColorChange}
         onHaloWidthChange={handleHaloWidthChange}
-        onStyleChange={onBackgroundStyleChange}
-        onModesChange={onBackgroundModesChange}
-        onClassificationChange={onBackgroundClassificationChange}
-        onStrokeClassificationChange={onBackgroundStrokeClassificationChange}
-        onMappingChange={onBackgroundMappingChange}
-        onStrokeMappingChange={onBackgroundStrokeMappingChange}
-        onInvertPalette={onBackgroundInvertPalette}
-        onStrokeInvertPalette={onBackgroundStrokeInvertPalette}
       />
     </div>
   </ExpandableSection>

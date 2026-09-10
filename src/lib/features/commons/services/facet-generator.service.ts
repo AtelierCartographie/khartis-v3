@@ -62,14 +62,6 @@ function resolveFacetClassification(
     case FACET_SLOT.TEXT_CATEGORY:
       return visualization.text?.classification ?? visualization.classification;
 
-    case FACET_SLOT.TEXT_BACKGROUND_VALUE:
-    case FACET_SLOT.TEXT_BACKGROUND_CATEGORY:
-      return visualization.text?.background?.classification;
-
-    case FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE:
-    case FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY:
-      return visualization.text?.background?.strokeClassification;
-
     case FACET_SLOT.POLYGON_STROKE_VALUE:
     case FACET_SLOT.POLYGON_STROKE_CATEGORY:
       return visualization.polygon?.strokeClassification;
@@ -211,32 +203,6 @@ function applyFacetClassificationToVisualization(
         visualization.text = {
           ...visualization.text,
           classification
-        };
-      }
-      return;
-
-    case FACET_SLOT.TEXT_BACKGROUND_VALUE:
-    case FACET_SLOT.TEXT_BACKGROUND_CATEGORY:
-      if (visualization.text?.background) {
-        visualization.text = {
-          ...visualization.text,
-          background: {
-            ...visualization.text.background,
-            classification
-          }
-        };
-      }
-      return;
-
-    case FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE:
-    case FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY:
-      if (visualization.text?.background) {
-        visualization.text = {
-          ...visualization.text,
-          background: {
-            ...visualization.text.background,
-            strokeClassification: classification
-          }
         };
       }
       return;
