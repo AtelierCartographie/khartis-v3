@@ -4,6 +4,8 @@ export const DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX = 12;
 
 export const NESTED_MEANS_CLASS_COUNTS = [2, 4, 8, 16] as const;
 
+export const Q6_CLASS_COUNT = 6;
+
 const CLASSIFICATION_METHOD = {
   KMEANS: 'kmeans',
   QUANTILES: 'quantiles',
@@ -50,11 +52,11 @@ export function resolveRequestedClassCount(
   const normalizedMethod = normalizeClassificationMethod(method);
   const safeRequested = Math.max(2, Math.floor(requestedClassCount));
 
-  if (normalizedMethod === 'q6') {
-    return 6;
+  if (normalizedMethod === CLASSIFICATION_METHOD.Q6) {
+    return Q6_CLASS_COUNT;
   }
 
-  if (normalizedMethod === 'nested_means') {
+  if (normalizedMethod === CLASSIFICATION_METHOD.NESTED_MEANS) {
     return resolveNestedMeansClassCount(safeRequested);
   }
 
@@ -100,15 +102,92 @@ export function resolveBreakpointLowerClassCount(
   );
 }
 
+export const DISCRETIZATION_NOTE = {
+  MERGED_BREAKS: 'merged-breaks',
+  HEAD_TAIL_LIMIT: 'head-tail-limit',
+  EMPTY_CLASSES: 'empty-classes',
+  Q6_UNAVAILABLE: 'q6-unavailable'
+} as const;
+
+export interface DiscretizationNote {
+  kind: (typeof DISCRETIZATION_NOTE)[keyof typeof DISCRETIZATION_NOTE];
+  count: number;
+}
+
+const HEAD_TAIL_MIN_USEFUL_CLASS_COUNT = 3;
+
+export function isQ6ContractHonoured(
+  method: ClassificationMethod,
+  actualClassCount: number
+): boolean {
+  return (
+    normalizeClassificationMethod(method) !== CLASSIFICATION_METHOD.Q6 ||
+    actualClassCount === Q6_CLASS_COUNT
+  );
+}
+
+export function resolveDiscretizationNote(input: {
+  method: ClassificationMethod;
+  requestedClassCount: number;
+  actualClassCount: number;
+  naturalClassCount?: number | null;
+  emptyClassCount?: number;
+}): DiscretizationNote | null {
+  const method = normalizeClassificationMethod(input.method);
+
+  if (!isQ6ContractHonoured(method, input.actualClassCount)) {
+    return {
+      kind: DISCRETIZATION_NOTE.Q6_UNAVAILABLE,
+      count: input.actualClassCount
+    };
+  }
+
+  const naturalClassCount =
+    typeof input.naturalClassCount === 'number' &&
+    Number.isFinite(input.naturalClassCount) &&
+    input.naturalClassCount >= 1
+      ? Math.floor(input.naturalClassCount)
+      : null;
+
+  if (
+    method === CLASSIFICATION_METHOD.HEAD_TAIL &&
+    naturalClassCount !== null &&
+    naturalClassCount < HEAD_TAIL_MIN_USEFUL_CLASS_COUNT
+  ) {
+    return {
+      kind: DISCRETIZATION_NOTE.HEAD_TAIL_LIMIT,
+      count: naturalClassCount
+    };
+  }
+
+  const reachableClassCount =
+    naturalClassCount !== null
+      ? Math.min(input.requestedClassCount, naturalClassCount)
+      : input.requestedClassCount;
+
+  if (input.actualClassCount < reachableClassCount) {
+    return {
+      kind: DISCRETIZATION_NOTE.MERGED_BREAKS,
+      count: input.actualClassCount
+    };
+  }
+
+  const emptyClassCount = Math.max(0, Math.floor(input.emptyClassCount ?? 0));
+
+  return emptyClassCount > 0
+    ? { kind: DISCRETIZATION_NOTE.EMPTY_CLASSES, count: emptyClassCount }
+    : null;
+}
+
 export function resolveHeadTailClassCountMax(
-  actualClassCount?: number | null
+  naturalClassCount?: number | null
 ): number {
   if (
-    typeof actualClassCount === 'number' &&
-    Number.isFinite(actualClassCount) &&
-    actualClassCount >= 2
+    typeof naturalClassCount === 'number' &&
+    Number.isFinite(naturalClassCount) &&
+    naturalClassCount >= 2
   ) {
-    return Math.floor(actualClassCount);
+    return Math.floor(naturalClassCount);
   }
 
   return DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
