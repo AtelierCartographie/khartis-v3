@@ -18,13 +18,30 @@ const CATALOGUE_PROJECTION_D3_CONFIGS: Record<string, D3Usage> = {
   mollweide: { projection: 'geoMollweide' },
   stereographic: { projection: 'geoStereographic' },
   'azimuthal-equal-area': { projection: 'geoAzimuthalEqualArea' },
-  'gall-peters': { projection: 'geoCylindricalEqualArea' },
+  'gall-peters': { projection: 'geoCylindricalEqualArea', parallels: [45, 45] },
   'equal-earth': { projection: 'geoEqualEarth' },
   bonne: { projection: 'geoBonne' },
   armadillo: { projection: 'geoArmadillo' },
   atlantis: { projection: 'geoMollweide', rotate: [30, -45, 0] },
   'bertin-1953': { projection: 'geoBertin1953' },
-  'interrupted-mollweide': { projection: 'geoInterruptedMollweide' }
+  'interrupted-mollweide': { projection: 'geoInterruptedMollweide' },
+  times: { projection: 'geoTimes' },
+  imago: { projection: 'geoImago' },
+  airocean: { projection: 'geoAirocean' },
+  waterman: { projection: 'geoPolyhedralWaterman' },
+  'mollweide-hemispheres': {
+    projection: 'geoInterruptedMollweideHemispheres'
+  },
+  'mollweide-oceans': { projection: 'geoInterrupt' },
+  'peirce-quincuncial': { projection: 'geoPeirceQuincuncial' },
+  'transverse-mercator': { projection: 'geoTransverseMercator' },
+  'azimuthal-equidistant': { projection: 'geoAzimuthalEquidistant' },
+  'equidistant-conic': { projection: 'geoConicEquidistant' },
+  'cylindrical-equal-area': {
+    projection: 'geoCylindricalEqualArea',
+    parallels: [0, 0]
+  },
+  cassini: { projection: 'geoCassini' }
 };
 
 function cloneD3UsageConfig(config: D3Usage): D3Usage {
@@ -66,13 +83,19 @@ export function buildProjectionFromCatalogueId(
   return getProjectionById(id)?.projection();
 }
 
+export type ProjectionShape = 'rectangular' | 'round' | 'discontinuous';
+
 export interface ProjectionInfo {
   id: string;
   name: string;
-  category: 'standard' | 'cylindrical' | 'conic' | 'azimuthal' | 'other';
+  shape: ProjectionShape;
   description?: string;
   projection: () => GeoProjection;
   recommended?: boolean;
+  // Interrupted, polyhedral or pre-clipped projections are only defined for
+  // the whole sphere: fitting them to a sub-global bbox blows the scale up and
+  // leaves degenerate slivers, so the render path must fit them to the Sphere.
+  worldScale?: boolean;
   bounds?: [[number, number], [number, number]];
 }
 
@@ -82,7 +105,7 @@ export const PROJECTIONS: ProjectionInfo[] = [
     get name() {
       return m.projection_name_mercator();
     },
-    category: 'cylindrical',
+    shape: 'rectangular',
     get description() {
       return m.projection_desc_mercator();
     },
@@ -94,7 +117,7 @@ export const PROJECTIONS: ProjectionInfo[] = [
     get name() {
       return m.projection_name_natural_earth();
     },
-    category: 'other',
+    shape: 'round',
     get description() {
       return m.projection_desc_natural_earth();
     },
@@ -106,7 +129,7 @@ export const PROJECTIONS: ProjectionInfo[] = [
     get name() {
       return m.projection_name_equirectangular();
     },
-    category: 'cylindrical',
+    shape: 'rectangular',
     get description() {
       return m.projection_desc_equirectangular();
     },
@@ -117,7 +140,7 @@ export const PROJECTIONS: ProjectionInfo[] = [
     get name() {
       return m.projection_name_orthographic();
     },
-    category: 'azimuthal',
+    shape: 'round',
     get description() {
       return m.projection_desc_orthographic();
     },
@@ -128,7 +151,7 @@ export const PROJECTIONS: ProjectionInfo[] = [
     get name() {
       return m.projection_name_albers();
     },
-    category: 'conic',
+    shape: 'round',
     get description() {
       return m.projection_desc_albers();
     },
@@ -139,7 +162,7 @@ export const PROJECTIONS: ProjectionInfo[] = [
     get name() {
       return m.projection_name_lambert_conformal();
     },
-    category: 'conic',
+    shape: 'round',
     get description() {
       return m.projection_desc_lambert_conformal();
     },
@@ -150,7 +173,7 @@ export const PROJECTIONS: ProjectionInfo[] = [
     get name() {
       return m.projection_name_robinson();
     },
-    category: 'other',
+    shape: 'round',
     get description() {
       return m.projection_desc_robinson();
     },
@@ -162,7 +185,7 @@ export const PROJECTIONS: ProjectionInfo[] = [
     get name() {
       return m.projection_name_winkel_tripel();
     },
-    category: 'other',
+    shape: 'round',
     get description() {
       return m.projection_desc_winkel_tripel();
     },
@@ -174,7 +197,7 @@ export const PROJECTIONS: ProjectionInfo[] = [
     get name() {
       return m.projection_name_aitoff();
     },
-    category: 'other',
+    shape: 'round',
     get description() {
       return m.projection_desc_aitoff();
     },
@@ -185,7 +208,7 @@ export const PROJECTIONS: ProjectionInfo[] = [
     get name() {
       return m.projection_name_mollweide();
     },
-    category: 'other',
+    shape: 'round',
     get description() {
       return m.projection_desc_mollweide();
     },
@@ -196,7 +219,7 @@ export const PROJECTIONS: ProjectionInfo[] = [
     get name() {
       return m.projection_name_stereographic();
     },
-    category: 'azimuthal',
+    shape: 'round',
     get description() {
       return m.projection_desc_stereographic();
     },
@@ -207,7 +230,7 @@ export const PROJECTIONS: ProjectionInfo[] = [
     get name() {
       return m.projection_name_azimuthal_equal_area();
     },
-    category: 'azimuthal',
+    shape: 'round',
     get description() {
       return m.projection_desc_azimuthal_equal_area();
     },
@@ -218,7 +241,7 @@ export const PROJECTIONS: ProjectionInfo[] = [
     get name() {
       return m.projection_name_gall_peters();
     },
-    category: 'cylindrical',
+    shape: 'rectangular',
     get description() {
       return m.projection_desc_gall_peters();
     },
@@ -229,7 +252,7 @@ export const PROJECTIONS: ProjectionInfo[] = [
     get name() {
       return m.projection_name_equal_earth();
     },
-    category: 'other',
+    shape: 'round',
     get description() {
       return m.projection_desc_equal_earth();
     },
@@ -240,7 +263,7 @@ export const PROJECTIONS: ProjectionInfo[] = [
     get name() {
       return m.projection_name_bonne();
     },
-    category: 'conic',
+    shape: 'round',
     get description() {
       return m.projection_desc_bonne();
     },
@@ -251,10 +274,11 @@ export const PROJECTIONS: ProjectionInfo[] = [
     get name() {
       return m.projection_name_armadillo();
     },
-    category: 'other',
+    shape: 'round',
     get description() {
       return m.projection_desc_armadillo();
     },
+    worldScale: true,
     projection: () => buildConfiguredCatalogueProjection('armadillo')
   },
   {
@@ -262,7 +286,7 @@ export const PROJECTIONS: ProjectionInfo[] = [
     get name() {
       return m.projection_name_atlantis();
     },
-    category: 'other',
+    shape: 'round',
     get description() {
       return m.projection_desc_atlantis();
     },
@@ -273,7 +297,7 @@ export const PROJECTIONS: ProjectionInfo[] = [
     get name() {
       return m.projection_name_bertin_1953();
     },
-    category: 'other',
+    shape: 'round',
     get description() {
       return m.projection_desc_bertin_1953();
     },
@@ -284,17 +308,226 @@ export const PROJECTIONS: ProjectionInfo[] = [
     get name() {
       return m.projection_name_interrupted_mollweide();
     },
-    category: 'other',
+    shape: 'discontinuous',
     get description() {
       return m.projection_desc_interrupted_mollweide();
     },
+    worldScale: true,
     projection: () =>
       buildConfiguredCatalogueProjection('interrupted-mollweide')
+  },
+  {
+    id: 'times',
+    get name() {
+      return m.projection_name_times();
+    },
+    shape: 'rectangular',
+    get description() {
+      return m.projection_desc_times();
+    },
+    projection: () => buildConfiguredCatalogueProjection('times')
+  },
+  {
+    id: 'cylindrical-equal-area',
+    get name() {
+      return m.projection_name_cylindrical_equal_area();
+    },
+    shape: 'rectangular',
+    get description() {
+      return m.projection_desc_cylindrical_equal_area();
+    },
+    projection: () =>
+      buildConfiguredCatalogueProjection('cylindrical-equal-area')
+  },
+  {
+    id: 'transverse-mercator',
+    get name() {
+      return m.projection_name_transverse_mercator();
+    },
+    shape: 'round',
+    get description() {
+      return m.projection_desc_transverse_mercator();
+    },
+    projection: () => buildConfiguredCatalogueProjection('transverse-mercator')
+  },
+  {
+    id: 'equidistant-conic',
+    get name() {
+      return m.projection_name_equidistant_conic();
+    },
+    shape: 'round',
+    get description() {
+      return m.projection_desc_equidistant_conic();
+    },
+    projection: () => buildConfiguredCatalogueProjection('equidistant-conic')
+  },
+  {
+    id: 'cassini',
+    get name() {
+      return m.projection_name_cassini();
+    },
+    shape: 'round',
+    get description() {
+      return m.projection_desc_cassini();
+    },
+    projection: () => buildConfiguredCatalogueProjection('cassini')
+  },
+  {
+    id: 'azimuthal-equidistant',
+    get name() {
+      return m.projection_name_azimuthal_equidistant();
+    },
+    shape: 'round',
+    get description() {
+      return m.projection_desc_azimuthal_equidistant();
+    },
+    projection: () =>
+      buildConfiguredCatalogueProjection('azimuthal-equidistant')
+  },
+  {
+    id: 'imago',
+    get name() {
+      return m.projection_name_imago();
+    },
+    shape: 'rectangular',
+    get description() {
+      return m.projection_desc_imago();
+    },
+    worldScale: true,
+    projection: () => buildConfiguredCatalogueProjection('imago')
+  },
+  {
+    id: 'airocean',
+    get name() {
+      return m.projection_name_airocean();
+    },
+    shape: 'discontinuous',
+    get description() {
+      return m.projection_desc_airocean();
+    },
+    worldScale: true,
+    projection: () => buildConfiguredCatalogueProjection('airocean')
+  },
+  {
+    id: 'waterman',
+    get name() {
+      return m.projection_name_waterman();
+    },
+    shape: 'discontinuous',
+    get description() {
+      return m.projection_desc_waterman();
+    },
+    worldScale: true,
+    projection: () => buildConfiguredCatalogueProjection('waterman')
+  },
+  {
+    id: 'mollweide-hemispheres',
+    get name() {
+      return m.projection_name_mollweide_hemispheres();
+    },
+    shape: 'discontinuous',
+    get description() {
+      return m.projection_desc_mollweide_hemispheres();
+    },
+    worldScale: true,
+    projection: () =>
+      buildConfiguredCatalogueProjection('mollweide-hemispheres')
+  },
+  {
+    id: 'mollweide-oceans',
+    get name() {
+      return m.projection_name_mollweide_oceans();
+    },
+    shape: 'discontinuous',
+    get description() {
+      return m.projection_desc_mollweide_oceans();
+    },
+    worldScale: true,
+    projection: () => buildConfiguredCatalogueProjection('mollweide-oceans')
+  },
+  {
+    id: 'peirce-quincuncial',
+    get name() {
+      return m.projection_name_peirce_quincuncial();
+    },
+    shape: 'rectangular',
+    get description() {
+      return m.projection_desc_peirce_quincuncial();
+    },
+    worldScale: true,
+    projection: () => buildConfiguredCatalogueProjection('peirce-quincuncial')
   }
 ];
 
 export function getProjectionById(id: string): ProjectionInfo | undefined {
   return PROJECTIONS.find((p) => p.id === id);
+}
+
+export function isWorldScaleProjectionId(id: string): boolean {
+  return getProjectionById(id)?.worldScale === true;
+}
+
+export interface ProjectionOrientationSource {
+  selected?: string;
+  customCode?: string;
+  suggestionD3Config?: D3Usage;
+}
+
+const orientationDefaultCache = new Map<string, [number, number]>();
+
+// A d3 projection often carries its own orientation (Bertin 1953 is rotated
+// onto the inhabited landmasses, Air Ocean onto its icosahedron, the two-
+// hemisphere Mollweide onto the Atlantic cut…). The render path re-applies
+// `rotate([-longitude, -latitude, gamma])`, so the settings must start from
+// that intrinsic orientation or the projection is silently reset to lon/lat 0.
+export function resolveProjectionDefaultOrientation(
+  source: ProjectionOrientationSource
+): [number, number] {
+  const cacheKey = getOrientationCacheKey(source);
+  const cached = orientationDefaultCache.get(cacheKey);
+  if (cached) {
+    return [...cached];
+  }
+
+  const orientation = readProjectionOrientation(source);
+  orientationDefaultCache.set(cacheKey, orientation);
+  return [...orientation];
+}
+
+function readProjectionOrientation(
+  source: ProjectionOrientationSource
+): [number, number] {
+  if (source.customCode) {
+    return [0, 0];
+  }
+
+  const projection = source.suggestionD3Config
+    ? buildD3ProjectionFromConfig(source.suggestionD3Config)
+    : source.selected
+      ? buildProjectionFromCatalogueId(source.selected)
+      : undefined;
+  const rotate = projection?.rotate();
+
+  return [-(rotate?.[0] ?? 0), -(rotate?.[1] ?? 0)];
+}
+
+function getOrientationCacheKey(source: ProjectionOrientationSource): string {
+  if (source.customCode) {
+    return 'code';
+  }
+
+  const config = source.suggestionD3Config;
+  if (!config) {
+    return `id:${source.selected ?? ''}`;
+  }
+
+  return [
+    'd3',
+    config.projection,
+    config.rotate?.join(',') ?? '',
+    config.center?.join(',') ?? '',
+    config.parallels?.join(',') ?? ''
+  ].join('|');
 }
 
 export function fitProjectionToBbox(
