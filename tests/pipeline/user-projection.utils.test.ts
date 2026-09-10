@@ -476,6 +476,9 @@ describe('user projection utils', () => {
     expect(projection).toBeUndefined();
   });
 
+  // Builds and fits one projection per (built-in projection x catalog basemap)
+  // pair — several thousand constructions, a few of them polyhedral — so this
+  // smoke test needs far more than the default 5s budget on a CI runner.
   it('fits every built-in projection to every catalog basemap bbox with finite coordinates', () => {
     expect(catalogBboxes.length).toBeGreaterThan(0);
 
@@ -526,7 +529,7 @@ describe('user projection utils', () => {
         ).toBeGreaterThan(0);
       }
     }
-  });
+  }, 30000);
 
   it('keeps every built-in projection compatible with non-neutral user parameters', () => {
     for (const projectionInfo of PROJECTIONS) {
