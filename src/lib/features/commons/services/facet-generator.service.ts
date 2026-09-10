@@ -297,6 +297,8 @@ async function buildFacetClassification(
     classes: actualClasses,
     breaks: result.breaks,
     counts: result.counts,
+    roundedMin: result.roundedMin,
+    roundedMax: result.roundedMax,
     ...(result.breakpointLowerClassCount != null
       ? { breakpointLowerClassCount: result.breakpointLowerClassCount }
       : {})

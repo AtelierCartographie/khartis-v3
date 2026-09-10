@@ -308,8 +308,57 @@ const round_thresholds_macro = `CREATE OR REPLACE MACRO round_left(n) AS (
 );`;
 
 /**
+ * SQL macros for rounding the outer bounds of a discretization scale.
+ *
+ * Defines:
+ * 1. `significant_rounding_limit(n)`: the largest deviation a rounding of `n` may show, which caps
+ *    the ladder at two significant digits (one below 10) exactly like the legend's `round_extreme`.
+ * 2. `round_bounds(low, high, tname, colname)`: rounds the series minimum and maximum.
+ *
+ * The minimum is rounded while it stays below the next observed value and the maximum while it
+ * stays above the previous one, so a rounded bound can never swallow a second value: the extreme
+ * value itself is the only one it can ever step over. Both bounds are display values; classes are
+ * assigned from the thresholds, never from them.
+ */
+const round_bounds_macro = `CREATE OR REPLACE MACRO significant_rounding_limit(n) AS (
+  0.5 * pow(10, floor(log10(nullif(abs(n::DOUBLE), 0))) - if(abs(n::DOUBLE) < 10, 0, 1))
+  );
+
+  CREATE OR REPLACE MACRO round_bounds(low, high, tname, colname) AS (
+  WITH values AS (
+    FROM query_table(tname::VARCHAR)
+    SELECT COLUMNS(c -> c = colname) AS value
+    WHERE COLUMNS(c -> c = colname) IS NOT NULL
+  ), neighbours AS (
+    FROM values
+    SELECT
+      min(value) FILTER (WHERE value > low) AS above_low,
+      max(value) FILTER (WHERE value < high) AS below_high
+  )
+  FROM neighbours
+  SELECT [
+    coalesce(
+      list_filter(
+        generate_roundings(low),
+        candidate -> candidate < above_low
+          AND abs(candidate - low) <= significant_rounding_limit(low)
+      )[1],
+      low::DOUBLE
+    ),
+    coalesce(
+      list_filter(
+        generate_roundings(high),
+        candidate -> candidate > below_high
+          AND abs(candidate - high) <= significant_rounding_limit(high)
+      )[1],
+      high::DOUBLE
+    )
+  ]
+);`;
+
+/**
  * Combination of all macro functions for data classification:
- * quantile, q6, equi_width, nested_means, headtail2, kmeans, round_thresholds.
+ * quantile, q6, equi_width, nested_means, headtail2, kmeans, round_thresholds, round_bounds.
  */
 export const breaks =
   quantile_macro +
@@ -318,4 +367,5 @@ export const breaks =
   nested_means_macro +
   headtail2_macro +
   kmeans_macro +
-  round_thresholds_macro;
+  round_thresholds_macro +
+  round_bounds_macro;

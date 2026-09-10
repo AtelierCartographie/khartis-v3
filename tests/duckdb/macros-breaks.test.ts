@@ -254,6 +254,88 @@ describe('round_thresholds macro', () => {
   });
 });
 
+describe('round_bounds macro', () => {
+  it('rounds the maximum while it stays above the previous observed value', async () => {
+    await run(db, 'CREATE OR REPLACE TABLE bounds_sparse (v INTEGER)');
+    const dense = Array.from({ length: 100 }, (_, i) => `(${i + 1})`).join(',');
+    await run(
+      db,
+      `INSERT INTO bounds_sparse VALUES ${dense}, (12789), (27367)`
+    );
+
+    const rows = await query(
+      db,
+      "SELECT round_bounds(1, 27367, 'bounds_sparse', 'v') AS bounds"
+    );
+
+    expect(rows[0].bounds).toEqual([1, 27000]);
+  });
+
+  it('refuses a rounding that would step over the neighbouring value', async () => {
+    await run(db, 'CREATE OR REPLACE TABLE bounds_dense (v DOUBLE)');
+    await run(
+      db,
+      'INSERT INTO bounds_dense VALUES (1678), (1690), (1700), (4000), (9800)'
+    );
+
+    const rows = await query(
+      db,
+      "SELECT round_bounds(1678, 9800, 'bounds_dense', 'v') AS bounds"
+    );
+
+    // 1700 would swallow two observed values, so the ladder stops at 1680.
+    expect(rows[0].bounds).toEqual([1680, 9800]);
+  });
+
+  it('keeps a zero minimum and stays inside two significant digits', async () => {
+    await run(db, 'CREATE OR REPLACE TABLE bounds_zero (v DOUBLE)');
+    await run(db, 'INSERT INTO bounds_zero VALUES (0), (3), (27367)');
+
+    const rows = await query(
+      db,
+      "SELECT round_bounds(0, 27367, 'bounds_zero', 'v') AS bounds"
+    );
+
+    expect(rows[0].bounds).toEqual([0, 27000]);
+  });
+
+  it('rounds decimal bounds and leaves a single-value series untouched', async () => {
+    await run(db, 'CREATE OR REPLACE TABLE bounds_decimals (v DOUBLE)');
+    await run(
+      db,
+      'INSERT INTO bounds_decimals VALUES (0.0123), (0.08), (0.97)'
+    );
+    const decimals = await query(
+      db,
+      "SELECT round_bounds(0.0123, 0.97, 'bounds_decimals', 'v') AS bounds"
+    );
+    expect(decimals[0].bounds).toEqual([0.01, 1]);
+
+    await run(db, 'CREATE OR REPLACE TABLE bounds_single (v DOUBLE)');
+    await run(db, 'INSERT INTO bounds_single VALUES (42), (42)');
+    const single = await query(
+      db,
+      "SELECT round_bounds(42, 42, 'bounds_single', 'v') AS bounds"
+    );
+    expect(single[0].bounds).toEqual([42, 42]);
+  });
+
+  it('widens a negative minimum outwards', async () => {
+    await run(db, 'CREATE OR REPLACE TABLE bounds_negative (v DOUBLE)');
+    await run(
+      db,
+      'INSERT INTO bounds_negative VALUES (-1267), (-1200), (-500), (-37)'
+    );
+
+    const rows = await query(
+      db,
+      "SELECT round_bounds(-1267, -37, 'bounds_negative', 'v') AS bounds"
+    );
+
+    expect(rows[0].bounds).toEqual([-1300, -37]);
+  });
+});
+
 describe('macros vs reference implementations on real NUTS2 GDP data', () => {
   const TABLE = 'gdp_real';
 

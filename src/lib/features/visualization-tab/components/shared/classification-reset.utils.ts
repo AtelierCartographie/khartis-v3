@@ -17,6 +17,8 @@ export function resetCategoryVisualClassification(): Partial<ClassificationConfi
     ...resetVisualClassification(),
     disabledLabels: undefined,
     breaks: undefined,
-    counts: undefined
+    counts: undefined,
+    roundedMin: undefined,
+    roundedMax: undefined
   };
 }

@@ -101,7 +101,8 @@ function buildStatisticsFromDataset(
           unique: column.stats?.uniques ?? 0,
           min: column.stats?.min,
           max: column.stats?.max,
-          mean: column.stats?.mean
+          mean: column.stats?.mean,
+          value_sample: column.stats?.value_sample
         }
       ])
   );
