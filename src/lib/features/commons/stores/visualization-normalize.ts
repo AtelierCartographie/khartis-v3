@@ -18,6 +18,7 @@ import {
   ThicknessMode,
   VisualizationType,
   VISUALIZATION_DEFAULTS,
+  SLIDER_LIMITS,
   availableShapesForSymbolMode
 } from '$lib/features/commons/constants/visualization.constants';
 import { GEO_COLUMN_TYPE } from '../constants/data.constants';
@@ -89,6 +90,15 @@ function resolveLegacyPrimitiveEnabled(
   return primitiveFilters.includes(primitive);
 }
 
+function clampHaloWidth(haloWidth: number | undefined): number {
+  const width = haloWidth ?? VISUALIZATION_DEFAULTS.haloWidth;
+  if (!Number.isFinite(width)) return VISUALIZATION_DEFAULTS.haloWidth;
+  return Math.min(
+    SLIDER_LIMITS.haloWidth.max,
+    Math.max(SLIDER_LIMITS.haloWidth.min, width)
+  );
+}
+
 function buildSecondaryLabelsConfig(
   visualization: VisualizationConfig
 ): TextSecondaryLabelsConfig {
@@ -123,10 +133,9 @@ function buildSecondaryLabelsConfig(
       existing?.haloColor ??
       visualization.style.labelHaloColor ??
       DEFAULT_COLORS.halo,
-    haloWidth:
-      existing?.haloWidth ??
-      visualization.style.labelHaloWidth ??
-      VISUALIZATION_DEFAULTS.haloWidth,
+    haloWidth: clampHaloWidth(
+      existing?.haloWidth ?? visualization.style.labelHaloWidth
+    ),
     collisionDetection:
       existing?.collisionDetection ??
       visualization.style.labelCollisionDetection ??
@@ -452,10 +461,9 @@ export function buildTextPrimitiveConfig(
       existing?.haloColor ??
       visualization.style.textHaloColor ??
       DEFAULT_COLORS.halo,
-    haloWidth:
-      existing?.haloWidth ??
-      visualization.style.textHaloWidth ??
-      VISUALIZATION_DEFAULTS.haloWidth,
+    haloWidth: clampHaloWidth(
+      existing?.haloWidth ?? visualization.style.textHaloWidth
+    ),
     collisionDetection:
       existing?.collisionDetection ??
       visualization.style.textCollisionDetection ??

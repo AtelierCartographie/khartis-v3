@@ -21,10 +21,7 @@ import {
 } from '$lib/features/map/layers/pattern-texture';
 import type { KhartisMotifOptions } from '$lib/features/map/layers/polygon-pattern-layer.utils';
 import type { PatternParams } from '$lib/features/commons/constants/pattern.constants';
-import {
-  SLIDER_LIMITS,
-  SYMBOL_SDF_EXTENT
-} from '$lib/features/commons/constants/visualization.constants';
+import { SYMBOL_SDF_EXTENT } from '$lib/features/commons/constants/visualization.constants';
 import { NEUTRAL_CARTOGRAPHY_RGBA_COLORS } from '$lib/features/commons/constants/colors.constants';
 import { resolveTextHaloWidthPx } from '$lib/features/map/layers/text-character-set';
 import { DeckLayerId } from '$lib/features/map/constants/map.constants';
@@ -2382,7 +2379,7 @@ function serializeTextLayer(
   const maxWidthMultiplier = getLayerNumber(props, 'maxWidth', -1);
   const backgroundEnabled = props.background === true;
   const backgroundPadding = normalizeTextPadding(props.backgroundPadding);
-  const maxHaloWidthPx = SLIDER_LIMITS.haloWidth.max;
+  const outlineWidth = getLayerNumber(props, 'outlineWidth', 0);
   const rectParts: string[] = [];
   const textElements: PendingTextElement[] = [];
 
@@ -2407,9 +2404,11 @@ function serializeTextLayer(
       index,
       [0, 0]
     );
-    const size =
-      Math.max(1, resolveAccessorNumber(props.getSize, datum, index, 12)) *
-      sizeScale;
+    const baseSize = Math.max(
+      1,
+      resolveAccessorNumber(props.getSize, datum, index, 12)
+    );
+    const size = baseSize * sizeScale;
     const x = projected[0] + (pixelOffset[0] ?? 0);
     const y = projected[1] + (pixelOffset[1] ?? 0);
     const color = applyLayerOpacity(
@@ -2443,10 +2442,7 @@ function serializeTextLayer(
       size,
       baseline
     );
-    const haloWidthPx = resolveTextHaloWidthPx(
-      getLayerNumber(props, 'outlineWidth', 0),
-      maxHaloWidthPx
-    );
+    const haloWidthPx = resolveTextHaloWidthPx(outlineWidth, baseSize);
     const haloColor = normalizeSvgColor(
       props.outlineColor,
       [255, 255, 255, 255]
