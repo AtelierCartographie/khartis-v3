@@ -34,13 +34,17 @@
   import type { ProjectionSuggestion } from './projection-suggest.service';
   import { isProjectionSuggestionOrientationDefault } from './projection-suggestion-selection.utils';
   import { getCatalogueProjectionIdForSuggestion } from './projection-suggestion-catalogue.utils';
+  import {
+    getProjectionShapeFilterId,
+    getSuggestionProjectionDescription,
+    getSuggestionProjectionTitle,
+    type ProjectionShapeFilterId
+  } from './projection-label.utils';
   import { getThumbnailPaths } from './projection-thumbnail';
   import {
     getWorldLandGeometrySync,
     loadWorldLandGeometry
   } from '$lib/features/commons/utils/world-land-geometry';
-
-  type ProjectionShapeFilterId = Exclude<ProjectionFilterId, 'all'>;
 
   const INITIAL_VISIBLE_SUGGESTIONS = 3;
   const SUGGESTION_INCREMENT = 3;
@@ -332,16 +336,7 @@
   function getSuggestionFilterId(
     suggestion: ProjectionSuggestion
   ): ProjectionShapeFilterId | undefined {
-    switch (suggestion.shape) {
-      case 'rectangular':
-        return 'Rectangulaire';
-      case 'round':
-        return 'Arrondie';
-      case 'discontinuous':
-        return 'Discontinue';
-      default:
-        return undefined;
-    }
+    return getProjectionShapeFilterId(suggestion.shape);
   }
 
   function getSuggestionTag(suggestion: ProjectionSuggestion): string {
@@ -358,45 +353,6 @@
       suggestion.shape ??
       ''
     );
-  }
-
-  function getSuggestionTitle(suggestion: ProjectionSuggestion): string {
-    switch (suggestion.id.toLowerCase()) {
-      case 'peters':
-        return m.projection_name_gall_peters();
-      case 'equalearth':
-        return m.projection_name_equal_earth();
-      case 'equirectangular':
-        return m.projection_name_equirectangular();
-      case 'mercator':
-        return m.projection_name_mercator();
-      case 'atlantis':
-        return m.projection_name_atlantis();
-      case 'bonne':
-        return m.projection_name_bonne();
-      case 'armadillo':
-        return m.projection_name_armadillo();
-      case 'bertin1953':
-        return m.projection_name_bertin_1953();
-      case 'mollweide_interrupted':
-        return m.projection_name_interrupted_mollweide();
-      case 'mollweide_2_hemisphere':
-        return m.projection_name_mollweide_hemispheres();
-      case 'mollweide_ocean':
-        return m.projection_name_mollweide_oceans();
-      case 'laea':
-        return m.projection_name_azimuthal_equal_area();
-      default:
-        return suggestion.name;
-    }
-  }
-
-  function getSuggestionDescription(suggestion: ProjectionSuggestion): string {
-    if (suggestion.type === 'national' && suggestion.epsg) {
-      return `${m.projection_tag_national()} · EPSG:${suggestion.epsg}`;
-    }
-
-    return description;
   }
 </script>
 
@@ -465,7 +421,7 @@
         <div class="projection-cards">
           {#each visibleListSuggestions as suggestion (suggestion.id)}
             <ProjectionCard
-              title={getSuggestionTitle(suggestion)}
+              title={getSuggestionProjectionTitle(suggestion)}
               subtitle=""
               tag={getSuggestionTag(suggestion)}
               previewLabel={m.projection_preview_label()}
@@ -473,7 +429,7 @@
               selected={isSuggestionSelected(suggestion)}
               variant="blue"
               equalArea={suggestion.equalArea}
-              description={getSuggestionDescription(suggestion)}
+              description={getSuggestionProjectionDescription(suggestion)}
               onclick={() => applySuggestion(suggestion)}
             />
           {/each}
@@ -500,7 +456,7 @@
         <div class="projection-grid-featured">
           {#each unclassifiedGridSuggestions as suggestion (suggestion.id)}
             <ProjectionCard
-              title={getSuggestionTitle(suggestion)}
+              title={getSuggestionProjectionTitle(suggestion)}
               subtitle=""
               tag={getSuggestionTag(suggestion)}
               previewLabel={m.projection_preview_label()}
@@ -508,7 +464,7 @@
               selected={isSuggestionSelected(suggestion)}
               variant="blue"
               equalArea={suggestion.equalArea}
-              description={getSuggestionDescription(suggestion)}
+              description={getSuggestionProjectionDescription(suggestion)}
               layout="vertical"
               fullWidth
               onclick={() => applySuggestion(suggestion)}
@@ -524,7 +480,7 @@
             <div class="projection-grid-cards">
               {#each group.suggestions as suggestion (suggestion.id)}
                 <ProjectionCard
-                  title={getSuggestionTitle(suggestion)}
+                  title={getSuggestionProjectionTitle(suggestion)}
                   subtitle=""
                   tag={getSuggestionTag(suggestion)}
                   previewLabel={m.projection_preview_label()}
@@ -532,7 +488,7 @@
                   selected={isSuggestionSelected(suggestion)}
                   variant="blue"
                   equalArea={suggestion.equalArea}
-                  description={getSuggestionDescription(suggestion)}
+                  description={getSuggestionProjectionDescription(suggestion)}
                   layout="vertical"
                   fullWidth
                   showTag={false}

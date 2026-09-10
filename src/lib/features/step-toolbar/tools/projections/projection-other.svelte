@@ -1,7 +1,6 @@
 <script lang="ts">
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
-  import type { ProjectionFilterId } from '$lib/features/commons/types/global';
   import {
     basemapService,
     osmBasemapStore,
@@ -29,17 +28,16 @@
     getProjectionState,
     projectionActions
   } from './projection.store.svelte';
-  import { getCatalogueProjectionIdForSuggestion } from './projection-suggestion-catalogue.utils';
-
-  type ProjectionShapeFilterId = Exclude<ProjectionFilterId, 'all'>;
+  import {
+    getProjectionShapeFilterId,
+    type ProjectionShapeFilterId
+  } from './projection-label.utils';
 
   type ProjectionCatalogueItem = {
     id: string;
     projectionId: string;
     title: string;
     tag: string;
-    description?: string;
-    equalArea?: boolean;
     shapeFilterId?: ProjectionShapeFilterId;
   };
 
@@ -50,32 +48,11 @@
 
   let { onapply, onreset }: Props = $props();
 
-  const EQUAL_AREA_PROJECTION_IDS = new Set([
-    'albers',
-    'azimuthal-equal-area',
-    'gall-peters',
-    'equal-earth',
-    'mollweide',
-    'bonne',
-    'interrupted-mollweide'
-  ]);
   let requestedTabIndex = $state(0);
   let crsCodeDraft = $state<string | null>(null);
 
   const projectionState = $derived(getProjectionState());
   const crsCode = $derived(crsCodeDraft ?? projectionState.customCode ?? '');
-  const suggestionProjectionIds = $derived.by(() => {
-    const suggestions = projectionState.suggestions;
-    if (!suggestions) {
-      return new Set<string>();
-    }
-
-    return new Set(
-      [...suggestions.national, ...suggestions.generic]
-        .map(getCatalogueProjectionIdForSuggestion)
-        .filter((projectionId): projectionId is string => Boolean(projectionId))
-    );
-  });
   const projectionContext = $derived(
     resolveProjectionAvailabilityContext({
       requiresMapLibre: basemapStyleStore.requiresMapLibre,
@@ -139,7 +116,6 @@
       ...compositeItems
     ].filter(
       (projection) =>
-        !suggestionProjectionIds.has(projection.projectionId) &&
         getAvailableProjectionIds(projectionContext, [projection.projectionId])
           .length > 0
     )
@@ -260,41 +236,15 @@
   function createProjectionCatalogueItem(
     projection: ProjectionInfo
   ): ProjectionCatalogueItem {
-    const shapeFilterId = getProjectionShapeFilterId(projection);
+    const shapeFilterId = getProjectionShapeFilterId(projection.shape);
 
     return {
       id: projection.id,
       projectionId: projection.id,
       title: projection.name,
       tag: getProjectionTag(shapeFilterId),
-      description: projection.description,
-      equalArea: EQUAL_AREA_PROJECTION_IDS.has(projection.id),
       shapeFilterId
     };
-  }
-
-  function getProjectionShapeFilterId(
-    projection: ProjectionInfo
-  ): ProjectionShapeFilterId | undefined {
-    if (projection.id === 'interrupted-mollweide') {
-      return 'Discontinue';
-    }
-
-    if (
-      projection.category === 'cylindrical' ||
-      projection.category === 'conic'
-    ) {
-      return 'Rectangulaire';
-    }
-
-    if (
-      projection.category === 'azimuthal' ||
-      projection.category === 'other'
-    ) {
-      return 'Arrondie';
-    }
-
-    return undefined;
   }
 
   function getProjectionTag(

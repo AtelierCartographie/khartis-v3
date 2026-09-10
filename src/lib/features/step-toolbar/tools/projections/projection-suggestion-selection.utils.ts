@@ -1,3 +1,4 @@
+import { resolveProjectionDefaultOrientation } from '$lib/features/commons/utils/projection.utils';
 import type { ProjectionState } from '../../types/projections.types';
 import type { ProjectionSuggestion } from './projection-suggest.service';
 
@@ -21,8 +22,9 @@ function resolveCurrentCenter(
 function resolveSuggestionDefaultCenter(
   suggestion: ProjectionSuggestion
 ): [number, number] {
-  const rotate = suggestion.d3Config?.rotate;
-  return [-(rotate?.[0] ?? 0), -(rotate?.[1] ?? 0)];
+  return resolveProjectionDefaultOrientation({
+    suggestionD3Config: suggestion.d3Config ?? undefined
+  });
 }
 
 export function isProjectionSuggestionOrientationDefault(
