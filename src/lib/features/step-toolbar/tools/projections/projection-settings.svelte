@@ -13,6 +13,7 @@
     supportsCustomProjectionCode
   } from '$lib/features/map/utils/projection-availability.utils';
   import { getCompositeProjectionPresetId } from '$lib/features/map/utils/user-projection.utils';
+  import { resolveProjectionDefaultOrientation } from '$lib/features/commons/utils/projection.utils';
   import { Renew } from 'carbon-icons-svelte';
   import {
     getProjectionState,
@@ -54,9 +55,18 @@
       ? m.projection_settings_unavailable_projection()
       : m.projection_settings_unavailable_render_engine()
   );
+  // The reference is the projection's own orientation, not lon/lat 0: Bertin
+  // 1953, Air Ocean or the two-hemisphere Mollweide are all rotated by design.
+  const defaultOrientation = $derived(
+    resolveProjectionDefaultOrientation({
+      selected: projectionState.selected,
+      customCode: projectionState.customCode,
+      suggestionD3Config: projectionState.suggestionD3Config
+    })
+  );
   const isDirty = $derived(
-    projectionState.longitude !== 0 ||
-      projectionState.latitude !== 0 ||
+    projectionState.longitude !== defaultOrientation[0] ||
+      projectionState.latitude !== defaultOrientation[1] ||
       projectionState.rotation !== 0
   );
   const deg = (n: number) => `${n}°`;
