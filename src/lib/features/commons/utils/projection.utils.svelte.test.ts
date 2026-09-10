@@ -197,6 +197,22 @@ describe('buildProjectionFromCatalogueId', () => {
 
     expect(projection!([0, 90])![0]).toBeCloseTo(50, 3);
     expect(projection!([0, 90])![1]).toBeCloseTo(50, 3);
-    expect(projection!([0, 0])![1]).toBeCloseTo(100, 3);
+    expect(projection!([0, -90])![0]).toBeCloseTo(0, 3);
+    expect(projection!([0, -90])![1]).toBeCloseTo(0, 3);
+  });
+
+  it('centres the square world map on lon 25 without the d3 default roll', async () => {
+    const {
+      buildProjectionFromCatalogueId,
+      resolveProjectionDefaultOrientation
+    } = await import('./projection.utils');
+    const projection = buildProjectionFromCatalogueId('peirce-quincuncial');
+
+    // d3's own default is rotate([-90, -90, 45]); that roll inverts part of
+    // the polygon rings, which inflates the projected land area.
+    expect(projection!.rotate()).toEqual([-25, -90, 0]);
+    expect(
+      resolveProjectionDefaultOrientation({ selected: 'peirce-quincuncial' })
+    ).toEqual([25, 90]);
   });
 });
