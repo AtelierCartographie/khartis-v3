@@ -369,21 +369,49 @@ export function magnitude(value: number): MagnitudeResult {
   return { order: order * sign, integers: exponent + 1, decimals: null };
 }
 
-export function filter_candidates_by_distances(
+export interface CandidateFillOptions {
+  position: ScaleFn;
+  spacing: number;
+  blockers: number[];
+  lower_limit: number;
+}
+
+/**
+ * Picks as many candidates as the legend has room for, closest to the data first.
+ *
+ * The layout decides how many ticks fit, the distance to real values decides which ones: taking a
+ * fixed number of the closest candidates first would keep values the spacing then throws away,
+ * leaving the legend emptier than the symbols on the map suggest.
+ */
+export function fill_candidates_by_proximity(
   sorted_data: ArrayLike<number>,
   candidates: number[],
-  n_ticks: number = 4
+  options: CandidateFillOptions
 ): number[] {
-  if (candidates.length <= n_ticks) {
-    return candidates;
+  const { position, spacing, blockers, lower_limit } = options;
+  const distances = candidates_distances_from_data(sorted_data, candidates);
+  const by_proximity = distances
+    .map((distance, index) => ({ distance, index }))
+    .sort(
+      (a, b) =>
+        a.distance - b.distance || candidates[a.index] - candidates[b.index]
+    );
+
+  const taken = blockers.map(position);
+  const kept: number[] = [];
+
+  for (const { index } of by_proximity) {
+    const candidate = candidates[index];
+    const at = position(candidate);
+
+    if (at < lower_limit) continue;
+    if (taken.some((other) => Math.abs(other - at) < spacing)) continue;
+
+    taken.push(at);
+    kept.push(candidate);
   }
 
-  const distances = candidates_distances_from_data(sorted_data, candidates);
-  const indexed = distances.map((distance, index) => ({ distance, index }));
-  indexed.sort((a, b) => a.distance - b.distance);
-  const exit_indices = new Set(indexed.slice(n_ticks).map((x) => x.index));
-
-  return candidates.filter((_, index) => !exit_indices.has(index));
+  return kept.sort((a, b) => a - b);
 }
 
 function candidates_distances_from_data(
