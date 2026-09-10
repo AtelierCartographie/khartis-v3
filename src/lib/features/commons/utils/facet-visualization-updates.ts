@@ -225,70 +225,6 @@ export function buildFacetVariablePatch(
             }
           : {})
       };
-
-    case FACET_SLOT.TEXT_BACKGROUND_VALUE:
-      return {
-        mapping: nextMapping,
-        ...(visualization.text?.background
-          ? {
-              text: {
-                ...visualization.text,
-                background: {
-                  ...visualization.text.background,
-                  valueColumn: variableName
-                }
-              }
-            }
-          : {})
-      };
-
-    case FACET_SLOT.TEXT_BACKGROUND_CATEGORY:
-      return {
-        mapping: nextMapping,
-        ...(visualization.text?.background
-          ? {
-              text: {
-                ...visualization.text,
-                background: {
-                  ...visualization.text.background,
-                  categoryColumn: variableName
-                }
-              }
-            }
-          : {})
-      };
-
-    case FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE:
-      return {
-        mapping: nextMapping,
-        ...(visualization.text?.background
-          ? {
-              text: {
-                ...visualization.text,
-                background: {
-                  ...visualization.text.background,
-                  strokeValueColumn: variableName
-                }
-              }
-            }
-          : {})
-      };
-
-    case FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY:
-      return {
-        mapping: nextMapping,
-        ...(visualization.text?.background
-          ? {
-              text: {
-                ...visualization.text,
-                background: {
-                  ...visualization.text.background,
-                  strokeCategoryColumn: variableName
-                }
-              }
-            }
-          : {})
-      };
   }
 }
 
@@ -341,13 +277,5 @@ export function getFacetSlotVariable(
       return visualization.text?.valueColumn;
     case FACET_SLOT.TEXT_CATEGORY:
       return visualization.text?.categoryColumn;
-    case FACET_SLOT.TEXT_BACKGROUND_VALUE:
-      return visualization.text?.background?.valueColumn;
-    case FACET_SLOT.TEXT_BACKGROUND_CATEGORY:
-      return visualization.text?.background?.categoryColumn;
-    case FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE:
-      return visualization.text?.background?.strokeValueColumn;
-    case FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY:
-      return visualization.text?.background?.strokeCategoryColumn;
   }
 }

@@ -1,15 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { SLIDER_LIMITS } from '$lib/features/commons/constants/visualization.constants';
 import {
-  DEFAULT_TEXT_FONT_SETTINGS_RASTER,
-  DEFAULT_TEXT_FONT_SETTINGS_SDF,
   DEFAULT_TEXT_LINE_HEIGHT,
   EXPLICIT_TEXT_CHARACTER_SET,
+  MAX_TEXT_OUTLINE_WIDTH,
+  TEXT_ATLAS_BUFFER,
+  TEXT_ATLAS_FONT_SIZE,
+  TEXT_ATLAS_RADIUS,
   extendTextCharacterSet,
   resolveTextFontSettings,
   resolveTextHaloWidthPx,
-  resolveTextOutlineWidth
+  resolveTextOutlineWidth,
+  resolveTextSmoothing
 } from './text-character-set';
+
+const SDF_EDGE_ALPHA = 0.75;
+// deck.gl only reads glyph distances that fit inside the atlas padding, so the
+// widest outline the shader can draw is what bounds the halo in pixels.
+const maxHaloWidthPx = (textSize: number) =>
+  (MAX_TEXT_OUTLINE_WIDTH * SDF_EDGE_ALPHA * textSize) / TEXT_ATLAS_FONT_SIZE;
 
 const FRENCH_DEPARTMENT_GLYPHS = [
   'A',
@@ -86,141 +95,116 @@ describe('text-character-set — coverage', () => {
   });
 });
 
-describe('text-character-set — DEFAULT_TEXT_FONT_SETTINGS_SDF', () => {
-  it('keeps SDF mode on for crisp halos and thin strokes', () => {
-    expect(DEFAULT_TEXT_FONT_SETTINGS_SDF.sdf).toBe(true);
-  });
-
-  it('uses the Deck.gl default atlas resolution so the SDF canvas stays under WebGL texture limits', () => {
-    expect(DEFAULT_TEXT_FONT_SETTINGS_SDF.fontSize).toBeLessThanOrEqual(64);
-  });
-
-  it('keeps buffer and radius proportionate to fontSize for clean halos and downsampling', () => {
-    expect(DEFAULT_TEXT_FONT_SETTINGS_SDF.buffer).toBeGreaterThanOrEqual(4);
-    expect(DEFAULT_TEXT_FONT_SETTINGS_SDF.radius).toBeGreaterThanOrEqual(8);
-    const ratio =
-      DEFAULT_TEXT_FONT_SETTINGS_SDF.radius /
-      DEFAULT_TEXT_FONT_SETTINGS_SDF.fontSize;
-    expect(ratio).toBeGreaterThanOrEqual(0.15);
-  });
-
-  it('keeps enough atlas margin for the maximum text contour width', () => {
-    expect(DEFAULT_TEXT_FONT_SETTINGS_SDF.buffer).toBeGreaterThanOrEqual(
-      SLIDER_LIMITS.haloWidth.max
-    );
-    expect(DEFAULT_TEXT_FONT_SETTINGS_SDF.radius).toBeGreaterThanOrEqual(
-      SLIDER_LIMITS.haloWidth.max
+describe('text-character-set — SDF atlas geometry', () => {
+  it('keeps the glyph padding wide enough for the widest outline it must encode', () => {
+    const maxOutlineAtlasPx = MAX_TEXT_OUTLINE_WIDTH * SDF_EDGE_ALPHA;
+    expect(maxOutlineAtlasPx).toBeLessThan(TEXT_ATLAS_BUFFER);
+    expect(maxOutlineAtlasPx).toBeLessThanOrEqual(
+      TEXT_ATLAS_RADIUS * SDF_EDGE_ALPHA
     );
   });
 
-  it('reserves more glyph padding than the encoded SDF distance so thick halos are not clipped', () => {
-    expect(DEFAULT_TEXT_FONT_SETTINGS_SDF.buffer).toBeGreaterThan(
-      DEFAULT_TEXT_FONT_SETTINGS_SDF.radius
+  it('keeps every glyph cell small enough for a 4096px atlas on any GPU', () => {
+    // Deck.gl lays 1024px-wide rows out and rounds the atlas height to a power
+    // of two; a 40px font with 20px padding leaves the full character set well
+    // inside 4096px, where fontSize 64 / buffer 48 needed 16384px.
+    expect(TEXT_ATLAS_FONT_SIZE + 2 * TEXT_ATLAS_BUFFER).toBeLessThanOrEqual(
+      128
     );
-  });
-
-  it('leaves cutoff and smoothing at the Deck.gl defaults to avoid hand-drawn looking glyphs', () => {
-    expect(
-      (DEFAULT_TEXT_FONT_SETTINGS_SDF as { cutoff?: number }).cutoff
-    ).toBeUndefined();
-    expect(
-      (DEFAULT_TEXT_FONT_SETTINGS_SDF as { smoothing?: number }).smoothing
-    ).toBeUndefined();
-  });
-});
-
-describe('text-character-set — DEFAULT_TEXT_FONT_SETTINGS_RASTER', () => {
-  it('disables SDF for pixel-perfect glyph rendering when no halo is required', () => {
-    expect(DEFAULT_TEXT_FONT_SETTINGS_RASTER.sdf).toBe(false);
-  });
-
-  it('uses an atlas resolution close to typical label sizes to avoid downscaling artefacts', () => {
-    expect(DEFAULT_TEXT_FONT_SETTINGS_RASTER.fontSize).toBeGreaterThanOrEqual(
-      24
-    );
-    expect(DEFAULT_TEXT_FONT_SETTINGS_RASTER.fontSize).toBeLessThanOrEqual(48);
-  });
-
-  it('omits SDF-only fields like radius, cutoff, smoothing in raster mode', () => {
-    const settings = DEFAULT_TEXT_FONT_SETTINGS_RASTER as Record<
-      string,
-      unknown
-    >;
-    expect(settings.radius).toBeUndefined();
-    expect(settings.cutoff).toBeUndefined();
-    expect(settings.smoothing).toBeUndefined();
   });
 });
 
 describe('resolveTextFontSettings', () => {
-  it('returns the SDF preset when halo is required', () => {
-    expect(resolveTextFontSettings('halo-on')).toBe(
-      DEFAULT_TEXT_FONT_SETTINGS_SDF
-    );
+  it('always renders through the SDF atlas so glyphs stay sharp at any scale', () => {
+    expect(resolveTextFontSettings(10).sdf).toBe(true);
+    expect(resolveTextFontSettings(64).sdf).toBe(true);
   });
 
-  it('returns the raster preset when halo is disabled', () => {
-    expect(resolveTextFontSettings('halo-off')).toBe(
-      DEFAULT_TEXT_FONT_SETTINGS_RASTER
-    );
+  it('exposes the shared atlas geometry so a single atlas serves every layer', () => {
+    const settings = resolveTextFontSettings(12);
+    expect(settings.fontSize).toBe(TEXT_ATLAS_FONT_SIZE);
+    expect(settings.buffer).toBe(TEXT_ATLAS_BUFFER);
+    expect(settings.radius).toBe(TEXT_ATLAS_RADIUS);
+  });
+});
+
+describe('resolveTextSmoothing', () => {
+  it('narrows the antialiasing ramp as the rendered size grows', () => {
+    expect(resolveTextSmoothing(24)).toBeLessThan(resolveTextSmoothing(10));
   });
 
-  it('returns stable references across calls so Deck.gl prop equality short-circuits atlas rebuilds', () => {
-    expect(resolveTextFontSettings('halo-on')).toBe(
-      resolveTextFontSettings('halo-on')
-    );
-    expect(resolveTextFontSettings('halo-off')).toBe(
-      resolveTextFontSettings('halo-off')
-    );
+  it('keeps the ramp near a third of a pixel wide instead of a fixed slice of the glyph', () => {
+    for (const size of [8, 12, 24, 48]) {
+      const rampPx =
+        (resolveTextSmoothing(size) * TEXT_ATLAS_RADIUS * size) /
+        TEXT_ATLAS_FONT_SIZE;
+      expect(rampPx).toBeLessThan(1);
+    }
+  });
+
+  it('falls back to the widest ramp for an unusable size', () => {
+    expect(resolveTextSmoothing(0)).toBe(resolveTextSmoothing(1));
+    expect(resolveTextSmoothing(Number.NaN)).toBe(resolveTextSmoothing(1));
   });
 });
 
 describe('resolveTextOutlineWidth', () => {
-  const max = SLIDER_LIMITS.haloWidth.max;
-
-  it('returns 0 when the contour is disabled or the thickness is invalid', () => {
-    expect(resolveTextOutlineWidth(0, max)).toBe(0);
-    expect(resolveTextOutlineWidth(-5, max)).toBe(0);
-    expect(resolveTextOutlineWidth(Number.NaN, max)).toBe(0);
+  it('returns 0 when the contour is disabled or the inputs are unusable', () => {
+    expect(resolveTextOutlineWidth(0, 12)).toBe(0);
+    expect(resolveTextOutlineWidth(-5, 12)).toBe(0);
+    expect(resolveTextOutlineWidth(Number.NaN, 12)).toBe(0);
+    expect(resolveTextOutlineWidth(2, 0)).toBe(0);
   });
 
-  it('keeps even the maximum thickness below the deck.gl SDF saturation point', () => {
-    expect(resolveTextOutlineWidth(max, max)).toBeGreaterThan(0);
-    expect(resolveTextOutlineWidth(max, max)).toBeLessThan(1);
+  it('renders the configured thickness as that many pixels of halo', () => {
+    for (const haloWidth of [0.5, 1, 2, 4]) {
+      expect(
+        resolveTextHaloWidthPx(resolveTextOutlineWidth(haloWidth, 12), 12)
+      ).toBeCloseTo(haloWidth, 5);
+    }
   });
 
-  it('clamps thickness above the UI maximum to the same bounded outline', () => {
-    expect(resolveTextOutlineWidth(max * 10, max)).toBe(
-      resolveTextOutlineWidth(max, max)
+  it('separates every step of the slider instead of collapsing them', () => {
+    const steps = [0.5, 1, 1.5, 2, 2.5, 3].map((halo) =>
+      resolveTextHaloWidthPx(resolveTextOutlineWidth(halo, 12), 12)
+    );
+    for (let i = 1; i < steps.length; i++) {
+      expect(steps[i] - steps[i - 1]).toBeGreaterThan(0.4);
+    }
+  });
+
+  it('asks for a wider outline on small text so the halo stays the same pixel width', () => {
+    expect(resolveTextOutlineWidth(2, 8)).toBeGreaterThan(
+      resolveTextOutlineWidth(2, 24)
     );
   });
 
-  it('increases monotonically with thickness so the slider stays meaningful end to end', () => {
-    const quarter = resolveTextOutlineWidth(max * 0.25, max);
-    const half = resolveTextOutlineWidth(max * 0.5, max);
-    const full = resolveTextOutlineWidth(max, max);
-    expect(quarter).toBeLessThan(half);
-    expect(half).toBeLessThan(full);
+  it('clamps to what the atlas can encode instead of cropping the halo', () => {
+    const textSize = 8;
+    const beyondAtlas = maxHaloWidthPx(textSize) * 4;
+    expect(resolveTextOutlineWidth(beyondAtlas, textSize)).toBe(
+      MAX_TEXT_OUTLINE_WIDTH
+    );
+  });
+
+  it('reaches the top of the slider at the default label size', () => {
+    expect(maxHaloWidthPx(10)).toBeGreaterThanOrEqual(
+      SLIDER_LIMITS.haloWidth.max
+    );
   });
 });
 
 describe('resolveTextHaloWidthPx', () => {
-  const max = SLIDER_LIMITS.haloWidth.max;
-
-  it('returns 0 when the outline width is disabled or invalid', () => {
-    expect(resolveTextHaloWidthPx(0, max)).toBe(0);
-    expect(resolveTextHaloWidthPx(-1, max)).toBe(0);
-    expect(resolveTextHaloWidthPx(Number.NaN, max)).toBe(0);
+  it('returns 0 when the outline width or the text size is unusable', () => {
+    expect(resolveTextHaloWidthPx(0, 12)).toBe(0);
+    expect(resolveTextHaloWidthPx(-1, 12)).toBe(0);
+    expect(resolveTextHaloWidthPx(Number.NaN, 12)).toBe(0);
+    expect(resolveTextHaloWidthPx(4, 0)).toBe(0);
   });
 
-  it('inverts resolveTextOutlineWidth back to the original halo pixel width', () => {
-    for (const haloWidth of [1, max * 0.25, max * 0.5, max]) {
-      const outlineWidth = resolveTextOutlineWidth(haloWidth, max);
-      expect(resolveTextHaloWidthPx(outlineWidth, max)).toBeCloseTo(
-        haloWidth,
-        5
-      );
-    }
+  it('scales with the glyph so an SVG export mirrors what the GPU draws', () => {
+    const outlineWidth = resolveTextOutlineWidth(2, 12);
+    expect(resolveTextHaloWidthPx(outlineWidth, 24)).toBeCloseTo(4, 5);
   });
 });
 

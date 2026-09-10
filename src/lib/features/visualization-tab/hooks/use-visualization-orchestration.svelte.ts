@@ -18,9 +18,7 @@ import type {
   ClassificationTarget,
   LineThicknessTarget,
   StrokeClassificationTarget,
-  SymbolFillTarget,
-  TextBackgroundStrokeTarget,
-  TextBackgroundTarget
+  SymbolFillTarget
 } from '../utils/classification-targets.utils';
 import type { BreaksTrigger } from '../utils/breaks-trigger.utils';
 import type { CategoryLabelsDataset } from './use-category-labels-fetcher.svelte';
@@ -38,8 +36,6 @@ export interface VisualizationOrchestrationDeps {
   getPrimitiveStrokeClassificationTargets: () => StrokeClassificationTarget[];
   getLineThicknessTarget: () => LineThicknessTarget | null;
   getSymbolFillTarget: () => SymbolFillTarget | null;
-  getTextBackgroundTarget: () => TextBackgroundTarget | null;
-  getTextBackgroundStrokeTarget: () => TextBackgroundStrokeTarget | null;
   getPrimitiveColorParamsKey: () => string;
   getStrokeColorParamsKey: () => string;
   ensurePrimitiveClassificationDefaults: (
@@ -61,14 +57,6 @@ export interface VisualizationOrchestrationDeps {
   ) => void;
   ensureSymbolFillClassificationDefaults: (viz: VisualizationConfig) => void;
   ensureSymbolFillAutoColumns: (viz: VisualizationConfig) => void;
-  ensureTextBackgroundClassificationDefaults: (
-    viz: VisualizationConfig
-  ) => void;
-  ensureTextBackgroundAutoColumns: (viz: VisualizationConfig) => void;
-  ensureTextBackgroundStrokeClassificationDefaults: (
-    viz: VisualizationConfig
-  ) => void;
-  ensureTextBackgroundStrokeAutoColumns: (viz: VisualizationConfig) => void;
   computeBreaksForPrimitive: (
     primitive: ClassifiablePrimitive,
     trigger: BreaksTrigger
@@ -79,8 +67,6 @@ export interface VisualizationOrchestrationDeps {
   ) => void;
   computeLineThicknessBreaks: (trigger: BreaksTrigger) => void;
   computeSymbolFillBreaks: (trigger: BreaksTrigger) => void;
-  computeTextBackgroundBreaks: (trigger: BreaksTrigger) => void;
-  computeTextBackgroundStrokeBreaks: (trigger: BreaksTrigger) => void;
   fetchCategoryLabels: (
     primitive: ClassifiablePrimitive,
     column: string,
@@ -94,14 +80,6 @@ export interface VisualizationOrchestrationDeps {
     useUntrack: boolean
   ) => void;
   fetchSymbolFillCategoryLabels: (
-    column: string,
-    dataset: CategoryLabelsDataset
-  ) => void;
-  fetchTextBackgroundCategoryLabels: (
-    column: string,
-    dataset: CategoryLabelsDataset
-  ) => void;
-  fetchTextBackgroundStrokeCategoryLabels: (
     column: string,
     dataset: CategoryLabelsDataset
   ) => void;
@@ -138,10 +116,6 @@ export function useVisualizationOrchestration(
 
       deps.ensureSymbolFillClassificationDefaults(visualization);
       deps.ensureSymbolFillAutoColumns(visualization);
-      deps.ensureTextBackgroundClassificationDefaults(visualization);
-      deps.ensureTextBackgroundAutoColumns(visualization);
-      deps.ensureTextBackgroundStrokeClassificationDefaults(visualization);
-      deps.ensureTextBackgroundStrokeAutoColumns(visualization);
     });
   });
 
@@ -172,8 +146,6 @@ export function useVisualizationOrchestration(
       }
 
       deps.ensureSymbolFillAutoColumns(visualization);
-      deps.ensureTextBackgroundAutoColumns(visualization);
-      deps.ensureTextBackgroundStrokeAutoColumns(visualization);
     });
   });
 
@@ -204,18 +176,6 @@ export function useVisualizationOrchestration(
     if (symbolFillTarget) {
       const trigger = resolveBreaksTrigger(symbolFillTarget);
       if (trigger) deps.computeSymbolFillBreaks(trigger);
-    }
-
-    const textBackgroundTarget = deps.getTextBackgroundTarget();
-    if (textBackgroundTarget) {
-      const trigger = resolveBreaksTrigger(textBackgroundTarget);
-      if (trigger) deps.computeTextBackgroundBreaks(trigger);
-    }
-
-    const textBackgroundStrokeTarget = deps.getTextBackgroundStrokeTarget();
-    if (textBackgroundStrokeTarget) {
-      const trigger = resolveBreaksTrigger(textBackgroundStrokeTarget);
-      if (trigger) deps.computeTextBackgroundStrokeBreaks(trigger);
     }
   });
 
@@ -260,22 +220,6 @@ export function useVisualizationOrchestration(
       if (shouldFetchCategoryLabels(symbolFillTarget)) {
         deps.fetchSymbolFillCategoryLabels(
           symbolFillTarget.categoryColumn,
-          dataset
-        );
-      }
-
-      const textBackgroundTarget = deps.getTextBackgroundTarget();
-      if (shouldFetchCategoryLabels(textBackgroundTarget)) {
-        deps.fetchTextBackgroundCategoryLabels(
-          textBackgroundTarget.categoryColumn,
-          dataset
-        );
-      }
-
-      const textBackgroundStrokeTarget = deps.getTextBackgroundStrokeTarget();
-      if (shouldFetchCategoryLabels(textBackgroundStrokeTarget)) {
-        deps.fetchTextBackgroundStrokeCategoryLabels(
-          textBackgroundStrokeTarget.categoryColumn,
           dataset
         );
       }

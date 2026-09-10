@@ -20,8 +20,7 @@ vi.mock('./use-classification-breaks.svelte', () => ({
     if (args.classification?.method) return ['#111', '#222'];
     return undefined;
   }),
-  SYMBOL_FILL_SCOPE_TARGET: 'symbol-fill',
-  TEXT_BACKGROUND_SCOPE_TARGET: 'text-bg'
+  SYMBOL_FILL_SCOPE_TARGET: 'symbol-fill'
 }));
 
 vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
@@ -79,13 +78,9 @@ function emptyDeps(
     getPrimitiveTargets: () => [],
     getStrokeTargets: () => [],
     getSymbolFillTarget: () => null,
-    getTextBackgroundTarget: () => null,
-    getTextBackgroundStrokeTarget: () => null,
     updatePrimitiveClassificationState: vi.fn(),
     updatePrimitiveStrokeClassificationState: vi.fn(),
     applySymbolFillUpdate: vi.fn(),
-    applyTextBackgroundUpdate: vi.fn(),
-    applyTextBackgroundStrokeUpdate: vi.fn(),
     ...overrides
   };
 }
@@ -103,7 +98,6 @@ describe('use-classification-color-sync', () => {
           usesBreaks: true
         })
       ],
-      null,
       null
     );
     expect(key).toContain('false');
@@ -165,25 +159,6 @@ describe('use-classification-color-sync', () => {
     );
   });
 
-  it('applies derived text background colors with preserved origin', () => {
-    const applyTextBackgroundUpdate = vi.fn();
-    syncPrimitiveColors(
-      emptyDeps({
-        getTextBackgroundTarget: () => ({
-          classification: { method: 'quantile' as never } as never,
-          usesBreaks: true,
-          usesCategories: false,
-          valueColumn: 'population'
-        }),
-        applyTextBackgroundUpdate
-      })
-    );
-    expect(applyTextBackgroundUpdate).toHaveBeenCalledWith(
-      { colors: ['#111', '#222'] },
-      { preserveOrigin: true }
-    );
-  });
-
   it('returns early when no selected visualization id', () => {
     const updateClass = vi.fn();
     syncPrimitiveColors(
@@ -201,10 +176,9 @@ describe('use-classification-color-sync', () => {
     expect(updateClass).not.toHaveBeenCalled();
   });
 
-  it('builds stroke color params key with stroke scope', () => {
-    const key = buildStrokeColorParamsKey([], null);
-    expect(key).toContain('false');
-    expect(key).toContain('text-bg-stroke');
+  it('builds stroke color params key from cb state alone when no target', () => {
+    const key = buildStrokeColorParamsKey([]);
+    expect(key).toBe('false');
   });
 
   it('applies stroke updates only when stroke target uses breaks/categories', () => {
@@ -225,25 +199,6 @@ describe('use-classification-color-sync', () => {
       {
         colors: ['#111', '#222']
       },
-      { preserveOrigin: true }
-    );
-  });
-
-  it('applies derived text background stroke colors with preserved origin', () => {
-    const applyTextBackgroundStrokeUpdate = vi.fn();
-    syncStrokeColors(
-      emptyDeps({
-        getTextBackgroundStrokeTarget: () => ({
-          classification: { method: 'quantile' as never } as never,
-          usesBreaks: true,
-          usesCategories: false,
-          valueColumn: 'population'
-        }),
-        applyTextBackgroundStrokeUpdate
-      })
-    );
-    expect(applyTextBackgroundStrokeUpdate).toHaveBeenCalledWith(
-      { colors: ['#111', '#222'] },
       { preserveOrigin: true }
     );
   });

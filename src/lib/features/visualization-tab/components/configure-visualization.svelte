@@ -25,7 +25,6 @@
     buildPolygonPanelVisualization,
     buildSymbolFillPanelVisualization,
     buildSymbolPanelVisualization,
-    buildTextBackgroundPanelVisualization,
     buildTextPanelVisualization
   } from '../utils/primitive-panel-visualization.utils';
   import {
@@ -37,9 +36,7 @@
     buildLineThicknessTarget,
     buildPrimitiveClassificationTargets,
     buildPrimitiveStrokeClassificationTargets,
-    buildSymbolFillTarget,
-    buildTextBackgroundStrokeTarget,
-    buildTextBackgroundTarget
+    buildSymbolFillTarget
   } from '../utils/classification-targets.utils';
   import {
     CATEGORY_LABEL_FETCH_ERROR,
@@ -137,15 +134,12 @@
     },
     updatePrimitiveStrokeClassification:
       updatePrimitiveStrokeClassificationState,
-    updateTextPrimitive: (updates) => handleTextChange(updates),
     updateVisualization: updateSelectedVisualization
   });
   const {
     applyPrimitiveMappingUpdate,
     applyPrimitiveStrokeMappingUpdate,
     applySymbolFillMappingUpdate,
-    applyTextBackgroundMappingUpdate,
-    applyTextBackgroundStrokeMappingUpdate,
     buildNextPrimitiveFilters,
     ensureAutoColumns,
     ensureLineThicknessClassificationDefaults,
@@ -154,23 +148,14 @@
     ensurePrimitiveStrokeClassificationDefaults,
     ensureSymbolFillAutoColumns,
     ensureSymbolFillClassificationDefaults,
-    ensureTextBackgroundAutoColumns,
-    ensureTextBackgroundClassificationDefaults,
-    ensureTextBackgroundStrokeAutoColumns,
-    ensureTextBackgroundStrokeClassificationDefaults,
     getPrimitiveStrokeCategoryColumn,
     getPrimitiveStrokeClassification,
     getPrimitiveStrokeValueColumn,
     invertPrimitivePalette,
     invertPrimitiveStrokePalette,
     invertSymbolFillPalette,
-    invertTextBackgroundPalette,
-    invertTextBackgroundStrokePalette,
     updateLineThicknessClassificationState,
     updateSymbolFillClassificationState,
-    updateTextBackground,
-    updateTextBackgroundClassificationState,
-    updateTextBackgroundStrokeClassificationState,
     usesBreakClassification,
     usesCategoricalClassification,
     usesLineThicknessBreakClassification,
@@ -328,15 +313,7 @@
     handleTextClassificationChange,
     handleTextMappingChange,
     handleTextSecondaryLabelsChange,
-    handleTextPaletteInvert,
-    handleTextBackgroundStyleChange,
-    handleTextBackgroundModesChange,
-    handleTextBackgroundClassificationChange,
-    handleTextBackgroundStrokeClassificationChange,
-    handleTextBackgroundMappingChange,
-    handleTextBackgroundStrokeMappingChange,
-    handleTextBackgroundPaletteInvert,
-    handleTextBackgroundStrokePaletteInvert
+    handleTextPaletteInvert
   } = usePrimitiveAdapters({
     getSelectedVisualization: () => selectedViz,
     updateSelectedVisualization,
@@ -345,29 +322,18 @@
     updatePrimitiveStrokeClassificationState,
     updateLineThicknessClassificationState,
     updateSymbolFillClassificationState,
-    updateTextBackgroundClassificationState,
-    updateTextBackgroundStrokeClassificationState,
     applyPrimitiveMappingUpdate,
     applyPrimitiveStrokeMappingUpdate,
     applySymbolFillMappingUpdate,
-    applyTextBackgroundMappingUpdate,
-    applyTextBackgroundStrokeMappingUpdate,
     invertPrimitivePalette,
     invertPrimitiveStrokePalette,
     invertSymbolFillPalette,
-    invertTextBackgroundPalette,
-    invertTextBackgroundStrokePalette,
-    updateTextBackground,
     ensurePrimitiveClassificationDefaults,
     ensureAutoColumns,
     ensureSymbolFillClassificationDefaults,
     ensureSymbolFillAutoColumns,
     ensurePrimitiveStrokeClassificationDefaults,
     ensurePrimitiveStrokeAutoColumns,
-    ensureTextBackgroundClassificationDefaults,
-    ensureTextBackgroundAutoColumns,
-    ensureTextBackgroundStrokeClassificationDefaults,
-    ensureTextBackgroundStrokeAutoColumns,
     applyStrokePolygonClassificationUpdate: (updates) =>
       updatePrimitiveStrokeClassificationState(
         PrimitiveFilterType.POLYGON,
@@ -433,15 +399,10 @@
     getSelectedVisualization: () => selectedViz,
     getLineThicknessTarget: () => lineThicknessTarget,
     getSymbolFillTarget: () => symbolFillTarget,
-    getTextBackgroundTarget: () => textBackgroundTarget,
-    getTextBackgroundStrokeTarget: () => textBackgroundStrokeTarget,
     updatePrimitiveClassificationState,
     updatePrimitiveStrokeClassificationState,
     applyLineThicknessClassification: handleLineThicknessClassificationChange,
-    applySymbolFillClassification: handleSymbolFillClassificationChange,
-    applyTextBackgroundClassification: handleTextBackgroundClassificationChange,
-    applyTextBackgroundStrokeClassification:
-      handleTextBackgroundStrokeClassificationChange
+    applySymbolFillClassification: handleSymbolFillClassificationChange
   });
 
   const computeBreaksForPrimitive =
@@ -485,10 +446,6 @@
   const textVisualization = $derived.by(() =>
     buildTextPanelVisualization(selectedViz)
   );
-  const textBackgroundVisualization = $derived.by(() =>
-    buildTextBackgroundPanelVisualization(selectedViz)
-  );
-
   const primitiveClassificationTargets = $derived.by(() =>
     buildPrimitiveClassificationTargets(selectedViz, {
       usesBreakClassification,
@@ -519,71 +476,16 @@
     })
   );
 
-  const textBackgroundTarget = $derived.by(() =>
-    buildTextBackgroundTarget(selectedViz)
-  );
-
-  const textBackgroundStrokeTarget = $derived.by(() =>
-    buildTextBackgroundStrokeTarget(selectedViz)
-  );
-
   const primitiveColorParamsKey = $derived.by(() =>
     buildPrimitiveColorParamsKey(
       primitiveClassificationTargets,
-      symbolFillTarget,
-      textBackgroundTarget
+      symbolFillTarget
     )
   );
 
   const strokeColorParamsKey = $derived.by(() =>
-    buildStrokeColorParamsKey(
-      primitiveStrokeClassificationTargets,
-      textBackgroundStrokeTarget
-    )
+    buildStrokeColorParamsKey(primitiveStrokeClassificationTargets)
   );
-
-  const computeTextBackgroundBreaks =
-    breaksOrchestrator.computeTextBackgroundBreaks;
-
-  function fetchTextBackgroundCategoryLabels(
-    column: string,
-    dataset: CategoryLabelsDataset
-  ): void {
-    void categoryLabelsFetcher.fetchClassificationLabels({
-      dataset,
-      column,
-      getCurrentLabels: () => textBackgroundTarget?.classification?.labels,
-      applyLabels: (labels) =>
-        handleTextBackgroundClassificationChange(
-          { labels },
-          { preserveOrigin: true }
-        ),
-      useUntrack: true,
-      errorMessage: CATEGORY_LABEL_FETCH_ERROR.TEXT_BACKGROUND
-    });
-  }
-
-  const computeTextBackgroundStrokeBreaks =
-    breaksOrchestrator.computeTextBackgroundStrokeBreaks;
-
-  function fetchTextBackgroundStrokeCategoryLabels(
-    column: string,
-    dataset: CategoryLabelsDataset
-  ): void {
-    void categoryLabelsFetcher.fetchClassificationLabels({
-      dataset,
-      column,
-      getCurrentLabels: () =>
-        textBackgroundStrokeTarget?.classification?.labels,
-      applyLabels: (labels) =>
-        handleTextBackgroundStrokeClassificationChange(
-          { labels },
-          { preserveOrigin: true }
-        ),
-      useUntrack: true,
-      errorMessage: CATEGORY_LABEL_FETCH_ERROR.TEXT_BACKGROUND_STROKE
-    });
-  }
 
   useVisualizationOrchestration({
     getSelectedVisualization: () => selectedViz,
@@ -596,8 +498,6 @@
       primitiveStrokeClassificationTargets,
     getLineThicknessTarget: () => lineThicknessTarget,
     getSymbolFillTarget: () => symbolFillTarget,
-    getTextBackgroundTarget: () => textBackgroundTarget,
-    getTextBackgroundStrokeTarget: () => textBackgroundStrokeTarget,
     getPrimitiveColorParamsKey: () => primitiveColorParamsKey,
     getStrokeColorParamsKey: () => strokeColorParamsKey,
     ensurePrimitiveClassificationDefaults,
@@ -607,35 +507,22 @@
     ensurePrimitiveStrokeAutoColumns,
     ensureSymbolFillClassificationDefaults,
     ensureSymbolFillAutoColumns,
-    ensureTextBackgroundClassificationDefaults,
-    ensureTextBackgroundAutoColumns,
-    ensureTextBackgroundStrokeClassificationDefaults,
-    ensureTextBackgroundStrokeAutoColumns,
     computeBreaksForPrimitive,
     computeBreaksForStrokePrimitive,
     computeLineThicknessBreaks,
     computeSymbolFillBreaks,
-    computeTextBackgroundBreaks,
-    computeTextBackgroundStrokeBreaks,
     fetchCategoryLabels,
     fetchStrokeCategoryLabels,
     fetchSymbolFillCategoryLabels,
-    fetchTextBackgroundCategoryLabels,
-    fetchTextBackgroundStrokeCategoryLabels,
     abortCategoryLabelFetches: categoryLabelsFetcher.abort,
     getColorSyncDeps: () => ({
       getSelectedVisualizationId: () => selectedViz?.id,
       getPrimitiveTargets: () => primitiveClassificationTargets,
       getStrokeTargets: () => primitiveStrokeClassificationTargets,
       getSymbolFillTarget: () => symbolFillTarget,
-      getTextBackgroundTarget: () => textBackgroundTarget,
-      getTextBackgroundStrokeTarget: () => textBackgroundStrokeTarget,
       updatePrimitiveClassificationState,
       updatePrimitiveStrokeClassificationState,
-      applySymbolFillUpdate: handleSymbolFillClassificationChange,
-      applyTextBackgroundUpdate: handleTextBackgroundClassificationChange,
-      applyTextBackgroundStrokeUpdate:
-        handleTextBackgroundStrokeClassificationChange
+      applySymbolFillUpdate: handleSymbolFillClassificationChange
     })
   });
 </script>
@@ -747,7 +634,6 @@
     <TextsConfig
       dataFields={dataFieldItems}
       visualization={textVisualization}
-      backgroundVisualization={textBackgroundVisualization}
       disabled={!hasGeometry}
       filters={filtersByPrimitive[PrimitiveFilterType.TEXT]}
       filterStats={primitiveFilterStats.getStatsForPrimitive(
@@ -760,14 +646,6 @@
       onMappingChange={handleTextMappingChange}
       onInvertPalette={handleTextPaletteInvert}
       onSecondaryLabelsChange={handleTextSecondaryLabelsChange}
-      onBackgroundStyleChange={handleTextBackgroundStyleChange}
-      onBackgroundModesChange={handleTextBackgroundModesChange}
-      onBackgroundClassificationChange={handleTextBackgroundClassificationChange}
-      onBackgroundStrokeClassificationChange={handleTextBackgroundStrokeClassificationChange}
-      onBackgroundStrokeMappingChange={handleTextBackgroundStrokeMappingChange}
-      onBackgroundMappingChange={handleTextBackgroundMappingChange}
-      onBackgroundInvertPalette={handleTextBackgroundPaletteInvert}
-      onBackgroundStrokeInvertPalette={handleTextBackgroundStrokePaletteInvert}
       onToggleVisibility={handleTextVisibilityChange}
       onAddFilter={(filter) =>
         handleAddDataFilter(filter, PrimitiveFilterType.TEXT)}

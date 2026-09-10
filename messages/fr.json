@@ -1869,8 +1869,6 @@
   "error_category_labels_fill": "Échec de la récupération des étiquettes de catégorie",
   "error_category_labels_stroke": "Échec de la récupération des étiquettes de contour",
   "error_category_labels_symbol_fill": "Échec de la récupération des étiquettes de remplissage de symboles",
-  "error_category_labels_text_background": "Échec de la récupération des étiquettes d'arrière-plan de texte",
-  "error_category_labels_text_background_stroke": "Échec de la récupération des étiquettes de contour d'arrière-plan de texte",
   "pipeline_pasted_data_filename": "donnees-collees",
   "remote_zip_default_name": "fichier_distant.zip",
   "separator_comma_space": ", ",

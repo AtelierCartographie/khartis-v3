@@ -18,6 +18,7 @@ import {
   ThicknessMode,
   VisualizationType,
   VISUALIZATION_DEFAULTS,
+  SLIDER_LIMITS,
   availableShapesForSymbolMode
 } from '$lib/features/commons/constants/visualization.constants';
 import { GEO_COLUMN_TYPE } from '../constants/data.constants';
@@ -38,7 +39,6 @@ import {
   type PrimitiveConfigMap,
   type PrimitiveFilter,
   type SymbolPrimitiveConfig,
-  type TextBackgroundConfig,
   type TextPrimitiveConfig,
   type TextSecondaryLabelsConfig,
   type VisualizationConfig,
@@ -89,6 +89,15 @@ function resolveLegacyPrimitiveEnabled(
   return primitiveFilters.includes(primitive);
 }
 
+function clampHaloWidth(haloWidth: number | undefined): number {
+  const width = haloWidth ?? VISUALIZATION_DEFAULTS.haloWidth;
+  if (!Number.isFinite(width)) return VISUALIZATION_DEFAULTS.haloWidth;
+  return Math.min(
+    SLIDER_LIMITS.haloWidth.max,
+    Math.max(SLIDER_LIMITS.haloWidth.min, width)
+  );
+}
+
 function buildSecondaryLabelsConfig(
   visualization: VisualizationConfig
 ): TextSecondaryLabelsConfig {
@@ -123,10 +132,9 @@ function buildSecondaryLabelsConfig(
       existing?.haloColor ??
       visualization.style.labelHaloColor ??
       DEFAULT_COLORS.halo,
-    haloWidth:
-      existing?.haloWidth ??
-      visualization.style.labelHaloWidth ??
-      VISUALIZATION_DEFAULTS.haloWidth,
+    haloWidth: clampHaloWidth(
+      existing?.haloWidth ?? visualization.style.labelHaloWidth
+    ),
     collisionDetection:
       existing?.collisionDetection ??
       visualization.style.labelCollisionDetection ??
@@ -384,29 +392,6 @@ export function buildLinePrimitiveConfig(
   };
 }
 
-function buildTextBackgroundConfig(
-  existing: TextBackgroundConfig | undefined
-): TextBackgroundConfig {
-  const defaultFillOpacity = VISUALIZATION_DEFAULTS.fillOpacity / 100;
-  return {
-    fillMode: existing?.fillMode ?? FillMode.NONE,
-    fillColor: existing?.fillColor,
-    fillOpacity: existing?.fillOpacity ?? defaultFillOpacity,
-    strokeMode: existing?.strokeMode ?? StrokeMode.NONE,
-    strokeColor: existing?.strokeColor,
-    strokeWidth: existing?.strokeWidth ?? VISUALIZATION_DEFAULTS.strokeWidth,
-    strokeOpacity: existing?.strokeOpacity ?? 1,
-    strokeDashed: existing?.strokeDashed ?? false,
-    strokeDashedPattern: existing?.strokeDashedPattern,
-    valueColumn: existing?.valueColumn,
-    categoryColumn: existing?.categoryColumn,
-    classification: existing?.classification,
-    strokeClassification: existing?.strokeClassification,
-    strokeValueColumn: existing?.strokeValueColumn,
-    strokeCategoryColumn: existing?.strokeCategoryColumn
-  };
-}
-
 export function buildTextPrimitiveConfig(
   visualization: VisualizationConfig
 ): TextPrimitiveConfig {
@@ -452,10 +437,9 @@ export function buildTextPrimitiveConfig(
       existing?.haloColor ??
       visualization.style.textHaloColor ??
       DEFAULT_COLORS.halo,
-    haloWidth:
-      existing?.haloWidth ??
-      visualization.style.textHaloWidth ??
-      VISUALIZATION_DEFAULTS.haloWidth,
+    haloWidth: clampHaloWidth(
+      existing?.haloWidth ?? visualization.style.textHaloWidth
+    ),
     collisionDetection:
       existing?.collisionDetection ??
       visualization.style.textCollisionDetection ??
@@ -470,8 +454,7 @@ export function buildTextPrimitiveConfig(
       visualization.textClassification ??
       visualization.classification,
     missingData: existing?.missingData ?? visualization.missingData,
-    secondaryLabels: buildSecondaryLabelsConfig(visualization),
-    background: buildTextBackgroundConfig(existing?.background)
+    secondaryLabels: buildSecondaryLabelsConfig(visualization)
   };
 }
 

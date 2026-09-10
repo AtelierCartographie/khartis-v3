@@ -150,49 +150,6 @@ describe('generateFacetVisualizations', () => {
     expect(result[0].symbol?.sizeColumn).toBe('gdp');
   });
 
-  it('should target text background stroke facets without overwriting fill facets', async () => {
-    const fillClassification = {
-      method: 'equal_interval',
-      numClasses: 4,
-      classes: 4,
-      colors: ['#100', '#200', '#300', '#400']
-    };
-    const strokeClassification = {
-      method: 'equal_interval',
-      numClasses: 4,
-      classes: 4,
-      colors: ['#010', '#020', '#030', '#040']
-    };
-    const base = makeBaseViz({
-      text: {
-        background: {
-          fillMode: 'classes',
-          valueColumn: 'fill-value',
-          classification: fillClassification,
-          strokeMode: 'classes',
-          strokeValueColumn: 'stroke-value',
-          strokeClassification
-        }
-      }
-    });
-
-    const result = await generateFacetVisualizations(
-      base as never,
-      ['stroke-next'],
-      SCALE_MODE.SHARED,
-      FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE
-    );
-
-    expect(result[0].text?.background.valueColumn).toBe('fill-value');
-    expect(result[0].text?.background.strokeValueColumn).toBe('stroke-next');
-    expect(result[0].text?.background.classification).toEqual(
-      fillClassification
-    );
-    expect(result[0].text?.background.strokeClassification).toEqual(
-      strokeClassification
-    );
-  });
-
   it('should target symbol stroke facets without overwriting symbol fill facets', async () => {
     const fillClassification = {
       method: 'equal_interval',
