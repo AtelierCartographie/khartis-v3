@@ -268,6 +268,32 @@ describe('common legend generators', () => {
     expect(sampled.some((label) => label.includes('14 000'))).toBe(false);
   });
 
+  it('fills the symbol legend with as many ticks as the room allows', () => {
+    const ticksOf = (size: number): string[] => {
+      const svg = createLegendSvg(
+        draw_symbols_legend(
+          [0, 0.1, 0.2, 0.4, 0.7, 1.3, 2.7, 4, 6.3, 10.1, 20.1, 36, 93, 1341],
+          { type: 'circle', size, fontSize: 12, fill: '#4585f5' }
+        )
+      );
+      const host = document.createElement('div');
+      host.innerHTML = `<svg>${svg.markup}</svg>`;
+      return [...host.querySelectorAll('.labels text')].map((node) =>
+        (node.textContent ?? '').trim().replace(/\s/g, ' ')
+      );
+    };
+
+    const small = ticksOf(20);
+    const medium = ticksOf(35);
+    const large = ticksOf(60);
+
+    expect(medium.length).toBeGreaterThan(small.length);
+    expect(large.length).toBeGreaterThan(medium.length);
+    // 100 and 500 sit next to real values and fit; a fixed cut kept 50 alone.
+    expect(medium).toContain('100');
+    expect(medium).toContain('500');
+  });
+
   it('drops symbol legend ticks whose labels would vertically overlap', () => {
     const svg = createLegendSvg(
       draw_symbols_legend([38, 54], {
