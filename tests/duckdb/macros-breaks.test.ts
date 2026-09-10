@@ -220,6 +220,38 @@ describe('round_thresholds macro', () => {
       expect(Math.abs(breaks[i] - [25, 50, 75][i]) / 75).toBeLessThan(0.01);
     }
   });
+
+  it('keeps thresholds sharing one sparse gap distinct instead of merging them', async () => {
+    await run(db, 'CREATE OR REPLACE TABLE vals_sparse (v INTEGER)');
+    const dense = Array.from({ length: 100 }, (_, i) => `(${i + 1})`).join(',');
+    await run(db, `INSERT INTO vals_sparse VALUES ${dense}, (27367)`);
+
+    const raw = [11728, 15638, 19547, 23457];
+    const rows = await query(
+      db,
+      `SELECT round_thresholds([${raw.map((v) => `${v}.0`).join(', ')}], 'vals_sparse', 'v') AS breaks`
+    );
+    const breaks = rows[0].breaks as number[];
+
+    expect(breaks).toHaveLength(raw.length);
+    for (let i = 1; i < breaks.length; i++) {
+      expect(breaks[i]).toBeGreaterThan(breaks[i - 1]);
+    }
+    // Every threshold must stay inside the gap between its neighbouring observed values.
+    for (const value of breaks) {
+      expect(value).toBeGreaterThanOrEqual(100);
+      expect(value).toBeLessThanOrEqual(27367);
+    }
+  });
+
+  it('rounds a threshold whose gap admits a rounder value', async () => {
+    const rows = await query(
+      db,
+      "SELECT round_thresholds([49.4], 'vals100', 'v') AS breaks"
+    );
+
+    expect(rows[0].breaks).toEqual([50]);
+  });
 });
 
 describe('macros vs reference implementations on real NUTS2 GDP data', () => {

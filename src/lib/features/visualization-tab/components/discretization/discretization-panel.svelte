@@ -7,11 +7,14 @@
     DEFAULT_DISCRETIZATION_CLASS_COUNT
   } from '$lib/features/commons/constants/visualization.constants';
   import {
+    DISCRETIZATION_NOTE,
     DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
     NESTED_MEANS_CLASS_COUNTS,
     normalizeClassificationMethod,
+    Q6_CLASS_COUNT,
     resolveBreakpointLowerClassCount
   } from '$lib/features/commons/utils/discretization.utils';
+  import type { DiscretizationNote } from '$lib/features/commons/utils/discretization.utils';
   import {
     Select,
     SelectItem,
@@ -45,7 +48,7 @@
   interface Props {
     method?: ClassificationMethod;
     numClasses?: number;
-    mergedClassCount?: number | null;
+    discretizationNote?: DiscretizationNote | null;
     classCountMax?: number;
     breaks?: ClassBreak[];
     breakpointValue?: number | null;
@@ -65,7 +68,7 @@
   let {
     method = $bindable<ClassificationMethod>(ClassificationMethod.KMEANS),
     numClasses = $bindable(DEFAULT_DISCRETIZATION_CLASS_COUNT),
-    mergedClassCount = null,
+    discretizationNote = null,
     classCountMax = DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
     breaks = $bindable<ClassBreak[]>([
       { min: 0, max: 20, count: 45, color: '#f7fbff' },
@@ -120,6 +123,25 @@
   });
 
   const isClassCountLocked = $derived(method === ClassificationMethod.Q6);
+
+  const NOTE_MESSAGES: Record<
+    DiscretizationNote['kind'],
+    (input: { count: number }) => string
+  > = {
+    [DISCRETIZATION_NOTE.MERGED_BREAKS]: m.discretization_merged_classes_note,
+    [DISCRETIZATION_NOTE.HEAD_TAIL_LIMIT]:
+      m.discretization_head_tail_limit_note,
+    [DISCRETIZATION_NOTE.EMPTY_CLASSES]: m.discretization_empty_classes_note,
+    [DISCRETIZATION_NOTE.Q6_UNAVAILABLE]: m.discretization_q6_unavailable_note
+  };
+
+  const discretizationNoteText = $derived(
+    discretizationNote
+      ? NOTE_MESSAGES[discretizationNote.kind]({
+          count: discretizationNote.count
+        })
+      : null
+  );
   const isNestedMeans = $derived(method === ClassificationMethod.NESTED_MEANS);
 
   const dataMin = $derived(breaks[0]?.min ?? 0);
@@ -186,14 +208,11 @@
     const newMethod = normalizePanelMethod(target.value);
     method = newMethod;
     if (newMethod === ClassificationMethod.Q6) {
-      numClasses = 6;
-      onclasseschange?.(6);
+      numClasses = Q6_CLASS_COUNT;
     } else if (newMethod === ClassificationMethod.NESTED_MEANS) {
-      const closest = NESTED_MEANS_CLASS_COUNTS.reduce((prev, curr) =>
+      numClasses = NESTED_MEANS_CLASS_COUNTS.reduce((prev, curr) =>
         Math.abs(curr - numClasses) < Math.abs(prev - numClasses) ? curr : prev
       );
-      numClasses = closest;
-      onclasseschange?.(closest);
     }
     onmethodchange?.(newMethod);
   }
@@ -381,12 +400,10 @@
         />
       {/if}
     </div>
-    {#if mergedClassCount != null}
-      <div class="merged-classes-note" role="status">
+    {#if discretizationNoteText}
+      <div class="class-count-note" role="status">
         <Information size={16} />
-        <span>
-          {m.discretization_merged_classes_note({ count: mergedClassCount })}
-        </span>
+        <span>{discretizationNoteText}</span>
       </div>
     {/if}
   </div>
@@ -497,7 +514,7 @@
     font-weight: 400;
   }
 
-  .merged-classes-note {
+  .class-count-note {
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-02);
