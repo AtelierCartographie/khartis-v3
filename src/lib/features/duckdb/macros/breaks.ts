@@ -222,6 +222,10 @@ const kmeans_macro = `CREATE OR REPLACE MACRO kmeans(tabname, colname, nb := 5, 
  * 3. `generate_roundings(n)`: Generates a list of rounded values by concatenating round_left and round_right.
  * 4. `best_value_rounded(n, lower_limit, upper_limit)`: Selects the best-rounded value within limits.
  * 5. `round_thresholds(breaks, tname, colname)`: Rounds the thresholds for a given set of breaks.
+ *
+ * Each threshold is rounded inside the gap between its neighbouring observed values, so no row
+ * changes class, and inside the midpoints to its neighbouring thresholds, so two thresholds
+ * sharing a sparse gap can never round onto the same value and merge their classes.
  */
 const round_thresholds_macro = `CREATE OR REPLACE MACRO round_left(n) AS (
   WITH RECURSIVE round_left(value, value_rounded, iter) AS (
@@ -266,16 +270,10 @@ const round_thresholds_macro = `CREATE OR REPLACE MACRO round_left(n) AS (
   );
 
   CREATE OR REPLACE MACRO best_value_rounded(n, lower_limit, upper_limit) AS (
-    WITH t1 AS (
-      SELECT
-        UNNEST(generate_roundings(n)) AS value_rounded,
-        value_rounded BETWEEN lower_limit AND upper_limit AS check_inside
-    )
-    FROM t1
-    SELECT value_rounded
-    WHERE check_inside = TRUE
-    LIMIT 1
-
+    list_filter(
+      generate_roundings(n),
+      value_rounded -> value_rounded BETWEEN lower_limit AND upper_limit
+    )[1]
   );
 
   CREATE OR REPLACE MACRO round_thresholds(breaks, tname, colname) AS (
@@ -286,14 +284,26 @@ const round_thresholds_macro = `CREATE OR REPLACE MACRO round_left(n) AS (
   ), t1 AS (
     SELECT unnest(breaks) AS break
   ), t2 AS (
-    FROM t1, values
+    FROM t1
     SELECT
       break,
-      max(value) FILTER (WHERE value <= break) AS lower_limit,
-      min(value) FILTER (WHERE value >= break) AS upper_limit
-    GROUP BY ALL
+      coalesce(
+        (break + lag(break) OVER (ORDER BY break)) / 2,
+        '-infinity'::DOUBLE
+      ) AS lower_gate,
+      coalesce(
+        (break + lead(break) OVER (ORDER BY break)) / 2,
+        'infinity'::DOUBLE
+      ) AS upper_gate
+  ), t3 AS (
+    FROM t2, values
+    SELECT
+      break,
+      greatest(max(value) FILTER (WHERE value <= break), lower_gate) AS lower_limit,
+      least(min(value) FILTER (WHERE value >= break), upper_gate) AS upper_limit
+    GROUP BY break, lower_gate, upper_gate
   )
-  FROM t2
+  FROM t3
   SELECT list(best_value_rounded(break, lower_limit, upper_limit)).list_sort()
 );`;
 

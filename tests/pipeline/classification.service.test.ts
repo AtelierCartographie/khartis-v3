@@ -609,6 +609,162 @@ describe('calculateBreaks — macro methods', () => {
   });
 });
 
+describe('calculateBreaks — rounding never changes the class count', () => {
+  let roundingCounter = 0;
+
+  function arrangeRoundingFlow(rawBreaks: number[], rounded: unknown): string {
+    roundingCounter += 1;
+    mockedGetDatasetBySourceFile.mockReturnValue({
+      tableName: `vals_rounding_${roundingCounter}`
+    } as never);
+    mockedDuckQuery
+      .mockResolvedValueOnce(
+        makeTable({ distinct_count: 400, min_val: 0, max_val: 27367 }) as never
+      )
+      .mockResolvedValueOnce(makeTable({ breaks: rawBreaks }) as never)
+      .mockResolvedValueOnce(makeTable({ rounded }) as never)
+      .mockResolvedValueOnce(
+        makeTable({ cnt_0: 9, cnt_1: 4, cnt_2: 2, cnt_3: 1 }) as never
+      );
+    return `births_${roundingCounter}`;
+  }
+
+  it('keeps the unrounded thresholds when two of them round onto the same value', async () => {
+    const columnName = arrangeRoundingFlow(
+      [3909, 16420, 21894],
+      [4000, 20000, 20000]
+    );
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName,
+      method: ClassificationMethod.EQUAL_INTERVAL,
+      numClasses: 4
+    });
+
+    expect(result?.breaks).toEqual([3909, 16420, 21894]);
+    expect(result?.counts).toHaveLength(4);
+    expect(mockedLoggerWarn).toHaveBeenCalledWith(
+      'Discarded rounded classification breaks that would change the class count',
+      'DATA',
+      expect.objectContaining({
+        extra: expect.objectContaining({ breakCount: 3, roundedCount: 2 })
+      })
+    );
+  });
+
+  it('keeps the unrounded thresholds when rounding lands one of them on the minimum', async () => {
+    const columnName = arrangeRoundingFlow(
+      [3909, 16420, 21894],
+      [0, 20000, 23000]
+    );
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName,
+      method: ClassificationMethod.EQUAL_INTERVAL,
+      numClasses: 4
+    });
+
+    expect(result?.breaks).toEqual([3909, 16420, 21894]);
+  });
+
+  it('adopts the rounded thresholds when they stay as numerous as the originals', async () => {
+    const columnName = arrangeRoundingFlow(
+      [3909, 16420, 21894],
+      [4000, 16000, 22000]
+    );
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName,
+      method: ClassificationMethod.EQUAL_INTERVAL,
+      numClasses: 4
+    });
+
+    expect(result?.breaks).toEqual([4000, 16000, 22000]);
+    expect(mockedLoggerWarn).not.toHaveBeenCalled();
+  });
+});
+
+describe('calculateBreaks — Head/Tail natural class count', () => {
+  let headTailCounter = 0;
+
+  function arrangeHeadTailFlow(
+    ladder: number[],
+    counts: Record<string, number>
+  ): void {
+    headTailCounter += 1;
+    mockedGetDatasetBySourceFile.mockReturnValue({
+      tableName: `vals_head_tail_${headTailCounter}`
+    } as never);
+    mockedDuckQuery
+      .mockResolvedValueOnce(
+        makeTable({ distinct_count: 500, min_val: 0, max_val: 30000 }) as never
+      )
+      .mockResolvedValueOnce(makeTable({ breaks: ladder }) as never)
+      .mockResolvedValueOnce(makeTable({ rounded: ladder }) as never)
+      .mockResolvedValueOnce(makeTable(counts) as never);
+  }
+
+  it('reports the whole ladder as the natural count when fewer classes are requested', async () => {
+    arrangeHeadTailFlow([21, 127, 515, 1349, 2890, 7717, 20078], {
+      cnt_0: 30000,
+      cnt_1: 4000,
+      cnt_2: 900,
+      cnt_3: 53
+    });
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName: 'births',
+      method: ClassificationMethod.HEAD_TAIL,
+      numClasses: 4
+    });
+
+    expect(result?.breaks).toEqual([21, 127, 515]);
+    expect(result?.counts).toHaveLength(4);
+    // Lowering the request must not shrink the ceiling the UI offers back.
+    expect(result?.naturalClassCount).toBe(8);
+    const macroQuery = mockedDuckQuery.mock.calls[1]?.[0] as string;
+    expect(macroQuery).toContain('headtail2(');
+    expect(macroQuery).toContain(', 12)');
+  });
+
+  it('reports two classes when the algorithm stops after the first split', async () => {
+    arrangeHeadTailFlow([52], { cnt_0: 19000, cnt_1: 15000 });
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName: 'region_code',
+      method: ClassificationMethod.HEAD_TAIL,
+      numClasses: 6
+    });
+
+    expect(result?.breaks).toEqual([52]);
+    expect(result?.naturalClassCount).toBe(2);
+  });
+
+  it('leaves the natural count unset for methods that honour the request', async () => {
+    arrangeHeadTailFlow([21, 127, 515], {
+      cnt_0: 30000,
+      cnt_1: 4000,
+      cnt_2: 900,
+      cnt_3: 53
+    });
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName: 'births',
+      method: ClassificationMethod.QUANTILES,
+      numClasses: 4
+    });
+
+    expect(result?.breaks).toEqual([21, 127, 515]);
+    expect(result?.naturalClassCount).toBeUndefined();
+  });
+});
+
 describe('calculateBreaks — Flechette edge cases', () => {
   let edgeCounter = 0;
 
