@@ -28,7 +28,10 @@ const mocks = vi.hoisted(() => {
     supportsCustomProjectionCodeMock: vi.fn(() => true),
     resolveProjectionAvailabilityContextMock: vi.fn(() => ({})),
     setProjectionMock: vi.fn(),
-    setProjectionViewModeMock: vi.fn()
+    setProjectionViewModeMock: vi.fn(),
+    resolveProjectionDefaultOrientationMock: vi.fn((): [number, number] => [
+      0, 0
+    ])
   };
 });
 
@@ -102,7 +105,9 @@ vi.mock('$lib/features/commons/stores/global.svelte', () => ({
 }));
 
 vi.mock('$lib/features/commons/utils/projection.utils', () => ({
-  getProjectionById: vi.fn(() => undefined)
+  getProjectionById: vi.fn(() => undefined),
+  resolveProjectionDefaultOrientation:
+    mocks.resolveProjectionDefaultOrientationMock
 }));
 
 vi.mock('$lib/features/map', () => ({

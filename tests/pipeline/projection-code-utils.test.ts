@@ -148,10 +148,15 @@ describe('parseProjectionCode — projection ID inference', () => {
     expect(parseProjectionCode('EPSG:2056')?.format).toBe('proj4');
   });
 
-  it('falls back to mercator for a valid but unrecognized projection', () => {
+  it('recognizes a raw Lambert conformal conic code', () => {
     const lcc =
       '+proj=lcc +lat_1=43 +lat_2=62 +lat_0=30 +lon_0=10 +datum=WGS84 +units=m';
-    expect(parseProjectionCode(lcc)?.projectionId).toBe('mercator');
+    expect(parseProjectionCode(lcc)?.projectionId).toBe('lambert-conformal');
+  });
+
+  it('falls back to mercator for a valid but unrecognized projection', () => {
+    const gnomonic = '+proj=gnom +lat_0=45 +lon_0=10 +datum=WGS84 +units=m';
+    expect(parseProjectionCode(gnomonic)?.projectionId).toBe('mercator');
   });
 });
 

@@ -19,7 +19,7 @@ export interface ParsedProjectionCode {
   projectionId: string;
 }
 
-function inferProjectionId(code: string): string {
+export function inferProjectionIdFromCode(code: string): string | undefined {
   const normalized = code.toLowerCase();
 
   if (
@@ -116,11 +116,20 @@ function inferProjectionId(code: string): string {
   }
 
   if (
+    normalized.includes('+proj=lcc') ||
     normalized.includes('epsg:2154') ||
     normalized.includes('epsg:27572') ||
     normalized.includes('lambert-93')
   ) {
     return 'lambert-conformal';
+  }
+
+  if (
+    normalized.includes('+proj=tmerc') ||
+    normalized.includes('+proj=utm') ||
+    normalized.includes('transverse mercator')
+  ) {
+    return 'transverse-mercator';
   }
 
   if (normalized.includes('epsg:3035')) {
@@ -135,7 +144,7 @@ function inferProjectionId(code: string): string {
     return 'mercator';
   }
 
-  return DEFAULT_FALLBACK_PROJECTION;
+  return undefined;
 }
 
 function isKnownProjectionId(projectionId: string): boolean {
@@ -180,10 +189,11 @@ export function parseProjectionCode(code: string): ParsedProjectionCode | null {
     return null;
   }
 
-  const inferredProjectionId = inferProjectionId(normalizedCode);
-  const projectionId = isKnownProjectionId(inferredProjectionId)
-    ? inferredProjectionId
-    : DEFAULT_FALLBACK_PROJECTION;
+  const inferredProjectionId = inferProjectionIdFromCode(normalizedCode);
+  const projectionId =
+    inferredProjectionId && isKnownProjectionId(inferredProjectionId)
+      ? inferredProjectionId
+      : DEFAULT_FALLBACK_PROJECTION;
 
   return {
     normalizedCode,

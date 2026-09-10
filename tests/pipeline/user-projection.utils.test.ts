@@ -6,7 +6,7 @@ import type { ProjectionPresets } from '$lib/features/map/types/basemap.types';
 import type { BBox } from '$lib/features/map/types';
 import type { D3Usage } from '@ateliercartographie/proj-suggest';
 import { PROJECTIONS } from '$lib/features/commons/utils/projection.utils';
-import { CLIP_DEGENERACY_LON_EPSILON } from '$lib/features/commons/utils/d3-projection-config.utils';
+import { CLIP_DEGENERACY_EPSILON } from '$lib/features/commons/utils/d3-projection-config.utils';
 import { computeProjectedBboxForProjection } from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
 import {
   getCompositeProjectionPresetId,
@@ -246,7 +246,7 @@ describe('user projection utils', () => {
       expect(
         projection.rotate()[0],
         `${projectionId} should avoid integer interruption meridians`
-      ).toBeCloseTo(CLIP_DEGENERACY_LON_EPSILON);
+      ).toBeCloseTo(CLIP_DEGENERACY_EPSILON);
     }
 
     const mollweide = asGeoProjection(
@@ -268,6 +268,31 @@ describe('user projection utils', () => {
     );
 
     expect(mollweide.rotate()[0]).toBeCloseTo(0);
+  });
+
+  it('nudges the quincuncial projection off the exact polar orientation', () => {
+    const projection = asGeoProjection(
+      resolveUserProjectionOverride({
+        state: {
+          selected: 'peirce-quincuncial',
+          overrideActive: true,
+          customCode: undefined,
+          center: [90, 90],
+          longitude: 90,
+          latitude: 90,
+          rotation: 0
+        },
+        fitBbox: [-180, -90, 180, 90],
+        viewportSize: { width: 960, height: 600 },
+        padding: 40,
+        projectionPresets
+      })
+    );
+
+    // Exactly -90 makes the near-full pre-clip circle degenerate onto the
+    // polar edge of the basemap rings and the GPU fill floods the frame.
+    expect(projection.rotate()[1]).toBeCloseTo(-90 + CLIP_DEGENERACY_EPSILON);
+    expect(projection.rotate()[1]).not.toBe(-90);
   });
 
   it('applies longitude and latitude as spherical rotation offsets', () => {
@@ -524,10 +549,12 @@ describe('user projection utils', () => {
       );
 
       expect(projection, `${projectionInfo.id} should resolve`).toBeDefined();
+      // The user rotation adds to the projection's own planar angle (Cassini,
+      // Air Ocean and Waterman are tilted by construction).
       expect(
         projection.angle(),
         `${projectionInfo.id} should apply planar rotation`
-      ).toBeCloseTo(12);
+      ).toBeCloseTo(projectionInfo.projection().angle() + 12);
       const projected = projection([10, 45]);
       expect(
         projected?.every(Number.isFinite),
