@@ -58,21 +58,18 @@ const { mockVisualizationStore, mockDatasetsStore } = vi.hoisted(() => ({
     getColumnStatistics: (columnName?: string) => {
       switch (columnName) {
         case 'population':
-          return { min: 30_359, max: 15_907_951 };
+          return {
+            min: 30_359,
+            max: 15_907_951,
+            value_sample: [
+              30_359, 41_000, 120_000, 260_000, 480_000, 900_000, 1_400_000,
+              2_100_000, 3_300_000, 6_800_000, 15_907_951
+            ]
+          };
         case 'secondary-population':
           return { min: 22_120, max: 9_431_204 };
         default:
           return null;
-      }
-    },
-    getColumnValues: (columnName?: string) => {
-      switch (columnName) {
-        case 'population':
-          return [30_359, 8_200_000, 15_907_951];
-        case 'secondary-population':
-          return [22_120, 4_500_000, 9_431_204];
-        default:
-          return [];
       }
     }
   }
@@ -96,9 +93,7 @@ vi.mock(
 vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   datasetsStore: {
     getColumnStatistics: (_datasetId: string, columnName?: string) =>
-      mockDatasetsStore.getColumnStatistics(columnName),
-    getColumnValues: (_datasetId: string, columnName?: string) =>
-      mockDatasetsStore.getColumnValues(columnName)
+      mockDatasetsStore.getColumnStatistics(columnName)
   }
 }));
 

@@ -73,7 +73,8 @@ const SUMMARY_NUMERIC_FIELDS = [
   'median',
   'stddev',
   'skewness',
-  'share_rank_interval'
+  'share_rank_interval',
+  'value_sample'
 ] as const;
 
 const SUMMARY_DATE_FIELDS = ['min', 'max'] as const;
@@ -200,6 +201,14 @@ function shareRankIntervalSelect(
   return `share_rank_interval('${escapedTable}', "${escapeIdentifier(column)}") AS "${key}_share_rank_interval"`;
 }
 
+function valueSampleSelect(
+  column: string,
+  key: string,
+  escapedTable: string
+): string {
+  return `value_sample('${escapedTable}', "${escapeIdentifier(column)}") AS "${key}_value_sample"`;
+}
+
 function summaryDateSelect(column: string, key: string): string {
   const c = `"${escapeIdentifier(column)}"`;
   return `min(${c}) AS "${key}_min", max(${c}) AS "${key}_max"`;
@@ -235,7 +244,10 @@ function buildNumericQuery(
   const ranks = batch.map((column, index) =>
     shareRankIntervalSelect(column, columnKey(index), escapedTable)
   );
-  return `WITH t1 AS (SELECT ${aggregates.join(', ')} FROM ${tableIdentifier}) FROM t1 POSITIONAL JOIN (SELECT ${ranks.join(', ')})`;
+  const samples = batch.map((column, index) =>
+    valueSampleSelect(column, columnKey(index), escapedTable)
+  );
+  return `WITH t1 AS (SELECT ${aggregates.join(', ')} FROM ${tableIdentifier}) FROM t1 POSITIONAL JOIN (SELECT ${ranks.join(', ')}) POSITIONAL JOIN (SELECT ${samples.join(', ')})`;
 }
 
 function buildDateQuery(batch: string[], tableIdentifier: string): string {

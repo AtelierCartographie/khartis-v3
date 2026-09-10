@@ -452,37 +452,62 @@ function getStatisticsNumber(
   );
 }
 
+function getStatisticsValueSample(statistics: unknown): number[] | null {
+  if (
+    !statistics ||
+    typeof statistics !== 'object' ||
+    !('value_sample' in statistics)
+  ) {
+    return null;
+  }
+
+  const sample = (statistics as { value_sample?: unknown }).value_sample;
+  if (!Array.isArray(sample)) {
+    return null;
+  }
+
+  const values = sample
+    .map(toFiniteLegendNumber)
+    .filter((value): value is number => value !== null);
+
+  return values.length > 1 ? values : null;
+}
+
 function collectNumericColumnValues(
   visualizationId: string | undefined,
   datasetId: string | undefined,
   columnName: string | undefined,
   primitive: PrimitiveFilter
 ): number[] {
+  const statistics =
+    datasetId && columnName
+      ? datasetsStore.getColumnStatistics(datasetId, columnName)
+      : null;
+  const sample = getStatisticsValueSample(statistics);
+
   // Every symbol drawer reads the extent of these values, so the resolved
   // scope can stand in for the rows it no longer draws.
   const scopedDomain = visualizationId
     ? rowScopeStore.getScopedDomain(visualizationId, primitive, columnName)
     : null;
   if (scopedDomain) {
-    return buildSampleValues(scopedDomain.min, scopedDomain.max);
+    return clampValuesToDomain(sample, scopedDomain.min, scopedDomain.max);
   }
 
-  const statistics =
-    datasetId && columnName
-      ? datasetsStore.getColumnStatistics(datasetId, columnName)
-      : null;
+  return sample ?? getStatisticsSampleValues(statistics);
+}
 
-  if (!datasetId || !columnName) {
-    return getStatisticsSampleValues(statistics);
+function clampValuesToDomain(
+  sample: number[] | null,
+  min: number,
+  max: number
+): number[] {
+  if (!sample) {
+    return buildSampleValues(min, max);
   }
 
-  const fallbackValues = getStatisticsSampleValues(statistics);
-  const values = datasetsStore
-    .getColumnValues(datasetId, columnName)
-    .map(toFiniteLegendNumber)
-    .filter((value): value is number => value !== null);
-
-  return values.length > 0 ? values : fallbackValues;
+  const inside = sample.filter((value) => value > min && value < max);
+  return [min, ...inside, max];
 }
 
 function getNumericColumnValues(

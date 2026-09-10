@@ -26,6 +26,7 @@ export type ColumnStatSummary = {
   min?: number;
   max?: number;
   mean?: number;
+  value_sample?: number[];
 };
 
 export { DataSourceType, FileType } from '../types/create-project.types';

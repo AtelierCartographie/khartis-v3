@@ -67,6 +67,51 @@ describe('summary_numeric macro', () => {
   });
 });
 
+describe('value_sample macro', () => {
+  it('keeps the extremes, their neighbours and the quantiles of a skewed column', async () => {
+    await run(db, 'CREATE OR REPLACE TABLE births (v DOUBLE)');
+    await run(db, 'INSERT INTO births SELECT 0 FROM range(200)');
+    await run(
+      db,
+      'INSERT INTO births SELECT (i % 60) + 1 FROM range(300) t(i)'
+    );
+    await run(db, 'INSERT INTO births VALUES (12789), (27367)');
+
+    const rows = await query(db, "SELECT value_sample('births', v) AS sample");
+    const sample = rows[0].sample as number[];
+
+    expect(sample[0]).toBe(0);
+    expect(sample[1]).toBe(1);
+    expect(sample[sample.length - 2]).toBe(12789);
+    expect(sample[sample.length - 1]).toBe(27367);
+    for (let i = 1; i < sample.length; i++) {
+      expect(sample[i]).toBeGreaterThan(sample[i - 1]);
+    }
+    // The quantiles land where the values are, not across the range.
+    expect(
+      sample.filter((value) => value > 0 && value <= 60).length
+    ).toBeGreaterThan(2);
+  });
+
+  it('drops NULLs and collapses a single-valued column', async () => {
+    await run(db, 'CREATE OR REPLACE TABLE sparse (v DOUBLE)');
+    await run(db, 'INSERT INTO sparse VALUES (NULL), (42), (NULL), (42)');
+
+    const rows = await query(db, "SELECT value_sample('sparse', v) AS sample");
+
+    expect(rows[0].sample).toEqual([42]);
+  });
+
+  it('reports real values on both sides of zero', async () => {
+    await run(db, 'CREATE OR REPLACE TABLE signed (v DOUBLE)');
+    await run(db, 'INSERT INTO signed VALUES (-100), (-3), (0.5), (7), (250)');
+
+    const rows = await query(db, "SELECT value_sample('signed', v) AS sample");
+
+    expect(rows[0].sample).toEqual([-100, -3, 0.5, 7, 250]);
+  });
+});
+
 describe('normalize_text macro', () => {
   it('lowercases and trims plain ASCII input', async () => {
     const rows = await query(

@@ -11,7 +11,12 @@ import {
   draw_quanti_color_legend,
   draw_symbols_legend
 } from '.';
-import { renderLegendHeader, renderLegendNote, wrapLegendText } from './utils';
+import {
+  renderLegendHeader,
+  renderLegendNote,
+  round_extreme,
+  wrapLegendText
+} from './utils';
 
 const measureCanvas = {
   getContext: () => ({
@@ -226,6 +231,41 @@ describe('common legend generators', () => {
     expect(svg.markup).toContain('class="links"');
     expect(svg.width).toBeGreaterThan(0);
     expect(svg.height).toBeGreaterThan(0);
+  });
+
+  it('stops an extreme rounding before it reaches the neighbouring value', () => {
+    // 1300 would swallow 1280, so the ladder stops one step earlier.
+    expect(round_extreme([1200, 1267, 1280, 5000], 1267, 'min')).toBe(1270);
+    expect(round_extreme([1200, 1267, 1280, 5000], 5000, 'max')).toBe(5000);
+  });
+
+  it('reads the symbol legend ticks from the sampled values, not from the range', () => {
+    const ticksOf = (sample: number[]): string[] => {
+      const svg = createLegendSvg(
+        draw_symbols_legend(sample, {
+          type: 'circle',
+          size: 40,
+          fontSize: 12,
+          fill: '#4585f5'
+        })
+      );
+      const host = document.createElement('div');
+      host.innerHTML = `<svg>${svg.markup}</svg>`;
+      return [...host.querySelectorAll('.labels text')].map((node) =>
+        (node.textContent ?? '').trim().replace(/\s/g, ' ')
+      );
+    };
+
+    // Same extent, but the zero-inflated series holds almost every value below 61.
+    const sampled = ticksOf([
+      0, 1, 2, 3, 4, 5, 6, 7, 9, 11, 14, 19, 30, 61, 12_789, 27_367
+    ]);
+    const rangeOnly = ticksOf([0, 13_683.5, 27_367]);
+
+    expect(sampled).not.toEqual(rangeOnly);
+    // Reading three points of the range puts the smallest symbol at 14 000.
+    expect(rangeOnly).toContain('14 000');
+    expect(sampled.some((label) => label.includes('14 000'))).toBe(false);
   });
 
   it('drops symbol legend ticks whose labels would vertically overlap', () => {
