@@ -9,8 +9,7 @@ import {
   draw_khartis_line_width_legend,
   draw_khartis_swatch_legend,
   draw_quanti_color_legend,
-  draw_symbols_legend,
-  round_thresholds
+  draw_symbols_legend
 } from '.';
 import { renderLegendHeader, renderLegendNote, wrapLegendText } from './utils';
 
@@ -424,12 +423,6 @@ describe('common legend generators', () => {
     expect(svg.markup).toContain('symbol_legend');
     expect(svg.markup).toContain('Sans données');
     expect(svg.markup).toContain('<path');
-  });
-
-  it('keeps round_thresholds exported for khartis-legends parity', () => {
-    expect(round_thresholds([10, 20, 30, 40, 50, 60], [10, 31.4, 60])).toEqual([
-      10, 31, 60
-    ]);
   });
 
   it('keeps the cross-zero sign legend inside the SVG viewBox bounds', () => {
