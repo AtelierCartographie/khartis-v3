@@ -478,16 +478,6 @@ function createTextVisualization(): VisualizationConfig {
         haloWidth: 2,
         collisionDetection: true,
         dxpMasking: false
-      },
-      background: {
-        fillMode: FillMode.NONE,
-        fillColor: '#ffffff',
-        fillOpacity: 1,
-        strokeMode: StrokeMode.NONE,
-        strokeColor: '#000000',
-        strokeWidth: 0,
-        strokeOpacity: 1,
-        strokeDashed: false
       }
     }
   };
@@ -937,7 +927,7 @@ describe('createTextOverlayLayers', () => {
     );
   });
 
-  it('keeps centroid labels centered and ignores legacy text background boxes', () => {
+  it('keeps centroid labels centered without a text background box', () => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 1,
       featureIds: new Uint32Array([0]),
@@ -947,19 +937,6 @@ describe('createTextOverlayLayers', () => {
     const visualization = createTextVisualization();
     visualization.primitiveFilters = [PrimitiveFilterType.TEXT];
     visualization.symbol = { ...visualization.symbol!, enabled: false };
-    visualization.text = {
-      ...visualization.text!,
-      background: {
-        ...visualization.text!.background,
-        fillMode: FillMode.UNIQUE,
-        fillColor: '#ff0000',
-        fillOpacity: 1,
-        strokeMode: StrokeMode.UNIQUE,
-        strokeColor: '#00ff00',
-        strokeWidth: 4,
-        strokeOpacity: 1
-      }
-    };
 
     const layers = createDeckLayers(
       createTableWithRows([{ name: 'Centroid' }], ['name']),

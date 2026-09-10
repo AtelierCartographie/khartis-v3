@@ -39,7 +39,6 @@ import {
   type PrimitiveConfigMap,
   type PrimitiveFilter,
   type SymbolPrimitiveConfig,
-  type TextBackgroundConfig,
   type TextPrimitiveConfig,
   type TextSecondaryLabelsConfig,
   type VisualizationConfig,
@@ -393,29 +392,6 @@ export function buildLinePrimitiveConfig(
   };
 }
 
-function buildTextBackgroundConfig(
-  existing: TextBackgroundConfig | undefined
-): TextBackgroundConfig {
-  const defaultFillOpacity = VISUALIZATION_DEFAULTS.fillOpacity / 100;
-  return {
-    fillMode: existing?.fillMode ?? FillMode.NONE,
-    fillColor: existing?.fillColor,
-    fillOpacity: existing?.fillOpacity ?? defaultFillOpacity,
-    strokeMode: existing?.strokeMode ?? StrokeMode.NONE,
-    strokeColor: existing?.strokeColor,
-    strokeWidth: existing?.strokeWidth ?? VISUALIZATION_DEFAULTS.strokeWidth,
-    strokeOpacity: existing?.strokeOpacity ?? 1,
-    strokeDashed: existing?.strokeDashed ?? false,
-    strokeDashedPattern: existing?.strokeDashedPattern,
-    valueColumn: existing?.valueColumn,
-    categoryColumn: existing?.categoryColumn,
-    classification: existing?.classification,
-    strokeClassification: existing?.strokeClassification,
-    strokeValueColumn: existing?.strokeValueColumn,
-    strokeCategoryColumn: existing?.strokeCategoryColumn
-  };
-}
-
 export function buildTextPrimitiveConfig(
   visualization: VisualizationConfig
 ): TextPrimitiveConfig {
@@ -478,8 +454,7 @@ export function buildTextPrimitiveConfig(
       visualization.textClassification ??
       visualization.classification,
     missingData: existing?.missingData ?? visualization.missingData,
-    secondaryLabels: buildSecondaryLabelsConfig(visualization),
-    background: buildTextBackgroundConfig(existing?.background)
+    secondaryLabels: buildSecondaryLabelsConfig(visualization)
   };
 }
 

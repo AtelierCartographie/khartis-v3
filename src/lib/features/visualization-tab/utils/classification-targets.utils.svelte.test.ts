@@ -3,14 +3,9 @@ import {
   buildLineThicknessTarget,
   buildPrimitiveClassificationTargets,
   buildPrimitiveStrokeClassificationTargets,
-  buildSymbolFillTarget,
-  buildTextBackgroundStrokeTarget,
-  buildTextBackgroundTarget
+  buildSymbolFillTarget
 } from './classification-targets.utils';
-import {
-  FillMode,
-  StrokeMode
-} from '$lib/features/commons/constants/visualization.constants';
+import { FillMode } from '$lib/features/commons/constants/visualization.constants';
 
 vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => {
   return {
@@ -134,29 +129,5 @@ describe('classification-targets.utils', () => {
     );
     expect(target?.fillMode).toBe(FillMode.UNIQUE);
     expect(target?.usesCategories).toBe(true);
-  });
-
-  it('buildTextBackgroundTarget derives usesBreaks from CLASSES fillMode', () => {
-    const target = buildTextBackgroundTarget({
-      text: { background: { fillMode: FillMode.CLASSES, valueColumn: 'v' } }
-    } as never);
-    expect(target?.usesBreaks).toBe(true);
-    expect(target?.usesCategories).toBe(false);
-  });
-
-  it('buildTextBackgroundTarget derives usesCategories from CATEGORIES fillMode', () => {
-    const target = buildTextBackgroundTarget({
-      text: { background: { fillMode: FillMode.CATEGORIES } }
-    } as never);
-    expect(target?.usesBreaks).toBe(false);
-    expect(target?.usesCategories).toBe(true);
-  });
-
-  it('buildTextBackgroundStrokeTarget derives strokeMode-based flags', () => {
-    const target = buildTextBackgroundStrokeTarget({
-      text: { background: { strokeMode: StrokeMode.CATEGORIES } }
-    } as never);
-    expect(target?.usesCategories).toBe(true);
-    expect(target?.usesBreaks).toBe(false);
   });
 });

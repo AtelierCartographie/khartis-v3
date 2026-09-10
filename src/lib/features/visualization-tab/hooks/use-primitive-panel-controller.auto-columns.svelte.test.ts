@@ -75,7 +75,6 @@ describe('usePrimitivePanelController auto columns', () => {
       updatePrimitiveClassification: () => {},
       updateLineThicknessClassification: () => {},
       updatePrimitiveStrokeClassification: () => {},
-      updateTextPrimitive: () => {},
       updateVisualization: (updates, afterUpdate) => {
         visualization = {
           ...visualization,
@@ -122,7 +121,6 @@ describe('usePrimitivePanelController auto columns', () => {
       updatePrimitiveClassification: () => {},
       updateLineThicknessClassification: () => {},
       updatePrimitiveStrokeClassification: () => {},
-      updateTextPrimitive: () => {},
       updateVisualization: (updates, afterUpdate) => {
         visualization = {
           ...visualization,
@@ -176,7 +174,6 @@ describe('usePrimitivePanelController auto columns', () => {
       updatePrimitiveClassification,
       updateLineThicknessClassification: () => {},
       updatePrimitiveStrokeClassification: () => {},
-      updateTextPrimitive: () => {},
       updateVisualization: () => {}
     });
 
@@ -213,7 +210,6 @@ describe('usePrimitivePanelController auto columns', () => {
       updatePrimitiveClassification: () => {},
       updateLineThicknessClassification: () => {},
       updatePrimitiveStrokeClassification: () => {},
-      updateTextPrimitive: () => {},
       updateVisualization: () => {}
     });
 
@@ -246,7 +242,6 @@ describe('usePrimitivePanelController auto columns', () => {
       updatePrimitiveClassification,
       updateLineThicknessClassification: () => {},
       updatePrimitiveStrokeClassification: () => {},
-      updateTextPrimitive: () => {},
       updateVisualization: () => {}
     });
 
@@ -291,7 +286,6 @@ describe('usePrimitivePanelController auto columns', () => {
       updatePrimitiveClassification,
       updateLineThicknessClassification: () => {},
       updatePrimitiveStrokeClassification: () => {},
-      updateTextPrimitive: () => {},
       updateVisualization: () => {}
     });
 
@@ -341,7 +335,6 @@ describe('usePrimitivePanelController auto columns', () => {
       updatePrimitiveClassification: () => {},
       updateLineThicknessClassification: () => {},
       updatePrimitiveStrokeClassification: () => {},
-      updateTextPrimitive: () => {},
       updateVisualization: (updates, afterUpdate) => {
         updatesLog.push(updates);
         visualization = {
@@ -382,7 +375,6 @@ describe('usePrimitivePanelController auto columns', () => {
       updatePrimitiveClassification: () => {},
       updateLineThicknessClassification: () => {},
       updatePrimitiveStrokeClassification,
-      updateTextPrimitive: () => {},
       updateVisualization: () => {}
     });
 

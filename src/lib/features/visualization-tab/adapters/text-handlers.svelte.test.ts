@@ -19,21 +19,10 @@ interface DepsBag {
   updateSelectedVisualization: Mock;
   buildNextPrimitiveFilters: Mock;
   updatePrimitiveClassificationState: Mock;
-  updateTextBackgroundClassificationState: Mock;
-  updateTextBackgroundStrokeClassificationState: Mock;
   applyPrimitiveMappingUpdate: Mock;
-  applyTextBackgroundMappingUpdate: Mock;
-  applyTextBackgroundStrokeMappingUpdate: Mock;
   invertPrimitivePalette: Mock;
-  invertTextBackgroundPalette: Mock;
-  invertTextBackgroundStrokePalette: Mock;
-  updateTextBackground: Mock;
   ensurePrimitiveClassificationDefaults: Mock;
   ensureAutoColumns: Mock;
-  ensureTextBackgroundClassificationDefaults: Mock;
-  ensureTextBackgroundAutoColumns: Mock;
-  ensureTextBackgroundStrokeClassificationDefaults: Mock;
-  ensureTextBackgroundStrokeAutoColumns: Mock;
   handlers: ReturnType<typeof createTextHandlers>;
 }
 
@@ -54,16 +43,6 @@ function makeBag(): DepsBag {
     dxpMasking: false,
     colorMode: 'unique',
     sizeMode: 'fixed',
-    background: {
-      fillMode: 'none',
-      fillColor: '#fff',
-      fillOpacity: 1,
-      strokeMode: 'none',
-      strokeColor: '#000',
-      strokeWidth: 1,
-      strokeOpacity: 1,
-      strokeDashed: false
-    },
     secondaryLabels: { enabled: false },
     missingData: { color: '#fff', show: true }
   };
@@ -72,21 +51,10 @@ function makeBag(): DepsBag {
     updateSelectedVisualization: vi.fn(),
     buildNextPrimitiveFilters: vi.fn().mockReturnValue([]),
     updatePrimitiveClassificationState: vi.fn(),
-    updateTextBackgroundClassificationState: vi.fn(),
-    updateTextBackgroundStrokeClassificationState: vi.fn(),
     applyPrimitiveMappingUpdate: vi.fn(),
-    applyTextBackgroundMappingUpdate: vi.fn(),
-    applyTextBackgroundStrokeMappingUpdate: vi.fn(),
     invertPrimitivePalette: vi.fn(),
-    invertTextBackgroundPalette: vi.fn(),
-    invertTextBackgroundStrokePalette: vi.fn(),
-    updateTextBackground: vi.fn(),
     ensurePrimitiveClassificationDefaults: vi.fn(),
-    ensureAutoColumns: vi.fn(),
-    ensureTextBackgroundClassificationDefaults: vi.fn(),
-    ensureTextBackgroundAutoColumns: vi.fn(),
-    ensureTextBackgroundStrokeClassificationDefaults: vi.fn(),
-    ensureTextBackgroundStrokeAutoColumns: vi.fn()
+    ensureAutoColumns: vi.fn()
   };
   const deps = {
     getSelectedVisualization: () => visualization,
@@ -240,57 +208,6 @@ describe('createTextHandlers', () => {
     if (calls.length > 0) {
       expect(calls[0][0].text.colorModeStates).toBeUndefined();
     }
-  });
-
-  it('handleTextBackgroundStyleChange uses updateTextBackground updater', () => {
-    const bag = makeBag();
-    bag.handlers.handleTextBackgroundStyleChange({
-      fillColor: '#aaa',
-      fillOpacity: undefined
-    } as never);
-    expect(bag.updateTextBackground).toHaveBeenCalledTimes(1);
-    const updaterFn = bag.updateTextBackground.mock.calls[0][0];
-    const result = updaterFn({ fillColor: '#zzz', fillOpacity: 0.4 });
-    expect(result).toEqual({ fillColor: '#aaa', fillOpacity: 0.4 });
-  });
-
-  it('handleTextBackgroundModesChange triggers all four ensure callbacks', () => {
-    const bag = makeBag();
-    bag.handlers.handleTextBackgroundModesChange({
-      fill: 'classes',
-      stroke: 'unique'
-    } as never);
-    const [, afterUpdate] = bag.updateSelectedVisualization.mock.calls[0];
-    afterUpdate({ id: 'next' });
-    expect(bag.ensureTextBackgroundClassificationDefaults).toHaveBeenCalled();
-    expect(bag.ensureTextBackgroundAutoColumns).toHaveBeenCalled();
-    expect(
-      bag.ensureTextBackgroundStrokeClassificationDefaults
-    ).toHaveBeenCalled();
-    expect(bag.ensureTextBackgroundStrokeAutoColumns).toHaveBeenCalled();
-  });
-
-  it('handleTextBackgroundClassificationChange forwards preserve-origin updates', () => {
-    const bag = makeBag();
-    bag.handlers.handleTextBackgroundClassificationChange(
-      { labels: ['A'] } as never,
-      { preserveOrigin: true }
-    );
-    expect(bag.updateTextBackgroundClassificationState).toHaveBeenCalledWith(
-      { labels: ['A'] },
-      { preserveOrigin: true }
-    );
-  });
-
-  it('handleTextBackgroundStrokeClassificationChange forwards preserve-origin updates', () => {
-    const bag = makeBag();
-    bag.handlers.handleTextBackgroundStrokeClassificationChange(
-      { colors: ['#123'] } as never,
-      { preserveOrigin: true }
-    );
-    expect(
-      bag.updateTextBackgroundStrokeClassificationState
-    ).toHaveBeenCalledWith({ colors: ['#123'] }, { preserveOrigin: true });
   });
 
   it('handleTextSecondaryLabelsChange merges into secondaryLabels', () => {

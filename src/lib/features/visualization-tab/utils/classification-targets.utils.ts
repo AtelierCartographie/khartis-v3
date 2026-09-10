@@ -9,14 +9,12 @@ import {
   getSymbolFillClassification,
   getSymbolFillValueColumn,
   getSymbolPrimitive,
-  getTextPrimitive,
   type ClassificationConfig,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   ColorMode,
-  FillMode,
-  StrokeMode
+  FillMode
 } from '$lib/features/commons/constants/visualization.constants';
 import {
   CLASSIFIABLE_PRIMITIVES,
@@ -56,23 +54,6 @@ export interface LineThicknessTarget {
 
 export interface SymbolFillTarget {
   fillMode: FillMode | undefined;
-  valueColumn: string | undefined;
-  categoryColumn: string | undefined;
-  classification: ClassificationConfig | undefined;
-  usesBreaks: boolean;
-  usesCategories: boolean;
-}
-
-export interface TextBackgroundTarget {
-  fillMode: FillMode | undefined;
-  valueColumn: string | undefined;
-  categoryColumn: string | undefined;
-  classification: ClassificationConfig | undefined;
-  usesBreaks: boolean;
-  usesCategories: boolean;
-}
-
-export interface TextBackgroundStrokeTarget {
   valueColumn: string | undefined;
   categoryColumn: string | undefined;
   classification: ClassificationConfig | undefined;
@@ -197,36 +178,5 @@ export function buildSymbolFillTarget(
     classification: getSymbolFillClassification(viz),
     usesBreaks: builders.usesSymbolFillBreakClassification(viz),
     usesCategories: builders.usesSymbolFillCategoricalClassification(viz)
-  };
-}
-
-export function buildTextBackgroundTarget(
-  viz: VisualizationConfig | undefined
-): TextBackgroundTarget | null {
-  const text = getTextPrimitive(viz);
-  if (!text) return null;
-  const bg = text.background;
-  return {
-    fillMode: bg.fillMode,
-    valueColumn: bg.valueColumn,
-    categoryColumn: bg.categoryColumn,
-    classification: bg.classification,
-    usesBreaks: bg.fillMode === FillMode.CLASSES,
-    usesCategories: bg.fillMode === FillMode.CATEGORIES
-  };
-}
-
-export function buildTextBackgroundStrokeTarget(
-  viz: VisualizationConfig | undefined
-): TextBackgroundStrokeTarget | null {
-  const text = getTextPrimitive(viz);
-  if (!text) return null;
-  const bg = text.background;
-  return {
-    valueColumn: bg.strokeValueColumn,
-    categoryColumn: bg.strokeCategoryColumn,
-    classification: bg.strokeClassification,
-    usesBreaks: bg.strokeMode === StrokeMode.CLASSES,
-    usesCategories: bg.strokeMode === StrokeMode.CATEGORIES
   };
 }
