@@ -36,8 +36,13 @@ import {
   StrokeMode,
   SymbolDoublePosition,
   SymbolMode,
-  ThicknessMode
+  ThicknessMode,
+  SLIDER_LIMITS
 } from '$lib/features/commons/constants/visualization.constants';
+import {
+  MAX_TEXT_OUTLINE_WIDTH,
+  resolveTextHaloWidthPx
+} from './text-character-set';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { GeometryInfo, LayerContext } from '../types';
 
@@ -993,7 +998,7 @@ describe('createTextOverlayLayers', () => {
     expect(textProps?.getBorderWidth).toBe(0);
   });
 
-  it('keeps a thick text contour below the SDF saturation point so the halo is not clipped', () => {
+  const resolveTextOutlineProps = (haloWidth: number, textSize: number) => {
     parsePointDataWithProjectionMock.mockReturnValue({
       length: 1,
       featureIds: new Uint32Array([0]),
@@ -1003,8 +1008,9 @@ describe('createTextOverlayLayers', () => {
     const visualization = createTextVisualization();
     visualization.text = {
       ...visualization.text!,
+      size: textSize,
       halo: true,
-      haloWidth: 20
+      haloWidth
     };
 
     const layers = createDeckLayers(
@@ -1020,18 +1026,41 @@ describe('createTextOverlayLayers', () => {
 
     const textLayer = layers.find((layer) => layer instanceof TextLayer) as
       TextLayer | undefined;
-    const textProps = textLayer?.props as
+    return textLayer?.props as
       | {
-          fontSettings?: { buffer?: number; radius?: number; sdf?: boolean };
+          fontSettings?: {
+            buffer?: number;
+            radius?: number;
+            sdf?: boolean;
+            smoothing?: number;
+          };
           outlineWidth?: number;
         }
       | undefined;
+  };
 
-    expect(textProps?.outlineWidth).toBeGreaterThan(0);
-    expect(textProps?.outlineWidth).toBeLessThan(1);
+  it('turns the configured contour thickness into that many pixels of halo', () => {
+    for (const [haloWidth, textSize] of [
+      [0.5, 12],
+      [1, 12],
+      [2, 12],
+      [2, 24]
+    ]) {
+      const textProps = resolveTextOutlineProps(haloWidth, textSize);
+      expect(
+        resolveTextHaloWidthPx(textProps?.outlineWidth ?? 0, textSize)
+      ).toBeCloseTo(haloWidth, 5);
+    }
+  });
+
+  it('keeps a thick text contour inside the SDF atlas so the halo is not clipped', () => {
+    const textProps = resolveTextOutlineProps(SLIDER_LIMITS.haloWidth.max, 6);
+
+    expect(textProps?.outlineWidth).toBe(MAX_TEXT_OUTLINE_WIDTH);
     expect(textProps?.fontSettings?.sdf).toBe(true);
-    expect(textProps?.fontSettings?.buffer).toBeGreaterThanOrEqual(20);
-    expect(textProps?.fontSettings?.radius).toBeGreaterThanOrEqual(20);
+    expect(MAX_TEXT_OUTLINE_WIDTH * 0.75).toBeLessThan(
+      textProps?.fontSettings?.buffer ?? 0
+    );
   });
 
   it('places text labels above point layers when primitiveOrder lists TEXT first', () => {

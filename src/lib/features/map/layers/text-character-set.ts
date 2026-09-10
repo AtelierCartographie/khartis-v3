@@ -73,60 +73,97 @@ const ARROWS_AND_GEOMETRIC = [
   '☆'
 ] as const;
 
-export const TEXT_HALO_ATLAS_RADIUS = 32;
-export const TEXT_HALO_ATLAS_BUFFER = 48;
+export const TEXT_ATLAS_FONT_SIZE = 40;
+export const TEXT_ATLAS_BUFFER = 20;
+export const TEXT_ATLAS_RADIUS = 24;
 
-export const MAX_TEXT_OUTLINE_WIDTH = 0.5;
+// deck.gl thresholds the SDF alpha channel at `1 - TinySDF cutoff`; every
+// distance below is glyph, every distance above is outline then background.
+const SDF_EDGE_ALPHA = 0.75;
+// Widest outline the atlas can encode: kept under TEXT_ATLAS_BUFFER so the
+// antialiasing ramp still fits inside the glyph bitmap instead of being clipped.
+const MAX_OUTLINE_ATLAS_PX = 16;
+const TEXT_EDGE_SOFTNESS_PX = 0.35;
+const MIN_TEXT_SMOOTHING = 0.005;
+const MAX_TEXT_SMOOTHING = 0.08;
 
-export const DEFAULT_TEXT_FONT_SETTINGS_SDF = {
-  sdf: true,
-  fontSize: 64,
-  buffer: TEXT_HALO_ATLAS_BUFFER,
-  radius: TEXT_HALO_ATLAS_RADIUS
-} as const;
+export const MAX_TEXT_OUTLINE_WIDTH = MAX_OUTLINE_ATLAS_PX / SDF_EDGE_ALPHA;
 
-export const DEFAULT_TEXT_FONT_SETTINGS_RASTER = {
-  sdf: false,
-  fontSize: 32,
-  buffer: 4
-} as const;
-
-export type TextFontSettingsHaloMode = 'halo-on' | 'halo-off';
-
-export function resolveTextFontSettings(
-  mode: TextFontSettingsHaloMode
-):
-  | typeof DEFAULT_TEXT_FONT_SETTINGS_SDF
-  | typeof DEFAULT_TEXT_FONT_SETTINGS_RASTER {
-  return mode === 'halo-on'
-    ? DEFAULT_TEXT_FONT_SETTINGS_SDF
-    : DEFAULT_TEXT_FONT_SETTINGS_RASTER;
+export interface TextFontSettings {
+  sdf: true;
+  fontSize: number;
+  buffer: number;
+  radius: number;
+  smoothing: number;
 }
 
+const TEXT_ATLAS_SETTINGS = {
+  sdf: true,
+  fontSize: TEXT_ATLAS_FONT_SIZE,
+  buffer: TEXT_ATLAS_BUFFER,
+  radius: TEXT_ATLAS_RADIUS
+} as const;
+
+/**
+ * deck.gl feathers glyph and outline edges over a fixed slice of the distance
+ * field, so a constant smoothing turns into a blur that grows with the rendered
+ * size. Scaling it back keeps the ramp around TEXT_EDGE_SOFTNESS_PX on screen.
+ */
+export function resolveTextSmoothing(renderedTextSize: number): number {
+  if (!Number.isFinite(renderedTextSize) || renderedTextSize <= 0) {
+    return MAX_TEXT_SMOOTHING;
+  }
+  const smoothing =
+    (TEXT_EDGE_SOFTNESS_PX * TEXT_ATLAS_FONT_SIZE) /
+    (TEXT_ATLAS_RADIUS * renderedTextSize);
+  return Math.min(MAX_TEXT_SMOOTHING, Math.max(MIN_TEXT_SMOOTHING, smoothing));
+}
+
+export function resolveTextFontSettings(
+  renderedTextSize: number
+): TextFontSettings {
+  return {
+    ...TEXT_ATLAS_SETTINGS,
+    smoothing: resolveTextSmoothing(renderedTextSize)
+  };
+}
+
+/**
+ * deck.gl expresses `outlineWidth` in atlas pixels divided by SDF_EDGE_ALPHA,
+ * so the halo a glyph ends up wearing scales with `textSize / fontSize`.
+ * Inverting that relation makes the configured thickness land as real pixels.
+ */
 export function resolveTextOutlineWidth(
-  haloWidth: number,
-  maxHaloWidth: number
+  haloWidthPx: number,
+  textSize: number
 ): number {
-  if (!Number.isFinite(haloWidth) || haloWidth <= 0 || maxHaloWidth <= 0) {
+  if (
+    !Number.isFinite(haloWidthPx) ||
+    haloWidthPx <= 0 ||
+    !Number.isFinite(textSize) ||
+    textSize <= 0
+  ) {
     return 0;
   }
-  const ratio = Math.min(haloWidth / maxHaloWidth, 1);
-  return MAX_TEXT_OUTLINE_WIDTH * Math.sqrt(ratio);
+  const outlineWidth =
+    (haloWidthPx * TEXT_ATLAS_FONT_SIZE) / (SDF_EDGE_ALPHA * textSize);
+  return Math.min(MAX_TEXT_OUTLINE_WIDTH, outlineWidth);
 }
 
 export function resolveTextHaloWidthPx(
   outlineWidth: number,
-  maxHaloWidth: number
+  textSize: number
 ): number {
   if (
     !Number.isFinite(outlineWidth) ||
     outlineWidth <= 0 ||
-    maxHaloWidth <= 0
+    !Number.isFinite(textSize) ||
+    textSize <= 0
   ) {
     return 0;
   }
-  const ratio = outlineWidth / MAX_TEXT_OUTLINE_WIDTH;
-  return maxHaloWidth * ratio * ratio;
+  const clamped = Math.min(MAX_TEXT_OUTLINE_WIDTH, outlineWidth);
+  return (clamped * SDF_EDGE_ALPHA * textSize) / TEXT_ATLAS_FONT_SIZE;
 }
 
 export const DEFAULT_TEXT_LINE_HEIGHT = 1.15;
