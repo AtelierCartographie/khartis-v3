@@ -252,6 +252,7 @@ export function createDatasetFromPreprocessedFile(
       share_rank_interval?: number;
       extent_magnitude?: number;
       skewness?: number;
+      value_sample?: number[];
       categories?: string[];
     }
   >;
@@ -276,6 +277,9 @@ export function createDatasetFromPreprocessedFile(
         share_rank_interval: toOptionalNumber(stats.share_rank_interval),
         extent_magnitude: toOptionalNumber(stats.extent_magnitude),
         skewness: toOptionalNumber(stats.skewness),
+        value_sample: Array.isArray(stats.value_sample)
+          ? stats.value_sample.filter((value) => Number.isFinite(value))
+          : undefined,
         categories: Array.isArray(stats.categories)
           ? stats.categories.filter(
               (value): value is string => typeof value === 'string'

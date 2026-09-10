@@ -76,6 +76,38 @@ const share_rank_interval_macro = `CREATE OR REPLACE FUNCTION share_rank_interva
     WHERE prev_value IS NOT NULL
 );`;
 
+/**
+ * SQL macro returning a small sample of real values of a numeric column.
+ *
+ * Holds the minimum, the value just above it, the 5%-to-95% quantiles, the value just below the
+ * maximum, and the maximum — sorted, deduplicated, NULLs dropped. Consumers that need to know
+ * where the data actually sits (legend ticks, bound rounding) read this instead of the rows
+ * themselves, which never leave DuckDB: the two neighbours make an extreme's rounding guard exact,
+ * and the quantiles put the remaining points where the values are, not where the range is.
+ */
+const value_sample_macro = `CREATE OR REPLACE MACRO value_sample(tabname, colname) AS (
+	WITH v AS (
+		FROM query_table(tabname)
+		SELECT "colname" AS value
+		WHERE "colname" IS NOT NULL
+	), bounds AS (
+		FROM v SELECT min(value) AS lo, max(value) AS hi
+	), facts AS (
+		FROM v, bounds
+		SELECT
+			lo,
+			hi,
+			min(value) FILTER (WHERE value > lo) AS next_above_min,
+			max(value) FILTER (WHERE value < hi) AS next_below_max,
+			quantile_disc(value, list_transform(range(1, 20), i -> i / 20.0)) AS quantiles
+		GROUP BY lo, hi
+	)
+	FROM facts
+	SELECT list_sort(list_distinct(
+		list_concat([lo, hi, next_above_min, next_below_max], quantiles)
+	))
+);`;
+
 const summary_general_macro = `CREATE OR REPLACE MACRO summary_general(tabname, colname) AS TABLE (
 	FROM query_table(tabname)
 	SELECT
@@ -118,6 +150,7 @@ const summary_numeric_macro = `CREATE OR REPLACE MACRO summary_numeric(tabname, 
 	        stddev("colname") AS stddev,
 	        skewness("colname") AS skewness
 	 ) FROM t1 POSITIONAL JOIN (SELECT share_rank_interval(tabname, "colname") as share_rank_interval)
+	 POSITIONAL JOIN (SELECT value_sample(tabname, "colname") as value_sample)
 );`;
 
 const summary_date_macro = `CREATE OR REPLACE MACRO summary_date(tabname, colname) AS TABLE (
@@ -201,6 +234,7 @@ export const analyse =
   get_simplified_type_macro +
   describe_full_macro +
   share_rank_interval_macro +
+  value_sample_macro +
   summary_general_macro +
   summary_numeric_macro +
   summary_date_macro +

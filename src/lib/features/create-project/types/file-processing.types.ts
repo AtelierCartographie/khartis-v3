@@ -12,5 +12,6 @@ export interface ColumnInfo {
     min?: unknown;
     max?: unknown;
     mean?: number;
+    value_sample?: number[];
   };
 }

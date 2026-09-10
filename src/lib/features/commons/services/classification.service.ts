@@ -23,6 +23,9 @@ export interface BreaksResult {
   counts: number[];
   min: number;
   max: number;
+  /** Display bounds of the scale: rounded min and max, never used to assign classes. */
+  roundedMin?: number;
+  roundedMax?: number;
   breakpointLowerClassCount?: number;
   /** Classes the method determines on its own, independent of the request. */
   naturalClassCount?: number;
@@ -294,6 +297,45 @@ async function roundBreaks(
   return breaks;
 }
 
+async function roundBounds(
+  context: QueryContext,
+  min: number,
+  max: number,
+  breaks: number[]
+): Promise<{ roundedMin: number; roundedMax: number }> {
+  try {
+    const boundsQuery = `SELECT round_bounds(${min}, ${max}, '${escapeSqlString(context.tableName)}', '${escapeSqlString(context.columnName)}') as bounds`;
+    const boundsResult = (await Duck.query(boundsQuery)) as Table;
+    const bounds = toIterableValues(boundsResult.getChild?.('bounds')?.get(0));
+
+    if (bounds?.length === 2) {
+      const [low, high] = bounds;
+      const lowerThreshold = breaks[0] ?? max;
+      const upperThreshold = breaks[breaks.length - 1] ?? min;
+
+      return {
+        roundedMin: low < lowerThreshold ? low : min,
+        roundedMax: high > upperThreshold ? high : max
+      };
+    }
+  } catch (error) {
+    logger.warn(
+      'Failed to round classification bounds; using unrounded bounds',
+      LogCategory.DATA,
+      {
+        error,
+        flow: 'classification_breaks',
+        extra: {
+          tableName: context.tableName,
+          columnName: context.columnName
+        }
+      }
+    );
+  }
+
+  return { roundedMin: min, roundedMax: max };
+}
+
 async function queryBreakCounts(
   context: QueryContext,
   allBreaks: number[]
@@ -499,12 +541,20 @@ export async function calculateBreaks(
 
     const allBreaks = [stats.min, ...breaks, stats.max];
     const counts = await queryBreakCounts(prepared.context, allBreaks);
+    const { roundedMin, roundedMax } = await roundBounds(
+      prepared.context,
+      stats.min,
+      stats.max,
+      breaks
+    );
 
     const result: BreaksResult = {
       breaks,
       counts,
       min: stats.min,
       max: stats.max,
+      roundedMin,
+      roundedMax,
       naturalClassCount
     };
 
@@ -589,6 +639,8 @@ export async function calculateDivergingBreaks(
     counts: [...lowerResult.counts, ...upperResult.counts],
     min: lowerResult.min,
     max: upperResult.max,
+    roundedMin: lowerResult.roundedMin,
+    roundedMax: upperResult.roundedMax,
     breakpointLowerClassCount: lowerResult.counts.length,
     naturalClassCount:
       lowerResult.naturalClassCount != null &&
