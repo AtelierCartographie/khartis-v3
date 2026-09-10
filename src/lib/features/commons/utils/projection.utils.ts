@@ -33,7 +33,13 @@ const CATALOGUE_PROJECTION_D3_CONFIGS: Record<string, D3Usage> = {
     projection: 'geoInterruptedMollweideHemispheres'
   },
   'mollweide-oceans': { projection: 'geoInterrupt' },
-  'peirce-quincuncial': { projection: 'geoPeirceQuincuncial' },
+  // d3's own default (rotate [-90, -90, 45]) centres the square on the wrong
+  // meridian and its 45° roll flips part of the polygon rings. The reference
+  // square world map is lon_0 = 25 with no roll.
+  'peirce-quincuncial': {
+    projection: 'geoPeirceQuincuncial',
+    rotate: [-25, -90, 0]
+  },
   'transverse-mercator': { projection: 'geoTransverseMercator' },
   'azimuthal-equidistant': { projection: 'geoAzimuthalEquidistant' },
   'equidistant-conic': { projection: 'geoConicEquidistant' },

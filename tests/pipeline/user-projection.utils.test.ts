@@ -277,8 +277,8 @@ describe('user projection utils', () => {
           selected: 'peirce-quincuncial',
           overrideActive: true,
           customCode: undefined,
-          center: [90, 90],
-          longitude: 90,
+          center: [25, 90],
+          longitude: 25,
           latitude: 90,
           rotation: 0
         },
@@ -291,6 +291,7 @@ describe('user projection utils', () => {
 
     // Exactly -90 makes the near-full pre-clip circle degenerate onto the
     // polar edge of the basemap rings and the GPU fill floods the frame.
+    expect(projection.rotate()[0]).toBeCloseTo(-25);
     expect(projection.rotate()[1]).toBeCloseTo(-90 + CLIP_DEGENERACY_EPSILON);
     expect(projection.rotate()[1]).not.toBe(-90);
   });
