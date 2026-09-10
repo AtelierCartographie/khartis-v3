@@ -214,7 +214,8 @@ describe('calculateBreaks', () => {
           cnt_2: 3,
           cnt_3: 4
         }) as never
-      );
+      )
+      .mockResolvedValueOnce(makeTable({ bounds: [0, 100] }) as never);
 
     const result = await calculateBreaks({
       datasetId: 'source-kmeans',
@@ -227,7 +228,9 @@ describe('calculateBreaks', () => {
       breaks: [35, 55, 75],
       counts: [1, 2, 3, 4],
       min: 0,
-      max: 100
+      max: 100,
+      roundedMin: 0,
+      roundedMax: 100
     });
     expect(mockedDuckQuery.mock.calls[1]?.[0]).toContain('kmeans');
     expect(mockedDuckQuery.mock.calls[2]?.[0]).toContain('round_thresholds');
@@ -263,7 +266,8 @@ describe('calculateBreaks', () => {
           cnt_2: 7,
           cnt_3: 5
         }) as never
-      );
+      )
+      .mockResolvedValueOnce(makeTable({ bounds: [0, 100] }) as never);
 
     const result = await calculateBreaks({
       datasetId: 'source-nested-clamp',
@@ -276,7 +280,9 @@ describe('calculateBreaks', () => {
       breaks: [20, 45, 70],
       counts: [10, 8, 7, 5],
       min: 0,
-      max: 100
+      max: 100,
+      roundedMin: 0,
+      roundedMax: 100
     });
     expect(mockedDuckQuery.mock.calls[1]?.[0]).toContain('nested_means');
     expect(mockedDuckQuery.mock.calls[1]?.[0]).toContain(', 4)');
@@ -340,6 +346,7 @@ describe('calculateDivergingBreaks', () => {
       .mockResolvedValueOnce(makeTable({ breaks: [20] }) as never)
       .mockResolvedValueOnce(makeTable({ rounded: [25] }) as never)
       .mockResolvedValueOnce(makeTable({ cnt_0: 1, cnt_1: 2 }) as never)
+      .mockResolvedValueOnce(makeTable({ bounds: [0, 49] }) as never)
       .mockResolvedValueOnce({ numRows: 0 } as never)
       .mockResolvedValueOnce({ numRows: 0 } as never)
       .mockResolvedValueOnce(
@@ -353,6 +360,7 @@ describe('calculateDivergingBreaks', () => {
       .mockResolvedValueOnce(makeTable({ breaks: [80] }) as never)
       .mockResolvedValueOnce(makeTable({ rounded: [75] }) as never)
       .mockResolvedValueOnce(makeTable({ cnt_0: 3, cnt_1: 4 }) as never)
+      .mockResolvedValueOnce(makeTable({ bounds: [50, 100] }) as never)
       .mockResolvedValueOnce({ numRows: 0 } as never);
 
     const result = await calculateDivergingBreaks({
@@ -369,13 +377,15 @@ describe('calculateDivergingBreaks', () => {
       counts: [1, 2, 3, 4],
       min: 0,
       max: 100,
+      roundedMin: 0,
+      roundedMax: 100,
       breakpointLowerClassCount: 2
     });
     const queries = mockedDuckQuery.mock.calls.map((call) => call[0] as string);
     expect(queries[0]).toContain('< 50');
-    expect(queries[6]).toContain('>= 50');
+    expect(queries[7]).toContain('>= 50');
     expect(queries[2]).toContain('quantile(');
-    expect(queries[8]).toContain('quantile(');
+    expect(queries[9]).toContain('quantile(');
   });
 });
 
@@ -423,7 +433,8 @@ describe('calculateBreaks — macro methods', () => {
       .mockResolvedValueOnce(
         makeTable({ rounded: rounded ?? rawBreaks }) as never
       )
-      .mockResolvedValueOnce(makeCountsTable() as never);
+      .mockResolvedValueOnce(makeCountsTable() as never)
+      .mockResolvedValueOnce(makeTable({ bounds: [0, 100] }) as never);
     return { tableName };
   }
 
@@ -625,7 +636,8 @@ describe('calculateBreaks — rounding never changes the class count', () => {
       .mockResolvedValueOnce(makeTable({ rounded }) as never)
       .mockResolvedValueOnce(
         makeTable({ cnt_0: 9, cnt_1: 4, cnt_2: 2, cnt_3: 1 }) as never
-      );
+      )
+      .mockResolvedValueOnce(makeTable({ bounds: [0, 27367] }) as never);
     return `births_${roundingCounter}`;
   }
 
@@ -687,6 +699,83 @@ describe('calculateBreaks — rounding never changes the class count', () => {
   });
 });
 
+describe('calculateBreaks — rounded scale bounds', () => {
+  let boundsCounter = 0;
+
+  function arrangeBoundsFlow(bounds: unknown): string {
+    boundsCounter += 1;
+    mockedGetDatasetBySourceFile.mockReturnValue({
+      tableName: `vals_bounds_${boundsCounter}`
+    } as never);
+    mockedDuckQuery
+      .mockResolvedValueOnce(
+        makeTable({ distinct_count: 400, min_val: 3, max_val: 27367 }) as never
+      )
+      .mockResolvedValueOnce(makeTable({ breaks: [4000, 16000] }) as never)
+      .mockResolvedValueOnce(makeTable({ rounded: [4000, 16000] }) as never)
+      .mockResolvedValueOnce(
+        makeTable({ cnt_0: 9, cnt_1: 4, cnt_2: 2 }) as never
+      );
+
+    if (bounds !== undefined) {
+      mockedDuckQuery.mockResolvedValueOnce(makeTable({ bounds }) as never);
+    }
+
+    return `births_bounds_${boundsCounter}`;
+  }
+
+  it('exposes the rounded bounds next to the raw ones', async () => {
+    const columnName = arrangeBoundsFlow([3, 27000]);
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName,
+      method: ClassificationMethod.EQUAL_INTERVAL,
+      numClasses: 3
+    });
+
+    expect(result?.min).toBe(3);
+    expect(result?.max).toBe(27367);
+    expect(result?.roundedMin).toBe(3);
+    expect(result?.roundedMax).toBe(27000);
+    expect(mockedDuckQuery.mock.calls[4]?.[0]).toContain('round_bounds');
+  });
+
+  it('keeps a raw bound when its rounding would cross the adjacent threshold', async () => {
+    const columnName = arrangeBoundsFlow([5000, 15000]);
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName,
+      method: ClassificationMethod.EQUAL_INTERVAL,
+      numClasses: 3
+    });
+
+    expect(result?.roundedMin).toBe(3);
+    expect(result?.roundedMax).toBe(27367);
+  });
+
+  it('falls back to the raw bounds and logs when the bounds query fails', async () => {
+    const columnName = arrangeBoundsFlow(undefined);
+    mockedDuckQuery.mockRejectedValueOnce(new Error('boom') as never);
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName,
+      method: ClassificationMethod.EQUAL_INTERVAL,
+      numClasses: 3
+    });
+
+    expect(result?.roundedMin).toBe(3);
+    expect(result?.roundedMax).toBe(27367);
+    expect(mockedLoggerWarn).toHaveBeenCalledWith(
+      'Failed to round classification bounds; using unrounded bounds',
+      'DATA',
+      expect.objectContaining({ flow: 'classification_breaks' })
+    );
+  });
+});
+
 describe('calculateBreaks — Head/Tail natural class count', () => {
   let headTailCounter = 0;
 
@@ -704,7 +793,8 @@ describe('calculateBreaks — Head/Tail natural class count', () => {
       )
       .mockResolvedValueOnce(makeTable({ breaks: ladder }) as never)
       .mockResolvedValueOnce(makeTable({ rounded: ladder }) as never)
-      .mockResolvedValueOnce(makeTable(counts) as never);
+      .mockResolvedValueOnce(makeTable(counts) as never)
+      .mockResolvedValueOnce(makeTable({ bounds: [0, 30000] }) as never);
   }
 
   it('reports the whole ladder as the natural count when fewer classes are requested', async () => {
@@ -803,7 +893,8 @@ describe('calculateBreaks — Flechette edge cases', () => {
       .mockResolvedValueOnce(
         makeTable({ rounded: rounded ?? rawBreaks }) as never
       )
-      .mockResolvedValueOnce(makeCountsTable() as never);
+      .mockResolvedValueOnce(makeCountsTable() as never)
+      .mockResolvedValueOnce(makeTable({ bounds: [0, 100] }) as never);
   }
 
   it('should return null when the macro returns an empty list (DirectBatch subarray of length 0)', async () => {

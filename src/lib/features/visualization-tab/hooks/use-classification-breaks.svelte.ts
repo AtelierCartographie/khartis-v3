@@ -651,6 +651,8 @@ export function useClassificationBreaksController({
       const classificationUpdate: Partial<ClassificationConfig> = {
         breaks: computation.result.breaks,
         counts: computation.result.counts,
+        roundedMin: computation.result.roundedMin,
+        roundedMax: computation.result.roundedMax,
         colors: computation.colors
       };
 
