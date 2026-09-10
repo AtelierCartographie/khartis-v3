@@ -157,6 +157,8 @@ function resetClassificationComputedValues(
     ...classification,
     breaks: undefined,
     counts: undefined,
+    roundedMin: undefined,
+    roundedMax: undefined,
     colors: undefined,
     breakpointValue: null,
     breakpointLowerClassCount: undefined

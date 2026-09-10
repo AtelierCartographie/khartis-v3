@@ -63,6 +63,9 @@ export interface ClassificationConfig {
   numClasses?: number;
   breaks?: number[];
   counts?: number[];
+  /** Rounded scale bounds kept for the legend; classes are assigned from breaks alone. */
+  roundedMin?: number;
+  roundedMax?: number;
   colors?: string[];
   paletteId?: string;
   inverted?: boolean;

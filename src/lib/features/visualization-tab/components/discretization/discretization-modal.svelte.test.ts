@@ -443,6 +443,41 @@ describe('DiscretizationModal', () => {
     expect(document.body.querySelector('.class-count-note')).toBeNull();
   });
 
+  it('shows the rounded scale bounds in the class list', async () => {
+    vi.mocked(calculateBreaks).mockResolvedValue({
+      breaks: [4000, 16000],
+      counts: [30, 4, 1],
+      min: 3,
+      max: 27367,
+      roundedMin: 3,
+      roundedMax: 27000
+    });
+
+    const visualization = createVisualization({
+      classification: {
+        method: ClassificationMethod.EQUAL_INTERVAL,
+        classes: 3,
+        numClasses: 3,
+        colors: ['#f7fbff', '#6baed6', '#08519c']
+      }
+    });
+    render(DiscretizationModal, {
+      open: true,
+      visualization,
+      classification: visualization.classification,
+      valueColumn: 'births'
+    });
+
+    await waitFor(() => {
+      expect(
+        document.body.querySelector<HTMLInputElement>('#break-value-3')?.value
+      ).toBe('27000');
+    });
+    expect(
+      document.body.querySelector<HTMLInputElement>('#break-value-0')?.value
+    ).toBe('3');
+  });
+
   it('reports the classes that hold no value', async () => {
     vi.mocked(calculateBreaks).mockResolvedValue({
       breaks: [7000, 13000, 20000, 26000, 33000, 40000],

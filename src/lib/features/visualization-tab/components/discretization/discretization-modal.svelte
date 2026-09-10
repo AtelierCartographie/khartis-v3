@@ -348,8 +348,8 @@
       computation.breakpointLowerClassCount ?? currentBreakpointLowerClassCount
     );
     currentBreaks = toClassBreaks(
-      result.min,
-      result.max,
+      result.roundedMin ?? result.min,
+      result.roundedMax ?? result.max,
       result.breaks,
       result.counts,
       colors
@@ -365,6 +365,8 @@
       numClasses: actualClassCount,
       breaks: result.breaks,
       counts: result.counts,
+      roundedMin: result.roundedMin,
+      roundedMax: result.roundedMax,
       colors,
       breakpointValue: currentBreakpoint,
       breakpointLowerClassCount:
@@ -560,6 +562,8 @@
       numClasses: requestedClassCount,
       breaks: undefined,
       counts: undefined,
+      roundedMin: undefined,
+      roundedMax: undefined,
       breakpointValue,
       breakpointLowerClassCount,
       paletteId: activeClassification?.paletteId,

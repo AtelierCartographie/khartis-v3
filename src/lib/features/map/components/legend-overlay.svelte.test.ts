@@ -665,6 +665,35 @@ describe('legend overlay visibility', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('labels the classed choropleth scale with the rounded bounds', () => {
+    const viz = buildClassedPolygonViz();
+    const classification = {
+      ...viz.classification,
+      roundedMin: 30_000,
+      roundedMax: 16_000_000
+    } as VisualizationConfig['classification'];
+    viz.classification = classification;
+    if (viz.polygon) {
+      viz.polygon.classification = classification;
+    }
+
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [viz];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    const labels =
+      container
+        .querySelector('.quantitative_legend')
+        ?.textContent?.replace(/\s/g, ' ') ?? '';
+
+    expect(labels).toContain('30 000');
+    expect(labels).toContain('16 000 000');
+    expect(labels).not.toContain('15 907 951');
+  });
+
   it('renders polygon classes on proportional visualizations when symbols are disabled', () => {
     mockVisualizationStore.version = 1;
     mockVisualizationStore.visualizations = [

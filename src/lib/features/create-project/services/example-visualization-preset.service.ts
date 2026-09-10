@@ -419,6 +419,8 @@ function buildComputedClassification(
     numClasses: computation.actualClassCount,
     breaks: computation.result.breaks,
     counts: computation.result.counts,
+    roundedMin: computation.result.roundedMin,
+    roundedMax: computation.result.roundedMax,
     colors: computation.colors
   };
 

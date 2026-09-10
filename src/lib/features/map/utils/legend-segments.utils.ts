@@ -1077,11 +1077,18 @@ function getQuantitativeColorLegendDraft(
     valueColumn
   );
   const statistics = getColumnStatistics(viz, valueColumn);
+  // A shared facet scale merges several domains, so the classification's own bounds stop describing it.
+  const hasSharedScale =
+    getSharedFacetScaleColumns(viz, valueColumn).length > 0;
+  const roundedMin = hasSharedScale ? undefined : classification.roundedMin;
+  const roundedMax = hasSharedScale ? undefined : classification.roundedMax;
   const thresholds = buildQuantiColorThresholds({
     breaks: classification.breaks,
     colors: classification.colors,
-    min: scopedDomain?.min ?? getStatisticsNumber(statistics, 'min'),
-    max: scopedDomain?.max ?? getStatisticsNumber(statistics, 'max')
+    min:
+      roundedMin ?? scopedDomain?.min ?? getStatisticsNumber(statistics, 'min'),
+    max:
+      roundedMax ?? scopedDomain?.max ?? getStatisticsNumber(statistics, 'max')
   });
 
   if (!thresholds) {
