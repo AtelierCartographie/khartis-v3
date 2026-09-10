@@ -14,7 +14,9 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
 
 import {
   DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
+  DISCRETIZATION_NOTE,
   normalizeClassificationMethod,
+  resolveDiscretizationNote,
   resolveBreakpointLowerClassCount,
   resolveComputedClassCount,
   resolveHeadTailClassCountMax,
@@ -135,12 +137,12 @@ describe('resolveBreakpointLowerClassCount', () => {
 // ─── resolveHeadTailClassCountMax ─────────────────────────────────────────
 
 describe('resolveHeadTailClassCountMax', () => {
-  it('returns floor(actualClassCount) when valid and >= 2', () => {
+  it('returns floor(naturalClassCount) when valid and >= 2', () => {
     expect(resolveHeadTailClassCountMax(7)).toBe(7);
     expect(resolveHeadTailClassCountMax(5.9)).toBe(5);
   });
 
-  it('returns the default max when actualClassCount is invalid', () => {
+  it('returns the default max when naturalClassCount is invalid', () => {
     expect(resolveHeadTailClassCountMax(null)).toBe(
       DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX
     );
@@ -153,5 +155,94 @@ describe('resolveHeadTailClassCountMax', () => {
     expect(resolveHeadTailClassCountMax(NaN)).toBe(
       DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX
     );
+  });
+});
+
+// ─── resolveDiscretizationNote ────────────────────────────────────────────────
+
+describe('resolveDiscretizationNote', () => {
+  it('stays silent when the computed classes match the request', () => {
+    expect(
+      resolveDiscretizationNote({
+        method: 'quantiles' as never,
+        requestedClassCount: 5,
+        actualClassCount: 5
+      })
+    ).toBeNull();
+  });
+
+  it('reports merged breaks when the series cannot fill the request', () => {
+    expect(
+      resolveDiscretizationNote({
+        method: 'quantiles' as never,
+        requestedClassCount: 8,
+        actualClassCount: 6
+      })
+    ).toEqual({ kind: DISCRETIZATION_NOTE.MERGED_BREAKS, count: 6 });
+  });
+
+  it('does not blame merged breaks when Head/Tail caps the request itself', () => {
+    expect(
+      resolveDiscretizationNote({
+        method: 'head_tail' as never,
+        requestedClassCount: 12,
+        actualClassCount: 8,
+        naturalClassCount: 8
+      })
+    ).toBeNull();
+  });
+
+  it('still reports merged breaks inside the Head/Tail ladder', () => {
+    expect(
+      resolveDiscretizationNote({
+        method: 'head_tail' as never,
+        requestedClassCount: 6,
+        actualClassCount: 5,
+        naturalClassCount: 8
+      })
+    ).toEqual({ kind: DISCRETIZATION_NOTE.MERGED_BREAKS, count: 5 });
+  });
+
+  it('explains a degenerate Head/Tail ladder instead of merged breaks', () => {
+    expect(
+      resolveDiscretizationNote({
+        method: 'head_tail' as never,
+        requestedClassCount: 6,
+        actualClassCount: 2,
+        naturalClassCount: 2
+      })
+    ).toEqual({ kind: DISCRETIZATION_NOTE.HEAD_TAIL_LIMIT, count: 2 });
+  });
+
+  it('reports empty classes when the requested count is honoured', () => {
+    expect(
+      resolveDiscretizationNote({
+        method: 'equal_interval' as never,
+        requestedClassCount: 7,
+        actualClassCount: 7,
+        emptyClassCount: 3
+      })
+    ).toEqual({ kind: DISCRETIZATION_NOTE.EMPTY_CLASSES, count: 3 });
+  });
+
+  it('reports Q6 as unapplicable when the series refuses its six classes', () => {
+    expect(
+      resolveDiscretizationNote({
+        method: 'q6' as never,
+        requestedClassCount: 6,
+        actualClassCount: 5,
+        emptyClassCount: 1
+      })
+    ).toEqual({ kind: DISCRETIZATION_NOTE.Q6_UNAVAILABLE, count: 5 });
+  });
+
+  it('stays silent on Q6 when its six classes are honoured', () => {
+    expect(
+      resolveDiscretizationNote({
+        method: 'q6' as never,
+        requestedClassCount: 6,
+        actualClassCount: 6
+      })
+    ).toBeNull();
   });
 });

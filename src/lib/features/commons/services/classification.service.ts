@@ -3,6 +3,7 @@ import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrat
 import { ClassificationMethod } from '$lib/features/commons/stores/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
 import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
+import { DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX } from '../utils/discretization.utils';
 import { webglToHex } from '../utils/color-utils';
 import {
   sequential,
@@ -23,6 +24,8 @@ export interface BreaksResult {
   min: number;
   max: number;
   breakpointLowerClassCount?: number;
+  /** Classes the method determines on its own, independent of the request. */
+  naturalClassCount?: number;
 }
 
 export interface ClassificationOptions {
@@ -251,11 +254,25 @@ async function roundBreaks(
     const roundResult = (await Duck.query(roundQuery)) as Table;
     const rawRounded = roundResult.getChild?.('rounded')?.get(0);
     const rounded = toIterableValues(rawRounded);
-    if (rounded && rounded.length > 0) {
+    if (rounded) {
       const sanitized = sanitizeBreaks(rounded, min, max);
-      if (sanitized.length > 0) {
+      // Rounding is a visual simplification: it must never merge or drop a class.
+      if (sanitized.length === breaks.length) {
         return sanitized;
       }
+      logger.warn(
+        'Discarded rounded classification breaks that would change the class count',
+        LogCategory.DATA,
+        {
+          flow: 'classification_breaks',
+          extra: {
+            tableName: context.tableName,
+            columnName: context.columnName,
+            breakCount: breaks.length,
+            roundedCount: sanitized.length
+          }
+        }
+      );
     }
   } catch (error) {
     logger.warn(
@@ -436,7 +453,13 @@ export async function calculateBreaks(
       return null;
     }
 
-    const query = `SELECT ${macroName}('${escapeSqlString(prepared.context.tableName)}', '${escapeSqlString(columnName)}', ${numClasses}) as breaks`;
+    // Head/Tail's ladder must be requested whole, then sliced, or its natural class count stops being observable.
+    const isHeadTail = method === ClassificationMethod.HEAD_TAIL;
+    const macroClassCount = isHeadTail
+      ? Math.max(numClasses, DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX)
+      : numClasses;
+
+    const query = `SELECT ${macroName}('${escapeSqlString(prepared.context.tableName)}', '${escapeSqlString(columnName)}', ${macroClassCount}) as breaks`;
 
     try {
       const result = (await Duck.query(query)) as Table;
@@ -468,6 +491,12 @@ export async function calculateBreaks(
       );
     }
 
+    let naturalClassCount: number | undefined;
+    if (isHeadTail) {
+      naturalClassCount = breaks.length + 1;
+      breaks = breaks.slice(0, Math.max(1, numClasses - 1));
+    }
+
     const allBreaks = [stats.min, ...breaks, stats.max];
     const counts = await queryBreakCounts(prepared.context, allBreaks);
 
@@ -475,7 +504,8 @@ export async function calculateBreaks(
       breaks,
       counts,
       min: stats.min,
-      max: stats.max
+      max: stats.max,
+      naturalClassCount
     };
 
     if (breaksCache.size >= BREAKS_CACHE_MAX) {
@@ -559,7 +589,12 @@ export async function calculateDivergingBreaks(
     counts: [...lowerResult.counts, ...upperResult.counts],
     min: lowerResult.min,
     max: upperResult.max,
-    breakpointLowerClassCount: lowerResult.counts.length
+    breakpointLowerClassCount: lowerResult.counts.length,
+    naturalClassCount:
+      lowerResult.naturalClassCount != null &&
+      upperResult.naturalClassCount != null
+        ? lowerResult.naturalClassCount + upperResult.naturalClassCount
+        : undefined
   };
 }
 
