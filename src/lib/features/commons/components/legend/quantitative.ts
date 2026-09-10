@@ -1,7 +1,6 @@
 import { m } from '$lib/paraglide/messages';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
 import Textbox from '@borgar/textbox';
-import { bisectLeft, bisectRight } from 'd3-array';
 import type { LegendPatternFill } from './khartis-extensions';
 import {
   createLegendCanvasRect,
@@ -9,14 +8,11 @@ import {
   escapeSvgAttribute,
   escapeSvgText,
   linearScale,
-  magnitude,
   measureLegendLongestToken,
   renderLegendHeader,
   renderLegendNote,
   resolveLegendFontFamily,
-  round,
   scaleLegendMetric,
-  round_extreme,
   type CommonLegendTextOptions,
   type LegendSvgDefinition
 } from './utils';
@@ -232,44 +228,6 @@ export function draw_quanti_color_legend(
       height
     };
   }
-}
-
-export function round_thresholds(
-  sorted_data: ArrayLike<number>,
-  thresholds: number[]
-): number[] {
-  const first = 0;
-  const last = thresholds.length - 1;
-
-  return thresholds.map((threshold, i) => {
-    switch (i) {
-      case first:
-        return round_extreme(sorted_data, threshold, 'min');
-      case last:
-        return round_extreme(sorted_data, threshold, 'max');
-      default: {
-        const lo = bisectLeft(sorted_data as number[], threshold);
-        const hi = bisectRight(sorted_data as number[], threshold);
-        const previous = lo > 0 ? sorted_data[lo - 1] : threshold;
-        const next = hi < sorted_data.length ? sorted_data[hi] : threshold;
-        const { integers, decimals } = magnitude(threshold);
-        let min_significant = decimals ? decimals : integers;
-        const significant_digit = threshold < 10 ? 1 : 2;
-        let rounded_threshold = threshold;
-
-        for (; min_significant >= significant_digit; min_significant--) {
-          const rounded = round(threshold, min_significant);
-          if (previous < rounded && next > rounded) {
-            rounded_threshold = rounded;
-          } else {
-            break;
-          }
-        }
-
-        return rounded_threshold;
-      }
-    }
-  });
 }
 
 function box(
