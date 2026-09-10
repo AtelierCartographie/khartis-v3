@@ -443,16 +443,16 @@ export function round_extreme(
 
   let first_rounded = first;
   const { integers, decimals } = magnitude(first);
-  let i = decimals ? decimals : integers;
   const significant_number = first < 10 ? 1 : 2;
 
-  while (
-    i >= significant_number &&
-    ((type === 'min' && first_rounded < second) ||
-      (type === 'max' && first_rounded > second))
-  ) {
-    first_rounded = round(first, i);
-    i--;
+  for (let i = decimals ? decimals : integers; i >= significant_number; i--) {
+    const candidate = round(first, i);
+    // Coarser roundings only move further, so the first candidate that reaches
+    // the neighbouring value ends the ladder.
+    if (type === 'min' ? candidate >= second : candidate <= second) {
+      break;
+    }
+    first_rounded = candidate;
   }
 
   return first_rounded;

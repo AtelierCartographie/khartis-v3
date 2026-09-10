@@ -41,7 +41,8 @@ export function buildColumnStatistics(
       unique: toNumber(col.stats.uniques) ?? 0,
       min: toNumber(col.stats.min),
       max: toNumber(col.stats.max),
-      mean: toNumber(col.stats.mean)
+      mean: toNumber(col.stats.mean),
+      value_sample: col.stats.value_sample
     };
   }
   return statistics;

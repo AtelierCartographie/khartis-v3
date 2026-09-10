@@ -8,6 +8,8 @@ export interface NumericStatistics {
   median: number;
   count: number;
   nullCount: number;
+  /** A few real values of the column, from DuckDB — see the `value_sample` macro. */
+  value_sample?: number[];
 }
 
 export interface CategoricalStatistics {
@@ -95,7 +97,8 @@ export function getColumnStatistics(
           mean: column.stats.mean ?? 0,
           median: column.stats.median ?? 0,
           count: column.stats.count ?? 0,
-          nullCount: column.stats.nulls ?? 0
+          nullCount: column.stats.nulls ?? 0,
+          value_sample: column.stats.value_sample
         };
       }
     } else {
