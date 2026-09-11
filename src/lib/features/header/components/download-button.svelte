@@ -126,12 +126,12 @@
 
   const mapFormatOptions = $derived([
     {
-      id: MAP_FORMAT.SVG,
-      label: m.download_map_svg()
-    },
-    {
       id: MAP_FORMAT.JPG,
       label: m.download_map_jpg()
+    },
+    {
+      id: MAP_FORMAT.SVG,
+      label: m.download_map_svg()
     }
   ]);
 
