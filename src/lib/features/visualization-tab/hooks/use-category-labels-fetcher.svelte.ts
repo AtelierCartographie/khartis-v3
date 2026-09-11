@@ -17,12 +17,6 @@ export const CATEGORY_LABEL_FETCH_ERROR = {
   },
   get SYMBOL_FILL() {
     return m.error_category_labels_symbol_fill();
-  },
-  get TEXT_BACKGROUND() {
-    return m.error_category_labels_text_background();
-  },
-  get TEXT_BACKGROUND_STROKE() {
-    return m.error_category_labels_text_background_stroke();
   }
 } as const;
 

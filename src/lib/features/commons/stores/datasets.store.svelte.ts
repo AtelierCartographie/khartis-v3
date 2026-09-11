@@ -31,7 +31,6 @@ import {
   getHiddenColumns as getHiddenColumnsFn,
   getVisibleColumns as getVisibleColumnsFn,
   renameDatasetColumn as renameDatasetColumnFn,
-  getColumnValues as getColumnValuesFn,
   getUniqueValues as getUniqueValuesFn,
   getColumnStatistics as getColumnStatisticsFn,
   processFiles as processFilesFn,
@@ -302,10 +301,6 @@ function createDatasetsStore() {
     return getDatasetsByTypeFn(datasetsState, hasGeometry);
   }
 
-  function getColumnValues(datasetId: string, columnName: string): unknown[] {
-    return getColumnValuesFn(datasetsState, datasetId, columnName);
-  }
-
   function getUniqueValues(datasetId: string, columnName: string): unknown[] {
     return getUniqueValuesFn(datasetsState, datasetId, columnName);
   }
@@ -437,7 +432,6 @@ function createDatasetsStore() {
     getDatasetBySourceFile,
     waitForDatasetBySourceFile,
     getDatasetsByType,
-    getColumnValues,
     getUniqueValues,
     getColumnStatistics,
     resetDataset,

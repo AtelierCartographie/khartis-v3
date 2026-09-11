@@ -197,39 +197,3 @@ export const buildTextPanelVisualization = createPanelBuilder({
     missingData: text.missingData
   })
 });
-
-export const buildTextBackgroundPanelVisualization = createPanelBuilder({
-  getPrimitive: getTextPrimitive,
-  build: (visualization, text) => {
-    const { background } = text;
-    return {
-      ...visualization,
-      primitiveFilters: getEnabledPrimitiveFilters(visualization),
-      modes: {
-        ...visualization.modes,
-        fill: background.fillMode,
-        stroke: background.strokeMode
-      },
-      style: {
-        ...visualization.style,
-        fillColor: background.fillColor,
-        fillOpacity: applyFillModeOpacity(
-          background.fillMode,
-          background.fillOpacity
-        ),
-        strokeColor: extractStrokeColor(background.strokeColor),
-        strokeWidth: background.strokeWidth,
-        strokeOpacity: background.strokeOpacity,
-        strokeDashed: background.strokeDashed,
-        strokeDashedPattern: background.strokeDashedPattern
-      },
-      mapping: {
-        ...visualization.mapping,
-        valueColumn: background.valueColumn,
-        categoryColumn: background.categoryColumn
-      },
-      classification: background.classification,
-      missingData: undefined
-    };
-  }
-});

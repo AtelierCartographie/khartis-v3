@@ -93,6 +93,7 @@ const D3_FACTORY_MAP: Record<string, GeoProjectionFactory | undefined> = {
   geoGnomonic: d3geo.geoGnomonic,
   geoBonne: getD3ProjectionFactory('geoBonne'),
   geoTimes: getD3ProjectionFactory('geoTimes'),
+  geoPeirceQuincuncial: getD3ProjectionFactory('geoPeirceQuincuncial'),
   geoBertin1953: getD3ProjectionFactory('geoBertin1953'),
   geoArmadillo: getD3ProjectionFactory('geoArmadillo'),
   geoMollweide: getD3ProjectionFactory('geoMollweide'),
@@ -132,10 +133,24 @@ const CLIP_POLYGON_PROJECTIONS = new Set([
   'geoArmadillo'
 ]);
 
-export const CLIP_DEGENERACY_LON_EPSILON = 0.01;
+// Quincuncial projections pre-clip with a near-full circle (clipAngle 180-1e-3)
+// and are oriented on a pole by default, so that circle degenerates onto the
+// polar edge of the basemap rings. d3-geo-path copes (the vignette is correct),
+// but the ring handed to the GPU tessellator then covers the whole frame — the
+// polygon fill floods the bbox. A sub-degree latitude offset moves the clip
+// circle off the pole and restores the fill.
+const POLAR_CLIP_DEGENERACY_PROJECTIONS = new Set(['geoPeirceQuincuncial']);
+
+export const CLIP_DEGENERACY_EPSILON = 0.01;
 
 export function isClipPolygonProjection(name: string | undefined): boolean {
   return name !== undefined && CLIP_POLYGON_PROJECTIONS.has(name);
+}
+
+export function isPolarClipDegeneracyProjection(
+  name: string | undefined
+): boolean {
+  return name !== undefined && POLAR_CLIP_DEGENERACY_PROJECTIONS.has(name);
 }
 
 // Armadillo has no built-in pre-clip: its raw forward parks back-of-sphere
@@ -170,6 +185,29 @@ function applyProjectionClip(projection: GeoProjection, name: string): void {
   }
 }
 
+// d3-geo exposes `parallels([phi1, phi2])` on conics, while the
+// d3-geo-projection families built on `parallel1` (cylindrical equal area,
+// Bonne…) only expose the single `parallel(phi)` setter. Without the second
+// branch a `parallels` config is silently dropped and the projection keeps its
+// own default parallel (Gall-Peters would render at 38.58° instead of 45°).
+function applyProjectionParallels(
+  projection: GeoProjection,
+  parallels: [number, number]
+): void {
+  const candidate = projection as unknown as Record<string, unknown>;
+
+  if (typeof candidate.parallels === 'function') {
+    (candidate as { parallels: (p: [number, number]) => void }).parallels(
+      parallels
+    );
+    return;
+  }
+
+  if (typeof candidate.parallel === 'function') {
+    (candidate as { parallel: (p: number) => void }).parallel(parallels[0]);
+  }
+}
+
 export function buildD3ProjectionFromConfig(
   config: D3Usage
 ): GeoProjection | null {
@@ -200,14 +238,8 @@ export function buildD3ProjectionFromConfig(
     projection.center(config.center);
   }
 
-  if (
-    config.parallels &&
-    'parallels' in projection &&
-    typeof (projection as Record<string, unknown>).parallels === 'function'
-  ) {
-    (
-      projection as unknown as { parallels: (p: [number, number]) => void }
-    ).parallels(config.parallels);
+  if (config.parallels) {
+    applyProjectionParallels(projection, config.parallels);
   }
 
   applyProjectionClip(projection, config.projection);

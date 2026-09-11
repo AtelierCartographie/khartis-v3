@@ -24,6 +24,23 @@ function toStatBoundary(value: unknown): unknown {
   return typeof value === 'bigint' ? Number(value) : value;
 }
 
+function toValueSample(value: unknown): number[] | undefined {
+  if (value == null) return undefined;
+
+  const isIterable =
+    Array.isArray(value) ||
+    typeof (value as { [Symbol.iterator]?: unknown })[Symbol.iterator] ===
+      'function';
+  if (!isIterable) return undefined;
+
+  const values = Array.from(value as Iterable<unknown>)
+    .map((entry) => Number(entry))
+    .filter((entry) => Number.isFinite(entry))
+    .sort((a, b) => a - b);
+
+  return values.length > 0 ? values : undefined;
+}
+
 const CATEGORY_SAMPLE_LIMIT = 24;
 
 export function extractCategories(histogram: unknown): string[] | undefined {
@@ -72,6 +89,7 @@ export function enrichColumns(columns: AnalysisResult[]): EnrichedColumn[] {
           ? Number(column.extent_magnitude)
           : undefined,
       skewness: toOptionalNumber(column.skewness),
+      value_sample: toValueSample(column.value_sample),
       categories: extractCategories(column.histogram)
     }
   }));
@@ -98,6 +116,7 @@ export function buildStatisticsSnapshot(
         share_rank_interval: toOptionalNumber(column.share_rank_interval),
         extent_magnitude: toOptionalNumber(column.extent_magnitude),
         skewness: toOptionalNumber(column.skewness),
+        value_sample: toValueSample(column.value_sample),
         categories: extractCategories(column.histogram)
       }
     ])

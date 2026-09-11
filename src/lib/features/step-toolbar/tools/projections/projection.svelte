@@ -7,15 +7,28 @@
     MagicWandFilled,
     SettingsAdjust
   } from 'carbon-icons-svelte';
+  import { tick } from 'svelte';
   import { projectionActions } from './projection.store.svelte';
   import { parseProjectionCode } from './projection-code.utils';
+  import ProjectionCurrent from './projection-current.svelte';
   import ProjectionMain from './projection-main.svelte';
   import ProjectionOther from './projection-other.svelte';
   import ProjectionSettings from './projection-settings.svelte';
 
+  const SETTINGS_SECTION_ID = 'khartis-projection-settings-tool';
+
   const title = $derived(m.projection_title());
 
   let crsError = $state(false);
+  let settingsOpen = $state(false);
+
+  async function openSettings() {
+    settingsOpen = true;
+    await tick();
+    document
+      .getElementById(SETTINGS_SECTION_ID)
+      ?.scrollIntoView({ block: 'end' });
+  }
 
   function handleProjectionCodeApply({ code }: { code: string }) {
     const parsed = parseProjectionCode(code);
@@ -39,6 +52,8 @@
 </script>
 
 <div id="khartis-projection-tool">
+  <ProjectionCurrent onopensettings={openSettings} />
+
   <div class="expandable-stack">
     <ExpandableSection
       title={title}
@@ -70,7 +85,11 @@
       {/if}
     </ExpandableSection>
 
-    <ExpandableSection title={m.projection_settings_title()}>
+    <ExpandableSection
+      title={m.projection_settings_title()}
+      open={settingsOpen}
+      onToggle={(expanded) => (settingsOpen = expanded)}
+    >
       {#snippet icon()}
         <SettingsAdjust size={20} />
       {/snippet}

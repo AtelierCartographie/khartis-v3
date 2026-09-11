@@ -16,8 +16,6 @@ import {
   PrimitiveFilterType,
   type ClassificationConfig,
   type PrimitiveFilter,
-  type TextBackgroundConfig,
-  type TextPrimitiveConfig,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
@@ -81,9 +79,6 @@ type VisualizationWriteOptions = {
   // from being re-tagged `custom` (which would uncheck its suggestion card).
   preserveOrigin?: boolean;
 };
-type TextBackgroundUpdater = (
-  background: TextPrimitiveConfig['background']
-) => Partial<TextPrimitiveConfig['background']>;
 type ClassificationDefaultsTarget = {
   getClassification: (
     visualization: VisualizationConfig
@@ -129,7 +124,6 @@ interface PrimitivePanelControllerOptions {
     updates: Partial<ClassificationConfig>,
     options?: ClassificationUpdateOptions
   ) => void;
-  updateTextPrimitive: (updates: Partial<TextPrimitiveConfig>) => void;
   updateVisualization: (
     updates: Partial<VisualizationConfig>,
     afterUpdate?: (nextVisualization: VisualizationConfig) => void
@@ -163,6 +157,8 @@ function resetClassificationComputedValues(
     ...classification,
     breaks: undefined,
     counts: undefined,
+    roundedMin: undefined,
+    roundedMax: undefined,
     colors: undefined,
     breakpointValue: null,
     breakpointLowerClassCount: undefined
@@ -200,7 +196,6 @@ export function usePrimitivePanelController({
   updatePrimitiveClassification,
   updateLineThicknessClassification,
   updatePrimitiveStrokeClassification,
-  updateTextPrimitive,
   updateVisualization
 }: PrimitivePanelControllerOptions) {
   function resolveWriteVisualization(
@@ -580,45 +575,6 @@ export function usePrimitivePanelController({
     }
   }
 
-  function getTextBackgroundConfig(
-    visualization: VisualizationConfig | null | undefined
-  ): TextBackgroundConfig | undefined {
-    return getTextPrimitive(visualization)?.background;
-  }
-
-  function usesTextBackgroundBreakClassification(
-    visualization: VisualizationConfig | null | undefined
-  ): boolean {
-    return (
-      getTextBackgroundConfig(visualization)?.fillMode === FillMode.CLASSES
-    );
-  }
-
-  function usesTextBackgroundCategoricalClassification(
-    visualization: VisualizationConfig | null | undefined
-  ): boolean {
-    return (
-      getTextBackgroundConfig(visualization)?.fillMode === FillMode.CATEGORIES
-    );
-  }
-
-  function usesTextBackgroundStrokeBreakClassification(
-    visualization: VisualizationConfig | null | undefined
-  ): boolean {
-    return (
-      getTextBackgroundConfig(visualization)?.strokeMode === StrokeMode.CLASSES
-    );
-  }
-
-  function usesTextBackgroundStrokeCategoricalClassification(
-    visualization: VisualizationConfig | null | undefined
-  ): boolean {
-    return (
-      getTextBackgroundConfig(visualization)?.strokeMode ===
-      StrokeMode.CATEGORIES
-    );
-  }
-
   function buildNextPrimitiveFilters(
     overrides: Partial<Record<CorePrimitive, boolean>> = {}
   ): PrimitiveFilter[] {
@@ -656,153 +612,6 @@ export function usePrimitivePanelController({
     invertClassificationPalette(
       getPrimitiveStrokeClassification(getVisualization(), primitive),
       (updates) => updatePrimitiveStrokeClassification(primitive, updates)
-    );
-  }
-
-  function updateTextBackground(updater: TextBackgroundUpdater): void {
-    const text = getTextPrimitive(getVisualization());
-    if (!text) {
-      return;
-    }
-
-    updateTextPrimitive({
-      background: {
-        ...text.background,
-        ...updater(text.background)
-      }
-    });
-  }
-
-  function updateTextBackgroundFromVisualization(
-    updater: TextBackgroundUpdater,
-    options?: VisualizationWriteOptions
-  ): void {
-    const visualization = resolveWriteVisualization(options);
-    if (!visualization) {
-      return;
-    }
-
-    const text = getTextPrimitive(visualization);
-    if (!text) {
-      return;
-    }
-
-    updateVisualization({
-      ...buildOriginPatch(visualization, options),
-      text: {
-        ...text,
-        background: {
-          ...text.background,
-          ...updater(text.background)
-        }
-      }
-    });
-  }
-
-  function updateTextBackgroundClassificationState(
-    updates: Partial<ClassificationConfig>,
-    options?: VisualizationWriteOptions
-  ): void {
-    updateTextBackgroundFromVisualization(
-      (background) => ({
-        classification: mergeClassificationConfig(
-          background.classification,
-          updates
-        )
-      }),
-      options
-    );
-  }
-
-  function updateTextBackgroundStrokeClassificationState(
-    updates: Partial<ClassificationConfig>,
-    options?: VisualizationWriteOptions
-  ): void {
-    updateTextBackgroundFromVisualization(
-      (background) => ({
-        strokeClassification: mergeClassificationConfig(
-          background.strokeClassification,
-          updates
-        )
-      }),
-      options
-    );
-  }
-
-  function applyTextBackgroundMappingUpdate(
-    updates: MappingUpdates,
-    options?: VisualizationWriteOptions
-  ): void {
-    updateTextBackgroundFromVisualization((background) => {
-      const previousCategoryColumn = background.categoryColumn;
-      const categoryColumnChanged =
-        hasOwnKey(updates, 'categoryColumn') &&
-        updates.categoryColumn !== previousCategoryColumn;
-      const nextClassification =
-        categoryColumnChanged && background.classification
-          ? {
-              ...background.classification,
-              labels: [],
-              disabledLabels: undefined
-            }
-          : background.classification;
-
-      return {
-        ...(hasOwnKey(updates, 'valueColumn')
-          ? { valueColumn: updates.valueColumn }
-          : {}),
-        ...(hasOwnKey(updates, 'categoryColumn')
-          ? { categoryColumn: updates.categoryColumn }
-          : {}),
-        ...(nextClassification ? { classification: nextClassification } : {})
-      };
-    }, options);
-  }
-
-  function applyTextBackgroundStrokeMappingUpdate(
-    updates: MappingUpdates,
-    options?: VisualizationWriteOptions
-  ): void {
-    updateTextBackgroundFromVisualization((background) => {
-      const previousStrokeCategoryColumn =
-        background.strokeCategoryColumn ?? background.categoryColumn;
-      const strokeCategoryColumnChanged =
-        hasOwnKey(updates, 'categoryColumn') &&
-        updates.categoryColumn !== previousStrokeCategoryColumn;
-      const nextStrokeClassification =
-        strokeCategoryColumnChanged && background.strokeClassification
-          ? {
-              ...background.strokeClassification,
-              labels: [],
-              disabledLabels: undefined
-            }
-          : background.strokeClassification;
-
-      return {
-        ...(hasOwnKey(updates, 'valueColumn')
-          ? { strokeValueColumn: updates.valueColumn }
-          : {}),
-        ...(hasOwnKey(updates, 'categoryColumn')
-          ? { strokeCategoryColumn: updates.categoryColumn }
-          : {}),
-        ...(nextStrokeClassification
-          ? { strokeClassification: nextStrokeClassification }
-          : {})
-      };
-    }, options);
-  }
-
-  function invertTextBackgroundPalette(): void {
-    invertClassificationPalette(
-      getTextPrimitive(getVisualization())?.background.classification,
-      updateTextBackgroundClassificationState
-    );
-  }
-
-  function invertTextBackgroundStrokePalette(): void {
-    invertClassificationPalette(
-      getTextPrimitive(getVisualization())?.background.strokeClassification,
-      updateTextBackgroundStrokeClassificationState
     );
   }
 
@@ -1131,139 +940,6 @@ export function usePrimitivePanelController({
         ),
       applyCategoryColumn: (column, currentVisualization) =>
         applySymbolFillMappingUpdate(
-          { categoryColumn: column },
-          { visualization: currentVisualization, preserveOrigin: true }
-        )
-    });
-  }
-
-  function ensureTextBackgroundClassificationDefaults(
-    visualization: VisualizationConfig
-  ): void {
-    ensureClassificationDefaults(visualization, {
-      getClassification: (currentVisualization) =>
-        getTextBackgroundConfig(currentVisualization)?.classification,
-      update: (updates) =>
-        updateTextBackgroundClassificationState(updates, {
-          visualization,
-          preserveOrigin: true
-        }),
-      usesBreaks: usesTextBackgroundBreakClassification,
-      usesCategories: usesTextBackgroundCategoricalClassification
-    });
-  }
-
-  function ensureTextBackgroundStrokeClassificationDefaults(
-    visualization: VisualizationConfig
-  ): void {
-    ensureClassificationDefaults(visualization, {
-      getClassification: (currentVisualization) =>
-        getTextBackgroundConfig(currentVisualization)?.strokeClassification,
-      update: (updates) =>
-        updateTextBackgroundStrokeClassificationState(updates, {
-          visualization,
-          preserveOrigin: true
-        }),
-      usesBreaks: usesTextBackgroundStrokeBreakClassification,
-      usesCategories: usesTextBackgroundStrokeCategoricalClassification
-    });
-  }
-
-  function ensureTextBackgroundAutoColumns(
-    visualization: VisualizationConfig
-  ): void {
-    const background = getTextBackgroundConfig(visualization);
-    if (!background) {
-      return;
-    }
-
-    ensureClassificationAutoColumns(visualization, {
-      usesBreaks: usesTextBackgroundBreakClassification,
-      getValueColumn: (currentVisualization) =>
-        getTextBackgroundConfig(currentVisualization)?.valueColumn,
-      findValueColumn: (currentVisualization) => {
-        const reservedColumns = getReservedColumnsForValue(
-          currentVisualization,
-          PrimitiveFilterType.TEXT
-        );
-        return (
-          getTextPrimitive(currentVisualization)?.valueColumn ??
-          findAutoValueColumn(reservedColumns) ??
-          findFallbackNumericColumn(reservedColumns)
-        );
-      },
-      applyValueColumn: (column, currentVisualization) =>
-        applyTextBackgroundMappingUpdate(
-          { valueColumn: column },
-          { visualization: currentVisualization, preserveOrigin: true }
-        ),
-      usesCategories: usesTextBackgroundCategoricalClassification,
-      getCategoryColumn: (currentVisualization) =>
-        getTextBackgroundConfig(currentVisualization)?.categoryColumn,
-      findCategoryColumn: (currentVisualization) =>
-        getTextPrimitive(currentVisualization)?.categoryColumn ??
-        findAutoCategoryColumn(
-          getReservedColumnsForCategory(
-            currentVisualization,
-            PrimitiveFilterType.TEXT
-          )
-        ),
-      applyCategoryColumn: (column, currentVisualization) =>
-        applyTextBackgroundMappingUpdate(
-          { categoryColumn: column },
-          { visualization: currentVisualization, preserveOrigin: true }
-        )
-    });
-  }
-
-  function ensureTextBackgroundStrokeAutoColumns(
-    visualization: VisualizationConfig
-  ): void {
-    const background = getTextBackgroundConfig(visualization);
-    if (!background) {
-      return;
-    }
-
-    ensureClassificationAutoColumns(visualization, {
-      usesBreaks: usesTextBackgroundStrokeBreakClassification,
-      getValueColumn: (currentVisualization) =>
-        getTextBackgroundConfig(currentVisualization)?.strokeValueColumn,
-      findValueColumn: (currentVisualization) => {
-        const reservedColumns = getReservedColumnsForValue(
-          currentVisualization,
-          PrimitiveFilterType.TEXT
-        );
-        const currentBackground = getTextBackgroundConfig(currentVisualization);
-        return (
-          currentBackground?.valueColumn ??
-          getTextPrimitive(currentVisualization)?.valueColumn ??
-          findAutoValueColumn(reservedColumns) ??
-          findFallbackNumericColumn(reservedColumns)
-        );
-      },
-      applyValueColumn: (column, currentVisualization) =>
-        applyTextBackgroundStrokeMappingUpdate(
-          { valueColumn: column },
-          { visualization: currentVisualization, preserveOrigin: true }
-        ),
-      usesCategories: usesTextBackgroundStrokeCategoricalClassification,
-      getCategoryColumn: (currentVisualization) =>
-        getTextBackgroundConfig(currentVisualization)?.strokeCategoryColumn,
-      findCategoryColumn: (currentVisualization) => {
-        const currentBackground = getTextBackgroundConfig(currentVisualization);
-        return (
-          currentBackground?.categoryColumn ??
-          getTextPrimitive(currentVisualization)?.categoryColumn ??
-          findAutoCategoryColumn(
-            getReservedColumnsForCategory(
-              currentVisualization,
-              PrimitiveFilterType.TEXT
-            )
-          )
-        );
-      },
-      applyCategoryColumn: (column, currentVisualization) =>
-        applyTextBackgroundStrokeMappingUpdate(
           { categoryColumn: column },
           { visualization: currentVisualization, preserveOrigin: true }
         )
@@ -1821,8 +1497,6 @@ export function usePrimitivePanelController({
     applyPrimitiveMappingUpdate,
     applyPrimitiveStrokeMappingUpdate,
     applySymbolFillMappingUpdate,
-    applyTextBackgroundMappingUpdate,
-    applyTextBackgroundStrokeMappingUpdate,
     buildNextPrimitiveFilters,
     ensureAutoColumns,
     ensureLineThicknessClassificationDefaults,
@@ -1831,34 +1505,20 @@ export function usePrimitivePanelController({
     ensurePrimitiveStrokeClassificationDefaults,
     ensureSymbolFillAutoColumns,
     ensureSymbolFillClassificationDefaults,
-    ensureTextBackgroundAutoColumns,
-    ensureTextBackgroundClassificationDefaults,
-    ensureTextBackgroundStrokeAutoColumns,
-    ensureTextBackgroundStrokeClassificationDefaults,
     getPrimitiveStrokeCategoryColumn,
     getPrimitiveStrokeClassification,
     getPrimitiveStrokeValueColumn,
-    getTextBackgroundConfig,
     invertPrimitivePalette,
     invertPrimitiveStrokePalette,
     invertSymbolFillPalette,
-    invertTextBackgroundPalette,
-    invertTextBackgroundStrokePalette,
     updateLineThicknessClassificationState: updateLineThicknessClassification,
     updateSymbolFillClassificationState,
-    updateTextBackground,
-    updateTextBackgroundClassificationState,
-    updateTextBackgroundStrokeClassificationState,
     usesBreakClassification,
     usesCategoricalClassification,
     usesLineThicknessBreakClassification,
     usesStrokeBreakClassification,
     usesStrokeCategoricalClassification,
     usesSymbolFillBreakClassification,
-    usesSymbolFillCategoricalClassification,
-    usesTextBackgroundBreakClassification,
-    usesTextBackgroundCategoricalClassification,
-    usesTextBackgroundStrokeBreakClassification,
-    usesTextBackgroundStrokeCategoricalClassification
+    usesSymbolFillCategoricalClassification
   };
 }

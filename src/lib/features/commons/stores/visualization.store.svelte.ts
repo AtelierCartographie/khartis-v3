@@ -30,7 +30,6 @@ import {
   type PrimitiveConfigMap,
   type PrimitiveFilter,
   type SymbolPrimitiveConfig,
-  type TextBackgroundConfig,
   type TextPrimitiveConfig,
   type VisualizationConfig,
   type VisualizationModes,
@@ -58,7 +57,6 @@ export type {
   PrimitiveFilter,
   SymbolModeState,
   SymbolPrimitiveConfig,
-  TextBackgroundConfig,
   TextColorModeState,
   TextPrimitiveConfig,
   TextSecondaryLabelsConfig,
@@ -1545,17 +1543,6 @@ function stripLineDerivedSerialization(
     : stripped;
 }
 
-function stripTextBackgroundDerivedSerialization(
-  background: TextBackgroundConfig
-): TextBackgroundConfig {
-  return (
-    stripClassificationProperties(background, [
-      'classification',
-      'strokeClassification'
-    ]) ?? background
-  );
-}
-
 function stripTextDerivedSerialization(
   text: TextPrimitiveConfig | undefined
 ): TextPrimitiveConfig | undefined {
@@ -1575,15 +1562,6 @@ function stripTextDerivedSerialization(
   );
   if (sizeModeStates !== stripped?.sizeModeStates && stripped) {
     stripped = { ...stripped, sizeModeStates };
-  }
-
-  if (stripped) {
-    const background = stripTextBackgroundDerivedSerialization(
-      stripped.background
-    );
-    if (background !== stripped.background) {
-      stripped = { ...stripped, background };
-    }
   }
 
   return stripped;

@@ -72,9 +72,9 @@ import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { withOpacity, dottedPatternToDashArray } from './layer-helpers';
 import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
 import {
-  DEFAULT_TEXT_FONT_SETTINGS_RASTER,
   DEFAULT_TEXT_LINE_HEIGHT,
-  extendTextCharacterSet
+  extendTextCharacterSet,
+  resolveTextFontSettings
 } from './text-character-set';
 import {
   getCachedSpherePolygon,
@@ -1389,7 +1389,7 @@ function createVillesLabelLayer(
     getTextPixelOffset: [0, Math.max(config.size, 1) + 4],
     textFontFamily: resolveFontFamilyStack(labelFontFamily),
     textCharacterSet: extendTextCharacterSet(labelGlyphs),
-    textFontSettings: DEFAULT_TEXT_FONT_SETTINGS_RASTER,
+    textFontSettings: resolveTextFontSettings(labelSize),
     textLineHeight: DEFAULT_TEXT_LINE_HEIGHT,
     textSizeUnits: 'pixels',
     ...getBaseLayerProps(ctx),

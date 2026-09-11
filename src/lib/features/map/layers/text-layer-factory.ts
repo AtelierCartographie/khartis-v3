@@ -9,7 +9,6 @@ import {
   DEFAULT_COLORS,
   ShapeType,
   SizeMode,
-  SLIDER_LIMITS,
   SymbolMode
 } from '$lib/features/commons/constants/visualization.constants';
 import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
@@ -588,12 +587,7 @@ export function createTextOverlayLayers(
           secondaryLabelsConfig.italic
         ),
         characterSet: labelCharacterSet,
-        fontSettings: resolveTextFontSettings(
-          secondaryLabelsConfig.halo &&
-            (secondaryLabelsConfig.haloWidth ?? DEFAULT_HALO_WIDTH) > 0
-            ? 'halo-on'
-            : 'halo-off'
-        ),
+        fontSettings: resolveTextFontSettings(labelBaseSize * pageDisplayScale),
         lineHeight: DEFAULT_TEXT_LINE_HEIGHT,
         outlineColor: withOpacity(
           resolveStyleColor(secondaryLabelsConfig.haloColor, [255, 255, 255]),
@@ -601,7 +595,7 @@ export function createTextOverlayLayers(
         ),
         outlineWidth: resolveTextOutlineWidth(
           secondaryHaloWidth,
-          SLIDER_LIMITS.haloWidth.max
+          labelBaseSize
         ),
         background: true,
         getBackgroundColor: backgroundColorAccessor,
@@ -681,7 +675,8 @@ export function createTextOverlayLayers(
           outlineColor: [secondaryLabelsConfig.haloColor],
           outlineWidth: [
             secondaryLabelsConfig.halo,
-            secondaryLabelsConfig.haloWidth
+            secondaryLabelsConfig.haloWidth,
+            labelBaseSize
           ],
           getBackgroundColor: [textConfig.dxpMasking, textConfig.haloColor],
           getBorderWidth: [],
@@ -757,19 +752,14 @@ export function createTextOverlayLayers(
           ),
           characterSet: textCharacterSet,
           fontSettings: resolveTextFontSettings(
-            textConfig.halo && (textConfig.haloWidth ?? DEFAULT_HALO_WIDTH) > 0
-              ? 'halo-on'
-              : 'halo-off'
+            textBaseSize * pageDisplayScale
           ),
           lineHeight: DEFAULT_TEXT_LINE_HEIGHT,
           outlineColor: withOpacity(
             resolveStyleColor(textConfig.haloColor, [255, 255, 255]),
             1
           ),
-          outlineWidth: resolveTextOutlineWidth(
-            primaryHaloWidth,
-            SLIDER_LIMITS.haloWidth.max
-          ),
+          outlineWidth: resolveTextOutlineWidth(primaryHaloWidth, textBaseSize),
           background: true,
           getBackgroundColor: backgroundColorAccessor,
           getBorderWidth: backgroundBorderWidth,
@@ -862,7 +852,7 @@ export function createTextOverlayLayers(
               secondaryLabelColumn
             ],
             outlineColor: [textConfig.haloColor],
-            outlineWidth: [textConfig.halo, textConfig.haloWidth],
+            outlineWidth: [textConfig.halo, textConfig.haloWidth, textBaseSize],
             getBackgroundColor: [textConfig.dxpMasking, textConfig.haloColor],
             getBorderWidth: [],
             getBorderColor: []

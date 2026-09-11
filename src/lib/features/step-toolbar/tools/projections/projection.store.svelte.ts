@@ -23,6 +23,7 @@ import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.st
 import { globalActions } from '$lib/features/commons/stores/global.svelte';
 import {
   getProjectionById,
+  resolveProjectionDefaultOrientation,
   type ProjectionInfo
 } from '$lib/features/commons/utils/projection.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
@@ -238,22 +239,16 @@ const { actions, getState } = createToolStore<
     };
 
     const seedOrientationFromProjection = () => {
-      let lambda = 0;
-      let phi = 0;
-      if (s.suggestionD3Config?.rotate) {
-        lambda = s.suggestionD3Config.rotate[0] ?? 0;
-        phi = s.suggestionD3Config.rotate[1] ?? 0;
-      } else if (!s.customCode) {
-        const rotate = getProjectionById(s.selected)?.projection().rotate();
-        if (rotate) {
-          lambda = rotate[0] ?? 0;
-          phi = rotate[1] ?? 0;
-        }
-      }
-      s.longitude = -lambda;
-      s.latitude = -phi;
+      const [longitude, latitude] = resolveProjectionDefaultOrientation({
+        selected: s.selected,
+        customCode: s.customCode,
+        suggestionD3Config: s.suggestionD3Config
+      });
+      s.longitude = longitude;
+      s.latitude = latitude;
       s.rotation = 0;
-      s.center = lambda === 0 && phi === 0 ? undefined : [-lambda, -phi];
+      s.center =
+        longitude === 0 && latitude === 0 ? undefined : [longitude, latitude];
     };
 
     const setSelectedInternal = (

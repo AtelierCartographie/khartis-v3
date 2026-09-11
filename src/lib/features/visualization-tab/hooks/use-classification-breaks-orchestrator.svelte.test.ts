@@ -21,8 +21,7 @@ vi.mock('./use-classification-breaks.svelte', () => ({
   resolveScopeTargetPrimitive: vi.fn(
     (target) => `primitive-of:${String(target)}`
   ),
-  SYMBOL_FILL_SCOPE_TARGET: 'symbol-fill',
-  TEXT_BACKGROUND_SCOPE_TARGET: 'text-bg'
+  SYMBOL_FILL_SCOPE_TARGET: 'symbol-fill'
 }));
 
 import { useClassificationBreaksOrchestrator } from './use-classification-breaks-orchestrator.svelte';
@@ -37,8 +36,6 @@ interface OrchestratorBag {
   updatePrimitiveStrokeClassificationState: Mock;
   applyLineThicknessClassification: Mock;
   applySymbolFillClassification: Mock;
-  applyTextBackgroundClassification: Mock;
-  applyTextBackgroundStrokeClassification: Mock;
   orchestrator: ReturnType<typeof useClassificationBreaksOrchestrator>;
 }
 
@@ -57,8 +54,6 @@ function makeBag(opts: { isNumeric?: boolean } = {}): OrchestratorBag {
   const updatePrimitiveStrokeClassificationState = vi.fn();
   const applyLineThicknessClassification = vi.fn();
   const applySymbolFillClassification = vi.fn();
-  const applyTextBackgroundClassification = vi.fn();
-  const applyTextBackgroundStrokeClassification = vi.fn();
 
   const orchestrator = useClassificationBreaksOrchestrator({
     classificationBreaks: classificationBreaks as never,
@@ -81,22 +76,10 @@ function makeBag(opts: { isNumeric?: boolean } = {}): OrchestratorBag {
         valueColumn: 'symfill',
         classification: { method: 'jenks' }
       }) as never,
-    getTextBackgroundTarget: () =>
-      ({
-        valueColumn: 'tb_val',
-        classification: { method: 'jenks' }
-      }) as never,
-    getTextBackgroundStrokeTarget: () =>
-      ({
-        valueColumn: 'tbs_val',
-        classification: { method: 'jenks' }
-      }) as never,
     updatePrimitiveClassificationState,
     updatePrimitiveStrokeClassificationState,
     applyLineThicknessClassification,
-    applySymbolFillClassification,
-    applyTextBackgroundClassification,
-    applyTextBackgroundStrokeClassification
+    applySymbolFillClassification
   });
 
   void noOp;
@@ -107,8 +90,6 @@ function makeBag(opts: { isNumeric?: boolean } = {}): OrchestratorBag {
     updatePrimitiveStrokeClassificationState,
     applyLineThicknessClassification,
     applySymbolFillClassification,
-    applyTextBackgroundClassification,
-    applyTextBackgroundStrokeClassification,
     orchestrator
   };
 }
@@ -178,28 +159,6 @@ describe('useClassificationBreaksOrchestrator', () => {
     );
   });
 
-  it('computeTextBackgroundBreaks scopes to TEXT_BACKGROUND_SCOPE_TARGET fill', () => {
-    const bag = makeBag();
-    bag.orchestrator.computeTextBackgroundBreaks();
-    expect(bag.classificationBreaks.compute).toHaveBeenCalledWith(
-      expect.objectContaining({
-        scopeKey: 'fill:text-bg',
-        primitive: 'primitive-of:text-bg'
-      })
-    );
-  });
-
-  it('computeTextBackgroundStrokeBreaks scopes to TEXT_BACKGROUND_SCOPE_TARGET stroke', () => {
-    const bag = makeBag();
-    bag.orchestrator.computeTextBackgroundStrokeBreaks();
-    expect(bag.classificationBreaks.compute).toHaveBeenCalledWith(
-      expect.objectContaining({
-        scopeKey: 'stroke:text-bg',
-        primitive: 'primitive-of:text-bg'
-      })
-    );
-  });
-
   it('applyUpdate of computeBreaksForPrimitive routes to updatePrimitiveClassificationState', () => {
     const bag = makeBag();
     bag.orchestrator.computeBreaksForPrimitive('polygon' as never);
@@ -232,30 +191,6 @@ describe('useClassificationBreaksOrchestrator', () => {
       .applyUpdate as (u: object) => void;
     applyUpdate({ breaks: [1, 2] });
     expect(bag.applySymbolFillClassification).toHaveBeenCalledWith(
-      { breaks: [1, 2] },
-      { preserveOrigin: true }
-    );
-  });
-
-  it('applyUpdate of computeTextBackgroundBreaks preserves suggestion origin', () => {
-    const bag = makeBag();
-    bag.orchestrator.computeTextBackgroundBreaks();
-    const applyUpdate = bag.classificationBreaks.compute.mock.calls[0][0]
-      .applyUpdate as (u: object) => void;
-    applyUpdate({ breaks: [1, 2] });
-    expect(bag.applyTextBackgroundClassification).toHaveBeenCalledWith(
-      { breaks: [1, 2] },
-      { preserveOrigin: true }
-    );
-  });
-
-  it('applyUpdate of computeTextBackgroundStrokeBreaks preserves suggestion origin', () => {
-    const bag = makeBag();
-    bag.orchestrator.computeTextBackgroundStrokeBreaks();
-    const applyUpdate = bag.classificationBreaks.compute.mock.calls[0][0]
-      .applyUpdate as (u: object) => void;
-    applyUpdate({ breaks: [1, 2] });
-    expect(bag.applyTextBackgroundStrokeClassification).toHaveBeenCalledWith(
       { breaks: [1, 2] },
       { preserveOrigin: true }
     );

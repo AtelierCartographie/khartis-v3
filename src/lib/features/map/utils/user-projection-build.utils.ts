@@ -5,12 +5,14 @@ import type { D3Usage } from '@ateliercartographie/proj-suggest';
 import {
   buildProjectionFromCatalogueId,
   fitProjectionToBbox,
-  getProjectionD3ConfigById
+  getProjectionD3ConfigById,
+  isWorldScaleProjectionId
 } from '$lib/features/commons/utils/projection.utils';
 import {
   buildD3ProjectionFromConfig,
-  CLIP_DEGENERACY_LON_EPSILON,
-  isClipPolygonProjection
+  CLIP_DEGENERACY_EPSILON,
+  isClipPolygonProjection,
+  isPolarClipDegeneracyProjection
 } from '$lib/features/commons/utils/d3-projection-config.utils';
 import { proj4d3 } from './proj4d3.utils';
 
@@ -70,12 +72,14 @@ function orientProjectionToParams(
   // suggestions (e.g. Atlantis) keep their orientation; rotation adds an
   // in-plane angle on top.
   const [, , gamma = 0] = projection.rotate();
-  const lonEpsilon = isClipPolygonProjection(
-    getResolvedD3ProjectionName(params)
-  )
-    ? CLIP_DEGENERACY_LON_EPSILON
+  const projectionName = getResolvedD3ProjectionName(params);
+  const lonEpsilon = isClipPolygonProjection(projectionName)
+    ? CLIP_DEGENERACY_EPSILON
     : 0;
-  projection.rotate([-longitude + lonEpsilon, -latitude, gamma]);
+  const latEpsilon = isPolarClipDegeneracyProjection(projectionName)
+    ? CLIP_DEGENERACY_EPSILON
+    : 0;
+  projection.rotate([-longitude + lonEpsilon, -latitude + latEpsilon, gamma]);
 }
 
 function applyUserProjectionTransform(
@@ -86,6 +90,39 @@ function applyUserProjectionTransform(
   if (params.rotation) {
     projection.angle(projection.angle() + params.rotation);
   }
+}
+
+// World-scale projections (Armadillo, interrupted Mollweide, Waterman, Air
+// Ocean, Peirce…) must be fit to the whole sphere, not the data bbox, or they
+// collapse/wrap; fitting to a sub-global bbox produces degenerate slivers.
+function fitProjectionToRenderTarget(
+  projection: GeoProjection,
+  params: UserProjectionBuildParams,
+  worldScale: boolean
+): void {
+  const { fitBbox, width, height, padding } = params;
+
+  if (worldScale) {
+    projection.fitExtent(
+      [
+        [padding, padding],
+        [width - padding, height - padding]
+      ],
+      { type: 'Sphere' as const }
+    );
+    return;
+  }
+
+  fitProjectionToBbox(projection, fitBbox, width, height, padding);
+}
+
+function isWorldScaleSuggestion(params: UserProjectionBuildParams): boolean {
+  const { suggestionScale } = params;
+  return (
+    suggestionScale !== undefined &&
+    suggestionScale.length > 0 &&
+    suggestionScale.every((value) => value === 'world')
+  );
 }
 
 function hasExplicitProjectionOrientation(
@@ -147,24 +184,11 @@ export function buildUserProjection(
       return undefined;
     }
 
-    // World-scale projections (Armadillo, interrupted Mollweide, Waterman,
-    // …) must be fit to the whole sphere, not the data bbox, or they
-    // collapse/wrap; fitting to a sub-global bbox produces degenerate slivers.
-    const isWorldScale =
-      params.suggestionScale !== undefined &&
-      params.suggestionScale.length > 0 &&
-      params.suggestionScale.every((value) => value === 'world');
-    if (isWorldScale) {
-      projection.fitExtent(
-        [
-          [padding, padding],
-          [width - padding, height - padding]
-        ],
-        { type: 'Sphere' as const }
-      );
-    } else {
-      fitProjectionToBbox(projection, fitBbox, width, height, padding);
-    }
+    fitProjectionToRenderTarget(
+      projection,
+      params,
+      isWorldScaleSuggestion(params)
+    );
     applyUserProjectionTransform(projection, params);
 
     return isUsableGeoProjection(projection, fitBbox) ? projection : undefined;
@@ -175,7 +199,8 @@ export function buildUserProjection(
     return undefined;
   }
 
-  fitProjectionToBbox(projection, fitBbox, width, height, padding);
+  const isWorldScaleCatalogue = isWorldScaleProjectionId(params.selected);
+  fitProjectionToRenderTarget(projection, params, isWorldScaleCatalogue);
   applyUserProjectionTransform(projection, params);
 
   if (isUsableGeoProjection(projection, fitBbox)) {
@@ -196,7 +221,7 @@ export function buildUserProjection(
     ...params,
     center: getBboxCenter(fitBbox)
   });
-  fitProjectionToBbox(projection, fitBbox, width, height, padding);
+  fitProjectionToRenderTarget(projection, params, isWorldScaleCatalogue);
 
   return isUsableGeoProjection(projection, fitBbox) ? projection : undefined;
 }

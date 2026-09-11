@@ -17,6 +17,8 @@ export interface ColumnStats {
   share_rank_interval?: number;
   extent_magnitude?: number;
   skewness?: number;
+  /** A few real values of the column: min, its neighbour, the 5–95% quantiles, the max's neighbour, max. */
+  value_sample?: number[];
   categories?: string[];
 }
 

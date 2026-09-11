@@ -222,6 +222,10 @@ const kmeans_macro = `CREATE OR REPLACE MACRO kmeans(tabname, colname, nb := 5, 
  * 3. `generate_roundings(n)`: Generates a list of rounded values by concatenating round_left and round_right.
  * 4. `best_value_rounded(n, lower_limit, upper_limit)`: Selects the best-rounded value within limits.
  * 5. `round_thresholds(breaks, tname, colname)`: Rounds the thresholds for a given set of breaks.
+ *
+ * Each threshold is rounded inside the gap between its neighbouring observed values, so no row
+ * changes class, and inside the midpoints to its neighbouring thresholds, so two thresholds
+ * sharing a sparse gap can never round onto the same value and merge their classes.
  */
 const round_thresholds_macro = `CREATE OR REPLACE MACRO round_left(n) AS (
   WITH RECURSIVE round_left(value, value_rounded, iter) AS (
@@ -266,16 +270,10 @@ const round_thresholds_macro = `CREATE OR REPLACE MACRO round_left(n) AS (
   );
 
   CREATE OR REPLACE MACRO best_value_rounded(n, lower_limit, upper_limit) AS (
-    WITH t1 AS (
-      SELECT
-        UNNEST(generate_roundings(n)) AS value_rounded,
-        value_rounded BETWEEN lower_limit AND upper_limit AS check_inside
-    )
-    FROM t1
-    SELECT value_rounded
-    WHERE check_inside = TRUE
-    LIMIT 1
-
+    list_filter(
+      generate_roundings(n),
+      value_rounded -> value_rounded BETWEEN lower_limit AND upper_limit
+    )[1]
   );
 
   CREATE OR REPLACE MACRO round_thresholds(breaks, tname, colname) AS (
@@ -286,20 +284,81 @@ const round_thresholds_macro = `CREATE OR REPLACE MACRO round_left(n) AS (
   ), t1 AS (
     SELECT unnest(breaks) AS break
   ), t2 AS (
-    FROM t1, values
+    FROM t1
     SELECT
       break,
-      max(value) FILTER (WHERE value <= break) AS lower_limit,
-      min(value) FILTER (WHERE value >= break) AS upper_limit
-    GROUP BY ALL
+      coalesce(
+        (break + lag(break) OVER (ORDER BY break)) / 2,
+        '-infinity'::DOUBLE
+      ) AS lower_gate,
+      coalesce(
+        (break + lead(break) OVER (ORDER BY break)) / 2,
+        'infinity'::DOUBLE
+      ) AS upper_gate
+  ), t3 AS (
+    FROM t2, values
+    SELECT
+      break,
+      greatest(max(value) FILTER (WHERE value <= break), lower_gate) AS lower_limit,
+      least(min(value) FILTER (WHERE value >= break), upper_gate) AS upper_limit
+    GROUP BY break, lower_gate, upper_gate
   )
-  FROM t2
+  FROM t3
   SELECT list(best_value_rounded(break, lower_limit, upper_limit)).list_sort()
 );`;
 
 /**
+ * SQL macros for rounding the outer bounds of a discretization scale.
+ *
+ * Defines:
+ * 1. `significant_rounding_limit(n)`: the largest deviation a rounding of `n` may show, which caps
+ *    the ladder at two significant digits (one below 10) exactly like the legend's `round_extreme`.
+ * 2. `round_bounds(low, high, tname, colname)`: rounds the series minimum and maximum.
+ *
+ * The minimum is rounded while it stays below the next observed value and the maximum while it
+ * stays above the previous one, so a rounded bound can never swallow a second value: the extreme
+ * value itself is the only one it can ever step over. Both bounds are display values; classes are
+ * assigned from the thresholds, never from them.
+ */
+const round_bounds_macro = `CREATE OR REPLACE MACRO significant_rounding_limit(n) AS (
+  0.5 * pow(10, floor(log10(nullif(abs(n::DOUBLE), 0))) - if(abs(n::DOUBLE) < 10, 0, 1))
+  );
+
+  CREATE OR REPLACE MACRO round_bounds(low, high, tname, colname) AS (
+  WITH values AS (
+    FROM query_table(tname::VARCHAR)
+    SELECT COLUMNS(c -> c = colname) AS value
+    WHERE COLUMNS(c -> c = colname) IS NOT NULL
+  ), neighbours AS (
+    FROM values
+    SELECT
+      min(value) FILTER (WHERE value > low) AS above_low,
+      max(value) FILTER (WHERE value < high) AS below_high
+  )
+  FROM neighbours
+  SELECT [
+    coalesce(
+      list_filter(
+        generate_roundings(low),
+        candidate -> candidate < above_low
+          AND abs(candidate - low) <= significant_rounding_limit(low)
+      )[1],
+      low::DOUBLE
+    ),
+    coalesce(
+      list_filter(
+        generate_roundings(high),
+        candidate -> candidate > below_high
+          AND abs(candidate - high) <= significant_rounding_limit(high)
+      )[1],
+      high::DOUBLE
+    )
+  ]
+);`;
+
+/**
  * Combination of all macro functions for data classification:
- * quantile, q6, equi_width, nested_means, headtail2, kmeans, round_thresholds.
+ * quantile, q6, equi_width, nested_means, headtail2, kmeans, round_thresholds, round_bounds.
  */
 export const breaks =
   quantile_macro +
@@ -308,4 +367,5 @@ export const breaks =
   nested_means_macro +
   headtail2_macro +
   kmeans_macro +
-  round_thresholds_macro;
+  round_thresholds_macro +
+  round_bounds_macro;

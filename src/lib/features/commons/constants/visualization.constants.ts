@@ -220,7 +220,7 @@ export const SLIDER_LIMITS = {
   textSize: { min: 6, max: 64, step: 1 },
   textOpacity: { min: 0, max: 100, step: 1 },
   labelOpacity: { min: 0, max: 100, step: 1 },
-  haloWidth: { min: 0, max: 20, step: 0.5 },
+  haloWidth: { min: 0, max: 4, step: 0.5 },
   missingDataSize: { min: 1, max: 12, step: 0.5 },
   missingDataSymbolSize: { min: 1, max: 50, step: 1 }
 } as const;

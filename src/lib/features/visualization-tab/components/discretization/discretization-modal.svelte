@@ -15,6 +15,7 @@
     type VisualizationConfig
   } from '$lib/features/commons/stores/visualization.store.svelte';
   import {
+    DEFAULT_CLASSIFICATION_CLASS_COUNT,
     SLIDER_DEBOUNCE_MS,
     type ShapeType
   } from '$lib/features/commons/constants/visualization.constants';
@@ -24,10 +25,13 @@
     DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
     normalizeClassificationMethod,
     resolveBreakpointLowerClassCount,
+    isQ6ContractHonoured,
     resolveComputedClassCount,
+    resolveDiscretizationNote,
     resolveHeadTailClassCountMax,
     resolveRequestedClassCount
   } from '$lib/features/commons/utils/discretization.utils';
+  import type { DiscretizationNote } from '$lib/features/commons/utils/discretization.utils';
   import {
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
@@ -37,6 +41,11 @@
     resolveClassificationBreakColors,
     type ClassificationBreaksComputation
   } from '../../hooks/use-classification-breaks.svelte';
+
+  interface MethodSelection {
+    method: ClassificationMethod;
+    numClasses: number;
+  }
 
   interface ClassBreak {
     min: number;
@@ -100,11 +109,15 @@
 
   let currentMethod = $state<ClassificationMethod>(ClassificationMethod.KMEANS);
   let currentNumClasses = $state(5);
-  let mergedClassCount = $state<number | null>(null);
+  let discretizationNote = $state<DiscretizationNote | null>(null);
   let currentBreaks = $state<ClassBreak[]>([]);
   let currentBreakpoint = $state<number | null>(null);
   let currentBreakpointLowerClassCount = $state<number | null>(null);
   let headTailClassCountMax = $state(DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX);
+  let lastAppliedSelection: MethodSelection = {
+    method: ClassificationMethod.KMEANS,
+    numClasses: DEFAULT_CLASSIFICATION_CLASS_COUNT
+  };
   let panelRenderKey = $state(0);
   let panelRight = $state(readPanelRight());
   let wasOpen = $state(false);
@@ -157,11 +170,12 @@
       currentNumClasses,
       classification?.breakpointLowerClassCount
     );
-    headTailClassCountMax =
-      method === ClassificationMethod.HEAD_TAIL
-        ? resolveHeadTailClassCountMax(actualClassCount ?? storedNumClasses)
-        : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
-    mergedClassCount = null;
+    headTailClassCountMax = DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
+    discretizationNote = null;
+    lastAppliedSelection = {
+      method,
+      numClasses: currentNumClasses
+    };
     lastLocalClassification = cloneClassification(classification);
     lastLocalContextKey = activeContextKey;
   }
@@ -305,25 +319,44 @@
 
     const { actualClassCount, colors, normalizedMethod, result } = computation;
 
-    mergedClassCount =
-      actualClassCount < computation.requestedClassCount
-        ? actualClassCount
-        : null;
+    discretizationNote = resolveDiscretizationNote({
+      method: normalizedMethod,
+      requestedClassCount: computation.requestedClassCount,
+      actualClassCount,
+      naturalClassCount: result.naturalClassCount,
+      emptyClassCount: result.counts.filter((count) => count === 0).length
+    });
+
+    // A method with a fixed class count cannot be applied to a series that refuses it.
+    if (
+      !isQ6ContractHonoured(normalizedMethod, actualClassCount) &&
+      lastAppliedSelection.method !== normalizedMethod
+    ) {
+      currentMethod = lastAppliedSelection.method;
+      currentNumClasses = lastAppliedSelection.numClasses;
+      persistSelectionDraft(lastAppliedSelection, false);
+      return;
+    }
+
+    lastAppliedSelection = {
+      method: normalizedMethod,
+      numClasses: actualClassCount
+    };
     currentNumClasses = actualClassCount;
     currentBreakpointLowerClassCount = resolveBreakpointLowerClassCount(
       actualClassCount,
       computation.breakpointLowerClassCount ?? currentBreakpointLowerClassCount
     );
     currentBreaks = toClassBreaks(
-      result.min,
-      result.max,
+      result.roundedMin ?? result.min,
+      result.roundedMax ?? result.max,
       result.breaks,
       result.counts,
       colors
     );
     headTailClassCountMax =
       normalizedMethod === ClassificationMethod.HEAD_TAIL
-        ? resolveHeadTailClassCountMax(computation.result.counts.length)
+        ? resolveHeadTailClassCountMax(result.naturalClassCount)
         : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
 
     const nextClassification = {
@@ -332,6 +365,8 @@
       numClasses: actualClassCount,
       breaks: result.breaks,
       counts: result.counts,
+      roundedMin: result.roundedMin,
+      roundedMax: result.roundedMax,
       colors,
       breakpointValue: currentBreakpoint,
       breakpointLowerClassCount:
@@ -527,6 +562,8 @@
       numClasses: requestedClassCount,
       breaks: undefined,
       counts: undefined,
+      roundedMin: undefined,
+      roundedMax: undefined,
       breakpointValue,
       breakpointLowerClassCount,
       paletteId: activeClassification?.paletteId,
@@ -700,7 +737,7 @@
         <DiscretizationPanel
           bind:method={currentMethod}
           bind:numClasses={currentNumClasses}
-          mergedClassCount={mergedClassCount}
+          discretizationNote={discretizationNote}
           bind:breaks={currentBreaks}
           bind:breakpointValue={currentBreakpoint}
           bind:breakpointLowerClassCount={currentBreakpointLowerClassCount}
