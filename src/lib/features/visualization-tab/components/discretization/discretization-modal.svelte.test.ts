@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
+import * as m from '$lib/paraglide/messages';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/features/commons/services/classification.service', () => ({
@@ -260,9 +261,7 @@ describe('DiscretizationModal', () => {
     });
 
     expect(container.querySelector('#classification-method')).not.toBeNull();
-    expect(container.textContent).toContain(
-      'Crée des seuils naturels avec la méthode K-means SQL.'
-    );
+    expect(container.textContent).toContain(m.discretization_desc_kmeans());
   });
 
   it('should update both adjacent bounds when editing a shared break value in manual mode', async () => {
