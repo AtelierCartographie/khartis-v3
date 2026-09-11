@@ -5,21 +5,21 @@ export const NEUTRAL_CARTOGRAPHY_COLORS = {
   dataFill: '#8d8d8d',
   dataStroke: '#595959',
   missingData: '#b0b0b0',
-  land: '#d6d6d6',
-  nutsLand: '#c6c6c6',
-  sea: '#f2f2f2',
+  land: '#ced6d9',
+  nutsLand: '#bdc8cc',
+  sea: '#f2f8fa',
   waterLine: '#9f9f9f',
   relief: '#dcdcdc',
-  boundaryFine: '#8f8f8f',
-  boundaryMedium: '#676767',
-  boundaryBold: '#3f3f3f',
-  boundaryCountry: '#2f2f2f',
-  boundaryContext: '#aaaaaa',
-  graticule: '#b5b5b5',
+  boundaryFine: '#ffffff',
+  boundaryMedium: '#ffffff',
+  boundaryBold: '#ffffff',
+  boundaryCountry: '#ffffff',
+  boundaryContext: '#ffffff',
+  graticule: '#ced6d9',
   geographicLine: '#777777',
   city: '#4f4f4f',
   cityLabel: '#161616',
-  sphereOutline: '#565656',
+  sphereOutline: '#738f99',
   shadow: '#505050',
   black: '#000000',
   white: '#ffffff'
@@ -31,23 +31,23 @@ export const NEUTRAL_CARTOGRAPHY_RGB_COLORS = {
 } as const satisfies Record<string, RgbColor>;
 
 export const NEUTRAL_CARTOGRAPHY_RGBA_COLORS = {
-  land: [214, 214, 214, 255],
-  nutsLand: [198, 198, 198, 255],
-  boundaryFine: [143, 143, 143, 200],
-  boundaryMedium: [103, 103, 103, 220],
-  boundaryBold: [63, 63, 63, 255],
-  boundaryCountry: [47, 47, 47, 255],
-  boundaryContext: [170, 170, 170, 150],
-  graticule: [181, 181, 181, 100],
+  land: [206, 214, 217, 255],
+  nutsLand: [189, 200, 204, 255],
+  boundaryFine: [255, 255, 255, 255],
+  boundaryMedium: [255, 255, 255, 255],
+  boundaryBold: [255, 255, 255, 255],
+  boundaryCountry: [255, 255, 255, 255],
+  boundaryContext: [255, 255, 255, 150],
+  graticule: [206, 214, 217, 255],
   geographicLine: [119, 119, 119, 170],
   sphereFill: [255, 255, 255, 255],
-  sphereOutline: [86, 86, 86, 200],
+  sphereOutline: [115, 143, 153, 255],
   svgDefaultFill: [141, 141, 141, 255],
   svgDefaultStroke: [89, 89, 89, 255],
   transparent: [0, 0, 0, 0]
 } as const satisfies Record<string, RgbaColor>;
 
-export const DEFAULT_VISUALIZATION_COLOR = '#4589ff';
+export const DEFAULT_VISUALIZATION_COLOR = '#0086cc';
 export const DEFAULT_VISUALIZATION_SECONDARY_COLOR = '#ff832b';
 export const DEFAULT_VISUALIZATION_NEUTRAL_COLOR =
   NEUTRAL_CARTOGRAPHY_COLORS.dataFill;
