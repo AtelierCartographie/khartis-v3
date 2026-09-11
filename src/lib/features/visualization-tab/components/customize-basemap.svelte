@@ -29,7 +29,6 @@
   import { resolveActiveBasemapMetadata } from '$lib/features/map/utils/basemap-metadata-resolution.utils';
   import { getBasemapPanelRank } from '$lib/features/map/utils/layer-panel-row.utils';
   import { isGlobalBbox } from '$lib/features/commons/utils/projection.utils';
-  import { getBasemapAuxLayerDefaultVisibility } from '$lib/features/map/utils/basemap-aux-layer-visibility.utils';
   import type { BasemapLayer } from '$lib/features/map/types/basemap.types';
   import type { BasemapLayerId } from '$lib/features/map/stores/basemap-layers.store.svelte';
 
@@ -128,7 +127,6 @@
     layer: BasemapLayer;
     sharedLegacyId: BasemapLayerId | null;
     instanceIndex: number;
-    defaultVisible: boolean;
   }
 
   function isSection3RenderableType(type: BasemapLayerType): boolean {
@@ -146,8 +144,7 @@
       {
         layer: oceanSyntheticLayer,
         sharedLegacyId: 'mers',
-        instanceIndex: 0,
-        defaultVisible: true
+        instanceIndex: 0
       }
     ];
     typeCounters.set(BasemapLayerType.POLYGON, 1);
@@ -162,11 +159,7 @@
           isCustomBasemap,
           isCustomLineBasemap
         ),
-        instanceIndex: count,
-        defaultVisible: getBasemapAuxLayerDefaultVisibility(
-          layer,
-          metadata.layers
-        )
+        instanceIndex: count
       });
     }
 
@@ -339,7 +332,6 @@
           basemapFile={currentMetadata.file}
           sharedLegacyId={entry.sharedLegacyId ?? undefined}
           instanceIndex={entry.instanceIndex}
-          defaultVisible={entry.defaultVisible}
           allowRemarkable={supportsRemarkableGraticule}
           allowEquator={supportsEquatorGraticule}
           allowSphereOutline={!isCustomBasemap}
