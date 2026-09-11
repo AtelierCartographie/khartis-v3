@@ -20,7 +20,6 @@ export {
 } from './khartis-extensions';
 export {
   draw_quanti_color_legend,
-  round_thresholds,
   type QuantiColorLegendOptions
 } from './quantitative';
 export {

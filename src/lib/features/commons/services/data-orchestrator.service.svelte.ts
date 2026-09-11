@@ -1167,6 +1167,8 @@ function createDataOrchestratorService() {
         visualizationStore.updateClassification(viz.id, {
           breaks: result.breaks,
           counts: result.counts,
+          roundedMin: result.roundedMin,
+          roundedMax: result.roundedMax,
           colors,
           ...(result.breakpointLowerClassCount != null
             ? {

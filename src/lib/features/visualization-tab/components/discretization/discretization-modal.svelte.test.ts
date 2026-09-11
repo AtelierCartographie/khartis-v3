@@ -402,10 +402,189 @@ describe('DiscretizationModal', () => {
 
     await waitFor(() => {
       expect(
-        document.body.querySelector('.merged-classes-note')?.textContent
+        document.body.querySelector('.class-count-note')?.textContent
       ).toContain(
-        'Bornes confondues en raison de valeurs répétées : 2 classes effectives'
+        'Avec cette méthode, la série ne permet pas plus de 2 classes distinctes'
       );
+    });
+  });
+
+  it('keeps the Head/Tail class-count ceiling at the natural count when fewer classes are requested', async () => {
+    vi.mocked(calculateBreaks).mockResolvedValue({
+      breaks: [21, 127, 515],
+      counts: [8, 4, 2, 1],
+      min: 0,
+      max: 30000,
+      naturalClassCount: 8
+    });
+
+    const visualization = createVisualization({
+      classification: {
+        method: ClassificationMethod.HEAD_TAIL,
+        classes: 4,
+        numClasses: 4,
+        colors: ['#f7fbff', '#c6dbef', '#6baed6', '#08519c']
+      }
+    });
+    render(DiscretizationModal, {
+      open: true,
+      visualization,
+      classification: visualization.classification,
+      valueColumn: 'births'
+    });
+
+    await waitFor(() => {
+      expect(
+        document.body.querySelector<HTMLInputElement>(
+          '.compact-number-input input'
+        )?.max
+      ).toBe('8');
+    });
+    expect(document.body.querySelector('.class-count-note')).toBeNull();
+  });
+
+  it('shows the rounded scale bounds in the class list', async () => {
+    vi.mocked(calculateBreaks).mockResolvedValue({
+      breaks: [4000, 16000],
+      counts: [30, 4, 1],
+      min: 3,
+      max: 27367,
+      roundedMin: 3,
+      roundedMax: 27000
+    });
+
+    const visualization = createVisualization({
+      classification: {
+        method: ClassificationMethod.EQUAL_INTERVAL,
+        classes: 3,
+        numClasses: 3,
+        colors: ['#f7fbff', '#6baed6', '#08519c']
+      }
+    });
+    render(DiscretizationModal, {
+      open: true,
+      visualization,
+      classification: visualization.classification,
+      valueColumn: 'births'
+    });
+
+    await waitFor(() => {
+      expect(
+        document.body.querySelector<HTMLInputElement>('#break-value-3')?.value
+      ).toBe('27000');
+    });
+    expect(
+      document.body.querySelector<HTMLInputElement>('#break-value-0')?.value
+    ).toBe('3');
+  });
+
+  it('reports the classes that hold no value', async () => {
+    vi.mocked(calculateBreaks).mockResolvedValue({
+      breaks: [7000, 13000, 20000, 26000, 33000, 40000],
+      counts: [30, 1, 0, 0, 1, 0, 1],
+      min: 1,
+      max: 46341
+    });
+
+    const visualization = createVisualization({
+      classification: {
+        method: ClassificationMethod.EQUAL_INTERVAL,
+        classes: 7,
+        numClasses: 7,
+        colors: []
+      }
+    });
+    render(DiscretizationModal, {
+      open: true,
+      visualization,
+      classification: visualization.classification,
+      valueColumn: 'spending'
+    });
+
+    await waitFor(() => {
+      expect(
+        document.body.querySelector('.class-count-note')?.textContent
+      ).toContain('3 classe(s) de cette discrétisation ne contiennent aucune');
+    });
+  });
+
+  it('refuses to switch to Q6 when the series cannot hold its six classes', async () => {
+    vi.mocked(calculateBreaks).mockResolvedValue({
+      breaks: [2, 4, 10, 61],
+      counts: [8000, 5000, 9000, 8000, 4953],
+      min: 0,
+      max: 27367
+    });
+
+    const visualization = createVisualization({
+      classification: {
+        method: ClassificationMethod.KMEANS,
+        classes: 5,
+        numClasses: 5,
+        colors: []
+      }
+    });
+    render(DiscretizationModal, {
+      open: true,
+      visualization,
+      classification: visualization.classification,
+      valueColumn: 'births'
+    });
+
+    const select = await waitFor(() => {
+      const node = document.body.querySelector(
+        '#classification-method'
+      ) as HTMLSelectElement | null;
+      expect(node).not.toBeNull();
+      return node as HTMLSelectElement;
+    });
+
+    await fireEvent.change(select, { target: { value: 'q6' } });
+
+    await waitFor(() => {
+      expect(
+        document.body.querySelector('.class-count-note')?.textContent
+      ).toContain("Q6 impose 6 classes, or cette série n'en permet que 5");
+    });
+    await waitFor(() => {
+      expect(
+        (
+          document.body.querySelector(
+            '#classification-method'
+          ) as HTMLSelectElement
+        ).value
+      ).toBe('kmeans');
+    });
+  });
+
+  it('explains a degenerate Head/Tail ladder instead of blaming merged bounds', async () => {
+    vi.mocked(calculateBreaks).mockResolvedValue({
+      breaks: [52],
+      counts: [19, 15],
+      min: 1,
+      max: 94,
+      naturalClassCount: 2
+    });
+
+    const visualization = createVisualization({
+      classification: {
+        method: ClassificationMethod.HEAD_TAIL,
+        classes: 5,
+        numClasses: 5,
+        colors: ['#f7fbff', '#08519c']
+      }
+    });
+    render(DiscretizationModal, {
+      open: true,
+      visualization,
+      classification: visualization.classification,
+      valueColumn: 'region_code'
+    });
+
+    await waitFor(() => {
+      expect(
+        document.body.querySelector('.class-count-note')?.textContent
+      ).toContain('Head/Tail ne dégage que 2 classes');
     });
   });
 
@@ -428,7 +607,7 @@ describe('DiscretizationModal', () => {
     await waitFor(() => {
       expect(document.body.querySelector('#break-value-1')).not.toBeNull();
     });
-    expect(document.body.querySelector('.merged-classes-note')).toBeNull();
+    expect(document.body.querySelector('.class-count-note')).toBeNull();
   });
 
   it('can hide breakpoint controls for non-color discretizations', () => {

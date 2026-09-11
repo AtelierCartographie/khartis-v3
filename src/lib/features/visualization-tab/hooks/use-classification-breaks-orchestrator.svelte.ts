@@ -9,7 +9,6 @@ import {
   CLASSIFICATION_BREAKS_TRIGGER,
   resolveScopeTargetPrimitive,
   SYMBOL_FILL_SCOPE_TARGET,
-  TEXT_BACKGROUND_SCOPE_TARGET,
   type ClassificationBreakTrigger,
   type ClassificationScopeTarget,
   useClassificationBreaksController
@@ -46,9 +45,6 @@ export interface ClassificationBreaksOrchestratorOptions {
   getSelectedVisualization: () => VisualizationConfig | undefined;
   getLineThicknessTarget: () => ClassificationBreakTarget | null | undefined;
   getSymbolFillTarget: () => ClassificationBreakTarget | null | undefined;
-  getTextBackgroundTarget: () => ClassificationBreakTarget | null | undefined;
-  getTextBackgroundStrokeTarget: () =>
-    ClassificationBreakTarget | null | undefined;
   updatePrimitiveClassificationState: (
     primitive: ClassifiablePrimitive,
     updates: Partial<ClassificationConfig>,
@@ -64,14 +60,6 @@ export interface ClassificationBreaksOrchestratorOptions {
     options?: { preserveOrigin?: boolean }
   ) => void;
   applySymbolFillClassification: (
-    updates: Partial<ClassificationConfig>,
-    options?: { preserveOrigin?: boolean }
-  ) => void;
-  applyTextBackgroundClassification: (
-    updates: Partial<ClassificationConfig>,
-    options?: { preserveOrigin?: boolean }
-  ) => void;
-  applyTextBackgroundStrokeClassification: (
     updates: Partial<ClassificationConfig>,
     options?: { preserveOrigin?: boolean }
   ) => void;
@@ -176,42 +164,10 @@ export function useClassificationBreaksOrchestrator(
     );
   }
 
-  function computeTextBackgroundBreaks(
-    trigger: ClassificationBreakTrigger = CLASSIFICATION_BREAKS_TRIGGER.UNKNOWN
-  ): void {
-    const target = opts.getTextBackgroundTarget();
-    computeBreaksIfNumeric(
-      'fill',
-      TEXT_BACKGROUND_SCOPE_TARGET,
-      target?.valueColumn,
-      target?.classification,
-      (updates) =>
-        opts.applyTextBackgroundClassification(updates, PRESERVE_ORIGIN),
-      trigger
-    );
-  }
-
-  function computeTextBackgroundStrokeBreaks(
-    trigger: ClassificationBreakTrigger = CLASSIFICATION_BREAKS_TRIGGER.UNKNOWN
-  ): void {
-    const target = opts.getTextBackgroundStrokeTarget();
-    computeBreaksIfNumeric(
-      'stroke',
-      TEXT_BACKGROUND_SCOPE_TARGET,
-      target?.valueColumn,
-      target?.classification,
-      (updates) =>
-        opts.applyTextBackgroundStrokeClassification(updates, PRESERVE_ORIGIN),
-      trigger
-    );
-  }
-
   return {
     computeBreaksForPrimitive,
     computeLineThicknessBreaks,
     computeBreaksForStrokePrimitive,
-    computeSymbolFillBreaks,
-    computeTextBackgroundBreaks,
-    computeTextBackgroundStrokeBreaks
+    computeSymbolFillBreaks
   };
 }

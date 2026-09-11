@@ -9,7 +9,7 @@ import {
   createLegendFont,
   escapeSvgAttribute,
   escapeSvgText,
-  filter_candidates_by_distances,
+  fill_candidates_by_proximity,
   linearScale,
   magnitude,
   measureLegendLongestToken,
@@ -54,7 +54,7 @@ export interface SymbolsLegendOptions extends CommonLegendTextOptions {
 
 interface GetTicksOptions {
   scale: ScaleFn;
-  minGap: number;
+  spacing: number;
   min: number;
   max: number;
 }
@@ -108,9 +108,9 @@ export function draw_symbols_legend(
     type !== 'bar' && type !== 'spike'
       ? sqrtScale([0, max], [0, size])
       : linearScale([0, max], [0, size]);
-  const minGap = fontSize * 0.8;
-  let ticks = get_ticks(sorted_data, { scale, minGap, min, max });
-  ticks = removeOverlappingSymbolTicks(ticks, scale, type, fontSize);
+  const spacing = symbolLabelSpacing(type, fontSize);
+  let ticks = get_ticks(sorted_data, { scale, spacing, min, max });
+  ticks = removeOverlappingSymbolTicks(ticks, scale, spacing);
   const values = ticks.reverse().map(scale);
   const x_max = type !== 'bar' && type !== 'spike' ? values[0] : bar_width;
   const y_max = values[0];
@@ -328,21 +328,26 @@ export function draw_symbols_legend(
   }
 }
 
-function removeOverlappingSymbolTicks(
-  ticks: number[],
-  scale: ScaleFn,
-  type: SymbolType,
-  fontSize: number
-): number[] {
-  if (ticks.length <= 1) return ticks;
-
+// Circles and squares grow away from the baseline on both sides, so a step of the scale moves
+// their label twice as far as a bar's.
+function symbolLabelSpacing(type: SymbolType, fontSize: number): number {
   const multiplier =
     type === 'square'
       ? 2 * SQUARE_SIDE_RATIO
       : type !== 'bar' && type !== 'spike'
         ? 2
         : 1;
-  const minLabelGap = fontSize * 1.2;
+
+  return (fontSize * 1.2) / multiplier;
+}
+
+function removeOverlappingSymbolTicks(
+  ticks: number[],
+  scale: ScaleFn,
+  spacing: number
+): number[] {
+  if (ticks.length <= 1) return ticks;
+
   const result: number[] = [];
 
   for (let i = ticks.length - 1; i >= 0; i--) {
@@ -352,9 +357,8 @@ function removeOverlappingSymbolTicks(
     }
 
     const lastKept = result[result.length - 1];
-    const distance = multiplier * Math.abs(scale(lastKept) - scale(ticks[i]));
 
-    if (distance >= minLabelGap) {
+    if (Math.abs(scale(lastKept) - scale(ticks[i])) >= spacing) {
       result.push(ticks[i]);
     }
   }
@@ -363,7 +367,7 @@ function removeOverlappingSymbolTicks(
 }
 
 function get_ticks(sorted_data: number[], options: GetTicksOptions): number[] {
-  const { scale, minGap, max } = options;
+  const { scale, spacing, max } = options;
   const { min } = options;
   const max_rounded = round_extreme(sorted_data, max, 'max');
   const min_rounded = round_extreme(sorted_data, min, 'min');
@@ -394,27 +398,15 @@ function get_ticks(sorted_data: number[], options: GetTicksOptions): number[] {
 
   candidates = candidates.filter((d) => d > min && d < max);
 
-  const half_minGap = minGap / 2;
-  const lower_limit = scale(min) <= 1.5 ? 0 : scale(min) + half_minGap;
-  const max_candidates = candidates.length;
-  let n_ticks = 4;
-  let ticks: number[];
+  const lowest = scale(min_rounded);
+  const ticks = fill_candidates_by_proximity(sorted_data, candidates, {
+    position: scale,
+    spacing,
+    blockers: [min_rounded, max_rounded],
+    lower_limit: lowest <= 1.5 ? 0 : lowest
+  });
 
-  do {
-    let upper_limit = scale(max);
-    ticks = filter_candidates_by_distances(sorted_data, candidates, n_ticks);
-    ticks = ticks
-      .reverse()
-      .filter(
-        (d) =>
-          scale(d) + half_minGap <= upper_limit &&
-          scale(d) >= lower_limit &&
-          Boolean((upper_limit = scale(d)))
-      );
-    n_ticks++;
-  } while (ticks.length < 2 && n_ticks < max_candidates);
-
-  return [min_rounded, ...ticks.reverse(), max_rounded];
+  return [min_rounded, ...ticks, max_rounded];
 }
 
 function symbol(

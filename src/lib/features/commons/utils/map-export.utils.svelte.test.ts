@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as m from '$lib/paraglide/messages';
 import {
   SHAPE_ORDINAL,
-  ShapeType,
-  SLIDER_LIMITS
+  ShapeType
 } from '$lib/features/commons/constants/visualization.constants';
+import { resolveTextOutlineWidth } from '$lib/features/map/layers/text-character-set';
 import {
   globalActions,
   globalState
@@ -981,16 +981,16 @@ describe('map export DOM mutations', () => {
     bindElementBox(canvas, { left: 0, top: 0, width: 400, height: 300 });
     vi.spyOn(canvas, 'toDataURL').mockReturnValue('data:image/png;base64,AAAA');
 
-    const maxHaloWidth = SLIDER_LIMITS.haloWidth.max;
-    const outlineWidth = 0.35;
-    const expectedHaloPx = maxHaloWidth * (outlineWidth / 0.5) ** 2;
+    const textSize = 14;
+    const expectedHaloPx = 2;
+    const outlineWidth = resolveTextOutlineWidth(expectedHaloPx, textSize);
 
     const textLayer = createDeckLayer('TextLayer', 'halo-text', {
       data: [{ position: [10, 20], text: 'Paris' }],
       getPosition: (d: { position: number[] }) => d.position,
       getText: (d: { text: string }) => d.text,
       getColor: () => [0, 0, 0, 255],
-      getSize: () => 14,
+      getSize: () => textSize,
       sizeUnits: 'pixels',
       outlineWidth,
       outlineColor: [255, 255, 255, 255],
