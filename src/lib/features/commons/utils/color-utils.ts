@@ -110,3 +110,27 @@ export function webglToHex([r, g, b]: [
     [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')
   );
 }
+
+export function hexToOklchHue(hex: string): number {
+  const [red, green, blue] = hexToRgb(hex).map((channel) => {
+    const value = channel / 255;
+    return value <= 0.04045
+      ? value / 12.92
+      : Math.pow((value + 0.055) / 1.055, 2.4);
+  });
+
+  const long = Math.cbrt(
+    0.4122214708 * red + 0.5363325363 * green + 0.0514459929 * blue
+  );
+  const medium = Math.cbrt(
+    0.2119034982 * red + 0.6806995451 * green + 0.1073969566 * blue
+  );
+  const short = Math.cbrt(
+    0.0883024619 * red + 0.2817188376 * green + 0.6299787005 * blue
+  );
+
+  const a = 1.9779984951 * long - 2.428592205 * medium + 0.4505937099 * short;
+  const b = 0.0259040371 * long + 0.7827717662 * medium - 0.808675766 * short;
+
+  return ((((Math.atan2(b, a) * 180) / Math.PI) % 360) + 360) % 360;
+}

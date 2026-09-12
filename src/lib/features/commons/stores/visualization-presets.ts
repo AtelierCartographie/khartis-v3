@@ -55,7 +55,7 @@ const DEFAULT_TEXT_OPACITY = 0;
 
 const DEFAULT_MISSING_DATA_COLOR = DEFAULT_COLORS.missingData;
 
-const DEFAULT_CHOROPLETH_COLORS = ['#eff3ff', '#bdd7e7', '#6baed6', '#08519c'];
+const DEFAULT_CHOROPLETH_COLORS = ['#e0e2e4', '#a1bed9', '#5e9acb', '#0076ba'];
 
 export const DEFAULT_CATEGORICAL_COLORS = [...FIGMA_DEFAULT_CATEGORICAL_COLORS];
 

@@ -134,7 +134,6 @@
   </ModalBody>
   <ModalFooter
     secondaryButtonText={m.data_privacy_modal_close()}
-    secondaryClass="khartis-dialog-close-action"
     on:click:button--secondary={closeModal}
   />
 </ComposedModal>

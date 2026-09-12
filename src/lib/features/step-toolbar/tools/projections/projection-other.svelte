@@ -320,7 +320,7 @@
           />
           <div class="actions">
             <Button
-              kind="secondary"
+              kind="tertiary"
               size="small"
               disabled={isEmpty()}
               on:click={onReset}>{resetLabel}</Button

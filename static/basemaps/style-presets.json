@@ -5,7 +5,7 @@
     "layer_type": "path",
     "width": 0.5,
     "widthUnits": "pixels",
-    "color": [143, 143, 143, 200]
+    "color": [255, 255, 255, 255]
   },
   "limit-level-1": {
     "description_fr": "Limites du niveau intermédiaire (départements, NUTS 2, etc.)",
@@ -13,7 +13,7 @@
     "layer_type": "path",
     "width": 1.0,
     "widthUnits": "pixels",
-    "color": [103, 103, 103, 220]
+    "color": [255, 255, 255, 255]
   },
   "limit-level-2": {
     "description_fr": "Limites du niveau large (régions, NUTS 1, États, etc.)",
@@ -21,7 +21,7 @@
     "layer_type": "path",
     "width": 1.5,
     "widthUnits": "pixels",
-    "color": [63, 63, 63, 255]
+    "color": [255, 255, 255, 255]
   },
   "limit-dashed": {
     "description_fr": "Limites tiretées (frontières contestées, lignes d'armistice ou de séparation)",
@@ -29,7 +29,7 @@
     "layer_type": "path",
     "width": 0.5,
     "widthUnits": "pixels",
-    "color": [143, 143, 143, 200],
+    "color": [255, 255, 255, 255],
     "dashArray": [4, 3]
   },
   "limit-country": {
@@ -38,7 +38,7 @@
     "layer_type": "path",
     "width": 2.0,
     "widthUnits": "pixels",
-    "color": [47, 47, 47, 255]
+    "color": [255, 255, 255, 255]
   },
   "limit-context": {
     "description_fr": "Limites de contexte des territoires voisins qui débordent du cadrage (fonds départementaux/régionaux) — mutées pour ne pas concurrencer le territoire focal",
@@ -46,7 +46,7 @@
     "layer_type": "path",
     "width": 0.75,
     "widthUnits": "pixels",
-    "color": [170, 170, 170, 150]
+    "color": [255, 255, 255, 150]
   },
   "limit-outer": {
     "description_fr": "Contour extérieur dérivé d'une géométrie importée (emprise du fond)",
@@ -54,20 +54,20 @@
     "layer_type": "path",
     "width": 0.5,
     "widthUnits": "pixels",
-    "color": [63, 63, 63, 255]
+    "color": [255, 255, 255, 255]
   },
   "land": {
     "description_fr": "Territoire général (fond polygone)",
     "description_en": "General territory (polygon fill)",
     "layer_type": "solid-polygon",
-    "fillColor": [214, 214, 214, 255],
+    "fillColor": [206, 214, 217, 255],
     "stroked": false
   },
   "nuts-land": {
     "description_fr": "Territoire NUTS (fond polygone pour le contour des zones NUTS)",
     "description_en": "NUTS territory (polygon fill for NUTS zones outline)",
     "layer_type": "solid-polygon",
-    "fillColor": [198, 198, 198, 255],
+    "fillColor": [189, 200, 204, 255],
     "stroked": false
   },
   "graticule": {
@@ -76,7 +76,7 @@
     "layer_type": "path",
     "width": 0.5,
     "widthUnits": "pixels",
-    "color": [181, 181, 181, 100]
+    "color": [206, 214, 217, 255]
   },
   "geographic-lines": {
     "description_fr": "Lignes géographiques remarquables (équateur, tropiques, cercles polaires, méridien de Greenwich)",
