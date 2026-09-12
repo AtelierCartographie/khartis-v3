@@ -167,7 +167,7 @@ export function createPolygonLayerStack(
   const polygonConfig = viz ? getPolygonPrimitive(viz) : undefined;
   const polygonEnabled = polygonConfig?.enabled ?? true;
   const polygonFillMode = polygonConfig?.fillMode ?? FillMode.UNIQUE;
-  const polygonStrokeMode = polygonConfig?.strokeMode ?? StrokeMode.UNIQUE;
+  const polygonStrokeMode = polygonConfig?.strokeMode ?? StrokeMode.NONE;
   const polygonValueColumn = polygonConfig?.valueColumn;
   const polygonCategoryColumn = polygonConfig?.categoryColumn;
   const polygonStrokeValueColumn =

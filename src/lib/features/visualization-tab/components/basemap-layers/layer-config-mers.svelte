@@ -24,7 +24,7 @@
     outlineVisible = true,
     showOutline = true,
     outlineColor = NEUTRAL_CARTOGRAPHY_COLORS.sphereOutline,
-    outlineThickness = 1,
+    outlineThickness = 0.5,
     outlineOpacity = 100,
     onchange,
     onoutlinechange,

@@ -31,7 +31,6 @@
     basemapFile: string;
     sharedLegacyId?: BasemapLayerId;
     instanceIndex?: number;
-    defaultVisible?: boolean;
     allowRemarkable?: boolean;
     allowEquator?: boolean;
     allowSphereOutline?: boolean;
@@ -42,7 +41,6 @@
     basemapFile,
     sharedLegacyId,
     instanceIndex = 0,
-    defaultVisible = true,
     allowRemarkable = true,
     allowEquator = false,
     allowSphereOutline = true
@@ -83,14 +81,10 @@
       const configId = legacyId === 'meridiens' ? graticuleLayerId : legacyId;
       return (
         (getConfig(configId)?.visible ?? true) &&
-        basemapAuxLayersStore.isVisible(basemapFile, renderKey, defaultVisible)
+        basemapAuxLayersStore.isVisible(basemapFile, renderKey, true)
       );
     }
-    return basemapAuxLayersStore.isVisible(
-      basemapFile,
-      renderKey,
-      defaultVisible
-    );
+    return basemapAuxLayersStore.isVisible(basemapFile, renderKey, true);
   }
 
   const visible = $derived.by(() => {

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as m from '$lib/paraglide/messages';
+import { DEFAULT_VISUALIZATION_COLOR } from '$lib/features/commons/constants/colors.constants';
+import { hexToOklchHue } from '$lib/features/commons/utils/color-utils';
 
 vi.mock('@ateliercartographie/ok-palette', async () => {
   const divergentSequential = vi.fn(
@@ -444,15 +446,20 @@ describe('palette.constants — getPaletteDisplayName', () => {
   });
 });
 
-describe('palette.constants — qualitative preset constants (Figma 893:153398)', () => {
-  it('should expose the exact Vif Mixte hex codes from the Figma design', () => {
-    expect([...VIF_MIXTE_COLORS]).toEqual([
-      '#f287ac',
-      '#00ad92',
-      '#c39800',
-      '#90a8ff',
-      '#da5e04'
-    ]);
+describe('palette.constants — qualitative preset constants', () => {
+  it('should start the Vif Mixte band on the Khartis signature hue', () => {
+    const SRGB_CLIPPING_HUE_TOLERANCE_DEGREES = 10;
+    const drift = Math.abs(
+      hexToOklchHue(VIF_MIXTE_COLORS[0]) -
+        hexToOklchHue(DEFAULT_VISUALIZATION_COLOR)
+    );
+
+    expect(drift).toBeLessThan(SRGB_CLIPPING_HUE_TOLERANCE_DEGREES);
+  });
+
+  it('should expose 5 Vif Mixte colors', () => {
+    expect(VIF_MIXTE_COLORS).toHaveLength(5);
+    VIF_MIXTE_COLORS.forEach((c) => expect(c).toMatch(HEX_REGEX));
   });
 
   it('should expose 5 Vif Chaud colors and 5 Vif Froid colors', () => {

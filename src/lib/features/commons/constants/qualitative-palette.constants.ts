@@ -1,9 +1,9 @@
 export const VIF_MIXTE_COLORS = [
-  '#f287ac',
-  '#00ad92',
-  '#c39800',
-  '#90a8ff',
-  '#da5e04'
+  '#37bbff',
+  '#df6400',
+  '#df6cd0',
+  '#4bce7d',
+  '#8a6fff'
 ] as const;
 
 export const VIF_CHAUD_COLORS = [
@@ -23,11 +23,11 @@ export const VIF_FROID_COLORS = [
 ] as const;
 
 export const PASTEL_MIXTE_COLORS = [
-  '#fbd0dd',
-  '#a9e8dd',
-  '#ecd79e',
-  '#cdd6ff',
-  '#f6c7a8'
+  '#b6ddfc',
+  '#eeb887',
+  '#ecbce3',
+  '#bbe4c5',
+  '#c0bbfc'
 ] as const;
 
 export const PASTEL_CHAUD_COLORS = [
