@@ -424,7 +424,7 @@
         <Row noGutter class="mt-4">
           <Column sm={2} md={4} lg={8}>
             <Button
-              kind="secondary"
+              kind="tertiary"
               size="field"
               class="action-button"
               onclick={() => {

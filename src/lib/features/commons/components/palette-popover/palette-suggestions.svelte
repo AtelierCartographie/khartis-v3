@@ -18,6 +18,7 @@
     buildPatternBackground,
     VIF_MIXTE_COLORS
   } from './palette.constants';
+  import { DEFAULT_VISUALIZATION_COLOR } from '$lib/features/commons/constants/colors.constants';
   import PaletteSwatchRow from './palette-swatch-row.svelte';
 
   interface Props {
@@ -102,7 +103,7 @@
       return generateIntensityShades(qualitativeSelectedColor);
     }
     const selected = sequentialPalettes.find((p) => p.id === selectedPaletteId);
-    const seedColor = selected?.colors?.[0] ?? '#08519c';
+    const seedColor = selected?.colors?.[0] ?? DEFAULT_VISUALIZATION_COLOR;
     return generateIntensityShades(seedColor);
   });
 

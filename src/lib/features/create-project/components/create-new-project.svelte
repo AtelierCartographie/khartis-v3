@@ -292,7 +292,7 @@
         <div class="paste-actions">
           <Button
             size="field"
-            kind="secondary"
+            kind="tertiary"
             onclick={() => (pastedDataValue = '')}
           >
             {m.create_project_clear_button()}

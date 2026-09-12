@@ -5,6 +5,7 @@ import { LogCategory, logger } from '../utils/logger';
 import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
 import { DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX } from '../utils/discretization.utils';
 import { webglToHex } from '../utils/color-utils';
+import { DEFAULT_VISUALIZATION_COLOR } from '../constants/colors.constants';
 import {
   sequential,
   divergentSequential,
@@ -14,7 +15,7 @@ import type { WebGLColor, ContrastMode } from '@ateliercartographie/ok-palette';
 import type { Table } from '@uwdata/flechette';
 
 const SEQUENTIAL_COLOR_START = '#f7fbff';
-const SEQUENTIAL_COLOR_END = '#08519c';
+const SEQUENTIAL_COLOR_END = DEFAULT_VISUALIZATION_COLOR;
 const DIVERGING_COLOR_A = '#b2182b';
 const DIVERGING_COLOR_B = '#2166ac';
 

@@ -192,7 +192,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     visible: true,
     renderBelowThematic: true,
     color: NEUTRAL_CARTOGRAPHY_COLORS.sphereOutline,
-    thickness: 1,
+    thickness: 0.5,
     opacity: 100
   },
   {

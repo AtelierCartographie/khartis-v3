@@ -32,15 +32,15 @@ function getDefaultFileName(): string {
 function createExportModal(): UseExportModalReturn {
   let isOpen = $state(false);
   let isExporting = $state(false);
-  let selectedTab = $state<ExportTabType>(ExportTab.PROJECT);
+  let selectedTab = $state<ExportTabType>(ExportTab.MAP);
   let fileName = $state(projectStore.projectName || getDefaultFileName());
-  let mapFormat = $state<MapExportFormat>(MAP_FORMAT.SVG);
+  let mapFormat = $state<MapExportFormat>(MAP_FORMAT.JPG);
   let dataFormat = $state<DataExportFormat>(DATA_FORMAT.CSV);
   let resolution = $state<ExportResolution>(EXPORT_RESOLUTION.HD_1080P);
 
   function open(): void {
     fileName = projectStore.projectName || getDefaultFileName();
-    selectedTab = ExportTab.PROJECT;
+    selectedTab = ExportTab.MAP;
     isOpen = true;
   }
 
