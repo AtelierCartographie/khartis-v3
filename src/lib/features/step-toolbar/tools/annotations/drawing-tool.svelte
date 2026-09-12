@@ -189,7 +189,7 @@
               {m.annotations_drawing_finish()}
             </Button>
             <Button
-              kind="secondary"
+              kind="tertiary"
               onclick={() => annotationsActions.cancelDrawing()}
             >
               {m.button_cancel()}

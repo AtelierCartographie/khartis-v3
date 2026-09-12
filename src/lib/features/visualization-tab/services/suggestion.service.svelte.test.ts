@@ -586,7 +586,7 @@ describe('suggestion.service', () => {
 
     expect(updatedVisualization).toBeDefined();
     expect(updatedVisualization?.type).toBe(VisualizationType.CHOROPLETH);
-    expect(updatedVisualization?.modes?.fill).toBe(FillMode.NONE);
+    expect(updatedVisualization?.modes?.fill).toBe(FillMode.UNIQUE);
     expect(updatedVisualization?.mapping.geometryColumn).toBe('geometry');
     expect(updatedVisualization?.mapping.valueColumn).toBeUndefined();
     expect(updatedVisualization?.classification).toBeUndefined();
@@ -594,9 +594,7 @@ describe('suggestion.service', () => {
     expect(updatedVisualization?.style.strokeColor).toBe(
       DEFAULT_COLORS.neutralStroke
     );
-    expect(updatedVisualization?.style.lineColor).toBe(
-      DEFAULT_COLORS.neutralStroke
-    );
+    expect(updatedVisualization?.style.lineColor).toBe(DEFAULT_COLORS.line);
     expect(updatedVisualization?.missingData?.show).toBe(false);
     expect(updatedVisualization?.style.labelHalo).toBe(false);
     expect(updatedVisualization?.style.textCollisionDetection).toBe(false);
@@ -622,14 +620,12 @@ describe('suggestion.service', () => {
     expect(updatedVisualization?.mapping.sizeColumn).toBeUndefined();
     expect(updatedVisualization?.mapping.valueColumn).toBeUndefined();
     expect(updatedVisualization?.style.symbolFillColor).toBe(
-      DEFAULT_COLORS.gray
+      DEFAULT_COLORS.fill
     );
     expect(updatedVisualization?.style.strokeColor).toBe(
       DEFAULT_COLORS.neutralStroke
     );
-    expect(updatedVisualization?.style.lineColor).toBe(
-      DEFAULT_COLORS.neutralStroke
-    );
+    expect(updatedVisualization?.style.lineColor).toBe(DEFAULT_COLORS.line);
     expect(updatedVisualization?.missingData?.show).toBe(false);
     expect(isVisualizationBlank(updatedVisualization!, dataset)).toBe(true);
   });

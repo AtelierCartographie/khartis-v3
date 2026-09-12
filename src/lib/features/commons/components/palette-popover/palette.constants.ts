@@ -18,7 +18,11 @@ import {
   type PatternShape
 } from '$lib/features/commons/constants/pattern.constants';
 import type { ClassPattern } from '$lib/features/commons/services/pattern-palette.service';
-import { hexToHsl, webglToHex } from '$lib/features/commons/utils/color-utils';
+import {
+  hexToOklchHue,
+  webglToHex
+} from '$lib/features/commons/utils/color-utils';
+import { DEFAULT_VISUALIZATION_COLOR } from '$lib/features/commons/constants/colors.constants';
 import {
   resolveMotifOptions,
   type PatternName
@@ -56,10 +60,10 @@ export {
 } from '$lib/features/commons/constants/qualitative-palette.constants';
 
 export const DEFAULT_SEQUENTIAL_PREVIEW = [
-  '#c8ddf0',
-  '#78a9cf',
-  '#2171b5',
-  '#084594'
+  '#c2e7ff',
+  '#89c1ed',
+  '#4d9bd4',
+  '#0076ba'
 ];
 
 export const DEFAULT_QUALITATIVE_PREVIEW = [...VIF_MIXTE_COLORS.slice(0, 4)];
@@ -162,6 +166,12 @@ const COLORBLIND_SAFE_INDICES: Record<
 
 export const monochromePalettes: Palette[] = [
   {
+    id: 'mono-khartis',
+    colors: [DEFAULT_VISUALIZATION_COLOR],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  },
+  {
     id: 'mono-pink',
     colors: ['#c2185b'],
     type: PALETTE_TYPE.SEQUENTIAL,
@@ -196,7 +206,7 @@ export const monochromePalettes: Palette[] = [
 const bicolorPalettes: Palette[] = [
   {
     id: 'blues',
-    colors: ['#f7fbff', '#08519c'],
+    colors: ['#f7fbff', DEFAULT_VISUALIZATION_COLOR],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
@@ -724,6 +734,8 @@ export function resolvePaletteTypeForBreakpoint(
 
 export function getPaletteDisplayName(palette: Palette): string {
   switch (palette.id) {
+    case 'mono-khartis':
+      return m.palette_name_mono_khartis();
     case 'mono-pink':
       return m.palette_name_mono_pink();
     case 'mono-teal':
@@ -914,5 +926,5 @@ export function generateCategoricalColorsFromSeed(
 }
 
 function extractHueFromHex(hex: string): number {
-  return hexToHsl(hex.startsWith('#') ? hex : `#${hex}`).hue;
+  return hexToOklchHue(hex.startsWith('#') ? hex : `#${hex}`);
 }

@@ -342,17 +342,11 @@
           />
         </div>
         <footer class="popover-footer">
-          <Button
-            class="khartis-dialog-close-action"
-            kind="secondary"
-            size="small"
-            on:click={handleCancel}
-          >
+          <Button kind="tertiary" size="small" on:click={handleCancel}>
             {m.button_cancel()}
           </Button>
           <Button
-            class="khartis-dialog-action"
-            kind="secondary"
+            kind="primary"
             size="small"
             icon={ArrowRight}
             on:click={handleValidate}

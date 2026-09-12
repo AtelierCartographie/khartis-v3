@@ -1073,7 +1073,8 @@ export function resolveBlankVisualizationPreset(
   };
   const style = {
     ...preset.style,
-    lineColor: DEFAULT_COLORS.neutralStroke,
+    fillColor: DEFAULT_COLORS.fill,
+    lineColor: DEFAULT_COLORS.line,
     textFontFamily: CARTOGRAPHIC_FONT_FAMILY,
     textHalo: false,
     textCollisionDetection: false,
@@ -1087,14 +1088,14 @@ export function resolveBlankVisualizationPreset(
   };
 
   if (blankType === VisualizationType.CHOROPLETH) {
-    modes.fill = FillMode.NONE;
+    modes.fill = FillMode.UNIQUE;
     style.strokeColor = DEFAULT_COLORS.neutralStroke;
   }
 
   if (blankType === VisualizationType.PROPORTIONAL) {
     modes.symbol = SymbolMode.UNIQUE;
     modes.proportionalType = ProportionalType.SINGLE;
-    style.symbolFillColor = DEFAULT_COLORS.gray;
+    style.symbolFillColor = DEFAULT_COLORS.fill;
     style.strokeColor = DEFAULT_COLORS.neutralStroke;
   }
 
@@ -1111,10 +1112,9 @@ export function resolveBlankVisualizationPreset(
     ? {
         ...preset.polygon,
         enabled: blankType === VisualizationType.CHOROPLETH,
-        fillMode:
-          blankType === VisualizationType.CHOROPLETH
-            ? FillMode.NONE
-            : preset.polygon.fillMode,
+        fillMode: FillMode.UNIQUE,
+        fillColor: DEFAULT_COLORS.fill,
+        strokeMode: StrokeMode.NONE,
         strokeColor: DEFAULT_COLORS.neutralStroke,
         missingData: blankMissingData
       }
@@ -1132,10 +1132,8 @@ export function resolveBlankVisualizationPreset(
           blankType === VisualizationType.PROPORTIONAL
             ? ProportionalType.SINGLE
             : preset.symbol.proportionalType,
-        fillColor:
-          blankType === VisualizationType.PROPORTIONAL
-            ? DEFAULT_COLORS.gray
-            : preset.symbol.fillColor,
+        fillMode: FillMode.UNIQUE,
+        fillColor: DEFAULT_COLORS.fill,
         strokeColor: DEFAULT_COLORS.neutralStroke,
         missingData: blankMissingData
       }
@@ -1145,7 +1143,7 @@ export function resolveBlankVisualizationPreset(
     ? {
         ...preset.line,
         enabled: false,
-        color: DEFAULT_COLORS.neutralStroke,
+        color: DEFAULT_COLORS.line,
         missingData: blankMissingData
       }
     : undefined;

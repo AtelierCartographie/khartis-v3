@@ -80,7 +80,6 @@ import {
   shouldShowGeneratedOrthographicOceanLayer,
   shouldShowOrthographicBasemapLayers
 } from '../utils/orthographic-basemap-visibility.utils';
-import { getBasemapAuxLayerDefaultVisibility } from '../utils/basemap-aux-layer-visibility.utils';
 import { resolveProjectionForRender } from '../utils/projection-priority.utils';
 import {
   applyProjectionSphereMask,
@@ -1123,15 +1122,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               const entry = metadataLayerByKey.get(layerKey);
               if (!entry) continue;
               const { layer } = entry;
-              const defaultVisible = getBasemapAuxLayerDefaultVisibility(
-                layer,
-                currentMetadata.layers
-              );
               if (
                 !basemapAuxLayersStore.isVisible(
                   currentMetadata.file,
                   layerKey,
-                  defaultVisible
+                  true
                 )
               ) {
                 continue;

@@ -664,7 +664,6 @@
 
     <ModalFooter
       secondaryButtonText={m.sidenav_install_help_close()}
-      secondaryClass="khartis-dialog-close-action"
       on:click:button--secondary={closeInstallDialog}
     />
   </ComposedModal>

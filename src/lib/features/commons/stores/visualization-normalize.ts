@@ -158,8 +158,7 @@ export function buildPolygonPrimitiveConfig(
       existing?.fillMode ?? visualization.modes?.fill ?? FillMode.UNIQUE,
     fillColor: existing?.fillColor ?? visualization.style.fillColor,
     fillOpacity: existing?.fillOpacity ?? visualization.style.fillOpacity ?? 1,
-    strokeMode:
-      existing?.strokeMode ?? visualization.modes?.stroke ?? StrokeMode.UNIQUE,
+    strokeMode: existing?.strokeMode ?? StrokeMode.NONE,
     strokeColor:
       existing?.strokeColor ??
       visualization.style.strokeColor ??
