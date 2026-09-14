@@ -22,6 +22,10 @@
   import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
   import { SYNTHETIC_AUX_LAYER_KEY } from '$lib/features/commons/constants/basemap.constants';
   import { webglToHex } from '$lib/features/commons/utils/color-utils';
+  import {
+    COLOR_ROLE,
+    getColorSuggestions
+  } from '$lib/features/commons/services/color-suggestion.service';
   import { resolvePresetLandStroked } from '$lib/features/map/layers/basemap-style-resolve';
   import { dashArrayToDottedPattern } from '$lib/features/map/layers/layer-helpers';
   import type { BasemapLayer } from '$lib/features/map/types/basemap.types';
@@ -208,6 +212,10 @@
     };
   });
 
+  const boundaryColorPresets = $derived(
+    getColorSuggestions(COLOR_ROLE.BOUNDARY, getConfig('terre')?.fillColor)
+  );
+
   function handlePerFileStyleChange(updates: Record<string, unknown>): void {
     basemapAuxLayersStore.updateStyle(basemapFile, renderKey, updates);
   }
@@ -345,6 +353,7 @@
       showDotted={true}
       showThickness={true}
       color={limitView?.color}
+      colorPresets={boundaryColorPresets}
       dotted={limitView?.dotted}
       dottedPattern={limitView?.dottedPattern}
       thickness={limitView?.thickness}

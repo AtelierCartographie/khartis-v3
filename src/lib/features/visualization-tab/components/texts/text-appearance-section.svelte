@@ -7,6 +7,10 @@
     SliderWithInput,
     ToggleWithLabel
   } from '../shared';
+  import {
+    COLOR_ROLE,
+    getColorSuggestions
+  } from '$lib/features/commons/services/color-suggestion.service';
 
   interface Props {
     color: string;
@@ -43,6 +47,7 @@
       exclusive
       label={m.color()}
       value={color}
+      presets={getColorSuggestions(COLOR_ROLE.TEXT_FILL)}
       onchange={onColorChange}
     />
   </div>
@@ -68,6 +73,7 @@
         exclusive
         label={m.color()}
         value={haloColor}
+        presets={getColorSuggestions(COLOR_ROLE.TEXT_STROKE)}
         onchange={onHaloColorChange}
       />
     </div>

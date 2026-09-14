@@ -1,3 +1,12 @@
+<script lang="ts" module>
+  let groupSequence = 0;
+
+  function nextGroupId(): number {
+    groupSequence += 1;
+    return groupSequence;
+  }
+</script>
+
 <script lang="ts" generics="T extends string | number">
   import SimpleRadio from './simple-radio.svelte';
 
@@ -33,6 +42,12 @@
     onchange
   }: Props = $props();
 
+  // Native radio grouping is document-wide, so two panels rendering the same
+  // logical group at once (a palette popover over a categories popover) would
+  // share one group and leave one of them with nothing checked.
+  const instanceId = nextGroupId();
+  const groupName = $derived(`${name}-${instanceId}`);
+
   function handleSelect(value: T, isChecked: boolean): void {
     if (!isChecked || value === selected) return;
     onchange?.(value);
@@ -53,7 +68,7 @@
   <div class="kh-radio-group-items">
     {#each items as item (item.value)}
       <SimpleRadio
-        name={name}
+        name={groupName}
         value={String(item.value)}
         checked={selected === item.value}
         labelText={item.labelText}
