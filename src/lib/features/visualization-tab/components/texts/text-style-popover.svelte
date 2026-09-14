@@ -5,14 +5,19 @@
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { portal } from '$lib/features/commons/utils/portal';
+  import SimpleRadioGroup from '$lib/features/commons/components/simple-radio-group.svelte';
   import { resolveToolbarWidth } from '$lib/features/commons/utils/toolbar-width.utils';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
-  import { DEFAULT_FONT_SIZE } from '$lib/features/step-toolbar/fonts.constants';
   import * as m from '$lib/paraglide/messages';
   import { Close } from 'carbon-icons-svelte';
   import TextStyleSection, {
     type TextStyleSectionHandlers
   } from './text-style-section.svelte';
+  import {
+    TEXT_HIERARCHY,
+    TEXT_HIERARCHY_ORDER,
+    type TextHierarchy
+  } from './text-hierarchy.utils';
 
   type SectionHandlers = TextStyleSectionHandlers;
 
@@ -24,6 +29,8 @@
     visibleSection?: VisibleSection;
     primary: SectionHandlers;
     secondary?: SectionHandlers;
+    hierarchy?: TextHierarchy;
+    onHierarchyChange?: (hierarchy: TextHierarchy) => void;
     onclose?: () => void;
   }
 
@@ -33,10 +40,23 @@
     visibleSection = 'both',
     primary,
     secondary,
+    hierarchy = TEXT_HIERARCHY.EQUAL,
+    onHierarchyChange,
     onclose
   }: Props = $props();
 
-  const DEFAULT_SECONDARY_FONT_SIZE = DEFAULT_FONT_SIZE;
+  const HIERARCHY_LABELS: Record<TextHierarchy, () => string> = {
+    [TEXT_HIERARCHY.EQUAL]: m.text_hierarchy_equal,
+    [TEXT_HIERARCHY.MODERATE]: m.text_hierarchy_moderate,
+    [TEXT_HIERARCHY.STRONG]: m.text_hierarchy_strong
+  };
+  const hierarchyItems = $derived(
+    TEXT_HIERARCHY_ORDER.map((level) => ({
+      value: level,
+      labelText: HIERARCHY_LABELS[level]()
+    }))
+  );
+
   const DEFAULT_POPOVER_WIDTH = 320;
   const VIEWPORT_GUTTER = 16;
   const TRIGGER_GAP = 12;
@@ -200,8 +220,19 @@
           <TextStyleSection
             title={m.text_style_secondary_title()}
             section={secondary}
-            fallbackSize={DEFAULT_SECONDARY_FONT_SIZE}
           />
+        {/if}
+
+        {#if secondary}
+          <div class="text-hierarchy-field">
+            <SimpleRadioGroup
+              name="text-hierarchy"
+              legendText={m.text_hierarchy_title()}
+              items={hierarchyItems}
+              selected={hierarchy}
+              onchange={(value) => onHierarchyChange?.(value)}
+            />
+          </div>
         {/if}
       </div>
     </div>
@@ -236,6 +267,10 @@
       0 0 1px rgba(0, 0, 0, 0.2);
     z-index: var(--z-popover);
     overflow: hidden;
+  }
+
+  .text-hierarchy-field {
+    padding: 0 var(--cds-spacing-05, 16px);
   }
 
   .popover-header {
