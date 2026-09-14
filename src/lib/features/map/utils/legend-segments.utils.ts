@@ -86,6 +86,7 @@ import {
   type SharedFacetScaleColumn
 } from '$lib/features/step-toolbar/tools/facets';
 import type { LegendSubtitlePrimitive } from '$lib/features/commons/utils/legend-subtitle.utils';
+import { resolveVariableTextSizeBounds } from '../layers/text-layer-data.utils';
 
 const legendPatternFillCache: Record<string, LegendPatternFill> = {};
 
@@ -1025,6 +1026,58 @@ function getTextColorLegendDraft(
   return null;
 }
 
+// Classed labels step through discrete font sizes, exactly like classed
+// symbols step through discrete radii, so the legend shows one glyph per class
+// at the size the renderer gives it — not the continuous ramp of the
+// proportional mode.
+function getTextSizeClassLegendItems(
+  viz: VisualizationConfig,
+  text: NonNullable<VisualizationConfig['text']>,
+  style: {
+    baseSize: number;
+    maxLegendSize: number;
+    fill: string;
+    stroke: string;
+  }
+): KhartisLegendSwatchItem[] {
+  const classification = getPrimitiveClassification(
+    viz,
+    PrimitiveFilterType.TEXT
+  );
+  const breaks = (classification?.breaks ?? []).filter(Number.isFinite);
+  const classCount = getClassificationClassCount(classification);
+
+  if (breaks.length === 0 || classCount < 1) {
+    return [];
+  }
+
+  const { minSize, maxSize } = resolveVariableTextSizeBounds(style.baseSize);
+  const legendScale = maxSize > 0 ? style.maxLegendSize / maxSize : 1;
+  const strokeWidth = getTextLegendStrokeWidth(text.haloWidth, text.halo);
+  const colors = classification?.colors ?? [];
+
+  return Array.from({ length: classCount }, (_, index) => {
+    // Same linear step the renderer applies per class index.
+    const classSize =
+      classCount === 1
+        ? maxSize
+        : minSize + (index * (maxSize - minSize)) / (classCount - 1);
+
+    return {
+      label: getColorScaleLabel(breaks, classCount, index),
+      fill:
+        text.colorMode === ColorMode.UNIQUE
+          ? style.fill
+          : (colors[index] ?? style.fill),
+      stroke: style.stroke,
+      strokeWidth,
+      opacity: text.opacity,
+      symbol: getTextLegendSymbolPath(),
+      size: Math.max(6, Math.round(classSize * legendScale))
+    };
+  });
+}
+
 function getTextSizeLegendDraft(
   viz: VisualizationConfig | undefined
 ): LegendSegmentDraft | null {
@@ -1065,6 +1118,37 @@ function getTextSizeLegendDraft(
         : (text.color ?? DEFAULT_COLORS.text)
       : DEFAULT_COLORS.text;
   const stroke = text.halo ? (text.haloColor ?? DEFAULT_COLORS.halo) : 'none';
+
+  if (text.sizeMode === SizeMode.CLASSES) {
+    const items = getTextSizeClassLegendItems(viz, text, {
+      baseSize: clampedBaseSize,
+      maxLegendSize,
+      fill,
+      stroke
+    });
+
+    if (items.length === 0) {
+      return null;
+    }
+
+    return {
+      key: 'text-size-classes',
+      primitive: 'text',
+      className: 'legend-svg--text-size',
+      consumesMissingData: Boolean(text.missingData?.show),
+      create: (options, context) =>
+        toLegendSvg(
+          draw_khartis_swatch_legend(items, {
+            ...options,
+            type: 'symbol',
+            ...getTextMissingDataFooterOptions(
+              text,
+              context.includeMissingDataFooter
+            )
+          })
+        )
+    };
+  }
 
   return {
     key: 'text-size',
