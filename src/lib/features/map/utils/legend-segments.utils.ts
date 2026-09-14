@@ -357,6 +357,8 @@ function normalizeLegendValue(
   );
 }
 
+const CLASSED_SYMBOL_LEGEND_MAX_SIZE = 18;
+
 function getPointLegendDisplaySize(
   scale: PointSizeLegendScale,
   size: number
@@ -365,11 +367,15 @@ function getPointLegendDisplaySize(
     return 0;
   }
 
-  const sizes = scale.steps.map((step) => step.size);
-  const minSize = Math.min(...sizes);
-  const maxSize = Math.max(...sizes);
+  const maxSize = Math.max(...scale.steps.map((step) => step.size));
+  if (maxSize <= 0) {
+    return 0;
+  }
 
-  return normalizeLegendValue(size, minSize, maxSize, 4, 18);
+  // One factor for every class, so the legend keeps the ratio the map draws:
+  // stretching the classes onto a fixed display range would show the same
+  // contrast whatever the symbol sizes actually are.
+  return (size * CLASSED_SYMBOL_LEGEND_MAX_SIZE) / maxSize;
 }
 
 function getUniquePointLegendDisplaySize(size: number | undefined): number {
@@ -1073,7 +1079,7 @@ function getTextSizeClassLegendItems(
       strokeWidth,
       opacity: text.opacity,
       symbol: getTextLegendSymbolPath(),
-      size: Math.max(6, Math.round(classSize * legendScale))
+      size: Math.round(classSize * legendScale)
     };
   });
 }

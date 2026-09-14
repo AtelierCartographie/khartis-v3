@@ -3,7 +3,10 @@ import type { FeatureCollection, Geometry } from 'geojson';
 import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
-import { SLIDER_LIMITS } from '$lib/features/commons/constants/visualization.constants';
+import {
+  SLIDER_LIMITS,
+  VISUALIZATION_DEFAULTS
+} from '$lib/features/commons/constants/visualization.constants';
 
 import { GeometryType } from '../constants';
 import type { GeometryInfo } from '../types';
@@ -68,17 +71,22 @@ export function resolveAccessorValue<T>(
   return isTextDatumAccessor(accessor) ? accessor(datum) : accessor;
 }
 
+// The size slider scales the whole class ramp. Pinning the smallest class to the
+// legibility floor would leave it alone while every other class grows, turning a
+// size control into a contrast control. The ratio is the widest spread that floor
+// allows at the default size, and it then holds at every size.
+const CLASSED_TEXT_SIZE_RATIO =
+  SLIDER_LIMITS.textSize.min / VISUALIZATION_DEFAULTS.textSize;
+
 export function resolveVariableTextSizeBounds(baseSize: number): {
   minSize: number;
   maxSize: number;
 } {
   const { min, max } = SLIDER_LIMITS.textSize;
-  const clampedBaseSize = Math.min(Math.max(baseSize, min), max);
-  const minSize = min;
-  const maxSize = clampedBaseSize;
+  const maxSize = Math.min(Math.max(baseSize, min), max);
 
   return {
-    minSize: Math.min(minSize, maxSize),
+    minSize: maxSize * CLASSED_TEXT_SIZE_RATIO,
     maxSize
   };
 }

@@ -49,6 +49,7 @@
     parseOpacityToSlider
   } from '../../utils/coerce.utils';
   import { getDefaultScaleForShape } from './scale-by-shape.utils';
+  import { scaleSymbolMinSize } from './classed-size.utils';
 
   interface Props extends SymbolModeProps {
     symbolMode: SymbolMode.PROPORTIONAL | SymbolMode.CLASSES;
@@ -409,8 +410,12 @@
 
   function handleSymbolMaxSizeChange(value: number) {
     runUserChange(() => {
+      const scaledMinSize = scaleSymbolMinSize(visualization?.symbol, value);
       symbolMaxSize = value;
-      onSymbolsChange?.({ maxSize: value });
+      onSymbolsChange?.({
+        maxSize: value,
+        ...(scaledMinSize === undefined ? {} : { minSize: scaledMinSize })
+      });
     });
   }
 
