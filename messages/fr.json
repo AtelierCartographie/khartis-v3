@@ -1238,6 +1238,8 @@
   "projection_desc_aitoff": "Azimutale modifiée",
   "projection_name_mollweide": "Mollweide",
   "projection_desc_mollweide": "Équivalente, elliptique",
+  "projection_name_eckert_4": "Eckert IV",
+  "projection_desc_eckert_4": "Équivalente à méridiens elliptiques et pôles rectilignes : elle respecte les surfaces tout en adoucissant l’étirement des hautes latitudes propre à Mollweide.",
   "projection_name_stereographic": "Stéréographique",
   "projection_name_times": "Times",
   "projection_desc_times": "Cette projection cherche à réduire les distorsions de la Plate carrée. Elle offre un rendu plus harmonieux des continents tout en conservant une structure rectangulaire.",

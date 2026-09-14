@@ -97,6 +97,7 @@ const D3_FACTORY_MAP: Record<string, GeoProjectionFactory | undefined> = {
   geoBertin1953: getD3ProjectionFactory('geoBertin1953'),
   geoArmadillo: getD3ProjectionFactory('geoArmadillo'),
   geoMollweide: getD3ProjectionFactory('geoMollweide'),
+  geoEckert4: getD3ProjectionFactory('geoEckert4'),
   geoInterruptedMollweide,
   geoInterruptedMollweideHemispheres,
   geoAirocean,
