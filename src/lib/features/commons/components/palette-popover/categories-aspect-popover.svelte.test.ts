@@ -8,8 +8,8 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as m from '$lib/paraglide/messages';
 import {
-  DEFAULT_QUALITATIVE_PRESET,
-  getQualitativeColorGroups
+  SUGGESTION_PRESET,
+  getQualitativeColorBands
 } from './palette.constants';
 import CategoriesAspectPopover from './categories-aspect-popover.svelte';
 
@@ -157,10 +157,8 @@ describe('CategoriesAspectPopover runtime', () => {
       onvalidate
     });
 
-    const mixteColors = getQualitativeColorGroups(
-      DEFAULT_QUALITATIVE_PRESET,
-      false
-    ).mixte;
+    const mixteColors = getQualitativeColorBands(SUGGESTION_PRESET.VIF)[0]
+      .colors;
 
     await fireEvent.click(
       screen.getByRole('button', { name: m.palette_theme_mixte() })

@@ -650,6 +650,7 @@
 
 <StrokeSection
   visualization={visualization}
+  fillColor={fillColor}
   dataFields={dataFields}
   infoText={m.stroke_section_info()}
   showDashed={true}

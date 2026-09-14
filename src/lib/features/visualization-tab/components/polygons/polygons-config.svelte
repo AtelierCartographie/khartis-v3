@@ -259,6 +259,12 @@
     return storedMode;
   });
 
+  const strokeReferenceFill = $derived(
+    effectiveFillMode === FillMode.UNIQUE
+      ? fillColor
+      : (visualization?.classification?.colors ?? fillColor)
+  );
+
   function handleFillOpacityChange(value: number) {
     fillOpacity = value;
     onStyleChange?.({ fillOpacity: value / 100 });
@@ -419,6 +425,7 @@
     {#if effectiveFillMode !== FillMode.DENSITY}
       <StrokeSection
         visualization={visualization}
+        fillColor={strokeReferenceFill}
         dataFields={dataFields}
         discretizationLabel={strokeDiscretizationLabel}
         onStyleChange={onStyleChange}
