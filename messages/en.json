@@ -1238,6 +1238,8 @@
   "projection_desc_aitoff": "Modified azimuthal",
   "projection_name_mollweide": "Mollweide",
   "projection_desc_mollweide": "Equal-area, elliptical",
+  "projection_name_eckert_4": "Eckert IV",
+  "projection_desc_eckert_4": "Equal-area, with elliptical meridians and pole lines: it preserves areas while softening the high-latitude stretching of Mollweide.",
   "projection_name_stereographic": "Stereographic",
   "projection_name_times": "Times",
   "projection_desc_times": "This projection reduces the distortions of the plate carrée. It renders the continents more harmoniously while keeping a rectangular frame.",
