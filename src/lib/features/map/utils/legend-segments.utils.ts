@@ -357,25 +357,12 @@ function normalizeLegendValue(
   );
 }
 
-const CLASSED_SYMBOL_LEGEND_MAX_SIZE = 18;
-
-function getPointLegendDisplaySize(
-  scale: PointSizeLegendScale,
-  size: number
-): number {
-  if (size <= 0) {
-    return 0;
-  }
-
-  const maxSize = Math.max(...scale.steps.map((step) => step.size));
-  if (maxSize <= 0) {
-    return 0;
-  }
-
-  // One factor for every class, so the legend keeps the ratio the map draws:
-  // stretching the classes onto a fixed display range would show the same
-  // contrast whatever the symbol sizes actually are.
-  return (size * CLASSED_SYMBOL_LEGEND_MAX_SIZE) / maxSize;
+// Class steps are radii, the swatch takes the drawn size, so the legend shows
+// each class at the size the map gives it — the way the proportional legend
+// already reads. Stretching the classes onto a fixed display range showed the
+// same contrast at the same size whatever the symbols actually measured.
+function getPointLegendDisplaySize(size: number): number {
+  return size > 0 ? size * 2 : 0;
 }
 
 function getUniquePointLegendDisplaySize(size: number | undefined): number {
@@ -1041,7 +1028,6 @@ function getTextSizeClassLegendItems(
   text: NonNullable<VisualizationConfig['text']>,
   style: {
     baseSize: number;
-    maxLegendSize: number;
     fill: string;
     stroke: string;
   }
@@ -1058,7 +1044,6 @@ function getTextSizeClassLegendItems(
   }
 
   const { minSize, maxSize } = resolveVariableTextSizeBounds(style.baseSize);
-  const legendScale = maxSize > 0 ? style.maxLegendSize / maxSize : 1;
   const strokeWidth = getTextLegendStrokeWidth(text.haloWidth, text.halo);
   const colors = classification?.colors ?? [];
 
@@ -1079,7 +1064,7 @@ function getTextSizeClassLegendItems(
       strokeWidth,
       opacity: text.opacity,
       symbol: getTextLegendSymbolPath(),
-      size: Math.round(classSize * legendScale)
+      size: Math.round(classSize)
     };
   });
 }
@@ -1113,10 +1098,9 @@ function getTextSizeLegendDraft(
     Math.max(baseSize, SLIDER_LIMITS.textSize.min),
     SLIDER_LIMITS.textSize.max
   );
-  const maxLegendSize = Math.max(
-    12,
-    Math.min(22, Math.round(clampedBaseSize * 1.4))
-  );
+  // draw_symbols_legend builds its glyph twice as tall as the size it is given,
+  // so half the font size draws the largest label at the size the map uses.
+  const proportionalLegendSize = clampedBaseSize / 2;
   const fill =
     text.colorMode === ColorMode.UNIQUE
       ? Array.isArray(text.color)
@@ -1128,7 +1112,6 @@ function getTextSizeLegendDraft(
   if (text.sizeMode === SizeMode.CLASSES) {
     const items = getTextSizeClassLegendItems(viz, text, {
       baseSize: clampedBaseSize,
-      maxLegendSize,
       fill,
       stroke
     });
@@ -1166,7 +1149,7 @@ function getTextSizeLegendDraft(
         draw_symbols_legend(values, {
           ...options,
           type: 'text',
-          size: maxLegendSize,
+          size: proportionalLegendSize,
           fill,
           stroke,
           nodata: context.includeMissingDataFooter
@@ -1790,7 +1773,7 @@ function getPointSizeLegendItems(
     strokeWidth: 0.75,
     opacity: scale.fillOpacity,
     symbol: getShapePath(scale.shape),
-    size: getPointLegendDisplaySize(scale, step.size)
+    size: getPointLegendDisplaySize(step.size)
   }));
 }
 

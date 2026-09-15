@@ -78,6 +78,10 @@ interface RowLegendOptions<T> extends CommonLegendTextOptions {
   drawShape: RowShapeFactory<T>;
   shapeWidth?: number;
   minRowHeight?: number;
+  // Set when the items carry their own drawn size: the shape column and each
+  // row then grow with the item, so a legend meant to read at map scale is not
+  // squeezed into a box derived from the font size.
+  getShapeSize?: (item: T) => number | undefined;
   footerItems?: KhartisLegendSwatchItem[];
   footerType?: KhartisLegendSwatchType;
 }
@@ -97,6 +101,9 @@ export function draw_khartis_swatch_legend(
       type,
       Math.round((options.fontSize ?? 12) * 1.25)
     ),
+    ...(type === 'symbol'
+      ? { getShapeSize: (item: KhartisLegendSwatchItem) => item.size }
+      : {}),
     footerItems: options.footerItems,
     footerType: options.footerType,
     drawShape: (item, x, rowTop, size, _index, rowHeight) =>
@@ -179,9 +186,17 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
       : []),
     ...(options.footerItems ?? [])
   ];
+  const itemShapeSizes = items.map((item) =>
+    Math.max(shapeSize, options.getShapeSize?.(item) ?? 0)
+  );
+  const footerShapeSizes = footerItems.map((item) =>
+    Math.max(shapeSize, options.getShapeSize ? (item.size ?? 0) : 0)
+  );
   const shapeWidth = Math.max(
     options.shapeWidth ?? shapeSize,
-    footerItems.length > 0 ? getSwatchShapeWidth(footerType, shapeSize) : 0
+    footerItems.length > 0 ? getSwatchShapeWidth(footerType, shapeSize) : 0,
+    ...itemShapeSizes,
+    ...footerShapeSizes
   );
   const labelWidth = Math.round(fontSize * 15);
   const labelLines = items.map((item) =>
@@ -222,22 +237,26 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
     1,
     ...labelLines.map((lines) => lines.length)
   );
-  const rowBodyHeight = Math.max(
-    options.minRowHeight ?? 0,
-    shapeSize,
-    lineHeight * maxLabelLineCount
+  const rowBodyHeights = items.map((_, index) =>
+    Math.max(
+      options.minRowHeight ?? 0,
+      itemShapeSizes[index] ?? shapeSize,
+      lineHeight * maxLabelLineCount
+    )
   );
-  const rowStep = rowBodyHeight + gap;
   const startY = margin + header.height + gap;
+  let nextRowTop = startY;
   const rows = items.map((item, index) => {
     const x = margin;
-    const rowTop = startY + index * rowStep;
+    const rowBodyHeight = rowBodyHeights[index] ?? shapeSize;
+    const rowTop = nextRowTop;
+    nextRowTop += rowBodyHeight + gap;
     const labelX = x + shapeWidth + gap;
     const shape = options.drawShape(
       item,
       x,
       rowTop,
-      shapeSize,
+      shapeWidth,
       index,
       rowBodyHeight
     );
@@ -255,20 +274,26 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
       defs: shape.defs
     };
   });
-  const mainBottom =
-    items.length > 0 ? startY + items.length * rowStep - gap : startY;
+  const mainBottom = items.length > 0 ? nextRowTop - gap : startY;
   const maxFooterLineCount = Math.max(
     1,
     ...footerLabelLines.map((lines) => lines.length)
   );
-  const footerBodyHeight = Math.max(shapeSize, lineHeight * maxFooterLineCount);
-  const footerRowStep = footerBodyHeight + gap;
+  const footerBodyHeights = footerItems.map((_, index) =>
+    Math.max(
+      footerShapeSizes[index] ?? shapeSize,
+      lineHeight * maxFooterLineCount
+    )
+  );
   const section_gap = Math.max(10, Math.round(fontSize * 0.6));
   const footerStartY =
     footerItems.length > 0 ? mainBottom + section_gap : mainBottom;
+  let nextFooterTop = footerStartY;
   const footerRows = footerItems.map((item, index) => {
     const x = margin;
-    const rowTop = footerStartY + index * footerRowStep;
+    const footerBodyHeight = footerBodyHeights[index] ?? shapeSize;
+    const rowTop = nextFooterTop;
+    nextFooterTop += footerBodyHeight + gap;
     const labelX = x + shapeWidth + gap;
     const labelY = rowTop + footerBodyHeight / 2;
     const shape = draw_swatch_shape(
@@ -276,7 +301,7 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
       footerType,
       x,
       rowTop,
-      shapeSize,
+      shapeWidth,
       footerBodyHeight
     );
     const label = render_label(
@@ -293,9 +318,7 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): LegendSvgDefinition {
     };
   });
   const footerBottom =
-    footerItems.length > 0
-      ? footerStartY + footerItems.length * footerRowStep - gap
-      : mainBottom;
+    footerItems.length > 0 ? nextFooterTop - gap : mainBottom;
   const bottom = footerItems.length > 0 ? footerBottom : mainBottom;
   const note = renderLegendNote({
     note: options.note,
