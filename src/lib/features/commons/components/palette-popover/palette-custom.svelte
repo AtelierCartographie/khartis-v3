@@ -13,7 +13,9 @@
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import {
     PALETTE_TYPE,
+    type DivergingPaletteSplit,
     type PaletteType,
+    generatePaletteColors,
     generateSequentialFromColor,
     generateSequentialFromColors
   } from './palette.constants';
@@ -21,7 +23,8 @@
   interface Props {
     paletteType?: PaletteType;
     numClasses: number;
-    colorBlindFilter?: boolean;
+    currentColors?: string[];
+    divergingSplit?: DivergingPaletteSplit;
     inverted?: boolean;
     allowPattern?: boolean;
     patternPaletteConfig?: PatternPaletteConfig;
@@ -33,7 +36,8 @@
   let {
     paletteType = PALETTE_TYPE.SEQUENTIAL,
     numClasses,
-    colorBlindFilter = false,
+    currentColors = [],
+    divergingSplit,
     inverted = false,
     allowPattern = true,
     patternPaletteConfig,
@@ -49,13 +53,18 @@
     color: '#000000'
   };
 
+  const CUSTOM_PALETTE_ID = '__custom__';
+  const FALLBACK_START_COLOR = '#f7fbff';
+  const FALLBACK_END_COLOR = '#08519c';
+
   let activeTab = $state(0);
   let activeTabInitialized = false;
-  let singleColor = $state('#08519c');
-  let startColor = $state('#f7fbff');
-  let endColor = $state('#08519c');
+  let singleColor = $state(FALLBACK_END_COLOR);
+  let startColor = $state(FALLBACK_START_COLOR);
+  let endColor = $state(FALLBACK_END_COLOR);
   let contrastMode = $state<'low' | 'normal' | 'high'>('normal');
   let motifEnabled = $state(false);
+  let emittedColors: string[] = [];
 
   let draftPatternPaletteConfig = $state<PatternPaletteConfig>(
     DEFAULT_PATTERN_PALETTE_CONFIG
@@ -95,12 +104,62 @@
   });
 
   const resolvedContrast = $derived<ContrastMode | undefined>(
-    contrastMode === 'normal'
-      ? colorBlindFilter
-        ? 'high'
-        : undefined
-      : contrastMode
+    contrastMode === 'normal' ? undefined : contrastMode
   );
+
+  function emitColors(colors: string[]) {
+    emittedColors = colors;
+    onColorsChange?.(colors);
+  }
+
+  function buildColors(seedColors: string[]): string[] {
+    if (paletteType === PALETTE_TYPE.DIVERGING) {
+      return generatePaletteColors(
+        {
+          id: CUSTOM_PALETTE_ID,
+          colors: seedColors,
+          type: PALETTE_TYPE.DIVERGING
+        },
+        numClasses,
+        resolvedContrast,
+        undefined,
+        divergingSplit
+      );
+    }
+
+    return seedColors.length > 1
+      ? generateSequentialFromColors(
+          seedColors[0],
+          seedColors[seedColors.length - 1],
+          numClasses,
+          resolvedContrast
+        )
+      : generateSequentialFromColor(
+          seedColors[0],
+          numClasses,
+          resolvedContrast
+        );
+  }
+
+  // The custom fields mirror the palette in progress: they follow every
+  // suggestion the user tries, but must not snap back over the colour this
+  // very section just emitted.
+  $effect(() => {
+    const incoming = currentColors;
+    untrack(() => {
+      if (
+        incoming.length === emittedColors.length &&
+        incoming.every((color, index) => color === emittedColors[index])
+      ) {
+        return;
+      }
+      emittedColors = [...incoming];
+      if (incoming.length === 0) return;
+      startColor = incoming[0];
+      endColor = incoming[incoming.length - 1];
+      singleColor = isQualitative ? incoming[0] : incoming[incoming.length - 1];
+    });
+  });
 
   function handleTabChange(index: number) {
     activeTabInitialized = true;
@@ -108,23 +167,19 @@
       singleColor = endColor;
     } else if (index === 1 && activeTab === 0) {
       endColor = singleColor;
-      startColor = '#ffffff';
+      // A diverging palette needs two opposite hues; a sequential ramp starts
+      // from white so the single seed keeps its full range.
+      startColor =
+        paletteType === PALETTE_TYPE.DIVERGING
+          ? (currentColors[0] ?? startColor)
+          : '#ffffff';
     }
     activeTab = index;
 
     if (index === 0) {
-      onColorsChange?.(
-        generateSequentialFromColor(singleColor, numClasses, resolvedContrast)
-      );
+      emitColors(buildColors([singleColor]));
     } else if (index === 1) {
-      onColorsChange?.(
-        generateSequentialFromColors(
-          startColor,
-          endColor,
-          numClasses,
-          resolvedContrast
-        )
-      );
+      emitColors(buildColors([startColor, endColor]));
     } else if (index === 2) {
       emitPatternPaletteChange(draftPatternPaletteConfig);
     }
@@ -136,20 +191,9 @@
     contrastMode = next;
 
     if (activeTab === 0) {
-      const colors = generateSequentialFromColor(
-        singleColor,
-        numClasses,
-        resolvedContrast
-      );
-      onColorsChange?.(colors);
+      emitColors(buildColors([singleColor]));
     } else if (activeTab === 1) {
-      const colors = generateSequentialFromColors(
-        startColor,
-        endColor,
-        numClasses,
-        resolvedContrast
-      );
-      onColorsChange?.(colors);
+      emitColors(buildColors([startColor, endColor]));
     } else if (activeTab === 2) {
       emitPatternPaletteChange(draftPatternPaletteConfig);
     }
@@ -166,32 +210,17 @@
 
   function handleSingleColorChange(color: string) {
     singleColor = color;
-    const colors = isQualitative
-      ? [color]
-      : generateSequentialFromColor(color, numClasses, resolvedContrast);
-    onColorsChange?.(colors);
+    emitColors(isQualitative ? [color] : buildColors([color]));
   }
 
   function handleStartColorChange(color: string) {
     startColor = color;
-    const colors = generateSequentialFromColors(
-      startColor,
-      endColor,
-      numClasses,
-      resolvedContrast
-    );
-    onColorsChange?.(colors);
+    emitColors(buildColors([startColor, endColor]));
   }
 
   function handleEndColorChange(color: string) {
     endColor = color;
-    const colors = generateSequentialFromColors(
-      startColor,
-      endColor,
-      numClasses,
-      resolvedContrast
-    );
-    onColorsChange?.(colors);
+    emitColors(buildColors([startColor, endColor]));
   }
 
   function handleInvertToggle(value: boolean) {
@@ -201,7 +230,7 @@
   function handleMotifToggle(value: boolean) {
     motifEnabled = value;
     if (!value) {
-      onColorsChange?.([singleColor]);
+      emitColors([singleColor]);
       return;
     }
 

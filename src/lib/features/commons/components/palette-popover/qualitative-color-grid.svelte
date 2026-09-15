@@ -7,26 +7,13 @@
     colors: readonly string[];
     selectedColor?: string;
     onColorSelect?: (hex: string) => void;
-    onPaletteSelect?: (colors: string[]) => void;
   }
 
-  let { label, colors, selectedColor, onColorSelect, onPaletteSelect }: Props =
-    $props();
+  let { label, colors, selectedColor, onColorSelect }: Props = $props();
 </script>
 
 <div class="qualitative-grid">
-  <div class="grid-header">
-    <p class="grid-label">{label}</p>
-    {#if onPaletteSelect}
-      <button
-        type="button"
-        class="apply-palette-button"
-        onclick={() => onPaletteSelect?.([...colors])}
-      >
-        {m.apply_palette()}
-      </button>
-    {/if}
-  </div>
+  <p class="grid-label">{label}</p>
   <div class="color-row" role="radiogroup" aria-label={label}>
     {#each colors as color (color)}
       <button
@@ -56,45 +43,14 @@
     width: 100%;
   }
 
-  .grid-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 0 0 8px 0;
-  }
-
   .grid-label {
-    margin: 0;
+    margin: 0 0 8px 0;
     font-family: 'IBM Plex Sans', sans-serif;
     font-weight: 400;
     font-size: 12px;
     line-height: 16px;
     letter-spacing: 0.32px;
     color: var(--cds-text-secondary, #525252);
-  }
-
-  .apply-palette-button {
-    flex-shrink: 0;
-    padding: 0;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-weight: 400;
-    font-size: 12px;
-    line-height: 16px;
-    letter-spacing: 0.32px;
-    color: var(--cds-link-primary, #0f62fe);
-
-    &:hover {
-      text-decoration: underline;
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--cds-focus, #0f62fe);
-      outline-offset: 2px;
-    }
   }
 
   .color-row {

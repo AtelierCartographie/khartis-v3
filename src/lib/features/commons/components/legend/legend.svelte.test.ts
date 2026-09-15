@@ -624,6 +624,30 @@ describe('common legend generators', () => {
     expect(svg.markup).not.toContain('<script>');
   });
 
+  it('gives every symbol swatch its own row so a sized legend reads at map scale', () => {
+    const items = [
+      { label: 'Large', symbol: 'M0,0', size: 48 },
+      { label: 'Small', symbol: 'M0,0', size: 8 }
+    ];
+    const svg = draw_khartis_swatch_legend(items, { type: 'symbol' });
+    const scales = [...svg.markup.matchAll(/scale\(([0-9.]+)\)/g)].map(
+      (match) => Number(match[1])
+    );
+    const tops = [
+      ...svg.markup.matchAll(/translate\([0-9.]+,([0-9.]+)\)/g)
+    ].map((match) => Number(match[1]));
+
+    expect(scales).toEqual([48 / 16, 8 / 16]);
+    // The rows clear each other: the large swatch owns the height it needs.
+    expect(tops[1] - tops[0]).toBeGreaterThan(24);
+
+    const smaller = draw_khartis_swatch_legend(
+      items.map((item) => ({ ...item, size: item.size / 2 })),
+      { type: 'symbol' }
+    );
+    expect(smaller.height).toBeLessThan(svg.height);
+  });
+
   it('draws pattern swatches as a colored box overlaid by the motif fill', () => {
     const svg = draw_khartis_swatch_legend(
       [

@@ -3,6 +3,7 @@ import {
   ColorMode,
   FillMode,
   ProportionalType,
+  SizeMode,
   SymbolMode,
   ThicknessMode
 } from '$lib/features/commons/constants/visualization.constants';
@@ -113,6 +114,26 @@ const LEGEND_PRIMITIVE_ORDER: LegendSubtitlePrimitive[] = [
   'text'
 ];
 
+// Labels at a single size and a single colour encode nothing: the words on the
+// map already say what they mean, so they get no legend frame. Every other
+// primitive keeps one even in unique mode — its mark still needs naming.
+function doesTextEncodeVariable(visualization: VisualizationConfig): boolean {
+  const text = visualization.text;
+  if (!text) {
+    return false;
+  }
+
+  const sizeEncodes =
+    (text.sizeMode === SizeMode.PROPORTIONAL ||
+      text.sizeMode === SizeMode.CLASSES) &&
+    Boolean(text.valueColumn ?? visualization.mapping.valueColumn);
+  const colorEncodes =
+    text.colorMode === ColorMode.CLASSES ||
+    text.colorMode === ColorMode.CATEGORIES;
+
+  return sizeEncodes || colorEncodes;
+}
+
 /**
  * The primitives that own a legend for this visualization. Derived from the
  * configuration alone: whether a primitive actually draws something is decided
@@ -125,7 +146,9 @@ export function getEnabledLegendPrimitives(
     area: Boolean(visualization.polygon?.enabled),
     line: Boolean(visualization.line?.enabled),
     point: Boolean(visualization.symbol?.enabled),
-    text: Boolean(visualization.text?.enabled)
+    text:
+      Boolean(visualization.text?.enabled) &&
+      doesTextEncodeVariable(visualization)
   };
 
   return LEGEND_PRIMITIVE_ORDER.filter((primitive) => enabled[primitive]);

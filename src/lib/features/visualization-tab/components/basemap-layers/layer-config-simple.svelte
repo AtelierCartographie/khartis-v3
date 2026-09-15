@@ -20,6 +20,7 @@
     thicknessMax?: number;
     thicknessStep?: number;
     color?: string;
+    colorPresets?: readonly string[];
     dotted?: boolean;
     dottedPattern?: BasemapDottedPattern;
     thickness?: number;
@@ -37,6 +38,7 @@
     thicknessMax = BASEMAP_LAYER_CONFIG.thickness.max,
     thicknessStep = BASEMAP_LAYER_CONFIG.thickness.step,
     color = NEUTRAL_CARTOGRAPHY_COLORS.waterLine,
+    colorPresets,
     dotted = false,
     dottedPattern = BasemapDottedPattern.DOTS,
     thickness = 1,
@@ -73,6 +75,7 @@
     <SingleColorPreview
       label={m.basemap_config_color()}
       color={color}
+      presets={colorPresets}
       allowPattern={false}
       onchange={handleColorChange}
     />
