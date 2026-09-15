@@ -30,7 +30,10 @@ Generate class colors through `generateColorsForBreaks()` in `classification.ser
 
 ## Color-blindness is first-class
 
-- Every palette declares `colorBlindSafe`; respect it. Known unsafe diverging ramps (red-green like `rdylgn`, `piyg`) must not be presented as "safe", and the daltonism filter should prefer safe palettes / safe category subsets.
+- **Daltonism is a suggestion preset, not a filter.** `SUGGESTION_PRESET.COLORBLIND` sits beside Monochrome/Bicolore/Sépia/Vif/Pastel and proposes palettes grounded in published work — Bang Wong (Nature Methods, 2011) and Paul Tol (SRON) in `colorblind-palette.constants.ts`. Never re-introduce a boolean that hides the other suggestions; the user picks a colour-blind-safe palette, they don't filter the catalogue.
+- Wong's black is deliberately excluded from the categorical scheme: categories must carry comparable visual weight.
+- Any palette a suggestion preset or a dropdown can hand out **must** be resolvable by `findPaletteById` (add it to `ADDRESSABLE_PALETTES`). An id that does not resolve makes `resolveClassificationColors` regenerate the default ramp and silently discard the user's choice.
+- A hand-built ramp has no palette id: the colour-sync path passes `preserveCustomColors` so it survives a refresh, while the break/breakpoint path must still regenerate.
 - The simulation tool (`color-blindness/`) only **previews** deficiencies (protanopia, deuteranopia, tritanopia, …) via CSS `feColorMatrix`; it must never alter exported colors.
 
 ## Custom color & intensity

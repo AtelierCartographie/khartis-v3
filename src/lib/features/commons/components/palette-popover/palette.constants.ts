@@ -43,6 +43,12 @@ import {
   VIF_FROID_COLORS,
   VIF_MIXTE_COLORS
 } from '$lib/features/commons/constants/qualitative-palette.constants';
+import {
+  COLORBLIND_DIVERGING_PAIRS,
+  COLORBLIND_SEQUENTIAL_SEEDS,
+  TOL_MUTED_COLORS,
+  WONG_COLORS
+} from '$lib/features/commons/constants/colorblind-palette.constants';
 
 export type { PatternParams };
 export {
@@ -113,7 +119,6 @@ export interface Palette {
   id: string;
   colors: string[];
   type: PaletteType;
-  colorBlindSafe?: boolean;
   patternId?: PatternId;
   qualitativePreset?: QualitativePreset;
 }
@@ -124,82 +129,57 @@ export interface DivergingPaletteSplit {
   hasCenterClass: boolean;
 }
 
-export type SuggestionPreset = 'monochrome' | 'bicolor' | 'sepia';
+export const SUGGESTION_PRESET = {
+  MONOCHROME: 'monochrome',
+  BICOLOR: 'bicolor',
+  SEPIA: 'sepia',
+  GRAYSCALE: 'grayscale',
+  VIF: 'vif',
+  PASTEL: 'pastel',
+  COLORBLIND: 'colorblind'
+} as const;
+
+export type SuggestionPreset =
+  (typeof SUGGESTION_PRESET)[keyof typeof SUGGESTION_PRESET];
 
 export type QualitativePreset = 'vif' | 'pastel' | 'sepia' | 'grayscale';
 
-export interface QualitativeColorGroups {
-  mixte: string[];
-  chaud: string[];
-  froid: string[];
+export interface QualitativeColorBand {
+  key: string;
+  label: string;
+  colors: string[];
 }
-
-const COLORBLIND_SAFE_INDICES: Record<
-  QualitativePreset,
-  {
-    mixte: number[];
-    chaud: number[];
-    froid: number[];
-  }
-> = {
-  vif: {
-    mixte: [0, 1, 2, 3],
-    chaud: [0, 1, 3],
-    froid: [1, 3]
-  },
-  pastel: {
-    mixte: [0, 1, 2, 3],
-    chaud: [0, 1, 3],
-    froid: [1, 3]
-  },
-  sepia: {
-    mixte: [0, 1, 2, 3, 4],
-    chaud: [0, 1, 2, 3, 4],
-    froid: [0, 1, 2, 3, 4]
-  },
-  grayscale: {
-    mixte: [0, 1, 2, 3, 4],
-    chaud: [0, 1, 2, 3, 4],
-    froid: [0, 1, 2, 3, 4]
-  }
-};
 
 export const monochromePalettes: Palette[] = [
   {
     id: 'mono-khartis',
     colors: [DEFAULT_VISUALIZATION_COLOR],
-    type: PALETTE_TYPE.SEQUENTIAL,
-    colorBlindSafe: true
+    type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'mono-pink',
     colors: ['#c2185b'],
-    type: PALETTE_TYPE.SEQUENTIAL,
-    colorBlindSafe: true
+    type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'mono-teal',
     colors: ['#00897b'],
-    type: PALETTE_TYPE.SEQUENTIAL,
-    colorBlindSafe: true
+    type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'mono-gold',
     colors: ['#f9a825'],
-    type: PALETTE_TYPE.SEQUENTIAL,
-    colorBlindSafe: true
+    type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'mono-indigo',
     colors: ['#1565c0'],
-    type: PALETTE_TYPE.SEQUENTIAL,
-    colorBlindSafe: true
+    type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'mono-vermilion',
     colors: ['#d84315'],
-    type: PALETTE_TYPE.SEQUENTIAL,
-    colorBlindSafe: true
+    type: PALETTE_TYPE.SEQUENTIAL
   }
 ];
 
@@ -207,32 +187,27 @@ const bicolorPalettes: Palette[] = [
   {
     id: 'blues',
     colors: ['#f7fbff', DEFAULT_VISUALIZATION_COLOR],
-    type: PALETTE_TYPE.SEQUENTIAL,
-    colorBlindSafe: true
+    type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'greens',
     colors: ['#f7fcf5', '#006d2c'],
-    type: PALETTE_TYPE.SEQUENTIAL,
-    colorBlindSafe: true
+    type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'oranges',
     colors: ['#fff5eb', '#a63603'],
-    type: PALETTE_TYPE.SEQUENTIAL,
-    colorBlindSafe: true
+    type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'purples',
     colors: ['#fcfbfd', '#54278f'],
-    type: PALETTE_TYPE.SEQUENTIAL,
-    colorBlindSafe: true
+    type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'reds',
     colors: ['#fff5f0', '#a50f15'],
-    type: PALETTE_TYPE.SEQUENTIAL,
-    colorBlindSafe: true
+    type: PALETTE_TYPE.SEQUENTIAL
   }
 ];
 
@@ -240,67 +215,144 @@ export const sepiaPalettes: Palette[] = [
   {
     id: 'sepia-sand',
     colors: ['#d7ccc8'],
-    type: PALETTE_TYPE.SEQUENTIAL,
-    colorBlindSafe: true
+    type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'sepia-terre',
     colors: ['#8d6e63'],
-    type: PALETTE_TYPE.SEQUENTIAL,
-    colorBlindSafe: true
+    type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'sepia-ochre',
     colors: ['#bf8f00'],
-    type: PALETTE_TYPE.SEQUENTIAL,
-    colorBlindSafe: true
+    type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'sepia-brique',
     colors: ['#a1887f'],
-    type: PALETTE_TYPE.SEQUENTIAL,
-    colorBlindSafe: true
+    type: PALETTE_TYPE.SEQUENTIAL
   },
   {
     id: 'sepia-olive',
     colors: ['#827717'],
-    type: PALETTE_TYPE.SEQUENTIAL,
-    colorBlindSafe: true
+    type: PALETTE_TYPE.SEQUENTIAL
   }
 ];
 
-export const sequentialPalettes: Palette[] = bicolorPalettes;
+export const grayscalePalettes: Palette[] = [
+  {
+    id: 'grays',
+    colors: [
+      GRAYSCALE_COLORS[0],
+      GRAYSCALE_COLORS[GRAYSCALE_COLORS.length - 1]
+    ],
+    type: PALETTE_TYPE.SEQUENTIAL
+  }
+];
 
-export const divergingPalettes: Palette[] = [
+export const colorblindSequentialPalettes: Palette[] = [
+  {
+    id: 'cb-blue',
+    colors: [COLORBLIND_SEQUENTIAL_SEEDS.blue],
+    type: PALETTE_TYPE.SEQUENTIAL
+  },
+  {
+    id: 'cb-vermilion',
+    colors: [COLORBLIND_SEQUENTIAL_SEEDS.vermilion],
+    type: PALETTE_TYPE.SEQUENTIAL
+  },
+  {
+    id: 'cb-green',
+    colors: [COLORBLIND_SEQUENTIAL_SEEDS.green],
+    type: PALETTE_TYPE.SEQUENTIAL
+  },
+  {
+    id: 'cb-indigo',
+    colors: [COLORBLIND_SEQUENTIAL_SEEDS.indigo],
+    type: PALETTE_TYPE.SEQUENTIAL
+  }
+];
+
+export const sequentialPalettes: Palette[] = [
+  ...bicolorPalettes,
+  ...grayscalePalettes
+];
+
+const divergingVifPalettes: Palette[] = [
   {
     id: 'rdbu',
     colors: ['#b2182b', '#f7f7f7', '#2166ac'],
-    type: PALETTE_TYPE.DIVERGING,
-    colorBlindSafe: true
+    type: PALETTE_TYPE.DIVERGING
   },
   {
     id: 'rdylgn',
     colors: ['#d73027', '#ffffbf', '#1a9850'],
-    type: PALETTE_TYPE.DIVERGING,
-    colorBlindSafe: false
-  },
-  {
-    id: 'brbg',
-    colors: ['#8c510a', '#f5f5f5', '#01665e'],
-    type: PALETTE_TYPE.DIVERGING,
-    colorBlindSafe: true
+    type: PALETTE_TYPE.DIVERGING
   },
   {
     id: 'piyg',
     colors: ['#c51b7d', '#f7f7f7', '#4d9221'],
-    type: PALETTE_TYPE.DIVERGING,
-    colorBlindSafe: false
+    type: PALETTE_TYPE.DIVERGING
   },
   {
     id: 'prgn',
     colors: ['#7b3294', '#f7f7f7', '#008837'],
-    type: PALETTE_TYPE.DIVERGING,
-    colorBlindSafe: true
+    type: PALETTE_TYPE.DIVERGING
+  }
+];
+
+const divergingSepiaPalettes: Palette[] = [
+  {
+    id: 'brbg',
+    colors: ['#8c510a', '#f5f5f5', '#01665e'],
+    type: PALETTE_TYPE.DIVERGING
+  },
+  {
+    id: 'sepia-ochre-slate',
+    colors: ['#bf8f00', '#f2efe9', '#4a5d7e'],
+    type: PALETTE_TYPE.DIVERGING
+  },
+  {
+    id: 'sepia-brick-olive',
+    colors: ['#a1887f', '#f2efe9', '#827717'],
+    type: PALETTE_TYPE.DIVERGING
+  }
+];
+
+export const colorblindDivergingPalettes: Palette[] = [
+  {
+    id: 'cb-prgn',
+    colors: [...COLORBLIND_DIVERGING_PAIRS.prgn],
+    type: PALETTE_TYPE.DIVERGING
+  },
+  {
+    id: 'cb-burd',
+    colors: [...COLORBLIND_DIVERGING_PAIRS.burd],
+    type: PALETTE_TYPE.DIVERGING
+  },
+  {
+    id: 'cb-orin',
+    colors: [...COLORBLIND_DIVERGING_PAIRS.orin],
+    type: PALETTE_TYPE.DIVERGING
+  }
+];
+
+export const divergingPalettes: Palette[] = [
+  ...divergingVifPalettes,
+  ...divergingSepiaPalettes,
+  ...colorblindDivergingPalettes
+];
+
+export const colorblindQualitativePalettes: Palette[] = [
+  {
+    id: 'cb-wong',
+    colors: [...WONG_COLORS],
+    type: PALETTE_TYPE.QUALITATIVE
+  },
+  {
+    id: 'cb-tol',
+    colors: [...TOL_MUTED_COLORS],
+    type: PALETTE_TYPE.QUALITATIVE
   }
 ];
 
@@ -309,28 +361,30 @@ export const qualitativePalettes: Palette[] = [
     id: 'vif',
     colors: [...VIF_ALL_COLORS],
     type: PALETTE_TYPE.QUALITATIVE,
-    colorBlindSafe: true,
     qualitativePreset: 'vif'
   },
   {
     id: 'pastel',
     colors: [...PASTEL_ALL_COLORS],
     type: PALETTE_TYPE.QUALITATIVE,
-    colorBlindSafe: true,
     qualitativePreset: 'pastel'
   },
   {
     id: 'sepia',
     colors: [...SEPIA_ALL_COLORS],
     type: PALETTE_TYPE.QUALITATIVE,
-    colorBlindSafe: true,
     qualitativePreset: 'sepia'
   },
+  ...colorblindQualitativePalettes
+];
+
+// Grayscale is no longer offered for qualitative data (greys order, they do not
+// separate), but projects saved with it must still resolve their palette.
+const legacyQualitativePalettes: Palette[] = [
   {
     id: 'grayscale',
     colors: [...GRAYSCALE_COLORS],
     type: PALETTE_TYPE.QUALITATIVE,
-    colorBlindSafe: true,
     qualitativePreset: 'grayscale'
   }
 ];
@@ -354,70 +408,60 @@ export function getPatternPalettes(): Palette[] {
       id: 'pattern-diagonal',
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
-      colorBlindSafe: true,
       patternId: 'diagonal'
     },
     {
       id: 'pattern-diagonal-reverse',
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
-      colorBlindSafe: true,
       patternId: 'diagonal-reverse'
     },
     {
       id: 'pattern-horizontal',
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
-      colorBlindSafe: true,
       patternId: 'horizontal'
     },
     {
       id: 'pattern-vertical',
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
-      colorBlindSafe: true,
       patternId: 'vertical'
     },
     {
       id: 'pattern-dots',
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
-      colorBlindSafe: true,
       patternId: 'dots'
     },
     {
       id: 'pattern-cross',
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
-      colorBlindSafe: true,
       patternId: 'cross'
     },
     {
       id: 'pattern-triangle',
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
-      colorBlindSafe: true,
       patternId: 'triangle'
     },
     {
       id: 'pattern-square',
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
-      colorBlindSafe: true,
       patternId: 'square'
     },
     {
       id: 'pattern-diamond',
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
-      colorBlindSafe: true,
       patternId: 'diamond'
     },
     {
       id: 'pattern-plus',
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
-      colorBlindSafe: true,
       patternId: 'plus'
     }
   ];
@@ -655,68 +699,116 @@ export function generateIntensityShades(seedColor: string): string[] {
   );
 }
 
-export function getSuggestionPalettes(
-  preset: SuggestionPreset,
-  colorBlindFilter: boolean
-): Palette[] {
-  let palettes: Palette[];
-  switch (preset) {
-    case 'monochrome':
-      palettes = monochromePalettes;
-      break;
-    case 'bicolor':
-      palettes = bicolorPalettes;
-      break;
-    case 'sepia':
-      palettes = sepiaPalettes;
-      break;
-    default:
-      palettes = monochromePalettes;
-  }
-  if (colorBlindFilter) {
-    return palettes.filter((p) => p.colorBlindSafe);
-  }
-  return palettes;
+const SUGGESTION_PRESETS_BY_TYPE: Record<PaletteType, SuggestionPreset[]> = {
+  [PALETTE_TYPE.SEQUENTIAL]: [
+    SUGGESTION_PRESET.MONOCHROME,
+    SUGGESTION_PRESET.BICOLOR,
+    SUGGESTION_PRESET.SEPIA,
+    SUGGESTION_PRESET.COLORBLIND,
+    SUGGESTION_PRESET.GRAYSCALE
+  ],
+  [PALETTE_TYPE.DIVERGING]: [
+    SUGGESTION_PRESET.VIF,
+    SUGGESTION_PRESET.SEPIA,
+    SUGGESTION_PRESET.COLORBLIND
+  ],
+  [PALETTE_TYPE.QUALITATIVE]: [
+    SUGGESTION_PRESET.VIF,
+    SUGGESTION_PRESET.PASTEL,
+    SUGGESTION_PRESET.SEPIA,
+    SUGGESTION_PRESET.COLORBLIND
+  ],
+  [PALETTE_TYPE.PATTERN]: [SUGGESTION_PRESET.MONOCHROME]
+};
+
+const SEQUENTIAL_SUGGESTIONS: Partial<Record<SuggestionPreset, Palette[]>> = {
+  [SUGGESTION_PRESET.MONOCHROME]: monochromePalettes,
+  [SUGGESTION_PRESET.BICOLOR]: bicolorPalettes,
+  [SUGGESTION_PRESET.SEPIA]: sepiaPalettes,
+  [SUGGESTION_PRESET.COLORBLIND]: colorblindSequentialPalettes,
+  [SUGGESTION_PRESET.GRAYSCALE]: grayscalePalettes
+};
+
+const DIVERGING_SUGGESTIONS: Partial<Record<SuggestionPreset, Palette[]>> = {
+  [SUGGESTION_PRESET.VIF]: divergingVifPalettes,
+  [SUGGESTION_PRESET.SEPIA]: divergingSepiaPalettes,
+  [SUGGESTION_PRESET.COLORBLIND]: colorblindDivergingPalettes
+};
+
+export function getSuggestionPresetsForType(
+  type: PaletteType
+): SuggestionPreset[] {
+  return (
+    SUGGESTION_PRESETS_BY_TYPE[type] ?? SUGGESTION_PRESETS_BY_TYPE.sequential
+  );
 }
 
-export function getPalettesForType(
-  type: PaletteType,
-  colorBlindFilter: boolean
-): Palette[] {
-  let palettes: Palette[];
-  switch (type) {
-    case PALETTE_TYPE.SEQUENTIAL:
-      palettes = sequentialPalettes;
-      break;
-    case PALETTE_TYPE.DIVERGING:
-      palettes = divergingPalettes;
-      break;
-    case PALETTE_TYPE.QUALITATIVE:
-      palettes = qualitativePalettes;
-      break;
-    case PALETTE_TYPE.PATTERN:
-      palettes = getPatternPalettes();
-      break;
-    default:
-      palettes = sequentialPalettes;
+export function getSuggestionPresetLabel(preset: SuggestionPreset): string {
+  switch (preset) {
+    case SUGGESTION_PRESET.MONOCHROME:
+      return m.preset_monochrome();
+    case SUGGESTION_PRESET.BICOLOR:
+      return m.preset_bicolor();
+    case SUGGESTION_PRESET.SEPIA:
+      return m.preset_sepia();
+    case SUGGESTION_PRESET.GRAYSCALE:
+      return m.preset_grayscale();
+    case SUGGESTION_PRESET.VIF:
+      return m.preset_vif();
+    case SUGGESTION_PRESET.PASTEL:
+      return m.preset_pastel();
+    case SUGGESTION_PRESET.COLORBLIND:
+      return m.preset_colorblind();
   }
-  if (colorBlindFilter) {
-    return palettes.filter((p) => p.colorBlindSafe);
-  }
-  return palettes;
 }
+
+export function getSuggestionPalettes(
+  type: PaletteType,
+  preset: SuggestionPreset
+): Palette[] {
+  const source =
+    type === PALETTE_TYPE.DIVERGING
+      ? DIVERGING_SUGGESTIONS
+      : SEQUENTIAL_SUGGESTIONS;
+  const palettes = source[preset];
+  if (palettes) {
+    return palettes;
+  }
+  return source[getSuggestionPresetsForType(type)[0]] ?? [];
+}
+
+export function getPalettesForType(type: PaletteType): Palette[] {
+  switch (type) {
+    case PALETTE_TYPE.DIVERGING:
+      return divergingPalettes;
+    case PALETTE_TYPE.QUALITATIVE:
+      return qualitativePalettes;
+    case PALETTE_TYPE.PATTERN:
+      return getPatternPalettes();
+    default:
+      return sequentialPalettes;
+  }
+}
+
+// Every palette a suggestion or a dropdown can hand out must be findable here:
+// a palette id that does not resolve makes the classification fall back to the
+// default ramp, silently discarding the user's choice.
+const ADDRESSABLE_PALETTES: Palette[] = [
+  ...monochromePalettes,
+  ...sequentialPalettes,
+  ...sepiaPalettes,
+  ...colorblindSequentialPalettes,
+  ...divergingPalettes,
+  ...qualitativePalettes,
+  ...legacyQualitativePalettes
+];
 
 export function findPaletteById(id: string): Palette | undefined {
   const resolvedId = normalizePaletteId(id) ?? id;
-  const all = [
-    ...monochromePalettes,
-    ...bicolorPalettes,
-    ...sepiaPalettes,
-    ...divergingPalettes,
-    ...qualitativePalettes,
-    ...getPatternPalettes()
-  ];
-  return all.find((p) => p.id === resolvedId);
+  return (
+    ADDRESSABLE_PALETTES.find((p) => p.id === resolvedId) ??
+    getPatternPalettes().find((p) => p.id === resolvedId)
+  );
 }
 
 export function normalizePaletteId(id: string | undefined): string | undefined {
@@ -776,6 +868,30 @@ export function getPaletteDisplayName(palette: Palette): string {
       return m.palette_name_piyg();
     case 'prgn':
       return m.palette_name_prgn();
+    case 'sepia-ochre-slate':
+      return m.palette_name_sepia_ochre_slate();
+    case 'sepia-brick-olive':
+      return m.palette_name_sepia_brick_olive();
+    case 'grays':
+      return m.preset_grayscale();
+    case 'cb-blue':
+      return m.palette_name_cb_blue();
+    case 'cb-vermilion':
+      return m.palette_name_cb_vermilion();
+    case 'cb-green':
+      return m.palette_name_cb_green();
+    case 'cb-indigo':
+      return m.palette_name_cb_indigo();
+    case 'cb-prgn':
+      return m.palette_name_cb_prgn();
+    case 'cb-burd':
+      return m.palette_name_cb_burd();
+    case 'cb-orin':
+      return m.palette_name_cb_orin();
+    case 'cb-wong':
+      return m.palette_name_cb_wong();
+    case 'cb-tol':
+      return m.palette_name_cb_tol();
     case 'set1':
     case 'vif':
       return m.preset_vif();
@@ -810,10 +926,6 @@ export function getPaletteDisplayName(palette: Palette): string {
     default:
       return m.color_palette();
   }
-}
-
-function filterByIndices<T>(source: readonly T[], indices: number[]): T[] {
-  return indices.map((i) => source[i]).filter((v): v is T => v !== undefined);
 }
 
 function getQualitativePresetOptions(
@@ -854,45 +966,45 @@ function extendQualitativeColors(
   });
 }
 
-export function getQualitativeColorGroups(
-  preset: QualitativePreset,
-  colorBlindFilter: boolean
-): QualitativeColorGroups {
-  const mixte =
-    preset === 'vif'
-      ? [...VIF_MIXTE_COLORS]
-      : preset === 'pastel'
-        ? [...PASTEL_MIXTE_COLORS]
-        : preset === 'sepia'
-          ? [...SEPIA_MIXTE_COLORS]
-          : [...GRAYSCALE_COLORS];
-  const chaud =
-    preset === 'vif'
-      ? [...VIF_CHAUD_COLORS]
-      : preset === 'pastel'
-        ? [...PASTEL_CHAUD_COLORS]
-        : preset === 'sepia'
-          ? [...SEPIA_CHAUD_COLORS]
-          : [...GRAYSCALE_COLORS];
-  const froid =
-    preset === 'vif'
-      ? [...VIF_FROID_COLORS]
-      : preset === 'pastel'
-        ? [...PASTEL_FROID_COLORS]
-        : preset === 'sepia'
-          ? [...SEPIA_FROID_COLORS]
-          : [...GRAYSCALE_COLORS];
+const QUALITATIVE_PRESET_BANDS: Record<
+  QualitativePreset,
+  readonly (readonly string[])[]
+> = {
+  vif: [VIF_MIXTE_COLORS, VIF_CHAUD_COLORS, VIF_FROID_COLORS],
+  pastel: [PASTEL_MIXTE_COLORS, PASTEL_CHAUD_COLORS, PASTEL_FROID_COLORS],
+  sepia: [SEPIA_MIXTE_COLORS, SEPIA_CHAUD_COLORS, SEPIA_FROID_COLORS],
+  grayscale: [GRAYSCALE_COLORS, GRAYSCALE_COLORS, GRAYSCALE_COLORS]
+};
 
-  if (!colorBlindFilter) {
-    return { mixte, chaud, froid };
+export function resolveQualitativeGeneratorPreset(
+  preset: SuggestionPreset
+): QualitativePreset {
+  return preset === SUGGESTION_PRESET.PASTEL ||
+    preset === SUGGESTION_PRESET.SEPIA ||
+    preset === SUGGESTION_PRESET.GRAYSCALE
+    ? preset
+    : DEFAULT_QUALITATIVE_PRESET;
+}
+
+export function getQualitativeColorBands(
+  preset: SuggestionPreset
+): QualitativeColorBand[] {
+  if (preset === SUGGESTION_PRESET.COLORBLIND) {
+    return colorblindQualitativePalettes.map((palette) => ({
+      key: palette.id,
+      label: getPaletteDisplayName(palette),
+      colors: [...palette.colors]
+    }));
   }
 
-  const safe = COLORBLIND_SAFE_INDICES[preset];
-  return {
-    mixte: filterByIndices(mixte, safe.mixte),
-    chaud: filterByIndices(chaud, safe.chaud),
-    froid: filterByIndices(froid, safe.froid)
-  };
+  const [mixte, chaud, froid] =
+    QUALITATIVE_PRESET_BANDS[resolveQualitativeGeneratorPreset(preset)];
+
+  return [
+    { key: 'mixte', label: m.palette_theme_mixte(), colors: [...mixte] },
+    { key: 'chaud', label: m.palette_theme_chaud(), colors: [...chaud] },
+    { key: 'froid', label: m.palette_theme_froid(), colors: [...froid] }
+  ];
 }
 
 export function generateCategoricalColorsFromSeed(

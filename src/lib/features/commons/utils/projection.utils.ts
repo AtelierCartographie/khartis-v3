@@ -16,6 +16,7 @@ const CATALOGUE_PROJECTION_D3_CONFIGS: Record<string, D3Usage> = {
   'winkel-tripel': { projection: 'geoWinkel3' },
   aitoff: { projection: 'geoAitoff' },
   mollweide: { projection: 'geoMollweide' },
+  'eckert-4': { projection: 'geoEckert4' },
   stereographic: { projection: 'geoStereographic' },
   'azimuthal-equal-area': { projection: 'geoAzimuthalEqualArea' },
   'gall-peters': { projection: 'geoCylindricalEqualArea', parallels: [45, 45] },
@@ -219,6 +220,17 @@ export const PROJECTIONS: ProjectionInfo[] = [
       return m.projection_desc_mollweide();
     },
     projection: () => buildConfiguredCatalogueProjection('mollweide')
+  },
+  {
+    id: 'eckert-4',
+    get name() {
+      return m.projection_name_eckert_4();
+    },
+    shape: 'round',
+    get description() {
+      return m.projection_desc_eckert_4();
+    },
+    projection: () => buildConfiguredCatalogueProjection('eckert-4')
   },
   {
     id: 'stereographic',

@@ -4,6 +4,10 @@
   import { SectionHeading, SliderWithInput, ToggleWithLabel } from '../shared';
   import { BASEMAP_LAYER_CONFIG } from '$lib/features/commons/constants/visualization.constants';
   import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
+  import {
+    COLOR_ROLE,
+    getColorSuggestions
+  } from '$lib/features/commons/services/color-suggestion.service';
 
   interface Props {
     color?: string;
@@ -30,6 +34,11 @@
     onoutlinechange,
     onoutlinevisibilitychange
   }: Props = $props();
+
+  const fillColorPresets = getColorSuggestions(COLOR_ROLE.SEA);
+  const outlineColorPresets = $derived(
+    getColorSuggestions(COLOR_ROLE.TERRITORY_STROKE, color)
+  );
 </script>
 
 <div class="layer-config-content">
@@ -41,6 +50,7 @@
       <SingleColorPreview
         label={m.basemap_config_color()}
         color={color}
+        presets={fillColorPresets}
         allowPattern={false}
         onchange={(value) => onchange?.({ color: value })}
       />
@@ -72,6 +82,7 @@
           <SingleColorPreview
             label={m.basemap_config_color()}
             color={outlineColor}
+            presets={outlineColorPresets}
             allowPattern={false}
             onchange={(value) => onoutlinechange?.({ color: value })}
           />

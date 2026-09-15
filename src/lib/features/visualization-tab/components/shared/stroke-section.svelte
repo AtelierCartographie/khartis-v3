@@ -45,6 +45,10 @@
     filterFieldsByKind,
     useFieldSelectionHandler
   } from '../../hooks/use-field-selection.svelte';
+  import {
+    COLOR_ROLE,
+    getColorSuggestions
+  } from '$lib/features/commons/services/color-suggestion.service';
   import { parseOpacityToSlider } from '../../utils/coerce.utils';
   import { resetVisualClassification } from './classification-reset.utils';
   import {
@@ -57,6 +61,7 @@
   interface Props {
     visualization?: VisualizationConfig;
     dataFields?: Array<{ id: number; text: string; type?: string }>;
+    fillColor?: string | string[];
     infoText?: string;
     showDashed?: boolean;
     discretizationLabel?: string;
@@ -92,6 +97,7 @@
   let {
     visualization,
     dataFields = [],
+    fillColor,
     infoText,
     showDashed = true,
     discretizationLabel,
@@ -164,6 +170,12 @@
     missingDataColor ??
       visualization?.missingData?.color ??
       DEFAULT_COLORS.missingData
+  );
+  const strokeColorPresets = $derived(
+    getColorSuggestions(
+      COLOR_ROLE.STROKE,
+      Array.isArray(fillColor) ? fillColor.at(-1) : fillColor
+    )
   );
   const strokeWidthMax = $derived(
     Math.max(
@@ -366,6 +378,7 @@
       allowPattern={false}
       label={m.color()}
       color={strokeColor}
+      presets={strokeColorPresets}
       onchange={handleStrokeColorChange}
     />
     <SliderWithInput

@@ -56,6 +56,11 @@
   let symbolSize = $state<number>(VISUALIZATION_DEFAULTS.symbolSize);
   let shapeType = $state<ShapeType>(ShapeType.CIRCLE);
   let fillColor = $state<string>(DEFAULT_COLORS.fill);
+  const strokeReferenceFill = $derived(
+    fillMode === FillMode.UNIQUE
+      ? fillColor
+      : (fillVisualization?.classification?.colors ?? fillColor)
+  );
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
@@ -268,6 +273,7 @@
 
 <StrokeSection
   visualization={visualization}
+  fillColor={strokeReferenceFill}
   dataFields={dataFields}
   infoText={m.stroke_section_info()}
   showDashed={true}

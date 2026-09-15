@@ -223,6 +223,10 @@ interface ResolveClassificationColorsOptions {
   breakValues?: readonly number[];
   breakpointValue?: number | null;
   ignorePatternPalette?: boolean;
+  // Set by callers that only refresh derived colours: a hand-built ramp has no
+  // palette id to regenerate from, so it must survive the refresh. Callers that
+  // react to a break or breakpoint change leave it off — the ramp must follow.
+  preserveCustomColors?: boolean;
 }
 
 export function resolveClassificationColors({
@@ -231,7 +235,8 @@ export function resolveClassificationColors({
   classCount,
   breakValues,
   breakpointValue,
-  ignorePatternPalette = false
+  ignorePatternPalette = false,
+  preserveCustomColors = false
 }: ResolveClassificationColorsOptions): string[] | null {
   if (!classification) {
     return null;
@@ -309,6 +314,14 @@ export function resolveClassificationColors({
         undefined,
         divergingSplit
       );
+    } else if (
+      preserveCustomColors &&
+      classification.colors?.length === resolvedClassCount
+    ) {
+      // No addressable palette means the user built the ramp by hand: it is not
+      // reproducible from an id, and it is already stored in its final order,
+      // so it is returned as-is rather than regenerated and re-inverted.
+      return [...classification.colors];
     } else {
       colors = generateColorsForBreaks(
         resolvedClassCount,

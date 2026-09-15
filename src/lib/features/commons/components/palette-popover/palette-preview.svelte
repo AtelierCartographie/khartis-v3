@@ -23,7 +23,6 @@
     selectedPaletteId?: string;
     inverted?: boolean;
     paletteType?: PaletteType;
-    colorBlindFilter?: boolean;
     showInvertButton?: boolean;
     categoriesMode?: boolean;
     categoriesVariant?: CategoriesAspectVariant;
@@ -49,7 +48,6 @@
     selectedPaletteId = 'blues',
     inverted = false,
     paletteType = $bindable<PaletteType>('sequential'),
-    colorBlindFilter = $bindable(false),
     showInvertButton = true,
     categoriesMode = false,
     categoriesVariant = 'symbols-unique',
@@ -360,7 +358,6 @@
   triggerElement={triggerRef}
   selectedPaletteId={normalizedSelectedPaletteId}
   paletteType={paletteType}
-  colorBlindFilter={colorBlindFilter}
   numClasses={resolvedClassCount}
   previewCount={dropdownPreviewCount}
   divergingSplit={divergingSplit}
@@ -376,7 +373,6 @@
   currentInverted={inverted}
   selectedPaletteId={normalizedSelectedPaletteId}
   bind:paletteType={paletteType}
-  bind:colorBlindFilter={colorBlindFilter}
   numClasses={resolvedClassCount}
   divergingSplit={divergingSplit}
   allowPattern={categoriesVariant === 'polygons'}
