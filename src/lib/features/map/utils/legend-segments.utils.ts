@@ -86,6 +86,7 @@ import {
   type SharedFacetScaleColumn
 } from '$lib/features/step-toolbar/tools/facets';
 import type { LegendSubtitlePrimitive } from '$lib/features/commons/utils/legend-subtitle.utils';
+import { resolveVariableTextSizeBounds } from '../layers/text-layer-data.utils';
 
 const legendPatternFillCache: Record<string, LegendPatternFill> = {};
 
@@ -356,19 +357,12 @@ function normalizeLegendValue(
   );
 }
 
-function getPointLegendDisplaySize(
-  scale: PointSizeLegendScale,
-  size: number
-): number {
-  if (size <= 0) {
-    return 0;
-  }
-
-  const sizes = scale.steps.map((step) => step.size);
-  const minSize = Math.min(...sizes);
-  const maxSize = Math.max(...sizes);
-
-  return normalizeLegendValue(size, minSize, maxSize, 4, 18);
+// Class steps are radii, the swatch takes the drawn size, so the legend shows
+// each class at the size the map gives it — the way the proportional legend
+// already reads. Stretching the classes onto a fixed display range showed the
+// same contrast at the same size whatever the symbols actually measured.
+function getPointLegendDisplaySize(size: number): number {
+  return size > 0 ? size * 2 : 0;
 }
 
 function getUniquePointLegendDisplaySize(size: number | undefined): number {
@@ -1025,6 +1019,56 @@ function getTextColorLegendDraft(
   return null;
 }
 
+// Classed labels step through discrete font sizes, exactly like classed
+// symbols step through discrete radii, so the legend shows one glyph per class
+// at the size the renderer gives it — not the continuous ramp of the
+// proportional mode.
+function getTextSizeClassLegendItems(
+  viz: VisualizationConfig,
+  text: NonNullable<VisualizationConfig['text']>,
+  style: {
+    baseSize: number;
+    fill: string;
+    stroke: string;
+  }
+): KhartisLegendSwatchItem[] {
+  const classification = getPrimitiveClassification(
+    viz,
+    PrimitiveFilterType.TEXT
+  );
+  const breaks = (classification?.breaks ?? []).filter(Number.isFinite);
+  const classCount = getClassificationClassCount(classification);
+
+  if (breaks.length === 0 || classCount < 1) {
+    return [];
+  }
+
+  const { minSize, maxSize } = resolveVariableTextSizeBounds(style.baseSize);
+  const strokeWidth = getTextLegendStrokeWidth(text.haloWidth, text.halo);
+  const colors = classification?.colors ?? [];
+
+  return Array.from({ length: classCount }, (_, index) => {
+    // Same linear step the renderer applies per class index.
+    const classSize =
+      classCount === 1
+        ? maxSize
+        : minSize + (index * (maxSize - minSize)) / (classCount - 1);
+
+    return {
+      label: getColorScaleLabel(breaks, classCount, index),
+      fill:
+        text.colorMode === ColorMode.UNIQUE
+          ? style.fill
+          : (colors[index] ?? style.fill),
+      stroke: style.stroke,
+      strokeWidth,
+      opacity: text.opacity,
+      symbol: getTextLegendSymbolPath(),
+      size: Math.round(classSize)
+    };
+  });
+}
+
 function getTextSizeLegendDraft(
   viz: VisualizationConfig | undefined
 ): LegendSegmentDraft | null {
@@ -1054,10 +1098,9 @@ function getTextSizeLegendDraft(
     Math.max(baseSize, SLIDER_LIMITS.textSize.min),
     SLIDER_LIMITS.textSize.max
   );
-  const maxLegendSize = Math.max(
-    12,
-    Math.min(22, Math.round(clampedBaseSize * 1.4))
-  );
+  // draw_symbols_legend builds its glyph twice as tall as the size it is given,
+  // so half the font size draws the largest label at the size the map uses.
+  const proportionalLegendSize = clampedBaseSize / 2;
   const fill =
     text.colorMode === ColorMode.UNIQUE
       ? Array.isArray(text.color)
@@ -1065,6 +1108,36 @@ function getTextSizeLegendDraft(
         : (text.color ?? DEFAULT_COLORS.text)
       : DEFAULT_COLORS.text;
   const stroke = text.halo ? (text.haloColor ?? DEFAULT_COLORS.halo) : 'none';
+
+  if (text.sizeMode === SizeMode.CLASSES) {
+    const items = getTextSizeClassLegendItems(viz, text, {
+      baseSize: clampedBaseSize,
+      fill,
+      stroke
+    });
+
+    if (items.length === 0) {
+      return null;
+    }
+
+    return {
+      key: 'text-size-classes',
+      primitive: 'text',
+      className: 'legend-svg--text-size',
+      consumesMissingData: Boolean(text.missingData?.show),
+      create: (options, context) =>
+        toLegendSvg(
+          draw_khartis_swatch_legend(items, {
+            ...options,
+            type: 'symbol',
+            ...getTextMissingDataFooterOptions(
+              text,
+              context.includeMissingDataFooter
+            )
+          })
+        )
+    };
+  }
 
   return {
     key: 'text-size',
@@ -1076,7 +1149,7 @@ function getTextSizeLegendDraft(
         draw_symbols_legend(values, {
           ...options,
           type: 'text',
-          size: maxLegendSize,
+          size: proportionalLegendSize,
           fill,
           stroke,
           nodata: context.includeMissingDataFooter
@@ -1700,7 +1773,7 @@ function getPointSizeLegendItems(
     strokeWidth: 0.75,
     opacity: scale.fillOpacity,
     symbol: getShapePath(scale.shape),
-    size: getPointLegendDisplaySize(scale, step.size)
+    size: getPointLegendDisplaySize(step.size)
   }));
 }
 

@@ -585,6 +585,7 @@
 
 <StrokeSection
   visualization={visualization}
+  fillColor={currentPalette}
   dataFields={dataFields}
   infoText={m.stroke_section_info()}
   showDashed={true}

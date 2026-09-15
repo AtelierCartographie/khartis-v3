@@ -395,6 +395,31 @@ export function createTextOverlayLayers(
     };
   };
 
+  // The two label layers name the same feature, so they read one colour rule:
+  // a class or a category paints the secondary label exactly as the primary.
+  const createTextColorAccessor = (fallback: RGBColor, opacity: number) => {
+    if (colorMode === ColorMode.CLASSES) {
+      return createChoroplethTextColorAccessor(
+        thematicValueVector,
+        textClassification?.breaks,
+        textClassification?.colors,
+        fallback,
+        opacity
+      );
+    }
+
+    if (colorMode === ColorMode.CATEGORIES) {
+      return createCategoricalTextColorAccessor(
+        categoryVector,
+        fallback,
+        opacity,
+        textClassification?.disabledLabels ?? []
+      );
+    }
+
+    return withOpacity(fallback, opacity);
+  };
+
   const labelSizeAccessor = createTextSizeAccessor(labelBaseSize);
   const textSizeAccessor = createTextSizeAccessor(textBaseSize);
   const pointStatistics = ctx.pointStatistics ?? ctx.statistics;
@@ -571,7 +596,7 @@ export function createTextOverlayLayers(
         data: labelData,
         getPosition: (d) => d.position,
         getText: (d) => d.primaryText ?? '',
-        getColor: withOpacity(labelColor, labelOpacity),
+        getColor: createTextColorAccessor(labelColor, labelOpacity),
         getSize: labelSizeAccessor,
         sizeUnits: 'pixels',
         sizeScale: pageDisplayScale,
@@ -610,7 +635,17 @@ export function createTextOverlayLayers(
         ...(ctx.beforeId && { beforeId: ctx.beforeId }),
         updateTriggers: {
           getText: [secondaryLabelColumn],
-          getColor: [secondaryLabelsConfig.color, labelOpacity],
+          getColor: [
+            colorMode,
+            textValueColumn,
+            textCategoryColumn,
+            textClassification?.breaks,
+            textClassification?.colors,
+            textClassification?.labels,
+            textClassification?.disabledLabels,
+            secondaryLabelsConfig.color,
+            labelOpacity
+          ],
           getSize: [
             secondaryLabelsConfig.size,
             sizeMode,
@@ -703,23 +738,10 @@ export function createTextOverlayLayers(
       const textCharacterSet = extendTextCharacterSet(
         collectTextLayerGlyphs(textData, [missingTextLabel])
       );
-      const baseTextColorAccessor =
-        colorMode === ColorMode.CLASSES
-          ? createChoroplethTextColorAccessor(
-              thematicValueVector,
-              textClassification?.breaks,
-              textClassification?.colors,
-              textColor,
-              textOpacity
-            )
-          : colorMode === ColorMode.CATEGORIES
-            ? createCategoricalTextColorAccessor(
-                categoryVector,
-                textColor,
-                textOpacity,
-                textClassification?.disabledLabels ?? []
-              )
-            : withOpacity(textColor, textOpacity);
+      const baseTextColorAccessor = createTextColorAccessor(
+        textColor,
+        textOpacity
+      );
       const textColorAccessor = (datum: TextLayerDatum): Color => {
         if (datum.isMissingData) {
           return withOpacity(missingTextColor, textOpacity);

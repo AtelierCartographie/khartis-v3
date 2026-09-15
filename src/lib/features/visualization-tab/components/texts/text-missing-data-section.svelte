@@ -4,6 +4,10 @@
   import Switch from '$lib/features/commons/components/switch.svelte';
   import { InfoPopover } from '../shared';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
+  import {
+    COLOR_ROLE,
+    getColorSuggestions
+  } from '$lib/features/commons/services/color-suggestion.service';
 
   interface Props {
     show: boolean;
@@ -80,6 +84,7 @@
           exclusive
           label={m.color()}
           color={color}
+          presets={getColorSuggestions(COLOR_ROLE.MISSING_DATA)}
           onchange={onColorChange}
         />
       </div>

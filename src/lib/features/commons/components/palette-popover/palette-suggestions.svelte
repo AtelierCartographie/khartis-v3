@@ -9,9 +9,11 @@
     type Palette,
     type SuggestionPreset,
     type QualitativePreset,
-    DEFAULT_QUALITATIVE_PRESET,
+    getSuggestionPresetsForType,
+    getSuggestionPresetLabel,
     getSuggestionPalettes,
-    getQualitativeColorGroups,
+    getQualitativeColorBands,
+    resolveQualitativeGeneratorPreset,
     getPaletteDisplayName,
     generatePaletteColors,
     generateIntensityShades,
@@ -23,13 +25,11 @@
 
   interface Props {
     paletteType: PaletteType;
-    colorBlindFilter: boolean;
     selectedPaletteId: string;
     selectedColor?: string;
     numClasses: number;
     divergingSplit?: DivergingPaletteSplit;
     qualitativeMode?: 'single' | 'categories';
-    onColorBlindChange?: (enabled: boolean) => void;
     onSelect?: (palette: Palette) => void;
     onColorSelect?: (color: string) => void;
     onPaletteSelect?: (colors: string[]) => void;
@@ -38,14 +38,12 @@
   }
 
   let {
-    paletteType = $bindable(PALETTE_TYPE.SEQUENTIAL),
-    colorBlindFilter = $bindable(false),
+    paletteType = PALETTE_TYPE.SEQUENTIAL,
     selectedPaletteId,
     selectedColor,
     numClasses,
     divergingSplit,
     qualitativeMode = 'single',
-    onColorBlindChange,
     onSelect,
     onColorSelect,
     onPaletteSelect,
@@ -58,38 +56,25 @@
     isQualitative && qualitativeMode === 'categories'
   );
 
-  let sequentialPreset = $state<SuggestionPreset>('monochrome');
-  let qualitativePreset = $state<QualitativePreset>(DEFAULT_QUALITATIVE_PRESET);
+  let requestedPreset = $state<SuggestionPreset | undefined>(undefined);
 
-  const sequentialPalettes = $derived(
-    getSuggestionPalettes(sequentialPreset, colorBlindFilter)
+  const availablePresets = $derived(getSuggestionPresetsForType(paletteType));
+
+  const activePreset = $derived(
+    requestedPreset && availablePresets.includes(requestedPreset)
+      ? requestedPreset
+      : availablePresets[0]
   );
 
-  const qualitativeGroups = $derived(
-    getQualitativeColorGroups(qualitativePreset, colorBlindFilter)
+  const suggestedPalettes = $derived(
+    getSuggestionPalettes(paletteType, activePreset)
   );
+
+  const qualitativeBands = $derived(getQualitativeColorBands(activePreset));
 
   const qualitativeSelectedColor = $derived(
     selectedColor ?? VIF_MIXTE_COLORS[0]
   );
-
-  const qualitativeBands = $derived([
-    {
-      key: 'mixte',
-      label: m.palette_theme_mixte(),
-      colors: qualitativeGroups.mixte
-    },
-    {
-      key: 'chaud',
-      label: m.palette_theme_chaud(),
-      colors: qualitativeGroups.chaud
-    },
-    {
-      key: 'froid',
-      label: m.palette_theme_froid(),
-      colors: qualitativeGroups.froid
-    }
-  ]);
 
   function isCategoryBandSelected(colors: readonly string[]): boolean {
     return (
@@ -102,32 +87,28 @@
     if (isQualitative) {
       return generateIntensityShades(qualitativeSelectedColor);
     }
-    const selected = sequentialPalettes.find((p) => p.id === selectedPaletteId);
+    const selected = suggestedPalettes.find((p) => p.id === selectedPaletteId);
     const seedColor = selected?.colors?.[0] ?? DEFAULT_VISUALIZATION_COLOR;
     return generateIntensityShades(seedColor);
   });
 
   let selectedIntensityIndex = $state<number>(-1);
 
-  function setSequentialPreset(preset: SuggestionPreset) {
-    sequentialPreset = preset;
-    const newPalettes = getSuggestionPalettes(preset, colorBlindFilter);
-    if (
-      !newPalettes.some((p) => p.id === selectedPaletteId) &&
-      newPalettes.length > 0
-    ) {
-      onSelect?.(newPalettes[0]);
+  function setPreset(preset: SuggestionPreset) {
+    requestedPreset = preset;
+
+    if (isQualitative) {
+      onQualitativePresetChange?.(resolveQualitativeGeneratorPreset(preset));
+      return;
     }
-  }
 
-  function setQualitativePreset(preset: QualitativePreset) {
-    qualitativePreset = preset;
-    onQualitativePresetChange?.(preset);
-  }
-
-  function toggleColorBlind() {
-    colorBlindFilter = !colorBlindFilter;
-    onColorBlindChange?.(colorBlindFilter);
+    const nextPalettes = getSuggestionPalettes(paletteType, preset);
+    if (
+      !nextPalettes.some((p) => p.id === selectedPaletteId) &&
+      nextPalettes.length > 0
+    ) {
+      onSelect?.(nextPalettes[0]);
+    }
   }
 
   function selectPalette(palette: Palette) {
@@ -159,52 +140,21 @@
     <div class="section-heading-line"></div>
   </div>
 
-  {#if isQualitative}
-    <div class="filter-tags">
+  <div class="filter-tags">
+    {#each availablePresets as preset (preset)}
       <button
         type="button"
         class="filter-tag"
-        class:selected={qualitativePreset === 'vif'}
-        onclick={() => setQualitativePreset('vif')}
+        class:selected={activePreset === preset}
+        aria-pressed={activePreset === preset}
+        onclick={() => setPreset(preset)}
       >
-        {m.preset_vif()}
+        {getSuggestionPresetLabel(preset)}
       </button>
-      <button
-        type="button"
-        class="filter-tag"
-        class:selected={qualitativePreset === 'pastel'}
-        onclick={() => setQualitativePreset('pastel')}
-      >
-        {m.preset_pastel()}
-      </button>
-      <button
-        type="button"
-        class="filter-tag"
-        class:selected={qualitativePreset === 'sepia'}
-        onclick={() => setQualitativePreset('sepia')}
-      >
-        {m.preset_sepia()}
-      </button>
-      {#if isCategoriesQualitative}
-        <button
-          type="button"
-          class="filter-tag"
-          class:selected={qualitativePreset === 'grayscale'}
-          onclick={() => setQualitativePreset('grayscale')}
-        >
-          {m.preset_grayscale()}
-        </button>
-      {/if}
-      <button
-        type="button"
-        class="filter-tag filter-tag--toggle"
-        class:active={colorBlindFilter}
-        onclick={toggleColorBlind}
-      >
-        {m.preset_colorblind()}
-      </button>
-    </div>
+    {/each}
+  </div>
 
+  {#if isQualitative}
     {#if isCategoriesQualitative}
       {#each qualitativeBands as band (band.key)}
         <div class="palette-box">
@@ -227,30 +177,15 @@
         </div>
       {/each}
     {:else}
-      <QualitativeColorGrid
-        label={m.palette_theme_mixte()}
-        colors={qualitativeGroups.mixte}
-        selectedColor={qualitativeSelectedColor}
-        onColorSelect={selectQualitativeColor}
-        onPaletteSelect={onPaletteSelect ? selectQualitativePalette : undefined}
-      />
-      <QualitativeColorGrid
-        label={m.palette_theme_chaud()}
-        colors={qualitativeGroups.chaud}
-        selectedColor={qualitativeSelectedColor}
-        onColorSelect={selectQualitativeColor}
-        onPaletteSelect={onPaletteSelect ? selectQualitativePalette : undefined}
-      />
-      <QualitativeColorGrid
-        label={m.palette_theme_froid()}
-        colors={qualitativeGroups.froid}
-        selectedColor={qualitativeSelectedColor}
-        onColorSelect={selectQualitativeColor}
-        onPaletteSelect={onPaletteSelect ? selectQualitativePalette : undefined}
-      />
-    {/if}
+      {#each qualitativeBands as band (band.key)}
+        <QualitativeColorGrid
+          label={band.label}
+          colors={band.colors}
+          selectedColor={qualitativeSelectedColor}
+          onColorSelect={selectQualitativeColor}
+        />
+      {/each}
 
-    {#if !isCategoriesQualitative}
       <div class="intensity-section">
         <p class="palette-label">{m.palette_intensity()}</p>
         <div class="intensity-row">
@@ -272,43 +207,8 @@
       </div>
     {/if}
   {:else}
-    <div class="filter-tags">
-      <button
-        type="button"
-        class="filter-tag"
-        class:selected={sequentialPreset === 'monochrome'}
-        onclick={() => setSequentialPreset('monochrome')}
-      >
-        {m.preset_monochrome()}
-      </button>
-      <button
-        type="button"
-        class="filter-tag"
-        class:selected={sequentialPreset === 'bicolor'}
-        onclick={() => setSequentialPreset('bicolor')}
-      >
-        {m.preset_bicolor()}
-      </button>
-      <button
-        type="button"
-        class="filter-tag"
-        class:selected={sequentialPreset === 'sepia'}
-        onclick={() => setSequentialPreset('sepia')}
-      >
-        {m.preset_sepia()}
-      </button>
-      <button
-        type="button"
-        class="filter-tag filter-tag--toggle"
-        class:active={colorBlindFilter}
-        onclick={toggleColorBlind}
-      >
-        {m.preset_colorblind()}
-      </button>
-    </div>
-
     <div class="palette-list">
-      {#each sequentialPalettes as palette (palette.id)}
+      {#each suggestedPalettes as palette (palette.id)}
         <div class="palette-box">
           <p class="palette-label">{getPaletteDisplayName(palette)}</p>
           <button
@@ -326,7 +226,7 @@
                 colors={generatePaletteColors(
                   palette,
                   numClasses,
-                  colorBlindFilter ? 'high' : undefined,
+                  undefined,
                   undefined,
                   divergingSplit
                 )}
@@ -414,12 +314,6 @@
       background: #0072c3;
       color: #ffffff;
       border-color: #0072c3;
-    }
-
-    &.filter-tag--toggle.active {
-      background: #003a6d;
-      color: #ffffff;
-      border-color: #003a6d;
     }
   }
 

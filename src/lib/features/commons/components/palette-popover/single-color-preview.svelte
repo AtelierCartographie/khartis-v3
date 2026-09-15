@@ -9,6 +9,7 @@
   interface Props {
     label?: string;
     color: string;
+    presets?: readonly string[];
     patternPaletteConfig?: PatternPaletteConfig;
     exclusive?: boolean;
     allowPattern?: boolean;
@@ -19,6 +20,7 @@
   let {
     label,
     color,
+    presets,
     patternPaletteConfig,
     exclusive = false,
     allowPattern = true,
@@ -87,6 +89,7 @@
   bind:open={dropdownOpen}
   triggerElement={triggerRef}
   selectedColor={color}
+  presets={presets}
   exclusive={exclusive}
   onclose={handleDropdownClose}
   onselect={handleDropdownSelect}
@@ -100,7 +103,6 @@
   currentInverted={false}
   selectedPaletteId="__custom__"
   paletteType={PALETTE_TYPE.QUALITATIVE}
-  colorBlindFilter={false}
   numClasses={1}
   exclusive={exclusive}
   allowPattern={allowPattern}

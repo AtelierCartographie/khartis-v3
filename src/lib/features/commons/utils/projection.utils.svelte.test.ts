@@ -18,6 +18,7 @@ vi.mock('$lib/paraglide/messages', () => {
       'projection_desc_bonne',
       'projection_desc_cassini',
       'projection_desc_cylindrical_equal_area',
+      'projection_desc_eckert_4',
       'projection_desc_equal_earth',
       'projection_desc_equidistant_conic',
       'projection_desc_equirectangular',
@@ -49,6 +50,7 @@ vi.mock('$lib/paraglide/messages', () => {
       'projection_name_bonne',
       'projection_name_cassini',
       'projection_name_cylindrical_equal_area',
+      'projection_name_eckert_4',
       'projection_name_equal_earth',
       'projection_name_equidistant_conic',
       'projection_name_equirectangular',
@@ -71,6 +73,34 @@ vi.mock('$lib/paraglide/messages', () => {
       'projection_name_winkel_tripel'
     ].map((key) => [key, message])
   );
+});
+
+describe('PROJECTIONS catalogue', () => {
+  it('builds a usable projection for every catalogue entry', async () => {
+    const { PROJECTIONS } = await import('./projection.utils');
+
+    PROJECTIONS.forEach((info) => {
+      const projected = info.projection()([0, 0]);
+      expect(projected, info.id).not.toBeNull();
+      expect(projected!.every(Number.isFinite), info.id).toBe(true);
+    });
+  });
+
+  it('offers Eckert IV as an equal-area world projection', async () => {
+    const { getProjectionById } = await import('./projection.utils');
+    const eckert = getProjectionById('eckert-4');
+
+    expect(eckert?.shape).toBe('round');
+
+    const projection = eckert!.projection().scale(100).translate([0, 0]);
+    const [equatorX, equatorY] = projection([90, 0])!;
+    const [poleX, poleY] = projection([90, 89.999])!;
+
+    // Equal-area with pole lines: the 90° meridian keeps a non-zero abscissa
+    // at the pole, and the pole sits above the equator.
+    expect(Math.abs(poleX)).toBeGreaterThan(0.1 * Math.abs(equatorX));
+    expect(poleY).toBeLessThan(equatorY);
+  });
 });
 
 describe('fitProjectionToBbox', () => {

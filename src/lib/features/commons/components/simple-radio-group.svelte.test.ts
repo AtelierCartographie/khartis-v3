@@ -9,7 +9,7 @@ describe('SimpleRadioGroup', () => {
     { value: 'c', labelText: 'Option C' }
   ];
 
-  it('renders one radio per item with the shared name attribute', () => {
+  it('renders one radio per item sharing a single native group name', () => {
     const { getAllByRole } = render(SimpleRadioGroup, {
       items,
       selected: 'a',
@@ -17,7 +17,32 @@ describe('SimpleRadioGroup', () => {
     });
     const radios = getAllByRole('radio') as HTMLInputElement[];
     expect(radios).toHaveLength(3);
-    expect(radios.every((r) => r.name === 'test-group')).toBe(true);
+    expect(new Set(radios.map((r) => r.name)).size).toBe(1);
+    expect(radios[0].name.startsWith('test-group')).toBe(true);
+  });
+
+  it('keeps two groups of the same name on separate native groups', () => {
+    // Radio grouping is document-wide: sharing a name would let the second
+    // group uncheck the first one's selection.
+    const first = render(SimpleRadioGroup, {
+      items,
+      selected: 'a',
+      name: 'test-group'
+    });
+    const second = render(SimpleRadioGroup, {
+      items,
+      selected: 'b',
+      name: 'test-group'
+    });
+
+    const firstName = (
+      first.container.querySelector('input[type="radio"]') as HTMLInputElement
+    ).name;
+    const secondName = (
+      second.container.querySelector('input[type="radio"]') as HTMLInputElement
+    ).name;
+
+    expect(firstName).not.toBe(secondName);
   });
 
   it('marks the selected option as checked', () => {

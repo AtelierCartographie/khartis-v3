@@ -13,13 +13,19 @@
     VisualizationModes,
     VizDataFilter
   } from '$lib/features/commons/stores/visualization.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import type { FilterStats } from '$lib/features/duckdb';
   import * as m from '$lib/paraglide/messages';
   import {
+    ColorMode,
     DEFAULT_COLORS,
     SizeMode,
     VISUALIZATION_DEFAULTS
   } from '$lib/features/commons/constants/visualization.constants';
+  import {
+    DEFAULT_QUALITATIVE_PREVIEW,
+    DEFAULT_SEQUENTIAL_PREVIEW
+  } from '$lib/features/commons/components/palette-popover/palette.constants';
   import {
     CARTOGRAPHIC_FONT_FAMILY,
     clampFontSize,
@@ -30,12 +36,18 @@
   import DiscretizationModal from '../discretization/discretization-modal.svelte';
   import TextStylePopover from './text-style-popover.svelte';
   import { makeTextStyleHandlers } from './text-style-handlers.utils';
+  import {
+    resolveSecondaryTextSize,
+    resolveTextHierarchy,
+    type TextHierarchy
+  } from './text-hierarchy.utils';
   import type { TextAlignment } from './text-alignment.utils';
   import { resolveDiscretizationLabel } from '../discretization/discretization.utils';
   import {
     NONE_FIELD_ID,
     useFieldSelection
   } from '../../hooks/use-field-selection.svelte';
+  import { useCategoryLabels } from '../../hooks/use-category-labels.svelte';
   import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
   import { coerceString, parseOpacityToSlider } from '../../utils/coerce.utils';
 
@@ -74,6 +86,7 @@
     onMissingDataChange,
     onClassificationChange,
     onMappingChange,
+    onInvertPalette,
     onToggleVisibility,
     onModesChange,
     onSecondaryLabelsChange,
@@ -90,10 +103,14 @@
   const secondaryFieldItems = $derived([noneOption, ...dataFields]);
 
   let discretizationModalOpen = $state(false);
+  let discretizationTarget = $state<'size' | 'color'>('size');
   let filterSectionVisible = $state(false);
 
   const labelFieldSelection = useFieldSelection(() => dataFields);
-  const sizeFieldSelection = useFieldSelection(() => dataFields);
+  // Labels carry one value column: the size classes and the colour classes read
+  // the same variable and share a single classification.
+  const valueFieldSelection = useFieldSelection(() => dataFields);
+  const categoryFieldSelection = useFieldSelection(() => dataFields);
   const secondaryLabelFieldSelection = useFieldSelection(() => dataFields);
   const textFacetsSelection = useFacetsVariableSelection({
     getVisualizationId: () => visualization?.id,
@@ -107,19 +124,17 @@
   let italic = $state<boolean>(false);
   let size = $state<number>(VISUALIZATION_DEFAULTS.textSize);
   let sizeMode = $state<SizeMode>(SizeMode.FIXED);
+  let colorMode = $state<ColorMode>(ColorMode.UNIQUE);
   let alignment = $state<TextAlignment>('center');
   let halo = $state<boolean>(false);
   let haloColor = $state<string>(DEFAULT_COLORS.halo);
   let haloWidth = $state<number>(VISUALIZATION_DEFAULTS.haloWidth);
 
-  let secondaryColor = $state<string>(DEFAULT_COLORS.text);
   let secondaryFontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
   let secondarySize = $state<number>(VISUALIZATION_DEFAULTS.labelSize);
   let secondaryBold = $state<boolean>(false);
   let secondaryItalic = $state<boolean>(false);
   let secondaryAlignment = $state<TextAlignment>('center');
-  let secondaryHalo = $state<boolean>(false);
-  let secondaryHaloColor = $state<string>(DEFAULT_COLORS.halo);
 
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
@@ -134,12 +149,20 @@
     SizeMode.PROPORTIONAL,
     SizeMode.CLASSES
   ] as const;
+  const TEXT_COLOR_MODES = [
+    ColorMode.UNIQUE,
+    ColorMode.CLASSES,
+    ColorMode.CATEGORIES
+  ] as const;
   let showStylePopover = $state(false);
   let activeStyleSection = $state<StyleSection>('primary');
   let stylePopoverTrigger = $state<HTMLElement | undefined>();
   let primaryTriggerRef = $state<FormatTriggerRef>(null);
   let secondaryTriggerRef = $state<FormatTriggerRef>(null);
   let sizePickerOpen = $state(false);
+  let colorPickerOpen = $state(false);
+  let categoryPickerOpen = $state(false);
+  let categoriesPopoverOpen = $state(false);
 
   const enabled = $derived((visualization?.style.textOpacity ?? 0) > 0);
   const hasPrimaryField = $derived(
@@ -147,6 +170,18 @@
   );
   const hasSecondaryField = $derived(
     secondaryLabelFieldSelection.selectedFieldId !== NONE_FIELD_ID
+  );
+  // The hierarchy is the contract between the two texts: once chosen it holds
+  // through every size change, where the stored sizes only seed it — a project
+  // reopened at 9 pt and 8 pt starts on the closest preset.
+  let requestedHierarchy = $state<
+    { visualizationId: string | undefined; value: TextHierarchy } | undefined
+  >(undefined);
+  const hierarchy = $derived(
+    requestedHierarchy &&
+      requestedHierarchy.visualizationId === visualization?.id
+      ? requestedHierarchy.value
+      : resolveTextHierarchy(size, secondarySize)
   );
   const activeDiscretizationVisualization = $derived(visualization);
   const activeDiscretizationClassification = $derived.by(
@@ -158,6 +193,29 @@
   const activeDiscretizationValueColumn = $derived(
     visualization?.text?.valueColumn ?? visualization?.mapping.valueColumn
   );
+  const currentPalette = $derived(
+    activeDiscretizationClassification?.colors ?? DEFAULT_SEQUENTIAL_PREVIEW
+  );
+  const categoriesPalette = $derived(
+    activeDiscretizationClassification?.colors ?? DEFAULT_QUALITATIVE_PREVIEW
+  );
+  const dataset = $derived(
+    visualization
+      ? (datasetsStore.datasets.find((d) => d.id === visualization.datasetId) ??
+          datasetsStore.selectedDataset)
+      : datasetsStore.selectedDataset
+  );
+  const categoryColumnName = $derived(
+    categoryFieldSelection.selectedFieldName ?? ''
+  );
+  const categoryLabels = useCategoryLabels({
+    enabled: () => colorMode === ColorMode.CATEGORIES,
+    getDataset: () => dataset,
+    getColumnName: () =>
+      visualization?.mapping.categoryColumn ?? categoryColumnName,
+    getClassification: () => activeDiscretizationClassification,
+    fallbackCount: 4
+  });
 
   const textSizeDiscretizationLabel = $derived.by(() =>
     resolveDiscretizationLabel(
@@ -169,7 +227,8 @@
 
   $effect(() => {
     labelFieldSelection.sync(visualization?.mapping.labelColumn);
-    sizeFieldSelection.sync(visualization?.mapping.valueColumn);
+    valueFieldSelection.sync(visualization?.mapping.valueColumn);
+    categoryFieldSelection.sync(visualization?.mapping.categoryColumn);
     secondaryLabelFieldSelection.sync(
       visualization?.mapping.secondaryLabelColumn
     );
@@ -193,14 +252,13 @@
         VISUALIZATION_DEFAULTS.textSize
       );
       sizeMode = visualization.modes?.size ?? SizeMode.FIXED;
+      colorMode = visualization.modes?.color ?? ColorMode.UNIQUE;
       alignment = visualization.style.textAlign ?? 'center';
       halo = visualization.style.textHalo ?? false;
       haloColor = visualization.style.textHaloColor ?? DEFAULT_COLORS.halo;
       haloWidth =
         visualization.style.textHaloWidth ?? VISUALIZATION_DEFAULTS.haloWidth;
 
-      secondaryColor =
-        coerceString(visualization.style.labelColor) ?? DEFAULT_COLORS.text;
       secondaryFontFamily =
         normalizeFontFamily(visualization.style.labelFontFamily) ??
         CARTOGRAPHIC_FONT_FAMILY;
@@ -211,9 +269,6 @@
       secondaryBold = visualization.style.labelBold ?? false;
       secondaryItalic = visualization.style.labelItalic ?? false;
       secondaryAlignment = visualization.style.labelAlign ?? 'center';
-      secondaryHalo = visualization.style.labelHalo ?? false;
-      secondaryHaloColor =
-        visualization.style.labelHaloColor ?? DEFAULT_COLORS.halo;
     }
 
     const missingData =
@@ -263,7 +318,11 @@
 
     const updates: Partial<TextSecondaryLabelsConfig> = {
       enabled: true,
-      labelColumn: field.text
+      labelColumn: field.text,
+      color: textColor,
+      halo,
+      haloColor,
+      haloWidth
     };
 
     if (
@@ -277,11 +336,6 @@
   }
 
   const primaryTextStyleHandlers = makeTextStyleHandlers({
-    defaultSize: VISUALIZATION_DEFAULTS.textSize,
-    setColor: (value) => {
-      textColor = value;
-    },
-    emitColor: (value) => onStyleChange?.({ textColor: value }),
     setFontFamily: (value) => {
       fontFamily = value;
     },
@@ -294,63 +348,13 @@
       italic = value;
     },
     emitItalic: (value) => onStyleChange?.({ textItalic: value }),
-    setSize: (value) => {
-      size = value;
-    },
-    emitSize: (value) => onStyleChange?.({ textSize: value }),
     setAlignment: (value) => {
       alignment = value;
     },
-    emitAlignment: (value) => onStyleChange?.({ textAlign: value }),
-    setHalo: (value) => {
-      halo = value;
-    },
-    emitHalo: (value) => onStyleChange?.({ textHalo: value }),
-    setHaloColor: (value) => {
-      haloColor = value;
-    },
-    emitHaloColor: (value) => onStyleChange?.({ textHaloColor: value })
+    emitAlignment: (value) => onStyleChange?.({ textAlign: value })
   });
 
-  function handleTextOpacityChange(value: number) {
-    textOpacity = value;
-    onStyleChange?.({ textOpacity: value / 100 });
-  }
-
-  function handleSizeModeChange(index: number) {
-    const nextMode = TEXT_SIZE_MODES[index] ?? SizeMode.FIXED;
-    if (nextMode === sizeMode) {
-      return;
-    }
-
-    sizeMode = nextMode;
-    onModesChange?.({ size: nextMode });
-  }
-
-  function handleSizeFieldSelect(fieldId: number) {
-    sizeFieldSelection.set(fieldId);
-    if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ valueColumn: undefined });
-      return;
-    }
-
-    const field = dataFields.find((item) => item.id === fieldId);
-    if (field) {
-      onMappingChange?.({ valueColumn: field.text });
-    }
-  }
-
-  function handleHaloWidthChange(value: number) {
-    haloWidth = value;
-    onStyleChange?.({ textHaloWidth: value });
-  }
-
   const secondaryTextStyleHandlers = makeTextStyleHandlers({
-    defaultSize: VISUALIZATION_DEFAULTS.labelSize,
-    setColor: (value) => {
-      secondaryColor = value;
-    },
-    emitColor: (value) => onSecondaryLabelsChange?.({ color: value }),
     setFontFamily: (value) => {
       secondaryFontFamily = value;
     },
@@ -363,23 +367,119 @@
       secondaryItalic = value;
     },
     emitItalic: (value) => onSecondaryLabelsChange?.({ italic: value }),
-    setSize: (value) => {
-      secondarySize = value;
-    },
-    emitSize: (value) => onSecondaryLabelsChange?.({ size: value }),
     setAlignment: (value) => {
       secondaryAlignment = value;
     },
-    emitAlignment: (value) => onSecondaryLabelsChange?.({ align: value }),
-    setHalo: (value) => {
-      secondaryHalo = value;
-    },
-    emitHalo: (value) => onSecondaryLabelsChange?.({ halo: value }),
-    setHaloColor: (value) => {
-      secondaryHaloColor = value;
-    },
-    emitHaloColor: (value) => onSecondaryLabelsChange?.({ haloColor: value })
+    emitAlignment: (value) => onSecondaryLabelsChange?.({ align: value })
   });
+
+  // One colour and one outline for both texts: the secondary label names the
+  // same feature as the primary, so it is styled with it, not beside it.
+  function handleTextColorChange(value: string) {
+    textColor = value;
+    onStyleChange?.({ textColor: value });
+    onSecondaryLabelsChange?.({ color: value });
+  }
+
+  function handleTextOpacityChange(value: number) {
+    textOpacity = value;
+    onStyleChange?.({ textOpacity: value / 100 });
+    onSecondaryLabelsChange?.({ opacity: value / 100 });
+  }
+
+  function handleHaloToggle(value: boolean) {
+    halo = value;
+    onStyleChange?.({ textHalo: value });
+    onSecondaryLabelsChange?.({ halo: value });
+  }
+
+  function handleHaloColorChange(value: string) {
+    haloColor = value;
+    onStyleChange?.({ textHaloColor: value });
+    onSecondaryLabelsChange?.({ haloColor: value });
+  }
+
+  function handleHaloWidthChange(value: number) {
+    haloWidth = value;
+    onStyleChange?.({ textHaloWidth: value });
+    onSecondaryLabelsChange?.({ haloWidth: value });
+  }
+
+  // The slider carries the whole type scale: both texts are multiplied by it so
+  // the hierarchy set in the style popover survives every size change.
+  function applySecondaryTextSize(
+    primarySize: number,
+    nextHierarchy: TextHierarchy
+  ) {
+    const nextSecondarySize = resolveSecondaryTextSize(
+      primarySize,
+      nextHierarchy
+    );
+    secondarySize = nextSecondarySize;
+    onSecondaryLabelsChange?.({ size: nextSecondarySize });
+  }
+
+  function handleTextSizeChange(value: number) {
+    const nextSize = clampFontSize(value, VISUALIZATION_DEFAULTS.textSize);
+
+    size = nextSize;
+    onStyleChange?.({ textSize: nextSize });
+    applySecondaryTextSize(nextSize, hierarchy);
+  }
+
+  function handleHierarchyChange(nextHierarchy: TextHierarchy) {
+    requestedHierarchy = {
+      visualizationId: visualization?.id,
+      value: nextHierarchy
+    };
+    applySecondaryTextSize(size, nextHierarchy);
+  }
+
+  function handleSizeModeChange(index: number) {
+    const nextMode = TEXT_SIZE_MODES[index] ?? SizeMode.FIXED;
+    if (nextMode === sizeMode) {
+      return;
+    }
+
+    sizeMode = nextMode;
+    onModesChange?.({ size: nextMode });
+  }
+
+  function handleColorModeChange(index: number) {
+    const nextMode = TEXT_COLOR_MODES[index] ?? ColorMode.UNIQUE;
+    if (nextMode === colorMode) {
+      return;
+    }
+
+    colorMode = nextMode;
+    onModesChange?.({ color: nextMode });
+  }
+
+  function handleValueFieldSelect(fieldId: number) {
+    valueFieldSelection.set(fieldId);
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ valueColumn: undefined });
+      return;
+    }
+
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field) {
+      onMappingChange?.({ valueColumn: field.text });
+    }
+  }
+
+  function handleCategoryFieldSelect(fieldId: number) {
+    categoryFieldSelection.set(fieldId);
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ categoryColumn: undefined });
+      return;
+    }
+
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field) {
+      onMappingChange?.({ categoryColumn: field.text });
+    }
+  }
 
   function handleToggleChange(checked: boolean) {
     if (checked && textOpacity <= 0) {
@@ -405,6 +505,12 @@
   }
 
   function openTextSizeDiscretization() {
+    discretizationTarget = 'size';
+    discretizationModalOpen = true;
+  }
+
+  function openTextColorDiscretization() {
+    discretizationTarget = 'color';
     discretizationModalOpen = true;
   }
 
@@ -438,7 +544,7 @@
     toggleStylePopover('secondary', secondaryTriggerRef);
   }
 
-  const sizeColumnName = $derived(sizeFieldSelection.selectedFieldName ?? '');
+  const valueColumnName = $derived(valueFieldSelection.selectedFieldName ?? '');
 </script>
 
 <div class="viz-panel-shell texts-panel-shell">
@@ -496,29 +602,52 @@
         size={size}
         sizeMin={TEXT_SIZE_SLIDER_MIN}
         sizeMax={TEXT_SIZE_SLIDER_MAX}
-        sizeColumnName={sizeColumnName}
+        sizeColumnName={valueColumnName}
         bind:sizePickerOpen={sizePickerOpen}
         dataFields={dataFields}
         selectableDataFields={selectableDataFields}
-        sizeFieldSelection={sizeFieldSelection}
+        sizeFieldSelection={valueFieldSelection}
         facetsSelection={textFacetsSelection}
         discretizationLabel={textSizeDiscretizationLabel}
         onSizeModeChange={handleSizeModeChange}
-        onSizeChange={primaryTextStyleHandlers.onSizeChange}
-        onSizeFieldSelect={handleSizeFieldSelect}
+        onSizeChange={handleTextSizeChange}
+        onSizeFieldSelect={handleValueFieldSelect}
         onOpenDiscretization={openTextSizeDiscretization}
       />
 
       <TextAppearanceSection
+        colorMode={colorMode}
         color={textColor}
         opacity={textOpacity}
         halo={halo}
         haloColor={haloColor}
         haloWidth={haloWidth}
-        onColorChange={primaryTextStyleHandlers.onColorChange}
+        valueColumnName={valueColumnName}
+        categoryColumnName={categoryColumnName}
+        colorDiscretizationLabel={textSizeDiscretizationLabel}
+        classification={activeDiscretizationClassification}
+        palette={currentPalette}
+        categoriesPalette={categoriesPalette}
+        categoryLabels={categoryLabels.labels}
+        categoryCount={categoryLabels.count}
+        bind:colorPickerOpen={colorPickerOpen}
+        bind:categoryPickerOpen={categoryPickerOpen}
+        bind:categoriesPopoverOpen={categoriesPopoverOpen}
+        dataFields={dataFields}
+        selectableDataFields={selectableDataFields}
+        valueFieldSelection={valueFieldSelection}
+        categoryFieldSelection={categoryFieldSelection}
+        facetsSelection={textFacetsSelection}
+        onColorModeChange={handleColorModeChange}
+        onColorChange={handleTextColorChange}
         onOpacityChange={handleTextOpacityChange}
-        onHaloToggle={primaryTextStyleHandlers.onHaloChange}
-        onHaloColorChange={primaryTextStyleHandlers.onHaloColorChange}
+        onValueFieldSelect={handleValueFieldSelect}
+        onCategoryFieldSelect={handleCategoryFieldSelect}
+        onOpenColorDiscretization={openTextColorDiscretization}
+        onClassificationChange={handleDiscretizationChange}
+        onInvertPalette={onInvertPalette}
+        onHaloToggle={handleHaloToggle}
+        onHaloColorChange={handleHaloColorChange}
         onHaloWidthChange={handleHaloWidthChange}
       />
     </div>
@@ -545,34 +674,29 @@
     visualization={activeDiscretizationVisualization}
     classification={activeDiscretizationClassification}
     valueColumn={activeDiscretizationValueColumn}
-    role="size"
+    role={discretizationTarget === 'color' ? 'fill' : 'size'}
+    showBreakpointControls={discretizationTarget === 'color'}
     onchange={handleDiscretizationChange}
   />
 
   <TextStylePopover
     bind:open={showStylePopover}
     triggerElement={stylePopoverTrigger}
+    hierarchy={hierarchy}
+    onHierarchyChange={handleHierarchyChange}
     primary={{
-      color: textColor,
       fontFamily,
       bold,
       italic,
-      size,
       align: alignment,
-      halo,
-      haloColor,
       ...primaryTextStyleHandlers
     }}
     secondary={hasSecondaryField
       ? {
-          color: secondaryColor,
           fontFamily: secondaryFontFamily,
-          size: secondarySize,
           bold: secondaryBold,
           italic: secondaryItalic,
           align: secondaryAlignment,
-          halo: secondaryHalo,
-          haloColor: secondaryHaloColor,
           ...secondaryTextStyleHandlers
         }
       : undefined}

@@ -51,7 +51,6 @@ describe('PaletteDropdown', () => {
       triggerElement,
       selectedPaletteId: 'vif',
       paletteType: PALETTE_TYPE.QUALITATIVE,
-      colorBlindFilter: false,
       numClasses: 4
     });
 
@@ -72,7 +71,6 @@ describe('PaletteDropdown', () => {
       triggerElement,
       selectedPaletteId: 'vif',
       paletteType: PALETTE_TYPE.QUALITATIVE,
-      colorBlindFilter: false,
       numClasses: 4
     });
 
