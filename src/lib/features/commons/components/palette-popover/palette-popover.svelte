@@ -39,7 +39,6 @@
     currentInverted?: boolean;
     selectedPaletteId?: string;
     paletteType?: PaletteType;
-    colorBlindFilter?: boolean;
     numClasses?: number;
     divergingSplit?: DivergingPaletteSplit;
     exclusive?: boolean;
@@ -63,7 +62,6 @@
     currentInverted = false,
     selectedPaletteId = 'blues',
     paletteType = $bindable<PaletteType>(PALETTE_TYPE.SEQUENTIAL),
-    colorBlindFilter = $bindable(false),
     numClasses = 5,
     divergingSplit,
     exclusive = true,
@@ -86,7 +84,6 @@
   let draftColors = $state<string[]>([]);
   let draftInverted = $state(false);
   let draftType = $state<PaletteType>(PALETTE_TYPE.SEQUENTIAL);
-  let draftColorBlindFilter = $state(false);
   let draftPatternPaletteConfig = $state<PatternPaletteConfig | undefined>(
     undefined
   );
@@ -120,7 +117,6 @@
     draftColors = [...currentColors];
     draftInverted = currentInverted;
     draftType = paletteType;
-    draftColorBlindFilter = colorBlindFilter;
     draftPatternPaletteConfig = currentPatternPaletteConfig;
     draftQualitativePreset =
       findPaletteById(selectedPaletteId)?.qualitativePreset ??
@@ -166,14 +162,10 @@
     draftColors = generatePaletteColors(
       palette,
       numClasses,
-      draftColorBlindFilter ? 'high' : undefined,
+      undefined,
       undefined,
       divergingSplit
     );
-  }
-
-  function handleColorBlindChange(enabled: boolean) {
-    draftColorBlindFilter = enabled;
   }
 
   function handleCustomColorsChange(colors: string[]) {
@@ -298,13 +290,11 @@
 
       <div class="popover-content">
         <PaletteSuggestions
-          bind:paletteType={draftType}
-          bind:colorBlindFilter={draftColorBlindFilter}
+          paletteType={draftType}
           selectedPaletteId={draftPaletteId}
           selectedColor={draftColors[0]}
           numClasses={numClasses}
           divergingSplit={divergingSplit}
-          onColorBlindChange={handleColorBlindChange}
           onSelect={handlePaletteSelect}
           onColorSelect={handleQualitativeColorSelect}
           onPaletteSelect={handleQualitativePaletteSelect}
@@ -315,7 +305,8 @@
         <PaletteCustom
           paletteType={draftType}
           numClasses={numClasses}
-          colorBlindFilter={draftColorBlindFilter}
+          currentColors={draftColors}
+          divergingSplit={divergingSplit}
           allowPattern={allowPattern}
           inverted={draftInverted}
           patternPaletteConfig={draftPatternPaletteConfig}

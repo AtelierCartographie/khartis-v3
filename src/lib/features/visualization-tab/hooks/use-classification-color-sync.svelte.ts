@@ -92,7 +92,8 @@ function syncClassificationColors(
 ): void {
   const colors = resolveClassificationColors({
     classification,
-    usesCategories
+    usesCategories,
+    preserveCustomColors: true
   });
   if (!colors || areClassificationColorsEqual(classification?.colors, colors)) {
     return;

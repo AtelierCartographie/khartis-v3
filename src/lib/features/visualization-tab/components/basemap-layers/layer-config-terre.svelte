@@ -8,6 +8,10 @@
     BasemapDottedPattern
   } from '$lib/features/commons/constants/visualization.constants';
   import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
+  import {
+    COLOR_ROLE,
+    getColorSuggestions
+  } from '$lib/features/commons/services/color-suggestion.service';
 
   interface Props {
     showFillSection?: boolean;
@@ -38,6 +42,11 @@
     strokeOpacity = 100,
     onchange
   }: Props = $props();
+
+  const fillColorPresets = getColorSuggestions(COLOR_ROLE.TERRITORY_FILL);
+  const strokeColorPresets = $derived(
+    getColorSuggestions(COLOR_ROLE.TERRITORY_STROKE, fillColor)
+  );
 
   function handleFillColorChange(value: string) {
     onchange?.({ fillColor: value });
@@ -86,6 +95,7 @@
         <SingleColorPreview
           label={m.basemap_config_color()}
           color={fillColor}
+          presets={fillColorPresets}
           allowPattern={false}
           onchange={handleFillColorChange}
         />
@@ -123,6 +133,7 @@
         <SingleColorPreview
           label={m.basemap_config_color()}
           color={strokeColor}
+          presets={strokeColorPresets}
           allowPattern={false}
           onchange={handleStrokeColorChange}
         />

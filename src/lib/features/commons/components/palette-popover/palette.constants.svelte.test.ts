@@ -63,8 +63,14 @@ import {
   generateIntensityShades,
   generateCategoricalColorsFromSeed,
   getSuggestionPalettes,
+  getSuggestionPresetsForType,
   getPalettesForType,
-  getQualitativeColorGroups,
+  getQualitativeColorBands,
+  grayscalePalettes,
+  colorblindSequentialPalettes,
+  colorblindDivergingPalettes,
+  colorblindQualitativePalettes,
+  SUGGESTION_PRESET,
   findPaletteById,
   getPaletteDisplayName,
   buildPatternBackground,
@@ -74,9 +80,12 @@ import {
   VIF_CHAUD_COLORS,
   VIF_FROID_COLORS,
   PASTEL_MIXTE_COLORS,
-  SEPIA_MIXTE_COLORS,
-  type Palette
+  SEPIA_MIXTE_COLORS
 } from './palette.constants';
+import {
+  TOL_MUTED_COLORS,
+  WONG_COLORS
+} from '$lib/features/commons/constants/colorblind-palette.constants';
 import { divergentSequential } from '@ateliercartographie/ok-palette';
 
 const HEX_REGEX = /^#[0-9a-fA-F]{6}$/;
@@ -106,11 +115,10 @@ describe('palette.constants — default previews', () => {
 });
 
 describe('palette.constants — palette collections', () => {
-  it('should mark every monochrome palette as colorBlindSafe and SEQUENTIAL', () => {
+  it('should define every monochrome palette as a single-seed SEQUENTIAL ramp', () => {
     expect(monochromePalettes.length).toBeGreaterThan(0);
     monochromePalettes.forEach((p) => {
       expect(p.type).toBe(PALETTE_TYPE.SEQUENTIAL);
-      expect(p.colorBlindSafe).toBe(true);
       expect(p.colors.length).toBe(1);
     });
   });
@@ -123,16 +131,11 @@ describe('palette.constants — palette collections', () => {
     });
   });
 
-  it('should mark all sepia palettes as colorBlindSafe', () => {
-    expect(sepiaPalettes.length).toBeGreaterThan(0);
-    sepiaPalettes.forEach((p) => expect(p.colorBlindSafe).toBe(true));
-  });
-
-  it('should define diverging palettes with three seed colors (start/middle/end)', () => {
+  it('should define diverging palettes with both extreme seed colors', () => {
     expect(divergingPalettes.length).toBeGreaterThan(0);
     divergingPalettes.forEach((p) => {
       expect(p.type).toBe(PALETTE_TYPE.DIVERGING);
-      expect(p.colors.length).toBe(3);
+      expect(p.colors.length).toBeGreaterThanOrEqual(2);
     });
   });
 
@@ -141,17 +144,22 @@ describe('palette.constants — palette collections', () => {
     qualitativePalettes.forEach((p) => {
       expect(p.type).toBe(PALETTE_TYPE.QUALITATIVE);
       expect(p.colors.length).toBeGreaterThanOrEqual(3);
-      expect(p.colorBlindSafe).toBe(true);
     });
   });
 
-  it('should expose the Figma-aligned qualitative palette ids in dropdown order', () => {
+  it('should no longer offer grayscale as a qualitative palette', () => {
     expect(qualitativePalettes.map((palette) => palette.id)).toEqual([
       'vif',
       'pastel',
       'sepia',
-      'grayscale'
+      'cb-wong',
+      'cb-tol'
     ]);
+  });
+
+  it('should still resolve projects saved with the grayscale qualitative palette', () => {
+    expect(findPaletteById('grayscale')?.type).toBe(PALETTE_TYPE.QUALITATIVE);
+    expect(findPaletteById('categorical-grayscale')?.id).toBe('grayscale');
   });
 });
 
@@ -305,83 +313,111 @@ describe('palette.constants — generateIntensityShades', () => {
   });
 });
 
+describe('palette.constants — suggestion presets', () => {
+  it('should offer monochrome, bicolor, sepia, colour blindness and grayscale for a sequential palette', () => {
+    expect(getSuggestionPresetsForType(PALETTE_TYPE.SEQUENTIAL)).toEqual([
+      SUGGESTION_PRESET.MONOCHROME,
+      SUGGESTION_PRESET.BICOLOR,
+      SUGGESTION_PRESET.SEPIA,
+      SUGGESTION_PRESET.COLORBLIND,
+      SUGGESTION_PRESET.GRAYSCALE
+    ]);
+  });
+
+  it('should not offer grayscale for a qualitative palette', () => {
+    expect(getSuggestionPresetsForType(PALETTE_TYPE.QUALITATIVE)).not.toContain(
+      SUGGESTION_PRESET.GRAYSCALE
+    );
+  });
+
+  it('should offer colour blindness as a preset for every palette type', () => {
+    [
+      PALETTE_TYPE.SEQUENTIAL,
+      PALETTE_TYPE.DIVERGING,
+      PALETTE_TYPE.QUALITATIVE
+    ].forEach((type) => {
+      expect(getSuggestionPresetsForType(type)).toContain(
+        SUGGESTION_PRESET.COLORBLIND
+      );
+    });
+  });
+});
+
 describe('palette.constants — getSuggestionPalettes', () => {
   it('should return monochrome palettes for the monochrome preset', () => {
-    const result = getSuggestionPalettes('monochrome', false);
-    expect(result).toEqual(monochromePalettes);
+    expect(
+      getSuggestionPalettes(
+        PALETTE_TYPE.SEQUENTIAL,
+        SUGGESTION_PRESET.MONOCHROME
+      )
+    ).toEqual(monochromePalettes);
   });
 
-  it('should return bicolor palettes for the bicolor preset', () => {
-    const result = getSuggestionPalettes('bicolor', false);
-    expect(result).toEqual(sequentialPalettes);
+  it('should return sepia palettes for the sepia preset of a sequential palette', () => {
+    expect(
+      getSuggestionPalettes(PALETTE_TYPE.SEQUENTIAL, SUGGESTION_PRESET.SEPIA)
+    ).toEqual(sepiaPalettes);
   });
 
-  it('should return sepia palettes for the sepia preset', () => {
-    const result = getSuggestionPalettes('sepia', false);
-    expect(result).toEqual(sepiaPalettes);
+  it('should return a single grayscale ramp for the grayscale preset', () => {
+    expect(
+      getSuggestionPalettes(
+        PALETTE_TYPE.SEQUENTIAL,
+        SUGGESTION_PRESET.GRAYSCALE
+      )
+    ).toEqual(grayscalePalettes);
+    expect(grayscalePalettes).toHaveLength(1);
   });
 
-  it('should filter to colorBlindSafe palettes only when colorBlindFilter is true', () => {
-    const filtered = getSuggestionPalettes('monochrome', true);
-    expect(filtered.every((p: Palette) => p.colorBlindSafe)).toBe(true);
+  it('should only suggest DIVERGING palettes when the classification has a breakpoint', () => {
+    getSuggestionPresetsForType(PALETTE_TYPE.DIVERGING).forEach((preset) => {
+      const palettes = getSuggestionPalettes(PALETTE_TYPE.DIVERGING, preset);
+      expect(palettes.length).toBeGreaterThan(0);
+      palettes.forEach((palette) =>
+        expect(palette.type).toBe(PALETTE_TYPE.DIVERGING)
+      );
+    });
+  });
+
+  it('should suggest the Wong and Tol ramps for the colour-blindness preset', () => {
+    expect(
+      getSuggestionPalettes(
+        PALETTE_TYPE.SEQUENTIAL,
+        SUGGESTION_PRESET.COLORBLIND
+      )
+    ).toEqual(colorblindSequentialPalettes);
+    expect(
+      getSuggestionPalettes(
+        PALETTE_TYPE.DIVERGING,
+        SUGGESTION_PRESET.COLORBLIND
+      )
+    ).toEqual(colorblindDivergingPalettes);
   });
 });
 
 describe('palette.constants — getPalettesForType', () => {
   it('should return sequential palettes for PALETTE_TYPE.SEQUENTIAL', () => {
-    expect(getPalettesForType(PALETTE_TYPE.SEQUENTIAL, false)).toEqual(
+    expect(getPalettesForType(PALETTE_TYPE.SEQUENTIAL)).toEqual(
       sequentialPalettes
     );
   });
 
   it('should return diverging palettes for PALETTE_TYPE.DIVERGING', () => {
-    expect(getPalettesForType(PALETTE_TYPE.DIVERGING, false)).toEqual(
+    expect(getPalettesForType(PALETTE_TYPE.DIVERGING)).toEqual(
       divergingPalettes
     );
   });
 
   it('should return qualitative palettes for PALETTE_TYPE.QUALITATIVE', () => {
-    expect(getPalettesForType(PALETTE_TYPE.QUALITATIVE, false)).toEqual(
+    expect(getPalettesForType(PALETTE_TYPE.QUALITATIVE)).toEqual(
       qualitativePalettes
     );
   });
 
   it('should return pattern palettes for PALETTE_TYPE.PATTERN', () => {
-    expect(getPalettesForType(PALETTE_TYPE.PATTERN, false)).toEqual(
+    expect(getPalettesForType(PALETTE_TYPE.PATTERN)).toEqual(
       getPatternPalettes()
     );
-  });
-
-  it('should filter to colorBlindSafe palettes only when colorBlindFilter is true', () => {
-    const filtered = getPalettesForType(PALETTE_TYPE.QUALITATIVE, true);
-    expect(filtered.every((p: Palette) => p.colorBlindSafe)).toBe(true);
-  });
-});
-
-describe('palette.constants — diverging colour-blind-safe flags are truthful', () => {
-  const flagFor = (id: string) =>
-    divergingPalettes.find((p) => p.id === id)?.colorBlindSafe;
-
-  it('should mark the red-green rdylgn and piyg ramps as not colour-blind-safe', () => {
-    expect(flagFor('rdylgn')).toBe(false);
-    expect(flagFor('piyg')).toBe(false);
-  });
-
-  it('should mark rdbu, brbg and prgn as colour-blind-safe', () => {
-    expect(flagFor('rdbu')).toBe(true);
-    expect(flagFor('brbg')).toBe(true);
-    expect(flagFor('prgn')).toBe(true);
-  });
-
-  it('should exclude rdylgn and piyg from getPalettesForType under the colour-blind filter', () => {
-    const ids = getPalettesForType(PALETTE_TYPE.DIVERGING, true).map(
-      (p) => p.id
-    );
-    expect(ids).not.toContain('rdylgn');
-    expect(ids).not.toContain('piyg');
-    expect(ids).toContain('rdbu');
-    expect(ids).toContain('brbg');
-    expect(ids).toContain('prgn');
   });
 });
 
@@ -414,6 +450,33 @@ describe('palette.constants — findPaletteById', () => {
     expect(findPaletteById('categorical-set2')?.id).toBe('pastel');
   });
 
+  it('should resolve every palette a suggestion preset can hand out', () => {
+    [
+      PALETTE_TYPE.SEQUENTIAL,
+      PALETTE_TYPE.DIVERGING,
+      PALETTE_TYPE.QUALITATIVE
+    ].forEach((type) => {
+      getSuggestionPresetsForType(type).forEach((preset) => {
+        getSuggestionPalettes(type, preset).forEach((palette) => {
+          expect(findPaletteById(palette.id)?.id, palette.id).toBe(palette.id);
+        });
+      });
+    });
+  });
+
+  it('should resolve every palette the quick dropdown lists', () => {
+    [
+      PALETTE_TYPE.SEQUENTIAL,
+      PALETTE_TYPE.DIVERGING,
+      PALETTE_TYPE.QUALITATIVE,
+      PALETTE_TYPE.PATTERN
+    ].forEach((type) => {
+      getPalettesForType(type).forEach((palette) => {
+        expect(findPaletteById(palette.id)?.id, palette.id).toBe(palette.id);
+      });
+    });
+  });
+
   it('should return undefined for an unknown palette id', () => {
     expect(findPaletteById('unknown-palette-id')).toBeUndefined();
   });
@@ -427,6 +490,9 @@ describe('palette.constants — getPaletteDisplayName', () => {
       ...sepiaPalettes,
       ...divergingPalettes,
       ...qualitativePalettes,
+      ...colorblindSequentialPalettes,
+      ...colorblindQualitativePalettes,
+      ...grayscalePalettes,
       ...getPatternPalettes()
     ];
 
@@ -477,30 +543,33 @@ describe('palette.constants — qualitative preset constants', () => {
   });
 });
 
-describe('palette.constants — getQualitativeColorGroups', () => {
-  it('should return 5-color Mixte/Chaud/Froid groups for the Vif preset', () => {
-    const groups = getQualitativeColorGroups('vif', false);
-    expect(groups.mixte).toEqual([...VIF_MIXTE_COLORS]);
-    expect(groups.chaud).toEqual([...VIF_CHAUD_COLORS]);
-    expect(groups.froid).toEqual([...VIF_FROID_COLORS]);
+describe('palette.constants — getQualitativeColorBands', () => {
+  it('should return the 5-color Mixte/Chaud/Froid bands for the Vif preset', () => {
+    const bands = getQualitativeColorBands(SUGGESTION_PRESET.VIF);
+    expect(bands.map((band) => band.key)).toEqual(['mixte', 'chaud', 'froid']);
+    expect(bands[0].colors).toEqual([...VIF_MIXTE_COLORS]);
+    expect(bands[1].colors).toEqual([...VIF_CHAUD_COLORS]);
+    expect(bands[2].colors).toEqual([...VIF_FROID_COLORS]);
   });
 
-  it('should return Pastel groups for the pastel preset', () => {
-    const groups = getQualitativeColorGroups('pastel', false);
-    expect(groups.mixte).toEqual([...PASTEL_MIXTE_COLORS]);
+  it('should return Pastel and Sépia bands for their presets', () => {
+    expect(
+      getQualitativeColorBands(SUGGESTION_PRESET.PASTEL)[0].colors
+    ).toEqual([...PASTEL_MIXTE_COLORS]);
+    expect(getQualitativeColorBands(SUGGESTION_PRESET.SEPIA)[0].colors).toEqual(
+      [...SEPIA_MIXTE_COLORS]
+    );
   });
 
-  it('should return Sépia groups for the sepia preset', () => {
-    const groups = getQualitativeColorGroups('sepia', false);
-    expect(groups.mixte).toEqual([...SEPIA_MIXTE_COLORS]);
+  it('should propose the Bang Wong and Paul Tol schemes for the colour-blindness preset', () => {
+    const bands = getQualitativeColorBands(SUGGESTION_PRESET.COLORBLIND);
+    expect(bands.map((band) => band.key)).toEqual(['cb-wong', 'cb-tol']);
+    expect(bands[0].colors).toEqual([...WONG_COLORS]);
+    expect(bands[1].colors).toEqual([...TOL_MUTED_COLORS]);
   });
 
-  it('should filter to colorblind-safe subsets when colorBlindFilter is true', () => {
-    const all = getQualitativeColorGroups('vif', false);
-    const safe = getQualitativeColorGroups('vif', true);
-    expect(safe.mixte.length).toBeLessThanOrEqual(all.mixte.length);
-    expect(safe.chaud.length).toBeLessThanOrEqual(all.chaud.length);
-    expect(safe.froid.length).toBeLessThanOrEqual(all.froid.length);
+  it('should keep black out of the Wong scheme so categories stay comparable', () => {
+    expect(WONG_COLORS).not.toContain('#000000');
   });
 });
 

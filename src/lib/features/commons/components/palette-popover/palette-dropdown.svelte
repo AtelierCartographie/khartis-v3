@@ -28,7 +28,6 @@
     triggerElement?: HTMLElement;
     selectedPaletteId: string;
     paletteType: PaletteType;
-    colorBlindFilter: boolean;
     numClasses: number;
     previewCount?: number;
     divergingSplit?: DivergingPaletteSplit;
@@ -43,7 +42,6 @@
     triggerElement,
     selectedPaletteId,
     paletteType,
-    colorBlindFilter,
     numClasses,
     previewCount = numClasses,
     divergingSplit,
@@ -58,7 +56,7 @@
   const contextualSurfaceId =
     createExclusiveContextualSurfaceId('palette-dropdown');
 
-  const palettes = $derived(getPalettesForType(paletteType, colorBlindFilter));
+  const palettes = $derived(getPalettesForType(paletteType));
 
   function getPalettePreviewColors(palette: Palette): string[] {
     if (palette.type === PALETTE_TYPE.QUALITATIVE) {
@@ -68,7 +66,7 @@
     return generatePaletteColors(
       palette,
       previewCount,
-      colorBlindFilter ? 'high' : undefined,
+      undefined,
       undefined,
       divergingSplit
     );
@@ -90,7 +88,7 @@
     const colors = generatePaletteColors(
       palette,
       numClasses,
-      colorBlindFilter ? 'high' : undefined,
+      undefined,
       undefined,
       divergingSplit
     );

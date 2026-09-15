@@ -85,7 +85,6 @@
   let popoverRight = $state(resolveToolbarWidth(globalState.toolbarState));
   let draftCategories = $state<CategoryDraft[]>([]);
   let selectedCategoryId = $state<string | null>(null);
-  let draftColorBlindFilter = $state(false);
   let draftQualitativePreset = $state<QualitativePreset>(
     DEFAULT_QUALITATIVE_PRESET
   );
@@ -199,7 +198,6 @@
     expandedCategoryId = showPerCategoryAspect
       ? (draftCategories[0]?.id ?? null)
       : null;
-    draftColorBlindFilter = false;
     draftQualitativePreset = DEFAULT_QUALITATIVE_PRESET;
     draftSuggestionSeedColor = draftCategories[0]?.color;
     draftCommonAspect = commonAspect
@@ -540,7 +538,6 @@
           <PaletteSuggestions
             paletteType={PALETTE_TYPE.QUALITATIVE}
             qualitativeMode="categories"
-            bind:colorBlindFilter={draftColorBlindFilter}
             selectedPaletteId="__custom__"
             selectedColor={draftSuggestionSeedColor ?? selectedCategory?.color}
             numClasses={draftCategories.length}

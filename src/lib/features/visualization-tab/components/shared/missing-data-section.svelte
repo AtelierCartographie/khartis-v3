@@ -20,6 +20,10 @@
     ToggleWithLabel
   } from '$lib/features/commons/components/viz-controls';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
+  import {
+    COLOR_ROLE,
+    getColorSuggestions
+  } from '$lib/features/commons/services/color-suggestion.service';
   import type { PatternPaletteConfig } from '$lib/features/commons/constants/pattern.constants';
   import {
     buildDashedPatternItems,
@@ -161,6 +165,7 @@
             exclusive
             label={m.color()}
             color={color}
+            presets={getColorSuggestions(COLOR_ROLE.MISSING_DATA)}
             allowPattern={showPatternToggle}
             patternPaletteConfig={pattern ? patternConfig : undefined}
             onchange={oncolorchange}

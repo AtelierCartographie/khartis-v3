@@ -134,3 +134,8 @@ export function hexToOklchHue(hex: string): number {
 
   return ((((Math.atan2(b, a) * 180) / Math.PI) % 360) + 360) % 360;
 }
+
+export function darkenHex(hex: string, ratio: number): string {
+  const { hue, saturation, lightness } = hexToHsl(hex);
+  return hslToHex(hue, saturation, Math.round(lightness * (1 - ratio)));
+}

@@ -1,18 +1,12 @@
 <script lang="ts">
-  import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import { Dropdown } from 'carbon-components-svelte';
-  import { hexToHsl } from '$lib/features/commons/utils/color-utils';
-  import { DEFAULT_COLORS } from '$lib/features/commons/constants/visualization.constants';
   import {
     AVAILABLE_FONTS,
-    clampFontSize,
     CARTOGRAPHIC_FONT_FAMILY,
-    DEFAULT_FONT_SIZE,
-    normalizeFontFamily,
-    resolveFontSizeOptions
+    normalizeFontFamily
   } from '$lib/features/step-toolbar/fonts.constants';
   import * as m from '$lib/paraglide/messages';
-  import { TextBold, TextColor, TextItalic } from 'carbon-icons-svelte';
+  import { TextBold, TextItalic } from 'carbon-icons-svelte';
   import {
     nextAlignment,
     resolveAlignmentIcon,
@@ -22,29 +16,14 @@
 
   export interface TextStyleSectionHandlers {
     fontFamily: string;
-    color: string;
     bold?: boolean;
     italic?: boolean;
-    size: number;
     align: TextAlignment;
-    halo?: boolean;
-    haloColor?: string;
     onFontFamilyChange: (value: string) => void;
-    onColorChange: (value: string) => void;
     onBoldChange?: (value: boolean) => void;
     onItalicChange?: (value: boolean) => void;
-    onSizeChange: (value: number) => void;
     onAlignmentChange: (align: TextAlignment) => void;
-    onHaloChange?: (value: boolean) => void;
-    onHaloColorChange?: (value: string) => void;
   }
-
-  type ColorPickerPayload = {
-    hex: string;
-    hue: number;
-    saturation: number;
-    lightness: number;
-  };
 
   type DropdownSelectEvent = CustomEvent<{
     selectedId?: string | number;
@@ -53,34 +32,18 @@
   interface Props {
     title: string;
     section: TextStyleSectionHandlers | undefined;
-    fallbackSize?: number;
   }
 
-  let { title, section, fallbackSize = DEFAULT_FONT_SIZE }: Props = $props();
+  let { title, section }: Props = $props();
 
   const enabled = $derived(Boolean(section));
   const align = $derived<TextAlignment>(section?.align ?? 'center');
   const AlignmentIcon = $derived(resolveAlignmentIcon(align));
-  const fontSizes = $derived(
-    resolveFontSizeOptions(section?.size ?? fallbackSize)
-  );
   const fontItems = $derived(
     AVAILABLE_FONTS.map((fontFamily) => ({
       id: fontFamily,
       text: fontFamily
     }))
-  );
-  const fontSizeItems = $derived(
-    fontSizes.map((fontSize) => ({
-      id: String(fontSize),
-      text: String(fontSize)
-    }))
-  );
-  const fallbackTextColor = DEFAULT_COLORS.gray;
-  const fallbackHaloColor = DEFAULT_COLORS.halo;
-  const textColorHsl = $derived(hexToHsl(section?.color ?? fallbackTextColor));
-  const haloColorHsl = $derived(
-    hexToHsl(section?.haloColor ?? fallbackHaloColor)
   );
 
   function handleFontFamilySelect(event: DropdownSelectEvent) {
@@ -91,29 +54,6 @@
         : undefined;
     if (value === undefined) return;
     section.onFontFamilyChange(value);
-  }
-
-  function handleSizeSelect(event: DropdownSelectEvent) {
-    if (!section) return;
-    const value = Number(event.detail.selectedId);
-    if (!Number.isFinite(value)) return;
-    section.onSizeChange(clampFontSize(value, DEFAULT_FONT_SIZE));
-  }
-
-  function enableHaloColorPicker() {
-    if (!section?.onHaloColorChange) return;
-    section.onHaloChange?.(true);
-  }
-
-  function handleQuickColorValidate({ hex }: ColorPickerPayload) {
-    if (!section) return;
-    section.onColorChange(hex);
-  }
-
-  function handleQuickHaloColorValidate({ hex }: ColorPickerPayload) {
-    if (!section) return;
-    section.onHaloChange?.(true);
-    section.onHaloColorChange?.(hex);
   }
 </script>
 
@@ -145,24 +85,6 @@
         />
       </div>
     </div>
-
-    <div class="compact-field compact-field--size">
-      <span class="compact-field__label">{m.annotations_size()}</span>
-      <div class="compact-field__control">
-        <Dropdown
-          class="compact-dropdown"
-          hideLabel
-          labelText={m.annotations_size()}
-          aria-label={m.annotations_size()}
-          items={fontSizeItems}
-          selectedId={String(clampFontSize(section?.size, fallbackSize))}
-          disabled={!enabled}
-          size="sm"
-          type="default"
-          on:select={handleSizeSelect}
-        />
-      </div>
-    </div>
   </div>
 
   <div class="quick-format-toolbar" role="toolbar" aria-label={title}>
@@ -189,51 +111,6 @@
     >
       <TextItalic size={16} />
     </button>
-
-    <div
-      class="quick-format-color-picker"
-      class:quick-format-color-picker--disabled={!enabled}
-      style={`--quick-format-accent: ${section?.color ?? fallbackTextColor};`}
-    >
-      <ColorPicker
-        exclusive
-        disabled={!enabled}
-        hex={section?.color ?? fallbackTextColor}
-        hue={textColorHsl.hue}
-        saturation={textColorHsl.saturation}
-        lightness={textColorHsl.lightness}
-        triggerAriaLabel={m.color()}
-        triggerTitle={m.color()}
-        onValidate={handleQuickColorValidate}
-      />
-      <span class="quick-format-color-icon" aria-hidden="true">
-        <TextColor size={16} />
-      </span>
-    </div>
-
-    <div
-      class="quick-format-color-picker quick-format-color-picker--halo"
-      class:quick-format-color-picker--active={Boolean(section?.halo)}
-      class:quick-format-color-picker--disabled={!section?.onHaloColorChange}
-      style={`--quick-format-accent: ${section?.haloColor ?? fallbackHaloColor};`}
-    >
-      <ColorPicker
-        exclusive
-        disabled={!section?.onHaloColorChange}
-        hex={section?.haloColor ?? fallbackHaloColor}
-        hue={haloColorHsl.hue}
-        saturation={haloColorHsl.saturation}
-        lightness={haloColorHsl.lightness}
-        triggerAriaLabel={m.halo_color()}
-        triggerTitle={m.halo_color()}
-        onBeforeOpen={enableHaloColorPicker}
-        onValidate={handleQuickHaloColorValidate}
-      />
-      <span class="outline-text-icon" aria-hidden="true">
-        <span class="outline-text-icon__glyph">{m.text_style_glyph()}</span>
-        <span class="outline-text-icon__underline"></span>
-      </span>
-    </div>
 
     <button
       type="button"
@@ -309,10 +186,6 @@
     flex: 1 1 auto;
   }
 
-  .compact-field--size {
-    flex: 0 0 var(--kh-text-size-control-width, 80px);
-  }
-
   .compact-field__label {
     display: block;
     padding-bottom: var(--cds-spacing-03, 8px);
@@ -363,8 +236,6 @@
   }
 
   .quick-format-button {
-    --quick-format-accent: currentColor;
-
     width: 32px;
     height: 32px;
     display: inline-flex;
@@ -397,136 +268,6 @@
 
   .quick-format-button--active {
     background: var(--cds-layer-hover-01, #e8e8e8);
-  }
-
-  .quick-format-color-picker {
-    --quick-format-accent: currentColor;
-
-    position: relative;
-    width: 32px;
-    height: 32px;
-    color: var(--cds-text-primary, #161616);
-  }
-
-  .quick-format-color-picker :global(#khartis-color-picker) {
-    width: 100%;
-    height: 100%;
-  }
-
-  .quick-format-color-picker :global(.color-trigger) {
-    position: relative;
-    width: 32px;
-    height: 32px;
-    margin-top: 0;
-    padding: 0;
-    justify-content: center;
-    gap: 0;
-    border: none;
-    background: transparent;
-    color: var(--cds-text-primary, #161616);
-  }
-
-  .quick-format-color-picker:not(.quick-format-color-picker--disabled)
-    :global(.color-trigger:hover) {
-    background: var(--cds-layer-hover-01, #e8e8e8);
-  }
-
-  .quick-format-color-picker--active :global(.color-trigger) {
-    background: var(--cds-layer-hover-01, #e8e8e8);
-  }
-
-  .quick-format-color-picker :global(.color-trigger:focus) {
-    outline: 2px solid var(--cds-focus, #0f62fe);
-    outline-offset: -2px;
-  }
-
-  .quick-format-color-picker :global(.swatch) {
-    position: absolute;
-    left: 10px;
-    right: 10px;
-    bottom: 6px;
-    width: auto;
-    height: 1px;
-    margin: 0;
-    border: none;
-    background: var(--quick-format-accent) !important;
-  }
-
-  .quick-format-color-picker :global(.chevron) {
-    display: none;
-  }
-
-  .quick-format-color-picker--disabled :global(.color-trigger) {
-    cursor: not-allowed;
-  }
-
-  .quick-format-color-picker--disabled {
-    color: var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
-  }
-
-  .quick-format-color-picker--disabled :global(.swatch) {
-    background: var(--cds-text-disabled, rgba(22, 22, 22, 0.25)) !important;
-  }
-
-  .quick-format-color-icon {
-    position: absolute;
-    inset: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    pointer-events: none;
-  }
-
-  .outline-text-icon {
-    position: relative;
-    width: 16px;
-    height: 16px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: currentColor;
-    position: absolute;
-    inset: 8px;
-    pointer-events: none;
-  }
-
-  .outline-text-icon__glyph {
-    position: relative;
-    z-index: 1;
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 0.875rem;
-    font-weight: 600;
-    line-height: 1;
-    color: var(--cds-field-02, #ffffff);
-    -webkit-text-stroke: 1px var(--cds-text-primary, #161616);
-    text-shadow:
-      -1px 0 var(--cds-text-primary, #161616),
-      0 1px var(--cds-text-primary, #161616),
-      1px 0 var(--cds-text-primary, #161616),
-      0 -1px var(--cds-text-primary, #161616);
-  }
-
-  .outline-text-icon__underline {
-    position: absolute;
-    left: 1px;
-    right: 1px;
-    bottom: 0;
-    height: 1px;
-    background: var(--quick-format-accent);
-  }
-
-  .quick-format-color-picker--disabled .outline-text-icon__glyph {
-    color: transparent;
-    -webkit-text-stroke-color: var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
-    text-shadow:
-      -1px 0 var(--cds-text-disabled, rgba(22, 22, 22, 0.25)),
-      0 1px var(--cds-text-disabled, rgba(22, 22, 22, 0.25)),
-      1px 0 var(--cds-text-disabled, rgba(22, 22, 22, 0.25)),
-      0 -1px var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
-  }
-
-  .quick-format-color-picker--disabled .outline-text-icon__underline {
-    background: var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
   }
 
   @media (max-width: 640px) {
