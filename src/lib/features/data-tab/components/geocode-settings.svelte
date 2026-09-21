@@ -106,6 +106,7 @@
       {/if}
     </span>
     <ToggleTabs
+      size="lg"
       activeIndex={activeTabIndex}
       items={tabItems}
       onchange={handleTabChange}
@@ -221,10 +222,6 @@
   :global(.geocode-tabs) {
     width: 100%;
     max-width: none;
-  }
-
-  :global(.geocode-tabs .toggle-tab) {
-    height: var(--kh-size-control-md);
   }
 
   :global(.geocode-tabs .toggle-tab.active) {

@@ -23,8 +23,8 @@
   .section-heading {
     display: flex;
     align-items: center;
-    gap: var(--cds-spacing-03);
-    margin: var(--cds-spacing-05) 0 var(--cds-spacing-04);
+    gap: var(--kh-gap-inline);
+    margin: var(--kh-gap-section) 0 var(--kh-gap-param);
 
     &:first-child {
       margin-top: 0;

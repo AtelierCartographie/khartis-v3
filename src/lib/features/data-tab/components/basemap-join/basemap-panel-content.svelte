@@ -53,6 +53,7 @@
 <div class="basemap-panel-content">
   <div class="basemap-tabs-wrapper">
     <ToggleTabs
+      size="lg"
       activeIndex={activeTabIndex}
       items={tabItems}
       onchange={handleTabChange}
@@ -83,10 +84,6 @@
 
   .basemap-tabs-wrapper {
     margin-bottom: 12px;
-  }
-
-  .basemap-tabs-wrapper :global(.toggle-tab) {
-    height: var(--kh-size-control-md);
   }
 
   .basemap-tabs-wrapper :global(.toggle-tab.active) {
