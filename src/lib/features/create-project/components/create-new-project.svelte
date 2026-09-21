@@ -627,7 +627,7 @@
     {#each SHAPEFILE_COMPONENT_GROUPS as group (group.key)}
       {#each group.extensions as extension (extension)}
         {@const isPresent = presentExtensions.has(extension)}
-        <Tag size="sm" type={isPresent ? 'teal' : 'gray'}>
+        <Tag size="sm" type={isPresent ? 'purple' : 'gray'}>
           {extension}{isPresent ? m.separator_check_mark() : ''}
         </Tag>
       {/each}
