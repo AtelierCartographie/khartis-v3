@@ -1,17 +1,26 @@
 # Contributors
 
-This file acknowledges the people who have contributed to Khartis v3.
+Khartis is designed and maintained by the
+[Atelier de cartographie](https://www.sciencespo.fr/cartographie/) at Sciences Po.
 
-## Core Team
+The roles below mirror the credits shown in the application's **Legal notice**
+panel, which is the validated reference.
 
-- **Thomas Ansart** - Atelier de cartographie de Sciences Po
-  - Website: [Sciences Po Cartographie](https://www.sciencespo.fr/cartographie/)
+| Role                  | People                                  |
+| --------------------- | --------------------------------------- |
+| General design        | The Atelier de cartographie team        |
+| UI/UX design          | Antoine Rio (Atelier de cartographie)   |
+| Development           | Jean-Baptiste Thery (via RECSI-GROUP)   |
+| Open-source ecosystem | Thomas Ansart (Atelier de cartographie) |
 
-- **Antoine Rio** - Atelier de cartographie de Sciences Po
-  - Website: [Sciences Po Cartographie](https://www.sciencespo.fr/cartographie/)
+Khartis also builds on standalone libraries developed within the Atelier —
+[geoarrow-deck-stream](https://github.com/AtelierCartographie/geoarrow-deck-stream),
+[motif.js](https://github.com/AtelierCartographie/motif.js),
+[ok-palette](https://github.com/AtelierCartographie/ok-palette) and
+[proj-suggest](https://github.com/AtelierCartographie/proj-suggest) — and on the
+wider open-source cartographic and web ecosystem.
 
-- **Jean-Baptiste Thery** - Lead Developer
-  - GitHub: [@jb-thery](https://github.com/jb-thery)
-  - Email: jb.thery@jcode.works
+Contributions from the community are welcome; see
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
----
+Contact: **carto@sciencespo.fr**

@@ -21,7 +21,7 @@ Security concerns relevant to this project:
 
 Please **do not** open a public GitHub issue for security vulnerabilities.
 
-Report security issues by email to: **cartographie@sciencespo.fr**
+Report security issues by email to: **carto@sciencespo.fr**
 
 Include:
 
