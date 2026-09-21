@@ -85,6 +85,8 @@ export interface UploadedFile {
   assetRef?: AssetRef;
   companionAssetRefs?: AssetRef[];
   uploadProgress?: number;
+  rowCount?: number;
+  columnCount?: number;
   statistics?: Record<string, unknown>;
   duplicates?: {
     hasDuplicates: boolean;
