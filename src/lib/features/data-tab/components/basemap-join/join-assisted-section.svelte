@@ -1543,7 +1543,7 @@
     display: flex;
     align-items: center;
     gap: var(--kh-gap-inline);
-    padding: 0 var(--kh-pad-panel) var(--kh-pad-panel);
+    padding-bottom: var(--kh-pad-panel);
   }
 
   .section-header-icon {
