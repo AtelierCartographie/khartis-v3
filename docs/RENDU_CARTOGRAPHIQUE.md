@@ -136,6 +136,13 @@ primitive, un mode de représentation et les paramètres qui lui sont propres.
 | Catégoriel    | variable qualitative  | catégorie, forme ou couleur par modalité                                             |
 | Proportionnel | quantité absolue      | taille de symbole ou largeur de ligne liée à la valeur                               |
 
+La primitive Textes partage une **hiérarchie typographique** unique
+(`visualization-tab/components/texts/text-hierarchy.utils.ts`) : la taille
+secondaire se déduit de la primaire par un rapport nommé — `equal` (1),
+`moderate` (0,75) ou `strong` (0,55) — et la lecture inverse retrouve le
+rapport le plus proche. Une taille secondaire ne se règle donc pas
+indépendamment : c’est le niveau de hiérarchie qui se choisit.
+
 Un choroplèthe est un cas de polygone classifié : sa variable devrait être un
 taux ou un ratio, pas un effectif absolu. Les effectifs absolus sont plutôt
 portés par des symboles proportionnels. Cette distinction métier influe sur la
@@ -180,6 +187,30 @@ séparation évite de lier le rendu SVG à l’état d’édition.
 chaîne issue d’un jeu de données ou d’une configuration doit y être échappée
 avec les utilitaires dédiés aux textes et attributs SVG. Une évolution de
 légende doit couvrir le rendu à l’écran, l’export et ce cas de sécurité.
+
+#### La légende dessine ce que la carte dessine
+
+La légende n’a **pas** accès à la série : `dataset.data` n’est pas alimenté
+après l’import. Les faits de distribution dont elle a besoin viennent de la
+macro `value_sample` portée par les statistiques de colonne
+(`getStatisticsValueSample()` dans `map/utils/legend-segments.utils.ts`). Les
+paliers d’une légende de symboles proportionnels sont donc choisis parmi des
+**valeurs réelles**, pas sur des arrondis inventés, et leur nombre est réduit à
+ce que la place disponible permet d’afficher.
+
+Le corollaire vaut pour la taille : une classe se dessine dans la légende à la
+taille que la carte lui donne. Étirer les classes sur une plage d’affichage
+fixe montrait le même contraste quelle que soit la taille réelle des symboles,
+ce qui rendait le curseur de taille invisible dans la légende. Lorsqu’un
+générateur impose sa propre échelle — `draw_symbols_legend` construit son glyphe
+deux fois plus haut que la taille qu’on lui passe — la compensation se fait au
+point d’appel, pas par une mise à l’échelle globale de la légende.
+
+Enfin, une primitive n’obtient une légende que si elle **encode une variable**.
+Des étiquettes de taille ou de couleur unique ne produisent pas d’entrée de
+légende : elles ne portent aucune information à décoder. `legend-subtitle.utils.ts`
+applique la même règle au sous-titre, qui ne liste que les colonnes réellement
+mobilisées par les primitives actives.
 
 ### Filtres, interaction et overlays
 
