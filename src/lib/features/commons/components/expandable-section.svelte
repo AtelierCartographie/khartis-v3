@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ChevronDown, ChevronUp } from 'carbon-icons-svelte';
   import type { Snippet } from 'svelte';
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { stopBubbleEvents } from '$lib/features/commons/utils/stop-bubble-events';
   import Switch from './switch.svelte';
 
@@ -23,6 +23,7 @@
     onToggle?: (expanded: boolean) => void;
     titleClass?: string;
     actionsEnd?: boolean;
+    scrollIntoViewOnOpen?: boolean;
   }
 
   const {
@@ -42,8 +43,11 @@
     onToggleChange,
     onToggle,
     titleClass = '',
-    actionsEnd = false
+    actionsEnd = false,
+    scrollIntoViewOnOpen = false
   }: Props = $props();
+
+  let headerElement = $state<HTMLDivElement | undefined>(undefined);
 
   let expanded = $state<boolean>(
     untrack(() => (showToggle ? toggleChecked : defaultOpen))
@@ -70,12 +74,19 @@
     }
     expanded = !expanded;
     onToggle?.(expanded);
+    revealHeader();
+  }
+
+  function revealHeader(): void {
+    if (!expanded || !scrollIntoViewOnOpen) return;
+    void tick().then(() => headerElement?.scrollIntoView({ block: 'start' }));
   }
 
   function handleToggleChange(toggled: boolean): void {
     expanded = toggled;
     onToggle?.(expanded);
     onToggleChange?.(toggled);
+    revealHeader();
   }
 </script>
 
@@ -85,6 +96,7 @@
   class:toggle-suggestions={toggleVariant === 'suggestions'}
 >
   <div
+    bind:this={headerElement}
     class="section-header"
     class:expanded={expanded && !disabled}
     class:collapsed={!expanded || disabled}

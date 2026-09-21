@@ -553,6 +553,7 @@
 
 <div class="viz-panel-shell texts-panel-shell">
   <ExpandableSection
+    scrollIntoViewOnOpen
     open={open}
     onToggle={onToggle}
     title={m.texts_title()}
