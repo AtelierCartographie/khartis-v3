@@ -95,6 +95,12 @@
     flex-direction: column;
   }
 
+  .basemap-panel-content :global(.section-expand-btn),
+  .basemap-panel-content :global(.section-body) {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
   .join-separator {
     border: none;
     border-top: 1px solid var(--cds-border-subtle-00, #e0e0e0);
