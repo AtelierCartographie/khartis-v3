@@ -209,7 +209,7 @@
     gap: var(--kh-gap-group);
     flex: 1;
     min-width: 0;
-    min-height: var(--kh-size-header);
+    min-height: var(--kh-size-lg);
     padding: 0 var(--kh-pad-panel);
     cursor: pointer;
     user-select: none;
@@ -228,7 +228,7 @@
   .section-toggle {
     display: flex;
     align-items: center;
-    min-height: var(--kh-size-header);
+    min-height: var(--kh-size-lg);
     padding: 0 var(--cds-spacing-03) 0 var(--kh-pad-panel);
     flex-shrink: 0;
   }

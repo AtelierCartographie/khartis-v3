@@ -150,7 +150,7 @@
 <div class="field-group">
   <ToggleTabs
     items={thicknessModeItems}
-    size="lg"
+    size="md"
     activeIndex={thicknessModeIndex}
     onchange={onThicknessModeChange}
     hideInactiveLabel={true}

@@ -1,8 +1,8 @@
 :root {
-  --kh-size-control-lg: 40px;
-  --kh-size-control-md: 32px;
-  --kh-size-control-sm: 24px;
-  --kh-size-header: 48px;
+  --kh-size-xs: 24px;
+  --kh-size-sm: 32px;
+  --kh-size-md: 40px;
+  --kh-size-lg: 48px;
 
   --kh-gap-label: 4px;
   --kh-gap-inline: 8px;

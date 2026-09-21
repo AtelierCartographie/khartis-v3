@@ -226,7 +226,7 @@
       width: 100%;
       justify-content: flex-start;
       padding-inline: 0;
-      min-height: var(--kh-size-control-md);
+      min-height: var(--kh-size-sm);
     }
   }
 </style>

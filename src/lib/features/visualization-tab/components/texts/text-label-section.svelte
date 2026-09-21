@@ -121,9 +121,9 @@
   }
 
   :global(.format-trigger.bx--btn) {
-    width: var(--kh-size-control-md) !important;
-    height: var(--kh-size-control-md) !important;
-    min-height: var(--kh-size-control-md) !important;
+    width: var(--kh-size-sm) !important;
+    height: var(--kh-size-sm) !important;
+    min-height: var(--kh-size-sm) !important;
     padding: 0 !important;
     border: 1px solid var(--cds-border-subtle-01, #c6c6c6) !important;
     background: var(--cds-layer-01, #ffffff) !important;

@@ -122,7 +122,7 @@
 
 <div class="layer-config-content">
   <ToggleTabs
-    size="lg"
+    size="md"
     activeIndex={activeModeIndex}
     items={modeTabs.map((tab) => ({
       icon: tab.icon,

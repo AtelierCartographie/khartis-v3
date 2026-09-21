@@ -329,7 +329,7 @@
     aria-label={m.zoom_value_input_label()}
   >
     <ToggleTabs
-      size="lg"
+      size="md"
       items={zoomItems}
       activeIndex={activeTabIndex}
       onchange={handleZoomModeChange}
@@ -644,7 +644,7 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    min-height: var(--kh-size-control-lg);
+    min-height: var(--kh-size-md);
     background: var(--cds-background, #ffffff);
   }
 
@@ -701,7 +701,7 @@
 
   #khartis-zoom-toolbar :global(.zoom-button.bx--btn) {
     min-width: 50px;
-    min-height: var(--kh-size-control-lg);
+    min-height: var(--kh-size-md);
     width: 50px;
     height: 100%;
     padding: 0;

@@ -113,7 +113,7 @@
   }
 
   .loading-recovery button {
-    min-height: var(--kh-size-control-lg);
+    min-height: var(--kh-size-md);
     padding: 0 var(--cds-spacing-05);
     border: 1px solid var(--cds-border-strong-01, #8d8d8d);
     background: var(--cds-layer-01, #f4f4f4);

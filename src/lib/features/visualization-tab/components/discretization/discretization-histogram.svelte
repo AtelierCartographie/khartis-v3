@@ -160,7 +160,7 @@
   }
 
   .histogram-threshold-row {
-    min-height: var(--kh-size-control-sm);
+    min-height: var(--kh-size-xs);
   }
 
   .histogram-interval-row {
@@ -190,8 +190,8 @@
   }
 
   .histogram-input-wrapper :global(.bx--text-input) {
-    height: var(--kh-size-control-sm);
-    min-height: var(--kh-size-control-sm);
+    height: var(--kh-size-xs);
+    min-height: var(--kh-size-xs);
     background-color: transparent;
     border-bottom: 1px solid var(--cds-border-subtle, #e0e0e0);
     text-align: right;

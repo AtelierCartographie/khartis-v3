@@ -351,7 +351,7 @@
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-03, 8px);
-    min-height: var(--kh-size-control-lg);
+    min-height: var(--kh-size-md);
     padding: 0 var(--cds-spacing-03, 8px);
     background-color: var(--cds-layer-01, #f4f4f4);
     border: 1px solid var(--cds-border-tile-01, #c6c6c6);

@@ -29,7 +29,7 @@
   }
 
   .open-panel-button-wrapper :global(.bx--btn) {
-    min-height: var(--kh-size-control-md);
+    min-height: var(--kh-size-sm);
     padding: 0 var(--cds-spacing-03);
   }
 </style>

@@ -1049,7 +1049,7 @@
     align-items: center;
     justify-content: center;
     height: 100%;
-    min-height: var(--kh-size-control-md);
+    min-height: var(--kh-size-sm);
   }
 
   .histogram-toggle-area {
@@ -1057,7 +1057,7 @@
     align-items: center;
     justify-content: center;
     flex: 1;
-    min-height: var(--kh-size-control-sm);
+    min-height: var(--kh-size-xs);
   }
 
   .row-index-stats {

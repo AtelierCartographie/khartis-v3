@@ -91,7 +91,7 @@
 <div class="field-group">
   <ToggleTabs
     items={sizeModeItems}
-    size="lg"
+    size="md"
     activeIndex={sizeModeIndex}
     onchange={onSizeModeChange}
     hideInactiveLabel={true}

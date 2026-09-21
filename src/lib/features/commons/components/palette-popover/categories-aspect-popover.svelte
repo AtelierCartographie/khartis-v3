@@ -1274,7 +1274,7 @@
     align-items: center;
     justify-content: space-between;
     width: 100%;
-    min-height: var(--kh-size-control-md);
+    min-height: var(--kh-size-sm);
     padding: 7px 16px;
     background: var(--cds-field-01, #f4f4f4);
     border: none;
@@ -1457,7 +1457,7 @@
   }
 
   .category-label-input :global(.bx--text-input) {
-    height: var(--kh-size-control-md);
+    height: var(--kh-size-sm);
     padding: 7px 16px;
     border: none;
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);

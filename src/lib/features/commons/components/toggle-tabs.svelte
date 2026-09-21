@@ -21,7 +21,7 @@
     hideInactiveLabel?: boolean;
     tabTitle?: (index: number, isActive: boolean) => string | undefined;
     tooltipPosition?: CarbonTooltipDirection;
-    size?: 'md' | 'lg';
+    size?: 'sm' | 'md';
   }
 
   let {
@@ -35,7 +35,7 @@
     hideInactiveLabel = true,
     tabTitle,
     tooltipPosition = 'bottom',
-    size = 'md'
+    size = 'sm'
   }: Props = $props();
 
   let tabElements = $state<Array<HTMLButtonElement | null>>([]);
@@ -81,7 +81,7 @@
 
 <div
   class="khartis-toggle-tabs toggle-tabs {className}"
-  class:size-lg={size === 'lg'}
+  class:size-md={size === 'md'}
 >
   {#each items as item, index (index)}
     <button
@@ -138,7 +138,7 @@
     align-items: center;
     justify-content: center;
     gap: var(--kh-gap-inline);
-    height: var(--kh-size-control-md);
+    height: var(--kh-size-sm);
     padding: 0 var(--kh-gap-inline);
     background: transparent;
     color: var(--cds-text-secondary);
@@ -173,16 +173,16 @@
   }
 
   .toggle-tab:not(.full-width) {
-    width: var(--kh-size-control-md);
+    width: var(--kh-size-sm);
     padding: 0;
   }
 
-  .size-lg .toggle-tab {
-    height: var(--kh-size-control-lg);
+  .size-md .toggle-tab {
+    height: var(--kh-size-md);
   }
 
-  .size-lg .toggle-tab:not(.full-width) {
-    width: var(--kh-size-control-lg);
+  .size-md .toggle-tab:not(.full-width) {
+    width: var(--kh-size-md);
   }
 
   .toggle-tab.active {

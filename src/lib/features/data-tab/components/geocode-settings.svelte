@@ -106,7 +106,7 @@
       {/if}
     </span>
     <ToggleTabs
-      size="lg"
+      size="md"
       activeIndex={activeTabIndex}
       items={tabItems}
       onchange={handleTabChange}
