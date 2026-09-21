@@ -479,12 +479,6 @@
     gap: var(--cds-spacing-03);
   }
 
-  .field-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-
   .labeled-input {
     display: flex;
     flex-direction: column;

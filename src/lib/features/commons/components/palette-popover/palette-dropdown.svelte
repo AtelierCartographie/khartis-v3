@@ -272,7 +272,7 @@
     display: flex;
     flex-direction: column;
     padding: 8px;
-    gap: 4px;
+    gap: var(--kh-gap-label);
     max-height: 60vh;
     overflow-y: auto;
   }
@@ -316,7 +316,7 @@
       width: 100%;
       justify-content: flex-start;
       padding-inline: 0;
-      min-height: 32px;
+      min-height: var(--kh-size-control-md);
     }
   }
 </style>

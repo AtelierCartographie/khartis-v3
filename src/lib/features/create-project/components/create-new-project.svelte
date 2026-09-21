@@ -313,6 +313,7 @@
     <div class="url-import-block">
       <div class="url-input-row">
         <TextInput
+          size="sm"
           value={onlineUrlValue}
           labelText={m.create_project_online_file_link()}
           placeholder={m.url_placeholder_example()}

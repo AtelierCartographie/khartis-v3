@@ -218,7 +218,7 @@
       rel="noopener noreferrer"
     >
       {m.filter_learn_more()}
-      <Launch size={12} />
+      <Launch size={16} />
     </a>
 
     {#each filters as filter, index (filter.id)}
@@ -296,13 +296,13 @@
     padding: var(--cds-spacing-04);
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-04);
+    gap: var(--kh-gap-param);
   }
 
   .stats-block {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02);
+    gap: var(--kh-gap-label);
   }
 
   .stats-primary {

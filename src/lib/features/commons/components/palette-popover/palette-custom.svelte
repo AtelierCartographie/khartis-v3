@@ -329,7 +329,7 @@
   .palette-custom {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--kh-gap-group);
     width: 100%;
   }
 
@@ -357,30 +357,21 @@
     background: var(--cds-border-subtle-01, #c6c6c6);
   }
 
-  .field-label {
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-weight: 400;
-    font-size: 12px;
-    line-height: 16px;
-    letter-spacing: 0.32px;
-    color: var(--cds-text-secondary, #525252);
-  }
-
   .tab-content {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--kh-gap-group);
   }
 
   .two-colors {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--kh-gap-group);
   }
 
   .contrast-section {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--kh-gap-inline);
   }
 </style>

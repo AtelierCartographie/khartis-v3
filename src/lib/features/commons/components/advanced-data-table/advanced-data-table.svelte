@@ -748,7 +748,7 @@
   );
 </script>
 
-<div class="advanced-data-table">
+<div class="advanced-data-table" style:--kh-row-h="{rowHeight}px">
   {#if tableData.isFullyLoaded && filters.numRows > 0 && !isReadOnly}
     <TableHeaderInfo filterStats={filters.filterStats} />
   {/if}
@@ -909,6 +909,7 @@
       {m.column_rename_description({ column: columnToRename ?? '' })}
     </p>
     <TextInput
+      size="sm"
       value={newColumnName}
       labelText={m.column_rename_label()}
       placeholder={m.column_rename_placeholder()}
@@ -1048,7 +1049,7 @@
     align-items: center;
     justify-content: center;
     height: 100%;
-    min-height: 32px;
+    min-height: var(--kh-size-control-md);
   }
 
   .histogram-toggle-area {
@@ -1056,7 +1057,7 @@
     align-items: center;
     justify-content: center;
     flex: 1;
-    min-height: 24px;
+    min-height: var(--kh-size-control-sm);
   }
 
   .row-index-stats {

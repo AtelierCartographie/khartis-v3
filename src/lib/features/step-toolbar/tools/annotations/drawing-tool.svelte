@@ -181,6 +181,7 @@
           <p class="helper-hint">{m.annotations_drawing_instructions()}</p>
           <div class="drawing-mode-actions">
             <Button
+              size="field"
               kind="primary"
               disabled={annotationsState.drawingInProgress.length <
                 minimumPointsToFinish}
@@ -189,6 +190,7 @@
               {m.annotations_drawing_finish()}
             </Button>
             <Button
+              size="field"
               kind="tertiary"
               onclick={() => annotationsActions.cancelDrawing()}
             >
@@ -202,7 +204,12 @@
     <Row>
       <Column>
         <div class="section">
-          <Button kind="primary" icon={Add} onclick={handleStartDrawing}>
+          <Button
+            size="field"
+            kind="primary"
+            icon={Add}
+            onclick={handleStartDrawing}
+          >
             {m.annotations_add_drawing()}
           </Button>
           <p class="helper">{m.annotations_drawing_helper()}</p>
@@ -367,6 +374,7 @@
             (i) => i.id === annotationsState.selectedId
           )}
           <Button
+            size="field"
             kind="danger-tertiary"
             icon={TrashCan}
             disabled={!selected || selected.type !== AnnotationKind.DRAWING}
@@ -378,7 +386,7 @@
             {m.annotations_delete_drawing()}
           </Button>
         {:else}
-          <Button kind="danger-tertiary" icon={TrashCan} disabled
+          <Button size="field" kind="danger-tertiary" icon={TrashCan} disabled
             >{m.annotations_delete_drawing()}</Button
           >
         {/if}

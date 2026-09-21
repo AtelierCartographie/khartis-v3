@@ -221,6 +221,7 @@
 <div class="field-group">
   <ToggleTabs
     items={fillModeItems}
+    size="lg"
     activeIndex={fillModeIndex}
     onchange={handleToggleChange}
     hideInactiveLabel={true}
@@ -362,11 +363,3 @@
     onpatternstylechange={onMissingDataPatternStyleChange ?? (() => {})}
   />
 {/if}
-
-<style lang="scss">
-  .field-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-</style>

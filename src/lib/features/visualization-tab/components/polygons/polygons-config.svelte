@@ -479,7 +479,7 @@
   .polygons-config {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-04);
+    gap: var(--kh-gap-param);
     padding: var(--cds-spacing-03);
   }
 </style>

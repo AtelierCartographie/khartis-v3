@@ -248,7 +248,7 @@
   .palette-suggestions {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--kh-gap-group);
     width: 100%;
   }
 
@@ -320,7 +320,7 @@
   .palette-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--kh-gap-inline);
     width: 100%;
   }
 

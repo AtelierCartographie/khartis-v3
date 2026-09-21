@@ -180,6 +180,7 @@
 
     <div class="flex-1 relative project-name-input-wrapper">
       <TextInput
+        size="sm"
         data-testid="project-name-input"
         placeholder={m.project_name_placeholder()}
         value={localProjectName}

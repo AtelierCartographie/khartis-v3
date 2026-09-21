@@ -135,6 +135,7 @@
   />
   {#if dashed}
     <Dropdown
+      size="sm"
       titleText={m.stroke_dashed_pattern()}
       items={dashedPatternItems}
       selectedId={dashedPattern}
@@ -149,6 +150,7 @@
 <div class="field-group">
   <ToggleTabs
     items={thicknessModeItems}
+    size="lg"
     activeIndex={thicknessModeIndex}
     onchange={onThicknessModeChange}
     hideInactiveLabel={true}
@@ -276,11 +278,3 @@
     ondashedpatternchange={onMissingDataDashedPatternChange}
   />
 {/if}
-
-<style lang="scss">
-  .field-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-</style>

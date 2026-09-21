@@ -153,6 +153,7 @@
 
     <div class="option-group">
       <Select
+        size="sm"
         labelText={m.csv_options_delimiter()}
         selected={delimiter}
         disabled={isApplying}
@@ -166,6 +167,7 @@
 
     <div class="option-group">
       <Select
+        size="sm"
         labelText={m.csv_options_decimal_separator()}
         selected={decimalSeparator}
         disabled={isApplying}
@@ -179,6 +181,7 @@
 
     <div class="option-group">
       <Select
+        size="sm"
         labelText={m.csv_options_thousands_separator()}
         selected={thousandsSeparator}
         disabled={isApplying}

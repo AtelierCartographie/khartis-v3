@@ -145,6 +145,7 @@
   <Row>
     <Column>
       <Select
+        size="sm"
         labelText={m.annotations_predefined_style()}
         selected={annotationsState.predefinedStyle || 'note'}
         on:change={(e) =>
@@ -163,7 +164,7 @@
   <Row>
     <Column>
       <div class="section add-btn-section">
-        <Button kind="primary" icon={Add} onclick={handleAddText}>
+        <Button size="field" kind="primary" icon={Add} onclick={handleAddText}>
           {m.annotations_add_text()}
         </Button>
         <p class="helper">{m.annotations_add_text_description()}</p>
@@ -437,6 +438,7 @@
     <Column>
       <div class="section delete-section">
         <Button
+          size="field"
           kind="danger-tertiary"
           icon={TrashCan}
           disabled={!selectedText}

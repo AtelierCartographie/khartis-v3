@@ -51,13 +51,13 @@
   #khartis-header :global(.bx--header) {
     background-color: var(--cds-ui-background) !important;
     border-color: var(--cds-ui-03) !important;
-    height: calc(3rem + var(--safe-area-top));
+    height: var(--cds-header-height);
     padding-top: var(--safe-area-top);
   }
 
   #khartis-header :global(.bx--header__menu-trigger) {
-    min-width: 48px;
-    min-height: 48px;
+    min-width: var(--kh-size-header);
+    min-height: var(--kh-size-header);
   }
 
   #khartis-header :global(.bx--header__menu-trigger > svg) {

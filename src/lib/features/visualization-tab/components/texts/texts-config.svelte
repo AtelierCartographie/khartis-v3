@@ -707,12 +707,12 @@
   .texts-config {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-04);
+    gap: var(--kh-gap-param);
     padding: var(--cds-spacing-03);
   }
 
   :global(.text-input-field .bx--text-input) {
-    height: 40px;
+    height: var(--kh-size-control-md);
   }
 
   :global(.text-input-field .bx--text-input__field-wrapper) {
@@ -720,11 +720,11 @@
   }
 
   :global(.texts-panel-shell .field-picker .bx--label) {
-    margin-bottom: 0.5rem;
+    margin-bottom: var(--kh-gap-label);
   }
 
   :global(.texts-panel-shell .field-picker .bx--list-box__field) {
-    min-height: 40px;
+    min-height: var(--kh-size-control-md);
     background: var(--cds-field-01, #f4f4f4);
   }
 </style>

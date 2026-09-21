@@ -367,7 +367,7 @@
   .content-area {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
+    gap: var(--kh-gap-inline);
     padding: 16px 16px 8px 16px;
   }
 
@@ -392,7 +392,7 @@
   .reference-basemap-tool {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-05);
+    gap: var(--kh-gap-group);
     background-color: var(--cds-layer-01);
   }
 

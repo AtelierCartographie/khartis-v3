@@ -94,7 +94,7 @@
 
 <style>
   tr {
-    height: 32px;
+    height: var(--kh-row-h);
     border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
     transition: background-color 0.15s;
     background-color: var(--cds-ui-01, #ffffff);
@@ -181,7 +181,7 @@
     text-overflow: ellipsis;
     max-width: 200px;
     vertical-align: middle;
-    height: 32px;
+    height: var(--kh-row-h);
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 12px;
     font-weight: 400;

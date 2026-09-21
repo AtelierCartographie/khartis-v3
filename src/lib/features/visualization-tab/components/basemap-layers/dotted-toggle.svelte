@@ -87,7 +87,7 @@
   .dotted-toggle {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
+    gap: var(--kh-gap-inline);
   }
 
   .pattern-selector {

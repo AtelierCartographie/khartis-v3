@@ -468,7 +468,7 @@
         placeholder={m.choose_data_field_placeholder()}
         labelText={m.data_visualized_label()}
         hideLabel
-        size="xl"
+        size="sm"
       />
     </div>
 
@@ -523,6 +523,7 @@
 
     <div class="create-section">
       <Button
+        size="field"
         icon={Edit}
         kind="secondary"
         on:click={handleCreateVisualization}
@@ -544,7 +545,7 @@
   .section-content {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-05, 16px);
+    gap: var(--kh-gap-group);
     padding: 16px 0 0 0;
   }
 
@@ -573,21 +574,13 @@
   }
 
   .field-label {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
     margin-bottom: var(--cds-spacing-03);
-    font-size: 0.75rem;
-    color: var(--cds-text-secondary, #525252);
-    font-weight: 400;
-    line-height: 1rem;
-    letter-spacing: 0.32px;
   }
 
   .suggestions-group {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
+    gap: var(--kh-gap-inline);
     margin: 0 0 var(--cds-spacing-05) 0;
     padding-right: 32px;
   }
@@ -602,7 +595,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--cds-spacing-04);
+    gap: var(--kh-gap-param);
     margin: 0;
     padding: 0 var(--cds-spacing-05);
   }

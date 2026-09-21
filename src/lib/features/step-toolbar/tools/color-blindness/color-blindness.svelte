@@ -104,7 +104,7 @@
   }
 
   .simulation-field :global(.bx--select-input) {
-    min-height: 48px;
+    min-height: var(--kh-size-control-md);
     padding: 15px 48px 15px 16px;
     font-size: 0.875rem;
     line-height: 1.125rem;
