@@ -12,7 +12,7 @@
     InlineNotification,
     Tag
   } from 'carbon-components-svelte';
-  import { Add, List, MagicWand } from 'carbon-icons-svelte';
+  import { Add, List, MagicWandFilled } from 'carbon-icons-svelte';
   import BasemapCardVertical from '../basemap-card-vertical.svelte';
   import { getLocale } from '$lib/paraglide/runtime.js';
   import {
@@ -177,7 +177,7 @@
     >
       {#snippet icon()}
         <span class="suggestions-title-icon">
-          <MagicWand size={16} />
+          <MagicWandFilled size={20} />
         </span>
       {/snippet}
       {#if suggestedBasemaps.length > 0}

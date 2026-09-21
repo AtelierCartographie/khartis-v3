@@ -19,7 +19,7 @@
     ChevronDown,
     ChevronUp,
     ErrorFilled,
-    MagicWand,
+    MagicWandFilled,
     Misuse,
     Renew,
     WarningAltFilled,
@@ -799,7 +799,7 @@
   <div class="section-header">
     <span class="section-title">{m.section_join_assisted()}</span>
     <span class="section-header-icon">
-      <MagicWand size={16} />
+      <MagicWandFilled size={20} />
     </span>
     <InfoPopover text={m.join_assisted_info()} />
   </div>
@@ -1185,7 +1185,7 @@
                 <Button
                   kind="tertiary"
                   size="small"
-                  icon={MagicWand}
+                  icon={MagicWandFilled}
                   on:click={() => onRunFullFuzzyPass?.()}
                 >
                   {m.join_fuzzy_pass_action()}
@@ -1542,21 +1542,21 @@
   .section-header {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 0 16px 16px 16px;
+    gap: var(--kh-gap-inline);
+    padding: 0 var(--kh-pad-panel) var(--kh-pad-panel);
   }
 
   .section-header-icon {
     display: flex;
     align-items: center;
-    color: var(--cds-text-secondary, #525252);
+    color: var(--khartis-additions-interactive-suggestions, #0072c3);
   }
 
   .section-title {
-    font-size: 0.875rem;
-    font-weight: 600;
-    line-height: 1.25rem;
-    color: #003a6d;
+    font-size: var(--kh-font-primitive);
+    font-weight: var(--kh-weight-primitive);
+    line-height: var(--kh-line-primitive);
+    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
   }
 
   .category-rows {
