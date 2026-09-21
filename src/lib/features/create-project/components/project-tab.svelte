@@ -38,10 +38,7 @@
 
 <div
   id={id}
-  class={clsx(
-    'project-card w-full cursor-pointer pl-5 pr-5 pt-5 pb-5',
-    selected && 'selected'
-  )}
+  class={clsx('project-card', selected && 'selected')}
   role="tab"
   tabindex={tabIndex}
   onclick={onclick}
@@ -50,43 +47,66 @@
   aria-controls={ariaControls}
   data-testid={dataTestId}
 >
-  <div class="flex justify-between w-full items-start pb-3">
-    <div
-      class={clsx(
-        'flex items-center justify-center icon-primary opacity-80',
-        selected && 'icon-interactive opacity-100'
-      )}
-    >
+  <div class="project-card-top">
+    <span class="project-card-icon">
       {@render icon()}
-    </div>
-
-    <div class="flex justify-end">
-      <span class="project-card-indicator" aria-hidden="true"></span>
-    </div>
+    </span>
+    <span class="project-card-indicator" aria-hidden="true"></span>
   </div>
 
-  <div class="tab-content self-start mt-3">
-    <p class="tab-title text-left">{title}</p>
-  </div>
+  <p class="tab-title">{title}</p>
 </div>
 
 <style>
   .project-card {
+    --project-card-accent: 230, 20, 45;
+
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: var(--kh-gap-inline);
+    width: 100%;
+    height: 100%;
+    max-height: 90px;
+    padding: var(--kh-gap-param) var(--kh-pad-panel);
     background: linear-gradient(
       0deg,
-      rgba(230, 20, 45, 0.14) 0%,
+      rgba(var(--project-card-accent), 0.07) 0%,
       var(--cds-layer) 100%
     );
-    box-sizing: border-box;
-    height: 100%;
+    cursor: pointer;
+  }
+
+  .project-card:hover {
+    background: linear-gradient(
+      0deg,
+      rgba(var(--project-card-accent), 0.2) 0%,
+      var(--cds-layer) 100%
+    );
   }
 
   .project-card.selected {
     background: linear-gradient(
       0deg,
-      rgba(230, 20, 45, 0.35) 0%,
-      rgba(230, 20, 45, 0.05) 100%
+      rgba(var(--project-card-accent), 0.5) 0%,
+      rgba(var(--project-card-accent), 0.06) 100%
     );
+  }
+
+  .project-card-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .project-card-icon {
+    display: inline-flex;
+    color: var(--cds-icon-secondary);
+  }
+
+  .project-card.selected .project-card-icon {
+    color: var(--cds-icon-primary);
   }
 
   .project-card-indicator {
@@ -96,6 +116,7 @@
     border-radius: 50%;
     box-sizing: border-box;
     display: inline-flex;
+    flex-shrink: 0;
     height: 1rem;
     justify-content: center;
     width: 1rem;
@@ -110,24 +131,26 @@
     width: 0.5rem;
   }
 
-  .project-card.selected .project-card-indicator {
-    border-color: var(--cds-icon-primary, #161616);
-  }
-
   .project-card.selected .project-card-indicator::after {
     opacity: 1;
   }
 
-  .tab-content {
-    width: 100%;
-    padding-bottom: var(--cds-spacing-04);
-  }
-
   .tab-title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    margin: 0;
     min-width: 0;
+    color: var(--cds-text-secondary);
     font-size: var(--cds-body-short-02-font-size, 1rem);
     font-weight: 600;
     line-height: 1.375rem;
-    margin: 0;
+    text-align: left;
+  }
+
+  .project-card.selected .tab-title {
+    color: var(--cds-text-primary);
   }
 </style>
