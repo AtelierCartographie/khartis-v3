@@ -154,6 +154,18 @@ interface FileProcessor {
 
 const PREPARED_GEOJSON_GEOMETRY_COLUMN = '__khartis_geometry_json';
 
+function countUserColumns(
+  columns: ReadonlyArray<{ name: string }>,
+  geometry?: DatasetResult['geometry']
+): number {
+  const hiddenColumns = new Set<string>([
+    ...EXCLUDED_COLUMNS,
+    ...(geometry?.columnName ? [geometry.columnName] : [])
+  ]);
+
+  return columns.filter((column) => !hiddenColumns.has(column.name)).length;
+}
+
 function withGeometryDetection(
   deepAnalysis: DataAnalysisResult,
   geometry: DatasetResult['geometry']
@@ -306,6 +318,8 @@ async function updateFileFromDuckDBDataset(
 
   callbacks.onDataUpdate(uploadedFile.id, {
     parsedData: tabularData,
+    rowCount,
+    columnCount: countUserColumns(columns, geometry),
     statistics,
     content: fileContent,
     duckdbTableName: tableName,
@@ -491,6 +505,8 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       parsedData: tabularData,
       content: originalContent,
       duckdbTableName: tableName,
+      rowCount,
+      columnCount: countUserColumns(columns),
       statistics
     });
 
@@ -638,6 +654,8 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
 
     callbacks.onDataUpdate(uploadedFile.id, {
       parsedData: tabularData,
+      rowCount,
+      columnCount: countUserColumns(columns, dataset.geometry),
       statistics,
       content: fileContent,
       duckdbTableName: tableName,
@@ -732,6 +750,8 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
           name,
           fileType: detectedFileType,
           parsedData: tabularData,
+          rowCount,
+          columnCount: countUserColumns(columns, geometry),
           statistics,
           content: undefined,
           deepAnalysis,
@@ -751,6 +771,8 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
           status: FileStatus.COMPLETE,
           sourceType: uploadedFile.sourceType,
           parsedData: tabularData,
+          rowCount,
+          columnCount: countUserColumns(columns, geometry),
           statistics,
           deepAnalysis,
           sourceArchive: result.sourceZipName,
@@ -816,7 +838,9 @@ function getProcessor(
   if (
     fileType === FileType.GEOJSON ||
     fileType === FileType.KML ||
-    fileType === FileType.GPX
+    fileType === FileType.GPX ||
+    fileType === FileType.SHAPEFILE ||
+    fileType === FileType.GEOPARQUET
   ) {
     return createDuckDBGeofileProcessor(callbacks);
   }
