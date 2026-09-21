@@ -418,9 +418,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: var(--kh-size-control-sm);
-    height: var(--kh-size-control-sm);
-    min-height: var(--kh-size-control-sm);
+    width: var(--kh-size-xs);
+    height: var(--kh-size-xs);
+    min-height: var(--kh-size-xs);
     padding: 0;
     border: none;
     border-radius: 0;

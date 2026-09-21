@@ -1033,8 +1033,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: var(--kh-size-control-sm);
-    height: var(--kh-size-control-sm);
+    width: var(--kh-size-xs);
+    height: var(--kh-size-xs);
     padding: 0;
     border: none;
     background: transparent;
@@ -1158,7 +1158,7 @@
     align-items: center;
     justify-content: center;
     min-width: 24px;
-    min-height: var(--kh-size-control-sm);
+    min-height: var(--kh-size-xs);
   }
 
   .sort-btn:hover {

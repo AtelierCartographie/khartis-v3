@@ -383,7 +383,7 @@
   #khartis-projection-other-tool :global(.projection-view-tabs .toggle-tab) {
     font-size: 0.875rem;
     padding: 6px 12px;
-    min-height: var(--kh-size-control-md);
+    min-height: var(--kh-size-sm);
   }
 
   #khartis-projection-other-tool :global(.projection-view-tabs .toggle-icon) {

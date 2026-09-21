@@ -52,6 +52,8 @@
   import { coerceString, parseOpacityToSlider } from '../../utils/coerce.utils';
 
   interface Props {
+    open?: boolean;
+    onToggle?: (expanded: boolean) => void;
     dataFields?: Array<{ id: number; text: string; type?: string }>;
     visualization?: VisualizationConfig;
     disabled?: boolean;
@@ -95,7 +97,9 @@
     onAddFilter,
     onUpdateFilter,
     onRemoveFilter,
-    onClearFilters
+    onClearFilters,
+    open,
+    onToggle
   }: Props = $props();
 
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
@@ -549,6 +553,8 @@
 
 <div class="viz-panel-shell texts-panel-shell">
   <ExpandableSection
+    open={open}
+    onToggle={onToggle}
     title={m.texts_title()}
     description={disabled ? m.primitive_unavailable() : undefined}
     defaultOpen={false}
@@ -712,7 +718,7 @@
   }
 
   :global(.text-input-field .bx--text-input) {
-    height: var(--kh-size-control-md);
+    height: var(--kh-size-sm);
   }
 
   :global(.text-input-field .bx--text-input__field-wrapper) {
@@ -724,7 +730,7 @@
   }
 
   :global(.texts-panel-shell .field-picker .bx--list-box__field) {
-    min-height: var(--kh-size-control-md);
+    min-height: var(--kh-size-sm);
     background: var(--cds-field-01, #f4f4f4);
   }
 </style>

@@ -579,7 +579,7 @@
 
   .input-wrapper .number {
     width: 100%;
-    height: var(--kh-size-control-md);
+    height: var(--kh-size-sm);
     min-width: unset;
     padding: 0 var(--cds-spacing-03);
     border: none;

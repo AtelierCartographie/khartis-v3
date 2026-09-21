@@ -540,7 +540,7 @@
     align-items: center;
     justify-content: center;
     width: 40px;
-    height: var(--kh-size-control-lg);
+    height: var(--kh-size-md);
     padding: 0;
     background: transparent;
     border: none;

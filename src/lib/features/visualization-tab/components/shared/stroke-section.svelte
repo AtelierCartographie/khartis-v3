@@ -365,7 +365,7 @@
 <div class="field-group">
   <ToggleTabs
     items={strokeModeItems}
-    size="lg"
+    size="md"
     activeIndex={strokeModeIndex}
     onchange={handleStrokeModeChange}
     hideInactiveLabel={true}

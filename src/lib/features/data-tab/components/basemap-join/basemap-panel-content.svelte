@@ -53,7 +53,7 @@
 <div class="basemap-panel-content">
   <div class="basemap-tabs-wrapper">
     <ToggleTabs
-      size="lg"
+      size="md"
       activeIndex={activeTabIndex}
       items={tabItems}
       onchange={handleTabChange}

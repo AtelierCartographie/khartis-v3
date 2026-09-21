@@ -447,7 +447,7 @@
 
   .palette-trigger :global(.bx--btn--ghost.bx--btn--sm) {
     min-width: 32px;
-    min-height: var(--kh-size-control-md);
+    min-height: var(--kh-size-sm);
     padding: 8px;
   }
 </style>

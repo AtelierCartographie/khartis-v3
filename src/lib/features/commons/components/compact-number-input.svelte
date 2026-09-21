@@ -26,7 +26,7 @@
     max = 100,
     step = 1,
     width = '100%',
-    height = 'var(--kh-size-control-md)',
+    height = 'var(--kh-size-sm)',
     stepperWidth = '40px',
     valueMinWidth = '3rem',
     disabled = false,
@@ -147,7 +147,7 @@
 
     width: var(--compact-number-input-width, 100%);
     min-width: 64px;
-    height: var(--compact-number-input-height, var(--kh-size-control-md));
+    height: var(--compact-number-input-height, var(--kh-size-sm));
     display: flex;
     align-items: stretch;
     background-color: var(--cds-field-01, #f4f4f4);

@@ -171,7 +171,7 @@
 <div class="field-group">
   <ToggleTabs
     items={colorModeItems}
-    size="lg"
+    size="md"
     activeIndex={colorModeIndex}
     onchange={onColorModeChange}
     hideInactiveLabel={true}

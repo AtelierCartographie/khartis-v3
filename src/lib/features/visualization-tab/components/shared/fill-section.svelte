@@ -221,7 +221,7 @@
 <div class="field-group">
   <ToggleTabs
     items={fillModeItems}
-    size="lg"
+    size="md"
     activeIndex={fillModeIndex}
     onchange={handleToggleChange}
     hideInactiveLabel={true}

@@ -31,6 +31,8 @@
   } from '.';
 
   interface Props {
+    open?: boolean;
+    onToggle?: (expanded: boolean) => void;
     dataFields?: Array<{ id: number; text: string; type?: string }>;
     visualization?: VisualizationConfig;
     fillVisualization?: VisualizationConfig;
@@ -98,7 +100,9 @@
     onAddFilter,
     onUpdateFilter,
     onRemoveFilter,
-    onClearFilters
+    onClearFilters,
+    open,
+    onToggle
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -241,6 +245,8 @@
 </script>
 
 <ExpandableSection
+  open={open}
+  onToggle={onToggle}
   title={m.symbols_title()}
   description={disabled ? m.primitive_unavailable() : undefined}
   defaultOpen={false}
@@ -277,7 +283,7 @@
       </span>
       <ToggleTabs
         items={symbolModeItems}
-        size="lg"
+        size="md"
         activeIndex={symbolModeIndex}
         onchange={handleSymbolModeChange}
         hideInactiveLabel={true}

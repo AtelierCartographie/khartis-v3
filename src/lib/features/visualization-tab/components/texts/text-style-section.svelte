@@ -203,7 +203,7 @@
 
   .compact-field__control {
     position: relative;
-    height: var(--kh-size-control-md);
+    height: var(--kh-size-sm);
     display: flex;
     align-items: center;
     background: var(--cds-field-02, #ffffff);
@@ -217,15 +217,15 @@
 
   .compact-field__control :global(.compact-dropdown) {
     width: 100%;
-    height: var(--kh-size-control-md);
-    min-height: var(--kh-size-control-md);
+    height: var(--kh-size-sm);
+    min-height: var(--kh-size-sm);
     background: transparent;
     border: none;
   }
 
   .compact-field__control :global(.compact-dropdown .bx--list-box__field) {
-    height: var(--kh-size-control-md);
-    min-height: var(--kh-size-control-md);
+    height: var(--kh-size-sm);
+    min-height: var(--kh-size-sm);
     padding-inline-start: var(--cds-spacing-05, 16px);
   }
 

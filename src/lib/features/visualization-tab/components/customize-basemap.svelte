@@ -12,6 +12,7 @@
   import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
   import BasemapStyleSelector from './basemap-layers/basemap-style-selector.svelte';
   import AuxLayerConfigSection from './basemap-layers/aux-layer-config-section.svelte';
+  import { createAccordionGroup } from '$lib/features/commons/utils/accordion-group.svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
   import {
@@ -180,6 +181,15 @@
       .map(({ entry }) => entry);
   });
 
+  const layerAccordion = createAccordionGroup(() => {
+    const first = layerEntries[0];
+    if (!first || !currentMetadata) return undefined;
+    return (
+      first.layer.file ??
+      `${currentMetadata.file}:${first.layer.type}:${first.instanceIndex}`
+    );
+  });
+
   const availableMetadataLayerTypes = $derived.by(
     () =>
       new Set(
@@ -327,7 +337,12 @@
   >
     {#if !isTiledBasemapEnabled && currentMetadata}
       {#each layerEntries as entry (entry.layer.file ?? `${currentMetadata.file}:${entry.layer.type}:${entry.instanceIndex}`)}
+        {@const layerKey =
+          entry.layer.file ??
+          `${currentMetadata.file}:${entry.layer.type}:${entry.instanceIndex}`}
         <AuxLayerConfigSection
+          open={layerAccordion.isOpen(layerKey)}
+          onToggle={(expanded) => layerAccordion.setOpen(layerKey, expanded)}
           layer={entry.layer}
           basemapFile={currentMetadata.file}
           sharedLegacyId={entry.sharedLegacyId ?? undefined}
