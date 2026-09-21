@@ -244,6 +244,7 @@
 
       {#each variables as variable (variable)}
         <TextInput
+          size="sm"
           id={`${FACET_TITLE_INPUT_ID_PREFIX}${variable}`}
           labelText={m.facets_facet_title_label({ variable })}
           placeholder={variable}
@@ -276,6 +277,7 @@
     </Link>
 
     <Button
+      size="field"
       kind="secondary"
       icon={SettingsAdjust}
       style="width: 100%;"
@@ -349,7 +351,7 @@
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-03, 8px);
-    min-height: 40px;
+    min-height: var(--kh-size-control-lg);
     padding: 0 var(--cds-spacing-03, 8px);
     background-color: var(--cds-layer-01, #f4f4f4);
     border: 1px solid var(--cds-border-tile-01, #c6c6c6);

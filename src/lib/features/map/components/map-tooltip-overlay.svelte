@@ -418,9 +418,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
-    min-height: 20px;
+    width: var(--kh-size-control-sm);
+    height: var(--kh-size-control-sm);
+    min-height: var(--kh-size-control-sm);
     padding: 0;
     border: none;
     border-radius: 0;

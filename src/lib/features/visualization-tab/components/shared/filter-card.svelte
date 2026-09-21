@@ -232,7 +232,7 @@
   .filter-card {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
+    gap: var(--kh-gap-inline);
     padding-top: var(--cds-spacing-03);
     border-top: 1px solid var(--cds-border-subtle);
   }
@@ -259,7 +259,7 @@
   .filter-field {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02);
+    gap: var(--kh-gap-label);
   }
 
   .filter-field-label {

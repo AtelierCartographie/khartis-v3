@@ -628,7 +628,6 @@
                       min={1}
                       max={100}
                       width="100%"
-                      height="32px"
                       showSteppers={false}
                       disabled={!draftCommonAspect.sizeUnique}
                       ariaLabel={m.aspect_common_size_unique()}
@@ -713,7 +712,6 @@
                       min={1}
                       max={20}
                       width="100%"
-                      height="32px"
                       showSteppers={false}
                       disabled={!draftCommonAspect.stroke ||
                         !(draftCommonAspect.strokeUnique ?? true)}
@@ -828,6 +826,7 @@
           <div class="field-stack">
             <span class="field-label">{m.palette_categories_sort()}</span>
             <Dropdown
+              size="sm"
               items={sortItems}
               selectedId={sortMode}
               on:select={(e) => handleSortSelect(e.detail.selectedId)}
@@ -982,7 +981,6 @@
                               min={1}
                               max={100}
                               width="100%"
-                              height="32px"
                               showSteppers={false}
                               ariaLabel={m.per_category_size()}
                               onchange={(value) =>
@@ -1015,7 +1013,6 @@
                               min={1}
                               max={20}
                               width="100%"
-                              height="32px"
                               showSteppers={false}
                               ariaLabel={m.per_category_stroke_width()}
                               onchange={(value) =>
@@ -1133,7 +1130,7 @@
   .popover-content {
     display: flex;
     flex-direction: column;
-    gap: 32px;
+    gap: var(--kh-gap-section);
     flex: 1;
     overflow-y: auto;
     padding: 0 16px 8px;
@@ -1142,7 +1139,7 @@
   .aspect-section {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--kh-gap-group);
   }
 
   .section-heading {
@@ -1171,7 +1168,7 @@
   .field-stack {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--kh-gap-inline);
   }
 
   .field-label,
@@ -1188,13 +1185,13 @@
   .common-stack {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--kh-gap-group);
   }
 
   .common-symbols-layout {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--kh-gap-group);
     width: 100%;
   }
 
@@ -1213,7 +1210,7 @@
     display: flex;
     flex: 1 1 0;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--kh-gap-inline);
     min-width: 0;
   }
 
@@ -1242,13 +1239,13 @@
   .common-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
+    gap: var(--kh-gap-group);
   }
 
   .common-grid-row {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--kh-gap-inline);
     min-width: 0;
   }
 
@@ -1277,7 +1274,7 @@
     align-items: center;
     justify-content: space-between;
     width: 100%;
-    min-height: 32px;
+    min-height: var(--kh-size-control-md);
     padding: 7px 16px;
     background: var(--cds-field-01, #f4f4f4);
     border: none;
@@ -1310,7 +1307,7 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--kh-gap-inline);
   }
 
   .hidden-count-note {
@@ -1328,7 +1325,7 @@
   .category-item {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--kh-gap-label);
     padding: 8px;
     background: var(--cds-layer-01, #f4f4f4);
     border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
@@ -1460,7 +1457,7 @@
   }
 
   .category-label-input :global(.bx--text-input) {
-    height: 32px;
+    height: var(--kh-size-control-md);
     padding: 7px 16px;
     border: none;
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
@@ -1507,7 +1504,7 @@
   .category-aspect-body {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--kh-gap-group);
     padding-left: 22px;
   }
 

@@ -222,6 +222,7 @@
 
       <div class="catalogue-filters">
         <ComboBox
+          size="sm"
           items={searchComboBoxItems}
           selectedId={searchSelectedId}
           value={searchQuery}

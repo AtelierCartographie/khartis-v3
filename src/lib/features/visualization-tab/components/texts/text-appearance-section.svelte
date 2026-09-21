@@ -138,6 +138,7 @@
   <div class="field-group">
     <ToggleTabs
       items={colorModeItems}
+      size="lg"
       activeIndex={colorModeIndex}
       onchange={onColorModeChange}
       hideInactiveLabel={true}
@@ -295,12 +296,6 @@
   .text-appearance-section {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-04);
-  }
-
-  .field-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
+    gap: var(--kh-gap-param);
   }
 </style>

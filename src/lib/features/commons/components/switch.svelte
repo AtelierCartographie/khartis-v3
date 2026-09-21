@@ -87,6 +87,7 @@
     display: inline-flex;
     align-items: center;
     gap: var(--cds-spacing-03);
+    min-height: var(--kh-size-control-sm);
     cursor: pointer;
   }
 

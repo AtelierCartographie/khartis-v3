@@ -1,0 +1,48 @@
+:root {
+  --kh-size-control-lg: 40px;
+  --kh-size-control-md: 32px;
+  --kh-size-control-sm: 24px;
+  --kh-size-header: 48px;
+
+  --kh-gap-label: 4px;
+  --kh-gap-inline: 8px;
+  --kh-gap-param: 12px;
+  --kh-gap-group: 16px;
+  --kh-gap-section: 32px;
+  --kh-pad-panel: 16px;
+
+  --kh-font-section: 20px;
+  --kh-line-section: 28px;
+  --kh-weight-section: 400;
+
+  --kh-font-primitive: 16px;
+  --kh-line-primitive: 22px;
+  --kh-weight-primitive: 600;
+
+  --kh-font-group: 14px;
+  --kh-line-group: 20px;
+  --kh-weight-group: 600;
+
+  --kh-font-body: 14px;
+  --kh-line-body: 18px;
+
+  --kh-font-label: 12px;
+  --kh-line-label: 16px;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kh-gap-label);
+}
+
+.field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kh-gap-label);
+  font-size: var(--kh-font-label);
+  line-height: var(--kh-line-label);
+  letter-spacing: 0.32px;
+  color: var(--cds-text-secondary);
+  font-weight: 400;
+}

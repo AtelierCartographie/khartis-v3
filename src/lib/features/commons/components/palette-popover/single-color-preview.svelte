@@ -115,13 +115,7 @@
   .single-color-preview-wrapper {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-
-  .field-label {
-    font-size: 0.75rem;
-    color: var(--cds-text-02);
-    font-weight: 400;
+    gap: var(--kh-gap-label);
   }
 
   .color-trigger {

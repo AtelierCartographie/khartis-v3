@@ -86,7 +86,7 @@
   }
 
   .basemap-tabs-wrapper :global(.toggle-tab) {
-    height: 32px;
+    height: var(--kh-size-control-md);
   }
 
   .basemap-tabs-wrapper :global(.toggle-tab.active) {

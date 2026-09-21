@@ -1907,7 +1907,7 @@
 
   .cell-select :global(.bx--select-input),
   .cell-select :global(.bx--text-input) {
-    height: 32px;
+    height: var(--kh-size-control-md);
     padding: 0 2rem 0 0.75rem;
     font-size: 0.875rem;
     background-color: var(--cds-field-01, #ffffff);
@@ -1915,7 +1915,7 @@
   }
 
   .cell-select :global(.bx--select__arrow) {
-    height: 32px;
+    height: var(--kh-size-control-md);
   }
 
   .cell-select :global(.bx--label) {
@@ -1923,7 +1923,7 @@
   }
 
   .select-placeholder {
-    height: 32px;
+    height: var(--kh-size-control-md);
     padding: 0 2rem 0 0.75rem;
     font-size: 0.875rem;
     background-color: var(--cds-field-01, #ffffff);
@@ -1956,7 +1956,7 @@
 
   .row-action {
     width: 32px;
-    height: 32px;
+    height: var(--kh-size-control-md);
     display: inline-flex;
     align-items: center;
     justify-content: center;

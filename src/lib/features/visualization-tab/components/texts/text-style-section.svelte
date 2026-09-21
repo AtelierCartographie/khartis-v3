@@ -129,7 +129,7 @@
   .text-style-section {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--kh-gap-param);
     padding: var(--cds-spacing-05, 16px);
     background: var(--cds-layer-01, #f4f4f4);
   }
@@ -203,7 +203,7 @@
 
   .compact-field__control {
     position: relative;
-    height: 32px;
+    height: var(--kh-size-control-md);
     display: flex;
     align-items: center;
     background: var(--cds-field-02, #ffffff);
@@ -217,15 +217,15 @@
 
   .compact-field__control :global(.compact-dropdown) {
     width: 100%;
-    height: 32px;
-    min-height: 32px;
+    height: var(--kh-size-control-md);
+    min-height: var(--kh-size-control-md);
     background: transparent;
     border: none;
   }
 
   .compact-field__control :global(.compact-dropdown .bx--list-box__field) {
-    height: 32px;
-    min-height: 32px;
+    height: var(--kh-size-control-md);
+    min-height: var(--kh-size-control-md);
     padding-inline-start: var(--cds-spacing-05, 16px);
   }
 

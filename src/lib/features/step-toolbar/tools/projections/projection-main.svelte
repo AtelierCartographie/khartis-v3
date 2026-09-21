@@ -565,8 +565,8 @@
   .projection-buttons :global(.projection-view-button.bx--btn) {
     width: 32px;
     min-width: 32px;
-    height: 32px;
-    min-height: 32px;
+    height: var(--kh-size-control-md);
+    min-height: var(--kh-size-control-md);
     padding: 8px;
     color: var(--cds-icon-primary, #161616);
   }
@@ -621,7 +621,7 @@
   .projection-content :global(.show-more-btn) {
     width: 100%;
     max-width: 100%;
-    min-height: 40px;
+    min-height: var(--kh-size-control-lg);
     margin-top: 0;
   }
 

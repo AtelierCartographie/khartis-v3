@@ -99,6 +99,7 @@
     <span class="section-label">{m.basemap_import_url_label()}</span>
     <div class="url-import-row">
       <TextInput
+        size="sm"
         value={importUrl}
         placeholder={m.url_placeholder()}
         on:input={handleImportUrlInput}

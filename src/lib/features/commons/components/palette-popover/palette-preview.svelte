@@ -398,13 +398,7 @@
   .palette-preview-wrapper {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-
-  .field-label {
-    font-size: 0.75rem;
-    color: var(--cds-text-02);
-    font-weight: 400;
+    gap: var(--kh-gap-label);
   }
 
   .palette-trigger {
@@ -453,7 +447,7 @@
 
   .palette-trigger :global(.bx--btn--ghost.bx--btn--sm) {
     min-width: 32px;
-    min-height: 32px;
+    min-height: var(--kh-size-control-md);
     padding: 8px;
   }
 </style>

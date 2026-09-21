@@ -91,6 +91,7 @@
 <div class="field-group">
   <ToggleTabs
     items={sizeModeItems}
+    size="lg"
     activeIndex={sizeModeIndex}
     onchange={onSizeModeChange}
     hideInactiveLabel={true}
@@ -146,11 +147,3 @@
   inputWidth="64px"
   onchange={onSizeChange}
 />
-
-<style lang="scss">
-  .field-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-</style>

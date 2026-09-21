@@ -35,8 +35,9 @@
     display: inline-flex;
     align-items: center;
     gap: var(--cds-spacing-02);
-    font-size: 0.875rem;
-    font-weight: 600;
+    font-size: var(--kh-font-group);
+    line-height: var(--kh-line-group);
+    font-weight: var(--kh-weight-group);
     color: var(--cds-text-primary);
     white-space: nowrap;
   }
