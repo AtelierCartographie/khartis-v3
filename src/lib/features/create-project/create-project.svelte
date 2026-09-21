@@ -259,6 +259,10 @@
     }
   }
 
+  #khartis-create-project :global(.fixed-modal-body) {
+    margin-bottom: 0;
+  }
+
   #khartis-create-project :global(.no-close-button .bx--modal-close) {
     display: none;
   }
