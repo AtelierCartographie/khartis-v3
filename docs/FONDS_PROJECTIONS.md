@@ -77,6 +77,37 @@ Les exceptions documentées doivent rester explicites :
 Ces exceptions n'autorisent pas l'ajout d'un parseur JavaScript pour un format
 dangereux ou déjà pris en charge par DuckDB.
 
+### Couches annexes dérivées
+
+Un fond polygonal importé n'apporte qu'une couverture. Les couches de
+territoire, de contour extérieur et de limites partagées en sont **dérivées**,
+pour qu'un fond importé se style comme un fond du catalogue.
+`rebuildDerivedGeometryTables()` (`duckdb/operations/derived-geometry.ts`)
+construit trois tables sœurs, suffixées, à côté de la table source :
+
+| Table dérivée  | Macro                | Contenu                                    |
+| -------------- | -------------------- | ------------------------------------------ |
+| `…_land`       | `extract_land`       | le territoire dissous                      |
+| `…_outerlines` | `extract_outerlines` | le contour extérieur, calculé sur `…_land` |
+| `…_innerlines` | `extract_innerlines` | les limites internes partagées             |
+
+Deux propriétés à préserver :
+
+- **La dérivation n'est jamais destructrice.** Les tables dérivées sont des
+  sœurs de la source, qui reste intacte. Ne pas remplacer une couverture par sa
+  dissolution.
+- **Le contour extérieur réutilise `…_land`.** L'ensemble coûte donc une
+  dissolution de plus que les seules limites partagées, pas deux.
+
+GEOS en WASM est plus strict que le natif et refuse de dissoudre des
+couvertures que la version native accepte. `createDerivedTable()` réessaie donc
+une fois avec un re-nodage (`noding_factor`), fixé à une fraction du périmètre
+moyen pour rester valable en degrés comme en mètres, et déplacer les sommets
+bien en dessous du pixel. Si la seconde tentative échoue, la table dérivée est
+créée **vide** plutôt que manquante : la couche disparaît de la carte sans
+casser le reste du fond. Un `ST_MakeValid` ne règle pas ce cas, c'est un
+problème de nodage.
+
 ## Attributs et jointures
 
 Les attributs du catalogue peuvent être chargés dans DuckDB sans charger sa
@@ -130,6 +161,26 @@ stables pour que chaque contexte conserve ses géométries et ses labels.
 Les projections non identitaires peuvent exiger un masque ou un contour de
 sphère. Ces couches de contexte font partie de la carte et doivent être
 vérifiées avec les couches thématiques, pas uniquement avec un fond vide.
+
+### Orientation intrinsèque
+
+Une projection d3 porte souvent **sa propre orientation** : Bertin 1953 est
+tournée sur les masses habitées, Air Ocean sur son icosaèdre, la Mollweide en
+deux hémisphères sur la coupure atlantique. Le chemin de rendu réapplique
+`rotate([-longitude, -latitude, gamma])` à partir des réglages de
+l'utilisateur. Si ces réglages démarrent à zéro, la projection est donc
+**silencieusement remise à lon/lat 0** et perd le cadrage qui fait son intérêt.
+
+`resolveProjectionDefaultOrientation()`
+(`commons/utils/projection.utils.ts`) résout ce défaut en construisant la
+projection et en lisant son `rotate()`, puis met le résultat en cache. Un code
+de projection saisi à la main repart de `[0, 0]` : c'est l'auteur du code qui
+porte alors l'orientation.
+
+Corollaire pour le catalogue : une entrée qui a besoin d'un cadrage différent
+de celui de d3 déclare son `rotate` dans le catalogue, et non dans le rendu.
+C'est par exemple le cas du planisphère carré, que le défaut de d3 centre au
+mauvais endroit.
 
 ## Styles, ordre et simplification
 
