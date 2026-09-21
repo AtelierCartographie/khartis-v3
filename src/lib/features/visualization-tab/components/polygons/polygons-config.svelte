@@ -356,6 +356,7 @@
 </script>
 
 <ExpandableSection
+  scrollIntoViewOnOpen
   open={open}
   onToggle={onToggle}
   title={m.polygons_title()}

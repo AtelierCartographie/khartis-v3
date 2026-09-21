@@ -345,6 +345,7 @@
 </script>
 
 <ExpandableSection
+  scrollIntoViewOnOpen
   open={open}
   onToggle={onToggle}
   title={m.lines_title()}

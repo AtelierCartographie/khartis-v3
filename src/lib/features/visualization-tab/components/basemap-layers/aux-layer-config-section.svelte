@@ -327,6 +327,7 @@
 </script>
 
 <ExpandableSection
+  scrollIntoViewOnOpen
   title={title}
   showToggle={true}
   toggleVariant="suggestions"

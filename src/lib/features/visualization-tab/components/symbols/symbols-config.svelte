@@ -245,6 +245,7 @@
 </script>
 
 <ExpandableSection
+  scrollIntoViewOnOpen
   open={open}
   onToggle={onToggle}
   title={m.symbols_title()}
