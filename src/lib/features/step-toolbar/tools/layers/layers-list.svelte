@@ -1,6 +1,7 @@
 <script lang="ts">
   import { dragHandleZone } from 'svelte-dnd-action';
   import { untrack } from 'svelte';
+  import { markRecentDndInteraction } from '$lib/features/map/utils/tool-popover-drag-visibility.utils';
   import LayerItem from './layer-item.svelte';
   import type { Layer } from '../../types/layers.types';
 
@@ -21,7 +22,6 @@
   }: Props = $props();
 
   const FLIP_DURATION_MS = 200;
-  const RECENT_DND_INTERACTION_ATTRIBUTE = 'data-khartis-recent-dnd-at';
 
   let items = $state<Layer[]>([]);
   let dragging = $state(false);
@@ -31,13 +31,6 @@
       items = layers.map((layer) => ({ ...layer }));
     }
   });
-
-  function markRecentDndInteraction(): void {
-    document.body.setAttribute(
-      RECENT_DND_INTERACTION_ATTRIBUTE,
-      String(Date.now())
-    );
-  }
 
   function handleConsider(e: Event): void {
     dragging = true;
