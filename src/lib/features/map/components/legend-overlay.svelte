@@ -122,6 +122,9 @@
       globalState.selectedStep === ToolbarStep.Styling &&
       globalState.selectedTool === StylingTools.Legend
   );
+  const isLegendDraggable = $derived(
+    !inline && globalState.selectedStep === ToolbarStep.Styling
+  );
   const pageScale = $derived(Math.max(globalState.zoom.pageZoomScale, 0.1));
   const layoutTokens = $derived.by(() =>
     resolveLayoutSizingTokens(getFormatLayoutSizingContext(formatState))
@@ -563,7 +566,7 @@
   }
 
   function handleFramePointerDown(event: PointerEvent, item: LegendItem): void {
-    if (!isLegendActive) {
+    if (!isLegendDraggable) {
       return;
     }
 
@@ -728,7 +731,7 @@
       <div
         bind:this={frameElements[item.id]}
         class="legend-container {getFrameAnchorClass(item)}"
-        class:draggable={isLegendActive}
+        class:draggable={isLegendDraggable}
         class:dragging={draggingItemId === item.id}
         data-workspace-pan-ignore="true"
         style={getFrameStyle(item)}
