@@ -1158,19 +1158,12 @@
       currentTarget.focus({ preventScroll: true });
     }
 
+    activateStylingToolFromMap(StylingTools.Annotations);
+    annotationsActions.setPageElementsVisibility(true);
+
     void tick().then(() => {
       centerAnnotationInViewport(currentTarget);
     });
-    annotationsActions.selectAnnotation(itemId);
-  }
-
-  function handleAnnotationDoubleClick(
-    event: MouseEvent,
-    itemId: string
-  ): void {
-    event.stopPropagation();
-    activateStylingToolFromMap(StylingTools.Annotations);
-    annotationsActions.setPageElementsVisibility(true);
     annotationsActions.selectAnnotation(itemId);
   }
 
@@ -2181,8 +2174,6 @@
       aria-disabled="false"
       aria-label={getAnnotationAccessibleLabel(item)}
       onclick={(event: MouseEvent) => handleAnnotationClick(event, item.id)}
-      ondblclick={(event: MouseEvent) =>
-        handleAnnotationDoubleClick(event, item.id)}
       onblur={(event: FocusEvent) => handleAnnotationBlur(event, item.id)}
       onpointerdown={(event: PointerEvent) =>
         handleAnnotationPointerDown(event, item)}

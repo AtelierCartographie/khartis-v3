@@ -1723,6 +1723,12 @@
     outline: none;
   }
 
+  .geo-indications-overlay:not(.non-interactive) .scale-bar:hover,
+  .geo-indications-overlay:not(.non-interactive) .north-arrow:hover,
+  .geo-indications-overlay:not(.non-interactive) .inset-map-panel:hover {
+    outline: 1px dashed var(--cds-border-strong-02, #6f6f6f);
+  }
+
   .scale-bar.draggable,
   .north-arrow.draggable,
   .inset-map-panel.draggable {

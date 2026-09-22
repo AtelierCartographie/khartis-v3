@@ -1181,7 +1181,7 @@ describe('legend overlay visibility', () => {
   it('recenters the page when a centered legend loses focus', async () => {
     const { legend } = setupLegendViewport();
 
-    await fireEvent.dblClick(legend);
+    await fireEvent.click(legend);
 
     await waitFor(() => {
       expect(globalState.zoom.pagePanOffset).toEqual({ x: 90, y: 60 });
@@ -1197,7 +1197,7 @@ describe('legend overlay visibility', () => {
   it('centers legend focus in the visible area beside the tool popover', async () => {
     const { legend } = setupLegendOccludedViewport();
 
-    await fireEvent.dblClick(legend);
+    await fireEvent.click(legend);
 
     await waitFor(() => {
       expect(globalState.zoom.pagePanOffset).toEqual({ x: 168, y: 60 });
