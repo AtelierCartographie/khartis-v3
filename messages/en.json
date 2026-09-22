@@ -388,6 +388,7 @@
   "tool_geo_indications": "Geographic indications",
   "tool_annotations": "Annotations",
   "tool_color_blindness": "Visual impairments",
+  "styling_drag_helper": "Drag an element on the map to move it.",
   "format_predefined": "Predefined",
   "format_custom": "Custom",
   "format_model": "Model",
