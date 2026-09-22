@@ -1090,6 +1090,8 @@
   "zoom_tab_double_click_hint": "Double-cliquez pour ajuster à l'écran (Cmd/Ctrl + 0)",
   "toolbar_expand": "Agrandir",
   "toolbar_compact": "Réduire",
+  "toolbar_open": "Ouvrir le panneau",
+  "toolbar_close": "Fermer le panneau",
   "data_step_status_controlled": "Données contrôlées",
   "data_step_status_clean": "Vérifiez et nettoyez vos données",
   "data_step_previous": "Étape précédente",
