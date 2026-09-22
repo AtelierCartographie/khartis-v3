@@ -1090,6 +1090,8 @@
   "zoom_tab_double_click_hint": "Double-click to fit to screen (Cmd/Ctrl + 0)",
   "toolbar_expand": "Expand",
   "toolbar_compact": "Compact",
+  "toolbar_open": "Open panel",
+  "toolbar_close": "Close panel",
   "data_step_status_controlled": "Data controlled",
   "data_step_status_clean": "Check and clean your data",
   "data_step_previous": "Previous step",

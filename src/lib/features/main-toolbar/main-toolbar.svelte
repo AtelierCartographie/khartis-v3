@@ -17,10 +17,13 @@
     ChevronLeft,
     ChevronRight,
     CircleDash,
+    DoubleChevronLeft,
+    DoubleChevronRight,
     OpenPanelFilledRight
   } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { tick } from 'svelte';
+  import OpenPanelFilledRightWide from './components/open-panel-filled-right-wide.svelte';
   import ToolbarTabs from './components/toolbar-tabs.svelte';
   import { dataTabStore } from '$lib/features/data-tab/stores/data-tab.store.svelte';
   import DataTab from '$lib/features/data-tab/data-tab.svelte';
@@ -38,6 +41,34 @@
   );
 
   const isCompact = $derived(globalState.toolbarState === ToolbarState.Compact);
+
+  const isVisualizationsStep = $derived(
+    globalState.selectedStep === ToolbarStep.Visualizations
+  );
+
+  // The Données toggle picks a width, the Visualisations one opens and closes:
+  // two behaviours that must not share a picto.
+  const willExpandToolbar = $derived(
+    isVisualizationsStep
+      ? globalState.toolbarState === ToolbarState.Collapsed
+      : globalState.toolbarState !== ToolbarState.Full
+  );
+
+  const toolbarToggleIcon = $derived.by(() => {
+    if (isVisualizationsStep) {
+      return willExpandToolbar ? DoubleChevronLeft : DoubleChevronRight;
+    }
+
+    return willExpandToolbar ? OpenPanelFilledRightWide : OpenPanelFilledRight;
+  });
+
+  const toolbarToggleLabel = $derived.by(() => {
+    if (isVisualizationsStep) {
+      return willExpandToolbar ? m.toolbar_open() : m.toolbar_close();
+    }
+
+    return willExpandToolbar ? m.toolbar_expand() : m.toolbar_compact();
+  });
 
   const totalSteps = $derived(dataTabStore.isGeographicMode ? 2 : 3);
 
@@ -75,20 +106,14 @@
       return;
     }
 
-    if (globalState.selectedStep === ToolbarStep.Visualizations) {
+    if (isVisualizationsStep) {
       setToolbar(
-        globalState.toolbarState === ToolbarState.Collapsed
-          ? ToolbarState.Compact
-          : ToolbarState.Collapsed
+        willExpandToolbar ? ToolbarState.Compact : ToolbarState.Collapsed
       );
       return;
     }
 
-    setToolbar(
-      globalState.toolbarState === ToolbarState.Full
-        ? ToolbarState.Compact
-        : ToolbarState.Full
-    );
+    setToolbar(willExpandToolbar ? ToolbarState.Full : ToolbarState.Compact);
   }
 
   $effect(() => {
@@ -119,10 +144,8 @@
     {#if hasToolbarPanel}
       <IconButton
         kind="ghost"
-        iconDescription={globalState.toolbarState === ToolbarState.Full
-          ? m.toolbar_compact()
-          : m.toolbar_expand()}
-        icon={OpenPanelFilledRight}
+        iconDescription={toolbarToggleLabel}
+        icon={toolbarToggleIcon}
         on:click={handleToolbarToggle}
       />
       <ToolbarTabs />
