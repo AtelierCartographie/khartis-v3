@@ -1097,7 +1097,7 @@
     event: PointerEvent,
     item: Annotation
   ): void {
-    if (!isAnnotationEditing) {
+    if (!interactive) {
       return;
     }
 
@@ -2158,7 +2158,7 @@
   {#each visibleItems as item (item.id)}
     <div
       class="annotation-item"
-      class:editable={isAnnotationEditing}
+      class:editable={interactive}
       class:selected={isAnnotationEditing &&
         selectedId === item.id &&
         item.type !== AnnotationKind.SHAPE}
