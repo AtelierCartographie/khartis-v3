@@ -1149,7 +1149,7 @@
     target: DragTarget,
     element: HTMLDivElement | null
   ): void {
-    if (!isGeoIndicationsActive || !overlayElement || !element) {
+    if (!interactive || !overlayElement || !element) {
       return;
     }
 
@@ -1395,7 +1395,7 @@
     <div
       bind:this={scaleElement}
       class="scale-bar"
-      class:draggable={isGeoIndicationsActive}
+      class:draggable={interactive}
       class:dragging={currentDrag === 'scale'}
       data-workspace-pan-ignore="true"
       style={scaleStyle}
@@ -1463,7 +1463,7 @@
     <div
       bind:this={orientationElement}
       class="north-arrow"
-      class:draggable={isGeoIndicationsActive}
+      class:draggable={interactive}
       class:dragging={currentDrag === 'orientation'}
       data-workspace-pan-ignore="true"
       style={orientationStyle}
@@ -1487,14 +1487,14 @@
         <g transform={`rotate(${orientationAngle.toFixed(1)} 20 25)`}>
           {#if geoIndicationsState.orientation.style === OrientationIndicatorStyle.ARROW}
             <polygon
-              points="20,5 30,35 20,28 10,35"
+              points="20,17 30,47 20,40 10,47"
               fill={orientationColor}
               stroke={orientationColor}
               stroke-width="1"
             />
             <text
               x="20"
-              y="47"
+              y="11"
               text-anchor="middle"
               font-size={PRINT_STANDARD_TOKENS.geoIndications.scaleFontSize}
               font-weight="bold"
@@ -1506,30 +1506,30 @@
           {:else}
             <circle
               cx="20"
-              cy="20"
+              cy="32"
               r="15"
               fill="none"
               stroke={orientationColor}
               stroke-width="2"
             />
-            <polygon points="20,7 23,20 20,15 17,20" fill={orientationColor} />
+            <polygon points="20,19 23,32 20,27 17,32" fill={orientationColor} />
             <polygon
-              points="20,33 23,20 20,25 17,20"
+              points="20,45 23,32 20,37 17,32"
               fill="none"
               stroke={orientationColor}
               stroke-width="1"
             />
             <line
               x1="7"
-              y1="20"
+              y1="32"
               x2="33"
-              y2="20"
+              y2="32"
               stroke={orientationColor}
               stroke-width="1"
             />
             <text
               x="20"
-              y="47"
+              y="11"
               text-anchor="middle"
               font-size={PRINT_STANDARD_TOKENS.annotations.captionFontSize}
               font-weight="bold"
@@ -1548,7 +1548,7 @@
     <div
       bind:this={insetMapElement}
       class="inset-map-panel"
-      class:draggable={isGeoIndicationsActive}
+      class:draggable={interactive}
       class:dragging={currentDrag === 'inset'}
       data-workspace-pan-ignore="true"
       style={insetPanelStyle}
