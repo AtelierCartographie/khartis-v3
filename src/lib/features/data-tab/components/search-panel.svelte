@@ -444,12 +444,6 @@
     gap: var(--cds-spacing-04);
   }
 
-  .field-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-
   .results-info {
     padding: var(--cds-spacing-02) 0;
     min-height: 2rem;

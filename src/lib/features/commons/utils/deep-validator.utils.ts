@@ -31,6 +31,7 @@ export interface DataQualityIssue {
 }
 
 export interface DataAnalysisResult {
+  // Rows actually analysed (a capped preview sample), never the dataset total.
   rowCount: number;
   columnCount: number;
   columns: ColumnStatistics[];

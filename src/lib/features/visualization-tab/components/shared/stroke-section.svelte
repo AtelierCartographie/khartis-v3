@@ -365,6 +365,7 @@
 <div class="field-group">
   <ToggleTabs
     items={strokeModeItems}
+    size="md"
     activeIndex={strokeModeIndex}
     onchange={handleStrokeModeChange}
     hideInactiveLabel={true}
@@ -528,6 +529,7 @@
     />
     {#if strokeDashed}
       <Dropdown
+        size="sm"
         titleText={m.stroke_dashed_pattern()}
         items={dashedPatternItems}
         selectedId={strokeDashedPattern}
@@ -548,11 +550,3 @@
     onchange={handleStrokeOpacityChange}
   />
 {/if}
-
-<style lang="scss">
-  .field-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-</style>

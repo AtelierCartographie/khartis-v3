@@ -57,9 +57,9 @@
   }
 
   .header-title {
-    font-size: 20px;
-    font-weight: 400;
-    line-height: 28px;
+    font-size: var(--kh-font-section);
+    font-weight: var(--kh-weight-section);
+    line-height: var(--kh-line-section);
     color: var(--cds-text-primary, #161616);
     margin: 0;
     flex: 1;

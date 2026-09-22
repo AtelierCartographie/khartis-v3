@@ -23,8 +23,8 @@
   .section-heading {
     display: flex;
     align-items: center;
-    gap: var(--cds-spacing-03);
-    margin: var(--cds-spacing-05) 0 var(--cds-spacing-04);
+    gap: var(--kh-gap-inline);
+    margin: var(--kh-gap-section) 0 var(--kh-gap-param);
 
     &:first-child {
       margin-top: 0;
@@ -35,8 +35,9 @@
     display: inline-flex;
     align-items: center;
     gap: var(--cds-spacing-02);
-    font-size: 0.875rem;
-    font-weight: 600;
+    font-size: var(--kh-font-group);
+    line-height: var(--kh-line-group);
+    font-weight: var(--kh-weight-group);
     color: var(--cds-text-primary);
     white-space: nowrap;
   }

@@ -5,13 +5,9 @@
   } from '$lib/features/commons/stores/create-project.store.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { m } from '$lib/paraglide/messages';
-  import {
-    DOC_LINK,
-    FEEDBACK_FORM_URL
-  } from '$lib/features/commons/constants/doc-links.constants';
+  import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
   import {
     ComposedModal,
-    Link,
     ModalBody,
     ModalHeader
   } from 'carbon-components-svelte';
@@ -19,8 +15,7 @@
     Categories,
     CopyFile,
     FetchUpload,
-    Information,
-    Launch
+    Information
   } from 'carbon-icons-svelte';
   import CreateNewProject from './components/create-new-project.svelte';
   import OpenProject from './components/open-project.svelte';
@@ -135,12 +130,6 @@
           <Information size={16} />
         </a>
       </div>
-      <p class="beta-notice">
-        {m.create_project_beta_notice()}
-        <Link href={FEEDBACK_FORM_URL} target="_blank" size="sm" icon={Launch}>
-          {m.create_project_beta_report()}
-        </Link>
-      </p>
     </ModalHeader>
 
     <ModalBody class="fixed-modal-body">
@@ -210,11 +199,7 @@
           aria-labelledby={activeProjectTabId}
         >
           {#if createProjectState.selectedTab === 1}
-            <CreateNewProject
-              onClose={handleClose}
-              isModal
-              resetToken={resetToken}
-            />
+            <CreateNewProject isModal resetToken={resetToken} />
           {:else if createProjectState.selectedTab === 2}
             <OpenProject onClose={handleClose} />
           {:else if createProjectState.selectedTab === 3}
@@ -237,14 +222,6 @@
     gap: var(--cds-spacing-03);
   }
 
-  .beta-notice {
-    margin: var(--cds-spacing-03) 0 0 0;
-    color: var(--cds-text-helper, #6f6f6f);
-    font-size: 0.875rem;
-    line-height: 1.125rem;
-    letter-spacing: 0.16px;
-  }
-
   .info-icon-link {
     flex-shrink: 0;
     color: var(--cds-icon-secondary);
@@ -261,7 +238,8 @@
     #khartis-create-project :global(.bx--modal-container) {
       width: 90vw;
       max-width: 700px;
-      height: 85vh;
+      height: auto;
+      max-height: 90vh;
       background: var(--cds-background);
     }
 
@@ -281,6 +259,10 @@
     }
   }
 
+  #khartis-create-project :global(.fixed-modal-body) {
+    margin-bottom: 0;
+  }
+
   #khartis-create-project :global(.no-close-button .bx--modal-close) {
     display: none;
   }
@@ -288,7 +270,7 @@
   .project-selector-wrapper {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-07);
+    gap: var(--kh-gap-group);
     height: 100%;
   }
 

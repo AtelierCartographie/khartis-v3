@@ -106,6 +106,7 @@
       {/if}
     </span>
     <ToggleTabs
+      size="md"
       activeIndex={activeTabIndex}
       items={tabItems}
       onchange={handleTabChange}
@@ -148,17 +149,6 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-  }
-
-  .field-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 12px;
-    line-height: 16px;
-    letter-spacing: 0.32px;
-    color: var(--cds-text-secondary, #525252);
-    font-weight: 400;
   }
 
   .geocode-field {
@@ -232,10 +222,6 @@
   :global(.geocode-tabs) {
     width: 100%;
     max-width: none;
-  }
-
-  :global(.geocode-tabs .toggle-tab) {
-    height: 32px;
   }
 
   :global(.geocode-tabs .toggle-tab.active) {

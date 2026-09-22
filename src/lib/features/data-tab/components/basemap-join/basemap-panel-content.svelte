@@ -53,6 +53,7 @@
 <div class="basemap-panel-content">
   <div class="basemap-tabs-wrapper">
     <ToggleTabs
+      size="md"
       activeIndex={activeTabIndex}
       items={tabItems}
       onchange={handleTabChange}
@@ -85,10 +86,6 @@
     margin-bottom: 12px;
   }
 
-  .basemap-tabs-wrapper :global(.toggle-tab) {
-    height: 32px;
-  }
-
   .basemap-tabs-wrapper :global(.toggle-tab.active) {
     background-color: var(--cds-border-subtle-01);
   }
@@ -96,6 +93,12 @@
   .basemap-tab-body {
     display: flex;
     flex-direction: column;
+  }
+
+  .basemap-panel-content :global(.section-expand-btn),
+  .basemap-panel-content :global(.section-body) {
+    padding-left: 0;
+    padding-right: 0;
   }
 
   .join-separator {

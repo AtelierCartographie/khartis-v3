@@ -47,6 +47,8 @@
   };
 
   interface Props {
+    open?: boolean;
+    onToggle?: (expanded: boolean) => void;
     dataFields?: Array<{ id: number; text: string; type?: string }>;
     visualization?: VisualizationConfig;
     disabled?: boolean;
@@ -98,7 +100,9 @@
     onAddFilter,
     onUpdateFilter,
     onRemoveFilter,
-    onClearFilters
+    onClearFilters,
+    open,
+    onToggle
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -352,6 +356,9 @@
 </script>
 
 <ExpandableSection
+  scrollIntoViewOnOpen
+  open={open}
+  onToggle={onToggle}
   title={m.polygons_title()}
   description={disabled ? m.primitive_unavailable() : undefined}
   defaultOpen={false}
@@ -479,7 +486,7 @@
   .polygons-config {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-04);
+    gap: var(--kh-gap-param);
     padding: var(--cds-spacing-03);
   }
 </style>

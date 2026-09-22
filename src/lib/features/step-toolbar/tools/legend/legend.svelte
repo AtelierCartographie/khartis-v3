@@ -251,6 +251,7 @@
     aria-label={m.tool_legend()}
   >
     <ToggleTabs
+      size="md"
       activeIndex={legendState.activeTab === LegendTab.CONTENT ? 0 : 1}
       items={[
         { icon: TableOfContents, label: m.legend_content(), iconSize: 16 },

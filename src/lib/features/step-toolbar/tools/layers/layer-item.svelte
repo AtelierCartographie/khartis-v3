@@ -83,7 +83,7 @@
   .layer-row {
     display: flex;
     align-items: center;
-    min-height: 40px;
+    min-height: var(--kh-size-md);
     padding: 0 8px 0 0;
     gap: 8px;
     background-color: var(--cds-layer-01, #f4f4f4);
@@ -97,7 +97,7 @@
   }
 
   .layer-row--viz {
-    min-height: 48px;
+    min-height: var(--kh-size-lg);
   }
 
   .accent-bar {

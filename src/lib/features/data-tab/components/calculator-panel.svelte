@@ -478,18 +478,6 @@
     gap: var(--cds-spacing-04);
   }
 
-  .field-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-
-  .field-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--cds-text-02);
-  }
-
   .help-text {
     font-size: 0.75rem;
     color: var(--cds-text-02);

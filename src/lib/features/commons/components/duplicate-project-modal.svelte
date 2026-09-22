@@ -134,6 +134,7 @@
 
       <div class="name-input-section">
         <TextInput
+          size="sm"
           light
           labelText={m.duplicate_project_modal_new_name()}
           placeholder={m.duplicate_project_modal_name_placeholder()}

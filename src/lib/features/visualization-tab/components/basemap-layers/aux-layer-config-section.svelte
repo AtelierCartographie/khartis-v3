@@ -38,6 +38,8 @@
     allowRemarkable?: boolean;
     allowEquator?: boolean;
     allowSphereOutline?: boolean;
+    open?: boolean;
+    onToggle?: (expanded: boolean) => void;
   }
 
   let {
@@ -47,7 +49,9 @@
     instanceIndex = 0,
     allowRemarkable = true,
     allowEquator = false,
-    allowSphereOutline = true
+    allowSphereOutline = true,
+    open,
+    onToggle
   }: Props = $props();
 
   const locale = $derived(getLocale());
@@ -323,10 +327,13 @@
 </script>
 
 <ExpandableSection
+  scrollIntoViewOnOpen
   title={title}
   showToggle={true}
   toggleVariant="suggestions"
   toggleChecked={visible}
+  open={open}
+  onToggle={onToggle}
   onToggleChange={handleToggle}
 >
   {#if legacyId === 'terre'}

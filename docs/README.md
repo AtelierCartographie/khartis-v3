@@ -26,6 +26,7 @@ GeoArrow, Deck.gl/WebGL, MapLibre et IndexedDB. Le terme à employer est donc
 | Où une action traverse-t-elle les features ?                         | [Architecture](ARCHITECTURE.md)                                   |
 | Comment importer, transformer ou joindre des données ?               | [Import et DuckDB](IMPORT_DUCKDB.md)                              |
 | Comment le navigateur dessine-t-il une couche ?                      | [Rendu cartographique](RENDU_CARTOGRAPHIQUE.md)                   |
+| Comment discrétiser une variable, la colorer ou la tramer ?          | [Discrétisation et couleurs](DISCRETISATION_ET_COULEURS.md)       |
 | Comment préparer un fond, une projection ou une jointure ?           | [Fonds et projections](FONDS_PROJECTIONS.md)                      |
 | Que reste-t-il après un rechargement ou dans une archive ?           | [Persistance et archives](PERSISTANCE_ET_ARCHIVES.md)             |
 | Comment préserver le format public `.kh` ?                           | [Compatibilité du format projet](PROJECT_FORMAT_COMPATIBILITY.md) |

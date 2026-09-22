@@ -31,6 +31,8 @@
   } from '.';
 
   interface Props {
+    open?: boolean;
+    onToggle?: (expanded: boolean) => void;
     dataFields?: Array<{ id: number; text: string; type?: string }>;
     visualization?: VisualizationConfig;
     fillVisualization?: VisualizationConfig;
@@ -98,7 +100,9 @@
     onAddFilter,
     onUpdateFilter,
     onRemoveFilter,
-    onClearFilters
+    onClearFilters,
+    open,
+    onToggle
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -241,6 +245,9 @@
 </script>
 
 <ExpandableSection
+  scrollIntoViewOnOpen
+  open={open}
+  onToggle={onToggle}
   title={m.symbols_title()}
   description={disabled ? m.primitive_unavailable() : undefined}
   defaultOpen={false}
@@ -277,6 +284,7 @@
       </span>
       <ToggleTabs
         items={symbolModeItems}
+        size="md"
         activeIndex={symbolModeIndex}
         onchange={handleSymbolModeChange}
         hideInactiveLabel={true}
@@ -378,23 +386,8 @@
   .symbols-config {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-04);
+    gap: var(--kh-gap-param);
     padding: var(--cds-spacing-03);
-  }
-
-  .field-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-
-  .field-label {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-    font-size: 0.75rem;
-    color: var(--cds-text-02);
-    font-weight: 400;
   }
 
   :global(.symbols-config .bx--dropdown) {

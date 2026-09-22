@@ -323,7 +323,7 @@
   .basemap-style-selector {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-05);
+    gap: var(--kh-gap-group);
     width: 100%;
   }
 
@@ -391,7 +391,7 @@
     display: grid;
     grid-auto-flow: column;
     grid-auto-columns: 184px;
-    gap: var(--cds-spacing-03);
+    gap: var(--kh-gap-inline);
     width: max-content;
     padding-bottom: var(--cds-spacing-03);
   }
@@ -399,13 +399,13 @@
   .groups-section {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
+    gap: var(--kh-gap-inline);
   }
 
   .groups-list {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02);
+    gap: var(--kh-gap-label);
   }
 
   .groups-list :global(.kh-checkbox-native) {

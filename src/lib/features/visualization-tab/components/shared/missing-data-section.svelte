@@ -207,6 +207,7 @@
           <Row>
             <Column>
               <Dropdown
+                size="sm"
                 titleText={m.stroke_dashed_pattern()}
                 items={dashedPatternItems}
                 selectedId={dashedPattern}
