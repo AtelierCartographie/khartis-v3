@@ -388,6 +388,7 @@
   "tool_geo_indications": "Indications géographiques",
   "tool_annotations": "Annotations",
   "tool_color_blindness": "Déficiences visuelles",
+  "styling_drag_helper": "Glisser un élément sur la carte pour le déplacer.",
   "format_predefined": "Prédéfini",
   "format_custom": "Personnalisé",
   "format_model": "Modèle",

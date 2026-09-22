@@ -245,6 +245,8 @@
 </script>
 
 <div id={DOM_IDS.LEGEND_TOOL} class="legend-tool">
+  <p class="kh-help">{m.styling_drag_helper()}</p>
+
   <div
     class={CSS_CLASSES.LEGEND_TABS}
     role="tablist"
@@ -383,6 +385,7 @@
           hue={bgColor.hue}
           saturation={bgColor.saturation}
           lightness={bgColor.lightness}
+          disabled={!backgroundEnabled}
           onValidate={({
             hue,
             saturation,
@@ -396,6 +399,7 @@
       <SliderWithInput
         label={m.legend_opacity()}
         bind:value={localOpacity}
+        disabled={!backgroundEnabled}
         min={0}
         max={100}
         step={1}
@@ -476,7 +480,7 @@
   .legend-background-toggle {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
+    gap: var(--kh-gap-label);
   }
 
   .legend-field-label {
@@ -501,6 +505,7 @@
 
   :global(#khartis-legend-tool .legend-background-toggle .kh-switch-native) {
     gap: var(--cds-spacing-03);
+    min-height: var(--kh-size-sm);
   }
 
   :global(#khartis-legend-tool .bx--text-input) {

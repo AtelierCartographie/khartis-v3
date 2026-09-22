@@ -130,9 +130,9 @@
   .tool-title {
     flex: 1 0 0;
     margin: 0;
-    font-size: 0.875rem;
-    font-weight: 600;
-    line-height: 1.25rem;
+    font-size: var(--kh-font-primitive);
+    font-weight: var(--kh-weight-primitive);
+    line-height: var(--kh-line-primitive);
     color: var(--cds-text-01, #161616);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -146,5 +146,6 @@
 
   .tool-body :global(.expandable-stack) {
     margin: 0 calc(-1 * var(--cds-spacing-05));
+    border-bottom: 1px solid var(--cds-border-subtle-00, #e0e0e0);
   }
 </style>

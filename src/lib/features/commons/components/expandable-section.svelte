@@ -186,15 +186,6 @@
     background: transparent;
   }
 
-  :global(
-    .section-container:has(> .section-header.expanded) + .section-container
-  ),
-  :global(
-    .section-container:has(> .section-header.expanded) + * + .section-container
-  ) {
-    border-top: none;
-  }
-
   .section-header {
     display: flex;
     align-items: center;

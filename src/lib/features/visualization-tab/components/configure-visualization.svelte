@@ -680,7 +680,7 @@
   }
 
   .content-area {
-    padding: 16px 16px 8px 16px;
+    padding: var(--kh-pad-panel);
   }
 
   .kh-help {
