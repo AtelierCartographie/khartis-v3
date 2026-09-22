@@ -430,7 +430,7 @@
     padding: 0 16px 8px 16px;
     display: flex;
     flex-direction: column;
-    gap: 32px;
+    gap: var(--kh-gap-section);
   }
 
   .popover-preview-wrap {

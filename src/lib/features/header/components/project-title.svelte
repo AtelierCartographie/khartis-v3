@@ -137,10 +137,10 @@
 
   @media (max-width: 639px) {
     .project-title {
-      left: calc(3rem + var(--cds-spacing-05) + 58px + var(--cds-spacing-04));
+      left: calc(3rem + var(--cds-spacing-05) + 68px + var(--cds-spacing-04));
       right: 6rem;
       width: auto;
-      max-width: none;
+      max-width: 168px;
       min-width: 0;
       transform: none;
     }

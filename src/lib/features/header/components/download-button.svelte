@@ -254,6 +254,7 @@
 
           <div class="project-name-field">
             <TextInput
+              size="sm"
               light
               labelText={m.download_project_name()}
               value={modal.fileName}
@@ -344,7 +345,7 @@
             on:click={() => modal.setTab(target.id as ExportTabType)}
           >
             <span class="export-rail-tab-inner">
-              <target.icon size={30} />
+              <target.icon size={32} />
               <span class="export-rail-tab-label">{target.label}</span>
             </span>
           </Button>

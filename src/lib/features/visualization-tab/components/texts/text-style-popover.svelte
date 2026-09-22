@@ -258,7 +258,7 @@
     max-height: min(80vh, calc(100dvh - 32px));
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03, 8px);
+    gap: var(--kh-gap-inline);
     padding: 0 0 var(--cds-spacing-05, 16px);
     background: var(--cds-background, #ffffff);
     border: none;
@@ -322,7 +322,7 @@
   .popover-content {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-05, 16px);
+    gap: var(--kh-gap-group);
     padding: 0 var(--cds-spacing-05, 16px);
     overflow-y: auto;
   }

@@ -3,7 +3,19 @@
   "private": true,
   "version": "1.6.0-staging.29",
   "license": "MIT",
-  "homepage": "https://www.sciencespo.fr/cartographie/khartis",
+  "description": "Client-side thematic mapping application: import tabular or geographic data, join it to a basemap, classify it and export publication-ready maps, entirely in the browser.",
+  "keywords": [
+    "cartography",
+    "thematic-map",
+    "choropleth",
+    "data-visualization",
+    "geospatial",
+    "duckdb-wasm",
+    "deck.gl",
+    "geoarrow",
+    "svelte"
+  ],
+  "homepage": "https://www.sciencespo.fr/cartographie/outils/khartis/app/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AtelierCartographie/khartis-v3.git"

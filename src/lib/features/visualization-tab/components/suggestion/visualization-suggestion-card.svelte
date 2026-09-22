@@ -315,7 +315,7 @@
   .details {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02);
+    gap: var(--kh-gap-label);
   }
 
   .detail-row {

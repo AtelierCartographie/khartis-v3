@@ -241,11 +241,7 @@
   }
 
   .field-label {
-    display: block;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--cds-text-02);
-    margin-bottom: var(--cds-spacing-02);
+    margin-bottom: var(--kh-gap-label);
   }
 
   .formula-textarea {

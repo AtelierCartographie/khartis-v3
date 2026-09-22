@@ -19,7 +19,7 @@
     ChevronDown,
     ChevronUp,
     ErrorFilled,
-    MagicWand,
+    MagicWandFilled,
     Misuse,
     Renew,
     WarningAltFilled,
@@ -799,7 +799,7 @@
   <div class="section-header">
     <span class="section-title">{m.section_join_assisted()}</span>
     <span class="section-header-icon">
-      <MagicWand size={16} />
+      <MagicWandFilled size={20} />
     </span>
     <InfoPopover text={m.join_assisted_info()} />
   </div>
@@ -1185,7 +1185,7 @@
                 <Button
                   kind="tertiary"
                   size="small"
-                  icon={MagicWand}
+                  icon={MagicWandFilled}
                   on:click={() => onRunFullFuzzyPass?.()}
                 >
                   {m.join_fuzzy_pass_action()}
@@ -1542,21 +1542,21 @@
   .section-header {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 0 16px 16px 16px;
+    gap: var(--kh-gap-inline);
+    padding-bottom: var(--kh-pad-panel);
   }
 
   .section-header-icon {
     display: flex;
     align-items: center;
-    color: var(--cds-text-secondary, #525252);
+    color: var(--khartis-additions-interactive-suggestions, #0072c3);
   }
 
   .section-title {
-    font-size: 0.875rem;
-    font-weight: 600;
-    line-height: 1.25rem;
-    color: #003a6d;
+    font-size: var(--kh-font-primitive);
+    font-weight: var(--kh-weight-primitive);
+    line-height: var(--kh-line-primitive);
+    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
   }
 
   .category-rows {
@@ -1907,7 +1907,7 @@
 
   .cell-select :global(.bx--select-input),
   .cell-select :global(.bx--text-input) {
-    height: 32px;
+    height: var(--kh-size-sm);
     padding: 0 2rem 0 0.75rem;
     font-size: 0.875rem;
     background-color: var(--cds-field-01, #ffffff);
@@ -1915,7 +1915,7 @@
   }
 
   .cell-select :global(.bx--select__arrow) {
-    height: 32px;
+    height: var(--kh-size-sm);
   }
 
   .cell-select :global(.bx--label) {
@@ -1923,7 +1923,7 @@
   }
 
   .select-placeholder {
-    height: 32px;
+    height: var(--kh-size-sm);
     padding: 0 2rem 0 0.75rem;
     font-size: 0.875rem;
     background-color: var(--cds-field-01, #ffffff);
@@ -1956,7 +1956,7 @@
 
   .row-action {
     width: 32px;
-    height: 32px;
+    height: var(--kh-size-sm);
     display: inline-flex;
     align-items: center;
     justify-content: center;

@@ -285,6 +285,7 @@
         {#if items.length > 0}
           {#key catalogueItemsSignature}
             <ComboBox
+              size="sm"
               items={catalogueComboItems}
               selectedId={activeCatalogueSelectionId}
               placeholder={m.projection_catalog_search_placeholder()}
@@ -382,7 +383,7 @@
   #khartis-projection-other-tool :global(.projection-view-tabs .toggle-tab) {
     font-size: 0.875rem;
     padding: 6px 12px;
-    min-height: 32px;
+    min-height: var(--kh-size-sm);
   }
 
   #khartis-projection-other-tool :global(.projection-view-tabs .toggle-icon) {

@@ -19,6 +19,7 @@
   import LinesConfig from './lines/lines-config.svelte';
   import PolygonsConfig from './polygons/polygons-config.svelte';
   import SymbolsConfig from './symbols/symbols-config.svelte';
+  import { createAccordionGroup } from '$lib/features/commons/utils/accordion-group.svelte';
   import TextsConfig from './texts/texts-config.svelte';
   import {
     buildLinePanelVisualization,
@@ -89,6 +90,13 @@
   const showsSymbolsConfig = $derived(datasetAnalysis.showsSymbolsConfig);
   const showsPolygonsConfig = $derived(datasetAnalysis.showsPolygonsConfig);
   const showsLinesConfig = $derived(datasetAnalysis.showsLinesConfig);
+
+  const primitiveAccordion = createAccordionGroup(() => {
+    if (showsSymbolsConfig) return 'symbols';
+    if (showsPolygonsConfig) return 'polygons';
+    if (showsLinesConfig) return 'lines';
+    return 'texts';
+  });
   const isNumericDataField = (name: string | undefined) =>
     datasetAnalysis.isNumericDataField(name);
 
@@ -552,6 +560,8 @@
 
   <div class="config-accordion">
     <SymbolsConfig
+      open={primitiveAccordion.isOpen('symbols')}
+      onToggle={(expanded) => primitiveAccordion.setOpen('symbols', expanded)}
       dataFields={dataFieldItems}
       visualization={symbolVisualization}
       fillVisualization={symbolFillVisualization}
@@ -584,6 +594,8 @@
     />
 
     <PolygonsConfig
+      open={primitiveAccordion.isOpen('polygons')}
+      onToggle={(expanded) => primitiveAccordion.setOpen('polygons', expanded)}
       onStrokeClassificationChange={handlePolygonStrokeClassificationChange}
       onStrokeMappingChange={handlePolygonStrokeMappingChange}
       dataFields={dataFieldItems}
@@ -611,6 +623,8 @@
     />
 
     <LinesConfig
+      open={primitiveAccordion.isOpen('lines')}
+      onToggle={(expanded) => primitiveAccordion.setOpen('lines', expanded)}
       dataFields={dataFieldItems}
       visualization={lineVisualization}
       disabled={!showsLinesConfig}
@@ -632,6 +646,8 @@
     />
 
     <TextsConfig
+      open={primitiveAccordion.isOpen('texts')}
+      onToggle={(expanded) => primitiveAccordion.setOpen('texts', expanded)}
       dataFields={dataFieldItems}
       visualization={textVisualization}
       disabled={!hasGeometry}

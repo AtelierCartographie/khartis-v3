@@ -40,7 +40,7 @@
       lowContrast
     />
   {:else}
-    <Button kind="primary" on:click={onSelectOSM}>
+    <Button size="field" kind="primary" on:click={onSelectOSM}>
       {m.osm_modal_button_add()}
     </Button>
   {/if}

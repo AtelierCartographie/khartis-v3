@@ -138,7 +138,6 @@
       max={max}
       step={step}
       width={inputWidth}
-      height="40px"
       valueMinWidth="3.5rem"
       disabled={disabled}
       showSteppers={showSteppers}
@@ -152,17 +151,7 @@
   .slider-with-input-wrapper {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
-  }
-
-  .field-label {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-    font-size: 0.75rem;
-    letter-spacing: 0.32px;
-    color: var(--cds-text-secondary);
-    font-weight: 400;
+    gap: var(--kh-gap-inline);
   }
 
   .slider-with-input {

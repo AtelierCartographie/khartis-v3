@@ -21,6 +21,7 @@
     hideInactiveLabel?: boolean;
     tabTitle?: (index: number, isActive: boolean) => string | undefined;
     tooltipPosition?: CarbonTooltipDirection;
+    size?: 'sm' | 'md';
   }
 
   let {
@@ -33,7 +34,8 @@
     fullWidthClass = 'full-width',
     hideInactiveLabel = true,
     tabTitle,
-    tooltipPosition = 'bottom'
+    tooltipPosition = 'bottom',
+    size = 'sm'
   }: Props = $props();
 
   let tabElements = $state<Array<HTMLButtonElement | null>>([]);
@@ -77,7 +79,10 @@
   }
 </script>
 
-<div class="khartis-toggle-tabs toggle-tabs {className}">
+<div
+  class="khartis-toggle-tabs toggle-tabs {className}"
+  class:size-md={size === 'md'}
+>
   {#each items as item, index (index)}
     <button
       type="button"
@@ -132,16 +137,17 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    height: 32px;
-    padding: 0 8px;
+    gap: var(--kh-gap-inline);
+    height: var(--kh-size-sm);
+    padding: 0 var(--kh-gap-inline);
     background: transparent;
     color: var(--cds-text-secondary);
     fill: currentColor;
     border: 1px solid var(--cds-border-subtle-01);
     border-right: none;
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 0.875rem;
+    font-size: var(--kh-font-body);
+    line-height: var(--kh-line-body);
     font-weight: 400;
     letter-spacing: 0.16px;
     cursor: pointer;
@@ -163,12 +169,20 @@
   .toggle-tab.full-width {
     flex: 1 0 0;
     justify-content: flex-start;
-    padding: 0 16px;
+    padding: 0 var(--kh-pad-panel);
   }
 
   .toggle-tab:not(.full-width) {
-    width: 32px;
+    width: var(--kh-size-sm);
     padding: 0;
+  }
+
+  .size-md .toggle-tab {
+    height: var(--kh-size-md);
+  }
+
+  .size-md .toggle-tab:not(.full-width) {
+    width: var(--kh-size-md);
   }
 
   .toggle-tab.active {
