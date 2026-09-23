@@ -655,10 +655,16 @@
   .projection-grid-featured,
   .projection-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(184px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(var(--kh-card-w), 1fr));
     gap: var(--cds-spacing-05);
     width: 100%;
     align-items: start;
+  }
+
+  .projection-grid-featured,
+  .projection-grid-cards {
+    grid-template-columns: repeat(auto-fill, minmax(var(--kh-card-w), 1fr));
+    gap: var(--cds-spacing-03);
   }
 
   .projection-grid-featured {
@@ -681,9 +687,7 @@
   }
 
   .projection-grid-cards {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
+    display: grid;
   }
 
   .projection-grid-featured :global(.projection-card),

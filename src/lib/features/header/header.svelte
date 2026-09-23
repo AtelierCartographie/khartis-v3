@@ -56,8 +56,8 @@
   }
 
   #khartis-header :global(.bx--header__menu-trigger) {
-    min-width: var(--kh-size-lg);
-    min-height: var(--kh-size-lg);
+    min-width: var(--kh-size-header);
+    min-height: var(--kh-size-header);
   }
 
   #khartis-header :global(.bx--header__menu-trigger > svg) {

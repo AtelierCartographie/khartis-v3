@@ -2,6 +2,26 @@ import { describe, expect, it } from 'vitest';
 import { resolveColorPickerDropdownPosition } from './color-picker-position';
 
 describe('resolveColorPickerDropdownPosition', () => {
+  it('matches the width of its dropdown trigger', () => {
+    expect(
+      resolveColorPickerDropdownPosition({
+        triggerRect: {
+          top: 50,
+          bottom: 82,
+          left: 20,
+          right: 332,
+          width: 312,
+          height: 32
+        },
+        dropdownHeight: 200,
+        viewport: {
+          width: 1440,
+          height: 900
+        }
+      }).width
+    ).toBe(312);
+  });
+
   it('keeps the color picker below when the constrained height fits', () => {
     expect(
       resolveColorPickerDropdownPosition({
@@ -22,7 +42,7 @@ describe('resolveColorPickerDropdownPosition', () => {
     ).toEqual({
       top: 82,
       left: 20,
-      width: 370,
+      width: 240,
       maxHeight: 202,
       openUpward: false
     });
@@ -47,8 +67,8 @@ describe('resolveColorPickerDropdownPosition', () => {
       })
     ).toEqual({
       top: 16,
-      left: 34,
-      width: 370,
+      left: 164,
+      width: 240,
       maxHeight: 204,
       openUpward: true
     });

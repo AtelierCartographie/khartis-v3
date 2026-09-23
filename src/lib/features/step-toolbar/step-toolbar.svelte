@@ -232,7 +232,7 @@
   header span {
     color: var(--cds-text-01);
     font-weight: bold;
-    font-size: 14px;
+    font-size: var(--kh-font-group);
   }
 
   nav {
@@ -263,6 +263,8 @@
   }
 
   :global(#khartis-step-toolbar .nav-item svg) {
+    width: var(--kh-icon-step);
+    height: var(--kh-icon-step);
     fill: var(--cds-text-01);
   }
 
@@ -272,7 +274,7 @@
   }
 
   .nav-item span {
-    font-size: 12px;
+    font-size: var(--kh-font-label);
   }
 
   :global(#khartis-step-toolbar .tools-grid) {

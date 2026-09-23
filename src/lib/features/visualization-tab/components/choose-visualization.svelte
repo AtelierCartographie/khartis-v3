@@ -539,14 +539,14 @@
   #choose-visualization {
     display: flex;
     flex-direction: column;
-    padding: 16px 0;
+    padding: var(--kh-pad-panel) 0;
   }
 
   .section-content {
     display: flex;
     flex-direction: column;
     gap: var(--kh-gap-group);
-    padding: 16px 0 0 0;
+    padding: var(--kh-pad-panel) 0 0 0;
   }
 
   .suggestions-section {
@@ -562,14 +562,14 @@
   .suggestions-help {
     color: var(--khartis-additions-text-helper-suggestions, #0072c3);
     margin: 0 0 var(--cds-spacing-05) 0;
-    padding-right: 32px;
+    padding-right: var(--kh-gap-section);
     font-size: 0.75rem;
     line-height: 1rem;
     letter-spacing: 0.32px;
   }
 
   .field-group {
-    padding: 0 var(--cds-spacing-05);
+    padding: 0 var(--kh-pad-panel);
     margin: 0;
   }
 
@@ -582,7 +582,7 @@
     flex-direction: column;
     gap: var(--kh-gap-inline);
     margin: 0 0 var(--cds-spacing-05) 0;
-    padding-right: 32px;
+    padding-right: var(--kh-gap-section);
   }
 
   .suggestions-actions {
