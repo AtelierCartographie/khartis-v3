@@ -15,6 +15,7 @@ export interface GeoIndicationsPlacementContext {
   scaleDragged: boolean;
   orientationEnabled: boolean;
   orientationDragged: boolean;
+  pageScale: number;
 }
 
 function legendOccupiesLeftSide(
@@ -88,6 +89,12 @@ export function getDefaultOrientationStyle(
   );
 }
 
+export function getDefaultOrientationTransformOrigin(
+  context: GeoIndicationsPlacementContext
+): string {
+  return `bottom ${resolveDefaultOrientationSide(context)}`;
+}
+
 export function getDefaultInsetStyle(
   context: GeoIndicationsPlacementContext
 ): string {
@@ -105,7 +112,8 @@ export function getDefaultInsetStyle(
       ? DEFAULT_SCALE_STACK_HEIGHT_PX + DEFAULT_STACK_GAP_PX
       : 0) +
     (needsOrientationOffset
-      ? DEFAULT_ORIENTATION_STACK_HEIGHT_PX + DEFAULT_STACK_GAP_PX
+      ? DEFAULT_ORIENTATION_STACK_HEIGHT_PX * context.pageScale +
+        DEFAULT_STACK_GAP_PX
       : 0);
 
   return buildAnchoredStyle(side, 'auto', bottom);
