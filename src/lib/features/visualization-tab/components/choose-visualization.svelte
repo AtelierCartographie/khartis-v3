@@ -539,14 +539,14 @@
   #choose-visualization {
     display: flex;
     flex-direction: column;
-    padding: 16px 0;
+    padding: var(--kh-pad-panel) 0;
   }
 
   .section-content {
     display: flex;
     flex-direction: column;
     gap: var(--kh-gap-group);
-    padding: 16px 0 0 0;
+    padding: var(--kh-pad-panel) 0 0 0;
   }
 
   .suggestions-section {
@@ -569,7 +569,7 @@
   }
 
   .field-group {
-    padding: 0 var(--cds-spacing-05);
+    padding: 0 var(--kh-pad-panel);
     margin: 0;
   }
 

@@ -1,3 +1,5 @@
+import type { UiDensity } from '$lib/features/commons/stores/ui-density.store.svelte';
+
 export interface ColumnInfo {
   name: string;
   type: string;
@@ -30,5 +32,8 @@ export type TableMutation =
       columnName: string;
     };
 
-export const TABLE_ROW_HEIGHT = 32;
+export const TABLE_ROW_HEIGHT = {
+  comfortable: 32,
+  compact: 24
+} as const satisfies Record<UiDensity, number>;
 export const DOM_UPDATE_DELAY_MS = 50;

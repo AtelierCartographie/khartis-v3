@@ -255,16 +255,16 @@
   .section-heading {
     display: flex;
     align-items: center;
-    gap: 8px;
-    height: 24px;
+    gap: var(--kh-gap-inline);
+    height: var(--kh-size-xs);
     width: 100%;
   }
 
   .section-heading-text {
     font-family: 'IBM Plex Sans', sans-serif;
     font-weight: 600;
-    font-size: 14px;
-    line-height: 20px;
+    font-size: var(--kh-font-group);
+    line-height: var(--kh-line-group);
     letter-spacing: 0.16px;
     color: var(--khartis-additions-text-primary-suggestions, #003a6d);
     white-space: nowrap;
@@ -286,15 +286,15 @@
   .filter-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--kh-gap-inline);
     align-content: flex-start;
   }
 
   .filter-tag {
-    padding: 0 8px 2px 8px;
+    padding: 0 var(--kh-gap-inline) 2px var(--kh-gap-inline);
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 12px;
-    line-height: 16px;
+    font-size: var(--kh-font-label);
+    line-height: var(--kh-line-label);
     letter-spacing: 0.32px;
     border-radius: 9px;
     cursor: pointer;
@@ -332,11 +332,11 @@
 
   .palette-label {
     margin: 0;
-    padding: 0 0 8px 0;
+    padding: 0 0 var(--kh-gap-inline) 0;
     font-family: 'IBM Plex Sans', sans-serif;
     font-weight: 400;
-    font-size: 12px;
-    line-height: 16px;
+    font-size: var(--kh-font-label);
+    line-height: var(--kh-line-label);
     letter-spacing: 0.32px;
     color: var(--cds-text-secondary, #525252);
     width: 100%;
@@ -348,7 +348,7 @@
     align-items: center;
     justify-content: center;
     width: 100%;
-    height: 24px;
+    height: var(--kh-size-xs);
     padding: 0;
     background: transparent;
     border: 2px solid transparent;
@@ -383,7 +383,7 @@
 
   .intensity-row {
     display: flex;
-    height: 32px;
+    height: var(--kh-size-sm);
     overflow: hidden;
   }
 

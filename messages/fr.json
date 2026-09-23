@@ -171,6 +171,8 @@
   "header_help": "Aide",
   "theme_light_mode": "Mode clair",
   "theme_dark_mode": "Mode sombre",
+  "ui_density_compact_mode": "Mode compact",
+  "ui_density_comfortable_mode": "Mode confortable",
   "download_button": "Télécharger",
   "download_tooltip": "Télécharger",
   "download_modal_title": "Options de téléchargement",

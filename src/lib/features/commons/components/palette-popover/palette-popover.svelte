@@ -405,8 +405,8 @@
   .popover-header {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 0 4px 8px 16px;
+    gap: var(--kh-gap-label);
+    padding: 0 var(--kh-gap-label) var(--kh-gap-inline) var(--kh-pad-panel);
     flex-shrink: 0;
     background: var(--cds-background, #ffffff);
 
@@ -414,9 +414,9 @@
       flex: 1;
       margin: 0;
       font-family: 'IBM Plex Sans', sans-serif;
-      font-size: 16px;
+      font-size: var(--kh-font-primitive);
       font-weight: 600;
-      line-height: 24px;
+      line-height: var(--kh-line-primitive);
       color: var(--cds-text-primary, #161616);
       overflow: hidden;
       text-overflow: ellipsis;
@@ -427,7 +427,7 @@
   .popover-content {
     flex: 1;
     overflow-y: auto;
-    padding: 0 16px 8px 16px;
+    padding: 0 var(--kh-pad-panel) var(--kh-gap-inline) var(--kh-pad-panel);
     display: flex;
     flex-direction: column;
     gap: var(--kh-gap-section);
@@ -449,14 +449,14 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
-    padding: 0 16px;
+    padding: 0 var(--kh-pad-panel);
     flex-shrink: 0;
   }
 
   .popover-footer {
     display: flex;
-    gap: 8px;
-    padding: 16px 16px 16px 16px;
+    gap: var(--kh-gap-inline);
+    padding: var(--kh-pad-panel);
     flex-shrink: 0;
 
     :global(.bx--btn) {

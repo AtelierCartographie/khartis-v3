@@ -4,7 +4,7 @@ export const MAIN_TOOLBAR_ID = 'khartis-main-toolbar';
 
 export const TOOLBAR_WIDTHS = {
   [ToolbarState.Collapsed]: '50px',
-  [ToolbarState.Compact]: '434px',
+  [ToolbarState.Compact]: 'var(--kh-panel-w)',
   [ToolbarState.Full]: '50vw'
 } as const satisfies Record<ToolbarState, string>;
 
