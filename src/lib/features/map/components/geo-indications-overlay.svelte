@@ -76,6 +76,7 @@
   import {
     getDefaultInsetStyle,
     getDefaultOrientationStyle,
+    getDefaultOrientationTransformOrigin,
     getDefaultScaleStyle
   } from '../utils/geo-indications-default-placement.utils';
 
@@ -699,9 +700,10 @@
     scaleEnabled: geoIndicationsState.scale.enabled,
     scaleDragged: geoIndicationsState.scale.dragPosition !== null,
     orientationEnabled: geoIndicationsState.orientation.enabled,
-    orientationDragged: geoIndicationsState.orientation.dragPosition !== null
+    orientationDragged: geoIndicationsState.orientation.dragPosition !== null,
+    pageScale: getPageScale()
   }));
-  // Drag positions are logical page coordinates; figures are not CSS-scaled.
+  // Drag positions are logical page coordinates; only the orientation figure is CSS-scaled.
   const scaleStyle = $derived.by(() => {
     if (geoIndicationsState.scale.dragPosition) {
       const scale = getPageScale();
@@ -711,12 +713,14 @@
     return getDefaultScaleStyle(placementContext);
   });
   const orientationStyle = $derived.by(() => {
+    const scale = getPageScale();
+    const pageScaleStyle = `transform: scale(${scale});`;
+
     if (geoIndicationsState.orientation.dragPosition) {
-      const scale = getPageScale();
-      return `left: ${geoIndicationsState.orientation.dragPosition.x * scale}px; top: ${geoIndicationsState.orientation.dragPosition.y * scale}px; bottom: auto; right: auto;`;
+      return `left: ${geoIndicationsState.orientation.dragPosition.x * scale}px; top: ${geoIndicationsState.orientation.dragPosition.y * scale}px; bottom: auto; right: auto; ${pageScaleStyle} transform-origin: top left;`;
     }
 
-    return getDefaultOrientationStyle(placementContext);
+    return `${getDefaultOrientationStyle(placementContext)} ${pageScaleStyle} transform-origin: ${getDefaultOrientationTransformOrigin(placementContext)};`;
   });
 
   const insetPanelStyle = $derived.by(() => {
@@ -864,6 +868,17 @@
     return Math.max(globalState.zoom.pageZoomScale, 0.1);
   }
 
+  function getLogicalElementSize(
+    target: DragTarget,
+    element: HTMLElement
+  ): { width: number; height: number } {
+    const scale = target === 'orientation' ? 1 : getPageScale();
+    return {
+      width: element.offsetWidth / scale,
+      height: element.offsetHeight / scale
+    };
+  }
+
   function getKeyboardMoveStep(): number {
     return formatState.gridEnabled ? PAGE_GRID_SIZE_PX : 1;
   }
@@ -984,14 +999,9 @@
       return position;
     }
 
-    // Convert screen-size elements to logical page units for drag bounds.
-    const scale = getPageScale();
     return snapPointWithinBounds(
       position,
-      getDragBounds(overlaySize, {
-        width: dragElement.offsetWidth / scale,
-        height: dragElement.offsetHeight / scale
-      }),
+      getDragBounds(overlaySize, getLogicalElementSize(target, dragElement)),
       snapEnabled
     );
   }
@@ -1678,10 +1688,7 @@
     position: absolute;
     bottom: 12px;
     left: 12px;
-    background: rgba(255, 255, 255, 0.85);
     padding: 3px 5px;
-    border-radius: 3px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
     pointer-events: auto;
     cursor: pointer;
     touch-action: none;
@@ -1699,10 +1706,7 @@
     position: absolute;
     top: 12px;
     right: 12px;
-    background: rgba(255, 255, 255, 0.85);
     padding: 4px;
-    border-radius: 3px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
     pointer-events: auto;
     cursor: pointer;
     touch-action: none;

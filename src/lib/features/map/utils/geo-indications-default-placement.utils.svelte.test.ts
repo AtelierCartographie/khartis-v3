@@ -18,11 +18,18 @@ function createContext(
     scaleDragged: false,
     orientationEnabled: true,
     orientationDragged: false,
+    pageScale: 1,
     ...overrides
   };
 }
 
 describe('geo indications default placement', () => {
+  it('lifts the stacked inset with the page-scaled orientation figure', () => {
+    const context = createContext({ pageScale: 2 });
+
+    expect(getDefaultInsetStyle(context)).toContain('bottom: 168px;');
+  });
+
   it('stacks scale, orientation and inset in the lower-left area away from the title and legend', () => {
     const context = createContext();
 
