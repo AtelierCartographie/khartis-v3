@@ -121,6 +121,9 @@
       globalState.selectedTool === StylingTools.Legend
   );
   const pageScale = $derived(Math.max(globalState.zoom.pageZoomScale, 0.1));
+  const frameScale = $derived(
+    pageScale * (inline ? Math.max(0, Math.min(1, sizeScale)) : 1)
+  );
   const layoutTokens = $derived.by(() =>
     resolveLayoutSizingTokens(getFormatLayoutSizingContext(formatState))
   );
@@ -183,8 +186,6 @@
   }
 
   function getFrameStyle(item: LegendItem): string {
-    const scale =
-      getPageScale() * (inline ? Math.max(0, Math.min(1, sizeScale)) : 1);
     const hasBackground = legendState.style.background.enabled;
     const shellPaddingInline = hasBackground
       ? Math.max(4, Math.round(layoutTokens.legend.paddingInline * 0.35))
@@ -197,14 +198,14 @@
       !inline &&
       !position &&
       legendState.position === LegendPosition.BOTTOM_CENTER
-        ? `translateX(-50%) scale(${scale})`
-        : `scale(${scale})`;
+        ? `translateX(-50%) scale(${frameScale})`
+        : `scale(${frameScale})`;
     const legendFontSize = clampFontSize(
       legendState.style.fontSize,
       layoutTokens.legend.fontSize
     );
     const styles: string[] = [
-      `--legend-page-scale: ${scale}`,
+      `--legend-page-scale: ${frameScale}`,
       `--legend-padding-inline: ${shellPaddingInline}px`,
       `--legend-padding-block: ${shellPaddingBlock}px`,
       `--legend-item-gap: ${stackGap}px`,
@@ -225,8 +226,8 @@
     }
 
     if (position) {
-      styles.push(`left: ${position.x * scale}px`);
-      styles.push(`top: ${position.y * scale}px`);
+      styles.push(`left: ${position.x * frameScale}px`);
+      styles.push(`top: ${position.y * frameScale}px`);
     }
 
     return styles.join('; ');
@@ -683,15 +684,18 @@
       >
         <div class="legend-item">
           {#if legendSegments.length > 0}
-            {#each legendSegments as segment (segment.key)}
-              <LegendSvg
-                markup={segment.svg.markup}
-                width={segment.svg.width}
-                height={segment.svg.height}
-                class={segment.className}
-                textColor={textHex}
-              />
-            {/each}
+            <!-- Chrome keeps SVG text metrics from the last painted ancestor scale; a fresh SVG root re-measures its labels. -->
+            {#key frameScale}
+              {#each legendSegments as segment (segment.key)}
+                <LegendSvg
+                  markup={segment.svg.markup}
+                  width={segment.svg.width}
+                  height={segment.svg.height}
+                  class={segment.className}
+                  textColor={textHex}
+                />
+              {/each}
+            {/key}
           {:else}
             {#if item.title}
               <h4 class="legend-title">{item.title}</h4>
