@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { rowScopeStore } from '$lib/features/map';
+  import { setMissingDataAvailability } from '../shared/missing-data-availability';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import { SliderWithInput, VizFilterButton, VizFilterPanel } from '../shared';
   import LineThicknessSection from './line-thickness-section.svelte';
@@ -87,6 +89,12 @@
     open,
     onToggle
   }: Props = $props();
+
+  setMissingDataAvailability(() =>
+    visualization
+      ? rowScopeStore.hasMissingData(visualization.id, PrimitiveFilterType.LINE)
+      : false
+  );
 
   let discretizationModalOpen = $state(false);
   let discretizationTarget = $state<'color' | 'thickness'>('color');

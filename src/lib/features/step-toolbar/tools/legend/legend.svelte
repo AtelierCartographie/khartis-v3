@@ -16,8 +16,8 @@
     AVAILABLE_FONTS,
     clampFontSize,
     CARTOGRAPHIC_FONT_FAMILY,
-    FONT_SIZE_OPTIONS,
-    normalizeFontFamily
+    normalizeFontFamily,
+    resolveFontSizeOptions
   } from '$lib/features/step-toolbar/fonts.constants';
   import { CSS_CLASSES, DOM_IDS, LEGEND_DEFAULTS } from './legend.constants';
   import { getLegendState, legendActions } from './legend.store.svelte';
@@ -47,6 +47,7 @@
 
   let localFontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
   let localFontSize = $state<number>(LEGEND_DEFAULTS.FONT_SIZE);
+  const fontSizeOptions = $derived(resolveFontSizeOptions(localFontSize));
   let localOpacity = $state<number>(LEGEND_DEFAULTS.OPACITY);
   let expandedItemIds = $state<string[]>([]);
 
@@ -245,6 +246,8 @@
 </script>
 
 <div id={DOM_IDS.LEGEND_TOOL} class="legend-tool">
+  <p class="kh-help">{m.styling_drag_helper()}</p>
+
   <div
     class={CSS_CLASSES.LEGEND_TABS}
     role="tablist"
@@ -338,7 +341,7 @@
             on:change={handleFontSizeChange}
             size="sm"
           >
-            {#each FONT_SIZE_OPTIONS as sizeOption (sizeOption)}
+            {#each fontSizeOptions as sizeOption (sizeOption)}
               <SelectItem value={sizeOption} text={sizeOption} />
             {/each}
           </Select>
@@ -383,6 +386,7 @@
           hue={bgColor.hue}
           saturation={bgColor.saturation}
           lightness={bgColor.lightness}
+          disabled={!backgroundEnabled}
           onValidate={({
             hue,
             saturation,
@@ -396,6 +400,7 @@
       <SliderWithInput
         label={m.legend_opacity()}
         bind:value={localOpacity}
+        disabled={!backgroundEnabled}
         min={0}
         max={100}
         step={1}
@@ -476,7 +481,7 @@
   .legend-background-toggle {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
+    gap: var(--kh-gap-label);
   }
 
   .legend-field-label {
@@ -501,6 +506,7 @@
 
   :global(#khartis-legend-tool .legend-background-toggle .kh-switch-native) {
     gap: var(--cds-spacing-03);
+    min-height: var(--kh-size-sm);
   }
 
   :global(#khartis-legend-tool .bx--text-input) {

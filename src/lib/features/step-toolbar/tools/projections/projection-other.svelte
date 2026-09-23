@@ -371,8 +371,16 @@
 
     .actions {
       display: flex;
-      gap: var(--cds-spacing-04);
+      gap: var(--kh-gap-inline);
       justify-content: flex-end;
+
+      /* Carbon reserves 60px of right padding for an icon these buttons
+         don't have, which overflows the tool panel's narrow column. */
+      :global(.bx--btn) {
+        flex: 0 1 auto;
+        min-width: 0;
+        padding-right: var(--kh-gap-param);
+      }
     }
   }
 

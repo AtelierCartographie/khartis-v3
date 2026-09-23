@@ -96,7 +96,9 @@ import { resolvePageDisplayScale } from './layer-style.utils';
 import { THEMATIC_OVERLAY_PARAMETERS } from './polygon-pattern-layer.utils';
 import {
   createSplitAwareRowAccessor as ctxRowAccessor,
-  hasSplitRenderingContext
+  hasSplitRenderingContext,
+  OUT_OF_SCOPE_COLOR,
+  OUT_OF_SCOPE_SIZE
 } from './split-rendering-accessors';
 import {
   buildShapeAttribute,
@@ -424,7 +426,8 @@ function createDoubleProportionalPointLayers(
       fillColor,
       secondaryFillColor,
       breakValueA
-    )
+    ),
+    OUT_OF_SCOPE_COLOR
   );
   const secondaryFillByFeatureId = ctxRowAccessor(
     ctx,
@@ -434,27 +437,32 @@ function createDoubleProportionalPointLayers(
       secondaryFillColor,
       fillColor,
       breakValueB
-    )
+    ),
+    OUT_OF_SCOPE_COLOR
   );
   const primaryLineByFeatureId = ctxRowAccessor(
     ctx,
     symbolRowTable,
-    createLineAccessor(pointSizeColumn)
+    createLineAccessor(pointSizeColumn),
+    OUT_OF_SCOPE_COLOR
   );
   const secondaryLineByFeatureId = ctxRowAccessor(
     ctx,
     symbolRowTable,
-    createLineAccessor(pointValueColumn)
+    createLineAccessor(pointValueColumn),
+    OUT_OF_SCOPE_COLOR
   );
   const primaryRadiusByFeatureId = ctxRowAccessor(
     ctx,
     symbolRowTable,
-    createRadiusAccessor(pointSizeColumn, primaryRadiusAccessor)
+    createRadiusAccessor(pointSizeColumn, primaryRadiusAccessor),
+    OUT_OF_SCOPE_SIZE
   );
   const secondaryRadiusByFeatureId = ctxRowAccessor(
     ctx,
     symbolRowTable,
-    createRadiusAccessor(pointValueColumn, secondaryRadiusAccessor)
+    createRadiusAccessor(pointValueColumn, secondaryRadiusAccessor),
+    OUT_OF_SCOPE_SIZE
   );
 
   const shapeOrdinal =
@@ -1035,18 +1043,21 @@ export function createRepresentativePointSymbolLayers(
     ctx,
     symbolRowTable,
     resolveFillColorForRow,
+    OUT_OF_SCOPE_COLOR,
     representativePointSource.table
   );
   const lineColorByFeatureId = ctxRowAccessor(
     ctx,
     symbolRowTable,
     resolveLineColorForRow,
+    OUT_OF_SCOPE_COLOR,
     representativePointSource.table
   );
   const radiusByFeatureId = ctxRowAccessor(
     ctx,
     symbolRowTable,
     resolveRadiusForRow,
+    OUT_OF_SCOPE_SIZE,
     representativePointSource.table
   );
 
@@ -1119,6 +1130,7 @@ export function createRepresentativePointSymbolLayers(
       }
       return shapeOrdinal;
     },
+    shapeOrdinal,
     representativePointSource.table
   );
   scatterBinaryData.attributes.getShape = {
@@ -1159,6 +1171,7 @@ export function createRepresentativePointSymbolLayers(
         }
         return uniquePointRadius;
       },
+      OUT_OF_SCOPE_SIZE,
       representativePointSource.table
     );
     const featureIds = scatterBinaryData.featureIds;
@@ -1798,7 +1811,10 @@ export function createPointLayerStack(
       : baseFillAccessor;
 
   const fillColorBinAttr = fillColorAccessor
-    ? pointColorAttr(pointData, ctxRowAccessor(ctx, jsTable, fillColorAccessor))
+    ? pointColorAttr(
+        pointData,
+        ctxRowAccessor(ctx, jsTable, fillColorAccessor, OUT_OF_SCOPE_COLOR)
+      )
     : null;
 
   const strokeClassificationAccessor = createStrokeClassificationAccessor({
@@ -1869,7 +1885,10 @@ export function createPointLayerStack(
       : null;
 
   const lineColorBinAttr = lineColorAccessor
-    ? pointColorAttr(pointData, ctxRowAccessor(ctx, jsTable, lineColorAccessor))
+    ? pointColorAttr(
+        pointData,
+        ctxRowAccessor(ctx, jsTable, lineColorAccessor, OUT_OF_SCOPE_COLOR)
+      )
     : null;
 
   const baseRadiusAccessor =
@@ -1912,7 +1931,10 @@ export function createPointLayerStack(
       : null;
 
   const radiusBinAttr = radiusAccessor
-    ? pointRadiusAttr(pointData, ctxRowAccessor(ctx, jsTable, radiusAccessor))
+    ? pointRadiusAttr(
+        pointData,
+        ctxRowAccessor(ctx, jsTable, radiusAccessor, OUT_OF_SCOPE_SIZE)
+      )
     : null;
 
   const scatterProps = createScatterplotLayerProps(pointData);

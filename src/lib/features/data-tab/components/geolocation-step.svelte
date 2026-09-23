@@ -666,17 +666,14 @@
   }
 
   .kh-help {
-    color: var(--cds-text-helper, #6f6f6f);
-    margin: 0 16px 12px;
-    padding-top: 16px;
-    font-size: 14px;
-    line-height: 18px;
+    margin: 0 var(--kh-pad-panel) var(--kh-gap-param);
+    padding-top: var(--kh-pad-panel);
   }
 
   .step-content {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 0 16px 16px;
+    gap: var(--kh-gap-param);
+    padding: 0 var(--kh-pad-panel) var(--kh-pad-panel);
   }
 </style>

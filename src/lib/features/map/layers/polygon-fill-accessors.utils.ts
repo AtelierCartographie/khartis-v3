@@ -88,18 +88,6 @@ export function filterMissingPolygonPatternFeatures(
   };
 }
 
-function readTableRow(
-  table: ArrowTable,
-  rowIndex: number
-): Record<string, unknown> {
-  const row = (
-    table as ArrowTable & {
-      get?: (index: number) => Record<string, unknown> | null | undefined;
-    }
-  ).get?.(rowIndex);
-  return row && typeof row === 'object' ? row : {};
-}
-
 export function createMissingPolygonPatternColorAccessor(
   ctx: LayerContext,
   geometryTable: ArrowTable,
@@ -126,16 +114,12 @@ export function createMissingPolygonPatternColorAccessor(
       ? overlay
       : TRANSPARENT_POLYGON_PATTERN_FILL_COLOR;
 
-  if (hasSplitRenderingContext(ctx)) {
-    return createSplitAwareRowAccessor(
-      ctx,
-      geometryTable,
-      rowToColor,
-      geometryTable
-    );
-  }
-
-  return (featureId) => rowToColor(readTableRow(geometryTable, featureId));
+  return createSplitAwareRowAccessor(
+    ctx,
+    geometryTable,
+    rowToColor,
+    TRANSPARENT_POLYGON_PATTERN_FILL_COLOR
+  );
 }
 
 export function createSplitUniqueBinaryColorAccessor(

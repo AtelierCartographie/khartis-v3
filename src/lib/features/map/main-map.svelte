@@ -661,6 +661,7 @@
   }
 
   .resize-handles-frame {
+    --resize-hit-reach: 8px;
     position: absolute;
     pointer-events: none;
     border: 1px dashed transparent;
@@ -685,81 +686,113 @@
     background: transparent;
   }
 
+  /* The hit area reaches well past the frame edge so brushing it is enough to
+     reveal the resize affordance; ::after keeps the painted grip on the edge. */
+  .resize-handle::after {
+    position: absolute;
+    border-radius: 1px;
+    background: var(--cds-interactive-01, #0f62fe);
+    opacity: 0;
+    transition: opacity 120ms ease;
+    content: '';
+  }
+
+  .resize-handle:hover::after {
+    opacity: 0.4;
+  }
+
+  .resize-handle:focus-visible::after {
+    outline: 2px solid var(--cds-focus, #0f62fe);
+    outline-offset: 2px;
+    opacity: 0.5;
+  }
+
+  .resize-n,
+  .resize-s {
+    left: var(--resize-hit-reach);
+    right: var(--resize-hit-reach);
+    height: calc(2 * var(--resize-hit-reach));
+  }
+
+  .resize-e,
+  .resize-w {
+    top: var(--resize-hit-reach);
+    bottom: var(--resize-hit-reach);
+    width: calc(2 * var(--resize-hit-reach));
+  }
+
+  .resize-ne,
+  .resize-nw,
+  .resize-se,
+  .resize-sw {
+    width: calc(2 * var(--resize-hit-reach));
+    height: calc(2 * var(--resize-hit-reach));
+  }
+
   .resize-n {
-    top: -3px;
-    left: 8px;
-    right: 8px;
-    height: 6px;
+    top: calc(-1 * var(--resize-hit-reach));
     cursor: n-resize;
   }
 
   .resize-s {
-    bottom: -3px;
-    left: 8px;
-    right: 8px;
-    height: 6px;
+    bottom: calc(-1 * var(--resize-hit-reach));
     cursor: s-resize;
   }
 
   .resize-e {
-    right: -3px;
-    top: 8px;
-    bottom: 8px;
-    width: 6px;
+    right: calc(-1 * var(--resize-hit-reach));
     cursor: e-resize;
   }
 
   .resize-w {
-    left: -3px;
-    top: 8px;
-    bottom: 8px;
-    width: 6px;
+    left: calc(-1 * var(--resize-hit-reach));
     cursor: w-resize;
   }
 
   .resize-ne {
-    top: -4px;
-    right: -4px;
-    width: 8px;
-    height: 8px;
+    top: calc(-1 * var(--resize-hit-reach));
+    right: calc(-1 * var(--resize-hit-reach));
     cursor: ne-resize;
   }
 
   .resize-nw {
-    top: -4px;
-    left: -4px;
-    width: 8px;
-    height: 8px;
+    top: calc(-1 * var(--resize-hit-reach));
+    left: calc(-1 * var(--resize-hit-reach));
     cursor: nw-resize;
   }
 
   .resize-se {
-    bottom: -4px;
-    right: -4px;
-    width: 8px;
-    height: 8px;
+    bottom: calc(-1 * var(--resize-hit-reach));
+    right: calc(-1 * var(--resize-hit-reach));
     cursor: se-resize;
   }
 
   .resize-sw {
-    bottom: -4px;
-    left: -4px;
-    width: 8px;
-    height: 8px;
+    bottom: calc(-1 * var(--resize-hit-reach));
+    left: calc(-1 * var(--resize-hit-reach));
     cursor: sw-resize;
   }
 
-  .resize-handle:hover {
-    background: var(--cds-interactive-01, #0f62fe);
-    opacity: 0.4;
-    border-radius: 1px;
+  .resize-n::after,
+  .resize-s::after {
+    left: 0;
+    right: 0;
+    top: calc(var(--resize-hit-reach) - 3px);
+    height: 6px;
   }
 
-  .resize-handle:focus-visible {
-    outline: 2px solid var(--cds-focus, #0f62fe);
-    outline-offset: 2px;
-    background: var(--cds-interactive-01, #0f62fe);
-    opacity: 0.5;
-    border-radius: 1px;
+  .resize-e::after,
+  .resize-w::after {
+    top: 0;
+    bottom: 0;
+    left: calc(var(--resize-hit-reach) - 3px);
+    width: 6px;
+  }
+
+  .resize-ne::after,
+  .resize-nw::after,
+  .resize-se::after,
+  .resize-sw::after {
+    inset: calc(var(--resize-hit-reach) - 4px);
   }
 </style>

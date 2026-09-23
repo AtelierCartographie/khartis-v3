@@ -104,7 +104,8 @@ describe('split rendering accessors', () => {
     const accessor = createSplitAwareRowAccessor(
       createSplitContext(dataset),
       geometry,
-      (row) => Number(row.value ?? -1),
+      (row) => Number(row.value),
+      -1,
       geometry
     );
 
@@ -335,6 +336,7 @@ describe('split rendering accessors', () => {
 });
 
 describe('scoped rendering accessors', () => {
+  const OUT_OF_SCOPE = Symbol('out-of-scope');
   const geometry = createTableWithRows(
     [{ [CANONICAL_ID_COLUMN]: 'FR' }, { [CANONICAL_ID_COLUMN]: 'PL' }],
     [CANONICAL_ID_COLUMN]
@@ -365,11 +367,12 @@ describe('scoped rendering accessors', () => {
     const readPopulation = createSplitAwareRowAccessor(
       ctx,
       geometry,
-      (row) => row.population
+      (row) => row.population,
+      OUT_OF_SCOPE
     );
 
     expect(readPopulation(0)).toBe(67_935_660);
-    expect(readPopulation(1)).toBeUndefined();
+    expect(readPopulation(1)).toBe(OUT_OF_SCOPE);
   });
 
   it('reads the whole dataset when no primitive scope is in force', () => {
@@ -378,7 +381,8 @@ describe('scoped rendering accessors', () => {
     const readPopulation = createSplitAwareRowAccessor(
       ctx,
       geometry,
-      (row) => row.population
+      (row) => row.population,
+      OUT_OF_SCOPE
     );
 
     expect(readPopulation(1)).toBe(38_307_726);

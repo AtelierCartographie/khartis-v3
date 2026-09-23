@@ -118,8 +118,11 @@ export function createHighlightedBinaryPolygonOverlay(
   }
 
   // Binary featureIds index the geometry table; highlights carry dataset row ids.
-  const resolveRowId = createSplitAwareRowAccessor(ctx, jsTable, (row) =>
-    Number(row[INTERNAL_COLUMN.ID])
+  const resolveRowId = createSplitAwareRowAccessor(
+    ctx,
+    jsTable,
+    (row) => Number(row[INTERNAL_COLUMN.ID]),
+    Number.NaN
   );
 
   if (

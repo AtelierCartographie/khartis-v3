@@ -1085,6 +1085,22 @@ export const duckDBOrchestrator = {
     );
   },
 
+  async getMissingValueCountsInScope(
+    tableName: string,
+    clause: string | null,
+    columns: tableDataOps.MissingValueColumn[]
+  ): Promise<number[]> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
+
+    return tableDataOps.getMissingValueCountsInScope(
+      tableName,
+      clause,
+      columns,
+      Duck
+    );
+  },
+
   async getFullAnalysis(
     tableName: string,
     force = false

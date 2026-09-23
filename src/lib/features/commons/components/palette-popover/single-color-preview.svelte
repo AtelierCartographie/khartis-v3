@@ -129,8 +129,8 @@
     align-items: center;
     gap: var(--cds-spacing-03);
     min-width: 0;
-    height: 32px;
-    padding: 7px 16px;
+    height: var(--kh-size-sm);
+    padding: 0 var(--kh-pad-panel);
     background: var(--cds-field-01, #f4f4f4);
     border: none;
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
@@ -144,7 +144,7 @@
   .color-swatch {
     flex: 1;
     min-width: 0;
-    height: 18px;
+    height: var(--kh-swatch-h);
     border: 1px solid var(--khartis-palette-swatch-border-color);
   }
 

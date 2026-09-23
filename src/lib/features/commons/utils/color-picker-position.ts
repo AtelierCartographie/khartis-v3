@@ -18,7 +18,6 @@ interface ResolveColorPickerDropdownPositionOptions {
   triggerRect: RectLike;
   dropdownHeight: number;
   viewport: ViewportLike;
-  preferredWidth?: number;
   margin?: number;
 }
 
@@ -30,18 +29,20 @@ interface ResolvedColorPickerDropdownPosition {
   openUpward: boolean;
 }
 
-const DEFAULT_DROPDOWN_WIDTH = 370;
+const MIN_DROPDOWN_WIDTH = 240;
 const DEFAULT_MARGIN = 16;
 
 export function resolveColorPickerDropdownPosition({
   triggerRect,
   dropdownHeight,
   viewport,
-  preferredWidth = DEFAULT_DROPDOWN_WIDTH,
   margin = DEFAULT_MARGIN
 }: ResolveColorPickerDropdownPositionOptions): ResolvedColorPickerDropdownPosition {
   const availableWidth = Math.max(viewport.width - margin * 2, 0);
-  const width = Math.min(preferredWidth, availableWidth);
+  const width = Math.min(
+    Math.max(triggerRect.width, MIN_DROPDOWN_WIDTH),
+    availableWidth
+  );
   const position = computeFlippedScrollablePosition({
     triggerRect,
     dropdownHeight,
