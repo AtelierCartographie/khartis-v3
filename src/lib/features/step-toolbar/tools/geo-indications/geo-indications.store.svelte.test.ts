@@ -130,6 +130,14 @@ describe('geo indications store responsive defaults', () => {
     expect(geoIndicationsState.insetMap.size).toBe(320);
   });
 
+  it('restores a format-derived scale font size outside the preset list', () => {
+    geoIndicationsActions.setState({
+      scale: { ...geoIndicationsState.scale, fontSize: 11 }
+    });
+
+    expect(geoIndicationsState.scale.fontSize).toBe(11);
+  });
+
   it('converts scale distance when the unit changes', () => {
     geoIndicationsActions.setState({
       scale: {
