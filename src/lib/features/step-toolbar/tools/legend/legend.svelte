@@ -16,8 +16,8 @@
     AVAILABLE_FONTS,
     clampFontSize,
     CARTOGRAPHIC_FONT_FAMILY,
-    FONT_SIZE_OPTIONS,
-    normalizeFontFamily
+    normalizeFontFamily,
+    resolveFontSizeOptions
   } from '$lib/features/step-toolbar/fonts.constants';
   import { CSS_CLASSES, DOM_IDS, LEGEND_DEFAULTS } from './legend.constants';
   import { getLegendState, legendActions } from './legend.store.svelte';
@@ -47,6 +47,7 @@
 
   let localFontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
   let localFontSize = $state<number>(LEGEND_DEFAULTS.FONT_SIZE);
+  const fontSizeOptions = $derived(resolveFontSizeOptions(localFontSize));
   let localOpacity = $state<number>(LEGEND_DEFAULTS.OPACITY);
   let expandedItemIds = $state<string[]>([]);
 
@@ -340,7 +341,7 @@
             on:change={handleFontSizeChange}
             size="sm"
           >
-            {#each FONT_SIZE_OPTIONS as sizeOption (sizeOption)}
+            {#each fontSizeOptions as sizeOption (sizeOption)}
               <SelectItem value={sizeOption} text={sizeOption} />
             {/each}
           </Select>

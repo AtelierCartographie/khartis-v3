@@ -28,9 +28,9 @@
     AVAILABLE_FONTS,
     CARTOGRAPHIC_FONT_FAMILY,
     clampFontSize,
-    FONT_SIZE_OPTIONS,
     DEFAULT_FONT_SIZE,
-    normalizeFontFamily
+    normalizeFontFamily,
+    resolveFontSizeOptions
   } from '$lib/features/step-toolbar/fonts.constants';
   import {
     geoIndicationsActions,
@@ -49,6 +49,9 @@
   const geoState = $derived(geoIndicationsState);
   let localScaleFontFamily = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
   let localScaleFontSize = $state<number>(DEFAULT_FONT_SIZE);
+  const scaleFontSizeOptions = $derived(
+    resolveFontSizeOptions(localScaleFontSize)
+  );
   let mapViewRevision = $state(0);
 
   $effect(() => {
@@ -242,7 +245,7 @@
                 }}
                 size="sm"
               >
-                {#each FONT_SIZE_OPTIONS as sizeOption (sizeOption)}
+                {#each scaleFontSizeOptions as sizeOption (sizeOption)}
                   <SelectItem value={sizeOption} text={sizeOption} />
                 {/each}
               </Select>

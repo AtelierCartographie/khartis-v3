@@ -56,10 +56,6 @@ export function isAvailableFont(value: string): value is AvailableFont {
   return AVAILABLE_FONTS.some((font) => font === value);
 }
 
-export function isAvailableFontSize(value: number): value is FontSize {
-  return FONT_SIZES.some((fontSize) => fontSize === value);
-}
-
 export function normalizeFontFamily(
   fontFamily?: string | null
 ): AvailableFont | undefined {

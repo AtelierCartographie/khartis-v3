@@ -10,10 +10,10 @@
   import {
     AVAILABLE_FONTS,
     CARTOGRAPHIC_FONT_FAMILY,
-    FONT_SIZE_OPTIONS,
     DEFAULT_FONT_SIZE,
     clampFontSize,
-    normalizeFontFamily
+    normalizeFontFamily,
+    resolveFontSizeOptions
   } from '$lib/features/step-toolbar/fonts.constants';
   import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
   import * as m from '$lib/paraglide/messages';
@@ -134,6 +134,7 @@
 
   let localFont = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
   let localFontSize = $state<number>(DEFAULT_FONT_SIZE);
+  const fontSizeOptions = $derived(resolveFontSizeOptions(localFontSize));
 
   $effect(() => {
     localFont = effectiveFont;
@@ -227,7 +228,7 @@
               }}
               size="sm"
             >
-              {#each FONT_SIZE_OPTIONS as sizeOption (sizeOption)}
+              {#each fontSizeOptions as sizeOption (sizeOption)}
                 <SelectItem value={sizeOption} text={sizeOption} />
               {/each}
             </Select>
