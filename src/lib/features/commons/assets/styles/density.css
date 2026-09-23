@@ -15,6 +15,8 @@
 
   --kh-icon-step: 32px;
   --kh-swatch-h: 18px;
+  --kh-card-thumb: 120px;
+  --kh-card-w: 176px;
 
   --kh-font-section: 20px;
   --kh-line-section: 28px;
@@ -55,6 +57,8 @@
 
     --kh-icon-step: 20px;
     --kh-swatch-h: 12px;
+    --kh-card-thumb: 80px;
+    --kh-card-w: 144px;
 
     --kh-font-section: 15px;
     --kh-line-section: 20px;
