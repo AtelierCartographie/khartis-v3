@@ -28,6 +28,7 @@
   import { useTableFilters } from './hooks/use-table-filters.svelte';
   import { useTableSort } from './hooks/use-table-sort.svelte';
   import { useVirtualScroll } from './hooks/use-virtual-scroll.svelte';
+  import { uiDensityStore } from '$lib/features/commons/stores/ui-density.store.svelte';
   import { GEOID_SCORE_THRESHOLD } from './column-type-styles';
   import {
     DOM_UPDATE_DELAY_MS,
@@ -125,7 +126,7 @@
     typeof window !== 'undefined' ? window.innerHeight : 800
   );
 
-  const rowHeight = TABLE_ROW_HEIGHT;
+  const rowHeight = $derived(TABLE_ROW_HEIGHT[uiDensityStore.appliedDensity]);
   const viewportHeightRatioNormal = 0.4;
   const viewportHeightRatioExpanded = 1.0;
   const viewportHeightRatio = $derived(
@@ -192,6 +193,7 @@
   const virtualScroll = useVirtualScroll({
     numRows: () => filters.numRows,
     maxRows: () => effectiveMaxRows,
+    rowHeight: () => rowHeight,
     onLoadMore: async () => {
       await tableData.loadRowsData();
     }

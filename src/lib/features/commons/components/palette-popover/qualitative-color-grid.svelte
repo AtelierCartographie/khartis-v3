@@ -44,11 +44,11 @@
   }
 
   .grid-label {
-    margin: 0 0 8px 0;
+    margin: 0 0 var(--kh-gap-inline) 0;
     font-family: 'IBM Plex Sans', sans-serif;
     font-weight: 400;
-    font-size: 12px;
-    line-height: 16px;
+    font-size: var(--kh-font-label);
+    line-height: var(--kh-line-label);
     letter-spacing: 0.32px;
     color: var(--cds-text-secondary, #525252);
   }
@@ -56,8 +56,8 @@
   .color-row {
     display: flex;
     width: 100%;
-    height: 32px;
-    gap: 4px;
+    height: var(--kh-size-sm);
+    gap: var(--kh-gap-label);
     overflow: hidden;
   }
 

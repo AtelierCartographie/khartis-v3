@@ -310,7 +310,7 @@
   }
 
   nav.compact {
-    width: 434px;
+    width: var(--kh-panel-w);
   }
 
   nav.collapsed {

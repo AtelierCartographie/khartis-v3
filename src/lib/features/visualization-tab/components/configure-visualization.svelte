@@ -691,19 +691,11 @@
   #configure-visualization {
     display: flex;
     flex-direction: column;
-    padding: 16px 0;
+    padding: var(--kh-pad-panel) 0;
   }
 
   .content-area {
     padding: var(--kh-pad-panel);
-  }
-
-  .kh-help {
-    color: var(--cds-text-helper, #6f6f6f);
-    margin: 0;
-    font-size: 0.875rem;
-    line-height: 1.125rem;
-    letter-spacing: 0.16px;
   }
 
   .collection-scale-toggle {
