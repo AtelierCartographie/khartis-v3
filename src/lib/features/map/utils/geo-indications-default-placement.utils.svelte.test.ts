@@ -24,10 +24,13 @@ function createContext(
 }
 
 describe('geo indications default placement', () => {
-  it('lifts the stacked inset with the page-scaled orientation figure', () => {
+  it('scales the default stack homothetically with the page zoom', () => {
     const context = createContext({ pageScale: 2 });
 
-    expect(getDefaultInsetStyle(context)).toContain('bottom: 168px;');
+    expect(getDefaultScaleStyle(context)).toContain('left: 48px;');
+    expect(getDefaultScaleStyle(context)).toContain('bottom: 48px;');
+    expect(getDefaultOrientationStyle(context)).toContain('bottom: 152px;');
+    expect(getDefaultInsetStyle(context)).toContain('bottom: 256px;');
   });
 
   it('stacks scale, orientation and inset in the lower-left area away from the title and legend', () => {

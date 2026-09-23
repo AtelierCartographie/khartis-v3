@@ -75,8 +75,8 @@
   import { loadWorldLandGeometry } from '$lib/features/commons/utils/world-land-geometry';
   import {
     getDefaultInsetStyle,
+    getDefaultGeoIndicationTransformOrigin,
     getDefaultOrientationStyle,
-    getDefaultOrientationTransformOrigin,
     getDefaultScaleStyle
   } from '../utils/geo-indications-default-placement.utils';
 
@@ -703,41 +703,40 @@
     orientationDragged: geoIndicationsState.orientation.dragPosition !== null,
     pageScale: getPageScale()
   }));
-  // Drag positions are logical page coordinates; only the orientation figure is CSS-scaled.
-  const scaleStyle = $derived.by(() => {
-    if (geoIndicationsState.scale.dragPosition) {
-      const scale = getPageScale();
-      return `left: ${geoIndicationsState.scale.dragPosition.x * scale}px; top: ${geoIndicationsState.scale.dragPosition.y * scale}px; bottom: auto; right: auto;`;
-    }
-
-    return getDefaultScaleStyle(placementContext);
-  });
-  const orientationStyle = $derived.by(() => {
+  // Figures are laid out in page units and CSS-scaled with the page zoom,
+  // like the legend; drag positions are logical page coordinates.
+  function buildGeoIndicationStyle(
+    dragPosition: { x: number; y: number } | null,
+    defaultStyle: string
+  ): string {
     const scale = getPageScale();
     const pageScaleStyle = `transform: scale(${scale});`;
 
-    if (geoIndicationsState.orientation.dragPosition) {
-      return `left: ${geoIndicationsState.orientation.dragPosition.x * scale}px; top: ${geoIndicationsState.orientation.dragPosition.y * scale}px; bottom: auto; right: auto; ${pageScaleStyle} transform-origin: top left;`;
+    if (dragPosition) {
+      return `left: ${dragPosition.x * scale}px; top: ${dragPosition.y * scale}px; bottom: auto; right: auto; ${pageScaleStyle} transform-origin: top left;`;
     }
 
-    return `${getDefaultOrientationStyle(placementContext)} ${pageScaleStyle} transform-origin: ${getDefaultOrientationTransformOrigin(placementContext)};`;
-  });
+    return `${defaultStyle} ${pageScaleStyle} transform-origin: ${getDefaultGeoIndicationTransformOrigin(placementContext)};`;
+  }
 
-  const insetPanelStyle = $derived.by(() => {
-    const styles = [getDefaultInsetStyle(placementContext)];
-
-    if (geoIndicationsState.insetMap.dragPosition) {
-      const scale = getPageScale();
-      styles.push(
-        `left: ${geoIndicationsState.insetMap.dragPosition.x * scale}px`,
-        `top: ${geoIndicationsState.insetMap.dragPosition.y * scale}px`,
-        'bottom: auto',
-        'right: auto'
-      );
-    }
-
-    return styles.join('; ');
-  });
+  const scaleStyle = $derived(
+    buildGeoIndicationStyle(
+      geoIndicationsState.scale.dragPosition,
+      getDefaultScaleStyle(placementContext)
+    )
+  );
+  const orientationStyle = $derived(
+    buildGeoIndicationStyle(
+      geoIndicationsState.orientation.dragPosition,
+      getDefaultOrientationStyle(placementContext)
+    )
+  );
+  const insetPanelStyle = $derived(
+    buildGeoIndicationStyle(
+      geoIndicationsState.insetMap.dragPosition,
+      getDefaultInsetStyle(placementContext)
+    )
+  );
 
   function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
@@ -868,17 +867,6 @@
     return Math.max(globalState.zoom.pageZoomScale, 0.1);
   }
 
-  function getLogicalElementSize(
-    target: DragTarget,
-    element: HTMLElement
-  ): { width: number; height: number } {
-    const scale = target === 'orientation' ? 1 : getPageScale();
-    return {
-      width: element.offsetWidth / scale,
-      height: element.offsetHeight / scale
-    };
-  }
-
   function getKeyboardMoveStep(): number {
     return formatState.gridEnabled ? PAGE_GRID_SIZE_PX : 1;
   }
@@ -1001,7 +989,10 @@
 
     return snapPointWithinBounds(
       position,
-      getDragBounds(overlaySize, getLogicalElementSize(target, dragElement)),
+      getDragBounds(overlaySize, {
+        width: dragElement.offsetWidth,
+        height: dragElement.offsetHeight
+      }),
       snapEnabled
     );
   }
