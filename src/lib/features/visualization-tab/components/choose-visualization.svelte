@@ -562,7 +562,7 @@
   .suggestions-help {
     color: var(--khartis-additions-text-helper-suggestions, #0072c3);
     margin: 0 0 var(--cds-spacing-05) 0;
-    padding-right: 32px;
+    padding-right: var(--kh-gap-section);
     font-size: 0.75rem;
     line-height: 1rem;
     letter-spacing: 0.32px;
@@ -582,7 +582,7 @@
     flex-direction: column;
     gap: var(--kh-gap-inline);
     margin: 0 0 var(--cds-spacing-05) 0;
-    padding-right: 32px;
+    padding-right: var(--kh-gap-section);
   }
 
   .suggestions-actions {

@@ -177,7 +177,7 @@
     box-sizing: border-box;
     overflow: hidden;
     display: flex;
-    min-height: 120px;
+    min-height: var(--kh-card-thumb);
     border-radius: 0;
     cursor: pointer;
     border: var(--projection-card-border-width) solid
@@ -247,10 +247,10 @@
 
   .preview-section {
     position: relative;
-    width: 120px;
-    min-width: 120px;
-    min-height: 120px;
-    flex: 0 0 120px;
+    width: var(--kh-card-thumb);
+    min-width: var(--kh-card-thumb);
+    min-height: var(--kh-card-thumb);
+    flex: 0 0 var(--kh-card-thumb);
     align-self: stretch;
     display: flex;
     align-items: center;
@@ -296,12 +296,13 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 8px;
-    padding: 16px 8px 8px 16px;
+    gap: var(--kh-gap-inline);
+    padding: var(--kh-pad-panel) var(--kh-gap-inline) var(--kh-gap-inline)
+      var(--kh-pad-panel);
   }
 
   .projection-card--vertical .header {
-    padding-bottom: 8px;
+    padding-bottom: var(--kh-gap-inline);
   }
 
   .title-copy {
@@ -346,22 +347,22 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
-    padding: 0 16px 16px;
+    gap: var(--kh-gap-inline);
+    padding: 0 var(--kh-pad-panel) var(--kh-pad-panel);
   }
 
   .meta-group {
     display: inline-flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: var(--kh-gap-label);
     min-width: 0;
   }
 
   .surface-indicator {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--kh-gap-label);
     color: var(--khartis-additions-text-secondary-suggestions, #00539a);
     font-size: 0.75rem;
     line-height: 1rem;
@@ -378,7 +379,7 @@
     align-items: center;
     max-width: 100%;
     height: 18px;
-    padding: 1px 8px;
+    padding: 1px var(--kh-gap-inline);
     border-radius: 9px;
     background: var(--tag-background, #bae6ff);
     color: var(--tag-color, #00539a);
@@ -392,7 +393,7 @@
 
   .title-radio {
     flex-shrink: 0;
-    padding-right: 8px;
+    padding-right: var(--kh-gap-inline);
   }
 
   .info-slot {
