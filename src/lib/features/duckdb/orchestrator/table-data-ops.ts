@@ -314,6 +314,47 @@ export async function getColumnDomainsInScope(
   return domains;
 }
 
+export interface MissingValueColumn {
+  column: string;
+  numeric: boolean;
+}
+
+function buildMissingValuePredicate({
+  column,
+  numeric
+}: MissingValueColumn): string {
+  const ref = `"${escapeIdentifier(column)}"`;
+  return numeric
+    ? `NOT COALESCE(isfinite(TRY_CAST(${ref} AS DOUBLE)), FALSE)`
+    : `${ref} IS NULL OR trim(CAST(${ref} AS VARCHAR)) = ''`;
+}
+
+export async function getMissingValueCountsInScope(
+  tableName: string,
+  clause: string | null,
+  columns: MissingValueColumn[],
+  Duck: DuckDBClientForTableData
+): Promise<number[]> {
+  if (columns.length === 0) {
+    return [];
+  }
+
+  const escapedTable = escapeIdentifier(tableName);
+  const projections = columns
+    .map(
+      (column, index) =>
+        `COUNT(*) FILTER (WHERE ${buildMissingValuePredicate(column)}) AS missing_${index}`
+    )
+    .join(', ');
+  const where = clause ? ` WHERE COALESCE(${clause}, FALSE)` : '';
+
+  const result = (await Duck.query(
+    `SELECT ${projections} FROM "${escapedTable}"${where}`
+  )) as ArrowTableLike;
+  const row = result.numRows > 0 ? result.get(0) : {};
+  return columns.map((_, index) => Number(row[`missing_${index}`] ?? 0));
+}
+
 function buildScopedCountExpression(clause: string | null): string {
   return clause
     ? `COUNT(*) FILTER (WHERE COALESCE(${clause}, FALSE))`

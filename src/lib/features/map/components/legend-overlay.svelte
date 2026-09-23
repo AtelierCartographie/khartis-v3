@@ -67,6 +67,8 @@
   } = $props();
 
   const LEGEND_ANCHOR_MARGIN_PX = 12;
+  const LEGEND_DRAG_THRESHOLD_PX = 3;
+  const LEGEND_CLICK_SUPPRESSION_MS = 120;
 
   interface FrameMeasure {
     item: LegendItem;
@@ -119,6 +121,9 @@
     !inline &&
       globalState.selectedStep === ToolbarStep.Styling &&
       globalState.selectedTool === StylingTools.Legend
+  );
+  const isLegendDraggable = $derived(
+    !inline && globalState.selectedStep === ToolbarStep.Styling
   );
   const pageScale = $derived(Math.max(globalState.zoom.pageZoomScale, 0.1));
   const layoutTokens = $derived.by(() =>
@@ -237,6 +242,11 @@
   let autoPositions = $state<Record<string, PageGridPoint>>({});
   let draggingItemId = $state<string | null>(null);
   let centeredItemId = $state<string | null>(null);
+  let dragStartClientX = 0;
+  let dragStartClientY = 0;
+  let currentDragMoved = false;
+  let suppressedClickItemId: string | null = null;
+  let suppressedClickTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   function getPageScale(): number {
     return pageScale;
@@ -501,9 +511,51 @@
     onDraggingChange: (active) => {
       if (!active) {
         draggingItemId = null;
+        currentDragMoved = false;
       }
-    }
+    },
+    onPointerMove: trackLegendDragMove,
+    onPointerUp: suppressCurrentLegendClickAfterDrag
   });
+
+  function clearSuppressedLegendClick(): void {
+    if (suppressedClickTimeoutId) {
+      clearTimeout(suppressedClickTimeoutId);
+      suppressedClickTimeoutId = null;
+    }
+
+    suppressedClickItemId = null;
+  }
+
+  function suppressNextLegendClick(itemId: string): void {
+    clearSuppressedLegendClick();
+    suppressedClickItemId = itemId;
+    suppressedClickTimeoutId = setTimeout(() => {
+      suppressedClickTimeoutId = null;
+      suppressedClickItemId = null;
+    }, LEGEND_CLICK_SUPPRESSION_MS);
+  }
+
+  function trackLegendDragMove(event: PointerEvent): void {
+    if (currentDragMoved) {
+      return;
+    }
+
+    const pointerDistance = Math.hypot(
+      event.clientX - dragStartClientX,
+      event.clientY - dragStartClientY
+    );
+
+    if (pointerDistance >= LEGEND_DRAG_THRESHOLD_PX) {
+      currentDragMoved = true;
+    }
+  }
+
+  function suppressCurrentLegendClickAfterDrag(): void {
+    if (draggingItemId && currentDragMoved) {
+      suppressNextLegendClick(draggingItemId);
+    }
+  }
 
   function findItem(itemId: string): LegendItem | undefined {
     return legendState.items.find((item) => item.id === itemId);
@@ -514,7 +566,7 @@
   }
 
   function handleFramePointerDown(event: PointerEvent, item: LegendItem): void {
-    if (!isLegendActive) {
+    if (!isLegendDraggable) {
       return;
     }
 
@@ -527,6 +579,9 @@
     event.stopPropagation();
 
     draggingItemId = item.id;
+    currentDragMoved = false;
+    dragStartClientX = event.clientX;
+    dragStartClientY = event.clientY;
 
     if (!legendDragController.start({ event, itemElement: element })) {
       draggingItemId = null;
@@ -570,6 +625,13 @@
   }
 
   function handleFrameFocusClick(event: MouseEvent, item: LegendItem): void {
+    if (suppressedClickItemId === item.id) {
+      event.preventDefault();
+      event.stopPropagation();
+      clearSuppressedLegendClick();
+      return;
+    }
+
     handleFrameClick(event);
     centeredItemId = item.id;
 
@@ -651,6 +713,7 @@
 
   onDestroy(() => {
     centeredItemId = null;
+    clearSuppressedLegendClick();
     stopDragging();
   });
 </script>
@@ -668,14 +731,14 @@
       <div
         bind:this={frameElements[item.id]}
         class="legend-container {getFrameAnchorClass(item)}"
-        class:draggable={isLegendActive}
+        class:draggable={isLegendDraggable}
         class:dragging={draggingItemId === item.id}
         data-workspace-pan-ignore="true"
         style={getFrameStyle(item)}
         role="button"
         tabindex="0"
         aria-label={m.legend_frame_label({ name: item.title || item.name })}
-        ondblclick={(event: MouseEvent) => handleFrameFocusClick(event, item)}
+        onclick={(event: MouseEvent) => handleFrameFocusClick(event, item)}
         onblur={handleFrameBlur}
         onkeydown={(event: KeyboardEvent) => handleFrameKeyDown(event, item)}
         onpointerdown={(event: PointerEvent) =>
@@ -776,8 +839,8 @@
     cursor: grab;
   }
 
-  .legend-container.draggable:hover {
-    outline: 1px dashed #726e6e;
+  .legend-overlay:not(.inline) .legend-container:hover {
+    outline: 1px dashed var(--cds-border-strong-02, #6f6f6f);
   }
 
   .legend-container.dragging {

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { rowScopeStore } from '$lib/features/map';
+  import { setMissingDataAvailability } from '../shared/missing-data-availability';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import { VizFilterButton, VizFilterPanel } from '../shared';
   import TextAppearanceSection from './text-appearance-section.svelte';
@@ -13,6 +15,7 @@
     VisualizationModes,
     VizDataFilter
   } from '$lib/features/commons/stores/visualization.store.svelte';
+  import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import type { FilterStats } from '$lib/features/duckdb';
   import * as m from '$lib/paraglide/messages';
@@ -101,6 +104,12 @@
     open,
     onToggle
   }: Props = $props();
+
+  setMissingDataAvailability(() =>
+    visualization
+      ? rowScopeStore.hasMissingData(visualization.id, PrimitiveFilterType.TEXT)
+      : false
+  );
 
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);

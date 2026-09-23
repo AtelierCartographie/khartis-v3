@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { rowScopeStore } from '$lib/features/map';
+  import { setMissingDataAvailability } from '../shared/missing-data-availability';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import type {
@@ -104,6 +106,15 @@
     open,
     onToggle
   }: Props = $props();
+
+  setMissingDataAvailability(() =>
+    visualization
+      ? rowScopeStore.hasMissingData(
+          visualization.id,
+          PrimitiveFilterType.POLYGON
+        )
+      : false
+  );
 
   let discretizationModalOpen = $state(false);
   let discretizationTarget = $state<'fill' | 'stroke'>('fill');

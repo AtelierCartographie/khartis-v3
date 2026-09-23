@@ -75,6 +75,7 @@
   import { loadWorldLandGeometry } from '$lib/features/commons/utils/world-land-geometry';
   import {
     getDefaultInsetStyle,
+    getDefaultGeoIndicationTransformOrigin,
     getDefaultOrientationStyle,
     getDefaultScaleStyle
   } from '../utils/geo-indications-default-placement.utils';
@@ -699,41 +700,43 @@
     scaleEnabled: geoIndicationsState.scale.enabled,
     scaleDragged: geoIndicationsState.scale.dragPosition !== null,
     orientationEnabled: geoIndicationsState.orientation.enabled,
-    orientationDragged: geoIndicationsState.orientation.dragPosition !== null
+    orientationDragged: geoIndicationsState.orientation.dragPosition !== null,
+    pageScale: getPageScale()
   }));
-  // Drag positions are logical page coordinates; figures are not CSS-scaled.
-  const scaleStyle = $derived.by(() => {
-    if (geoIndicationsState.scale.dragPosition) {
-      const scale = getPageScale();
-      return `left: ${geoIndicationsState.scale.dragPosition.x * scale}px; top: ${geoIndicationsState.scale.dragPosition.y * scale}px; bottom: auto; right: auto;`;
+  // Figures are laid out in page units and CSS-scaled with the page zoom,
+  // like the legend; drag positions are logical page coordinates.
+  function buildGeoIndicationStyle(
+    dragPosition: { x: number; y: number } | null,
+    defaultStyle: string
+  ): string {
+    const scale = getPageScale();
+    const pageScaleStyle = `transform: scale(${scale});`;
+
+    if (dragPosition) {
+      return `left: ${dragPosition.x * scale}px; top: ${dragPosition.y * scale}px; bottom: auto; right: auto; ${pageScaleStyle} transform-origin: top left;`;
     }
 
-    return getDefaultScaleStyle(placementContext);
-  });
-  const orientationStyle = $derived.by(() => {
-    if (geoIndicationsState.orientation.dragPosition) {
-      const scale = getPageScale();
-      return `left: ${geoIndicationsState.orientation.dragPosition.x * scale}px; top: ${geoIndicationsState.orientation.dragPosition.y * scale}px; bottom: auto; right: auto;`;
-    }
+    return `${defaultStyle} ${pageScaleStyle} transform-origin: ${getDefaultGeoIndicationTransformOrigin(placementContext)};`;
+  }
 
-    return getDefaultOrientationStyle(placementContext);
-  });
-
-  const insetPanelStyle = $derived.by(() => {
-    const styles = [getDefaultInsetStyle(placementContext)];
-
-    if (geoIndicationsState.insetMap.dragPosition) {
-      const scale = getPageScale();
-      styles.push(
-        `left: ${geoIndicationsState.insetMap.dragPosition.x * scale}px`,
-        `top: ${geoIndicationsState.insetMap.dragPosition.y * scale}px`,
-        'bottom: auto',
-        'right: auto'
-      );
-    }
-
-    return styles.join('; ');
-  });
+  const scaleStyle = $derived(
+    buildGeoIndicationStyle(
+      geoIndicationsState.scale.dragPosition,
+      getDefaultScaleStyle(placementContext)
+    )
+  );
+  const orientationStyle = $derived(
+    buildGeoIndicationStyle(
+      geoIndicationsState.orientation.dragPosition,
+      getDefaultOrientationStyle(placementContext)
+    )
+  );
+  const insetPanelStyle = $derived(
+    buildGeoIndicationStyle(
+      geoIndicationsState.insetMap.dragPosition,
+      getDefaultInsetStyle(placementContext)
+    )
+  );
 
   function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
@@ -984,13 +987,11 @@
       return position;
     }
 
-    // Convert screen-size elements to logical page units for drag bounds.
-    const scale = getPageScale();
     return snapPointWithinBounds(
       position,
       getDragBounds(overlaySize, {
-        width: dragElement.offsetWidth / scale,
-        height: dragElement.offsetHeight / scale
+        width: dragElement.offsetWidth,
+        height: dragElement.offsetHeight
       }),
       snapEnabled
     );
@@ -1149,7 +1150,7 @@
     target: DragTarget,
     element: HTMLDivElement | null
   ): void {
-    if (!isGeoIndicationsActive || !overlayElement || !element) {
+    if (!interactive || !overlayElement || !element) {
       return;
     }
 
@@ -1395,7 +1396,7 @@
     <div
       bind:this={scaleElement}
       class="scale-bar"
-      class:draggable={isGeoIndicationsActive}
+      class:draggable={interactive}
       class:dragging={currentDrag === 'scale'}
       data-workspace-pan-ignore="true"
       style={scaleStyle}
@@ -1463,7 +1464,7 @@
     <div
       bind:this={orientationElement}
       class="north-arrow"
-      class:draggable={isGeoIndicationsActive}
+      class:draggable={interactive}
       class:dragging={currentDrag === 'orientation'}
       data-workspace-pan-ignore="true"
       style={orientationStyle}
@@ -1487,14 +1488,14 @@
         <g transform={`rotate(${orientationAngle.toFixed(1)} 20 25)`}>
           {#if geoIndicationsState.orientation.style === OrientationIndicatorStyle.ARROW}
             <polygon
-              points="20,5 30,35 20,28 10,35"
+              points="20,17 30,47 20,40 10,47"
               fill={orientationColor}
               stroke={orientationColor}
               stroke-width="1"
             />
             <text
               x="20"
-              y="47"
+              y="11"
               text-anchor="middle"
               font-size={PRINT_STANDARD_TOKENS.geoIndications.scaleFontSize}
               font-weight="bold"
@@ -1506,30 +1507,30 @@
           {:else}
             <circle
               cx="20"
-              cy="20"
+              cy="32"
               r="15"
               fill="none"
               stroke={orientationColor}
               stroke-width="2"
             />
-            <polygon points="20,7 23,20 20,15 17,20" fill={orientationColor} />
+            <polygon points="20,19 23,32 20,27 17,32" fill={orientationColor} />
             <polygon
-              points="20,33 23,20 20,25 17,20"
+              points="20,45 23,32 20,37 17,32"
               fill="none"
               stroke={orientationColor}
               stroke-width="1"
             />
             <line
               x1="7"
-              y1="20"
+              y1="32"
               x2="33"
-              y2="20"
+              y2="32"
               stroke={orientationColor}
               stroke-width="1"
             />
             <text
               x="20"
-              y="47"
+              y="11"
               text-anchor="middle"
               font-size={PRINT_STANDARD_TOKENS.annotations.captionFontSize}
               font-weight="bold"
@@ -1548,7 +1549,7 @@
     <div
       bind:this={insetMapElement}
       class="inset-map-panel"
-      class:draggable={isGeoIndicationsActive}
+      class:draggable={interactive}
       class:dragging={currentDrag === 'inset'}
       data-workspace-pan-ignore="true"
       style={insetPanelStyle}
@@ -1678,10 +1679,7 @@
     position: absolute;
     bottom: 12px;
     left: 12px;
-    background: rgba(255, 255, 255, 0.85);
     padding: 3px 5px;
-    border-radius: 3px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
     pointer-events: auto;
     cursor: pointer;
     touch-action: none;
@@ -1699,10 +1697,7 @@
     position: absolute;
     top: 12px;
     right: 12px;
-    background: rgba(255, 255, 255, 0.85);
     padding: 4px;
-    border-radius: 3px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
     pointer-events: auto;
     cursor: pointer;
     touch-action: none;
@@ -1721,6 +1716,12 @@
     cursor: pointer;
     touch-action: none;
     outline: none;
+  }
+
+  .geo-indications-overlay:not(.non-interactive) .scale-bar:hover,
+  .geo-indications-overlay:not(.non-interactive) .north-arrow:hover,
+  .geo-indications-overlay:not(.non-interactive) .inset-map-panel:hover {
+    outline: 1px dashed var(--cds-border-strong-02, #6f6f6f);
   }
 
   .scale-bar.draggable,

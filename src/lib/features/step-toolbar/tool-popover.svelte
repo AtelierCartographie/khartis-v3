@@ -17,6 +17,7 @@
   import { getAnnotationsState } from './tools/annotations/annotations.store.svelte';
   import { shouldBlockToolClose } from './tools/tool-close-guard';
   import { closeSelectedToolPanel } from './tools-list/tool-list.utils.svelte';
+  import { hasRecentDndInteraction } from '$lib/features/map/utils/tool-popover-drag-visibility.utils';
 
   const {
     open = false,
@@ -46,8 +47,6 @@
       globalState.selectedTool === StylingTools.Annotations &&
       getAnnotationsState().creationMode !== 'idle'
   );
-  const RECENT_DND_INTERACTION_ATTRIBUTE = 'data-khartis-recent-dnd-at';
-  const RECENT_DND_INTERACTION_GRACE_MS = 500;
   let popoverRoot: HTMLDivElement | null = null;
   let computedTopOffset = $state(0);
 
@@ -92,13 +91,7 @@
 
     if (document.getElementById(DRAGGED_ELEMENT_ID)) return;
 
-    const lastDndInteractionAt = Number(
-      document.body.getAttribute(RECENT_DND_INTERACTION_ATTRIBUTE) ?? '0'
-    );
-    if (
-      Number.isFinite(lastDndInteractionAt) &&
-      Date.now() - lastDndInteractionAt < RECENT_DND_INTERACTION_GRACE_MS
-    ) {
+    if (hasRecentDndInteraction()) {
       return;
     }
 

@@ -383,7 +383,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--kh-gap-inline);
-    padding: 16px 16px 8px 16px;
+    padding: var(--kh-pad-panel);
   }
 
   .kh-help {
