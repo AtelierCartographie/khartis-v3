@@ -56,7 +56,7 @@
   .size-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 32px;
+    gap: var(--kh-gap-param) var(--kh-gap-group);
     width: 100%;
   }
 
@@ -70,7 +70,7 @@
   .size-input {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
+    gap: var(--kh-gap-label);
     min-width: 0;
   }
 

@@ -108,33 +108,23 @@ export function resolveSplitMappingFeatureIdColumn(
   return idField?.name;
 }
 
+export const OUT_OF_SCOPE_COLOR: [number, number, number, number] = [
+  0, 0, 0, 0
+];
+export const OUT_OF_SCOPE_SIZE = 0;
+
 export function createSplitAwareRowAccessor<T>(
   ctx: LayerContext,
   sourceTable: ArrowTable,
   accessor: (row: Record<string, unknown>) => T,
+  outOfScope: T,
   geometryTable = sourceTable
 ): (featureId: number) => T {
-  if (!hasSplitRenderingContext(ctx)) {
-    return createScopedRowAccessor(ctx, sourceTable, (row) =>
-      accessor((row ?? {}) as Record<string, unknown>)
-    );
-  }
-
-  const featureIdColumn = resolveSplitMappingFeatureIdColumn(
-    geometryTable,
-    ctx.splitFeatureIdColumn
-  );
-
-  if (!featureIdColumn) {
-    return rowAccessor(sourceTable, accessor);
-  }
-
-  return splitRowAccessor(
-    geometryTable,
-    resolveScopedAttributeTable(ctx) ?? ctx.splitDatasetTable,
-    featureIdColumn,
-    JOINED_BASEMAP_COLUMN.ID,
-    (row) => accessor((row ?? {}) as Record<string, unknown>)
+  return createSplitAwareNullableRowAccessor(
+    ctx,
+    sourceTable,
+    (row) => (row ? accessor(row) : outOfScope),
+    geometryTable
   );
 }
 

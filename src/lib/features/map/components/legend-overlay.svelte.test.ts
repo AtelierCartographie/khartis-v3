@@ -42,7 +42,8 @@ import { formatActions } from '$lib/features/step-toolbar/tools/format/format.st
 import { DRAGGING_STYLING_TARGET_BODY_CLASS } from '../utils/tool-popover-drag-visibility.utils';
 
 const mockRowScopeStore = vi.hoisted(() => ({
-  getScopedDomain: vi.fn((): { min: number; max: number } | null => null)
+  getScopedDomain: vi.fn((): { min: number; max: number } | null => null),
+  hasMissingData: vi.fn(() => true)
 }));
 
 vi.mock('../stores/row-scope.store.svelte', () => ({
@@ -287,6 +288,7 @@ describe('legend overlay visibility', () => {
     mockVisualizationStore.version = 0;
     mockVisualizationStore.visualizations = [];
     mockRowScopeStore.getScopedDomain.mockReturnValue(null);
+    mockRowScopeStore.hasMissingData.mockReturnValue(true);
     legendActions.reset();
     formatActions.reset();
     globalActions.resetNavigationState();
@@ -866,6 +868,31 @@ describe('legend overlay visibility', () => {
     expect(countLegendLabels('Absence de données')).toBe(1);
   });
 
+  it('omits missing data when no displayed row lacks a value', () => {
+    const viz = buildTextBivariateViz();
+    if (!viz.text) {
+      throw new Error('Text primitive is required for this test');
+    }
+    viz.text = {
+      ...viz.text,
+      missingData: {
+        show: true,
+        shape: MissingDataShape.CIRCLE,
+        size: 6,
+        color: '#c6c6c6'
+      }
+    };
+    mockRowScopeStore.hasMissingData.mockReturnValue(false);
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [viz];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    render(LegendOverlay);
+
+    expect(countLegendLabels('Absence de données')).toBe(0);
+  });
+
   it('renders proportional text size legends through the original symbol legend generator', () => {
     mockVisualizationStore.version = 1;
     mockVisualizationStore.visualizations = [buildTextProportionalViz()];
@@ -1181,7 +1208,7 @@ describe('legend overlay visibility', () => {
   it('recenters the page when a centered legend loses focus', async () => {
     const { legend } = setupLegendViewport();
 
-    await fireEvent.dblClick(legend);
+    await fireEvent.click(legend);
 
     await waitFor(() => {
       expect(globalState.zoom.pagePanOffset).toEqual({ x: 90, y: 60 });
@@ -1197,7 +1224,7 @@ describe('legend overlay visibility', () => {
   it('centers legend focus in the visible area beside the tool popover', async () => {
     const { legend } = setupLegendOccludedViewport();
 
-    await fireEvent.dblClick(legend);
+    await fireEvent.click(legend);
 
     await waitFor(() => {
       expect(globalState.zoom.pagePanOffset).toEqual({ x: 168, y: 60 });

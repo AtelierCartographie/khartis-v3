@@ -36,6 +36,14 @@
   gap: var(--kh-gap-label);
 }
 
+.kh-help {
+  margin: 0;
+  color: var(--cds-text-helper, #6f6f6f);
+  font-size: var(--kh-font-body);
+  line-height: var(--kh-line-body);
+  letter-spacing: 0.16px;
+}
+
 .field-label {
   display: inline-flex;
   align-items: center;

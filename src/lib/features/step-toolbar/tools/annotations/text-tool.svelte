@@ -528,8 +528,12 @@
   .bg-toggle-col {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02);
+    gap: var(--kh-gap-label);
     flex-shrink: 0;
+  }
+
+  .bg-toggle-col :global(.kh-switch-native) {
+    min-height: var(--kh-size-sm);
   }
 
   .bg-col-label {

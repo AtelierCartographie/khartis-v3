@@ -78,6 +78,7 @@ import {
 } from './layer-style.utils';
 import {
   createSplitAwareRowAccessor as ctxRowAccessor,
+  OUT_OF_SCOPE_COLOR,
   createSplitGeoJsonFeatureAccessor,
   withPrimitiveScope
 } from './split-rendering-accessors';
@@ -94,7 +95,8 @@ import {
   createPolygonPatternOverlayLayer,
   resolveClassPatternPalette,
   resolveMissingDataClassPattern,
-  resolveMissingDataPatternId
+  resolveMissingDataPatternId,
+  TRANSPARENT_POLYGON_PATTERN_FILL_COLOR
 } from './polygon-pattern-layer.utils';
 import {
   createClassPatternColorAccessor,
@@ -485,7 +487,7 @@ export function createPolygonLayerStack(
         : fillColorFn
           ? createPolygonFillColorAttribute(
               polyData,
-              ctxRowAccessor(ctx, jsTable, fillColorFn)
+              ctxRowAccessor(ctx, jsTable, fillColorFn, OUT_OF_SCOPE_COLOR)
             )
           : null;
 
@@ -574,7 +576,7 @@ export function createPolygonLayerStack(
         : strokeColorFn
           ? pathColorAttr(
               outlineData,
-              ctxRowAccessor(ctx, jsTable, strokeColorFn)
+              ctxRowAccessor(ctx, jsTable, strokeColorFn, OUT_OF_SCOPE_COLOR)
             )
           : null;
 
@@ -724,7 +726,12 @@ export function createPolygonLayerStack(
             polyData,
             classPatternProps,
             ctx,
-            ctxRowAccessor(ctx, jsTable, classFillAccessor),
+            ctxRowAccessor(
+              ctx,
+              jsTable,
+              classFillAccessor,
+              TRANSPARENT_POLYGON_PATTERN_FILL_COLOR
+            ),
             `pattern-c${index}`,
             polygonFillOpacity
           );

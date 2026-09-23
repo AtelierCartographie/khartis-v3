@@ -112,10 +112,4 @@
   #khartis-projection-tool .expandable-stack :global(.section-container) {
     margin-bottom: 0;
   }
-
-  #khartis-projection-tool
-    .expandable-stack
-    :global(.section-container + .section-container) {
-    border-top: 1px solid var(--cds-border-subtle-00, #e0e0e0);
-  }
 </style>
