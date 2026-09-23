@@ -660,6 +660,25 @@ describe('legend overlay visibility', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('mounts a fresh legend SVG when the page scale changes so labels are re-measured', async () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildClassedPolygonViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+    const initialSvg = container.querySelector('.legend-svg--quantitative');
+    expect(initialSvg).toBeInTheDocument();
+
+    globalActions.setPageZoomScale(2);
+
+    await waitFor(() => {
+      const rescaledSvg = container.querySelector('.legend-svg--quantitative');
+      expect(rescaledSvg).toBeInTheDocument();
+      expect(rescaledSvg).not.toBe(initialSvg);
+    });
+  });
+
   it('labels the classed choropleth scale with the rounded bounds', () => {
     const viz = buildClassedPolygonViz();
     const classification = {
