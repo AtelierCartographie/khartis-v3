@@ -336,7 +336,7 @@
     overflow-y: hidden;
     scroll-snap-type: x proximity;
     overscroll-behavior-x: contain;
-    --basemap-card-width: 176px;
+    --basemap-card-width: var(--kh-card-w);
     --basemap-card-preview-min-height: 6.5rem;
     --basemap-card-padding-bottom: 0.875rem;
   }
@@ -372,7 +372,7 @@
   }
 
   .compact-slider {
-    --basemap-card-width: 176px;
+    --basemap-card-width: var(--kh-card-w);
     --basemap-card-preview-min-height: 5.5rem;
     --basemap-card-padding-bottom: 0.75rem;
   }

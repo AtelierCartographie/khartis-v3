@@ -3,6 +3,10 @@
   import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import {
+    UI_DENSITY,
+    uiDensityStore
+  } from '$lib/features/commons/stores/ui-density.store.svelte';
+  import {
     detectApplePlatform,
     getSideNavShortcutLabels
   } from '$lib/features/commons/utils/keyboard-shortcuts.utils';
@@ -233,6 +237,12 @@
 
   function handleThemeToggle(checked: boolean) {
     currentTheme = checked ? 'g100' : 'white';
+  }
+
+  function handleDensityToggle(checked: boolean) {
+    uiDensityStore.setDensity(
+      checked ? UI_DENSITY.COMPACT : UI_DENSITY.COMFORTABLE
+    );
   }
 
   async function handleInstallApp() {
@@ -576,9 +586,9 @@
           </Column>
         </Row>
 
-        <Row class="mr-5 ml-5 mb-5 flex justify-center">
+        <Row class="mr-5 ml-5 mb-5 flex flex-col gap-3">
           <Theme bind:theme={currentTheme} persist>
-            <div class="theme-toggle">
+            <div class="appearance-toggle">
               <Switch
                 size="sm"
                 labelText={m.theme_dark_mode()}
@@ -591,6 +601,20 @@
               />
             </div>
           </Theme>
+          {#if !globalState.isMobileView}
+            <div class="appearance-toggle">
+              <Switch
+                size="sm"
+                labelText={m.ui_density_compact_mode()}
+                labelA={m.ui_density_comfortable_mode()}
+                labelB={m.ui_density_compact_mode()}
+                hideLabel
+                showStateLabel
+                toggled={uiDensityStore.isCompact}
+                onchange={handleDensityToggle}
+              />
+            </div>
+          {/if}
         </Row>
       </Grid>
 
@@ -791,9 +815,8 @@
     margin-left: auto;
   }
 
-  .theme-toggle {
+  .appearance-toggle {
     display: flex;
-    justify-content: center;
     width: 100%;
   }
 

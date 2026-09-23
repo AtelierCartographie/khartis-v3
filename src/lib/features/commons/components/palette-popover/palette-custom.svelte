@@ -336,16 +336,16 @@
   .section-heading {
     display: flex;
     align-items: center;
-    gap: 8px;
-    height: 24px;
+    gap: var(--kh-gap-inline);
+    height: var(--kh-size-xs);
     width: 100%;
   }
 
   .section-heading-text {
     font-family: 'IBM Plex Sans', sans-serif;
     font-weight: 600;
-    font-size: 14px;
-    line-height: 20px;
+    font-size: var(--kh-font-group);
+    line-height: var(--kh-line-group);
     letter-spacing: 0.16px;
     color: var(--cds-text-primary, #161616);
     white-space: nowrap;

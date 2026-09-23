@@ -621,7 +621,7 @@
 
   .hex {
     width: 100%;
-    height: 2.5rem;
+    height: var(--kh-size-md);
     border: none;
     border-bottom: 1px solid var(--cds-border-strong);
     padding: 0 var(--cds-spacing-03);
@@ -635,7 +635,7 @@
 
   .preview {
     width: 100%;
-    height: 2.5rem;
+    height: var(--kh-size-md);
     border: 1px solid var(--cds-ui-04);
   }
 

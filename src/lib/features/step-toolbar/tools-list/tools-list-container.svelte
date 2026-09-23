@@ -28,7 +28,7 @@
   header span {
     color: var(--cds-text-secondary);
     font-weight: bold;
-    font-size: 14px;
+    font-size: var(--kh-font-group);
   }
 
   .tools-section {

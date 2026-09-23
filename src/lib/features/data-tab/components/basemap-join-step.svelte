@@ -1994,14 +1994,11 @@
   }
 
   .kh-help {
-    color: var(--cds-text-helper, #6f6f6f);
-    margin: 0 16px 12px;
-    padding-top: 16px;
-    font-size: 14px;
-    line-height: 18px;
+    margin: 0 var(--kh-pad-panel) var(--kh-gap-param);
+    padding-top: var(--kh-pad-panel);
   }
 
   .step-content {
-    padding: 0 16px 16px;
+    padding: 0 var(--kh-pad-panel) var(--kh-pad-panel);
   }
 </style>
