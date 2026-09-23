@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ChevronDown, ChevronUp } from 'carbon-icons-svelte';
   import type { Snippet } from 'svelte';
-  import { tick, untrack } from 'svelte';
+  import { onDestroy, tick, untrack } from 'svelte';
   import { stopBubbleEvents } from '$lib/features/commons/utils/stop-bubble-events';
   import Switch from './switch.svelte';
 
@@ -47,7 +47,11 @@
     scrollIntoViewOnOpen = false
   }: Props = $props();
 
-  let headerElement = $state<HTMLDivElement | undefined>(undefined);
+  const REVEAL_SETTLE_DELAYS_MS = [0, 80, 200, 400];
+
+  let containerElement = $state<HTMLDivElement | undefined>(undefined);
+  let revealTimers: ReturnType<typeof setTimeout>[] = [];
+  let revealScroller: HTMLElement | undefined;
 
   let expanded = $state<boolean>(
     untrack(() => (showToggle ? toggleChecked : defaultOpen))
@@ -77,10 +81,81 @@
     revealHeader();
   }
 
+  function findScrollableAncestor(
+    element: HTMLElement
+  ): HTMLElement | undefined {
+    let parent = element.parentElement;
+
+    while (parent) {
+      const { overflowY } = getComputedStyle(parent);
+      if (
+        (overflowY === 'auto' || overflowY === 'scroll') &&
+        parent.scrollHeight > parent.clientHeight
+      ) {
+        return parent;
+      }
+      parent = parent.parentElement;
+    }
+
+    return undefined;
+  }
+
+  function alignContainerToScrollerTop(): void {
+    const container = containerElement;
+    if (!container || !expanded) return;
+
+    const scroller = findScrollableAncestor(container);
+    if (!scroller) return;
+
+    // The header is sticky, so scrollIntoView reads it as already in place
+    // once it is pinned; the container is the only reliable anchor.
+    const delta =
+      container.getBoundingClientRect().top -
+      scroller.getBoundingClientRect().top;
+
+    if (Math.abs(delta) < 1) return;
+
+    scroller.scrollTop += delta;
+  }
+
+  function cancelReveal(): void {
+    for (const timer of revealTimers) {
+      clearTimeout(timer);
+    }
+    revealTimers = [];
+
+    revealScroller?.removeEventListener('wheel', cancelReveal);
+    revealScroller?.removeEventListener('touchstart', cancelReveal);
+    revealScroller = undefined;
+  }
+
   function revealHeader(): void {
     if (!expanded || !scrollIntoViewOnOpen) return;
-    void tick().then(() => headerElement?.scrollIntoView({ block: 'start' }));
+
+    cancelReveal();
+
+    void tick().then(() => {
+      const container = containerElement;
+      if (!container || !expanded) return;
+
+      revealScroller = findScrollableAncestor(container);
+      revealScroller?.addEventListener('wheel', cancelReveal, {
+        passive: true
+      });
+      revealScroller?.addEventListener('touchstart', cancelReveal, {
+        passive: true
+      });
+
+      // The sibling that closes and this section's own body settle over
+      // several update cycles, so a single measure lands on a layout that is
+      // still moving under it.
+      revealTimers = REVEAL_SETTLE_DELAYS_MS.map((delay) =>
+        setTimeout(alignContainerToScrollerTop, delay)
+      );
+    });
   }
+
+  onDestroy(cancelReveal);
 
   function handleToggleChange(toggled: boolean): void {
     expanded = toggled;
@@ -91,12 +166,12 @@
 </script>
 
 <div
+  bind:this={containerElement}
   class="section-container"
   class:disabled={disabled}
   class:toggle-suggestions={toggleVariant === 'suggestions'}
 >
   <div
-    bind:this={headerElement}
     class="section-header"
     class:expanded={expanded && !disabled}
     class:collapsed={!expanded || disabled}
@@ -184,15 +259,6 @@
   .section-container {
     border-top: 1px solid var(--cds-border-subtle-00, #e0e0e0);
     background: transparent;
-  }
-
-  :global(
-    .section-container:has(> .section-header.expanded) + .section-container
-  ),
-  :global(
-    .section-container:has(> .section-header.expanded) + * + .section-container
-  ) {
-    border-top: none;
   }
 
   .section-header {
@@ -311,7 +377,10 @@
       --khartis-expandable-section-background,
       var(--cds-layer-01)
     );
-    padding: var(--khartis-expandable-section-body-padding, 8px 16px 16px 16px);
+    padding: var(
+      --khartis-expandable-section-body-padding,
+      var(--kh-gap-inline) var(--kh-pad-panel) var(--kh-gap-group)
+    );
   }
 
   .section-expand-btn:hover:not(:disabled) {

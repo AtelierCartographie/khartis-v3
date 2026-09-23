@@ -3,6 +3,7 @@
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {
     visualizationStore,
+    ALL_PRIMITIVE_FILTERS,
     PrimitiveFilterType,
     getPrimitiveClassification,
     getPrimitiveValueColumn,
@@ -91,11 +92,25 @@
   const showsPolygonsConfig = $derived(datasetAnalysis.showsPolygonsConfig);
   const showsLinesConfig = $derived(datasetAnalysis.showsLinesConfig);
 
+  const activePrimitives = $derived(
+    selectedViz?.primitiveFilters ?? ALL_PRIMITIVE_FILTERS
+  );
+
   const primitiveAccordion = createAccordionGroup(() => {
-    if (showsSymbolsConfig) return 'symbols';
-    if (showsPolygonsConfig) return 'polygons';
-    if (showsLinesConfig) return 'lines';
-    return 'texts';
+    if (
+      showsSymbolsConfig &&
+      activePrimitives.includes(PrimitiveFilterType.POINT)
+    )
+      return 'symbols';
+    if (
+      showsPolygonsConfig &&
+      activePrimitives.includes(PrimitiveFilterType.POLYGON)
+    )
+      return 'polygons';
+    if (showsLinesConfig && activePrimitives.includes(PrimitiveFilterType.LINE))
+      return 'lines';
+    if (activePrimitives.includes(PrimitiveFilterType.TEXT)) return 'texts';
+    return undefined;
   });
   const isNumericDataField = (name: string | undefined) =>
     datasetAnalysis.isNumericDataField(name);
@@ -676,19 +691,11 @@
   #configure-visualization {
     display: flex;
     flex-direction: column;
-    padding: 16px 0;
+    padding: var(--kh-pad-panel) 0;
   }
 
   .content-area {
-    padding: 16px 16px 8px 16px;
-  }
-
-  .kh-help {
-    color: var(--cds-text-helper, #6f6f6f);
-    margin: 0;
-    font-size: 0.875rem;
-    line-height: 1.125rem;
-    letter-spacing: 0.16px;
+    padding: var(--kh-pad-panel);
   }
 
   .collection-scale-toggle {

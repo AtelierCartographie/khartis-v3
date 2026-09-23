@@ -42,11 +42,12 @@
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    padding: 7px 16px;
+    min-height: var(--kh-size-sm);
+    padding: 0 var(--kh-pad-panel);
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 14px;
+    font-size: var(--kh-font-body);
     font-weight: 400;
-    line-height: 18px;
+    line-height: var(--kh-line-body);
     letter-spacing: 0.16px;
     background: transparent;
     border: none;

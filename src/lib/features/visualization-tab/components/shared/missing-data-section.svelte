@@ -29,6 +29,7 @@
     buildDashedPatternItems,
     coerceDashedPattern
   } from './dashed-pattern.utils';
+  import { getMissingDataAvailability } from './missing-data-availability';
 
   const DEFAULT_PATTERN_CONFIG: PatternPaletteConfig = {
     shape: 'line',
@@ -92,6 +93,7 @@
   }: Props = $props();
 
   const dashedPatternItems = $derived(buildDashedPatternItems());
+  const hasMissingData = $derived.by(getMissingDataAvailability());
 
   function handleShowToggle(value: boolean) {
     show = value;
@@ -128,12 +130,15 @@
 <div class="missing-data-section">
   <ToggleWithLabel
     label={m.show_missing_data()}
-    toggled={show}
+    toggled={show && hasMissingData}
+    disabled={!hasMissingData}
     infoText={m.show_missing_data_info()}
     ontoggle={handleShowToggle}
   />
 
-  {#if show}
+  {#if !hasMissingData}
+    <p class="missing-data-none">{m.missing_data_none()}</p>
+  {:else if show}
     <Grid padding noGutter>
       <Row>
         {#if showShapeSelector}
@@ -228,6 +233,11 @@
     margin-top: var(--cds-spacing-04);
     padding-top: var(--cds-spacing-04);
     border-top: 1px solid var(--cds-border-subtle);
+  }
+
+  .missing-data-none {
+    font-size: 0.75rem;
+    color: var(--cds-text-helper);
   }
 
   .size-slider {

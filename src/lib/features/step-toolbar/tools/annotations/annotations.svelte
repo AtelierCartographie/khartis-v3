@@ -16,6 +16,8 @@
 </script>
 
 <div id="khartis-annotations-tool">
+  <p class="kh-help">{m.styling_drag_helper()}</p>
+
   <Grid noGutter fullWidth>
     <Row>
       <Column>
@@ -99,6 +101,10 @@
 <style lang="scss">
   #khartis-annotations-tool :global(.bx--number input[type='number']) {
     min-width: 0 !important;
+  }
+
+  #khartis-annotations-tool .kh-help {
+    margin-bottom: var(--kh-gap-param);
   }
 
   .tool-picker {

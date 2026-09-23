@@ -7,6 +7,7 @@
     COLOR_ROLE,
     getColorSuggestions
   } from '$lib/features/commons/services/color-suggestion.service';
+  import { getMissingDataAvailability } from '../shared/missing-data-availability';
 
   interface Props {
     show: boolean;
@@ -25,6 +26,8 @@
     onLabelChange,
     onColorChange
   }: Props = $props();
+
+  const hasMissingData = $derived.by(getMissingDataAvailability());
 
   type CarbonTextInputEvent = Event & {
     detail?: string | number | null | { value?: string | number | null };
@@ -49,11 +52,14 @@
 <div class="missing-data-block">
   <ToggleWithLabel
     label={m.show_missing_data()}
-    toggled={show}
+    toggled={show && hasMissingData}
+    disabled={!hasMissingData}
     infoText={m.show_missing_data_info()}
     ontoggle={onShowChange}
   />
-  {#if show}
+  {#if !hasMissingData}
+    <p class="missing-data-none">{m.missing_data_none()}</p>
+  {:else if show}
     <div class="missing-data-fields">
       <label class="field-group" for="texts-missing-data-label">
         <span class="field-label">{m.text_label()}</span>
@@ -92,6 +98,11 @@
     display: flex;
     flex-direction: column;
     gap: var(--kh-gap-inline);
+  }
+
+  .missing-data-none {
+    font-size: 0.75rem;
+    color: var(--cds-text-helper);
   }
 
   .text-input-field {

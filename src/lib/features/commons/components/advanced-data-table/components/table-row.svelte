@@ -144,7 +144,7 @@
     width: 32px;
     min-width: 32px;
     max-width: 32px;
-    height: 32px;
+    height: var(--kh-row-h);
     padding: 0;
     position: sticky;
     left: 0;
@@ -159,12 +159,12 @@
     width: 40px;
     min-width: 40px;
     max-width: 40px;
-    padding: 6px 0;
+    padding: 0;
     text-align: center;
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 12px;
+    font-size: var(--kh-font-label);
     font-weight: 400;
-    line-height: 16px;
+    line-height: var(--kh-line-label);
     letter-spacing: 0.32px;
     color: var(--cds-text-03, #a8a8a8);
     overflow: hidden;
@@ -174,7 +174,7 @@
   }
 
   td {
-    padding: 7px 8px;
+    padding: 0 var(--kh-gap-inline);
     color: var(--cds-text-01, #161616);
     white-space: nowrap;
     overflow: hidden;
@@ -183,9 +183,9 @@
     vertical-align: middle;
     height: var(--kh-row-h);
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 12px;
+    font-size: var(--kh-font-label);
     font-weight: 400;
-    line-height: 16px;
+    line-height: var(--kh-line-label);
     letter-spacing: 0.32px;
   }
 

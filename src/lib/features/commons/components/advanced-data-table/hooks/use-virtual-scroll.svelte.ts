@@ -1,9 +1,9 @@
 import { tick } from 'svelte';
-import { TABLE_ROW_HEIGHT } from '../types';
 
 export interface UseVirtualScrollProps {
   numRows: number | (() => number);
   maxRows: number | (() => number);
+  rowHeight: () => number;
   onLoadMore: () => Promise<void>;
   tableContainer?: HTMLDivElement;
 }
@@ -34,7 +34,6 @@ export function useVirtualScroll(
   let startIndex = $state<number>(0);
   let tableContainer = $state<HTMLDivElement | undefined>(props.tableContainer);
 
-  const rowHeight = TABLE_ROW_HEIGHT;
   const offsetRows = 5;
   const scrollIncrement = 13;
 
@@ -83,7 +82,7 @@ export function useVirtualScroll(
       const newRows = createIndexArray(newLength, newStartIndex);
       rows = [...newRows, ...rows];
       startIndex = newStartIndex;
-      tableContainer.scrollTop = newLength * rowHeight;
+      tableContainer.scrollTop = newLength * props.rowHeight();
       props.onLoadMore();
     }
   }
@@ -104,7 +103,10 @@ export function useVirtualScroll(
     await tick();
 
     const targetRowPosition = position - newStartIndex;
-    const scrollPosition = Math.max(0, (targetRowPosition - 3) * rowHeight);
+    const scrollPosition = Math.max(
+      0,
+      (targetRowPosition - 3) * props.rowHeight()
+    );
     if (tableContainer) {
       const maxScrollTop = Math.max(
         0,

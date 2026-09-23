@@ -1109,17 +1109,17 @@
   .popover-header {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 0 4px 8px 16px;
+    gap: var(--kh-gap-label);
+    padding: 0 var(--kh-gap-label) var(--kh-gap-inline) var(--kh-pad-panel);
     flex-shrink: 0;
 
     h3 {
       flex: 1;
       margin: 0;
       font-family: 'IBM Plex Sans', sans-serif;
-      font-size: 16px;
+      font-size: var(--kh-font-primitive);
       font-weight: 600;
-      line-height: 24px;
+      line-height: var(--kh-line-primitive);
       color: var(--cds-text-primary, #161616);
       overflow: hidden;
       text-overflow: ellipsis;
@@ -1133,7 +1133,7 @@
     gap: var(--kh-gap-section);
     flex: 1;
     overflow-y: auto;
-    padding: 0 16px 8px;
+    padding: 0 var(--kh-pad-panel) var(--kh-gap-inline);
   }
 
   .aspect-section {
@@ -1145,15 +1145,15 @@
   .section-heading {
     display: flex;
     align-items: center;
-    gap: 8px;
-    min-height: 24px;
+    gap: var(--kh-gap-inline);
+    min-height: var(--kh-size-xs);
   }
 
   .section-heading-text {
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 14px;
+    font-size: var(--kh-font-group);
     font-weight: 600;
-    line-height: 20px;
+    line-height: var(--kh-line-group);
     letter-spacing: 0.16px;
     color: var(--cds-text-primary, #161616);
     white-space: nowrap;
@@ -1175,9 +1175,9 @@
   .list-label {
     margin: 0;
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 12px;
+    font-size: var(--kh-font-label);
     font-weight: 400;
-    line-height: 16px;
+    line-height: var(--kh-line-label);
     letter-spacing: 0.32px;
     color: var(--cds-text-secondary, #525252);
   }
@@ -1198,7 +1198,7 @@
   .common-paired-row {
     display: flex;
     align-items: flex-start;
-    gap: 16px;
+    gap: var(--kh-gap-group);
     width: 100%;
   }
 
@@ -1226,7 +1226,7 @@
   .common-toggle-value {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--kh-gap-inline);
     min-height: 18px;
   }
 
@@ -1257,14 +1257,14 @@
   .toggle-only-control {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--kh-gap-inline);
   }
 
   .toggle-state {
     min-width: 20px;
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 14px;
-    line-height: 18px;
+    font-size: var(--kh-font-body);
+    line-height: var(--kh-line-body);
     letter-spacing: 0.16px;
     color: var(--cds-text-primary, #161616);
   }
@@ -1275,13 +1275,13 @@
     justify-content: space-between;
     width: 100%;
     min-height: var(--kh-size-sm);
-    padding: 7px 16px;
+    padding: 0 var(--kh-pad-panel);
     background: var(--cds-field-01, #f4f4f4);
     border: none;
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 14px;
-    line-height: 18px;
+    font-size: var(--kh-font-body);
+    line-height: var(--kh-line-body);
     letter-spacing: 0.16px;
     color: var(--cds-text-primary, #161616);
   }
@@ -1311,14 +1311,14 @@
   }
 
   .hidden-count-note {
-    margin: 8px 0 0;
-    padding: 8px 12px;
+    margin: var(--kh-gap-inline) 0 0;
+    padding: var(--kh-gap-inline) var(--kh-gap-param);
     background: var(--cds-layer-01, #f4f4f4);
     border: 1px dashed var(--cds-border-subtle-01, #c6c6c6);
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 12px;
+    font-size: var(--kh-font-label);
     font-style: italic;
-    line-height: 16px;
+    line-height: var(--kh-line-label);
     color: var(--cds-text-secondary, #525252);
   }
 
@@ -1326,7 +1326,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--kh-gap-label);
-    padding: 8px;
+    padding: var(--kh-gap-inline);
     background: var(--cds-layer-01, #f4f4f4);
     border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
   }
@@ -1338,7 +1338,7 @@
   .category-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--kh-gap-inline);
     min-width: 0;
   }
 
@@ -1458,13 +1458,13 @@
 
   .category-label-input :global(.bx--text-input) {
     height: var(--kh-size-sm);
-    padding: 7px 16px;
+    padding: 0 var(--kh-pad-panel);
     border: none;
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
     background: var(--cds-field-02, #ffffff);
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 14px;
-    line-height: 18px;
+    font-size: var(--kh-font-body);
+    line-height: var(--kh-line-body);
     letter-spacing: 0.16px;
     color: var(--cds-text-primary, #161616);
   }
@@ -1477,15 +1477,15 @@
   .category-expand-button {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--kh-gap-inline);
     width: 100%;
-    padding: 0 16px 0 22px;
+    padding: 0 var(--kh-pad-panel) 0 22px;
     background: transparent;
     border: none;
     cursor: pointer;
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 14px;
-    line-height: 20px;
+    font-size: var(--kh-font-body);
+    line-height: var(--kh-line-group);
     letter-spacing: 0.16px;
     color: var(--cds-text-primary, #161616);
     text-align: left;
@@ -1521,8 +1521,8 @@
 
   .popover-footer {
     display: flex;
-    gap: 8px;
-    padding: 16px;
+    gap: var(--kh-gap-inline);
+    padding: var(--kh-pad-panel);
     flex-shrink: 0;
 
     :global(.bx--btn) {

@@ -148,8 +148,9 @@
 
   .panel-header h3 {
     margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
+    font-size: var(--kh-font-primitive);
+    font-weight: var(--kh-weight-primitive);
+    line-height: var(--kh-line-primitive);
     color: var(--cds-text-01);
   }
 

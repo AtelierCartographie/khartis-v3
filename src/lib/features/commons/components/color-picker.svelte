@@ -464,7 +464,7 @@
     line-height: 1rem;
     letter-spacing: 0.32px;
     color: var(--cds-text-secondary, #525252);
-    margin-bottom: var(--cds-spacing-02);
+    margin-bottom: var(--kh-gap-label);
   }
 
   .color-picker-wrap {
@@ -472,9 +472,8 @@
   }
 
   .color-trigger {
-    margin-top: var(--cds-spacing-03);
     width: 100%;
-    height: 2.5rem;
+    height: var(--kh-size-sm);
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-03);
@@ -622,7 +621,7 @@
 
   .hex {
     width: 100%;
-    height: 2.5rem;
+    height: var(--kh-size-md);
     border: none;
     border-bottom: 1px solid var(--cds-border-strong);
     padding: 0 var(--cds-spacing-03);
@@ -636,7 +635,7 @@
 
   .preview {
     width: 100%;
-    height: 2.5rem;
+    height: var(--kh-size-md);
     border: 1px solid var(--cds-ui-04);
   }
 

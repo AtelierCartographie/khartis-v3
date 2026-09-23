@@ -212,6 +212,33 @@ légende : elles ne portent aucune information à décoder. `legend-subtitle.uti
 applique la même règle au sous-titre, qui ne liste que les colonnes réellement
 mobilisées par les primitives actives.
 
+### Absence de données
+
+Dans Khartis, l’absence de données a **une seule définition** : une valeur
+nulle, vide ou non finie dans la colonne du jeu de données importé qui pilote
+une primitive. Deux cas n’en relèvent pas :
+
+- une entité du fond **non jointe** au jeu de données n’est pas dessinée par la
+  couche thématique ;
+- une ligne **écartée par un filtre** de primitive est masquée, comme une
+  entité non jointe. Un filtre ne crée jamais d’absence de données :
+  `createSplitAwareRowAccessor` exige une valeur explicite hors portée
+  (`OUT_OF_SCOPE_COLOR`, `OUT_OF_SCOPE_SIZE`) à chaque point d’appel.
+
+Les colonnes concernées dépendent du mode de chaque primitive
+(`getPrimitiveMissingDataColumns()` dans
+`map/utils/missing-data-columns.utils.ts`) ; le mode unique n’en a aucune.
+DuckDB compte leurs valeurs manquantes sur les lignes **affichées** : jointes au
+fond et conservées par les filtres (`getMissingValueCountsInScope`). Le
+`rowScopeStore` expose le résultat par visualisation et primitive via
+`hasMissingData()`, qui conditionne :
+
+- l’entrée « Absence de données » de la légende, absente quand rien ne manque,
+  pour ne pas induire le lecteur en erreur ;
+- la section « Afficher l’absence de données » du panneau, désactivée avec un
+  message explicatif (contexte `missing-data-availability.ts` posé par chaque
+  panneau de primitive).
+
 ### Filtres, interaction et overlays
 
 Les filtres de données et de tables sont appliqués aux tables Arrow avant les

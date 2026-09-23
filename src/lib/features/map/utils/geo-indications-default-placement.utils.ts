@@ -15,6 +15,7 @@ export interface GeoIndicationsPlacementContext {
   scaleDragged: boolean;
   orientationEnabled: boolean;
   orientationDragged: boolean;
+  pageScale: number;
 }
 
 function legendOccupiesLeftSide(
@@ -48,18 +49,22 @@ function resolveDefaultInsetSide(
 
 function buildAnchoredStyle(
   side: HorizontalSide,
-  top: number | 'auto',
-  bottom: number | 'auto'
+  bottom: number,
+  pageScale: number
 ): string {
+  const margin = DEFAULT_MARGIN_PX * pageScale;
   const horizontal =
     side === 'left'
-      ? `left: ${DEFAULT_MARGIN_PX}px; right: auto;`
-      : `right: ${DEFAULT_MARGIN_PX}px; left: auto;`;
-  const verticalTop = top === 'auto' ? 'top: auto;' : `top: ${top}px;`;
-  const verticalBottom =
-    bottom === 'auto' ? 'bottom: auto;' : `bottom: ${bottom}px;`;
+      ? `left: ${margin}px; right: auto;`
+      : `right: ${margin}px; left: auto;`;
 
-  return `${horizontal} ${verticalTop} ${verticalBottom}`;
+  return `${horizontal} top: auto; bottom: ${bottom * pageScale}px;`;
+}
+
+export function getDefaultGeoIndicationTransformOrigin(
+  context: GeoIndicationsPlacementContext
+): string {
+  return `bottom ${resolveDefaultScaleSide(context)}`;
 }
 
 export function getDefaultScaleStyle(
@@ -67,8 +72,8 @@ export function getDefaultScaleStyle(
 ): string {
   return buildAnchoredStyle(
     resolveDefaultScaleSide(context),
-    'auto',
-    DEFAULT_MARGIN_PX
+    DEFAULT_MARGIN_PX,
+    context.pageScale
   );
 }
 
@@ -83,8 +88,8 @@ export function getDefaultOrientationStyle(
 
   return buildAnchoredStyle(
     resolveDefaultOrientationSide(context),
-    'auto',
-    bottom
+    bottom,
+    context.pageScale
   );
 }
 
@@ -108,5 +113,5 @@ export function getDefaultInsetStyle(
       ? DEFAULT_ORIENTATION_STACK_HEIGHT_PX + DEFAULT_STACK_GAP_PX
       : 0);
 
-  return buildAnchoredStyle(side, 'auto', bottom);
+  return buildAnchoredStyle(side, bottom, context.pageScale);
 }

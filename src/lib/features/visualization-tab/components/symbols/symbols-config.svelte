@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { rowScopeStore } from '$lib/features/map';
+  import { setMissingDataAvailability } from '../shared/missing-data-availability';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import * as m from '$lib/paraglide/messages';
@@ -104,6 +106,15 @@
     open,
     onToggle
   }: Props = $props();
+
+  setMissingDataAvailability(() =>
+    visualization
+      ? rowScopeStore.hasMissingData(
+          visualization.id,
+          PrimitiveFilterType.POINT
+        )
+      : false
+  );
 
   let discretizationModalOpen = $state(false);
   let discretizationTarget = $state<'size' | 'fill'>('size');
