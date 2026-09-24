@@ -1,82 +1,81 @@
 # Analytics et consentement
 
-> Documentation de maintenance. Le suivi d’usage ne doit jamais modifier la
-> promesse centrale de Khartis : les données cartographiques de l’utilisateur
-> restent dans son navigateur.
+Documentation de maintenance du suivi d'usage. Règle intangible : il ne
+transmet jamais rien des données de l'utilisateur, qui restent dans son
+navigateur.
 
-## Responsabilités séparées
+## Responsabilités
 
-| Élément                                   | Responsable                                           |
-| ----------------------------------------- | ----------------------------------------------------- |
-| Consentement et cookies                   | Cookiebot                                             |
-| Chargement du conteneur                   | `analytics.service.ts` avec `PUBLIC_GTM_CONTAINER_ID` |
-| Événements propres à Khartis              | `analyticsService`                                    |
-| Interface de modification du consentement | `Cookiebot.renew()`                                   |
+| Élément                      | Responsable                                                        |
+| ---------------------------- | ------------------------------------------------------------------ |
+| Consentement et cookies      | Cookiebot                                                          |
+| Chargement du conteneur GTM  | `commons/services/analytics.service.ts`, `PUBLIC_GTM_CONTAINER_ID` |
+| Événements Khartis           | `analyticsService`                                                 |
+| Modification du consentement | `Cookiebot.renew()`                                                |
 
-Khartis observe `Cookiebot.consent.statistics`; il ne conserve pas de second
-état de consentement, n’émet pas de commandes Consent Mode et ne gère pas les
-cookies d’analytics. Cookiebot reste l’unique source de décision.
+Khartis lit `Cookiebot.consent.statistics`. Il ne tient pas de second état de
+consentement, n'émet pas de commandes Consent Mode et ne gère pas les cookies
+d'analytics : Cookiebot est la seule source de décision.
 
 ## Initialisation
 
-Sans `PUBLIC_GTM_CONTAINER_ID`, aucun fournisseur de suivi n’est chargé. Avec
-un identifiant, le service ajoute le script GTM et prépare `dataLayer`. Les
-événements Khartis restent bloqués jusqu’à ce que Cookiebot accorde le
-consentement statistique.
+Sans `PUBLIC_GTM_CONTAINER_ID`, rien n'est chargé. Avec un identifiant, le
+service pousse dans `dataLayer` les informations de page (`page_location`,
+`page_path`, `page_referrer`, `page_title`), puis charge le script GTM. Les
+événements Khartis restent en attente jusqu'au consentement statistique, puis
+sont envoyés.
 
-Le conteneur GTM est une configuration de déploiement. Le helper de déploiement
-le reçoit par cible, ce qui permet de désactiver le suivi pour un environnement
-en laissant la valeur vide. Ne jamais écrire un identifiant de production en
-dur dans le code.
+`page_location` et `page_referrer` sont réduits à l'origine et au chemin, sans
+paramètres ni fragment ; `page_title` est le nom fixe de l'application.
 
-## Contrat de données
+L'identifiant GTM est une configuration de déploiement, fournie par cible au
+script de déploiement ; une valeur vide désactive le suivi pour cette cible. Ne
+jamais l'écrire en dur dans le code.
 
-Les événements et paramètres sont définis par listes blanches dans
-`src/lib/features/commons/services/analytics.service.ts`.
+## Événements autorisés
 
-| Événement                    | Paramètres admis                              |
-| ---------------------------- | --------------------------------------------- |
-| ouverture de l’application   | aucun                                         |
-| création ou import de projet | type de source, type de fichier, nombre borné |
-| création de visualisation    | type de visualisation                         |
-| export                       | cible, format, résolution                     |
-| erreur applicative           | source, type d’erreur, caractère fatal        |
-| ouverture de projet          | origine locale ou archive                     |
+Événements et paramètres sont déclarés par liste blanche
+(`ANALYTICS_EVENT`, `ANALYTICS_EVENT_PARAMETERS`) :
 
-Les valeurs sont normalisées contre des listes finies. Ne jamais ajouter à un
-événement un nom de projet, fichier, colonne, lieu, valeur de cellule, contenu
-d’annotation, requête SQL ou taille déduite des données de l’utilisateur.
+| Événement               | Paramètres                                               |
+| ----------------------- | -------------------------------------------------------- |
+| `app_opened`            | aucun                                                    |
+| `project_created`       | `source_type`, `file_type`, `file_count` (plafonné à 10) |
+| `data_import_completed` | `source_type`, `file_type`, `file_count` (plafonné à 10) |
+| `visualization_created` | `visualization_type`                                     |
+| `export_completed`      | `export_target`, `export_format`, `export_resolution`    |
+| `app_error`             | `error_source`, `error_type`, `fatal`                    |
+| `project_opened`        | `open_source` (projet local ou archive)                  |
 
-Les URL utilisées pour `page_location` et `page_referrer` sont réduites à
-l’origine et au chemin : ni paramètres de recherche ni fragments ne sont
-envoyés.
+Les valeurs appartiennent à des domaines finis ; une partie est normalisée à
+l'exécution, le reste (`export_target`, `error_source`, `open_source`) n'est
+contraint que par le typage TypeScript. Ne jamais ajouter un nom de projet, de
+fichier, de colonne ou de lieu, une valeur de cellule, un texte d'annotation,
+une requête SQL ou une taille déduite des données.
 
 ## Ajouter ou modifier un événement
 
-1. Définir l’événement et ses paramètres dans les constantes allow-listées.
-2. Définir les domaines de valeurs permis et remplacer toute valeur inconnue
-   par une catégorie générique.
-3. Vérifier que l’appel est sans effet avant consentement, puis correctement
-   mis en file et envoyé après consentement.
-4. Ajouter les tests du service et vérifier qu’aucune donnée métier n’entre
-   dans `dataLayer`.
-5. Mettre à jour ce document et la configuration GTM autorisée si nécessaire.
+1. Déclarer l'événement et ses paramètres dans les listes blanches.
+2. Définir le domaine de chaque valeur, et ramener toute valeur inconnue à une
+   catégorie générique.
+3. Vérifier que l'appel n'émet rien avant consentement, puis qu'il est mis en
+   file et envoyé après.
+4. Tester le service et vérifier qu'aucune donnée utilisateur n'entre dans
+   `dataLayer`.
+5. Mettre à jour cette page et la configuration GTM si nécessaire.
 
-Un événement qui demande une nouvelle information utilisateur n’est pas une
-simple modification technique : il doit être revu avec les responsables de la
-confidentialité et de Cookiebot avant d’être publié.
+Un événement qui demande une nouvelle information sur l'utilisateur doit être
+validé par les responsables de la protection des données avant publication.
 
 ## Vérification locale
 
-- Démarrer avec un identifiant GTM de test, jamais un secret ou une donnée de
-  production.
-- Vérifier l’absence de script et d’événement lorsque l’identifiant est vide.
-- Simuler successivement refus et accord Cookiebot; confirmer que seule la
-  seconde situation libère les événements.
-- Inspecter `window.dataLayer` en s’assurant que les paramètres restent dans
-  le contrat ci-dessus.
+- Utiliser un identifiant GTM de test, jamais celui de production.
+- Avec un identifiant vide : ni script, ni événement.
+- Refuser puis accepter le consentement Cookiebot : seul l'accord libère les
+  événements.
+- Inspecter `window.dataLayer` et vérifier que les paramètres respectent le
+  tableau ci-dessus.
 
-Les tests automatisés du service couvrent le chargement conditionnel, le
-consentement, les listes blanches et les événements différés. Ils complètent,
-mais ne remplacent pas, une vérification de la configuration Cookiebot/GTM sur
-l’environnement visé.
+Les tests du service couvrent chargement conditionnel, consentement, listes
+blanches et événements différés. Ils ne dispensent pas de vérifier la
+configuration Cookiebot et GTM sur l'environnement visé.

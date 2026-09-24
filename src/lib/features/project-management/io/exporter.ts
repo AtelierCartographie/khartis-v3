@@ -8,6 +8,7 @@ import {
   ensureUploadedFileAssets,
   readAssetBytes
 } from '../services/asset-store.service';
+import { collectCustomBasemapAssetRefs } from '../services/custom-basemap-source.service';
 import { serialize } from '../services/serializer.service';
 import type { KhartisProject } from '../types';
 
@@ -31,8 +32,15 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   ) as ArrayBuffer;
 }
 
-function collectUniqueAssetRefs(files: UploadedFile[]): AssetRef[] {
+function collectUniqueAssetRefs(
+  files: UploadedFile[],
+  additionalAssetRefs: readonly AssetRef[]
+): AssetRef[] {
   const uniqueAssetRefs = new Map<string, AssetRef>();
+
+  additionalAssetRefs.forEach((assetRef) => {
+    uniqueAssetRefs.set(assetRef.assetId, assetRef);
+  });
 
   files.forEach((file) => {
     if (file.assetRef) {
@@ -72,7 +80,10 @@ async function createArchivePayload(project: KhartisProject): Promise<Blob> {
 
   const serialized = await serialize(projectWithAssets);
   const sourceFiles = projectWithAssets.data?.sourceFiles ?? [];
-  const assetRefs = collectUniqueAssetRefs(sourceFiles);
+  const assetRefs = collectUniqueAssetRefs(
+    sourceFiles,
+    collectCustomBasemapAssetRefs(serialized.data)
+  );
   const manifestAssets: ProjectArchiveAssetEntry[] = assetRefs.map(
     (assetRef) => ({
       ...assetRef,

@@ -1,6 +1,7 @@
 import { persistenceRegistry } from '$lib/features/project-management/core';
 import { dataTabStore } from '$lib/features/data-tab/stores/data-tab.store.svelte';
 import { dataToolsStore } from '$lib/features/data-tab/stores/data-tools.store.svelte';
+import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
 import { globalActions } from '../global.svelte';
@@ -66,6 +67,7 @@ export function resetProjectRuntimeState(
     globalActions.resetNavigationState();
     dataTabStore.reset();
     dataToolsStore.reset();
+    basemapCatalogService.replaceCustomBasemaps([]);
   }
   datasetsStore.clear();
   basemapService.reset();

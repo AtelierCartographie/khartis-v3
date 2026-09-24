@@ -360,6 +360,8 @@
   "custom_basemap_export_warning_message": "Le projet a été sauvegardé, mais certains attributs du fond de carte personnalisé n'ont pas pu être inclus.",
   "custom_basemap_import_warning_title": "Fond de carte personnalisé incomplet",
   "custom_basemap_import_warning_message": "Le projet a été ouvert, mais certains attributs du fond de carte personnalisé n'ont pas pu être restaurés.",
+  "custom_basemap_restore_warning_title": "Fond de carte importé non restauré",
+  "custom_basemap_restore_warning_message": "Le projet a été ouvert, mais la géométrie de ces fonds de carte importés n'a pas pu être restaurée : {names}. Importez-les de nouveau pour les réutiliser.",
   "basemap_import_modal_title": "Importer le fond de carte",
   "basemap_import_modal_description": "Charger un fichier d'informations géographiques (SHP, GeoJSON, GeoPackage) compatible avec les données chargées précédemment.",
   "basemap_import_modal_error_select_file": "Veuillez sélectionner un fichier à importer",

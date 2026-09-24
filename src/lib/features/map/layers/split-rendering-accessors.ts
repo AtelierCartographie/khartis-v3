@@ -1,4 +1,4 @@
-import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import { Type, type Table as ArrowTable } from 'apache-arrow/Arrow';
 import {
   CANONICAL_ID_COLUMN,
   INTERNAL_COLUMN,
@@ -10,7 +10,6 @@ import {
   rowAccessor,
   splitRowAccessor
 } from '../utils/geoarrow-stream-bridge.utils';
-import { isCustomBasemapJoinCandidateColumn } from '../services/custom-basemap-columns.service';
 
 export type GeoJsonFeatureLike = {
   properties?: Record<string, unknown>;
@@ -291,6 +290,8 @@ export function hasJoinedBasemapKey(
   return Boolean(dataset.getChild(basemapIdColumn));
 }
 
+const SPLIT_KEY_TYPE_IDS = new Set<Type>([Type.Utf8, Type.LargeUtf8, Type.Int]);
+
 export function resolveBestSplitFeatureIdColumn(
   geometry: ArrowTable,
   dataset: ArrowTable,
@@ -308,8 +309,8 @@ export function resolveBestSplitFeatureIdColumn(
     CANONICAL_ID_COLUMN,
     INTERNAL_COLUMN.FEATURE_ID,
     ...fields
+      .filter((field) => SPLIT_KEY_TYPE_IDS.has(field.type.typeId))
       .map((field) => field.name)
-      .filter((name) => isCustomBasemapJoinCandidateColumn(name))
   ].filter(
     (name, index, names): name is string =>
       Boolean(name && fields.some((field) => field.name === name)) &&

@@ -69,7 +69,7 @@ describe('BasemapCardVertical', () => {
 
     await setTestLocale('en');
 
-    expect(screen.getByText('Reference background')).toBeInTheDocument();
+    expect(screen.getByText('Reference basemap')).toBeInTheDocument();
     expect(screen.getByText('OpenStreetMap contributors')).toBeInTheDocument();
   });
 

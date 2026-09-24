@@ -304,9 +304,12 @@ export async function serializeProjectData(
       );
 
       if (tableExists && Array.isArray(tableExists) && tableExists.length > 0) {
+        const basemapIds = customBasemaps
+          .map((basemap) => `'${escapeSqlString(basemap.file)}'`)
+          .join(', ');
         const attributes = (await Duck.query(
-          'SELECT * FROM custom_basemap_attributes',
-          { format: 'array' }
+          `SELECT * FROM custom_basemap_attributes WHERE basemap IN (${basemapIds})`,
+          { format: 'array', useProxy: false }
         )) as SerializedBasemapAttribute[];
 
         serialized.customBasemaps = {
@@ -346,15 +349,19 @@ export async function deserializeProjectData(
     ) as SerializedUploadedFile[];
   }
 
+  const persistedCustomBasemaps = data.customBasemaps?.metadata;
+  basemapCatalogService.replaceCustomBasemaps(
+    Array.isArray(persistedCustomBasemaps)
+      ? persistedCustomBasemaps.filter(isValidBasemapMetadata)
+      : []
+  );
+
   if (
     data.customBasemaps &&
     (await ensureDuckDbReady('restoring custom basemaps'))
   ) {
     try {
-      const { metadata, attributes } = data.customBasemaps;
-      const validMetadata = Array.isArray(metadata)
-        ? metadata.filter(isValidBasemapMetadata)
-        : [];
+      const { attributes } = data.customBasemaps;
       const validAttributes = Array.isArray(attributes)
         ? attributes
             .filter((attribute) => attribute && typeof attribute === 'object')
@@ -399,10 +406,6 @@ export async function deserializeProjectData(
           VALUES ${insertValues}
         `);
       }
-
-      validMetadata.forEach((basemap: BasemapMetadata) => {
-        basemapCatalogService.addCustomBasemap(basemap);
-      });
     } catch (error) {
       logger.error(
         'Failed to restore custom basemap attributes',

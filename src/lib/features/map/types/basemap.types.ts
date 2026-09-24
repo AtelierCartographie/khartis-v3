@@ -1,4 +1,5 @@
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
+import type { AssetRef } from '$lib/features/commons/types/create-project.types';
 import type { JoinEntity } from '$lib/features/data-tab/types';
 import type {
   DuplicateLineReference,
@@ -99,6 +100,7 @@ export interface BasemapMetadata {
   // Built from a dataset's own geometry rather than picked as a reference
   // basemap: it must not be persisted or offered in the basemap catalog.
   isDatasetGeometry?: boolean;
+  sourceAsset?: AssetRef;
 }
 
 export interface BasemapSuggestion extends BasemapMetadata {
