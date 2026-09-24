@@ -1,14 +1,13 @@
-import { deepClone } from '$lib/features/commons/utils/clone.utils';
 import { sanitizeProjectName } from '$lib/features/commons/utils/sanitize.utils';
+import type { SerializedProject } from '$lib/types/serialization.types';
 import { PROJECT_CONST } from '../constants';
-import type { KhartisProject } from '../types';
 
 export function duplicateProject(
-  original: KhartisProject,
+  original: SerializedProject,
   name: string
-): KhartisProject {
-  const clone = deepClone(original);
-  const now = new Date();
+): SerializedProject {
+  const clone = structuredClone(original);
+  const now = new Date().toISOString();
   const sanitizedName = sanitizeProjectName(name);
 
   return {

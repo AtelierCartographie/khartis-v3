@@ -214,7 +214,7 @@ export async function duplicateProject(
   newName?: string
 ): Promise<string> {
   try {
-    const originalProject = await projectRepository.load(id);
+    const originalProject = await projectRepository.loadSerialized(id);
 
     if (!originalProject) {
       throw new DataValidationError(
@@ -254,7 +254,7 @@ export async function duplicateProject(
       sanitizeProjectName(duplicatedName)
     );
 
-    await projectRepository.save(duplicatedProject);
+    await projectRepository.saveSerialized(duplicatedProject);
 
     return duplicatedProject.id;
   } catch (error) {

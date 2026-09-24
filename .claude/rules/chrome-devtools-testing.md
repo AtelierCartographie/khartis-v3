@@ -23,7 +23,7 @@ Browse `tests-datasets/` and pick by concern:
 - **Lat/lon plotting & GPS validation** → `csv/sites-seveso-idf.csv` and its `-swapped-gps` / `-invalid-gps` / `-custom-gps-columns` variants, `csv/tabular-gps-gcpnt-columns.csv`.
 - **CSV parser robustness** → `csv/csv-malformed--with-*` (empty lines, no header, European numeric format, special characters, duplicated columns, 100 columns, …).
 - **Format readers** → `geojson/`, `gpkg/`, `shp/`, `shp-incomplete/` (deliberately broken shapefile), `gpx/`, `kml-kmz/`, `zip/` (`single-csv`, `multiple-csv`, `shapefile-complete`).
-- **Visualization semiology & simplification** → `visualization-toolbox-cases.{csv,geojson}`, `csv/france-regions-simplification-check.csv`, `geojson/nuts2_data.geojson`.
+- **Visualization semiology & simplification** → `csv/visualization-toolbox-cases.csv`, `geojson/visualization-toolbox-cases.geojson`, `csv/france-regions-simplification-check.csv`, `geojson/nuts2_data.geojson`.
 
 ## When the UI freezes (escalate in order)
 

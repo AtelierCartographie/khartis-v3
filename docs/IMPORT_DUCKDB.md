@@ -1,141 +1,184 @@
 # Import, DuckDB et Arrow
 
-Ce document décrit le chemin des données depuis une source utilisateur jusqu'aux tables DuckDB et aux tables Arrow utilisées par le rendu. Il s'adresse aux développeurs qui ajoutent un format, une transformation ou une opération cartographique.
-
-Voir aussi : [PERSISTANCE_ET_ARCHIVES.md](PERSISTANCE_ET_ARCHIVES.md), [PROJECT_FORMAT_COMPATIBILITY.md](PROJECT_FORMAT_COMPATIBILITY.md), [RENDU_CARTOGRAPHIQUE.md](RENDU_CARTOGRAPHIQUE.md) et [FONDS_PROJECTIONS.md](FONDS_PROJECTIONS.md).
-
-## Contrat d'architecture
+Le chemin d'une donnée, de la source utilisateur jusqu'à la table Arrow
+consommée par le rendu. À lire avant d'ajouter un format, une transformation ou
+une opération de données.
 
 ```text
-fichier, URL ou texte
-  -> validation et détection
-  -> import ou processeur spécialisé
-  -> table DuckDB temporaire
-  -> analyse, jointure, filtres et transformations
-  -> Arrow avec métadonnées GeoArrow
-  -> rendu Deck.gl ou export
+fichier, URL ou texte collé
+  → validation et détection
+  → lecture DuckDB (ou processeur spécialisé)
+  → table DuckDB
+  → analyse, jointure, filtres, transformations
+  → Arrow avec métadonnées GeoArrow
+  → rendu Deck.gl ou export
 ```
 
-DuckDB WASM est une base analytique en mémoire exécutée dans un Web Worker. Ses tables et ses caches ne sont pas la persistance du projet : la reprise recrée les tables à partir des assets et du snapshot projet. Le contrat de reprise est documenté dans [PERSISTANCE_ET_ARCHIVES.md](PERSISTANCE_ET_ARCHIVES.md).
-
-Le point d'entrée applicatif est `duckDBOrchestrator`. La façade `Duck` est réservée aux modules DuckDB, au pipeline et à l'orchestrateur. Un composant ou un store métier ne doit pas instancier `AsyncDuckDB` directement.
+DuckDB WASM est une base analytique en mémoire, exécutée dans un Web Worker.
+Ses tables ne sont pas la persistance : à la réouverture, elles sont recréées à
+partir des fichiers source ([Persistance et archives](PERSISTANCE_ET_ARCHIVES.md)).
 
 ## Démarrage du moteur
 
-Au démarrage, `+layout.svelte` initialise les services de données, puis `duckDBOrchestrator.initialize()` appelle `initDuckDB()` :
+`duckDBOrchestrator.initialize()` appelle `initDuckDB()`, qui mutualise
+l'initialisation entre tous les appelants :
 
-1. le moteur sélectionne le bundle WASM compatible (`eh` ou `mvp`) et crée un Worker DuckDB ;
-2. la connexion est ouverte avec `maximumThreads: 1` ;
-3. les limites mémoire, le répertoire temporaire et le cache DuckDB sont configurés ;
-4. les macros SQL de classification, analyse, jointure, recherche, simplification et densité sont chargées ;
-5. l'extension `spatial` est préchargée et HTTPFS est chargé à la demande.
+1. sélection du bundle WASM (`eh` ou `mvp`) et création du Worker ;
+2. connexion avec `maximumThreads: 1`, limite mémoire, répertoire temporaire
+   (5 Go) et cache d'objets ;
+3. chargement de l'extension `spatial` et préchauffage des CRS ;
+4. chargement des macros SQL : classification, analyse, jointure, recherche,
+   simplification, densité.
 
-Les timeouts d'instanciation et d'initialisation sont de 180 secondes. La limite mémoire est calculée à partir de `navigator.deviceMemory`, avec un plafond de 3 Gio et un repli à 2 Gio. Le répertoire temporaire DuckDB est limité à 5 Gio.
+| Réglage                                      | Valeur                                                                   |
+| -------------------------------------------- | ------------------------------------------------------------------------ |
+| Timeouts d'instanciation et d'initialisation | 180 s                                                                    |
+| Limite mémoire                               | `navigator.deviceMemory` × 0,5 Gio, plafonnée à 3 Gio ; 2 Gio si inconnu |
 
-L'extension spatiale peut échouer à se charger : une alerte est alors affichée, mais l'application ne prétend pas que les opérations spatiales restent disponibles. Les extensions sont résolues depuis `/duckdb-extensions`, empaqueté avec l'application.
+Les extensions sont servies depuis `/duckdb-extensions`, où `pnpm install` les
+dépose. Si `spatial` ne se charge pas, un avertissement est affiché et les
+opérations spatiales ne sont pas disponibles. En cas d'échec, le Worker est
+terminé pour qu'une nouvelle tentative reparte de zéro.
 
-## Entrées d'import et formats
+## Points d'entrée
 
-Khartis a deux chemins complémentaires :
+| API                                                        | Usage                                                 |
+| ---------------------------------------------------------- | ----------------------------------------------------- |
+| `dataPipeline.processUploadedFile()`                       | parcours principal : création de projet et reprise    |
+| `dataPipeline.processFile()`                               | lecture DuckDB directe d'un fichier local             |
+| `dataPipeline.processPastedData()`                         | texte tabulaire collé                                 |
+| `dataPipeline.processZipFile()` / `processRemoteZipFile()` | archives ZIP, locales ou distantes                    |
+| `dataPipeline.processRemoteFile(url)`                      | téléchargement d'une URL puis pipeline générique      |
+| `duckDBOrchestrator.processFile()`                         | choix d'une stratégie dans le registre de processeurs |
 
-| Chemin                                | Responsabilité                         | Usage                                                      |
-| ------------------------------------- | -------------------------------------- | ---------------------------------------------------------- |
-| `dataPipeline.processFile()`          | Pipeline générique                     | Fichier local, lecture DuckDB directe et exception GPX.    |
-| `dataPipeline.processRemoteFile(url)` | Téléchargement puis pipeline générique | Source distante, avec une URL comme unique paramètre.      |
-| `duckDBOrchestrator.processFile()`    | Orchestration applicative              | Sélection d'une stratégie dans le registre de processeurs. |
+`duckDBOrchestrator` est le point d'entrée des opérations de données.
+`Duck.query()` est la façade SQL bas niveau : une mutation faite par ce biais
+doit invalider elle-même les caches concernés (voir plus bas).
 
-Le registre actuel couvre CSV, GeoJSON, Shapefile, GeoPackage, GeoParquet et GPX. Ce n'est pas le même mécanisme que l'ancien symbole `RAW_FILE_PROCESSOR_TYPES`, qui n'existe plus dans le code. Ne pas le réintroduire dans une documentation ou une extension.
+## Formats
 
-| Famille                     | Comportement actuel                                                                                        |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| CSV, TSV et texte tabulaire | Détection du séparateur, de l'en-tête et des nombres avant lecture DuckDB.                                 |
-| GeoJSON                     | Lecture géospatiale ; un fichier `.json` non reconnu comme GeoJSON peut suivre le chemin tabulaire.        |
-| Shapefile                   | Les companions `.shx` et `.dbf` sont requis ; une archive ZIP est le moyen usuel de les transporter.       |
-| GeoPackage                  | Lecture géospatiale DuckDB, avec un fallback navigateur pour certains fichiers non lus par le build WASM.  |
-| Parquet et GeoParquet       | Lecture Parquet puis normalisation spatiale quand les métadonnées `geo` sont présentes.                    |
-| GPX                         | Processeur spécialisé.                                                                                     |
-| KML, KMZ et ZIP             | Chemin géospatial ou archive selon la détection ; une archive ZIP peut contenir plusieurs jeux de données. |
+Le registre de processeurs couvre CSV, GeoJSON, Shapefile, GeoPackage,
+GeoParquet et GPX. Les autres formats passent par la lecture géospatiale
+générique (`ST_Read`).
 
-Le validateur de l'interface vérifie notamment les extensions, tailles, groupes Shapefile et URLs HTTP(S). Le processeur distant reste une API interne plus basse : appelé directement, il télécharge la réponse entière avec un timeout, sans faire appliquer lui-même toutes les règles d'interface. Toute nouvelle entrée réseau doit donc définir ses propres limites et validations.
+| Format                | Comportement                                                                                          |
+| --------------------- | ----------------------------------------------------------------------------------------------------- |
+| CSV, TSV, texte collé | détection du séparateur, de l'en-tête et du format numérique avant `read_csv`                         |
+| GeoJSON               | lecture géospatiale ; un `.json` qui n'est pas du GeoJSON est lu comme tableau                        |
+| Shapefile             | `.shx` et `.dbf` obligatoires, en pratique transportés dans un ZIP                                    |
+| GeoPackage            | lecture DuckDB, avec un repli navigateur (SQLite WASM) pour les fichiers que le build WASM ne lit pas |
+| Parquet, GeoParquet   | `read_parquet`, normalisation spatiale si les métadonnées `geo` sont présentes                        |
+| GPX                   | processeur dédié                                                                                      |
+| KML, KMZ              | lecture géospatiale générique, sans processeur enregistré                                             |
+| ZIP                   | un ou plusieurs jeux de données par archive                                                           |
 
-## Table DuckDB et analyse
+Le validateur de l'interface contrôle extensions, tailles, groupes Shapefile et
+schéma d'URL (`http`/`https`). Appelé directement, le processeur distant
+télécharge la réponse entière avec un timeout, sans ces contrôles : toute
+nouvelle entrée réseau définit ses propres limites.
 
-L'import produit une table nommée et un `DuckDBDataset` lié au fichier source. Les opérations métier travaillent ensuite sur cette table : analyse de colonnes, détection géographique, jointure, filtres, géolocalisation GPS, calculs de colonnes, transformations et classifications.
+## Tables et identifiant de ligne
 
-Les lecteurs et opérations doivent conserver l'identifiant de ligne `__id` quand une transformation reconstruit une table. Cet identifiant relie les lignes, les corrections, les filtres et les interactions de rendu.
+Un import produit une table nommée et un `DuckDBDataset`. Analyse de colonnes,
+détection géographique, jointure, filtres, géolocalisation GPS, calculs et
+classifications travaillent ensuite sur cette table.
 
-Les macros SQL sont chargées une fois par `initDuckDB()`. Elles encapsulent notamment les méthodes de classification, la normalisation textuelle et la similarité des jointures, la simplification et la densité. Les appeler via le service qui porte leur contrat, plutôt que depuis une interface, évite de contourner l'analyse et l'invalidation associées.
+Toute opération qui reconstruit une table conserve la colonne `__id` : elle
+relie lignes, corrections, filtres et interactions de rendu.
+
+Les macros SQL portent la logique métier (classification, normalisation et
+similarité de jointure, simplification, densité). On les appelle par le service
+qui porte leur contrat, jamais directement depuis un composant.
 
 ## Arrow et GeoArrow
 
-Le résultat privilégié pour les données spatiales est une table Arrow produite depuis DuckDB. Lorsque la table comporte une géométrie DuckDB native, l'orchestrateur ajoute les métadonnées GeoArrow :
+Une table spatiale est exportée de DuckDB en Arrow, puis annotée :
 
-- la métadonnée de schéma `geo` décrit la colonne primaire, son encodage et son CRS ;
-- l'encodage normal est `geoarrow.wkb` ;
-- un encodage GeoJSON textuel sert de repli ;
-- le CRS est conservé lorsqu'il est connu, sinon le code utilise WGS 84 comme valeur par défaut dans certains chemins.
+- la métadonnée de schéma `geo` décrit la colonne géométrique, son encodage et
+  son CRS ;
+- l'encodage normal est `geoarrow.wkb`, avec un repli GeoJSON textuel ;
+- le CRS est conservé s'il est connu, WGS 84 sinon ;
+- la `bbox` `[-180, -90, 180, 90]` est une valeur fixe, pas l'emprise réelle du
+  jeu de données.
 
-Le rectangle `[-180, -90, 180, 90]` ajouté dans certains chemins de repli est synthétique. Il ne doit pas être présenté comme l'emprise calculée du jeu de données.
+Une reprojection de données tente `ST_Transform` dans DuckDB, puis `proj4` si
+les deux CRS sont pris en charge. Elle est distincte de la projection de rendu
+([Fonds et projections](FONDS_PROJECTIONS.md)).
 
-Une reprojection tente d'abord `ST_Transform` dans DuckDB, puis utilise le fallback `proj4` pour les CRS pris en charge. La projection de rendu et la reprojection des données sont deux mécanismes distincts : documenter ou modifier l'un ne change pas implicitement l'autre.
+## Caches et mutations
 
-## Caches, streaming et mutations
+| Niveau                 | Contenu                                                        | Invalidation                                         |
+| ---------------------- | -------------------------------------------------------------- | ---------------------------------------------------- |
+| Métadonnées DuckDB     | description, nombre de lignes, analyse de colonnes             | `markTableMutated()` et mutateurs de l'orchestrateur |
+| Table Arrow du dataset | référence Arrow conservée dans l'état du dataset               | recréation ou mutation de la table ou de ses filtres |
+| Jointure               | tables Arrow jointes, cache de similarité, gradings (LRU de 4) | mutation, correction de jointure                     |
+| Rendu                  | caches indexés par identité de table et de projection          | nouvelle référence Arrow ou nouvelle projection      |
 
-Trois niveaux de cache doivent être distingués :
+Toute mutation passe par l'orchestrateur ou invalide explicitement ces caches.
 
-| Niveau                 | Rôle                                                                                     | Invalidation                                                             |
-| ---------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Métadonnées DuckDB     | Descriptions, nombre de lignes, analyse et métadonnées de table.                         | `markTableMutated()` et les mutateurs de l'orchestrateur.                |
-| Table Arrow du dataset | Référence Arrow conservée dans l'état du dataset.                                        | Recréation ou mutation de la table, des filtres ou du dataset.           |
-| Caches de rendu        | Caches faibles indexés par identité de table et de projection, plus des LRU de jointure. | Nouvelle référence Arrow, nouvelle projection ou invalidation explicite. |
+Le grading de jointure (joint / à vérifier / non unique / non reconnu) est
+matérialisé dans des tables dérivées, **clés sur le cache de similarité** qui
+les a produites : invalider ce cache fait tomber les gradings. Des appels
+concurrents partagent un même calcul.
 
-Toute mutation de table doit passer par l'orchestrateur ou invalider explicitement les caches associés. Un `Duck.query()` direct ne peut pas informer automatiquement les caches de niveau applicatif.
-
-Le streaming Arrow n'est pas universel : après une DDL qui modifie le schéma, un binding streaming peut retourner des colonnes nouvellement ajoutées comme `NULL`. Les parcours de jointure et d'édition choisissent donc volontairement une lecture non streaming. Ne pas remplacer ce choix par une optimisation locale sans test de schéma et de rendu.
-
-Les résultats Arrow joints sont gardés dans un LRU de quatre entrées. Les mutations et les corrections de jointure doivent invalider la table jointe, le cache de similarité et les caches Arrow dépendants.
-
-Le grading de la jointure est matérialisé dans des tables dérivées, une par couple (cache de similarité, fond, valeurs exclues), elles aussi en LRU de quatre entrées. Ces tables sont **clés sur le cache de similarité qui les a produites** : évincer, invalider ou reconstruire ce cache doit faire tomber les gradings dérivés, sinon les compteurs de buckets et les pages d'entités continuent de lire des lignes périmées. Les appels concurrents partagent un build en cours plutôt que d'en lancer plusieurs.
+Après une DDL qui ajoute des colonnes, une lecture Arrow en streaming peut
+renvoyer ces colonnes à `NULL`. Jointures, GPS et lecture directe se font donc
+sans streaming (`skipStreaming`) ; ne pas « optimiser » ce choix sans test de schéma
+et de rendu.
 
 ## Phase fuzzy de la jointure
 
-La phase fuzzy compare chaque valeur source sans correspondance exacte à chaque nom cible, en Jaro-Winkler. Le coût est donc le **produit** des deux, et il est borné par un budget en paires (`MAX_FUZZY_AUTO_PAIRS`) et non par un plafond de candidats : un plafond fixe rendrait l'étape plus lente à mesure que le catalogue grandit, alors que le budget garde une durée constante et resserre le seuil tout seul. Le débit mesuré en WASM sert à estimer la durée (`FUZZY_PAIRS_PER_MS`, calibré sur le corpus le plus lent). Cette estimation ne couvre que le scoring : le reste de la construction du cache croît avec le nombre de correspondances trouvées, mesuré à 3 850 ms pour une estimation de 3 437 ms quand toutes les valeurs finissent par recevoir une suggestion. C'est un ordre de grandeur affiché à l'utilisateur, pas une borne.
+Les valeurs sans correspondance exacte sont comparées en Jaro-Winkler aux noms
+distincts des fonds candidats : le coût est le produit des deux. Il est borné
+par un budget en paires (`MAX_FUZZY_AUTO_PAIRS`) plutôt que par un nombre de
+candidats, ce qui garde une durée stable quand le catalogue grandit.
+`FUZZY_PAIRS_PER_MS` estime la durée affichée ; ce n'est qu'un ordre de
+grandeur.
 
-Le budget est volontairement tout-ou-rien pour les suggestions par valeur : n'en scorer qu'une partie donnerait des propositions à un sous-ensemble arbitraire des valeurs. Deux conséquences à connaître :
+- Le **classement des fonds** est toujours calculé, sur un échantillon borné
+  (`MAX_FUZZY_RANKING_SAMPLE`) : Khartis désigne le bon fond même quand aucune
+  valeur n'est écrite exactement.
+- Les **suggestions par valeur** sont tout-ou-rien : au-delà du budget, elles
+  sont proposées à la demande, avec l'estimation de durée.
+- Cette passe à la demande **ne s'annule pas** : DuckDB WASM est mono-thread et
+  `cancelPendingQuery` ne rejette qu'à la fin du calcul. Ne pas proposer de
+  bouton Annuler sur ce chemin.
 
-- le **classement des fonds** ne subit pas ce tout-ou-rien : il est calculé sur un échantillon borné du résidu (`MAX_FUZZY_RANKING_SAMPLE`), donc Khartis continue de nommer le bon fond même quand aucune valeur n'est écrite correctement ;
-- au-delà du budget, les suggestions par valeur sont proposées **à la demande** de l'utilisateur, avec l'estimation de durée. Cette passe **n'est pas interruptible** : DuckDB WASM est mono-thread et le worker ne rend pas la main pendant le cross join, donc `cancelPendingQuery` ne rejette qu'une fois le calcul terminé (mesuré : abandon demandé à 400 ms, rejet à 10 091 ms pour une passe de 10 266 ms). Ne pas exposer de bouton d'annulation sur ce chemin ; la passe va au bout et conserve son résultat.
+## Limites
 
-## Ajouter ou faire évoluer un format
+| Limite             | Valeur                                                                       |
+| ------------------ | ---------------------------------------------------------------------------- |
+| Taille par fichier | voir [Persistance et archives](PERSISTANCE_ET_ARCHIVES.md#quotas-et-tailles) |
+| Lignes importées   | avertissement à 250 000, maximum 1 000 000 (`IMPORT_ROW_LIMITS`)             |
+| Parquet            | volume estimé avant lecture (`assertParquetVolumeBeforeRead`)                |
+| ZIP de données     | 500 Mio décompressés au total                                                |
 
-Avant d'ajouter un format :
+Le plafond ZIP est vérifié avant décompression, mais sur les tailles
+**déclarées** par l'archive, après lecture du fichier entier en mémoire. Une
+archive non fiable reste potentiellement coûteuse.
 
-1. choisir le chemin approprié : lecteur DuckDB générique, processeur enregistré ou fallback navigateur justifié ;
-2. ajouter la détection, les limites de taille et les validations de contenu au niveau d'entrée ;
-3. produire une table avec un nom, `__id`, les métadonnées et le statut attendus par `DuckDBDataset` ;
-4. normaliser les géométries et le CRS lorsque le format est spatial, puis vérifier le contrat Arrow/GeoArrow ;
-5. garantir l'invalidation des caches après toute mutation ;
-6. vérifier que le fichier source ou son snapshot préparé pourra être conservé comme asset avant de promettre la reprise ou l'export `.kh` ;
-7. ajouter des tests de lecture, d'erreur, de reprise et de rendu représentatif.
+Les expressions SQL saisies dans les opérations de colonnes sont validées par
+une frontière dédiée ; ce n'est pas une permission d'exécuter du SQL libre
+depuis un composant.
 
-Une exception au principe DuckDB-first doit être motivée : par exemple, le fallback GeoPackage navigateur existe parce que certains GeoPackages ne sont pas lisibles par le build DuckDB WASM.
+## Ajouter un format
 
-## Limites de ressources et de sécurité
+1. Choisir le chemin : lecteur DuckDB générique, processeur enregistré, ou
+   repli navigateur justifié (comme celui du GeoPackage).
+2. Ajouter détection, limites de taille et validation de contenu à l'entrée.
+3. Produire une table avec son nom, `__id` et les métadonnées attendues par
+   `DuckDBDataset`.
+4. Pour un format spatial, normaliser géométrie et CRS, puis vérifier le
+   contrat GeoArrow.
+5. Invalider les caches après toute mutation.
+6. S'assurer que le fichier source est conservé comme asset, sans quoi ni la
+   reprise ni l'export `.kh` ne fonctionnent.
+7. Tester lecture, erreurs, reprise et rendu, avec un jeu de données dans
+   `tests-datasets/`.
 
-Les limites actuelles sont séparées : taille d'un fichier selon son type, total de l'import, taille du snapshot JSON, quota réel du navigateur et mémoire DuckDB. Elles ne garantissent pas qu'un gros projet pourra être importé, conservé et rouvert sur chaque navigateur.
+## Tests de référence
 
-Le ZIP de données refuse un total décompressé supérieur à 500 Mio, mais la décompression a déjà produit les entrées en mémoire au moment de ce contrôle. Les sources et archives non fiables restent donc à traiter comme potentiellement coûteuses.
-
-Les expressions SQL saisies par l'utilisateur sont validées dans les opérations de colonnes. Cette validation est une frontière dédiée, pas une permission d'exécuter du SQL utilisateur librement depuis un composant.
-
-## Tests vivants
-
-Les tests de pipeline et DuckDB sont la référence pour les formats et leurs erreurs :
-
-- `tests/pipeline/remote-processor.test.ts` ;
-- `tests/pipeline/validators.test.ts` ;
-- `tests/duckdb/` ;
-- `src/lib/features/duckdb/duck.svelte.test.ts` ;
-- `src/lib/features/duckdb/orchestrator/orchestrator-joined-arrow-cache.svelte.test.ts`.
-
-Pour une modification de format ou de table, compléter ces tests par un jeu de données représentatif dans `tests-datasets/` et par le test de persistance ou d'archive correspondant.
+- `tests/pipeline/remote-processor.test.ts`, `tests/pipeline/validators.test.ts`
+- `tests/duckdb/`
+- `src/lib/features/duckdb/duck.svelte.test.ts`
+- `src/lib/features/duckdb/orchestrator/orchestrator-joined-arrow-cache.svelte.test.ts`

@@ -345,9 +345,11 @@ describe('project persistence', () => {
     expect(storedProject.manifest.version).toBe(PROJECT_CONST.SCHEMA_VERSION);
     expect(storedProject.data.sourceFiles).toEqual([preparedFile]);
     expect(storedProject.data.sourceFiles).not.toBe(project.data.sourceFiles);
-    expect(mocks.syncProjectAssetRefs).toHaveBeenCalledWith('project-1', [
-      preparedFile
-    ]);
+    expect(mocks.syncProjectAssetRefs).toHaveBeenCalledWith(
+      'project-1',
+      [preparedFile],
+      []
+    );
   });
 
   it('uses the caller-provided size for metadata instead of re-estimating the project', async () => {
@@ -379,6 +381,55 @@ describe('project persistence', () => {
       4242
     );
     expect(vi.mocked(estimateProjectStorageSize)).not.toHaveBeenCalled();
+  });
+
+  it('saves a stored project copy verbatim without the live-state serializer', async () => {
+    const database = new FakeDatabase();
+    installFakeIndexedDb(database);
+
+    const assetRef = {
+      assetId: 'asset-1',
+      originalName: 'data.csv',
+      mimeType: 'text/csv',
+      size: 12,
+      kind: 'primary'
+    };
+    const basemapSourceAsset = {
+      assetId: 'basemap-asset-1',
+      originalName: 'zones.geojson',
+      mimeType: 'application/geo+json',
+      size: 64,
+      kind: 'primary'
+    };
+    const project = {
+      ...createSerializedProject('project-copy', 'Copy'),
+      data: {
+        sourceFiles: [{ id: 'file-1', name: 'data.csv', assetRef }],
+        visualizationSettings: { visualizations: [{ name: 'Stored viz' }] },
+        customBasemaps: {
+          metadata: [
+            { file: 'custom_basemap_1', sourceAsset: basemapSourceAsset }
+          ],
+          attributes: []
+        }
+      }
+    };
+
+    const { saveSerializedProject, loadSerializedProject, listMetadata } =
+      await import('./persistence.service');
+
+    await saveSerializedProject(project as never);
+
+    expect(mocks.prepareForIndexedDB).not.toHaveBeenCalled();
+    expect(await loadSerializedProject('project-copy')).toEqual(project);
+    expect(mocks.syncProjectAssetRefs).toHaveBeenCalledWith(
+      'project-copy',
+      [expect.objectContaining({ id: 'file-1', assetRef })],
+      [basemapSourceAsset]
+    );
+    expect(
+      (await listMetadata()).find((entry) => entry.id === 'project-copy')?.name
+    ).toBe('Copy');
   });
 
   it('should serialize saves when one browser context writes concurrently', async () => {

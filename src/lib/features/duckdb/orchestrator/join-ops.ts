@@ -42,6 +42,7 @@ import type {
 } from '$lib/features/commons/types/data-tab.types';
 import { detectGPSColumns } from './gps-ops';
 import { isGeometryColumnName } from '../utils/geometry-column.utils';
+import { selectBasemapJoinKeyColumns } from '../utils/basemap-join-key-columns.utils';
 
 export type { FinalizeJoinResult };
 
@@ -1241,20 +1242,9 @@ async function generateAttributesForBasemap(
       return true;
     });
 
-    const candidateColumns = textColumns.filter((col) => {
-      const name = col.column_name.toLowerCase();
-      return (
-        /^(name|nom|libelle|label|id|code|iso|fips|postal|abbrev|admin|sovereignt|geounit|subunit)$/i.test(
-          name
-        ) ||
-        /_(name|code|a3|a2)$/i.test(name) ||
-        /^(name_|iso_|adm0_|brk_|un_|wb_|gu_|su_|sov_|formal_)/i.test(name)
-      );
-    });
-
-    if (candidateColumns.length === 0) {
-      candidateColumns.push(...textColumns.slice(0, 5));
-    }
+    const candidateColumns = selectBasemapJoinKeyColumns(
+      textColumns.map((col) => col.column_name)
+    );
 
     const countResult = (await Duck.query(
       `SELECT COUNT(*) as total FROM "${escapedGeomTable}"`,
@@ -1264,9 +1254,9 @@ async function generateAttributesForBasemap(
 
     if (totalCount === 0) return false;
 
-    const unionQueries = candidateColumns.map((col) => {
-      const safeColName = escapeIdentifier(col.column_name);
-      const safeVariantName = escapeSqlString(col.column_name);
+    const unionQueries = candidateColumns.map((columnName) => {
+      const safeColName = escapeIdentifier(columnName);
+      const safeVariantName = escapeSqlString(columnName);
       return `
         SELECT DISTINCT
           "${safeColName}" as raw,

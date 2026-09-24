@@ -62,6 +62,7 @@
     SavePriority,
     persistenceRegistry
   } from '$lib/features/project-management/core';
+  import { persistCustomBasemapSource } from '$lib/features/project-management';
   import { useBasemapJoinAttributes } from '../hooks/use-basemap-join-attributes.svelte';
   import { tick, untrack } from 'svelte';
   import {
@@ -927,8 +928,15 @@
 
     try {
       const file = importFiles[0];
-      const { basemap: customBasemap, geometryTable } =
+      const { basemap: processedBasemap, geometryTable } =
         await processBasemapImport(file);
+
+      if (abortSignal.aborted) return;
+
+      const customBasemap = await persistCustomBasemapSource(
+        processedBasemap,
+        file
+      );
 
       if (abortSignal.aborted) return;
 
