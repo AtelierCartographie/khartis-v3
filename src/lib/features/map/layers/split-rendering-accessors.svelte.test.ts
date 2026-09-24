@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import { Type, type Table as ArrowTable } from 'apache-arrow/Arrow';
 import {
   CANONICAL_ID_COLUMN,
   INTERNAL_COLUMN,
@@ -26,7 +26,12 @@ function createTableWithRows(
 ): ArrowTable {
   return {
     schema: {
-      fields: fieldNames.map((name) => ({ name }))
+      fields: fieldNames.map((name) => ({
+        name,
+        type: {
+          typeId: typeof rows[0]?.[name] === 'number' ? Type.Int : Type.Utf8
+        }
+      }))
     },
     numRows: rows.length,
     get: (index: number) => rows[index],
@@ -282,6 +287,39 @@ describe('split rendering accessors', () => {
         INTERNAL_COLUMN.FEATURE_ID
       )
     ).toBe('admin_code');
+  });
+
+  it('matches on a basemap column outside the named candidates when the join used it', () => {
+    const geometry = createTableWithRows(
+      [
+        {
+          [INTERNAL_COLUMN.FEATURE_ID]: 0,
+          NUTS_ID: 'AT11',
+          NAME_LATN: 'Burgenland'
+        },
+        {
+          [INTERNAL_COLUMN.FEATURE_ID]: 1,
+          NUTS_ID: 'AT32',
+          NAME_LATN: 'Salzburg'
+        }
+      ],
+      [INTERNAL_COLUMN.FEATURE_ID, 'NUTS_ID', 'NAME_LATN']
+    );
+    const dataset = createTableWithRows(
+      [
+        { [JOINED_BASEMAP_COLUMN.ID]: 'Burgenland', value: 301250 },
+        { [JOINED_BASEMAP_COLUMN.ID]: 'Salzburg', value: 568346 }
+      ],
+      [JOINED_BASEMAP_COLUMN.ID, 'value']
+    );
+
+    expect(
+      resolveBestSplitFeatureIdColumn(
+        geometry,
+        dataset,
+        INTERNAL_COLUMN.FEATURE_ID
+      )
+    ).toBe('NAME_LATN');
   });
 
   it('does not resolve a split feature id column without joined basemap ids', () => {

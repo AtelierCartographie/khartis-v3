@@ -63,6 +63,7 @@ export function useMapReferenceBasemap(
     const refId = basemapStyleStore.referenceBasemapId;
     const isMapLoaded = props.getIsMapLoaded();
     void isMapLoaded;
+    void basemapService.registrationVersion;
     const requestId = ++referenceBasemapRequestId;
 
     untrack(async () => {

@@ -3,6 +3,7 @@ export { basemapService } from './basemap.service.svelte';
 export * from './osm-tile.service';
 export {
   processBasemapImport,
+  isImportedCustomBasemap,
   createBasemapFromGeometryTable,
   loadBasemapFromUrl,
   getBasemapRawTableName,

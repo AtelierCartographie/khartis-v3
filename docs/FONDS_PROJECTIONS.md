@@ -71,6 +71,28 @@ encore persistée (voir
 de données importé qui porte sa propre géométrie peut aussi servir de fond de
 référence : il occupe alors le slot de référence s'il est libre.
 
+### Persistance d'un fond importé
+
+La table `custom_basemap_*` et ses couches dérivées sont éphémères, comme toute
+table DuckDB. Ce qui est durable, c'est le fichier importé : il est enregistré
+comme asset du projet (`sourceAsset` dans la métadonnée du fond), exporté dans
+l'archive `.kh`, puis rejoué par `processBasemapImport()` à l'ouverture du
+projet, sous le nom de table enregistré dans `metadata.file`. Ce nom doit rester
+stable : jointures, fond de référence, couches et attributs le référencent.
+
+Deux conséquences pour qui modifie l'import :
+
+- **L'import doit rester rejouable.** Il est exécuté à nouveau à chaque
+  ouverture, sur les mêmes octets. Toute écriture annexe doit être idempotente
+  pour un même nom de table, comme `generateCustomBasemapAttributes()` qui
+  remplace les attributs du fond au lieu de les ajouter.
+- **L'ordre des `__id` doit rester déterministe.** Une jointure restaurée
+  s'appuie sur les identifiants recalculés au replay.
+
+Si le replay échoue, un avertissement nomme le fond au lieu de le faire
+disparaître en silence. Le détail du contrat de persistance est dans
+[PERSISTANCE_ET_ARCHIVES.md](PERSISTANCE_ET_ARCHIVES.md#fonds-personnalisés-importés).
+
 ### Couches annexes dérivées
 
 Un fond polygonal importé n'apporte qu'une couverture. Pour qu'il se style
@@ -107,6 +129,16 @@ En rendu split, la géométrie du fond et les attributs du jeu de données reste
 dans des tables Arrow distinctes, reliées par `featureIdColumn` : moins de
 copies de géométrie, et picking et infobulles toujours rattachés à la ligne du
 jeu de données.
+
+Pour un fond importé, la jointure range dans `basemap_id` la **valeur brute**
+de la colonne du fond qui a apparié la donnée (un nom, un code), pas son `__id`.
+Les colonnes candidates viennent d'une seule règle,
+`selectBasemapJoinKeyColumns()` (`duckdb/utils/`) : noms et codes reconnus,
+sinon les cinq premières colonnes texte. Le rendu split doit retrouver ces
+valeurs dans la géométrie : `getCustomBasemapGeometryProjectColumns()` projette
+au moins ces colonnes, et `resolveBestSplitFeatureIdColumn()` essaie toute
+colonne texte ou entière. Si une colonne de jointure manque à la géométrie, la
+légende se calcule mais aucune entité n'est dessinée.
 
 Jointures, classifications, recherches et densités sont des opérations DuckDB ;
 après une mutation, les caches concernés sont invalidés par l'orchestrateur

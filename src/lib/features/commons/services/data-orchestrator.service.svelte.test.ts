@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   duckWaitForInitialization: vi.fn<() => Promise<void>>(),
   isCurrentProjectRuntime: true,
   loggerError: vi.fn(),
+  restoreCustomBasemapTables: vi.fn<() => Promise<void>>(),
   showWarning: vi.fn(),
   updateClassification: vi.fn()
 }));
@@ -55,6 +56,10 @@ vi.mock('$lib/features/project-management/core', () => ({
       callback()
     )
   }
+}));
+
+vi.mock('$lib/features/project-management', () => ({
+  restoreCustomBasemapTables: mocks.restoreCustomBasemapTables
 }));
 
 vi.mock(
@@ -360,6 +365,33 @@ describe('dataOrchestratorService restore fallbacks', () => {
       expect.any(String),
       expect.stringContaining('broken.csv')
     );
+  });
+
+  it('rebuilds imported basemap tables before replaying source files', async () => {
+    mocks.currentProject = {
+      id: 'project-1',
+      manifest: {
+        name: 'Project'
+      },
+      data: {
+        sourceFiles: [
+          {
+            id: 'file-1',
+            name: 'data.csv',
+            fileType: 'csv',
+            content: new ArrayBuffer(1)
+          }
+        ]
+      }
+    };
+    const { dataOrchestratorService } = await loadService();
+
+    await dataOrchestratorService.onProjectChanged();
+
+    expect(mocks.restoreCustomBasemapTables).toHaveBeenCalledTimes(1);
+    expect(
+      mocks.restoreCustomBasemapTables.mock.invocationCallOrder[0]
+    ).toBeLessThan(mocks.addFile.mock.invocationCallOrder[0]);
   });
 
   it('should fail promptly when a joined source file cannot restore its dataset', async () => {
