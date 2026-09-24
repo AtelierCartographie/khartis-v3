@@ -1,127 +1,159 @@
 # Persistance, reprise et archives
 
-Khartis conserve les projets dans le navigateur et permet leur sauvegarde sous forme d'archive `.kh`. Ce document distingue les garanties observées dans le code des limites que les contributeurs ne doivent pas masquer.
+Khartis enregistre les projets dans le navigateur (IndexedDB) et les exporte en
+archives `.kh`. Cette page décrit ce qui est conservé, comment un projet est
+restauré, et les limites connues. Le contrat de version est dans
+[Compatibilité du format projet](PROJECT_FORMAT_COMPATIBILITY.md).
 
-Voir aussi : [IMPORT_DUCKDB.md](IMPORT_DUCKDB.md) et [PROJECT_FORMAT_COMPATIBILITY.md](PROJECT_FORMAT_COMPATIBILITY.md).
+## Ce qui est conservé, ce qui est recréé
 
-## Ce qui est durable, ce qui est recréé
+| Élément                           | Où                                 | Durée de vie                   |
+| --------------------------------- | ---------------------------------- | ------------------------------ |
+| Snapshot du projet                | IndexedDB, `project.json` du `.kh` | durable                        |
+| Fichiers source                   | IndexedDB, `assets/` du `.kh`      | durable, en assets binaires    |
+| Tables, macros et caches DuckDB   | mémoire                            | session ; recréés à la reprise |
+| Historique annuler/rétablir       | mémoire                            | session                        |
+| Liste des projets, dernier ouvert | IndexedDB                          | durable                        |
 
-| Élément                         | Durée de vie                      | Contrat actuel                                                       |
-| ------------------------------- | --------------------------------- | -------------------------------------------------------------------- |
-| Tables, macros et caches DuckDB | Session                           | Éphémères. Recréés à la reprise du projet.                           |
-| Snapshot de projet              | IndexedDB et `project.json`       | Configuration, état métier et références d'assets.                   |
-| Fichiers source                 | IndexedDB et `assets/` dans `.kh` | Persistés comme assets binaires référencés.                          |
-| Historique undo/redo            | Mémoire                           | Limité et non destiné à la restauration après rechargement.          |
-| Métadonnées de navigation       | IndexedDB                         | Liste de projets, dernier projet ouvert et informations de stockage. |
-
-Le snapshot n'est pas seulement un ensemble de métadonnées légères. Il ne contient pas les octets binaires des sources, mais peut contenir des données analysées ou préparées, des statistiques, transformations, jointures, corrections et réglages de visualisation. Ne pas qualifier ce contrat de « metadata-only ».
+Le snapshot ne contient pas les octets des sources, mais il ne se limite pas à
+des métadonnées : il porte aussi statistiques, transformations, jointures,
+corrections, visualisations et mise en page.
 
 ## IndexedDB
 
-La base `KhartisDB` est à la version 3. Les object stores sont :
+Base `KhartisDB`, version 3 :
 
-| Store                  | Contenu                                                            |
-| ---------------------- | ------------------------------------------------------------------ |
-| `projects`             | Snapshot sérialisé du projet.                                      |
-| `metadata`             | Métadonnées applicatives et du projet.                             |
-| `project_assets`       | Métadonnées d'un asset : MIME, taille, nombre et taille de chunks. |
-| `project_asset_chunks` | Octets binaires, découpés par blocs de 8 Mio.                      |
-| `project_asset_refs`   | Références projet vers asset pour le cycle de vie et le nettoyage. |
+| Store                  | Contenu                                          |
+| ---------------------- | ------------------------------------------------ |
+| `projects`             | snapshot sérialisé                               |
+| `metadata`             | métadonnées applicatives et de projet            |
+| `project_assets`       | description d'un asset : MIME, taille, découpage |
+| `project_asset_chunks` | octets, par blocs de 8 Mio                       |
+| `project_asset_refs`   | liens projet → asset, pour le nettoyage          |
 
-L'ouverture de la base protège contre les blocages, les changements de version et les ouvertures qui dépassent son timeout. Une migration unique depuis les anciennes clés `localforage` est également prévue ; IndexedDB reste prioritaire quand les deux sources existent.
+L'ouverture gère les blocages, les changements de version et un timeout de
+10 s. Une migration unique reprend les anciennes clés `localforage` ; en cas de
+doublon, IndexedDB l'emporte.
 
-## Écriture locale et concurrence
+## Enregistrement
 
-L'auto-sauvegarde passe par un registre de persistance débouncé à 750 ms. Il coalesce les changements, préserve une mutation intervenue pendant une sauvegarde et peut être suspendu pendant une restauration.
+L'autosave passe par `persistenceRegistry`, avec un debounce de 750 ms : les
+changements sont regroupés, une mutation survenue pendant un enregistrement
+n'est pas perdue, et l'autosave est suspendu pendant une restauration. Le
+layout force aussi un enregistrement sur `visibilitychange` (onglet masqué),
+`pagehide` et `beforeunload`.
 
-Avant d'écrire le projet, le code prépare les sources pour leur stockage et vérifie la taille du snapshot. La sauvegarde utilise une révision optimiste : deux onglets qui écrivent un même projet ne doivent pas écraser silencieusement une révision devenue obsolète ; une erreur de conflit est remontée à l'appelant.
+Un enregistrement vérifie d'abord la taille estimée du snapshot, puis prépare
+les assets. Il utilise une révision optimiste : si deux onglets écrivent le même
+projet, le second reçoit une `ProjectSaveConflictError` au lieu d'écraser la
+révision la plus récente.
 
-Les assets sont écrits chunk par chunk, puis leurs métadonnées sont écrites dans une transaction distincte. Le snapshot, les références d'assets et les métadonnées de projet sont également sauvegardés par étapes. C'est une limite importante : il n'existe pas de transaction IndexedDB unique couvrant l'intégralité d'un projet.
+Il n'y a pas de transaction unique pour tout un projet : chaque bloc d'asset,
+les métadonnées de l'asset, le snapshot, les références et les métadonnées de
+projet sont écrits dans des transactions distinctes.
 
 ## Quotas et tailles
 
-Les seuils applicatifs actuels sont des garde-fous, pas une réserve de stockage garantie :
-
-| Règle                             | Valeur actuelle     |
+| Règle                             | Valeur              |
 | --------------------------------- | ------------------- |
 | CSV, TSV, GeoJSON, KML, KMZ, GPX  | 150 Mio par fichier |
 | Shapefile, GeoPackage, GeoParquet | 200 Mio par fichier |
 | ZIP générique                     | 100 Mio par fichier |
 | Total d'un import                 | 200 Mio             |
-| Nombre de fichiers importés       | 20                  |
-| Snapshot de projet sérialisé      | 150 Mio             |
-| Paramètre de stockage applicatif  | 500 Mio             |
+| Fichiers par import               | 20                  |
+| Snapshot sérialisé                | 150 Mio             |
+| Projets                           | 50                  |
 
-Au moment d'ajouter un asset, Khartis consulte `navigator.storage.estimate()` si disponible. Il exige la taille de l'asset plus une marge de sécurité égale au maximum de 20 % de l'asset ou 8 Mio. Si l'estimation n'est pas disponible, elle échoue ou n'indique pas de quota, l'écriture est tentée et l'erreur navigateur reste possible.
+Avant d'écrire un asset, Khartis consulte `navigator.storage.estimate()` et
+exige la taille de l'asset plus une marge de max(20 %, 8 Mio). Sans estimation
+disponible, l'écriture est tentée et l'erreur de quota du navigateur reste
+possible. En production, la PWA demande le stockage persistant
+(`navigator.storage.persist()`), sans garantie que le navigateur l'accorde.
 
-Le navigateur contrôle le quota réel. La PWA demande le stockage persistant lorsque l'API est disponible, mais le code traite cette demande comme une opération qui peut ne pas aboutir. Les limites de fichier, du snapshot JSON et du navigateur ne mesurent pas la même chose.
+Ces seuils sont des garde-fous : ils ne garantissent pas qu'un gros projet
+pourra être importé, enregistré et rouvert sur tous les navigateurs.
 
 ## Reprise d'un projet
 
-La restauration suit cette séquence :
-
 ```text
 lecture IndexedDB
-  -> vérification et migration de schéma
-  -> désérialisation du snapshot et des assets
-  -> remise à zéro du runtime DuckDB et des stores transitoires
-  -> réimport séquentiel des sources
-  -> restauration des visualisations, jointures, filtres, facettes et mise en page
+  → vérification et migration du schéma
+  → désérialisation du snapshot et des assets
+  → remise à zéro de DuckDB et des stores transitoires
+  → réimport séquentiel des sources (le fichier sélectionné d'abord)
+  → restauration des visualisations, jointures, filtres, facettes et mise en page
 ```
 
-Les sources sont retraitées une par une pour limiter la mémoire et éviter les courses asynchrones. Des gardes de cycle de vie empêchent un projet qui n'est plus courant de terminer sa restauration. En cas d'échec du dernier projet, la reprise est mise en quarantaine afin d'éviter une boucle de démarrage.
+Les sources sont réimportées une par une pour limiter la mémoire. Des gardes
+empêchent un projet qui n'est plus courant de terminer sa restauration. La
+reprise du dernier projet a un timeout de 5 minutes ; si elle échoue, le projet
+est mis en quarantaine pour la session (`sessionStorage`) afin d'éviter une
+boucle au démarrage.
 
-Cela implique qu'une évolution d'import, de transformation ou de table doit être pensée aussi comme une évolution de reprise : un projet exporté ou enregistré doit reconstruire le même état utile, pas seulement réafficher son JSON.
+Conséquence : toute évolution d'import, de transformation ou de table est aussi
+une évolution de la reprise. Un projet rouvert doit reconstruire le même état,
+pas seulement relire son JSON.
 
 ## Archive `.kh`
 
-Le format actuel est une archive ZIP version 2 :
+Archive ZIP, conteneur version 2 :
 
 ```text
-manifest.json
-project.json
-assets/<assetId>
+manifest.json      version du conteneur, date, projet, liste des assets
+project.json       snapshot et version de schéma
+assets/<assetId>   octets de chaque asset
 ```
 
-`manifest.json` décrit la version du conteneur, la date d'export, le projet et les assets. `project.json` porte le snapshot et sa version de schéma. Les octets d'un asset sont placés sous `assets/<assetId>`.
+**Export.** Les sources sans asset sont préparées sur une copie du projet, ce
+qui peut écrire les assets manquants dans IndexedDB. Les JSON sont compressés,
+les assets ajoutés sans compression. L'export n'appelle pas
+`saveCurrentProject()`.
 
-Lors d'un export, les sources sans asset sont préparées sur une copie du projet afin de ne pas muter le projet en mémoire. Cette préparation peut écrire les assets manquants dans IndexedDB. Les entrées JSON sont configurées avec compression ; les assets sont ajoutés au niveau 0. L'export `.kh` n'appelle pas `saveCurrentProject()` : il ne doit pas être décrit comme un flush explicite de l'IndexedDB.
+**Import.**
 
-Lors d'un import, Khartis valide d'abord la structure, la version d'archive, la cohérence du manifest (`assetCount`, entrées d'assets typées avec un `path` dérivé de l'`assetId`) et le schéma de `project.json`. Les assets sont ensuite restaurés, le projet est désérialisé puis sauvegardé localement. Les versions incompatibles sont rejetées avant la restauration des assets. Si l'identifiant du projet archivé existe déjà localement, l'import crée un nouveau projet sous un identifiant frais au lieu d'écraser l'existant ou d'échouer en conflit de sauvegarde.
+1. La taille du fichier est bornée avant lecture.
+2. `unzipSync()` ne décompresse que les entrées attendues, avec un plafond sur
+   leur nombre et sur les tailles déclarées.
+3. La structure, la version du conteneur, le manifest (`assetCount`, chemin
+   `assets/<assetId>`) et le schéma de `project.json` sont validés ; une
+   version incompatible est rejetée avant toute écriture d'asset.
+4. Les assets sont restaurés (un `assetId` déjà présent localement est
+   conservé tel quel), puis le projet est désérialisé et enregistré.
+5. Si l'identifiant du projet existe déjà localement, le projet importé reçoit
+   un nouvel identifiant.
 
-### Limites vérifiées de l'import
+L'import n'est pas transactionnel. En cas d'échec après la restauration des
+assets, Khartis supprime au mieux le projet partiel et les assets orphelins
+(ceux d'un autre projet sont conservés), puis recharge le projet précédent.
+Une fermeture d'onglet en cours d'import n'est pas couverte.
 
-L'import ne constitue pas une transaction globale. En cas d'échec après la restauration des assets, le code retire en best-effort la ligne projet partielle et les assets devenus orphelins (les assets encore référencés par un autre projet sont conservés), puis recharge le projet précédemment ouvert pour que l'état des stores ne soit pas pollué par l'import échoué. Ce nettoyage ne garantit pas la récupération de chaque interruption, notamment une fermeture d'onglet en plein milieu.
+Aucun hash ni contrôle du contenu réel des assets n'est effectué : le format
+n'est ni signé, ni durci contre une archive malveillante.
 
-Le lecteur charge l'archive entière puis appelle `unzipSync()` avec un filtre : seules les entrées attendues (`manifest.json`, `project.json`, `assets/*`) sont décompressées, avec un plafond sur le nombre d'entrées et sur les tailles décompressées déclarées, dérivé des limites de stockage applicatives ; la taille du fichier archive est bornée avant lecture. Les tailles utilisées par le filtre restent celles déclarées par le ZIP. Aucun hash ni vérification du contenu réel d'un payload (MIME, octets) n'est effectué : ne pas présenter le format comme une archive intègre, atomique ou durcie contre toutes les archives malveillantes.
+## Limites connues
 
-## Fonds personnalisés : faits et lacune à vérifier
+- **Fonds importés via l'étape fond de carte.** `processBasemapImport` crée une
+  table DuckDB `custom_basemap_*` sans asset source. Seuls les métadonnées et
+  la table `custom_basemap_attributes` sont sérialisés : après un rechargement
+  ou un import `.kh`, la géométrie du fond est introuvable
+  (`Custom basemap table not found`, journalisé sans message à l'utilisateur),
+  et ses couches dérivées aussi. À l'inverse, un jeu de données qui porte sa
+  propre géométrie est persisté : sa source est un asset, et ses couches de
+  fond sont reconstruites à chaque reprise.
+- **Projet local illisible.** Un projet dont le schéma ne peut pas être migré
+  est journalisé et ne s'ouvre pas, sans message d'erreur explicite.
 
-Faits prouvés par le code :
+## Tests de référence
 
-- la sérialisation tente de conserver les métadonnées des fonds personnalisés et la table `custom_basemap_attributes` lorsque cette table existe ;
-- l'export `.kh` collecte les `assetRef` des fichiers source du projet ;
-- le service d'import de fond crée une table DuckDB temporaire nommée `custom_basemap_*` ;
-- le chargement d'un fond personnalisé recherche cette table DuckDB à partir de `metadata.file`.
+- `tests/pipeline/project-archive.test.ts`
+- `tests/pipeline/project-schema-compatibility.test.ts`
+- `tests/pipeline/persistence-registry.test.ts`
+- `src/lib/features/project-management/services/asset-store.service.svelte.test.ts`
+- `src/lib/features/project-management/services/database-access.service.svelte.test.ts`
+- `src/lib/features/project-management/services/persistence.service.svelte.test.ts`
+- `src/lib/features/commons/stores/project/project-lifecycle.svelte.test.ts`
 
-Le chemin inspecté ne montre ni asset de géométrie associé au fond personnalisé, ni sérialisation de sa table de géométrie. Cela constitue une lacune de persistance **non confirmée par un test de reprise complet** : il est plausible que la géométrie d'un fond personnalisé ne soit plus disponible après rechargement ou import d'archive. La documentation ne doit ni garantir cette persistance, ni transformer cette déduction statique en défaut avéré avant un test d'intégration dédié.
-
-## Compatibilité et évolution
-
-La baseline publique est l'archive `.kh` v2 avec le schéma de projet `3.9.0`. Toute évolution de conteneur, de snapshot ou de sémantique durable doit suivre [PROJECT_FORMAT_COMPATIBILITY.md](PROJECT_FORMAT_COMPATIBILITY.md) et ajouter les migrations et fixtures nécessaires.
-
-La restauration locale et l'import `.kh` partagent le même contrat de schéma. Une migration qui passe seulement dans un test de JSON isolé ne suffit pas : elle doit préserver la reprise des assets et le replay des sources.
-
-## Tests vivants
-
-Les principaux tests sont :
-
-- `tests/pipeline/project-archive.test.ts` ;
-- `tests/pipeline/project-schema-compatibility.test.ts` ;
-- `src/lib/features/project-management/services/asset-store.service.svelte.test.ts` ;
-- `src/lib/features/project-management/services/database-access.service.svelte.test.ts` ;
-- `src/lib/features/project-management/services/persistence.service.svelte.test.ts` ;
-- `tests/pipeline/persistence-registry.test.ts` ;
-- `src/lib/features/commons/stores/project/project-lifecycle.svelte.test.ts`.
-
-Les tests actuels couvrent les versions incompatibles, les chunks, les conflits de sauvegarde, les erreurs de quota, les principaux parcours de restauration, les plafonds d'import `.kh` (taille d'archive, nombre d'entrées), la validation du manifest, l'import sous identifiant frais en cas de collision et le nettoyage best-effort après un échec de sauvegarde de l'import. Ils ne démontrent pas encore l'intégrité cryptographique des assets ni la persistance de géométrie d'un fond personnalisé.
+Ils couvrent versions incompatibles, découpage en blocs, conflits
+d'enregistrement, quotas, restauration, plafonds d'import `.kh`, validation du
+manifest, collision d'identifiant et nettoyage après échec. Ils ne couvrent pas
+la reprise d'un fond importé.
