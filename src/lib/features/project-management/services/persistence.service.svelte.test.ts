@@ -345,9 +345,11 @@ describe('project persistence', () => {
     expect(storedProject.manifest.version).toBe(PROJECT_CONST.SCHEMA_VERSION);
     expect(storedProject.data.sourceFiles).toEqual([preparedFile]);
     expect(storedProject.data.sourceFiles).not.toBe(project.data.sourceFiles);
-    expect(mocks.syncProjectAssetRefs).toHaveBeenCalledWith('project-1', [
-      preparedFile
-    ]);
+    expect(mocks.syncProjectAssetRefs).toHaveBeenCalledWith(
+      'project-1',
+      [preparedFile],
+      []
+    );
   });
 
   it('uses the caller-provided size for metadata instead of re-estimating the project', async () => {

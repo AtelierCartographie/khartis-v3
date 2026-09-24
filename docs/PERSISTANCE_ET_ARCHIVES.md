@@ -10,7 +10,7 @@ restauré, et les limites connues. Le contrat de version est dans
 | Élément                           | Où                                 | Durée de vie                   |
 | --------------------------------- | ---------------------------------- | ------------------------------ |
 | Snapshot du projet                | IndexedDB, `project.json` du `.kh` | durable                        |
-| Fichiers source                   | IndexedDB, `assets/` du `.kh`      | durable, en assets binaires    |
+| Fichiers source et fonds importés | IndexedDB, `assets/` du `.kh`      | durable, en assets binaires    |
 | Tables, macros et caches DuckDB   | mémoire                            | session ; recréés à la reprise |
 | Historique annuler/rétablir       | mémoire                            | session                        |
 | Liste des projets, dernier ouvert | IndexedDB                          | durable                        |
@@ -80,6 +80,7 @@ lecture IndexedDB
   → vérification et migration du schéma
   → désérialisation du snapshot et des assets
   → remise à zéro de DuckDB et des stores transitoires
+  → reconstruction des fonds importés depuis leurs assets
   → réimport séquentiel des sources (le fichier sélectionné d'abord)
   → restauration des visualisations, jointures, filtres, facettes et mise en page
 ```
@@ -132,14 +133,45 @@ n'est ni signé, ni durci contre une archive malveillante.
 
 ## Limites connues
 
-- **Fonds importés via l'étape fond de carte.** `processBasemapImport` crée une
-  table DuckDB `custom_basemap_*` sans asset source. Seuls les métadonnées et
-  la table `custom_basemap_attributes` sont sérialisés : après un rechargement
-  ou un import `.kh`, la géométrie du fond est introuvable
-  (`Custom basemap table not found`, journalisé sans message à l'utilisateur),
-  et ses couches dérivées aussi. À l'inverse, un jeu de données qui porte sa
-  propre géométrie est persisté : sa source est un asset, et ses couches de
-  fond sont reconstruites à chaque reprise.
+## Fonds importés
+
+Un fond importé (fichier ou URL) est persisté comme une source : son fichier
+d'origine devient un asset, et ses tables DuckDB sont rejouées à la reprise.
+
+- **Asset source.** Après `processBasemapImport()`,
+  `persistCustomBasemapSource()` écrit le fichier importé dans les assets et
+  l'attache à la métadonnée du fond (`sourceAsset`). La reprise ne dépend donc
+  pas du réseau.
+- **Snapshot.** `customBasemaps.metadata` porte ce `sourceAsset` ;
+  `customBasemaps.attributes` ne garde que les lignes de
+  `custom_basemap_attributes` des fonds sérialisés.
+- **Références et archive.** `saveProject()` ajoute les `sourceAsset` aux
+  références d'assets du projet, et l'export `.kh` les place sous
+  `assets/<assetId>`. Supprimer le projet libère aussi ses fonds importés.
+- **Replay.** `restoreCustomBasemapTables()` s'exécute après la remise à zéro
+  de DuckDB et **avant** le réimport des sources, car la restauration d'une
+  jointure a besoin de la table du fond. Il rejoue `processBasemapImport()`
+  sous le **même** nom de table (`metadata.file`) : table normalisée, `__id`,
+  couches dérivées, centroïdes et attributs de jointure. Une table déjà
+  présente n'est pas rejouée. Le fond de référence reconstruit est ensuite
+  enregistré auprès de `basemapService` : l'incrément de `registrationVersion`
+  fait réessayer la carte, qui l'a souvent demandé trop tôt à l'import d'un
+  `.kh`.
+- **Échec visible.** Un fond non reconstructible (asset absent ou corrompu,
+  erreur DuckDB, projet `3.9.0` antérieur au mécanisme) déclenche un seul
+  avertissement qui liste les fonds concernés ; le reste du projet s'ouvre.
+- **Portée par projet.** La désérialisation remplace les fonds personnalisés
+  du projet précédent, et un nouveau projet repart sans fond personnalisé.
+
+## Limites connues
+
+- **Fond importé abandonné.** L'asset est écrit à l'import du fond, avant la
+  sauvegarde : un fond abandonné avant toute sauvegarde laisse un asset sans
+  référence. Si l'écriture échoue (quota), l'import du fond échoue.
+- **Projets `3.9.0`.** Un fond importé dans un projet `3.9.0` n'a jamais
+  conservé ses octets : aucune migration ne peut les recréer.
+- **Coût du replay.** Il refait tout le traitement d'import ; son coût à
+  l'ouverture est celui de l'import initial.
 - **Projet local illisible.** Un projet dont le schéma ne peut pas être migré
   est journalisé et ne s'ouvre pas, sans message d'erreur explicite.
 
@@ -147,6 +179,7 @@ n'est ni signé, ni durci contre une archive malveillante.
 
 - `tests/pipeline/project-archive.test.ts`
 - `tests/pipeline/project-schema-compatibility.test.ts`
+- `tests/pipeline/custom-basemap-persistence.test.ts`
 - `tests/pipeline/persistence-registry.test.ts`
 - `src/lib/features/project-management/services/asset-store.service.svelte.test.ts`
 - `src/lib/features/project-management/services/database-access.service.svelte.test.ts`
@@ -155,5 +188,6 @@ n'est ni signé, ni durci contre une archive malveillante.
 
 Ils couvrent versions incompatibles, découpage en blocs, conflits
 d'enregistrement, quotas, restauration, plafonds d'import `.kh`, validation du
-manifest, collision d'identifiant et nettoyage après échec. Ils ne couvrent pas
-la reprise d'un fond importé.
+manifest, collision d'identifiant, nettoyage après échec, et l'aller-retour
+d'un fond importé (replay, avertissement, isolement entre projets). Le replay
+réel dans DuckDB WASM reste vérifié dans le navigateur, pas en CI.

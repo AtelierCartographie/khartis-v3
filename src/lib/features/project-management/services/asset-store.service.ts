@@ -193,7 +193,7 @@ export async function persistAssetBytes(
   return persistAssetBlob(blob, { ...ref, size: blob.size });
 }
 
-async function createAssetRefFromFile(
+export async function createAssetRefFromFile(
   file: File,
   kind: AssetRef['kind'],
   originalName = file.name
@@ -454,10 +454,14 @@ async function loadProjectAssetIds(projectId: string): Promise<string[]> {
 
 export async function syncProjectAssetRefs(
   projectId: string,
-  files: UploadedFile[]
+  files: UploadedFile[],
+  additionalAssetRefs: readonly AssetRef[] = []
 ): Promise<void> {
   const db = await getDb();
-  const nextAssetIds = new Set(extractAssetIdsFromFiles(files));
+  const nextAssetIds = new Set([
+    ...extractAssetIdsFromFiles(files),
+    ...additionalAssetRefs.map((assetRef) => assetRef.assetId)
+  ]);
   const currentAssetIds = new Set(await loadProjectAssetIds(projectId));
 
   const idsToAdd = [...nextAssetIds].filter(

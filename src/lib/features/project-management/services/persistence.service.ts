@@ -10,6 +10,7 @@ import {
   removeProjectAssetRefs,
   syncProjectAssetRefs
 } from './asset-store.service';
+import { collectCustomBasemapAssetRefs } from './custom-basemap-source.service';
 import { deserialize, prepareForIndexedDB } from './serializer.service';
 import { deserializeUploadedFile } from '../core/file-serializer';
 import {
@@ -344,7 +345,8 @@ export async function saveProject(
     await writeRevisionedProject(serialized);
     await syncProjectAssetRefs(
       projectForStorage.id,
-      projectForStorage.data.sourceFiles
+      projectForStorage.data.sourceFiles,
+      collectCustomBasemapAssetRefs(serialized.data)
     );
     await updateMetadata(projectForStorage, thumbnail, exampleId, sizeBytes);
   });

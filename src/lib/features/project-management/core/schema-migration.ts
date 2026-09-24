@@ -16,7 +16,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
-export const schemaMigrations: readonly SchemaMigration[] = [];
+// No-op on purpose: the bump fences off builds that would drop basemap source assets on save.
+export const schemaMigrations: readonly SchemaMigration[] = [
+  {
+    from: '3.9.0',
+    to: '3.10.0',
+    migrate: (data) => ({ ...data })
+  }
+];
 
 function throwUnsupportedSchemaVersion(receivedVersion: unknown): never {
   const version =

@@ -33,6 +33,10 @@ export async function generateCustomBasemapAttributes(
   const safeBasemapId = escapeSqlString(basemapId);
   const safeFeatureId = escapeIdentifier(INTERNAL_COLUMN.FEATURE_ID);
 
+  await duck.query(
+    `DELETE FROM custom_basemap_attributes WHERE basemap = '${safeBasemapId}'`
+  );
+
   const columns = await duck.analyse(tableName);
 
   const candidateColumns = getCustomBasemapJoinCandidateColumns(columns);

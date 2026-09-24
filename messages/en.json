@@ -360,6 +360,8 @@
   "custom_basemap_export_warning_message": "The project was saved, but some custom basemap attributes could not be included.",
   "custom_basemap_import_warning_title": "Custom basemap incomplete",
   "custom_basemap_import_warning_message": "The project was opened, but some custom basemap attributes could not be restored.",
+  "custom_basemap_restore_warning_title": "Imported basemap not restored",
+  "custom_basemap_restore_warning_message": "The project was opened, but the geometry of these imported basemaps could not be restored: {names}. Import them again to use them.",
   "basemap_import_modal_title": "Import basemap",
   "basemap_import_modal_description": "Load a geographic information file (SHP, GeoJSON, GeoPackage) compatible with the previously loaded data.",
   "basemap_import_modal_error_select_file": "Please select a file to import",
