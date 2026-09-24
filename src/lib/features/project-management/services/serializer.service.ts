@@ -309,7 +309,7 @@ export async function serializeProjectData(
           .join(', ');
         const attributes = (await Duck.query(
           `SELECT * FROM custom_basemap_attributes WHERE basemap IN (${basemapIds})`,
-          { format: 'array' }
+          { format: 'array', useProxy: false }
         )) as SerializedBasemapAttribute[];
 
         serialized.customBasemaps = {
