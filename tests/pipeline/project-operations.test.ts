@@ -1,22 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
 import { duplicateProject } from '$lib/features/project-management/operations/duplicate';
 import { PROJECT_CONST } from '$lib/features/project-management/constants';
-import type { KhartisProject } from '$lib/features/project-management/types';
+import type { SerializedProject } from '$lib/types/serialization.types';
 
 vi.mock('$lib/features/commons/utils/logger', () => ({
   logger: { warn: vi.fn(), debug: vi.fn(), error: vi.fn(), info: vi.fn() },
   LogCategory: { PERSISTENCE: 'PERSISTENCE' }
 }));
 
-function makeProject(overrides: Partial<KhartisProject> = {}): KhartisProject {
+function makeProject(
+  overrides: Partial<SerializedProject> = {}
+): SerializedProject {
   return {
     id: 'original-id',
     manifest: {
       version: PROJECT_CONST.SCHEMA_VERSION,
       name: 'My Project',
-      format: 'kh',
-      createdAt: new Date('2024-01-01'),
-      updatedAt: new Date('2024-01-01')
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z'
     },
     data: { sourceFiles: [] },
     ...overrides
@@ -58,26 +59,26 @@ describe('duplicateProject', () => {
     const before = Date.now();
     const dup = duplicateProject(makeProject(), 'Copy');
     const after = Date.now();
-    expect(dup.manifest.createdAt.getTime()).toBeGreaterThanOrEqual(before);
-    expect(dup.manifest.createdAt.getTime()).toBeLessThanOrEqual(after);
-    expect(dup.manifest.createdAt.getTime()).toBe(
-      dup.manifest.updatedAt.getTime()
-    );
+    const createdAt = Date.parse(dup.manifest.createdAt);
+    expect(createdAt).toBeGreaterThanOrEqual(before);
+    expect(createdAt).toBeLessThanOrEqual(after);
+    expect(dup.manifest.createdAt).toBe(dup.manifest.updatedAt);
   });
 
   it('preserves the original manifest fields other than name/timestamps', () => {
     const original = makeProject({
       manifest: {
         ...makeProject().manifest,
-        version: PROJECT_CONST.SCHEMA_VERSION,
         author: 'Jean',
         format: 'kh'
-      }
+      } as SerializedProject['manifest']
     });
     const dup = duplicateProject(original, 'Copy');
-    expect(dup.manifest.version).toBe(PROJECT_CONST.SCHEMA_VERSION);
-    expect(dup.manifest.format).toBe('kh');
-    expect(dup.manifest.author).toBe('Jean');
+    expect(dup.manifest).toMatchObject({
+      version: PROJECT_CONST.SCHEMA_VERSION,
+      format: 'kh',
+      author: 'Jean'
+    });
   });
 
   it('deep clones data — modifying clone does not affect original', () => {
@@ -85,7 +86,7 @@ describe('duplicateProject', () => {
       data: { sourceFiles: [{ id: 'f1', name: 'file.csv' } as never] }
     });
     const dup = duplicateProject(original, 'Copy');
-    dup.data.sourceFiles.push({ id: 'f2', name: 'other.csv' } as never);
-    expect(original.data.sourceFiles).toHaveLength(1);
+    dup.data?.sourceFiles?.push({ id: 'f2', name: 'other.csv' } as never);
+    expect(original.data?.sourceFiles).toHaveLength(1);
   });
 });
