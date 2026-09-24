@@ -394,11 +394,24 @@ describe('project persistence', () => {
       size: 12,
       kind: 'primary'
     };
+    const basemapSourceAsset = {
+      assetId: 'basemap-asset-1',
+      originalName: 'zones.geojson',
+      mimeType: 'application/geo+json',
+      size: 64,
+      kind: 'primary'
+    };
     const project = {
       ...createSerializedProject('project-copy', 'Copy'),
       data: {
         sourceFiles: [{ id: 'file-1', name: 'data.csv', assetRef }],
-        visualizationSettings: { visualizations: [{ name: 'Stored viz' }] }
+        visualizationSettings: { visualizations: [{ name: 'Stored viz' }] },
+        customBasemaps: {
+          metadata: [
+            { file: 'custom_basemap_1', sourceAsset: basemapSourceAsset }
+          ],
+          attributes: []
+        }
       }
     };
 
@@ -409,9 +422,11 @@ describe('project persistence', () => {
 
     expect(mocks.prepareForIndexedDB).not.toHaveBeenCalled();
     expect(await loadSerializedProject('project-copy')).toEqual(project);
-    expect(mocks.syncProjectAssetRefs).toHaveBeenCalledWith('project-copy', [
-      expect.objectContaining({ id: 'file-1', assetRef })
-    ]);
+    expect(mocks.syncProjectAssetRefs).toHaveBeenCalledWith(
+      'project-copy',
+      [expect.objectContaining({ id: 'file-1', assetRef })],
+      [basemapSourceAsset]
+    );
     expect(
       (await listMetadata()).find((entry) => entry.id === 'project-copy')?.name
     ).toBe('Copy');

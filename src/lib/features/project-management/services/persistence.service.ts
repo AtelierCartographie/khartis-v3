@@ -361,7 +361,8 @@ export async function saveSerializedProject(
     await writeRevisionedProject(project);
     await syncProjectAssetRefs(
       project.id,
-      (project.data?.sourceFiles ?? []).map(deserializeUploadedFile)
+      (project.data?.sourceFiles ?? []).map(deserializeUploadedFile),
+      collectCustomBasemapAssetRefs(project.data)
     );
     await updateMetadata(project);
   });
