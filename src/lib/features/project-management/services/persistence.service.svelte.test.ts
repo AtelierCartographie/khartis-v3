@@ -381,6 +381,40 @@ describe('project persistence', () => {
     expect(vi.mocked(estimateProjectStorageSize)).not.toHaveBeenCalled();
   });
 
+  it('saves a stored project copy verbatim without the live-state serializer', async () => {
+    const database = new FakeDatabase();
+    installFakeIndexedDb(database);
+
+    const assetRef = {
+      assetId: 'asset-1',
+      originalName: 'data.csv',
+      mimeType: 'text/csv',
+      size: 12,
+      kind: 'primary'
+    };
+    const project = {
+      ...createSerializedProject('project-copy', 'Copy'),
+      data: {
+        sourceFiles: [{ id: 'file-1', name: 'data.csv', assetRef }],
+        visualizationSettings: { visualizations: [{ name: 'Stored viz' }] }
+      }
+    };
+
+    const { saveSerializedProject, loadSerializedProject, listMetadata } =
+      await import('./persistence.service');
+
+    await saveSerializedProject(project as never);
+
+    expect(mocks.prepareForIndexedDB).not.toHaveBeenCalled();
+    expect(await loadSerializedProject('project-copy')).toEqual(project);
+    expect(mocks.syncProjectAssetRefs).toHaveBeenCalledWith('project-copy', [
+      expect.objectContaining({ id: 'file-1', assetRef })
+    ]);
+    expect(
+      (await listMetadata()).find((entry) => entry.id === 'project-copy')?.name
+    ).toBe('Copy');
+  });
+
   it('should serialize saves when one browser context writes concurrently', async () => {
     const database = new FakeDatabase();
     installFakeIndexedDb(database);
