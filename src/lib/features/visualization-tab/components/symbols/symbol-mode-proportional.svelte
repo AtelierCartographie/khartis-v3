@@ -624,7 +624,7 @@
     categoriesVariant="symbols-unique"
     showMissingData={showMissingData}
     missingDataColor={missingDataColor}
-    sectionTitle={m.background()}
+    sectionTitle={m.fill()}
     sectionInfoText={m.fill_section_info()}
     selectableDataFields={selectableDataFields}
     getFacetsSelectedFieldIds={facetsSelection.getSelectedFieldIds}
