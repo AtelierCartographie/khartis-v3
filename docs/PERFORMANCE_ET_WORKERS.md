@@ -1,148 +1,120 @@
-# Performance, workers et rendu cartographique
+# Performance, workers et caches
 
-Khartis traite des données géographiques parfois volumineuses dans le
-navigateur. Les performances reposent moins sur une optimisation isolée que
-sur la continuité d'un chemin de données : lecture et requêtes dans DuckDB,
-tables Arrow, géo-Arrow, puis couches de rendu. Ce guide expose les invariants
-à conserver lorsque l'on modifie ce chemin.
+Khartis traite dans le navigateur des données géographiques parfois
+volumineuses. Sa performance tient moins à des optimisations locales qu'à la
+continuité d'un chemin binaire : DuckDB, Arrow, GeoArrow, puis Deck.gl. Cette
+page décrit les workers, les caches et la façon de mesurer un changement.
 
-## Répartition des responsabilités
+## Workers
 
-Le moteur DuckDB est exécuté dans son propre worker WebAssembly. Son
-initialisation est mutualisée afin que plusieurs consommateurs ne créent pas
-plusieurs moteurs concurrents. Le runtime choisit le bundle compatible avec le
-navigateur et applique une limite mémoire dépendante de l'appareil ; cette
-politique appartient au moteur, pas à un composant d'interface.
+| Worker         | Rôle                                                   | Cycle de vie                                                               |
+| -------------- | ------------------------------------------------------ | -------------------------------------------------------------------------- |
+| DuckDB WASM    | toutes les requêtes SQL, en mono-thread                | initialisé une fois et partagé ; terminé et réinitialisable en cas d'échec |
+| Parse GeoArrow | projection et conversion binaire hors du fil principal | créé à la demande ; désactivé pour la session après un échec ou un timeout |
 
-Le traitement des géométries dispose d'un worker de parsing chargé à la demande.
-Il sert à déplacer hors du fil principal le travail compatible avec ce chemin,
-sans rendre l'application dépendante d'un worker toujours disponible. En cas
-d'erreur ou de délai dépassé, le chemin établi désactive proprement le worker et
-utilise le repli prévu plutôt que de multiplier les tentatives concurrentes.
+La configuration de DuckDB (bundle, limite mémoire, extensions) est décrite
+dans [Import et DuckDB](IMPORT_DUCKDB.md#démarrage-du-moteur). La limite
+mémoire dépend de l'appareil : ne pas la remplacer par une constante pour
+régler un cas local ; réduire plutôt les colonnes, les tables intermédiaires et
+les copies.
 
-Le rendu cartographique est géré par son cycle de vie commun : Deck.gl pour les
-vues orthographiques et MapLibre avec l'overlay approprié pour les vues
-cartographiques. Initialiser directement un moteur parallèle dans un composant
-est une source de fuites WebGL, d'abonnements persistants et de toiles
-superposées. Réutiliser le point d'initialisation et de destruction existant.
+Une requête DuckDB lourde ne s'interrompt pas : le Worker ne rend la main
+qu'une fois le calcul terminé.
 
-## Conserver le chemin binaire
+### Worker de parse
 
-Le passage normal des géométries est binaire : DuckDB produit des tables Arrow,
-puis les adaptateurs géo-Arrow alimentent Deck.gl. Les fonds catalogués suivent
-le même principe, depuis GeoParquet jusqu'aux tables rendues. Ce choix évite de
-dupliquer de grands objets JavaScript et limite les copies de données.
+`geoarrow-stream-bridge.utils.ts` délègue le parse au worker
+(`worker-parse.svelte.ts`) quand :
 
-Lorsqu'une évolution touche un import ou une couche :
+- la table a au moins 2 000 lignes (`WORKER_PARSE_MIN_ROWS`) ;
+- la projection est sérialisable et enregistrée par `registerProjectionSpec`.
 
-- privilégier les opérations DuckDB pour filtrer, projeter et transformer les
-  données prises en charge ;
-- transmettre les tables Arrow et leurs buffers au chemin de rendu prévu ;
-- isoler explicitement tout passage temporaire en GeoJSON ou en objets simples,
-  avec une justification et une mesure de son coût ;
-- ne pas recréer des structures de données équivalentes à chaque réaction
-  Svelte ou à chaque image affichée.
+Sinon, le parse est synchrone. Pendant un parse en worker, la couche reçoit un
+résultat vide provisoire, puis une mise à jour réactive (incrément de version)
+quand le résultat arrive.
 
-Une nouvelle requête produit naturellement une nouvelle table. En revanche,
-cloner une table inchangée détruit les caches fondés sur son identité et rend le
-travail de sérialisation ou de projection à chaque rendu.
+Après 30 s sans réponse ou un plantage, le worker est désactivé pour la session
+et le parse repasse sur le fil principal ; les échecs sont mémorisés par couple
+table/projection. Pour isoler ce facteur lors d'un diagnostic, la clé
+`localStorage` `khartis:disable-parse-worker` désactive le worker.
 
-## Caches : identité, durée de vie et mémoire
+## Caches
 
-Le chemin de rendu mémorise notamment les octets Arrow sérialisés et certains
-résultats de projection. Ces caches sont intentionnellement associés aux objets
-de table et sont bornés là où une projection peut devenir coûteuse. Ils ne sont
-pas des caches globaux à purger depuis une vue pour "réparer" une carte.
+Les caches de calcul sont indexés sur l'**identité** des objets Arrow et
+projection (`WeakMap`) : cloner une table inchangée ou recréer une projection
+équivalente les invalide et refait le travail à chaque rendu.
 
-Trois types d'état ne doivent pas être confondus :
+| Cache                      | Taille                  | Emplacement                                  |
+| -------------------------- | ----------------------- | -------------------------------------------- |
+| Données binaires projetées | 2 projections par table | `map/utils/geoarrow-stream-bridge.utils.ts`  |
+| Tables Arrow jointes       | 4 entrées               | `duckdb/orchestrator/orchestrator.svelte.ts` |
+| Gradings de jointure       | 4 entrées               | `duckdb/orchestrator/join-ops.ts`            |
+| Résultats de densité       | 12 entrées              | `duckdb/orchestrator/density-ops.ts`         |
+| Bornes de classification   | 50 entrées              | `commons/services/classification.service.ts` |
 
-| État                       | Finalité                                                               | Conséquence pour une modification                                                  |
-| -------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Cache de calcul en mémoire | Éviter de sérialiser ou reprojeter une table inchangée                 | Préserver l'identité des données et laisser le cycle de vie libérer les références |
-| Cache du service worker    | Réutiliser les ressources applicatives et cartographiques téléchargées | Ne pas l'utiliser comme stockage de projet ni comme cache de calcul                |
-| Persistance IndexedDB      | Conserver les sources et les projets locaux                            | Respecter le schéma, les migrations et la récupération de projet                   |
+Ces caches ne se purgent pas depuis une vue pour « réparer » une carte : on
+corrige l'identité des données ou l'invalidation à la source.
 
-La mémoire DuckDB est volontairement bornée en fonction des capacités déclarées
-par l'appareil, avec une valeur de repli lorsqu'elles sont inconnues. Ne pas
-remplacer cette limite par une constante dans une fonctionnalité pour résoudre
-un cas local. Réduire plutôt les colonnes, les jeux de données intermédiaires
-et les copies évitables, puis mesurer l'effet sur un appareil représentatif.
+Trois mécanismes à ne pas confondre :
 
-## Cycle de vie des workers et du GPU
+| Mécanisme               | Finalité                                                                 | Ne pas l'utiliser pour         |
+| ----------------------- | ------------------------------------------------------------------------ | ------------------------------ |
+| Caches de calcul        | ne pas reprojeter ou resérialiser une table inchangée                    | stocker un état durable        |
+| Cache du service worker | réutiliser les ressources téléchargées ([PWA](PWA_RUNTIME.md))           | stocker un projet ou un calcul |
+| IndexedDB               | conserver sources et projets ([persistance](PERSISTANCE_ET_ARCHIVES.md)) | mettre en cache un résultat    |
 
-Un changement de moteur, une fermeture de vue ou la destruction d'un composant
-doit libérer ses ressources par le cycle de vie partagé. Ce cycle désabonne les
-observateurs, finalise les overlays et les instances Deck.gl, retire la carte
-MapLibre et nettoie la toile de repli. Toute nouvelle ressource créée hors de
-ce cycle doit avoir une destruction symétrique et vérifiable.
+## Règles du chemin de rendu
 
-Les couches Deck.gl sont des objets immuables. Mettre à jour une couche consiste
-à construire l'instance ou les propriétés attendues par Deck.gl, pas à modifier
-silencieusement un objet déjà rendu. L'application gère également le facteur de
-pixels et l'indisponibilité éventuelle de WebGL2. Une fonctionnalité ne doit pas
-supposer l'accélération GPU, ni imposer un facteur de pixels fixe adapté à une
-seule machine.
+- Filtrer, projeter et transformer dans DuckDB.
+- Transmettre les tables Arrow et leurs buffers tels quels jusqu'aux factories.
+- Garder la même référence de table et de projection tant que les données ne
+  changent pas ; ne pas reconstruire des structures équivalentes à chaque
+  réaction Svelte.
+- Isoler et justifier, mesure à l'appui, tout passage temporaire par GeoJSON ou
+  des objets JavaScript.
+- Charger les jeux de données séquentiellement (`loadDatasetsSequentially`),
+  pour limiter les pics de mémoire.
+- Construire de nouvelles instances de couches Deck.gl plutôt que de muter une
+  couche déjà rendue.
+- Toute ressource créée hors du cycle de vie de `useMapInit` (observateur,
+  overlay, canevas) a une libération symétrique.
 
-Un worker DuckDB défaillant est nettoyé afin que l'initialisation puisse être
-tentée de nouveau après correction. Traiter l'erreur à sa frontière et garder
-les messages assez précis pour distinguer une extension absente, un problème
-d'isolation cross-origin ou une erreur de requête.
+## Mesurer
 
-## Méthode de mesure
+Mesurer sur un scénario représentatif, pas sur un petit fichier artificiel :
+un jeu de données, un style et une interaction qui exercent la zone modifiée.
+Comparer avant et après, en changeant une seule variable à la fois :
 
-Mesurer un changement sur un scénario utile, pas seulement sur un petit fichier
-artificiel. Choisir au moins un exemple de données, un style et une interaction
-qui exercent la zone modifiée, puis comparer avant et après :
+1. délai entre l'action et un affichage exploitable ;
+2. activité du fil principal et des workers ;
+3. mémoire, nombre de canevas et de workers actifs ;
+4. fluidité pendant les déplacements et changements de couche.
 
-1. le temps entre l'action et l'affichage exploitable ;
-2. l'activité du fil principal et des workers ;
-3. la mémoire du processus et le nombre de toiles ou de workers actifs ;
-4. la fluidité pendant les déplacements, les changements de couche et les
-   interactions concernées.
+Outils disponibles :
 
-Modifier une seule variable à la fois. Les outils de performance du navigateur
-et les diagnostics de développement de la carte servent à localiser le travail
-excessif ; ils ne remplacent pas une validation sur les données représentatives.
-Les variables `VITE_*` destinées au diagnostic sont visibles côté client : ne
-jamais y placer une information sensible.
+- le panneau Performance du navigateur ;
+- les marques de performance (`commons/utils/perf-marks.utils.ts`) ;
+- en développement et en préproduction, le débogage Deck.gl
+  (`map/stores/deck-debug.store.svelte.ts`), qui expose `window.__deck` et
+  `window.__maplibreMap`.
 
-## Vérifier une évolution du rendu
+Les variables `VITE_*` de diagnostic sont compilées dans le code client : ne
+jamais y mettre d'information sensible.
 
-Les tests client vérifient la logique accessible sous JSDOM, mais ne valident
-ni un contexte GPU réel ni les contraintes de mémoire d'un navigateur. Pour un
-changement de worker, de projection, de couche ou de cycle de vie :
+## Vérifier
 
-```sh
-pnpm test:unit
-pnpm build
-pnpm dev
-```
+Les tests client (jsdom) ne valident ni un contexte GPU réel ni les contraintes
+mémoire d'un navigateur. Pour un changement de worker, de projection, de couche
+ou de cycle de vie, compléter `pnpm test:unit` et `pnpm build` par un parcours
+dans `pnpm dev` avec plusieurs jeux de `tests-datasets/`, dont un qui force un
+changement de moteur ou de projection. Vérifier qu'entrer puis sortir de la vue
+ne laisse ni canevas, ni carte, ni worker résiduel.
 
-Ensuite, parcourir plusieurs exemples et formats disponibles dans
-`tests-datasets`, notamment une situation qui force le changement de moteur ou
-de projection. Vérifier aussi qu'une entrée puis une sortie de la vue ne laisse
-pas de toile, de carte ou de comportement résiduel.
+Checklist :
 
-Un changement qui touche l'import, le passage DuckDB ou l'orchestration doit
-ajouter :
-
-```sh
-pnpm test:pipeline
-pnpm test:duckdb
-```
-
-La suite complète et les contrôles requis avant une remise sont détaillés dans
-[CONTRIBUER_ET_TESTER.md](CONTRIBUER_ET_TESTER.md). Les règles de cache et de
-mise à jour hors ligne sont documentées dans [PWA_RUNTIME.md](PWA_RUNTIME.md).
-
-## Liste de contrôle avant validation
-
-- Le changement conserve-t-il DuckDB, Arrow et le chemin binaire là où ils
-  sont déjà utilisés ?
-- Les données inchangées gardent-elles une identité stable entre deux rendus ?
-- Les workers, observateurs et ressources WebGL ont-ils une libération
-  symétrique ?
-- L'absence de WebGL2 et l'échec d'un worker sont-ils traités par le flux
-  établi ?
-- La mesure est-elle faite avec une donnée et une interaction représentatives ?
-- Les tests ciblés, le build et le contrôle navigateur adaptés sont-ils passés ?
+- DuckDB, Arrow et le chemin binaire sont-ils conservés ?
+- Les données inchangées gardent-elles la même identité entre deux rendus ?
+- Workers, observateurs et ressources WebGL sont-ils libérés symétriquement ?
+- L'absence de WebGL2 et l'échec du worker suivent-ils le repli prévu ?
+- La mesure a-t-elle été faite sur une donnée et une interaction
+  représentatives ?

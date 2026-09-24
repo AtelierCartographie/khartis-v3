@@ -25,12 +25,12 @@ Briefly describe the change and its motivation.
 
 ## Checklist
 
-- [ ] Lint/format: `pnpm lint` and `pnpm format`
+- [ ] Lint and types: `pnpm lint` and `pnpm check`
 - [ ] Tests: `pnpm test:all` (or the relevant `test:*`)
 - [ ] Build: `pnpm build`
-- [ ] i18n: keys added/updated (no hardcoded strings)
-- [ ] Docs: README/CONTRIBUTING updated if needed
-- [ ] Basic accessibility (focus/contrast) OK
+- [ ] i18n: keys added in both `fr.json` and `en.json` (no hardcoded strings)
+- [ ] Docs: relevant document updated if a contract, command or boundary changed
+- [ ] Accessibility: keyboard, visible focus and contrast checked
 - [ ] No secrets/credentials
 
 ## Deployment notes
