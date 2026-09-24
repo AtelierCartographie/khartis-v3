@@ -254,7 +254,7 @@
   categoriesVariant="symbols-unique"
   showMissingData={showMissingData}
   missingDataColor={missingDataColor}
-  sectionTitle={m.background()}
+  sectionTitle={m.fill()}
   selectableDataFields={selectableDataFields}
   getFacetsSelectedFieldIds={facetsSelection.getSelectedFieldIds}
   isFacetsActiveForSlot={facetsSelection.isActiveForSlot}
