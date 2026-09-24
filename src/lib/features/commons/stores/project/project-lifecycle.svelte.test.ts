@@ -4,8 +4,12 @@ const mocks = vi.hoisted(() => ({
   beginProjectRuntime: vi.fn(),
   dataOnProjectChanged:
     vi.fn<(options?: { signal?: AbortSignal }) => Promise<void>>(),
+  duplicateProjectEntity: vi.fn(),
   loggerError: vi.fn(),
+  projectRepositoryListMetadata: vi.fn(),
   projectRepositoryLoad: vi.fn(),
+  projectRepositoryLoadSerialized: vi.fn(),
+  projectRepositorySaveSerialized: vi.fn(),
   projectRepositoryRemove: vi.fn(),
   projectStorageLoad: vi.fn(),
   projectStorageRemove: vi.fn(),
@@ -23,12 +27,14 @@ vi.mock('$lib/features/project-management', () => ({
   PROJECT_CONST: {
     SCHEMA_VERSION: '3.9.0'
   },
-  duplicateProject: vi.fn(),
+  duplicateProject: mocks.duplicateProjectEntity,
   projectRepository: {
-    listMetadata: vi.fn(),
+    listMetadata: mocks.projectRepositoryListMetadata,
     load: mocks.projectRepositoryLoad,
+    loadSerialized: mocks.projectRepositoryLoadSerialized,
     remove: mocks.projectRepositoryRemove,
-    save: vi.fn()
+    save: vi.fn(),
+    saveSerialized: mocks.projectRepositorySaveSerialized
   },
   projectStorage: {
     load: mocks.projectStorageLoad,
@@ -39,7 +45,9 @@ vi.mock('$lib/features/project-management', () => ({
 
 vi.mock('$lib/paraglide/messages', () => ({
   m: {
-    history_project_loaded: () => 'Project loaded'
+    error_duplicate_project_title: () => 'Duplicate failed',
+    history_project_loaded: () => 'Project loaded',
+    project_duplicate_suffix: () => '(copy)'
   }
 }));
 
@@ -262,5 +270,60 @@ describe('project lifecycle startup restore', () => {
         Object.defineProperty(window, 'sessionStorage', originalSessionStorage);
       }
     }
+  });
+});
+
+describe('project lifecycle duplication', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('duplicates another project from its stored snapshot without touching the open project', async () => {
+    const { duplicateProject } = await import('./project-lifecycle');
+    const openProject = createProject();
+    const container = createContainer();
+    const state: { currentProject: unknown; isDirty: boolean } =
+      container._state;
+    state.currentProject = openProject;
+    state.isDirty = true;
+    const storedProjectB = {
+      id: 'project-b',
+      manifest: {
+        version: '3.9.0',
+        createdAt: '2026-07-16T00:00:00.000Z',
+        updatedAt: '2026-07-16T00:00:00.000Z',
+        name: 'Project B'
+      },
+      data: { sourceFiles: [] }
+    };
+    const duplicatedSnapshot = {
+      ...storedProjectB,
+      id: 'project-b-copy',
+      manifest: { ...storedProjectB.manifest, name: 'Project B copy' }
+    };
+    mocks.projectRepositoryLoadSerialized.mockResolvedValue(storedProjectB);
+    mocks.projectRepositoryListMetadata.mockResolvedValue([]);
+    mocks.duplicateProjectEntity.mockReturnValue(duplicatedSnapshot);
+    mocks.projectRepositorySaveSerialized.mockResolvedValue(undefined);
+
+    const newId = await duplicateProject(
+      container as never,
+      'project-b',
+      'Project B copy'
+    );
+
+    expect(newId).toBe('project-b-copy');
+    expect(mocks.projectRepositoryLoad).not.toHaveBeenCalled();
+    expect(mocks.duplicateProjectEntity).toHaveBeenCalledWith(
+      storedProjectB,
+      'Project B copy'
+    );
+    expect(mocks.projectRepositorySaveSerialized).toHaveBeenCalledWith(
+      duplicatedSnapshot
+    );
+    expect(state.currentProject).toBe(openProject);
+    expect(state.isDirty).toBe(true);
+    expect(mocks.beginProjectRuntime).not.toHaveBeenCalled();
+    expect(mocks.resetProjectRuntimeState).not.toHaveBeenCalled();
   });
 });
