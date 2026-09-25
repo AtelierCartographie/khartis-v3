@@ -1,13 +1,13 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import { TextInput } from 'carbon-components-svelte';
-  import Switch from '$lib/features/commons/components/switch.svelte';
-  import { InfoPopover } from '../shared';
+  import { ToggleWithLabel } from '$lib/features/commons/components/viz-controls';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import {
     COLOR_ROLE,
     getColorSuggestions
   } from '$lib/features/commons/services/color-suggestion.service';
+  import { getMissingDataAvailability } from '../shared/missing-data-availability';
 
   interface Props {
     show: boolean;
@@ -26,6 +26,8 @@
     onLabelChange,
     onColorChange
   }: Props = $props();
+
+  const hasMissingData = $derived.by(getMissingDataAvailability());
 
   type CarbonTextInputEvent = Event & {
     detail?: string | number | null | { value?: string | number | null };
@@ -48,29 +50,22 @@
 </script>
 
 <div class="missing-data-block">
-  <div class="missing-data-heading">
-    <span class="missing-data-title">{m.show_missing_data()}</span>
-    <InfoPopover text={m.show_missing_data_info()} />
-  </div>
-
-  <div class="missing-data-toggle">
-    <Switch
-      toggled={show}
-      hideLabel
-      labelText={m.show_missing_data()}
-      onchange={onShowChange}
-    />
-    <span class="missing-data-toggle-state">
-      {show ? m.yes() : m.no()}
-    </span>
-  </div>
-
-  {#if show}
+  <ToggleWithLabel
+    label={m.show_missing_data()}
+    toggled={show && hasMissingData}
+    disabled={!hasMissingData}
+    infoText={m.show_missing_data_info()}
+    ontoggle={onShowChange}
+  />
+  {#if !hasMissingData}
+    <p class="missing-data-none">{m.missing_data_none()}</p>
+  {:else if show}
     <div class="missing-data-fields">
       <label class="field-group" for="texts-missing-data-label">
         <span class="field-label">{m.text_label()}</span>
         <div class="text-input-field">
           <TextInput
+            size="sm"
             id="texts-missing-data-label"
             value={label}
             placeholder={m.missing_data_text()}
@@ -96,47 +91,18 @@
   .missing-data-block {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
-  }
-
-  .missing-data-heading {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-  }
-
-  .missing-data-title {
-    font-size: 0.875rem;
-    color: var(--cds-text-primary);
-    font-weight: 400;
-  }
-
-  .missing-data-toggle {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-  }
-
-  .missing-data-toggle-state {
-    font-size: 0.875rem;
-    color: var(--cds-text-secondary);
+    gap: var(--kh-gap-inline);
   }
 
   .missing-data-fields {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
+    gap: var(--kh-gap-inline);
   }
 
-  .field-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-
-  .field-label {
+  .missing-data-none {
     font-size: 0.75rem;
-    color: var(--cds-text-02);
+    color: var(--cds-text-helper);
   }
 
   .text-input-field {

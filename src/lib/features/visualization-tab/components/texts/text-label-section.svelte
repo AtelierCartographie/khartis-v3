@@ -52,6 +52,7 @@
   <div class="field-row">
     <div class="field-row-dropdown field-picker">
       <Dropdown
+        size="sm"
         labelText={m.text_according()}
         items={selectableDataFields}
         selectedId={primarySelectedId}
@@ -61,6 +62,7 @@
     </div>
 
     <Button
+      size="small"
       bind:ref={primaryTriggerRef}
       class={`format-trigger ${showStylePopover && activeStyleSection === 'primary' ? 'format-trigger--active' : ''}`}
       kind="ghost"
@@ -75,6 +77,7 @@
   <div class="field-row">
     <div class="field-row-dropdown field-picker">
       <Dropdown
+        size="sm"
         labelText={m.secondary_text()}
         items={secondaryFieldItems}
         selectedId={secondarySelectedId}
@@ -85,6 +88,7 @@
     </div>
 
     <Button
+      size="small"
       bind:ref={secondaryTriggerRef}
       class={`format-trigger ${showStylePopover && activeStyleSection === 'secondary' ? 'format-trigger--active' : ''}`}
       kind="ghost"
@@ -102,13 +106,13 @@
   .field-stack {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-04);
+    gap: var(--kh-gap-param);
   }
 
   .field-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: var(--cds-spacing-04);
+    gap: var(--kh-gap-param);
     align-items: end;
   }
 
@@ -117,15 +121,14 @@
   }
 
   :global(.format-trigger.bx--btn) {
-    width: 40px !important;
-    height: 40px !important;
-    min-height: 40px !important;
-    max-height: 40px !important;
+    width: var(--kh-size-sm) !important;
+    height: var(--kh-size-sm) !important;
+    min-height: var(--kh-size-sm) !important;
     padding: 0 !important;
     border: 1px solid var(--cds-border-subtle-01, #c6c6c6) !important;
     background: var(--cds-layer-01, #ffffff) !important;
     color: var(--cds-text-secondary, #6f6f6f) !important;
-    font-size: 0.875rem !important;
+    font-size: var(--kh-font-body) !important;
     font-weight: 600 !important;
     line-height: 1 !important;
     cursor: pointer;

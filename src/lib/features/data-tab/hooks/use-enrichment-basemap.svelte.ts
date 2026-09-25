@@ -25,6 +25,7 @@ import {
   processBasemapImport
 } from '$lib/features/map/services/basemap-import.service';
 import { mapLoadingStore } from '$lib/features/map/stores/map-loading.store.svelte';
+import { persistCustomBasemapSource } from '$lib/features/project-management';
 import * as m from '$lib/paraglide/messages';
 import { shouldAutoSelectSuggestedBasemap } from '../utils/basemap-auto-selection.utils';
 import {
@@ -279,8 +280,12 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     basemapImportError = null;
 
     try {
-      const { basemap: customBasemap, geometryTable } =
+      const { basemap: processedBasemap, geometryTable } =
         await processBasemapImport(file);
+      const customBasemap = await persistCustomBasemapSource(
+        processedBasemap,
+        file
+      );
 
       basemapCatalogService.addCustomBasemap(customBasemap);
       osmBasemapStore.clear();

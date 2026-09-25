@@ -122,6 +122,7 @@
 
 <div class="layer-config-content">
   <ToggleTabs
+    size="md"
     activeIndex={activeModeIndex}
     items={modeTabs.map((tab) => ({
       icon: tab.icon,
@@ -195,17 +196,12 @@
   .layer-config-content {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-05);
+    gap: var(--kh-gap-group);
   }
 
   .control-group {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-
-  .field-label {
-    font-size: 0.75rem;
-    color: var(--cds-text-02);
+    gap: var(--kh-gap-label);
   }
 </style>

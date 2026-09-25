@@ -10,10 +10,10 @@
   import {
     AVAILABLE_FONTS,
     CARTOGRAPHIC_FONT_FAMILY,
-    FONT_SIZE_OPTIONS,
     DEFAULT_FONT_SIZE,
     clampFontSize,
-    normalizeFontFamily
+    normalizeFontFamily,
+    resolveFontSizeOptions
   } from '$lib/features/step-toolbar/fonts.constants';
   import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
   import * as m from '$lib/paraglide/messages';
@@ -134,6 +134,7 @@
 
   let localFont = $state<string>(CARTOGRAPHIC_FONT_FAMILY);
   let localFontSize = $state<number>(DEFAULT_FONT_SIZE);
+  const fontSizeOptions = $derived(resolveFontSizeOptions(localFontSize));
 
   $effect(() => {
     localFont = effectiveFont;
@@ -145,6 +146,7 @@
   <Row>
     <Column>
       <Select
+        size="sm"
         labelText={m.annotations_predefined_style()}
         selected={annotationsState.predefinedStyle || 'note'}
         on:change={(e) =>
@@ -163,7 +165,7 @@
   <Row>
     <Column>
       <div class="section add-btn-section">
-        <Button kind="primary" icon={Add} onclick={handleAddText}>
+        <Button size="field" kind="primary" icon={Add} onclick={handleAddText}>
           {m.annotations_add_text()}
         </Button>
         <p class="helper">{m.annotations_add_text_description()}</p>
@@ -226,7 +228,7 @@
               }}
               size="sm"
             >
-              {#each FONT_SIZE_OPTIONS as sizeOption (sizeOption)}
+              {#each fontSizeOptions as sizeOption (sizeOption)}
                 <SelectItem value={sizeOption} text={sizeOption} />
               {/each}
             </Select>
@@ -437,6 +439,7 @@
     <Column>
       <div class="section delete-section">
         <Button
+          size="field"
           kind="danger-tertiary"
           icon={TrashCan}
           disabled={!selectedText}
@@ -526,8 +529,12 @@
   .bg-toggle-col {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02);
+    gap: var(--kh-gap-label);
     flex-shrink: 0;
+  }
+
+  .bg-toggle-col :global(.kh-switch-native) {
+    min-height: var(--kh-size-sm);
   }
 
   .bg-col-label {

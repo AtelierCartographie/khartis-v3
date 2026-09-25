@@ -1,64 +1,49 @@
 # Documentation développeur de Khartis
 
-Cette documentation décrit le fonctionnement et l’évolution de Khartis pour
-les développeurs. Elle ne remplace ni le code, ni les tests vivants, ni les
-contrats de compatibilité.
+Fonctionnement interne et règles d'évolution de Khartis, outil de cartographie
+thématique exécuté entièrement dans le navigateur (Svelte 5, DuckDB WASM,
+Apache Arrow et GeoArrow, Deck.gl, MapLibre, IndexedDB).
 
-Khartis est un outil de cartographie thématique qui s’exécute dans le
-navigateur. Son architecture combine Svelte 5, DuckDB WASM, Apache Arrow et
-GeoArrow, Deck.gl/WebGL, MapLibre et IndexedDB. Le terme à employer est donc
-`DuckDB → Arrow/GeoArrow → Deck.gl`, pas « DuckGL ».
+Pour installer le projet et proposer une modification, commencer par
+[CONTRIBUTING.md](../CONTRIBUTING.md). Le mode d'emploi pour les utilisateurs
+est publié sur le
+[site de l'Atelier](https://www.sciencespo.fr/cartographie/fr/outils/khartis/mode-emploi).
 
-## Parcours de prise en main
+## Par où commencer
 
-| Temps          | Lire                                            | Objectif                                               |
-| -------------- | ----------------------------------------------- | ------------------------------------------------------ |
-| 10 min         | [Contribuer et tester](CONTRIBUER_ET_TESTER.md) | installer le projet et savoir quelle validation lancer |
-| 10 min         | [Architecture](ARCHITECTURE.md)                 | comprendre le démarrage et les trois flux majeurs      |
-| 15 min         | [Import et DuckDB](IMPORT_DUCKDB.md)            | suivre une donnée jusqu’à Arrow                        |
-| 20 min         | [Rendu cartographique](RENDU_CARTOGRAPHIQUE.md) | modifier une carte sans casser le chemin GPU           |
-| selon la tâche | les documents de domaine ci-dessous             | intervenir au bon endroit                              |
+1. [Architecture](ARCHITECTURE.md) : démarrage, trois flux de données, deux
+   moteurs de rendu.
+2. [Import et DuckDB](IMPORT_DUCKDB.md) : d'un fichier à une table Arrow.
+3. [Rendu cartographique](RENDU_CARTOGRAPHIQUE.md) : d'une table Arrow au GPU.
+4. Le document du domaine concerné, ci-dessous.
 
-## Carte de la documentation
+## Documents
 
-| Question                                                             | Document de référence                                             |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Où une action traverse-t-elle les features ?                         | [Architecture](ARCHITECTURE.md)                                   |
-| Comment importer, transformer ou joindre des données ?               | [Import et DuckDB](IMPORT_DUCKDB.md)                              |
-| Comment le navigateur dessine-t-il une couche ?                      | [Rendu cartographique](RENDU_CARTOGRAPHIQUE.md)                   |
-| Comment préparer un fond, une projection ou une jointure ?           | [Fonds et projections](FONDS_PROJECTIONS.md)                      |
-| Que reste-t-il après un rechargement ou dans une archive ?           | [Persistance et archives](PERSISTANCE_ET_ARCHIVES.md)             |
-| Comment préserver le format public `.kh` ?                           | [Compatibilité du format projet](PROJECT_FORMAT_COMPATIBILITY.md) |
-| Comment raisonner sur workers, cache, mémoire et GPU ?               | [Performance et workers](PERFORMANCE_ET_WORKERS.md)               |
-| Comment installer, tester et contribuer ?                            | [Contribuer et tester](CONTRIBUER_ET_TESTER.md)                   |
-| Comment le PWA fonctionne-t-il à l’exécution ?                       | [PWA et runtime](PWA_RUNTIME.md)                                  |
-| Comment diagnostiquer une panne locale ?                             | [Dépannage](DEPANNAGE.md)                                         |
-| Comment déployer une release validée ?                               | [Déploiement](DEPLOYMENT.md)                                      |
-| Comment maintenir le suivi d’usage sans contourner le consentement ? | [Analytics](ANALYTICS.md)                                         |
+| Question                                                       | Document                                                          |
+| -------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Comment une action traverse-t-elle les features ?              | [Architecture](ARCHITECTURE.md)                                   |
+| Comment importer, transformer ou joindre des données ?         | [Import et DuckDB](IMPORT_DUCKDB.md)                              |
+| Comment une couche est-elle dessinée ?                         | [Rendu cartographique](RENDU_CARTOGRAPHIQUE.md)                   |
+| Comment discrétiser, colorer ou tramer une variable ?          | [Discrétisation et couleurs](DISCRETISATION_ET_COULEURS.md)       |
+| Comment fonctionnent fonds, jointures et projections ?         | [Fonds et projections](FONDS_PROJECTIONS.md)                      |
+| Que devient un projet au rechargement ou dans une archive ?    | [Persistance et archives](PERSISTANCE_ET_ARCHIVES.md)             |
+| Comment faire évoluer le format `.kh` sans casser l'existant ? | [Compatibilité du format projet](PROJECT_FORMAT_COMPATIBILITY.md) |
+| Workers, caches, mémoire : comment mesurer ?                   | [Performance et workers](PERFORMANCE_ET_WORKERS.md)               |
+| Quels tests, jeux de données et contrôles CI ?                 | [Contribuer et tester](CONTRIBUER_ET_TESTER.md)                   |
+| Comment le service worker met-il en cache et à jour ?          | [PWA et runtime](PWA_RUNTIME.md)                                  |
+| Comment diagnostiquer un problème local ?                      | [Dépannage](DEPANNAGE.md)                                         |
+| Comment le suivi d'usage respecte-t-il le consentement ?       | [Analytics](ANALYTICS.md)                                         |
+| Comment déployer une release ?                                 | [Déploiement](DEPLOYMENT.md)                                      |
 
 ## Ce qui fait foi
 
-1. Le code et les tests correspondant au comportement modifié.
-2. Les contrats explicitement versionnés, notamment
-   [PROJECT_FORMAT_COMPATIBILITY.md](PROJECT_FORMAT_COMPATIBILITY.md).
-3. Cette documentation, mise à jour dans le même changement lorsque le contrat
-   développeur évolue.
+1. Le code et ses tests.
+2. Les contrats versionnés, en premier lieu
+   [la compatibilité du format projet](PROJECT_FORMAT_COMPATIBILITY.md).
+3. Cette documentation, mise à jour dans le même changement que le contrat
+   qu'elle décrit.
 
-Les fichiers `AGENTS.md`, `CLAUDE.md` et `.claude/rules/` sont des instructions
-de contribution utiles, mais ils ne constituent pas l’architecture de référence
-pour un lecteur humain. Les répertoires `.ragmir/`, `.agent-plans/` et
-`.codex/` ne sont pas des pages de documentation de référence : ils contiennent
-des états locaux, des historiques ou des éléments générés.
-
-## Règles de lecture
-
-- Les diagrammes décrivent les frontières stables; les noms de fonctions sont
-  des points d’entrée pour retrouver le code, pas une API publique implicite.
-- Une limite chiffrée est donnée seulement lorsqu’elle est un comportement
-  actuel et utile à la décision. Les tests restent la preuve pour les cas fins.
-- Les pages métier expliquent les conséquences techniques. Par exemple,
-  polygones, lignes, points, textes et densité sont documentés à poids égal;
-  annotations et légendes sont des surcouches, pas des moteurs de rendu.
-- Toute modification de persistance, de format ou de comportement navigateur
-  doit être vérifiée par un scénario de reprise réel, pas seulement par un
-  état de store ou une assertion isolée.
+Les noms de fonctions et de fichiers cités servent à retrouver le code ; ils ne
+constituent pas une API publique. `CLAUDE.md`, `AGENTS.md` et `.claude/rules/`
+sont des consignes pour les assistants de code, pas une documentation de
+référence.

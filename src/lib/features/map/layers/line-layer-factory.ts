@@ -67,7 +67,11 @@ import {
 } from './layer-style.utils';
 import { orderPrimitiveLayers } from './primitive-layer-order';
 import { resolveEffectiveCategoryColorMap } from './layer-color.utils';
-import { createSplitAwareRowAccessor as ctxRowAccessor } from './split-rendering-accessors';
+import {
+  createSplitAwareRowAccessor as ctxRowAccessor,
+  OUT_OF_SCOPE_COLOR,
+  OUT_OF_SCOPE_SIZE
+} from './split-rendering-accessors';
 
 export function createLineLayerStack(
   jsTable: ArrowTable,
@@ -286,7 +290,10 @@ export function createLineLayerStack(
         : baseLineColorAccessor;
 
     const colorBinaryAttr = lineColorFn
-      ? pathColorAttr(lineData, ctxRowAccessor(ctx, jsTable, lineColorFn))
+      ? pathColorAttr(
+          lineData,
+          ctxRowAccessor(ctx, jsTable, lineColorFn, OUT_OF_SCOPE_COLOR)
+        )
       : null;
 
     const variableWidthFn =
@@ -316,7 +323,10 @@ export function createLineLayerStack(
         : null;
 
     const widthBinaryAttr = widthFn
-      ? pathWidthAttr(lineData, ctxRowAccessor(ctx, jsTable, widthFn))
+      ? pathWidthAttr(
+          lineData,
+          ctxRowAccessor(ctx, jsTable, widthFn, OUT_OF_SCOPE_SIZE)
+        )
       : null;
 
     const pathProps = createPathLayerProps(lineData);

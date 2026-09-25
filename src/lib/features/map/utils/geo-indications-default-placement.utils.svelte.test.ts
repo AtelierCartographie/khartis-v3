@@ -18,11 +18,21 @@ function createContext(
     scaleDragged: false,
     orientationEnabled: true,
     orientationDragged: false,
+    pageScale: 1,
     ...overrides
   };
 }
 
 describe('geo indications default placement', () => {
+  it('scales the default stack homothetically with the page zoom', () => {
+    const context = createContext({ pageScale: 2 });
+
+    expect(getDefaultScaleStyle(context)).toContain('left: 48px;');
+    expect(getDefaultScaleStyle(context)).toContain('bottom: 48px;');
+    expect(getDefaultOrientationStyle(context)).toContain('bottom: 152px;');
+    expect(getDefaultInsetStyle(context)).toContain('bottom: 256px;');
+  });
+
   it('stacks scale, orientation and inset in the lower-left area away from the title and legend', () => {
     const context = createContext();
 

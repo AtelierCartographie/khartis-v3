@@ -468,7 +468,7 @@
         placeholder={m.choose_data_field_placeholder()}
         labelText={m.data_visualized_label()}
         hideLabel
-        size="xl"
+        size="sm"
       />
     </div>
 
@@ -523,6 +523,7 @@
 
     <div class="create-section">
       <Button
+        size="field"
         icon={Edit}
         kind="secondary"
         on:click={handleCreateVisualization}
@@ -538,14 +539,14 @@
   #choose-visualization {
     display: flex;
     flex-direction: column;
-    padding: 16px 0;
+    padding: var(--kh-pad-panel) 0;
   }
 
   .section-content {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-05, 16px);
-    padding: 16px 0 0 0;
+    gap: var(--kh-gap-group);
+    padding: var(--kh-pad-panel) 0 0 0;
   }
 
   .suggestions-section {
@@ -561,35 +562,27 @@
   .suggestions-help {
     color: var(--khartis-additions-text-helper-suggestions, #0072c3);
     margin: 0 0 var(--cds-spacing-05) 0;
-    padding-right: 32px;
+    padding-right: var(--kh-gap-section);
     font-size: 0.75rem;
     line-height: 1rem;
     letter-spacing: 0.32px;
   }
 
   .field-group {
-    padding: 0 var(--cds-spacing-05);
+    padding: 0 var(--kh-pad-panel);
     margin: 0;
   }
 
   .field-label {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
     margin-bottom: var(--cds-spacing-03);
-    font-size: 0.75rem;
-    color: var(--cds-text-secondary, #525252);
-    font-weight: 400;
-    line-height: 1rem;
-    letter-spacing: 0.32px;
   }
 
   .suggestions-group {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
+    gap: var(--kh-gap-inline);
     margin: 0 0 var(--cds-spacing-05) 0;
-    padding-right: 32px;
+    padding-right: var(--kh-gap-section);
   }
 
   .suggestions-actions {
@@ -602,7 +595,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--cds-spacing-04);
+    gap: var(--kh-gap-param);
     margin: 0;
     padding: 0 var(--cds-spacing-05);
   }

@@ -10,12 +10,13 @@
     type UploadedFile
   } from '$lib/features/commons/types/create-project.types';
   import { debounce } from '$lib/features/commons/utils/debounce.utils';
-  import { formatFileSize } from '$lib/features/commons/utils/file-import.utils';
+  import { formatValue } from '$lib/features/commons/utils/format.utils';
   import { SUPPORTED_FILE_TYPES } from '$lib/features/commons/utils/file-validator.utils';
   import {
     readCarbonStringValue,
     type CarbonValueEvent
   } from '$lib/features/commons/utils/carbon-events.utils';
+  import { KEY } from '$lib/features/commons/constants/dom.constants';
   import { m } from '$lib/paraglide/messages';
   import { DOC_LINK } from '$lib/features/commons/constants/doc-links.constants';
   import {
@@ -31,30 +32,25 @@
     TextInput,
     Tile
   } from 'carbon-components-svelte';
-  import {
-    CloudDownload,
-    DocumentBlank,
-    Launch,
-    TrashCan
-  } from 'carbon-icons-svelte';
+  import { Launch, TrashCan } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { SvelteSet } from 'svelte/reactivity';
-  import ProjectName from './project-name.svelte';
   import { CreateProjectValidationService } from '../services/validation.service';
   import { PIPELINE_CONST } from '$lib/features/data-pipeline';
   import type { ValidationResult } from '$lib/features/commons/types/validation.types';
 
   interface Props {
-    onClose?: () => void;
     isModal?: boolean;
     resetToken?: number;
   }
 
-  const { onClose, isModal = false, resetToken = 0 }: Props = $props();
+  const { isModal = false, resetToken = 0 }: Props = $props();
 
   let pastedDataValue = $state('');
   let onlineUrlValue = $state('');
   let internalResetKey = $state(0);
+  let pasteContainer = $state<HTMLElement | undefined>(undefined);
+  let urlImportBlock = $state<HTMLElement | undefined>(undefined);
 
   const uploaderKey = $derived(resetToken + internalResetKey);
 
@@ -97,11 +93,30 @@
     }
   }
 
+  const AUTO_IMPORT_INPUT_TYPES = new Set([
+    'insertFromPaste',
+    'insertFromDrop'
+  ]);
+
+  function isAutoImportInput(event: Event): boolean {
+    return (
+      event instanceof InputEvent &&
+      !!event.inputType &&
+      AUTO_IMPORT_INPUT_TYPES.has(event.inputType)
+    );
+  }
+
+  function staysInside(container: HTMLElement | undefined, event: Event) {
+    const next = (event as FocusEvent).relatedTarget;
+    return next instanceof Node && !!container?.contains(next);
+  }
+
   async function handlePasteData() {
-    if (pastedDataValue.trim()) {
-      await createProjectActions.processPastedData(pastedDataValue);
-      pastedDataValue = '';
-    }
+    if (!pastedDataValue.trim()) return;
+    if (pastedDataValidation && !pastedDataValidation.isValid) return;
+
+    await createProjectActions.processPastedData(pastedDataValue);
+    pastedDataValue = '';
   }
 
   async function handleLoadOnlineFile() {
@@ -112,11 +127,9 @@
       return;
     }
 
-    const currentValidation =
-      urlValidation ?? CreateProjectValidationService.validateURL(trimmedUrl);
-    urlValidation = currentValidation;
+    urlValidation = CreateProjectValidationService.validateURL(trimmedUrl);
 
-    if (!currentValidation.isValid) {
+    if (!urlValidation.isValid) {
       return;
     }
 
@@ -129,10 +142,38 @@
 
   function handlePastedDataInput(event: CarbonValueEvent) {
     pastedDataValue = readCarbonStringValue(event, pastedDataValue);
+    if (isAutoImportInput(event)) {
+      void handlePasteData();
+    }
+  }
+
+  function handlePastedDataBlur(event: CarbonValueEvent) {
+    if (staysInside(pasteContainer, event)) return;
+    void handlePasteData();
   }
 
   function handleOnlineUrlInput(event: CarbonValueEvent) {
     onlineUrlValue = readCarbonStringValue(event, onlineUrlValue);
+  }
+
+  function handleOnlineUrlPaste(event: ClipboardEvent) {
+    const pastedUrl = event.clipboardData?.getData('text')?.trim();
+    if (!pastedUrl) return;
+
+    event.preventDefault();
+    onlineUrlValue = pastedUrl;
+    void handleLoadOnlineFile();
+  }
+
+  function handleOnlineUrlBlur(event: CarbonValueEvent) {
+    if (staysInside(urlImportBlock, event)) return;
+    void handleLoadOnlineFile();
+  }
+
+  function handleOnlineUrlKeydown(event: KeyboardEvent) {
+    if (event.key !== KEY.ENTER) return;
+    event.preventDefault();
+    void handleLoadOnlineFile();
   }
 
   let deletingFileIds = $state<SvelteSet<string>>(new SvelteSet());
@@ -275,12 +316,13 @@
       {/key}
     </div>
 
-    <div class="paste-container">
+    <div class="paste-container" bind:this={pasteContainer}>
       <TextArea
         value={pastedDataValue}
         placeholder={m.create_project_paste_data()}
         rows={4}
         on:input={handlePastedDataInput}
+        on:blur={handlePastedDataBlur}
         invalid={!!(pastedDataValidation && !pastedDataValidation.isValid)}
         invalidText={pastedDataValidation?.errors[0] || ''}
         warn={!!(
@@ -292,17 +334,10 @@
         <div class="paste-actions">
           <Button
             size="field"
-            kind="tertiary"
+            kind="ghost"
             onclick={() => (pastedDataValue = '')}
           >
             {m.create_project_clear_button()}
-          </Button>
-          <Button
-            size="field"
-            disabled={!!(pastedDataValidation && !pastedDataValidation.isValid)}
-            onclick={handlePasteData}
-          >
-            {m.create_project_process_button()}
           </Button>
         </div>
       {/if}
@@ -310,48 +345,38 @@
   </div>
 
   <div class="grid grid-cols-1 gap-7">
-    <div class="url-import-block">
-      <div class="url-input-row">
-        <TextInput
-          value={onlineUrlValue}
-          labelText={m.create_project_online_file_link()}
-          placeholder={m.url_placeholder_example()}
-          disabled={createProjectState.newProject.isLoading}
-          on:input={handleOnlineUrlInput}
-          invalid={!!(urlValidation && !urlValidation.isValid)}
-          invalidText={urlValidation?.errors[0] || ''}
-          warn={!!(urlValidation && urlValidation.warnings.length > 0)}
-          warnText={urlValidation?.warnings[0] || ''}
+    <div class="url-import-block" bind:this={urlImportBlock}>
+      <TextInput
+        size="sm"
+        value={onlineUrlValue}
+        labelText={m.create_project_online_file_link()}
+        placeholder={m.url_placeholder_example()}
+        disabled={createProjectState.newProject.isLoading}
+        on:input={handleOnlineUrlInput}
+        on:paste={handleOnlineUrlPaste}
+        on:blur={handleOnlineUrlBlur}
+        on:keydown={handleOnlineUrlKeydown}
+        invalid={!!(urlValidation && !urlValidation.isValid)}
+        invalidText={urlValidation?.errors[0] || ''}
+        warn={!!(urlValidation && urlValidation.warnings.length > 0)}
+        warnText={urlValidation?.warnings[0] || ''}
+      />
+
+      {#if createProjectState.newProject.isLoading}
+        <InlineLoading
+          status="active"
+          description={m.create_project_loading_status()}
         />
-
-        <div class:button-loading={createProjectState.newProject.isLoading}>
-          <Button
-            size="field"
-            icon={createProjectState.newProject.isLoading
-              ? undefined
-              : CloudDownload}
-            disabled={!onlineUrlValue.trim() ||
-              (urlValidation && !urlValidation.isValid) ||
-              createProjectState.newProject.isLoading}
-            onclick={handleLoadOnlineFile}
-          >
-            <div class="button-with-loader">
-              {#if createProjectState.newProject.isLoading}
-                <Loading small withOverlay={false} />
-              {/if}
-              <span>
-                {createProjectState.newProject.isLoading
-                  ? m.create_project_loading_status()
-                  : m.create_project_load()}
-              </span>
-            </div>
-          </Button>
-        </div>
-      </div>
-
-      <Link href={DOC_LINK.IMPORT_DATA} target="_blank" size="sm" icon={Launch}>
-        {m.basemap_import_learn_more()}
-      </Link>
+      {:else}
+        <Link
+          href={DOC_LINK.IMPORT_DATA}
+          target="_blank"
+          size="sm"
+          icon={Launch}
+        >
+          {m.basemap_import_learn_more()}
+        </Link>
+      {/if}
     </div>
 
     {#if createProjectState.newProject.error}
@@ -383,12 +408,6 @@
     </div>
 
     <div class="files-section">
-      {#if createProjectState.newProject.uploadedFiles.length > 0}
-        <span class="files-imported-label"
-          >{m.create_project_file_imported()}</span
-        >
-      {/if}
-
       {#if globalValidationErrors.length > 0}
         <InlineNotification
           kind="error"
@@ -401,10 +420,8 @@
 
       {#if createProjectState.newProject.uploadedFiles.length > 0}
         <div class="files-header">
-          <span class="files-count">
-            {createProjectState.newProject.uploadedFiles.length}
-            {m.create_project_files_label()}{m.separator_dash_space()}
-            {formatFileSize(createProjectActions.getTotalFileSize())}
+          <span class="files-imported-label">
+            {m.create_project_file_imported()}
           </span>
           {#if createProjectState.newProject.uploadedFiles.length > 1}
             <Button
@@ -498,23 +515,14 @@
             <div data-testid="file-incomplete">
               <Tile class="file-incomplete-tile">
                 <div class="file-header">
-                  <div class="file-info">
-                    <DocumentBlank
-                      size={20}
-                      class="file-icon file-icon-warning"
-                    />
-                    <div class="file-details">
-                      <div class="file-name">{file.name}</div>
-                      <div class="file-size">{formatFileSize(file.size)}</div>
-                      <div class="file-tags">
-                        <Tag size="sm" type={fileTag.color}>
-                          {fileTag.label}
-                        </Tag>
-                        <Tag size="sm" type="warm-gray">
-                          {m.shapefile_incomplete_title()}
-                        </Tag>
-                      </div>
-                    </div>
+                  <div class="file-identity">
+                    <Tag size="sm" type={fileTag.color}>
+                      {fileTag.label}
+                    </Tag>
+                    <Tag size="sm" type="warm-gray">
+                      {m.shapefile_incomplete_title()}
+                    </Tag>
+                    <span class="file-name" title={file.name}>{file.name}</span>
                   </div>
                   <Button
                     size="small"
@@ -535,36 +543,33 @@
             </div>
           {:else if file.status === FileStatus.COMPLETE}
             {@const fileTag = getFileTypeTag(file)}
-            {@const rowCount = file.deepAnalysis?.rowCount ?? 0}
-            {@const columnCount = file.deepAnalysis?.columnCount ?? 0}
+            {@const rowCount = file.rowCount ?? 0}
+            {@const columnCount = file.columnCount ?? 0}
             <div data-testid="file-complete">
               <Tile class="file-complete-tile">
                 <div class="file-header">
-                  <div class="file-info">
-                    <DocumentBlank size={20} class="file-icon" />
-                    <div class="file-details">
-                      <div class="file-name">{file.name}</div>
-                      <div class="file-size">
-                        {formatFileSize(file.size)}
-                        {#if rowCount > 0}
-                          <span class="file-stats">
-                            {m.separator_middle_dot_space()}<span
-                              data-testid="file-row-count">{rowCount}</span
-                            >
-                            {m.rows()}{m.separator_middle_dot_space()}
-                            <span data-testid="file-column-count"
-                              >{columnCount}</span
-                            >
-                            {m.columns()}
-                          </span>
-                        {/if}
-                      </div>
-                      <div class="file-tags">
-                        <Tag size="sm" type={fileTag.color}>
-                          {fileTag.label}
-                        </Tag>
-                      </div>
+                  <div class="file-details">
+                    <div class="file-identity">
+                      <Tag size="sm" type={fileTag.color}>
+                        {fileTag.label}
+                      </Tag>
+                      <span class="file-name" title={file.name}
+                        >{file.name}</span
+                      >
                     </div>
+                    {#if rowCount > 0}
+                      <div class="file-metrics">
+                        <span data-testid="file-row-count"
+                          >{formatValue(rowCount)}</span
+                        >
+                        {m.rows()}
+                        {m.separator_middle_dot_space()}
+                        <span data-testid="file-column-count"
+                          >{formatValue(columnCount)}</span
+                        >
+                        {m.columns()}
+                      </div>
+                    {/if}
                   </div>
                   <Button
                     size="small"
@@ -614,10 +619,6 @@
       {/each}
     </div>
   </div>
-
-  {#if !isModal}
-    <ProjectName onClose={onClose} />
-  {/if}
 </section>
 
 {#snippet shapefileComponents(relatedFiles?: readonly string[])}
@@ -626,7 +627,7 @@
     {#each SHAPEFILE_COMPONENT_GROUPS as group (group.key)}
       {#each group.extensions as extension (extension)}
         {@const isPresent = presentExtensions.has(extension)}
-        <Tag size="sm" type={isPresent ? 'teal' : 'gray'}>
+        <Tag size="sm" type={isPresent ? 'purple' : 'gray'}>
           {extension}{isPresent ? m.separator_check_mark() : ''}
         </Tag>
       {/each}
@@ -669,7 +670,8 @@
   }
 
   .files-imported-label {
-    font-size: 0.75rem;
+    font-size: var(--kh-font-label);
+    line-height: var(--kh-line-label);
     color: var(--cds-text-secondary);
     letter-spacing: 0.32px;
   }
@@ -678,13 +680,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--cds-spacing-03) 0;
+    min-height: var(--kh-size-sm);
     border-bottom: 1px solid var(--cds-border-subtle);
-  }
-
-  .files-count {
-    font-size: 0.875rem;
-    color: var(--cds-text-secondary);
   }
 
   .file-item-wrapper {
@@ -705,67 +702,58 @@
     background: var(--cds-layer-01);
   }
 
-  .file-icon-warning {
-    color: var(--cds-support-warning) !important;
-  }
-
   .file-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-  }
-
-  .file-info {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-    flex: 1;
-    min-width: 0;
-  }
-
-  .file-info :global(.file-icon) {
-    flex-shrink: 0;
-    color: var(--cds-icon-secondary);
+    align-items: flex-start;
+    gap: var(--kh-gap-inline);
   }
 
   .file-details {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-01);
+    gap: var(--kh-gap-label);
+    flex: 1;
     min-width: 0;
   }
 
-  .file-tags {
+  .file-identity {
     display: flex;
-    gap: var(--cds-spacing-02);
-    flex-wrap: wrap;
-    margin-top: var(--cds-spacing-02);
+    align-items: center;
+    gap: var(--kh-gap-inline);
+    min-width: 0;
+  }
+
+  .file-identity :global(.bx--tag) {
+    margin: 0;
+    flex-shrink: 0;
   }
 
   .file-name {
     font-weight: 600;
-    font-size: 0.875rem;
+    font-size: var(--kh-font-body);
+    line-height: var(--kh-line-body);
     color: var(--cds-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .file-size {
-    font-size: 0.75rem;
+  .file-metrics {
+    font-size: var(--kh-font-label);
+    line-height: var(--kh-line-label);
     color: var(--cds-text-secondary);
   }
 
-  .file-stats {
-    color: var(--cds-text-helper);
-  }
-
   .shapefile-components {
-    margin-top: var(--cds-spacing-04);
+    margin-top: var(--kh-gap-label);
     display: flex;
     flex-wrap: wrap;
     gap: var(--cds-spacing-02);
+  }
+
+  .shapefile-components :global(.bx--tag) {
+    margin: 0;
   }
 
   .file-processing-row,
@@ -811,10 +799,6 @@
     height: 1rem;
   }
 
-  .button-loading :global(.bx--btn) {
-    pointer-events: none;
-  }
-
   .sr-only {
     position: absolute;
     width: 1px;
@@ -843,22 +827,12 @@
   .url-import-block {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
+    gap: var(--kh-gap-inline);
     align-items: flex-start;
   }
 
-  .url-input-row {
-    display: flex;
-    align-items: flex-end;
-    gap: var(--cds-spacing-03);
+  .url-import-block :global(.bx--text-input-wrapper) {
     width: 100%;
-  }
-
-  @media (max-width: 672px) {
-    .url-input-row {
-      flex-direction: column;
-      align-items: stretch;
-    }
   }
 
   .processing-overlay {

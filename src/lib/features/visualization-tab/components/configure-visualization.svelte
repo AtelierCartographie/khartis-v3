@@ -3,6 +3,7 @@
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {
     visualizationStore,
+    ALL_PRIMITIVE_FILTERS,
     PrimitiveFilterType,
     getPrimitiveClassification,
     getPrimitiveValueColumn,
@@ -19,6 +20,7 @@
   import LinesConfig from './lines/lines-config.svelte';
   import PolygonsConfig from './polygons/polygons-config.svelte';
   import SymbolsConfig from './symbols/symbols-config.svelte';
+  import { createAccordionGroup } from '$lib/features/commons/utils/accordion-group.svelte';
   import TextsConfig from './texts/texts-config.svelte';
   import {
     buildLinePanelVisualization,
@@ -89,6 +91,27 @@
   const showsSymbolsConfig = $derived(datasetAnalysis.showsSymbolsConfig);
   const showsPolygonsConfig = $derived(datasetAnalysis.showsPolygonsConfig);
   const showsLinesConfig = $derived(datasetAnalysis.showsLinesConfig);
+
+  const activePrimitives = $derived(
+    selectedViz?.primitiveFilters ?? ALL_PRIMITIVE_FILTERS
+  );
+
+  const primitiveAccordion = createAccordionGroup(() => {
+    if (
+      showsSymbolsConfig &&
+      activePrimitives.includes(PrimitiveFilterType.POINT)
+    )
+      return 'symbols';
+    if (
+      showsPolygonsConfig &&
+      activePrimitives.includes(PrimitiveFilterType.POLYGON)
+    )
+      return 'polygons';
+    if (showsLinesConfig && activePrimitives.includes(PrimitiveFilterType.LINE))
+      return 'lines';
+    if (activePrimitives.includes(PrimitiveFilterType.TEXT)) return 'texts';
+    return undefined;
+  });
   const isNumericDataField = (name: string | undefined) =>
     datasetAnalysis.isNumericDataField(name);
 
@@ -552,6 +575,8 @@
 
   <div class="config-accordion">
     <SymbolsConfig
+      open={primitiveAccordion.isOpen('symbols')}
+      onToggle={(expanded) => primitiveAccordion.setOpen('symbols', expanded)}
       dataFields={dataFieldItems}
       visualization={symbolVisualization}
       fillVisualization={symbolFillVisualization}
@@ -584,6 +609,8 @@
     />
 
     <PolygonsConfig
+      open={primitiveAccordion.isOpen('polygons')}
+      onToggle={(expanded) => primitiveAccordion.setOpen('polygons', expanded)}
       onStrokeClassificationChange={handlePolygonStrokeClassificationChange}
       onStrokeMappingChange={handlePolygonStrokeMappingChange}
       dataFields={dataFieldItems}
@@ -611,6 +638,8 @@
     />
 
     <LinesConfig
+      open={primitiveAccordion.isOpen('lines')}
+      onToggle={(expanded) => primitiveAccordion.setOpen('lines', expanded)}
       dataFields={dataFieldItems}
       visualization={lineVisualization}
       disabled={!showsLinesConfig}
@@ -632,6 +661,8 @@
     />
 
     <TextsConfig
+      open={primitiveAccordion.isOpen('texts')}
+      onToggle={(expanded) => primitiveAccordion.setOpen('texts', expanded)}
       dataFields={dataFieldItems}
       visualization={textVisualization}
       disabled={!hasGeometry}
@@ -660,19 +691,11 @@
   #configure-visualization {
     display: flex;
     flex-direction: column;
-    padding: 16px 0;
+    padding: var(--kh-pad-panel) 0;
   }
 
   .content-area {
-    padding: 16px 16px 8px 16px;
-  }
-
-  .kh-help {
-    color: var(--cds-text-helper, #6f6f6f);
-    margin: 0;
-    font-size: 0.875rem;
-    line-height: 1.125rem;
-    letter-spacing: 0.16px;
+    padding: var(--kh-pad-panel);
   }
 
   .collection-scale-toggle {

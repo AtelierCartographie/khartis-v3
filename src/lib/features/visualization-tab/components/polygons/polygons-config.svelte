@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { rowScopeStore } from '$lib/features/map';
+  import { setMissingDataAvailability } from '../shared/missing-data-availability';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import type {
@@ -47,6 +49,8 @@
   };
 
   interface Props {
+    open?: boolean;
+    onToggle?: (expanded: boolean) => void;
     dataFields?: Array<{ id: number; text: string; type?: string }>;
     visualization?: VisualizationConfig;
     disabled?: boolean;
@@ -98,8 +102,19 @@
     onAddFilter,
     onUpdateFilter,
     onRemoveFilter,
-    onClearFilters
+    onClearFilters,
+    open,
+    onToggle
   }: Props = $props();
+
+  setMissingDataAvailability(() =>
+    visualization
+      ? rowScopeStore.hasMissingData(
+          visualization.id,
+          PrimitiveFilterType.POLYGON
+        )
+      : false
+  );
 
   let discretizationModalOpen = $state(false);
   let discretizationTarget = $state<'fill' | 'stroke'>('fill');
@@ -352,6 +367,9 @@
 </script>
 
 <ExpandableSection
+  scrollIntoViewOnOpen
+  open={open}
+  onToggle={onToggle}
   title={m.polygons_title()}
   description={disabled ? m.primitive_unavailable() : undefined}
   defaultOpen={false}
@@ -479,7 +497,7 @@
   .polygons-config {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-04);
+    gap: var(--kh-gap-param);
     padding: var(--cds-spacing-03);
   }
 </style>

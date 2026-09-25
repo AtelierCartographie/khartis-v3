@@ -183,7 +183,7 @@
   #khartis-search-tool {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
+    gap: var(--kh-gap-param);
   }
 
   .helper-text {

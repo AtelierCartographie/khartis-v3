@@ -230,6 +230,7 @@
     <InfoPopover text={m.shape_info()} />
   </span>
   <Dropdown
+    size="sm"
     items={shapeDropdownItems}
     selectedId={shapeType}
     on:select={(e) => handleShapeDropdownSelect(e.detail.selectedId)}
@@ -253,7 +254,7 @@
   categoriesVariant="symbols-unique"
   showMissingData={showMissingData}
   missingDataColor={missingDataColor}
-  sectionTitle={m.background()}
+  sectionTitle={m.fill()}
   selectableDataFields={selectableDataFields}
   getFacetsSelectedFieldIds={facetsSelection.getSelectedFieldIds}
   isFacetsActiveForSlot={facetsSelection.isActiveForSlot}
@@ -306,20 +307,3 @@
   role="stroke"
   onchange={onStrokeClassificationChange ?? (() => {})}
 />
-
-<style lang="scss">
-  .field-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-
-  .field-label {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-    font-size: 0.75rem;
-    color: var(--cds-text-02);
-    font-weight: 400;
-  }
-</style>

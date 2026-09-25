@@ -744,6 +744,7 @@ function createBasemapService() {
   let initializePromise: Promise<void> | null = null;
   let currentBasemap: LoadedBasemap | null = $state(null);
   let simplificationVersion = $state(0);
+  let registrationVersion = $state(0);
   let attributesLoaded = false;
   let attributesLoadPromise: Promise<void> | null = null;
   let projectionPresetsData: ProjectionPresets | null = $state(null);
@@ -1372,6 +1373,7 @@ function createBasemapService() {
     basemapCache.set(metadata.file, loaded);
     basemapActivationRequestId += 1;
     activateLoadedBasemap(loaded);
+    registrationVersion += 1;
   }
 
   async function loadCustomBasemapLayerTables(
@@ -1786,6 +1788,9 @@ function createBasemapService() {
     },
     get simplificationVersion(): number {
       return simplificationVersion;
+    },
+    get registrationVersion(): number {
+      return registrationVersion;
     },
     get currentLayers(): Map<string, ArrowTable> {
       return getResolvedLayerTables(currentBasemap);

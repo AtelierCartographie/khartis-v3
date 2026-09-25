@@ -26,8 +26,8 @@
   .toolbar-tab {
     display: flex;
     flex-direction: column;
-    gap: 32px;
-    padding: 16px;
+    gap: var(--kh-gap-section);
+    padding: var(--kh-pad-panel);
     background-color: var(
       --khartis-main-toolbar-background,
       var(--cds-ui-01, #f4f4f4)
@@ -41,7 +41,7 @@
       --khartis-main-toolbar-surface-background,
       var(--cds-ui-02, #ffffff)
     );
-    padding: 16px;
+    padding: var(--kh-pad-panel);
   }
 
   :global(.collapsed-content) {

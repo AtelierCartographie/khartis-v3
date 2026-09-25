@@ -63,6 +63,7 @@ export interface BasemapBounds {
   maxY: number;
 }
 
+const CUSTOM_BASEMAP_TABLE_PREFIX = 'custom_basemap_';
 const RAW_TABLE_SUFFIX = '__raw';
 const CENTROIDS_TABLE_SUFFIX = '__centroids';
 const BASEMAP_URL_LOAD_ERROR_CODE = 'BASEMAP_URL_LOAD_ERROR';
@@ -76,12 +77,27 @@ export function getBasemapCentroidsTableName(tableName: string): string {
   return `${tableName}${CENTROIDS_TABLE_SUFFIX}`;
 }
 
+interface BasemapImportOptions {
+  tableName?: string;
+}
+
+export function isImportedCustomBasemap(metadata: BasemapMetadata): boolean {
+  return (
+    metadata.isCustom === true &&
+    !metadata.isDatasetGeometry &&
+    metadata.file.startsWith(CUSTOM_BASEMAP_TABLE_PREFIX)
+  );
+}
+
 export async function processBasemapImport(
-  file: File
+  file: File,
+  options: BasemapImportOptions = {}
 ): Promise<BasemapImportResult> {
+  const tableName =
+    options.tableName ?? `${CUSTOM_BASEMAP_TABLE_PREFIX}${Date.now()}`;
   const isZip = file.name.toLowerCase().endsWith('.zip');
   if (isZip) {
-    return processZipShapefileImport(file);
+    return processZipShapefileImport(file, tableName);
   }
 
   const isShapefile = file.name.toLowerCase().endsWith('.shp');
@@ -103,7 +119,6 @@ export async function processBasemapImport(
   const duck = Duck;
   await duck.register_files([file]);
 
-  const tableName = `custom_basemap_${Date.now()}`;
   const lowerFileName = file.name.toLowerCase();
   const isParquet =
     lowerFileName.endsWith('.parquet') ||
@@ -139,7 +154,8 @@ export async function processBasemapImport(
 }
 
 async function processZipShapefileImport(
-  zipFile: File
+  zipFile: File,
+  tableName: string
 ): Promise<BasemapImportResult> {
   const extraction = await extractZip(zipFile);
   if (!extraction.isShapefileArchive || !extraction.shapefileBaseName) {
@@ -183,7 +199,6 @@ async function processZipShapefileImport(
   const duck = Duck;
   await duck.register_files(shapefileFiles, { shapefile: true });
 
-  const tableName = `custom_basemap_${Date.now()}`;
   return processGeofileBasemapImport(duck, mainShpFile, tableName, true);
 }
 

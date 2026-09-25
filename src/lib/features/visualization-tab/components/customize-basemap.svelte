@@ -12,6 +12,7 @@
   import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
   import BasemapStyleSelector from './basemap-layers/basemap-style-selector.svelte';
   import AuxLayerConfigSection from './basemap-layers/aux-layer-config-section.svelte';
+  import { createAccordionGroup } from '$lib/features/commons/utils/accordion-group.svelte';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
   import {
@@ -180,6 +181,15 @@
       .map(({ entry }) => entry);
   });
 
+  const layerAccordion = createAccordionGroup(() => {
+    const first = layerEntries[0];
+    if (!first || !currentMetadata) return undefined;
+    return (
+      first.layer.file ??
+      `${currentMetadata.file}:${first.layer.type}:${first.instanceIndex}`
+    );
+  });
+
   const availableMetadataLayerTypes = $derived.by(
     () =>
       new Set(
@@ -327,7 +337,12 @@
   >
     {#if !isTiledBasemapEnabled && currentMetadata}
       {#each layerEntries as entry (entry.layer.file ?? `${currentMetadata.file}:${entry.layer.type}:${entry.instanceIndex}`)}
+        {@const layerKey =
+          entry.layer.file ??
+          `${currentMetadata.file}:${entry.layer.type}:${entry.instanceIndex}`}
         <AuxLayerConfigSection
+          open={layerAccordion.isOpen(layerKey)}
+          onToggle={(expanded) => layerAccordion.setOpen(layerKey, expanded)}
           layer={entry.layer}
           basemapFile={currentMetadata.file}
           sharedLegacyId={entry.sharedLegacyId ?? undefined}
@@ -361,22 +376,14 @@
   #customize-basemap {
     display: flex;
     flex-direction: column;
-    padding: 16px 0;
+    padding: var(--kh-pad-panel) 0;
   }
 
   .content-area {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
-    padding: 16px 16px 8px 16px;
-  }
-
-  .kh-help {
-    color: var(--cds-text-helper, #6f6f6f);
-    font-size: 0.875rem;
-    line-height: 1.125rem;
-    letter-spacing: 0.16px;
-    margin: 0;
+    gap: var(--kh-gap-inline);
+    padding: var(--kh-pad-panel);
   }
 
   .layers-list {
@@ -392,7 +399,7 @@
   .reference-basemap-tool {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-05);
+    gap: var(--kh-gap-group);
     background-color: var(--cds-layer-01);
   }
 

@@ -27,7 +27,6 @@ const mocks = vi.hoisted(() => {
     loadOnlineFileMock: vi.fn(),
     removeUploadedFileMock: vi.fn(),
     clearAllFilesMock: vi.fn(),
-    getTotalFileSizeMock: vi.fn(() => 0),
     setProjectNameMock: vi.fn(),
     createProjectMock: vi.fn(),
     refreshProjectsMock: vi.fn(),
@@ -75,7 +74,6 @@ vi.mock('$lib/features/commons/stores/create-project.store.svelte', () => ({
     loadOnlineFile: mocks.loadOnlineFileMock,
     removeUploadedFile: mocks.removeUploadedFileMock,
     clearAllFiles: mocks.clearAllFilesMock,
-    getTotalFileSize: mocks.getTotalFileSizeMock,
     setProjectName(name: string) {
       mocks.createProjectState.newProject.projectName = name;
       mocks.setProjectNameMock(name);
@@ -157,7 +155,7 @@ describe('CreateNewProject', () => {
     vi.useRealTimers();
   });
 
-  it('loads an online file even when the user clicks before debounced URL validation finishes', async () => {
+  it('loads a pasted online file before debounced URL validation finishes', async () => {
     render(CreateNewProject, {
       props: {
         isModal: true
@@ -167,17 +165,37 @@ describe('CreateNewProject', () => {
     const urlInput = screen.getByLabelText(
       /lien vers un fichier stocké en ligne/i
     );
-    const loadButton = screen.getByRole('button', { name: /charger/i });
     const url =
       'http://localhost:5176/cartographie/khartisnewpprd/tests-datasets/visualization-toolbox-cases.csv';
 
-    await fireEvent.input(urlInput, { target: { value: url } });
-
-    expect(loadButton).toBeEnabled();
-
-    await fireEvent.click(loadButton);
+    await fireEvent.paste(urlInput, {
+      clipboardData: { getData: () => url }
+    });
 
     expect(mocks.setNewProjectErrorMock).toHaveBeenCalledWith(undefined);
+    expect(mocks.setOnlineFileUrlMock).toHaveBeenCalledWith(url);
+    expect(mocks.loadOnlineFileMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('loads an online file typed by hand once the field loses focus', async () => {
+    render(CreateNewProject, {
+      props: {
+        isModal: true
+      }
+    });
+
+    const urlInput = screen.getByLabelText(
+      /lien vers un fichier stocké en ligne/i
+    );
+    const url =
+      'http://localhost:5176/tests-datasets/csv/world-bank-rural-pop.csv';
+
+    await fireEvent.input(urlInput, { target: { value: url } });
+
+    expect(mocks.loadOnlineFileMock).not.toHaveBeenCalled();
+
+    await fireEvent.blur(urlInput);
+
     expect(mocks.setOnlineFileUrlMock).toHaveBeenCalledWith(url);
     expect(mocks.loadOnlineFileMock).toHaveBeenCalledTimes(1);
   });
@@ -192,25 +210,42 @@ describe('CreateNewProject', () => {
     const urlInput = screen.getByLabelText(
       /lien vers un fichier stocké en ligne/i
     );
-    const loadButton = screen.getByRole('button', { name: /charger/i });
 
-    await fireEvent.input(urlInput, {
-      target: {
-        value: 'http://localhost:5176/tests-datasets/projects/test-project.kh'
+    await fireEvent.paste(urlInput, {
+      clipboardData: {
+        getData: () =>
+          'http://localhost:5176/tests-datasets/projects/test-project.kh'
       }
     });
-
-    expect(loadButton).toBeEnabled();
-
-    await fireEvent.click(loadButton);
 
     expect(mocks.setOnlineFileUrlMock).not.toHaveBeenCalled();
     expect(mocks.loadOnlineFileMock).not.toHaveBeenCalled();
     expect(
       await screen.findByText(
-        /doivent être ouverts depuis l'onglet « Ouvrir un projet ou une sauvegarde »/i
+        /doivent être ouverts depuis l'onglet « Ouvrir un projet »/i
       )
     ).toBeInTheDocument();
+  });
+
+  it('imports pasted tabular data without asking for a confirmation click', async () => {
+    render(CreateNewProject, {
+      props: {
+        isModal: true
+      }
+    });
+
+    const pastedDataInput = screen.getByPlaceholderText(
+      /coller un tableau de données/i
+    );
+
+    await fireEvent.input(pastedDataInput, {
+      target: { value: 'country,value\nFrance,1' },
+      inputType: 'insertFromPaste'
+    });
+
+    expect(mocks.processPastedDataMock).toHaveBeenCalledWith(
+      'country,value\nFrance,1'
+    );
   });
 
   it('clears local URL and pasted data state when resetToken changes', async () => {

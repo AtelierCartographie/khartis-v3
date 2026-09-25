@@ -828,7 +828,7 @@
                 {#if histogramData.nulls > 0}
                   <div class="hist-warning-line">
                     <span class="hist-warning-icon"
-                      ><WarningAlt size={14} /></span
+                      ><WarningAlt size={16} /></span
                     >
                     <span
                       >{m.column_warning_nulls({
@@ -1033,8 +1033,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: var(--kh-size-xs);
+    height: var(--kh-size-xs);
     padding: 0;
     border: none;
     background: transparent;
@@ -1158,7 +1158,7 @@
     align-items: center;
     justify-content: center;
     min-width: 24px;
-    min-height: 24px;
+    min-height: var(--kh-size-xs);
   }
 
   .sort-btn:hover {

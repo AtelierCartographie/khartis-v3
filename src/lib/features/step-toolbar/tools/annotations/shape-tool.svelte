@@ -187,6 +187,7 @@
   <Row>
     <Column>
       <Select
+        size="sm"
         labelText={m.shape()}
         selected={selectedShape}
         on:change={handleShapeChange}
@@ -201,7 +202,7 @@
   <Row>
     <Column>
       <div class="section">
-        <Button kind="primary" icon={Add} onclick={handleAddShape}>
+        <Button size="field" kind="primary" icon={Add} onclick={handleAddShape}>
           {m.annotations_add_shape()}
         </Button>
         <p class="helper">{m.annotations_shape_helper()}</p>
@@ -363,6 +364,7 @@
             (i) => i.id === annotationsState.selectedId
           )}
           <Button
+            size="field"
             kind="danger-tertiary"
             icon={TrashCan}
             disabled={!selected || selected.type !== AnnotationKind.SHAPE}
@@ -374,7 +376,7 @@
             {m.annotations_delete_shape()}
           </Button>
         {:else}
-          <Button kind="danger-tertiary" icon={TrashCan} disabled
+          <Button size="field" kind="danger-tertiary" icon={TrashCan} disabled
             >{m.annotations_delete_shape()}</Button
           >
         {/if}

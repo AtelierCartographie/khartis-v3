@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { rowScopeStore } from '$lib/features/map';
+  import { setMissingDataAvailability } from '../shared/missing-data-availability';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import { SliderWithInput, VizFilterButton, VizFilterPanel } from '../shared';
   import LineThicknessSection from './line-thickness-section.svelte';
@@ -40,6 +42,8 @@
   import { coerceDashedPattern } from '../shared/dashed-pattern.utils';
 
   interface Props {
+    open?: boolean;
+    onToggle?: (expanded: boolean) => void;
     dataFields?: Array<{ id: number; text: string; type?: string }>;
     visualization?: VisualizationConfig;
     disabled?: boolean;
@@ -81,8 +85,16 @@
     onAddFilter,
     onUpdateFilter,
     onRemoveFilter,
-    onClearFilters
+    onClearFilters,
+    open,
+    onToggle
   }: Props = $props();
+
+  setMissingDataAvailability(() =>
+    visualization
+      ? rowScopeStore.hasMissingData(visualization.id, PrimitiveFilterType.LINE)
+      : false
+  );
 
   let discretizationModalOpen = $state(false);
   let discretizationTarget = $state<'color' | 'thickness'>('color');
@@ -341,6 +353,9 @@
 </script>
 
 <ExpandableSection
+  scrollIntoViewOnOpen
+  open={open}
+  onToggle={onToggle}
   title={m.lines_title()}
   description={disabled ? m.primitive_unavailable() : undefined}
   defaultOpen={false}
@@ -480,13 +495,13 @@
   .lines-config {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-04);
+    gap: var(--kh-gap-param);
     padding: var(--cds-spacing-03);
   }
 
   :global(.field-group) {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02);
+    gap: var(--kh-gap-label);
   }
 </style>

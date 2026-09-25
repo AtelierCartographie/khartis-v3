@@ -49,14 +49,14 @@ pnpm exec vitest run --project server tests/pipeline/viz-suggester.test.ts  # si
 pnpm exec vitest --project client                      # watch mode
 ```
 
-- **client** mocks `@duckdb/duckdb-wasm` and `$lib/features/duckdb` (no WASM worker). Use `vi.hoisted()` for pre-import mocks. Does **not** run in CI (jsdom can't simulate DuckDB WASM reliably) — run locally.
+- **client** mocks `@duckdb/duckdb-wasm` and `$lib/features/duckdb` (no WASM worker). Use `vi.hoisted()` for pre-import mocks. Runs in CI via `pnpm test:unit`.
 - **server** runs in `pool: 'forks'` with `fileParallelism: false`; tests needing real DuckDB use `@duckdb/node-api` via `tests/pipeline/duckdb-node-helper`. These run in CI.
 
-CI (`.github/workflows/pr-validation.yml`) on PRs to `staging`/`main`: lint + typecheck → pipeline/DuckDB tests → production build.
+CI (`.github/workflows/pr-validation.yml` on PRs to `staging`/`main`, and `release.yml` before semantic-release): Paraglide compile → lint → typecheck → `test:unit` → `test:pipeline` → `test:duckdb` → production build.
 
 ## Architecture
 
-Deep docs live in `docs/` (French) — `ARCHITECTURE.md`, `IMPORT_DUCKDB.md`, `RENDU_CARTOGRAPHIQUE.md`, `FONDS_PROJECTIONS.md`, `PERSISTANCE_ET_ARCHIVES.md`, `PERFORMANCE_ET_WORKERS.md`, `CONTRIBUER_ET_TESTER.md`, and `DEPLOYMENT.md`. Consult them before non-trivial work.
+Deep docs live in `docs/` (French), indexed by `docs/README.md` — `ARCHITECTURE.md`, `IMPORT_DUCKDB.md`, `RENDU_CARTOGRAPHIQUE.md`, `DISCRETISATION_ET_COULEURS.md`, `FONDS_PROJECTIONS.md`, `PERSISTANCE_ET_ARCHIVES.md`, `PROJECT_FORMAT_COMPATIBILITY.md`, `PERFORMANCE_ET_WORKERS.md`, `PWA_RUNTIME.md`, `ANALYTICS.md`, `CONTRIBUER_ET_TESTER.md`, `DEPANNAGE.md`, and `DEPLOYMENT.md`. Consult them before non-trivial work.
 
 **Four pillars:**
 

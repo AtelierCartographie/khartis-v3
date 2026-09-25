@@ -1,112 +1,89 @@
 # Runtime PWA, cache et mise à jour
 
-La PWA de Khartis doit offrir un chargement robuste sans mettre en danger les
-projets locaux. Son service worker est une partie du runtime applicatif : une
-modification de cache, de chemin de base ou de mise à jour doit être conçue
-avec la persistance et les ressources cartographiques, pas comme une simple
-optimisation de build.
+Le service worker de Khartis fait partie du runtime : il doit charger
+l'application de façon fiable sans jamais mettre en danger les projets locaux.
+Toute modification de cache, de chemin de base ou de mise à jour se conçoit
+avec la persistance ([Persistance et archives](PERSISTANCE_ET_ARCHIVES.md)).
 
 ## Construction et enregistrement
 
-VitePWA construit le service worker à partir de `src/sw.ts` avec une stratégie
-`injectManifest`. L'enregistrement est piloté par le composant et le service de
-mise à jour de l'application, avec un mode d'inscription demandant une décision
-explicite pour une nouvelle version. Le navigateur ne doit donc pas activer une
-version nouvelle de façon invisible au milieu d'une session de travail.
+- VitePWA construit `src/sw.ts` en stratégie `injectManifest`.
+- `registerType: 'prompt'`, `injectRegister: false` : l'enregistrement est fait
+  par `pwa-service-worker.svelte` (`useRegisterSW`), qui vérifie les mises à
+  jour toutes les heures. Une nouvelle version n'est jamais activée sans
+  décision de l'utilisateur.
+- Les noms de caches sont dérivés du scope du service worker : une
+  installation servie sous un autre chemin de base ne partage pas ses caches.
+- En production, le composant demande le stockage persistant
+  (`navigator.storage.persist()`).
+- **En développement, le service worker est désinscrit et ses caches
+  supprimés** : la vérification d'un changement PWA se fait sur un build.
 
-Le service worker déduit ses noms de caches et son périmètre de son scope. Cette
-isolation évite qu'une installation servie sous un autre chemin de base partage
-accidentellement des ressources avec l'application courante. Toute nouvelle
-route ou ressource mise en cache doit conserver cette propriété.
+## Stratégies de cache
 
-## Ce qui est mis en cache
+Le précache contient le shell produit par le build (JS, CSS, HTML, manifeste)
+ainsi que les métadonnées du catalogue de fonds et les préréglages de
+projections et de styles. Le reste est mis en cache à l'usage :
 
-Le pré-cache contient le shell applicatif produit par le build, notamment les
-ressources JavaScript, CSS, HTML et le manifeste. Les ressources volumineuses
-ou dépendantes du runtime, comme les fonds, les captures, les extensions
-DuckDB et les binaires associés, ne font pas toutes partie de ce pré-cache ;
-elles sont mises en cache à la demande selon leur catégorie.
+| Ressources                                                | Stratégie                                                           |
+| --------------------------------------------------------- | ------------------------------------------------------------------- |
+| Navigation                                                | réseau d'abord (timeout 10 s), repli sur le shell précaché du scope |
+| Assets immuables du build                                 | précache, avec un instantané de la version précédente en secours    |
+| WASM DuckDB, extensions (locales ou CDN), workers         | cache d'abord, avec expiration                                      |
+| Images et polices                                         | cache d'abord, vidé à chaque activation d'une nouvelle version      |
+| Tuiles vectorielles IGN (`data.geopf.fr`) et OpenMapTiles | réponse du cache puis actualisation en arrière-plan                 |
+| `/_app/version.json`, `/sw.js`                            | jamais mis en cache                                                 |
 
-| Catégorie                                         | Stratégie de runtime                                          | Effet attendu                                                                                  |
-| ------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Navigation applicative                            | Réseau d'abord, avec repli sur le shell pré-caché             | Obtenir une version fraîche lorsque le réseau répond, garder une ouverture possible hors ligne |
-| Ressources immuables du build                     | Pré-cache et réutilisation contrôlée                          | Charger rapidement l'interface correspondant au build                                          |
-| WebAssembly DuckDB, extensions locales et workers | Cache de ressources de runtime                                | Éviter les téléchargements répétés sans prétendre que la première ouverture est hors ligne     |
-| Images, polices et préréglages                    | Cache de runtime avec expiration                              | Réutiliser les ressources usuelles sans les rendre éternelles                                  |
-| Tuiles vectorielles distantes                     | Cache avec réponse immédiate et actualisation en arrière-plan | Préserver la réactivité tout en renouvelant progressivement les données                        |
+Les politiques, clés et durées vivent dans `src/sw.ts` et nulle part ailleurs.
+Les caches obsolètes du scope sont supprimés à l'activation. La première
+ouverture hors ligne d'une ressource jamais téléchargée n'est pas possible.
 
-Les politiques de cache, leurs clés et leurs durées vivent dans `src/sw.ts`.
-Éviter d'ajouter une seconde politique dans un composant ou de s'appuyer sur un
-nombre de ressources en cache comme contrat fonctionnel. Les versions obsolètes
-sont nettoyées par le service worker dans le périmètre de l'application.
+## Mise à jour sans perte de session
 
-## Mettre à jour sans perdre une session
+L'activation d'une nouvelle version (`skipWaiting`) n'a lieu qu'à réception du
+message `{ type: 'SKIP_WAITING', protocolVersion: 1, persistenceFlushed: true }`,
+envoyé une fois la persistance du projet confirmée. Aucune vue ne doit appeler
+`skipWaiting` elle-même.
 
-Une nouvelle version est proposée à l'utilisateur. L'activation anticipée du
-service worker n'est autorisée qu'après un message de protocole confirmant que
-la persistance a été enregistrée de façon sûre. Cette séquence protège un
-projet dont les écritures IndexedDB seraient encore en cours.
+Le bouton « Rechercher une mise à jour » de la barre latérale
+(`runFullUpdateFlow`) enchaîne : vérification, installation d'une version en
+attente, sinon réinitialisation du runtime (désinscription du service worker,
+suppression des caches du scope) et rechargement. IndexedDB n'est pas touché :
+le projet ouvert est conservé. Le bouton débloque aussi un client coincé par
+une mise à jour défectueuse. Il s'arrête sans recharger si le navigateur est
+hors ligne ou si l'enregistrement du projet n'est pas confirmé.
 
-Le bouton « Rechercher une mise à jour » de la barre latérale exécute la
-séquence complète en un clic : vérification, installation d'une version en
-attente le cas échéant, sinon actualisation garantie du runtime
-(désinscription des service workers du scope, suppression des caches du scope,
-rechargement sans paramètre `reset`, donc sans perte du projet ouvert ni des
-données IndexedDB). Un client bloqué par une mise à jour cassée est débloqué
-par ce même bouton. Deux échecs restent volontairement bloquants : hors ligne,
-et sauvegarde du projet non confirmée — aucun rechargement n'a lieu dans ces
-deux cas. Le raccourci de secours et `?reset=1` conservent le
-« factory reset » complet, qui saute en plus la restauration du dernier
-projet.
+Deux mécanismes de secours, qui ne touchent pas non plus à IndexedDB :
 
-Lorsqu'une modification touche la mise à jour :
+- le raccourci **Cmd/Ctrl + Alt + R** désinscrit le service worker, vide les
+  caches du scope puis recharge avec `?reset=1` ;
+- `?reset=1` seul ne vide rien : il saute seulement la restauration du dernier
+  projet.
 
-1. conserver l'invite de mise à jour et le protocole de confirmation ;
-2. ne pas appeler `skipWaiting` depuis une vue ou un gestionnaire ad hoc ;
-3. tester une session avec des données locales, une version en attente et une
-   activation demandée par l'utilisateur ;
-4. vérifier le repli de navigation lorsque le réseau est indisponible.
-
-Une mise à jour de cache n'est pas une migration de projet. Les données
-persistées restent soumises à leurs schémas et migrations ; consulter
-[PROJECT_FORMAT_COMPATIBILITY.md](PROJECT_FORMAT_COMPATIBILITY.md) avant toute
-évolution de ce contrat.
+Une mise à jour de cache n'est pas une migration de projet : les données
+persistées suivent leur schéma
+([Compatibilité du format projet](PROJECT_FORMAT_COMPATIBILITY.md)).
 
 ## Cache PWA et données utilisateur
 
-Le cache du service worker stocke des réponses HTTP. IndexedDB conserve les
-sources et l'état des projets locaux. Ces deux mécanismes ont des durées de vie
-et des risques différents : vider un cache PWA n'est pas une méthode de
-récupération de données, et effacer les données de site du navigateur peut
-supprimer des projets locaux.
+Le service worker stocke des réponses HTTP ; IndexedDB stocke sources et
+projets. Vider un cache PWA ne récupère pas de données, mais effacer les
+données de site du navigateur supprime les projets locaux. Ne proposer ce
+nettoyage qu'après un export `.kh` ou la confirmation qu'aucun projet n'est à
+conserver.
 
-Pour diagnostiquer une ressource obsolète, inspecter d'abord le scope du service
-worker, la version de l'application, les caches de ce scope et les requêtes
-réellement servies. Ne demander un nettoyage manuel de données du navigateur
-qu'après sauvegarde ou confirmation explicite de l'utilisateur, et en
-expliquant précisément ce qui sera perdu.
+## Chemin de base
 
-## Chemin de base et déploiement
+Le chemin de base Vite (`BASE_PATH`) détermine les URL des ressources, le
+manifeste, le scope et la route de navigation précachée. Un build n'a qu'une
+URL publique canonique ; les alias d'infrastructure redirigent vers elle au lieu
+de servir le même build sous un autre préfixe.
 
-Le chemin de base Vite détermine les URL des ressources, le manifeste, le
-scope PWA et la route de navigation pré-cachée. Une construction statique a une
-seule URL publique canonique. Les alias d'infrastructure doivent rediriger vers
-cette URL au lieu de faire servir le même build sous un autre préfixe.
-
-Pour PPRD et PROD, le script de déploiement déduit ce chemin de l'URL publique
-de la cible et le valide. Ne pas remplacer cette valeur par un préfixe manuel
-dans le code ou dans le service worker. Les identifiants d'hébergement, chemins
-distants et secrets restent hors du dépôt ; la procédure opérationnelle est
-dans [DEPLOYMENT.md](DEPLOYMENT.md).
-
-Un test local qui porte sur un chemin de base doit vérifier toutes les URL
-résultantes, y compris les ressources de test et le scope du service worker. Il
-ne suffit pas qu'une page racine réponde correctement.
+Pour PPRD et PROD, le script de déploiement dérive `BASE_PATH` de l'URL publique
+de la cible ([Déploiement](DEPLOYMENT.md)). Ne jamais le coder en dur dans
+l'application ou le service worker.
 
 ## Vérifier un changement PWA
-
-Le développement active le runtime PWA, mais la vérification déterminante se
-fait sur un artefact construit :
 
 ```sh
 pnpm test:pipeline
@@ -114,26 +91,23 @@ pnpm build
 pnpm preview
 ```
 
-Dans le navigateur, contrôler au minimum :
+Contrôler ensuite dans le navigateur :
 
-- l'inscription du service worker sous le bon scope ;
-- le chargement direct d'une route servie sous le chemin de base prévu ;
-- le comportement de navigation après une coupure réseau ;
+- l'enregistrement du service worker sous le bon scope ;
+- le chargement direct d'une route sous le chemin de base prévu ;
+- la navigation après une coupure réseau ;
 - le chargement d'une ressource DuckDB ou cartographique déjà téléchargée ;
 - la proposition puis l'activation d'une mise à jour sans perte de session.
 
-Après un changement de build ou de service worker, repartir d'un état de test
-connu. Ne pas conclure à une régression ou à une correction à partir d'un cache
-hérité d'une version différente. Les autres validations, notamment la chaîne
-CI réellement exécutée, sont précisées dans
-[CONTRIBUER_ET_TESTER.md](CONTRIBUER_ET_TESTER.md).
+Repartir d'un état connu après chaque changement de build : un cache hérité
+d'une autre version fausse la conclusion.
 
-## Signaux de diagnostic
+## Diagnostic
 
-| Symptôme                                    | Vérification prioritaire                                                                |
-| ------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Ancienne interface après publication locale | Scope, version en attente, invite de mise à jour et contenu des caches de ce scope      |
-| Ressource introuvable sous un sous-chemin   | Chemin de base du build, URL du manifeste, scope et URL réellement demandée             |
-| Première ouverture hors ligne incomplète    | Ressource jamais téléchargée, pré-cache du shell et stratégie de la catégorie concernée |
-| Projet local apparemment absent             | IndexedDB et compatibilité de projet avant toute suppression de données de site         |
-| Extension DuckDB ou worker indisponible     | Ressource de runtime, en-têtes d'isolation et installation des extensions DuckDB        |
+| Symptôme                                  | Vérifier                                                                   |
+| ----------------------------------------- | -------------------------------------------------------------------------- |
+| Ancienne interface après publication      | scope, version en attente, invite de mise à jour, caches du scope          |
+| Ressource introuvable sous un sous-chemin | `BASE_PATH` du build, URL du manifeste, scope, URL réellement demandée     |
+| Ouverture hors ligne incomplète           | ressource jamais téléchargée, précache du shell, stratégie de la catégorie |
+| Projet local apparemment absent           | IndexedDB et compatibilité du projet, avant toute suppression de données   |
+| Extension DuckDB ou worker indisponible   | cache de runtime, en-têtes d'isolation, installation des extensions        |

@@ -624,7 +624,7 @@
     categoriesVariant="symbols-unique"
     showMissingData={showMissingData}
     missingDataColor={missingDataColor}
-    sectionTitle={m.background()}
+    sectionTitle={m.fill()}
     sectionInfoText={m.fill_section_info()}
     selectableDataFields={selectableDataFields}
     getFacetsSelectedFieldIds={facetsSelection.getSelectedFieldIds}
@@ -688,21 +688,6 @@
 />
 
 <style lang="scss">
-  .field-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-
-  .field-label {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-    font-size: 0.75rem;
-    color: var(--cds-text-02);
-    font-weight: 400;
-  }
-
   :global(.field-group .bx--dropdown) {
     max-width: 100%;
   }

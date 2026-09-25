@@ -377,6 +377,13 @@ export const createProjectActions = {
     uploadedFile.originalFile = file;
     this.addUploadedFile(uploadedFile);
 
+    await this.runFileProcessor(uploadedFile, file);
+  },
+
+  async runFileProcessor(
+    uploadedFile: UploadedFile,
+    file: File
+  ): Promise<void> {
     const callbacks: ProcessingCallbacks = {
       onProgress: (fileId: string, progress: number) =>
         this.updateFileProgress(fileId, progress),
@@ -482,6 +489,8 @@ export const createProjectActions = {
     };
 
     this.addUploadedFile(uploadedFile);
+
+    await this.runFileProcessor(uploadedFile, shpFile);
   },
 
   async processPastedData(pastedText: string): Promise<void> {
@@ -808,13 +817,6 @@ export const createProjectActions = {
   hasValidFiles(): boolean {
     return createProjectInternalState.newProject.uploadedFiles.some(
       (f) => f.status === FileStatus.COMPLETE
-    );
-  },
-
-  getTotalFileSize(): number {
-    return createProjectInternalState.newProject.uploadedFiles.reduce(
-      (sum, file) => sum + file.size,
-      0
     );
   },
 

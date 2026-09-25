@@ -84,11 +84,7 @@
   }
 
   @media (max-width: 639px) {
-    .sciences-po-logo {
-      width: 58px;
-    }
-
-    .khartis-logo-group,
+    .sciences-po-logo,
     #khartis-logo :global(.full-height) {
       display: none;
     }

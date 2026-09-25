@@ -533,7 +533,7 @@ function createBasemapCatalogService() {
     const url = resolveStaticAssetUrl(BASEMAP_METADATA_PATH);
 
     try {
-      state.basemaps = await fetchWithTimeout(
+      const catalogBasemaps: BasemapMetadata[] = await fetchWithTimeout(
         url,
         async (response) => {
           if (!response.ok) {
@@ -552,6 +552,10 @@ function createBasemapCatalogService() {
         },
         BASEMAP_FETCH_TIMEOUT_MS
       );
+      state.basemaps = [
+        ...catalogBasemaps,
+        ...state.basemaps.filter((basemap) => basemap.isCustom)
+      ];
       invalidateCatalogBasemapsCache();
       state.isLoaded = true;
     } catch (error) {
@@ -618,6 +622,14 @@ function createBasemapCatalogService() {
     invalidateCatalogBasemapsCache();
   }
 
+  function replaceCustomBasemaps(basemaps: readonly BasemapMetadata[]): void {
+    state.basemaps = [
+      ...state.basemaps.filter((basemap) => !basemap.isCustom),
+      ...basemaps
+    ];
+    invalidateCatalogBasemapsCache();
+  }
+
   function getCatalogBasemaps(): BasemapMetadata[] {
     if (catalogBasemapsCache?.version === catalogBasemapsVersion) {
       return catalogBasemapsCache.basemaps;
@@ -645,7 +657,8 @@ function createBasemapCatalogService() {
     getSuggestions,
     getSuggestionsByGPSBbox,
     getBasemapById,
-    addCustomBasemap
+    addCustomBasemap,
+    replaceCustomBasemaps
   };
 }
 

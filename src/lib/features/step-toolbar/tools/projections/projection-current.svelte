@@ -42,8 +42,8 @@
 </script>
 
 <div class="projection-current">
-  <div class="projection-current-copy">
-    <span class="projection-current-label">{m.projection_current_label()}</span>
+  <span class="projection-current-label">{m.projection_current_label()}</span>
+  <div class="projection-current-row">
     <div class="projection-current-name-row">
       <span class="projection-current-name" title={display.name}
         >{display.name}</span
@@ -52,33 +52,34 @@
         <InfoPopover text={display.description} />
       {/if}
     </div>
-  </div>
 
-  {#if !isTiledBasemapEnabled}
-    <Button
-      kind="ghost"
-      size="small"
-      icon={SettingsAdjust}
-      class="projection-current-settings"
-      on:click={onopensettings}>{m.projection_current_settings()}</Button
-    >
-  {/if}
+    {#if !isTiledBasemapEnabled}
+      <Button
+        kind="ghost"
+        size="small"
+        icon={SettingsAdjust}
+        class="projection-current-settings"
+        on:click={onopensettings}>{m.projection_current_settings()}</Button
+      >
+    {/if}
+  </div>
 </div>
 
 <style lang="scss">
   .projection-current {
     display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: var(--cds-spacing-03);
-    padding: var(--cds-spacing-04) var(--cds-spacing-05);
+    flex-direction: column;
+    gap: 2px;
+    margin-inline: calc(-1 * var(--kh-pad-panel));
+    padding: var(--kh-gap-param) var(--kh-pad-panel);
     background: var(--cds-layer-01, #f4f4f4);
   }
 
-  .projection-current-copy {
+  .projection-current-row {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--kh-gap-inline);
     min-width: 0;
   }
 

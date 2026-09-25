@@ -6,8 +6,8 @@ import {
 } from '$lib/features/commons/constants/ui.constants';
 import {
   CARTOGRAPHIC_FONT_FAMILY,
-  isAvailableFont,
-  isAvailableFontSize
+  clampFontSize,
+  isAvailableFont
 } from '$lib/features/step-toolbar/fonts.constants';
 import { hexToHsl } from '$lib/features/commons/utils/color-utils';
 import {
@@ -173,11 +173,7 @@ function normalizeState(
         isAvailableFont(nextScale.fontFamily)
           ? nextScale.fontFamily
           : current.scale.fontFamily,
-      fontSize:
-        typeof nextScale?.fontSize === 'number' &&
-        isAvailableFontSize(nextScale.fontSize)
-          ? nextScale.fontSize
-          : current.scale.fontSize,
+      fontSize: clampFontSize(nextScale?.fontSize, current.scale.fontSize),
       expanded:
         typeof nextScale?.expanded === 'boolean'
           ? nextScale.expanded
@@ -420,9 +416,7 @@ const { state, actions } = createToolStore<
       }
     },
     setScaleFontSize: (fontSize: number) => {
-      if (isAvailableFontSize(fontSize)) {
-        s.scale.fontSize = fontSize;
-      }
+      s.scale.fontSize = clampFontSize(fontSize, s.scale.fontSize);
     },
     setOrientationStyle: (style: OrientationIndicatorStyle) => {
       s.orientation.style = style;

@@ -43,12 +43,6 @@
     gap: var(--cds-spacing-02);
   }
 
-  .field-label {
-    font-size: 0.75rem;
-    color: var(--cds-text-02);
-    font-weight: 400;
-  }
-
   .discretization-value {
     display: flex;
     align-items: center;

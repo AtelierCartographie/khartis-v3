@@ -23,6 +23,7 @@
     <Row>
       <Column>
         <ToggleTabs
+          size="md"
           items={modeItems}
           activeIndex={modeIndex}
           className="format-mode-tabs"

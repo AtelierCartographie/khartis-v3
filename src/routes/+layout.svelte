@@ -64,6 +64,7 @@
   import '$lib/features/commons/assets/styles/fonts.css';
   import 'carbon-components-svelte/css/all.css';
   import '$lib/features/commons/assets/styles/global.css';
+  import '$lib/features/commons/assets/styles/density.css';
   import '$lib/features/commons/assets/styles/figma-tokens.css';
   import '$lib/features/commons/assets/styles/spacing.css';
   import '$lib/features/commons/assets/styles/theming.css';

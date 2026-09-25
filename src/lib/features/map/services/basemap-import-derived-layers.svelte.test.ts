@@ -12,7 +12,14 @@ const mocks = vi.hoisted(() => ({
   generateAttributesMock: vi.fn(async () => undefined)
 }));
 
-vi.mock('$lib/features/duckdb', () => ({
+vi.mock('$lib/features/duckdb', async () => ({
+  ...(await vi.importActual<object>(
+    '$lib/features/duckdb/utils/basemap-join-key-columns.utils'
+  )),
+  ...(await vi.importActual<object>(
+    '$lib/features/duckdb/utils/geometry-column.utils'
+  )),
+  ...(await vi.importActual<object>('$lib/features/duckdb/enums')),
   Duck: {
     query: mocks.queryMock,
     analyse: mocks.analyseMock,
