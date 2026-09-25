@@ -68,16 +68,6 @@
     gap: var(--cds-spacing-04);
   }
 
-  .field-label {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-    font-size: 0.75rem;
-    letter-spacing: 0.32px;
-    color: var(--cds-text-secondary);
-    font-weight: 400;
-  }
-
   .toggle-with-label {
     display: flex;
     align-items: center;

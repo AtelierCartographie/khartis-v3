@@ -40,6 +40,7 @@ import {
 } from '../utils/dataset-crs.utils';
 import { loadDatasetsSequentially } from '../utils/load-datasets-sequentially.utils';
 import { resolveMapDisplayDatasets } from '../utils/map-display-datasets.utils';
+import { getPrimitiveMissingDataColumns } from '../utils/missing-data-columns.utils';
 import { shouldUseMapLibreInterleaved } from '../utils/render-engine.utils';
 
 export interface UseMapDisplayDataProps {
@@ -149,7 +150,10 @@ export function useMapDisplayData(
           datasetId: sourceFileId,
           vizFilters: viz.dataFilters,
           primitive,
-          numericColumns: collectPrimitiveNumericColumns(viz, primitive)
+          numericColumns: collectPrimitiveNumericColumns(viz, primitive),
+          missingDataColumns: primitive
+            ? getPrimitiveMissingDataColumns(viz, primitive)
+            : undefined
         })
       );
     })

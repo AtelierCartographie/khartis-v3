@@ -1,183 +1,228 @@
 # Fonds de carte et projections
 
-Ce document décrit les fonds de référence, leurs attributs, les jointures
-géographiques et le choix de projection. Il complète le document sur le rendu
-cartographique sans répéter son cycle WebGL.
+Fonds de référence, fonds importés, jointures géographiques et projections. Le
+cycle de vie WebGL est décrit dans
+[Rendu cartographique](RENDU_CARTOGRAPHIQUE.md).
 
-## Modèle cartographique
+## Trois objets distincts
 
-Khartis distingue trois objets qui peuvent être liés, mais ne sont pas
-interchangeables :
+| Objet                     | Rôle cartographique                            | Rôle technique                             |
+| ------------------------- | ---------------------------------------------- | ------------------------------------------ |
+| Jeu de données thématique | porte la mesure, les catégories ou les entités | table DuckDB, puis Arrow                   |
+| Fond de référence         | fournit géométries, limites et repères         | GeoParquet du catalogue ou fichier importé |
+| Projection                | passe des coordonnées à l'espace de la carte   | d3 via geoarrow-deck-stream, ou MapLibre   |
 
-| Objet                     | Rôle métier                                                  | Rôle technique                                          |
-| ------------------------- | ------------------------------------------------------------ | ------------------------------------------------------- |
-| Jeu de données thématique | Porte la mesure, les catégories ou les entités à représenter | Table DuckDB et résultat Arrow                          |
-| Fond de référence         | Donne les géométries, limites ou repères géographiques       | GeoParquet catalogue ou jeu importé                     |
-| Projection                | Définit le passage des coordonnées à l'espace de la carte    | d3 et geoarrow-deck-stream, ou MapLibre selon le moteur |
+Un fond peut être purement visuel, servir de support à une jointure ou fournir
+la géométrie d'une visualisation. Une jointure ne fusionne pas forcément fond et
+données en une seule table : le rendu split évite de dupliquer les géométries.
 
-Un fond peut être purement visuel, servir de support à une jointure, ou fournir
-la géométrie d'une visualisation. Une jointure ne transforme pas
-nécessairement le fond et le jeu métier en une seule table, le rendu peut rester
-split pour éviter de dupliquer les géométries.
+## Points d'entrée
 
-## Sources de vérité
+Chemins relatifs à `src/lib/features/`.
 
-| Responsabilité                             | Source principale                                               |
-| ------------------------------------------ | --------------------------------------------------------------- |
-| Métadonnées et chargement des fonds        | src/lib/features/map/services/basemap.service.svelte.ts         |
-| Lecture GeoParquet et métadonnées GeoArrow | src/lib/features/map/services/read-geojson-arrow.service.ts     |
-| Recherche et sélection de catalogue        | src/lib/features/map/services/basemap-catalog.service.svelte.ts |
-| Import d'un fond personnalisé              | src/lib/features/map/services/basemap-import.service.ts         |
-| Chargement et cadrage du fond de référence | src/lib/features/map/hooks/use-map-reference-basemap.svelte.ts  |
-| Styles MapLibre et OSM                     | src/lib/features/map/hooks/use-map-basemap.svelte.ts            |
-| Projections et bridge binaire              | src/lib/features/map/utils/geoarrow-stream-bridge.utils.ts      |
+| Responsabilité                              | Fichier                                                                                                                            |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Métadonnées, chargement et cache des fonds  | `map/services/basemap.service.svelte.ts`                                                                                           |
+| Lecture GeoParquet et métadonnées GeoArrow  | `map/services/read-geojson-arrow.service.ts`                                                                                       |
+| Recherche dans le catalogue                 | `map/services/basemap-catalog.service.svelte.ts`                                                                                   |
+| Import d'un fond                            | `map/services/basemap-import.service.ts`                                                                                           |
+| Chargement et cadrage du fond de référence  | `map/hooks/use-map-reference-basemap.svelte.ts`                                                                                    |
+| Styles MapLibre et OSM                      | `map/hooks/use-map-basemap.svelte.ts`                                                                                              |
+| Couches annexes dérivées                    | `duckdb/operations/derived-geometry.ts`                                                                                            |
+| Construction et orientation des projections | `commons/utils/projection.utils.ts`, `map/utils/khartis-projection-factories.utils.ts`, `map/utils/user-projection-build.utils.ts` |
+| Application aux buffers binaires            | `map/utils/geoarrow-stream-bridge.utils.ts`                                                                                        |
 
-Les métadonnées publiques du catalogue se trouvent sous static/basemaps. Ne
-figez pas dans la documentation un nombre de fonds, de variantes ou de
-familles : le catalogue est une donnée versionnée.
+Le catalogue est une donnée versionnée sous `static/basemaps/` : la
+documentation ne fige ni nombre de fonds ni liste de variantes.
 
-## Catalogue : affichage rapide et capacité analytique
+## Fonds du catalogue
 
-Un fond catalogue possède généralement une géométrie GeoParquet et des
-attributs descriptifs. Deux parcours sont possibles selon le besoin.
+Un fond du catalogue a une géométrie GeoParquet et des attributs descriptifs.
+Deux parcours coexistent :
 
-    Affichage primaire
-      GeoParquet -> parquet-wasm -> Arrow avec GeoArrow -> Deck.gl
+```text
+Affichage                     GeoParquet → parquet-wasm → Arrow/GeoArrow → Deck.gl
+Jointure, analyse ou densité  GeoParquet → DuckDB → table de fond → requête → Arrow
+```
 
-    Analyse, jointure ou densité
-      GeoParquet -> DuckDB -> table de fond -> requête ou jointure -> Arrow
+L'affichage évite DuckDB pour dessiner vite. Les attributs peuvent être chargés
+dans DuckDB sans la géométrie ; celle-ci n'y est matérialisée que si une
+opération géographique l'exige.
 
-Le premier parcours est volontairement direct pour éviter un chargement DuckDB
-inutile lors du dessin. Le second est tout aussi légitime lorsque la géométrie
-ou ses attributs doivent participer au traitement. Il est donc incorrect de
-dire qu'un fond catalogue ne passe jamais par DuckDB.
+`basemapService` met en cache les fonds chargés. `useMapReferenceBasemap`
+associe chaque chargement à un identifiant de requête, pour qu'une réponse
+tardive n'écrase pas un fond demandé ensuite, et ne recadre pas une vue que
+l'utilisateur a déplacée.
 
-basemapService met en cache les fonds chargés. useMapReferenceBasemap protège
-les chargements asynchrones par un identifiant de requête afin qu'une réponse
-ancienne ne remplace pas le fond demandé plus récemment. Il décide aussi si le
-changement de fond doit recadrer la carte ou respecter une vue manipulée par
-l'utilisateur.
+## Fonds importés
 
-## Fonds personnalisés
+`processBasemapImport` a son propre chemin de lecture, distinct du pipeline des
+jeux de données :
 
-Un fond importé suit le pipeline de données de l'application et devient une
-ressource DuckDB avant son exposition en Arrow. Cette règle couvre les formats
-gérés par DuckDB, notamment les données tabulaires, GeoParquet et les fichiers
-géographiques.
+- Shapefile zippé ; un `.shp` isolé est refusé ;
+- Parquet et GeoParquet par `read_parquet` ;
+- GeoPackage et autres formats géographiques par `ST_Read`, avec un repli
+  navigateur (SQLite WASM, WKB, proj4) pour les GeoPackages que le build WASM ne
+  lit pas.
 
-Les exceptions documentées doivent rester explicites :
+Le résultat est une table DuckDB `custom_basemap_*`. Sa géométrie n'est pas
+encore persistée (voir
+[Persistance et archives](PERSISTANCE_ET_ARCHIVES.md#limites-connues)). Un jeu
+de données importé qui porte sa propre géométrie peut aussi servir de fond de
+référence : il occupe alors le slot de référence s'il est libre.
 
-- GPX utilise son processeur dédié.
-- Un JSON qui n'est pas lisible comme GeoJSON peut suivre le lecteur tabulaire.
-- GeoPackage possède un secours navigateur fondé sur SQLite WASM, WKB et proj4
-  lorsque le parcours DuckDB ne suffit pas.
-- Un Shapefile requiert ses fichiers compagnons, un fichier .shp isolé ne
-  constitue pas un fond valide.
+### Persistance d'un fond importé
 
-Ces exceptions n'autorisent pas l'ajout d'un parseur JavaScript pour un format
-dangereux ou déjà pris en charge par DuckDB.
+La table `custom_basemap_*` et ses couches dérivées sont éphémères, comme toute
+table DuckDB. Ce qui est durable, c'est le fichier importé : il est enregistré
+comme asset du projet (`sourceAsset` dans la métadonnée du fond), exporté dans
+l'archive `.kh`, puis rejoué par `processBasemapImport()` à l'ouverture du
+projet, sous le nom de table enregistré dans `metadata.file`. Ce nom doit rester
+stable : jointures, fond de référence, couches et attributs le référencent.
 
-## Attributs et jointures
+Deux conséquences pour qui modifie l'import :
 
-Les attributs du catalogue peuvent être chargés dans DuckDB sans charger sa
-géométrie pour le dessin. Cette séparation permet de choisir une couche de
-référence légère, puis de matérialiser la géométrie seulement si une opération
-géographique le requiert.
+- **L'import doit rester rejouable.** Il est exécuté à nouveau à chaque
+  ouverture, sur les mêmes octets. Toute écriture annexe doit être idempotente
+  pour un même nom de table, comme `generateCustomBasemapAttributes()` qui
+  remplace les attributs du fond au lieu de les ajouter.
+- **L'ordre des `__id` doit rester déterministe.** Une jointure restaurée
+  s'appuie sur les identifiants recalculés au replay.
+
+Si le replay échoue, un avertissement nomme le fond au lieu de le faire
+disparaître en silence. Le détail du contrat de persistance est dans
+[PERSISTANCE_ET_ARCHIVES.md](PERSISTANCE_ET_ARCHIVES.md#fonds-personnalisés-importés).
+
+### Couches annexes dérivées
+
+Un fond polygonal importé n'apporte qu'une couverture. Pour qu'il se style
+comme un fond du catalogue, `rebuildDerivedGeometryTables()` en dérive trois
+tables sœurs :
+
+| Table           | Macro                | Contenu                                         |
+| --------------- | -------------------- | ----------------------------------------------- |
+| `…__land`       | `extract_land`       | territoire dissous                              |
+| `…__outerlines` | `extract_outerlines` | contour extérieur, calculé à partir de `__land` |
+| `…__innerlines` | `extract_innerlines` | limites internes partagées                      |
+
+La dérivation est relancée après une simplification. Un fond linéaire ne reçoit
+qu'une table de points représentatifs.
+
+- **Elle n'est jamais destructrice** : la table source reste intacte.
+- **GEOS WASM est plus strict que le natif** et refuse de dissoudre certaines
+  couvertures. `createDerivedTable()` réessaie une fois avec un re-nodage
+  (`noding_factor`, fraction du périmètre moyen, valable en degrés comme en
+  mètres). Si cela échoue encore, la table est créée **vide** : la couche
+  disparaît sans casser le fond. `ST_MakeValid` ne corrige pas ce cas, qui est
+  un problème de nodage.
+
+## Jointures
 
 Lors d'une jointure, vérifier :
 
 1. l'identifiant géographique et son niveau administratif ;
 2. les types, la normalisation et les valeurs sans correspondance ;
-3. le CRS de la géométrie de sortie ;
-4. le contrat de rendu attendu : table directe ou rendu split.
+3. le CRS de la géométrie produite ;
+4. le contrat de rendu attendu : table directe ou split.
 
-### Ce que coûte un fond de plus au catalogue
+En rendu split, la géométrie du fond et les attributs du jeu de données restent
+dans des tables Arrow distinctes, reliées par `featureIdColumn` : moins de
+copies de géométrie, et picking et infobulles toujours rattachés à la ligne du
+jeu de données.
 
-La phase fuzzy de la jointure est linéaire en **noms distincts** du catalogue, pas en nombre de fonds : les valeurs normalisées sont dédupliquées avant d'être comparées. Ajouter une résolution, un millésime ou un découpage régional d'un territoire déjà couvert n'ajoute donc **aucun** nom distinct et ne coûte rien à la jointure. Seul un nouveau territoire apporte des noms nouveaux, et d'autant plus qu'il descend fin : un niveau communal en apporte à peu près son propre effectif.
+Pour un fond importé, la jointure range dans `basemap_id` la **valeur brute**
+de la colonne du fond qui a apparié la donnée (un nom, un code), pas son `__id`.
+Les colonnes candidates viennent d'une seule règle,
+`selectBasemapJoinKeyColumns()` (`duckdb/utils/`) : noms et codes reconnus,
+sinon les cinq premières colonnes texte. Le rendu split doit retrouver ces
+valeurs dans la géométrie : `getCustomBasemapGeometryProjectColumns()` projette
+au moins ces colonnes, et `resolveBestSplitFeatureIdColumn()` essaie toute
+colonne texte ou entière. Si une colonne de jointure manque à la géométrie, la
+légende se calcule mais aucune entité n'est dessinée.
 
-L'ordre de grandeur à retenir : le seuil du budget fuzzy se resserre proportionnellement aux noms distincts, donc une croissance du catalogue concentrée sur des niveaux communaux de nouveaux pays réduit d'autant le nombre de valeurs qui reçoivent des suggestions automatiquement. Voir la phase fuzzy dans `IMPORT_DUCKDB.md`.
+Jointures, classifications, recherches et densités sont des opérations DuckDB ;
+après une mutation, les caches concernés sont invalidés par l'orchestrateur
+([Import et DuckDB](IMPORT_DUCKDB.md#caches-et-mutations)).
 
-Le rendu split conserve la géométrie de fond et les attributs du jeu de données
-dans des tables Arrow distinctes, liées par featureId. Il réduit les copies de
-géométrie tout en conservant le picking et les infobulles sur la ligne métier.
+### Coût d'un fond de plus au catalogue
 
-Les jointures, classifications, recherches et densités sont des opérations
-DuckDB. Après une mutation de table, les caches de métadonnées, de jointures ou
-de résultats Arrow concernés doivent être invalidés par les mécanismes de
-l'orchestrateur.
+La phase fuzzy compare les valeurs non appariées aux **noms distincts** des
+fonds candidats (dédupliqués après normalisation). Les candidats sont les fonds
+qui ont déjà des correspondances exactes, ou tout le catalogue à défaut.
+Ajouter une résolution, un millésime ou un découpage d'un territoire déjà
+couvert n'ajoute donc aucun nom. Un nouveau territoire en ajoute, d'autant plus
+qu'il est fin : un niveau communal en apporte à peu près son nombre de communes.
+Comme le budget est fixé en paires (`MAX_FUZZY_AUTO_PAIRS`), plus de noms
+distincts signifie moins de valeurs suggérées automatiquement ; le reste l'est à
+la demande ([Import et DuckDB](IMPORT_DUCKDB.md#phase-fuzzy-de-la-jointure)).
 
 ## CRS et projections
 
-Trois notions doivent rester séparées dans le code et la documentation :
+Trois notions à ne pas confondre :
 
-| Notion              | Question à résoudre                                               |
+| Notion              | Question                                                          |
 | ------------------- | ----------------------------------------------------------------- |
-| CRS source          | Dans quelles coordonnées arrive le fichier ou le GeoParquet ?     |
-| Projection de rendu | Comment les géométries sont-elles transformées pour cette carte ? |
-| Moteur de carte     | Le rendu utilise-t-il Deck orthographique ou MapLibre intercalé ? |
+| CRS source          | dans quelles coordonnées arrive le fichier ?                      |
+| Projection de rendu | comment les géométries sont-elles transformées pour cette carte ? |
+| Moteur de carte     | Deck.gl orthographique ou MapLibre intercalé ?                    |
 
-Les données utilisées par MapLibre sont préparées dans le CRS compatible avec
-son rendu tuilé. En mode Deck orthographique, les transformations d3 sont
-appliquées par geoarrow-deck-stream aux buffers GeoArrow. Une reprojection ne
-doit pas dégrader le chemin binaire en une conversion générale vers GeoJSON.
+En mode orthographique, geoarrow-deck-stream applique la projection d3
+directement aux buffers GeoArrow ; en mode MapLibre, les données sont préparées
+pour son rendu tuilé. Une reprojection ne dégrade jamais le chemin binaire en
+conversion GeoJSON.
 
-La projection résolue dépend de la configuration de la visualisation, du fond
-de référence et des projections composites. Les projections composites
-définissent plusieurs zones de dessin, par exemple une zone principale et des
-encarts. Elles impliquent une mise en page, un cadrage et un ordre de couches
-stables pour que chaque contexte conserve ses géométries et ses labels.
+La projection résolue dépend de la visualisation, du fond de référence et des
+projections composites. Une projection composite définit plusieurs zones de
+dessin (territoire principal, encarts) avec leur propre cadrage et ordre de
+couches. Les projections non identitaires peuvent ajouter un masque ou un
+contour de sphère, à vérifier avec les couches thématiques, pas seulement sur
+un fond vide.
 
-Les projections non identitaires peuvent exiger un masque ou un contour de
-sphère. Ces couches de contexte font partie de la carte et doivent être
-vérifiées avec les couches thématiques, pas uniquement avec un fond vide.
+### Orientation intrinsèque
+
+Beaucoup de projections d3 portent leur propre orientation : Bertin 1953 est
+centrée sur les terres habitées, Air Ocean sur son icosaèdre, la Mollweide
+interrompue sur la coupure atlantique. Le rendu applique
+`rotate([-longitude, -latitude, gamma])` à partir des réglages de
+l'utilisateur ; des réglages à zéro ramèneraient donc la projection à lon/lat 0.
+
+`resolveProjectionDefaultOrientation()` lit le `rotate()` par défaut de chaque
+projection et le met en cache. Un code de projection saisi à la main part de
+`[0, 0]`. Une entrée du catalogue qui a besoin d'un autre cadrage que celui de
+d3 déclare son `rotate` dans le catalogue, pas dans le rendu — par exemple le
+planisphère carré (Peirce quinconcial).
 
 ## Styles, ordre et simplification
 
-Un fond peut être rendu :
+Un fond peut être rendu comme géométrie de référence Deck.gl, comme style tuilé
+MapLibre avec couches Deck.gl intercalées, ou comme raster OSM. Les couches de
+fond se placent derrière ou devant les couches thématiques selon leur rôle ;
+`useMapBasemap` et `useMapLayers` synchronisent style, ordre effectif et
+libellés MapLibre.
 
-- comme géométrie de référence Deck ;
-- comme style tuilé MapLibre, avec les couches Deck intercalées ;
-- comme raster OSM ;
-- en variante simplifiée adaptée à l'échelle ou à la projection.
+Une simplification est une variante de la donnée ou une opération géographique
+maîtrisée. Elle préserve les identifiants de jointure et se vérifie sur les
+contours, îles, encarts et limites administratives. Elle ne sert pas à masquer
+un problème de projection ou de mémoire.
 
-Les couches de fond sont placées derrière ou devant les couches thématiques
-selon leur rôle. La configuration de style, l'ordre effectif et les libellés
-MapLibre doivent rester synchronisés par useMapBasemap et useMapLayers.
+## Ajouter un fond au catalogue
 
-La simplification doit être choisie comme une variante de la donnée catalogue
-ou une opération géographique maîtrisée. Elle doit préserver les identifiants
-utiles aux jointures et être vérifiée sur les contours, les îles, les encarts
-et les limites administratives. Ne pas simplifier une géométrie uniquement pour
-masquer un problème de projection ou de mémoire.
+1. Définir métadonnées, niveau géographique, CRS et variantes.
+2. Vérifier que le GeoParquet expose une géométrie lisible et des métadonnées
+   GeoArrow après lecture.
+3. Définir séparément les attributs utiles aux jointures.
+4. Tester l'affichage direct par parquet-wasm, puis la matérialisation DuckDB
+   si le fond peut être joint, analysé ou densifié.
+5. Tester les modes Deck.gl et MapLibre concernés, le cadrage, la projection et
+   la simplification.
 
-## Ajouter ou modifier un fond
+## Diagnostic
 
-Avant d'ajouter un fond catalogue :
-
-1. définir ses métadonnées, son niveau géographique, son CRS et ses variantes ;
-2. vérifier que le GeoParquet expose une géométrie lisible et que les
-   métadonnées GeoArrow sont disponibles après lecture ;
-3. définir séparément les attributs nécessaires aux jointures ;
-4. tester l'affichage direct depuis parquet-wasm ;
-5. tester la matérialisation DuckDB si le fond peut être joint, analysé ou
-   densifié ;
-6. tester les modes Deck et MapLibre concernés, le cadrage, la projection et la
-   simplification.
-
-Pour un fond importé, partir du pipeline existant plutôt que d'ajouter une voie
-spécifique au composant de carte. Vérifier les messages d'erreur, les fichiers
-compagnons, la réouverture du projet et l'export de l'archive.
-
-## Diagnostic ciblé
-
-| Symptôme                                      | Vérifications prioritaires                                                            |
-| --------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Fond catalogue absent                         | URL de géométrie, lecture parquet-wasm, métadonnées GeoArrow, requête active et cache |
-| Jointure sans résultat                        | Clés géographiques, normalisation, niveau administratif et table DuckDB matérialisée  |
-| Fond correct mais couche thématique déplacée  | CRS source, projection résolue, moteur choisi et cadrage                              |
-| Style tuilé instable                          | État du style MapLibre, synchronisation des couches intercalées et ordre              |
-| Ralentissement après changement de projection | Variante simplifiée, identité des tables/projections, Worker de parse et caches       |
-
-Les tests du service de fonds, du bridge GeoArrow, des projections, des
-jointures et des formats GeoParquet ou GeoPackage doivent accompagner toute
-évolution de ce modèle.
+| Symptôme                                      | Vérifier                                                                     |
+| --------------------------------------------- | ---------------------------------------------------------------------------- |
+| Fond du catalogue absent                      | URL de géométrie, lecture parquet-wasm, métadonnées GeoArrow, requête active |
+| Jointure sans résultat                        | clés, normalisation, niveau administratif, table DuckDB matérialisée         |
+| Couche thématique décalée par rapport au fond | CRS source, projection résolue, moteur, cadrage                              |
+| Style tuilé instable                          | état du style MapLibre, synchronisation et ordre des couches intercalées     |
+| Fond importé absent après rechargement        | limite connue de persistance des fonds importés                              |
+| Lenteur après changement de projection        | variante simplifiée, identité des tables et projections, worker de parse     |

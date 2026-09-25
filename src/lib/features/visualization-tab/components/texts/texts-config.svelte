@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { rowScopeStore } from '$lib/features/map';
+  import { setMissingDataAvailability } from '../shared/missing-data-availability';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import { VizFilterButton, VizFilterPanel } from '../shared';
   import TextAppearanceSection from './text-appearance-section.svelte';
@@ -13,6 +15,7 @@
     VisualizationModes,
     VizDataFilter
   } from '$lib/features/commons/stores/visualization.store.svelte';
+  import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import type { FilterStats } from '$lib/features/duckdb';
   import * as m from '$lib/paraglide/messages';
@@ -52,6 +55,8 @@
   import { coerceString, parseOpacityToSlider } from '../../utils/coerce.utils';
 
   interface Props {
+    open?: boolean;
+    onToggle?: (expanded: boolean) => void;
     dataFields?: Array<{ id: number; text: string; type?: string }>;
     visualization?: VisualizationConfig;
     disabled?: boolean;
@@ -95,8 +100,16 @@
     onAddFilter,
     onUpdateFilter,
     onRemoveFilter,
-    onClearFilters
+    onClearFilters,
+    open,
+    onToggle
   }: Props = $props();
+
+  setMissingDataAvailability(() =>
+    visualization
+      ? rowScopeStore.hasMissingData(visualization.id, PrimitiveFilterType.TEXT)
+      : false
+  );
 
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
@@ -549,6 +562,9 @@
 
 <div class="viz-panel-shell texts-panel-shell">
   <ExpandableSection
+    scrollIntoViewOnOpen
+    open={open}
+    onToggle={onToggle}
     title={m.texts_title()}
     description={disabled ? m.primitive_unavailable() : undefined}
     defaultOpen={false}
@@ -707,12 +723,12 @@
   .texts-config {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-04);
+    gap: var(--kh-gap-param);
     padding: var(--cds-spacing-03);
   }
 
   :global(.text-input-field .bx--text-input) {
-    height: 40px;
+    height: var(--kh-size-sm);
   }
 
   :global(.text-input-field .bx--text-input__field-wrapper) {
@@ -720,11 +736,11 @@
   }
 
   :global(.texts-panel-shell .field-picker .bx--label) {
-    margin-bottom: 0.5rem;
+    margin-bottom: var(--kh-gap-label);
   }
 
   :global(.texts-panel-shell .field-picker .bx--list-box__field) {
-    min-height: 40px;
+    min-height: var(--kh-size-sm);
     background: var(--cds-field-01, #f4f4f4);
   }
 </style>

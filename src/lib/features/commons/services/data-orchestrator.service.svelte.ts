@@ -18,6 +18,7 @@ import { buildFileErrorContext } from '$lib/features/commons/utils/file-error-co
 import { toJsonValue } from '$lib/features/commons/utils/json.utils';
 import type { SerializedProjectData } from '$lib/types/serialization.types';
 import { persistenceRegistry } from '$lib/features/project-management/core';
+import { restoreCustomBasemapTables } from '$lib/features/project-management';
 import { createCompanionFilesFromAssetRefs } from '$lib/features/project-management/services/asset-store.service';
 import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
 import { layersActions } from '$lib/features/step-toolbar/tools/layers';
@@ -1548,6 +1549,13 @@ function createDataOrchestratorService() {
           }
 
           if (!currentProject) {
+            return;
+          }
+
+          await restoreCustomBasemapTables();
+          throwIfProjectChangeAborted(options.signal);
+
+          if (!isCurrentProjectRuntime(restoreRun)) {
             return;
           }
 

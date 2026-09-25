@@ -337,6 +337,7 @@
 <div class="discretization-panel">
   <div class="section">
     <Select
+      size="sm"
       id="classification-method"
       labelText={m.discretization_method_label()}
       selected={method}
@@ -378,6 +379,7 @@
       <p class="input-label">{m.discretization_num_classes()}</p>
       {#if isNestedMeans}
         <Select
+          size="sm"
           id="nested-means-classes"
           labelText={m.discretization_num_classes()}
           hideLabel
@@ -500,7 +502,7 @@
   .labeled-input {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02);
+    gap: var(--kh-gap-label);
   }
 
   .input-label {
@@ -539,14 +541,14 @@
   .breakpoint-input-col {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02);
+    gap: var(--kh-gap-label);
     flex: 0 0 40%;
   }
 
   .breakpoint-slider-col {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02);
+    gap: var(--kh-gap-label);
     flex: 1;
     min-width: 0;
   }
@@ -569,7 +571,7 @@
     padding-top: var(--cds-spacing-02);
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-04);
+    gap: var(--kh-gap-param);
     margin-bottom: 0;
   }
 

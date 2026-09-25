@@ -1,9 +1,6 @@
 import type { SavedProjectMetadata } from '$lib/features/project-management';
 import { projectRepository } from '$lib/features/project-management';
 import * as m from '$lib/paraglide/messages';
-import { DataValidationError } from '../pipeline.errors';
-import { sanitizeProjectName } from '../utils/sanitize.utils';
-import { ProjectValidator } from '../utils/validation.utils';
 import { projectStore } from './project.store.svelte';
 
 interface ProjectsState {
@@ -55,49 +52,12 @@ function createProjectsStore() {
   }
 
   async function duplicateProject(
-    id: string
+    id: string,
+    newName?: string
   ): Promise<SavedProjectMetadata | undefined> {
-    const newProjectId = await projectStore.duplicateProject(id);
+    const newProjectId = await projectStore.duplicateProject(id, newName);
     await refresh();
     return getProjectById(newProjectId);
-  }
-
-  async function updateProject(
-    id: string,
-    updates: Partial<Pick<SavedProjectMetadata, 'name' | 'description'>>
-  ): Promise<SavedProjectMetadata | undefined> {
-    const project = await projectRepository.load(id);
-
-    if (!project) {
-      throw new DataValidationError(
-        m.history_project_not_found(),
-        'projectId',
-        { projectId: id }
-      );
-    }
-
-    if (updates.name !== undefined) {
-      const sanitized = sanitizeProjectName(updates.name);
-      const validation = ProjectValidator.validateProjectName(sanitized);
-
-      if (!validation.isValid) {
-        throw new DataValidationError(validation.errors.join(', '), 'name', {
-          errors: validation.errors
-        });
-      }
-
-      project.manifest.name = sanitized;
-    }
-
-    if (updates.description !== undefined) {
-      project.manifest.description = updates.description;
-    }
-
-    project.manifest.updatedAt = new Date();
-    await projectRepository.save(project);
-    await refresh();
-
-    return getProjectById(id);
   }
 
   async function openProject(id: string): Promise<void> {
@@ -125,7 +85,6 @@ function createProjectsStore() {
     refresh,
     getProjectById,
     duplicateProject,
-    updateProject,
     openProject
   };
 }

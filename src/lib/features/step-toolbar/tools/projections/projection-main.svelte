@@ -565,8 +565,8 @@
   .projection-buttons :global(.projection-view-button.bx--btn) {
     width: 32px;
     min-width: 32px;
-    height: 32px;
-    min-height: 32px;
+    height: var(--kh-size-sm);
+    min-height: var(--kh-size-sm);
     padding: 8px;
     color: var(--cds-icon-primary, #161616);
   }
@@ -621,7 +621,7 @@
   .projection-content :global(.show-more-btn) {
     width: 100%;
     max-width: 100%;
-    min-height: 40px;
+    min-height: var(--kh-size-md);
     margin-top: 0;
   }
 
@@ -655,10 +655,16 @@
   .projection-grid-featured,
   .projection-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(184px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(var(--kh-card-w), 1fr));
     gap: var(--cds-spacing-05);
     width: 100%;
     align-items: start;
+  }
+
+  .projection-grid-featured,
+  .projection-grid-cards {
+    grid-template-columns: repeat(auto-fill, minmax(var(--kh-card-w), 1fr));
+    gap: var(--cds-spacing-03);
   }
 
   .projection-grid-featured {
@@ -681,9 +687,7 @@
   }
 
   .projection-grid-cards {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
+    display: grid;
   }
 
   .projection-grid-featured :global(.projection-card),

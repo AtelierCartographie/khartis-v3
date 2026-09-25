@@ -62,6 +62,7 @@
     SavePriority,
     persistenceRegistry
   } from '$lib/features/project-management/core';
+  import { persistCustomBasemapSource } from '$lib/features/project-management';
   import { useBasemapJoinAttributes } from '../hooks/use-basemap-join-attributes.svelte';
   import { tick, untrack } from 'svelte';
   import {
@@ -927,8 +928,15 @@
 
     try {
       const file = importFiles[0];
-      const { basemap: customBasemap, geometryTable } =
+      const { basemap: processedBasemap, geometryTable } =
         await processBasemapImport(file);
+
+      if (abortSignal.aborted) return;
+
+      const customBasemap = await persistCustomBasemapSource(
+        processedBasemap,
+        file
+      );
 
       if (abortSignal.aborted) return;
 
@@ -1994,14 +2002,11 @@
   }
 
   .kh-help {
-    color: var(--cds-text-helper, #6f6f6f);
-    margin: 0 16px 12px;
-    padding-top: 16px;
-    font-size: 14px;
-    line-height: 18px;
+    margin: 0 var(--kh-pad-panel) var(--kh-gap-param);
+    padding-top: var(--kh-pad-panel);
   }
 
   .step-content {
-    padding: 0 16px 16px;
+    padding: 0 var(--kh-pad-panel) var(--kh-pad-panel);
   }
 </style>

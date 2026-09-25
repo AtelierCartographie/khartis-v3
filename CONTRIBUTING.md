@@ -1,77 +1,106 @@
 # Contributing to Khartis
 
-Khartis is a browser-only thematic-mapping application. Contributions should
-preserve the data, rendering, persistence, accessibility, and cartographic
-contracts described in the [developer documentation](docs/README.md).
+Thank you for your interest in Khartis. This guide covers setup, the rules
+every change must respect, how to validate it and how to submit it. The
+[developer documentation](docs/README.md) (in French) details each area.
 
-## Before coding
+## Before you start
 
-1. Read the document for the area you will change.
-2. Inspect the current working tree and preserve unrelated edits.
-3. Follow the feature boundary instead of reaching into another feature’s
-   internals.
-4. Keep imported user data in the browser. Do not add a server upload or send
-   data-derived information to a third party.
+- For a substantial feature, open an
+  [issue](https://github.com/AtelierCartographie/khartis-v3/issues) first to
+  discuss it.
+- Read the document for the area you will change.
+- Keep imported user data in the browser: never add an upload, and never send
+  data-derived information to a third party.
 
-## Local setup
+## Setup
+
+Requirements: Node.js `>=22 <25` and pnpm `>=10`, through Corepack.
 
 ```sh
 corepack enable pnpm
 pnpm install
-pnpm dev
+pnpm dev             # http://localhost:5176
 ```
 
-Node 22 and pnpm are required. `pnpm install` fetches the DuckDB WASM
-extensions; use `pnpm download:extensions` to retry a failed download.
+`pnpm install` downloads the DuckDB WASM extensions from
+`extensions.duckdb.org`; if that step fails, fix the network issue and run
+`pnpm download:extensions`. No `.env` file is needed to run the application.
 
-## Non-negotiable engineering contracts
+| Command              | Purpose                                          |
+| -------------------- | ------------------------------------------------ |
+| `pnpm dev`           | development server on port 5176                  |
+| `pnpm build`         | static build into `build/`                       |
+| `pnpm preview`       | serve the production build locally               |
+| `pnpm check`         | compile Paraglide, then run svelte-check (types) |
+| `pnpm lint`          | Prettier check and ESLint                        |
+| `pnpm format`        | format files with Prettier                       |
+| `pnpm test:unit`     | client Vitest project (jsdom)                    |
+| `pnpm test:pipeline` | server Vitest project, `tests/pipeline/`         |
+| `pnpm test:duckdb`   | server Vitest project, `tests/duckdb/`           |
+| `pnpm test:all`      | the three test suites in sequence                |
 
-- Parse supported data formats through DuckDB WASM. Do not add a hand-written
-  JavaScript parser when DuckDB already supports the format.
-- Keep rendering geometry on the binary Arrow/GeoArrow path. GeoJSON is a
-  fallback or export format, not the normal path to Deck.gl.
-- Escape all user-derived SQL identifiers and values with the existing helpers.
-- Invalidate the relevant DuckDB caches after every table mutation.
-- Treat project compatibility as public API: archive v2 and schema 3.9.0 have
-  explicit migration rules in
-  [PROJECT_FORMAT_COMPATIBILITY.md](docs/PROJECT_FORMAT_COMPATIBILITY.md).
-- Add UI text through Paraglide in French and English, and preserve keyboard
-  navigation, visible focus, and semantic controls.
+## Engineering rules
 
-## Validate the change
+- **DuckDB reads the data.** Supported formats go through DuckDB WASM; do not
+  add a JavaScript parser for a format DuckDB handles.
+- **Geometry stays binary.** The render path is Arrow/GeoArrow to Deck.gl;
+  GeoJSON is a fallback or export format only.
+- **SQL is escaped.** Escape every user-derived identifier and value with the
+  existing helpers.
+- **Caches follow mutations.** Invalidate the relevant DuckDB caches after any
+  table mutation.
+- **Features stay separate.** Import another feature only through its
+  `index.ts`; `features/commons` is the shared exception.
+- **Project files are a public API.** Archive v2 and schema `3.9.0` follow the
+  rules in [Project format compatibility](docs/PROJECT_FORMAT_COMPATIBILITY.md).
+- **Interface.** Svelte 5 runes, Carbon components, strict TypeScript without
+  `any`. Every visible string goes through Paraglide, in both `messages/fr.json`
+  (reference) and `messages/en.json`. Keep keyboard navigation, visible focus
+  and labelled controls.
 
-Run the narrowest relevant command first, then widen it when the change spans
+## Validate your change
+
+Start with the narrowest command, then widen it when the change crosses
 boundaries.
 
-| Change                                                 | Required starting point                         |
-| ------------------------------------------------------ | ----------------------------------------------- |
-| Svelte component, store, or utility                    | `pnpm test:unit`                                |
-| Import, persistence, project archive, or data pipeline | `pnpm test:pipeline`                            |
-| SQL, DuckDB macro, reader, join, or classification     | `pnpm test:duckdb`                              |
-| Type or Svelte boundary                                | `pnpm check`                                    |
-| Formatting and linting                                 | `pnpm lint`                                     |
-| User-visible rendering, PWA, or browser lifecycle      | focused browser scenario on a development build |
+| Change                                              | Start with                                               |
+| --------------------------------------------------- | -------------------------------------------------------- |
+| Documentation or config without runtime effect      | `pnpm lint`                                              |
+| Svelte component, store or client utility           | `pnpm test:unit`, then `pnpm check`                      |
+| Import, data pipeline, persistence or `.kh` archive | `pnpm test:pipeline`                                     |
+| SQL, DuckDB macro, reader, join or classification   | `pnpm test:duckdb`                                       |
+| Rendering, WebGL, PWA or browser lifecycle          | tests above, `pnpm build`, then a browser check          |
+| Large change, or before review                      | `pnpm lint`, `pnpm check`, `pnpm test:all`, `pnpm build` |
 
-The pull-request workflow runs all three test suites, `pnpm lint`, `pnpm check`,
-and `pnpm build`. A passing mock-based client test is not proof of a working
-DuckDB Worker, WebGL rendering, or IndexedDB restore.
+Client tests mock DuckDB: passing them does not prove that the DuckDB Worker,
+WebGL rendering or IndexedDB restore work.
 
-For render work, exercise more than one bundled basemap and representative
-fixtures. For persistence work, prove a real save, reload, and archive
-round-trip. For project-format changes, add or update migrations and fixtures
-before changing the public version.
+- **Rendering:** try several basemaps and datasets from `tests-datasets/`.
+- **Persistence:** prove a real save, reload and `.kh` round trip.
+- **Project format:** add migrations and test archives before changing the
+  public version.
 
-## Submit a reviewable change
+Test projects, fixtures and browser checks are detailed in
+[Contribuer et tester](docs/CONTRIBUER_ET_TESTER.md).
 
-- Keep the diff focused and update the appropriate developer document when a
-  contract, command, architectural boundary, or troubleshooting path changes.
-- Use Conventional Commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`,
-  `chore:`).
-- Do not commit environment files, credentials, private keys, data exports, or
+## Submit a pull request
+
+- Target `staging`. Keep the diff focused on one intent, and update the
+  relevant document when a contract, command or architectural boundary
+  changes.
+- Write [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`,
+  `fix:`, `refactor:`, `perf:`, `test:`, `docs:`, `build:`, `ci:`, `chore:`).
+  Husky checks the message and formats staged files.
+- Never commit environment files, credentials, private keys, data exports or
   source datasets.
-- Describe the observable behavior, validation performed, and remaining manual
-  browser or deployment evidence in the pull request.
-- Preserve individual reviewed commits. Maintainers integrate accepted pull
-  requests with a regular merge commit, not a squash merge.
+- In the description, state the observable behavior, the checks you ran and
+  any browser or deployment check left to do.
+- CI runs on every non-draft pull request to `staging` or `main`: Paraglide
+  compilation, `pnpm lint`, `pnpm check`, the three test suites and
+  `pnpm build`.
+- Maintainers merge with a merge commit, not a squash, so reviewed commits are
+  kept.
 
-Security issues should follow [SECURITY.md](SECURITY.md), not a public issue.
+Report security issues as described in [SECURITY.md](SECURITY.md), not in a
+public issue.

@@ -104,7 +104,12 @@
   <Row>
     <Column>
       <div class="section">
-        <Button kind="primary" icon={Upload} onclick={triggerFileDialog}>
+        <Button
+          size="field"
+          kind="primary"
+          icon={Upload}
+          onclick={triggerFileDialog}
+        >
           {m.annotations_import_image()}
         </Button>
         <p class="helper">{m.annotations_import_image_description()}</p>
@@ -171,6 +176,7 @@
             (i) => i.id === annotationsState.selectedId
           )}
           <Button
+            size="field"
             kind="danger-tertiary"
             icon={TrashCan}
             disabled={!selected || selected.type !== AnnotationKind.IMAGE}
@@ -182,7 +188,7 @@
             {m.annotations_delete_image()}
           </Button>
         {:else}
-          <Button kind="danger-tertiary" icon={TrashCan} disabled>
+          <Button size="field" kind="danger-tertiary" icon={TrashCan} disabled>
             {m.annotations_delete_image()}
           </Button>
         {/if}

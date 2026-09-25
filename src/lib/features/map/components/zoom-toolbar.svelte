@@ -329,6 +329,7 @@
     aria-label={m.zoom_value_input_label()}
   >
     <ToggleTabs
+      size="md"
       items={zoomItems}
       activeIndex={activeTabIndex}
       onchange={handleZoomModeChange}
@@ -435,6 +436,7 @@
 <style>
   .zoom-toolbar-shell {
     --khartis-step-toolbar-width: 102px;
+    --_zoom-cell: calc(var(--kh-size-md) * 1.25);
     position: fixed;
     bottom: 24px;
     left: 24px;
@@ -446,7 +448,7 @@
 
   .zoom-toolbar {
     padding: 0;
-    width: 230px;
+    width: calc(var(--_zoom-cell) * 4.6);
     background: var(--cds-background, #ffffff);
     border-radius: 0;
     font-family: 'IBM Plex Sans', sans-serif;
@@ -457,7 +459,6 @@
   .zoom-debug-panel {
     width: auto;
     min-width: 0;
-    height: 84px;
     padding: 0 0 0 0.85rem;
     display: flex;
     align-items: center;
@@ -611,9 +612,7 @@
   }
 
   #khartis-zoom-toolbar :global(.zoom-mode-tabs .toggle-tab) {
-    min-height: 42px;
-    height: 42px;
-    gap: 8px;
+    gap: var(--kh-gap-inline);
     border-radius: 0;
     transition:
       width 0.15s ease,
@@ -621,13 +620,13 @@
   }
 
   #khartis-zoom-toolbar :global(.zoom-mode-tabs .toggle-tab.full-width) {
-    width: calc(100% - 50px);
+    width: calc(100% - var(--_zoom-cell));
     padding: 0 12px;
     justify-content: flex-start;
   }
 
   #khartis-zoom-toolbar :global(.zoom-mode-tabs .toggle-tab:not(.full-width)) {
-    width: 50px;
+    width: var(--_zoom-cell);
     padding: 0;
     justify-content: center;
   }
@@ -645,7 +644,7 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    min-height: 42px;
+    min-height: var(--kh-size-md);
     background: var(--cds-background, #ffffff);
   }
 
@@ -679,7 +678,7 @@
 
   .zoom-controls {
     display: grid;
-    grid-template-columns: repeat(3, 50px);
+    grid-template-columns: repeat(3, var(--_zoom-cell));
     align-items: center;
     justify-items: center;
     align-self: stretch;
@@ -701,9 +700,9 @@
   }
 
   #khartis-zoom-toolbar :global(.zoom-button.bx--btn) {
-    min-width: 50px;
-    min-height: 42px;
-    width: 50px;
+    min-width: var(--_zoom-cell);
+    min-height: var(--kh-size-md);
+    width: var(--_zoom-cell);
     height: 100%;
     padding: 0;
     border: none;

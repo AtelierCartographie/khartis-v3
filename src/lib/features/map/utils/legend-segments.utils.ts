@@ -923,7 +923,6 @@ function getTextColorLegendDraft(
   const stroke = text.halo ? (text.haloColor ?? DEFAULT_COLORS.halo) : 'none';
   const strokeWidth = getTextLegendStrokeWidth(text.haloWidth, text.halo);
   const symbol = getTextLegendSymbolPath();
-  const missingData = text.missingData;
 
   if (
     text.colorMode === ColorMode.CATEGORIES &&
@@ -959,7 +958,7 @@ function getTextColorLegendDraft(
       key: 'text-categorical-color',
       primitive: 'text',
       className: 'legend-svg--text-color',
-      consumesMissingData: Boolean(missingData?.show),
+      consumesMissingData: isTextLegendMissingDataShown(viz),
       create: (options, context) =>
         toLegendSvg(
           draw_categorical_legend(categories, {
@@ -1001,7 +1000,7 @@ function getTextColorLegendDraft(
       key: 'text-classed-color',
       primitive: 'text',
       className: 'legend-svg--text-color',
-      consumesMissingData: Boolean(missingData?.show),
+      consumesMissingData: isTextLegendMissingDataShown(viz),
       create: (options, context) =>
         toLegendSvg(
           draw_khartis_swatch_legend(items, {
@@ -1124,7 +1123,7 @@ function getTextSizeLegendDraft(
       key: 'text-size-classes',
       primitive: 'text',
       className: 'legend-svg--text-size',
-      consumesMissingData: Boolean(text.missingData?.show),
+      consumesMissingData: isTextLegendMissingDataShown(viz),
       create: (options, context) =>
         toLegendSvg(
           draw_khartis_swatch_legend(items, {
@@ -1143,7 +1142,7 @@ function getTextSizeLegendDraft(
     key: 'text-size',
     primitive: 'text',
     className: 'legend-svg--text-size',
-    consumesMissingData: Boolean(text.missingData?.show),
+    consumesMissingData: isTextLegendMissingDataShown(viz),
     create: (options, context) =>
       toLegendSvg(
         draw_symbols_legend(values, {
@@ -1977,11 +1976,34 @@ function getLegendMissingDataConfig(
   }
 }
 
+const LEGEND_SWATCH_PRIMITIVE_FILTER: Record<
+  LegendSwatchPrimitive,
+  PrimitiveFilter
+> = {
+  area: PrimitiveFilterType.POLYGON,
+  point: PrimitiveFilterType.POINT,
+  line: PrimitiveFilterType.LINE
+};
+
 function isLegendMissingDataShown(
   viz: VisualizationConfig | undefined,
   primitive: LegendSwatchPrimitive
 ): boolean {
-  return Boolean(getLegendMissingDataConfig(viz, primitive)?.show);
+  if (!viz || !getLegendMissingDataConfig(viz, primitive)?.show) {
+    return false;
+  }
+
+  return rowScopeStore.hasMissingData(
+    viz.id,
+    LEGEND_SWATCH_PRIMITIVE_FILTER[primitive]
+  );
+}
+
+function isTextLegendMissingDataShown(viz: VisualizationConfig): boolean {
+  return (
+    Boolean(getTextPrimitive(viz)?.missingData?.show) &&
+    rowScopeStore.hasMissingData(viz.id, PrimitiveFilterType.TEXT)
+  );
 }
 
 function getSwatchType(

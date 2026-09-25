@@ -1,256 +1,250 @@
 # Rendu cartographique
 
-Ce document décrit le chemin qui mène des données spatiales au canevas. Il
-s'adresse aux développeurs qui interviennent sur les couches thématiques, les
-fonds, les projections ou les performances de rendu.
+Le chemin des données spatiales jusqu'au canevas : moteurs, couches,
+primitives, légendes et interactions. Les caches, workers et mesures de
+performance sont dans [Performance et workers](PERFORMANCE_ET_WORKERS.md) ; les
+fonds et projections dans [Fonds et projections](FONDS_PROJECTIONS.md).
 
-Khartis est une application entièrement exécutée dans le navigateur. Le chemin
-rapide est binaire :
+Le chemin normal est binaire :
 
-    DuckDB WASM ou GeoParquet
-      -> Apache Arrow avec métadonnées GeoArrow
-      -> geoarrow-deck-stream
-      -> Deck.gl et buffers GPU
+```text
+DuckDB WASM ou GeoParquet
+  → Apache Arrow avec métadonnées GeoArrow
+  → geoarrow-deck-stream
+  → Deck.gl et buffers GPU
+```
 
-GeoJSON est un format de secours ou d'export, pas le format normal du rendu.
-Le convertir sur le chemin principal augmente les allocations et neutralise les
-caches associés aux tables Arrow.
+GeoJSON n'est qu'un repli. Le produire sur le chemin principal multiplie les
+allocations et neutralise les caches indexés sur les tables Arrow.
 
-## Responsabilités et points d'entrée
+## Points d'entrée
 
-| Besoin                              | Sources de vérité                                                                     |
-| ----------------------------------- | ------------------------------------------------------------------------------------- |
-| Orchestration de la carte           | src/lib/features/map/components/thematic-map.svelte                                   |
-| Création et destruction des moteurs | src/lib/features/map/hooks/use-map-init.svelte.ts                                     |
-| Mise à jour des données et couches  | src/lib/features/map/hooks/use-map-display-data.svelte.ts et use-map-layers.svelte.ts |
-| Choix du moteur                     | src/lib/features/map/utils/render-engine.utils.ts                                     |
-| Conversion GeoArrow binaire         | src/lib/features/map/utils/geoarrow-stream-bridge.utils.ts                            |
-| Primitives Deck                     | src/lib/features/map/layers/layer-factory.ts et les factories associées               |
-| Infobulles et sélection             | src/lib/features/map/interactions/tooltip.service.ts                                  |
+Chemins relatifs à `src/lib/features/map/`.
 
-La carte thématique coordonne l'état de la visualisation, le chargement des
-fonds, la projection et les mises à jour de couches. Elle attend la
-stabilisation d'un style MapLibre avant de demander de nouvelles couches. Les
-hooks restent les propriétaires de leur cycle de vie respectif, ils ne doivent
-pas être contournés depuis un composant d'interface.
+| Besoin                              | Fichier                                                                  |
+| ----------------------------------- | ------------------------------------------------------------------------ |
+| Orchestration de la carte           | `components/thematic-map.svelte`                                         |
+| Création et destruction des moteurs | `hooks/use-map-init.svelte.ts`                                           |
+| Données et couches                  | `hooks/use-map-display-data.svelte.ts`, `hooks/use-map-layers.svelte.ts` |
+| Choix du moteur                     | `utils/render-engine.utils.ts`                                           |
+| Conversion GeoArrow binaire         | `utils/geoarrow-stream-bridge.utils.ts`                                  |
+| Couches Deck.gl                     | `layers/layer-factory.ts` et les factories par primitive                 |
+| Infobulles et sélection             | `interactions/tooltip.service.ts`                                        |
 
-## Deux moteurs complémentaires
+`thematic-map.svelte` coordonne visualisation, fonds, projection et mises à
+jour de couches ; il attend qu'un style MapLibre soit stabilisé avant de
+demander de nouvelles couches. Chaque hook possède son cycle de vie : un
+composant d'interface ne le contourne pas.
 
-| Mode                | Quand il est choisi                           | Rôle principal                                                                                    |
-| ------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Deck orthographique | Aucun fond n'impose MapLibre                  | Carte thématique projetée avec OrthographicView et projections d3 appliquées aux buffers GeoArrow |
-| MapLibre intercalé  | Un style de fond le requiert ou OSM est actif | Fond tuilé et interactions MapLibre, couches Deck dans MapboxOverlay avec interleaved: true       |
+## Deux moteurs
 
-Le sélecteur central est shouldUseMapLibreInterleaved. Une couche ne doit pas
-choisir son moteur elle-même. Le changement de mode recrée les ressources
-nécessaires, puis useMapLayers reconstruit les couches avec le modèle et la
-projection compatibles.
+| Mode                   | Quand                                 | Rôle                                                                                             |
+| ---------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Deck.gl orthographique | fond blanc                            | `OrthographicView`, projections d3 appliquées aux buffers GeoArrow                               |
+| MapLibre intercalé     | style de fond tuilé ou fond OSM actif | fond tuilé et interactions MapLibre, couches Deck.gl dans `MapboxOverlay({ interleaved: true })` |
 
-En l'absence de WebGL2, le mode orthographique affiche un canevas de repli.
-Cette situation est un état dégradé à diagnostiquer, pas un motif pour
-dissimuler une erreur de données.
+Le choix est fait par `shouldUseMapLibreInterleaved()` (enveloppé par
+`resolveMapRenderEngine()`), jamais par une couche. Changer de mode recrée les
+ressources, puis `useMapLayers` reconstruit les couches pour le nouveau moteur.
 
-## Données spatiales jusqu'au GPU
+Sans WebGL2, le mode orthographique affiche un canevas de repli. C'est un état
+dégradé à diagnostiquer, pas un moyen de masquer une erreur de données.
 
-Deux parcours coexistent et doivent conserver leurs caractéristiques propres.
+## Contrats de données
 
-    Données importées
-      fichier -> pipeline -> DuckDB -> Arrow IPC -> GeoArrow -> Deck.gl
+Deux parcours coexistent :
 
-    Géométrie d'un fond catalogue pour l'affichage
-      GeoParquet -> parquet-wasm -> Arrow/GeoArrow -> Deck.gl
+```text
+Données importées   fichier → pipeline → DuckDB → Arrow IPC → GeoArrow → Deck.gl
+Fond du catalogue   GeoParquet → parquet-wasm → Arrow/GeoArrow → Deck.gl
+```
 
-Le second parcours évite DuckDB pour afficher rapidement une géométrie de
-catalogue. Il ne signifie pas que le fond ne peut jamais passer par DuckDB :
-la géométrie peut être matérialisée dans DuckDB pour une jointure, une analyse
-ou une densité. Voir FONDS_PROJECTIONS.md.
+`useMapDisplayData` produit l'un des contrats suivants :
 
-### Contrats de rendu
+| Contrat               | Usage                                                                                  |
+| --------------------- | -------------------------------------------------------------------------------------- |
+| Table Arrow directe   | géométrie et attributs dans la même table                                              |
+| `SplitRenderingTable` | géométrie du fond et attributs du jeu de données séparés, reliés par `featureIdColumn` |
+| Table de densité      | résultat DuckDB, réexposé en `geoarrow.wkb`                                            |
+| GeoJSON de secours    | cas incompatibles avec le chemin binaire                                               |
 
-useMapDisplayData produit un contrat adapté à chaque cas :
-
-| Contrat             | Usage                                                                                      |
-| ------------------- | ------------------------------------------------------------------------------------------ |
-| Table Arrow directe | Géométrie et attributs sont disponibles dans une même table                                |
-| SplitRenderingTable | Géométrie de fond et attributs métier restent séparés, reliés par l'identifiant de feature |
-| Table de densité    | Résultat calculé par DuckDB, réexposé en GeoArrow WKB                                      |
-| GeoJSON de secours  | Cas incompatibles avec le chemin binaire, jamais le chemin recherché par défaut            |
-
-Les métadonnées GeoArrow sont un contrat d'entrée des factories. DuckDB les
-ajoute ou les réattache notamment après des vues et jointures qui ne les
-préservent pas. Une factory qui refuse une table sans géométrie annotée évite
-un rendu ambigu, elle ne doit pas être contournée par une conversion hâtive.
+Les métadonnées GeoArrow sont un contrat d'entrée : sans géométrie annotée,
+`createDeckLayers` ne produit aucune couche. DuckDB les réattache après les
+vues et jointures qui les perdent. Ne pas contourner ce refus par une
+conversion.
 
 ## Cycle de vie WebGL
 
-useMapInit est le seul propriétaire de l'instanciation des moteurs :
+`useMapInit` est le seul à instancier les moteurs :
 
-1. vérification de WebGL2 et calcul du ratio de rendu compatible avec les
-   limites GPU ;
-2. création de Deck avec OrthographicView, ou de MapLibre et de son
-   MapboxOverlay intercalé ;
+1. vérification de WebGL2 (mode orthographique) et calcul du ratio de rendu ;
+2. création de Deck.gl avec `OrthographicView`, ou de MapLibre et de son
+   `MapboxOverlay` ;
 3. installation des interactions et des observateurs de taille ;
-4. synchronisation des styles MapLibre, des fonds et des couches ;
-5. libération explicite lors d'un changement de mode ou du démontage.
+4. synchronisation des styles, des fonds et des couches ;
+5. libération lors d'un changement de mode ou du démontage.
 
-La libération réelle est importante : l'overlay MapLibre est finalisé avant
-map.remove(), et l'instance Deck est finalisée ensuite. Ne remplacez pas cette
-séquence par un simple setProps avec une liste de couches vide.
+La libération suit un ordre précis : `overlay.finalize()`, puis `map.remove()`,
+puis `deck.finalize()`, puis destruction du `Device` luma.gl et de son
+`CanvasContext` (sans quoi le contexte fuit). Ne pas la remplacer par un
+`setProps` avec une liste de couches vide.
 
-Le ratio de rendu est borné par MAX_TEXTURE_SIZE et MAX_RENDERBUFFER_SIZE dans
-render-pixel-ratio.utils.ts. Un écran à forte densité de pixels ou une grande
-zone d'export ne doit pas provoquer la création d'un buffer non pris en charge.
+Le ratio de rendu (`render-pixel-ratio.utils.ts`) vise un DPR entre 2 et 4,
+compense le zoom de page et reste borné par `MAX_TEXTURE_SIZE` et
+`MAX_RENDERBUFFER_SIZE` : un grand export ne doit pas créer de buffer que le GPU
+refuse.
 
 ## Couches et primitives
 
-layer-factory répartit les géométries puis compose les couches dans l'ordre des
-primitives configurées. Les cinq familles ci-dessous sont des responsabilités
-équivalentes du rendu.
+`layer-factory` répartit les géométries et compose les couches dans l'ordre des
+primitives configurées :
 
-| Primitive | Factory et couche                                              | À préserver lors d'une évolution                                                               |
-| --------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Polygones | polygon-layer-factory, SolidPolygonLayer et PathLayer binaires | Aplat, contour, ordre, données jointes et éventuel remplacement par une densité                |
-| Lignes    | line-layer-factory et PathLayer                                | Chemin binaire, style, ordre de dessin et secours GeoJSON                                      |
-| Points    | point-layer-factory, ScatterplotLayer et MultiShapeLayer       | Taille, symbole, attributs binaires, picking et ordre des symboles                             |
-| Textes    | text-layer-factory                                             | Étiquetage lié aux entités, lisibilité et ordre par rapport aux géométries                     |
-| Densité   | density-layer-factory et opérations DuckDB                     | Calcul préalable, géométrie de sortie et coexistence éventuelle avec des points représentatifs |
+| Primitive | Factory et couches Deck.gl                                                | À préserver                                                    |
+| --------- | ------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Polygones | `polygon-layer-factory` : `SolidPolygonLayer` + `PathLayer` binaires      | aplat, contour, ordre, données jointes                         |
+| Lignes    | `line-layer-factory` : `PathLayer`                                        | chemin binaire, style, ordre                                   |
+| Points    | `point-layer-factory` : `MultiShapeLayer` (dérivée de `ScatterplotLayer`) | taille, symbole, picking, ordre des symboles                   |
+| Textes    | `text-layer-factory` : `TextLayer`                                        | lien aux entités, lisibilité, ordre par rapport aux géométries |
+| Densité   | `density-layer-factory` : `ScatterplotLayer`, points calculés par DuckDB  | calcul préalable ; peut remplacer l'aplat polygonal            |
 
-Les polygones ne sont donc pas un cas secondaire. Une visualisation de densité
-peut remplacer l'aplat polygonal par des points générés tout en conservant les
-informations nécessaires à l'interaction.
+Polygones, lignes et points ont un repli `GeoJsonLayer`. Les couches de fond se
+placent derrière ou devant les couches thématiques ; l'ordre affiché dans le
+panneau reflète cet ordre, il n'en est pas une seconde source.
 
-Les couches de fond sont réparties derrière ou devant les couches thématiques.
-L'ordre affiché dans le panneau est une projection de cet ordre canonique, pas
-une deuxième source de vérité.
+## Modèle de visualisation
 
-## Modèle de visualisation et sémiologie
+Une visualisation associe une ou plusieurs primitives à une variable. Un
+nouveau style précise une primitive, un mode et ses paramètres ; il ne crée pas
+de concept parallèle.
 
-Une visualisation associe une ou plusieurs primitives à une variable. Le code
-ne doit pas créer un concept parallèle pour un nouveau style : il précise une
-primitive, un mode de représentation et les paramètres qui lui sont propres.
+| Mode          | Variable         | Conséquence                                                       |
+| ------------- | ---------------- | ----------------------------------------------------------------- |
+| Unique        | aucune           | style constant                                                    |
+| Classifié     | quantitative     | bornes et palette ordonnée, calculées par DuckDB puis persistées  |
+| Catégoriel    | qualitative      | couleur ou forme par modalité                                     |
+| Proportionnel | quantité absolue | taille de symbole ou largeur de ligne proportionnelle à la valeur |
 
-| Mode          | Donnée attendue       | Conséquence cartographique et technique                                              |
-| ------------- | --------------------- | ------------------------------------------------------------------------------------ |
-| Unique        | aucune variable       | style constant, utile comme couche de référence                                      |
-| Classifié     | variable quantitative | bornes et palette ordonnée, calculées par DuckDB puis persistées comme configuration |
-| Catégoriel    | variable qualitative  | catégorie, forme ou couleur par modalité                                             |
-| Proportionnel | quantité absolue      | taille de symbole ou largeur de ligne liée à la valeur                               |
+Une choroplèthe est un polygone classifié : sa variable doit être un taux ou un
+ratio. Les effectifs absolus vont aux symboles proportionnels. Cette règle
+guide la suggestion initiale, la légende et l'interface.
 
-Un choroplèthe est un cas de polygone classifié : sa variable devrait être un
-taux ou un ratio, pas un effectif absolu. Les effectifs absolus sont plutôt
-portés par des symboles proportionnels. Cette distinction métier influe sur la
-suggestion initiale, la légende, le calcul de bornes et l’interface de
-configuration.
+La primitive Textes a une hiérarchie typographique unique
+(`visualization-tab/components/texts/text-hierarchy.utils.ts`) : la taille
+secondaire se déduit de la primaire par un rapport nommé — `equal` (1),
+`moderate` (0,75), `strong` (0,55). On choisit un niveau, pas une seconde
+taille.
 
-Les suggestions de visualisation, de projection et de palette sont classées
-selon les données et les contraintes cartographiques, mais restent modifiables
-par l’utilisateur. Une évolution du score ou des valeurs par défaut doit être
-testée depuis `visualization-tab/` jusqu’à la primitive concernée, pas
-seulement sur la carte finale.
+### Suggestions
 
-Les légendes reflètent les primitives visibles et leur classification. Les
-annotations, l’échelle, l’orientation, les indications géographiques et les
-facettes appartiennent à l’habillage : ils sont persistés et exportés, mais ne
-changent ni la géométrie ni le moteur de rendu. Les facettes partagent une
-instance Deck et plusieurs vues, elles ne créent pas une carte WebGL par case.
+`semio-detector.utils.ts` qualifie les variables, `viz-suggester.service.ts`
+classe les visualisations possibles, puis
+`visualization-tab/services/suggestion.service.ts` applique le choix de
+l'utilisateur. Une suggestion ne masque jamais la configuration finale. Une
+modification de score ou de valeur par défaut se teste depuis
+`visualization-tab/` jusqu'à la primitive, pas seulement sur la carte finale.
 
-En échelle commune, une collection dessine chaque facette contre le domaine
-fusionné de ses variables (`facets-shared-scale.ts`) : la légende doit lire ce
-même domaine, sinon les cercles proportionnels de la légende ne correspondent
-plus à ceux de la carte. Le titre d’une facette s’édite comme les autres
-éléments de page : un clic sur le titre ouvre le panneau qui le porte, ici
-l’outil Collection de cartes.
+## Légendes
 
-### Suggestions, légendes et habillage sûr
+| Rôle                     | Emplacement                            |
+| ------------------------ | -------------------------------------- |
+| Générateurs SVG          | `commons/components/legend/`           |
+| Placement sur la carte   | `map/components/legend-overlay.svelte` |
+| Réglages                 | `step-toolbar/tools/legend/`           |
+| Segments et échantillons | `map/utils/legend-segments.utils.ts`   |
 
-La détection sémantique (`semio-detector.utils.ts`) qualifie les variables avant
-que `viz-suggester.service.ts` classe les patrons de visualisation possibles.
-Une quantité absolue mène en général vers des symboles proportionnels, un ratio
-vers une choroplèthe, et une variable qualitative vers une palette catégorielle.
-`suggestion.service.ts` applique ensuite le choix de l’utilisateur : une
-suggestion ne doit jamais masquer la configuration finale ni empêcher sa
-modification.
+`commons/components/legend/legend-svg.svelte` est le seul `{@html}` de
+l'application. Toute chaîne issue des données ou de la configuration y est
+échappée avec `escapeSvgText` / `escapeSvgAttribute`.
 
-Les générateurs SVG génériques de légende vivent dans
-`commons/components/legend/`, `map/components/legend-overlay.svelte` les place
-sur la carte, et `step-toolbar/tools/legend/` expose leur réglage. Cette
-séparation évite de lier le rendu SVG à l’état d’édition.
+La légende dessine ce que la carte dessine :
 
-`LegendSvg.svelte` est le seul point qui injecte du SVG avec `{@html}`. Toute
-chaîne issue d’un jeu de données ou d’une configuration doit y être échappée
-avec les utilitaires dédiés aux textes et attributs SVG. Une évolution de
-légende doit couvrir le rendu à l’écran, l’export et ce cas de sécurité.
+- **Valeurs réelles.** La légende n'a pas accès à la série (`dataset.data`
+  n'est pas alimenté après l'import). Les paliers des symboles proportionnels
+  sont choisis parmi les valeurs de l'échantillon `value_sample` des
+  statistiques de colonne, puis réduits à ce que la place permet d'afficher.
+- **Tailles réelles.** Une classe a dans la légende la taille qu'elle a sur la
+  carte. Quand un générateur applique sa propre échelle (`draw_symbols_legend`
+  dessine un glyphe deux fois plus grand que la taille reçue), la compensation
+  se fait au point d'appel.
+- **Textes.** Des étiquettes de taille et de couleur uniques n'ont pas
+  d'entrée de légende ; les autres primitives en gardent une, même en mode
+  unique. `legend-subtitle.utils.ts` construit le sous-titre à partir des
+  colonnes des primitives actives.
 
-### Filtres, interaction et overlays
+## Absence de données
 
-Les filtres de données et de tables sont appliqués aux tables Arrow avant les
-factories par filterArrowTableByDataFilters et
-filterArrowTableByTableFilters. Il n'existe pas de DataFilterExtension ni de
-propriété yearFilter dans le rendu actuel.
+L'absence de données a une seule définition : une valeur nulle, vide ou non
+finie dans une colonne qui pilote une primitive. Ce n'en est pas :
 
-Les données binaires conservent les identifiants d'entités et leur source
-métier. Le service d'infobulle peut ainsi résoudre un résultat de sélection
-Deck vers la bonne ligne Arrow, y compris pour une visualisation split.
+- une entité du fond **non jointe**, qui n'est pas dessinée par la couche
+  thématique ;
+- une ligne **écartée par un filtre**, masquée elle aussi.
+  `createSplitAwareRowAccessor` exige à chaque appel une valeur hors portée
+  explicite (`OUT_OF_SCOPE_COLOR`, `OUT_OF_SCOPE_SIZE`).
 
-Les légendes, annotations, indicateurs et éléments de mise en page sont des
-overlays DOM ou SVG. Ils ne sont pas des primitives Deck. Une modification de
-leur affichage doit respecter le mode d'export, qui passe par
-globalState.isMapExporting plutôt que par un changement artificiel d'étape.
+Les colonnes concernées dépendent du mode de chaque primitive
+(`getPrimitiveMissingDataColumns()`) ; en mode unique, seule la colonne
+d'étiquette des Textes compte. DuckDB compte les valeurs manquantes sur les
+lignes affichées, jointes et non filtrées (`getMissingValueCountsInScope`).
+`rowScopeStore.hasMissingData()` conditionne l'entrée « Absence de données » de
+la légende et la section correspondante des panneaux de primitive (contexte
+`missing-data-availability.ts`), désactivée avec un message quand rien ne
+manque.
 
-## Projections et fonds
+## Filtres et interaction
 
-Le rendu reçoit une projection résolue à partir des choix cartographiques :
-projection manuelle, projection du fond ou projection composite. Les
-projections orthographiques sont appliquées par geoarrow-deck-stream. Les
-projections Web Mercator ou globe nécessaires aux fonds tuilés sont gérées par
-MapLibre.
+Les filtres sont évalués par DuckDB : `rowScopeStore` obtient les identifiants
+des lignes dans la portée de chaque primitive, puis `applyPrimitiveScopes`
+(`use-map-layers.svelte.ts`) restreint les **tables d'attributs** avec
+`selectRowsInScope` / `selectRowsByIndices` (`map/utils/arrow-filter.utils.ts`).
+La géométrie n'est pas filtrée : une entité écartée reste adressable et est
+dessinée avec les valeurs `OUT_OF_SCOPE_*`.
 
-Les projections non identitaires peuvent nécessiter un masque ou un contour de
-sphère. Les projections composites créent plusieurs contextes de carte, par
-exemple un territoire principal et des encarts. Leur mise en page doit rester
-stable pour que les couches, labels et interactions restent cohérents. Le
-modèle métier complet est décrit dans FONDS_PROJECTIONS.md.
+Les données binaires conservent les identifiants d'entité : le service
+d'infobulle retrouve la ligne Arrow d'un résultat de picking, y compris en rendu
+split.
 
-## Performance et diagnostic
+## Habillage et facettes
 
-Les règles suivantes sont des invariants de performance :
+Légendes, annotations, échelle, orientation, indications géographiques et
+éléments de page sont des overlays DOM ou SVG, pas des couches Deck.gl. Ils
+sont persistés et exportés sans toucher la géométrie ni le moteur. L'export
+passe par `globalState.isMapExporting`, jamais par un changement d'étape.
 
-- Conserver Arrow et GeoArrow jusqu'aux factories. N'utiliser GeoJSON qu'en
-  secours explicite.
-- Réutiliser les mêmes objets Table et projection quand les données ne
-  changent pas. Les caches WeakMap sont fondés sur leur identité.
-- Au-delà de 2 000 lignes, le parse GeoArrow peut être délégué à un Worker. Un
-  cache manquant peut produire provisoirement une couche vide, puis une mise à
-  jour réactive lorsque le résultat arrive.
-- Le Worker expire après 30 secondes et bascule vers le thread principal en cas
-  d'échec. Le réglage local khartis:disable-parse-worker permet de diagnostiquer
-  cette voie.
-- Les chargements de jeux de données sont séquentiels afin de limiter les pics
-  de mémoire.
-- Utiliser les marques de performance et deck-debug.store.svelte.ts avant
-  d'attribuer un ralentissement à une primitive ou à Deck.
+Les facettes (collection de cartes) partagent une instance Deck.gl, avec une
+`OrthographicView` par facette. Elles sont toujours rendues en mode
+orthographique : un fond uniquement MapLibre n'y est pas dessiné et un
+avertissement l'indique. En échelle commune, chaque facette est dessinée contre
+le domaine fusionné de ses variables (`facets-shared-scale.ts`), que la légende
+doit lire aussi. Un clic sur le titre d'une facette ouvre l'outil Collection de
+cartes.
 
-| Symptôme                            | Parcours de diagnostic                                                                      |
-| ----------------------------------- | ------------------------------------------------------------------------------------------- |
-| Carte vide après changement de fond | Vérifier le mode choisi, l'état du style MapLibre, puis useMapLayers                        |
-| Couche utilisateur absente          | Vérifier la table Arrow, ses métadonnées GeoArrow et les filtres appliqués avant la factory |
-| Rendu lent après une projection     | Vérifier la réutilisation des tables et projections, le Worker et les caches du bridge      |
-| Ressources GPU conservées           | Vérifier le cycle finalize de l'overlay, de MapLibre et de Deck                             |
+## Projections
 
-## Étendre et vérifier le rendu
+Le rendu reçoit une projection résolue : manuelle, héritée du fond, ou
+composite (territoire principal et encarts). En mode orthographique,
+geoarrow-deck-stream applique la projection d3 ; Web Mercator et globe relèvent
+de MapLibre. Les projections non identitaires peuvent ajouter un masque ou un
+contour de sphère. Détails : [Fonds et projections](FONDS_PROJECTIONS.md).
 
-Pour ajouter ou modifier une primitive :
+## Diagnostic
 
-1. partir du contrat de visualisation et de la factory concernée ;
-2. conserver le chemin binaire, les identifiants de sélection et l'ordre des
-   primitives ;
-3. traiter les contrats directs et split si la primitive affiche des données
-   jointes ;
-4. vérifier les deux moteurs lorsque la couche peut coexister avec un fond
-   MapLibre ;
-5. couvrir le cas de projection, le cas filtré et le cas sans WebGL2 lorsque
-   le comportement le concerne.
+| Symptôme                            | Vérifier                                                                                       |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Carte vide après changement de fond | moteur choisi, état du style MapLibre, puis `useMapLayers`                                     |
+| Couche utilisateur absente          | table Arrow, métadonnées GeoArrow, portée des filtres                                          |
+| Rendu lent après une projection     | identité des tables et projections, worker de parse ([performance](PERFORMANCE_ET_WORKERS.md)) |
+| Ressources GPU conservées           | ordre de libération : overlay, MapLibre, Deck.gl, `Device`                                     |
 
-Les tests proches du code, notamment ceux du bridge GeoArrow, du Worker, des
-factories, des filtres et du service de fonds, sont la preuve vivante à mettre
-à jour avec ce document.
+## Étendre une primitive
+
+1. Partir du contrat de visualisation et de la factory concernée.
+2. Conserver le chemin binaire, les identifiants de sélection et l'ordre des
+   primitives.
+3. Gérer les contrats direct et split si la primitive affiche des données
+   jointes.
+4. Vérifier les deux moteurs si la couche peut coexister avec un fond MapLibre.
+5. Couvrir projection, filtre, facettes et absence de WebGL2 quand ils sont
+   concernés.
+6. Mettre à jour les tests voisins : bridge GeoArrow, worker, factories,
+   filtres, service de fonds.

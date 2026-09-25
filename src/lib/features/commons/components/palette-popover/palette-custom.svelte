@@ -329,23 +329,23 @@
   .palette-custom {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--kh-gap-group);
     width: 100%;
   }
 
   .section-heading {
     display: flex;
     align-items: center;
-    gap: 8px;
-    height: 24px;
+    gap: var(--kh-gap-inline);
+    height: var(--kh-size-xs);
     width: 100%;
   }
 
   .section-heading-text {
     font-family: 'IBM Plex Sans', sans-serif;
     font-weight: 600;
-    font-size: 14px;
-    line-height: 20px;
+    font-size: var(--kh-font-group);
+    line-height: var(--kh-line-group);
     letter-spacing: 0.16px;
     color: var(--cds-text-primary, #161616);
     white-space: nowrap;
@@ -357,30 +357,21 @@
     background: var(--cds-border-subtle-01, #c6c6c6);
   }
 
-  .field-label {
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-weight: 400;
-    font-size: 12px;
-    line-height: 16px;
-    letter-spacing: 0.32px;
-    color: var(--cds-text-secondary, #525252);
-  }
-
   .tab-content {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--kh-gap-group);
   }
 
   .two-colors {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--kh-gap-group);
   }
 
   .contrast-section {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--kh-gap-inline);
   }
 </style>

@@ -2,6 +2,11 @@ import {
   CANONICAL_ID_COLUMN,
   INTERNAL_COLUMN
 } from '$lib/features/commons/constants/data.constants';
+import {
+  DuckDBSimplifiedType,
+  isGeometryColumnName,
+  selectBasemapJoinKeyColumns
+} from '$lib/features/duckdb';
 
 export interface CustomBasemapColumnSummary {
   name: string;
@@ -12,9 +17,7 @@ export interface CustomBasemapColumnAnalyzer {
   analyse(tableName: string): Promise<readonly CustomBasemapColumnSummary[]>;
 }
 
-export function isCustomBasemapJoinCandidateColumn(
-  columnName: string
-): boolean {
+function isCustomBasemapJoinCandidateColumn(columnName: string): boolean {
   const normalizedName = columnName.toLowerCase();
   return (
     ['name', 'nom', 'libelle', 'label'].includes(normalizedName) ||
@@ -51,11 +54,23 @@ export function getCustomBasemapJoinCandidateColumns<
 export function getCustomBasemapGeometryProjectColumns(
   columns: readonly CustomBasemapColumnSummary[]
 ): string[] {
-  return [
-    INTERNAL_COLUMN.FEATURE_ID,
-    ...getCustomBasemapJoinCandidateColumns(columns).map(
-      (column) => column.name
+  const textColumnNames = columns
+    .filter(
+      (column) =>
+        column.type_simple === DuckDBSimplifiedType.STRING &&
+        column.name !== INTERNAL_COLUMN.FEATURE_ID &&
+        !isGeometryColumnName(column.name)
     )
+    .map((column) => column.name);
+
+  return [
+    ...new Set([
+      INTERNAL_COLUMN.FEATURE_ID,
+      ...getCustomBasemapJoinCandidateColumns(columns).map(
+        (column) => column.name
+      ),
+      ...selectBasemapJoinKeyColumns(textColumnNames)
+    ])
   ];
 }
 

@@ -16,5 +16,5 @@ export const PROJECT_CONST = {
     SUPPORTED_VERSIONS: [2]
   },
   SCHEMA_BASELINE_VERSION: '3.9.0',
-  SCHEMA_VERSION: '3.9.0'
+  SCHEMA_VERSION: '3.10.0'
 } as const;

@@ -29,13 +29,13 @@
 
 <style lang="scss">
   .section-header {
-    margin-bottom: 12px;
+    margin-bottom: var(--kh-gap-param);
   }
 
   .section-header.with-divider {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-05, 16px);
+    gap: var(--kh-gap-group);
     margin-bottom: 0;
   }
 
@@ -46,7 +46,7 @@
   }
 
   .with-divider .header-content {
-    padding: 0 16px;
+    padding: 0 var(--kh-pad-panel);
   }
 
   .header-icon {
@@ -57,9 +57,9 @@
   }
 
   .header-title {
-    font-size: 20px;
-    font-weight: 400;
-    line-height: 28px;
+    font-size: var(--kh-font-section);
+    font-weight: var(--kh-weight-section);
+    line-height: var(--kh-line-section);
     color: var(--cds-text-primary, #161616);
     margin: 0;
     flex: 1;

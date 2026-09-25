@@ -1,17 +1,32 @@
 # Code of Conduct
 
-We are committed to providing an open, welcoming, and respectful experience for everyone.
+Khartis is maintained by the Sciences Po Atelier de cartographie. We are
+committed to providing an open, welcoming and respectful experience for
+everyone taking part in the project.
 
-## Principles
+## Our standards
 
-- Respect, kindness, and collaboration
-- No harassment or discriminatory language
-- Constructive feedback focused on code and facts
+- Respect, kindness and collaboration.
+- No harassment, personal attacks or discriminatory language.
+- Constructive feedback focused on code, cartography and facts.
+- Good faith toward contributors of every level of experience.
+
+This applies to issues, pull requests, commit messages, discussions and any
+other space where someone represents the project.
 
 ## Reporting
 
-Report any incident via a private issue or by email to the maintainers listed in `package.json` (contributors).
+Report any incident privately by email to **carto@sciencespo.fr**.
+
+Do not use a public issue: GitHub issues on this repository are visible to
+everyone. Reports are handled confidentially by the Atelier de cartographie,
+and we aim to acknowledge them within 5 business days.
+
+Security vulnerabilities follow a separate process described in
+[SECURITY.md](SECURITY.md).
 
 ## Enforcement
 
-Maintainers may warn, moderate, or ban in case of violations.
+Maintainers may edit or remove contributions, issue a warning, or temporarily
+or permanently ban a contributor from the project spaces, in proportion to the
+violation.

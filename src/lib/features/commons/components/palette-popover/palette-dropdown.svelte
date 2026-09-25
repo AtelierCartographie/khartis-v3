@@ -208,14 +208,14 @@
             {#if palette.type === PALETTE_TYPE.PATTERN}
               <PaletteSwatchRow
                 background={buildPatternBackground(palette)}
-                height="18px"
+                height="var(--kh-swatch-h)"
                 bordered
                 flexFill
               />
             {:else}
               <PaletteSwatchRow
                 colors={getPalettePreviewColors(palette)}
-                height="18px"
+                height="var(--kh-swatch-h)"
                 bordered
                 flexFill
               />
@@ -271,8 +271,8 @@
   .dropdown-list {
     display: flex;
     flex-direction: column;
-    padding: 8px;
-    gap: 4px;
+    padding: var(--kh-gap-inline);
+    gap: var(--kh-gap-label);
     max-height: 60vh;
     overflow-y: auto;
   }
@@ -282,7 +282,7 @@
     display: flex;
     align-items: center;
     width: 100%;
-    padding: 4px;
+    padding: var(--kh-gap-label);
     background: transparent;
     border: 1px solid transparent;
     cursor: pointer;
@@ -309,14 +309,14 @@
   }
 
   .dropdown-footer {
-    padding: 8px 16px 12px;
+    padding: var(--kh-gap-inline) var(--kh-pad-panel) var(--kh-gap-param);
     border-top: 1px solid var(--cds-border-subtle-01, #c6c6c6);
 
     :global(.bx--btn) {
       width: 100%;
       justify-content: flex-start;
       padding-inline: 0;
-      min-height: 32px;
+      min-height: var(--kh-size-sm);
     }
   }
 </style>

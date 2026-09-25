@@ -4,13 +4,19 @@ import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.
 const mocks = vi.hoisted(() => ({
   getRowIdsInScope: vi.fn(),
   getColumnDomainsInScope: vi.fn(),
+  getMissingValueCountsInScope: vi.fn(),
+  getDatasetBySourceFile: vi.fn(),
   resolveRowScope: vi.fn()
 }));
 
 vi.mock('$lib/features/duckdb', () => ({
+  combineFilterClauses: (clauses: (string | null)[]) =>
+    clauses.filter(Boolean).join(' AND ') || null,
   duckDBOrchestrator: {
     getRowIdsInScope: mocks.getRowIdsInScope,
-    getColumnDomainsInScope: mocks.getColumnDomainsInScope
+    getColumnDomainsInScope: mocks.getColumnDomainsInScope,
+    getMissingValueCountsInScope: mocks.getMissingValueCountsInScope,
+    getDatasetBySourceFile: mocks.getDatasetBySourceFile
   }
 }));
 
@@ -46,6 +52,64 @@ describe('rowScopeStore', () => {
     mocks.resolveRowScope.mockReset();
     mocks.getRowIdsInScope.mockResolvedValue(new Set([1, 2]));
     mocks.getColumnDomainsInScope.mockResolvedValue(new Map());
+    mocks.getMissingValueCountsInScope.mockReset();
+    mocks.getDatasetBySourceFile.mockReset();
+  });
+
+  it('counts missing values on the joined rows even without a filter', async () => {
+    mocks.resolveRowScope.mockReturnValue({
+      tableName: 'communes',
+      clause: null
+    });
+    mocks.getDatasetBySourceFile.mockReturnValue({
+      joinedBasemap: 'france-commune',
+      columns: [{ name: 'basemap_id' }]
+    });
+    mocks.getMissingValueCountsInScope.mockResolvedValue([2]);
+    const rate = { column: 'rate', numeric: true };
+
+    await rowScopeStore.sync([
+      { ...target(PrimitiveFilterType.POLYGON), missingDataColumns: [rate] },
+      target(PrimitiveFilterType.POINT)
+    ]);
+
+    expect(mocks.getMissingValueCountsInScope).toHaveBeenCalledWith(
+      'communes',
+      '"basemap_id" IS NOT NULL',
+      [rate]
+    );
+    expect(
+      rowScopeStore.hasMissingData('viz-1', PrimitiveFilterType.POLYGON)
+    ).toBe(true);
+    expect(
+      rowScopeStore.hasMissingData('viz-1', PrimitiveFilterType.POINT)
+    ).toBe(false);
+  });
+
+  it('reports no missing data once the filter keeps only valued rows', async () => {
+    mocks.resolveRowScope.mockReturnValue({
+      tableName: 'sites',
+      clause: '"rate" >= 5'
+    });
+    mocks.getDatasetBySourceFile.mockReturnValue({
+      gpsMode: true,
+      columns: []
+    });
+    mocks.getMissingValueCountsInScope.mockResolvedValue([0]);
+    const rate = { column: 'rate', numeric: true };
+
+    await rowScopeStore.sync([
+      { ...target(PrimitiveFilterType.POINT), missingDataColumns: [rate] }
+    ]);
+
+    expect(mocks.getMissingValueCountsInScope).toHaveBeenCalledWith(
+      'sites',
+      '("rate" >= 5)',
+      [rate]
+    );
+    expect(
+      rowScopeStore.hasMissingData('viz-1', PrimitiveFilterType.POINT)
+    ).toBe(false);
   });
 
   it('leaves every row in scope when no filter resolves', async () => {

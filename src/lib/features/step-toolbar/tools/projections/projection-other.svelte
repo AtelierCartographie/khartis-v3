@@ -285,6 +285,7 @@
         {#if items.length > 0}
           {#key catalogueItemsSignature}
             <ComboBox
+              size="sm"
               items={catalogueComboItems}
               selectedId={activeCatalogueSelectionId}
               placeholder={m.projection_catalog_search_placeholder()}
@@ -370,8 +371,16 @@
 
     .actions {
       display: flex;
-      gap: var(--cds-spacing-04);
+      gap: var(--kh-gap-inline);
       justify-content: flex-end;
+
+      /* Carbon reserves 60px of right padding for an icon these buttons
+         don't have, which overflows the tool panel's narrow column. */
+      :global(.bx--btn) {
+        flex: 0 1 auto;
+        min-width: 0;
+        padding-right: var(--kh-gap-param);
+      }
     }
   }
 
@@ -382,7 +391,7 @@
   #khartis-projection-other-tool :global(.projection-view-tabs .toggle-tab) {
     font-size: 0.875rem;
     padding: 6px 12px;
-    min-height: 32px;
+    min-height: var(--kh-size-sm);
   }
 
   #khartis-projection-other-tool :global(.projection-view-tabs .toggle-icon) {

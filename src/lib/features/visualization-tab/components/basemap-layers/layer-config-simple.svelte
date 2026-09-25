@@ -124,6 +124,6 @@
   .layer-config-content {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-05);
+    gap: var(--kh-gap-group);
   }
 </style>

@@ -78,14 +78,10 @@ export function useSideNav(): UseSideNavReturn {
     if (project) {
       isDuplicating = true;
       try {
-        const duplicatedProject =
-          await projectsStore.duplicateProject(projectId);
-
-        if (duplicatedProject && newName !== duplicatedProject.name) {
-          await projectsStore.updateProject(duplicatedProject.id, {
-            name: newName
-          });
-        }
+        const duplicatedProject = await projectsStore.duplicateProject(
+          projectId,
+          newName
+        );
 
         if (duplicatedProject) {
           await projectsStore.openProject(duplicatedProject.id);

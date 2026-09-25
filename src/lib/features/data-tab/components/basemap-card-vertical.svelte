@@ -303,8 +303,8 @@
 
   .preview-radio {
     position: absolute;
-    top: 8px;
-    right: 8px;
+    top: var(--kh-gap-inline);
+    right: var(--kh-gap-inline);
     z-index: 1;
   }
 
@@ -312,8 +312,8 @@
     display: flex;
     flex-direction: column;
     flex: 1;
-    padding: 16px;
-    gap: 12px;
+    padding: var(--kh-pad-panel);
+    gap: var(--kh-gap-param);
   }
 
   .title-row {
@@ -363,7 +363,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 12px;
+    gap: var(--kh-gap-param);
     margin-top: auto;
   }
 
@@ -380,7 +380,7 @@
   .date {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--kh-gap-label);
     font-size: 0.75rem;
     line-height: 16px;
     letter-spacing: 0.32px;
@@ -395,8 +395,8 @@
   .match-section {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 12px 16px 16px;
+    gap: var(--kh-gap-inline);
+    padding: var(--kh-gap-param) var(--kh-pad-panel) var(--kh-pad-panel);
     border-top: 1px solid var(--cds-border-subtle-01, #c6c6c6);
   }
 
@@ -404,7 +404,7 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--kh-gap-inline);
   }
 
   .basemap-card--suggestion .match-section {

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ChevronDown, ChevronUp } from 'carbon-icons-svelte';
   import type { Snippet } from 'svelte';
-  import { untrack } from 'svelte';
+  import { onDestroy, tick, untrack } from 'svelte';
   import { stopBubbleEvents } from '$lib/features/commons/utils/stop-bubble-events';
   import Switch from './switch.svelte';
 
@@ -23,6 +23,7 @@
     onToggle?: (expanded: boolean) => void;
     titleClass?: string;
     actionsEnd?: boolean;
+    scrollIntoViewOnOpen?: boolean;
   }
 
   const {
@@ -42,8 +43,15 @@
     onToggleChange,
     onToggle,
     titleClass = '',
-    actionsEnd = false
+    actionsEnd = false,
+    scrollIntoViewOnOpen = false
   }: Props = $props();
+
+  const REVEAL_SETTLE_DELAYS_MS = [0, 80, 200, 400];
+
+  let containerElement = $state<HTMLDivElement | undefined>(undefined);
+  let revealTimers: ReturnType<typeof setTimeout>[] = [];
+  let revealScroller: HTMLElement | undefined;
 
   let expanded = $state<boolean>(
     untrack(() => (showToggle ? toggleChecked : defaultOpen))
@@ -70,16 +78,95 @@
     }
     expanded = !expanded;
     onToggle?.(expanded);
+    revealHeader();
   }
+
+  function findScrollableAncestor(
+    element: HTMLElement
+  ): HTMLElement | undefined {
+    let parent = element.parentElement;
+
+    while (parent) {
+      const { overflowY } = getComputedStyle(parent);
+      if (
+        (overflowY === 'auto' || overflowY === 'scroll') &&
+        parent.scrollHeight > parent.clientHeight
+      ) {
+        return parent;
+      }
+      parent = parent.parentElement;
+    }
+
+    return undefined;
+  }
+
+  function alignContainerToScrollerTop(): void {
+    const container = containerElement;
+    if (!container || !expanded) return;
+
+    const scroller = findScrollableAncestor(container);
+    if (!scroller) return;
+
+    // The header is sticky, so scrollIntoView reads it as already in place
+    // once it is pinned; the container is the only reliable anchor.
+    const delta =
+      container.getBoundingClientRect().top -
+      scroller.getBoundingClientRect().top;
+
+    if (Math.abs(delta) < 1) return;
+
+    scroller.scrollTop += delta;
+  }
+
+  function cancelReveal(): void {
+    for (const timer of revealTimers) {
+      clearTimeout(timer);
+    }
+    revealTimers = [];
+
+    revealScroller?.removeEventListener('wheel', cancelReveal);
+    revealScroller?.removeEventListener('touchstart', cancelReveal);
+    revealScroller = undefined;
+  }
+
+  function revealHeader(): void {
+    if (!expanded || !scrollIntoViewOnOpen) return;
+
+    cancelReveal();
+
+    void tick().then(() => {
+      const container = containerElement;
+      if (!container || !expanded) return;
+
+      revealScroller = findScrollableAncestor(container);
+      revealScroller?.addEventListener('wheel', cancelReveal, {
+        passive: true
+      });
+      revealScroller?.addEventListener('touchstart', cancelReveal, {
+        passive: true
+      });
+
+      // The sibling that closes and this section's own body settle over
+      // several update cycles, so a single measure lands on a layout that is
+      // still moving under it.
+      revealTimers = REVEAL_SETTLE_DELAYS_MS.map((delay) =>
+        setTimeout(alignContainerToScrollerTop, delay)
+      );
+    });
+  }
+
+  onDestroy(cancelReveal);
 
   function handleToggleChange(toggled: boolean): void {
     expanded = toggled;
     onToggle?.(expanded);
     onToggleChange?.(toggled);
+    revealHeader();
   }
 </script>
 
 <div
+  bind:this={containerElement}
   class="section-container"
   class:disabled={disabled}
   class:toggle-suggestions={toggleVariant === 'suggestions'}
@@ -174,15 +261,6 @@
     background: transparent;
   }
 
-  :global(
-    .section-container:has(> .section-header.expanded) + .section-container
-  ),
-  :global(
-    .section-container:has(> .section-header.expanded) + * + .section-container
-  ) {
-    border-top: none;
-  }
-
   .section-header {
     display: flex;
     align-items: center;
@@ -206,10 +284,11 @@
     all: unset;
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: var(--kh-gap-group);
     flex: 1;
     min-width: 0;
-    padding: 14px 16px;
+    min-height: var(--kh-size-lg);
+    padding: 0 var(--kh-pad-panel);
     cursor: pointer;
     user-select: none;
     box-sizing: border-box;
@@ -227,7 +306,8 @@
   .section-toggle {
     display: flex;
     align-items: center;
-    padding: 14px var(--cds-spacing-03) 14px 16px;
+    min-height: var(--kh-size-lg);
+    padding: 0 var(--cds-spacing-03) 0 var(--kh-pad-panel);
     flex-shrink: 0;
   }
 
@@ -240,9 +320,9 @@
   }
 
   .section-title {
-    font-weight: 600;
-    font-size: 1rem;
-    line-height: 1.375rem;
+    font-weight: var(--kh-weight-primitive);
+    font-size: var(--kh-font-primitive);
+    line-height: var(--kh-line-primitive);
     letter-spacing: 0.16px;
     color: var(--cds-text-primary);
     display: flex;
@@ -251,8 +331,8 @@
   }
 
   .section-description {
-    font-size: 0.6875rem;
-    line-height: 1rem;
+    font-size: var(--kh-font-label);
+    line-height: var(--kh-line-label);
     color: var(--cds-text-secondary);
     font-weight: 400;
   }
@@ -297,7 +377,10 @@
       --khartis-expandable-section-background,
       var(--cds-layer-01)
     );
-    padding: var(--khartis-expandable-section-body-padding, 8px 16px 16px 16px);
+    padding: var(
+      --khartis-expandable-section-body-padding,
+      var(--kh-gap-inline) var(--kh-pad-panel) var(--kh-gap-group)
+    );
   }
 
   .section-expand-btn:hover:not(:disabled) {

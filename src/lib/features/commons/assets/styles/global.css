@@ -4,7 +4,7 @@
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-left: env(safe-area-inset-left, 0px);
   --safe-area-right: env(safe-area-inset-right, 0px);
-  --cds-header-height: calc(47px + var(--safe-area-top));
+  --cds-header-height: calc(var(--kh-size-header) + var(--safe-area-top));
   --kh-text-size-control-width: 80px;
   --khartis-floating-panel-background: rgba(255, 255, 255, 0.78);
   --khartis-data-table-header-background: var(--cds-ui-03);

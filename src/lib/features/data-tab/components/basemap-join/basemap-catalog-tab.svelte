@@ -12,7 +12,7 @@
     InlineNotification,
     Tag
   } from 'carbon-components-svelte';
-  import { Add, List, MagicWand } from 'carbon-icons-svelte';
+  import { Add, List, MagicWandFilled } from 'carbon-icons-svelte';
   import BasemapCardVertical from '../basemap-card-vertical.svelte';
   import { getLocale } from '$lib/paraglide/runtime.js';
   import {
@@ -168,7 +168,7 @@
 </script>
 
 <div class="tab-content">
-  <div class="suggestions-section" class:compact-mode={isCompact}>
+  <div class="suggestions-section">
     <ExpandableSection
       title={m.section_suggestions()}
       open={suggestionsPanelOpen}
@@ -177,7 +177,7 @@
     >
       {#snippet icon()}
         <span class="suggestions-title-icon">
-          <MagicWand size={16} />
+          <MagicWandFilled size={20} />
         </span>
       {/snippet}
       {#if suggestedBasemaps.length > 0}
@@ -210,7 +210,7 @@
     </ExpandableSection>
   </div>
 
-  <div class="catalogue-section" class:compact-mode={isCompact}>
+  <div class="catalogue-section">
     <ExpandableSection
       title={m.basemap_other()}
       open={catalogPanelOpen}
@@ -222,6 +222,7 @@
 
       <div class="catalogue-filters">
         <ComboBox
+          size="sm"
           items={searchComboBoxItems}
           selectedId={searchSelectedId}
           value={searchQuery}
@@ -331,16 +332,11 @@
   }
 
   .basemap-slider {
-    margin-left: calc(-1 * var(--cds-spacing-04));
-    margin-right: calc(-1 * var(--cds-spacing-04));
-    padding-left: var(--cds-spacing-04);
-    padding-right: var(--cds-spacing-04);
     overflow-x: auto;
     overflow-y: hidden;
     scroll-snap-type: x proximity;
-    scroll-padding-inline: var(--cds-spacing-04);
     overscroll-behavior-x: contain;
-    --basemap-card-width: 176px;
+    --basemap-card-width: var(--kh-card-w);
     --basemap-card-preview-min-height: 6.5rem;
     --basemap-card-padding-bottom: 0.875rem;
   }
@@ -376,7 +372,7 @@
   }
 
   .compact-slider {
-    --basemap-card-width: 176px;
+    --basemap-card-width: var(--kh-card-w);
     --basemap-card-preview-min-height: 5.5rem;
     --basemap-card-padding-bottom: 0.75rem;
   }
@@ -390,33 +386,6 @@
     flex-direction: column;
     gap: var(--cds-spacing-03);
     margin-bottom: var(--cds-spacing-03);
-  }
-
-  .catalogue-section.compact-mode :global(.section-expand-btn) {
-    padding-left: 0;
-  }
-
-  .suggestions-section.compact-mode :global(.section-body),
-  .catalogue-section.compact-mode :global(.section-body) {
-    padding-left: 0;
-    padding-right: 0;
-  }
-
-  .suggestions-section.compact-mode .section-subtitle,
-  .suggestions-section.compact-mode .suggestions-notification,
-  .catalogue-section.compact-mode .catalogue-filters,
-  .catalogue-section.compact-mode .suggest-action,
-  .catalogue-section.compact-mode .no-results {
-    padding-left: var(--cds-spacing-04);
-    padding-right: var(--cds-spacing-04);
-  }
-
-  .suggestions-section.compact-mode .basemap-slider,
-  .catalogue-section.compact-mode .basemap-slider-catalog {
-    margin-left: 0;
-    margin-right: 0;
-    padding-left: 0;
-    padding-right: 0;
   }
 
   .year-filters {
