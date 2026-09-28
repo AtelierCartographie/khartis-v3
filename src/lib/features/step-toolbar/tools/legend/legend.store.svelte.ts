@@ -4,6 +4,7 @@ import {
 } from '$lib/features/commons/constants/ui.constants';
 import {
   visualizationStore,
+  type PrimitiveConfigKind,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
@@ -16,9 +17,10 @@ import {
 import {
   getEnabledLegendPrimitives,
   getPrimitiveLegendSubtitle,
-  getVisualizationLegendSubtitle,
+  joinLegendSubtitleParts,
   type LegendSubtitlePrimitive
 } from '$lib/features/commons/utils/legend-subtitle.utils';
+import { facetsStore, SCALE_MODE } from '../facets';
 import { LEGEND_DEFAULTS, LEGEND_ID_PREFIXES } from './legend.constants';
 import type {
   LegendItem,
@@ -77,13 +79,48 @@ const PRIMITIVE_LABELS: Record<LegendSubtitlePrimitive, () => string> = {
   text: () => m.texts_title()
 };
 
-function getLegendSubtitle(
+const LEGEND_PRIMITIVE_BY_SLOT_KIND: Record<
+  PrimitiveConfigKind,
+  LegendSubtitlePrimitive
+> = {
+  polygon: 'area',
+  symbol: 'point',
+  line: 'line',
+  text: 'text'
+};
+
+function isSharedCollectionLegend(
   visualization: VisualizationConfig,
-  primitive?: LegendSubtitlePrimitive
+  primitive: LegendSubtitlePrimitive
+): boolean {
+  const slotPath = facetsStore.primarySlotPath;
+  return Boolean(
+    facetsStore.enabled &&
+    slotPath &&
+    facetsStore.scaleMode === SCALE_MODE.SHARED &&
+    visualization.facet?.baseVisualizationId ===
+      facetsStore.baseVisualizationId &&
+    LEGEND_PRIMITIVE_BY_SLOT_KIND[
+      slotPath.split('.')[0] as PrimitiveConfigKind
+    ] === primitive
+  );
+}
+
+function truncateAutoTitle(title: string): string {
+  const characters = Array.from(title);
+  return characters.length > LEGEND_DEFAULTS.AUTO_TITLE_MAX_LENGTH
+    ? `${characters.slice(0, LEGEND_DEFAULTS.AUTO_TITLE_MAX_LENGTH - 1).join('')}…`
+    : title;
+}
+
+function getDefaultLegendTitle(
+  visualization: VisualizationConfig,
+  primitive: LegendSubtitlePrimitive
 ): string {
-  return primitive
-    ? getPrimitiveLegendSubtitle(visualization, primitive)
-    : getVisualizationLegendSubtitle(visualization);
+  const variables = isSharedCollectionLegend(visualization, primitive)
+    ? joinLegendSubtitleParts(facetsStore.variables)
+    : getPrimitiveLegendSubtitle(visualization, primitive);
+  return truncateAutoTitle(variables || visualization.name);
 }
 
 function getLegendItemName(
@@ -108,9 +145,9 @@ function createLegendItemFromVisualization(
     id: getLegendItemId(visualization, primitive),
     name: getLegendItemName(visualization, primitive),
     visible: true,
-    title: visualization.name,
+    title: getDefaultLegendTitle(visualization, primitive),
     titleMode: 'auto',
-    subtitle: getLegendSubtitle(visualization, primitive),
+    subtitle: '',
     subtitleMode: 'auto',
     note: '',
     variableId: visualization.id,
@@ -179,7 +216,6 @@ function syncLegendItemsWithVisualizations(
       usedItemIds.add(existing.id);
 
       const name = getLegendItemName(visualization, primitive);
-      const defaultSubtitle = getLegendSubtitle(visualization, primitive);
       const titleMode = resolveTitleMode(existing);
       const subtitleMode = resolveSubtitleMode(existing, visualization);
 
@@ -187,9 +223,12 @@ function syncLegendItemsWithVisualizations(
         ...existing,
         id: getLegendItemId(visualization, primitive),
         name,
-        title: titleMode === 'auto' ? visualization.name : existing.title,
+        title:
+          titleMode === 'auto'
+            ? getDefaultLegendTitle(visualization, primitive)
+            : existing.title,
         titleMode,
-        subtitle: subtitleMode === 'auto' ? defaultSubtitle : existing.subtitle,
+        subtitle: subtitleMode === 'auto' ? '' : existing.subtitle,
         subtitleMode,
         variableId: visualization.id,
         primitive,
