@@ -41,7 +41,11 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
   LogCategory: { DATA: 'DATA', DUCKDB: 'DUCKDB' }
 }));
 
-import { calculateBreaks } from '$lib/features/commons/services/classification.service';
+import {
+  calculateBreakCounts,
+  calculateBreaks,
+  detectDivergingBreakpoint
+} from '$lib/features/commons/services/classification.service';
 import type { ClassificationMethod } from '$lib/features/commons/stores/visualization.store.svelte';
 
 const EQUAL_INTERVAL = 'equal_interval' as ClassificationMethod;
@@ -51,7 +55,7 @@ beforeAll(async () => {
   await state.db.connection.run(breaksMacros);
   await run(
     state.db,
-    'CREATE TABLE collection AS SELECT i::DOUBLE AS y1960, (i + 90)::INTEGER AS y2020 FROM range(1, 11) t(i)'
+    'CREATE TABLE collection AS SELECT i::DOUBLE AS y1960, (i + 90)::INTEGER AS y2020, i::DOUBLE AS gain, (-i)::DOUBLE AS loss FROM range(1, 11) t(i)'
   );
 });
 
@@ -84,6 +88,32 @@ describe('calculateBreaks over pooled columns', () => {
     });
 
     expect(own).toMatchObject({ min: 1, max: 10 });
+  });
+
+  it('counts manual classes over the pooled columns', async () => {
+    const counted = await calculateBreakCounts({
+      datasetId: 'source',
+      columnName: 'y1960',
+      breaks: [50],
+      pooledColumnNames: ['y1960', 'y2020']
+    });
+
+    expect(counted?.counts).toEqual([10, 10]);
+  });
+
+  it('detects a zero pivot only when the pooled values cross zero', async () => {
+    const own = await detectDivergingBreakpoint({
+      datasetId: 'source',
+      columnName: 'gain'
+    });
+    const pooled = await detectDivergingBreakpoint({
+      datasetId: 'source',
+      columnName: 'gain',
+      pooledColumnNames: ['gain', 'loss']
+    });
+
+    expect(own).toBeNull();
+    expect(pooled).toBe(0);
   });
 
   it('drops the temporary pooled table', async () => {

@@ -134,6 +134,7 @@ interface ComputeClassificationBreaksOptions {
   breakValues?: number[];
   breakpointValue?: number | null;
   breakpointLowerClassCount?: number | null;
+  pooledColumnNames?: string[];
 }
 
 interface BreaksRetryState {
@@ -367,7 +368,8 @@ export async function computeClassificationBreaks(
   ) {
     const autoBreakpoint = await detectDivergingBreakpoint({
       datasetId: options.datasetSourceFileId,
-      columnName: options.valueColumn
+      columnName: options.valueColumn,
+      pooledColumnNames: options.pooledColumnNames
     });
     const currentPivot = breakpointValue ?? null;
     if (autoBreakpoint !== currentPivot) {
@@ -400,6 +402,7 @@ export async function computeClassificationBreaks(
       ? await computeManualBreaks({
           datasetSourceFileId: options.datasetSourceFileId,
           valueColumn: options.valueColumn,
+          pooledColumnNames: options.pooledColumnNames,
           rowScopeClause: options.rowScopeClause,
           requestedClassCount,
           breakValues: options.breakValues ?? classification?.breaks ?? []
@@ -410,6 +413,7 @@ export async function computeClassificationBreaks(
             columnName: options.valueColumn,
             method: storeMethod,
             rowScopeClause: options.rowScopeClause,
+            pooledColumnNames: options.pooledColumnNames,
             breakpointValue: breakpointValue as number,
             lowerClassCount: breakpointLowerClassCount,
             upperClassCount: breakpointUpperClassCount
@@ -419,6 +423,7 @@ export async function computeClassificationBreaks(
             columnName: options.valueColumn,
             method: storeMethod,
             rowScopeClause: options.rowScopeClause,
+            pooledColumnNames: options.pooledColumnNames,
             numClasses: requestedClassCount
           });
 
@@ -432,6 +437,7 @@ export async function computeClassificationBreaks(
       columnName: options.valueColumn,
       method: storeMethod,
       rowScopeClause: options.rowScopeClause,
+      pooledColumnNames: options.pooledColumnNames,
       numClasses: requestedClassCount
     });
   }
@@ -468,12 +474,14 @@ export async function computeClassificationBreaks(
 async function computeManualBreaks({
   datasetSourceFileId,
   valueColumn,
+  pooledColumnNames,
   rowScopeClause,
   requestedClassCount,
   breakValues
 }: {
   datasetSourceFileId: string;
   valueColumn: string;
+  pooledColumnNames: string[] | undefined;
   rowScopeClause: string | null | undefined;
   requestedClassCount: number;
   breakValues: number[];
@@ -484,6 +492,7 @@ async function computeManualBreaks({
     return await calculateBreakCounts({
       datasetId: datasetSourceFileId,
       columnName: valueColumn,
+      pooledColumnNames,
       rowScopeClause,
       breaks: breakValues
     });
@@ -494,6 +503,7 @@ async function computeManualBreaks({
     columnName: valueColumn,
     method: ClassificationMethod.EQUAL_INTERVAL,
     rowScopeClause,
+    pooledColumnNames,
     numClasses: requestedClassCount
   });
 }

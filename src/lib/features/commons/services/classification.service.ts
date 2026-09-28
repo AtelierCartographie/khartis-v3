@@ -48,6 +48,7 @@ export interface BreakCountOptions {
   columnName: string;
   breaks: number[];
   rowScopeClause?: string | null;
+  pooledColumnNames?: string[];
 }
 
 export interface ClassificationValueFilter {
@@ -693,14 +694,23 @@ export async function calculateDivergingBreaks(
 export async function detectDivergingBreakpoint(options: {
   datasetId: string;
   columnName: string;
+  pooledColumnNames?: string[];
 }): Promise<number | null> {
   const context = getQueryContext(options.datasetId, options.columnName);
   if (!context) {
     return null;
   }
 
+  let cleanup = async () => {};
   try {
-    const stats = await queryColumnStats(context);
+    const prepared = await prepareClassificationContext(
+      context,
+      undefined,
+      null,
+      resolvePooledColumnNames(options.pooledColumnNames)
+    );
+    cleanup = prepared.cleanup;
+    const stats = await queryColumnStats(prepared.context);
     if (!stats) {
       return null;
     }
@@ -719,6 +729,8 @@ export async function detectDivergingBreakpoint(options: {
       }
     );
     return null;
+  } finally {
+    await cleanup();
   }
 }
 
@@ -734,7 +746,7 @@ export async function calculateBreakCounts(
     context,
     undefined,
     options.rowScopeClause,
-    null
+    resolvePooledColumnNames(options.pooledColumnNames)
   );
 
   try {
