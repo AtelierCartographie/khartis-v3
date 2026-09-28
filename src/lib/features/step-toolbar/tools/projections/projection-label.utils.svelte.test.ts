@@ -37,6 +37,36 @@ describe('resolveCurrentProjectionDisplay', () => {
     ).toBe('France + DOM-TOM (encarts)');
   });
 
+  it('names the basemap projection, not an automatic override left by a previous basemap', () => {
+    expect(
+      resolveCurrentProjectionDisplay(
+        createState({
+          selected: 'composite:FRANCE_DOM_TOM',
+          overrideSource: 'auto'
+        }),
+        { type: 'simple', proj4: '+proj=eqearth' }
+      ).name
+    ).toBe('Equal Earth');
+  });
+
+  it('names a preset by the official name and EPSG code it carries', () => {
+    const display = resolveCurrentProjectionDisplay(
+      createState({ overrideActive: false, overrideSource: undefined }),
+      { type: 'composite', preset: 'BRESIL_ALBERS' },
+      {
+        BRESIL_ALBERS: {
+          name_fr: 'SIRGAS 2000 / Brazil Albers',
+          name_en: 'SIRGAS 2000 / Brazil Albers',
+          epsg: '10857',
+          entries: []
+        }
+      }
+    );
+
+    expect(display.name).toBe('SIRGAS 2000 / Brazil Albers');
+    expect(display.description).toContain('EPSG:10857');
+  });
+
   it('names a suggestion restored from its d3 config alone', () => {
     expect(
       resolveCurrentProjectionDisplay(
