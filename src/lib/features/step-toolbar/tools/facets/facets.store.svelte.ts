@@ -532,6 +532,7 @@ function createFacetsStore() {
           baseViz,
           visualization: baseViz,
           variable,
+          collectionVariables: state.variables,
           scaleMode: state.scaleMode,
           primarySlotPath
         });
@@ -812,6 +813,7 @@ function createFacetsStore() {
                 baseViz,
                 visualization,
                 variable,
+                collectionVariables: state.variables,
                 scaleMode: newMode,
                 primarySlotPath
               });

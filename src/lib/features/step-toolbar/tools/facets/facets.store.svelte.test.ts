@@ -179,6 +179,7 @@ describe('facetsStore', () => {
         baseViz,
         visualization: baseViz,
         variable: 'a',
+        collectionVariables: ['a', 'b'],
         scaleMode: SCALE_MODE.INDEPENDENT,
         primarySlotPath: FACET_SLOT.TEXT_VALUE
       }
@@ -189,6 +190,7 @@ describe('facetsStore', () => {
         baseViz,
         visualization: baseViz,
         variable: 'b',
+        collectionVariables: ['a', 'b'],
         scaleMode: SCALE_MODE.INDEPENDENT,
         primarySlotPath: FACET_SLOT.TEXT_VALUE
       }
