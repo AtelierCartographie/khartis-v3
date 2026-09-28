@@ -2,6 +2,8 @@ import { getProjectionById } from '$lib/features/commons/utils/projection.utils'
 import { getCompositeProjectionPresetId } from '$lib/features/map/utils/user-projection.utils';
 import type { ProjectionFilterId } from '$lib/features/commons/types/global';
 import * as m from '$lib/paraglide/messages';
+import { getLocale } from '$lib/paraglide/runtime';
+import type { ProjectionPresets } from '$lib/features/map/types/basemap.types';
 import { inferProjectionIdFromCode } from './projection-code.utils';
 import {
   getCatalogueProjectionIdForD3Config,
@@ -62,6 +64,27 @@ export function getCompositeProjectionName(
   return COMPOSITE_PROJECTION_NAMES[presetId]?.();
 }
 
+// A preset names its projection itself (name_fr/name_en + epsg, written by
+// khartis-basemaps); the hard-coded names cover the older presets, and the raw
+// id stays the last resort.
+function resolvePresetProjectionDisplay(
+  presetId: string,
+  projectionPresets?: ProjectionPresets | null
+): CurrentProjectionDisplay {
+  const preset = projectionPresets?.[presetId];
+  const officialName =
+    getLocale() === 'en'
+      ? (preset?.name_en ?? preset?.name_fr)
+      : (preset?.name_fr ?? preset?.name_en);
+  const name = officialName ?? getCompositeProjectionName(presetId) ?? presetId;
+  return preset?.epsg
+    ? {
+        name,
+        description: `${m.projection_tag_national()} · EPSG:${preset.epsg}`
+      }
+    : { name };
+}
+
 export interface CurrentProjectionDisplay {
   name: string;
   description?: string;
@@ -79,10 +102,17 @@ export interface BasemapProjectionSource {
 // code, or the catalogue. All five must be nameable.
 export function resolveCurrentProjectionDisplay(
   state: ProjectionState,
-  basemapProjection?: BasemapProjectionSource | null
+  basemapProjection?: BasemapProjectionSource | null,
+  projectionPresets?: ProjectionPresets | null
 ): CurrentProjectionDisplay {
-  if (state.overrideActive !== true) {
-    return resolveBasemapProjectionDisplay(basemapProjection);
+  // Only a manual override is rendered (projection-priority.utils.ts): an
+  // 'auto' one is the basemap's own composite, possibly left over from a
+  // previous basemap, and must not rename the projection actually drawn.
+  if (state.overrideActive !== true || state.overrideSource !== 'manual') {
+    return resolveBasemapProjectionDisplay(
+      basemapProjection,
+      projectionPresets
+    );
   }
 
   const suggestion = findActiveSuggestion(state);
@@ -106,17 +136,18 @@ export function resolveCurrentProjectionDisplay(
 
   const presetId = getCompositeProjectionPresetId(state.selected);
   if (presetId) {
-    return { name: getCompositeProjectionName(presetId) ?? state.selected };
+    return resolvePresetProjectionDisplay(presetId, projectionPresets);
   }
 
   return getProjectionForId(state.selected) ?? { name: state.selected };
 }
 
 function resolveBasemapProjectionDisplay(
-  source: BasemapProjectionSource | null | undefined
+  source: BasemapProjectionSource | null | undefined,
+  projectionPresets?: ProjectionPresets | null
 ): CurrentProjectionDisplay {
   if (source?.type === 'composite' && source.preset) {
-    return { name: getCompositeProjectionName(source.preset) ?? source.preset };
+    return resolvePresetProjectionDisplay(source.preset, projectionPresets);
   }
 
   if (source?.type === 'simple' && source.proj4) {

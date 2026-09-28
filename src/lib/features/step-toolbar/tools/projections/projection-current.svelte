@@ -36,7 +36,8 @@
         }
       : resolveCurrentProjectionDisplay(
           projectionState,
-          basemapService.currentMetadata?.proj_to
+          basemapService.currentMetadata?.proj_to,
+          basemapService.projectionPresets
         )
   );
 </script>

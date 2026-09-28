@@ -42,6 +42,11 @@ export interface ProjectionPreset {
   // Width/height ratio the normalized layouts were authored for. When absent
   // it is derived so the mainland geometry exactly fills its layout cell.
   layoutAspect?: number;
+  // Official name and EPSG code of the preset's projection (written by
+  // khartis-basemaps), shown as the basemap-native projection.
+  name_fr?: string;
+  name_en?: string;
+  epsg?: string;
   entries: ProjectionPresetEntry[];
 }
 
