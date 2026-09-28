@@ -166,13 +166,8 @@
             FACET_SLOT.TEXT_VALUE,
             ids
           )}
-        onToggleCollection={(enabled, ids) =>
-          facetsSelection.toggle(
-            valueColumnName,
-            FACET_SLOT.TEXT_VALUE,
-            enabled,
-            ids
-          )}
+        onToggleCollection={(enabled) =>
+          facetsSelection.toggle(FACET_SLOT.TEXT_VALUE, enabled)}
       />
     </div>
     <DiscretizationRow
@@ -211,13 +206,8 @@
             FACET_SLOT.TEXT_CATEGORY,
             ids
           )}
-        onToggleCollection={(enabled, ids) =>
-          facetsSelection.toggle(
-            categoryColumnName,
-            FACET_SLOT.TEXT_CATEGORY,
-            enabled,
-            ids
-          )}
+        onToggleCollection={(enabled) =>
+          facetsSelection.toggle(FACET_SLOT.TEXT_CATEGORY, enabled)}
       />
     </div>
     <DiscretizationRow

@@ -42,26 +42,6 @@ const DEFAULT_FACETS_FRAME_COLOR = '#c6c6c6';
 
 export const MAX_FACETS = 16;
 
-function getCompatibleDatasetVariables(
-  visualization: VisualizationConfig,
-  slotPath: FacetSlotPath
-): string[] {
-  const dataset = datasetsStore.datasets.find(
-    (candidate) => candidate.id === visualization.datasetId
-  );
-  if (!dataset?.columns?.length) {
-    return [];
-  }
-
-  return dataset.columns
-    .filter((column) =>
-      facetSlotRequiresNumericVariable(slotPath)
-        ? isAutoFacetNumericColumn(column)
-        : isAutoFacetDataColumn(column)
-    )
-    .map((column) => column.name);
-}
-
 function filterCompatibleFacetVariables(
   visualization: VisualizationConfig,
   variables: string[],
@@ -90,36 +70,6 @@ function filterCompatibleFacetVariables(
   return sanitized.filter((variable) => compatibleColumns.has(variable));
 }
 
-function normalizeFacetVariablesForEnable(
-  visualization: VisualizationConfig,
-  variables: string[],
-  slotPath: FacetSlotPath
-): string[] {
-  const compatible = filterCompatibleFacetVariables(
-    visualization,
-    variables,
-    slotPath
-  );
-  if (compatible.length >= 2 || !facetSlotRequiresNumericVariable(slotPath)) {
-    return compatible;
-  }
-
-  const nextCompatible = [...compatible];
-  for (const variable of getCompatibleDatasetVariables(
-    visualization,
-    slotPath
-  )) {
-    if (nextCompatible.length >= 2) {
-      break;
-    }
-    if (!nextCompatible.includes(variable)) {
-      nextCompatible.push(variable);
-    }
-  }
-
-  return nextCompatible;
-}
-
 function computeBestColumns(
   mapCount: number,
   maxCols: number = DEFAULT_MAX_FACETS_COLUMNS
@@ -137,6 +87,11 @@ export interface FacetsLayout {
   frameVisible: boolean;
   frameColor: string;
   frameThickness: number;
+}
+
+export interface FacetsDraft {
+  baseVisualizationId: string;
+  slotPath: FacetSlotPath;
 }
 
 export interface FacetsState {
@@ -239,6 +194,7 @@ function createFacetsStore() {
   // Transient: which facet title the toolbar panel should focus, set when the
   // user clicks a title on the page.
   let editedTitleVariable = $state<string | null>(null);
+  let draft = $state<FacetsDraft | null>(null);
   let isRegenerating = false;
 
   function notifyPersistence(): void {
@@ -399,12 +355,13 @@ function createFacetsStore() {
       return;
     }
 
-    const compatible = normalizeFacetVariablesForEnable(
+    const compatible = filterCompatibleFacetVariables(
       baseViz,
       variables,
       primarySlotPath
     );
     if (compatible.length < 2) {
+      startDraft(baseVizId, primarySlotPath);
       return;
     }
 
@@ -434,6 +391,7 @@ function createFacetsStore() {
       }
       visualizationStore.createBulkVisualizations(facetConfigs);
 
+      draft = null;
       state.enabled = true;
       state.baseVisualizationId = baseVizId;
       state.primarySlotPath = primarySlotPath;
@@ -480,7 +438,7 @@ function createFacetsStore() {
       return;
     }
 
-    const compatible = normalizeFacetVariablesForEnable(
+    const compatible = filterCompatibleFacetVariables(
       baseViz,
       state.variables,
       state.primarySlotPath
@@ -594,6 +552,7 @@ function createFacetsStore() {
   }
 
   function disable(): void {
+    draft = null;
     if (!state.enabled) {
       return;
     }
@@ -609,6 +568,11 @@ function createFacetsStore() {
     state.generatedVisualizationIds = [];
     state.facetTitles = {};
     notifyPersistence();
+  }
+
+  function startDraft(baseVizId: string, slotPath: FacetSlotPath): void {
+    disable();
+    draft = { baseVisualizationId: baseVizId, slotPath };
   }
 
   function setVariables(variables: string[]): void {
@@ -694,9 +658,7 @@ function createFacetsStore() {
       primarySlotPath
     );
     if (compatible.length < 2) {
-      if (state.enabled) {
-        disable();
-      }
+      startDraft(baseVizId, primarySlotPath);
       return;
     }
 
@@ -916,11 +878,15 @@ function createFacetsStore() {
     get editedTitleVariable(): string | null {
       return editedTitleVariable;
     },
+    get draft(): FacetsDraft | null {
+      return draft;
+    },
     get facetVisualizations(): VisualizationConfig[] {
       return getFacetVisualizations();
     },
     enable,
     disable,
+    startDraft,
     setVariables,
     updateVariables,
     reorderVariables,
