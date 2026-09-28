@@ -31,7 +31,7 @@ export function useFacetsVariableSelection({
       return null;
     }
     if (
-      facetsStore.enabled &&
+      (facetsStore.enabled || facetsStore.suspended) &&
       facetsStore.baseVisualizationId === visualizationId
     ) {
       return facetsStore.primarySlotPath;

@@ -70,7 +70,7 @@ describe('facetsStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.resolveFacetPrimitiveFilterMock.mockReturnValue('polygon');
-    mocks.getEnabledPrimitiveFiltersMock.mockReturnValue([]);
+    mocks.getEnabledPrimitiveFiltersMock.mockReturnValue(['polygon']);
     mocks.buildFacetVisualizationUpdatesMock.mockImplementation(
       ({
         variable,
@@ -137,7 +137,7 @@ describe('facetsStore', () => {
     ]);
   });
 
-  it('leaves the collection when its primitive is hidden on the base visualization', async () => {
+  it('keeps a collection whose primitive is hidden and restores it when shown again', async () => {
     mocks.resolveFacetPrimitiveFilterMock.mockReturnValue('polygon');
     mocks.getEnabledPrimitiveFiltersMock.mockReturnValue(['point']);
     facetsStore.restoreFromSerialized({
@@ -153,9 +153,25 @@ describe('facetsStore', () => {
     await facetsStore.syncGeneratedVisualizationsFromBase('base-viz');
 
     expect(facetsStore.enabled).toBe(false);
+    expect(facetsStore.suspended).toBe(true);
+    expect(facetsStore.variables).toEqual(['a', 'b']);
     expect(mocks.removeBulkVisualizationsMock).toHaveBeenCalledWith([
       'facet-a',
       'facet-b'
+    ]);
+
+    mocks.getEnabledPrimitiveFiltersMock.mockReturnValue(['point', 'polygon']);
+    mocks.generateFacetVisualizationsMock.mockResolvedValue([
+      { id: 'facet-a2' },
+      { id: 'facet-b2' }
+    ]);
+
+    await facetsStore.syncGeneratedVisualizationsFromBase('base-viz');
+
+    expect(facetsStore.enabled).toBe(true);
+    expect(facetsStore.generatedVisualizationIds).toEqual([
+      'facet-a2',
+      'facet-b2'
     ]);
   });
 

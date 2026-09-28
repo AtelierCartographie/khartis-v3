@@ -159,6 +159,15 @@ function arraysEqual<T>(left: T[], right: T[]): boolean {
   );
 }
 
+function isCollectionPrimitiveShown(
+  baseViz: VisualizationConfig,
+  slotPath: FacetSlotPath
+): boolean {
+  return getEnabledPrimitiveFilters(baseViz).includes(
+    resolveFacetPrimitiveFilter(slotPath)
+  );
+}
+
 function notifyReplacedCollection(replacedPreviousCollection: boolean): void {
   if (replacedPreviousCollection) {
     showInfo(m.facets_notice_title(), m.facets_notice_replaced());
@@ -396,6 +405,9 @@ function createFacetsStore() {
       disable();
       return;
     }
+    if (!isCollectionPrimitiveShown(baseViz, state.primarySlotPath)) {
+      return;
+    }
 
     const existingVisualizationIds = new Set(
       visualizationStore.visualizations.map((visualization) => visualization.id)
@@ -472,13 +484,16 @@ function createFacetsStore() {
     const baseViz = visualizationStore.visualizations.find(
       (v) => v.id === state.baseVisualizationId
     );
-    if (
-      !baseViz ||
-      !getEnabledPrimitiveFilters(baseViz).includes(
-        resolveFacetPrimitiveFilter(primarySlotPath)
-      )
-    ) {
+    if (!baseViz) {
       disable();
+      return;
+    }
+    if (!isCollectionPrimitiveShown(baseViz, primarySlotPath)) {
+      suspend();
+      return;
+    }
+    if (state.generatedVisualizationIds.length === 0) {
+      await restoreGeneratedVisualizations();
       return;
     }
 
@@ -546,6 +561,29 @@ function createFacetsStore() {
     state.generatedVisualizationIds = [];
     state.facetTitles = {};
     notifyPersistence();
+  }
+
+  function suspend(): void {
+    if (state.generatedVisualizationIds.length === 0) {
+      return;
+    }
+    visualizationStore.removeBulkVisualizations(
+      state.generatedVisualizationIds
+    );
+    state.generatedVisualizationIds = [];
+    notifyPersistence();
+  }
+
+  function isSuspended(): boolean {
+    if (!state.enabled || !state.primarySlotPath) {
+      return false;
+    }
+    const baseViz = visualizationStore.visualizations.find(
+      (v) => v.id === state.baseVisualizationId
+    );
+    return Boolean(
+      baseViz && !isCollectionPrimitiveShown(baseViz, state.primarySlotPath)
+    );
   }
 
   function startDraft(baseVizId: string, slotPath: FacetSlotPath): void {
@@ -831,7 +869,11 @@ function createFacetsStore() {
 
   return {
     get enabled() {
-      return state.enabled;
+      return state.enabled && !isSuspended();
+    },
+    /** Configured collection whose primitive is hidden: drawn as a single map until shown again. */
+    get suspended() {
+      return isSuspended();
     },
     get baseVisualizationId() {
       return state.baseVisualizationId;
@@ -889,7 +931,7 @@ export const facetsStore = createFacetsStore();
 persistenceRegistry.register({
   key: 'facets',
   serialize: () => ({
-    enabled: facetsStore.enabled,
+    enabled: facetsStore.enabled || facetsStore.suspended,
     baseVisualizationId: facetsStore.baseVisualizationId,
     primarySlotPath: facetsStore.primarySlotPath,
     variables: [...facetsStore.variables],
