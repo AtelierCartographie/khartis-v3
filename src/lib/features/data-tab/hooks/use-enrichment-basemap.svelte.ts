@@ -21,6 +21,7 @@ import type {
   BasemapSuggestion
 } from '$lib/features/map/types/basemap.types';
 import {
+  bundleBasemapImportFiles,
   createOSMBasemap,
   loadBasemapFromUrl,
   processBasemapImport
@@ -101,7 +102,7 @@ export interface UseEnrichmentBasemapReturn {
   readonly suggestedBasemaps: BasemapSuggestionItem[];
   setBasemapTabIndex: (index: number) => void;
   handleSelectBasemap: (basemapId: string) => void;
-  handleBasemapImportFile: (file: File) => Promise<void>;
+  handleBasemapImportFile: (files: File[]) => Promise<void>;
   handleBasemapUrlLoad: (url: string) => Promise<void>;
   handleSelectOSM: () => void;
   activatePreferredBasemap: () => void;
@@ -276,11 +277,12 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     );
   }
 
-  async function handleBasemapImportFile(file: File): Promise<void> {
+  async function handleBasemapImportFile(files: File[]): Promise<void> {
     basemapImportUploading = true;
     basemapImportError = null;
 
     try {
+      const file = await bundleBasemapImportFiles(files);
       const { basemap: processedBasemap, geometryTable } =
         await processBasemapImport(file);
       const customBasemap = await persistCustomBasemapSource(
@@ -322,7 +324,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
 
     try {
       const file = await loadBasemapFromUrl(url);
-      await handleBasemapImportFile(file);
+      await handleBasemapImportFile([file]);
     } catch (err) {
       logger.error('Error loading basemap URL', LogCategory.MAP, err);
       basemapImportError =

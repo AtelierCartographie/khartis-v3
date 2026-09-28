@@ -363,6 +363,7 @@
   "basemap_import_modal_title": "Import basemap",
   "basemap_import_modal_description": "Load a geographic information file (SHP, GeoJSON, GeoPackage) compatible with the previously loaded data.",
   "basemap_import_modal_error_select_file": "Please select a file to import",
+  "basemap_import_error_single_source": "Select a single basemap: one file, or all the components of the same Shapefile (.shp, .shx, .dbf…)",
   "basemap_import_modal_error_invalid_geometry": "The file does not contain a valid geometry or the geometry column is missing",
   "basemap_import_dropzone_text": "Drag and drop a file or click to import",
   "basemap_import_url_label": "Link to a file stored online",
