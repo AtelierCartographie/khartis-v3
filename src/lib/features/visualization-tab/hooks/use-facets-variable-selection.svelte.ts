@@ -1,14 +1,8 @@
-import {
-  isAutoFacetDataColumn,
-  isAutoFacetNumericColumn
-} from '$lib/features/commons/utils/visualization-columns.utils';
-import { facetSlotRequiresNumericVariable } from '$lib/features/commons/constants/facets.constants';
 import { facetsStore, type FacetSlotPath } from '../adapters/facets-adapter';
 
 interface DataFieldOption {
   id: number;
   text: string;
-  type?: string;
 }
 
 interface FacetsVariableSelectionOptions {
@@ -24,12 +18,7 @@ export interface FacetsVariableSelection {
     slotPath: FacetSlotPath | undefined,
     fieldIds: number[]
   ): Promise<void>;
-  toggle(
-    baseVariableName: string,
-    slotPath: FacetSlotPath | undefined,
-    enabled: boolean,
-    seedFieldIds?: number[]
-  ): Promise<void>;
+  toggle(slotPath: FacetSlotPath | undefined, enabled: boolean): void;
 }
 
 export function useFacetsVariableSelection({
@@ -38,15 +27,19 @@ export function useFacetsVariableSelection({
 }: FacetsVariableSelectionOptions): FacetsVariableSelection {
   const activeSlotPath = $derived.by(() => {
     const visualizationId = getVisualizationId();
-    if (
-      !facetsStore.enabled ||
-      !visualizationId ||
-      facetsStore.baseVisualizationId !== visualizationId
-    ) {
+    if (!visualizationId) {
       return null;
     }
-
-    return facetsStore.primarySlotPath;
+    if (
+      facetsStore.enabled &&
+      facetsStore.baseVisualizationId === visualizationId
+    ) {
+      return facetsStore.primarySlotPath;
+    }
+    const draft = facetsStore.draft;
+    return draft?.baseVisualizationId === visualizationId
+      ? draft.slotPath
+      : null;
   });
 
   function isActiveForSlot(slotPath: FacetSlotPath | undefined): boolean {
@@ -70,15 +63,6 @@ export function useFacetsVariableSelection({
       .filter((name): name is string => Boolean(name));
   }
 
-  function isFieldCompatibleWithSlot(
-    field: DataFieldOption,
-    slotPath: FacetSlotPath
-  ): boolean {
-    return facetSlotRequiresNumericVariable(slotPath)
-      ? isAutoFacetNumericColumn(field)
-      : isAutoFacetDataColumn(field);
-  }
-
   async function updateVariables(
     baseVariableName: string,
     slotPath: FacetSlotPath | undefined,
@@ -98,53 +82,17 @@ export function useFacetsVariableSelection({
     await facetsStore.updateVariables(visualizationId, merged, slotPath);
   }
 
-  async function toggle(
-    baseVariableName: string,
-    slotPath: FacetSlotPath | undefined,
-    enabled: boolean,
-    seedFieldIds?: number[]
-  ): Promise<void> {
+  function toggle(slotPath: FacetSlotPath | undefined, enabled: boolean): void {
     const visualizationId = getVisualizationId();
     if (!visualizationId || !slotPath) {
       return;
     }
 
-    if (!enabled) {
+    if (enabled) {
+      facetsStore.startDraft(visualizationId, slotPath);
+    } else {
       facetsStore.disable();
-      return;
     }
-
-    const seedFieldNames = seedFieldIds ? getFieldNames(seedFieldIds) : [];
-    if (seedFieldNames.length >= 2) {
-      const merged =
-        baseVariableName && !seedFieldNames.includes(baseVariableName)
-          ? [baseVariableName, ...seedFieldNames]
-          : seedFieldNames;
-      await facetsStore.updateVariables(visualizationId, merged, slotPath);
-      return;
-    }
-
-    const seed = baseVariableName ? [baseVariableName] : [];
-    const candidates = seed.slice();
-
-    for (const field of getDataFields()) {
-      if (candidates.length >= 2) {
-        break;
-      }
-      const text = field.text;
-      if (!isFieldCompatibleWithSlot(field, slotPath)) {
-        continue;
-      }
-      if (text && !candidates.includes(text)) {
-        candidates.push(text);
-      }
-    }
-
-    if (candidates.length < 2) {
-      return;
-    }
-
-    await facetsStore.updateVariables(visualizationId, candidates, slotPath);
   }
 
   return {

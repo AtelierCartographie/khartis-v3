@@ -234,7 +234,7 @@ describe('facetsStore', () => {
   });
 
   describe('updateVariables', () => {
-    it('should disable the collection when fewer than 2 variables are provided', async () => {
+    it('should fall back to a single-map draft when fewer than 2 variables are provided', async () => {
       facetsStore.restoreFromSerialized({
         enabled: true,
         baseVisualizationId: 'base-viz',
@@ -257,6 +257,10 @@ describe('facetsStore', () => {
         'facet-b',
         'facet-c'
       ]);
+      expect(facetsStore.draft).toEqual({
+        baseVisualizationId: 'base-viz',
+        slotPath: FACET_SLOT.POLYGON_VALUE
+      });
     });
 
     it('should enable a new collection when not yet enabled', async () => {
@@ -321,7 +325,7 @@ describe('facetsStore', () => {
       );
     });
 
-    it('does not auto-complete numeric facet slots with technical identifiers', async () => {
+    it('keeps a single chosen variable as a draft instead of auto-completing it', async () => {
       mocks.visualizations = [
         {
           id: 'base-viz',
@@ -333,34 +337,25 @@ describe('facetsStore', () => {
         {
           id: 'dataset-1',
           columns: [
-            { name: 'OGC_FID', type: 'number' },
-            { name: 'capacity_total', type: 'number' },
-            { name: 'population_total', type: 'number' }
+            { name: 'label', type: 'text' },
+            { name: 'a', type: 'number' },
+            { name: 'b', type: 'number' }
           ]
         }
       ];
-      mocks.generateFacetVisualizationsMock.mockResolvedValue([
-        { id: 'facet-capacity' },
-        { id: 'facet-population' }
-      ]);
 
       await facetsStore.updateVariables(
         'base-viz',
-        ['capacity_total'],
-        FACET_SLOT.SYMBOL_FILL_VALUE
+        ['label', 'a'],
+        FACET_SLOT.POLYGON_VALUE
       );
 
-      expect(facetsStore.enabled).toBe(true);
-      expect(facetsStore.variables).toEqual([
-        'capacity_total',
-        'population_total'
-      ]);
-      expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
-        mocks.visualizations[0],
-        ['capacity_total', 'population_total'],
-        SCALE_MODE.SHARED,
-        FACET_SLOT.SYMBOL_FILL_VALUE
-      );
+      expect(facetsStore.enabled).toBe(false);
+      expect(mocks.generateFacetVisualizationsMock).not.toHaveBeenCalled();
+      expect(facetsStore.draft).toEqual({
+        baseVisualizationId: 'base-viz',
+        slotPath: FACET_SLOT.POLYGON_VALUE
+      });
     });
 
     it('filters internal geometry columns from categorical facet slots', async () => {
@@ -439,45 +434,6 @@ describe('facetsStore', () => {
         ['a', 'b'],
         SCALE_MODE.SHARED,
         FACET_SLOT.SYMBOL_FILL_VALUE
-      );
-    });
-
-    it('fills the activation seed with another compatible numeric variable when the initial toggle includes text fields', async () => {
-      mocks.visualizations = [
-        {
-          id: 'base-viz',
-          name: 'Base visualization',
-          datasetId: 'dataset-1'
-        }
-      ];
-      mocks.datasets = [
-        {
-          id: 'dataset-1',
-          columns: [
-            { name: 'label', type: 'text' },
-            { name: 'a', type: 'number' },
-            { name: 'b', type: 'number' }
-          ]
-        }
-      ];
-      mocks.generateFacetVisualizationsMock.mockResolvedValue([
-        { id: 'facet-a' },
-        { id: 'facet-b' }
-      ]);
-
-      await facetsStore.updateVariables(
-        'base-viz',
-        ['label', 'a'],
-        FACET_SLOT.POLYGON_VALUE
-      );
-
-      expect(facetsStore.enabled).toBe(true);
-      expect(facetsStore.variables).toEqual(['a', 'b']);
-      expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
-        mocks.visualizations[0],
-        ['a', 'b'],
-        SCALE_MODE.SHARED,
-        FACET_SLOT.POLYGON_VALUE
       );
     });
 

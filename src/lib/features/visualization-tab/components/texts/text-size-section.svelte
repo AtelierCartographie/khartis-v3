@@ -119,13 +119,8 @@
           FACET_SLOT.TEXT_VALUE,
           ids
         )}
-      onToggleCollection={(enabled, ids) =>
-        facetsSelection.toggle(
-          sizeColumnName,
-          FACET_SLOT.TEXT_VALUE,
-          enabled,
-          ids
-        )}
+      onToggleCollection={(enabled) =>
+        facetsSelection.toggle(FACET_SLOT.TEXT_VALUE, enabled)}
     />
   </div>
 {/if}
