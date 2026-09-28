@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   calculateBreaks: vi.fn(),
+  calculateDivergingBreaks: vi.fn(),
   getUniqueValues: vi.fn(),
   loadDistinctCategoryLabels: vi.fn(),
   resolveRowScopeClause: vi.fn(() => null as string | null)
@@ -26,7 +27,8 @@ vi.mock('$lib/features/commons/utils/category-labels.utils', () => ({
 }));
 
 vi.mock('./classification.service', () => ({
-  calculateBreaks: mocks.calculateBreaks
+  calculateBreaks: mocks.calculateBreaks,
+  calculateDivergingBreaks: mocks.calculateDivergingBreaks
 }));
 
 vi.mock('$lib/features/commons/utils/logger', () => ({
@@ -182,7 +184,7 @@ describe('generateFacetVisualizations', () => {
     expect(result[0].symbol?.fillValueColumn).toBe('fill-value');
     expect(result[0].symbol?.strokeValueColumn).toBe('stroke-next');
     expect(result[0].symbol?.fillClassification).toEqual(fillClassification);
-    expect(result[0].symbol?.strokeClassification).toEqual(
+    expect(result[0].symbol?.strokeClassification).toMatchObject(
       strokeClassification
     );
   });
@@ -219,7 +221,7 @@ describe('generateFacetVisualizations', () => {
     expect(result[0].polygon?.valueColumn).toBe('fill-value');
     expect(result[0].polygon?.strokeValueColumn).toBe('stroke-next');
     expect(result[0].polygon?.classification).toEqual(fillClassification);
-    expect(result[0].polygon?.strokeClassification).toEqual(
+    expect(result[0].polygon?.strokeClassification).toMatchObject(
       strokeClassification
     );
   });
@@ -270,16 +272,56 @@ describe('generateFacetVisualizations', () => {
     );
   });
 
-  it('should reuse base classification in shared mode', async () => {
-    const base = makeBaseViz();
+  it('classifies every collection variable together in shared mode', async () => {
     const result = await generateFacetVisualizations(
-      base as never,
-      ['pop'],
+      makeBaseViz() as never,
+      ['pop', 'gdp'],
       SCALE_MODE.SHARED,
       FACET_SLOT.POLYGON_VALUE
     );
 
-    expect(result[0].classification?.breaks).toEqual([0, 25, 50, 75, 100]);
+    expect(mocks.calculateBreaks).toHaveBeenCalledWith(
+      expect.objectContaining({ pooledColumnNames: ['pop', 'gdp'] })
+    );
+    expect(result.map((facet) => facet.classification?.breaks)).toEqual([
+      [20, 30, 40],
+      [20, 30, 40]
+    ]);
+  });
+
+  it('keeps the diverging breakpoint when facets are reclassified', async () => {
+    mocks.calculateDivergingBreaks.mockResolvedValue({
+      breaks: [-10, 0, 10],
+      counts: [1, 1, 1, 1],
+      min: -20,
+      max: 20,
+      breakpointLowerClassCount: 2
+    });
+    const base = makeBaseViz({
+      classification: {
+        ...makeBaseViz().classification,
+        breakpointValue: 0,
+        breakpointLowerClassCount: 2
+      }
+    });
+
+    const result = await generateFacetVisualizations(
+      base as never,
+      ['gdp'],
+      SCALE_MODE.INDEPENDENT,
+      FACET_SLOT.POLYGON_VALUE
+    );
+
+    expect(mocks.calculateDivergingBreaks).toHaveBeenCalledWith(
+      expect.objectContaining({
+        columnName: 'gdp',
+        breakpointValue: 0,
+        lowerClassCount: 2,
+        upperClassCount: 2
+      })
+    );
+    expect(mocks.calculateBreaks).not.toHaveBeenCalled();
+    expect(result[0].classification?.breaks).toEqual([-10, 0, 10]);
   });
 
   it('should recalculate breaks in independent mode', async () => {
@@ -366,6 +408,7 @@ describe('generateFacetVisualizations', () => {
         name: 'pop'
       } as never,
       variable: 'gdp',
+      collectionVariables: ['pop', 'gdp'],
       scaleMode: SCALE_MODE.INDEPENDENT,
       primarySlotPath: FACET_SLOT.POLYGON_VALUE
     });
@@ -408,6 +451,7 @@ describe('generateFacetVisualizations', () => {
       baseViz: base as never,
       visualization: base as never,
       variable: 'NUTS_ID',
+      collectionVariables: ['pop', 'NUTS_ID'],
       scaleMode: SCALE_MODE.INDEPENDENT,
       slotPath: FACET_SLOT.POLYGON_STROKE_CATEGORY
     });
@@ -447,6 +491,7 @@ describe('generateFacetVisualizations', () => {
       baseViz: base as never,
       visualization: base as never,
       variable: 'gdp',
+      collectionVariables: ['pop', 'gdp'],
       scaleMode: SCALE_MODE.SHARED,
       primarySlotPath: FACET_SLOT.POLYGON_VALUE
     });
