@@ -103,15 +103,61 @@ describe('legend store responsive defaults', () => {
       expect.objectContaining({
         id: 'legend-viz-viz-pop--area',
         primitive: 'area',
-        title: 'Population',
+        title: 'category',
         titleMode: 'auto',
-        subtitle: 'category',
+        subtitle: '',
         subtitleMode: 'auto',
         variableId: 'viz-pop',
         visible: true,
         dragPosition: null
       })
     ]);
+  });
+
+  it('truncates a long default title but keeps a custom one whole', () => {
+    const longColumn =
+      'population_rurale_en_pourcentage_de_la_population_totale';
+    mockVisualizationStore.visualizations = [
+      createVisualization({
+        id: 'viz-long',
+        name: 'Visualisation',
+        mapping: { categoryColumn: longColumn },
+        polygon: { enabled: true } as never,
+        modes: {}
+      })
+    ];
+
+    legendActions.syncWithVisualizations();
+    const [item] = getLegendState().items;
+
+    expect(Array.from(item.title)).toHaveLength(
+      LEGEND_DEFAULTS.AUTO_TITLE_MAX_LENGTH
+    );
+    expect(item.title.endsWith('…')).toBe(true);
+
+    legendActions.updateLegendItem(item.id, {
+      title: longColumn,
+      titleMode: 'custom'
+    });
+    legendActions.syncWithVisualizations();
+
+    expect(getLegendState().items[0].title).toBe(longColumn);
+  });
+
+  it('falls back to the visualization name when no variable is mapped', () => {
+    mockVisualizationStore.visualizations = [
+      createVisualization({
+        id: 'viz-unique',
+        name: 'Fond',
+        mapping: {},
+        polygon: { enabled: true } as never,
+        modes: {}
+      })
+    ];
+
+    legendActions.syncWithVisualizations();
+
+    expect(getLegendState().items[0].title).toBe('Fond');
   });
 
   it('joins multiple mapped columns in cartographic legend order', () => {
@@ -164,8 +210,8 @@ describe('legend store responsive defaults', () => {
       expect.objectContaining({
         id: 'legend-viz-viz-poly-only--area',
         primitive: 'area',
-        subtitle: 'population',
-        subtitleMode: 'auto'
+        title: 'population',
+        subtitle: ''
       })
     ]);
   });
@@ -207,8 +253,8 @@ describe('legend store responsive defaults', () => {
       expect.objectContaining({
         id: 'legend-viz-viz-point-fill--point',
         primitive: 'point',
-        subtitle: 'capacity',
-        subtitleMode: 'auto'
+        title: 'capacity',
+        subtitle: ''
       })
     ]);
   });
@@ -243,8 +289,8 @@ describe('legend store responsive defaults', () => {
       expect.objectContaining({
         id: 'legend-viz-viz-line-only--line',
         primitive: 'line',
-        subtitle: 'line_type / traffic',
-        subtitleMode: 'auto'
+        title: 'line_type / traffic',
+        subtitle: ''
       })
     ]);
   });
