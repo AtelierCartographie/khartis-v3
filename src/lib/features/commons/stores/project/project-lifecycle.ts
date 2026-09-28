@@ -26,7 +26,6 @@ import {
 import type { UploadedFile } from '../../types/create-project.types';
 import type { ProjectStateContainer } from './project-state.svelte';
 import { cleanFileForStorage } from './project-files';
-import { addToHistory, resetHistory } from './project-history';
 import { saveCurrentProject } from './project-persistence';
 import {
   beginProjectRuntime,
@@ -100,7 +99,6 @@ function resetFailedLastProjectRestore(container: ProjectStateContainer): void {
   resetProjectRuntimeState();
   container._state.isDirty = false;
   container._state.lastSaved = undefined;
-  resetHistory(container);
 }
 
 export async function createProject(
@@ -142,8 +140,6 @@ export async function createProject(
   container._state.isDirty = false;
   container._state.lastSaved = new Date();
 
-  addToHistory(container, m.history_project_created(), project);
-
   await saveCurrentProject(container);
   await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
   await dataOrchestratorService.onProjectChanged({ isProjectCreation: true });
@@ -171,9 +167,6 @@ export async function loadProject(
     resetProjectRuntimeState({ resetPersistence: false });
     container._state.isDirty = false;
     container._state.lastSaved = new Date();
-    resetHistory(container);
-
-    addToHistory(container, m.history_project_loaded(), project);
 
     await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
     throwIfProjectRestoreAborted(options.signal);
@@ -280,7 +273,6 @@ export async function clearProject(
   beginProjectRuntime(null);
   container._state.isDirty = false;
   container._state.lastSaved = undefined;
-  resetHistory(container);
 
   resetProjectRuntimeState();
 

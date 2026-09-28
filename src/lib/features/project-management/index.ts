@@ -2,7 +2,6 @@ export { ProjectStorageKey } from './types';
 export type {
   KhartisProject,
   ProjectData,
-  ProjectHistoryEntry,
   ProjectManifest,
   ProjectState,
   SavedProjectMetadata
