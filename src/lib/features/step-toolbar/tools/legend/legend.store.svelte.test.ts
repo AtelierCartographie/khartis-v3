@@ -16,11 +16,23 @@ import {
 import { formatActions } from '../format/format.store.svelte';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 
-const { mockVisualizationStore } = vi.hoisted(() => ({
+const { mockVisualizationStore, mockFacetsStore } = vi.hoisted(() => ({
   mockVisualizationStore: {
     version: 0,
     visualizations: [] as VisualizationConfig[]
+  },
+  mockFacetsStore: {
+    enabled: false,
+    baseVisualizationId: null as string | null,
+    primarySlotPath: null as string | null,
+    scaleMode: 'independent',
+    variables: [] as string[]
   }
+}));
+
+vi.mock('../facets', () => ({
+  facetsStore: mockFacetsStore,
+  SCALE_MODE: { SHARED: 'shared', INDEPENDENT: 'independent' }
 }));
 
 vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
@@ -30,6 +42,7 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
 import { getLegendState, legendActions } from './legend.store.svelte';
 import { getVisualizationLegendSubtitle } from '$lib/features/commons/utils/legend-subtitle.utils';
 import { LEGEND_DEFAULTS } from './legend.constants';
+import { getFacetVisualizationId } from '$lib/features/commons/services/facet-generator.service';
 
 function createVisualization(
   overrides: Partial<VisualizationConfig> = {}
@@ -56,6 +69,8 @@ describe('legend store responsive defaults', () => {
     formatActions.reset();
     legendActions.reset();
     mockVisualizationStore.visualizations = [];
+    mockFacetsStore.baseVisualizationId = null;
+    mockFacetsStore.variables = [];
   });
 
   it('keeps the default legend font size whatever the page profile', () => {
@@ -293,6 +308,40 @@ describe('legend store responsive defaults', () => {
         subtitle: ''
       })
     ]);
+  });
+
+  it('keeps a collection map legend text while the map is regenerated', () => {
+    const base = createVisualization({
+      id: 'viz-base',
+      polygon: { enabled: true } as never
+    });
+    const facetId = getFacetVisualizationId('viz-base', '1960');
+    const facet = createVisualization({
+      id: facetId,
+      name: '1960',
+      polygon: { enabled: true } as never,
+      facet: { baseVisualizationId: 'viz-base' }
+    });
+    mockFacetsStore.baseVisualizationId = 'viz-base';
+    mockFacetsStore.variables = ['1960', '2020'];
+    mockVisualizationStore.visualizations = [base, facet];
+    legendActions.syncWithVisualizations();
+    legendActions.updateLegendItem(`legend-viz-${facetId}--area`, {
+      title: 'Population rurale en 1960',
+      titleMode: 'custom'
+    });
+
+    mockVisualizationStore.visualizations = [base];
+    legendActions.syncWithVisualizations();
+    mockVisualizationStore.visualizations = [base, facet];
+    legendActions.syncWithVisualizations();
+
+    expect(
+      getLegendState().items.find((item) => item.variableId === facetId)
+    ).toMatchObject({
+      title: 'Population rurale en 1960',
+      titleMode: 'custom'
+    });
   });
 
   it('preserves custom legend text when linked visualizations change', () => {

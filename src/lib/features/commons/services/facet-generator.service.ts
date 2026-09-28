@@ -438,6 +438,16 @@ export async function buildFacetVisualizationUpdates({
   };
 }
 
+const FACET_ID_SEPARATOR = '--facet--';
+
+/** Stable across regenerations so legend text attached to a facet map survives a reload. */
+export function getFacetVisualizationId(
+  baseVisualizationId: string,
+  variable: string
+): string {
+  return `${baseVisualizationId}${FACET_ID_SEPARATOR}${encodeURIComponent(variable)}`;
+}
+
 export async function generateFacetVisualizations(
   baseViz: VisualizationConfig,
   variables: string[],
@@ -457,7 +467,7 @@ export async function generateFacetVisualizations(
   const facetConfigs: VisualizationConfig[] = [];
 
   for (const variable of variables) {
-    const facetId = crypto.randomUUID();
+    const facetId = getFacetVisualizationId(baseViz.id, variable);
 
     const cloned = deepClone(baseViz);
 

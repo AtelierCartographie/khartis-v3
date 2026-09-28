@@ -20,6 +20,7 @@ import {
   joinLegendSubtitleParts,
   type LegendSubtitlePrimitive
 } from '$lib/features/commons/utils/legend-subtitle.utils';
+import { getFacetVisualizationId } from '$lib/features/commons/services/facet-generator.service';
 import { facetsStore, SCALE_MODE } from '../facets';
 import { LEGEND_DEFAULTS, LEGEND_ID_PREFIXES } from './legend.constants';
 import type {
@@ -183,6 +184,21 @@ function resolveSubtitleMode(
     : 'custom';
 }
 
+function getPendingFacetVisualizationIds(
+  visualizations: VisualizationConfig[]
+): Set<string> {
+  const baseVisualizationId = facetsStore.baseVisualizationId;
+  if (!baseVisualizationId) {
+    return new Set();
+  }
+  const presentIds = new Set(visualizations.map((viz) => viz.id));
+  return new Set(
+    facetsStore.variables
+      .map((variable) => getFacetVisualizationId(baseVisualizationId, variable))
+      .filter((id) => !presentIds.has(id))
+  );
+}
+
 function syncLegendItemsWithVisualizations(
   currentItems: LegendItem[],
   visualizations: VisualizationConfig[]
@@ -237,11 +253,14 @@ function syncLegendItemsWithVisualizations(
     });
   });
 
-  const customItems = currentItems.filter(
-    (item) => !usedItemIds.has(item.id) && !item.variableId
+  const pendingFacetIds = getPendingFacetVisualizationIds(visualizations);
+  const keptItems = currentItems.filter(
+    (item) =>
+      !usedItemIds.has(item.id) &&
+      (!item.variableId || pendingFacetIds.has(item.variableId))
   );
 
-  return [...linkedItems, ...customItems];
+  return [...linkedItems, ...keptItems];
 }
 
 function areLegendItemsEqual(a: LegendItem[], b: LegendItem[]): boolean {
