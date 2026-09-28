@@ -504,9 +504,14 @@ describe('generateFacetVisualizations', () => {
     expect(update.text?.enabled).toBe(true);
     expect(update.text?.labelColumn).toBe('place_name');
     expect(update.text?.opacity).toBe(1);
-    // Bridage #177: the other primitives stay configured but the facet only
-    // renders the collection's primitive, so it must restrict primitiveFilters.
-    expect(update.primitiveFilters).toEqual([PrimitiveFilterType.POLYGON]);
+    expect(update.primitiveFilters).toEqual(
+      expect.arrayContaining([
+        PrimitiveFilterType.POLYGON,
+        PrimitiveFilterType.POINT,
+        PrimitiveFilterType.LINE,
+        PrimitiveFilterType.TEXT
+      ])
+    );
   });
 
   it('should fall back to base breaks when break calculation returns null in independent mode', async () => {

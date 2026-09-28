@@ -1,7 +1,6 @@
 import {
   visualizationStore,
   getEnabledPrimitiveFilters,
-  type PrimitiveFilter,
   type VisualizationConfig
 } from '$lib/features/commons/stores/visualization.store.svelte';
 import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
@@ -160,33 +159,10 @@ function arraysEqual<T>(left: T[], right: T[]): boolean {
   );
 }
 
-function getHiddenPrimitivesForSlot(
-  baseViz: VisualizationConfig,
-  primarySlotPath: FacetSlotPath
-): PrimitiveFilter[] {
-  const targetPrimitive = resolveFacetPrimitiveFilter(primarySlotPath);
-  return getEnabledPrimitiveFilters(baseViz).filter(
-    (primitive) => primitive !== targetPrimitive
-  );
-}
-
-function notifyCollectionConstraints(
-  replacedPreviousCollection: boolean,
-  hiddenPrimitives: PrimitiveFilter[]
-): void {
-  const hasHiddenPrimitives = hiddenPrimitives.length > 0;
-  if (!replacedPreviousCollection && !hasHiddenPrimitives) {
-    return;
+function notifyReplacedCollection(replacedPreviousCollection: boolean): void {
+  if (replacedPreviousCollection) {
+    showInfo(m.facets_notice_title(), m.facets_notice_replaced());
   }
-
-  const subtitle =
-    replacedPreviousCollection && hasHiddenPrimitives
-      ? m.facets_notice_replaced_and_hidden()
-      : replacedPreviousCollection
-        ? m.facets_notice_replaced()
-        : m.facets_notice_hidden();
-
-  showInfo(m.facets_notice_title(), subtitle);
 }
 
 function createFacetsStore() {
@@ -371,10 +347,6 @@ function createFacetsStore() {
       : SCALE_MODE.INDEPENDENT;
     const replacedPreviousCollection =
       state.enabled && state.generatedVisualizationIds.length > 0;
-    const hiddenPrimitives = getHiddenPrimitivesForSlot(
-      baseViz,
-      primarySlotPath
-    );
 
     try {
       const facetConfigs = await generateFacetVisualizations(
@@ -401,7 +373,7 @@ function createFacetsStore() {
       state.layout.columns = computeBestColumns(capped.length);
       notifyPersistence();
 
-      notifyCollectionConstraints(replacedPreviousCollection, hiddenPrimitives);
+      notifyReplacedCollection(replacedPreviousCollection);
     } catch (error) {
       logger.error('Failed to enable facets', LogCategory.STORE, error);
     }
@@ -500,7 +472,12 @@ function createFacetsStore() {
     const baseViz = visualizationStore.visualizations.find(
       (v) => v.id === state.baseVisualizationId
     );
-    if (!baseViz) {
+    if (
+      !baseViz ||
+      !getEnabledPrimitiveFilters(baseViz).includes(
+        resolveFacetPrimitiveFilter(primarySlotPath)
+      )
+    ) {
       disable();
       return;
     }

@@ -916,6 +916,9 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
               layer.parentId,
               layer.primitive
             );
+            void facetsStore.syncGeneratedVisualizationsFromBase(
+              layer.parentId
+            );
           }
         }
 

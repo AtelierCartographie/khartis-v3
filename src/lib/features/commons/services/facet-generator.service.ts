@@ -1,5 +1,6 @@
 import { m } from '$lib/paraglide/messages';
 import {
+  getEnabledPrimitiveFilters,
   PrimitiveFilterType,
   type PrimitiveConfigKind,
   type PrimitiveFilter,
@@ -430,7 +431,7 @@ export async function buildFacetVisualizationUpdates({
   return {
     ...slotUpdates,
     name: variable,
-    primitiveFilters: [resolveFacetPrimitiveFilter(primarySlotPath)],
+    primitiveFilters: getEnabledPrimitiveFilters(baseViz),
     facet: {
       baseVisualizationId: baseViz.id
     }
