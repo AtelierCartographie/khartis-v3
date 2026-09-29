@@ -1,10 +1,12 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { registerTableMutationCallback } from '../cache/cache-manager';
+import { waitForQueryIdle } from '../core/query-activity';
 
-// DuckDB WASM runs one query at a time: a single long statement would hold every
-// later query behind it, whereas batches let them run in between.
-const BATCH_ROW_COUNT = 2000;
+// DuckDB WASM runs one query at a time: a batch only starts once the connection
+// is idle, so a foreground query waits for one short batch at most.
+const BATCH_ROW_COUNT = 1000;
+const FOREGROUND_IDLE_MS = 30;
 
 interface DuckDBClientForBackgroundBuild {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
@@ -98,6 +100,7 @@ async function buildInBatches(
     WHERE rowid >= ${start} AND rowid < ${start + BATCH_ROW_COUNT}
   `;
 
+  await waitForQueryIdle(FOREGROUND_IDLE_MS);
   const rows = (await duck.query(
     `SELECT MAX(rowid) AS max_row_id FROM "${escapedSource}"`,
     { format: 'array' }
@@ -112,6 +115,7 @@ async function buildInBatches(
     start <= maxRowId;
     start += BATCH_ROW_COUNT
   ) {
+    await waitForQueryIdle(FOREGROUND_IDLE_MS);
     if (!isCurrent()) {
       await dropTable(duck, stagingTable);
       return false;

@@ -6,6 +6,10 @@ import {
   isTableBuildPending,
   waitForTableBuild
 } from '$lib/features/duckdb/operations/background-table-build';
+import {
+  trackQuery,
+  waitForQueryIdle
+} from '$lib/features/duckdb/core/query-activity';
 import type { DuckDBContext } from '$lib/features/duckdb/types';
 import {
   createTestInstance,
@@ -86,7 +90,7 @@ describe('buildTableInBackground', () => {
     expect(await tableNames()).toEqual(['target']);
     expect(
       statements.filter((sql) => sql.includes('INSERT INTO'))
-    ).toHaveLength(2);
+    ).toHaveLength(4);
     expect(
       statements.some((sql) => sql.includes('CREATE OR REPLACE TABLE "target"'))
     ).toBe(false);
@@ -124,5 +128,29 @@ describe('buildTableInBackground', () => {
     );
     expect(values.map((row) => Number(row.value))).toEqual([1]);
     expect(await tableNames()).toEqual(['target']);
+  });
+});
+
+describe('waitForQueryIdle', () => {
+  it('holds background work while a foreground query is running', async () => {
+    let finishForeground = () => {};
+    const foreground = trackQuery(
+      () =>
+        new Promise<void>((resolve) => {
+          finishForeground = resolve;
+        })
+    );
+    let idle = false;
+    const waiting = waitForQueryIdle(5).then(() => {
+      idle = true;
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(idle).toBe(false);
+
+    finishForeground();
+    await foreground;
+    await waiting;
+    expect(idle).toBe(true);
   });
 });
