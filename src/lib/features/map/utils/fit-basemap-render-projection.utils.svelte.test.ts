@@ -50,6 +50,28 @@ describe('fitBasemapRenderProjection', () => {
     );
   });
 
+  it('registers a structured-cloneable worker spec for a reactive fit bbox', async () => {
+    const { fitBasemapRenderProjection } =
+      await import('./fit-basemap-render-projection.utils');
+    const { getProjectionSpec } =
+      await import('./geoarrow-stream-bridge.utils');
+    const projection = geoEquirectangular();
+    const fitBbox = $state<[number, number, number, number]>([0, 0, 5, 1]);
+
+    fitBasemapRenderProjection({
+      projection,
+      metadata: {
+        proj_to: { type: 'simple', proj4: '+proj=natearth2' }
+      } as BasemapMetadata,
+      fitBbox,
+      width: 800,
+      height: 600,
+      padding: 40
+    });
+
+    expect(() => structuredClone(getProjectionSpec(projection))).not.toThrow();
+  });
+
   it('leaves composite projections unchanged', async () => {
     // Composite presets (e.g. FRANCE_DOM_TOM) expose no `fitExtent` — each
     // sub-projection is already fitted to its fixed layout cell — so they must
