@@ -1164,19 +1164,8 @@ describe('createPolygonLayers', () => {
     ).toEqual(['keep-projected', 'drop-projected']);
   });
 
-  it('uses the projected GeoJSON fallback for native polygons when a projection is active', () => {
-    const sourceGeoJson: FeatureCollection<Polygon> = {
-      type: 'FeatureCollection',
-      features: [createPolygonFeature('keep', 2024)]
-    };
-    const projectedGeoJson: FeatureCollection<Polygon> = {
-      type: 'FeatureCollection',
-      features: [createPolygonFeature('keep-projected', 2024)]
-    };
-
-    arrowTableToGeoJSONMock.mockReturnValue(sourceGeoJson);
-    projectGeoJSONMock.mockReturnValue(projectedGeoJson);
-
+  it('parses projected WKB polygons through the binary path', () => {
+    const context = createContext(createVisualization(FillMode.UNIQUE));
     const layers = createPolygonLayers(
       createTableWithFields([]),
       {
@@ -1186,15 +1175,16 @@ describe('createPolygonLayers', () => {
         isWkbEncoded: true,
         isGeoJsonEncoded: false
       },
-      createContext(createVisualization(FillMode.UNIQUE))
+      context
     );
 
-    expect(parseSolidPolygonsMock).not.toHaveBeenCalled();
-    expect(projectGeoJSONMock).toHaveBeenCalledWith(
-      sourceGeoJson,
-      expect.objectContaining({ stream: expect.any(Function) })
+    expect(parseSolidPolygonsWithProjectionMock).toHaveBeenCalledWith(
+      expect.anything(),
+      context.customProjection
     );
-    expect(layers[0]).toBeInstanceOf(GeoJsonLayer);
+    expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
+    expect(projectGeoJSONMock).not.toHaveBeenCalled();
+    expect(layers.some((layer) => layer instanceof GeoJsonLayer)).toBe(false);
   });
 
   it('reuses projected GeoJSON fallback data for repeated rebuilds with the same projection', () => {
@@ -1224,38 +1214,6 @@ describe('createPolygonLayers', () => {
     expect((secondLayers[0] as GeoJsonLayer | undefined)?.props.data).toBe(
       projectedGeoJson
     );
-  });
-
-  it('uses a distinct layer id for the projected GeoJSON fallback', () => {
-    arrowTableToGeoJSONMock.mockReturnValue({
-      type: 'FeatureCollection',
-      features: [createPolygonFeature('keep', 2024)]
-    } satisfies FeatureCollection<Polygon>);
-
-    const table = createTableWithFields([]);
-    const geometryInfo = {
-      ...createGeometryInfo(),
-      encoding: 'geoarrow.wkb',
-      isNativeGeoArrow: true,
-      isWkbEncoded: true,
-      isGeoJsonEncoded: false
-    };
-    const projectedLayers = createPolygonLayers(
-      table,
-      geometryInfo,
-      createContext(createVisualization(FillMode.UNIQUE))
-    );
-    const binaryLayers = createPolygonLayers(table, geometryInfo, {
-      ...createContext(createVisualization(FillMode.UNIQUE)),
-      customProjection: undefined
-    });
-
-    const projectedLayer = projectedLayers.find(
-      (layer) => layer instanceof GeoJsonLayer
-    );
-
-    expect(projectedLayer?.props.id).toMatch(/-projected-geojson$/);
-    expect(binaryLayers[0]?.props.id).not.toBe(projectedLayer?.props.id);
   });
 
   it('renders GeoJSON polygon fallbacks without a visualization context', () => {
