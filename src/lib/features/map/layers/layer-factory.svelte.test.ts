@@ -179,6 +179,7 @@ import {
   type TextLayerDatum
 } from './layer-factory';
 import { MultiShapeLayer } from './multi-shape-layer';
+import { createHighlightedFeatureOverlay } from './layer-selection-overlays';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { EXPLICIT_TEXT_CHARACTER_SET } from './text-character-set';
 
@@ -4041,5 +4042,80 @@ describe('createLineLayers', () => {
   it('does not route text contour through legacy background boxes', () => {
     expect(source).not.toContain('textBackgroundConfig');
     expect(source).toContain('outlineWidth: resolveTextOutlineWidth(');
+  });
+});
+
+describe('createHighlightedFeatureOverlay', () => {
+  const rows = [{ __id: 1 }, { __id: 2 }, { __id: 3 }];
+
+  it('outlines highlighted polygons from binary paths without GeoJSON', () => {
+    parsePathsWithProjectionMock.mockReturnValue({
+      length: 3,
+      featureIds: new Uint32Array([0, 1, 2]),
+      positions: new Float32Array(12),
+      startIndices: new Uint32Array([0, 2, 4, 6]),
+      size: 2
+    });
+    const context = createContext(createVisualization(FillMode.UNIQUE));
+
+    const overlay = createHighlightedFeatureOverlay(
+      'polygon-layer',
+      createTableWithRows(rows, ['__id']),
+      createGeometryInfo(),
+      new Set([2]),
+      0,
+      context
+    );
+
+    expect(overlay).toBeInstanceOf(PathLayer);
+    expect(parsePathsWithProjectionMock).toHaveBeenCalledWith(
+      expect.anything(),
+      context.customProjection
+    );
+    expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
+  });
+
+  it('rings only the highlighted points', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 3,
+      featureIds: new Uint32Array([0, 1, 2]),
+      positions: new Float32Array([10, 11, 20, 21, 30, 31]),
+      size: 2
+    });
+
+    const overlay = createHighlightedFeatureOverlay(
+      'point-layer',
+      createTableWithRows(rows, ['__id']),
+      createPointGeometryInfo(),
+      new Set([1, 3]),
+      0,
+      createContext(createVisualization(FillMode.UNIQUE))
+    ) as ScatterplotLayer | null;
+    const data = overlay?.props.data as unknown as {
+      length: number;
+      attributes: { getPosition: { value: Float64Array } };
+    };
+
+    expect(overlay).toBeInstanceOf(ScatterplotLayer);
+    expect(overlay?.props.filled).toBe(false);
+    expect(overlay?.props.stroked).toBe(true);
+    expect(data.length).toBe(2);
+    expect(Array.from(data.attributes.getPosition.value)).toEqual([
+      10, 11, 30, 31
+    ]);
+    expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
+  });
+
+  it('returns no overlay when nothing is highlighted', () => {
+    expect(
+      createHighlightedFeatureOverlay(
+        'polygon-layer',
+        createTableWithRows(rows, ['__id']),
+        createGeometryInfo(),
+        new Set(),
+        0,
+        createContext(createVisualization(FillMode.UNIQUE))
+      )
+    ).toBeNull();
   });
 });

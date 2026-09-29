@@ -1,24 +1,27 @@
 import type { Layer } from '@deck.gl/core';
-import { GeoJsonLayer, PathLayer } from '@deck.gl/layers';
+import { PathLayer, ScatterplotLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { FeatureCollection } from 'geojson';
 import { createPathLayerProps } from '@ateliercartographie/geoarrow-deck-stream';
-import type { BinaryPathData } from '@ateliercartographie/geoarrow-deck-stream';
+import type {
+  BinaryPathData,
+  BinaryPointData
+} from '@ateliercartographie/geoarrow-deck-stream';
 
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
+import { GeometryType } from '../constants';
 import {
   pathColorAttr,
   pathWidthAttr
 } from '../utils/geoarrow-stream-bridge.utils';
-import type { DeckDataRow, LayerContext } from '../types';
+import type { DeckDataRow, GeometryInfo, LayerContext } from '../types';
+import {
+  resolvePathParser,
+  resolvePointParser
+} from './layer-geometry-parsers';
 import { hasAnyHighlightedFeature } from './layer-highlight.utils';
 import { createSplitAwareRowAccessor } from './split-rendering-accessors';
-import {
-  getCachedGeoJSON,
-  getCachedProjectedGeoJSON
-} from './layer-geojson-cache';
 import { TRANSPARENT_POLYGON_PATTERN_FILL_COLOR } from './polygon-pattern-layer.utils';
 
 const SELECTED_POLYGON_STROKE_COLOR: [number, number, number, number] = [
@@ -26,79 +29,117 @@ const SELECTED_POLYGON_STROKE_COLOR: [number, number, number, number] = [
 ];
 const SELECTED_POLYGON_STROKE_WIDTH = 3;
 const SELECTED_POINT_RING_RADIUS = 8;
+const POINT_GEOMETRY_TYPES = new Set<string>([
+  GeometryType.POINT,
+  GeometryType.MULTIPOINT
+]);
+
+// Binary featureIds index the geometry table; highlights carry dataset row ids.
+function createRowIdResolver(
+  jsTable: ArrowTable,
+  ctx: LayerContext
+): (featureId: number) => number {
+  return createSplitAwareRowAccessor(
+    ctx,
+    jsTable,
+    (row) => Number(row[INTERNAL_COLUMN.ID]),
+    Number.NaN
+  );
+}
 
 export function createHighlightedFeatureOverlay(
   layerId: string,
   jsTable: ArrowTable,
-  geoColumn: string,
+  geometryInfo: GeometryInfo,
   highlightedRowIds: Set<number> | undefined,
   highlightVersion: number,
-  ctx: Pick<LayerContext, 'customProjection' | 'modelMatrix' | 'beforeId'>
+  ctx: LayerContext
 ): Layer<DeckDataRow> | null {
   if (!highlightedRowIds || highlightedRowIds.size === 0) {
     return null;
   }
 
   try {
-    const rawGeoJson = getCachedGeoJSON(jsTable, geoColumn);
-    if (!rawGeoJson) {
-      return null;
+    if (POINT_GEOMETRY_TYPES.has(geometryInfo.type.toUpperCase())) {
+      return createHighlightedPointRingOverlay(
+        layerId,
+        jsTable,
+        resolvePointParser(ctx.customProjection)(jsTable),
+        highlightedRowIds,
+        highlightVersion,
+        ctx
+      );
     }
 
-    const highlightedGeoJson: FeatureCollection = {
-      ...rawGeoJson,
-      features: rawGeoJson.features.filter((feature) => {
-        const rowId = feature.properties?.[INTERNAL_COLUMN.ID];
-        return typeof rowId === 'number' && highlightedRowIds.has(rowId);
-      })
-    };
-
-    if (highlightedGeoJson.features.length === 0) {
-      return null;
-    }
-
-    const projectedGeoJson = getCachedProjectedGeoJSON(
-      highlightedGeoJson,
-      ctx.customProjection
+    return createHighlightedBinaryPolygonOverlay(
+      layerId,
+      jsTable,
+      resolvePathParser(ctx.customProjection)(jsTable),
+      highlightedRowIds,
+      highlightVersion,
+      ctx
     );
-
-    if (projectedGeoJson.features.length === 0) {
-      return null;
-    }
-
-    return new GeoJsonLayer({
-      id: `${layerId}-selection-overlay`,
-      data: projectedGeoJson,
-      filled: false,
-      stroked: true,
-      lineWidthUnits: 'pixels',
-      getLineColor: SELECTED_POLYGON_STROKE_COLOR,
-      getLineWidth: SELECTED_POLYGON_STROKE_WIDTH,
-      lineWidthMinPixels: SELECTED_POLYGON_STROKE_WIDTH,
-      pointType: 'circle',
-      pointRadiusUnits: 'pixels',
-      getPointRadius: SELECTED_POINT_RING_RADIUS,
-      pickable: false,
-      parameters: {
-        depthCompare: 'always' as const,
-        stencilCompare: 'always' as const
-      },
-      ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
-      ...(ctx.beforeId && { beforeId: ctx.beforeId }),
-      updateTriggers: {
-        getLineColor: [highlightVersion],
-        getLineWidth: [highlightVersion]
-      },
-      dataComparator: (newData, oldData) => newData === oldData
-    });
   } catch (error) {
     logger.error(
-      'Failed to create highlighted Arrow path overlay',
+      'Failed to create highlighted Arrow selection overlay',
       LogCategory.MAP,
       error
     );
     return null;
   }
+}
+
+function createHighlightedPointRingOverlay(
+  layerId: string,
+  jsTable: ArrowTable,
+  pointData: BinaryPointData,
+  highlightedRowIds: Set<number>,
+  highlightVersion: number,
+  ctx: LayerContext
+): Layer<DeckDataRow> | null {
+  const resolveRowId = createRowIdResolver(jsTable, ctx);
+  const size = pointData.size ?? 2;
+  const selected: number[] = [];
+  for (let index = 0; index < pointData.length; index++) {
+    if (highlightedRowIds.has(resolveRowId(pointData.featureIds[index]))) {
+      selected.push(
+        pointData.positions[index * size],
+        pointData.positions[index * size + 1]
+      );
+    }
+  }
+
+  if (selected.length === 0) {
+    return null;
+  }
+
+  return new ScatterplotLayer({
+    id: `${layerId}-selection-overlay-points`,
+    data: {
+      length: selected.length / 2,
+      attributes: {
+        getPosition: { value: new Float64Array(selected), size: 2 }
+      }
+    },
+    filled: false,
+    stroked: true,
+    radiusUnits: 'pixels',
+    getRadius: SELECTED_POINT_RING_RADIUS,
+    lineWidthUnits: 'pixels',
+    getLineWidth: SELECTED_POLYGON_STROKE_WIDTH,
+    lineWidthMinPixels: SELECTED_POLYGON_STROKE_WIDTH,
+    getLineColor: SELECTED_POLYGON_STROKE_COLOR,
+    pickable: false,
+    parameters: {
+      depthCompare: 'always' as const,
+      stencilCompare: 'always' as const
+    },
+    ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
+    ...(ctx.beforeId && { beforeId: ctx.beforeId }),
+    updateTriggers: {
+      getLineColor: [highlightVersion]
+    }
+  }) as unknown as Layer<DeckDataRow>;
 }
 
 export function createHighlightedBinaryPolygonOverlay(
@@ -117,13 +158,7 @@ export function createHighlightedBinaryPolygonOverlay(
     return null;
   }
 
-  // Binary featureIds index the geometry table; highlights carry dataset row ids.
-  const resolveRowId = createSplitAwareRowAccessor(
-    ctx,
-    jsTable,
-    (row) => Number(row[INTERNAL_COLUMN.ID]),
-    Number.NaN
-  );
+  const resolveRowId = createRowIdResolver(jsTable, ctx);
 
   if (
     !hasAnyHighlightedFeature(
