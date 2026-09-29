@@ -29,8 +29,9 @@ const SELECTED_POLYGON_STROKE_COLOR: [number, number, number, number] = [
   15, 98, 254, 255
 ];
 const SELECTED_POLYGON_STROKE_WIDTH = 3;
+const SELECTED_POINT_RING_RADIUS = 8;
 
-export function createHighlightedPolygonOverlay(
+export function createHighlightedFeatureOverlay(
   layerId: string,
   jsTable: ArrowTable,
   geoColumn: string,
@@ -78,6 +79,9 @@ export function createHighlightedPolygonOverlay(
       getLineColor: SELECTED_POLYGON_STROKE_COLOR,
       getLineWidth: SELECTED_POLYGON_STROKE_WIDTH,
       lineWidthMinPixels: SELECTED_POLYGON_STROKE_WIDTH,
+      pointType: 'circle',
+      pointRadiusUnits: 'pixels',
+      getPointRadius: SELECTED_POINT_RING_RADIUS,
       pickable: false,
       parameters: {
         depthCompare: 'always' as const,
