@@ -729,7 +729,7 @@ describe('legend overlay visibility', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('keeps polygon-only legend subtitles focused on active polygon columns', () => {
+  it('keeps polygon-only legend titles focused on active polygon columns', () => {
     const viz = buildProportionalPolygonClassesOnlyViz();
     viz.mapping = {
       ...viz.mapping,
@@ -747,12 +747,12 @@ describe('legend overlay visibility', () => {
     legendActions.setVisibility(true);
 
     const { container } = render(LegendOverlay);
-    const subtitle = container.querySelector(
-      '.quantitative_legend .subtitle'
+    const title = container.querySelector(
+      '.quantitative_legend .title'
     )?.textContent;
 
-    expect(subtitle).toContain('population');
-    expect(subtitle).not.toContain('area');
+    expect(title).toContain('population');
+    expect(title).not.toContain('area');
   });
 
   it('renders density legends through the common SVG component', () => {
