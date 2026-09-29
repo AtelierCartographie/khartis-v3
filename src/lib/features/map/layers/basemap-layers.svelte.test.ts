@@ -3,7 +3,13 @@ import { GeoJsonLayer, PathLayer, SolidPolygonLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import { geoEquirectangular } from 'd3-geo';
 import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
-import type { FeatureCollection, LineString, Point, Polygon } from 'geojson';
+import type {
+  FeatureCollection,
+  LineString,
+  MultiLineString,
+  Point,
+  Polygon
+} from 'geojson';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { NEUTRAL_CARTOGRAPHY_COLORS } from '$lib/features/commons/constants/colors.constants';
@@ -22,6 +28,8 @@ import {
   basemapLayersStore
 } from '../stores/basemap-layers.store.svelte';
 import type { BBox, GeometryInfo } from '../types';
+import { buildKhartisCompositeProjection } from '../utils/khartis-projection-factories.utils';
+import projectionPresets from '../../../../../static/basemaps/projection-presets.json';
 
 const {
   arrowTableToGeoJSONMock,
@@ -1077,7 +1085,7 @@ describe('basemap projection fallbacks', () => {
     expect(last[1]).toBeCloseTo(50, 6);
   });
 
-  it('expands composite graticule clipping to the visible canvas extent', () => {
+  it('keeps composite graticules inside the sub-projection frame within the visible canvas', () => {
     const subFrameExtent: [[number, number], [number, number]] = [
       [25, 25],
       [75, 75]
@@ -1129,11 +1137,70 @@ describe('basemap projection fallbacks', () => {
     const first = coordinates[0];
     const last = coordinates[coordinates.length - 1];
 
-    expect(first[0]).toBeCloseTo(0, 6);
+    expect(first[0]).toBeCloseTo(25, 6);
     expect(first[1]).toBeCloseTo(50, 6);
-    expect(last[0]).toBeCloseTo(100, 6);
+    expect(last[0]).toBeCloseTo(75, 6);
     expect(last[1]).toBeCloseTo(50, 6);
     expect(projection.clipExtent()).toEqual(subFrameExtent);
+  });
+
+  it('does not draw a chord across the frame where a conic sub-projection is cut', () => {
+    const width = 1200;
+    const height = 800;
+    const preset = projectionPresets.BRESIL_ALBERS;
+    const projection = buildKhartisCompositeProjection({
+      width,
+      height,
+      entries: preset.entries.map((entry) => ({
+        id: entry.id,
+        proj4: entry.proj4,
+        bounds: [...entry.bounds[0], ...entry.bounds[1]] as BBox,
+        layout: entry.layout
+      }))
+    });
+
+    const layer = createMeridiensLayer(
+      {
+        id: 'meridiens',
+        visible: true,
+        mode: BasemapGraticuleMode.REGULAR,
+        spacingDegrees: 5,
+        color: '#666666',
+        dotted: false,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 1,
+        opacity: 100
+      },
+      {
+        bbox: [-76, -37, -29, 10],
+        graticuleClipExtent: [
+          [0, 0],
+          [width, height]
+        ],
+        projection
+      }
+    ) as GeoJsonLayer | null;
+
+    const data = layer?.props.data as FeatureCollection<
+      LineString | MultiLineString
+    >;
+    const lines = data.features.flatMap((feature) =>
+      feature.geometry.type === 'LineString'
+        ? [feature.geometry.coordinates]
+        : feature.geometry.coordinates
+    );
+    const longestStep = Math.max(
+      ...lines.flatMap((line) =>
+        line
+          .slice(1)
+          .map((point, index) =>
+            Math.hypot(point[0] - line[index][0], point[1] - line[index][1])
+          )
+      )
+    );
+
+    expect(lines.length).toBeGreaterThan(0);
+    expect(longestStep).toBeLessThan(width / 4);
   });
 
   it('keeps generated meridians and parallels visible when dotted styling is disabled', () => {
