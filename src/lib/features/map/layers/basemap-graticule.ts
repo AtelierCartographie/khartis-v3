@@ -8,6 +8,7 @@ import type {
   Polygon,
   Position
 } from 'geojson';
+import { geoIdentity, type GeoIdentityTransform } from 'd3-geo';
 import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 import {
@@ -15,6 +16,7 @@ import {
   BasemapGraticuleMode
 } from '$lib/features/commons/constants/visualization.constants';
 import { projectGeoJSON } from '../utils/geoarrow-stream-bridge.utils';
+import { splitLineToRoutingBounds } from '../utils/composite-routing.utils';
 import type { BBox } from '../types';
 
 type GraticuleAxis = 'meridian' | 'parallel';
@@ -101,7 +103,22 @@ function projectFeatureCollectionIfNeeded<
   return result;
 }
 
-function createScreenExtentPolygon(
+let cachedFrameClip: {
+  key: string;
+  projection: GeoIdentityTransform;
+} | null = null;
+
+function getFrameClipProjection(
+  frame: GraticuleClipExtent
+): GeoIdentityTransform {
+  const key = frame.flat().join(',');
+  if (cachedFrameClip?.key !== key) {
+    cachedFrameClip = { key, projection: geoIdentity().clipExtent(frame) };
+  }
+  return cachedFrameClip.projection;
+}
+
+export function createScreenExtentPolygon(
   screenExtent: [[number, number], [number, number]]
 ): Feature<Polygon> | null {
   const [[x0, y0], [x1, y1]] = screenExtent;
@@ -280,16 +297,25 @@ function projectGraticuleWithSubProjections(
     GraticuleLineProperties
   >[] = [];
 
-  for (const feature of geojson.features) {
-    for (const entry of entries) {
-      if (!bboxIntersects(entry.bounds, routingBbox)) {
-        continue;
-      }
+  const routedEntries = entries.flatMap((entry) => {
+    if (!bboxIntersects(entry.bounds, routingBbox)) {
+      return [];
+    }
+    if (!entry.screenExtent || !clipExtent) {
+      return [{ entry, cellExtent: entry.screenExtent ?? clipExtent ?? null }];
+    }
+    const cellExtent = intersectScreenExtents(entry.screenExtent, clipExtent);
+    return cellExtent ? [{ entry, cellExtent }] : [];
+  });
 
-      const segments = projectGraticuleLineToSegments(
-        feature.geometry.coordinates,
-        entry.projection,
-        clipExtent
+  for (const feature of geojson.features) {
+    const line = feature.geometry.coordinates.map(
+      ([longitude, latitude]) => [longitude, latitude] as [number, number]
+    );
+    for (const { entry, cellExtent } of routedEntries) {
+      const segments = splitLineToRoutingBounds(line, entry.bounds).flatMap(
+        (run) =>
+          projectGraticuleLineToSegments(run, entry.projection, cellExtent)
       );
       if (segments.length === 0) {
         continue;
@@ -326,11 +352,17 @@ export function projectGraticuleFeatureCollectionIfNeeded(
   ctx: {
     projection?: ProjectionLike;
     graticuleClipExtent?: GraticuleClipExtent | null;
+    unprojectedFrame?: GraticuleClipExtent | null;
   },
   routingBbox: BBox
 ): FeatureCollection<LineString | MultiLineString, GraticuleLineProperties> {
   if (!ctx.projection) {
-    return geojson;
+    return ctx.unprojectedFrame
+      ? projectFeatureCollectionIfNeeded(
+          geojson,
+          getFrameClipProjection(ctx.unprojectedFrame)
+        )
+      : geojson;
   }
 
   if (hasCompositeGraticuleSubProjections(ctx.projection)) {

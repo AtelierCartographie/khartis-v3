@@ -69,6 +69,13 @@ function splitLineToBounds(
   return runs;
 }
 
+export function splitLineToRoutingBounds(
+  line: readonly [number, number][],
+  bounds: GeoBounds
+): [number, number][][] {
+  return splitLineToBounds(line, expandBoundsForRouting(bounds));
+}
+
 // Sutherland-Hodgman clip of a polygon ring against an axis-aligned lon/lat
 // rectangle (bounds = [west, south, east, north]). Routing a composite ring to
 // a sub-projection by merely *dropping* out-of-bounds points reconnects the

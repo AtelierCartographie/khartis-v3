@@ -64,6 +64,18 @@ export function getCompositeProjectionName(
   return COMPOSITE_PROJECTION_NAMES[presetId]?.();
 }
 
+// Official name a preset gives its projection (name_fr / name_en, written by
+// khartis-basemaps), in the current locale.
+export function getPresetOfficialProjectionName(
+  presetId: string,
+  projectionPresets?: ProjectionPresets | null
+): string | undefined {
+  const preset = projectionPresets?.[presetId];
+  return getLocale() === 'en'
+    ? (preset?.name_en ?? preset?.name_fr)
+    : (preset?.name_fr ?? preset?.name_en);
+}
+
 // A preset names its projection itself (name_fr/name_en + epsg, written by
 // khartis-basemaps); the hard-coded names cover the older presets, and the raw
 // id stays the last resort.
@@ -72,10 +84,10 @@ function resolvePresetProjectionDisplay(
   projectionPresets?: ProjectionPresets | null
 ): CurrentProjectionDisplay {
   const preset = projectionPresets?.[presetId];
-  const officialName =
-    getLocale() === 'en'
-      ? (preset?.name_en ?? preset?.name_fr)
-      : (preset?.name_fr ?? preset?.name_en);
+  const officialName = getPresetOfficialProjectionName(
+    presetId,
+    projectionPresets
+  );
   const name = officialName ?? getCompositeProjectionName(presetId) ?? presetId;
   return preset?.epsg
     ? {

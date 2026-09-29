@@ -233,5 +233,90 @@
         "layout": { "x": 0.934, "y": 0.9662, "width": 0.0514, "height": 0.0278 }
       }
     ]
+  },
+  "BRESIL_ALBERS": {
+    "description_fr": "Brésil en Albers equal-area (SIRGAS 2000 / Brazil Albers, EPSG:10857), cadre CARRÉ qui sert de masque, centré sur le territoire dans la bbox du fond (sans Trindade ni Martim Vaz), marge de 10 %",
+    "description_en": "Brazil in Albers equal-area (SIRGAS 2000 / Brazil Albers, EPSG:10857), SQUARE frame used as a mask, centred on the territory within the basemap bbox (without Trindade and Martim Vaz), 10% margin",
+    "name_fr": "SIRGAS 2000 / Brazil Albers",
+    "name_en": "SIRGAS 2000 / Brazil Albers",
+    "epsg": "10857",
+    "layoutAspect": 1,
+    "entries": [
+      {
+        "id": "mainland",
+        "proj4": "+proj=aea +lat_0=-12 +lon_0=-54 +lat_1=-2 +lat_2=-22 +x_0=5000000 +y_0=10000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs",
+        "bounds": [
+          [-76.7611, -37.1584],
+          [-29.4232, 9.9234]
+        ],
+        "layout": { "x": 0, "y": 0, "width": 1, "height": 1 }
+      },
+      {
+        "id": "cadre",
+        "proj4": "+proj=aea +lat_0=-12 +lon_0=-54 +lat_1=-2 +lat_2=-22 +x_0=5000000 +y_0=10000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs",
+        "bounds": [
+          [-33.2821, -28.28],
+          [-33.2179, -28.22]
+        ],
+        "layout": { "x": 0, "y": 0, "width": 1, "height": 1 }
+      }
+    ]
+  },
+  "ALLEMAGNE_UTM32": {
+    "description_fr": "Allemagne en UTM zone 32N (ETRS89, EPSG:25832), cadre CARRÉ qui sert de masque, centré sur le territoire, marge de 10 %",
+    "description_en": "Germany in UTM zone 32N (ETRS89, EPSG:25832), SQUARE frame used as a mask, centred on the territory, 10% margin",
+    "name_fr": "ETRS89 / UTM zone 32N",
+    "name_en": "ETRS89 / UTM zone 32N",
+    "epsg": "25832",
+    "layoutAspect": 1,
+    "entries": [
+      {
+        "id": "mainland",
+        "proj4": "+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs",
+        "bounds": [
+          [3.5582, 46.3676],
+          [17.0645, 55.5723]
+        ],
+        "layout": { "x": 0, "y": 0, "width": 1, "height": 1 }
+      },
+      {
+        "id": "cadre",
+        "proj4": "+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs",
+        "bounds": [
+          [4.1975, 55.22],
+          [4.3025, 55.28]
+        ],
+        "layout": { "x": 0, "y": 0, "width": 1, "height": 1 }
+      }
+    ]
+  },
+  "CANADA_LAMBERT": {
+    "description_fr": "Canada en Lambert conique conforme de Statistique Canada (NAD83, EPSG:3347), cadre RECTANGULAIRE qui sert de masque, centré sur le territoire, marge de 10 % ; bounds élargis en longitude et scaleMultiplier pour que le routage couvre l'Alaska, la Tchoukotka et le Groenland",
+    "description_en": "Canada in Statistics Canada Lambert conformal conic (NAD83, EPSG:3347), RECTANGULAR frame used as a mask, centred on the territory, 10% margin; bounds widened in longitude with a scaleMultiplier so that routing covers Alaska, Chukotka and Greenland",
+    "name_fr": "Statistique Canada Lambert",
+    "name_en": "Statistics Canada Lambert",
+    "epsg": "3347",
+    "layoutAspect": 1.1328,
+    "entries": [
+      {
+        "id": "mainland",
+        "proj4": "+proj=lcc +lat_0=63.390675 +lon_0=-91.8666666666667 +lat_1=49 +lat_2=77 +x_0=6200000 +y_0=3000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs",
+        "bounds": [
+          [-135.0022, 30.2244],
+          [-45.0022, 84.6926]
+        ],
+        "layout": { "x": 0, "y": 0, "width": 1, "height": 1 },
+        "scaleMultiplier": 1.3916
+      },
+      {
+        "id": "cadre",
+        "proj4": "+proj=lcc +lat_0=63.390675 +lon_0=-91.8666666666667 +lat_1=49 +lat_2=77 +x_0=6200000 +y_0=3000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs",
+        "bounds": [
+          [-86.316, 58.22],
+          [-86.184, 58.28]
+        ],
+        "layout": { "x": 0, "y": 0, "width": 1, "height": 1 }
+      }
+    ]
   }
 }

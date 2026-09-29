@@ -1,3 +1,4 @@
+import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 import type { BBox } from '../types';
 import type {
   BasemapMetadata,
@@ -7,6 +8,7 @@ import {
   computeProjectedBboxForBasemap,
   getMainlandBboxForBasemap
 } from './geoarrow-stream-bridge.utils';
+import { getBasemapFrameBbox } from './basemap-frame.utils';
 
 interface ViewportSize {
   width: number;
@@ -17,6 +19,7 @@ interface ResolveOrthographicBasemapReferenceBboxesOptions {
   basemapMeta: BasemapMetadata | null;
   projectionPresets: ProjectionPresets | null;
   viewportSize: ViewportSize;
+  renderProjection: ProjectionLike | null;
   projectBbox: (bbox: BBox | null) => BBox | null;
 }
 
@@ -29,6 +32,7 @@ export function resolveOrthographicBasemapReferenceBboxes({
   basemapMeta,
   projectionPresets,
   viewportSize,
+  renderProjection,
   projectBbox
 }: ResolveOrthographicBasemapReferenceBboxesOptions): OrthographicBasemapReferenceBboxes {
   if (!basemapMeta) {
@@ -48,7 +52,7 @@ export function resolveOrthographicBasemapReferenceBboxes({
           viewportSize.width,
           viewportSize.height
         ) ?? projectBbox(fallbackBbox))
-      : projectBbox(fallbackBbox);
+      : (getBasemapFrameBbox(renderProjection) ?? projectBbox(fallbackBbox));
 
   return { projectedBbox, fallbackBbox };
 }
