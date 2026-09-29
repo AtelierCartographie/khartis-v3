@@ -3,7 +3,10 @@ import { rebuildDerivedGeometryTables } from '$lib/features/duckdb/operations/de
 
 type DuckMock = Parameters<typeof rebuildDerivedGeometryTables>[0];
 
-function createDuck(shouldFail: (sql: string) => boolean = () => false): {
+function createDuck(
+  shouldFail: (sql: string) => boolean = () => false,
+  { validCoverage = false }: { validCoverage?: boolean } = {}
+): {
   duck: DuckMock;
   queries: string[];
 } {
@@ -13,6 +16,9 @@ function createDuck(shouldFail: (sql: string) => boolean = () => false): {
       queries.push(sql);
       if (shouldFail(sql)) {
         throw new Error('TopologyException: found non-noded intersection');
+      }
+      if (sql.includes('is_valid_polygon_coverage(')) {
+        return [{ is_valid: validCoverage }];
       }
       return [];
     }),
@@ -34,9 +40,40 @@ describe('rebuildDerivedGeometryTables', () => {
     expect(findQueries(queries, 'extract_land(')).toHaveLength(1);
     expect(findQueries(queries, 'extract_outerlines(')).toHaveLength(1);
     expect(findQueries(queries, 'extract_innerlines(')).toHaveLength(1);
-    for (const sql of queries) {
+    for (const sql of findQueries(queries, 'CREATE OR REPLACE TABLE')) {
       expect(sql).toContain('noding_factor := 0');
     }
+  });
+
+  it('derives a valid coverage from its shared vertices, without any dissolve', async () => {
+    const { duck, queries } = createDuck(() => false, { validCoverage: true });
+
+    await rebuildDerivedGeometryTables(duck, 'regions');
+
+    expect(findQueries(queries, 'extract_coverage_land(')).toHaveLength(1);
+    expect(findQueries(queries, 'extract_coverage_innerlines(')).toHaveLength(
+      1
+    );
+    expect(findQueries(queries, 'extract_land(')).toHaveLength(0);
+    expect(findQueries(queries, 'extract_innerlines(')).toHaveLength(0);
+    expect(findQueries(queries, 'extract_outerlines(')).toHaveLength(1);
+  });
+
+  it('falls back to the dissolve when the coverage path fails', async () => {
+    const { duck, queries } = createDuck(
+      (sql) => sql.includes('extract_coverage_innerlines('),
+      { validCoverage: true }
+    );
+
+    await rebuildDerivedGeometryTables(duck, 'regions');
+
+    const innerlinesQueries = findQueries(
+      queries,
+      'CREATE OR REPLACE TABLE "regions__innerlines"'
+    );
+    expect(innerlinesQueries).toHaveLength(2);
+    expect(innerlinesQueries[1]).toContain('extract_innerlines(');
+    expect(queries.some((sql) => sql.includes('WHERE FALSE'))).toBe(false);
   });
 
   it('re-nodes the coverage when GEOS refuses to union it as is', async () => {
