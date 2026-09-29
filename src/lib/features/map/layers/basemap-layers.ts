@@ -20,19 +20,10 @@ import {
   parsePathsWithProjection,
   parseSolidPolygonsWithProjection,
   pathColorAttr,
-  pathWidthAttr,
-  projectGeoJSON as _projectGeoJSON
+  pathWidthAttr
 } from '../utils/geoarrow-stream-bridge.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import type {
-  FeatureCollection,
-  Feature,
-  LineString,
-  MultiLineString,
-  Point,
-  Polygon,
-  MultiPolygon
-} from 'geojson';
+import type { FeatureCollection } from 'geojson';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import {
   ArrowExtension,
@@ -43,7 +34,7 @@ import {
 } from '../constants';
 import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 import { resolveBasemapConfigRowId } from '$lib/features/map/utils/layer-panel-row.utils';
-import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
+import { extractGeometryInfo } from '../io';
 import {
   basemapLayersStore,
   BASEMAP_LAYER_ID,
@@ -137,80 +128,6 @@ const BASEMAP_CITY_STROKE_COLOR: RGBColor = [
   ...NEUTRAL_CARTOGRAPHY_RGB_COLORS.cityStroke
 ];
 const BASEMAP_CITY_STROKE_OPACITY_RATIO = 0.5;
-const basemapGeoJsonCache = new WeakMap<
-  ArrowTable,
-  Map<string, FeatureCollection | null>
->();
-const projectedBasemapGeoJsonCache = new WeakMap<
-  FeatureCollection,
-  WeakMap<object, FeatureCollection>
->();
-
-function getCachedBasemapGeoJSON(
-  table: ArrowTable,
-  geoColumn: string
-): FeatureCollection | null {
-  let columnMap = basemapGeoJsonCache.get(table);
-  if (columnMap) {
-    const cached = columnMap.get(geoColumn);
-    if (cached !== undefined) return cached;
-  } else {
-    columnMap = new Map();
-    basemapGeoJsonCache.set(table, columnMap);
-  }
-  const result = arrowTableToGeoJSON(table, geoColumn);
-  columnMap.set(geoColumn, result);
-  return result;
-}
-
-function projectFeatureCollectionIfNeeded<
-  T extends GeoJSON.Geometry,
-  P extends GeoJSON.GeoJsonProperties = GeoJSON.GeoJsonProperties
->(
-  geojson: FeatureCollection<T, P>,
-  ctx: Pick<BasemapLayerContext, 'projection'>
-): FeatureCollection<T, P> {
-  if (!ctx.projection) {
-    return geojson;
-  }
-
-  const projectionKey = ctx.projection as ProjectionLike & object;
-  let projectionCache = projectedBasemapGeoJsonCache.get(geojson);
-  const cached = projectionCache?.get(projectionKey) as
-    FeatureCollection<T, P> | undefined;
-  if (cached) {
-    return cached;
-  }
-
-  const projected = _projectGeoJSON(
-    geojson,
-    ctx.projection
-  ) as FeatureCollection<T, P> | null;
-  const result = projected ?? {
-    ...geojson,
-    features: []
-  };
-
-  if (!projectionCache) {
-    projectionCache = new WeakMap<object, FeatureCollection>();
-    projectedBasemapGeoJsonCache.set(geojson, projectionCache);
-  }
-  projectionCache.set(projectionKey, result);
-
-  return result;
-}
-
-function getPreparedBasemapGeoJSON<T extends GeoJSON.Geometry>(
-  table: ArrowTable,
-  geoColumn: string,
-  ctx: Pick<BasemapLayerContext, 'projection'>
-): FeatureCollection<T> | null {
-  const geojson = getCachedBasemapGeoJSON(
-    table,
-    geoColumn
-  ) as FeatureCollection<T> | null;
-  return geojson ? projectFeatureCollectionIfNeeded(geojson, ctx) : null;
-}
 
 let cachedMetadataCitySources: object[] | null = null;
 let cachedMetadataCities: BasemapCity[] | null = null;
@@ -274,14 +191,6 @@ function isPolygonGeometry(geometryInfo: GeometryInfo): boolean {
   return geometryInfo.type.toUpperCase().includes('POLYGON');
 }
 
-function canRenderViaGeoJsonFallback(geometryInfo: GeometryInfo): boolean {
-  return (
-    geometryInfo.isNativeGeoArrow ||
-    geometryInfo.isWkbEncoded ||
-    geometryInfo.isGeoJsonEncoded
-  );
-}
-
 function toRgbColor(hex: string): RGBColor {
   const [r, g, b] = hexToRgb(hex);
   return [r, g, b];
@@ -322,22 +231,6 @@ function createStyledBasemapPathLayerProps(
   };
 }
 
-function createDashedGeoJsonLineSubLayerProps(
-  dotted: boolean,
-  dashArray: [number, number]
-) {
-  const dashProps = {
-    extensions: dotted ? [DASH_EXTENSION] : [],
-    getDashArray: dashArray,
-    dashJustified: true
-  };
-
-  return {
-    'polygons-stroke': dashProps,
-    linestrings: dashProps
-  };
-}
-
 export function createTerreLayers(
   worldBaseTable: ArrowTable,
   config: TerreLayerConfig,
@@ -366,12 +259,6 @@ export function createTerreLayers(
   const dashArray = config.strokeDotted
     ? dottedPatternToDashArray(config.strokeDottedPattern)
     : [0, 0];
-
-  const updateTriggers = {
-    getFillColor: [config.fillColor, config.fillOpacity],
-    getLineColor: [config.strokeColor, effectiveStrokeOpacity],
-    getDashArray: [config.strokeDotted, config.strokeDottedPattern]
-  };
 
   const layers: Layer<DeckDataRow>[] = [];
   if (
@@ -444,65 +331,6 @@ export function createTerreLayers(
     }
 
     return layers;
-  }
-
-  if (canRenderViaGeoJsonFallback(geometryInfo)) {
-    const geojson = getPreparedBasemapGeoJSON(
-      worldBaseTable,
-      geometryInfo.geoColumn,
-      ctx
-    );
-    if (geojson) {
-      if (config.fillShadow) {
-        layers.push(
-          new GeoJsonLayer({
-            id: `${layerId}-shadow`,
-            data: geojson,
-            filled: false,
-            stroked: true,
-            getLineColor: withOpacity(
-              BASEMAP_TERRE_SHADOW_COLOR,
-              BASEMAP_TERRE_SHADOW_OPACITY
-            ),
-            lineWidthUnits: 'pixels',
-            getLineWidth: BASEMAP_TERRE_SHADOW_WIDTH_PX,
-            lineWidthMinPixels: BASEMAP_TERRE_SHADOW_MIN_WIDTH_PX,
-            lineWidthMaxPixels: BASEMAP_TERRE_SHADOW_MAX_WIDTH_PX,
-            ...baseProps,
-            updateTriggers: {
-              getLineWidth: [config.strokeThickness]
-            }
-          })
-        );
-      }
-
-      layers.push(
-        new GeoJsonLayer({
-          id: layerId,
-          data: geojson,
-          filled: true,
-          stroked: shouldRenderStroke,
-          getFillColor: withOpacity(fillColor, fillOpacity),
-          getLineColor: shouldRenderStroke
-            ? withOpacity(strokeColor, effectiveStrokeOpacity)
-            : [0, 0, 0, 0],
-          lineWidthUnits: 'pixels',
-          getLineWidth: shouldRenderStroke ? effectiveStrokeThickness : 0,
-          lineWidthMinPixels: 0,
-          lineWidthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
-          extensions:
-            shouldRenderStroke && config.strokeDotted ? [DASH_EXTENSION] : [],
-          getDashArray: shouldRenderStroke ? dashArray : [0, 0],
-          ...baseProps,
-          updateTriggers: {
-            ...updateTriggers,
-            getLineWidth: [effectiveStrokeThickness]
-          }
-        })
-      );
-
-      return layers;
-    }
   }
 
   return [];
@@ -681,41 +509,6 @@ export function createFrontieresLayer(
   }
 
   if (
-    isLineGeometry(geometryInfo) &&
-    canRenderViaGeoJsonFallback(geometryInfo)
-  ) {
-    const geojson = getPreparedBasemapGeoJSON(
-      frontieresTable,
-      geometryInfo.geoColumn,
-      ctx
-    );
-    if (geojson) {
-      return new GeoJsonLayer({
-        id: layerId,
-        data: geojson,
-        filled: false,
-        stroked: true,
-        getLineColor: withOpacity(strokeColor, effectiveOpacity),
-        lineWidthUnits: 'pixels',
-        getLineWidth: effectiveThickness,
-        lineWidthMinPixels: 0,
-        lineWidthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
-        extensions: config.dotted ? [DASH_EXTENSION] : [],
-        getDashArray: dashArray,
-        _subLayerProps: createDashedGeoJsonLineSubLayerProps(
-          config.dotted,
-          dashArray
-        ),
-        ...baseProps,
-        updateTriggers: {
-          ...updateTriggers,
-          getLineWidth: [effectiveThickness]
-        }
-      });
-    }
-  }
-
-  if (
     isGeoArrowPolygonEncoding(geometryInfo) ||
     geometryInfo.isNativeGeoArrow
   ) {
@@ -745,38 +538,6 @@ export function createFrontieresLayer(
         getWidth: [effectiveThickness]
       }
     });
-  }
-
-  if (canRenderViaGeoJsonFallback(geometryInfo)) {
-    const geojson = getPreparedBasemapGeoJSON(
-      frontieresTable,
-      geometryInfo.geoColumn,
-      ctx
-    );
-    if (geojson) {
-      return new GeoJsonLayer({
-        id: layerId,
-        data: geojson,
-        filled: false,
-        stroked: true,
-        getLineColor: withOpacity(strokeColor, effectiveOpacity),
-        lineWidthUnits: 'pixels',
-        getLineWidth: effectiveThickness,
-        lineWidthMinPixels: 0,
-        lineWidthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
-        extensions: config.dotted ? [DASH_EXTENSION] : [],
-        getDashArray: dashArray,
-        _subLayerProps: createDashedGeoJsonLineSubLayerProps(
-          config.dotted,
-          dashArray
-        ),
-        ...baseProps,
-        updateTriggers: {
-          ...updateTriggers,
-          getLineWidth: [effectiveThickness]
-        }
-      });
-    }
   }
 
   return null;
@@ -871,62 +632,6 @@ export function createMeridiensLayer(
   });
 }
 
-function createLacsLayer(
-  lakesData: FeatureCollection<Polygon | MultiPolygon>,
-  config: LacsLayerConfig,
-  ctx: BasemapLayerContext,
-  layerId = buildLayerId(DeckLayerId.BASEMAP_LACS, ctx.projectionSuffix)
-): Layer<DeckDataRow> | null {
-  if (!config.visible) return null;
-
-  const strokeColor = toRgbColor(config.color);
-  const opacity = config.opacity / 100;
-
-  return new GeoJsonLayer({
-    id: layerId,
-    data: projectFeatureCollectionIfNeeded(lakesData, ctx),
-    filled: true,
-    stroked: config.thickness > 0,
-    getFillColor: withOpacity(
-      strokeColor,
-      opacity * BASEMAP_WATER_FILL_OPACITY_RATIO
-    ),
-    getLineColor: withOpacity(strokeColor, opacity),
-    lineWidthUnits: 'pixels',
-    lineWidthMinPixels: config.thickness,
-    ...getBaseLayerProps(ctx),
-    updateTriggers: {
-      getFillColor: [config.color, config.opacity],
-      getLineColor: [config.color, config.opacity]
-    }
-  });
-}
-
-function filterMetadataGeoJsonByGeometry<T extends MetadataGeometry>(
-  geojson: FeatureCollection,
-  geometryTypes: ReadonlySet<string>
-): FeatureCollection<T> | null {
-  const features: Feature<T>[] = [];
-
-  for (const feature of geojson.features) {
-    const geometryType = feature.geometry?.type;
-    if (!geometryType || !geometryTypes.has(geometryType)) {
-      continue;
-    }
-
-    features.push(feature as Feature<T>);
-  }
-
-  if (features.length === 0) {
-    return null;
-  }
-
-  return {
-    type: GEOJSON_TYPE.FEATURE_COLLECTION,
-    features
-  };
-}
-
 function createBinaryLacsLayers(
   table: ArrowTable,
   config: LacsLayerConfig,
@@ -1008,63 +713,10 @@ function createMetadataLacsLayers(
       (isGeoArrowPolygonEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
     ) {
       layers.push(...createBinaryLacsLayers(entry.table, config, ctx, layerId));
-    } else if (canRenderViaGeoJsonFallback(geometryInfo)) {
-      const geojson = getPreparedBasemapGeoJSON(
-        entry.table,
-        geometryInfo.geoColumn,
-        ctx
-      );
-      const lakesData = geojson
-        ? filterMetadataGeoJsonByGeometry<Polygon | MultiPolygon>(
-            geojson,
-            new Set([GEOJSON_TYPE.POLYGON, GEOJSON_TYPE.MULTI_POLYGON])
-          )
-        : null;
-      const layer = lakesData
-        ? createLacsLayer(lakesData, config, ctx, layerId)
-        : null;
-      if (layer) {
-        layers.push(layer);
-      }
     }
   }
 
   return layers;
-}
-
-function createRivieresLayer(
-  riversData: FeatureCollection<LineString | MultiLineString>,
-  config: RivieresLayerConfig,
-  ctx: BasemapLayerContext,
-  layerId = buildLayerId(DeckLayerId.BASEMAP_RIVIERES, ctx.projectionSuffix)
-): Layer<DeckDataRow> | null {
-  if (!config.visible) return null;
-
-  const strokeColor = toRgbColor(config.color);
-  const opacity = config.opacity / 100;
-
-  const dashArray = config.dotted
-    ? dottedPatternToDashArray(config.dottedPattern)
-    : [0, 0];
-
-  return new GeoJsonLayer({
-    id: layerId,
-    data: projectFeatureCollectionIfNeeded(riversData, ctx),
-    stroked: true,
-    filled: false,
-    getLineColor: withOpacity(strokeColor, opacity),
-    getLineWidth: config.thickness,
-    lineWidthUnits: 'pixels',
-    lineWidthMinPixels: BASEMAP_DEFAULT_THICKNESS_PX,
-    extensions: config.dotted ? [DASH_EXTENSION] : [],
-    getDashArray: dashArray,
-    ...getBaseLayerProps(ctx),
-    updateTriggers: {
-      getLineColor: [config.color, config.opacity],
-      getLineWidth: [config.thickness],
-      getDashArray: [config.dotted, config.dottedPattern]
-    }
-  });
 }
 
 function createBinaryRivieresLayer(
@@ -1139,24 +791,6 @@ function createMetadataRivieresLayers(
       if (layer) {
         layers.push(layer);
       }
-    } else if (canRenderViaGeoJsonFallback(geometryInfo)) {
-      const geojson = getPreparedBasemapGeoJSON(
-        entry.table,
-        geometryInfo.geoColumn,
-        ctx
-      );
-      const riversData = geojson
-        ? filterMetadataGeoJsonByGeometry<LineString | MultiLineString>(
-            geojson,
-            new Set([GEOJSON_TYPE.LINE_STRING, GEOJSON_TYPE.MULTI_LINE_STRING])
-          )
-        : null;
-      const layer = riversData
-        ? createRivieresLayer(riversData, config, ctx, layerId)
-        : null;
-      if (layer) {
-        layers.push(layer);
-      }
     }
   }
 
@@ -1203,10 +837,6 @@ export function createReliefLayers(
   );
   const baseProps = getBaseLayerProps(ctx);
 
-  const updateTriggers = {
-    getFillColor: [config.color, config.opacity, config.representation],
-    getLineColor: [config.color, config.opacity, config.representation]
-  };
   if (
     isGeoArrowPolygonEncoding(geometryInfo) ||
     geometryInfo.isNativeGeoArrow
@@ -1251,35 +881,6 @@ export function createReliefLayers(
     );
 
     return result;
-  }
-
-  if (canRenderViaGeoJsonFallback(geometryInfo)) {
-    const geojson = getPreparedBasemapGeoJSON(
-      worldBaseTable,
-      geometryInfo.geoColumn,
-      ctx
-    );
-    if (geojson) {
-      return [
-        new GeoJsonLayer({
-          id: layerId,
-          data: geojson,
-          filled: !isContours,
-          stroked: true,
-          getFillColor: withOpacity(baseColor, fillOpacity),
-          getLineColor: withOpacity(lineColor, lineOpacity),
-          lineWidthUnits: 'pixels',
-          getLineWidth: lineWidth,
-          lineWidthMinPixels: 0,
-          lineWidthMaxPixels: 1,
-          ...baseProps,
-          updateTriggers: {
-            ...updateTriggers,
-            getLineWidth: [lineWidth]
-          }
-        })
-      ];
-    }
   }
 
   return [];
@@ -1429,9 +1030,6 @@ function createVillesLabelLayer(
     }
   }) as unknown as Layer<DeckDataRow>;
 }
-
-type MetadataGeometry =
-  Polygon | MultiPolygon | LineString | MultiLineString | Point;
 
 function collectMetadataCities(
   entries: MetadataLayerEntry[]
@@ -1631,39 +1229,6 @@ function createMetadataLineLayers(
           }
         })
       );
-    } else if (canRenderViaGeoJsonFallback(geometryInfo)) {
-      const geojson = getPreparedBasemapGeoJSON(
-        entry.table,
-        geometryInfo.geoColumn,
-        ctx
-      );
-      if (geojson) {
-        layers.push(
-          new GeoJsonLayer({
-            id: layerId,
-            data: geojson,
-            filled: false,
-            stroked: true,
-            getLineColor: withOpacity(strokeColor, effectiveOpacity),
-            lineWidthUnits: 'pixels',
-            getLineWidth: effectiveThickness,
-            lineWidthMinPixels: 0,
-            lineWidthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
-            extensions: effective.dotted ? [DASH_EXTENSION] : [],
-            getDashArray: dashArray,
-            dashJustified: true,
-            _subLayerProps: createDashedGeoJsonLineSubLayerProps(
-              effective.dotted,
-              dashArray
-            ),
-            ...baseProps,
-            updateTriggers: {
-              ...updateTriggers,
-              getLineWidth: [effectiveThickness]
-            }
-          })
-        );
-      }
     }
   }
 
