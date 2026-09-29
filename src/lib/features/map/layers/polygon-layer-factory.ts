@@ -361,7 +361,7 @@ export function createPolygonLayerStack(
     const selectionOverlay = createHighlightedFeatureOverlay(
       layerId,
       jsTable,
-      geoColumn,
+      geometryInfo,
       polyHighlightedRowIds,
       hlVersion,
       ctx
@@ -1382,7 +1382,7 @@ export function createPolygonLayerStack(
   const selectionOverlay = createHighlightedFeatureOverlay(
     layerId,
     jsTable,
-    geoColumn,
+    geometryInfo,
     polyHighlightedRowIds,
     hlVersion,
     ctx

@@ -74,7 +74,7 @@ export function createSelectionOverlay(
     ? createHighlightedFeatureOverlay(
         createThematicLayerId(DeckLayerId.POLYGON_LAYER, ctx),
         source,
-        geometryInfo.geoColumn,
+        geometryInfo,
         ctx.highlightedRowIds,
         highlightVersion,
         ctx
