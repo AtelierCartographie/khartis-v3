@@ -3965,6 +3965,106 @@ describe('createLineLayers', () => {
     expect(lineLayerProps?.getDashArray?.(feature)).toEqual([12, 4]);
   });
 
+  it('draws dashed native lines on the binary PathLayer', () => {
+    const visualization: VisualizationConfig = {
+      id: 'viz-line-dashed-binary',
+      name: 'Binary dashed line test',
+      type: VisualizationType.CATEGORICAL,
+      datasetId: 'dataset-1',
+      enabled: true,
+      primitiveFilters: [PrimitiveFilterType.LINE],
+      line: {
+        enabled: true,
+        colorMode: ColorMode.UNIQUE,
+        thicknessMode: ThicknessMode.UNIQUE,
+        color: '#3366cc',
+        width: 3,
+        maxWidth: 6,
+        opacity: 1,
+        dashed: true,
+        dashedPattern: BasemapDottedPattern.DASHES
+      },
+      style: { fillOpacity: 1, strokeOpacity: 1, strokeWidth: 1 },
+      mapping: {}
+    };
+
+    const layers = createLineLayers(
+      createTableWithRows([{ route_name: 'A' }], ['route_name']),
+      createLineGeometryInfo(),
+      createContext(visualization)
+    );
+    const lineLayer = layers.find((layer) => layer instanceof PathLayer) as
+      PathLayer | undefined;
+
+    expect(layers.some((layer) => layer instanceof GeoJsonLayer)).toBe(false);
+    expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
+    expect(lineLayer?.props.id).toMatch(/-dashed$/);
+    expect(lineLayer?.props.extensions).toHaveLength(1);
+    expect(
+      (lineLayer?.props as { getDashArray?: unknown } | undefined)?.getDashArray
+    ).toEqual([6, 4]);
+  });
+
+  it('gives missing native lines their own binary dash array', () => {
+    parsePathsWithProjectionMock.mockReturnValue({
+      length: 2,
+      featureIds: new Uint32Array([0, 1]),
+      positions: new Float32Array([0, 0, 1, 1, 2, 2, 3, 3]),
+      startIndices: new Uint32Array([0, 2, 4]),
+      size: 2
+    });
+    const visualization: VisualizationConfig = {
+      id: 'viz-line-missing-binary',
+      name: 'Binary missing line test',
+      type: VisualizationType.PROPORTIONAL,
+      datasetId: 'dataset-1',
+      enabled: true,
+      primitiveFilters: [PrimitiveFilterType.LINE],
+      line: {
+        enabled: true,
+        colorMode: ColorMode.UNIQUE,
+        thicknessMode: ThicknessMode.PROPORTIONAL,
+        color: '#3366cc',
+        width: 3,
+        maxWidth: 10,
+        opacity: 1,
+        dashed: false,
+        sizeColumn: 'flow',
+        missingData: {
+          show: true,
+          shape: MissingDataShape.CIRCLE,
+          size: 7,
+          color: '#123456',
+          dashed: true,
+          dashedPattern: BasemapDottedPattern.LONG_DASH
+        }
+      },
+      style: { fillOpacity: 1, strokeOpacity: 1, strokeWidth: 1 },
+      mapping: {}
+    };
+
+    const layers = createLineLayers(
+      createTableWithRows(
+        [
+          { route_name: 'A', flow: 4 },
+          { route_name: 'B', flow: null }
+        ],
+        ['route_name', 'flow']
+      ),
+      createLineGeometryInfo(),
+      createContext(visualization)
+    );
+    const lineLayer = layers.find((layer) => layer instanceof PathLayer) as
+      PathLayer | undefined;
+    const dashArrays = (
+      lineLayer?.props.data as
+        { attributes: { getDashArray?: { value: Float32Array } } } | undefined
+    )?.attributes.getDashArray?.value;
+
+    expect(lineLayer?.props.extensions).toHaveLength(1);
+    expect(Array.from(dashArrays ?? [])).toEqual([0, 0, 0, 0, 12, 4, 12, 4]);
+  });
+
   it('uses a dedicated thickness classification for classed line widths', () => {
     const visualization: VisualizationConfig = {
       id: 'viz-line-2',

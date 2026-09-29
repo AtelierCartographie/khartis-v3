@@ -29,6 +29,7 @@ import {
 } from '../utils/data-styling.utils';
 import {
   pathColorAttr,
+  pathDashArrayAttr,
   pathWidthAttr
 } from '../utils/geoarrow-stream-bridge.utils';
 import { resolveHoverHighlightProps } from '../utils/hover-highlight-props.utils';
@@ -188,7 +189,7 @@ export function createLineLayerStack(
     (arrowExtension === ArrowExtension.GEOARROW_LINESTRING ||
       arrowExtension === ArrowExtension.GEOARROW_MULTILINESTRING);
 
-  if ((isNativeGeoArrowLine || isNativeGeoArrow) && !lineUsesDashExtension) {
+  if (isNativeGeoArrowLine || isNativeGeoArrow) {
     const lineData = resolvePathParser(ctx.customProjection)(jsTable);
     const effectiveCategoryColorMap = resolveEffectiveCategoryColorMap(
       jsTable,
@@ -329,6 +330,19 @@ export function createLineLayerStack(
         )
       : null;
 
+    const dashArrayBinaryAttr = usesMissingLineDash
+      ? pathDashArrayAttr(
+          lineData,
+          ctxRowAccessor(
+            ctx,
+            jsTable,
+            (row) =>
+              isMissingLineRow(row) ? lineMissingDashArray : lineDashArray,
+            lineDashArray
+          )
+        )
+      : null;
+
     const pathProps = createPathLayerProps(lineData);
     const pathBinaryData = pathProps.data as {
       attributes: Record<string, unknown>;
@@ -342,6 +356,9 @@ export function createLineLayerStack(
     if (widthBinaryAttr) {
       pathBinaryData.attributes.getWidth = widthBinaryAttr;
     }
+    if (dashArrayBinaryAttr) {
+      pathBinaryData.attributes.getDashArray = dashArrayBinaryAttr;
+    }
 
     const lineLayer = new PathLayer({
       id: layerId,
@@ -349,8 +366,8 @@ export function createLineLayerStack(
       ...(!colorBinaryAttr && {
         getColor: withOpacity(resolvedLineColor, normalizedLineOpacity)
       }),
-      extensions: lineDashed ? [DASH_EXTENSION] : [],
-      getDashArray: lineDashArray,
+      extensions: lineUsesDashExtension ? [DASH_EXTENSION] : [],
+      ...(!dashArrayBinaryAttr && { getDashArray: lineDashArray }),
       dashJustified: true,
       capRounded: lineCapRounded,
       widthUnits: 'pixels',
@@ -378,7 +395,13 @@ export function createLineLayerStack(
           showLineMissingData,
           hlVersion
         ],
-        getDashArray: [lineDashed, lineConfig?.dashedPattern],
+        getDashArray: [
+          lineDashed,
+          lineConfig?.dashedPattern,
+          lineMissingData?.dashed,
+          lineMissingData?.dashedPattern,
+          showLineMissingData
+        ],
         getWidth: [
           usesVariableLineWidth,
           lineHasMissingDataStyle,

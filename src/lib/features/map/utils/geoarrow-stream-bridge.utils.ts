@@ -980,6 +980,32 @@ export function pathWidthAttr(
   return { value: widths, size: 1 };
 }
 
+export function pathDashArrayAttr(
+  data: BinaryPathData,
+  dashArrayLookup: (featureId: number) => [number, number]
+): DeckBinaryAttribute {
+  const vertexCount = data.positions.length / data.size;
+  const dashArrays = new Float32Array(vertexCount * 2);
+
+  for (let i = 0; i < data.length; i++) {
+    const [dash, gap] = dashArrayLookup(data.featureIds[i]);
+    const vertexStart = data.startIndices[i];
+    const vertexEnd =
+      i + 1 < data.startIndices.length ? data.startIndices[i + 1] : vertexCount;
+
+    for (
+      let vertexIndex = vertexStart;
+      vertexIndex < vertexEnd;
+      vertexIndex++
+    ) {
+      dashArrays[vertexIndex * 2] = dash;
+      dashArrays[vertexIndex * 2 + 1] = gap;
+    }
+  }
+
+  return { value: dashArrays, size: 2 };
+}
+
 export function rowAccessor<T>(
   table: ArrowTable,
   accessor: (row: Record<string, unknown>) => T
