@@ -31,7 +31,7 @@ export function cleanFileForStorage(file: UploadedFile): UploadedFile {
     validation: file.validation,
     parsedData: file.parsedData,
     content: file.content,
-    preparedGeoJSON: file.preparedGeoJSON,
+    archiveLayerSnapshot: file.archiveLayerSnapshot,
     geometry: file.geometry,
     duplicates: file.duplicates,
     statistics: file.statistics,

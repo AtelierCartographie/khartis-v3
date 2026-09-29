@@ -59,10 +59,6 @@ vi.mock('$lib/features/commons/utils/sanitize.utils', () => ({
   escapeSqlString: (value: string) => value
 }));
 
-vi.mock('$lib/features/commons/utils/persisted-geojson.utils', () => ({
-  sanitizePreparedGeoJSON: (value: string) => value
-}));
-
 vi.mock('$lib/features/commons/utils/logger', () => ({
   LogCategory: {
     DATA: 'DATA'
@@ -263,7 +259,7 @@ describe('useEnrichmentJoin', () => {
       sourceFileId: 'source-1',
       tableName: 'geo_table_enriched_1777777777777',
       duckColumns,
-      geometryColumnName: 'geom'
+      geometry: { columnName: 'geom' }
     });
   });
 

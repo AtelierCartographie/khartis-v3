@@ -6,7 +6,7 @@ import {
   loadMacros
 } from './core/engine';
 import { executeQuery, executeQueryStreaming } from './core/query';
-import { exportToCsv } from './io/exporters';
+import { exportToCsv, exportToParquet } from './io/exporters';
 import { dropRegisteredFile, registerFiles } from './io/file-registry';
 import { rowIdSequenceName } from './io/reader-utils';
 import { readGeofile, readJsonTabular, readTabular } from './io';
@@ -133,6 +133,14 @@ export const Duck = {
   ): Promise<string> {
     const ctx = getContext();
     return exportToCsv(ctx, table, options);
+  },
+
+  async copy_to_parquet_bytes(
+    table: string,
+    columns: string[]
+  ): Promise<Uint8Array> {
+    const ctx = getContext();
+    return exportToParquet(ctx, table, columns);
   },
 
   async describeColumns(table: string): Promise<AnalysisResults> {
