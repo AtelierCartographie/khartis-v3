@@ -1,7 +1,6 @@
 <script lang="ts">
   import { Deck, OrthographicView, type DeckProps } from '@deck.gl/core';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-  import type { FeatureCollection } from 'geojson';
   import { onMount, untrack } from 'svelte';
   import * as m from '$lib/paraglide/messages';
   import { globalState } from '$lib/features/commons/stores/global.svelte';
@@ -31,7 +30,6 @@
     supportsWebGL2,
     type DeckInstance
   } from '$lib/features/map/hooks/use-map-init.svelte';
-  import { calculateBoundsFromGeoJSON } from '$lib/features/map/core';
   import { DECK_DEVICE_TYPE } from '$lib/features/map/constants';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
@@ -87,7 +85,6 @@
     tables: Map<string, ArrowTable>;
     densityTables?: Map<string, ArrowTable>;
     splitData?: Map<string, SplitRenderingTable>;
-    geoJSONs: Map<string, FeatureCollection>;
     layout: FacetsLayout;
     containerWidth: number;
     containerHeight: number;
@@ -100,7 +97,6 @@
     tables,
     densityTables,
     splitData,
-    geoJSONs,
     layout,
     containerWidth,
     containerHeight,
@@ -206,9 +202,6 @@
   const mapViewportFitPaddingPx = FACET_VIEWPORT_FIT_PADDING_PX;
   const firstTable = $derived(
     tables.size > 0 ? tables.values().next().value : null
-  );
-  const firstGeoJSON = $derived(
-    geoJSONs.size > 0 ? geoJSONs.values().next().value : null
   );
   const firstDatasetId = $derived(
     tables.size > 0 ? tables.keys().next().value : undefined
@@ -502,33 +495,6 @@
       // Fall through to basemap reference bounds when dataset bounds are unavailable.
     }
 
-    if (firstGeoJSON) {
-      if (basemapStyleStore.referenceBasemapId && worldBaseTable) {
-        const referenceState = resolveOrthographicBasemapReferenceState(
-          basemapMeta,
-          worldBaseTable
-        );
-        if (referenceState.bbox) {
-          projectionStore.setReferenceBbox(
-            referenceState.bbox,
-            undefined,
-            referenceState.isProjected,
-            referenceState.renderProjection
-          );
-          return;
-        }
-      }
-
-      const bounds = toOrthographicBounds(
-        calculateBoundsFromGeoJSON(firstGeoJSON)
-      );
-      if (bounds) {
-        const [[minX, minY], [maxX, maxY]] = bounds;
-        projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
-        return;
-      }
-    }
-
     if (worldBaseTable) {
       const referenceState = resolveOrthographicBasemapReferenceState(
         basemapMeta,
@@ -561,9 +527,9 @@
     getProjectionFitBbox: () => getProjectionFitBbox(),
     getShouldRenderDatasetFallbacks: () => false,
     onBasemapLayersLoaded: () =>
-      mapLayers.updateLayers(tables, geoJSONs, splitData, densityTables),
+      mapLayers.updateLayers(tables, splitData, densityTables),
     onRepresentativePointTablesLoaded: () =>
-      mapLayers.updateLayers(tables, geoJSONs, splitData, densityTables)
+      mapLayers.updateLayers(tables, splitData, densityTables)
   });
 
   function buildDeckViewStateMap() {
@@ -747,9 +713,7 @@
   $effect(() => {
     void trackWorkerParseVersion();
     if (isRendererLoaded) {
-      untrack(() =>
-        mapLayers.updateLayers(tables, geoJSONs, splitData, densityTables)
-      );
+      untrack(() => mapLayers.updateLayers(tables, splitData, densityTables));
     }
   });
 
@@ -765,7 +729,7 @@
         updateDeckProps();
         refreshReferenceBbox();
         // Refit render projection to the facet cell before rebuilding layers.
-        mapLayers.updateLayers(tables, geoJSONs, splitData, densityTables);
+        mapLayers.updateLayers(tables, splitData, densityTables);
         if (mapInstanceStore.isViewportAutoFitManaged) {
           mapInstanceStore.fitToOrthographicBounds(
             mapInstanceStore.viewportFitReason ?? 'dataset'
@@ -862,7 +826,6 @@
     void tables;
     void densityTables;
     void splitData;
-    void geoJSONs;
     void visualizations;
     void worldBaseTable;
 
@@ -878,7 +841,7 @@
           basemapStyleStore.referenceBasemapId ? 'basemap' : 'dataset'
         );
       }
-      mapLayers.updateLayers(tables, geoJSONs, splitData, densityTables);
+      mapLayers.updateLayers(tables, splitData, densityTables);
       triggerOnReady();
     });
   });

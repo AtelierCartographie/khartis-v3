@@ -3,7 +3,6 @@ import type { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Matrix4 } from '@math.gl/core';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { FeatureCollection } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   Duck,
@@ -26,7 +25,6 @@ import { SYNTHETIC_AUX_LAYER_KEY } from '$lib/features/commons/constants/basemap
 import {
   createBasemapLayers,
   createDeckLayers,
-  createGeoJsonLayers,
   createSelectionOverlay,
   type BasemapRowOrderEntry,
   type MetadataLayerEntry
@@ -170,7 +168,6 @@ export interface UseMapLayersProps {
 export interface UseMapLayersReturn {
   updateLayers: (
     tables: Map<string, ArrowTable>,
-    geoJSONs: Map<string, FeatureCollection>,
     splitData?: Map<string, SplitRenderingTable>,
     densityTables?: Map<string, ArrowTable>
   ) => void;
@@ -927,7 +924,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
   function updateLayers(
     tables: Map<string, ArrowTable>,
-    geoJSONs: Map<string, FeatureCollection>,
     splitData?: Map<string, SplitRenderingTable>,
     densityTables?: Map<string, ArrowTable>
   ): void {
@@ -1025,7 +1021,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
       const datasetContentIds = new Set<string>();
       for (const datasetId of tables.keys()) datasetContentIds.add(datasetId);
-      for (const datasetId of geoJSONs.keys()) datasetContentIds.add(datasetId);
       for (const viz of activeVisualizations)
         datasetContentIds.add(viz.datasetId);
       for (const dataset of datasetsStore.datasets) {
@@ -1294,7 +1289,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           const table =
             getRenderableSplitGeometryTable(split) ?? tables.get(datasetId);
           const densityTable = densityTables?.get(datasetId);
-          const geojson = geoJSONs.get(datasetId);
 
           const ctx = buildLayerContextForViz(viz);
           if (split) {
@@ -1335,13 +1329,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             allowProjectionOverride
           );
 
-          if (geojson) {
-            const geojsonLayers = createGeoJsonLayers(geojson, ctx);
-            layers.push(...geojsonLayers);
-            if (geojsonLayers.length > 0) {
-              renderedDatasetIds.add(datasetId);
-            }
-          } else if (table) {
+          if (table) {
             const geoMetadata = table.schema.metadata?.get('geo');
             if (!geoMetadata) {
               continue;
@@ -1433,10 +1421,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       }
 
       if (shouldRenderDatasetFallbacks) {
-        const fallbackDatasetIds = new Set<string>([
-          ...tables.keys(),
-          ...geoJSONs.keys()
-        ]);
+        const fallbackDatasetIds = new Set<string>(tables.keys());
 
         for (const renderedDatasetId of renderedDatasetIds) {
           fallbackDatasetIds.delete(renderedDatasetId);
@@ -1449,9 +1434,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           );
           const datasetHasOwnGeometry = Boolean(datasetEntry?.geometry);
           const table = tables.get(datasetId);
-          const geojson = geoJSONs.get(datasetId);
           const hasLoadedRenderableGeometry = Boolean(
-            geojson || table?.schema.metadata?.get('geo')
+            table?.schema.metadata?.get('geo')
           );
           // A joined dataset whose basemap is not the reference one would be
           // clipped by a foreign projection. Without a join or own geometry,
@@ -1463,9 +1447,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             continue;
           }
           const hasPolygonGeometry = isPolygonGeometryType(
-            table
-              ? extractGeometryInfo(table)?.type
-              : geojson?.features[0]?.geometry?.type
+            table ? extractGeometryInfo(table)?.type : undefined
           );
           const isDrawnByReferenceBasemap =
             hasPolygonGeometry &&
@@ -1513,17 +1495,14 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             ...fallbackCtx,
             highlightedRowIds: undefined
           };
-          if (!isDrawnByReferenceBasemap && geojson) {
-            layers.push(...createGeoJsonLayers(geojson, unhighlightedCtx));
-          } else if (
+          if (
             !isDrawnByReferenceBasemap &&
             table?.schema.metadata?.get('geo')
           ) {
             layers.push(...createDeckLayers(table, unhighlightedCtx));
           }
-          const selectionSource = geojson ?? table;
-          const selectionOverlay = selectionSource
-            ? createSelectionOverlay(selectionSource, fallbackCtx)
+          const selectionOverlay = table
+            ? createSelectionOverlay(table, fallbackCtx)
             : null;
           if (selectionOverlay) {
             layers.push(selectionOverlay);
@@ -1683,7 +1662,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         visualizationHasEnabledPrimitive
       );
       const hasExpectedDatasetFallbacks =
-        shouldRenderDatasetFallbacks && (tables.size > 0 || geoJSONs.size > 0);
+        shouldRenderDatasetFallbacks && tables.size > 0;
       // The layer store always holds its ten rows, so "one of them is visible"
       // says nothing about a basemap that draws none of them: it kept the
       // previous stack on screen after the user hid every row. What justifies
