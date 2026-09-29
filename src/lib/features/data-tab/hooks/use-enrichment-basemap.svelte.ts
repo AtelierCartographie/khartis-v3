@@ -6,7 +6,8 @@ import { isMissingDuckTableError } from '$lib/features/duckdb/utils/duckdb-error
 import { BasemapStyle } from '$lib/features/map/constants';
 import {
   basemapCatalogService,
-  rankBasemapsByJoinSynthesis
+  rankBasemapsByJoinSynthesis,
+  shouldPreferTextBasemapRefinementForGPS
 } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import {
@@ -443,6 +444,32 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     });
   });
 
+  async function rankBasemapsByGeometryExtent(
+    datasetId: string
+  ): Promise<BasemapSuggestion[]> {
+    try {
+      const extent = await duckDBOrchestrator.getGeometryExtent(datasetId);
+      return extent
+        ? basemapCatalogService.getSuggestionsByGPSBbox(
+            {
+              minLon: extent[0],
+              minLat: extent[1],
+              maxLon: extent[2],
+              maxLat: extent[3]
+            },
+            3
+          )
+        : [];
+    } catch (error) {
+      logger.error(
+        'Failed to rank basemaps by geometry extent',
+        LogCategory.DATA,
+        error
+      );
+      return [];
+    }
+  }
+
   $effect(() => {
     const datasetId = datasetsStore.selectedDataset?.id;
     const linkedVariableName = dataTabState.geolocation.linkedVariableName;
@@ -474,53 +501,64 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       const geoColumnName = dataTabState.geolocation.linkedVariableName;
       const datasetId =
         resolveDatasetIdForOrchestrator(selectedDataset) ?? null;
-      let suggestions: BasemapSuggestion[] = [];
+      const datasetReady = datasetId
+        ? await waitForDatasetAvailability(datasetId, {
+            isCancelled: () => cancelled
+          })
+        : false;
+      const isDatasetAvailable = Boolean(
+        datasetId &&
+        datasetReady &&
+        !cancelled &&
+        duckDBOrchestrator.findDatasetByIdOrSourceFile(datasetId)
+      );
+      const geometryExtentSuggestions =
+        isDatasetAvailable && datasetId && selectedDataset.geometry
+          ? await rankBasemapsByGeometryExtent(datasetId)
+          : [];
+      let joinSuggestions: BasemapSuggestion[] = [];
 
-      if (datasetId && geoColumnName) {
-        const datasetReady = await waitForDatasetAvailability(datasetId, {
-          isCancelled: () => cancelled
-        });
-
-        if (
-          datasetReady &&
-          !cancelled &&
-          isCurrentSuggestionInput(selectedDataset, datasetId, geoColumnName) &&
-          duckDBOrchestrator.findDatasetByIdOrSourceFile(datasetId)
-        ) {
-          try {
-            const synthesis = await duckDBOrchestrator.computeJoinSynthesis(
-              datasetId,
-              geoColumnName
+      if (
+        isDatasetAvailable &&
+        datasetId &&
+        geoColumnName &&
+        isCurrentSuggestionInput(selectedDataset, datasetId, geoColumnName)
+      ) {
+        try {
+          const synthesis = await duckDBOrchestrator.computeJoinSynthesis(
+            datasetId,
+            geoColumnName
+          );
+          joinSuggestions = rankBasemapsByJoinSynthesis(
+            basemapCatalogService.basemaps,
+            synthesis,
+            3
+          );
+        } catch (error) {
+          if (!cancelled && !isMissingDuckTableError(error)) {
+            logger.error(
+              'Failed to compute basemap join suggestions',
+              LogCategory.DATA,
+              error
             );
-            suggestions = rankBasemapsByJoinSynthesis(
-              basemapCatalogService.basemaps,
-              synthesis,
-              3
-            );
-          } catch (error) {
-            if (!cancelled && !isMissingDuckTableError(error)) {
-              logger.error(
-                'Failed to compute basemap join suggestions',
-                LogCategory.DATA,
-                error
-              );
-            }
           }
         }
       }
+
+      let suggestions =
+        geometryExtentSuggestions.length > 0 &&
+        !shouldPreferTextBasemapRefinementForGPS(
+          geometryExtentSuggestions,
+          joinSuggestions[0]?.matchScore ?? 0
+        )
+          ? geometryExtentSuggestions
+          : joinSuggestions;
 
       if (suggestions.length === 0) {
         suggestions = basemapCatalogService.getSuggestions(
           processedDataset,
           3,
           geoColumnName
-        );
-      }
-
-      if (suggestions.length === 0 && selectedDataset.bounds) {
-        suggestions = basemapCatalogService.getSuggestionsByGPSBbox(
-          selectedDataset.bounds,
-          3
         );
       }
 
