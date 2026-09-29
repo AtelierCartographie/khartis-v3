@@ -54,7 +54,7 @@ describe('orthographic render resolution utils', () => {
     expect(toBboxFromOrthographicBounds(null)).toBeNull();
   });
 
-  it('prefers dataset bbox when requested', () => {
+  it('prefers the dataset bbox, framed with a 10% margin, when requested', () => {
     const state = resolveOrthographicReferenceState({
       dataset: null,
       bounds: [
@@ -69,8 +69,10 @@ describe('orthographic render resolution utils', () => {
       preferDatasetBbox: true
     });
 
-    expect(state).toEqual({
-      bbox: [1, 2, 3, 4],
+    expect(state.bbox?.map((value) => Number(value.toFixed(6)))).toEqual([
+      0.8, 1.8, 3.2, 4.2
+    ]);
+    expect(state).toMatchObject({
       isProjected: false,
       renderProjection: null
     });
@@ -163,7 +165,7 @@ describe('orthographic render resolution utils', () => {
     });
   });
 
-  it('falls back to basemap metadata bbox for basemap references', () => {
+  it('falls back to the framed basemap metadata bbox for basemap references', () => {
     const state = resolveOrthographicBasemapReferenceState({
       basemapMeta,
       basemapTable: null,
@@ -173,7 +175,7 @@ describe('orthographic render resolution utils', () => {
     });
 
     expect(state).toEqual({
-      bbox: basemapMeta.bbox,
+      bbox: [-14, -26, 34, 46],
       isProjected: false,
       renderProjection: null
     });

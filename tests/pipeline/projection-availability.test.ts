@@ -45,11 +45,11 @@ const catalogProjectionPresets = JSON.parse(
 const builtInProjectionIds = FULL_PROJECTION_CATALOG.map(
   (projection) => projection.id
 );
-const compositeProjectionIds = [
-  getCompositeProjectionSelectionId('FRANCE_DOM_TOM'),
-  getCompositeProjectionSelectionId('EUROPE_DOM_TOM'),
-  getCompositeProjectionSelectionId('USA_ALBERS')
-];
+// Every preset of the catalog, including the national mask presets written by
+// khartis-basemaps (BRESIL_ALBERS, ALLEMAGNE_UTM32, CANADA_LAMBERT).
+const compositeProjectionIds = Object.keys(catalogProjectionPresets).map(
+  getCompositeProjectionSelectionId
+);
 
 const projectionPresets: ProjectionPresets = {
   FRANCE_DOM_TOM: {

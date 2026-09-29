@@ -7,6 +7,7 @@ import type { GeoProjection } from 'd3-geo';
 import * as _d3GeoProjection from 'd3-geo-projection';
 
 import { proj4d3 } from './proj4d3.utils';
+import type { BasemapFrameExtent } from './basemap-frame.utils';
 import { fitProjectionToBbox } from '$lib/features/commons/utils/projection.utils';
 import {
   buildUserProjection,
@@ -45,6 +46,7 @@ export interface KhartisProj4Params {
     height: number;
     padding: number;
   };
+  clipExtent?: BasemapFrameExtent;
 }
 
 export function buildKhartisProj4Projection(
@@ -59,6 +61,9 @@ export function buildKhartisProj4Projection(
       params.fit.height,
       params.fit.padding
     );
+  }
+  if (params.clipExtent) {
+    projection.clipExtent(params.clipExtent);
   }
   return projection;
 }

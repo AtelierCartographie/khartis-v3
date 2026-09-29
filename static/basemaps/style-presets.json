@@ -64,8 +64,8 @@
     "stroked": false
   },
   "nuts-land": {
-    "description_fr": "Territoire NUTS (fond polygone pour le contour des zones NUTS)",
-    "description_en": "NUTS territory (polygon fill for NUTS zones outline)",
+    "description_fr": "Territoire focal (zones NUTS, territoire départemental/régional, ou pays d'un fond national posé sur ses voisins)",
+    "description_en": "Focal territory (NUTS zones, department/region territory, or the country of a national basemap set among its neighbours)",
     "layer_type": "solid-polygon",
     "fillColor": [189, 200, 204, 255],
     "stroked": false
