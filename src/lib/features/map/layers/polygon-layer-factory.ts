@@ -380,13 +380,8 @@ export function createPolygonLayerStack(
     arrowExtension &&
     (arrowExtension === ArrowExtension.GEOARROW_POLYGON ||
       arrowExtension === ArrowExtension.GEOARROW_MULTIPOLYGON);
-  const preferProjectedGeoJsonFallback =
-    Boolean(ctx.customProjection) && (isWkbEncoded || isGeoJsonEncoded);
 
-  if (
-    !preferProjectedGeoJsonFallback &&
-    (isNativeGeoArrowPolygon || isNativeGeoArrow)
-  ) {
+  if (isNativeGeoArrowPolygon || isNativeGeoArrow) {
     try {
       const polyData = resolvePolygonParser(ctx.customProjection)(jsTable);
       const outlineData = resolvePathParser(ctx.customProjection)(jsTable);
