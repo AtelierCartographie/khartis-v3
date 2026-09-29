@@ -22,6 +22,12 @@ import {
   createRepresentativePointSymbolLayers
 } from './point-layer-factory';
 import { createTextOverlayLayers } from './text-layer-factory';
+import {
+  createHighlightedGeoJsonOverlay,
+  createHighlightedFeatureOverlay
+} from './layer-selection-overlays';
+import { ensureGeoJsonFeatureIds } from './layer-highlight.utils';
+import { getCachedProjectedGeoJSON } from './layer-geojson-cache';
 
 export { resolveSplitMappingFeatureIdColumn } from './split-rendering-accessors';
 export { resolveTextAnchor } from './text-layer-data.utils';
@@ -71,6 +77,35 @@ export function createGeoJsonLayers(
 ): Layer<DeckDataRow>[] {
   const layerId = createThematicLayerId(DeckLayerId.GEOJSON_LAYER, ctx);
   return createGeoJsonLayerStack(geojson, ctx, layerId);
+}
+
+export function createSelectionOverlay(
+  source: ArrowTable | FeatureCollection,
+  ctx: LayerContext
+): Layer<DeckDataRow> | null {
+  const highlightVersion = ctx.highlightVersion ?? 0;
+  if (!('schema' in source)) {
+    return createHighlightedGeoJsonOverlay(
+      createThematicLayerId(DeckLayerId.GEOJSON_LAYER, ctx),
+      ensureGeoJsonFeatureIds(
+        getCachedProjectedGeoJSON(source, ctx.customProjection)
+      ),
+      ctx.highlightedRowIds,
+      highlightVersion,
+      ctx
+    );
+  }
+  const geometryInfo = extractGeometryInfo(source);
+  return geometryInfo
+    ? createHighlightedFeatureOverlay(
+        createThematicLayerId(DeckLayerId.POLYGON_LAYER, ctx),
+        source,
+        geometryInfo.geoColumn,
+        ctx.highlightedRowIds,
+        highlightVersion,
+        ctx
+      )
+    : null;
 }
 
 export function createDeckLayers(

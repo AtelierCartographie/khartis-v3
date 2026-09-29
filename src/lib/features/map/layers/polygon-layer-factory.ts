@@ -66,7 +66,7 @@ import { HIGHLIGHT_DIMMING_FACTOR } from './layer-highlight.utils';
 import { createThematicLayerId } from './layer-id.utils';
 import {
   createHighlightedBinaryPolygonOverlay,
-  createHighlightedPolygonOverlay
+  createHighlightedFeatureOverlay
 } from './layer-selection-overlays';
 import { attachBinaryPickingMetadata } from './layer-source.utils';
 import {
@@ -358,7 +358,7 @@ export function createPolygonLayerStack(
       ],
       primitiveOrder
     );
-    const selectionOverlay = createHighlightedPolygonOverlay(
+    const selectionOverlay = createHighlightedFeatureOverlay(
       layerId,
       jsTable,
       geoColumn,
@@ -1384,7 +1384,7 @@ export function createPolygonLayerStack(
     primitiveOrder
   );
 
-  const selectionOverlay = createHighlightedPolygonOverlay(
+  const selectionOverlay = createHighlightedFeatureOverlay(
     layerId,
     jsTable,
     geoColumn,
