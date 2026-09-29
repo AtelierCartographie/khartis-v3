@@ -15,9 +15,7 @@ export {
   forgetDatasetGeometryBasemap,
   isDatasetGeometryBasemap
 } from './dataset-geometry-basemap.service';
-export { centerMapOnTableRow } from './center-on-table-row.service';
 export { generateCustomBasemapAttributes } from './generate-basemap-attributes.service';
-export { resolveCenterCoordinates } from './orthographic-center.service';
 export {
   readGeoParquetViaDuckDB,
   readGeoParquetDirect,
