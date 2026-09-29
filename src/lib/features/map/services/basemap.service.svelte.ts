@@ -1,4 +1,8 @@
-import { Duck } from '$lib/features/duckdb';
+import {
+  Duck,
+  isTableBuildPending,
+  waitForTableBuild
+} from '$lib/features/duckdb';
 import { loadingStore } from '$lib/features/commons/stores/loading.store.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { type Table as ArrowTable } from 'apache-arrow/Arrow';
@@ -1017,6 +1021,7 @@ function createBasemapService() {
     metadata: BasemapMetadata,
     layerFile: string
   ): Promise<ArrowTable> {
+    await waitForTableBuild(layerFile);
     const shouldReadFromDuck =
       metadata.isCustom && (await doesDuckTableExist(layerFile));
     const customLayerType = shouldReadFromDuck
@@ -1382,7 +1387,11 @@ function createBasemapService() {
     const layerTables = new Map<string, ArrowTable>();
     for (const layer of getLoadableMetadataLayers(metadata)) {
       const layerFile = layer.file;
-      if (!layerFile || !(await doesDuckTableExist(layerFile))) {
+      if (
+        !layerFile ||
+        isTableBuildPending(layerFile) ||
+        !(await doesDuckTableExist(layerFile))
+      ) {
         continue;
       }
       try {
@@ -1414,7 +1423,11 @@ function createBasemapService() {
 
     for (const layer of getLoadableMetadataLayers(loadedBasemap.metadata)) {
       const layerFile = layer.file;
-      if (!layerFile || !(await doesDuckTableExist(layerFile))) {
+      if (
+        !layerFile ||
+        isTableBuildPending(layerFile) ||
+        !(await doesDuckTableExist(layerFile))
+      ) {
         continue;
       }
 
