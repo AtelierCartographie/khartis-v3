@@ -297,7 +297,8 @@ export function createDatasetFromPreprocessedFile(
       ? parsedRows
       : buildRowsFromPreparedGeoJSON(file);
   const firstColStats = Object.values(statistics)[0];
-  const geometryInfo = buildGeometryInfoFromPreparedGeoJSON(file);
+  const geometryInfo =
+    file.geometry ?? buildGeometryInfoFromPreparedGeoJSON(file);
   const actualRowCount =
     firstColStats?.count ?? geometryInfo?.featureCount ?? data?.length ?? 0;
 
@@ -432,7 +433,9 @@ async function processUploadedDatasetFile(
     file.assetRef ||
     file.companionAssetRefs?.length
   );
-  const restorableGeoSnapshot = createRestorableGeoSnapshot(file);
+  const restorableGeoSnapshot = file.geometry
+    ? null
+    : createRestorableGeoSnapshot(file);
   if (restorableGeoSnapshot) {
     return dataPipeline.processUploadedFile(restorableGeoSnapshot);
   }

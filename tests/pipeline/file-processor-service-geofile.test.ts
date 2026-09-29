@@ -85,14 +85,7 @@ describe('createFileProcessorService geofile imports', () => {
         fileType: FileType.GPX
       }
     });
-    mocks.duckQuery
-      .mockResolvedValueOnce([{ name: 'Station' }])
-      .mockResolvedValueOnce([
-        {
-          name: 'Station',
-          __khartis_geometry_json: '{"type":"Point","coordinates":[2.3,48.8]}'
-        }
-      ]);
+    mocks.duckQuery.mockResolvedValueOnce([{ name: 'Station' }]);
     mocks.analyzeDataContent.mockResolvedValue({
       rowCount: 1,
       columnCount: 1,
@@ -144,15 +137,19 @@ describe('createFileProcessorService geofile imports', () => {
       expect.objectContaining({
         duckdbTableName: 'track_gpx_table',
         parsedData: [{ name: 'Station' }],
-        preparedGeoJSON: expect.stringContaining('FeatureCollection')
+        geometry: expect.objectContaining({
+          type: 'Point',
+          bounds: [2.3, 48.8, 2.3, 48.8],
+          featureCount: 1
+        })
       })
     );
-    const preparedGeoJSON = updates.find((update) => update.preparedGeoJSON)
-      ?.preparedGeoJSON as string;
-    expect(JSON.parse(preparedGeoJSON).features[0]).toMatchObject({
-      geometry: { type: 'Point', coordinates: [2.3, 48.8] },
-      properties: { name: 'Station' }
-    });
+    expect(updates.some((update) => update.preparedGeoJSON)).toBe(false);
+    expect(
+      mocks.duckQuery.mock.calls.some(([sql]) =>
+        String(sql).includes('ST_AsGeoJSON')
+      )
+    ).toBe(false);
     expect(
       updates.some(
         (update) => update.deepAnalysis?.geoDetection.hasGeoColumns === true
