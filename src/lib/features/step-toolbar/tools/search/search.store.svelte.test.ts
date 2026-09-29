@@ -4,7 +4,6 @@ const mocks = vi.hoisted(() => ({
   duckQuery: vi.fn(),
   searchInTable: vi.fn(),
   getDatasetBySourceFile: vi.fn(),
-  centerMapOnTableRow: vi.fn(),
   pinAt: vi.fn(),
   unpin: vi.fn(),
   setHighlightedRows: vi.fn(),
@@ -62,10 +61,6 @@ vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
   }
 }));
 
-vi.mock('$lib/features/map/services/center-on-table-row.service', () => ({
-  centerMapOnTableRow: mocks.centerMapOnTableRow
-}));
-
 vi.mock('$lib/features/map/services/basemap.service.svelte', () => ({
   basemapService: {
     initialize: vi.fn(),
@@ -97,7 +92,6 @@ describe('search store tooltip integration', () => {
     mocks.unpin.mockReset();
     mocks.setHighlightedRows.mockReset();
     mocks.clearHighlights.mockReset();
-    mocks.centerMapOnTableRow.mockReset();
     mocks.bumpDatasetsVersion.mockReset();
     mocks.invalidateTableCache.mockReset();
 
@@ -180,7 +174,6 @@ describe('search store tooltip integration', () => {
     searchActions.goToNextResult();
 
     expect(mocks.setHighlightedRows).toHaveBeenCalledWith([55]);
-    expect(mocks.centerMapOnTableRow).not.toHaveBeenCalled();
   });
 
   it('projects HTML-like values to plain text in results and pinned tooltips', async () => {
@@ -244,8 +237,6 @@ describe('search store tooltip integration', () => {
 
     searchActions.setSearchValue('Braunschweig');
     await searchActions.performSearch();
-
-    expect(mocks.centerMapOnTableRow).not.toHaveBeenCalled();
   });
 
   it('excludes joined basemap columns (basemap_id, basemap_label, typo_match) from results', async () => {

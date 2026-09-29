@@ -285,8 +285,6 @@
   "density_loading": "Calculating density...",
   "density_layer_warning_title": "Density visualization unavailable",
   "density_layer_warning_message": "The dot-density visualization could not be displayed.",
-  "center_table_row_warning_title": "Unable to center the map",
-  "center_table_row_warning_message": "Khartis could not center the map on the selected row.",
   "basemap_loading": "Loading basemap...",
   "fill": "Fill",
   "discretization": "Classification",

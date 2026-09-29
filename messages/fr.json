@@ -285,8 +285,6 @@
   "density_loading": "Calcul de la densité…",
   "density_layer_warning_title": "Visualisation en densité indisponible",
   "density_layer_warning_message": "La visualisation en densité de points n'a pas pu être affichée.",
-  "center_table_row_warning_title": "Centrage de la carte impossible",
-  "center_table_row_warning_message": "Khartis n'a pas pu centrer la carte sur la ligne sélectionnée.",
   "basemap_loading": "Chargement du fond de carte…",
   "fill": "Fond",
   "discretization": "Discrétisation",

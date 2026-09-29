@@ -33,7 +33,6 @@
     Modal
   } from 'carbon-components-svelte';
   import { mapHighlightStore } from '$lib/features/map/stores/map-highlight.store.svelte';
-  import { centerMapOnTableRow } from '$lib/features/map/services/center-on-table-row.service';
   import { DataCheck } from 'carbon-icons-svelte';
   import MainToolBarHeader from '$lib/features/main-toolbar/components/main-toolbar-header.svelte';
   import CalculatorPanel from './calculator-panel.svelte';
@@ -55,7 +54,6 @@
   import { refreshDatasetMetadata } from '../services/dataset-metadata.service';
   import { resolveSelectedDuckTableName } from '../utils/dataset-resolution.utils';
   import { UI_CONSTANTS } from '$lib/features/commons/constants/visualization.constants';
-  import { untrack } from 'svelte';
 
   const selectedDataset = $derived.by(() => {
     const dataset = datasetsStore.selectedDataset;
@@ -690,27 +688,6 @@
     }
 
     mapHighlightStore.setHighlightedRows([currentRowId]);
-
-    untrack(() => {
-      const tableName = currentDuckTable;
-      if (!tableName) return;
-
-      const dataset = selectedDataset;
-      const sourceFileId = dataset?.sourceFileId;
-      if (!sourceFileId) return;
-
-      const duckDataset = sourceFileId
-        ? duckDBOrchestrator.getDatasetBySourceFile(sourceFileId)
-        : undefined;
-
-      void centerMapOnTableRow({
-        tableName,
-        rowId: currentRowId,
-        sourceFileId,
-        joinedBasemap: duckDataset?.joinedBasemap,
-        gpsColumns: duckDataset?.gpsColumns
-      });
-    });
   });
 
   $effect(() => {
