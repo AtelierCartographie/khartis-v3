@@ -20,6 +20,9 @@ vi.mock('$lib/features/duckdb', async () => ({
     '$lib/features/duckdb/utils/geometry-column.utils'
   )),
   ...(await vi.importActual<object>('$lib/features/duckdb/enums')),
+  ...(await vi.importActual<object>(
+    '$lib/features/duckdb/operations/background-table-build'
+  )),
   Duck: {
     query: mocks.queryMock,
     analyse: mocks.analyseMock,
@@ -137,6 +140,37 @@ describe('createBasemapFromGeometryTable', () => {
           sql.includes('extract_land(') && sql.includes('regions_geojson__land')
       )
     ).toBe(true);
+  });
+
+  it('should not wait for the representative points of a polygon coverage', async () => {
+    const { isTableBuildPending, waitForTableBuild } =
+      await import('$lib/features/duckdb');
+    let releaseCentroids = () => {};
+    const centroidsGate = new Promise<void>((resolve) => {
+      releaseCentroids = resolve;
+    });
+    mocks.queryMock.mockImplementation(async (sql: string) => {
+      if (sql.includes('ST_GeometryType')) {
+        return [{ geom_type: 'POLYGON' }];
+      }
+      if (sql.includes('ST_XMin')) {
+        return [{ minX: -5, minY: 41, maxX: 9, maxY: 51 }];
+      }
+      if (sql.includes('MAX(rowid)')) {
+        await centroidsGate;
+      }
+      return [];
+    });
+    const centroidsTable = getBasemapCentroidsTableName('regions_geojson');
+
+    await createBasemapFromGeometryTable(Duck, 'regions_geojson', {
+      title: 'regions.geojson'
+    });
+
+    expect(isTableBuildPending(centroidsTable)).toBe(true);
+    releaseCentroids();
+    await waitForTableBuild(centroidsTable);
+    expect(isTableBuildPending(centroidsTable)).toBe(false);
   });
 
   it('should never rewrite the source table it derives from', async () => {
