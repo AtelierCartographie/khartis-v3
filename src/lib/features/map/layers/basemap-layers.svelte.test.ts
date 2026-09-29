@@ -1,5 +1,11 @@
-import { COORDINATE_SYSTEM } from '@deck.gl/core';
-import { GeoJsonLayer, PathLayer, SolidPolygonLayer } from '@deck.gl/layers';
+import { COORDINATE_SYSTEM, type Layer } from '@deck.gl/core';
+import {
+  GeoJsonLayer,
+  PathLayer,
+  ScatterplotLayer,
+  SolidPolygonLayer,
+  TextLayer
+} from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import { geoEquirectangular } from 'd3-geo';
 import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
@@ -7,7 +13,6 @@ import type {
   FeatureCollection,
   LineString,
   MultiLineString,
-  Point,
   Polygon
 } from 'geojson';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -36,7 +41,9 @@ const {
   extractGeometryInfoMock,
   projectGeoJSONMock,
   parseSolidPolygonsWithProjectionMock,
-  parsePathsWithProjectionMock
+  parsePathsWithProjectionMock,
+  parsePointDataMock,
+  cityPointData
 } = vi.hoisted(() => {
   class WorkerStub {
     terminate() {}
@@ -57,7 +64,9 @@ const {
     extractGeometryInfoMock: vi.fn(),
     projectGeoJSONMock: vi.fn(),
     parseSolidPolygonsWithProjectionMock: vi.fn(),
-    parsePathsWithProjectionMock: vi.fn()
+    parsePathsWithProjectionMock: vi.fn(),
+    parsePointDataMock: vi.fn(),
+    cityPointData: new WeakMap<object, unknown>()
   };
 });
 
@@ -80,7 +89,8 @@ vi.mock('../utils/geoarrow-stream-bridge.utils', async () => {
     ...actual,
     projectGeoJSON: projectGeoJSONMock,
     parseSolidPolygonsWithProjection: parseSolidPolygonsWithProjectionMock,
-    parsePathsWithProjection: parsePathsWithProjectionMock
+    parsePathsWithProjection: parsePathsWithProjectionMock,
+    parsePointData: parsePointDataMock
   };
 });
 
@@ -92,9 +102,10 @@ import {
   createMersLayer,
   createReliefLayers,
   createTerreLayers,
-  createVillesLayer,
+  createVillesLayers,
   type MetadataLayerEntry
 } from './basemap-layers';
+import type { BasemapCity } from './basemap-cities';
 
 function createProjectionContext() {
   return {
@@ -241,14 +252,14 @@ function createNativeLineGeometryInfo(): GeometryInfo {
   };
 }
 
-function createPointGeometryInfo(): GeometryInfo {
+function createNativePointGeometryInfo(): GeometryInfo {
   return {
     type: 'Point',
-    encoding: 'geojson',
+    encoding: 'geoarrow.point',
     geoColumn: 'geometry',
-    isNativeGeoArrow: false,
+    isNativeGeoArrow: true,
     isWkbEncoded: false,
-    isGeoJsonEncoded: true
+    isGeoJsonEncoded: false
   };
 }
 
@@ -299,26 +310,88 @@ function createLineGeoJSON(
   };
 }
 
-function createPointGeoJSON(
-  id: string
-): FeatureCollection<Point, { id: string; adm0cap: number; pop_max: number }> {
+type CityLabel = { position: [number, number]; text: string };
+
+function createScalingProjectionContext(factor: number) {
   return {
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        properties: {
-          id,
-          adm0cap: 1,
-          pop_max: 1_000_000
-        },
-        geometry: {
-          type: 'Point',
-          coordinates: [2, 3]
-        }
-      }
-    ]
+    projection: {
+      stream: (sink: {
+        point: (x: number, y: number) => void;
+        lineStart: () => void;
+        lineEnd: () => void;
+        polygonStart: () => void;
+        polygonEnd: () => void;
+      }) => ({
+        ...sink,
+        point: (x: number, y: number) => sink.point(x * factor, y * factor)
+      })
+    } as ProjectionLike
   };
+}
+
+function createCityTable(
+  rows: Record<string, unknown>[],
+  positions: [number, number][],
+  featureIds = positions.map((_, index) => index)
+): ArrowTable {
+  const table = {
+    getChild(name: string) {
+      return rows.some((row) => name in row)
+        ? { get: (index: number) => rows[index]?.[name] }
+        : null;
+    }
+  } as unknown as ArrowTable;
+  cityPointData.set(table, {
+    length: positions.length,
+    positions: new Float64Array(positions.flat()),
+    featureIds: new Uint32Array(featureIds),
+    size: 2
+  });
+  return table;
+}
+
+function createCityMetadata(table: ArrowTable, type: BasemapLayerType) {
+  extractGeometryInfoMock.mockImplementation((candidate: ArrowTable) =>
+    candidate === table ? createNativePointGeometryInfo() : null
+  );
+  return {
+    metadataLayers: [
+      {
+        table,
+        style: null,
+        type,
+        file: 'cities.parquet'
+      } satisfies MetadataLayerEntry
+    ],
+    availableMetadataLayerTypes: [type],
+    stylePresets: null
+  };
+}
+
+function findCitySymbolLayer(layers: Layer[]): Layer | undefined {
+  return layers.find(
+    (layer) =>
+      String(layer.props.id).includes('basemap-villes') &&
+      !String(layer.props.id).includes('labels')
+  );
+}
+
+function findCityLabelLayer(layers: Layer[]): Layer | undefined {
+  return layers.find((layer) =>
+    String(layer.props.id).includes('basemap-villes-labels')
+  );
+}
+
+function readBinaryPositions(layer: Layer | undefined): number[] {
+  const data = layer?.props.data as
+    { attributes: { getPosition: { value: Float64Array } } } | undefined;
+  return Array.from(data?.attributes.getPosition.value ?? []);
+}
+
+function readBinaryPolygon(layer: Layer | undefined): Float64Array | undefined {
+  const data = layer?.props.data as
+    { attributes: { getPolygon: { value: Float64Array } } } | undefined;
+  return data?.attributes.getPolygon.value;
 }
 
 function createTerreConfig() {
@@ -344,6 +417,9 @@ function clearDocumentFonts(): void {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  parsePointDataMock.mockImplementation((table: object) =>
+    cityPointData.get(table)
+  );
   clearDocumentFonts();
   basemapLayersStore.resetToDefaults();
   projectGeoJSONMock.mockImplementation((geojson) => geojson);
@@ -1807,14 +1883,12 @@ describe('basemap projection fallbacks', () => {
   });
 
   it('projects city point overlays before rendering them', () => {
-    const sourceCities = createPointGeoJSON('raw-city');
-    const projectedCities = createPointGeoJSON('projected-city');
-    const ctx = createProjectionContext();
+    const cities: BasemapCity[] = [
+      { position: [2, 3], properties: { adm0cap: 1, pop_max: 1_000_000 } }
+    ];
 
-    projectGeoJSONMock.mockReturnValue(projectedCities);
-
-    const layer = createVillesLayer(
-      sourceCities,
+    const [layer] = createVillesLayers(
+      cities,
       {
         id: 'villes',
         visible: true,
@@ -1824,19 +1898,19 @@ describe('basemap projection fallbacks', () => {
         size: 6,
         opacity: 100
       },
-      ctx
-    ) as GeoJsonLayer | null;
-
-    expect(projectGeoJSONMock).toHaveBeenCalledWith(
-      sourceCities,
-      ctx.projection
+      createScalingProjectionContext(10)
     );
-    expect(layer?.props.data).toBe(projectedCities);
+
+    expect(layer).toBeInstanceOf(ScatterplotLayer);
+    expect(readBinaryPositions(layer)).toEqual([20, 30]);
+    expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
+    expect(projectGeoJSONMock).not.toHaveBeenCalled();
   });
 
   it('does not replace cached raw city polygons while rendering projected symbols', () => {
-    const sourceCities = createPointGeoJSON('raw-city');
-    const projectedCities = createPointGeoJSON('projected-city');
+    const cities: BasemapCity[] = [
+      { position: [2, 3], properties: { adm0cap: 1, pop_max: 1_000_000 } }
+    ];
     const config = {
       id: 'villes' as const,
       visible: true,
@@ -1847,66 +1921,37 @@ describe('basemap projection fallbacks', () => {
       opacity: 100
     };
 
-    const rawLayer = createVillesLayer(
-      sourceCities,
+    const rawLayers = createVillesLayers(cities, config, {});
+    const projectedLayers = createVillesLayers(
+      cities,
       config,
-      {}
-    ) as GeoJsonLayer | null;
-    const rawPolygonData = rawLayer?.props.data;
+      createScalingProjectionContext(10)
+    );
+    const nextRawLayers = createVillesLayers(cities, config, {});
 
-    projectGeoJSONMock.mockReturnValue(projectedCities);
-
-    const projectedLayer = createVillesLayer(
-      sourceCities,
-      config,
-      createProjectionContext()
-    ) as GeoJsonLayer | null;
-    const nextRawLayer = createVillesLayer(
-      sourceCities,
-      config,
-      {}
-    ) as GeoJsonLayer | null;
-
-    expect(projectedLayer?.props.data).not.toBe(rawPolygonData);
-    expect(nextRawLayer?.props.data).toBe(rawPolygonData);
+    expect(rawLayers.map((layer) => layer.constructor)).toEqual([
+      SolidPolygonLayer,
+      PathLayer
+    ]);
+    expect(readBinaryPolygon(projectedLayers[0])).not.toBe(
+      readBinaryPolygon(rawLayers[0])
+    );
+    expect(readBinaryPolygon(nextRawLayers[0])).toBe(
+      readBinaryPolygon(rawLayers[0])
+    );
   });
 
   it('connects centroid metadata to city symbols and labels', () => {
-    const centroidTable = { id: 'cities' } as unknown as ArrowTable;
-    const citiesGeoJSON: FeatureCollection<
-      Point,
-      { id: string; name: string; pop_max: number; adm0cap: number }
-    > = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: {
-            id: 'small',
-            name: 'Small',
-            pop_max: 10,
-            adm0cap: 0
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: [1, 1]
-          }
-        },
-        {
-          type: 'Feature',
-          properties: {
-            id: 'large',
-            name: '東京',
-            pop_max: 100,
-            adm0cap: 0
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: [2, 2]
-          }
-        }
+    const centroidTable = createCityTable(
+      [
+        { id: 'small', name: 'Small', pop_max: 10, adm0cap: 0 },
+        { id: 'large', name: '東京', pop_max: 100n, adm0cap: 0 }
+      ],
+      [
+        [1, 1],
+        [2, 2]
       ]
-    };
+    );
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.VILLES, true);
     basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.VILLES, {
@@ -1916,80 +1961,34 @@ describe('basemap projection fallbacks', () => {
       labelFontFamily: 'Cabin'
     });
 
-    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable ? createPointGeometryInfo() : null
-    );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable ? citiesGeoJSON : null
-    );
-
     const layers = createBasemapLayers(
       null,
       {},
-      {
-        metadataLayers: [
-          {
-            table: centroidTable,
-            style: null,
-            type: BasemapLayerType.CENTROID,
-            file: 'centroids.parquet'
-          } satisfies MetadataLayerEntry
-        ],
-        availableMetadataLayerTypes: [BasemapLayerType.CENTROID],
-        stylePresets: null
-      }
+      createCityMetadata(centroidTable, BasemapLayerType.CENTROID)
     );
 
-    const symbolLayer = layers.foreground.find((layer) =>
-      String(layer.props.id).includes('basemap-villes')
-    ) as GeoJsonLayer | undefined;
-    const labelLayer = layers.foreground.find((layer) =>
-      String(layer.props.id).includes('basemap-villes-labels')
-    ) as GeoJsonLayer | undefined;
-    const symbolData = symbolLayer?.props.data as
-      FeatureCollection<Point, { id: string }> | undefined;
-    const labelData = labelLayer?.props.data as
-      FeatureCollection<Point, { name: string }> | undefined;
-    const textCharacterSet = labelLayer?.props.textCharacterSet as
-      string[] | undefined;
+    const symbolLayer = findCitySymbolLayer(layers.foreground);
+    const labelLayer = findCityLabelLayer(layers.foreground) as
+      TextLayer<CityLabel> | undefined;
+    const labels = labelLayer?.props.data as CityLabel[] | undefined;
+    const characterSet = labelLayer?.props.characterSet as string[] | undefined;
 
-    expect(symbolLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(labelLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(symbolData?.features).toHaveLength(1);
-    expect(symbolData?.features[0]?.properties.id).toBe('large');
-    expect(labelData?.features).toHaveLength(1);
-    expect(labelLayer?.props.getText(labelData?.features[0])).toBe('東京');
-    expect(labelLayer?.props.getTextColor).toEqual([255, 0, 0, 255]);
-    expect(textCharacterSet).not.toBe('auto');
-    expect(textCharacterSet).toContain('東');
-    expect(textCharacterSet).toContain('京');
+    expect(symbolLayer).toBeInstanceOf(ScatterplotLayer);
+    expect(readBinaryPositions(symbolLayer)).toEqual([2, 2]);
+    expect(labelLayer).toBeInstanceOf(TextLayer);
+    expect(labels?.map((label) => label.text)).toEqual(['東京']);
+    expect(labelLayer?.props.getColor).toEqual([255, 0, 0, 255]);
+    expect(characterSet).not.toBe('auto');
+    expect(characterSet).toContain('東');
+    expect(characterSet).toContain('京');
+    expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
   });
 
   it('waits for font assets before rendering city labels', () => {
-    const centroidTable = {
-      id: 'cities-font-loading'
-    } as unknown as ArrowTable;
-    const citiesGeoJSON: FeatureCollection<
-      Point,
-      { id: string; name: string; pop_max: number; adm0cap: number }
-    > = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: {
-            id: 'city',
-            name: 'City',
-            pop_max: 100,
-            adm0cap: 0
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: [2, 2]
-          }
-        }
-      ]
-    };
+    const centroidTable = createCityTable(
+      [{ id: 'city', name: 'City', pop_max: 100, adm0cap: 0 }],
+      [[2, 2]]
+    );
 
     Object.defineProperty(document, 'fonts', {
       configurable: true,
@@ -1999,342 +1998,121 @@ describe('basemap projection fallbacks', () => {
       }
     });
     fontAssetsStore.reset();
-
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.VILLES, true);
-    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable ? createPointGeometryInfo() : null
-    );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable ? citiesGeoJSON : null
-    );
 
     const layers = createBasemapLayers(
       null,
       {},
-      {
-        metadataLayers: [
-          {
-            table: centroidTable,
-            style: null,
-            type: BasemapLayerType.CENTROID,
-            file: 'centroids.parquet'
-          } satisfies MetadataLayerEntry
-        ],
-        availableMetadataLayerTypes: [BasemapLayerType.CENTROID],
-        stylePresets: null
-      }
-    );
-
-    const symbolLayer = layers.foreground.find(
-      (layer) =>
-        String(layer.props.id).includes('basemap-villes') &&
-        !String(layer.props.id).includes('labels')
-    ) as GeoJsonLayer | undefined;
-    const labelLayer = layers.foreground.find((layer) =>
-      String(layer.props.id).includes('basemap-villes-labels')
+      createCityMetadata(centroidTable, BasemapLayerType.CENTROID)
     );
 
     expect(fontAssetsStore.ready).toBe(false);
-    expect(symbolLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(labelLayer).toBeUndefined();
+    expect(findCitySymbolLayer(layers.foreground)).toBeInstanceOf(
+      ScatterplotLayer
+    );
+    expect(findCityLabelLayer(layers.foreground)).toBeUndefined();
   });
 
-  it('normalizes single-coordinate centroid metadata to point city layers', () => {
-    const centroidTable = { id: 'geoarrow-centroids' } as unknown as ArrowTable;
-    const centroidsGeoJSON: FeatureCollection<
-      LineString,
-      { id: string; name: string; pop_max: number; adm0cap: number }
-    > = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: {
-            id: 'centroid-city',
-            name: 'Centroid City',
-            pop_max: 100,
-            adm0cap: 0
-          },
-          geometry: {
-            type: 'LineString',
-            coordinates: [[2, 2]]
-          }
-        }
-      ]
-    };
+  it('expands multipoint centroids into one city per point', () => {
+    const centroidTable = createCityTable(
+      [{ id: 'archipelago', name: 'Archipel', pop_max: 100, adm0cap: 0 }],
+      [
+        [2, 2],
+        [4, 4]
+      ],
+      [0, 0]
+    );
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.VILLES, true);
-
-    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable
-        ? {
-            type: 'MULTIPOINT',
-            encoding: 'geoarrow.multipoint',
-            geoColumn: 'geometry',
-            isNativeGeoArrow: true,
-            isWkbEncoded: false,
-            isGeoJsonEncoded: false
-          }
-        : null
-    );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable ? centroidsGeoJSON : null
-    );
+    basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.VILLES, { count: 5 });
 
     const layers = createBasemapLayers(
       null,
       {},
-      {
-        metadataLayers: [
-          {
-            table: centroidTable,
-            style: null,
-            type: BasemapLayerType.CENTROID,
-            file: 'centroids.parquet'
-          } satisfies MetadataLayerEntry
-        ],
-        availableMetadataLayerTypes: [BasemapLayerType.CENTROID],
-        stylePresets: null
-      }
+      createCityMetadata(centroidTable, BasemapLayerType.CENTROID)
     );
+    const labels = findCityLabelLayer(layers.foreground)?.props.data as
+      CityLabel[] | undefined;
 
-    const symbolLayer = layers.foreground.find(
-      (layer) =>
-        String(layer.props.id).includes('basemap-villes') &&
-        !String(layer.props.id).includes('labels')
-    ) as GeoJsonLayer | undefined;
-    const labelLayer = layers.foreground.find((layer) =>
-      String(layer.props.id).includes('basemap-villes-labels')
-    ) as GeoJsonLayer | undefined;
-    const symbolData = symbolLayer?.props.data as
-      FeatureCollection<Point, { id: string }> | undefined;
-    const labelData = labelLayer?.props.data as
-      FeatureCollection<Point, { name: string }> | undefined;
-
-    expect(symbolLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(labelLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(symbolData?.features[0]?.geometry).toEqual({
-      type: 'Point',
-      coordinates: [2, 2]
-    });
-    expect(labelLayer?.props.getText(labelData?.features[0])).toBe(
-      'Centroid City'
+    expect(readBinaryPositions(findCitySymbolLayer(layers.foreground))).toEqual(
+      [2, 2, 4, 4]
     );
+    expect(labels?.map((label) => label.text)).toEqual([
+      'Archipel',
+      'Archipel'
+    ]);
   });
 
   it('falls back to point metadata for city symbols and labels', () => {
-    const pointTable = { id: 'point-cities' } as unknown as ArrowTable;
-    const citiesGeoJSON: FeatureCollection<
-      Point,
-      { id: string; name: string; pop_max: number; adm0cap: number }
-    > = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: {
-            id: 'point-city',
-            name: 'Point City',
-            pop_max: 100,
-            adm0cap: 0
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: [2, 2]
-          }
-        }
-      ]
-    };
+    const pointTable = createCityTable(
+      [{ id: 'point-city', name: 'Point City', pop_max: 100, adm0cap: 0 }],
+      [[2, 2]]
+    );
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.VILLES, true);
-
-    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === pointTable ? createPointGeometryInfo() : null
-    );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
-      table === pointTable ? citiesGeoJSON : null
-    );
+    basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.VILLES, { count: 5 });
 
     const layers = createBasemapLayers(
       null,
       {},
-      {
-        metadataLayers: [
-          {
-            table: pointTable,
-            style: null,
-            type: BasemapLayerType.POINT,
-            file: 'points.parquet'
-          } satisfies MetadataLayerEntry
-        ],
-        availableMetadataLayerTypes: [BasemapLayerType.POINT],
-        stylePresets: null
-      }
+      createCityMetadata(pointTable, BasemapLayerType.POINT)
     );
+    const labels = findCityLabelLayer(layers.foreground)?.props.data as
+      CityLabel[] | undefined;
 
-    const symbolLayer = layers.foreground.find(
-      (layer) =>
-        String(layer.props.id).includes('basemap-villes') &&
-        !String(layer.props.id).includes('labels')
-    ) as GeoJsonLayer | undefined;
-    const labelLayer = layers.foreground.find((layer) =>
-      String(layer.props.id).includes('basemap-villes-labels')
-    ) as GeoJsonLayer | undefined;
-    const labelData = labelLayer?.props.data as
-      FeatureCollection<Point, { name: string }> | undefined;
-
-    expect(symbolLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(labelLayer).toBeInstanceOf(GeoJsonLayer);
-    expect(labelLayer?.props.getText(labelData?.features[0])).toBe(
-      'Point City'
+    expect(findCitySymbolLayer(layers.foreground)).toBeInstanceOf(
+      ScatterplotLayer
     );
+    expect(labels?.map((label) => label.text)).toEqual(['Point City']);
   });
 
   it('projects city symbols and labels with the active projection', () => {
-    const centroidTable = { id: 'projected-cities' } as unknown as ArrowTable;
-    const sourceCities: FeatureCollection<
-      Point,
-      { id: string; name: string; pop_max: number; adm0cap: number }
-    > = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: {
-            id: 'raw-city',
-            name: 'Raw City',
-            pop_max: 100,
-            adm0cap: 0
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: [2, 2]
-          }
-        }
-      ]
-    };
-    const projectedCities: FeatureCollection<
-      Point,
-      { id: string; name: string; pop_max: number; adm0cap: number }
-    > = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: {
-            id: 'projected-city',
-            name: 'Projected City',
-            pop_max: 100,
-            adm0cap: 0
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: [20, 20]
-          }
-        }
-      ]
-    };
-    const ctx = createProjectionContext();
+    const centroidTable = createCityTable(
+      [{ id: 'raw-city', name: 'Raw City', pop_max: 100, adm0cap: 0 }],
+      [[2, 2]]
+    );
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.VILLES, true);
-    projectGeoJSONMock.mockReturnValue(projectedCities);
-    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable ? createPointGeometryInfo() : null
+    basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.VILLES, { count: 5 });
+
+    const layers = createBasemapLayers(
+      null,
+      createScalingProjectionContext(10),
+      createCityMetadata(centroidTable, BasemapLayerType.CENTROID)
     );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable ? sourceCities : null
+    const labels = findCityLabelLayer(layers.foreground)?.props.data as
+      CityLabel[] | undefined;
+
+    expect(readBinaryPositions(findCitySymbolLayer(layers.foreground))).toEqual(
+      [20, 20]
     );
-
-    const layers = createBasemapLayers(null, ctx, {
-      metadataLayers: [
-        {
-          table: centroidTable,
-          style: null,
-          type: BasemapLayerType.CENTROID,
-          file: 'centroids.parquet'
-        } satisfies MetadataLayerEntry
-      ],
-      availableMetadataLayerTypes: [BasemapLayerType.CENTROID],
-      stylePresets: null
-    });
-
-    const symbolLayer = layers.foreground.find(
-      (layer) =>
-        String(layer.props.id).includes('basemap-villes') &&
-        !String(layer.props.id).includes('labels')
-    ) as GeoJsonLayer | undefined;
-    const labelLayer = layers.foreground.find((layer) =>
-      String(layer.props.id).includes('basemap-villes-labels')
-    ) as GeoJsonLayer | undefined;
-
-    expect(projectGeoJSONMock).toHaveBeenCalledTimes(2);
-    expect(symbolLayer?.props.data).toBe(projectedCities);
-    expect(labelLayer?.props.data).toBe(projectedCities);
+    expect(labels?.map((label) => label.position)).toEqual([[20, 20]]);
   });
 
-  it('reuses the labelled city subset across identical projected rebuilds', () => {
-    const centroidTable = {
-      id: 'memoized-projected-cities'
-    } as unknown as ArrowTable;
-    const sourceCities: FeatureCollection<
-      Point,
-      { id: string; name: string; pop_max: number; adm0cap: number }
-    > = {
-      type: 'FeatureCollection',
-      features: [
-        {
-          type: 'Feature',
-          properties: {
-            id: 'city',
-            name: 'City',
-            pop_max: 100,
-            adm0cap: 0
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: [2, 2]
-          }
-        }
-      ]
-    };
-    const projectedCities = createPointGeoJSON('projected-city');
-    const ctx = createProjectionContext();
+  it('reuses the projected city subset across identical rebuilds', () => {
+    const centroidTable = createCityTable(
+      [{ id: 'city', name: 'City', pop_max: 100, adm0cap: 0 }],
+      [[2, 2]]
+    );
+    const ctx = createScalingProjectionContext(10);
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.VILLES, true);
-    projectGeoJSONMock.mockReturnValue(projectedCities);
-    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable ? createPointGeometryInfo() : null
-    );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
-      table === centroidTable ? sourceCities : null
-    );
+    basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.VILLES, { count: 5 });
 
-    createBasemapLayers(null, ctx, {
-      metadataLayers: [
-        {
-          table: centroidTable,
-          style: null,
-          type: BasemapLayerType.CENTROID,
-          file: 'centroids.parquet'
-        } satisfies MetadataLayerEntry
-      ],
-      availableMetadataLayerTypes: [BasemapLayerType.CENTROID],
-      stylePresets: null
-    });
-    createBasemapLayers(null, ctx, {
-      metadataLayers: [
-        {
-          table: centroidTable,
-          style: null,
-          type: BasemapLayerType.CENTROID,
-          file: 'centroids.parquet'
-        } satisfies MetadataLayerEntry
-      ],
-      availableMetadataLayerTypes: [BasemapLayerType.CENTROID],
-      stylePresets: null
-    });
+    const metadata = createCityMetadata(
+      centroidTable,
+      BasemapLayerType.CENTROID
+    );
+    const first = findCityLabelLayer(
+      createBasemapLayers(null, ctx, metadata).foreground
+    );
+    const second = findCityLabelLayer(
+      createBasemapLayers(null, ctx, metadata).foreground
+    );
+    const firstLabels = first?.props.data as CityLabel[] | undefined;
+    const secondLabels = second?.props.data as CityLabel[] | undefined;
 
-    expect(projectGeoJSONMock).toHaveBeenCalledTimes(2);
+    expect(secondLabels?.[0]?.position).toBe(firstLabels?.[0]?.position);
   });
 
   it('renders the Territoire from LAND metadata even when worldBaseTable is null', () => {
