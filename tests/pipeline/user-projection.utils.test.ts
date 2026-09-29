@@ -7,7 +7,10 @@ import type { BBox } from '$lib/features/map/types';
 import type { D3Usage } from '@ateliercartographie/proj-suggest';
 import { PROJECTIONS } from '$lib/features/commons/utils/projection.utils';
 import { CLIP_DEGENERACY_EPSILON } from '$lib/features/commons/utils/d3-projection-config.utils';
-import { computeProjectedBboxForProjection } from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
+import {
+  computeProjectedBboxForProjection,
+  getProjectionSpec
+} from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
 import {
   getCompositeProjectionPresetId,
   getCompositeProjectionSelectionId,
@@ -454,6 +457,36 @@ describe('user projection utils', () => {
     expect(projection.rotate()[0]).toBeCloseTo(-10);
     expect(projection.rotate()[1]).toBeCloseTo(-52);
     expect(projection.angle()).toBeCloseTo(15);
+  });
+
+  it('registers a structured-cloneable worker spec for reactive projection state', () => {
+    const reactive = <T extends object>(value: T): T => new Proxy(value, {});
+    const fitBbox = reactive<BBox>([-24.6, 34.8, 45.8, 71.2]);
+    const projection = resolveUserProjectionOverride({
+      state: {
+        selected: 'mercator',
+        overrideActive: true,
+        customCode: undefined,
+        suggestionD3Config: reactive({
+          projection: 'geoAzimuthalEqualArea',
+          rotate: reactive<[number, number]>([-10, -52])
+        }),
+        suggestionScale: reactive(['national']),
+        center: reactive<[number, number]>([10, 52]),
+        longitude: 10,
+        latitude: 52,
+        rotation: 0
+      },
+      fitBbox,
+      viewportSize: { width: 960, height: 600 },
+      padding: 40,
+      projectionPresets
+    });
+
+    expect(projection).toBeDefined();
+    const spec = getProjectionSpec(projection!);
+    expect(spec).not.toBeNull();
+    expect(() => structuredClone(spec)).not.toThrow();
   });
 
   it('ignores custom proj4 overrides that produce invalid coordinates', () => {
