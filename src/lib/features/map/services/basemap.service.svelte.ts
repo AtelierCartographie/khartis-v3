@@ -32,7 +32,7 @@ import type {
   ProjectionPresets,
   StylePresets
 } from '../types/basemap.types';
-import { readGeoParquetDirect } from './read-geojson-arrow.service';
+import { readGeoParquetDirect } from './read-geoparquet-arrow.service';
 import { SimplificationLevel } from '../../commons/types/enums';
 import { INTERNAL_COLUMN } from '../../commons/constants/data.constants';
 import { GEOMETRY_WKT_TYPES } from '../../commons/constants/geometry.constants';
