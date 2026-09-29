@@ -71,6 +71,7 @@ import type { StylePresets } from '../types/basemap.types';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { withOpacity, dottedPatternToDashArray } from './layer-helpers';
 import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
+import { getBasemapFrameExtent } from '../utils/basemap-frame.utils';
 import {
   DEFAULT_TEXT_LINE_HEIGHT,
   extendTextCharacterSet,
@@ -82,6 +83,7 @@ import {
 } from '../utils/projection-sphere-mask.utils';
 import {
   createProjectedCompositeOceanData,
+  createScreenExtentPolygon,
   getEquatorGeoJSON,
   getGraticuleGeoJSON,
   hasCompositeGraticuleSubProjections,
@@ -212,6 +214,7 @@ interface BasemapLayerContext {
   bbox?: BBox | null;
   excludeEquator?: boolean;
   graticuleClipExtent?: GraticuleClipExtent | null;
+  unprojectedFrame?: GraticuleClipExtent | null;
 }
 
 interface BaseLayerProps {
@@ -544,7 +547,7 @@ export function createMersLayer(
 
     const projectedCompositeOceanData = createProjectedCompositeOceanData(
       ctx.projection,
-      ctx.graticuleClipExtent
+      getBasemapFrameExtent(ctx.projection) ?? ctx.graticuleClipExtent
     );
 
     if (projectedCompositeOceanData) {
@@ -566,26 +569,31 @@ export function createMersLayer(
     return null;
   }
 
+  const unprojectedFramePolygon = ctx.unprojectedFrame
+    ? createScreenExtentPolygon(ctx.unprojectedFrame)
+    : null;
   const oceanGeoJSON: FeatureCollection = {
     type: GEOJSON_TYPE.FEATURE_COLLECTION,
-    features: [
-      {
-        type: GEOJSON_TYPE.FEATURE,
-        properties: {},
-        geometry: {
-          type: GEOJSON_TYPE.POLYGON,
-          coordinates: [
-            [
-              [-180, -90],
-              [180, -90],
-              [180, 90],
-              [-180, 90],
-              [-180, -90]
-            ]
-          ]
-        }
-      }
-    ]
+    features: unprojectedFramePolygon
+      ? [unprojectedFramePolygon]
+      : [
+          {
+            type: GEOJSON_TYPE.FEATURE,
+            properties: {},
+            geometry: {
+              type: GEOJSON_TYPE.POLYGON,
+              coordinates: [
+                [
+                  [-180, -90],
+                  [180, -90],
+                  [180, 90],
+                  [-180, 90],
+                  [-180, -90]
+                ]
+              ]
+            }
+          }
+        ]
   };
 
   return new GeoJsonLayer({
