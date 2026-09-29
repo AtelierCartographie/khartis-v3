@@ -1,7 +1,4 @@
-export {
-  calculateBoundsFromGeoArrow,
-  calculateBoundsFromGeoJSON
-} from './bounds';
+export { calculateBoundsFromGeoArrow } from './bounds';
 
 export {
   get_bbox_from_geoparquet,

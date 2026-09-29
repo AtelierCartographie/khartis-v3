@@ -1,6 +1,5 @@
 import type { Layer } from '@deck.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { FeatureCollection } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { FillMode } from '$lib/features/commons/constants/visualization.constants';
 import {
@@ -12,7 +11,6 @@ import { DeckLayerId, GeometryType } from '../constants';
 import { extractGeometryInfo } from '../io';
 import type { DeckDataRow, GeometryInfo, LayerContext } from '../types';
 import { orderLayersByPrimitive } from './primitive-layer-order';
-import { createGeoJsonLayerStack } from './geojson-layer-factory';
 import { createThematicLayerId } from './layer-id.utils';
 import { withPrimitiveScope } from './split-rendering-accessors';
 import { createLineLayerStack } from './line-layer-factory';
@@ -22,12 +20,7 @@ import {
   createRepresentativePointSymbolLayers
 } from './point-layer-factory';
 import { createTextOverlayLayers } from './text-layer-factory';
-import {
-  createHighlightedGeoJsonOverlay,
-  createHighlightedFeatureOverlay
-} from './layer-selection-overlays';
-import { ensureGeoJsonFeatureIds } from './layer-highlight.utils';
-import { getCachedProjectedGeoJSON } from './layer-geojson-cache';
+import { createHighlightedFeatureOverlay } from './layer-selection-overlays';
 
 export { resolveSplitMappingFeatureIdColumn } from './split-rendering-accessors';
 export { resolveTextAnchor } from './text-layer-data.utils';
@@ -71,30 +64,11 @@ export function createPolygonLayers(
   });
 }
 
-export function createGeoJsonLayers(
-  geojson: FeatureCollection,
-  ctx: LayerContext
-): Layer<DeckDataRow>[] {
-  const layerId = createThematicLayerId(DeckLayerId.GEOJSON_LAYER, ctx);
-  return createGeoJsonLayerStack(geojson, ctx, layerId);
-}
-
 export function createSelectionOverlay(
-  source: ArrowTable | FeatureCollection,
+  source: ArrowTable,
   ctx: LayerContext
 ): Layer<DeckDataRow> | null {
   const highlightVersion = ctx.highlightVersion ?? 0;
-  if (!('schema' in source)) {
-    return createHighlightedGeoJsonOverlay(
-      createThematicLayerId(DeckLayerId.GEOJSON_LAYER, ctx),
-      ensureGeoJsonFeatureIds(
-        getCachedProjectedGeoJSON(source, ctx.customProjection)
-      ),
-      ctx.highlightedRowIds,
-      highlightVersion,
-      ctx
-    );
-  }
   const geometryInfo = extractGeometryInfo(source);
   return geometryInfo
     ? createHighlightedFeatureOverlay(

@@ -54,7 +54,6 @@
   });
   const displayTables = $derived(mapDisplayData.displayTables);
   const displayDensityTables = $derived(mapDisplayData.displayDensityTables);
-  const displayGeoJSONs = $derived(mapDisplayData.displayGeoJSONs);
   const displaySplitData = $derived(mapDisplayData.displaySplitData);
   const displayDataVersion = $derived(mapDisplayData.displayDataVersion);
 
@@ -484,7 +483,6 @@
           tables={displayTables}
           densityTables={displayDensityTables}
           splitData={displaySplitData}
-          geoJSONs={displayGeoJSONs}
           layout={facetsLayout}
           width={renderedPageWidth}
           height={renderedPageHeight}
@@ -498,7 +496,6 @@
           tables={displayTables}
           densityTables={displayDensityTables}
           splitData={displaySplitData}
-          geoJSONs={displayGeoJSONs}
           dataVersion={displayDataVersion}
           width={renderedPageWidth}
           height={renderedPageHeight}

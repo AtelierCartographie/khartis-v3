@@ -1,7 +1,7 @@
 import type { Layer } from '@deck.gl/core';
 import { GeoJsonLayer, PathLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { FeatureCollection, Geometry } from 'geojson';
+import type { FeatureCollection } from 'geojson';
 import { createPathLayerProps } from '@ateliercartographie/geoarrow-deck-stream';
 import type { BinaryPathData } from '@ateliercartographie/geoarrow-deck-stream';
 
@@ -13,11 +13,7 @@ import {
   pathWidthAttr
 } from '../utils/geoarrow-stream-bridge.utils';
 import type { DeckDataRow, LayerContext } from '../types';
-import {
-  hasAnyHighlightedFeature,
-  isPolygonGeometryType,
-  resolveGeoJsonFeatureRowId
-} from './layer-highlight.utils';
+import { hasAnyHighlightedFeature } from './layer-highlight.utils';
 import { createSplitAwareRowAccessor } from './split-rendering-accessors';
 import {
   getCachedGeoJSON,
@@ -176,54 +172,6 @@ export function createHighlightedBinaryPolygonOverlay(
     updateTriggers: {
       getColor: [highlightVersion],
       getWidth: [highlightVersion]
-    },
-    dataComparator: (newData, oldData) => newData === oldData
-  });
-}
-
-export function createHighlightedGeoJsonOverlay<T extends Geometry>(
-  layerId: string,
-  geojson: FeatureCollection<T>,
-  highlightedRowIds: Set<number> | undefined,
-  highlightVersion: number,
-  ctx: Pick<LayerContext, 'modelMatrix' | 'beforeId'>
-): Layer<DeckDataRow> | null {
-  if (!highlightedRowIds || highlightedRowIds.size === 0) {
-    return null;
-  }
-
-  const highlightedGeoJson: FeatureCollection<T> = {
-    ...geojson,
-    features: geojson.features.filter(
-      (feature, index) =>
-        isPolygonGeometryType(feature.geometry?.type) &&
-        highlightedRowIds.has(resolveGeoJsonFeatureRowId(feature, index))
-    )
-  };
-
-  if (highlightedGeoJson.features.length === 0) {
-    return null;
-  }
-
-  return new GeoJsonLayer({
-    id: `${layerId}-selection-overlay`,
-    data: highlightedGeoJson,
-    filled: false,
-    stroked: true,
-    lineWidthUnits: 'pixels',
-    getLineColor: SELECTED_POLYGON_STROKE_COLOR,
-    getLineWidth: SELECTED_POLYGON_STROKE_WIDTH,
-    lineWidthMinPixels: SELECTED_POLYGON_STROKE_WIDTH,
-    pickable: false,
-    parameters: {
-      depthCompare: 'always' as const,
-      stencilCompare: 'always' as const
-    },
-    ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
-    ...(ctx.beforeId && { beforeId: ctx.beforeId }),
-    updateTriggers: {
-      getLineColor: [highlightVersion],
-      getLineWidth: [highlightVersion]
     },
     dataComparator: (newData, oldData) => newData === oldData
   });

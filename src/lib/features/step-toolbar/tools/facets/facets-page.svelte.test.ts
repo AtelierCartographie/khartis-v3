@@ -56,7 +56,6 @@ vi.hoisted(() => {
 const baseProps = {
   visualizations: [],
   tables: new Map(),
-  geoJSONs: new Map(),
   layout: {
     columns: 2,
     gap: 16,

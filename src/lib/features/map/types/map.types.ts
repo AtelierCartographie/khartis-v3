@@ -1,7 +1,6 @@
 import type { Layer } from '@deck.gl/core';
 import type { Matrix4 } from '@math.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { FeatureCollection } from 'geojson';
 import type { ProjectionLike } from '@ateliercartographie/geoarrow-deck-stream';
 import type {
   PrimitiveFilter,
@@ -62,7 +61,6 @@ export interface DeckMapProps {
   tables: Map<string, ArrowTable>;
   densityTables?: Map<string, ArrowTable>;
   splitData?: Map<string, SplitRenderingTable>;
-  geoJSONs: Map<string, FeatureCollection>;
   dataVersion?: number;
   width: number;
   height: number;
