@@ -1,19 +1,116 @@
-import type { Feature, FeatureCollection, Point, Polygon } from 'geojson';
-import { GEOJSON_TYPE } from '$lib/features/commons/constants';
+import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import type {
+  BinaryPointData,
+  ProjectionLike
+} from '@ateliercartographie/geoarrow-deck-stream';
 import {
   BASEMAP_LAYER_CONFIG,
   BasemapCityCategory,
   BasemapCitySymbol
 } from '$lib/features/commons/constants/visualization.constants';
 import type { VillesLayerConfig } from '../stores/basemap-layers.store.svelte';
+import { createProjectionPointSampler } from '../utils/projected-bbox.utils';
+
+export interface BasemapCity {
+  position: [number, number];
+  properties: Record<string, unknown>;
+}
+
+export interface BasemapCityShapes {
+  length: number;
+  positions: Float64Array;
+  startIndices: Uint32Array;
+}
+
+const CITY_LABEL_COLUMNS = [
+  'label',
+  'name',
+  'name_fr',
+  'name_en',
+  'nameascii',
+  'NAME',
+  'NOM',
+  'nom',
+  'id'
+];
+const CITY_ATTRIBUTE_COLUMNS = [
+  'adm0cap',
+  'featurecla',
+  'pop_max',
+  'population',
+  'pop',
+  'POP_MAX',
+  ...CITY_LABEL_COLUMNS
+];
 
 let cachedCitiesKey: string | null = null;
-let cachedCitiesSource: FeatureCollection<Point> | null = null;
-let cachedFilteredCities: FeatureCollection<Point> | null = null;
-let cachedLabelledCitiesSource: FeatureCollection<Point> | null = null;
-let cachedLabelledCities: FeatureCollection<Point> | null = null;
+let cachedCitiesSource: BasemapCity[] | null = null;
+let cachedFilteredCities: BasemapCity[] | null = null;
+let cachedLabelledCitiesSource: BasemapCity[] | null = null;
+let cachedLabelledCities: BasemapCity[] | null = null;
 let cachedPolygonCitiesKey: string | null = null;
-let cachedPolygonCities: FeatureCollection<Polygon> | null = null;
+let cachedPolygonCities: BasemapCityShapes | null = null;
+const projectedCitiesCache = new WeakMap<
+  BasemapCity[],
+  WeakMap<object, BasemapCity[]>
+>();
+
+export function readBasemapCities(
+  table: ArrowTable,
+  points: BinaryPointData
+): BasemapCity[] {
+  const columns = CITY_ATTRIBUTE_COLUMNS.flatMap((name) => {
+    const vector = table.getChild(name);
+    return vector ? [{ name, vector }] : [];
+  });
+  const size = points.size ?? 2;
+  const cities: BasemapCity[] = [];
+
+  for (let index = 0; index < points.length; index++) {
+    const x = Number(points.positions[index * size]);
+    const y = Number(points.positions[index * size + 1]);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+
+    const row = points.featureIds[index];
+    const properties: Record<string, unknown> = {};
+    for (const { name, vector } of columns) {
+      const value = vector.get(row);
+      properties[name] = typeof value === 'bigint' ? Number(value) : value;
+    }
+    cities.push({ position: [x, y], properties });
+  }
+
+  return cities;
+}
+
+export function projectBasemapCities(
+  cities: BasemapCity[],
+  projection: ProjectionLike | undefined
+): BasemapCity[] {
+  if (!projection) {
+    return cities;
+  }
+
+  const projectionKey = projection as ProjectionLike & object;
+  let byProjection = projectedCitiesCache.get(cities);
+  const cached = byProjection?.get(projectionKey);
+  if (cached) {
+    return cached;
+  }
+
+  const projectPoint = createProjectionPointSampler(projection);
+  const projected = cities.flatMap((city) => {
+    const position = projectPoint(city.position);
+    return position ? [{ ...city, position }] : [];
+  });
+
+  if (!byProjection) {
+    byProjection = new WeakMap();
+    projectedCitiesCache.set(cities, byProjection);
+  }
+  byProjection.set(projectionKey, projected);
+  return projected;
+}
 
 function getSymbolPolygonSides(symbol: BasemapCitySymbol): number {
   switch (symbol) {
@@ -80,48 +177,50 @@ function createSymbolPolygon(
   return points;
 }
 
-function convertCitiesToPolygons(
-  cities: FeatureCollection<Point>,
+function convertCitiesToShapes(
+  cities: BasemapCity[],
   symbol: BasemapCitySymbol,
   sizePx: number,
   radiusScale?: number
-): FeatureCollection<Polygon> {
+): BasemapCityShapes {
   const sides = getSymbolPolygonSides(symbol);
   const angleOffset = getSymbolAngleOffset(symbol);
   const isStar = isStarSymbol(symbol);
+  const verticesPerShape = sides + 1;
+  const positions = new Float64Array(cities.length * verticesPerShape * 2);
+  const startIndices = new Uint32Array(cities.length + 1);
 
-  const features = cities.features.map((feature) => {
-    const coords = feature.geometry.coordinates as [number, number];
-    const polygon = createSymbolPolygon(
-      coords,
+  cities.forEach((city, cityIndex) => {
+    const ring = createSymbolPolygon(
+      city.position,
       sizePx,
       sides,
       angleOffset,
       isStar,
       radiusScale
     );
-    return {
-      type: GEOJSON_TYPE.FEATURE,
-      properties: feature.properties,
-      geometry: {
-        type: GEOJSON_TYPE.POLYGON,
-        coordinates: [polygon]
-      }
-    };
+    const offset = cityIndex * verticesPerShape;
+    startIndices[cityIndex] = offset;
+    ring.forEach(([x, y], vertexIndex) => {
+      positions[(offset + vertexIndex) * 2] = x;
+      positions[(offset + vertexIndex) * 2 + 1] = y;
+    });
   });
+  startIndices[cities.length] = cities.length * verticesPerShape;
 
-  return { type: GEOJSON_TYPE.FEATURE_COLLECTION, features };
+  return { length: cities.length, positions, startIndices };
 }
 
 function filterCitiesByCategory(
-  cities: FeatureCollection<Point>,
+  cities: BasemapCity[],
   category: BasemapCityCategory
-): FeatureCollection<Point> {
-  const features = cities.features.filter((feature) => {
-    const props = feature.properties ?? {};
+): BasemapCity[] {
+  return cities.filter(({ properties: props }) => {
+    const featureClass = props.featurecla;
     const isCapital =
-      props.adm0cap === 1 || props.featurecla?.includes('capital');
-    const pop = props.pop_max ?? 0;
+      props.adm0cap === 1 ||
+      (typeof featureClass === 'string' && featureClass.includes('capital'));
+    const pop = Number(props.pop_max ?? 0);
 
     switch (category) {
       case BasemapCityCategory.CAPITALS:
@@ -136,8 +235,6 @@ function filterCitiesByCategory(
         return isCapital;
     }
   });
-
-  return { type: GEOJSON_TYPE.FEATURE_COLLECTION, features };
 }
 
 function clampBasemapCityCount(count: number | undefined): number | undefined {
@@ -151,8 +248,8 @@ function clampBasemapCityCount(count: number | undefined): number | undefined {
   );
 }
 
-function getCityPopulation(feature: Feature<Point>): number {
-  const props = feature.properties ?? {};
+function getCityPopulation(city: BasemapCity): number {
+  const props = city.properties;
   const rawValue =
     props.pop_max ?? props.population ?? props.pop ?? props.POP_MAX ?? 0;
   const value = Number(rawValue);
@@ -160,23 +257,21 @@ function getCityPopulation(feature: Feature<Point>): number {
 }
 
 function filterCitiesByCount(
-  cities: FeatureCollection<Point>,
+  cities: BasemapCity[],
   count: number
-): FeatureCollection<Point> {
-  const features = cities.features
-    .map((feature, index) => ({
-      feature,
+): BasemapCity[] {
+  return cities
+    .map((city, index) => ({
+      city,
       index,
-      population: getCityPopulation(feature)
+      population: getCityPopulation(city)
     }))
     .sort((left, right) => {
       const populationDelta = right.population - left.population;
       return populationDelta === 0 ? left.index - right.index : populationDelta;
     })
     .slice(0, count)
-    .map(({ feature }) => feature);
-
-  return { type: GEOJSON_TYPE.FEATURE_COLLECTION, features };
+    .map(({ city }) => city);
 }
 
 export function getCitiesFilterKey(config: VillesLayerConfig): string {
@@ -185,20 +280,20 @@ export function getCitiesFilterKey(config: VillesLayerConfig): string {
 }
 
 export function getFilteredCitiesForConfig(
-  citiesData: FeatureCollection<Point>,
+  cities: BasemapCity[],
   config: VillesLayerConfig
-): FeatureCollection<Point> {
+): BasemapCity[] {
   const filterKey = getCitiesFilterKey(config);
-  const isNewSource = cachedCitiesSource !== citiesData;
+  const isNewSource = cachedCitiesSource !== cities;
 
   if (isNewSource || cachedCitiesKey !== filterKey || !cachedFilteredCities) {
     const count = clampBasemapCityCount(config.count);
     cachedFilteredCities =
       count === undefined
-        ? filterCitiesByCategory(citiesData, config.category)
-        : filterCitiesByCount(citiesData, count);
+        ? filterCitiesByCategory(cities, config.category)
+        : filterCitiesByCount(cities, count);
     cachedCitiesKey = filterKey;
-    cachedCitiesSource = citiesData;
+    cachedCitiesSource = cities;
     cachedLabelledCitiesSource = null;
     cachedLabelledCities = null;
     cachedPolygonCitiesKey = null;
@@ -209,40 +304,24 @@ export function getFilteredCitiesForConfig(
 }
 
 export function getLabelledCitiesForConfig(
-  citiesData: FeatureCollection<Point>,
+  cities: BasemapCity[],
   config: VillesLayerConfig
-): FeatureCollection<Point> {
-  const filteredCities = getFilteredCitiesForConfig(citiesData, config);
+): BasemapCity[] {
+  const filteredCities = getFilteredCitiesForConfig(cities, config);
 
   if (cachedLabelledCitiesSource !== filteredCities || !cachedLabelledCities) {
-    cachedLabelledCities = {
-      type: GEOJSON_TYPE.FEATURE_COLLECTION,
-      features: filteredCities.features.filter((feature) =>
-        Boolean(resolveCityLabel(feature))
-      )
-    };
+    cachedLabelledCities = filteredCities.filter((city) =>
+      Boolean(resolveCityLabel(city))
+    );
     cachedLabelledCitiesSource = filteredCities;
   }
 
   return cachedLabelledCities;
 }
 
-export function resolveCityLabel(feature: Feature<Point>): string {
-  const props = feature.properties ?? {};
-  const keys = [
-    'label',
-    'name',
-    'name_fr',
-    'name_en',
-    'nameascii',
-    'NAME',
-    'NOM',
-    'nom',
-    'id'
-  ];
-
-  for (const key of keys) {
-    const value = props[key];
+export function resolveCityLabel(city: BasemapCity): string {
+  for (const key of CITY_LABEL_COLUMNS) {
+    const value = city.properties[key];
     if (typeof value === 'string' && value.trim()) {
       return value;
     }
@@ -255,18 +334,18 @@ export function resolveCityLabel(feature: Feature<Point>): string {
 }
 
 export function getPolygonCitiesForConfig(
-  cities: FeatureCollection<Point>,
+  cities: BasemapCity[],
   config: VillesLayerConfig,
   filterKey: string,
   options?: { projected?: boolean }
-): FeatureCollection<Polygon> {
+): BasemapCityShapes {
   if (options?.projected) {
-    return convertCitiesToPolygons(cities, config.symbol, config.size, 0.5);
+    return convertCitiesToShapes(cities, config.symbol, config.size, 0.5);
   }
 
   const polygonKey = `${filterKey}:${config.symbol}:${config.size}`;
   if (cachedPolygonCitiesKey !== polygonKey || !cachedPolygonCities) {
-    cachedPolygonCities = convertCitiesToPolygons(
+    cachedPolygonCities = convertCitiesToShapes(
       cities,
       config.symbol,
       config.size

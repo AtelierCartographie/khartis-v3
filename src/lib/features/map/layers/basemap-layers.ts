@@ -2,7 +2,12 @@ import { COORDINATE_SYSTEM, type Layer } from '@deck.gl/core';
 import type { Matrix4 } from '@math.gl/core';
 import { GeoJsonLayer } from '@deck.gl/layers';
 import { PathStyleExtension } from '@deck.gl/extensions';
-import { SolidPolygonLayer, PathLayer } from '@deck.gl/layers';
+import {
+  PathLayer,
+  ScatterplotLayer,
+  SolidPolygonLayer,
+  TextLayer
+} from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import {
   createPathLayerProps,
@@ -10,6 +15,7 @@ import {
 } from '@ateliercartographie/geoarrow-deck-stream';
 import {
   parsePaths,
+  parsePointData,
   parseSolidPolygons,
   parsePathsWithProjection,
   parseSolidPolygonsWithProjection,
@@ -24,7 +30,6 @@ import type {
   LineString,
   MultiLineString,
   Point,
-  MultiPoint,
   Polygon,
   MultiPolygon
 } from 'geojson';
@@ -96,7 +101,10 @@ import {
   getFilteredCitiesForConfig,
   getLabelledCitiesForConfig,
   getPolygonCitiesForConfig,
-  resolveCityLabel
+  projectBasemapCities,
+  readBasemapCities,
+  resolveCityLabel,
+  type BasemapCity
 } from './basemap-cities';
 import {
   resolveLandConfig,
@@ -204,8 +212,8 @@ function getPreparedBasemapGeoJSON<T extends GeoJSON.Geometry>(
   return geojson ? projectFeatureCollectionIfNeeded(geojson, ctx) : null;
 }
 
-let cachedMetadataPointSources: FeatureCollection[] | null = null;
-let cachedMetadataPointGeoJson: FeatureCollection<Point> | null = null;
+let cachedMetadataCitySources: object[] | null = null;
+let cachedMetadataCities: BasemapCity[] | null = null;
 
 interface BasemapLayerContext {
   modelMatrix?: Matrix4 | null;
@@ -1277,106 +1285,119 @@ export function createReliefLayers(
   return [];
 }
 
-export function createVillesLayer(
-  citiesData: FeatureCollection<Point>,
+export function createVillesLayers(
+  cities: BasemapCity[],
   config: VillesLayerConfig,
   ctx: BasemapLayerContext
-): Layer<DeckDataRow> | null {
-  if (!config.visible) return null;
+): Layer<DeckDataRow>[] {
+  if (!config.visible) return [];
 
-  const filteredCities = getFilteredCitiesForConfig(citiesData, config);
+  const filteredCities = getFilteredCitiesForConfig(cities, config);
 
-  if (filteredCities.features.length === 0) return null;
+  if (filteredCities.length === 0) return [];
 
-  const fillColor = toRgbColor(config.color);
-  const opacity = config.opacity / 100;
-
+  const fillColor = withOpacity(toRgbColor(config.color), config.opacity / 100);
+  const strokeColor = withOpacity(
+    BASEMAP_CITY_STROKE_COLOR,
+    (config.opacity / 100) * BASEMAP_CITY_STROKE_OPACITY_RATIO
+  );
   const layerId = buildLayerId(
     DeckLayerId.BASEMAP_VILLES,
     ctx.projectionSuffix
   );
-  const projectedCities = projectFeatureCollectionIfNeeded(
-    filteredCities,
-    ctx
-  ) as FeatureCollection<Point>;
-  const filterKey = getCitiesFilterKey(config);
+  const projectedCities = projectBasemapCities(filteredCities, ctx.projection);
 
-  const isCircle = config.symbol === BasemapCitySymbol.POINT;
-
-  if (isCircle) {
-    return new GeoJsonLayer({
-      id: layerId,
-      data: projectedCities,
-      filled: true,
-      stroked: true,
-      pointType: 'circle',
-      getPointRadius: config.size,
-      getFillColor: withOpacity(fillColor, opacity),
-      getLineColor: withOpacity(
-        BASEMAP_CITY_STROKE_COLOR,
-        opacity * BASEMAP_CITY_STROKE_OPACITY_RATIO
-      ),
-      lineWidthUnits: 'pixels',
-      lineWidthMinPixels: 1,
-      pointRadiusUnits: 'pixels',
-      pointRadiusMinPixels: 2,
-      ...getBaseLayerProps(ctx),
-      updateTriggers: {
-        getFillColor: [config.color, config.opacity],
-        getPointRadius: [config.size]
-      }
+  if (config.symbol === BasemapCitySymbol.POINT) {
+    const positions = new Float64Array(projectedCities.length * 2);
+    projectedCities.forEach(({ position }, index) => {
+      positions[index * 2] = position[0];
+      positions[index * 2 + 1] = position[1];
     });
+
+    return [
+      new ScatterplotLayer({
+        id: `${layerId}-circles`,
+        data: {
+          length: projectedCities.length,
+          attributes: { getPosition: { value: positions, size: 2 } }
+        },
+        filled: true,
+        stroked: true,
+        getRadius: config.size,
+        getFillColor: fillColor,
+        getLineColor: strokeColor,
+        lineWidthUnits: 'pixels',
+        lineWidthMinPixels: 1,
+        radiusUnits: 'pixels',
+        radiusMinPixels: 2,
+        ...getBaseLayerProps(ctx)
+      }) as unknown as Layer<DeckDataRow>
+    ];
   }
 
-  const shouldUseProjectedSymbols = Boolean(ctx.projection);
-  const resolvedPolygonCities = getPolygonCitiesForConfig(
+  const shapes = getPolygonCitiesForConfig(
     projectedCities,
     config,
-    filterKey,
-    { projected: shouldUseProjectedSymbols }
+    getCitiesFilterKey(config),
+    { projected: Boolean(ctx.projection) }
   );
 
-  return new GeoJsonLayer({
-    id: layerId,
-    data: resolvedPolygonCities,
-    filled: true,
-    stroked: true,
-    getFillColor: withOpacity(fillColor, opacity),
-    getLineColor: withOpacity(
-      BASEMAP_CITY_STROKE_COLOR,
-      opacity * BASEMAP_CITY_STROKE_OPACITY_RATIO
-    ),
-    lineWidthUnits: 'pixels',
-    lineWidthMinPixels: 1,
-    ...getBaseLayerProps(ctx),
-    updateTriggers: {
-      getFillColor: [config.color, config.opacity]
-    }
-  });
+  return [
+    new SolidPolygonLayer({
+      id: `${layerId}-shapes-fill`,
+      data: {
+        length: shapes.length,
+        startIndices: shapes.startIndices,
+        attributes: { getPolygon: { value: shapes.positions, size: 2 } }
+      },
+      _normalize: false,
+      getFillColor: fillColor,
+      ...getBaseLayerProps(ctx)
+    }) as unknown as Layer<DeckDataRow>,
+    new PathLayer({
+      id: `${layerId}-shapes-stroke`,
+      data: {
+        length: shapes.length,
+        startIndices: shapes.startIndices,
+        attributes: { getPath: { value: shapes.positions, size: 2 } }
+      },
+      _pathType: 'loop',
+      getColor: strokeColor,
+      getWidth: 1,
+      widthUnits: 'pixels',
+      widthMinPixels: 1,
+      ...getBaseLayerProps(ctx)
+    }) as unknown as Layer<DeckDataRow>
+  ];
+}
+
+interface CityLabelDatum {
+  position: [number, number];
+  text: string;
 }
 
 function createVillesLabelLayer(
-  citiesData: FeatureCollection<Point>,
+  cities: BasemapCity[],
   config: VillesLayerConfig,
   ctx: BasemapLayerContext
 ): Layer<DeckDataRow> | null {
   if (!config.visible) return null;
   if (!fontAssetsStore.ready) return null;
 
-  const labelledCities = getLabelledCitiesForConfig(citiesData, config);
+  const labelledCities = getLabelledCitiesForConfig(cities, config);
 
-  if (labelledCities.features.length === 0) return null;
+  if (labelledCities.length === 0) return null;
 
-  const projectedCities = projectFeatureCollectionIfNeeded(
+  const labels: CityLabelDatum[] = projectBasemapCities(
     labelledCities,
-    ctx
-  ) as FeatureCollection<Point>;
+    ctx.projection
+  ).map((city) => ({ position: city.position, text: resolveCityLabel(city) }));
   const labelColor = toRgbColor(config.labelColor ?? '#161616');
   const labelSize = config.labelSize ?? 12;
   const labelFontFamily = config.labelFontFamily ?? CARTOGRAPHIC_FONT_FAMILY;
   const labelGlyphs = new Set<string>();
-  for (const feature of projectedCities.features) {
-    for (const char of resolveCityLabel(feature)) {
+  for (const { text } of labels) {
+    for (const char of text) {
       labelGlyphs.add(char);
     }
   }
@@ -1385,136 +1406,57 @@ function createVillesLabelLayer(
     ctx.projectionSuffix
   );
 
-  return new GeoJsonLayer({
+  return new TextLayer<CityLabelDatum>({
     id: layerId,
-    data: projectedCities,
-    pointType: 'text',
-    getText: resolveCityLabel,
-    getTextColor: withOpacity(labelColor, 1),
-    getTextSize: labelSize,
+    data: labels,
+    getPosition: (label) => label.position,
+    getText: (label) => label.text,
+    getColor: withOpacity(labelColor, 1),
+    getSize: labelSize,
     getTextAnchor: 'middle',
-    getTextAlignmentBaseline: 'top',
-    getTextPixelOffset: [0, Math.max(config.size, 1) + 4],
-    textFontFamily: resolveFontFamilyStack(labelFontFamily),
-    textCharacterSet: extendTextCharacterSet(labelGlyphs),
-    textFontSettings: resolveTextFontSettings(labelSize),
-    textLineHeight: DEFAULT_TEXT_LINE_HEIGHT,
-    textSizeUnits: 'pixels',
+    getAlignmentBaseline: 'top',
+    getPixelOffset: [0, Math.max(config.size, 1) + 4],
+    fontFamily: resolveFontFamilyStack(labelFontFamily),
+    characterSet: extendTextCharacterSet(labelGlyphs),
+    fontSettings: resolveTextFontSettings(labelSize),
+    lineHeight: DEFAULT_TEXT_LINE_HEIGHT,
+    sizeUnits: 'pixels',
     ...getBaseLayerProps(ctx),
     updateTriggers: {
-      getTextColor: [config.labelColor],
-      getTextSize: [labelSize],
-      getTextPixelOffset: [config.size],
-      textFontFamily: [labelFontFamily]
+      getColor: [config.labelColor],
+      getSize: [labelSize],
+      getPixelOffset: [config.size]
     }
-  });
+  }) as unknown as Layer<DeckDataRow>;
 }
 
 type MetadataGeometry =
   Polygon | MultiPolygon | LineString | MultiLineString | Point;
 
-function createPointFeatureFromCoordinates(
-  sourceFeature: Feature<MetadataGeometry>,
-  coordinates: [number, number]
-): Feature<Point> | null {
-  const [longitude, latitude] = coordinates;
-  if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
-    return null;
-  }
-
-  return {
-    type: GEOJSON_TYPE.FEATURE,
-    properties: sourceFeature.properties,
-    geometry: {
-      type: GEOJSON_TYPE.POINT,
-      coordinates
-    }
-  };
-}
-
-function areSameFeatureCollectionSources(
-  sources: FeatureCollection[],
-  cachedSources: FeatureCollection[] | null
-): boolean {
-  return (
-    cachedSources !== null &&
-    cachedSources.length === sources.length &&
-    cachedSources.every((source, index) => source === sources[index])
-  );
-}
-
-function collectMetadataPointGeoJson(
+function collectMetadataCities(
   entries: MetadataLayerEntry[]
-): FeatureCollection<Point> | null {
-  const sources: FeatureCollection[] = [];
+): BasemapCity[] | null {
+  const sources = entries.flatMap((entry) =>
+    extractGeometryInfo(entry.table)
+      ? [{ table: entry.table, points: parsePointData(entry.table) }]
+      : []
+  );
+  const sourceKeys = sources.map(({ points }) => points);
 
-  for (const entry of entries) {
-    const geometryInfo = extractGeometryInfo(entry.table);
-    if (!geometryInfo) continue;
-
-    const geojson = getCachedBasemapGeoJSON(
-      entry.table,
-      geometryInfo.geoColumn
-    );
-    if (!geojson) continue;
-
-    sources.push(geojson);
+  if (
+    cachedMetadataCitySources !== null &&
+    cachedMetadataCitySources.length === sourceKeys.length &&
+    cachedMetadataCitySources.every((key, index) => key === sourceKeys[index])
+  ) {
+    return cachedMetadataCities;
   }
 
-  if (areSameFeatureCollectionSources(sources, cachedMetadataPointSources)) {
-    return cachedMetadataPointGeoJson;
-  }
-
-  const features: Feature<Point>[] = [];
-
-  for (const geojson of sources) {
-    for (const feature of geojson.features as Feature<
-      Point | MultiPoint | LineString
-    >[]) {
-      const geometry = feature.geometry;
-      if (!geometry) continue;
-
-      if (geometry.type === GEOJSON_TYPE.POINT) {
-        features.push(feature as Feature<Point>);
-        continue;
-      }
-
-      if (geometry.type === GEOJSON_TYPE.MULTI_POINT) {
-        for (const coordinates of geometry.coordinates) {
-          const pointFeature = createPointFeatureFromCoordinates(
-            feature as Feature<MetadataGeometry>,
-            coordinates as [number, number]
-          );
-          if (pointFeature) features.push(pointFeature);
-        }
-        continue;
-      }
-
-      if (
-        geometry.type === GEOJSON_TYPE.LINE_STRING &&
-        geometry.coordinates.length === 1
-      ) {
-        const pointFeature = createPointFeatureFromCoordinates(
-          feature as Feature<MetadataGeometry>,
-          geometry.coordinates[0] as [number, number]
-        );
-        if (pointFeature) features.push(pointFeature);
-      }
-    }
-  }
-
-  if (features.length === 0) {
-    cachedMetadataPointSources = sources;
-    cachedMetadataPointGeoJson = null;
-    return null;
-  }
-
-  cachedMetadataPointSources = sources;
-  cachedMetadataPointGeoJson = {
-    type: GEOJSON_TYPE.FEATURE_COLLECTION,
-    features
-  };
-  return cachedMetadataPointGeoJson;
+  const cities = sources.flatMap(({ table, points }) =>
+    readBasemapCities(table, points)
+  );
+  cachedMetadataCitySources = sourceKeys;
+  cachedMetadataCities = cities.length > 0 ? cities : null;
+  return cachedMetadataCities;
 }
 
 function hasArrowRows(table: ArrowTable): boolean {
@@ -1970,19 +1912,17 @@ export function createBasemapLayers(
         }
 
         case BASEMAP_LAYER_ID.VILLES: {
-          const citiesData = collectMetadataPointGeoJson(
+          const cities = collectMetadataCities(
             centroidEntries.length > 0 ? centroidEntries : pointEntries
           );
           const villesConfig = config as VillesLayerConfig;
-          const symbolLayer = citiesData
-            ? createVillesLayer(citiesData, villesConfig, ctx)
+          const labelLayer = cities
+            ? createVillesLabelLayer(cities, villesConfig, ctx)
             : null;
-          const labelLayer = citiesData
-            ? createVillesLabelLayer(citiesData, villesConfig, ctx)
-            : null;
-          const layers = [symbolLayer, labelLayer].filter(
-            (layer): layer is Layer<DeckDataRow> => layer !== null
-          );
+          const layers = [
+            ...(cities ? createVillesLayers(cities, villesConfig, ctx) : []),
+            ...(labelLayer ? [labelLayer] : [])
+          ];
           if (layers.length > 0) {
             targetGroups.push(layers);
           }
