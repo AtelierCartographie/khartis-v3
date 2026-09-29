@@ -239,10 +239,11 @@ registerProjectionSpec(IDENTITY_OPTIONS.projection, {
   projection: 'geoIdentity'
 });
 
-// Below this row count a synchronous parse costs a few milliseconds at most —
-// cheaper than the worker round trip and it avoids an empty frame while the
-// transferred buffers travel back.
-const WORKER_PARSE_MIN_ROWS = 2000;
+// Below this geometry size a synchronous parse costs a few milliseconds at
+// most — cheaper than the worker round trip and it avoids an empty frame while
+// the transferred buffers travel back. Measured in bytes, not rows: a single
+// dissolved boundary row can hold hundreds of thousands of vertices.
+const WORKER_PARSE_MIN_GEOMETRY_BYTES = 256 * 1024;
 
 const EMPTY_PATH_DATA: BinaryPathData = {
   length: 0,
@@ -293,6 +294,14 @@ function rememberWorkerFailedKey(key: string): void {
   }
 }
 
+function getGeometryByteLength(table: ArrowTable): number {
+  const geometry = normalizeGeomColumnName(table).getChild(EXPECTED_GEOM_COL);
+  return (geometry?.data ?? []).reduce(
+    (total, data) => total + data.byteLength,
+    0
+  );
+}
+
 function workerKeyIdFor(reference: object): number {
   let id = workerKeyIds.get(reference);
   if (id === undefined) {
@@ -317,7 +326,7 @@ function requestWorkerParse<T>(
   storeResult: (data: T) => void,
   options: { rewind: boolean } = { rewind: true }
 ): T | null {
-  if (table.numRows < WORKER_PARSE_MIN_ROWS) {
+  if (getGeometryByteLength(table) < WORKER_PARSE_MIN_GEOMETRY_BYTES) {
     return null;
   }
   const spec = getProjectionSpec(projection);
