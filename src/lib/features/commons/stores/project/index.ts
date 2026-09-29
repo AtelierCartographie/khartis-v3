@@ -1,8 +1,7 @@
 export {
   createProjectState,
   type ProjectStateContainer,
-  DEFAULT_AUTO_SAVE_INTERVAL,
-  DEFAULT_MAX_HISTORY_SIZE
+  DEFAULT_AUTO_SAVE_INTERVAL
 } from './project-state.svelte';
 
 export {
@@ -33,15 +32,6 @@ export {
   clearSourceFiles,
   renameFile
 } from './project-files';
-
-export {
-  resetHistory,
-  addToHistory,
-  undo,
-  redo,
-  canUndo,
-  canRedo
-} from './project-history';
 
 export {
   saveCurrentProject,

@@ -111,6 +111,11 @@ export const ACCEPTED_BASEMAP_EXTENSIONS = [
   '.geojson',
   '.json',
   '.shp',
+  '.shx',
+  '.dbf',
+  '.prj',
+  '.cpg',
+  '.zip',
   '.gpkg',
   '.kml',
   '.parquet'

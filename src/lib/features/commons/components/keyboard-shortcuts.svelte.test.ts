@@ -37,9 +37,7 @@ const mocks = vi.hoisted(() => ({
   },
   projectStore: {
     currentProject: undefined,
-    saveCurrentProject: vi.fn(),
-    undo: vi.fn(),
-    redo: vi.fn()
+    saveCurrentProject: vi.fn()
   }
 }));
 

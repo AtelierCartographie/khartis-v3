@@ -3,7 +3,9 @@ import '$lib/features/commons/stores/locale.store.svelte';
 import { setLocale } from '$lib/paraglide/runtime.js';
 import * as m from '$lib/paraglide/messages';
 import { BASEMAP_FETCH_TIMEOUT_MS } from '$lib/features/map/constants/basemap-fetch.constants';
+import { unzipSync } from 'fflate';
 import {
+  bundleBasemapImportFiles,
   createOSMBasemap,
   loadBasemapFromUrl,
   processBasemapImport
@@ -31,6 +33,40 @@ describe('processBasemapImport', () => {
         missingComponents: ['.shx', '.dbf']
       }
     });
+  });
+});
+
+describe('bundleBasemapImportFiles', () => {
+  it('zips the loose parts of a shapefile into one archive', async () => {
+    const parts = ['regions.shp', 'regions.shx', 'regions.dbf', 'regions.prj'];
+    const bundle = await bundleBasemapImportFiles(
+      parts.map((name) => new File([name], name))
+    );
+
+    expect(bundle.name).toBe('regions.zip');
+    const entries = unzipSync(new Uint8Array(await bundle.arrayBuffer()));
+    expect(Object.keys(entries).sort()).toEqual([...parts].sort());
+  });
+
+  it('reports the required components missing from a loose shapefile', async () => {
+    await expect(
+      bundleBasemapImportFiles([
+        new File([''], 'regions.shp'),
+        new File([''], 'regions.prj')
+      ])
+    ).rejects.toMatchObject({
+      name: 'ParseError',
+      details: { missingComponents: ['.shx', '.dbf'] }
+    });
+  });
+
+  it('rejects files that do not form a single basemap', async () => {
+    await expect(
+      bundleBasemapImportFiles([
+        new File([''], 'regions.geojson'),
+        new File([''], 'communes.geojson')
+      ])
+    ).rejects.toMatchObject({ name: 'ParseError' });
   });
 });
 

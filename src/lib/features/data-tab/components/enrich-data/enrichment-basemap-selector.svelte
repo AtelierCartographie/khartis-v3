@@ -4,7 +4,6 @@
   import BasemapCatalogTab from '../basemap-join/basemap-catalog-tab.svelte';
   import BasemapPanelContent from '../basemap-join/basemap-panel-content.svelte';
   import { BasemapImportDropzone, OSMBasemapSelector } from '../index';
-  import { ACCEPTED_BASEMAP_EXTENSIONS } from '../../utils/enrichment.utils';
 
   interface BasemapSuggestionItem {
     basemap: BasemapMetadata;
@@ -21,7 +20,7 @@
     importedCustomBasemap: BasemapMetadata | null;
     onTabChange: (index: number) => void;
     onSelectBasemap: (basemapId: string) => void;
-    onBasemapImportFile: (file: File) => void;
+    onBasemapImportFile: (files: File[]) => void;
     onBasemapUrlLoad: (url: string) => void;
     onClearError: () => void;
     onSelectOSM: () => void;
@@ -83,7 +82,6 @@
 
 {#snippet importContent()}
   <BasemapImportDropzone
-    acceptedExtensions={ACCEPTED_BASEMAP_EXTENSIONS}
     isUploading={basemapImportUploading}
     error={basemapImportError}
     importedBasemap={importedCustomBasemap}

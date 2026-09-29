@@ -28,6 +28,7 @@
   } from '$lib/features/map/types/basemap.types';
   import {
     createOSMBasemap,
+    bundleBasemapImportFiles,
     loadBasemapFromUrl,
     processBasemapImport
   } from '$lib/features/map/services/basemap-import.service';
@@ -893,7 +894,7 @@
   function handleFileDrop(event: DragEvent) {
     const files = event.dataTransfer?.files;
     if (files && files.length > 0) {
-      importFiles = [files[0]];
+      importFiles = Array.from(files);
       handleImportFile();
     }
   }
@@ -901,7 +902,7 @@
   function handleFileInputChange(event: Event) {
     const target = event.target as HTMLInputElement;
     if (target.files && target.files.length > 0) {
-      importFiles = [target.files[0]];
+      importFiles = Array.from(target.files);
       handleImportFile();
     }
   }
@@ -927,7 +928,7 @@
     dataTabStore.resetStepCompletion(stepIndex);
 
     try {
-      const file = importFiles[0];
+      const file = await bundleBasemapImportFiles(importFiles);
       const { basemap: processedBasemap, geometryTable } =
         await processBasemapImport(file);
 

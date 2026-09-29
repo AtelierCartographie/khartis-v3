@@ -190,8 +190,8 @@
           FACET_SLOT.LINE_SIZE,
           ids
         )}
-      onToggleCollection={(en, ids) =>
-        facetsSelection.toggle(sizeColumnName, FACET_SLOT.LINE_SIZE, en, ids)}
+      onToggleCollection={(en) =>
+        facetsSelection.toggle(FACET_SLOT.LINE_SIZE, en)}
     />
   </div>
   <SliderWithInput
@@ -239,13 +239,8 @@
           FACET_SLOT.LINE_THICKNESS_VALUE,
           ids
         )}
-      onToggleCollection={(en, ids) =>
-        facetsSelection.toggle(
-          valueColumnName,
-          FACET_SLOT.LINE_THICKNESS_VALUE,
-          en,
-          ids
-        )}
+      onToggleCollection={(en) =>
+        facetsSelection.toggle(FACET_SLOT.LINE_THICKNESS_VALUE, en)}
     />
   </div>
   <DiscretizationRow

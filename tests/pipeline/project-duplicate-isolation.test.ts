@@ -85,10 +85,6 @@ vi.mock('$lib/features/commons/stores/project/project-runtime.svelte', () => ({
   beginProjectRuntime: vi.fn(),
   resetProjectRuntimeState: vi.fn()
 }));
-vi.mock('$lib/features/commons/stores/project/project-history', () => ({
-  addToHistory: vi.fn(),
-  resetHistory: vi.fn()
-}));
 
 const { persistenceRegistry } =
   await import('$lib/features/project-management/core/persistence-registry');

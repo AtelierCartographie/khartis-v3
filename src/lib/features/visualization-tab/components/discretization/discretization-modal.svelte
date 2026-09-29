@@ -20,6 +20,7 @@
     type ShapeType
   } from '$lib/features/commons/constants/visualization.constants';
   import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+  import { facetsStore, SCALE_MODE } from '../../adapters/facets-adapter';
   import { tick, untrack } from 'svelte';
   import {
     DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
@@ -95,8 +96,17 @@
     classificationOverride
   );
   const activeValueColumn = $derived(valueColumn);
+  const pooledColumnNames = $derived(
+    facetsStore.enabled &&
+      facetsStore.scaleMode === SCALE_MODE.SHARED &&
+      facetsStore.baseVisualizationId === visualization?.id &&
+      activeValueColumn &&
+      facetsStore.variables.includes(activeValueColumn)
+      ? facetsStore.variables
+      : undefined
+  );
   const activeContextKey = $derived(
-    `${visualization?.id ?? ''}:${role}:${activeValueColumn ?? ''}`
+    `${visualization?.id ?? ''}:${role}:${activeValueColumn ?? ''}:${pooledColumnNames?.join('|') ?? ''}`
   );
 
   let isCalculating = $state(false);
@@ -493,7 +503,8 @@
         breakpointLowerClassCount:
           currentBreakpoint !== null
             ? currentBreakpointLowerClassCount
-            : undefined
+            : undefined,
+        pooledColumnNames
       });
 
       if (myRequestId !== breaksRequestId) return false;
