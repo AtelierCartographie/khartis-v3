@@ -445,14 +445,9 @@
     );
   }
 
-  async function handleFacetsToggle(enabled: boolean, fieldIds?: number[]) {
+  async function handleFacetsToggle(enabled: boolean) {
     await runUserChange(() =>
-      facetsSelection.toggle(
-        categoryColumnName,
-        FACET_SLOT.SYMBOL_CATEGORY,
-        enabled,
-        fieldIds
-      )
+      facetsSelection.toggle(FACET_SLOT.SYMBOL_CATEGORY, enabled)
     );
   }
 </script>

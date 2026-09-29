@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => ({
   projectStorageLoad: vi.fn(),
   projectStorageRemove: vi.fn(),
   projectStorageSave: vi.fn(),
-  resetHistory: vi.fn(),
   resetProjectRuntimeState: vi.fn(),
   saveCurrentProject: vi.fn(),
   trackProjectOpened: vi.fn()
@@ -46,7 +45,6 @@ vi.mock('$lib/features/project-management', () => ({
 vi.mock('$lib/paraglide/messages', () => ({
   m: {
     error_duplicate_project_title: () => 'Duplicate failed',
-    history_project_loaded: () => 'Project loaded',
     project_duplicate_suffix: () => '(copy)'
   }
 }));
@@ -80,11 +78,6 @@ vi.mock('./project-files', () => ({
   cleanFileForStorage: vi.fn((file) => file)
 }));
 
-vi.mock('./project-history', () => ({
-  addToHistory: vi.fn(),
-  resetHistory: mocks.resetHistory
-}));
-
 vi.mock('./project-persistence', () => ({
   saveCurrentProject: mocks.saveCurrentProject
 }));
@@ -100,13 +93,10 @@ function createContainer() {
       autoSaveEnabled: true,
       autoSaveInterval: 1_000,
       currentProject: undefined,
-      history: [],
-      historyIndex: -1,
       isDirty: false,
       isInitialized: false,
       isLoading: false,
-      lastSaved: undefined,
-      maxHistorySize: 50
+      lastSaved: undefined
     }
   };
 }
@@ -138,10 +128,6 @@ describe('project lifecycle startup restore', () => {
     mocks.projectStorageLoad.mockResolvedValue('project-1');
     mocks.projectStorageRemove.mockResolvedValue(undefined);
     mocks.projectStorageSave.mockResolvedValue(undefined);
-    mocks.resetHistory.mockImplementation((container) => {
-      container._state.history = [];
-      container._state.historyIndex = -1;
-    });
     mocks.saveCurrentProject.mockResolvedValue(undefined);
   });
 

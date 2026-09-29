@@ -429,6 +429,20 @@
     }
   }
 
+  function fitSubmenuInViewport(
+    trigger: HTMLElement | null,
+    submenuElement: HTMLElement | null
+  ) {
+    if (!trigger || !submenuElement) return;
+    const rect = trigger.getBoundingClientRect();
+    const { offsetWidth: width, offsetHeight: height } = submenuElement;
+    const overflowsRight = rect.right + width > window.innerWidth;
+    submenuPosition = {
+      top: Math.max(0, Math.min(rect.top, window.innerHeight - height)),
+      left: overflowsRight ? Math.max(0, rect.left - width) : rect.right
+    };
+  }
+
   async function openSubmenu(
     submenu: ColumnSubmenu,
     trigger: HTMLElement | null,
@@ -440,6 +454,8 @@
     }
 
     activeSubmenu = submenu;
+    await tick();
+    fitSubmenuInViewport(trigger, getSubmenuElement(submenu));
 
     if (options.focusFirst) {
       await focusFirstMenuItem(() => getSubmenuElement(submenu));

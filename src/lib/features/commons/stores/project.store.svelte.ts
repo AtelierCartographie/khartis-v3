@@ -1,10 +1,8 @@
 import type {
   KhartisProject,
   ProjectData,
-  ProjectHistoryEntry,
   SavedProjectMetadata
 } from '$lib/features/project-management';
-import * as m from '$lib/paraglide/messages';
 import { persistenceRegistry } from '$lib/features/project-management/core';
 import { shouldSkipLastProjectRestore } from '../utils/pwa-reset';
 import type {
@@ -26,11 +24,6 @@ import {
   removeFileFromProject as removeFileFromProjectFn,
   clearSourceFiles as clearSourceFilesFn,
   renameFile as renameFileFn,
-  addToHistory as addToHistoryFn,
-  undo as undoFn,
-  redo as redoFn,
-  canUndo as canUndoFn,
-  canRedo as canRedoFn,
   saveCurrentProject as saveCurrentProjectFn,
   exportProject as exportProjectFn,
   importProject as importProjectFn,
@@ -188,7 +181,6 @@ function createProjectStore() {
     state.currentProject.manifest.name = name;
     state.currentProject.manifest.updatedAt = new Date();
     markAsDirty();
-    addToHistoryFn(container, m.history_project_name_updated());
   }
 
   function updateProjectData(data: Partial<ProjectData>): void {
@@ -202,19 +194,6 @@ function createProjectStore() {
     };
     state.currentProject.manifest.updatedAt = new Date();
     markAsDirty();
-    addToHistoryFn(container, m.history_project_data_updated());
-  }
-
-  function undo(): void {
-    if (undoFn(container)) {
-      markAsDirty();
-    }
-  }
-
-  function redo(): void {
-    if (redoFn(container)) {
-      markAsDirty();
-    }
   }
 
   async function clearProject(): Promise<void> {
@@ -235,15 +214,6 @@ function createProjectStore() {
     },
     get isDirty(): boolean {
       return state.isDirty;
-    },
-    get canUndo(): boolean {
-      return canUndoFn(container);
-    },
-    get canRedo(): boolean {
-      return canRedoFn(container);
-    },
-    get history(): ProjectHistoryEntry[] {
-      return state.history;
     },
     get isInitialized(): boolean {
       return state.isInitialized;
@@ -271,8 +241,6 @@ function createProjectStore() {
     markAsDirty,
     updateProjectName,
     updateProjectData,
-    undo,
-    redo,
     clearProject
   };
 }

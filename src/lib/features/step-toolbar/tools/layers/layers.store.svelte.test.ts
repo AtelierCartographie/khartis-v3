@@ -35,6 +35,7 @@ const {
       renameVisualization: vi.fn()
     },
     mockFacetsStore: {
+      syncGeneratedVisualizationsFromBase: vi.fn(),
       enabled: false,
       baseVisualizationId: null as string | null,
       generatedVisualizationIds: [] as string[],

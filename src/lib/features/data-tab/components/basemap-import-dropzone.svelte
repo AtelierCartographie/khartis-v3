@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ACCEPTED_BASEMAP_EXTENSIONS } from '../utils/enrichment.utils';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
@@ -18,24 +19,15 @@
   } from '$lib/features/commons/utils/carbon-events.utils';
 
   interface Props {
-    acceptedExtensions?: string[];
     isUploading?: boolean;
     error?: string | null;
     importedBasemap?: BasemapMetadata | null;
-    onFileSelect: (file: File) => void;
+    onFileSelect: (files: File[]) => void;
     onUrlLoad: (url: string) => void;
     onClearError?: () => void;
   }
 
   const {
-    acceptedExtensions = [
-      '.geojson',
-      '.json',
-      '.shp',
-      '.gpkg',
-      '.kml',
-      '.parquet'
-    ],
     isUploading = false,
     error = null,
     importedBasemap = null,
@@ -55,14 +47,14 @@
     isDragging = false;
     const files = event.dataTransfer?.files;
     if (files && files.length > 0) {
-      onFileSelect(files[0]);
+      onFileSelect(Array.from(files));
     }
   }
 
   function handleFileInputChange(event: Event) {
     const target = event.target as HTMLInputElement;
     if (target.files && target.files.length > 0) {
-      onFileSelect(target.files[0]);
+      onFileSelect(Array.from(target.files));
     }
   }
 
@@ -117,7 +109,8 @@
     <input
       bind:this={fileInputRef}
       type="file"
-      accept={acceptedExtensions.join(',')}
+      accept={ACCEPTED_BASEMAP_EXTENSIONS.join(',')}
+      multiple
       onchange={handleFileInputChange}
       hidden
     />

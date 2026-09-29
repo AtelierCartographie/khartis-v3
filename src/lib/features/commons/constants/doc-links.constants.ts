@@ -6,7 +6,7 @@ export const DOC_LINK = {
   KHARTIS_HOME: KHARTIS_SITE_URL,
   GETTING_STARTED: `${KHARTIS_SITE_URL}/prise-en-main`,
   USER_GUIDE: USER_GUIDE_URL,
-  LEGACY_V2: `${KHARTIS_SITE_URL}/old`,
+  LEGACY_V2: 'https://www.sciencespo.fr/cartographie/outils/khartis/old',
   HELP_AND_RESOURCES: `${KHARTIS_SITE_URL}#aide-et-ressources`,
   IMPORT_DATA: `${USER_GUIDE_URL}#importer-des-données`,
   CONTROL_DATA: `${USER_GUIDE_URL}#contrôler-les-données`,
@@ -18,5 +18,4 @@ export const DOC_LINK = {
   PRIMITIVE_FILTERS: USER_GUIDE_URL
 } as const;
 
-export const FEEDBACK_FORM_URL =
-  'https://docs.google.com/forms/d/e/1FAIpQLSdobFeupR7CFppaMTEScMXoSHVUMl39grV3aBsoHzw1NpaHdw/viewform';
+export const FEEDBACK_FORM_URL = `${KHARTIS_SITE_URL}/retours`;

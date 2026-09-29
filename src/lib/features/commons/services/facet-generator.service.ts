@@ -1,5 +1,6 @@
 import { m } from '$lib/paraglide/messages';
 import {
+  getEnabledPrimitiveFilters,
   PrimitiveFilterType,
   type PrimitiveConfigKind,
   type PrimitiveFilter,
@@ -17,7 +18,11 @@ import {
 } from '$lib/features/commons/constants/facets.constants';
 import { DEFAULT_CLASSIFICATION_CLASS_COUNT } from '$lib/features/commons/constants/visualization.constants';
 import { applyFacetVariablePatch } from '$lib/features/commons/utils/facet-visualization-updates';
-import { calculateBreaks } from './classification.service';
+import {
+  calculateBreaks,
+  calculateDivergingBreaks
+} from './classification.service';
+import { resolveBreakpointLowerClassCount } from '../utils/discretization.utils';
 import { resolveRowScopeClause } from './row-scope.service';
 import {
   findPaletteById,
@@ -233,6 +238,7 @@ function applyFacetClassificationToVisualization(
 async function buildFacetClassification(
   baseViz: VisualizationConfig,
   variable: string,
+  collectionVariables: string[],
   scaleMode: ScaleMode,
   slotPath: FacetSlotPath
 ): Promise<VisualizationConfig['classification']> {
@@ -253,10 +259,6 @@ async function buildFacetClassification(
     return { ...baseClassification };
   }
 
-  if (scaleMode === SCALE_MODE.SHARED) {
-    return { ...baseClassification };
-  }
-
   // calculateBreaks resolves its dataset by source file, which is a different
   // id from the one a visualization carries as soon as a project has been
   // saved and reopened.
@@ -273,7 +275,7 @@ async function buildFacetClassification(
     baseClassification.numClasses ??
     baseClassification.classes ??
     DEFAULT_CLASSIFICATION_CLASS_COUNT;
-  const result = await calculateBreaks({
+  const breakOptions = {
     datasetId: datasetSourceFileId,
     columnName: variable,
     method: baseClassification.method,
@@ -282,8 +284,28 @@ async function buildFacetClassification(
       vizFilters: baseViz.dataFilters,
       primitive: resolveFacetPrimitiveFilter(slotPath)
     }),
-    numClasses: classes
-  });
+    pooledColumnNames:
+      scaleMode === SCALE_MODE.SHARED ? collectionVariables : undefined
+  };
+  const { breakpointValue } = baseClassification;
+  const lowerClassCount =
+    breakpointValue != null && Number.isFinite(breakpointValue)
+      ? resolveBreakpointLowerClassCount(
+          classes,
+          baseClassification.breakpointLowerClassCount
+        )
+      : null;
+  const result =
+    breakpointValue != null &&
+    lowerClassCount != null &&
+    lowerClassCount < classes
+      ? await calculateDivergingBreaks({
+          ...breakOptions,
+          breakpointValue,
+          lowerClassCount,
+          upperClassCount: classes - lowerClassCount
+        })
+      : await calculateBreaks({ ...breakOptions, numClasses: classes });
 
   if (!result) {
     return { ...baseClassification };
@@ -342,12 +364,14 @@ export async function buildFacetSlotUpdates({
   baseViz,
   visualization,
   variable,
+  collectionVariables,
   scaleMode,
   slotPath
 }: {
   baseViz: VisualizationConfig;
   visualization: VisualizationConfig;
   variable: string;
+  collectionVariables: string[];
   scaleMode: ScaleMode;
   slotPath: FacetSlotPath;
 }): Promise<Partial<VisualizationConfig>> {
@@ -357,6 +381,7 @@ export async function buildFacetSlotUpdates({
   const classification = await buildFacetClassification(
     baseViz,
     variable,
+    collectionVariables,
     scaleMode,
     slotPath
   );
@@ -383,12 +408,14 @@ export async function buildFacetVisualizationUpdates({
   baseViz,
   visualization,
   variable,
+  collectionVariables,
   scaleMode,
   primarySlotPath
 }: {
   baseViz: VisualizationConfig;
   visualization: VisualizationConfig;
   variable: string;
+  collectionVariables: string[];
   scaleMode: ScaleMode;
   primarySlotPath: FacetSlotPath;
 }): Promise<Partial<VisualizationConfig>> {
@@ -396,6 +423,7 @@ export async function buildFacetVisualizationUpdates({
     baseViz,
     visualization,
     variable,
+    collectionVariables,
     scaleMode,
     slotPath: primarySlotPath
   });
@@ -403,11 +431,21 @@ export async function buildFacetVisualizationUpdates({
   return {
     ...slotUpdates,
     name: variable,
-    primitiveFilters: [resolveFacetPrimitiveFilter(primarySlotPath)],
+    primitiveFilters: getEnabledPrimitiveFilters(baseViz),
     facet: {
       baseVisualizationId: baseViz.id
     }
   };
+}
+
+const FACET_ID_SEPARATOR = '--facet--';
+
+/** Stable across regenerations so legend text attached to a facet map survives a reload. */
+export function getFacetVisualizationId(
+  baseVisualizationId: string,
+  variable: string
+): string {
+  return `${baseVisualizationId}${FACET_ID_SEPARATOR}${encodeURIComponent(variable)}`;
 }
 
 export async function generateFacetVisualizations(
@@ -429,7 +467,7 @@ export async function generateFacetVisualizations(
   const facetConfigs: VisualizationConfig[] = [];
 
   for (const variable of variables) {
-    const facetId = crypto.randomUUID();
+    const facetId = getFacetVisualizationId(baseViz.id, variable);
 
     const cloned = deepClone(baseViz);
 
@@ -444,6 +482,7 @@ export async function generateFacetVisualizations(
         baseViz,
         visualization: cloned,
         variable,
+        collectionVariables: variables,
         scaleMode,
         primarySlotPath
       }))

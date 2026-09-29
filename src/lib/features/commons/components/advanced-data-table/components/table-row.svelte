@@ -35,6 +35,16 @@
     onToggleSelection
   }: Props = $props();
 
+  const NARROW_NO_BREAK_SPACE = /\u202F/g;
+  const NO_BREAK_SPACE = '\u00A0';
+
+  function formatCellValue(value: unknown, column: ColumnInfo): string {
+    const formatted = formatValueByType(value, column.type);
+    return isNumericType(column.type)
+      ? formatted.replace(NARROW_NO_BREAK_SPACE, NO_BREAK_SPACE)
+      : formatted;
+  }
+
   const rowId = $derived((row.__id as number | undefined) ?? -1);
   const displayIndex = $derived(rowIndex + 1);
 
@@ -86,7 +96,7 @@
           >{m.cell_null_value_symbol()}</span
         >
       {:else}
-        {formatValueByType(displayValue, col.type)}
+        {formatCellValue(displayValue, col)}
       {/if}
     </td>
   {/each}
@@ -190,7 +200,7 @@
   }
 
   td.numeric {
-    text-align: left;
+    text-align: right;
     font-variant-numeric: tabular-nums;
   }
 

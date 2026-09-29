@@ -12,7 +12,6 @@ restauré, et les limites connues. Le contrat de version est dans
 | Snapshot du projet                | IndexedDB, `project.json` du `.kh` | durable                        |
 | Fichiers source et fonds importés | IndexedDB, `assets/` du `.kh`      | durable, en assets binaires    |
 | Tables, macros et caches DuckDB   | mémoire                            | session ; recréés à la reprise |
-| Historique annuler/rétablir       | mémoire                            | session                        |
 | Liste des projets, dernier ouvert | IndexedDB                          | durable                        |
 
 Le snapshot ne contient pas les octets des sources, mais il ne se limite pas à

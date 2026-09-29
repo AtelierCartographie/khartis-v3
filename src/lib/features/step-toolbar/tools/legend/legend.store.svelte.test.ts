@@ -16,11 +16,23 @@ import {
 import { formatActions } from '../format/format.store.svelte';
 import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 
-const { mockVisualizationStore } = vi.hoisted(() => ({
+const { mockVisualizationStore, mockFacetsStore } = vi.hoisted(() => ({
   mockVisualizationStore: {
     version: 0,
     visualizations: [] as VisualizationConfig[]
+  },
+  mockFacetsStore: {
+    enabled: false,
+    baseVisualizationId: null as string | null,
+    primarySlotPath: null as string | null,
+    scaleMode: 'independent',
+    variables: [] as string[]
   }
+}));
+
+vi.mock('../facets', () => ({
+  facetsStore: mockFacetsStore,
+  SCALE_MODE: { SHARED: 'shared', INDEPENDENT: 'independent' }
 }));
 
 vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
@@ -30,6 +42,7 @@ vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
 import { getLegendState, legendActions } from './legend.store.svelte';
 import { getVisualizationLegendSubtitle } from '$lib/features/commons/utils/legend-subtitle.utils';
 import { LEGEND_DEFAULTS } from './legend.constants';
+import { getFacetVisualizationId } from '$lib/features/commons/services/facet-generator.service';
 
 function createVisualization(
   overrides: Partial<VisualizationConfig> = {}
@@ -56,6 +69,8 @@ describe('legend store responsive defaults', () => {
     formatActions.reset();
     legendActions.reset();
     mockVisualizationStore.visualizations = [];
+    mockFacetsStore.baseVisualizationId = null;
+    mockFacetsStore.variables = [];
   });
 
   it('keeps the default legend font size whatever the page profile', () => {
@@ -103,15 +118,61 @@ describe('legend store responsive defaults', () => {
       expect.objectContaining({
         id: 'legend-viz-viz-pop--area',
         primitive: 'area',
-        title: 'Population',
+        title: 'category',
         titleMode: 'auto',
-        subtitle: 'category',
+        subtitle: '',
         subtitleMode: 'auto',
         variableId: 'viz-pop',
         visible: true,
         dragPosition: null
       })
     ]);
+  });
+
+  it('truncates a long default title but keeps a custom one whole', () => {
+    const longColumn =
+      'population_rurale_en_pourcentage_de_la_population_totale';
+    mockVisualizationStore.visualizations = [
+      createVisualization({
+        id: 'viz-long',
+        name: 'Visualisation',
+        mapping: { categoryColumn: longColumn },
+        polygon: { enabled: true } as never,
+        modes: {}
+      })
+    ];
+
+    legendActions.syncWithVisualizations();
+    const [item] = getLegendState().items;
+
+    expect(Array.from(item.title)).toHaveLength(
+      LEGEND_DEFAULTS.AUTO_TITLE_MAX_LENGTH
+    );
+    expect(item.title.endsWith('…')).toBe(true);
+
+    legendActions.updateLegendItem(item.id, {
+      title: longColumn,
+      titleMode: 'custom'
+    });
+    legendActions.syncWithVisualizations();
+
+    expect(getLegendState().items[0].title).toBe(longColumn);
+  });
+
+  it('falls back to the visualization name when no variable is mapped', () => {
+    mockVisualizationStore.visualizations = [
+      createVisualization({
+        id: 'viz-unique',
+        name: 'Fond',
+        mapping: {},
+        polygon: { enabled: true } as never,
+        modes: {}
+      })
+    ];
+
+    legendActions.syncWithVisualizations();
+
+    expect(getLegendState().items[0].title).toBe('Fond');
   });
 
   it('joins multiple mapped columns in cartographic legend order', () => {
@@ -164,8 +225,8 @@ describe('legend store responsive defaults', () => {
       expect.objectContaining({
         id: 'legend-viz-viz-poly-only--area',
         primitive: 'area',
-        subtitle: 'population',
-        subtitleMode: 'auto'
+        title: 'population',
+        subtitle: ''
       })
     ]);
   });
@@ -207,8 +268,8 @@ describe('legend store responsive defaults', () => {
       expect.objectContaining({
         id: 'legend-viz-viz-point-fill--point',
         primitive: 'point',
-        subtitle: 'capacity',
-        subtitleMode: 'auto'
+        title: 'capacity',
+        subtitle: ''
       })
     ]);
   });
@@ -243,10 +304,44 @@ describe('legend store responsive defaults', () => {
       expect.objectContaining({
         id: 'legend-viz-viz-line-only--line',
         primitive: 'line',
-        subtitle: 'line_type / traffic',
-        subtitleMode: 'auto'
+        title: 'line_type / traffic',
+        subtitle: ''
       })
     ]);
+  });
+
+  it('keeps a collection map legend text while the map is regenerated', () => {
+    const base = createVisualization({
+      id: 'viz-base',
+      polygon: { enabled: true } as never
+    });
+    const facetId = getFacetVisualizationId('viz-base', '1960');
+    const facet = createVisualization({
+      id: facetId,
+      name: '1960',
+      polygon: { enabled: true } as never,
+      facet: { baseVisualizationId: 'viz-base' }
+    });
+    mockFacetsStore.baseVisualizationId = 'viz-base';
+    mockFacetsStore.variables = ['1960', '2020'];
+    mockVisualizationStore.visualizations = [base, facet];
+    legendActions.syncWithVisualizations();
+    legendActions.updateLegendItem(`legend-viz-${facetId}--area`, {
+      title: 'Population rurale en 1960',
+      titleMode: 'custom'
+    });
+
+    mockVisualizationStore.visualizations = [base];
+    legendActions.syncWithVisualizations();
+    mockVisualizationStore.visualizations = [base, facet];
+    legendActions.syncWithVisualizations();
+
+    expect(
+      getLegendState().items.find((item) => item.variableId === facetId)
+    ).toMatchObject({
+      title: 'Population rurale en 1960',
+      titleMode: 'custom'
+    });
   });
 
   it('preserves custom legend text when linked visualizations change', () => {
